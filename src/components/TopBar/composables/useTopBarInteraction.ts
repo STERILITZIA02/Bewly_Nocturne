@@ -1,4 +1,3 @@
-import { useEventListener } from '@vueuse/core'
 import { computed, reactive, ref, watch } from 'vue'
 
 import {
@@ -9,6 +8,7 @@ import {
   VIDEO_PAGE_URL,
 } from '~/components/TopBar/constants/urls'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDelayedHover } from '~/composables/useDelayedHover'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -32,31 +32,23 @@ export function useTopBarInteraction() {
   // 获取 App Provider
   const { activatedPage, reachTop } = useBewlyApp()
 
-  // 监听 URL 变化，使其响应式
-  const currentLocationHref = ref(window.location.href)
-
-  function updateCurrentLocationHref() {
-    currentLocationHref.value = window.location.href
-  }
-
-  useEventListener(window, 'pushstate', updateCurrentLocationHref)
-  useEventListener(window, 'popstate', updateCurrentLocationHref)
+  const currentLocationHref = useCurrentLocationHref()
 
   // TopBar 相关计算属性
   const forceWhiteIcon = computed((): boolean => {
+    const currentUrl = currentLocationHref.value
     if (!settings.value)
       return false
 
     if (
-      (isHomePage() && settings.value.useOriginalBilibiliHomepage)
-      || (CHANNEL_PAGE_URL.test(location.href) && !VIDEO_PAGE_URL.test(location.href))
-      || SPACE_URL.test(location.href)
-      || ACCOUNT_URL.test(location.href)
+      (CHANNEL_PAGE_URL.test(currentUrl) && !VIDEO_PAGE_URL.test(currentUrl))
+      || SPACE_URL.test(currentUrl)
+      || ACCOUNT_URL.test(currentUrl)
     ) {
       return true
     }
 
-    if (!isHomePage())
+    if (!isHomePage(currentUrl))
       return false
     return false
   })
@@ -65,9 +57,7 @@ export function useTopBarInteraction() {
     const currentUrl = currentLocationHref.value
     const isSearchPage = SEARCH_PAGE_URL.test(currentUrl)
 
-    if (isHomePage()) {
-      if (settings.value.useOriginalBilibiliHomepage)
-        return true
+    if (isHomePage(currentUrl)) {
       if (!activatedPage?.value)
         return true
       // Search 页面的显示逻辑：不显示顶栏搜索框（因为页面中已有搜索框）

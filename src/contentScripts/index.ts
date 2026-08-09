@@ -16,7 +16,8 @@ import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
 import { initFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { runWhenIdle } from '~/utils/lazyLoad'
-import { compareVersions, getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage } from '~/utils/main'
+import { getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder } from '~/utils/randomPlay'
@@ -44,6 +45,10 @@ const shouldInitializeContentScript = !contentScriptGlobal.__BEWLYCAT_CONTENT_SC
 
 if (shouldInitializeContentScript) {
   contentScriptGlobal.__BEWLYCAT_CONTENT_SCRIPT_INITIALIZED__ = true
+  window.addEventListener('unhandledrejection', (event) => {
+    if (isExtensionContextInvalidatedError(event.reason))
+      event.preventDefault()
+  })
   browser.runtime.onMessage.addListener((message: unknown) => {
     if (typeof message === 'object' && message !== null && 'type' in message && message.type === CONTENT_SCRIPT_PING)
       return Promise.resolve(CONTENT_SCRIPT_PONG)
@@ -984,7 +989,7 @@ else if (shouldInitializeContentScript) {
     // 所有页面都先完成设置读取，避免启动期 watcher 基于默认值生成陈旧写入。
     await settingsReady
 
-    const changeHomePage = !isInIframe() && !settings.value.useOriginalBilibiliHomepage && isHomePage()
+    const changeHomePage = !isInIframe() && isHomePage()
     document.documentElement.classList.toggle('bewly-custom-homepage', changeHomePage)
 
     // 启用自定义首页时隐藏 B 站原始首页。
@@ -1109,20 +1114,7 @@ else if (shouldInitializeContentScript) {
   }
 
   function injectApp() {
-    const bewlyElArr: NodeListOf<Element> = document.querySelectorAll('#bewly')
-    if (bewlyElArr.length > 0) {
-      bewlyElArr.forEach((el: Element) => {
-        const elVersion = el.getAttribute('data-version') || '0.0.0'
-        const elIsDev = el.getAttribute('data-dev') === 'true'
-
-        // Remove bewly element if the version is less than the current version
-        if (compareVersions(elVersion, version) < 0)
-          el.remove()
-        // Only the development mode element remains
-        else if (!elIsDev)
-          el.remove()
-      })
-    }
+    document.querySelectorAll('#bewly').forEach(el => el.remove())
 
     // mount component to context window
     const container = document.createElement('div')
@@ -1138,7 +1130,7 @@ else if (shouldInitializeContentScript) {
     }
 
     const root = document.createElement('div')
-    const useViewportLayout = !isInIframe() && !settings.value.useOriginalBilibiliHomepage && isHomePage()
+    const useViewportLayout = !isInIframe() && isHomePage()
 
     if (useViewportLayout) {
       Object.assign(container.style, {
@@ -1176,7 +1168,15 @@ else if (shouldInitializeContentScript) {
       container.style.visibility = 'visible'
     }
     styleEl.addEventListener('load', revealContainer, { once: true })
-    styleEl.addEventListener('error', revealContainer, { once: true })
+
+    const app = createApp(App)
+    setupApp(app)
+    let isAppMounted = false
+    styleEl.addEventListener('error', () => {
+      if (isAppMounted)
+        app.unmount()
+      container.remove()
+    }, { once: true })
 
     // startShadowDOMStyleInjection()
 
@@ -1187,9 +1187,8 @@ else if (shouldInitializeContentScript) {
 
     document.body.appendChild(container)
 
-    const app = createApp(App)
-    setupApp(app)
     app.mount(root)
+    isAppMounted = true
   }
 
   // 发送设置更新到网页环境

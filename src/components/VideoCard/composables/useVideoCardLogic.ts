@@ -22,7 +22,7 @@ interface VideoCardProps {
   skeleton?: boolean
   video?: Video
   type?: 'rcmd' | 'appRcmd' | 'bangumi' | 'common'
-  showWatcherLater?: boolean
+  showWatchLater?: boolean
   horizontal?: boolean
   showPreview?: boolean
   moreBtn?: boolean
@@ -67,8 +67,24 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const contextMenuRef = ref<HTMLDivElement | null>(null)
   const selectedDislikeOpt = ref<AppFeedFeedbackSelection>()
   const videoCurrentTime = ref<number | null>(null)
-  const isInWatchLater = ref<boolean>(false)
   const resolvedWatchLaterAid = ref<number>()
+  const isUpdatingWatchLater = ref(false)
+  let watchLaterResolutionId = 0
+  let previewRequestGeneration = 0
+  const watchLaterAid = computed(() => {
+    const video = props.value.video
+    if (!video)
+      return undefined
+    if (resolvedWatchLaterAid.value)
+      return resolvedWatchLaterAid.value
+    if (video.aid)
+      return video.aid
+    return undefined
+  })
+  const isInWatchLater = computed(() => {
+    return watchLaterAid.value !== undefined
+      && topBarStore.addedWatchLaterList.includes(watchLaterAid.value)
+  })
   const isHover = ref<boolean>(false)
   const isPreviewFullscreen = ref<boolean>(false)
   const mouseEnterTimeOut = ref<number | null>(null)
@@ -87,6 +103,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   // 清理函数 - 在组件卸载时调用
   onScopeDispose(() => {
     isDisposed.value = true
+    previewRequestGeneration++
     releaseVideoPreviewCacheEntry(previewCacheKey)
 
     // 清除所有待处理的超时
@@ -170,83 +187,128 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       .filter((mid): mid is number => typeof mid === 'number')
   }
 
+  async function resolveWatchLaterAid(video: Video): Promise<number | undefined> {
+    if (video.aid)
+      return video.aid
+
+    if (video.epid) {
+      const ids = await resolvePgcEpisodeVideoIds(video.epid)
+      return ids?.aid
+    }
+
+    if (video.roomid)
+      return undefined
+
+    if (video.bvid) {
+      const result: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
+      if (result.code === 0 && Number.isFinite(result.data?.aid))
+        return Number(result.data.aid)
+    }
+
+    return undefined
+  }
+
   // Watch
-  watch(() => isHover.value, async (newValue) => {
-    if (!props.value.video || !newValue)
+  watch([
+    () => props.value.video,
+    () => props.value.showWatchLater,
+    () => topBarStore.userInfo.mid,
+  ], async ([video, showWatchLater]) => {
+    const resolutionId = ++watchLaterResolutionId
+    resolvedWatchLaterAid.value = undefined
+    if (!video || !showWatchLater)
       return
 
-    // 如果组件已卸载，不执行任何操作
-    if (isDisposed.value)
+    await topBarStore.ensureWatchLaterState()
+    if (resolutionId !== watchLaterResolutionId)
+      return
+    if (watchLaterAid.value)
       return
 
-    // Moments feed preview control: Only load preview if video belongs to selected uploader
-    // This prevents loading previews for videos from other uploaders when switching
+    try {
+      const aid = await resolveWatchLaterAid(video)
+      if (resolutionId === watchLaterResolutionId)
+        resolvedWatchLaterAid.value = aid
+    }
+    catch (error) {
+      console.error('获取视频稍后再看状态失败:', error)
+    }
+  }, { immediate: true })
+
+  watch([
+    () => props.value.video,
+    isHover,
+    () => props.value.showPreview,
+    () => settings.value.enableVideoPreview,
+    () => topBarStore.isLogin,
+    momentsSelectedUploader,
+  ], async ([video, hover, showPreview, enableVideoPreview, isLogin]) => {
+    const generation = ++previewRequestGeneration
+    clearPreviewVideoUrl()
+
+    if (!video || !hover || !showPreview || !enableVideoPreview || !isLogin || isDisposed.value)
+      return
+
+    const isCurrentRequest = () => generation === previewRequestGeneration
+      && !isDisposed.value
+      && isHover.value
+      && props.value.video === video
+      && props.value.showPreview
+      && settings.value.enableVideoPreview
+      && topBarStore.isLogin
+
     if (momentsSelectedUploader.value !== null) {
-      const authorMids = getAuthorMids(props.value.video)
-      // If no authors found, don't load preview
-      if (authorMids.length === 0)
-        return
-      // If a specific uploader is selected and video doesn't belong to them, don't load preview
+      const authorMids = getAuthorMids(video)
       if (!authorMids.includes(momentsSelectedUploader.value))
         return
     }
 
-    if (props.value.showPreview && settings.value.enableVideoPreview && !previewVideoUrl.value) {
-      // 检查登录状态，未登录不允许视频预览
-      if (!topBarStore.isLogin)
-        return
-
-      // Handle live stream preview
-      if (props.value.video.roomid) {
-        try {
-          const res = await api.live.getLivePlayUrl({
-            cid: props.value.video.roomid,
-            platform: 'web', // 使用web平台获取FLV格式，加载更快
-            qn: 80, // 流畅画质，适合预览
-          })
-          // 再次检查是否已卸载
-          if (isDisposed.value || !isHover.value)
-            return
-          if (res.code === 0 && res.data.durl && res.data.durl.length > 0) {
-            previewVideoUrl.value = res.data.durl[0].url
-          }
-        }
-        catch {
-          // Ignore error
-        }
-      }
-      // Handle video preview
-      else if (props.value.video.aid || props.value.video.bvid) {
-        let cid = props.value.video.cid
-        if (!cid) {
-          try {
-            const res: VideoInfo = await api.video.getVideoInfo({
-              bvid: props.value.video.bvid,
-            })
-            // 检查是否已卸载
-            if (isDisposed.value || !isHover.value)
-              return
-            if (res.code === 0)
-              cid = res.data.cid
-          }
-          catch {
-            // Ignore error
-          }
-        }
-        // 如果组件已卸载，不发起请求
-        if (isDisposed.value)
-          return
-        api.video.getVideoPreview({
-          bvid: props.value.video.bvid,
-          cid,
-        }).then((res: VideoPreviewResult) => {
-          // 检查是否已卸载，已卸载则不更新状态
-          if (isDisposed.value || !isHover.value)
-            return
-          if (res.code === 0 && res.data.durl && res.data.durl.length > 0)
-            previewVideoUrl.value = res.data.durl[0].url
+    if (video.roomid) {
+      try {
+        const res = await api.live.getLivePlayUrl({
+          cid: video.roomid,
+          platform: 'web',
+          qn: 80,
         })
+        if (isCurrentRequest() && res.code === 0 && res.data.durl?.length)
+          previewVideoUrl.value = res.data.durl[0].url
       }
+      catch {
+        // Ignore preview request errors.
+      }
+      return
+    }
+
+    if (!video.aid && !video.bvid)
+      return
+
+    let cid = video.cid
+    if (!cid && video.bvid) {
+      try {
+        const res: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
+        if (!isCurrentRequest())
+          return
+        if (res.code === 0)
+          cid = res.data.cid
+      }
+      catch {
+        // Ignore preview request errors.
+      }
+    }
+
+    if (!isCurrentRequest())
+      return
+
+    try {
+      const res: VideoPreviewResult = await api.video.getVideoPreview({
+        bvid: video.bvid,
+        cid,
+      })
+      if (isCurrentRequest() && res.code === 0 && res.data.durl?.length)
+        previewVideoUrl.value = res.data.durl[0].url
+    }
+    catch {
+      // Ignore preview request errors.
     }
   })
 
@@ -258,14 +320,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
     retainVideoPreviewCacheEntry(previewCacheKey, clearPreviewVideoUrl, hover)
   }, { immediate: true })
-
-  watch([() => props.value.showPreview, () => settings.value.enableVideoPreview], ([showPreview, enableVideoPreview]) => {
-    if (showPreview && enableVideoPreview)
-      return
-
-    previewVideoUrl.value = ''
-    isHover.value = false
-  })
 
   // Methods
   function refreshTopBarWatchLaterAfterMutation() {
@@ -281,57 +335,56 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }
 
   async function toggleWatchLater() {
-    if (!props.value.video)
+    if (!props.value.video || isUpdatingWatchLater.value)
       return
 
     const video = props.value.video
-    if (video.epid && !video.aid && !video.bvid) {
-      const ids = await resolvePgcEpisodeVideoIds(video.epid)
-      if (!ids) {
-        toast.error('无法获取该剧集的稍后再看信息')
+    isUpdatingWatchLater.value = true
+    try {
+      await topBarStore.ensureWatchLaterState()
+      const aid = watchLaterAid.value ?? await resolveWatchLaterAid(video)
+      if (props.value.video !== video)
+        return
+      if (!aid) {
+        toast.error('无法获取该视频的稍后再看信息')
         return
       }
-      resolvedWatchLaterAid.value = ids.aid
-    }
+      resolvedWatchLaterAid.value = aid
 
-    if (!isInWatchLater.value) {
-      const params: { bvid?: string, aid?: number, csrf: string } = {
-        csrf: getCSRF(),
-      }
-
-      // 优先使用bvid，如果没有则使用aid
-      if (video.bvid) {
-        params.bvid = video.bvid
+      if (!isInWatchLater.value) {
+        const res = await api.watchlater.saveToWatchLater({
+          ...(video.bvid ? { bvid: video.bvid } : { aid }),
+          csrf: getCSRF(),
+        })
+        if (res.code !== 0) {
+          toast.error(res.message)
+          return
+        }
+        if (!topBarStore.addedWatchLaterList.includes(aid))
+          topBarStore.addedWatchLaterList.push(aid)
       }
       else {
-        params.aid = video.aid || resolvedWatchLaterAid.value || video.id
+        const res = await api.watchlater.removeFromWatchLater({
+          aid,
+          csrf: getCSRF(),
+        })
+        if (res.code !== 0) {
+          toast.error(res.message)
+          return
+        }
+        const index = topBarStore.addedWatchLaterList.indexOf(aid)
+        if (index !== -1)
+          topBarStore.addedWatchLaterList.splice(index, 1)
       }
 
-      api.watchlater.saveToWatchLater(params)
-        .then((res) => {
-          if (res.code === 0) {
-            isInWatchLater.value = true
-            refreshTopBarWatchLaterAfterMutation()
-          }
-          else {
-            toast.error(res.message)
-          }
-        })
+      refreshTopBarWatchLaterAfterMutation()
     }
-    else {
-      api.watchlater.removeFromWatchLater({
-        aid: video.aid || resolvedWatchLaterAid.value || video.id,
-        csrf: getCSRF(),
-      })
-        .then((res) => {
-          if (res.code === 0) {
-            isInWatchLater.value = false
-            refreshTopBarWatchLaterAfterMutation()
-          }
-          else {
-            toast.error(res.message)
-          }
-        })
+    catch (error) {
+      console.error('更新稍后再看失败:', error)
+      toast.error('更新稍后再看失败')
+    }
+    finally {
+      isUpdatingWatchLater.value = false
     }
   }
 

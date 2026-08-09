@@ -538,8 +538,6 @@ function findAutoPlaySwitchButton(): { button: HTMLElement, isOn: boolean } | nu
     { container: '.auto-play', switchOn: '.switch-btn.on', switchOff: '.switch-btn:not(.on)' },
     // 旧版 B站
     { container: '.continuous-btn', switchOn: '.switch-btn.on', switchOff: '.switch-btn:not(.on)' },
-    // 备用：直接查找开关
-    { container: null, switchOn: '.switch-btn.on', switchOff: '.switch-btn:not(.on)' },
   ]
 
   for (const selector of selectors) {
@@ -1279,6 +1277,8 @@ export function showClockTime(firstShow = false) {
     }
   }
   else {
+    if (clockInterval)
+      clearInterval(clockInterval)
     clockInterval = null
     if (clockElement) {
       clockElement.style.display = 'none'

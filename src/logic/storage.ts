@@ -3,6 +3,7 @@ import browser from 'webextension-polyfill'
 
 import { useSettingsStorage } from '~/composables/useSettingsStorage'
 import { useStorageLocal } from '~/composables/useStorageLocal'
+import type { DockCollapseMode } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
@@ -12,8 +13,6 @@ import {
   normalizeListLayoutBreakpoint,
 } from '~/utils/gridLayout'
 import type { PageMode } from '~/utils/pageMode'
-
-export const storageDemo = useStorageLocal('webext-demo', 'Storage Demo')
 
 export type { AppAuthTokens } from './appAuthStorage'
 export { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from './appAuthStorage'
@@ -225,7 +224,7 @@ export interface Settings {
 
   disableFrostedGlass: boolean
   frostedGlassBlurIntensity: number
-  /** 分段控件液态滑动指示器；默认关闭以降低切换动画合成成本 */
+  /** 已隐藏的旧设置字段；分段控件液态指示器固定启用 */
   enableLiquidSegmentIndicator: boolean
   disableShadow: boolean
 
@@ -315,6 +314,7 @@ export interface Settings {
   alwaysUseDock: boolean
   autoHideDock: boolean
   halfHideDock: boolean
+  dockCollapseMode: DockCollapseMode
   dockPosition: 'left' | 'right' | 'bottom'
   dockItemsConfig: { page: AppPage, visible: boolean, openInNewTab: boolean, useOriginalBiliPage: boolean }[]
   pageMode: PageMode
@@ -411,7 +411,6 @@ export interface Settings {
   adaptToOtherPageStyles: boolean
   showTopBar: boolean
   useOriginalBilibiliTopBar: boolean
-  useOriginalBilibiliHomepage: boolean
   preventMobileRedirect: boolean
 
   // Video Player
@@ -584,6 +583,7 @@ export const originalSettings: Settings = {
   alwaysUseDock: false,
   autoHideDock: false,
   halfHideDock: false,
+  dockCollapseMode: 'button',
   dockPosition: 'right',
   dockItemsConfig: [],
   pageMode: 'custom',
@@ -677,7 +677,6 @@ export const originalSettings: Settings = {
   adaptToOtherPageStyles: true,
   showTopBar: true,
   useOriginalBilibiliTopBar: false,
-  useOriginalBilibiliHomepage: false,
   preventMobileRedirect: false,
 
   // Video Player
@@ -737,6 +736,7 @@ export const originalSettings: Settings = {
     videoTime: { key: 'G', enabled: true },
     clockTime: { key: 'H', enabled: true },
     homeRefresh: { key: 'R', enabled: true },
+    toggleFollow: { key: 'Shift+F', enabled: false },
   },
 
   // 倍速记忆设置
@@ -786,6 +786,7 @@ watch(
     Reflect.deleteProperty(record, 'alwaysUseTransparentTopBar')
     Reflect.deleteProperty(record, 'enableTopBarGradient')
     Reflect.deleteProperty(record, 'showTopBarThemeColorGradient')
+    Reflect.deleteProperty(record, 'useOriginalBilibiliHomepage')
 
     // 清理已移除的音量均衡功能设置。
     for (const field of ['enableVolumeNormalization', 'targetVolume', 'normalizationStrength', 'adaptiveGainSpeed', 'voiceGateDb', 'volumeNormalizationDebug'])
@@ -977,49 +978,11 @@ watch(
       Reflect.deleteProperty(record, 'customizeCSS')
       Reflect.deleteProperty(record, 'customizeCSSContent')
     }
-
-    // 迁移 gridColumns：从独立存储迁移到 settings
-    // 检查当前值是否有效（不是空对象且包含必需字段）
-    const hasValidGridColumns = record.gridColumns
-      && typeof record.gridColumns === 'object'
-      && 'base' in record.gridColumns
-      && Object.keys(record.gridColumns).length > 0
-
-    // 如果当前值无效，尝试从旧存储迁移
-    if (!hasValidGridColumns) {
-      browser.storage.local.get(['gridColumns']).then((result) => {
-        // 在回调执行时重新读取当前 settings.value，避免使用闭包中过期的 record 引用
-        let migratedGridColumns: GridColumnsConfig = { ...defaultGridColumns }
-
-        if (result.gridColumns) {
-          try {
-            // useStorageLocal 可能直接存储对象，也可能存储 JSON 字符串
-            let oldGridColumns = result.gridColumns
-            if (typeof oldGridColumns === 'string') {
-              oldGridColumns = JSON.parse(oldGridColumns)
-            }
-
-            // 验证数据结构是否正确
-            if (oldGridColumns && typeof oldGridColumns === 'object' && 'base' in oldGridColumns) {
-              migratedGridColumns = oldGridColumns as GridColumnsConfig
-              // 清理旧的独立存储
-              browser.storage.local.remove(['gridColumns'])
-            }
-          }
-          catch {
-            // JSON 解析失败，使用默认值
-          }
-        }
-
-        // 只更新 gridColumns 字段，不覆盖整个 settings
-        settings.value = { ...settings.value, gridColumns: migratedGridColumns }
-      })
-    }
   },
   { immediate: true },
 )
 
-void browser.storage.local.remove(['gridBreakpoints']).catch(() => {})
+void browser.storage.local.remove(['gridBreakpoints', 'gridColumns']).catch(() => {})
 
 export type GridLayoutType = 'adaptive' | 'twoColumns' | 'oneColumn'
 
@@ -1030,12 +993,6 @@ export interface GridLayout {
 export const gridLayout = useStorageLocal<GridLayout>('gridLayout', {
   home: 'adaptive',
 }, { mergeDefaults: true, writeDefaults: false })
-
-export const gridColumns = useStorageLocal<GridColumnsConfig>(
-  'gridColumns',
-  { ...defaultGridColumns },
-  { mergeDefaults: true, writeDefaults: false },
-)
 
 export const sidePanel = useStorageLocal<{
   home: boolean

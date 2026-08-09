@@ -1,4 +1,5 @@
 import { settings } from '~/logic'
+import { normalizeKeyboardEvent } from '~/utils/keyboard'
 // 导入需要的函数
 import {
   adjustVideoSize,
@@ -130,12 +131,11 @@ export function setupShortcutHandlers() {
 
   // 创建新的键盘事件监听器
   keydownListener = (e: KeyboardEvent) => {
-    // 快速检查：如果在输入框中或按下meta键，直接返回
+    // 快速检查：如果在输入框中，直接返回
     if (e.target instanceof HTMLInputElement
       || e.target instanceof HTMLTextAreaElement
       || (e.target as HTMLElement).isContentEditable
-      || (e.target instanceof HTMLElement && e.target.tagName === 'BILI-COMMENTS')
-      || e.metaKey) {
+      || (e.target instanceof HTMLElement && e.target.tagName === 'BILI-COMMENTS')) {
       return
     }
 
@@ -155,7 +155,9 @@ export function setupShortcutHandlers() {
     const player = document.querySelector('.bpx-player') || document.querySelector('.bilibili-player')
 
     // 生成当前按键组合
-    const keyCombo = generateKeyCombo(e)
+    const keyCombo = normalizeKeyboardEvent(e)
+    if (!keyCombo)
+      return
 
     // 遍历所有注册的快捷键
     try {
@@ -184,10 +186,7 @@ export function setupShortcutHandlers() {
           if (!configKey)
             continue
 
-          // 如果快捷键匹配
-          // 兼容：配置为 '+' 时，允许直接按 '=' 键触发（标准键盘上 '+' 需要 Shift+=）
-          if (configKey.toLowerCase() === keyCombo.toLowerCase()
-            || (configKey === '+' && keyCombo === '=')) {
+          if (configKey.toLowerCase() === keyCombo.toLowerCase()) {
             // 获取处理函数
             const handler = shortcutHandlers[id]
             if (handler) {
@@ -368,43 +367,15 @@ function toggleFollow(): void {
     // 检查是否未关注状态（有 not-follow 类）
     const isNotFollowing = followButton.classList.contains('not-follow')
 
-    // 创建并触发鼠标事件，确保Vue组件能响应
-    const triggerClick = (element: HTMLElement) => {
-      // 尝试多种方式触发点击
-      // 1. 标准 click
-      element.click()
-
-      // 2. 触发 mousedown 和 mouseup 事件
-      const mouseDownEvent = new MouseEvent('mousedown', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-      const mouseUpEvent = new MouseEvent('mouseup', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-      const clickEvent = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-
-      element.dispatchEvent(mouseDownEvent)
-      element.dispatchEvent(mouseUpEvent)
-      element.dispatchEvent(clickEvent)
-    }
-
     if (isNotFollowing) {
       // 未关注，直接点击关注
       // 尝试找到内部的 follow-btn-inner 元素
       const innerButton = followButton.querySelector<HTMLElement>('.follow-btn-inner')
       if (innerButton) {
-        triggerClick(innerButton)
+        innerButton.click()
       }
       else {
-        triggerClick(followButton)
+        followButton.click()
       }
     }
     else {
@@ -412,10 +383,10 @@ function toggleFollow(): void {
       // 先尝试点击内部元素
       const innerButton = followButton.querySelector<HTMLElement>('.follow-btn-inner')
       if (innerButton) {
-        triggerClick(innerButton)
+        innerButton.click()
       }
       else {
-        triggerClick(followButton)
+        followButton.click()
       }
 
       // 等待下拉框出现
@@ -436,7 +407,7 @@ function toggleFollow(): void {
           )
 
           if (unfollowButton) {
-            triggerClick(unfollowButton)
+            unfollowButton.click()
           }
         }
         catch (error) {
@@ -448,47 +419,4 @@ function toggleFollow(): void {
   catch (error) {
     console.error('[BewlyCat] Error toggling follow:', error)
   }
-}
-
-// 快捷键按键组合生成函数
-// 生成标准化的按键组合字符串
-function generateKeyCombo(e: KeyboardEvent): string {
-  const parts: string[] = []
-
-  // 添加修饰键(顺序要与配置中的一致)
-  if (e.ctrlKey)
-    parts.push('Ctrl')
-  if (e.altKey)
-    parts.push('Alt')
-  if (e.shiftKey)
-    parts.push('Shift')
-
-  // 处理主按键
-  let mainKey = e.key
-  // 对于单字符按键转为大写
-  if (mainKey.length === 1) {
-    mainKey = mainKey.toUpperCase()
-  }
-  // 特殊按键处理
-  else if (mainKey === ' ') {
-    mainKey = 'Space'
-  }
-  else if (mainKey === 'ArrowUp') {
-    mainKey = '↑'
-  }
-  else if (mainKey === 'ArrowDown') {
-    mainKey = '↓'
-  }
-  else if (mainKey === 'ArrowLeft') {
-    mainKey = '←'
-  }
-  else if (mainKey === 'ArrowRight') {
-    mainKey = '→'
-  }
-
-  parts.push(mainKey)
-
-  // 返回标准化的按键组合
-  const combo = parts.join('+')
-  return combo
 }

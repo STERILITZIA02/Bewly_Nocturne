@@ -516,7 +516,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.group_visual_effects',
     'settings.disable_frosted_glass_and_top_bar_gradient',
     'settings.frosted_glass_blur_intensity',
-    'settings.enable_liquid_segment_indicator',
     'settings.disable_shadow',
     'settings.group_page_style',
     'settings.adapt_to_other_page_styles',
@@ -562,7 +561,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ...createEntries(compatibilityRoute, [
     'settings.menu_compatibility',
     'settings.group_common',
-    'settings.use_original_bilibili_homepage',
     'settings.prevent_mobile_redirect',
     'settings.group_ad_blocking',
     'settings.block_ads',

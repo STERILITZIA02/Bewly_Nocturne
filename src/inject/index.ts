@@ -2,6 +2,7 @@
 import { PAGE_NO_COOKIE_SEARCH_REQUEST, PAGE_NO_COOKIE_SEARCH_RESPONSE } from '~/constants/api'
 import type { Settings } from '~/logic/storage'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
+import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { isElectron } from '~/utils/main'
 
 // 存储当前设置状态
@@ -3206,91 +3207,6 @@ else if (shouldInitializePageScript) {
     return originalFetch.call(this, input, init)
   }
 
-  // 页面加载完成后初始化随机播放（功能已迁移到contentScripts）
-
-  // Bilibili tracking parameters to be removed from URLs
-  const BILIBILI_TRACKING_PARAMS = [
-    'spm_id_from',
-    'vd_source',
-    'share_source',
-    'share_medium',
-    'share_plat',
-    'share_session_id',
-    'share_tag',
-    'share_times',
-    'unique_k',
-    'bbid',
-    'ts',
-    'from_source',
-    'from_spmid',
-    'from',
-    'buvid',
-    'is_story_h5',
-    'mid',
-    'p',
-    'plat_id',
-    'share_from',
-    'timestamp',
-    'csource',
-    'launch_id',
-    '-Arouter',
-  ]
-
-  function cleanUrl(url: string): string {
-    try {
-      const urlObj = new URL(url)
-      const hostname = urlObj.hostname.toLowerCase()
-      const isBilibiliHost = hostname === 'bilibili.com'
-        || hostname === 'b23.tv'
-        || hostname.endsWith('.bilibili.com')
-        || hostname.endsWith('.b23.tv')
-      if (!isBilibiliHost)
-        return url
-      for (const param of BILIBILI_TRACKING_PARAMS)
-        urlObj.searchParams.delete(param)
-      let cleaned = urlObj.toString()
-      if (urlObj.searchParams.toString() === '')
-        cleaned = cleaned.replace(/\?$/, '')
-      return cleaned
-    }
-    catch { return url }
-  }
-
-  // 提取文本中第一个成对的「【...】」内容，支持嵌套
-  function extractFirstBracketContent(text: string): string | null {
-    const start = text.indexOf('【')
-    if (start === -1)
-      return null
-    let depth = 0
-    for (let i = start; i < text.length; i++) {
-      if (text[i] === '【')
-        depth++
-      else if (text[i] === '】')
-        depth--
-      if (depth === 0 && i > start)
-        return text.slice(start + 1, i)
-    }
-    return null
-  }
-
-  function cleanShareText(text: string, includeTitle: boolean, removeTracking: boolean): string {
-    // 分别解析标题与链接，标题内部可能存在嵌套的「【...】」
-    const title = extractFirstBracketContent(text)
-    const urlMatch = text.match(/(https?:\/\/\S+)/)
-    const url = urlMatch?.[1]
-
-    if (url) {
-      const cleanedUrl = removeTracking ? cleanUrl(url) : url
-      if (title)
-        return includeTitle ? `${title} ${cleanedUrl}` : cleanedUrl
-      return cleanedUrl
-    }
-
-    if (removeTracking)
-      return text.replace(/(https?:\/\/\S+)/g, u => cleanUrl(u))
-    return text
-  }
-
   // 拦截 navigator.clipboard.writeText，启用净化分享链接功能
   const originalWriteText = navigator.clipboard.writeText.bind(navigator.clipboard)
   navigator.clipboard.writeText = function (text: string) {
@@ -3303,7 +3219,10 @@ else if (shouldInitializePageScript) {
     if (isBilibiliShare || hasBilibiliUrl) {
       const includeTitle = currentSettings?.cleanShareLinkIncludeTitle ?? false
       const removeTracking = currentSettings?.cleanShareLinkRemoveTrackingParams !== false
-      const cleanedText = cleanShareText(text, includeTitle, removeTracking)
+      const cleanedText = cleanBilibiliShareText(text, {
+        includeTitle,
+        removeTrackingParams: removeTracking,
+      })
       return originalWriteText(cleanedText)
     }
 

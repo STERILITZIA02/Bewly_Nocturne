@@ -69,6 +69,7 @@ const noMoreContent = ref<boolean>(true) // 排行榜没有分页
 const rankingGridRef = ref<HTMLElement | null>(null)
 const rankingGridWidth = ref(0)
 let rankingGridResizeObserver: ResizeObserver | null = null
+let requestGeneration = 0
 
 const isRankingAutoSwitchSingleColumn = computed(() => {
   if (props.gridLayout !== 'twoColumns' || !settings.value.autoSwitchListLayout || !rankingGridWidth.value)
@@ -135,7 +136,7 @@ function transformRankingVideo(item: RankingVideoItem, rank: number): Video {
 watch(() => activatedRankingType.value.id, () => {
   handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
 
-  initData()
+  void initData()
 })
 
 watch(() => props.topBarVisibility, () => {
@@ -154,7 +155,7 @@ watch(() => props.topBarVisibility, () => {
 })
 
 onMounted(() => {
-  initData()
+  void initData()
   initPageAction()
   window.addEventListener('resize', updateRankingGridWidth, { passive: true })
   nextTick(setupRankingGridResizeObserver)
@@ -163,6 +164,7 @@ onMounted(() => {
 watch(rankingGridRef, setupRankingGridResizeObserver, { flush: 'post' })
 
 onBeforeUnmount(() => {
+  requestGeneration++
   cleanupRankingGridResizeObserver()
   window.removeEventListener('resize', updateRankingGridWidth)
 })
@@ -175,31 +177,34 @@ function initPageAction() {
   handlePageRefresh.value = async () => {
     if (isLoading.value)
       return
-    initData()
+    await initData()
   }
 }
 
 function initData() {
+  const generation = ++requestGeneration
+  const rankingType = { ...activatedRankingType.value }
   videoList.length = 0
   PgcList.length = 0
-  getData()
+  return getData(generation, rankingType)
 }
 
-function getData() {
-  if ('seasonType' in activatedRankingType.value)
-    getRankingPgc()
-  else
-    getRankingVideos()
+function getData(generation: number, rankingType: RankingType) {
+  return 'seasonType' in rankingType
+    ? getRankingPgc(generation, rankingType.seasonType!)
+    : getRankingVideos(generation, rankingType)
 }
 
-function getRankingVideos() {
-  videoList.length = 0
+async function getRankingVideos(generation: number, rankingType: RankingType) {
   emit('beforeLoading')
   isLoading.value = true
-  api.ranking.getRankingVideos({
-    rid: activatedRankingType.value.rid,
-    type: 'type' in activatedRankingType.value ? activatedRankingType.value.type : 'all',
-  }).then((response: RankingResult) => {
+  try {
+    const response: RankingResult = await api.ranking.getRankingVideos({
+      rid: rankingType.rid,
+      type: 'type' in rankingType ? rankingType.type : 'all',
+    })
+    if (generation !== requestGeneration)
+      return
     if (response.code === 0) {
       const { list } = response.data
       // 添加 displayData 预处理
@@ -209,21 +214,28 @@ function getRankingVideos() {
       }))
       Object.assign(videoList, processedList)
     }
-  }).finally(() => {
-    isLoading.value = false
-    emit('afterLoading')
-  })
+  }
+  finally {
+    if (generation === requestGeneration) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
+  }
 }
 
-function getRankingPgc() {
-  PgcList.length = 0
+async function getRankingPgc(generation: number, seasonType: number) {
   isLoading.value = true
-  api.ranking.getRankingPgc({
-    season_type: activatedRankingType.value.seasonType,
-  }).then((response: RankingPgcResult) => {
+  try {
+    const response: RankingPgcResult = await api.ranking.getRankingPgc({ season_type: seasonType })
+    if (generation !== requestGeneration)
+      return
     if (response.code === 0)
       Object.assign(PgcList, response.data.list)
-  }).finally(() => isLoading.value = false)
+  }
+  finally {
+    if (generation === requestGeneration)
+      isLoading.value = false
+  }
 }
 
 defineExpose({ initData })

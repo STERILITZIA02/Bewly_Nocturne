@@ -22,6 +22,27 @@ type FuncMap = { [key in FilterType]: {
 
 type KeyPath = Array<string>[]
 
+function compileFilterRules(rules: Array<{ keyword: string }>) {
+  const stringValues: string[] = []
+  const regExpValues: RegExp[] = []
+
+  rules.forEach(({ keyword }) => {
+    if (keyword.startsWith('/') && keyword.endsWith('/')) {
+      try {
+        regExpValues.push(new RegExp(keyword.slice(1, -1), 'i'))
+      }
+      catch {
+        // Ignore an invalid user-supplied regular expression.
+      }
+    }
+    else {
+      stringValues.push(keyword.toUpperCase())
+    }
+  })
+
+  return { regExpValues, stringValues }
+}
+
 export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], keyList: KeyPath) {
   function filterOutVerticalVideos(item: any, keyPath: string[], _filterValue: number) {
     const value = get(item, keyPath)
@@ -62,17 +83,8 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
   }
 
   // #region filter by title
-  const filterByTitleStringValues: string[] = []
-  const filterByTitleRegExpValues: RegExp[] = []
-
-  settings.value.filterByTitle.forEach((item) => {
-    if (item.keyword.startsWith('/') && item.keyword.endsWith('/')) {
-      filterByTitleRegExpValues.push(new RegExp(item.keyword.slice(1, -1), 'i'))
-    }
-    else {
-      filterByTitleStringValues.push(`${item.keyword}`.toUpperCase())
-    }
-  })
+  let filterByTitleStringValues: string[] = []
+  let filterByTitleRegExpValues: RegExp[] = []
 
   /**
    * Compares the title of an item with the given key path.
@@ -89,17 +101,8 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
   // #endregion
 
   // #region filter by user
-  const filterByUserStringValues: string[] = []
-  const filterByUserRegExpValues: RegExp[] = []
-
-  settings.value.filterByUser.forEach((item) => {
-    if (item.keyword.startsWith('/') && item.keyword.endsWith('/')) {
-      filterByUserRegExpValues.push(new RegExp(item.keyword.slice(1, -1), 'i'))
-    }
-    else {
-      filterByUserStringValues.push(`${item.keyword}`.toUpperCase())
-    }
-  })
+  let filterByUserStringValues: string[] = []
+  let filterByUserRegExpValues: RegExp[] = []
 
   /**
    * Compares a given item with a key path and determines if it does not meets the filter criteria.
@@ -133,7 +136,7 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
     const filterTimeInSeconds = filterValue * dayInSeconds
     const timeDiff = now - publishTimestamp
 
-    return timeDiff <= filterTimeInSeconds
+    return timeDiff >= 0 && timeDiff <= filterTimeInSeconds
   }
 
   const funcMap: FuncMap = {
@@ -196,12 +199,19 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
     settings.value.filterByUser,
     settings.value.filterByPublishTime,
   ], ([filterOutVerticalVideos, durationFilter, viewCountFilter, likeCountFilter, titleFilter, userFilter, publishTimeFilter]) => {
+    const titleRules = compileFilterRules(settings.value.filterByTitle)
+    const userRules = compileFilterRules(settings.value.filterByUser)
+    filterByTitleStringValues = titleRules.stringValues
+    filterByTitleRegExpValues = titleRules.regExpValues
+    filterByUserStringValues = userRules.stringValues
+    filterByUserRegExpValues = userRules.regExpValues
+
     if (!filterOutVerticalVideos && !durationFilter && !viewCountFilter && !likeCountFilter && !titleFilter && !userFilter && !publishTimeFilter) {
       filter.value = null
       return
     }
     filter.value = factoryFilter(funcMap, filterOpt, keyList)
-  }, { immediate: true })
+  }, { deep: true, immediate: true })
 
   function factoryFilter(funcMap: FuncMap, filterOpt: FilterType[], keyList: KeyPath): (item: any) => boolean {
     interface FuncParams {

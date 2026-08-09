@@ -130,6 +130,10 @@ pnpm typecheck
 - 2026-08-08：建立平滑连续圆角、语义表面边框和主题色前景对比系统；统一设置页与 Dialog 的顶部渐变模糊层、关闭按钮、标签删除按钮和媒体裁切轮廓。
 - 2026-08-08：毛玻璃默认开启；唯一的负向设置 `disableFrostedGlass` 同时关闭全局毛玻璃与普通顶栏渐变并切换到实色表面。暗色主题色渐变由 `useLinearGradientThemeColorBackground` 统一控制页面与顶栏，不恢复旧顶栏专用开关。
 - 2026-08-08：统一扩展失效消息处理和内容脚本刷新提示；开发模式关闭内容脚本压缩，避免长期 watch 后增量函数重命名失配，生产构建仍沿用原有压缩行为。
+- 2026-08-09：新版本与重载提示统一为 round 面板轮廓；顶栏登录入口和共享关闭按钮改用实色语义表面。“Bewly 页面”二级导航新增播放页与消息页独立空框架，不预设状态或兼容层。
+- 2026-08-09：Dock 新增按钮收起、隐藏收起入口、离开后自动收起三档行为；收起态复用单一 Dock 实例并保持在展开 Dock 的几何中心。同一毛玻璃外壳先连续改变真实宽高，再分阶段加载或退出按钮组，不恢复为两个表面交叉淡入。
+- 2026-08-09：Stage 2 完成动态、历史、稍后再看、订阅流、榜单、过滤、快捷键、视频预览和 URL 净化的确定性修复；分页只在成功响应后推进，尾页数据先消费再结束，异步响应按局部 generation 隔离。
+- 2026-08-09：扩展重载后的旧 content script 将 context invalidated 视为终止状态；停止共享状态轮询并收敛未处理 Promise。Shadow DOM 样式失败时卸载该次插件 UI，不得显示透明、错位的无样式 Dock 或设置页；刷新页面后由新上下文正常挂载。
 
 ## Bewly_Nocturne 上游同步保护基线
 
@@ -139,6 +143,7 @@ pnpm typecheck
 
 - 主 Dock 是完整胶囊；未选中导航项没有圆形底板，Hover 保留发光反馈。浅色模式使用主题色选中背景和主题色光晕，深色模式保留白色发光指示与黑色选中图标。
 - Dock 指示器动画和刷新后的严格居中行为必须保留；Bilibili / Bewly / 自定义三档页面模式及其持久化、与 Dock 内容设置的同步关系不得拆散。
+- Dock 收起模式保留 `button / hidden / automatic` 三档：按钮模式在设置按钮后显示收起入口，隐藏模式不提供收起功能，自动模式在指针离开后收起且 Hover 圆球立即展开。收起圆球必须保持展开 Dock 的几何中心；展开时同一玻璃外壳先沿主轴增长，完成后按钮组再轻移进入，收起时顺序反转。不得通过 Teleport、第二套 Dock 状态或两个表面交叉淡入实现。
 - 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 顶栏，检测到 Bilibili Evolved 时沿用 Evolved 顶栏；自定义模式才允许单独选择。
 - 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
 
@@ -163,12 +168,18 @@ pnpm typecheck
 - 设置页和 Dialog 的顶部渐变模糊统一由 `PanelTopBlur.vue` 承担。装饰层不绘制背景或边框、不承担内容裁切，遮罩必须在物理边界前衰减透明；清晰表面边框必须在模糊层上方单独绘制，不得以 `overflow: hidden`、实色背景或重复 backdrop-filter 破坏渐变或模糊顶部圆角/边框。
 - 设置页从实际 Dock 设置按钮的 `DOMRect` 起源展开并保留 KeepAlive；只动画最外层面板的 opacity/transform，遮罩独立淡入淡出，不缩放顶部模糊层。
 - 圆形操作使用 `IconButton.vue`，关闭浮层使用 `CloseButton.vue`，删除搜索历史或 Chip 使用 `TagRemoveButton.vue`；不得重新在页面组件中复制几何、前景继承和交互样式，也不得混淆三种语义。
+- 左下新版本提示与内容脚本重载提示必须共用 `--bew-panel-radius` 和 `corner-shape: round`；不得将其中一个单独改回 superellipse。顶栏登录按钮使用实色主题背景与 `--bew-on-theme-color`，`CloseButton.vue` 的 surface 变体使用 elevated solid token，以保持深浅主题可读性。
 - 内存节省相关设置集中在“通用 → 内存节省”，保留各自持久化 key 和独立行为；不得在旧页面重复入口或把网络、画质、动画等无关性能项混入。
+- 播放页和消息页设置位于“Bewly 页面”的二级导航，分别由 `PlaybackPage/PlaybackPage.vue` 和 `MessagesPage/MessagesPage.vue` 作为独立叶子模块。实际页面设置出现前保持空内容，不新增存储字段、迁移、fallback 或重复入口。
 
 ### 设置与开发运行时
 
 - 当前设置结构直接以 `src/logic/storage.ts` 的默认值为准；已删除字段不恢复迁移、兼容别名或 fallback。视觉设置搜索目录和四套 locale 必须与实际入口同步，`common.close` 等共享组件文案不得退回局部硬编码。
 - 内容脚本、顶栏共享状态和设置存储统一通过 `src/utils/messaging.ts` 发送扩展消息；扩展重载造成的 context invalidated、消息端口关闭或接收端缺失应作为同一失效状态收敛，避免未处理 Promise 阻断页面挂载。
+- Shadow DOM 的主样式未就绪前必须保持插件容器隐藏；样式加载失败时卸载并移除容器，绝不能把无样式的 Dock、Sidebar 或设置页暴露到 Bilibili 原版页面。
+- 顶栏动态尾页必须先追加当前 `items` 再设置结束状态；稍后再看使用显式页码、aid 去重和完整集合刷新；History 补屏保持单一 async 请求链。不得退回通过数组长度推页、未等待递归或旧 index 删除。
+- `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；`src/utils/keyboard.ts` 同时服务录制与运行时，必须保留 Meta/Command 和 `Shift + Equal` 对 `+` 的一致规范化。
+- 液态分段指示器保持固定启用及现有 morph、ResizeObserver 和 reduced-motion 行为；不得恢复 `enableLiquidSegmentIndicator` 的可见设置项、搜索入口或静态视觉分支。
 - `vite.config.content.ts` 的开发构建必须保持 `minify: false`，防止 Vite watch 增量更新后函数重命名与调用点错配；该约束仅用于 `pnpm dev`，不得借此改变生产构建策略。
 
 ## 通用工程原则

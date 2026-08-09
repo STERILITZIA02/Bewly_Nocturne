@@ -28,7 +28,6 @@ const needToLoginFirst = ref<boolean>(false)
 const offset = ref<string>('')
 const updateBaseline = ref<string>('')
 const noMoreContent = ref<boolean>(false)
-const noMoreContentWarning = ref<boolean>(false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
@@ -41,11 +40,11 @@ onActivated(() => {
 })
 
 async function initData() {
+  needToLoginFirst.value = false
   offset.value = ''
   updateBaseline.value = ''
   videoList.value = []
   noMoreContent.value = false
-  noMoreContentWarning.value = false
 
   await getData()
 }
@@ -94,10 +93,8 @@ function initPageAction() {
   handleReachBottom.value = async () => {
     if (isLoading.value)
       return
-    if (noMoreContent.value) {
-      noMoreContentWarning.value = true
+    if (noMoreContent.value)
       return
-    }
     handleLoadMore()
   }
   handlePageRefresh.value = async () => {
@@ -131,6 +128,7 @@ async function getSubscribedSeriesVideos() {
     }
 
     if (response.code === 0) {
+      needToLoginFirst.value = false
       offset.value = response.data.offset
       updateBaseline.value = response.data.update_baseline
 
@@ -141,9 +139,6 @@ async function getSubscribedSeriesVideos() {
       }))
 
       videoList.value = [...videoList.value, ...newItems]
-    }
-    else if (response.code === -101) {
-      needToLoginFirst.value = true
     }
   }
   catch {
@@ -178,12 +173,12 @@ defineExpose({ initData })
       :items="videoList"
       :grid-layout="gridLayout"
       :loading="isLoading"
-      :no-more-content="noMoreContentWarning"
+      :no-more-content="noMoreContent"
       :need-to-login-first="needToLoginFirst"
       :transform-item="(item: VideoElement) => item.displayData"
       :get-item-key="(item: VideoElement) => item.uniqueId"
       video-type="bangumi"
-      :show-watcher-later="true"
+      :show-watch-later="true"
       @refresh="initData"
       @login="jumpToLoginPage"
       @load-more="handleLoadMore"

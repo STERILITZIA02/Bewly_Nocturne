@@ -24,12 +24,13 @@ async function toJsonHandler(data: Response): Promise<any> {
     throw new ApiRiskControlError()
   }
 
+  const textResponse = data.clone()
   try {
     return await data.json()
   }
   catch (error) {
     // 如果JSON解析失败，可能也是风控页面
-    const text = await data.clone().text()
+    const text = await textResponse.text()
     if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
       throw new ApiRiskControlError()
     }
@@ -40,24 +41,11 @@ function toData(data: Promise<any>): Promise<any> {
   return data
 }
 
-// if need sendResponse, use this
-// return a FetchAfterHandler function
-function sendResponseHandler(sendResponse: (response?: any) => void) {
-  return (data: any) => {
-    sendResponse(data)
-    return data
-  }
-}
-
 // 定义后处理流
 const AHS: {
   J_D: FetchAfterHandler[]
-  J_S: FetchAfterHandler[]
-  S: FetchAfterHandler[]
 } = {
   J_D: [toJsonHandler, toData],
-  J_S: [toJsonHandler, sendResponseHandler],
-  S: [sendResponseHandler],
 }
 
 interface Message {
@@ -83,7 +71,7 @@ interface API {
   afterHandle: ((response: Response) => Response | Promise<Response>)[]
 }
 // 重载API 可以为函数
-type APIFunction = (message: Message, sender?: any, sendResponse?: (response?: any) => void) => any
+type APIFunction = (message: Message, sender?: any) => any
 export type APIType = API | APIFunction
 interface APIMAP {
   [key: string]: APIType
@@ -110,14 +98,14 @@ function apiListenerFactory(API_MAP: APIMAP) {
       const tab = await browser.tabs.get(sender.tab.id)
       const storeId = tab.cookieStoreId || 'default'
       const cookies = await browser.cookies.getAll({ storeId })
-      return await doRequest(typedMessage, api, undefined, cookies)
+      return await doRequest(typedMessage, api, cookies)
     }
 
     return await doRequest(typedMessage, api)
   }
 }
 
-async function doRequest(message: Message, api: API, sendResponse?: (response?: any) => void, cookies?: Browser.Cookies.Cookie[]) {
+async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.Cookie[]) {
   try {
     let { contentScriptQuery, ...rest } = message
     // rest above two part body or params
@@ -249,12 +237,7 @@ async function doRequest(message: Message, api: API, sendResponse?: (response?: 
 
       // 执行 afterHandle 处理
       for (const func of afterHandle) {
-        if (func.name === sendResponseHandler.name && sendResponse) {
-          response = await sendResponseHandler(sendResponse)(response as any)
-        }
-        else {
-          response = await func(response as any)
-        }
+        response = await func(response as any)
       }
 
       return response
@@ -328,7 +311,6 @@ export {
   type APIMAP,
   type FetchAfterHandler,
   type Message,
-  sendResponseHandler,
   toData,
   toJsonHandler,
 }

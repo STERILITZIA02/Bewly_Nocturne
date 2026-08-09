@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { settings } from '~/logic'
 import { isHomePage, isInIframe } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -20,6 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const { openIframeDrawer } = useBewlyApp()
+const currentLocationHref = useCurrentLocationHref()
 
 const processedHref = computed(() => {
   if (!props.href)
@@ -45,11 +47,12 @@ const target = computed(() => {
     return '_blank'
   }
   if (openMode.value === 'currentTabIfNotHomepage') {
+    const currentUrl = currentLocationHref.value
     // When in iframe, treat as homepage by default
     if (isInIframe()) {
       return '_blank'
     }
-    return isHomePage() ? '_blank' : '_top'
+    return isHomePage(currentUrl) ? '_blank' : '_top'
   }
   if (openMode.value === 'currentTab') {
     return '_top'

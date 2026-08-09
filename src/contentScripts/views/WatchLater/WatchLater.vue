@@ -10,6 +10,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
+import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
 
 const { t } = useI18n()
@@ -86,30 +87,25 @@ async function getWatchLaterListByPage() {
   isLoading.value = true
 
   try {
-    const res: WatchLaterResult = await api.watchlater.getWatchLaterListByPage({
-      pn: pageNum.value,
-      ps: pageSize.value,
-    })
+    while (!noMoreContent.value) {
+      const res: WatchLaterResult = await api.watchlater.getWatchLaterListByPage({
+        pn: pageNum.value,
+        ps: pageSize.value,
+      })
 
-    if (res.code === 0) {
-      // 第一页时更新总数
-      if (pageNum.value === 1) {
+      if (res.code !== 0)
+        break
+
+      const list = Array.isArray(res.data?.list) ? res.data.list : []
+      if (pageNum.value === 1)
         watchLaterCount.value = res.data.count
-      }
 
-      // 如果返回的数据少于请求的数量，说明没有更多数据了
-      if (res.data.list.length < pageSize.value) {
-        noMoreContent.value = true
-      }
-
-      // 添加新数据到列表
-      currentWatchLaterList.value.push(...res.data.list)
+      currentWatchLaterList.value.push(...list)
       pageNum.value++
+      noMoreContent.value = list.length < pageSize.value
 
-      // 如果没有滚动条且还有更多数据，继续加载
-      if (!await haveScrollbar() && !noMoreContent.value) {
-        getWatchLaterListByPage()
-      }
+      if (noMoreContent.value || await haveScrollbar())
+        break
     }
   }
   finally {
@@ -117,15 +113,17 @@ async function getWatchLaterListByPage() {
   }
 }
 
-function deleteWatchLaterItem(index: number, aid: number) {
+function deleteWatchLaterItem(aid: number) {
   api.watchlater.removeFromWatchLater({
     aid,
     csrf: getCSRF(),
   })
     .then((res) => {
       if (res.code === 0) {
-        currentWatchLaterList.value.splice(index, 1)
-        watchLaterCount.value--
+        const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
+        if (currentIndex !== -1)
+          currentWatchLaterList.value.splice(currentIndex, 1)
+        watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
         syncTopBarWatchLaterState()
       }
     })
@@ -207,9 +205,9 @@ function handleVideoLinkClick(bvid: string) {
   }
 }
 
-function handleOpenVideoPageAndRemove(index: number, bvid: string, aid: number) {
+function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
   handleVideoLinkClick(bvid)
-  deleteWatchLaterItem(index, aid)
+  deleteWatchLaterItem(aid)
 }
 </script>
 
@@ -224,7 +222,7 @@ function handleOpenVideoPageAndRemove(index: number, bvid: string, aid: number) 
         <!-- watcher later list -->
         <TransitionGroup name="list">
           <ALink
-            v-for="(item, index) in currentWatchLaterList"
+            v-for="item in currentWatchLaterList"
             :key="item.aid"
             :href="`https://www.bilibili.com/video/${item.bvid}/`"
             type="videoCard"
@@ -290,7 +288,7 @@ function handleOpenVideoPageAndRemove(index: number, bvid: string, aid: number) 
                 <div w-full pos="absolute bottom-0" bg="white opacity-60">
                   <Progress
                     :percentage="
-                      (item.progress / item.duration) * 100
+                      normalizePlaybackProgress(item.progress, item.duration)
                     "
                   />
                 </div>
@@ -349,7 +347,7 @@ function handleOpenVideoPageAndRemove(index: number, bvid: string, aid: number) 
                       opacity-0 group-hover:opacity-100
                       p-2
                       duration-300
-                      @click.prevent.stop="handleOpenVideoPageAndRemove(index, item.bvid, item.aid)"
+                      @click.prevent.stop="handleOpenVideoPageAndRemove(item.bvid, item.aid)"
                     >
                       <div i-tabler:player-play />
                     </button>
@@ -373,7 +371,7 @@ function handleOpenVideoPageAndRemove(index: number, bvid: string, aid: number) 
                       opacity-0 group-hover:opacity-100
                       p-2
                       duration-300
-                      @click.prevent.stop="deleteWatchLaterItem(index, item.aid)"
+                      @click.prevent.stop="deleteWatchLaterItem(item.aid)"
                     >
                       <div i-tabler:trash />
                     </button>

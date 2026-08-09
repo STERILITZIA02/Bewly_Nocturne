@@ -707,7 +707,7 @@ defineExpose({
             :loading="isLoading"
             :no-more-content="!hasMore"
             :request-failed="!!error"
-            :show-watcher-later="false"
+            :show-watch-later="false"
             :empty-description="t('common.no_data')"
             :show-loading-more-skeleton="false"
             :show-load-more-indicator="paginationMode === 'scroll' && transformedLiveRoomList.length > 0 && hasMore"

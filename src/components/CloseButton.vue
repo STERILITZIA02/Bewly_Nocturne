@@ -29,14 +29,14 @@ withDefaults(defineProps<{
 <style scoped lang="scss">
 .bew-close-button {
   color: var(--bew-text-1);
-  background: var(--bew-elevated);
+  background: var(--bew-elevated-solid);
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
   box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
   backdrop-filter: var(--bew-filter-glass-1);
   &:hover {
     color: var(--bew-theme-color);
-    background: var(--bew-theme-color-30);
+    background: var(--bew-elevated-solid-hover);
   }
 
   svg {
@@ -77,14 +77,14 @@ withDefaults(defineProps<{
 
 .bew-close-button--overlay {
   color: white;
-  background: rgb(0 0 0 / 48%);
+  background: rgb(0 0 0 / 72%);
   border-color: transparent;
   box-shadow: none;
   backdrop-filter: none;
 
   &:hover {
     color: white;
-    background: rgb(0 0 0 / 72%);
+    background: rgb(0 0 0 / 84%);
   }
 }
 </style>

@@ -1,6 +1,5 @@
 <script lang="ts">
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
-import { settings } from '~/logic'
 
 // 仅记录“曾经加载过”的 URL，避免重复淡入；不持有 ImageBitmap。
 const MAX_REMEMBERED_PICTURES = 240
@@ -190,8 +189,6 @@ function cleanupObserver() {
 
 function getObserverRoot(): Element | null {
   if (typeof window === 'undefined')
-    return null
-  if (settings.value.useOriginalBilibiliHomepage)
     return null
   const viewport = bewlyApp?.scrollViewportRef?.value
   return viewport?.isConnected ? viewport : null

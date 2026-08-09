@@ -15,7 +15,7 @@ import type { Video } from './types'
 import VideoCardContextMenu from './VideoCardContextMenu/VideoCardContextMenu.vue'
 
 const props = withDefaults(defineProps<Props>(), {
-  showWatcherLater: true,
+  showWatchLater: true,
   type: 'common',
   moreBtn: true,
   disableContentVisibility: false,
@@ -25,7 +25,7 @@ interface Props {
   skeleton?: boolean
   video?: Video
   type?: 'rcmd' | 'appRcmd' | 'bangumi' | 'common'
-  showWatcherLater?: boolean
+  showWatchLater?: boolean
   horizontal?: boolean
   showPreview?: boolean
   moreBtn?: boolean
@@ -393,7 +393,7 @@ provide('getVideoType', () => props.type!)
             :preview-video-url="logic.previewVideoUrl.value || ''"
             :video-element="logic.videoElement.value || null"
             :is-in-watch-later="logic.isInWatchLater.value"
-            :show-watcher-later="showWatcherLater && settings.showVideoCardWatchLater"
+            :show-watch-later="showWatchLater && settings.showVideoCardWatchLater"
             :cover-top-left-always-visible="coverTopLeftAlwaysVisible"
             :cover-image-url="coverImageUrl"
             :cover-stat-values="coverStatValues"

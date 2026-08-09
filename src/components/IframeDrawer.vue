@@ -522,7 +522,6 @@ watchEffect(() => {
             :key="iframeKey"
             ref="iframeRef"
             :src="currentUrl"
-            sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-modals"
             :style="iframeStyles"
             frameborder="0"
             tabindex="-1"

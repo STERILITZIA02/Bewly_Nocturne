@@ -30,6 +30,7 @@ const seriesList = ref<PopularSeriesItem[]>([])
 const activatedSeries = ref<PopularSeriesItem | null>(null)
 const videoList = ref<VideoElement[]>([])
 const noMoreContent = ref<boolean>(true) // 每周必看没有分页
+let requestGeneration = 0
 
 // 下拉选择器相关
 const searchQuery = ref<string>('')
@@ -100,6 +101,7 @@ onActivated(() => {
 })
 
 onUnmounted(() => {
+  requestGeneration++
   window.removeEventListener('resize', calculatePosition)
 })
 
@@ -107,11 +109,12 @@ function initPageAction() {
   handlePageRefresh.value = async () => {
     if (isLoading.value)
       return
-    initData()
+    await initData()
   }
 }
 
 async function initData() {
+  const generation = ++requestGeneration
   emit('beforeLoading')
   isLoading.value = true
   videoList.value.length = 0
@@ -120,6 +123,8 @@ async function initData() {
 
   try {
     const res: PopularSeriesListResult = await api.ranking.getPopularSeriesList()
+    if (generation !== requestGeneration)
+      return
     if (res && res.code === 0 && res.data && Array.isArray(res.data.list)) {
       // sort by number desc (latest first) if available
       seriesList.value = [...res.data.list].sort((a, b) => (b.number || 0) - (a.number || 0))
@@ -127,23 +132,27 @@ async function initData() {
         // 默认选择第一期（通常为最新期）
         activatedSeries.value = seriesList.value[0]
         handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
-        await fetchSeriesOne()
+        await fetchSeriesOne(generation, seriesList.value[0])
       }
     }
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (generation === requestGeneration) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
-async function fetchSeriesOne() {
-  if (!activatedSeries.value)
+async function fetchSeriesOne(generation: number, series: PopularSeriesItem | null) {
+  if (!series)
     return
 
   const res: PopularSeriesOneResult = await api.ranking.getPopularSeriesOne({
-    number: (activatedSeries.value as PopularSeriesItem).number,
+    number: series.number,
   })
+  if (generation !== requestGeneration || activatedSeries.value?.number !== series.number)
+    return
   if (res && res.code === 0 && res.data && Array.isArray(res.data.list)) {
     videoList.value = res.data.list.map((item, index) => ({
       ...item,
@@ -153,15 +162,19 @@ async function fetchSeriesOne() {
 }
 
 async function getSeriesOne() {
+  const generation = ++requestGeneration
+  const series = activatedSeries.value
   emit('beforeLoading')
   isLoading.value = true
   videoList.value.length = 0
   try {
-    await fetchSeriesOne()
+    await fetchSeriesOne(generation, series)
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (generation === requestGeneration) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 

@@ -115,7 +115,7 @@ function acknowledgeCurrentVersion() {
   background: var(--bew-theme-color);
   border: 1px solid var(--bew-theme-color);
   border-radius: var(--bew-panel-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: round;
   box-shadow: var(--bew-shadow-2);
   cursor: pointer;
   transition:

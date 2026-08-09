@@ -19,7 +19,6 @@
     "build-safari": "cross-env NODE_ENV=production SAFARI=true run-s clear-safari build:prepare build:js build:inject build:bg",
     "build-firefox": "cross-env NODE_ENV=production FIREFOX=true run-s clear-firefox build:prepare build:js build:inject build:bg",
     "build:prepare": "esno scripts/prepare.ts",
-    "build:web": "vite build",
     "build:js": "vite build --config vite.config.content.ts",
     "build:inject": "vite build --config vite.config.inject.ts",
     "build:bg": "tsup",

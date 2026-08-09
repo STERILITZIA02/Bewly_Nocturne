@@ -105,6 +105,8 @@ settings:
   category_navigation_dock_desc: 配置 Dock 栏与侧栏的位置、显隐和快捷操作。
   category_navigation_search_desc: 配置搜索页外观、搜索建议、历史、热搜与结果页。
   category_navigation_moments_desc: 配置插件动态页的左侧组件和动态卡片打开方式。
+  category_navigation_playback_page_desc: 为播放页后续设置预留独立配置区域。
+  category_navigation_messages_page_desc: 为消息页后续设置预留独立配置区域。
   category_playback_player_desc: 配置播放器模式、滚动行为、弹幕、字幕和播放状态。
   category_playback_autoplay_desc: 配置自动连播与自定义播放行为。
   category_bilibili_comments_desc: 增强评论区的用户信息与内容显示。
@@ -140,6 +142,8 @@ settings:
     moments: 动态页
     favorites: 收藏
     search: 搜索页
+    playback_page: 播放页
+    messages_page: 消息页
 
   # Bilibili 功能增强 子菜单
   bilibili_features:
@@ -321,9 +325,6 @@ settings:
   disable_frosted_glass_and_top_bar_gradient: 关闭毛玻璃与顶栏渐变
   disable_frosted_glass_and_top_bar_gradient_desc: 开启后关闭全局毛玻璃和顶栏渐变，并使用实色表面；两种效果默认开启。
   frosted_glass_blur_intensity: 毛玻璃模糊强度
-  enable_liquid_segment_indicator: 启用液态分段指示器
-  enable_liquid_segment_indicator_desc: |
-    在首页标签、布局切换、顶栏页面切换器等分段控件上使用滑动液态指示器。关闭后改为静态选中态，无滑动动画，默认关闭以提升低性能设备流畅度。
   disable_shadow: 禁用阴影
   link_opening_behavior_opt:
     current_tab: 当前标签页
@@ -545,6 +546,11 @@ settings:
   always_use_dock_desc: 启用后，Dock 栏将始终显示，侧边栏将隐藏。我们推荐你同时启用自动隐藏 Dock 栏。
   auto_hide_dock: 自动隐藏 Dock 栏
   half_hide_dock: 半隐藏 Dock 栏
+  dock_collapse_mode: Dock 收起方式
+  dock_collapse_mode_desc: 控制收起按钮是否显示，或在指针离开后自动收起为悬浮圆球。
+  dock_collapse_mode_button: 显示收起按钮
+  dock_collapse_mode_hidden: 不显示收起按钮
+  dock_collapse_mode_automatic: 无按钮，离开后自动收起
   dock_position: Dock 栏位置
   dock_position_desc: 在屏幕中摆放位置。
   dock_content_adjustment: Dock 内容调整
@@ -675,8 +681,6 @@ settings:
   home_tabs_adjustment_desc: 第一个激活的标签项是默认界面
   always_show_tabs_on_home_page: 滚动隐藏首页标签栏
   fixed_home_tabs_on_home_page: 固定首页标签栏
-  use_original_bilibili_homepage: 使用原版 Bilibili 首页
-  use_original_bilibili_homepage_desc: 在您更改此设置后，如果在首页上，页面将自动刷新！
   adapt_to_other_page_styles: 适应其他页面样式
   adapt_to_other_page_styles_desc: 适应一些常见页面，以与 BewlyMac 主题相匹配。
   prevent_mobile_redirect: 防止跳转移动端
@@ -936,6 +940,8 @@ dock:
   dark_mode: 暗色模式
   light_mode: 亮色模式
   settings: 设置
+  collapse_dock: 收起 Dock
+  expand_dock: 展开 Dock
 video_card:
   operation:
     not_interested: 不感兴趣

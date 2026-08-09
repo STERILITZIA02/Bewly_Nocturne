@@ -13,8 +13,8 @@ import {
   SEARCH_PAGE_URL,
   VIDEO_LIST_URL,
 } from '~/components/TopBar/constants/urls'
-import { updateInterval } from '~/components/TopBar/notify'
 import type { PrivilegeInfo, UnReadDm, UnReadMessage, UserInfo } from '~/components/TopBar/types'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import type {
   TopBarFavoritesChanged,
   TopBarRefreshClaim,
@@ -38,6 +38,7 @@ import { isExtensionContextInvalidatedError, onMessage, sendMessage } from '~/ut
 export const LOGIN_RECHECK_INTERVAL = 1000 * 60 // 已登录但 userInfo 未填充时重查的间隔
 
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000
+const UPDATE_INTERVAL = 1000 * 60 * 5
 
 function getNextReceiveAt(nextReceiveDays?: number, periodEndUnix?: number): number | null {
   if (Number.isFinite(periodEndUnix) && periodEndUnix! > 0)
@@ -55,6 +56,7 @@ function isBeforeNextReceiveAt(nextReceiveAt: number | null): boolean {
 
 export const useTopBarStore = defineStore('topBar', () => {
   const toast = useToast()
+  const currentLocationHref = useCurrentLocationHref()
   // 登录态是本地事实而非网络推导：初始值取 DedeUserID 存在性（同步、零请求），
   // 之后只有 -101 或本地 Cookie 清除才能翻转为未登录，瞬态失败永不翻转。
   // 否则刷新时的一次风控窗口会把已登录用户误判为未登录（见 issue #921）。
@@ -105,9 +107,14 @@ export const useTopBarStore = defineStore('topBar', () => {
   const watchLaterList = reactive<VideoItem[]>([])
   const favoriteStateVersion = ref(0)
   const isLoadingWatchLater = ref<boolean>(false)
+  let nextWatchLaterPage = 1
+  let watchLaterListGeneration = 0
   // 添加 Moments 相关状态
   const moments = reactive<any[]>([])
   const addedWatchLaterList = reactive<number[]>([])
+  let watchLaterStateAccountId: number | undefined
+  let watchLaterStateRequest: Promise<void> | null = null
+  let watchLaterStateGeneration = 0
   const isLoadingMoments = ref<boolean>(false)
   const noMoreMomentsContent = ref<boolean>(false)
   const livePage = ref<number>(1)
@@ -153,18 +160,18 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   // 从 useTopBarReactive 整合的计算属性
   const isSearchPage = computed((): boolean => {
-    return SEARCH_PAGE_URL.test(location.href)
+    return SEARCH_PAGE_URL.test(currentLocationHref.value)
   })
 
   const isTopBarFixed = computed((): boolean => {
     if (
-      isHomePage()
-      || VIDEO_LIST_URL.test(location.href)
-      || BANGUMI_PLAY_URL.test(location.href)
-      || MOMENTS_URL.test(location.href)
-      || CHANNEL_PAGE_URL.test(location.href)
-      || READ_HOME_URL.test(location.href)
-      || ACCOUNT_URL.test(location.href)
+      isHomePage(currentLocationHref.value)
+      || VIDEO_LIST_URL.test(currentLocationHref.value)
+      || BANGUMI_PLAY_URL.test(currentLocationHref.value)
+      || MOMENTS_URL.test(currentLocationHref.value)
+      || CHANNEL_PAGE_URL.test(currentLocationHref.value)
+      || READ_HOME_URL.test(currentLocationHref.value)
+      || ACCOUNT_URL.test(currentLocationHref.value)
     ) {
       return true
     }
@@ -174,8 +181,8 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   const showTopBar = computed((): boolean => {
     if (
-      CREATOR_PLATFORM_URL.test(location.href)
-      || READ_PREVIEW_URL.test(location.href)
+      CREATOR_PLATFORM_URL.test(currentLocationHref.value)
+      || READ_PREVIEW_URL.test(currentLocationHref.value)
     ) {
       return false
     }
@@ -204,7 +211,12 @@ export const useTopBarStore = defineStore('topBar', () => {
     newMomentsCount.value = 0
     watchLaterCount.value = 0
     watchLaterList.splice(0)
+    nextWatchLaterPage = 1
+    watchLaterListGeneration++
     addedWatchLaterList.splice(0)
+    watchLaterStateAccountId = undefined
+    watchLaterStateRequest = null
+    watchLaterStateGeneration++
     moments.splice(0)
     livePage.value = 1
     momentUpdateBaseline.value = ''
@@ -596,6 +608,45 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
+  function invalidateWatchLaterState() {
+    watchLaterStateGeneration++
+    watchLaterStateAccountId = undefined
+    watchLaterStateRequest = null
+  }
+
+  async function ensureWatchLaterState(force = false) {
+    const accountId = userInfo.mid
+    if (!isCurrentAccount(accountId) || (!force && watchLaterStateAccountId === accountId))
+      return
+    if (!force && watchLaterStateRequest)
+      return watchLaterStateRequest
+
+    const requestGeneration = force ? ++watchLaterStateGeneration : watchLaterStateGeneration
+    const request = (async () => {
+      const res = await api.watchlater.getAllWatchLaterList()
+      if (res.code !== 0 || !isCurrentAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
+        return
+
+      const list = Array.isArray(res.data?.list) ? res.data.list as VideoItem[] : []
+      const aids = [...new Set(list.map(item => item.aid).filter(aid => Number.isFinite(aid)))]
+      addedWatchLaterList.splice(0, addedWatchLaterList.length, ...aids)
+      watchLaterStateAccountId = accountId
+    })()
+
+    watchLaterStateRequest = request
+    try {
+      await request
+    }
+    catch (error) {
+      if (!isExtensionContextInvalidatedError(error))
+        console.error('获取稍后再看状态失败:', error)
+    }
+    finally {
+      if (watchLaterStateRequest === request)
+        watchLaterStateRequest = null
+    }
+  }
+
   // 获取稍后再看列表数量
   async function getWatchLaterCount() {
     const accountId = userInfo.mid
@@ -612,16 +663,29 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
-      console.error(error)
+      if (!isExtensionContextInvalidatedError(error))
+        console.error(error)
     }
   }
 
   // 获取稍后再看列表
+  function dedupeWatchLaterItems(items: VideoItem[]): VideoItem[] {
+    const seen = new Set<number>()
+    return items.filter((item) => {
+      if (!Number.isFinite(item.aid) || seen.has(item.aid))
+        return false
+      seen.add(item.aid)
+      return true
+    })
+  }
+
   async function getAllWatchLaterList() {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
       return
 
+    const requestGeneration = ++watchLaterListGeneration
+    nextWatchLaterPage = 1
     isLoadingWatchLater.value = true
 
     try {
@@ -629,17 +693,19 @@ export const useTopBarStore = defineStore('topBar', () => {
         pn: 1,
         ps: 10,
       })
-      if (res.code === 0 && isCurrentAccount(accountId)) {
+      if (res.code === 0 && isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration) {
+        const list = dedupeWatchLaterItems(Array.isArray(res.data?.list) ? res.data.list : [])
         watchLaterCount.value = res.data.count
-        watchLaterList.splice(0)
-        Object.assign(watchLaterList, res.data.list)
+        watchLaterList.splice(0, watchLaterList.length, ...list)
+        nextWatchLaterPage = 2
       }
     }
     catch (error) {
-      console.error(error)
+      if (!isExtensionContextInvalidatedError(error))
+        console.error(error)
     }
     finally {
-      if (isCurrentAccount(accountId))
+      if (isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration)
         isLoadingWatchLater.value = false
     }
   }
@@ -650,10 +716,11 @@ export const useTopBarStore = defineStore('topBar', () => {
     if (!isCurrentAccount(accountId) || isLoadingWatchLater.value)
       return
 
-    const currentPage = Math.floor(watchLaterList.length / 10) + 1
+    const requestGeneration = watchLaterListGeneration
+    const currentPage = nextWatchLaterPage
     const totalPages = Math.ceil(watchLaterCount.value / 10)
 
-    if (currentPage > totalPages)
+    if (currentPage > totalPages || watchLaterList.length >= watchLaterCount.value)
       return
 
     isLoadingWatchLater.value = true
@@ -663,21 +730,26 @@ export const useTopBarStore = defineStore('topBar', () => {
         pn: currentPage,
         ps: 10,
       })
-      if (res.code === 0 && isCurrentAccount(accountId)) {
-        watchLaterList.push(...res.data.list)
+      if (res.code === 0 && isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration) {
+        const existingAids = new Set(watchLaterList.map(item => item.aid))
+        const list = dedupeWatchLaterItems(Array.isArray(res.data?.list) ? res.data.list : [])
+          .filter(item => !existingAids.has(item.aid))
+        watchLaterList.push(...list)
+        nextWatchLaterPage = currentPage + 1
       }
     }
     catch (error) {
-      console.error(error)
+      if (!isExtensionContextInvalidatedError(error))
+        console.error(error)
     }
     finally {
-      if (isCurrentAccount(accountId))
+      if (isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration)
         isLoadingWatchLater.value = false
     }
   }
 
   // 删除稍后再看项目
-  async function deleteWatchLaterItem(index: number, aid: number) {
+  async function deleteWatchLaterItem(aid: number) {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
       return
@@ -688,8 +760,15 @@ export const useTopBarStore = defineStore('topBar', () => {
         csrf: getCSRF(),
       })
       if (res.code === 0 && isCurrentAccount(accountId)) {
-        watchLaterList.splice(index, 1)
+        const index = watchLaterList.findIndex(item => item.aid === aid)
+        if (index !== -1)
+          watchLaterList.splice(index, 1)
         watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
+
+        const stateIndex = addedWatchLaterList.indexOf(aid)
+        if (stateIndex !== -1)
+          addedWatchLaterList.splice(stateIndex, 1)
+        invalidateWatchLaterState()
 
         // 先保留本地乐观更新；B 站删除接口返回后，列表查询偶尔仍会短暂返回旧数量。
         // 延迟同步可避免把刚删除的项目/计数立即覆盖回来。
@@ -701,7 +780,8 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
-      console.error(error)
+      if (!isExtensionContextInvalidatedError(error))
+        console.error(error)
     }
   }
 
@@ -732,6 +812,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     if (!isCurrentAccount(accountId) || isLoadingMoments.value || noMoreMomentsContent.value)
       return
 
+    const isFirstPage = !momentOffset.value
     isLoadingMoments.value = true
     api.moment.getTopBarMoments({
       type: selectedType,
@@ -740,12 +821,8 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
       .then((res: any) => {
         if (res.code === 0 && isCurrentAccount(accountId)) {
-          const { has_more, items, offset, update_baseline } = res.data
-
-          if (!has_more) {
-            noMoreMomentsContent.value = true
-            return
-          }
+          const { has_more, offset, update_baseline } = res.data
+          const items = Array.isArray(res.data.items) ? res.data.items : []
 
           // 更新状态
           // newMomentsCount.value = update_num
@@ -800,7 +877,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
             // 如果是第一次加载（offset为空），需要根据过滤和合并后的实际数量调整 newMomentsCount
             // 因为过滤专栏和合并联合投稿会导致显示的条目数量少于原始的 update_num
-            if (!momentOffset.value && selectedType === 'video') {
+            if (isFirstPage && selectedType === 'video') {
               // 计算过滤前有多少新内容
               const originalNewCount = newMomentsCount.value
               // 计算过滤和合并后的实际条目数
@@ -838,6 +915,8 @@ export const useTopBarStore = defineStore('topBar', () => {
               }
             })
           }
+
+          noMoreMomentsContent.value = !has_more || items.length === 0
         }
       })
       .catch(error => console.error(error))
@@ -980,38 +1059,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     return index < newMomentsCount.value
   }
 
-  function toggleWatchLater(aid: number) {
-    const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId))
-      return
-
-    const isInWatchLater = addedWatchLaterList.includes(aid)
-
-    if (!isInWatchLater) {
-      api.watchlater.saveToWatchLater({
-        aid,
-        csrf: getCSRF(),
-      })
-        .then((res: any) => {
-          if (res.code === 0 && isCurrentAccount(accountId))
-            addedWatchLaterList.push(aid)
-        })
-    }
-    else {
-      api.watchlater.removeFromWatchLater({
-        aid,
-        csrf: getCSRF(),
-      })
-        .then((res: any) => {
-          if (res.code === 0 && isCurrentAccount(accountId)) {
-            const index = addedWatchLaterList.indexOf(aid)
-            if (index !== -1)
-              addedWatchLaterList.splice(index, 1)
-          }
-        })
-    }
-  }
-
   function handleNotificationsItemClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
     if (settings.value.openNotificationsPageAsDrawer) {
       drawerVisible.notifications = true
@@ -1118,7 +1165,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       TOP_BAR_STATE_MESSAGE.CLAIM_REFRESH,
       {
         accountId,
-        maxAge: updateInterval,
+        maxAge: UPDATE_INTERVAL,
         force: options.force,
       },
     )
@@ -1215,9 +1262,19 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function syncWatchLaterState(includeList = false) {
+    if (includeList)
+      invalidateWatchLaterState()
+
     return syncSharedData({
       force: true,
-      refresh: includeList ? getAllWatchLaterList : getWatchLaterCount,
+      refresh: includeList
+        ? async () => {
+          await Promise.all([
+            getAllWatchLaterList(),
+            ensureWatchLaterState(true),
+          ])
+        }
+        : getWatchLaterCount,
     })
   }
 
@@ -1274,7 +1331,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     // 1. 已登录但 userInfo 尚未填充（初始化时撞风控/限流）：按
     //    LOGIN_RECHECK_INTERVAL 重查，瞬态失败指数退避（60s → 120s → 240s →
     //    300s 封顶），填充成功即转 2；
-    // 2. userInfo 已填充：按 updateInterval 同步角标状态。
+    // 2. userInfo 已填充：按固定间隔同步角标状态。
     // 未登录时不启动任何轮询，等待事件唤醒（见 issue #921）。
     const maxRecheckInterval = 5 * 60 * 1000
     let recheckInterval = LOGIN_RECHECK_INTERVAL
@@ -1317,7 +1374,7 @@ export const useTopBarStore = defineStore('topBar', () => {
                   console.error('同步顶栏共享状态失败:', error)
                 })
               }
-              scheduleNext(needsRecheck() ? recheckInterval : updateInterval)
+              scheduleNext(needsRecheck() ? recheckInterval : UPDATE_INTERVAL)
             })
           return
         }
@@ -1332,14 +1389,14 @@ export const useTopBarStore = defineStore('topBar', () => {
         syncSharedData().catch((error) => {
           console.error('同步顶栏共享状态失败:', error)
         })
-        scheduleNext(updateInterval)
+        scheduleNext(UPDATE_INTERVAL)
       }, delay)
     }
 
     if (!isLogin.value)
       return
 
-    scheduleNext(needsRecheck() ? LOGIN_RECHECK_INTERVAL : updateInterval)
+    scheduleNext(needsRecheck() ? LOGIN_RECHECK_INTERVAL : UPDATE_INTERVAL)
   }
   function stopUpdateTimer() {
     updateTimerGeneration++
@@ -1416,6 +1473,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     syncUnreadMessageState,
     syncMomentsState,
     syncWatchLaterState,
+    ensureWatchLaterState,
     invalidateUnreadMessageState,
     notifyFavoritesChanged,
     startUpdateTimer,
@@ -1433,8 +1491,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     initMomentsData,
     getMomentsData,
     isNewMoment,
-    toggleWatchLater,
-
     getWatchLaterCount,
     getAllWatchLaterList,
     loadMoreWatchLaterList,

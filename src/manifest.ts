@@ -16,15 +16,6 @@ export async function getManifest() {
     version: pkg.version,
     description: pkg.description,
     homepage_url: pkg.homepage,
-    // action: {
-    //   default_icon: './assets/icon-512.png',
-    //   default_popup: './dist/popup/index.html',
-    // },
-    // options_ui: {
-    //   page: './dist/options/index.html',
-    //   open_in_tab: true,
-    // },
-
     // Setting `persistent` to true in Manifest V3 results in an error in Firefox
     // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background
     background: (isFirefox || isSafari)

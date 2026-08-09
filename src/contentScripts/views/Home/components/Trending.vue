@@ -26,6 +26,7 @@ const videoList = ref<VideoElement[]>([])
 const isLoading = ref<boolean>(false)
 const pn = ref<number>(1)
 const noMoreContent = ref<boolean>(false)
+let requestGeneration = 0
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
@@ -38,10 +39,11 @@ onActivated(() => {
 })
 
 async function initData() {
+  const generation = ++requestGeneration
   noMoreContent.value = false
   videoList.value = []
   pn.value = 1
-  await getData()
+  await getData(generation)
 }
 
 // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
@@ -73,15 +75,17 @@ function transformTrendingVideo(item: VideoElement): Video | undefined {
   }
 }
 
-async function getData() {
+async function getData(generation: number) {
   emit('beforeLoading')
   isLoading.value = true
   try {
-    await getTrendingVideos()
+    await getTrendingVideos(generation)
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (generation === requestGeneration) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
@@ -96,17 +100,22 @@ function initPageAction() {
   }
 }
 
-async function getTrendingVideos() {
+async function getTrendingVideos(generation: number) {
   if (noMoreContent.value)
     return
 
   try {
+    const page = pn.value
     const response: TrendingResult = await api.video.getPopularVideos({
-      pn: pn.value++,
+      pn: page,
       ps: 30,
     })
 
+    if (generation !== requestGeneration)
+      return
+
     if (response.code === 0) {
+      pn.value = page + 1
       noMoreContent.value = response.data.no_more
 
       const newItems = response.data.list.map((item: VideoItem) => ({
@@ -115,11 +124,17 @@ async function getTrendingVideos() {
         displayData: transformTrendingVideo({ uniqueId: `${item.aid}`, item }),
       }))
 
-      videoList.value = [...videoList.value, ...newItems]
+      const existingIds = new Set(videoList.value.map(item => item.uniqueId))
+      videoList.value.push(...newItems.filter((item) => {
+        if (existingIds.has(item.uniqueId))
+          return false
+        existingIds.add(item.uniqueId)
+        return true
+      }))
 
       // 初次加载且数据不足时继续加载
       if (videoList.value.length < 30 && !noMoreContent.value) {
-        await getTrendingVideos()
+        await getTrendingVideos(generation)
       }
     }
   }
@@ -133,16 +148,22 @@ async function handleLoadMore() {
   if (isLoading.value || noMoreContent.value)
     return
 
+  const generation = requestGeneration
   isLoading.value = true
   try {
-    await getTrendingVideos()
+    await getTrendingVideos(generation)
   }
   finally {
-    isLoading.value = false
+    if (generation === requestGeneration)
+      isLoading.value = false
   }
 }
 
 defineExpose({ initData })
+
+onScopeDispose(() => {
+  requestGeneration++
+})
 </script>
 
 <template>

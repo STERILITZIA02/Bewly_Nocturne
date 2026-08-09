@@ -367,7 +367,7 @@ function handleClickChannel() {
       >
         <!-- B币领取提醒dot -->
         <div
-          v-if="hasBCoinToReceive && item?.code === 'vip_rewards'"
+          v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
           class="unread-dot"
           pos="absolute top-1 right-1"
           style="z-index: 999 !important;"

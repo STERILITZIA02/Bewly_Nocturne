@@ -1234,7 +1234,7 @@ defineExpose({ initData })
         :request-failed="requestFailed"
         :transform-item="transformVideoItem"
         :get-item-key="(item: VideoElement) => item.uniqueId"
-        :show-watcher-later="false"
+        :show-watch-later="false"
         is-following-page
         show-preview
         @refresh="initData"

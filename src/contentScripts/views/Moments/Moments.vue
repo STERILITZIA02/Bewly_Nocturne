@@ -2471,7 +2471,7 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
       watchLaterMomentIds.delete(stateKey)
     else
       watchLaterMomentIds.add(stateKey)
-    void topBarStore.syncWatchLaterState()
+    void topBarStore.syncWatchLaterState(true)
   }
   catch (error) {
     console.error('切换稍后再看状态失败:', error)
@@ -3174,14 +3174,12 @@ watch(
         <section
           class="moments-filter-panel bew-segment-control bew-segment-control--surface"
           :class="{
-            'bew-segment-control--static': !settings.enableLiquidSegmentIndicator,
             'bew-segment-control--solid': settings.disableFrostedGlass,
           }"
         >
           <div class="moments-filter-scroll">
             <div class="moments-filter-inside">
               <LiquidSegmentIndicator
-                v-if="settings.enableLiquidSegmentIndicator"
                 :active-key="activeMomentFilter"
               />
               <button

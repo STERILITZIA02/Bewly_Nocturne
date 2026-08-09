@@ -105,6 +105,8 @@ settings:
   category_navigation_dock_desc: Configure Dock and sidebar position, visibility, and quick actions.
   category_navigation_search_desc: Configure search appearance, suggestions, history, trending, and results.
   category_navigation_moments_desc: Configure the dynamic feed sidebar and how dynamic cards are opened.
+  category_navigation_playback_page_desc: Reserved for future playback page settings.
+  category_navigation_messages_page_desc: Reserved for future messages page settings.
   category_playback_player_desc: Configure player mode, scrolling, danmaku, captions, and playback state.
   category_playback_autoplay_desc: Configure autoplay and custom playback behavior.
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
@@ -140,6 +142,8 @@ settings:
     moments: Dynamic Feed
     favorites: Favorites
     search: Search
+    playback_page: Playback Page
+    messages_page: Messages Page
 
   # Bilibili Features Enhancement submenu
   bilibili_features:
@@ -333,11 +337,6 @@ settings:
   disable_frosted_glass_and_top_bar_gradient: Disable frosted glass and top bar gradient
   disable_frosted_glass_and_top_bar_gradient_desc: Turn this on to use solid surfaces without frosted glass or the top bar gradient. Both effects are enabled by default.
   frosted_glass_blur_intensity: Frosted glass blur intensity
-  enable_liquid_segment_indicator: Enable liquid segment indicator
-  enable_liquid_segment_indicator_desc: >
-    Use a sliding liquid indicator on segmented controls such as home tabs, layout switcher,
-    and top-bar page switcher. When off, the selected item uses a static highlight with no
-    sliding animation. Disabled by default for smoother performance on weaker devices.
   disable_shadow: Disable shadow
   link_opening_behavior_opt:
     current_tab: Current tab
@@ -494,6 +493,11 @@ settings:
     recommend enabling auto-hide for the dock.
   auto_hide_dock: Automatically hide the dock
   half_hide_dock: Half-hide dock
+  dock_collapse_mode: Dock collapse behavior
+  dock_collapse_mode_desc: Choose whether to show the collapse button or collapse to a floating orb when the pointer leaves.
+  dock_collapse_mode_button: Show collapse button
+  dock_collapse_mode_hidden: Hide collapse button
+  dock_collapse_mode_automatic: No button; collapse on leave
   dock_position: Dock position
   dock_position_desc: Position on screen.
   dock_content_adjustment: Dock content adjustment
@@ -639,10 +643,6 @@ settings:
   home_tabs_adjustment_desc: The first activated tab is the default page.
   always_show_tabs_on_home_page: Hide home tabs while scrolling
   fixed_home_tabs_on_home_page: Fix home tabs to the top
-  use_original_bilibili_homepage: Use the original Bilibili homepage
-  use_original_bilibili_homepage_desc: >-
-    After you change it, the page will automatically refresh if you are on the
-    homepage!
   adapt_to_other_page_styles: Adapt to other page styles
   adapt_to_other_page_styles_desc: Adapt to some common pages to match with the BewlyBewly theme.
   prevent_mobile_redirect: Prevent mobile redirect
@@ -997,6 +997,8 @@ dock:
   dark_mode: Dark Mode
   light_mode: Light Mode
   settings: Settings
+  collapse_dock: Collapse Dock
+  expand_dock: Expand Dock
 video_card:
   operation:
     not_interested: Not Interested

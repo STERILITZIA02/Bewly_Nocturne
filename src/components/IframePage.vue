@@ -259,7 +259,6 @@ defineExpose({
     <iframe
       ref="iframeRef"
       :src="props.url"
-      sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
       :style="{
         bottom: headerShow ? `var(--bew-top-bar-height)` : '0',
       }"

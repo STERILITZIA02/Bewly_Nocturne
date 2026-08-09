@@ -1,6 +1,5 @@
 <script setup lang="ts" generic="T extends string">
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
-import { settings } from '~/logic'
 
 defineProps<{
   modelValue: T
@@ -22,13 +21,11 @@ function selectOption(value: T) {
 <template>
   <div
     class="settings-segmented-control bew-segment-control bew-segment-control--surface bew-segment-control--solid"
-    :class="{ 'bew-segment-control--static': !settings.enableLiquidSegmentIndicator }"
     role="radiogroup"
     :aria-label="label"
     :style="{ gridTemplateColumns: `repeat(${options.length}, minmax(0, 1fr))` }"
   >
     <LiquidSegmentIndicator
-      v-if="settings.enableLiquidSegmentIndicator"
       :active-key="modelValue"
     />
 

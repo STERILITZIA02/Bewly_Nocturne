@@ -15,17 +15,19 @@ const keywordRef = ref<HTMLInputElement | null>(null)
 const remarkRef = ref<HTMLInputElement | null>(null)
 
 function handleAddFilter() {
-  if (!addingFilter.value.keyword.trim())
+  const keyword = addingFilter.value.keyword.trim()
+  const remark = addingFilter.value.remark.trim()
+  if (!keyword)
     return
 
   const hasDuplicate = settings.value.filterByTitle.find(
-    (item, itemIndex) => item.keyword === addingFilter.value.keyword.trim() && itemIndex !== editingIndex.value,
+    (item, itemIndex) => item.keyword === keyword && itemIndex !== editingIndex.value,
   )
   if (hasDuplicate) {
-    toast.warning('This title filter already exist!!!')
+    toast.warning(t('settings.filter_item_already_exist'))
     return
   }
-  settings.value.filterByTitle.unshift({ ...addingFilter.value })
+  settings.value.filterByTitle.unshift({ keyword, remark })
   nextTick(() => {
     handleClearAddingFilter()
   })
@@ -50,19 +52,19 @@ async function handleEditFilter(index: number, focusItem: 'keyword' | 'remark' =
 }
 
 function handleConfirmFilter(index: number) {
-  if (!editingFilter.value.keyword.trim())
+  const keyword = editingFilter.value.keyword.trim()
+  const remark = editingFilter.value.remark.trim()
+  if (!keyword)
     return
 
   const hasDuplicate = settings.value.filterByTitle.find(
-    (item, itemIndex) => item.keyword === editingFilter.value.keyword.trim() && itemIndex !== index,
+    (item, itemIndex) => item.keyword === keyword && itemIndex !== index,
   )
   if (hasDuplicate) {
     toast.warning(t('settings.filter_item_already_exist'))
     return
   }
-  addingFilter.value.keyword = addingFilter.value.keyword.trim()
-  addingFilter.value.remark = addingFilter.value.remark.trim()
-  settings.value.filterByTitle[index] = { ...editingFilter.value }
+  settings.value.filterByTitle[index] = { keyword, remark }
   if (index !== -1)
     editingIndex.value = -1
 }
@@ -72,8 +74,15 @@ function handleDeleteFilter(index: number) {
 }
 
 onKeyStroke('Escape', (e: KeyboardEvent) => {
+  const isAdding = !!(addingFilter.value.keyword || addingFilter.value.remark)
+  if (editingIndex.value < 0 && !isAdding)
+    return
+
   e.preventDefault()
-  editingIndex.value = -1
+  if (editingIndex.value >= 0)
+    editingIndex.value = -1
+  else
+    handleClearAddingFilter()
 })
 </script>
 

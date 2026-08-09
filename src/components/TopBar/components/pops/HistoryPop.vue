@@ -12,6 +12,7 @@ import { Business } from '~/models/history/history'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
+import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
 const { t } = useI18n()
 const historys = reactive<Array<HistoryItem>>([])
@@ -349,7 +350,7 @@ defineExpose({
                 </div>
                 <Progress
                   :percentage="
-                    (historyItem.progress / historyItem.duration) * 100
+                    normalizePlaybackProgress(historyItem.progress, historyItem.duration)
                   "
                 />
               </template>
