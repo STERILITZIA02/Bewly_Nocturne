@@ -1,21 +1,10 @@
-import { readonly, ref } from 'vue'
+import { computed } from 'vue'
 
-const currentLocationHref = ref(typeof window === 'undefined' ? '' : window.location.href)
-let routeWatcherStarted = false
+import { useRouteState } from './useRouteState'
 
-function updateCurrentLocationHref() {
-  if (currentLocationHref.value !== window.location.href)
-    currentLocationHref.value = window.location.href
-}
+const routeState = useRouteState()
+const currentLocationHref = computed(() => routeState.href)
 
 export function useCurrentLocationHref() {
-  if (!routeWatcherStarted && typeof window !== 'undefined') {
-    routeWatcherStarted = true
-    window.addEventListener('pushstate', updateCurrentLocationHref)
-    window.addEventListener('popstate', updateCurrentLocationHref)
-    window.addEventListener('hashchange', updateCurrentLocationHref)
-    window.setInterval(updateCurrentLocationHref, 1000)
-  }
-
-  return readonly(currentLocationHref)
+  return currentLocationHref
 }

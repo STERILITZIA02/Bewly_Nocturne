@@ -11,8 +11,8 @@ import { getTvSign, TVAppKey } from '~/utils/authProvider'
 import { calcCurrentTime, numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getCSRF, removeHttpFromUrl } from '~/utils/main'
-import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { openLinkInBackground } from '~/utils/tabs'
+import { resolveWatchLaterAid } from '~/utils/watchLater'
 
 import type { Video } from '../types'
 import { getCurrentTime, getCurrentVideoUrl } from '../utils'
@@ -83,7 +83,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   })
   const isInWatchLater = computed(() => {
     return watchLaterAid.value !== undefined
-      && topBarStore.addedWatchLaterList.includes(watchLaterAid.value)
+      && topBarStore.isInWatchLater(watchLaterAid.value)
   })
   const isHover = ref<boolean>(false)
   const isPreviewFullscreen = ref<boolean>(false)
@@ -185,27 +185,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     return authors
       .map(author => author.mid)
       .filter((mid): mid is number => typeof mid === 'number')
-  }
-
-  async function resolveWatchLaterAid(video: Video): Promise<number | undefined> {
-    if (video.aid)
-      return video.aid
-
-    if (video.epid) {
-      const ids = await resolvePgcEpisodeVideoIds(video.epid)
-      return ids?.aid
-    }
-
-    if (video.roomid)
-      return undefined
-
-    if (video.bvid) {
-      const result: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
-      if (result.code === 0 && Number.isFinite(result.data?.aid))
-        return Number(result.data.aid)
-    }
-
-    return undefined
   }
 
   // Watch
@@ -322,18 +301,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }, { immediate: true })
 
   // Methods
-  function refreshTopBarWatchLaterAfterMutation() {
-    const refresh = () => {
-      void topBarStore.syncWatchLaterState(true).catch((error) => {
-        console.error('刷新顶栏稍后再看状态失败:', error)
-      })
-    }
-
-    // 先立即同步；B 站写入偶尔有短暂延迟，再补一次最终状态。
-    refresh()
-    window.setTimeout(refresh, 1000)
-  }
-
   async function toggleWatchLater() {
     if (!props.value.video || isUpdatingWatchLater.value)
       return
@@ -342,6 +309,9 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     isUpdatingWatchLater.value = true
     try {
       await topBarStore.ensureWatchLaterState()
+      const accountId = topBarStore.userInfo.mid
+      if (!topBarStore.isLogin || !accountId)
+        return
       const aid = watchLaterAid.value ?? await resolveWatchLaterAid(video)
       if (props.value.video !== video)
         return
@@ -360,8 +330,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
           toast.error(res.message)
           return
         }
-        if (!topBarStore.addedWatchLaterList.includes(aid))
-          topBarStore.addedWatchLaterList.push(aid)
+        await topBarStore.commitWatchLaterMutation(aid, true, accountId)
       }
       else {
         const res = await api.watchlater.removeFromWatchLater({
@@ -372,12 +341,8 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
           toast.error(res.message)
           return
         }
-        const index = topBarStore.addedWatchLaterList.indexOf(aid)
-        if (index !== -1)
-          topBarStore.addedWatchLaterList.splice(index, 1)
+        await topBarStore.commitWatchLaterMutation(aid, false, accountId)
       }
-
-      refreshTopBarWatchLaterAfterMutation()
     }
     catch (error) {
       console.error('更新稍后再看失败:', error)

@@ -1,4 +1,5 @@
 export const SETTINGS_CLOUD_SYNC_ENABLED_KEY = 'settingsCloudSyncEnabled:v1'
+export const SETTINGS_CLOUD_SYNC_STATUS_KEY = 'settingsCloudSyncStatus:v1'
 export const SETTINGS_CLOUD_SYNC_KEY_PREFIX = 'bewlycat:settings:v1:'
 export const SETTINGS_CLOUD_SYNC_SCHEMA_VERSION = 1
 
@@ -6,6 +7,28 @@ export const SETTINGS_CLOUD_SYNC_SCHEMA_VERSION = 1
 // about 100 KiB in total) for differences in quota accounting across browsers.
 export const SETTINGS_CLOUD_SYNC_ITEM_BYTES_LIMIT = 7_500
 export const SETTINGS_CLOUD_SYNC_TOTAL_BYTES_LIMIT = 90_000
+export const SETTINGS_CLOUD_SYNC_RETRY_DELAYS = [2_000, 5_000, 15_000, 60_000] as const
+
+export interface SettingsCloudSyncStatus {
+  pendingCount: number
+  blockedByQuotaCount: number
+  failedCount: number
+  syncedCount: number
+  lastError: string
+}
+
+export const DEFAULT_SETTINGS_CLOUD_SYNC_STATUS: SettingsCloudSyncStatus = {
+  pendingCount: 0,
+  blockedByQuotaCount: 0,
+  failedCount: 0,
+  syncedCount: 0,
+  lastError: '',
+}
+
+export function getSettingsCloudSyncRetryDelay(attempt: number) {
+  const index = Math.min(Math.max(0, attempt), SETTINGS_CLOUD_SYNC_RETRY_DELAYS.length - 1)
+  return SETTINGS_CLOUD_SYNC_RETRY_DELAYS[index]
+}
 
 export interface SettingsCloudSyncVersion {
   counter: number

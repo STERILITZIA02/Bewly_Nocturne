@@ -1,5 +1,5 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
-import { PAGE_NO_COOKIE_SEARCH_REQUEST, PAGE_NO_COOKIE_SEARCH_RESPONSE } from '~/constants/api'
+import { createPageBridgeChannelId, matchesPageBridgeMessage, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
 import type { Settings } from '~/logic/storage'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
@@ -10,8 +10,17 @@ let currentSettings: Settings | null = null
 let settingsReady = false
 let preventMobileRedirectEnabled = false
 let resolveSettingsReady: (() => void) | null = null
+const pageBridgeChannelId = createPageBridgeChannelId()
 const settingsReadyPromise = new Promise<void>((resolve) => {
-  resolveSettingsReady = resolve
+  let timeoutId: number | undefined
+  const finish = () => {
+    if (timeoutId !== undefined)
+      window.clearTimeout(timeoutId)
+    resolveSettingsReady = null
+    resolve()
+  }
+  resolveSettingsReady = finish
+  timeoutId = window.setTimeout(finish, 1500)
 })
 
 const pageScriptGlobal = globalThis as typeof globalThis & {
@@ -500,6 +509,14 @@ else if (shouldInitializePageScript) {
     ['pushState'],
     (...args: any[]) => {
       window.dispatchEvent(new CustomEvent('pushstate', { detail: args }))
+    },
+  )
+
+  injectFunction(
+    window.history,
+    ['replaceState'],
+    (...args: any[]) => {
+      window.dispatchEvent(new CustomEvent('replacestate', { detail: args }))
     },
   )
 
@@ -3059,15 +3076,16 @@ else if (shouldInitializePageScript) {
     if (event.source !== window)
       return
 
-    const { type, data } = event.data
-
-    // 处理来自插件环境的消息
-    if (type === 'BEWLY_SETTINGS_UPDATE') {
-    // 更新设置
-      if (data) {
+    if (matchesPageBridgeMessage(event.data, {
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
+    })) {
+      const { data } = event.data
+      // 更新设置
+      if (typeof data === 'object' && data !== null) {
         const isFirstTime = !settingsReady
-        currentSettings = data
-        preventMobileRedirectEnabled = data.preventMobileRedirect === true
+        currentSettings = data as Settings
+        preventMobileRedirectEnabled = currentSettings.preventMobileRedirect === true
         settingsReady = true
         refreshCommentReplyTrees()
         if (getCommentReplyTreeMode() === null)
@@ -3083,7 +3101,9 @@ else if (shouldInitializePageScript) {
 
   // 请求初始设置
   window.postMessage({
-    type: 'BEWLY_REQUEST_SETTINGS',
+    protocol: PAGE_BRIDGE_PROTOCOL,
+    channelId: pageBridgeChannelId,
+    type: PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST,
   }, '*')
 
   const SEARCH_RESULT_API_PATHS = [
@@ -3127,10 +3147,11 @@ else if (shouldInitializePageScript) {
     }
   }
 
-  async function handlePageNoCookieSearchRequest(data: any) {
-    const id = data?.id
-    const url = data?.url
-    if (typeof id !== 'string' || typeof url !== 'string')
+  async function handlePageNoCookieSearchRequest(requestId: string, data: unknown) {
+    if (typeof data !== 'object' || data === null)
+      return
+    const { method, url } = data as Record<string, unknown>
+    if (method !== 'GET' || typeof url !== 'string')
       return
 
     try {
@@ -3152,9 +3173,11 @@ else if (shouldInitializePageScript) {
       }
 
       window.postMessage({
-        type: PAGE_NO_COOKIE_SEARCH_RESPONSE,
+        protocol: PAGE_BRIDGE_PROTOCOL,
+        channelId: pageBridgeChannelId,
+        type: PAGE_BRIDGE_MESSAGE.NO_COOKIE_SEARCH_RESPONSE,
+        requestId,
         data: {
-          id,
           ok: response.ok,
           status: response.status,
           response: parsedResponse,
@@ -3163,9 +3186,11 @@ else if (shouldInitializePageScript) {
     }
     catch (error) {
       window.postMessage({
-        type: PAGE_NO_COOKIE_SEARCH_RESPONSE,
+        protocol: PAGE_BRIDGE_PROTOCOL,
+        channelId: pageBridgeChannelId,
+        type: PAGE_BRIDGE_MESSAGE.NO_COOKIE_SEARCH_RESPONSE,
+        requestId,
         data: {
-          id,
           error: error instanceof Error ? error.message : String(error),
         },
       }, '*')
@@ -3176,9 +3201,14 @@ else if (shouldInitializePageScript) {
     if (event.source !== window)
       return
 
-    const { type, data } = event.data || {}
-    if (type === PAGE_NO_COOKIE_SEARCH_REQUEST)
-      void handlePageNoCookieSearchRequest(data)
+    if (!matchesPageBridgeMessage(event.data, {
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.NO_COOKIE_SEARCH_REQUEST,
+    }) || typeof event.data.requestId !== 'string') {
+      return
+    }
+
+    void handlePageNoCookieSearchRequest(event.data.requestId, event.data.data)
   })
 
   function fetchWithSearchSettings(thisArg: unknown, input: RequestInfo | URL, init?: RequestInit) {

@@ -200,7 +200,7 @@ function onMouseEnter() {
             marginTop: dropdownPosition.openUp ? undefined : `${DROPDOWN_MARGIN}px`,
           }"
           pos="absolute" p="2"
-          z="10004" flex="~ col gap-1"
+          z="$bew-z-control-menu" flex="~ col gap-1"
           w="full" overflow-y-overlay will-change-transform
         >
           <div
@@ -223,7 +223,7 @@ function onMouseEnter() {
       <div
         v-if="showOptions"
         pos="fixed top-0 left-0" w-full h-full
-        z="10003"
+        z="$bew-z-control-backdrop"
         @wheel="closeOptions"
       />
     </Teleport>

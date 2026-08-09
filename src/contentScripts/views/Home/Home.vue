@@ -8,6 +8,7 @@ import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constant
 import { gridLayout, settings } from '~/logic'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
+import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 
 import VersionReminder from './components/VersionReminder.vue'
@@ -129,13 +130,14 @@ function handleTopBarVisibilityChange(visible: boolean) {
 }
 
 function computeTabs(): HomeTab[] {
-  // if homePageTabVisibilityList not fresh , set it to default
-  if (!settings.value.homePageTabVisibilityList.length || settings.value.homePageTabVisibilityList.length !== mainStore.homeTabs.length)
-    settings.value.homePageTabVisibilityList = mainStore.homeTabs.map(tab => ({ page: tab.page, visible: tab.page !== HomeSubPage.Precious }))
-
   const targetTabs: HomeTab[] = []
+  const defaultConfig = mainStore.homeTabs.map(tab => ({
+    page: tab.page,
+    visible: tab.page !== HomeSubPage.Precious,
+  }))
+  const tabConfig = normalizeHomeTabConfig(settings.value.homePageTabVisibilityList, defaultConfig)
 
-  for (const tab of settings.value.homePageTabVisibilityList) {
+  for (const tab of tabConfig) {
     if (tab.visible) {
       targetTabs.push({
         i18nKey: (mainStore.homeTabs.find(defaultTab => defaultTab.page === tab.page) || {})?.i18nKey || tab.page,

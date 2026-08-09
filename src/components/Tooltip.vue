@@ -34,8 +34,9 @@ const tooltipRef = ref(null)
   --uno: "flex items-center relative";
 
   .b-tooltip {
-    --uno: "absolute px-2 rounded-$bew-radius-half pointer-events-none opacity-0 duration-300 shadow-$bew-shadow-2 whitespace-nowrap z-9999";
+    --uno: "absolute px-2 rounded-$bew-radius-half pointer-events-none opacity-0 duration-300 shadow-$bew-shadow-2 whitespace-nowrap";
 
+    z-index: var(--bew-z-popover);
     padding-block: var(--bew-space-1);
     box-sizing: border-box;
     border: 1px solid var(--bew-surface-border-color);

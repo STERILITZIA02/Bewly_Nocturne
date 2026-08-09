@@ -83,9 +83,10 @@ const {
   setExhausted,
   reset: resetLoadMore,
 } = useLoadMore(async () => {
+  const previousCount = getCurrentResultLength()
   const success = await performSearch(true)
-  const itemsCount = getCurrentResultLength()
-  return { success, itemsCount }
+  const appendedCount = Math.max(0, getCurrentResultLength() - previousCount)
+  return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
 })

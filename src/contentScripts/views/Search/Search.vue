@@ -37,8 +37,6 @@ function performInPlaceSearch(keyword: string) {
   window.history.pushState({}, '', newUrl)
   searchInput.value = normalized
   topBarSearchKeyword.value = normalized
-  // 触发 pushstate 事件通知其他组件
-  window.dispatchEvent(new Event('pushstate'))
 }
 
 function handleSearch(keyword: string) {

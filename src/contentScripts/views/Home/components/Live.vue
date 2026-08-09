@@ -27,6 +27,7 @@ const isLoading = ref<boolean>(false)
 const needToLoginFirst = ref<boolean>(false)
 const page = ref<number>(1)
 const noMoreContent = ref<boolean>(false)
+const requestFailed = ref<boolean>(false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
@@ -60,6 +61,7 @@ async function initData() {
   page.value = 1
   videoList.value = []
   noMoreContent.value = false
+  requestFailed.value = false
 
   await getData()
 }
@@ -93,8 +95,10 @@ async function getData() {
 
   try {
     // 初次加载时多加载几批确保有足够内容
-    for (let i = 0; i < 3 && !noMoreContent.value; i++)
-      await getLiveVideos()
+    for (let i = 0; i < 3 && !noMoreContent.value; i++) {
+      if (!await getLiveVideos())
+        break
+    }
   }
   finally {
     isLoading.value = false
@@ -104,7 +108,7 @@ async function getData() {
 
 async function getLiveVideos() {
   if (noMoreContent.value)
-    return
+    return true
 
   try {
     const response: FollowingLiveResult = await api.live.getFollowingLiveList({
@@ -113,29 +117,39 @@ async function getLiveVideos() {
     })
 
     if (response.code === -101) {
-      noMoreContent.value = true
+      noMoreContent.value = false
       needToLoginFirst.value = true
-      return
+      requestFailed.value = false
+      return false
     }
 
     if (response.code === 0) {
       needToLoginFirst.value = false
-      if (response.data.list.length < 9)
+      requestFailed.value = false
+      const list = Array.isArray(response.data?.list) ? response.data.list : []
+      if (list.length < 9)
         noMoreContent.value = true
 
       page.value++
 
-      const newItems = response.data.list.map((item: FollowingLiveItem) => ({
+      const newItems = list.map((item: FollowingLiveItem) => ({
         uniqueId: `${item.roomid}`,
         item,
         displayData: transformLiveVideo({ uniqueId: `${item.roomid}`, item }),
       }))
 
       videoList.value = [...videoList.value, ...newItems]
+      return true
     }
+    requestFailed.value = true
+    noMoreContent.value = false
+    return false
   }
-  catch {
-    // 忽略错误
+  catch (error) {
+    requestFailed.value = true
+    noMoreContent.value = false
+    console.error('[Live] Failed to load followed live rooms:', error)
+    return false
   }
 }
 
@@ -166,6 +180,7 @@ defineExpose({ initData })
     :grid-layout="gridLayout"
     :loading="isLoading"
     :no-more-content="noMoreContent"
+    :request-failed="requestFailed"
     :need-to-login-first="needToLoginFirst"
     :transform-item="(item: VideoElement) => item.displayData"
     :get-item-key="(item: VideoElement) => item.uniqueId"

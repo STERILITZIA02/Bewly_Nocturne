@@ -5,7 +5,10 @@
 
 import { settings } from '~/logic'
 
-let observer: MutationObserver | null = null
+let bootstrapObserver: MutationObserver | null = null
+let dialogObserver: MutationObserver | null = null
+let portalObserver: MutationObserver | null = null
+let enhanceTimer: number | null = null
 
 /**
  * 创建清空已选按钮
@@ -95,43 +98,87 @@ function enhanceFavoriteDialog(dialog: Element) {
  * 监听 DOM 变化，当收藏弹窗出现时应用增强功能（清空按钮和放大样式）
  */
 export function initFavoriteDialogEnhancement() {
-  // 如果已经初始化过，先清理
-  if (observer) {
-    observer.disconnect()
+  stopFavoriteDialogObservers()
+  let startBootstrapObserver: () => void
+
+  const bindDialog = (dialog: Element) => {
+    bootstrapObserver?.disconnect()
+    bootstrapObserver = null
+    dialogObserver?.disconnect()
+    portalObserver?.disconnect()
+
+    enhanceFavoriteDialog(dialog)
+    dialogObserver = new MutationObserver(() => {
+      if (enhanceTimer !== null)
+        clearTimeout(enhanceTimer)
+      enhanceTimer = window.setTimeout(() => {
+        enhanceTimer = null
+        enhanceFavoriteDialog(dialog)
+      }, 100)
+    })
+    dialogObserver.observe(dialog, { childList: true, subtree: true })
+
+    const portal = dialog.parentElement
+    if (portal) {
+      portalObserver = new MutationObserver(() => {
+        if (!dialog.isConnected)
+          startBootstrapObserver()
+      })
+      portalObserver.observe(portal, { childList: true })
+    }
   }
 
-  // 创建 MutationObserver 监听 DOM 变化
-  observer = new MutationObserver((mutations) => {
-    for (const mutation of mutations) {
-      // 检查新增的节点
-      for (const node of Array.from(mutation.addedNodes)) {
-        if (node instanceof HTMLElement) {
-          // 检查是否是收藏弹窗或包含收藏弹窗
-          const dialog = node.classList?.contains('collection-m-exp')
-            ? node
-            : node.querySelector?.('.collection-m-exp')
+  startBootstrapObserver = () => {
+    dialogObserver?.disconnect()
+    portalObserver?.disconnect()
+    dialogObserver = null
+    portalObserver = null
+    if (bootstrapObserver || !document.body)
+      return
 
-          if (dialog) {
-            // 延迟一点注入，确保弹窗内容已渲染
-            setTimeout(() => {
-              enhanceFavoriteDialog(dialog)
-            }, 100)
+    bootstrapObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        // 检查新增的节点
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node instanceof HTMLElement) {
+            // 检查是否是收藏弹窗或包含收藏弹窗
+            const dialog = node.classList?.contains('collection-m-exp')
+              ? node
+              : node.querySelector?.('.collection-m-exp')
+
+            if (dialog) {
+              bindDialog(dialog)
+              return
+            }
           }
         }
       }
-    }
-  })
+    })
 
-  // 开始监听 body 的子节点变化
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  })
+    bootstrapObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+    })
+  }
 
   // 同时检查页面上是否已存在收藏弹窗
   const existingDialog = document.querySelector('.collection-m-exp')
-  if (existingDialog) {
-    enhanceFavoriteDialog(existingDialog)
+  if (existingDialog)
+    bindDialog(existingDialog)
+  else
+    startBootstrapObserver()
+}
+
+function stopFavoriteDialogObservers() {
+  bootstrapObserver?.disconnect()
+  dialogObserver?.disconnect()
+  portalObserver?.disconnect()
+  bootstrapObserver = null
+  dialogObserver = null
+  portalObserver = null
+  if (enhanceTimer !== null) {
+    clearTimeout(enhanceTimer)
+    enhanceTimer = null
   }
 }
 
@@ -139,10 +186,7 @@ export function initFavoriteDialogEnhancement() {
  * 停止收藏弹窗增强功能
  */
 export function stopFavoriteDialogEnhancement() {
-  if (observer) {
-    observer.disconnect()
-    observer = null
-  }
+  stopFavoriteDialogObservers()
 
   // 移除所有已注入的按钮
   document.querySelectorAll('.bewly-clear-selection-btn').forEach(btn => btn.remove())

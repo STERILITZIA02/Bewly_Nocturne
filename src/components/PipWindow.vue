@@ -17,6 +17,8 @@ const pipWindowEl = ref<any | null>(null)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
 const { isDark, isOledDark } = useDark()
+let closing = false
+let closed = false
 
 function applyPipTheme() {
   const documentElement = pipWindowEl.value?.document?.documentElement
@@ -72,26 +74,36 @@ function handleOpenInNewTab() {
 }
 
 async function handleClose() {
+  if (closing || closed)
+    return
+
+  closing = true
   await releaseIframeResources()
-  await nextTick()
-  if (pipWindowEl.value)
-    pipWindowEl.value.close()
-  await nextTick()
+  try {
+    pipWindowEl.value?.close()
+  }
+  catch {
+    // The user may already have closed the Document Picture-in-Picture window.
+  }
+  pipWindowEl.value = null
+  closed = true
+  closing = false
   emit('close')
 }
 
 async function releaseIframeResources() {
-  // Clear iframe content
+  const iframe = iframeRef.value
   currentUrl.value = 'about:blank'
-  iframeRef.value?.contentWindow?.document.write('')
+  if (iframe)
+    iframe.src = 'about:blank'
   await nextTick()
-  iframeRef.value?.contentWindow?.close()
-
-  // Remove iframe from the DOM
-  iframeRef.value?.parentNode?.removeChild(iframeRef.value)
-  await nextTick()
-
-  // Nullify the reference
+  try {
+    iframe?.contentWindow?.close()
+  }
+  catch {
+    // Cross-origin browsing contexts may reject direct close access.
+  }
+  iframe?.remove()
   iframeRef.value = null
 }
 

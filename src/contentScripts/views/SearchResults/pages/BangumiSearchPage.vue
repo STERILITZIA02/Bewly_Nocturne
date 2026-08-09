@@ -65,9 +65,10 @@ const {
   setExhausted,
   reset: resetLoadMore,
 } = useLoadMore(async () => {
+  const previousCount = results.value?.length || 0
   const success = await performSearch(true)
-  const itemsCount = results.value?.length || 0
-  return { success, itemsCount }
+  const appendedCount = Math.max(0, (results.value?.length || 0) - previousCount)
+  return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
 })
@@ -408,6 +409,8 @@ defineExpose({
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/breakpoints";
+
 .bangumi-search-page {
   width: 100%;
   padding-bottom: 2rem;
@@ -423,11 +426,11 @@ defineExpose({
   gap: 1.5rem;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 
-  @media (max-width: 1024px) {
+  @media (max-width: breakpoints.$grid-lg) {
     grid-template-columns: repeat(1, 1fr);
   }
 
-  @media (min-width: 640px) and (max-width: 1024px) {
+  @media (min-width: breakpoints.$grid-sm) and (max-width: breakpoints.$grid-lg) {
     grid-template-columns: repeat(2, 1fr);
   }
 }

@@ -8,13 +8,18 @@ import { FilterType, useFilter } from '~/composables/useFilter'
 import { LanguageType } from '~/enums/appEnums'
 import type { GridLayoutType } from '~/logic'
 import { appAuthTokens, noCookieForYouRecommendationState, settings } from '~/logic'
+import { parseDedeUserID } from '~/logic/loginStatus'
 import type { AppForYouResult, Item as AppVideoItem } from '~/models/video/appForYou'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
 import type { forYouResult, Item as VideoItem } from '~/models/video/forYou'
 import type { AppVideoElement, VideoCardDisplayData, VideoElement } from '~/stores/forYouStore'
 import { useForYouStore } from '~/stores/forYouStore'
+import { useTopBarStore } from '~/stores/topBarStore'
+import type { AccountId } from '~/utils/accountScope'
+import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { TVAppKey } from '~/utils/authProvider'
+import { debugLog } from '~/utils/debug'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { isVerticalVideo } from '~/utils/uriParse'
@@ -30,6 +35,7 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const forYouStore = useForYouStore()
+const topBarStore = useTopBarStore()
 
 const filterFunc = useFilter(
   ['is_followed'],
@@ -81,6 +87,7 @@ const appVideoList = ref<AppVideoElement[]>([])
 
 const isWebRecommendationMode = computed(() => settings.value.recommendationMode !== 'app')
 let requestVersion = 0
+let loadedAccountId: AccountId = getCurrentAccountId()
 type WebRecommendRequestType = 'refresh' | 'loadMore'
 
 const HOME_LOAD_LOG_PREFIX = '[BewlyCat][首页加载]'
@@ -103,7 +110,7 @@ function startRecommendRequestLog(
     requestType,
     startedAt: performance.now(),
   }
-  console.log(`${HOME_LOAD_LOG_PREFIX} 插件开始请求推荐接口`, {
+  debugLog(`${HOME_LOAD_LOG_PREFIX} 插件开始请求推荐接口`, {
     time: new Date().toLocaleString(),
     requestId: context.id,
     mode,
@@ -119,7 +126,7 @@ function getRequestDuration(context: RecommendRequestLogContext): number {
 function logRecommendRequestSuccess(
   context: RecommendRequestLogContext,
 ) {
-  console.log(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求成功`, {
+  debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求成功`, {
     time: new Date().toLocaleString(),
     requestId: context.id,
     mode: context.mode,
@@ -156,8 +163,12 @@ const activatedAppVideo = ref<AppVideoItem | null>()
 const showDislikeDialog = ref<boolean>(false)
 const hasInitializedData = ref<boolean>(false)
 
+function getCurrentAccountId(): AccountId {
+  return parseDedeUserID(document.cookie) ?? null
+}
+
 function logHomeLoadComplete(source: 'api' | 'cache', startedAt: number) {
-  console.log(`${HOME_LOAD_LOG_PREFIX} 加载完成`, {
+  debugLog(`${HOME_LOAD_LOG_PREFIX} 加载完成`, {
     time: new Date().toLocaleString(),
     source,
     mode: settings.value.recommendationMode,
@@ -277,11 +288,16 @@ function handleVisibilityChange() {
 onMounted(() => {
   const loadStartedAt = performance.now()
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  loadedAccountId = getCurrentAccountId()
+
+  if (!isSameAccount(forYouStore.state.accountId, loadedAccountId))
+    forYouStore.resetState()
 
   // 如果启用状态保留且store中有数据，则恢复状态
   if (
     settings.value.preserveForYouState
     && forYouStore.state.isInitialized
+    && isSameAccount(forYouStore.state.accountId, loadedAccountId)
     && forYouStore.state.recommendationMode === settings.value.recommendationMode
   ) {
     // 恢复关键状态
@@ -337,16 +353,27 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  if (ensureForYouAccount())
+    void initData()
   initPageAction()
+})
+
+watch([
+  () => topBarStore.isLogin,
+  () => topBarStore.userInfo.mid,
+], () => {
+  if (ensureForYouAccount())
+    void initData()
 })
 
 onBeforeUnmount(() => {
   // 如果启用状态保留，保存当前状态到store
-  if (settings.value.preserveForYouState) {
+  if (settings.value.preserveForYouState && isSameAccount(loadedAccountId, getCurrentAccountId())) {
     // 获取当前滚动位置
     const scrollTop = scrollViewportRef.value?.scrollTop || 0
 
     const currentState = {
+      accountId: loadedAccountId,
       videoList: [...videoList.value],
       appVideoList: [...appVideoList.value],
       refreshIdx: refreshIdx.value,
@@ -564,6 +591,35 @@ function resetWebRecommendState() {
   refreshIdx.value = 1
   webFetchRow.value = 1
   webShowlistGroups.value = []
+}
+
+function resetForYouAccountState() {
+  requestVersion++
+  videoList.value = []
+  appVideoList.value = []
+  refreshIdx.value = 1
+  noMoreContent.value = false
+  hasInitializedData.value = false
+  cachedVideoList.value = []
+  forwardVideoList.value = []
+  cachedAppVideoList.value = []
+  forwardAppVideoList.value = []
+  hasBackState.value = false
+  hasForwardState.value = false
+  undoForwardState.value = UndoForwardState.Hidden
+  resetWebRecommendState()
+  resetFilteredFeedPagingState()
+  forYouStore.resetState()
+}
+
+function ensureForYouAccount() {
+  const accountId = getCurrentAccountId()
+  if (isSameAccount(loadedAccountId, accountId))
+    return false
+
+  loadedAccountId = accountId
+  resetForYouAccountState()
+  return true
 }
 
 watch(() => settings.value.recommendationMode, () => {

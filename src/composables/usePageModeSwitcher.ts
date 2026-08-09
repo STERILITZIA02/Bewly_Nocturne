@@ -1,8 +1,8 @@
-import { useEventListener, useIntervalFn } from '@vueuse/core'
 import type { ComputedRef, MaybeRefOrGetter } from 'vue'
-import { computed, ref, toValue, watch } from 'vue'
+import { computed, ref, toValue } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import type { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -38,19 +38,8 @@ export function usePageModeSwitcher(
 ): PageModeSwitcherState {
   const { t } = useI18n()
   const settingsStore = useSettingsStore()
-  const currentLocationHref = ref(window.location.href)
+  const currentLocationHref = useCurrentLocationHref()
   const switchingPageMode = ref(false)
-
-  function updateCurrentLocationHref() {
-    if (currentLocationHref.value !== window.location.href)
-      currentLocationHref.value = window.location.href
-  }
-
-  useEventListener(window, 'pushstate', updateCurrentLocationHref)
-  useEventListener(window, 'popstate', updateCurrentLocationHref)
-  useEventListener(window, 'hashchange', updateCurrentLocationHref)
-  useIntervalFn(updateCurrentLocationHref, 1000)
-  watch(() => toValue(activatedPage), updateCurrentLocationHref, { flush: 'post' })
 
   const target = computed(() => {
     return resolvePageModeTarget(currentLocationHref.value, toValue(activatedPage))
@@ -74,7 +63,6 @@ export function usePageModeSwitcher(
     if (switchingPageMode.value)
       return
 
-    updateCurrentLocationHref()
     const currentHref = currentLocationHref.value
     const currentTarget = resolvePageModeTarget(currentHref, toValue(activatedPage))
     if (!currentTarget)

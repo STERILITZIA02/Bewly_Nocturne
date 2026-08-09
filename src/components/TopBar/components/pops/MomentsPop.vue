@@ -72,6 +72,7 @@ function onClickTab(tab: MomentTab) {
 }
 
 function initData() {
+  void topBarStore.ensureWatchLaterState()
   topBarStore.initMomentsData(selectedMomentTab.value.type)
 }
 
@@ -79,39 +80,29 @@ function getData() {
   topBarStore.getMomentsData(selectedMomentTab.value.type)
 }
 
-function toggleWatchLater(aid: number) {
+async function toggleWatchLater(aid: number) {
   const accountId = topBarStore.userInfo.mid
   if (!topBarStore.isLogin || !accountId)
     return
 
-  // 修改这里，直接使用 topBarStore.addedWatchLaterList
-  const isInWatchLater = topBarStore.addedWatchLaterList.includes(aid)
+  await topBarStore.ensureWatchLaterState()
+  const isInWatchLater = topBarStore.isInWatchLater(aid)
 
   if (!isInWatchLater) {
-    api.watchlater.saveToWatchLater({
+    const res = await api.watchlater.saveToWatchLater({
       aid,
       csrf: getCSRF(),
     })
-      .then((res) => {
-        if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId) {
-          topBarStore.addedWatchLaterList.push(aid)
-          void topBarStore.syncWatchLaterState(true)
-        }
-      })
+    if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId)
+      await topBarStore.commitWatchLaterMutation(aid, true, accountId)
   }
   else {
-    api.watchlater.removeFromWatchLater({
+    const res = await api.watchlater.removeFromWatchLater({
       aid,
       csrf: getCSRF(),
     })
-      .then((res) => {
-        if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId) {
-          const index = topBarStore.addedWatchLaterList.indexOf(aid)
-          if (index !== -1)
-            topBarStore.addedWatchLaterList.splice(index, 1)
-          void topBarStore.syncWatchLaterState(true)
-        }
-      })
+    if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId)
+      await topBarStore.commitWatchLaterMutation(aid, false, accountId)
   }
 }
 
@@ -302,15 +293,15 @@ defineExpose({
                 w="82px" h="46px"
                 rounded="$bew-radius-half"
               >
-              <!-- 修改这里，使用 topBarStore.addedWatchLaterList -->
               <div
+                v-if="moment.watchLaterAid"
                 opacity-0 group-hover:opacity-100
                 pos="absolute" duration-300 bg="black opacity-60"
                 rounded="$bew-radius-half" p-1
                 z-1 color-white
-                @click.prevent="toggleWatchLater(moment.rid || 0)"
+                @click.prevent="toggleWatchLater(moment.watchLaterAid)"
               >
-                <Tooltip v-if="!topBarStore.addedWatchLaterList.includes(moment.rid || 0)" :content="$t('common.save_to_watch_later')" placement="bottom" type="dark">
+                <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="$t('common.save_to_watch_later')" placement="bottom" type="dark">
                   <div i-mingcute:carplay-line />
                 </Tooltip>
                 <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">

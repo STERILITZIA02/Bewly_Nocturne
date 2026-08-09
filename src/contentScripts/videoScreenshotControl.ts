@@ -1,8 +1,12 @@
 import { watch } from 'vue'
 
+import { useRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { i18n } from '~/utils/i18n'
+import { isVideoPlaybackPage } from '~/utils/main'
 import { showState } from '~/utils/player'
+
+import { observePlayerDom } from './playerDomLifecycle'
 
 const screenshotIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88" style="width: 100%; height: 100%;">
   <path d="M25 29h9l4-6h12l4 6h9a6 6 0 0 1 6 6v26a6 6 0 0 1-6 6H25a6 6 0 0 1-6-6V35a6 6 0 0 1 6-6Z" fill="none" stroke="#fff" stroke-width="5" stroke-linejoin="round"/>
@@ -12,6 +16,7 @@ const screenshotIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 
 let controlContainer: HTMLElement | null = null
 let hasInitialized = false
 let isCapturing = false
+let stopPlayerObserver: (() => void) | null = null
 
 function translate(key: string): string {
   return String(i18n.global.t(key, settings.value.language))
@@ -159,13 +164,6 @@ function createControlContainer(): HTMLElement {
 }
 
 function injectControl() {
-  if (!settings.value.showVideoScreenshotButton) {
-    controlContainer?.remove()
-    controlContainer = null
-    document.querySelector<HTMLElement>('.bewly-video-screenshot-control')?.remove()
-    return
-  }
-
   if (controlContainer?.isConnected)
     return
 
@@ -187,18 +185,29 @@ function injectControl() {
   anchor.insertAdjacentElement('afterend', controlContainer)
 }
 
+function stopScreenshotControl() {
+  stopPlayerObserver?.()
+  stopPlayerObserver = null
+  controlContainer?.remove()
+  controlContainer = null
+  document.querySelector<HTMLElement>('.bewly-video-screenshot-control')?.remove()
+}
+
 export function initVideoScreenshotControl() {
   if (hasInitialized || location.hostname === 'live.bilibili.com')
     return
 
   hasInitialized = true
-  injectControl()
-  watch(
-    () => settings.value.showVideoScreenshotButton,
-    () => injectControl(),
-  )
+  const routeState = useRouteState()
+  const updateLifecycle = () => {
+    stopScreenshotControl()
+    if (settings.value.showVideoScreenshotButton && isVideoPlaybackPage(routeState.href))
+      stopPlayerObserver = observePlayerDom(injectControl)
+  }
 
-  setInterval(() => {
-    injectControl()
-  }, 2000)
+  watch(
+    [() => settings.value.showVideoScreenshotButton, () => routeState.navigationId],
+    updateLifecycle,
+    { immediate: true },
+  )
 }

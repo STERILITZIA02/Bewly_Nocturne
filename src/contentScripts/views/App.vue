@@ -8,8 +8,10 @@ import CloseButton from '~/components/CloseButton.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
+import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -19,6 +21,7 @@ import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
+import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
@@ -33,6 +36,7 @@ function isFestivalPage(): boolean {
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
+const currentLocationHref = useCurrentLocationHref()
 const useOriginalBilibiliTopBar = computed(() => settingsStore.getUseOriginalBilibiliTopBar())
 
 // Conditionally use dark mode. `useDark()` handles the video-page-only route gate.
@@ -62,7 +66,7 @@ function toggleSettings(origin: DOMRect) {
 
   const viewportWidth = window.innerWidth
   const viewportHeight = window.innerHeight
-  const compactLayout = viewportWidth <= 1279
+  const compactLayout = viewportWidth <= LAYOUT_BREAKPOINTS.compactMax
   const panelWidth = compactLayout
     ? Math.min(1072, viewportWidth - 24)
     : Math.min(viewportWidth * 0.9, 1000)
@@ -188,13 +192,7 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 }, { immediate: true })
 
 // 监听 URL 变化,同步更新 activatedPage
-useEventListener(window, 'pushstate', () => {
-  const pageParam = getPageParam()
-  if (pageParam && pageParam !== activatedPage.value) {
-    activatedPage.value = pageParam
-  }
-})
-useEventListener(window, 'popstate', () => {
+watch(currentLocationHref, () => {
   const pageParam = getPageParam()
   if (pageParam && pageParam !== activatedPage.value) {
     activatedPage.value = pageParam
@@ -240,20 +238,15 @@ if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.Se
   topBarStore.searchKeyword = ''
 }
 
-function isFreshHomeTabConfig(tabConfig: { page: HomeSubPage, visible: boolean }[]): boolean {
-  const defaultPages = new Set(mainStore.homeTabs.map(tab => tab.page))
-  const configuredPages = new Set(tabConfig.map(tab => tab.page))
-  return tabConfig.length === mainStore.homeTabs.length
-    && configuredPages.size === tabConfig.length
-    && tabConfig.every(tab => defaultPages.has(tab.page))
-    && mainStore.homeTabs.every(tab => configuredPages.has(tab.page))
-}
+const defaultHomeTabConfig = mainStore.homeTabs.map(tab => ({
+  page: tab.page,
+  visible: tab.page !== HomeSubPage.Precious,
+}))
 
 function getDefaultHomeSubPage(tabConfig: { page: HomeSubPage, visible: boolean }[]): HomeSubPage {
-  if (isFreshHomeTabConfig(tabConfig))
-    return tabConfig.find(tab => tab.visible)?.page ?? HomeSubPage.ForYou
-
-  return HomeSubPage.ForYou
+  return normalizeHomeTabConfig(tabConfig, defaultHomeTabConfig)
+    .find(tab => tab.visible)
+    ?.page ?? HomeSubPage.ForYou
 }
 
 // 添加Home页面的子页面状态
@@ -263,10 +256,16 @@ const isHomeTabSwitching = ref<boolean>(false)
 watch(
   () => settings.value.homePageTabVisibilityList,
   (tabConfig) => {
+    const normalizedTabConfig = normalizeHomeTabConfig(tabConfig, defaultHomeTabConfig)
+    if (!isSameHomeTabConfig(tabConfig, normalizedTabConfig)) {
+      settings.value.homePageTabVisibilityList = normalizedTabConfig
+      return
+    }
+
     if (homeActivatedPageTouched.value)
       return
 
-    const defaultHomeSubPage = getDefaultHomeSubPage(tabConfig)
+    const defaultHomeSubPage = getDefaultHomeSubPage(normalizedTabConfig)
     if (homeActivatedPage.value !== defaultHomeSubPage)
       homeActivatedPage.value = defaultHomeSubPage
   },
@@ -604,23 +603,6 @@ onMounted(() => {
 
   if (isHomePage()) {
     focusScrollViewport()
-
-    // Windows/Linux: 监听 Home 键
-    onKeyStroke('Home', (e) => {
-      handleThrottledBackToTop()
-      focusScrollViewport({ force: true })
-      e.preventDefault()
-    })
-
-    // macOS: 使用原生事件监听 Command+↑ 组合键
-    document.addEventListener('keydown', (e) => {
-      // 确保只有同时按下 Command 和 ArrowUp 键时才触发
-      if (e.key === 'ArrowUp' && e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        handleThrottledBackToTop()
-        focusScrollViewport({ force: true })
-        e.preventDefault()
-      }
-    })
   }
 
   document.addEventListener('scroll', () => {
@@ -915,36 +897,7 @@ if (settings.value.cleanUrlArgument) {
     window.addEventListener('load', () => scheduleCleanup(1000), { once: true })
   }
 
-  // 监听URL变化，但增加防抖和延迟
-  if (typeof window !== 'undefined') {
-    let lastUrl = window.location.href
-    let urlCheckTimer: ReturnType<typeof setTimeout> | null = null
-
-    const checkUrlChange = () => {
-      if (window.location.href !== lastUrl) {
-        lastUrl = window.location.href
-        scheduleCleanup(2000) // 页面跳转后延迟更长时间
-      }
-      urlCheckTimer = setTimeout(checkUrlChange, 1000) // 降低检查频率
-    }
-
-    // 页面可见性变化时停止/恢复检查
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) {
-        if (urlCheckTimer) {
-          clearTimeout(urlCheckTimer)
-          urlCheckTimer = null
-        }
-      }
-      else {
-        if (!urlCheckTimer) {
-          checkUrlChange()
-        }
-      }
-    })
-
-    checkUrlChange()
-  }
+  watch(currentLocationHref, () => scheduleCleanup(2000))
 }
 </script>
 
@@ -969,7 +922,7 @@ if (settings.value.cleanUrlArgument) {
       <KeepAlive>
         <Settings
           v-if="showSettings"
-          z-10002
+          class="settings-layer"
           :style="settingsLaunchStyle"
           @close="showSettings = false"
         />
@@ -1112,13 +1065,17 @@ if (settings.value.cleanUrlArgument) {
 
 <style lang="scss" scoped>
 .top-bar-layer {
-  z-index: 1001;
+  z-index: var(--bew-z-topbar-host);
+}
+
+.settings-layer {
+  z-index: var(--bew-z-modal);
 }
 
 .bew-confirm-dialog {
   position: fixed;
   inset: 0;
-  z-index: 10002;
+  z-index: var(--bew-z-modal);
   pointer-events: auto;
 }
 
@@ -1134,7 +1091,7 @@ if (settings.value.cleanUrlArgument) {
   left: 50%;
   display: flex;
   flex-direction: column;
-  width: 420px;
+  width: var(--bew-layout-dialog-width);
   max-width: calc(100vw - 32px);
   overflow: hidden;
   background: var(--bew-elevated-alt-solid);

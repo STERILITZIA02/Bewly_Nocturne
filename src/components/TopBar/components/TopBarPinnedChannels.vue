@@ -215,6 +215,8 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/breakpoints";
+
 .pinned-channels {
   --bew-segment-item-color: var(--bew-text-1);
 
@@ -287,7 +289,7 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
   }
 }
 
-@media (max-width: 1279px) {
+@media (max-width: breakpoints.$compact-max) {
   .pinned-channels {
     display: none;
   }

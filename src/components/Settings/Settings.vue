@@ -42,7 +42,6 @@ const settingsMenu = {
   [MenuType.BewlyComponents]: defineAsyncComponent(() => import('./Navigation/BewlyComponents.vue')),
   [MenuType.Bilibili]: defineAsyncComponent(() => import('./BilibiliFeaturesEnhancement/BilibiliFeaturesEnhancement.vue')),
   [MenuType.Appearance]: defineAsyncComponent(() => import('./Appearance/Appearance.vue')),
-  [MenuType.Shortcuts]: defineAsyncComponent(() => import('./Shortcuts/Shortcuts.vue')),
   [MenuType.About]: defineAsyncComponent(() => import('./About/About.vue')),
 }
 const settingsMenuStorageKey = 'bewly-settings-active-menu'
@@ -204,13 +203,6 @@ const settingsMenuItems: MenuItem[] = [
     titleKey: 'settings.menu_appearance',
     icon: 'i-mingcute:paint-brush-line',
     iconActivated: 'i-mingcute:paint-brush-fill',
-  },
-  {
-    value: MenuType.Shortcuts,
-    icon: 'i-mingcute:keyboard-line',
-    iconActivated: 'i-mingcute:keyboard-fill',
-    titleKey: 'settings.shortcuts.title',
-    sectionStart: true,
   },
   {
     value: MenuType.About,
@@ -650,6 +642,8 @@ function changeMenuItem(menuItem: MenuType) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/breakpoints";
+
 .menu-item-activated {
   --uno: "text-$bew-text-auto bg-$bew-theme-color-auto";
   color: var(--bew-on-theme-color);
@@ -1037,7 +1031,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 }
 
-@media (max-width: 1279px) {
+@media (max-width: breakpoints.$compact-max) {
   #settings-window {
     /* 侧栏进入布局后先维持 1000px 内容宽度，空间不足时再连续收缩。 */
     width: min(calc(1000px + 72px), calc(100% - var(--bew-space-6)));

@@ -1,4 +1,4 @@
-import { nextTick, ref } from 'vue'
+import { getCurrentScope, nextTick, onScopeDispose, ref } from 'vue'
 
 export interface LoadMoreOptions {
   cooldownMs?: number
@@ -21,7 +21,7 @@ export interface LoadMoreState {
  * 管理分页、加载状态、防抖和自动填充
  */
 export function useLoadMore(
-  loadFn: () => Promise<{ success: boolean, itemsCount: number }>,
+  loadFn: () => Promise<{ success: boolean, appendedCount: number }>,
   options: LoadMoreOptions = {},
 ) {
   const {
@@ -102,9 +102,9 @@ export function useLoadMore(
 
       if (result.success) {
         page.value += 1
-        state.value.lastAppended = result.itemsCount
+        state.value.lastAppended = result.appendedCount
 
-        if (result.itemsCount === 0)
+        if (result.appendedCount === 0)
           exhausted.value = true
       }
     }
@@ -218,6 +218,9 @@ export function useLoadMore(
   function setExhausted(value: boolean) {
     exhausted.value = value
   }
+
+  if (getCurrentScope())
+    onScopeDispose(clearTimer)
 
   return {
     page,

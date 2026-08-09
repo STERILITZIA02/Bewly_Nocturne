@@ -64,9 +64,10 @@ const {
   setExhausted,
   reset: resetLoadMore,
 } = useLoadMore(async () => {
+  const previousCount = results.value?.length || 0
   const success = await performSearch(true)
-  const itemsCount = results.value?.length || 0
-  return { success, itemsCount }
+  const appendedCount = Math.max(0, (results.value?.length || 0) - previousCount)
+  return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
 })
@@ -273,6 +274,8 @@ defineExpose({
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/breakpoints";
+
 .article-search-page {
   width: 100%;
   padding-bottom: 2rem;
@@ -283,7 +286,7 @@ defineExpose({
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
 
-  @media (max-width: 768px) {
+  @media (max-width: breakpoints.$grid-md) {
     grid-template-columns: 1fr;
   }
 }

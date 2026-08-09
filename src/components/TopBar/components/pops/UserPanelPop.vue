@@ -370,7 +370,7 @@ function handleClickChannel() {
           v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
           class="unread-dot"
           pos="absolute top-1 right-1"
-          style="z-index: 999 !important;"
+          style="z-index: var(--bew-z-topbar) !important;"
         />
 
         <div flex="~ items-center gap-2">

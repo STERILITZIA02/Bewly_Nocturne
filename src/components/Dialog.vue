@@ -181,7 +181,7 @@ function handleConfirm() {
       <div
         v-if="showDialog"
         class="dialog"
-        pos="fixed top-0 left-0" w-full h-full z-10002
+        pos="fixed top-0 left-0" w-full h-full
         pointer-events-auto
       >
         <div
@@ -310,6 +310,10 @@ function handleConfirm() {
 </template>
 
 <style lang="scss" scoped>
+.dialog {
+  z-index: var(--bew-z-modal);
+}
+
 .dialog__panel {
   display: flex;
   flex-direction: column;

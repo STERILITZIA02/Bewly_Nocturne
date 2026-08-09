@@ -1,5 +1,6 @@
 import { useI18n } from 'vue-i18n'
 
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
 import { LanguageType } from '~/enums/appEnums'
@@ -29,7 +30,7 @@ export function setupNecessarySettingsWatchers() {
   const { locale } = useI18n()
   const settingsStore = useSettingsStore()
   let syncingTopBarSettings = false
-  let lastBewlyDesignHref = location.href
+  const currentLocationHref = useCurrentLocationHref()
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
   const FROSTED_GLASS_DIALOG_OFFSET_PX = 10
@@ -277,9 +278,7 @@ export function setupNecessarySettingsWatchers() {
   )
 
   // iframe 内的原版页面同样可能通过 SPA 导航离开或返回首页。
-  window.addEventListener('pushstate', refreshUselessFeedCardBlocker)
-  window.addEventListener('popstate', refreshUselessFeedCardBlocker)
-  window.addEventListener('hashchange', refreshUselessFeedCardBlocker)
+  watch(currentLocationHref, refreshUselessFeedCardBlocker)
 
   /**
    * 搜尋結果的上方的廣告，但有時是年末總結、年度報告這些
@@ -424,16 +423,26 @@ export function setupNecessarySettingsWatchers() {
 
   // In the homepage "original Bili page in iframe" mode, the iframe may appear after async settings load.
   // Observe shadow DOM changes so we can hide/show the outer `.bili-header` reliably without requiring refresh.
-  if (!isInIframe() && isHomePage()) {
+  let outerTopBarShadowObserver: MutationObserver | null = null
+  const syncOuterTopBarShadowObserver = () => {
+    outerTopBarShadowObserver?.disconnect()
+    outerTopBarShadowObserver = null
+    if (isInIframe() || !isHomePage())
+      return
+
     const bewlyHost = document.getElementById('bewly')
     const shadow = bewlyHost?.shadowRoot
     if (shadow) {
-      const observer = new MutationObserver(() => {
+      outerTopBarShadowObserver = new MutationObserver(() => {
         applyOuterTopBarPolicy()
       })
-      observer.observe(shadow, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
+      outerTopBarShadowObserver.observe(shadow, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
     }
   }
+  watch(currentLocationHref, () => {
+    syncOuterTopBarShadowObserver()
+    applyOuterTopBarPolicy()
+  }, { immediate: true })
 
   const applyBewlyDesignClasses = () => {
     const shouldApply = settings.value.adaptToOtherPageStyles
@@ -464,17 +473,7 @@ export function setupNecessarySettingsWatchers() {
     { immediate: true },
   )
 
-  const refreshBewlyDesignOnRouteChange = () => {
-    if (lastBewlyDesignHref === location.href)
-      return
-
-    lastBewlyDesignHref = location.href
-    applyBewlyDesignClasses()
-  }
-
-  window.addEventListener('popstate', refreshBewlyDesignOnRouteChange)
-  window.addEventListener('hashchange', refreshBewlyDesignOnRouteChange)
-  window.setInterval(refreshBewlyDesignOnRouteChange, 800)
+  watch(currentLocationHref, applyBewlyDesignClasses)
 
   // Clean Share Link - intercept clipboard copy events
   let cleanShareLinkCopyHandler: ((e: ClipboardEvent) => void) | null = null

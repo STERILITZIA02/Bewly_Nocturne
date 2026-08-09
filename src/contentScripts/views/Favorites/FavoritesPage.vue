@@ -1285,7 +1285,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
       <Dialog
         v-if="renameDialogVisible"
         :title="t('favorites.rename_folder_dialog_title')"
-        width="420px"
+        width="var(--bew-layout-dialog-width)"
         append-to-bewly-body
         :loading="isSidebarOperating"
         @close="closeRenameFolderDialog"
@@ -1302,7 +1302,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
         v-if="batchTransferDialogVisible"
         :title="batchTransferDialogTitle"
         :desc="batchTransferDialogDesc"
-        width="420px"
+        width="var(--bew-layout-dialog-width)"
         content-max-height="420px"
         append-to-bewly-body
         :loading="isBatchOperating"
@@ -1557,6 +1557,8 @@ function transformFavoriteArticle(item: FavoriteArticle) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/breakpoints";
+
 .favorites-old-page {
   display: flex;
   flex-direction: column;
@@ -2151,7 +2153,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
   }
 }
 
-@media (min-width: 768px) {
+@media (min-width: breakpoints.$grid-md) {
   .favorites-old-page {
     flex-direction: row;
   }
@@ -2178,7 +2180,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
   }
 }
 
-@media (min-width: 1024px) {
+@media (min-width: breakpoints.$grid-lg) {
   .favorites-old-main {
     width: 70%;
   }
@@ -2188,7 +2190,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
   }
 }
 
-@media (min-width: 1280px) {
+@media (min-width: breakpoints.$grid-xl) {
   .favorites-old-main {
     width: 75%;
   }
@@ -2198,7 +2200,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: breakpoints.$mobile-max) {
   .favorites-toolbar {
     flex-wrap: wrap;
     width: 100%;
@@ -2209,7 +2211,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
   }
 }
 
-@media (max-width: 640px) {
+@media (max-width: breakpoints.$grid-sm) {
   .article-favorites-grid {
     grid-template-columns: 1fr;
   }

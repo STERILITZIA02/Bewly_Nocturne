@@ -34,7 +34,6 @@ const nonSettingTitleKeyPatterns = [
   /^settings\.group_/,
   /^settings\.plugin\./,
   /^settings\.bilibili_features\./,
-  /^settings\.shortcuts\.group\./,
   /^settings\.maintenance\.(title|backup_title|reset_title)$/,
   /^settings\.topbar_(display_settings|logo_and_channels|actions|user_menu)$/,
 ]
@@ -137,7 +136,6 @@ const compatibilityRoute: SearchRoute = {
   secondaryTitleKey: 'settings.menu_compatibility',
   storageKey: bilibiliStorageKey,
 }
-const shortcutsRoute: SearchRoute = { menu: MenuType.Shortcuts }
 const aboutRoute: SearchRoute = { menu: MenuType.About }
 
 const linkOpeningOptionKeys = [
@@ -572,46 +570,13 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.clean_share_link_remove_tracking_params',
   ]),
 
-  ...createEntries(shortcutsRoute, [
-    'settings.shortcuts.title',
-    'settings.shortcuts.enable_all_shortcuts_toggle',
-    'settings.shortcuts.group.homepage',
-    'settings.shortcuts.home_refresh',
-    'settings.shortcuts.group.general',
-    'settings.shortcuts.danmu_status',
-    'settings.shortcuts.web_fullscreen',
-    'settings.shortcuts.widescreen',
-    'settings.shortcuts.short_step_backward',
-    'settings.shortcuts.long_step_backward',
-    'settings.shortcuts.play_pause_ext',
-    'settings.shortcuts.short_step_forward',
-    'settings.shortcuts.long_step_forward',
-    'settings.shortcuts.pip',
-    'settings.shortcuts.turn_off_light',
-    'settings.shortcuts.caption',
-    'settings.shortcuts.increase_playback_rate',
-    'settings.shortcuts.decrease_playback_rate',
-    'settings.shortcuts.reset_playback_rate',
-    'settings.shortcuts.previous_frame',
-    'settings.shortcuts.next_frame',
-    'settings.shortcuts.replay',
-    'settings.shortcuts.toggle_follow',
-    'settings.shortcuts.group.fullscreen_mode',
-    'settings.shortcuts.increase_video_size',
-    'settings.shortcuts.decrease_video_size',
-    'settings.shortcuts.reset_video_size',
-    'settings.shortcuts.video_title',
-    'settings.shortcuts.video_time',
-    'settings.shortcuts.clock_time',
-    'settings.shortcuts.group.global_actions',
-    'settings.shortcuts.reset_all_ext_shortcuts',
-    'settings.shortcuts.group.official_bilibili',
-  ]),
-
   ...createEntries(aboutRoute, [
     'settings.menu_about',
     'settings.group_settings_sync',
     'settings.enable_settings_sync',
+    'settings.settings_sync_unsynced_count',
+    'settings.settings_sync_quota_blocked_count',
+    'settings.settings_sync_last_error',
     'settings.group_version_reminder',
     'settings.enable_version_reminder',
     'settings.maintenance.title',

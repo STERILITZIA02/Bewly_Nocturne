@@ -4,8 +4,10 @@ import 'uno.css'
 import { createApp } from 'vue'
 
 import { useDark } from '~/composables/useDark'
+import { onRouteChange } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import { BEWLY_MOUNTED, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { isPageBridgeMessage, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
 import { settings, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -14,15 +16,15 @@ import api from '~/utils/api'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenActive, prepareBewlyWidescreenLoading } from '~/utils/bewlyWidescreen'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
-import { initFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
+import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { runWhenIdle } from '~/utils/lazyLoad'
 import { getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
+import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder } from '~/utils/randomPlay'
 import { getPluginSearchResultsUrl } from '~/utils/searchNavigation'
-import { setupShortcutHandlers } from '~/utils/shortcuts'
 import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
@@ -118,8 +120,6 @@ function isSupportedPages(): boolean {
     || /^https?:\/\/member\.bilibili\.com\/platform.*$/.test(currentUrl)
     // account settings page 帳號設定頁
     || /^https?:\/\/account\.bilibili\.com\/.*$/.test(currentUrl)
-    // login page
-    || /^https?:\/\/passport\.bilibili\.com\/login.*$/.test(currentUrl)
     // music center page 新歌熱榜 https://music.bilibili.com/pc/music-center/
     || /https?:\/\/music\.bilibili\.com\/pc\/music-center.*$/.test(currentUrl)
     // // blackboard 存在和B站其他页面不一样的元素，需要独立适配
@@ -440,7 +440,6 @@ else if (shouldInitializeContentScript) {
           break
       }
     }
-    setupShortcutHandlers()
     applyDefaultDanmakuState()
     applyDefaultCaptionState()
     if (settings.value.showVerticalVideoZoomButton)
@@ -733,6 +732,7 @@ else if (shouldInitializeContentScript) {
       lastVideoNavigationKey = currentVideoNavigationKey
       recordVideoVisitFromUrl(lastUrl)
       applyBewlyDesignClasses()
+      syncFavoriteDialogLifecycle()
 
       if (!isVideoOrBangumiPage()) {
         clearPendingWidescreenReloadNavigation()
@@ -745,7 +745,6 @@ else if (shouldInitializeContentScript) {
         if (!isMeaningfulVideoNavigation) {
           clearPendingWidescreenReloadNavigation()
           autoContinuationNavigationKey = undefined
-          scheduleUrlChangeCheck()
           return
         }
 
@@ -766,7 +765,6 @@ else if (shouldInitializeContentScript) {
           // 评论区无法可靠映射到视频 ID 时保留完整刷新兜底，避免宽屏 SPA
           // 切换后继续复用旧评论组件（例如番剧页面或异常 URL）。
           window.location.reload()
-          scheduleUrlChangeCheck()
           return
         }
 
@@ -795,21 +793,19 @@ else if (shouldInitializeContentScript) {
         }
       }
     }
-    scheduleUrlChangeCheck()
   }
 
-  function scheduleUrlChangeCheck() {
-    if (document.visibilityState === 'visible')
-      requestAnimationFrame(checkForUrlChanges)
+  onRouteChange(checkForUrlChanges)
+
+  function syncFavoriteDialogLifecycle() {
+    if (isVideoOrBangumiPage())
+      initFavoriteDialogEnhancement()
     else
-      setTimeout(checkForUrlChanges, 1000)
+      stopFavoriteDialogEnhancement()
   }
-
-  scheduleUrlChangeCheck()
 
   // inject/index.ts 在调用 history.pushState 前派发此事件，先退出宽屏；URL
-  // 真正变化后由 checkForUrlChanges 复用 SPA 路由并按需重载评论区。
-  // popstate/replaceState 由轮询兜底。
+  // 真正变化后由共享 route state 复用 SPA 路由并按需重载评论区。
   window.addEventListener('pushstate', prepareVideoNavigationBeforeRouteChange, true)
   document.addEventListener('ended', (event) => {
     if (event.target === getVideoElement())
@@ -846,6 +842,11 @@ else if (shouldInitializeContentScript) {
   let nativeWatchLaterLastSyncAt = 0
 
   function scheduleNativeWatchLaterStateSync(force = false) {
+    const topBarStore = useTopBarStore()
+    const accountId = topBarStore.userInfo.mid
+    if (!accountId)
+      return
+
     if (nativeWatchLaterSyncTimer) {
       if (!force)
         return
@@ -860,15 +861,10 @@ else if (shouldInitializeContentScript) {
       nativeWatchLaterSyncTimer = undefined
       nativeWatchLaterLastSyncAt = Date.now()
 
-      const refresh = () => {
-        void useTopBarStore().syncWatchLaterState(true).catch((error) => {
-          console.error('刷新顶栏稍后再看状态失败:', error)
-        })
-      }
-
-      // 原生列表的删除请求和 DOM 更新不是同一个时序，补一次最终状态。
-      refresh()
-      window.setTimeout(refresh, 1000)
+      void topBarStore.invalidateWatchLaterMembership(accountId).catch((error) => {
+        if (!isExtensionContextInvalidatedError(error))
+          console.error('使稍后再看成员状态失效失败:', error)
+      })
     }, 800)
   }
 
@@ -924,14 +920,15 @@ else if (shouldInitializeContentScript) {
       scheduleNativeWatchLaterStateSync()
     })
 
-    const observeNativeWatchLaterList = () => {
-      if (document.documentElement)
+    const syncNativeWatchLaterListObserver = () => {
+      observer.disconnect()
+      if (document.documentElement && isWatchLaterListPage(location.href))
         observer.observe(document.documentElement, { childList: true, subtree: true })
     }
     if (document.documentElement)
-      observeNativeWatchLaterList()
+      onRouteChange(syncNativeWatchLaterListObserver, true)
     else
-      window.addEventListener('DOMContentLoaded', observeNativeWatchLaterList, { once: true })
+      window.addEventListener('DOMContentLoaded', () => onRouteChange(syncNativeWatchLaterListObserver, true), { once: true })
   }
 
   setupNativeWatchLaterStateSync()
@@ -1086,9 +1083,7 @@ else if (shouldInitializeContentScript) {
     initTouchPlayerGestures()
 
     // Initialize Favorite Dialog Enhancement (for video pages)
-    if (isVideoOrBangumiPage()) {
-      initFavoriteDialogEnhancement()
-    }
+    syncFavoriteDialogLifecycle()
 
     // 原生空间订阅合集 favlist「播放全部」按设置起播
     initNativeFavoriteSeasonPlayAllIntercept()
@@ -1193,10 +1188,16 @@ else if (shouldInitializeContentScript) {
 
   // 发送设置更新到网页环境
   function sendSettingsToPage(settings: any) {
-  // 将响应式对象转换为普通对象
+    const channelId = getPageBridgeChannelId()
+    if (!channelId)
+      return
+
+    // 将响应式对象转换为普通对象
     const serializedSettings = JSON.parse(JSON.stringify(settings))
     window.postMessage({
-      type: 'BEWLY_SETTINGS_UPDATE',
+      protocol: PAGE_BRIDGE_PROTOCOL,
+      channelId,
+      type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
       data: serializedSettings,
     }, '*')
   }
@@ -1303,9 +1304,9 @@ else if (shouldInitializeContentScript) {
     if (event.source !== window)
       return
 
-    const { type } = event.data
-
-    if (type === 'BEWLY_REQUEST_SETTINGS') {
+    if (isPageBridgeMessage(event.data)
+      && event.data.type === PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
+      && setPageBridgeChannelId(event.data.channelId)) {
     // 发送当前设置到网页环境
       void settingsReady.then(() => {
         sendSettingsToPage(settings.value)

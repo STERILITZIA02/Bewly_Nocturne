@@ -201,7 +201,7 @@ function keepOriginalTopBarAvailable(doc: Document) {
       reparenting = false
     }
   })
-  observer.observe(doc.documentElement, {
+  observer.observe(doc.body ?? doc.documentElement, {
     childList: true,
     subtree: true,
   })

@@ -36,7 +36,7 @@ function handleClose() {
   <Dialog
     v-if="showDialog"
     :title="$t('video_card.unfollow_user_confirm.title')"
-    width="420px"
+    width="var(--bew-layout-dialog-width)"
     append-to-bewly-body
     @close="handleClose"
     @confirm="handleConfirm"

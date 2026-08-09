@@ -4,12 +4,15 @@ import type { SettingsCloudSyncEntry } from '~/utils/settingsCloudSyncProtocol'
 import {
   compareSettingsCloudSyncVersions,
   createSettingsCloudSyncKey,
+  DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
   estimateSettingsCloudSyncItemBytes,
+  getSettingsCloudSyncRetryDelay,
   isSettingsCloudSyncEnabled,
   normalizeSettingsCloudSyncEntry,
   parseSettingsCloudSyncKey,
   SETTINGS_CLOUD_SYNC_ENABLED_KEY,
   SETTINGS_CLOUD_SYNC_ITEM_BYTES_LIMIT,
+  SETTINGS_CLOUD_SYNC_STATUS_KEY,
   SETTINGS_CLOUD_SYNC_TOTAL_BYTES_LIMIT,
 } from '~/utils/settingsCloudSyncProtocol'
 import { normalizeSettingsStorageWriteMeta, SETTINGS_STORAGE_META_KEY } from '~/utils/settingsStorageProtocol'
@@ -31,8 +34,13 @@ let preferenceGeneration = 0
 let restartAfterInitialization = false
 let flushInProgress = false
 let flushTimer: ReturnType<typeof setTimeout> | undefined
+let retryTimer: ReturnType<typeof setTimeout> | undefined
+let retryAttempt = 0
 let knownCloudItems: Record<string, unknown> = {}
 const pendingUploads = new Map<string, SettingsCloudSyncEntry>()
+const blockedUploads = new Map<string, { entry: SettingsCloudSyncEntry, reason: 'oversized' | 'quota' }>()
+const uploadStates = new Map<string, 'pending' | 'blockedByQuota' | 'failed' | 'synced'>()
+let lastError = ''
 let remoteChangeQueue = Promise.resolve()
 
 function logCloudSyncError(message: string, error?: unknown) {
@@ -63,10 +71,81 @@ function clearFlushTimer() {
   flushTimer = undefined
 }
 
+function clearRetryTimer() {
+  if (retryTimer != null)
+    clearTimeout(retryTimer)
+  retryTimer = undefined
+}
+
+function formatError(error: unknown) {
+  return error instanceof Error ? error.message : String(error)
+}
+
+function publishCloudSyncStatus() {
+  const counts = {
+    ...DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
+    lastError,
+  }
+  for (const state of uploadStates.values()) {
+    if (state === 'pending')
+      counts.pendingCount++
+    else if (state === 'blockedByQuota')
+      counts.blockedByQuotaCount++
+    else if (state === 'failed')
+      counts.failedCount++
+    else
+      counts.syncedCount++
+  }
+  void browser.storage.local.set({ [SETTINGS_CLOUD_SYNC_STATUS_KEY]: counts })
+    .catch(error => logCloudSyncError('Failed to publish settings cloud sync status:', error))
+}
+
+function setUploadState(field: string, state: 'pending' | 'blockedByQuota' | 'failed' | 'synced') {
+  uploadStates.set(field, state)
+}
+
 function consumePendingUpload(field: string, entry: SettingsCloudSyncEntry) {
   const pending = pendingUploads.get(field)
   if (pending && compareSettingsCloudSyncVersions(pending.version, entry.version) <= 0)
     pendingUploads.delete(field)
+}
+
+function blockUpload(field: string, entry: SettingsCloudSyncEntry, reason: 'oversized' | 'quota') {
+  consumePendingUpload(field, entry)
+  blockedUploads.set(field, { entry, reason })
+  setUploadState(field, 'blockedByQuota')
+}
+
+function scheduleFlush(delay = CLOUD_UPLOAD_DELAY) {
+  if (pendingUploads.size === 0 || flushTimer != null || retryTimer != null || flushInProgress)
+    return
+
+  flushTimer = setTimeout(() => {
+    flushTimer = undefined
+    void flushUploads()
+  }, delay)
+}
+
+function scheduleRetry() {
+  if (retryTimer != null || !enabled || !ready || pendingUploads.size === 0)
+    return
+
+  retryTimer = setTimeout(() => {
+    retryTimer = undefined
+    void flushUploads()
+  }, getSettingsCloudSyncRetryDelay(retryAttempt++))
+}
+
+function requeueQuotaBlockedUploads() {
+  for (const [field, blocked] of blockedUploads) {
+    if (blocked.reason !== 'quota')
+      continue
+    blockedUploads.delete(field)
+    pendingUploads.set(field, blocked.entry)
+    setUploadState(field, 'pending')
+  }
+  publishCloudSyncStatus()
+  scheduleFlush()
 }
 
 function queueUploads(uploads: Record<string, SettingsCloudSyncEntry>) {
@@ -75,21 +154,21 @@ function queueUploads(uploads: Record<string, SettingsCloudSyncEntry>) {
 
   for (const [field, entry] of Object.entries(uploads)) {
     const cloudEntry = getKnownCloudEntry(field)
-    if (cloudEntry && compareSettingsCloudSyncVersions(entry.version, cloudEntry.version) <= 0)
+    if (cloudEntry && compareSettingsCloudSyncVersions(entry.version, cloudEntry.version) <= 0) {
+      setUploadState(field, 'synced')
       continue
+    }
 
     const pending = pendingUploads.get(field)
-    if (!pending || compareSettingsCloudSyncVersions(pending.version, entry.version) <= 0)
+    if (!pending || compareSettingsCloudSyncVersions(pending.version, entry.version) <= 0) {
+      blockedUploads.delete(field)
       pendingUploads.set(field, entry)
+      setUploadState(field, 'pending')
+    }
   }
 
-  if (pendingUploads.size === 0 || flushTimer != null || flushInProgress)
-    return
-
-  flushTimer = setTimeout(() => {
-    flushTimer = undefined
-    void flushUploads()
-  }, CLOUD_UPLOAD_DELAY)
+  publishCloudSyncStatus()
+  scheduleFlush()
 }
 
 function safeEstimateItemBytes(key: string, value: unknown) {
@@ -118,12 +197,14 @@ function prepareUploadBatch(entries: Array<[string, SettingsCloudSyncEntry]>) {
     const cloudEntry = getKnownCloudEntry(field)
     if (cloudEntry && compareSettingsCloudSyncVersions(entry.version, cloudEntry.version) <= 0) {
       consumePendingUpload(field, entry)
+      blockedUploads.delete(field)
+      setUploadState(field, 'synced')
       continue
     }
 
     const nextBytes = safeEstimateItemBytes(key, entry)
     if (nextBytes > SETTINGS_CLOUD_SYNC_ITEM_BYTES_LIMIT) {
-      consumePendingUpload(field, entry)
+      blockUpload(field, entry, 'oversized')
       logCloudSyncError(`Skipped oversized cloud setting "${field}".`)
       continue
     }
@@ -138,7 +219,7 @@ function prepareUploadBatch(entries: Array<[string, SettingsCloudSyncEntry]>) {
       nextTotalBytes > SETTINGS_CLOUD_SYNC_TOTAL_BYTES_LIMIT
       || nextItemCount > CLOUD_SYNC_ITEM_COUNT_LIMIT
     ) {
-      consumePendingUpload(field, entry)
+      blockUpload(field, entry, 'quota')
       logCloudSyncError(`Skipped cloud setting "${field}" because the sync quota is full.`)
       continue
     }
@@ -148,6 +229,7 @@ function prepareUploadBatch(entries: Array<[string, SettingsCloudSyncEntry]>) {
     itemCount = nextItemCount
   }
 
+  publishCloudSyncStatus()
   return items
 }
 
@@ -158,8 +240,6 @@ async function flushUploads() {
   flushInProgress = true
   const flushGeneration = generation
   const batchEntries = [...pendingUploads.entries()]
-  let shouldScheduleNextBatch = true
-
   try {
     const stored = await browser.storage.local.get(SETTINGS_CLOUD_SYNC_ENABLED_KEY)
     if (
@@ -185,16 +265,29 @@ async function flushUploads() {
       if (!cloudEntry || compareSettingsCloudSyncVersions(cloudEntry.version, entry.version) <= 0)
         knownCloudItems[key] = entry
       consumePendingUpload(field, entry)
+      blockedUploads.delete(field)
+      setUploadState(field, 'synced')
     }
+    retryAttempt = 0
+    clearRetryTimer()
+    lastError = ''
+    publishCloudSyncStatus()
+    requeueQuotaBlockedUploads()
   }
   catch (error) {
-    shouldScheduleNextBatch = false
+    for (const [field, entry] of batchEntries) {
+      if (pendingUploads.get(field) === entry)
+        setUploadState(field, 'failed')
+    }
+    lastError = formatError(error)
+    publishCloudSyncStatus()
     logCloudSyncError('Failed to upload settings to browser sync storage:', error)
+    scheduleRetry()
   }
   finally {
     flushInProgress = false
-    if (shouldScheduleNextBatch && enabled && ready && pendingUploads.size > 0)
-      queueUploads({})
+    if (enabled && ready && pendingUploads.size > 0 && retryTimer == null)
+      scheduleFlush()
   }
 }
 
@@ -204,7 +297,13 @@ async function startCloudSync() {
   ready = false
   restartAfterInitialization = false
   clearFlushTimer()
+  clearRetryTimer()
   pendingUploads.clear()
+  blockedUploads.clear()
+  uploadStates.clear()
+  lastError = ''
+  retryAttempt = 0
+  publishCloudSyncStatus()
 
   try {
     const cloudItems = await browser.storage.sync.get(null)
@@ -227,6 +326,8 @@ async function startCloudSync() {
     if (!enabled || startGeneration !== generation)
       return
     logCloudSyncError('Failed to initialize settings cloud sync:', error)
+    lastError = formatError(error)
+    publishCloudSyncStatus()
   }
 }
 
@@ -236,8 +337,14 @@ function stopCloudSync() {
   generation++
   restartAfterInitialization = false
   clearFlushTimer()
+  clearRetryTimer()
   pendingUploads.clear()
+  blockedUploads.clear()
+  uploadStates.clear()
+  lastError = ''
+  retryAttempt = 0
   knownCloudItems = {}
+  publishCloudSyncStatus()
 }
 
 function updateCloudSyncPreference(value: unknown) {
@@ -319,6 +426,8 @@ function handleSyncChanges(
   }
   if (Object.keys(remoteChanges).length === 0)
     return
+
+  requeueQuotaBlockedUploads()
 
   if (!ready) {
     restartAfterInitialization = true

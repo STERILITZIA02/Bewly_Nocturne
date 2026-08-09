@@ -32,6 +32,7 @@ common:
   performance_impact_warn: This feature may cause performance *DECREASE*!
   no_data: No data available
   no_more_content: No more content now, owari da
+  load_failed: Failed to load. Please try again later.
   load_more: Load more
   operation:
     add: Add
@@ -669,6 +670,9 @@ settings:
   enable_settings_sync_desc: >-
     Save settings locally and to browser cloud storage. Per-device playback
     state is not synced (requires signing in to the browser account).
+  settings_sync_unsynced_count: 'Unsynced fields: {count}'
+  settings_sync_quota_blocked_count: 'Blocked by cloud quota: {count}'
+  settings_sync_last_error: 'Last sync error: {error}'
   disable_auto_play_collection: Auto disable collection autoplay
   disable_auto_play_collection_desc: Automatically turn off the autoplay feature for video collections
   keep_collection_video_default_mode: Keep collection videos in default mode

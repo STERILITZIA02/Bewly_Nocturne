@@ -2,6 +2,7 @@
 import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 
+import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
@@ -15,7 +16,7 @@ const props = defineProps<{
 }>()
 
 const { forceWhiteIcon, handleNotificationsItemClick, showSearchBar } = useTopBarInteraction()
-const isNarrowLayout = useMediaQuery('(max-width: 767px)')
+const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
 
 const OVERLAY_HEIGHT = 'calc(var(--bew-top-bar-height) * 1.35)'
 
@@ -267,6 +268,8 @@ function refreshSearchContent() {
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/breakpoints";
+
 .top-bar-header {
   grid-template-columns: auto minmax(0, 1fr) auto;
   box-sizing: border-box;
@@ -347,14 +350,14 @@ function refreshSearchContent() {
 }
 
 // 窄屏响应式 padding（避免窄屏下 x-48px 过于挤压）
-@media (max-width: 1279px) {
+@media (max-width: breakpoints.$compact-max) {
   .top-bar-header {
     gap: 12px;
     padding-inline: 16px;
   }
 }
 
-@media (max-width: 767px) {
+@media (max-width: breakpoints.$mobile-max) {
   .top-bar-header {
     gap: 8px;
     padding-inline: 8px;

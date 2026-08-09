@@ -4,6 +4,7 @@ import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl, isPreventMobileRedirectE
 
 import { setupAppAuthScheduler } from './appAuthScheduler'
 import { setupContentScriptRefreshPrompt } from './contentScriptRefreshPrompt'
+import { replaceFirefoxContainerCookieHeader } from './firefoxCookies'
 import { setupLoginStateWatcher } from './loginStateWatcher'
 import { setupApiMsgListeners } from './messageListeners/api'
 import { setupTabMsgListeners } from './messageListeners/tabs'
@@ -94,9 +95,10 @@ if (isFirefoxBuild) {
     async (details: any) => {
       const requestHeaders: browser.WebRequest.HttpHeaders = []
       await preventMobileRedirectReady
+      const filteredHeaders = replaceFirefoxContainerCookieHeader(details.requestHeaders || [])
       if (preventMobileRedirectEnabled && details.type === 'main_frame' && isBilibiliWwwUrl(details.url)) {
         let hasUserAgent = false
-        for (const header of details.requestHeaders || []) {
+        for (const header of filteredHeaders) {
           const headerName = header.name.toLowerCase()
           if (headerName === 'user-agent') {
             requestHeaders.push({ name: header.name, value: BILIBILI_DESKTOP_USER_AGENT })
@@ -122,20 +124,17 @@ if (isFirefoxBuild) {
       if (details.documentUrl) {
         const url = new URL(details.documentUrl)
         const extensionUri = isExtensionUri(details.documentUrl)
-        details.requestHeaders = details.requestHeaders || []
-        for (let i = 0; i < details.requestHeaders.length; i++) {
-          if (details.requestHeaders[i].name.toLowerCase() === 'origin' || details.requestHeaders[i].name.toLowerCase() === 'referer')
-            requestHeaders.push({ name: details.requestHeaders[i].name, value: extensionUri ? 'https://www.bilibili.com' : url.origin })
+        for (let i = 0; i < filteredHeaders.length; i++) {
+          if (filteredHeaders[i].name.toLowerCase() === 'origin' || filteredHeaders[i].name.toLowerCase() === 'referer')
+            requestHeaders.push({ name: filteredHeaders[i].name, value: extensionUri ? 'https://www.bilibili.com' : url.origin })
           else
-            requestHeaders.push(details.requestHeaders[i])
-
-          if (details.requestHeaders[i].name === 'firefox-multi-account-cookie') {
-            requestHeaders.push({ name: 'cookie', value: details.requestHeaders[i].value })
-          }
+            requestHeaders.push(filteredHeaders[i])
         }
 
         return { ...details, requestHeaders }
       }
+
+      return { ...details, requestHeaders: filteredHeaders }
     },
     { urls: ['<all_urls>'] },
     ['blocking', 'requestHeaders'],

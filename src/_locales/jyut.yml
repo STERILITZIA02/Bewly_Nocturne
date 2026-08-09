@@ -32,6 +32,7 @@ common:
   performance_impact_warn: 呢個功能可能會降低效能！
   no_data: 暫時冇數據
   no_more_content: 唔使睇喇，冇嘢喇
+  load_failed: 載入失敗，請遲啲再試
   load_more: 撈多啲
   operation:
     add: 新增
@@ -661,6 +662,9 @@ settings:
   auto_play_playlist_desc: 揀收藏列表嘅自動播放行為。「連播推薦」表示目前影片完咗之後繼續播推薦影片。
   enable_settings_sync: 允許同步設定
   enable_settings_sync_desc: 開啟之後會同時儲存喺本機同瀏覽器雲端；牆紙背景同裝置播放狀態唔會同步（需要登入瀏覽器帳戶）。
+  settings_sync_unsynced_count: '未同步欄位：{count}'
+  settings_sync_quota_blocked_count: '受雲端配額限制：{count}'
+  settings_sync_last_error: '最近同步錯誤：{error}'
   enable_undo_refresh_button: 啓用復原更新掣（淨係得 Web 推介模式下有效）
   enable_undo_refresh_button_desc: 更新頁面後顯示復原更新掣，撳低可以回復更新前內容。
   shortcuts:

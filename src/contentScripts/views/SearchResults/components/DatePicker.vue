@@ -483,7 +483,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 1000;
+  z-index: var(--bew-z-base-overlay);
   width: 280px;
   padding: var(--bew-space-3);
 }

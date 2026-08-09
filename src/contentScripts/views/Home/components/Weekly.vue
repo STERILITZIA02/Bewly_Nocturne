@@ -251,7 +251,7 @@ defineExpose({ initData })
               backdropFilter: 'var(--bew-filter-glass-1)',
             }"
             pos="absolute" bg="$bew-elevated" shadow="$bew-shadow-2"
-            mt-2 rounded="$bew-radius" z="10004"
+            mt-2 rounded="$bew-radius" z="$bew-z-control-menu"
             max-h-400px of-hidden
             @mouseenter="onMouseEnter"
             @mouseleave="onMouseLeave"
@@ -300,7 +300,7 @@ defineExpose({ initData })
         <div
           v-if="showDropdown"
           pos="fixed top-0 left-0" w-full h-full
-          z="10003"
+          z="$bew-z-control-backdrop"
           @wheel="closeDropdown"
         />
       </Teleport>

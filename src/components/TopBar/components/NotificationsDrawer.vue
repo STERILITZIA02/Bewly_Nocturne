@@ -2,7 +2,9 @@
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
+import { getIframeMessageData } from '~/utils/iframeMessage'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
 const props = defineProps<{
@@ -183,7 +185,7 @@ function handleClose() {
   delayCloseTimer.value = setTimeout(() => {
     delayCloseTimer.value = null
     emit('close')
-  }, 300)
+  }, DRAWER_TRANSITION_MS)
 }
 
 async function releaseIframeResources() {
@@ -254,11 +256,12 @@ function startEscConfirmation() {
   escPressedTimer.value = setTimeout(() => {
     escPressedTimer.value = null
     isEscPressed.value = false
-  }, 1300)
+  }, ESC_CONFIRM_WINDOW_MS)
 }
 
 function handleWindowMessage(event: MessageEvent) {
-  if (event.data?.type !== 'BEWLY_DRAWER_CLOSE_REQUEST' || event.data?.source !== 'iframe')
+  const data = getIframeMessageData(event, iframeRef.value)
+  if (data?.type !== 'BEWLY_DRAWER_CLOSE_REQUEST' || data.source !== 'iframe')
     return
 
   if (settings.value.closeDrawerWithoutPressingEscAgain || isEscPressed.value)
@@ -380,9 +383,9 @@ function handleFocusDrawer(e?: Event) {
 <template>
   <Teleport :to="mainAppRef">
     <div
+      class="notifications-drawer-layer"
       :style="{ pointerEvents: show ? 'auto' : 'none' }"
       pos="fixed top-0 left-0" of-hidden w-full h-full
-      z-999999
     >
       <!-- Mask -->
       <Transition name="fade">
@@ -400,7 +403,7 @@ function handleFocusDrawer(e?: Event) {
           ref="drawerRef"
           tabindex="0"
           pos="absolute top-0 right-0" of-hidden bg="$bew-bg"
-          w="xl:70vw lg:80vw md:100vw 100vw" max-w-1400px h-full
+          w="xl:70vw lg:80vw md:100vw 100vw" max-w="$bew-layout-drawer-max-width" h-full
           outline-none
           @keydown="handleKeydown"
           @mousedown.self="handleFocusDrawer"
@@ -523,9 +526,13 @@ function handleFocusDrawer(e?: Event) {
 </template>
 
 <style lang="scss" scoped>
+.notifications-drawer-layer {
+  z-index: var(--bew-z-drawer);
+}
+
 .drawer-enter-active,
 .drawer-leave-active {
-  transition: transform 0.3s;
+  transition: transform var(--bew-duration-moderate);
 }
 
 .drawer-enter-from,

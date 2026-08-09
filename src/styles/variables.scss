@@ -70,6 +70,36 @@
   --bew-space-12: 48px;
   // #endregion
 
+  // #region Layout
+  --bew-layout-content-gap: var(--bew-space-5);
+  --bew-layout-sidebar-width: 200px;
+  --bew-layout-sidebar-sticky-top: 150px;
+  --bew-layout-sidebar-viewport-offset: 140px;
+  --bew-layout-dialog-width: 420px;
+  --bew-layout-drawer-max-width: 1400px;
+  // #endregion
+
+  // #region Stacking
+  // Global overlay order. Local component-internal layers continue to use small integers.
+  --bew-z-topbar: 999;
+  --bew-z-base-overlay: 1000;
+  --bew-z-topbar-interaction: var(--bew-z-base-overlay);
+  --bew-z-topbar-host: 1001;
+  --bew-z-native-topbar: 1003;
+  --bew-z-context-backdrop: 9998;
+  --bew-z-popover: 9999;
+  --bew-z-modal: 10002;
+  --bew-z-control-backdrop: 10003;
+  --bew-z-control-menu: 10004;
+  --bew-z-image-viewer: 10010;
+  --bew-z-toast: 10020;
+  --bew-z-native-detail: 99999;
+  --bew-z-native-overlay: 100000;
+  --bew-z-drawer: 999999;
+  --bew-z-widescreen: 2147483000;
+  --bew-z-hud: 2147483646;
+  // #endregion
+
   // #region Motion
   // Prefer specific transition properties over `transition: all` to avoid layout jumps.
   --bew-duration-fast: 150ms;

@@ -139,7 +139,7 @@ watchEffect(() => {
           pos="absolute"
           p="2"
           m="t-2"
-          z="10004"
+          z="$bew-z-control-menu"
           flex="~ col gap-1"
           w="full"
           max-h-400px
@@ -175,7 +175,7 @@ watchEffect(() => {
         pos="fixed top-0 left-0"
         w-full
         h-full
-        z="10003"
+        z="$bew-z-control-backdrop"
         @wheel="closeDropdown"
       />
     </Teleport>

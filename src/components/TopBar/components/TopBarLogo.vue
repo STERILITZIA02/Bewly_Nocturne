@@ -124,10 +124,11 @@ const channels = setupTopBarItemHoverEvent('channels')
 
 <style lang="scss" scoped>
 @use "../styles/index.scss";
+@use "../../../styles/breakpoints";
 
 .bew-popover {
   position: fixed;
-  z-index: 999;
+  z-index: var(--bew-z-topbar);
 }
 
 .logo {
@@ -214,7 +215,7 @@ const channels = setupTopBarItemHoverEvent('channels')
   flex: 0 1 auto;
 }
 
-@media (max-width: 767px) {
+@media (max-width: breakpoints.$mobile-max) {
   .logo--brand {
     width: var(--bew-top-bar-primary-control-height);
     padding-inline: var(--bew-space-2);

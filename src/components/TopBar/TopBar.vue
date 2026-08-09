@@ -3,6 +3,7 @@ import { onKeyStroke, useMouseInElement, useMutationObserver } from '@vueuse/cor
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
@@ -35,21 +36,10 @@ const topAreaTarget = ref(null)
 const { isOutside: isOutsideTopBar } = useMouseInElement(headerTarget)
 const { isOutside: isOutsideTopArea } = useMouseInElement(topAreaTarget)
 
-// 当前URL
-const currentUrl = ref(window.location.href)
-
-// 监听URL变化
-function checkUrlChange() {
-  if (currentUrl.value !== window.location.href) {
-    currentUrl.value = window.location.href
-    setupScrollListeners()
-    updateConflictingHeaderVisibility()
-  }
-}
+const currentLocationHref = useCurrentLocationHref()
 
 // 延迟隐藏计时器
 let hideTimer: number | null = null
-let urlCheckTimer: number | null = null
 
 // 检测是否有弹窗激活
 const hasActivePopup = computed(() => {
@@ -112,6 +102,11 @@ watch(hasActivePopup, () => {
 watch(forceHideTopBar, () => {
   applyTopBarVisibility()
 })
+
+watch(currentLocationHref, () => {
+  setupScrollListeners()
+  updateConflictingHeaderVisibility()
+}, { flush: 'post' })
 
 // 滚动处理
 const scrollTop = ref<number>(0)
@@ -352,8 +347,19 @@ onMounted(() => {
     updateConflictingHeaderVisibility()
     conflictingHeaderObserver = useMutationObserver(
       () => document.body,
-      () => {
-        updateConflictingHeaderVisibility()
+      (mutations) => {
+        const affectsConflictingHeader = mutations.some((mutation) => {
+          if (mutation.type === 'attributes') {
+            const target = mutation.target
+            return target instanceof Element && conflictingHeaderSelectors.some(selector => target.matches(selector))
+          }
+
+          return [...Array.from(mutation.addedNodes), ...Array.from(mutation.removedNodes)].some((node) => {
+            return node instanceof Element && conflictingHeaderSelectors.some(selector => node.matches(selector) || node.querySelector(selector))
+          })
+        })
+        if (affectsConflictingHeader)
+          updateConflictingHeaderVisibility()
       },
       {
         childList: true,
@@ -362,9 +368,6 @@ onMounted(() => {
         attributeFilter: ['class', 'style'],
       },
     ) ?? undefined
-
-    // 设置URL变化检查定时器
-    urlCheckTimer = window.setInterval(checkUrlChange, 1000)
 
     // 添加全局点击事件监听器（用于触屏模式下点击外部关闭弹窗）
     document.addEventListener('click', handleClickOutsidePopup)
@@ -385,11 +388,6 @@ onUnmounted(() => {
     hideTimer = null
   }
 
-  if (urlCheckTimer) {
-    clearInterval(urlCheckTimer)
-    urlCheckTimer = null
-  }
-
   conflictingHeaderObserver?.stop()
 
   cleanupScrollListeners()
@@ -399,11 +397,6 @@ onUnmounted(() => {
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleClickOutsidePopup)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
-})
-
-// 快捷键
-onKeyStroke('/', () => {
-  toggleTopBarVisible(true)
 })
 
 onKeyStroke('Escape', (event: KeyboardEvent) => {
@@ -469,14 +462,14 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
   top: 0;
   left: 0;
   right: 0;
-  z-index: 999;
+  z-index: var(--bew-z-topbar);
   position: fixed;
 }
 
 .top-area-listener {
   cursor: default;
   position: fixed;
-  z-index: 1000;
+  z-index: var(--bew-z-topbar-interaction);
   top: 0;
   left: 0;
   right: 0;
