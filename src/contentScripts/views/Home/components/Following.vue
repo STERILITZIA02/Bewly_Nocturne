@@ -46,6 +46,7 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
+import { parseDedeUserID } from '~/logic/loginStatus'
 import {
   recordUploaderLatestVideoTimes,
   uploaderLatestVideoTimes,
@@ -54,8 +55,12 @@ import {
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import type { DataItem as MomentItem, MomentResult } from '~/models/moment/moment'
 import { BadgeText } from '~/models/moment/moment'
+import { useTopBarStore } from '~/stores/topBarStore'
+import type { AccountId } from '~/utils/accountScope'
+import { getAccountScopedStorageKey, isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcTimeSince, parseStatNumber } from '~/utils/dataFormatter'
+import { debugLog } from '~/utils/debug'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 
 interface Props {
@@ -82,6 +87,16 @@ interface VideoElement {
   isLive?: boolean
 }
 
+type FollowingLoadResult
+  = | { status: 'success' }
+    | { status: 'login-required' }
+    | { status: 'error' }
+
+type CurrentUserLoadResult
+  = | { status: 'success', mid: number }
+    | { status: 'login-required' }
+    | { status: 'error' }
+
 withDefaults(defineProps<Props>(), {
   gridLayout: 'adaptive',
   topBarVisibility: true,
@@ -93,6 +108,7 @@ const emit = defineEmits<{
 }>()
 
 useI18n()
+const topBarStore = useTopBarStore()
 
 const { scrollViewportRef, handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 const videoList = ref<VideoElement[]>([])
@@ -116,6 +132,8 @@ const allViewUpdateBaseline = ref<string>('')
 const userMomentsOffset = ref<string>('')
 
 const currentUserMid = ref<number>(0) // 当前登录用户的mid
+let loadedAccountMid: AccountId = null
+let followingAccountInitialized = false
 
 function syncRefreshAvailability() {
   canRefreshHomeSubPage.value = isRefreshContextActive.value && selectedUploader.value === null
@@ -128,10 +146,28 @@ const VIEWED_UPLOADERS_KEY = 'bewlycat_moments_viewed_uploaders'
 // Blacklist for inactive uploaders
 const UPLOADER_BLACKLIST_KEY = 'bewlycat_uploader_blacklist'
 
+function getCurrentAccountMid(): AccountId {
+  return parseDedeUserID(document.cookie) ?? null
+}
+
+function getFollowingStorageKey(baseKey: string): string | undefined {
+  return loadedAccountMid === null || !isSameAccount(loadedAccountMid, getCurrentAccountMid())
+    ? undefined
+    : getAccountScopedStorageKey(baseKey, loadedAccountMid)
+}
+
+function isFollowingRequestCurrent(token?: number): boolean {
+  return (token === undefined || token === selectionToken.value)
+    && isSameAccount(loadedAccountMid, getCurrentAccountMid())
+}
+
 // 获取已查看的UP主记录（存储用户实际看到的最新投稿时间）
 function getViewedUploaders(): Record<number, number> {
   try {
-    const data = localStorage.getItem(VIEWED_UPLOADERS_KEY)
+    const key = getFollowingStorageKey(VIEWED_UPLOADERS_KEY)
+    if (!key)
+      return {}
+    const data = localStorage.getItem(key)
     return data ? JSON.parse(data) : {}
   }
   catch {
@@ -157,19 +193,25 @@ function markUploaderAsViewed(mid: number, updateTime?: number) {
   const timeToMark = updateTime || (uploader?.lastUpdateTime) || Date.now()
 
   viewed[mid] = timeToMark
-  localStorage.setItem(VIEWED_UPLOADERS_KEY, JSON.stringify(viewed))
+  const key = getFollowingStorageKey(VIEWED_UPLOADERS_KEY)
+  if (!key)
+    return
+  localStorage.setItem(key, JSON.stringify(viewed))
 
   if (uploader) {
     uploader.hasUpdate = false
   }
 
-  console.log(`[Following] Marked UP ${mid} as viewed at ${new Date(timeToMark).toLocaleString()}`)
+  debugLog(`[Following] Marked UP ${mid} as viewed at ${new Date(timeToMark).toLocaleString()}`)
 }
 
 // 获取黑名单
 function getBlacklistedUploaders(): Set<number> {
   try {
-    const data = localStorage.getItem(UPLOADER_BLACKLIST_KEY)
+    const key = getFollowingStorageKey(UPLOADER_BLACKLIST_KEY)
+    if (!key)
+      return new Set()
+    const data = localStorage.getItem(key)
     return data ? new Set(JSON.parse(data)) : new Set()
   }
   catch {
@@ -180,10 +222,13 @@ function getBlacklistedUploaders(): Set<number> {
 // 添加到黑名单
 function addToBlacklist(mid: number) {
   try {
+    const key = getFollowingStorageKey(UPLOADER_BLACKLIST_KEY)
+    if (!key)
+      return
     const blacklist = getBlacklistedUploaders()
     blacklist.add(mid)
-    localStorage.setItem(UPLOADER_BLACKLIST_KEY, JSON.stringify([...blacklist]))
-    console.log(`[Following] Added UP ${mid} to blacklist`)
+    localStorage.setItem(key, JSON.stringify([...blacklist]))
+    debugLog(`[Following] Added UP ${mid} to blacklist`)
   }
   catch (error) {
     console.error('[Following] Failed to add to blacklist:', error)
@@ -193,11 +238,14 @@ function addToBlacklist(mid: number) {
 // 从黑名单移除
 function removeFromBlacklist(mid: number) {
   try {
+    const key = getFollowingStorageKey(UPLOADER_BLACKLIST_KEY)
+    if (!key)
+      return
     const blacklist = getBlacklistedUploaders()
     if (blacklist.has(mid)) {
       blacklist.delete(mid)
-      localStorage.setItem(UPLOADER_BLACKLIST_KEY, JSON.stringify([...blacklist]))
-      console.log(`[Following] Removed UP ${mid} from blacklist`)
+      localStorage.setItem(key, JSON.stringify([...blacklist]))
+      debugLog(`[Following] Removed UP ${mid} from blacklist`)
     }
   }
   catch (error) {
@@ -331,34 +379,49 @@ const displayedUploaderList = computed(() => {
 const gridKey = computed(() => `following-grid-${selectedUploader.value ?? 'all'}`)
 
 // 获取当前用户信息以获取关注列表
-async function getCurrentUserInfo() {
+async function getCurrentUserInfo(requestToken: number, accountMid: number): Promise<CurrentUserLoadResult> {
   try {
     const response: any = await api.user.getUserInfo()
-    if (response.code === 0 && response.data?.mid) {
+    if (
+      response.code === 0
+      && response.data?.mid === accountMid
+      && requestToken === selectionToken.value
+      && isSameAccount(loadedAccountMid, getCurrentAccountMid())
+    ) {
       currentUserMid.value = response.data.mid
-      return response.data.mid
+      return { status: 'success', mid: response.data.mid }
     }
+    if (response.code === -101)
+      return { status: 'login-required' }
   }
   catch (error) {
     console.error('[Following] Failed to get current user info:', error)
   }
-  return 0
+  return { status: 'error' }
 }
 
 // 加载关注列表（独立API）- 渐进式加载所有关注的UP主
-async function loadFollowingList() {
-  console.log('[Following] Loading all following list...')
+async function loadFollowingList(requestToken: number, accountMid: number): Promise<FollowingLoadResult> {
+  debugLog('[Following] Loading all following list...')
+  requestFailed.value = false
+  needToLoginFirst.value = false
+  noMoreContent.value = false
 
   if (!currentUserMid.value) {
-    const mid = await getCurrentUserInfo()
-    if (!mid) {
-      needToLoginFirst.value = true
-      return
+    const result = await getCurrentUserInfo(requestToken, accountMid)
+    if (result.status !== 'success') {
+      if (isFollowingRequestCurrent(requestToken)) {
+        needToLoginFirst.value = result.status === 'login-required'
+        requestFailed.value = result.status === 'error'
+      }
+      return result
     }
   }
 
   try {
     await uploaderLatestVideoTimesReady
+    if (!isFollowingRequestCurrent(requestToken))
+      return { status: 'error' }
 
     let currentPage = 1
     const pageSize = 50
@@ -368,7 +431,7 @@ async function loadFollowingList() {
 
     // 持续加载所有关注的UP主，每页加载后立即显示
     while (hasMore) {
-      console.log(`[Following] Loading following list page ${currentPage}...`)
+      debugLog(`[Following] Loading following list page ${currentPage}...`)
 
       const response: any = await api.user.getUserFollowings({
         vmid: currentUserMid.value.toString(),
@@ -376,11 +439,16 @@ async function loadFollowingList() {
         pn: currentPage,
       })
 
-      console.log(`[Following] Following list page ${currentPage} response:`, response.code, 'count:', response.data?.list?.length)
+      if (!isFollowingRequestCurrent(requestToken))
+        return { status: 'error' }
+
+      debugLog(`[Following] Following list page ${currentPage} response:`, response.code, 'count:', response.data?.list?.length)
 
       if (response.code === -101) {
         needToLoginFirst.value = true
-        return
+        requestFailed.value = false
+        noMoreContent.value = false
+        return { status: 'login-required' }
       }
 
       if (response.code === 0 && response.data?.list) {
@@ -408,31 +476,39 @@ async function loadFollowingList() {
         uploaderList.value = [...uploaderList.value, ...newUploaders]
         updateUploaderStatus()
 
-        console.log(`[Following] Page ${currentPage} loaded. Current total:`, uploaderList.value.length)
+        debugLog(`[Following] Page ${currentPage} loaded. Current total:`, uploaderList.value.length)
 
         // 检查是否还有更多
         const total = response.data.total
         if (uploaderList.value.length >= total || followings.length < pageSize) {
           hasMore = false
-          console.log('[Following] All followings loaded. Total:', uploaderList.value.length)
+          debugLog('[Following] All followings loaded. Total:', uploaderList.value.length)
         }
         else {
           currentPage++
         }
       }
       else {
-        hasMore = false
-        console.log('[Following] API returned error code:', response.code)
+        debugLog('[Following] API returned error code:', response.code)
+        requestFailed.value = true
+        noMoreContent.value = false
+        return { status: 'error' }
       }
     }
 
     if (uploaderList.value.length > 0) {
-      console.log('[Following] Successfully loaded', uploaderList.value.length, 'followings')
-      console.log('[Following] Loaded recorded uploader times:', Object.keys(recordedTimes).length)
+      debugLog('[Following] Successfully loaded', uploaderList.value.length, 'followings')
+      debugLog('[Following] Loaded recorded uploader times:', Object.keys(recordedTimes).length)
     }
+    return { status: 'success' }
   }
   catch (error) {
     console.error('[Following] Failed to load following list:', error)
+    if (isFollowingRequestCurrent(requestToken)) {
+      requestFailed.value = true
+      noMoreContent.value = false
+    }
+    return { status: 'error' }
   }
 }
 
@@ -451,17 +527,20 @@ function isLiveStreamingItem(liveItem: FollowingLiveItem): boolean {
   return true
 }
 
-async function loadFollowingLiveList(): Promise<VideoElement[]> {
+async function loadFollowingLiveList(token: number): Promise<VideoElement[]> {
   if (!settings.value.followingTabShowLivestreamingVideos) {
     return []
   }
 
   try {
-    console.log('[Following] Loading following live list...')
+    debugLog('[Following] Loading following live list...')
     const response: FollowingLiveResult = await api.live.getFollowingLiveList({
       page: 1,
       page_size: 30,
     })
+
+    if (!isFollowingRequestCurrent(token))
+      return []
 
     if (response.code === 0 && response.data.list) {
       // 只保留正在直播的（live_status === 1）
@@ -473,7 +552,7 @@ async function loadFollowingLiveList(): Promise<VideoElement[]> {
           displayData: mapLiveItemToVideo(liveItem),
           isLive: true,
         }))
-      console.log(`[Following] Loaded ${liveItems.length} live streams (filtered from ${response.data.list.length} total)`)
+      debugLog(`[Following] Loaded ${liveItems.length} live streams (filtered from ${response.data.list.length} total)`)
       return liveItems
     }
   }
@@ -486,10 +565,11 @@ async function loadFollowingLiveList(): Promise<VideoElement[]> {
 
 // 加载ALL视图的动态流（渐进式加载，每页加载后立即显示）
 async function loadAllViewVideos(maxPages: number = 3, token?: number) {
-  console.log('[Following] Loading ALL view videos (max', maxPages, 'pages)...')
+  debugLog('[Following] Loading ALL view videos (max', maxPages, 'pages)...')
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
+  needToLoginFirst.value = false
 
   // 追踪每个UP主在ALL视图中的最新视频时间
   const uploaderLatestTimes = new Map<number, number>()
@@ -497,7 +577,9 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
   try {
     // 只在首次加载且未加载过直播列表时，才加载直播列表（防止重复加载）
     if (!allViewOffset.value && !liveListLoaded.value && settings.value.followingTabShowLivestreamingVideos) {
-      const liveItems = await loadFollowingLiveList()
+      const liveItems = await loadFollowingLiveList(token ?? selectionToken.value)
+      if (!isFollowingRequestCurrent(token))
+        return
       if (liveItems.length > 0) {
         videoList.value = [...liveItems, ...videoList.value]
       }
@@ -510,7 +592,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
 
     while (pageCount < maxPages) {
       pageCount++
-      console.log(`[Following] Loading ALL view page ${pageCount}...`)
+      debugLog(`[Following] Loading ALL view page ${pageCount}...`)
 
       const response: MomentResult = await api.moment.getMoments({
         type: 'video',
@@ -519,14 +601,16 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
       })
 
       // 竞态条件检查：如果当前选择已改变，停止加载
-      if (token !== undefined && token !== selectionToken.value) {
-        console.log('[Following] Selection changed during load, aborting...')
+      if (!isFollowingRequestCurrent(token)) {
+        debugLog('[Following] Selection changed during load, aborting...')
         return
       }
 
       if (response.code === -101) {
         needToLoginFirst.value = true
-        console.log('[Following] Need to login first')
+        requestFailed.value = false
+        noMoreContent.value = false
+        debugLog('[Following] Need to login first')
         return
       }
 
@@ -537,13 +621,13 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
         // 检查是否有数据
         if (!response.data.items || response.data.items.length === 0) {
           noMoreContent.value = true
-          console.log('[Following] No items returned in ALL view')
+          debugLog('[Following] No items returned in ALL view')
           break
         }
 
         if (newOffset === '0' || newOffset === tempOffset) {
           noMoreContent.value = true
-          console.log('[Following] No more content in ALL view')
+          debugLog('[Following] No more content in ALL view')
           break
         }
         else {
@@ -600,21 +684,21 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
           })
         })
 
-        console.log(`[Following] ALL view page ${pageCount} loaded. Total videos:`, videoList.value.length)
+        debugLog(`[Following] ALL view page ${pageCount} loaded. Total videos:`, videoList.value.length)
       }
       else {
         console.error('[Following] API returned error code:', response.code)
         requestFailed.value = true
-        noMoreContent.value = true // 出错时也设置 noMoreContent
-        break
+        noMoreContent.value = false
+        return
       }
     }
 
-    console.log('[Following] ALL view loading complete. Total:', videoList.value.length, 'videos')
+    debugLog('[Following] ALL view loading complete. Total:', videoList.value.length, 'videos')
 
     // 再次检查 token，防止在处理缓存更新期间选择改变
-    if (token !== undefined && token !== selectionToken.value) {
-      console.log('[Following] Selection changed during cache update, aborting...')
+    if (!isFollowingRequestCurrent(token)) {
+      debugLog('[Following] Selection changed during cache update, aborting...')
       return
     }
 
@@ -636,7 +720,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
           uploader.lastUpdateTime = time
           uploader.hasPostTime = true
           updatedCount++
-          console.log(`[Following] Updated time for UP ${mid} from ALL view: ${new Date(time).toLocaleString()}`)
+          debugLog(`[Following] Updated time for UP ${mid} from ALL view: ${new Date(time).toLocaleString()}`)
         }
 
         // 用户在ALL视图中看到了该UP主的投稿，标记为已查看
@@ -664,13 +748,13 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
     })
 
     if (updatedCount > 0) {
-      console.log(`[Following] Updated ${updatedCount} uploader times from ALL view`)
+      debugLog(`[Following] Updated ${updatedCount} uploader times from ALL view`)
     }
     if (markedAsViewedCount > 0) {
-      console.log(`[Following] Marked ${markedAsViewedCount} uploaders as viewed from ALL view`)
+      debugLog(`[Following] Marked ${markedAsViewedCount} uploaders as viewed from ALL view`)
     }
     if (removedFromBlacklistCount > 0) {
-      console.log(`[Following] Removed ${removedFromBlacklistCount} uploaders from blacklist (found in ALL view)`)
+      debugLog(`[Following] Removed ${removedFromBlacklistCount} uploaders from blacklist (found in ALL view)`)
     }
     if (updatedCount > 0 || removedFromBlacklistCount > 0 || markedAsViewedCount > 0) {
       sortUploaderList(selectedUploader.value)
@@ -683,12 +767,14 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
   }
   catch (error) {
     console.error('[Following] Failed to load ALL view:', error)
-    requestFailed.value = true
-    noMoreContent.value = true // 异常时也设置 noMoreContent
+    if (isFollowingRequestCurrent(token)) {
+      requestFailed.value = true
+      noMoreContent.value = false
+    }
   }
   finally {
     // 只有当前 token 仍然有效时才清除加载状态
-    if (token === undefined || token === selectionToken.value) {
+    if (isFollowingRequestCurrent(token)) {
       isLoading.value = false
       emit('afterLoading')
     }
@@ -697,10 +783,11 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
 
 // 加载单个UP主的动态（渐进式加载，每页加载后立即显示）
 async function loadUserMoments(mid: number, maxPages: number = 3, token?: number) {
-  console.log('[Following] Loading moments for UP', mid, '(max', maxPages, 'pages)...')
+  debugLog('[Following] Loading moments for UP', mid, '(max', maxPages, 'pages)...')
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
+  needToLoginFirst.value = false
 
   // 收集本次点击后实际加载到的视频时间
   const allVideoTimes: number[] = []
@@ -711,7 +798,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
 
     while (pageCount < maxPages) {
       pageCount++
-      console.log(`[Following] Loading user moments page ${pageCount}...`)
+      debugLog(`[Following] Loading user moments page ${pageCount}...`)
 
       const response: MomentResult = await api.moment.getUserMoments({
         host_mid: mid.toString(),
@@ -720,16 +807,18 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
       })
 
       // 竞态条件检查：如果当前选择已改变，停止加载
-      if (token !== undefined && token !== selectionToken.value) {
-        console.log('[Following] Selection changed during load, aborting...')
+      if (!isFollowingRequestCurrent(token)) {
+        debugLog('[Following] Selection changed during load, aborting...')
         return
       }
 
-      console.log('[Following] API Response:', response)
+      debugLog('[Following] API Response:', response)
 
       if (response.code === -101) {
         needToLoginFirst.value = true
-        console.log('[Following] Need to login first')
+        requestFailed.value = false
+        noMoreContent.value = false
+        debugLog('[Following] Need to login first')
         return
       }
 
@@ -738,7 +827,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
 
         if (newOffset === '0' || newOffset === tempOffset || !response.data.items || response.data.items.length === 0) {
           noMoreContent.value = true
-          console.log('[Following] No more content for this UP')
+          debugLog('[Following] No more content for this UP')
           break
         }
         else {
@@ -797,21 +886,21 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
           }
         })
 
-        console.log(`[Following] User moments page ${pageCount} loaded. Total:`, videoList.value.length)
+        debugLog(`[Following] User moments page ${pageCount} loaded. Total:`, videoList.value.length)
       }
       else {
         console.error('[Following] API returned error code:', response.code)
         requestFailed.value = true
-        noMoreContent.value = true // 出错时也设置 noMoreContent
-        break
+        noMoreContent.value = false
+        return
       }
     }
 
     // 加载完成后，用点击后实际取得的最新投稿时间更新排序
     if (allVideoTimes.length > 0) {
       // 再次检查 token，防止在处理缓存更新期间选择改变
-      if (token !== undefined && token !== selectionToken.value) {
-        console.log('[Following] Selection changed during cache update, aborting...')
+      if (!isFollowingRequestCurrent(token)) {
+        debugLog('[Following] Selection changed during cache update, aborting...')
         return
       }
 
@@ -844,11 +933,11 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
 
         sortUploaderList(selectedUploader.value)
 
-        console.log(`[Following] Updated data for UP ${mid} from selected view: time=${new Date(knownLatestTime).toLocaleString()}`)
+        debugLog(`[Following] Updated data for UP ${mid} from selected view: time=${new Date(knownLatestTime).toLocaleString()}`)
       }
     }
 
-    console.log('[Following] User moments loading complete. Total:', videoList.value.length, 'videos')
+    debugLog('[Following] User moments loading complete. Total:', videoList.value.length, 'videos')
 
     // 如果一条视频都没加载到，设置 noMoreContent
     if (videoList.value.length === 0) {
@@ -857,12 +946,14 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
   }
   catch (error) {
     console.error('[Following] Failed to load user moments:', error)
-    requestFailed.value = true
-    noMoreContent.value = true // 异常时也设置 noMoreContent
+    if (isFollowingRequestCurrent(token)) {
+      requestFailed.value = true
+      noMoreContent.value = false
+    }
   }
   finally {
     // 只有当前 token 仍然有效时才清除加载状态
-    if (token === undefined || token === selectionToken.value) {
+    if (isFollowingRequestCurrent(token)) {
       isLoading.value = false
       emit('afterLoading')
     }
@@ -871,7 +962,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
 
 // 切换UP主
 function selectUploader(mid: number | null) {
-  console.log('[Following] Selecting uploader:', mid === null ? 'All' : mid)
+  debugLog('[Following] Selecting uploader:', mid === null ? 'All' : mid)
 
   // 生成新的选择令牌，用于防止竞态条件
   const currentToken = ++selectionToken.value
@@ -889,7 +980,7 @@ function selectUploader(mid: number | null) {
 
   if (mid === null) {
     // 切换到ALL视图
-    console.log('[Following] Switching to All view')
+    debugLog('[Following] Switching to All view')
 
     if (previousSelectedUploader.value !== null) {
       sortUploaderList(null)
@@ -908,7 +999,7 @@ function selectUploader(mid: number | null) {
   }
   else {
     // 切换到具体UP主
-    console.log('[Following] Selecting uploader:', mid)
+    debugLog('[Following] Selecting uploader:', mid)
 
     markUploaderAsViewed(mid)
 
@@ -1018,7 +1109,7 @@ async function handleLoadMore() {
   if (isLoading.value || noMoreContent.value)
     return
 
-  console.log('[Following] Loading more...')
+  debugLog('[Following] Loading more...')
 
   if (selectedUploader.value === null) {
     // ALL视图：继续加载视频
@@ -1032,10 +1123,11 @@ async function handleLoadMore() {
 
 // 初始化
 function initData() {
-  console.log('[Following] Initializing...')
+  debugLog('[Following] Initializing...')
 
   // 生成新的令牌，确保旧的加载请求被取消
-  selectionToken.value++
+  const currentToken = ++selectionToken.value
+  const accountMid = loadedAccountMid
 
   // 保存当前选中的UP主
   const currentSelectedUploader = selectedUploader.value
@@ -1049,10 +1141,17 @@ function initData() {
   requestFailed.value = false
   liveListLoaded.value = false // 重置直播加载标志
 
+  if (accountMid === null) {
+    currentUserMid.value = 0
+    needToLoginFirst.value = true
+    return
+  }
+  currentUserMid.value = accountMid
+
   // 如果当前已经选中了某个UP主，刷新该UP主的动态
   if (currentSelectedUploader !== null) {
-    console.log('[Following] Refreshing moments for UP', currentSelectedUploader)
-    loadUserMoments(currentSelectedUploader, 3, selectionToken.value)
+    debugLog('[Following] Refreshing moments for UP', currentSelectedUploader)
+    loadUserMoments(currentSelectedUploader, 3, currentToken)
   }
   else {
     // 否则，先加载关注列表，然后加载ALL视图
@@ -1061,8 +1160,15 @@ function initData() {
       isLoading.value = true
       emit('beforeLoading')
 
-      loadFollowingList().then(() => {
-        console.log('[Following] Following list loaded')
+      loadFollowingList(currentToken, accountMid).then((result) => {
+        if (result.status !== 'success' || currentToken !== selectionToken.value) {
+          if (currentToken === selectionToken.value) {
+            isLoading.value = false
+            emit('afterLoading')
+          }
+          return
+        }
+        debugLog('[Following] Following list loaded')
         selectUploader(null)
       }).catch((error) => {
         console.error('[Following] Failed to initialize:', error)
@@ -1072,8 +1178,8 @@ function initData() {
     }
     else {
       // 如果关注列表已经加载过，直接刷新ALL视图
-      console.log('[Following] Refreshing ALL view')
-      loadAllViewVideos(3, selectionToken.value)
+      debugLog('[Following] Refreshing ALL view')
+      loadAllViewVideos(3, currentToken)
     }
   }
 }
@@ -1082,10 +1188,42 @@ function jumpToLoginPage() {
   location.href = 'https://passport.bilibili.com/login'
 }
 
+function resetFollowingAccountState(accountMid: AccountId) {
+  const wasLoading = isLoading.value
+  selectionToken.value++
+  uploaderList.value = []
+  selectedUploader.value = null
+  previousSelectedUploader.value = null
+  videoList.value = []
+  currentUserMid.value = accountMid ?? 0
+  allViewOffset.value = ''
+  allViewUpdateBaseline.value = ''
+  userMomentsOffset.value = ''
+  liveListLoaded.value = false
+  isLoading.value = false
+  requestFailed.value = false
+  needToLoginFirst.value = accountMid === null
+  noMoreContent.value = false
+  if (wasLoading)
+    emit('afterLoading')
+}
+
+function ensureFollowingAccount() {
+  const accountMid = getCurrentAccountMid()
+  if (followingAccountInitialized && isSameAccount(loadedAccountMid, accountMid))
+    return
+
+  loadedAccountMid = accountMid
+  followingAccountInitialized = true
+  resetFollowingAccountState(accountMid)
+  if (accountMid !== null)
+    initData()
+}
+
 onMounted(() => {
   isRefreshContextActive.value = true
   syncRefreshAvailability()
-  initData()
+  ensureFollowingAccount()
 
   // 确保在 nextTick 中调用，以保证所有依赖都已准备好
   nextTick(() => {
@@ -1096,7 +1234,16 @@ onMounted(() => {
 onActivated(() => {
   isRefreshContextActive.value = true
   syncRefreshAvailability()
+  ensureFollowingAccount()
   initPageAction()
+})
+
+watch([
+  () => topBarStore.isLogin,
+  () => topBarStore.userInfo.mid,
+], () => {
+  if (isRefreshContextActive.value)
+    ensureFollowingAccount()
 })
 
 onDeactivated(() => {
@@ -1128,7 +1275,8 @@ defineExpose({ initData })
   <div flex="~ gap-40px">
     <!-- Left Panel: Uploader List -->
     <aside
-      pos="sticky top-150px" h="[calc(100vh-140px)]" w-200px shrink-0 duration-300
+      pos="sticky" top="$bew-layout-sidebar-sticky-top" h="[calc(100vh-var(--bew-layout-sidebar-viewport-offset))]" w="$bew-layout-sidebar-width" shrink-0
+      duration-300
       ease-in-out
     >
       <div h-inherit p="x-20px b-20px t-8px" m--20px of-y-auto of-x-hidden>

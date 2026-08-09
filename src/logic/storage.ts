@@ -16,6 +16,7 @@ import type { PageMode } from '~/utils/pageMode'
 
 export type { AppAuthTokens } from './appAuthStorage'
 export { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from './appAuthStorage'
+export { GRID_BREAKPOINTS } from '~/utils/gridLayout'
 
 export interface NoCookieForYouRecommendationState {
   showlistGroups: string[]
@@ -156,15 +157,6 @@ export const defaultGridColumns: GridColumnsConfig = {
   xl: 5,
   xxl: 6,
 }
-
-// 固定的断点宽度（基于 Tailwind CSS 标准断点）
-export const GRID_BREAKPOINTS = {
-  sm: 640,
-  md: 768,
-  lg: 1024,
-  xl: 1280,
-  xxl: 1536,
-} as const
 
 export const videoCardContextMenuKeys = [
   'notInterested',
@@ -924,9 +916,6 @@ watch(
 
     Reflect.deleteProperty(record, 'customPlayDefaultEnabled')
     Reflect.deleteProperty(record, 'randomPlayOrder')
-
-    if (record.shortcuts?.webFullscreen?.key === 'W')
-      record.shortcuts.webFullscreen.key = originalSettings.shortcuts.webFullscreen?.key
 
     // 紧凑布局已由卡片元素显示设置替代
     if (record.videoCardLayout === 'compact')

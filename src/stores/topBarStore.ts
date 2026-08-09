@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, readonly, ref } from 'vue'
 import { useToast } from 'vue-toastification'
 
 import {
@@ -23,6 +23,7 @@ import type {
   TopBarStateInvalidate,
   TopBarStatePublish,
   TopBarStateRelease,
+  WatchLaterInvalidation,
 } from '~/constants/topBarState'
 import {
   TOP_BAR_STATE_MESSAGE,
@@ -114,7 +115,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   const addedWatchLaterList = reactive<number[]>([])
   let watchLaterStateAccountId: number | undefined
   let watchLaterStateRequest: Promise<void> | null = null
+  let watchLaterStateRequestAccountId: number | undefined
   let watchLaterStateGeneration = 0
+  let watchLaterAuthoritativeSyncTimer: ReturnType<typeof setTimeout> | null = null
+  let sharedStateMessagingUnavailable = false
   const isLoadingMoments = ref<boolean>(false)
   const noMoreMomentsContent = ref<boolean>(false)
   const livePage = ref<number>(1)
@@ -216,7 +220,12 @@ export const useTopBarStore = defineStore('topBar', () => {
     addedWatchLaterList.splice(0)
     watchLaterStateAccountId = undefined
     watchLaterStateRequest = null
+    watchLaterStateRequestAccountId = undefined
     watchLaterStateGeneration++
+    if (watchLaterAuthoritativeSyncTimer) {
+      clearTimeout(watchLaterAuthoritativeSyncTimer)
+      watchLaterAuthoritativeSyncTimer = null
+    }
     moments.splice(0)
     livePage.value = 1
     momentUpdateBaseline.value = ''
@@ -611,29 +620,49 @@ export const useTopBarStore = defineStore('topBar', () => {
   function invalidateWatchLaterState() {
     watchLaterStateGeneration++
     watchLaterStateAccountId = undefined
-    watchLaterStateRequest = null
+  }
+
+  function isInWatchLater(aid: number | undefined): boolean {
+    return aid !== undefined && addedWatchLaterList.includes(aid)
   }
 
   async function ensureWatchLaterState(force = false) {
     const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId) || (!force && watchLaterStateAccountId === accountId))
+    if (!isCurrentAccount(accountId))
       return
-    if (!force && watchLaterStateRequest)
-      return watchLaterStateRequest
+    if (force)
+      invalidateWatchLaterState()
+    else if (watchLaterStateAccountId === accountId)
+      return
 
-    const requestGeneration = force ? ++watchLaterStateGeneration : watchLaterStateGeneration
+    if (watchLaterStateRequest && watchLaterStateRequestAccountId === accountId) {
+      try {
+        await watchLaterStateRequest
+      }
+      catch (error) {
+        if (!isExtensionContextInvalidatedError(error))
+          console.error('获取稍后再看状态失败:', error)
+      }
+      if (isCurrentAccount(accountId) && watchLaterStateAccountId !== accountId)
+        await ensureWatchLaterState()
+      return
+    }
+
+    const requestGeneration = watchLaterStateGeneration
     const request = (async () => {
       const res = await api.watchlater.getAllWatchLaterList()
       if (res.code !== 0 || !isCurrentAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
         return
 
       const list = Array.isArray(res.data?.list) ? res.data.list as VideoItem[] : []
-      const aids = [...new Set(list.map(item => item.aid).filter(aid => Number.isFinite(aid)))]
+      const aids = [...new Set(list.map(item => item.aid).filter(aid => Number.isFinite(aid) && aid > 0))]
       addedWatchLaterList.splice(0, addedWatchLaterList.length, ...aids)
+      watchLaterCount.value = Number.isFinite(res.data?.count) ? res.data.count : aids.length
       watchLaterStateAccountId = accountId
     })()
 
     watchLaterStateRequest = request
+    watchLaterStateRequestAccountId = accountId
     try {
       await request
     }
@@ -642,9 +671,106 @@ export const useTopBarStore = defineStore('topBar', () => {
         console.error('获取稍后再看状态失败:', error)
     }
     finally {
-      if (watchLaterStateRequest === request)
+      if (watchLaterStateRequest === request) {
         watchLaterStateRequest = null
+        watchLaterStateRequestAccountId = undefined
+      }
     }
+  }
+
+  async function refreshWatchLaterAuthoritativeState() {
+    await Promise.all([
+      getAllWatchLaterList(),
+      ensureWatchLaterState(true),
+    ])
+  }
+
+  function scheduleWatchLaterAuthoritativeSync() {
+    if (watchLaterAuthoritativeSyncTimer)
+      clearTimeout(watchLaterAuthoritativeSyncTimer)
+
+    const accountId = userInfo.mid
+    watchLaterAuthoritativeSyncTimer = setTimeout(() => {
+      watchLaterAuthoritativeSyncTimer = null
+      if (!isCurrentAccount(accountId))
+        return
+
+      void syncWatchLaterState(true).catch((error) => {
+        if (!isExtensionContextInvalidatedError(error))
+          console.error('刷新稍后再看权威状态失败:', error)
+      })
+    }, 800)
+  }
+
+  function applyWatchLaterMutation(aid: number, added: boolean) {
+    const hadAid = isInWatchLater(aid)
+    const hadCompleteMembership = watchLaterStateAccountId === userInfo.mid
+    invalidateWatchLaterState()
+    watchLaterListGeneration++
+    isLoadingWatchLater.value = false
+
+    if (added && !hadAid)
+      addedWatchLaterList.push(aid)
+    else if (!added && hadAid)
+      addedWatchLaterList.splice(addedWatchLaterList.indexOf(aid), 1)
+
+    if (!added) {
+      const listIndex = watchLaterList.findIndex(item => item.aid === aid)
+      if (listIndex !== -1)
+        watchLaterList.splice(listIndex, 1)
+    }
+
+    watchLaterCount.value = hadCompleteMembership
+      ? addedWatchLaterList.length
+      : Math.max(0, watchLaterCount.value + (added && !hadAid ? 1 : !added && hadAid ? -1 : 0))
+  }
+
+  async function broadcastWatchLaterInvalidation(accountId: number) {
+    if (sharedStateMessagingUnavailable)
+      return
+
+    try {
+      await sendMessage<WatchLaterInvalidation>(
+        TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATE,
+        { accountId },
+      )
+    }
+    catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        disableSharedStateMessaging()
+      else
+        console.error('广播稍后再看成员失效失败:', error)
+    }
+  }
+
+  async function commitWatchLaterMutation(aid: number, added: boolean, accountId: number) {
+    if (!isCurrentAccount(accountId))
+      return
+
+    applyWatchLaterMutation(aid, added)
+    scheduleWatchLaterAuthoritativeSync()
+    await broadcastWatchLaterInvalidation(accountId)
+  }
+
+  async function invalidateWatchLaterMembership(accountId: number) {
+    if (!isCurrentAccount(accountId))
+      return
+
+    invalidateWatchLaterState()
+    watchLaterListGeneration++
+    isLoadingWatchLater.value = false
+    scheduleWatchLaterAuthoritativeSync()
+    await broadcastWatchLaterInvalidation(accountId)
+  }
+
+  async function commitWatchLaterClear(accountId: number) {
+    if (!isCurrentAccount(accountId))
+      return
+
+    addedWatchLaterList.splice(0)
+    watchLaterList.splice(0)
+    watchLaterCount.value = 0
+    await invalidateWatchLaterMembership(accountId)
   }
 
   // 获取稍后再看列表数量
@@ -760,23 +886,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         csrf: getCSRF(),
       })
       if (res.code === 0 && isCurrentAccount(accountId)) {
-        const index = watchLaterList.findIndex(item => item.aid === aid)
-        if (index !== -1)
-          watchLaterList.splice(index, 1)
-        watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
-
-        const stateIndex = addedWatchLaterList.indexOf(aid)
-        if (stateIndex !== -1)
-          addedWatchLaterList.splice(stateIndex, 1)
-        invalidateWatchLaterState()
-
-        // 先保留本地乐观更新；B 站删除接口返回后，列表查询偶尔仍会短暂返回旧数量。
-        // 延迟同步可避免把刚删除的项目/计数立即覆盖回来。
-        window.setTimeout(() => {
-          void syncWatchLaterState(true).catch((error) => {
-            console.error('刷新顶栏稍后再看状态失败:', error)
-          })
-        }, 800)
+        void commitWatchLaterMutation(aid, false, accountId)
       }
     }
     catch (error) {
@@ -897,6 +1007,7 @@ export const useTopBarStore = defineStore('topBar', () => {
                 cover: item.cover,
                 link: item.jump_url,
                 rid: item.rid,
+                watchLaterAid: item.type === 8 ? Number(item.rid) || undefined : undefined,
                 isCollaborative: !!item.authors,
                 authors: item.authors,
               }
@@ -1075,7 +1186,6 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   let updateTimer: ReturnType<typeof setTimeout> | null = null
   let updateTimerGeneration = 0
-  let sharedStateMessagingUnavailable = false
 
   function disableSharedStateMessaging() {
     sharedStateMessagingUnavailable = true
@@ -1133,6 +1243,19 @@ export const useTopBarStore = defineStore('topBar', () => {
     ({ accountId }) => {
       if (accountId === userInfo.mid)
         favoriteStateVersion.value++
+    },
+  )
+
+  onMessage<WatchLaterInvalidation>(
+    TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATED,
+    ({ accountId }) => {
+      if (accountId !== getLocalLoginMid())
+        return
+
+      invalidateWatchLaterState()
+      watchLaterListGeneration++
+      isLoadingWatchLater.value = false
+      scheduleWatchLaterAuthoritativeSync()
     },
   )
 
@@ -1262,18 +1385,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function syncWatchLaterState(includeList = false) {
-    if (includeList)
-      invalidateWatchLaterState()
-
     return syncSharedData({
       force: true,
       refresh: includeList
-        ? async () => {
-          await Promise.all([
-            getAllWatchLaterList(),
-            ensureWatchLaterState(true),
-          ])
-        }
+        ? refreshWatchLaterAuthoritativeState
         : getWatchLaterCount,
     })
   }
@@ -1474,13 +1589,17 @@ export const useTopBarStore = defineStore('topBar', () => {
     syncMomentsState,
     syncWatchLaterState,
     ensureWatchLaterState,
+    isInWatchLater,
+    commitWatchLaterMutation,
+    commitWatchLaterClear,
+    invalidateWatchLaterMembership,
     invalidateUnreadMessageState,
     notifyFavoritesChanged,
     startUpdateTimer,
     stopUpdateTimer,
 
     moments,
-    addedWatchLaterList,
+    addedWatchLaterList: readonly(addedWatchLaterList),
     isLoadingMoments,
     noMoreMomentsContent,
     livePage,

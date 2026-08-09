@@ -1,9 +1,9 @@
-import { PAGE_NO_COOKIE_SEARCH_REQUEST, PAGE_NO_COOKIE_SEARCH_RESPONSE } from '~/constants/api'
+import { matchesPageBridgeMessage, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
 import type { SearchApiMethod } from '~/constants/searchApi'
 import { SEARCH_API_DEFINITIONS } from '~/constants/searchApi'
+import { waitForPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 
 interface PageSearchResponse {
-  id: string
   ok?: boolean
   status?: number
   response?: unknown
@@ -40,9 +40,10 @@ function buildSearchUrl(method: SearchApiMethod, options: Record<string, unknown
   return query ? `${definition.url}?${query}` : definition.url
 }
 
-function requestPageFetch(url: string): Promise<any> {
+async function requestPageFetch(url: string): Promise<any> {
+  const channelId = await waitForPageBridgeChannelId()
   return new Promise((resolve, reject) => {
-    const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${++requestSeq}-${Math.random()}`
+    const requestId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${++requestSeq}-${Math.random()}`
     const timer = window.setTimeout(() => {
       cleanup()
       reject(new Error('Page no-cookie search request timed out'))
@@ -57,15 +58,24 @@ function requestPageFetch(url: string): Promise<any> {
       if (event.source !== window)
         return
 
-      const { type, data } = event.data || {}
-      if (type !== PAGE_NO_COOKIE_SEARCH_RESPONSE || data?.id !== id)
+      if (!matchesPageBridgeMessage(event.data, {
+        channelId,
+        type: PAGE_BRIDGE_MESSAGE.NO_COOKIE_SEARCH_RESPONSE,
+        requestId,
+      }) || typeof event.data.data !== 'object' || event.data.data === null) {
         return
+      }
 
       cleanup()
 
-      const response = data as PageSearchResponse
+      const response = event.data.data as PageSearchResponse
       if (response.error) {
         reject(new Error(response.error))
+        return
+      }
+
+      if (typeof response.ok !== 'boolean' || !Number.isFinite(response.status)) {
+        reject(new Error('Invalid page no-cookie search response'))
         return
       }
 
@@ -74,8 +84,11 @@ function requestPageFetch(url: string): Promise<any> {
 
     window.addEventListener('message', handleMessage)
     window.postMessage({
-      type: PAGE_NO_COOKIE_SEARCH_REQUEST,
-      data: { id, url },
+      protocol: PAGE_BRIDGE_PROTOCOL,
+      channelId,
+      type: PAGE_BRIDGE_MESSAGE.NO_COOKIE_SEARCH_REQUEST,
+      requestId,
+      data: { method: 'GET', url },
     }, '*')
   })
 }

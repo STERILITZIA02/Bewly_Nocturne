@@ -49,6 +49,7 @@ const offset = ref<string>('')
 const updateBaseline = ref<string>('')
 const noMoreVideoContent = ref<boolean>(false)
 const noMoreLiveContent = ref<boolean>(false)
+const requestFailed = ref<boolean>(false)
 const { handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 
 // 合并直播和视频列表用于虚拟滚动
@@ -144,6 +145,7 @@ async function initData() {
   videoList.value = []
   noMoreVideoContent.value = false
   noMoreLiveContent.value = false
+  requestFailed.value = false
   recursionDepth.value = 0
 
   if (settings.value.followingTabShowLivestreamingVideos)
@@ -177,7 +179,7 @@ async function getLiveVideoList() {
     })
 
     if (response.code === -101) {
-      noMoreLiveContent.value = true
+      noMoreLiveContent.value = false
       needToLoginFirst.value = true
       return
     }
@@ -217,8 +219,8 @@ async function getLiveVideoList() {
       }
     }
   }
-  catch {
-    // 忽略错误
+  catch (error) {
+    console.error('[FollowingOld] Failed to load live list:', error)
   }
 }
 
@@ -242,6 +244,7 @@ async function getFollowedUsersVideos() {
   }
 
   recursionDepth.value++
+  requestFailed.value = false
 
   try {
     const lastVideoListLength = videoList.value.length
@@ -253,8 +256,9 @@ async function getFollowedUsersVideos() {
     })
 
     if (response.code === -101) {
-      noMoreVideoContent.value = true
+      noMoreVideoContent.value = false
       needToLoginFirst.value = true
+      requestFailed.value = false
       return
     }
 
@@ -322,6 +326,15 @@ async function getFollowedUsersVideos() {
         await getFollowedUsersVideos()
       }
     }
+    else {
+      requestFailed.value = true
+      noMoreVideoContent.value = false
+    }
+  }
+  catch (error) {
+    requestFailed.value = true
+    noMoreVideoContent.value = false
+    console.error('[FollowingOld] Failed to load videos:', error)
   }
   finally {
     recursionDepth.value--
@@ -484,6 +497,7 @@ defineExpose({ initData })
       :loading="isLoading"
       :no-more-content="noMoreVideoContent"
       :need-to-login-first="needToLoginFirst"
+      :request-failed="requestFailed"
       :transform-item="transformCombinedItem"
       :get-item-key="(item: VideoElement | LiveVideoElement) => item.uniqueId"
       :show-watch-later="false"

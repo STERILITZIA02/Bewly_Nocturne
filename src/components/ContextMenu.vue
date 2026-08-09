@@ -28,7 +28,7 @@ const { mainAppRef } = useBewlyApp()
     <div
       class="context-menu-container bew-shape-smooth-rect"
       :style="menuStyles"
-      style="backdrop-filter: var(--bew-filter-glass-1); box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1); z-index: 9999;"
+      style="backdrop-filter: var(--bew-filter-glass-1); box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1); z-index: var(--bew-z-popover);"
       p-1 bg="$bew-elevated" rounded="$bew-popover-radius"
       min-w-140px m="t-1 l-[calc(-140px+0.5rem)]"
       border="1 $bew-surface-border-color" box-border
@@ -50,7 +50,7 @@ const { mainAppRef } = useBewlyApp()
     <!-- 点击遮罩关闭菜单 -->
     <div
       pos="fixed top-0 left-0" w-full h-full
-      style="z-index: 9998;"
+      style="z-index: var(--bew-z-context-backdrop);"
       @click="emit('close')"
     />
   </Teleport>

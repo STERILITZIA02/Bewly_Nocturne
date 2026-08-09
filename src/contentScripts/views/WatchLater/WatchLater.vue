@@ -12,54 +12,95 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
+import { mergeWatchLaterItemsByAid } from '~/utils/watchLaterList'
 
 const { t } = useI18n()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 const { openIframeDrawer } = useBewlyApp()
 const topBarStore = useTopBarStore()
 
-const isLoading = ref<boolean>()
-const noMoreContent = ref<boolean>()
+const isLoading = ref(false)
+const noMoreContent = ref(false)
+const requestFailed = ref(false)
 const currentWatchLaterList = ref<VideoItem[]>([])
 const watchLaterCount = ref<number>(0)
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const pageNum = ref<number>(1)
 const pageSize = ref<number>(20)
+let requestGeneration = 0
+let loadedAccountId: number | null = null
+let loadMoreTimer: ReturnType<typeof setTimeout> | null = null
 
-function syncTopBarWatchLaterState() {
-  const sync = () => {
-    void topBarStore.syncWatchLaterState(true).catch((error) => {
-      console.error('刷新顶栏稍后再看状态失败:', error)
-    })
+function getCurrentAccountId(): number | null {
+  const mid = Number(topBarStore.userInfo.mid)
+  return topBarStore.isLogin && Number.isFinite(mid) && mid > 0 ? mid : null
+}
+
+function clearLoadMoreTimer() {
+  if (loadMoreTimer) {
+    clearTimeout(loadMoreTimer)
+    loadMoreTimer = null
   }
+}
 
-  sync()
-  window.setTimeout(sync, 1000)
+function invalidateRequests(): number {
+  clearLoadMoreTimer()
+  isLoading.value = false
+  return ++requestGeneration
+}
+
+function isCurrentRequest(generation: number, accountId: number): boolean {
+  return generation === requestGeneration && accountId === getCurrentAccountId()
 }
 
 onMounted(() => {
   initPageAction()
-  initData()
+  loadedAccountId = getCurrentAccountId()
+  void initData()
+})
+
+watch(
+  [() => topBarStore.isLogin, () => topBarStore.userInfo.mid],
+  () => {
+    const accountId = getCurrentAccountId()
+    if (accountId === loadedAccountId)
+      return
+
+    loadedAccountId = accountId
+    void initData()
+  },
+)
+
+onBeforeUnmount(() => {
+  invalidateRequests()
+  handlePageRefresh.value = undefined
+  handleReachBottom.value = undefined
 })
 
 async function initData() {
+  const generation = invalidateRequests()
+  const accountId = getCurrentAccountId()
   isLoading.value = false
   noMoreContent.value = false
-  currentWatchLaterList.value.length = 0
+  requestFailed.value = false
+  currentWatchLaterList.value = []
+  watchLaterCount.value = 0
   pageNum.value = 1
-  await getWatchLaterListByPage()
+  if (accountId === null)
+    return
+
+  await getWatchLaterListByPage(generation, accountId)
 }
 
 function getData() {
-  getWatchLaterListByPage()
+  const accountId = getCurrentAccountId()
+  if (accountId !== null)
+    void getWatchLaterListByPage(requestGeneration, accountId)
 }
 
 function initPageAction() {
   handlePageRefresh.value = async () => {
-    if (isLoading.value)
-      return
-
-    initData()
+    await initData()
   }
 
   handleReachBottom.value = async () => {
@@ -68,7 +109,12 @@ function initPageAction() {
     }
 
     // 优化：添加延迟执行提高触发成功率
-    setTimeout(() => {
+    clearLoadMoreTimer()
+    const generation = requestGeneration
+    loadMoreTimer = setTimeout(() => {
+      loadMoreTimer = null
+      if (generation !== requestGeneration)
+        return
       if (!isLoading.value && !noMoreContent.value) {
         getData()
       }
@@ -79,8 +125,8 @@ function initPageAction() {
 /**
  * Get watch later list by page
  */
-async function getWatchLaterListByPage() {
-  if (isLoading.value || noMoreContent.value) {
+async function getWatchLaterListByPage(generation: number, accountId: number) {
+  if (!isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value) {
     return
   }
 
@@ -88,45 +134,79 @@ async function getWatchLaterListByPage() {
 
   try {
     while (!noMoreContent.value) {
+      const requestedPage = pageNum.value
       const res: WatchLaterResult = await api.watchlater.getWatchLaterListByPage({
-        pn: pageNum.value,
+        pn: requestedPage,
         ps: pageSize.value,
       })
 
-      if (res.code !== 0)
+      if (!isCurrentRequest(generation, accountId))
+        return
+      if (res.code !== 0) {
+        requestFailed.value = true
+        noMoreContent.value = false
         break
+      }
 
       const list = Array.isArray(res.data?.list) ? res.data.list : []
-      if (pageNum.value === 1)
-        watchLaterCount.value = res.data.count
+      if (requestedPage === 1)
+        watchLaterCount.value = Number.isFinite(res.data?.count) ? res.data.count : list.length
 
-      currentWatchLaterList.value.push(...list)
-      pageNum.value++
+      currentWatchLaterList.value = mergeWatchLaterItemsByAid(currentWatchLaterList.value, list)
+      requestFailed.value = false
+      pageNum.value = requestedPage + 1
       noMoreContent.value = list.length < pageSize.value
 
-      if (noMoreContent.value || await haveScrollbar())
+      if (noMoreContent.value)
+        break
+
+      const hasScrollbar = await haveScrollbar()
+      if (!isCurrentRequest(generation, accountId))
+        return
+      if (hasScrollbar)
         break
     }
   }
+  catch (error) {
+    if (isCurrentRequest(generation, accountId)) {
+      requestFailed.value = true
+      noMoreContent.value = false
+      console.error('[WatchLater] Failed to load list:', error)
+    }
+  }
   finally {
-    isLoading.value = false
+    if (isCurrentRequest(generation, accountId))
+      isLoading.value = false
   }
 }
 
-function deleteWatchLaterItem(aid: number) {
-  api.watchlater.removeFromWatchLater({
-    aid,
-    csrf: getCSRF(),
-  })
-    .then((res) => {
-      if (res.code === 0) {
-        const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
-        if (currentIndex !== -1)
-          currentWatchLaterList.value.splice(currentIndex, 1)
-        watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
-        syncTopBarWatchLaterState()
-      }
+async function deleteWatchLaterItem(aid: number): Promise<boolean> {
+  const accountId = getCurrentAccountId()
+  if (!accountId)
+    return false
+
+  invalidateRequests()
+  let res
+  try {
+    res = await api.watchlater.removeFromWatchLater({
+      aid,
+      csrf: getCSRF(),
     })
+  }
+  catch (error) {
+    console.error('[WatchLater] Failed to remove item:', error)
+    return false
+  }
+  if (res.code !== 0 || accountId !== getCurrentAccountId())
+    return false
+
+  const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
+  if (currentIndex !== -1) {
+    currentWatchLaterList.value.splice(currentIndex, 1)
+    watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
+  }
+  await topBarStore.commitWatchLaterMutation(aid, false, accountId)
+  return true
 }
 
 async function handleClearAllWatchLater() {
@@ -134,17 +214,30 @@ async function handleClearAllWatchLater() {
     t('watch_later.clear_all_confirm'),
   )
   if (result) {
+    const accountId = getCurrentAccountId()
+    if (!accountId)
+      return
+
+    const generation = invalidateRequests()
     isLoading.value = true
-    api.watchlater.clearAllWatchLater({
-      csrf: getCSRF(),
-    }).then((res) => {
-      if (res.code === 0) {
-        initData()
-        syncTopBarWatchLaterState()
+    try {
+      const res = await api.watchlater.clearAllWatchLater({
+        csrf: getCSRF(),
+      })
+      if (res.code === 0 && accountId === getCurrentAccountId()) {
+        currentWatchLaterList.value = []
+        watchLaterCount.value = 0
+        await topBarStore.commitWatchLaterClear(accountId)
+        await initData()
       }
-    }).finally(() => {
-      isLoading.value = false
-    })
+    }
+    catch (error) {
+      console.error('[WatchLater] Failed to clear list:', error)
+    }
+    finally {
+      if (generation === requestGeneration)
+        isLoading.value = false
+    }
   }
 }
 
@@ -153,16 +246,29 @@ async function handleRemoveWatchedVideos() {
     t('watch_later.remove_watched_videos_confirm'),
   )
   if (result) {
-    api.watchlater.removeFromWatchLater({
-      viewed: true,
-      csrf: getCSRF(),
-    })
-      .then((res) => {
-        if (res.code === 0) {
-          initData()
-          syncTopBarWatchLaterState()
-        }
+    const accountId = getCurrentAccountId()
+    if (!accountId)
+      return
+
+    const generation = invalidateRequests()
+    isLoading.value = true
+    try {
+      const res = await api.watchlater.removeFromWatchLater({
+        viewed: true,
+        csrf: getCSRF(),
       })
+      if (res.code === 0 && accountId === getCurrentAccountId()) {
+        await topBarStore.invalidateWatchLaterMembership(accountId)
+        await initData()
+      }
+    }
+    catch (error) {
+      console.error('[WatchLater] Failed to remove viewed items:', error)
+    }
+    finally {
+      if (generation === requestGeneration)
+        isLoading.value = false
+    }
   }
 }
 
@@ -205,9 +311,9 @@ function handleVideoLinkClick(bvid: string) {
   }
 }
 
-function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
-  handleVideoLinkClick(bvid)
-  deleteWatchLaterItem(aid)
+async function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
+  if (await deleteWatchLaterItem(aid))
+    handleVideoLinkClick(bvid)
 }
 </script>
 
@@ -217,7 +323,12 @@ function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
       <h3 class="bew-page-heading" text="$bew-text-1" mb-6>
         {{ t('watch_later.title') }} ({{ watchLaterCount }})
       </h3>
-      <Empty v-if="watchLaterCount === 0 && !isLoading" />
+      <Empty v-if="requestFailed && !isLoading" :description="$t('common.load_failed')">
+        <Button type="primary" @click="initData">
+          {{ $t('common.operation.refresh') }}
+        </Button>
+      </Empty>
+      <Empty v-else-if="watchLaterCount === 0 && !isLoading" />
       <template v-else>
         <!-- watcher later list -->
         <TransitionGroup name="list">

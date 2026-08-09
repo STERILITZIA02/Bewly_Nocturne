@@ -1,12 +1,11 @@
 import { usePreferredDark } from '@vueuse/core'
 
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { DARK_MODE_BASE_COLOR_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
 
-const currentUrl = ref(typeof location === 'undefined' ? '' : location.href)
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
-let isRouteWatcherStarted = false
 let isScheduleClockStarted = false
 let lastThemeChangeState: boolean | undefined
 let lastDarkModeBaseColor: string | undefined
@@ -57,22 +56,6 @@ function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(document.URL)
 }
 
-function startRouteWatcher() {
-  if (isRouteWatcherStarted || typeof window === 'undefined')
-    return
-
-  isRouteWatcherStarted = true
-
-  const updateCurrentUrl = () => {
-    if (currentUrl.value !== location.href)
-      currentUrl.value = location.href
-  }
-
-  window.addEventListener('popstate', updateCurrentUrl)
-  window.addEventListener('hashchange', updateCurrentUrl)
-  window.setInterval(updateCurrentUrl, 800)
-}
-
 /**
  * 设置深色模式基准颜色
  */
@@ -102,8 +85,8 @@ function syncBilibiliTheme(isDark: boolean) {
 }
 
 export function useDark() {
-  startRouteWatcher()
   startScheduleClock()
+  const currentUrl = useCurrentLocationHref()
 
   const isPreferredDark = usePreferredDark()
   const currentSystemColorScheme = computed(() => isPreferredDark.value ? 'dark' : 'light')
@@ -270,9 +253,10 @@ export function useDark() {
         const isDarkNow = document.documentElement.classList.contains('dark')
 
         const zIndexStyle = document.createElement('style')
+        const foregroundZIndex = 'var(--bew-z-popover)'
         zIndexStyle.textContent = `
-            ::view-transition-old(root) { z-index: ${isDarkNow ? 1 : 9999}; }
-            ::view-transition-new(root) { z-index: ${isDarkNow ? 9999 : 1}; }
+            ::view-transition-old(root) { z-index: ${isDarkNow ? 1 : foregroundZIndex}; }
+            ::view-transition-new(root) { z-index: ${isDarkNow ? foregroundZIndex : 1}; }
             `
         document.head.appendChild(zIndexStyle)
 

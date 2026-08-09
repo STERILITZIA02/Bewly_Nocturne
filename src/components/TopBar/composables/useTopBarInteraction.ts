@@ -20,7 +20,7 @@ import { createTransformer } from '~/utils/transformer'
 export function useTopBarInteraction() {
   const topBarStore = useTopBarStore()
   const { closeAllPopups } = topBarStore
-  const topBarItemElements = reactive({})
+  const topBarItemElements: Record<string, ReturnType<typeof useDelayedHover>> = {}
   const topBarTransformers = reactive({})
 
   const isMouseOverPopup = reactive<Record<string, boolean>>({})

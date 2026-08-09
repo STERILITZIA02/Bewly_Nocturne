@@ -851,6 +851,8 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/breakpoints";
+
 .video-card-overlay-transition {
   transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
 }
@@ -1025,14 +1027,14 @@ onBeforeUnmount(() => {
 
 /* 使用媒体查询代替容器查询（性能更好） */
 /* 屏幕宽度 > 768px 时显示弹幕 */
-@media (min-width: 768px) {
+@media (min-width: breakpoints.$grid-md) {
   .cover-stat-danmaku {
     display: inline-flex;
   }
 }
 
 /* 屏幕宽度 > 1024px 时显示点赞 */
-@media (min-width: 1024px) {
+@media (min-width: breakpoints.$grid-lg) {
   .cover-stat-like {
     display: inline-flex;
   }

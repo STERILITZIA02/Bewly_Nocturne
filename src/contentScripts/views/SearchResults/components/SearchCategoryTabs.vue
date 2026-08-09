@@ -4,7 +4,6 @@ import type { SearchCategory, SearchCategoryOption } from '../types'
 const props = defineProps<{
   categories: ReadonlyArray<SearchCategoryOption>
   currentCategory: SearchCategory
-  categoryCounts: Record<SearchCategory, number>
 }>()
 
 const emit = defineEmits<{
@@ -13,16 +12,6 @@ const emit = defineEmits<{
 
 function handleSelect(category: SearchCategory) {
   emit('select', category)
-}
-
-function formatCount(count: number): string {
-  if (!count)
-    return ''
-  if (count > 99)
-    return '99+'
-  if (count >= 10000)
-    return `${(count / 10000).toFixed(1)}万`
-  return `${count}`
 }
 </script>
 
@@ -40,12 +29,6 @@ function formatCount(count: number): string {
       >
         <div :class="category.icon" class="bew-segment-control__icon" />
         <span>{{ category.label }}</span>
-        <span
-          v-if="category.value !== 'all' && props.categoryCounts[category.value] > 0"
-          class="category-tab__count"
-        >
-          ({{ formatCount(props.categoryCounts[category.value]) }})
-        </span>
       </button>
     </div>
   </div>
@@ -60,12 +43,5 @@ function formatCount(count: number): string {
 
 .search-category-control::-webkit-scrollbar {
   display: none;
-}
-
-.category-tab__count {
-  margin-left: var(--bew-space-1);
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
 }
 </style>

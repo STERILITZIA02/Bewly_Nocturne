@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -27,15 +26,6 @@ const searchBarStyles = computed(() => ({
   '--b-search-bar-hover-text-color': useLightText.value ? 'white' : 'var(--bew-text-1)',
   '--b-search-bar-placeholder-opacity': useLightText.value ? '0.9' : '0.65',
 }))
-
-const currentLocation = ref(window.location.href)
-
-function updateCurrentLocation() {
-  currentLocation.value = window.location.href
-}
-
-useEventListener(window, 'pushstate', updateCurrentLocation)
-useEventListener(window, 'popstate', updateCurrentLocation)
 
 const searchBehavior = computed<'navigate' | 'stay'>(() => {
   // 不再在这里决定搜索行为，让 SearchBar 组件自己根据情况判断
@@ -63,8 +53,6 @@ function pushKeywordToSearchResultsPage(keyword: string) {
     params.delete('live_user_order')
     const newUrl = `${window.location.pathname}?${params.toString()}`
     window.history.pushState({}, '', newUrl)
-    // 触发 pushstate 事件通知其他组件（如 SearchResults.vue）
-    window.dispatchEvent(new Event('pushstate'))
   }
   else {
     // 如果不在首页,跳转到 bilibili.com 主页的搜索结果页

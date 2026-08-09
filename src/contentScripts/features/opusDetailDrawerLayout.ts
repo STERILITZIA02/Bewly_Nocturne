@@ -2,6 +2,7 @@ import { Icon } from '@iconify/vue'
 import { createVNode, render } from 'vue'
 import browser from 'webextension-polyfill'
 
+import { GRID_BREAKPOINTS } from '~/constants/layout'
 import { isInIframe } from '~/utils/main'
 
 const SPLIT_FLAG = 'bewlyOpusSplit'
@@ -218,7 +219,7 @@ html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-toc {
 .bewly-opus-iframe-loading {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 99999 !important;
+  z-index: var(--bew-z-native-detail) !important;
   display: flex !important;
   align-items: center !important;
   justify-content: center !important;
@@ -655,7 +656,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer {
   position: fixed !important;
   inset: 0 !important;
-  z-index: 100000 !important;
+  z-index: var(--bew-z-native-overlay) !important;
   display: none !important;
   overflow: hidden !important;
   background: rgba(18, 18, 18, 0.72) !important;
@@ -794,7 +795,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer__divider {
   margin: 0 4px !important;
   background: rgba(255, 255, 255, 0.24) !important;
 }
-@media (max-width: 640px) {
+@media (max-width: ${GRID_BREAKPOINTS.sm}px) {
   html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer__stage {
     padding: 68px 12px 92px !important;
   }
@@ -2482,7 +2483,7 @@ export function setupOpusDetailDrawerLayout() {
 
       scheduleStableApply()
     })
-    observer.observe(documentElement, {
+    observer.observe(document.body ?? documentElement, {
       childList: true,
       subtree: true,
     })

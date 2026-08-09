@@ -1,3 +1,7 @@
+import { GRID_BREAKPOINTS } from '~/constants/layout'
+
+export { GRID_BREAKPOINTS } from '~/constants/layout'
+
 /**
  * The default width at which a manually selected two-column list falls back
  * to one column when automatic switching is enabled.
@@ -55,15 +59,15 @@ function normalizeColumnCount(value: unknown, fallback: number): number {
 export function getAdaptiveGridColumnCount(width: number, columns: AdaptiveGridColumns): number {
   let breakpoint: keyof AdaptiveGridColumns = 'base'
 
-  if (width >= 1536)
+  if (width >= GRID_BREAKPOINTS.xxl)
     breakpoint = 'xxl'
-  else if (width >= 1280)
+  else if (width >= GRID_BREAKPOINTS.xl)
     breakpoint = 'xl'
-  else if (width >= 1024)
+  else if (width >= GRID_BREAKPOINTS.lg)
     breakpoint = 'lg'
-  else if (width >= 768)
+  else if (width >= GRID_BREAKPOINTS.md)
     breakpoint = 'md'
-  else if (width >= 640)
+  else if (width >= GRID_BREAKPOINTS.sm)
     breakpoint = 'sm'
 
   return normalizeColumnCount(columns[breakpoint], DEFAULT_ADAPTIVE_GRID_COLUMNS[breakpoint])

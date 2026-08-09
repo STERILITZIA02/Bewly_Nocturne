@@ -147,7 +147,7 @@ onKeyStroke((e: KeyboardEvent) => {
   <Dialog
     v-if="showDislikeDialog"
     :title="$t('home.tell_us_why')"
-    width="420px"
+    width="var(--bew-layout-dialog-width)"
     append-to-bewly-body
     :loading="loadingDislikeDialog"
     @close="closeDislikeDialog"

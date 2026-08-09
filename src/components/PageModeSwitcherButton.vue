@@ -56,6 +56,8 @@ const displayedIcon = computed(() => previewNextMode.value ? nextIcon.value : cu
 </template>
 
 <style lang="scss" scoped>
+@use "../styles/breakpoints";
+
 .page-mode-switcher {
   box-sizing: border-box;
   display: grid;
@@ -157,7 +159,7 @@ const displayedIcon = computed(() => previewNextMode.value ? nextIcon.value : cu
   box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
 }
 
-@media (min-width: 1024px) {
+@media (min-width: breakpoints.$grid-lg) {
   .page-mode-switcher--dock {
     width: var(--bew-dock-control-size-lg);
     height: var(--bew-dock-control-size-lg);

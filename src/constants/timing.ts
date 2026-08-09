@@ -1,0 +1,2 @@
+export const DRAWER_TRANSITION_MS = 300
+export const ESC_CONFIRM_WINDOW_MS = 1300

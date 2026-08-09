@@ -25,6 +25,7 @@ const emit = defineEmits<{
 const videoList = ref<VideoElement[]>([])
 const isLoading = ref<boolean>(false)
 const noMoreContent = ref<boolean>(true) // 入站必刷没有分页
+const requestFailed = ref<boolean>(false)
 const { handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
@@ -38,6 +39,7 @@ onActivated(() => {
 
 async function initData() {
   videoList.value = []
+  requestFailed.value = false
   await getData()
 }
 
@@ -90,6 +92,7 @@ async function getPreciousVideos() {
     const response: PreciousResult = await api.ranking.getPreciousVideos()
 
     if (response.code === 0) {
+      requestFailed.value = false
       const list = Array.isArray((response.data as any)?.list) ? (response.data as any).list as PreciousItem[] : []
       videoList.value = list.map(item => ({
         uniqueId: `${item.aid}`,
@@ -97,6 +100,13 @@ async function getPreciousVideos() {
         displayData: transformPreciousVideo(item),
       }))
     }
+    else {
+      requestFailed.value = true
+    }
+  }
+  catch (error) {
+    requestFailed.value = true
+    console.error('[Precious] Failed to load videos:', error)
   }
   finally {
     videoList.value = videoList.value.filter(video => video.item)
@@ -113,6 +123,7 @@ defineExpose({ initData })
       :grid-layout="gridLayout"
       :loading="isLoading"
       :no-more-content="noMoreContent"
+      :request-failed="requestFailed"
       :transform-item="(item: VideoElement) => item.displayData"
       :get-item-key="(item: VideoElement) => item.uniqueId"
       :is-skeleton-item="(item: VideoElement) => !item.item"

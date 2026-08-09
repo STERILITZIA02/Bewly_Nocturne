@@ -5,10 +5,10 @@ import type { CSSProperties } from 'vue'
 import { computed, inject, reactive, ref, shallowRef, watch } from 'vue'
 
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import api from '~/utils/api'
-import { findLeafActiveElement } from '~/utils/element'
 import { isHomePage } from '~/utils/main'
 import { buildKeywordSearchUrl } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -90,7 +90,7 @@ const isLoadingHotSearch = ref<boolean>(false)
 // 搜索推荐相关状态
 const searchRecommendation = ref<SearchRecommendationItem | null>(null)
 const isLoadingSearchRecommendation = ref<boolean>(false)
-const isNarrowLayout = useMediaQuery('(max-width: 767px)')
+const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
 
 const searchMode = computed(() => props.searchBehavior ?? 'navigate')
 const isInPlaceSearch = computed(() => searchMode.value === 'stay')
@@ -311,22 +311,6 @@ onBeforeUnmount(() => {
   cleanupRecommendationTimer()
 })
 
-onKeyStroke('/', (e: KeyboardEvent) => {
-  // Reference: https://github.com/polywock/globalSpeed/blob/3705ac836402b324550caf92aa65075b2f2347c6/src/contentScript/ConfigSync.ts#L94
-  const target = e.target as HTMLElement
-  const ignoreTagNames = ['INPUT', 'TEXTAREA']
-  if (target && (ignoreTagNames.includes(target.tagName) || target.isContentEditable))
-    return
-
-  const activeElement = findLeafActiveElement(document) as HTMLElement | undefined
-  if (activeElement && target !== activeElement) {
-    if (ignoreTagNames.includes(activeElement.tagName) || activeElement.isContentEditable)
-      return
-  }
-
-  e.preventDefault()
-  keywordRef.value?.focus()
-})
 onKeyStroke('Escape', (e: KeyboardEvent) => {
   console.log('[SearchBar] ESC key pressed!')
   console.log('[SearchBar] isFocus.value:', isFocus.value)
@@ -771,6 +755,8 @@ function handleClearKeyword() {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/breakpoints";
+
 ::v-deep(.suggest_high_light) {
   --uno: "text-$bew-theme-color not-italic";
 }
@@ -939,7 +925,7 @@ function handleClearKeyword() {
   #search-dropdown {
     @include search-content;
     --uno: "max-h-420px important-overflow-y-auto";
-    z-index: 1000;
+    z-index: var(--bew-z-topbar-interaction);
 
     .title {
       --uno: "text-lg font-500";
@@ -1037,7 +1023,7 @@ function handleClearKeyword() {
   #search-suggestion {
     @include search-content;
     --uno: "max-h-420px important-overflow-y-auto";
-    z-index: 1000;
+    z-index: var(--bew-z-topbar-interaction);
 
     .suggestion-item {
       @include search-content-item;
@@ -1049,7 +1035,7 @@ function handleClearKeyword() {
   }
 
   &.search-wrap--top-bar {
-    @media (max-width: 767px) {
+    @media (max-width: breakpoints.$mobile-max) {
       #search-dropdown,
       #search-suggestion {
         max-height: calc(100dvh - var(--bew-top-bar-height) - 12px);

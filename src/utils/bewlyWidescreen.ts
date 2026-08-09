@@ -467,7 +467,7 @@ function showWidescreenLoading() {
     #${LOADING_ROOT_ID} {
       position: fixed;
       inset: 0;
-      z-index: 2147483000;
+      z-index: var(--bew-z-widescreen);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -712,7 +712,7 @@ function injectLayoutStyle() {
     #${ROOT_ID} {
       position: fixed;
       inset: 0;
-      z-index: 1000;
+      z-index: var(--bew-z-base-overlay);
       color: #f4f6fb;
       background: #0f1115;
       font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);

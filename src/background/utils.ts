@@ -5,6 +5,7 @@
 import type Browser from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
+import { FIREFOX_CONTAINER_COOKIE_HEADER, serializeCookiesForUrl } from './firefoxCookies'
 import { addWbiSign, clearWbiKeys, getWbiKeys, initWbiKeys, isBilibiliNavUrl, needsWbiSign, storeWbiKeys } from './wbiSign'
 
 export class ApiRiskControlError extends Error {
@@ -173,8 +174,9 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
       // generate cookies
       const requestHeaders = { ...headers }
       if (cookies && credentials !== 'omit') {
-        const cookieStr = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
-        requestHeaders['firefox-multi-account-cookie'] = cookieStr
+        const cookieStr = serializeCookiesForUrl(cookies, requestUrl)
+        if (cookieStr)
+          requestHeaders[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieStr
       }
 
       // 添加Referer以防止风控

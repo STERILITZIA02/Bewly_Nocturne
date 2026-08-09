@@ -28,6 +28,7 @@ const needToLoginFirst = ref<boolean>(false)
 const offset = ref<string>('')
 const updateBaseline = ref<string>('')
 const noMoreContent = ref<boolean>(false)
+const requestFailed = ref<boolean>(false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
@@ -45,6 +46,7 @@ async function initData() {
   updateBaseline.value = ''
   videoList.value = []
   noMoreContent.value = false
+  requestFailed.value = false
 
   await getData()
 }
@@ -80,8 +82,10 @@ async function getData() {
 
   try {
     // 初次加载时多加载几批确保有足够内容
-    for (let i = 0; i < 3 && !noMoreContent.value; i++)
-      await getSubscribedSeriesVideos()
+    for (let i = 0; i < 3 && !noMoreContent.value; i++) {
+      if (!await getSubscribedSeriesVideos())
+        break
+    }
   }
   finally {
     isLoading.value = false
@@ -107,11 +111,11 @@ function initPageAction() {
 
 async function getSubscribedSeriesVideos() {
   if (noMoreContent.value)
-    return
+    return true
 
   if (offset.value === '0') {
     noMoreContent.value = true
-    return
+    return true
   }
 
   try {
@@ -122,27 +126,39 @@ async function getSubscribedSeriesVideos() {
     })
 
     if (response.code === -101) {
-      noMoreContent.value = true
+      noMoreContent.value = false
       needToLoginFirst.value = true
-      return
+      requestFailed.value = false
+      return false
     }
 
     if (response.code === 0) {
       needToLoginFirst.value = false
+      requestFailed.value = false
       offset.value = response.data.offset
       updateBaseline.value = response.data.update_baseline
 
-      const newItems = response.data.items.map((item: MomentItem) => ({
+      const items = Array.isArray(response.data?.items) ? response.data.items : []
+      const newItems = items.map((item: MomentItem) => ({
         uniqueId: `${item.id_str}`,
         item,
         displayData: transformSubscribedSeriesVideo({ uniqueId: `${item.id_str}`, item }),
       }))
 
       videoList.value = [...videoList.value, ...newItems]
+      if (items.length === 0)
+        noMoreContent.value = true
+      return true
     }
+    requestFailed.value = true
+    noMoreContent.value = false
+    return false
   }
-  catch {
-    // 忽略错误
+  catch (error) {
+    requestFailed.value = true
+    noMoreContent.value = false
+    console.error('[SubscribedSeries] Failed to load series:', error)
+    return false
   }
 }
 
@@ -174,6 +190,7 @@ defineExpose({ initData })
       :grid-layout="gridLayout"
       :loading="isLoading"
       :no-more-content="noMoreContent"
+      :request-failed="requestFailed"
       :need-to-login-first="needToLoginFirst"
       :transform-item="(item: VideoElement) => item.displayData"
       :get-item-key="(item: VideoElement) => item.uniqueId"

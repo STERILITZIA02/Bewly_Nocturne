@@ -662,6 +662,10 @@ const showEmptyState = computed(() => {
   return !props.loading && props.noMoreContent && props.items.length === 0 && !props.needToLoginFirst
 })
 
+const showErrorState = computed(() => {
+  return !props.loading && props.requestFailed && props.items.length === 0 && !props.needToLoginFirst
+})
+
 function normalizePositiveInt(value: unknown, fallback: number): number {
   const normalized = Number(value)
   if (!Number.isFinite(normalized) || normalized <= 0)
@@ -908,6 +912,12 @@ function getUniqueKey(item: T, index: number): string | number {
       </Button>
     </Empty>
 
+    <Empty v-else-if="showErrorState" mt-6 :description="$t('common.load_failed')">
+      <Button type="primary" @click="handleRefresh">
+        {{ refreshButtonText || $t('common.operation.refresh') }}
+      </Button>
+    </Empty>
+
     <!-- 空列表 -->
     <Empty
       v-else-if="showEmptyState"
@@ -974,6 +984,8 @@ function getUniqueKey(item: T, index: number): string | number {
 </template>
 
 <style lang="scss" scoped>
+@use "../styles/breakpoints";
+
 .video-card-grid-root {
   container-type: inline-size;
 }
@@ -981,37 +993,37 @@ function getUniqueKey(item: T, index: number): string | number {
 // Grid 布局 - 根据设置页声明的容器断点和 CSS 变量控制列数
 .grid-adaptive {
   display: grid;
-  gap: 20px;
+  gap: var(--bew-layout-content-gap);
   grid-template-columns: repeat(var(--grid-cols-base, 1), 1fr);
   contain: layout style;
   align-items: stretch;
 }
 
-@container (min-width: 640px) {
+@container (min-width: #{breakpoints.$grid-sm}) {
   .grid-adaptive {
     grid-template-columns: repeat(var(--grid-cols-sm, 2), 1fr);
   }
 }
 
-@container (min-width: 768px) {
+@container (min-width: #{breakpoints.$grid-md}) {
   .grid-adaptive {
     grid-template-columns: repeat(var(--grid-cols-md, 3), 1fr);
   }
 }
 
-@container (min-width: 1024px) {
+@container (min-width: #{breakpoints.$grid-lg}) {
   .grid-adaptive {
     grid-template-columns: repeat(var(--grid-cols-lg, 4), 1fr);
   }
 }
 
-@container (min-width: 1280px) {
+@container (min-width: #{breakpoints.$grid-xl}) {
   .grid-adaptive {
     grid-template-columns: repeat(var(--grid-cols-xl, 5), 1fr);
   }
 }
 
-@container (min-width: 1536px) {
+@container (min-width: #{breakpoints.$grid-xxl}) {
   .grid-adaptive {
     grid-template-columns: repeat(var(--grid-cols-xxl, 6), 1fr);
   }

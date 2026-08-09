@@ -149,7 +149,7 @@
     left: 24px !important;
     width: max-content;
     max-width: calc(100vw - 48px);
-    z-index: 1003 !important;
+    z-index: var(--bew-z-native-topbar) !important;
     padding: 16px 0;
     overflow-x: auto;
     border-radius: 0 0 8px 8px;

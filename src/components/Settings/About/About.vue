@@ -3,7 +3,12 @@ import browser from 'webextension-polyfill'
 
 import Radio from '~/components/Radio.vue'
 import { useSettingsCloudSyncPreference } from '~/composables/useSettingsCloudSyncPreference'
+import { useStorageLocal } from '~/composables/useStorageLocal'
 import { settings } from '~/logic'
+import {
+  DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
+  SETTINGS_CLOUD_SYNC_STATUS_KEY,
+} from '~/utils/settingsCloudSyncProtocol'
 
 import { displayName, homepage, version } from '../../../../package.json'
 import Maintenance from '../Advanced/Maintenance.vue'
@@ -14,6 +19,14 @@ import SettingsSectionHeading from '../components/SettingsSectionHeading.vue'
 const hasNewVersion = ref<boolean>(false)
 const contributorsImageFailed = ref(false)
 const settingsCloudSyncPreference = useSettingsCloudSyncPreference()
+const settingsCloudSyncStatus = useStorageLocal(
+  SETTINGS_CLOUD_SYNC_STATUS_KEY,
+  DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
+  { mergeDefaults: true, writeDefaults: false },
+)
+const unsyncedCloudFieldCount = computed(() => settingsCloudSyncStatus.value.pendingCount
+  + settingsCloudSyncStatus.value.blockedByQuotaCount
+  + settingsCloudSyncStatus.value.failedCount)
 const repositoryPath = new URL(homepage).pathname.replace(/^\//, '')
 const releasesUrl = `${homepage}/releases`
 const latestReleaseApiUrl = `https://api.github.com/repos/${repositoryPath}/releases/latest`
@@ -97,6 +110,13 @@ function handleContributorImageError() {
           >
             <Radio v-model="settingsCloudSyncPreference" />
           </SettingsItem>
+          <div v-if="settingsCloudSyncPreference" class="cloud-sync-status">
+            <p>{{ $t('settings.settings_sync_unsynced_count', { count: unsyncedCloudFieldCount }) }}</p>
+            <p>{{ $t('settings.settings_sync_quota_blocked_count', { count: settingsCloudSyncStatus.blockedByQuotaCount }) }}</p>
+            <p v-if="settingsCloudSyncStatus.lastError">
+              {{ $t('settings.settings_sync_last_error', { error: settingsCloudSyncStatus.lastError }) }}
+            </p>
+          </div>
         </SettingsItemGroup>
 
         <SettingsItemGroup :title="$t('settings.group_version_reminder')">
@@ -219,6 +239,13 @@ function handleContributorImageError() {
 
 .about-maintenance {
   margin-top: var(--bew-space-6);
+}
+
+.cloud-sync-status {
+  padding: 0 var(--bew-space-4) var(--bew-space-3);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 
 .maintenance-heading {

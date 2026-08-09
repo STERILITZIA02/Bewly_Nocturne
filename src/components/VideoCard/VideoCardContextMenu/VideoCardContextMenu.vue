@@ -552,7 +552,7 @@ async function unfollowUser() {
     <div
       v-if="showContextMenu"
       pos="fixed top-0 left-0" w-full h-full
-      style="z-index: 9998;"
+      style="z-index: var(--bew-z-context-backdrop);"
       @click="handleClose"
       @click.right.prevent.stop="handleReopen"
     />
@@ -623,7 +623,7 @@ async function unfollowUser() {
   width: min(240px, calc(100vw - var(--bew-space-4)));
   max-height: min(406px, calc(100vh - var(--bew-space-4)));
   overflow: hidden;
-  z-index: 9999;
+  z-index: var(--bew-z-popover);
 }
 
 .context-menu-list {

@@ -43,6 +43,10 @@ export interface TopBarFavoritesChanged {
   accountId: number
 }
 
+export interface WatchLaterInvalidation {
+  accountId: number
+}
+
 export const TOP_BAR_STATE_MESSAGE = {
   CLAIM_REFRESH: 'topBarState:claimRefresh',
   PUBLISH: 'topBarState:publish',
@@ -52,4 +56,6 @@ export const TOP_BAR_STATE_MESSAGE = {
   FAVORITES_CHANGED: 'topBarState:favoritesChanged',
   UPDATED: 'topBarState:updated',
   LOGIN_STATE_CHANGED: 'topBarState:loginStateChanged',
+  WATCH_LATER_INVALIDATE: 'watchLater:invalidate',
+  WATCH_LATER_INVALIDATED: 'watchLater:invalidated',
 } as const

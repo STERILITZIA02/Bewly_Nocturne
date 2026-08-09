@@ -4,7 +4,6 @@ export enum MenuType {
   BewlyComponents = 'BewlyComponents',
   Bilibili = 'Bilibili',
   Appearance = 'Appearance',
-  Shortcuts = 'Shortcuts',
   About = 'About',
 }
 

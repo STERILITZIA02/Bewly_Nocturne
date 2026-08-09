@@ -2,6 +2,8 @@ import type { MaybeRef, Ref, WatchOptions } from 'vue'
 import { getCurrentScope, isProxy, onScopeDispose, ref, shallowRef, toRaw, toValue, watch } from 'vue'
 import browser from 'webextension-polyfill'
 
+import { shouldWriteStorageDefault } from '~/utils/storageInitialization'
+
 type Awaitable<T> = T | Promise<T>
 type SerializerType = 'any' | 'boolean' | 'date' | 'map' | 'number' | 'object' | 'set' | 'string'
 type StorageFlush = NonNullable<WatchOptions['flush']>
@@ -184,6 +186,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   const data = createStorageRef(createInitialValue(initialValue), shallow)
 
   let ready = false
+  let initialReadSucceeded = false
   let dirtyBeforeReady = false
   let hasStoredValue = false
   let suppressedWriteCount = 0
@@ -301,16 +304,35 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   }
 
   void (async () => {
+    let result: Record<string, unknown> | undefined
+    let lastReadError: unknown
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        result = await browser.storage.local.get(key)
+        initialReadSucceeded = true
+        break
+      }
+      catch (error) {
+        lastReadError = error
+        if (attempt < 2)
+          await new Promise(resolve => setTimeout(resolve, 100 * 2 ** attempt))
+      }
+    }
+
     try {
-      const result = await browser.storage.local.get(key)
-      const rawStoredValue = result[key]
+      if (!initialReadSucceeded) {
+        onError(lastReadError)
+        return
+      }
+
+      const rawStoredValue = result![key]
       hasStoredValue = rawStoredValue != null
 
       if (rawStoredValue == null) {
         if (!dirtyBeforeReady)
           data.value = createInitialValue(initialValue) as T
       }
-      else {
+      else if (!dirtyBeforeReady) {
         const storedValue = await deserializeStoredValue(rawStoredValue, serializer)
         data.value = cloneValue(mergeStoredValue(storedValue, createInitialValue(initialValue), mergeDefaults))
       }
@@ -324,7 +346,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     }
 
     try {
-      if (!hasStoredValue && (dirtyBeforeReady || writeDefaults) && data.value != null)
+      if (shouldWriteStorageDefault(initialReadSucceeded, hasStoredValue, dirtyBeforeReady, writeDefaults, data.value != null))
         await persistValue()
     }
     catch (error) {

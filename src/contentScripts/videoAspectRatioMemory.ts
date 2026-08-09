@@ -1,10 +1,18 @@
+import { watch } from 'vue'
+
+import { useRouteState } from '~/composables/useRouteState'
 import { settings, settingsReady } from '~/logic'
 import type { VideoAspectRatio } from '~/logic/storage'
+import { isVideoPlaybackPage } from '~/utils/main'
+
+import { observePlayerDom } from './playerDomLifecycle'
 
 const ASPECT_INPUT_SELECTOR = '.bpx-player-ctrl-setting-aspect input.bui-radio-input[type="radio"]'
 const SUPPORTED_ASPECT_RATIOS = new Set<VideoAspectRatio>(['0:0', '4:3', '16:9'])
 
 let hasInitialized = false
+let stopPlayerObserver: (() => void) | null = null
+let syncFrame: number | null = null
 
 function isVideoAspectRatio(value: string): value is VideoAspectRatio {
   return SUPPORTED_ASPECT_RATIOS.has(value as VideoAspectRatio)
@@ -58,17 +66,47 @@ function syncVideoAspectRatio() {
   targetInput.click()
 }
 
+function scheduleSyncVideoAspectRatio() {
+  if (syncFrame !== null)
+    return
+
+  syncFrame = requestAnimationFrame(() => {
+    syncFrame = null
+    syncVideoAspectRatio()
+  })
+}
+
+function stopVideoAspectRatioMemory() {
+  document.removeEventListener('change', rememberSelectedAspectRatio, true)
+  stopPlayerObserver?.()
+  stopPlayerObserver = null
+  if (syncFrame !== null) {
+    cancelAnimationFrame(syncFrame)
+    syncFrame = null
+  }
+}
+
 export function initVideoAspectRatioMemory() {
   if (hasInitialized || location.hostname === 'live.bilibili.com')
     return
 
   hasInitialized = true
+  const routeState = useRouteState()
 
   void settingsReady.then(() => {
-    document.addEventListener('change', rememberSelectedAspectRatio, true)
-    syncVideoAspectRatio()
+    const updateLifecycle = () => {
+      stopVideoAspectRatioMemory()
+      if (!settings.value.rememberVideoAspectRatio || !isVideoPlaybackPage(routeState.href))
+        return
 
-    // 播放器会在站内切集或切换番剧时复用/重建设置面板，定时同步可覆盖两种情况。
-    setInterval(syncVideoAspectRatio, 1000)
+      document.addEventListener('change', rememberSelectedAspectRatio, true)
+      stopPlayerObserver = observePlayerDom(scheduleSyncVideoAspectRatio)
+    }
+
+    watch(
+      [() => settings.value.rememberVideoAspectRatio, () => routeState.navigationId],
+      updateLifecycle,
+      { immediate: true },
+    )
   })
 }

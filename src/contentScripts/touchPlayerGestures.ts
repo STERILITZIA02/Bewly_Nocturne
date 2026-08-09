@@ -1,5 +1,6 @@
 import { watch } from 'vue'
 
+import { useRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { isVideoPlaybackPage } from '~/utils/main'
 import { calculateRelativeSeekTime } from '~/utils/touchGesture'
@@ -63,6 +64,7 @@ let lastTap: LastTap | null = null
 let suppressNativeDoubleClickUntil = 0
 let suppressClickUntil = 0
 let hudHideTimeout: number | null = null
+let listenersAttached = false
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -85,12 +87,12 @@ function isTouchPointer(event: PointerEvent) {
 function getActiveVideo(player: HTMLElement): HTMLVideoElement | null {
   const videos = Array.from(player.querySelectorAll<HTMLVideoElement>('video'))
     .filter(video => video.readyState !== HTMLMediaElement.HAVE_NOTHING && video.getClientRects().length > 0)
+  const videosByArea = videos.map((video) => {
+    const rect = video.getBoundingClientRect()
+    return { video, area: rect.width * rect.height }
+  })
 
-  return videos.sort((first, second) => {
-    const firstRect = first.getBoundingClientRect()
-    const secondRect = second.getBoundingClientRect()
-    return secondRect.width * secondRect.height - firstRect.width * firstRect.height
-  })[0] ?? null
+  return videosByArea.sort((first, second) => second.area - first.area)[0]?.video ?? null
 }
 
 function getPlayerContext(target: EventTarget | null, clientY?: number): PlayerContext | null {
@@ -135,7 +137,7 @@ function ensureStyles() {
       position: absolute;
       top: 50%;
       left: 50%;
-      z-index: 2147483646;
+      z-index: var(--bew-z-hud, 2147483646);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -386,27 +388,65 @@ function handleDoubleClick(event: MouseEvent) {
   event.stopImmediatePropagation()
 }
 
-function updateEnabledState(enabled: boolean) {
-  document.documentElement.classList.toggle(ROOT_CLASS, enabled)
-  if (enabled)
-    return
-
+function resetGestureState() {
   gesture = null
   lastTap = null
+  suppressNativeDoubleClickUntil = 0
+  suppressClickUntil = 0
   hideHud()
+}
+
+function handlePointerUp(event: PointerEvent) {
+  handlePointerEnd(event)
+}
+
+function handlePointerCancel(event: PointerEvent) {
+  handlePointerEnd(event, true)
+}
+
+function attachListeners() {
+  if (listenersAttached)
+    return
+
+  listenersAttached = true
+  ensureStyles()
+  document.documentElement.classList.add(ROOT_CLASS)
+  document.addEventListener('pointerdown', handlePointerDown, { capture: true })
+  document.addEventListener('pointermove', handlePointerMove, { capture: true, passive: false })
+  document.addEventListener('pointerup', handlePointerUp, { capture: true })
+  document.addEventListener('pointercancel', handlePointerCancel, { capture: true })
+  document.addEventListener('click', handleClick, { capture: true })
+  document.addEventListener('dblclick', handleDoubleClick, { capture: true })
+}
+
+function detachListeners() {
+  document.documentElement.classList.remove(ROOT_CLASS)
+  resetGestureState()
+  if (!listenersAttached)
+    return
+
+  listenersAttached = false
+  document.removeEventListener('pointerdown', handlePointerDown, { capture: true })
+  document.removeEventListener('pointermove', handlePointerMove, { capture: true })
+  document.removeEventListener('pointerup', handlePointerUp, { capture: true })
+  document.removeEventListener('pointercancel', handlePointerCancel, { capture: true })
+  document.removeEventListener('click', handleClick, { capture: true })
+  document.removeEventListener('dblclick', handleDoubleClick, { capture: true })
 }
 
 export function initTouchPlayerGestures() {
   if (initialized)
     return
   initialized = true
-
-  ensureStyles()
-  watch(() => settings.value.touchScreenOptimization, updateEnabledState, { immediate: true })
-  document.addEventListener('pointerdown', handlePointerDown, { capture: true })
-  document.addEventListener('pointermove', handlePointerMove, { capture: true, passive: false })
-  document.addEventListener('pointerup', event => handlePointerEnd(event), { capture: true })
-  document.addEventListener('pointercancel', event => handlePointerEnd(event, true), { capture: true })
-  document.addEventListener('click', handleClick, { capture: true })
-  document.addEventListener('dblclick', handleDoubleClick, { capture: true })
+  const routeState = useRouteState()
+  watch(
+    [() => settings.value.touchScreenOptimization, () => routeState.navigationId],
+    () => {
+      if (settings.value.touchScreenOptimization && isVideoPlaybackPage(routeState.href))
+        attachListeners()
+      else
+        detachListeners()
+    },
+    { immediate: true },
+  )
 }

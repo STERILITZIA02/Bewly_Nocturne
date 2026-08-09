@@ -34,6 +34,7 @@ interface SettingsStorageFlushWaiter {
 }
 
 const MAX_MESSAGE_ATTEMPTS = 5
+const RECOVERY_READ_DELAYS = [2_000, 5_000, 15_000] as const
 
 class StaleStorageGenerationError extends Error {}
 
@@ -112,6 +113,9 @@ export function useSettingsStorage<T extends object>(
   let disposed = false
   let storageGeneration = 0
   let readInFlightGeneration: number | null = null
+  let initializationState: 'loading' | 'loaded' | 'degraded' = 'loading'
+  let recoveryReadAttempt = 0
+  let recoveryReadTimer: ReturnType<typeof setTimeout> | null = null
   const flushWaiters = new Set<SettingsStorageFlushWaiter>()
 
   const storageIsIdle = () => ready
@@ -311,7 +315,24 @@ export function useSettingsStorage<T extends object>(
     void flushQueuedPatch()
   }
 
-  const refreshCanonicalValue = async (markReadyWhenFinished = false) => {
+  function clearRecoveryReadTimer() {
+    if (recoveryReadTimer != null)
+      clearTimeout(recoveryReadTimer)
+    recoveryReadTimer = null
+  }
+
+  function scheduleRecoveryRead() {
+    if (disposed || initializationState === 'loaded' || recoveryReadTimer != null || recoveryReadAttempt >= RECOVERY_READ_DELAYS.length)
+      return
+
+    const delay = RECOVERY_READ_DELAYS[recoveryReadAttempt++]
+    recoveryReadTimer = setTimeout(() => {
+      recoveryReadTimer = null
+      void refreshCanonicalValue()
+    }, delay)
+  }
+
+  async function refreshCanonicalValue(markReadyWhenFinished = false) {
     const generation = storageGeneration
     if (readInFlightGeneration === generation)
       return
@@ -331,6 +352,9 @@ export function useSettingsStorage<T extends object>(
         currentEpoch = response.epoch
 
       persistenceReady = true
+      initializationState = 'loaded'
+      recoveryReadAttempt = 0
+      clearRecoveryReadTimer()
       applyCanonicalValue(response.storedValue, response.revision, epochChanged)
       void flushQueuedPatch()
     }
@@ -338,10 +362,14 @@ export function useSettingsStorage<T extends object>(
       if (error instanceof StaleStorageGenerationError)
         return
 
-      if (isExtensionContextInvalidatedError(error))
+      if (isExtensionContextInvalidatedError(error)) {
         disposed = true
-      else
+      }
+      else {
+        initializationState = 'degraded'
         onError(error)
+        scheduleRecoveryRead()
+      }
       rejectFlushWaiters(error)
     }
     finally {
@@ -382,6 +410,9 @@ export function useSettingsStorage<T extends object>(
     }
 
     persistenceReady = true
+    initializationState = 'loaded'
+    recoveryReadAttempt = 0
+    clearRecoveryReadTimer()
     applyCanonicalValue(settingsChange.newValue, meta?.revision ?? canonicalRevision, epochChanged)
     void flushQueuedPatch()
   }
@@ -390,6 +421,7 @@ export function useSettingsStorage<T extends object>(
   if (getCurrentScope()) {
     onScopeDispose(() => {
       disposed = true
+      clearRecoveryReadTimer()
       browser.storage.onChanged.removeListener(onStorageChanged)
       rejectFlushWaiters(new Error('Settings storage was disposed before pending writes were flushed'))
     })

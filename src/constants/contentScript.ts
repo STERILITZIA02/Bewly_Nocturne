@@ -7,7 +7,6 @@ export const CONTENT_SCRIPT_HOSTS = [
   'member.bilibili.com',
   'account.bilibili.com',
   'www.hdslb.com',
-  'passport.bilibili.com',
   'music.bilibili.com',
 ] as const
 

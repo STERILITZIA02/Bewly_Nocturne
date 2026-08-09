@@ -15,15 +15,19 @@ import {
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useStorageLocal } from '~/composables/useStorageLocal'
 import { settings } from '~/logic'
+import { parseDedeUserID } from '~/logic/loginStatus'
 import { momentsPinnedUsers, momentsWantedUsers } from '~/logic/storage'
 import { recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
 import type { DataItem, MomentResult } from '~/models/moment/moment'
 import { useTopBarStore } from '~/stores/topBarStore'
+import type { AccountId } from '~/utils/accountScope'
+import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { getIframeMessageData } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
-import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { openLinkInBackground } from '~/utils/tabs'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
+import { getDirectWatchLaterAid, resolveWatchLaterAid } from '~/utils/watchLater'
 
 const loadingGifUrl = browser.runtime.getURL('/assets/loading.gif')
 
@@ -116,12 +120,19 @@ interface MomentsFeedCacheEntry {
     hasMore: boolean
   }
 }
-type MomentsFeedCache = Partial<Record<MomentFilter, MomentsFeedCacheEntry>>
+type MomentsFeedCacheEntries = Partial<Record<MomentFilter, MomentsFeedCacheEntry>>
+interface MomentsFeedCache {
+  accountId: AccountId
+  entries: MomentsFeedCacheEntries
+}
 let resolveMomentsFeedCacheReady: (() => void) | undefined
 const momentsFeedCacheReady = new Promise<void>((resolve) => {
   resolveMomentsFeedCacheReady = resolve
 })
-const momentsFeedCache = useStorageLocal<MomentsFeedCache>('momentsFeedCache', {}, {
+const momentsFeedCache = useStorageLocal<MomentsFeedCache>('momentsFeedCache', {
+  accountId: null,
+  entries: {},
+}, {
   writeDefaults: false,
   onReady: () => resolveMomentsFeedCacheReady?.(),
 })
@@ -174,8 +185,9 @@ let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
 const hoveredMediaId = ref('')
 const previewUrls = reactive<Record<string, string>>({})
 const likingMomentIds = reactive(new Set<string>())
-const watchLaterMomentIds = reactive(new Set<string>())
 const watchLaterLoadingMomentIds = reactive(new Set<string>())
+const watchLaterAidByTarget = reactive(new Map<string, number>())
+const watchLaterAidRequests = new Map<string, Promise<number | undefined>>()
 const videoCidCache = new Map<string, number>()
 const videoCidRequests = new Map<string, Promise<number | undefined>>()
 const videoAspectRatios = reactive<Record<string, number>>({})
@@ -232,6 +244,7 @@ let lastScrollAt = 0
 let virtualRaf = 0
 let feedRequestToken = 0
 let portalRequestToken = 0
+let loadedAccountId: AccountId = getCurrentAccountId()
 let suppressBottomRebalanceUntil = 0
 const detailImageViewerDragging = ref(false)
 let detailImageViewerDragStartX = 0
@@ -255,6 +268,20 @@ const showMomentsUpList = computed(() =>
     || settings.value.momentsEnableWantedFilter
   ),
 )
+
+function getCurrentAccountId(): AccountId {
+  return parseDedeUserID(document.cookie) ?? null
+}
+
+function ensureMomentsCacheAccount(accountId: AccountId) {
+  if (isSameAccount(momentsFeedCache.value.accountId, accountId))
+    return
+
+  momentsFeedCache.value = {
+    accountId,
+    entries: {},
+  }
+}
 
 function httpsUrl(url = '') {
   return url.replace(/^http:/, 'https:')
@@ -1401,6 +1428,7 @@ function isFeedRequestCurrent(
   requestHostMid: string,
 ) {
   return requestToken === feedRequestToken
+    && isSameAccount(loadedAccountId, getCurrentAccountId())
     && requestType === activeMomentFilter.value
     && requestGroup === activeMomentGroup.value
     && requestHostMid === selectedHostMid.value
@@ -1417,7 +1445,8 @@ function matchesMomentFilter(moment: DisplayMoment) {
 }
 
 function getValidMomentsCache(filter: MomentFilter) {
-  const entry = momentsFeedCache.value[filter]
+  ensureMomentsCacheAccount(loadedAccountId)
+  const entry = momentsFeedCache.value.entries[filter]
   if (!entry)
     return undefined
   const usesCurrentVideoShape = entry.items.every(moment => (
@@ -1428,8 +1457,11 @@ function getValidMomentsCache(filter: MomentFilter) {
   if (usesCurrentVideoShape && Date.now() - entry.updatedAt < MOMENTS_CACHE_TTL_MS)
     return entry
 
-  const { [filter]: _expired, ...validEntries } = momentsFeedCache.value
-  momentsFeedCache.value = validEntries
+  const { [filter]: _expired, ...validEntries } = momentsFeedCache.value.entries
+  momentsFeedCache.value = {
+    accountId: loadedAccountId,
+    entries: validEntries,
+  }
   return undefined
 }
 
@@ -1448,18 +1480,22 @@ function mergeCachedMoments(primary: DisplayMoment[], secondary: DisplayMoment[]
 }
 
 function saveMomentsCache(filter: MomentFilter, entry: MomentsFeedCacheEntry) {
+  ensureMomentsCacheAccount(loadedAccountId)
   const items = entry.items.slice(0, MOMENTS_CACHE_MAX_ITEMS)
   const continuationLimit = Math.max(0, MOMENTS_CACHE_MAX_ITEMS - items.length)
   const continuation = entry.continuation && continuationLimit > 0
     ? { ...entry.continuation, items: entry.continuation.items.slice(0, continuationLimit) }
     : undefined
   momentsFeedCache.value = {
-    ...momentsFeedCache.value,
-    [filter]: {
-      ...entry,
-      items,
-      continuation,
-      updatedAt: Date.now(),
+    accountId: loadedAccountId,
+    entries: {
+      ...momentsFeedCache.value.entries,
+      [filter]: {
+        ...entry,
+        items,
+        continuation,
+        updatedAt: Date.now(),
+      },
     },
   }
 }
@@ -2423,12 +2459,47 @@ async function toggleMomentLike(moment: DisplayMoment) {
 
 function isWatchLaterAdded(target: WatchLaterTarget) {
   const stateKey = getWatchLaterStateKey(target)
-  return Boolean(stateKey && watchLaterMomentIds.has(stateKey))
+  if (!stateKey)
+    return false
+
+  const aid = getDirectWatchLaterAid(target) ?? watchLaterAidByTarget.get(stateKey)
+  if (!aid) {
+    void resolveMomentWatchLaterAid(target)
+    return false
+  }
+  return topBarStore.isInWatchLater(aid)
 }
 
 function isWatchLaterLoading(target: WatchLaterTarget) {
   const stateKey = getWatchLaterStateKey(target)
   return Boolean(stateKey && watchLaterLoadingMomentIds.has(stateKey))
+}
+
+async function resolveMomentWatchLaterAid(target: WatchLaterTarget): Promise<number | undefined> {
+  const directAid = getDirectWatchLaterAid(target)
+  if (directAid)
+    return directAid
+
+  const stateKey = getWatchLaterStateKey(target)
+  if (!stateKey)
+    return undefined
+  const cachedAid = watchLaterAidByTarget.get(stateKey)
+  if (cachedAid)
+    return cachedAid
+  const pendingRequest = watchLaterAidRequests.get(stateKey)
+  if (pendingRequest)
+    return pendingRequest
+
+  const request = resolveWatchLaterAid(target)
+    .then((aid) => {
+      if (aid)
+        watchLaterAidByTarget.set(stateKey, aid)
+      return aid
+    })
+    .catch(() => undefined)
+    .finally(() => watchLaterAidRequests.delete(stateKey))
+  watchLaterAidRequests.set(stateKey, request)
+  return request
 }
 
 async function toggleMomentWatchLater(target: WatchLaterTarget) {
@@ -2444,34 +2515,27 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
 
   watchLaterLoadingMomentIds.add(stateKey)
   try {
-    let aid = Number(target.aid || 0)
-    let bvid = target.bvid
-    if (!aid && !bvid && target.epid) {
-      const ids = await resolvePgcEpisodeVideoIds(target.epid)
-      aid = ids?.aid || 0
-      bvid = ids?.bvid
-    }
-
-    if (!aid && !bvid) {
+    await topBarStore.ensureWatchLaterState()
+    const accountId = topBarStore.userInfo.mid
+    if (!topBarStore.isLogin || !accountId)
+      return
+    const aid = await resolveMomentWatchLaterAid(target)
+    if (!aid) {
       toast.error('无法获取该视频的稍后再看信息')
       return
     }
 
-    const isAdded = watchLaterMomentIds.has(stateKey)
+    const isAdded = topBarStore.isInWatchLater(aid)
     const response = isAdded
       ? await api.watchlater.removeFromWatchLater({ aid, csrf })
-      : await api.watchlater.saveToWatchLater({ aid: aid || undefined, bvid, csrf })
+      : await api.watchlater.saveToWatchLater({ aid, csrf })
 
     if (response.code !== 0) {
       toast.error(response.message)
       return
     }
 
-    if (isAdded)
-      watchLaterMomentIds.delete(stateKey)
-    else
-      watchLaterMomentIds.add(stateKey)
-    void topBarStore.syncWatchLaterState(true)
+    await topBarStore.commitWatchLaterMutation(aid, !isAdded, accountId)
   }
   catch (error) {
     console.error('切换稍后再看状态失败:', error)
@@ -2483,6 +2547,11 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
 }
 
 async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false) {
+  await momentsFeedCacheReady
+  if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
+    return
+  ensureMomentsCacheAccount(loadedAccountId)
+
   // “想看”或低保留率类型过滤开启时只允许按钮触发后续批次，避免滚动自动连刷。
   if (!reset && requiresManualMomentPaging() && !manualPaging)
     return
@@ -2903,10 +2972,11 @@ function clearMomentsPortalState() {
 
 async function loadMomentsPortal() {
   const requestToken = ++portalRequestToken
+  const accountId = loadedAccountId
   isPortalLoading.value = true
   try {
     const response = await api.moment.getMomentsPortal() as MomentsPortalResult
-    if (requestToken !== portalRequestToken)
+    if (requestToken !== portalRequestToken || !isSameAccount(accountId, getCurrentAccountId()))
       return
 
     if (response.code !== 0) {
@@ -2920,11 +2990,11 @@ async function loadMomentsPortal() {
     portalUpList.value = normalizePortalUpList(response.data)
   }
   catch {
-    if (requestToken === portalRequestToken)
+    if (requestToken === portalRequestToken && isSameAccount(accountId, getCurrentAccountId()))
       clearMomentsPortalState()
   }
   finally {
-    if (requestToken === portalRequestToken)
+    if (requestToken === portalRequestToken && isSameAccount(accountId, getCurrentAccountId()))
       isPortalLoading.value = false
   }
 }
@@ -2935,12 +3005,49 @@ function refresh() {
   void loadMomentsPortal()
 }
 
+function resetMomentsAccountState() {
+  feedRequestToken++
+  portalRequestToken++
+  moments.value = []
+  momentColumns.value = []
+  virtualColumns.value = []
+  selectedHostMid.value = ''
+  wantedCacheCursor.value = 0
+  offset.value = ''
+  updateBaseline.value = ''
+  momentsFeedPage.value = 1
+  noMoreContent.value = false
+  isLoading.value = false
+  isInitialLoading.value = true
+  filteredMomentRetentionRate.value = null
+  clearMomentsPortalState()
+  cleanupLivePreviewPlayer()
+  hoveredMediaId.value = ''
+  watchLaterAidByTarget.clear()
+  watchLaterAidRequests.clear()
+}
+
+async function ensureMomentsAccount(): Promise<boolean> {
+  const accountId = getCurrentAccountId()
+  const changed = !isSameAccount(loadedAccountId, accountId)
+  if (changed) {
+    loadedAccountId = accountId
+    resetMomentsAccountState()
+  }
+
+  await momentsFeedCacheReady
+  ensureMomentsCacheAccount(accountId)
+  return changed
+}
+
 function handleDetailFrameMessage(event: MessageEvent) {
-  const type = event.data?.type
+  const data = getIframeMessageData(event, detailIframeRef.value)
+  if (!data)
+    return
+
+  const type = data.type
   if (type === 'BEWLY_OPUS_IMAGE_VIEWER_OPEN') {
-    if (event.source !== detailIframeRef.value?.contentWindow)
-      return
-    const { index, urls } = normalizeDetailImageViewerPayload(event.data.urls, event.data.index)
+    const { index, urls } = normalizeDetailImageViewerPayload(data.urls, data.index)
     if (!urls.length)
       return
 
@@ -2986,13 +3093,28 @@ onMounted(() => {
     updateVirtualColumns()
   })
   window.addEventListener('message', handleDetailFrameMessage)
-  refresh()
+  void ensureMomentsAccount().then(() => {
+    void topBarStore.ensureWatchLaterState()
+    refresh()
+  })
   handlePageRefresh.value = refresh
   handleReachBottom.value = () => {
     if (requiresManualMomentPaging())
       return
     void loadMoments()
   }
+})
+
+watch([
+  () => topBarStore.isLogin,
+  () => topBarStore.userInfo.mid,
+], () => {
+  if (topBarStore.isLogin && topBarStore.userInfo.mid)
+    void topBarStore.ensureWatchLaterState()
+  void ensureMomentsAccount().then((changed) => {
+    if (changed)
+      refresh()
+  })
 })
 
 onBeforeUnmount(() => {
@@ -3682,6 +3804,8 @@ watch(
 </template>
 
 <style scoped lang="scss">
+@use "../../../styles/breakpoints";
+
 .moments-page {
   padding: var(--bew-space-2) var(--bew-space-3) var(--bew-space-12);
 }
@@ -4623,7 +4747,7 @@ watch(
 .moment-image-viewer {
   position: fixed;
   inset: 0;
-  z-index: 10010;
+  z-index: var(--bew-z-image-viewer);
   overflow: hidden;
   color: #fff;
   background: rgb(18 18 18 / 76%);
@@ -4789,7 +4913,7 @@ watch(
   corner-shape: var(--bew-corner-shape-round);
 }
 
-@media (max-width: 640px) {
+@media (max-width: breakpoints.$grid-sm) {
   .moment-image-viewer__stage {
     padding: 68px 12px 92px;
   }

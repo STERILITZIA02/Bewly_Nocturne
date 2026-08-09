@@ -244,7 +244,8 @@ defineExpose({ initData })
 <template>
   <div flex="~ gap-40px">
     <aside
-      pos="sticky top-150px" h="[calc(100vh-140px)]" w-200px shrink-0 duration-300
+      pos="sticky" top="$bew-layout-sidebar-sticky-top" h="[calc(100vh-var(--bew-layout-sidebar-viewport-offset))]" w="$bew-layout-sidebar-width" shrink-0
+      duration-300
       ease-in-out
       :class="{ hide: shouldMoveAsideUp }"
     >
@@ -340,13 +341,13 @@ defineExpose({ initData })
 .grid-two-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 20px;
+  gap: var(--bew-layout-content-gap);
 }
 
 .grid-one-column {
   display: grid;
   grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 20px;
+  gap: var(--bew-layout-content-gap);
 }
 
 .grid-two-columns.grid-list-auto-switch-single {

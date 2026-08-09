@@ -402,6 +402,8 @@ function toggleChannel(value: string) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../../styles/breakpoints";
+
 .topbar-settings-groups {
   min-width: 0;
 }
@@ -595,7 +597,7 @@ function toggleChannel(value: string) {
   line-height: var(--bew-line-height-control);
 }
 
-@media (max-width: 640px) {
+@media (max-width: breakpoints.$grid-sm) {
   .topbar-component-controls {
     justify-content: flex-start;
   }

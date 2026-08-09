@@ -1,13 +1,16 @@
+import { watch } from 'vue'
+
 import { settings } from '~/logic'
-import type { List as WatchLaterItem, WatchLaterResult } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { i18n } from '~/utils/i18n'
 import { getCSRF } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { resolveWatchLaterAid } from '~/utils/watchLater'
 
 const BUTTON_CLASS = 'bewly-watch-later-btn'
 const WATCH_LATER_ICON_CLASS = 'i-mingcute:carplay-line'
+const buttonMembershipWatchers = new WeakMap<HTMLButtonElement, () => void>()
 
 export interface VideoIds {
   bvid?: string
@@ -66,10 +69,6 @@ function getVideoKey({ bvid, aid }: VideoIds): string {
   return bvid || (aid ? `av${aid}` : '')
 }
 
-function findWatchLaterItem(list: WatchLaterItem[] | undefined, { bvid, aid }: VideoIds): WatchLaterItem | undefined {
-  return list?.find(item => (bvid && item.bvid === bvid) || (aid && item.aid === aid))
-}
-
 function translate(key: string): string {
   return String(i18n.global.t(key, settings.value.language))
 }
@@ -117,25 +116,6 @@ function animateButton(button: HTMLButtonElement) {
   }, 150)
 }
 
-function scheduleTopBarRefresh() {
-  const refresh = () => {
-    try {
-      void useTopBarStore().syncWatchLaterState(true).catch((error) => {
-        if (!isExtensionContextInvalidatedError(error))
-          console.error('刷新稍后再看列表失败:', error)
-      })
-    }
-    catch (error) {
-      if (!isExtensionContextInvalidatedError(error))
-        console.error('刷新稍后再看列表失败:', error)
-    }
-  }
-
-  // 用户操作成功后立即同步；考虑到接口偶发的最终一致性，再补一次。
-  refresh()
-  window.setTimeout(refresh, 1000)
-}
-
 async function resolveAid(ids: VideoIds, state: WatchLaterButtonState): Promise<number | undefined> {
   if (state.aid)
     return state.aid
@@ -144,11 +124,8 @@ async function resolveAid(ids: VideoIds, state: WatchLaterButtonState): Promise<
   if (state.pendingAid)
     return state.pendingAid
 
-  state.pendingAid = api.video.getVideoInfo({ bvid: ids.bvid })
-    .then((result: any) => {
-      const aid = result.code === 0 && Number.isFinite(result.data?.aid)
-        ? Number(result.data.aid)
-        : undefined
+  state.pendingAid = resolveWatchLaterAid(ids)
+    .then((aid) => {
       state.aid = aid
       return aid
     })
@@ -161,16 +138,15 @@ async function resolveAid(ids: VideoIds, state: WatchLaterButtonState): Promise<
 
 async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, state: WatchLaterButtonState) {
   try {
-    const result = await api.watchlater.getAllWatchLaterList() as WatchLaterResult
+    const topBarStore = useTopBarStore()
+    await topBarStore.getUserInfo()
+    await topBarStore.ensureWatchLaterState()
+    const aid = await resolveAid(ids, state)
     if (!button.isConnected)
       return
 
-    if (result.code === 0) {
-      const item = findWatchLaterItem(result.data?.list, ids)
-      state.isInWatchLater = Boolean(item)
-      state.aid = item?.aid || state.aid
-      updateButtonState(button, state.isInWatchLater)
-    }
+    state.isInWatchLater = topBarStore.isInWatchLater(aid)
+    updateButtonState(button, state.isInWatchLater)
   }
   catch (error) {
     if (!isExtensionContextInvalidatedError(error))
@@ -186,13 +162,19 @@ async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state:
   setButtonBusy(button, true)
 
   try {
-    if (state.isInWatchLater) {
-      const aid = await resolveAid(ids, state)
-      if (!aid) {
-        console.warn('无法获取当前视频的 aid，不能从稍后再看中移除')
-        return
-      }
+    const topBarStore = useTopBarStore()
+    await topBarStore.ensureWatchLaterState()
+    const accountId = topBarStore.userInfo.mid
+    if (!topBarStore.isLogin || !accountId)
+      return
+    const aid = await resolveAid(ids, state)
+    if (!aid) {
+      console.warn('无法获取当前视频的 aid，不能更新稍后再看')
+      return
+    }
 
+    state.isInWatchLater = topBarStore.isInWatchLater(aid)
+    if (state.isInWatchLater) {
       const result = await api.watchlater.removeFromWatchLater({
         aid,
         csrf: getCSRF(),
@@ -203,6 +185,7 @@ async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state:
       }
 
       state.isInWatchLater = false
+      await topBarStore.commitWatchLaterMutation(aid, false, accountId)
     }
     else {
       const result = await api.watchlater.saveToWatchLater({
@@ -215,11 +198,11 @@ async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state:
       }
 
       state.isInWatchLater = true
+      await topBarStore.commitWatchLaterMutation(aid, true, accountId)
     }
 
     updateButtonState(button, state.isInWatchLater)
     animateButton(button)
-    scheduleTopBarRefresh()
   }
   catch (error) {
     if (!isExtensionContextInvalidatedError(error))
@@ -266,6 +249,12 @@ function createButton(ids: VideoIds): HTMLButtonElement {
   return button
 }
 
+function removeWatchLaterButton(button: HTMLButtonElement) {
+  buttonMembershipWatchers.get(button)?.()
+  buttonMembershipWatchers.delete(button)
+  button.remove()
+}
+
 function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefined {
   const moreButton = document.querySelector('.video-tool-more')
   if (!moreButton?.parentNode)
@@ -287,6 +276,17 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
     void handleButtonClick(mounted)
   })
 
+  const topBarStore = useTopBarStore()
+  buttonMembershipWatchers.set(button, watch(
+    () => [...topBarStore.addedWatchLaterList],
+    () => {
+      if (!button.isConnected)
+        return
+      state.isInWatchLater = topBarStore.isInWatchLater(state.aid)
+      updateButtonState(button, state.isInWatchLater)
+    },
+  ))
+
   moreButton.parentNode.insertBefore(button, moreButton)
   mounted.ready = initializeButtonState(button, ids, state)
   return mounted
@@ -300,7 +300,7 @@ async function handleButtonClick(mounted: MountedWatchLaterButton) {
     return
 
   if (currentVideoKey !== getVideoKey(mounted.ids)) {
-    mounted.button.remove()
+    removeWatchLaterButton(mounted.button)
     const replacement = mountWatchLaterButton(currentIds)
     if (!replacement)
       return
@@ -333,7 +333,8 @@ export function addWatchLaterButton(): boolean {
   const existingButton = document.querySelector<HTMLButtonElement>(`.${BUTTON_CLASS}`)
   if (existingButton?.dataset.videoKey === videoKey)
     return true
-  existingButton?.remove()
+  if (existingButton)
+    removeWatchLaterButton(existingButton)
 
   return Boolean(mountWatchLaterButton(ids))
 }

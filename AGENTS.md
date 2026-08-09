@@ -134,6 +134,13 @@ pnpm typecheck
 - 2026-08-09：Dock 新增按钮收起、隐藏收起入口、离开后自动收起三档行为；收起态复用单一 Dock 实例并保持在展开 Dock 的几何中心。同一毛玻璃外壳先连续改变真实宽高，再分阶段加载或退出按钮组，不恢复为两个表面交叉淡入。
 - 2026-08-09：Stage 2 完成动态、历史、稍后再看、订阅流、榜单、过滤、快捷键、视频预览和 URL 净化的确定性修复；分页只在成功响应后推进，尾页数据先消费再结束，异步响应按局部 generation 隔离。
 - 2026-08-09：扩展重载后的旧 content script 将 context invalidated 视为终止状态；停止共享状态轮询并收敛未处理 Promise。Shadow DOM 样式失败时卸载该次插件 UI，不得显示透明、错位的无样式 Dock 或设置页；刷新页面后由新上下文正常挂载。
+- 2026-08-09：For You、Moments 和 Following 的内容缓存、分页与本地状态按 Bilibili MID 隔离，未登录状态与任意已登录账号也必须分开；切换账号时旧请求必须失效。
+- 2026-08-09：稍后再看以 `topBarStore` 的完整 `aid` 集合为唯一成员状态源；Moments、VideoCard、顶栏和原站增强不得各自维护 aid/bvid/epid 真值，mutation 后通过专用失效消息跨标签重新获取服务端权威集合。
+- 2026-08-09：MAIN-world 设置与无 Cookie 搜索通信共用版本化 protocol、页面级 channelId、requestId 和有限 timeout；iframe 消息只接受当前 iframe source。Firefox Container Cookie 必须按最终 URL 的 domain/path/secure/expiry 筛选，不得把整个 Cookie Store 直接拼入请求。
+- 2026-08-09：Bewly 全局播放器/页面快捷键和快捷键设置入口已移除，不得重新注册会与 Bilibili 原站竞争的 window/document 键盘监听；Dialog、Drawer、图片查看器和菜单/输入控件的局部无障碍键盘交互必须保留。
+- 2026-08-09：Cloud Sync 保留 pending/quota blocked/failed/synced 语义和有上限退避；存储初读失败不得解释为空存储并回写默认值。MV3 App Auth 使用 `browser.alarms` 保持 token 新鲜度，不恢复后台长期 interval。
+- 2026-08-09：站内导航收敛到 `useRouteState.ts` 单例，共享 pushstate/replacestate/popstate/hashchange 和一个低频 fallback；页面模式、主题、顶栏和内容脚本不得重新建立各自的高频 URL 轮询。截图、画面比例、触屏手势、随机播放和收藏弹窗的 observer/listener 必须跟随页面与设置生命周期启停。
+- 2026-08-09：TopBar DOM `Ref` 注册表不得使用会自动解包子 ref 的深层 `reactive`；未登录或元素尚未挂载时，transformer 必须仍获得 Ref 容器，不得因读取 `undefined.value` 阻断页面。
 
 ## Bewly_Nocturne 上游同步保护基线
 
@@ -178,9 +185,10 @@ pnpm typecheck
 - 内容脚本、顶栏共享状态和设置存储统一通过 `src/utils/messaging.ts` 发送扩展消息；扩展重载造成的 context invalidated、消息端口关闭或接收端缺失应作为同一失效状态收敛，避免未处理 Promise 阻断页面挂载。
 - Shadow DOM 的主样式未就绪前必须保持插件容器隐藏；样式加载失败时卸载并移除容器，绝不能把无样式的 Dock、Sidebar 或设置页暴露到 Bilibili 原版页面。
 - 顶栏动态尾页必须先追加当前 `items` 再设置结束状态；稍后再看使用显式页码、aid 去重和完整集合刷新；History 补屏保持单一 async 请求链。不得退回通过数组长度推页、未等待递归或旧 index 删除。
-- `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；`src/utils/keyboard.ts` 同时服务录制与运行时，必须保留 Meta/Command 和 `Shift + Equal` 对 `+` 的一致规范化。
+- `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；不得为恢复 Bewly 全局快捷键而重建 `src/utils/keyboard.ts` / `src/utils/shortcuts.ts` 运行时。
 - 液态分段指示器保持固定启用及现有 morph、ResizeObserver 和 reduced-motion 行为；不得恢复 `enableLiquidSegmentIndicator` 的可见设置项、搜索入口或静态视觉分支。
 - `vite.config.content.ts` 的开发构建必须保持 `minify: false`，防止 Vite watch 增量更新后函数重命名与调用点错配；该约束仅用于 `pnpm dev`，不得借此改变生产构建策略。
+- `pnpm dev` / `pnpm dev-firefox` 只启动 prepare、content/inject 和 background 等真实扩展任务；已移除的 popup/options HTML 入口、`build:web` 和 `dev:web` 不得恢复为假构建流程。
 
 ## 通用工程原则
 

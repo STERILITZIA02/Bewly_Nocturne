@@ -1,5 +1,8 @@
+import { onRouteChange } from '~/composables/useRouteState'
+import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { CustomPlayOrderContext, RandomPlayOrder } from '~/logic/storage'
+import { debugLog } from '~/utils/debug'
 import { i18n } from '~/utils/i18n'
 
 import { applyAutoPlayByVideoType, detectVideoType, disableNativeEndPlaybackBehavior, supportsCustomPlaybackForVideoType, VideoType } from './player'
@@ -11,8 +14,16 @@ const visitedEpisodes = new Set<string>()
 let originalEndedListener: (() => void) | null = null
 let originalPauseListener: (() => void) | null = null
 let listenerVideo: HTMLVideoElement | null = null
-let videoObserver: MutationObserver | null = null
+let stopVideoDomObserver: (() => void) | null = null
 let isPageObserverInitialized = false
+let pageObserver: MutationObserver | null = null
+let pageObserverTarget: Node | null = null
+let stopRouteChangeListener: (() => void) | null = null
+let videoListenerRetryTimer: number | null = null
+let initializationTimer: number | null = null
+let routeInitTimer: number | null = null
+let domChangeTimer: number | null = null
+let recreateTimer: number | null = null
 let userManuallySetRandomPlay = false // 用户手动设置的随机播放状态标志
 let customEpisodeOrder: string[] = []
 let activePlayOrder: RandomPlayOrder | null = null
@@ -295,7 +306,7 @@ export function getCurrentEpisodeIndex(episodes: HTMLElement[]): number {
 
 // 获取随机下一集
 export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: number): number {
-  console.log('[BewlyCat Random Play] getRandomNextEpisode called, currentIndex:', currentIndex, 'visitedEpisodes:', Array.from(visitedEpisodes))
+  debugLog('[BewlyCat Random Play] getRandomNextEpisode called, currentIndex:', currentIndex, 'visitedEpisodes:', Array.from(visitedEpisodes))
 
   if (episodes.length <= 1)
     return currentIndex
@@ -307,7 +318,7 @@ export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: numb
 
   // 如果所有视频都已访问，重置访问记录
   if (visitedEpisodes.size >= episodes.length) {
-    console.log('[BewlyCat Random Play] All episodes visited, resetting')
+    debugLog('[BewlyCat Random Play] All episodes visited, resetting')
     visitedEpisodes.clear()
     if (currentKey)
       visitedEpisodes.add(currentKey)
@@ -318,26 +329,26 @@ export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: numb
     .map((_, index) => index)
     .filter(index => !visitedEpisodes.has(episodeKeys[index]))
 
-  console.log('[BewlyCat Random Play] Unvisited indices:', unvisitedIndices)
+  debugLog('[BewlyCat Random Play] Unvisited indices:', unvisitedIndices)
 
   if (unvisitedIndices.length === 0) {
-    console.log('[BewlyCat Random Play] No unvisited indices, selecting random excluding current')
+    debugLog('[BewlyCat Random Play] No unvisited indices, selecting random excluding current')
     // 如果没有未访问的视频，随机选择一个不是当前视频的
     const availableIndices = episodes
       .map((_, index) => index)
       .filter(index => index !== currentIndex)
 
     if (availableIndices.length === 0) {
-      console.log('[BewlyCat Random Play] No available indices')
+      debugLog('[BewlyCat Random Play] No available indices')
       return currentIndex
     }
     const selected = availableIndices[Math.floor(Math.random() * availableIndices.length)]
-    console.log('[BewlyCat Random Play] Selected from available:', selected)
+    debugLog('[BewlyCat Random Play] Selected from available:', selected)
     return selected
   }
 
   const selected = unvisitedIndices[Math.floor(Math.random() * unvisitedIndices.length)]
-  console.log('[BewlyCat Random Play] Selected from unvisited:', selected)
+  debugLog('[BewlyCat Random Play] Selected from unvisited:', selected)
   return selected
 }
 
@@ -364,7 +375,7 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
 
   const targetEpisode = episodes[targetIndex]
   const targetKey = getEpisodeEntries(episodes)[targetIndex]?.key
-  console.log('[BewlyCat Random Play] Target episode element:', targetEpisode)
+  debugLog('[BewlyCat Random Play] Target episode element:', targetEpisode)
 
   // 尝试多种方式找到可点击的元素
   let clickableElement: HTMLElement | null = null
@@ -373,7 +384,7 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   const link = targetEpisode.matches('a[href]')
     ? targetEpisode as HTMLAnchorElement
     : targetEpisode.querySelector<HTMLAnchorElement>('a[href]')
-  console.log('[BewlyCat Random Play] Found link:', link, 'href:', link?.href)
+  debugLog('[BewlyCat Random Play] Found link:', link, 'href:', link?.href)
 
   if (link && link.href) {
     clickableElement = link
@@ -381,7 +392,7 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   else {
     // 2. 查找 .simple-base-item 元素（B站新版播放列表项）
     const simpleBaseItem = targetEpisode.querySelector('.simple-base-item') as HTMLElement
-    console.log('[BewlyCat Random Play] Found .simple-base-item:', simpleBaseItem)
+    debugLog('[BewlyCat Random Play] Found .simple-base-item:', simpleBaseItem)
 
     if (simpleBaseItem) {
       clickableElement = simpleBaseItem
@@ -400,16 +411,16 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   }
 
   if (!clickableElement) {
-    console.log('[BewlyCat Random Play] No clickable element found')
+    debugLog('[BewlyCat Random Play] No clickable element found')
     return
   }
 
-  console.log('[BewlyCat Random Play] Clickable element:', clickableElement)
+  debugLog('[BewlyCat Random Play] Clickable element:', clickableElement)
 
   // 使用更智能的点击策略
   const performClick = () => {
     try {
-      console.log('[BewlyCat Random Play] Attempting to click element:', targetIndex, clickableElement)
+      debugLog('[BewlyCat Random Play] Attempting to click element:', targetIndex, clickableElement)
 
       // 标记为已访问（在点击前标记，防止点击失败后重复尝试）
       if (targetKey)
@@ -417,14 +428,14 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
 
       // 如果是链接，尝试点击
       if (clickableElement instanceof HTMLAnchorElement && clickableElement.href) {
-        console.log('[BewlyCat Random Play] Clicking anchor element, href:', clickableElement.href)
+        debugLog('[BewlyCat Random Play] Clicking anchor element, href:', clickableElement.href)
         clickableElement.click()
         return
       }
 
       // 对于没有链接的元素（如 video-pod__item），只触发一次点击。
       // 重复派发 click 会让 B 站 Vue 路由执行两次卸载流程。
-      console.log('[BewlyCat Random Play] Clicking episode element')
+      debugLog('[BewlyCat Random Play] Clicking episode element')
       clickableElement!.click()
     }
     catch (error) {
@@ -488,12 +499,13 @@ function applyCustomEpisodeVisualOrder(): void {
 
   const entries = orderEpisodeEntries(getEpisodeEntries())
   const parents = new Set(entries.map(entry => entry.element.parentElement).filter((parent): parent is HTMLElement => Boolean(parent)))
-  for (const parent of parents) {
+  const parentsNeedingLayout = Array.from(parents).filter((parent) => {
     const display = getComputedStyle(parent).display
-    if (display !== 'flex' && display !== 'inline-flex' && display !== 'grid' && display !== 'inline-grid') {
-      parent.classList.add('bewly-random-play-order-parent')
-      visuallyOrderedParents.add(parent)
-    }
+    return display !== 'flex' && display !== 'inline-flex' && display !== 'grid' && display !== 'inline-grid'
+  })
+  for (const parent of parentsNeedingLayout) {
+    parent.classList.add('bewly-random-play-order-parent')
+    visuallyOrderedParents.add(parent)
   }
 
   entries.forEach((entry, index) => {
@@ -807,8 +819,17 @@ export function enableRandomPlay(): void {
     const video = document.querySelector<HTMLVideoElement>('video')
     if (!video) {
       // 如果找不到视频，稍后重试
-      setTimeout(setupVideoListener, 1000)
+      if (videoListenerRetryTimer === null) {
+        videoListenerRetryTimer = window.setTimeout(() => {
+          videoListenerRetryTimer = null
+          setupVideoListener()
+        }, 1000)
+      }
       return
+    }
+    if (videoListenerRetryTimer !== null) {
+      clearTimeout(videoListenerRetryTimer)
+      videoListenerRetryTimer = null
     }
 
     // 移除之前的监听器
@@ -831,17 +852,17 @@ export function enableRandomPlay(): void {
 
     // 创建新的随机播放监听器
     const randomPlayListener = () => {
-      console.log('[BewlyCat Random Play] Video ended, random play listener triggered')
+      debugLog('[BewlyCat Random Play] Video ended, random play listener triggered')
 
       // 防止重复触发（ended 和 pause 事件可能都会触发）
       if (isProcessing) {
-        console.log('[BewlyCat Random Play] Already processing, skipping')
+        debugLog('[BewlyCat Random Play] Already processing, skipping')
         return
       }
 
       // 关键：检查随机播放是否仍然启用
       if (!isRandomPlayEnabled) {
-        console.log('[BewlyCat Random Play] Random play disabled, skipping')
+        debugLog('[BewlyCat Random Play] Random play disabled, skipping')
         return
       }
 
@@ -849,26 +870,26 @@ export function enableRandomPlay(): void {
 
       // 在捕获阶段立即接管切集，避免被 B 站原生连播按 DOM 顺序抢先跳转。
       const episodes = getPlaybackEpisodeEntries().map(entry => entry.element)
-      console.log('[BewlyCat Random Play] Found episodes:', episodes.length)
+      debugLog('[BewlyCat Random Play] Found episodes:', episodes.length)
 
       if (episodes.length <= 1) {
-        console.log('[BewlyCat Random Play] Not enough episodes')
+        debugLog('[BewlyCat Random Play] Not enough episodes')
         isProcessing = false
         return
       }
 
       const currentIndex = getCurrentEpisodeIndex(episodes)
-      console.log('[BewlyCat Random Play] Current episode index:', currentIndex)
+      debugLog('[BewlyCat Random Play] Current episode index:', currentIndex)
 
       const playOrder = getActivePlayOrder()
       const nextIndex = getNextEpisodeIndex(episodes, currentIndex, playOrder)
-      console.log('[BewlyCat Random Play] Next episode index:', nextIndex, 'order:', playOrder)
+      debugLog('[BewlyCat Random Play] Next episode index:', nextIndex, 'order:', playOrder)
 
       if (nextIndex !== currentIndex) {
         jumpToEpisode(episodes, nextIndex)
       }
       else {
-        console.log('[BewlyCat Random Play] Next index same as current, not jumping')
+        debugLog('[BewlyCat Random Play] Next index same as current, not jumping')
       }
       setTimeout(() => {
         isProcessing = false
@@ -894,22 +915,21 @@ export function enableRandomPlay(): void {
   setupVideoListener()
 
   // 监听DOM变化，如果视频元素被替换，重新设置监听器
-  videoObserver?.disconnect()
-  videoObserver = new MutationObserver(() => {
+  stopVideoDomObserver?.()
+  stopVideoDomObserver = observePlayerDom(() => {
     const video = document.querySelector('video')
     if (video && !video.hasAttribute('data-bewly-random-play-listener')) {
       setupVideoListener()
     }
   })
-
-  videoObserver.observe(document.body, {
-    childList: true,
-    subtree: true,
-  })
 }
 
 // 禁用随机播放
 export function disableRandomPlay(): void {
+  if (videoListenerRetryTimer !== null) {
+    clearTimeout(videoListenerRetryTimer)
+    videoListenerRetryTimer = null
+  }
   if (listenerVideo && originalEndedListener)
     listenerVideo.removeEventListener('ended', originalEndedListener, true)
   if (listenerVideo && originalPauseListener)
@@ -920,8 +940,8 @@ export function disableRandomPlay(): void {
   // 移除标记，以便下次可以重新添加
   listenerVideo?.removeAttribute('data-bewly-random-play-listener')
   listenerVideo = null
-  videoObserver?.disconnect()
-  videoObserver = null
+  stopVideoDomObserver?.()
+  stopVideoDomObserver = null
 
   // 清空访问记录
   visitedEpisodes.clear()
@@ -990,6 +1010,15 @@ export function resetRandomPlayInitialization(): void {
 }
 
 export function destroyRandomPlay(): void {
+  stopRouteChangeListener?.()
+  stopRouteChangeListener = null
+  isPageObserverInitialized = false
+  stopRandomPlayPageObserver()
+  clearRandomPlayLifecycleTimers()
+  cleanupRandomPlayPage()
+}
+
+function cleanupRandomPlayPage(): void {
   stopNativePlaylistEditing()
   setRandomPlayEnabled(false)
   isRandomPlayInitialized = false
@@ -1002,6 +1031,23 @@ export function destroyRandomPlay(): void {
   playlistEditorStyle?.remove()
   playlistEditorStyle = null
   document.querySelector('.random-play')?.remove()
+}
+
+function clearRandomPlayLifecycleTimers() {
+  for (const timer of [initializationTimer, routeInitTimer, domChangeTimer, recreateTimer]) {
+    if (timer !== null)
+      clearTimeout(timer)
+  }
+  initializationTimer = null
+  routeInitTimer = null
+  domChangeTimer = null
+  recreateTimer = null
+}
+
+function stopRandomPlayPageObserver() {
+  pageObserver?.disconnect()
+  pageObserver = null
+  pageObserverTarget = null
 }
 
 // 同步UI状态（当UI重新创建时调用）
@@ -1065,12 +1111,17 @@ export function initRandomPlayOnVideoPage(): void {
     }
     else {
       // 如果元素还没有加载，继续等待
-      setTimeout(checkAndInit, 100)
+      initializationTimer = window.setTimeout(checkAndInit, 100)
     }
   }
 
   // 延迟初始化，确保页面完全加载
-  setTimeout(checkAndInit, 500)
+  if (initializationTimer !== null)
+    clearTimeout(initializationTimer)
+  initializationTimer = window.setTimeout(() => {
+    initializationTimer = null
+    checkAndInit()
+  }, 500)
 }
 
 // 监听页面变化
@@ -1079,126 +1130,124 @@ export function observeRandomPlayPageChanges(): void {
     return
   isPageObserverInitialized = true
 
-  let lastUrl = window.location.href
-  let urlChangeTimeout: number | null = null
-
-  // 监听URL变化 - 使用防抖和延迟处理
-  const checkUrlChange = () => {
-    // 清除之前的定时器
-    if (urlChangeTimeout) {
-      clearTimeout(urlChangeTimeout)
-    }
-
-    // 延迟处理，让B站的路由系统先完成处理
-    urlChangeTimeout = window.setTimeout(() => {
-      const currentUrl = window.location.href
-      if (currentUrl !== lastUrl) {
-        // 检查是否只是hash变化或查询参数变化
-        const currentPath = currentUrl.split('?')[0].split('#')[0]
-        const lastPath = lastUrl.split('?')[0].split('#')[0]
-
-        // 只有路径真正变化时才重新初始化
-        if (currentPath !== lastPath) {
-          lastUrl = currentUrl
-          resetRandomPlayInitialization()
-
-          // 进一步延迟初始化，确保B站页面完全加载
-          setTimeout(() => {
-            if (isCustomPlayPage()) {
-              initRandomPlayOnVideoPage()
-            }
-          }, 1500) // 增加到1.5秒
-        }
-        else {
-          // 只是参数或hash变化，更新URL记录但不重新初始化
-          lastUrl = currentUrl
-        }
-      }
-    }, 500) // 500ms防抖延迟
-  }
-
-  // 监听pushstate事件 - 使用捕获阶段避免冲突
-  window.addEventListener('pushstate', checkUrlChange, true)
-
-  // 监听popstate事件 - 使用捕获阶段避免冲突
-  window.addEventListener('popstate', checkUrlChange, true)
-
-  // 使用MutationObserver监听DOM变化
-  let domChangeTimeout: number | null = null
-  const observer = new MutationObserver((mutations) => {
-    if (!isCustomPlayPage())
+  const startPageObserver = () => {
+    if (pageObserver || !document.body)
       return
 
-    // 使用防抖避免频繁触发
-    if (domChangeTimeout) {
-      clearTimeout(domChangeTimeout)
-    }
+    const observerTarget = document.querySelector(episodeRootSelector)?.parentElement ?? document.body
+    pageObserverTarget = observerTarget
+    pageObserver = new MutationObserver((mutations) => {
+      if (!isCustomPlayPage())
+        return
 
-    domChangeTimeout = window.setTimeout(() => {
-      if (customEpisodeOrder.length > 0)
-        applyCustomEpisodeVisualOrder()
-
-      // 检查是否需要重新初始化
-      if (!isRandomPlayInitialized) {
-        initRandomPlayOnVideoPage()
+      const scopedTarget = document.querySelector(episodeRootSelector)?.parentElement
+      if (pageObserverTarget === document.body && scopedTarget) {
+        stopRandomPlayPageObserver()
+        startPageObserver()
         return
       }
 
-      // 检查随机播放按钮是否还存在
-      const existingBtn = document.querySelector('.random-play-btn')
-      const autoPlayContainer = findPlaylistAutoPlayContainer()
-      const existingRandomPlay = document.querySelector<HTMLElement>('.random-play')
-      const isMisplacedRandomPlay = !!existingRandomPlay?.closest(recommendationRootSelector)
+      // 使用防抖避免频繁触发
+      if (domChangeTimer !== null)
+        clearTimeout(domChangeTimer)
 
-      // 如果按钮不存在但应该存在（有自动播放容器且启用了功能），则重新创建
-      if ((!existingBtn || isMisplacedRandomPlay) && autoPlayContainer && settings.value.enableRandomPlay) {
-        // 检查是否是因为DOM重新渲染导致的
-        let shouldRecreate = false
+      domChangeTimer = window.setTimeout(() => {
+        domChangeTimer = null
+        if (customEpisodeOrder.length > 0)
+          applyCustomEpisodeVisualOrder()
 
-        for (const mutation of mutations) {
-          if (mutation.type === 'childList') {
-            // 只检查特定的DOM变化，减少误判
-            const removedNodes = Array.from(mutation.removedNodes)
-            const addedNodes = Array.from(mutation.addedNodes)
+        // 检查是否需要重新初始化
+        if (!isRandomPlayInitialized) {
+          initRandomPlayOnVideoPage()
+          return
+        }
 
-            // 更精确的检查：只关注直接相关的DOM变化
-            const hasAutoPlayRemoved = removedNodes.some(node =>
-              node.nodeType === Node.ELEMENT_NODE
-              && ((node as Element).classList?.contains('auto-play')
-                || (node as Element).classList?.contains('continuous-btn')
-                || (node as Element).classList?.contains('random-play-btn')
-                || (node as Element).querySelector?.('.auto-play, .continuous-btn') !== null),
-            )
+        // 检查随机播放按钮是否还存在
+        const existingBtn = document.querySelector('.random-play-btn')
+        const autoPlayContainer = findPlaylistAutoPlayContainer()
+        const existingRandomPlay = document.querySelector<HTMLElement>('.random-play')
+        const isMisplacedRandomPlay = !!existingRandomPlay?.closest(recommendationRootSelector)
 
-            const hasAutoPlayAdded = addedNodes.some(node =>
-              node.nodeType === Node.ELEMENT_NODE
-              && ((node as Element).classList?.contains('auto-play')
-                || (node as Element).classList?.contains('continuous-btn')),
-            )
+        // 如果按钮不存在但应该存在（有自动播放容器且启用了功能），则重新创建
+        if ((!existingBtn || isMisplacedRandomPlay) && autoPlayContainer && settings.value.enableRandomPlay) {
+          // 检查是否是因为DOM重新渲染导致的
+          let shouldRecreate = false
 
-            if (hasAutoPlayRemoved || hasAutoPlayAdded) {
-              shouldRecreate = true
-              break
+          for (const mutation of mutations) {
+            if (mutation.type === 'childList') {
+              // 只检查特定的DOM变化，减少误判
+              const removedNodes = Array.from(mutation.removedNodes)
+              const addedNodes = Array.from(mutation.addedNodes)
+
+              // 更精确的检查：只关注直接相关的DOM变化
+              const hasAutoPlayRemoved = removedNodes.some(node =>
+                node.nodeType === Node.ELEMENT_NODE
+                && ((node as Element).classList?.contains('auto-play')
+                  || (node as Element).classList?.contains('continuous-btn')
+                  || (node as Element).classList?.contains('random-play-btn')
+                  || (node as Element).querySelector?.('.auto-play, .continuous-btn') !== null),
+              )
+
+              const hasAutoPlayAdded = addedNodes.some(node =>
+                node.nodeType === Node.ELEMENT_NODE
+                && ((node as Element).classList?.contains('auto-play')
+                  || (node as Element).classList?.contains('continuous-btn')),
+              )
+
+              if (hasAutoPlayRemoved || hasAutoPlayAdded) {
+                shouldRecreate = true
+                break
+              }
             }
           }
-        }
 
-        if (shouldRecreate) {
-          // 增加延迟，避免与Bilibili的DOM更新冲突
-          setTimeout(() => {
-            createRandomPlayUI()
+          if (shouldRecreate) {
+            // 增加延迟，避免与Bilibili的DOM更新冲突
+            if (recreateTimer !== null)
+              clearTimeout(recreateTimer)
+            recreateTimer = window.setTimeout(() => {
+              recreateTimer = null
+              createRandomPlayUI()
 
-            // UI创建函数内部会自动同步状态，这里不需要额外处理
-          }, 500) // 增加延迟到500ms
+              // UI创建函数内部会自动同步状态，这里不需要额外处理
+            }, 500) // 增加延迟到500ms
+          }
         }
-      }
-    }, 300) // 300ms防抖延迟
+      }, 300) // 300ms防抖延迟
+    })
+
+    pageObserver.observe(observerTarget, {
+      childList: true,
+      subtree: true,
+    })
+  }
+
+  let lastPath = `${location.origin}${location.pathname}`
+  stopRouteChangeListener = onRouteChange((route) => {
+    const nextPath = `${location.origin}${route.pathname}`
+    if (nextPath === lastPath)
+      return
+
+    lastPath = nextPath
+    clearRandomPlayLifecycleTimers()
+    stopRandomPlayPageObserver()
+    resetRandomPlayInitialization()
+
+    if (!isCustomPlayPage()) {
+      cleanupRandomPlayPage()
+      return
+    }
+
+    startPageObserver()
+    routeInitTimer = window.setTimeout(() => {
+      routeInitTimer = null
+      if (isCustomPlayPage())
+        initRandomPlayOnVideoPage()
+    }, 1500)
   })
 
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true,
-  })
+  if (isCustomPlayPage())
+    startPageObserver()
 }
 
 // 初始化随机播放功能

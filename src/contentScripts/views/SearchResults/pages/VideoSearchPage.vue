@@ -13,7 +13,7 @@ import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
 import { convertLiveRoomData, convertVideoData, isAdVideo } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
-import { applyVideoTimeFilter, buildVideoSearchParams } from '../utils/searchHelpers'
+import { applyVideoTimeFilter, buildVideoSearchParams, dedupeByKey } from '../utils/searchHelpers'
 
 const props = defineProps<{
   keyword: string
@@ -69,9 +69,10 @@ const {
   setExhausted,
   reset: resetLoadMore,
 } = useLoadMore(async () => {
+  const previousCount = results.value?.length || 0
   const success = await performSearch(true)
-  const itemsCount = results.value?.length || 0
-  return { success, itemsCount }
+  const appendedCount = Math.max(0, (results.value?.length || 0) - previousCount)
+  return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
 })
@@ -171,7 +172,10 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
 
   // 合并或替换结果
   if (isLoadMore && results.value) {
-    results.value = [...results.value, ...convertedList]
+    results.value = dedupeByKey(
+      [...results.value, ...convertedList],
+      item => String(item.aid ?? item.bvid ?? item.id ?? item.roomid),
+    )
   }
   else {
     results.value = convertedList

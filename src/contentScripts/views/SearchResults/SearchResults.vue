@@ -1,9 +1,10 @@
 <script lang="ts" setup>
-import { useEventListener, useTitle } from '@vueuse/core'
+import { useTitle } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 
@@ -13,6 +14,7 @@ import SearchResultsPanel from './components/SearchResultsPanel.vue'
 import SearchUserFilters from './components/SearchUserFilters.vue'
 import SearchVideoFilters from './components/SearchVideoFilters.vue'
 import type { LiveSubCategory, SearchCategory, SearchCategoryOption } from './types'
+import { buildSearchResultsUrl, parseSearchUrlState } from './utils/searchUrlState'
 
 // 从 URL 读取关键词
 function getKeywordFromUrl(): string {
@@ -22,7 +24,9 @@ function getKeywordFromUrl(): string {
 
 const keyword = ref<string>(getKeywordFromUrl())
 const normalizedKeyword = computed(() => (keyword.value || '').trim())
-const CATEGORY_KEYS: SearchCategory[] = ['all', 'video', 'bangumi', 'media_ft', 'user', 'live', 'article']
+const currentLocationHref = useCurrentLocationHref()
+let restoringFromUrl = false
+let urlRestoreGeneration = 0
 
 // 设置页面标题
 const pageTitle = computed(() => {
@@ -33,37 +37,16 @@ const pageTitle = computed(() => {
 })
 useTitle(pageTitle)
 
-// 从URL读取category参数
-function getCategoryFromUrl(): SearchCategory {
-  const urlParams = new URLSearchParams(window.location.search)
-  const categoryParam = urlParams.get('category') as SearchCategory | null
-  if (categoryParam && CATEGORY_KEYS.includes(categoryParam)) {
-    return categoryParam
-  }
-  return 'all'
-}
-
 // 从URL读取所有筛选条件
 function getFiltersFromUrl() {
-  const urlParams = new URLSearchParams(window.location.search)
-
-  return {
-    // 分页参数
-    page: Number(urlParams.get('pn')) || 1,
-
-    // 用户筛选
-    userOrder: urlParams.get('user_order') || '',
-    userType: Number(urlParams.get('user_type')) || 0,
-
-    // 直播筛选
-    liveSubCategory: (urlParams.get('search_type') || 'all') as LiveSubCategory,
-    liveRoomOrder: urlParams.get('live_room_order') || '',
-    liveUserOrder: urlParams.get('live_user_order') || '',
-  }
+  return parseSearchUrlState(new URLSearchParams(window.location.search))
 }
 
 // 更新URL参数
 function updateUrlParams(params: Record<string, string | number | undefined | null>) {
+  if (restoringFromUrl)
+    return
+
   const urlParams = new URLSearchParams(window.location.search)
 
   Object.entries(params).forEach(([key, value]) => {
@@ -76,11 +59,11 @@ function updateUrlParams(params: Record<string, string | number | undefined | nu
     }
   })
 
-  const newUrl = `${window.location.pathname}?${urlParams.toString()}`
+  const newUrl = buildSearchResultsUrl(window.location.pathname, urlParams, window.location.hash)
   window.history.pushState({}, '', newUrl)
 }
 
-const currentCategory = ref<SearchCategory>(getCategoryFromUrl())
+const currentCategory = ref<SearchCategory>(getFiltersFromUrl().category)
 
 // 从URL初始化筛选条件
 const initialFilters = getFiltersFromUrl()
@@ -101,8 +84,6 @@ const currentUserType = ref<number>(initialFilters.userType)
 
 // 直播筛选条件（同步到URL）
 const currentLiveSubCategory = ref<LiveSubCategory>(initialFilters.liveSubCategory)
-const currentLiveRoomOrder = ref<string>(initialFilters.liveRoomOrder)
-const currentLiveUserOrder = ref<string>(initialFilters.liveUserOrder)
 
 // 组合过滤器对象
 const videoFilters = computed(() => ({
@@ -120,8 +101,9 @@ const userFilters = computed(() => ({
 
 const liveFilters = computed(() => ({
   subCategory: currentLiveSubCategory.value,
-  roomOrder: currentLiveRoomOrder.value,
-  userOrder: currentLiveUserOrder.value,
+  // Room/user sorting is reserved for a future visible filter UI.
+  roomOrder: '',
+  userOrder: '',
 }))
 
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
@@ -176,22 +158,14 @@ const categories: ReadonlyArray<SearchCategoryOption> = [
   { value: 'article', label: '专栏', icon: 'i-tabler:article' },
 ]
 
-// TODO: 需要从各个 Page 组件获取实际的 counts
-// 暂时使用空对象
-const categoryCounts = ref<Record<SearchCategory, number>>({
-  all: 0,
-  video: 0,
-  bangumi: 0,
-  media_ft: 0,
-  user: 0,
-  live: 0,
-  article: 0,
-})
+// TODO: 分类数量等待真实聚合接口后再展示。
 
 const searchResultsPanelRef = ref<InstanceType<typeof SearchResultsPanel>>()
 
 // 监听 URL 变化（前进/后退或 pushstate）
 function handleUrlChange() {
+  const restoreGeneration = ++urlRestoreGeneration
+  restoringFromUrl = true
   const newKeyword = getKeywordFromUrl()
   if (newKeyword !== keyword.value) {
     keyword.value = newKeyword
@@ -199,7 +173,7 @@ function handleUrlChange() {
 
   // 从URL读取筛选条件并恢复状态
   const filters = getFiltersFromUrl()
-  const categoryFromUrl = getCategoryFromUrl()
+  const categoryFromUrl = filters.category
 
   // 恢复筛选条件
   currentCategory.value = categoryFromUrl
@@ -214,13 +188,13 @@ function handleUrlChange() {
   currentUserOrder.value = filters.userOrder
   currentUserType.value = filters.userType
   currentLiveSubCategory.value = filters.liveSubCategory
-  currentLiveRoomOrder.value = filters.liveRoomOrder
-  currentLiveUserOrder.value = filters.liveUserOrder
+  void nextTick(() => {
+    if (restoreGeneration === urlRestoreGeneration)
+      restoringFromUrl = false
+  })
 }
 
-// 监听 URL 变化事件
-useEventListener(window, 'popstate', handleUrlChange)
-useEventListener(window, 'pushstate', handleUrlChange)
+watch(currentLocationHref, handleUrlChange)
 
 // 监听关键词变化
 watch(() => keyword.value, async (newKeyword, oldKeyword) => {
@@ -243,7 +217,7 @@ watch(normalizedKeyword, (value) => {
 
 // 监听用户筛选条件变化
 watch([currentUserOrder, currentUserType], () => {
-  if (!normalizedKeyword.value)
+  if (restoringFromUrl || !normalizedKeyword.value)
     return
 
   // 筛选条件变化时重置页码
@@ -259,7 +233,7 @@ watch([currentUserOrder, currentUserType], () => {
 
 // 监听直播子分类变化
 watch(currentLiveSubCategory, () => {
-  if (!normalizedKeyword.value)
+  if (restoringFromUrl || !normalizedKeyword.value)
     return
 
   // 筛选条件变化时重置页码
@@ -268,36 +242,6 @@ watch(currentLiveSubCategory, () => {
   // 更新URL参数（筛选条件变化时回到第一页）
   updateUrlParams({
     search_type: currentLiveSubCategory.value,
-    pn: 1,
-  })
-})
-
-// 监听直播间排序变化
-watch(currentLiveRoomOrder, () => {
-  if (!normalizedKeyword.value)
-    return
-
-  // 筛选条件变化时重置页码
-  currentPage.value = 1
-
-  // 更新URL参数（筛选条件变化时回到第一页）
-  updateUrlParams({
-    live_room_order: currentLiveRoomOrder.value,
-    pn: 1,
-  })
-})
-
-// 监听主播排序变化
-watch(currentLiveUserOrder, () => {
-  if (!normalizedKeyword.value)
-    return
-
-  // 筛选条件变化时重置页码
-  currentPage.value = 1
-
-  // 更新URL参数（筛选条件变化时回到第一页）
-  updateUrlParams({
-    live_user_order: currentLiveUserOrder.value,
     pn: 1,
   })
 })
@@ -325,11 +269,9 @@ function switchCategory(category: SearchCategory) {
   }
   if (category !== 'live') {
     params.delete('search_type')
-    params.delete('live_room_order')
-    params.delete('live_user_order')
   }
 
-  const newUrl = `${window.location.pathname}?${params.toString()}`
+  const newUrl = buildSearchResultsUrl(window.location.pathname, params, window.location.hash)
   window.history.pushState({}, '', newUrl)
 }
 
@@ -352,8 +294,7 @@ function initPageAction() {
     const urlParams = new URLSearchParams(window.location.search)
     const keyword = urlParams.get('keyword')
     if (keyword) {
-      // 触发 pushstate 事件通知组件重新加载
-      window.dispatchEvent(new Event('pushstate'))
+      handleUrlChange()
     }
     else {
       window.location.reload()
@@ -377,7 +318,6 @@ onMounted(() => {
     <SearchCategoryTabs
       :categories="categories"
       :current-category="currentCategory"
-      :category-counts="categoryCounts"
       @select="switchCategory"
     />
 

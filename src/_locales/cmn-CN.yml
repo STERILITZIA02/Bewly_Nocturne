@@ -32,6 +32,7 @@ common:
   performance_impact_warn: 这个功能可能会影响性能！
   no_data: 暂无数据
   no_more_content: 没有更多内容了
+  load_failed: 加载失败，请稍后重试
   load_more: 加载更多
   operation:
     add: 新增
@@ -470,6 +471,9 @@ settings:
   filter_articles_in_moments_desc: 在动态列表中过滤掉专栏内容，仅显示视频
   enable_settings_sync: 启用设置同步
   enable_settings_sync_desc: 开启后同时保存到本地和浏览器云端；设备播放状态不会同步（需要登录浏览器账号）
+  settings_sync_unsynced_count: '未同步字段：{count}'
+  settings_sync_quota_blocked_count: '受云端配额限制：{count}'
+  settings_sync_last_error: '最近同步错误：{error}'
   top_bar_icon_badges: 图标角标
   top_bar_icon_badges_opt:
     number: 数字

@@ -3,6 +3,7 @@ import { defineStore } from 'pinia'
 import type { RecommendationMode } from '~/logic'
 import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import type { Item as VideoItem } from '~/models/video/forYou'
+import type { AccountId } from '~/utils/accountScope'
 
 // 预处理的显示数据，减少模板中的计算
 export interface VideoCardDisplayData {
@@ -48,6 +49,8 @@ export interface AppVideoElement {
 }
 
 export interface ForYouState {
+  accountId: AccountId
+
   // 视频列表数据 - 最关键的状态
   videoList: VideoElement[]
   appVideoList: AppVideoElement[]
@@ -68,6 +71,7 @@ export interface ForYouState {
 
 export const useForYouStore = defineStore('forYou', () => {
   const state = ref<ForYouState>({
+    accountId: null,
     // 视频列表数据
     videoList: [],
     appVideoList: [],
@@ -93,6 +97,7 @@ export const useForYouStore = defineStore('forYou', () => {
   // 重置状态
   const resetState = () => {
     state.value = {
+      accountId: null,
       videoList: [],
       appVideoList: [],
       refreshIdx: 1,

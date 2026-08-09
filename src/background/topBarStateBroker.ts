@@ -10,6 +10,7 @@ import type {
   TopBarStateInvalidate,
   TopBarStatePublish,
   TopBarStateRelease,
+  WatchLaterInvalidation,
 } from '~/constants/topBarState'
 import {
   TOP_BAR_STATE_MESSAGE,
@@ -49,6 +50,10 @@ export interface TopBarStateBroker {
   ) => Promise<void>
   notifyFavoritesChanged: (
     data: TopBarFavoritesChanged,
+    sender?: Browser.Runtime.MessageSender,
+  ) => Promise<void>
+  invalidateWatchLater: (
+    data: WatchLaterInvalidation,
     sender?: Browser.Runtime.MessageSender,
   ) => Promise<void>
 }
@@ -213,6 +218,8 @@ export function createTopBarStateBroker(
   async function broadcastInvalidation(
     data: TopBarStateInvalidate,
     sender?: Browser.Runtime.MessageSender,
+    messageType: string = TOP_BAR_STATE_MESSAGE.INVALIDATED,
+    excludeSender = false,
   ): Promise<void> {
     const browserContextKey = getBrowserContextKey(sender?.tab)
 
@@ -220,9 +227,11 @@ export function createTopBarStateBroker(
       const tabs = await extensionApi.tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] })
       await Promise.allSettled(
         tabs
-          .filter(tab => tab.id !== undefined && getBrowserContextKey(tab) === browserContextKey)
+          .filter(tab => tab.id !== undefined
+            && (!excludeSender || tab.id !== sender?.tab?.id)
+            && getBrowserContextKey(tab) === browserContextKey)
           .map(tab => extensionApi.tabs.sendMessage(tab.id!, {
-            type: TOP_BAR_STATE_MESSAGE.INVALIDATED,
+            type: messageType,
             data,
           })),
       )
@@ -330,6 +339,24 @@ export function createTopBarStateBroker(
     notifyFavoritesChanged(data, sender) {
       return broadcastFavoritesChanged(data, sender)
     },
+
+    async invalidateWatchLater(data, sender) {
+      await runExclusive(async () => {
+        await ensureStateLoaded()
+        const entry = getEntry(data.accountId, sender)
+        entry.updatedAt = 0
+        entry.refreshStartedAt = 0
+        entry.refreshId += 1
+        await persistState()
+      })
+
+      await broadcastInvalidation(
+        data,
+        sender,
+        TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATED,
+        true,
+      )
+    },
   }
 }
 
@@ -359,5 +386,10 @@ export function setupTopBarStateBroker() {
   onMessage<TopBarFavoritesChanged>(
     TOP_BAR_STATE_MESSAGE.FAVORITES_CHANGED,
     (data, sender) => broker.notifyFavoritesChanged(data, sender),
+  )
+
+  onMessage<WatchLaterInvalidation>(
+    TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATE,
+    (data, sender) => broker.invalidateWatchLater(data, sender),
   )
 }

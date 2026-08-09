@@ -1,0 +1,9 @@
+// Keep these shared build-time breakpoints aligned with constants/layout.ts
+// and GRID_BREAKPOINTS in utils/gridLayout.ts.
+$grid-sm: 640px;
+$grid-md: 768px;
+$grid-lg: 1024px;
+$grid-xl: 1280px;
+$grid-xxl: 1536px;
+$mobile-max: 767px;
+$compact-max: 1279px;
