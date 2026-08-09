@@ -421,6 +421,7 @@ export function isInIframe(): boolean {
  * 需要从链接中移除的 B 站追踪参数
  */
 const BILIBILI_TRACKING_PARAMS = [
+  // Navigation parameters such as `p` and `t` are intentionally preserved.
   'spm_id_from',
   'vd_source',
   'share_source',
@@ -438,7 +439,6 @@ const BILIBILI_TRACKING_PARAMS = [
   'buvid',
   'is_story_h5',
   'mid',
-  'p',
   'plat_id',
   'share_from',
   'timestamp',

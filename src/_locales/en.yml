@@ -639,10 +639,6 @@ settings:
   home_tabs_adjustment_desc: The first activated tab is the default page.
   always_show_tabs_on_home_page: Hide home tabs while scrolling
   fixed_home_tabs_on_home_page: Fix home tabs to the top
-  use_original_bilibili_homepage: Use the original Bilibili homepage
-  use_original_bilibili_homepage_desc: >-
-    After you change it, the page will automatically refresh if you are on the
-    homepage!
   adapt_to_other_page_styles: Adapt to other page styles
   adapt_to_other_page_styles_desc: Adapt to some common pages to match with the BewlyBewly theme.
   prevent_mobile_redirect: Prevent mobile redirect

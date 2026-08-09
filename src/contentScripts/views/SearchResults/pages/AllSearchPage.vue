@@ -920,7 +920,7 @@ defineExpose({
           :no-more-content="!hasMore"
           :request-failed="!!error"
           :show-preview="true"
-          :show-watcher-later="true"
+          :show-watch-later="true"
           :empty-description="t('common.no_data')"
           :show-loading-more-skeleton="false"
           :show-load-more-indicator="paginationMode === 'scroll' && videoList.length > 0 && hasMore"

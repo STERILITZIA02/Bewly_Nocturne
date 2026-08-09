@@ -86,30 +86,25 @@ async function getWatchLaterListByPage() {
   isLoading.value = true
 
   try {
-    const res: WatchLaterResult = await api.watchlater.getWatchLaterListByPage({
-      pn: pageNum.value,
-      ps: pageSize.value,
-    })
+    while (!noMoreContent.value) {
+      const res: WatchLaterResult = await api.watchlater.getWatchLaterListByPage({
+        pn: pageNum.value,
+        ps: pageSize.value,
+      })
 
-    if (res.code === 0) {
-      // 第一页时更新总数
-      if (pageNum.value === 1) {
+      if (res.code !== 0)
+        break
+
+      const list = Array.isArray(res.data?.list) ? res.data.list : []
+      if (pageNum.value === 1)
         watchLaterCount.value = res.data.count
-      }
 
-      // 如果返回的数据少于请求的数量，说明没有更多数据了
-      if (res.data.list.length < pageSize.value) {
-        noMoreContent.value = true
-      }
-
-      // 添加新数据到列表
-      currentWatchLaterList.value.push(...res.data.list)
+      currentWatchLaterList.value.push(...list)
       pageNum.value++
+      noMoreContent.value = list.length < pageSize.value
 
-      // 如果没有滚动条且还有更多数据，继续加载
-      if (!await haveScrollbar() && !noMoreContent.value) {
-        getWatchLaterListByPage()
-      }
+      if (noMoreContent.value || await haveScrollbar())
+        break
     }
   }
   finally {

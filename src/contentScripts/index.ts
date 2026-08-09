@@ -984,7 +984,7 @@ else if (shouldInitializeContentScript) {
     // 所有页面都先完成设置读取，避免启动期 watcher 基于默认值生成陈旧写入。
     await settingsReady
 
-    const changeHomePage = !isInIframe() && !settings.value.useOriginalBilibiliHomepage && isHomePage()
+    const changeHomePage = !isInIframe() && isHomePage()
     document.documentElement.classList.toggle('bewly-custom-homepage', changeHomePage)
 
     // 启用自定义首页时隐藏 B 站原始首页。
@@ -1138,7 +1138,7 @@ else if (shouldInitializeContentScript) {
     }
 
     const root = document.createElement('div')
-    const useViewportLayout = !isInIframe() && !settings.value.useOriginalBilibiliHomepage && isHomePage()
+    const useViewportLayout = !isInIframe() && isHomePage()
 
     if (useViewportLayout) {
       Object.assign(container.style, {

@@ -13,8 +13,8 @@ import {
   SEARCH_PAGE_URL,
   VIDEO_LIST_URL,
 } from '~/components/TopBar/constants/urls'
-import { updateInterval } from '~/components/TopBar/notify'
 import type { PrivilegeInfo, UnReadDm, UnReadMessage, UserInfo } from '~/components/TopBar/types'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import type {
   TopBarFavoritesChanged,
   TopBarRefreshClaim,
@@ -38,6 +38,7 @@ import { isExtensionContextInvalidatedError, onMessage, sendMessage } from '~/ut
 export const LOGIN_RECHECK_INTERVAL = 1000 * 60 // 已登录但 userInfo 未填充时重查的间隔
 
 const DAY_MILLISECONDS = 24 * 60 * 60 * 1000
+const UPDATE_INTERVAL = 1000 * 60 * 5
 
 function getNextReceiveAt(nextReceiveDays?: number, periodEndUnix?: number): number | null {
   if (Number.isFinite(periodEndUnix) && periodEndUnix! > 0)
@@ -55,6 +56,7 @@ function isBeforeNextReceiveAt(nextReceiveAt: number | null): boolean {
 
 export const useTopBarStore = defineStore('topBar', () => {
   const toast = useToast()
+  const currentLocationHref = useCurrentLocationHref()
   // 登录态是本地事实而非网络推导：初始值取 DedeUserID 存在性（同步、零请求），
   // 之后只有 -101 或本地 Cookie 清除才能翻转为未登录，瞬态失败永不翻转。
   // 否则刷新时的一次风控窗口会把已登录用户误判为未登录（见 issue #921）。
@@ -108,6 +110,8 @@ export const useTopBarStore = defineStore('topBar', () => {
   // 添加 Moments 相关状态
   const moments = reactive<any[]>([])
   const addedWatchLaterList = reactive<number[]>([])
+  let watchLaterStateAccountId: number | undefined
+  let watchLaterStateRequest: Promise<void> | null = null
   const isLoadingMoments = ref<boolean>(false)
   const noMoreMomentsContent = ref<boolean>(false)
   const livePage = ref<number>(1)
@@ -153,18 +157,18 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   // 从 useTopBarReactive 整合的计算属性
   const isSearchPage = computed((): boolean => {
-    return SEARCH_PAGE_URL.test(location.href)
+    return SEARCH_PAGE_URL.test(currentLocationHref.value)
   })
 
   const isTopBarFixed = computed((): boolean => {
     if (
-      isHomePage()
-      || VIDEO_LIST_URL.test(location.href)
-      || BANGUMI_PLAY_URL.test(location.href)
-      || MOMENTS_URL.test(location.href)
-      || CHANNEL_PAGE_URL.test(location.href)
-      || READ_HOME_URL.test(location.href)
-      || ACCOUNT_URL.test(location.href)
+      isHomePage(currentLocationHref.value)
+      || VIDEO_LIST_URL.test(currentLocationHref.value)
+      || BANGUMI_PLAY_URL.test(currentLocationHref.value)
+      || MOMENTS_URL.test(currentLocationHref.value)
+      || CHANNEL_PAGE_URL.test(currentLocationHref.value)
+      || READ_HOME_URL.test(currentLocationHref.value)
+      || ACCOUNT_URL.test(currentLocationHref.value)
     ) {
       return true
     }
@@ -174,8 +178,8 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   const showTopBar = computed((): boolean => {
     if (
-      CREATOR_PLATFORM_URL.test(location.href)
-      || READ_PREVIEW_URL.test(location.href)
+      CREATOR_PLATFORM_URL.test(currentLocationHref.value)
+      || READ_PREVIEW_URL.test(currentLocationHref.value)
     ) {
       return false
     }
@@ -205,6 +209,8 @@ export const useTopBarStore = defineStore('topBar', () => {
     watchLaterCount.value = 0
     watchLaterList.splice(0)
     addedWatchLaterList.splice(0)
+    watchLaterStateAccountId = undefined
+    watchLaterStateRequest = null
     moments.splice(0)
     livePage.value = 1
     momentUpdateBaseline.value = ''
@@ -596,6 +602,37 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
+  async function ensureWatchLaterState() {
+    const accountId = userInfo.mid
+    if (!isCurrentAccount(accountId) || watchLaterStateAccountId === accountId)
+      return
+    if (watchLaterStateRequest)
+      return watchLaterStateRequest
+
+    const request = (async () => {
+      const res = await api.watchlater.getAllWatchLaterList()
+      if (res.code !== 0 || !isCurrentAccount(accountId))
+        return
+
+      const list = Array.isArray(res.data?.list) ? res.data.list as VideoItem[] : []
+      const aids = [...new Set(list.map(item => item.aid).filter(aid => Number.isFinite(aid)))]
+      addedWatchLaterList.splice(0, addedWatchLaterList.length, ...aids)
+      watchLaterStateAccountId = accountId
+    })()
+
+    watchLaterStateRequest = request
+    try {
+      await request
+    }
+    catch (error) {
+      console.error('获取稍后再看状态失败:', error)
+    }
+    finally {
+      if (watchLaterStateRequest === request)
+        watchLaterStateRequest = null
+    }
+  }
+
   // 获取稍后再看列表数量
   async function getWatchLaterCount() {
     const accountId = userInfo.mid
@@ -980,38 +1017,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     return index < newMomentsCount.value
   }
 
-  function toggleWatchLater(aid: number) {
-    const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId))
-      return
-
-    const isInWatchLater = addedWatchLaterList.includes(aid)
-
-    if (!isInWatchLater) {
-      api.watchlater.saveToWatchLater({
-        aid,
-        csrf: getCSRF(),
-      })
-        .then((res: any) => {
-          if (res.code === 0 && isCurrentAccount(accountId))
-            addedWatchLaterList.push(aid)
-        })
-    }
-    else {
-      api.watchlater.removeFromWatchLater({
-        aid,
-        csrf: getCSRF(),
-      })
-        .then((res: any) => {
-          if (res.code === 0 && isCurrentAccount(accountId)) {
-            const index = addedWatchLaterList.indexOf(aid)
-            if (index !== -1)
-              addedWatchLaterList.splice(index, 1)
-          }
-        })
-    }
-  }
-
   function handleNotificationsItemClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
     if (settings.value.openNotificationsPageAsDrawer) {
       drawerVisible.notifications = true
@@ -1118,7 +1123,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       TOP_BAR_STATE_MESSAGE.CLAIM_REFRESH,
       {
         accountId,
-        maxAge: updateInterval,
+        maxAge: UPDATE_INTERVAL,
         force: options.force,
       },
     )
@@ -1274,7 +1279,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     // 1. 已登录但 userInfo 尚未填充（初始化时撞风控/限流）：按
     //    LOGIN_RECHECK_INTERVAL 重查，瞬态失败指数退避（60s → 120s → 240s →
     //    300s 封顶），填充成功即转 2；
-    // 2. userInfo 已填充：按 updateInterval 同步角标状态。
+    // 2. userInfo 已填充：按固定间隔同步角标状态。
     // 未登录时不启动任何轮询，等待事件唤醒（见 issue #921）。
     const maxRecheckInterval = 5 * 60 * 1000
     let recheckInterval = LOGIN_RECHECK_INTERVAL
@@ -1317,7 +1322,7 @@ export const useTopBarStore = defineStore('topBar', () => {
                   console.error('同步顶栏共享状态失败:', error)
                 })
               }
-              scheduleNext(needsRecheck() ? recheckInterval : updateInterval)
+              scheduleNext(needsRecheck() ? recheckInterval : UPDATE_INTERVAL)
             })
           return
         }
@@ -1332,14 +1337,14 @@ export const useTopBarStore = defineStore('topBar', () => {
         syncSharedData().catch((error) => {
           console.error('同步顶栏共享状态失败:', error)
         })
-        scheduleNext(updateInterval)
+        scheduleNext(UPDATE_INTERVAL)
       }, delay)
     }
 
     if (!isLogin.value)
       return
 
-    scheduleNext(needsRecheck() ? LOGIN_RECHECK_INTERVAL : updateInterval)
+    scheduleNext(needsRecheck() ? LOGIN_RECHECK_INTERVAL : UPDATE_INTERVAL)
   }
   function stopUpdateTimer() {
     updateTimerGeneration++
@@ -1416,6 +1421,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     syncUnreadMessageState,
     syncMomentsState,
     syncWatchLaterState,
+    ensureWatchLaterState,
     invalidateUnreadMessageState,
     notifyFavoritesChanged,
     startUpdateTimer,
@@ -1433,8 +1439,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     initMomentsData,
     getMomentsData,
     isNewMoment,
-    toggleWatchLater,
-
     getWatchLaterCount,
     getAllWatchLaterList,
     loadMoreWatchLaterList,

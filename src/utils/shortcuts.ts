@@ -368,43 +368,15 @@ function toggleFollow(): void {
     // 检查是否未关注状态（有 not-follow 类）
     const isNotFollowing = followButton.classList.contains('not-follow')
 
-    // 创建并触发鼠标事件，确保Vue组件能响应
-    const triggerClick = (element: HTMLElement) => {
-      // 尝试多种方式触发点击
-      // 1. 标准 click
-      element.click()
-
-      // 2. 触发 mousedown 和 mouseup 事件
-      const mouseDownEvent = new MouseEvent('mousedown', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-      const mouseUpEvent = new MouseEvent('mouseup', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-      const clickEvent = new MouseEvent('click', {
-        bubbles: true,
-        cancelable: true,
-        view: window,
-      })
-
-      element.dispatchEvent(mouseDownEvent)
-      element.dispatchEvent(mouseUpEvent)
-      element.dispatchEvent(clickEvent)
-    }
-
     if (isNotFollowing) {
       // 未关注，直接点击关注
       // 尝试找到内部的 follow-btn-inner 元素
       const innerButton = followButton.querySelector<HTMLElement>('.follow-btn-inner')
       if (innerButton) {
-        triggerClick(innerButton)
+        innerButton.click()
       }
       else {
-        triggerClick(followButton)
+        followButton.click()
       }
     }
     else {
@@ -412,10 +384,10 @@ function toggleFollow(): void {
       // 先尝试点击内部元素
       const innerButton = followButton.querySelector<HTMLElement>('.follow-btn-inner')
       if (innerButton) {
-        triggerClick(innerButton)
+        innerButton.click()
       }
       else {
-        triggerClick(followButton)
+        followButton.click()
       }
 
       // 等待下拉框出现
@@ -436,7 +408,7 @@ function toggleFollow(): void {
           )
 
           if (unfollowButton) {
-            triggerClick(unfollowButton)
+            unfollowButton.click()
           }
         }
         catch (error) {

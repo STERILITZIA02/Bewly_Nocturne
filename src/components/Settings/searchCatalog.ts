@@ -562,7 +562,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ...createEntries(compatibilityRoute, [
     'settings.menu_compatibility',
     'settings.group_common',
-    'settings.use_original_bilibili_homepage',
     'settings.prevent_mobile_redirect',
     'settings.group_ad_blocking',
     'settings.block_ads',

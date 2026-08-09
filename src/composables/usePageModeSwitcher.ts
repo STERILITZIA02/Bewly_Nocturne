@@ -11,7 +11,6 @@ import {
   getNextPageMode,
   resolvePageModeNavigationUrl,
   resolvePageModeTarget,
-  shouldReloadForPageModeChange,
 } from '~/utils/pageMode'
 
 export interface PageModeSwitcherState {
@@ -82,12 +81,10 @@ export function usePageModeSwitcher(
       return
 
     const previousPageMode = settings.value.pageMode
-    const wasUsingOriginalBilibiliHomepage = settings.value.useOriginalBilibiliHomepage
     const selectedPageMode = nextMode.value
     settings.value = {
       ...settings.value,
       pageMode: selectedPageMode,
-      useOriginalBilibiliHomepage: false,
     }
 
     const useOriginalBiliPage = settingsStore.getDockItemIsUseOriginalBiliPage(
@@ -99,12 +96,8 @@ export function usePageModeSwitcher(
       useOriginalBiliPage,
     )
 
-    const shouldReload = shouldReloadForPageModeChange(
-      currentHref,
-      wasUsingOriginalBilibiliHomepage,
-    )
     const shouldNavigate = navigationUrl && navigationUrl !== currentHref
-    if (shouldReload || shouldNavigate) {
+    if (shouldNavigate) {
       switchingPageMode.value = true
       try {
         await settings.flush()
@@ -113,16 +106,10 @@ export function usePageModeSwitcher(
         settings.value = {
           ...settings.value,
           pageMode: previousPageMode,
-          useOriginalBilibiliHomepage: wasUsingOriginalBilibiliHomepage,
         }
         switchingPageMode.value = false
         return
       }
-    }
-
-    if (shouldReload) {
-      window.location.reload()
-      return
     }
 
     if (navigationUrl && navigationUrl !== currentHref)

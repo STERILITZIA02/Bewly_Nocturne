@@ -23,7 +23,7 @@ interface Props {
   previewVideoUrl: string
   videoElement: HTMLVideoElement | null
   isInWatchLater: boolean
-  showWatcherLater: boolean
+  showWatchLater: boolean
   coverTopLeftAlwaysVisible?: boolean
   coverImageUrl: string
   // Modern layout specific
@@ -780,7 +780,7 @@ onBeforeUnmount(() => {
 
         <!-- Track cover hover separately so delayed preview playback does not delay this action. -->
         <div
-          v-if="showWatcherLater && isCoverHovered"
+          v-if="showWatchLater && isCoverHovered"
           role="button"
           tabindex="0"
           :aria-label="isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"

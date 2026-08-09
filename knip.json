@@ -1,14 +1,16 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
+    ".github/scripts/pr-policy-check.mjs",
+    "scripts/manifest.ts",
+    "scripts/prepare.ts",
+    "src/components/*.vue",
+    "src/components/*/*.vue",
     "src/contentScripts/index.ts",
-    "src/options/main.ts",
-    "src/popup/main.ts",
-    "src/components/**",
-    "scripts/*.ts",
-    "*.config.*"
+    "src/inject/index.ts",
+    "vite.config.content.ts",
+    "vite.config.inject.ts"
   ],
-  "ignore": ["src/components/Settings/**", "src/inject/**"],
   "ignoreDependencies": [
     "@iconify/json",
     "uno.css"

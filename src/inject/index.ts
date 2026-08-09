@@ -3206,10 +3206,9 @@ else if (shouldInitializePageScript) {
     return originalFetch.call(this, input, init)
   }
 
-  // 页面加载完成后初始化随机播放（功能已迁移到contentScripts）
-
   // Bilibili tracking parameters to be removed from URLs
   const BILIBILI_TRACKING_PARAMS = [
+    // Navigation parameters such as `p` and `t` are intentionally preserved.
     'spm_id_from',
     'vd_source',
     'share_source',
@@ -3227,7 +3226,6 @@ else if (shouldInitializePageScript) {
     'buvid',
     'is_story_h5',
     'mid',
-    'p',
     'plat_id',
     'share_from',
     'timestamp',

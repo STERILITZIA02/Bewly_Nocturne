@@ -443,7 +443,7 @@ const showBewlyPage = computed((): boolean => {
 
   // SearchResults 页面是虚拟页面，不在 dockItems 中，但应该显示
   if (activatedPage.value === AppPage.SearchResults) {
-    return isHomePage() && !settings.value.useOriginalBilibiliHomepage
+    return isHomePage()
   }
 
   const dockItem = mainStore.getDockItemByPage(activatedPage.value)
@@ -453,7 +453,7 @@ const showBewlyPage = computed((): boolean => {
   if (iframePageURL.value)
     return false
 
-  return isHomePage() && !settings.value.useOriginalBilibiliHomepage
+  return isHomePage()
 })
 const showTopBar = computed((): boolean => {
   // When using the open in drawer feature, the iframe inside the page will hide the top bar
@@ -470,9 +470,7 @@ const showTopBar = computed((): boolean => {
     return false
 
   // when using original bilibili homepage, show top bar
-  return settings.value.useOriginalBilibiliHomepage
-  // when on home page and not using original bilibili page, show top bar
-    || (isHomePage() && !settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
+  return (isHomePage() && !settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
   // when using original bilibili page on home page, show top bar in outer layer
     || (isHomePage() && settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
   // when not on home page, show top bar
@@ -553,7 +551,7 @@ onMounted(() => {
 
   // ✅ 设置 IntersectionObserver 用于无限滚动底部检测（仅在首页且使用Bewly页面时）
   // 避免在每次滚动时读取 scrollHeight/clientHeight
-  if (isHomePage() && !settings.value.useOriginalBilibiliHomepage) {
+  if (isHomePage()) {
     nextTick(() => {
       const viewport = scrollViewportRef.value
       if (!viewport)
@@ -985,7 +983,7 @@ if (settings.value.cleanUrlArgument) {
     class="bewly-wrapper"
     :class="{
       'dark': isDark,
-      'bewly-wrapper--viewport': isHomePage() && !settings.useOriginalBilibiliHomepage,
+      'bewly-wrapper--viewport': isHomePage(),
     }"
     text="$bew-text-1 size-$bew-base-font-size"
   >
@@ -1017,7 +1015,7 @@ if (settings.value.cleanUrlArgument) {
       }"
     >
       <Dock
-        v-if="!settings.useOriginalBilibiliHomepage && (settings.alwaysUseDock || (showBewlyPage || iframePageURL))"
+        v-if="settings.alwaysUseDock || (showBewlyPage || iframePageURL)"
         pointer-events-auto
         :activated-page="activatedPage"
         @settings-visibility-change="toggleSettings"
@@ -1054,7 +1052,6 @@ if (settings.value.cleanUrlArgument) {
     </div>
 
     <div
-      v-if="!settings.useOriginalBilibiliHomepage"
       pos="absolute top-0 left-0" w-full h-full
       :style="{
         height: showBewlyPage || iframePageURL ? '100dvh' : '0',

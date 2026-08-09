@@ -433,12 +433,7 @@ function setupScrollListeners() {
   scrollListenersActive = true
 
   // Bewly 自己的页面都在内部滚动容器中，通过全局事件同步 scrollTop
-  if (!settings.value.useOriginalBilibiliHomepage) {
-    emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
-  }
-  else {
-    window.addEventListener('scroll', handleScroll, { passive: true })
-  }
+  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleScroll)
 
   window.addEventListener('resize', handleResize, { passive: true })
 }
@@ -686,9 +681,6 @@ function getCurrentColumnCount(layout: GridLayoutType, width: number): number {
 }
 
 function findScrollElement(): HTMLElement | null {
-  if (settings.value.useOriginalBilibiliHomepage)
-    return document.scrollingElement as HTMLElement | null
-
   let element = gridContainerRef.value?.parentElement ?? null
   while (element) {
     const styles = window.getComputedStyle(element)
@@ -947,7 +939,7 @@ function getUniqueKey(item: T, index: number): string | number {
         :type="renderItem.type"
         :video="renderItem.video"
         :show-preview="showPreview"
-        :show-watcher-later="showWatchLater"
+        :show-watch-later="showWatchLater"
         :horizontal="isHorizontal"
         :more-btn="moreBtn"
         :hide-author="hideAuthor"

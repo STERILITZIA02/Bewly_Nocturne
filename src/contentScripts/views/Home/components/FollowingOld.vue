@@ -47,8 +47,8 @@ const recursionDepth = ref<number>(0) // 递归深度计数器
 const isPageVisible = ref<boolean>(true) // 页面可见性状态
 const offset = ref<string>('')
 const updateBaseline = ref<string>('')
-const noMoreContent = ref<boolean>(false)
-const isInitialized = ref<boolean>(false)
+const noMoreVideoContent = ref<boolean>(false)
+const noMoreLiveContent = ref<boolean>(false)
 const { handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 
 // 合并直播和视频列表用于虚拟滚动
@@ -79,10 +79,10 @@ async function handleVisibilityChange() {
   isPageVisible.value = !document.hidden
 
   // 如果从不可见变为可见，且需要加载更多数据，则触发加载
-  if (!wasVisible && isPageVisible.value && !noMoreContent.value && !isLoading.value) {
+  if (!wasVisible && isPageVisible.value && !noMoreVideoContent.value && !isLoading.value) {
     if (videoList.value.length < 30) {
       setTimeout(() => {
-        if (isPageVisible.value && !isLoading.value && !noMoreContent.value)
+        if (isPageVisible.value && !isLoading.value && !noMoreVideoContent.value)
           handleLoadMore()
       }, 200)
     }
@@ -136,19 +136,18 @@ function initPageAction() {
 }
 
 async function initData() {
-  isInitialized.value = false
   offset.value = ''
   updateBaseline.value = ''
   liveVideoList.value = []
   livePage.value = 1
   videoList.value = []
-  noMoreContent.value = false
+  noMoreVideoContent.value = false
+  noMoreLiveContent.value = false
   recursionDepth.value = 0
 
   if (settings.value.followingTabShowLivestreamingVideos)
     getLiveVideoList()
   await getData()
-  isInitialized.value = true
 }
 
 async function getData() {
@@ -166,7 +165,7 @@ async function getData() {
 
 async function getLiveVideoList() {
   // 检查页面是否可见，如果不可见则不进行请求
-  if (!isPageVisible.value)
+  if (!isPageVisible.value || noMoreLiveContent.value)
     return
 
   const lastLiveVideoListLength = liveVideoList.value.length
@@ -177,7 +176,7 @@ async function getLiveVideoList() {
     })
 
     if (response.code === -101) {
-      noMoreContent.value = true
+      noMoreLiveContent.value = true
       needToLoginFirst.value = true
       return
     }
@@ -185,7 +184,7 @@ async function getLiveVideoList() {
     if (response.code === 0) {
       // 如果返回的数据少于9条，说明没有更多数据了
       if (response.data.list.length < 9)
-        noMoreContent.value = true
+        noMoreLiveContent.value = true
 
       livePage.value++
 
@@ -225,11 +224,11 @@ async function getLiveVideoList() {
 }
 
 async function getFollowedUsersVideos() {
-  if (noMoreContent.value)
+  if (noMoreVideoContent.value)
     return
 
   if (offset.value === '0') {
-    noMoreContent.value = true
+    noMoreVideoContent.value = true
     return
   }
 
@@ -239,7 +238,7 @@ async function getFollowedUsersVideos() {
 
   // 限制递归深度，防止无限递归
   if (recursionDepth.value >= 10) {
-    noMoreContent.value = true
+    noMoreVideoContent.value = true
     return
   }
 
@@ -255,7 +254,7 @@ async function getFollowedUsersVideos() {
     })
 
     if (response.code === -101) {
-      noMoreContent.value = true
+      noMoreVideoContent.value = true
       needToLoginFirst.value = true
       return
     }
@@ -319,7 +318,7 @@ async function getFollowedUsersVideos() {
 
       // 预加载由 VideoCardGrid 的虚拟滚动机制控制
       // 只在初次加载且数据不足时继续加载
-      if (lastVideoListLength === 0 && videoList.value.length < 30 && !noMoreContent.value) {
+      if (lastVideoListLength === 0 && videoList.value.length < 30 && !noMoreVideoContent.value) {
         await getFollowedUsersVideos()
       }
     }
@@ -363,7 +362,7 @@ function shouldFilterVideo(item: MomentItem): boolean {
 
 // 供 VideoCardGrid 预加载调用的函数
 async function handleLoadMore() {
-  if (isLoading.value || noMoreContent.value)
+  if (isLoading.value || noMoreVideoContent.value)
     return
 
   isLoading.value = true
@@ -486,11 +485,11 @@ defineExpose({ initData })
       :items="combinedVideoList"
       :grid-layout="gridLayout"
       :loading="isLoading"
-      :no-more-content="noMoreContent"
+      :no-more-content="noMoreVideoContent"
       :need-to-login-first="needToLoginFirst"
       :transform-item="transformCombinedItem"
       :get-item-key="(item: VideoElement | LiveVideoElement) => item.uniqueId"
-      :show-watcher-later="false"
+      :show-watch-later="false"
       is-following-page
       show-preview
       @refresh="initData"

@@ -73,19 +73,15 @@ function getHistoryList() {
   })
     .then(async (res: HistoryResult) => {
       if (res.code === 0) {
-        if (Array.isArray(res.data.list) && res.data.list.length > 0)
-          historyList.push(...res.data.list)
+        const list = Array.isArray(res.data?.list) ? res.data.list : []
+        if (list.length > 0)
+          historyList.push(...list)
 
-        if (historyList.length !== 0 && res.data.list.length < 20) {
-          isLoading.value = false
-          noMoreContent.value = true
+        noMoreContent.value = list.length < 20
+        if (noMoreContent.value)
           return
-        }
 
-        noMoreContent.value = false
-
-        // ✅ 修复：添加 await，因为 haveScrollbar() 是异步函数
-        if (!(await haveScrollbar()) && !noMoreContent.value) {
+        if (!await haveScrollbar()) {
           getHistoryList()
         }
       }
@@ -97,23 +93,21 @@ function getHistoryList() {
 
 function searchHistoryList() {
   isLoading.value = true
+  const page = currentPageNum.value
   api.history.searchHistoryList({
-    pn: currentPageNum.value++,
+    pn: page,
     keyword: keyword.value,
   })
     .then((res: HistorySearchResult) => {
       if (res.code === 0) {
-        if (historyList.length !== 0 && res.data.list.length < 20) {
-          isLoading.value = false
-          noMoreContent.value = true
-          return
-        }
+        const list = Array.isArray(res.data?.list) ? res.data.list : []
 
-        res.data.list.forEach((item: HistorySearchItem) => {
+        list.forEach((item: HistorySearchItem) => {
           historyList.push(item as unknown as HistoryItem)
         })
 
-        noMoreContent.value = false
+        currentPageNum.value = page + 1
+        noMoreContent.value = list.length < 20
       }
     })
     .finally(() => {

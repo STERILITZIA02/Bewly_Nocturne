@@ -87,20 +87,14 @@ function getRecommendAnimeList() {
     coursor: cursor.value,
   })
     .then((response: RecommendationResult) => {
-      const {
-        code,
-        data: { items, coursor, has_next },
-      } = response
-      if (code === 0 && has_next) {
-        if (recommendAnimeList.length === 0)
-          Object.assign(recommendAnimeList, items[0].sub_items as RecommendationItem[])
-        else
-          recommendAnimeList.push(...items[0].sub_items)
+      if (response.code !== 0)
+        return
 
-        cursor.value = coursor
-      }
-      if (code === 0 && !has_next)
-        noMoreContent.value = true
+      const items = Array.isArray(response.data?.items) ? response.data.items : []
+      const subItems = Array.isArray(items[0]?.sub_items) ? items[0].sub_items : []
+      recommendAnimeList.push(...subItems)
+      cursor.value = response.data.coursor
+      noMoreContent.value = !response.data.has_next || subItems.length === 0
     })
     .finally(() => {
       isLoadingRecommendAnime.value = false

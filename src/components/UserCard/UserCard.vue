@@ -95,6 +95,7 @@ function openUserSpace() {
 }
 
 async function handleFollowClick(e: Event) {
+  e.preventDefault()
   e.stopPropagation()
 
   if (isFollowLoading.value)

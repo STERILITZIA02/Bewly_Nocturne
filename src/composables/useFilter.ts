@@ -67,7 +67,12 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
 
   settings.value.filterByTitle.forEach((item) => {
     if (item.keyword.startsWith('/') && item.keyword.endsWith('/')) {
-      filterByTitleRegExpValues.push(new RegExp(item.keyword.slice(1, -1), 'i'))
+      try {
+        filterByTitleRegExpValues.push(new RegExp(item.keyword.slice(1, -1), 'i'))
+      }
+      catch {
+        // Ignore an invalid user-supplied regular expression.
+      }
     }
     else {
       filterByTitleStringValues.push(`${item.keyword}`.toUpperCase())
@@ -94,7 +99,12 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
 
   settings.value.filterByUser.forEach((item) => {
     if (item.keyword.startsWith('/') && item.keyword.endsWith('/')) {
-      filterByUserRegExpValues.push(new RegExp(item.keyword.slice(1, -1), 'i'))
+      try {
+        filterByUserRegExpValues.push(new RegExp(item.keyword.slice(1, -1), 'i'))
+      }
+      catch {
+        // Ignore an invalid user-supplied regular expression.
+      }
     }
     else {
       filterByUserStringValues.push(`${item.keyword}`.toUpperCase())

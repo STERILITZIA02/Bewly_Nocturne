@@ -131,7 +131,7 @@ function handleScroll(arg?: number | Event): void {
   else {
     // ✅ 只在非首页或使用原始页面时才需要读取 DOM
     // 首页场景下必须通过 OVERLAY_SCROLL_BAR_SCROLL 事件接收 scrollTop
-    if (!isHomePage() || settings.value.useOriginalBilibiliHomepage) {
+    if (!isHomePage()) {
       scrollTop.value = document.documentElement.scrollTop
     }
     else {
@@ -267,7 +267,7 @@ function setupScrollListeners() {
   }
 
   // 设置滚动监听
-  if (isHomePage() && !settings.value.useOriginalBilibiliHomepage) {
+  if (isHomePage()) {
     // 创建并保存handler引用
     overlayScrollHandler = (payloadScrollTop: number) => {
       handleScroll(payloadScrollTop)

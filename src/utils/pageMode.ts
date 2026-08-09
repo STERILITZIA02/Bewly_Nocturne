@@ -141,22 +141,6 @@ export function resolvePageModeTarget(rawUrl: string, activatedPage: AppPage): P
   }
 }
 
-export function shouldReloadForPageModeChange(
-  rawUrl: string,
-  wasUsingOriginalBilibiliHomepage: boolean,
-): boolean {
-  if (!wasUsingOriginalBilibiliHomepage)
-    return false
-
-  try {
-    const sourceUrl = new URL(rawUrl)
-    return isBilibiliHomeHost(sourceUrl.hostname) && isBilibiliHomepagePath(sourceUrl.pathname)
-  }
-  catch {
-    return false
-  }
-}
-
 export function buildNativeSearchUrl(rawUrl: string): string {
   const targetUrl = new URL('https://search.bilibili.com/all')
 

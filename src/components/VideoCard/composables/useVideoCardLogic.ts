@@ -22,7 +22,7 @@ interface VideoCardProps {
   skeleton?: boolean
   video?: Video
   type?: 'rcmd' | 'appRcmd' | 'bangumi' | 'common'
-  showWatcherLater?: boolean
+  showWatchLater?: boolean
   horizontal?: boolean
   showPreview?: boolean
   moreBtn?: boolean
@@ -67,8 +67,25 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const contextMenuRef = ref<HTMLDivElement | null>(null)
   const selectedDislikeOpt = ref<AppFeedFeedbackSelection>()
   const videoCurrentTime = ref<number | null>(null)
-  const isInWatchLater = ref<boolean>(false)
   const resolvedWatchLaterAid = ref<number>()
+  const isUpdatingWatchLater = ref(false)
+  let watchLaterResolutionId = 0
+  const watchLaterAid = computed(() => {
+    const video = props.value.video
+    if (!video)
+      return undefined
+    if (resolvedWatchLaterAid.value)
+      return resolvedWatchLaterAid.value
+    if (video.aid)
+      return video.aid
+    if (video.epid || video.roomid)
+      return undefined
+    return Number.isFinite(video.id) ? video.id : undefined
+  })
+  const isInWatchLater = computed(() => {
+    return watchLaterAid.value !== undefined
+      && topBarStore.addedWatchLaterList.includes(watchLaterAid.value)
+  })
   const isHover = ref<boolean>(false)
   const isPreviewFullscreen = ref<boolean>(false)
   const mouseEnterTimeOut = ref<number | null>(null)
@@ -170,7 +187,56 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       .filter((mid): mid is number => typeof mid === 'number')
   }
 
+  async function resolveWatchLaterAid(video: Video): Promise<number | undefined> {
+    if (video.aid)
+      return video.aid
+
+    if (video.epid) {
+      const ids = await resolvePgcEpisodeVideoIds(video.epid)
+      return ids?.aid
+    }
+
+    if (video.roomid)
+      return undefined
+    if (Number.isFinite(video.id))
+      return video.id
+
+    if (video.bvid) {
+      const result: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
+      if (result.code === 0 && Number.isFinite(result.data?.aid))
+        return Number(result.data.aid)
+    }
+
+    return undefined
+  }
+
   // Watch
+  watch([
+    () => props.value.video,
+    () => props.value.showWatchLater,
+    () => topBarStore.userInfo.mid,
+  ], async ([video, showWatchLater]) => {
+    const resolutionId = ++watchLaterResolutionId
+    resolvedWatchLaterAid.value = undefined
+    if (!video || !showWatchLater)
+      return
+
+    await topBarStore.ensureWatchLaterState()
+    if (resolutionId !== watchLaterResolutionId)
+      return
+    if (watchLaterAid.value)
+      return
+
+    try {
+      const aid = await resolveWatchLaterAid(video)
+      if (resolutionId === watchLaterResolutionId)
+        resolvedWatchLaterAid.value = aid
+    }
+    catch (error) {
+      console.error('获取视频稍后再看状态失败:', error)
+    }
+  }, { immediate: true })
+
   watch(() => isHover.value, async (newValue) => {
     if (!props.value.video || !newValue)
       return
@@ -281,57 +347,52 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }
 
   async function toggleWatchLater() {
-    if (!props.value.video)
+    if (!props.value.video || isUpdatingWatchLater.value)
       return
 
     const video = props.value.video
-    if (video.epid && !video.aid && !video.bvid) {
-      const ids = await resolvePgcEpisodeVideoIds(video.epid)
-      if (!ids) {
-        toast.error('无法获取该剧集的稍后再看信息')
+    isUpdatingWatchLater.value = true
+    try {
+      await topBarStore.ensureWatchLaterState()
+      const aid = watchLaterAid.value ?? await resolveWatchLaterAid(video)
+      if (props.value.video !== video)
+        return
+      if (!aid) {
+        toast.error('无法获取该视频的稍后再看信息')
         return
       }
-      resolvedWatchLaterAid.value = ids.aid
-    }
+      resolvedWatchLaterAid.value = aid
 
-    if (!isInWatchLater.value) {
-      const params: { bvid?: string, aid?: number, csrf: string } = {
-        csrf: getCSRF(),
-      }
-
-      // 优先使用bvid，如果没有则使用aid
-      if (video.bvid) {
-        params.bvid = video.bvid
+      if (!isInWatchLater.value) {
+        const res = await api.watchlater.saveToWatchLater({
+          ...(video.bvid ? { bvid: video.bvid } : { aid }),
+          csrf: getCSRF(),
+        })
+        if (res.code !== 0) {
+          toast.error(res.message)
+          return
+        }
+        if (!topBarStore.addedWatchLaterList.includes(aid))
+          topBarStore.addedWatchLaterList.push(aid)
       }
       else {
-        params.aid = video.aid || resolvedWatchLaterAid.value || video.id
+        const res = await api.watchlater.removeFromWatchLater({
+          aid,
+          csrf: getCSRF(),
+        })
+        if (res.code !== 0) {
+          toast.error(res.message)
+          return
+        }
+        const index = topBarStore.addedWatchLaterList.indexOf(aid)
+        if (index !== -1)
+          topBarStore.addedWatchLaterList.splice(index, 1)
       }
 
-      api.watchlater.saveToWatchLater(params)
-        .then((res) => {
-          if (res.code === 0) {
-            isInWatchLater.value = true
-            refreshTopBarWatchLaterAfterMutation()
-          }
-          else {
-            toast.error(res.message)
-          }
-        })
+      refreshTopBarWatchLaterAfterMutation()
     }
-    else {
-      api.watchlater.removeFromWatchLater({
-        aid: video.aid || resolvedWatchLaterAid.value || video.id,
-        csrf: getCSRF(),
-      })
-        .then((res) => {
-          if (res.code === 0) {
-            isInWatchLater.value = false
-            refreshTopBarWatchLaterAfterMutation()
-          }
-          else {
-            toast.error(res.message)
-          }
-        })
+    finally {
+      isUpdatingWatchLater.value = false
     }
   }
 

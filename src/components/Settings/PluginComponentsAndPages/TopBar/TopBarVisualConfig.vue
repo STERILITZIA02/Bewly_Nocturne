@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import bilibiliBrandLogoUrl from '~/assets/branding/bilibili-brand-logo.png'
 import Button from '~/components/Button.vue'
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
@@ -204,13 +205,15 @@ function toggleChannel(value: string) {
         right-width="auto"
       >
         <div
-          class="logo-style-picker bew-segment-control bew-segment-control--surface bew-segment-control--static"
+          class="logo-style-picker bew-segment-control bew-segment-control--surface"
           role="radiogroup"
           :aria-label="$t('settings.top_bar_logo_style')"
         >
+          <LiquidSegmentIndicator :active-key="settings.topBarLogoStyle" />
           <button
             type="button"
             class="bew-segment-control__item bew-segment-control__item--icon"
+            data-segment-item
             :data-active="settings.topBarLogoStyle === 'icon'"
             role="radio"
             :aria-checked="settings.topBarLogoStyle === 'icon'"
@@ -222,6 +225,7 @@ function toggleChannel(value: string) {
           <button
             type="button"
             class="logo-style-picker__brand-option bew-segment-control__item"
+            data-segment-item
             :data-active="settings.topBarLogoStyle === 'brand'"
             role="radio"
             :aria-checked="settings.topBarLogoStyle === 'brand'"

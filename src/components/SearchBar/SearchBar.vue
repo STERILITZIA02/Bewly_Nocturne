@@ -338,19 +338,22 @@ onKeyStroke('Escape', (e: KeyboardEvent) => {
   console.log('[SearchBar] Blurred search input')
 }, { target: keywordRef })
 
-const handleKeywordInput = useDebounceFn(() => {
-  if (keyword.value.trim().length > 0) {
-    api.search.getSearchSuggestion({
-      term: keyword.value,
-    })
-      .then((res: SuggestionResponse) => {
-        if (!res || (res && res.code !== 0))
-          return
-        Object.assign(suggestions, res.result.tag)
-      })
+let suggestionRequestId = 0
+const handleKeywordInput = useDebounceFn(async (term: string, requestId: number) => {
+  try {
+    const res: SuggestionResponse = await api.search.getSearchSuggestion({ term })
+    if (requestId !== suggestionRequestId)
+      return
+
+    const nextSuggestions = res?.code === 0 && Array.isArray(res.result?.tag)
+      ? res.result.tag
+      : []
+    suggestions.splice(0, suggestions.length, ...nextSuggestions)
   }
-  else {
-    suggestions.length = 0
+  catch (error) {
+    if (requestId === suggestionRequestId)
+      suggestions.length = 0
+    console.error('获取搜索建议失败:', error)
   }
 }, 200)
 
@@ -358,7 +361,11 @@ function handleNativeInput(event: Event) {
   const value = (event.target as HTMLInputElement).value
   resetKeyboardSelection()
   keyword.value = value
-  handleKeywordInput()
+  const requestId = ++suggestionRequestId
+  if (value.trim())
+    handleKeywordInput(value, requestId)
+  else
+    suggestions.length = 0
 }
 
 function buildKeywordHref(keyword: string) {
@@ -550,6 +557,7 @@ function handleFocusOut(event: FocusEvent) {
 
 function handleClearKeyword() {
   resetKeyboardSelection()
+  suggestionRequestId++
   keyword.value = ''
   suggestions.length = 0
 }
