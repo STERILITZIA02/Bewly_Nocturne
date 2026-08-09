@@ -56,6 +56,7 @@ function initPageAction() {
 }
 
 async function initData() {
+  needToLoginFirst.value = false
   page.value = 1
   videoList.value = []
   noMoreContent.value = false
@@ -118,6 +119,7 @@ async function getLiveVideos() {
     }
 
     if (response.code === 0) {
+      needToLoginFirst.value = false
       if (response.data.list.length < 9)
         noMoreContent.value = true
 
@@ -130,9 +132,6 @@ async function getLiveVideos() {
       }))
 
       videoList.value = [...videoList.value, ...newItems]
-    }
-    else if (response.code === -101) {
-      needToLoginFirst.value = true
     }
   }
   catch {

@@ -136,6 +136,7 @@ function initPageAction() {
 }
 
 async function initData() {
+  needToLoginFirst.value = false
   offset.value = ''
   updateBaseline.value = ''
   liveVideoList.value = []
@@ -182,6 +183,7 @@ async function getLiveVideoList() {
     }
 
     if (response.code === 0) {
+      needToLoginFirst.value = false
       // 如果返回的数据少于9条，说明没有更多数据了
       if (response.data.list.length < 9)
         noMoreLiveContent.value = true
@@ -213,9 +215,6 @@ async function getLiveVideoList() {
           }
         })
       }
-    }
-    else if (response.code === -101) {
-      needToLoginFirst.value = true
     }
   }
   catch {
@@ -260,6 +259,7 @@ async function getFollowedUsersVideos() {
     }
 
     if (response.code === 0) {
+      needToLoginFirst.value = false
       offset.value = response.data.offset
       updateBaseline.value = response.data.update_baseline
 
@@ -321,9 +321,6 @@ async function getFollowedUsersVideos() {
       if (lastVideoListLength === 0 && videoList.value.length < 30 && !noMoreVideoContent.value) {
         await getFollowedUsersVideos()
       }
-    }
-    else if (response.code === -101) {
-      needToLoginFirst.value = true
     }
   }
   finally {

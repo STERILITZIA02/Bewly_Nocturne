@@ -95,7 +95,7 @@ function toggleWatchLater(aid: number) {
       .then((res) => {
         if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId) {
           topBarStore.addedWatchLaterList.push(aid)
-          void topBarStore.syncWatchLaterState()
+          void topBarStore.syncWatchLaterState(true)
         }
       })
   }
@@ -109,7 +109,7 @@ function toggleWatchLater(aid: number) {
           const index = topBarStore.addedWatchLaterList.indexOf(aid)
           if (index !== -1)
             topBarStore.addedWatchLaterList.splice(index, 1)
-          void topBarStore.syncWatchLaterState()
+          void topBarStore.syncWatchLaterState(true)
         }
       })
   }

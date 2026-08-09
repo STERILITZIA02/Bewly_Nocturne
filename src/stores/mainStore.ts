@@ -61,7 +61,7 @@ export const useMainStore = defineStore('main', () => {
         page: AppPage.Favorites,
         openInNewTab: false,
         useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Favorites),
-        url: `https://space.bilibili.com/${getUserID()}/favlist`,
+        url: 'https://space.bilibili.com',
         hasBewlyPage: true,
       },
       {
@@ -135,6 +135,13 @@ export const useMainStore = defineStore('main', () => {
   )
 
   function getBiliWebPageURLByPage(page: AppPage): string {
+    if (page === AppPage.Favorites) {
+      const userId = getUserID()
+      return userId
+        ? `https://space.bilibili.com/${userId}/favlist`
+        : 'https://space.bilibili.com'
+    }
+
     const dockItem = dockItems.value.find(e => e.page === page)
     return dockItem?.url || ''
   }

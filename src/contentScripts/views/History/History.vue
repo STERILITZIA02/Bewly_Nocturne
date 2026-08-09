@@ -10,28 +10,56 @@ import type { HistorySearchResult, List as HistorySearchItem } from '~/models/vi
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, removeHttpFromUrl } from '~/utils/main'
+import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
 const { t } = useI18n()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
-const isLoading = ref<boolean>()
+const isLoading = ref<boolean>(false)
 const noMoreContent = ref<boolean>(false)
 const historyList = reactive<Array<HistoryItem>>([])
 const currentPageNum = ref<number>(1)
-const keyword = ref<string>()
+const keyword = ref<string>('')
 const historyStatus = ref<boolean>()
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
+let historyCursor = 0
+let requestGeneration = 0
 
 const HistoryBusiness = computed(() => {
   return Business
 })
 
 onMounted(() => {
-  getHistoryList()
+  void getHistoryList()
   getHistoryPauseStatus()
 
   initPageAction()
 })
+
+onScopeDispose(() => {
+  requestGeneration++
+})
+
+function isSearchMode(): boolean {
+  return keyword.value.trim().length > 0
+}
+
+function resetListState() {
+  requestGeneration++
+  historyList.length = 0
+  historyCursor = 0
+  currentPageNum.value = 1
+  noMoreContent.value = false
+  isLoading.value = false
+}
+
+function reloadCurrentMode() {
+  resetListState()
+  if (isSearchMode())
+    void searchHistoryList()
+  else
+    void getHistoryList()
+}
 
 function initPageAction() {
   handleReachBottom.value = () => {
@@ -43,95 +71,127 @@ function initPageAction() {
     // 优化：添加延迟执行提高触发成功率
     setTimeout(() => {
       if (!isLoading.value && !noMoreContent.value) {
-        if (keyword.value)
-          searchHistoryList()
+        if (isSearchMode())
+          void searchHistoryList()
         else
-          getHistoryList()
+          void getHistoryList()
       }
     }, 50)
   }
 
   handlePageRefresh.value = () => {
-    historyList.length = 0
-    currentPageNum.value = 1
-    noMoreContent.value = false
-    getHistoryList()
+    reloadCurrentMode()
   }
 }
 
 /**
  * Get history list
  */
-function getHistoryList() {
+async function getHistoryList() {
+  if (isLoading.value || noMoreContent.value)
+    return
+
+  const generation = requestGeneration
   isLoading.value = true
-  api.history.getHistoryList({
-    type: 'all',
-    view_at:
-        historyList.length > 0
-          ? historyList[historyList.length - 1].view_at
-          : 0,
-  })
-    .then(async (res: HistoryResult) => {
-      if (res.code === 0) {
-        const list = Array.isArray(res.data?.list) ? res.data.list : []
-        if (list.length > 0)
-          historyList.push(...list)
-
-        noMoreContent.value = list.length < 20
-        if (noMoreContent.value)
-          return
-
-        if (!await haveScrollbar()) {
-          getHistoryList()
-        }
+  try {
+    while (!noMoreContent.value) {
+      const requestedCursor = historyCursor
+      let res: HistoryResult
+      try {
+        res = await api.history.getHistoryList({
+          type: 'all',
+          view_at: requestedCursor,
+        })
       }
-    })
-    .finally(() => {
+      catch (error) {
+        console.error('获取历史记录失败:', error)
+        break
+      }
+
+      if (generation !== requestGeneration || isSearchMode())
+        return
+      if (res.code !== 0)
+        break
+
+      const list = Array.isArray(res.data?.list) ? res.data.list : []
+      if (list.length === 0) {
+        noMoreContent.value = true
+        break
+      }
+
+      historyList.push(...list)
+      const nextCursor = list[list.length - 1].view_at
+      if (nextCursor === requestedCursor)
+        noMoreContent.value = true
+      else
+        historyCursor = nextCursor
+
+      if (list.length < 20)
+        noMoreContent.value = true
+
+      if (noMoreContent.value || await haveScrollbar())
+        break
+    }
+  }
+  finally {
+    if (generation === requestGeneration)
       isLoading.value = false
-    })
+  }
 }
 
-function searchHistoryList() {
+async function searchHistoryList() {
+  const searchKeyword = keyword.value.trim()
+  if (!searchKeyword || isLoading.value || noMoreContent.value)
+    return
+
+  const generation = requestGeneration
   isLoading.value = true
   const page = currentPageNum.value
-  api.history.searchHistoryList({
-    pn: page,
-    keyword: keyword.value,
-  })
-    .then((res: HistorySearchResult) => {
-      if (res.code === 0) {
-        const list = Array.isArray(res.data?.list) ? res.data.list : []
-
-        list.forEach((item: HistorySearchItem) => {
-          historyList.push(item as unknown as HistoryItem)
-        })
-
-        currentPageNum.value = page + 1
-        noMoreContent.value = list.length < 20
-      }
+  try {
+    const res: HistorySearchResult = await api.history.searchHistoryList({
+      pn: page,
+      keyword: searchKeyword,
     })
-    .finally(() => {
+    if (generation !== requestGeneration || keyword.value.trim() !== searchKeyword)
+      return
+    if (res.code !== 0)
+      return
+
+    const list = Array.isArray(res.data?.list) ? res.data.list : []
+    list.forEach((item: HistorySearchItem) => {
+      historyList.push(item as unknown as HistoryItem)
+    })
+
+    currentPageNum.value = page + 1
+    noMoreContent.value = list.length < 20
+  }
+  catch (error) {
+    console.error('搜索历史记录失败:', error)
+  }
+  finally {
+    if (generation === requestGeneration)
       isLoading.value = false
-    })
+  }
 }
 
 function handleSearch() {
-  historyList.length = 0
-  currentPageNum.value = 1
-  noMoreContent.value = false
-  if (keyword.value)
-    searchHistoryList()
-  else getHistoryList()
+  reloadCurrentMode()
 }
 
-function deleteHistoryItem(index: number, historyItem: HistoryItem) {
+function deleteHistoryItem(historyItem: HistoryItem) {
+  const kid = `${historyItem.history.business}_${historyItem.history.oid}`
   api.history.deleteHistoryItem({
-    kid: `${historyItem.history.business}_${historyItem.history.oid}`,
+    kid,
     csrf: getCSRF(),
   })
     .then((res) => {
-      if (res.code === 0)
-        historyList.splice(index, 1)
+      if (res.code === 0) {
+        const targetIndex = historyList.findIndex(item =>
+          `${item.history.business}_${item.history.oid}` === kid,
+        )
+        if (targetIndex !== -1)
+          historyList.splice(targetIndex, 1)
+      }
     })
 }
 
@@ -240,7 +300,7 @@ function jumpToLoginPage() {
       <!-- historyList -->
       <TransitionGroup name="list">
         <ALink
-          v-for="(historyItem, index) in historyList"
+          v-for="historyItem in historyList"
           :key="historyItem.kid"
           type="videoCard"
           :href="getHistoryUrl(historyItem)"
@@ -365,7 +425,7 @@ function jumpToLoginPage() {
                       || historyItem.history.business === HistoryBusiness.PGC
                   "
                   :percentage="
-                    (historyItem.progress / historyItem.duration) * 100
+                    normalizePlaybackProgress(historyItem.progress, historyItem.duration)
                   "
                 />
               </div>
@@ -460,7 +520,7 @@ function jumpToLoginPage() {
                 opacity-0 group-hover:opacity-100
                 p-2
                 duration-300
-                @click.prevent.stop="deleteHistoryItem(index, historyItem)"
+                @click.prevent.stop="deleteHistoryItem(historyItem)"
               >
                 <div i-tabler:trash />
               </button>

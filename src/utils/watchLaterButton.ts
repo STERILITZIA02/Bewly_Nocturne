@@ -4,6 +4,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { i18n } from '~/utils/i18n'
 import { getCSRF } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 const BUTTON_CLASS = 'bewly-watch-later-btn'
 const WATCH_LATER_ICON_CLASS = 'i-mingcute:carplay-line'
@@ -119,10 +120,14 @@ function animateButton(button: HTMLButtonElement) {
 function scheduleTopBarRefresh() {
   const refresh = () => {
     try {
-      void useTopBarStore().syncWatchLaterState(true)
+      void useTopBarStore().syncWatchLaterState(true).catch((error) => {
+        if (!isExtensionContextInvalidatedError(error))
+          console.error('刷新稍后再看列表失败:', error)
+      })
     }
     catch (error) {
-      console.error('刷新稍后再看列表失败:', error)
+      if (!isExtensionContextInvalidatedError(error))
+        console.error('刷新稍后再看列表失败:', error)
     }
   }
 
@@ -168,7 +173,8 @@ async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, s
     }
   }
   catch (error) {
-    console.error('获取稍后再看状态失败:', error)
+    if (!isExtensionContextInvalidatedError(error))
+      console.error('获取稍后再看状态失败:', error)
   }
   finally {
     if (button.isConnected)
@@ -216,7 +222,8 @@ async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state:
     scheduleTopBarRefresh()
   }
   catch (error) {
-    console.error('更新稍后再看状态失败:', error)
+    if (!isExtensionContextInvalidatedError(error))
+      console.error('更新稍后再看状态失败:', error)
   }
   finally {
     if (button.isConnected)

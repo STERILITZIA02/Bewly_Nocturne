@@ -18,6 +18,7 @@ import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
+import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
@@ -227,8 +228,9 @@ function clearSearchParamsFromUrl() {
     urlParams.delete('live_user_order')
     urlParams.delete('pn')
     // 注意：不要删除 'page' 参数，它用于 dock 的页面切换
-    const newUrl = `${window.location.pathname}?${urlParams.toString()}`
-    window.history.replaceState({}, '', newUrl)
+    const currentUrl = new URL(window.location.href)
+    currentUrl.search = urlParams.toString()
+    window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
   }
 }
 
@@ -239,8 +241,12 @@ if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.Se
 }
 
 function isFreshHomeTabConfig(tabConfig: { page: HomeSubPage, visible: boolean }[]): boolean {
+  const defaultPages = new Set(mainStore.homeTabs.map(tab => tab.page))
+  const configuredPages = new Set(tabConfig.map(tab => tab.page))
   return tabConfig.length === mainStore.homeTabs.length
-    && tabConfig.every(tab => mainStore.homeTabs.some(defaultTab => defaultTab.page === tab.page))
+    && configuredPages.size === tabConfig.length
+    && tabConfig.every(tab => defaultPages.has(tab.page))
+    && mainStore.homeTabs.every(tab => configuredPages.has(tab.page))
 }
 
 function getDefaultHomeSubPage(tabConfig: { page: HomeSubPage, visible: boolean }[]): HomeSubPage {
@@ -286,6 +292,30 @@ const handleForwardRefresh = ref<() => void>()
 const canRefreshHomeSubPage = ref<boolean>(false)
 // 使用新的枚举状态管理撤销/前进按钮
 const undoForwardState = ref<UndoForwardState>(UndoForwardState.Hidden)
+let refreshScrollGeneration = 0
+let refreshScrollTimer: ReturnType<typeof setTimeout> | null = null
+
+function cancelPendingRefreshScroll() {
+  refreshScrollGeneration++
+  if (refreshScrollTimer) {
+    clearTimeout(refreshScrollTimer)
+    refreshScrollTimer = null
+  }
+}
+
+function waitForScrollTop(viewport: HTMLElement, generation: number, startedAt: number) {
+  if (generation !== refreshScrollGeneration)
+    return
+
+  if (viewport.scrollTop === 0 || performance.now() - startedAt >= 1800) {
+    refreshScrollTimer = null
+    handlePageRefresh.value?.()
+    return
+  }
+
+  refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, startedAt), 50)
+}
+
 const canRefreshCurrentPage = computed((): boolean => {
   return activatedPage.value !== AppPage.Home || homeActivatedPage.value === HomeSubPage.ForYou || canRefreshHomeSubPage.value
 })
@@ -293,6 +323,7 @@ const handleThrottledPageRefresh = useThrottleFn(() => {
   if (!canRefreshCurrentPage.value)
     return
 
+  cancelPendingRefreshScroll()
   const viewport = scrollViewportRef.value
   if (!viewport) {
     handlePageRefresh.value?.()
@@ -303,15 +334,8 @@ const handleThrottledPageRefresh = useThrottleFn(() => {
   }
   else {
     handleBackToTop()
-    const checkScrollComplete = () => {
-      if (viewport.scrollTop === 0) {
-        handlePageRefresh.value?.()
-      }
-      else {
-        setTimeout(checkScrollComplete, 50)
-      }
-    }
-    setTimeout(checkScrollComplete, 100)
+    const generation = refreshScrollGeneration
+    refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, performance.now()), 50)
   }
 }, 500)
 const handleThrottledReachBottom = useThrottleFn(() => handleReachBottom.value?.(), 200)
@@ -506,6 +530,7 @@ const isFirstTimeActivatedPageChange = ref<boolean>(true)
 watch(
   () => activatedPage.value,
   () => {
+    cancelPendingRefreshScroll()
     if (!isFirstTimeActivatedPageChange.value) {
       // Update the URL query parameter when activatedPage changes
       const url = new URL(window.location.href)
@@ -519,6 +544,10 @@ watch(
   },
   { immediate: true },
 )
+
+watch(homeActivatedPage, cancelPendingRefreshScroll)
+
+onScopeDispose(cancelPendingRefreshScroll)
 
 watch(
   () => showBewlyPage.value,
@@ -825,44 +854,6 @@ provide<BewlyAppProvider>('BEWLY_APP', {
 })
 
 if (settings.value.cleanUrlArgument) {
-  const BASE_PARAMS_TO_REMOVE = new Set([
-    'spm_id_from',
-    'from_source',
-    'msource',
-    'bsource',
-    'seid',
-    'source',
-    'session_id',
-    'visit_id',
-    'sourceFrom',
-    'from_spmid',
-    'share_source',
-    'share_medium',
-    'share_plat',
-    'share_session_id',
-    'share_tag',
-    'unique_k',
-    'csource',
-    'vd_source',
-    'tab',
-    'is_story_h5',
-    'share_from',
-    'plat_id',
-    '-Arouter',
-    'launch_id',
-    'live_from',
-    'hotRank',
-    'broadcast_type',
-    'trackid',
-  ])
-  const VIDEO_ONLY_PARAMS_TO_REMOVE = new Set([
-    'buvid',
-    'mid',
-    'spmid',
-    'timestamp',
-    'up_id',
-  ])
-
   let isCleaningUrl = false // 防止重复执行
   let cleanupTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -874,41 +865,22 @@ if (settings.value.cleanUrlArgument) {
 
     try {
       isCleaningUrl = true
-      const currentUrl = new URL(window.location.href)
-      let hasChanged = false
+      const currentUrl = window.location.href
+      const cleanedUrl = cleanBilibiliUrl(currentUrl)
 
-      for (const param of BASE_PARAMS_TO_REMOVE) {
-        if (currentUrl.searchParams.has(param)) {
-          currentUrl.searchParams.delete(param)
-          hasChanged = true
-        }
-      }
-      const hostname = currentUrl.hostname
-      if ((hostname === 'bilibili.com' || hostname.endsWith('.bilibili.com')) && currentUrl.pathname.startsWith('/video/')) {
-        for (const param of VIDEO_ONLY_PARAMS_TO_REMOVE) {
-          if (currentUrl.searchParams.has(param)) {
-            currentUrl.searchParams.delete(param)
-            hasChanged = true
-          }
-        }
-      }
-
-      if (hasChanged) {
-        const newUrl = currentUrl.toString()
-          .replace(/([^:])\/\/(?!\/)/g, '$1/') // 只替换中间的双斜杠，不处理末尾的斜杠
-          .replace(/%3D/gi, '=')
-          .replace(/%26/g, '&')
-
+      if (cleanedUrl !== currentUrl) {
         // 使用 requestIdleCallback 来避免阻塞页面加载
         if (window.requestIdleCallback) {
           window.requestIdleCallback(() => {
-            history.replaceState(null, '', newUrl)
+            if (window.location.href === currentUrl)
+              history.replaceState(null, '', cleanedUrl)
             isCleaningUrl = false
           })
         }
         else {
           setTimeout(() => {
-            history.replaceState(null, '', newUrl)
+            if (window.location.href === currentUrl)
+              history.replaceState(null, '', cleanedUrl)
             isCleaningUrl = false
           }, 0)
         }

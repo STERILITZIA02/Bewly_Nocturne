@@ -40,6 +40,7 @@ onActivated(() => {
 })
 
 async function initData() {
+  needToLoginFirst.value = false
   offset.value = ''
   updateBaseline.value = ''
   videoList.value = []
@@ -127,6 +128,7 @@ async function getSubscribedSeriesVideos() {
     }
 
     if (response.code === 0) {
+      needToLoginFirst.value = false
       offset.value = response.data.offset
       updateBaseline.value = response.data.update_baseline
 
@@ -137,9 +139,6 @@ async function getSubscribedSeriesVideos() {
       }))
 
       videoList.value = [...videoList.value, ...newItems]
-    }
-    else if (response.code === -101) {
-      needToLoginFirst.value = true
     }
   }
   catch {

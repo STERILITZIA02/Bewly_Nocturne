@@ -105,6 +105,8 @@ settings:
   category_navigation_dock_desc: 設定 Dock 欄同側欄嘅位置、顯示同快捷操作。
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋同結果頁。
   category_navigation_moments_desc: 設定插件動態頁左邊嘅元件同動態卡片開啟方式。
+  category_navigation_playback_page_desc: 預留獨立區域當以後加入播放頁設定。
+  category_navigation_messages_page_desc: 預留獨立區域當以後加入訊息頁設定。
   category_playback_player_desc: 設定播放器模式、捲動、彈幕、字幕同播放狀態。
   category_playback_autoplay_desc: 設定自動連播同自訂播放行為。
   category_bilibili_comments_desc: 加強留言區嘅用戶資料同內容顯示。
@@ -140,6 +142,8 @@ settings:
     moments: 動態頁
     favorites: 收藏
     search: 搵嘢頁
+    playback_page: 播放頁
+    messages_page: 訊息頁
 
   # Bilibili 功能增強 子選單
   bilibili_features:
@@ -348,9 +352,6 @@ settings:
   disable_frosted_glass_and_top_bar_gradient: 關閉毛玻璃同頂欄漸變
   disable_frosted_glass_and_top_bar_gradient_desc: 開啟後會關閉全域毛玻璃同頂欄漸變，並使用實色表面；兩種效果預設開啟。
   frosted_glass_blur_intensity: 毛玻璃模糊強度
-  enable_liquid_segment_indicator: 啓用液態分段指示器
-  enable_liquid_segment_indicator_desc: |
-    喺主頁標籤、版面切換、頂欄頁面切換器等分段控件用滑動液態指示器。閂咗就用靜態選中態，無滑動動畫，預設閂以提升低效能裝置流暢度。
   disable_shadow: 閂咗陰影
   link_opening_behavior_opt:
     current_tab: 目前分頁
@@ -457,6 +458,11 @@ settings:
   always_use_dock_desc: 啓用後，Dock 點都要用佢而唔係用側邊欄。我哋推介你同時啓用自動收埋 Dock 去。
   auto_hide_dock: 自動收埋 Dock
   half_hide_dock: 收埋一半 Dock
+  dock_collapse_mode: Dock 收埋方式
+  dock_collapse_mode_desc: 控制收埋掣會唔會顯示，或者指針離開後自動收埋做懸浮圓球。
+  dock_collapse_mode_button: 顯示收埋掣
+  dock_collapse_mode_hidden: 唔顯示收埋掣
+  dock_collapse_mode_automatic: 冇掣，離開後自動收埋
   dock_position: Dock 放位
   dock_position_desc: 放喺螢幕邊度。
   dock_content_adjustment: Dock 內容調整
@@ -917,6 +923,8 @@ dock:
   dark_mode: 深色模式
   light_mode: 淺色模式
   settings: 設定
+  collapse_dock: 收埋 Dock
+  expand_dock: 展開 Dock
 video_card:
   operation:
     not_interested: 唔鍾意

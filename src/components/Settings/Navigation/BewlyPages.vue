@@ -3,7 +3,7 @@ import SettingsCategoryLayout from '../components/SettingsCategoryLayout.vue'
 
 const storageKey = 'bewly-settings-bewly-pages-page'
 const legacyStorageKey = 'bewly-settings-navigation-page'
-const pageValues = ['home', 'moments', 'search']
+const pageValues = ['home', 'moments', 'search', 'playback', 'messages']
 const legacyPage = sessionStorage.getItem(legacyStorageKey)
 
 if (!sessionStorage.getItem(storageKey) && legacyPage && pageValues.includes(legacyPage))
@@ -35,6 +35,22 @@ const pages = [
     icon: 'i-mingcute:search-2-line',
     iconActivated: 'i-mingcute:search-2-fill',
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/SearchPage/SearchPage.vue')),
+  },
+  {
+    value: 'playback',
+    titleKey: 'settings.plugin.playback_page',
+    descriptionKey: 'settings.category_navigation_playback_page_desc',
+    icon: 'i-mingcute:play-circle-line',
+    iconActivated: 'i-mingcute:play-circle-fill',
+    component: defineAsyncComponent(() => import('../PluginComponentsAndPages/PlaybackPage/PlaybackPage.vue')),
+  },
+  {
+    value: 'messages',
+    titleKey: 'settings.plugin.messages_page',
+    descriptionKey: 'settings.category_navigation_messages_page_desc',
+    icon: 'i-mingcute:message-3-line',
+    iconActivated: 'i-mingcute:message-3-fill',
+    component: defineAsyncComponent(() => import('../PluginComponentsAndPages/MessagesPage/MessagesPage.vue')),
   },
 ]
 </script>

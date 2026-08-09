@@ -5,6 +5,7 @@ import draggable from 'vuedraggable'
 import Button from '~/components/Button.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import type { DockCollapseMode } from '~/constants/dock'
 import { settings } from '~/logic'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
@@ -30,6 +31,23 @@ const dockPositions = computed(() => {
     {
       label: t('common.position.bottom'),
       value: 'bottom',
+    },
+  ]
+})
+
+const dockCollapseModeOptions = computed((): { label: string, value: DockCollapseMode }[] => {
+  return [
+    {
+      label: t('settings.dock_collapse_mode_button'),
+      value: 'button',
+    },
+    {
+      label: t('settings.dock_collapse_mode_hidden'),
+      value: 'hidden',
+    },
+    {
+      label: t('settings.dock_collapse_mode_automatic'),
+      value: 'automatic',
     },
   ]
 })
@@ -116,6 +134,17 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
       </SettingsItem>
       <SettingsItem :title="$t('settings.half_hide_dock')" right-width="auto">
         <Radio v-model="settings.halfHideDock" />
+      </SettingsItem>
+      <SettingsItem
+        :title="$t('settings.dock_collapse_mode')"
+        :desc="$t('settings.dock_collapse_mode_desc')"
+        right-width="auto"
+      >
+        <Select
+          v-model="settings.dockCollapseMode"
+          :options="dockCollapseModeOptions"
+          w="160px"
+        />
       </SettingsItem>
       <SettingsItem :title="$t('settings.dock_position')" :desc="$t('settings.dock_position_desc')" right-width="auto">
         <Select

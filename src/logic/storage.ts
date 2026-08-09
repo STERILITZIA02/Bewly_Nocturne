@@ -3,6 +3,7 @@ import browser from 'webextension-polyfill'
 
 import { useSettingsStorage } from '~/composables/useSettingsStorage'
 import { useStorageLocal } from '~/composables/useStorageLocal'
+import type { DockCollapseMode } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
@@ -223,7 +224,7 @@ export interface Settings {
 
   disableFrostedGlass: boolean
   frostedGlassBlurIntensity: number
-  /** 分段控件液态滑动指示器；默认关闭以降低切换动画合成成本 */
+  /** 已隐藏的旧设置字段；分段控件液态指示器固定启用 */
   enableLiquidSegmentIndicator: boolean
   disableShadow: boolean
 
@@ -313,6 +314,7 @@ export interface Settings {
   alwaysUseDock: boolean
   autoHideDock: boolean
   halfHideDock: boolean
+  dockCollapseMode: DockCollapseMode
   dockPosition: 'left' | 'right' | 'bottom'
   dockItemsConfig: { page: AppPage, visible: boolean, openInNewTab: boolean, useOriginalBiliPage: boolean }[]
   pageMode: PageMode
@@ -581,6 +583,7 @@ export const originalSettings: Settings = {
   alwaysUseDock: false,
   autoHideDock: false,
   halfHideDock: false,
+  dockCollapseMode: 'button',
   dockPosition: 'right',
   dockItemsConfig: [],
   pageMode: 'custom',

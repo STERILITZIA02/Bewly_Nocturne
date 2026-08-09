@@ -242,7 +242,6 @@ function toggleTabContentLoading(loading: boolean) {
           v-if="shouldShowHomeTabs"
           class="glass-panel home-tabs-panel bew-segment-control bew-segment-control--surface"
           :class="{
-            'bew-segment-control--static': !settings.enableLiquidSegmentIndicator,
             'bew-segment-control--solid': settings.disableFrostedGlass,
           }"
         >
@@ -252,7 +251,6 @@ function toggleTabContentLoading(loading: boolean) {
               box-border
             >
               <LiquidSegmentIndicator
-                v-if="settings.enableLiquidSegmentIndicator"
                 ref="tabsIndicatorRef"
                 :active-key="activatedPage"
               />
@@ -274,14 +272,12 @@ function toggleTabContentLoading(loading: boolean) {
           v-if="settings.enableGridLayoutSwitcher"
           class="glass-panel home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
           :class="{
-            'bew-segment-control--static': !settings.enableLiquidSegmentIndicator,
             'bew-segment-control--solid': settings.disableFrostedGlass,
           }"
           flex="~ shrink-0 items-center"
           box-border
         >
           <LiquidSegmentIndicator
-            v-if="settings.enableLiquidSegmentIndicator"
             ref="gridIndicatorRef"
             :active-key="gridLayout.home"
           />

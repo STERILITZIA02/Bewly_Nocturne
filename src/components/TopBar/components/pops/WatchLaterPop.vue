@@ -11,6 +11,7 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { isHomePage, isInIframe, removeHttpFromUrl } from '~/utils/main'
+import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
 
 const topBarStore = useTopBarStore()
@@ -80,13 +81,13 @@ function openVideoPage(url: string) {
   window.open(url, '_top')
 }
 
-function deleteWatchLaterItem(index: number, aid: number) {
-  topBarStore.deleteWatchLaterItem(index, aid)
+function deleteWatchLaterItem(aid: number) {
+  topBarStore.deleteWatchLaterItem(aid)
 }
 
-function handleOpenVideoPageAndRemove(index: number, aid: number, bvid: string) {
+function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
   openVideoPage(getVideoPageUrl(bvid))
-  deleteWatchLaterItem(index, aid)
+  deleteWatchLaterItem(aid)
 }
 </script>
 
@@ -167,7 +168,7 @@ function handleOpenVideoPageAndRemove(index: number, aid: number, bvid: string) 
       <!-- watchlater -->
       <TransitionGroup name="list">
         <ALink
-          v-for="(item, index) in watchLaterList"
+          v-for="item in watchLaterList"
           :key="item.aid"
           :href="getWatchLaterVideoUrl(item.bvid)"
           class="group"
@@ -220,7 +221,7 @@ function handleOpenVideoPageAndRemove(index: number, aid: number, bvid: string) 
                     grid="~ place-items-center"
                     text="white xs"
                     border="rounded-full"
-                    @click.stop.prevent="handleOpenVideoPageAndRemove(index, item.aid, item.bvid)"
+                    @click.stop.prevent="handleOpenVideoPageAndRemove(item.aid, item.bvid)"
                   >
                     <i i-tabler:player-play />
                   </button>
@@ -237,7 +238,7 @@ function handleOpenVideoPageAndRemove(index: number, aid: number, bvid: string) 
                 text="white xs"
                 duration-300
                 border="rounded-full"
-                @click.stop.prevent="deleteWatchLaterItem(index, item.aid)"
+                @click.stop.prevent="deleteWatchLaterItem(item.aid)"
               >
                 <i i-mingcute:close-line />
               </div>
@@ -274,7 +275,7 @@ function handleOpenVideoPageAndRemove(index: number, aid: number, bvid: string) 
               </div>
               <Progress
                 :percentage="
-                  (item.progress / item.duration) * 100
+                  normalizePlaybackProgress(item.progress, item.duration)
                 "
               />
             </div>

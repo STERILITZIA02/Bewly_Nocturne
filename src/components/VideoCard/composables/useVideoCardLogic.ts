@@ -70,6 +70,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const resolvedWatchLaterAid = ref<number>()
   const isUpdatingWatchLater = ref(false)
   let watchLaterResolutionId = 0
+  let previewRequestGeneration = 0
   const watchLaterAid = computed(() => {
     const video = props.value.video
     if (!video)
@@ -78,9 +79,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       return resolvedWatchLaterAid.value
     if (video.aid)
       return video.aid
-    if (video.epid || video.roomid)
-      return undefined
-    return Number.isFinite(video.id) ? video.id : undefined
+    return undefined
   })
   const isInWatchLater = computed(() => {
     return watchLaterAid.value !== undefined
@@ -104,6 +103,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   // 清理函数 - 在组件卸载时调用
   onScopeDispose(() => {
     isDisposed.value = true
+    previewRequestGeneration++
     releaseVideoPreviewCacheEntry(previewCacheKey)
 
     // 清除所有待处理的超时
@@ -198,8 +198,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
     if (video.roomid)
       return undefined
-    if (Number.isFinite(video.id))
-      return video.id
 
     if (video.bvid) {
       const result: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
@@ -237,82 +235,80 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     }
   }, { immediate: true })
 
-  watch(() => isHover.value, async (newValue) => {
-    if (!props.value.video || !newValue)
+  watch([
+    () => props.value.video,
+    isHover,
+    () => props.value.showPreview,
+    () => settings.value.enableVideoPreview,
+    () => topBarStore.isLogin,
+    momentsSelectedUploader,
+  ], async ([video, hover, showPreview, enableVideoPreview, isLogin]) => {
+    const generation = ++previewRequestGeneration
+    clearPreviewVideoUrl()
+
+    if (!video || !hover || !showPreview || !enableVideoPreview || !isLogin || isDisposed.value)
       return
 
-    // 如果组件已卸载，不执行任何操作
-    if (isDisposed.value)
-      return
+    const isCurrentRequest = () => generation === previewRequestGeneration
+      && !isDisposed.value
+      && isHover.value
+      && props.value.video === video
+      && props.value.showPreview
+      && settings.value.enableVideoPreview
+      && topBarStore.isLogin
 
-    // Moments feed preview control: Only load preview if video belongs to selected uploader
-    // This prevents loading previews for videos from other uploaders when switching
     if (momentsSelectedUploader.value !== null) {
-      const authorMids = getAuthorMids(props.value.video)
-      // If no authors found, don't load preview
-      if (authorMids.length === 0)
-        return
-      // If a specific uploader is selected and video doesn't belong to them, don't load preview
+      const authorMids = getAuthorMids(video)
       if (!authorMids.includes(momentsSelectedUploader.value))
         return
     }
 
-    if (props.value.showPreview && settings.value.enableVideoPreview && !previewVideoUrl.value) {
-      // 检查登录状态，未登录不允许视频预览
-      if (!topBarStore.isLogin)
-        return
-
-      // Handle live stream preview
-      if (props.value.video.roomid) {
-        try {
-          const res = await api.live.getLivePlayUrl({
-            cid: props.value.video.roomid,
-            platform: 'web', // 使用web平台获取FLV格式，加载更快
-            qn: 80, // 流畅画质，适合预览
-          })
-          // 再次检查是否已卸载
-          if (isDisposed.value || !isHover.value)
-            return
-          if (res.code === 0 && res.data.durl && res.data.durl.length > 0) {
-            previewVideoUrl.value = res.data.durl[0].url
-          }
-        }
-        catch {
-          // Ignore error
-        }
-      }
-      // Handle video preview
-      else if (props.value.video.aid || props.value.video.bvid) {
-        let cid = props.value.video.cid
-        if (!cid) {
-          try {
-            const res: VideoInfo = await api.video.getVideoInfo({
-              bvid: props.value.video.bvid,
-            })
-            // 检查是否已卸载
-            if (isDisposed.value || !isHover.value)
-              return
-            if (res.code === 0)
-              cid = res.data.cid
-          }
-          catch {
-            // Ignore error
-          }
-        }
-        // 如果组件已卸载，不发起请求
-        if (isDisposed.value)
-          return
-        api.video.getVideoPreview({
-          bvid: props.value.video.bvid,
-          cid,
-        }).then((res: VideoPreviewResult) => {
-          // 检查是否已卸载，已卸载则不更新状态
-          if (isDisposed.value || !isHover.value)
-            return
-          if (res.code === 0 && res.data.durl && res.data.durl.length > 0)
-            previewVideoUrl.value = res.data.durl[0].url
+    if (video.roomid) {
+      try {
+        const res = await api.live.getLivePlayUrl({
+          cid: video.roomid,
+          platform: 'web',
+          qn: 80,
         })
+        if (isCurrentRequest() && res.code === 0 && res.data.durl?.length)
+          previewVideoUrl.value = res.data.durl[0].url
       }
+      catch {
+        // Ignore preview request errors.
+      }
+      return
+    }
+
+    if (!video.aid && !video.bvid)
+      return
+
+    let cid = video.cid
+    if (!cid && video.bvid) {
+      try {
+        const res: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
+        if (!isCurrentRequest())
+          return
+        if (res.code === 0)
+          cid = res.data.cid
+      }
+      catch {
+        // Ignore preview request errors.
+      }
+    }
+
+    if (!isCurrentRequest())
+      return
+
+    try {
+      const res: VideoPreviewResult = await api.video.getVideoPreview({
+        bvid: video.bvid,
+        cid,
+      })
+      if (isCurrentRequest() && res.code === 0 && res.data.durl?.length)
+        previewVideoUrl.value = res.data.durl[0].url
+    }
+    catch {
+      // Ignore preview request errors.
     }
   })
 
@@ -324,14 +320,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
     retainVideoPreviewCacheEntry(previewCacheKey, clearPreviewVideoUrl, hover)
   }, { immediate: true })
-
-  watch([() => props.value.showPreview, () => settings.value.enableVideoPreview], ([showPreview, enableVideoPreview]) => {
-    if (showPreview && enableVideoPreview)
-      return
-
-    previewVideoUrl.value = ''
-    isHover.value = false
-  })
 
   // Methods
   function refreshTopBarWatchLaterAfterMutation() {
@@ -390,6 +378,10 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       }
 
       refreshTopBarWatchLaterAfterMutation()
+    }
+    catch (error) {
+      console.error('更新稍后再看失败:', error)
+      toast.error('更新稍后再看失败')
     }
     finally {
       isUpdatingWatchLater.value = false

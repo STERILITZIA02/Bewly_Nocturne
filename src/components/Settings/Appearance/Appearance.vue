@@ -154,17 +154,6 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
           />
         </div>
       </SettingsItem>
-      <SettingsItem
-        :title="$t('settings.enable_liquid_segment_indicator')"
-        :badge="$t('settings.badge_performance_impact')"
-        right-width="auto"
-      >
-        <template #desc>
-          <span>{{ $t('settings.enable_liquid_segment_indicator_desc') }}</span>
-          <span block class="bew-warning-text">{{ $t('common.performance_impact_warn') }}</span>
-        </template>
-        <Radio v-model="settings.enableLiquidSegmentIndicator" />
-      </SettingsItem>
       <SettingsItem :title="$t('settings.disable_shadow')" right-width="auto">
         <Radio v-model="settings.disableShadow" />
       </SettingsItem>

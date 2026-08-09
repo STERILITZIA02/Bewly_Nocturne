@@ -16,7 +16,7 @@
 
 ## 结构与定位
 
-在现有 `Dock.vue` 内切换“完整 Dock”和“收起圆球”，不创建 Teleport、独立悬浮根节点或第二套 Dock 状态。
+在现有 `Dock.vue` 内保留一个持续存在的玻璃外壳，不创建 Teleport、独立悬浮根节点或第二套 Dock 状态。展开和收起只改变该外壳的真实宽高、圆角与内部内容阶段，不替换整个表面。
 
 收起前记录 Dock 的实际宽高。收起时外层定位容器继续使用该宽高，圆球在容器中水平、垂直居中。因此无论 Dock 在左侧、右侧或底部，圆球都停留在原 Dock 的几何中心。
 
@@ -24,9 +24,9 @@
 
 ## 动画与交互
 
-完整 Dock 与圆球通过同一个 Vue `Transition` 切换，只动画 `opacity` 和 `transform`。收起时 Dock 在原中心缩小并淡出，圆球从较小 scale 淡入；展开时反向播放。不动画 `backdrop-filter`、阴影几何或布局定位。
+采用“克制导轨”时序。展开时，同一个圆形玻璃外壳先以稳定的非线性节奏沿 Dock 主轴增长成长条；外壳达到最终尺寸后，整组按钮再以轻微位移和淡入进入。收起时顺序反转：按钮组先退出，长条外壳再连续缩回圆球。左右 Dock 沿纵轴形变，底部 Dock 沿横轴形变。
 
-动画使用现有 `--bew-duration-normal/moderate` 和 `--bew-ease-emphasized`。`prefers-reduced-motion: reduce` 时缩短为几乎即时的淡入淡出。
+外壳使用真实 `width` / `height` 过渡，避免把玻璃、边框和圆角作为位图拉伸；按钮阶段只动画 `opacity` 和 `transform`。不动画 `backdrop-filter`、阴影几何或布局定位。外壳约 320ms，按钮约 160ms，使用现有 duration/easing token；`prefers-reduced-motion: reduce` 时缩短为几乎即时切换。
 
 收起按钮位于设置按钮之后，复用 `.dock-item` 的尺寸、正圆、Hover、Active、Focus 和阴影。按钮与圆球均有独立的可访问名称。
 
@@ -40,7 +40,7 @@
 
 ## 方案比较
 
-1. **在现有 `Dock.vue` 中切换视图（采用）**：共用定位、比例缩放、主题 token 和 Hover 生命周期，差异最小。
+1. **在现有 `Dock.vue` 中维持单一形变外壳（采用）**：共用定位、比例缩放、主题 token 和 Hover 生命周期，外壳连续且为未来按钮组合保留稳定容器。
 2. **独立悬浮圆球组件**：需复制 Dock 定位、缩放和 Hover 逻辑，容易在左/右/底部定位中产生偏差。
 3. **Teleport 到页面级悬浮层**：会新增坐标同步、层级和 Shadow DOM 交互问题，与最小改动目标不符。
 
