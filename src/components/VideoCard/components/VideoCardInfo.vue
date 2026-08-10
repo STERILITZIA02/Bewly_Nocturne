@@ -305,7 +305,7 @@ const content = computed(() => {
             v-for="primaryTag in content.visiblePrimaryTags"
             :key="`primary-${primaryTag}`"
             class="video-card-meta__chip"
-            un-text="$bew-theme-color"
+            un-text="$bew-theme-foreground"
             p="x-2"
             lh-6
             rounded="$bew-radius"
@@ -321,7 +321,7 @@ const content = computed(() => {
             v-for="extraTag in content.visibleHighlightTags"
             :key="`highlight-${extraTag}`"
             class="video-card-meta__chip"
-            text="$bew-theme-color"
+            text="$bew-theme-foreground"
             p="x-2"
             lh-6
             rounded="$bew-radius"
@@ -386,7 +386,7 @@ const content = computed(() => {
                 v-for="primaryTag in content.visiblePrimaryTags"
                 :key="`primary-${primaryTag}`"
                 class="video-card-meta__chip"
-                un-text="$bew-theme-color"
+                un-text="$bew-theme-foreground"
                 p="x-2"
                 lh-6
                 rounded="$bew-radius"
@@ -402,7 +402,7 @@ const content = computed(() => {
                 v-for="extraTag in content.visibleHighlightTags"
                 :key="`highlight-${extraTag}`"
                 class="video-card-meta__chip"
-                text="$bew-theme-color"
+                text="$bew-theme-foreground"
                 p="x-2"
                 lh-6
                 rounded="$bew-radius"
@@ -449,7 +449,7 @@ const content = computed(() => {
             <a
               v-for="primaryTag in content.visiblePrimaryTags"
               :key="`legacy-primary-${primaryTag}`"
-              un-text="$bew-theme-color" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20 hover:$bew-theme-color-30"
+              un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20 hover:$bew-theme-color-30"
               :href="getTagSearchUrl(primaryTag)"
               target="_blank"
               @click.stop=""
@@ -459,7 +459,7 @@ const content = computed(() => {
             <span
               v-for="extraTag in content.visibleHighlightTags"
               :key="`highlight-${extraTag}`"
-              text="$bew-theme-color"
+              text="$bew-theme-foreground"
               lh-6
               p="x-2"
               rounded="$bew-radius"
@@ -540,7 +540,7 @@ const content = computed(() => {
               <a
                 v-for="primaryTag in content.visiblePrimaryTags"
                 :key="`legacy-primary-${primaryTag}`"
-                un-text="$bew-theme-color" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20 hover:$bew-theme-color-30"
+                un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20 hover:$bew-theme-color-30"
                 :href="getTagSearchUrl(primaryTag)"
                 target="_blank"
                 @click.stop=""
@@ -550,7 +550,7 @@ const content = computed(() => {
               <span
                 v-for="extraTag in content.visibleHighlightTags"
                 :key="`highlight-${extraTag}`"
-                text="$bew-theme-color"
+                text="$bew-theme-foreground"
                 lh-6
                 p="x-2"
                 rounded="$bew-radius"

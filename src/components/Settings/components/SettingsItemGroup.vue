@@ -86,7 +86,7 @@ const collapsed = ref(props.defaultCollapsed)
   &:hover {
     .group-title,
     .collapse-icon {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
   }
 }
@@ -98,7 +98,7 @@ const collapsed = ref(props.defaultCollapsed)
 }
 
 .group-title > i {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-icon-size-md);
 }
 

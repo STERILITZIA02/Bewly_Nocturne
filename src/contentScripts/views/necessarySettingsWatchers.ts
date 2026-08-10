@@ -1,6 +1,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
+import { useDark } from '~/composables/useDark'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
 import { LanguageType } from '~/enums/appEnums'
@@ -11,22 +12,10 @@ import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, 
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
+import { getThemeColorTokens } from '~/utils/themeColor'
 
 function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(location.href)
-}
-
-function getOnThemeColor(themeColor: string): '#000' | '#fff' {
-  const hex = themeColor.replace('#', '')
-  const channels = [0, 2, 4].map((offset) => {
-    const srgb = Number.parseInt(hex.slice(offset, offset + 2), 16) / 255
-    return srgb <= 0.04045 ? srgb / 12.92 : ((srgb + 0.055) / 1.055) ** 2.4
-  })
-  const luminance = channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722
-  const blackContrast = (luminance + 0.05) / 0.05
-  const whiteContrast = 1.05 / (luminance + 0.05)
-
-  return blackContrast >= whiteContrast ? '#000' : '#fff'
 }
 
 export function setupNecessarySettingsWatchers() {
@@ -34,6 +23,7 @@ export function setupNecessarySettingsWatchers() {
   const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const iframePageActive = useIframePageActive()
+  const { isDark } = useDark()
   let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
@@ -306,15 +296,17 @@ export function setupNecessarySettingsWatchers() {
   }, { immediate: true })
 
   watch(
-    () => settings.value.themeColor,
+    [() => settings.value.themeColor, isDark],
     () => {
       const bewlyElement = document.querySelector('#bewly') as HTMLElement | null
-      const onThemeColor = getOnThemeColor(settings.value.themeColor)
+      const themeTokens = getThemeColorTokens(settings.value.themeColor, isDark.value)
       const targets = [document.documentElement, bewlyElement].filter((element): element is HTMLElement => Boolean(element))
 
       targets.forEach((element) => {
-        element.style.setProperty('--bew-theme-color', settings.value.themeColor)
-        element.style.setProperty('--bew-on-theme-color', onThemeColor)
+        element.style.setProperty('--bew-theme-color', themeTokens.theme)
+        element.style.setProperty('--bew-on-theme-color', themeTokens.onTheme)
+        element.style.setProperty('--bew-theme-foreground', themeTokens.foreground)
+        element.style.setProperty('--bew-theme-focus-ring', themeTokens.focusRing)
       })
     },
     { immediate: true },

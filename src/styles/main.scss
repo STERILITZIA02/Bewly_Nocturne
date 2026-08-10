@@ -1,5 +1,5 @@
 * {
-  outline-color: var(--bew-theme-color-80);
+  outline-color: var(--bew-theme-focus-ring);
   font-feature-settings: "tnum";
   // outline-width: 2px;
   // outline-offset: 2px;
@@ -110,7 +110,7 @@ img:not(.pswp__img) {
     [role="tab"],
     [tabindex]:not([tabindex="-1"])
   ):focus-visible {
-    outline: 2px solid var(--bew-theme-color-40);
+    outline: 2px solid var(--bew-theme-focus-ring);
     outline-offset: var(--bew-space-0-5);
   }
 
@@ -172,10 +172,10 @@ img:not(.pswp__img) {
   }
 
   a.link {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
 
     &:hover {
-      color: var(--bew-theme-color-80);
+      color: var(--bew-theme-foreground);
     }
   }
 }

@@ -492,7 +492,7 @@ async function handleFollowClick(e: Event) {
   cursor: pointer;
 
   &:hover .sample-title {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 }
 
@@ -601,7 +601,7 @@ async function handleFollowClick(e: Event) {
 }
 
 .live-status-badge {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-weight: var(--bew-font-weight-medium);
 }
 

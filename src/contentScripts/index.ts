@@ -952,18 +952,23 @@ else if (shouldInitializeContentScript) {
       }
     }, true)
   }
-  window.addEventListener('pageshow', () => {
-    if (isVideoOrBangumiPage()) {
+  let playerModeResumeFrame: number | undefined
+  function queuePlayerModeResume() {
+    if (playerModeResumeFrame !== undefined)
+      return
+    playerModeResumeFrame = requestAnimationFrame(() => {
+      playerModeResumeFrame = undefined
+      if (document.visibilityState !== 'visible' || !isVideoOrBangumiPage())
+        return
       waitForPlayerModePageSettle()
       applyDefaultPlayerMode()
-    }
-  })
-  document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState !== 'visible' || !isVideoOrBangumiPage())
-      return
+    })
+  }
 
-    waitForPlayerModePageSettle()
-    applyDefaultPlayerMode()
+  window.addEventListener('pageshow', queuePlayerModeResume)
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible')
+      queuePlayerModeResume()
   })
 
   // Set the original Bilibili top bar to `display: none` to prevent it from showing before the load

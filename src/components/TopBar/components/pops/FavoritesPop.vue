@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
 import type { Ref } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
 import Loading from '~/components/Loading.vue'
@@ -24,6 +26,8 @@ const isLoading = ref<boolean>(false)
 const noMoreContent = ref<boolean>(false)
 const favoriteVideosWrap = ref<HTMLElement>() as Ref<HTMLElement>
 const topBarStore = useTopBarStore()
+const { t } = useI18n()
+const toast = useToast()
 const { favoriteStateVersion } = storeToRefs(topBarStore)
 let favoriteDataRequestVersion = 0
 let favoriteResourcesRequestVersion = 0
@@ -65,8 +69,7 @@ function handleReachBottom() {
     return
 
   if (activatedMediaId.value) {
-    currentPageNum.value++
-    getFavoriteResources()
+    void getFavoriteResources()
   }
 }
 
@@ -82,10 +85,15 @@ async function initData() {
 
 async function refreshFavoriteData() {
   const requestVersion = ++favoriteDataRequestVersion
+  favoriteResourcesRequestVersion++
   const previousMediaId = activatedMediaId.value
-  await getFavoriteCategories(requestVersion)
+  const loaded = await getFavoriteCategories(requestVersion)
   if (requestVersion !== favoriteDataRequestVersion)
     return
+  if (!loaded) {
+    isLoading.value = false
+    return
+  }
 
   const category = favoriteCategories.find(item => item.id === previousMediaId) || favoriteCategories[0]
   if (!category) {
@@ -106,21 +114,30 @@ async function refreshFavoriteData() {
   }
 }
 
-async function getFavoriteCategories(requestVersion?: number) {
-  await api.favorite.getFavoriteCategories({
-    up_mid: getUserID(),
-  })
-    .then((res) => {
-      if (requestVersion !== undefined && requestVersion !== favoriteDataRequestVersion)
-        return
-
-      if (res.code === 0) {
-        favoriteCategories.length = 0
-        favoriteCategories.push(...res.data.list)
-        noMoreContent.value = false
-      }
-      isLoading.value = false
+async function getFavoriteCategories(requestVersion?: number): Promise<boolean> {
+  try {
+    const res = await api.favorite.getFavoriteCategories({
+      up_mid: getUserID(),
     })
+    if (requestVersion !== undefined && requestVersion !== favoriteDataRequestVersion)
+      return false
+
+    if (res.code !== 0) {
+      toast.error(t('common.load_failed'))
+      return false
+    }
+
+    favoriteCategories.length = 0
+    favoriteCategories.push(...res.data.list)
+    noMoreContent.value = false
+    return true
+  }
+  catch (error) {
+    console.error('Failed to load favorite categories:', error)
+    if (requestVersion === undefined || requestVersion === favoriteDataRequestVersion)
+      toast.error(t('common.load_failed'))
+    return false
+  }
 }
 
 /**
@@ -157,16 +174,32 @@ async function getFavoriteResources(force = false) {
 
       // 添加数据到列表
       if (data && 'medias' in data && Array.isArray(data.medias) && data.medias.length > 0) {
-        favoriteResources.push(...data.medias.filter((m: any) => m != null))
+        const existingIds = new Set(favoriteResources.map(item => `${item.type}:${item.id}`))
+        const newResources = data.medias.filter((item: FavoriteResource | null) => {
+          if (!item)
+            return false
+          const key = `${item.type}:${item.id}`
+          if (existingIds.has(key))
+            return false
+          existingIds.add(key)
+          return true
+        })
+        favoriteResources.push(...newResources)
       }
       else if (!data || !data.medias || data.medias.length === 0) {
         // 如果没有数据返回，也标记为没有更多内容
         noMoreContent.value = true
       }
+      currentPageNum.value = pageNum + 1
+    }
+    else {
+      toast.error(t('common.load_failed'))
     }
   }
   catch (error) {
     console.error('Failed to load favorite resources:', error)
+    if (requestVersion === favoriteResourcesRequestVersion)
+      toast.error(t('common.load_failed'))
   }
   finally {
     if (requestVersion === favoriteResourcesRequestVersion)
@@ -177,6 +210,7 @@ async function getFavoriteResources(force = false) {
 function refreshFavoriteResources() {
   favoriteResources.length = 0
   currentPageNum.value = 1
+  noMoreContent.value = false
   void getFavoriteResources(true)
 }
 
@@ -290,25 +324,27 @@ defineExpose({
 
         <!-- favorites -->
         <TransitionGroup name="list">
-          <ALink
+          <article
             v-for="item in favoriteResources"
-            :key="item.id"
-            :href="isMusic(item) ? `https://www.bilibili.com/audio/au${item.id}` : `//www.bilibili.com/video/${item.bvid}`"
-            type="topBar"
+            :key="`${item.type}:${item.id}`"
             hover:bg="$bew-fill-2"
             rounded="$bew-radius"
             m="last:b-4" p="2"
-            class="group"
+            class="group popover-card"
             transition="background-color duration-200, color duration-200, opacity duration-200"
           >
-            <section flex="~ gap-4" items-start>
+            <ALink
+              class="popover-card__primary"
+              :href="isMusic(item) ? `https://www.bilibili.com/audio/au${item.id}` : `//www.bilibili.com/video/${item.bvid}`"
+              :aria-label="item.title"
+              type="topBar"
+            />
+            <section class="popover-card__content" flex="~ gap-4" items-start>
               <div
+                class="popover-card__media aspect-video"
                 bg="$bew-skeleton"
                 w="120px"
                 flex="shrink-0"
-                rounded="$bew-radius-half"
-                overflow="hidden"
-                class="aspect-video"
               >
                 <div pos="relative" w-full h-full>
                   <img
@@ -346,14 +382,14 @@ defineExpose({
                   <ALink
                     :href="`https://space.bilibili.com/${item.upper.mid}`"
                     type="topBar"
-                    :stop-propagation="true"
+                    class="popover-card__interactive"
                   >
                     {{ item.upper.name }}
                   </ALink>
                 </div>
               </div>
             </section>
-          </ALink>
+          </article>
         </TransitionGroup>
 
         <!-- loading -->
@@ -366,6 +402,8 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/popoverCards";
+
 .activated-category {
   --uno: "bg-$bew-theme-color text-$bew-on-theme-color";
 }

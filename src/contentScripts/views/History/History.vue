@@ -334,7 +334,7 @@ function jumpToLoginPage() {
             />
             <div
               text="sm $bew-text-3"
-              group-hover:text="$bew-theme-color"
+              group-hover:text="$bew-theme-foreground"
               bg="$bew-fill-1"
               group-hover:bg="$bew-theme-color-20"
               p="x-3 y-1"
@@ -479,7 +479,7 @@ function jumpToLoginPage() {
                   }}
                   <span
                     v-if="historyItem.live_status === 1"
-                    text="$bew-theme-color"
+                    text="$bew-theme-foreground"
                     flex
                     items-center
                     gap-1

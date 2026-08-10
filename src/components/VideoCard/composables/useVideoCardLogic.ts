@@ -11,6 +11,7 @@ import { getTvSign, TVAppKey } from '~/utils/authProvider'
 import { calcCurrentTime, numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getCSRF, removeHttpFromUrl } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
 import { resolveWatchLaterAid } from '~/utils/watchLater'
 
@@ -210,7 +211,8 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
         resolvedWatchLaterAid.value = aid
     }
     catch (error) {
-      console.error('获取视频稍后再看状态失败:', error)
+      if (!isExtensionContextInvalidatedError(error))
+        console.error('获取视频稍后再看状态失败:', error)
     }
   }, { immediate: true })
 

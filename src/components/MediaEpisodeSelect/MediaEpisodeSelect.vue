@@ -228,7 +228,7 @@ watch(isOpen, async (open) => {
     border-radius: var(--bew-badge-radius);
     corner-shape: var(--bew-corner-shape);
     background: var(--bew-theme-color-20);
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
   }

@@ -219,7 +219,7 @@ const awayScore = computed(() => {
 
   &.upcoming {
     background: var(--bew-theme-color-20);
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 }
 

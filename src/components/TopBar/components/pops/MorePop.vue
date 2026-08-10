@@ -4,10 +4,10 @@ import { useI18n } from 'vue-i18n'
 import { settings } from '~/logic'
 import { getUserID } from '~/utils/main'
 
-const emit = defineEmits<{
-  (e: 'bewlyPageClick', event: MouseEvent, key: string): void
-}>()
+import { useTopBarInteraction } from '../../composables/useTopBarInteraction'
+
 const { t } = useI18n()
+const { getTopBarItemHref, handleClickTopBarItem, shouldOpenConfiguredTopBarItem } = useTopBarInteraction()
 
 const list = computed((): { name: string, url: string, icon: string, bewlyKey?: string }[] => [
   { name: t('topbar.notifications'), url: '//message.bilibili.com', icon: 'i-mingcute:notification-line' },
@@ -36,9 +36,9 @@ const list = computed((): { name: string, url: string, icon: string, bewlyKey?: 
     <ALink
       v-for="item in list"
       :key="item.name"
-      :href="item.url"
+      :href="item.bewlyKey ? getTopBarItemHref(item.bewlyKey, item.url) : item.url"
       type="topBar"
-      :custom-click-event="!!item.bewlyKey && !settings.touchScreenOptimization && settings.openTopBarItemsInBewly"
+      :custom-click-event="!!item.bewlyKey && !settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem(item.bewlyKey)"
       pos="relative"
       p="x-4 y-2"
       bg="hover:$bew-fill-2"
@@ -47,7 +47,7 @@ const list = computed((): { name: string, url: string, icon: string, bewlyKey?: 
       m="b-1 last:b-0"
       flex="~"
       items="center"
-      @click="item.bewlyKey && emit('bewlyPageClick', $event, item.bewlyKey)"
+      @click="item.bewlyKey && handleClickTopBarItem($event, item.bewlyKey)"
     >
       <i :class="item.icon" class="mr-4" />
       <span class="flex-1">{{ item.name }}</span>

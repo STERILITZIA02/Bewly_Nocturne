@@ -149,7 +149,7 @@ defineExpose({ refreshAnimeTimeTable })
                     :href="`//www.bilibili.com/bangumi/play/ss${episode.season_id}`"
                     target="_blank"
                   >{{ episode.title }}</a>
-                  <p mt-auto text="$bew-theme-color">
+                  <p mt-auto text="$bew-theme-foreground">
                     {{ episode.pub_index }}
                   </p>
                 </div>

@@ -4129,7 +4129,7 @@ watch(
   outline-offset: 2px;
 }
 .moments-up-list__item--active .moments-up-list__name {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
 }
 .moments-up-list__item--active .moments-up-list__avatar > img,
 .moments-up-list__item--active .moments-up-list__avatar--all,
@@ -4165,7 +4165,7 @@ watch(
   box-sizing: border-box;
   border: 0;
   border-radius: 50%;
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   background: var(--bew-theme-color-20);
 }
 .moments-up-list__item--active .moments-up-list__avatar--all,

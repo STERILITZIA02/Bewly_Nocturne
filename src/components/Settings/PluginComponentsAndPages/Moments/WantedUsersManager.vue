@@ -361,7 +361,7 @@ function removeUser(mid: string) {
   line-height: var(--bew-line-height-caption);
 }
 .wanted-users-manager__candidates em {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
   font-style: normal;
 }

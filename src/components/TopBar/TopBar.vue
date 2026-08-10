@@ -24,6 +24,7 @@ const topBarStore = useTopBarStore()
 const { forceWhiteIcon } = useTopBarInteraction()
 
 const conflictingHeaderSelectors = ['.fixed-author-header', '.fixed-top-header']
+const spaceNavbarSelector = '.nav-bar.space-navbar'
 
 const { isDark } = useDark()
 
@@ -149,6 +150,10 @@ function handleScroll(arg?: number | Event): void {
       console.warn('[TopBar Performance] Missing scrollTop parameter from OVERLAY_SCROLL_BAR_SCROLL event')
       return
     }
+  }
+
+  if (isUserSpacePage()) {
+    scheduleConflictingHeaderVisibilityUpdate()
   }
 
   // 计算滚动距离，只有超过阈值才处理
@@ -297,17 +302,34 @@ function cleanupScrollListeners() {
   }
 }
 
-function updateConflictingHeaderVisibility(targets = findConflictingHeaders()) {
-  bewlyWidescreenActive.value = isBewlyWidescreenActive()
+function isVisibleElement(element: HTMLElement) {
+  const style = window.getComputedStyle(element)
+  return style.display !== 'none'
+    && style.visibility !== 'hidden'
+    && Number.parseFloat(style.opacity) !== 0
+    && element.offsetWidth > 0
+    && element.offsetHeight > 0
+}
 
-  const hasVisibleHeader = targets.some((el) => {
-    const style = window.getComputedStyle(el)
-    return style.display !== 'none'
-      && style.visibility !== 'hidden'
-      && Number.parseFloat(style.opacity) !== 0
-      && el.offsetWidth > 0
-      && el.offsetHeight > 0
+function isStickySpaceNavbarVisible(targets: HTMLElement[]) {
+  if (!isUserSpacePage())
+    return false
+
+  return targets.some((element) => {
+    if (!isVisibleElement(element))
+      return false
+    const style = window.getComputedStyle(element)
+    const rect = element.getBoundingClientRect()
+    return style.position === 'sticky' && rect.top <= 1 && rect.bottom > 0
   })
+}
+
+let conflictingHeaderTargets: HTMLElement[] = []
+
+function updateConflictingHeaderVisibility(targets = conflictingHeaderTargets) {
+  const hasVisibleHeader = isUserSpacePage()
+    ? isStickySpaceNavbarVisible(targets)
+    : targets.some(isVisibleElement)
 
   forceHideTopBar.value = hasVisibleHeader
   applyTopBarVisibility()
@@ -316,11 +338,13 @@ function updateConflictingHeaderVisibility(targets = findConflictingHeaders()) {
 let conflictingHeaderDiscoveryObserver: MutationObserver | undefined
 let conflictingHeaderTargetObservers: MutationObserver[] = []
 let conflictingHeaderUpdateRaf: number | undefined
+let conflictingHeaderVisibilityRaf: number | undefined
 let conflictingHeaderDiscoveryTimer: ReturnType<typeof setTimeout> | undefined
 let conflictingHeaderDiscoveryDeadline = 0
 
 function findConflictingHeaders(): HTMLElement[] {
-  return conflictingHeaderSelectors.flatMap(selector =>
+  const selectors = isUserSpacePage() ? [spaceNavbarSelector] : conflictingHeaderSelectors
+  return selectors.flatMap(selector =>
     Array.from(document.querySelectorAll<HTMLElement>(selector)),
   )
 }
@@ -333,10 +357,14 @@ function stopConflictingHeaderObservation() {
   if (conflictingHeaderUpdateRaf != null)
     cancelAnimationFrame(conflictingHeaderUpdateRaf)
   conflictingHeaderUpdateRaf = undefined
+  if (conflictingHeaderVisibilityRaf != null)
+    cancelAnimationFrame(conflictingHeaderVisibilityRaf)
+  conflictingHeaderVisibilityRaf = undefined
   if (conflictingHeaderDiscoveryTimer != null)
     clearTimeout(conflictingHeaderDiscoveryTimer)
   conflictingHeaderDiscoveryTimer = undefined
   conflictingHeaderDiscoveryDeadline = 0
+  conflictingHeaderTargets = []
 }
 
 function scheduleConflictingHeaderRefresh() {
@@ -349,8 +377,18 @@ function scheduleConflictingHeaderRefresh() {
   })
 }
 
+function scheduleConflictingHeaderVisibilityUpdate() {
+  if (conflictingHeaderVisibilityRaf != null)
+    return
+  conflictingHeaderVisibilityRaf = requestAnimationFrame(() => {
+    conflictingHeaderVisibilityRaf = undefined
+    updateConflictingHeaderVisibility()
+  })
+}
+
 function nodeContainsConflictingHeader(node: Node): boolean {
-  return node instanceof Element && conflictingHeaderSelectors.some(selector =>
+  const selectors = isUserSpacePage() ? [spaceNavbarSelector] : conflictingHeaderSelectors
+  return node instanceof Element && selectors.some(selector =>
     node.matches(selector) || Boolean(node.querySelector(selector)),
   )
 }
@@ -374,16 +412,20 @@ function bindConflictingHeaderObservers() {
   conflictingHeaderTargetObservers = []
 
   const targets = findConflictingHeaders()
+  conflictingHeaderTargets = targets
   updateConflictingHeaderVisibility(targets)
 
   if (targets.length === 0) {
-    if (!document.body)
+    const discoveryRoot = isUserSpacePage()
+      ? document.querySelector('#app') ?? document.body
+      : document.body
+    if (!discoveryRoot)
       return
     conflictingHeaderDiscoveryObserver = new MutationObserver((mutations) => {
       if (mutations.some(mutation => Array.from(mutation.addedNodes).some(nodeContainsConflictingHeader)))
         scheduleConflictingHeaderRefresh()
     })
-    conflictingHeaderDiscoveryObserver.observe(document.body, { childList: true, subtree: true })
+    conflictingHeaderDiscoveryObserver.observe(discoveryRoot, { childList: true, subtree: true })
     scheduleConflictingHeaderDiscoveryRetry()
     return
   }
@@ -405,6 +447,22 @@ function startConflictingHeaderObservation() {
   stopConflictingHeaderObservation()
   conflictingHeaderDiscoveryDeadline = Date.now() + 2000
   scheduleConflictingHeaderRefresh()
+}
+
+let widescreenStateObserver: MutationObserver | undefined
+
+function updateWidescreenState() {
+  bewlyWidescreenActive.value = isBewlyWidescreenActive()
+  applyTopBarVisibility()
+}
+
+function startWidescreenStateObservation() {
+  widescreenStateObserver?.disconnect()
+  updateWidescreenState()
+  if (!document.body)
+    return
+  widescreenStateObserver = new MutationObserver(updateWidescreenState)
+  widescreenStateObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
 }
 
 // 处理点击外部关闭 POP 窗（仅在触屏优化开启时）
@@ -450,6 +508,7 @@ onMounted(() => {
     setupScrollListeners()
 
     startConflictingHeaderObservation()
+    startWidescreenStateObservation()
 
     // 添加全局点击事件监听器（用于触屏模式下点击外部关闭弹窗）
     document.addEventListener('click', handleClickOutsidePopup)
@@ -479,6 +538,8 @@ onUnmounted(() => {
   clearHideTimer()
 
   stopConflictingHeaderObservation()
+  widescreenStateObserver?.disconnect()
+  widescreenStateObserver = undefined
 
   cleanupScrollListeners()
   // 使用 store 中的方法清理定时器

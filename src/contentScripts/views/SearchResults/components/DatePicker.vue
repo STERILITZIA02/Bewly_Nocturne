@@ -471,7 +471,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
     transform 0.2s ease;
 
   &:hover {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 
   &:active {
@@ -601,7 +601,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   }
 
   &.today {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
     font-weight: var(--bew-font-weight-semibold);
   }
 
@@ -655,7 +655,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   }
 
   &.today {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
 
     &:hover {
       background: var(--bew-theme-color-10);

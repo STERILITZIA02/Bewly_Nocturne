@@ -250,6 +250,7 @@ const shouldShowDivider = computed(() => {
               />
             </template>
             <ALink
+              class="top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
               :href="getTopBarItemHref('moments', 'https://t.bilibili.com')"
               :title="$t('topbar.moments')"
@@ -279,6 +280,7 @@ const shouldShowDivider = computed(() => {
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
           >
             <ALink
+              class="top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
               :href="getTopBarItemHref('favorites', `https://space.bilibili.com/${mid}/favlist`)"
               :title="$t('topbar.favorites')"
@@ -308,6 +310,7 @@ const shouldShowDivider = computed(() => {
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
           >
             <ALink
+              class="top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
               :href="getTopBarItemHref('history', 'https://www.bilibili.com/history')"
               :title="$t('topbar.history')"
@@ -349,6 +352,7 @@ const shouldShowDivider = computed(() => {
               />
             </template>
             <ALink
+              class="top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
               :href="getTopBarItemHref('watchLater', 'https://www.bilibili.com/watchlater/list')"
               :title="$t('topbar.watch_later')"
@@ -372,6 +376,7 @@ const shouldShowDivider = computed(() => {
           <!-- Creative center -->
           <div v-if="isComponentVisible('creatorCenter')" class="right-side-item">
             <a
+              class="top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
               href="https://member.bilibili.com/platform/home"
               target="_blank"
@@ -391,7 +396,7 @@ const shouldShowDivider = computed(() => {
         >
           <button
             type="button"
-            class="top-bar-icon-button"
+            class="top-bar-icon-button top-bar-trigger"
             :class="{ 'white-icon': forceWhiteIcon }"
             :title="$t('video_card.operation.more_options')"
             :aria-label="$t('video_card.operation.more_options')"
@@ -406,7 +411,6 @@ const shouldShowDivider = computed(() => {
               ref="morePopRef"
               class="bew-popover"
               @click.stop="() => {}"
-              @bewly-page-click="(event: MouseEvent, key: string) => handleClickTopBarItem(event, key)"
             />
           </Transition>
         </div>
@@ -429,7 +433,7 @@ const shouldShowDivider = computed(() => {
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'upload')"
           >
             <a
-              class="upload"
+              class="upload top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
               style="backdrop-filter: var(--bew-filter-glass-1);"
               href="https://member.bilibili.com/platform/upload/video/frame"
@@ -471,6 +475,7 @@ const shouldShowDivider = computed(() => {
             </template>
 
             <ALink
+              class="top-bar-trigger"
               :href="settings.openNotificationsPageAsDrawer ? undefined : 'https://message.bilibili.com'"
               :class="{ 'white-icon': forceWhiteIcon }"
               :title="$t('topbar.notifications')"
@@ -516,7 +521,7 @@ const shouldShowDivider = computed(() => {
           ref="avatarImg"
           :href="`https://space.bilibili.com/${mid}`"
           type="topBar"
-          class="avatar-img"
+          class="avatar-img top-bar-trigger"
           :class="{ hover: popupVisible?.userPanel }"
           :style="{
             backgroundImage: `url(${userInfo.face ? removeHttpFromUrl(userInfo.face) : ''})`,
@@ -547,7 +552,6 @@ const shouldShowDivider = computed(() => {
             :user-info="userInfo"
             after:h="!0"
             class="bew-popover"
-            pos="!left-auto !right-0" transform="!translate-x-0"
             @click.stop="() => {}"
           />
         </Transition>

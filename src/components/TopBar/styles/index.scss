@@ -58,7 +58,7 @@
 }
 
 .bew-popover {
-  --uno: "absolute";
+  --uno: "fixed";
   --uno: "overflow-hidden";
   --uno: "after:content-empty";
   --uno: "after:opacity-100 after:w-full after:h-100px";
@@ -67,6 +67,8 @@
   border-radius: var(--bew-popover-radius);
   corner-shape: var(--bew-corner-shape);
   box-sizing: border-box;
+  z-index: var(--bew-z-popover);
+  max-width: calc(100vw - var(--bew-space-8));
 }
 
 .logo.activated {
@@ -146,8 +148,7 @@
   .right-side-item {
     --uno: "relative text-$bew-text-1 flex items-center";
 
-    &:not(.avatar) :is(a, button.top-bar-icon-button),
-    & .notifications {
+    &:not(.avatar) > .top-bar-trigger {
       --uno: "grid place-items-center duration-300 relative z-5";
       width: var(--bew-control-height);
       height: var(--bew-control-height);
@@ -156,7 +157,7 @@
       filter: drop-shadow(0 0 4px var(--bew-bg));
     }
 
-    & button.top-bar-icon-button {
+    & > button.top-bar-trigger {
       padding: 0;
       border: 0;
       color: inherit;
@@ -164,29 +165,27 @@
       cursor: pointer;
     }
 
-    &.active :is(a, button.top-bar-icon-button),
-    & :is(a, button.top-bar-icon-button):hover,
-    & .notifications:hover,
-    & .notifications:active {
+    &.active > .top-bar-trigger,
+    & > .top-bar-trigger:hover,
+    & > .top-bar-trigger:active {
       --uno: "bg-$bew-fill-2";
     }
 
-    &.active :is(a, button.top-bar-icon-button).white-icon,
-    & :is(a, button.top-bar-icon-button):hover.white-icon,
-    & .notifications:hover.white-icon,
-    & .notifications:active.white-icon {
+    &.active > .top-bar-trigger.white-icon,
+    & > .top-bar-trigger:hover.white-icon,
+    & > .top-bar-trigger:active.white-icon {
       --uno: "bg-white bg-opacity-20";
     }
 
-    & a.upload {
-      --uno: "bg-$bew-theme-color-20 hover:bg-$bew-theme-color-40 text-$bew-theme-color";
+    & > a.upload {
+      --uno: "bg-$bew-theme-color-20 hover:bg-$bew-theme-color-40 text-$bew-theme-foreground";
     }
 
-    &.active a.upload {
+    &.active > a.upload {
       --uno: "bg-$bew-theme-color-40";
     }
 
-    &.active a.upload.white-icon {
+    &.active > a.upload.white-icon {
       --uno: "!bg-white !bg-opacity-40";
     }
 

@@ -276,7 +276,7 @@ defineExpose({
               {{ bangumi.title }}
             </div>
             <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
-              <span v-if="bangumi.score" text="$bew-theme-color" font-bold>
+              <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
                 {{ bangumi.score?.toFixed(1) }} 分
               </span>
               <span v-if="bangumi.areas">
@@ -345,7 +345,7 @@ defineExpose({
                 {{ item.title }}
               </div>
               <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
-                <span v-if="item.score" text="$bew-theme-color" font-bold>
+                <span v-if="item.score" text="$bew-theme-foreground" font-bold>
                   {{ item.score?.toFixed(1) }} 分
                 </span>
                 <span v-if="item.areas">

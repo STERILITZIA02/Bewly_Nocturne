@@ -67,7 +67,7 @@ const collapsed = defineModel<boolean>('collapsed', {
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-icon-size-lg);
 }
 
@@ -84,7 +84,7 @@ const collapsed = defineModel<boolean>('collapsed', {
   &:hover {
     .settings-section-heading__content h2,
     .settings-section-heading__chevron {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
   }
 }

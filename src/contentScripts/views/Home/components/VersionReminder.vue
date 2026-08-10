@@ -207,7 +207,7 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-dialog__link:hover {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   background: var(--bew-theme-color-10);
   border-color: var(--bew-theme-color);
 }
@@ -226,7 +226,7 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-dialog__link-icon--bilibili {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
 }
 
 .version-reminder-dialog__link strong,
