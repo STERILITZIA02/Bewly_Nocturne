@@ -178,6 +178,19 @@ const gridColumnOptions = computed(() => [
         </template>
       </SettingsItem>
       <SettingsItem
+        :title="$t('settings.moments_enable_keyword_filter')"
+        :desc="$t('settings.moments_enable_keyword_filter_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.momentsEnableKeywordFilter" />
+        <template v-if="settings.momentsEnableKeywordFilter" #bottom>
+          <Input
+            v-model="settings.momentsBlockedKeywords"
+            :placeholder="$t('settings.moments_blocked_keywords_placeholder')"
+          />
+        </template>
+      </SettingsItem>
+      <SettingsItem
         :title="$t('settings.moments_card_open_mode')"
         :desc="$t('settings.moments_card_open_mode_desc')"
         right-width="auto"

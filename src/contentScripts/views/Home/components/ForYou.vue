@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onKeyStroke } from '@vueuse/core'
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
@@ -19,6 +20,7 @@ import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { TVAppKey } from '~/utils/authProvider'
+import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { debugLog } from '~/utils/debug'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
@@ -34,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { t } = useI18n()
 const forYouStore = useForYouStore()
 const topBarStore = useTopBarStore()
 
@@ -201,6 +204,7 @@ const hasForwardState = ref<boolean>(false)
 const PAGE_SIZE = 30
 const WEB_REFRESH_PAGE_SIZE = 10
 const WEB_LOAD_MORE_PAGE_SIZE = 12
+const WEB_RISK_COOLDOWN_MS = 60_000
 const NO_COOKIE_RECOMMEND_STATE_MAX_SHOWLIST_GROUPS = 3
 const MAX_EMPTY_LOADS = 5 // 最大连续空加载次数
 const FILTERED_FEED_SAMPLE_SIZE = 100
@@ -211,6 +215,8 @@ const consecutiveEmptyLoads = ref<number>(0) // 连续空加载次数，用于�
 const appConsecutiveEmptyLoads = ref<number>(0) // APP模式连续空加载次数
 // 递归加载锁，防止双重触发
 const isRecursiveLoading = ref<boolean>(false)
+const webRiskCooldownUntil = ref(0)
+let notifiedWebRiskCooldownUntil = 0
 const webFetchRow = ref<number>(1)
 const webShowlistGroups = ref<string[]>([])
 
@@ -593,6 +599,46 @@ function resetWebRecommendState() {
   webShowlistGroups.value = []
 }
 
+function isWebRiskCooldownActive(): boolean {
+  if (webRiskCooldownUntil.value > Date.now())
+    return true
+
+  if (webRiskCooldownUntil.value) {
+    webRiskCooldownUntil.value = 0
+    notifiedWebRiskCooldownUntil = 0
+    noMoreContent.value = false
+  }
+  return false
+}
+
+function startWebRiskCooldown() {
+  if (!isWebRiskCooldownActive())
+    webRiskCooldownUntil.value = Date.now() + WEB_RISK_COOLDOWN_MS
+  noMoreContent.value = true
+}
+
+function resetWebRiskCooldown() {
+  webRiskCooldownUntil.value = 0
+  notifiedWebRiskCooldownUntil = 0
+}
+
+function notifyWebRiskCooldown(key = 'home.web_recommendation_risk_cooldown') {
+  if (!isWebRiskCooldownActive() || notifiedWebRiskCooldownUntil === webRiskCooldownUntil.value)
+    return
+
+  notifiedWebRiskCooldownUntil = webRiskCooldownUntil.value
+  toast.warning(t(key, {
+    seconds: Math.max(1, Math.ceil((webRiskCooldownUntil.value - Date.now()) / 1000)),
+  }))
+}
+
+function isCurrentWebRequest(version: number, recommendationMode: string, accountId: AccountId) {
+  return version === requestVersion
+    && recommendationMode === settings.value.recommendationMode
+    && isSameAccount(accountId, loadedAccountId)
+    && isSameAccount(accountId, getCurrentAccountId())
+}
+
 function resetForYouAccountState() {
   requestVersion++
   videoList.value = []
@@ -607,6 +653,7 @@ function resetForYouAccountState() {
   hasBackState.value = false
   hasForwardState.value = false
   undoForwardState.value = UndoForwardState.Hidden
+  resetWebRiskCooldown()
   resetWebRecommendState()
   resetFilteredFeedPagingState()
   forYouStore.resetState()
@@ -653,6 +700,11 @@ watch(() => settings.value.recommendationMode, () => {
 })
 
 async function initData() {
+  if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
+    notifyWebRiskCooldown()
+    return
+  }
+
   const loadStartedAt = performance.now()
   requestVersion++
   const version = requestVersion
@@ -663,6 +715,7 @@ async function initData() {
   // 直接清空列表，骨架屏由 VideoCardGrid 自动处理
   videoList.value = []
   appVideoList.value = []
+  noMoreContent.value = false
 
   APP_LOAD_BATCHES.value = 1 // 初始化时只加载1批
   resetFilteredFeedPagingState()
@@ -684,6 +737,10 @@ async function initData() {
 
 async function getData(webRequestType: WebRecommendRequestType = 'refresh') {
   const version = requestVersion
+  if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
+    notifyWebRiskCooldown()
+    return
+  }
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
@@ -731,6 +788,11 @@ async function getData(webRequestType: WebRecommendRequestType = 'refresh') {
 }
 
 function loadMore(manual = false) {
+  if (isWebRecommendationMode.value && isWebRiskCooldownActive()) {
+    notifyWebRiskCooldown()
+    return
+  }
+
   // 如果正在递归加载中，跳过外部触发的加载请求
   if (
     !hasInitializedData.value
@@ -902,9 +964,15 @@ function initPageAction() {
 
 async function getRecommendVideos(version = requestVersion, requestType: WebRecommendRequestType = 'refresh') {
   const recommendationMode = settings.value.recommendationMode
+  const accountId = loadedAccountId
   let canFillViewport = false
 
   try {
+    if (isWebRiskCooldownActive()) {
+      notifyWebRiskCooldown()
+      return
+    }
+
     // 检查是否达到最大空加载次数，防止无限递归
     if (!hasActiveRecommendationFilter.value && consecutiveEmptyLoads.value >= MAX_EMPTY_LOADS) {
       console.warn('达到最大连续空加载次数，停止加载')
@@ -927,26 +995,96 @@ async function getRecommendVideos(version = requestVersion, requestType: WebReco
       ? api.video.getNoCookieRecommendVideos
       : api.video.getRecommendVideos
 
-    const requestLog = startRecommendRequestLog(recommendationMode, requestType)
-    let response: forYouResult
+    const requestOptions = {
+      fresh_type: isLoadMoreRequest ? 4 : 5,
+      fresh_idx: currentRefreshIdx,
+      fresh_idx_1h: currentRefreshIdx,
+      ps: pageSize,
+      fetch_row: fetchRow,
+      last_showlist: lastShowlist || undefined,
+    }
+    let requestLog = startRecommendRequestLog(recommendationMode, requestType)
+    let response: forYouResult | undefined
+
+    const tryNoCookieFallback = async () => {
+      startWebRiskCooldown()
+      requestLog = startRecommendRequestLog('webNoCookie(fallback)', requestType)
+      try {
+        response = await api.video.getNoCookieRecommendVideos(requestOptions)
+      }
+      catch (error) {
+        if (!isExtensionContextInvalidatedError(error))
+          logRecommendRequestFailure(requestLog, { error, phase: 'fallback' })
+        if (isCurrentWebRequest(version, recommendationMode, accountId)) {
+          requestFailed.value = true
+          notifyWebRiskCooldown('home.web_recommendation_risk_fallback_failed')
+        }
+        return false
+      }
+
+      if (!isCurrentWebRequest(version, recommendationMode, accountId))
+        return false
+
+      if (!response || isBilibiliRiskControl(response) || response.code !== 0 || !response.data || !Array.isArray(response.data.item)) {
+        logRecommendRequestFailure(requestLog, {
+          code: response?.code,
+          message: response?.message,
+          phase: 'fallback',
+        })
+        requestFailed.value = true
+        notifyWebRiskCooldown('home.web_recommendation_risk_fallback_failed')
+        return false
+      }
+
+      notifyWebRiskCooldown('home.web_recommendation_risk_fallback_active')
+      return true
+    }
+
     try {
-      response = await getWebRecommendVideos({
-        fresh_type: isLoadMoreRequest ? 4 : 5,
-        fresh_idx: currentRefreshIdx,
-        fresh_idx_1h: currentRefreshIdx,
-        ps: pageSize,
-        fetch_row: fetchRow,
-        last_showlist: lastShowlist || undefined,
-      })
+      response = await getWebRecommendVideos(requestOptions)
     }
     catch (error) {
       if (!isExtensionContextInvalidatedError(error))
-        logRecommendRequestFailure(requestLog, { error })
-      throw error
+        logRecommendRequestFailure(requestLog, { error, phase: 'primary' })
+
+      if (!isCurrentWebRequest(version, recommendationMode, accountId))
+        return
+
+      if (recommendationMode === 'web' && isBilibiliRiskControl(error)) {
+        if (!await tryNoCookieFallback())
+          return
+      }
+      else if (recommendationMode === 'webNoCookie' && isBilibiliRiskControl(error)) {
+        startWebRiskCooldown()
+        requestFailed.value = true
+        notifyWebRiskCooldown()
+        return
+      }
+      else {
+        throw error
+      }
     }
 
-    if (version !== requestVersion || recommendationMode !== settings.value.recommendationMode)
+    if (!isCurrentWebRequest(version, recommendationMode, accountId))
       return
+
+    if (isBilibiliRiskControl(response)) {
+      logRecommendRequestFailure(requestLog, {
+        code: response?.code,
+        message: response?.message,
+        phase: 'primary',
+      })
+      if (recommendationMode === 'web') {
+        if (!await tryNoCookieFallback())
+          return
+      }
+      else {
+        startWebRiskCooldown()
+        requestFailed.value = true
+        notifyWebRiskCooldown()
+        return
+      }
+    }
 
     if (!response) {
       logRecommendRequestFailure(requestLog, { reason: '响应为空' })

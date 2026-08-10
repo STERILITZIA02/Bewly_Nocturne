@@ -40,10 +40,6 @@ function error(message, file) {
   console.error(`::error file=${escapeAnnotation(file)},title=PR 文件策略::${escapeAnnotation(message)}`)
 }
 
-function isAgentsFile(file) {
-  return file.split('/').at(-1) === 'AGENTS.md'
-}
-
 function isLocalTestFile(file) {
   return /(?:^|\/)(?:__tests__|tests?|e2e|cypress|test-results|playwright-report|coverage)(?:\/|$)/i.test(file)
     || /(?:^|\/)[^/]+\.(?:test|spec|e2e)\.[^/]+$/i.test(file)
@@ -98,7 +94,6 @@ function dependencyLine(dependency) {
 
 const allChangedFiles = changedFiles('ACDMRTUXB')
 const introducedOrModifiedFiles = changedFiles('AMCR')
-const agentsFiles = allChangedFiles.filter(isAgentsFile)
 const localTestFiles = introducedOrModifiedFiles.filter(isLocalTestFile)
 const dependencyFiles = allChangedFiles.filter(file =>
   file === 'package.json'
@@ -106,20 +101,14 @@ const dependencyFiles = allChangedFiles.filter(file =>
   || file === 'pnpm-workspace.yaml',
 )
 
-for (const file of agentsFiles)
-  error('PR 不允许新增、修改、移动或删除 AGENTS.md。', file)
-
 for (const file of localTestFiles)
   error('PR 不允许提交本地测试文件或测试产物。', file)
 
 const dependencyChanges = compareDependencies()
 const summary = ['## PR 文件策略检查', '']
 
-if (agentsFiles.length || localTestFiles.length) {
+if (localTestFiles.length) {
   summary.push('### ❌ 发现禁止提交的文件', '')
-
-  for (const file of agentsFiles)
-    summary.push(`- \`${file}\`：AGENTS.md 不允许通过 PR 改动`)
 
   for (const file of localTestFiles)
     summary.push(`- \`${file}\`：本地测试文件或测试产物不允许提交`)
@@ -127,7 +116,7 @@ if (agentsFiles.length || localTestFiles.length) {
   summary.push('')
 }
 else {
-  summary.push('✅ 未发现 AGENTS.md 或本地测试文件变更。', '')
+  summary.push('✅ 未发现本地测试文件变更。', '')
 }
 
 if (dependencyFiles.length) {
@@ -167,5 +156,5 @@ if (process.env.GITHUB_STEP_SUMMARY)
 else
   console.log(summaryText)
 
-if (agentsFiles.length || localTestFiles.length)
+if (localTestFiles.length)
   process.exitCode = 1

@@ -164,57 +164,17 @@ html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .bili-opus-vie
   box-sizing: border-box !important;
   overflow-x: hidden !important;
 }
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode img,
+html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode img:not(.pswp__img),
 html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode video,
 html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode iframe,
 html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode table {
   max-width: 100% !important;
 }
-/* 目录所在侧栏在 article 模式重新显示（基础样式里可能被隐藏） */
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .right-sidebar-wrap:has(.catalog, .catalog-panel, [class*="catalog"], [class*="Catalog"]),
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .right-side-bar:has(.catalog, .catalog-panel, [class*="catalog"], [class*="Catalog"]),
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .side-toolbar:has(.catalog, .catalog-panel, [class*="catalog"], [class*="Catalog"]) {
-  display: block !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-  z-index: 30 !important;
-}
-/* 目录本身：限制宽度、抬高层级，避免横向撑破 */
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .catalog,
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .catalog-panel,
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode [class*="catalog"],
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode [class*="Catalog"],
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode [class*="directory"],
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode [class*="Directory"] {
-  display: block !important;
-  visibility: visible !important;
-  max-width: min(180px, 28vw) !important;
-  z-index: 31 !important;
-  box-sizing: border-box !important;
-  overflow-x: hidden !important;
-}
-/*
- * 新版专栏目录使用 fixed 定位，原站的 left 会在窄 iframe 中算成负值。
- * 不修改目录内部样式，仅为原生 240px 目录预留空间并修正横向位置。
- */
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-detail:has(.opus-toc) {
-  width: min(980px, calc(100% - 20px)) !important;
-  padding: 12px 0 40px !important;
-}
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .bili-opus-view-wrap:has(> .opus-toc) {
-  width: min(708px, calc(100% - 264px)) !important;
-  margin-right: 0 !important;
-  margin-left: 264px !important;
-  padding: 0 !important;
-}
-html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .bili-opus-view-wrap:has(> .opus-toc) > .bili-opus-view {
-  width: 100% !important;
-  margin: 0 !important;
-  padding: 12px 12px 40px !important;
+html.momentsPage.drawer.bewly-opus-layout .pswp__img {
+  max-width: none !important;
 }
 html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-toc {
-  left: max(10px, calc((100vw - 980px) / 2 + 20px)) !important;
-  right: auto !important;
+  display: none !important;
 }
 .bewly-opus-iframe-loading {
   position: fixed !important;
@@ -839,7 +799,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel .bili-comment
   padding-right: 0 !important;
   box-sizing: border-box !important;
 }
-html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel img,
+html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel img:not(.pswp__img),
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel video {
   max-width: 100% !important;
 }
@@ -2415,6 +2375,7 @@ export function disposeOpusDetailDrawerLayout() {
   }
 
   appliedSuccessfully = false
+  markArticleMode(false)
   layoutMode = 'pending'
   disabledSplit = false
   teardownCount = 0

@@ -247,7 +247,11 @@ settings:
   moments_visible_components_original_desc: Control whether sidebar and banner components appear on the original Bilibili moments page. Theme-colored means shown; gray means hidden.
   moments_visible_components_plugin_desc: Control whether sidebar and top components appear on the Bewly moments page. Theme-colored means shown; gray means hidden.
   moments_filtered_types: Filter dynamics
-  moments_filtered_types_desc: Control which dynamic types appear in the Bewly feed. Selected (theme-colored) means not filtered; unselected means filtered out. With filters enabled, each load scans at most 100 items; when the retention rate is below 60%, further loads are manual, while rates of 60% or higher continue loading on scroll.
+  moments_filtered_types_desc: Control which dynamic types appear in the Bewly feed. Selected (theme-colored) means not filtered; unselected means filtered out. With any filter enabled, each action requests at most two pages and further results use Load more.
+  moments_enable_keyword_filter: Enable keyword filtering
+  moments_enable_keyword_filter_desc: Filter dynamics by author, title, body, or additional content. With valid keywords enabled, each action requests at most two pages and further results use Load more.
+  moments_blocked_keywords: Blocked keywords
+  moments_blocked_keywords_placeholder: Separate keywords with line breaks, commas, or semicolons
   moments_enable_live_preview: Preview live dynamics on hover
   moments_enable_live_preview_desc: Play a live preview when hovering over a live dynamic cover.
   moments_enable_video_preview: Preview video dynamics on hover
@@ -648,10 +652,6 @@ settings:
   adapt_to_other_page_styles_desc: Adapt to some common pages to match with the BewlyBewly theme.
   prevent_mobile_redirect: Prevent mobile redirect
   prevent_mobile_redirect_desc: When enabled, a desktop UA is used only for www.bilibili.com to prevent redirects to m.bilibili.com. Direct visits to the mobile site are unaffected.
-  follow_bilibili_evolved_color: Follow the Bilibili Evolved theme color
-  follow_bilibili_evolved_color_desc: >-
-    After changing the theme color in Bilibili Evolved, you will need to
-    re-select this option in order to update the theme color.
   links: Links
   import_settings: Import Settings
   export_settings: Export Settings
@@ -865,6 +865,11 @@ settings:
     line_collapse_main: Lines · collapse parent
     line_keep_main: Lines · keep parent visible
     indent_only: Indent · no collapse
+  comment_reply_pagination_mode:
+    title: Tree reply pagination
+    desc: Load more appends pages and keeps replies already read; native pagination shows only the current page
+    load_more: Load more
+    pagination: Native pagination
   adjust_comment_image_height: Adjust comment image height
   adjust_comment_image_height_desc: Automatically adjust comment image height to match actual aspect ratio and prevent distortion
   hide_comment_image_scrollbar: Hide page scrollbar in comment image preview
@@ -873,6 +878,7 @@ settings:
   video_player_scroll_desc: >-
     When enabled, it will automatically scroll to the appropriate position when
     the default mode is widescreen and default.
+  exit_bewly_widescreen_loading: Exit widescreen mode
   enlarge_favorite_dialog: Enlarge favorite dialog
   enlarge_favorite_dialog_desc: When enabled, the favorite dialog on video pages will be displayed in a larger size for easier viewing and management.
   external_watch_later_button: External watch later button
@@ -887,8 +893,6 @@ settings:
 auth:
   auth_access_key_first: Before doing this, authorize BewlyBewly to use the access key.
 topbar:
-  switch_to_bewly_top_bar: Switch to BewlyBewly top bar
-  switch_to_bili_top_bar: Switch to BiliBili/Bilibili-Evolved top bar
   sign_in: Sign in
   notifications: Notifications
   moments: Moments
@@ -1003,6 +1007,14 @@ dock:
   settings: Settings
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
+moment_card:
+  preview_image: Preview image {index} from {author}'s dynamic
+  reserve: Reserve
+  cancel_reservation: Cancel reservation
+  reservation_succeeded: Reservation successful
+  reservation_cancelled: Reservation cancelled
+  reservation_failed: Reservation failed
+  reservation_login_required: Sign in to reserve
 video_card:
   operation:
     not_interested: Not Interested
@@ -1038,6 +1050,9 @@ video_card:
   watched: Watched
   visited_recently: Visited within the past month
 home:
+  web_recommendation_risk_cooldown: Recommendation requests hit risk control and are paused for {seconds} seconds. Try again later.
+  web_recommendation_risk_fallback_active: No-cookie recommendations are shown; further requests are paused for {seconds} seconds.
+  web_recommendation_risk_fallback_failed: Recommendation risk fallback failed; requests are paused for {seconds} seconds.
   tell_us_why: Choose a reason why
   not_interested_desc: >-
     You can use <kbd>↑</kbd> and <kbd>↓</kbd> to choose the reason, or using

@@ -154,22 +154,6 @@ function handleContributorImageError() {
             >
               <div i-tabler:brand-github /> GitHub
             </a>
-            <a
-              href="https://space.bilibili.com/32487218/dynamic" target="_blank"
-              class="link-card"
-              bg="#fb7299 dark:#ffa7c0 !opacity-10 !hover:opacity-20"
-              un-text="#fb7299 dark:#ffa7c0"
-            >
-              <div i-tabler:brand-bilibili /> Bilibili
-            </a>
-            <a
-              href="https://www.xiaohongshu.com/user/profile/5fb77085000000000100060d" target="_blank"
-              class="link-card"
-              bg="#FF2442 dark:#D7223A !opacity-10 !hover:opacity-20"
-              un-text="#FF2442 dark:#D7223A"
-            >
-              <div i-tabler:book-2 /> 小红书
-            </a>
           </div>
         </section>
         <section w-full>

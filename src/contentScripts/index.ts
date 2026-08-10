@@ -16,17 +16,19 @@ import api from '~/utils/api'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenActive, prepareBewlyWidescreenLoading } from '~/utils/bewlyWidescreen'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
+import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { runWhenIdle } from '~/utils/lazyLoad'
 import { getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
-import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, webFullscreen, widescreen } from '~/utils/player'
-import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder } from '~/utils/randomPlay'
+import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
 import { getPluginSearchResultsUrl } from '~/utils/searchNavigation'
 import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
+import { resolveUseOriginalBilibiliTopBar } from '~/utils/topBarMode'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
 import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
@@ -283,13 +285,6 @@ else if (shouldInitializeContentScript) {
       // Setup iframe photo viewer detector (only in iframe)
       if (isInIframe())
         setupIframePhotoViewerDetector()
-
-      // Remove the Bilibili Evolved's dark mode style
-      runWhenIdle(async () => {
-        const darkModeStyle = document.head.querySelector('#dark-mode')
-        if (darkModeStyle)
-          document.head.removeChild(darkModeStyle)
-      })
     }
   }
 
@@ -773,7 +768,7 @@ else if (shouldInitializeContentScript) {
         waitForPlayerModePageSettle()
         document.querySelector('.bewly-watch-later-btn')?.remove()
         watchLaterButtonAdded = false // URL变化时重置稍后再看按钮标志
-        // 不再重置用户手动修改标志，保持用户的自动播放偏好设置
+        resetAutoPlayUserChangeFlag()
 
         // 重置随机播放初始化状态，避免重复加载
         resetRandomPlayInitialization()
@@ -987,6 +982,10 @@ else if (shouldInitializeContentScript) {
     await settingsReady
 
     const changeHomePage = !isInIframe() && isHomePage()
+    const initialTopBarSource = resolveEffectiveTopBarSource(
+      resolveUseOriginalBilibiliTopBar(settings.value.pageMode, settings.value.useOriginalBilibiliTopBar),
+    )
+    applyEffectiveTopBarSource(document, initialTopBarSource)
     document.documentElement.classList.toggle('bewly-custom-homepage', changeHomePage)
 
     // 启用自定义首页时隐藏 B 站原始首页。
@@ -1013,10 +1012,9 @@ else if (shouldInitializeContentScript) {
         max-width: 100% !important;
         overflow-x: hidden !important;
       }
-      /* Hide Bilibili's own page elements, preserving third-party extensions (e.g., Bili-Evolved) */
+      /* Hide Bilibili's own page elements while preserving the independent Bilibili-Gate root. */
       body > #app,
       body > #i_cecream,
-      .home-redesign-base,
       .bilibili-gate-root {
         display: none !important;
         visibility: hidden !important;
@@ -1035,9 +1033,9 @@ else if (shouldInitializeContentScript) {
       // 温和的脚本清理（可选，减少后台资源消耗）
       cleanupBilibiliScripts()
 
-      // 始终把原版顶栏移出被隐藏的 #app，避免后续开关原版顶栏时节点仍埋在不可见树里。
-      // 使用 Bewly 顶栏时由 .remove-top-bar 隐藏占位，逻辑对齐 1.6.9。
-      ensureOriginalBilibiliTopBarAppended(document)
+      // 只有原生顶栏成为有效来源时才将其移出被隐藏的 #app。
+      if (initialTopBarSource === 'bilibili-native')
+        ensureOriginalBilibiliTopBarAppended(document)
 
       // Setup login button click handlers for the original Bilibili top bar
       setupLoginButtonClickHandlers(document)
@@ -1053,9 +1051,9 @@ else if (shouldInitializeContentScript) {
     // Remove the original Bilibili homepage
     document.body.innerHTML = ''
 
-    // Remove the Bilibili Evolved homepage & Bilibili-Gate homepage
+    // Remove the Bilibili-Gate homepage
     injectCSS(`
-      .home-redesign-base, .bilibili-gate-root {
+      .bilibili-gate-root {
         display: none !important;
       }
     `)
@@ -1254,6 +1252,11 @@ else if (shouldInitializeContentScript) {
     },
   )
 
+  watch(
+    () => settings.value.language,
+    () => syncRandomPlayUI(),
+  )
+
   // 监听设置变化
   watch(settings, (newSettings, oldSettings) => {
     sendSettingsToPage(newSettings)
@@ -1363,8 +1366,10 @@ else if (shouldInitializeContentScript) {
       if (typeof useOriginalBilibiliTopBar !== 'boolean')
         return
 
-      document.documentElement.classList.toggle('remove-top-bar', !useOriginalBilibiliTopBar)
-      if (useOriginalBilibiliTopBar) {
+      const source = resolveEffectiveTopBarSource(useOriginalBilibiliTopBar)
+      applyEffectiveTopBarSource(document, source)
+      document.documentElement.classList.toggle('remove-top-bar', source === 'bewly')
+      if (source === 'bilibili-native') {
         resetBilibiliTopBarInlineStyles(document)
         // Setup login button click handlers when switching to original top bar
         setupLoginButtonClickHandlers(document)

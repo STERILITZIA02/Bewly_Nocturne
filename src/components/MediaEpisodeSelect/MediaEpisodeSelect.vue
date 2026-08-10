@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watchEffect } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 
 interface Episode {
   id: string
@@ -19,8 +20,15 @@ const props = defineProps<{
 const { mainAppRef } = useBewlyApp()
 
 const isOpen = ref(false)
-const dropdownPosition = ref({ top: 0, left: 0, width: 0 })
 const containerRef = ref<HTMLElement | null>(null)
+const dropdownRef = ref<HTMLElement | null>(null)
+const DROPDOWN_MAX_HEIGHT = 400
+const {
+  position: dropdownPosition,
+  scheduleUpdate: schedulePositionUpdate,
+  start: startPositionTracking,
+  stop: stopPositionTracking,
+} = useFloatingMenuPosition(containerRef, dropdownRef, DROPDOWN_MAX_HEIGHT)
 
 const normalizedEpisodes = computed(() => {
   return Array.isArray(props.episodes) ? props.episodes : []
@@ -35,39 +43,20 @@ const defaultLabel = computed(() => {
   return '选集'
 })
 
-onMounted(() => {
-  window.addEventListener('resize', calculatePosition)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', calculatePosition)
-})
-
-/** 计算下拉菜单绝对位置 */
-function calculatePosition() {
-  if (!containerRef.value)
-    return
-
-  const rect = containerRef.value.getBoundingClientRect()
-  dropdownPosition.value = {
-    top: rect.bottom + window.scrollY,
-    left: rect.left + window.scrollX,
-    width: rect.width,
-  }
-}
-
 function toggleDropdown() {
-  isOpen.value = !isOpen.value
+  if (isOpen.value) {
+    isOpen.value = false
+    return
+  }
+  startPositionTracking()
+  isOpen.value = true
 }
 
 function closeDropdown() {
   isOpen.value = false
 }
 
-function handleEpisodeClick(url?: string) {
-  if (url) {
-    window.open(url, '_blank', 'noopener')
-  }
+function handleEpisodeClick() {
   closeDropdown()
 }
 
@@ -80,12 +69,16 @@ function onMouseEnter() {
   window.removeEventListener('click', closeDropdown)
 }
 
-// 显示选项时计算位置
-watchEffect(() => {
-  if (isOpen.value) {
-    calculatePosition()
+onBeforeUnmount(() => window.removeEventListener('click', closeDropdown))
+
+watch(isOpen, async (open) => {
+  if (!open) {
+    stopPositionTracking()
+    return
   }
-}, { flush: 'pre' })
+  await nextTick()
+  schedulePositionUpdate()
+}, { flush: 'post' })
 </script>
 
 <template>
@@ -127,22 +120,23 @@ watchEffect(() => {
     </button>
 
     <Teleport :to="mainAppRef">
-      <Transition name="dropdown">
+      <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'">
         <div
           v-if="isOpen"
+          ref="dropdownRef"
           class="bew-popover-surface"
           :style="{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
+            maxHeight: `${dropdownPosition.maxHeight}px`,
+            transform: dropdownPosition.openUp ? 'translateY(-100%)' : undefined,
           }"
-          pos="absolute"
+          pos="fixed"
           p="2"
-          m="t-2"
           z="$bew-z-control-menu"
           flex="~ col gap-1"
           w="full"
-          max-h-400px
           overflow-y-overlay
           will-change-transform
           @click.stop
@@ -161,7 +155,7 @@ watchEffect(() => {
             transition="background-color duration-200, color duration-200, box-shadow duration-200"
             cursor="pointer"
             :title="episode.longTitle || episode.title"
-            @click.stop="handleEpisodeClick(episode.url || fallbackUrl)"
+            @click.stop="handleEpisodeClick"
           >
             <span class="episode-title">{{ episode.title }}</span>
             <span v-if="episode.badge" class="episode-badge">{{ episode.badge }}</span>
@@ -176,7 +170,6 @@ watchEffect(() => {
         w-full
         h-full
         z="$bew-z-control-backdrop"
-        @wheel="closeDropdown"
       />
     </Teleport>
   </div>
@@ -228,5 +221,20 @@ watchEffect(() => {
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
   }
+}
+
+.dropdown-up-enter-active,
+.dropdown-up-leave-active {
+  transition:
+    opacity 300ms ease,
+    translate 300ms ease,
+    filter 300ms ease;
+}
+
+.dropdown-up-enter-from,
+.dropdown-up-leave-to {
+  opacity: 0;
+  translate: 0 12px;
+  filter: blur(4px);
 }
 </style>

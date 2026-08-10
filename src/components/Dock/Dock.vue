@@ -907,12 +907,14 @@ onUnmounted(() => {
                 <Icon
                   v-if="key === 1"
                   icon="line-md:rotate-270"
-                  shrink-0 rotate-90 absolute text="size-$bew-icon-size-lg"
+                  class="dock-action-icon"
+                  shrink-0 rotate-90 absolute
                 />
                 <Icon
                   v-else
                   icon="line-md:arrow-small-up"
-                  shrink-0 absolute text="size-$bew-icon-size-lg"
+                  class="dock-action-icon"
+                  shrink-0 absolute
                 />
               </IconButton>
             </Transition>
@@ -931,12 +933,14 @@ onUnmounted(() => {
               <Icon
                 v-if="reachTop && canRefreshCurrentPage"
                 icon="line-md:rotate-270"
-                shrink-0 rotate-90 absolute text="size-$bew-icon-size-lg"
+                class="dock-action-icon"
+                shrink-0 rotate-90 absolute
               />
               <Icon
                 v-else
                 icon="line-md:arrow-small-up"
-                shrink-0 absolute text="size-$bew-icon-size-lg"
+                class="dock-action-icon"
+                shrink-0 absolute
               />
             </Transition>
           </IconButton>
@@ -955,12 +959,14 @@ onUnmounted(() => {
             <Icon
               v-if="showUndo"
               icon="mdi:undo-variant"
-              shrink-0 absolute text="size-$bew-icon-size-lg"
+              class="dock-action-icon"
+              shrink-0 absolute
             />
             <Icon
               v-else-if="showForward"
               icon="mdi:redo-variant"
-              shrink-0 absolute text="size-$bew-icon-size-lg"
+              class="dock-action-icon"
+              shrink-0 absolute
             />
           </IconButton>
         </Transition>
@@ -984,7 +990,8 @@ onUnmounted(() => {
         >
           <Icon
             icon="line-md:rotate-270"
-            shrink-0 rotate-90 absolute text="size-$bew-icon-size-lg"
+            class="dock-action-icon"
+            shrink-0 rotate-90 absolute
           />
         </IconButton>
       </Transition>
@@ -997,7 +1004,8 @@ onUnmounted(() => {
         >
           <Icon
             icon="line-md:arrow-small-up"
-            shrink-0 absolute text="size-$bew-icon-size-lg"
+            class="dock-action-icon"
+            shrink-0 absolute
           />
         </IconButton>
       </Transition>
@@ -1011,12 +1019,14 @@ onUnmounted(() => {
           <Icon
             v-if="showUndo"
             icon="mdi:undo-variant"
-            shrink-0 absolute text="size-$bew-icon-size-lg"
+            class="dock-action-icon"
+            shrink-0 absolute
           />
           <Icon
             v-else-if="showForward"
             icon="mdi:redo-variant"
-            shrink-0 absolute text="size-$bew-icon-size-lg"
+            class="dock-action-icon"
+            shrink-0 absolute
           />
         </IconButton>
       </Transition>
@@ -1431,6 +1441,11 @@ onUnmounted(() => {
   aspect-ratio: 1;
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
+
+  :deep(.dock-action-icon) {
+    width: var(--bew-icon-size-lg);
+    height: var(--bew-icon-size-lg);
+  }
 }
 
 @media (min-width: breakpoints.$grid-lg) {

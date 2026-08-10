@@ -296,6 +296,9 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
     })
   }
   catch (e) {
+    if (e instanceof Error && (e as Error & { isRiskControl?: boolean }).isRiskControl)
+      return Promise.reject(e)
+
     const initError = new Error(e instanceof Error ? e.message : '请求初始化失败')
     Object.assign(initError, {
       code: -1,

@@ -67,7 +67,7 @@ html.dark.bewly-design {
 }
 
 // Adjust broken image icon
-img {
+img:not(.pswp__img) {
   position: relative;
 
   &::before {
