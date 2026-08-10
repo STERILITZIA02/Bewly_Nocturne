@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
 import type flvjs from 'flv.js'
+import type Hls from 'hls.js'
 import type { ErrorData, Events } from 'hls.js'
-import Hls from 'hls.js'
 
 import Button from '~/components/Button.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { settings } from '~/logic'
 import { calcCurrentTime } from '~/utils/dataFormatter'
+import { loadFlvModule } from '~/utils/flv'
+import { loadHlsModule } from '~/utils/hls'
 
 import type { Video } from '../types'
 
@@ -49,6 +51,7 @@ const emit = defineEmits<{
   toggleWatchLater: []
   undo: []
   imageLoaded: []
+  previewError: []
   previewFullscreenChange: [isFullscreen: boolean]
 }>()
 
@@ -65,6 +68,7 @@ const showVideoControls = computed(() => shouldEnableVideoControls.value
   && (props.isHover || isPreviewFullscreen.value || isScrubbing.value))
 let hls: Hls | null = null
 let flvPlayer: flvjs.Player | null = null
+let previewSetupGeneration = 0
 /** 仅记录 pointerdown 意图；真正 scrub 需横向拖过阈值后才激活 */
 let activeScrubPointerId: number | null = null
 let scrubStartX = 0
@@ -331,28 +335,49 @@ function syncPreviewFullscreenState() {
   }
 }
 
+function destroyFlvPlayer(player: flvjs.Player) {
+  try {
+    player.pause()
+    player.unload()
+    player.detachMediaElement()
+    player.destroy()
+  }
+  catch {
+    // The stream can already be detached when its network request fails.
+  }
+}
+
 function cleanupPlayers() {
   if (hls) {
     hls.destroy()
     hls = null
   }
   if (flvPlayer) {
-    flvPlayer.pause()
-    flvPlayer.unload()
-    flvPlayer.detachMediaElement()
-    flvPlayer.destroy()
+    const player = flvPlayer
     flvPlayer = null
+    destroyFlvPlayer(player)
   }
   isLoadingStream.value = false
 }
 
-async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement) {
+function isPreviewSetupCurrent(generation: number, url: string, videoEl: HTMLVideoElement) {
+  return generation === previewSetupGeneration
+    && videoRef.value === videoEl
+    && props.previewVideoUrl === url
+    && (props.isHover || isPreviewFullscreen.value)
+}
+
+async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generation: number) {
+  if (!isPreviewSetupCurrent(generation, url, videoEl))
+    return
+
   // Check if URL is FLV stream
   if (url.includes('.flv')) {
     try {
-      // 动态导入 flv.js 以避免构建时依赖问题
-      const flvjsModule = await import('flv.js')
+      const flvjsModule = await loadFlvModule()
       const flvjs = flvjsModule.default
+      if (!isPreviewSetupCurrent(generation, url, videoEl))
+        return
 
       if (flvjs.isSupported()) {
         // Cleanup previous players and clear video src
@@ -361,7 +386,7 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement) {
 
         isLoadingStream.value = true
 
-        flvPlayer = flvjs.createPlayer({
+        const player = flvjs.createPlayer({
           type: 'flv',
           url,
           isLive: true,
@@ -373,18 +398,25 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement) {
           lazyLoadMaxDuration: 1,
           seekType: 'range',
         })
+        flvPlayer = player
 
-        flvPlayer.attachMediaElement(videoEl)
-        flvPlayer.load()
+        player.attachMediaElement(videoEl)
 
-        flvPlayer.on(flvjs.Events.LOADING_COMPLETE, () => {
-          isLoadingStream.value = false
+        player.on(flvjs.Events.LOADING_COMPLETE, () => {
+          if (flvPlayer === player)
+            isLoadingStream.value = false
         })
 
-        flvPlayer.on(flvjs.Events.ERROR, (errorType, errorDetail) => {
-          console.error('FLV Player error:', errorType, errorDetail)
+        player.on(flvjs.Events.ERROR, () => {
+          if (flvPlayer !== player)
+            return
+
+          flvPlayer = null
+          destroyFlvPlayer(player)
+          resetPreviewScrub()
+          resetVideoElement(videoEl)
           isLoadingStream.value = false
-          cleanupPlayers()
+          emit('previewError')
         })
 
         // 当有数据可以播放时立即播放
@@ -400,6 +432,8 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement) {
             isLoadingStream.value = false
           }
         }, { once: true })
+
+        player.load()
       }
     }
     catch (error) {
@@ -409,6 +443,9 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement) {
   }
   // Check if URL is HLS stream (.m3u8)
   else if (url.includes('.m3u8') || url.includes('m3u8')) {
+    const Hls = (await loadHlsModule()).default
+    if (!isPreviewSetupCurrent(generation, url, videoEl))
+      return
     if (Hls.isSupported()) {
       // Cleanup previous players and clear video src
       cleanupPlayers()
@@ -493,18 +530,22 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement) {
 
 // Watch for preview URL and videoRef changes
 watch([() => props.previewVideoUrl, () => props.isHover, videoRef], ([url, isHover, videoEl]) => {
-  if (!videoEl)
+  if (!videoEl) {
+    previewSetupGeneration++
+    return
+  }
+
+  if (!isHover && isPreviewFullscreen.value && url)
     return
 
-  if (!isHover || !url) {
-    if (isPreviewFullscreen.value)
-      return
+  const generation = ++previewSetupGeneration
 
+  if (!isHover || !url) {
     stopPreview(videoEl)
     return
   }
 
-  setupPreviewVideo(url, videoEl)
+  void setupPreviewVideo(url, videoEl, generation)
 })
 
 // Cleanup on unmount
@@ -514,6 +555,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  previewSetupGeneration++
   document.removeEventListener('fullscreenchange', syncPreviewFullscreenState)
   document.removeEventListener('webkitfullscreenchange', syncPreviewFullscreenState as EventListener)
   resetPreviewScrub()
@@ -703,17 +745,16 @@ onBeforeUnmount(() => {
         </div>
 
         <!-- Track cover hover separately so delayed preview playback does not delay this action. -->
-        <div
+        <button
           v-if="showWatchLater && isCoverHovered"
-          role="button"
-          tabindex="0"
+          type="button"
           :aria-label="isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"
           pos="absolute top-0 right-0" z="2"
           p="x-2 y-1" m="1"
           rounded="$bew-radius"
-          text="!white xl"
+          text="xl"
           bg="black opacity-60"
-          class="video-card-overlay-transform-transition opacity-0 group-hover/cover:opacity-100"
+          class="video-card-watch-later video-card-overlay-transform-transition opacity-0 group-hover/cover:opacity-100"
           transform="scale-70 group-hover/cover:scale-100"
           @click.prevent.stop="emit('toggleWatchLater')"
           @keydown.enter.prevent.stop="emit('toggleWatchLater')"
@@ -725,7 +766,7 @@ onBeforeUnmount(() => {
           <Tooltip v-else :content="$t('common.added')" placement="bottom-right" type="dark">
             <Icon icon="line-md:confirm" />
           </Tooltip>
-        </div>
+        </button>
 
         <!-- Modern layout: Cover stats (bottom overlay) -->
         <div
@@ -785,6 +826,29 @@ onBeforeUnmount(() => {
   transition:
     opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
     transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
+}
+
+.video-card-watch-later {
+  appearance: none;
+  color: white;
+  line-height: 1;
+  border: 0;
+  cursor: pointer;
+  transition:
+    opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+    transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.video-card-watch-later:hover,
+.video-card-watch-later:focus-visible {
+  color: var(--bew-on-theme-color);
+  background-color: var(--bew-theme-color);
+  box-shadow:
+    0 0 14px var(--bew-theme-color-40),
+    var(--bew-shadow-1);
 }
 
 .video-card-preview--scrubbable {

@@ -16,6 +16,7 @@ import api from '~/utils/api'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenActive, prepareBewlyWidescreenLoading } from '~/utils/bewlyWidescreen'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
+import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { runWhenIdle } from '~/utils/lazyLoad'
@@ -25,10 +26,9 @@ import { initNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavorite
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
-import { getPluginSearchResultsUrl } from '~/utils/searchNavigation'
+import { getPluginSearchResultsUrl, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
-import { resolveUseOriginalBilibiliTopBar } from '~/utils/topBarMode'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
 import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
@@ -67,7 +67,7 @@ const isElectronEnv = isElectron()
 const currentUrl = document.URL
 
 if (shouldInitializeContentScript && isHomePage()) {
-  console.log('[BewlyCat][首页加载] 插件开始加载', {
+  console.log('[Bewly Nocturne][首页加载] 插件开始加载', {
     time: new Date().toLocaleString(),
     version,
   })
@@ -169,7 +169,7 @@ export function isSupportedIframePages(): boolean {
 }
 
 if (isElectronEnv) {
-  console.warn('[BewlyCat] Detected Electron environment, extension disabled.')
+  console.warn('[Bewly Nocturne] Detected Electron environment, extension disabled.')
 }
 else if (shouldInitializeContentScript) {
   const playerModeLoadSettleDelay = 500
@@ -229,7 +229,7 @@ else if (shouldInitializeContentScript) {
 
   function setupPluginSearchLinkNavigation() {
     document.addEventListener('click', (event) => {
-      if (!settings.value.usePluginSearchResultsPage || !getCookie('DedeUserID'))
+      if (!shouldUsePluginSearchResultsPage() || !getCookie('DedeUserID'))
         return
 
       // 评论区等 B 站 Web Component 会把点击目标重新指向 Shadow Host，
@@ -983,7 +983,8 @@ else if (shouldInitializeContentScript) {
 
     const changeHomePage = !isInIframe() && isHomePage()
     const initialTopBarSource = resolveEffectiveTopBarSource(
-      resolveUseOriginalBilibiliTopBar(settings.value.pageMode, settings.value.useOriginalBilibiliTopBar),
+      settings.value.pageMode,
+      settings.value.useOriginalBilibiliTopBar,
     )
     applyEffectiveTopBarSource(document, initialTopBarSource)
     document.documentElement.classList.toggle('bewly-custom-homepage', changeHomePage)
@@ -1366,7 +1367,7 @@ else if (shouldInitializeContentScript) {
       if (typeof useOriginalBilibiliTopBar !== 'boolean')
         return
 
-      const source = resolveEffectiveTopBarSource(useOriginalBilibiliTopBar)
+      const source: EffectiveTopBarSource = useOriginalBilibiliTopBar ? 'bilibili-native' : 'bewly'
       applyEffectiveTopBarSource(document, source)
       document.documentElement.classList.toggle('remove-top-bar', source === 'bewly')
       if (source === 'bilibili-native') {

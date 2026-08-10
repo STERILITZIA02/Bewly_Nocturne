@@ -2,6 +2,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import type { PopularSeriesItem, PopularSeriesListResult, PopularSeriesOneResult, PopularSeriesVideoItem } from '~/models/video/popularSeries'
@@ -131,7 +132,7 @@ async function initData() {
       if (seriesList.value.length) {
         // 默认选择第一期（通常为最新期）
         activatedSeries.value = seriesList.value[0]
-        handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
+        handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
         await fetchSeriesOne(generation, seriesList.value[0])
       }
     }
@@ -182,7 +183,7 @@ function selectSeries(item: PopularSeriesItem) {
   activatedSeries.value = item
   showDropdown.value = false
   searchQuery.value = ''
-  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
+  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
   void getSeriesOne()
 }
 

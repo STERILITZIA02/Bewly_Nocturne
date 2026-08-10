@@ -245,7 +245,7 @@ html.bewly-outer-top-bars-suppressed {
 }
 
 .remove-top-bar {
-  // 隐藏原版第一行顶栏，并保留与 BewlyCat 顶栏一致的页面占位
+  // 隐藏原版第一行顶栏，并保留与 Bewly Nocturne 顶栏一致的页面占位
   .bili-header .bili-header__bar,
   #internationalHeader,
   .link-navbar,
@@ -256,7 +256,7 @@ html.bewly-outer-top-bars-suppressed {
     height: var(--bew-top-bar-height) !important;
   }
 
-  // BewlyCat 顶栏下保留首屏频道行，仅隐藏滚动后出现的原版顶栏第二行。
+  // Bewly Nocturne 顶栏下保留首屏频道行，仅隐藏滚动后出现的原版顶栏第二行。
   .header-channel,
   .bili-header-channel-panel,
   .bewly-bili-fixed-channel,

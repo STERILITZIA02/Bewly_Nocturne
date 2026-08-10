@@ -4,6 +4,7 @@ import { useDark } from '~/composables/useDark'
 import { IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
+import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 
 const props = defineProps<{
   url: string
@@ -18,6 +19,10 @@ const currentUrl = ref<string>(props.url)
 const showLoading = ref<boolean>(false)
 const iframeScrollCleanupFns = ref<Array<() => void>>([])
 const iframeScrollSyncFailed = ref(false)
+
+function shouldUseOriginalBilibiliTopBar() {
+  return showNativeBilibiliTopBar(settingsStore.getEffectiveTopBarSource())
+}
 
 function cleanupIframeScrollSync() {
   for (const stop of iframeScrollCleanupFns.value)
@@ -127,7 +132,8 @@ watch([isDark, isOledDark], ([newValue, newOledValue]) => {
   }
 })
 
-watch(() => settingsStore.getUseOriginalBilibiliTopBar(), (newValue) => {
+watch(() => settingsStore.getEffectiveTopBarSource(), (source) => {
+  const newValue = showNativeBilibiliTopBar(source)
   syncIframeTopBarVisibility(newValue)
 }, { immediate: true })
 
@@ -162,7 +168,7 @@ function handleIframeLoad() {
   showLoading.value = false
 
   setupIframeScrollSync()
-  syncIframeTopBarVisibility(settingsStore.getUseOriginalBilibiliTopBar())
+  syncIframeTopBarVisibility(shouldUseOriginalBilibiliTopBar())
 
   // 当iframe加载完成后，发送当前的黑暗模式状态（仅在跨域时需要）
   if (iframeRef.value?.contentWindow) {
@@ -174,7 +180,7 @@ function handleIframeLoad() {
           isOledDark: isOledDark.value,
           darkModeBaseColor: settings.value.darkModeBaseColor,
         }, '*')
-        syncIframeTopBarVisibility(settingsStore.getUseOriginalBilibiliTopBar())
+        syncIframeTopBarVisibility(shouldUseOriginalBilibiliTopBar())
       }
       catch (error) {
         console.warn('Failed to send initial dark mode state to iframe:', error)

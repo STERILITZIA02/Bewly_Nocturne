@@ -1,4 +1,5 @@
 import { usePreferredDark } from '@vueuse/core'
+import { effectScope } from 'vue'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { DARK_MODE_BASE_COLOR_CHANGE } from '~/constants/globalEvents'
@@ -63,7 +64,7 @@ function setDarkModeBaseColor(color: string) {
   // 设置主文档的CSS变量（用于哔哩哔哩原站样式）
   document.documentElement.style.setProperty('--bew-dark-base-color', color)
 
-  // 设置Shadow DOM内的CSS变量（用于BewlyCat组件样式）
+  // 设置 Shadow DOM 内的 CSS 变量（用于 Bewly Nocturne 组件样式）
   const bewlyContainer = document.getElementById('bewly')
   if (bewlyContainer?.shadowRoot) {
     const shadowHost = bewlyContainer
@@ -84,7 +85,7 @@ function syncBilibiliTheme(isDark: boolean) {
   window.dispatchEvent(new CustomEvent('global.themeChange', { detail: theme }))
 }
 
-export function useDark() {
+function createDarkState() {
   startScheduleClock()
   const currentUrl = useCurrentLocationHref()
 
@@ -108,6 +109,25 @@ export function useDark() {
   })
   const isDark = computed(() => currentAppColorScheme.value === 'dark' || isVideoPageDark.value)
   const isOledDark = computed(() => isDark.value && settings.value.enableOledDarkMode === true)
+
+  const handleIframeThemeMessage = ({ data, source }: MessageEvent) => {
+    if (window.parent === window || source !== window.parent || !data || typeof data !== 'object' || data.type !== 'iframeDarkModeChange')
+      return
+
+    const selective = isFestivalPage()
+    const bewlyContainer = document.getElementById('bewly')
+    bewlyContainer?.classList.toggle('dark', data.isDark === true)
+    bewlyContainer?.classList.toggle('oled-dark', data.isDark === true && data.isOledDark === true)
+    if (!selective) {
+      document.documentElement.classList.toggle('dark', data.isDark === true)
+      document.documentElement.classList.toggle('oled-dark', data.isDark === true && data.isOledDark === true)
+      document.body?.classList.toggle('dark', data.isDark === true)
+      document.body?.classList.toggle('oled-dark', data.isDark === true && data.isOledDark === true)
+    }
+    if (typeof data.darkModeBaseColor === 'string')
+      setDarkModeBaseColor(data.darkModeBaseColor)
+  }
+  window.addEventListener('message', handleIframeThemeMessage)
 
   // Apply appearance only when an effective theme input changes. The settings
   // adapter replaces its object on every write, so a getter returning an array
@@ -295,4 +315,14 @@ export function useDark() {
     isOledDark,
     toggleDark,
   }
+}
+
+type DarkState = ReturnType<typeof createDarkState>
+const darkStateScope = effectScope(true)
+let darkState: DarkState | undefined
+
+export function useDark(): DarkState {
+  if (!darkState)
+    darkState = darkStateScope.run(createDarkState)
+  return darkState!
 }

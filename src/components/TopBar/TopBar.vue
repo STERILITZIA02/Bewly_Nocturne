@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onKeyStroke, useMouseInElement, useMutationObserver } from '@vueuse/core'
+import { onKeyStroke, useMediaQuery, useMouseInElement } from '@vueuse/core'
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -8,6 +8,7 @@ import { useDark } from '~/composables/useDark'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useLayoutEditableRoot } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { isHomePage, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
@@ -31,15 +32,31 @@ const hideTopBar = ref<boolean>(false)
 const desiredTopBarVisible = ref(true)
 const forceHideTopBar = ref(false)
 const bewlyWidescreenActive = ref(false)
-const headerTarget = ref(null)
-const topAreaTarget = ref(null)
+const headerTarget = ref<HTMLElement>()
+const topAreaTarget = ref<HTMLElement>()
+useLayoutEditableRoot('topBar', headerTarget)
 const { isOutside: isOutsideTopBar } = useMouseInElement(headerTarget)
 const { isOutside: isOutsideTopArea } = useMouseInElement(topAreaTarget)
 
 const currentLocationHref = useCurrentLocationHref()
+const coarsePointer = useMediaQuery('(pointer: coarse)')
+const lastPointerType = ref<'mouse' | 'touch' | 'pen'>(coarsePointer.value ? 'touch' : 'mouse')
+const effectiveVideoTopBarConfig = computed(() => {
+  if (settings.value.videoPageTopBarConfig === VideoPageTopBarConfig.ShowOnMouse && lastPointerType.value !== 'mouse')
+    return VideoPageTopBarConfig.ShowOnScroll
+  return settings.value.videoPageTopBarConfig
+})
 
 // 延迟隐藏计时器
 let hideTimer: number | null = null
+let topBarMounted = false
+
+function clearHideTimer() {
+  if (hideTimer !== null) {
+    clearTimeout(hideTimer)
+    hideTimer = null
+  }
+}
 
 // 检测是否有弹窗激活
 const hasActivePopup = computed(() => {
@@ -64,12 +81,9 @@ function handleTopBarVisibility() {
   if (bewlyWidescreenActive.value)
     return
 
-  if (isVideoOrBangumiPage() && settings.value.videoPageTopBarConfig === VideoPageTopBarConfig.ShowOnMouse) {
+  if (isVideoOrBangumiPage() && effectiveVideoTopBarConfig.value === VideoPageTopBarConfig.ShowOnMouse) {
     // 清除之前的计时器
-    if (hideTimer) {
-      clearTimeout(hideTimer)
-      hideTimer = null
-    }
+    clearHideTimer()
 
     // 如果鼠标在顶栏区域或顶部监听区域，或者有任何弹窗激活，则显示顶栏
     if (!isOutsideTopBar.value || !isOutsideTopArea.value || hasActivePopup.value) {
@@ -105,7 +119,7 @@ watch(forceHideTopBar, () => {
 
 watch(currentLocationHref, () => {
   setupScrollListeners()
-  updateConflictingHeaderVisibility()
+  startConflictingHeaderObservation()
 }, { flush: 'post' })
 
 // 滚动处理
@@ -145,7 +159,7 @@ function handleScroll(arg?: number | Event): void {
 
   // 在视频页面处理不同的配置
   if (isVideoOrBangumiPage()) {
-    const config = settings.value.videoPageTopBarConfig
+    const config = effectiveVideoTopBarConfig.value
 
     // 总是显示：不处理滚动隐藏
     if (config === VideoPageTopBarConfig.AlwaysShow) {
@@ -237,7 +251,7 @@ function emitTopBarScrollVisibilityChange(visible: boolean, scrollDelta: number)
 function setupScrollListeners() {
   // 根据视频页面配置设置初始显示状态
   if (isVideoOrBangumiPage()) {
-    const config = settings.value.videoPageTopBarConfig
+    const config = effectiveVideoTopBarConfig.value
     if (config === VideoPageTopBarConfig.AlwaysHide || config === VideoPageTopBarConfig.ShowOnMouse) {
       toggleTopBarVisible(false)
     }
@@ -254,7 +268,7 @@ function setupScrollListeners() {
 
   // 在视频页面根据配置决定是否设置滚动监听
   if (isVideoOrBangumiPage()) {
-    const config = settings.value.videoPageTopBarConfig
+    const config = effectiveVideoTopBarConfig.value
     // 只有在滚动显示模式下才设置滚动监听
     if (config !== VideoPageTopBarConfig.ShowOnScroll) {
       return
@@ -283,14 +297,10 @@ function cleanupScrollListeners() {
   }
 }
 
-function updateConflictingHeaderVisibility() {
+function updateConflictingHeaderVisibility(targets = findConflictingHeaders()) {
   bewlyWidescreenActive.value = isBewlyWidescreenActive()
 
-  const hasVisibleHeader = conflictingHeaderSelectors.some((selector) => {
-    const el = document.querySelector(selector) as HTMLElement | null
-    if (!el)
-      return false
-
+  const hasVisibleHeader = targets.some((el) => {
     const style = window.getComputedStyle(el)
     return style.display !== 'none'
       && style.visibility !== 'hidden'
@@ -303,7 +313,99 @@ function updateConflictingHeaderVisibility() {
   applyTopBarVisibility()
 }
 
-let conflictingHeaderObserver: ReturnType<typeof useMutationObserver> | undefined
+let conflictingHeaderDiscoveryObserver: MutationObserver | undefined
+let conflictingHeaderTargetObservers: MutationObserver[] = []
+let conflictingHeaderUpdateRaf: number | undefined
+let conflictingHeaderDiscoveryTimer: ReturnType<typeof setTimeout> | undefined
+let conflictingHeaderDiscoveryDeadline = 0
+
+function findConflictingHeaders(): HTMLElement[] {
+  return conflictingHeaderSelectors.flatMap(selector =>
+    Array.from(document.querySelectorAll<HTMLElement>(selector)),
+  )
+}
+
+function stopConflictingHeaderObservation() {
+  conflictingHeaderDiscoveryObserver?.disconnect()
+  conflictingHeaderDiscoveryObserver = undefined
+  conflictingHeaderTargetObservers.forEach(observer => observer.disconnect())
+  conflictingHeaderTargetObservers = []
+  if (conflictingHeaderUpdateRaf != null)
+    cancelAnimationFrame(conflictingHeaderUpdateRaf)
+  conflictingHeaderUpdateRaf = undefined
+  if (conflictingHeaderDiscoveryTimer != null)
+    clearTimeout(conflictingHeaderDiscoveryTimer)
+  conflictingHeaderDiscoveryTimer = undefined
+  conflictingHeaderDiscoveryDeadline = 0
+}
+
+function scheduleConflictingHeaderRefresh() {
+  if (conflictingHeaderUpdateRaf != null)
+    return
+
+  conflictingHeaderUpdateRaf = requestAnimationFrame(() => {
+    conflictingHeaderUpdateRaf = undefined
+    bindConflictingHeaderObservers()
+  })
+}
+
+function nodeContainsConflictingHeader(node: Node): boolean {
+  return node instanceof Element && conflictingHeaderSelectors.some(selector =>
+    node.matches(selector) || Boolean(node.querySelector(selector)),
+  )
+}
+
+function scheduleConflictingHeaderDiscoveryRetry() {
+  if (conflictingHeaderDiscoveryTimer != null || Date.now() >= conflictingHeaderDiscoveryDeadline)
+    return
+  conflictingHeaderDiscoveryTimer = setTimeout(() => {
+    conflictingHeaderDiscoveryTimer = undefined
+    if (findConflictingHeaders().length > 0)
+      scheduleConflictingHeaderRefresh()
+    else
+      scheduleConflictingHeaderDiscoveryRetry()
+  }, 250)
+}
+
+function bindConflictingHeaderObservers() {
+  conflictingHeaderDiscoveryObserver?.disconnect()
+  conflictingHeaderDiscoveryObserver = undefined
+  conflictingHeaderTargetObservers.forEach(observer => observer.disconnect())
+  conflictingHeaderTargetObservers = []
+
+  const targets = findConflictingHeaders()
+  updateConflictingHeaderVisibility(targets)
+
+  if (targets.length === 0) {
+    if (!document.body)
+      return
+    conflictingHeaderDiscoveryObserver = new MutationObserver((mutations) => {
+      if (mutations.some(mutation => Array.from(mutation.addedNodes).some(nodeContainsConflictingHeader)))
+        scheduleConflictingHeaderRefresh()
+    })
+    conflictingHeaderDiscoveryObserver.observe(document.body, { childList: true, subtree: true })
+    scheduleConflictingHeaderDiscoveryRetry()
+    return
+  }
+
+  if (conflictingHeaderDiscoveryTimer != null)
+    clearTimeout(conflictingHeaderDiscoveryTimer)
+  conflictingHeaderDiscoveryTimer = undefined
+
+  targets.forEach((target) => {
+    const observer = new MutationObserver(scheduleConflictingHeaderRefresh)
+    observer.observe(target, { attributes: true, attributeFilter: ['class', 'style'] })
+    if (target.parentElement)
+      observer.observe(target.parentElement, { childList: true })
+    conflictingHeaderTargetObservers.push(observer)
+  })
+}
+
+function startConflictingHeaderObservation() {
+  stopConflictingHeaderObservation()
+  conflictingHeaderDiscoveryDeadline = Date.now() + 2000
+  scheduleConflictingHeaderRefresh()
+}
 
 // 处理点击外部关闭 POP 窗（仅在触屏优化开启时）
 function handleClickOutsidePopup(event: MouseEvent) {
@@ -331,6 +433,7 @@ function handleClickOutsidePopup(event: MouseEvent) {
 
 // 生命周期钩子
 onMounted(() => {
+  topBarMounted = true
   nextTick(async () => {
     // 初始化数据和更新定时器
     try {
@@ -339,41 +442,21 @@ onMounted(() => {
     catch (error) {
       console.error('初始化顶栏数据失败:', error)
     }
+    if (!topBarMounted)
+      return
     // 启动定时器：已登录时同步角标/补填 userInfo；未登录时不启动轮询，
     // 登录态由本地 Cookie 事实与事件驱动维护（见 issue #921）
     topBarStore.startUpdateTimer()
     setupScrollListeners()
 
-    updateConflictingHeaderVisibility()
-    conflictingHeaderObserver = useMutationObserver(
-      () => document.body,
-      (mutations) => {
-        const affectsConflictingHeader = mutations.some((mutation) => {
-          if (mutation.type === 'attributes') {
-            const target = mutation.target
-            return target instanceof Element && conflictingHeaderSelectors.some(selector => target.matches(selector))
-          }
-
-          return [...Array.from(mutation.addedNodes), ...Array.from(mutation.removedNodes)].some((node) => {
-            return node instanceof Element && conflictingHeaderSelectors.some(selector => node.matches(selector) || node.querySelector(selector))
-          })
-        })
-        if (affectsConflictingHeader)
-          updateConflictingHeaderVisibility()
-      },
-      {
-        childList: true,
-        subtree: true,
-        attributes: true,
-        attributeFilter: ['class', 'style'],
-      },
-    ) ?? undefined
+    startConflictingHeaderObservation()
 
     // 添加全局点击事件监听器（用于触屏模式下点击外部关闭弹窗）
     document.addEventListener('click', handleClickOutsidePopup)
     // 页面重新可见时按本地 Cookie 校正登录态：覆盖「他处登录/登出后
     // 本标签处于后台」的场景，无需轮询（见 issue #921）
     document.addEventListener('visibilitychange', handleVisibilityChange)
+    window.addEventListener('pointerdown', handlePointerDown, { passive: true })
   })
 })
 
@@ -382,13 +465,20 @@ function handleVisibilityChange() {
     topBarStore.reconcileLocalLoginState()
 }
 
-onUnmounted(() => {
-  if (hideTimer) {
-    clearTimeout(hideTimer)
-    hideTimer = null
-  }
+function handlePointerDown(event: PointerEvent) {
+  lastPointerType.value = event.pointerType === 'pen' || event.pointerType === 'touch' ? event.pointerType : 'mouse'
+}
 
-  conflictingHeaderObserver?.stop()
+watch(effectiveVideoTopBarConfig, () => {
+  clearHideTimer()
+  setupScrollListeners()
+}, { flush: 'post' })
+
+onUnmounted(() => {
+  topBarMounted = false
+  clearHideTimer()
+
+  stopConflictingHeaderObservation()
 
   cleanupScrollListeners()
   // 使用 store 中的方法清理定时器
@@ -397,6 +487,7 @@ onUnmounted(() => {
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleClickOutsidePopup)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('pointerdown', handlePointerDown)
 })
 
 onKeyStroke('Escape', (event: KeyboardEvent) => {
@@ -420,7 +511,7 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
   <div class="top-bar-container">
     <!-- 顶部监听区域 -->
     <div
-      v-if="!bewlyWidescreenActive && isVideoOrBangumiPage() && settings.videoPageTopBarConfig === VideoPageTopBarConfigEnum.ShowOnMouse"
+      v-if="!bewlyWidescreenActive && isVideoOrBangumiPage() && effectiveVideoTopBarConfig === VideoPageTopBarConfigEnum.ShowOnMouse"
       ref="topAreaTarget"
       class="top-area-listener"
     />
@@ -438,13 +529,11 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
           :is-dark="isDark"
         />
 
-        <KeepAlive v-if="settings.openNotificationsPageAsDrawer">
-          <NotificationsDrawer
-            v-if="topBarStore.drawerVisible.notifications"
-            :url="topBarStore.notificationsDrawerUrl"
-            @close="topBarStore.drawerVisible.notifications = false"
-          />
-        </KeepAlive>
+        <NotificationsDrawer
+          v-if="settings.openNotificationsPageAsDrawer && topBarStore.drawerVisible.notifications"
+          :url="topBarStore.notificationsDrawerUrl"
+          @close="topBarStore.drawerVisible.notifications = false"
+        />
       </header>
     </Transition>
   </div>

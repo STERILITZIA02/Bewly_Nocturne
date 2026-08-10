@@ -26,7 +26,6 @@ export interface BewlyAppProvider {
   isHomeTabSwitching: Ref<boolean>
   scrollViewportRef: Ref<HTMLElement | null>
   reachTop: Ref<boolean>
-  searchFocusOverlayActive: Ref<boolean>
   mainAppRef: Ref<HTMLElement>
   handleReachBottom: Ref<(() => void) | undefined>
   handlePageRefresh: Ref<(() => void) | undefined>

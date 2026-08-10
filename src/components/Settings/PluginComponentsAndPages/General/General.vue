@@ -32,6 +32,11 @@ const langOptions = computed(() => {
   ]
 })
 
+const drawerEscapeBehaviorOptions = computed(() => [
+  { label: t('settings.drawer_escape_immediate'), value: 'immediate' },
+  { label: t('settings.drawer_escape_second_press'), value: 'secondPress' },
+])
+
 watch(() => settings.value.language, (newValue) => {
   locale.value = newValue
 })
@@ -86,11 +91,8 @@ watch(() => settings.value.language, (newValue) => {
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_drawer_behavior')">
-      <SettingsItem :title="$t('settings.close_drawer_without_pressing_esc_again')" right-width="auto">
-        <template #title>
-          <div v-html="$t('settings.close_drawer_without_pressing_esc_again')" />
-        </template>
-        <Radio v-model="settings.closeDrawerWithoutPressingEscAgain" />
+      <SettingsItem :title="$t('settings.drawer_escape_behavior')" right-width="auto">
+        <Select v-model="settings.drawerEscapeBehavior" :options="drawerEscapeBehaviorOptions" w="160px" />
       </SettingsItem>
     </SettingsItemGroup>
   </div>

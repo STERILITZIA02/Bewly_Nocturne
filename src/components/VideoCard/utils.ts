@@ -1,4 +1,4 @@
-import { buildKeywordSearchUrl } from '~/utils/searchNavigation'
+import { resolveSearchNavigationTarget } from '~/utils/searchNavigation'
 
 import type { Author, Video } from './types'
 
@@ -11,7 +11,7 @@ export function getAuthorJumpUrl(author?: Author) {
 
 /** 标签点击跳转搜索页（复用统一的搜索链接构建入口） */
 export function getTagSearchUrl(tag: string) {
-  return buildKeywordSearchUrl(tag)
+  return resolveSearchNavigationTarget(tag)
 }
 
 export function getCurrentTime(videoElement: Ref<HTMLVideoElement | null>) {

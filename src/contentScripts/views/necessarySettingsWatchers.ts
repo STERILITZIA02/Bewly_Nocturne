@@ -1,4 +1,3 @@
-import { onScopeDispose } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -6,10 +5,11 @@ import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
 import { LanguageType } from '~/enums/appEnums'
 import { appAuthTokens, FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
+import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
-import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
+import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 
 function isFestivalPage(): boolean {
@@ -32,8 +32,8 @@ function getOnThemeColor(themeColor: string): '#000' | '#fff' {
 export function setupNecessarySettingsWatchers() {
   const { locale } = useI18n()
   const settingsStore = useSettingsStore()
-  let syncingTopBarSettings = false
   const currentLocationHref = useCurrentLocationHref()
+  const iframePageActive = useIframePageActive()
   let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
@@ -130,7 +130,7 @@ export function setupNecessarySettingsWatchers() {
   )
 
   const refreshEffectiveTopBarSource = () => {
-    effectiveTopBarSource = resolveEffectiveTopBarSource(settingsStore.getUseOriginalBilibiliTopBar())
+    effectiveTopBarSource = settingsStore.getEffectiveTopBarSource()
     applyEffectiveTopBarSource(document, effectiveTopBarSource)
     applyOuterTopBarPolicy()
   }
@@ -248,7 +248,7 @@ export function setupNecessarySettingsWatchers() {
   }, { immediate: true })
 
   const refreshUselessFeedCardBlocker = () => {
-    // 原版 Bilibili 页面也可能运行在 BewlyCat 的 iframe 中，每个文档都要独立标记外层卡片。
+    // 原版 Bilibili 页面也可能运行在 Bewly Nocturne 的 iframe 中，每个文档都要独立标记外层卡片。
     setUselessFeedCardBlockerEnabled(
       shouldEnableUselessFeedCardBlocker({
         blockAds: settings.value.blockAds,
@@ -363,44 +363,18 @@ export function setupNecessarySettingsWatchers() {
   )
 
   watch(
-    () => settings.value.showTopBar,
-    (newVal) => {
-      // `showTopBar` is the Bewly top bar toggle. Keep `useOriginalBilibiliTopBar` in sync,
-      // but avoid ping-pong writes that can race in async storage.
-      if (syncingTopBarSettings)
-        return
-
-      const desiredUseOriginal = !newVal
-      if (settings.value.pageMode !== 'custom' || settings.value.useOriginalBilibiliTopBar === desiredUseOriginal)
-        return
-
-      syncingTopBarSettings = true
-      settings.value.useOriginalBilibiliTopBar = desiredUseOriginal
-      syncingTopBarSettings = false
-    },
-    { immediate: true },
-  )
-
-  watch(
-    () => settingsStore.getUseOriginalBilibiliTopBar(),
-    (newVal) => {
-      // `useOriginalBilibiliTopBar` stores the custom preference; pageMode decides the effective top bar.
-      // Sync `showTopBar` (Bewly top bar visible) with minimal writes.
-      const desiredShowTopBar = !newVal
-      if (!syncingTopBarSettings && settings.value.showTopBar !== desiredShowTopBar) {
-        syncingTopBarSettings = true
-        settings.value.showTopBar = desiredShowTopBar
-        syncingTopBarSettings = false
-      }
+    () => settingsStore.getEffectiveTopBarSource(),
+    (source) => {
       refreshEffectiveTopBarSource()
 
       // Sync top bar visibility preference to embedded Bilibili iframes.
       // WebExtension storage doesn't automatically sync reactive state across frames,
       // so the iframe may not update until reload without this message.
       if (!isInIframe()) {
+        const useOriginalBilibiliTopBar = showNativeBilibiliTopBar(source)
         const message = {
           type: IFRAME_TOP_BAR_CHANGE,
-          useOriginalBilibiliTopBar: newVal,
+          useOriginalBilibiliTopBar,
         }
 
         const iframeCandidates = new Set<HTMLIFrameElement>()
@@ -411,8 +385,8 @@ export function setupNecessarySettingsWatchers() {
           try {
             // Prefer direct DOM access when same-origin, so it works even if the iframe didn't inject our content script.
             const iframeDoc = iframe.contentWindow?.document
-            iframeDoc?.documentElement?.classList.toggle('remove-top-bar', !newVal)
-            if (newVal && iframeDoc)
+            iframeDoc?.documentElement?.classList.toggle('remove-top-bar', !useOriginalBilibiliTopBar)
+            if (useOriginalBilibiliTopBar && iframeDoc)
               resetBilibiliTopBarInlineStyles(iframeDoc)
           }
           catch {
@@ -431,29 +405,9 @@ export function setupNecessarySettingsWatchers() {
     { immediate: true },
   )
 
-  // In the homepage "original Bili page in iframe" mode, the iframe may appear after async settings load.
-  // Observe shadow DOM changes so we can hide/show the outer `.bili-header` reliably without requiring refresh.
-  let outerTopBarShadowObserver: MutationObserver | null = null
-  const syncOuterTopBarShadowObserver = () => {
-    outerTopBarShadowObserver?.disconnect()
-    outerTopBarShadowObserver = null
-    if (isInIframe() || !isHomePage())
-      return
-
-    const bewlyHost = document.getElementById('bewly')
-    const shadow = bewlyHost?.shadowRoot
-    if (shadow) {
-      outerTopBarShadowObserver = new MutationObserver(() => {
-        applyOuterTopBarPolicy()
-      })
-      outerTopBarShadowObserver.observe(shadow, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] })
-    }
-  }
-  watch(currentLocationHref, () => {
-    syncOuterTopBarShadowObserver()
+  watch([currentLocationHref, iframePageActive], () => {
     refreshEffectiveTopBarSource()
   }, { immediate: true })
-  onScopeDispose(() => outerTopBarShadowObserver?.disconnect())
 
   const applyBewlyDesignClasses = () => {
     const shouldApply = settings.value.adaptToOtherPageStyles
@@ -536,17 +490,8 @@ export function setupNecessarySettingsWatchers() {
     { immediate: true },
   )
 
-  function hasBiliIframePage(): boolean {
-    const bewlyHost = document.getElementById('bewly')
-    const shadow = bewlyHost?.shadowRoot
-    if (!shadow)
-      return false
-    // Only consider iframes that look like a Bilibili page.
-    return Boolean(shadow.querySelector('iframe[src*="bilibili.com"]'))
-  }
-
   function applyOuterTopBarPolicy() {
-    const outerTopBarsSuppressed = !isInIframe() && isHomePage() && hasBiliIframePage()
+    const outerTopBarsSuppressed = !isInIframe() && isHomePage() && iframePageActive.value
     document.documentElement.classList.toggle('bewly-outer-top-bars-suppressed', outerTopBarsSuppressed)
 
     if (isInIframe())

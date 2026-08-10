@@ -63,7 +63,7 @@ async function syncPreventMobileRedirectRule(enabled: boolean) {
     })
   }
   catch (error) {
-    console.error('[BewlyCat] Failed to update the mobile redirect compatibility rule:', error)
+    console.error('[Bewly Nocturne] Failed to update the mobile redirect compatibility rule:', error)
   }
 }
 
@@ -82,7 +82,7 @@ browser.storage.onChanged.addListener((changes, areaName) => {
 
 // 扩展启动时初始化 WBI 密钥
 initWbiKeys().catch((error) => {
-  console.error('[BewlyCat] WBI keys initialization error:', error)
+  console.error('[Bewly Nocturne] WBI keys initialization error:', error)
 })
 
 function isExtensionUri(url: string) {

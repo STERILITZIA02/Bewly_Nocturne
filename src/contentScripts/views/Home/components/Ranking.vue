@@ -4,11 +4,14 @@ import { useI18n } from 'vue-i18n'
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
 import type { List as RankingPgcItem, RankingPgcResult } from '~/models/video/rankingPgc'
+import { useSettingsStore } from '~/stores/settingsStore'
 import api from '~/utils/api'
+import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { getListGridColumnCount } from '~/utils/gridLayout'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 
@@ -31,6 +34,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const { handleBackToTop, handlePageRefresh } = useBewlyApp()
+const settingsStore = useSettingsStore()
 
 const rankingTypes = computed((): RankingType[] => {
   return [
@@ -134,7 +138,7 @@ function transformRankingVideo(item: RankingVideoItem, rank: number): Video {
 }
 
 watch(() => activatedRankingType.value.id, () => {
-  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
+  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
 
   void initData()
 })
@@ -143,7 +147,7 @@ watch(() => props.topBarVisibility, () => {
   shouldMoveAsideUp.value = false
 
   // Allow moving tabs up only when the Bewly top bar is visible and set to auto-hide.
-  if (settings.value.autoHideTopBar && settings.value.showTopBar) {
+  if (settings.value.autoHideTopBar && showBewlyTopBar(settingsStore.getEffectiveTopBarSource())) {
     if (props.topBarVisibility)
       shouldMoveAsideUp.value = false
 

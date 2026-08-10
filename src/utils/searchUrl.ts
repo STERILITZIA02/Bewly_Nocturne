@@ -11,7 +11,7 @@ const NATIVE_SEARCH_CATEGORY_BY_PATH: Readonly<Record<string, string>> = {
 }
 
 /**
- * Convert a Bilibili native search URL into BewlyCat's built-in search results
+ * Convert a Bilibili native search URL into Bewly Nocturne's built-in search results
  * URL. Returning null leaves unsupported or keyword-less pages untouched.
  */
 export function getPluginSearchResultsUrl(value: string): string | null {

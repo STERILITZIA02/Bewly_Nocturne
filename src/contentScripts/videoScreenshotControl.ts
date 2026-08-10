@@ -121,7 +121,7 @@ async function captureCurrentFrame(trigger: HTMLElement) {
     showState(translate('player_screenshot.saved'))
   }
   catch (error) {
-    console.error('[BewlyCat] 视频帧截图失败', error)
+    console.error('[Bewly Nocturne] 视频帧截图失败', error)
     showState(translate('player_screenshot.failed'))
   }
   finally {

@@ -2,13 +2,16 @@
 import { storeToRefs } from 'pinia'
 import { onUnmounted, ref } from 'vue'
 
+import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 
 // 搜索关键词
 const searchInput = ref<string>('')
 const topBarStore = useTopBarStore()
 const { searchKeyword: topBarSearchKeyword } = storeToRefs(topBarStore)
+const searchFocusEffect = useSearchFocusEffect()
 
 // 页面卸载时清空顶栏搜索框（真正离开搜索页面）
 onUnmounted(() => {
@@ -40,7 +43,7 @@ function performInPlaceSearch(keyword: string) {
 }
 
 function handleSearch(keyword: string) {
-  if (!settings.value.usePluginSearchResultsPage)
+  if (!shouldUsePluginSearchResultsPage())
     return
   performInPlaceSearch(keyword)
 }
@@ -63,11 +66,12 @@ function handleSearch(keyword: string) {
     />
     <SearchBar
       v-model="searchInput"
-      :darken-on-focus="settings.searchPageDarkenOnSearchFocus"
-      :blurred-on-focus="settings.searchPageBlurredOnSearchFocus"
+      :darken-on-focus="searchFocusEffect.darkened"
+      :blurred-on-focus="searchFocusEffect.blurred"
       :focused-character="settings.searchPageSearchBarFocusCharacter"
       :show-hot-search="settings.showHotSearchInTopBar"
-      :search-behavior="settings.usePluginSearchResultsPage ? 'stay' : 'navigate'"
+      :search-behavior="shouldUsePluginSearchResultsPage() ? 'stay' : 'navigate'"
+      :top-bar-appearance="true"
       @search="handleSearch"
     />
   </div>

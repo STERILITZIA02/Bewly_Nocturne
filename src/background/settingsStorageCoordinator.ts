@@ -427,7 +427,7 @@ function handleStorageReset(
 
     const { meta } = completeStorageMeta(undefined)
     await browser.storage.local.set({ [SETTINGS_STORAGE_META_KEY]: meta })
-  }).catch(error => console.error('[BewlyCat] Failed to rotate settings storage epoch:', error))
+  }).catch(error => console.error('[Bewly Nocturne] Failed to rotate settings storage epoch:', error))
 }
 
 export function setupSettingsStorageCoordinator() {

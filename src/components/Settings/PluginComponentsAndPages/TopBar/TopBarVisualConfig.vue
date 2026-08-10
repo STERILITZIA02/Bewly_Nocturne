@@ -310,23 +310,6 @@ function toggleChannel(value: string) {
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_search_bar')">
-      <SettingsItem
-        :title="$t('settings.show_hot_search_in_top_bar')"
-        :desc="$t('settings.show_hot_search_in_top_bar_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.showHotSearchInTopBar" />
-      </SettingsItem>
-      <SettingsItem
-        :title="$t('settings.show_search_recommendation')"
-        :desc="$t('settings.show_search_recommendation_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.showSearchRecommendation" />
-      </SettingsItem>
-    </SettingsItemGroup>
-
     <SettingsItemGroup
       :title="$t('settings.topbar_actions')"
       :desc="$t('settings.topbar_actions_desc')"

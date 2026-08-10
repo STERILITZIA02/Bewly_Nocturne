@@ -59,12 +59,14 @@ const {
 
 const mid = computed(() => userInfo.value.mid || getUserID())
 
-const moments = isComponentVisible('moments') ? setupTopBarItemHoverEvent('moments') : ref()
-const favorites = isComponentVisible('favorites') ? setupTopBarItemHoverEvent('favorites') : ref()
-const history = isComponentVisible('history') ? setupTopBarItemHoverEvent('history') : ref()
-const watchLater = isComponentVisible('watchLater') ? setupTopBarItemHoverEvent('watchLater') : ref()
-const upload = isComponentVisible('upload') ? setupTopBarItemHoverEvent('upload') : ref()
-const notifications = isComponentVisible('notifications') ? setupTopBarItemHoverEvent('notifications') : ref()
+// Controllers are created independently of current visibility so hiding and
+// later re-enabling an item restores hover/popover behavior without remounting.
+const moments = setupTopBarItemHoverEvent('moments')
+const favorites = setupTopBarItemHoverEvent('favorites')
+const history = setupTopBarItemHoverEvent('history')
+const watchLater = setupTopBarItemHoverEvent('watchLater')
+const upload = setupTopBarItemHoverEvent('upload')
+const notifications = setupTopBarItemHoverEvent('notifications')
 const more = setupTopBarItemHoverEvent('more')
 const avatar = setupTopBarItemHoverEvent('userPanel')
 
@@ -79,57 +81,43 @@ const watchLaterPopRef = ref()
 const uploadPopRef = ref()
 const morePopRef = ref()
 
-// 在组件挂载后初始化transformer，传入ref对象
-onMounted(() => {
-  nextTick(() => {
-    setupTopBarItemTransformer('userPanel', avatarPopRef)
-    if (isComponentVisible('notifications'))
-      setupTopBarItemTransformer('notifications', notificationsPopRef)
-    if (isComponentVisible('moments'))
-      setupTopBarItemTransformer('moments', momentsPopRef)
-    if (isComponentVisible('favorites'))
-      setupTopBarItemTransformer('favorites', favoritesPopRef)
-    if (isComponentVisible('history'))
-      setupTopBarItemTransformer('history', historyPopRef)
-    if (isComponentVisible('watchLater'))
-      setupTopBarItemTransformer('watchLater', watchLaterPopRef)
-    if (isComponentVisible('upload'))
-      setupTopBarItemTransformer('upload', uploadPopRef)
-    setupTopBarItemTransformer('more', morePopRef)
-  })
-})
+setupTopBarItemTransformer('userPanel', avatarPopRef)
+setupTopBarItemTransformer('notifications', notificationsPopRef)
+setupTopBarItemTransformer('moments', momentsPopRef)
+setupTopBarItemTransformer('favorites', favoritesPopRef)
+setupTopBarItemTransformer('history', historyPopRef)
+setupTopBarItemTransformer('watchLater', watchLaterPopRef)
+setupTopBarItemTransformer('upload', uploadPopRef)
+setupTopBarItemTransformer('more', morePopRef)
 
-// 只有当notifications组件可见时才监听相关属性
-if (isComponentVisible('notifications')) {
-  watch(
-    () => popupVisible.value?.notifications ?? false,
-    (newVal, oldVal) => {
-      if (newVal === undefined || oldVal === undefined)
-        return
+watch(
+  () => popupVisible.value?.notifications ?? false,
+  (newVal, oldVal) => {
+    if (newVal === undefined || oldVal === undefined)
+      return
 
-      if (oldVal !== undefined && MESSAGE_URL.test(location.href))
-        return
+    if (oldVal !== undefined && MESSAGE_URL.test(location.href))
+      return
 
-      if (newVal === oldVal)
-        return
+    if (newVal === oldVal)
+      return
 
-      if (!newVal)
-        refreshUnreadMessageSharedState()
-    },
-    { immediate: true },
-  )
+    if (!newVal)
+      refreshUnreadMessageSharedState()
+  },
+  { immediate: true },
+)
 
-  watch(
-    () => drawerVisible.value?.notifications ?? false,
-    (newVal, oldVal) => {
-      if (newVal === oldVal)
-        return
+watch(
+  () => drawerVisible.value?.notifications ?? false,
+  (newVal, oldVal) => {
+    if (newVal === oldVal)
+      return
 
-      if (!newVal)
-        refreshUnreadMessageSharedState()
-    },
-  )
-}
+    if (!newVal)
+      refreshUnreadMessageSharedState()
+  },
+)
 
 const focused = useWindowFocus()
 watch(() => focused.value, (newVal, _) => {
@@ -274,7 +262,7 @@ const shouldShowDivider = computed(() => {
 
             <Transition name="slide-in">
               <MomentsPop
-                v-show="popupVisible?.moments"
+                v-if="popupVisible?.moments"
                 ref="momentsPopRef"
                 class="bew-popover"
                 @click.stop="() => {}"
@@ -302,14 +290,12 @@ const shouldShowDivider = computed(() => {
             </ALink>
 
             <Transition name="slide-in">
-              <KeepAlive>
-                <FavoritesPop
-                  v-if="popupVisible?.favorites"
-                  ref="favoritesPopRef"
-                  class="bew-popover"
-                  @click.stop="() => {}"
-                />
-              </KeepAlive>
+              <FavoritesPop
+                v-if="popupVisible?.favorites"
+                ref="favoritesPopRef"
+                class="bew-popover"
+                @click.stop="() => {}"
+              />
             </Transition>
           </div>
 
@@ -403,12 +389,16 @@ const shouldShowDivider = computed(() => {
           :class="{ active: popupVisible?.more }"
           @click="(event: MouseEvent) => handleClickTopBarItem(event, 'more')"
         >
-          <a
+          <button
+            type="button"
+            class="top-bar-icon-button"
             :class="{ 'white-icon': forceWhiteIcon }"
-            title="More"
+            :title="$t('video_card.operation.more_options')"
+            :aria-label="$t('video_card.operation.more_options')"
+            :aria-expanded="Boolean(popupVisible?.more)"
           >
             <div i-mingcute:menu-line />
-          </a>
+          </button>
 
           <Transition name="slide-in">
             <MorePop
@@ -451,7 +441,7 @@ const shouldShowDivider = computed(() => {
 
             <Transition name="slide-in">
               <UploadPop
-                v-if="popupVisible?.upload"
+                v-show="popupVisible?.upload"
                 ref="uploadPopRef"
                 class="bew-popover"
                 @click.stop="() => {}"
@@ -493,7 +483,7 @@ const shouldShowDivider = computed(() => {
 
             <Transition name="slide-in">
               <NotificationsPop
-                v-if="popupVisible?.notifications"
+                v-show="popupVisible?.notifications"
                 ref="notificationsPopRef"
                 class="bew-popover"
                 :un-read-message="unReadMessage"

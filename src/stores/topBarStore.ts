@@ -32,7 +32,9 @@ import { settings } from '~/logic'
 import { checkLoginStatus, LoginStatus, parseDedeUserID } from '~/logic/loginStatus'
 import { parseTopBarPublicationTime, recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
 import type { List as VideoItem } from '~/models/video/watchLater'
+import { useSettingsStore } from '~/stores/settingsStore'
 import api from '~/utils/api'
+import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, sendMessage } from '~/utils/messaging'
 
@@ -56,6 +58,7 @@ function isBeforeNextReceiveAt(nextReceiveAt: number | null): boolean {
 }
 
 export const useTopBarStore = defineStore('topBar', () => {
+  const settingsStore = useSettingsStore()
   const toast = useToast()
   const currentLocationHref = useCurrentLocationHref()
   // 登录态是本地事实而非网络推导：初始值取 DedeUserID 存在性（同步、零请求），
@@ -191,9 +194,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       return false
     }
 
-    if (settings.value.showTopBar)
-      return true
-    return false
+    return showBewlyTopBar(settingsStore.getEffectiveTopBarSource())
   })
 
   function resetReceiveStates() {
@@ -434,6 +435,8 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        throw error
       console.error(error)
     }
   }
@@ -515,6 +518,8 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        throw error
       console.error('Failed to check VIP reward status:', error)
       if (isCurrentAccount(accountId))
         hasBCoinToReceive.value = false
@@ -547,7 +552,9 @@ export const useTopBarStore = defineStore('topBar', () => {
         toast.error(`B币券自动领取失败: ${res.message}`)
       }
     }
-    catch {
+    catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        throw error
       if (isCurrentAccount(accountId))
         toast.error('B币券自动领取失败，请稍后重试')
     }
@@ -585,7 +592,9 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
       // 其他错误码不处理，下次继续尝试
     }
-    catch {
+    catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        throw error
       // 请求失败不处理，下次继续尝试
     }
   }
@@ -609,6 +618,8 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        throw error
       console.error(error)
     }
     finally {
@@ -789,8 +800,9 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
-      if (!isExtensionContextInvalidatedError(error))
-        console.error(error)
+      if (isExtensionContextInvalidatedError(error))
+        throw error
+      console.error(error)
     }
   }
 

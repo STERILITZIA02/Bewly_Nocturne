@@ -94,7 +94,6 @@ settings:
     located: 已定位到此设置
   category_general_desc: 配置语言、交互布局与抽屉行为。
   category_appearance_desc: 配置毛玻璃、主题颜色、字体、自定义样式和其他页面的适配。
-  category_shortcuts_desc: 启用、修改或恢复 BewlyMac 与播放器快捷键。
   breadcrumb: 设置位置
   group_interaction_layout: 交互与布局
   group_memory_saving: 内存节省
@@ -113,19 +112,19 @@ settings:
   category_bilibili_comments_desc: 增强评论区的用户信息与内容显示。
   category_bilibili_vip_desc: 配置大会员权益相关的提醒功能。
   category_advanced_compatibility_desc: 配置原版页面、第三方扩展和其他页面的兼容行为。
-  category_advanced_maintenance_desc: 导出备份、导入设置或恢复 BewlyMac 默认配置。
+  category_advanced_maintenance_desc: 导出备份、导入设置或恢复 Bewly Nocturne 默认配置。
   maintenance:
     title: 备份与重置
     backup_title: 设置备份
     backup_desc: 导出设置用于备份或迁移，也可以从已有备份恢复。
-    import_desc: 从 BewlyMac JSON 备份中导入已识别的设置项。
+    import_desc: 从 Bewly Nocturne JSON 备份中导入已识别的设置项。
     import_failed: 设置文件无法读取，请确认它是有效的 JSON 备份。
     import_no_matches: 备份中没有可导入的设置项。
     import_success: 导入成功：已应用 {imported} 项，忽略 {ignored} 项未知设置。
     reset_title: 恢复默认设置
-    reset_desc: 此区域的操作会影响全部 BewlyMac 设置。
+    reset_desc: 此区域的操作会影响全部 Bewly Nocturne 设置。
     reset_warning: 恢复后无法撤销，当前语言设置会保留。
-  menu_plugin_components_and_pages: BewlyMac界面
+  menu_plugin_components_and_pages: Bewly Nocturne界面
   menu_bilibili_features_enhancement: Bilibili 功能
   menu_appearance: 外观
   menu_compatibility: 兼容性
@@ -342,7 +341,9 @@ settings:
   link_opening_behavior_desc: 控制点击链接后的打开位置。“首页外当前页”表示：当前页为首页时使用新标签页打开，其他页面使用当前标签页打开；“后台打开”会在浏览器允许时打开到后台标签页。
   video_card_link_opening_behavior_desc: 控制点击视频卡片和番剧卡片后的打开位置，可选择当前标签页、抽屉、后台标签页或新标签页。
   search_bar_link_opening_behavior: 搜索栏链接打开行为
-  close_drawer_without_pressing_esc_again: 关闭抽屉时不用再次按 <kbd>Esc</kbd> 关闭
+  drawer_escape_behavior: 抽屉 Esc 关闭方式
+  drawer_escape_immediate: 按一次立即关闭
+  drawer_escape_second_press: 再按一次后关闭
   block_ads: 屏蔽广告
   block_top_search_page_ads: 屏蔽 Bilibili 搜索页上方的广告
   block_top_search_page_ads_desc: |
@@ -479,12 +480,10 @@ settings:
   settings_sync_unsynced_count: '未同步字段：{count}'
   settings_sync_quota_blocked_count: '受云端配额限制：{count}'
   settings_sync_last_error: '最近同步错误：{error}'
-  top_bar_icon_badges: 图标角标
   top_bar_icon_badges_opt:
     number: 数字
     dot: 圆点
     none: 不显示
-  show_watch_later_badge: 显示稍后再看角标
   show_bcoin_receive_reminder: 大会员B币领取提醒
   auto_receive_bcoin_coupon: 大会员B币自动领取
   auto_receive_bcoin_coupon_desc: 启用后，当检测到有未领取的B币券时将自动领取
@@ -552,9 +551,7 @@ settings:
     brand: 品牌标识
   badge_type: 角标类型
   always_use_dock: 总是使用 Dock 栏
-  always_use_dock_desc: 启用后，Dock 栏将始终显示，侧边栏将隐藏。我们推荐你同时启用自动隐藏 Dock 栏。
-  auto_hide_dock: 自动隐藏 Dock 栏
-  half_hide_dock: 半隐藏 Dock 栏
+  always_use_dock_desc: 启用后，Dock 栏将始终显示，侧边栏将隐藏。
   dock_collapse_mode: Dock 收起方式
   dock_collapse_mode_desc: 控制收起按钮是否显示，或在指针离开后自动收起为悬浮圆球。
   dock_collapse_mode_button: 显示收起按钮
@@ -566,6 +563,7 @@ settings:
   dock_content_adjustment_desc: 第一个激活的 Dock 项的页面将会是启动页面。
   topbar_mode: 顶栏模式
   topbar_mode_desc: 全 Bewly 或全原版模式会跟随全局设置；自定义模式下可单独选择。
+  custom_page_mode_required: 仅在“自定义”页面模式下可单独配置。
   topbar_mode_bewly: Bewly 顶栏
   topbar_mode_bilibili: Bilibili 顶栏
   dock_item_open_in_new_tab: 在新标签页打开
@@ -573,7 +571,6 @@ settings:
   disable_dock_glowing_effect: 关闭 Dock 栏发光效果
   disable_light_dark_mode_switcher: 禁用亮/暗色模式切换按钮
   back_to_top_and_refresh_buttons_are_separated: 分离回到顶部和刷新按钮
-  always_show_dock_actions_when_auto_hide: 自动隐藏 Dock 栏时始终显示操作按钮
   sidebar_position: 侧边栏位置
   auto_hide_sidebar: 自动隐藏侧边栏
   theme: 主题
@@ -585,7 +582,7 @@ settings:
   theme_schedule: 亮色时间
   theme_schedule_desc: 在所选时间范围内使用亮色模式，其余时间使用暗色模式。
   video_page_dark_mode: 仅视频播放页深色模式
-  video_page_dark_mode_desc: 保持全站主题设置不变，仅在视频播放页启用 BewlyMac 深色样式。
+  video_page_dark_mode_desc: 保持全站主题设置不变，仅在视频播放页启用 Bewly Nocturne 深色样式。
   theme_color: 主题色
   dark_mode_base_color: 深色模式基准颜色
   enable_oled_dark_mode: OLED 纯黑模式
@@ -595,7 +592,7 @@ settings:
   customize_css: 自定义 CSS
   customize_css_desc: |-
     如果你不熟悉 CSS，请不要修改 CSS。否则可能会导致意外的显示问题。
-    如果在你修改 CSS 后遇到任何问题，请重新安装 BewlyMac。
+    如果在你修改 CSS 后遇到任何问题，请重新安装 Bewly Nocturne。
   logo_color: Logo 颜色
   logo_color_opt:
     white: 白
@@ -605,11 +602,11 @@ settings:
     pagination: 翻页
   logo_visibility: Logo 可见性
   enable_logo_glowing_effect: 启用 Logo 发光效果
-  bg_darkens_when_the_search_bar_is_focused: 当搜索栏聚焦时背景暗化
-  bg_blurs_when_the_search_bar_is_focused: 当搜索栏聚焦时背景模糊
+  disable_search_focus_effect: 去除搜索栏聚焦效果
+  disable_search_focus_effect_desc: 开启后，搜索栏聚焦时不再模糊或暗化页面背景。
   choose_search_bar_focused_character: 选择搜索栏聚焦时出现的人物
-  show_hot_search_in_top_bar: 在顶栏显示热搜
-  show_hot_search_in_top_bar_desc: 在顶栏搜索框中显示热搜列表
+  show_hot_search_in_top_bar: 显示热搜
+  show_hot_search_in_top_bar_desc: 在搜索框聚焦时显示热搜列表
   show_hot_search_in_search_page: 在搜索页显示热搜
   show_hot_search_in_search_page_desc: 在搜索页面显示热搜排行榜
   show_search_recommendation: 显示搜索推荐
@@ -631,7 +628,7 @@ settings:
   auto_switch_recommendation_mode: 自动切换推荐模式
   auto_switch_recommendation_mode_desc: |
     当 App 推荐失败时自动切换至 Web 模式。
-  authorize_app: 授权 BewlyMac 使用 access key
+  authorize_app: 授权 Bewly Nocturne 使用 access key
   authorize_app_desc: |
     授权使用后能在首页推送 bilibili App 端算法的推荐视频，授权 key 有效期约为一个月，过后记得重新授权获取 access key。
   authorize_app_more_info_access_key: 关于 access key
@@ -688,10 +685,9 @@ settings:
   settings_shared_with_the_search_page_desc: 这些设置都与搜索页共用。
   home_tabs_adjustment: 标签栏调整
   home_tabs_adjustment_desc: 第一个激活的标签项是默认界面
-  always_show_tabs_on_home_page: 滚动隐藏首页标签栏
   fixed_home_tabs_on_home_page: 固定首页标签栏
   adapt_to_other_page_styles: 适应其他页面样式
-  adapt_to_other_page_styles_desc: 适应一些常见页面，以与 BewlyMac 主题相匹配。
+  adapt_to_other_page_styles_desc: 适应一些常见页面，以与 Bewly Nocturne 主题相匹配。
   prevent_mobile_redirect: 防止跳转移动端
   prevent_mobile_redirect_desc: 开启后，仅在访问 www.bilibili.com 时使用桌面端 UA，避免被跳转到 m.bilibili.com；直接访问移动端不受影响。
   links: 链接
@@ -702,98 +698,10 @@ settings:
   reset_settings_confirm: |-
     重置设置？
     该操作无法撤销。你确定要重置你的设置吗？
-  current_contributors: BewlyMac（含 BewlyBewly）贡献者
+  current_contributors: Bewly Nocturne（含 BewlyBewly）贡献者
   contributors_image_failed: 贡献者图片加载失败
   enable_undo_refresh_button: 启用撤销刷新按钮（仅在Web推荐模式下有效）
   enable_undo_refresh_button_desc: 刷新页面后显示撤销按钮，点击可恢复刷新前的内容
-  shortcuts:
-    title: 快捷键
-    enable_all_shortcuts_toggle: 启用键盘快捷键
-    enable_all_shortcuts_toggle_desc: 启用或禁用所有键盘快捷键功能
-    group:
-      official_bilibili: Bilibili 官方快捷键
-      homepage: 首页快捷键
-      general: 常规快捷键
-      fullscreen_mode: 全屏模式快捷键
-      global_actions: 全局操作
-    official:
-      play_pause: 播放/暂停
-      forward: 快进5秒
-      backward: 后退5秒
-      volume_up: 音量增加
-      volume_down: 音量减少
-      exit_fullscreen: 退出全屏
-      fullscreen: 切换全屏模式
-      danmu_toggle: 弹幕开关
-      mute: 静音切换
-      like: 点赞
-      coin: 投币
-      favorite: 收藏
-      prev_video: 播放上一个视频
-      next_video: 播放下一个视频
-      speed_1: 播放速度设为1倍速
-      speed_2: 播放速度设为2倍速
-      input_danmu: 输入弹幕
-    item:
-      edit_key: 编辑快捷键
-      cancel_edit: 取消编辑
-      reset_default: 重置为默认值
-    reset_all_button: 重置所有快捷键
-    reset_all_ext_shortcuts: 重置所有扩展快捷键
-    press_keys: 点击输入框，按下快捷键
-    conflict: 此快捷键已被插件快捷键“{name}”使用，不能重复设置。
-    danmu_status: 显示弹幕状态
-    danmu_status_desc: 显示当前弹幕开关状态
-    web_fullscreen: 网页全屏
-    web_fullscreen_desc: 切换网页全屏模式
-    widescreen: 宽屏模式
-    widescreen_desc: 切换宽屏模式
-    short_step_backward: 快退
-    short_step_backward_desc: 快退5秒
-    long_step_backward: 长退
-    long_step_backward_desc: 快退30秒
-    play_pause_ext: 播放/暂停
-    play_pause_ext_desc: 播放或暂停视频(扩展)
-    short_step_forward: 快进
-    short_step_forward_desc: 快进5秒
-    long_step_forward: 长进
-    long_step_forward_desc: 快进30秒
-    next_video_ext: 下一个视频
-    next_video_ext_desc: 播放列表的下一个视频(扩展)
-    pip: 画中画
-    pip_desc: 切换画中画模式
-    turn_off_light: 关灯
-    turn_off_light_desc: 打开/关闭关灯模式
-    caption: 字幕
-    caption_desc: 打开/关闭字幕
-    increase_playback_rate: 加速播放
-    increase_playback_rate_desc: 提高播放速度
-    decrease_playback_rate: 减速播放
-    decrease_playback_rate_desc: 降低播放速度
-    reset_playback_rate: 重置播放速度
-    reset_playback_rate_desc: 恢复正常播放速度
-    previous_frame: 上一帧
-    previous_frame_desc: 回退到上一帧(暂停时)
-    next_frame: 下一帧
-    next_frame_desc: 前进到下一帧(暂停时)
-    replay: 重播
-    replay_desc: 从头开始播放
-    increase_video_size: 放大视频
-    increase_video_size_desc: 增加视频画面大小
-    decrease_video_size: 缩小视频
-    decrease_video_size_desc: 减小视频画面大小
-    reset_video_size: 重置视频大小
-    reset_video_size_desc: 恢复默认视频大小
-    video_title: 视频标题
-    video_title_desc: 显示/隐藏视频标题
-    video_time: 视频时间
-    video_time_desc: 显示/隐藏视频时间
-    clock_time: 时钟
-    clock_time_desc: 显示/隐藏系统时间
-    home_refresh: 首页刷新
-    home_refresh_desc: 刷新首页内容
-    toggle_follow: 关注/取消关注
-    toggle_follow_desc: 在视频页切换关注UP主状态
   clean_url_argument: 清理URL追踪参数
   clean_url_argument_desc: 自动清理URL中的追踪参数，使链接更加简洁
 
@@ -802,7 +710,7 @@ settings:
   enable_clean_share_link: 启用分享链接净化
   enable_clean_share_link_desc: >
     启用后，分享链接将自动移除追踪参数，并可选择是否包含视频标题。
-    此功能适用于 BewlyMac 的复制链接功能，同时也会拦截 Bilibili 原生分享按钮的复制内容。
+    此功能适用于 Bewly Nocturne 的复制链接功能，同时也会拦截 Bilibili 原生分享按钮的复制内容。
   clean_share_link_include_title: 分享时包含视频标题
   clean_share_link_include_title_desc: >
     分享时在链接前添加视频标题，例如 "视频标题 https://www.bilibili.com/video/BVxxx"
@@ -836,7 +744,7 @@ settings:
   group_fonts: 字体
   group_visual_effects: 视觉效果
 auth:
-  auth_access_key_first: 在这之前请先授权 BewlyMac 使用 access key
+  auth_access_key_first: 在这之前请先授权 Bewly Nocturne 使用 access key
 topbar:
   sign_in: 登录
   notifications: 通知
@@ -942,19 +850,122 @@ dock:
   favorites: 收藏
   watch_later: 稍后再看
   moments: 动态
+  notifications: 消息页
   page_mode_original: BiliBili
-  page_mode_bewly: BewlyMac
+  page_mode_bewly: Bewly Nocturne
   page_mode_custom: 设置
   page_mode_switch_tooltip: 当前为{current}配置, 点击切换为{next}配置
-  bewly_page_unavailable: 当前页面暂无 BewlyMac 版本
+  bewly_page_unavailable: 当前页面暂无 Bewly Nocturne 版本
   dark_mode: 暗色模式
   light_mode: 亮色模式
   settings: 设置
   collapse_dock: 收起 Dock
   expand_dock: 展开 Dock
+moments:
+  filter_all: 全部
+  filter_video: 视频投稿
+  filter_pgc: 追番追剧
+  filter_article: 专栏
+  emoji: 表情
+  unlock_with_charge: 充电解锁
+  view: 查看
+  live_popularity: '{count} 人气'
+  charge_exclusive: 充电专属
+  charge_unlock_hint: 加入当前 UP 主的充电即可解锁观看
+  charge_exclusive_moment: 充电专属动态
+  go_charge: 去充电
+  forwarded_moment: 转发了动态
+  bilibili_user: B站用户
+  original_author: 原作者
+  live_moment: 直播动态
+  video_moment: 视频动态
+  image_moment: 图文动态
+  text_moment: 纯文字动态
+  original_moment: 原动态
+  login_to_like: 登录后才能点赞动态
+  like_failed: 动态点赞失败
+  like_failed_retry: 动态点赞失败，请稍后重试
+  login_to_watch_later: 登录后才能添加稍后再看
+  watch_later_unavailable: 无法获取该视频的稍后再看信息
+  watch_later_failed_retry: 稍后再看操作失败，请稍后重试
+  user_info: 动态用户信息
+  following: 关注
+  followers: 粉丝
+  moments: 动态
+  publish: 发布动态
+  live_now: 正在直播
+  live_badge: 直播中
+  feed_bar: 动态栏
+  feed_groups: 动态分组
+  all_moments: 全部动态
+  wanted_enable: 只看想看的 UP 主
+  wanted_disable: 取消只看想看的 UP 主
+  wanted_only_all_video: 仅适用于全部和视频投稿
+  wanted: 想看
+  scroll_frequent_left: 向左滚动经常访问列表
+  scroll_frequent_right: 向右滚动经常访问列表
+  scroll_left: 向左滚动
+  scroll_right: 向右滚动
+  frequent_uploaders: 经常访问的 UP 主
+  has_update: 有更新
+  pinned_uploaders: 固定 UP 主
+  initial_loading: 正在准备动态和图片…
+  empty_wanted: 近期无更新
+  no_wanted_users: 请先在设置中添加想看的 UP 主
+  empty: 暂时没有可展示的动态
+  loading: 正在加载…
+  load_more: 加载更多
+  recheck: 重新检查
+  reload: 重新加载
+  loading_more: 正在加载并准备更多动态…
+  no_more: 已经到底啦
+  live_room: 直播间
+  video_playback: 视频播放
+  detail: 动态详情
+  opening_live: 正在打开直播间…
+  opening_video: 正在打开视频…
+  opening_forward: 正在打开转发动态…
+  loading_detail: 正在加载动态详情…
+  author_detail: '{author} 的详情'
+  open_new_tab: 新建标签页打开
+  image_viewer: 动态图片查看器
+  close_image_viewer: 关闭图片查看器
+  image_large: 动态图片大图
+  previous_image: 上一张
+  next_image: 下一张
+  zoom_out: 缩小
+  zoom_in: 放大
+  fit_window: 适应窗口
+  rotate_clockwise: 顺时针旋转
 moment_card:
+  video_moment: 视频动态
+  open_detail: 打开 {author} 的动态详情
+  just_now: 刚刚
+  charge_exclusive: 充电专属
+  watch_later_added: 已添加到稍后再看
+  add_watch_later: 添加到稍后再看
+  added: 已添加
+  watch_later: 稍后再看
+  live_moment: 直播动态
+  open_original_video: 打开原视频
+  moment_image_alt: 动态图片 {index}
+  additional_content: 附加内容
+  view_hot_comment: 查看热门评论
+  hot_comment: 热门评论
+  open_dialog: 在弹窗中打开
+  open_dialog_short: 弹窗
+  open_new_tab: 在新标签页打开
+  open_new_tab_short: 新标签页
+  view_comments: 查看评论
+  live_popularity: '{count} 人气'
+  no_data: 暂无数据
+  live_now: 正在直播
+  like_unavailable: 暂时无法点赞
+  cancel_like: 取消点赞
+  like: 点赞
   preview_image: 预览 {author} 的动态图片 {index}
   reserve: 预约
+  reserved: 已预约
   cancel_reservation: 取消预约
   reservation_succeeded: 预约成功
   reservation_cancelled: 已取消预约
@@ -1101,7 +1112,7 @@ favorites:
   unfav_seasons_failed: '{count} 个合集取消收藏失败'
 version_reminder:
   trigger: 新版本说明
-  title: BewlyMac 已更新
+  title: Bewly Nocturne 已更新
   current_version: 当前版本 v{version}
   description: 查看本版本的更新记录与最新动态。确认后，本版本将不再显示提醒。
   github_releases: GitHub Releases

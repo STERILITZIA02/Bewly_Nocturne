@@ -2,6 +2,8 @@
 import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 import { computed, onMounted, ref } from 'vue'
 
+import SearchFocusOverlay from '~/components/SearchFocusOverlay.vue'
+import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 
@@ -16,6 +18,7 @@ const props = defineProps<{
 }>()
 
 const { forceWhiteIcon, handleNotificationsItemClick, showSearchBar } = useTopBarInteraction()
+const searchFocusEffect = useSearchFocusEffect()
 const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
 
 const OVERLAY_HEIGHT = 'calc(var(--bew-top-bar-height) * 1.35)'
@@ -92,6 +95,7 @@ const leftWidth = ref(0)
 const rightWidth = ref(0)
 const centerWidth = ref(0)
 const searchContentWidth = ref(0)
+const topBarSearchFocused = ref(false)
 
 // 使用单个 ResizeObserver 监听多个元素，减少开销
 let resizeObserver: ResizeObserver | null = null
@@ -229,6 +233,7 @@ function refreshSearchContent() {
     <div
       ref="searchSection"
       class="top-bar-header__search"
+      :class="{ 'top-bar-header__search--focused': topBarSearchFocused }"
       :style="{ transform: `translateX(${searchOffset}px)` }"
     >
       <div
@@ -239,10 +244,16 @@ function refreshSearchContent() {
           v-if="showSearchBar"
           class="top-bar-header__search-control"
         >
-          <TopBarSearch />
+          <TopBarSearch @focus-change="topBarSearchFocused = $event" />
         </div>
       </div>
     </div>
+
+    <SearchFocusOverlay
+      :active="topBarSearchFocused && Boolean(searchFocusEffect.darkened || searchFocusEffect.blurred)"
+      :darkened="searchFocusEffect.darkened"
+      :blurred="searchFocusEffect.blurred"
+    />
 
     <!-- right content -->
     <div ref="rightSection" class="top-bar-header__side top-bar-header__side--right">
@@ -314,6 +325,11 @@ function refreshSearchContent() {
   justify-content: center;
   width: 100%;
   min-width: 0;
+}
+
+.top-bar-header__search--focused {
+  position: relative;
+  z-index: 1;
 }
 
 .top-bar-header__search-content {

@@ -18,8 +18,8 @@ defineProps<{
   top: 0;
   right: 0;
   left: 0;
-  z-index: -1;
-  height: calc(100% + var(--bew-space-6));
+  z-index: 0;
+  height: calc(100% + var(--bew-panel-top-blur-tail, var(--bew-space-12)));
   background: transparent;
   border: 0;
   border-radius: inherit;
@@ -28,18 +28,19 @@ defineProps<{
   mask-image: linear-gradient(
     to bottom,
     black 0%,
-    black var(--bew-panel-top-blur-hold, 48%),
-    transparent calc(100% - var(--bew-space-6)),
+    black var(--bew-panel-top-blur-hold, var(--bew-space-10)),
+    transparent calc(100% - var(--bew-panel-top-blur-tail, var(--bew-space-12))),
     transparent 100%
   );
+  mask-mode: alpha;
   mask-repeat: no-repeat;
   mask-size: 100% 100%;
   backdrop-filter: blur(3px) saturate(180%);
   -webkit-mask-image: linear-gradient(
     to bottom,
     black 0%,
-    black var(--bew-panel-top-blur-hold, 48%),
-    transparent calc(100% - var(--bew-space-6)),
+    black var(--bew-panel-top-blur-hold, var(--bew-space-10)),
+    transparent calc(100% - var(--bew-panel-top-blur-tail, var(--bew-space-12))),
     transparent 100%
   );
   -webkit-mask-repeat: no-repeat;

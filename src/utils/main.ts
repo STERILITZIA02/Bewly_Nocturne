@@ -1,3 +1,5 @@
+import { AppPage } from '~/enums/appEnums'
+
 /**
  * Get cookie by name
  * @param name cookie name
@@ -265,9 +267,9 @@ export function isSearchResultsPage(url: string = location.href): boolean {
   if (/https?:\/\/search\.bilibili\.com\/.*/.test(url)) {
     return true
   }
-  // 检查是否是插件搜索结果页（URL 中带 page=Search 参数）
+  // 检查是否是插件搜索结果页。
   const urlObj = new URL(url)
-  if (urlObj.searchParams.get('page') === 'Search') {
+  if (urlObj.searchParams.get('page') === AppPage.SearchResults) {
     return true
   }
   return false
@@ -383,21 +385,33 @@ export function compareVersions(version1: string, version2: string): number {
   return 0 // Versions are equal
 }
 
-export function queryDomUntilFound(selector: string, timeout = 500, abort?: AbortController): Promise<HTMLElement | null> {
+export function queryDomUntilFound(selector: string, timeout = 500, abort?: AbortController, maxWait = 10_000): Promise<HTMLElement | null> {
   return new Promise((resolve) => {
-    const interval = setInterval(() => {
+    if (abort?.signal.aborted) {
+      resolve(null)
+      return
+    }
+
+    let settled = false
+    let interval = 0
+    let deadline = 0
+    const finish = (element: HTMLElement | null) => {
+      if (settled)
+        return
+      settled = true
+      clearInterval(interval)
+      clearTimeout(deadline)
+      resolve(element)
+    }
+    interval = window.setInterval(() => {
       const element = document.querySelector(selector)
-      if (element) {
-        clearInterval(interval)
-        resolve(element as HTMLElement)
-      }
+      if (element)
+        finish(element as HTMLElement)
     }, timeout)
+    deadline = window.setTimeout(() => finish(null), maxWait)
 
     if (abort) {
-      abort.signal.addEventListener('abort', () => {
-        clearInterval(interval)
-        resolve(null)
-      })
+      abort.signal.addEventListener('abort', () => finish(null), { once: true })
     }
   })
 }

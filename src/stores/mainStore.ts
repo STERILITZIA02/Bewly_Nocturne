@@ -94,6 +94,16 @@ export const useMainStore = defineStore('main', () => {
         url: `https://t.bilibili.com`,
         hasBewlyPage: true,
       },
+      {
+        i18nKey: 'dock.notifications',
+        icon: 'i-mingcute:message-3-line',
+        iconActivated: 'i-mingcute:message-3-fill',
+        page: AppPage.Notifications,
+        openInNewTab: false,
+        useOriginalBiliPage: getDefaultCustomUseOriginalBiliPage(AppPage.Notifications),
+        url: 'https://message.bilibili.com',
+        hasBewlyPage: true,
+      },
     ]
   })
 

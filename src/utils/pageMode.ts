@@ -23,6 +23,7 @@ const BEWLY_PAGE_ALLOW_LIST = new Set<AppPage>([
   AppPage.Favorites,
   AppPage.WatchLater,
   AppPage.Moments,
+  AppPage.Notifications,
 ])
 const CUSTOM_ORIGINAL_PAGE_DEFAULTS = new Set<AppPage>([
   AppPage.Moments,
@@ -53,6 +54,14 @@ export function resolveUseOriginalBiliPage(
   if (mode === 'bewly')
     return false
   return customUseOriginalBiliPage
+}
+
+export function resolvePluginSearchResultsUsage(
+  mode: PageMode,
+  customUseOriginalSearchPage: boolean,
+  pluginSearchEnabled: boolean,
+): boolean {
+  return pluginSearchEnabled && !resolveUseOriginalBiliPage(mode, customUseOriginalSearchPage)
 }
 
 function buildBewlyUrl(page: AppPage, sourceUrl?: URL): string {

@@ -27,6 +27,8 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { loadFlvModule } from '~/utils/flv'
+import { loadHlsModule } from '~/utils/hls'
 import { getIframeMessageData } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -105,12 +107,12 @@ const topBarStore = useTopBarStore()
 
 const moments = ref<DisplayMoment[]>([])
 type MomentFilter = 'all' | 'video' | 'pgc' | 'article'
-const momentFilters: Array<{ value: MomentFilter, label: string }> = [
-  { value: 'all', label: '全部' },
-  { value: 'video', label: '视频投稿' },
-  { value: 'pgc', label: '追番追剧' },
-  { value: 'article', label: '专栏' },
-]
+const momentFilters = computed<Array<{ value: MomentFilter, label: string }>>(() => [
+  { value: 'all', label: t('moments.filter_all') },
+  { value: 'video', label: t('moments.filter_video') },
+  { value: 'pgc', label: t('moments.filter_pgc') },
+  { value: 'article', label: t('moments.filter_article') },
+])
 const activeMomentFilter = ref<MomentFilter>('all')
 interface MomentsFeedCacheEntry {
   items: DisplayMoment[]
@@ -448,7 +450,7 @@ function extractRichTextSegments(...nodeLists: any[]): DisplayRichTextSegment[] 
     if (node?.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && imageUrl) {
       return [{
         type: 'emoji' as const,
-        text: text || emoji?.text || '表情',
+        text: text || emoji?.text || t('moments.emoji'),
         imageUrl,
         size: Number(emoji?.size || 1),
       }]
@@ -477,23 +479,23 @@ function extractBlockedInfo(blocked: any) {
   return {
     hint,
     cover: httpsUrl(blocked.bg_img?.img_day || blocked.bg_img?.img_dark || blocked.icon?.img_day || blocked.icon?.img_dark || ''),
-    buttonText: pickText(button.text, '充电解锁'),
+    buttonText: pickText(button.text, t('moments.unlock_with_charge')),
     buttonUrl: button.jump_url || '',
   }
 }
 
 function getAdditionalActionText(button: any) {
   if (!button || typeof button !== 'object')
-    return '查看'
+    return t('moments.view')
 
   // 预约按钮：status 1 为未预约，2 为已预约。
   if (Number(button.type) === 1 || Number(button.type) === 2) {
     return Number(button.status) === 2
-      ? pickText(button.check?.text, '已预约')
-      : pickText(button.uncheck?.text, '预约')
+      ? pickText(button.check?.text, t('moment_card.reserved'))
+      : pickText(button.uncheck?.text, t('moment_card.reserve'))
   }
 
-  return pickText(button.jump_style?.text, button.text, '查看')
+  return pickText(button.jump_style?.text, button.text, t('moments.view'))
 }
 
 function getMomentContent(item: any) {
@@ -545,14 +547,14 @@ function getMomentContent(item: any) {
     || {}
   const liveArea = pickText(live?.area_name, live?.desc_first)
   const livePopularity = live?.online
-    ? `${formatCount(Number(live.online))} 人气`
+    ? t('moments.live_popularity', { count: formatCount(Number(live.online)) })
     : pickText(live?.desc_second)
 
-  const chargeBadge = pickText(iconBadge.text, isChargeExclusive ? '充电专属' : '')
+  const chargeBadge = pickText(iconBadge.text, isChargeExclusive ? t('moments.charge_exclusive') : '')
   const chargeCover = httpsUrl(iconBadge.render_img || iconBadge.icon || blocked?.cover || '')
   const chargeHint = pickText(
     blocked?.hint,
-    isChargeExclusive ? '加入当前 UP 主的充电即可解锁观看' : '',
+    isChargeExclusive ? t('moments.charge_unlock_hint') : '',
   )
 
   // 图文/纯文字（itemOpusStyle）正文：major.opus.summary.text
@@ -572,7 +574,7 @@ function getMomentContent(item: any) {
 
   // 充电未解锁：列表往往无 desc/major，用提示文案顶上
   if (!text && isChargeExclusive)
-    text = chargeHint || '充电专属动态'
+    text = chargeHint || t('moments.charge_exclusive_moment')
 
   let additionalView = additional.type
     ? {
@@ -603,11 +605,11 @@ function getMomentContent(item: any) {
   // 未解锁充电：构造充电卡片附加区（列表没有 additional 时）
   if (!additionalView && isChargeExclusive && (blocked?.buttonUrl || chargeBadge)) {
     additionalView = {
-      title: chargeBadge || '充电专属',
+      title: chargeBadge || t('moments.charge_exclusive'),
       desc: chargeHint,
       // 充电档位区不展示小图标
       cover: '',
-      action: blocked?.buttonText || '去充电',
+      action: blocked?.buttonText || t('moments.go_charge'),
       url: blocked?.buttonUrl || '',
       isUpRecommendation: false,
       isVideoReservation: false,
@@ -663,7 +665,7 @@ function getMomentContent(item: any) {
     videoDanmaku: pickText(archive.stat?.danmaku),
     mediaMeta: live
       ? liveArea
-      : (isChargeExclusive ? (chargeBadge || '充电专属') : (archive.duration_text || article.label || '')),
+      : (isChargeExclusive ? (chargeBadge || t('moments.charge_exclusive')) : (archive.duration_text || article.label || '')),
     liveArea,
     livePopularity,
     additional: additionalView,
@@ -1176,7 +1178,7 @@ function mapMoment(item: DataItem): DisplayMoment {
   const forwardedAuthor = contentRaw.modules?.module_author || {}
   const id = raw.id_str || raw.id || `${author.mid}-${author.pub_ts}`
   const text = isForward
-    ? (normalizeDescText(dynamic.desc) || '转发了动态')
+    ? (normalizeDescText(dynamic.desc) || t('moments.forwarded_moment'))
     : content.text
   const richText = isForward
     ? extractRichTextSegments(dynamic.desc?.rich_text_nodes)
@@ -1193,7 +1195,7 @@ function mapMoment(item: DataItem): DisplayMoment {
     id,
     author: {
       mid: String(author.mid || ''),
-      name: author.name || 'B站用户',
+      name: author.name || t('moments.bilibili_user'),
       face: httpsUrl(author.face || ''),
     },
     publishedAt: Number(author.pub_ts || 0),
@@ -1252,20 +1254,20 @@ function mapMoment(item: DataItem): DisplayMoment {
     additional,
     forward: isForward
       ? {
-          author: forwardedAuthor.name || '原作者',
+          author: forwardedAuthor.name || t('moments.original_author'),
           title: content.title,
           text: content.text,
           fallback: content.isChargeExclusive
-            ? (content.chargeBadge || '充电专属动态')
+            ? (content.chargeBadge || t('moments.charge_exclusive_moment'))
             : content.isLive
-              ? '直播动态'
+              ? t('moments.live_moment')
               : content.isVideo
-                ? '视频动态'
+                ? t('moments.video_moment')
                 : content.images.length
-                  ? '图文动态'
+                  ? t('moments.image_moment')
                   : content.text
-                    ? '纯文字动态'
-                    : '原动态',
+                    ? t('moments.text_moment')
+                    : t('moments.original_moment'),
           // 转发动态的原图只放在嵌套卡片中，避免被提升成外层动态媒体。
           images: !content.isVideo && !content.isLive && !content.isChargeExclusive
             ? content.images
@@ -1723,6 +1725,39 @@ function passesMomentSettings(moment: DisplayMoment) {
   if (settings.value.momentsHideArticleDynamics && moment.isArticle && !moment.isForward)
     return false
   return true
+}
+
+async function reapplyMomentFiltersFromCache() {
+  if (activeMomentGroup.value !== 'all' || selectedHostMid.value)
+    return false
+
+  const cacheEntry = getValidMomentsCache(activeMomentFilter.value)
+  if (!cacheEntry)
+    return false
+
+  const requestToken = ++feedRequestToken
+  const filteredItems = cacheEntry.items
+    .filter(passesMomentSettings)
+    .sort((a, b) => b.publishedAt - a.publishedAt)
+
+  moments.value = []
+  momentColumns.value = []
+  virtualColumns.value = []
+  if (scrollViewportRef.value)
+    scrollViewportRef.value.scrollTop = 0
+
+  appendMoments(filteredItems)
+  offset.value = cacheEntry.offset
+  updateBaseline.value = cacheEntry.updateBaseline
+  noMoreContent.value = !cacheEntry.hasMore
+  isInitialLoading.value = false
+  isLoading.value = false
+
+  if (filteredItems.length > 0 || !cacheEntry.hasMore) {
+    void prepareMomentCovers(filteredItems, requestToken)
+    return true
+  }
+  return false
 }
 
 function getCardHeight(moment: DisplayMoment) {
@@ -2303,7 +2338,7 @@ async function setupStreamPreview(url: string, videoEl: HTMLVideoElement) {
 
   if (url.includes('.flv')) {
     try {
-      const flvjsModule = await import('flv.js')
+      const flvjsModule = await loadFlvModule()
       const flvjs = flvjsModule.default
       if (!flvjs.isSupported() || hoveredMediaId.value === '')
         return
@@ -2330,7 +2365,7 @@ async function setupStreamPreview(url: string, videoEl: HTMLVideoElement) {
 
   if (url.includes('m3u8')) {
     try {
-      const Hls = (await import('hls.js')).default
+      const Hls = (await loadHlsModule()).default
       if (Hls.isSupported()) {
         liveHlsPlayer = new Hls({
           enableWorker: true,
@@ -2520,7 +2555,7 @@ async function toggleMomentLike(moment: DisplayMoment) {
   const previousCount = moment.likeCount
   const csrf = getCSRF()
   if (!csrf) {
-    toast.warning('登录后才能点赞动态')
+    toast.warning(t('moments.login_to_like'))
     return
   }
 
@@ -2537,13 +2572,13 @@ async function toggleMomentLike(moment: DisplayMoment) {
       csrf,
     })
     if (response.code !== 0)
-      throw new Error(response.message || '动态点赞失败')
+      throw new Error(response.message || t('moments.like_failed'))
   }
   catch (error) {
     // 请求失败时恢复接口返回前的状态，避免界面与服务端不一致
     moment.isLiked = previousLiked
     moment.likeCount = previousCount
-    toast.error(error instanceof Error ? error.message : '动态点赞失败，请稍后重试')
+    toast.error(error instanceof Error ? error.message : t('moments.like_failed_retry'))
   }
   finally {
     likingMomentIds.delete(moment.id)
@@ -2641,7 +2676,7 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
 
   const csrf = getCSRF()
   if (!csrf) {
-    toast.warning('登录后才能添加稍后再看')
+    toast.warning(t('moments.login_to_watch_later'))
     return
   }
 
@@ -2653,7 +2688,7 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
       return
     const aid = await resolveMomentWatchLaterAid(target)
     if (!aid) {
-      toast.error('无法获取该视频的稍后再看信息')
+      toast.error(t('moments.watch_later_unavailable'))
       return
     }
 
@@ -2670,8 +2705,8 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
     await topBarStore.commitWatchLaterMutation(aid, !isAdded, accountId)
   }
   catch (error) {
-    console.error('切换稍后再看状态失败:', error)
-    toast.error(error instanceof Error ? error.message : '稍后再看操作失败，请稍后重试')
+    console.error('[Bewly Nocturne] Watch Later mutation failed:', error)
+    toast.error(error instanceof Error ? error.message : t('moments.watch_later_failed_retry'))
   }
   finally {
     watchLaterLoadingMomentIds.delete(stateKey)
@@ -3383,9 +3418,9 @@ watch(
     () => settings.value.momentsEnableKeywordFilter,
     () => settings.value.momentsBlockedKeywords,
   ],
-  () => {
-    if (scrollViewportRef.value)
-      scrollViewportRef.value.scrollTop = 0
+  async () => {
+    if (await reapplyMomentFiltersFromCache())
+      return
     void loadMoments(true)
   },
 )
@@ -3444,7 +3479,7 @@ watch(
         </section>
       </header>
 
-      <aside v-if="showMomentsSidebar" class="moments-sidebar" aria-label="动态用户信息">
+      <aside v-if="showMomentsSidebar" class="moments-sidebar" :aria-label="t('moments.user_info')">
         <div v-if="isPortalLoading" class="moments-sidebar-skeleton" aria-hidden="true">
           <div v-if="settings.momentsSidebarShowUserCard" class="moments-sidebar-skeleton__profile">
             <span class="moments-sidebar-skeleton__avatar moments-skeleton-block" />
@@ -3476,9 +3511,9 @@ watch(
               </span>
             </a>
             <div class="moments-user-card__stats">
-              <span><strong>{{ portalUser.following }}</strong><small>关注</small></span>
-              <span><strong>{{ portalUser.follower }}</strong><small>粉丝</small></span>
-              <span><strong>{{ portalUser.dyns }}</strong><small>动态</small></span>
+              <span><strong>{{ portalUser.following }}</strong><small>{{ t('moments.following') }}</small></span>
+              <span><strong>{{ portalUser.follower }}</strong><small>{{ t('moments.followers') }}</small></span>
+              <span><strong>{{ portalUser.dyns }}</strong><small>{{ t('moments.moments') }}</small></span>
             </div>
           </article>
 
@@ -3490,13 +3525,13 @@ watch(
             rel="noopener noreferrer"
           >
             <span i-tabler-edit />
-            <span>发布动态</span>
+            <span>{{ t('moments.publish') }}</span>
             <span i-tabler-external-link />
           </a>
 
           <section v-if="settings.momentsSidebarShowLive && portalLiveUsers.length" class="moments-live-card">
             <header>
-              <strong>正在直播 <span>{{ portalLiveCount }}</span></strong>
+              <strong>{{ t('moments.live_now') }} <span>{{ portalLiveCount }}</span></strong>
             </header>
             <div class="moments-live-card__list">
               <a
@@ -3508,7 +3543,7 @@ watch(
               >
                 <span class="moments-live-card__avatar">
                   <img :src="getSidebarAvatarUrl(liveUser.face, 64)" :alt="liveUser.uname" loading="lazy" decoding="async">
-                  <em><span i-tabler-chart-bar />直播中</em>
+                  <em><span i-tabler-chart-bar />{{ t('moments.live_badge') }}</em>
                 </span>
                 <span class="moments-live-card__info">
                   <strong>{{ liveUser.uname }}</strong>
@@ -3524,16 +3559,16 @@ watch(
         <section
           v-if="showMomentsUpList"
           class="moments-up-list"
-          aria-label="动态栏"
+          :aria-label="t('moments.feed_bar')"
         >
-          <div class="moments-up-list__start" role="list" aria-label="动态分组">
+          <div class="moments-up-list__start" role="list" :aria-label="t('moments.feed_groups')">
             <button
               type="button"
               class="moments-up-list__item"
               :class="{ 'moments-up-list__item--active': !selectedHostMid && activeMomentGroup === 'all' }"
               role="listitem"
               :aria-pressed="!selectedHostMid && activeMomentGroup === 'all'"
-              title="全部动态"
+              :title="t('moments.all_moments')"
               @click="handleUpFilterChange('')"
             >
               <span class="moments-up-list__avatar moments-up-list__avatar--all" aria-hidden="true">
@@ -3542,7 +3577,7 @@ watch(
                   :class="!selectedHostMid && activeMomentGroup === 'all' ? 'i-tabler-windmill-filled' : 'i-tabler-windmill'"
                 />
               </span>
-              <span class="moments-up-list__name">全部动态</span>
+              <span class="moments-up-list__name">{{ t('moments.all_moments') }}</span>
             </button>
             <button
               v-if="settings.momentsEnableWantedFilter"
@@ -3552,10 +3587,10 @@ watch(
               role="listitem"
               :aria-pressed="activeMomentGroup === 'wanted'"
               :disabled="activeMomentFilter !== 'all' && activeMomentFilter !== 'video'"
-              :aria-label="activeMomentGroup === 'wanted' ? '取消只看想看的 UP 主' : '只看想看的 UP 主'"
+              :aria-label="activeMomentGroup === 'wanted' ? t('moments.wanted_disable') : t('moments.wanted_enable')"
               :title="activeMomentFilter === 'all' || activeMomentFilter === 'video'
-                ? (activeMomentGroup === 'wanted' ? '取消只看想看的 UP 主' : '只看想看的 UP 主')
-                : '仅适用于全部和视频投稿'"
+                ? (activeMomentGroup === 'wanted' ? t('moments.wanted_disable') : t('moments.wanted_enable'))
+                : t('moments.wanted_only_all_video')"
               @click="handleMomentGroupChange(activeMomentGroup === 'wanted' ? 'all' : 'wanted')"
             >
               <span class="moments-up-list__avatar moments-up-list__avatar--wanted" aria-hidden="true">
@@ -3564,7 +3599,7 @@ watch(
                   :class="activeMomentGroup === 'wanted' ? 'i-tabler-star-filled' : 'i-tabler-star'"
                 />
               </span>
-              <span class="moments-up-list__name">想看</span>
+              <span class="moments-up-list__name">{{ t('moments.wanted') }}</span>
             </button>
           </div>
 
@@ -3583,8 +3618,8 @@ watch(
               v-show="canScrollUpListLeft"
               type="button"
               class="moments-up-list__arrow moments-up-list__arrow--prev"
-              aria-label="向左滚动经常访问列表"
-              title="向左滚动"
+              :aria-label="t('moments.scroll_frequent_left')"
+              :title="t('moments.scroll_left')"
               @click="scrollUpListBy(-1)"
             >
               <span i-tabler-chevron-left aria-hidden="true" />
@@ -3593,8 +3628,8 @@ watch(
               v-show="canScrollUpListRight"
               type="button"
               class="moments-up-list__arrow moments-up-list__arrow--next"
-              aria-label="向右滚动经常访问列表"
-              title="向右滚动"
+              :aria-label="t('moments.scroll_frequent_right')"
+              :title="t('moments.scroll_right')"
               @click="scrollUpListBy(1)"
             >
               <span i-tabler-chevron-right aria-hidden="true" />
@@ -3620,7 +3655,7 @@ watch(
               ref="upListScrollerRef"
               class="moments-up-list__scroller"
               role="list"
-              aria-label="经常访问的 UP 主"
+              :aria-label="t('moments.frequent_uploaders')"
               @scroll="updateUpListScrollState"
               @wheel="handleUpListWheel"
             >
@@ -3645,7 +3680,7 @@ watch(
                   <span
                     v-if="up.has_update"
                     class="moments-up-list__dot"
-                    aria-label="有更新"
+                    :aria-label="t('moments.has_update')"
                   />
                 </span>
                 <span class="moments-up-list__name">{{ up.uname }}</span>
@@ -3657,7 +3692,7 @@ watch(
             v-if="momentsPinnedUsers.length"
             class="moments-up-list__pinned"
             role="list"
-            aria-label="固定 UP 主"
+            :aria-label="t('moments.pinned_uploaders')"
             @wheel="handleUpListWheel"
           >
             <span class="moments-up-list__divider" aria-hidden="true" />
@@ -3687,7 +3722,7 @@ watch(
         <div v-if="isInitialLoading" class="moments-page__initial-loading">
           <div class="moments-skeleton__status">
             <span i-svg-spinners:ring-resize />
-            正在准备动态和图片…
+            {{ t('moments.initial_loading') }}
           </div>
           <div class="moments-skeleton-grid" :style="momentsGridStyle">
             <div
@@ -3759,12 +3794,12 @@ watch(
           </div>
         </div>
         <div v-else-if="!isInitialLoading && (!requiresManualMomentPaging() || noMoreContent)" class="moments-page__empty">
-          <span i-tabler-windmill text="size-$bew-icon-size-xl" /><p>{{ activeMomentGroup === 'wanted' ? (momentsWantedUsers.length ? '近期无更新' : '请先在设置中添加想看的 UP 主') : '暂时没有可展示的动态' }}</p><button
+          <span i-tabler-windmill text="size-$bew-icon-size-xl" /><p>{{ activeMomentGroup === 'wanted' ? (momentsWantedUsers.length ? t('moments.empty_wanted') : t('moments.no_wanted_users')) : t('moments.empty') }}</p><button
             v-if="activeMomentGroup !== 'wanted' || momentsWantedUsers.length"
             :disabled="isLoading"
             @click="requiresManualMomentPaging() && !noMoreContent ? (activeMomentGroup === 'wanted' ? loadMoreWantedMoments() : loadMoreFilteredMoments()) : refresh()"
           >
-            {{ isLoading ? '正在加载…' : requiresManualMomentPaging() ? (!noMoreContent ? '加载更多' : (activeMomentGroup === 'wanted' ? '重新检查' : '重新加载')) : '重新加载' }}
+            {{ isLoading ? t('moments.loading') : requiresManualMomentPaging() ? (!noMoreContent ? t('moments.load_more') : (activeMomentGroup === 'wanted' ? t('moments.recheck') : t('moments.reload'))) : t('moments.reload') }}
           </button>
         </div>
         <button
@@ -3774,7 +3809,7 @@ watch(
           @click="activeMomentGroup === 'wanted' ? loadMoreWantedMoments() : loadMoreFilteredMoments()"
         >
           <span i-tabler-arrow-down />
-          加载更多
+          {{ t('moments.load_more') }}
         </button>
         <p
           v-if="!isInitialLoading && moments.length"
@@ -3785,10 +3820,10 @@ watch(
         >
           <template v-if="isLoading">
             <span i-svg-spinners:ring-resize />
-            正在加载并准备更多动态…
+            {{ t('moments.loading_more') }}
           </template>
           <template v-else-if="noMoreContent">
-            已经到底啦
+            {{ t('moments.no_more') }}
           </template>
         </p>
       </main>
@@ -3803,8 +3838,8 @@ watch(
       :show-border="false"
       :show-footer="false"
       :frosted-glass="false"
-      :title="selectedMoment.isLive ? '直播间' : selectedMoment.isVideo ? '视频播放' : selectedMoment.author.name"
-      :desc="selectedMoment.isLive || selectedMoment.isVideo ? selectedMoment.title || selectedMoment.author.name : (selectedMoment.time || '动态详情')"
+      :title="selectedMoment.isLive ? t('moments.live_room') : selectedMoment.isVideo ? t('moments.video_playback') : selectedMoment.author.name"
+      :desc="selectedMoment.isLive || selectedMoment.isVideo ? selectedMoment.title || selectedMoment.author.name : (selectedMoment.time || t('moments.detail'))"
       :width="detailDialogWidth"
       :height="detailDialogHeight"
       :content-height="detailContentHeight"
@@ -3822,14 +3857,14 @@ watch(
       >
         <div class="moment-detail-frame__loading" aria-hidden="true">
           <img class="moment-detail-frame__loading-icon" :src="loadingGifUrl" alt="" aria-hidden="true">
-          {{ selectedMoment.isLive ? '正在打开直播间…' : selectedMoment.isVideo ? '正在打开视频…' : selectedMoment.isForward ? '正在打开转发动态…' : '正在加载动态详情…' }}
+          {{ selectedMoment.isLive ? t('moments.opening_live') : selectedMoment.isVideo ? t('moments.opening_video') : selectedMoment.isForward ? t('moments.opening_forward') : t('moments.loading_detail') }}
         </div>
         <iframe
           ref="detailIframeRef"
           :key="detailFrameUrl"
           class="moment-detail-frame__iframe"
           :src="detailFrameUrl"
-          :title="`${selectedMoment.author.name} 的详情`"
+          :title="t('moments.author_detail', { author: selectedMoment.author.name })"
           referrerpolicy="no-referrer-when-downgrade"
           allow="fullscreen; autoplay; clipboard-write"
           scrolling="yes"
@@ -3840,7 +3875,7 @@ watch(
           class="moment-detail-frame__open"
           @click.stop="openDetailFrameInNewTab"
         >
-          新建标签页打开
+          {{ t('moments.open_new_tab') }}
           <span i-tabler-external-link />
         </button>
       </div>
@@ -3852,14 +3887,14 @@ watch(
         class="moment-image-viewer"
         role="dialog"
         aria-modal="true"
-        aria-label="动态图片查看器"
+        :aria-label="t('moments.image_viewer')"
         tabindex="-1"
         @keydown="handleDetailImageViewerKeydown"
         @wheel.prevent.stop="handleDetailImageViewerWheel"
       >
         <CloseButton
           class="moment-image-viewer__close"
-          label="关闭图片查看器"
+          :label="t('moments.close_image_viewer')"
           size="large"
           variant="overlay"
           @click="closeDetailImageViewer"
@@ -3867,7 +3902,7 @@ watch(
         <div class="moment-image-viewer__stage" @click.self="closeDetailImageViewer">
           <img
             :src="detailImageViewerUrl"
-            alt="动态图片大图"
+            :alt="t('moments.image_large')"
             class="moment-image-viewer__image"
             :class="{
               'is-zoomed': detailImageViewerScale > 1,
@@ -3886,7 +3921,7 @@ watch(
           v-if="detailImageViewerUrls.length > 1"
           type="button"
           class="moment-image-viewer__nav moment-image-viewer__nav--prev"
-          aria-label="上一张"
+          :aria-label="t('moments.previous_image')"
           @click="showDetailImageViewerImage(detailImageViewerIndex - 1)"
         >
           <span i-tabler-chevron-left />
@@ -3895,7 +3930,7 @@ watch(
           v-if="detailImageViewerUrls.length > 1"
           type="button"
           class="moment-image-viewer__nav moment-image-viewer__nav--next"
-          aria-label="下一张"
+          :aria-label="t('moments.next_image')"
           @click="showDetailImageViewerImage(detailImageViewerIndex + 1)"
         >
           <span i-tabler-chevron-right />
@@ -3905,20 +3940,20 @@ watch(
             {{ detailImageViewerIndex + 1 }}/{{ detailImageViewerUrls.length }}
           </span>
           <span class="moment-image-viewer__divider" />
-          <button type="button" aria-label="缩小" title="缩小" @click="setDetailImageViewerScale(detailImageViewerScale - 0.25)">
+          <button type="button" :aria-label="t('moments.zoom_out')" :title="t('moments.zoom_out')" @click="setDetailImageViewerScale(detailImageViewerScale - 0.25)">
             −
           </button>
           <span class="moment-image-viewer__zoom">{{ Math.round(detailImageViewerScale * 100) }}%</span>
-          <button type="button" aria-label="放大" title="放大" @click="setDetailImageViewerScale(detailImageViewerScale + 0.25)">
+          <button type="button" :aria-label="t('moments.zoom_in')" :title="t('moments.zoom_in')" @click="setDetailImageViewerScale(detailImageViewerScale + 0.25)">
             +
           </button>
-          <button type="button" aria-label="适应窗口" title="适应窗口" @click="resetDetailImageViewerTransform">
+          <button type="button" :aria-label="t('moments.fit_window')" :title="t('moments.fit_window')" @click="resetDetailImageViewerTransform">
             1:1
           </button>
           <button
             type="button"
-            aria-label="顺时针旋转"
-            title="顺时针旋转"
+            :aria-label="t('moments.rotate_clockwise')"
+            :title="t('moments.rotate_clockwise')"
             @click="detailImageViewerRotation = (detailImageViewerRotation + 90) % 360"
           >
             ↻

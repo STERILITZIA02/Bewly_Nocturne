@@ -77,7 +77,7 @@ function persistVideoVisitHistory(history: VideoVisitHistory) {
     localStorage.setItem(VIDEO_VISIT_HISTORY_STORAGE_KEY, JSON.stringify(normalizedHistory))
   }
   catch (error) {
-    console.warn('[BewlyCat] Failed to persist video visit history.', error)
+    console.warn('[Bewly Nocturne] Failed to persist video visit history.', error)
   }
 }
 
@@ -102,7 +102,7 @@ function migrateLegacyVideoVisitHistory() {
       persistVideoVisitHistory(mergedHistory)
       localStorage.setItem(VIDEO_VISIT_HISTORY_MIGRATION_KEY, '1')
     })
-    .catch(error => console.warn('[BewlyCat] Failed to migrate video visit history.', error))
+    .catch(error => console.warn('[Bewly Nocturne] Failed to migrate video visit history.', error))
 }
 
 migrateLegacyVideoVisitHistory()

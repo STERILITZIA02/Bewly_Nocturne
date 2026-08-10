@@ -16,6 +16,7 @@ import {
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useLayoutEditableRoot } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
@@ -28,6 +29,7 @@ import type { HoveringDockItem } from './types'
 
 const props = defineProps<{
   activatedPage: AppPage
+  settingsOpen: boolean
 }>()
 
 const emit = defineEmits<{
@@ -52,8 +54,8 @@ const showForward = computed(() => undoForwardState.value === UndoForwardState.S
 const DOCK_CONTENT_TRANSITION_MS = 150
 const DOCK_SHELL_TRANSITION_MS = 300
 const DOCK_SHELL_COMPLETION_BUFFER_MS = 50
-const hideDock = ref<boolean>(false)
 const dockContentHover = ref<boolean>(false)
+const dockInteractionActive = ref(false)
 const dockReady = ref(false)
 const isDockCollapsed = ref(false)
 const isDockTransitioning = ref(false)
@@ -77,16 +79,14 @@ const dockContentRef = useDelayedHover({
   },
   enter: () => {
     dockContentHover.value = true
-    toggleHideDock(false)
   },
   leave: () => {
     dockContentHover.value = false
-    if (shouldAutoCollapseDock(settings.value.dockCollapseMode))
+    if (shouldAutoCollapseDock(settings.value.dockCollapseMode) && !dockInteractionActive.value && !props.settingsOpen)
       collapseDock()
-    else
-      toggleHideDock(true)
   },
 })
+useLayoutEditableRoot('dock', dockContentRef)
 const { width: dockWidth, height: dockHeight } = useElementSize(dockContentRef)
 const dockShellRef = ref<HTMLElement>()
 const dockShellSurfaceRef = ref<HTMLElement>()
@@ -97,58 +97,7 @@ const { width: dockShellWidth, height: dockShellHeight } = useElementSize(
 )
 const preferredReducedMotion = usePreferredReducedMotion()
 
-// Global mouse move detection for edge zones
-const edgeZoneSize = 20 // pixels from edge
-let mouseEnterTimer: any | undefined
-let mouseLeaveTimer: any | undefined
-
-function handleGlobalMouseMove(event: MouseEvent) {
-  if (
-    !settings.value.autoHideDock
-    || shouldAutoCollapseDock(settings.value.dockCollapseMode)
-    || isDockCollapsed.value
-  ) {
-    return
-  }
-
-  const { clientX, clientY } = event
-  const { innerWidth, innerHeight } = window
-
-  let isInEdgeZone = false
-
-  if (settings.value.dockPosition === 'left' && clientX <= edgeZoneSize) {
-    isInEdgeZone = true
-  }
-  else if (settings.value.dockPosition === 'right' && clientX >= innerWidth - edgeZoneSize) {
-    isInEdgeZone = true
-  }
-  else if (settings.value.dockPosition === 'bottom' && clientY >= innerHeight - edgeZoneSize) {
-    isInEdgeZone = true
-  }
-
-  if (isInEdgeZone) {
-    if (mouseLeaveTimer) {
-      clearTimeout(mouseLeaveTimer)
-      mouseLeaveTimer = undefined
-    }
-    if (!mouseEnterTimer) {
-      mouseEnterTimer = setTimeout(() => {
-        toggleHideDock(false)
-      }, 100)
-    }
-  }
-  else {
-    if (mouseEnterTimer) {
-      clearTimeout(mouseEnterTimer)
-      mouseEnterTimer = undefined
-    }
-    if (!mouseLeaveTimer && !dockContentHover.value) {
-      mouseLeaveTimer = setTimeout(() => {
-        toggleHideDock(true)
-      }, 600)
-    }
-  }
-}
+let autoCollapseTimer: ReturnType<typeof setTimeout> | undefined
 
 const hoveringDockItem = reactive<HoveringDockItem>({
   themeMode: false,
@@ -209,23 +158,9 @@ const showDockActionButtons = computed((): boolean => {
   return showBackToTopOrRefreshActions.value || showUndoForwardActions.value
 })
 
-const detachDockActionButtons = computed((): boolean => {
-  return settings.value.autoHideDock && settings.value.alwaysShowDockActionsWhenAutoHide
-})
-
 const showInlineDockActionButtons = computed((): boolean => {
-  return isDockContentVisible.value && showDockActionButtons.value && !detachDockActionButtons.value
+  return isDockContentVisible.value && showDockActionButtons.value
 })
-
-const showDetachedDockActionButtons = computed((): boolean => {
-  return isDockContentVisible.value && showDockActionButtons.value && detachDockActionButtons.value
-})
-
-watch(() => settings.value.autoHideDock, (newValue) => {
-  hideDock.value = isDockCollapsed.value || shouldAutoCollapseDock(settings.value.dockCollapseMode)
-    ? false
-    : newValue
-}, { immediate: true })
 
 // use Json stringify to watch the changes of the array item properties
 watch(
@@ -253,18 +188,6 @@ function computeDockItem(): DockItem[] {
     targetDockItems.push(dockItem)
   }
   return targetDockItems
-}
-
-function toggleHideDock(hide: boolean) {
-  if (isDockCollapsed.value || shouldAutoCollapseDock(settings.value.dockCollapseMode)) {
-    hideDock.value = false
-    return
-  }
-
-  if (settings.value.autoHideDock)
-    hideDock.value = hide
-  else
-    hideDock.value = false
 }
 
 function cacheExpandedDockSize() {
@@ -359,7 +282,6 @@ function collapseDock() {
     return
 
   cacheExpandedDockSize()
-  hideDock.value = false
   isDockContentVisible.value = false
   isDockCollapsedTriggerVisible.value = false
 
@@ -393,7 +315,6 @@ function expandDock() {
   }
 
   clearDockMorphSchedule()
-  hideDock.value = false
   isDockContentVisible.value = false
   isDockCollapsedTriggerVisible.value = false
   isDockTransitioning.value = dockReady.value
@@ -436,6 +357,52 @@ function openDockItemInNewTab(dockItem: DockItem) {
 
 function openSettings(event: MouseEvent) {
   emit('settingsVisibilityChange', (event.currentTarget as HTMLElement).getBoundingClientRect())
+}
+
+function clearAutoCollapseTimer() {
+  if (autoCollapseTimer !== undefined) {
+    clearTimeout(autoCollapseTimer)
+    autoCollapseTimer = undefined
+  }
+}
+
+function scheduleAutoCollapse(delay = 900) {
+  clearAutoCollapseTimer()
+  if (!shouldAutoCollapseDock(settings.value.dockCollapseMode) || props.settingsOpen || dockContentHover.value || dockInteractionActive.value)
+    return
+
+  autoCollapseTimer = setTimeout(() => {
+    autoCollapseTimer = undefined
+    collapseDock()
+  }, delay)
+}
+
+function handleDockPointerDown(event: PointerEvent) {
+  if (event.pointerType === 'mouse')
+    return
+  dockInteractionActive.value = true
+  clearAutoCollapseTimer()
+  expandDock()
+}
+
+function handleDockPointerUp(event: PointerEvent) {
+  if (event.pointerType === 'mouse')
+    return
+  dockInteractionActive.value = false
+  scheduleAutoCollapse(1800)
+}
+
+function handleDockFocusIn() {
+  dockInteractionActive.value = true
+  clearAutoCollapseTimer()
+  expandDock()
+}
+
+function handleDockFocusOut(event: FocusEvent) {
+  if ((event.currentTarget as HTMLElement).contains(event.relatedTarget as Node | null))
+    return
+  dockInteractionActive.value = false
+  scheduleAutoCollapse()
 }
 
 function handleBackToTopOrRefresh(action: 'backToTop' | 'refresh' | 'auto' = 'auto') {
@@ -517,9 +484,9 @@ watch([dockShellWidth, dockShellHeight], ([width, height]) => {
 }, { flush: 'post' })
 
 watch(
-  [() => settings.value.dockCollapseMode, dockReady],
-  ([mode, ready]) => {
-    const shouldCollapse = getDockCollapsedStateForMode(mode, dockContentHover.value)
+  [() => settings.value.dockCollapseMode, () => props.settingsOpen, dockReady],
+  ([mode, settingsOpen, ready]) => {
+    const shouldCollapse = getDockCollapsedStateForMode(mode, dockContentHover.value || settingsOpen)
     if (shouldCollapse && ready)
       collapseDock()
     else if (!shouldCollapse)
@@ -566,11 +533,7 @@ const dockScale = computed((): number => {
   let additionalHeight = 0
   let additionalWidth = 0
 
-  if (detachDockActionButtons.value) {
-    additionalHeight = 0
-    additionalWidth = 0
-  }
-  else if (settings.value.dockPosition === 'bottom') {
+  if (settings.value.dockPosition === 'bottom') {
     const maxButtonCount = settings.value.backToTopAndRefreshButtonsAreSeparated ? 2 : 1
     const maxUndoForwardButtonCount = settings.value.enableUndoRefreshButton ? 1 : 0
     additionalWidth = (maxButtonCount + maxUndoForwardButtonCount) * buttonSize + maxButtonCount * buttonGap
@@ -603,32 +566,6 @@ const dockActionButtonsStyle = computed<CSSProperties>(() => {
     right: settings.value.dockPosition === 'bottom' ? 0 : 'unset',
     transform: settings.value.dockPosition === 'bottom' ? 'translate(100%, 0)' : 'translateY(100%)',
     flexDirection: settings.value.dockPosition === 'bottom' ? 'row' : 'column',
-  }
-})
-
-const detachedDockActionButtonsStyle = computed<CSSProperties>(() => {
-  const scale = dockScale.value
-  const gap = 8
-  const actionButtonSize = windowWidth.value >= 1024 ? 45 : 35
-  const sideActionInset = `${gap + Math.max(0, ((dockWidth.value - actionButtonSize) * scale) / 2)}px`
-
-  if (settings.value.dockPosition === 'bottom') {
-    return {
-      left: `calc(50% + ${(dockWidth.value * scale) / 2 + gap}px)`,
-      bottom: '8px',
-      transform: `scale(${scale})`,
-      transformOrigin: 'left bottom',
-      flexDirection: 'row',
-    }
-  }
-
-  return {
-    top: `calc(50% + ${(dockHeight.value * scale) / 2 + gap}px)`,
-    left: settings.value.dockPosition === 'left' ? sideActionInset : 'unset',
-    right: settings.value.dockPosition === 'right' ? sideActionInset : 'unset',
-    transform: `scale(${scale})`,
-    transformOrigin: settings.value.dockPosition === 'left' ? 'left top' : 'right top',
-    flexDirection: 'column',
   }
 })
 
@@ -674,21 +611,8 @@ const dockShellStyle = computed((): CSSProperties => {
     : {}
 })
 
-onMounted(() => {
-  // Add global mouse move listener for edge zone detection
-  window.addEventListener('mousemove', handleGlobalMouseMove)
-})
-
 onUnmounted(() => {
-  // Remove global mouse move listener
-  window.removeEventListener('mousemove', handleGlobalMouseMove)
-  // Clear any pending timers
-  if (mouseEnterTimer) {
-    clearTimeout(mouseEnterTimer)
-  }
-  if (mouseLeaveTimer) {
-    clearTimeout(mouseLeaveTimer)
-  }
+  clearAutoCollapseTimer()
   if (dockReadyFrame !== undefined)
     cancelAnimationFrame(dockReadyFrame)
   clearDockMorphSchedule()
@@ -701,32 +625,24 @@ onUnmounted(() => {
     pos="fixed top-0" z-100 flex="~ col justify-center items-center" w-full h-full
     z-10 pointer-events-none
   >
-    <!-- Edge Div -->
-    <div
-      v-if="settings.autoHideDock && hideDock"
-      class="dock-edge"
-      :class="`dock-edge-${settings.dockPosition}`"
-      @mouseenter="toggleHideDock(false)"
-      @mouseleave="toggleHideDock(true)"
-    />
-
     <!-- Dock Content -->
     <div
       ref="dockContentRef"
       class="dock-content"
       :class="{
-        'left': settings.dockPosition === 'left',
-        'right': settings.dockPosition === 'right',
-        'bottom': settings.dockPosition === 'bottom',
-        'hide': hideDock,
-        'half-hide': settings.halfHideDock,
-        'hover': dockContentHover,
-        'ready': dockReady,
-        'collapsed': isDockCollapsed,
+        left: settings.dockPosition === 'left',
+        right: settings.dockPosition === 'right',
+        bottom: settings.dockPosition === 'bottom',
+        hover: dockContentHover,
+        ready: dockReady,
+        collapsed: isDockCollapsed,
       }"
       :style="dockTransformStyle"
-      @mouseenter="toggleHideDock(false)"
-      @mouseleave="toggleHideDock(true)"
+      @pointerdown="handleDockPointerDown"
+      @pointerup="handleDockPointerUp"
+      @pointercancel="handleDockPointerUp"
+      @focusin="handleDockFocusIn"
+      @focusout="handleDockFocusOut"
     >
       <div
         ref="dockShellRef"
@@ -870,7 +786,7 @@ onUnmounted(() => {
           :disabled="!isDockCollapsedTriggerVisible"
           :tabindex="isDockCollapsedTriggerVisible ? 0 : -1"
           @click="expandDock"
-          @mouseenter="shouldAutoCollapseDock(settings.dockCollapseMode) && expandDock()"
+          @pointerenter="shouldAutoCollapseDock(settings.dockCollapseMode) && expandDock()"
         >
           <Icon icon="mingcute:more-2-line" />
         </IconButton>
@@ -965,65 +881,6 @@ onUnmounted(() => {
         </Transition>
       </div>
     </div>
-
-    <!-- Detached action buttons stay visible when the dock itself is auto-hidden. -->
-    <div
-      v-if="showDetachedDockActionButtons"
-      class="detached-dock-actions"
-      :style="detachedDockActionButtonsStyle"
-      pos="absolute"
-      flex="~ gap-2"
-    >
-      <Transition name="fade">
-        <IconButton
-          v-if="showBackToTopOrRefreshButton && canRefreshCurrentPage"
-          class="back-to-top-or-refresh-btn"
-          :label="$t('common.operation.refresh')"
-          @click="handleBackToTopOrRefresh('refresh')"
-        >
-          <Icon
-            icon="line-md:rotate-270"
-            class="dock-action-icon"
-            shrink-0 rotate-90 absolute
-          />
-        </IconButton>
-      </Transition>
-      <Transition name="fade">
-        <IconButton
-          v-if="showBackToTopOrRefreshButton && !reachTop"
-          class="back-to-top-or-refresh-btn"
-          :label="$t('common.operation.back_to_top')"
-          @click="handleBackToTopOrRefresh('backToTop')"
-        >
-          <Icon
-            icon="line-md:arrow-small-up"
-            class="dock-action-icon"
-            shrink-0 absolute
-          />
-        </IconButton>
-      </Transition>
-      <Transition name="fade">
-        <IconButton
-          v-if="showUndoForwardActions"
-          class="back-to-top-or-refresh-btn"
-          :label="showUndo ? $t('common.operation.undo_refresh') : $t('common.operation.forward_refresh')"
-          @click="handleHistoryNavigation"
-        >
-          <Icon
-            v-if="showUndo"
-            icon="mdi:undo-variant"
-            class="dock-action-icon"
-            shrink-0 absolute
-          />
-          <Icon
-            v-else-if="showForward"
-            icon="mdi:redo-variant"
-            class="dock-action-icon"
-            shrink-0 absolute
-          />
-        </IconButton>
-      </Transition>
-    </div>
   </aside>
 </template>
 
@@ -1033,49 +890,6 @@ onUnmounted(() => {
 .dock-wrap {
   > * {
     --uno: "pointer-events-auto";
-  }
-}
-
-.dock-edge {
-  &-left,
-  &-right,
-  &-bottom {
-    --uno: "absolute z--1";
-  }
-
-  &-left {
-    --uno: "left-0 top-0 w-14px h-full hover:w-60px";
-  }
-
-  &-right {
-    --uno: "right-0 top-0 w-14px h-full hover:w-60px";
-  }
-
-  &-bottom {
-    --uno: "left-0 bottom-0 w-full h-14px hover-h-60px";
-  }
-}
-
-.detached-dock-actions {
-  --uno: "pointer-events-auto z-1";
-
-  .back-to-top-or-refresh-btn {
-    --uno: "transform active:important-scale-90 hover:scale-110";
-    --uno: "lg:w-45px w-35px lg:h-45px h-35px";
-    --uno: "grid place-items-center";
-    --uno: "filter-$bew-filter-glass-1";
-    --uno: "bg-$bew-elevated hover:bg-$bew-content-hover";
-    --uno: "rounded-full shadow-$bew-shadow-2 border-1 border-$bew-surface-border-color";
-
-    backdrop-filter: var(--bew-filter-glass-1);
-    box-sizing: border-box;
-    transition:
-      transform 300ms var(--bew-ease-emphasized, cubic-bezier(0.34, 1.3, 0.64, 1)),
-      background 300ms ease,
-      color 300ms ease,
-      box-shadow 300ms ease,
-      opacity 300ms ease;
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
   }
 }
 
@@ -1101,31 +915,13 @@ onUnmounted(() => {
   &.left {
     --uno: "left-2 after:right--4px";
   }
-  &.left.hide:not(.hover):not(.collapsed) {
-    --uno: "opacity-0 !translate-x--100%";
-  }
-  &.left.half-hide:not(.hover):not(.collapsed) {
-    --uno: "!opacity-60 !translate-x--50%";
-  }
 
   &.right {
     --uno: "right-2 after:left--4px";
   }
-  &.right.hide:not(.hover):not(.collapsed) {
-    --uno: "opacity-0 !translate-x-100%";
-  }
-  &.right.half-hide:not(.hover):not(.collapsed) {
-    --uno: "!opacity-60 !translate-x-50%";
-  }
 
   &.bottom {
     --uno: "top-unset bottom-0";
-  }
-  &.bottom.hide:not(.hover):not(.collapsed) {
-    --uno: "opacity-0 !translate-y-100%";
-  }
-  &.bottom.half-hide:not(.hover):not(.collapsed) {
-    --uno: "!opacity-60 !translate-y-50%";
   }
 
   &.collapsed {

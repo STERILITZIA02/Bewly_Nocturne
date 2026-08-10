@@ -2,30 +2,24 @@
 import { storeToRefs } from 'pinia'
 import { computed } from 'vue'
 
+import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isHomePage } from '~/utils/main'
+import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
+
+const emit = defineEmits<{
+  focusChange: [focused: boolean]
+}>()
 
 const { showSearchBar, forceWhiteIcon } = useTopBarInteraction()
 const topBarStore = useTopBarStore()
 const { searchKeyword } = storeToRefs(topBarStore)
+const searchFocusEffect = useSearchFocusEffect()
 
 const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disableFrostedGlass)
-
-// 顶栏覆盖在图片上且使用毛玻璃时，切换为高对比度亮色文字
-const searchBarStyles = computed(() => ({
-  '--b-search-bar-max-width': '100%',
-  // Keep the initial radius calculation valid before the global tokens finish loading.
-  '--b-search-bar-height': 'var(--bew-top-bar-primary-control-height, 46px)',
-  '--b-search-bar-normal-color': settings.value.disableFrostedGlass ? 'var(--bew-elevated)' : 'color-mix(in oklab, var(--bew-elevated-solid), transparent 60%)',
-  '--b-search-bar-focus-color': 'var(--bew-elevated)',
-  '--b-search-bar-normal-icon-color': useLightText.value ? 'white' : 'var(--bew-text-1)',
-  '--b-search-bar-normal-text-color': useLightText.value ? 'white' : 'var(--bew-text-1)',
-  '--b-search-bar-hover-text-color': useLightText.value ? 'white' : 'var(--bew-text-1)',
-  '--b-search-bar-placeholder-opacity': useLightText.value ? '0.9' : '0.65',
-}))
 
 const searchBehavior = computed<'navigate' | 'stay'>(() => {
   // 不再在这里决定搜索行为，让 SearchBar 组件自己根据情况判断
@@ -69,7 +63,7 @@ function handleSearch(keyword: string) {
 
   // 只有在搜索结果页且启用了插件搜索时才使用 pushState 方式
   // 其他情况由 SearchBar 组件的 navigateToSearchResultPage 处理
-  if (!settings.value.usePluginSearchResultsPage)
+  if (!shouldUsePluginSearchResultsPage())
     return
 
   // 检查是否在搜索结果页（通过 URL 参数判断，因为在 TopBar 中无法 inject BEWLY_APP）
@@ -90,10 +84,14 @@ function handleSearch(keyword: string) {
         v-if="showSearchBar"
         v-model="searchKeyword"
         class="search-bar"
-        :style="searchBarStyles"
+        :darken-on-focus="searchFocusEffect.darkened"
+        :blurred-on-focus="searchFocusEffect.blurred"
+        :force-light-text="useLightText"
         :show-hot-search="settings.showHotSearchInTopBar"
         :search-behavior="searchBehavior"
+        :top-bar-appearance="true"
         :top-bar-mode="true"
+        @focus-change="emit('focusChange', $event)"
         @search="handleSearch"
       />
     </Transition>

@@ -93,7 +93,7 @@ let requestVersion = 0
 let loadedAccountId: AccountId = getCurrentAccountId()
 type WebRecommendRequestType = 'refresh' | 'loadMore'
 
-const HOME_LOAD_LOG_PREFIX = '[BewlyCat][首页加载]'
+const HOME_LOAD_LOG_PREFIX = '[Bewly Nocturne][首页加载]'
 let recommendRequestLogId = 0
 
 interface RecommendRequestLogContext {
@@ -833,7 +833,7 @@ function initPageAction() {
     // 根据当前模式保存数据
     if (isWebRecommendationMode.value) {
       // 总是保存刷新前的当前状态到后退缓存
-      cachedVideoList.value = JSON.parse(JSON.stringify(videoList.value))
+      cachedVideoList.value = videoList.value.slice()
       cachedRefreshIdx.value = refreshIdx.value
       cachedWebFetchRow.value = webFetchRow.value
       cachedWebShowlistGroups.value = [...webShowlistGroups.value]
@@ -850,7 +850,7 @@ function initPageAction() {
     }
     else if (settings.value.recommendationMode === 'app') {
       // APP 模式下保存刷新前的当前状态到后退缓存
-      cachedAppVideoList.value = JSON.parse(JSON.stringify(appVideoList.value))
+      cachedAppVideoList.value = appVideoList.value.slice()
       hasBackState.value = true
 
       // 清空前进状态（因为刷新会产生新的分支）
@@ -873,14 +873,14 @@ function initPageAction() {
 
         // Web模式下的后退操作
         // 保存当前数据到前进状态
-        forwardVideoList.value = JSON.parse(JSON.stringify(videoList.value))
+        forwardVideoList.value = videoList.value.slice()
         forwardRefreshIdx.value = refreshIdx.value
         forwardWebFetchRow.value = webFetchRow.value
         forwardWebShowlistGroups.value = [...webShowlistGroups.value]
         hasForwardState.value = true
 
         // 恢复缓存的数据
-        videoList.value = JSON.parse(JSON.stringify(cachedVideoList.value))
+        videoList.value = cachedVideoList.value.slice()
         refreshIdx.value = cachedRefreshIdx.value
         webFetchRow.value = cachedWebFetchRow.value
         webShowlistGroups.value = [...cachedWebShowlistGroups.value]
@@ -896,11 +896,11 @@ function initPageAction() {
 
         // APP模式下的后退操作
         // 保存当前数据到前进状态
-        forwardAppVideoList.value = JSON.parse(JSON.stringify(appVideoList.value))
+        forwardAppVideoList.value = appVideoList.value.slice()
         hasForwardState.value = true
 
         // 恢复缓存的数据
-        appVideoList.value = JSON.parse(JSON.stringify(cachedAppVideoList.value))
+        appVideoList.value = cachedAppVideoList.value.slice()
 
         hasBackState.value = false
         undoForwardState.value = UndoForwardState.Hidden
@@ -919,14 +919,14 @@ function initPageAction() {
 
         // Web模式下的前进操作
         // 保存当前数据到后退状态
-        cachedVideoList.value = JSON.parse(JSON.stringify(videoList.value))
+        cachedVideoList.value = videoList.value.slice()
         cachedRefreshIdx.value = refreshIdx.value
         cachedWebFetchRow.value = webFetchRow.value
         cachedWebShowlistGroups.value = [...webShowlistGroups.value]
         hasBackState.value = true
 
         // 恢复前进状态的数据
-        videoList.value = JSON.parse(JSON.stringify(forwardVideoList.value))
+        videoList.value = forwardVideoList.value.slice()
         refreshIdx.value = forwardRefreshIdx.value
         webFetchRow.value = forwardWebFetchRow.value
         webShowlistGroups.value = [...forwardWebShowlistGroups.value]
@@ -944,11 +944,11 @@ function initPageAction() {
 
         // APP模式下的前进操作
         // 保存当前数据到后退状态
-        cachedAppVideoList.value = JSON.parse(JSON.stringify(appVideoList.value))
+        cachedAppVideoList.value = appVideoList.value.slice()
         hasBackState.value = true
 
         // 恢复前进状态的数据
-        appVideoList.value = JSON.parse(JSON.stringify(forwardAppVideoList.value))
+        appVideoList.value = forwardAppVideoList.value.slice()
 
         // 标记为已经前进
         hasForwardState.value = false

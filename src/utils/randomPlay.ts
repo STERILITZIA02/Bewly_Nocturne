@@ -306,7 +306,7 @@ export function getCurrentEpisodeIndex(episodes: HTMLElement[]): number {
 
 // 获取随机下一集
 export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: number): number {
-  debugLog('[BewlyCat Random Play] getRandomNextEpisode called, currentIndex:', currentIndex, 'visitedEpisodes:', Array.from(visitedEpisodes))
+  debugLog('[Bewly Nocturne Random Play] getRandomNextEpisode called, currentIndex:', currentIndex, 'visitedEpisodes:', Array.from(visitedEpisodes))
 
   if (episodes.length <= 1)
     return currentIndex
@@ -318,7 +318,7 @@ export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: numb
 
   // 如果所有视频都已访问，重置访问记录
   if (visitedEpisodes.size >= episodes.length) {
-    debugLog('[BewlyCat Random Play] All episodes visited, resetting')
+    debugLog('[Bewly Nocturne Random Play] All episodes visited, resetting')
     visitedEpisodes.clear()
     if (currentKey)
       visitedEpisodes.add(currentKey)
@@ -329,26 +329,26 @@ export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: numb
     .map((_, index) => index)
     .filter(index => !visitedEpisodes.has(episodeKeys[index]))
 
-  debugLog('[BewlyCat Random Play] Unvisited indices:', unvisitedIndices)
+  debugLog('[Bewly Nocturne Random Play] Unvisited indices:', unvisitedIndices)
 
   if (unvisitedIndices.length === 0) {
-    debugLog('[BewlyCat Random Play] No unvisited indices, selecting random excluding current')
+    debugLog('[Bewly Nocturne Random Play] No unvisited indices, selecting random excluding current')
     // 如果没有未访问的视频，随机选择一个不是当前视频的
     const availableIndices = episodes
       .map((_, index) => index)
       .filter(index => index !== currentIndex)
 
     if (availableIndices.length === 0) {
-      debugLog('[BewlyCat Random Play] No available indices')
+      debugLog('[Bewly Nocturne Random Play] No available indices')
       return currentIndex
     }
     const selected = availableIndices[Math.floor(Math.random() * availableIndices.length)]
-    debugLog('[BewlyCat Random Play] Selected from available:', selected)
+    debugLog('[Bewly Nocturne Random Play] Selected from available:', selected)
     return selected
   }
 
   const selected = unvisitedIndices[Math.floor(Math.random() * unvisitedIndices.length)]
-  debugLog('[BewlyCat Random Play] Selected from unvisited:', selected)
+  debugLog('[Bewly Nocturne Random Play] Selected from unvisited:', selected)
   return selected
 }
 
@@ -375,7 +375,7 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
 
   const targetEpisode = episodes[targetIndex]
   const targetKey = getEpisodeEntries(episodes)[targetIndex]?.key
-  debugLog('[BewlyCat Random Play] Target episode element:', targetEpisode)
+  debugLog('[Bewly Nocturne Random Play] Target episode element:', targetEpisode)
 
   // 尝试多种方式找到可点击的元素
   let clickableElement: HTMLElement | null = null
@@ -384,7 +384,7 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   const link = targetEpisode.matches('a[href]')
     ? targetEpisode as HTMLAnchorElement
     : targetEpisode.querySelector<HTMLAnchorElement>('a[href]')
-  debugLog('[BewlyCat Random Play] Found link:', link, 'href:', link?.href)
+  debugLog('[Bewly Nocturne Random Play] Found link:', link, 'href:', link?.href)
 
   if (link && link.href) {
     clickableElement = link
@@ -392,7 +392,7 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   else {
     // 2. 查找 .simple-base-item 元素（B站新版播放列表项）
     const simpleBaseItem = targetEpisode.querySelector('.simple-base-item') as HTMLElement
-    debugLog('[BewlyCat Random Play] Found .simple-base-item:', simpleBaseItem)
+    debugLog('[Bewly Nocturne Random Play] Found .simple-base-item:', simpleBaseItem)
 
     if (simpleBaseItem) {
       clickableElement = simpleBaseItem
@@ -411,16 +411,16 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   }
 
   if (!clickableElement) {
-    debugLog('[BewlyCat Random Play] No clickable element found')
+    debugLog('[Bewly Nocturne Random Play] No clickable element found')
     return
   }
 
-  debugLog('[BewlyCat Random Play] Clickable element:', clickableElement)
+  debugLog('[Bewly Nocturne Random Play] Clickable element:', clickableElement)
 
   // 使用更智能的点击策略
   const performClick = () => {
     try {
-      debugLog('[BewlyCat Random Play] Attempting to click element:', targetIndex, clickableElement)
+      debugLog('[Bewly Nocturne Random Play] Attempting to click element:', targetIndex, clickableElement)
 
       // 标记为已访问（在点击前标记，防止点击失败后重复尝试）
       if (targetKey)
@@ -428,18 +428,18 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
 
       // 如果是链接，尝试点击
       if (clickableElement instanceof HTMLAnchorElement && clickableElement.href) {
-        debugLog('[BewlyCat Random Play] Clicking anchor element, href:', clickableElement.href)
+        debugLog('[Bewly Nocturne Random Play] Clicking anchor element, href:', clickableElement.href)
         clickableElement.click()
         return
       }
 
       // 对于没有链接的元素（如 video-pod__item），只触发一次点击。
       // 重复派发 click 会让 B 站 Vue 路由执行两次卸载流程。
-      debugLog('[BewlyCat Random Play] Clicking episode element')
+      debugLog('[Bewly Nocturne Random Play] Clicking episode element')
       clickableElement!.click()
     }
     catch (error) {
-      console.error('[BewlyCat Random Play] Click failed:', error)
+      console.error('[Bewly Nocturne Random Play] Click failed:', error)
     }
   }
 
@@ -852,17 +852,17 @@ export function enableRandomPlay(): void {
 
     // 创建新的随机播放监听器
     const randomPlayListener = () => {
-      debugLog('[BewlyCat Random Play] Video ended, random play listener triggered')
+      debugLog('[Bewly Nocturne Random Play] Video ended, random play listener triggered')
 
       // 防止重复触发（ended 和 pause 事件可能都会触发）
       if (isProcessing) {
-        debugLog('[BewlyCat Random Play] Already processing, skipping')
+        debugLog('[Bewly Nocturne Random Play] Already processing, skipping')
         return
       }
 
       // 关键：检查随机播放是否仍然启用
       if (!isRandomPlayEnabled) {
-        debugLog('[BewlyCat Random Play] Random play disabled, skipping')
+        debugLog('[Bewly Nocturne Random Play] Random play disabled, skipping')
         return
       }
 
@@ -870,26 +870,26 @@ export function enableRandomPlay(): void {
 
       // 在捕获阶段立即接管切集，避免被 B 站原生连播按 DOM 顺序抢先跳转。
       const episodes = getPlaybackEpisodeEntries().map(entry => entry.element)
-      debugLog('[BewlyCat Random Play] Found episodes:', episodes.length)
+      debugLog('[Bewly Nocturne Random Play] Found episodes:', episodes.length)
 
       if (episodes.length <= 1) {
-        debugLog('[BewlyCat Random Play] Not enough episodes')
+        debugLog('[Bewly Nocturne Random Play] Not enough episodes')
         isProcessing = false
         return
       }
 
       const currentIndex = getCurrentEpisodeIndex(episodes)
-      debugLog('[BewlyCat Random Play] Current episode index:', currentIndex)
+      debugLog('[Bewly Nocturne Random Play] Current episode index:', currentIndex)
 
       const playOrder = getActivePlayOrder()
       const nextIndex = getNextEpisodeIndex(episodes, currentIndex, playOrder)
-      debugLog('[BewlyCat Random Play] Next episode index:', nextIndex, 'order:', playOrder)
+      debugLog('[Bewly Nocturne Random Play] Next episode index:', nextIndex, 'order:', playOrder)
 
       if (nextIndex !== currentIndex) {
         jumpToEpisode(episodes, nextIndex)
       }
       else {
-        debugLog('[BewlyCat Random Play] Next index same as current, not jumping')
+        debugLog('[Bewly Nocturne Random Play] Next index same as current, not jumping')
       }
       setTimeout(() => {
         isProcessing = false

@@ -15,6 +15,7 @@ import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isHomePage } from '~/utils/main'
+import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 import { createTransformer } from '~/utils/transformer'
 
@@ -40,7 +41,7 @@ export function useTopBarInteraction() {
   const handledClickEvents = new WeakSet<MouseEvent>()
 
   // 获取 App Provider
-  const { activatedPage, getDockPageHref, navigateToDockPage, reachTop } = useBewlyApp()
+  const { activatedPage, getDockPageHref, navigateToDockPage } = useBewlyApp()
 
   const currentLocationHref = useCurrentLocationHref()
 
@@ -77,11 +78,11 @@ export function useTopBarInteraction() {
       // SearchResults 页面的显示逻辑：
       if (activatedPage.value === AppPage.SearchResults) {
         // 启用了插件搜索结果页才显示搜索框
-        if (!settings.value.usePluginSearchResultsPage)
+        if (!shouldUsePluginSearchResultsPage())
           return false
         // 其他情况显示搜索框
       }
-      if (settings.value.useSearchPageModeOnHomePage && activatedPage.value === AppPage.Home && reachTop?.value)
+      if (settings.value.useSearchPageModeOnHomePage && activatedPage.value === AppPage.Home)
         return false
     }
     else if (isSearchPage) {

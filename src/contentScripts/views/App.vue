@@ -2,6 +2,7 @@
 import { onKeyStroke, useEventListener, useIntersectionObserver, useThrottleFn } from '@vueuse/core'
 import type { Ref } from 'vue'
 import { provide, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
@@ -15,12 +16,14 @@ import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { setIframePageActive } from '~/logic/iframePageState'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
+import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
@@ -28,31 +31,17 @@ import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pag
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 
-// Check if current page is festival page
-function isFestivalPage(): boolean {
-  return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(document.URL)
-}
-
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
 const currentLocationHref = useCurrentLocationHref()
-const useOriginalBilibiliTopBar = computed(() => settingsStore.getUseOriginalBilibiliTopBar())
+const effectiveTopBarSource = computed(() => settingsStore.getEffectiveTopBarSource())
+const useOriginalBilibiliTopBar = computed(() => showNativeBilibiliTopBar(effectiveTopBarSource.value))
+const { t } = useI18n()
 
-// Conditionally use dark mode. `useDark()` handles the video-page-only route gate.
-let isDark: Ref<boolean>
-const shouldUseDark = settings.value.adaptToOtherPageStyles || settings.value.videoPageDarkMode
-
-if (shouldUseDark) {
-  const darkResult = useDark()
-  isDark = darkResult.isDark
-}
-else {
-  isDark = ref(false)
-}
+const { isDark } = useDark()
 const showSettings = ref(false)
 const settingsLaunchStyle = ref<Record<string, string>>({})
-const searchFocusOverlayActive = ref(false)
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -280,6 +269,7 @@ const pages = {
   [AppPage.WatchLater]: defineAsyncComponent(() => import('./WatchLater/WatchLater.vue')),
   [AppPage.Favorites]: defineAsyncComponent(() => import('./Favorites/Favorites.vue')),
   [AppPage.Moments]: defineAsyncComponent(() => import('./Moments/Moments.vue')),
+  [AppPage.Notifications]: defineAsyncComponent(() => import('./Notifications/Notifications.vue')),
 }
 const mainAppRef = ref<HTMLElement>() as Ref<HTMLElement>
 const scrollViewportRef = ref<HTMLElement | null>(null)
@@ -391,63 +381,6 @@ useEventListener(window, 'message', ({ data, source }) => {
   }
 })
 
-// 监听来自父页面的黑暗模式切换消息（用于iframe跨域场景）
-useEventListener(window, 'message', ({ data, source }) => {
-  // 只处理来自父窗口的消息
-  if (source !== window.parent)
-    return
-
-  const { type, isDark, isOledDark, darkModeBaseColor } = data
-
-  if (type === 'iframeDarkModeChange') {
-    // 在iframe环境中，只更新DOM样式，不修改用户的主题设置
-    // 避免覆盖用户选择的设备或定时主题模式
-    if (isInIframe()) {
-      // Check if we should apply selective dark mode (plugin UI only) on festival pages
-      const isSelectiveDark = isFestivalPage()
-
-      // 立即更新DOM样式，不修改settings.value.theme
-      if (isDark) {
-        // Always apply to plugin container
-        const bewlyContainer = document.querySelector('#bewly')
-        bewlyContainer?.classList.add('dark')
-        bewlyContainer?.classList.toggle('oled-dark', isOledDark === true)
-
-        // Only apply global styles if not on festival pages
-        if (!isSelectiveDark) {
-          document.documentElement.classList.add('dark')
-          document.documentElement.classList.toggle('oled-dark', isOledDark === true)
-          document.body?.classList.add('dark')
-          document.body?.classList.toggle('oled-dark', isOledDark === true)
-        }
-
-        // 如果提供了深色模式基准颜色，则应用它（仅应用到DOM，不修改设置）
-        if (darkModeBaseColor) {
-          document.documentElement.style.setProperty('--bew-dark-base-color', darkModeBaseColor)
-          // 对于Shadow DOM也需要设置
-          const bewlyContainer = document.getElementById('bewly')
-          if (bewlyContainer?.shadowRoot) {
-            const shadowHost = bewlyContainer
-            shadowHost.style.setProperty('--bew-dark-base-color', darkModeBaseColor)
-          }
-        }
-      }
-      else {
-        const bewlyContainer = document.querySelector('#bewly')
-        bewlyContainer?.classList.remove('dark', 'oled-dark')
-
-        // Only remove global classes if not in selective mode
-        if (!isSelectiveDark) {
-          document.documentElement.classList.remove('dark', 'oled-dark')
-          document.body?.classList.remove('dark', 'oled-dark')
-        }
-      }
-
-      // 强制重新计算样式
-      void document.documentElement.offsetHeight
-    }
-  }
-}, { passive: true })
 const iframePageURL = computed((): string => {
   // If the iframe is not the BiliBili homepage or in iframe, then don't show the iframe page
   if (!isHomePage(window.self.location.href) || isInIframe())
@@ -460,6 +393,8 @@ const iframePageURL = computed((): string => {
     ? mainStore.getBiliWebPageURLByPage(activatedPage.value)
     : ''
 })
+watch(iframePageURL, url => setIframePageActive(Boolean(url)), { immediate: true })
+onBeforeUnmount(() => setIframePageActive(false))
 const showBewlyPage = computed((): boolean => {
   if (isInIframe())
     return false
@@ -478,6 +413,24 @@ const showBewlyPage = computed((): boolean => {
 
   return isHomePage()
 })
+
+// SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
+// currently selected Dock page (and Home sub-tab) and react to locale changes.
+const dockPageTitle = computed<string | undefined>(() => {
+  if (!showBewlyPage.value || activatedPage.value === AppPage.SearchResults)
+    return undefined
+
+  const titleKey = activatedPage.value === AppPage.Home
+    ? mainStore.homeTabs.find(tab => tab.page === homeActivatedPage.value)?.i18nKey
+    : mainStore.getDockItemByPage(activatedPage.value)?.i18nKey
+
+  return titleKey ? `${t(titleKey)} - 哔哩哔哩` : undefined
+})
+
+watch(dockPageTitle, (title) => {
+  if (title)
+    document.title = title
+}, { immediate: true })
 const showTopBar = computed((): boolean => {
   // When using the open in drawer feature, the iframe inside the page will hide the top bar
   if (isVideoOrBangumiPage() && isInIframe())
@@ -682,8 +635,6 @@ function handleBackToTop(targetScrollTop = 0 as number) {
   iframePageRef.value?.handleBackToTop()
 }
 
-// 添加滚动结束检测
-let scrollEndTimer: ReturnType<typeof setTimeout> | null = null
 let scrollStateTimer: ReturnType<typeof setTimeout> | null = null
 let lastScrollTop = 0
 let rafId: number | null = null
@@ -722,11 +673,6 @@ function handleOsScroll(_instance: any, event: Event) {
     // ✅ 移除手动的"到达底部"检测，改用 IntersectionObserver（见 loadMoreSentinelRef）
     // 这避免了在每次滚动时计算 threshold 和读取 scrollHeight/clientHeight
 
-    // 清除之前的滚动结束定时器
-    if (scrollEndTimer) {
-      clearTimeout(scrollEndTimer)
-    }
-
     // 清除之前的滚动状态定时器
     if (scrollStateTimer) {
       clearTimeout(scrollStateTimer)
@@ -736,11 +682,6 @@ function handleOsScroll(_instance: any, event: Event) {
     scrollStateTimer = setTimeout(() => {
       emitter.emit(OVERLAY_SCROLL_STATE_CHANGE, false)
       scrollingEmitted = false
-    }, 150)
-
-    // ✅ 简化滚动结束检测：移除 DOM 读取，IntersectionObserver 会处理底部检测
-    scrollEndTimer = setTimeout(() => {
-      // IntersectionObserver 会处理底部触发，这里只保留定时器结构以备将来扩展
     }, 150)
 
     rafId = null
@@ -824,7 +765,6 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   mainAppRef,
   scrollViewportRef,
   reachTop,
-  searchFocusOverlayActive,
   handleBackToTop,
   handlePageRefresh,
   canRefreshHomeSubPage,
@@ -840,70 +780,94 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   navigateToDockPage,
 })
 
-if (settings.value.cleanUrlArgument) {
-  let isCleaningUrl = false // 防止重复执行
-  let cleanupTimer: ReturnType<typeof setTimeout> | null = null
+let isCleaningUrl = false
+let cleanupTimer: ReturnType<typeof setTimeout> | undefined
+let cleanupApplyTimer: ReturnType<typeof setTimeout> | undefined
+let cleanupIdleCallback: number | undefined
 
-  function cleanUrlParams() {
-    // 防止在页面加载过程中执行URL清理
-    if (isCleaningUrl || document.readyState === 'loading') {
-      return
-    }
+function stopUrlCleaner() {
+  if (cleanupTimer !== undefined)
+    clearTimeout(cleanupTimer)
+  if (cleanupApplyTimer !== undefined)
+    clearTimeout(cleanupApplyTimer)
+  if (cleanupIdleCallback !== undefined)
+    window.cancelIdleCallback?.(cleanupIdleCallback)
+  cleanupTimer = undefined
+  cleanupApplyTimer = undefined
+  cleanupIdleCallback = undefined
+  isCleaningUrl = false
+}
 
-    try {
-      isCleaningUrl = true
-      const currentUrl = window.location.href
-      const cleanedUrl = cleanBilibiliUrl(currentUrl)
+function cleanUrlParams() {
+  // 防止在页面加载过程中执行URL清理
+  if (isCleaningUrl || document.readyState === 'loading') {
+    return
+  }
 
-      if (cleanedUrl !== currentUrl) {
-        // 使用 requestIdleCallback 来避免阻塞页面加载
-        if (window.requestIdleCallback) {
-          window.requestIdleCallback(() => {
-            if (window.location.href === currentUrl)
-              history.replaceState(null, '', cleanedUrl)
-            isCleaningUrl = false
-          })
-        }
-        else {
-          setTimeout(() => {
-            if (window.location.href === currentUrl)
-              history.replaceState(null, '', cleanedUrl)
-            isCleaningUrl = false
-          }, 0)
-        }
+  try {
+    isCleaningUrl = true
+    const currentUrl = window.location.href
+    const cleanedUrl = cleanBilibiliUrl(currentUrl)
+
+    if (cleanedUrl !== currentUrl) {
+      // 使用 requestIdleCallback 来避免阻塞页面加载
+      if (window.requestIdleCallback) {
+        cleanupIdleCallback = window.requestIdleCallback(() => {
+          cleanupIdleCallback = undefined
+          if (settings.value.cleanUrlArgument && window.location.href === currentUrl)
+            history.replaceState(null, '', cleanedUrl)
+          isCleaningUrl = false
+        })
       }
       else {
-        isCleaningUrl = false
+        cleanupApplyTimer = setTimeout(() => {
+          cleanupApplyTimer = undefined
+          if (settings.value.cleanUrlArgument && window.location.href === currentUrl)
+            history.replaceState(null, '', cleanedUrl)
+          isCleaningUrl = false
+        }, 0)
       }
     }
-    catch (error) {
-      console.warn('URL清理失败:', error)
+    else {
       isCleaningUrl = false
     }
   }
-
-  // 延迟执行URL清理，确保页面完全加载后再执行
-  function scheduleCleanup(delay = 2000) {
-    if (cleanupTimer) {
-      clearTimeout(cleanupTimer)
-    }
-    cleanupTimer = setTimeout(() => {
-      if (document.readyState === 'complete') {
-        cleanUrlParams()
-      }
-    }, delay)
+  catch (error) {
+    console.warn('URL清理失败:', error)
+    isCleaningUrl = false
   }
-
-  // 只在页面完全加载后执行清理
-  if (document.readyState === 'complete') {
-    scheduleCleanup(1000)
-  }
-  else {
-    window.addEventListener('load', () => scheduleCleanup(1000), { once: true })
-  }
-
-  watch(currentLocationHref, () => scheduleCleanup(2000))
 }
+
+function scheduleCleanup(delay = 1000) {
+  if (!settings.value.cleanUrlArgument)
+    return
+  if (cleanupTimer !== undefined)
+    clearTimeout(cleanupTimer)
+  cleanupTimer = setTimeout(() => {
+    cleanupTimer = undefined
+    if (document.readyState !== 'loading')
+      cleanUrlParams()
+  }, delay)
+}
+
+function startUrlCleaner() {
+  stopUrlCleaner()
+  scheduleCleanup(0)
+}
+
+watch(() => settings.value.cleanUrlArgument, (enabled) => {
+  if (enabled)
+    startUrlCleaner()
+  else
+    stopUrlCleaner()
+}, { immediate: true })
+
+watch(currentLocationHref, () => {
+  if (settings.value.cleanUrlArgument)
+    scheduleCleanup()
+})
+
+onBeforeUnmount(stopUrlCleaner)
 </script>
 
 <template>
@@ -948,6 +912,7 @@ if (settings.value.cleanUrlArgument) {
         v-if="settings.alwaysUseDock || (showBewlyPage || iframePageURL)"
         pointer-events-auto
         :activated-page="activatedPage"
+        :settings-open="showSettings"
         @settings-visibility-change="toggleSettings"
         @refresh="handleThrottledPageRefresh"
         @undo-refresh="handleThrottledPageUnRefresh"
@@ -967,7 +932,6 @@ if (settings.value.cleanUrlArgument) {
     <div
       v-if="showTopBar"
       class="top-bar-host"
-      :class="{ 'top-bar-host--behind-search-overlay': searchFocusOverlayActive }"
       m-auto max-w="$bew-page-max-width"
       :style="{
         opacity: hideUIForIframePhotoViewer ? 0 : 1,
@@ -1142,11 +1106,6 @@ if (settings.value.cleanUrlArgument) {
   gap: var(--bew-space-2);
   justify-content: flex-end;
   padding: var(--bew-space-2) var(--bew-space-8) var(--bew-space-6);
-}
-
-.top-bar-host--behind-search-overlay {
-  position: relative;
-  z-index: 0;
 }
 
 .bewly-wrapper {
