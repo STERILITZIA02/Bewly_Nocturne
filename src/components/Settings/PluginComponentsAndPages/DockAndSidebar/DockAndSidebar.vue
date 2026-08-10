@@ -96,16 +96,6 @@ const sidebarPositions = computed(() => {
   ]
 })
 
-watch(() => settings.value.halfHideDock, (newValue) => {
-  if (newValue)
-    settings.value.autoHideDock = false
-})
-
-watch(() => settings.value.autoHideDock, (newValue) => {
-  if (newValue)
-    settings.value.halfHideDock = false
-})
-
 function resetDockContent() {
   settingsStore.resetDockItemsConfig()
 }
@@ -125,17 +115,12 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
 
 <template>
   <div>
-    <SettingsItemGroup :title="$t('settings.group_dock')">
+    <SettingsItemGroup data-setting-id="navigation.pageMode" :title="$t('settings.group_dock')">
       <SettingsItem :title="$t('settings.always_use_dock')" :desc="$t('settings.always_use_dock_desc')" right-width="auto">
         <Radio v-model="settings.alwaysUseDock" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.auto_hide_dock')" right-width="auto">
-        <Radio v-model="settings.autoHideDock" />
-      </SettingsItem>
-      <SettingsItem :title="$t('settings.half_hide_dock')" right-width="auto">
-        <Radio v-model="settings.halfHideDock" />
-      </SettingsItem>
       <SettingsItem
+        setting-id="navigation.dock.collapseMode"
         :title="$t('settings.dock_collapse_mode')"
         :desc="$t('settings.dock_collapse_mode_desc')"
         right-width="auto"
@@ -146,7 +131,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
           w="160px"
         />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.dock_position')" :desc="$t('settings.dock_position_desc')" right-width="auto">
+      <SettingsItem setting-id="navigation.dock.position" :title="$t('settings.dock_position')" :desc="$t('settings.dock_position_desc')" right-width="auto">
         <Select
           v-model="settings.dockPosition"
           :options="dockPositions"
@@ -154,6 +139,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
         />
       </SettingsItem>
       <SettingsItem
+        setting-id="navigation.topBar.mode"
         :title="$t('settings.dock_content_adjustment')"
         :desc="$t('settings.dock_content_adjustment_desc')"
       >
@@ -187,6 +173,9 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
               :disabled="topBarModeDisabled"
               w="160px"
             />
+            <div v-if="topBarModeDisabled" w-full text="sm $bew-text-2">
+              {{ $t('settings.custom_page_mode_required') }}
+            </div>
           </div>
 
           <draggable
@@ -218,6 +207,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
                     {{ $t('settings.dock_item_use_original_bili_web_page') }}
                     <Radio
                       :model-value="element.useOriginalBiliPage"
+                      :disabled="settings.pageMode !== 'custom'"
                       @update:model-value="updateDockItemPageMode(element, $event as boolean)"
                     />
                   </div>
@@ -247,19 +237,16 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
       <SettingsItem :title="$t('settings.back_to_top_and_refresh_buttons_are_separated')" right-width="auto">
         <Radio v-model="settings.backToTopAndRefreshButtonsAreSeparated" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.always_show_dock_actions_when_auto_hide')" right-width="auto">
-        <Radio v-model="settings.alwaysShowDockActionsWhenAutoHide" />
-      </SettingsItem>
       <SettingsItem :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">
         <Radio v-model="settings.enableUndoRefreshButton" />
       </SettingsItem>
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_sidebar')" :desc="$t('settings.group_sidebar_desc')">
-      <SettingsItem :title="$t('settings.sidebar_position')" right-width="auto">
+      <SettingsItem setting-id="navigation.sidebar.position" :title="$t('settings.sidebar_position')" right-width="auto">
         <Select v-model="settings.sidebarPosition" :options="sidebarPositions" w="160px" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.auto_hide_sidebar')" right-width="auto">
+      <SettingsItem setting-id="navigation.sidebar.autoHide" :title="$t('settings.auto_hide_sidebar')" right-width="auto">
         <Radio v-model="settings.autoHideSidebar" />
       </SettingsItem>
     </SettingsItemGroup>

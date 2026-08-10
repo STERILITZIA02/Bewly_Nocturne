@@ -50,6 +50,7 @@ function acknowledgeCurrentVersion() {
     max-width="calc(100vw - 32px)"
     content-max-height="calc(100vh - 180px)"
     :show-footer="false"
+    :show-top-blur="false"
     append-to-bewly-body
     @close="dialogVisible = false"
   >

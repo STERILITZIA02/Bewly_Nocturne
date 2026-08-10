@@ -7,6 +7,8 @@ import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
+import type { SettingDescriptor } from '~/logic/layoutEdit'
+import { subscribeSettingNavigation } from '~/logic/layoutEdit'
 
 import type { SettingsSearchEntry } from './searchCatalog'
 import { settingsSearchEntries } from './searchCatalog'
@@ -21,6 +23,7 @@ const searchQuery = ref('')
 const settingsContentKey = ref(0)
 const settingsContentReady = ref(false)
 let settingsContentFrame: number | undefined
+let settingNavigationTimer: number | undefined
 
 onMounted(() => {
   // 先让设置外壳完成首帧绘制，再挂载异步设置页，避免点击反馈被重组件初始化阻塞。
@@ -387,10 +390,17 @@ function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: n
     return
   }
 
-  window.setTimeout(() => scrollToSearchTarget(expectedTitle, navigationId, attempts + 1), 100)
+  settingNavigationTimer = window.setTimeout(
+    () => scrollToSearchTarget(expectedTitle, navigationId, attempts + 1),
+    100,
+  )
 }
 
 function navigateToSearchResult(entry: SettingsSearchEntry) {
+  if (settingNavigationTimer !== undefined) {
+    clearTimeout(settingNavigationTimer)
+    settingNavigationTimer = undefined
+  }
   const navigationId = ++searchNavigationId
   entry.storageValues?.forEach(({ key, value }) => sessionStorage.setItem(key, value))
 
@@ -404,9 +414,51 @@ function navigateToSearchResult(entry: SettingsSearchEntry) {
   nextTick(() => scrollToSearchTarget(targetTitle, navigationId))
 }
 
+function scrollToSettingId(settingId: string, navigationId: number, attempts = 0) {
+  if (navigationId !== searchNavigationId || attempts > 30)
+    return
+  const target = settingsWindow.value?.querySelector<HTMLElement>(`[data-setting-id="${CSS.escape(settingId)}"]`)
+  if (!target) {
+    settingNavigationTimer = window.setTimeout(
+      () => scrollToSettingId(settingId, navigationId, attempts + 1),
+      100,
+    )
+    return
+  }
+  expandSearchTarget(target)
+  nextTick(() => window.requestAnimationFrame(() => {
+    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    highlightSearchTarget(target)
+  }))
+}
+
+function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
+  const menu = descriptor.category as MenuType
+  if (!(menu in settingsMenu))
+    return
+  if (menu === MenuType.BewlyPages)
+    sessionStorage.setItem(bewlyPagesStorageKey, descriptor.page)
+  else if (menu === MenuType.BewlyComponents)
+    sessionStorage.setItem(bewlyComponentsStorageKey, descriptor.page)
+
+  if (settingNavigationTimer !== undefined) {
+    clearTimeout(settingNavigationTimer)
+    settingNavigationTimer = undefined
+  }
+  const navigationId = ++searchNavigationId
+  activatedMenuItem.value = menu
+  settingsContentKey.value++
+  nextTick(() => scrollToSettingId(descriptor.id, navigationId))
+}
+
+const unsubscribeSettingNavigation = subscribeSettingNavigation(navigateToSettingDescriptor)
+
 onBeforeUnmount(() => {
+  unsubscribeSettingNavigation()
   if (settingsContentFrame !== undefined)
     cancelAnimationFrame(settingsContentFrame)
+  if (settingNavigationTimer !== undefined)
+    clearTimeout(settingNavigationTimer)
   searchNavigationId++
   clearSearchTargetHighlight()
 })
@@ -569,6 +621,7 @@ function changeMenuItem(menuItem: MenuType) {
             >
           </div>
           <CloseButton
+            class="settings-header__close"
             :label="$t('common.close')"
             size="medium"
             @click="handleClose"
@@ -766,7 +819,13 @@ function changeMenuItem(menuItem: MenuType) {
 
 .settings-header {
   z-index: 2;
-  isolation: isolate;
+}
+
+.settings-breadcrumb,
+.settings-search,
+.settings-header__close {
+  position: relative;
+  z-index: 1;
 }
 
 .settings-content__scroll {

@@ -94,7 +94,6 @@ settings:
     located: Setting located
   category_general_desc: Configure language, interaction, and drawer behavior.
   category_appearance_desc: Configure frosted glass, theme colors, fonts, custom styles, and page style adaptation.
-  category_shortcuts_desc: Enable, customize, or restore BewlyMac and player shortcuts.
   breadcrumb: Settings location
   group_interaction_layout: Interaction & Layout
   group_memory_saving: Memory Saving
@@ -113,19 +112,19 @@ settings:
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
   category_bilibili_vip_desc: Configure reminders related to premium membership benefits.
   category_advanced_compatibility_desc: Configure compatibility with original pages, third-party extensions, and other pages.
-  category_advanced_maintenance_desc: Export a backup, import settings, or restore BewlyMac defaults.
+  category_advanced_maintenance_desc: Export a backup, import settings, or restore Bewly Nocturne defaults.
   maintenance:
     title: Backup & Reset
     backup_title: Settings backup
     backup_desc: Export settings for backup or migration, or restore an existing backup.
-    import_desc: Import recognized settings from a BewlyMac JSON backup.
+    import_desc: Import recognized settings from a Bewly Nocturne JSON backup.
     import_failed: The settings file could not be read. Make sure it is a valid JSON backup.
     import_no_matches: No recognized settings were found in this backup.
     import_success: 'Import complete: applied {imported} settings and ignored {ignored} unknown settings.'
     reset_title: Restore default settings
-    reset_desc: Actions in this section affect all BewlyMac settings.
+    reset_desc: Actions in this section affect all Bewly Nocturne settings.
     reset_warning: This cannot be undone. Your current language will be preserved.
-  menu_plugin_components_and_pages: BewlyMac Interface
+  menu_plugin_components_and_pages: Bewly Nocturne Interface
   menu_bilibili_features_enhancement: Bilibili Features
   menu_appearance: Appearance
   menu_compatibility: Compatibility
@@ -354,7 +353,9 @@ settings:
   link_opening_behavior_desc: 'Controls where links open. "Current outside home" means: use a new tab on the home page, and use the current tab on other pages; "Background tab" opens in the background when the browser allows it.'
   video_card_link_opening_behavior_desc: Controls where video and bangumi cards open. You can choose the current tab, drawer, background tab, or new tab.
   search_bar_link_opening_behavior: Search bar link opening behavior
-  close_drawer_without_pressing_esc_again: Close the drawer without pressing <kbd>Esc</kbd> again
+  drawer_escape_behavior: Drawer Escape behavior
+  drawer_escape_immediate: Close immediately
+  drawer_escape_second_press: Close on the second press
   block_ads: Block ads
   block_top_search_page_ads: Block Bilibili top search page ads
   block_top_search_page_ads_desc: >
@@ -420,12 +421,10 @@ settings:
   show_bewly_or_bili_page_switcher: Show page mode switcher
   filter_articles_in_moments: Filter articles
   filter_articles_in_moments_desc: Hide articles from the moments feed and only show videos
-  top_bar_icon_badges: Icon badges
   top_bar_icon_badges_opt:
     number: Number
     dot: Dot
     none: Do not show
-  show_watch_later_badge: Show watch later badge
   show_bcoin_receive_reminder: VIP B-coin receive reminder
   auto_receive_bcoin_coupon: Auto receive B-coin coupon
   auto_receive_bcoin_coupon_desc: When enabled, B-coin coupons will be automatically received when detected
@@ -493,11 +492,7 @@ settings:
     brand: Brand mark
   badge_type: Badge Type
   always_use_dock: Always use the dock
-  always_use_dock_desc: >-
-    The dock will always be visible and the sidebar will be hidden. We also
-    recommend enabling auto-hide for the dock.
-  auto_hide_dock: Automatically hide the dock
-  half_hide_dock: Half-hide dock
+  always_use_dock_desc: The dock will always be visible and the sidebar will be hidden.
   dock_collapse_mode: Dock collapse behavior
   dock_collapse_mode_desc: Choose whether to show the collapse button or collapse to a floating orb when the pointer leaves.
   dock_collapse_mode_button: Show collapse button
@@ -509,6 +504,7 @@ settings:
   dock_content_adjustment_desc: The page of the first activated dock item will be the startup page.
   topbar_mode: Top bar mode
   topbar_mode_desc: All Bewly and All Original modes follow the global setting; Custom mode can choose independently.
+  custom_page_mode_required: This can only be configured separately in Custom page mode.
   topbar_mode_bewly: Bewly top bar
   topbar_mode_bilibili: Bilibili top bar
   dock_item_open_in_new_tab: Open in new tab
@@ -516,7 +512,6 @@ settings:
   disable_dock_glowing_effect: Disable the dock glowing effect
   disable_light_dark_mode_switcher: Disable light/dark mode switcher
   back_to_top_and_refresh_buttons_are_separated: Separate Back to Top and Refresh Buttons
-  always_show_dock_actions_when_auto_hide: Always show action buttons when the dock auto-hides
   sidebar_position: Sidebar position
   auto_hide_sidebar: Automatically hide the sidebar
   theme: Theme
@@ -528,7 +523,7 @@ settings:
   theme_schedule: Light mode hours
   theme_schedule_desc: Use light mode during this time range and dark mode outside it.
   video_page_dark_mode: Video page dark mode only
-  video_page_dark_mode_desc: Keep the global theme unchanged and enable BewlyMac dark styles only on video playback pages.
+  video_page_dark_mode_desc: Keep the global theme unchanged and enable Bewly Nocturne dark styles only on video playback pages.
   theme_color: Theme color
   dark_mode_base_color: Dark mode base color
   enable_oled_dark_mode: OLED pure black mode
@@ -551,11 +546,11 @@ settings:
     pagination: Pagination
   enable_logo_glowing_effect: Enable glowing effect for the logo
   logo_visibility: Logo visibility
-  bg_darkens_when_the_search_bar_is_focused: Background darkens when the search bar is focused
-  bg_blurs_when_the_search_bar_is_focused: Background blurs when the search bar is focused
+  disable_search_focus_effect: Remove search focus effect
+  disable_search_focus_effect_desc: When enabled, focusing the search bar no longer blurs or darkens the page background.
   choose_search_bar_focused_character: Choose the character that appears when the search bar is focused
-  show_hot_search_in_top_bar: Show hot search in top bar
-  show_hot_search_in_top_bar_desc: Display hot search list in the top bar search box
+  show_hot_search_in_top_bar: Show trending searches
+  show_hot_search_in_top_bar_desc: Display trending searches when the search box is focused
   show_hot_search_in_search_page: Show hot search in search page
   show_hot_search_in_search_page_desc: Display hot search ranking on the search page
   show_search_recommendation: Show search recommendation
@@ -646,7 +641,6 @@ settings:
   settings_shared_with_the_search_page_desc: Those settings are used in common with the search page.
   home_tabs_adjustment: Tabs adjustment
   home_tabs_adjustment_desc: The first activated tab is the default page.
-  always_show_tabs_on_home_page: Hide home tabs while scrolling
   fixed_home_tabs_on_home_page: Fix home tabs to the top
   adapt_to_other_page_styles: Adapt to other page styles
   adapt_to_other_page_styles_desc: Adapt to some common pages to match with the BewlyBewly theme.
@@ -664,7 +658,7 @@ settings:
 
     This operation cannot be reversed. Are you sure you want to reset your
     settings?
-  current_contributors: BewlyMac Contributors (including BewlyBewly)
+  current_contributors: Bewly Nocturne Contributors (including BewlyBewly)
   contributors_image_failed: Contributor image failed to load
   enable_settings_sync: Allow syncing settings
   enable_settings_sync_desc: >-
@@ -747,94 +741,6 @@ settings:
   enable_undo_refresh_button_desc: >-
     After refreshing the page, display an undo button that restores the content
     before the refresh when clicked.
-  shortcuts:
-    title: Keyboard Shortcuts
-    enable_all_shortcuts_toggle: Enable Keyboard Shortcuts
-    enable_all_shortcuts_toggle_desc: Enable or disable all keyboard shortcuts functionality
-    group:
-      official_bilibili: Bilibili Official Shortcuts
-      homepage: Homepage Shortcuts
-      general: General Shortcuts
-      fullscreen_mode: Fullscreen Mode Shortcuts
-      global_actions: Global Actions
-    official:
-      play_pause: Play/Pause
-      forward: Forward 5s
-      backward: Backward 5s
-      volume_up: Volume Up
-      volume_down: Volume Down
-      exit_fullscreen: Exit Fullscreen
-      fullscreen: Toggle Fullscreen
-      danmu_toggle: Toggle Danmu
-      mute: Toggle Mute
-      like: Like
-      coin: Coin
-      favorite: Favorite
-      prev_video: Play Previous Video
-      next_video: Play Next Video
-      speed_1: Set Speed to 1x
-      speed_2: Set Speed to 2x
-      input_danmu: Input Danmu
-    item:
-      edit_key: Edit Shortcut
-      cancel_edit: Cancel Edit
-      reset_default: Reset to Default
-    reset_all_button: Reset All Shortcuts
-    reset_all_ext_shortcuts: Reset All Extension Shortcuts
-    press_keys: Click the input box, then press the shortcut keys
-    conflict: The shortcut is already used by the extension shortcut “{name}” and cannot be assigned again.
-    danmu_status: Show Danmu Status
-    danmu_status_desc: Show current danmu toggle status
-    web_fullscreen: Web Fullscreen
-    web_fullscreen_desc: Toggle web fullscreen mode
-    widescreen: Widescreen
-    widescreen_desc: Toggle widescreen mode
-    short_step_backward: Quick Rewind
-    short_step_backward_desc: Rewind 5 seconds
-    long_step_backward: Long Rewind
-    long_step_backward_desc: Rewind 30 seconds
-    play_pause_ext: Play/Pause
-    play_pause_ext_desc: Play or pause video (extension)
-    short_step_forward: Quick Forward
-    short_step_forward_desc: Forward 5 seconds
-    long_step_forward: Long Forward
-    long_step_forward_desc: Forward 30 seconds
-    next_video_ext: Next Video
-    next_video_ext_desc: Play next video in playlist (extension)
-    pip: Picture in Picture
-    pip_desc: Toggle picture-in-picture mode
-    turn_off_light: Turn Off Light
-    turn_off_light_desc: Toggle theater mode
-    caption: Captions
-    caption_desc: Toggle captions
-    increase_playback_rate: Increase Speed
-    increase_playback_rate_desc: Increase playback speed
-    decrease_playback_rate: Decrease Speed
-    decrease_playback_rate_desc: Decrease playback speed
-    reset_playback_rate: Reset Speed
-    reset_playback_rate_desc: Reset to normal playback speed
-    previous_frame: Previous Frame
-    previous_frame_desc: Go to previous frame (when paused)
-    next_frame: Next Frame
-    next_frame_desc: Go to next frame (when paused)
-    replay: Replay
-    replay_desc: Start playing from beginning
-    increase_video_size: Increase Video Size
-    increase_video_size_desc: Make video larger
-    decrease_video_size: Decrease Video Size
-    decrease_video_size_desc: Make video smaller
-    reset_video_size: Reset Video Size
-    reset_video_size_desc: Reset to default video size
-    video_title: Video Title
-    video_title_desc: Show/Hide video title
-    video_time: Video Time
-    video_time_desc: Show/Hide video time
-    clock_time: Clock
-    clock_time_desc: Show/Hide system time
-    home_refresh: Homepage Refresh
-    home_refresh_desc: Refresh homepage content
-    toggle_follow: Toggle Follow/Unfollow
-    toggle_follow_desc: Toggle follow status of the uploader on video page
   clean_url_argument: Clean URL Tracking Parameters
   clean_url_argument_desc: Automatically clean tracking parameters from URLs to make links cleaner
 
@@ -843,7 +749,7 @@ settings:
   enable_clean_share_link: Enable clean share link
   enable_clean_share_link_desc: >
     When enabled, the share link will be cleaned by removing tracking parameters and optionally including the video title.
-    This applies to BewlyMac's copy link feature and intercepts Bilibili's native share button.
+    This applies to Bewly Nocturne's copy link feature and intercepts Bilibili's native share button.
   clean_share_link_include_title: Include video title in shared link
   clean_share_link_include_title_desc: >
     When sharing, the video title will be added before the link, e.g. "Video Title https://www.bilibili.com/video/BVxxx"
@@ -997,19 +903,122 @@ dock:
   favorites: Favorites
   watch_later: Watch later
   moments: Moments
+  notifications: Messages
   page_mode_original: All original
   page_mode_bewly: All Bewly
   page_mode_custom: Custom
   page_mode_switch_tooltip: 'Current: {current}; click to switch to {next}'
-  bewly_page_unavailable: No BewlyMac version is available for this page
+  bewly_page_unavailable: No Bewly Nocturne version is available for this page
   dark_mode: Dark Mode
   light_mode: Light Mode
   settings: Settings
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
+moments:
+  filter_all: All
+  filter_video: Videos
+  filter_pgc: Series
+  filter_article: Articles
+  emoji: Emoji
+  unlock_with_charge: Unlock with Charge
+  view: View
+  live_popularity: '{count} popularity'
+  charge_exclusive: Charge exclusive
+  charge_unlock_hint: Join this creator's Charge to unlock this content
+  charge_exclusive_moment: Charge-exclusive post
+  go_charge: Go to Charge
+  forwarded_moment: Forwarded a post
+  bilibili_user: Bilibili user
+  original_author: Original author
+  live_moment: Live post
+  video_moment: Video post
+  image_moment: Image post
+  text_moment: Text post
+  original_moment: Original post
+  login_to_like: Log in to like posts
+  like_failed: Failed to like the post
+  like_failed_retry: Failed to like the post. Try again later.
+  login_to_watch_later: Log in to add videos to Watch Later
+  watch_later_unavailable: Watch Later information is unavailable for this video
+  watch_later_failed_retry: Watch Later operation failed. Try again later.
+  user_info: Post user information
+  following: Following
+  followers: Followers
+  moments: Posts
+  publish: Publish a post
+  live_now: Live now
+  live_badge: LIVE
+  feed_bar: Feed bar
+  feed_groups: Feed groups
+  all_moments: All posts
+  wanted_enable: Only show wanted creators
+  wanted_disable: Show all creators
+  wanted_only_all_video: Available for All and Videos only
+  wanted: Wanted
+  scroll_frequent_left: Scroll frequently visited creators left
+  scroll_frequent_right: Scroll frequently visited creators right
+  scroll_left: Scroll left
+  scroll_right: Scroll right
+  frequent_uploaders: Frequently visited creators
+  has_update: New update
+  pinned_uploaders: Pinned creators
+  initial_loading: Preparing posts and images…
+  empty_wanted: No recent updates
+  no_wanted_users: Add wanted creators in Settings first
+  empty: No posts to show
+  loading: Loading…
+  load_more: Load more
+  recheck: Check again
+  reload: Reload
+  loading_more: Loading and preparing more posts…
+  no_more: You have reached the end
+  live_room: Live room
+  video_playback: Video playback
+  detail: Post details
+  opening_live: Opening the live room…
+  opening_video: Opening the video…
+  opening_forward: Opening the forwarded post…
+  loading_detail: Loading post details…
+  author_detail: 'Details from {author}'
+  open_new_tab: Open in a new tab
+  image_viewer: Post image viewer
+  close_image_viewer: Close image viewer
+  image_large: Full-size post image
+  previous_image: Previous image
+  next_image: Next image
+  zoom_out: Zoom out
+  zoom_in: Zoom in
+  fit_window: Fit to window
+  rotate_clockwise: Rotate clockwise
 moment_card:
+  video_moment: Video post
+  open_detail: Open {author}'s post details
+  just_now: Just now
+  charge_exclusive: Charge-exclusive
+  watch_later_added: Added to Watch Later
+  add_watch_later: Add to Watch Later
+  added: Added
+  watch_later: Watch Later
+  live_moment: Live post
+  open_original_video: Open original video
+  moment_image_alt: Post image {index}
+  additional_content: Additional content
+  view_hot_comment: View highlighted comment
+  hot_comment: Highlighted comment
+  open_dialog: Open in dialog
+  open_dialog_short: Dialog
+  open_new_tab: Open in new tab
+  open_new_tab_short: New tab
+  view_comments: View comments
+  live_popularity: '{count} popularity'
+  no_data: No data
+  live_now: Live now
+  like_unavailable: Like unavailable
+  cancel_like: Remove like
+  like: Like
   preview_image: Preview image {index} from {author}'s dynamic
   reserve: Reserve
+  reserved: Reserved
   cancel_reservation: Cancel reservation
   reservation_succeeded: Reservation successful
   reservation_cancelled: Reservation cancelled
@@ -1159,7 +1168,7 @@ favorites:
   search_placeholder: Search for current favorites
 version_reminder:
   trigger: What's new
-  title: BewlyMac has been updated
+  title: Bewly Nocturne has been updated
   current_version: Current version v{version}
   description: View the release notes and latest updates for this version. After confirmation, this version will not be shown again.
   github_releases: GitHub Releases

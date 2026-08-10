@@ -191,6 +191,12 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   let hasStoredValue = false
   let suppressedWriteCount = 0
   let syncStarted = false
+  let degraded = false
+  let hasDegradedEdits = false
+  let disposed = false
+  let recoveryTimer: ReturnType<typeof setTimeout> | undefined
+  let stopSyncWatch: (() => void) | undefined
+  let removeStorageListener: (() => void) | undefined
   const pendingOwnStorageChanges: unknown[] = []
 
   const normalizePendingStorageValue = (value: unknown) => value ?? null
@@ -250,11 +256,14 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
 
     syncStarted = true
 
-    watch(
+    stopSyncWatch = watch(
       data,
       () => {
         if (!ready)
           return
+
+        if (degraded)
+          hasDegradedEdits = true
 
         if (suppressedWriteCount > 0) {
           suppressedWriteCount--
@@ -299,9 +308,59 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
       }
 
       browser.storage.onChanged.addListener(onChanged)
-      tryOnScopeDispose(() => browser.storage.onChanged.removeListener(onChanged))
+      removeStorageListener = () => browser.storage.onChanged.removeListener(onChanged)
     }
   }
+
+  const clearRecoveryTimer = () => {
+    if (recoveryTimer != null)
+      clearTimeout(recoveryTimer)
+    recoveryTimer = undefined
+  }
+
+  const scheduleRecoveryRead = () => {
+    if (disposed || !degraded || recoveryTimer != null)
+      return
+
+    recoveryTimer = setTimeout(async () => {
+      recoveryTimer = undefined
+      try {
+        const result = await browser.storage.local.get(key)
+        const rawStoredValue = result[key]
+        hasStoredValue = rawStoredValue != null
+        if (hasDegradedEdits) {
+          await persistValue()
+          hasDegradedEdits = false
+        }
+        else {
+          const nextValue = rawStoredValue == null
+            ? createInitialValue(initialValue) as T
+            : cloneValue(mergeStoredValue(
+                await deserializeStoredValue(rawStoredValue, serializer),
+                createInitialValue(initialValue),
+                mergeDefaults,
+              ))
+          if (!Object.is(data.value, nextValue)) {
+            suppressedWriteCount++
+            data.value = nextValue
+          }
+        }
+        initialReadSucceeded = true
+        degraded = false
+      }
+      catch (error) {
+        onError(error)
+        scheduleRecoveryRead()
+      }
+    }, 15_000)
+  }
+
+  tryOnScopeDispose(() => {
+    disposed = true
+    clearRecoveryTimer()
+    stopSyncWatch?.()
+    removeStorageListener?.()
+  })
 
   void (async () => {
     let result: Record<string, unknown> | undefined
@@ -322,19 +381,20 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     try {
       if (!initialReadSucceeded) {
         onError(lastReadError)
-        return
+        degraded = true
       }
+      else {
+        const rawStoredValue = result![key]
+        hasStoredValue = rawStoredValue != null
 
-      const rawStoredValue = result![key]
-      hasStoredValue = rawStoredValue != null
-
-      if (rawStoredValue == null) {
-        if (!dirtyBeforeReady)
-          data.value = createInitialValue(initialValue) as T
-      }
-      else if (!dirtyBeforeReady) {
-        const storedValue = await deserializeStoredValue(rawStoredValue, serializer)
-        data.value = cloneValue(mergeStoredValue(storedValue, createInitialValue(initialValue), mergeDefaults))
+        if (rawStoredValue == null) {
+          if (!dirtyBeforeReady)
+            data.value = createInitialValue(initialValue) as T
+        }
+        else if (!dirtyBeforeReady) {
+          const storedValue = await deserializeStoredValue(rawStoredValue, serializer)
+          data.value = cloneValue(mergeStoredValue(storedValue, createInitialValue(initialValue), mergeDefaults))
+        }
       }
     }
     catch (error) {
@@ -343,6 +403,22 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     finally {
       ready = true
       stopDirtyWatch()
+    }
+
+    if (!initialReadSucceeded) {
+      hasDegradedEdits = dirtyBeforeReady
+      onReady?.(data.value)
+      startSync()
+      if (dirtyBeforeReady) {
+        try {
+          await persistValue()
+        }
+        catch (error) {
+          onError(error)
+        }
+      }
+      scheduleRecoveryRead()
+      return
     }
 
     try {

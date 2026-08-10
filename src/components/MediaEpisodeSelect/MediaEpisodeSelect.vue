@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 
 interface Episode {
@@ -18,6 +19,7 @@ const props = defineProps<{
 }>()
 
 const { mainAppRef } = useBewlyApp()
+const currentLocationHref = useCurrentLocationHref()
 
 const isOpen = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
@@ -37,9 +39,18 @@ const normalizedEpisodes = computed(() => {
 const hasEpisodes = computed(() => normalizedEpisodes.value.length > 0)
 
 const defaultLabel = computed(() => {
-  if (normalizedEpisodes.value.length > 0) {
+  const currentUrl = new URL(currentLocationHref.value)
+  const currentEpisode = normalizedEpisodes.value.find((episode) => {
+    if (!episode.url)
+      return false
+    const episodeUrl = new URL(episode.url, currentUrl)
+    return episodeUrl.pathname === currentUrl.pathname
+      && episodeUrl.searchParams.get('p') === currentUrl.searchParams.get('p')
+  })
+  if (currentEpisode)
+    return currentEpisode.title
+  if (normalizedEpisodes.value.length > 0)
     return normalizedEpisodes.value[0].title
-  }
   return '选集'
 })
 

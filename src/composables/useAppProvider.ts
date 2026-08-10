@@ -26,7 +26,6 @@ export interface BewlyAppProvider {
   isHomeTabSwitching: Ref<boolean>
   scrollViewportRef: Ref<HTMLElement | null>
   reachTop: Ref<boolean>
-  searchFocusOverlayActive: Ref<boolean>
   mainAppRef: Ref<HTMLElement>
   handleReachBottom: Ref<(() => void) | undefined>
   handlePageRefresh: Ref<(() => void) | undefined>
@@ -42,6 +41,8 @@ export interface BewlyAppProvider {
   // 添加活跃抽屉状态
   activeDrawer: Ref<DrawerType>
   setActiveDrawer: (drawer: DrawerType) => void
+  getDockPageHref: (page: AppPage) => string
+  navigateToDockPage: (page: AppPage) => void
 }
 
 export function useBewlyApp(): BewlyAppProvider {

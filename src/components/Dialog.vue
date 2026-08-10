@@ -25,6 +25,8 @@ const props = withDefaults(defineProps<{
   contentFlush?: boolean
   /** 是否显示对话框顶栏 */
   showHeader?: boolean
+  /** 是否显示顶栏局部渐进模糊 */
+  showTopBlur?: boolean
   /** Vue Transition 名称；可为需要避免缩放的详情弹窗指定独立过渡 */
   transitionName?: string
   /** 是否显示边框和边缘光 */
@@ -37,6 +39,7 @@ const props = withDefaults(defineProps<{
   preventCloseWhenLoading: true,
   frostedGlass: true,
   showHeader: true,
+  showTopBlur: true,
   showBorder: true,
   showFooter: true,
   contentFlush: false,
@@ -226,11 +229,9 @@ function handleConfirm() {
             items-center justify-between
             rounded="t-$bew-modal-radius" z-1
           >
-            <PanelTopBlur
-              :enabled="frostedGlassEnabled"
-              style="--bew-panel-top-blur-hold: 45%;"
-            />
+            <PanelTopBlur v-if="showTopBlur" :enabled="frostedGlassEnabled" />
             <div
+              class="dialog__heading"
               :style="{ textAlign: center ? 'center' : 'left' }"
               w-full
             >
@@ -347,10 +348,6 @@ function handleConfirm() {
   pointer-events: none;
 }
 
-.dialog__header {
-  isolation: isolate;
-}
-
 .dialog__title {
   margin: 0;
   font-size: var(--bew-font-size-title);
@@ -363,6 +360,12 @@ function handleConfirm() {
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
+}
+
+.dialog__heading,
+.dialog__close {
+  position: relative;
+  z-index: 1;
 }
 
 .dialog__close {

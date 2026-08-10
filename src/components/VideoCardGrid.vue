@@ -684,16 +684,25 @@ function getCurrentColumnCount(layout: GridLayoutType, width: number): number {
   )
 }
 
+let cachedScrollElement: HTMLElement | null | undefined
+
 function findScrollElement(): HTMLElement | null {
-  let element = gridContainerRef.value?.parentElement ?? null
+  const gridContainer = gridContainerRef.value
+  if (cachedScrollElement?.isConnected && gridContainer && cachedScrollElement.contains(gridContainer))
+    return cachedScrollElement
+
+  let element = gridContainer?.parentElement ?? null
   while (element) {
     const styles = window.getComputedStyle(element)
     const canScrollY = /auto|scroll|overlay/.test(styles.overflowY)
-    if (canScrollY)
-      return element
+    if (canScrollY) {
+      cachedScrollElement = element
+      return cachedScrollElement
+    }
     element = element.parentElement
   }
 
+  cachedScrollElement = null
   return null
 }
 
@@ -751,6 +760,7 @@ function setupGridResizeObserver() {
 }
 
 watch(gridContainerRef, () => {
+  cachedScrollElement = undefined
   setupGridResizeObserver()
 })
 

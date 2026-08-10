@@ -404,6 +404,7 @@ provide('getVideoType', () => props.type!)
             @toggle-watch-later="logic.toggleWatchLater"
             @undo="logic.handleUndo"
             @image-loaded="handleImageLoaded"
+            @preview-error="logic.clearPreviewVideoUrl"
             @preview-fullscreen-change="logic.handlePreviewFullscreenChange"
           >
             <template #coverTopLeft>

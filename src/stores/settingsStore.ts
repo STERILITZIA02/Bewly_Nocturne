@@ -2,9 +2,10 @@ import { defineStore } from 'pinia'
 
 import type { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
+import { resolveEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { getDefaultCustomUseOriginalBiliPage, resolveUseOriginalBiliPage } from '~/utils/pageMode'
-import { resolveUseOriginalBilibiliTopBar } from '~/utils/topBarMode'
 
 export interface DockItemConfig {
   page: AppPage
@@ -52,7 +53,6 @@ export const useSettingsStore = defineStore('settings', () => {
 
   function resetDockItemsConfig(): void {
     settings.value.dockItemsConfig = createDefaultDockItemsConfig()
-    settings.value.pageMode = 'custom'
   }
 
   function getDockItemConfigByPage(page: AppPage): DockItemConfig | undefined {
@@ -71,28 +71,50 @@ export const useSettingsStore = defineStore('settings', () => {
     )
   }
 
+  function getEffectiveDockItemByPage(page: AppPage): DockItem | undefined {
+    const defaultItem = mainStore.getDockItemByPage(page)
+    if (!defaultItem)
+      return undefined
+
+    const config = getDockItemConfigByPage(page)
+    return {
+      ...defaultItem,
+      openInNewTab: config?.openInNewTab ?? defaultItem.openInNewTab,
+      useOriginalBiliPage: getDockItemIsUseOriginalBiliPage(page) || !defaultItem.hasBewlyPage,
+    }
+  }
+
   function setDockItemCustomUseOriginalBiliPage(page: AppPage, useOriginalBiliPage: boolean): void {
+    if (settings.value.pageMode !== 'custom')
+      return
+
     ensureDockItemsConfig()
     const config = getDockItemConfigByPage(page)
     if (!config)
       return
 
     config.useOriginalBiliPage = useOriginalBiliPage
-    settings.value.pageMode = 'custom'
   }
 
   function getCustomUseOriginalBilibiliTopBar(): boolean {
     return settings.value.useOriginalBilibiliTopBar
   }
 
-  function getUseOriginalBilibiliTopBar(): boolean {
-    return resolveUseOriginalBilibiliTopBar(
+  function getEffectiveTopBarSource() {
+    return resolveEffectiveTopBarSource(
       settings.value.pageMode,
       getCustomUseOriginalBilibiliTopBar(),
     )
   }
 
+  function getUseOriginalBilibiliTopBar(): boolean {
+    return showNativeBilibiliTopBar(getEffectiveTopBarSource())
+  }
+
   function setCustomUseOriginalBilibiliTopBar(useOriginalBilibiliTopBar: boolean): void {
+    if (settings.value.pageMode !== 'custom')
+      return
+
     settings.value.useOriginalBilibiliTopBar = useOriginalBilibiliTopBar
   }
 
@@ -103,7 +125,9 @@ export const useSettingsStore = defineStore('settings', () => {
     getDockItemConfigByPage,
     getDockItemCustomUseOriginalBiliPage,
     getDockItemIsUseOriginalBiliPage,
+    getEffectiveDockItemByPage,
     getCustomUseOriginalBilibiliTopBar,
+    getEffectiveTopBarSource,
     getUseOriginalBilibiliTopBar,
     resetDockItemsConfig,
     setCustomUseOriginalBilibiliTopBar,

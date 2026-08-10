@@ -4,7 +4,9 @@ import { useThrottleFn } from '@vueuse/core'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
+import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
@@ -16,6 +18,7 @@ import type { GridLayoutIcon } from './types'
 import { HomeSubPage } from './types'
 
 const mainStore = useMainStore()
+const searchFocusEffect = useSearchFocusEffect()
 const {
   handleBackToTop,
   homeActivatedPage,
@@ -27,6 +30,7 @@ const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => 
 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
 const cachedScrollTop = ref(0)
+const showHomeSearchCharacter = computed(() => cachedScrollTop.value < HOME_SEARCH_STICKY_SCROLL_TOP)
 const tabScrollPositions = new Map<HomeSubPage, number>()
 let pendingTabScrollTop: number | null = null
 
@@ -84,7 +88,7 @@ watch(() => settings.value.enableGridLayoutSwitcher, (enabled) => {
 })
 
 function getInitialTabScrollTop(): number {
-  return settings.value.useSearchPageModeOnHomePage ? 510 : 0
+  return settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
 }
 
 function restoreTabScrollPosition() {
@@ -180,8 +184,8 @@ function handleChangeTab(tab: HomeTab) {
   if (activatedPage.value === tab.page) {
     const scrollTop = scrollViewportRef.value?.scrollTop ?? cachedScrollTop.value
 
-    if ((!settings.value.useSearchPageModeOnHomePage && scrollTop > 0) || (settings.value.useSearchPageModeOnHomePage && scrollTop > 510)) {
-      handleThrottledBackToTop(settings.value.useSearchPageModeOnHomePage ? 510 : 0)
+    if ((!settings.value.useSearchPageModeOnHomePage && scrollTop > 0) || (settings.value.useSearchPageModeOnHomePage && scrollTop > HOME_SEARCH_STAGE_HEIGHT)) {
+      handleThrottledBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
     }
     else {
       if (tabContentLoading.value)
@@ -209,26 +213,26 @@ function toggleTabContentLoading(loading: boolean) {
     <main>
       <!-- Home search page mode content -->
       <Transition name="content">
-        <div
-          v-if="settings.useSearchPageModeOnHomePage"
-          flex="~ col"
-          justify-center
-          items-center relative
-          w-full z-10 mb-4
-          h-500px
-          pointer-events-none
-        >
-          <Logo
-            v-if="settings.searchPageShowLogo" :size="180" :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
-            :glow="settings.searchPageLogoGlow"
-            m="t--70px b-12" z-1
-          />
-          <SearchBar
-            pointer-events-auto
-            :darken-on-focus="settings.searchPageDarkenOnSearchFocus"
-            :blurred-on-focus="settings.searchPageBlurredOnSearchFocus"
-            :focused-character="settings.searchPageSearchBarFocusCharacter"
-          />
+        <div v-if="settings.useSearchPageModeOnHomePage" class="home-search-stage">
+          <div class="home-search-stage__lead">
+            <Logo
+              v-if="settings.searchPageShowLogo"
+              class="home-search-stage__logo"
+              :size="180"
+              :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
+              :glow="settings.searchPageLogoGlow"
+            />
+          </div>
+          <div class="home-search-stage__sticky-search">
+            <SearchBar
+              :darken-on-focus="searchFocusEffect.darkened"
+              :blurred-on-focus="searchFocusEffect.blurred"
+              :focused-character="showHomeSearchCharacter ? settings.searchPageSearchBarFocusCharacter : undefined"
+              :show-hot-search="settings.showHotSearchInTopBar"
+              :top-bar-appearance="true"
+            />
+          </div>
+          <div class="home-search-stage__tail" aria-hidden="true" />
         </div>
       </Transition>
 
@@ -308,7 +312,7 @@ function toggleTabContentLoading(loading: boolean) {
         @enter="restoreTabScrollPosition"
         @after-enter="finishTabSwitch"
       >
-        <KeepAlive :max="3">
+        <KeepAlive :max="8">
           <Component
             :is="pages[activatedPage]" :key="activatedPageCacheKey"
             ref="tabPageRef"
@@ -326,6 +330,44 @@ function toggleTabContentLoading(loading: boolean) {
 </template>
 
 <style scoped lang="scss">
+.home-search-stage {
+  display: contents;
+}
+
+.home-search-stage__lead,
+.home-search-stage__tail {
+  height: calc((var(--bew-layout-home-search-stage-height) - var(--bew-top-bar-primary-control-height)) / 2);
+  pointer-events: none;
+}
+
+.home-search-stage__lead {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.home-search-stage__logo {
+  z-index: 1;
+  margin-bottom: var(--bew-space-12);
+}
+
+.home-search-stage__sticky-search {
+  position: sticky;
+  top: calc((var(--bew-top-bar-height) - var(--bew-top-bar-primary-control-height)) / 2);
+  z-index: var(--bew-z-topbar-host);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-width: 0;
+  height: var(--bew-top-bar-primary-control-height);
+  pointer-events: none;
+}
+
+.home-search-stage__sticky-search :deep(#search-wrap) {
+  pointer-events: auto;
+}
+
 .content-enter-active,
 .content-leave-active {
   --uno: "duration-500 ease-in-out";

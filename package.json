@@ -1,11 +1,11 @@
 {
-  "name": "bewly-mac",
-  "displayName": "BewlyMac",
+  "name": "bewly-nocturne",
+  "displayName": "Bewly Nocturne",
   "type": "module",
-  "version": "1.7.4",
+  "version": "0.1.1",
   "packageManager": "pnpm@11.17.0",
   "description": "A personal browser extension for a customized Bilibili experience.",
-  "homepage": "https://github.com/STERILITZIA02/BewlyMac",
+  "homepage": "https://github.com/STERILITZIA02/Bewly_Nocturne",
   "scripts": {
     "build-pack": "pnpm build && pnpm build-firefox && pnpm pack:zip && pnpm pack:zip-firefox && pnpm pack:zip-firefox-sources",
     "dev": "npm run clear && cross-env NODE_ENV=development run-p dev:prepare dev:js dev:inject dev:bg",

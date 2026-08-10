@@ -143,7 +143,7 @@ pnpm typecheck
 - 2026-08-09：TopBar DOM `Ref` 注册表不得使用会自动解包子 ref 的深层 `reactive`；未登录或元素尚未挂载时，transformer 必须仍获得 Ref 容器，不得因读取 `undefined.value` 阻断页面。
 - 2026-08-10：选择性同步并审查 BewlyCat 新增修复，同时完整移除 Bilibili Evolved 的样式、DOM 探测、运行时分支、设置和文案。原版顶栏从此严格指 Bilibili 原生 `.bili-header`，不得重新引入第三方顶栏兼容层。
 - 2026-08-10：顶栏搜索框的异步宽度校正必须立即生效，不得为水平 `transform` 添加过渡，避免页面重新加载时出现横向入场动画。
-- 上游同步游标：已审查并处理至 `BewlyCat upstream/main@792d73c`（完整提交 `792d73c4a7c5a541166f2fb1bf29f6aa0c48d902`）；本范围最后关联的上游 Issue 为 `#1017`。游标提交本身无关联 Issue/PR，因此以 commit SHA 作为唯一权威游标；后续同步只检查该游标之后的新提交、Issue/PR，不重复审查此前范围。
+- 上游同步游标：已审查并处理至 `BewlyCat upstream/main@00682ac`（完整提交 `00682ac56e790fff8b2ff3b58fd68c163579f852`）。游标提交无关联 Issue/PR，因此以完整 commit SHA 作为唯一权威游标；后续同步只检查该游标之后的新提交、Issue/PR，不重复审查此前范围。
 
 ## Bewly_Nocturne 上游同步保护基线
 
@@ -156,6 +156,8 @@ pnpm typecheck
 - Dock 收起模式保留 `button / hidden / automatic` 三档：按钮模式在设置按钮后显示收起入口，隐藏模式不提供收起功能，自动模式在指针离开后收起且 Hover 圆球立即展开。收起圆球必须保持展开 Dock 的几何中心；展开时同一玻璃外壳先沿主轴增长，完成后按钮组再轻移进入，收起时顺序反转。不得通过 Teleport、第二套 Dock 状态或两个表面交叉淡入实现。
 - 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 原生 `.bili-header`；自定义模式根据现有配置选择 Bewly 或 Bilibili 原生顶栏。不得探测、适配或承诺支持第三方顶栏实现。
 - 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
+- 首页搜索模式复用单一 SearchBar 实例：初始位置保留聚焦人物，滚动到顶栏后原实例粘附且人物隐藏，不得再生成第二个顶栏搜索框。首页与搜索页只复用顶栏表面样式，必须保留搜索框自身的 `550px` 最大宽度。
+- Dock 默认位于底部；`Notifications` 是可配置的独立 Bewly 页面，当前只保留“消息页”占位内容，不得与现有通知抽屉合并状态或预设未来业务。
 
 ### 深色背景、OLED 与主题色
 
@@ -185,7 +187,7 @@ pnpm typecheck
 ### 设置与开发运行时
 
 - 当前设置结构直接以 `src/logic/storage.ts` 的默认值为准；已删除字段不恢复迁移、兼容别名或 fallback。视觉设置搜索目录和四套 locale 必须与实际入口同步，`common.close` 等共享组件文案不得退回局部硬编码。
-- 内容脚本、顶栏共享状态和设置存储统一通过 `src/utils/messaging.ts` 发送扩展消息；扩展重载造成的 context invalidated、消息端口关闭或接收端缺失应作为同一失效状态收敛，避免未处理 Promise 阻断页面挂载。
+- 内容脚本、顶栏共享状态和设置存储统一通过 `src/utils/messaging.ts` 发送扩展消息；扩展重载造成的 context invalidated、消息端口关闭或接收端缺失应作为同一失效状态收敛。TopBar 刷新批次的叶子请求必须把 context invalidated 交给共享协调器统一停止轮询，不得局部打印后吞掉。
 - Shadow DOM 的主样式未就绪前必须保持插件容器隐藏；样式加载失败时卸载并移除容器，绝不能把无样式的 Dock、Sidebar 或设置页暴露到 Bilibili 原版页面。
 - 顶栏动态尾页必须先追加当前 `items` 再设置结束状态；稍后再看使用显式页码、aid 去重和完整集合刷新；History 补屏保持单一 async 请求链。不得退回通过数组长度推页、未等待递归或旧 index 删除。
 - `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；不得为恢复 Bewly 全局快捷键而重建 `src/utils/keyboard.ts` / `src/utils/shortcuts.ts` 运行时。

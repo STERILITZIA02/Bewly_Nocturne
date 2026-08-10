@@ -124,7 +124,7 @@ export function captureOriginalBilibiliTopBar(doc: Document) {
 }
 
 /**
- * 同步 BewlyCat 独立滚动容器与 B 站原版顶栏的下拉状态。
+ * 同步 Bewly Nocturne 独立滚动容器与 B 站原版顶栏的下拉状态。
  * B 站脚本只监听页面滚动，无法感知 Shadow DOM 内部容器的 scrollTop。
  *
  * slide-down 始终保留（1.6.8 观感）；频道 Logo 等仅依赖 bewly-original-top-bar-scrolled。

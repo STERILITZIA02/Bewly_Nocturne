@@ -8,11 +8,13 @@ import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { acquireSearchExperience, loadSharedHotSearch, loadSharedSearchRecommendation, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
 import { isHomePage } from '~/utils/main'
-import { buildKeywordSearchUrl } from '~/utils/searchNavigation'
+import { resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
+import SearchFocusOverlay from '../SearchFocusOverlay.vue'
 import TagRemoveButton from '../TagRemoveButton.vue'
 import type { HistoryItem, SuggestionItem, SuggestionResponse } from './searchHistoryProvider'
 import {
@@ -21,41 +23,6 @@ import {
   getSearchHistory,
   removeSearchHistory,
 } from './searchHistoryProvider'
-
-// 热搜数据类型定义
-interface HotSearchItem {
-  keyword: string
-  show_name: string
-  icon: string
-}
-
-interface HotSearchResponse {
-  code: number
-  data: {
-    trending: {
-      list: HotSearchItem[]
-    }
-  }
-}
-
-// 搜索推荐数据类型定义
-interface SearchRecommendationItem {
-  seid: string
-  id: number
-  type: number
-  show_name: string
-  name: string
-  goto_type: number
-  goto_value: string
-  url: string
-}
-
-interface SearchRecommendationResponse {
-  code: number
-  message: string
-  ttl: number
-  data: SearchRecommendationItem
-}
 
 type KeyboardSelectionMode = 'none' | 'suggestions' | 'history'
 
@@ -67,10 +34,13 @@ const props = defineProps<{
   modelValue?: string
   searchBehavior?: 'navigate' | 'stay'
   topBarMode?: boolean
+  topBarAppearance?: boolean
+  forceLightText?: boolean
 }>()
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
+  focusChange: [focused: boolean]
   search: [value: string]
 }>()
 
@@ -84,12 +54,7 @@ const selectedIndex = ref<number>(-1)
 const keyboardSelectionMode = ref<KeyboardSelectionMode>('none')
 const originalKeywordBeforeKeyboardSelection = ref<string>(keyword.value)
 const searchHistory = shallowRef<HistoryItem[]>([])
-// 热搜相关状态
-const hotSearchList = ref<HotSearchItem[]>([])
-const isLoadingHotSearch = ref<boolean>(false)
-// 搜索推荐相关状态
-const searchRecommendation = ref<SearchRecommendationItem | null>(null)
-const isLoadingSearchRecommendation = ref<boolean>(false)
+const { hotSearchList, searchRecommendation } = useSearchExperience()
 const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
 
 const searchMode = computed(() => props.searchBehavior ?? 'navigate')
@@ -97,6 +62,23 @@ const isInPlaceSearch = computed(() => searchMode.value === 'stay')
 const visibleHotSearchList = computed(() => {
   const limit = props.topBarMode && isNarrowLayout.value ? 5 : 10
   return hotSearchList.value.slice(0, limit)
+})
+const topBarAppearanceStyle = computed<CSSProperties | undefined>(() => {
+  if (!props.topBarAppearance)
+    return undefined
+
+  const foreground = props.forceLightText ? 'white' : 'var(--bew-text-1)'
+  return {
+    '--b-search-bar-height': 'var(--bew-top-bar-primary-control-height, 46px)',
+    '--b-search-bar-normal-color': settings.value.disableFrostedGlass
+      ? 'var(--bew-elevated)'
+      : 'color-mix(in oklab, var(--bew-elevated-solid), transparent 60%)',
+    '--b-search-bar-focus-color': 'var(--bew-elevated)',
+    '--b-search-bar-normal-icon-color': foreground,
+    '--b-search-bar-normal-text-color': foreground,
+    '--b-search-bar-hover-text-color': foreground,
+    '--b-search-bar-placeholder-opacity': props.forceLightText ? '0.9' : '0.65',
+  } as CSSProperties
 })
 const narrowTopBarPopupStyle = computed<CSSProperties | undefined>(() => {
   if (!props.topBarMode || !isNarrowLayout.value)
@@ -144,7 +126,7 @@ const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
 
 // 判断是否在搜索结果页且启用了插件搜索
 const shouldHandleInCurrentPage = computed(() => {
-  if (!settings.value.usePluginSearchResultsPage)
+  if (!shouldUsePluginSearchResultsPage())
     return false
   // 如果能获取到 bewlyApp，使用 activatedPage 来判断
   if (bewlyApp?.activatedPage) {
@@ -172,8 +154,7 @@ watch(keyword, (value) => {
 })
 
 watch(isFocus, async (focus) => {
-  if (props.darkenOnFocus && bewlyApp)
-    bewlyApp.searchFocusOverlayActive.value = focus
+  emit('focusChange', focus)
 
   // 延后加载搜索历史
   if (focus) {
@@ -192,7 +173,7 @@ watch(isFocus, async (focus) => {
     // 加载热搜数据
     if (props.showHotSearch ?? settings.value.showHotSearchInTopBar) {
       try {
-        await loadHotSearchData()
+        await loadSharedHotSearch()
       }
       catch (error) {
         console.error('Failed to load hot search list:', error)
@@ -207,119 +188,40 @@ onClickOutside(searchWrapRef, () => {
   resetKeyboardSelection()
 })
 
-// 加载热搜数据
-async function loadHotSearchData() {
-  if (isLoadingHotSearch.value)
-    return
-
-  try {
-    isLoadingHotSearch.value = true
-    const res: HotSearchResponse = await api.search.getHotSearchList({ limit: 10 })
-    if (res && res.code === 0) {
-      hotSearchList.value = res.data.trending.list.slice(0, 10)
-    }
-  }
-  catch (error) {
-    console.error('Failed to load hot search data:', error)
-  }
-  finally {
-    isLoadingHotSearch.value = false
-  }
-}
-
-// 加载搜索推荐数据
-async function loadSearchRecommendation() {
-  if (isLoadingSearchRecommendation.value)
-    return
-
-  try {
-    isLoadingSearchRecommendation.value = true
-    const res: SearchRecommendationResponse = await api.search.getDefaultSearchRecommendation()
-    if (res && res.code === 0) {
-      searchRecommendation.value = res.data
-    }
-  }
-  catch (error) {
-    console.error('Failed to load search recommendation:', error)
-  }
-  finally {
-    isLoadingSearchRecommendation.value = false
-  }
-}
-
-// 定时更新搜索推荐的定时器
-let recommendationTimer: ReturnType<typeof setInterval> | null = null
-
-// 初始化搜索推荐（组件挂载时调用）
-function initSearchRecommendation() {
-  if (!settings.value.showSearchRecommendation)
-    return
-
-  // 立即加载一次
-  loadSearchRecommendation()
-
-  // 设置10分钟定时更新
-  if (recommendationTimer)
-    clearInterval(recommendationTimer)
-
-  recommendationTimer = setInterval(() => {
-    if (settings.value.showSearchRecommendation) {
-      loadSearchRecommendation()
-    }
-  }, 10 * 60 * 1000) // 10分钟
-}
-
-// 清理定时器
-function cleanupRecommendationTimer() {
-  if (recommendationTimer) {
-    clearInterval(recommendationTimer)
-    recommendationTimer = null
-  }
-}
+let releaseSearchExperience: (() => void) | undefined
 
 // 监听设置变化，动态启用或停止推荐功能
 watch(() => settings.value.showSearchRecommendation, (enabled) => {
   if (enabled) {
-    initSearchRecommendation()
-  }
-  else {
-    cleanupRecommendationTimer()
-    searchRecommendation.value = null
+    void loadSharedSearchRecommendation()
   }
 })
 
 // 监听搜索历史设置变化
-watch(() => settings.value.enableSearchHistory, async (enabled, wasEnabled) => {
-  if (wasEnabled === true && enabled === false) {
-    await clearAllSearchHistory()
+watch(() => settings.value.enableSearchHistory, (enabled) => {
+  if (!enabled)
     searchHistory.value = []
-  }
 })
 
 // 组件挂载时初始化
 onMounted(() => {
+  releaseSearchExperience = acquireSearchExperience()
   if (settings.value.showSearchRecommendation) {
-    initSearchRecommendation()
+    void loadSharedSearchRecommendation()
   }
 })
 
 // 组件卸载时清理定时器
 onBeforeUnmount(() => {
-  if (props.darkenOnFocus && bewlyApp)
-    bewlyApp.searchFocusOverlayActive.value = false
-
-  cleanupRecommendationTimer()
+  emit('focusChange', false)
+  releaseSearchExperience?.()
 })
 
 onKeyStroke('Escape', (e: KeyboardEvent) => {
-  console.log('[SearchBar] ESC key pressed!')
-  console.log('[SearchBar] isFocus.value:', isFocus.value)
-
   e.preventDefault()
   keywordRef.value?.blur()
   isFocus.value = false
   resetKeyboardSelection()
-  console.log('[SearchBar] Blurred search input')
 }, { target: keywordRef })
 
 let suggestionRequestId = 0
@@ -353,7 +255,7 @@ function handleNativeInput(event: Event) {
 }
 
 function buildKeywordHref(keyword: string) {
-  return buildKeywordSearchUrl(keyword)
+  return resolveSearchNavigationTarget(keyword)
 }
 
 // 从URL中提取搜索关键词
@@ -551,34 +453,21 @@ function handleClearKeyword() {
   <div
     id="search-wrap"
     ref="searchWrapRef"
-    :class="{ 'search-wrap--top-bar': topBarMode }"
+    :class="{
+      'search-wrap--top-bar': topBarMode,
+      'search-wrap--focus-overlay': isFocus && (darkenOnFocus || blurredOnFocus),
+    }"
+    :style="topBarAppearanceStyle"
     w="full"
     max-w="550px"
     pos="relative"
     @focusout="handleFocusOut"
   >
-    <div
-      v-if="!darkenOnFocus && isFocus"
-      pos="fixed top-0 left-0"
-      w="full"
-      h="full"
-      content="~"
-      @click="isFocus = false"
-    />
-    <Transition name="mask">
-      <div
-        v-if="darkenOnFocus && isFocus" pos="fixed top-0 left-0" w-full h-full bg="black opacity-60"
-        @click="isFocus = false"
-      />
-    </Transition>
-
-    <div
-      v-if="blurredOnFocus"
-      pos="fixed top-0 left-0" w-full h-full duration-500 pointer-events-none
-      ease-out
-      :style="{
-        backdropFilter: isFocus ? 'blur(15px)' : 'blur(0)',
-      }"
+    <SearchFocusOverlay
+      :active="!topBarMode && isFocus && Boolean(darkenOnFocus || blurredOnFocus)"
+      :darkened="darkenOnFocus"
+      :blurred="blurredOnFocus"
+      @dismiss="isFocus = false"
     />
 
     <div
@@ -589,9 +478,11 @@ function handleClearKeyword() {
     >
       <Transition name="focus-character">
         <img
-          v-show="focusedCharacter && isFocus" :src="focusedCharacter"
+          v-show="focusedCharacter && isFocus"
+          :src="focusedCharacter"
           class="focus-character-image"
-          width="100" object-contain pos="absolute right-0 bottom-40px"
+          width="100"
+          alt=""
         >
       </Transition>
 
@@ -785,21 +676,6 @@ function handleClearKeyword() {
   --uno: "transform translate-y-6 opacity-0";
 }
 
-.mask-enter-active,
-.mask-leave-active {
-  transition: opacity var(--bew-duration-moderate) var(--bew-ease-in-out);
-}
-
-.mask-enter-from,
-.mask-leave-to {
-  --uno: "opacity-0";
-}
-
-.mask-enter-to,
-.mask-leave-from {
-  --uno: "opacity-100";
-}
-
 #search-wrap {
   min-width: 0;
   max-width: var(--b-search-bar-max-width, 550px);
@@ -816,6 +692,14 @@ function handleClearKeyword() {
   --b-search-bar-hover-text-color: var(--bew-text-1);
   --b-search-bar-focus-text-color: var(--bew-text-1);
 
+  &.search-wrap--focus-overlay {
+    z-index: var(--bew-z-topbar-interaction);
+
+    .search-bar {
+      z-index: 1;
+    }
+  }
+
   @mixin card-content {
     --uno: "text-base outline-none w-full bg-$b-search-bar-normal-color border-1 border-$bew-surface-border-color";
     --uno: "shadow-[var(--bew-shadow-2),var(--bew-shadow-edge-glow-1)]";
@@ -824,8 +708,16 @@ function handleClearKeyword() {
 
   .search-bar {
     .focus-character-image {
-      pointer-events: none;
+      position: absolute;
+      right: 0;
+      bottom: var(--bew-space-10);
       z-index: 0;
+      display: block;
+      width: 100px;
+      max-width: none;
+      height: auto;
+      object-fit: contain;
+      pointer-events: none;
     }
 
     > button {

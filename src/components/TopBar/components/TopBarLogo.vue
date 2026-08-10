@@ -14,7 +14,7 @@ defineProps<{
   forceWhiteIcon: boolean
 }>()
 
-const { handleClickTopBarLogo, setupTopBarItemHoverEvent } = useTopBarInteraction()
+const { getTopBarLogoHref, handleClickTopBarLogo, setupTopBarItemHoverEvent } = useTopBarInteraction()
 const topBarStore = useTopBarStore()
 const { popupVisible } = storeToRefs(topBarStore)
 const logo = ref<HTMLElement | null>(null)
@@ -39,7 +39,7 @@ const channels = setupTopBarItemHoverEvent('channels')
       >
         <a
           ref="logo"
-          href="//www.bilibili.com"
+          :href="getTopBarLogoHref()"
           target="_top"
           class="group logo"
           :class="{

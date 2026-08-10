@@ -8,6 +8,7 @@ import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { appAuthTokens, settings } from '~/logic'
+import { openSettingById } from '~/logic/layoutEdit'
 import type { RecommendationMode } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
 import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, revokeAccessKey, saveAppAuthTokens } from '~/utils/authProvider'
@@ -15,7 +16,6 @@ import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, revokeAcces
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
-import SearchPage from '../SearchPage/SearchPage.vue'
 import FilterByTitleTable from './components/FilterByTitleTable.vue'
 import FilterByUserTable from './components/FilterByUserTable.vue'
 
@@ -29,7 +29,6 @@ const recommendationModeOptions = computed<{ label: string, value: Recommendatio
   { label: 'App', value: 'app' },
 ])
 
-const showSearchPageModeSharedSettings = ref<boolean>(false)
 const showQRCodeDialog = ref<boolean>(false)
 const loginQRCodeUrl = ref<string>()
 const pollLoginQRCodeInterval = ref<any>(null)
@@ -537,26 +536,9 @@ function handleToggleHomeTab(tab: any) {
           <template #desc>
             <span class="bew-warning-text">{{ $t('settings.settings_shared_with_the_search_page_desc') }}</span>
           </template>
-          <Button type="secondary" center @click="showSearchPageModeSharedSettings = true">
+          <Button type="secondary" center @click="openSettingById('search.focus.darken')">
             {{ $t('settings.btn.open_settings') }}
           </Button>
-
-          <Dialog
-            v-if="showSearchPageModeSharedSettings"
-            width="80%"
-            max-width="900px"
-            content-height="64vh"
-            :show-footer="false"
-            :title="$t('settings.settings_shared_with_the_search_page')"
-            append-to-bewly-body
-            @close="showSearchPageModeSharedSettings = false"
-          >
-            <template #desc>
-              <span class="bew-warning-text">{{ $t('settings.settings_shared_with_the_search_page_desc') }}</span>
-            </template>
-
-            <SearchPage />
-          </Dialog>
         </SettingsItem>
       </template>
     </SettingsItemGroup>

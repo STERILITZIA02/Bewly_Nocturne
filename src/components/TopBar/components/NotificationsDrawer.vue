@@ -235,7 +235,7 @@ function handleKeydown(e: KeyboardEvent) {
   e.preventDefault()
   e.stopPropagation()
 
-  if (settings.value.closeDrawerWithoutPressingEscAgain) {
+  if (settings.value.drawerEscapeBehavior === 'immediate') {
     if (escPressedTimer.value)
       clearTimeout(escPressedTimer.value)
     handleClose()
@@ -264,7 +264,7 @@ function handleWindowMessage(event: MessageEvent) {
   if (data?.type !== 'BEWLY_DRAWER_CLOSE_REQUEST' || data.source !== 'iframe')
     return
 
-  if (settings.value.closeDrawerWithoutPressingEscAgain || isEscPressed.value)
+  if (settings.value.drawerEscapeBehavior === 'immediate' || isEscPressed.value)
     handleClose()
   else
     startEscConfirmation()

@@ -352,8 +352,8 @@ function handleKeydown(e: KeyboardEvent) {
   e.preventDefault()
   e.stopPropagation()
 
-  if (settings.value.closeDrawerWithoutPressingEscAgain) {
-    debugLog('[IframeDrawer] closeDrawerWithoutPressingEscAgain = true, closing immediately')
+  if (settings.value.drawerEscapeBehavior === 'immediate') {
+    debugLog('[IframeDrawer] drawerEscapeBehavior = immediate, closing immediately')
     clearTimeout(escPressedTimer.value!)
     handleClose()
     return
@@ -414,7 +414,7 @@ function handleIframeMessage(event: MessageEvent) {
       // 来自 iframe 的关闭请求
       if (data?.source === 'iframe' && activeDrawer.value === DrawerType.IframeDrawer) {
         debugLog('[IframeDrawer] Received close request from iframe')
-        if (settings.value.closeDrawerWithoutPressingEscAgain) {
+        if (settings.value.drawerEscapeBehavior === 'immediate') {
           handleClose()
         }
         else {

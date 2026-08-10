@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
+import { useMediaQuery } from '@vueuse/core'
 
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
 import type { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useLayoutEditableRoot } from '~/logic/layoutEdit'
 
 import PageModeSwitcherButton from '../PageModeSwitcherButton.vue'
 import Tooltip from '../Tooltip.vue'
@@ -23,6 +25,8 @@ const tooltipPlacement = computed<'left' | 'right'>(() => {
 })
 
 const hideSidebar = ref<boolean>(false)
+const coarsePointer = useMediaQuery('(pointer: coarse)')
+const effectiveAutoHideSidebar = computed(() => settings.value.autoHideSidebar && !coarsePointer.value)
 const sideBarContentHover = ref<boolean>(false)
 const sideBarContentRef = useDelayedHover({
   enterDelay: 100,
@@ -36,13 +40,14 @@ const sideBarContentRef = useDelayedHover({
     toggleHideSidebar(true)
   },
 })
+useLayoutEditableRoot('sidebar', sideBarContentRef)
 
 const hoveringDockItem = reactive<HoveringDockItem>({
   themeMode: false,
   settings: false,
 })
 
-watch(() => settings.value.autoHideSidebar, (newValue) => {
+watch(effectiveAutoHideSidebar, (newValue) => {
   if (newValue)
     hideSidebar.value = true
   else
@@ -52,7 +57,7 @@ watch(() => settings.value.autoHideSidebar, (newValue) => {
 })
 
 function toggleHideSidebar(hide: boolean) {
-  if (settings.value.autoHideSidebar)
+  if (effectiveAutoHideSidebar.value)
     hideSidebar.value = hide
   else
     hideSidebar.value = false
@@ -75,7 +80,7 @@ function openSettings(event: MouseEvent) {
   >
     <!-- Edge Div -->
     <div
-      v-if="settings.autoHideSidebar && hideSidebar"
+      v-if="effectiveAutoHideSidebar && hideSidebar"
       class="sidebar-edge"
       :class="`sidebar-edge-${settings.sidebarPosition}`"
       pointer-events-auto

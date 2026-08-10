@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import Button from '~/components/Button.vue'
+import { clearAllSearchHistory } from '~/components/SearchBar/searchHistoryProvider'
 import { SEARCH_BAR_CHARACTERS } from '~/constants/imgs'
 import { settings } from '~/logic'
 
@@ -7,6 +9,10 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 
 function changeSearchBarFocusCharacter(url: string) {
   settings.value.searchPageSearchBarFocusCharacter = url
+}
+
+async function clearSearchHistory() {
+  await clearAllSearchHistory()
 }
 </script>
 
@@ -60,16 +66,14 @@ function changeSearchBarFocusCharacter(url: string) {
         <Radio v-model="settings.enableSearchHistory" />
       </SettingsItem>
 
-      <SettingsItem :title="$t('settings.bg_darkens_when_the_search_bar_is_focused')" right-width="auto">
-        <Radio v-model="settings.searchPageDarkenOnSearchFocus" />
+      <SettingsItem :title="$t('search_bar.clear_history')" right-width="auto">
+        <Button type="secondary" @click="clearSearchHistory">
+          {{ $t('search_bar.clear_history') }}
+        </Button>
       </SettingsItem>
 
-      <SettingsItem :title="$t('settings.bg_blurs_when_the_search_bar_is_focused')" right-width="auto">
-        <template #desc>
-          <span class="bew-warning-text">{{ $t('common.performance_impact_warn') }}</span>
-        </template>
-
-        <Radio v-model="settings.searchPageBlurredOnSearchFocus" />
+      <SettingsItem setting-id="search.focus.disable" :title="$t('settings.disable_search_focus_effect')" :desc="$t('settings.disable_search_focus_effect_desc')" right-width="auto">
+        <Radio v-model="settings.disableSearchFocusEffect" />
       </SettingsItem>
 
       <SettingsItem :title="$t('settings.choose_search_bar_focused_character')">

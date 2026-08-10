@@ -32,9 +32,9 @@
 
 ## 与现有 Dock 行为的关系
 
-- `hidden` 完整保留现有 `autoHideDock` 和 `halfHideDock`。
-- `button` 下的完整 Dock 仍可按现有 `autoHideDock` 隐藏；用户手动收起后，圆球保持可见，不再被边缘隐藏或半隐藏位移。
-- `automatic` 下，离开 Dock 优先收起为圆球，不将它完全移出屏幕；不改写用户的 `autoHideDock` 或 `halfHideDock` 设置值。
+- `hidden` 不显示收起按钮，Dock 保持完整展开。
+- `button` 显示手动收起按钮；收起后圆球始终保持可见。
+- `automatic` 在指针离开且没有焦点、设置页或触屏交互占用时收起为圆球，不将 Dock 移出屏幕。
 - 收起时隐藏内联和分离的刷新、返回顶部、撤销/前进按钮，保证可见表面只有一个圆球。展开后按现有逻辑恢复。
 - 切换三档设置时按新模式立即解析当前状态，不修改其他 Dock 设置。
 

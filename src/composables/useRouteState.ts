@@ -20,6 +20,19 @@ const routeState = shallowReactive<RouteState>({
 })
 const listeners = new Set<RouteChangeListener>()
 let routeObserverStarted = false
+let fallbackTimer: ReturnType<typeof setTimeout> | undefined
+
+function scheduleFallback() {
+  if (fallbackTimer !== undefined)
+    clearTimeout(fallbackTimer)
+  if (document.hidden)
+    return
+  fallbackTimer = setTimeout(() => {
+    fallbackTimer = undefined
+    syncRouteState()
+    scheduleFallback()
+  }, 4000)
+}
 
 function syncRouteState() {
   if (typeof window === 'undefined' || routeState.href === window.location.href)
@@ -31,7 +44,14 @@ function syncRouteState() {
   routeState.search = url.search
   routeState.hash = url.hash
   routeState.navigationId++
-  listeners.forEach(listener => listener(routeState))
+  listeners.forEach((listener) => {
+    try {
+      listener(routeState)
+    }
+    catch (error) {
+      console.error('[Bewly Nocturne][Route] 路由订阅回调失败', error)
+    }
+  })
 }
 
 function scheduleRouteSync() {
@@ -50,9 +70,12 @@ function startRouteObserver() {
   window.addEventListener('popstate', scheduleRouteSync)
   window.addEventListener('hashchange', scheduleRouteSync)
 
-  // Bilibili occasionally changes location without emitting the custom history
-  // events. One low-frequency fallback covers that path for every consumer.
-  window.setInterval(syncRouteState, 4000)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden)
+      syncRouteState()
+    scheduleFallback()
+  })
+  scheduleFallback()
 }
 
 export function useRouteState() {
@@ -63,8 +86,14 @@ export function useRouteState() {
 export function onRouteChange(listener: RouteChangeListener, immediate = false) {
   startRouteObserver()
   listeners.add(listener)
-  if (immediate)
-    listener(routeState)
+  if (immediate) {
+    try {
+      listener(routeState)
+    }
+    catch (error) {
+      console.error('[Bewly Nocturne][Route] 路由订阅回调失败', error)
+    }
+  }
 
   return () => listeners.delete(listener)
 }

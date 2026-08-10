@@ -32,6 +32,7 @@ let ready = false
 let generation = 0
 let preferenceGeneration = 0
 let restartAfterInitialization = false
+let initializationInProgress = false
 let flushInProgress = false
 let flushTimer: ReturnType<typeof setTimeout> | undefined
 let retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -45,9 +46,9 @@ let remoteChangeQueue = Promise.resolve()
 
 function logCloudSyncError(message: string, error?: unknown) {
   if (error == null)
-    console.warn(`[BewlyCat] ${message}`)
+    console.warn(`[Bewly Nocturne] ${message}`)
   else
-    console.error(`[BewlyCat] ${message}`, error)
+    console.error(`[Bewly Nocturne] ${message}`, error)
 }
 
 function parseCloudEntries(items: Record<string, unknown>) {
@@ -134,6 +135,16 @@ function scheduleRetry() {
     retryTimer = undefined
     void flushUploads()
   }, getSettingsCloudSyncRetryDelay(retryAttempt++))
+}
+
+function scheduleInitializationRetry(delay?: number) {
+  if (retryTimer != null || !enabled || ready)
+    return
+
+  retryTimer = setTimeout(() => {
+    retryTimer = undefined
+    void startCloudSync(true)
+  }, delay ?? getSettingsCloudSyncRetryDelay(retryAttempt++))
 }
 
 function requeueQuotaBlockedUploads() {
@@ -291,19 +302,27 @@ async function flushUploads() {
   }
 }
 
-async function startCloudSync() {
+async function startCloudSync(isRetry = false) {
+  if (initializationInProgress) {
+    restartAfterInitialization = true
+    return
+  }
+
+  initializationInProgress = true
   const startGeneration = ++generation
   enabled = true
   ready = false
   restartAfterInitialization = false
-  clearFlushTimer()
-  clearRetryTimer()
-  pendingUploads.clear()
-  blockedUploads.clear()
-  uploadStates.clear()
-  lastError = ''
-  retryAttempt = 0
-  publishCloudSyncStatus()
+  if (!isRetry) {
+    clearFlushTimer()
+    clearRetryTimer()
+    pendingUploads.clear()
+    blockedUploads.clear()
+    uploadStates.clear()
+    lastError = ''
+    retryAttempt = 0
+    publishCloudSyncStatus()
+  }
 
   try {
     const cloudItems = await browser.storage.sync.get(null)
@@ -316,10 +335,12 @@ async function startCloudSync() {
       return
 
     ready = true
+    retryAttempt = 0
+    clearRetryTimer()
     queueUploads(result.uploads)
     if (restartAfterInitialization) {
       restartAfterInitialization = false
-      void startCloudSync()
+      queueMicrotask(() => void startCloudSync(true))
     }
   }
   catch (error) {
@@ -328,6 +349,10 @@ async function startCloudSync() {
     logCloudSyncError('Failed to initialize settings cloud sync:', error)
     lastError = formatError(error)
     publishCloudSyncStatus()
+    scheduleInitializationRetry()
+  }
+  finally {
+    initializationInProgress = false
   }
 }
 
@@ -336,6 +361,7 @@ function stopCloudSync() {
   ready = false
   generation++
   restartAfterInitialization = false
+  initializationInProgress = false
   clearFlushTimer()
   clearRetryTimer()
   pendingUploads.clear()
@@ -430,7 +456,13 @@ function handleSyncChanges(
   requeueQuotaBlockedUploads()
 
   if (!ready) {
-    restartAfterInitialization = true
+    if (initializationInProgress) {
+      restartAfterInitialization = true
+    }
+    else {
+      clearRetryTimer()
+      scheduleInitializationRetry(0)
+    }
     return
   }
 
@@ -444,6 +476,13 @@ function handleSyncChanges(
   }).catch(error => logCloudSyncError('Failed to apply remote settings changes:', error))
 }
 
+function retryInitializationOnBrowserActivity() {
+  if (enabled && !ready && !initializationInProgress) {
+    clearRetryTimer()
+    scheduleInitializationRetry(0)
+  }
+}
+
 export function setupSettingsCloudSync() {
   if (initialized)
     return
@@ -451,6 +490,8 @@ export function setupSettingsCloudSync() {
   initialized = true
   browser.storage.onChanged.addListener(handleLocalChanges)
   browser.storage.onChanged.addListener(handleSyncChanges)
+  browser.tabs.onActivated.addListener(retryInitializationOnBrowserActivity)
+  browser.windows.onFocusChanged.addListener(retryInitializationOnBrowserActivity)
 
   const initialPreferenceGeneration = preferenceGeneration
   void browser.storage.local.get(SETTINGS_CLOUD_SYNC_ENABLED_KEY).then((stored) => {

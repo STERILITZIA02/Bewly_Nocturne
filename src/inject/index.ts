@@ -34,7 +34,7 @@ if (shouldInitializePageScript)
 
 const isElectronEnv = isElectron()
 if (isElectronEnv) {
-  console.warn('[BewlyCat] Detected Electron environment, extension disabled.')
+  console.warn('[Bewly Nocturne] Detected Electron environment, extension disabled.')
 }
 else if (shouldInitializePageScript) {
   // 根据兼容性设置动态返回桌面 UA，默认保持浏览器原始值。
@@ -142,6 +142,7 @@ else if (shouldInitializePageScript) {
   const COMMENT_REPLY_TREE_INDENT_STEP = 'var(--bew-comment-reply-indent-step, var(--bew-space-8, 32px))'
   const COMMENT_REPLY_TREE_GUIDES_ID = 'bewly-comment-reply-tree-guides'
   const COMMENT_REPLY_TREE_ROOT_KEY = 'thread-root'
+  const WIDESCREEN_COMMENT_EMOJI_OPEN_ATTRIBUTE = 'data-bewly-comment-emoji-open'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
   /** 楼中楼已见过的回复关系（跨分页保留，用于父节点不在当前页时回溯挂载） */
@@ -380,6 +381,10 @@ else if (shouldInitializePageScript) {
         #editor:not(:hover):not(.active) {
           border-color: var(--bew-comment-editor-border, var(--Ga1)) !important;
         }
+
+        :is(#pub button, button[data-v-risk="fingerprint"]):not(:hover, :active, .active) {
+          background-color: var(--bew-theme-color-60) !important;
+        }
       `,
     },
     'bili-comments-vote-card': {
@@ -400,6 +405,28 @@ else if (shouldInitializePageScript) {
     style.id = id
     style.textContent = css
     root.appendChild(style)
+  }
+
+  function updateWidescreenCommentEmojiOverflow(component: HTMLElement, root: ShadowRoot) {
+    const emojiPopover = root.querySelector<HTMLElement>('#emoji-popover')
+    const emojiPickerOpen = (component as HTMLElement & { showEmojiPicker?: boolean }).showEmojiPicker === true
+      || emojiPopover?.style.display === 'block'
+    const componentRoot = component.getRootNode()
+    const shadowHost = componentRoot instanceof ShadowRoot ? componentRoot.host : null
+    const panel = component.closest('.bewly-widescreen-panel')
+      ?? shadowHost?.closest('.bewly-widescreen-panel')
+
+    if (!(panel instanceof HTMLElement))
+      return
+
+    panel.toggleAttribute(WIDESCREEN_COMMENT_EMOJI_OPEN_ATTRIBUTE, emojiPickerOpen)
+    const panels = panel.parentElement
+    if (panels?.classList.contains('bewly-widescreen-panels')) {
+      panels.toggleAttribute(
+        WIDESCREEN_COMMENT_EMOJI_OPEN_ATTRIBUTE,
+        Boolean(panels.querySelector(`.bewly-widescreen-panel[${WIDESCREEN_COMMENT_EMOJI_OPEN_ATTRIBUTE}]`)),
+      )
+    }
   }
 
   function findCommentComponentLifecycleMethod(
@@ -432,7 +459,7 @@ else if (shouldInitializePageScript) {
     const prototype = classConstructor?.prototype as object | undefined
     if (!prototype) {
       if (!options?.silent)
-        console.warn(`[BewlyCat] Skip patching ${name}: prototype is unavailable.`)
+        console.warn(`[Bewly Nocturne] Skip patching ${name}: prototype is unavailable.`)
       return false
     }
 
@@ -440,7 +467,7 @@ else if (shouldInitializePageScript) {
       return true
 
     const scheduleEnhance = (instance: any) => {
-      // Do not run BewlyCat DOM work inside Bilibili's render lifecycle.
+      // Do not run Bewly Nocturne DOM work inside Bilibili's render lifecycle.
       if (pendingCommentEnhancements.has(instance))
         return
       pendingCommentEnhancements.add(instance)
@@ -455,7 +482,7 @@ else if (shouldInitializePageScript) {
               enhance(instance)
             }
             catch (error) {
-              console.warn(`[BewlyCat] Failed to enhance ${name}.`, error)
+              console.warn(`[Bewly Nocturne] Failed to enhance ${name}.`, error)
             }
           })
         })
@@ -483,7 +510,7 @@ else if (shouldInitializePageScript) {
 
     if (!patchedMethod || !originalMethod) {
       if (!options?.silent)
-        console.warn(`[BewlyCat] Skip patching ${name}: no suitable lifecycle method.`)
+        console.warn(`[Bewly Nocturne] Skip patching ${name}: no suitable lifecycle method.`)
       return false
     }
 
@@ -3033,10 +3060,13 @@ else if (shouldInitializePageScript) {
               if (getCommentReplyDeepLinkId())
                 scheduleCommentReplyDeepLinkSettlement('hash')
             }
+            else if (name === 'bili-comment-box') {
+              updateWidescreenCommentEmojiOverflow(component, root)
+            }
           })
         }
         catch (error) {
-          console.warn(`[BewlyCat] Failed to patch ${name}.`, error)
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
         }
         return
       }
@@ -3054,7 +3084,7 @@ else if (shouldInitializePageScript) {
           })
         }
         catch (error) {
-          console.warn(`[BewlyCat] Failed to patch ${name}.`, error)
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
         }
         return
       }
@@ -3089,7 +3119,7 @@ else if (shouldInitializePageScript) {
           })
         }
         catch (error) {
-          console.warn(`[BewlyCat] Failed to patch ${name}.`, error)
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
         }
         return
       }
@@ -3135,7 +3165,7 @@ else if (shouldInitializePageScript) {
           })
         }
         catch (error) {
-          console.warn(`[BewlyCat] Failed to patch ${name}.`, error)
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
         }
       }
     }

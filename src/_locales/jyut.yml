@@ -94,7 +94,6 @@ settings:
     located: 已定位到呢個設定
   category_general_desc: 設定語言、互動版面同抽屜行為。
   category_appearance_desc: 設定毛玻璃、主題顏色、字型、自訂樣式同其他頁面嘅適配。
-  category_shortcuts_desc: 啟用、修改或者還原 BewlyMac 同播放器快捷鍵。
   breadcrumb: 設定位置
   group_interaction_layout: 互動同版面
   group_memory_saving: 記憶體節省
@@ -113,19 +112,19 @@ settings:
   category_bilibili_comments_desc: 加強留言區嘅用戶資料同內容顯示。
   category_bilibili_vip_desc: 設定大會員權益相關嘅提醒功能。
   category_advanced_compatibility_desc: 設定原版頁面、第三方擴充功能同其他頁面嘅相容行為。
-  category_advanced_maintenance_desc: 匯出備份、匯入設定或者還原 BewlyMac 預設配置。
+  category_advanced_maintenance_desc: 匯出備份、匯入設定或者還原 Bewly Nocturne 預設配置。
   maintenance:
     title: 備份同重設
     backup_title: 設定備份
     backup_desc: 匯出設定做備份或搬移，亦可以由現有備份還原。
-    import_desc: 由 BewlyMac JSON 備份匯入可識別嘅設定。
+    import_desc: 由 Bewly Nocturne JSON 備份匯入可識別嘅設定。
     import_failed: 讀唔到設定檔，請確認係有效嘅 JSON 備份。
     import_no_matches: 備份入面冇可以匯入嘅設定。
     import_success: 匯入成功：已套用 {imported} 項，忽略 {ignored} 項未知設定。
     reset_title: 還原預設設定
-    reset_desc: 呢區嘅操作會影響全部 BewlyMac 設定。
+    reset_desc: 呢區嘅操作會影響全部 Bewly Nocturne 設定。
     reset_warning: 還原之後無法復原，而家嘅語言設定會保留。
-  menu_plugin_components_and_pages: BewlyMac界面
+  menu_plugin_components_and_pages: Bewly Nocturne界面
   menu_bilibili_features_enhancement: Bilibili 功能
   menu_appearance: 版面
   menu_compatibility: 相容性
@@ -369,7 +368,9 @@ settings:
   link_opening_behavior_desc: 控制撳連結之後喺邊度開。「主頁外目前分頁」表示：目前頁面係主頁時用新分頁開，其他頁面用目前分頁開；「後臺打開」會喺瀏覽器容許時開到背景分頁。
   video_card_link_opening_behavior_desc: 控制撳影片同番劇卡片之後喺邊度開，可以揀目前分頁、櫃桶、背景分頁或者新分頁。
   search_bar_link_opening_behavior: 搜尋欄連結開啓行爲
-  close_drawer_without_pressing_esc_again: 閂櫃桶嗰陣唔使再撳多次 <kbd>Esc</kbd>
+  drawer_escape_behavior: 櫃桶 Esc 關閉方式
+  drawer_escape_immediate: 撳一次即刻關閉
+  drawer_escape_second_press: 再撳一次先關閉
   block_ads: 封鎖廣告
   block_top_search_page_ads: 封鎖 Bilibili 搵嘢頁上方的廣告
 
@@ -439,7 +440,6 @@ settings:
   show_bewly_or_bili_page_switcher: 顯示頁面模式切換掣
   filter_articles_in_moments: 過濾專欄
   filter_articles_in_moments_desc: 喺動態列表過濾專欄內容，只顯示影片
-  top_bar_icon_badges: 圖標邊位標記
   top_bar_icon_badges_opt:
     number: 數字
     dot: 圓點
@@ -460,9 +460,7 @@ settings:
   show_like_notification_reminder: 顯示點讚提醒
   show_like_notification_reminder_desc: 開咗之後，頂欄通知角標會將點讚提醒計埋入總數。
   always_use_dock: 點都要用 Dock
-  always_use_dock_desc: 啓用後，Dock 點都要用佢而唔係用側邊欄。我哋推介你同時啓用自動收埋 Dock 去。
-  auto_hide_dock: 自動收埋 Dock
-  half_hide_dock: 收埋一半 Dock
+  always_use_dock_desc: 啓用後，Dock 點都要用佢而唔係用側邊欄。
   dock_collapse_mode: Dock 收埋方式
   dock_collapse_mode_desc: 控制收埋掣會唔會顯示，或者指針離開後自動收埋做懸浮圓球。
   dock_collapse_mode_button: 顯示收埋掣
@@ -474,6 +472,7 @@ settings:
   dock_content_adjustment_desc: 第一個啓用嘅 Dock 項個頁面會係開始頁面。
   topbar_mode: 頂欄模式
   topbar_mode_desc: 全 Bewly 或全原版模式會跟住全域設定；自訂模式可以獨立選擇。
+  custom_page_mode_required: 只可以喺「自訂」頁面模式獨立設定。
   topbar_mode_bewly: Bewly 頂欄
   topbar_mode_bilibili: Bilibili 頂欄
   dock_item_open_in_new_tab: 在新分頁度開啓
@@ -481,7 +480,6 @@ settings:
   disable_dock_glowing_effect: 熄咗 Dock 發光效果去
   disable_light_dark_mode_switcher: 閂咗淺 / 深色主題切換粒掣去
   back_to_top_and_refresh_buttons_are_separated: 分離返到最篤同重新整理掣
-  always_show_dock_actions_when_auto_hide: 自動收埋 Dock 時照顯示操作掣
   sidebar_position: 側邊欄位置
   auto_hide_sidebar: 自動收埋側邊欄
   theme: 色系
@@ -493,7 +491,7 @@ settings:
   theme_schedule: 淺色時間
   theme_schedule_desc: 喺揀選嘅時間範圍內使用淺色模式，其餘時間使用深色模式。
   video_page_dark_mode: 淨係影片播放頁用深色模式
-  video_page_dark_mode_desc: 保持全站色系設定唔變，淨係喺影片播放頁啟用 BewlyMac 深色樣式。
+  video_page_dark_mode_desc: 保持全站色系設定唔變，淨係喺影片播放頁啟用 Bewly Nocturne 深色樣式。
   theme_color: 主題色
   enable_oled_dark_mode: OLED 純黑模式
   enable_oled_dark_mode_desc: 淨係喺實際使用深色模式時生效；網頁底色會變成純黑，但卡片同浮層仍然保留層次。
@@ -512,11 +510,11 @@ settings:
     pagination: 翻頁
   enable_logo_glowing_effect: Logo 使用發光效果
   logo_visibility: Logo 可視性
-  bg_darkens_when_the_search_bar_is_focused: 搜尋欄聚焦嗰陣校暗背景
-  bg_blurs_when_the_search_bar_is_focused: 搜尋欄聚焦嗰陣校矇背景
+  disable_search_focus_effect: 移除搜尋欄聚焦效果
+  disable_search_focus_effect_desc: 開啟之後，搜尋欄聚焦嗰陣唔再校矇或者校暗頁面背景。
   choose_search_bar_focused_character: 揀個喺搜尋欄聚焦嗰陣出現嘅人物
-  show_hot_search_in_top_bar: 喺頂欄顯示熱搜
-  show_hot_search_in_top_bar_desc: 喺頂欄搜尋框度顯示熱搜清單
+  show_hot_search_in_top_bar: 顯示熱搜
+  show_hot_search_in_top_bar_desc: 搜尋欄聚焦嗰陣顯示熱搜清單
   show_hot_search_in_search_page: 喺搵嘢頁顯示熱搜
   show_hot_search_in_search_page_desc: 喺搵嘢頁面顯示熱搜排行榜
   show_search_recommendation: 顯示搜尋推介
@@ -596,7 +594,6 @@ settings:
   settings_shared_with_the_search_page_desc: 呢啲設定同搵嘢頁嗰度共用。
   home_tabs_adjustment: 分頁欄調整
   home_tabs_adjustment_desc: 第一個啓用嘅分頁項目會係開始頁面。
-  always_show_tabs_on_home_page: 捲動時隱藏主頁分頁欄
   fixed_home_tabs_on_home_page: 固定主頁分頁欄
   adapt_to_other_page_styles: 適應其他版面風格
   adapt_to_other_page_styles_desc: 執執啲常用嘅版面，襯返 BewlyBewly 主題風格。
@@ -610,7 +607,7 @@ settings:
   reset_settings_confirm: |-
     重設設定？
     噉做冇得返轉頭噃，你確定要重設你之前嘅設定？
-  current_contributors: BewlyMac（含 BewlyBewly）貢獻者
+  current_contributors: Bewly Nocturne（含 BewlyBewly）貢獻者
   contributors_image_failed: 貢獻者圖片載入失敗
   video_page_top_bar_config: 影片頁頂欄配置
   video_page_top_bar_config_desc: 控制影片頁頂欄嘅顯示時機。「滑鼠顯示」表示滑鼠移入頁面頂部時顯示；「捲動顯示」表示頁面捲動時顯示。
@@ -627,7 +624,7 @@ settings:
   enable_clean_share_link: 使用分享連結淨化
   enable_clean_share_link_desc: >
     開咗之後，分享連結會自動移除追蹤參數，仲可以揀要唔要加埋影片標題。
-    呢個功能適用於 BewlyMac 嘅複製連結功能，同時亦會攔截 Bilibili 原生分享掣嘅複製內容。
+    呢個功能適用於 Bewly Nocturne 嘅複製連結功能，同時亦會攔截 Bilibili 原生分享掣嘅複製內容。
   clean_share_link_include_title: 分享時加埋影片標題
   clean_share_link_include_title_desc: >
     分享嗰陣喺連結前面加埋影片標題，例如 "影片標題 https://www.bilibili.com/video/BVxxx"
@@ -669,92 +666,6 @@ settings:
   settings_sync_last_error: '最近同步錯誤：{error}'
   enable_undo_refresh_button: 啓用復原更新掣（淨係得 Web 推介模式下有效）
   enable_undo_refresh_button_desc: 更新頁面後顯示復原更新掣，撳低可以回復更新前內容。
-  shortcuts:
-    caption: 字幕
-    caption_desc: 顯示/隱藏字幕。
-    clock_time: 時鐘
-    clock_time_desc: 顯示/隱藏系統時間。
-    danmu_status: 顯示彈幕狀態
-    danmu_status_desc: 顯示目前彈幕開關狀態。
-    decrease_playback_rate: 減速播放
-    decrease_playback_rate_desc: 校慢播放速度。
-    decrease_video_size: 縮細影片
-    decrease_video_size_desc: 縮細影片畫面大細。
-    enable_all_shortcuts_toggle: 啓用鍵盤快捷鍵
-    enable_all_shortcuts_toggle_desc: 啓用或停用所有鍵盤快捷鍵功能。
-    group:
-      fullscreen_mode: 全螢幕模式快捷鍵
-      general: 一般快捷鍵
-      global_actions: 全域操作
-      official_bilibili: Bilibili 官方快捷鍵
-      homepage: ''
-    increase_playback_rate: 加速播放
-    increase_playback_rate_desc: 校快播放速度。
-    increase_video_size: 放大影片
-    increase_video_size_desc: 校帶影片畫面大細。
-    item:
-      cancel_edit: 唔再編輯
-      edit_key: 編輯快捷鍵
-      reset_default: 重設做預設值
-    long_step_backward: 褪後
-    long_step_backward_desc: 褪後 30 秒。
-    long_step_forward: 行前
-    long_step_forward_desc: 行前 30 秒
-    next_frame: 下一影格
-    next_frame_desc: 去到下一影格（暫停時）
-    next_video_ext: 下一條片
-    next_video_ext_desc: 播放清單度嘅下一條片（延伸功能）
-    official:
-      backward: 快褪 5 秒
-      danmu_toggle: 彈幕開關
-      exit_fullscreen: 離開全螢幕
-      forward: 快行 5 秒
-      fullscreen: 切換全螢幕模式
-      input_danmu: 輸入彈幕
-      mute: 切換靜音
-      like: 讚好
-      coin: 投幣
-      favorite: 收藏
-      next_video: 播下一條片
-      play_pause: 播放/暫停
-      prev_video: 播上一條片
-      speed_1: 設定 1 倍播放速度
-      speed_2: 設定 2 倍播放速度
-      volume_down: 校低音量
-      volume_up: 校高音量
-    pip: 子母畫面
-    pip_desc: 切換字母畫面模式。
-    play_pause_ext: 播放/暫停
-    play_pause_ext_desc: 播放或暫停影片（延伸功能）。
-    press_keys: 點擊輸入框，跟住撳低快捷鍵
-    conflict: 呢個快捷鍵已經俾延伸功能快捷鍵「{name}」用緊，唔可以重複設定。
-    previous_frame: 上一影格
-    previous_frame_desc: 去返上一影格（暫停時）。
-    replay: 重播
-    replay_desc: 由頭播過。
-    toggle_follow: 關注/取消關注
-    toggle_follow_desc: 響視頻頁切換關注UP主狀態。
-    reset_all_button: 重設所有快捷鍵
-    reset_all_ext_shortcuts: 重設所有延伸功能快捷鍵
-    reset_playback_rate: 重設播放速度
-    reset_playback_rate_desc: 恢復正常播放速度。
-    reset_video_size: 重設影片大細
-    reset_video_size_desc: 恢復預設影片大細。
-    short_step_backward: 快褪
-    short_step_backward_desc: 快褪 5 秒。
-    short_step_forward: 快進
-    short_step_forward_desc: 快進 5 秒。
-    title: 快捷鍵
-    turn_off_light: 熄燈
-    turn_off_light_desc: 切換熄燈模式。
-    video_time: 影片時長
-    video_time_desc: 顯示/隱藏影片時長
-    video_title: 影片標題
-    video_title_desc: 顯示/隱藏影片標題
-    web_fullscreen: 網頁全螢幕
-    web_fullscreen_desc: 切換網頁全螢幕模式。
-    widescreen: 闊螢幕模式
-    widescreen_desc: 切換闊螢幕模式。
   video_default_player_mode: 預設影片顯示模式
   video_danmaku_default_state: 彈幕預設狀態
   video_danmaku_default_state_desc: 開片時自動幫你調整彈幕開關，亦可以保持唔變。
@@ -925,19 +836,122 @@ dock:
   watch_later: 陣間至睇
   favorites: 我嘅至愛
   moments: 動向
+  notifications: 訊息頁
   page_mode_original: 全原版
   page_mode_bewly: 全 Bewly
   page_mode_custom: 自訂
   page_mode_switch_tooltip: 而家：{current}；撳一下切換去{next}
-  bewly_page_unavailable: 呢個頁面暫時未有 BewlyMac 版本
+  bewly_page_unavailable: 呢個頁面暫時未有 Bewly Nocturne 版本
   dark_mode: 深色模式
   light_mode: 淺色模式
   settings: 設定
   collapse_dock: 收埋 Dock
   expand_dock: 展開 Dock
+moments:
+  filter_all: 全部
+  filter_video: 影片投稿
+  filter_pgc: 追番追劇
+  filter_article: 專欄
+  emoji: 表情
+  unlock_with_charge: 充電解鎖
+  view: 睇吓
+  live_popularity: '{count} 人氣'
+  charge_exclusive: 充電專屬
+  charge_unlock_hint: 加入而家呢位 UP 主嘅充電就可以解鎖
+  charge_exclusive_moment: 充電專屬動態
+  go_charge: 去充電
+  forwarded_moment: 轉發咗動態
+  bilibili_user: B站用戶
+  original_author: 原作者
+  live_moment: 直播動態
+  video_moment: 影片動態
+  image_moment: 圖文動態
+  text_moment: 純文字動態
+  original_moment: 原動態
+  login_to_like: 登入之後先可以讚動態
+  like_failed: 動態讚好失敗
+  like_failed_retry: 動態讚好失敗，遲啲再試
+  login_to_watch_later: 登入之後先可以加稍後再睇
+  watch_later_unavailable: 攞唔到呢條片嘅稍後再睇資料
+  watch_later_failed_retry: 稍後再睇操作失敗，遲啲再試
+  user_info: 動態用戶資料
+  following: 關注
+  followers: 粉絲
+  moments: 動態
+  publish: 發布動態
+  live_now: 直播緊
+  live_badge: 直播中
+  feed_bar: 動態欄
+  feed_groups: 動態分組
+  all_moments: 全部動態
+  wanted_enable: 淨係睇想睇嘅 UP 主
+  wanted_disable: 取消淨係睇想睇嘅 UP 主
+  wanted_only_all_video: 只適用於全部同影片投稿
+  wanted: 想睇
+  scroll_frequent_left: 向左捲動經常瀏覽列表
+  scroll_frequent_right: 向右捲動經常瀏覽列表
+  scroll_left: 向左捲動
+  scroll_right: 向右捲動
+  frequent_uploaders: 經常瀏覽嘅 UP 主
+  has_update: 有更新
+  pinned_uploaders: 固定 UP 主
+  initial_loading: 準備緊動態同圖片…
+  empty_wanted: 最近冇更新
+  no_wanted_users: 請先喺設定加入想睇嘅 UP 主
+  empty: 暫時冇動態可以顯示
+  loading: 載入緊…
+  load_more: 載入更多
+  recheck: 再檢查
+  reload: 重新載入
+  loading_more: 載入同準備緊更多動態…
+  no_more: 已經到底喇
+  live_room: 直播間
+  video_playback: 影片播放
+  detail: 動態詳情
+  opening_live: 開緊直播間…
+  opening_video: 開緊影片…
+  opening_forward: 開緊轉發動態…
+  loading_detail: 載入緊動態詳情…
+  author_detail: '{author} 嘅詳情'
+  open_new_tab: 喺新分頁開啟
+  image_viewer: 動態圖片檢視器
+  close_image_viewer: 關閉圖片檢視器
+  image_large: 動態圖片大圖
+  previous_image: 上一張
+  next_image: 下一張
+  zoom_out: 縮細
+  zoom_in: 放大
+  fit_window: 配合視窗
+  rotate_clockwise: 順時針旋轉
 moment_card:
+  video_moment: 影片動態
+  open_detail: 開啟 {author} 嘅動態詳情
+  just_now: 啱啱
+  charge_exclusive: 充電專屬
+  watch_later_added: 已加入稍後再睇
+  add_watch_later: 加入稍後再睇
+  added: 已加入
+  watch_later: 稍後再睇
+  live_moment: 直播動態
+  open_original_video: 開啟原影片
+  moment_image_alt: 動態圖片 {index}
+  additional_content: 附加內容
+  view_hot_comment: 睇熱門留言
+  hot_comment: 熱門留言
+  open_dialog: 喺對話框開啟
+  open_dialog_short: 對話框
+  open_new_tab: 喺新分頁開啟
+  open_new_tab_short: 新分頁
+  view_comments: 睇留言
+  live_popularity: '{count} 人氣'
+  no_data: 暫時冇數據
+  live_now: 直播緊
+  like_unavailable: 暫時未能讚好
+  cancel_like: 取消讚好
+  like: 讚好
   preview_image: 預覽 {author} 嘅動態圖片 {index}
   reserve: 預約
+  reserved: 已預約
   cancel_reservation: 取消預約
   reservation_succeeded: 預約成功
   reservation_cancelled: 已取消預約
@@ -1079,7 +1093,7 @@ favorites:
   unfav_seasons_failed: '{count} 個合集取消收藏失敗'
 version_reminder:
   trigger: 新版本說明
-  title: BewlyMac 已更新
+  title: Bewly Nocturne 已更新
   current_version: 而家版本 v{version}
   description: 睇吓呢個版本嘅更新記錄同最新動態。確認之後，呢個版本就唔會再顯示提醒。
   github_releases: GitHub Releases

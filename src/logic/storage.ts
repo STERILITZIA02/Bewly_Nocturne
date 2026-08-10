@@ -96,6 +96,8 @@ export interface ShortcutsSettings {
   toggleFollow?: BaseShortcutSetting // Shift+F (默认禁用)
 }
 
+export type DrawerEscapeBehavior = 'immediate' | 'secondPress'
+
 export type VideoCardFontSizeSetting = 'xs' | 'sm' | 'base' | 'lg'
 export type VideoCardLayoutSetting = 'modern' | 'old'
 export type TopBarLogoStyle = 'icon' | 'brand'
@@ -218,8 +220,6 @@ export interface Settings {
 
   disableFrostedGlass: boolean
   frostedGlassBlurIntensity: number
-  /** 已隐藏的旧设置字段；分段控件液态指示器固定启用 */
-  enableLiquidSegmentIndicator: boolean
   disableShadow: boolean
 
   enableVideoPreview: boolean
@@ -228,7 +228,7 @@ export interface Settings {
   videoCardLinkOpenMode: 'drawer' | 'newTab' | 'currentTab' | 'background'
   topBarLinkOpenMode: 'currentTab' | 'currentTabIfNotHomepage' | 'newTab' | 'background'
   searchBarLinkOpenMode: 'currentTab' | 'currentTabIfNotHomepage' | 'newTab' | 'background'
-  closeDrawerWithoutPressingEscAgain: boolean
+  drawerEscapeBehavior: DrawerEscapeBehavior
 
   blockAds: boolean
   blockTopSearchPageAds: boolean
@@ -261,8 +261,6 @@ export interface Settings {
   videoPageTopBarConfig: VideoPageTopBarConfig
   showBewlyOrBiliPageSwitcher: boolean
   topBarLogoStyle: TopBarLogoStyle
-  topBarIconBadges: 'number' | 'dot' | 'none'
-  showWatchLaterBadge: boolean
   topBarComponentsConfig: { key: string, visible: boolean, badgeType: 'number' | 'dot' | 'none' }[]
   topBarPinnedChannels: string[]
   openNotificationsPageAsDrawer: boolean
@@ -308,8 +306,6 @@ export interface Settings {
   momentsCardOpenMode: 'dialog' | 'newTab' | 'background'
 
   alwaysUseDock: boolean
-  autoHideDock: boolean
-  halfHideDock: boolean
   dockCollapseMode: DockCollapseMode
   dockPosition: 'left' | 'right' | 'bottom'
   dockItemsConfig: { page: AppPage, visible: boolean, openInNewTab: boolean, useOriginalBiliPage: boolean }[]
@@ -317,7 +313,6 @@ export interface Settings {
   disableDockGlowingEffect: boolean
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
-  alwaysShowDockActionsWhenAutoHide: boolean
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
 
   sidebarPosition: 'left' | 'right'
@@ -332,8 +327,7 @@ export interface Settings {
   enableOledDarkMode: boolean
   useLinearGradientThemeColorBackground: boolean
 
-  searchPageDarkenOnSearchFocus: boolean
-  searchPageBlurredOnSearchFocus: boolean
+  disableSearchFocusEffect: boolean
   searchPageLogoColor: 'white' | 'themeColor'
   searchPageLogoGlow: boolean
   searchPageShowLogo: boolean
@@ -381,7 +375,6 @@ export interface Settings {
   followingInactiveDays: number // UP主超过N天未更新则移至不活跃名单
 
   homePageTabVisibilityList: { page: HomeSubPage, visible: boolean }[]
-  alwaysShowTabsOnHomePage: boolean
   fixedHomeTabsOnHomePage: boolean
   enableVersionReminder: boolean
   lastAcknowledgedVersion: string
@@ -405,7 +398,6 @@ export interface Settings {
   rememberNoCookieRecommendationState: boolean
 
   adaptToOtherPageStyles: boolean
-  showTopBar: boolean
   useOriginalBilibiliTopBar: boolean
   preventMobileRedirect: boolean
 
@@ -433,8 +425,6 @@ export interface Settings {
   autoPlayWatchLater: AutoPlayMode // 稍后再看自动播放模式
   autoPlayPlaylist: AutoPlayMode // 收藏列表自动播放模式
 
-  keyboard: boolean
-  shortcuts: ShortcutsSettings
   videoPlayerScroll: boolean // 添加视频播放器滚动设置
 
   // 倍速记忆设置
@@ -491,14 +481,13 @@ export const originalSettings: Settings = {
 
   disableFrostedGlass: false,
   frostedGlassBlurIntensity: 20,
-  enableLiquidSegmentIndicator: false,
   disableShadow: false,
 
   // Link Opening Behavior
   videoCardLinkOpenMode: 'newTab',
   topBarLinkOpenMode: 'currentTabIfNotHomepage',
   searchBarLinkOpenMode: 'currentTabIfNotHomepage',
-  closeDrawerWithoutPressingEscAgain: false,
+  drawerEscapeBehavior: 'secondPress',
 
   blockAds: false,
   blockTopSearchPageAds: false,
@@ -532,8 +521,6 @@ export const originalSettings: Settings = {
   videoPageTopBarConfig: VideoPageTopBarConfig.ShowOnScroll,
   showBewlyOrBiliPageSwitcher: true,
   topBarLogoStyle: 'icon',
-  topBarIconBadges: 'number',
-  showWatchLaterBadge: false,
   topBarComponentsConfig: [
     { key: 'moments', visible: true, badgeType: 'number' },
     { key: 'favorites', visible: true, badgeType: 'number' },
@@ -580,16 +567,13 @@ export const originalSettings: Settings = {
   momentsCardOpenMode: 'dialog',
 
   alwaysUseDock: false,
-  autoHideDock: false,
-  halfHideDock: false,
   dockCollapseMode: 'button',
-  dockPosition: 'right',
+  dockPosition: 'bottom',
   dockItemsConfig: [],
   pageMode: 'custom',
   disableDockGlowingEffect: false,
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
-  alwaysShowDockActionsWhenAutoHide: false,
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
 
   sidebarPosition: 'right',
@@ -604,8 +588,7 @@ export const originalSettings: Settings = {
   enableOledDarkMode: false,
   useLinearGradientThemeColorBackground: false,
 
-  searchPageDarkenOnSearchFocus: true,
-  searchPageBlurredOnSearchFocus: false,
+  disableSearchFocusEffect: false,
   searchPageLogoColor: 'themeColor',
   searchPageLogoGlow: true,
   searchPageShowLogo: true,
@@ -653,7 +636,6 @@ export const originalSettings: Settings = {
   followingInactiveDays: 100, // 默认100天
 
   homePageTabVisibilityList: [],
-  alwaysShowTabsOnHomePage: false,
   fixedHomeTabsOnHomePage: false,
   enableVersionReminder: true,
   lastAcknowledgedVersion: '',
@@ -674,7 +656,6 @@ export const originalSettings: Settings = {
   rememberNoCookieRecommendationState: true,
 
   adaptToOtherPageStyles: true,
-  showTopBar: true,
   useOriginalBilibiliTopBar: false,
   preventMobileRedirect: false,
 
@@ -708,35 +689,7 @@ export const originalSettings: Settings = {
   autoPlayWatchLater: 'autoPlay', // 稍后再看自动播放模式，默认自动连播
   autoPlayPlaylist: 'autoPlay', // 收藏列表自动播放模式，默认自动连播
 
-  keyboard: true, // 总快捷键开关，默认为 true
   videoPlayerScroll: true, // 默认开启视频播放器滚动
-  shortcuts: {
-    danmuStatus: { key: 'Shift+D', enabled: true },
-    webFullscreen: { key: 'Shift+W', enabled: true },
-    widescreen: { key: 'T', enabled: true },
-    shortStepBackward: { key: 'J', enabled: true },
-    longStepBackward: { key: 'Shift+J', enabled: true },
-    playPause: { key: 'K', enabled: true }, // 官方有 Space/⏯️，K 作为可选项
-    shortStepForward: { key: 'L', enabled: true },
-    longStepForward: { key: 'Shift+L', enabled: true },
-    pip: { key: 'P', enabled: true },
-    turnOffLight: { key: 'I', enabled: true },
-    caption: { key: 'C', enabled: true },
-    increasePlaybackRate: { key: '+', enabled: true },
-    decreasePlaybackRate: { key: '-', enabled: true },
-    resetPlaybackRate: { key: '0', enabled: true },
-    previousFrame: { key: ',', enabled: true },
-    nextFrame: { key: '.', enabled: true },
-    replay: { key: 'Shift+Backspace', enabled: true },
-    increaseVideoSize: { key: 'Shift++', enabled: true },
-    decreaseVideoSize: { key: 'Shift+-', enabled: true },
-    resetVideoSize: { key: 'Shift+0', enabled: true },
-    videoTitle: { key: 'B', enabled: true },
-    videoTime: { key: 'G', enabled: true },
-    clockTime: { key: 'H', enabled: true },
-    homeRefresh: { key: 'R', enabled: true },
-    toggleFollow: { key: 'Shift+F', enabled: false },
-  },
 
   // 倍速记忆设置
   rememberPlaybackRate: false, // 启用倍速记忆功能
@@ -786,6 +739,8 @@ watch(
     Reflect.deleteProperty(record, 'enableTopBarGradient')
     Reflect.deleteProperty(record, 'showTopBarThemeColorGradient')
     Reflect.deleteProperty(record, 'useOriginalBilibiliHomepage')
+    Reflect.deleteProperty(record, 'searchPageDarkenOnSearchFocus')
+    Reflect.deleteProperty(record, 'searchPageBlurredOnSearchFocus')
 
     // 清理已移除的音量均衡功能设置。
     for (const field of ['enableVolumeNormalization', 'targetVolume', 'normalizationStrength', 'adaptiveGainSpeed', 'voiceGateDb', 'volumeNormalizationDebug'])

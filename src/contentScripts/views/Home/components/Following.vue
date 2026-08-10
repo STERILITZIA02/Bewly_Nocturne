@@ -44,6 +44,7 @@ import { useI18n } from 'vue-i18n'
 import type { Author, Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import { parseDedeUserID } from '~/logic/loginStatus'
@@ -970,7 +971,7 @@ function selectUploader(mid: number | null) {
   // 即时滚动到顶部（或搜索页面模式下的偏移位置）
   const viewport = scrollViewportRef.value
   if (viewport) {
-    const scrollTarget = settings.value.useSearchPageModeOnHomePage ? 510 : 0
+    const scrollTarget = settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
     viewport.scrollTop = scrollTarget
   }
 

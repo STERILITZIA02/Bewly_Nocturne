@@ -36,9 +36,9 @@ function getRefreshPromptCopy(locale: string, currentVersion: string): RefreshPr
       currentVersion,
       refresh: '立即重新整理',
       later: '稍後',
-      missingTitle: 'BewlyMac 需要重新整理頁面',
+      missingTitle: 'Bewly Nocturne 需要重新整理頁面',
       missingDescription: '擴充功能已重新載入。重新整理頁面以恢復完整樣式與功能。',
-      updatedTitle: 'BewlyMac 已更新',
+      updatedTitle: 'Bewly Nocturne 已更新',
       updatedDescription: '目前頁面仍在執行舊版本。重新整理後套用 v{version}。',
     }
   }
@@ -48,9 +48,9 @@ function getRefreshPromptCopy(locale: string, currentVersion: string): RefreshPr
       currentVersion,
       refresh: '立即刷新',
       later: '稍后',
-      missingTitle: 'BewlyMac 需要刷新页面',
+      missingTitle: 'Bewly Nocturne 需要刷新页面',
       missingDescription: '扩展已重新加载。刷新页面以恢复完整样式和功能。',
-      updatedTitle: 'BewlyMac 已更新',
+      updatedTitle: 'Bewly Nocturne 已更新',
       updatedDescription: '当前页面仍在运行旧版本。刷新后应用 v{version}。',
     }
   }
@@ -60,9 +60,9 @@ function getRefreshPromptCopy(locale: string, currentVersion: string): RefreshPr
       currentVersion,
       refresh: '今すぐ再読み込み',
       later: '後で',
-      missingTitle: 'BewlyMac の再読み込みが必要です',
+      missingTitle: 'Bewly Nocturne の再読み込みが必要です',
       missingDescription: '拡張機能が再読み込みされました。ページを再読み込みして、スタイルと機能を復元してください。',
-      updatedTitle: 'BewlyMac が更新されました',
+      updatedTitle: 'Bewly Nocturne が更新されました',
       updatedDescription: 'このページでは古いバージョンが実行されています。再読み込みして v{version} を適用してください。',
     }
   }
@@ -72,9 +72,9 @@ function getRefreshPromptCopy(locale: string, currentVersion: string): RefreshPr
       currentVersion,
       refresh: '지금 새로고침',
       later: '나중에',
-      missingTitle: 'BewlyMac 페이지 새로고침 필요',
+      missingTitle: 'Bewly Nocturne 페이지 새로고침 필요',
       missingDescription: '확장 프로그램이 다시 로드되었습니다. 전체 스타일과 기능을 복원하려면 페이지를 새로고침하세요.',
-      updatedTitle: 'BewlyMac 업데이트됨',
+      updatedTitle: 'Bewly Nocturne 업데이트됨',
       updatedDescription: '이 페이지는 이전 버전을 실행 중입니다. 새로고침하여 v{version}을 적용하세요.',
     }
   }
@@ -83,9 +83,9 @@ function getRefreshPromptCopy(locale: string, currentVersion: string): RefreshPr
     currentVersion,
     refresh: 'Refresh now',
     later: 'Later',
-    missingTitle: 'BewlyMac needs a page refresh',
+    missingTitle: 'Bewly Nocturne needs a page refresh',
     missingDescription: 'The extension was reloaded. Refresh this page to restore all styles and features.',
-    updatedTitle: 'BewlyMac was updated',
+    updatedTitle: 'Bewly Nocturne was updated',
     updatedDescription: 'This page is still running an older version. Refresh to apply v{version}.',
   }
 }
@@ -450,10 +450,10 @@ function queueContentScriptRefreshPrompt(tabId: number): void {
   const prompt = promptContentScriptRefresh(tabId)
     .then((result) => {
       if (result === 'refresh-prompted')
-        console.log(`[BewlyCat] Asked tab ${tabId} to refresh after its content script became unavailable.`)
+        console.log(`[Bewly Nocturne] Asked tab ${tabId} to refresh after its content script became unavailable.`)
     })
     .catch((error) => {
-      console.warn(`[BewlyCat] Failed to show the refresh prompt in tab ${tabId}.`, error)
+      console.warn(`[Bewly Nocturne] Failed to show the refresh prompt in tab ${tabId}.`, error)
     })
     .finally(() => {
       if (pendingPrompts.get(tabId) === prompt)
@@ -491,11 +491,11 @@ export function setupContentScriptRefreshPrompt(): void {
 
   browser.runtime.onStartup.addListener(() => {
     void queueActiveTabs().catch((error) => {
-      console.warn('[BewlyCat] Failed to inspect active tabs on startup.', error)
+      console.warn('[Bewly Nocturne] Failed to inspect active tabs on startup.', error)
     })
   })
 
   void queueActiveTabs().catch((error) => {
-    console.warn('[BewlyCat] Failed to inspect active tabs.', error)
+    console.warn('[Bewly Nocturne] Failed to inspect active tabs.', error)
   })
 }

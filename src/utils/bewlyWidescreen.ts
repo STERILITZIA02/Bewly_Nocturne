@@ -1111,7 +1111,12 @@ function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-sidebar-top {
       position: relative;
       z-index: 0;
-      flex: 0 0 auto;
+      flex: 0 1 auto;
+      min-height: 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
       padding: 8px 10px 8px;
       border-bottom: 1px solid var(--bewly-widescreen-divider);
       background: var(--bewly-widescreen-surface-bg);
@@ -1219,6 +1224,22 @@ function injectLayoutStyle() {
       overflow: hidden !important;
       overflow-wrap: anywhere;
       word-break: break-word !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-description-slot.is-expanded .video-desc-container,
+    #${ROOT_ID} .bewly-widescreen-description-slot.is-expanded #v_desc {
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-description-slot.is-expanded .basic-desc-info {
+      display: block !important;
+      height: auto !important;
+      max-height: none !important;
+      overflow: visible !important;
+      -webkit-line-clamp: unset !important;
+      -webkit-box-orient: initial !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-description-slot.is-collapsed .basic-desc-info {
@@ -1552,6 +1573,12 @@ function injectLayoutStyle() {
       overflow: auto;
       overscroll-behavior: contain;
       padding: 8px 8px 16px;
+    }
+
+    /* B 站表情面板可能向上展开；只在打开期间允许它越过评论面板边界。 */
+    #${ROOT_ID} .bewly-widescreen-panels[data-bewly-comment-emoji-open],
+    #${ROOT_ID} .bewly-widescreen-panel[data-bewly-comment-emoji-open] {
+      overflow: visible;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel[hidden] {

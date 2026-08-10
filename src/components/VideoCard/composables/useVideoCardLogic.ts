@@ -498,6 +498,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     shouldHideOverlayElements,
 
     // Methods
+    clearPreviewVideoUrl,
     toggleWatchLater,
     handleMouseEnter,
     handelMouseLeave,

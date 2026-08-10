@@ -120,7 +120,7 @@ const menuVideo = computed<Video | null>(() => {
   return getMenuVideo({
     aid: moment.aid,
     bvid: moment.bvid,
-    title: moment.title || '视频动态',
+    title: moment.title || t('moment_card.video_moment'),
     cover: moment.images[0] || moment.chargeCover || '',
     duration: moment.duration,
     play: moment.videoPlay,
@@ -177,15 +177,7 @@ function closeVideoOptions() {
   showVideoOptions.value = false
 }
 
-function handleCardClick(event: MouseEvent) {
-  const target = event.target
-  if (target instanceof Element) {
-    const interactiveTarget = target.closest('button, a, [role="button"]')
-    // 根 article 自身就是 role="button"；只过滤卡片内部的独立交互控件。
-    if (interactiveTarget && interactiveTarget !== event.currentTarget)
-      return
-  }
-
+function openPrimaryDetail() {
   emit('openDetail', moment)
 }
 
@@ -233,18 +225,20 @@ function getImagePreviewLabel(author: string, index: number) {
       'moment-card--preparing': !ready,
       'moment-card--entering': entering,
     }"
-    tabindex="0"
-    role="button"
     :style="cardLayoutStyles"
-    @click="handleCardClick"
-    @keydown.enter.self="emit('openDetail', moment)"
   >
+    <button
+      type="button"
+      class="moment-card__primary-action"
+      :aria-label="$t('moment_card.open_detail', { author: moment.author.name })"
+      @click="openPrimaryDetail"
+    />
     <div class="moment-card__surface">
       <header class="moment-card__header">
         <img :src="getAvatarThumbnailUrl(moment.author.face)" :alt="moment.author.name" class="moment-card__avatar" loading="lazy" decoding="async">
         <span class="moment-card__identity">
           <strong>{{ moment.author.name }}</strong>
-          <small>{{ moment.time || '刚刚' }}</small>
+          <small>{{ moment.time || $t('moment_card.just_now') }}</small>
         </span>
         <button
           v-if="menuVideo"
@@ -280,6 +274,7 @@ function getImagePreviewLabel(author: string, index: number) {
           class="moment-card__media moment-card__cover moment-card__cover--media"
           @mouseenter="emit('mediaEnter', moment)"
           @mouseleave="emit('mediaLeave', moment)"
+          @click="openPrimaryDetail"
         >
           <img
             :src="getMomentThumbnailUrl(moment.images[0])"
@@ -315,7 +310,7 @@ function getImagePreviewLabel(author: string, index: number) {
             <span i-svg-spinners:pulse-3 aria-hidden="true" />
           </span>
           <span v-if="moment.isChargeExclusive" class="moment-card__charge-badge">
-            {{ moment.chargeBadge || '充电专属' }}
+            {{ moment.chargeBadge || $t('moment_card.charge_exclusive') }}
           </span>
           <button
             v-if="settings.showVideoCardWatchLater && moment.isVideo && !moment.isLive"
@@ -323,9 +318,9 @@ function getImagePreviewLabel(author: string, index: number) {
             class="moment-card__watch-later"
             :class="{ 'is-added': isWatchLaterAdded(moment) }"
             :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) ? '已添加稍后再看' : '添加至稍后再看'"
+            :aria-label="isWatchLaterAdded(moment) ? $t('moment_card.watch_later_added') : $t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) ? '已添加' : '稍后再看'"
+            :title="isWatchLaterAdded(moment) ? $t('moment_card.added') : $t('moment_card.watch_later')"
             @click.stop="emit('toggleWatchLater', moment)"
           >
             <span v-if="isWatchLaterLoading(moment)" i-svg-spinners:ring-resize aria-hidden="true" />
@@ -333,19 +328,23 @@ function getImagePreviewLabel(author: string, index: number) {
             <span v-else i-mingcute:carplay-line aria-hidden="true" />
           </button>
         </div>
-        <div v-else-if="(moment.isVideo || moment.isLive) && (!moment.isChargeExclusive || moment.isVideo)" class="moment-card__media moment-card__cover moment-card__text-cover moment-card__text-cover--video">
+        <div
+          v-else-if="(moment.isVideo || moment.isLive) && (!moment.isChargeExclusive || moment.isVideo)"
+          class="moment-card__media moment-card__cover moment-card__text-cover moment-card__text-cover--video"
+          @click="openPrimaryDetail"
+        >
           <span v-if="moment.isLive" i-tabler-live-photo class="moment-card__text-cover-icon" />
           <span v-else i-tabler-player-play-filled class="moment-card__text-cover-icon" />
-          <span>{{ moment.isLive ? '直播动态' : '视频动态' }}</span>
+          <span>{{ moment.isLive ? $t('moment_card.live_moment') : $t('moment_card.video_moment') }}</span>
           <button
             v-if="settings.showVideoCardWatchLater && moment.isVideo && !moment.isLive"
             type="button"
             class="moment-card__watch-later"
             :class="{ 'is-added': isWatchLaterAdded(moment) }"
             :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) ? '已添加稍后再看' : '添加至稍后再看'"
+            :aria-label="isWatchLaterAdded(moment) ? $t('moment_card.watch_later_added') : $t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) ? '已添加' : '稍后再看'"
+            :title="isWatchLaterAdded(moment) ? $t('moment_card.added') : $t('moment_card.watch_later')"
             @click.stop="emit('toggleWatchLater', moment)"
           >
             <span v-if="isWatchLaterLoading(moment)" i-svg-spinners:ring-resize aria-hidden="true" />
@@ -402,56 +401,65 @@ function getImagePreviewLabel(author: string, index: number) {
               {{ getCardPreviewText(moment) }}
             </template>
           </p>
-          <a
+          <div
             v-if="moment.forward?.video"
-            :href="moment.forward.video.url || undefined"
-            target="_blank"
-            rel="noopener noreferrer"
             class="moment-card__forward-video"
-            :aria-label="`打开原视频：${moment.forward.video.title}`"
-            @click.stop="handleForwardVideoClick"
           >
             <span class="moment-card__forward-video-cover">
-              <img
-                :src="getMomentThumbnailUrl(moment.forward.video.cover)"
-                :alt="moment.forward.video.title"
-                loading="lazy"
-                decoding="async"
+              <a
+                :href="moment.forward.video.url || undefined"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="moment-card__forward-video-cover-link"
+                :aria-label="$t('moment_card.open_original_video', { title: moment.forward.video.title })"
+                @click.stop="handleForwardVideoClick"
               >
-              <span
-                v-if="settings.showVideoCardViewCount && moment.forward.video.play"
-                class="moment-card__video-stats"
-              >
-                <span class="moment-card__video-stat-group">
-                  <span>
-                    <span i-tabler-player-play aria-hidden="true" />
-                    {{ moment.forward.video.play }}
+                <img
+                  :src="getMomentThumbnailUrl(moment.forward.video.cover)"
+                  :alt="moment.forward.video.title"
+                  loading="lazy"
+                  decoding="async"
+                >
+                <span
+                  v-if="settings.showVideoCardViewCount && moment.forward.video.play"
+                  class="moment-card__video-stats"
+                >
+                  <span class="moment-card__video-stat-group">
+                    <span>
+                      <span i-tabler-player-play aria-hidden="true" />
+                      {{ moment.forward.video.play }}
+                    </span>
                   </span>
                 </span>
-              </span>
-              <span
+              </a>
+              <button
                 v-if="settings.showVideoCardWatchLater && getWatchLaterStateKey(moment.forward.video)"
-                role="button"
-                :tabindex="isWatchLaterLoading(moment.forward.video) ? -1 : 0"
+                type="button"
                 class="moment-card__watch-later"
                 :class="{
                   'is-added': isWatchLaterAdded(moment.forward.video),
                   'is-disabled': isWatchLaterLoading(moment.forward.video),
                 }"
+                :disabled="isWatchLaterLoading(moment.forward.video)"
                 :aria-disabled="isWatchLaterLoading(moment.forward.video)"
-                :aria-label="isWatchLaterAdded(moment.forward.video) ? '已添加稍后再看' : '添加至稍后再看'"
+                :aria-label="isWatchLaterAdded(moment.forward.video) ? $t('moment_card.watch_later_added') : $t('moment_card.add_watch_later')"
                 :aria-pressed="isWatchLaterAdded(moment.forward.video)"
-                :title="isWatchLaterAdded(moment.forward.video) ? '已添加' : '稍后再看'"
+                :title="isWatchLaterAdded(moment.forward.video) ? $t('moment_card.added') : $t('moment_card.watch_later')"
                 @click.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
-                @keydown.enter.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
-                @keydown.space.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
               >
                 <span v-if="isWatchLaterLoading(moment.forward.video)" i-svg-spinners:ring-resize aria-hidden="true" />
                 <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-line-md:confirm aria-hidden="true" />
                 <span v-else i-mingcute:carplay-line aria-hidden="true" />
-              </span>
+              </button>
             </span>
-            <span class="moment-card__forward-video-info">
+            <a
+              :href="moment.forward.video.url || undefined"
+              target="_blank"
+              rel="noopener noreferrer"
+              class="moment-card__forward-video-info"
+              :aria-label="$t('moment_card.open_original_video', { title: moment.forward.video.title })"
+              @click.stop="handleForwardVideoClick"
+            >
               <strong>
                 <VideoWatchedTag
                   :aid="moment.forward.video.aid"
@@ -460,8 +468,8 @@ function getImagePreviewLabel(author: string, index: number) {
                 {{ moment.forward.video.title || moment.forward.fallback }}
               </strong>
               <small><span i-tabler-user aria-hidden="true" />{{ moment.forward.author }}</small>
-            </span>
-          </a>
+            </a>
+          </div>
           <div
             v-else-if="moment.forward"
             class="moment-card__forward"
@@ -486,7 +494,7 @@ function getImagePreviewLabel(author: string, index: number) {
               >
                 <img
                   :src="getMomentThumbnailUrl(image, 360)"
-                  :alt="`${moment.forward.author} 的动态图片 ${imageIndex + 1}`"
+                  :alt="$t('moment_card.moment_image_alt', { author: moment.forward.author, index: imageIndex + 1 })"
                   loading="lazy"
                   decoding="async"
                 >
@@ -511,7 +519,7 @@ function getImagePreviewLabel(author: string, index: number) {
           >
             <img
               :src="getMomentThumbnailUrl(image, 360)"
-              :alt="`${moment.author.name} 的动态图片 ${imageIndex + 1}`"
+              :alt="$t('moment_card.moment_image_alt', { author: moment.author.name, index: imageIndex + 1 })"
               loading="lazy"
               decoding="async"
               @load="handleCoverLoad"
@@ -519,7 +527,7 @@ function getImagePreviewLabel(author: string, index: number) {
           </button>
           <span v-if="moment.images.length > 9" class="moment-card__image-count">+{{ moment.images.length - 9 }}</span>
           <span v-if="moment.isChargeExclusive" class="moment-card__charge-badge">
-            {{ moment.chargeBadge || '充电专属' }}
+            {{ moment.chargeBadge || $t('moment_card.charge_exclusive') }}
           </span>
         </div>
       </div>
@@ -553,7 +561,7 @@ function getImagePreviewLabel(author: string, index: number) {
             loading="lazy"
             decoding="async"
           >
-          <span><strong>{{ moment.additional.title || '附加内容' }}</strong><small v-if="moment.additional.desc">{{ moment.additional.desc }}</small></span>
+          <span><strong>{{ moment.additional.title || $t('moment_card.additional_content') }}</strong><small v-if="moment.additional.desc">{{ moment.additional.desc }}</small></span>
         </a>
         <button
           v-if="isReservationAdditional"
@@ -582,12 +590,12 @@ function getImagePreviewLabel(author: string, index: number) {
         v-if="moment.hotComment"
         type="button"
         class="moment-card__hot-comment"
-        aria-label="查看热门评论"
+        :aria-label="$t('moment_card.view_hot_comment')"
         @click.stop="emit('openDetail', moment)"
       >
         <span class="moment-card__hot-comment-label">
           <span i-tabler-message-circle-filled aria-hidden="true" />
-          热门评论
+          {{ $t('moment_card.hot_comment') }}
         </span>
         <span class="moment-card__hot-comment-content">
           <template v-if="moment.hotComment.richText.length">
@@ -613,40 +621,40 @@ function getImagePreviewLabel(author: string, index: number) {
         <button
           v-if="settings.momentsCardOpenMode !== 'dialog' && !moment.isLive"
           type="button"
-          aria-label="弹窗打开动态"
+          :aria-label="$t('moment_card.open_dialog')"
           @click.stop="emit('openDetail', moment, true)"
           @keydown.enter.stop
         >
           <span i-tabler-layout-dashboard />
-          <span class="moment-card__open-label">弹窗打开</span>
+          <span class="moment-card__open-label">{{ $t('moment_card.open_dialog_short') }}</span>
         </button>
         <a
           v-else
           :href="moment.url"
           target="_blank"
           rel="noopener noreferrer"
-          aria-label="新建标签页打开动态"
+          :aria-label="$t('moment_card.open_new_tab')"
           @click.stop
         >
           <span i-tabler-external-link />
-          <span class="moment-card__open-label">新标签页打开</span>
+          <span class="moment-card__open-label">{{ $t('moment_card.open_new_tab_short') }}</span>
         </a>
-        <button v-if="!moment.isLive" type="button" aria-label="查看评论" @click.stop="emit('openDetail', moment)">
+        <button v-if="!moment.isLive" type="button" :aria-label="$t('moment_card.view_comments')" @click.stop="emit('openDetail', moment)">
           <span i-tabler-message-circle />
           {{ formatCount(moment.commentCount) }}
         </button>
-        <span v-else class="moment-card__footer-stat" :aria-label="`直播人气 ${moment.livePopularity || '暂无数据'}`">
+        <span v-else class="moment-card__footer-stat" :aria-label="$t('moment_card.live_popularity', { value: moment.livePopularity || $t('moment_card.no_data') })">
           <span i-tabler-users />
-          {{ moment.livePopularity || '直播中' }}
+          {{ moment.livePopularity || $t('moment_card.live_now') }}
         </span>
         <button
           type="button"
           class="moment-card__likes"
           :class="{ 'is-liked': moment.isLiked, 'is-unavailable': moment.isLikeDisabled }"
           :disabled="isLikeLoading || moment.isLikeDisabled"
-          :aria-label="moment.isLikeDisabled ? '该动态暂不支持点赞' : moment.isLiked ? '取消点赞' : '点赞'"
+          :aria-label="moment.isLikeDisabled ? $t('moment_card.like_unavailable') : moment.isLiked ? $t('moment_card.cancel_like') : $t('moment_card.like')"
           :aria-pressed="moment.isLiked"
-          :title="moment.isLikeDisabled ? '该动态暂不支持点赞' : moment.isLiked ? '取消点赞' : '点赞'"
+          :title="moment.isLikeDisabled ? $t('moment_card.like_unavailable') : moment.isLiked ? $t('moment_card.cancel_like') : $t('moment_card.like')"
           @click.stop="emit('toggleLike', moment)"
           @keydown.enter.stop
         >
@@ -694,12 +702,39 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__surface {
+  position: relative;
+  z-index: 1;
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
   border-radius: inherit;
   corner-shape: inherit;
   background: var(--bew-elevated);
+  pointer-events: none;
+}
+
+.moment-card__surface :is(a, button, [role="button"]),
+.moment-card__cover--media,
+.moment-card__text-cover--video {
+  pointer-events: auto;
+}
+
+.moment-card__primary-action {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+
+.moment-card__primary-action:focus-visible {
+  outline: 2px solid var(--bew-theme-color);
+  outline-offset: 4px;
 }
 
 @media (hover: hover) and (pointer: fine) {
@@ -707,11 +742,6 @@ function getImagePreviewLabel(author: string, index: number) {
     transform: translateY(-2px);
     box-shadow: var(--bew-shadow-1);
   }
-}
-
-.moment-card:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
-  outline-offset: 4px;
 }
 
 .moment-card:active {
@@ -1439,7 +1469,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__forward-video:hover,
-.moment-card__forward-video:focus-visible {
+.moment-card__forward-video:focus-within {
   border-color: color-mix(in oklab, var(--bew-theme-color), transparent 48%);
   background: color-mix(in oklab, var(--bew-theme-color) 7%, var(--bew-fill-1));
   outline: none;
@@ -1454,7 +1484,13 @@ function getImagePreviewLabel(author: string, index: number) {
   background: #111;
 }
 
-.moment-card__forward-video-cover > img {
+.moment-card__forward-video-cover-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.moment-card__forward-video-cover-link > img {
   display: block;
   width: 100%;
   height: 100%;

@@ -21,7 +21,7 @@ async function ensureFreshTokens() {
       return
 
     if (tokens.refreshTokenExpiresAt && tokens.refreshTokenExpiresAt <= Date.now()) {
-      console.warn('[BewlyCat] APP refresh token 已过期，清除授权。')
+      console.warn('[Bewly Nocturne] APP refresh token 已过期，清除授权。')
       resetAppAuthTokens()
       return
     }
@@ -31,7 +31,7 @@ async function ensureFreshTokens() {
 
     const ok = await refreshAppAccessToken()
     if (!ok)
-      console.warn('[BewlyCat] APP access token 刷新失败，请重新授权。')
+      console.warn('[Bewly Nocturne] APP access token 刷新失败，请重新授权。')
   })().finally(() => {
     refreshPromise = null
   })
