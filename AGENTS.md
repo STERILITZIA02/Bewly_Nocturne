@@ -103,7 +103,7 @@ pnpm typecheck
 - 冒号后说明用中文，准确概括改动
 - 合并 PR 时使用 `merge: 合并 PR #<number> <标题>`
 - 有对应 [issue](https://github.com/keleus/BewlyCat/issues) 时在 commit 后附 `#{issue}`
-- PR 不要提交 tests 文件和 `AGENTS.md`
+- PR 不要提交 tests 文件
 
 ## 双仓库开发守则
 
