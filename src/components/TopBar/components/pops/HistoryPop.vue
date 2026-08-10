@@ -2,6 +2,7 @@
 import { useDateFormat } from '@vueuse/core'
 import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
 import Loading from '~/components/Loading.vue'
@@ -12,25 +13,24 @@ import { Business } from '~/models/history/history'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
 const { t } = useI18n()
+const toast = useToast()
 const historys = reactive<Array<HistoryItem>>([])
 const historyTabs = computed(() => [
   {
     id: 0,
     name: t('topbar.moments_dropdown.tabs.videos'),
-    isSelected: true,
   },
   {
     id: 1,
     name: t('topbar.moments_dropdown.tabs.live'),
-    isSelected: false,
   },
   {
     id: 2,
     name: t('topbar.moments_dropdown.tabs.articles'),
-    isSelected: false,
   },
 ])
 /**
@@ -97,9 +97,6 @@ function onClickTab(tabId: number) {
   noMoreContent.value = false
 
   activatedTab.value = tabId
-  historyTabs.value.forEach((tab) => {
-    tab.isSelected = tab.id === tabId
-  })
 }
 
 /**
@@ -164,22 +161,38 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
     }
   }
   catch (error) {
-    console.error('Failed to load history list:', error)
+    if (!isExtensionContextInvalidatedError(error))
+      console.error('Failed to load history list:', error)
   }
   finally {
     isLoading.value = false
   }
 }
 
-function deleteHistoryItem(index: number, historyItem: HistoryItem) {
-  api.history.deleteHistoryItem({
-    kid: `${historyItem.history.business}_${historyItem.history.oid}`,
-    csrf: getCSRF(),
-  })
-    .then((res) => {
-      if (res.code === 0)
-        historys.splice(index, 1)
+function getHistoryItemKey(historyItem: HistoryItem): string {
+  return `${historyItem.history.business}_${historyItem.history.oid}`
+}
+
+async function deleteHistoryItem(historyItem: HistoryItem) {
+  const itemKey = getHistoryItemKey(historyItem)
+  try {
+    const res = await api.history.deleteHistoryItem({
+      kid: itemKey,
+      csrf: getCSRF(),
     })
+    if (res.code !== 0) {
+      toast.error(t('common.load_failed'))
+      return
+    }
+
+    const currentIndex = historys.findIndex(item => getHistoryItemKey(item) === itemKey)
+    if (currentIndex >= 0)
+      historys.splice(currentIndex, 1)
+  }
+  catch (error) {
+    console.error('Failed to delete history item:', error)
+    toast.error(t('common.load_failed'))
+  }
 }
 
 function initData() {
@@ -235,7 +248,7 @@ defineExpose({
           m="r-4"
           transition="background-color duration-200, color duration-200, opacity duration-200"
           class="tab"
-          :class="tab.isSelected ? 'tab-selected' : ''"
+          :class="tab.id === activatedTab ? 'tab-selected' : ''"
           cursor="pointer"
           @click="onClickTab(tab.id)"
         >
@@ -281,30 +294,34 @@ defineExpose({
 
       <!-- historys -->
       <TransitionGroup name="list">
-        <ALink
-          v-for="(historyItem, index) in historys"
+        <article
+          v-for="historyItem in historys"
           :key="historyItem.kid"
-          :href="getHistoryUrl(historyItem)"
-          type="topBar"
-          class="group"
+          class="group popover-card"
           m="last:b-4" p="2"
           rounded="$bew-radius"
           hover:bg="$bew-fill-2"
           duration-300
         >
-          <section flex="~ gap-4 item-start">
+          <ALink
+            class="popover-card__primary"
+            :href="getHistoryUrl(historyItem)"
+            :aria-label="historyItem.title"
+            type="topBar"
+          />
+          <section class="popover-card__content" flex="~ gap-4 items-start">
             <!-- Video cover, live cover, ariticle cover -->
             <div
+              class="popover-card__media"
               bg="$bew-skeleton"
-              pos="relative"
               w="150px"
               flex="shrink-0"
-              border="rounded-$bew-radius-half"
-              overflow="hidden"
             >
               <!-- Delete button -->
-              <div
-                class="group-hover:opacity-100 opacity-0 bew-shape-circle"
+              <button
+                type="button"
+                class="group-hover:opacity-100 opacity-0 p-0 bew-shape-circle popover-card__interactive popover-card-action"
+                :aria-label="$t('common.operation.delete')"
                 pos="absolute top-0 right-0" z-1 w-24px h-24px
                 bg="black opacity-60 hover:$bew-error-color"
                 grid="~ place-items-center"
@@ -312,10 +329,10 @@ defineExpose({
                 text="white xs"
                 duration-300
                 border="rounded-full"
-                @click.stop.prevent="deleteHistoryItem(index, historyItem)"
+                @click.stop.prevent="deleteHistoryItem(historyItem)"
               >
                 <i i-mingcute:close-line />
-              </div>
+              </button>
 
               <!-- Video -->
               <template v-if="activatedTab === 0">
@@ -425,13 +442,13 @@ defineExpose({
                 <ALink
                   :href="`https://space.bilibili.com/${historyItem.author_mid}`"
                   type="topBar"
-                  :stop-propagation="true"
+                  class="popover-card__interactive"
                 >
                   {{ historyItem.author_name }}
                 </ALink>
                 <span
                   v-if="historyItem.live_status === 1"
-                  text="$bew-theme-color"
+                  text="$bew-theme-foreground"
                   flex
                   items-center
                   gap-1
@@ -451,7 +468,7 @@ defineExpose({
               </p>
             </div>
           </section>
-        </ALink>
+        </article>
       </TransitionGroup>
       <!-- loading -->
       <Transition name="fade">
@@ -462,6 +479,8 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/popoverCards";
+
 .tab {
   --uno: "relative text-$bew-text-2";
 

@@ -694,7 +694,7 @@ defineExpose({
               <div class="media-ft-highlight-info">
                 <div class="media-ft-highlight-title" text="lg $bew-text-1" font-medium v-html="item.title" />
                 <div class="media-ft-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
-                  <span v-if="item.media_score?.score" text="$bew-theme-color" font-bold>
+                  <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-bold>
                     {{ item.media_score.score.toFixed(1) }} 分
                   </span>
                   <span v-if="item.areas">{{ item.areas }}</span>
@@ -745,7 +745,7 @@ defineExpose({
                   {{ bangumi.title }}
                 </div>
                 <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
-                  <span v-if="bangumi.score" text="$bew-theme-color" font-bold>
+                  <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
                     {{ bangumi.score?.toFixed(1) }} 分
                   </span>
                   <span v-if="bangumi.areas">{{ bangumi.areas }}</span>
@@ -1011,7 +1011,7 @@ defineExpose({
   padding: 0.25rem 0.5rem;
   border-radius: var(--bew-badge-radius);
   background: var(--bew-theme-color-20);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
 }
 
@@ -1161,7 +1161,7 @@ defineExpose({
   padding: 0.1rem 0.5rem;
   border-radius: var(--bew-badge-radius);
   background: var(--bew-theme-color-20);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
 }
 
@@ -1255,7 +1255,7 @@ defineExpose({
   text-align: center;
   padding: 0.5rem;
   font-size: var(--bew-font-size-control);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   text-decoration: none;
   border-radius: var(--bew-interactive-radius);
   transition:

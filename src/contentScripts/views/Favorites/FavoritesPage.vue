@@ -2110,7 +2110,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
 }
 
 .batch-target-folder.active {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   border-color: var(--bew-theme-color);
   background: var(--bew-theme-color-10);
 }

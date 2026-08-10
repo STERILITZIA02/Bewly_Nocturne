@@ -89,7 +89,7 @@
 }
 
 .bew-segment-control__item[data-active="true"]:focus-visible {
-  outline: 2px solid var(--bew-segment-item-focus-ring-color, var(--bew-theme-color-40));
+  outline: 2px solid var(--bew-segment-item-focus-ring-color, var(--bew-theme-focus-ring));
   outline-offset: -2px;
 }
 

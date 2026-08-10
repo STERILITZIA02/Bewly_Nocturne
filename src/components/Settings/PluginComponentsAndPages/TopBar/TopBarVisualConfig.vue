@@ -406,7 +406,7 @@ function toggleChannel(value: string) {
 
 .topbar-component-icon {
   flex: 0 0 auto;
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-icon-size-md);
 }
 
@@ -444,7 +444,7 @@ function toggleChannel(value: string) {
 
 .logo-style-picker {
   --bew-segment-item-active-bg: var(--bew-theme-color-20);
-  --bew-segment-item-active-color: var(--bew-theme-color);
+  --bew-segment-item-active-color: var(--bew-theme-foreground);
   --bew-segment-item-active-shadow: inset 0 0 0 1px var(--bew-theme-color-30);
 
   &__brand-option {
@@ -508,14 +508,14 @@ function toggleChannel(value: string) {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-color-60);
+    outline: 2px solid var(--bew-theme-focus-ring);
     outline-offset: var(--bew-space-0-5);
   }
 
   &.selected {
     border-color: var(--bew-theme-color-30);
     background: color-mix(in oklab, var(--bew-theme-color-20), transparent 35%);
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
     transform: none;
 
     &:hover {

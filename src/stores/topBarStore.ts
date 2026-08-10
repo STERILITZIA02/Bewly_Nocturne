@@ -887,10 +887,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // 删除稍后再看项目
-  async function deleteWatchLaterItem(aid: number) {
+  async function deleteWatchLaterItem(aid: number): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
-      return
+      return false
 
     try {
       const res = await api.watchlater.removeFromWatchLater({
@@ -898,12 +898,15 @@ export const useTopBarStore = defineStore('topBar', () => {
         csrf: getCSRF(),
       })
       if (res.code === 0 && isCurrentAccount(accountId)) {
-        void commitWatchLaterMutation(aid, false, accountId)
+        await commitWatchLaterMutation(aid, false, accountId)
+        return true
       }
+      return false
     }
     catch (error) {
       if (!isExtensionContextInvalidatedError(error))
         console.error(error)
+      return false
     }
   }
 
@@ -1548,19 +1551,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     drawerVisible.notifications = false
   }
 
-  // 添加鼠标状态跟踪
-  const isMouseOverPopup = reactive<Record<string, boolean>>({})
-
-  // 设置鼠标是否在弹窗上
-  function setMouseOverPopup(key: string, value: boolean) {
-    isMouseOverPopup[key] = value
-  }
-
-  // 获取鼠标是否在弹窗上
-  function getMouseOverPopup(key: string) {
-    return isMouseOverPopup[key] || false
-  }
-
   // 设置TopBar可见状态
   function setTopBarVisible(visible: boolean) {
     topBarVisible.value = visible
@@ -1593,9 +1583,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     closeAllPopups,
     initData,
     cleanup,
-    isMouseOverPopup,
-    setMouseOverPopup,
-    getMouseOverPopup,
     syncSharedData,
     syncUnreadMessageState,
     syncMomentsState,

@@ -24,7 +24,7 @@ defineProps<{
   opacity: 0.6;
 
   &:hover {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
     background: var(--bew-theme-color-20);
     opacity: 1;
   }

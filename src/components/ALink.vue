@@ -8,6 +8,7 @@ import { openLinkInBackground } from '~/utils/tabs'
 const props = defineProps<{
   href?: string
   title?: string
+  ariaLabel?: string
   rel?: string
   type: 'topBar' | 'videoCard' | 'searchBar'
   customClickEvent?: boolean
@@ -114,6 +115,7 @@ function handleClick(event: MouseEvent) {
     :href="processedHref"
     :target="target"
     :title="title"
+    :aria-label="ariaLabel"
     :rel="rel"
     :draggable="disableDragging ? false : undefined"
     @click="handleClick"

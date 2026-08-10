@@ -765,7 +765,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-color-40);
+    outline: 2px solid var(--bew-theme-focus-ring);
     outline-offset: -2px;
   }
 }
@@ -893,15 +893,15 @@ function changeMenuItem(menuItem: MenuType) {
     background-color var(--bew-duration-normal) var(--bew-ease-standard);
 
   &:hover {
-    border-color: var(--bew-theme-color-40);
+    border-color: var(--bew-theme-focus-ring);
   }
 
   &:focus-within {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-theme-focus-ring);
     border-radius: var(--bew-radius);
     box-shadow:
       var(--bew-shadow-edge-glow-1),
-      0 0 0 2px var(--bew-theme-color);
+      0 0 0 2px var(--bew-theme-focus-ring);
   }
 
   > i {

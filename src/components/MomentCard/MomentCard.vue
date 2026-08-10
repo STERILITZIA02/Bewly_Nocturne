@@ -733,7 +733,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__primary-action:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: 2px solid var(--bew-theme-focus-ring);
   outline-offset: 4px;
 }
 
@@ -953,7 +953,7 @@ function getImagePreviewLabel(author: string, index: number) {
   align-self: flex-start;
   padding: 4px 8px;
   border-radius: var(--bew-interactive-radius);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   background: var(--bew-theme-color-10);
   line-height: 1.35;
 }
@@ -1071,7 +1071,7 @@ function getImagePreviewLabel(author: string, index: number) {
   padding: var(--bew-space-1) var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-interactive-radius);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   background: transparent;
   box-sizing: border-box;
   cursor: pointer;
@@ -1095,7 +1095,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__additional-action:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: 2px solid var(--bew-theme-focus-ring);
   outline-offset: 2px;
 }
 
@@ -1132,7 +1132,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__likes:hover {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   background: color-mix(in srgb, var(--bew-theme-color) 10%, transparent);
 }
 
@@ -1141,7 +1141,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__likes.is-liked {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
 }
 
 .moment-card__likes:disabled {
@@ -1181,7 +1181,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__identity strong {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-semibold);
 }
@@ -1285,7 +1285,7 @@ function getImagePreviewLabel(author: string, index: number) {
 .moment-card__gallery-item:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid var(--bew-theme-color);
+  outline: 2px solid var(--bew-theme-focus-ring);
   outline-offset: -2px;
 }
 
@@ -1353,7 +1353,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__more-btn:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: 2px solid var(--bew-theme-focus-ring);
   outline-offset: 2px;
 }
 
@@ -1443,7 +1443,7 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__rich-link {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   text-decoration: none;
   text-underline-offset: 0.15em;
 }
@@ -1671,7 +1671,7 @@ function getImagePreviewLabel(author: string, index: number) {
   flex: 0 0 auto;
   align-items: center;
   gap: var(--bew-space-1);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-weight: var(--bew-font-weight-semibold);
 }
 
@@ -1725,7 +1725,7 @@ function getImagePreviewLabel(author: string, index: number) {
 
 .moment-card__footer > a:hover,
 .moment-card__footer > button:hover {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   background: color-mix(in srgb, var(--bew-theme-color) 8%, transparent);
 }
 

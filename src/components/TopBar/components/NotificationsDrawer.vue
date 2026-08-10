@@ -359,6 +359,8 @@ function activateDrawer() {
   handleOpen()
 }
 
+onMounted(activateDrawer)
+
 onActivated(activateDrawer)
 
 onDeactivated(deactivateDrawer)

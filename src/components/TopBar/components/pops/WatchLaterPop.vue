@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
 import Loading from '~/components/Loading.vue'
@@ -15,6 +17,8 @@ import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
 
 const topBarStore = useTopBarStore()
+const { t } = useI18n()
+const toast = useToast()
 const { watchLaterList, isLoadingWatchLater, watchLaterCount } = storeToRefs(topBarStore)
 const viewAllUrl = computed((): string => {
   return 'https://www.bilibili.com/watchlater/list'
@@ -24,6 +28,7 @@ const playAllUrl = computed((): string => {
 })
 
 const scrollContainer = ref<HTMLElement>()
+const pendingActions = reactive(new Set<number>())
 
 // 检查是否还有更多内容
 const hasMoreContent = computed(() => {
@@ -81,13 +86,25 @@ function openVideoPage(url: string) {
   window.open(url, '_top')
 }
 
-function deleteWatchLaterItem(aid: number) {
-  topBarStore.deleteWatchLaterItem(aid)
+async function deleteWatchLaterItem(aid: number): Promise<boolean> {
+  if (pendingActions.has(aid))
+    return false
+
+  pendingActions.add(aid)
+  try {
+    const removed = await topBarStore.deleteWatchLaterItem(aid)
+    if (!removed)
+      toast.error(t('moments.watch_later_failed_retry'))
+    return removed
+  }
+  finally {
+    pendingActions.delete(aid)
+  }
 }
 
-function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
-  openVideoPage(getVideoPageUrl(bvid))
-  deleteWatchLaterItem(aid)
+async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
+  if (await deleteWatchLaterItem(aid))
+    openVideoPage(getVideoPageUrl(bvid))
 }
 </script>
 
@@ -167,29 +184,31 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 
       <!-- watchlater -->
       <TransitionGroup name="list">
-        <ALink
+        <article
           v-for="item in watchLaterList"
           :key="item.aid"
-          :href="getWatchLaterVideoUrl(item.bvid)"
-          class="group"
-          type="topBar"
+          class="group popover-card"
           m="last:b-4" p="2"
           rounded="$bew-radius"
           hover:bg="$bew-fill-2"
           duration-300
         >
-          <section flex="~ gap-4 item-start">
+          <ALink
+            class="popover-card__primary"
+            :href="getWatchLaterVideoUrl(item.bvid)"
+            :aria-label="item.title"
+            type="topBar"
+          />
+          <section class="popover-card__content" flex="~ gap-4 items-start">
             <!-- Video cover, live cover, ariticle cover -->
             <div
+              class="popover-card__media"
               bg="$bew-skeleton"
-              pos="relative"
               w="150px"
               flex="shrink-0"
-              border="rounded-$bew-radius-half"
-              overflow="hidden"
             >
               <div
-                class="group-hover:opacity-100 opacity-0"
+                class="group-hover:opacity-100 opacity-0 popover-card__interactive popover-card-action"
                 pos="absolute top-0 left-0" z-1
                 flex="~ gap-1"
                 m="1"
@@ -198,8 +217,10 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                 <!-- Open in regular video page button -->
                 <Tooltip :content="$t('watch_later.open_video_page')" placement="top">
                   <button
-                    class="bew-shape-circle"
+                    class="p-0 bew-shape-circle popover-card__interactive"
                     type="button"
+                    :aria-label="$t('watch_later.open_video_page')"
+                    :disabled="pendingActions.has(item.aid)"
                     w-24px h-24px
                     bg="black opacity-60 hover:$bew-theme-color"
                     grid="~ place-items-center"
@@ -214,8 +235,10 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                 <!-- Open in video page and remove button -->
                 <Tooltip :content="$t('watch_later.play_video')" placement="top">
                   <button
-                    class="bew-shape-circle"
+                    class="p-0 bew-shape-circle popover-card__interactive"
                     type="button"
+                    :aria-label="$t('watch_later.play_video')"
+                    :disabled="pendingActions.has(item.aid)"
                     w-24px h-24px
                     bg="black opacity-60 hover:$bew-theme-color"
                     grid="~ place-items-center"
@@ -229,8 +252,11 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
               </div>
 
               <!-- Delete button -->
-              <div
-                class="group-hover:opacity-100 opacity-0 bew-shape-circle"
+              <button
+                type="button"
+                class="group-hover:opacity-100 opacity-0 p-0 bew-shape-circle popover-card__interactive popover-card-action"
+                :aria-label="$t('common.operation.delete')"
+                :disabled="pendingActions.has(item.aid)"
                 pos="absolute top-0 right-0" z-1 w-24px h-24px
                 bg="black opacity-60 hover:$bew-error-color"
                 grid="~ place-items-center"
@@ -241,7 +267,7 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                 @click.stop.prevent="deleteWatchLaterItem(item.aid)"
               >
                 <i i-mingcute:close-line />
-              </div>
+              </button>
 
               <!-- Video -->
               <div pos="relative">
@@ -294,14 +320,14 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                 <ALink
                   :href="`https://space.bilibili.com/${item.owner.mid}`"
                   type="topBar"
-                  :stop-propagation="true"
+                  class="popover-card__interactive"
                 >
                   {{ item.owner.name }}
                 </ALink>
               </div>
             </div>
           </section>
-        </ALink>
+        </article>
       </TransitionGroup>
 
       <!-- loading -->
@@ -322,6 +348,8 @@ function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/popoverCards";
+
 .tab {
   --uno: "relative text-$bew-text-2";
 

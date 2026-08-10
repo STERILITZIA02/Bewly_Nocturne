@@ -10,6 +10,35 @@ export interface AnchoredFloatingMenuPosition {
   openUp: boolean
 }
 
+export interface AnchoredPopoverPosition {
+  top: number
+  left: number
+  openUp: boolean
+}
+
+export function computeAnchoredPopoverPosition(
+  anchor: Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width'>,
+  popup: { width: number, height: number },
+  viewportWidth: number,
+  viewportHeight: number,
+): AnchoredPopoverPosition {
+  const inset = 16
+  const gap = 8
+  const spaceBelow = viewportHeight - anchor.bottom - gap - inset
+  const spaceAbove = anchor.top - gap - inset
+  const openUp = popup.height > spaceBelow && spaceAbove > spaceBelow
+  const idealTop = openUp
+    ? anchor.top - gap - popup.height
+    : anchor.bottom + gap
+  const idealLeft = anchor.left + anchor.width / 2 - popup.width / 2
+
+  return {
+    top: clamp(idealTop, inset, Math.max(inset, viewportHeight - popup.height - inset)),
+    left: clamp(idealLeft, inset, Math.max(inset, viewportWidth - popup.width - inset)),
+    openUp,
+  }
+}
+
 export function computeAnchoredFloatingMenuPosition(
   anchor: Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width'>,
   desiredHeight: number,

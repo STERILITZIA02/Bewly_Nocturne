@@ -187,18 +187,22 @@ defineExpose({
 
       <!-- moments -->
       <TransitionGroup name="list">
-        <ALink
+        <article
           v-for="(moment, index) in topBarStore.moments"
           :key="index"
-          :href="moment.link"
-          type="topBar"
           flex="~ justify-between"
           m="b-2" p="2"
           rounded="$bew-radius"
           hover:bg="$bew-fill-2"
           duration-300
-          pos="relative"
+          class="group popover-card"
         >
+          <ALink
+            class="popover-card__primary"
+            :href="moment.link"
+            :aria-label="moment.title"
+            type="topBar"
+          />
           <!-- new moment dot -->
           <div
             v-if="topBarStore.isNewMoment(index) && selectedMomentTab.type === 'video'"
@@ -211,106 +215,109 @@ defineExpose({
             pos="absolute -top-12px -left-12px"
             style="box-shadow: 0 0 4px var(--bew-theme-color)"
           />
-          <ALink
-            :href="moment.authorJumpUrl"
-            type="topBar"
-            :stop-propagation="true"
-            rounded="1/2"
-            w="40px" h="40px" m="r-4"
-            bg="$bew-skeleton"
-            shrink-0
-          >
-            <img
-              :src="`${moment.authorFace}@50w_50h_1c`"
+          <div class="popover-card__content" flex="~ justify-between" w="full">
+            <ALink
+              :href="moment.authorJumpUrl"
+              type="topBar"
+              class="popover-card__interactive"
               rounded="1/2"
-              w="40px" h="40px"
-            >
-          </ALink>
-
-          <div flex="~" justify="between" w="full">
-            <div>
-              <!-- <span v-if="selectedTab !== 1">{{ `${moment.name} ${t('topbar.moments_dropdown.uploaded')}` }}</span> -->
-              <!-- <span v-else>{{ `${moment.name} ${t('topbar.moments_dropdown.now_streaming')}` }}</span> -->
-
-              <!-- 联合投稿显示多个作者 -->
-              <div v-if="moment.isCollaborative && moment.authors" flex="~ wrap" items="center" gap="1">
-                <template v-for="(author, idx) in moment.authors" :key="author.jump_url">
-                  <ALink
-                    :href="author.jump_url"
-                    type="topBar"
-                    :stop-propagation="true"
-                    font-bold
-                  >
-                    {{ author.name }}
-                  </ALink>
-                  <span v-if="idx < moment.authors.length - 1" text="$bew-text-2">/</span>
-                </template>
-              </div>
-              <!-- 单个作者 -->
-              <ALink
-                v-else
-                :href="moment.authorJumpUrl"
-                type="topBar"
-                :stop-propagation="true"
-                font-bold
-              >
-                {{ moment.author }}
-              </ALink>
-              <div overflow-hidden text-ellipsis break-anywhere>
-                {{ moment.title }}
-              </div>
-              <div
-                text="$bew-text-2 sm"
-                m="y-2"
-              >
-                <!-- publish time -->
-                <div v-if="selectedMomentTab.type !== 'live'">
-                  {{ moment.pubTime }}
-                </div>
-
-                <!-- Live -->
-                <div
-                  v-else
-                  text="$bew-theme-color"
-                  font="bold"
-                  flex="~"
-                  items="center"
-                >
-                  <div i-fluent:live-24-filled m="r-2" />
-                  {{ $t('topbar.moments_dropdown.live_status') }}
-                </div>
-              </div>
-            </div>
-            <div
-              class="group"
-              flex="~ items-center justify-center" w="82px"
-              h="46px" m="l-4" shrink-0
-              rounded="$bew-radius-half"
+              w="40px" h="40px" m="r-4"
               bg="$bew-skeleton"
+              shrink-0
             >
               <img
-                :src="`${moment.cover}@128w_72h_1c`"
-                w="82px" h="46px"
-                rounded="$bew-radius-half"
+                :src="`${moment.authorFace}@50w_50h_1c`"
+                rounded="1/2"
+                w="40px" h="40px"
               >
+            </ALink>
+
+            <div flex="~" justify="between" w="full">
+              <div>
+                <!-- <span v-if="selectedTab !== 1">{{ `${moment.name} ${t('topbar.moments_dropdown.uploaded')}` }}</span> -->
+                <!-- <span v-else>{{ `${moment.name} ${t('topbar.moments_dropdown.now_streaming')}` }}</span> -->
+
+                <!-- 联合投稿显示多个作者 -->
+                <div v-if="moment.isCollaborative && moment.authors" flex="~ wrap" items="center" gap="1">
+                  <template v-for="(author, idx) in moment.authors" :key="author.jump_url">
+                    <ALink
+                      :href="author.jump_url"
+                      type="topBar"
+                      class="popover-card__interactive"
+                      font-bold
+                    >
+                      {{ author.name }}
+                    </ALink>
+                    <span v-if="idx < moment.authors.length - 1" text="$bew-text-2">/</span>
+                  </template>
+                </div>
+                <!-- 单个作者 -->
+                <ALink
+                  v-else
+                  :href="moment.authorJumpUrl"
+                  type="topBar"
+                  class="popover-card__interactive"
+                  font-bold
+                >
+                  {{ moment.author }}
+                </ALink>
+                <div overflow-hidden text-ellipsis break-anywhere>
+                  {{ moment.title }}
+                </div>
+                <div
+                  text="$bew-text-2 sm"
+                  m="y-2"
+                >
+                  <!-- publish time -->
+                  <div v-if="selectedMomentTab.type !== 'live'">
+                    {{ moment.pubTime }}
+                  </div>
+
+                  <!-- Live -->
+                  <div
+                    v-else
+                    text="$bew-theme-foreground"
+                    font="bold"
+                    flex="~"
+                    items="center"
+                  >
+                    <div i-fluent:live-24-filled m="r-2" />
+                    {{ $t('topbar.moments_dropdown.live_status') }}
+                  </div>
+                </div>
+              </div>
               <div
-                v-if="moment.watchLaterAid"
-                opacity-0 group-hover:opacity-100
-                pos="absolute" duration-300 bg="black opacity-60"
-                rounded="$bew-radius-half" p-1
-                z-1 color-white
-                @click.prevent="toggleWatchLater(moment.watchLaterAid)"
+                class="group popover-card__media"
+                flex="~ items-center justify-center" w="82px"
+                h="46px" m="l-4" shrink-0
+                bg="$bew-skeleton"
               >
-                <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="$t('common.save_to_watch_later')" placement="bottom" type="dark">
-                  <div i-mingcute:carplay-line />
-                </Tooltip>
-                <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">
-                  <Icon icon="line-md:confirm" />
-                </Tooltip>
+                <img
+                  :src="`${moment.cover}@128w_72h_1c`"
+                  w="82px" h="46px"
+                >
+                <button
+                  v-if="moment.watchLaterAid"
+                  type="button"
+                  class="popover-card__interactive popover-card-action"
+                  :aria-label="topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
+                  opacity-0 group-hover:opacity-100
+                  pos="absolute" duration-300 bg="black opacity-60"
+                  rounded="$bew-radius-half" p-1
+                  z-1 color-white
+                  @click.stop.prevent="toggleWatchLater(moment.watchLaterAid)"
+                >
+                  <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="$t('common.save_to_watch_later')" placement="bottom" type="dark">
+                    <div i-mingcute:carplay-line />
+                  </Tooltip>
+                  <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">
+                    <Icon icon="line-md:confirm" />
+                  </Tooltip>
+                </button>
               </div>
             </div>
           </div>
-        </ALink>
+        </article>
       </TransitionGroup>
 
       <!-- loading -->
@@ -322,6 +329,8 @@ defineExpose({
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/popoverCards";
+
 .tab {
   --uno: "relative text-$bew-text-2";
 

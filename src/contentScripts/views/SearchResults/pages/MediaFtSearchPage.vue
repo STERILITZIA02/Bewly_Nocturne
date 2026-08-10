@@ -266,7 +266,7 @@ defineExpose({
               {{ item.title }}
             </div>
             <div class="media-ft-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
-              <span v-if="item.score" text="$bew-theme-color" font-bold>
+              <span v-if="item.score" text="$bew-theme-foreground" font-bold>
                 {{ item.score?.toFixed(1) }} 分
               </span>
               <span v-if="item.areas">

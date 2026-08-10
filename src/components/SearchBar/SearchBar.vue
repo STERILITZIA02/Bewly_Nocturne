@@ -595,7 +595,7 @@ function handleClearKeyword() {
         >
           <div class="title p-2 pb-0 flex justify-between">
             <span>{{ $t('search_bar.history_title') }}</span>
-            <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-color" text="base $bew-text-2" @click="handleClearSearchHistory">
+            <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
               {{ $t('search_bar.clear_history') }}
             </button>
           </div>
@@ -649,7 +649,7 @@ function handleClearKeyword() {
 @use "../../styles/breakpoints";
 
 ::v-deep(.suggest_high_light) {
-  --uno: "text-$bew-theme-color not-italic";
+  --uno: "text-$bew-theme-foreground not-italic";
 }
 
 .result-list-enter-active,
@@ -685,8 +685,8 @@ function handleClearKeyword() {
   --b-search-bar-focus-color: var(--bew-content-hover);
 
   --b-search-bar-normal-icon-color: var(--bew-text-1);
-  --b-search-bar-hover-icon-color: var(--bew-theme-color);
-  --b-search-bar-focus-icon-color: var(--bew-theme-color);
+  --b-search-bar-hover-icon-color: var(--bew-theme-foreground);
+  --b-search-bar-focus-icon-color: var(--bew-theme-foreground);
 
   --b-search-bar-normal-text-color: var(--bew-text-1);
   --b-search-bar-hover-text-color: var(--bew-text-1);
@@ -753,10 +753,10 @@ function handleClearKeyword() {
     }
 
     &.focus input {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-theme-focus-ring);
       border-radius: var(--bew-radius);
       box-shadow:
-        0 0 0 2px var(--bew-theme-color),
+        0 0 0 2px var(--bew-theme-focus-ring),
         0 6px 16px var(--bew-theme-color-40),
         inset 0 0 6px var(--bew-theme-color-30);
     }
@@ -797,7 +797,7 @@ function handleClearKeyword() {
     &:focus-within .search-submit-btn,
     .search-submit-btn:hover,
     .search-submit-btn:focus-visible {
-      color: var(--b-search-bar-hover-icon-color, var(--bew-theme-color));
+      color: var(--b-search-bar-hover-icon-color, var(--bew-theme-foreground));
 
       &::before {
         opacity: 0.4;
@@ -887,7 +887,7 @@ function handleClearKeyword() {
       .history-item-container {
         .history-item {
           --uno: "relative cursor-pointer duration-300";
-          --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-color-20 hover:text-$bew-theme-color rounded-$bew-radius-half";
+          --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-color-20 hover:text-$bew-theme-foreground rounded-$bew-radius-half";
 
           .history-item__remove {
             position: absolute;
@@ -905,7 +905,7 @@ function handleClearKeyword() {
           }
 
           &.active {
-            --uno: "bg-$bew-fill-2 text-$bew-theme-color shadow-[var(--bew-shadow-1),var(--bew-shadow-edge-glow-1)]";
+            --uno: "bg-$bew-fill-2 text-$bew-theme-foreground shadow-[var(--bew-shadow-1),var(--bew-shadow-edge-glow-1)]";
           }
         }
       }

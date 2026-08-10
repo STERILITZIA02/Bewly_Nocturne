@@ -14,12 +14,14 @@ defineProps<{
   forceWhiteIcon: boolean
 }>()
 
-const { getTopBarLogoHref, handleClickTopBarLogo, setupTopBarItemHoverEvent } = useTopBarInteraction()
+const { getTopBarLogoHref, handleClickTopBarLogo, setupTopBarItemHoverEvent, setupTopBarItemTransformer } = useTopBarInteraction()
 const topBarStore = useTopBarStore()
 const { popupVisible } = storeToRefs(topBarStore)
 const logo = ref<HTMLElement | null>(null)
 
 const channels = setupTopBarItemHoverEvent('channels')
+const channelsPopRef = ref()
+setupTopBarItemTransformer('channels', channelsPopRef)
 </script>
 
 <template>
@@ -86,10 +88,8 @@ const channels = setupTopBarItemHoverEvent('channels')
         <Transition name="slide-in">
           <ChannelsPop
             v-if="popupVisible.channels"
+            ref="channelsPopRef"
             class="bew-popover"
-            pos="!absolute !left-0 !top-50px"
-            transform="!translate-x-0"
-            z="!999"
           />
         </Transition>
       </div>
@@ -126,11 +126,6 @@ const channels = setupTopBarItemHoverEvent('channels')
 @use "../styles/index.scss";
 @use "../../../styles/breakpoints";
 
-.bew-popover {
-  position: fixed;
-  z-index: var(--bew-z-topbar);
-}
-
 .logo {
   box-sizing: border-box;
   width: var(--bew-top-bar-primary-control-height);
@@ -140,7 +135,7 @@ const channels = setupTopBarItemHoverEvent('channels')
   border-radius: var(--bew-top-bar-primary-control-radius);
   corner-shape: var(--bew-corner-shape-round);
   background: transparent;
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   transition:
     color var(--bew-duration-moderate) var(--bew-ease-standard),
     background-color var(--bew-duration-moderate) var(--bew-ease-standard);

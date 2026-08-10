@@ -212,7 +212,7 @@ const { isDark } = useDark()
           <div
             v-if="bangumi.capsuleText && bangumi.capsuleText.trim()"
             class="bangumi-capsule"
-            text="$bew-theme-color" bg="$bew-theme-color-20"
+            text="$bew-theme-foreground" bg="$bew-theme-color-20"
             p="x-2" rounded="$bew-badge-radius"
           >
             {{ bangumi.capsuleText }}

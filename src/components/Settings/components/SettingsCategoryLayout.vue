@@ -177,7 +177,7 @@ function handlePageMouseDown(event: MouseEvent) {
   }
 
   &.active {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
     background: var(--bew-fill-3);
   }
 
