@@ -17,7 +17,6 @@ import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import type { DockItem } from '~/stores/mainStore'
-import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
 
@@ -41,7 +40,6 @@ const emit = defineEmits<{
   (e: 'forwardRefresh'): void
 }>()
 
-const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
 const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage } = useBewlyApp()
@@ -248,16 +246,11 @@ function computeDockItem(): DockItem[] {
     if (!item.visible)
       continue
 
-    const defaultItem = mainStore.getDockItemByPage(item.page)
-    if (!defaultItem)
+    const dockItem = settingsStore.getEffectiveDockItemByPage(item.page)
+    if (!dockItem)
       continue
 
-    targetDockItems.push({
-      ...defaultItem,
-      openInNewTab: item.openInNewTab,
-      useOriginalBiliPage: settingsStore.getDockItemIsUseOriginalBiliPage(item.page)
-        || !defaultItem.hasBewlyPage,
-    })
+    targetDockItems.push(dockItem)
   }
   return targetDockItems
 }

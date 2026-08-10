@@ -40,7 +40,7 @@ export function useTopBarInteraction() {
   const handledClickEvents = new WeakSet<MouseEvent>()
 
   // 获取 App Provider
-  const { activatedPage, reachTop } = useBewlyApp()
+  const { activatedPage, getDockPageHref, navigateToDockPage, reachTop } = useBewlyApp()
 
   const currentLocationHref = useCurrentLocationHref()
 
@@ -217,13 +217,23 @@ export function useTopBarInteraction() {
   }
 
   function handleClickTopBarLogo(event: MouseEvent) {
-    if (!settings.value.touchScreenOptimization)
+    if (settings.value.touchScreenOptimization) {
+      handleClickTopBarItem(event, 'channels')
       return
+    }
 
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
 
-    handleClickTopBarItem(event, 'channels')
+    handledClickEvents.add(event)
+    event.preventDefault()
+    event.stopPropagation()
+    closeAllPopups()
+    navigateToDockPage(AppPage.Home)
+  }
+
+  function getTopBarLogoHref(): string {
+    return getDockPageHref(AppPage.Home)
   }
 
   // 处理通知项点击
@@ -240,6 +250,7 @@ export function useTopBarInteraction() {
     setupTopBarItemTransformer,
     handleClickTopBarItem,
     handleClickTopBarLogo,
+    getTopBarLogoHref,
     handleNotificationsItemClick,
     getTopBarItemHref,
     shouldOpenConfiguredTopBarItem,

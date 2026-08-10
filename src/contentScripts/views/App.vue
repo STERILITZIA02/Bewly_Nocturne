@@ -641,6 +641,22 @@ function handleDockItemClick(dockItem: DockItem) {
   }
 }
 
+function getDockPageHref(page: AppPage): string {
+  const dockItem = settingsStore.getEffectiveDockItemByPage(page)
+  if (!dockItem)
+    return 'https://www.bilibili.com/'
+
+  return dockItem.useOriginalBiliPage
+    ? dockItem.url
+    : `https://www.bilibili.com/?page=${page}`
+}
+
+function navigateToDockPage(page: AppPage): void {
+  const dockItem = settingsStore.getEffectiveDockItemByPage(page)
+  if (dockItem)
+    handleDockItemClick(dockItem)
+}
+
 function changeActivatePage(pageName: AppPage) {
   const scrollTop: number = scrollViewportRef.value?.scrollTop ?? 0
 
@@ -820,6 +836,8 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   haveScrollbar,
   activeDrawer,
   setActiveDrawer,
+  getDockPageHref,
+  navigateToDockPage,
 })
 
 if (settings.value.cleanUrlArgument) {

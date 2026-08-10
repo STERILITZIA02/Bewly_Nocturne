@@ -42,6 +42,8 @@ export interface BewlyAppProvider {
   // 添加活跃抽屉状态
   activeDrawer: Ref<DrawerType>
   setActiveDrawer: (drawer: DrawerType) => void
+  getDockPageHref: (page: AppPage) => string
+  navigateToDockPage: (page: AppPage) => void
 }
 
 export function useBewlyApp(): BewlyAppProvider {

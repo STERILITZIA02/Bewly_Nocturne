@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 
 import type { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { getDefaultCustomUseOriginalBiliPage, resolveUseOriginalBiliPage } from '~/utils/pageMode'
 import { resolveUseOriginalBilibiliTopBar } from '~/utils/topBarMode'
@@ -71,6 +72,19 @@ export const useSettingsStore = defineStore('settings', () => {
     )
   }
 
+  function getEffectiveDockItemByPage(page: AppPage): DockItem | undefined {
+    const defaultItem = mainStore.getDockItemByPage(page)
+    if (!defaultItem)
+      return undefined
+
+    const config = getDockItemConfigByPage(page)
+    return {
+      ...defaultItem,
+      openInNewTab: config?.openInNewTab ?? defaultItem.openInNewTab,
+      useOriginalBiliPage: getDockItemIsUseOriginalBiliPage(page) || !defaultItem.hasBewlyPage,
+    }
+  }
+
   function setDockItemCustomUseOriginalBiliPage(page: AppPage, useOriginalBiliPage: boolean): void {
     ensureDockItemsConfig()
     const config = getDockItemConfigByPage(page)
@@ -103,6 +117,7 @@ export const useSettingsStore = defineStore('settings', () => {
     getDockItemConfigByPage,
     getDockItemCustomUseOriginalBiliPage,
     getDockItemIsUseOriginalBiliPage,
+    getEffectiveDockItemByPage,
     getCustomUseOriginalBilibiliTopBar,
     getUseOriginalBilibiliTopBar,
     resetDockItemsConfig,
