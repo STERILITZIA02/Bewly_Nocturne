@@ -32,6 +32,9 @@ export interface DisplayAdditional {
   isUpRecommendation: boolean
   isVideoReservation: boolean
   isLiveReservation: boolean
+  reservationId?: string
+  reservationTotal?: number
+  isReserved?: boolean
 }
 
 export interface DisplayMoment {

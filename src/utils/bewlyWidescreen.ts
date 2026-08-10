@@ -1,5 +1,8 @@
 import browser from 'webextension-polyfill'
 
+import { settings } from '~/logic'
+
+import { i18n } from './i18n'
 import { injectCSS } from './main'
 import { getVideoElement } from './player'
 
@@ -51,6 +54,7 @@ const SIDEBAR_NARROW_MAX_WIDTH = 460
 const MOBILE_BREAKPOINT = 900
 const LOAD_SETTLE_DELAY = 1200
 const LOADING_FADE_DURATION = 240
+const LOADING_EXIT_DELAY = 5000
 const PREPARED_LOADING_TIMEOUT = 30_000
 const READY_RETRY_INTERVAL = 500
 const READY_RETRY_MAX = 30
@@ -69,6 +73,7 @@ let loadingStyleEl: HTMLStyleElement | null = null
 let loadingFadeTimer: ReturnType<typeof setTimeout> | undefined
 let loadingPlaybackCleanup: (() => void) | undefined
 let loadingPreparationFallbackTimer: ReturnType<typeof setTimeout> | undefined
+let loadingExitTimer: ReturnType<typeof setTimeout> | undefined
 let loadingMayDismissOnPlaying = false
 let loadingSuppressedUntilExit = false
 let readyRetryTimer: ReturnType<typeof setTimeout> | undefined
@@ -459,6 +464,10 @@ function getLoadingGifUrl() {
   }
 }
 
+function t(key: string) {
+  return String(i18n.global.t(key, settings.value.language))
+}
+
 function showWidescreenLoading() {
   if (loadingOverlay)
     return
@@ -492,10 +501,17 @@ function showWidescreenLoading() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-content {
       position: relative;
       display: flex;
+      flex-direction: column;
       align-items: center;
-      gap: 10px;
+      gap: var(--bew-space-3, 12px);
       font-size: 13px;
       line-height: 20px;
+    }
+
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-status {
+      display: flex;
+      align-items: center;
+      gap: var(--bew-space-2, 8px);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-icon {
@@ -503,6 +519,33 @@ function showWidescreenLoading() {
       height: 36px;
       object-fit: contain;
       flex-shrink: 0;
+    }
+
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-exit {
+      box-sizing: border-box;
+      min-width: 72px;
+      min-height: var(--bew-control-item-height, 28px);
+      padding: 0 var(--bew-space-3, 12px);
+      color: var(--bew-text-1, #18191c);
+      font: inherit;
+      font-weight: var(--bew-font-weight-semibold, 600);
+      background: var(--bew-fill-2, rgb(0 0 0 / 8%));
+      border: 1px solid var(--bew-surface-border-color, #d1d2d4);
+      border-radius: var(--bew-interactive-radius, 8px);
+      cursor: pointer;
+    }
+
+    html.dark #${LOADING_ROOT_ID} .bewly-widescreen-loading-exit {
+      color: var(--bew-text-1, #fff);
+    }
+
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-exit:hover {
+      background: var(--bew-fill-3, rgb(0 0 0 / 12%));
+    }
+
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-exit:focus-visible {
+      outline: 2px solid var(--bew-theme-color, #00aeec);
+      outline-offset: 2px;
     }
   `)
 
@@ -514,6 +557,9 @@ function showWidescreenLoading() {
   const content = document.createElement('div')
   content.className = 'bewly-widescreen-loading-content'
 
+  const status = document.createElement('div')
+  status.className = 'bewly-widescreen-loading-status'
+
   const loadingGifUrl = getLoadingGifUrl()
   if (loadingGifUrl) {
     const icon = document.createElement('img')
@@ -521,17 +567,31 @@ function showWidescreenLoading() {
     icon.src = loadingGifUrl
     icon.alt = ''
     icon.setAttribute('aria-hidden', 'true')
-    content.appendChild(icon)
+    status.appendChild(icon)
   }
 
   const label = document.createElement('span')
   label.textContent = '正在加载宽屏模式…'
-  content.appendChild(label)
+  status.appendChild(label)
+  content.appendChild(status)
 
   overlay.appendChild(content)
   const mountTarget = document.body ?? document.documentElement
   mountTarget.appendChild(overlay)
   loadingOverlay = overlay
+
+  loadingExitTimer = setTimeout(() => {
+    loadingExitTimer = undefined
+    if (loadingOverlay !== overlay)
+      return
+
+    const exitButton = document.createElement('button')
+    exitButton.type = 'button'
+    exitButton.className = 'bewly-widescreen-loading-exit'
+    exitButton.textContent = t('settings.exit_bewly_widescreen_loading')
+    exitButton.addEventListener('click', exitBewlyWidescreen, { once: true })
+    content.appendChild(exitButton)
+  }, LOADING_EXIT_DELAY)
 
   const handlePlaying = (event: Event) => {
     const video = event.target
@@ -563,6 +623,11 @@ function dismissWidescreenLoadingForPlaying() {
 function removeWidescreenLoading(immediate = false) {
   loadingPlaybackCleanup?.()
   loadingMayDismissOnPlaying = false
+
+  if (loadingExitTimer) {
+    clearTimeout(loadingExitTimer)
+    loadingExitTimer = undefined
+  }
 
   if (loadingPreparationFallbackTimer) {
     clearTimeout(loadingPreparationFallbackTimer)

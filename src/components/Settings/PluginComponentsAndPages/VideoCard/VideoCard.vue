@@ -37,6 +37,13 @@ const videoCardLayoutOptions = computed(() => videoCardLayoutOptionValues.map(va
 })))
 
 const isModernLayout = computed(() => settings.value.videoCardLayout === 'modern')
+const listLayoutBreakpointDraft = ref(String(settings.value.autoSwitchListLayoutBreakpoint))
+const isEditingListLayoutBreakpoint = ref(false)
+
+watch(() => settings.value.autoSwitchListLayoutBreakpoint, (value) => {
+  if (!isEditingListLayoutBreakpoint.value)
+    listLayoutBreakpointDraft.value = String(value)
+})
 
 function resetShadowSettings() {
   settings.value.videoCardShadowCurve = [...originalSettings.videoCardShadowCurve]
@@ -61,8 +68,25 @@ function resetColumns() {
   settings.value.gridColumns = { ...defaultGridColumns }
 }
 
-function updateListLayoutBreakpoint(value: string | number | undefined) {
-  settings.value.autoSwitchListLayoutBreakpoint = normalizeListLayoutBreakpoint(value)
+function updateListLayoutBreakpointDraft(value: string | number | undefined) {
+  isEditingListLayoutBreakpoint.value = true
+  listLayoutBreakpointDraft.value = value == null ? '' : String(value)
+}
+
+function commitListLayoutBreakpoint() {
+  const normalized = normalizeListLayoutBreakpoint(listLayoutBreakpointDraft.value)
+  settings.value.autoSwitchListLayoutBreakpoint = normalized
+  listLayoutBreakpointDraft.value = String(normalized)
+}
+
+function finishListLayoutBreakpointEditing() {
+  commitListLayoutBreakpoint()
+  isEditingListLayoutBreakpoint.value = false
+}
+
+function cancelListLayoutBreakpointEditing() {
+  listLayoutBreakpointDraft.value = String(settings.value.autoSwitchListLayoutBreakpoint)
+  isEditingListLayoutBreakpoint.value = false
 }
 </script>
 
@@ -116,12 +140,16 @@ function updateListLayoutBreakpoint(value: string | number | undefined) {
       >
         <div class="list-layout-control">
           <Input
-            :model-value="settings.autoSwitchListLayoutBreakpoint"
+            :model-value="listLayoutBreakpointDraft"
             type="number"
             :min="MIN_LIST_LAYOUT_BREAKPOINT"
             :max="MAX_LIST_LAYOUT_BREAKPOINT"
             class="list-layout-control__input"
-            @update:model-value="updateListLayoutBreakpoint"
+            @focus="isEditingListLayoutBreakpoint = true"
+            @update:model-value="updateListLayoutBreakpointDraft"
+            @blur="finishListLayoutBreakpointEditing"
+            @keydown.enter.prevent="commitListLayoutBreakpoint"
+            @keydown.escape.prevent.stop="cancelListLayoutBreakpointEditing"
           >
             <template #prefix>
               <span class="list-layout-control__label">{{ $t('settings.auto_switch_list_layout_breakpoint') }}</span>

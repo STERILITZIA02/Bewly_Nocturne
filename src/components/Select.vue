@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 
 const props = withDefaults(defineProps<{
   options: readonly OptionType[]
@@ -18,15 +19,19 @@ interface OptionType {
 
 const { mainAppRef } = useBewlyApp()
 
-const DROPDOWN_MARGIN = 8
 // UX 上限：菜单不应无限高，实际高度始终与可用空间取小
 const DROPDOWN_MAX_HEIGHT = 300
 
 const label = ref<string>('')
 const showOptions = ref<boolean>(false)
-const dropdownPosition = ref({ top: 0, left: 0, width: 0, openUp: false, maxHeight: DROPDOWN_MAX_HEIGHT })
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
+const {
+  position: dropdownPosition,
+  scheduleUpdate: schedulePositionUpdate,
+  start: startPositionTracking,
+  stop: stopPositionTracking,
+} = useFloatingMenuPosition(containerRef, dropdownRef, DROPDOWN_MAX_HEIGHT)
 
 onUpdated(() => {
   // fix the issue when the dropdown menu text doesn't update in real-time based on the updated page language
@@ -37,52 +42,14 @@ onUpdated(() => {
 onMounted(() => {
   if (props.options)
     label.value = `${props.options.find((item: OptionType) => item.value === props.modelValue)?.label}`
-
-  // 窗口大小变化时按真实高度重算位置
-  window.addEventListener('resize', handleWindowResize)
 })
-
-onUnmounted(() => {
-  window.removeEventListener('resize', handleWindowResize)
-})
-
-function handleWindowResize() {
-  if (!showOptions.value)
-    return
-  calculatePosition(dropdownRef.value?.scrollHeight ?? DROPDOWN_MAX_HEIGHT)
-}
-
-/** 计算下拉菜单绝对位置，空间不足时自动向上弹出并限制最大高度 */
-function calculatePosition(desiredHeight: number) {
-  if (!containerRef.value)
-    return
-
-  const rect = containerRef.value.getBoundingClientRect()
-  const spaceBelow = window.innerHeight - rect.bottom - DROPDOWN_MARGIN
-  const spaceAbove = rect.top - DROPDOWN_MARGIN
-
-  // 下方放不下且上方更宽敞时向上弹出；最大高度限制在所选方向的可用空间内
-  const openUp = desiredHeight > 0
-    ? spaceBelow < desiredHeight && spaceAbove > spaceBelow
-    : false
-  const availableSpace = openUp ? spaceAbove : spaceBelow
-
-  dropdownPosition.value = {
-    top: (openUp ? rect.top : rect.bottom) + window.scrollY,
-    left: rect.left + window.scrollX,
-    width: rect.width,
-    openUp,
-    // 极端矮视口下也不能超过实际可用空间，否则仍会溢出贴边
-    maxHeight: Math.max(Math.min(DROPDOWN_MAX_HEIGHT, availableSpace), 0),
-  }
-}
 
 function openOptions() {
   if (props.disabled)
     return
 
   // 先写好坐标再挂载，避免 enter 动画把 top/left 从 0 过渡到真实位置（左上角飞入）
-  calculatePosition(DROPDOWN_MAX_HEIGHT)
+  startPositionTracking()
   showOptions.value = true
 }
 
@@ -98,12 +65,13 @@ function toggleOptions() {
 
 // 打开后再用真实内容高度校正方向与 maxHeight（此时坐标已接近正确，不再从 0,0 起步）
 watch(showOptions, async (visible) => {
-  if (!visible)
+  if (!visible) {
+    stopPositionTracking()
     return
+  }
 
   await nextTick()
-  if (dropdownRef.value)
-    calculatePosition(dropdownRef.value.scrollHeight)
+  schedulePositionUpdate()
 }, { flush: 'post' })
 
 watch(() => props.disabled, (disabled) => {
@@ -137,6 +105,8 @@ function onMouseLeave() {
 function onMouseEnter() {
   window.removeEventListener('click', closeOptions)
 }
+
+onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
 </script>
 
 <template>
@@ -195,11 +165,9 @@ function onMouseEnter() {
             left: `${dropdownPosition.left}px`,
             width: `${dropdownPosition.width}px`,
             maxHeight: `${dropdownPosition.maxHeight}px`,
-            // 向上弹出时锚点移到触发器顶部，用 transform 上移自身高度，无需先测量实际高度
-            transform: dropdownPosition.openUp ? `translateY(calc(-100% - ${DROPDOWN_MARGIN}px))` : undefined,
-            marginTop: dropdownPosition.openUp ? undefined : `${DROPDOWN_MARGIN}px`,
+            transform: dropdownPosition.openUp ? 'translateY(-100%)' : undefined,
           }"
-          pos="absolute" p="2"
+          pos="fixed" p="2"
           z="$bew-z-control-menu" flex="~ col gap-1"
           w="full" overflow-y-overlay will-change-transform
         >
@@ -224,7 +192,6 @@ function onMouseEnter() {
         v-if="showOptions"
         pos="fixed top-0 left-0" w-full h-full
         z="$bew-z-control-backdrop"
-        @wheel="closeOptions"
       />
     </Teleport>
   </div>

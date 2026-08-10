@@ -142,9 +142,7 @@ watch(() => activatedRankingType.value.id, () => {
 watch(() => props.topBarVisibility, () => {
   shouldMoveAsideUp.value = false
 
-  // Allow moving tabs up only when the top bar is not hidden & is set to auto-hide
-  // This feature is primarily designed to compatible with the Bilibili Evolved's top bar
-  // Even when the BewlyBewly top bar is hidden, the Bilibili Evolved top bar still exists, so not moving up
+  // Allow moving tabs up only when the Bewly top bar is visible and set to auto-hide.
   if (settings.value.autoHideTopBar && settings.value.showTopBar) {
     if (props.topBarVisibility)
       shouldMoveAsideUp.value = false

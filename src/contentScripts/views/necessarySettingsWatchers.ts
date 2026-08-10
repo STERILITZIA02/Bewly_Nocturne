@@ -1,3 +1,4 @@
+import { onScopeDispose } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -7,6 +8,8 @@ import { LanguageType } from '~/enums/appEnums'
 import { appAuthTokens, FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
+import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
+import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 
 function isFestivalPage(): boolean {
@@ -31,6 +34,7 @@ export function setupNecessarySettingsWatchers() {
   const settingsStore = useSettingsStore()
   let syncingTopBarSettings = false
   const currentLocationHref = useCurrentLocationHref()
+  let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
   const FROSTED_GLASS_DIALOG_OFFSET_PX = 10
@@ -124,6 +128,12 @@ export function setupNecessarySettingsWatchers() {
     },
     { immediate: true },
   )
+
+  const refreshEffectiveTopBarSource = () => {
+    effectiveTopBarSource = resolveEffectiveTopBarSource(settingsStore.getUseOriginalBilibiliTopBar())
+    applyEffectiveTopBarSource(document, effectiveTopBarSource)
+    applyOuterTopBarPolicy()
+  }
 
   watch(
     [() => settings.value.customizeFont, () => settings.value.fontFamily],
@@ -382,7 +392,7 @@ export function setupNecessarySettingsWatchers() {
         settings.value.showTopBar = desiredShowTopBar
         syncingTopBarSettings = false
       }
-      applyOuterTopBarPolicy()
+      refreshEffectiveTopBarSource()
 
       // Sync top bar visibility preference to embedded Bilibili iframes.
       // WebExtension storage doesn't automatically sync reactive state across frames,
@@ -441,8 +451,9 @@ export function setupNecessarySettingsWatchers() {
   }
   watch(currentLocationHref, () => {
     syncOuterTopBarShadowObserver()
-    applyOuterTopBarPolicy()
+    refreshEffectiveTopBarSource()
   }, { immediate: true })
+  onScopeDispose(() => outerTopBarShadowObserver?.disconnect())
 
   const applyBewlyDesignClasses = () => {
     const shouldApply = settings.value.adaptToOtherPageStyles
@@ -535,6 +546,9 @@ export function setupNecessarySettingsWatchers() {
   }
 
   function applyOuterTopBarPolicy() {
+    const outerTopBarsSuppressed = !isInIframe() && isHomePage() && hasBiliIframePage()
+    document.documentElement.classList.toggle('bewly-outer-top-bars-suppressed', outerTopBarsSuppressed)
+
     if (isInIframe())
       return
 
@@ -542,29 +556,20 @@ export function setupNecessarySettingsWatchers() {
     if (isHomePage()) {
       // When the homepage is showing an original Bilibili page inside our iframe (dock item "useOriginalBiliPage"),
       // we should keep the *outer* document's Bilibili top bar hidden to avoid double headers.
-      const shouldHideOuterBiliTopBar = hasBiliIframePage()
-      const useOriginalBilibiliTopBar = settingsStore.getUseOriginalBilibiliTopBar()
+      const useNativeBilibiliTopBar = effectiveTopBarSource === 'bilibili-native'
 
       // 自定义首页下原版顶栏只挂在 body，不再回填 #app 做保活。
       // 切回 Bewly 顶栏时用 remove-top-bar 隐藏即可，避免重新点亮原站首页 Vue 树。
-      if (useOriginalBilibiliTopBar && !shouldHideOuterBiliTopBar)
+      if (useNativeBilibiliTopBar && !outerTopBarsSuppressed)
         ensureOriginalBilibiliTopBarAppended(document)
 
-      const shouldApplyRemoveTopBar = !useOriginalBilibiliTopBar || shouldHideOuterBiliTopBar
+      const shouldApplyRemoveTopBar = effectiveTopBarSource === 'bewly' || outerTopBarsSuppressed
       document.documentElement.classList.toggle('remove-top-bar', shouldApplyRemoveTopBar)
 
-      const outerHeader = document.querySelector<HTMLElement>('body > .bili-header, .bili-header')
-      if (outerHeader) {
-        if (shouldHideOuterBiliTopBar)
-          outerHeader.style.display = 'none'
-        else
-          outerHeader.style.removeProperty('display')
-      }
-
-      if (useOriginalBilibiliTopBar && !shouldHideOuterBiliTopBar)
+      if (useNativeBilibiliTopBar && !outerTopBarsSuppressed)
         resetBilibiliTopBarInlineStyles(document)
 
-      if (useOriginalBilibiliTopBar && !shouldHideOuterBiliTopBar) {
+      if (useNativeBilibiliTopBar && !outerTopBarsSuppressed) {
         const scrollTop = document.getElementById('bewly')
           ?.shadowRoot
           ?.querySelector<HTMLElement>('.bewly-scroll-viewport')
@@ -574,15 +579,10 @@ export function setupNecessarySettingsWatchers() {
     }
     else {
       // Handle non-homepage pages
-      const useOriginalBilibiliTopBar = settingsStore.getUseOriginalBilibiliTopBar()
-      document.documentElement.classList.toggle('remove-top-bar', !useOriginalBilibiliTopBar)
+      document.documentElement.classList.toggle('remove-top-bar', effectiveTopBarSource === 'bewly')
 
       // When switching to Bewly top bar, reset any inline styles that Bilibili might have added
-      if (!useOriginalBilibiliTopBar)
-        resetBilibiliTopBarInlineStyles(document)
-      // When switching to original Bilibili top bar, also reset inline styles to ensure it's visible
-      else
-        resetBilibiliTopBarInlineStyles(document)
+      resetBilibiliTopBarInlineStyles(document)
     }
   }
 }

@@ -243,7 +243,11 @@ settings:
   moments_visible_components_original_desc: 控制 Bilibili 原版動態頁側欄與橫幅等元件是否顯示。主題色表示顯示，灰色表示隱藏。
   moments_visible_components_plugin_desc: 控制 Bewly 動態頁側欄與頂部元件是否顯示。主題色表示顯示，灰色表示隱藏。
   moments_filtered_types: 過濾動態
-  moments_filtered_types_desc: 控制各類動態是否出現在 Bewly 動態流中。選中（主題色）表示不過濾，未選中表示過濾。開啟過濾時單次最多掃描 100 條；留存率低於 60% 時需手動載入更多，達到 60% 或以上時會自動滾動載入。
+  moments_filtered_types_desc: 控制各類動態是否出現在 Bewly 動態流中。選中（主題色）表示不過濾，未選中表示過濾。開啟任意過濾後，每次最多請求兩頁，後續內容透過「載入更多」取得。
+  moments_enable_keyword_filter: 啟用關鍵詞過濾
+  moments_enable_keyword_filter_desc: 過濾符合作者、標題、正文或附加內容的動態。啟用有效關鍵詞後，每次最多請求兩頁，後續內容透過「載入更多」取得。
+  moments_blocked_keywords: 封鎖關鍵詞
+  moments_blocked_keywords_placeholder: 使用換行、逗號或分號分隔關鍵詞
   moments_enable_live_preview: 直播動態懸停預覽
   moments_enable_live_preview_desc: 滑鼠懸停直播動態封面時播放直播預覽。
   moments_enable_video_preview: 影片動態懸停預覽
@@ -596,8 +600,6 @@ settings:
   adapt_to_other_page_styles_desc: 適應一些常見頁面，以配合 BewlyBewly 主題。
   prevent_mobile_redirect: 防止跳轉至行動版
   prevent_mobile_redirect_desc: 啟用後，僅在造訪 www.bilibili.com 時使用桌面版 UA，避免被跳轉至 m.bilibili.com；直接造訪行動版不受影響。
-  follow_bilibili_evolved_color: 使用 Bilibili Evolved 主題色
-  follow_bilibili_evolved_color_desc: 每次變更 Bilibili Evolved 主題色後，記得重新選取此選項以更新配置。
   links: 連結
   import_settings: 匯入設定
   export_settings: 匯出設定
@@ -790,12 +792,18 @@ settings:
     line_collapse_main: 線條-收起主評論
     line_keep_main: 線條-不收起主評論
     indent_only: 縮進-無收起功能
+  comment_reply_pagination_mode:
+    title: 樹狀回覆分頁方式
+    desc: 載入更多會逐頁附加並保留已讀回覆；原生分頁僅顯示目前頁面
+    load_more: 載入更多
+    pagination: 原生分頁
   adjust_comment_image_height: 調整評論區圖片高度
   adjust_comment_image_height_desc: 自動調整評論區圖片高度以匹配實際長寬比，避免圖片變形
   hide_comment_image_scrollbar: 評論圖片預覽時隱藏頁面滾動條
   hide_comment_image_scrollbar_desc: 開啟評論區圖片預覽時隱藏頁面右側滾動條，避免滾動條顯示在遮罩右側
   video_player_scroll: 調整顯示模式後滾動
   video_player_scroll_desc: 啟用後，在默認模式為寬屏和默認時，會自動滾動到合適位置。
+  exit_bewly_widescreen_loading: 退出寬螢幕模式
   enlarge_favorite_dialog: 放大收藏彈窗
   enlarge_favorite_dialog_desc: 啟用後，影片頁收藏彈窗將以更大的尺寸顯示，方便查看和管理收藏夾。
   external_watch_later_button: 稍後再看按鈕外置
@@ -831,8 +839,6 @@ settings:
 auth:
   auth_access_key_first: 在這之前請先授權 BewlyBewly 使用 access key
 topbar:
-  switch_to_bewly_top_bar: 切換到 BewlyBewly 頂部列
-  switch_to_bili_top_bar: 切換到 Bilibili/Bilibili-Evolved 頂部列
   sign_in: 登入
   notifications: 通知
   moments: 動態
@@ -947,6 +953,14 @@ dock:
   settings: 設定
   collapse_dock: 收合 Dock
   expand_dock: 展開 Dock
+moment_card:
+  preview_image: 預覽 {author} 的動態圖片 {index}
+  reserve: 預約
+  cancel_reservation: 取消預約
+  reservation_succeeded: 預約成功
+  reservation_cancelled: 已取消預約
+  reservation_failed: 預約操作失敗
+  reservation_login_required: 登入後才能預約
 video_card:
   operation:
     not_interested: 不感興趣
@@ -982,6 +996,9 @@ video_card:
   watched: 已觀看
   visited_recently: 近一個月內瀏覽過
 home:
+  web_recommendation_risk_cooldown: 推薦請求觸發風控，已暫停 {seconds} 秒，請稍後重試
+  web_recommendation_risk_fallback_active: 已使用無 Cookie 推薦結果，並暫停後續請求 {seconds} 秒
+  web_recommendation_risk_fallback_failed: 推薦請求觸發風控，備用請求失敗，已暫停 {seconds} 秒
   tell_us_why: 為什麼這樣做...
   not_interested_desc: >
     你可以用 <kbd>↑</kbd> 和 <kbd>↓</kbd> 來選擇原因，或者直接使用數字鍵來選擇原因，按 <kbd>Enter</kbd>

@@ -122,7 +122,7 @@ pnpm typecheck
 
 ## Bewly_Nocturne 当前维护记录
 
-- 2026-08-06：完成顶栏模式切换重构。顶栏模式现作为 `DockAndSidebar.vue` 的特殊配置项，复用既有全局模式、顶栏状态和 Bilibili Evolved 兼容逻辑；旧的搜索框下方悬浮切换器、Teleport、显隐控制、层级、设置项及废弃文案已清理。
+- 2026-08-06：完成顶栏模式切换重构。顶栏模式现作为 `DockAndSidebar.vue` 的特殊配置项，复用既有全局页面模式和顶栏状态；旧的搜索框下方悬浮切换器、Teleport、显隐控制、层级、设置项及废弃文案已清理。
 - 顶栏模式配置不属于 Dock 导航项，不参与拖拽排序，不显示“新标签页”选项；自定义顶栏选择与全 Bewly / 全原版模式保持同步，不恢复已删除的旧入口或兼容层。
 - 本次变更已在独立测试 Chrome 窗口中加载开发扩展并通过 Bilibili 页面注入验收。后续涉及上游顶栏实现的更新默认不批准，必须先取得用户明确授权后再移植或合入。
 - 2026-08-06：深色网页背景统一使用受 OKLCH 明度/色度约束的 `--bew-dark-page-bg` 派生 token；`enableOledDarkMode` 仅在有效深色主题下通过 `oled-dark` class 生效，并同步到相关 iframe。首页不直接覆盖 Bilibili `body` 背景，纯黑底色由插件自己的 viewport wrapper 承载，以保护原站布局和滚动层。
@@ -141,6 +141,9 @@ pnpm typecheck
 - 2026-08-09：Cloud Sync 保留 pending/quota blocked/failed/synced 语义和有上限退避；存储初读失败不得解释为空存储并回写默认值。MV3 App Auth 使用 `browser.alarms` 保持 token 新鲜度，不恢复后台长期 interval。
 - 2026-08-09：站内导航收敛到 `useRouteState.ts` 单例，共享 pushstate/replacestate/popstate/hashchange 和一个低频 fallback；页面模式、主题、顶栏和内容脚本不得重新建立各自的高频 URL 轮询。截图、画面比例、触屏手势、随机播放和收藏弹窗的 observer/listener 必须跟随页面与设置生命周期启停。
 - 2026-08-09：TopBar DOM `Ref` 注册表不得使用会自动解包子 ref 的深层 `reactive`；未登录或元素尚未挂载时，transformer 必须仍获得 Ref 容器，不得因读取 `undefined.value` 阻断页面。
+- 2026-08-10：选择性同步并审查 BewlyCat 新增修复，同时完整移除 Bilibili Evolved 的样式、DOM 探测、运行时分支、设置和文案。原版顶栏从此严格指 Bilibili 原生 `.bili-header`，不得重新引入第三方顶栏兼容层。
+- 2026-08-10：顶栏搜索框的异步宽度校正必须立即生效，不得为水平 `transform` 添加过渡，避免页面重新加载时出现横向入场动画。
+- 上游同步游标：已审查并处理至 `BewlyCat upstream/main@792d73c`（完整提交 `792d73c4a7c5a541166f2fb1bf29f6aa0c48d902`）；本范围最后关联的上游 Issue 为 `#1017`。游标提交本身无关联 Issue/PR，因此以 commit SHA 作为唯一权威游标；后续同步只检查该游标之后的新提交、Issue/PR，不重复审查此前范围。
 
 ## Bewly_Nocturne 上游同步保护基线
 
@@ -151,7 +154,7 @@ pnpm typecheck
 - 主 Dock 是完整胶囊；未选中导航项没有圆形底板，Hover 保留发光反馈。浅色模式使用主题色选中背景和主题色光晕，深色模式保留白色发光指示与黑色选中图标。
 - Dock 指示器动画和刷新后的严格居中行为必须保留；Bilibili / Bewly / 自定义三档页面模式及其持久化、与 Dock 内容设置的同步关系不得拆散。
 - Dock 收起模式保留 `button / hidden / automatic` 三档：按钮模式在设置按钮后显示收起入口，隐藏模式不提供收起功能，自动模式在指针离开后收起且 Hover 圆球立即展开。收起圆球必须保持展开 Dock 的几何中心；展开时同一玻璃外壳先沿主轴增长，完成后按钮组再轻移进入，收起时顺序反转。不得通过 Teleport、第二套 Dock 状态或两个表面交叉淡入实现。
-- 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 顶栏，检测到 Bilibili Evolved 时沿用 Evolved 顶栏；自定义模式才允许单独选择。
+- 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 原生 `.bili-header`；自定义模式根据现有配置选择 Bewly 或 Bilibili 原生顶栏。不得探测、适配或承诺支持第三方顶栏实现。
 - 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
 
 ### 深色背景、OLED 与主题色

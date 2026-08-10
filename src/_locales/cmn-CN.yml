@@ -244,7 +244,11 @@ settings:
   moments_visible_components_original_desc: 控制 Bilibili 原版动态页侧栏与横幅等组件是否显示。主题色表示显示，灰色表示隐藏。
   moments_visible_components_plugin_desc: 控制 Bewly 动态页侧栏与顶部组件是否显示。主题色表示显示，灰色表示隐藏。
   moments_filtered_types: 过滤动态
-  moments_filtered_types_desc: 控制各类动态是否出现在 Bewly 动态流中。选中（主题色）表示不过滤，未选中表示过滤。开启过滤时单次最多扫描 100 条；留存率低于 60% 时需手动加载更多，达到 60% 及以上时将自动滚动加载。
+  moments_filtered_types_desc: 控制各类动态是否出现在 Bewly 动态流中。选中（主题色）表示不过滤，未选中表示过滤。开启任意过滤后，每次最多请求两页，后续内容通过“加载更多”获取。
+  moments_enable_keyword_filter: 启用关键词过滤
+  moments_enable_keyword_filter_desc: 过滤匹配作者、标题、正文或附加内容的动态。启用有效关键词后，每次最多请求两页，后续内容通过“加载更多”获取。
+  moments_blocked_keywords: 屏蔽关键词
+  moments_blocked_keywords_placeholder: 使用换行、逗号或分号分隔关键词
   moments_enable_live_preview: 直播动态悬停预览
   moments_enable_live_preview_desc: 鼠标悬停直播动态封面时播放直播预览。
   moments_enable_video_preview: 视频动态悬停预览
@@ -374,6 +378,7 @@ settings:
     bewly_widescreen_sidebar_position_right: 右侧
   video_player_scroll: 调整显示模式后滚动
   video_player_scroll_desc: 启用后，在默认模式为宽屏和默认时，会自动滚动到合适位置。
+  exit_bewly_widescreen_loading: 退出宽屏模式
   enlarge_favorite_dialog: 放大收藏弹窗
   enlarge_favorite_dialog_desc: 启用后，视频页收藏弹窗将以更大的尺寸显示，方便查看和管理收藏夹。
   external_watch_later_button: 稍后再看按钮外置
@@ -689,8 +694,6 @@ settings:
   adapt_to_other_page_styles_desc: 适应一些常见页面，以与 BewlyMac 主题相匹配。
   prevent_mobile_redirect: 防止跳转移动端
   prevent_mobile_redirect_desc: 开启后，仅在访问 www.bilibili.com 时使用桌面端 UA，避免被跳转到 m.bilibili.com；直接访问移动端不受影响。
-  follow_bilibili_evolved_color: 使用 Bilibili Evolved 主题色
-  follow_bilibili_evolved_color_desc: 每次选完 Bilibili Evolved 主题色时，记得重新选中这一选项以更新配置。
   links: 链接
   import_settings: 导入设置
   export_settings: 导出设置
@@ -821,6 +824,11 @@ settings:
     line_collapse_main: 线条-收起主评论
     line_keep_main: 线条-不收起主评论
     indent_only: 缩进-无收起功能
+  comment_reply_pagination_mode:
+    title: 树状回复分页方式
+    desc: 加载更多会按页追加并保留已读回复；原生分页仅显示当前页
+    load_more: 加载更多
+    pagination: 原生分页
   adjust_comment_image_height: 调整评论区图片高度
   adjust_comment_image_height_desc: 自动调整评论区图片高度以匹配实际长宽比，避免图片变形
   hide_comment_image_scrollbar: 评论图片预览时隐藏页面滚动条
@@ -830,8 +838,6 @@ settings:
 auth:
   auth_access_key_first: 在这之前请先授权 BewlyMac 使用 access key
 topbar:
-  switch_to_bewly_top_bar: 切换到 BewlyMac 顶栏
-  switch_to_bili_top_bar: 切换到 Bilibili/Bilibili-Evolved 顶栏
   sign_in: 登录
   notifications: 通知
   moments: 动态
@@ -946,6 +952,14 @@ dock:
   settings: 设置
   collapse_dock: 收起 Dock
   expand_dock: 展开 Dock
+moment_card:
+  preview_image: 预览 {author} 的动态图片 {index}
+  reserve: 预约
+  cancel_reservation: 取消预约
+  reservation_succeeded: 预约成功
+  reservation_cancelled: 已取消预约
+  reservation_failed: 预约操作失败
+  reservation_login_required: 登录后才能预约
 video_card:
   operation:
     not_interested: 不感兴趣
@@ -981,6 +995,9 @@ video_card:
   watched: 已观看
   visited_recently: 近一个月内浏览过
 home:
+  web_recommendation_risk_cooldown: 推荐请求触发风控，已暂停 {seconds} 秒，请稍后重试
+  web_recommendation_risk_fallback_active: 已使用无 Cookie 推荐结果，并暂停后续请求 {seconds} 秒
+  web_recommendation_risk_fallback_failed: 推荐请求触发风控，备用请求失败，已暂停 {seconds} 秒
   tell_us_why: 为什么这么做...
   not_interested_desc: >
     你可以使用 <kbd>↑</kbd> 和 <kbd>↓</kbd> 来选择原因，或者直接使用数字键选择原因，按 <kbd>Enter</kbd>

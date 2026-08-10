@@ -1,3 +1,19 @@
+html.bewly-outer-top-bars-suppressed {
+  .bili-header,
+  #internationalHeader,
+  .link-navbar,
+  #home_nav,
+  #biliMainHeader,
+  #bili-header-container,
+  .header-channel,
+  .bili-header-channel-panel,
+  .bewly-bili-fixed-channel,
+  .bewly-bili-channel-panel {
+    display: none !important;
+    visibility: hidden !important;
+  }
+}
+
 .homePage.bewly-custom-homepage .bili-header > .bili-header__channel,
 .homePage.bewly-custom-homepage .bili-header > .bewly-bili-channel-panel {
   display: none !important;
@@ -251,11 +267,6 @@
     min-height: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
-  }
-
-  // Remove the Bilibili Evolved's top bar
-  .custom-navbar {
-    display: none;
   }
 
   // some pages have a white bar at the top; changing the top margin fixes this problem

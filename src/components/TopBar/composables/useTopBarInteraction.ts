@@ -12,13 +12,23 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDelayedHover } from '~/composables/useDelayedHover'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isHomePage } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
 import { createTransformer } from '~/utils/transformer'
 
+const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<string, AppPage>> = {
+  channels: AppPage.Home,
+  moments: AppPage.Moments,
+  favorites: AppPage.Favorites,
+  history: AppPage.History,
+  watchLater: AppPage.WatchLater,
+}
+
 export function useTopBarInteraction() {
   const topBarStore = useTopBarStore()
+  const settingsStore = useSettingsStore()
   const { closeAllPopups } = topBarStore
   const topBarItemElements: Record<string, ReturnType<typeof useDelayedHover>> = {}
   const topBarTransformers = reactive({})
@@ -155,8 +165,31 @@ export function useTopBarInteraction() {
     location.href = pageUrl
   }
 
+  function getConfiguredTopBarPage(key: string): AppPage | undefined {
+    return BEWLY_PAGE_BY_TOP_BAR_ITEM[key]
+  }
+
+  function shouldOpenConfiguredTopBarItem(key: string): boolean {
+    const page = getConfiguredTopBarPage(key)
+    return Boolean(
+      page
+      && settings.value.openTopBarItemsInBewly
+      && !settingsStore.getDockItemIsUseOriginalBiliPage(page),
+    )
+  }
+
+  function getTopBarItemHref(key: string, originalHref: string): string {
+    const page = getConfiguredTopBarPage(key)
+    return page && shouldOpenConfiguredTopBarItem(key)
+      ? `https://www.bilibili.com/?page=${page}`
+      : originalHref
+  }
+
   function handleClickTopBarItem(event: MouseEvent, key: string) {
     if (handledClickEvents.has(event))
+      return
+
+    if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
 
     if (settings.value.touchScreenOptimization) {
@@ -169,17 +202,10 @@ export function useTopBarInteraction() {
       return
     }
 
-    if (!settings.value.openTopBarItemsInBewly || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+    if (!shouldOpenConfiguredTopBarItem(key))
       return
 
-    const bewlyPageByTopBarItem: Partial<Record<string, AppPage>> = {
-      channels: AppPage.Home,
-      moments: AppPage.Moments,
-      favorites: AppPage.Favorites,
-      history: AppPage.History,
-      watchLater: AppPage.WatchLater,
-    }
-    const page = bewlyPageByTopBarItem[key]
+    const page = getConfiguredTopBarPage(key)
     if (!page)
       return
 
@@ -215,6 +241,8 @@ export function useTopBarInteraction() {
     handleClickTopBarItem,
     handleClickTopBarLogo,
     handleNotificationsItemClick,
+    getTopBarItemHref,
+    shouldOpenConfiguredTopBarItem,
     forceWhiteIcon,
     showSearchBar,
   }

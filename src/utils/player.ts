@@ -16,7 +16,7 @@ const _videoClassTag = {
   title:
       '.video-title,.bilibili-player-video-top-title,#player-title,.season-info .title',
   subtitle:
-      '.video-pod__item.active>.title,.multip-list-item.multip-list-item-active',
+      '.video-pod__item.active>.title,.simple-base-item.active .title-txt,.multip-list-item.multip-list-item-active',
   widescreen:
       '.bpx-player-ctrl-wide,.bilibili-player-video-btn-widescreen,.squirtle-video-widescreen',
   pagefullscreen:
@@ -375,7 +375,7 @@ export function saveCaptionState(enabled: boolean) {
 // 检测是否为合集视频
 export function isCollectionVideo(): boolean {
   // 检测多P视频选集
-  if (document.querySelector('.video-pod__item, .multi-page__item, .page-item')) {
+  if (document.querySelector('.video-pod__item, .video-pod__list .simple-base-item, .multi-page__item, .page-item')) {
     return true
   }
 
@@ -446,7 +446,9 @@ export function detectVideoType(): VideoType {
   // 检测多P视频和合集视频的关键区别：
   // 分P视频有 .view-mode 切换视图组件，合集视频没有
   const hasViewMode = !!document.querySelector('.view-mode')
-  const hasVideoPod = !!document.querySelector('.video-pod__item, .multi-page__item, .page-item')
+  const hasVideoPod = !!document.querySelector(
+    '.video-pod__item, .video-pod__list .simple-base-item, .multi-page__item, .page-item',
+  )
 
   if (hasVideoPod) {
     // 有视频列表项
@@ -567,9 +569,23 @@ function findAutoPlaySwitchButton(): { button: HTMLElement, isOn: boolean } | nu
   return null
 }
 
+let loopStateRequestGeneration = 0
+let autoPlayStateRequestGeneration = 0
+let handoffStateRequestGeneration = 0
+
+function invalidatePendingEndPlaybackStateChanges(): void {
+  loopStateRequestGeneration++
+  autoPlayStateRequestGeneration++
+  handoffStateRequestGeneration++
+}
+
 // 设置单集循环状态
 export function setLoopState(enable: boolean) {
+  const requestGeneration = ++loopStateRequestGeneration
   new RetryTask(30, 500, () => {
+    if (requestGeneration !== loopStateRequestGeneration)
+      return true
+
     // 查找单集循环开关
     const loopCheckbox = document.querySelector(
       '.bpx-player-ctrl-setting-loop input[type=checkbox]',
@@ -621,7 +637,11 @@ export function resetAutoPlayUserChangeFlag() {
 
 // 设置自动播放状态
 function setAutoPlayState(enable: boolean) {
+  const requestGeneration = ++autoPlayStateRequestGeneration
   new RetryTask(30, 500, () => {
+    if (requestGeneration !== autoPlayStateRequestGeneration)
+      return true
+
     const result = findAutoPlaySwitchButton()
 
     if (!result) {
@@ -641,20 +661,26 @@ function setAutoPlayState(enable: boolean) {
           isProgrammaticChange = false
         }, 0)
       }
+
+      return findAutoPlaySwitchButton()?.isOn === enable
     }
 
     return true
   }).start()
 }
 
-// 设置收藏列表的播放方式（自动切集或播完暂停）
+// 设置播放器官方 handoff 模式（自动切集或播完暂停）
 function setPlaylistHandoffMode(enable: boolean) {
   // 如果启用自动切集，需要先关闭单集循环（单集循环优先级更高）
   if (enable) {
     setLoopState(false)
   }
 
+  const requestGeneration = ++handoffStateRequestGeneration
   new RetryTask(30, 500, () => {
+    if (requestGeneration !== handoffStateRequestGeneration)
+      return true
+
     // 自动切集的 radio value 是 "0"，播完暂停的 value 是 "2"
     const targetValue = enable ? '0' : '2'
     const targetRadio = document.querySelector(
@@ -665,10 +691,19 @@ function setPlaylistHandoffMode(enable: boolean) {
       return false
     }
 
-    // 如果目标按钮未选中，则设置为选中
+    // 优先使用原生 click，让播放器同步内部配置与 UI。
     if (!targetRadio.checked) {
-      targetRadio.checked = true
-      targetRadio.dispatchEvent(new Event('change', { bubbles: true }))
+      targetRadio.click()
+
+      if (!targetRadio.checked) {
+        const checkedSetter = Object.getOwnPropertyDescriptor(
+          HTMLInputElement.prototype,
+          'checked',
+        )?.set
+        checkedSetter?.call(targetRadio, true)
+        targetRadio.dispatchEvent(new Event('input', { bubbles: true }))
+        targetRadio.dispatchEvent(new Event('change', { bubbles: true }))
+      }
     }
 
     return targetRadio.checked
@@ -680,7 +715,10 @@ export function supportsCustomPlaybackForVideoType(videoType = detectVideoType()
 }
 
 function usesPlaylistHandoff(videoType: VideoType): boolean {
-  return videoType === VideoType.WATCH_LATER || videoType === VideoType.PLAYLIST
+  return videoType === VideoType.MULTIPART
+    || videoType === VideoType.COLLECTION
+    || videoType === VideoType.WATCH_LATER
+    || videoType === VideoType.PLAYLIST
 }
 
 interface NativeEndPlaybackSnapshot {
@@ -691,6 +729,13 @@ interface NativeEndPlaybackSnapshot {
 }
 
 let nativeEndPlaybackSnapshot: NativeEndPlaybackSnapshot | null = null
+let customEndPlaybackHandlerActive = false
+
+export function setCustomEndPlaybackHandlerActive(active: boolean): void {
+  if (customEndPlaybackHandlerActive !== active)
+    invalidatePendingEndPlaybackStateChanges()
+  customEndPlaybackHandlerActive = active
+}
 
 function captureNativeEndPlaybackBehavior(videoType: VideoType): void {
   if (nativeEndPlaybackSnapshot?.videoType === videoType)
@@ -719,13 +764,11 @@ function restoreNativeEndPlaybackBehavior(): void {
   if (snapshot.loop !== null)
     setLoopState(snapshot.loop)
 
-  if (usesPlaylistHandoff(snapshot.videoType)) {
-    if (snapshot.playlistHandoff !== null)
-      setPlaylistHandoffMode(snapshot.playlistHandoff)
-  }
-  else if (snapshot.autoPlay !== null) {
+  if (usesPlaylistHandoff(snapshot.videoType) && snapshot.playlistHandoff !== null)
+    setPlaylistHandoffMode(snapshot.playlistHandoff)
+
+  if (snapshot.autoPlay !== null)
     setAutoPlayState(snapshot.autoPlay)
-  }
 }
 
 export function getAutoPlayModeForVideoType(videoType = detectVideoType()): AutoPlayMode {
@@ -751,19 +794,25 @@ export function disableNativeEndPlaybackBehavior(videoType = detectVideoType()):
   setLoopState(false)
   if (usesPlaylistHandoff(videoType))
     setPlaylistHandoffMode(false)
-  else
-    setAutoPlayState(false)
+  setAutoPlayState(false)
 }
 
 // 根据视频类型和设置应用自动连播状态
 export function applyAutoPlayByVideoType() {
+  invalidatePendingEndPlaybackStateChanges()
+  const videoType = detectVideoType()
+
+  if (customEndPlaybackHandlerActive) {
+    disableNativeEndPlaybackBehavior(videoType)
+    return
+  }
+
   // 使用 B 站默认行为时，撤销自定义播放对原生开关的临时接管。
   if (settings.value.useBilibiliDefaultAutoPlay) {
     restoreNativeEndPlaybackBehavior()
     return
   }
 
-  const videoType = detectVideoType()
   const mode = getAutoPlayModeForVideoType(videoType)
 
   nativeEndPlaybackSnapshot = null
@@ -773,21 +822,26 @@ export function applyAutoPlayByVideoType() {
     return
   }
 
-  // 收藏列表和稍后再看使用特殊的播放方式控制（自动切集/播完暂停）
+  // 播放列表优先使用播放器官方 handoff，避免两套续播逻辑竞争。
   if (usesPlaylistHandoff(videoType)) {
     switch (mode) {
       case 'autoPlay':
-      case 'autoPlayWithRecommend':
-        // 开启自动切集
         setPlaylistHandoffMode(true)
         break
+      case 'autoPlayWithRecommend':
+        setPlaylistHandoffMode(true)
+        setAutoPlayState(true)
+        break
       case 'pauseAtEnd':
-        // 开启播完暂停
+        setLoopState(false)
         setPlaylistHandoffMode(false)
+        setAutoPlayState(false)
         break
       case 'loop':
-        // 收藏列表不支持单集循环，使用播完暂停代替
         setPlaylistHandoffMode(false)
+        setAutoPlayState(false)
+        if (videoType === VideoType.MULTIPART || videoType === VideoType.COLLECTION)
+          setLoopState(true)
         break
     }
     return

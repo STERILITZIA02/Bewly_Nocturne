@@ -5,7 +5,7 @@ import type { CustomPlayOrderContext, RandomPlayOrder } from '~/logic/storage'
 import { debugLog } from '~/utils/debug'
 import { i18n } from '~/utils/i18n'
 
-import { applyAutoPlayByVideoType, detectVideoType, disableNativeEndPlaybackBehavior, supportsCustomPlaybackForVideoType, VideoType } from './player'
+import { applyAutoPlayByVideoType, detectVideoType, disableNativeEndPlaybackBehavior, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
 
 // 随机播放状态管理
 let isRandomPlayEnabled = false
@@ -116,7 +116,7 @@ export function getRandomPlayText(): string {
 // 获取视频选集
 export function getVideoEpisodes(): HTMLElement[] {
   // 多P视频选集（B站标准选集列表）
-  const episodes = queryEpisodeItems('.video-pod__item, .multi-page__item, .page-item')
+  const episodes = queryEpisodeItems('.video-pod__item, .video-pod__list .simple-base-item, .multi-page__item, .page-item')
 
   if (episodes.length > 0) {
     return episodes
@@ -204,7 +204,7 @@ function getEpisodeBaseKey(episode: HTMLElement, index: number): string {
   const title = normalizeEpisodeText(
     episode.getAttribute('title')
     ?? episode.getAttribute('aria-label')
-    ?? episode.querySelector<HTMLElement>('[title], .title, .name, .video-name')?.textContent
+    ?? episode.querySelector<HTMLElement>('[title], .title, .title-txt, .name, .video-name')?.textContent
     ?? episode.textContent,
   )
   return `text:${title || index}`
@@ -212,7 +212,7 @@ function getEpisodeBaseKey(episode: HTMLElement, index: number): string {
 
 function getEpisodeTitle(episode: HTMLElement, index: number): string {
   const titleElement = episode.querySelector<HTMLElement>(
-    '.title, .name, .video-name, .video-pod__item-text, .page-part',
+    '.title, .title-txt, .name, .video-name, .video-pod__item-text, .page-part',
   )
   return normalizeEpisodeText(
     episode.getAttribute('aria-label')
@@ -950,6 +950,7 @@ export function disableRandomPlay(): void {
 // 设置随机播放状态
 export function setRandomPlayEnabled(enabled: boolean): void {
   isRandomPlayEnabled = enabled
+  setCustomEndPlaybackHandlerActive(enabled)
   if (enabled) {
     disableNativeEndPlaybackBehavior()
     enableRandomPlay()
@@ -1063,8 +1064,27 @@ export function syncRandomPlayUI(): void {
   const existingBtn = document.querySelector('.random-play-btn .switch-btn') as HTMLElement
   const existingBlock = document.querySelector('.random-play-btn .switch-block') as HTMLElement
   const existingSelect = document.querySelector<HTMLSelectElement>('.random-play-order-select')
-  if (existingSelect)
+  if (existingSelect) {
     existingSelect.value = getActivePlayOrder()
+    existingSelect.setAttribute('aria-label', getRandomPlayText())
+    existingSelect.title = getRandomPlayText()
+    const optionLabels: Record<RandomPlayOrder, string> = {
+      sequential: t('settings.random_play_order_sequential'),
+      reverse: t('settings.random_play_order_reverse'),
+      random: t('settings.random_play_order_random'),
+    }
+    for (const option of Array.from(existingSelect.options)) {
+      if (option.value === 'sequential' || option.value === 'reverse' || option.value === 'random')
+        option.textContent = optionLabels[option.value]
+    }
+  }
+
+  const editButton = document.querySelector<HTMLElement>('.random-play-edit-btn')
+  if (editButton) {
+    const label = t('settings.random_play_edit_playlist')
+    editButton.title = label
+    editButton.setAttribute('aria-label', label)
+  }
 
   if (existingBtn && existingBlock) {
     existingBtn.setAttribute('aria-checked', String(isRandomPlayEnabled))

@@ -8,8 +8,6 @@ const BILIBILI_TOP_BAR_SELECTORS = [
   '#home_nav',
   '#biliMainHeader',
   '#bili-header-container',
-  // Bilibili Evolved
-  '.custom-navbar',
 ]
 
 let cachedOriginalTopBar: HTMLElement | null = null
@@ -161,6 +159,8 @@ function keepOriginalTopBarAvailable(doc: Document) {
   let reparenting = false
   const observer = new MutationObserver(() => {
     if (reparenting)
+      return
+    if (doc.documentElement.dataset.bewlyTopBarSource !== 'bilibili-native')
       return
 
     // 已有挂在 body 上的稳定 portal：绝不要再 adopt #app 内再生的顶栏。

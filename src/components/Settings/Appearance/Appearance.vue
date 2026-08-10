@@ -71,10 +71,6 @@ const isCustomDarkModeBaseColor = computed<boolean>(() => {
   return !darkModeBaseColorOptions.value.includes(settings.value.darkModeBaseColor)
 })
 
-const bilibiliEvolvedThemeColor = computed(() => {
-  return getComputedStyle(document.documentElement).getPropertyValue('--theme-color').trim() || '#00a1d6'
-})
-
 const fontPreferenceOptions = computed(() => {
   return [
     {
@@ -287,24 +283,6 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
         right-width="auto"
       >
         <Radio v-model="settings.useLinearGradientThemeColorBackground" />
-      </SettingsItem>
-      <SettingsItem
-        :title="$t('settings.follow_bilibili_evolved_color')"
-        :desc="$t('settings.follow_bilibili_evolved_color_desc')"
-        right-width="auto"
-      >
-        <div
-          class="color-option"
-          w-20px h-20px rounded-8 cursor-pointer transition
-          duration-300 box-border
-          :style="{
-            background: bilibiliEvolvedThemeColor,
-            transform: bilibiliEvolvedThemeColor === settings.themeColor ? 'scale(1.3)' : 'scale(1)',
-            border: bilibiliEvolvedThemeColor === settings.themeColor ? '2px solid white' : '2px solid transparent',
-            boxShadow: bilibiliEvolvedThemeColor === settings.themeColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
-          }"
-          @click="changeThemeColor(bilibiliEvolvedThemeColor)"
-        />
       </SettingsItem>
     </SettingsItemGroup>
 

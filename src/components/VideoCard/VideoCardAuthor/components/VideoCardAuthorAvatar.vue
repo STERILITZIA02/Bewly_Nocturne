@@ -43,7 +43,7 @@ const isKetang = computed(() => {
     shrink-0
   >
     <div
-      class="ketang-icon"
+      class="ketang-icon video-card-author-avatar bew-shape-circle"
       w-34px h-34px
       rounded="1/2"
       bg="$bew-theme-color-10"
@@ -68,6 +68,7 @@ const isKetang = computed(() => {
       v-for="(item, index) in displayedAvatars"
       :key="index"
       :href="getAuthorJumpUrl(item)" target="_blank"
+      class="video-card-author-avatar bew-shape-circle"
       rounded="1/2"
       object="center cover" bg="$bew-skeleton" cursor="pointer"
       position-absolute top-0 inline-block
@@ -115,6 +116,7 @@ const isKetang = computed(() => {
     <!-- More avatars not shown -->
     <span
       v-if="Array.isArray(author) && author.length > maxCount"
+      class="video-card-author-avatar bew-shape-circle"
       pos="absolute right--4px"
       w="28px" h="28px"
       bg="$bew-skeleton"
@@ -127,7 +129,14 @@ const isKetang = computed(() => {
 </template>
 
 <style scoped lang="scss">
+.video-card-author-avatar {
+  box-sizing: border-box;
+  border: 1px solid var(--bew-surface-border-color);
+}
+
 .live {
-  --uno: "p-2px box-border border-2 border-$bew-theme-color-60";
+  padding: 2px;
+  border-width: 2px;
+  border-color: var(--bew-theme-color-60);
 }
 </style>

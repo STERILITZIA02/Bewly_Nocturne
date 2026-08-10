@@ -21,6 +21,7 @@ const blockedPropertyNames = new Set(['__proto__', 'constructor', 'prototype'])
 const settingEnumValues = {
   language: ['', 'en', 'cmn-CN', 'cmn-TW', 'jyut'],
   commentReplyTreeMode: ['lineCollapseMain', 'lineKeepMain', 'indentOnly'],
+  commentReplyPaginationMode: ['loadMore', 'pagination'],
   customizeFont: ['default', 'recommend', 'custom'],
   videoCardLinkOpenMode: ['drawer', 'newTab', 'currentTab', 'background'],
   topBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'newTab', 'background'],

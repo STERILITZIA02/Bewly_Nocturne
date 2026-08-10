@@ -4,11 +4,47 @@ function httpsUrl(url = '') {
   return url.replace(/^http:/, 'https:')
 }
 
+const BILIBILI_IMAGE_HOSTS = ['hdslb.com', 'biliimg.com', 'bilivideo.com', 'bilibili.com']
+
+function isBilibiliImageHost(hostname: string) {
+  return BILIBILI_IMAGE_HOSTS.some(host => hostname === host || hostname.endsWith(`.${host}`))
+}
+
+export function getMomentOriginalImageUrl(url = '') {
+  if (!url)
+    return url
+
+  try {
+    const parsed = new URL(url.startsWith('//') ? `https:${url}` : url)
+    if (!isBilibiliImageHost(parsed.hostname.toLowerCase()))
+      return url
+
+    parsed.pathname = parsed.pathname.replace(
+      /@\d+w(?:_\d+h)?(?:_\d+c)?(?:\.(?:avif|webp|gif|jpe?g|png))?$/i,
+      '',
+    )
+    return parsed.toString()
+  }
+  catch {
+    return url
+  }
+}
+
 export function getMomentThumbnailUrl(url = '', width = 560) {
-  const normalized = httpsUrl(url).replace(/@[^/]*$/, '')
-  if (!normalized || !/hdslb\.com|biliimg\.com|bilivideo\.com|bilibili\.com/.test(normalized))
+  const normalized = getMomentOriginalImageUrl(httpsUrl(url))
+  if (!normalized)
     return normalized
-  return `${normalized}@${width}w.webp`
+
+  try {
+    const parsed = new URL(normalized)
+    if (!isBilibiliImageHost(parsed.hostname.toLowerCase()))
+      return normalized
+    parsed.pathname = `${parsed.pathname}@${width}w.webp`
+    return parsed.toString()
+  }
+  catch {
+    return normalized
+  }
 }
 
 export function getAvatarThumbnailUrl(url = '') {
@@ -45,13 +81,17 @@ export function getCardPreviewText(moment: DisplayMoment) {
 }
 
 export function isCompactPlainTextMoment(moment: DisplayMoment) {
+  const isReservation = Boolean(
+    moment.additional?.isVideoReservation || moment.additional?.isLiveReservation,
+  )
+
   return !moment.images.length
     && !moment.isVideo
     && !moment.isLive
     && !moment.isChargeExclusive
     && !moment.title
     && !moment.forward
-    && !moment.additional
+    && (!moment.additional || isReservation)
 }
 
 export function getWatchLaterStateKey(target: WatchLaterTarget) {

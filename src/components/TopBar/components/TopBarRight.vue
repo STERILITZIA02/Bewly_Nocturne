@@ -48,7 +48,14 @@ function refreshUnreadMessageSharedState() {
 const avatarImg = ref<HTMLElement | null>(null)
 const avatarShadow = ref<HTMLElement | null>(null)
 
-const { handleClickTopBarItem, setupTopBarItemHoverEvent, setupTopBarItemTransformer, forceWhiteIcon } = useTopBarInteraction()
+const {
+  getTopBarItemHref,
+  handleClickTopBarItem,
+  setupTopBarItemHoverEvent,
+  setupTopBarItemTransformer,
+  shouldOpenConfiguredTopBarItem,
+  forceWhiteIcon,
+} = useTopBarInteraction()
 
 const mid = computed(() => userInfo.value.mid || getUserID())
 
@@ -256,10 +263,10 @@ const shouldShowDivider = computed(() => {
             </template>
             <ALink
               :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://t.bilibili.com"
+              :href="getTopBarItemHref('moments', 'https://t.bilibili.com')"
               :title="$t('topbar.moments')"
               type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && settings.openTopBarItemsInBewly"
+              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('moments')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
             >
               <div i-tabler:windmill />
@@ -285,10 +292,10 @@ const shouldShowDivider = computed(() => {
           >
             <ALink
               :class="{ 'white-icon': forceWhiteIcon }"
-              :href="`https://space.bilibili.com/${mid}/favlist`"
+              :href="getTopBarItemHref('favorites', `https://space.bilibili.com/${mid}/favlist`)"
               :title="$t('topbar.favorites')"
               type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && settings.openTopBarItemsInBewly"
+              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('favorites')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
             >
               <div i-mingcute:star-line />
@@ -316,10 +323,10 @@ const shouldShowDivider = computed(() => {
           >
             <ALink
               :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://www.bilibili.com/history"
+              :href="getTopBarItemHref('history', 'https://www.bilibili.com/history')"
               :title="$t('topbar.history')"
               type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && settings.openTopBarItemsInBewly"
+              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('history')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
             >
               <div i-mingcute:time-line />
@@ -357,10 +364,10 @@ const shouldShowDivider = computed(() => {
             </template>
             <ALink
               :class="{ 'white-icon': forceWhiteIcon }"
-              href="https://www.bilibili.com/watchlater/list"
+              :href="getTopBarItemHref('watchLater', 'https://www.bilibili.com/watchlater/list')"
               :title="$t('topbar.watch_later')"
               type="topBar"
-              :custom-click-event="!settings.touchScreenOptimization && settings.openTopBarItemsInBewly"
+              :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('watchLater')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
             >
               <div i-mingcute:carplay-line />

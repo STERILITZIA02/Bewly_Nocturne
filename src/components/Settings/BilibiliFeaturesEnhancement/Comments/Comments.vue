@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
-import type { CommentReplyTreeMode } from '~/logic/storage'
+import type { CommentReplyPaginationMode, CommentReplyTreeMode } from '~/logic/storage'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
@@ -44,6 +44,17 @@ const commentReplyTreeModeOptions = computed<{ label: string, value: CommentRepl
     value: 'indentOnly',
   },
 ])
+
+const commentReplyPaginationModeOptions = computed<{ label: string, value: CommentReplyPaginationMode }[]>(() => [
+  {
+    label: t('settings.comment_reply_pagination_mode.load_more'),
+    value: 'loadMore',
+  },
+  {
+    label: t('settings.comment_reply_pagination_mode.pagination'),
+    value: 'pagination',
+  },
+])
 </script>
 
 <template>
@@ -66,6 +77,19 @@ const commentReplyTreeModeOptions = computed<{ label: string, value: CommentRepl
       right-width="auto"
     >
       <Radio v-model="settings.enableCommentReplyTreeDisplay" />
+    </SettingsItem>
+
+    <SettingsItem
+      v-if="settings.enableCommentReplyTreeDisplay"
+      :title="$t('settings.comment_reply_pagination_mode.title')"
+      :desc="$t('settings.comment_reply_pagination_mode.desc')"
+      right-width="auto"
+    >
+      <Select
+        v-model="settings.commentReplyPaginationMode"
+        :options="commentReplyPaginationModeOptions"
+        w="220px"
+      />
     </SettingsItem>
 
     <SettingsItem
