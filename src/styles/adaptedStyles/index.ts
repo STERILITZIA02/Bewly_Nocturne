@@ -19,7 +19,12 @@ async function setupStyles() {
     await import('./pages/notificationsPage.scss')
     document.documentElement.classList.add('notificationsPage')
 
-    if (isInIframe() && settings.value.openNotificationsPageAsDrawer) {
+    const isEmbeddedNotificationsPage = window.name === 'bewly-notifications-page'
+    if (isEmbeddedNotificationsPage) {
+      document.documentElement.classList.add('bewly-notifications-embedded')
+      document.documentElement.classList.add('remove-top-bar-without-placeholder')
+    }
+    else if (isInIframe() && settings.value.openNotificationsPageAsDrawer) {
       document.documentElement.classList.add('drawer')
     }
   }

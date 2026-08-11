@@ -999,7 +999,11 @@ onBeforeUnmount(stopUrlCleaner)
                 </Transition>
 
                 <!-- ✅ IntersectionObserver 哨兵：用于检测滚动到底部，避免在 RAF 中读取 scrollHeight -->
-                <div ref="loadMoreSentinelRef" h-1px w-full pointer-events-none opacity-0 />
+                <div
+                  v-if="activatedPage !== AppPage.Notifications"
+                  ref="loadMoreSentinelRef"
+                  h-1px w-full pointer-events-none opacity-0
+                />
               </div>
             </main>
           </div>
