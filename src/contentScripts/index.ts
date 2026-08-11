@@ -1392,7 +1392,7 @@ else if (shouldInitializeContentScript) {
   // 为 iframe 中运行时添加 ESC 键监听（消息页面、视频页面、动态详情）
   const isMomentDetailPage = /https?:\/\/t\.bilibili\.com\/\d+/.test(currentUrl)
     || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(currentUrl)
-  const isNotificationsDrawer = isNotificationPage() && window.name !== 'bewly-notifications-page'
+  const isNotificationsDrawer = isNotificationPage() && window.name === 'bewly-notifications-drawer'
   if (isInIframe() && (isNotificationsDrawer || isVideoOrBangumiPage() || isMomentDetailPage)) {
     const pageType = isNotificationsDrawer ? 'message' : isVideoOrBangumiPage() ? 'video' : 'moment-detail'
     console.log(`[Bewly IFrame] ESC listener initialized for ${pageType} page`)

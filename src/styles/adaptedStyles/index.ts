@@ -24,7 +24,11 @@ async function setupStyles() {
       document.documentElement.classList.add('bewly-notifications-embedded')
       document.documentElement.classList.add('remove-top-bar-without-placeholder')
     }
-    else if (isInIframe() && settings.value.openNotificationsPageAsDrawer) {
+    else if (
+      window.name === 'bewly-notifications-drawer'
+      && isInIframe()
+      && settings.value.openNotificationsPageAsDrawer
+    ) {
       document.documentElement.classList.add('drawer')
     }
   }
