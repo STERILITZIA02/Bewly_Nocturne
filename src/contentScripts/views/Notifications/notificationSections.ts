@@ -1,0 +1,99 @@
+export type NotificationView
+  = | 'whisper'
+    | 'reply'
+    | 'at'
+    | 'love'
+    | 'system'
+    | 'settings'
+
+export type NativeNotificationSection = 'reply'
+
+export type OriginalNotificationView
+  = | 'whisper'
+    | 'at'
+    | 'love'
+    | 'system'
+    | 'settings'
+
+export interface NotificationSectionDefinition {
+  id: NotificationView
+  implementation: 'native' | 'original'
+  labelKey: string
+  descriptionKey: string
+  icon: string
+  originalHash: string
+  unreadSource: 'dm' | 'reply' | 'at' | 'like' | 'system' | null
+}
+
+export const NOTIFICATION_SECTIONS = [
+  {
+    id: 'whisper',
+    implementation: 'original',
+    labelKey: 'notifications.sections.whisper.label',
+    descriptionKey: 'notifications.sections.whisper.description',
+    icon: 'i-solar:chat-round-bold-duotone',
+    originalHash: 'whisper',
+    unreadSource: 'dm',
+  },
+  {
+    id: 'reply',
+    implementation: 'native',
+    labelKey: 'notifications.sections.reply.label',
+    descriptionKey: 'notifications.sections.reply.description',
+    icon: 'i-solar:reply-2-bold-duotone',
+    originalHash: 'reply',
+    unreadSource: 'reply',
+  },
+  {
+    id: 'at',
+    implementation: 'original',
+    labelKey: 'notifications.sections.at.label',
+    descriptionKey: 'notifications.sections.at.description',
+    icon: 'i-solar:mention-circle-bold-duotone',
+    originalHash: 'at',
+    unreadSource: 'at',
+  },
+  {
+    id: 'love',
+    implementation: 'original',
+    labelKey: 'notifications.sections.love.label',
+    descriptionKey: 'notifications.sections.love.description',
+    icon: 'i-solar:like-bold-duotone',
+    originalHash: 'love',
+    unreadSource: 'like',
+  },
+  {
+    id: 'system',
+    implementation: 'original',
+    labelKey: 'notifications.sections.system.label',
+    descriptionKey: 'notifications.sections.system.description',
+    icon: 'i-solar:chat-line-bold-duotone',
+    originalHash: 'system',
+    unreadSource: 'system',
+  },
+  {
+    id: 'settings',
+    implementation: 'original',
+    labelKey: 'notifications.sections.settings.label',
+    descriptionKey: 'notifications.sections.settings.description',
+    icon: 'i-solar:settings-bold-duotone',
+    originalHash: 'config',
+    unreadSource: null,
+  },
+] as const satisfies readonly NotificationSectionDefinition[]
+
+export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
+  NOTIFICATION_SECTIONS.map(section => [section.id, section]),
+) as Record<NotificationView, NotificationSectionDefinition>
+
+export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
+  section => section.unreadSource !== null,
+)
+
+export function isNotificationView(value: unknown): value is NotificationView {
+  return typeof value === 'string' && value in NOTIFICATION_SECTION_BY_ID
+}
+
+export function isOriginalNotificationView(value: NotificationView): value is OriginalNotificationView {
+  return NOTIFICATION_SECTION_BY_ID[value].implementation === 'original'
+}

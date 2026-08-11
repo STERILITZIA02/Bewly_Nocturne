@@ -553,6 +553,36 @@ html.notificationsPage.bewly-notifications-embedded {
     overflow: hidden;
   }
 
+  .message-layout {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
+  // The current message site owns its primary category navigation in this
+  // aside. The narrow legacy selector covers the equivalent sidebar without
+  // touching the private-message conversation list inside `.bili-im .left`.
+  .message-aside,
+  .space-left:has(> .side-bar) {
+    display: none !important;
+  }
+
+  .message-main {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    overflow: hidden;
+  }
+
   #message-navbar,
   .bili-header,
   .link-navbar {
@@ -605,6 +635,8 @@ html.notificationsPage.bewly-notifications-embedded {
 
   .space-right {
     flex: 1 1 auto;
+    width: 100%;
+    max-width: none;
     background: var(--bew-content-alt) !important;
     backdrop-filter: none;
   }
@@ -687,11 +719,14 @@ html.notificationsPage.bewly-notifications-embedded {
 
   .side-bar .item.active,
   .list-item.active,
-  .list-item.top,
   .tab-list .tab-item.active,
   .button-box .item > button.active {
     color: var(--bew-theme-color) !important;
     background: var(--bew-theme-color-10) !important;
+  }
+
+  .list-item.top:not(.active) {
+    background: var(--bew-fill-1) !important;
   }
 
   .title,

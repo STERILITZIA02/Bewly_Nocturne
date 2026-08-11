@@ -449,8 +449,13 @@ const showBewlyPage = computed((): boolean => {
 // SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
 // currently selected Dock page (and Home sub-tab) and react to locale changes.
 const dockPageTitle = computed<string | undefined>(() => {
-  if (!showBewlyPage.value || activatedPage.value === AppPage.SearchResults)
+  if (
+    !showBewlyPage.value
+    || activatedPage.value === AppPage.SearchResults
+    || activatedPage.value === AppPage.Notifications
+  ) {
     return undefined
+  }
 
   const titleKey = activatedPage.value === AppPage.Home
     ? mainStore.homeTabs.find(tab => tab.page === homeActivatedPage.value)?.i18nKey

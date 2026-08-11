@@ -1,182 +1,169 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useDark } from '~/composables/useDark'
-import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { useRouteState } from '~/composables/useRouteState'
+import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
-import { useTopBarStore } from '~/stores/topBarStore'
+import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
 
-const MESSAGE_PAGE_URL = 'https://message.bilibili.com/#/whisper'
+import NotificationsNavigation from './components/NotificationsNavigation.vue'
+import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
+import OriginalNotificationsFrame from './components/OriginalNotificationsFrame.vue'
+import ReplyNotificationFeed from './components/ReplyNotificationFeed.vue'
+import type { NotificationView, OriginalNotificationView } from './notificationSections'
+import {
+  isNotificationView,
+  isOriginalNotificationView,
+  NOTIFICATION_SECTION_BY_ID,
+} from './notificationSections'
 
-const { handlePageRefresh } = useBewlyApp()
-const { isDark, isOledDark } = useDark()
-const topBarStore = useTopBarStore()
+interface OriginalNotificationsFrameExposed {
+  reload: () => void
+}
 
-const iframeRef = ref<HTMLIFrameElement | null>(null)
-const iframeKey = ref(0)
-const isIframeLoaded = ref(false)
+interface ReplyNotificationFeedExposed {
+  refresh: () => Promise<void>
+}
+
+const { t } = useI18n()
+const { activatedPage, handlePageRefresh, scrollViewportRef } = useBewlyApp()
+const routeState = useRouteState()
+
+const currentView = ref<NotificationView>(parseNotificationView(routeState.href || window.location.href))
+const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
+const replyFeedRef = ref<ReplyNotificationFeedExposed | null>(null)
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
+const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
+const originalView = computed<OriginalNotificationView | null>(() => (
+  isOriginalNotificationView(currentView.value) ? currentView.value : null
+))
+const isOriginalView = computed(() => originalView.value !== null)
 
-let isPageActive = false
-let iframeWasReleased = false
-let revealFrame: number | undefined
-let stopThemeWatcher: (() => void) | undefined
+const isPageActive = ref(false)
 
-function clearRevealFrame() {
-  if (revealFrame === undefined)
+function replaceNotificationRoute(view: NotificationView) {
+  const targetUrl = buildBewlyNotificationUrl(view)
+  if (window.location.href !== targetUrl)
+    window.history.replaceState(window.history.state, '', targetUrl)
+}
+
+function syncViewFromRoute(href: string) {
+  const url = new URL(href || window.location.href)
+  if (url.searchParams.get('page') !== AppPage.Notifications)
     return
 
-  cancelAnimationFrame(revealFrame)
-  revealFrame = undefined
+  const requestedView = url.searchParams.get('notificationView')
+  const nextView = parseNotificationView(url)
+  currentView.value = nextView
+
+  if (!isNotificationView(requestedView))
+    replaceNotificationRoute(nextView)
 }
 
-function syncIframeTheme(iframe = iframeRef.value) {
-  if (!iframe?.contentWindow)
+function selectView(view: NotificationView) {
+  if (view === currentView.value)
     return
 
-  try {
-    iframe.contentWindow.postMessage({
-      type: IFRAME_DARK_MODE_CHANGE,
-      isDark: isDark.value,
-      isOledDark: isOledDark.value,
-      darkModeBaseColor: settings.value.darkModeBaseColor,
-    }, '*')
-  }
-  catch (error) {
-    console.warn('Failed to send notifications theme state to iframe:', error)
-  }
+  currentView.value = view
+  window.history.pushState(window.history.state, '', buildBewlyNotificationUrl(view))
+  if (isOriginalNotificationView(view))
+    scrollViewportRef.value?.scrollTo({ top: 0 })
 }
 
-function syncUnreadMessageCount() {
-  topBarStore.syncUnreadMessageState().catch((error) => {
-    console.error('同步消息页未读数量失败:', error)
-  })
-}
-
-function scheduleIframeReveal(iframe: HTMLIFrameElement) {
-  clearRevealFrame()
-  revealFrame = requestAnimationFrame(() => {
-    revealFrame = undefined
-    if (iframe === iframeRef.value && isPageActive)
-      isIframeLoaded.value = true
-  })
-}
-
-function handleIframeLoad(event: Event) {
-  const iframe = event.currentTarget as HTMLIFrameElement
-  if (iframe !== iframeRef.value || iframe.getAttribute('src') === 'about:blank')
-    return
-
-  syncIframeTheme(iframe)
-  syncUnreadMessageCount()
-  scheduleIframeReveal(iframe)
-}
-
-function reloadIframe() {
-  clearRevealFrame()
-  isIframeLoaded.value = false
-  iframeWasReleased = false
-  iframeKey.value++
+function refreshCurrentView() {
+  if (currentView.value === 'reply')
+    void replyFeedRef.value?.refresh()
+  else
+    originalFrameRef.value?.reload()
 }
 
 function registerRefreshHandler() {
-  handlePageRefresh.value = reloadIframe
+  handlePageRefresh.value = refreshCurrentView
 }
 
 function clearRefreshHandler() {
-  if (handlePageRefresh.value === reloadIframe)
+  if (handlePageRefresh.value === refreshCurrentView)
     handlePageRefresh.value = undefined
 }
 
-function startThemeWatcher() {
-  if (stopThemeWatcher)
+function clearNotificationViewFromRoute() {
+  if (activatedPage.value === AppPage.Notifications)
     return
 
-  stopThemeWatcher = watch(
-    [isDark, isOledDark, () => settings.value.darkModeBaseColor],
-    () => syncIframeTheme(),
-  )
-}
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has('notificationView'))
+    return
 
-function stopThemeSync() {
-  stopThemeWatcher?.()
-  stopThemeWatcher = undefined
-}
-
-function handleVisibilityChange() {
-  if (isPageActive && document.visibilityState === 'visible')
-    syncUnreadMessageCount()
-}
-
-function releaseIframeResources() {
-  clearRevealFrame()
-  isIframeLoaded.value = false
-  const iframe = iframeRef.value
-  if (iframe && iframe.getAttribute('src') !== 'about:blank')
-    iframe.src = 'about:blank'
-  iframeWasReleased = true
+  url.searchParams.delete('notificationView')
+  window.history.replaceState(window.history.state, '', url)
 }
 
 function activatePage() {
-  if (isPageActive)
+  if (isPageActive.value)
     return
 
-  isPageActive = true
-  if (iframeWasReleased) {
-    iframeWasReleased = false
-    iframeKey.value++
-  }
+  isPageActive.value = true
+  syncViewFromRoute(window.location.href)
   registerRefreshHandler()
-  startThemeWatcher()
-  document.addEventListener('visibilitychange', handleVisibilityChange)
-  syncUnreadMessageCount()
 }
 
 function deactivatePage() {
-  if (!isPageActive)
+  if (!isPageActive.value)
     return
 
-  isPageActive = false
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  stopThemeSync()
+  isPageActive.value = false
   clearRefreshHandler()
-  syncUnreadMessageCount()
-  releaseIframeResources()
+  clearNotificationViewFromRoute()
 }
+
+watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
+
+watchEffect(() => {
+  if (isPageActive.value) {
+    document.title = t('notifications.document_title', {
+      section: t(currentSection.value.labelKey),
+    })
+  }
+})
 
 onMounted(activatePage)
 onActivated(activatePage)
 onDeactivated(deactivatePage)
-
 onBeforeUnmount(() => {
   deactivatePage()
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  stopThemeSync()
   clearRefreshHandler()
-  releaseIframeResources()
+  clearNotificationViewFromRoute()
 })
 </script>
 
 <template>
   <main
     class="notifications-page"
-    :class="{ 'notifications-page--dock-bottom': isBottomDock }"
-    :aria-busy="!isIframeLoaded"
+    :class="{
+      'notifications-page--original': isOriginalView,
+      'notifications-page--reply': !isOriginalView,
+      'notifications-page--dock-bottom': isBottomDock,
+    }"
   >
-    <div v-if="!isIframeLoaded" class="notifications-page__loading">
-      <Loading />
-    </div>
+    <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
 
-    <iframe
-      :key="iframeKey"
-      ref="iframeRef"
-      class="notifications-page__iframe"
-      :class="{ 'notifications-page__iframe--loaded': isIframeLoaded }"
-      :src="MESSAGE_PAGE_URL"
-      name="bewly-notifications-page"
-      :title="$t('dock.notifications')"
-      frameborder="0"
-      @load="handleIframeLoad"
-    />
+    <div class="notifications-page__workspace">
+      <NotificationsNavigation :model-value="currentView" @update:model-value="selectView" />
+
+      <section class="notifications-page__outlet">
+        <ReplyNotificationFeed
+          v-show="currentView === 'reply'"
+          ref="replyFeedRef"
+          :active="isPageActive && currentView === 'reply'"
+        />
+        <OriginalNotificationsFrame
+          v-if="originalView"
+          ref="originalFrameRef"
+          :view="originalView"
+        />
+      </section>
+    </div>
   </main>
 </template>
 
@@ -184,58 +171,82 @@ onBeforeUnmount(() => {
 @use "../../../styles/breakpoints";
 
 .notifications-page {
-  position: relative;
+  box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   min-height: 0;
-  overflow: hidden;
   background: transparent;
   border: 0;
   border-radius: 0;
   box-shadow: none;
 }
 
-.notifications-page--dock-bottom {
+.notifications-page--original {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
+  overflow: hidden;
+}
+
+.notifications-page--reply {
+  min-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
+}
+
+.notifications-page--original.notifications-page--dock-bottom {
   height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
   );
 }
 
-.notifications-page__loading,
-.notifications-page__iframe {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+.notifications-page--reply.notifications-page--dock-bottom {
+  min-height: calc(
+    100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
+  );
 }
 
-.notifications-page__loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bew-homepage-bg);
-}
-
-.notifications-page__iframe {
-  display: block;
+.notifications-page__workspace {
+  display: grid;
+  grid-template-columns: calc(var(--bew-space-10) * 5) minmax(0, 1fr);
+  gap: var(--bew-space-4);
   min-width: 0;
   min-height: 0;
-  background: transparent;
-  border: 0;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity var(--bew-duration-normal) var(--bew-ease-standard);
+  padding-top: var(--bew-space-4);
 }
 
-.notifications-page__iframe--loaded {
-  opacity: 1;
-  pointer-events: auto;
+.notifications-page__outlet {
+  min-width: 0;
+  min-height: 0;
+}
+
+.notifications-page--original .notifications-page__outlet {
+  height: 100%;
+  overflow: hidden;
+}
+
+@media (min-width: breakpoints.$grid-md) and (max-width: breakpoints.$compact-max) {
+  .notifications-page__workspace {
+    grid-template-columns: calc(var(--bew-space-8) * 2) minmax(0, 1fr);
+    gap: var(--bew-space-2);
+  }
+}
+
+@media (max-width: breakpoints.$mobile-max) {
+  .notifications-page__workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    gap: var(--bew-space-3);
+  }
 }
 
 @media (min-width: breakpoints.$grid-lg) {
-  .notifications-page--dock-bottom {
+  .notifications-page--original.notifications-page--dock-bottom {
     height: calc(
+      100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
+    );
+  }
+
+  .notifications-page--reply.notifications-page--dock-bottom {
+    min-height: calc(
       100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
     );
   }
