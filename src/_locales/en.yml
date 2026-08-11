@@ -1312,3 +1312,180 @@ search:
     finished: Finished
     not_started: Not started
     in_progress: In progress
+notifications:
+  title: Messages
+  section_page_title: '{section} - Messages - Bilibili'
+  sections:
+    whisper: Direct messages
+    reply: Replies
+    at: Mentions
+    love: Likes
+    system: System
+    settings: Message settings
+  aria:
+    primary_navigation: Message categories
+  filters:
+    label: Conversation filters
+    all: All
+    unread: Unread
+    unread_only: Unread only
+    followed: Following
+    unfollowed: Not following
+    system: Official & system
+    pinned: Pinned
+  overview:
+    title: Message overview
+    description: Review unread activity or continue a recent conversation.
+    recent: Recent conversations
+  conversations:
+    title: Direct message conversations
+    search_loaded: Search loaded conversations
+    unknown_user: Unknown user
+    no_messages: No messages yet
+    support_group: My fan groups
+    support_group_new: New fan-group messages
+    support_group_empty: No new fan-group messages
+    delete_confirm: Delete the conversation with “{name}”?
+  feed:
+    replied: replied to you
+    mentioned: mentioned you
+    liked: liked your content
+    system_sent: sent a notification
+    description_reply: See replies to your comments and posts.
+    description_at: See where other people mentioned you.
+    description_love: See likes received by your content.
+    description_system: See Bilibili system notifications.
+    delete_confirm: Delete this notification?
+  composer:
+    placeholder: Type a message. Enter to send, Shift+Enter for a new line
+    reply_placeholder: Write a reply
+    add_image: Add image
+  message_types:
+    image: Image message
+    share: Shared content
+    withdrawn: This message was withdrawn
+    unknown: Unsupported message type ({type})
+  actions:
+    add: Add
+    back: Back to conversations
+    delete: Delete
+    delete_conversation: Delete conversation
+    like: Like
+    unlike: Unlike
+    load_older: Load older messages
+    mark_read: Mark as read
+    mute: Mute
+    unmute: Unmute
+    open: Open
+    open_original: Open in the original messages page
+    open_original_manage: Manage in the original page
+    view_profile: View profile
+    pin: Pin
+    unpin: Unpin
+    refresh: Refresh
+    reply: Reply
+    retract: Withdraw
+    retry: Retry
+    send: Send
+    view_source: View original content
+  status:
+    auto_reply: Auto reply
+    conversation_deleted: Conversation deleted
+    deleted: Notification deleted
+    followed: Following
+    image_unavailable: This image is currently unavailable
+    image_too_large: Images cannot exceed 20 MiB
+    gif_too_large: GIF images cannot exceed 1 MiB
+    load_failed: Couldn't load this content. Try again.
+    loading_account: Loading account status…
+    marked_read: Marked as read
+    muted: Muted
+    muted_success: Conversation muted
+    operation_failed: The operation failed. Try again.
+    pinned: Pinned
+    pinned_success: Conversation pinned
+    reply_sent: Reply sent
+    retracted: Message withdrawn
+    save_failed: Couldn't save this setting. Try again.
+    saved: Setting saved
+    send_failed: Couldn't send the message. Try again.
+    sending: Sending…
+    system_conversation: Official or system conversation
+    unfollowed: Not following
+    unmuted_success: Conversation unmuted
+    unpinned_success: Conversation unpinned
+  empty:
+    at: No mentions yet
+    feed_hint: New activity will appear here.
+    login_title: Sign in to see your messages
+    login_description: Sign in to Bilibili to view notifications, direct messages, and message settings.
+    love: No likes yet
+    no_conversations: No direct message conversations
+    no_matching_conversations: No loaded conversations match
+    no_messages: There are no messages here yet
+    no_unread: You're all caught up
+    reply: No replies yet
+    system: No system notifications
+  settings:
+    description: These preferences are saved directly to Bilibili.
+    groups:
+      notifications: Notifications
+      conversations: Direct messages & conversations
+      groups: Fan-group messages
+      anti_disturb: Do Not Disturb
+      safety: Smart filtering & anti-harassment
+      auto_reply: Auto replies & updates
+      block_words: Blocked words
+    message_notification: Message notifications
+    message_notification_desc: Receive Bilibili message notifications.
+    comment_notification: Reply notifications
+    comment_notification_desc: Receive comment and reply notifications.
+    mention_notification: Mention notifications
+    mention_notification_desc: Receive notifications when someone mentions you.
+    notification_mode_all: Everyone
+    notification_mode_following: People I follow
+    notification_mode_off: Don't receive
+    like_notification: Like notifications
+    like_notification_desc: Receive notifications when someone likes your content.
+    receive_unfollowed: Receive messages from people you don't follow
+    receive_unfollowed_desc: Allow people you don't follow to send direct messages.
+    show_unfollowed: Show conversations from people you don't follow
+    show_unfollowed_desc: Show those messages in the conversation list.
+    receive_group: Receive fan-group messages
+    receive_group_desc: Receive fan-group and group conversation messages.
+    fold_group: Fold fan-group messages
+    fold_group_desc: Group fan-club conversations into a folded section.
+    anti_disturb: Do Not Disturb
+    anti_disturb_desc: Pause message notifications during the selected period.
+    anti_disturb_period: Do Not Disturb period
+    anti_disturb_period_desc: Choose one of the periods provided by Bilibili.
+    anti_disturb_option: 'Option {id}'
+    ai_intercept: Smart direct-message filtering
+    ai_intercept_desc: Use Bilibili's smart filters for suspicious direct messages.
+    anti_harassment: Anti-harassment protection
+    anti_harassment_desc: Use Bilibili's anti-harassment settings for direct messages.
+    followed_auto_reply: New-follower auto reply
+    followed_auto_reply_desc: Enable an automatic reply after someone follows you.
+    received_auto_reply: Incoming-message auto reply
+    received_auto_reply_desc: Enable an automatic reply for incoming messages.
+    keyword_auto_reply: Keyword auto reply
+    keyword_auto_reply_desc: Enable automatic replies for matching keywords.
+    keyword_auto_reply_original_desc: Keyword rules contain multiple match-and-reply entries. Manage them in Bilibili's original message settings.
+    voyage_auto_reply: Voyage auto reply
+    voyage_auto_reply_desc: Enable automatic replies for Voyage supporters.
+    auto_reply_group_desc: Edit the switches and server text for simple automatic replies.
+    auto_reply_text_label: '{name} text'
+    auto_reply_text_placeholder: Enter the automatic reply text
+    auto_reply_saving: Saving…
+    save_auto_reply: Save reply
+    block_words: Direct-message blocked words
+    block_words_desc: Bilibili applies its rules to messages containing these words.
+    block_word_placeholder: Enter a blocked word
+    block_word_search: Search added blocked words
+    block_words_count: '{count}/{max} blocked words added.'
+    block_word_length_limit: 'Up to {length} characters each.'
+    remove_block_word: Remove blocked word “{word}”
+    no_block_words: No blocked words have been added.
+    no_matching_block_words: No blocked words match.
+    advanced_title: More original-page features
+    advanced_desc: Complex keyword rules, follower and content updates, reporting, and trust management remain available in Bilibili's original messages page.

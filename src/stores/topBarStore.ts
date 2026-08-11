@@ -99,6 +99,8 @@ export const useTopBarStore = defineStore('topBar', () => {
       result += unReadDm.follow_unread
     if (typeof unReadDm.unfollow_unread === 'number')
       result += unReadDm.unfollow_unread
+    if (typeof unReadDm.support_group_unread === 'number')
+      result += unReadDm.support_group_unread
 
     return result
   })
@@ -433,6 +435,10 @@ export const useTopBarStore = defineStore('topBar', () => {
       if (res.code === 0 && isCurrentAccount(accountId)) {
         Object.assign(unReadDm, res.data)
       }
+
+      res = await api.notification.getSupportGroupUnread()
+      if (res.code === 0 && isCurrentAccount(accountId))
+        unReadDm.support_group_unread = Math.max(0, Number(res.data?.unread_count) || 0)
     }
     catch (error) {
       if (isExtensionContextInvalidatedError(error))
@@ -1185,13 +1191,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     return index < newMomentsCount.value
   }
 
-  function handleNotificationsItemClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
-    if (settings.value.openNotificationsPageAsDrawer) {
-      drawerVisible.notifications = true
-      notificationsDrawerUrl.value = item.url
-    }
-  }
-
   function closeAllPopups(exceptionKey?: string) {
     Object.keys(popupVisible).forEach((key) => {
       if (key !== exceptionKey)
@@ -1579,7 +1578,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     reconcileLocalLoginState,
     getUnreadMessageCount,
     getTopBarNewMomentsCount,
-    handleNotificationsItemClick,
     closeAllPopups,
     initData,
     cleanup,

@@ -1253,3 +1253,180 @@ search:
     finished: 已結束
     not_started: 未開始
     in_progress: 進行中
+notifications:
+  title: 訊息
+  section_page_title: '{section} - 訊息 - 嗶哩嗶哩'
+  sections:
+    whisper: 私訊
+    reply: 回覆我的
+    at: "{'@'} 我的"
+    love: 收到的讚
+    system: 系統通知
+    settings: 訊息設定
+  aria:
+    primary_navigation: 訊息分類
+  filters:
+    label: 會話篩選
+    all: 全部
+    unread: 未讀
+    unread_only: 只看未讀
+    followed: 已關注
+    unfollowed: 未關注
+    system: 官方與系統
+    pinned: 已置頂
+  overview:
+    title: 訊息概覽
+    description: 查看各類未讀訊息，或繼續最近的會話。
+    recent: 最近會話
+  conversations:
+    title: 私訊會話
+    search_loaded: 搜尋已載入的會話
+    unknown_user: 未知使用者
+    no_messages: 暫無訊息
+    support_group: 我的應援團
+    support_group_new: 有新的應援團訊息
+    support_group_empty: 暫無新的應援團訊息
+    delete_confirm: 確定刪除與「{name}」的會話嗎？
+  feed:
+    replied: 回覆了你
+    mentioned: 提到了你
+    liked: 讚了你的內容
+    system_sent: 傳送了通知
+    description_reply: 查看別人對你的回覆。
+    description_at: "查看內容中的 {'@'} 提醒。"
+    description_love: 查看收到的讚。
+    description_system: 查看 Bilibili 系統通知。
+    delete_confirm: 確定刪除這則通知嗎？
+  composer:
+    placeholder: 輸入訊息，Enter 傳送，Shift+Enter 換行
+    reply_placeholder: 輸入回覆
+    add_image: 新增圖片
+  message_types:
+    image: 圖片訊息
+    share: 分享內容
+    withdrawn: 此訊息已收回
+    unknown: 尚未支援的訊息類型（{type}）
+  actions:
+    add: 新增
+    back: 返回會話列表
+    delete: 刪除
+    delete_conversation: 刪除會話
+    like: 按讚
+    unlike: 取消按讚
+    load_older: 載入更早訊息
+    mark_read: 標為已讀
+    mute: 勿擾
+    unmute: 關閉勿擾
+    open: 開啟
+    open_original: 在原版訊息頁開啟
+    open_original_manage: 在原版中管理
+    view_profile: 查看個人空間
+    pin: 置頂
+    unpin: 取消置頂
+    refresh: 重新整理
+    reply: 回覆
+    retract: 收回
+    retry: 重試
+    send: 傳送
+    view_source: 查看原內容
+  status:
+    auto_reply: 自動回覆
+    conversation_deleted: 會話已刪除
+    deleted: 通知已刪除
+    followed: 已關注
+    image_unavailable: 圖片暫時無法顯示
+    image_too_large: 圖片不能超過 20 MiB
+    gif_too_large: GIF 圖片不能超過 1 MiB
+    load_failed: 載入失敗，請重試
+    loading_account: 正在讀取帳號狀態…
+    marked_read: 已標為已讀
+    muted: 已開啟勿擾
+    muted_success: 已開啟勿擾
+    operation_failed: 操作失敗，請重試
+    pinned: 已置頂
+    pinned_success: 會話已置頂
+    reply_sent: 回覆已傳送
+    retracted: 訊息已收回
+    save_failed: 儲存失敗，請重試
+    saved: 設定已儲存
+    send_failed: 傳送失敗，請重試
+    sending: 傳送中…
+    system_conversation: 官方或系統會話
+    unfollowed: 未關注
+    unmuted_success: 已關閉勿擾
+    unpinned_success: 已取消置頂
+  empty:
+    at: "暫無 {'@'} 提醒"
+    feed_hint: 新訊息會顯示在這裡。
+    login_title: 登入後查看訊息
+    login_description: 登入 Bilibili 後可查看通知、私訊和訊息設定。
+    love: 暫無收到的讚
+    no_conversations: 暫無私訊會話
+    no_matching_conversations: 沒有符合的已載入會話
+    no_messages: 這裡還沒有訊息
+    no_unread: 目前沒有未讀訊息
+    reply: 暫無回覆
+    system: 暫無系統通知
+  settings:
+    description: 這些偏好會直接儲存到 Bilibili 伺服器。
+    groups:
+      notifications: 通知提醒
+      conversations: 私訊與會話
+      groups: 粉絲團訊息
+      anti_disturb: 勿擾
+      safety: 智慧攔截與防騷擾
+      auto_reply: 自動回覆與推送
+      block_words: 封鎖詞
+    message_notification: 總訊息提醒
+    message_notification_desc: 接收 Bilibili 訊息提醒。
+    comment_notification: 回覆提醒
+    comment_notification_desc: 接收留言與回覆通知。
+    mention_notification: "{'@'} 提醒"
+    mention_notification_desc: 接收別人提到你的通知。
+    notification_mode_all: 所有人
+    notification_mode_following: 僅關注的人
+    notification_mode_off: 不接收
+    like_notification: 按讚提醒
+    like_notification_desc: 接收內容被按讚的通知。
+    receive_unfollowed: 接收未關注者訊息
+    receive_unfollowed_desc: 允許未關注的人向你傳送私訊。
+    show_unfollowed: 顯示未關注者會話
+    show_unfollowed_desc: 在會話列表中顯示未關注者的訊息。
+    receive_group: 接收粉絲團訊息
+    receive_group_desc: 接收粉絲團和群組會話訊息。
+    fold_group: 收起粉絲團訊息
+    fold_group_desc: 將粉絲團會話摺疊顯示。
+    anti_disturb: 勿擾
+    anti_disturb_desc: 在所選時段內暫停訊息提醒。
+    anti_disturb_period: 勿擾時段
+    anti_disturb_period_desc: 選擇 Bilibili 提供的勿擾方案。
+    anti_disturb_option: '方案 {id}'
+    ai_intercept: 私訊智慧攔截
+    ai_intercept_desc: 使用 Bilibili 的智慧攔截規則過濾可疑私訊。
+    anti_harassment: 防騷擾保護
+    anti_harassment_desc: 使用 Bilibili 的防騷擾設定保護私訊。
+    followed_auto_reply: 被關注自動回覆
+    followed_auto_reply_desc: 開啟被關注後的自動回覆。
+    received_auto_reply: 收到私訊自動回覆
+    received_auto_reply_desc: 開啟收到私訊時的自動回覆。
+    keyword_auto_reply: 關鍵字自動回覆
+    keyword_auto_reply_desc: 開啟符合關鍵字時的自動回覆。
+    keyword_auto_reply_original_desc: 關鍵字規則包含多組符合條件與回覆，請在原版訊息設定中管理。
+    voyage_auto_reply: 大航海自動回覆
+    voyage_auto_reply_desc: 開啟大航海相關自動回覆。
+    auto_reply_group_desc: 編輯簡單自動回覆的開關與伺服器文字。
+    auto_reply_text_label: '{name}內容'
+    auto_reply_text_placeholder: 輸入自動回覆內容
+    auto_reply_saving: 正在儲存…
+    save_auto_reply: 儲存回覆
+    block_words: 私訊封鎖詞
+    block_words_desc: 包含這些詞的私訊會依 Bilibili 規則處理。
+    block_word_placeholder: 輸入封鎖詞
+    block_word_search: 搜尋已新增的封鎖詞
+    block_words_count: '已新增 {count}/{max} 個封鎖詞。'
+    block_word_length_limit: '每個最多 {length} 個字元。'
+    remove_block_word: 刪除封鎖詞「{word}」
+    no_block_words: 尚未設定封鎖詞。
+    no_matching_block_words: 沒有符合的封鎖詞。
+    advanced_title: 更多原版功能
+    advanced_desc: 關鍵字規則、新粉絲與作品推送、檢舉和信任管理等複雜功能繼續由原版訊息頁提供。

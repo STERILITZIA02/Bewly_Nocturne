@@ -84,6 +84,16 @@
     var(--bew-layout-home-search-stage-lead-height) + var(--bew-top-bar-primary-control-height) +
       var(--bew-layout-home-search-stage-tail-height)
   );
+  --bew-notifications-workspace-max-width: 1680px;
+  --bew-notifications-nav-width: 208px;
+  --bew-notifications-nav-compact-width: 64px;
+  --bew-notifications-session-width: clamp(292px, 23vw, 360px);
+  --bew-notifications-header-height: 64px;
+  --bew-notifications-content-max-width: 820px;
+  --bew-notifications-composer-min-height: 72px;
+  --bew-notifications-nav-background: color-mix(in srgb, var(--bew-elevated) 78%, transparent);
+  --bew-notifications-list-header-background: color-mix(in srgb, var(--bew-content) 86%, transparent);
+  --bew-notifications-detail-header-background: color-mix(in srgb, var(--bew-content-alt) 86%, transparent);
   // #endregion
 
   // #region Stacking
@@ -522,6 +532,9 @@
   --bew-shadow-edge-glow-1: 0 0 0 transparent;
   --bew-shadow-edge-glow-2: 0 0 0 transparent;
   --bew-fill-alt: var(--bew-content-solid);
+  --bew-notifications-nav-background: var(--bew-elevated-alt-solid);
+  --bew-notifications-list-header-background: var(--bew-content-solid);
+  --bew-notifications-detail-header-background: var(--bew-content-alt-solid);
 }
 
 :host(.disable-frosted-glass.dark),

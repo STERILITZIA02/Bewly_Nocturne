@@ -6,6 +6,8 @@ import ALink from '~/components/ALink.vue'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
+import type { NotificationNavigationTarget } from '~/utils/notificationRoute'
+import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
@@ -19,7 +21,9 @@ import UploadPop from './pops/UploadPop.vue'
 import UserPanelPop from './pops/UserPanelPop.vue'
 import WatchLaterPop from './pops/WatchLaterPop.vue'
 
-const emit = defineEmits(['notificationsClick'])
+const emit = defineEmits<{
+  (e: 'notificationsClick', item: NotificationNavigationTarget): void
+}>()
 
 const topBarStore = useTopBarStore()
 // 使用 store 中的必要状态
@@ -49,6 +53,7 @@ const avatarImg = ref<HTMLElement | null>(null)
 const avatarShadow = ref<HTMLElement | null>(null)
 
 const {
+  getNotificationHref,
   getTopBarItemHref,
   handleClickTopBarItem,
   setupTopBarItemHoverEvent,
@@ -183,11 +188,18 @@ watch(
 )
 
 // 修改通知点击处理
-function handleNotificationsClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
+function handleNotificationsClick(item: NotificationNavigationTarget) {
   invalidateUnreadMessageState().catch((error) => {
     console.error('标记未读消息缓存失效失败:', error)
   })
   emit('notificationsClick', item)
+}
+
+function handleNotificationsRootClick() {
+  handleNotificationsClick({
+    section: 'whisper',
+    url: buildOriginalNotificationUrl('whisper'),
+  })
 }
 
 // 判断分割线是否应该显示：左右两组至少各有一个可见时才显示
@@ -476,12 +488,13 @@ const shouldShowDivider = computed(() => {
 
             <ALink
               class="top-bar-trigger"
-              :href="settings.openNotificationsPageAsDrawer ? undefined : 'https://message.bilibili.com'"
+              :href="getNotificationHref('whisper')"
               :class="{ 'white-icon': forceWhiteIcon }"
               :title="$t('topbar.notifications')"
               type="topBar"
               :custom-click-event="settings.openNotificationsPageAsDrawer"
-              @click="drawerVisible && (drawerVisible.notifications = true)"
+              :stop-propagation="settings.openNotificationsPageAsDrawer"
+              @click="handleNotificationsRootClick"
             >
               <div i-tabler:bell />
             </ALink>

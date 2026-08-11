@@ -54,6 +54,7 @@ export interface UnReadDm {
   dustbin_unread: number
   biz_msg_unfollow_unread: number
   biz_msg_follow_unread: number
+  support_group_unread: number
 }
 
 export enum MomentType {

@@ -5,15 +5,9 @@
 import type Browser from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
+import { ApiRiskControlError } from './apiErrors'
 import { FIREFOX_CONTAINER_COOKIE_HEADER, serializeCookiesForUrl } from './firefoxCookies'
 import { addWbiSign, clearWbiKeys, getWbiKeys, initWbiKeys, isBilibiliNavUrl, needsWbiSign, storeWbiKeys } from './wbiSign'
-
-export class ApiRiskControlError extends Error {
-  constructor(message: string = '检测到风控页面，API返回了HTML而不是JSON') {
-    super(message)
-    this.name = 'ApiRiskControlError'
-  }
-}
 
 type FetchAfterHandler = ((data: Response) => Promise<any>) | ((data: any) => any)
 
@@ -69,10 +63,10 @@ interface API {
   params?: {
     [key: string]: any
   }
-  afterHandle: ((response: Response) => Response | Promise<Response>)[]
+  afterHandle: FetchAfterHandler[]
 }
 // 重载API 可以为函数
-type APIFunction = (message: Message, sender?: any) => any
+type APIFunction = (message: any, sender?: any) => any
 export type APIType = API | APIFunction
 interface APIMAP {
   [key: string]: APIType
@@ -119,7 +113,7 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
     const targetParams = Object.assign({}, params)
     const targetBody = Object.assign({}, body)
     Object.keys(rest).forEach((key) => {
-      if (body && body[key] !== undefined)
+      if (body && Object.prototype.hasOwnProperty.call(body, key))
         targetBody[key] = rest[key]
       else
         targetParams[key] = rest[key]
@@ -166,9 +160,17 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
       // generate body
       let requestBody = targetBody
       if (!isGET) {
-        requestBody = (headers && headers['Content-Type'] && headers['Content-Type'].includes('application/x-www-form-urlencoded'))
-          ? new URLSearchParams(targetBody)
-          : JSON.stringify(targetBody)
+        if (headers && headers['Content-Type'] && headers['Content-Type'].includes('application/x-www-form-urlencoded')) {
+          const bodyParams = new URLSearchParams()
+          Object.entries(targetBody).forEach(([key, value]) => {
+            if (value !== undefined && value !== null)
+              bodyParams.append(key, String(value))
+          })
+          requestBody = bodyParams
+        }
+        else {
+          requestBody = JSON.stringify(targetBody)
+        }
       }
 
       // generate cookies
@@ -314,6 +316,7 @@ export {
   type API,
   apiListenerFactory,
   type APIMAP,
+  ApiRiskControlError,
   type FetchAfterHandler,
   type Message,
   toData,

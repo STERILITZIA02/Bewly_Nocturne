@@ -6,6 +6,7 @@ const props = withDefaults(defineProps<{
   options: readonly OptionType[]
   modelValue: any
   disabled?: boolean
+  ariaLabel?: string
 }>(), {
   disabled: false,
 })
@@ -25,6 +26,7 @@ const DROPDOWN_MAX_HEIGHT = 300
 const label = ref<string>('')
 const showOptions = ref<boolean>(false)
 const containerRef = ref<HTMLElement | null>(null)
+const triggerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const {
   position: dropdownPosition,
@@ -61,6 +63,56 @@ function toggleOptions() {
     showOptions.value = false
   else
     openOptions()
+}
+
+function getOptionElements(): HTMLElement[] {
+  return Array.from(dropdownRef.value?.querySelectorAll<HTMLElement>('[data-select-option]') || [])
+}
+
+async function focusOption(index: number) {
+  await nextTick()
+  const options = getOptionElements()
+  options.at(Math.min(Math.max(index, 0), options.length - 1))?.focus()
+}
+
+function onTriggerKeydown(event: KeyboardEvent) {
+  if (props.disabled)
+    return
+
+  if (event.key === 'Escape') {
+    closeOptions()
+    return
+  }
+
+  if (!['Enter', ' ', 'ArrowDown', 'ArrowUp'].includes(event.key))
+    return
+
+  event.preventDefault()
+  if (!showOptions.value)
+    openOptions()
+  const selectedIndex = props.options.findIndex(option => option.value === props.modelValue)
+  void focusOption(event.key === 'ArrowUp'
+    ? (selectedIndex >= 0 ? selectedIndex : props.options.length - 1)
+    : (selectedIndex >= 0 ? selectedIndex : 0))
+}
+
+function onDropdownKeydown(event: KeyboardEvent) {
+  const options = getOptionElements()
+  const activeIndex = options.indexOf(document.activeElement as HTMLElement)
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeOptions()
+    triggerRef.value?.focus()
+  }
+  else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    const step = event.key === 'ArrowDown' ? 1 : -1
+    options[(activeIndex + step + options.length) % options.length]?.focus()
+  }
+  else if (event.key === 'Home' || event.key === 'End') {
+    event.preventDefault()
+    options[event.key === 'Home' ? 0 : options.length - 1]?.focus()
+  }
 }
 
 // 打开后再用真实内容高度校正方向与 maxHeight（此时坐标已接近正确，不再从 0,0 起步）
@@ -117,9 +169,15 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
     @mouseenter="onMouseEnter"
   >
     <div
+      ref="triggerRef"
       class="select-trigger"
       :class="{ 'is-disabled': props.disabled }"
+      role="combobox"
+      aria-haspopup="listbox"
+      :aria-label="props.ariaLabel"
+      :aria-expanded="showOptions"
       :aria-disabled="props.disabled"
+      :tabindex="props.disabled ? -1 : 0"
       p="x-4 y-2"
       bg="$bew-fill-1"
       rounded="$bew-interactive-radius"
@@ -132,6 +190,7 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
       items="center" w="full"
       :ring="showOptions ? '2px $bew-theme-color' : ''" duration-300
       @click="toggleOptions"
+      @keydown="onTriggerKeydown"
     >
       <div
         truncate
@@ -160,6 +219,7 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
           v-if="showOptions"
           ref="dropdownRef"
           class="bew-popover-surface"
+          role="listbox"
           :style="{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
@@ -170,10 +230,15 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
           pos="fixed" p="2"
           z="$bew-z-control-menu" flex="~ col gap-1"
           w="full" overflow-y-overlay will-change-transform
+          @keydown="onDropdownKeydown"
         >
-          <div
+          <button
             v-for="option in options"
             :key="option.value"
+            data-select-option
+            type="button"
+            role="option"
+            :aria-selected="option.value === modelValue"
             p="x-2 y-2"
             rounded="$bew-interactive-radius"
             w="full"
@@ -183,7 +248,7 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
             @click="onClickOption(option)"
           >
             <span v-text="option.label" />
-          </div>
+          </button>
         </div>
       </Transition>
 
@@ -200,6 +265,13 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
 <style lang="scss" scoped>
 .select-trigger {
   transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+[data-select-option] {
+  border: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
 }
 
 .select-trigger:hover {

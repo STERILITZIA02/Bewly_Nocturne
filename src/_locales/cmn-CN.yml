@@ -1252,3 +1252,180 @@ search:
     finished: 已结束
     not_started: 未开始
     in_progress: 进行中
+notifications:
+  title: 消息
+  section_page_title: '{section} - 消息 - 哔哩哔哩'
+  sections:
+    whisper: 私信
+    reply: 回复我的
+    at: "{'@'} 我的"
+    love: 收到的赞
+    system: 系统通知
+    settings: 消息设置
+  aria:
+    primary_navigation: 消息分类
+  filters:
+    label: 会话筛选
+    all: 全部
+    unread: 未读
+    unread_only: 只看未读
+    followed: 已关注
+    unfollowed: 未关注
+    system: 官方与系统
+    pinned: 已置顶
+  overview:
+    title: 消息概览
+    description: 查看各类未读消息，或继续最近的会话。
+    recent: 最近会话
+  conversations:
+    title: 私信会话
+    search_loaded: 搜索已加载的会话
+    unknown_user: 未知用户
+    no_messages: 暂无消息
+    support_group: 我的应援团
+    support_group_new: 有新的应援团消息
+    support_group_empty: 暂无新的应援团消息
+    delete_confirm: 确定删除与“{name}”的会话吗？
+  feed:
+    replied: 回复了你
+    mentioned: 提到了你
+    liked: 赞了你的内容
+    system_sent: 发送了通知
+    description_reply: 查看别人对你的回复。
+    description_at: "查看内容中的 {'@'} 提醒。"
+    description_love: 查看收到的点赞。
+    description_system: 查看 Bilibili 系统通知。
+    delete_confirm: 确定删除这条通知吗？
+  composer:
+    placeholder: 输入消息，Enter 发送，Shift+Enter 换行
+    reply_placeholder: 输入回复
+    add_image: 添加图片
+  message_types:
+    image: 图片消息
+    share: 分享内容
+    withdrawn: 该消息已撤回
+    unknown: 未支持的消息类型（{type}）
+  actions:
+    add: 添加
+    back: 返回会话列表
+    delete: 删除
+    delete_conversation: 删除会话
+    like: 点赞
+    unlike: 取消点赞
+    load_older: 加载更早消息
+    mark_read: 标为已读
+    mute: 免打扰
+    unmute: 关闭免打扰
+    open: 打开
+    open_original: 在原版消息页打开
+    open_original_manage: 在原版中管理
+    view_profile: 查看主页
+    pin: 置顶
+    unpin: 取消置顶
+    refresh: 刷新
+    reply: 回复
+    retract: 撤回
+    retry: 重试
+    send: 发送
+    view_source: 查看原内容
+  status:
+    auto_reply: 自动回复
+    conversation_deleted: 会话已删除
+    deleted: 通知已删除
+    followed: 已关注
+    image_unavailable: 图片暂时无法显示
+    image_too_large: 图片不能超过 20 MiB
+    gif_too_large: GIF 图片不能超过 1 MiB
+    load_failed: 加载失败，请重试
+    loading_account: 正在读取账号状态…
+    marked_read: 已标为已读
+    muted: 已开启免打扰
+    muted_success: 已开启免打扰
+    operation_failed: 操作失败，请重试
+    pinned: 已置顶
+    pinned_success: 会话已置顶
+    reply_sent: 回复已发送
+    retracted: 消息已撤回
+    save_failed: 保存失败，请重试
+    saved: 设置已保存
+    send_failed: 发送失败，请重试
+    sending: 发送中…
+    system_conversation: 官方或系统会话
+    unfollowed: 未关注
+    unmuted_success: 已关闭免打扰
+    unpinned_success: 已取消置顶
+  empty:
+    at: "暂无 {'@'} 提醒"
+    feed_hint: 新消息会显示在这里。
+    login_title: 登录后查看消息
+    login_description: 登录 Bilibili 后可查看通知、私信和消息设置。
+    love: 暂无收到的赞
+    no_conversations: 暂无私信会话
+    no_matching_conversations: 没有匹配的已加载会话
+    no_messages: 这里还没有消息
+    no_unread: 当前没有未读消息
+    reply: 暂无回复
+    system: 暂无系统通知
+  settings:
+    description: 这些偏好直接保存到 Bilibili 服务器。
+    groups:
+      notifications: 通知提醒
+      conversations: 私信与会话
+      groups: 粉丝团消息
+      anti_disturb: 免打扰
+      safety: 智能拦截与防骚扰
+      auto_reply: 自动回复与推送
+      block_words: 屏蔽词
+    message_notification: 总消息提醒
+    message_notification_desc: 接收 Bilibili 消息提醒。
+    comment_notification: 回复提醒
+    comment_notification_desc: 接收评论和回复通知。
+    mention_notification: "{'@'} 提醒"
+    mention_notification_desc: 接收别人提到你的通知。
+    notification_mode_all: 所有人
+    notification_mode_following: 仅关注的人
+    notification_mode_off: 不接收
+    like_notification: 点赞提醒
+    like_notification_desc: 接收内容被点赞的通知。
+    receive_unfollowed: 接收未关注人消息
+    receive_unfollowed_desc: 允许未关注的人向你发送私信。
+    show_unfollowed: 显示未关注人会话
+    show_unfollowed_desc: 在会话列表中显示未关注人的消息。
+    receive_group: 接收粉丝团消息
+    receive_group_desc: 接收粉丝团和群组会话消息。
+    fold_group: 收起粉丝团消息
+    fold_group_desc: 将粉丝团会话折叠显示。
+    anti_disturb: 免打扰
+    anti_disturb_desc: 在所选时段内暂停消息提醒。
+    anti_disturb_period: 免打扰时段
+    anti_disturb_period_desc: 选择 Bilibili 提供的免打扰方案。
+    anti_disturb_option: '方案 {id}'
+    ai_intercept: 私信智能拦截
+    ai_intercept_desc: 使用 Bilibili 的智能拦截规则过滤可疑私信。
+    anti_harassment: 防骚扰保护
+    anti_harassment_desc: 使用 Bilibili 的防骚扰设置保护私信。
+    followed_auto_reply: 被关注自动回复
+    followed_auto_reply_desc: 开启被关注后的自动回复。
+    received_auto_reply: 收到私信自动回复
+    received_auto_reply_desc: 开启收到私信时的自动回复。
+    keyword_auto_reply: 关键词自动回复
+    keyword_auto_reply_desc: 开启匹配关键词时的自动回复。
+    keyword_auto_reply_original_desc: 关键词规则包含多条匹配和回复，请在原版消息设置中管理。
+    voyage_auto_reply: 大航海自动回复
+    voyage_auto_reply_desc: 开启大航海相关自动回复。
+    auto_reply_group_desc: 编辑简单自动回复的开关和服务器文本。
+    auto_reply_text_label: '{name}内容'
+    auto_reply_text_placeholder: 输入自动回复内容
+    auto_reply_saving: 正在保存…
+    save_auto_reply: 保存回复
+    block_words: 私信屏蔽词
+    block_words_desc: 包含这些词的私信将按 Bilibili 规则处理。
+    block_word_placeholder: 输入屏蔽词
+    block_word_search: 搜索已添加的屏蔽词
+    block_words_count: '已添加 {count}/{max} 个屏蔽词。'
+    block_word_length_limit: '每个最多 {length} 个字符。'
+    remove_block_word: 删除屏蔽词“{word}”
+    no_block_words: 尚未设置屏蔽词。
+    no_matching_block_words: 没有匹配的屏蔽词。
+    advanced_title: 更多原版能力
+    advanced_desc: 关键词规则、新粉丝与作品推送、举报和信任管理等复杂能力继续由原版消息页提供。

@@ -27,6 +27,7 @@ import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
+import { buildOriginalNotificationUrl, parseNotificationRoute } from '~/utils/notificationRoute'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
@@ -308,6 +309,8 @@ const scrollViewportRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement>() // ✅ IntersectionObserver 哨兵元素
 const handlePageRefresh = ref<() => void>()
 const handleReachBottom = ref<() => void>()
+const pageScrollReachTop = ref<boolean | null>(null)
+const handlePageBackToTop = ref<() => void>()
 const handleUndoRefresh = ref<() => void>()
 const handleForwardRefresh = ref<() => void>()
 const canRefreshHomeSubPage = ref<boolean>(false)
@@ -345,6 +348,11 @@ const handleThrottledPageRefresh = useThrottleFn(() => {
     return
 
   cancelPendingRefreshScroll()
+  if (pageScrollReachTop.value !== null) {
+    handlePageRefresh.value?.()
+    return
+  }
+
   const viewport = scrollViewportRef.value
   if (!viewport) {
     handlePageRefresh.value?.()
@@ -421,9 +429,16 @@ const iframePageURL = computed((): string => {
   if (!dockItem)
     return ''
 
-  return settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value) || !dockItem.hasBewlyPage
-    ? mainStore.getBiliWebPageURLByPage(activatedPage.value)
-    : ''
+  const useOriginalPage = settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value) || !dockItem.hasBewlyPage
+  if (!useOriginalPage)
+    return ''
+
+  if (activatedPage.value === AppPage.Notifications) {
+    const route = parseNotificationRoute(currentLocationHref.value)
+    return buildOriginalNotificationUrl(route.section, route.conversation)
+  }
+
+  return mainStore.getBiliWebPageURLByPage(activatedPage.value)
 })
 watch(iframePageURL, url => setIframePageActive(Boolean(url)), { immediate: true })
 onBeforeUnmount(() => setIframePageActive(false))
@@ -449,8 +464,13 @@ const showBewlyPage = computed((): boolean => {
 // SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
 // currently selected Dock page (and Home sub-tab) and react to locale changes.
 const dockPageTitle = computed<string | undefined>(() => {
-  if (!showBewlyPage.value || activatedPage.value === AppPage.SearchResults)
+  if (
+    !showBewlyPage.value
+    || activatedPage.value === AppPage.SearchResults
+    || activatedPage.value === AppPage.Notifications
+  ) {
     return undefined
+  }
 
   const titleKey = activatedPage.value === AppPage.Home
     ? mainStore.homeTabs.find(tab => tab.page === homeActivatedPage.value)?.i18nKey
@@ -513,12 +533,17 @@ function focusScrollViewport(options: { force?: boolean } = {}) {
 const isFirstTimeActivatedPageChange = ref<boolean>(true)
 watch(
   () => activatedPage.value,
-  () => {
+  (page, previousPage) => {
     cancelPendingRefreshScroll()
     if (!isFirstTimeActivatedPageChange.value) {
       // Update the URL query parameter when activatedPage changes
       const url = new URL(window.location.href)
-      url.searchParams.set('page', activatedPage.value)
+      url.searchParams.set('page', page)
+      if (previousPage === AppPage.Notifications && page !== AppPage.Notifications) {
+        url.searchParams.delete('notificationView')
+        url.searchParams.delete('notificationTalker')
+        url.searchParams.delete('notificationSessionType')
+      }
       window.history.replaceState({}, '', url.toString())
     }
 
@@ -653,6 +678,12 @@ function changeActivatePage(pageName: AppPage) {
 }
 
 function handleBackToTop(targetScrollTop = 0 as number) {
+  if (handlePageBackToTop.value) {
+    handlePageBackToTop.value()
+    topBarRef.value?.toggleTopBarVisible(true)
+    return
+  }
+
   const viewport = scrollViewportRef.value
   if (viewport) {
     scrollToTop(viewport, targetScrollTop)
@@ -790,7 +821,9 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   mainAppRef,
   scrollViewportRef,
   reachTop,
+  pageScrollReachTop,
   handleBackToTop,
+  handlePageBackToTop,
   handlePageRefresh,
   canRefreshHomeSubPage,
   handleReachBottom,
@@ -981,13 +1014,23 @@ onBeforeUnmount(stopUrlCleaner)
           <div
             ref="scrollViewportRef"
             class="bewly-scroll-viewport"
+            :class="{ 'bewly-scroll-viewport--workspace': activatedPage === AppPage.Notifications }"
             h-inherit of-y-auto of-x-hidden
             tabindex="-1"
             style="overscroll-behavior: contain;"
             @scroll.passive="handleNativeScroll"
           >
-            <main m-auto max-w="$bew-page-max-width">
+            <main
+              class="bewly-page-main"
+              :class="{ 'bewly-page-main--workspace': activatedPage === AppPage.Notifications }"
+              m-auto max-w="$bew-page-max-width"
+            >
               <div
+                class="bewly-page-content"
+                :class="{
+                  'bewly-page-content--workspace': activatedPage === AppPage.Notifications,
+                  'bewly-page-content--bottom-dock': activatedPage === AppPage.Notifications && settings.dockPosition === 'bottom',
+                }"
                 p="t-[calc(var(--bew-top-bar-height)+10px)]" m-auto
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
                 :style="useOriginalBilibiliTopBar && !reachTop
@@ -999,7 +1042,11 @@ onBeforeUnmount(stopUrlCleaner)
                 </Transition>
 
                 <!-- ✅ IntersectionObserver 哨兵：用于检测滚动到底部，避免在 RAF 中读取 scrollHeight -->
-                <div ref="loadMoreSentinelRef" h-1px w-full pointer-events-none opacity-0 />
+                <div
+                  v-if="activatedPage !== AppPage.Notifications"
+                  ref="loadMoreSentinelRef"
+                  h-1px w-full pointer-events-none opacity-0
+                />
               </div>
             </main>
           </div>
@@ -1058,6 +1105,35 @@ onBeforeUnmount(stopUrlCleaner)
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/breakpoints";
+
+.bewly-scroll-viewport--workspace {
+  overflow-y: hidden;
+}
+
+.bewly-page-main--workspace,
+.bewly-page-content--workspace {
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.bewly-page-content--workspace {
+  box-sizing: border-box;
+  width: calc(100% - var(--bew-space-8));
+  padding-top: calc(var(--bew-top-bar-height) + var(--bew-space-2));
+}
+
+.bewly-page-content--bottom-dock {
+  padding-bottom: calc(var(--bew-dock-control-size) + var(--bew-space-8));
+}
+
+@media (min-width: breakpoints.$grid-lg) {
+  .bewly-page-content--bottom-dock {
+    padding-bottom: calc(var(--bew-dock-control-size-lg) + var(--bew-space-8));
+  }
+}
+
 .top-bar-layer {
   z-index: var(--bew-z-topbar-host);
 }

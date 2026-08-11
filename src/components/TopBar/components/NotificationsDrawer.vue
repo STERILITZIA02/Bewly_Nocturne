@@ -126,6 +126,19 @@ watch(() => showIframe.value, (newValue) => {
 
 const beforeUrl = ref<string>('')
 
+watch(() => props.url, (nextUrl) => {
+  const normalizedUrl = nextUrl || 'https://message.bilibili.com/'
+  if (normalizedUrl === currentUrl.value)
+    return
+
+  beforeUrl.value = normalizedUrl
+  isIframeLoaded.value = false
+  isIframeDisplayReady.value = false
+  clearRevealIframeTimer()
+  clearDarkModeSyncTimers()
+  currentUrl.value = normalizedUrl
+})
+
 function handleOpen() {
   if (show.value)
     return
@@ -145,9 +158,10 @@ function handleOpen() {
     isPageScrollLocked.value = true
   }
 
-  if (beforeUrl.value !== props.url) {
-    currentUrl.value = props.url
-    beforeUrl.value = props.url
+  const nextUrl = props.url || 'https://message.bilibili.com/'
+  if (beforeUrl.value !== nextUrl) {
+    currentUrl.value = nextUrl
+    beforeUrl.value = nextUrl
   }
   // 延迟加载iframe，确保抽屉动画完成后再开始加载内容
   openIframeTimer.value = setTimeout(() => {
@@ -210,15 +224,12 @@ async function releaseIframeResources() {
 }
 
 function handleOpenInNewTab() {
-  if (iframeRef.value) {
-    try {
-      window.open(iframeRef.value.contentWindow?.location.href.replace(/\/$/, ''), '_blank')
-    }
-    catch {
-      window.open('https://message.bilibili.com/', '_blank')
-    }
-    handleClose()
-  }
+  if (!iframeRef.value)
+    return
+  const opened = window.open(currentUrl.value, '_blank')
+  if (opened)
+    opened.opener = null
+  handleClose()
 }
 
 /**
@@ -504,6 +515,7 @@ function handleFocusDrawer(e?: Event) {
             <iframe
               v-show="showIframe"
               ref="iframeRef"
+              name="bewly-notifications-drawer"
               :src="src"
               frameborder="0"
               pointer-events-auto

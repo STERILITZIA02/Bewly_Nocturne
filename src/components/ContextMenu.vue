@@ -37,12 +37,16 @@ const { mainAppRef } = useBewlyApp()
         <li
           v-for="option in options"
           :key="option.value"
-          class="context-menu-item"
-          :class="{ danger: option.danger }"
-          @click="emit('select', option.value); emit('close')"
         >
-          <i class="item-icon" :class="option.icon" />
-          {{ option.label }}
+          <button
+            type="button"
+            class="context-menu-item"
+            :class="{ danger: option.danger }"
+            @click="emit('select', option.value); emit('close')"
+          >
+            <i class="item-icon" :class="option.icon" />
+            {{ option.label }}
+          </button>
         </li>
       </ul>
     </div>
@@ -61,11 +65,22 @@ const { mainAppRef } = useBewlyApp()
   --uno: "hover:bg-$bew-fill-2 rounded-$bew-interactive-radius cursor-pointer";
   --uno: "flex items-center";
 
+  width: 100%;
   min-height: 32px;
   padding: var(--bew-space-2);
+  border: 0;
+  color: inherit;
+  background: transparent;
+  font-family: inherit;
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
+  text-align: left;
+
+  &:focus-visible {
+    outline: 2px solid var(--bew-theme-focus-ring);
+    outline-offset: -2px;
+  }
 
   &.danger {
     color: var(--bew-error-color);

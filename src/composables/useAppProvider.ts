@@ -26,6 +26,7 @@ export interface BewlyAppProvider {
   isHomeTabSwitching: Ref<boolean>
   scrollViewportRef: Ref<HTMLElement | null>
   reachTop: Ref<boolean>
+  pageScrollReachTop: Ref<boolean | null>
   mainAppRef: Ref<HTMLElement>
   handleReachBottom: Ref<(() => void) | undefined>
   handlePageRefresh: Ref<(() => void) | undefined>
@@ -36,6 +37,7 @@ export interface BewlyAppProvider {
   // 使用枚举状态统一管理撤销/前进按钮
   undoForwardState: Ref<UndoForwardState>
   handleBackToTop: (targetScrollTop?: number) => void
+  handlePageBackToTop: Ref<(() => void) | undefined>
   haveScrollbar: () => Promise<boolean>
   openIframeDrawer: (url: string) => void
   // 添加活跃抽屉状态

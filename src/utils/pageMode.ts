@@ -1,4 +1,5 @@
 import { AppPage } from '~/enums/appEnums'
+import { buildBewlyNotificationUrl, parseNotificationRoute } from '~/utils/notificationRoute'
 import { getPluginSearchResultsUrl } from '~/utils/searchUrl'
 
 export type PageMode = 'original' | 'bewly' | 'custom'
@@ -65,6 +66,11 @@ export function resolvePluginSearchResultsUsage(
 }
 
 function buildBewlyUrl(page: AppPage, sourceUrl?: URL): string {
+  if (page === AppPage.Notifications) {
+    const route = parseNotificationRoute(sourceUrl ?? 'https://message.bilibili.com/')
+    return buildBewlyNotificationUrl(route.section, route.conversation)
+  }
+
   const targetUrl = new URL('https://www.bilibili.com/')
   targetUrl.searchParams.set('page', page)
 
@@ -99,6 +105,9 @@ export function resolvePageModeTarget(rawUrl: string, activatedPage: AppPage): P
       return null
 
     const { hostname, pathname } = sourceUrl
+
+    if (hostname === 'message.bilibili.com')
+      return createTarget(AppPage.Notifications, sourceUrl)
 
     if (hostname === 'search.bilibili.com') {
       const searchResultsUrl = getPluginSearchResultsUrl(rawUrl)

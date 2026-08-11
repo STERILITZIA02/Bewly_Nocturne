@@ -19,7 +19,7 @@ async function setupStyles() {
     await import('./pages/notificationsPage.scss')
     document.documentElement.classList.add('notificationsPage')
 
-    if (isInIframe() && settings.value.openNotificationsPageAsDrawer) {
+    if (isInIframe() && window.name === 'bewly-notifications-drawer') {
       document.documentElement.classList.add('drawer')
     }
   }

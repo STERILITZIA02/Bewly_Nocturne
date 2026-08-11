@@ -22,6 +22,18 @@ const API_USER = {
     },
     afterHandle: AHS.J_D,
   },
+  getUserCards: {
+    url: 'https://api.bilibili.com/x/polymer/pc-electron/v1/user/cards',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      uids: '',
+      build: 0,
+      mobi_app: 'web',
+    },
+    afterHandle: AHS.J_D,
+  },
   getUserStat: {
     url: 'https://api.bilibili.com/x/web-interface/nav/stat',
     _fetch: {

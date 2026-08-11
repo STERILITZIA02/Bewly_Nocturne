@@ -45,7 +45,15 @@ const emit = defineEmits<{
 
 const settingsStore = useSettingsStore()
 const { isDark, toggleDark } = useDark()
-const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
+const {
+  reachTop,
+  pageScrollReachTop,
+  homeActivatedPage,
+  undoForwardState,
+  canRefreshHomeSubPage,
+  getDockPageHref,
+} = useBewlyApp()
+const currentPageReachTop = computed(() => pageScrollReachTop.value ?? reachTop.value)
 
 // 计算属性：是否显示撤销按钮
 const showUndo = computed(() => undoForwardState.value === UndoForwardState.ShowUndo)
@@ -140,7 +148,7 @@ const canRefreshCurrentPage = computed((): boolean => {
 })
 
 const showBackToTopOrRefreshActions = computed((): boolean => {
-  return showBackToTopOrRefreshButton.value && (canRefreshCurrentPage.value || !reachTop.value)
+  return showBackToTopOrRefreshButton.value && (canRefreshCurrentPage.value || !currentPageReachTop.value)
 })
 
 /**
@@ -436,7 +444,7 @@ function handleBackToTopOrRefresh(action: 'backToTop' | 'refresh' | 'auto' = 'au
       emit('refresh')
   }
   else {
-    if (reachTop.value && canRefreshCurrentPage.value) {
+    if (currentPageReachTop.value && canRefreshCurrentPage.value) {
       emit('refresh')
     }
     else {
@@ -829,7 +837,7 @@ onUnmounted(() => {
           <template v-for="key in 2" :key="key">
             <Transition name="fade">
               <IconButton
-                v-if="(key === 1 && canRefreshCurrentPage) || (key === 2 && !reachTop)"
+                v-if="(key === 1 && canRefreshCurrentPage) || (key === 2 && !currentPageReachTop)"
                 class="back-to-top-or-refresh-btn"
                 :label="key === 1 ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
                 :class="{
@@ -856,7 +864,7 @@ onUnmounted(() => {
         <template v-else>
           <IconButton
             class="back-to-top-or-refresh-btn"
-            :label="reachTop && canRefreshCurrentPage ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
+            :label="currentPageReachTop && canRefreshCurrentPage ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
             :class="{
               inactive: hoveringDockItem.themeMode && isDark,
             }"
@@ -864,7 +872,7 @@ onUnmounted(() => {
           >
             <Transition name="fade">
               <Icon
-                v-if="reachTop && canRefreshCurrentPage"
+                v-if="currentPageReachTop && canRefreshCurrentPage"
                 icon="line-md:rotate-270"
                 class="dock-action-icon"
                 shrink-0 rotate-90 absolute

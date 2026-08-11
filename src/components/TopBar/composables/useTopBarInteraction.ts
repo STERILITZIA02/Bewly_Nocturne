@@ -18,6 +18,8 @@ import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isHomePage } from '~/utils/main'
+import type { NotificationNavigationTarget, NotificationSection } from '~/utils/notificationRoute'
+import { resolveNotificationHref } from '~/utils/notificationRoute'
 import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
@@ -357,8 +359,15 @@ export function useTopBarInteraction() {
     return getDockPageHref(AppPage.Home)
   }
 
+  function getNotificationHref(section: NotificationSection = 'whisper'): string {
+    return resolveNotificationHref(section, {
+      openAsDrawer: settings.value.openNotificationsPageAsDrawer,
+      useOriginalPage: settingsStore.getDockItemIsUseOriginalBiliPage(AppPage.Notifications),
+    })
+  }
+
   // 处理通知项点击
-  function handleNotificationsItemClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
+  function handleNotificationsItemClick(item: NotificationNavigationTarget) {
     if (settings.value.openNotificationsPageAsDrawer) {
       topBarStore.drawerVisible.notifications = true
       topBarStore.notificationsDrawerUrl = item.url
@@ -372,6 +381,7 @@ export function useTopBarInteraction() {
     handleClickTopBarItem,
     handleClickTopBarLogo,
     getTopBarLogoHref,
+    getNotificationHref,
     handleNotificationsItemClick,
     getTopBarItemHref,
     shouldOpenConfiguredTopBarItem,

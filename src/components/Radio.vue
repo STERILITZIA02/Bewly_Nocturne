@@ -2,15 +2,20 @@
 defineProps<{
   modelValue: boolean
   label?: string
+  ariaLabel?: string
+  disabled?: boolean
 }>()
 
 const model = defineModel()
 </script>
 
 <template>
-  <label cursor="pointer" pointer="auto" flex items-center gap-3>
-    <span>{{ label }}</span>
-    <input v-model="model" type="checkbox" class="radio-input">
+  <label
+    :class="{ 'is-disabled': disabled }"
+    cursor="pointer" pointer="auto" flex items-center gap-3
+  >
+    <span v-if="label">{{ label }}</span>
+    <input v-model="model" type="checkbox" class="radio-input" :disabled="disabled" :aria-label="ariaLabel || label">
     <span class="radio-switch" aria-hidden="true" />
   </label>
 </template>
@@ -24,6 +29,11 @@ label {
   --b-switch-thumb-size: 20px;
 
   position: relative;
+
+  &.is-disabled {
+    cursor: not-allowed;
+    opacity: 0.5;
+  }
 }
 
 .radio-input {
@@ -76,11 +86,11 @@ input[type="checkbox"] {
     outline-offset: var(--bew-space-0-5);
   }
 
-  &:hover + .radio-switch {
+  &:not(:disabled):hover + .radio-switch {
     background: var(--bew-fill-2);
   }
 
-  &:active + .radio-switch::after {
+  &:not(:disabled):active + .radio-switch::after {
     --b-switch-thumb-scale: 0.9;
   }
 
@@ -89,7 +99,7 @@ input[type="checkbox"] {
     border-color: var(--bew-theme-color);
   }
 
-  &:checked:hover + .radio-switch {
+  &:checked:not(:disabled):hover + .radio-switch {
     background: var(--bew-theme-color-80);
     border-color: var(--bew-theme-color);
     box-shadow:

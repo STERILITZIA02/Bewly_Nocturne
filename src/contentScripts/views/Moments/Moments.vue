@@ -2,8 +2,8 @@
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
-import CloseButton from '~/components/CloseButton.vue'
 import Dialog from '~/components/Dialog.vue'
+import ImageViewer from '~/components/ImageViewer.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import type { DisplayForwardVideo, DisplayMoment, DisplayRichTextSegment, WatchLaterTarget } from '~/components/MomentCard/types'
@@ -163,14 +163,9 @@ const selectedMoment = ref<DisplayMoment | null>(null)
 const detailFrameUrl = ref('')
 const detailFrameLoaded = ref(false)
 const detailIframeRef = ref<HTMLIFrameElement | null>(null)
-const detailImageViewerRef = ref<HTMLElement | null>(null)
 const detailImageViewerOpen = ref(false)
 const detailImageViewerUrls = ref<string[]>([])
 const detailImageViewerIndex = ref(0)
-const detailImageViewerScale = ref(1)
-const detailImageViewerRotation = ref(0)
-const detailImageViewerPanX = ref(0)
-const detailImageViewerPanY = ref(0)
 const detailImageViewerSource = shallowRef<Window | null>(null)
 const detailImageViewerTrigger = shallowRef<HTMLElement | null>(null)
 let detailLoadTimer: ReturnType<typeof setTimeout> | null = null
@@ -229,7 +224,7 @@ const offset = ref('')
 const updateBaseline = ref('')
 /** 按 UP 主筛选时 feed/all 的 page，从 1 递增 */
 const momentsFeedPage = ref(1)
-const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
+const { handlePageRefresh, handleReachBottom, scrollViewportRef } = useBewlyApp()
 const OVERSCAN_PX = 1200
 const MAX_PREVIEW_CACHE = 12
 const MAX_VIDEO_CID_CACHE = 80
@@ -251,11 +246,6 @@ let feedRequestToken = 0
 let portalRequestToken = 0
 let loadedAccountId: AccountId = getCurrentAccountId()
 let suppressBottomRebalanceUntil = 0
-const detailImageViewerDragging = ref(false)
-let detailImageViewerDragStartX = 0
-let detailImageViewerDragStartY = 0
-let detailImageViewerDragOriginX = 0
-let detailImageViewerDragOriginY = 0
 /** 高度已稳定的卡片，避免反复 Resize 微抖动 */
 const settledHeights = new Set<string>()
 
@@ -785,34 +775,6 @@ const detailContentHeight = computed(() => {
     : detailViewportSafeHeight
 })
 
-const detailImageViewerUrl = computed(() => detailImageViewerUrls.value[detailImageViewerIndex.value] || '')
-const detailImageViewerTransform = computed(() => {
-  return `translate3d(${detailImageViewerPanX.value}px, ${detailImageViewerPanY.value}px, 0) scale(${detailImageViewerScale.value}) rotate(${detailImageViewerRotation.value}deg)`
-})
-
-function resetDetailImageViewerTransform() {
-  detailImageViewerScale.value = 1
-  detailImageViewerRotation.value = 0
-  detailImageViewerPanX.value = 0
-  detailImageViewerPanY.value = 0
-}
-
-function setDetailImageViewerScale(scale: number) {
-  detailImageViewerScale.value = Math.min(4, Math.max(0.25, scale))
-  if (detailImageViewerScale.value <= 1) {
-    detailImageViewerPanX.value = 0
-    detailImageViewerPanY.value = 0
-  }
-}
-
-function showDetailImageViewerImage(index: number) {
-  const count = detailImageViewerUrls.value.length
-  if (!count)
-    return
-  detailImageViewerIndex.value = ((index % count) + count) % count
-  resetDetailImageViewerTransform()
-}
-
 function openDetailImageViewer(
   value: unknown,
   requestedIndex: unknown,
@@ -828,8 +790,6 @@ function openDetailImageViewer(
   detailImageViewerSource.value = source
   detailImageViewerTrigger.value = trigger
   detailImageViewerOpen.value = true
-  resetDetailImageViewerTransform()
-  nextTick(() => detailImageViewerRef.value?.focus({ preventScroll: true }))
   return true
 }
 
@@ -856,95 +816,12 @@ function closeDetailImageViewer() {
   const trigger = detailImageViewerTrigger.value
   detailImageViewerSource.value = null
   detailImageViewerTrigger.value = null
-  detailImageViewerDragging.value = false
-  resetDetailImageViewerTransform()
   nextTick(() => {
     if (source)
       detailIframeRef.value?.focus({ preventScroll: true })
     else
       trigger?.focus({ preventScroll: true })
   })
-}
-
-function handleDetailImageViewerWheel(event: WheelEvent) {
-  const delta = event.deltaY || event.deltaX
-  if (!delta)
-    return
-  setDetailImageViewerScale(detailImageViewerScale.value * (delta < 0 ? 1.15 : 0.87))
-}
-
-function handleDetailImageViewerPointerDown(event: PointerEvent) {
-  if (detailImageViewerScale.value <= 1)
-    return
-  event.preventDefault()
-  detailImageViewerDragging.value = true
-  detailImageViewerDragStartX = event.clientX
-  detailImageViewerDragStartY = event.clientY
-  detailImageViewerDragOriginX = detailImageViewerPanX.value
-  detailImageViewerDragOriginY = detailImageViewerPanY.value
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-}
-
-function handleDetailImageViewerPointerMove(event: PointerEvent) {
-  if (!detailImageViewerDragging.value)
-    return
-  detailImageViewerPanX.value = detailImageViewerDragOriginX + event.clientX - detailImageViewerDragStartX
-  detailImageViewerPanY.value = detailImageViewerDragOriginY + event.clientY - detailImageViewerDragStartY
-}
-
-function handleDetailImageViewerPointerEnd(event: PointerEvent) {
-  if (!detailImageViewerDragging.value)
-    return
-  detailImageViewerDragging.value = false
-  try {
-    ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
-  }
-  catch {
-    // 指针已经释放时忽略
-  }
-}
-
-function handleDetailImageViewerDoubleClick() {
-  if (detailImageViewerScale.value > 1)
-    resetDetailImageViewerTransform()
-  else
-    setDetailImageViewerScale(2)
-}
-
-function handleDetailImageViewerKeydown(event: KeyboardEvent) {
-  if (!detailImageViewerOpen.value)
-    return
-
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    closeDetailImageViewer()
-  }
-  else if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    showDetailImageViewerImage(detailImageViewerIndex.value - 1)
-  }
-  else if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    showDetailImageViewerImage(detailImageViewerIndex.value + 1)
-  }
-  else if (event.key === '+' || event.key === '=') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    setDetailImageViewerScale(detailImageViewerScale.value + 0.25)
-  }
-  else if (event.key === '-' || event.key === '_') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    setDetailImageViewerScale(detailImageViewerScale.value - 0.25)
-  }
-  else if (event.key === '0') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    resetDetailImageViewerTransform()
-  }
 }
 
 function shouldOpenMomentExternally(moment: DisplayMoment) {
@@ -3940,92 +3817,16 @@ watch(
       </div>
     </Dialog>
 
-    <Teleport v-if="mainAppRef && detailImageViewerOpen" :to="mainAppRef">
-      <div
-        ref="detailImageViewerRef"
-        class="moment-image-viewer"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('moments.image_viewer')"
-        tabindex="-1"
-        @keydown="handleDetailImageViewerKeydown"
-        @wheel.prevent.stop="handleDetailImageViewerWheel"
-      >
-        <CloseButton
-          class="moment-image-viewer__close"
-          :label="t('moments.close_image_viewer')"
-          size="large"
-          variant="overlay"
-          @click="closeDetailImageViewer"
-        />
-        <div class="moment-image-viewer__stage" @click.self="closeDetailImageViewer">
-          <img
-            :src="detailImageViewerUrl"
-            :alt="t('moments.image_large')"
-            class="moment-image-viewer__image"
-            :class="{
-              'is-zoomed': detailImageViewerScale > 1,
-              'is-dragging': detailImageViewerDragging,
-            }"
-            :style="{ transform: detailImageViewerTransform }"
-            draggable="false"
-            @dblclick.prevent.stop="handleDetailImageViewerDoubleClick"
-            @pointerdown="handleDetailImageViewerPointerDown"
-            @pointermove="handleDetailImageViewerPointerMove"
-            @pointerup="handleDetailImageViewerPointerEnd"
-            @pointercancel="handleDetailImageViewerPointerEnd"
-          >
-        </div>
-        <button
-          v-if="detailImageViewerUrls.length > 1"
-          type="button"
-          class="moment-image-viewer__nav moment-image-viewer__nav--prev"
-          :aria-label="t('moments.previous_image')"
-          @click="showDetailImageViewerImage(detailImageViewerIndex - 1)"
-        >
-          <span i-tabler-chevron-left />
-        </button>
-        <button
-          v-if="detailImageViewerUrls.length > 1"
-          type="button"
-          class="moment-image-viewer__nav moment-image-viewer__nav--next"
-          :aria-label="t('moments.next_image')"
-          @click="showDetailImageViewerImage(detailImageViewerIndex + 1)"
-        >
-          <span i-tabler-chevron-right />
-        </button>
-        <div class="moment-image-viewer__toolbar">
-          <span class="moment-image-viewer__counter">
-            {{ detailImageViewerIndex + 1 }}/{{ detailImageViewerUrls.length }}
-          </span>
-          <span class="moment-image-viewer__divider" />
-          <button type="button" :aria-label="t('moments.zoom_out')" :title="t('moments.zoom_out')" @click="setDetailImageViewerScale(detailImageViewerScale - 0.25)">
-            −
-          </button>
-          <span class="moment-image-viewer__zoom">{{ Math.round(detailImageViewerScale * 100) }}%</span>
-          <button type="button" :aria-label="t('moments.zoom_in')" :title="t('moments.zoom_in')" @click="setDetailImageViewerScale(detailImageViewerScale + 0.25)">
-            +
-          </button>
-          <button type="button" :aria-label="t('moments.fit_window')" :title="t('moments.fit_window')" @click="resetDetailImageViewerTransform">
-            1:1
-          </button>
-          <button
-            type="button"
-            :aria-label="t('moments.rotate_clockwise')"
-            :title="t('moments.rotate_clockwise')"
-            @click="detailImageViewerRotation = (detailImageViewerRotation + 90) % 360"
-          >
-            ↻
-          </button>
-        </div>
-      </div>
-    </Teleport>
+    <ImageViewer
+      v-if="detailImageViewerOpen"
+      v-model="detailImageViewerIndex"
+      :images="detailImageViewerUrls"
+      @close="closeDetailImageViewer"
+    />
   </section>
 </template>
 
 <style scoped lang="scss">
-@use "../../../styles/breakpoints";
-
 .moments-page {
   padding: var(--bew-space-2) var(--bew-space-3) var(--bew-space-12);
 }
@@ -4965,133 +4766,6 @@ watch(
   opacity: 1;
   transform: translateY(-1px);
 }
-.moment-image-viewer {
-  position: fixed;
-  inset: 0;
-  z-index: var(--bew-z-image-viewer);
-  overflow: hidden;
-  color: #fff;
-  background: rgb(18 18 18 / 76%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
-  touch-action: none;
-}
-.moment-image-viewer__stage {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 24px 72px 96px;
-  overflow: hidden;
-}
-.moment-image-viewer__image {
-  display: block;
-  width: auto;
-  height: auto;
-  max-width: 100%;
-  max-height: 100%;
-  border: 0 !important;
-  outline: 0 !important;
-  border-radius: 0;
-  box-shadow: none !important;
-  object-fit: contain;
-  transform-origin: center center;
-  transition: transform 0.12s ease-out;
-  user-select: none;
-  -webkit-user-drag: none;
-  cursor: zoom-in;
-}
-.moment-image-viewer__image.is-zoomed {
-  cursor: grab;
-}
-.moment-image-viewer__image.is-dragging {
-  cursor: grabbing;
-  transition: none;
-}
-.moment-image-viewer__nav,
-.moment-image-viewer__toolbar button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  padding: 0;
-  border: 0 !important;
-  outline: 0;
-  color: #fff;
-  background: rgb(0 0 0 / 48%);
-  box-shadow: none !important;
-  font-family: inherit;
-  cursor: pointer;
-}
-.moment-image-viewer__nav:hover,
-.moment-image-viewer__toolbar button:hover {
-  background: rgb(0 0 0 / 72%);
-}
-.moment-image-viewer__close {
-  position: absolute;
-  top: 20px;
-  left: 20px;
-  z-index: 4;
-}
-.moment-image-viewer__nav {
-  position: absolute;
-  top: 50%;
-  z-index: 4;
-  width: 44px;
-  height: 56px;
-  border-radius: var(--bew-radius-md);
-  transform: translateY(-50%);
-  font-size: var(--bew-icon-size-xl);
-  line-height: 1;
-}
-.moment-image-viewer__nav--prev {
-  left: 16px;
-}
-.moment-image-viewer__nav--next {
-  right: 16px;
-}
-.moment-image-viewer__toolbar {
-  position: absolute;
-  left: 50%;
-  bottom: 24px;
-  z-index: 4;
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-2);
-  padding: var(--bew-space-2) var(--bew-space-3);
-  border: 0;
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
-  background: rgb(0 0 0 / 58%);
-  box-shadow: 0 8px 30px rgb(0 0 0 / 28%);
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-.moment-image-viewer__toolbar button {
-  width: 34px;
-  height: 34px;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  background: transparent;
-  font-size: var(--bew-icon-size-md);
-}
-.moment-image-viewer__counter,
-.moment-image-viewer__zoom {
-  min-width: 48px;
-  text-align: center;
-  font-size: var(--bew-font-size-control);
-  font-variant-numeric: tabular-nums;
-}
-.moment-image-viewer__divider {
-  width: 1px;
-  height: 24px;
-  margin: 0 4px;
-  background: rgb(255 255 255 / 24%);
-}
-
 .moments-up-list,
 .moments-up-list__item,
 .moments-up-list__item--skeleton .moments-up-list__name,
@@ -5117,9 +4791,7 @@ watch(
 .moments-page__empty button,
 .moments-wanted-load-more,
 .moment-detail-frame,
-.moment-detail-frame__open,
-.moment-image-viewer__nav,
-.moment-image-viewer__toolbar {
+.moment-detail-frame__open {
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -5129,23 +4801,10 @@ watch(
 
 .moments-live-card__avatar em,
 .moments-wanted-load-more,
-.moment-detail-frame__open,
-.moment-image-viewer__toolbar {
+.moment-detail-frame__open {
   corner-shape: var(--bew-corner-shape-round);
 }
 
-@media (max-width: breakpoints.$grid-sm) {
-  .moment-image-viewer__stage {
-    padding: 68px 12px 92px;
-  }
-  .moment-image-viewer__nav {
-    top: auto;
-    bottom: 24px;
-    width: 36px;
-    height: 42px;
-    transform: none;
-  }
-}
 @keyframes moment-shimmer {
   to {
     background-position: -400% 0;

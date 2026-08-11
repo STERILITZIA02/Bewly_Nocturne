@@ -7,10 +7,16 @@ type CamelCase<S extends string> = S extends `${infer P1}_${infer P2}${infer P3}
   ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
   : Lowercase<S>
 
+type PublicApiFunction<T> = T extends (message: infer TMessage, ...args: any[]) => infer TResult
+  ? TMessage extends { contentScriptQuery: string }
+    ? (options: Omit<TMessage, 'contentScriptQuery'>) => TResult
+    : T
+  : never
+
 type APIFunction<T = typeof API_COLLECTION> = {
   [K in keyof T as CamelCase<string & K>]: {
     // @ts-expect-error allow params
-    [P in keyof T[K]]: T[K][P] extends (...args: any[]) => any ? T[K][P] : Lowercase<T[K][P]['_fetch']['method']> extends 'get' ? (options?: Partial<T[K][P]['params']>) => Promise<any> : (options?: Partial<T[K][P]['params'] & T[K][P]['_fetch']['body']>) => Promise<any>
+    [P in keyof T[K]]: T[K][P] extends (...args: any[]) => any ? PublicApiFunction<T[K][P]> : Lowercase<T[K][P]['_fetch']['method']> extends 'get' ? (options?: Partial<T[K][P]['params']>) => Promise<any> : (options?: Partial<T[K][P]['params'] & T[K][P]['_fetch']['body']>) => Promise<any>
   }
 }
 

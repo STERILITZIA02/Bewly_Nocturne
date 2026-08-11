@@ -5,7 +5,12 @@ interface Props {
   type?: 'text' | 'password' | 'email' | 'number'
   min?: number
   max?: number
+  maxlength?: number
   placeholder?: string
+  ariaLabel?: string
+  disabled?: boolean
+  inputmode?: 'none' | 'text' | 'decimal' | 'numeric' | 'tel' | 'search' | 'email' | 'url'
+  autofocus?: boolean
 }
 const props = withDefaults(defineProps<Props>(), { size: 'medium' })
 
@@ -17,11 +22,11 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const height = computed(() => {
   if (props.size === 'small')
-    return '28px'
+    return 'var(--bew-control-height-sm)'
   if (props.size === 'medium')
     return 'var(--bew-control-height)'
   if (props.size === 'large')
-    return '40px'
+    return 'var(--bew-control-height-lg)'
   return 'var(--bew-control-height)'
 })
 
@@ -41,9 +46,9 @@ defineExpose({ focus })
 <template>
   <div
     class="b-input"
-    :class="`b-input--${size}`"
+    :class="[`b-input--${size}`, { 'is-disabled': disabled }]"
     :style="{ height, padding }"
-    focus-within:ring="2px $bew-theme-color"
+    focus-within:ring="2px $bew-theme-focus-ring"
     p="x-4"
     rounded="$bew-interactive-radius" border="1 $bew-surface-border-color" box-border
     transition="border-color duration-300, background-color duration-300, box-shadow duration-300"
@@ -62,7 +67,12 @@ defineExpose({ focus })
       :type="type"
       :min="min"
       :max="max"
+      :maxlength="maxlength"
       :placeholder="placeholder"
+      :aria-label="ariaLabel"
+      :disabled="disabled"
+      :inputmode="inputmode"
+      :autofocus="autofocus"
       w-inherit h-inherit
       outline-none flex-1 bg-transparent
       @keydown.enter="$emit('enter')"
@@ -91,6 +101,15 @@ defineExpose({ focus })
 
   &:focus-visible {
     outline: none;
+  }
+}
+
+.b-input.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+
+  input {
+    cursor: inherit;
   }
 }
 

@@ -81,7 +81,8 @@ const tooltipRef = ref(null)
     }
   }
 
-  &:hover .b-tooltip {
+  &:hover .b-tooltip,
+  &:focus-within .b-tooltip {
     --uno: "opacity-100";
   }
 }

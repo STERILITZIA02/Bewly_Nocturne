@@ -15,9 +15,16 @@ interface WbiKeyOptions {
 }
 
 const BILIBILI_API_ORIGIN = 'https://api.bilibili.com'
+const BILIBILI_IM_API_ORIGIN = 'https://api.vc.bilibili.com'
 const NAV_PATH = '/x/web-interface/nav'
 const BILI_TICKET_PATH = '/x/web-interface/bili_ticket'
 const FEEDBACK_DISLIKE_PATH = '/x/web-interface/feedback/dislike'
+const WBI_IM_PATHS = new Set([
+  '/session_svr/v1/session_svr/get_sessions',
+  '/session_svr/v1/session_svr/new_sessions',
+  '/svr_sync/v1/svr_sync/fetch_session_msgs',
+  '/web_im/v1/web_im/send_msg',
+])
 
 /**
  * Parse an API URL only when it points at the exact Bilibili API origin.
@@ -283,6 +290,15 @@ export async function initWbiKeys(options: WbiKeyOptions = {}): Promise<boolean>
  * 检查是否需要WBI签名的URL
  */
 export function needsWbiSign(url: string): boolean {
+  try {
+    const parsedUrl = new URL(url)
+    if (parsedUrl.origin === BILIBILI_IM_API_ORIGIN)
+      return WBI_IM_PATHS.has(parsedUrl.pathname)
+  }
+  catch {
+    return false
+  }
+
   const parsedUrl = parseBilibiliApiUrl(url)
   if (!parsedUrl)
     return false

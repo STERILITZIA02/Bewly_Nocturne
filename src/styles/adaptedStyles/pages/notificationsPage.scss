@@ -37,10 +37,9 @@
 }
 
 html.bewly-design.notificationsPage {
-  // remove original Bilibili background image
   body,
   &.bili_dark body {
-    background: unset;
+    background: var(--bew-homepage-bg);
   }
 
   #message-navbar {
@@ -50,26 +49,7 @@ html.bewly-design.notificationsPage {
       height: calc(100vh - var(--bew-top-bar-height));
 
       &::after {
-        content: "";
-        top: 0;
-        left: 0;
-        position: absolute;
-        width: 100%;
-        height: 100%;
-        background: url(https://s1.hdslb.com/bfs/static/blive/blfe-message-web/static/img/light_bg.8e46311e.png)
-          bottom/cover no-repeat fixed;
-        pointer-events: none;
-        opacity: 0.4;
-      }
-    }
-  }
-
-  &.dark #message-navbar {
-    + .container {
-      &::after {
-        background: url(https://s1.hdslb.com/bfs/static/blive/blfe-message-web/static/img/dark_bg.e136e3d5.png)
-          bottom/cover no-repeat fixed;
-        opacity: 0.4;
+        display: none;
       }
     }
   }
