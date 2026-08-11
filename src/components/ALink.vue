@@ -2,7 +2,8 @@
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { settings } from '~/logic'
-import { isHomePage, isInIframe } from '~/utils/main'
+import { executeResolvedLinkAction, getLinkTarget, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
+import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
 
 const props = defineProps<{
@@ -44,21 +45,10 @@ const openMode = computed(() => {
 // Since BewlyBewly sometimes uses an iframe to open the original Bilibili page in the current tab
 // please set the target to `_top` instead of `_self`
 const target = computed(() => {
-  if (openMode.value === 'newTab') {
-    return '_blank'
-  }
-  if (openMode.value === 'currentTabIfNotHomepage') {
-    const currentUrl = currentLocationHref.value
-    // When in iframe, treat as homepage by default
-    if (isInIframe()) {
-      return '_blank'
-    }
-    return isHomePage(currentUrl) ? '_blank' : '_top'
-  }
-  if (openMode.value === 'currentTab') {
-    return '_top'
-  }
-  return '_top'
+  return getLinkTarget(resolveLinkOpenAction(openMode.value, {
+    isHomepage: isHomePage(currentLocationHref.value),
+    inIframe: isInIframe(),
+  }))
 })
 
 function handleClick(event: MouseEvent) {
@@ -75,7 +65,7 @@ function handleClick(event: MouseEvent) {
     return
   }
 
-  if (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+  if (event.button !== 0 || hasNavigationModifier(event))
     return
 
   // 在触屏模式下，topBar 类型的链接不执行打开操作，只显示弹窗
@@ -95,17 +85,20 @@ function handleClick(event: MouseEvent) {
     }
   }
 
-  if (openMode.value === 'drawer') {
+  const action = resolveLinkOpenAction(openMode.value, {
+    isHomepage: isHomePage(currentLocationHref.value),
+    inIframe: isInIframe(),
+  })
+  if (action === 'drawer' || action === 'background') {
     event.preventDefault()
     if (props.href) {
-      openIframeDrawer(processedHref.value)
+      executeResolvedLinkAction(action, processedHref.value, {
+        currentTab: url => window.location.assign(url),
+        newTab: openLinkToNewTab,
+        background: url => void openLinkInBackground(url),
+        drawer: openIframeDrawer,
+      })
     }
-    return
-  }
-
-  if (openMode.value === 'background' && props.href) {
-    event.preventDefault()
-    openLinkInBackground(processedHref.value)
   }
 }
 </script>

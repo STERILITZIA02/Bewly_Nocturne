@@ -651,7 +651,7 @@ export const originalSettings: Settings = {
     { position: 100, opacity: 0 },
   ],
   videoCardShadowHeight: 1.0,
-  useSearchPageModeOnHomePage: false,
+  useSearchPageModeOnHomePage: true,
   preserveForYouState: false,
   rememberNoCookieRecommendationState: true,
 

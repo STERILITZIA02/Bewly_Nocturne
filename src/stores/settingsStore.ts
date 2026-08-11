@@ -84,6 +84,16 @@ export const useSettingsStore = defineStore('settings', () => {
     }
   }
 
+  function resolveDockPageHref(page: AppPage): string {
+    const dockItem = getEffectiveDockItemByPage(page)
+    if (!dockItem)
+      return 'https://www.bilibili.com/'
+
+    return dockItem.useOriginalBiliPage
+      ? mainStore.getBiliWebPageURLByPage(page)
+      : `https://www.bilibili.com/?page=${page}`
+  }
+
   function setDockItemCustomUseOriginalBiliPage(page: AppPage, useOriginalBiliPage: boolean): void {
     if (settings.value.pageMode !== 'custom')
       return
@@ -130,6 +140,7 @@ export const useSettingsStore = defineStore('settings', () => {
     getEffectiveTopBarSource,
     getUseOriginalBilibiliTopBar,
     resetDockItemsConfig,
+    resolveDockPageHref,
     setCustomUseOriginalBilibiliTopBar,
     setDockItemCustomUseOriginalBiliPage,
   }

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 interface Team {
   ID: number
@@ -28,6 +29,8 @@ const props = defineProps<{
   contest: Contest
   cardWidth?: string
 }>()
+
+const { t } = useI18n()
 
 const matchUrl = computed(() => {
   return props.contest.playback || props.contest.jumpURL || ''
@@ -101,9 +104,9 @@ const awayScore = computed(() => {
         </div>
         <!-- 状态标签 -->
         <div text="sm" class="status-badge" :class="{ finished: isFinished, live: !isNotStarted && !isFinished, upcoming: isNotStarted }">
-          <template v-if="isFinished">已结束</template>
-          <template v-else-if="isNotStarted">未开始</template>
-          <template v-else>进行中</template>
+          <template v-if="isFinished">{{ t('search.esports.finished') }}</template>
+          <template v-else-if="isNotStarted">{{ t('search.esports.not_started') }}</template>
+          <template v-else>{{ t('search.esports.in_progress') }}</template>
         </div>
       </div>
 

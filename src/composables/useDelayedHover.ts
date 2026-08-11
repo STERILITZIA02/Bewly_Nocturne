@@ -7,6 +7,7 @@ export function useDelayedHover({ enterDelay = 300, leaveDelay = 300, beforeEnte
 
   let enterTimer: ReturnType<typeof setTimeout> | undefined
   let leaveTimer: ReturnType<typeof setTimeout> | undefined
+  let hoverActive = false
 
   function clearTimers() {
     if (enterTimer !== undefined)
@@ -30,6 +31,8 @@ export function useDelayedHover({ enterDelay = 300, leaveDelay = 300, beforeEnte
       leaveTimer = undefined
     }
     enterTimer = setTimeout(() => {
+      enterTimer = undefined
+      hoverActive = true
       enter()
     }, enterDelay)
   }
@@ -46,8 +49,18 @@ export function useDelayedHover({ enterDelay = 300, leaveDelay = 300, beforeEnte
       leaveTimer = undefined
     }
     leaveTimer = setTimeout(() => {
+      leaveTimer = undefined
+      hoverActive = false
       leave()
     }, leaveDelay)
+  }
+
+  function resetInteraction() {
+    clearTimers()
+    if (!hoverActive)
+      return
+    hoverActive = false
+    leave()
   }
 
   watch([el, () => settings.value.touchScreenOptimization], ([element, touchOptimized], _, onCleanup) => {
@@ -61,11 +74,11 @@ export function useDelayedHover({ enterDelay = 300, leaveDelay = 300, beforeEnte
         element.removeEventListener('mouseenter', handleMouseEnter)
         element.removeEventListener('mouseleave', handleMouseLeave)
       }
-      clearTimers()
+      resetInteraction()
     })
   }, { immediate: true, flush: 'post' })
 
-  onScopeDispose(clearTimers)
+  onScopeDispose(resetInteraction)
 
   return el
 }

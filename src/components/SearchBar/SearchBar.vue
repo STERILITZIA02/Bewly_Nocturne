@@ -8,7 +8,7 @@ import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
-import { acquireSearchExperience, loadSharedHotSearch, loadSharedSearchRecommendation, useSearchExperience } from '~/logic/searchExperience'
+import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
 import { isHomePage } from '~/utils/main'
 import { resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
@@ -188,13 +188,9 @@ onClickOutside(searchWrapRef, () => {
   resetKeyboardSelection()
 })
 
-let releaseSearchExperience: (() => void) | undefined
-
-// 监听设置变化，动态启用或停止推荐功能
-watch(() => settings.value.showSearchRecommendation, (enabled) => {
-  if (enabled) {
-    void loadSharedSearchRecommendation()
-  }
+const releaseSearchExperience = acquireSearchExperience({
+  hotSearch: computed(() => isFocus.value && (props.showHotSearch ?? settings.value.showHotSearchInTopBar)),
+  recommendation: computed(() => settings.value.showSearchRecommendation),
 })
 
 // 监听搜索历史设置变化
@@ -203,18 +199,10 @@ watch(() => settings.value.enableSearchHistory, (enabled) => {
     searchHistory.value = []
 })
 
-// 组件挂载时初始化
-onMounted(() => {
-  releaseSearchExperience = acquireSearchExperience()
-  if (settings.value.showSearchRecommendation) {
-    void loadSharedSearchRecommendation()
-  }
-})
-
 // 组件卸载时清理定时器
 onBeforeUnmount(() => {
   emit('focusChange', false)
-  releaseSearchExperience?.()
+  releaseSearchExperience()
 })
 
 onKeyStroke('Escape', (e: KeyboardEvent) => {
@@ -545,7 +533,7 @@ function handleClearKeyword() {
           class="hot-search-section"
         >
           <div class="title p-2 pb-0">
-            <span>{{ $t('search_bar.hot_search_title') || '热搜' }}</span>
+            <span>{{ $t('search_bar.hot_search_title') }}</span>
           </div>
 
           <div class="hot-search-container p-2 grid grid-cols-2 gap-x-4 gap-y-1">

@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+
+import { formatLocalCalendarDate, parseLocalCalendarDate, toLocalDate } from '../utils/localDate'
 
 const props = defineProps<{
   modelValue?: string
@@ -11,6 +14,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:modelValue': [value: string]
 }>()
+const { t } = useI18n()
 
 const showPicker = ref(false)
 const pickerRef = ref<HTMLElement>()
@@ -25,18 +29,13 @@ const currentMonth = ref(new Date().getMonth())
 const maxDate = computed(() => {
   if (!props.max)
     return null
-  const date = new Date(props.max)
-  return {
-    year: date.getFullYear(),
-    month: date.getMonth(),
-    day: date.getDate(),
-  }
+  return parseLocalCalendarDate(props.max)
 })
 
 // 格式化显示的日期
 const displayValue = computed(() => {
   if (!props.modelValue)
-    return props.placeholder || '开始日期'
+    return props.placeholder || t('search.date_picker.start_date')
   return props.modelValue.replace(/-/g, '/')
 })
 
@@ -48,37 +47,6 @@ watch(() => props.modelValue, (newVal) => {
 }, { immediate: true })
 
 // 解析用户输入的日期
-function parseInputDate(input: string): Date | null {
-  if (!input)
-    return null
-
-  // 移除空格
-  const cleaned = input.trim()
-
-  // 尝试匹配 yyyy-MM-DD 格式
-  const dashMatch = cleaned.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/)
-  if (dashMatch) {
-    const [, year, month, day] = dashMatch
-    return new Date(Number(year), Number(month) - 1, Number(day))
-  }
-
-  // 尝试匹配 yyyy/MM/DD 格式
-  const slashMatch = cleaned.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/)
-  if (slashMatch) {
-    const [, year, month, day] = slashMatch
-    return new Date(Number(year), Number(month) - 1, Number(day))
-  }
-
-  // 尝试匹配 yyyy年MM月DD日 格式
-  const chineseMatch = cleaned.match(/^(\d{4})年(\d{1,2})月(\d{1,2})日$/)
-  if (chineseMatch) {
-    const [, year, month, day] = chineseMatch
-    return new Date(Number(year), Number(month) - 1, Number(day))
-  }
-
-  return null
-}
-
 // 生成日历数据
 const calendarDays = computed(() => {
   const year = currentYear.value
@@ -121,7 +89,8 @@ const calendarDays = computed(() => {
   for (let day = 1; day <= daysInMonth; day++) {
     const date = new Date(year, month, day)
     const isToday = isSameDay(date, new Date())
-    const isSelected = props.modelValue ? isSameDay(date, new Date(props.modelValue)) : false
+    const selectedDate = props.modelValue ? parseLocalCalendarDate(props.modelValue) : null
+    const isSelected = selectedDate ? isSameDay(date, toLocalDate(selectedDate)) : false
 
     days.push({
       day,
@@ -170,10 +139,11 @@ function isSameDay(date1: Date, date2: Date): boolean {
 
 // 格式化日期为 YYYY-MM-DD
 function formatDate(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  return formatLocalCalendarDate({
+    year: date.getFullYear(),
+    month: date.getMonth(),
+    day: date.getDate(),
+  })
 }
 
 // 选择日期
@@ -237,9 +207,11 @@ function clearDate() {
 // 打开选择器时，初始化到当前选中的日期或今天
 function openPicker() {
   if (props.modelValue) {
-    const date = new Date(props.modelValue)
-    currentYear.value = date.getFullYear()
-    currentMonth.value = date.getMonth()
+    const date = parseLocalCalendarDate(props.modelValue)
+    if (date) {
+      currentYear.value = date.year
+      currentMonth.value = date.month
+    }
   }
   else {
     const today = new Date()
@@ -265,7 +237,8 @@ function handleInputFocus() {
 // 处理输入框失去焦点
 function handleInputBlur() {
   isInputMode.value = false
-  const date = parseInputDate(inputValue.value)
+  const parsedDate = parseLocalCalendarDate(inputValue.value)
+  const date = parsedDate ? toLocalDate(parsedDate) : null
 
   if (date && !Number.isNaN(date.getTime())) {
     // 检查日期是否有效且不超过最大日期
@@ -304,8 +277,17 @@ onClickOutside(pickerRef, () => {
 })
 
 // 月份名称
-const monthNames = ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
-const weekDays = ['日', '一', '二', '三', '四', '五', '六']
+const monthNames = computed(() => Array.from({ length: 12 }, (_, index) =>
+  t('search.date_picker.month', { month: index + 1 })))
+const weekDays = computed(() => [
+  t('search.date_picker.weekday_sunday'),
+  t('search.date_picker.weekday_monday'),
+  t('search.date_picker.weekday_tuesday'),
+  t('search.date_picker.weekday_wednesday'),
+  t('search.date_picker.weekday_thursday'),
+  t('search.date_picker.weekday_friday'),
+  t('search.date_picker.weekday_saturday'),
+])
 </script>
 
 <template>
@@ -317,7 +299,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
         type="text"
         class="date-picker-input"
         :class="{ 'has-value': modelValue }"
-        :placeholder="placeholder || '开始日期'"
+        :placeholder="placeholder || $t('search.date_picker.start_date')"
         @click="handleInputClick"
         @focus="handleInputFocus"
         @blur="handleInputBlur"
@@ -326,6 +308,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
       <button
         type="button"
         class="calendar-icon"
+        :aria-label="$t('search.date_picker.open_calendar')"
         @click="openPicker"
       >
         <div class="i-tabler:calendar" w-4 h-4 />
@@ -338,22 +321,22 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
         <!-- 头部：年月选择 -->
         <div class="picker-header">
           <div class="year-controls">
-            <button type="button" class="header-btn" @click="prevYear">
+            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_year')" @click="prevYear">
               <div class="i-tabler:chevron-left" w-4 h-4 />
             </button>
-            <span class="year-text">{{ currentYear }}年</span>
-            <button type="button" class="header-btn" @click="nextYear">
+            <span class="year-text">{{ $t('search.date_picker.year', { year: currentYear }) }}</span>
+            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_year')" @click="nextYear">
               <div class="i-tabler:chevron-right" w-4 h-4 />
             </button>
           </div>
           <div class="month-controls">
-            <button type="button" class="header-btn" @click="prevMonth">
+            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_month')" @click="prevMonth">
               <div class="i-tabler:chevron-up" w-5 h-5 />
             </button>
             <div class="month-text">
               {{ monthNames[currentMonth] }}
             </div>
-            <button type="button" class="header-btn" @click="nextMonth">
+            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_month')" @click="nextMonth">
               <div class="i-tabler:chevron-down" w-5 h-5 />
             </button>
           </div>
@@ -379,6 +362,10 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
               'today': day.isToday,
               'selected': day.isSelected,
             }"
+            :disabled="day.disabled"
+            :aria-disabled="day.disabled"
+            :aria-pressed="day.isSelected"
+            :aria-label="$t('search.date_picker.select_date', { date: formatDate(day.date) })"
             @click="selectDate(day)"
           >
             {{ day.day }}
@@ -388,10 +375,10 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
         <!-- 底部按钮 -->
         <div class="picker-footer">
           <button type="button" class="footer-btn clear" @click="clearDate">
-            清除
+            {{ $t('search.date_picker.clear') }}
           </button>
           <button type="button" class="footer-btn today" @click="selectToday">
-            今天
+            {{ $t('search.date_picker.today') }}
           </button>
         </div>
       </div>
@@ -408,13 +395,13 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   position: relative;
   display: inline-flex;
   align-items: center;
-  width: 115px;
+  width: var(--bew-date-picker-input-width);
 }
 
 .date-picker-input {
   flex: 1;
   width: 100%;
-  min-height: 28px;
+  min-height: var(--bew-control-height-sm);
   padding: 0 var(--bew-space-6) 0 var(--bew-space-2);
   background: var(--bew-fill-1);
   box-sizing: border-box;
@@ -427,11 +414,11 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   line-height: var(--bew-line-height-control);
   letter-spacing: -0.01em;
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background-color var(--bew-duration-normal) var(--bew-ease-out),
+    color var(--bew-duration-normal) var(--bew-ease-out),
+    border-color var(--bew-duration-normal) var(--bew-ease-out),
+    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
+    transform var(--bew-duration-normal) var(--bew-ease-out);
   outline: none;
 
   &::placeholder {
@@ -464,11 +451,11 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   color: var(--bew-text-3);
   cursor: pointer;
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background-color var(--bew-duration-normal) var(--bew-ease-out),
+    color var(--bew-duration-normal) var(--bew-ease-out),
+    border-color var(--bew-duration-normal) var(--bew-ease-out),
+    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
+    transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &:hover {
     color: var(--bew-theme-foreground);
@@ -481,10 +468,10 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 
 .date-picker-panel {
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + var(--bew-popover-gap));
   left: 0;
   z-index: var(--bew-z-base-overlay);
-  width: 280px;
+  width: var(--bew-date-picker-panel-width);
   padding: var(--bew-space-3);
 }
 
@@ -518,8 +505,8 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: var(--bew-icon-button-size-sm);
+  height: var(--bew-icon-button-size-sm);
   background: transparent;
   border: none;
   border-radius: var(--bew-interactive-radius);
@@ -527,11 +514,11 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   color: var(--bew-text-2);
   cursor: pointer;
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background-color var(--bew-duration-normal) var(--bew-ease-out),
+    color var(--bew-duration-normal) var(--bew-ease-out),
+    border-color var(--bew-duration-normal) var(--bew-ease-out),
+    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
+    transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &:hover {
     background: var(--bew-fill-1);
@@ -554,7 +541,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: var(--bew-date-picker-day-size);
   font-size: var(--bew-font-size-control);
   color: var(--bew-text-3);
   font-weight: var(--bew-font-weight-medium);
@@ -571,7 +558,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 32px;
+  height: var(--bew-date-picker-day-size);
   background: transparent;
   border: none;
   border-radius: var(--bew-interactive-radius);
@@ -580,11 +567,11 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   font-size: var(--bew-font-size-body);
   cursor: pointer;
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background-color var(--bew-duration-normal) var(--bew-ease-out),
+    color var(--bew-duration-normal) var(--bew-ease-out),
+    border-color var(--bew-duration-normal) var(--bew-ease-out),
+    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
+    transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &:hover:not(.disabled) {
     background: var(--bew-fill-1);
@@ -628,7 +615,7 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 }
 
 .footer-btn {
-  min-height: 28px;
+  min-height: var(--bew-control-height-sm);
   padding: 0 var(--bew-space-3);
   background: transparent;
   border: none;
@@ -639,11 +626,11 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background-color var(--bew-duration-normal) var(--bew-ease-out),
+    color var(--bew-duration-normal) var(--bew-ease-out),
+    border-color var(--bew-duration-normal) var(--bew-ease-out),
+    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
+    transform var(--bew-duration-normal) var(--bew-ease-out);
 
   &.clear {
     color: var(--bew-text-2);
@@ -671,11 +658,11 @@ const weekDays = ['日', '一', '二', '三', '四', '五', '六']
 .picker-fade-enter-active,
 .picker-fade-leave-active {
   transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
+    background-color var(--bew-duration-normal) var(--bew-ease-out),
+    color var(--bew-duration-normal) var(--bew-ease-out),
+    border-color var(--bew-duration-normal) var(--bew-ease-out),
+    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
+    transform var(--bew-duration-normal) var(--bew-ease-out);
 }
 
 .picker-fade-enter-from {

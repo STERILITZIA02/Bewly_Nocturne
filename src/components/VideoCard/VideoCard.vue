@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed, ref, watch, watchEffect } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
@@ -44,6 +45,7 @@ const layout = computed((): VideoCardLayoutSetting => {
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
 const logic = useVideoCardLogic(props)
 const { mainAppRef } = useBewlyApp()
+const { t } = useI18n()
 
 // 使用共享样式（避免每个卡片重复计算）
 const { titleFontSizeClass, titleStyle, authorFontSizeClass, metaFontSizeClass } = useVideoCardSharedStyles()
@@ -231,7 +233,7 @@ const highlightTags = computed(() => {
     // 使用查找表快速判断是否高赞
     const likeThreshold = LIKE_RATIO_THRESHOLDS.find(t => viewCount >= t.view)
     if (likeThreshold && likeRatio >= likeThreshold.ratio) {
-      tags.push('高赞')
+      tags.push(t('video_card.highlight_high_like'))
     }
 
     const danmakuCount = stats.danmaku ?? 0
@@ -240,7 +242,7 @@ const highlightTags = computed(() => {
     // 使用查找表快速判断是否高互动
     const danmakuThreshold = DANMAKU_RATIO_THRESHOLDS.find(t => viewCount >= t.view)
     if (danmakuThreshold && danmakuRatio > danmakuThreshold.ratio) {
-      tags.push('高互动')
+      tags.push(t('video_card.highlight_high_engagement'))
     }
   }
 
@@ -253,7 +255,7 @@ const highlightTags = computed(() => {
   if (viewCount >= 1_000_000) {
     const hasPlayKeyword = primaryTags.value.some(tag => /播放|观看|views?|play/i.test(tag))
     if (!hasPlayKeyword)
-      tags.push('百万播放')
+      tags.push(t('video_card.highlight_million_views'))
   }
 
   // 如果传入了2个或更多Tag，则不显示推荐tag
@@ -277,10 +279,10 @@ function getDurationHighlight(video: Video) {
     return
 
   if (durationInSeconds >= 40 * 60)
-    return '超长视频'
+    return t('video_card.highlight_extra_long')
 
   if (durationInSeconds >= 20 * 60)
-    return '长视频'
+    return t('video_card.highlight_long')
 }
 
 function getDurationInSeconds(video: Video) {

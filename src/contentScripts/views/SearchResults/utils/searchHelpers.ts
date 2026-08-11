@@ -1,4 +1,5 @@
 import type { VideoSearchFilters } from '../types'
+import { parseLocalCalendarDate, toLocalDate } from './localDate'
 
 /**
  * 获取时间范围参数
@@ -17,16 +18,19 @@ export function getTimeRangeParams(filters: VideoSearchFilters): Record<string, 
 
     // 解析开始日期
     if (customStartDate) {
-      const startTime = new Date(customStartDate).getTime()
-      if (!Number.isNaN(startTime))
-        begin = Math.floor(startTime / 1000)
+      const parsedStart = parseLocalCalendarDate(customStartDate)
+      if (parsedStart)
+        begin = Math.floor(toLocalDate(parsedStart).getTime() / 1000)
     }
 
     // 解析结束日期（设置为当天的23:59:59）
     if (customEndDate) {
-      const endTime = new Date(customEndDate).getTime()
-      if (!Number.isNaN(endTime))
-        end = Math.floor(endTime / 1000) + 86399 // 加上23小时59分59秒
+      const parsedEnd = parseLocalCalendarDate(customEndDate)
+      if (parsedEnd) {
+        const endDate = toLocalDate(parsedEnd)
+        endDate.setHours(23, 59, 59, 999)
+        end = Math.floor(endDate.getTime() / 1000)
+      }
     }
 
     // 如果开始日期大于结束日期，交换它们

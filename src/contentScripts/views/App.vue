@@ -163,7 +163,26 @@ function getPageParam(): AppPage | null {
   return null
 }
 
-const activatedPage = ref<AppPage>(getPageParam() || (settings.value.dockItemsConfig.find(e => e.visible === true)?.page || AppPage.Home))
+function resolveAvailableAppPage(page: AppPage): AppPage {
+  return settings.value.useSearchPageModeOnHomePage && page === AppPage.Search
+    ? AppPage.Home
+    : page
+}
+
+function replacePageParam(page: AppPage) {
+  const url = new URL(window.location.href)
+  url.searchParams.set('page', page)
+  window.history.replaceState({}, '', url.toString())
+}
+
+const requestedInitialPage = getPageParam()
+  || settings.value.dockItemsConfig.find(e => e.visible === true)?.page
+  || AppPage.Home
+const initialPage = resolveAvailableAppPage(requestedInitialPage)
+const activatedPage = ref<AppPage>(initialPage)
+
+if (initialPage !== requestedInitialPage)
+  replacePageParam(initialPage)
 
 const shouldUseOriginalSearchResultsPage = computed(() => {
   return activatedPage.value === AppPage.SearchResults
@@ -183,9 +202,22 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 // 监听 URL 变化,同步更新 activatedPage
 watch(currentLocationHref, () => {
   const pageParam = getPageParam()
-  if (pageParam && pageParam !== activatedPage.value) {
-    activatedPage.value = pageParam
-  }
+  if (!pageParam)
+    return
+
+  const availablePage = resolveAvailableAppPage(pageParam)
+  if (availablePage !== pageParam)
+    replacePageParam(availablePage)
+
+  if (availablePage !== activatedPage.value)
+    activatedPage.value = availablePage
+})
+
+watch(() => settings.value.useSearchPageModeOnHomePage, (useOnHomePage) => {
+  if (!useOnHomePage || activatedPage.value !== AppPage.Search)
+    return
+
+  activatedPage.value = AppPage.Home
 })
 
 // 清理搜索相关的URL参数（仅在首页生效）
@@ -556,14 +588,14 @@ onMounted(() => {
 function handleDockItemClick(dockItem: DockItem) {
   // Opening in a new tab while still on the current tab doesn't require changing the `activatedPage`
   if (dockItem.openInNewTab) {
-    openLinkToNewTab(`https://www.bilibili.com/?page=${dockItem.page}`)
+    openLinkToNewTab(settingsStore.resolveDockPageHref(dockItem.page))
   }
   else {
     if (dockItem.useOriginalBiliPage) {
       // It seem like the `activatedPage` watcher above will handle this, so no need to set iframePageURL.value here
       // iframePageURL.value = dockItem.url
       if (!isHomePage()) {
-        location.href = `https://www.bilibili.com/?page=${dockItem.page}`
+        location.href = settingsStore.resolveDockPageHref(dockItem.page)
       }
     }
     else {
@@ -595,25 +627,20 @@ function handleDockItemClick(dockItem: DockItem) {
 }
 
 function getDockPageHref(page: AppPage): string {
-  const dockItem = settingsStore.getEffectiveDockItemByPage(page)
-  if (!dockItem)
-    return 'https://www.bilibili.com/'
-
-  return dockItem.useOriginalBiliPage
-    ? dockItem.url
-    : `https://www.bilibili.com/?page=${page}`
+  return settingsStore.resolveDockPageHref(resolveAvailableAppPage(page))
 }
 
 function navigateToDockPage(page: AppPage): void {
-  const dockItem = settingsStore.getEffectiveDockItemByPage(page)
+  const dockItem = settingsStore.getEffectiveDockItemByPage(resolveAvailableAppPage(page))
   if (dockItem)
     handleDockItemClick(dockItem)
 }
 
 function changeActivatePage(pageName: AppPage) {
+  const targetPage = resolveAvailableAppPage(pageName)
   const scrollTop: number = scrollViewportRef.value?.scrollTop ?? 0
 
-  if (activatedPage.value === pageName) {
+  if (activatedPage.value === targetPage) {
     if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.SearchResults) {
       if (scrollTop === 0)
         handleThrottledPageRefresh()
@@ -622,7 +649,7 @@ function changeActivatePage(pageName: AppPage) {
     }
     return
   }
-  activatedPage.value = pageName
+  activatedPage.value = targetPage
 }
 
 function handleBackToTop(targetScrollTop = 0 as number) {
@@ -696,23 +723,21 @@ function openIframeDrawer(url: string) {
   const isSameOrigin = (origin: URL, destination: URL) =>
     origin.protocol === destination.protocol && origin.host === destination.host && origin.port === destination.port
 
-  const currentUrl = new URL(location.href)
-  const destination = new URL(url)
-
   try {
-    if (!isSameOrigin(currentUrl, destination)) {
-      openLinkToNewTab(url)
+    const currentUrl = new URL(location.href)
+    const destination = new URL(url, currentUrl)
+    if (!['http:', 'https:'].includes(destination.protocol) || !isSameOrigin(currentUrl, destination)) {
+      openLinkToNewTab(destination.href)
       return
     }
+
+    setActiveDrawer(DrawerType.IframeDrawer)
+    iframeDrawerURL.value = destination.href
+    showIframeDrawer.value = true
   }
   catch {
-    openLinkToNewTab(url)
-    return
+    // An invalid URL cannot be normalized safely for either the drawer or a new tab.
   }
-
-  setActiveDrawer(DrawerType.IframeDrawer)
-  iframeDrawerURL.value = url
-  showIframeDrawer.value = true
 }
 
 /**

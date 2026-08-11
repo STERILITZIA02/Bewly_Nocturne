@@ -8,7 +8,6 @@ import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { appAuthTokens, settings } from '~/logic'
-import { openSettingById } from '~/logic/layoutEdit'
 import type { RecommendationMode } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
 import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, revokeAccessKey, saveAppAuthTokens } from '~/utils/authProvider'
@@ -36,6 +35,12 @@ const authCode = ref<string>('')
 const qrcodeMsg = ref<string>('')
 
 const appAccessToken = computed(() => appAuthTokens.value.accessToken)
+const showStandaloneSearchPage = computed({
+  get: () => !settings.value.useSearchPageModeOnHomePage,
+  set: (showStandalone: boolean) => {
+    settings.value.useSearchPageModeOnHomePage = !showStandalone
+  },
+})
 
 onDeactivated(() => {
   clearInterval(pollLoginQRCodeInterval.value)
@@ -528,19 +533,13 @@ function handleToggleHomeTab(tab: any) {
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_search_page_mode')">
-      <SettingsItem :title="$t('settings.use_search_page_mode')" right-width="auto">
-        <Radio v-model="settings.useSearchPageModeOnHomePage" />
+      <SettingsItem
+        :title="$t('settings.show_standalone_search_page')"
+        :desc="$t('settings.show_standalone_search_page_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="showStandaloneSearchPage" />
       </SettingsItem>
-      <template v-if="settings.useSearchPageModeOnHomePage">
-        <SettingsItem :title="$t('settings.settings_shared_with_the_search_page')" right-width="auto">
-          <template #desc>
-            <span class="bew-warning-text">{{ $t('settings.settings_shared_with_the_search_page_desc') }}</span>
-          </template>
-          <Button type="secondary" center @click="openSettingById('search.focus.darken')">
-            {{ $t('settings.btn.open_settings') }}
-          </Button>
-        </SettingsItem>
-      </template>
     </SettingsItemGroup>
   </div>
 </template>

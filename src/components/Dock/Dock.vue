@@ -13,6 +13,7 @@ import {
   shouldAutoCollapseDock,
   shouldShowDockCollapseButton,
 } from '~/constants/dock'
+import { DOCK_LAYOUT } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -44,7 +45,7 @@ const emit = defineEmits<{
 
 const settingsStore = useSettingsStore()
 const { isDark, toggleDark } = useDark()
-const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage } = useBewlyApp()
+const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
 
 // 计算属性：是否显示撤销按钮
 const showUndo = computed(() => undoForwardState.value === UndoForwardState.ShowUndo)
@@ -167,6 +168,7 @@ watch(
   [
     () => JSON.stringify(settings.value.dockItemsConfig),
     () => settings.value.pageMode,
+    () => settings.value.useSearchPageModeOnHomePage,
   ],
   () => {
     currentDockItems.value = computeDockItem()
@@ -174,11 +176,29 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => settings.value.touchScreenOptimization,
+  () => {
+    dockContentHover.value = false
+    dockInteractionActive.value = false
+    clearAutoCollapseTimer()
+
+    const shouldCollapse = getDockCollapsedStateForMode(
+      settings.value.dockCollapseMode,
+      props.settingsOpen,
+    )
+    if (shouldCollapse && dockReady.value)
+      collapseDock()
+    else if (!shouldCollapse)
+      expandDock()
+  },
+)
+
 function computeDockItem(): DockItem[] {
   const targetDockItems: DockItem[] = []
 
   for (const item of settingsStore.ensureDockItemsConfig()) {
-    if (!item.visible)
+    if (!item.visible || (settings.value.useSearchPageModeOnHomePage && item.page === AppPage.Search))
       continue
 
     const dockItem = settingsStore.getEffectiveDockItemByPage(item.page)
@@ -343,6 +363,8 @@ function handleDockShellTransitionEnd(event: TransitionEvent) {
 }
 
 function handleDockItemClick($event: MouseEvent, dockItem: DockItem) {
+  if ($event.button !== 0)
+    return
   if ($event.ctrlKey || $event.metaKey) {
     openDockItemInNewTab(dockItem)
     return
@@ -352,7 +374,7 @@ function handleDockItemClick($event: MouseEvent, dockItem: DockItem) {
 }
 
 function openDockItemInNewTab(dockItem: DockItem) {
-  openLinkToNewTab(`https://www.bilibili.com/?page=${dockItem.page}`)
+  openLinkToNewTab(getDockPageHref(dockItem.page))
 }
 
 function openSettings(event: MouseEvent) {
@@ -446,9 +468,11 @@ function handleHistoryNavigation() {
 }
 
 function isDockItemActivated(dockItem: DockItem): boolean {
-  // SearchResults 页面时也激活 Search 按钮
-  if (props.activatedPage === AppPage.SearchResults && dockItem.page === AppPage.Search) {
-    return isHomePage()
+  if (props.activatedPage === AppPage.SearchResults) {
+    const searchOwnerPage = settings.value.useSearchPageModeOnHomePage
+      ? AppPage.Home
+      : AppPage.Search
+    return dockItem.page === searchOwnerPage && isHomePage()
   }
   return props.activatedPage === dockItem.page && isHomePage()
 }
@@ -527,8 +551,8 @@ const dockScale = computed((): number => {
   const maxAllowedHeight = windowHeight.value - heightMargin
   const maxAllowedWidth = windowWidth.value - widthMargin
 
-  const buttonSize = 45 // lg:w-45px w-35px, use larger size for calculation
-  const buttonGap = 8 // gap-2 = 8px
+  const buttonSize = DOCK_LAYOUT.actionControlSize
+  const buttonGap = DOCK_LAYOUT.controlGap
 
   let additionalHeight = 0
   let additionalWidth = 0
@@ -1102,7 +1126,7 @@ onUnmounted(() => {
     }
 
     &:focus-visible:not([data-active="true"]):not(:disabled) {
-      outline: 2px solid var(--bew-theme-color-40);
+      outline: 2px solid var(--bew-theme-focus-ring);
       outline-offset: var(--bew-space-0-5);
     }
 

@@ -1,5 +1,5 @@
 import type { Video } from '~/components/VideoCard/types'
-import { parseStatNumber } from '~/utils/dataFormatter'
+import { numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 
 /**
  * 解码 HTML 实体
@@ -34,11 +34,7 @@ function decodeHtmlEntities(text: string | undefined): string {
 }
 
 export function formatNumber(num?: number): string {
-  if (!num)
-    return '0'
-  if (num >= 10000)
-    return `${(num / 10000).toFixed(1)}万`
-  return num.toString()
+  return numFormatter(num ?? 0)
 }
 
 export function removeHighlight(text?: string): string {
@@ -243,7 +239,7 @@ export function convertBangumiHighlight(item: any) {
     publishDateFormatted,
     episodeCount,
     tags: bizTips.filter(Boolean).slice(0, 4),
-    buttonText: removeHighlight(item.button_text || '立即观看'),
+    buttonText: removeHighlight(item.button_text || ''),
     desc: sanitizeBangumiDescription(description || base.desc || ''),
     episodes,
   }
@@ -259,7 +255,7 @@ export interface BangumiEpisode {
   number?: number
 }
 
-export function convertUserCardData(user: any) {
+export function convertUserCardData(user: any, sampleTitle: (index: number) => string) {
   const verifyInfo = user.official_verify?.desc || user.verify_info || ''
   // 兼容live_user数据结构：uid->mid, uface->face
   const mid = user.mid || user.uid
@@ -275,7 +271,7 @@ export function convertUserCardData(user: any) {
     gender: user.gender, // 0:保密, 1:男, 2:女
     isVerified: Boolean(user.official_verify?.type === 0 || user.is_verify),
     verifyInfo: removeHighlight(verifyInfo),
-    samples: convertUserSamples(user, 7),
+    samples: convertUserSamples(user, 7, sampleTitle),
     isFollowed: user.is_follow || 0,
     showFollowButton: true,
     liveStatus: user.live_status,
@@ -283,8 +279,8 @@ export function convertUserCardData(user: any) {
   }
 }
 
-export function convertUserHighlight(user: any) {
-  const base = convertUserCardData(user)
+export function convertUserHighlight(user: any, sampleTitle: (index: number) => string) {
+  const base = convertUserCardData(user, sampleTitle)
   return {
     ...base,
     face: base.face,
@@ -296,7 +292,7 @@ export function convertUserHighlight(user: any) {
     gender: user.gender, // 0:保密, 1:男, 2:女
     officialVerify: removeHighlight(user.official_verify?.title || user.official_verify?.desc || ''),
     url: `https://space.bilibili.com/${user.mid}`,
-    samples: convertUserSamples(user, 7),
+    samples: convertUserSamples(user, 7, sampleTitle),
   }
 }
 
@@ -587,7 +583,7 @@ function resolveEpisodeNumber(source: any, fallbackTitle: string): number | unde
   return undefined
 }
 
-function convertUserSamples(source: any, limit = 6): any[] {
+function convertUserSamples(source: any, limit: number, sampleTitle: (index: number) => string): any[] {
   const list = Array.isArray(source?.res) ? source.res : []
   const samples: any[] = []
 
@@ -596,7 +592,7 @@ function convertUserSamples(source: any, limit = 6): any[] {
     if (!item)
       continue
     const id = String(item.bvid || item.aid || item.id || item.arcurl || index)
-    const title = removeHighlight(item.title || item.long_title || `稿件 ${index + 1}`)
+    const title = removeHighlight(item.title || item.long_title || sampleTitle(index + 1))
     const cover = normalizeMediaCover(item.pic || item.cover)
     const url = resolveUserSampleUrl(item)
     const play = parseCountNumber(item.play)

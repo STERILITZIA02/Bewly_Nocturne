@@ -46,45 +46,45 @@ withDefaults(defineProps<{
 }
 
 .bew-close-button--small {
-  width: 24px;
-  height: 24px;
+  width: var(--bew-icon-button-size-sm);
+  height: var(--bew-icon-button-size-sm);
 
   svg {
-    width: 14px;
-    height: 14px;
+    width: var(--bew-icon-size-xs);
+    height: var(--bew-icon-size-xs);
   }
 }
 
 .bew-close-button--medium {
-  width: 32px;
-  height: 32px;
+  width: var(--bew-icon-button-size-md);
+  height: var(--bew-icon-button-size-md);
 
   svg {
-    width: 16px;
-    height: 16px;
+    width: var(--bew-icon-size-sm);
+    height: var(--bew-icon-size-sm);
   }
 }
 
 .bew-close-button--large {
-  width: 44px;
-  height: 44px;
+  width: var(--bew-icon-button-size-lg);
+  height: var(--bew-icon-button-size-lg);
 
   svg {
-    width: 20px;
-    height: 20px;
+    width: var(--bew-icon-size-md);
+    height: var(--bew-icon-size-md);
   }
 }
 
 .bew-close-button--overlay {
-  color: white;
-  background: rgb(0 0 0 / 72%);
+  color: var(--bew-on-overlay-color);
+  background: var(--bew-overlay-background);
   border-color: transparent;
   box-shadow: none;
   backdrop-filter: none;
 
   &:hover {
-    color: white;
-    background: rgb(0 0 0 / 84%);
+    color: var(--bew-on-overlay-color);
+    background: var(--bew-overlay-background-hover);
   }
 }
 </style>

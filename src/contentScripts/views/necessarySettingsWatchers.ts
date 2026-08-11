@@ -9,6 +9,7 @@ import { appAuthTokens, FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, lo
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
+import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clipboardSelection'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
@@ -455,13 +456,14 @@ export function setupNecessarySettingsWatchers() {
           if (!clipboardData)
             return
 
-          const text = clipboardData.getData('text/plain')
-          if (!text)
+          const selection = getClipboardSelection(e)
+          if (!selection)
             return
+          const { text } = selection
 
           // Only process text that looks like a Bilibili share text or contains Bilibili URLs
           const isBilibiliShare = /【.+?】\s*https?:\/\//.test(text)
-          const hasBilibiliUrl = /https?:\/\/(?:www\.)?bilibili\.com\//.test(text) || /https?:\/\/b23\.tv\//.test(text)
+          const hasBilibiliUrl = /https?:\/\/(?:[^\s.]+\.)*bilibili\.com\//i.test(text) || /https?:\/\/b23\.tv\//i.test(text)
 
           if (isBilibiliShare || hasBilibiliUrl) {
             const cleanedText = cleanBilibiliShareText(text, {
@@ -470,8 +472,20 @@ export function setupNecessarySettingsWatchers() {
             })
 
             if (cleanedText !== text) {
+              const cleanText = (value: string) => cleanBilibiliShareText(value, {
+                includeTitle: settings.value.cleanShareLinkIncludeTitle,
+                removeTrackingParams: settings.value.cleanShareLinkRemoveTrackingParams,
+              })
+              const cleanedHtml = selection.html
+                ? cleanClipboardSelectionHtml(selection.html, cleanText, cleanedText)
+                : undefined
+              if (selection.html && !cleanedHtml)
+                return
+
               e.preventDefault()
               clipboardData.setData('text/plain', cleanedText)
+              if (cleanedHtml)
+                clipboardData.setData('text/html', cleanedHtml)
             }
           }
         }
@@ -481,6 +495,11 @@ export function setupNecessarySettingsWatchers() {
     },
     { immediate: true },
   )
+
+  onScopeDispose(() => {
+    if (cleanShareLinkCopyHandler)
+      document.removeEventListener('copy', cleanShareLinkCopyHandler, true)
+  })
 
   function applyOuterTopBarPolicy() {
     const outerTopBarsSuppressed = !isInIframe() && isHomePage() && iframePageActive.value

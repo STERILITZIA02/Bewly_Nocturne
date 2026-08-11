@@ -589,9 +589,8 @@ settings:
   following_inactive_days_desc: 套用『用跟緊啲人新版面』之後個功能就會生效。同你自己加嘅用戶黑名單冇關，只係改咗『跟緊啲人』頁面嘅推薦內容。
   preserve_for_you_state: 留存估你心水切換前狀態
   preserve_for_you_state_desc: 喺dock欄切換到其它頁面嗰陣，留存估你心水頁面嘅瀏覽狀態，返嚟嗰陣保持切換前嘅內容
-  use_search_page_mode: 主頁使用搵嘢頁模式
-  settings_shared_with_the_search_page: 同搵嘢頁共用嘅設定
-  settings_shared_with_the_search_page_desc: 呢啲設定同搵嘢頁嗰度共用。
+  show_standalone_search_page: 單獨顯示搵嘢頁
+  show_standalone_search_page_desc: 關閉時，搵嘢頁會合併到主頁，同時喺 Dock 隱藏。
   home_tabs_adjustment: 分頁欄調整
   home_tabs_adjustment_desc: 第一個啓用嘅分頁項目會係開始頁面。
   fixed_home_tabs_on_home_page: 固定主頁分頁欄
@@ -991,6 +990,14 @@ video_card:
   video_removed: 經已鏟咗條片
   watched: 睇過
   visited_recently: 近一個月內睇過
+  highlight_high_like: 高讚
+  highlight_high_engagement: 高互動
+  highlight_million_views: 百萬播放
+  highlight_extra_long: 超長影片
+  highlight_long: 長影片
+  watch_later_unavailable: 攞唔到呢條片嘅陣間至睇資料
+  watch_later_update_failed: 更新陣間至睇失敗
+  feedback_unavailable: 攞唔到意見選項
 home:
   web_recommendation_risk_cooldown: 推薦請求觸發風控，暫停咗 {seconds} 秒，請遲啲再試
   web_recommendation_risk_fallback_active: 已使用無 Cookie 推薦結果，並暫停之後嘅請求 {seconds} 秒
@@ -1124,3 +1131,104 @@ search_page:
   hot_search_ranking: 熱搜排行榜
   loading: 載入緊...
   no_hot_search_data: 暫時冇熱搜資料
+
+search:
+  page_title: 搜尋 - 嗶哩嗶哩
+  results_page_title: '{keyword} - 搜尋 - 嗶哩嗶哩'
+  result_count: 搵到 {count} 個結果
+  categories:
+    all: 綜合
+    video: 影片
+    bangumi: 番劇
+    media_ft: 影視
+    user: 用戶
+    live: 直播
+    article: 專欄
+  filters:
+    order: 排序
+    more: 更多篩選
+    duration: 時長
+    date: 日期
+    start_date: 開始日期
+    end_date: 結束日期
+    to: 至
+    user_type: 用戶類型
+    order_relevance: 綜合排序
+    order_most_played: 最多播放
+    order_latest: 最新發佈
+    order_most_danmaku: 最多彈幕
+    order_most_favorited: 最多收藏
+    duration_all: 全部時長
+    duration_under_10: 10 分鐘以下
+    duration_10_30: 10–30 分鐘
+    duration_30_60: 30–60 分鐘
+    duration_over_60: 60 分鐘以上
+    date_all: 全部日期
+    date_day: 一日內
+    date_week: 一星期內
+    date_halfyear: 半年內
+    user_order_default: 預設排序
+    user_order_fans_desc: 粉絲數由高至低
+    user_order_fans_asc: 粉絲數由低至高
+    user_order_level_desc: 等級由高至低
+    user_order_level_asc: 等級由低至高
+    user_type_all: 全部用戶
+    user_type_uploader: UP 主
+    user_type_normal: 普通用戶
+    user_type_verified: 認證用戶
+  errors:
+    failed: 搜尋失敗，請遲啲再試
+    exception: 搜尋出錯，請遲啲再試
+  pagination:
+    previous: 上一頁
+    next: 下一頁
+    page: 第 {page} 頁
+  date_picker:
+    start_date: 開始日期
+    month: '{month} 月'
+    year: '{year} 年'
+    weekday_sunday: 日
+    weekday_monday: 一
+    weekday_tuesday: 二
+    weekday_wednesday: 三
+    weekday_thursday: 四
+    weekday_friday: 五
+    weekday_saturday: 六
+    open_calendar: 打開日曆
+    previous_year: 上一年
+    next_year: 下一年
+    previous_month: 上個月
+    next_month: 下個月
+    select_date: 揀 {date}
+    clear: 清除
+    today: 今日
+  live:
+    all: 全部
+    rooms: 直播間
+    streamers: 主播
+    more_streamers: 睇更多主播（{count}+）
+  media:
+    select_episode: 選集
+    score: '{score} 分'
+    episode_count: 共 {count} 話
+    premiere: '首播：{date}'
+    watch_now: 即刻睇
+    other: 其他
+  sections:
+    activities: 活動
+    schedule: 賽程日曆
+  user:
+    fans: '粉絲：{count}'
+    videos: '影片：{count}'
+    follow: '+ 關注'
+    following: 已關注
+    no_signature: 呢個人好懶，什麼都沒有寫~
+    live: 直播中
+    submissions_count: '{count}個投稿'
+    followers_count: '{count}粉絲'
+    videos_count: '{count} 條片'
+    sample_title: '稿件 {index}'
+  esports:
+    finished: 已結束
+    not_started: 未開始
+    in_progress: 進行中

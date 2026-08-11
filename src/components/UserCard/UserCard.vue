@@ -1,9 +1,11 @@
 <script lang="ts" setup>
 import DOMPurify from 'dompurify'
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import ALink from '~/components/ALink.vue'
 import api from '~/utils/api'
+import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
 import { getCSRF } from '~/utils/main'
 
@@ -38,6 +40,7 @@ const props = withDefaults(defineProps<UserCardProps>(), {
 const emit = defineEmits<{
   followStateChanged: [mid: number, isFollowing: boolean]
 }>()
+const { t } = useI18n()
 
 interface UserSample {
   id: string
@@ -63,7 +66,7 @@ watch(() => props.isFollowed, (newVal) => {
 const followButtonText = computed(() => {
   if (isFollowLoading.value)
     return '...'
-  return isFollowing.value ? '已关注' : '+ 关注'
+  return isFollowing.value ? t('search.user.following') : t('search.user.follow')
 })
 
 const levelIcons: string[] = [
@@ -78,16 +81,6 @@ const levelIcons: string[] = [
 
 function getLvIcon(level: number): string {
   return levelIcons[level] || LV0_ICON
-}
-
-// 格式化数字
-function formatNumber(num: number | undefined) {
-  if (!num)
-    return '0'
-  if (num >= 10000) {
-    return `${(num / 10000).toFixed(1)}万`
-  }
-  return num.toString()
 }
 
 function openUserSpace() {
@@ -199,7 +192,7 @@ async function handleFollowClick(e: Event) {
             text="sm $bew-text-2"
             truncate
           >
-            {{ sign || '这个人很懒，什么都没有写~' }}
+            {{ sign || $t('search.user.no_signature') }}
           </div>
 
           <!-- 统计信息行 -->
@@ -210,15 +203,15 @@ async function handleFollowClick(e: Event) {
           >
             <div v-if="liveStatus === 1" flex items-center gap-1 class="live-status-badge">
               <div i-tabler:live-photo w-3.5 h-3.5 />
-              <span>直播中</span>
+              <span>{{ $t('search.user.live') }}</span>
             </div>
             <div v-if="videos" flex items-center gap-1>
               <div i-tabler:video w-3.5 h-3.5 />
-              <span>{{ formatNumber(videos) }}个投稿</span>
+              <span>{{ $t('search.user.submissions_count', { count: numFormatter(videos) }) }}</span>
             </div>
             <div v-if="fans" flex items-center gap-1>
               <div i-tabler:users w-3.5 h-3.5 />
-              <span>{{ formatNumber(fans) }}粉丝</span>
+              <span>{{ $t('search.user.followers_count', { count: numFormatter(fans) }) }}</span>
             </div>
           </div>
 
@@ -303,8 +296,8 @@ async function handleFollowClick(e: Event) {
           flex items-center gap-3 text="xs $bew-text-3"
           mt-1
         >
-          <span v-if="fans !== undefined">{{ formatNumber(fans) }} 粉丝</span>
-          <span v-if="videos !== undefined">{{ videos }} 视频</span>
+          <span v-if="fans !== undefined">{{ $t('search.user.followers_count', { count: numFormatter(fans) }) }}</span>
+          <span v-if="videos !== undefined">{{ $t('search.user.videos_count', { count: videos }) }}</span>
         </div>
 
         <div
@@ -331,7 +324,7 @@ async function handleFollowClick(e: Event) {
               </div>
               <div v-if="sample.play !== undefined" class="sample-play">
                 <div i-tabler:player-play />
-                <span>{{ formatNumber(sample.play) }}</span>
+                <span>{{ numFormatter(sample.play) }}</span>
               </div>
             </div>
             <div class="sample-title" :title="sample.title">

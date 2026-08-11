@@ -399,7 +399,7 @@ function cancelListLayoutBreakpointEditing() {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-color-40);
+    outline: 2px solid var(--bew-theme-focus-ring);
     outline-offset: var(--bew-space-1);
   }
 }

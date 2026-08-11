@@ -15,6 +15,7 @@ interface Props {
   round?: boolean
   block?: boolean
   center?: boolean
+  nativeType?: 'button' | 'submit' | 'reset'
 }
 
 defineProps<Props>()
@@ -28,6 +29,7 @@ function handleClick(evt: MouseEvent) {
 
 <template>
   <button
+    :type="nativeType ?? 'button'"
     class="b-button bew-shape-smooth-rect"
     :class="[
       `b-button--type-${type ?? 'default'}`,
@@ -132,8 +134,8 @@ function handleClick(evt: MouseEvent) {
     --b-button-padding: var(--bew-space-2);
     --b-button-font-size: var(--bew-font-size-caption);
     --b-button-line-height: var(--bew-line-height-caption);
-    --b-button-icon-size: 14px;
-    --b-button-height: 28px;
+    --b-button-icon-size: var(--bew-icon-size-xs);
+    --b-button-height: var(--bew-control-height-sm);
   }
 
   &--size-large {
@@ -141,7 +143,7 @@ function handleClick(evt: MouseEvent) {
     --b-button-font-size: var(--bew-font-size-body);
     --b-button-line-height: var(--bew-line-height-body);
     --b-button-icon-size: var(--bew-control-icon-size);
-    --b-button-height: 40px;
+    --b-button-height: var(--bew-control-height-lg);
   }
 
   &--custom-color {

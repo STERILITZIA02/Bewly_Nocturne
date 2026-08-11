@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import DatePicker from './DatePicker.vue'
 
@@ -17,6 +18,7 @@ const customEndDate = defineModel<string>('customEndDate', { default: '' })
 
 const customStartInput = ref('')
 const customEndInput = ref('')
+const { t } = useI18n()
 
 // 更多筛选的展开状态
 const isMoreFiltersExpanded = ref(false)
@@ -70,7 +72,7 @@ const maxDate = computed(() => formatDate(new Date()))
   <div class="filter-bar" mb-4 flex="~ col" gap-3>
     <!-- 排序 + 更多筛选按钮 -->
     <div flex items-center gap-2>
-      <span text="sm $bew-text-2" min-w-12>排序</span>
+      <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.order') }}</span>
       <div flex items-center gap-2 flex-wrap flex-1>
         <button
           v-for="option in props.orderOptions"
@@ -89,7 +91,7 @@ const maxDate = computed(() => formatDate(new Date()))
         type="button"
         @click="isMoreFiltersExpanded = !isMoreFiltersExpanded"
       >
-        <span text="sm $bew-text-2">更多筛选</span>
+        <span text="sm $bew-text-2">{{ t('search.filters.more') }}</span>
         <div class="toggle-icon" :class="{ expanded: isMoreFiltersExpanded }">
           <div class="i-tabler:chevron-down" text="sm $bew-text-3" />
         </div>
@@ -100,7 +102,7 @@ const maxDate = computed(() => formatDate(new Date()))
     <div v-show="isMoreFiltersExpanded" flex="~ col" gap-3>
       <!-- 时长 -->
       <div flex items-center gap-2>
-        <span text="sm $bew-text-2" min-w-12>时长</span>
+        <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.duration') }}</span>
         <div flex items-center gap-2 flex-wrap>
           <button
             v-for="option in props.durationOptions"
@@ -117,7 +119,7 @@ const maxDate = computed(() => formatDate(new Date()))
 
       <!-- 日期 -->
       <div flex items-center gap-2>
-        <span text="sm $bew-text-2" min-w-12>日期</span>
+        <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.date') }}</span>
         <div flex items-center gap-2 flex-wrap>
           <button
             v-for="option in props.timeRangeOptions"
@@ -132,13 +134,13 @@ const maxDate = computed(() => formatDate(new Date()))
           <DatePicker
             v-model="customStartInput"
             :max="maxDate"
-            placeholder="开始日期"
+            :placeholder="t('search.filters.start_date')"
           />
-          <span text="sm $bew-text-3">至</span>
+          <span text="sm $bew-text-3">{{ t('search.filters.to') }}</span>
           <DatePicker
             v-model="customEndInput"
             :max="maxDate"
-            placeholder="结束日期"
+            :placeholder="t('search.filters.end_date')"
           />
         </div>
       </div>

@@ -50,6 +50,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+function convertUserSearchHighlight(user: any) {
+  return convertUserHighlight(user, index => t('search.user.sample_title', { index }))
+}
+
 const { haveScrollbar, handleBackToTop } = useBewlyApp()
 
 // 分页模式
@@ -315,6 +319,10 @@ watch(() => props.keyword, async (newKeyword, oldKeyword) => {
 watch(() => props.filters, () => {
   if (!props.keyword.trim())
     return
+  if (paginationMode.value === 'pagination') {
+    void handlePageChange(1, currentPage.value !== 1, false)
+    return
+  }
   resetAll()
   void performSearch(false)
 }, { deep: true })
@@ -506,87 +514,104 @@ function getSectionItemKey(type: string, item: any): string {
   }
 }
 
-async function handlePageChange(page: number) {
+async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
   if (paginationMode.value !== 'pagination')
-    return
+    return false
 
   const keyword = props.keyword.trim()
   if (!keyword)
-    return
+    return false
 
-  handleBackToTop()
-  await nextTick()
+  if (scrollToTop) {
+    handleBackToTop()
+    await nextTick()
+  }
 
   isPageChanging.value = true
+  try {
+    let success = false
+    const useVideoFilters = isVideoFilterActive.value
 
-  let success = false
-  const useVideoFilters = isVideoFilterActive.value
-
-  if (useVideoFilters) {
-    success = await search(
-      keyword,
-      params => api.search.searchVideo(params),
-      {
-        page,
-        page_size: 30,
-        ...buildVideoSearchParams({
-          loadMore: false,
-          context: context.value,
-          filters: props.filters,
-        }),
-      },
-    )
-  }
-  else {
-    success = await search(
-      keyword,
-      params => api.search.searchAll(params),
-      {
-        page,
-        page_size: 30,
-        context: page > 1 ? context.value : '',
-        web_roll_page: page,
-      },
-    )
-  }
-
-  if (!success || !lastResponse.value?.data)
-    return
-
-  const rawData = lastResponse.value.data
-
-  let normalizedData = rawData
-  if (useVideoFilters) {
-    const list = Array.isArray(rawData?.result) ? rawData.result : []
-    normalizedData = {
-      ...rawData,
-      result: [{ result_type: 'video', data: list }],
+    if (useVideoFilters) {
+      success = await search(
+        keyword,
+        params => api.search.searchVideo(params),
+        {
+          page,
+          page_size: 30,
+          ...buildVideoSearchParams({
+            loadMore: false,
+            context: context.value,
+            filters: props.filters,
+          }),
+        },
+      )
     }
-  }
-
-  const incomingSections = Array.isArray(normalizedData?.result) ? normalizedData.result : []
-
-  results.value = normalizedData
-
-  if (Array.isArray(results.value?.result)) {
-    const userSection = results.value.result.find((s: any) => s?.result_type === 'bili_user')
-    if (userSection && Array.isArray(userSection.data)) {
-      const mids = userSection.data.map((u: any) => u.mid).filter(Boolean)
-      await batchQueryUserRelations(mids)
+    else {
+      success = await search(
+        keyword,
+        params => api.search.searchAll(params),
+        {
+          page,
+          page_size: 30,
+          context: page > 1 ? context.value : '',
+          web_roll_page: page,
+        },
+      )
     }
+
+    if (!success || !lastResponse.value?.data)
+      return false
+
+    const rawData = lastResponse.value.data
+
+    let normalizedData = rawData
+    if (useVideoFilters) {
+      const list = Array.isArray(rawData?.result) ? rawData.result : []
+      normalizedData = {
+        ...rawData,
+        result: [{ result_type: 'video', data: list }],
+      }
+    }
+
+    const incomingSections = Array.isArray(normalizedData?.result) ? normalizedData.result : []
+
+    results.value = normalizedData
+
+    if (Array.isArray(results.value?.result)) {
+      const userSection = results.value.result.find((s: any) => s?.result_type === 'bili_user')
+      if (userSection && Array.isArray(userSection.data)) {
+        const mids = userSection.data.map((u: any) => u.mid).filter(Boolean)
+        await batchQueryUserRelations(mids)
+      }
+    }
+
+    const fallbackLength = incomingSections.reduce((sum: number, section: any) => {
+      if (Array.isArray(section?.data))
+        return sum + section.data.length
+      return sum
+    }, 0)
+    extractPagination(rawData, fallbackLength)
+    updatePage(page)
+    setHasMore(paginationHasMore.value)
+    if (updateUrl)
+      emit('updatePage', page)
+    return true
   }
+  finally {
+    isPageChanging.value = false
+  }
+}
 
-  const fallbackLength = incomingSections.reduce((sum: number, section: any) => {
-    if (Array.isArray(section?.data))
-      return sum + section.data.length
-    return sum
-  }, 0)
-  extractPagination(rawData, fallbackLength)
-  updatePage(page)
-  setHasMore(paginationHasMore.value)
-
-  isPageChanging.value = false
-  emit('updatePage', page)
+function refreshCurrentPage() {
+  return paginationMode.value === 'pagination'
+    ? handlePageChange(currentPage.value, false, false)
+    : performSearch(false)
+}
+function restorePage(page: number) {
+  return page === currentPage.value
+    ? Promise.resolve(true)
+    : handlePageChange(page, false, false)
 }
 
 function resetAll() {
@@ -616,6 +641,8 @@ defineExpose({
   updateUserRelation,
   currentPage,
   totalPages,
+  refreshCurrentPage,
+  restorePage,
 })
 </script>
 
@@ -629,7 +656,7 @@ defineExpose({
       <!-- 活动和游戏 -->
       <div v-if="!isInPaginationNonFirstPage && activityAndGameItems.length > 0">
         <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
-          活动
+          {{ t('search.sections.activities') }}
         </h3>
         <div class="activity-results" grid="~ cols-1 md:cols-2 lg:cols-3 gap-4">
           <a
@@ -672,7 +699,7 @@ defineExpose({
             && Array.isArray(section.data) && section.data.length"
         >
           <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
-            {{ section.result_type === 'media_ft' ? '影视' : '番剧' }}
+            {{ section.result_type === 'media_ft' ? t('search.categories.media_ft') : t('search.categories.bangumi') }}
           </h3>
           <!-- 影视 -->
           <div v-if="section.result_type === 'media_ft'" class="media-ft-highlight-grid">
@@ -695,7 +722,7 @@ defineExpose({
                 <div class="media-ft-highlight-title" text="lg $bew-text-1" font-medium v-html="item.title" />
                 <div class="media-ft-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
                   <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-bold>
-                    {{ item.media_score.score.toFixed(1) }} 分
+                    {{ t('search.media.score', { score: item.media_score.score.toFixed(1) }) }}
                   </span>
                   <span v-if="item.areas">{{ item.areas }}</span>
                   <span v-if="item.styles">{{ item.styles }}</span>
@@ -721,7 +748,7 @@ defineExpose({
                     :href="item.goto_url || item.url || `https://www.bilibili.com/bangumi/media/md${item.media_id}`"
                     target="_blank"
                   >
-                    立即观看
+                    {{ t('search.media.watch_now') }}
                   </a>
                 </div>
               </div>
@@ -746,11 +773,11 @@ defineExpose({
                 </div>
                 <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
                   <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
-                    {{ bangumi.score?.toFixed(1) }} 分
+                    {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
                   </span>
                   <span v-if="bangumi.areas">{{ bangumi.areas }}</span>
-                  <span v-if="bangumi.episodeCount">共 {{ bangumi.episodeCount }} 话</span>
-                  <span v-if="bangumi.publishDateFormatted">首播：{{ bangumi.publishDateFormatted }}</span>
+                  <span v-if="bangumi.episodeCount">{{ t('search.media.episode_count', { count: bangumi.episodeCount }) }}</span>
+                  <span v-if="bangumi.publishDateFormatted">{{ t('search.media.premiere', { date: bangumi.publishDateFormatted }) }}</span>
                 </div>
                 <div v-if="bangumi.desc" class="bangumi-highlight-desc">
                   {{ bangumi.desc }}
@@ -766,7 +793,7 @@ defineExpose({
                 />
                 <div class="bangumi-highlight-actions" flex items-center gap-3>
                   <a class="bangumi-highlight-button" :href="bangumi.url" target="_blank">
-                    {{ bangumi.buttonText || '立即观看' }}
+                    {{ bangumi.buttonText || t('search.media.watch_now') }}
                   </a>
                 </div>
               </div>
@@ -780,7 +807,7 @@ defineExpose({
         <!-- 赛事 -->
         <div v-else-if="!isInPaginationNonFirstPage && section?.result_type === 'esports' && Array.isArray(section.data) && section.data.length">
           <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
-            赛程日历
+            {{ t('search.sections.schedule') }}
           </h3>
           <div class="esports-grid" flex="~ wrap gap-4" mb-4>
             <template v-for="contestData in section.data" :key="`esports-data-${contestData.contest?.[0]?.ID}`">
@@ -804,11 +831,11 @@ defineExpose({
         <!-- 用户 -->
         <div v-else-if="!isInPaginationNonFirstPage && section?.result_type === 'bili_user' && Array.isArray(section.data) && section.data.length">
           <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
-            用户
+            {{ t('search.categories.user') }}
           </h3>
           <div class="user-highlight-grid">
             <div
-              v-for="user in section.data.map(convertUserHighlight)"
+              v-for="user in section.data.map(convertUserSearchHighlight)"
               :key="user.mid"
               class="user-highlight-card"
             >
@@ -841,8 +868,8 @@ defineExpose({
                     </span>
                   </div>
                   <div text="xs $bew-text-3" flex items-center gap-3>
-                    <span>粉丝：{{ formatNumber(user.fans || 0) }}</span>
-                    <span>视频：{{ user.videos || 0 }}</span>
+                    <span>{{ t('search.user.fans', { count: formatNumber(user.fans || 0) }) }}</span>
+                    <span>{{ t('search.user.videos', { count: user.videos || 0 }) }}</span>
                   </div>
                   <div v-if="user.desc" class="user-highlight-desc" mt-1>
                     {{ user.desc }}
@@ -854,7 +881,7 @@ defineExpose({
                   :disabled="userRelations[user.mid]?.isLoading"
                   @click.stop="handleUserFollow(user.mid)"
                 >
-                  {{ userRelations[user.mid]?.isLoading ? '...' : userRelations[user.mid]?.isFollowing ? '已关注' : '+ 关注' }}
+                  {{ userRelations[user.mid]?.isLoading ? '...' : userRelations[user.mid]?.isFollowing ? t('search.user.following') : t('search.user.follow') }}
                 </button>
               </div>
               <div
@@ -910,7 +937,7 @@ defineExpose({
       <!-- 视频（放在最后，因为有滚动加载） -->
       <div>
         <h3 v-if="videoList.length > 0" text="lg $bew-text-1" font-medium mb-3 mt-6>
-          视频
+          {{ t('search.categories.video') }}
         </h3>
         <VideoCardGrid
           :items="videoList"

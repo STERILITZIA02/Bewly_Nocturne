@@ -29,6 +29,7 @@
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.
   --bew-icon-size-sm: 16px;
+  --bew-icon-size-xs: 14px;
   --bew-icon-size-md: 20px;
   --bew-icon-size-lg: 24px;
   --bew-icon-size-xl: 32px;
@@ -77,7 +78,12 @@
   --bew-layout-sidebar-viewport-offset: 140px;
   --bew-layout-dialog-width: 420px;
   --bew-layout-drawer-max-width: 1400px;
-  --bew-layout-home-search-stage-height: 510px;
+  --bew-layout-home-search-stage-lead-height: 156px;
+  --bew-layout-home-search-stage-tail-height: 116px;
+  --bew-layout-home-search-stage-height: calc(
+    var(--bew-layout-home-search-stage-lead-height) + var(--bew-top-bar-primary-control-height) +
+      var(--bew-layout-home-search-stage-tail-height)
+  );
   // #endregion
 
   // #region Stacking
@@ -136,6 +142,14 @@
   --bew-control-background-white: color-mix(in oklab, var(--bew-elevated-solid), transparent 80%);
   --bew-control-border-color: transparent;
   --bew-floating-control-size: 40px;
+  --bew-control-height-sm: 28px;
+  --bew-control-height-lg: 40px;
+  --bew-icon-button-size-sm: 24px;
+  --bew-icon-button-size-md: 32px;
+  --bew-icon-button-size-lg: 44px;
+  --bew-overlay-background: rgb(0 0 0 / 72%);
+  --bew-overlay-background-hover: rgb(0 0 0 / 84%);
+  --bew-on-overlay-color: white;
   --bew-dock-control-size: 35px;
   --bew-dock-control-size-lg: 45px;
   --bew-floating-control-icon-size: var(--bew-icon-size-md);
@@ -177,6 +191,16 @@
   --bew-liquid-indicator-paint-duration: var(--bew-duration-normal);
 
   --bew-top-bar-height: 64px;
+  --bew-popover-gap: var(--bew-space-1);
+  --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
+  --bew-date-picker-input-width: 115px;
+  --bew-date-picker-panel-width: 280px;
+  --bew-date-picker-day-size: 32px;
+  --bew-media-episode-menu-max-height: 400px;
+  --bew-native-comment-tag-font-size: 11px;
+  --bew-native-comment-tag-line-height: 1.4;
+  --bew-native-comment-tag-padding-block: 1px;
+  --bew-native-comment-tag-radius: 3px;
 
   // #region Filters
   // Use this in all components (except dialogs) if you want to add a frosted glass effect

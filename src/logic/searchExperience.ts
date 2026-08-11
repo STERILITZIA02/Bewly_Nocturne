@@ -1,4 +1,5 @@
-import { readonly, ref, shallowRef } from 'vue'
+import type { MaybeRefOrGetter } from 'vue'
+import { readonly, ref, shallowRef, toValue, watch } from 'vue'
 
 import api from '~/utils/api'
 
@@ -19,6 +20,11 @@ export interface SearchRecommendationItem {
   url: string
 }
 
+interface SearchExperienceInterest {
+  hotSearch: MaybeRefOrGetter<boolean>
+  recommendation: MaybeRefOrGetter<boolean>
+}
+
 const CACHE_TTL_MS = 8 * 60 * 1000
 const REFRESH_INTERVAL_MS = 10 * 60 * 1000
 
@@ -32,9 +38,16 @@ let recommendationUpdatedAt = 0
 let hotSearchRequest: Promise<void> | null = null
 let recommendationRequest: Promise<void> | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
-let consumerCount = 0
+let hotSearchConsumerCount = 0
+let recommendationConsumerCount = 0
+
+function hasConsumers() {
+  return hotSearchConsumerCount > 0 || recommendationConsumerCount > 0
+}
 
 export async function loadSharedHotSearch(force = false): Promise<void> {
+  if (hotSearchConsumerCount === 0)
+    return
   if (!force && hotSearchList.value.length > 0 && Date.now() - hotSearchUpdatedAt < CACHE_TTL_MS)
     return
   if (hotSearchRequest)
@@ -48,6 +61,7 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
         hotSearchUpdatedAt = Date.now()
       }
     })
+    .catch(error => console.error('Failed to load hot search list:', error))
     .finally(() => {
       hotSearchRequest = null
       isLoadingHotSearch.value = false
@@ -56,6 +70,8 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
 }
 
 export async function loadSharedSearchRecommendation(force = false): Promise<void> {
+  if (recommendationConsumerCount === 0)
+    return
   if (!force && searchRecommendation.value && Date.now() - recommendationUpdatedAt < CACHE_TTL_MS)
     return
   if (recommendationRequest)
@@ -69,6 +85,7 @@ export async function loadSharedSearchRecommendation(force = false): Promise<voi
         recommendationUpdatedAt = Date.now()
       }
     })
+    .catch(error => console.error('Failed to load search recommendation:', error))
     .finally(() => {
       recommendationRequest = null
       isLoadingSearchRecommendation.value = false
@@ -76,54 +93,73 @@ export async function loadSharedSearchRecommendation(force = false): Promise<voi
   return recommendationRequest
 }
 
-function scheduleRefresh() {
+function clearRefreshTimer() {
   if (refreshTimer !== undefined)
     clearTimeout(refreshTimer)
-  if (consumerCount === 0 || document.hidden)
+  refreshTimer = undefined
+}
+
+function scheduleRefresh() {
+  clearRefreshTimer()
+  if (!hasConsumers() || document.hidden)
     return
 
   refreshTimer = setTimeout(async () => {
     refreshTimer = undefined
     await Promise.allSettled([
-      loadSharedHotSearch(true),
-      loadSharedSearchRecommendation(true),
+      hotSearchConsumerCount > 0 ? loadSharedHotSearch(true) : Promise.resolve(),
+      recommendationConsumerCount > 0 ? loadSharedSearchRecommendation(true) : Promise.resolve(),
     ])
     scheduleRefresh()
   }, REFRESH_INTERVAL_MS)
 }
 
 function handleVisibilityChange() {
-  if (document.hidden) {
-    if (refreshTimer !== undefined) {
-      clearTimeout(refreshTimer)
-      refreshTimer = undefined
-    }
+  if (document.hidden)
+    clearRefreshTimer()
+  else
+    scheduleRefresh()
+}
+
+function updateConsumerCounts(previous: { hotSearch: boolean, recommendation: boolean }, next: typeof previous) {
+  hotSearchConsumerCount += Number(next.hotSearch) - Number(previous.hotSearch)
+  recommendationConsumerCount += Number(next.recommendation) - Number(previous.recommendation)
+
+  if (!previous.hotSearch && next.hotSearch)
+    void loadSharedHotSearch()
+  if (!previous.recommendation && next.recommendation)
+    void loadSharedSearchRecommendation()
+
+  if (!previous.hotSearch && !previous.recommendation && hasConsumers())
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+  if (!hasConsumers()) {
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
+    clearRefreshTimer()
   }
   else {
     scheduleRefresh()
   }
 }
 
-export function acquireSearchExperience() {
-  consumerCount++
-  if (consumerCount === 1) {
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    scheduleRefresh()
-  }
+export function acquireSearchExperience(interest: SearchExperienceInterest) {
+  let current = { hotSearch: false, recommendation: false }
+  const stop = watch(
+    [() => Boolean(toValue(interest.hotSearch)), () => Boolean(toValue(interest.recommendation))],
+    ([hotSearch, recommendation]) => {
+      const next = { hotSearch, recommendation }
+      updateConsumerCounts(current, next)
+      current = next
+    },
+    { immediate: true },
+  )
 
   let released = false
   return () => {
     if (released)
       return
     released = true
-    consumerCount--
-    if (consumerCount === 0) {
-      document.removeEventListener('visibilitychange', handleVisibilityChange)
-      if (refreshTimer !== undefined) {
-        clearTimeout(refreshTimer)
-        refreshTimer = undefined
-      }
-    }
+    stop()
+    updateConsumerCounts(current, { hotSearch: false, recommendation: false })
   }
 }
 

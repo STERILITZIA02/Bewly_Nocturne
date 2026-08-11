@@ -178,47 +178,50 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
 }
 
 // 翻页模式的页码切换
-async function handlePageChange(page: number) {
+async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
   if (paginationMode.value !== 'pagination')
-    return
+    return false
 
   const keyword = props.keyword.trim()
   if (!keyword)
-    return
+    return false
 
   // 先滚动到顶部
-  handleBackToTop()
-  await nextTick()
+  if (scrollToTop) {
+    handleBackToTop()
+    await nextTick()
+  }
 
   isPageChanging.value = true
 
-  const success = await search(
-    keyword,
-    params => api.search.searchBangumi(params),
-    {
-      page,
-      pagesize: 30,
-    },
-  )
+  try {
+    const success = await search(keyword, params => api.search.searchBangumi(params), { page, pagesize: 30 })
+    if (!success || !lastResponse.value?.data)
+      return false
+    const rawData = lastResponse.value.data
+    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
+    results.value = incomingList
+    extractPagination(rawData, incomingList.length)
+    updatePage(page)
+    setHasMore(paginationHasMore.value)
+    if (updateUrl)
+      emit('updatePage', page)
+    return true
+  }
+  finally {
+    isPageChanging.value = false
+  }
+}
 
-  if (!success || !lastResponse.value?.data)
-    return
-
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-
-  // 替换结果
-  results.value = incomingList
-
-  // 提取分页信息
-  extractPagination(rawData, incomingList.length)
-  updatePage(page)
-  setHasMore(paginationHasMore.value)
-
-  isPageChanging.value = false
-
-  // 更新 URL 中的页码参数
-  emit('updatePage', page)
+function refreshCurrentPage() {
+  return paginationMode.value === 'pagination'
+    ? handlePageChange(currentPage.value, false, false)
+    : performSearch(false)
+}
+function restorePage(page: number) {
+  return page === currentPage.value
+    ? Promise.resolve(true)
+    : handlePageChange(page, false, false)
 }
 
 function resetAll() {
@@ -237,6 +240,8 @@ defineExpose({
   requestLoadMore,
   currentPage,
   totalPages,
+  refreshCurrentPage,
+  restorePage,
 })
 </script>
 
@@ -277,16 +282,16 @@ defineExpose({
             </div>
             <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
               <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
-                {{ bangumi.score?.toFixed(1) }} 分
+                {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
               </span>
               <span v-if="bangumi.areas">
                 {{ bangumi.areas }}
               </span>
               <span v-if="bangumi.episodeCount">
-                共 {{ bangumi.episodeCount }} 话
+                {{ t('search.media.episode_count', { count: bangumi.episodeCount }) }}
               </span>
               <span v-if="bangumi.publishDateFormatted">
-                首播：{{ bangumi.publishDateFormatted }}
+                {{ t('search.media.premiere', { date: bangumi.publishDateFormatted }) }}
               </span>
             </div>
             <div v-if="bangumi.desc" class="bangumi-highlight-desc">
@@ -310,7 +315,7 @@ defineExpose({
                 target="_blank"
                 @click.stop
               >
-                {{ bangumi.buttonText || '立即观看' }}
+                {{ bangumi.buttonText || t('search.media.watch_now') }}
               </a>
             </div>
           </div>
@@ -318,7 +323,7 @@ defineExpose({
       </div>
       <div v-if="bangumiGroups.movie.length" space-y-3>
         <h3 text="lg $bew-text-1" font-medium>
-          其它
+          {{ t('search.media.other') }}
         </h3>
         <div class="bangumi-highlight-grid">
           <div
@@ -346,7 +351,7 @@ defineExpose({
               </div>
               <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
                 <span v-if="item.score" text="$bew-theme-foreground" font-bold>
-                  {{ item.score?.toFixed(1) }} 分
+                  {{ t('search.media.score', { score: item.score?.toFixed(1) }) }}
                 </span>
                 <span v-if="item.areas">
                   {{ item.areas }}
@@ -373,7 +378,7 @@ defineExpose({
                   target="_blank"
                   @click.stop
                 >
-                  立即观看
+                  {{ t('search.media.watch_now') }}
                 </a>
               </div>
             </div>
