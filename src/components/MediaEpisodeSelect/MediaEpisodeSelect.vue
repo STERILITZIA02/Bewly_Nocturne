@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
+import { MEDIA_EPISODE_MENU_MAX_HEIGHT } from '~/constants/layout'
 
 interface Episode {
   id: string
@@ -20,17 +22,17 @@ const props = defineProps<{
 
 const { mainAppRef } = useBewlyApp()
 const currentLocationHref = useCurrentLocationHref()
+const { t } = useI18n()
 
 const isOpen = ref(false)
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
-const DROPDOWN_MAX_HEIGHT = 400
 const {
   position: dropdownPosition,
   scheduleUpdate: schedulePositionUpdate,
   start: startPositionTracking,
   stop: stopPositionTracking,
-} = useFloatingMenuPosition(containerRef, dropdownRef, DROPDOWN_MAX_HEIGHT)
+} = useFloatingMenuPosition(containerRef, dropdownRef, MEDIA_EPISODE_MENU_MAX_HEIGHT)
 
 const normalizedEpisodes = computed(() => {
   return Array.isArray(props.episodes) ? props.episodes : []
@@ -51,7 +53,7 @@ const defaultLabel = computed(() => {
     return currentEpisode.title
   if (normalizedEpisodes.value.length > 0)
     return normalizedEpisodes.value[0].title
-  return '选集'
+  return t('search.media.select_episode')
 })
 
 function toggleDropdown() {

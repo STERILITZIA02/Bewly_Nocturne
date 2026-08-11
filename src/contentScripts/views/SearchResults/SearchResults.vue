@@ -2,6 +2,7 @@
 import { useTitle } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -23,6 +24,7 @@ function getKeywordFromUrl(): string {
 }
 
 const keyword = ref<string>(getKeywordFromUrl())
+const { t } = useI18n()
 const normalizedKeyword = computed(() => (keyword.value || '').trim())
 const currentLocationHref = useCurrentLocationHref()
 let restoringFromUrl = false
@@ -31,9 +33,9 @@ let urlRestoreGeneration = 0
 // 设置页面标题
 const pageTitle = computed(() => {
   if (!normalizedKeyword.value) {
-    return '搜索 - 哔哩哔哩'
+    return t('search.page_title')
   }
-  return `${normalizedKeyword.value} - 搜索结果 - 哔哩哔哩`
+  return t('search.results_page_title', { keyword: normalizedKeyword.value })
 })
 useTitle(pageTitle)
 
@@ -110,105 +112,105 @@ const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const { searchKeyword: topBarSearchKeyword } = storeToRefs(topBarStore)
 
-const videoOrderOptions = [
-  { value: '', label: '综合排序' },
-  { value: 'click', label: '最多播放' },
-  { value: 'pubdate', label: '最新发布' },
-  { value: 'dm', label: '最多弹幕' },
-  { value: 'stow', label: '最多收藏' },
-]
+const videoOrderOptions = computed(() => [
+  { value: '', label: t('search.filters.order_relevance') },
+  { value: 'click', label: t('search.filters.order_most_played') },
+  { value: 'pubdate', label: t('search.filters.order_latest') },
+  { value: 'dm', label: t('search.filters.order_most_danmaku') },
+  { value: 'stow', label: t('search.filters.order_most_favorited') },
+])
 
-const durationOptions = [
-  { value: 0, label: '全部时长' },
-  { value: 1, label: '10分钟以下' },
-  { value: 2, label: '10-30分钟' },
-  { value: 3, label: '30-60分钟' },
-  { value: 4, label: '60分钟以上' },
-]
+const durationOptions = computed(() => [
+  { value: 0, label: t('search.filters.duration_all') },
+  { value: 1, label: t('search.filters.duration_under_10') },
+  { value: 2, label: t('search.filters.duration_10_30') },
+  { value: 3, label: t('search.filters.duration_30_60') },
+  { value: 4, label: t('search.filters.duration_over_60') },
+])
 
-const timeRangeOptions = [
-  { value: 'all', label: '全部日期' },
-  { value: 'day', label: '最近一天' },
-  { value: 'week', label: '最近一周' },
-  { value: 'halfyear', label: '最近半年' },
-]
+const timeRangeOptions = computed(() => [
+  { value: 'all', label: t('search.filters.date_all') },
+  { value: 'day', label: t('search.filters.date_day') },
+  { value: 'week', label: t('search.filters.date_week') },
+  { value: 'halfyear', label: t('search.filters.date_halfyear') },
+])
 
-const userOrderOptions = [
-  { value: '', label: '默认排序' },
-  { value: 'fans', label: '粉丝数由高到低' },
-  { value: 'fans_desc', label: '粉丝数由低到高' },
-  { value: 'level', label: 'Lv等级由高到低' },
-  { value: 'level_desc', label: 'Lv等级由低到高' },
-]
+const userOrderOptions = computed(() => [
+  { value: '', label: t('search.filters.user_order_default') },
+  { value: 'fans', label: t('search.filters.user_order_fans_desc') },
+  { value: 'fans_desc', label: t('search.filters.user_order_fans_asc') },
+  { value: 'level', label: t('search.filters.user_order_level_desc') },
+  { value: 'level_desc', label: t('search.filters.user_order_level_asc') },
+])
 
-const userTypeOptions = [
-  { value: 0, label: '全部用户' },
-  { value: 1, label: 'UP主用户' },
-  { value: 2, label: '普通用户' },
-  { value: 3, label: '认证用户' },
-]
+const userTypeOptions = computed(() => [
+  { value: 0, label: t('search.filters.user_type_all') },
+  { value: 1, label: t('search.filters.user_type_uploader') },
+  { value: 2, label: t('search.filters.user_type_normal') },
+  { value: 3, label: t('search.filters.user_type_verified') },
+])
 
-const categories: ReadonlyArray<SearchCategoryOption> = [
-  { value: 'all', label: '综合', icon: 'i-tabler:search' },
-  { value: 'video', label: '视频', icon: 'i-tabler:video' },
-  { value: 'bangumi', label: '番剧', icon: 'i-tabler:movie' },
-  { value: 'media_ft', label: '影视', icon: 'i-tabler:movie-off' },
-  { value: 'user', label: '用户', icon: 'i-tabler:user' },
-  { value: 'live', label: '直播', icon: 'i-tabler:broadcast' },
-  { value: 'article', label: '专栏', icon: 'i-tabler:article' },
-]
+const categories = computed<ReadonlyArray<SearchCategoryOption>>(() => [
+  { value: 'all', label: t('search.categories.all'), icon: 'i-tabler:search' },
+  { value: 'video', label: t('search.categories.video'), icon: 'i-tabler:video' },
+  { value: 'bangumi', label: t('search.categories.bangumi'), icon: 'i-tabler:movie' },
+  { value: 'media_ft', label: t('search.categories.media_ft'), icon: 'i-tabler:movie-off' },
+  { value: 'user', label: t('search.categories.user'), icon: 'i-tabler:user' },
+  { value: 'live', label: t('search.categories.live'), icon: 'i-tabler:broadcast' },
+  { value: 'article', label: t('search.categories.article'), icon: 'i-tabler:article' },
+])
 
 // TODO: 分类数量等待真实聚合接口后再展示。
 
 const searchResultsPanelRef = ref<InstanceType<typeof SearchResultsPanel>>()
 
 // 监听 URL 变化（前进/后退或 pushstate）
-function handleUrlChange() {
+async function handleUrlChange() {
   const restoreGeneration = ++urlRestoreGeneration
+  const previousKeyword = normalizedKeyword.value
+  const previousCategory = currentCategory.value
+  const previousPage = currentPage.value
   restoringFromUrl = true
-  const newKeyword = getKeywordFromUrl()
-  if (newKeyword !== keyword.value) {
-    keyword.value = newKeyword
+  try {
+    const newKeyword = getKeywordFromUrl()
+    if (newKeyword !== keyword.value)
+      keyword.value = newKeyword
+
+    const filters = getFiltersFromUrl()
+    const categoryFromUrl = filters.category
+
+    currentCategory.value = categoryFromUrl
+    currentPage.value = filters.page
+    currentUserOrder.value = filters.userOrder
+    currentUserType.value = filters.userType
+    currentLiveSubCategory.value = filters.liveSubCategory
+    await nextTick()
+    if (restoreGeneration !== urlRestoreGeneration)
+      return
+
+    const sameSearch = previousKeyword === normalizedKeyword.value && previousCategory === categoryFromUrl
+    if (sameSearch && previousPage !== filters.page) {
+      const restored = await searchResultsPanelRef.value?.restoreCurrentPage(filters.page)
+      if (restoreGeneration !== urlRestoreGeneration)
+        return
+      if (!restored) {
+        currentPage.value = previousPage
+        const params = new URLSearchParams(window.location.search)
+        if (previousPage === 1)
+          params.delete('pn')
+        else
+          params.set('pn', String(previousPage))
+        history.replaceState({}, '', buildSearchResultsUrl(location.pathname, params, location.hash))
+      }
+    }
   }
-
-  // 从URL读取筛选条件并恢复状态
-  const filters = getFiltersFromUrl()
-  const categoryFromUrl = filters.category
-
-  // 恢复筛选条件
-  currentCategory.value = categoryFromUrl
-  currentPage.value = filters.page
-  // 视频筛选条件重置为默认值
-  currentVideoOrder.value = ''
-  currentDuration.value = 0
-  currentTimeRange.value = 'all'
-  customStartDate.value = ''
-  customEndDate.value = ''
-  // 恢复用户和直播筛选条件
-  currentUserOrder.value = filters.userOrder
-  currentUserType.value = filters.userType
-  currentLiveSubCategory.value = filters.liveSubCategory
-  void nextTick(() => {
+  finally {
     if (restoreGeneration === urlRestoreGeneration)
       restoringFromUrl = false
-  })
+  }
 }
 
-watch(currentLocationHref, handleUrlChange)
-
-// 监听关键词变化
-watch(() => keyword.value, async (newKeyword, oldKeyword) => {
-  const normalizedNew = (newKeyword || '').trim()
-  const normalizedOld = (oldKeyword || '').trim()
-
-  if (!normalizedNew)
-    return
-
-  if (normalizedNew === normalizedOld && newKeyword === oldKeyword)
-    return
-
-  handleUrlChange()
-})
+watch(currentLocationHref, () => void handleUrlChange())
 
 // 同步搜索关键词到 topBar
 watch(normalizedKeyword, (value) => {
@@ -275,6 +277,11 @@ function switchCategory(category: SearchCategory) {
   window.history.pushState({}, '', newUrl)
 }
 
+function handlePageUpdate(page: number) {
+  currentPage.value = page
+  updateUrlParams({ pn: page })
+}
+
 function initPageAction() {
   handleReachBottom.value = () => {
     if (!normalizedKeyword.value)
@@ -294,7 +301,7 @@ function initPageAction() {
     const urlParams = new URLSearchParams(window.location.search)
     const keyword = urlParams.get('keyword')
     if (keyword) {
-      handleUrlChange()
+      void searchResultsPanelRef.value?.refreshCurrentPage()
     }
     else {
       window.location.reload()
@@ -307,7 +314,7 @@ function initPageAction() {
 
 onMounted(() => {
   // 初始化 URL 参数和筛选条件
-  handleUrlChange()
+  void handleUrlChange()
   // 初始化页面操作
   initPageAction()
 })
@@ -354,7 +361,7 @@ onMounted(() => {
       :user-filters="userFilters"
       :live-filters="liveFilters"
       :initial-page="currentPage"
-      @update-page="(page: number) => updateUrlParams({ pn: page })"
+      @update-page="handlePageUpdate"
     />
   </div>
 </template>

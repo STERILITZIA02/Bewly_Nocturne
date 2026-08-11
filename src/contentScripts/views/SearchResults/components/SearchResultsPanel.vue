@@ -83,9 +83,19 @@ function handleUpdatePage(page: number) {
   emit('updatePage', page)
 }
 
+function refreshCurrentPage(): Promise<boolean> {
+  return currentPageRef.value?.refreshCurrentPage?.() ?? Promise.resolve(false)
+}
+
+function restoreCurrentPage(page: number): Promise<boolean> {
+  return currentPageRef.value?.restorePage?.(page) ?? Promise.resolve(false)
+}
+
 // 暴露给父组件
 defineExpose({
   handleReachBottom,
+  refreshCurrentPage,
+  restoreCurrentPage,
 })
 </script>
 

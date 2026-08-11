@@ -336,14 +336,18 @@ function toggleTabContentLoading(loading: boolean) {
 
 .home-search-stage__lead,
 .home-search-stage__tail {
-  height: calc((var(--bew-layout-home-search-stage-height) - var(--bew-top-bar-primary-control-height)) / 2);
   pointer-events: none;
 }
 
 .home-search-stage__lead {
+  height: var(--bew-layout-home-search-stage-lead-height);
   display: flex;
   align-items: flex-end;
   justify-content: center;
+}
+
+.home-search-stage__tail {
+  height: var(--bew-layout-home-search-stage-tail-height);
 }
 
 .home-search-stage__logo {

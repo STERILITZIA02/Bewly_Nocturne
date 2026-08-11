@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 const props = defineProps<{
   currentPage: number
@@ -11,6 +12,8 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'change', page: number): void
 }>()
+
+const { t } = useI18n()
 
 // 生成页码数组
 const pageNumbers = computed(() => {
@@ -90,6 +93,7 @@ function goToNextPage() {
     <button
       class="pagination-btn"
       :disabled="disabled || loading || currentPage === 1"
+      :aria-label="t('search.pagination.previous')"
       @click="goToPrevPage"
     >
       <div v-if="loading" class="i-tabler:loader-2 animate-spin" />
@@ -105,6 +109,8 @@ function goToNextPage() {
         class="pagination-btn"
         :class="{ active: page === currentPage, loading: loading && page === currentPage }"
         :disabled="disabled || loading"
+        :aria-label="t('search.pagination.page', { page })"
+        :aria-current="page === currentPage ? 'page' : undefined"
         @click="handlePageChange(page)"
       >
         <div v-if="loading && page === currentPage" class="i-tabler:loader-2 animate-spin" />
@@ -115,6 +121,7 @@ function goToNextPage() {
     <button
       class="pagination-btn"
       :disabled="disabled || loading || currentPage === totalPages"
+      :aria-label="t('search.pagination.next')"
       @click="goToNextPage"
     >
       <div v-if="loading" class="i-tabler:loader-2 animate-spin" />
@@ -151,11 +158,11 @@ function goToNextPage() {
   line-height: var(--bew-line-height-body);
   cursor: pointer;
   transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    border-color 0.3s ease,
-    box-shadow 0.3s ease,
-    transform 0.3s ease;
+    background-color var(--bew-duration-moderate) var(--bew-ease-out),
+    color var(--bew-duration-moderate) var(--bew-ease-out),
+    border-color var(--bew-duration-moderate) var(--bew-ease-out),
+    box-shadow var(--bew-duration-moderate) var(--bew-ease-out),
+    transform var(--bew-duration-moderate) var(--bew-ease-out);
 
   &:hover:not(:disabled):not(.active) {
     background-color: var(--bew-elevated-2);

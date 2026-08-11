@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import type { SearchCategory } from '../types'
 
@@ -23,6 +24,7 @@ export interface SearchRequestState<T = any> {
  * 管理搜索状态、错误处理和请求取消
  */
 export function useSearchRequest<T = any>(category: SearchCategory) {
+  const { t } = useI18n()
   const isLoading = ref(false)
   const error = ref('')
   const results = ref<T | null>(null)
@@ -71,7 +73,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
         return false
 
       if (!response || response.code !== 0) {
-        error.value = '搜索失败，请稍后重试'
+        error.value = t('search.errors.failed')
         return false
       }
 
@@ -84,7 +86,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
       if (activeRequestToken !== requestToken)
         return false
       console.error(`Search error for ${category}:`, err)
-      error.value = '搜索出错，请稍后重试'
+      error.value = t('search.errors.exception')
       return false
     }
     finally {

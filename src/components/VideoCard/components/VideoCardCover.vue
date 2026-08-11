@@ -302,6 +302,7 @@ function resetVideoElement(videoEl: HTMLVideoElement) {
 }
 
 function stopPreview(videoEl: HTMLVideoElement) {
+  previewSetupGeneration++
   cleanupPlayers()
   resetPreviewScrub()
   resetVideoElement(videoEl)
@@ -360,11 +361,35 @@ function cleanupPlayers() {
   isLoadingStream.value = false
 }
 
+function cleanupHlsPlayer(player: Hls) {
+  if (hls === player)
+    hls = null
+  player.destroy()
+}
+
 function isPreviewSetupCurrent(generation: number, url: string, videoEl: HTMLVideoElement) {
   return generation === previewSetupGeneration
     && videoRef.value === videoEl
     && props.previewVideoUrl === url
     && (props.isHover || isPreviewFullscreen.value)
+}
+
+function isHlsPlayerCurrent(player: Hls, generation: number, url: string, videoEl: HTMLVideoElement) {
+  return hls === player && isPreviewSetupCurrent(generation, url, videoEl)
+}
+
+function isFlvPlayerCurrent(player: flvjs.Player, generation: number, url: string, videoEl: HTMLVideoElement) {
+  return flvPlayer === player && isPreviewSetupCurrent(generation, url, videoEl)
+}
+
+function failPreviewSetup(generation: number, url: string, videoEl: HTMLVideoElement) {
+  if (!isPreviewSetupCurrent(generation, url, videoEl))
+    return
+  cleanupPlayers()
+  resetPreviewScrub()
+  resetVideoElement(videoEl)
+  isLoadingStream.value = false
+  emit('previewError')
 }
 
 async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generation: number) {
@@ -403,24 +428,23 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
         player.attachMediaElement(videoEl)
 
         player.on(flvjs.Events.LOADING_COMPLETE, () => {
-          if (flvPlayer === player)
+          if (isFlvPlayerCurrent(player, generation, url, videoEl))
             isLoadingStream.value = false
         })
 
         player.on(flvjs.Events.ERROR, () => {
-          if (flvPlayer !== player)
+          if (!isFlvPlayerCurrent(player, generation, url, videoEl))
             return
 
           flvPlayer = null
           destroyFlvPlayer(player)
-          resetPreviewScrub()
-          resetVideoElement(videoEl)
-          isLoadingStream.value = false
-          emit('previewError')
+          failPreviewSetup(generation, url, videoEl)
         })
 
         // 当有数据可以播放时立即播放
         videoEl.addEventListener('loadeddata', () => {
+          if (!isFlvPlayerCurrent(player, generation, url, videoEl))
+            return
           isLoadingStream.value = false
           videoEl.play().catch(() => {
             // Ignore autoplay errors
@@ -428,93 +452,105 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
         }, { once: true })
 
         videoEl.addEventListener('canplay', () => {
-          if (isLoadingStream.value) {
+          if (isFlvPlayerCurrent(player, generation, url, videoEl) && isLoadingStream.value) {
             isLoadingStream.value = false
           }
         }, { once: true })
 
         player.load()
       }
+      else {
+        failPreviewSetup(generation, url, videoEl)
+      }
     }
     catch (error) {
       console.error('Failed to load flv.js:', error)
-      isLoadingStream.value = false
+      failPreviewSetup(generation, url, videoEl)
     }
   }
   // Check if URL is HLS stream (.m3u8)
   else if (url.includes('.m3u8') || url.includes('m3u8')) {
-    const Hls = (await loadHlsModule()).default
-    if (!isPreviewSetupCurrent(generation, url, videoEl))
-      return
-    if (Hls.isSupported()) {
-      // Cleanup previous players and clear video src
-      cleanupPlayers()
-      resetVideoElement(videoEl)
+    try {
+      const Hls = (await loadHlsModule()).default
+      if (!isPreviewSetupCurrent(generation, url, videoEl))
+        return
+      if (Hls.isSupported()) {
+        // Cleanup previous players and clear video src
+        cleanupPlayers()
+        resetVideoElement(videoEl)
 
-      isLoadingStream.value = true
+        isLoadingStream.value = true
 
-      hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: true,
-        // 优化配置以更快开始播放
-        maxBufferLength: 10, // 减少缓冲长度
-        maxMaxBufferLength: 20,
-        liveSyncDurationCount: 2, // 减少直播同步计数
-        liveMaxLatencyDurationCount: 5,
-        maxBufferSize: 60 * 1000 * 1000, // 60MB
-      })
-
-      hls.loadSource(url)
-      hls.attachMedia(videoEl)
-
-      hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        isLoadingStream.value = false
-        videoEl.play().catch(() => {
-          // Ignore autoplay errors
+        const player = new Hls({
+          enableWorker: true,
+          lowLatencyMode: true,
+          // 优化配置以更快开始播放
+          maxBufferLength: 10, // 减少缓冲长度
+          maxMaxBufferLength: 20,
+          liveSyncDurationCount: 2, // 减少直播同步计数
+          liveMaxLatencyDurationCount: 5,
+          maxBufferSize: 60 * 1000 * 1000, // 60MB
         })
-      })
+        hls = player
 
-      hls.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
-        if (data.fatal) {
+        player.loadSource(url)
+        player.attachMedia(videoEl)
+
+        player.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (!isHlsPlayerCurrent(player, generation, url, videoEl))
+            return
+          isLoadingStream.value = false
+          videoEl.play().catch(() => {
+            // Ignore autoplay errors
+          })
+        })
+
+        player.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
+          if (!isHlsPlayerCurrent(player, generation, url, videoEl) || !data.fatal)
+            return
           isLoadingStream.value = false
           switch (data.type) {
             case Hls.ErrorTypes.MEDIA_ERROR:
-              // Try to recover from media errors
-              hls?.recoverMediaError()
+              player.recoverMediaError()
               break
             default:
-              // For other fatal errors, cleanup
-              cleanupPlayers()
+              cleanupHlsPlayer(player)
+              failPreviewSetup(generation, url, videoEl)
               break
           }
-        }
-      })
+        })
 
-      // 添加首帧加载事件
-      hls.on(Hls.Events.BUFFER_APPENDED, () => {
-        if (isLoadingStream.value) {
-          isLoadingStream.value = false
-        }
-      })
-    }
-    // cSpell:ignore mpegurl
-    else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-      cleanupPlayers()
-      resetVideoElement(videoEl)
-      // Native HLS support (Safari)
-      isLoadingStream.value = true
-      videoEl.src = url
-
-      const handleCanPlay = () => {
-        isLoadingStream.value = false
-        videoEl.removeEventListener('canplay', handleCanPlay)
+        player.on(Hls.Events.BUFFER_APPENDED, () => {
+          if (isHlsPlayerCurrent(player, generation, url, videoEl) && isLoadingStream.value)
+            isLoadingStream.value = false
+        })
       }
+      // cSpell:ignore mpegurl
+      else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
+        cleanupPlayers()
+        resetVideoElement(videoEl)
+        isLoadingStream.value = true
+        videoEl.src = url
 
-      videoEl.addEventListener('canplay', handleCanPlay)
-      videoEl.play().catch(() => {
-        isLoadingStream.value = false
-        // Ignore autoplay errors
-      })
+        const handleCanPlay = () => {
+          if (isPreviewSetupCurrent(generation, url, videoEl))
+            isLoadingStream.value = false
+          videoEl.removeEventListener('canplay', handleCanPlay)
+        }
+
+        videoEl.addEventListener('canplay', handleCanPlay)
+        videoEl.play().catch(() => {
+          if (isPreviewSetupCurrent(generation, url, videoEl))
+            failPreviewSetup(generation, url, videoEl)
+        })
+      }
+      else {
+        failPreviewSetup(generation, url, videoEl)
+      }
+    }
+    catch (error) {
+      console.error('Failed to load hls.js:', error)
+      failPreviewSetup(generation, url, videoEl)
     }
   }
   else {
@@ -523,7 +559,7 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
     videoEl.src = url
     videoEl.load()
     videoEl.play().catch(() => {
-      // Ignore autoplay errors
+      failPreviewSetup(generation, url, videoEl)
     })
   }
 }
@@ -545,7 +581,10 @@ watch([() => props.previewVideoUrl, () => props.isHover, videoRef], ([url, isHov
     return
   }
 
-  void setupPreviewVideo(url, videoEl, generation)
+  void setupPreviewVideo(url, videoEl, generation).catch((error) => {
+    console.error('Failed to set up video preview:', error)
+    failPreviewSetup(generation, url, videoEl)
+  })
 })
 
 // Cleanup on unmount

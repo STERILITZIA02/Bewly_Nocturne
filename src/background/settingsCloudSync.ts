@@ -32,7 +32,8 @@ let ready = false
 let generation = 0
 let preferenceGeneration = 0
 let restartAfterInitialization = false
-let initializationInProgress = false
+let initializationPromise: Promise<void> | undefined
+let initializationToken: symbol | undefined
 let flushInProgress = false
 let flushTimer: ReturnType<typeof setTimeout> | undefined
 let retryTimer: ReturnType<typeof setTimeout> | undefined
@@ -302,16 +303,17 @@ async function flushUploads() {
   }
 }
 
-async function startCloudSync(isRetry = false) {
-  if (initializationInProgress) {
-    restartAfterInitialization = true
-    return
-  }
-
-  initializationInProgress = true
-  const startGeneration = ++generation
+function startCloudSync(isRetry = false): Promise<void> {
   enabled = true
   ready = false
+  if (initializationPromise) {
+    restartAfterInitialization = true
+    return initializationPromise
+  }
+
+  const runToken = Symbol('cloud-sync-initialization')
+  initializationToken = runToken
+  const startGeneration = ++generation
   restartAfterInitialization = false
   if (!isRetry) {
     clearFlushTimer()
@@ -324,36 +326,43 @@ async function startCloudSync(isRetry = false) {
     publishCloudSyncStatus()
   }
 
-  try {
-    const cloudItems = await browser.storage.sync.get(null)
-    if (!enabled || startGeneration !== generation)
-      return
+  const run = (async () => {
+    try {
+      const cloudItems = await browser.storage.sync.get(null)
+      if (!enabled || startGeneration !== generation)
+        return
 
-    knownCloudItems = cloudItems
-    const result = await reconcileSettingsCloudSyncSnapshot(parseCloudEntries(cloudItems))
-    if (!enabled || startGeneration !== generation)
-      return
+      const result = await reconcileSettingsCloudSyncSnapshot(parseCloudEntries(cloudItems))
+      if (!enabled || startGeneration !== generation)
+        return
 
-    ready = true
-    retryAttempt = 0
-    clearRetryTimer()
-    queueUploads(result.uploads)
-    if (restartAfterInitialization) {
-      restartAfterInitialization = false
-      queueMicrotask(() => void startCloudSync(true))
+      knownCloudItems = cloudItems
+      ready = true
+      retryAttempt = 0
+      clearRetryTimer()
+      queueUploads(result.uploads)
     }
-  }
-  catch (error) {
-    if (!enabled || startGeneration !== generation)
-      return
-    logCloudSyncError('Failed to initialize settings cloud sync:', error)
-    lastError = formatError(error)
-    publishCloudSyncStatus()
-    scheduleInitializationRetry()
-  }
-  finally {
-    initializationInProgress = false
-  }
+    catch (error) {
+      if (!enabled || startGeneration !== generation)
+        return
+      logCloudSyncError('Failed to initialize settings cloud sync:', error)
+      lastError = formatError(error)
+      publishCloudSyncStatus()
+      scheduleInitializationRetry()
+    }
+    finally {
+      if (initializationToken === runToken) {
+        initializationToken = undefined
+        initializationPromise = undefined
+        if (enabled && restartAfterInitialization) {
+          restartAfterInitialization = false
+          queueMicrotask(() => void startCloudSync(true))
+        }
+      }
+    }
+  })()
+  initializationPromise = run
+  return run
 }
 
 function stopCloudSync() {
@@ -361,7 +370,6 @@ function stopCloudSync() {
   ready = false
   generation++
   restartAfterInitialization = false
-  initializationInProgress = false
   clearFlushTimer()
   clearRetryTimer()
   pendingUploads.clear()
@@ -456,7 +464,7 @@ function handleSyncChanges(
   requeueQuotaBlockedUploads()
 
   if (!ready) {
-    if (initializationInProgress) {
+    if (initializationPromise) {
       restartAfterInitialization = true
     }
     else {
@@ -477,7 +485,7 @@ function handleSyncChanges(
 }
 
 function retryInitializationOnBrowserActivity() {
-  if (enabled && !ready && !initializationInProgress) {
+  if (enabled && !ready && !initializationPromise) {
     clearRetryTimer()
     scheduleInitializationRetry(0)
   }

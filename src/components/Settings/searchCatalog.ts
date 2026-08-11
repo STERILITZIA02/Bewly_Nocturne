@@ -224,8 +224,8 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.home_tabs_adjustment',
     'settings.fixed_home_tabs_on_home_page',
     'settings.group_search_page_mode',
-    'settings.use_search_page_mode',
-    'settings.settings_shared_with_the_search_page',
+    'settings.show_standalone_search_page',
+    'settings.show_standalone_search_page_desc',
   ]),
   ...createEntries(homeRoute, [
     'settings.recommendation_mode',

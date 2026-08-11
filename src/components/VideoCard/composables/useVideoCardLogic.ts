@@ -1,4 +1,5 @@
 import type { CSSProperties } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -50,6 +51,7 @@ function createAppFeedFeedbackParams(video: Video, selection?: AppFeedFeedbackSe
 
 export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps>) {
   const toast = useToast()
+  const { t } = useI18n()
   const { openIframeDrawer } = useBewlyApp()
   const topBarStore = useTopBarStore()
 
@@ -318,7 +320,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       if (props.value.video !== video)
         return
       if (!aid) {
-        toast.error('无法获取该视频的稍后再看信息')
+        toast.error(t('video_card.watch_later_unavailable'))
         return
       }
       resolvedWatchLaterAid.value = aid
@@ -348,7 +350,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     }
     catch (error) {
       console.error('更新稍后再看失败:', error)
-      toast.error('更新稍后再看失败')
+      toast.error(t('video_card.watch_later_update_failed'))
     }
     finally {
       isUpdatingWatchLater.value = false

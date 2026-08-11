@@ -101,7 +101,6 @@ export function cleanBilibiliShareText(
     const cleanedUrl = removeTrackingParams ? cleanBilibiliUrl(url) : url
     if (title)
       return includeTitle ? `${title} ${cleanedUrl}` : cleanedUrl
-    return cleanedUrl
   }
 
   return removeTrackingParams

@@ -636,9 +636,8 @@ settings:
   following_inactive_days_desc: The feature takes effect after applying 'Use new layout for Following tab' It is unrelated to the custom user blacklist and only modifies recommendations within the 'new layout for Following tab' module.
   preserve_for_you_state: Preserve "For You" pre-switch state
   preserve_for_you_state_desc: When switching from dock to other pages, preserve the browsing state of the "For You" page and maintain content before switching when returning
-  use_search_page_mode: Use search page mode on homepage
-  settings_shared_with_the_search_page: Settings shared with the search page
-  settings_shared_with_the_search_page_desc: Those settings are used in common with the search page.
+  show_standalone_search_page: Show standalone search page
+  show_standalone_search_page_desc: When disabled, search is integrated into Home and hidden from the Dock.
   home_tabs_adjustment: Tabs adjustment
   home_tabs_adjustment_desc: The first activated tab is the default page.
   fixed_home_tabs_on_home_page: Fix home tabs to the top
@@ -1058,6 +1057,14 @@ video_card:
   video_removed: Video removed
   watched: Watched
   visited_recently: Visited within the past month
+  highlight_high_like: Highly liked
+  highlight_high_engagement: High engagement
+  highlight_million_views: 1M+ views
+  highlight_extra_long: Extra-long video
+  highlight_long: Long video
+  watch_later_unavailable: Watch Later information is unavailable for this video
+  watch_later_update_failed: Failed to update Watch Later
+  feedback_unavailable: Feedback options are unavailable
 home:
   web_recommendation_risk_cooldown: Recommendation requests hit risk control and are paused for {seconds} seconds. Try again later.
   web_recommendation_risk_fallback_active: No-cookie recommendations are shown; further requests are paused for {seconds} seconds.
@@ -1204,3 +1211,104 @@ search_page:
   loading: Loading...
   no_hot_search_data: No hot search data available
   view_all_esports: View All Esports
+
+search:
+  page_title: Search - Bilibili
+  results_page_title: '{keyword} - Search - Bilibili'
+  result_count: '{count} results found'
+  categories:
+    all: All
+    video: Videos
+    bangumi: Anime
+    media_ft: Film & TV
+    user: Users
+    live: Live
+    article: Articles
+  filters:
+    order: Sort
+    more: More filters
+    duration: Duration
+    date: Date
+    start_date: Start date
+    end_date: End date
+    to: to
+    user_type: User type
+    order_relevance: Relevance
+    order_most_played: Most played
+    order_latest: Latest
+    order_most_danmaku: Most danmaku
+    order_most_favorited: Most favorited
+    duration_all: Any duration
+    duration_under_10: Under 10 minutes
+    duration_10_30: 10–30 minutes
+    duration_30_60: 30–60 minutes
+    duration_over_60: Over 60 minutes
+    date_all: Any date
+    date_day: Past day
+    date_week: Past week
+    date_halfyear: Past six months
+    user_order_default: Default
+    user_order_fans_desc: Most followers
+    user_order_fans_asc: Fewest followers
+    user_order_level_desc: Highest level
+    user_order_level_asc: Lowest level
+    user_type_all: All users
+    user_type_uploader: Uploaders
+    user_type_normal: Regular users
+    user_type_verified: Verified users
+  errors:
+    failed: Search failed. Please try again later.
+    exception: An error occurred while searching. Please try again later.
+  pagination:
+    previous: Previous page
+    next: Next page
+    page: Page {page}
+  date_picker:
+    start_date: Start date
+    month: Month {month}
+    year: '{year}'
+    weekday_sunday: Su
+    weekday_monday: Mo
+    weekday_tuesday: Tu
+    weekday_wednesday: We
+    weekday_thursday: Th
+    weekday_friday: Fr
+    weekday_saturday: Sa
+    open_calendar: Open calendar
+    previous_year: Previous year
+    next_year: Next year
+    previous_month: Previous month
+    next_month: Next month
+    select_date: Select {date}
+    clear: Clear
+    today: Today
+  live:
+    all: All
+    rooms: Live rooms
+    streamers: Streamers
+    more_streamers: View more streamers ({count}+)
+  media:
+    select_episode: Select episode
+    score: '{score} points'
+    episode_count: '{count} episodes'
+    premiere: 'Premiere: {date}'
+    watch_now: Watch now
+    other: Other
+  sections:
+    activities: Events
+    schedule: Match schedule
+  user:
+    fans: 'Followers: {count}'
+    videos: 'Videos: {count}'
+    follow: '+ Follow'
+    following: Following
+    no_signature: No bio yet
+    live: Live
+    submissions_count: '{count} uploads'
+    followers_count: '{count} followers'
+    videos_count: '{count} videos'
+    sample_title: 'Video {index}'
+  esports:
+    finished: Finished
+    not_started: Not started
+    in_progress: In progress

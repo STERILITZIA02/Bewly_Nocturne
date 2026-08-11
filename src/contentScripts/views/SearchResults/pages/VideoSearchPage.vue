@@ -111,6 +111,11 @@ watch(() => props.filters, () => {
   if (!props.keyword.trim())
     return
 
+  if (paginationMode.value === 'pagination') {
+    void handlePageChange(1, currentPage.value !== 1, false)
+    return
+  }
+
   resetAll()
   void performSearch(false)
 }, { deep: true })
@@ -207,67 +212,67 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
 }
 
 // 翻页模式的页码切换
-async function handlePageChange(page: number) {
+async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
   if (paginationMode.value !== 'pagination')
-    return
+    return false
 
   const keyword = props.keyword.trim()
   if (!keyword)
-    return
+    return false
 
   // 先滚动到顶部
-  handleBackToTop()
-  await nextTick()
-
-  isPageChanging.value = true
-
-  const success = await search(
-    keyword,
-    params => api.search.searchVideo(params),
-    {
-      page,
-      page_size: 30,
-      ...buildVideoSearchParams({
-        loadMore: false,
-        context: context.value,
-        filters: props.filters,
-      }),
-    },
-  )
-
-  if (!success || !lastResponse.value?.data) {
-    isPageChanging.value = false
-    return
+  if (scrollToTop) {
+    handleBackToTop()
+    await nextTick()
   }
 
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
+  isPageChanging.value = true
+  try {
+    const success = await search(
+      keyword,
+      params => api.search.searchVideo(params),
+      {
+        page,
+        page_size: 30,
+        ...buildVideoSearchParams({
+          loadMore: false,
+          context: context.value,
+          filters: props.filters,
+        }),
+      },
+    )
 
-  // 过滤广告和应用时间过滤
-  const filteredList = applyVideoTimeFilter(incomingList.filter(item => !isAdVideo(item)))
+    if (!success || !lastResponse.value?.data)
+      return false
 
-  // 转换数据格式 - 根据类型选择正确的转换函数
-  const convertedList = filteredList.map((item) => {
-    // 如果是直播间类型，使用直播间转换函数
-    if (item.type === 'live_room') {
-      return convertLiveRoomData(item)
-    }
-    // 否则使用视频转换函数
-    return convertVideoData(item)
-  })
+    const rawData = lastResponse.value.data
+    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
+    const filteredList = applyVideoTimeFilter(incomingList.filter(item => !isAdVideo(item)))
+    const convertedList = filteredList.map(item => item.type === 'live_room'
+      ? convertLiveRoomData(item)
+      : convertVideoData(item))
 
-  // 替换结果
-  results.value = convertedList
+    results.value = convertedList
+    extractPagination(rawData, filteredList.length)
+    updatePage(page)
+    setHasMore(paginationHasMore.value)
+    if (updateUrl)
+      emit('updatePage', page)
+    return true
+  }
+  finally {
+    isPageChanging.value = false
+  }
+}
 
-  // 提取分页信息
-  extractPagination(rawData, filteredList.length)
-  updatePage(page)
-  setHasMore(paginationHasMore.value)
+function refreshCurrentPage() {
+  return paginationMode.value === 'pagination'
+    ? handlePageChange(currentPage.value, false, false)
+    : performSearch(false)
+}
 
-  isPageChanging.value = false
-
-  // 更新 URL 中的页码参数
-  emit('updatePage', page)
+function restorePage(page: number) {
+  return page === currentPage.value ? Promise.resolve(true) : handlePageChange(page, false, false)
 }
 
 function resetAll() {
@@ -302,6 +307,8 @@ defineExpose({
   requestLoadMore,
   currentPage,
   totalPages,
+  refreshCurrentPage,
+  restorePage,
 })
 </script>
 

@@ -680,9 +680,8 @@ settings:
   following_inactive_days_desc: 许用“使用正在关注新布局”后该功能生效。与自主添加的用户黑名单无关，仅更改“正在关注”页面推荐
   preserve_for_you_state: 留存个性推荐切换前状态
   preserve_for_you_state_desc: 当从dock栏切换到其他页面时，留存个性推荐页面的浏览状态，返回时保持切换前的内容
-  use_search_page_mode: 首页使用搜索页模式
-  settings_shared_with_the_search_page: 与搜索页共用的配置
-  settings_shared_with_the_search_page_desc: 这些设置都与搜索页共用。
+  show_standalone_search_page: 单独显示搜索页
+  show_standalone_search_page_desc: 关闭时，搜索页会整合到首页，并从 Dock 中隐藏。
   home_tabs_adjustment: 标签栏调整
   home_tabs_adjustment_desc: 第一个激活的标签项是默认界面
   fixed_home_tabs_on_home_page: 固定首页标签栏
@@ -1005,6 +1004,14 @@ video_card:
   video_removed: 视频已移除
   watched: 已观看
   visited_recently: 近一个月内浏览过
+  highlight_high_like: 高赞
+  highlight_high_engagement: 高互动
+  highlight_million_views: 百万播放
+  highlight_extra_long: 超长视频
+  highlight_long: 长视频
+  watch_later_unavailable: 无法获取该视频的稍后再看信息
+  watch_later_update_failed: 更新稍后再看失败
+  feedback_unavailable: 无法获取反馈选项
 home:
   web_recommendation_risk_cooldown: 推荐请求触发风控，已暂停 {seconds} 秒，请稍后重试
   web_recommendation_risk_fallback_active: 已使用无 Cookie 推荐结果，并暂停后续请求 {seconds} 秒
@@ -1144,3 +1151,104 @@ search_page:
   loading: 加载中...
   no_hot_search_data: 暂无热搜数据
   view_all_esports: 查看全部赛事
+
+search:
+  page_title: 搜索 - 哔哩哔哩
+  results_page_title: '{keyword} - 搜索 - 哔哩哔哩'
+  result_count: 共找到{count}个结果
+  categories:
+    all: 综合
+    video: 视频
+    bangumi: 番剧
+    media_ft: 影视
+    user: 用户
+    live: 直播
+    article: 专栏
+  filters:
+    order: 排序
+    more: 更多筛选
+    duration: 时长
+    date: 日期
+    start_date: 开始日期
+    end_date: 结束日期
+    to: 至
+    user_type: 用户类型
+    order_relevance: 综合排序
+    order_most_played: 最多播放
+    order_latest: 最新发布
+    order_most_danmaku: 最多弹幕
+    order_most_favorited: 最多收藏
+    duration_all: 全部时长
+    duration_under_10: 10分钟以下
+    duration_10_30: 10–30分钟
+    duration_30_60: 30–60分钟
+    duration_over_60: 60分钟以上
+    date_all: 全部日期
+    date_day: 一天内
+    date_week: 一周内
+    date_halfyear: 半年内
+    user_order_default: 默认排序
+    user_order_fans_desc: 粉丝数从高到低
+    user_order_fans_asc: 粉丝数从低到高
+    user_order_level_desc: 等级从高到低
+    user_order_level_asc: 等级从低到高
+    user_type_all: 全部用户
+    user_type_uploader: UP 主
+    user_type_normal: 普通用户
+    user_type_verified: 认证用户
+  errors:
+    failed: 搜索失败，请稍后重试
+    exception: 搜索出错，请稍后重试
+  pagination:
+    previous: 上一页
+    next: 下一页
+    page: 第 {page} 页
+  date_picker:
+    start_date: 开始日期
+    month: '{month}月'
+    year: '{year}年'
+    weekday_sunday: 日
+    weekday_monday: 一
+    weekday_tuesday: 二
+    weekday_wednesday: 三
+    weekday_thursday: 四
+    weekday_friday: 五
+    weekday_saturday: 六
+    open_calendar: 打开日历
+    previous_year: 上一年
+    next_year: 下一年
+    previous_month: 上个月
+    next_month: 下个月
+    select_date: 选择 {date}
+    clear: 清除
+    today: 今天
+  live:
+    all: 全部
+    rooms: 直播间
+    streamers: 主播
+    more_streamers: 查看更多主播（{count}+）
+  media:
+    select_episode: 选集
+    score: '{score} 分'
+    episode_count: 共 {count} 话
+    premiere: '首播：{date}'
+    watch_now: 立即观看
+    other: 其它
+  sections:
+    activities: 活动
+    schedule: 赛程日历
+  user:
+    fans: '粉丝：{count}'
+    videos: '视频：{count}'
+    follow: '+ 关注'
+    following: 已关注
+    no_signature: 这个人很懒，什么都没有写~
+    live: 直播中
+    submissions_count: '{count}个投稿'
+    followers_count: '{count}粉丝'
+    videos_count: '{count} 视频'
+    sample_title: '稿件 {index}'
+  esports:
+    finished: 已结束
+    not_started: 未开始
+    in_progress: 进行中

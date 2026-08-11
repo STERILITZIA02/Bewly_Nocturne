@@ -167,47 +167,50 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
 }
 
 // 翻页模式的页码切换
-async function handlePageChange(page: number) {
+async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
   if (paginationMode.value !== 'pagination')
-    return
+    return false
 
   const keyword = props.keyword.trim()
   if (!keyword)
-    return
+    return false
 
   // 先滚动到顶部
-  handleBackToTop()
-  await nextTick()
+  if (scrollToTop) {
+    handleBackToTop()
+    await nextTick()
+  }
 
   isPageChanging.value = true
 
-  const success = await search(
-    keyword,
-    params => api.search.searchArticle(params),
-    {
-      page,
-      pagesize: 30,
-    },
-  )
+  try {
+    const success = await search(keyword, params => api.search.searchArticle(params), { page, pagesize: 30 })
+    if (!success || !lastResponse.value?.data)
+      return false
+    const rawData = lastResponse.value.data
+    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
+    results.value = incomingList
+    extractPagination(rawData, incomingList.length)
+    updatePage(page)
+    setHasMore(paginationHasMore.value)
+    if (updateUrl)
+      emit('updatePage', page)
+    return true
+  }
+  finally {
+    isPageChanging.value = false
+  }
+}
 
-  if (!success || !lastResponse.value?.data)
-    return
-
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-
-  // 替换结果
-  results.value = incomingList
-
-  // 提取分页信息
-  extractPagination(rawData, incomingList.length)
-  updatePage(page)
-  setHasMore(paginationHasMore.value)
-
-  isPageChanging.value = false
-
-  // 更新 URL 中的页码参数
-  emit('updatePage', page)
+function refreshCurrentPage() {
+  return paginationMode.value === 'pagination'
+    ? handlePageChange(currentPage.value, false, false)
+    : performSearch(false)
+}
+function restorePage(page: number) {
+  return page === currentPage.value
+    ? Promise.resolve(true)
+    : handlePageChange(page, false, false)
 }
 
 function resetAll() {
@@ -226,6 +229,8 @@ defineExpose({
   requestLoadMore,
   currentPage,
   totalPages,
+  refreshCurrentPage,
+  restorePage,
 })
 </script>
 

@@ -3012,12 +3012,12 @@ else if (shouldInitializePageScript) {
     }
     // 如果是IP地理位置元素，使用Tag样式显示
     else if (id === 'location') {
-      element.style.cssText = `display: inline-block; margin-left: 4px; padding: 1px 4px; font-size: 11px; color: var(--bew-ip-tag-text); background-color: var(--bew-ip-tag-bg); border-radius: 3px; vertical-align: middle; line-height: 1.4;`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); color: var(--bew-ip-tag-text); background-color: var(--bew-ip-tag-bg); border-radius: var(--bew-native-comment-tag-radius, 3px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     // 楼主标签使用主题色，明暗模式由主题变量自动适配
     else if (id === 'host-tag') {
-      element.style.cssText = `display: inline-block; margin-left: 4px; padding: 1px 4px; font-size: 11px; font-weight: 500; color: var(--bew-theme-foreground); background-color: var(--bew-theme-color-10); border-radius: 3px; vertical-align: middle; line-height: 1.4;`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-medium, 500); color: var(--bew-theme-foreground); background-color: var(--bew-theme-color-10); border-radius: var(--bew-native-comment-tag-radius, 3px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     else {

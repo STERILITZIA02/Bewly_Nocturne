@@ -30,6 +30,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
+function convertSearchUser(user: any) {
+  return convertUserCardData(user, index => t('search.user.sample_title', { index }))
+}
+
 const { haveScrollbar, handleBackToTop } = useBewlyApp()
 
 // 分页模式：scroll 滚动加载，pagination 翻页
@@ -213,64 +217,67 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
 }
 
 // 翻页模式的页码切换
-async function handlePageChange(page: number) {
+async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
   if (paginationMode.value !== 'pagination')
-    return
+    return false
 
   const keyword = props.keyword.trim()
   if (!keyword)
-    return
+    return false
 
   // 先滚动到顶部
-  handleBackToTop()
-  await nextTick()
+  if (scrollToTop) {
+    handleBackToTop()
+    await nextTick()
+  }
 
   isPageChanging.value = true
 
-  // 用户排序映射
-  const userOrderMap: Record<string, { order: string, order_sort: number }> = {
-    '': { order: '', order_sort: 0 },
-    'fans': { order: 'fans', order_sort: 0 },
-    'fans_desc': { order: 'fans', order_sort: 1 },
-    'level': { order: 'level', order_sort: 0 },
-    'level_desc': { order: 'level', order_sort: 1 },
-  }
-  const orderConfig = userOrderMap[props.filters.order] || { order: '', order_sort: 0 }
-
-  const success = await search(
-    keyword,
-    params => api.search.searchUser(params),
-    {
+  try {
+    const userOrderMap: Record<string, { order: string, order_sort: number }> = {
+      '': { order: '', order_sort: 0 },
+      'fans': { order: 'fans', order_sort: 0 },
+      'fans_desc': { order: 'fans', order_sort: 1 },
+      'level': { order: 'level', order_sort: 0 },
+      'level_desc': { order: 'level', order_sort: 1 },
+    }
+    const orderConfig = userOrderMap[props.filters.order] || { order: '', order_sort: 0 }
+    const success = await search(keyword, params => api.search.searchUser(params), {
       page,
       pagesize: 30,
       order: orderConfig.order,
       order_sort: orderConfig.order_sort,
       user_type: props.filters.userType,
-    },
-  )
+    })
+    if (!success || !lastResponse.value?.data)
+      return false
 
-  if (!success || !lastResponse.value?.data)
-    return
+    const rawData = lastResponse.value.data
+    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
+    const mids = incomingList.map((u: any) => u.mid).filter(Boolean)
+    await batchQueryUserRelations(mids)
+    results.value = incomingList
+    extractPagination(rawData, incomingList.length)
+    updatePage(page)
+    setHasMore(paginationHasMore.value)
+    if (updateUrl)
+      emit('updatePage', page)
+    return true
+  }
+  finally {
+    isPageChanging.value = false
+  }
+}
 
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-
-  // 替换结果
-  results.value = incomingList
-
-  // 批量查询用户关系
-  const mids = results.value!.map((u: any) => u.mid).filter(Boolean)
-  await batchQueryUserRelations(mids)
-
-  // 提取分页信息
-  extractPagination(rawData, incomingList.length)
-  updatePage(page)
-  setHasMore(paginationHasMore.value)
-
-  isPageChanging.value = false
-
-  // 更新 URL 中的页码参数
-  emit('updatePage', page)
+function refreshCurrentPage() {
+  return paginationMode.value === 'pagination'
+    ? handlePageChange(currentPage.value, false, false)
+    : performSearch(false)
+}
+function restorePage(page: number) {
+  return page === currentPage.value
+    ? Promise.resolve(true)
+    : handlePageChange(page, false, false)
 }
 
 function resetAll() {
@@ -296,6 +303,8 @@ defineExpose({
   updateUserRelation,
   currentPage,
   totalPages,
+  refreshCurrentPage,
+  restorePage,
 })
 </script>
 
@@ -314,7 +323,7 @@ defineExpose({
         v-for="user in results"
         :key="user.mid"
         v-bind="{
-          ...convertUserCardData(user),
+          ...convertSearchUser(user),
           isFollowed: userRelations[user.mid]?.isFollowing ? 1 : 0,
         }"
         :compact="true"

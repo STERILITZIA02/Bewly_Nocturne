@@ -221,6 +221,7 @@ const MIN_SINGLE_IMAGE_RATIO = 1 / 2
 let gridObserver: ResizeObserver | undefined
 let liveFlvPlayer: any = null
 let liveHlsPlayer: any = null
+let livePreviewGeneration = 0
 const isLoading = ref(false)
 const isInitialLoading = ref(true)
 const noMoreContent = ref(false)
@@ -2312,7 +2313,9 @@ async function prepareMomentCovers(items: DisplayMoment[], requestToken: number)
   })))
 }
 
-function cleanupLivePreviewPlayer() {
+function cleanupLivePreviewPlayer(invalidate = true) {
+  if (invalidate)
+    livePreviewGeneration++
   if (liveHlsPlayer) {
     liveHlsPlayer.destroy()
     liveHlsPlayer = null
@@ -2331,8 +2334,26 @@ function cleanupLivePreviewPlayer() {
   }
 }
 
-async function setupStreamPreview(url: string, videoEl: HTMLVideoElement) {
-  cleanupLivePreviewPlayer()
+function isLivePreviewCurrent(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
+  return generation === livePreviewGeneration
+    && hoveredMediaId.value === momentId
+    && previewUrls[momentId] === url
+    && videoEl.isConnected
+}
+
+function failLivePreview(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
+  if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
+    return
+  cleanupLivePreviewPlayer(false)
+  videoEl.pause()
+  videoEl.removeAttribute('src')
+  videoEl.load()
+}
+
+async function setupStreamPreview(url: string, videoEl: HTMLVideoElement, momentId: string, generation: number) {
+  if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
+    return
+  cleanupLivePreviewPlayer(false)
   videoEl.removeAttribute('src')
   videoEl.load()
 
@@ -2340,10 +2361,14 @@ async function setupStreamPreview(url: string, videoEl: HTMLVideoElement) {
     try {
       const flvjsModule = await loadFlvModule()
       const flvjs = flvjsModule.default
-      if (!flvjs.isSupported() || hoveredMediaId.value === '')
+      if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
         return
+      if (!flvjs.isSupported()) {
+        failLivePreview(generation, momentId, url, videoEl)
+        return
+      }
 
-      liveFlvPlayer = flvjs.createPlayer({
+      const player = flvjs.createPlayer({
         type: 'flv',
         url,
         isLive: true,
@@ -2353,12 +2378,20 @@ async function setupStreamPreview(url: string, videoEl: HTMLVideoElement) {
         stashInitialSize: 128,
         lazyLoad: false,
       })
-      liveFlvPlayer.attachMediaElement(videoEl)
-      liveFlvPlayer.load()
-      void videoEl.play().catch(() => {})
+      liveFlvPlayer = player
+      player.attachMediaElement(videoEl)
+      player.on(flvjs.Events.ERROR, () => {
+        if (liveFlvPlayer === player)
+          failLivePreview(generation, momentId, url, videoEl)
+      })
+      player.load()
+      void videoEl.play().catch(() => {
+        if (liveFlvPlayer === player)
+          failLivePreview(generation, momentId, url, videoEl)
+      })
     }
     catch {
-      // 直播预览失败时保留封面
+      failLivePreview(generation, momentId, url, videoEl)
     }
     return
   }
@@ -2366,32 +2399,51 @@ async function setupStreamPreview(url: string, videoEl: HTMLVideoElement) {
   if (url.includes('m3u8')) {
     try {
       const Hls = (await loadHlsModule()).default
+      if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
+        return
       if (Hls.isSupported()) {
-        liveHlsPlayer = new Hls({
+        const player = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
           maxBufferLength: 10,
         })
-        liveHlsPlayer.loadSource(url)
-        liveHlsPlayer.attachMedia(videoEl)
-        liveHlsPlayer.on(Hls.Events.MANIFEST_PARSED, () => {
-          void videoEl.play().catch(() => {})
+        liveHlsPlayer = player
+        player.loadSource(url)
+        player.attachMedia(videoEl)
+        player.on(Hls.Events.MANIFEST_PARSED, () => {
+          if (liveHlsPlayer !== player || !isLivePreviewCurrent(generation, momentId, url, videoEl))
+            return
+          void videoEl.play().catch(() => {
+            if (liveHlsPlayer === player)
+              failLivePreview(generation, momentId, url, videoEl)
+          })
+        })
+        player.on(Hls.Events.ERROR, (_event, data) => {
+          if (data.fatal && liveHlsPlayer === player)
+            failLivePreview(generation, momentId, url, videoEl)
         })
         return
       }
       if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
         videoEl.src = url
-        void videoEl.play().catch(() => {})
+        void videoEl.play().catch(() => {
+          failLivePreview(generation, momentId, url, videoEl)
+        })
+      }
+      else {
+        failLivePreview(generation, momentId, url, videoEl)
       }
     }
     catch {
-      // 直播预览失败时保留封面
+      failLivePreview(generation, momentId, url, videoEl)
     }
     return
   }
 
   videoEl.src = url
-  void videoEl.play().catch(() => {})
+  void videoEl.play().catch(() => {
+    failLivePreview(generation, momentId, url, videoEl)
+  })
 }
 
 function isMomentPreviewEnabled(moment: DisplayMoment) {
@@ -2475,6 +2527,7 @@ async function handleMediaEnter(moment: DisplayMoment) {
     return
 
   hoveredMediaId.value = moment.id
+  const generation = ++livePreviewGeneration
 
   if (previewUrls[moment.id])
     return
@@ -2486,7 +2539,7 @@ async function handleMediaEnter(moment: DisplayMoment) {
         platform: 'web',
         qn: 80,
       })
-      if (hoveredMediaId.value !== moment.id || !isMomentPreviewEnabled(moment))
+      if (generation !== livePreviewGeneration || hoveredMediaId.value !== moment.id || !isMomentPreviewEnabled(moment))
         return
       if (res.code === 0 && res.data?.durl?.[0]?.url)
         previewUrls[moment.id] = httpsUrl(res.data.durl[0].url)
@@ -2497,13 +2550,14 @@ async function handleMediaEnter(moment: DisplayMoment) {
       return
 
     const cid = await getVideoCid(moment.bvid)
-    if (!cid || hoveredMediaId.value !== moment.id || !isMomentPreviewEnabled(moment))
+    if (!cid || generation !== livePreviewGeneration || hoveredMediaId.value !== moment.id || !isMomentPreviewEnabled(moment))
       return
 
     const preview = await api.video.getVideoPreview({ bvid: moment.bvid, cid })
     if (
       preview.code === 0
       && preview.data?.durl?.[0]?.url
+      && generation === livePreviewGeneration
       && hoveredMediaId.value === moment.id
       && isMomentPreviewEnabled(moment)
     ) {
@@ -2536,10 +2590,15 @@ function bindPreviewVideo(el: Element | null, moment: DisplayMoment) {
   if (!url || hoveredMediaId.value !== moment.id)
     return
 
-  if (moment.isLive || url.includes('.flv') || url.includes('m3u8'))
-    void setupStreamPreview(url, el)
-  else
+  if (moment.isLive || url.includes('.flv') || url.includes('m3u8')) {
+    const generation = livePreviewGeneration
+    void setupStreamPreview(url, el, moment.id, generation).catch(() => {
+      failLivePreview(generation, moment.id, url, el)
+    })
+  }
+  else {
     void el.play().catch(() => {})
+  }
 }
 
 function playPreview(event: Event) {

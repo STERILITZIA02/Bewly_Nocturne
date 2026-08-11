@@ -20,7 +20,8 @@ import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { runWhenIdle } from '~/utils/lazyLoad'
-import { getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage } from '~/utils/main'
+import { executeResolvedLinkAction, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
+import { getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage, openLinkToNewTab } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
@@ -936,19 +937,21 @@ else if (shouldInitializeContentScript) {
       const linkElement = target.closest('.bili-video-card a, .bili-video-card__wrap a')
 
       if (linkElement instanceof HTMLAnchorElement) {
+        if (!(event instanceof MouseEvent) || event.button !== 0 || hasNavigationModifier(event))
+          return
         event.preventDefault()
 
         const href = linkElement.href
-        const videoCardLinkOpenMode = settings.value.videoCardLinkOpenMode
-
-        if (videoCardLinkOpenMode === 'background') {
-        // 后台打开标签页
-          openLinkInBackground(href)
-        }
-        else {
-        // 默认新标签页打开
-          window.open(href, '_blank')
-        }
+        const action = resolveLinkOpenAction(settings.value.videoCardLinkOpenMode, {
+          isHomepage: isHomePage(),
+          inIframe: isInIframe(),
+        })
+        executeResolvedLinkAction(action, href, {
+          currentTab: url => window.location.assign(url),
+          newTab: openLinkToNewTab,
+          background: url => void openLinkInBackground(url),
+          drawer: openLinkToNewTab,
+        })
       }
     }, true)
   }

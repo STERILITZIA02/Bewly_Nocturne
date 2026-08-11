@@ -180,9 +180,16 @@ export function useTopBarInteraction() {
       onCleanup(() => {
         triggerElement?.removeEventListener('mouseenter', handleTriggerEnter)
         triggerElement?.removeEventListener('mouseleave', handleTriggerLeave)
+        const hadMouseInteraction = controller.triggerHovered
+          || controller.popupHovered
+          || controller.enterTimer !== undefined
+          || controller.leaveTimer !== undefined
         controller.triggerHovered = false
+        controller.popupHovered = false
         clearEnterTimer()
         clearLeaveTimer()
+        if (hadMouseInteraction)
+          topBarStore.popupVisible[key] = false
       })
     }, { immediate: true, flush: 'post' })
 
@@ -236,8 +243,11 @@ export function useTopBarInteraction() {
       onCleanup(() => {
         popupElement?.removeEventListener('mouseenter', handlePopupEnter)
         popupElement?.removeEventListener('mouseleave', handlePopupLeave)
+        const hadPopupInteraction = activeController.popupHovered
         activeController.popupHovered = false
         clearLeaveTimer()
+        if (hadPopupInteraction && !activeController.triggerHovered)
+          topBarStore.popupVisible[key] = false
       })
     }, { immediate: true, flush: 'post' })
 
