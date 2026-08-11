@@ -627,7 +627,8 @@ html.notificationsPage.bewly-notifications-embedded {
   }
 
   .bili-im .right,
-  .message-list {
+  .message-list,
+  #link-message-container .message-list {
     background: var(--bew-content-alt) !important;
   }
 
@@ -742,26 +743,30 @@ html.notificationsPage.bewly-notifications-embedded {
     box-shadow: none;
   }
 
-  .message-content:has(.share-card),
-  .message-content:has(.image-message),
-  .message-content:has(> img),
-  .message-content:has(.notify-wrapper) {
+  #link-message-container .message-content:has(.share-card),
+  #link-message-container .message-content:has(.image-message),
+  #link-message-container .message-content:has(> img),
+  #link-message-container .message-content:has(.notify-wrapper),
+  #link-message-container .message-content:has(.msg-notify),
+  #link-message-container .message-content:has(.notify-push),
+  #link-message-container .message-content:has(.msg-push-new) {
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
   }
 
-  .msg-time,
-  .revoke,
-  .system-msg,
-  .message-tip,
-  .notify-wrapper > .notify-text {
+  #link-message-container .msg-time,
+  #link-message-container .revoke,
+  #link-message-container .system-msg,
+  #link-message-container .message-tip,
+  #link-message-container .notify-wrapper > .notify-text {
     background: transparent !important;
     border: 0 !important;
     box-shadow: none !important;
   }
 
-  .send-box {
+  .send-box,
+  #link-message-container .send-box {
     color: var(--bew-text-1);
     background: var(--bew-elevated-solid) !important;
     border-color: var(--bew-border-color) !important;
@@ -902,7 +907,11 @@ html.notificationsPage.bewly-notifications-embedded {
   }
 
   &.disable-frosted-glass {
-    .space-left,
+    .space-left {
+      background: var(--bew-content-solid) !important;
+      backdrop-filter: none;
+    }
+
     .space-right-top .title,
     .bili-im .left > .title,
     .bili-im .right .dialog > .title,
