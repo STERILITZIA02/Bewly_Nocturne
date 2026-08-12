@@ -4,6 +4,7 @@
     ".github/scripts/pr-policy-check.mjs",
     "scripts/manifest.ts",
     "scripts/prepare.ts",
+    "scripts/verify-notification-fixtures.ts",
     "src/components/*.vue",
     "src/components/*/*.vue",
     "src/contentScripts/index.ts",
