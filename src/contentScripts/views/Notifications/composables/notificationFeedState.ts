@@ -29,4 +29,12 @@ export interface NotificationFeedState {
   badgeReconciled: boolean
 }
 
+export interface NotificationReadCandidate {
+  readCommitId: string
+  mid: string
+  section: NativeNotificationSection
+  generation: number
+  serverReadCommitted: true
+}
+
 export type NotificationFeedStates = Record<NativeNotificationSection, NotificationFeedState>

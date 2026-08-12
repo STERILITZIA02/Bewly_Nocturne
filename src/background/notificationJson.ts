@@ -15,8 +15,8 @@ export interface NotificationTransportError {
   httpStatus: number
   endpointName: NotificationEndpointName
   redirected: boolean
-  finalUrlHost: string
-  bilibiliCode?: number
+  finalHost: string
+  apiCode?: number
 }
 
 export interface NotificationApiResponse {
@@ -54,8 +54,8 @@ function createTransportError(
       httpStatus: response.status,
       endpointName,
       redirected: response.redirected,
-      finalUrlHost: getResponseHost(response),
-      bilibiliCode: code,
+      finalHost: getResponseHost(response),
+      apiCode: code,
     },
   }
 }
@@ -73,6 +73,14 @@ function classifyHtmlResponse(response: Response, text: string): NotificationTra
 
 function preserveNotificationIdentifiers(jsonText: string): string {
   return jsonText.replace(NOTIFICATION_IDENTIFIER_PATTERN, '$1"$2"')
+}
+
+function classifyApiCode(code: number): NotificationTransportErrorKind {
+  if (code === -101)
+    return 'login-required'
+  if (code === -412 || code === -403)
+    return 'risk-control'
+  return 'api-error'
 }
 
 async function parseNotificationResponse(
@@ -107,20 +115,23 @@ async function parseNotificationResponse(
     return createTransportError(response, endpointName, 'invalid-response')
   }
 
-  if (!parsed || typeof parsed !== 'object' || !('code' in parsed))
+  if (!parsed || typeof parsed !== 'object' || !Object.hasOwn(parsed, 'code'))
     return createTransportError(response, endpointName, 'invalid-response')
 
   const result = parsed as NotificationApiResponse
-  if (!response.ok) {
-    const bilibiliCode = typeof result.code === 'number' ? result.code : -1
-    const kind = bilibiliCode === 0 ? 'invalid-response' : 'api-error'
+  if (typeof result.code !== 'number')
+    return createTransportError(response, endpointName, 'invalid-response')
+
+  if (!response.ok || result.code !== 0) {
+    const apiCode = result.code
+    const kind = apiCode === 0 ? 'invalid-response' : classifyApiCode(apiCode)
     result.bewlyError = {
       kind,
       httpStatus: response.status,
       endpointName,
       redirected: response.redirected,
-      finalUrlHost: getResponseHost(response),
-      bilibiliCode,
+      finalHost: getResponseHost(response),
+      apiCode,
     }
   }
 

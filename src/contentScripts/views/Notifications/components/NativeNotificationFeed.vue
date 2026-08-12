@@ -6,6 +6,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NotificationFeedsController } from '../composables/useNotificationFeeds'
+import { shouldReconcileUnreadBadge } from '../notificationFeedPolicy'
 import type { NotificationBadgeReconcileResult } from '../notificationReadReconciliation'
 import { reconcileNotificationBadge } from '../notificationReadReconciliation'
 import type { NativeNotificationSection } from '../notificationSections'
@@ -154,18 +155,19 @@ function retry() {
 }
 
 function isReadCandidateEligible(candidate = props.controller.getReadCandidate(props.section)): boolean {
-  return Boolean(
-    candidate
-    && lifecycleActive
-    && props.active
-    && document.visibilityState === 'visible'
-    && candidate.serverReadCommitted
-    && candidate.mid === props.controller.accountMid.value
-    && candidate.section === props.section
-    && candidate.generation === state.generation
-    && !state.badgeReconciled
-    && props.controller.isReadCandidateCurrent(props.section, candidate),
-  )
+  return lifecycleActive
+    && shouldReconcileUnreadBadge({
+      active: props.active,
+      visible: document.visibilityState === 'visible',
+      accountMid: props.controller.accountMid.value,
+      currentSection: props.section,
+      currentGeneration: state.generation,
+      currentReadCommitId: state.currentReadCommitId,
+      badgeReconciled: state.badgeReconciled,
+      candidate,
+    })
+    && candidate !== null
+    && props.controller.isReadCandidateCurrent(props.section, candidate)
 }
 
 async function syncReadCandidate() {
@@ -266,8 +268,7 @@ watch(authoritativeUnreadCount, (unreadCount) => {
     }).then(() => syncReadCandidate())
   }
   else if (unreadCount === 0) {
-    // Preserve the zero-to-positive edge while this v-show feed is inactive;
-    // activation will consume it without loading a hidden category.
+    // Preserve the zero-to-positive edge until this category is mounted again.
     state.lastObservedUnreadCount = 0
   }
 })

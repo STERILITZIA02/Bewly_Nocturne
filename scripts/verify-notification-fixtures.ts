@@ -4,6 +4,15 @@ import process from 'node:process'
 
 import { nextTick, ref } from 'vue'
 
+import {
+  buildNextPageParams,
+  parseNotificationPage,
+} from '../src/contentScripts/views/Notifications/notificationFeedParsing'
+import {
+  createReadCommitId,
+  shouldReconcileUnreadBadge,
+  shouldRefreshFeed,
+} from '../src/contentScripts/views/Notifications/notificationFeedPolicy'
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
 
 interface PageParams {
@@ -114,6 +123,49 @@ verify('MID change clears all states and rejects old account responses', async (
     assert.equal(controller.states[section].items.length, 0)
     assert.equal(controller.states[section].generation, 1)
   }
+})
+
+verify('notification parsing and pagination are pure reusable logic', () => {
+  const parsed = parseNotificationPage('reply', replyPage('reply-1', 'reply-cursor', 100))
+  assert.equal(parsed.page?.items[0]?.id, 'reply-1')
+  assert.deepEqual(buildNextPageParams('reply', 'reply-cursor', 100), {
+    id: 'reply-cursor',
+    reply_time: 100,
+  })
+})
+
+verify('feed freshness and read reconciliation use pure policy', () => {
+  const state = {
+    loaded: true,
+    loadedAt: 100,
+    unreadCountAtFetch: 0,
+    lastObservedUnreadCount: 0,
+  }
+  assert.equal(shouldRefreshFeed(state, {
+    now: 101,
+    reason: 'unread-change',
+    unreadCount: 1,
+  }), true)
+
+  const firstCommit = createReadCommitId('love', '100', 2, 4)
+  const secondCommit = createReadCommitId('love', '100', 2, 5)
+  assert.notEqual(firstCommit, secondCommit)
+  assert.equal(shouldReconcileUnreadBadge({
+    active: true,
+    visible: true,
+    accountMid: '100',
+    currentSection: 'love',
+    currentGeneration: 2,
+    currentReadCommitId: firstCommit,
+    badgeReconciled: false,
+    candidate: {
+      readCommitId: firstCommit,
+      mid: '100',
+      section: 'love',
+      generation: 2,
+      serverReadCommitted: true,
+    },
+  }), true)
 })
 
 async function main() {
