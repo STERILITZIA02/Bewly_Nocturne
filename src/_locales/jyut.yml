@@ -827,6 +827,52 @@ topbar:
     sticker: 出貼圖
     video: Po 片
     manager: 內容管理
+notifications:
+  document_title: '{section} - 訊息 - 嗶哩嗶哩'
+  navigation_aria: 訊息分類
+  section_aria: 打開{section}
+  unread_count: '{count} 條未讀訊息'
+  original_frame_title: 嗶哩嗶哩原版訊息頁
+  actions:
+    refresh: 重新整理
+    refresh_aria: 重新整理而家嘅訊息分類
+    refresh_tooltip: 重新載入而家嘅訊息分類
+    retry: 再試
+    open_original: 喺原版打開
+    open_original_aria: 喺嗶哩嗶哩原版打開{section}
+    open_original_tooltip: 用嗶哩嗶哩原版訊息頁打開
+  sections:
+    whisper:
+      label: 私訊
+      description: 用嗶哩嗶哩原版私訊
+    reply:
+      label: 回覆我嘅
+      description: 睇其他人畀你嘅回覆
+    at:
+      label: "{'@'} 我嘅"
+      description: "用嗶哩嗶哩原版睇 {'@'} 通知"
+    love:
+      label: 收到嘅讚
+      description: 用嗶哩嗶哩原版睇讚好通知
+    system:
+      label: 系統通知
+      description: 用嗶哩嗶哩原版睇系統通知
+    settings:
+      label: 訊息設定
+      description: 用嗶哩嗶哩原版管理訊息設定
+  reply:
+    loading: 載入緊回覆通知
+    empty: 暫時未有回覆通知
+    replied_to_you: 回覆咗你
+    unknown_user: 未知用戶
+    original_content: 原始內容
+    view_source: 睇原內容
+    errors:
+      login-required: 登入狀態已經失效
+      risk-control: 請求暫時受到限制
+      network: 網絡連線失敗
+      invalid-response: 暫時讀唔到回覆通知
+      api-error: 載入失敗，請再試
 dock:
   search: 搵嘢
   home: 主頁

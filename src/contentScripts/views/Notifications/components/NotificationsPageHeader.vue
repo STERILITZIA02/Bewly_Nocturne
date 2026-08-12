@@ -37,7 +37,7 @@ const originalUrl = computed(() => buildOriginalNotificationUrl(props.view))
         <template #left>
           <i i-mingcute:refresh-2-line />
         </template>
-        {{ t('notifications.actions.refresh') }}
+        <span>{{ t('notifications.actions.refresh') }}</span>
       </Button>
       <ALink
         class="notifications-page-header__original-link bew-shape-smooth-rect"

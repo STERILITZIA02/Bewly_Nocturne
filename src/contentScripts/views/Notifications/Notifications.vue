@@ -5,6 +5,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { useRouteState } from '~/composables/useRouteState'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useTopBarStore } from '~/stores/topBarStore'
 import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
 
 import NotificationsNavigation from './components/NotificationsNavigation.vue'
@@ -29,10 +30,12 @@ interface ReplyNotificationFeedExposed {
 const { t } = useI18n()
 const { activatedPage, handlePageRefresh, scrollViewportRef } = useBewlyApp()
 const routeState = useRouteState()
+const topBarStore = useTopBarStore()
 
 const currentView = ref<NotificationView>(parseNotificationView(routeState.href || window.location.href))
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const replyFeedRef = ref<ReplyNotificationFeedExposed | null>(null)
+const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
 const originalView = computed<OriginalNotificationView | null>(() => (
@@ -156,6 +159,7 @@ onBeforeUnmount(() => {
           v-show="currentView === 'reply'"
           ref="replyFeedRef"
           :active="isPageActive && currentView === 'reply'"
+          :mid="currentMid"
         />
         <OriginalNotificationsFrame
           v-if="originalView"

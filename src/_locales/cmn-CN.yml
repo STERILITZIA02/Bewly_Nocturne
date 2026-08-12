@@ -841,6 +841,52 @@ topbar:
     sticker: 上传贴纸
     video: 上传视频
     manager: 投稿管理
+notifications:
+  document_title: '{section} - 消息 - 哔哩哔哩'
+  navigation_aria: 消息分类
+  section_aria: 打开{section}
+  unread_count: '{count} 条未读消息'
+  original_frame_title: 哔哩哔哩原版消息页
+  actions:
+    refresh: 刷新
+    refresh_aria: 刷新当前消息分类
+    refresh_tooltip: 重新加载当前消息分类
+    retry: 重试
+    open_original: 在原版中打开
+    open_original_aria: 在哔哩哔哩原版中打开{section}
+    open_original_tooltip: 使用哔哩哔哩原版消息页打开
+  sections:
+    whisper:
+      label: 私信
+      description: 使用哔哩哔哩原版私信
+    reply:
+      label: 回复我的
+      description: 查看别人对你的回复
+    at:
+      label: "{'@'} 我的"
+      description: "使用哔哩哔哩原版查看 {'@'} 通知"
+    love:
+      label: 收到的赞
+      description: 使用哔哩哔哩原版查看点赞通知
+    system:
+      label: 系统通知
+      description: 使用哔哩哔哩原版查看系统通知
+    settings:
+      label: 消息设置
+      description: 使用哔哩哔哩原版管理消息设置
+  reply:
+    loading: 正在加载回复通知
+    empty: 暂无回复通知
+    replied_to_you: 回复了你
+    unknown_user: 未知用户
+    original_content: 原始内容
+    view_source: 查看原内容
+    errors:
+      login-required: 登录状态已失效
+      risk-control: 请求暂时受到限制
+      network: 网络连接失败
+      invalid-response: 回复通知暂时无法读取
+      api-error: 加载失败，请重试
 dock:
   search: 搜索
   home: 首页

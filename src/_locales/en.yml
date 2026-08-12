@@ -894,6 +894,52 @@ topbar:
     sticker: Sticker
     video: Video
     manager: Manager
+notifications:
+  document_title: '{section} - Messages - Bilibili'
+  navigation_aria: Message categories
+  section_aria: Open {section}
+  unread_count: '{count} unread messages'
+  original_frame_title: Original Bilibili messages
+  actions:
+    refresh: Refresh
+    refresh_aria: Refresh the current message category
+    refresh_tooltip: Reload the current message category
+    retry: Retry
+    open_original: Open original
+    open_original_aria: Open {section} in original Bilibili messages
+    open_original_tooltip: Open with the original Bilibili messages page
+  sections:
+    whisper:
+      label: Direct messages
+      description: Use original Bilibili direct messages
+    reply:
+      label: Replies
+      description: See replies to your comments
+    at:
+      label: Mentions
+      description: Use original Bilibili to view mentions
+    love:
+      label: Likes
+      description: Use original Bilibili to view like notifications
+    system:
+      label: System
+      description: Use original Bilibili to view system notifications
+    settings:
+      label: Message settings
+      description: Manage message settings with original Bilibili
+  reply:
+    loading: Loading reply notifications
+    empty: No reply notifications
+    replied_to_you: replied to you
+    unknown_user: Unknown user
+    original_content: Original content
+    view_source: View original content
+    errors:
+      login-required: Your sign-in has expired
+      risk-control: Requests are temporarily restricted
+      network: Network connection failed
+      invalid-response: Reply notifications are temporarily unavailable
+      api-error: Failed to load. Try again
 dock:
   search: Search
   home: Home

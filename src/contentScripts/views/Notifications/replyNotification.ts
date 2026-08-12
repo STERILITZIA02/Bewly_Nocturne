@@ -35,6 +35,13 @@ function toIdentifier(value: unknown): string {
   return ''
 }
 
+function toTimestamp(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0)
+    return 0
+
+  return Number.isFinite(new Date(value * 1000).getTime()) ? value : 0
+}
+
 export function sanitizeReplyUrl(value: unknown): string {
   if (typeof value !== 'string' || !value.trim())
     return ''
@@ -60,9 +67,7 @@ export function transformReplyNotification(raw: unknown): DisplayReplyNotificati
 
   const user = asRecord(record.user)
   const item = asRecord(record.item)
-  const timestamp = typeof record.reply_time === 'number' && Number.isFinite(record.reply_time)
-    ? record.reply_time
-    : 0
+  const timestamp = toTimestamp(record.reply_time)
 
   return {
     id,

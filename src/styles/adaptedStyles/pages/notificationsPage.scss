@@ -581,6 +581,35 @@ html.notificationsPage.bewly-notifications-embedded {
     min-height: 0;
     margin: 0;
     overflow: hidden;
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt) !important;
+  }
+
+  .message-main > .message-content,
+  .message-main .reply-layout,
+  .message-main .reply-list {
+    min-width: 0;
+    min-height: 0;
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt) !important;
+  }
+
+  .message-main .interaction-item {
+    color: var(--bew-text-1);
+    background: transparent;
+    border-bottom: 1px solid var(--bew-border-color);
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .message-main .interaction-item:hover {
+    background: var(--bew-fill-1) !important;
+  }
+
+  .message-main .interaction-item.active,
+  .message-main .interaction-item[aria-current="page"] {
+    color: var(--bew-theme-color);
+    background: var(--bew-theme-color-10) !important;
   }
 
   #message-navbar,

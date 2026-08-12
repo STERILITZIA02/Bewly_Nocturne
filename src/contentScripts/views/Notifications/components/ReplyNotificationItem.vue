@@ -21,10 +21,15 @@ const formattedTime = computed(() => {
   if (!props.item.timestamp)
     return ''
 
-  return new Intl.DateTimeFormat(locale.value, {
-    dateStyle: 'medium',
-    timeStyle: 'short',
-  }).format(props.item.timestamp * 1000)
+  try {
+    return new Intl.DateTimeFormat(locale.value, {
+      dateStyle: 'medium',
+      timeStyle: 'short',
+    }).format(props.item.timestamp * 1000)
+  }
+  catch {
+    return ''
+  }
 })
 
 watch(() => props.item.id, () => {

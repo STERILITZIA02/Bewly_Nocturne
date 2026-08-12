@@ -26,6 +26,9 @@ const API_NOTIFICATION = {
     },
     afterHandle: AHS.J_D,
   },
+  // Verified against the current message-pc client: the first page omits the
+  // cursor, later pages send string `id` plus numeric `reply_time`, and this
+  // authenticated GET owns the Reply read side effect (no CSRF/notice POST).
   getReplyNotifications: {
     url: 'https://api.bilibili.com/x/msgfeed/reply',
     _fetch: {

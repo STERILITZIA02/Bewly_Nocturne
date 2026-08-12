@@ -7,9 +7,11 @@ import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { OriginalNotificationView } from '../notificationSections'
 
-const props = defineProps<{
+interface Props {
   view: OriginalNotificationView
-}>()
+}
+
+const props = defineProps<Props>()
 
 const { isDark, isOledDark } = useDark()
 const topBarStore = useTopBarStore()

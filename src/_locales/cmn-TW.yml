@@ -842,6 +842,52 @@ topbar:
     sticker: 上傳貼圖
     video: 上傳影片
     manager: 內容管理
+notifications:
+  document_title: '{section} - 訊息 - 嗶哩嗶哩'
+  navigation_aria: 訊息分類
+  section_aria: 開啟{section}
+  unread_count: '{count} 則未讀訊息'
+  original_frame_title: 嗶哩嗶哩原版訊息頁
+  actions:
+    refresh: 重新整理
+    refresh_aria: 重新整理目前訊息分類
+    refresh_tooltip: 重新載入目前訊息分類
+    retry: 重試
+    open_original: 在原版中開啟
+    open_original_aria: 在嗶哩嗶哩原版中開啟{section}
+    open_original_tooltip: 使用嗶哩嗶哩原版訊息頁開啟
+  sections:
+    whisper:
+      label: 私訊
+      description: 使用嗶哩嗶哩原版私訊
+    reply:
+      label: 回覆我的
+      description: 查看其他人對你的回覆
+    at:
+      label: "{'@'} 我的"
+      description: "使用嗶哩嗶哩原版查看 {'@'} 通知"
+    love:
+      label: 收到的讚
+      description: 使用嗶哩嗶哩原版查看按讚通知
+    system:
+      label: 系統通知
+      description: 使用嗶哩嗶哩原版查看系統通知
+    settings:
+      label: 訊息設定
+      description: 使用嗶哩嗶哩原版管理訊息設定
+  reply:
+    loading: 正在載入回覆通知
+    empty: 暫無回覆通知
+    replied_to_you: 回覆了你
+    unknown_user: 未知使用者
+    original_content: 原始內容
+    view_source: 查看原始內容
+    errors:
+      login-required: 登入狀態已失效
+      risk-control: 請求暫時受到限制
+      network: 網路連線失敗
+      invalid-response: 暫時無法讀取回覆通知
+      api-error: 載入失敗，請重試
 dock:
   search: 搜尋
   home: 首頁

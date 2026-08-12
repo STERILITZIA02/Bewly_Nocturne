@@ -11,13 +11,14 @@ import ReplyNotificationItem from './ReplyNotificationItem.vue'
 
 const props = defineProps<{
   active: boolean
+  mid: string
 }>()
 
 const { t } = useI18n()
 const { scrollViewportRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const sentinelRef = ref<HTMLElement | null>(null)
-const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
+const currentMid = computed(() => props.mid)
 const originalReplyUrl = buildOriginalNotificationUrl('reply')
 const feed = useReplyNotifications(currentMid, {
   fetchPage: params => api.notification.getReplyNotifications(params),
@@ -30,6 +31,8 @@ const errorMessage = computed(() => state.errorKind
 
 let observer: IntersectionObserver | null = null
 let restoreFrame: number | undefined
+let readSyncRequest: Promise<void> | null = null
+let lifecycleActive = true
 
 function clearRestoreFrame() {
   if (restoreFrame === undefined)
@@ -74,10 +77,15 @@ async function connectObserver() {
 }
 
 async function activateFeed() {
+  if (!props.active || document.visibilityState !== 'visible')
+    return
+
   restoreScrollPosition()
   await feed.ensureLoaded()
-  if (props.active)
+  if (props.active) {
     await connectObserver()
+    void syncReadCandidate()
+  }
 }
 
 function deactivateFeed() {
@@ -91,8 +99,10 @@ async function refresh() {
   state.scrollTop = 0
   viewport?.scrollTo({ top: 0 })
   await feed.refresh()
-  if (props.active)
+  if (props.active) {
     await connectObserver()
+    void syncReadCandidate()
+  }
 }
 
 function retry() {
@@ -102,11 +112,74 @@ function retry() {
     void feed.loadInitial()
 }
 
-watch(() => props.active, (active) => {
-  if (active)
-    void activateFeed()
+function isReadCandidateEligible(candidate = feed.readCandidate.value): boolean {
+  return Boolean(
+    candidate
+    && lifecycleActive
+    && props.active
+    && document.visibilityState === 'visible'
+    && candidate.mid === currentMid.value
+    && candidate.generation === state.generation
+    && candidate.marker !== state.lastReadMarker
+    && feed.isReadCandidateCurrent(candidate),
+  )
+}
+
+async function syncReadCandidate() {
+  if (readSyncRequest)
+    return
+
+  await nextTick()
+  const candidate = feed.readCandidate.value
+  if (!candidate || !isReadCandidateEligible(candidate))
+    return
+
+  // The successful first-page GET is the current message site's real read
+  // mutation. Only clear local dots after that response has rendered.
+  if (!feed.markCandidateReadLocally(candidate))
+    return
+
+  const request = topBarStore.syncUnreadMessageState()
+  readSyncRequest = request
+  try {
+    await request
+    if (isReadCandidateEligible(candidate))
+      feed.confirmReadCandidate(candidate)
+  }
+  catch {
+    if (import.meta.env.DEV) {
+      console.warn('[Notifications][Reply] Unread synchronization failed', {
+        endpointName: 'syncUnreadMessageState',
+        kind: 'network',
+      })
+    }
+  }
+  finally {
+    readSyncRequest = null
+    const nextCandidate = feed.readCandidate.value
+    if (nextCandidate && nextCandidate.marker !== candidate.marker && isReadCandidateEligible(nextCandidate))
+      void syncReadCandidate()
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState !== 'visible' || !props.active)
+    return
+
+  if (state.loaded)
+    void syncReadCandidate()
   else
+    void activateFeed()
+}
+
+watch(() => props.active, (active) => {
+  if (active) {
+    lifecycleActive = true
+    void activateFeed()
+  }
+  else {
     deactivateFeed()
+  }
 }, { immediate: true })
 
 watch(currentMid, () => {
@@ -118,12 +191,26 @@ watch(currentMid, () => {
   }
 })
 
+watch(() => feed.readCandidate.value?.marker, () => {
+  if (props.active)
+    void syncReadCandidate()
+})
+
+onMounted(() => document.addEventListener('visibilitychange', handleVisibilityChange))
 onActivated(() => {
+  lifecycleActive = true
   if (props.active)
     void activateFeed()
 })
-onDeactivated(deactivateFeed)
-onBeforeUnmount(deactivateFeed)
+onDeactivated(() => {
+  lifecycleActive = false
+  deactivateFeed()
+})
+onBeforeUnmount(() => {
+  lifecycleActive = false
+  deactivateFeed()
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 
 defineExpose({ refresh })
 </script>
@@ -132,9 +219,9 @@ defineExpose({ refresh })
   <section
     class="reply-notification-feed"
     :aria-label="t('notifications.sections.reply.label')"
-    :aria-busy="state.loading || state.loadingMore"
+    :aria-busy="!state.loaded || state.loading || state.loadingMore"
   >
-    <Loading v-if="state.loading && !state.loaded" />
+    <Loading v-if="!state.loaded && !state.errorKind" />
 
     <div v-else-if="state.errorKind && state.items.length === 0" class="reply-notification-feed__state">
       <Empty :description="errorMessage">

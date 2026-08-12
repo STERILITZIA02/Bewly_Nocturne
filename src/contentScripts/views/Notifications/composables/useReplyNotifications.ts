@@ -27,6 +27,12 @@ export interface ReplyFeedState {
   lastReadMarker: string
 }
 
+export interface ReplyReadCandidate {
+  marker: string
+  mid: string
+  generation: number
+}
+
 interface ReplyPageParams {
   id?: string
   reply_time?: number
@@ -108,13 +114,17 @@ function parseReplyPage(value: unknown): { page?: ReplyPageResult, errorKind?: R
   const cursorTime = typeof cursor.time === 'number' && Number.isFinite(cursor.time)
     ? cursor.time
     : 0
+  const cursorId = toStringIdentifier(cursor.id)
+  const noMore = cursor.is_end === true || cursor.is_end === 1
+  if (!noMore && (!cursorId || cursorTime <= 0))
+    return { errorKind: 'invalid-response' }
 
   return {
     page: {
       items,
-      cursorId: toStringIdentifier(cursor.id),
+      cursorId,
       cursorTime,
-      noMore: cursor.is_end === true || cursor.is_end === 1,
+      noMore,
     },
   }
 }
@@ -126,6 +136,7 @@ export function useReplyNotifications(
   const fetchPage = options.fetchPage
   const resolvedMid = computed(() => toValue(mid))
   const accountMid = ref(resolvedMid.value)
+  const readCandidate = ref<ReplyReadCandidate | null>(null)
   const state = reactive<ReplyFeedState>({
     items: [],
     cursorId: '',
@@ -143,7 +154,8 @@ export function useReplyNotifications(
   let initialRequest: Promise<void> | null = null
   let loadMoreRequest: Promise<void> | null = null
 
-  function resetForAccount(nextMid: string) {
+  function resetForAccount(nextMid: string, preserveReadMarker = false) {
+    const lastReadMarker = state.lastReadMarker
     state.generation++
     accountMid.value = nextMid
     state.items.splice(0)
@@ -155,7 +167,8 @@ export function useReplyNotifications(
     state.noMore = false
     state.errorKind = null
     state.scrollTop = 0
-    state.lastReadMarker = ''
+    state.lastReadMarker = preserveReadMarker ? lastReadMarker : ''
+    readCandidate.value = null
     initialRequest = null
     loadMoreRequest = null
   }
@@ -181,6 +194,16 @@ export function useReplyNotifications(
       state.loaded = true
       state.errorKind = null
       state.noMore = result.page.noMore
+      readCandidate.value = {
+        marker: [
+          result.page.cursorId,
+          result.page.cursorTime,
+          result.page.items[0]?.id ?? 'empty',
+          result.page.items.length,
+        ].join(':'),
+        mid: requestMid,
+        generation: requestGeneration,
+      }
     }
     catch {
       if (isCurrentRequest(requestGeneration, requestMid))
@@ -270,7 +293,8 @@ export function useReplyNotifications(
   }
 
   function refresh(): Promise<void> {
-    resetForAccount(resolvedMid.value)
+    const nextMid = resolvedMid.value
+    resetForAccount(nextMid, nextMid === accountMid.value)
     return loadInitial()
   }
 
@@ -278,14 +302,42 @@ export function useReplyNotifications(
     return state.loaded ? Promise.resolve() : loadInitial()
   }
 
-  watch(resolvedMid, resetForAccount)
+  function isReadCandidateCurrent(candidate: ReplyReadCandidate): boolean {
+    return readCandidate.value?.marker === candidate.marker
+      && candidate.mid === accountMid.value
+      && candidate.generation === state.generation
+  }
+
+  function markCandidateReadLocally(candidate: ReplyReadCandidate): boolean {
+    if (!isReadCandidateCurrent(candidate))
+      return false
+
+    state.items.forEach((item) => {
+      item.unread = false
+    })
+    return true
+  }
+
+  function confirmReadCandidate(candidate: ReplyReadCandidate): boolean {
+    if (!isReadCandidateCurrent(candidate))
+      return false
+
+    state.lastReadMarker = candidate.marker
+    return true
+  }
+
+  watch(resolvedMid, nextMid => resetForAccount(nextMid))
 
   return {
     accountMid,
+    readCandidate,
     state,
+    confirmReadCandidate,
     ensureLoaded,
+    isReadCandidateCurrent,
     loadInitial,
     loadMore,
+    markCandidateReadLocally,
     refresh,
   }
 }
