@@ -39,6 +39,7 @@ type FixtureName
     | 'like-empty.json'
     | 'large-id.json'
     | 'api-error.json'
+    | 'system/api-error.json'
     | 'html-response.html'
 
 interface MockResponseOptions {
@@ -255,6 +256,12 @@ verify('transport classifies API, HTML, server, risk, and login failures', async
     'kind',
     'redirected',
   ])
+})
+
+verify('System anonymous probe fixture preserves the confirmed login error', async () => {
+  const response = await readFixtureJson('system/api-error.json') as { code?: unknown, message?: unknown }
+  assert.equal(response.code, -101)
+  assert.equal(response.message, '-101')
 })
 
 verify('invalid JSON and invalid response shapes are rejected', async () => {
