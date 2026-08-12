@@ -158,9 +158,10 @@ pnpm typecheck
 - 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 原生 `.bili-header`；自定义模式根据现有配置选择 Bewly 或 Bilibili 原生顶栏。不得探测、适配或承诺支持第三方顶栏实现。
 - 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
 - 首页默认整合搜索页并复用单一 SearchBar 实例：初始位置保留聚焦人物，滚动到顶栏后原实例粘附且人物隐藏，不得再生成第二个顶栏搜索框。独立搜索页开关关闭时，`AppPage.Search` 路由归一到首页且 Dock 不显示搜索项；两种形态直接共用现有搜索设置，不恢复“与搜索页共用的配置”跳转入口。首页与搜索页只复用顶栏表面样式，必须保留搜索框自身的 `550px` 最大宽度。
-- Dock 默认位于底部；`Notifications` 是可配置的独立 Bewly 混合消息页：`reply / at / love` 使用 Vue Native Feed，`whisper / system / settings` 使用完整的原版消息 iframe fallback。未原生化的能力继续由原版页面完整承载，不得一次性移植或重写完整私信客户端；下一阶段只能单独评估 `system`，私信必须继续作为独立阶段拆分。
+- Dock 默认位于底部；`Notifications` 是可配置的独立 Bewly 混合消息页：`reply / at / love` 使用 Vue Native Feed，`whisper / system / settings` 使用完整的原版消息 iframe fallback。未原生化的能力继续由原版页面完整承载，不得一次性移植或重写完整私信客户端。System 已完成当前发布 bundle 的静态协议调查，但仍缺少登录态成功首屏响应、历史分页成功响应、`update_cursor` 成功响应与 `sys_msg` 归零时序；在这些真实脱敏 fixture 齐备前必须保持 original iframe，禁止根据旧 `Stage_2_fix` 或归档文档猜测 System 数据结构。
 - 三类 Native Feed 共用展示模型、分页策略、错误模型、外层滚动和连续列表视觉；页面级 controller 按分类保存状态，但同一时间只允许渲染当前一个 Native Feed DOM。隐藏分类不得保留完整长列表、IntersectionObserver 或 visibility listener，也不得通过 KeepAlive 保留三套 Feed 组件。
 - Reply / At / Love 的 items、cursor、read commit、请求 single-flight、缓存与 scrollTop 必须独立；所有 Feed 按当前 MID 隔离，账号变化后旧 generation 的响应不得写入新账号。通知解析、聚合或分页规则变更必须同步脱敏 fixture，并通过 `pnpm verify:notifications`，不得绕过该门禁。
+- Native Feed 的自动激活、未读变化与可见性刷新必须使用 `merge-head` 更新首部并保留已加载历史与视觉锚点；用户手动刷新使用 `replace`、重置分页并回到顶部。分页必须检查 cursor 或唯一条目是否前进，停滞后停止 Observer 自动请求；Retry 必须根据 `failedOperation` 精确重试首次加载、刷新或分页，不得根据 items 数量猜测。
 - Native Feed 的服务端已读成功后只通过 `topBarStore` 的单一权威路径同步未读与跨标签 broker；不得建立第二套 unread Store。Bewly 页面、`NotificationsDrawer` 与直接打开的原版页必须继续保持 iframe、路由、滚动和显隐状态独立。后续 System 原生化必须复用 Native Feed controller 与策略内核，但不得把系统通知强行套入 actor 模型。
 
 ### 深色背景、OLED 与主题色
