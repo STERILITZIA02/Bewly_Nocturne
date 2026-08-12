@@ -36,7 +36,8 @@ export interface NotificationFeedState {
   errorKind: NotificationErrorKind | null
   generation: number
   scrollTop: number
-  readCommitId: string
+  firstPageRequestSerial: number
+  currentReadCommitId: string
   serverReadCommitted: boolean
   badgeReconciled: boolean
 }
@@ -263,15 +264,14 @@ export function useNotificationFeed(
     errorKind: null,
     generation: 0,
     scrollTop: 0,
-    readCommitId: '',
+    firstPageRequestSerial: 0,
+    currentReadCommitId: '',
     serverReadCommitted: false,
     badgeReconciled: false,
   })
 
   let initialRequest: Promise<void> | null = null
   let loadMoreRequest: Promise<void> | null = null
-  let firstPageRequestSerial = 0
-
   function resetForAccount(nextMid: string) {
     state.generation++
     accountMid.value = nextMid
@@ -287,13 +287,13 @@ export function useNotificationFeed(
     state.noMore = false
     state.errorKind = null
     state.scrollTop = 0
-    state.readCommitId = ''
+    state.firstPageRequestSerial = 0
+    state.currentReadCommitId = ''
     state.serverReadCommitted = false
     state.badgeReconciled = false
     readCandidate.value = null
     initialRequest = null
     loadMoreRequest = null
-    firstPageRequestSerial = 0
   }
 
   function isCurrentRequest(requestGeneration: number, requestMid: string): boolean {
@@ -301,7 +301,7 @@ export function useNotificationFeed(
   }
 
   function isCurrentPageRequest(requestGeneration: number, requestMid: string, requestSerial: number): boolean {
-    return isCurrentRequest(requestGeneration, requestMid) && requestSerial === firstPageRequestSerial
+    return isCurrentRequest(requestGeneration, requestMid) && requestSerial === state.firstPageRequestSerial
   }
 
   async function requestInitialPage(
@@ -333,7 +333,7 @@ export function useNotificationFeed(
       // The verified message-pc contract commits category read in the
       // successful first-page GET for Reply, At, and Like.
       readCandidate.value = {
-        readCommitId: state.readCommitId,
+        readCommitId: state.currentReadCommitId,
         mid: requestMid,
         section,
         generation: requestGeneration,
@@ -364,13 +364,13 @@ export function useNotificationFeed(
 
     const requestGeneration = state.generation
     const requestMid = accountMid.value
-    const requestSerial = ++firstPageRequestSerial
+    const requestSerial = ++state.firstPageRequestSerial
     const unreadCount = normalizeUnreadCount(options.unreadCount ?? state.lastObservedUnreadCount)
     const loadedAt = options.now ?? Date.now()
     state.loading = true
     state.loadingMore = false
     state.errorKind = null
-    state.readCommitId = [section, requestMid, requestGeneration, requestSerial].join(':')
+    state.currentReadCommitId = [section, requestMid, requestGeneration, requestSerial].join(':')
     state.serverReadCommitted = false
     state.badgeReconciled = false
     readCandidate.value = null
@@ -430,7 +430,7 @@ export function useNotificationFeed(
 
     const requestGeneration = state.generation
     const requestMid = accountMid.value
-    const requestSerial = firstPageRequestSerial
+    const requestSerial = state.firstPageRequestSerial
     state.loadingMore = true
     state.errorKind = null
     const request = requestNextPage(requestGeneration, requestMid, requestSerial)
@@ -481,7 +481,7 @@ export function useNotificationFeed(
 
   function isReadCandidateCurrent(candidate: NotificationReadCandidate): boolean {
     return readCandidate.value?.readCommitId === candidate.readCommitId
-      && state.readCommitId === candidate.readCommitId
+      && state.currentReadCommitId === candidate.readCommitId
       && state.serverReadCommitted
       && candidate.serverReadCommitted
       && candidate.mid === accountMid.value

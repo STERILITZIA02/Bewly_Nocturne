@@ -36,6 +36,7 @@
     "lint": "eslint",
     "lint:fix": "eslint --fix",
     "typecheck": "vue-tsc",
+    "verify:notifications": "esno scripts/verify-notification-fixtures.ts",
     "postinstall": "npx simple-git-hooks",
     "knip": "knip",
     "submit": "run-p submit:*",

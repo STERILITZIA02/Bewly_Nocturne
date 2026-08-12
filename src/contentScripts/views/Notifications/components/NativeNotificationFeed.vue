@@ -3,11 +3,9 @@ import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useTopBarStore } from '~/stores/topBarStore'
-import api from '~/utils/api'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
-import type { NotificationPageParams } from '../composables/useNotificationFeed'
-import { useNotificationFeed } from '../composables/useNotificationFeed'
+import type { NotificationFeedsController } from '../composables/useNotificationFeeds'
 import type { NotificationBadgeReconcileResult } from '../notificationReadReconciliation'
 import { reconcileNotificationBadge } from '../notificationReadReconciliation'
 import type { NativeNotificationSection } from '../notificationSections'
@@ -16,7 +14,7 @@ import NativeNotificationItem from './NativeNotificationItem.vue'
 
 const props = defineProps<{
   active: boolean
-  mid: string
+  controller: NotificationFeedsController
   section: NativeNotificationSection
 }>()
 
@@ -24,7 +22,7 @@ const { t } = useI18n()
 const { scrollViewportRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const sentinelRef = ref<HTMLElement | null>(null)
-const currentMid = computed(() => props.mid)
+const state = props.controller.states[props.section]
 const originalNotificationUrl = computed(() => buildOriginalNotificationUrl(props.section))
 const authoritativeUnreadCount = computed(() => {
   if (props.section === 'reply')
@@ -36,30 +34,6 @@ const authoritativeUnreadCount = computed(() => {
     (topBarStore.unReadMessage as { recv_like?: number }).recv_like || 0,
   )
 })
-
-function fetchNotificationPage(params?: NotificationPageParams): Promise<unknown> {
-  if (props.section === 'reply') {
-    return api.notification.getReplyNotifications({
-      id: params?.id,
-      reply_time: params?.reply_time,
-    })
-  }
-  if (props.section === 'at') {
-    return api.notification.getAtNotifications({
-      id: params?.id,
-      at_time: params?.at_time,
-    })
-  }
-  return api.notification.getLikeNotifications({
-    id: params?.id,
-    like_time: params?.like_time,
-  })
-}
-
-const feed = useNotificationFeed(currentMid, props.section, {
-  fetchPage: fetchNotificationPage,
-})
-const { state } = feed
 
 const errorMessage = computed(() => state.errorKind
   ? t(`notifications.native.errors.${state.errorKind}`)
@@ -130,7 +104,7 @@ async function connectObserver() {
 
   observer = new IntersectionObserver(([entry]) => {
     if (entry.isIntersecting && props.active)
-      void feed.loadMore()
+      void props.controller.loadMore(props.section)
   }, {
     root: scrollViewportRef.value,
     rootMargin: '0px 0px 320px 0px',
@@ -144,7 +118,7 @@ async function activateFeed(reason: 'activate' | 'visibility' = 'activate') {
     return
 
   restoreScrollPosition()
-  await feed.refreshIfStale({
+  await props.controller.refreshIfStale(props.section, {
     reason,
     unreadCount: authoritativeUnreadCount.value,
   })
@@ -165,7 +139,7 @@ async function refresh() {
   const viewport = scrollViewportRef.value
   state.scrollTop = 0
   viewport?.scrollTo({ top: 0 })
-  await feed.refresh(authoritativeUnreadCount.value)
+  await props.controller.refresh(props.section, authoritativeUnreadCount.value)
   if (props.active) {
     await connectObserver()
     void syncReadCandidate()
@@ -174,23 +148,23 @@ async function refresh() {
 
 function retry() {
   if (state.items.length > 0)
-    void feed.loadMore()
+    void props.controller.loadMore(props.section)
   else
-    void feed.loadInitial()
+    void props.controller.loadInitial(props.section)
 }
 
-function isReadCandidateEligible(candidate = feed.readCandidate.value): boolean {
+function isReadCandidateEligible(candidate = props.controller.getReadCandidate(props.section)): boolean {
   return Boolean(
     candidate
     && lifecycleActive
     && props.active
     && document.visibilityState === 'visible'
     && candidate.serverReadCommitted
-    && candidate.mid === currentMid.value
+    && candidate.mid === props.controller.accountMid.value
     && candidate.section === props.section
     && candidate.generation === state.generation
     && !state.badgeReconciled
-    && feed.isReadCandidateCurrent(candidate),
+    && props.controller.isReadCandidateCurrent(props.section, candidate),
   )
 }
 
@@ -202,13 +176,13 @@ async function syncReadCandidate() {
   if (readSyncRequest)
     return
 
-  const candidate = feed.readCandidate.value
+  const candidate = props.controller.getReadCandidate(props.section)
   if (!candidate || !isReadCandidateEligible(candidate))
     return
 
   // The successful first-page GET is the current message site's real read
   // mutation. Only clear local dots after that response has rendered.
-  if (!feed.markCandidateReadLocally(candidate))
+  if (!props.controller.markCandidateReadLocally(props.section, candidate))
     return
 
   let reconcileResult: NotificationBadgeReconcileResult = 'cancelled'
@@ -222,7 +196,7 @@ async function syncReadCandidate() {
     })
 
     if (reconcileResult === 'reconciled' && isReadCandidateEligible(candidate)) {
-      feed.confirmReadCandidate(candidate)
+      props.controller.confirmReadCandidate(props.section, candidate)
     }
     else if (reconcileResult === 'failed' && import.meta.env.DEV) {
       console.warn('[Notifications][NativeFeed] Unread synchronization failed', {
@@ -239,7 +213,7 @@ async function syncReadCandidate() {
   finally {
     cancelBadgeRetry()
     readSyncRequest = null
-    const nextCandidate = feed.readCandidate.value
+    const nextCandidate = props.controller.getReadCandidate(props.section)
     if (
       nextCandidate
       && isReadCandidateEligible(nextCandidate)
@@ -274,7 +248,7 @@ watch(() => props.active, (active) => {
   }
 }, { immediate: true })
 
-watch(currentMid, () => {
+watch(() => props.controller.accountMid.value, () => {
   cancelBadgeRetry()
   if (props.active) {
     nextTick(() => {
@@ -286,7 +260,7 @@ watch(currentMid, () => {
 
 watch(authoritativeUnreadCount, (unreadCount) => {
   if (props.active && document.visibilityState === 'visible') {
-    void feed.refreshIfStale({
+    void props.controller.refreshIfStale(props.section, {
       reason: 'unread-change',
       unreadCount,
     }).then(() => syncReadCandidate())
@@ -298,7 +272,7 @@ watch(authoritativeUnreadCount, (unreadCount) => {
   }
 })
 
-watch(() => feed.readCandidate.value?.readCommitId, () => {
+watch(() => props.controller.getReadCandidate(props.section)?.readCommitId, () => {
   cancelBadgeRetry()
   if (props.active)
     void syncReadCandidate()

@@ -6,12 +6,15 @@ import { useRouteState } from '~/composables/useRouteState'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import api from '~/utils/api'
 import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
 
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
 import NotificationsNavigation from './components/NotificationsNavigation.vue'
 import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
 import OriginalNotificationsFrame from './components/OriginalNotificationsFrame.vue'
+import type { NotificationPageParams } from './composables/useNotificationFeed'
+import { useNotificationFeeds } from './composables/useNotificationFeeds'
 import type {
   NativeNotificationSection,
   NotificationView,
@@ -21,7 +24,6 @@ import {
   isNativeNotificationSection,
   isNotificationView,
   isOriginalNotificationView,
-  NATIVE_NOTIFICATION_SECTIONS,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
 
@@ -40,8 +42,11 @@ const topBarStore = useTopBarStore()
 
 const currentView = ref<NotificationView>(parseNotificationView(routeState.href || window.location.href))
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
-const nativeFeedRefs = new Map<NativeNotificationSection, NativeNotificationFeedExposed>()
+const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
+const notificationFeeds = useNotificationFeeds(currentMid, {
+  fetchPage: fetchNotificationPage,
+})
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
 const originalView = computed<OriginalNotificationView | null>(() => (
@@ -103,16 +108,31 @@ function resetOuterScrollForOriginalView(view: NotificationView) {
 
 function refreshCurrentView() {
   if (nativeView.value)
-    void nativeFeedRefs.get(nativeView.value)?.refresh()
+    void nativeFeedRef.value?.refresh()
   else
     originalFrameRef.value?.reload()
 }
 
-function setNativeFeedRef(section: NativeNotificationSection, component: unknown) {
-  if (component)
-    nativeFeedRefs.set(section, component as NativeNotificationFeedExposed)
-  else
-    nativeFeedRefs.delete(section)
+function fetchNotificationPage(
+  section: NativeNotificationSection,
+  params?: NotificationPageParams,
+): Promise<unknown> {
+  if (section === 'reply') {
+    return api.notification.getReplyNotifications({
+      id: params?.id,
+      reply_time: params?.reply_time,
+    })
+  }
+  if (section === 'at') {
+    return api.notification.getAtNotifications({
+      id: params?.id,
+      at_time: params?.at_time,
+    })
+  }
+  return api.notification.getLikeNotifications({
+    id: params?.id,
+    like_time: params?.like_time,
+  })
 }
 
 function registerRefreshHandler() {
@@ -191,13 +211,12 @@ onBeforeUnmount(() => {
 
       <section class="notifications-page__outlet">
         <NativeNotificationFeed
-          v-for="section in NATIVE_NOTIFICATION_SECTIONS"
-          v-show="currentView === section.id"
-          :key="section.id"
-          :ref="component => setNativeFeedRef(section.id, component)"
-          :active="isPageActive && currentView === section.id"
-          :mid="currentMid"
-          :section="section.id"
+          v-if="nativeView"
+          :key="nativeView"
+          ref="nativeFeedRef"
+          :active="isPageActive"
+          :controller="notificationFeeds"
+          :section="nativeView"
         />
         <OriginalNotificationsFrame
           v-if="originalView"
