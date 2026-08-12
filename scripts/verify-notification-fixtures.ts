@@ -25,6 +25,7 @@ import {
   shouldReconcileUnreadBadge,
   shouldRefreshFeed,
 } from '../src/contentScripts/views/Notifications/notificationFeedPolicy'
+import { reconcileNotificationBadge } from '../src/contentScripts/views/Notifications/notificationReadReconciliation'
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
 import { parseNotificationView } from '../src/utils/notificationRoute'
 
@@ -32,6 +33,8 @@ type FixtureName
   = | 'reply-first.json'
     | 'reply-next.json'
     | 'reply-empty.json'
+    | 'reply-same-cursor-empty.json'
+    | 'reply-same-cursor-duplicate.json'
     | 'at-first.json'
     | 'at-next.json'
     | 'like-first.json'
@@ -105,6 +108,34 @@ function sampleDisplayNotification(id: string): DisplayNotification {
   }
 }
 
+interface NotificationReliabilityPolicy {
+  applyNotificationFirstPage: (...args: unknown[]) => unknown
+  evaluatePaginationProgress: (...args: unknown[]) => unknown
+  resolveNotificationAccountState: (...args: unknown[]) => unknown
+}
+
+async function loadNotificationReliabilityPolicy(): Promise<NotificationReliabilityPolicy> {
+  const policy = await import('../src/contentScripts/views/Notifications/notificationFeedPolicy')
+  const applyNotificationFirstPage = Reflect.get(policy, 'applyNotificationFirstPage')
+  const evaluatePaginationProgress = Reflect.get(policy, 'evaluatePaginationProgress')
+  const resolveNotificationAccountState = Reflect.get(policy, 'resolveNotificationAccountState')
+
+  assert.equal(typeof applyNotificationFirstPage, 'function', 'applyNotificationFirstPage must be exported')
+  assert.equal(typeof evaluatePaginationProgress, 'function', 'evaluatePaginationProgress must be exported')
+  assert.equal(typeof resolveNotificationAccountState, 'function', 'resolveNotificationAccountState must be exported')
+  return {
+    applyNotificationFirstPage: applyNotificationFirstPage as NotificationReliabilityPolicy['applyNotificationFirstPage'],
+    evaluatePaginationProgress: evaluatePaginationProgress as NotificationReliabilityPolicy['evaluatePaginationProgress'],
+    resolveNotificationAccountState: resolveNotificationAccountState as NotificationReliabilityPolicy['resolveNotificationAccountState'],
+  }
+}
+
+function getRetryFailedOperation(controller: ReturnType<typeof useNotificationFeeds>) {
+  const retry = Reflect.get(controller, 'retryFailedOperation')
+  assert.equal(typeof retry, 'function', 'controller.retryFailedOperation must exist')
+  return retry as (section: NativeNotificationSection, unreadCount?: number) => Promise<void>
+}
+
 verify('only the current Native Feed is rendered', async () => {
   const source = await readFile(
     new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url),
@@ -114,6 +145,19 @@ verify('only the current Native Feed is rendered', async () => {
   assert.doesNotMatch(source, /v-for="section in NATIVE_NOTIFICATION_SECTIONS"/)
   assert.doesNotMatch(source, /v-show="currentView === section\.id"/)
   assert.match(source, /v-if="nativeView"/)
+})
+
+verify('Native Feed retry, account pending, and scroll anchor wiring are explicit', async () => {
+  const [feedSource, itemSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeed.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationItem.vue', import.meta.url), 'utf8'),
+  ])
+  assert.doesNotMatch(feedSource, /state\.items\.length\s*>\s*0[\s\S]{0,120}loadMore/)
+  assert.match(feedSource, /retryFailedOperation/)
+  assert.match(feedSource, /accountState === 'profile-pending'/)
+  assert.match(feedSource, /captureScrollAnchor/)
+  assert.match(feedSource, /restoreScrollAnchor/)
+  assert.match(itemSource, /data-notification-id/)
 })
 
 verify('pure parsing and policy modules have no Vue or Store dependency', async () => {
@@ -202,6 +246,85 @@ verify('notification ID dedupe is stable and non-mutating', () => {
   const result = dedupeNotifications(input)
   assert.deepEqual(result.map(item => item.id), ['duplicate', 'unique'])
   assert.equal(input.length, 3)
+})
+
+verify('first-page apply policy merges new head data without losing a loaded tail', async () => {
+  const { applyNotificationFirstPage } = await loadNotificationReliabilityPolicy()
+  const oldHead = { ...sampleDisplayNotification('head'), actorCount: 1, body: 'old' }
+  const tail = { ...sampleDisplayNotification('tail'), body: 'history' }
+  const newHead = { ...sampleDisplayNotification('new'), body: 'new' }
+  const updatedHead = {
+    ...sampleDisplayNotification('head'),
+    actorCount: 5,
+    body: 'updated',
+    unread: true,
+  }
+  const current = {
+    items: [oldHead, tail],
+    cursorId: 'tail-cursor',
+    cursorTime: 10,
+    noMore: false,
+    hasLoadedMore: true,
+    paginationStalled: false,
+  }
+  const page = {
+    items: [newHead, updatedHead],
+    cursorId: 'head-cursor',
+    cursorTime: 20,
+    noMore: true,
+  }
+
+  const merged = applyNotificationFirstPage(current, page, 'merge-head') as typeof current
+  assert.deepEqual(merged.items.map(item => item.id), ['new', 'head', 'tail'])
+  assert.equal(merged.items[1]?.body, 'updated')
+  assert.equal(merged.items[1]?.actorCount, 5)
+  assert.equal(merged.items[1]?.unread, true)
+  assert.equal(merged.cursorId, 'tail-cursor')
+  assert.equal(merged.cursorTime, 10)
+  assert.equal(merged.noMore, false)
+  assert.equal(merged.hasLoadedMore, true)
+
+  const replaced = applyNotificationFirstPage(current, page, 'replace') as typeof current
+  assert.deepEqual(replaced.items.map(item => item.id), ['new', 'head'])
+  assert.equal(replaced.cursorId, 'head-cursor')
+  assert.equal(replaced.cursorTime, 20)
+  assert.equal(replaced.noMore, true)
+  assert.equal(replaced.hasLoadedMore, false)
+})
+
+verify('pagination progress policy stops unchanged cursors but accepts tails and cursor advances', async () => {
+  const { evaluatePaginationProgress } = await loadNotificationReliabilityPolicy()
+  assert.deepEqual(evaluatePaginationProgress({
+    previousCursorId: 'cursor',
+    previousCursorTime: 10,
+    nextCursorId: 'cursor',
+    nextCursorTime: 10,
+    newUniqueItemCount: 0,
+    noMore: false,
+  }), { madeProgress: false, stalled: true })
+  assert.deepEqual(evaluatePaginationProgress({
+    previousCursorId: 'cursor',
+    previousCursorTime: 10,
+    nextCursorId: 'cursor',
+    nextCursorTime: 10,
+    newUniqueItemCount: 0,
+    noMore: true,
+  }), { madeProgress: false, stalled: false })
+  assert.deepEqual(evaluatePaginationProgress({
+    previousCursorId: 'cursor',
+    previousCursorTime: 10,
+    nextCursorId: 'next',
+    nextCursorTime: 9,
+    newUniqueItemCount: 0,
+    noMore: false,
+  }), { madeProgress: true, stalled: false })
+})
+
+verify('account policy distinguishes logged out, pending profile, and ready MID', async () => {
+  const { resolveNotificationAccountState } = await loadNotificationReliabilityPolicy()
+  assert.equal(resolveNotificationAccountState(false, ''), 'logged-out')
+  assert.equal(resolveNotificationAccountState(true, ''), 'profile-pending')
+  assert.equal(resolveNotificationAccountState(true, '100'), 'ready')
 })
 
 verify('lossless transport preserves unsafe numeric identifiers as strings', async () => {
@@ -297,6 +420,84 @@ verify('pagination does not create a new read commit', async () => {
   assert.equal(controller.states.reply.items.length, 3)
 })
 
+verify('retry dispatch follows the failed operation instead of item count', async () => {
+  const firstFixture = await readFixtureJson('reply-first.json')
+  const nextFixture = await readFixtureJson('reply-next.json')
+  const apiError = await readFixtureJson('api-error.json')
+
+  const initialParams: Array<unknown> = []
+  const initialResponses = [apiError, firstFixture]
+  const initialController = useNotificationFeeds(ref('100'), {
+    fetchPage: (_section, params) => {
+      initialParams.push(params)
+      return Promise.resolve(initialResponses.shift())
+    },
+  })
+  await initialController.loadInitial('reply')
+  assert.equal(Reflect.get(initialController.states.reply, 'failedOperation'), 'initial')
+  await getRetryFailedOperation(initialController).call(initialController, 'reply')
+  assert.deepEqual(initialParams, [undefined, undefined])
+  assert.equal(initialController.states.reply.loaded, true)
+
+  const refreshParams: Array<unknown> = []
+  const refreshResponses = [firstFixture, apiError, firstFixture]
+  const refreshController = useNotificationFeeds(ref('100'), {
+    fetchPage: (_section, params) => {
+      refreshParams.push(params)
+      return Promise.resolve(refreshResponses.shift())
+    },
+  })
+  await refreshController.loadInitial('reply')
+  const oldRefreshItems = refreshController.states.reply.items.map(item => item.id)
+  await refreshController.refresh('reply')
+  assert.equal(Reflect.get(refreshController.states.reply, 'failedOperation'), 'refresh')
+  assert.deepEqual(refreshController.states.reply.items.map(item => item.id), oldRefreshItems)
+  await getRetryFailedOperation(refreshController).call(refreshController, 'reply')
+  assert.deepEqual(refreshParams, [undefined, undefined, undefined])
+
+  const loadMoreParams: Array<unknown> = []
+  const loadMoreResponses = [firstFixture, apiError, nextFixture]
+  const loadMoreController = useNotificationFeeds(ref('100'), {
+    fetchPage: (_section, params) => {
+      loadMoreParams.push(params)
+      return Promise.resolve(loadMoreResponses.shift())
+    },
+  })
+  await loadMoreController.loadInitial('reply')
+  await loadMoreController.loadMore('reply')
+  assert.equal(Reflect.get(loadMoreController.states.reply, 'failedOperation'), 'load-more')
+  await getRetryFailedOperation(loadMoreController).call(loadMoreController, 'reply')
+  assert.equal(loadMoreParams.length, 3)
+  assert.equal(loadMoreParams[0], undefined)
+  assert.ok(loadMoreParams[1])
+  assert.ok(loadMoreParams[2])
+})
+
+verify('same-cursor pages stop automatic pagination and allow one explicit retry', async () => {
+  const firstFixture = await readFixtureJson('reply-first.json')
+  const stalledEmpty = await readFixtureJson('reply-same-cursor-empty.json')
+  const stalledDuplicate = await readFixtureJson('reply-same-cursor-duplicate.json')
+  const responses = [firstFixture, stalledEmpty, stalledDuplicate]
+  let requestCount = 0
+  const controller = useNotificationFeeds(ref('100'), {
+    fetchPage: () => {
+      requestCount++
+      return Promise.resolve(responses.shift())
+    },
+  })
+
+  await controller.loadInitial('reply')
+  await controller.loadMore('reply')
+  assert.equal(Reflect.get(controller.states.reply, 'paginationStalled'), true)
+  assert.equal(Reflect.get(controller.states.reply, 'failedOperation'), 'load-more')
+  await controller.loadMore('reply')
+  assert.equal(requestCount, 2)
+
+  await getRetryFailedOperation(controller).call(controller, 'reply')
+  assert.equal(requestCount, 3)
+  assert.equal(Reflect.get(controller.states.reply, 'paginationStalled'), true)
+})
+
 verify('feed freshness policy covers load, unread, visibility, and manual refresh', () => {
   const state = {
     loaded: true,
@@ -325,11 +526,41 @@ verify('feed freshness policy covers load, unread, visibility, and manual refres
     unreadCount: 0,
   }), true)
   assert.equal(shouldRefreshFeed(state, {
+    now: 300_999,
+    reason: 'activate',
+    unreadCount: 0,
+  }), false)
+  assert.equal(shouldRefreshFeed(state, {
+    now: 301_000,
+    reason: 'activate',
+    unreadCount: 0,
+  }), true)
+  assert.equal(shouldRefreshFeed(state, {
     force: true,
     now: 1_001,
     reason: 'manual',
     unreadCount: 0,
   }), true)
+})
+
+verify('zero authoritative unread reconciles without a redundant global sync', async () => {
+  let syncCount = 0
+  let waitCount = 0
+  const result = await reconcileNotificationBadge({
+    getUnreadCount: () => 0,
+    isCurrent: () => true,
+    retryDelays: [250, 750],
+    sync: async () => {
+      syncCount++
+    },
+    wait: async () => {
+      waitCount++
+      return true
+    },
+  })
+  assert.equal(result, 'reconciled')
+  assert.equal(syncCount, 0)
+  assert.equal(waitCount, 0)
 })
 
 verify('badge reconciliation policy rejects stale account, section, and commit state', () => {

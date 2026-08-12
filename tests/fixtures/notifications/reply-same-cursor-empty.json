@@ -1,0 +1,14 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "cursor": {
+      "id": "7849910264738201601",
+      "time": 1754902800,
+      "is_end": false
+    },
+    "items": [],
+    "last_view_at": 1754902750
+  }
+}
