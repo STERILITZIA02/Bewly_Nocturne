@@ -927,20 +927,10 @@ notifications:
     settings:
       label: Message settings
       description: Manage message settings with original Bilibili
-  reply:
-    loading: Loading reply notifications
-    empty: No reply notifications
-    replied_to_you: replied to you
+  native:
     unknown_user: Unknown user
     original_content: Original content
     view_source: View original content
-    errors:
-      login-required: Your sign-in has expired
-      risk-control: Requests are temporarily restricted
-      network: Network connection failed
-      invalid-response: Reply notifications are temporarily unavailable
-      api-error: Failed to load. Try again
-  native:
     loading:
       reply: Loading reply notifications
       at: Loading mention notifications
@@ -950,11 +940,18 @@ notifications:
       at: No mention notifications
       love: No like notifications
     actions:
+      reply: replied to you
       at: mentioned you
       love: liked your content
       love_multiple: and {count} people in total liked your content
     more_actors: '+{count}'
     more_actors_aria: '{count} more users'
+    errors:
+      login-required: Your sign-in has expired
+      risk-control: Requests are temporarily restricted
+      network: Network connection failed
+      invalid-response: These notifications are temporarily unavailable
+      api-error: Failed to load. Try again
 dock:
   search: Search
   home: Home

@@ -123,7 +123,7 @@ export function transformReplyNotification(raw: unknown): DisplayNotification | 
       avatar: sanitizeNotificationUrl(user?.avatar || user?.face),
     }],
     actorCount: 1,
-    actionTextKey: 'notifications.reply.replied_to_you',
+    actionTextKey: 'notifications.native.actions.reply',
     body: toNotificationText(item?.source_content) || toNotificationText(record.message),
     quote: toNotificationText(item?.target_reply_content),
     sourceTitle: toNotificationText(item?.title) || toNotificationText(item?.desc) || toNotificationText(item?.business),

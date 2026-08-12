@@ -88,12 +88,14 @@ export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
   section => section.unreadSource !== null,
 )
 
+type NativeNotificationSectionDefinition = Extract<
+  (typeof NOTIFICATION_SECTIONS)[number],
+  { implementation: 'native' }
+>
+
 export const NATIVE_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
-  section => section.implementation === 'native',
-) as readonly (NotificationSectionDefinition & {
-  id: NativeNotificationSection
-  implementation: 'native'
-})[]
+  (section): section is NativeNotificationSectionDefinition => section.implementation === 'native',
+)
 
 export function isNotificationView(value: unknown): value is NotificationView {
   return typeof value === 'string' && value in NOTIFICATION_SECTION_BY_ID

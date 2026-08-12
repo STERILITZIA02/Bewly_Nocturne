@@ -875,20 +875,10 @@ notifications:
     settings:
       label: 訊息設定
       description: 使用嗶哩嗶哩原版管理訊息設定
-  reply:
-    loading: 正在載入回覆通知
-    empty: 暫無回覆通知
-    replied_to_you: 回覆了你
+  native:
     unknown_user: 未知使用者
     original_content: 原始內容
     view_source: 查看原始內容
-    errors:
-      login-required: 登入狀態已失效
-      risk-control: 請求暫時受到限制
-      network: 網路連線失敗
-      invalid-response: 暫時無法讀取回覆通知
-      api-error: 載入失敗，請重試
-  native:
     loading:
       reply: 正在載入回覆通知
       at: 正在載入提及通知
@@ -898,11 +888,18 @@ notifications:
       at: 暫無提及通知
       love: 暫無按讚通知
     actions:
+      reply: 回覆了你
       at: 提到了你
       love: 按讚了你的內容
       love_multiple: 等 {count} 人按讚了你的內容
     more_actors: '+{count}'
     more_actors_aria: 還有 {count} 位使用者
+    errors:
+      login-required: 登入狀態已失效
+      risk-control: 請求暫時受到限制
+      network: 網路連線失敗
+      invalid-response: 暫時無法讀取目前通知
+      api-error: 載入失敗，請重試
 dock:
   search: 搜尋
   home: 首頁

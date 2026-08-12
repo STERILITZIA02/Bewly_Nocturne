@@ -79,8 +79,18 @@ function selectView(view: NotificationView) {
 
   currentView.value = view
   window.history.pushState(window.history.state, '', buildBewlyNotificationUrl(view))
-  if (isOriginalNotificationView(view))
-    scrollViewportRef.value?.scrollTo({ top: 0 })
+}
+
+function resetOuterScrollForOriginalView(view: NotificationView) {
+  if (!isOriginalNotificationView(view))
+    return
+
+  // Let the active Native Feed persist its own scrollTop before resetting the
+  // shared outer viewport for an iframe category.
+  void nextTick(() => {
+    if (currentView.value === view)
+      scrollViewportRef.value?.scrollTo({ top: 0 })
+  })
 }
 
 function refreshCurrentView() {
@@ -137,6 +147,7 @@ function deactivatePage() {
 }
 
 watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
+watch(currentView, resetOuterScrollForOriginalView)
 
 watchEffect(() => {
   if (isPageActive.value) {

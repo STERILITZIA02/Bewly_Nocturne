@@ -39,6 +39,7 @@ export interface NotificationReadCandidate {
   mid: string
   section: NativeNotificationSection
   generation: number
+  serverReadCommitted: true
 }
 
 export interface NotificationPageParams {
@@ -291,6 +292,8 @@ export function useNotificationFeed(
       state.loaded = true
       state.errorKind = null
       state.noMore = result.page.noMore
+      // The verified message-pc contract commits category read in the
+      // successful first-page GET for Reply, At, and Like.
       readCandidate.value = {
         marker: [
           section,
@@ -302,6 +305,7 @@ export function useNotificationFeed(
         mid: requestMid,
         section,
         generation: requestGeneration,
+        serverReadCommitted: true,
       }
     }
     catch {
@@ -403,6 +407,7 @@ export function useNotificationFeed(
 
   function isReadCandidateCurrent(candidate: NotificationReadCandidate): boolean {
     return readCandidate.value?.marker === candidate.marker
+      && candidate.serverReadCommitted
       && candidate.mid === accountMid.value
       && candidate.section === section
       && candidate.generation === state.generation

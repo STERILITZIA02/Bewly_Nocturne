@@ -49,8 +49,11 @@ const feed = useNotificationFeed(currentMid, props.section, {
 const { state } = feed
 
 const errorMessage = computed(() => state.errorKind
-  ? t(`notifications.reply.errors.${state.errorKind}`)
+  ? t(`notifications.native.errors.${state.errorKind}`)
   : '')
+const feedAriaLabel = computed(() => state.loading && !state.loaded
+  ? t(`notifications.native.loading.${props.section}`)
+  : t(`notifications.sections.${props.section}.label`))
 
 let observer: IntersectionObserver | null = null
 let restoreFrame: number | undefined
@@ -141,6 +144,7 @@ function isReadCandidateEligible(candidate = feed.readCandidate.value): boolean 
     && lifecycleActive
     && props.active
     && document.visibilityState === 'visible'
+    && candidate.serverReadCommitted
     && candidate.mid === currentMid.value
     && candidate.section === props.section
     && candidate.generation === state.generation
@@ -243,7 +247,7 @@ defineExpose({ refresh })
 <template>
   <section
     class="native-notification-feed"
-    :aria-label="t(`notifications.sections.${section}.label`)"
+    :aria-label="feedAriaLabel"
     :aria-busy="!state.loaded || state.loading || state.loadingMore"
   >
     <Loading v-if="!state.loaded && !state.errorKind" />
