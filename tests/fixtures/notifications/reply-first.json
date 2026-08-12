@@ -1,0 +1,50 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "cursor": {
+      "id": "7849910264738201601",
+      "time": 1754902800,
+      "is_end": false
+    },
+    "items": [
+      {
+        "id": "7849910264738201602",
+        "user": {
+          "mid": "3499910000000001",
+          "nickname": "脱敏用户甲",
+          "avatar": "https://i0.hdslb.com/bfs/face/sanitized-reply-a.png"
+        },
+        "item": {
+          "business": "评论",
+          "business_id": "8849910264738201603",
+          "title": "脱敏视频甲",
+          "image": "https://i0.hdslb.com/bfs/archive/sanitized-reply-a.jpg",
+          "uri": "https://www.bilibili.com/video/BV1fixtureReplyA",
+          "source_content": "脱敏回复正文甲",
+          "target_reply_content": "脱敏原评论甲"
+        },
+        "reply_time": 1754902860
+      },
+      {
+        "id": 420001,
+        "user": {
+          "mid": 420002,
+          "nickname": "脱敏用户乙",
+          "avatar": "https://i0.hdslb.com/bfs/face/sanitized-reply-b.png"
+        },
+        "item": {
+          "business": "动态",
+          "business_id": 420003,
+          "title": "脱敏动态乙",
+          "uri": "https://t.bilibili.com/420003",
+          "source_content": "脱敏回复正文乙",
+          "target_reply_content": "脱敏原动态乙"
+        },
+        "reply_time": 1754902700
+      }
+    ],
+    "last_view_at": 1754902750
+  }
+}

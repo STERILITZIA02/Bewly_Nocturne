@@ -1,0 +1,33 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "cursor": {
+      "id": "7850010264738201701",
+      "time": 1754903800,
+      "is_end": false
+    },
+    "items": [
+      {
+        "id": "7850010264738201702",
+        "user": {
+          "mid": "3499920000000001",
+          "nickname": "脱敏提及用户甲",
+          "avatar": "https://i0.hdslb.com/bfs/face/sanitized-at-a.png"
+        },
+        "item": {
+          "business": "评论",
+          "business_id": "8850010264738201703",
+          "title": "脱敏提及来源甲",
+          "image": "https://i0.hdslb.com/bfs/archive/sanitized-at-a.jpg",
+          "uri": "https://www.bilibili.com/video/BV1fixtureAtA",
+          "source_content": "脱敏提及正文甲",
+          "target_reply_content": "脱敏被提及内容甲"
+        },
+        "at_time": 1754903860
+      }
+    ],
+    "last_view_at": 1754903000
+  }
+}

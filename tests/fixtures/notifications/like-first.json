@@ -1,0 +1,90 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "latest": {
+      "items": [
+        {
+          "id": "7850110264738201801",
+          "users": [
+            {
+              "mid": "3499930000000001",
+              "nickname": "脱敏点赞用户甲",
+              "avatar": "https://i0.hdslb.com/bfs/face/sanitized-like-a.png"
+            }
+          ],
+          "counts": 1,
+          "item": {
+            "business": "评论",
+            "business_id": "8850110264738201802",
+            "title": "脱敏点赞来源甲",
+            "image": "https://i0.hdslb.com/bfs/archive/sanitized-like-a.jpg",
+            "uri": "https://www.bilibili.com/video/BV1fixtureLikeA",
+            "target_reply_content": "脱敏被点赞内容甲"
+          },
+          "like_time": 1754904860
+        }
+      ],
+      "last_view_at": 1754904000
+    },
+    "total": {
+      "cursor": {
+        "id": "7850110264738201803",
+        "time": 1754904500,
+        "is_end": false
+      },
+      "items": [
+        {
+          "id": "7850110264738201801",
+          "users": [
+            {
+              "mid": "3499930000000001",
+              "nickname": "脱敏点赞用户甲",
+              "avatar": "https://i0.hdslb.com/bfs/face/sanitized-like-a.png"
+            },
+            {
+              "mid": "3499930000000002",
+              "nickname": "脱敏点赞用户乙",
+              "avatar": "https://i0.hdslb.com/bfs/face/sanitized-like-b.png"
+            },
+            {
+              "mid": "3499930000000003",
+              "nickname": "脱敏点赞用户丙",
+              "avatar": "https://i0.hdslb.com/bfs/face/sanitized-like-c.png"
+            }
+          ],
+          "counts": 5,
+          "item": {
+            "business": "评论",
+            "business_id": "8850110264738201802",
+            "title": "脱敏点赞来源甲",
+            "image": "https://i0.hdslb.com/bfs/archive/sanitized-like-a.jpg",
+            "uri": "https://www.bilibili.com/video/BV1fixtureLikeA",
+            "target_reply_content": "脱敏被点赞内容甲"
+          },
+          "like_time": 1754904860
+        },
+        {
+          "id": "7850110264738201804",
+          "users": [
+            {
+              "mid": "3499930000000004",
+              "nickname": "脱敏点赞用户丁",
+              "avatar": "https://i0.hdslb.com/bfs/face/sanitized-like-d.png"
+            }
+          ],
+          "counts": 1,
+          "item": {
+            "business": "动态",
+            "business_id": "8850110264738201805",
+            "title": "脱敏点赞来源乙",
+            "uri": "https://t.bilibili.com/420006",
+            "target_reply_content": "脱敏被点赞内容乙"
+          },
+          "like_time": 1754904300
+        }
+      ]
+    }
+  }
+}

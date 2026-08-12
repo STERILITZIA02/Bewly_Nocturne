@@ -5,8 +5,20 @@ import process from 'node:process'
 import { nextTick, ref } from 'vue'
 
 import {
+  parseAtNotificationResponse,
+  parseLikeNotificationResponse,
+  parseReplyNotificationResponse,
+} from '../src/background/notificationJson'
+import { useNotificationFeeds } from '../src/contentScripts/views/Notifications/composables/useNotificationFeeds'
+import type { DisplayNotification } from '../src/contentScripts/views/Notifications/notification'
+import {
   buildNextPageParams,
+  classifyApiError,
+  dedupeNotifications,
+  parseAtPage,
+  parseLikePage,
   parseNotificationPage,
+  parseReplyPage,
 } from '../src/contentScripts/views/Notifications/notificationFeedParsing'
 import {
   createReadCommitId,
@@ -14,21 +26,26 @@ import {
   shouldRefreshFeed,
 } from '../src/contentScripts/views/Notifications/notificationFeedPolicy'
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
+import { parseNotificationView } from '../src/utils/notificationRoute'
 
-interface PageParams {
-  id?: string
-  reply_time?: number
-  at_time?: number
-  like_time?: number
-}
+type FixtureName
+  = | 'reply-first.json'
+    | 'reply-next.json'
+    | 'reply-empty.json'
+    | 'at-first.json'
+    | 'at-next.json'
+    | 'like-first.json'
+    | 'like-next.json'
+    | 'like-empty.json'
+    | 'large-id.json'
+    | 'api-error.json'
+    | 'html-response.html'
 
-interface ControllerModule {
-  useNotificationFeeds?: (
-    mid: ReturnType<typeof ref<string>>,
-    options: {
-      fetchPage: (section: NativeNotificationSection, params?: PageParams) => Promise<unknown>
-    },
-  ) => any
+interface MockResponseOptions {
+  contentType?: string
+  redirected?: boolean
+  status?: number
+  url?: string
 }
 
 const assertions: Array<{
@@ -40,14 +57,50 @@ function verify(name: string, run: () => void | Promise<void>) {
   assertions.push({ name, run })
 }
 
-function replyPage(id: string, cursorId: string, cursorTime: number) {
+function readFixtureText(name: FixtureName): Promise<string> {
+  return readFile(new URL(`../tests/fixtures/notifications/${name}`, import.meta.url), 'utf8')
+}
+
+async function readFixtureJson(name: Exclude<FixtureName, 'html-response.html' | 'large-id.json'>): Promise<unknown> {
+  return JSON.parse(await readFixtureText(name))
+}
+
+function createMockResponse(text: string, options: MockResponseOptions = {}): Response {
+  const status = options.status ?? 200
   return {
-    code: 0,
-    data: {
-      cursor: { id: cursorId, time: cursorTime, is_end: false },
-      items: [{ id, reply_time: cursorTime, user: {}, item: {} }],
-      last_view_at: 0,
-    },
+    headers: new Headers({ 'content-type': options.contentType ?? 'application/json' }),
+    ok: status >= 200 && status < 300,
+    redirected: options.redirected ?? false,
+    status,
+    text: async () => text,
+    url: options.url ?? 'https://api.bilibili.com/x/msgfeed/reply?sanitized=1',
+  } as Response
+}
+
+function requirePage(
+  section: NativeNotificationSection,
+  response: unknown,
+) {
+  const result = parseNotificationPage(section, response)
+  assert.ok(result.page, `${section} fixture should parse`)
+  return result.page
+}
+
+function sampleDisplayNotification(id: string): DisplayNotification {
+  return {
+    id,
+    section: 'reply',
+    actors: [],
+    actorCount: 1,
+    actionTextKey: 'notifications.native.actions.reply',
+    body: '',
+    quote: '',
+    sourceTitle: '',
+    sourceImage: '',
+    sourceUrl: '',
+    originalUrl: 'https://message.bilibili.com/#/reply',
+    timestamp: 1,
+    unread: false,
   }
 }
 
@@ -62,51 +115,275 @@ verify('only the current Native Feed is rendered', async () => {
   assert.match(source, /v-if="nativeView"/)
 })
 
-verify('controller preserves independent section state in memory', async () => {
-  const module = await import('../src/contentScripts/views/Notifications/composables/useNotificationFeeds') as ControllerModule
-  assert.equal(typeof module.useNotificationFeeds, 'function')
+verify('pure parsing and policy modules have no Vue or Store dependency', async () => {
+  const sources = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/notificationFeedParsing.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/notificationFeedPolicy.ts', import.meta.url), 'utf8'),
+  ])
+  for (const source of sources) {
+    assert.doesNotMatch(source, /from ['"]vue['"]|useTopBarStore|useBewlyApp|\bfetch\s*\(/)
+  }
+})
 
-  const mid = ref('100')
-  const controller = module.useNotificationFeeds!(mid, {
-    fetchPage: async (section) => {
-      if (section === 'reply')
-        return replyPage('reply-1', 'reply-cursor', 100)
-      if (section === 'at') {
-        return {
-          code: 0,
-          data: {
-            cursor: { id: 'at-cursor', time: 90, is_end: false },
-            items: [{ id: 'at-1', at_time: 90, user: {}, item: {} }],
-            last_view_at: 0,
-          },
-        }
-      }
-      return {
-        code: 0,
-        data: {
-          latest: { items: [], last_view_at: 0 },
-          total: { cursor: { id: '', time: 0, is_end: true }, items: [] },
-        },
-      }
-    },
+verify('Reply first page preserves IDs, timestamps, and unread state', async () => {
+  const page = requirePage('reply', await readFixtureJson('reply-first.json'))
+  assert.equal(page.items.length, 2)
+  assert.equal(page.items[0]?.id, '7849910264738201602')
+  assert.equal(page.items[1]?.id, '420001')
+  assert.equal(typeof page.items[0]?.timestamp, 'number')
+  assert.equal(page.items[0]?.unread, true)
+  assert.equal(page.items[1]?.unread, false)
+})
+
+verify('Reply next-page cursor and tail-page data are retained', async () => {
+  const firstPage = requirePage('reply', await readFixtureJson('reply-first.json'))
+  assert.deepEqual(buildNextPageParams('reply', firstPage.cursorId, firstPage.cursorTime), {
+    id: '7849910264738201601',
+    reply_time: 1754902800,
   })
 
-  await controller.loadInitial('reply')
-  controller.states.reply.scrollTop = 480
-  await controller.loadInitial('at')
+  const nextPage = requirePage('reply', await readFixtureJson('reply-next.json'))
+  assert.equal(nextPage.items.length, 1)
+  assert.equal(nextPage.items[0]?.id, '7849910264738201604')
+  assert.equal(nextPage.noMore, true)
+})
 
-  assert.deepEqual(controller.states.reply.items.map((item: any) => item.id), ['reply-1'])
-  assert.equal(controller.states.reply.cursorId, 'reply-cursor')
-  assert.equal(controller.states.reply.scrollTop, 480)
-  assert.deepEqual(controller.states.at.items.map((item: any) => item.id), ['at-1'])
-  assert.equal(controller.states.love.loaded, false)
+verify('At first and next pages use the confirmed cursor shape', async () => {
+  const firstPage = requirePage('at', await readFixtureJson('at-first.json'))
+  assert.equal(firstPage.items[0]?.section, 'at')
+  assert.deepEqual(buildNextPageParams('at', firstPage.cursorId, firstPage.cursorTime), {
+    id: '7850010264738201701',
+    at_time: 1754903800,
+  })
+
+  const nextPage = requirePage('at', await readFixtureJson('at-next.json'))
+  assert.equal(nextPage.items.length, 1)
+  assert.equal(nextPage.noMore, true)
+})
+
+verify('Like latest and total streams merge without duplicate aggregate entries', async () => {
+  const page = requirePage('love', await readFixtureJson('like-first.json'))
+  assert.deepEqual(page.items.map(item => item.id), [
+    '7850110264738201801',
+    '7850110264738201804',
+  ])
+  assert.equal(page.items[0]?.actorCount, 5)
+  assert.equal(page.items[0]?.actors.length, 3)
+  assert.equal(page.items[0]?.unread, true)
+})
+
+verify('Like pagination uses only the total cursor and retains the tail item', async () => {
+  const firstPage = requirePage('love', await readFixtureJson('like-first.json'))
+  assert.deepEqual(buildNextPageParams('love', firstPage.cursorId, firstPage.cursorTime), {
+    id: '7850110264738201803',
+    like_time: 1754904500,
+  })
+
+  const nextPage = requirePage('love', await readFixtureJson('like-next.json'))
+  assert.deepEqual(nextPage.items.map(item => item.id), ['7850110264738201806'])
+  assert.equal(nextPage.noMore, true)
+})
+
+verify('empty Reply and Like pages are valid tail pages', async () => {
+  const replyPage = requirePage('reply', await readFixtureJson('reply-empty.json'))
+  const likePage = requirePage('love', await readFixtureJson('like-empty.json'))
+  assert.deepEqual(replyPage.items, [])
+  assert.deepEqual(likePage.items, [])
+  assert.equal(replyPage.noMore, true)
+  assert.equal(likePage.noMore, true)
+})
+
+verify('notification ID dedupe is stable and non-mutating', () => {
+  const first = sampleDisplayNotification('duplicate')
+  const second = sampleDisplayNotification('duplicate')
+  const unique = sampleDisplayNotification('unique')
+  const input = [first, second, unique]
+  const result = dedupeNotifications(input)
+  assert.deepEqual(result.map(item => item.id), ['duplicate', 'unique'])
+  assert.equal(input.length, 3)
+})
+
+verify('lossless transport preserves unsafe numeric identifiers as strings', async () => {
+  const response = await parseReplyNotificationResponse(createMockResponse(
+    await readFixtureText('large-id.json'),
+  ))
+  const page = requirePage('reply', response)
+  assert.equal(page.cursorId, '9223372036854775806')
+  assert.equal(page.items[0]?.id, '9223372036854775807')
+  assert.equal(page.items[0]?.actors[0]?.id, '9223372036854775805')
+})
+
+verify('transport classifies API, HTML, server, risk, and login failures', async () => {
+  const apiError = await parseReplyNotificationResponse(createMockResponse(
+    await readFixtureText('api-error.json'),
+  ))
+  assert.equal(classifyApiError(apiError), 'api-error')
+  assert.equal(apiError.bewlyError?.apiCode, -400)
+
+  const html = await readFixtureText('html-response.html')
+  const invalidHtml = await parseReplyNotificationResponse(createMockResponse(html, {
+    contentType: 'text/html',
+    status: 404,
+  }))
+  assert.equal(invalidHtml.bewlyError?.kind, 'invalid-response')
+
+  const serverError = await parseAtNotificationResponse(createMockResponse(html, {
+    contentType: 'text/html',
+    status: 503,
+    url: 'https://api.bilibili.com/x/msgfeed/at?private=removed',
+  }))
+  assert.equal(serverError.bewlyError?.kind, 'server-error')
+  assert.equal(serverError.bewlyError?.finalHost, 'api.bilibili.com')
+
+  const riskError = await parseLikeNotificationResponse(createMockResponse(html, {
+    contentType: 'text/html',
+    status: 412,
+  }))
+  assert.equal(riskError.bewlyError?.kind, 'risk-control')
+
+  const loginError = await parseReplyNotificationResponse(createMockResponse(html, {
+    contentType: 'text/html',
+    redirected: true,
+    url: 'https://passport.bilibili.com/login?private=removed',
+  }))
+  assert.equal(loginError.bewlyError?.kind, 'login-required')
+  assert.deepEqual(Object.keys(loginError.bewlyError ?? {}).sort(), [
+    'apiCode',
+    'endpointName',
+    'finalHost',
+    'httpStatus',
+    'kind',
+    'redirected',
+  ])
+})
+
+verify('invalid JSON and invalid response shapes are rejected', async () => {
+  const malformed = await parseReplyNotificationResponse(createMockResponse('{not-json'))
+  assert.equal(malformed.bewlyError?.kind, 'invalid-response')
+  assert.equal(parseNotificationPage('reply', { code: 0, data: [] }).errorKind, 'invalid-response')
+  assert.equal(parseReplyPage({ cursor: {}, items: 'invalid' }), null)
+  assert.equal(parseAtPage({ cursor: {}, items: 'invalid' }), null)
+  assert.equal(parseLikePage({ latest: {}, total: {} }), null)
+})
+
+verify('read commit IDs are unique per first-page request and independent per section', () => {
+  const firstReply = createReadCommitId('reply', '100', 2, 1)
+  const secondReply = createReadCommitId('reply', '100', 2, 2)
+  const firstAt = createReadCommitId('at', '100', 2, 1)
+  const firstLike = createReadCommitId('love', '100', 2, 1)
+  assert.notEqual(firstReply, secondReply)
+  assert.equal(new Set([firstReply, firstAt, firstLike]).size, 3)
+})
+
+verify('pagination does not create a new read commit', async () => {
+  const firstFixture = await readFixtureJson('reply-first.json')
+  const nextFixture = await readFixtureJson('reply-next.json')
+  const controller = useNotificationFeeds(ref('100'), {
+    fetchPage: (_section, params) => Promise.resolve(params ? nextFixture : firstFixture),
+  })
+  await controller.loadInitial('reply')
+  const readCommitId = controller.states.reply.currentReadCommitId
+  const serial = controller.states.reply.firstPageRequestSerial
+  await controller.loadMore('reply')
+  assert.equal(controller.states.reply.currentReadCommitId, readCommitId)
+  assert.equal(controller.states.reply.firstPageRequestSerial, serial)
+  assert.equal(controller.states.reply.items.length, 3)
+})
+
+verify('feed freshness policy covers load, unread, visibility, and manual refresh', () => {
+  const state = {
+    loaded: true,
+    loadedAt: 1_000,
+    unreadCountAtFetch: 0,
+    lastObservedUnreadCount: 0,
+  }
+  assert.equal(shouldRefreshFeed({ ...state, loaded: false }, {
+    now: 1_001,
+    reason: 'activate',
+    unreadCount: 0,
+  }), true)
+  assert.equal(shouldRefreshFeed(state, {
+    now: 1_001,
+    reason: 'unread-change',
+    unreadCount: 1,
+  }), true)
+  assert.equal(shouldRefreshFeed({ ...state, unreadCountAtFetch: 1, lastObservedUnreadCount: 1 }, {
+    now: 1_001,
+    reason: 'activate',
+    unreadCount: 1,
+  }), false)
+  assert.equal(shouldRefreshFeed(state, {
+    now: 61_000,
+    reason: 'visibility',
+    unreadCount: 0,
+  }), true)
+  assert.equal(shouldRefreshFeed(state, {
+    force: true,
+    now: 1_001,
+    reason: 'manual',
+    unreadCount: 0,
+  }), true)
+})
+
+verify('badge reconciliation policy rejects stale account, section, and commit state', () => {
+  const readCommitId = createReadCommitId('love', '100', 2, 4)
+  const base = {
+    active: true,
+    visible: true,
+    accountMid: '100',
+    currentSection: 'love' as const,
+    currentGeneration: 2,
+    currentReadCommitId: readCommitId,
+    badgeReconciled: false,
+    candidate: {
+      readCommitId,
+      mid: '100',
+      section: 'love' as const,
+      generation: 2,
+      serverReadCommitted: true as const,
+    },
+  }
+  assert.equal(shouldReconcileUnreadBadge(base), true)
+  assert.equal(shouldReconcileUnreadBadge({ ...base, accountMid: '200' }), false)
+  assert.equal(shouldReconcileUnreadBadge({ ...base, currentSection: 'reply' }), false)
+  assert.equal(shouldReconcileUnreadBadge({ ...base, currentReadCommitId: 'stale' }), false)
+  assert.equal(shouldReconcileUnreadBadge({ ...base, badgeReconciled: true }), false)
+})
+
+verify('controller preserves independent section state and scroll positions', async () => {
+  const fixtures = {
+    reply: await readFixtureJson('reply-first.json'),
+    at: await readFixtureJson('at-first.json'),
+    love: await readFixtureJson('like-first.json'),
+  }
+  const mid = ref('100')
+  const controller = useNotificationFeeds(mid, {
+    fetchPage: section => Promise.resolve(fixtures[section]),
+  })
+
+  await Promise.all([
+    controller.loadInitial('reply'),
+    controller.loadInitial('at'),
+    controller.loadInitial('love'),
+  ])
+  controller.states.reply.scrollTop = 480
+  controller.states.at.scrollTop = 320
+  controller.states.love.scrollTop = 160
+
+  assert.equal(controller.states.reply.cursorId, '7849910264738201601')
+  assert.equal(controller.states.at.cursorId, '7850010264738201701')
+  assert.equal(controller.states.love.cursorId, '7850110264738201803')
+  assert.deepEqual([
+    controller.states.reply.scrollTop,
+    controller.states.at.scrollTop,
+    controller.states.love.scrollTop,
+  ], [480, 320, 160])
 })
 
 verify('MID change clears all states and rejects old account responses', async () => {
-  const module = await import('../src/contentScripts/views/Notifications/composables/useNotificationFeeds') as ControllerModule
   const mid = ref('100')
   let resolveReply: ((value: unknown) => void) | undefined
-  const controller = module.useNotificationFeeds!(mid, {
+  const controller = useNotificationFeeds(mid, {
     fetchPage: section => section === 'reply'
       ? new Promise(resolve => resolveReply = resolve)
       : Promise.resolve({ code: 0, data: null }),
@@ -115,7 +392,7 @@ verify('MID change clears all states and rejects old account responses', async (
   const oldRequest = controller.loadInitial('reply')
   mid.value = '200'
   await nextTick()
-  resolveReply?.(replyPage('old-account', 'old-cursor', 100))
+  resolveReply?.(await readFixtureJson('reply-first.json'))
   await oldRequest
 
   for (const section of ['reply', 'at', 'love'] as const) {
@@ -125,47 +402,14 @@ verify('MID change clears all states and rejects old account responses', async (
   }
 })
 
-verify('notification parsing and pagination are pure reusable logic', () => {
-  const parsed = parseNotificationPage('reply', replyPage('reply-1', 'reply-cursor', 100))
-  assert.equal(parsed.page?.items[0]?.id, 'reply-1')
-  assert.deepEqual(buildNextPageParams('reply', 'reply-cursor', 100), {
-    id: 'reply-cursor',
-    reply_time: 100,
-  })
-})
-
-verify('feed freshness and read reconciliation use pure policy', () => {
-  const state = {
-    loaded: true,
-    loadedAt: 100,
-    unreadCountAtFetch: 0,
-    lastObservedUnreadCount: 0,
+verify('invalid notificationView values safely fall back to whisper', () => {
+  for (const value of ['', 'unknown', 'toString', 'constructor', '__proto__', '**proto**', 'valueOf']) {
+    assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${encodeURIComponent(value)}`), 'whisper')
   }
-  assert.equal(shouldRefreshFeed(state, {
-    now: 101,
-    reason: 'unread-change',
-    unreadCount: 1,
-  }), true)
-
-  const firstCommit = createReadCommitId('love', '100', 2, 4)
-  const secondCommit = createReadCommitId('love', '100', 2, 5)
-  assert.notEqual(firstCommit, secondCommit)
-  assert.equal(shouldReconcileUnreadBadge({
-    active: true,
-    visible: true,
-    accountMid: '100',
-    currentSection: 'love',
-    currentGeneration: 2,
-    currentReadCommitId: firstCommit,
-    badgeReconciled: false,
-    candidate: {
-      readCommitId: firstCommit,
-      mid: '100',
-      section: 'love',
-      generation: 2,
-      serverReadCommitted: true,
-    },
-  }), true)
+  for (const value of ['whisper', 'reply', 'at', 'love', 'system', 'settings']) {
+    assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${value}`), value)
+  }
+  assert.equal(parseNotificationView('not a valid absolute URL'), 'whisper')
 })
 
 async function main() {

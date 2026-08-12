@@ -159,8 +159,9 @@ pnpm typecheck
 - 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
 - 首页默认整合搜索页并复用单一 SearchBar 实例：初始位置保留聚焦人物，滚动到顶栏后原实例粘附且人物隐藏，不得再生成第二个顶栏搜索框。独立搜索页开关关闭时，`AppPage.Search` 路由归一到首页且 Dock 不显示搜索项；两种形态直接共用现有搜索设置，不恢复“与搜索页共用的配置”跳转入口。首页与搜索页只复用顶栏表面样式，必须保留搜索框自身的 `550px` 最大宽度。
 - Dock 默认位于底部；`Notifications` 是可配置的独立 Bewly 混合消息页：`reply / at / love` 使用 Vue Native Feed，`whisper / system / settings` 使用完整的原版消息 iframe fallback。未原生化的能力继续由原版页面完整承载，不得一次性移植或重写完整私信客户端；下一阶段只能单独评估 `system`，私信必须继续作为独立阶段拆分。
-- 三类 Native Feed 共用展示模型、分页状态机、错误模型、外层滚动和连续列表视觉，但每个分类的 cursor、read marker、请求 single-flight、缓存与滚动位置必须独立；所有 Feed 按当前 MID 隔离，账号变化后旧 generation 的响应不得写入新账号。
-- Native Feed 的服务端已读成功后只通过 `topBarStore` 的单一权威路径同步未读与跨标签 broker；不得建立第二套 unread Store。Bewly 页面、`NotificationsDrawer` 与直接打开的原版页必须继续保持 iframe、路由、滚动和显隐状态独立。
+- 三类 Native Feed 共用展示模型、分页策略、错误模型、外层滚动和连续列表视觉；页面级 controller 按分类保存状态，但同一时间只允许渲染当前一个 Native Feed DOM。隐藏分类不得保留完整长列表、IntersectionObserver 或 visibility listener，也不得通过 KeepAlive 保留三套 Feed 组件。
+- Reply / At / Love 的 items、cursor、read commit、请求 single-flight、缓存与 scrollTop 必须独立；所有 Feed 按当前 MID 隔离，账号变化后旧 generation 的响应不得写入新账号。通知解析、聚合或分页规则变更必须同步脱敏 fixture，并通过 `pnpm verify:notifications`，不得绕过该门禁。
+- Native Feed 的服务端已读成功后只通过 `topBarStore` 的单一权威路径同步未读与跨标签 broker；不得建立第二套 unread Store。Bewly 页面、`NotificationsDrawer` 与直接打开的原版页必须继续保持 iframe、路由、滚动和显隐状态独立。后续 System 原生化必须复用 Native Feed controller 与策略内核，但不得把系统通知强行套入 actor 模型。
 
 ### 深色背景、OLED 与主题色
 
