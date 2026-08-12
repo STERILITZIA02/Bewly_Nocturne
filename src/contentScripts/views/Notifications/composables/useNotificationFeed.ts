@@ -12,10 +12,12 @@ import {
   transformReplyNotification,
 } from '../notification'
 import type { NativeNotificationSection } from '../notificationSections'
+import { NOTIFICATION_STALE_TIME_MS } from '../notificationTimings'
 
 export type NotificationErrorKind
   = | 'login-required'
     | 'risk-control'
+    | 'server-error'
     | 'network'
     | 'invalid-response'
     | 'api-error'
@@ -27,6 +29,9 @@ export interface NotificationFeedState {
   loading: boolean
   loadingMore: boolean
   loaded: boolean
+  loadedAt: number
+  unreadCountAtFetch: number
+  lastObservedUnreadCount: number
   noMore: boolean
   errorKind: NotificationErrorKind | null
   generation: number
@@ -47,6 +52,13 @@ export interface NotificationPageParams {
   reply_time?: number
   at_time?: number
   like_time?: number
+}
+
+export interface RefreshNotificationFeedOptions {
+  force?: boolean
+  now?: number
+  reason: 'activate' | 'unread-change' | 'visibility' | 'manual'
+  unreadCount: number
 }
 
 interface NotificationPageResult {
@@ -242,6 +254,9 @@ export function useNotificationFeed(
     loading: false,
     loadingMore: false,
     loaded: false,
+    loadedAt: 0,
+    unreadCountAtFetch: 0,
+    lastObservedUnreadCount: 0,
     noMore: false,
     errorKind: null,
     generation: 0,
@@ -251,6 +266,7 @@ export function useNotificationFeed(
 
   let initialRequest: Promise<void> | null = null
   let loadMoreRequest: Promise<void> | null = null
+  let firstPageRequestSerial = 0
 
   function resetForAccount(nextMid: string, preserveReadMarker = false) {
     const lastReadMarker = state.lastReadMarker
@@ -262,6 +278,9 @@ export function useNotificationFeed(
     state.loading = false
     state.loadingMore = false
     state.loaded = false
+    state.loadedAt = 0
+    state.unreadCountAtFetch = 0
+    state.lastObservedUnreadCount = 0
     state.noMore = false
     state.errorKind = null
     state.scrollTop = 0
@@ -269,16 +288,27 @@ export function useNotificationFeed(
     readCandidate.value = null
     initialRequest = null
     loadMoreRequest = null
+    firstPageRequestSerial = 0
   }
 
   function isCurrentRequest(requestGeneration: number, requestMid: string): boolean {
     return requestGeneration === state.generation && requestMid === accountMid.value
   }
 
-  async function requestInitialPage(requestGeneration: number, requestMid: string) {
+  function isCurrentPageRequest(requestGeneration: number, requestMid: string, requestSerial: number): boolean {
+    return isCurrentRequest(requestGeneration, requestMid) && requestSerial === firstPageRequestSerial
+  }
+
+  async function requestInitialPage(
+    requestGeneration: number,
+    requestMid: string,
+    requestSerial: number,
+    unreadCount: number,
+    loadedAt: number,
+  ) {
     try {
       const result = parseNotificationPage(section, await fetchPage())
-      if (!isCurrentRequest(requestGeneration, requestMid))
+      if (!isCurrentPageRequest(requestGeneration, requestMid, requestSerial))
         return
 
       if (!result.page) {
@@ -290,6 +320,8 @@ export function useNotificationFeed(
       state.cursorId = result.page.cursorId
       state.cursorTime = result.page.cursorTime
       state.loaded = true
+      state.loadedAt = loadedAt
+      state.unreadCountAtFetch = unreadCount
       state.errorKind = null
       state.noMore = result.page.noMore
       // The verified message-pc contract commits category read in the
@@ -309,16 +341,20 @@ export function useNotificationFeed(
       }
     }
     catch {
-      if (isCurrentRequest(requestGeneration, requestMid))
+      if (isCurrentPageRequest(requestGeneration, requestMid, requestSerial))
         state.errorKind = 'network'
     }
     finally {
-      if (isCurrentRequest(requestGeneration, requestMid))
+      if (isCurrentPageRequest(requestGeneration, requestMid, requestSerial))
         state.loading = false
     }
   }
 
-  function loadInitial(): Promise<void> {
+  function normalizeUnreadCount(value: number): number {
+    return Number.isFinite(value) ? Math.max(0, Math.trunc(value)) : 0
+  }
+
+  function loadInitial(options: { now?: number, unreadCount?: number } = {}): Promise<void> {
     if (initialRequest)
       return initialRequest
     if (!accountMid.value) {
@@ -328,17 +364,23 @@ export function useNotificationFeed(
 
     const requestGeneration = state.generation
     const requestMid = accountMid.value
+    const requestSerial = ++firstPageRequestSerial
+    const unreadCount = normalizeUnreadCount(options.unreadCount ?? state.lastObservedUnreadCount)
+    const loadedAt = options.now ?? Date.now()
     state.loading = true
+    state.loadingMore = false
     state.errorKind = null
-    const request = requestInitialPage(requestGeneration, requestMid)
-    initialRequest = request
-    return request.finally(() => {
+    readCandidate.value = null
+    loadMoreRequest = null
+    const request = requestInitialPage(requestGeneration, requestMid, requestSerial, unreadCount, loadedAt).finally(() => {
       if (initialRequest === request)
         initialRequest = null
     })
+    initialRequest = request
+    return request
   }
 
-  async function requestNextPage(requestGeneration: number, requestMid: string) {
+  async function requestNextPage(requestGeneration: number, requestMid: string, requestSerial: number) {
     const cursorId = state.cursorId
     const cursorTime = state.cursorTime
     try {
@@ -346,7 +388,7 @@ export function useNotificationFeed(
         section,
         await fetchPage(buildNextPageParams(section, cursorId, cursorTime)),
       )
-      if (!isCurrentRequest(requestGeneration, requestMid))
+      if (!isCurrentPageRequest(requestGeneration, requestMid, requestSerial))
         return
 
       if (!result.page) {
@@ -368,11 +410,11 @@ export function useNotificationFeed(
       state.noMore = result.page.noMore
     }
     catch {
-      if (isCurrentRequest(requestGeneration, requestMid))
+      if (isCurrentPageRequest(requestGeneration, requestMid, requestSerial))
         state.errorKind = 'network'
     }
     finally {
-      if (isCurrentRequest(requestGeneration, requestMid))
+      if (isCurrentPageRequest(requestGeneration, requestMid, requestSerial))
         state.loadingMore = false
     }
   }
@@ -385,9 +427,10 @@ export function useNotificationFeed(
 
     const requestGeneration = state.generation
     const requestMid = accountMid.value
+    const requestSerial = firstPageRequestSerial
     state.loadingMore = true
     state.errorKind = null
-    const request = requestNextPage(requestGeneration, requestMid)
+    const request = requestNextPage(requestGeneration, requestMid, requestSerial)
     loadMoreRequest = request
     return request.finally(() => {
       if (loadMoreRequest === request)
@@ -395,14 +438,42 @@ export function useNotificationFeed(
     })
   }
 
-  function refresh(): Promise<void> {
-    const nextMid = resolvedMid.value
-    resetForAccount(nextMid, nextMid === accountMid.value)
-    return loadInitial()
+  function refresh(unreadCount = state.lastObservedUnreadCount): Promise<void> {
+    return refreshIfStale({
+      force: true,
+      reason: 'manual',
+      unreadCount,
+    })
   }
 
-  function ensureLoaded(): Promise<void> {
-    return state.loaded ? Promise.resolve() : loadInitial()
+  function refreshIfStale(options: RefreshNotificationFeedOptions): Promise<void> {
+    const unreadCount = normalizeUnreadCount(options.unreadCount)
+    const previousUnreadCount = state.lastObservedUnreadCount
+    const now = options.now ?? Date.now()
+    state.lastObservedUnreadCount = unreadCount
+
+    const shouldRefresh = Boolean(
+      options.force
+      || !state.loaded
+      || (unreadCount > 0 && unreadCount !== state.unreadCountAtFetch)
+      || (previousUnreadCount === 0 && unreadCount > 0)
+      || (
+        options.reason === 'visibility'
+        && state.loadedAt > 0
+        && now - state.loadedAt >= NOTIFICATION_STALE_TIME_MS
+      ),
+    )
+
+    return shouldRefresh
+      ? loadInitial({ now, unreadCount })
+      : Promise.resolve()
+  }
+
+  function ensureLoaded(unreadCount = state.lastObservedUnreadCount): Promise<void> {
+    return refreshIfStale({
+      reason: 'activate',
+      unreadCount,
+    })
   }
 
   function isReadCandidateCurrent(candidate: NotificationReadCandidate): boolean {
@@ -444,5 +515,6 @@ export function useNotificationFeed(
     loadMore,
     markCandidateReadLocally,
     refresh,
+    refreshIfStale,
   }
 }

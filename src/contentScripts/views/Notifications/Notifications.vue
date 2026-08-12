@@ -61,7 +61,15 @@ function replaceNotificationRoute(view: NotificationView) {
 }
 
 function syncViewFromRoute(href: string) {
-  const url = new URL(href || window.location.href)
+  let url: URL
+  try {
+    url = new URL(href || window.location.href)
+  }
+  catch {
+    currentView.value = 'whisper'
+    replaceNotificationRoute('whisper')
+    return
+  }
   if (url.searchParams.get('page') !== AppPage.Notifications)
     return
 

@@ -23,6 +23,16 @@ const topBarStore = useTopBarStore()
 const sentinelRef = ref<HTMLElement | null>(null)
 const currentMid = computed(() => props.mid)
 const originalNotificationUrl = computed(() => buildOriginalNotificationUrl(props.section))
+const authoritativeUnreadCount = computed(() => {
+  if (props.section === 'reply')
+    return topBarStore.unReadMessage.reply || 0
+  if (props.section === 'at')
+    return topBarStore.unReadMessage.at || 0
+  return Math.max(
+    topBarStore.unReadMessage.like || 0,
+    (topBarStore.unReadMessage as { recv_like?: number }).recv_like || 0,
+  )
+})
 
 function fetchNotificationPage(params?: NotificationPageParams): Promise<unknown> {
   if (props.section === 'reply') {
@@ -102,12 +112,15 @@ async function connectObserver() {
   observer.observe(sentinelRef.value)
 }
 
-async function activateFeed() {
+async function activateFeed(reason: 'activate' | 'visibility' = 'activate') {
   if (!props.active || document.visibilityState !== 'visible')
     return
 
   restoreScrollPosition()
-  await feed.ensureLoaded()
+  await feed.refreshIfStale({
+    reason,
+    unreadCount: authoritativeUnreadCount.value,
+  })
   if (props.active) {
     await connectObserver()
     void syncReadCandidate()
@@ -124,7 +137,7 @@ async function refresh() {
   const viewport = scrollViewportRef.value
   state.scrollTop = 0
   viewport?.scrollTo({ top: 0 })
-  await feed.refresh()
+  await feed.refresh(authoritativeUnreadCount.value)
   if (props.active) {
     await connectObserver()
     void syncReadCandidate()
@@ -195,10 +208,7 @@ function handleVisibilityChange() {
   if (document.visibilityState !== 'visible' || !props.active)
     return
 
-  if (state.loaded)
-    void syncReadCandidate()
-  else
-    void activateFeed()
+  void activateFeed('visibility')
 }
 
 watch(() => props.active, (active) => {
@@ -217,6 +227,20 @@ watch(currentMid, () => {
       if (props.active)
         void activateFeed()
     })
+  }
+})
+
+watch(authoritativeUnreadCount, (unreadCount) => {
+  if (props.active && document.visibilityState === 'visible') {
+    void feed.refreshIfStale({
+      reason: 'unread-change',
+      unreadCount,
+    }).then(() => syncReadCandidate())
+  }
+  else if (unreadCount === 0) {
+    // Preserve the zero-to-positive edge while this v-show feed is inactive;
+    // activation will consume it without loading a hidden category.
+    state.lastObservedUnreadCount = 0
   }
 })
 

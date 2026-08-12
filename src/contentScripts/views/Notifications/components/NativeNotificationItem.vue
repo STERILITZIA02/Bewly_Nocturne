@@ -71,6 +71,8 @@ function markAvatarFailed(index: number) {
           v-if="actor.avatar && !failedAvatarIndexes.has(index)"
           :src="actor.avatar"
           alt=""
+          loading="lazy"
+          decoding="async"
           @error="markAvatarFailed(index)"
         >
         <i v-else i-solar:user-circle-bold-duotone />
@@ -112,6 +114,8 @@ function markAvatarFailed(index: number) {
               v-if="item.sourceImage && !sourceImageFailed"
               :src="item.sourceImage"
               alt=""
+              loading="lazy"
+              decoding="async"
               @error="sourceImageFailed = true"
             >
             <i v-else i-solar:document-text-bold-duotone />

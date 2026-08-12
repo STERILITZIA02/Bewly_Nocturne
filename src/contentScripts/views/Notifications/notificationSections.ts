@@ -84,6 +84,10 @@ export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
   NOTIFICATION_SECTIONS.map(section => [section.id, section]),
 ) as Record<NotificationView, NotificationSectionDefinition>
 
+const NOTIFICATION_VIEW_SET = new Set<NotificationView>(
+  NOTIFICATION_SECTIONS.map(section => section.id),
+)
+
 export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
   section => section.unreadSource !== null,
 )
@@ -98,7 +102,7 @@ export const NATIVE_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
 )
 
 export function isNotificationView(value: unknown): value is NotificationView {
-  return typeof value === 'string' && value in NOTIFICATION_SECTION_BY_ID
+  return typeof value === 'string' && NOTIFICATION_VIEW_SET.has(value as NotificationView)
 }
 
 export function isOriginalNotificationView(value: NotificationView): value is OriginalNotificationView {

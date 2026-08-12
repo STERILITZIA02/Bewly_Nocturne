@@ -896,6 +896,7 @@ notifications:
     errors:
       login-required: 登录状态已失效
       risk-control: 请求暂时受到限制
+      server-error: 服务暂时不可用
       network: 网络连接失败
       invalid-response: 当前通知暂时无法读取
       api-error: 加载失败，请重试

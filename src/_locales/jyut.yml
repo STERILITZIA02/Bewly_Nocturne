@@ -882,6 +882,7 @@ notifications:
     errors:
       login-required: 登入狀態已經失效
       risk-control: 請求暫時受到限制
+      server-error: 服務暫時用唔到
       network: 網絡連線失敗
       invalid-response: 暫時讀唔到而家嘅通知
       api-error: 載入失敗，請再試

@@ -9,14 +9,19 @@ const BEWLY_NOTIFICATION_ORIGIN = 'https://www.bilibili.com/'
 const ORIGINAL_NOTIFICATION_ORIGIN = 'https://message.bilibili.com/'
 
 export function parseNotificationView(url: string | URL): NotificationView {
-  const parsedUrl = url instanceof URL ? url : new URL(url, BEWLY_NOTIFICATION_ORIGIN)
-  const queryView = parsedUrl.searchParams.get('notificationView')
-  if (isNotificationView(queryView))
-    return queryView
+  try {
+    const parsedUrl = url instanceof URL ? url : new URL(url, BEWLY_NOTIFICATION_ORIGIN)
+    const queryView = parsedUrl.searchParams.get('notificationView')
+    if (queryView !== null)
+      return isNotificationView(queryView) ? queryView : 'whisper'
 
-  const originalHash = parsedUrl.hash.replace(/^#\/?/, '').split(/[/?]/, 1)[0]
-  const originalSection = NOTIFICATION_SECTIONS.find(section => section.originalHash === originalHash)
-  return originalSection?.id ?? 'whisper'
+    const originalHash = parsedUrl.hash.replace(/^#\/?/, '').split(/[/?]/, 1)[0]
+    const originalSection = NOTIFICATION_SECTIONS.find(section => section.originalHash === originalHash)
+    return originalSection?.id ?? 'whisper'
+  }
+  catch {
+    return 'whisper'
+  }
 }
 
 export function buildBewlyNotificationUrl(view: NotificationView): string {
