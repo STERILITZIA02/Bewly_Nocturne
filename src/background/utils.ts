@@ -69,7 +69,7 @@ interface API {
   params?: {
     [key: string]: any
   }
-  afterHandle: ((response: Response) => Response | Promise<Response>)[]
+  afterHandle: FetchAfterHandler[]
 }
 // 重载API 可以为函数
 type APIFunction = (message: Message, sender?: any) => any

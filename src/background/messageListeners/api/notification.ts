@@ -1,3 +1,4 @@
+import { parseReplyNotificationResponse } from '../../notificationJson'
 import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
 
@@ -24,6 +25,20 @@ const API_NOTIFICATION = {
       unread_type: 0,
     },
     afterHandle: AHS.J_D,
+  },
+  getReplyNotifications: {
+    url: 'https://api.bilibili.com/x/msgfeed/reply',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      platform: 'web',
+      build: 0,
+      mobi_app: 'web',
+      id: undefined as string | undefined,
+      reply_time: undefined as number | undefined,
+    },
+    afterHandle: [parseReplyNotificationResponse],
   },
 } satisfies APIMAP
 
