@@ -1,59 +1,69 @@
-export type ReplyNotificationTransportErrorKind
+export type NotificationTransportErrorKind
   = | 'login-required'
     | 'risk-control'
     | 'invalid-response'
     | 'api-error'
 
-export interface ReplyNotificationTransportError {
-  kind: ReplyNotificationTransportErrorKind
+export type NotificationEndpointName
+  = | 'getReplyNotifications'
+    | 'getAtNotifications'
+    | 'getLikeNotifications'
+
+export interface NotificationTransportError {
+  kind: NotificationTransportErrorKind
   httpStatus: number
-  endpointName: 'getReplyNotifications'
+  endpointName: NotificationEndpointName
 }
 
-export interface ReplyNotificationApiResponse {
+export interface NotificationApiResponse {
   code: number
   message?: string
   data: unknown
-  bewlyError?: ReplyNotificationTransportError
+  bewlyError?: NotificationTransportError
 }
 
-const REPLY_IDENTIFIER_PATTERN = /("(?:id|mid|business_id|subject_id|source_id|root_id|target_id)"\s*:\s*)(-?\d+)/g
+const NOTIFICATION_IDENTIFIER_PATTERN = /("(?:id|mid|business_id|subject_id|source_id|root_id|target_id|item_id)"\s*:\s*)(-?\d+)/g
 const HTML_PREFIX_PATTERN = /^\s*</
 const LOGIN_URL_PATTERN = /passport|login/i
 
 function createTransportError(
-  kind: ReplyNotificationTransportErrorKind,
+  endpointName: NotificationEndpointName,
+  kind: NotificationTransportErrorKind,
   httpStatus: number,
   code = -1,
-): ReplyNotificationApiResponse {
+): NotificationApiResponse {
   return {
     code,
     data: null,
     bewlyError: {
       kind,
       httpStatus,
-      endpointName: 'getReplyNotifications',
+      endpointName,
     },
   }
 }
 
-function classifyHtmlResponse(response: Response): ReplyNotificationTransportErrorKind {
+function classifyHtmlResponse(response: Response): NotificationTransportErrorKind {
   if (response.status === 401 || response.redirected || LOGIN_URL_PATTERN.test(response.url))
     return 'login-required'
 
   return 'risk-control'
 }
 
-function preserveReplyIdentifiers(jsonText: string): string {
-  return jsonText.replace(REPLY_IDENTIFIER_PATTERN, '$1"$2"')
+function preserveNotificationIdentifiers(jsonText: string): string {
+  return jsonText.replace(NOTIFICATION_IDENTIFIER_PATTERN, '$1"$2"')
 }
 
-export async function parseReplyNotificationResponse(response: Response): Promise<ReplyNotificationApiResponse> {
+async function parseNotificationResponse(
+  response: Response,
+  endpointName: NotificationEndpointName,
+): Promise<NotificationApiResponse> {
   const text = await response.text()
   const contentType = response.headers.get('content-type') || ''
 
   if (contentType.includes('text/html') || HTML_PREFIX_PATTERN.test(text)) {
     return createTransportError(
+      endpointName,
       classifyHtmlResponse(response),
       response.status,
       response.status === 401 ? -101 : -412,
@@ -62,16 +72,16 @@ export async function parseReplyNotificationResponse(response: Response): Promis
 
   let parsed: unknown
   try {
-    parsed = JSON.parse(preserveReplyIdentifiers(text))
+    parsed = JSON.parse(preserveNotificationIdentifiers(text))
   }
   catch {
-    return createTransportError('invalid-response', response.status)
+    return createTransportError(endpointName, 'invalid-response', response.status)
   }
 
   if (!parsed || typeof parsed !== 'object' || !('code' in parsed))
-    return createTransportError('invalid-response', response.status)
+    return createTransportError(endpointName, 'invalid-response', response.status)
 
-  const result = parsed as ReplyNotificationApiResponse
+  const result = parsed as NotificationApiResponse
   if (!response.ok) {
     const kind = response.status === 401
       ? 'login-required'
@@ -81,9 +91,21 @@ export async function parseReplyNotificationResponse(response: Response): Promis
     result.bewlyError = {
       kind,
       httpStatus: response.status,
-      endpointName: 'getReplyNotifications',
+      endpointName,
     }
   }
 
   return result
+}
+
+export function parseReplyNotificationResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'getReplyNotifications')
+}
+
+export function parseAtNotificationResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'getAtNotifications')
+}
+
+export function parseLikeNotificationResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'getLikeNotifications')
 }

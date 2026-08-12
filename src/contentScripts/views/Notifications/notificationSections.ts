@@ -6,12 +6,10 @@ export type NotificationView
     | 'system'
     | 'settings'
 
-export type NativeNotificationSection = 'reply'
+export type NativeNotificationSection = 'reply' | 'at' | 'love'
 
 export type OriginalNotificationView
   = | 'whisper'
-    | 'at'
-    | 'love'
     | 'system'
     | 'settings'
 
@@ -46,7 +44,7 @@ export const NOTIFICATION_SECTIONS = [
   },
   {
     id: 'at',
-    implementation: 'original',
+    implementation: 'native',
     labelKey: 'notifications.sections.at.label',
     descriptionKey: 'notifications.sections.at.description',
     icon: 'i-solar:mention-circle-bold-duotone',
@@ -55,7 +53,7 @@ export const NOTIFICATION_SECTIONS = [
   },
   {
     id: 'love',
-    implementation: 'original',
+    implementation: 'native',
     labelKey: 'notifications.sections.love.label',
     descriptionKey: 'notifications.sections.love.description',
     icon: 'i-solar:like-bold-duotone',
@@ -90,10 +88,21 @@ export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
   section => section.unreadSource !== null,
 )
 
+export const NATIVE_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
+  section => section.implementation === 'native',
+) as readonly (NotificationSectionDefinition & {
+  id: NativeNotificationSection
+  implementation: 'native'
+})[]
+
 export function isNotificationView(value: unknown): value is NotificationView {
   return typeof value === 'string' && value in NOTIFICATION_SECTION_BY_ID
 }
 
 export function isOriginalNotificationView(value: NotificationView): value is OriginalNotificationView {
   return NOTIFICATION_SECTION_BY_ID[value].implementation === 'original'
+}
+
+export function isNativeNotificationSection(value: NotificationView): value is NativeNotificationSection {
+  return NOTIFICATION_SECTION_BY_ID[value].implementation === 'native'
 }

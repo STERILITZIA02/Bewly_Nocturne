@@ -865,10 +865,10 @@ notifications:
       description: 查看其他人對你的回覆
     at:
       label: "{'@'} 我的"
-      description: "使用嗶哩嗶哩原版查看 {'@'} 通知"
+      description: 查看別人對你的提及
     love:
       label: 收到的讚
-      description: 使用嗶哩嗶哩原版查看按讚通知
+      description: 查看別人對你內容的按讚
     system:
       label: 系統通知
       description: 使用嗶哩嗶哩原版查看系統通知
@@ -888,6 +888,21 @@ notifications:
       network: 網路連線失敗
       invalid-response: 暫時無法讀取回覆通知
       api-error: 載入失敗，請重試
+  native:
+    loading:
+      reply: 正在載入回覆通知
+      at: 正在載入提及通知
+      love: 正在載入按讚通知
+    empty:
+      reply: 暫無回覆通知
+      at: 暫無提及通知
+      love: 暫無按讚通知
+    actions:
+      at: 提到了你
+      love: 按讚了你的內容
+      love_multiple: 等 {count} 人按讚了你的內容
+    more_actors: '+{count}'
+    more_actors_aria: 還有 {count} 位使用者
 dock:
   search: 搜尋
   home: 首頁

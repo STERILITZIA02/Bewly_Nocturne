@@ -917,10 +917,10 @@ notifications:
       description: See replies to your comments
     at:
       label: Mentions
-      description: Use original Bilibili to view mentions
+      description: See when others mention you
     love:
       label: Likes
-      description: Use original Bilibili to view like notifications
+      description: See likes on your content
     system:
       label: System
       description: Use original Bilibili to view system notifications
@@ -940,6 +940,21 @@ notifications:
       network: Network connection failed
       invalid-response: Reply notifications are temporarily unavailable
       api-error: Failed to load. Try again
+  native:
+    loading:
+      reply: Loading reply notifications
+      at: Loading mention notifications
+      love: Loading like notifications
+    empty:
+      reply: No reply notifications
+      at: No mention notifications
+      love: No like notifications
+    actions:
+      at: mentioned you
+      love: liked your content
+      love_multiple: and {count} people in total liked your content
+    more_actors: '+{count}'
+    more_actors_aria: '{count} more users'
 dock:
   search: Search
   home: Home

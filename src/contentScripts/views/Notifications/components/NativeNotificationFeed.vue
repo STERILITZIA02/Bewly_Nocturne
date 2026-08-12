@@ -6,6 +6,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
+import type { NotificationPageParams } from '../composables/useNotificationFeed'
 import { useNotificationFeed } from '../composables/useNotificationFeed'
 import type { NativeNotificationSection } from '../notificationSections'
 import NativeNotificationItem from './NativeNotificationItem.vue'
@@ -22,8 +23,28 @@ const topBarStore = useTopBarStore()
 const sentinelRef = ref<HTMLElement | null>(null)
 const currentMid = computed(() => props.mid)
 const originalNotificationUrl = computed(() => buildOriginalNotificationUrl(props.section))
+
+function fetchNotificationPage(params?: NotificationPageParams): Promise<unknown> {
+  if (props.section === 'reply') {
+    return api.notification.getReplyNotifications({
+      id: params?.id,
+      reply_time: params?.reply_time,
+    })
+  }
+  if (props.section === 'at') {
+    return api.notification.getAtNotifications({
+      id: params?.id,
+      at_time: params?.at_time,
+    })
+  }
+  return api.notification.getLikeNotifications({
+    id: params?.id,
+    like_time: params?.like_time,
+  })
+}
+
 const feed = useNotificationFeed(currentMid, props.section, {
-  fetchPage: params => api.notification.getReplyNotifications(params),
+  fetchPage: fetchNotificationPage,
 })
 const { state } = feed
 
@@ -241,7 +262,7 @@ defineExpose({ refresh })
     </div>
 
     <div v-else-if="state.loaded && state.items.length === 0" class="native-notification-feed__state">
-      <Empty :description="t('notifications.reply.empty')" />
+      <Empty :description="t(`notifications.native.empty.${section}`)" />
     </div>
 
     <template v-else>

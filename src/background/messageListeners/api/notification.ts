@@ -1,4 +1,8 @@
-import { parseReplyNotificationResponse } from '../../notificationJson'
+import {
+  parseAtNotificationResponse,
+  parseLikeNotificationResponse,
+  parseReplyNotificationResponse,
+} from '../../notificationJson'
 import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
 
@@ -42,6 +46,38 @@ const API_NOTIFICATION = {
       reply_time: undefined as number | undefined,
     },
     afterHandle: [parseReplyNotificationResponse],
+  },
+  // The current message-pc client uses the first authenticated GET as the At
+  // category read mutation; subsequent pages send string `id` plus `at_time`.
+  getAtNotifications: {
+    url: 'https://api.bilibili.com/x/msgfeed/at',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      platform: 'web',
+      build: 0,
+      mobi_app: 'web',
+      id: undefined as string | undefined,
+      at_time: undefined as number | undefined,
+    },
+    afterHandle: [parseAtNotificationResponse],
+  },
+  // Like keeps `latest` and `total` groups, but only `total.cursor` drives the
+  // original client's next request. Its first GET also owns category read.
+  getLikeNotifications: {
+    url: 'https://api.bilibili.com/x/msgfeed/like',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      platform: 'web',
+      build: 0,
+      mobi_app: 'web',
+      id: undefined as string | undefined,
+      like_time: undefined as number | undefined,
+    },
+    afterHandle: [parseLikeNotificationResponse],
   },
 } satisfies APIMAP
 

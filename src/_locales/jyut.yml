@@ -850,10 +850,10 @@ notifications:
       description: 睇其他人畀你嘅回覆
     at:
       label: "{'@'} 我嘅"
-      description: "用嗶哩嗶哩原版睇 {'@'} 通知"
+      description: 睇其他人提及你
     love:
       label: 收到嘅讚
-      description: 用嗶哩嗶哩原版睇讚好通知
+      description: 睇其他人畀你內容嘅讚
     system:
       label: 系統通知
       description: 用嗶哩嗶哩原版睇系統通知
@@ -873,6 +873,21 @@ notifications:
       network: 網絡連線失敗
       invalid-response: 暫時讀唔到回覆通知
       api-error: 載入失敗，請再試
+  native:
+    loading:
+      reply: 載入緊回覆通知
+      at: 載入緊提及通知
+      love: 載入緊讚好通知
+    empty:
+      reply: 暫時未有回覆通知
+      at: 暫時未有提及通知
+      love: 暫時未有讚好通知
+    actions:
+      at: 提及咗你
+      love: 讚咗你嘅內容
+      love_multiple: 等總共 {count} 人讚咗你嘅內容
+    more_actors: '+{count}'
+    more_actors_aria: 仲有 {count} 位用戶
 dock:
   search: 搵嘢
   home: 主頁

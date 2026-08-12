@@ -8,17 +8,20 @@ const props = defineProps<{
 }>()
 
 const { locale, t } = useI18n()
-const avatarFailed = ref(false)
+const failedAvatarIndexes = ref<Set<number>>(new Set())
 const sourceImageFailed = ref(false)
 
 const fallbackActor: DisplayNotificationActor = { id: '', name: '', avatar: '' }
 const primaryActor = computed(() => props.item.actors[0] ?? fallbackActor)
+const displayedActors = computed(() => props.item.actors.length > 0
+  ? props.item.actors.slice(0, 3)
+  : [fallbackActor])
+const remainingActorCount = computed(() => Math.max(props.item.actorCount - displayedActors.value.length, 0))
 const actorName = computed(() => primaryActor.value.name || t('notifications.reply.unknown_user'))
-const actorUrl = computed(() => primaryActor.value.id
-  ? `https://space.bilibili.com/${encodeURIComponent(primaryActor.value.id)}`
-  : props.item.originalUrl)
+const actorUrl = computed(() => getActorUrl(primaryActor.value))
 const sourceUrl = computed(() => props.item.sourceUrl || props.item.originalUrl)
 const sourceTitle = computed(() => props.item.sourceTitle || t('notifications.reply.original_content'))
+const actionText = computed(() => t(props.item.actionTextKey, { count: props.item.actorCount }))
 const formattedTime = computed(() => {
   if (!props.item.timestamp)
     return ''
@@ -35,21 +38,50 @@ const formattedTime = computed(() => {
 })
 
 watch(() => props.item.id, () => {
-  avatarFailed.value = false
+  failedAvatarIndexes.value = new Set()
   sourceImageFailed.value = false
 })
+
+function getActorUrl(actor: DisplayNotificationActor): string {
+  return actor.id
+    ? `https://space.bilibili.com/${encodeURIComponent(actor.id)}`
+    : props.item.originalUrl
+}
+
+function markAvatarFailed(index: number) {
+  failedAvatarIndexes.value = new Set([...failedAvatarIndexes.value, index])
+}
 </script>
 
 <template>
   <article class="native-notification-item">
-    <div class="native-notification-item__avatar" aria-hidden="true">
-      <img
-        v-if="primaryActor.avatar && !avatarFailed"
-        :src="primaryActor.avatar"
-        alt=""
-        @error="avatarFailed = true"
+    <div
+      class="native-notification-item__avatars"
+      :class="{ 'native-notification-item__avatars--grouped': item.actorCount > 1 }"
+    >
+      <ALink
+        v-for="(actor, index) in displayedActors"
+        :key="actor.id || `${item.id}:${index}`"
+        :href="getActorUrl(actor)"
+        type="content"
+        class="native-notification-item__avatar"
+        :aria-label="actor.name || t('notifications.reply.unknown_user')"
       >
-      <i v-else i-solar:user-circle-bold-duotone />
+        <img
+          v-if="actor.avatar && !failedAvatarIndexes.has(index)"
+          :src="actor.avatar"
+          alt=""
+          @error="markAvatarFailed(index)"
+        >
+        <i v-else i-solar:user-circle-bold-duotone />
+      </ALink>
+      <span
+        v-if="remainingActorCount > 0"
+        class="native-notification-item__remaining-actors"
+        :aria-label="t('notifications.native.more_actors_aria', { count: remainingActorCount })"
+      >
+        {{ t('notifications.native.more_actors', { count: remainingActorCount }) }}
+      </span>
     </div>
 
     <div class="native-notification-item__content">
@@ -59,7 +91,7 @@ watch(() => props.item.id, () => {
           <ALink :href="actorUrl" type="content" class="native-notification-item__actor">
             {{ actorName }}
           </ALink>
-          <span>{{ t(item.actionTextKey) }}</span>
+          <span>{{ actionText }}</span>
         </p>
         <time v-if="formattedTime" :datetime="new Date(item.timestamp * 1000).toISOString()">
           {{ formattedTime }}
@@ -110,8 +142,16 @@ watch(() => props.item.id, () => {
   background: var(--bew-fill-1);
 }
 
-.native-notification-item__avatar {
+.native-notification-item__avatars {
+  display: flex;
+  align-items: center;
+  min-width: var(--bew-space-12);
+}
+
+.native-notification-item__avatar,
+.native-notification-item__remaining-actors {
   display: grid;
+  flex: 0 0 auto;
   place-items: center;
   width: var(--bew-space-12);
   height: var(--bew-space-12);
@@ -119,8 +159,32 @@ watch(() => props.item.id, () => {
   color: var(--bew-text-3);
   font-size: var(--bew-icon-size-xl);
   background: var(--bew-fill-1);
+  border: 1px solid var(--bew-surface-border-color);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
+}
+
+.native-notification-item__avatar {
+  text-decoration: none;
+}
+
+.native-notification-item__avatars--grouped .native-notification-item__avatar,
+.native-notification-item__remaining-actors {
+  width: var(--bew-space-10);
+  height: var(--bew-space-10);
+}
+
+.native-notification-item__avatars--grouped .native-notification-item__avatar + .native-notification-item__avatar,
+.native-notification-item__remaining-actors {
+  margin-left: calc(var(--bew-space-2) * -1);
+}
+
+.native-notification-item__remaining-actors {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-line-height-caption);
+  background: var(--bew-elevated-solid);
 }
 
 .native-notification-item__avatar img,

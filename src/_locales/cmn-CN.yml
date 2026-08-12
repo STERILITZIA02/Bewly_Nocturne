@@ -864,10 +864,10 @@ notifications:
       description: 查看别人对你的回复
     at:
       label: "{'@'} 我的"
-      description: "使用哔哩哔哩原版查看 {'@'} 通知"
+      description: 查看别人对你的提及
     love:
       label: 收到的赞
-      description: 使用哔哩哔哩原版查看点赞通知
+      description: 查看别人对你内容的点赞
     system:
       label: 系统通知
       description: 使用哔哩哔哩原版查看系统通知
@@ -887,6 +887,21 @@ notifications:
       network: 网络连接失败
       invalid-response: 回复通知暂时无法读取
       api-error: 加载失败，请重试
+  native:
+    loading:
+      reply: 正在加载回复通知
+      at: 正在加载提及通知
+      love: 正在加载点赞通知
+    empty:
+      reply: 暂无回复通知
+      at: 暂无提及通知
+      love: 暂无点赞通知
+    actions:
+      at: 提到了你
+      love: 赞了你的内容
+      love_multiple: 等 {count} 人赞了你的内容
+    more_actors: '+{count}'
+    more_actors_aria: 还有 {count} 位用户
 dock:
   search: 搜索
   home: 首页
