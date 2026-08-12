@@ -1,19 +1,21 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import type { DisplayReplyNotification } from '../replyNotification'
+import type { DisplayNotification, DisplayNotificationActor } from '../notification'
 
 const props = defineProps<{
-  item: DisplayReplyNotification
+  item: DisplayNotification
 }>()
 
 const { locale, t } = useI18n()
 const avatarFailed = ref(false)
 const sourceImageFailed = ref(false)
 
-const actorName = computed(() => props.item.actor.name || t('notifications.reply.unknown_user'))
-const actorUrl = computed(() => props.item.actor.id
-  ? `https://space.bilibili.com/${encodeURIComponent(props.item.actor.id)}`
+const fallbackActor: DisplayNotificationActor = { id: '', name: '', avatar: '' }
+const primaryActor = computed(() => props.item.actors[0] ?? fallbackActor)
+const actorName = computed(() => primaryActor.value.name || t('notifications.reply.unknown_user'))
+const actorUrl = computed(() => primaryActor.value.id
+  ? `https://space.bilibili.com/${encodeURIComponent(primaryActor.value.id)}`
   : props.item.originalUrl)
 const sourceUrl = computed(() => props.item.sourceUrl || props.item.originalUrl)
 const sourceTitle = computed(() => props.item.sourceTitle || t('notifications.reply.original_content'))
@@ -39,41 +41,41 @@ watch(() => props.item.id, () => {
 </script>
 
 <template>
-  <article class="reply-notification-item">
-    <div class="reply-notification-item__avatar" aria-hidden="true">
+  <article class="native-notification-item">
+    <div class="native-notification-item__avatar" aria-hidden="true">
       <img
-        v-if="item.actor.avatar && !avatarFailed"
-        :src="item.actor.avatar"
+        v-if="primaryActor.avatar && !avatarFailed"
+        :src="primaryActor.avatar"
         alt=""
         @error="avatarFailed = true"
       >
       <i v-else i-solar:user-circle-bold-duotone />
     </div>
 
-    <div class="reply-notification-item__content">
-      <header class="reply-notification-item__header">
+    <div class="native-notification-item__content">
+      <header class="native-notification-item__header">
         <p>
-          <span v-if="item.unread" class="reply-notification-item__unread" aria-hidden="true" />
-          <ALink :href="actorUrl" type="content" class="reply-notification-item__actor">
+          <span v-if="item.unread" class="native-notification-item__unread" aria-hidden="true" />
+          <ALink :href="actorUrl" type="content" class="native-notification-item__actor">
             {{ actorName }}
           </ALink>
-          <span>{{ t('notifications.reply.replied_to_you') }}</span>
+          <span>{{ t(item.actionTextKey) }}</span>
         </p>
         <time v-if="formattedTime" :datetime="new Date(item.timestamp * 1000).toISOString()">
           {{ formattedTime }}
         </time>
       </header>
 
-      <p v-if="item.body" class="reply-notification-item__body">
+      <p v-if="item.body" class="native-notification-item__body">
         {{ item.body }}
       </p>
 
-      <div v-if="item.quote || item.sourceTitle || item.sourceImage" class="reply-notification-item__reference">
+      <div v-if="item.quote || item.sourceTitle || item.sourceImage" class="native-notification-item__reference">
         <p v-if="item.quote">
           {{ item.quote }}
         </p>
-        <ALink :href="sourceUrl" type="content" class="reply-notification-item__source">
-          <span class="reply-notification-item__source-image">
+        <ALink :href="sourceUrl" type="content" class="native-notification-item__source">
+          <span class="native-notification-item__source-image">
             <img
               v-if="item.sourceImage && !sourceImageFailed"
               :src="item.sourceImage"
@@ -86,7 +88,7 @@ watch(() => props.item.id, () => {
         </ALink>
       </div>
 
-      <ALink :href="sourceUrl" type="content" class="reply-notification-item__open-source">
+      <ALink :href="sourceUrl" type="content" class="native-notification-item__open-source">
         {{ t('notifications.reply.view_source') }}
         <i i-mingcute:arrow-right-line />
       </ALink>
@@ -95,7 +97,7 @@ watch(() => props.item.id, () => {
 </template>
 
 <style scoped lang="scss">
-.reply-notification-item {
+.native-notification-item {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--bew-space-3);
@@ -104,11 +106,11 @@ watch(() => props.item.id, () => {
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
-.reply-notification-item:hover {
+.native-notification-item:hover {
   background: var(--bew-fill-1);
 }
 
-.reply-notification-item__avatar {
+.native-notification-item__avatar {
   display: grid;
   place-items: center;
   width: var(--bew-space-12);
@@ -121,31 +123,31 @@ watch(() => props.item.id, () => {
   corner-shape: var(--bew-corner-shape-round);
 }
 
-.reply-notification-item__avatar img,
-.reply-notification-item__source-image img {
+.native-notification-item__avatar img,
+.native-notification-item__source-image img {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
 
-.reply-notification-item__content {
+.native-notification-item__content {
   min-width: 0;
 }
 
-.reply-notification-item__header {
+.native-notification-item__header {
   display: flex;
   gap: var(--bew-space-3);
   align-items: baseline;
   justify-content: space-between;
 }
 
-.reply-notification-item__header p,
-.reply-notification-item__body,
-.reply-notification-item__reference p {
+.native-notification-item__header p,
+.native-notification-item__body,
+.native-notification-item__reference p {
   margin: 0;
 }
 
-.reply-notification-item__header p {
+.native-notification-item__header p {
   display: flex;
   flex-wrap: wrap;
   gap: var(--bew-space-1);
@@ -155,25 +157,25 @@ watch(() => props.item.id, () => {
   line-height: var(--bew-line-height-title);
 }
 
-.reply-notification-item__header time {
+.native-notification-item__header time {
   flex: 0 0 auto;
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
 
-.reply-notification-item__actor {
+.native-notification-item__actor {
   color: var(--bew-text-1);
   font-weight: var(--bew-font-weight-semibold);
   text-decoration: none;
 }
 
-.reply-notification-item__actor:hover,
-.reply-notification-item__open-source:hover {
+.native-notification-item__actor:hover,
+.native-notification-item__open-source:hover {
   color: var(--bew-theme-color);
 }
 
-.reply-notification-item__unread {
+.native-notification-item__unread {
   width: var(--bew-space-2);
   height: var(--bew-space-2);
   background: var(--bew-theme-color);
@@ -181,7 +183,7 @@ watch(() => props.item.id, () => {
   corner-shape: var(--bew-corner-shape-round);
 }
 
-.reply-notification-item__body {
+.native-notification-item__body {
   margin-top: var(--bew-space-2);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
@@ -191,7 +193,7 @@ watch(() => props.item.id, () => {
   white-space: pre-wrap;
 }
 
-.reply-notification-item__reference {
+.native-notification-item__reference {
   display: grid;
   gap: var(--bew-space-2);
   margin-top: var(--bew-space-3);
@@ -204,7 +206,7 @@ watch(() => props.item.id, () => {
   corner-shape: var(--bew-corner-shape);
 }
 
-.reply-notification-item__source {
+.native-notification-item__source {
   display: flex;
   gap: var(--bew-space-2);
   align-items: center;
@@ -213,7 +215,7 @@ watch(() => props.item.id, () => {
   text-decoration: none;
 }
 
-.reply-notification-item__source-image {
+.native-notification-item__source-image {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
@@ -227,14 +229,14 @@ watch(() => props.item.id, () => {
   corner-shape: var(--bew-corner-shape);
 }
 
-.reply-notification-item__source > span:last-child {
+.native-notification-item__source > span:last-child {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.reply-notification-item__open-source {
+.native-notification-item__open-source {
   display: inline-flex;
   gap: var(--bew-space-1);
   align-items: center;
@@ -247,7 +249,7 @@ watch(() => props.item.id, () => {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .reply-notification-item {
+  .native-notification-item {
     transition: none;
   }
 }

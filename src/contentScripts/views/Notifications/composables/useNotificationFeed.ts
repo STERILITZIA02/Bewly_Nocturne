@@ -3,67 +3,57 @@ import { computed, reactive, ref, toValue, watch } from 'vue'
 
 import type { ReplyNotificationApiResponse } from '~/background/notificationJson'
 
-import type { DisplayReplyNotification } from '../replyNotification'
-import { transformReplyNotification } from '../replyNotification'
+import type { DisplayNotification } from '../notification'
+import { asNotificationRecord, toNotificationIdentifier, transformReplyNotification } from '../notification'
+import type { NativeNotificationSection } from '../notificationSections'
 
-export type ReplyFeedErrorKind
+export type NotificationErrorKind
   = | 'login-required'
     | 'risk-control'
     | 'network'
     | 'invalid-response'
     | 'api-error'
 
-export interface ReplyFeedState {
-  items: DisplayReplyNotification[]
+export interface NotificationFeedState {
+  items: DisplayNotification[]
   cursorId: string
   cursorTime: number
   loading: boolean
   loadingMore: boolean
   loaded: boolean
   noMore: boolean
-  errorKind: ReplyFeedErrorKind | null
+  errorKind: NotificationErrorKind | null
   generation: number
   scrollTop: number
   lastReadMarker: string
 }
 
-export interface ReplyReadCandidate {
+export interface NotificationReadCandidate {
   marker: string
   mid: string
+  section: NativeNotificationSection
   generation: number
 }
 
-interface ReplyPageParams {
+export interface NotificationPageParams {
   id?: string
   reply_time?: number
+  at_time?: number
+  like_time?: number
 }
 
-interface ReplyPageResult {
-  items: DisplayReplyNotification[]
+interface NotificationPageResult {
+  items: DisplayNotification[]
   cursorId: string
   cursorTime: number
   noMore: boolean
 }
 
-interface ReplyFeedOptions {
-  fetchPage: (params?: ReplyPageParams) => Promise<unknown>
+interface NotificationFeedOptions {
+  fetchPage: (params?: NotificationPageParams) => Promise<unknown>
 }
 
-type UnknownRecord = Record<string, unknown>
-
-function asRecord(value: unknown): UnknownRecord | null {
-  return value !== null && typeof value === 'object' ? value as UnknownRecord : null
-}
-
-function toStringIdentifier(value: unknown): string {
-  if (typeof value === 'string')
-    return value
-  if (typeof value === 'number' && Number.isFinite(value))
-    return String(value)
-  return ''
-}
-
-function classifyApiError(response: ReplyNotificationApiResponse): ReplyFeedErrorKind | null {
+function classifyApiError(response: ReplyNotificationApiResponse): NotificationErrorKind | null {
   if (response.bewlyError)
     return response.bewlyError.kind
   if (response.code === 0)
@@ -75,7 +65,7 @@ function classifyApiError(response: ReplyNotificationApiResponse): ReplyFeedErro
   return 'api-error'
 }
 
-function dedupeReplyNotifications(items: DisplayReplyNotification[]): DisplayReplyNotification[] {
+function dedupeNotifications(items: DisplayNotification[]): DisplayNotification[] {
   const seen = new Set<string>()
   return items.filter((item) => {
     if (seen.has(item.id))
@@ -85,27 +75,18 @@ function dedupeReplyNotifications(items: DisplayReplyNotification[]): DisplayRep
   })
 }
 
-function parseReplyPage(value: unknown): { page?: ReplyPageResult, errorKind?: ReplyFeedErrorKind } {
-  const response = asRecord(value) as ReplyNotificationApiResponse | null
-  if (!response || typeof response.code !== 'number')
-    return { errorKind: 'invalid-response' }
-
-  const apiError = classifyApiError(response)
-  if (apiError)
-    return { errorKind: apiError }
-
-  const data = asRecord(response.data)
-  const cursor = asRecord(data?.cursor)
-  const rawItems = data?.items
-  if (!data || !cursor || (rawItems !== undefined && rawItems !== null && !Array.isArray(rawItems)))
-    return { errorKind: 'invalid-response' }
+function parseReplyPage(data: Record<string, unknown>): NotificationPageResult | null {
+  const cursor = asNotificationRecord(data.cursor)
+  const rawItems = data.items
+  if (!cursor || (rawItems !== undefined && rawItems !== null && !Array.isArray(rawItems)))
+    return null
 
   const lastViewAt = typeof data.last_view_at === 'number' && Number.isFinite(data.last_view_at)
     ? data.last_view_at
     : 0
-  const items = dedupeReplyNotifications((Array.isArray(rawItems) ? rawItems : [])
+  const items = dedupeNotifications((Array.isArray(rawItems) ? rawItems : [])
     .map(transformReplyNotification)
-    .filter((item): item is DisplayReplyNotification => item !== null)
+    .filter((item): item is DisplayNotification => item !== null)
     .map(item => ({
       ...item,
       unread: item.timestamp > lastViewAt,
@@ -114,30 +95,54 @@ function parseReplyPage(value: unknown): { page?: ReplyPageResult, errorKind?: R
   const cursorTime = typeof cursor.time === 'number' && Number.isFinite(cursor.time)
     ? cursor.time
     : 0
-  const cursorId = toStringIdentifier(cursor.id)
+  const cursorId = toNotificationIdentifier(cursor.id)
   const noMore = cursor.is_end === true || cursor.is_end === 1
   if (!noMore && (!cursorId || cursorTime <= 0))
-    return { errorKind: 'invalid-response' }
+    return null
 
-  return {
-    page: {
-      items,
-      cursorId,
-      cursorTime,
-      noMore,
-    },
-  }
+  return { items, cursorId, cursorTime, noMore }
 }
 
-export function useReplyNotifications(
+function parseNotificationPage(
+  section: NativeNotificationSection,
+  value: unknown,
+): { page?: NotificationPageResult, errorKind?: NotificationErrorKind } {
+  const response = asNotificationRecord(value) as ReplyNotificationApiResponse | null
+  if (!response || typeof response.code !== 'number')
+    return { errorKind: 'invalid-response' }
+
+  const apiError = classifyApiError(response)
+  if (apiError)
+    return { errorKind: apiError }
+
+  const data = asNotificationRecord(response.data)
+  if (!data)
+    return { errorKind: 'invalid-response' }
+
+  const page = section === 'reply' ? parseReplyPage(data) : null
+  return page ? { page } : { errorKind: 'invalid-response' }
+}
+
+function buildNextPageParams(
+  section: NativeNotificationSection,
+  cursorId: string,
+  cursorTime: number,
+): NotificationPageParams {
+  if (section === 'reply')
+    return { id: cursorId, reply_time: cursorTime }
+  return { id: cursorId }
+}
+
+export function useNotificationFeed(
   mid: MaybeRefOrGetter<string>,
-  options: ReplyFeedOptions,
+  section: NativeNotificationSection,
+  options: NotificationFeedOptions,
 ) {
   const fetchPage = options.fetchPage
   const resolvedMid = computed(() => toValue(mid))
   const accountMid = ref(resolvedMid.value)
-  const readCandidate = ref<ReplyReadCandidate | null>(null)
-  const state = reactive<ReplyFeedState>({
+  const readCandidate = ref<NotificationReadCandidate | null>(null)
+  const state = reactive<NotificationFeedState>({
     items: [],
     cursorId: '',
     cursorTime: 0,
@@ -179,7 +184,7 @@ export function useReplyNotifications(
 
   async function requestInitialPage(requestGeneration: number, requestMid: string) {
     try {
-      const result = parseReplyPage(await fetchPage())
+      const result = parseNotificationPage(section, await fetchPage())
       if (!isCurrentRequest(requestGeneration, requestMid))
         return
 
@@ -196,12 +201,14 @@ export function useReplyNotifications(
       state.noMore = result.page.noMore
       readCandidate.value = {
         marker: [
+          section,
           result.page.cursorId,
           result.page.cursorTime,
           result.page.items[0]?.id ?? 'empty',
           result.page.items.length,
         ].join(':'),
         mid: requestMid,
+        section,
         generation: requestGeneration,
       }
     }
@@ -239,10 +246,10 @@ export function useReplyNotifications(
     const cursorId = state.cursorId
     const cursorTime = state.cursorTime
     try {
-      const result = parseReplyPage(await fetchPage({
-        id: cursorId,
-        reply_time: cursorTime,
-      }))
+      const result = parseNotificationPage(
+        section,
+        await fetchPage(buildNextPageParams(section, cursorId, cursorTime)),
+      )
       if (!isCurrentRequest(requestGeneration, requestMid))
         return
 
@@ -302,13 +309,14 @@ export function useReplyNotifications(
     return state.loaded ? Promise.resolve() : loadInitial()
   }
 
-  function isReadCandidateCurrent(candidate: ReplyReadCandidate): boolean {
+  function isReadCandidateCurrent(candidate: NotificationReadCandidate): boolean {
     return readCandidate.value?.marker === candidate.marker
       && candidate.mid === accountMid.value
+      && candidate.section === section
       && candidate.generation === state.generation
   }
 
-  function markCandidateReadLocally(candidate: ReplyReadCandidate): boolean {
+  function markCandidateReadLocally(candidate: NotificationReadCandidate): boolean {
     if (!isReadCandidateCurrent(candidate))
       return false
 
@@ -318,7 +326,7 @@ export function useReplyNotifications(
     return true
   }
 
-  function confirmReadCandidate(candidate: ReplyReadCandidate): boolean {
+  function confirmReadCandidate(candidate: NotificationReadCandidate): boolean {
     if (!isReadCandidateCurrent(candidate))
       return false
 

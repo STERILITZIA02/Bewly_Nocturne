@@ -8,10 +8,10 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
 
+import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
 import NotificationsNavigation from './components/NotificationsNavigation.vue'
 import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
 import OriginalNotificationsFrame from './components/OriginalNotificationsFrame.vue'
-import ReplyNotificationFeed from './components/ReplyNotificationFeed.vue'
 import type { NotificationView, OriginalNotificationView } from './notificationSections'
 import {
   isNotificationView,
@@ -23,7 +23,7 @@ interface OriginalNotificationsFrameExposed {
   reload: () => void
 }
 
-interface ReplyNotificationFeedExposed {
+interface NativeNotificationFeedExposed {
   refresh: () => Promise<void>
 }
 
@@ -34,7 +34,7 @@ const topBarStore = useTopBarStore()
 
 const currentView = ref<NotificationView>(parseNotificationView(routeState.href || window.location.href))
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
-const replyFeedRef = ref<ReplyNotificationFeedExposed | null>(null)
+const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
@@ -76,7 +76,7 @@ function selectView(view: NotificationView) {
 
 function refreshCurrentView() {
   if (currentView.value === 'reply')
-    void replyFeedRef.value?.refresh()
+    void nativeFeedRef.value?.refresh()
   else
     originalFrameRef.value?.reload()
 }
@@ -145,7 +145,7 @@ onBeforeUnmount(() => {
     class="notifications-page"
     :class="{
       'notifications-page--original': isOriginalView,
-      'notifications-page--reply': !isOriginalView,
+      'notifications-page--native': !isOriginalView,
       'notifications-page--dock-bottom': isBottomDock,
     }"
   >
@@ -155,11 +155,12 @@ onBeforeUnmount(() => {
       <NotificationsNavigation :model-value="currentView" @update:model-value="selectView" />
 
       <section class="notifications-page__outlet">
-        <ReplyNotificationFeed
+        <NativeNotificationFeed
           v-show="currentView === 'reply'"
-          ref="replyFeedRef"
+          ref="nativeFeedRef"
           :active="isPageActive && currentView === 'reply'"
           :mid="currentMid"
+          section="reply"
         />
         <OriginalNotificationsFrame
           v-if="originalView"
@@ -192,7 +193,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-.notifications-page--reply {
+.notifications-page--native {
   min-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
 }
 
@@ -202,7 +203,7 @@ onBeforeUnmount(() => {
   );
 }
 
-.notifications-page--reply.notifications-page--dock-bottom {
+.notifications-page--native.notifications-page--dock-bottom {
   min-height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
   );
@@ -249,7 +250,7 @@ onBeforeUnmount(() => {
     );
   }
 
-  .notifications-page--reply.notifications-page--dock-bottom {
+  .notifications-page--native.notifications-page--dock-bottom {
     min-height: calc(
       100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
     );

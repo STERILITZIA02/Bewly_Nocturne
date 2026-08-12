@@ -6,12 +6,14 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
-import { useReplyNotifications } from '../composables/useReplyNotifications'
-import ReplyNotificationItem from './ReplyNotificationItem.vue'
+import { useNotificationFeed } from '../composables/useNotificationFeed'
+import type { NativeNotificationSection } from '../notificationSections'
+import NativeNotificationItem from './NativeNotificationItem.vue'
 
 const props = defineProps<{
   active: boolean
   mid: string
+  section: NativeNotificationSection
 }>()
 
 const { t } = useI18n()
@@ -19,8 +21,8 @@ const { scrollViewportRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const sentinelRef = ref<HTMLElement | null>(null)
 const currentMid = computed(() => props.mid)
-const originalReplyUrl = buildOriginalNotificationUrl('reply')
-const feed = useReplyNotifications(currentMid, {
+const originalNotificationUrl = computed(() => buildOriginalNotificationUrl(props.section))
+const feed = useNotificationFeed(currentMid, props.section, {
   fetchPage: params => api.notification.getReplyNotifications(params),
 })
 const { state } = feed
@@ -119,6 +121,7 @@ function isReadCandidateEligible(candidate = feed.readCandidate.value): boolean 
     && props.active
     && document.visibilityState === 'visible'
     && candidate.mid === currentMid.value
+    && candidate.section === props.section
     && candidate.generation === state.generation
     && candidate.marker !== state.lastReadMarker
     && feed.isReadCandidateCurrent(candidate),
@@ -148,7 +151,8 @@ async function syncReadCandidate() {
   }
   catch {
     if (import.meta.env.DEV) {
-      console.warn('[Notifications][Reply] Unread synchronization failed', {
+      console.warn('[Notifications][NativeFeed] Unread synchronization failed', {
+        section: props.section,
         endpointName: 'syncUnreadMessageState',
         kind: 'network',
       })
@@ -217,35 +221,35 @@ defineExpose({ refresh })
 
 <template>
   <section
-    class="reply-notification-feed"
-    :aria-label="t('notifications.sections.reply.label')"
+    class="native-notification-feed"
+    :aria-label="t(`notifications.sections.${section}.label`)"
     :aria-busy="!state.loaded || state.loading || state.loadingMore"
   >
     <Loading v-if="!state.loaded && !state.errorKind" />
 
-    <div v-else-if="state.errorKind && state.items.length === 0" class="reply-notification-feed__state">
+    <div v-else-if="state.errorKind && state.items.length === 0" class="native-notification-feed__state">
       <Empty :description="errorMessage">
-        <div class="reply-notification-feed__state-actions">
+        <div class="native-notification-feed__state-actions">
           <Button type="tertiary" @click="retry">
             {{ t('notifications.actions.retry') }}
           </Button>
-          <ALink :href="originalReplyUrl" type="content" class="reply-notification-feed__original-link">
+          <ALink :href="originalNotificationUrl" type="content" class="native-notification-feed__original-link">
             {{ t('notifications.actions.open_original') }}
           </ALink>
         </div>
       </Empty>
     </div>
 
-    <div v-else-if="state.loaded && state.items.length === 0" class="reply-notification-feed__state">
+    <div v-else-if="state.loaded && state.items.length === 0" class="native-notification-feed__state">
       <Empty :description="t('notifications.reply.empty')" />
     </div>
 
     <template v-else>
-      <div class="reply-notification-feed__items">
-        <ReplyNotificationItem v-for="item in state.items" :key="item.id" :item="item" />
+      <div class="native-notification-feed__items">
+        <NativeNotificationItem v-for="item in state.items" :key="item.id" :item="item" />
       </div>
 
-      <div v-if="state.errorKind" class="reply-notification-feed__pagination-state" role="status">
+      <div v-if="state.errorKind" class="native-notification-feed__pagination-state" role="status">
         <span>{{ errorMessage }}</span>
         <Button type="tertiary" size="small" @click="retry">
           {{ t('notifications.actions.retry') }}
@@ -256,7 +260,7 @@ defineExpose({ refresh })
       <div
         v-if="!state.noMore"
         ref="sentinelRef"
-        class="reply-notification-feed__sentinel"
+        class="native-notification-feed__sentinel"
         aria-hidden="true"
       />
     </template>
@@ -264,23 +268,23 @@ defineExpose({ refresh })
 </template>
 
 <style scoped lang="scss">
-.reply-notification-feed {
+.native-notification-feed {
   min-width: 0;
   min-height: 100%;
 }
 
-.reply-notification-feed__items {
+.native-notification-feed__items {
   min-width: 0;
 }
 
-.reply-notification-feed__state {
+.native-notification-feed__state {
   display: grid;
   min-height: calc(var(--bew-space-12) * 6);
   place-items: center;
 }
 
-.reply-notification-feed__state-actions,
-.reply-notification-feed__pagination-state {
+.native-notification-feed__state-actions,
+.native-notification-feed__pagination-state {
   display: flex;
   flex-wrap: wrap;
   gap: var(--bew-space-2);
@@ -288,7 +292,7 @@ defineExpose({ refresh })
   justify-content: center;
 }
 
-.reply-notification-feed__original-link {
+.native-notification-feed__original-link {
   display: inline-flex;
   align-items: center;
   box-sizing: border-box;
@@ -305,18 +309,18 @@ defineExpose({ refresh })
   corner-shape: var(--bew-corner-shape);
 }
 
-.reply-notification-feed__original-link:hover {
+.native-notification-feed__original-link:hover {
   background: var(--bew-fill-1);
 }
 
-.reply-notification-feed__pagination-state {
+.native-notification-feed__pagination-state {
   padding: var(--bew-space-4);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
 }
 
-.reply-notification-feed__sentinel {
+.native-notification-feed__sentinel {
   width: 100%;
   height: 1px;
   pointer-events: none;
