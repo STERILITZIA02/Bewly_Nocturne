@@ -6,7 +6,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { OriginalNotificationView } from '../notificationSections'
-import { NOTIFICATION_STALE_TIME_MS } from '../notificationTimings'
+import { NOTIFICATION_IFRAME_UNREAD_STALE_TIME_MS } from '../notificationTimings'
 
 interface Props {
   view: OriginalNotificationView
@@ -63,7 +63,7 @@ function syncUnreadMessageCount(options: { force?: boolean } = {}): Promise<void
   if (
     !options.force
     && unreadSyncedAt > 0
-    && Date.now() - unreadSyncedAt < NOTIFICATION_STALE_TIME_MS
+    && Date.now() - unreadSyncedAt < NOTIFICATION_IFRAME_UNREAD_STALE_TIME_MS
   ) {
     return Promise.resolve()
   }

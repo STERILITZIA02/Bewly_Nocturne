@@ -9,6 +9,14 @@ export type NotificationErrorKind
     | 'invalid-response'
     | 'api-error'
 
+export type NotificationFailedOperation
+  = | 'initial'
+    | 'refresh'
+    | 'load-more'
+    | null
+
+export type FirstPageApplyMode = 'replace' | 'merge-head'
+
 export interface NotificationFeedState {
   items: DisplayNotification[]
   cursorId: string
@@ -18,6 +26,10 @@ export interface NotificationFeedState {
   loaded: boolean
   noMore: boolean
   errorKind: NotificationErrorKind | null
+  failedOperation: NotificationFailedOperation
+  failedFirstPageApplyMode: FirstPageApplyMode | null
+  hasLoadedMore: boolean
+  paginationStalled: boolean
   generation: number
   scrollTop: number
   loadedAt: number

@@ -15,6 +15,7 @@ import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
 import OriginalNotificationsFrame from './components/OriginalNotificationsFrame.vue'
 import type { NotificationPageParams } from './composables/useNotificationFeed'
 import { useNotificationFeeds } from './composables/useNotificationFeeds'
+import { resolveNotificationAccountState } from './notificationFeedPolicy'
 import type {
   NativeNotificationSection,
   NotificationView,
@@ -44,6 +45,7 @@ const currentView = ref<NotificationView>(parseNotificationView(routeState.href 
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
+const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
@@ -214,6 +216,7 @@ onBeforeUnmount(() => {
           v-if="nativeView"
           :key="nativeView"
           ref="nativeFeedRef"
+          :account-state="accountState"
           :active="isPageActive"
           :controller="notificationFeeds"
           :section="nativeView"

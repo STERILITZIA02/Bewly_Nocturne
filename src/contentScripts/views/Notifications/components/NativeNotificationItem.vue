@@ -54,7 +54,7 @@ function markAvatarFailed(index: number) {
 </script>
 
 <template>
-  <article class="native-notification-item">
+  <article class="native-notification-item" :data-notification-id="item.id">
     <div
       class="native-notification-item__avatars"
       :class="{ 'native-notification-item__avatars--grouped': item.actorCount > 1 }"

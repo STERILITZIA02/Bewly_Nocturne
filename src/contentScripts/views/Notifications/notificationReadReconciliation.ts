@@ -18,6 +18,8 @@ export async function reconcileNotificationBadge(
   for (let attempt = 0; attempt <= options.retryDelays.length; attempt++) {
     if (!options.isCurrent())
       return 'cancelled'
+    if (options.getUnreadCount() <= 0)
+      return 'reconciled'
 
     try {
       await options.sync()

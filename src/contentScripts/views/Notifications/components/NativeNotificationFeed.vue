@@ -6,6 +6,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NotificationFeedsController } from '../composables/useNotificationFeeds'
+import type { NotificationAccountState, RefreshNotificationFeedOptions } from '../notificationFeedPolicy'
 import { shouldReconcileUnreadBadge } from '../notificationFeedPolicy'
 import type { NotificationBadgeReconcileResult } from '../notificationReadReconciliation'
 import { reconcileNotificationBadge } from '../notificationReadReconciliation'
@@ -14,6 +15,7 @@ import { NOTIFICATION_BADGE_RETRY_DELAYS_MS } from '../notificationTimings'
 import NativeNotificationItem from './NativeNotificationItem.vue'
 
 const props = defineProps<{
+  accountState: NotificationAccountState
   active: boolean
   controller: NotificationFeedsController
   section: NativeNotificationSection
@@ -22,6 +24,7 @@ const props = defineProps<{
 const { t } = useI18n()
 const { scrollViewportRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
+const feedRootRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 const state = props.controller.states[props.section]
 const originalNotificationUrl = computed(() => buildOriginalNotificationUrl(props.section))
@@ -45,29 +48,95 @@ const feedAriaLabel = computed(() => state.loading && !state.loaded
 
 let observer: IntersectionObserver | null = null
 let restoreFrame: number | undefined
+let resolveRestoreFrame: (() => void) | null = null
 let readSyncRequest: Promise<void> | null = null
 let badgeRetryTimer: ReturnType<typeof setTimeout> | null = null
 let resolveBadgeRetry: ((shouldContinue: boolean) => void) | null = null
 let lifecycleActive = true
+
+const AUTO_REFRESH_TOP_THRESHOLD_PX = 32
+
+interface NotificationScrollAnchor {
+  atTop: boolean
+  id: string
+  offset: number
+  scrollHeight: number
+  scrollTop: number
+}
 
 function clearRestoreFrame() {
   if (restoreFrame === undefined)
     return
   cancelAnimationFrame(restoreFrame)
   restoreFrame = undefined
+  const resolve = resolveRestoreFrame
+  resolveRestoreFrame = null
+  resolve?.()
 }
 
 function saveScrollPosition() {
   state.scrollTop = scrollViewportRef.value?.scrollTop ?? state.scrollTop
 }
 
-function restoreScrollPosition() {
+function restoreScrollPosition(): Promise<void> {
   clearRestoreFrame()
-  restoreFrame = requestAnimationFrame(() => {
-    restoreFrame = undefined
-    if (props.active)
-      scrollViewportRef.value?.scrollTo({ top: state.scrollTop })
+  return new Promise((resolve) => {
+    resolveRestoreFrame = resolve
+    restoreFrame = requestAnimationFrame(() => {
+      restoreFrame = undefined
+      resolveRestoreFrame = null
+      if (props.active)
+        scrollViewportRef.value?.scrollTo({ top: state.scrollTop })
+      resolve()
+    })
   })
+}
+
+function captureScrollAnchor(): NotificationScrollAnchor | null {
+  const viewport = scrollViewportRef.value
+  const feed = feedRootRef.value
+  if (!viewport || !feed)
+    return null
+
+  const viewportRect = viewport.getBoundingClientRect()
+  const firstVisible = Array.from(feed.querySelectorAll<HTMLElement>('[data-notification-id]'))
+    .find((element) => {
+      const rect = element.getBoundingClientRect()
+      return rect.bottom > viewportRect.top && rect.top < viewportRect.bottom
+    })
+  return {
+    atTop: viewport.scrollTop <= AUTO_REFRESH_TOP_THRESHOLD_PX,
+    id: firstVisible?.dataset.notificationId ?? '',
+    offset: firstVisible ? firstVisible.getBoundingClientRect().top - viewportRect.top : 0,
+    scrollHeight: viewport.scrollHeight,
+    scrollTop: viewport.scrollTop,
+  }
+}
+
+async function restoreScrollAnchor(anchor: NotificationScrollAnchor | null) {
+  if (!anchor || !props.active)
+    return
+
+  await nextTick()
+  const viewport = scrollViewportRef.value
+  const feed = feedRootRef.value
+  if (!viewport || !feed || !props.active)
+    return
+
+  if (anchor.atTop) {
+    state.scrollTop = 0
+    viewport.scrollTo({ top: 0 })
+    return
+  }
+
+  const viewportTop = viewport.getBoundingClientRect().top
+  const anchoredElement = Array.from(feed.querySelectorAll<HTMLElement>('[data-notification-id]'))
+    .find(element => element.dataset.notificationId === anchor.id)
+  const nextScrollTop = anchoredElement
+    ? viewport.scrollTop + (anchoredElement.getBoundingClientRect().top - viewportTop - anchor.offset)
+    : anchor.scrollTop + (viewport.scrollHeight - anchor.scrollHeight)
+  state.scrollTop = Math.max(0, nextScrollTop)
+  viewport.scrollTo({ top: state.scrollTop })
 }
 
 function disconnectObserver() {
@@ -104,8 +173,14 @@ async function connectObserver() {
     return
 
   observer = new IntersectionObserver(([entry]) => {
-    if (entry.isIntersecting && props.active)
+    if (
+      entry.isIntersecting
+      && props.active
+      && !state.paginationStalled
+      && state.errorKind === null
+    ) {
       void props.controller.loadMore(props.section)
+    }
   }, {
     root: scrollViewportRef.value,
     rootMargin: '0px 0px 320px 0px',
@@ -114,15 +189,27 @@ async function connectObserver() {
   observer.observe(sentinelRef.value)
 }
 
-async function activateFeed(reason: 'activate' | 'visibility' = 'activate') {
-  if (!props.active || document.visibilityState !== 'visible')
-    return
-
-  restoreScrollPosition()
+async function refreshAutomatically(reason: Exclude<RefreshNotificationFeedOptions['reason'], 'manual'>) {
+  const anchor = captureScrollAnchor()
   await props.controller.refreshIfStale(props.section, {
     reason,
     unreadCount: authoritativeUnreadCount.value,
   })
+  await restoreScrollAnchor(anchor)
+}
+
+async function activateFeed(reason: 'activate' | 'visibility' = 'activate') {
+  if (
+    !props.active
+    || props.accountState !== 'ready'
+    || document.visibilityState !== 'visible'
+  ) {
+    return
+  }
+
+  if (reason === 'activate')
+    await restoreScrollPosition()
+  await refreshAutomatically(reason)
   if (props.active) {
     await connectObserver()
     void syncReadCandidate()
@@ -137,6 +224,9 @@ function deactivateFeed() {
 }
 
 async function refresh() {
+  if (props.accountState !== 'ready')
+    return
+
   const viewport = scrollViewportRef.value
   state.scrollTop = 0
   viewport?.scrollTo({ top: 0 })
@@ -147,11 +237,15 @@ async function refresh() {
   }
 }
 
-function retry() {
-  if (state.items.length > 0)
-    void props.controller.loadMore(props.section)
-  else
-    void props.controller.loadInitial(props.section)
+async function retry() {
+  if (props.accountState !== 'ready')
+    return
+
+  await props.controller.retryFailedOperation(props.section, authoritativeUnreadCount.value)
+  if (props.active) {
+    await connectObserver()
+    void syncReadCandidate()
+  }
 }
 
 function isReadCandidateEligible(candidate = props.controller.getReadCandidate(props.section)): boolean {
@@ -250,22 +344,29 @@ watch(() => props.active, (active) => {
   }
 }, { immediate: true })
 
-watch(() => props.controller.accountMid.value, () => {
+watch([
+  () => props.accountState,
+  () => props.controller.accountMid.value,
+], () => {
   cancelBadgeRetry()
-  if (props.active) {
+  if (props.active && props.accountState === 'ready') {
     nextTick(() => {
-      if (props.active)
+      if (props.active && props.accountState === 'ready')
         void activateFeed()
     })
+  }
+  else {
+    disconnectObserver()
   }
 })
 
 watch(authoritativeUnreadCount, (unreadCount) => {
-  if (props.active && document.visibilityState === 'visible') {
-    void props.controller.refreshIfStale(props.section, {
-      reason: 'unread-change',
-      unreadCount,
-    }).then(() => syncReadCandidate())
+  if (
+    props.active
+    && props.accountState === 'ready'
+    && document.visibilityState === 'visible'
+  ) {
+    void refreshAutomatically('unread-change').then(() => syncReadCandidate())
   }
   else if (unreadCount === 0) {
     // Preserve the zero-to-positive edge until this category is mounted again.
@@ -301,11 +402,22 @@ defineExpose({ refresh })
 
 <template>
   <section
+    ref="feedRootRef"
     class="native-notification-feed"
     :aria-label="feedAriaLabel"
-    :aria-busy="!state.loaded || state.loading || state.loadingMore"
+    :aria-busy="accountState === 'profile-pending' || (accountState === 'ready' && (!state.loaded || state.loading || state.loadingMore))"
   >
-    <Loading v-if="!state.loaded && !state.errorKind" />
+    <Loading v-if="accountState === 'profile-pending'" />
+
+    <div v-else-if="accountState === 'logged-out'" class="native-notification-feed__state">
+      <Empty :description="t('notifications.native.errors.login-required')">
+        <ALink :href="originalNotificationUrl" type="content" class="native-notification-feed__original-link">
+          {{ t('notifications.actions.open_original') }}
+        </ALink>
+      </Empty>
+    </div>
+
+    <Loading v-else-if="!state.loaded && !state.errorKind" />
 
     <div v-else-if="state.errorKind && state.items.length === 0" class="native-notification-feed__state">
       <Empty :description="errorMessage">
@@ -326,7 +438,11 @@ defineExpose({ refresh })
 
     <template v-else>
       <div class="native-notification-feed__items">
-        <NativeNotificationItem v-for="item in state.items" :key="item.id" :item="item" />
+        <NativeNotificationItem
+          v-for="item in state.items"
+          :key="item.id"
+          :item="item"
+        />
       </div>
 
       <div v-if="state.errorKind" class="native-notification-feed__pagination-state" role="status">
@@ -338,7 +454,7 @@ defineExpose({ refresh })
       <Loading v-else-if="state.loadingMore" />
 
       <div
-        v-if="!state.noMore"
+        v-if="!state.noMore && !state.paginationStalled"
         ref="sentinelRef"
         class="native-notification-feed__sentinel"
         aria-hidden="true"
