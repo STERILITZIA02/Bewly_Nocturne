@@ -36,11 +36,13 @@ export interface NotificationFeedState {
   errorKind: NotificationErrorKind | null
   generation: number
   scrollTop: number
-  lastReadMarker: string
+  readCommitId: string
+  serverReadCommitted: boolean
+  badgeReconciled: boolean
 }
 
 export interface NotificationReadCandidate {
-  marker: string
+  readCommitId: string
   mid: string
   section: NativeNotificationSection
   generation: number
@@ -261,15 +263,16 @@ export function useNotificationFeed(
     errorKind: null,
     generation: 0,
     scrollTop: 0,
-    lastReadMarker: '',
+    readCommitId: '',
+    serverReadCommitted: false,
+    badgeReconciled: false,
   })
 
   let initialRequest: Promise<void> | null = null
   let loadMoreRequest: Promise<void> | null = null
   let firstPageRequestSerial = 0
 
-  function resetForAccount(nextMid: string, preserveReadMarker = false) {
-    const lastReadMarker = state.lastReadMarker
+  function resetForAccount(nextMid: string) {
     state.generation++
     accountMid.value = nextMid
     state.items.splice(0)
@@ -284,7 +287,9 @@ export function useNotificationFeed(
     state.noMore = false
     state.errorKind = null
     state.scrollTop = 0
-    state.lastReadMarker = preserveReadMarker ? lastReadMarker : ''
+    state.readCommitId = ''
+    state.serverReadCommitted = false
+    state.badgeReconciled = false
     readCandidate.value = null
     initialRequest = null
     loadMoreRequest = null
@@ -324,16 +329,11 @@ export function useNotificationFeed(
       state.unreadCountAtFetch = unreadCount
       state.errorKind = null
       state.noMore = result.page.noMore
+      state.serverReadCommitted = true
       // The verified message-pc contract commits category read in the
       // successful first-page GET for Reply, At, and Like.
       readCandidate.value = {
-        marker: [
-          section,
-          result.page.cursorId,
-          result.page.cursorTime,
-          result.page.items[0]?.id ?? 'empty',
-          result.page.items.length,
-        ].join(':'),
+        readCommitId: state.readCommitId,
         mid: requestMid,
         section,
         generation: requestGeneration,
@@ -370,6 +370,9 @@ export function useNotificationFeed(
     state.loading = true
     state.loadingMore = false
     state.errorKind = null
+    state.readCommitId = [section, requestMid, requestGeneration, requestSerial].join(':')
+    state.serverReadCommitted = false
+    state.badgeReconciled = false
     readCandidate.value = null
     loadMoreRequest = null
     const request = requestInitialPage(requestGeneration, requestMid, requestSerial, unreadCount, loadedAt).finally(() => {
@@ -477,7 +480,9 @@ export function useNotificationFeed(
   }
 
   function isReadCandidateCurrent(candidate: NotificationReadCandidate): boolean {
-    return readCandidate.value?.marker === candidate.marker
+    return readCandidate.value?.readCommitId === candidate.readCommitId
+      && state.readCommitId === candidate.readCommitId
+      && state.serverReadCommitted
       && candidate.serverReadCommitted
       && candidate.mid === accountMid.value
       && candidate.section === section
@@ -498,7 +503,7 @@ export function useNotificationFeed(
     if (!isReadCandidateCurrent(candidate))
       return false
 
-    state.lastReadMarker = candidate.marker
+    state.badgeReconciled = true
     return true
   }
 

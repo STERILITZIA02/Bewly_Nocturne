@@ -1,1 +1,3 @@
 export const NOTIFICATION_STALE_TIME_MS = 60_000
+
+export const NOTIFICATION_BADGE_RETRY_DELAYS_MS = [250, 750] as const

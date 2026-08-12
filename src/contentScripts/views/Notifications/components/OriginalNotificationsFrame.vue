@@ -6,6 +6,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { OriginalNotificationView } from '../notificationSections'
+import { NOTIFICATION_STALE_TIME_MS } from '../notificationTimings'
 
 interface Props {
   view: OriginalNotificationView
@@ -26,6 +27,9 @@ let iframeWasReleased = false
 let remountGeneration = 0
 let revealFrame: number | undefined
 let stopThemeWatcher: (() => void) | undefined
+let unreadSyncRequest: Promise<void> | null = null
+let unreadSyncedAt = 0
+let originalReadActivityPossible = false
 
 function clearRevealFrame() {
   if (revealFrame === undefined)
@@ -53,10 +57,42 @@ function syncIframeTheme(iframe = iframeRef.value) {
   }
 }
 
-function syncUnreadMessageCount() {
-  topBarStore.syncUnreadMessageState().catch((error) => {
-    if (import.meta.env.DEV)
-      console.warn('[Notifications] Failed to sync unread state', error)
+function syncUnreadMessageCount(options: { force?: boolean } = {}): Promise<void> {
+  if (unreadSyncRequest)
+    return unreadSyncRequest
+  if (
+    !options.force
+    && unreadSyncedAt > 0
+    && Date.now() - unreadSyncedAt < NOTIFICATION_STALE_TIME_MS
+  ) {
+    return Promise.resolve()
+  }
+
+  const request = topBarStore.syncUnreadMessageState()
+    .then(() => {
+      unreadSyncedAt = Date.now()
+    })
+    .catch(() => {
+      if (import.meta.env.DEV) {
+        console.warn('[Notifications] Failed to sync unread state', {
+          endpointName: 'syncUnreadMessageState',
+        })
+      }
+    })
+    .finally(() => {
+      if (unreadSyncRequest === request)
+        unreadSyncRequest = null
+    })
+  unreadSyncRequest = request
+  return request
+}
+
+function syncUnreadAfterOriginalActivity(options: { force?: boolean } = {}) {
+  const iframe = iframeRef.value
+  originalReadActivityPossible = false
+  void syncUnreadMessageCount(options).finally(() => {
+    if (isFrameActive && isIframeLoaded.value && iframe === iframeRef.value)
+      originalReadActivityPossible = true
   })
 }
 
@@ -64,8 +100,10 @@ function scheduleIframeReveal(iframe: HTMLIFrameElement) {
   clearRevealFrame()
   revealFrame = requestAnimationFrame(() => {
     revealFrame = undefined
-    if (iframe === iframeRef.value && isFrameActive)
+    if (iframe === iframeRef.value && isFrameActive) {
       isIframeLoaded.value = true
+      originalReadActivityPossible = true
+    }
   })
 }
 
@@ -75,13 +113,14 @@ function handleIframeLoad(event: Event) {
     return
 
   syncIframeTheme(iframe)
-  syncUnreadMessageCount()
   scheduleIframeReveal(iframe)
+  syncUnreadAfterOriginalActivity({ force: true })
 }
 
 function releaseIframeResources() {
   clearRevealFrame()
   isIframeLoaded.value = false
+  originalReadActivityPossible = false
   const iframe = iframeRef.value
   if (iframe && iframe.getAttribute('src') !== 'about:blank')
     iframe.src = 'about:blank'
@@ -120,8 +159,8 @@ function stopThemeSync() {
 }
 
 function handleVisibilityChange() {
-  if (isFrameActive && document.visibilityState === 'visible')
-    syncUnreadMessageCount()
+  if (isFrameActive && isIframeLoaded.value && document.visibilityState === 'visible')
+    syncUnreadAfterOriginalActivity()
 }
 
 function activateFrame() {
@@ -136,18 +175,21 @@ function activateFrame() {
   }
   startThemeWatcher()
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  syncUnreadMessageCount()
+  if (isIframeLoaded.value)
+    syncUnreadAfterOriginalActivity()
 }
 
 function deactivateFrame() {
   if (!isFrameActive)
     return
 
+  const shouldSyncUnread = isIframeLoaded.value && originalReadActivityPossible
   isFrameActive = false
   remountGeneration++
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   stopThemeSync()
-  syncUnreadMessageCount()
+  if (shouldSyncUnread)
+    void syncUnreadMessageCount({ force: true })
   releaseIframeResources()
 }
 

@@ -8,7 +8,10 @@ import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NotificationPageParams } from '../composables/useNotificationFeed'
 import { useNotificationFeed } from '../composables/useNotificationFeed'
+import type { NotificationBadgeReconcileResult } from '../notificationReadReconciliation'
+import { reconcileNotificationBadge } from '../notificationReadReconciliation'
 import type { NativeNotificationSection } from '../notificationSections'
+import { NOTIFICATION_BADGE_RETRY_DELAYS_MS } from '../notificationTimings'
 import NativeNotificationItem from './NativeNotificationItem.vue'
 
 const props = defineProps<{
@@ -68,6 +71,8 @@ const feedAriaLabel = computed(() => state.loading && !state.loaded
 let observer: IntersectionObserver | null = null
 let restoreFrame: number | undefined
 let readSyncRequest: Promise<void> | null = null
+let badgeRetryTimer: ReturnType<typeof setTimeout> | null = null
+let resolveBadgeRetry: ((shouldContinue: boolean) => void) | null = null
 let lifecycleActive = true
 
 function clearRestoreFrame() {
@@ -93,6 +98,28 @@ function restoreScrollPosition() {
 function disconnectObserver() {
   observer?.disconnect()
   observer = null
+}
+
+function cancelBadgeRetry() {
+  if (badgeRetryTimer) {
+    clearTimeout(badgeRetryTimer)
+    badgeRetryTimer = null
+  }
+  const resolve = resolveBadgeRetry
+  resolveBadgeRetry = null
+  resolve?.(false)
+}
+
+function waitForBadgeRetry(delay: number): Promise<boolean> {
+  cancelBadgeRetry()
+  return new Promise((resolve) => {
+    resolveBadgeRetry = resolve
+    badgeRetryTimer = setTimeout(() => {
+      badgeRetryTimer = null
+      resolveBadgeRetry = null
+      resolve(true)
+    }, delay)
+  })
 }
 
 async function connectObserver() {
@@ -131,6 +158,7 @@ function deactivateFeed() {
   saveScrollPosition()
   clearRestoreFrame()
   disconnectObserver()
+  cancelBadgeRetry()
 }
 
 async function refresh() {
@@ -161,7 +189,7 @@ function isReadCandidateEligible(candidate = feed.readCandidate.value): boolean 
     && candidate.mid === currentMid.value
     && candidate.section === props.section
     && candidate.generation === state.generation
-    && candidate.marker !== state.lastReadMarker
+    && !state.badgeReconciled
     && feed.isReadCandidateCurrent(candidate),
   )
 }
@@ -171,6 +199,9 @@ async function syncReadCandidate() {
     return
 
   await nextTick()
+  if (readSyncRequest)
+    return
+
   const candidate = feed.readCandidate.value
   if (!candidate || !isReadCandidateEligible(candidate))
     return
@@ -180,32 +211,54 @@ async function syncReadCandidate() {
   if (!feed.markCandidateReadLocally(candidate))
     return
 
-  const request = topBarStore.syncUnreadMessageState()
-  readSyncRequest = request
-  try {
-    await request
-    if (isReadCandidateEligible(candidate))
+  let reconcileResult: NotificationBadgeReconcileResult = 'cancelled'
+  const request = (async () => {
+    reconcileResult = await reconcileNotificationBadge({
+      getUnreadCount: () => authoritativeUnreadCount.value,
+      isCurrent: () => isReadCandidateEligible(candidate),
+      retryDelays: NOTIFICATION_BADGE_RETRY_DELAYS_MS,
+      sync: () => topBarStore.syncUnreadMessageState(),
+      wait: waitForBadgeRetry,
+    })
+
+    if (reconcileResult === 'reconciled' && isReadCandidateEligible(candidate)) {
       feed.confirmReadCandidate(candidate)
-  }
-  catch {
-    if (import.meta.env.DEV) {
+    }
+    else if (reconcileResult === 'failed' && import.meta.env.DEV) {
       console.warn('[Notifications][NativeFeed] Unread synchronization failed', {
         section: props.section,
         endpointName: 'syncUnreadMessageState',
         kind: 'network',
       })
     }
+  })()
+  readSyncRequest = request
+  try {
+    await request
   }
   finally {
+    cancelBadgeRetry()
     readSyncRequest = null
     const nextCandidate = feed.readCandidate.value
-    if (nextCandidate && nextCandidate.marker !== candidate.marker && isReadCandidateEligible(nextCandidate))
+    if (
+      nextCandidate
+      && isReadCandidateEligible(nextCandidate)
+      && (
+        nextCandidate.readCommitId !== candidate.readCommitId
+        || reconcileResult === 'cancelled'
+      )
+    ) {
       void syncReadCandidate()
+    }
   }
 }
 
 function handleVisibilityChange() {
-  if (document.visibilityState !== 'visible' || !props.active)
+  if (document.visibilityState !== 'visible') {
+    cancelBadgeRetry()
+    return
+  }
+  if (!props.active)
     return
 
   void activateFeed('visibility')
@@ -222,6 +275,7 @@ watch(() => props.active, (active) => {
 }, { immediate: true })
 
 watch(currentMid, () => {
+  cancelBadgeRetry()
   if (props.active) {
     nextTick(() => {
       if (props.active)
@@ -244,7 +298,8 @@ watch(authoritativeUnreadCount, (unreadCount) => {
   }
 })
 
-watch(() => feed.readCandidate.value?.marker, () => {
+watch(() => feed.readCandidate.value?.readCommitId, () => {
+  cancelBadgeRetry()
   if (props.active)
     void syncReadCandidate()
 })
@@ -262,6 +317,7 @@ onDeactivated(() => {
 onBeforeUnmount(() => {
   lifecycleActive = false
   deactivateFeed()
+  cancelBadgeRetry()
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
