@@ -19,6 +19,9 @@ const { locale, t } = useI18n()
 const avatarFailed = ref(false)
 const originalUrl = buildOriginalNotificationUrl('whisper')
 const usesNativeConversation = computed(() => props.session.capabilities.canReadNative)
+const assistantLabel = computed(() => props.session.assistantType
+  ? t(`notifications.whisper.assistants.${props.session.assistantType}`)
+  : '')
 
 const displayName = computed(() => props.session.name || t('notifications.whisper.unknown_user'))
 const displaySummary = computed(() => props.session.summary || t('notifications.whisper.summary_unavailable'))
@@ -102,7 +105,12 @@ watch(() => props.session.avatar, () => {
 
     <span class="conversation-list-item__body">
       <span class="conversation-list-item__heading">
-        <strong>{{ displayName }}</strong>
+        <span class="conversation-list-item__name">
+          <strong>{{ displayName }}</strong>
+          <span v-if="session.assistantType" class="conversation-list-item__assistant-label">
+            {{ assistantLabel }}
+          </span>
+        </span>
         <time v-if="displayTime">{{ displayTime }}</time>
       </span>
       <span class="conversation-list-item__meta">
@@ -192,6 +200,7 @@ watch(() => props.session.avatar, () => {
 .conversation-list-item__body,
 .conversation-list-item__copy,
 .conversation-list-item__heading,
+.conversation-list-item__name,
 .conversation-list-item__meta {
   min-width: 0;
 }
@@ -208,6 +217,29 @@ watch(() => props.session.avatar, () => {
   display: flex;
   gap: var(--bew-space-2);
   align-items: center;
+}
+
+.conversation-list-item__name {
+  display: flex;
+  min-width: 0;
+  gap: var(--bew-space-1);
+  align-items: center;
+}
+
+.conversation-list-item__assistant-label {
+  flex: 0 0 auto;
+  max-width: 50%;
+  padding: 0 var(--bew-space-1);
+  overflow: hidden;
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-caption);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: var(--bew-fill-1);
+  border-radius: var(--bew-badge-radius);
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .conversation-list-item strong {

@@ -11,6 +11,13 @@ export type PrivateSessionKind
     | 'system'
     | 'unsupported'
 
+export type OfficialAssistantType
+  = | 'streamer-assistant'
+    | 'up-assistant'
+    | 'payment-assistant'
+    | 'customer-service'
+    | 'official-assistant'
+
 export interface PrivateSessionCapabilities {
   canReadNative: boolean
   canAck: boolean
@@ -39,14 +46,17 @@ export interface DisplayPrivateSession {
   followed: boolean
   kind: PrivateSessionKind
   systemMessageType: number
+  assistantType: OfficialAssistantType | null
   capabilities: PrivateSessionCapabilities
   original: RawSessionReference
 }
 
 export type PrivateSessionFilter = 'all' | 'unread' | 'pinned'
+export type PrivateSessionTypeFilter = 'all' | 'user' | 'official-assistant' | 'other'
 
 export interface PrivateSessionFilterOptions {
   filter: PrivateSessionFilter
+  typeFilter: PrivateSessionTypeFilter
   query: string
 }
 
@@ -126,11 +136,27 @@ function classifyPrivateSession(session: PrivateSession): PrivateSessionKind {
     return session.session_type === 2 ? 'fan-group' : 'unsupported'
   if (session.system_msg_type > 0)
     return 'official-assistant'
+  if (session.system_msg_type !== 0)
+    return 'unsupported'
   if (session.is_intercept !== 0)
     return 'intercepted-user'
   if (session.can_fold !== 0 || session.is_follow === 0)
     return 'unfollowed-user'
   return 'user'
+}
+
+export function getOfficialAssistantType(systemMessageType: number): OfficialAssistantType | null {
+  if (systemMessageType <= 0)
+    return null
+  if (systemMessageType === 1)
+    return 'streamer-assistant'
+  if (systemMessageType === 7)
+    return 'up-assistant'
+  if (systemMessageType === 8)
+    return 'customer-service'
+  if (systemMessageType === 9)
+    return 'payment-assistant'
+  return 'official-assistant'
 }
 
 function createPrivateSessionCapabilities(kind: PrivateSessionKind): PrivateSessionCapabilities {
@@ -204,6 +230,9 @@ export function transformPrivateSessions(
       followed: session.is_follow !== 0,
       kind,
       systemMessageType: session.system_msg_type,
+      assistantType: kind === 'official-assistant'
+        ? getOfficialAssistantType(session.system_msg_type)
+        : null,
       capabilities: createPrivateSessionCapabilities(kind),
       original: session,
     })
@@ -257,8 +286,24 @@ export function filterPrivateSessions(
       return false
     if (options.filter === 'pinned' && !item.pinned)
       return false
+    if (options.typeFilter === 'user' && item.kind !== 'user')
+      return false
+    if (options.typeFilter === 'official-assistant' && item.kind !== 'official-assistant')
+      return false
+    if (
+      options.typeFilter === 'other'
+      && (item.kind === 'user' || item.kind === 'official-assistant')
+    ) {
+      return false
+    }
     return !query || item.name.toLocaleLowerCase().includes(query)
   })
+}
+
+export function getPrivateSessionProfileUrl(session: DisplayPrivateSession): string {
+  if (!session.capabilities.canOpenProfile || !/^\d+$/.test(session.talkerId))
+    return ''
+  return `https://space.bilibili.com/${session.talkerId}`
 }
 
 export function isNativePrivateSession(session: DisplayPrivateSession): boolean {

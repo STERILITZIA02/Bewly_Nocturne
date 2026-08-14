@@ -8,6 +8,7 @@ import MessageComposer from './MessageComposer.vue'
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { DisplayPrivateSession } from './privateSession'
+import { getPrivateSessionProfileUrl } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
 
 const props = defineProps<{
@@ -22,6 +23,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const originalUrl = buildOriginalNotificationUrl('whisper')
+const profileUrl = computed(() => getPrivateSessionProfileUrl(props.session))
+const assistantLabel = computed(() => props.session.assistantType
+  ? t(`notifications.whisper.assistants.${props.session.assistantType}`)
+  : '')
 const headingRef = ref<HTMLElement | null>(null)
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
@@ -252,10 +257,26 @@ defineExpose({
         <i i-mingcute:arrow-left-line aria-hidden="true" />
       </IconButton>
       <div>
-        <strong ref="headingRef" tabindex="-1">
+        <ALink
+          v-if="profileUrl"
+          class="conversation-view__profile-link"
+          :href="profileUrl"
+          type="content"
+          :aria-label="t('notifications.whisper.open_profile', { name: session.name })"
+        >
+          <strong ref="headingRef" tabindex="-1">
+            {{ session.name || t('notifications.whisper.unknown_user') }}
+          </strong>
+        </ALink>
+        <strong v-else ref="headingRef" tabindex="-1">
           {{ session.name || t('notifications.whisper.unknown_user') }}
         </strong>
-        <span>{{ t('notifications.whisper.messages.readonly') }}</span>
+        <span class="conversation-view__header-meta">
+          <span v-if="session.assistantType" class="conversation-view__assistant-label">
+            {{ assistantLabel }}
+          </span>
+          <span>{{ t('notifications.whisper.messages.readonly') }}</span>
+        </span>
       </div>
     </header>
 
@@ -426,10 +447,43 @@ defineExpose({
   white-space: nowrap;
 }
 
+.conversation-view__profile-link {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+}
+
+.conversation-view__profile-link strong {
+  display: block;
+}
+
+.conversation-view__profile-link:focus-visible {
+  border-radius: var(--bew-radius-sm);
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
+}
+
 .conversation-view__header span {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+}
+
+.conversation-view__header-meta {
+  display: flex;
+  min-width: 0;
+  gap: var(--bew-space-2);
+  align-items: center;
+}
+
+.conversation-view__assistant-label {
+  flex: 0 0 auto;
+  padding: 0 var(--bew-space-1);
+  background: var(--bew-fill-1);
+  border-radius: var(--bew-badge-radius);
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .conversation-view__state-actions a,

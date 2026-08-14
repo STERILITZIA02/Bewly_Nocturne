@@ -53,6 +53,9 @@ const failureMessage = computed(() => {
     return t('notifications.whisper.messages.image_reconcile_failed')
   return t('notifications.whisper.messages.send_failed')
 })
+const sourceLabel = computed(() => props.message.source
+  ? t(`notifications.whisper.messages.message_sources.${props.message.source}`)
+  : '')
 </script>
 
 <template>
@@ -64,18 +67,26 @@ const failureMessage = computed(() => {
     }"
     :data-message-id="message.msgKey"
   >
-    <PrivateMessageContent
+    <div
       v-if="message.content.type === 'tip' || message.content.type === 'recalled'"
-      :content="message.content"
-      @preview="emit('preview', $event)"
-    />
+      class="private-message-item__notice-content"
+    >
+      <PrivateMessageContent
+        :content="message.content"
+        @preview="emit('preview', $event)"
+      />
+      <span v-if="message.source" class="private-message-item__source">{{ sourceLabel }}</span>
+    </div>
 
     <div v-else class="private-message-item__content">
       <PrivateMessageContent :content="message.content" @preview="emit('preview', $event)" />
 
-      <time v-if="displayTime" class="private-message-item__time">
-        {{ displayTime }}
-      </time>
+      <div v-if="message.source || displayTime" class="private-message-item__metadata">
+        <span v-if="message.source" class="private-message-item__source">{{ sourceLabel }}</span>
+        <time v-if="displayTime" class="private-message-item__time">
+          {{ displayTime }}
+        </time>
+      </div>
       <div v-if="message.localId" class="private-message-item__send-status" role="status">
         <span v-if="sendStatus">{{ sendStatus }}</span>
         <template v-else-if="message.sendState === 'failed'">
@@ -119,16 +130,35 @@ const failureMessage = computed(() => {
   min-width: 0;
 }
 
+.private-message-item__notice-content {
+  display: grid;
+  gap: var(--bew-space-1);
+  justify-items: center;
+  min-width: 0;
+}
+
 .private-message-item--self .private-message-item__content {
   justify-items: end;
 }
 
 .private-message-item__time,
+.private-message-item__source,
 .private-message-item__send-status {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
+}
+
+.private-message-item__metadata {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bew-space-2);
+  align-items: center;
+}
+
+.private-message-item--self .private-message-item__metadata {
+  justify-content: flex-end;
 }
 
 .private-message-item__send-status {

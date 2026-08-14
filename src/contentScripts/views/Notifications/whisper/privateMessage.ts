@@ -22,11 +22,19 @@ export interface DisplayPrivateMessage {
   msgType: number
   timestamp: number
   isSelf: boolean
+  source: PrivateMessageSource | null
   content: ParsedPrivateMessageContent
   localId?: string
   sendState?: PrivateMessageSendState
   serverMsgKey?: string
 }
+
+export type PrivateMessageSource
+  = | 'auto-reply'
+    | 'fan-group-system'
+    | 'mutual-follow'
+    | 'system'
+    | 'ai'
 
 export type PrivateMessageSendState
   = | 'pending'
@@ -60,6 +68,20 @@ export interface PrivateMessageReconcileResult {
 
 const PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS = 30
 
+export function classifyPrivateMessageSource(msgSource: number): PrivateMessageSource | null {
+  if (msgSource >= 8 && msgSource <= 11)
+    return 'auto-reply'
+  if (msgSource === 13)
+    return 'fan-group-system'
+  if (msgSource === 17)
+    return 'mutual-follow'
+  if (msgSource === 18)
+    return 'system'
+  if (msgSource === 19)
+    return 'ai'
+  return null
+}
+
 function normalizeDecimal(value: string): string {
   const normalized = value.replace(/^0+(?=\d)/, '')
   return /^\d+$/.test(normalized) ? normalized : ''
@@ -91,6 +113,7 @@ export function transformPrivateMessages(
       msgType: message.msg_type,
       timestamp: message.timestamp,
       isSelf,
+      source: classifyPrivateMessageSource(message.msg_source),
       content: parsePrivateMessageContent(message, emotions),
       sendState: isSelf ? 'sent' as const : undefined,
     }
@@ -134,6 +157,7 @@ export function createOptimisticPrivateTextMessage(
     msgType: 1,
     timestamp: options.timestamp,
     isSelf: true,
+    source: null,
     content: {
       type: 'text',
       segments: [{ type: 'text', text: options.text }],
@@ -156,6 +180,7 @@ export function createOptimisticPrivateImageMessage(
     msgType: 2,
     timestamp: options.timestamp,
     isSelf: true,
+    source: null,
     content: {
       type: 'image',
       src: options.objectUrl,

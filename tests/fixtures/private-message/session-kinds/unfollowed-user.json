@@ -1,0 +1,23 @@
+{
+  "code": 0,
+  "data": {
+    "session_list": [
+      {
+        "talker_id": "1000000000000004",
+        "session_type": 1,
+        "top_ts": 0,
+        "session_ts": 1755000000000004,
+        "unread_count": 0,
+        "ack_seqno": "9400000000000001",
+        "max_seqno": "9400000000000002",
+        "is_follow": 0,
+        "can_fold": 0,
+        "is_intercept": 0,
+        "system_msg_type": 0,
+        "group_name": "Sanitized Unfollowed User",
+        "last_msg": null
+      }
+    ],
+    "has_more": 0
+  }
+}

@@ -101,6 +101,11 @@ async function readRuntimeFixture(name: string): Promise<unknown> {
   return JSON.parse(await readFile(fixtureUrl, 'utf8')) as unknown
 }
 
+async function readSessionKindFixture(name: string): Promise<unknown> {
+  const fixtureUrl = new URL(`../tests/fixtures/private-message/session-kinds/${name}.json`, import.meta.url)
+  return JSON.parse(await readFile(fixtureUrl, 'utf8')) as unknown
+}
+
 async function loadModules(): Promise<PrivateMessageModules> {
   try {
     const [
@@ -944,15 +949,15 @@ verify('local session filters combine all, unread, pinned, and username search',
   ], createCardsResponse([]))
 
   assert.deepEqual(
-    privateSession.filterPrivateSessions(items, { filter: 'all', query: 'a' }).map(item => item.talkerId),
+    privateSession.filterPrivateSessions(items, { filter: 'all', typeFilter: 'all', query: 'a' }).map(item => item.talkerId),
     ['1', '2', '3'],
   )
   assert.deepEqual(
-    privateSession.filterPrivateSessions(items, { filter: 'unread', query: '' }).map(item => item.talkerId),
+    privateSession.filterPrivateSessions(items, { filter: 'unread', typeFilter: 'all', query: '' }).map(item => item.talkerId),
     ['1'],
   )
   assert.deepEqual(
-    privateSession.filterPrivateSessions(items, { filter: 'pinned', query: 'bet' }).map(item => item.talkerId),
+    privateSession.filterPrivateSessions(items, { filter: 'pinned', typeFilter: 'all', query: 'bet' }).map(item => item.talkerId),
     ['2'],
   )
   assert.equal(privateSession.normalizePrivateSessionLocale('jyut'), 'zh-HK')
@@ -961,6 +966,147 @@ verify('local session filters combine all, unread, pinned, and username search',
     createRawSession('4', { is_follow: 0 }),
   ], createCardsResponse([]))
   assert.equal(privateSession.isNativePrivateSession(fallbackItem!), false)
+})
+
+verify('session-kind fixtures enforce classification, capabilities, profiles, and original fallback', async ({ privateSession, protocol }) => {
+  const fixtureCases = [
+    ['user', 'user'],
+    ['up-assistant', 'official-assistant'],
+    ['customer-service', 'official-assistant'],
+    ['unfollowed-user', 'unfollowed-user'],
+    ['intercepted-user', 'intercepted-user'],
+    ['fan-group', 'fan-group'],
+    ['unsupported', 'unsupported'],
+  ] as const
+  const items: import('../src/contentScripts/views/Notifications/whisper/privateSession').DisplayPrivateSession[] = []
+
+  for (const [fixtureName, expectedKind] of fixtureCases) {
+    const fixture = await readSessionKindFixture(fixtureName)
+    const parsed = protocol.parsePrivateSessionsResponse(fixture as import('../src/background/privateMessage/types').PrivateMessageApiResponse)
+    assert.ok(parsed, fixtureName)
+    const [item] = privateSession.transformPrivateSessions(parsed.data.session_list, { code: 0, data: [] })
+    assert.ok(item, fixtureName)
+    assert.equal(item.kind, expectedKind, fixtureName)
+    items.push(item)
+  }
+
+  const [user, upAssistant, customerService, ...fallbackItems] = items
+  assert.equal(privateSession.getPrivateSessionProfileUrl(user!), 'https://space.bilibili.com/1000000000000001')
+  assert.equal(user?.capabilities.canReadNative, true)
+  assert.equal(user?.capabilities.canAck, true)
+  assert.equal(user?.capabilities.canOpenProfile, true)
+  assert.equal(user?.capabilities.canSendText, false)
+  assert.equal(user?.capabilities.canSendImage, false)
+
+  assert.equal(upAssistant?.assistantType, 'up-assistant')
+  assert.equal(upAssistant?.name, 'Sanitized UP Assistant')
+  assert.equal(upAssistant?.avatar, 'https://i0.hdslb.com/bfs/face/sanitized-up-assistant.webp')
+  assert.equal(customerService?.assistantType, 'customer-service')
+  assert.equal(privateSession.getOfficialAssistantType(1), 'streamer-assistant')
+  assert.equal(privateSession.getOfficialAssistantType(7), 'up-assistant')
+  assert.equal(privateSession.getOfficialAssistantType(8), 'customer-service')
+  assert.equal(privateSession.getOfficialAssistantType(9), 'payment-assistant')
+  assert.equal(privateSession.getOfficialAssistantType(99), 'official-assistant')
+  assert.equal(privateSession.getOfficialAssistantType(0), null)
+  const [invalidSystemType] = privateSession.transformPrivateSessions([
+    createRawSession('8', { system_msg_type: -1 }),
+  ], createCardsResponse([]))
+  assert.equal(invalidSystemType?.kind, 'unsupported')
+  for (const assistant of [upAssistant, customerService]) {
+    assert.equal(assistant?.capabilities.canReadNative, true)
+    assert.equal(assistant?.capabilities.canAck, true)
+    assert.equal(assistant?.capabilities.canOpenProfile, false)
+    assert.equal(privateSession.getPrivateSessionProfileUrl(assistant!), '')
+  }
+
+  for (const item of fallbackItems) {
+    assert.equal(item.capabilities.canReadNative, false)
+    assert.equal(item.capabilities.canAck, false)
+    assert.equal(item.capabilities.canOpenProfile, false)
+    assert.equal(item.capabilities.canOpenOriginal, true)
+  }
+  assert.equal(items.every(item => !item.capabilities.canPin), true)
+  assert.equal(items.every(item => !item.capabilities.canMute), true)
+  assert.equal(items.every(item => !item.capabilities.canRemove), true)
+})
+
+verify('session type filter composes with unread, pinned, and search filters', ({ privateSession }) => {
+  const items = privateSession.transformPrivateSessions([
+    createRawSession('1', { group_name: 'Alpha', unread_count: 2 }),
+    createRawSession('2', { system_msg_type: 7, account_info: { name: 'Creator Helper', pic_url: '' }, top_ts: 1 }),
+    createRawSession('3', { is_follow: 0, group_name: 'Other Alpha', unread_count: 3 }),
+    createRawSession('4', { session_type: 2, group_name: 'Fan Group' }),
+  ], createCardsResponse([]))
+
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'all', typeFilter: 'user', query: '' }).map(item => item.talkerId),
+    ['1'],
+  )
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'pinned', typeFilter: 'official-assistant', query: '' }).map(item => item.talkerId),
+    ['2'],
+  )
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'unread', typeFilter: 'other', query: 'alpha' }).map(item => item.talkerId),
+    ['3'],
+  )
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'all', typeFilter: 'other', query: '' }).map(item => item.talkerId),
+    ['3', '4'],
+  )
+})
+
+verify('confirmed private-message source values map to weak display identifiers only', ({ privateMessage }) => {
+  const sources = [8, 11, 13, 17, 18, 19, 7]
+  const display = privateMessage.transformPrivateMessages(
+    sources.map((msgSource, index) => createRawMessage(
+      String(index + 1),
+      String(index + 1),
+      { msg_source: msgSource },
+    )),
+    [],
+    '100',
+  )
+  assert.deepEqual(display.map(item => item.source), [
+    'auto-reply',
+    'auto-reply',
+    'fan-group-system',
+    'mutual-follow',
+    'system',
+    'ai',
+    null,
+  ])
+})
+
+verify('private-session UI consumes type filters, assistant labels, profile links, and source labels', async () => {
+  const [listSource, itemSource, conversationSource, messageSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageItem.vue', import.meta.url), 'utf8'),
+  ])
+  assert.ok(listSource.includes('PrivateSessionTypeFilter'))
+  assert.ok(listSource.includes('typeFilter'))
+  assert.ok(itemSource.includes('session.assistantType'))
+  assert.ok(conversationSource.includes('getPrivateSessionProfileUrl'))
+  assert.ok(conversationSource.includes(':href="profileUrl"'))
+  assert.ok(itemSource.includes(':href="originalUrl"'))
+  assert.ok(messageSource.includes('message.source'))
+
+  for (const localeName of ['cmn-CN', 'cmn-TW', 'en', 'jyut']) {
+    const localeSource = await readFile(new URL(`../src/_locales/${localeName}.yml`, import.meta.url), 'utf8')
+    for (const key of [
+      'type_filters:',
+      'up-assistant:',
+      'customer-service:',
+      'message_sources:',
+      'auto-reply:',
+      'fan-group-system:',
+      'mutual-follow:',
+    ]) {
+      assert.ok(localeSource.includes(key), `${localeName}: ${key}`)
+    }
+  }
 })
 
 verify('session kinds and capabilities keep native reads separate from disabled writes', ({ privateSession }) => {

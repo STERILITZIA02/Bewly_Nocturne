@@ -889,6 +889,18 @@ notifications:
       all: 全部
       unread: 未读
       pinned: 置顶
+    type_filter_label: 会话类型
+    type_filters:
+      all: 全部类型
+      user: 普通会话
+      official-assistant: 官方助手
+      other: 其他会话
+    assistants:
+      streamer-assistant: 主播小助手
+      up-assistant: UP 主小助手
+      payment-assistant: 支付助手
+      customer-service: 客服
+      official-assistant: 官方助手
     empty: 暂无私信会话
     empty_filtered: 没有符合条件的会话
     unknown_user: 未知用户
@@ -900,6 +912,7 @@ notifications:
     unread_count: '{count} 条未读私信'
     open_unsupported_original: 在原版中打开与{name}的会话
     open_original_list: 打开原版私信列表
+    open_profile: 打开{name}的个人空间
     back_to_conversations: 返回会话列表
     messages:
       timeline_aria: 与{name}的私信记录
@@ -908,6 +921,12 @@ notifications:
       load_older: 加载更早消息
       history_start: 已到达聊天记录起点
       readonly: 当前私信页面为只读模式
+      message_sources:
+        auto-reply: 自动回复
+        fan-group-system: 粉丝团系统提示
+        mutual-follow: 互相关注
+        system: 系统提示
+        ai: AI
       send_original: 在原版中发送消息
       composer_placeholder: 输入消息
       composer_aria: 私信文本输入框

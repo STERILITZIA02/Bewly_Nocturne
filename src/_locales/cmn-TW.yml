@@ -890,6 +890,18 @@ notifications:
       all: 全部
       unread: 未讀
       pinned: 置頂
+    type_filter_label: 會話類型
+    type_filters:
+      all: 全部類型
+      user: 一般會話
+      official-assistant: 官方助手
+      other: 其他會話
+    assistants:
+      streamer-assistant: 主播小助手
+      up-assistant: UP 主小助手
+      payment-assistant: 支付助手
+      customer-service: 客服
+      official-assistant: 官方助手
     empty: 暫無私訊會話
     empty_filtered: 沒有符合條件的會話
     unknown_user: 未知使用者
@@ -901,6 +913,7 @@ notifications:
     unread_count: '{count} 則未讀私訊'
     open_unsupported_original: 在原版中開啟與{name}的會話
     open_original_list: 開啟原版私訊列表
+    open_profile: 開啟{name}的個人空間
     back_to_conversations: 返回會話列表
     messages:
       timeline_aria: 與{name}的私訊記錄
@@ -909,6 +922,12 @@ notifications:
       load_older: 載入更早訊息
       history_start: 已到達聊天記錄起點
       readonly: 目前私訊頁面為唯讀模式
+      message_sources:
+        auto-reply: 自動回覆
+        fan-group-system: 粉絲團系統提示
+        mutual-follow: 互相關注
+        system: 系統提示
+        ai: AI
       send_original: 在原版中傳送訊息
       composer_placeholder: 輸入訊息
       composer_aria: 私訊文字輸入框

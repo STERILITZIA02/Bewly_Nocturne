@@ -942,6 +942,18 @@ notifications:
       all: All
       unread: Unread
       pinned: Pinned
+    type_filter_label: Conversation type
+    type_filters:
+      all: All types
+      user: Regular
+      official-assistant: Official assistants
+      other: Other
+    assistants:
+      streamer-assistant: Streamer assistant
+      up-assistant: Creator assistant
+      payment-assistant: Payment assistant
+      customer-service: Customer service
+      official-assistant: Official assistant
     empty: No direct-message conversations
     empty_filtered: No conversations match these filters
     unknown_user: Unknown user
@@ -953,6 +965,7 @@ notifications:
     unread_count: '{count} unread direct messages'
     open_unsupported_original: Open conversation with {name} in original Bilibili
     open_original_list: Open the original direct-message list
+    open_profile: Open {name}'s profile
     back_to_conversations: Back to conversations
     messages:
       timeline_aria: Direct-message history with {name}
@@ -961,6 +974,12 @@ notifications:
       load_older: Load earlier messages
       history_start: Start of message history
       readonly: Direct messages are currently read-only
+      message_sources:
+        auto-reply: Automatic reply
+        fan-group-system: Fan-group system notice
+        mutual-follow: Mutual follow
+        system: System notice
+        ai: AI
       send_original: Send in original Bilibili
       composer_placeholder: Write a message
       composer_aria: Direct-message text field

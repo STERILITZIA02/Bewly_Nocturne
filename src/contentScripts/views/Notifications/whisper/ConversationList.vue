@@ -2,7 +2,11 @@
 import { useI18n } from 'vue-i18n'
 
 import ConversationListItem from './ConversationListItem.vue'
-import type { DisplayPrivateSession, PrivateSessionFilter } from './privateSession'
+import type {
+  DisplayPrivateSession,
+  PrivateSessionFilter,
+  PrivateSessionTypeFilter,
+} from './privateSession'
 import { filterPrivateSessions } from './privateSession'
 
 const props = defineProps<{
@@ -22,8 +26,10 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const filter = ref<PrivateSessionFilter>('all')
+const typeFilter = ref<PrivateSessionTypeFilter>('all')
 const query = ref('')
 const filters: PrivateSessionFilter[] = ['all', 'unread', 'pinned']
+const typeFilters: PrivateSessionTypeFilter[] = ['all', 'user', 'official-assistant', 'other']
 const itemsRef = ref<HTMLElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
@@ -31,11 +37,13 @@ let observerGeneration = 0
 
 const filteredItems = computed(() => filterPrivateSessions(props.items, {
   filter: filter.value,
+  typeFilter: typeFilter.value,
   query: query.value,
 }))
 
 const canAutoLoad = computed(() => (
   filter.value === 'all'
+  && typeFilter.value === 'all'
   && !query.value.trim()
   && !props.loadingMore
   && !props.noMore
@@ -143,6 +151,18 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
           {{ t(`notifications.whisper.filters.${filterId}`) }}
         </button>
       </div>
+
+      <label class="conversation-list__type-filter">
+        <span>{{ t('notifications.whisper.type_filter_label') }}</span>
+        <span class="conversation-list__type-select">
+          <select v-model="typeFilter">
+            <option v-for="typeFilterId in typeFilters" :key="typeFilterId" :value="typeFilterId">
+              {{ t(`notifications.whisper.type_filters.${typeFilterId}`) }}
+            </option>
+          </select>
+          <i i-mingcute:down-line aria-hidden="true" />
+        </span>
+      </label>
     </div>
 
     <div v-if="filteredItems.length" ref="itemsRef" class="conversation-list__items">
@@ -238,6 +258,58 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
 .conversation-list__filters .bew-segment-control__item {
   flex: 1 1 0;
   min-width: 0;
+}
+
+.conversation-list__type-filter {
+  display: flex;
+  gap: var(--bew-space-2);
+  align-items: center;
+  min-width: 0;
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+
+.conversation-list__type-filter > span:first-child {
+  flex: 0 0 auto;
+}
+
+.conversation-list__type-select {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  align-items: center;
+}
+
+.conversation-list__type-select select {
+  width: 100%;
+  min-width: 0;
+  height: var(--bew-control-height-sm);
+  padding: 0 var(--bew-space-8) 0 var(--bew-space-2);
+  overflow: hidden;
+  color: var(--bew-text-2);
+  font: inherit;
+  text-overflow: ellipsis;
+  appearance: none;
+  cursor: pointer;
+  background: var(--bew-fill-1);
+  border: 1px solid transparent;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
+.conversation-list__type-select select:focus-visible {
+  border-color: var(--bew-theme-focus-ring);
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
+}
+
+.conversation-list__type-select i {
+  position: absolute;
+  right: var(--bew-space-2);
+  color: var(--bew-text-3);
+  pointer-events: none;
 }
 
 .conversation-list__items {
