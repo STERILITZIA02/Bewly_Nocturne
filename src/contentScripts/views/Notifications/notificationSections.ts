@@ -112,3 +112,7 @@ export function isOriginalNotificationView(value: NotificationView): value is Or
 export function isNativeNotificationSection(value: NotificationView): value is NativeNotificationSection {
   return NOTIFICATION_SECTION_BY_ID[value].implementation === 'native'
 }
+
+export function canOriginalNotificationMutateUnread(value: OriginalNotificationView): boolean {
+  return value === 'whisper' || value === 'system'
+}

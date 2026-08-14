@@ -6,6 +6,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { OriginalNotificationView } from '../notificationSections'
+import { canOriginalNotificationMutateUnread } from '../notificationSections'
 import { NOTIFICATION_IFRAME_UNREAD_STALE_TIME_MS } from '../notificationTimings'
 
 interface Props {
@@ -21,6 +22,7 @@ const iframeRef = ref<HTMLIFrameElement | null>(null)
 const iframeKey = ref(0)
 const iframeSrc = ref(buildOriginalNotificationUrl(props.view))
 const isIframeLoaded = ref(false)
+const canMutateUnread = computed(() => canOriginalNotificationMutateUnread(props.view))
 
 let isFrameActive = false
 let iframeWasReleased = false
@@ -58,6 +60,8 @@ function syncIframeTheme(iframe = iframeRef.value) {
 }
 
 function syncUnreadMessageCount(options: { force?: boolean } = {}): Promise<void> {
+  if (!canMutateUnread.value)
+    return Promise.resolve()
   if (unreadSyncRequest)
     return unreadSyncRequest
   if (
@@ -88,11 +92,15 @@ function syncUnreadMessageCount(options: { force?: boolean } = {}): Promise<void
 }
 
 function syncUnreadAfterOriginalActivity(options: { force?: boolean } = {}) {
+  if (!canMutateUnread.value) {
+    originalReadActivityPossible = false
+    return
+  }
   const iframe = iframeRef.value
   originalReadActivityPossible = false
   void syncUnreadMessageCount(options).finally(() => {
     if (isFrameActive && isIframeLoaded.value && iframe === iframeRef.value)
-      originalReadActivityPossible = true
+      originalReadActivityPossible = canMutateUnread.value
   })
 }
 
@@ -114,7 +122,8 @@ function handleIframeLoad(event: Event) {
 
   syncIframeTheme(iframe)
   scheduleIframeReveal(iframe)
-  syncUnreadAfterOriginalActivity({ force: true })
+  if (canMutateUnread.value)
+    syncUnreadAfterOriginalActivity({ force: true })
 }
 
 function releaseIframeResources() {
@@ -159,7 +168,7 @@ function stopThemeSync() {
 }
 
 function handleVisibilityChange() {
-  if (isFrameActive && isIframeLoaded.value && document.visibilityState === 'visible')
+  if (canMutateUnread.value && isFrameActive && isIframeLoaded.value && document.visibilityState === 'visible')
     syncUnreadAfterOriginalActivity()
 }
 
@@ -175,7 +184,7 @@ function activateFrame() {
   }
   startThemeWatcher()
   document.addEventListener('visibilitychange', handleVisibilityChange)
-  if (isIframeLoaded.value)
+  if (canMutateUnread.value && isIframeLoaded.value)
     syncUnreadAfterOriginalActivity()
 }
 
@@ -183,7 +192,7 @@ function deactivateFrame() {
   if (!isFrameActive)
     return
 
-  const shouldSyncUnread = isIframeLoaded.value && originalReadActivityPossible
+  const shouldSyncUnread = canMutateUnread.value && isIframeLoaded.value && originalReadActivityPossible
   isFrameActive = false
   remountGeneration++
   document.removeEventListener('visibilitychange', handleVisibilityChange)
