@@ -113,10 +113,37 @@ async function sendDraft() {
 }
 
 async function retrySend(localId: string) {
-  const request = props.controller.retrySend(props.session.talkerId, localId)
+  const message = state.value.items.find(item => item.localId === localId)
+  const request = message?.msgType === 2
+    ? props.controller.retryImage(props.session.talkerId, localId)
+    : props.controller.retrySend(props.session.talkerId, localId)
   await nextTick()
   scrollToLatest()
   await request
+}
+
+async function sendImage(file: File) {
+  const request = props.controller.sendImage(props.session.talkerId, file)
+  await nextTick()
+  scrollToLatest()
+  await request
+  await nextTick()
+  if (isAtLatest())
+    scrollToLatest()
+}
+
+function deleteFailed(localId: string) {
+  const message = state.value.items.find(item => item.localId === localId)
+  if (message?.msgType === 2)
+    props.controller.removeImage(props.session.talkerId, localId)
+  else
+    props.controller.deleteFailed(props.session.talkerId, localId)
+}
+
+function getImageFailureKind(localId?: string) {
+  return localId && state.value.imageDraft?.localId === localId
+    ? state.value.imageDraft.failureKind
+    : null
 }
 
 function editFailed(localId: string) {
@@ -246,7 +273,8 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
             v-for="message in state.items"
             :key="message.msgKey"
             :message="message"
-            @delete-failed="controller.deleteFailed(session.talkerId, $event)"
+            :image-failure-kind="getImageFailureKind(message.localId)"
+            @delete-failed="deleteFailed"
             @edit-failed="editFailed"
             @preview="previewImage = $event"
             @retry="retrySend"
@@ -272,6 +300,10 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
         ref="composerRef"
         v-model="draft"
         :sending="state.sending"
+        :image-draft="state.imageDraft"
+        @remove-image="controller.removeImage(session.talkerId, $event)"
+        @retry-image="controller.retryImage(session.talkerId, $event)"
+        @select-image="sendImage"
         @submit="sendDraft"
       />
     </footer>

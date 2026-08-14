@@ -844,7 +844,7 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 睇原生會話、聊天記錄同傳送文字訊息，未支援會話繼續由原版提供
+      description: 睇原生會話、聊天記錄同傳送文字或圖片，未支援會話繼續由原版提供
     reply:
       label: 回覆我嘅
       description: 睇其他人畀你嘅回覆
@@ -887,7 +887,7 @@ notifications:
       load_older: 載入更早訊息
       history_start: 已經去到聊天記錄起點
       readonly: 而家係唯讀模式
-      text_send_enabled: 支援文字訊息
+      text_send_enabled: 支援文字同圖片訊息
       send_original: 喺原版傳送訊息
       composer_placeholder: 輸入訊息
       composer_aria: 私訊文字輸入框
@@ -908,6 +908,16 @@ notifications:
       emoticon_alt: 私訊表情
       picture_card_alt: 私訊分享圖片
       video_views: '{count} 次播放'
+      image_summary: '[圖片]'
+      select_image: 揀圖片
+      selected_image_alt: 等待傳送嘅私訊圖片
+      image_size_kb: '{size} KB'
+      remove_image: 移除圖片
+      image_preparing: 準備緊圖片
+      image_uploading: 上傳緊圖片
+      image_upload_failed: 圖片上傳失敗
+      image_send_failed: 圖片傳送失敗
+      image_reconcile_failed: 圖片已傳送，等緊伺服器同步
     errors:
       wbi-unavailable: 私訊簽名暫時用唔到
   native:

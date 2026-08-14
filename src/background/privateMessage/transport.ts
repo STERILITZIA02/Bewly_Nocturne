@@ -30,6 +30,10 @@ interface PrivateMessageRequestDependencies {
   signParams: typeof signPrivateMessageParams
 }
 
+interface PrivateImageUploadDependencies {
+  fetch: typeof fetch
+}
+
 const DEFAULT_SIGNING_DEPENDENCIES: PrivateMessageSigningDependencies = {
   addWbiSign,
   initWbiKeys,
@@ -38,6 +42,16 @@ const DEFAULT_SIGNING_DEPENDENCIES: PrivateMessageSigningDependencies = {
 const DEFAULT_REQUEST_DEPENDENCIES: PrivateMessageRequestDependencies = {
   fetch: globalThis.fetch.bind(globalThis),
   signParams: signPrivateMessageParams,
+}
+
+const DEFAULT_IMAGE_UPLOAD_DEPENDENCIES: PrivateImageUploadDependencies = {
+  fetch: globalThis.fetch.bind(globalThis),
+}
+
+export interface PrivateImageUploadRequest {
+  endpointName: 'uploadPrivateImage'
+  form: FormData
+  url: string
 }
 
 export async function signPrivateMessageParams(
@@ -101,6 +115,37 @@ export async function requestPrivateMessageForm(
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   return requestSignedPrivateMessage(request, 'POST', dependencies, sender)
+}
+
+export async function requestPrivateImageUpload(
+  request: PrivateImageUploadRequest,
+  dependencies: Partial<PrivateImageUploadDependencies> = {},
+  sender?: Browser.Runtime.MessageSender,
+  signal?: AbortSignal,
+): Promise<PrivateMessageApiResponse> {
+  const runtimeDependencies = {
+    ...DEFAULT_IMAGE_UPLOAD_DEPENDENCIES,
+    ...dependencies,
+  }
+  try {
+    const headers: Record<string, string> = {
+      Referer: 'https://www.bilibili.com/',
+    }
+    const cookieHeader = await getFirefoxContainerCookieHeader(sender, request.url)
+    if (cookieHeader)
+      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
+    const response = await runtimeDependencies.fetch(request.url, {
+      method: 'POST',
+      body: request.form,
+      credentials: 'include',
+      headers,
+      signal,
+    })
+    return await parsePrivateMessageResponse(response, request.endpointName)
+  }
+  catch {
+    return createPrivateMessageErrorResponse('network', request.endpointName)
+  }
 }
 
 async function requestSignedPrivateMessage(

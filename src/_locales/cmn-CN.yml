@@ -858,7 +858,7 @@ notifications:
   sections:
     whisper:
       label: 私信
-      description: 查看原生会话、聊天记录并发送文本消息，未支持会话继续由原版提供
+      description: 查看原生会话、聊天记录并发送文本或图片，未支持会话继续由原版提供
     reply:
       label: 回复我的
       description: 查看别人对你的回复
@@ -901,7 +901,7 @@ notifications:
       load_older: 加载更早消息
       history_start: 已到达聊天记录起点
       readonly: 当前为只读模式
-      text_send_enabled: 支持文本消息
+      text_send_enabled: 支持文本与图片消息
       send_original: 在原版中发送消息
       composer_placeholder: 输入消息
       composer_aria: 私信文本输入框
@@ -922,6 +922,16 @@ notifications:
       emoticon_alt: 私信表情
       picture_card_alt: 私信分享图片
       video_views: '{count} 次播放'
+      image_summary: '[图片]'
+      select_image: 选择图片
+      selected_image_alt: 待发送的私信图片
+      image_size_kb: '{size} KB'
+      remove_image: 移除图片
+      image_preparing: 正在准备图片
+      image_uploading: 正在上传图片
+      image_upload_failed: 图片上传失败
+      image_send_failed: 图片发送失败
+      image_reconcile_failed: 图片已发送，正在等待服务端同步
     errors:
       wbi-unavailable: 私信签名暂时不可用
   native:

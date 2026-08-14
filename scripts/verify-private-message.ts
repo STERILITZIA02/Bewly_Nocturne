@@ -14,6 +14,26 @@ if (false) {
   void api.privateMessage.getPrivateMessages({ talkerId: '1', endSeqno: '2' })
   void api.privateMessage.ackPrivateSession({ talkerId: '1', ackSeqno: '2', csrf: 'token' })
   void api.privateMessage.sendPrivateMessage({ senderId: '1', talkerId: '2', text: 'hello', csrf: 'token' })
+  void api.privateMessage.uploadPrivateImage({
+    requestId: 'request-1',
+    fileName: 'image.png',
+    mimeType: 'image/png',
+    bytes: [1, 2, 3],
+    csrf: 'token',
+  })
+  void api.privateMessage.sendPrivateImageMessage({
+    senderId: '1',
+    talkerId: '2',
+    csrf: 'token',
+    uploaded: {
+      url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+      width: 1,
+      height: 1,
+      size: 3,
+      imageType: 'png',
+    },
+  })
+  void api.privateMessage.cancelPrivateImageUpload({ requestId: 'request-1' })
 }
 
 interface MockResponseOptions {
@@ -113,6 +133,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
 
 verify('endpoints and request builders match the fixed Web IM contract', ({ protocol, types }) => {
   assert.deepEqual(types.PRIVATE_MESSAGE_ENDPOINTS, {
+    uploadPrivateImage: 'https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs',
     getPrivateSessions: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions',
     getPrivateUserCards: 'https://api.vc.bilibili.com/account/v1/user/cards',
     getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
@@ -225,6 +246,96 @@ verify('text send builder creates a flat bracket form with UUID, seconds, JSON c
   })
   assert.match(String(params['msg[dev_id]']), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
   assert.equal(typeof params['msg[timestamp]'], 'number')
+})
+
+verify('image upload builder uses file_up, biz=im, csrf, and parses fixed upload fields', ({ protocol }) => {
+  const file = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
+  const form = protocol.buildPrivateImageUploadForm(file, 'sanitized-csrf')
+  const uploadedFile = form.get('file_up')
+
+  assert.ok(uploadedFile instanceof File)
+  assert.equal(uploadedFile.name, 'sanitized.png')
+  assert.equal(uploadedFile.type, 'image/png')
+  assert.equal(form.get('biz'), 'im')
+  assert.equal(form.get('csrf'), 'sanitized-csrf')
+  assert.equal(protocol.getPrivateImageType('image/jpeg'), 'jpg')
+  assert.equal(protocol.getPrivateImageType('image/png'), 'png')
+  assert.equal(protocol.getPrivateImageType('image/gif'), 'gif')
+  assert.equal(protocol.getPrivateImageType('image/webp'), 'webp')
+  assert.equal(protocol.getPrivateImageType('image/svg+xml'), 'svg')
+  assert.throws(() => protocol.getPrivateImageType('application/pdf'))
+
+  assert.deepEqual(protocol.parsePrivateImageUploadResponse({
+    code: 0,
+    data: {
+      image_url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+      image_height: 720,
+      image_width: 1280,
+      img_size: 4096,
+    },
+  }, 'png'), {
+    code: 0,
+    data: {
+      url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+      height: 720,
+      width: 1280,
+      size: 4096,
+      imageType: 'png',
+    },
+  })
+})
+
+verify('image send builder creates msg_type two content with upload metadata and shared WBI-ready fields', ({ protocol }) => {
+  const params = protocol.createPrivateImageMessageParams({
+    senderId: '9223372036854775806',
+    talkerId: '9223372036854775807',
+    csrf: 'sanitized-csrf',
+    uploaded: {
+      url: 'https://i0.hdslb.com/bfs/im/sanitized.webp',
+      width: 1280,
+      height: 720,
+      size: 4096,
+      imageType: 'webp',
+    },
+  }, {
+    now: () => 1755000000123,
+    randomUUID: () => '123e4567-e89b-42d3-a456-426614174000',
+  })
+
+  assert.equal(params['msg[msg_type]'], 2)
+  assert.equal(params['msg[sender_uid]'], '9223372036854775806')
+  assert.equal(params['msg[receiver_id]'], '9223372036854775807')
+  assert.equal(params.csrf_token, 'sanitized-csrf')
+  assert.equal(params.csrf, 'sanitized-csrf')
+  assert.deepEqual(JSON.parse(String(params['msg[content]'])), {
+    url: 'https://i0.hdslb.com/bfs/im/sanitized.webp',
+    height: 720,
+    width: 1280,
+    imageType: 'webp',
+    original: 1,
+    size: 4096,
+  })
+})
+
+verify('multipart upload transport does not set a multipart boundary and preserves the abort signal', async ({ transport }) => {
+  let capturedInit: RequestInit | undefined
+  const controller = new AbortController()
+  const response = await transport.requestPrivateImageUpload({
+    endpointName: 'uploadPrivateImage',
+    form: new FormData(),
+    url: 'https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs',
+  }, {
+    fetch: async (_url, init) => {
+      capturedInit = init
+      return createMockResponse('{"code":0,"data":{"image_url":"https://i0.hdslb.com/bfs/im/sanitized.png","image_height":1,"image_width":1,"img_size":3}}')
+    },
+  }, undefined, controller.signal)
+
+  assert.equal(response.code, 0)
+  assert.equal(capturedInit?.method, 'POST')
+  assert.ok(capturedInit?.body instanceof FormData)
+  assert.equal(Object.keys(capturedInit?.headers as Record<string, string>).some(key => key.toLowerCase() === 'content-type'), false)
+  assert.equal(capturedInit?.signal, controller.signal)
 })
 
 verify('form transport signs the flat send body and posts it as form-urlencoded', async ({ transport }) => {
@@ -1400,6 +1511,327 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   mid.value = '300'
   await nextTick()
   assert.equal(controller.states.has('200'), false)
+})
+
+verify('optimistic image messages retain local previews and reconcile by server msg_key', ({ privateMessage }) => {
+  const optimistic = privateMessage.createOptimisticPrivateImageMessage({
+    localId: 'image-local-1',
+    senderId: '100',
+    receiverId: '200',
+    objectUrl: 'blob:https://www.bilibili.com/sanitized-preview',
+    timestamp: 1755000000,
+  })
+  assert.equal(optimistic.msgType, 2)
+  assert.equal(optimistic.sendState, 'preparing')
+  assert.deepEqual(optimistic.content, {
+    type: 'image',
+    src: 'blob:https://www.bilibili.com/sanitized-preview',
+    width: 0,
+    height: 0,
+  })
+
+  optimistic.sendState = 'reconciling'
+  optimistic.serverMsgKey = '9223372036854775807'
+  const [server] = privateMessage.transformPrivateMessages([
+    createRawMessage('9223372036854775807', '105', {
+      sender_uid: '100',
+      receiver_id: '200',
+      msg_type: 2,
+      content: '{"url":"https://i0.hdslb.com/bfs/im/sanitized.png","width":1280,"height":720}',
+      timestamp: 1755000002,
+    }),
+  ], [], '100')
+  const reconciled = privateMessage.reconcileOptimisticPrivateMessages([
+    optimistic,
+    server!,
+  ], 'image-local-1')
+  assert.equal(reconciled.reconciled, true)
+  assert.deepEqual(reconciled.items.map(item => item.msgKey), ['9223372036854775807'])
+})
+
+verify('image upload failure retries upload while send failure reuses the uploaded server image', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const revoked: string[] = []
+  const cancelled: string[] = []
+  let uploadAttempts = 0
+  let sendAttempts = 0
+  let sessionRefreshes = 0
+  const serverImage = createRawMessage('server-image-1', '105', {
+    sender_uid: '100',
+    receiver_id: '200',
+    msg_type: 2,
+    content: '{"url":"https://i0.hdslb.com/bfs/im/sanitized.png","width":1280,"height":720}',
+    timestamp: 1755000002,
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    cancelImageUpload: async (requestId) => { cancelled.push(requestId) },
+    createLocalId: () => 'image-local-1',
+    createObjectUrl: () => 'blob:https://www.bilibili.com/sanitized-preview',
+    createUploadRequestId: () => `upload-${uploadAttempts + 1}`,
+    fetchMessages: async () => createMessagesResponse([serverImage]),
+    getCsrf: () => 'csrf-token',
+    getImageSummary: () => '[image]',
+    markSessionRead: () => {},
+    markSessionSent: () => {},
+    readFileBytes: async () => [1, 2, 3],
+    refreshSessions: async () => { sessionRefreshes++ },
+    revokeObjectUrl: url => revoked.push(url),
+    sendImageMessage: async () => {
+      sendAttempts++
+      return sendAttempts === 1
+        ? { code: -400, data: null }
+        : { code: 0, data: { msg_key: 'server-image-1' } }
+    },
+    syncUnread: async () => {},
+    uploadImage: async () => {
+      uploadAttempts++
+      return uploadAttempts === 1
+        ? { code: -1, data: null }
+        : {
+            code: 0,
+            data: {
+              url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+              width: 1280,
+              height: 720,
+              size: 3,
+              imageType: 'png',
+            },
+          }
+    },
+  })
+  const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
+
+  assert.equal(await controller.sendImage('200', image), false)
+  const state = controller.getState('200')
+  assert.equal(state.imageDraft?.failureKind, 'upload-failed')
+  assert.equal(state.items[0]?.sendState, 'failed')
+  assert.equal(uploadAttempts, 1)
+  assert.equal(sendAttempts, 0)
+
+  assert.equal(await controller.retryImage('200', 'image-local-1'), false)
+  assert.equal(state.imageDraft?.failureKind, 'send-failed')
+  assert.equal(uploadAttempts, 2)
+  assert.equal(sendAttempts, 1)
+
+  assert.equal(await controller.retryImage('200', 'image-local-1'), true)
+  assert.equal(uploadAttempts, 2)
+  assert.equal(sendAttempts, 2)
+  assert.deepEqual(state.items.map(item => item.msgKey), ['server-image-1'])
+  assert.equal(state.imageDraft, null)
+  assert.deepEqual(revoked, ['blob:https://www.bilibili.com/sanitized-preview'])
+  assert.deepEqual(cancelled, [])
+  assert.equal(sessionRefreshes, 1)
+})
+
+verify('image reconcile failure retries only history and resource cleanup cancels stale uploads', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const revoked: string[] = []
+  const cancelled: string[] = []
+  let historyRequests = 0
+  let uploadAttempts = 0
+  let sendAttempts = 0
+  let resolveUpload: ((value: unknown) => void) | undefined
+  let resolveUploadStarted: (() => void) | undefined
+  const deferredUpload = new Promise<unknown>((resolve) => {
+    resolveUpload = resolve
+  })
+  const uploadStarted = new Promise<void>((resolve) => {
+    resolveUploadStarted = resolve
+  })
+  const serverImage = createRawMessage('server-image-2', '106', {
+    sender_uid: '100',
+    receiver_id: '200',
+    msg_type: 2,
+    content: '{"url":"https://i0.hdslb.com/bfs/im/sanitized.png","width":1280,"height":720}',
+    timestamp: 1755000002,
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    cancelImageUpload: async (requestId) => { cancelled.push(requestId) },
+    createLocalId: () => 'image-local-2',
+    createObjectUrl: () => 'blob:https://www.bilibili.com/reconcile-preview',
+    createUploadRequestId: () => 'upload-reconcile',
+    fetchMessages: async () => {
+      historyRequests++
+      return historyRequests === 1
+        ? createMessagesResponse([])
+        : createMessagesResponse([serverImage])
+    },
+    getCsrf: () => 'csrf-token',
+    getImageSummary: () => '[image]',
+    markSessionRead: () => {},
+    markSessionSent: () => {},
+    readFileBytes: async () => [1, 2, 3],
+    refreshSessions: async () => {},
+    revokeObjectUrl: url => revoked.push(url),
+    sendImageMessage: async () => {
+      sendAttempts++
+      return { code: 0, data: { msg_key: 'server-image-2' } }
+    },
+    syncUnread: async () => {},
+    uploadImage: async () => {
+      uploadAttempts++
+      return {
+        code: 0,
+        data: {
+          url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+          width: 1280,
+          height: 720,
+          size: 3,
+          imageType: 'png',
+        },
+      }
+    },
+  })
+  const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
+
+  assert.equal(await controller.sendImage('200', image), false, 'first send must stop at reconciliation')
+  const state = controller.getState('200')
+  assert.equal(state.imageDraft?.failureKind, 'reconcile-failed', 'failure stage')
+  assert.equal(uploadAttempts, 1, 'initial upload count')
+  assert.equal(sendAttempts, 1, 'initial send count')
+  assert.equal(historyRequests, 1, 'initial reconciliation history count')
+
+  assert.equal(await controller.retryImage('200', 'image-local-2'), true, 'reconcile retry result')
+  assert.equal(uploadAttempts, 1, 'retry must not upload')
+  assert.equal(sendAttempts, 1, 'retry must not send')
+  assert.equal(historyRequests, 2, 'retry must only fetch history')
+  assert.equal(state.imageDraft, null, 'draft clears after reconciliation')
+  assert.deepEqual(revoked, ['blob:https://www.bilibili.com/reconcile-preview'], 'object URL cleanup')
+
+  const staleController = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    cancelImageUpload: async (requestId) => { cancelled.push(requestId) },
+    createLocalId: () => 'image-local-stale',
+    createObjectUrl: () => 'blob:https://www.bilibili.com/stale-preview',
+    createUploadRequestId: () => 'upload-stale',
+    fetchMessages: async () => createMessagesResponse([]),
+    getCsrf: () => 'csrf-token',
+    getImageSummary: () => '[image]',
+    markSessionRead: () => {},
+    readFileBytes: async () => [1, 2, 3],
+    revokeObjectUrl: url => revoked.push(url),
+    sendImageMessage: async () => ({ code: 0, data: { msg_key: 'never' } }),
+    syncUnread: async () => {},
+    uploadImage: async () => {
+      resolveUploadStarted?.()
+      return deferredUpload
+    },
+  })
+  const staleSend = staleController.sendImage('200', image)
+  await uploadStarted
+  activeTalkerId.value = '300'
+  await nextTick()
+  resolveUpload?.({
+    code: 0,
+    data: {
+      url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+      width: 1280,
+      height: 720,
+      size: 3,
+      imageType: 'png',
+    },
+  })
+  assert.equal(await staleSend, false, 'stale upload result')
+  assert.ok(cancelled.includes('upload-stale'), 'conversation switch cancels background upload')
+  assert.ok(revoked.includes('blob:https://www.bilibili.com/stale-preview'), 'conversation switch revokes preview')
+
+  activeTalkerId.value = '200'
+  const disposeSend = staleController.sendImage('200', image)
+  staleController.dispose()
+  assert.ok(cancelled.includes('upload-stale'), 'dispose keeps upload cancellation invariant')
+  resolveUpload?.({ code: -1, data: null })
+  await disposeSend
+})
+
+verify('image send waits for a valid account before allocating preview resources', async ({ usePrivateMessages }) => {
+  const mid = ref('')
+  const activeTalkerId = ref('200')
+  let objectUrlsCreated = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    createObjectUrl: () => {
+      objectUrlsCreated++
+      return 'blob:https://www.bilibili.com/pending-account'
+    },
+    fetchMessages: async () => createMessagesResponse([]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    sendImageMessage: async () => ({ code: 0, data: { msg_key: 'unused' } }),
+    syncUnread: async () => {},
+    uploadImage: async () => ({
+      code: 0,
+      data: {
+        url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+        width: 1280,
+        height: 720,
+        size: 3,
+        imageType: 'png',
+      },
+    }),
+  })
+  const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
+
+  assert.equal(await controller.sendImage('200', image), false)
+  assert.equal(objectUrlsCreated, 0)
+  assert.equal(controller.states.size, 0)
+})
+
+verify('account changes cancel an active image upload and reject the old account response', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const cancelled: string[] = []
+  const revoked: string[] = []
+  let resolveUpload: ((value: unknown) => void) | undefined
+  let resolveUploadStarted: (() => void) | undefined
+  const uploadResponse = new Promise<unknown>((resolve) => {
+    resolveUpload = resolve
+  })
+  const uploadStarted = new Promise<void>((resolve) => {
+    resolveUploadStarted = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    cancelImageUpload: async requestId => void cancelled.push(requestId),
+    createLocalId: () => 'image-account-change',
+    createObjectUrl: () => 'blob:https://www.bilibili.com/account-change',
+    createUploadRequestId: () => 'upload-account-change',
+    fetchMessages: async () => createMessagesResponse([]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    readFileBytes: async () => [1, 2, 3],
+    revokeObjectUrl: url => revoked.push(url),
+    sendImageMessage: async () => ({ code: 0, data: { msg_key: 'unused' } }),
+    syncUnread: async () => {},
+    uploadImage: async () => {
+      resolveUploadStarted?.()
+      return uploadResponse
+    },
+  })
+  const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
+
+  const send = controller.sendImage('200', image)
+  await uploadStarted
+  mid.value = '300'
+  await nextTick()
+  resolveUpload?.({
+    code: 0,
+    data: {
+      url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
+      width: 1280,
+      height: 720,
+      size: 3,
+      imageType: 'png',
+    },
+  })
+
+  assert.equal(await send, false)
+  assert.deepEqual(cancelled, ['upload-account-change'])
+  assert.deepEqual(revoked, ['blob:https://www.bilibili.com/account-change'])
+  assert.equal(controller.states.size, 0)
 })
 
 async function main() {

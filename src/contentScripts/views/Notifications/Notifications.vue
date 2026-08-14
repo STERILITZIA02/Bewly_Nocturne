@@ -67,6 +67,10 @@ const privateMessages = usePrivateMessages(currentMid, privateSessions.selectedT
   markSessionSent: privateSessions.markSessionSent,
   refreshSessions: () => privateSessions.refresh('merge'),
   sendMessage: options => api.privateMessage.sendPrivateMessage(options),
+  uploadImage: options => api.privateMessage.uploadPrivateImage(options),
+  cancelImageUpload: requestId => api.privateMessage.cancelPrivateImageUpload({ requestId }),
+  sendImageMessage: options => api.privateMessage.sendPrivateImageMessage(options),
+  getImageSummary: () => t('notifications.whisper.messages.image_summary'),
   syncUnread: () => topBarStore.syncUnreadMessageState(),
 })
 const notificationFeeds = useNotificationFeeds(currentMid, {
@@ -219,6 +223,7 @@ onMounted(activatePage)
 onActivated(activatePage)
 onDeactivated(deactivatePage)
 onBeforeUnmount(() => {
+  privateMessages.dispose()
   deactivatePage()
   clearRefreshHandler()
   clearNotificationViewFromRoute()

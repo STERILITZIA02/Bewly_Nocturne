@@ -4,9 +4,11 @@ import { useI18n } from 'vue-i18n'
 import type { DisplayPrivateMessage } from './privateMessage'
 import PrivateMessageContent from './PrivateMessageContent.vue'
 import { normalizePrivateSessionLocale } from './privateSession'
+import type { PrivateImageFailureKind } from './usePrivateMessages'
 
 const props = defineProps<{
   message: DisplayPrivateMessage
+  imageFailureKind?: PrivateImageFailureKind | null
 }>()
 
 const emit = defineEmits<{
@@ -28,6 +30,28 @@ const displayTime = computed(() => {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
+})
+const sendStatus = computed(() => {
+  if (props.message.sendState === 'preparing')
+    return t('notifications.whisper.messages.image_preparing')
+  if (props.message.sendState === 'uploading')
+    return t('notifications.whisper.messages.image_uploading')
+  if (props.message.sendState === 'sending')
+    return t('notifications.whisper.messages.sending')
+  if (props.message.sendState === 'reconciling')
+    return t('notifications.whisper.messages.reconciling')
+  if (props.message.sendState === 'pending')
+    return t('notifications.whisper.messages.sending')
+  return ''
+})
+const failureMessage = computed(() => {
+  if (props.imageFailureKind === 'upload-failed')
+    return t('notifications.whisper.messages.image_upload_failed')
+  if (props.imageFailureKind === 'send-failed')
+    return t('notifications.whisper.messages.image_send_failed')
+  if (props.imageFailureKind === 'reconcile-failed')
+    return t('notifications.whisper.messages.image_reconcile_failed')
+  return t('notifications.whisper.messages.send_failed')
 })
 </script>
 
@@ -53,18 +77,13 @@ const displayTime = computed(() => {
         {{ displayTime }}
       </time>
       <div v-if="message.localId" class="private-message-item__send-status" role="status">
-        <span v-if="message.sendState === 'pending'">
-          {{ t('notifications.whisper.messages.sending') }}
-        </span>
-        <span v-else-if="message.sendState === 'reconciling'">
-          {{ t('notifications.whisper.messages.reconciling') }}
-        </span>
+        <span v-if="sendStatus">{{ sendStatus }}</span>
         <template v-else-if="message.sendState === 'failed'">
-          <span>{{ t('notifications.whisper.messages.send_failed') }}</span>
+          <span>{{ failureMessage }}</span>
           <button type="button" @click="emit('retry', message.localId)">
             {{ t('notifications.whisper.messages.retry_send') }}
           </button>
-          <button type="button" @click="emit('editFailed', message.localId)">
+          <button v-if="message.msgType === 1" type="button" @click="emit('editFailed', message.localId)">
             {{ t('notifications.whisper.messages.edit_failed') }}
           </button>
           <button type="button" @click="emit('deleteFailed', message.localId)">

@@ -28,13 +28,28 @@ export interface DisplayPrivateMessage {
   serverMsgKey?: string
 }
 
-export type PrivateMessageSendState = 'pending' | 'sent' | 'failed' | 'reconciling'
+export type PrivateMessageSendState
+  = | 'pending'
+    | 'preparing'
+    | 'uploading'
+    | 'sending'
+    | 'reconciling'
+    | 'sent'
+    | 'failed'
 
 export interface OptimisticPrivateTextMessageOptions {
   localId: string
   senderId: string
   receiverId: string
   text: string
+  timestamp: number
+}
+
+export interface OptimisticPrivateImageMessageOptions {
+  localId: string
+  senderId: string
+  receiverId: string
+  objectUrl: string
   timestamp: number
 }
 
@@ -128,6 +143,30 @@ export function createOptimisticPrivateTextMessage(
   }
 }
 
+export function createOptimisticPrivateImageMessage(
+  options: OptimisticPrivateImageMessageOptions,
+): DisplayPrivateMessage {
+  if (!options.localId || !options.objectUrl.startsWith('blob:'))
+    throw new TypeError('optimistic image requires a localId and object URL')
+  return {
+    msgKey: `local:${options.localId}`,
+    seqno: '',
+    senderId: options.senderId,
+    receiverId: options.receiverId,
+    msgType: 2,
+    timestamp: options.timestamp,
+    isSelf: true,
+    content: {
+      type: 'image',
+      src: options.objectUrl,
+      width: 0,
+      height: 0,
+    },
+    localId: options.localId,
+    sendState: 'preparing',
+  }
+}
+
 export function getPrivateMessageText(message: DisplayPrivateMessage): string {
   if (message.content.type !== 'text')
     return ''
@@ -147,10 +186,12 @@ export function reconcileOptimisticPrivateMessages(
 
   const optimisticText = getPrivateMessageText(optimistic)
   const serverMatch = deduped.find((item) => {
-    if (item.localId || !item.isSelf || item.msgType !== 1)
+    if (item.localId || !item.isSelf || item.msgType !== optimistic.msgType)
       return false
     if (optimistic.serverMsgKey)
       return item.msgKey === optimistic.serverMsgKey
+    if (optimistic.msgType !== 1)
+      return false
     return (
       getPrivateMessageText(item) === optimisticText
       && Math.abs(item.timestamp - optimistic.timestamp) <= PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS

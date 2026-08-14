@@ -5,11 +5,13 @@ import type {
   PrivateMessageApiResponse,
   PrivateMessagesData,
   PrivateMessageTransportErrorKind,
+  UploadedPrivateImage,
 } from '~/background/privateMessage/types'
 
 import type { DisplayPrivateMessage } from './privateMessage'
 import {
   comparePrivateMessageSeqno,
+  createOptimisticPrivateImageMessage,
   createOptimisticPrivateTextMessage,
   getLatestPrivateMessageSeqno,
   getOldestPrivateMessageSeqno,
@@ -37,6 +39,32 @@ interface SendPrivateMessageOptions {
   text: string
 }
 
+interface UploadPrivateImageOptions {
+  bytes: number[]
+  csrf: string
+  fileName: string
+  mimeType: string
+  requestId: string
+}
+
+interface SendPrivateImageMessageOptions {
+  csrf: string
+  senderId: string
+  talkerId: string
+  uploaded: UploadedPrivateImage
+}
+
+export type PrivateImageFailureKind = 'upload-failed' | 'send-failed' | 'reconcile-failed'
+
+export interface PrivateImageDraftState {
+  failureKind: PrivateImageFailureKind | null
+  fileName: string
+  localId: string
+  objectUrl: string
+  size: number
+  status: 'preparing' | 'uploading' | 'sending' | 'reconciling' | 'failed'
+}
+
 export interface PrivateConversationState {
   talkerId: string
   items: DisplayPrivateMessage[]
@@ -54,6 +82,7 @@ export interface PrivateConversationState {
   lastAckSeqno: string
   draft: string
   sending: boolean
+  imageDraft: PrivateImageDraftState | null
 }
 
 export interface PrivateMessagesDependencies {
@@ -63,10 +92,18 @@ export interface PrivateMessagesDependencies {
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   syncUnread: () => Promise<void>
   sendMessage?: (options: SendPrivateMessageOptions) => Promise<unknown>
+  uploadImage?: (options: UploadPrivateImageOptions) => Promise<unknown>
+  cancelImageUpload?: (requestId: string) => Promise<unknown>
+  sendImageMessage?: (options: SendPrivateImageMessageOptions) => Promise<unknown>
   markSessionSent?: (talkerId: string, summary: string, timestamp: number) => void
   refreshSessions?: () => Promise<void>
   createLocalId?: () => string
   nowSeconds?: () => number
+  createObjectUrl?: (file: File) => string
+  revokeObjectUrl?: (url: string) => void
+  readFileBytes?: (file: File) => Promise<number[]>
+  createUploadRequestId?: () => string
+  getImageSummary?: () => string
 }
 
 export interface PrivateAckEligibility {
@@ -86,9 +123,24 @@ export interface PrivateMessagesController {
   setDraft: (talkerId: string, text: string) => void
   sendDraft: (talkerId: string) => Promise<boolean>
   retrySend: (talkerId: string, localId: string) => Promise<boolean>
+  sendImage: (talkerId: string, file: File) => Promise<boolean>
+  retryImage: (talkerId: string, localId: string) => Promise<boolean>
+  removeImage: (talkerId: string, localId: string) => void
   editFailed: (talkerId: string, localId: string) => void
   deleteFailed: (talkerId: string, localId: string) => void
   invalidateConversation: (talkerId: string) => void
+  dispose: () => void
+}
+
+interface PrivateImageTask {
+  bytes?: number[]
+  file: File
+  localId: string
+  objectUrl: string
+  talkerId: string
+  uploaded?: UploadedPrivateImage
+  uploadRequestId?: string
+  failureKind: PrivateImageFailureKind | null
 }
 
 function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
@@ -116,6 +168,23 @@ function extractSentMessageKey(response: unknown): string {
   return typeof msgKey === 'string' ? msgKey : ''
 }
 
+function extractUploadedImage(response: unknown): UploadedPrivateImage | null {
+  const parsed = asResponse(response)
+  if (!parsed || parsed.code !== 0 || !parsed.data || typeof parsed.data !== 'object')
+    return null
+  const data = parsed.data as Partial<UploadedPrivateImage>
+  if (
+    typeof data.url !== 'string'
+    || typeof data.width !== 'number'
+    || typeof data.height !== 'number'
+    || typeof data.size !== 'number'
+    || typeof data.imageType !== 'string'
+  ) {
+    return null
+  }
+  return data as UploadedPrivateImage
+}
+
 function resolveErrorKind(response: unknown): PrivateMessageTransportErrorKind {
   const parsed = asResponse(response)
   return parsed?.bewlyError?.kind ?? (parsed ? 'api-error' : 'invalid-response')
@@ -139,6 +208,7 @@ function createConversationState(talkerId: string): PrivateConversationState {
     lastAckSeqno: '0',
     draft: '',
     sending: false,
+    imageDraft: null,
   })
 }
 
@@ -152,7 +222,10 @@ export function usePrivateMessages(
   const olderRequests = new Map<string, Promise<void>>()
   const ackRequests = new Map<string, Promise<boolean>>()
   const sendRequests = new Map<string, Promise<boolean>>()
+  const imageRequests = new Map<string, Promise<boolean>>()
+  const imageTasks = new Map<string, PrivateImageTask>()
   let accountGeneration = 0
+  let disposed = false
 
   function getState(talkerId: string): PrivateConversationState {
     let state = states.get(talkerId)
@@ -429,6 +502,67 @@ export function usePrivateMessages(
     return dependencies.nowSeconds?.() ?? Math.floor(Date.now() / 1000)
   }
 
+  function createObjectUrl(file: File): string {
+    return dependencies.createObjectUrl?.(file) ?? URL.createObjectURL(file)
+  }
+
+  function revokeObjectUrl(url: string) {
+    if (dependencies.revokeObjectUrl)
+      dependencies.revokeObjectUrl(url)
+    else
+      URL.revokeObjectURL(url)
+  }
+
+  async function readFileBytes(file: File): Promise<number[]> {
+    if (dependencies.readFileBytes)
+      return dependencies.readFileBytes(file)
+    return Array.from(new Uint8Array(await file.arrayBuffer()))
+  }
+
+  function createUploadRequestId(): string {
+    return dependencies.createUploadRequestId?.() ?? globalThis.crypto.randomUUID()
+  }
+
+  function updateImageState(
+    state: PrivateConversationState,
+    task: PrivateImageTask,
+    status: PrivateImageDraftState['status'],
+    failureKind: PrivateImageFailureKind | null = null,
+  ) {
+    const message = state.items.find(item => item.localId === task.localId)
+    if (message)
+      message.sendState = status
+    if (state.imageDraft?.localId === task.localId) {
+      state.imageDraft.status = status
+      state.imageDraft.failureKind = failureKind
+    }
+    task.failureKind = failureKind
+  }
+
+  function releaseImageTask(task: PrivateImageTask, removeOptimistic: boolean) {
+    if (task.uploadRequestId) {
+      void dependencies.cancelImageUpload?.(task.uploadRequestId).catch(() => {})
+      task.uploadRequestId = undefined
+    }
+    revokeObjectUrl(task.objectUrl)
+    imageTasks.delete(task.localId)
+    const state = states.get(task.talkerId)
+    if (!state)
+      return
+    if (removeOptimistic)
+      state.items = state.items.filter(item => item.localId !== task.localId)
+    if (state.imageDraft?.localId === task.localId)
+      state.imageDraft = null
+  }
+
+  function cancelConversationImages(talkerId: string) {
+    for (const task of [...imageTasks.values()]) {
+      if (task.talkerId === talkerId)
+        releaseImageTask(task, true)
+    }
+    imageRequests.delete(talkerId)
+  }
+
   async function pullLatestAfterSend(
     talkerId: string,
     mid: string,
@@ -572,6 +706,206 @@ export function usePrivateMessages(
     state.items = state.items.filter(item => item.localId !== localId)
   }
 
+  function executeImageSend(talkerId: string, localId: string): Promise<boolean> {
+    const activeRequest = imageRequests.get(talkerId)
+    if (activeRequest)
+      return activeRequest
+    if (sendRequests.has(talkerId))
+      return Promise.resolve(false)
+
+    const mid = currentMid.value
+    const state = states.get(talkerId)
+    const task = imageTasks.get(localId)
+    const csrf = dependencies.getCsrf().trim()
+    const uploadImage = dependencies.uploadImage
+    const sendImageMessage = dependencies.sendImageMessage
+    if (
+      disposed
+      || !mid
+      || !state
+      || !task
+      || activeTalkerId.value !== talkerId
+      || !csrf
+      || !uploadImage
+      || !sendImageMessage
+    ) {
+      return Promise.resolve(false)
+    }
+
+    const requestAccountGeneration = accountGeneration
+    const conversationGeneration = state.generation
+    const isCurrent = () => (
+      !disposed
+      && activeTalkerId.value === talkerId
+      && isCurrentRequest(mid, requestAccountGeneration, state, conversationGeneration)
+      && imageTasks.get(localId) === task
+    )
+    state.sending = true
+
+    const request = (async () => {
+      let failedKind: PrivateImageFailureKind = task.failureKind ?? 'upload-failed'
+      try {
+        if (task.failureKind !== 'reconcile-failed') {
+          if (!task.bytes) {
+            updateImageState(state, task, 'preparing')
+            task.bytes = await readFileBytes(task.file)
+            if (!isCurrent())
+              return false
+          }
+
+          if (!task.uploaded) {
+            failedKind = 'upload-failed'
+            updateImageState(state, task, 'uploading')
+            const requestId = createUploadRequestId()
+            task.uploadRequestId = requestId
+            const uploadResponse = await uploadImage({
+              bytes: task.bytes,
+              csrf,
+              fileName: task.file.name,
+              mimeType: task.file.type,
+              requestId,
+            })
+            if (task.uploadRequestId === requestId)
+              task.uploadRequestId = undefined
+            if (!isCurrent())
+              return false
+            const uploaded = extractUploadedImage(uploadResponse)
+            if (!uploaded)
+              throw new Error('upload failed')
+            task.uploaded = uploaded
+          }
+
+          failedKind = 'send-failed'
+          updateImageState(state, task, 'sending')
+          const sendResponse = await sendImageMessage({
+            csrf,
+            senderId: mid,
+            talkerId,
+            uploaded: task.uploaded,
+          })
+          if (asResponse(sendResponse)?.code !== 0)
+            throw new Error('send failed')
+          if (!isCurrent())
+            return false
+
+          const optimistic = state.items.find(item => item.localId === localId)
+          if (!optimistic)
+            return false
+          optimistic.serverMsgKey = extractSentMessageKey(sendResponse) || undefined
+          dependencies.markSessionSent?.(
+            talkerId,
+            dependencies.getImageSummary?.() ?? '[image]',
+            optimistic.timestamp,
+          )
+          void dependencies.refreshSessions?.().catch(() => {})
+        }
+
+        failedKind = 'reconcile-failed'
+        updateImageState(state, task, 'reconciling')
+        await pullLatestAfterSend(talkerId, mid, requestAccountGeneration, state)
+        if (!isCurrent())
+          return false
+        if (state.items.some(item => item.localId === localId))
+          throw new Error('reconcile failed')
+
+        releaseImageTask(task, false)
+        return true
+      }
+      catch {
+        if (isCurrent())
+          updateImageState(state, task, 'failed', failedKind)
+        return false
+      }
+      finally {
+        if (isCurrentAccountState(mid, requestAccountGeneration, state))
+          state.sending = false
+      }
+    })().finally(() => {
+      if (imageRequests.get(talkerId) === request)
+        imageRequests.delete(talkerId)
+    })
+
+    imageRequests.set(talkerId, request)
+    return request
+  }
+
+  function sendImage(talkerId: string, file: File): Promise<boolean> {
+    if (
+      disposed
+      || !currentMid.value
+      || activeTalkerId.value !== talkerId
+      || !file.type.startsWith('image/')
+      || imageRequests.has(talkerId)
+      || sendRequests.has(talkerId)
+      || !dependencies.uploadImage
+      || !dependencies.sendImageMessage
+    ) {
+      return Promise.resolve(false)
+    }
+
+    const state = getState(talkerId)
+    if (state.imageDraft)
+      return Promise.resolve(false)
+
+    let objectUrl = ''
+    try {
+      const localId = createLocalId()
+      objectUrl = createObjectUrl(file)
+      const optimistic = createOptimisticPrivateImageMessage({
+        localId,
+        objectUrl,
+        receiverId: talkerId,
+        senderId: currentMid.value,
+        timestamp: nowSeconds(),
+      })
+      const task: PrivateImageTask = {
+        failureKind: null,
+        file,
+        localId,
+        objectUrl,
+        talkerId,
+      }
+      imageTasks.set(localId, task)
+      state.items = mergePrivateMessages(state.items, [optimistic])
+      state.imageDraft = {
+        failureKind: null,
+        fileName: file.name,
+        localId,
+        objectUrl,
+        size: file.size,
+        status: 'preparing',
+      }
+      return executeImageSend(talkerId, localId)
+    }
+    catch {
+      if (objectUrl)
+        revokeObjectUrl(objectUrl)
+      return Promise.resolve(false)
+    }
+  }
+
+  function retryImage(talkerId: string, localId: string): Promise<boolean> {
+    const task = imageTasks.get(localId)
+    const state = states.get(talkerId)
+    if (
+      !task
+      || task.talkerId !== talkerId
+      || !task.failureKind
+      || state?.imageDraft?.localId !== localId
+      || state.imageDraft.status !== 'failed'
+    ) {
+      return Promise.resolve(false)
+    }
+    return executeImageSend(talkerId, localId)
+  }
+
+  function removeImage(talkerId: string, localId: string) {
+    const task = imageTasks.get(localId)
+    if (!task || task.talkerId !== talkerId)
+      return
+    releaseImageTask(task, true)
+  }
+
   function invalidateConversation(talkerId: string) {
     const state = states.get(talkerId)
     if (!state)
@@ -581,23 +915,37 @@ export function usePrivateMessages(
     state.loadingOlder = false
     state.refreshing = false
     state.failedOperation = null
+    cancelConversationImages(talkerId)
     firstPageRequests.delete(talkerId)
     olderRequests.delete(talkerId)
   }
 
   watch(currentMid, () => {
+    for (const task of [...imageTasks.values()])
+      releaseImageTask(task, true)
     accountGeneration++
     states.clear()
     firstPageRequests.clear()
     olderRequests.clear()
     ackRequests.clear()
     sendRequests.clear()
+    imageRequests.clear()
   }, { flush: 'sync' })
 
   watch(activeTalkerId, (nextTalkerId, previousTalkerId) => {
     if (previousTalkerId && previousTalkerId !== nextTalkerId)
       invalidateConversation(previousTalkerId)
   }, { flush: 'sync' })
+
+  function dispose() {
+    if (disposed)
+      return
+    disposed = true
+    accountGeneration++
+    for (const task of [...imageTasks.values()])
+      releaseImageTask(task, true)
+    imageRequests.clear()
+  }
 
   return {
     states,
@@ -610,8 +958,12 @@ export function usePrivateMessages(
     setDraft,
     sendDraft,
     retrySend,
+    sendImage,
+    retryImage,
+    removeImage,
     editFailed,
     deleteFailed,
     invalidateConversation,
+    dispose,
   }
 }

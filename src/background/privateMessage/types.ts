@@ -1,4 +1,5 @@
 export const PRIVATE_MESSAGE_ENDPOINTS = {
+  uploadPrivateImage: 'https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs',
   getPrivateSessions: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions',
   getPrivateUserCards: 'https://api.vc.bilibili.com/account/v1/user/cards',
   getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
@@ -104,6 +105,29 @@ export interface SendPrivateMessageOptions {
   talkerId: string
   text: string
   csrf: string
+}
+
+export interface UploadedPrivateImage {
+  url: string
+  width: number
+  height: number
+  size: number
+  imageType: string
+}
+
+export interface PrivateImageUploadPayload {
+  requestId: string
+  fileName: string
+  mimeType: string
+  bytes: number[]
+  csrf: string
+}
+
+export interface SendPrivateImageMessageOptions {
+  senderId: string
+  talkerId: string
+  csrf: string
+  uploaded: UploadedPrivateImage
 }
 
 export interface PrivateSendData {

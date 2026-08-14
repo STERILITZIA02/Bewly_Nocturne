@@ -8,17 +8,19 @@ import type {
   PrivateSendData,
   PrivateSession,
   PrivateSessionsData,
+  SendPrivateImageMessageOptions,
   SendPrivateMessageOptions,
+  UploadedPrivateImage,
 } from './types'
 
-interface PrivateTextMessageRuntime {
+interface PrivateMessageRuntime {
   now: () => number
   randomUUID: () => string
 }
 
 const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
-const DEFAULT_PRIVATE_TEXT_MESSAGE_RUNTIME: PrivateTextMessageRuntime = {
+const DEFAULT_PRIVATE_MESSAGE_RUNTIME: PrivateMessageRuntime = {
   now: () => Date.now(),
   randomUUID: () => globalThis.crypto.randomUUID(),
 }
@@ -32,6 +34,31 @@ function requireIdentifier(value: string, fieldName: string): string {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
+}
+
+function requireCsrf(value: string): string {
+  const csrf = value.trim()
+  if (!csrf)
+    throw new TypeError('csrf must not be empty')
+  return csrf
+}
+
+function requirePositiveNumber(value: number, fieldName: string): number {
+  if (!Number.isFinite(value) || value <= 0)
+    throw new TypeError(`${fieldName} must be a positive number`)
+  return value
+}
+
+function requireHttpUrl(value: string, fieldName: string): string {
+  try {
+    const url = new URL(value)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      throw new TypeError('unsupported URL protocol')
+    return url.toString()
+  }
+  catch {
+    throw new TypeError(`${fieldName} must be an HTTP(S) URL`)
+  }
 }
 
 function parsePrivateMessage(value: unknown): PrivateMessage | null {
@@ -150,14 +177,36 @@ export function buildPrivateAckParams(
 
 export function createPrivateTextMessageParams(
   options: SendPrivateMessageOptions,
-  runtime: PrivateTextMessageRuntime = DEFAULT_PRIVATE_TEXT_MESSAGE_RUNTIME,
+  runtime: PrivateMessageRuntime = DEFAULT_PRIVATE_MESSAGE_RUNTIME,
 ): PrivateMessageRequestParams {
   if (!options.text.trim())
     throw new TypeError('text must not be blank')
 
-  const csrf = options.csrf.trim()
-  if (!csrf)
-    throw new TypeError('csrf must not be empty')
+  const csrf = requireCsrf(options.csrf)
+
+  return createPrivateSendParams({
+    content: JSON.stringify({ content: options.text }),
+    csrf,
+    msgType: 1,
+    runtime,
+    senderId: options.senderId,
+    talkerId: options.talkerId,
+  })
+}
+
+interface CreatePrivateSendParamsOptions {
+  content: string
+  csrf: string
+  msgType: 1 | 2
+  runtime: PrivateMessageRuntime
+  senderId: string
+  talkerId: string
+}
+
+function createPrivateSendParams(
+  options: CreatePrivateSendParamsOptions,
+): PrivateMessageRequestParams {
+  const { runtime } = options
 
   const devId = runtime.randomUUID()
   if (!UUID_V4_PATTERN.test(devId))
@@ -171,17 +220,97 @@ export function createPrivateTextMessageParams(
     'msg[sender_uid]': requireIdentifier(options.senderId, 'senderId'),
     'msg[receiver_id]': requireIdentifier(options.talkerId, 'talkerId'),
     'msg[receiver_type]': 1,
-    'msg[msg_type]': 1,
+    'msg[msg_type]': options.msgType,
     'msg[msg_status]': 0,
     'msg[dev_id]': devId,
     'msg[timestamp]': timestamp,
     'msg[new_face_version]': 1,
-    'msg[content]': JSON.stringify({ content: options.text }),
+    'msg[content]': options.content,
     from_firework: 0,
     build: 0,
     mobi_app: 'web',
-    csrf_token: csrf,
-    csrf,
+    csrf_token: options.csrf,
+    csrf: options.csrf,
+  }
+}
+
+export function getPrivateImageType(mimeType: string): string {
+  const normalizedMimeType = mimeType.trim().toLowerCase()
+  if (!normalizedMimeType.startsWith('image/'))
+    throw new TypeError('unsupported private image MIME type')
+  const rawSubtype = normalizedMimeType.slice('image/'.length).split('+', 1)[0] ?? ''
+  const imageType = rawSubtype === 'jpeg'
+    ? 'jpg'
+    : rawSubtype.replace(/^x-/, '').split('.').at(-1) ?? ''
+  if (!/^[a-z\d]+$/.test(imageType))
+    throw new TypeError('unsupported private image MIME type')
+  return imageType
+}
+
+export function buildPrivateImageUploadForm(file: File, csrfValue: string): FormData {
+  const csrf = requireCsrf(csrfValue)
+  getPrivateImageType(file.type)
+  const form = new FormData()
+  form.set('file_up', file)
+  form.set('biz', 'im')
+  form.set('csrf', csrf)
+  return form
+}
+
+export function createPrivateImageMessageParams(
+  options: SendPrivateImageMessageOptions,
+  runtime: PrivateMessageRuntime = DEFAULT_PRIVATE_MESSAGE_RUNTIME,
+): PrivateMessageRequestParams {
+  const uploaded = options.uploaded
+  const content = JSON.stringify({
+    url: requireHttpUrl(uploaded.url, 'uploaded.url'),
+    height: requirePositiveNumber(uploaded.height, 'uploaded.height'),
+    width: requirePositiveNumber(uploaded.width, 'uploaded.width'),
+    imageType: getPrivateImageType(`image/${uploaded.imageType === 'jpg' ? 'jpeg' : uploaded.imageType}`),
+    original: 1,
+    size: requirePositiveNumber(uploaded.size, 'uploaded.size'),
+  })
+
+  return createPrivateSendParams({
+    content,
+    csrf: requireCsrf(options.csrf),
+    msgType: 2,
+    runtime,
+    senderId: options.senderId,
+    talkerId: options.talkerId,
+  })
+}
+
+export function parsePrivateImageUploadResponse(
+  response: PrivateMessageApiResponse,
+  imageType: string,
+): PrivateMessageApiResponse<UploadedPrivateImage> | null {
+  if (response.code !== 0 || !isRecord(response.data))
+    return null
+  const data = response.data
+  if (
+    typeof data.image_url !== 'string'
+    || typeof data.image_height !== 'number'
+    || typeof data.image_width !== 'number'
+    || typeof data.img_size !== 'number'
+  ) {
+    return null
+  }
+
+  try {
+    return {
+      code: 0,
+      data: {
+        url: requireHttpUrl(data.image_url, 'image_url'),
+        height: requirePositiveNumber(data.image_height, 'image_height'),
+        width: requirePositiveNumber(data.image_width, 'image_width'),
+        size: requirePositiveNumber(data.img_size, 'img_size'),
+        imageType: getPrivateImageType(`image/${imageType === 'jpg' ? 'jpeg' : imageType}`),
+      },
+    }
+  }
+  catch {
+    return null
   }
 }
 
