@@ -7,6 +7,7 @@ import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
+import { getCSRF } from '~/utils/main'
 import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
 
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
@@ -27,6 +28,7 @@ import {
   isOriginalNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
+import { usePrivateMessages } from './whisper/usePrivateMessages'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
 import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
 
@@ -56,6 +58,13 @@ const accountState = computed(() => resolveNotificationAccountState(topBarStore.
 const privateSessions = usePrivateSessions(currentMid, {
   fetchSessions: () => api.privateMessage.getPrivateSessions(),
   fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
+})
+const privateMessages = usePrivateMessages(currentMid, privateSessions.selectedTalkerId, {
+  fetchMessages: options => api.privateMessage.getPrivateMessages(options),
+  ackSession: options => api.privateMessage.ackPrivateSession(options),
+  getCsrf: getCSRF,
+  markSessionRead: privateSessions.markSessionRead,
+  syncUnread: () => topBarStore.syncUnreadMessageState(),
 })
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
@@ -234,6 +243,7 @@ onBeforeUnmount(() => {
           :account-state="accountState"
           :active="isPageActive"
           :controller="privateSessions"
+          :messages-controller="privateMessages"
         />
         <NativeNotificationFeed
           v-if="nativeView"

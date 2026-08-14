@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { DisplayPrivateSession } from './privateSession'
-import { normalizePrivateSessionLocale } from './privateSession'
+import { isNativePrivateSession, normalizePrivateSessionLocale } from './privateSession'
 
 const props = defineProps<{
   selected: boolean
@@ -18,6 +18,7 @@ const emit = defineEmits<{
 const { locale, t } = useI18n()
 const avatarFailed = ref(false)
 const originalUrl = buildOriginalNotificationUrl('whisper')
+const usesNativeConversation = computed(() => isNativePrivateSession(props.session))
 
 const displayName = computed(() => props.session.name || t('notifications.whisper.unknown_user'))
 const displaySummary = computed(() => props.session.summary || t('notifications.whisper.summary_unavailable'))
@@ -44,7 +45,7 @@ watch(() => props.session.avatar, () => {
 
 <template>
   <ALink
-    v-if="session.sessionType !== 1"
+    v-if="!usesNativeConversation"
     class="conversation-list-item bew-shape-smooth-rect"
     :href="originalUrl"
     type="content"

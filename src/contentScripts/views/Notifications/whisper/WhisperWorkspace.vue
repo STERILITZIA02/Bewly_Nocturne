@@ -7,22 +7,39 @@ import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 import OriginalNotificationsFrame from '../components/OriginalNotificationsFrame.vue'
 import type { NotificationAccountState } from '../notificationFeedPolicy'
 import ConversationList from './ConversationList.vue'
+import ConversationView from './ConversationView.vue'
+import { isNativePrivateSession } from './privateSession'
+import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateSessionsController } from './usePrivateSessions'
 
 interface OriginalNotificationsFrameExposed {
   reload: () => void
 }
 
+interface ConversationViewExposed {
+  refresh: () => Promise<void>
+}
+
 const props = defineProps<{
   accountState: NotificationAccountState
   active: boolean
   controller: PrivateSessionsController
+  messagesController: PrivateMessagesController
 }>()
 
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
+const conversationViewRef = ref<ConversationViewExposed | null>(null)
 const originalUrl = buildOriginalNotificationUrl('whisper')
+const selectedSession = computed(() => props.controller.state.items.find(
+  item => item.talkerId === props.controller.selectedTalkerId.value,
+))
+const nativeSelectedSession = computed(() => (
+  selectedSession.value && isNativePrivateSession(selectedSession.value)
+    ? selectedSession.value
+    : null
+))
 
 const unreadCount = computed(() => (
   (topBarStore.unReadDm.follow_unread || 0)
@@ -46,7 +63,11 @@ function ensureLoaded() {
 async function refresh() {
   if (props.accountState === 'ready')
     await props.controller.refresh('replace')
-  originalFrameRef.value?.reload()
+  await nextTick()
+  if (nativeSelectedSession.value)
+    await conversationViewRef.value?.refresh()
+  else
+    originalFrameRef.value?.reload()
 }
 
 function retry() {
@@ -62,13 +83,15 @@ watch(
   { immediate: true },
 )
 
-watch(unreadCount, (next, previous) => {
+watch(unreadCount, async (next, previous) => {
   if (
     props.active
     && props.accountState === 'ready'
     && next !== previous
   ) {
-    void props.controller.observeUnreadCount(next)
+    await props.controller.observeUnreadCount(next)
+    if (next > previous)
+      await conversationViewRef.value?.refresh()
   }
 })
 
@@ -132,9 +155,15 @@ defineExpose({ refresh })
     </aside>
 
     <div class="whisper-workspace__detail">
-      <!-- The selected row is deliberately not mapped to an unverified original hash.
-           The original iframe remains the complete history and write-capability owner. -->
-      <OriginalNotificationsFrame ref="originalFrameRef" view="whisper" />
+      <ConversationView
+        v-if="nativeSelectedSession"
+        :key="nativeSelectedSession.talkerId"
+        ref="conversationViewRef"
+        :active="active"
+        :controller="messagesController"
+        :session="nativeSelectedSession"
+      />
+      <OriginalNotificationsFrame v-else ref="originalFrameRef" view="whisper" />
     </div>
   </section>
 </template>

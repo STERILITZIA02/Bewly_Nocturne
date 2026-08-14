@@ -911,7 +911,7 @@ notifications:
   sections:
     whisper:
       label: Direct messages
-      description: Browse native conversations while original Bilibili provides chat details
+      description: Browse native conversations and read-only history; use original Bilibili to send or open unsupported chats
     reply:
       label: Replies
       description: See replies to your comments
@@ -947,6 +947,21 @@ notifications:
     muted: Muted
     unread_count: '{count} unread direct messages'
     open_unsupported_original: Open conversation with {name} in original Bilibili
+    messages:
+      timeline_aria: Direct-message history with {name}
+      loading: Loading message history
+      empty: No messages in this conversation
+      load_older: Load earlier messages
+      history_start: Start of message history
+      readonly: Read-only mode
+      send_original: Send in original Bilibili
+      new_messages: New messages
+      recalled: Message recalled
+      unsupported: This message type is not supported yet
+      preview_image: Preview image
+      image_preview: Direct-message image preview
+      image_alt: Direct-message image
+      emoticon_alt: Direct-message sticker
     errors:
       wbi-unavailable: Direct-message signing is temporarily unavailable
   native:

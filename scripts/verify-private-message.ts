@@ -28,7 +28,9 @@ interface PrivateMessageModules {
   transport: typeof import('../src/background/privateMessage/transport')
   types: typeof import('../src/background/privateMessage/types')
   privateSession: typeof import('../src/contentScripts/views/Notifications/whisper/privateSession')
+  privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
+  usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
 }
 
 const assertions: Array<{
@@ -64,7 +66,9 @@ async function loadModules(): Promise<PrivateMessageModules> {
       transport,
       types,
       privateSession,
+      privateMessage,
       usePrivateSessions,
+      usePrivateMessages,
     ] = await Promise.all([
       import('../src/background/privateMessage/errors'),
       import('../src/background/privateMessage/losslessJson'),
@@ -72,7 +76,9 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/background/privateMessage/transport'),
       import('../src/background/privateMessage/types'),
       import('../src/contentScripts/views/Notifications/whisper/privateSession'),
+      import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
+      import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
     ])
     return {
       errors,
@@ -81,7 +87,9 @@ async function loadModules(): Promise<PrivateMessageModules> {
       transport,
       types,
       privateSession,
+      privateMessage,
       usePrivateSessions,
+      usePrivateMessages,
     }
   }
   catch {
@@ -345,6 +353,42 @@ function createCardsResponse(cards: Array<{ face: string, mid: string, name: str
   }
 }
 
+function createRawMessage(
+  msgKey: string,
+  seqno: string,
+  overrides: Partial<import('../src/background/privateMessage/types').PrivateMessage> = {},
+): import('../src/background/privateMessage/types').PrivateMessage {
+  return {
+    sender_uid: '200',
+    receiver_type: 1,
+    receiver_id: '100',
+    msg_type: 1,
+    content: JSON.stringify({ content: `message ${msgKey}` }),
+    msg_seqno: seqno,
+    timestamp: 1755000000,
+    at_uids: [],
+    msg_key: msgKey,
+    msg_status: 0,
+    notify_code: '',
+    new_face_version: 0,
+    msg_source: 0,
+    ...overrides,
+  }
+}
+
+function createMessagesResponse(
+  messages: import('../src/background/privateMessage/types').PrivateMessage[],
+  eInfos: unknown[] = [],
+) {
+  return {
+    code: 0,
+    data: {
+      messages,
+      e_infos: eInfos,
+    },
+  }
+}
+
 verify('session transform preserves IDs and maps cards, flags, unread, and summaries', ({ privateSession }) => {
   const raw = createRawSession('9223372036854775807', {
     top_ts: 1755000000000002,
@@ -411,6 +455,19 @@ verify('local session filters combine all, unread, pinned, and username search',
     ['2'],
   )
   assert.equal(privateSession.normalizePrivateSessionLocale('jyut'), 'zh-HK')
+  assert.equal(privateSession.isNativePrivateSession({
+    ...items[0]!,
+    followed: true,
+  }), true)
+  assert.equal(privateSession.isNativePrivateSession({
+    ...items[0]!,
+    followed: false,
+  }), false)
+  assert.equal(privateSession.isNativePrivateSession({
+    ...items[0]!,
+    followed: true,
+    original: { ...items[0]!.original, can_fold: 1 },
+  }), false)
 })
 
 verify('automatic session merge updates head data without discarding existing rows', ({ privateSession }) => {
@@ -504,6 +561,385 @@ verify('authoritative DM unread changes trigger one merge refresh per observed v
   await controller.observeUnreadCount(2)
   assert.equal(requests, 2)
   assert.deepEqual(controller.state.items.map(item => item.talkerId), ['2', '1'])
+})
+
+verify('private message parser supports text, image, recall, custom emoji, system, and safe unknown fallback', ({ privateMessage }) => {
+  const eInfos = [{
+    text: '[smile]',
+    uri: 'https://i0.hdslb.com/sanitized-emoji.png',
+    gif_url: 'https://i0.hdslb.com/sanitized-emoji.gif',
+    size: 2,
+  }]
+  const raw = [
+    createRawMessage('1', '101', { content: '{"content":"hello [smile]"}' }),
+    createRawMessage('2', '102', {
+      msg_type: 2,
+      content: '{"url":"https://i0.hdslb.com/sanitized-image.jpg","width":640,"height":360}',
+    }),
+    createRawMessage('3', '103', { msg_type: 5, content: '{}' }),
+    createRawMessage('4', '104', {
+      msg_type: 6,
+      content: '{"url":"https://i0.hdslb.com/sanitized-sticker.gif","width":120,"height":120}',
+    }),
+    createRawMessage('5', '105', { msg_type: 18, content: '{"content":"system notice"}' }),
+    createRawMessage('6', '106', { msg_type: 99, content: '{"private":"must not render"}' }),
+  ]
+
+  const display = privateMessage.transformPrivateMessages(raw, eInfos, '100')
+  assert.deepEqual(display.map(item => item.msgKey), ['1', '2', '3', '4', '5', '6'])
+  assert.equal(display[0]?.isSelf, false)
+  assert.deepEqual(display[0]?.content, {
+    type: 'text',
+    segments: [
+      { type: 'text', text: 'hello ' },
+      {
+        type: 'emoji',
+        alt: '[smile]',
+        src: 'https://i0.hdslb.com/sanitized-emoji.gif',
+        size: 2,
+      },
+    ],
+  })
+  assert.deepEqual(display[1]?.content, {
+    type: 'image',
+    src: 'https://i0.hdslb.com/sanitized-image.jpg',
+    width: 640,
+    height: 360,
+  })
+  assert.deepEqual(display[2]?.content, { type: 'recalled' })
+  assert.deepEqual(display[3]?.content, {
+    type: 'emoticon',
+    src: 'https://i0.hdslb.com/sanitized-sticker.gif',
+    width: 120,
+    height: 120,
+  })
+  assert.deepEqual(display[4]?.content, { type: 'system', text: 'system notice' })
+  assert.deepEqual(display[5]?.content, { type: 'unknown' })
+  assert.equal(JSON.stringify(display).includes('must not render'), false)
+})
+
+verify('private message parsing rejects unsafe media URLs and preserves large string IDs', ({ privateMessage }) => {
+  const [display] = privateMessage.transformPrivateMessages([
+    createRawMessage('9223372036854775807', '9223372036854775700', {
+      msg_type: 2,
+      content: '{"url":"javascript:alert(1)","width":640,"height":360}',
+      sender_uid: '9223372036854775806',
+      receiver_id: '9223372036854775805',
+    }),
+  ], [], '9223372036854775806')
+
+  assert.equal(display?.msgKey, '9223372036854775807')
+  assert.equal(display?.seqno, '9223372036854775700')
+  assert.equal(display?.senderId, '9223372036854775806')
+  assert.equal(display?.receiverId, '9223372036854775805')
+  assert.equal(display?.isSelf, true)
+  assert.deepEqual(display?.content, { type: 'unknown' })
+})
+
+verify('older pages prepend in seqno order and dedupe by msgKey', ({ privateMessage }) => {
+  const current = privateMessage.transformPrivateMessages([
+    createRawMessage('3', '103'),
+    createRawMessage('4', '104'),
+  ], [], '100')
+  const older = privateMessage.transformPrivateMessages([
+    createRawMessage('1', '101'),
+    createRawMessage('2', '102'),
+    createRawMessage('3', '103', { content: '{"content":"updated duplicate"}' }),
+  ], [], '100')
+
+  const merged = privateMessage.mergePrivateMessages(current, older)
+  assert.deepEqual(merged.map(item => item.msgKey), ['1', '2', '3', '4'])
+  assert.deepEqual(merged[2]?.content, {
+    type: 'text',
+    segments: [{ type: 'text', text: 'updated duplicate' }],
+  })
+  assert.equal(privateMessage.getOldestPrivateMessageSeqno(merged), '101')
+  assert.equal(privateMessage.getLatestPrivateMessageSeqno(merged), '104')
+})
+
+verify('conversation controller uses end_seqno for history and rejects old account or conversation generations', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const requests: Array<{ endSeqno?: string, talkerId: string }> = []
+  let resolveOlder: ((value: unknown) => void) | undefined
+  const olderResponse = new Promise<unknown>((resolve) => {
+    resolveOlder = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async (options) => {
+      requests.push(options)
+      if (options.endSeqno)
+        return olderResponse
+      return createMessagesResponse([
+        createRawMessage('3', '103'),
+        createRawMessage('4', '104'),
+      ])
+    },
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  const firstLoad = controller.loadInitial('200', '100')
+  const repeatedLoad = controller.loadInitial('200', '100')
+  await Promise.all([firstLoad, repeatedLoad])
+  assert.deepEqual(requests, [{ talkerId: '200' }])
+
+  const state = controller.getState('200')
+  assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
+  const loadOlder = controller.loadOlder('200')
+  assert.deepEqual(requests[1], { talkerId: '200', endSeqno: '103' })
+
+  activeTalkerId.value = '300'
+  await nextTick()
+  resolveOlder?.(createMessagesResponse([createRawMessage('1', '101')]))
+  await loadOlder
+  assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
+
+  mid.value = '300'
+  await nextTick()
+  controller.updateViewport('200', { atLatest: false, scrollTop: 88 })
+  assert.equal(controller.states.has('200'), false)
+  assert.equal(controller.getState('200').items.length, 0)
+})
+
+verify('latest refresh merges to the tail and reports new messages without discarding history', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const pages = [
+    createMessagesResponse([createRawMessage('2', '102'), createRawMessage('3', '103')]),
+    createMessagesResponse([createRawMessage('1', '101')]),
+    createMessagesResponse([createRawMessage('3', '103'), createRawMessage('4', '104')]),
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => pages.shift(),
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  await controller.loadOlder('200')
+  const state = controller.getState('200')
+  controller.updateViewport('200', { atLatest: false, scrollTop: 40 })
+  await controller.refreshLatest('200')
+
+  assert.deepEqual(state.items.map(item => item.msgKey), ['1', '2', '3', '4'])
+  assert.equal(state.newMessagesAvailable, true)
+  assert.equal(state.scrollTop, 40)
+})
+
+verify('conversation failures retain the exact initial, refresh, or load-older retry operation', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const initialController = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => ({ code: -400, data: null }),
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+  await initialController.loadInitial('200', '100')
+  assert.equal(initialController.getState('200').failedOperation, 'initial')
+
+  const responses = [
+    createMessagesResponse([createRawMessage('2', '102')]),
+    { code: -400, data: null },
+    { code: -400, data: null },
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => responses.shift(),
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  await controller.loadOlder('200')
+  assert.equal(controller.getState('200').failedOperation, 'load-older')
+  await controller.refreshLatest('200')
+  assert.equal(controller.getState('200').failedOperation, 'refresh')
+})
+
+verify('a failed latest refresh blocks ACK against stale cached history', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let ackRequestCount = 0
+  const responses = [
+    createMessagesResponse([createRawMessage('1', '104')]),
+    { code: -400, data: null },
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => {
+      ackRequestCount++
+      return { code: 0, data: {} }
+    },
+    fetchMessages: async () => responses.shift(),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  await controller.refreshLatest('200')
+  const acknowledged = await controller.acknowledgeIfEligible('200', {
+    atLatest: true,
+    pageActive: true,
+    visible: true,
+  })
+
+  assert.equal(controller.getState('200').failedOperation, 'refresh')
+  assert.equal(acknowledged, false)
+  assert.equal(ackRequestCount, 0)
+})
+
+verify('ACK requires an active visible latest conversation and dedupes successful seqnos', async ({ privateMessage, usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const ackRequests: Array<{ ackSeqno: string, csrf: string, talkerId: string }> = []
+  const readUpdates: Array<{ ackSeqno: string, talkerId: string }> = []
+  let unreadSyncs = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async (options) => {
+      ackRequests.push(options)
+      return { code: 0, data: {} }
+    },
+    fetchMessages: async () => createMessagesResponse([
+      createRawMessage('1', '9223372036854775799'),
+    ]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: (talkerId, ackSeqno) => readUpdates.push({ talkerId, ackSeqno }),
+    syncUnread: async () => { unreadSyncs++ },
+  })
+
+  await controller.loadInitial('200', '9223372036854775700')
+  const blocked = await controller.acknowledgeIfEligible('200', {
+    atLatest: false,
+    pageActive: true,
+    visible: true,
+  })
+  assert.equal(blocked, false)
+
+  const first = await controller.acknowledgeIfEligible('200', {
+    atLatest: true,
+    pageActive: true,
+    visible: true,
+  })
+  const repeated = await controller.acknowledgeIfEligible('200', {
+    atLatest: true,
+    pageActive: true,
+    visible: true,
+  })
+  assert.equal(first, true)
+  assert.equal(repeated, false)
+  assert.deepEqual(ackRequests, [{
+    talkerId: '200',
+    ackSeqno: '9223372036854775799',
+    csrf: 'csrf-token',
+  }])
+  assert.deepEqual(readUpdates, [{ talkerId: '200', ackSeqno: '9223372036854775799' }])
+  assert.equal(unreadSyncs, 1)
+  assert.equal(controller.getState('200').lastAckSeqno, '9223372036854775799')
+  assert.equal(privateMessage.comparePrivateMessageSeqno('9223372036854775799', '9223372036854775700') > 0, true)
+})
+
+verify('failed ACK never clears local unread state or advances lastAckSeqno', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let localReadUpdates = 0
+  let unreadSyncs = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: -400, data: null }),
+    fetchMessages: async () => createMessagesResponse([createRawMessage('1', '104')]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => { localReadUpdates++ },
+    syncUnread: async () => { unreadSyncs++ },
+  })
+
+  await controller.loadInitial('200', '100')
+  const acknowledged = await controller.acknowledgeIfEligible('200', {
+    atLatest: true,
+    pageActive: true,
+    visible: true,
+  })
+
+  assert.equal(acknowledged, false)
+  assert.equal(controller.getState('200').lastAckSeqno, '100')
+  assert.equal(localReadUpdates, 0)
+  assert.equal(unreadSyncs, 0)
+})
+
+verify('in-flight ACK remains single-flight across a temporary conversation switch', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let ackRequestCount = 0
+  let resolveAck: ((value: unknown) => void) | undefined
+  const ackResponse = new Promise<unknown>((resolve) => {
+    resolveAck = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => {
+      ackRequestCount++
+      return ackResponse
+    },
+    fetchMessages: async () => createMessagesResponse([createRawMessage('1', '104')]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  const firstAck = controller.acknowledgeIfEligible('200', {
+    atLatest: true,
+    pageActive: true,
+    visible: true,
+  })
+  activeTalkerId.value = '300'
+  activeTalkerId.value = '200'
+  const repeatedAck = controller.acknowledgeIfEligible('200', {
+    atLatest: true,
+    pageActive: true,
+    visible: true,
+  })
+
+  assert.equal(ackRequestCount, 1)
+  resolveAck?.({ code: 0, data: {} })
+  assert.deepEqual(await Promise.all([firstAck, repeatedAck]), [true, true])
+  assert.equal(controller.getState('200').lastAckSeqno, '104')
+})
+
+verify('session controller clears unread only after confirmed ACK', ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse([]),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+  controller.state.items = [
+    {
+      ...createRawSession('200', { unread_count: 4 }),
+      key: '1:200',
+      talkerId: '200',
+      sessionType: 1,
+      name: 'User 200',
+      avatar: '',
+      summary: 'summary',
+      timestamp: 1755000000000001,
+      unreadCount: 4,
+      ackSeqno: '100',
+      maxSeqno: '104',
+      pinned: false,
+      muted: false,
+      followed: true,
+      original: createRawSession('200', { unread_count: 4 }),
+    },
+  ]
+
+  controller.markSessionRead('200', '104')
+  assert.equal(controller.state.items[0]?.unreadCount, 0)
+  assert.equal(controller.state.items[0]?.ackSeqno, '104')
 })
 
 async function main() {

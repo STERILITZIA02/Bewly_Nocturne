@@ -859,7 +859,7 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 查看原生會話列表，聊天詳情仍由嗶哩嗶哩原版提供
+      description: 查看原生會話列表與唯讀聊天記錄，傳送訊息和未支援會話仍由原版提供
     reply:
       label: 回覆我的
       description: 查看其他人對你的回覆
@@ -895,6 +895,21 @@ notifications:
     muted: 已開啟勿擾
     unread_count: '{count} 則未讀私訊'
     open_unsupported_original: 在原版中開啟與{name}的會話
+    messages:
+      timeline_aria: 與{name}的私訊記錄
+      loading: 正在載入聊天記錄
+      empty: 暫無聊天記錄
+      load_older: 載入更早訊息
+      history_start: 已到達聊天記錄起點
+      readonly: 目前為唯讀模式
+      send_original: 在原版中傳送訊息
+      new_messages: 有新訊息
+      recalled: 訊息已收回
+      unsupported: 目前版本暫不支援此訊息
+      preview_image: 預覽圖片
+      image_preview: 私訊圖片預覽
+      image_alt: 私訊圖片
+      emoticon_alt: 私訊表情
     errors:
       wbi-unavailable: 私訊簽章暫時無法使用
   native:

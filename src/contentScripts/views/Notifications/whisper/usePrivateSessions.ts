@@ -11,6 +11,7 @@ import type {
 import type { DisplayPrivateSession } from './privateSession'
 import {
   collectPrivateSessionUids,
+  isNativePrivateSession,
   mergePrivateSessions,
   transformPrivateSessions,
 } from './privateSession'
@@ -39,6 +40,7 @@ export interface PrivateSessionsController {
   refresh: (mode?: PrivateSessionsApplyMode) => Promise<void>
   observeUnreadCount: (unreadCount: number) => Promise<void>
   selectSession: (session: DisplayPrivateSession) => void
+  markSessionRead: (talkerId: string, ackSeqno: string) => void
 }
 
 function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
@@ -187,8 +189,21 @@ export function usePrivateSessions(
   }
 
   function selectSession(session: DisplayPrivateSession) {
-    if (session.sessionType === 1)
+    if (isNativePrivateSession(session))
       selectedTalkerId.value = session.talkerId
+  }
+
+  function markSessionRead(talkerId: string, ackSeqno: string) {
+    const session = state.items.find(item => item.talkerId === talkerId)
+    if (!session)
+      return
+    session.unreadCount = 0
+    session.ackSeqno = ackSeqno
+    session.original = {
+      ...session.original,
+      unread_count: 0,
+      ack_seqno: ackSeqno,
+    }
   }
 
   watch(currentMid, resetForAccount, { flush: 'sync' })
@@ -200,5 +215,6 @@ export function usePrivateSessions(
     refresh,
     observeUnreadCount,
     selectSession,
+    markSessionRead,
   }
 }

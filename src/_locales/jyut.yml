@@ -844,7 +844,7 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 睇原生會話列表，聊天詳情繼續由嗶哩嗶哩原版提供
+      description: 睇原生會話列表同唯讀聊天記錄，傳送訊息同未支援會話繼續由原版提供
     reply:
       label: 回覆我嘅
       description: 睇其他人畀你嘅回覆
@@ -880,6 +880,21 @@ notifications:
     muted: 已免打擾
     unread_count: '{count} 條未讀私訊'
     open_unsupported_original: 喺原版打開同{name}嘅會話
+    messages:
+      timeline_aria: 同{name}嘅私訊記錄
+      loading: 載入緊聊天記錄
+      empty: 暫時未有聊天記錄
+      load_older: 載入更早訊息
+      history_start: 已經去到聊天記錄起點
+      readonly: 而家係唯讀模式
+      send_original: 喺原版傳送訊息
+      new_messages: 有新訊息
+      recalled: 訊息已經收回
+      unsupported: 而家個版本暫時未支援呢種訊息
+      preview_image: 預覽圖片
+      image_preview: 私訊圖片預覽
+      image_alt: 私訊圖片
+      emoticon_alt: 私訊表情
     errors:
       wbi-unavailable: 私訊簽名暫時用唔到
   native:

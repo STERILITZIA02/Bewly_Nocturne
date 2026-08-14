@@ -159,6 +159,15 @@ export function filterPrivateSessions(
   })
 }
 
+export function isNativePrivateSession(session: DisplayPrivateSession): boolean {
+  return (
+    session.sessionType === 1
+    && session.followed
+    && session.original.can_fold === 0
+    && session.original.group_type === 0
+  )
+}
+
 export function normalizePrivateSessionLocale(locale: string): string {
   return locale === 'jyut' ? 'zh-HK' : locale
 }
