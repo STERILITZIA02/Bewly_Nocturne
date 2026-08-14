@@ -307,8 +307,8 @@ function parseMediaContent(
   }
 }
 
-function parseRecalledContent(content: string): PrivateMessageRecalledContent | null {
-  return parseContentRecord(content) ? { type: 'recalled' } : null
+function parseRecalledContent(): PrivateMessageRecalledContent {
+  return { type: 'recalled' }
 }
 
 function normalizeShareSource(value: unknown): PrivateMessageShareSource | null {
@@ -388,13 +388,13 @@ function parseNotificationContent(content: string): PrivateMessageNotificationCo
     return null
 
   const modules: Array<{ title: string, detail: string }> = []
-  if (record.modules !== undefined) {
+  if (record.modules !== undefined && record.modules !== null) {
     if (!Array.isArray(record.modules))
       return null
     for (const rawModule of record.modules) {
       const module = asRecord(rawModule)
       if (!module || typeof module.title !== 'string' || typeof module.detail !== 'string')
-        return null
+        continue
       modules.push({ title: module.title, detail: module.detail })
     }
   }
@@ -402,13 +402,14 @@ function parseNotificationContent(content: string): PrivateMessageNotificationCo
   const links: Array<{ text: string, href: string }> = []
   for (const suffix of ['', '_2', '_3']) {
     const rawHref = record[`jump_uri${suffix}`]
-    const rawText = record[`jump_text${suffix}`]
-    if (rawHref === undefined && rawText === undefined)
+    const text = normalizeString(record[`jump_text${suffix}`])
+    if ((rawHref === undefined || rawHref === '') && !text)
       continue
-    const href = normalizeHttpUrl(rawHref)
-    if (!href || typeof rawText !== 'string' || !rawText.trim())
-      return null
-    links.push({ href, text: rawText.trim() })
+    const config = asRecord(record[`jump_uri${suffix}_config`])
+    const href = normalizeHttpUrl(rawHref) || normalizeHttpUrl(config?.all_uri)
+    if (!href || !text)
+      continue
+    links.push({ href, text })
   }
   return { type: 'notification', title, text, modules, links }
 }
@@ -567,6 +568,8 @@ export function parsePrivateMessageContent(
   message: PrivateMessage,
   emotions: Map<string, PrivateMessageEmotion>,
 ): ParsedPrivateMessageContent {
+  if (message.msg_status === 1 || message.msg_type === 5)
+    return { type: 'recalled' }
   const renderer = PRIVATE_MESSAGE_RENDERERS[message.msg_type]
   if (!renderer)
     return { type: 'unknown' }
