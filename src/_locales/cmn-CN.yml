@@ -878,8 +878,12 @@ notifications:
     loading: 正在加载私信会话
     profile_pending: 正在确认账号
     list_aria: 私信会话列表
-    search_placeholder: 搜索用户名
+    search_placeholder: 搜索当前已加载会话
     search_aria: 搜索已加载的私信会话
+    search_scope: 搜索和筛选仅作用于当前已加载会话
+    loading_more_sessions: 正在加载更早会话
+    earliest_session: 已到最早会话
+    load_more_failed: 更早会话加载失败
     clear_search: 清除搜索
     filters:
       all: 全部

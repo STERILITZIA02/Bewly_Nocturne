@@ -58,6 +58,8 @@ const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
 const privateSessions = usePrivateSessions(currentMid, {
   fetchSessions: () => api.privateMessage.getPrivateSessions(),
+  fetchOlderSessions: endTs => api.privateMessage.getOlderPrivateSessions({ endTs }),
+  fetchNewSessions: beginTs => api.privateMessage.getNewPrivateSessions({ beginTs }),
   fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
   getFallbackName: talkerId => t('notifications.whisper.user_fallback', { talkerId }),
 })

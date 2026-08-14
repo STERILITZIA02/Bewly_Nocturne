@@ -931,8 +931,12 @@ notifications:
     loading: Loading direct-message conversations
     profile_pending: Confirming your account
     list_aria: Direct-message conversation list
-    search_placeholder: Search usernames
+    search_placeholder: Search loaded conversations
     search_aria: Search loaded direct-message conversations
+    search_scope: Search and filters only apply to loaded conversations
+    loading_more_sessions: Loading earlier conversations
+    earliest_session: Earliest conversation reached
+    load_more_failed: Earlier conversations failed to load
     clear_search: Clear search
     filters:
       all: All

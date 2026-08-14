@@ -1,6 +1,8 @@
 import type {
   AckPrivateSessionOptions,
+  GetNewPrivateSessionsOptions,
   GetPrivateMessagesOptions,
+  GetPrivateSessionsOptions,
   PrivateMessage,
   PrivateMessageApiResponse,
   PrivateMessageRequestParams,
@@ -191,12 +193,30 @@ function parsePrivateSession(value: unknown): PrivateSession | null {
   }
 }
 
-export function buildPrivateSessionsParams(): PrivateMessageRequestParams {
-  return {
+export function buildPrivateSessionsParams(
+  options: GetPrivateSessionsOptions = {},
+): PrivateMessageRequestParams {
+  const params: PrivateMessageRequestParams = {
     session_type: 1,
     group_fold: 1,
     unfollow_fold: 0,
     sort_rule: 2,
+    size: 100,
+    build: 0,
+    mobi_app: 'web',
+  }
+
+  if (options.endTs !== undefined)
+    params.end_ts = requirePositiveNumber(options.endTs, 'endTs')
+
+  return params
+}
+
+export function buildNewPrivateSessionsParams(
+  options: GetNewPrivateSessionsOptions,
+): PrivateMessageRequestParams {
+  return {
+    begin_ts: requirePositiveNumber(options.beginTs, 'beginTs'),
     size: 100,
     build: 0,
     mobi_app: 'web',
@@ -424,6 +444,7 @@ export function parsePrivateSessionsResponse(
     data: {
       ...response.data,
       session_list: sessions,
+      has_more: asNumber(response.data.has_more),
     },
   }
 }

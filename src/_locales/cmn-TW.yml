@@ -879,8 +879,12 @@ notifications:
     loading: 正在載入私訊會話
     profile_pending: 正在確認帳號
     list_aria: 私訊會話列表
-    search_placeholder: 搜尋使用者名稱
+    search_placeholder: 搜尋目前已載入的會話
     search_aria: 搜尋已載入的私訊會話
+    search_scope: 搜尋和篩選僅套用於目前已載入的會話
+    loading_more_sessions: 正在載入更早的會話
+    earliest_session: 已到最早的會話
+    load_more_failed: 更早的會話載入失敗
     clear_search: 清除搜尋
     filters:
       all: 全部

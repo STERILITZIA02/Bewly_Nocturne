@@ -54,12 +54,12 @@ const errorMessage = computed(() => {
 
 function ensureLoaded() {
   if (props.active && props.accountState === 'ready')
-    void props.controller.observeUnreadCount(unreadCount.value)
+    void props.controller.activate(unreadCount.value)
 }
 
 async function refresh() {
   if (props.accountState === 'ready')
-    await props.controller.refresh('replace')
+    await props.controller.refresh()
   await nextTick()
   if (nativeSelectedSession.value)
     await conversationViewRef.value?.refresh()
@@ -68,10 +68,17 @@ async function refresh() {
 }
 
 function retry() {
-  if (props.controller.state.loaded)
-    void props.controller.refresh('replace')
-  else
-    void props.controller.loadInitial()
+  void props.controller.retryFailed()
+}
+
+function handleVisibilityChange() {
+  if (
+    document.visibilityState === 'visible'
+    && props.active
+    && props.accountState === 'ready'
+  ) {
+    void props.controller.refreshIfStale()
+  }
 }
 
 watch(
@@ -91,6 +98,9 @@ watch(unreadCount, async (next, previous) => {
       await conversationViewRef.value?.refresh()
   }
 })
+
+onMounted(() => document.addEventListener('visibilitychange', handleVisibilityChange))
+onBeforeUnmount(() => document.removeEventListener('visibilitychange', handleVisibilityChange))
 
 defineExpose({ refresh })
 </script>
@@ -137,7 +147,11 @@ defineExpose({ refresh })
       </div>
 
       <template v-else>
-        <div v-if="controller.state.errorKind" class="whisper-workspace__inline-error" role="status">
+        <div
+          v-if="controller.state.errorKind && controller.state.failedOperation !== 'load-more'"
+          class="whisper-workspace__inline-error"
+          role="status"
+        >
           <span>{{ errorMessage }}</span>
           <button type="button" @click="retry">
             {{ t('notifications.actions.retry') }}
@@ -145,7 +159,13 @@ defineExpose({ refresh })
         </div>
         <ConversationList
           :items="controller.state.items"
+          :loading-more="controller.state.loadingMore"
+          :no-more="controller.state.noMore"
+          :pagination-stalled="controller.state.paginationStalled"
+          :load-more-failed="controller.state.failedOperation === 'load-more'"
           :selected-talker-id="controller.selectedTalkerId.value"
+          @load-more="controller.loadMore()"
+          @retry-load-more="controller.loadMore({ retry: true })"
           @select="controller.selectSession"
         />
       </template>

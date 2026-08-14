@@ -10,6 +10,8 @@ import type { APIClient } from '../src/utils/api'
 if (false) {
   const api = null as unknown as APIClient
   void api.privateMessage.getPrivateSessions()
+  void api.privateMessage.getOlderPrivateSessions({ endTs: 1755000000000000 })
+  void api.privateMessage.getNewPrivateSessions({ beginTs: 1755000000000000 })
   void api.privateMessage.getPrivateUserCards({ uids: ['1'] })
   void api.privateMessage.getPrivateMessages({ talkerId: '1', endSeqno: '2' })
   void api.privateMessage.ackPrivateSession({ talkerId: '1', ackSeqno: '2', csrf: 'token' })
@@ -232,6 +234,7 @@ verify('endpoints and request builders match the fixed Web IM contract', ({ prot
   assert.deepEqual(types.PRIVATE_MESSAGE_ENDPOINTS, {
     uploadPrivateImage: 'https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs',
     getPrivateSessions: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions',
+    getNewPrivateSessions: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/new_sessions',
     getPrivateUserCards: 'https://api.vc.bilibili.com/account/v1/user/cards',
     getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
     ackPrivateSession: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
@@ -242,6 +245,22 @@ verify('endpoints and request builders match the fixed Web IM contract', ({ prot
     group_fold: 1,
     unfollow_fold: 0,
     sort_rule: 2,
+    size: 100,
+    build: 0,
+    mobi_app: 'web',
+  })
+  assert.deepEqual(protocol.buildPrivateSessionsParams({ endTs: 1755000000000000 }), {
+    session_type: 1,
+    group_fold: 1,
+    unfollow_fold: 0,
+    sort_rule: 2,
+    size: 100,
+    build: 0,
+    mobi_app: 'web',
+    end_ts: 1755000000000000,
+  })
+  assert.deepEqual(protocol.buildNewPrivateSessionsParams({ beginTs: 1755000000000100 }), {
+    begin_ts: 1755000000000100,
     size: 100,
     build: 0,
     mobi_app: 'web',
@@ -471,7 +490,7 @@ verify('form transport signs the flat send body and posts it as form-urlencoded'
 })
 
 verify('lossless parser preserves only confirmed IDs and seqnos as strings', async ({ losslessJson, protocol }) => {
-  const rawSessionJson = `{"code":0,"data":{"session_list":[{"talker_id":9223372036854775807,"session_type":1,"at_seqno":0,"top_ts":1755000000000000,"group_name":"","group_cover":"","is_follow":0,"is_dnd":0,"ack_seqno":9223372036854775700,"ack_ts":1755000000000001,"session_ts":1755000000000002,"unread_count":3,"last_msg":{"sender_uid":9223372036854775806,"receiver_type":1,"receiver_id":9223372036854775807,"msg_type":1,"content":"sanitized","msg_seqno":9223372036854775799,"timestamp":1755000000,"at_uids":[],"msg_key":9223372036854775798,"msg_status":0,"notify_code":"","new_face_version":0,"msg_source":0},"group_type":0,"can_fold":0,"status":0,"max_seqno":9223372036854775799,"new_push_msg":0,"setting":0,"is_guardian":0,"is_intercept":0,"is_trust":0}]}}`
+  const rawSessionJson = `{"code":0,"data":{"has_more":1,"session_list":[{"talker_id":9223372036854775807,"session_type":1,"at_seqno":0,"top_ts":1755000000000000,"group_name":"","group_cover":"","is_follow":0,"is_dnd":0,"ack_seqno":9223372036854775700,"ack_ts":1755000000000001,"session_ts":1755000000000002,"unread_count":3,"last_msg":{"sender_uid":9223372036854775806,"receiver_type":1,"receiver_id":9223372036854775807,"msg_type":1,"content":"sanitized","msg_seqno":9223372036854775799,"timestamp":1755000000,"at_uids":[],"msg_key":9223372036854775798,"msg_status":0,"notify_code":"","new_face_version":0,"msg_source":0},"group_type":0,"can_fold":0,"status":0,"max_seqno":9223372036854775799,"new_push_msg":0,"setting":0,"is_guardian":0,"is_intercept":0,"is_trust":0}]}}`
   const parsedSessions = protocol.parsePrivateSessionsResponse(
     await losslessJson.parsePrivateMessageResponse(createMockResponse(rawSessionJson), 'getPrivateSessions'),
   )
@@ -482,6 +501,7 @@ verify('lossless parser preserves only confirmed IDs and seqnos as strings', asy
   assert.equal(session?.max_seqno, '9223372036854775799')
   assert.equal(session?.last_msg?.sender_uid, '9223372036854775806')
   assert.equal(session?.last_msg?.msg_key, '9223372036854775798')
+  assert.equal(parsedSessions.data.has_more, 1)
   assert.equal(typeof session?.session_ts, 'number')
   assert.equal(typeof session?.unread_count, 'number')
 })
@@ -667,11 +687,13 @@ function createRawSession(
 
 function createSessionsResponse(
   sessions: import('../src/background/privateMessage/types').PrivateSession[],
+  hasMore = 0,
 ) {
   return {
     code: 0,
     data: {
       session_list: sessions,
+      has_more: hasMore,
     },
   }
 }
@@ -765,6 +787,14 @@ verify('session helpers batch and dedupe UIDs while preserving server order', ({
   assert.equal(display[0]?.pinned, true)
 })
 
+verify('session identity keeps the same talker separate across session types', ({ privateSession }) => {
+  const display = privateSession.transformPrivateSessions([
+    createRawSession('30', { session_type: 1 }),
+    createRawSession('30', { session_type: 2 }),
+  ], createCardsResponse([]))
+  assert.deepEqual(display.map(item => item.key), ['1:30', '2:30'])
+})
+
 verify('user card response shapes are optional enhancements with stable fallbacks', ({ privateSession }) => {
   const session = createRawSession('42', { group_name: 'Group fallback' })
   const cardsArray = privateSession.transformPrivateSessions([session], {
@@ -794,6 +824,8 @@ verify('user card batches are best effort and never block the primary session li
   const requestedChunks: string[][] = []
   const controller = usePrivateSessions.usePrivateSessions(mid, {
     fetchSessions: async () => createSessionsResponse(sessions),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse([]),
     fetchUserCards: async (uids) => {
       requestedChunks.push(uids)
       if (requestedChunks.length === 1)
@@ -815,6 +847,8 @@ verify('user card batches are best effort and never block the primary session li
 
   const allFailed = usePrivateSessions.usePrivateSessions(ref('200'), {
     fetchSessions: async () => createSessionsResponse([createRawSession('55', { group_name: 'Still visible' })]),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse([]),
     fetchUserCards: async () => { throw new TypeError('sanitized profile enhancement failure') },
   })
   await allFailed.loadInitial()
@@ -1066,6 +1100,255 @@ verify('automatic session merge updates head data without discarding existing ro
   assert.equal(merged[1]?.unreadCount, 4)
 })
 
+verify('older session pages append new rows and update duplicates in place', ({ privateSession }) => {
+  const current = privateSession.transformPrivateSessions([
+    createRawSession('1', { group_name: 'Alpha', session_ts: 300 }),
+    createRawSession('2', { group_name: 'Old Beta', session_ts: 200 }),
+  ], createCardsResponse([]))
+  const older = privateSession.transformPrivateSessions([
+    createRawSession('2', { group_name: 'Updated Beta', session_ts: 200, unread_count: 3 }),
+    createRawSession('3', { group_name: 'Gamma', session_ts: 100 }),
+  ], createCardsResponse([]))
+
+  const appended = privateSession.appendPrivateSessions(current, older)
+  assert.deepEqual(appended.map(item => item.key), ['1:1', '1:2', '1:3'])
+  assert.equal(appended[1]?.name, 'Updated Beta')
+  assert.equal(appended[1]?.unreadCount, 3)
+  assert.deepEqual(privateSession.getPrivateSessionTimeBounds(appended), {
+    newestSessionTs: 300,
+    oldestSessionTs: 100,
+  })
+})
+
+verify('session pagination advances only after success and stops a repeated end_ts', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const olderBoundaries: number[] = []
+  const olderPages = [
+    createSessionsResponse([
+      createRawSession('2', { group_name: 'Updated Beta', session_ts: 200, unread_count: 2 }),
+      createRawSession('3', { group_name: 'Gamma', session_ts: 100 }),
+    ], 1),
+    createSessionsResponse([
+      createRawSession('3', { group_name: 'Gamma', session_ts: 100 }),
+    ], 1),
+    createSessionsResponse([], 0),
+  ]
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse([
+      createRawSession('1', { group_name: 'Alpha', session_ts: 300 }),
+      createRawSession('2', { group_name: 'Beta', session_ts: 200 }),
+    ], 1),
+    fetchOlderSessions: async (endTs) => {
+      olderBoundaries.push(endTs)
+      return olderPages.shift()
+    },
+    fetchNewSessions: async () => createSessionsResponse([]),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  assert.equal(controller.state.oldestSessionTs, 200)
+  assert.equal(controller.state.newestSessionTs, 300)
+  assert.equal(controller.state.loadedPageCount, 1)
+  assert.equal(controller.state.noMore, false)
+
+  await controller.loadMore()
+  assert.deepEqual(controller.state.items.map(item => item.key), ['1:1', '1:2', '1:3'])
+  assert.equal(controller.state.items[1]?.name, 'Updated Beta')
+  assert.equal(controller.state.oldestSessionTs, 100)
+  assert.equal(controller.state.loadedPageCount, 2)
+
+  await controller.loadMore()
+  assert.equal(controller.state.paginationStalled, true)
+  assert.equal(controller.state.failedOperation, 'load-more')
+  assert.equal(controller.state.errorKind, 'invalid-response')
+  assert.deepEqual(olderBoundaries, [200, 100])
+
+  await controller.loadMore({ retry: true })
+  assert.equal(controller.state.paginationStalled, false)
+  assert.equal(controller.state.noMore, true)
+  assert.equal(controller.state.failedOperation, null)
+  assert.deepEqual(olderBoundaries, [200, 100, 100])
+})
+
+verify('failed older-session requests preserve the successful pagination boundary', async ({ usePrivateSessions }) => {
+  const boundaries: number[] = []
+  const olderResponses = [
+    { code: -500, data: null },
+    createSessionsResponse([createRawSession('2', { session_ts: 100 })], 0),
+  ]
+  const controller = usePrivateSessions.usePrivateSessions(ref('100'), {
+    fetchSessions: async () => createSessionsResponse([
+      createRawSession('1', { session_ts: 200 }),
+    ], 1),
+    fetchOlderSessions: async (endTs) => {
+      boundaries.push(endTs)
+      return olderResponses.shift()
+    },
+    fetchNewSessions: async () => createSessionsResponse([]),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  await controller.loadMore()
+  assert.equal(controller.state.oldestSessionTs, 200)
+  assert.equal(controller.state.loadedPageCount, 1)
+  assert.equal(controller.state.failedOperation, 'load-more')
+
+  await controller.loadMore({ retry: true })
+  assert.deepEqual(boundaries, [200, 200])
+  assert.equal(controller.state.oldestSessionTs, 100)
+  assert.equal(controller.state.loadedPageCount, 2)
+  assert.equal(controller.state.noMore, true)
+})
+
+verify('manual replace invalidates an in-flight older-session response', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const firstPages = [
+    createSessionsResponse([createRawSession('1', { session_ts: 300 })], 1),
+    createSessionsResponse([createRawSession('9', { session_ts: 900 })], 0),
+  ]
+  let resolveOlder: ((value: unknown) => void) | undefined
+  const olderResponse = new Promise<unknown>((resolve) => {
+    resolveOlder = resolve
+  })
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => firstPages.shift(),
+    fetchOlderSessions: async () => olderResponse,
+    fetchNewSessions: async () => createSessionsResponse([]),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  const olderRequest = controller.loadMore()
+  await controller.refresh()
+  resolveOlder?.(createSessionsResponse([createRawSession('2', { session_ts: 200 })], 0))
+  await olderRequest
+
+  assert.deepEqual(controller.state.items.map(item => item.key), ['1:9'])
+  assert.equal(controller.state.loadingMore, false)
+  assert.equal(controller.state.loadedPageCount, 1)
+})
+
+verify('an in-flight replace blocks incremental and older session requests', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  let firstPageRequests = 0
+  let incrementalRequests = 0
+  let olderRequests = 0
+  let resolveReplacement: ((value: unknown) => void) | undefined
+  const replacementResponse = new Promise<unknown>((resolve) => {
+    resolveReplacement = resolve
+  })
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => {
+      firstPageRequests++
+      return firstPageRequests === 1
+        ? createSessionsResponse([createRawSession('1', { session_ts: 300 })], 1)
+        : replacementResponse
+    },
+    fetchOlderSessions: async () => {
+      olderRequests++
+      return createSessionsResponse([], 0)
+    },
+    fetchNewSessions: async () => {
+      incrementalRequests++
+      return createSessionsResponse([])
+    },
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  const replacement = controller.refresh()
+  const incremental = controller.refreshNew()
+  const older = controller.loadMore()
+  assert.equal(incrementalRequests, 0)
+  assert.equal(olderRequests, 0)
+  resolveReplacement?.(createSessionsResponse([createRawSession('9', { session_ts: 900 })], 0))
+  await Promise.all([replacement, incremental, older])
+  assert.deepEqual(controller.state.items.map(item => item.key), ['1:9'])
+})
+
+verify('new sessions merge at the head with a single-flight begin_ts request', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const beginBoundaries: number[] = []
+  let resolveIncremental: ((value: unknown) => void) | undefined
+  const incrementalResponse = new Promise<unknown>((resolve) => {
+    resolveIncremental = resolve
+  })
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse([
+      createRawSession('1', { group_name: 'Old Alpha', session_ts: 300 }),
+      createRawSession('2', { group_name: 'Beta', session_ts: 200 }),
+    ], 1),
+    fetchOlderSessions: async () => createSessionsResponse([
+      createRawSession('4', { group_name: 'Historical', session_ts: 100 }),
+    ], 0),
+    fetchNewSessions: async (beginTs) => {
+      beginBoundaries.push(beginTs)
+      return incrementalResponse
+    },
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  await controller.loadMore()
+  const first = controller.refreshNew()
+  const repeated = controller.refreshNew()
+  assert.deepEqual(beginBoundaries, [300])
+  resolveIncremental?.(createSessionsResponse([
+    createRawSession('3', { group_name: 'Gamma', session_ts: 400 }),
+    createRawSession('1', { group_name: 'New Alpha', session_ts: 350, unread_count: 5 }),
+  ]))
+  await Promise.all([first, repeated])
+
+  assert.deepEqual(controller.state.items.map(item => item.key), ['1:3', '1:1', '1:2', '1:4'])
+  assert.equal(controller.state.items[1]?.name, 'New Alpha')
+  assert.equal(controller.state.newestSessionTs, 400)
+  assert.equal(controller.state.oldestSessionTs, 100)
+  assert.equal(controller.state.loadedPageCount, 2)
+  assert.equal(controller.state.noMore, true)
+})
+
+verify('private user-card cache is TTL-bound, best effort, and cleared by MID changes', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  let now = 1_000
+  let firstPage = [createRawSession('1', { session_ts: 300 })]
+  let incremental = [createRawSession('2', { session_ts: 400 })]
+  const requestedChunks: string[][] = []
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse(firstPage),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse(incremental),
+    fetchUserCards: async (uids) => {
+      requestedChunks.push(uids)
+      return createCardsResponse(uids.map(uid => ({
+        mid: uid,
+        name: `Cached ${uid}`,
+        face: `https://i0.hdslb.com/${uid}.png`,
+      })))
+    },
+    now: () => now,
+  })
+
+  await controller.loadInitial()
+  await controller.refreshNew()
+  assert.deepEqual(requestedChunks, [['1'], ['2']])
+
+  incremental = [createRawSession('1', { session_ts: 500 })]
+  await controller.refreshNew()
+  assert.deepEqual(requestedChunks, [['1'], ['2']])
+
+  now += usePrivateSessions.PRIVATE_SESSION_USER_CARD_CACHE_TTL_MS + 1
+  await controller.refreshNew()
+  assert.deepEqual(requestedChunks, [['1'], ['2'], ['1']])
+
+  mid.value = '200'
+  await nextTick()
+  firstPage = [createRawSession('1', { session_ts: 600 })]
+  await controller.loadInitial()
+  assert.deepEqual(requestedChunks, [['1'], ['2'], ['1'], ['1']])
+})
+
 verify('session controller is single-flight and drops old-account responses', async ({ usePrivateSessions }) => {
   const mid = ref('100')
   let resolveFirst: ((value: unknown) => void) | undefined
@@ -1080,6 +1363,8 @@ verify('session controller is single-flight and drops old-account responses', as
         return firstResponse
       return createSessionsResponse([createRawSession('300')])
     },
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse([]),
     fetchUserCards: async uids => createCardsResponse(
       uids.map(uid => ({ mid: uid, name: `User ${uid}`, face: '' })),
     ),
@@ -1103,44 +1388,111 @@ verify('session controller is single-flight and drops old-account responses', as
 
 verify('manual session refresh replaces while automatic refresh merges', async ({ usePrivateSessions }) => {
   const mid = ref('100')
-  const pages = [
+  const firstPages = [
     [createRawSession('1'), createRawSession('2')],
-    [createRawSession('3')],
     [createRawSession('4')],
   ]
   const controller = usePrivateSessions.usePrivateSessions(mid, {
-    fetchSessions: async () => createSessionsResponse(pages.shift() ?? []),
+    fetchSessions: async () => createSessionsResponse(firstPages.shift() ?? []),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse([createRawSession('3')]),
     fetchUserCards: async () => createCardsResponse([]),
   })
 
   await controller.loadInitial()
-  await controller.refresh('merge')
+  await controller.refreshNew()
   assert.deepEqual(controller.state.items.map(item => item.talkerId), ['3', '1', '2'])
 
-  await controller.refresh('replace')
+  await controller.refresh()
   assert.deepEqual(controller.state.items.map(item => item.talkerId), ['4'])
+  assert.equal(controller.state.loadedPageCount, 1)
+  assert.equal(controller.state.noMore, true)
 })
 
 verify('authoritative DM unread changes trigger one merge refresh per observed value', async ({ usePrivateSessions }) => {
   const mid = ref('100')
-  let requests = 0
+  let initialRequests = 0
+  let incrementalRequests = 0
   const controller = usePrivateSessions.usePrivateSessions(mid, {
     fetchSessions: async () => {
-      requests++
-      return createSessionsResponse([createRawSession(String(requests))])
+      initialRequests++
+      return createSessionsResponse([createRawSession('1')])
+    },
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => {
+      incrementalRequests++
+      return createSessionsResponse([createRawSession('2', { session_ts: 1755000000000002 })])
     },
     fetchUserCards: async () => createCardsResponse([]),
   })
 
   await controller.observeUnreadCount(0)
-  assert.equal(requests, 1)
+  assert.equal(initialRequests, 1)
   await controller.observeUnreadCount(0)
-  assert.equal(requests, 1)
+  assert.equal(incrementalRequests, 0)
   await controller.observeUnreadCount(2)
-  assert.equal(requests, 2)
+  assert.equal(incrementalRequests, 1)
   await controller.observeUnreadCount(2)
-  assert.equal(requests, 2)
+  assert.equal(incrementalRequests, 1)
   assert.deepEqual(controller.state.items.map(item => item.talkerId), ['2', '1'])
+})
+
+verify('visibility refresh uses a finite TTL while whisper activation always checks new sessions', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  let now = 1_000
+  let incrementalRequests = 0
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse([
+      createRawSession('1', { session_ts: 300 }),
+    ]),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => {
+      incrementalRequests++
+      return createSessionsResponse([])
+    },
+    fetchUserCards: async () => createCardsResponse([]),
+    now: () => now,
+  })
+
+  await controller.loadInitial()
+  await controller.refreshIfStale()
+  assert.equal(incrementalRequests, 0)
+
+  now += usePrivateSessions.PRIVATE_SESSION_VISIBILITY_STALE_TIME_MS + 1
+  await controller.refreshIfStale()
+  assert.equal(incrementalRequests, 1)
+
+  await controller.activate(0)
+  assert.equal(incrementalRequests, 2)
+})
+
+verify('conversation list wires one bottom sentinel and localized loaded-list scope', async () => {
+  const [listSource, workspaceSource, notificationsSource, ...localeSources] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+    ...['cmn-CN', 'cmn-TW', 'en', 'jyut'].map(locale => (
+      readFile(new URL(`../src/_locales/${locale}.yml`, import.meta.url), 'utf8')
+    )),
+  ])
+
+  assert.equal((listSource.match(/new IntersectionObserver/g) ?? []).length, 1)
+  assert.ok(listSource.includes('conversation-list__sentinel'))
+  assert.ok(listSource.includes(`emit('loadMore')`))
+  assert.ok(listSource.includes(`emit('retryLoadMore')`))
+  assert.ok(listSource.includes(`notifications.whisper.search_scope`))
+  assert.ok(listSource.includes('onBeforeUnmount(disconnectObserver)'))
+  assert.ok(workspaceSource.includes(`document.addEventListener('visibilitychange'`))
+  assert.ok(workspaceSource.includes('controller.refreshIfStale()'))
+  assert.ok(notificationsSource.includes('getOlderPrivateSessions'))
+  assert.ok(notificationsSource.includes('getNewPrivateSessions'))
+  assert.equal(`${listSource}\n${workspaceSource}\n${notificationsSource}`.includes('setInterval('), false)
+  for (const localeSource of localeSources) {
+    assert.ok(localeSource.includes('search_scope:'))
+    assert.ok(localeSource.includes('loading_more_sessions:'))
+    assert.ok(localeSource.includes('earliest_session:'))
+    assert.ok(localeSource.includes('load_more_failed:'))
+  }
 })
 
 verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {
@@ -1785,6 +2137,8 @@ verify('session controller clears unread only after confirmed ACK', ({ privateSe
   const mid = ref('100')
   const controller = usePrivateSessions.usePrivateSessions(mid, {
     fetchSessions: async () => createSessionsResponse([]),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse([]),
     fetchUserCards: async () => createCardsResponse([]),
   })
   controller.state.items = privateSession.transformPrivateSessions([

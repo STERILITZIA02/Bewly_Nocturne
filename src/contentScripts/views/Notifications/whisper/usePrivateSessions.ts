@@ -8,42 +8,73 @@ import type {
   PrivateSessionsData,
 } from '~/background/privateMessage/types'
 
-import type { DisplayPrivateSession } from './privateSession'
+import type { DisplayPrivateSession, PrivateUserCard } from './privateSession'
 import {
+  appendPrivateSessions,
   collectPrivateSessionUids,
+  extractPrivateUserCards,
+  getPrivateSessionTimeBounds,
   isNativePrivateSession,
   mergePrivateSessions,
   transformPrivateSessions,
 } from './privateSession'
 
-export type PrivateSessionsApplyMode = 'replace' | 'merge'
+export type PrivateSessionsFailedOperation = 'initial' | 'refresh' | 'incremental' | 'load-more' | null
+
 export const PRIVATE_SESSION_CARD_BATCH_SIZE = 30
+export const PRIVATE_SESSION_USER_CARD_CACHE_TTL_MS = 300_000
+export const PRIVATE_SESSION_VISIBILITY_STALE_TIME_MS = 60_000
 
 export interface PrivateSessionsState {
   items: DisplayPrivateSession[]
   loading: boolean
   refreshing: boolean
+  loadingMore: boolean
   loaded: boolean
+  noMore: boolean
+  paginationStalled: boolean
   errorKind: PrivateMessageTransportErrorKind | null
+  failedOperation: PrivateSessionsFailedOperation
   generation: number
   lastObservedUnreadCount: number
+  oldestSessionTs: number
+  newestSessionTs: number
+  loadedPageCount: number
+  loadedAt: number
 }
 
 export interface PrivateSessionsDependencies {
   fetchSessions: () => Promise<unknown>
+  fetchOlderSessions: (endTs: number) => Promise<unknown>
+  fetchNewSessions: (beginTs: number) => Promise<unknown>
   fetchUserCards: (uids: string[]) => Promise<unknown>
   getFallbackName?: (talkerId: string) => string
+  now?: () => number
 }
 
 export interface PrivateSessionsController {
   state: PrivateSessionsState
   selectedTalkerId: Ref<string>
   loadInitial: () => Promise<void>
-  refresh: (mode?: PrivateSessionsApplyMode) => Promise<void>
+  loadMore: (options?: { retry?: boolean }) => Promise<void>
+  refresh: () => Promise<void>
+  refreshNew: () => Promise<void>
+  refreshIfStale: () => Promise<void>
+  activate: (unreadCount: number) => Promise<void>
+  retryFailed: () => Promise<void>
   observeUnreadCount: (unreadCount: number) => Promise<void>
   selectSession: (session: DisplayPrivateSession) => void
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   markSessionSent: (talkerId: string, summary: string, timestamp: number) => void
+}
+
+interface ExtractedSessions {
+  hasMore: number
+  sessions: PrivateSession[]
+}
+
+interface CachedPrivateUserCard extends PrivateUserCard {
+  updatedAt: number
 }
 
 function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
@@ -53,12 +84,19 @@ function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
   return typeof response.code === 'number' ? response as PrivateMessageApiResponse<unknown> : null
 }
 
-function extractSessions(response: unknown): PrivateSession[] | null {
+function extractSessions(response: unknown): ExtractedSessions | null {
   const parsed = asResponse(response)
   if (!parsed || parsed.code !== 0 || !parsed.data || typeof parsed.data !== 'object')
     return null
-  const sessionList = (parsed.data as Partial<PrivateSessionsData>).session_list
-  return Array.isArray(sessionList) ? sessionList : null
+  const data = parsed.data as Partial<PrivateSessionsData>
+  if (!Array.isArray(data.session_list))
+    return null
+  return {
+    sessions: data.session_list,
+    hasMore: typeof data.has_more === 'number' && Number.isFinite(data.has_more)
+      ? data.has_more
+      : 0,
+  }
 }
 
 function resolveErrorKind(response: unknown): PrivateMessageTransportErrorKind {
@@ -68,10 +106,15 @@ function resolveErrorKind(response: unknown): PrivateMessageTransportErrorKind {
 
 function chunkPrivateSessionUids(uids: string[]): string[][] {
   const chunks: string[][] = []
-  for (let index = 0; index < uids.length; index += PRIVATE_SESSION_CARD_BATCH_SIZE) {
+  for (let index = 0; index < uids.length; index += PRIVATE_SESSION_CARD_BATCH_SIZE)
     chunks.push(uids.slice(index, index + PRIVATE_SESSION_CARD_BATCH_SIZE))
-  }
   return chunks
+}
+
+function normalizeUnreadCount(unreadCount: number): number {
+  return Number.isFinite(unreadCount)
+    ? Math.max(0, Math.trunc(unreadCount))
+    : 0
 }
 
 function createState(): PrivateSessionsState {
@@ -79,10 +122,18 @@ function createState(): PrivateSessionsState {
     items: [],
     loading: false,
     refreshing: false,
+    loadingMore: false,
     loaded: false,
+    noMore: false,
+    paginationStalled: false,
     errorKind: null,
+    failedOperation: null,
     generation: 0,
     lastObservedUnreadCount: -1,
+    oldestSessionTs: 0,
+    newestSessionTs: 0,
+    loadedPageCount: 0,
+    loadedAt: 0,
   })
 }
 
@@ -92,62 +143,161 @@ export function usePrivateSessions(
 ): PrivateSessionsController {
   const state = createState()
   const selectedTalkerId = ref('')
-  let activeRequest: Promise<void> | null = null
+  const userCardCache = new Map<string, CachedPrivateUserCard>()
+  const now = dependencies.now ?? Date.now
+  let firstPageRequest: Promise<void> | null = null
+  let olderSessionsRequest: Promise<void> | null = null
+  let newSessionsRequest: Promise<void> | null = null
+  let contentGeneration = 0
+
+  function isCurrentRequest(
+    mid: string,
+    generation: number,
+    expectedContentGeneration: number,
+  ): boolean {
+    return generation === state.generation
+      && mid === currentMid.value
+      && expectedContentGeneration === contentGeneration
+  }
+
+  function clearFailure(operation: Exclude<PrivateSessionsFailedOperation, null>) {
+    if (state.failedOperation !== operation)
+      return
+    state.errorKind = null
+    state.failedOperation = null
+  }
+
+  function recordFailure(
+    operation: Exclude<PrivateSessionsFailedOperation, null>,
+    response: unknown,
+  ) {
+    state.errorKind = resolveErrorKind(response)
+    state.failedOperation = operation
+  }
+
+  function updateBounds() {
+    const bounds = getPrivateSessionTimeBounds(state.items)
+    state.oldestSessionTs = bounds.oldestSessionTs
+    state.newestSessionTs = bounds.newestSessionTs
+  }
 
   function resetForAccount() {
     state.generation++
     state.items = []
     state.loading = false
     state.refreshing = false
+    state.loadingMore = false
     state.loaded = false
+    state.noMore = false
+    state.paginationStalled = false
     state.errorKind = null
+    state.failedOperation = null
     state.lastObservedUnreadCount = -1
+    state.oldestSessionTs = 0
+    state.newestSessionTs = 0
+    state.loadedPageCount = 0
+    state.loadedAt = 0
     selectedTalkerId.value = ''
-    activeRequest = null
+    userCardCache.clear()
+    contentGeneration++
+    firstPageRequest = null
+    olderSessionsRequest = null
+    newSessionsRequest = null
   }
 
-  async function requestSessions(mode: PrivateSessionsApplyMode): Promise<void> {
-    if (activeRequest)
-      return activeRequest
+  async function enrichSessions(
+    sessions: PrivateSession[],
+    mid: string,
+    generation: number,
+    requestContentGeneration: number,
+  ): Promise<DisplayPrivateSession[]> {
+    const requestedAt = now()
+    const uids = collectPrivateSessionUids(sessions)
+    const missingUids = uids.filter((uid) => {
+      const cached = userCardCache.get(uid)
+      return !cached || requestedAt - cached.updatedAt >= PRIVATE_SESSION_USER_CARD_CACHE_TTL_MS
+    })
+    const chunks = chunkPrivateSessionUids(missingUids)
+    const cardResults = await Promise.allSettled(
+      chunks.map(chunk => dependencies.fetchUserCards(chunk)),
+    )
+
+    if (!isCurrentRequest(mid, generation, requestContentGeneration))
+      return []
+
+    for (const [index, result] of cardResults.entries()) {
+      if (result.status !== 'fulfilled' || asResponse(result.value)?.code !== 0)
+        continue
+      const cards = new Map(extractPrivateUserCards(result.value).map(card => [card.mid, card]))
+      for (const uid of chunks[index] ?? []) {
+        const card = cards.get(uid)
+        userCardCache.set(uid, {
+          mid: uid,
+          name: card?.name ?? '',
+          avatar: card?.avatar ?? '',
+          updatedAt: requestedAt,
+        })
+      }
+    }
+
+    const cachedCardsResponse = {
+      code: 0,
+      data: uids.flatMap((uid) => {
+        const card = userCardCache.get(uid)
+        return card
+          ? [{ mid: card.mid, name: card.name, face: card.avatar }]
+          : []
+      }),
+    }
+    return transformPrivateSessions(
+      sessions,
+      cachedCardsResponse,
+      dependencies.getFallbackName,
+    )
+  }
+
+  async function requestFirstPage(operation: 'initial' | 'refresh'): Promise<void> {
+    if (firstPageRequest)
+      return firstPageRequest
 
     const mid = currentMid.value
     if (!mid)
       return
-
     const generation = state.generation
+    const requestContentGeneration = ++contentGeneration
+    state.loadingMore = false
+    olderSessionsRequest = null
+    newSessionsRequest = null
+    clearFailure(operation)
+
     const request = (async () => {
       state.loading = !state.loaded
       state.refreshing = state.loaded
-      state.errorKind = null
       try {
-        const sessionsResponse = await dependencies.fetchSessions()
-        const sessions = extractSessions(sessionsResponse)
-        if (!sessions)
-          throw resolveErrorKind(sessionsResponse)
-
-        const uids = collectPrivateSessionUids(sessions)
-        const cardResults = await Promise.allSettled(
-          chunkPrivateSessionUids(uids).map(chunk => dependencies.fetchUserCards(chunk)),
+        const response = await dependencies.fetchSessions()
+        const page = extractSessions(response)
+        if (!page)
+          throw response
+        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+          return
+        const incoming = await enrichSessions(
+          page.sessions,
+          mid,
+          generation,
+          requestContentGeneration,
         )
-        const cardsResponses = cardResults.flatMap(result => (
-          result.status === 'fulfilled' && asResponse(result.value)?.code === 0
-            ? [result.value]
-            : []
-        ))
-
-        if (generation !== state.generation || mid !== currentMid.value)
+        if (!isCurrentRequest(mid, generation, requestContentGeneration))
           return
 
-        const incoming = transformPrivateSessions(
-          sessions,
-          cardsResponses,
-          dependencies.getFallbackName,
-        )
-        state.items = mode === 'merge'
-          ? mergePrivateSessions(state.items, incoming)
-          : incoming
+        state.items = incoming
         state.loaded = true
+        state.noMore = page.hasMore === 0
+        state.paginationStalled = false
+        state.loadedPageCount = 1
+        state.loadedAt = now()
+        updateBounds()
         state.errorKind = null
+        state.failedOperation = null
 
         if (
           selectedTalkerId.value
@@ -156,50 +306,203 @@ export function usePrivateSessions(
           selectedTalkerId.value = ''
         }
       }
-      catch (error) {
-        if (generation !== state.generation || mid !== currentMid.value)
-          return
-        state.errorKind = typeof error === 'string'
-          ? error as PrivateMessageTransportErrorKind
-          : 'invalid-response'
+      catch (response) {
+        if (isCurrentRequest(mid, generation, requestContentGeneration))
+          recordFailure(operation, response)
       }
       finally {
-        if (generation === state.generation && mid === currentMid.value) {
+        if (isCurrentRequest(mid, generation, requestContentGeneration)) {
           state.loading = false
           state.refreshing = false
         }
       }
     })().finally(() => {
-      if (activeRequest === request)
-        activeRequest = null
+      if (firstPageRequest === request)
+        firstPageRequest = null
     })
 
-    activeRequest = request
+    firstPageRequest = request
     return request
   }
 
   function loadInitial(): Promise<void> {
     if (state.loaded)
       return Promise.resolve()
-    return requestSessions('replace')
+    return requestFirstPage('initial')
   }
 
-  function refresh(mode: PrivateSessionsApplyMode = 'replace'): Promise<void> {
-    return requestSessions(mode)
+  async function refreshNew(): Promise<void> {
+    if (!state.loaded)
+      return loadInitial()
+    if (firstPageRequest)
+      return firstPageRequest
+    if (newSessionsRequest)
+      return newSessionsRequest
+    if (state.newestSessionTs <= 0)
+      return requestFirstPage('refresh')
+
+    const mid = currentMid.value
+    if (!mid)
+      return
+    const generation = state.generation
+    const requestContentGeneration = contentGeneration
+    const beginTs = state.newestSessionTs
+    clearFailure('incremental')
+
+    const request = (async () => {
+      state.refreshing = true
+      try {
+        const response = await dependencies.fetchNewSessions(beginTs)
+        const page = extractSessions(response)
+        if (!page)
+          throw response
+        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+          return
+        const incoming = await enrichSessions(
+          page.sessions,
+          mid,
+          generation,
+          requestContentGeneration,
+        )
+        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+          return
+
+        state.items = mergePrivateSessions(state.items, incoming)
+        state.loadedAt = now()
+        updateBounds()
+        clearFailure('incremental')
+      }
+      catch (response) {
+        if (isCurrentRequest(mid, generation, requestContentGeneration))
+          recordFailure('incremental', response)
+      }
+      finally {
+        if (isCurrentRequest(mid, generation, requestContentGeneration))
+          state.refreshing = false
+      }
+    })().finally(() => {
+      if (newSessionsRequest === request)
+        newSessionsRequest = null
+    })
+
+    newSessionsRequest = request
+    return request
+  }
+
+  async function loadMore(options: { retry?: boolean } = {}): Promise<void> {
+    if (firstPageRequest)
+      return firstPageRequest
+    if (!state.loaded || state.noMore || olderSessionsRequest)
+      return olderSessionsRequest ?? Promise.resolve()
+    if (state.paginationStalled && !options.retry)
+      return
+    if (state.oldestSessionTs <= 0) {
+      state.noMore = true
+      return
+    }
+
+    const mid = currentMid.value
+    if (!mid)
+      return
+    const generation = state.generation
+    const requestContentGeneration = contentGeneration
+    const endTs = state.oldestSessionTs
+    state.paginationStalled = false
+    clearFailure('load-more')
+
+    const request = (async () => {
+      state.loadingMore = true
+      try {
+        const response = await dependencies.fetchOlderSessions(endTs)
+        const page = extractSessions(response)
+        if (!page)
+          throw response
+        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+          return
+        const incoming = await enrichSessions(
+          page.sessions,
+          mid,
+          generation,
+          requestContentGeneration,
+        )
+        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+          return
+
+        const existingKeys = new Set(state.items.map(item => item.key))
+        const newItemCount = incoming.filter(item => !existingKeys.has(item.key)).length
+        const incomingOldest = getPrivateSessionTimeBounds(incoming).oldestSessionTs
+        const madeProgress = newItemCount > 0 || (incomingOldest > 0 && incomingOldest < endTs)
+
+        state.items = appendPrivateSessions(state.items, incoming)
+        if (page.hasMore !== 0 && !madeProgress) {
+          state.paginationStalled = true
+          state.errorKind = 'invalid-response'
+          state.failedOperation = 'load-more'
+          return
+        }
+
+        state.noMore = page.hasMore === 0
+        state.loadedPageCount++
+        updateBounds()
+        clearFailure('load-more')
+      }
+      catch (response) {
+        if (isCurrentRequest(mid, generation, requestContentGeneration))
+          recordFailure('load-more', response)
+      }
+      finally {
+        if (isCurrentRequest(mid, generation, requestContentGeneration))
+          state.loadingMore = false
+      }
+    })().finally(() => {
+      if (olderSessionsRequest === request)
+        olderSessionsRequest = null
+    })
+
+    olderSessionsRequest = request
+    return request
+  }
+
+  function refresh(): Promise<void> {
+    return requestFirstPage('refresh')
+  }
+
+  function refreshIfStale(): Promise<void> {
+    if (
+      !state.loaded
+      || state.loadedAt <= 0
+      || now() - state.loadedAt >= PRIVATE_SESSION_VISIBILITY_STALE_TIME_MS
+    ) {
+      return refreshNew()
+    }
+    return Promise.resolve()
+  }
+
+  function activate(unreadCount: number): Promise<void> {
+    state.lastObservedUnreadCount = normalizeUnreadCount(unreadCount)
+    return state.loaded ? refreshNew() : loadInitial()
   }
 
   function observeUnreadCount(unreadCount: number): Promise<void> {
-    const normalizedUnreadCount = Number.isFinite(unreadCount)
-      ? Math.max(0, Math.trunc(unreadCount))
-      : 0
+    const normalizedUnreadCount = normalizeUnreadCount(unreadCount)
     const previousUnreadCount = state.lastObservedUnreadCount
     state.lastObservedUnreadCount = normalizedUnreadCount
 
     if (!state.loaded)
       return loadInitial()
     if (previousUnreadCount >= 0 && previousUnreadCount !== normalizedUnreadCount)
-      return refresh('merge')
+      return refreshNew()
     return Promise.resolve()
+  }
+
+  function retryFailed(): Promise<void> {
+    if (state.failedOperation === 'load-more')
+      return loadMore({ retry: true })
+    if (state.failedOperation === 'incremental')
+      return refreshNew()
+    if (state.failedOperation === 'refresh')
+      return requestFirstPage('refresh')
+    return loadInitial()
   }
 
   function selectSession(session: DisplayPrivateSession) {
@@ -208,7 +511,7 @@ export function usePrivateSessions(
   }
 
   function markSessionRead(talkerId: string, ackSeqno: string) {
-    const session = state.items.find(item => item.talkerId === talkerId)
+    const session = state.items.find(item => item.key === `1:${talkerId}`)
     if (!session)
       return
     session.unreadCount = 0
@@ -221,7 +524,7 @@ export function usePrivateSessions(
   }
 
   function markSessionSent(talkerId: string, summary: string, timestamp: number) {
-    const session = state.items.find(item => item.talkerId === talkerId)
+    const session = state.items.find(item => item.key === `1:${talkerId}`)
     if (!session)
       return
     const timestampMicroseconds = timestamp * 1_000_000
@@ -231,6 +534,7 @@ export function usePrivateSessions(
       ...session.original,
       session_ts: timestampMicroseconds,
     }
+    updateBounds()
   }
 
   watch(currentMid, resetForAccount, { flush: 'sync' })
@@ -239,7 +543,12 @@ export function usePrivateSessions(
     state,
     selectedTalkerId,
     loadInitial,
+    loadMore,
     refresh,
+    refreshNew,
+    refreshIfStale,
+    activate,
+    retryFailed,
     observeUnreadCount,
     selectSession,
     markSessionRead,

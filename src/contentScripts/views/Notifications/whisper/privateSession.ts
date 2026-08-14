@@ -50,7 +50,7 @@ export interface PrivateSessionFilterOptions {
   query: string
 }
 
-interface PrivateUserCard {
+export interface PrivateUserCard {
   avatar: string
   mid: string
   name: string
@@ -78,7 +78,7 @@ function normalizeHttpUrl(value: unknown): string {
   }
 }
 
-function extractPrivateUserCards(response: unknown): PrivateUserCard[] {
+export function extractPrivateUserCards(response: unknown): PrivateUserCard[] {
   const root = asRecord(response)
   if (root?.code !== 0)
     return []
@@ -180,15 +180,16 @@ export function transformPrivateSessions(
 
   for (const session of sessions) {
     const talkerId = session.talker_id
-    if (!talkerId || seen.has(talkerId))
+    const key = `${session.session_type}:${talkerId}`
+    if (!talkerId || seen.has(key))
       continue
-    seen.add(talkerId)
+    seen.add(key)
 
     const card = cards.get(talkerId)
     const accountInfo = session.account_info
     const kind = classifyPrivateSession(session)
     result.push({
-      key: `${session.session_type}:${talkerId}`,
+      key,
       talkerId,
       sessionType: session.session_type,
       name: accountInfo?.name || card?.name || session.group_name || getFallbackName(talkerId),
@@ -215,11 +216,35 @@ export function mergePrivateSessions(
   current: DisplayPrivateSession[],
   incoming: DisplayPrivateSession[],
 ): DisplayPrivateSession[] {
-  const incomingIds = new Set(incoming.map(item => item.talkerId))
+  const incomingIds = new Set(incoming.map(item => item.key))
   return [
     ...incoming,
-    ...current.filter(item => !incomingIds.has(item.talkerId)),
+    ...current.filter(item => !incomingIds.has(item.key)),
   ]
+}
+
+export function appendPrivateSessions(
+  current: DisplayPrivateSession[],
+  incoming: DisplayPrivateSession[],
+): DisplayPrivateSession[] {
+  const incomingByKey = new Map(incoming.map(item => [item.key, item]))
+  const currentKeys = new Set(current.map(item => item.key))
+  return [
+    ...current.map(item => incomingByKey.get(item.key) ?? item),
+    ...incoming.filter(item => !currentKeys.has(item.key)),
+  ]
+}
+
+export function getPrivateSessionTimeBounds(
+  items: DisplayPrivateSession[],
+): { newestSessionTs: number, oldestSessionTs: number } {
+  const timestamps = items
+    .map(item => item.timestamp)
+    .filter(timestamp => Number.isFinite(timestamp) && timestamp > 0)
+  return {
+    newestSessionTs: timestamps.length > 0 ? Math.max(...timestamps) : 0,
+    oldestSessionTs: timestamps.length > 0 ? Math.min(...timestamps) : 0,
+  }
 }
 
 export function filterPrivateSessions(

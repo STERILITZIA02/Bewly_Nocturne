@@ -1,6 +1,7 @@
 export const PRIVATE_MESSAGE_ENDPOINTS = {
   uploadPrivateImage: 'https://api.bilibili.com/x/dynamic/feed/draw/upload_bfs',
   getPrivateSessions: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions',
+  getNewPrivateSessions: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/new_sessions',
   getPrivateUserCards: 'https://api.vc.bilibili.com/account/v1/user/cards',
   getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
   ackPrivateSession: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
@@ -87,7 +88,16 @@ export interface PrivateSession {
 
 export interface PrivateSessionsData {
   session_list: PrivateSession[]
+  has_more: number
   [key: string]: unknown
+}
+
+export interface GetPrivateSessionsOptions {
+  endTs?: number
+}
+
+export interface GetNewPrivateSessionsOptions {
+  beginTs: number
 }
 
 export interface PrivateMessagesData {

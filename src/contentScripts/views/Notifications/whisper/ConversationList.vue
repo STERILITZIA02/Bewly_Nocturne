@@ -7,22 +7,82 @@ import { filterPrivateSessions } from './privateSession'
 
 const props = defineProps<{
   items: DisplayPrivateSession[]
+  loadingMore: boolean
+  noMore: boolean
+  paginationStalled: boolean
+  loadMoreFailed: boolean
   selectedTalkerId: string
 }>()
 
 const emit = defineEmits<{
   (event: 'select', session: DisplayPrivateSession): void
+  (event: 'loadMore'): void
+  (event: 'retryLoadMore'): void
 }>()
 
 const { t } = useI18n()
 const filter = ref<PrivateSessionFilter>('all')
 const query = ref('')
 const filters: PrivateSessionFilter[] = ['all', 'unread', 'pinned']
+const itemsRef = ref<HTMLElement | null>(null)
+const sentinelRef = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
+let observerGeneration = 0
 
 const filteredItems = computed(() => filterPrivateSessions(props.items, {
   filter: filter.value,
   query: query.value,
 }))
+
+const canAutoLoad = computed(() => (
+  filter.value === 'all'
+  && !query.value.trim()
+  && !props.loadingMore
+  && !props.noMore
+  && !props.paginationStalled
+  && !props.loadMoreFailed
+))
+
+function disconnectObserver() {
+  observerGeneration++
+  observer?.disconnect()
+  observer = null
+}
+
+async function observeSentinel() {
+  const generation = ++observerGeneration
+  observer?.disconnect()
+  observer = null
+  await nextTick()
+  if (generation !== observerGeneration)
+    return
+  if (!canAutoLoad.value || !itemsRef.value || !sentinelRef.value)
+    return
+  observer = new IntersectionObserver(([entry]) => {
+    if (entry.isIntersecting && canAutoLoad.value)
+      emit('loadMore')
+  }, {
+    root: itemsRef.value,
+    rootMargin: '0px 0px 160px 0px',
+    threshold: 0,
+  })
+  observer.observe(sentinelRef.value)
+}
+
+watch(
+  () => [
+    filteredItems.value.length,
+    canAutoLoad.value,
+    props.loadingMore,
+    props.noMore,
+    props.paginationStalled,
+    props.loadMoreFailed,
+  ] as const,
+  () => void observeSentinel(),
+  { immediate: true },
+)
+
+onBeforeUnmount(disconnectObserver)
 </script>
 
 <template>
@@ -47,6 +107,9 @@ const filteredItems = computed(() => filterPrivateSessions(props.items, {
           </IconButton>
         </Tooltip>
       </div>
+      <span class="conversation-list__search-scope">
+        {{ t('notifications.whisper.search_scope') }}
+      </span>
 
       <div class="bew-segment-control bew-segment-control--static conversation-list__filters">
         <button
@@ -63,7 +126,7 @@ const filteredItems = computed(() => filterPrivateSessions(props.items, {
       </div>
     </div>
 
-    <div v-if="filteredItems.length" class="conversation-list__items">
+    <div v-if="filteredItems.length" ref="itemsRef" class="conversation-list__items">
       <ConversationListItem
         v-for="session in filteredItems"
         :key="session.key"
@@ -71,6 +134,18 @@ const filteredItems = computed(() => filterPrivateSessions(props.items, {
         :selected="selectedTalkerId === session.talkerId"
         @select="emit('select', $event)"
       />
+      <div ref="sentinelRef" class="conversation-list__sentinel" role="status">
+        <template v-if="loadingMore">
+          <span>{{ t('notifications.whisper.loading_more_sessions') }}</span>
+        </template>
+        <span v-else-if="noMore">{{ t('notifications.whisper.earliest_session') }}</span>
+        <template v-else-if="paginationStalled || loadMoreFailed">
+          <span>{{ t('notifications.whisper.load_more_failed') }}</span>
+          <Button type="tertiary" @click="emit('retryLoadMore')">
+            {{ t('notifications.actions.retry') }}
+          </Button>
+        </template>
+      </div>
     </div>
     <div v-else class="conversation-list__empty">
       <Empty :description="items.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty')" />
@@ -126,6 +201,12 @@ const filteredItems = computed(() => filterPrivateSessions(props.items, {
   outline: none;
 }
 
+.conversation-list__search-scope {
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+
 .conversation-list__clear {
   width: var(--bew-control-height-sm);
   height: var(--bew-control-height-sm);
@@ -141,10 +222,24 @@ const filteredItems = computed(() => filterPrivateSessions(props.items, {
 }
 
 .conversation-list__items {
+  flex: 1 1 auto;
   min-height: 0;
   padding: var(--bew-space-1);
   overflow: auto;
   overscroll-behavior: contain;
+}
+
+.conversation-list__sentinel {
+  display: flex;
+  gap: var(--bew-space-2);
+  align-items: center;
+  justify-content: center;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-3);
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  text-align: center;
 }
 
 .conversation-list__empty {
