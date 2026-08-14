@@ -5,6 +5,7 @@
     "scripts/manifest.ts",
     "scripts/prepare.ts",
     "scripts/verify-notification-fixtures.ts",
+    "scripts/verify-private-message.ts",
     "src/components/*.vue",
     "src/components/*/*.vue",
     "src/contentScripts/index.ts",
