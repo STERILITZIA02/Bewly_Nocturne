@@ -859,7 +859,7 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 查看原生會話、聊天記錄並傳送文字或圖片，未支援會話繼續由原版提供
+      description: 查看原生會話與唯讀聊天記錄，傳送和未支援會話繼續由原版提供
     reply:
       label: 回覆我的
       description: 查看其他人對你的回覆
@@ -889,6 +889,7 @@ notifications:
     empty: 暫無私訊會話
     empty_filtered: 沒有符合條件的會話
     unknown_user: 未知使用者
+    user_fallback: '使用者 {talkerId}'
     summary_unavailable: 暫無訊息摘要
     select_conversation: 選擇與{name}的會話
     pinned: 已置頂
@@ -901,8 +902,7 @@ notifications:
       empty: 暫無聊天記錄
       load_older: 載入更早訊息
       history_start: 已到達聊天記錄起點
-      readonly: 目前為唯讀模式
-      text_send_enabled: 支援文字與圖片訊息
+      readonly: 目前私訊頁面為唯讀模式
       send_original: 在原版中傳送訊息
       composer_placeholder: 輸入訊息
       composer_aria: 私訊文字輸入框
@@ -934,6 +934,12 @@ notifications:
       image_send_failed: 圖片傳送失敗
       image_reconcile_failed: 圖片已傳送，正在等待伺服器同步
     errors:
+      login-required: 登入狀態已失效
+      risk-control: 私訊請求暫時受到限制
+      server-error: 私訊服務暫時無法使用
+      network: 網路連線失敗
+      invalid-response: 暫時無法讀取私訊資料
+      api-error: 私訊載入失敗，請重試
       wbi-unavailable: 私訊簽章暫時無法使用
   native:
     unknown_user: 未知使用者

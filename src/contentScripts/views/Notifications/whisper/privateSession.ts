@@ -2,6 +2,27 @@ import type { PrivateSession } from '~/background/privateMessage/types'
 
 export type RawSessionReference = Readonly<PrivateSession>
 
+export type PrivateSessionKind
+  = | 'user'
+    | 'official-assistant'
+    | 'unfollowed-user'
+    | 'intercepted-user'
+    | 'fan-group'
+    | 'system'
+    | 'unsupported'
+
+export interface PrivateSessionCapabilities {
+  canReadNative: boolean
+  canAck: boolean
+  canSendText: boolean
+  canSendImage: boolean
+  canOpenProfile: boolean
+  canOpenOriginal: boolean
+  canPin: boolean
+  canMute: boolean
+  canRemove: boolean
+}
+
 export interface DisplayPrivateSession {
   key: string
   talkerId: string
@@ -16,6 +37,9 @@ export interface DisplayPrivateSession {
   pinned: boolean
   muted: boolean
   followed: boolean
+  kind: PrivateSessionKind
+  systemMessageType: number
+  capabilities: PrivateSessionCapabilities
   original: RawSessionReference
 }
 
@@ -97,6 +121,33 @@ function summarizePrivateMessage(session: PrivateSession): string {
   }
 }
 
+function classifyPrivateSession(session: PrivateSession): PrivateSessionKind {
+  if (session.session_type !== 1)
+    return session.session_type === 2 ? 'fan-group' : 'unsupported'
+  if (session.system_msg_type > 0)
+    return 'official-assistant'
+  if (session.is_intercept !== 0)
+    return 'intercepted-user'
+  if (session.can_fold !== 0 || session.is_follow === 0)
+    return 'unfollowed-user'
+  return 'user'
+}
+
+function createPrivateSessionCapabilities(kind: PrivateSessionKind): PrivateSessionCapabilities {
+  const isNativeReadable = kind === 'user' || kind === 'official-assistant'
+  return {
+    canReadNative: isNativeReadable,
+    canAck: isNativeReadable,
+    canSendText: false,
+    canSendImage: false,
+    canOpenProfile: kind === 'user',
+    canOpenOriginal: true,
+    canPin: false,
+    canMute: false,
+    canRemove: false,
+  }
+}
+
 export function collectPrivateSessionUids(sessions: PrivateSession[]): string[] {
   const seen = new Set<string>()
   const uids: string[] = []
@@ -135,6 +186,7 @@ export function transformPrivateSessions(
 
     const card = cards.get(talkerId)
     const accountInfo = session.account_info
+    const kind = classifyPrivateSession(session)
     result.push({
       key: `${session.session_type}:${talkerId}`,
       talkerId,
@@ -149,6 +201,9 @@ export function transformPrivateSessions(
       pinned: session.top_ts > 0,
       muted: session.is_dnd !== 0,
       followed: session.is_follow !== 0,
+      kind,
+      systemMessageType: session.system_msg_type,
+      capabilities: createPrivateSessionCapabilities(kind),
       original: session,
     })
   }
@@ -182,12 +237,7 @@ export function filterPrivateSessions(
 }
 
 export function isNativePrivateSession(session: DisplayPrivateSession): boolean {
-  return (
-    session.sessionType === 1
-    && session.followed
-    && session.original.can_fold === 0
-    && session.original.group_type === 0
-  )
+  return session.capabilities.canReadNative
 }
 
 export function normalizePrivateSessionLocale(locale: string): string {

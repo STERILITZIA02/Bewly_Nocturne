@@ -23,9 +23,10 @@ import type {
   OriginalNotificationView,
 } from './notificationSections'
 import {
+  isHybridNotificationView,
   isNativeNotificationSection,
   isNotificationView,
-  isOriginalNotificationView,
+  isOriginalOnlyNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
 import { usePrivateMessages } from './whisper/usePrivateMessages'
@@ -58,19 +59,13 @@ const accountState = computed(() => resolveNotificationAccountState(topBarStore.
 const privateSessions = usePrivateSessions(currentMid, {
   fetchSessions: () => api.privateMessage.getPrivateSessions(),
   fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
+  getFallbackName: talkerId => t('notifications.whisper.user_fallback', { talkerId }),
 })
 const privateMessages = usePrivateMessages(currentMid, privateSessions.selectedTalkerId, {
   fetchMessages: options => api.privateMessage.getPrivateMessages(options),
   ackSession: options => api.privateMessage.ackPrivateSession(options),
   getCsrf: getCSRF,
   markSessionRead: privateSessions.markSessionRead,
-  markSessionSent: privateSessions.markSessionSent,
-  refreshSessions: () => privateSessions.refresh('merge'),
-  sendMessage: options => api.privateMessage.sendPrivateMessage(options),
-  uploadImage: options => api.privateMessage.uploadPrivateImage(options),
-  cancelImageUpload: requestId => api.privateMessage.cancelPrivateImageUpload({ requestId }),
-  sendImageMessage: options => api.privateMessage.sendPrivateImageMessage(options),
-  getImageSummary: () => t('notifications.whisper.messages.image_summary'),
   syncUnread: () => topBarStore.syncUnreadMessageState(),
 })
 const notificationFeeds = useNotificationFeeds(currentMid, {
@@ -79,15 +74,15 @@ const notificationFeeds = useNotificationFeeds(currentMid, {
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
 const originalView = computed<OriginalNotificationView | null>(() => (
-  currentView.value !== 'whisper' && isOriginalNotificationView(currentView.value)
+  isOriginalOnlyNotificationView(currentView.value)
     ? currentView.value
     : null
 ))
 const nativeView = computed<NativeNotificationSection | null>(() => (
   isNativeNotificationSection(currentView.value) ? currentView.value : null
 ))
-const isWhisperView = computed(() => currentView.value === 'whisper')
-const isOriginalView = computed(() => isOriginalNotificationView(currentView.value))
+const isWhisperView = computed(() => isHybridNotificationView(currentView.value))
+const usesWorkspaceLayout = computed(() => currentSection.value.layout === 'workspace')
 
 const isPageActive = ref(false)
 
@@ -126,8 +121,8 @@ function selectView(view: NotificationView) {
   window.history.pushState(window.history.state, '', buildBewlyNotificationUrl(view))
 }
 
-function resetOuterScrollForOriginalView(view: NotificationView) {
-  if (!isOriginalNotificationView(view))
+function resetOuterScrollForWorkspaceView(view: NotificationView) {
+  if (NOTIFICATION_SECTION_BY_ID[view].layout !== 'workspace')
     return
 
   // Let the active Native Feed persist its own scrollTop before resetting the
@@ -209,7 +204,7 @@ function deactivatePage() {
 }
 
 watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
-watch(currentView, resetOuterScrollForOriginalView)
+watch(currentView, resetOuterScrollForWorkspaceView)
 
 watchEffect(() => {
   if (isPageActive.value) {
@@ -234,8 +229,8 @@ onBeforeUnmount(() => {
   <main
     class="notifications-page"
     :class="{
-      'notifications-page--original': isOriginalView,
-      'notifications-page--native': !isOriginalView,
+      'notifications-page--workspace': usesWorkspaceLayout,
+      'notifications-page--document': !usesWorkspaceLayout,
       'notifications-page--dock-bottom': isBottomDock,
     }"
   >
@@ -286,24 +281,24 @@ onBeforeUnmount(() => {
   box-shadow: none;
 }
 
-.notifications-page--original {
+.notifications-page--workspace {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   overflow: hidden;
 }
 
-.notifications-page--native {
+.notifications-page--document {
   min-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
 }
 
-.notifications-page--original.notifications-page--dock-bottom {
+.notifications-page--workspace.notifications-page--dock-bottom {
   height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
   );
 }
 
-.notifications-page--native.notifications-page--dock-bottom {
+.notifications-page--document.notifications-page--dock-bottom {
   min-height: calc(
     100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
   );
@@ -323,7 +318,7 @@ onBeforeUnmount(() => {
   min-height: 0;
 }
 
-.notifications-page--original .notifications-page__outlet {
+.notifications-page--workspace .notifications-page__outlet {
   height: 100%;
   overflow: hidden;
 }
@@ -344,13 +339,13 @@ onBeforeUnmount(() => {
 }
 
 @media (min-width: breakpoints.$grid-lg) {
-  .notifications-page--original.notifications-page--dock-bottom {
+  .notifications-page--workspace.notifications-page--dock-bottom {
     height: calc(
       100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
     );
   }
 
-  .notifications-page--native.notifications-page--dock-bottom {
+  .notifications-page--document.notifications-page--dock-bottom {
     min-height: calc(
       100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
     );

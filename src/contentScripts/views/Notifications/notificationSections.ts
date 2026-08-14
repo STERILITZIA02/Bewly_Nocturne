@@ -7,15 +7,21 @@ export type NotificationView
     | 'settings'
 
 export type NativeNotificationSection = 'reply' | 'at' | 'love'
+export type HybridNotificationView = 'whisper'
+export type OriginalOnlyNotificationView = 'system' | 'settings'
 
 export type OriginalNotificationView
   = | 'whisper'
     | 'system'
     | 'settings'
 
+export type NotificationSectionImplementation = 'native' | 'original' | 'hybrid'
+export type NotificationSectionLayout = 'document' | 'workspace'
+
 export interface NotificationSectionDefinition {
   id: NotificationView
-  implementation: 'native' | 'original'
+  implementation: NotificationSectionImplementation
+  layout: NotificationSectionLayout
   labelKey: string
   descriptionKey: string
   icon: string
@@ -26,7 +32,8 @@ export interface NotificationSectionDefinition {
 export const NOTIFICATION_SECTIONS = [
   {
     id: 'whisper',
-    implementation: 'original',
+    implementation: 'hybrid',
+    layout: 'workspace',
     labelKey: 'notifications.sections.whisper.label',
     descriptionKey: 'notifications.sections.whisper.description',
     icon: 'i-solar:chat-round-bold-duotone',
@@ -36,6 +43,7 @@ export const NOTIFICATION_SECTIONS = [
   {
     id: 'reply',
     implementation: 'native',
+    layout: 'document',
     labelKey: 'notifications.sections.reply.label',
     descriptionKey: 'notifications.sections.reply.description',
     icon: 'i-solar:reply-2-bold-duotone',
@@ -45,6 +53,7 @@ export const NOTIFICATION_SECTIONS = [
   {
     id: 'at',
     implementation: 'native',
+    layout: 'document',
     labelKey: 'notifications.sections.at.label',
     descriptionKey: 'notifications.sections.at.description',
     icon: 'i-solar:mention-circle-bold-duotone',
@@ -54,6 +63,7 @@ export const NOTIFICATION_SECTIONS = [
   {
     id: 'love',
     implementation: 'native',
+    layout: 'document',
     labelKey: 'notifications.sections.love.label',
     descriptionKey: 'notifications.sections.love.description',
     icon: 'i-solar:like-bold-duotone',
@@ -63,6 +73,7 @@ export const NOTIFICATION_SECTIONS = [
   {
     id: 'system',
     implementation: 'original',
+    layout: 'workspace',
     labelKey: 'notifications.sections.system.label',
     descriptionKey: 'notifications.sections.system.description',
     icon: 'i-solar:chat-line-bold-duotone',
@@ -72,6 +83,7 @@ export const NOTIFICATION_SECTIONS = [
   {
     id: 'settings',
     implementation: 'original',
+    layout: 'workspace',
     labelKey: 'notifications.sections.settings.label',
     descriptionKey: 'notifications.sections.settings.description',
     icon: 'i-solar:settings-bold-duotone',
@@ -87,6 +99,8 @@ export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
 const NOTIFICATION_VIEW_SET = new Set<NotificationView>(
   NOTIFICATION_SECTIONS.map(section => section.id),
 )
+const ORIGINAL_FRAME_VIEW_SET = new Set<OriginalNotificationView>(['whisper', 'system', 'settings'])
+const ORIGINAL_ONLY_VIEW_SET = new Set<OriginalOnlyNotificationView>(['system', 'settings'])
 
 export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
   section => section.unreadSource !== null,
@@ -105,8 +119,16 @@ export function isNotificationView(value: unknown): value is NotificationView {
   return typeof value === 'string' && NOTIFICATION_VIEW_SET.has(value as NotificationView)
 }
 
-export function isOriginalNotificationView(value: NotificationView): value is OriginalNotificationView {
-  return NOTIFICATION_SECTION_BY_ID[value].implementation === 'original'
+export function isOriginalOnlyNotificationView(value: NotificationView): value is OriginalOnlyNotificationView {
+  return ORIGINAL_ONLY_VIEW_SET.has(value as OriginalOnlyNotificationView)
+}
+
+export function isOriginalFrameCapableView(value: NotificationView): value is OriginalNotificationView {
+  return ORIGINAL_FRAME_VIEW_SET.has(value as OriginalNotificationView)
+}
+
+export function isHybridNotificationView(value: NotificationView): value is HybridNotificationView {
+  return NOTIFICATION_SECTION_BY_ID[value].implementation === 'hybrid'
 }
 
 export function isNativeNotificationSection(value: NotificationView): value is NativeNotificationSection {

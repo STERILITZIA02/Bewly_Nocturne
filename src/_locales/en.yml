@@ -911,7 +911,7 @@ notifications:
   sections:
     whisper:
       label: Direct messages
-      description: Browse native conversations and history, and send text or images; unsupported chats remain in original Bilibili
+      description: Browse native conversations and read-only history; sending and unsupported chats remain in original Bilibili
     reply:
       label: Replies
       description: See replies to your comments
@@ -941,6 +941,7 @@ notifications:
     empty: No direct-message conversations
     empty_filtered: No conversations match these filters
     unknown_user: Unknown user
+    user_fallback: 'User {talkerId}'
     summary_unavailable: No message preview
     select_conversation: Select conversation with {name}
     pinned: Pinned
@@ -953,8 +954,7 @@ notifications:
       empty: No messages in this conversation
       load_older: Load earlier messages
       history_start: Start of message history
-      readonly: Read-only mode
-      text_send_enabled: Text and image messages supported
+      readonly: Direct messages are currently read-only
       send_original: Send in original Bilibili
       composer_placeholder: Write a message
       composer_aria: Direct-message text field
@@ -986,6 +986,12 @@ notifications:
       image_send_failed: Image send failed
       image_reconcile_failed: Image sent; waiting for server sync
     errors:
+      login-required: Your sign-in has expired
+      risk-control: Direct-message requests are temporarily restricted
+      server-error: The direct-message service is temporarily unavailable
+      network: Network connection failed
+      invalid-response: Direct-message data is temporarily unavailable
+      api-error: Failed to load direct messages. Try again
       wbi-unavailable: Direct-message signing is temporarily unavailable
   native:
     unknown_user: Unknown user

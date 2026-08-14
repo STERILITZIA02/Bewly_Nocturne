@@ -29,9 +29,7 @@ const errorMessage = computed(() => {
   const kind = state.value.errorKind
   if (!kind)
     return ''
-  if (kind === 'wbi-unavailable')
-    return t('notifications.whisper.errors.wbi-unavailable')
-  return t(`notifications.native.errors.${kind}`)
+  return t(`notifications.whisper.errors.${kind}`)
 })
 
 const SCROLL_EDGE_THRESHOLD = 48
@@ -225,7 +223,7 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
     <header class="conversation-view__header">
       <div>
         <strong>{{ session.name || t('notifications.whisper.unknown_user') }}</strong>
-        <span>{{ t('notifications.whisper.messages.text_send_enabled') }}</span>
+        <span>{{ t('notifications.whisper.messages.readonly') }}</span>
       </div>
     </header>
 
@@ -297,6 +295,7 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
 
     <footer class="conversation-view__footer">
       <MessageComposer
+        v-if="session.capabilities.canSendText || session.capabilities.canSendImage"
         ref="composerRef"
         v-model="draft"
         :sending="state.sending"
@@ -306,6 +305,12 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
         @select-image="sendImage"
         @submit="sendDraft"
       />
+      <div v-else class="conversation-view__readonly">
+        <span>{{ t('notifications.whisper.messages.readonly') }}</span>
+        <ALink :href="originalUrl" type="content">
+          {{ t('notifications.whisper.messages.send_original') }}
+        </ALink>
+      </div>
     </footer>
 
     <PrivateMessageImageViewer
@@ -346,6 +351,25 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
 
 .conversation-view__footer {
   border-top: 1px solid var(--bew-border-color);
+}
+
+.conversation-view__readonly {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  gap: var(--bew-space-3);
+  align-items: center;
+  justify-content: space-between;
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
+
+.conversation-view__readonly a {
+  flex: 0 0 auto;
+  color: var(--bew-theme-color);
+  font-weight: var(--bew-font-weight-semibold);
+  text-decoration: none;
 }
 
 .conversation-view__header > div {

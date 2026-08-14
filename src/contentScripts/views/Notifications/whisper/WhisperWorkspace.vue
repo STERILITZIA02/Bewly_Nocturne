@@ -8,7 +8,6 @@ import OriginalNotificationsFrame from '../components/OriginalNotificationsFrame
 import type { NotificationAccountState } from '../notificationFeedPolicy'
 import ConversationList from './ConversationList.vue'
 import ConversationView from './ConversationView.vue'
-import { isNativePrivateSession } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateSessionsController } from './usePrivateSessions'
 
@@ -36,7 +35,7 @@ const selectedSession = computed(() => props.controller.state.items.find(
   item => item.talkerId === props.controller.selectedTalkerId.value,
 ))
 const nativeSelectedSession = computed(() => (
-  selectedSession.value && isNativePrivateSession(selectedSession.value)
+  selectedSession.value?.capabilities.canReadNative
     ? selectedSession.value
     : null
 ))
@@ -50,9 +49,7 @@ const errorMessage = computed(() => {
   const kind = props.controller.state.errorKind
   if (!kind)
     return ''
-  if (kind === 'wbi-unavailable')
-    return t('notifications.whisper.errors.wbi-unavailable')
-  return t(`notifications.native.errors.${kind}`)
+  return t(`notifications.whisper.errors.${kind}`)
 })
 
 function ensureLoaded() {
@@ -107,7 +104,7 @@ defineExpose({ refresh })
       </div>
 
       <div v-else-if="accountState === 'logged-out'" class="whisper-workspace__state">
-        <Empty :description="t('notifications.native.errors.login-required')">
+        <Empty :description="t('notifications.whisper.errors.login-required')">
           <ALink :href="originalUrl" type="content" class="whisper-workspace__original-link">
             {{ t('notifications.actions.open_original') }}
           </ALink>
