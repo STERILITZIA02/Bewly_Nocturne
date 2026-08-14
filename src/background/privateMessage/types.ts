@@ -46,7 +46,7 @@ export interface PrivateMessage {
   at_uids: unknown[]
   msg_key: string
   msg_status: number
-  notify_code: unknown
+  notify_code: string
   new_face_version: number
   msg_source: number
   [key: string]: unknown
@@ -75,6 +75,13 @@ export interface PrivateSession {
   is_guardian: number
   is_intercept: number
   is_trust: number
+  system_msg_type: number
+  account_info: {
+    name: string
+    pic_url: string
+  } | null
+  live_status: number
+  biz_msg_unread_count: number
   [key: string]: unknown
 }
 

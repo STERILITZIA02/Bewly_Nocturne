@@ -17,6 +17,7 @@ import {
 } from './privateSession'
 
 export type PrivateSessionsApplyMode = 'replace' | 'merge'
+export const PRIVATE_SESSION_CARD_BATCH_SIZE = 30
 
 export interface PrivateSessionsState {
   items: DisplayPrivateSession[]
@@ -31,6 +32,7 @@ export interface PrivateSessionsState {
 export interface PrivateSessionsDependencies {
   fetchSessions: () => Promise<unknown>
   fetchUserCards: (uids: string[]) => Promise<unknown>
+  getFallbackName?: (talkerId: string) => string
 }
 
 export interface PrivateSessionsController {
@@ -64,8 +66,12 @@ function resolveErrorKind(response: unknown): PrivateMessageTransportErrorKind {
   return parsed?.bewlyError?.kind ?? (parsed ? 'api-error' : 'invalid-response')
 }
 
-function isSuccessfulCardsResponse(response: unknown): boolean {
-  return asResponse(response)?.code === 0
+function chunkPrivateSessionUids(uids: string[]): string[][] {
+  const chunks: string[][] = []
+  for (let index = 0; index < uids.length; index += PRIVATE_SESSION_CARD_BATCH_SIZE) {
+    chunks.push(uids.slice(index, index + PRIVATE_SESSION_CARD_BATCH_SIZE))
+  }
+  return chunks
 }
 
 function createState(): PrivateSessionsState {
@@ -120,16 +126,23 @@ export function usePrivateSessions(
           throw resolveErrorKind(sessionsResponse)
 
         const uids = collectPrivateSessionUids(sessions)
-        const cardsResponse = uids.length > 0
-          ? await dependencies.fetchUserCards(uids)
-          : { code: 0, data: [] }
-        if (!isSuccessfulCardsResponse(cardsResponse))
-          throw resolveErrorKind(cardsResponse)
+        const cardResults = await Promise.allSettled(
+          chunkPrivateSessionUids(uids).map(chunk => dependencies.fetchUserCards(chunk)),
+        )
+        const cardsResponses = cardResults.flatMap(result => (
+          result.status === 'fulfilled' && asResponse(result.value)?.code === 0
+            ? [result.value]
+            : []
+        ))
 
         if (generation !== state.generation || mid !== currentMid.value)
           return
 
-        const incoming = transformPrivateSessions(sessions, cardsResponse)
+        const incoming = transformPrivateSessions(
+          sessions,
+          cardsResponses,
+          dependencies.getFallbackName,
+        )
         state.items = mode === 'merge'
           ? mergePrivateSessions(state.items, incoming)
           : incoming

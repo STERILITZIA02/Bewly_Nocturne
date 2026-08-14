@@ -56,7 +56,18 @@ function normalizeHttpUrl(value: unknown): string {
 
 function extractPrivateUserCards(response: unknown): PrivateUserCard[] {
   const root = asRecord(response)
-  const rawCards = root?.code === 0 && Array.isArray(root.data) ? root.data : []
+  if (root?.code !== 0)
+    return []
+
+  const data = root.data
+  const dataRecord = asRecord(data)
+  const rawCards = Array.isArray(data)
+    ? data
+    : Array.isArray(dataRecord?.cards)
+      ? dataRecord.cards
+      : dataRecord
+        ? Object.values(dataRecord)
+        : []
   return rawCards.flatMap((rawCard) => {
     const card = asRecord(rawCard)
     const mid = asString(card?.mid)
@@ -90,8 +101,14 @@ export function collectPrivateSessionUids(sessions: PrivateSession[]): string[] 
   const seen = new Set<string>()
   const uids: string[] = []
   for (const session of sessions) {
-    if (session.session_type !== 1 || !session.talker_id || seen.has(session.talker_id))
+    if (
+      session.session_type !== 1
+      || session.system_msg_type > 0
+      || !session.talker_id
+      || seen.has(session.talker_id)
+    ) {
       continue
+    }
     seen.add(session.talker_id)
     uids.push(session.talker_id)
   }
@@ -100,9 +117,13 @@ export function collectPrivateSessionUids(sessions: PrivateSession[]): string[] 
 
 export function transformPrivateSessions(
   sessions: PrivateSession[],
-  userCardsResponse: unknown,
+  userCardsResponse: unknown | readonly unknown[],
+  getFallbackName: (talkerId: string) => string = talkerId => talkerId,
 ): DisplayPrivateSession[] {
-  const cards = new Map(extractPrivateUserCards(userCardsResponse).map(card => [card.mid, card]))
+  const cardResponses = Array.isArray(userCardsResponse) ? userCardsResponse : [userCardsResponse]
+  const cards = new Map(
+    cardResponses.flatMap(extractPrivateUserCards).map(card => [card.mid, card]),
+  )
   const seen = new Set<string>()
   const result: DisplayPrivateSession[] = []
 
@@ -113,12 +134,13 @@ export function transformPrivateSessions(
     seen.add(talkerId)
 
     const card = cards.get(talkerId)
+    const accountInfo = session.account_info
     result.push({
       key: `${session.session_type}:${talkerId}`,
       talkerId,
       sessionType: session.session_type,
-      name: card?.name || session.group_name || '',
-      avatar: card?.avatar || normalizeHttpUrl(session.group_cover),
+      name: accountInfo?.name || card?.name || session.group_name || getFallbackName(talkerId),
+      avatar: normalizeHttpUrl(accountInfo?.pic_url) || card?.avatar || normalizeHttpUrl(session.group_cover),
       summary: summarizePrivateMessage(session),
       timestamp: session.session_ts,
       unreadCount: Math.max(0, session.unread_count || 0),

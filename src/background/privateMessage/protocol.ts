@@ -36,6 +36,47 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function asNumber(value: unknown, fallback = 0): number {
+  return typeof value === 'number' && Number.isFinite(value) ? value : fallback
+}
+
+function asString(value: unknown): string {
+  return typeof value === 'string' ? value : ''
+}
+
+function getMissingCoreFields(
+  value: unknown,
+  fields: ReadonlyArray<readonly [string, 'number' | 'string']>,
+): string[] {
+  if (!isRecord(value))
+    return ['record']
+  return fields.flatMap(([field, expectedType]) => {
+    const fieldValue = value[field]
+    const isValid = expectedType === 'string'
+      ? typeof fieldValue === 'string'
+      : typeof fieldValue === 'number' && Number.isFinite(fieldValue)
+    return isValid ? [] : [field]
+  })
+}
+
+function reportSkippedPrivateRows(
+  endpointName: 'getPrivateMessages' | 'getPrivateSessions',
+  rawCount: number,
+  acceptedCount: number,
+  missingFields: Set<string>,
+) {
+  const skippedCount = rawCount - acceptedCount
+  if (import.meta.env?.DEV && skippedCount > 0) {
+    console.warn('[PrivateMessage] Skipped malformed rows', {
+      endpointName,
+      rawCount,
+      acceptedCount,
+      skippedCount,
+      missingFields: [...missingFields].sort(),
+    })
+  }
+}
+
 function requireCsrf(value: string): string {
   const csrf = value.trim()
   if (!csrf)
@@ -61,56 +102,93 @@ function requireHttpUrl(value: string, fieldName: string): string {
   }
 }
 
+const PRIVATE_MESSAGE_CORE_FIELDS = [
+  ['sender_uid', 'string'],
+  ['receiver_type', 'number'],
+  ['receiver_id', 'string'],
+  ['msg_type', 'number'],
+  ['content', 'string'],
+  ['msg_seqno', 'string'],
+  ['timestamp', 'number'],
+  ['msg_key', 'string'],
+  ['msg_status', 'number'],
+] as const
+
+const PRIVATE_SESSION_CORE_FIELDS = [
+  ['talker_id', 'string'],
+  ['session_type', 'number'],
+  ['top_ts', 'number'],
+  ['session_ts', 'number'],
+  ['unread_count', 'number'],
+  ['ack_seqno', 'string'],
+  ['max_seqno', 'string'],
+] as const
+
 function parsePrivateMessage(value: unknown): PrivateMessage | null {
-  if (!isRecord(value))
-    return null
-
-  if (
-    typeof value.sender_uid !== 'string'
-    || typeof value.receiver_type !== 'number'
-    || typeof value.receiver_id !== 'string'
-    || typeof value.msg_type !== 'number'
-    || typeof value.content !== 'string'
-    || typeof value.msg_seqno !== 'string'
-    || typeof value.timestamp !== 'number'
-    || !Array.isArray(value.at_uids)
-    || typeof value.msg_key !== 'string'
-    || typeof value.msg_status !== 'number'
-    || typeof value.new_face_version !== 'number'
-    || typeof value.msg_source !== 'number'
-  ) {
-    return null
-  }
-
-  return value as PrivateMessage
-}
-
-function parsePrivateSession(value: unknown): PrivateSession | null {
-  if (!isRecord(value) || value.session_type !== 1)
-    return null
-
-  if (
-    typeof value.talker_id !== 'string'
-    || typeof value.ack_seqno !== 'string'
-    || typeof value.max_seqno !== 'string'
-    || typeof value.top_ts !== 'number'
-    || typeof value.ack_ts !== 'number'
-    || typeof value.session_ts !== 'number'
-    || typeof value.unread_count !== 'number'
-  ) {
-    return null
-  }
-
-  const lastMessage = value.last_msg === null
-    ? null
-    : parsePrivateMessage(value.last_msg)
-  if (value.last_msg !== null && lastMessage === null)
+  if (!isRecord(value) || getMissingCoreFields(value, PRIVATE_MESSAGE_CORE_FIELDS).length > 0)
     return null
 
   return {
     ...value,
+    sender_uid: value.sender_uid as string,
+    receiver_type: value.receiver_type as number,
+    receiver_id: value.receiver_id as string,
+    msg_type: value.msg_type as number,
+    content: value.content as string,
+    msg_seqno: value.msg_seqno as string,
+    timestamp: value.timestamp as number,
+    at_uids: Array.isArray(value.at_uids) ? value.at_uids : [],
+    msg_key: value.msg_key as string,
+    msg_status: value.msg_status as number,
+    notify_code: asString(value.notify_code),
+    new_face_version: asNumber(value.new_face_version),
+    msg_source: asNumber(value.msg_source),
+  }
+}
+
+function parsePrivateSession(value: unknown): PrivateSession | null {
+  if (!isRecord(value) || getMissingCoreFields(value, PRIVATE_SESSION_CORE_FIELDS).length > 0)
+    return null
+
+  const lastMessage = value.last_msg === null || value.last_msg === undefined
+    ? null
+    : parsePrivateMessage(value.last_msg)
+  const accountInfo = isRecord(value.account_info)
+    ? {
+        name: asString(value.account_info.name),
+        pic_url: asString(value.account_info.pic_url),
+      }
+    : null
+
+  return {
+    ...value,
+    talker_id: value.talker_id as string,
+    session_type: value.session_type as number,
+    at_seqno: asNumber(value.at_seqno),
+    top_ts: value.top_ts as number,
+    group_name: asString(value.group_name),
+    group_cover: asString(value.group_cover),
+    is_follow: asNumber(value.is_follow),
+    is_dnd: asNumber(value.is_dnd),
+    ack_seqno: value.ack_seqno as string,
+    ack_ts: asNumber(value.ack_ts),
+    session_ts: value.session_ts as number,
+    unread_count: value.unread_count as number,
     last_msg: lastMessage,
-  } as PrivateSession
+    group_type: asNumber(value.group_type),
+    can_fold: asNumber(value.can_fold),
+    status: asNumber(value.status),
+    max_seqno: value.max_seqno as string,
+    new_push_msg: asNumber(value.new_push_msg),
+    setting: value.setting ?? null,
+    is_guardian: asNumber(value.is_guardian),
+    is_intercept: asNumber(value.is_intercept),
+    is_trust: asNumber(value.is_trust),
+    system_msg_type: asNumber(value.system_msg_type),
+    account_info: accountInfo,
+    live_status: asNumber(value.live_status),
+    biz_msg_unread_count: asNumber(value.biz_msg_unread_count),
+  }
 }
 
 export function buildPrivateSessionsParams(): PrivateMessageRequestParams {
@@ -317,18 +395,29 @@ export function parsePrivateImageUploadResponse(
 export function parsePrivateSessionsResponse(
   response: PrivateMessageApiResponse,
 ): PrivateMessageApiResponse<PrivateSessionsData> | null {
-  if (response.code !== 0 || !isRecord(response.data) || !Array.isArray(response.data.session_list))
+  if (response.code !== 0 || !isRecord(response.data))
+    return null
+
+  const rawSessions = response.data.session_list
+  if (rawSessions !== null && rawSessions !== undefined && !Array.isArray(rawSessions))
     return null
 
   const sessions: PrivateSession[] = []
-  for (const value of response.data.session_list) {
-    if (isRecord(value) && value.session_type !== 1)
-      continue
+  const missingFields = new Set<string>()
+  for (const value of rawSessions ?? []) {
     const session = parsePrivateSession(value)
-    if (!session)
-      return null
-    sessions.push(session)
+    if (session) {
+      sessions.push(session)
+    }
+    else {
+      for (const field of getMissingCoreFields(value, PRIVATE_SESSION_CORE_FIELDS))
+        missingFields.add(field)
+    }
   }
+  const rawCount = rawSessions?.length ?? 0
+  reportSkippedPrivateRows('getPrivateSessions', rawCount, sessions.length, missingFields)
+  if (rawCount > 0 && sessions.length === 0)
+    return null
 
   return {
     ...response,
@@ -345,26 +434,40 @@ export function parsePrivateMessagesResponse(
   if (
     response.code !== 0
     || !isRecord(response.data)
-    || !Array.isArray(response.data.messages)
-    || !Array.isArray(response.data.e_infos)
   ) {
     return null
   }
 
+  const rawMessages = response.data.messages
+  const rawEInfos = response.data.e_infos
+  if (rawMessages !== null && rawMessages !== undefined && !Array.isArray(rawMessages))
+    return null
+  if (rawEInfos !== null && rawEInfos !== undefined && !Array.isArray(rawEInfos))
+    return null
+
   const messages: PrivateMessage[] = []
-  for (const value of response.data.messages) {
+  const missingFields = new Set<string>()
+  for (const value of rawMessages ?? []) {
     const message = parsePrivateMessage(value)
-    if (!message)
-      return null
-    messages.push(message)
+    if (message) {
+      messages.push(message)
+    }
+    else {
+      for (const field of getMissingCoreFields(value, PRIVATE_MESSAGE_CORE_FIELDS))
+        missingFields.add(field)
+    }
   }
+  const rawCount = rawMessages?.length ?? 0
+  reportSkippedPrivateRows('getPrivateMessages', rawCount, messages.length, missingFields)
+  if (rawCount > 0 && messages.length === 0)
+    return null
 
   return {
     ...response,
     data: {
       ...response.data,
       messages,
-      e_infos: response.data.e_infos,
+      e_infos: rawEInfos ?? [],
     },
   }
 }
