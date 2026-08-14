@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import process from 'node:process'
 
+import { nextTick, ref } from 'vue'
+
 import { storeWbiKeys } from '../src/background/wbiSign'
 import type { APIClient } from '../src/utils/api'
 
@@ -25,6 +27,8 @@ interface PrivateMessageModules {
   protocol: typeof import('../src/background/privateMessage/protocol')
   transport: typeof import('../src/background/privateMessage/transport')
   types: typeof import('../src/background/privateMessage/types')
+  privateSession: typeof import('../src/contentScripts/views/Notifications/whisper/privateSession')
+  usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
 }
 
 const assertions: Array<{
@@ -53,14 +57,32 @@ function createMockResponse(text: string, options: MockResponseOptions = {}): Re
 
 async function loadModules(): Promise<PrivateMessageModules> {
   try {
-    const [errors, losslessJson, protocol, transport, types] = await Promise.all([
+    const [
+      errors,
+      losslessJson,
+      protocol,
+      transport,
+      types,
+      privateSession,
+      usePrivateSessions,
+    ] = await Promise.all([
       import('../src/background/privateMessage/errors'),
       import('../src/background/privateMessage/losslessJson'),
       import('../src/background/privateMessage/protocol'),
       import('../src/background/privateMessage/transport'),
       import('../src/background/privateMessage/types'),
+      import('../src/contentScripts/views/Notifications/whisper/privateSession'),
+      import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
     ])
-    return { errors, losslessJson, protocol, transport, types }
+    return {
+      errors,
+      losslessJson,
+      protocol,
+      transport,
+      types,
+      privateSession,
+      usePrivateSessions,
+    }
   }
   catch {
     assert.fail('private-message production modules must exist before verification can pass')
@@ -258,6 +280,230 @@ verify('transport errors are structured without raw response data', async ({ err
     assert.equal(Object.hasOwn(response.bewlyError ?? {}, 'url'), false)
     assert.equal(Object.hasOwn(response.bewlyError ?? {}, 'stack'), false)
   }
+})
+
+function createRawSession(
+  talkerId: string,
+  overrides: Partial<import('../src/background/privateMessage/types').PrivateSession> = {},
+): import('../src/background/privateMessage/types').PrivateSession {
+  return {
+    talker_id: talkerId,
+    session_type: 1,
+    at_seqno: 0,
+    top_ts: 0,
+    group_name: '',
+    group_cover: '',
+    is_follow: 0,
+    is_dnd: 0,
+    ack_seqno: '9223372036854775700',
+    ack_ts: 1755000000000000,
+    session_ts: 1755000000000001,
+    unread_count: 0,
+    last_msg: {
+      sender_uid: talkerId,
+      receiver_type: 1,
+      receiver_id: '1',
+      msg_type: 1,
+      content: '{"content":"sanitized summary"}',
+      msg_seqno: '9223372036854775799',
+      timestamp: 1755000000,
+      at_uids: [],
+      msg_key: '9223372036854775798',
+      msg_status: 0,
+      notify_code: '',
+      new_face_version: 0,
+      msg_source: 0,
+    },
+    group_type: 0,
+    can_fold: 0,
+    status: 0,
+    max_seqno: '9223372036854775799',
+    new_push_msg: 0,
+    setting: 0,
+    is_guardian: 0,
+    is_intercept: 0,
+    is_trust: 0,
+    ...overrides,
+  }
+}
+
+function createSessionsResponse(
+  sessions: import('../src/background/privateMessage/types').PrivateSession[],
+) {
+  return {
+    code: 0,
+    data: {
+      session_list: sessions,
+    },
+  }
+}
+
+function createCardsResponse(cards: Array<{ face: string, mid: string, name: string }>) {
+  return {
+    code: 0,
+    data: cards,
+  }
+}
+
+verify('session transform preserves IDs and maps cards, flags, unread, and summaries', ({ privateSession }) => {
+  const raw = createRawSession('9223372036854775807', {
+    top_ts: 1755000000000002,
+    is_dnd: 1,
+    is_follow: 1,
+    unread_count: 7,
+  })
+  const [display] = privateSession.transformPrivateSessions(
+    [raw],
+    createCardsResponse([{
+      mid: '9223372036854775807',
+      name: 'Sanitized User',
+      face: 'https://i0.hdslb.com/sanitized-avatar.webp',
+    }]),
+  )
+
+  assert.ok(display)
+  assert.equal(display.key, '1:9223372036854775807')
+  assert.equal(display.talkerId, '9223372036854775807')
+  assert.equal(display.name, 'Sanitized User')
+  assert.equal(display.avatar, 'https://i0.hdslb.com/sanitized-avatar.webp')
+  assert.equal(display.summary, 'sanitized summary')
+  assert.equal(display.timestamp, 1755000000000001)
+  assert.equal(display.unreadCount, 7)
+  assert.equal(display.ackSeqno, '9223372036854775700')
+  assert.equal(display.maxSeqno, '9223372036854775799')
+  assert.equal(display.pinned, true)
+  assert.equal(display.muted, true)
+  assert.equal(display.followed, true)
+  assert.equal(display.original, raw)
+})
+
+verify('session helpers batch and dedupe UIDs while preserving server order', ({ privateSession }) => {
+  const sessions = [
+    createRawSession('30', { top_ts: 3 }),
+    createRawSession('20'),
+    createRawSession('30', { unread_count: 9 }),
+    createRawSession('10'),
+  ]
+  assert.deepEqual(privateSession.collectPrivateSessionUids(sessions), ['30', '20', '10'])
+
+  const display = privateSession.transformPrivateSessions(sessions, createCardsResponse([]))
+  assert.deepEqual(display.map(item => item.talkerId), ['30', '20', '10'])
+  assert.equal(display[0]?.pinned, true)
+})
+
+verify('local session filters combine all, unread, pinned, and username search', ({ privateSession }) => {
+  const items = privateSession.transformPrivateSessions([
+    createRawSession('1', { group_name: 'Alpha', unread_count: 2 }),
+    createRawSession('2', { group_name: 'Beta', top_ts: 1 }),
+    createRawSession('3', { group_name: 'Gamma' }),
+  ], createCardsResponse([]))
+
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'all', query: 'a' }).map(item => item.talkerId),
+    ['1', '2', '3'],
+  )
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'unread', query: '' }).map(item => item.talkerId),
+    ['1'],
+  )
+  assert.deepEqual(
+    privateSession.filterPrivateSessions(items, { filter: 'pinned', query: 'bet' }).map(item => item.talkerId),
+    ['2'],
+  )
+  assert.equal(privateSession.normalizePrivateSessionLocale('jyut'), 'zh-HK')
+})
+
+verify('automatic session merge updates head data without discarding existing rows', ({ privateSession }) => {
+  const previous = privateSession.transformPrivateSessions([
+    createRawSession('1', { group_name: 'Old Alpha' }),
+    createRawSession('2', { group_name: 'Beta' }),
+  ], createCardsResponse([]))
+  const incoming = privateSession.transformPrivateSessions([
+    createRawSession('3', { group_name: 'Gamma', top_ts: 1 }),
+    createRawSession('1', { group_name: 'New Alpha', unread_count: 4 }),
+  ], createCardsResponse([]))
+
+  const merged = privateSession.mergePrivateSessions(previous, incoming)
+  assert.deepEqual(merged.map(item => item.talkerId), ['3', '1', '2'])
+  assert.equal(merged[1]?.name, 'New Alpha')
+  assert.equal(merged[1]?.unreadCount, 4)
+})
+
+verify('session controller is single-flight and drops old-account responses', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  let resolveFirst: ((value: unknown) => void) | undefined
+  let sessionRequestCount = 0
+  const firstResponse = new Promise<unknown>((resolve) => {
+    resolveFirst = resolve
+  })
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => {
+      sessionRequestCount++
+      if (sessionRequestCount === 1)
+        return firstResponse
+      return createSessionsResponse([createRawSession('300')])
+    },
+    fetchUserCards: async uids => createCardsResponse(
+      uids.map(uid => ({ mid: uid, name: `User ${uid}`, face: '' })),
+    ),
+  })
+
+  const firstLoad = controller.loadInitial()
+  const repeatedLoad = controller.loadInitial()
+  assert.equal(sessionRequestCount, 1)
+
+  mid.value = '200'
+  await nextTick()
+  resolveFirst?.(createSessionsResponse([createRawSession('999')]))
+  await Promise.all([firstLoad, repeatedLoad])
+  assert.equal(controller.state.items.length, 0)
+
+  await controller.loadInitial()
+  assert.equal(sessionRequestCount, 2)
+  assert.deepEqual(controller.state.items.map(item => item.talkerId), ['300'])
+  assert.equal(controller.state.items[0]?.name, 'User 300')
+})
+
+verify('manual session refresh replaces while automatic refresh merges', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const pages = [
+    [createRawSession('1'), createRawSession('2')],
+    [createRawSession('3')],
+    [createRawSession('4')],
+  ]
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse(pages.shift() ?? []),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  await controller.refresh('merge')
+  assert.deepEqual(controller.state.items.map(item => item.talkerId), ['3', '1', '2'])
+
+  await controller.refresh('replace')
+  assert.deepEqual(controller.state.items.map(item => item.talkerId), ['4'])
+})
+
+verify('authoritative DM unread changes trigger one merge refresh per observed value', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  let requests = 0
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => {
+      requests++
+      return createSessionsResponse([createRawSession(String(requests))])
+    },
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.observeUnreadCount(0)
+  assert.equal(requests, 1)
+  await controller.observeUnreadCount(0)
+  assert.equal(requests, 1)
+  await controller.observeUnreadCount(2)
+  assert.equal(requests, 2)
+  await controller.observeUnreadCount(2)
+  assert.equal(requests, 2)
+  assert.deepEqual(controller.state.items.map(item => item.talkerId), ['2', '1'])
 })
 
 async function main() {

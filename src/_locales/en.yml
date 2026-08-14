@@ -911,7 +911,7 @@ notifications:
   sections:
     whisper:
       label: Direct messages
-      description: Use original Bilibili direct messages
+      description: Browse native conversations while original Bilibili provides chat details
     reply:
       label: Replies
       description: See replies to your comments
@@ -927,6 +927,28 @@ notifications:
     settings:
       label: Message settings
       description: Manage message settings with original Bilibili
+  whisper:
+    loading: Loading direct-message conversations
+    profile_pending: Confirming your account
+    list_aria: Direct-message conversation list
+    search_placeholder: Search usernames
+    search_aria: Search loaded direct-message conversations
+    clear_search: Clear search
+    filters:
+      all: All
+      unread: Unread
+      pinned: Pinned
+    empty: No direct-message conversations
+    empty_filtered: No conversations match these filters
+    unknown_user: Unknown user
+    summary_unavailable: No message preview
+    select_conversation: Select conversation with {name}
+    pinned: Pinned
+    muted: Muted
+    unread_count: '{count} unread direct messages'
+    open_unsupported_original: Open conversation with {name} in original Bilibili
+    errors:
+      wbi-unavailable: Direct-message signing is temporarily unavailable
   native:
     unknown_user: Unknown user
     original_content: Original content

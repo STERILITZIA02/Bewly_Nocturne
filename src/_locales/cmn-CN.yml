@@ -858,7 +858,7 @@ notifications:
   sections:
     whisper:
       label: 私信
-      description: 使用哔哩哔哩原版私信
+      description: 查看原生会话列表，聊天详情仍由哔哩哔哩原版提供
     reply:
       label: 回复我的
       description: 查看别人对你的回复
@@ -874,6 +874,28 @@ notifications:
     settings:
       label: 消息设置
       description: 使用哔哩哔哩原版管理消息设置
+  whisper:
+    loading: 正在加载私信会话
+    profile_pending: 正在确认账号
+    list_aria: 私信会话列表
+    search_placeholder: 搜索用户名
+    search_aria: 搜索已加载的私信会话
+    clear_search: 清除搜索
+    filters:
+      all: 全部
+      unread: 未读
+      pinned: 置顶
+    empty: 暂无私信会话
+    empty_filtered: 没有符合条件的会话
+    unknown_user: 未知用户
+    summary_unavailable: 暂无消息摘要
+    select_conversation: 选择与{name}的会话
+    pinned: 已置顶
+    muted: 已免打扰
+    unread_count: '{count} 条未读私信'
+    open_unsupported_original: 在原版中打开与{name}的会话
+    errors:
+      wbi-unavailable: 私信签名暂时不可用
   native:
     unknown_user: 未知用户
     original_content: 原始内容

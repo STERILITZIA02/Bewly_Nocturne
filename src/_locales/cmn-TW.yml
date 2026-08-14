@@ -859,7 +859,7 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 使用嗶哩嗶哩原版私訊
+      description: 查看原生會話列表，聊天詳情仍由嗶哩嗶哩原版提供
     reply:
       label: 回覆我的
       description: 查看其他人對你的回覆
@@ -875,6 +875,28 @@ notifications:
     settings:
       label: 訊息設定
       description: 使用嗶哩嗶哩原版管理訊息設定
+  whisper:
+    loading: 正在載入私訊會話
+    profile_pending: 正在確認帳號
+    list_aria: 私訊會話列表
+    search_placeholder: 搜尋使用者名稱
+    search_aria: 搜尋已載入的私訊會話
+    clear_search: 清除搜尋
+    filters:
+      all: 全部
+      unread: 未讀
+      pinned: 置頂
+    empty: 暫無私訊會話
+    empty_filtered: 沒有符合條件的會話
+    unknown_user: 未知使用者
+    summary_unavailable: 暫無訊息摘要
+    select_conversation: 選擇與{name}的會話
+    pinned: 已置頂
+    muted: 已開啟勿擾
+    unread_count: '{count} 則未讀私訊'
+    open_unsupported_original: 在原版中開啟與{name}的會話
+    errors:
+      wbi-unavailable: 私訊簽章暫時無法使用
   native:
     unknown_user: 未知使用者
     original_content: 原始內容

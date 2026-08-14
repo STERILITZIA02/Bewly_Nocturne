@@ -27,12 +27,18 @@ import {
   isOriginalNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
+import { usePrivateSessions } from './whisper/usePrivateSessions'
+import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
 
 interface OriginalNotificationsFrameExposed {
   reload: () => void
 }
 
 interface NativeNotificationFeedExposed {
+  refresh: () => Promise<void>
+}
+
+interface WhisperWorkspaceExposed {
   refresh: () => Promise<void>
 }
 
@@ -44,20 +50,28 @@ const topBarStore = useTopBarStore()
 const currentView = ref<NotificationView>(parseNotificationView(routeState.href || window.location.href))
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
+const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
+const privateSessions = usePrivateSessions(currentMid, {
+  fetchSessions: () => api.privateMessage.getPrivateSessions(),
+  fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
+})
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
 const originalView = computed<OriginalNotificationView | null>(() => (
-  isOriginalNotificationView(currentView.value) ? currentView.value : null
+  currentView.value !== 'whisper' && isOriginalNotificationView(currentView.value)
+    ? currentView.value
+    : null
 ))
 const nativeView = computed<NativeNotificationSection | null>(() => (
   isNativeNotificationSection(currentView.value) ? currentView.value : null
 ))
-const isOriginalView = computed(() => originalView.value !== null)
+const isWhisperView = computed(() => currentView.value === 'whisper')
+const isOriginalView = computed(() => isOriginalNotificationView(currentView.value))
 
 const isPageActive = ref(false)
 
@@ -109,7 +123,9 @@ function resetOuterScrollForOriginalView(view: NotificationView) {
 }
 
 function refreshCurrentView() {
-  if (nativeView.value)
+  if (isWhisperView.value)
+    void whisperWorkspaceRef.value?.refresh()
+  else if (nativeView.value)
     void nativeFeedRef.value?.refresh()
   else
     originalFrameRef.value?.reload()
@@ -212,6 +228,13 @@ onBeforeUnmount(() => {
       <NotificationsNavigation :model-value="currentView" @update:model-value="selectView" />
 
       <section class="notifications-page__outlet">
+        <WhisperWorkspace
+          v-if="isWhisperView"
+          ref="whisperWorkspaceRef"
+          :account-state="accountState"
+          :active="isPageActive"
+          :controller="privateSessions"
+        />
         <NativeNotificationFeed
           v-if="nativeView"
           :key="nativeView"
