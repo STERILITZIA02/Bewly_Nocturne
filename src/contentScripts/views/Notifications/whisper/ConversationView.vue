@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
+import MessageComposer from './MessageComposer.vue'
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { DisplayPrivateSession } from './privateSession'
@@ -18,7 +19,12 @@ const { t } = useI18n()
 const originalUrl = buildOriginalNotificationUrl('whisper')
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
+const composerRef = ref<InstanceType<typeof MessageComposer> | null>(null)
 const state = computed(() => props.controller.getState(props.session.talkerId))
+const draft = computed({
+  get: () => state.value.draft,
+  set: value => props.controller.setDraft(props.session.talkerId, value),
+})
 const errorMessage = computed(() => {
   const kind = state.value.errorKind
   if (!kind)
@@ -96,6 +102,28 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   await acknowledgeIfEligible()
 }
 
+async function sendDraft() {
+  const request = props.controller.sendDraft(props.session.talkerId)
+  await nextTick()
+  scrollToLatest()
+  await request
+  await nextTick()
+  if (isAtLatest())
+    scrollToLatest()
+}
+
+async function retrySend(localId: string) {
+  const request = props.controller.retrySend(props.session.talkerId, localId)
+  await nextTick()
+  scrollToLatest()
+  await request
+}
+
+function editFailed(localId: string) {
+  props.controller.editFailed(props.session.talkerId, localId)
+  void nextTick(() => composerRef.value?.focus())
+}
+
 async function activateConversation() {
   if (!props.active)
     return
@@ -170,7 +198,7 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
     <header class="conversation-view__header">
       <div>
         <strong>{{ session.name || t('notifications.whisper.unknown_user') }}</strong>
-        <span>{{ t('notifications.whisper.messages.readonly') }}</span>
+        <span>{{ t('notifications.whisper.messages.text_send_enabled') }}</span>
       </div>
     </header>
 
@@ -218,7 +246,10 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
             v-for="message in state.items"
             :key="message.msgKey"
             :message="message"
+            @delete-failed="controller.deleteFailed(session.talkerId, $event)"
+            @edit-failed="editFailed"
             @preview="previewImage = $event"
+            @retry="retrySend"
           />
         </div>
         <div v-else class="conversation-view__state">
@@ -237,10 +268,12 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
     </button>
 
     <footer class="conversation-view__footer">
-      <span>{{ t('notifications.whisper.messages.readonly') }}</span>
-      <ALink :href="originalUrl" type="content">
-        {{ t('notifications.whisper.messages.send_original') }}
-      </ALink>
+      <MessageComposer
+        ref="composerRef"
+        v-model="draft"
+        :sending="state.sending"
+        @submit="sendDraft"
+      />
     </footer>
 
     <PrivateMessageImageViewer
@@ -280,9 +313,6 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
 }
 
 .conversation-view__footer {
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
   border-top: 1px solid var(--bew-border-color);
 }
 
@@ -307,7 +337,6 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
   line-height: var(--bew-line-height-caption);
 }
 
-.conversation-view__footer a,
 .conversation-view__state-actions a,
 .conversation-view__inline-error button,
 .conversation-view__history-status button {
@@ -388,7 +417,7 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
 .conversation-view__new-messages {
   position: absolute;
   right: var(--bew-space-4);
-  bottom: calc(var(--bew-control-height) + var(--bew-space-6));
+  bottom: calc(var(--bew-control-height-lg) + var(--bew-space-12) + var(--bew-space-4));
   z-index: 1;
   min-height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);

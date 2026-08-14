@@ -10,9 +10,12 @@ import type {
 import type { DisplayPrivateMessage } from './privateMessage'
 import {
   comparePrivateMessageSeqno,
+  createOptimisticPrivateTextMessage,
   getLatestPrivateMessageSeqno,
   getOldestPrivateMessageSeqno,
+  getPrivateMessageText,
   mergePrivateMessages,
+  reconcileOptimisticPrivateMessages,
   transformPrivateMessages,
 } from './privateMessage'
 
@@ -25,6 +28,13 @@ interface AckPrivateMessagesOptions {
   ackSeqno: string
   csrf: string
   talkerId: string
+}
+
+interface SendPrivateMessageOptions {
+  csrf: string
+  senderId: string
+  talkerId: string
+  text: string
 }
 
 export interface PrivateConversationState {
@@ -42,6 +52,8 @@ export interface PrivateConversationState {
   atLatest: boolean
   newMessagesAvailable: boolean
   lastAckSeqno: string
+  draft: string
+  sending: boolean
 }
 
 export interface PrivateMessagesDependencies {
@@ -50,6 +62,11 @@ export interface PrivateMessagesDependencies {
   getCsrf: () => string
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   syncUnread: () => Promise<void>
+  sendMessage?: (options: SendPrivateMessageOptions) => Promise<unknown>
+  markSessionSent?: (talkerId: string, summary: string, timestamp: number) => void
+  refreshSessions?: () => Promise<void>
+  createLocalId?: () => string
+  nowSeconds?: () => number
 }
 
 export interface PrivateAckEligibility {
@@ -66,6 +83,11 @@ export interface PrivateMessagesController {
   refreshLatest: (talkerId: string) => Promise<void>
   updateViewport: (talkerId: string, viewport: { atLatest: boolean, scrollTop: number }) => void
   acknowledgeIfEligible: (talkerId: string, eligibility: PrivateAckEligibility) => Promise<boolean>
+  setDraft: (talkerId: string, text: string) => void
+  sendDraft: (talkerId: string) => Promise<boolean>
+  retrySend: (talkerId: string, localId: string) => Promise<boolean>
+  editFailed: (talkerId: string, localId: string) => void
+  deleteFailed: (talkerId: string, localId: string) => void
   invalidateConversation: (talkerId: string) => void
 }
 
@@ -84,6 +106,14 @@ function extractMessages(response: unknown): PrivateMessagesData | null {
   return Array.isArray(data.messages) && Array.isArray(data.e_infos)
     ? data as PrivateMessagesData
     : null
+}
+
+function extractSentMessageKey(response: unknown): string {
+  const parsed = asResponse(response)
+  if (!parsed || parsed.code !== 0 || !parsed.data || typeof parsed.data !== 'object')
+    return ''
+  const msgKey = (parsed.data as { msg_key?: unknown }).msg_key
+  return typeof msgKey === 'string' ? msgKey : ''
 }
 
 function resolveErrorKind(response: unknown): PrivateMessageTransportErrorKind {
@@ -107,6 +137,8 @@ function createConversationState(talkerId: string): PrivateConversationState {
     atLatest: true,
     newMessagesAvailable: false,
     lastAckSeqno: '0',
+    draft: '',
+    sending: false,
   })
 }
 
@@ -119,6 +151,7 @@ export function usePrivateMessages(
   const firstPageRequests = new Map<string, Promise<void>>()
   const olderRequests = new Map<string, Promise<void>>()
   const ackRequests = new Map<string, Promise<boolean>>()
+  const sendRequests = new Map<string, Promise<boolean>>()
   let accountGeneration = 0
 
   function getState(talkerId: string): PrivateConversationState {
@@ -165,6 +198,14 @@ export function usePrivateMessages(
     }
   }
 
+  function reconcilePendingMessages(state: PrivateConversationState) {
+    const localIds = state.items.flatMap(item => (
+      item.localId && item.sendState === 'reconciling' ? [item.localId] : []
+    ))
+    for (const localId of localIds)
+      state.items = reconcileOptimisticPrivateMessages(state.items, localId).items
+  }
+
   function requestFirstPage(
     talkerId: string,
     mode: 'replace' | 'merge',
@@ -199,9 +240,11 @@ export function usePrivateMessages(
         const incoming = transformPrivateMessages(data.messages, data.e_infos, mid)
         const previousKeys = new Set(state.items.map(item => item.msgKey))
         const hasNewItems = incoming.some(item => !previousKeys.has(item.msgKey))
+        const localItems = state.items.filter(item => item.localId)
         state.items = mode === 'replace'
-          ? incoming
+          ? mergePrivateMessages(incoming, localItems)
           : mergePrivateMessages(state.items, incoming)
+        reconcilePendingMessages(state)
         state.loaded = true
         state.noMore = mode === 'replace' ? incoming.length === 0 : state.noMore
         state.errorKind = null
@@ -374,6 +417,161 @@ export function usePrivateMessages(
     return request
   }
 
+  function setDraft(talkerId: string, text: string) {
+    getState(talkerId).draft = text
+  }
+
+  function createLocalId(): string {
+    return dependencies.createLocalId?.() ?? globalThis.crypto.randomUUID()
+  }
+
+  function nowSeconds(): number {
+    return dependencies.nowSeconds?.() ?? Math.floor(Date.now() / 1000)
+  }
+
+  async function pullLatestAfterSend(
+    talkerId: string,
+    mid: string,
+    requestAccountGeneration: number,
+    state: PrivateConversationState,
+  ) {
+    const activeFirstPageRequest = firstPageRequests.get(talkerId)
+    if (activeFirstPageRequest)
+      await activeFirstPageRequest
+    if (!isCurrentAccountState(mid, requestAccountGeneration, state))
+      return
+    await requestFirstPage(talkerId, state.loaded ? 'merge' : 'replace')
+  }
+
+  function executeSend(
+    talkerId: string,
+    localId: string,
+  ): Promise<boolean> {
+    const activeRequest = sendRequests.get(talkerId)
+    if (activeRequest)
+      return activeRequest
+
+    const mid = currentMid.value
+    const state = states.get(talkerId)
+    const optimistic = state?.items.find(item => item.localId === localId)
+    const text = optimistic ? getPrivateMessageText(optimistic) : ''
+    const csrf = dependencies.getCsrf().trim()
+    if (!mid || !state || !optimistic || !text.trim() || !csrf || !dependencies.sendMessage)
+      return Promise.resolve(false)
+
+    const requestAccountGeneration = accountGeneration
+    optimistic.sendState = 'pending'
+    optimistic.serverMsgKey = undefined
+    state.sending = true
+
+    const request = (async () => {
+      const response = await dependencies.sendMessage!({
+        csrf,
+        senderId: mid,
+        talkerId,
+        text,
+      })
+      if (asResponse(response)?.code !== 0)
+        throw new Error('private message send failed')
+      if (!isCurrentAccountState(mid, requestAccountGeneration, state))
+        return false
+
+      const currentOptimistic = state.items.find(item => item.localId === localId)
+      if (!currentOptimistic)
+        return false
+      currentOptimistic.sendState = 'reconciling'
+      currentOptimistic.serverMsgKey = extractSentMessageKey(response) || undefined
+
+      dependencies.markSessionSent?.(talkerId, text, currentOptimistic.timestamp)
+      const sessionRefresh = dependencies.refreshSessions?.().catch(() => {})
+      await pullLatestAfterSend(talkerId, mid, requestAccountGeneration, state)
+      if (sessionRefresh)
+        await sessionRefresh
+      return isCurrentAccountState(mid, requestAccountGeneration, state)
+    })().catch(() => {
+      if (isCurrentAccountState(mid, requestAccountGeneration, state)) {
+        const currentOptimistic = state.items.find(item => item.localId === localId)
+        if (currentOptimistic)
+          currentOptimistic.sendState = 'failed'
+      }
+      return false
+    }).finally(() => {
+      if (isCurrentAccountState(mid, requestAccountGeneration, state))
+        state.sending = false
+      if (sendRequests.get(talkerId) === request)
+        sendRequests.delete(talkerId)
+    })
+
+    sendRequests.set(talkerId, request)
+    return request
+  }
+
+  function sendDraft(talkerId: string): Promise<boolean> {
+    const activeRequest = sendRequests.get(talkerId)
+    if (activeRequest)
+      return activeRequest
+
+    const mid = currentMid.value
+    const state = getState(talkerId)
+    const text = state.draft
+    const csrf = dependencies.getCsrf().trim()
+    if (
+      !mid
+      || activeTalkerId.value !== talkerId
+      || !text.trim()
+      || !csrf
+      || !dependencies.sendMessage
+    ) {
+      return Promise.resolve(false)
+    }
+
+    let optimistic: DisplayPrivateMessage
+    try {
+      optimistic = createOptimisticPrivateTextMessage({
+        localId: createLocalId(),
+        receiverId: talkerId,
+        senderId: mid,
+        text,
+        timestamp: nowSeconds(),
+      })
+    }
+    catch {
+      return Promise.resolve(false)
+    }
+
+    state.items = mergePrivateMessages(state.items, [optimistic])
+    state.draft = ''
+    return executeSend(talkerId, optimistic.localId!)
+  }
+
+  function retrySend(talkerId: string, localId: string): Promise<boolean> {
+    const activeRequest = sendRequests.get(talkerId)
+    if (activeRequest)
+      return activeRequest
+    const state = states.get(talkerId)
+    const message = state?.items.find(item => item.localId === localId)
+    if (!message || message.sendState !== 'failed')
+      return Promise.resolve(false)
+    return executeSend(talkerId, localId)
+  }
+
+  function editFailed(talkerId: string, localId: string) {
+    const state = states.get(talkerId)
+    const message = state?.items.find(item => item.localId === localId)
+    if (!state || !message || message.sendState !== 'failed')
+      return
+    state.draft = getPrivateMessageText(message)
+    state.items = state.items.filter(item => item.localId !== localId)
+  }
+
+  function deleteFailed(talkerId: string, localId: string) {
+    const state = states.get(talkerId)
+    const message = state?.items.find(item => item.localId === localId)
+    if (!state || !message || message.sendState !== 'failed')
+      return
+    state.items = state.items.filter(item => item.localId !== localId)
+  }
+
   function invalidateConversation(talkerId: string) {
     const state = states.get(talkerId)
     if (!state)
@@ -393,6 +591,7 @@ export function usePrivateMessages(
     firstPageRequests.clear()
     olderRequests.clear()
     ackRequests.clear()
+    sendRequests.clear()
   }, { flush: 'sync' })
 
   watch(activeTalkerId, (nextTalkerId, previousTalkerId) => {
@@ -408,6 +607,11 @@ export function usePrivateMessages(
     refreshLatest,
     updateViewport,
     acknowledgeIfEligible,
+    setDraft,
+    sendDraft,
+    retrySend,
+    editFailed,
+    deleteFailed,
     invalidateConversation,
   }
 }

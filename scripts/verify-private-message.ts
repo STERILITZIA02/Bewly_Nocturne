@@ -12,6 +12,7 @@ if (false) {
   void api.privateMessage.getPrivateUserCards({ uids: ['1'] })
   void api.privateMessage.getPrivateMessages({ talkerId: '1', endSeqno: '2' })
   void api.privateMessage.ackPrivateSession({ talkerId: '1', ackSeqno: '2', csrf: 'token' })
+  void api.privateMessage.sendPrivateMessage({ senderId: '1', talkerId: '2', text: 'hello', csrf: 'token' })
 }
 
 interface MockResponseOptions {
@@ -103,6 +104,7 @@ verify('endpoints and request builders match the fixed Web IM contract', ({ prot
     getPrivateUserCards: 'https://api.vc.bilibili.com/account/v1/user/cards',
     getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
     ackPrivateSession: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
+    sendPrivateMessage: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
   })
   assert.deepEqual(protocol.buildPrivateSessionsParams(), {
     session_type: 1,
@@ -179,6 +181,72 @@ verify('private-message WBI signing reuses the shared signer and adds wts/w_rid'
   assert.match(String(signed.w_rid), /^[a-f\d]{32}$/)
   assert.equal(Object.hasOwn(original, 'wts'), false)
   assert.equal(Object.hasOwn(original, 'w_rid'), false)
+})
+
+verify('text send builder creates a flat bracket form with UUID, seconds, JSON content, and dual CSRF', ({ protocol }) => {
+  const params = protocol.createPrivateTextMessageParams({
+    senderId: '9223372036854775806',
+    talkerId: '9223372036854775807',
+    text: 'hello\nworld',
+    csrf: 'sanitized-csrf',
+  }, {
+    now: () => 1755000000123,
+    randomUUID: () => '123e4567-e89b-42d3-a456-426614174000',
+  })
+
+  assert.deepEqual(params, {
+    'msg[sender_uid]': '9223372036854775806',
+    'msg[receiver_id]': '9223372036854775807',
+    'msg[receiver_type]': 1,
+    'msg[msg_type]': 1,
+    'msg[msg_status]': 0,
+    'msg[dev_id]': '123e4567-e89b-42d3-a456-426614174000',
+    'msg[timestamp]': 1755000000,
+    'msg[new_face_version]': 1,
+    'msg[content]': '{"content":"hello\\nworld"}',
+    from_firework: 0,
+    build: 0,
+    mobi_app: 'web',
+    csrf_token: 'sanitized-csrf',
+    csrf: 'sanitized-csrf',
+  })
+  assert.match(String(params['msg[dev_id]']), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i)
+  assert.equal(typeof params['msg[timestamp]'], 'number')
+})
+
+verify('form transport signs the flat send body and posts it as form-urlencoded', async ({ transport }) => {
+  let capturedUrl = ''
+  let capturedInit: RequestInit | undefined
+  const response = await transport.requestPrivateMessageForm({
+    endpointName: 'sendPrivateMessage',
+    params: {
+      'msg[sender_uid]': '100',
+      'msg[receiver_id]': '200',
+      'msg[dev_id]': '123e4567-e89b-42d3-a456-426614174000',
+      'msg[content]': '{"content":"hello"}',
+    },
+    url: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+  }, {
+    fetch: async (url, init) => {
+      capturedUrl = String(url)
+      capturedInit = init
+      return createMockResponse('{"code":0,"data":{"msg_key":9223372036854775807}}')
+    },
+    signParams: async params => ({ ...params, wts: 1755000000, w_rid: 'signed-rid' }),
+  })
+
+  assert.equal(response.code, 0)
+  assert.equal((response.data as { msg_key?: string }).msg_key, '9223372036854775807')
+  assert.equal(capturedUrl, 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg')
+  assert.equal(capturedInit?.method, 'POST')
+  assert.equal((capturedInit?.headers as Record<string, string>)['Content-Type'], 'application/x-www-form-urlencoded')
+  const form = new URLSearchParams(String(capturedInit?.body))
+  assert.equal(form.get('msg[sender_uid]'), '100')
+  assert.equal(form.get('msg[receiver_id]'), '200')
+  assert.equal(form.get('msg[dev_id]'), '123e4567-e89b-42d3-a456-426614174000')
+  assert.equal(form.get('msg[content]'), '{"content":"hello"}')
+  assert.equal(form.get('wts'), '1755000000')
+  assert.equal(form.get('w_rid'), 'signed-rid')
 })
 
 verify('lossless parser preserves only confirmed IDs and seqnos as strings', async ({ losslessJson, protocol }) => {
@@ -940,6 +1008,188 @@ verify('session controller clears unread only after confirmed ACK', ({ usePrivat
   controller.markSessionRead('200', '104')
   assert.equal(controller.state.items[0]?.unreadCount, 0)
   assert.equal(controller.state.items[0]?.ackSeqno, '104')
+
+  controller.markSessionSent('200', 'sent summary', 1755000005)
+  assert.equal(controller.state.items[0]?.summary, 'sent summary')
+  assert.equal(controller.state.items[0]?.timestamp, 1755000005000000)
+  assert.equal(controller.state.items[0]?.original.session_ts, 1755000005000000)
+})
+
+verify('optimistic text messages reconcile to one server message without duplicates', ({ privateMessage }) => {
+  const optimistic = privateMessage.createOptimisticPrivateTextMessage({
+    localId: 'local-1',
+    senderId: '100',
+    receiverId: '200',
+    text: 'same text',
+    timestamp: 1755000000,
+  })
+  assert.equal(optimistic.sendState, 'pending')
+  assert.equal(optimistic.msgType, 1)
+  assert.deepEqual(optimistic.content, {
+    type: 'text',
+    segments: [{ type: 'text', text: 'same text' }],
+  })
+
+  optimistic.sendState = 'reconciling'
+  optimistic.serverMsgKey = '9223372036854775807'
+  const [server] = privateMessage.transformPrivateMessages([
+    createRawMessage('9223372036854775807', '105', {
+      sender_uid: '100',
+      receiver_id: '200',
+      content: '{"content":"same text"}',
+      timestamp: 1755000002,
+    }),
+  ], [], '100')
+  const [sameContentWrongKey] = privateMessage.transformPrivateMessages([
+    createRawMessage('different-server-key', '104', {
+      sender_uid: '100',
+      receiver_id: '200',
+      content: '{"content":"same text"}',
+      timestamp: 1755000001,
+    }),
+  ], [], '100')
+  const notReconciled = privateMessage.reconcileOptimisticPrivateMessages([
+    optimistic,
+    sameContentWrongKey!,
+  ], 'local-1')
+  assert.equal(notReconciled.reconciled, false)
+  assert.equal(notReconciled.items.some(item => item.localId === 'local-1'), true)
+
+  const reconciled = privateMessage.reconcileOptimisticPrivateMessages([
+    optimistic,
+    server!,
+    server!,
+  ], 'local-1')
+
+  assert.equal(reconciled.reconciled, true)
+  assert.deepEqual(reconciled.items.map(item => item.msgKey), ['9223372036854775807'])
+})
+
+verify('send controller inserts one optimistic item, clears draft, and reconciles after code zero', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let resolveSend: ((value: unknown) => void) | undefined
+  const sendResponse = new Promise<unknown>((resolve) => {
+    resolveSend = resolve
+  })
+  let sendRequests = 0
+  let sessionRefreshes = 0
+  const sessionUpdates: Array<{ talkerId: string, summary: string, timestamp: number }> = []
+  const historyResponses = [
+    createMessagesResponse([]),
+    createMessagesResponse([
+      createRawMessage('server-1', '105', {
+        sender_uid: '100',
+        receiver_id: '200',
+        content: '{"content":"hello"}',
+        timestamp: 1755000002,
+      }),
+    ]),
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => historyResponses.shift(),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    markSessionSent: (talkerId, summary, timestamp) => sessionUpdates.push({ talkerId, summary, timestamp }),
+    refreshSessions: async () => { sessionRefreshes++ },
+    sendMessage: async () => {
+      sendRequests++
+      return sendResponse
+    },
+    syncUnread: async () => {},
+    createLocalId: () => 'local-1',
+    nowSeconds: () => 1755000000,
+  })
+
+  await controller.loadInitial('200', '0')
+  controller.setDraft('200', 'hello')
+  const firstSend = controller.sendDraft('200')
+  const repeatedSend = controller.sendDraft('200')
+  const state = controller.getState('200')
+  assert.equal(sendRequests, 1)
+  assert.equal(state.draft, '')
+  assert.equal(state.items.length, 1)
+  assert.equal(state.items[0]?.sendState, 'pending')
+
+  resolveSend?.({ code: 0, data: { msg_key: 'server-1' } })
+  assert.deepEqual(await Promise.all([firstSend, repeatedSend]), [true, true])
+  assert.equal(state.items.length, 1)
+  assert.equal(state.items[0]?.msgKey, 'server-1')
+  assert.equal(state.items[0]?.sendState, 'sent')
+  assert.deepEqual(sessionUpdates, [{ talkerId: '200', summary: 'hello', timestamp: 1755000000 }])
+  assert.equal(sessionRefreshes, 1)
+})
+
+verify('failed optimistic sends retain text and retry remains single-flight', async ({ privateMessage, usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let sendAttempt = 0
+  let resolveRetry: ((value: unknown) => void) | undefined
+  const retryResponse = new Promise<unknown>((resolve) => {
+    resolveRetry = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => createMessagesResponse([
+      createRawMessage('server-2', '106', {
+        sender_uid: '100',
+        receiver_id: '200',
+        content: '{"content":"retry me"}',
+        timestamp: 1755000003,
+      }),
+    ]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    markSessionSent: () => {},
+    refreshSessions: async () => {},
+    sendMessage: async () => {
+      sendAttempt++
+      return sendAttempt === 1 ? { code: -400, data: null } : retryResponse
+    },
+    syncUnread: async () => {},
+    createLocalId: () => 'local-2',
+    nowSeconds: () => 1755000000,
+  })
+
+  controller.setDraft('200', 'retry me')
+  assert.equal(await controller.sendDraft('200'), false)
+  const state = controller.getState('200')
+  assert.equal(state.items[0]?.sendState, 'failed')
+  assert.deepEqual(state.items[0]?.content, {
+    type: 'text',
+    segments: [{ type: 'text', text: 'retry me' }],
+  })
+
+  const firstRetry = controller.retrySend('200', 'local-2')
+  const repeatedRetry = controller.retrySend('200', 'local-2')
+  assert.equal(sendAttempt, 2)
+  resolveRetry?.({ code: 0, data: { msg_key: 'server-2' } })
+  assert.deepEqual(await Promise.all([firstRetry, repeatedRetry]), [true, true])
+  assert.equal(sendAttempt, 2)
+  assert.deepEqual(state.items.map(item => item.msgKey), ['server-2'])
+
+  controller.setDraft('200', 'editable')
+  const failed = privateMessage.createOptimisticPrivateTextMessage({
+    localId: 'local-3',
+    senderId: '100',
+    receiverId: '200',
+    text: 'failed text',
+    timestamp: 1755000004,
+  })
+  failed.sendState = 'failed'
+  state.items.push(failed)
+  controller.editFailed('200', 'local-3')
+  assert.equal(state.draft, 'failed text')
+  assert.equal(state.items.some(item => item.localId === 'local-3'), false)
+  state.items.push(failed)
+  controller.deleteFailed('200', 'local-3')
+  assert.equal(state.items.some(item => item.localId === 'local-3'), false)
+
+  controller.setDraft('200', 'account-scoped draft')
+  mid.value = '300'
+  await nextTick()
+  assert.equal(controller.states.has('200'), false)
 })
 
 async function main() {

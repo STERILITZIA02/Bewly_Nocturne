@@ -41,6 +41,7 @@ export interface PrivateSessionsController {
   observeUnreadCount: (unreadCount: number) => Promise<void>
   selectSession: (session: DisplayPrivateSession) => void
   markSessionRead: (talkerId: string, ackSeqno: string) => void
+  markSessionSent: (talkerId: string, summary: string, timestamp: number) => void
 }
 
 function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
@@ -206,6 +207,19 @@ export function usePrivateSessions(
     }
   }
 
+  function markSessionSent(talkerId: string, summary: string, timestamp: number) {
+    const session = state.items.find(item => item.talkerId === talkerId)
+    if (!session)
+      return
+    const timestampMicroseconds = timestamp * 1_000_000
+    session.summary = summary
+    session.timestamp = timestampMicroseconds
+    session.original = {
+      ...session.original,
+      session_ts: timestampMicroseconds,
+    }
+  }
+
   watch(currentMid, resetForAccount, { flush: 'sync' })
 
   return {
@@ -216,5 +230,6 @@ export function usePrivateSessions(
     observeUnreadCount,
     selectSession,
     markSessionRead,
+    markSessionSent,
   }
 }

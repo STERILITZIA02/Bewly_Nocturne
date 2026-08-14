@@ -28,7 +28,27 @@ export interface DisplayPrivateMessage {
   timestamp: number
   isSelf: boolean
   content: ParsedPrivateMessageContent
+  localId?: string
+  sendState?: PrivateMessageSendState
+  serverMsgKey?: string
 }
+
+export type PrivateMessageSendState = 'pending' | 'sent' | 'failed' | 'reconciling'
+
+export interface OptimisticPrivateTextMessageOptions {
+  localId: string
+  senderId: string
+  receiverId: string
+  text: string
+  timestamp: number
+}
+
+export interface PrivateMessageReconcileResult {
+  items: DisplayPrivateMessage[]
+  reconciled: boolean
+}
+
+const PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS = 30
 
 interface PrivateMessageEmotion {
   alt: string
@@ -205,20 +225,20 @@ export function transformPrivateMessages(
   currentMid: string,
 ): DisplayPrivateMessage[] {
   const emotions = collectPrivateMessageEmotions(eInfos)
-  return messages.map(message => ({
-    msgKey: message.msg_key,
-    seqno: message.msg_seqno,
-    senderId: message.sender_uid,
-    receiverId: message.receiver_id,
-    msgType: message.msg_type,
-    timestamp: message.timestamp,
-    isSelf: message.sender_uid === currentMid,
-    content: parsePrivateMessageContent(message, emotions),
-  })).sort((left, right) => (
-    comparePrivateMessageSeqno(left.seqno, right.seqno)
-    || left.timestamp - right.timestamp
-    || left.msgKey.localeCompare(right.msgKey)
-  ))
+  return messages.map((message) => {
+    const isSelf = message.sender_uid === currentMid
+    return {
+      msgKey: message.msg_key,
+      seqno: message.msg_seqno,
+      senderId: message.sender_uid,
+      receiverId: message.receiver_id,
+      msgType: message.msg_type,
+      timestamp: message.timestamp,
+      isSelf,
+      content: parsePrivateMessageContent(message, emotions),
+      sendState: isSelf ? 'sent' as const : undefined,
+    }
+  }).sort(compareDisplayPrivateMessages)
 }
 
 export function mergePrivateMessages(
@@ -228,17 +248,86 @@ export function mergePrivateMessages(
   const byKey = new Map(current.map(item => [item.msgKey, item]))
   for (const item of incoming)
     byKey.set(item.msgKey, item)
-  return [...byKey.values()].sort((left, right) => (
-    comparePrivateMessageSeqno(left.seqno, right.seqno)
-    || left.timestamp - right.timestamp
+  return [...byKey.values()].sort(compareDisplayPrivateMessages)
+}
+
+function compareDisplayPrivateMessages(
+  left: DisplayPrivateMessage,
+  right: DisplayPrivateMessage,
+): number {
+  if (left.seqno && right.seqno) {
+    return comparePrivateMessageSeqno(left.seqno, right.seqno)
+      || left.timestamp - right.timestamp
+      || left.msgKey.localeCompare(right.msgKey)
+  }
+  return left.timestamp - right.timestamp
+    || Number(Boolean(left.localId)) - Number(Boolean(right.localId))
     || left.msgKey.localeCompare(right.msgKey)
-  ))
+}
+
+export function createOptimisticPrivateTextMessage(
+  options: OptimisticPrivateTextMessageOptions,
+): DisplayPrivateMessage {
+  if (!options.localId || !options.text.trim())
+    throw new TypeError('optimistic message requires a localId and non-blank text')
+  return {
+    msgKey: `local:${options.localId}`,
+    seqno: '',
+    senderId: options.senderId,
+    receiverId: options.receiverId,
+    msgType: 1,
+    timestamp: options.timestamp,
+    isSelf: true,
+    content: {
+      type: 'text',
+      segments: [{ type: 'text', text: options.text }],
+    },
+    localId: options.localId,
+    sendState: 'pending',
+  }
+}
+
+export function getPrivateMessageText(message: DisplayPrivateMessage): string {
+  if (message.content.type !== 'text')
+    return ''
+  return message.content.segments.map(segment => (
+    segment.type === 'text' ? segment.text : segment.alt
+  )).join('')
+}
+
+export function reconcileOptimisticPrivateMessages(
+  items: DisplayPrivateMessage[],
+  localId: string,
+): PrivateMessageReconcileResult {
+  const deduped = mergePrivateMessages([], items)
+  const optimistic = deduped.find(item => item.localId === localId)
+  if (!optimistic)
+    return { items: deduped, reconciled: true }
+
+  const optimisticText = getPrivateMessageText(optimistic)
+  const serverMatch = deduped.find((item) => {
+    if (item.localId || !item.isSelf || item.msgType !== 1)
+      return false
+    if (optimistic.serverMsgKey)
+      return item.msgKey === optimistic.serverMsgKey
+    return (
+      getPrivateMessageText(item) === optimisticText
+      && Math.abs(item.timestamp - optimistic.timestamp) <= PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS
+    )
+  })
+  if (!serverMatch)
+    return { items: deduped, reconciled: false }
+
+  return {
+    items: deduped.filter(item => item.localId !== localId),
+    reconciled: true,
+  }
 }
 
 export function getOldestPrivateMessageSeqno(items: DisplayPrivateMessage[]): string {
-  return items[0]?.seqno ?? ''
+  return items.find(item => item.seqno)?.seqno ?? ''
 }
 
 export function getLatestPrivateMessageSeqno(items: DisplayPrivateMessage[]): string {
-  return items.at(-1)?.seqno ?? ''
+  return items.findLast(item => item.seqno)?.seqno ?? ''
 }

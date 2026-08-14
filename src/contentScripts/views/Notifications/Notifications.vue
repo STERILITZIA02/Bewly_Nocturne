@@ -64,6 +64,9 @@ const privateMessages = usePrivateMessages(currentMid, privateSessions.selectedT
   ackSession: options => api.privateMessage.ackPrivateSession(options),
   getCsrf: getCSRF,
   markSessionRead: privateSessions.markSessionRead,
+  markSessionSent: privateSessions.markSessionSent,
+  refreshSessions: () => privateSessions.refresh('merge'),
+  sendMessage: options => api.privateMessage.sendPrivateMessage(options),
   syncUnread: () => topBarStore.syncUnreadMessageState(),
 })
 const notificationFeeds = useNotificationFeeds(currentMid, {

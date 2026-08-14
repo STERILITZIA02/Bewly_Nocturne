@@ -11,7 +11,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
+  (event: 'deleteFailed', localId: string): void
+  (event: 'editFailed', localId: string): void
   (event: 'preview', src: string): void
+  (event: 'retry', localId: string): void
 }>()
 
 const { locale, t } = useI18n()
@@ -95,6 +98,26 @@ const displayTime = computed(() => {
       <time v-if="displayTime" class="private-message-item__time">
         {{ displayTime }}
       </time>
+      <div v-if="message.localId" class="private-message-item__send-status" role="status">
+        <span v-if="message.sendState === 'pending'">
+          {{ t('notifications.whisper.messages.sending') }}
+        </span>
+        <span v-else-if="message.sendState === 'reconciling'">
+          {{ t('notifications.whisper.messages.reconciling') }}
+        </span>
+        <template v-else-if="message.sendState === 'failed'">
+          <span>{{ t('notifications.whisper.messages.send_failed') }}</span>
+          <button type="button" @click="emit('retry', message.localId)">
+            {{ t('notifications.whisper.messages.retry_send') }}
+          </button>
+          <button type="button" @click="emit('editFailed', message.localId)">
+            {{ t('notifications.whisper.messages.edit_failed') }}
+          </button>
+          <button type="button" @click="emit('deleteFailed', message.localId)">
+            {{ t('notifications.whisper.messages.delete_failed') }}
+          </button>
+        </template>
+      </div>
     </div>
   </article>
 </template>
@@ -197,11 +220,34 @@ const displayTime = computed(() => {
 }
 
 .private-message-item__system,
-.private-message-item__time {
+.private-message-item__time,
+.private-message-item__send-status {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
+}
+
+.private-message-item__send-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bew-space-2);
+  justify-content: flex-end;
+}
+
+.private-message-item__send-status button {
+  padding: 0;
+  color: var(--bew-theme-color);
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.private-message-item__send-status button:focus-visible {
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
 }
 
 .private-message-item__system {

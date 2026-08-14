@@ -6,10 +6,12 @@ import {
   buildPrivateMessagesParams,
   buildPrivateSessionsParams,
   buildPrivateUserCardsParams,
+  createPrivateTextMessageParams,
   parsePrivateMessagesResponse,
+  parsePrivateSendResponse,
   parsePrivateSessionsResponse,
 } from './protocol'
-import { requestPrivateMessage } from './transport'
+import { requestPrivateMessage, requestPrivateMessageForm } from './transport'
 import type { PrivateMessageApiResponse } from './types'
 import { PRIVATE_MESSAGE_ENDPOINTS } from './types'
 
@@ -30,6 +32,13 @@ interface PrivateAckMessage extends PrivateApiMessage {
   ackSeqno?: string
   csrf?: string
   talkerId?: string
+}
+
+interface PrivateSendMessage extends PrivateApiMessage {
+  csrf?: string
+  senderId?: string
+  talkerId?: string
+  text?: string
 }
 
 function invalidRequest(endpointName: keyof typeof PRIVATE_MESSAGE_ENDPOINTS) {
@@ -112,11 +121,38 @@ export async function ackPrivateSession(
   }
 }
 
+export async function sendPrivateMessage(
+  message: PrivateSendMessage = {},
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  try {
+    if (!message.senderId || !message.talkerId || !message.text?.trim() || !message.csrf)
+      return invalidRequest('sendPrivateMessage')
+    const response = await requestPrivateMessageForm({
+      endpointName: 'sendPrivateMessage',
+      params: createPrivateTextMessageParams({
+        senderId: message.senderId,
+        talkerId: message.talkerId,
+        text: message.text,
+        csrf: message.csrf,
+      }),
+      url: PRIVATE_MESSAGE_ENDPOINTS.sendPrivateMessage,
+    }, {}, sender)
+    if (response.code !== 0)
+      return response
+    return parsePrivateSendResponse(response) ?? invalidRequest('sendPrivateMessage')
+  }
+  catch {
+    return invalidRequest('sendPrivateMessage')
+  }
+}
+
 const API_PRIVATE_MESSAGE = {
   getPrivateSessions,
   getPrivateUserCards,
   getPrivateMessages,
   ackPrivateSession,
+  sendPrivateMessage,
 }
 
 export default API_PRIVATE_MESSAGE

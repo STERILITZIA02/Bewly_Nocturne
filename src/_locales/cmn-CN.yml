@@ -858,7 +858,7 @@ notifications:
   sections:
     whisper:
       label: 私信
-      description: 查看原生会话列表与只读聊天记录，发送消息和未支持会话仍由原版提供
+      description: 查看原生会话、聊天记录并发送文本消息，未支持会话继续由原版提供
     reply:
       label: 回复我的
       description: 查看别人对你的回复
@@ -901,7 +901,18 @@ notifications:
       load_older: 加载更早消息
       history_start: 已到达聊天记录起点
       readonly: 当前为只读模式
+      text_send_enabled: 支持文本消息
       send_original: 在原版中发送消息
+      composer_placeholder: 输入消息
+      composer_aria: 私信文本输入框
+      composer_hint: Enter 发送，Shift+Enter 换行
+      send: 发送
+      sending: 发送中
+      reconciling: 正在与服务端同步
+      send_failed: 发送失败
+      retry_send: 重试
+      edit_failed: 编辑
+      delete_failed: 删除本地失败项
       new_messages: 有新消息
       recalled: 消息已撤回
       unsupported: 当前版本暂未支持此消息

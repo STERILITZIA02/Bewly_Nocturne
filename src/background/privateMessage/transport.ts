@@ -92,6 +92,23 @@ export async function requestPrivateMessage(
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
+  return requestSignedPrivateMessage(request, 'GET', dependencies, sender)
+}
+
+export async function requestPrivateMessageForm(
+  request: PrivateMessageRequest,
+  dependencies: Partial<PrivateMessageRequestDependencies> = {},
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  return requestSignedPrivateMessage(request, 'POST', dependencies, sender)
+}
+
+async function requestSignedPrivateMessage(
+  request: PrivateMessageRequest,
+  method: 'GET' | 'POST',
+  dependencies: Partial<PrivateMessageRequestDependencies>,
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
   const runtimeDependencies = {
     ...DEFAULT_REQUEST_DEPENDENCIES,
     ...dependencies,
@@ -99,16 +116,27 @@ export async function requestPrivateMessage(
 
   try {
     const signedParams = await runtimeDependencies.signParams(request.params)
-    const requestUrl = appendRequestParams(request.url, signedParams)
+    const requestUrl = method === 'GET'
+      ? appendRequestParams(request.url, signedParams)
+      : request.url
     const headers: Record<string, string> = {
       Referer: 'https://message.bilibili.com/',
     }
+    if (method === 'POST')
+      headers['Content-Type'] = 'application/x-www-form-urlencoded'
     const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
     if (cookieHeader)
       headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
 
     const response = await runtimeDependencies.fetch(requestUrl, {
-      method: 'GET',
+      method,
+      body: method === 'POST'
+        ? new URLSearchParams(
+            Object.entries(signedParams).flatMap(([key, value]) => (
+              value === undefined || value === '' ? [] : [[key, String(value)]]
+            )),
+          ).toString()
+        : undefined,
       credentials: 'include',
       headers,
     })

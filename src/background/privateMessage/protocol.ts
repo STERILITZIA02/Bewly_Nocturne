@@ -5,9 +5,23 @@ import type {
   PrivateMessageApiResponse,
   PrivateMessageRequestParams,
   PrivateMessagesData,
+  PrivateSendData,
   PrivateSession,
   PrivateSessionsData,
+  SendPrivateMessageOptions,
 } from './types'
+
+interface PrivateTextMessageRuntime {
+  now: () => number
+  randomUUID: () => string
+}
+
+const UUID_V4_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+const DEFAULT_PRIVATE_TEXT_MESSAGE_RUNTIME: PrivateTextMessageRuntime = {
+  now: () => Date.now(),
+  randomUUID: () => globalThis.crypto.randomUUID(),
+}
 
 function requireIdentifier(value: string, fieldName: string): string {
   const normalized = value.trim()
@@ -134,6 +148,43 @@ export function buildPrivateAckParams(
   }
 }
 
+export function createPrivateTextMessageParams(
+  options: SendPrivateMessageOptions,
+  runtime: PrivateTextMessageRuntime = DEFAULT_PRIVATE_TEXT_MESSAGE_RUNTIME,
+): PrivateMessageRequestParams {
+  if (!options.text.trim())
+    throw new TypeError('text must not be blank')
+
+  const csrf = options.csrf.trim()
+  if (!csrf)
+    throw new TypeError('csrf must not be empty')
+
+  const devId = runtime.randomUUID()
+  if (!UUID_V4_PATTERN.test(devId))
+    throw new TypeError('devId must be a UUID v4')
+
+  const timestamp = Math.floor(runtime.now() / 1000)
+  if (!Number.isSafeInteger(timestamp) || timestamp <= 0)
+    throw new TypeError('timestamp must be a positive integer')
+
+  return {
+    'msg[sender_uid]': requireIdentifier(options.senderId, 'senderId'),
+    'msg[receiver_id]': requireIdentifier(options.talkerId, 'talkerId'),
+    'msg[receiver_type]': 1,
+    'msg[msg_type]': 1,
+    'msg[msg_status]': 0,
+    'msg[dev_id]': devId,
+    'msg[timestamp]': timestamp,
+    'msg[new_face_version]': 1,
+    'msg[content]': JSON.stringify({ content: options.text }),
+    from_firework: 0,
+    build: 0,
+    mobi_app: 'web',
+    csrf_token: csrf,
+    csrf,
+  }
+}
+
 export function parsePrivateSessionsResponse(
   response: PrivateMessageApiResponse,
 ): PrivateMessageApiResponse<PrivateSessionsData> | null {
@@ -187,4 +238,19 @@ export function parsePrivateMessagesResponse(
       e_infos: response.data.e_infos,
     },
   }
+}
+
+export function parsePrivateSendResponse(
+  response: PrivateMessageApiResponse,
+): PrivateMessageApiResponse<PrivateSendData> | null {
+  if (response.code !== 0 || !isRecord(response.data))
+    return null
+  if (
+    Object.hasOwn(response.data, 'msg_key')
+    && typeof response.data.msg_key !== 'string'
+  ) {
+    return null
+  }
+
+  return response as PrivateMessageApiResponse<PrivateSendData>
 }

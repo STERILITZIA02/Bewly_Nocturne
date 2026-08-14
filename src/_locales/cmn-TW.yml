@@ -859,7 +859,7 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 查看原生會話列表與唯讀聊天記錄，傳送訊息和未支援會話仍由原版提供
+      description: 查看原生會話、聊天記錄並傳送文字訊息，未支援會話繼續由原版提供
     reply:
       label: 回覆我的
       description: 查看其他人對你的回覆
@@ -902,7 +902,18 @@ notifications:
       load_older: 載入更早訊息
       history_start: 已到達聊天記錄起點
       readonly: 目前為唯讀模式
+      text_send_enabled: 支援文字訊息
       send_original: 在原版中傳送訊息
+      composer_placeholder: 輸入訊息
+      composer_aria: 私訊文字輸入框
+      composer_hint: Enter 傳送，Shift+Enter 換行
+      send: 傳送
+      sending: 傳送中
+      reconciling: 正在與伺服器同步
+      send_failed: 傳送失敗
+      retry_send: 重試
+      edit_failed: 編輯
+      delete_failed: 刪除本機失敗項目
       new_messages: 有新訊息
       recalled: 訊息已收回
       unsupported: 目前版本暫不支援此訊息

@@ -3,6 +3,7 @@ export const PRIVATE_MESSAGE_ENDPOINTS = {
   getPrivateUserCards: 'https://api.vc.bilibili.com/account/v1/user/cards',
   getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
   ackPrivateSession: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
+  sendPrivateMessage: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
 } as const
 
 export type PrivateMessageEndpointName = keyof typeof PRIVATE_MESSAGE_ENDPOINTS
@@ -96,4 +97,16 @@ export interface AckPrivateSessionOptions {
   talkerId: string
   ackSeqno: string
   csrf: string
+}
+
+export interface SendPrivateMessageOptions {
+  senderId: string
+  talkerId: string
+  text: string
+  csrf: string
+}
+
+export interface PrivateSendData {
+  msg_key?: string
+  [key: string]: unknown
 }
