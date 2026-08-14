@@ -37,6 +37,11 @@ import {
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
 import type { DisplayPrivateSession } from './whisper/privateSession'
+import type {
+  PrivateMessagesDependencies,
+  PrivateTextSendDiagnostic,
+  PrivateTextSendOutcome,
+} from './whisper/usePrivateMessages'
 import { usePrivateMessages } from './whisper/usePrivateMessages'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
 import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
@@ -72,13 +77,21 @@ const privateSessions = usePrivateSessions(currentMid, {
   fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
   getFallbackName: talkerId => t('notifications.whisper.user_fallback', { talkerId }),
 })
-const privateMessages = usePrivateMessages(currentMid, privateSessions.selectedTalkerId, {
+const privateMessageDependencies: PrivateMessagesDependencies = {
   fetchMessages: options => api.privateMessage.getPrivateMessages(options),
   ackSession: options => api.privateMessage.ackPrivateSession(options),
   getCsrf: getCSRF,
   markSessionRead: privateSessions.markSessionRead,
   syncUnread: () => topBarStore.syncUnreadMessageState(),
-})
+  ...(import.meta.env.DEV
+    ? { sendMessage: options => api.privateMessage.sendPrivateMessage(options) }
+    : {}),
+}
+const privateMessages = usePrivateMessages(
+  currentMid,
+  privateSessions.selectedTalkerId,
+  privateMessageDependencies,
+)
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
@@ -96,6 +109,93 @@ const isWhisperView = computed(() => isHybridNotificationView(currentView.value)
 const usesWorkspaceLayout = computed(() => currentSection.value.layout === 'workspace')
 
 const isPageActive = ref(false)
+
+const DEV_TEXT_SEND_CONFIRMATION = 'I_CONFIRM_ONE_PRIVATE_TEXT_SEND'
+const DEV_TEXT_SEND_VALUE = 'test-test'
+const DEV_TEXT_SEND_GATE_KEY = '__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'
+
+interface DevPrivateTextSendGateInput {
+  confirmation: string
+  talkerId: string
+  text: string
+}
+
+interface DevPrivateTextSendGateResult {
+  status: PrivateTextSendOutcome | 'blocked'
+  diagnostic: PrivateTextSendDiagnostic | null
+}
+
+type DevPrivateTextSendGlobal = typeof globalThis & {
+  [DEV_TEXT_SEND_GATE_KEY]?: (
+    input: DevPrivateTextSendGateInput,
+  ) => Promise<DevPrivateTextSendGateResult>
+}
+
+const devTextSendGateUsed = ref(false)
+const devTextSendGateResult = ref<DevPrivateTextSendGateResult | null>(null)
+
+const devTextSendSession = computed(() => privateSessions.state.items.find(
+  item => item.key === privateSessions.selectedSessionKey.value,
+))
+const devTextSendGateAvailable = computed(() => (
+  import.meta.env.DEV
+    && !devTextSendGateUsed.value
+    && devTextSendSession.value?.kind === 'user'
+    && isPageActive.value
+    && currentView.value === 'whisper'
+    && accountState.value === 'ready'
+))
+
+async function runDevPrivateTextSendGate(
+  input: DevPrivateTextSendGateInput,
+): Promise<DevPrivateTextSendGateResult> {
+  const session = devTextSendSession.value
+  if (
+    !devTextSendGateAvailable.value
+    || input?.confirmation !== DEV_TEXT_SEND_CONFIRMATION
+    || input?.text !== DEV_TEXT_SEND_VALUE
+    || !/^\d+$/.test(input?.talkerId ?? '')
+    || input.talkerId !== session?.talkerId
+  ) {
+    return { status: 'blocked', diagnostic: null }
+  }
+
+  devTextSendGateUsed.value = true
+  privateMessages.setDraft(session.talkerId, input.text)
+  await privateMessages.sendDraft(session.talkerId)
+  const state = privateMessages.getState(session.talkerId)
+  const result: DevPrivateTextSendGateResult = {
+    status: state.lastTextSendOutcome ?? 'failed',
+    diagnostic: state.lastTextSendDiagnostic,
+  }
+  devTextSendGateResult.value = result
+  return result
+}
+
+function installDevPrivateTextSendGate() {
+  if (!import.meta.env.DEV)
+    return
+  const devGlobal = globalThis as DevPrivateTextSendGlobal
+  devGlobal[DEV_TEXT_SEND_GATE_KEY] = runDevPrivateTextSendGate
+}
+
+function triggerDevPrivateTextSendGate() {
+  const talkerId = devTextSendSession.value?.talkerId
+  if (!talkerId)
+    return
+  void runDevPrivateTextSendGate({
+    confirmation: DEV_TEXT_SEND_CONFIRMATION,
+    talkerId,
+    text: DEV_TEXT_SEND_VALUE,
+  })
+}
+
+function removeDevPrivateTextSendGate() {
+  if (!import.meta.env.DEV)
+    return
+  const devGlobal = globalThis as DevPrivateTextSendGlobal
+  delete devGlobal[DEV_TEXT_SEND_GATE_KEY]
+}
 
 function hasPrivateConversationRouteParams(url: URL): boolean {
   return Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS).some(param => url.searchParams.has(param))
@@ -336,10 +436,14 @@ watchEffect(() => {
   }
 })
 
-onMounted(activatePage)
+onMounted(() => {
+  activatePage()
+  installDevPrivateTextSendGate()
+})
 onActivated(activatePage)
 onDeactivated(deactivatePage)
 onBeforeUnmount(() => {
+  removeDevPrivateTextSendGate()
   privateMessages.dispose()
   deactivatePage()
   clearRefreshHandler()
@@ -357,6 +461,26 @@ onBeforeUnmount(() => {
     }"
   >
     <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
+
+    <button
+      v-if="devTextSendGateAvailable"
+      data-testid="private-text-send-protocol-gate"
+      type="button"
+      class="notifications-page__dev-text-send-gate"
+      @click="triggerDevPrivateTextSendGate"
+    >
+      DEV · send test-test once
+    </button>
+    <output
+      v-if="devTextSendGateResult"
+      hidden
+      data-testid="private-text-send-protocol-result"
+      :data-status="devTextSendGateResult.status"
+      :data-error-kind="devTextSendGateResult.diagnostic?.kind ?? ''"
+      :data-http-status="devTextSendGateResult.diagnostic?.httpStatus ?? ''"
+      :data-api-code="devTextSendGateResult.diagnostic?.apiCode ?? ''"
+      :data-final-host="devTextSendGateResult.diagnostic?.finalHost ?? ''"
+    />
 
     <div class="notifications-page__workspace">
       <NotificationsNavigation :model-value="currentView" @update:model-value="selectView" />
@@ -403,6 +527,21 @@ onBeforeUnmount(() => {
   border: 0;
   border-radius: 0;
   box-shadow: none;
+}
+
+.notifications-page__dev-text-send-gate {
+  position: fixed;
+  right: var(--bew-space-4);
+  bottom: var(--bew-space-4);
+  z-index: var(--bew-z-popover);
+  padding: var(--bew-space-2) var(--bew-space-3);
+  color: var(--bew-on-theme-color);
+  font: inherit;
+  cursor: pointer;
+  background: var(--bew-theme-color);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .notifications-page--workspace {

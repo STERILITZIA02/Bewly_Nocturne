@@ -511,30 +511,55 @@ verify('multipart upload transport does not set a multipart boundary and preserv
   assert.equal(capturedInit?.signal, controller.signal)
 })
 
-verify('form transport signs the flat send body and posts it as form-urlencoded', async ({ transport }) => {
+verify('text form transport signs the full body but separates WBI identity query fields', async ({ transport }) => {
   let capturedUrl = ''
   let capturedInit: RequestInit | undefined
+  let signedInput: Record<string, unknown> | undefined
+  const body = {
+    'msg[sender_uid]': '100',
+    'msg[receiver_id]': '200',
+    'msg[receiver_type]': 1,
+    'msg[msg_type]': 1,
+    'msg[msg_status]': 0,
+    'msg[dev_id]': '123e4567-e89b-42d3-a456-426614174000',
+    'msg[timestamp]': 1755000000,
+    'msg[new_face_version]': 1,
+    'msg[content]': '{"content":"hello"}',
+    from_firework: 0,
+    build: 0,
+    mobi_app: 'web',
+    csrf: 'sanitized-csrf',
+    csrf_token: 'sanitized-csrf',
+  }
+  const request = await transport.buildPrivateMessageFormRequest(
+    'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+    body,
+    async (params) => {
+      signedInput = { ...params }
+      return { ...params, wts: 1755000000, w_rid: 'signed-rid' }
+    },
+  )
   const response = await transport.requestPrivateMessageForm({
     endpointName: 'sendPrivateMessage',
-    params: {
-      'msg[sender_uid]': '100',
-      'msg[receiver_id]': '200',
-      'msg[dev_id]': '123e4567-e89b-42d3-a456-426614174000',
-      'msg[content]': '{"content":"hello"}',
-    },
-    url: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+    ...request,
   }, {
     fetch: async (url, init) => {
       capturedUrl = String(url)
       capturedInit = init
       return createMockResponse('{"code":0,"data":{"msg_key":9223372036854775807}}')
     },
-    signParams: async params => ({ ...params, wts: 1755000000, w_rid: 'signed-rid' }),
   })
 
   assert.equal(response.code, 0)
   assert.equal((response.data as { msg_key?: string }).msg_key, '9223372036854775807')
-  assert.equal(capturedUrl, 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg')
+  assert.deepEqual(signedInput, body)
+  const url = new URL(capturedUrl)
+  assert.equal(`${url.origin}${url.pathname}`, 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg')
+  assert.equal(url.searchParams.get('w_sender_uid'), '100')
+  assert.equal(url.searchParams.get('w_receiver_id'), '200')
+  assert.equal(url.searchParams.get('w_dev_id'), '123e4567-e89b-42d3-a456-426614174000')
+  assert.equal(url.searchParams.get('wts'), '1755000000')
+  assert.equal(url.searchParams.get('w_rid'), 'signed-rid')
   assert.equal(capturedInit?.method, 'POST')
   assert.equal((capturedInit?.headers as Record<string, string>)['Content-Type'], 'application/x-www-form-urlencoded')
   const form = new URLSearchParams(String(capturedInit?.body))
@@ -542,8 +567,22 @@ verify('form transport signs the flat send body and posts it as form-urlencoded'
   assert.equal(form.get('msg[receiver_id]'), '200')
   assert.equal(form.get('msg[dev_id]'), '123e4567-e89b-42d3-a456-426614174000')
   assert.equal(form.get('msg[content]'), '{"content":"hello"}')
-  assert.equal(form.get('wts'), '1755000000')
-  assert.equal(form.get('w_rid'), 'signed-rid')
+  assert.equal(form.get('csrf'), 'sanitized-csrf')
+  assert.equal(form.get('csrf_token'), 'sanitized-csrf')
+  assert.equal(form.has('wts'), false)
+  assert.equal(form.has('w_rid'), false)
+  assert.equal(request.query.w_dev_id, request.body['msg[dev_id]'])
+})
+
+verify('code-zero text send responses without data remain eligible for history confirmation', ({ protocol }) => {
+  assert.deepEqual(protocol.parsePrivateSendResponse({ code: 0, data: null }), {
+    code: 0,
+    data: {},
+  })
+  assert.deepEqual(protocol.parsePrivateSendResponse({ code: 0, data: {} }), {
+    code: 0,
+    data: {},
+  })
 })
 
 verify('lossless parser preserves only confirmed IDs and seqnos as strings', async ({ losslessJson, protocol }) => {
@@ -1173,13 +1212,21 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
     'utf8',
   )
   for (const writeDependency of [
-    'sendPrivateMessage',
     'uploadPrivateImage',
     'cancelPrivateImageUpload',
     'sendPrivateImageMessage',
   ]) {
     assert.equal(notificationsSource.includes(writeDependency), false, writeDependency)
   }
+  assert.ok(notificationsSource.includes('import.meta.env.DEV'))
+  assert.ok(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'))
+  assert.ok(notificationsSource.includes('data-testid="private-text-send-protocol-gate"'))
+  assert.ok(notificationsSource.includes('data-testid="private-text-send-protocol-result"'))
+  assert.ok(notificationsSource.includes('v-if="devTextSendGateAvailable"'))
+  assert.ok(notificationsSource.includes('const devTextSendGateUsed = ref(false)'))
+  assert.ok(notificationsSource.includes('devTextSendGateUsed.value = true'))
+  assert.ok(notificationsSource.includes('sendPrivateMessage'))
+  assert.ok(notificationsSource.includes(`DEV_TEXT_SEND_VALUE = 'test-test'`))
   assert.equal(
     conversationSource.includes('v-if="session.capabilities.canSendText || session.capabilities.canSendImage"'),
     true,
@@ -1238,6 +1285,51 @@ verify('runtime response fixtures are sanitized and preserve only confirmed real
   assert.equal(sessions.data?.session_list?.length, 5)
   assert.equal(messages.data?.messages?.length, 3)
   assert.equal(messages.data?.e_infos, null)
+})
+
+verify('controlled text send risk-control evidence is sanitized and cannot satisfy the send gate', async () => {
+  const fixtureName = 'send-text-risk-control'
+  const fixtureUrl = new URL(`../tests/fixtures/private-message/runtime/${fixtureName}.json`, import.meta.url)
+  const source = await readFile(fixtureUrl, 'utf8')
+  const fixture = await readRuntimeFixture(fixtureName) as {
+    request?: {
+      body_contains_wbi?: unknown
+      dev_id_shared?: unknown
+      host?: unknown
+      method?: unknown
+      path?: unknown
+      query_fields?: unknown
+      text?: unknown
+    }
+    response?: {
+      classified_code?: unknown
+      error_kind?: unknown
+      http_status?: unknown
+      json_code_observed?: unknown
+    }
+    history?: { server_confirmed?: unknown }
+  }
+
+  assert.equal(/SESSDATA|bili_jct|cookie|351609538|test-test/i.test(source), false)
+  assert.equal(/https?:\/\/[^"\s]+\?/i.test(source), false)
+  assert.equal(fixture.request?.host, 'api.vc.bilibili.com')
+  assert.equal(fixture.request?.path, '/web_im/v1/web_im/send_msg')
+  assert.equal(fixture.request?.method, 'POST')
+  assert.deepEqual(fixture.request?.query_fields, [
+    'w_sender_uid',
+    'w_receiver_id',
+    'w_dev_id',
+    'wts',
+    'w_rid',
+  ])
+  assert.equal(fixture.request?.body_contains_wbi, false)
+  assert.equal(fixture.request?.dev_id_shared, true)
+  assert.equal(fixture.request?.text, '<redacted>')
+  assert.equal(fixture.response?.http_status, 412)
+  assert.equal(fixture.response?.error_kind, 'risk-control')
+  assert.equal(fixture.response?.classified_code, -412)
+  assert.equal(fixture.response?.json_code_observed, false)
+  assert.equal(fixture.history?.server_confirmed, false)
 })
 
 verify('authenticated history and ACK fixtures preserve the real pagination boundary and unread closure', async ({ privateMessage, protocol }) => {
@@ -2483,6 +2575,22 @@ verify('optimistic text messages reconcile to one server message without duplica
   assert.equal(notReconciled.reconciled, false)
   assert.equal(notReconciled.items.some(item => item.localId === 'local-1'), true)
 
+  optimistic.serverMsgKey = undefined
+  const [wrongConversation] = privateMessage.transformPrivateMessages([
+    createRawMessage('fallback-wrong-conversation', '104', {
+      sender_uid: '100',
+      receiver_id: '300',
+      content: '{"content":"same text"}',
+      timestamp: 1755000001,
+    }),
+  ], [], '100')
+  const wrongConversationResult = privateMessage.reconcileOptimisticPrivateMessages([
+    optimistic,
+    wrongConversation!,
+  ], 'local-1')
+  assert.equal(wrongConversationResult.reconciled, false)
+
+  optimistic.serverMsgKey = '9223372036854775807'
   const reconciled = privateMessage.reconcileOptimisticPrivateMessages([
     optimistic,
     server!,
@@ -2549,6 +2657,117 @@ verify('send controller inserts one optimistic item, clears draft, and reconcile
   assert.equal(sessionRefreshes, 1)
 })
 
+verify('code-zero text send confirms from finite history retries without resending', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const waits: number[] = []
+  let historyRequests = 0
+  let sendRequests = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => {
+      historyRequests++
+      if (historyRequests < 4)
+        return createMessagesResponse([])
+      return createMessagesResponse([
+        createRawMessage('history-fallback-key', '105', {
+          sender_uid: '100',
+          receiver_id: '200',
+          content: '{"content":"controlled text"}',
+          timestamp: 1755000002,
+        }),
+      ])
+    },
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    sendMessage: async () => {
+      sendRequests++
+      return { code: 0, data: {} }
+    },
+    syncUnread: async () => {},
+    createLocalId: () => 'local-history-confirmed',
+    nowSeconds: () => 1755000000,
+    wait: async delayMs => void waits.push(delayMs),
+  })
+
+  await controller.loadInitial('200', '0')
+  controller.setDraft('200', 'controlled text')
+  assert.equal(await controller.sendDraft('200'), true)
+  const state = controller.getState('200')
+  assert.equal(sendRequests, 1)
+  assert.equal(historyRequests, 4)
+  assert.deepEqual(waits, [250, 750])
+  assert.equal(state.lastTextSendOutcome, 'confirmed')
+  assert.equal(state.items.some(item => item.localId === 'local-history-confirmed'), false)
+  assert.deepEqual(state.items.map(item => item.msgKey), ['history-fallback-key'])
+})
+
+verify('accepted but unconfirmed text is retained and never automatically resent', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const waits: number[] = []
+  let historyRequests = 0
+  let sendRequests = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => {
+      historyRequests++
+      return createMessagesResponse([])
+    },
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    sendMessage: async () => {
+      sendRequests++
+      return { code: 0, data: {} }
+    },
+    syncUnread: async () => {},
+    createLocalId: () => 'local-unconfirmed',
+    nowSeconds: () => 1755000000,
+    wait: async delayMs => void waits.push(delayMs),
+  })
+
+  await controller.loadInitial('200', '0')
+  controller.setDraft('200', 'controlled text')
+  assert.equal(await controller.sendDraft('200'), false)
+  const state = controller.getState('200')
+  assert.equal(sendRequests, 1)
+  assert.equal(historyRequests, 5)
+  assert.deepEqual(waits, [250, 750, 1500])
+  assert.equal(state.lastTextSendOutcome, 'accepted-but-unconfirmed')
+  assert.equal(state.items[0]?.sendState, 'accepted-but-unconfirmed')
+  assert.equal(await controller.retrySend('200', 'local-unconfirmed'), false)
+  assert.equal(sendRequests, 1)
+})
+
+verify('a response msg_key missing from bounded history fails the protocol gate without resending', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let sendRequests = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => createMessagesResponse([]),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    sendMessage: async () => {
+      sendRequests++
+      return { code: 0, data: { msg_key: 'server-key-not-in-history' } }
+    },
+    syncUnread: async () => {},
+    createLocalId: () => 'local-key-mismatch',
+    nowSeconds: () => 1755000000,
+    wait: async () => {},
+  })
+
+  await controller.loadInitial('200', '0')
+  controller.setDraft('200', 'controlled text')
+  assert.equal(await controller.sendDraft('200'), false)
+  const state = controller.getState('200')
+  assert.equal(state.lastTextSendOutcome, 'protocol-mismatch')
+  assert.equal(state.items[0]?.sendState, 'accepted-but-unconfirmed')
+  assert.equal(await controller.retrySend('200', 'local-key-mismatch'), false)
+  assert.equal(sendRequests, 1)
+})
+
 verify('failed optimistic sends retain text and retry remains single-flight', async ({ privateMessage, usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
@@ -2573,7 +2792,20 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
     refreshSessions: async () => {},
     sendMessage: async () => {
       sendAttempt++
-      return sendAttempt === 1 ? { code: -400, data: null } : retryResponse
+      return sendAttempt === 1
+        ? {
+            code: -400,
+            data: null,
+            bewlyError: {
+              kind: 'api-error',
+              endpointName: 'sendPrivateMessage',
+              httpStatus: 200,
+              redirected: false,
+              finalHost: 'api.vc.bilibili.com',
+              apiCode: -400,
+            },
+          }
+        : retryResponse
     },
     syncUnread: async () => {},
     createLocalId: () => 'local-2',
@@ -2584,6 +2816,13 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   assert.equal(await controller.sendDraft('200'), false)
   const state = controller.getState('200')
   assert.equal(state.items[0]?.sendState, 'failed')
+  assert.deepEqual(state.lastTextSendDiagnostic, {
+    kind: 'api-error',
+    httpStatus: 200,
+    redirected: false,
+    finalHost: 'api.vc.bilibili.com',
+    apiCode: -400,
+  })
   assert.deepEqual(state.items[0]?.content, {
     type: 'text',
     segments: [{ type: 'text', text: 'retry me' }],

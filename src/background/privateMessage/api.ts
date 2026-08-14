@@ -16,7 +16,12 @@ import {
   parsePrivateSendResponse,
   parsePrivateSessionsResponse,
 } from './protocol'
-import { requestPrivateImageUpload, requestPrivateMessage, requestPrivateMessageForm } from './transport'
+import {
+  requestPrivateImageUpload,
+  requestPrivateMessage,
+  requestPrivateMessageForm,
+  requestSignedPrivateMessageForm,
+} from './transport'
 import type {
   PrivateImageUploadPayload,
   PrivateMessageApiResponse,
@@ -190,9 +195,9 @@ export async function sendPrivateMessage(
   try {
     if (!message.senderId || !message.talkerId || !message.text?.trim() || !message.csrf)
       return invalidRequest('sendPrivateMessage')
-    const response = await requestPrivateMessageForm({
+    const response = await requestSignedPrivateMessageForm({
       endpointName: 'sendPrivateMessage',
-      params: createPrivateTextMessageParams({
+      body: createPrivateTextMessageParams({
         senderId: message.senderId,
         talkerId: message.talkerId,
         text: message.text,

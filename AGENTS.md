@@ -163,7 +163,7 @@ pnpm typecheck
 - Reply / At / Love 的 items、cursor、read commit、请求 single-flight、缓存与 scrollTop 必须独立；所有 Feed 按当前 MID 隔离，账号变化后旧 generation 的响应不得写入新账号。通知解析、聚合或分页规则变更必须同步脱敏 fixture，并通过 `pnpm verify:notifications`，不得绕过该门禁。
 - Native Feed 的自动激活、未读变化与可见性刷新必须使用 `merge-head` 更新首部并保留已加载历史与视觉锚点；用户手动刷新使用 `replace`、重置分页并回到顶部。分页必须检查 cursor 或唯一条目是否前进，停滞后停止 Observer 自动请求；Retry 必须根据 `failedOperation` 精确重试首次加载、刷新或分页，不得根据 items 数量猜测。
 - Native Feed 的服务端已读成功后只通过 `topBarStore` 的单一权威路径同步未读与跨标签 broker；不得建立第二套 unread Store。Bewly 页面、`NotificationsDrawer` 与直接打开的原版页必须继续保持 iframe、路由、滚动和显隐状态独立。后续 System 原生化必须复用 Native Feed controller 与策略内核，但不得把系统通知强行套入 actor 模型。
-- 私信 Web IM 固定通过后台 `api.vc.bilibili.com` Web endpoint、显式复用现有 WBI 签名并对已确认的 ID/seqno 字段做窄范围无损解析；消息正文与会话草稿不得持久化。会话历史按 `msg_seqno` 边界分页并以 `msg_key` 去重，ACK 属于已读操作，只在当前会话可见且位于最新消息区域时提交，成功后才清除本地未读并通过 `topBarStore.syncUnreadMessageState()` 同步权威角标。Native 私信当前只读；文本与图片发送 transport 仅作为 experimental 代码保留且不注入运行时，现有合成测试不得视为服务端协议验证；在取得真实成功的文本发送、图片上传/发送响应及服务端历史对账证据前，不得重新开放 Composer。
+- 私信 Web IM 固定通过后台 `api.vc.bilibili.com` Web endpoint、显式复用现有 WBI 签名并对已确认的 ID/seqno 字段做窄范围无损解析；消息正文与会话草稿不得持久化。会话历史按 `msg_seqno` 边界分页并以 `msg_key` 去重，ACK 属于已读操作，只在当前会话可见且位于最新消息区域时提交，成功后才清除本地未读并通过 `topBarStore.syncUnreadMessageState()` 同步权威角标。Native 私信当前只读；文本与图片发送 transport 仅作为 experimental 代码保留，生产运行时不注入，仅允许通过 DEV 一次性门禁做受控验收。2026-08-14 的真实文本发送尝试返回 HTTP `412`，被 transport 分类为 `risk-control` 并生成结构化 code `-412`（未观察到合法 JSON code）；服务端历史未出现该消息，因此协议门禁仍为 blocked。现有合成测试不得视为服务端协议验证，在取得真实 `code=0` 的文本发送、图片上传/发送响应及服务端历史对账证据前，不得重新开放 Composer。
 
 ### 深色背景、OLED 与主题色
 

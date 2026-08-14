@@ -36,6 +36,12 @@ export interface PrivateMessageApiResponse<T = unknown> {
 
 export type PrivateMessageRequestParams = Record<string, string | number | boolean | undefined>
 
+export interface PrivateMessageFormRequest {
+  url: string
+  query: PrivateMessageRequestParams
+  body: PrivateMessageRequestParams
+}
+
 export interface PrivateMessage {
   sender_uid: string
   receiver_type: number

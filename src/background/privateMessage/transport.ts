@@ -11,6 +11,7 @@ import { parsePrivateMessageResponse } from './losslessJson'
 import type {
   PrivateMessageApiResponse,
   PrivateMessageEndpointName,
+  PrivateMessageFormRequest,
   PrivateMessageRequestParams,
 } from './types'
 
@@ -23,6 +24,16 @@ export interface PrivateMessageRequest {
   endpointName: PrivateMessageEndpointName
   params: PrivateMessageRequestParams
   url: string
+}
+
+export interface SignedPrivateMessageFormRequest {
+  endpointName: PrivateMessageEndpointName
+  body: PrivateMessageRequestParams
+  url: string
+}
+
+export interface PrivateMessageFormTransportRequest extends PrivateMessageFormRequest {
+  endpointName: PrivateMessageEndpointName
 }
 
 interface PrivateMessageRequestDependencies {
@@ -109,12 +120,113 @@ export async function requestPrivateMessage(
   return requestSignedPrivateMessage(request, 'GET', dependencies, sender)
 }
 
-export async function requestPrivateMessageForm(
+export function requestPrivateMessageForm(
   request: PrivateMessageRequest,
+  dependencies?: Partial<PrivateMessageRequestDependencies>,
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse>
+export function requestPrivateMessageForm(
+  request: PrivateMessageFormTransportRequest,
+  dependencies?: Partial<PrivateMessageRequestDependencies>,
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse>
+export async function requestPrivateMessageForm(
+  request: PrivateMessageRequest | PrivateMessageFormTransportRequest,
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
-  return requestSignedPrivateMessage(request, 'POST', dependencies, sender)
+  if ('params' in request)
+    return requestSignedPrivateMessage(request, 'POST', dependencies, sender)
+
+  const runtimeDependencies = {
+    ...DEFAULT_REQUEST_DEPENDENCIES,
+    ...dependencies,
+  }
+  const requestUrl = appendRequestParams(request.url, request.query)
+  try {
+    const headers: Record<string, string> = {
+      Referer: 'https://message.bilibili.com/',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
+    if (cookieHeader)
+      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
+
+    const response = await runtimeDependencies.fetch(requestUrl, {
+      method: 'POST',
+      body: serializeRequestParams(request.body),
+      credentials: 'include',
+      headers,
+    })
+    return await parsePrivateMessageResponse(response, request.endpointName)
+  }
+  catch {
+    return createPrivateMessageErrorResponse('network', request.endpointName)
+  }
+}
+
+export async function buildPrivateMessageFormRequest(
+  url: string,
+  body: PrivateMessageRequestParams,
+  signParams: typeof signPrivateMessageParams = signPrivateMessageParams,
+): Promise<PrivateMessageFormRequest> {
+  const senderId = body['msg[sender_uid]']
+  const receiverId = body['msg[receiver_id]']
+  const devId = body['msg[dev_id]']
+  if (
+    typeof senderId !== 'string'
+    || typeof receiverId !== 'string'
+    || typeof devId !== 'string'
+    || !senderId
+    || !receiverId
+    || !devId
+  ) {
+    throw new TypeError('private-message form identity fields are required')
+  }
+
+  const signed = await signParams({ ...body })
+  if (typeof signed.wts !== 'number' || typeof signed.w_rid !== 'string' || !signed.w_rid)
+    throw new PrivateMessageWbiUnavailableError()
+
+  return {
+    url,
+    body: { ...body },
+    query: {
+      w_sender_uid: senderId,
+      w_receiver_id: receiverId,
+      w_dev_id: devId,
+      wts: signed.wts,
+      w_rid: signed.w_rid,
+    },
+  }
+}
+
+export async function requestSignedPrivateMessageForm(
+  request: SignedPrivateMessageFormRequest,
+  dependencies: Partial<PrivateMessageRequestDependencies> = {},
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  const runtimeDependencies = {
+    ...DEFAULT_REQUEST_DEPENDENCIES,
+    ...dependencies,
+  }
+  try {
+    const formRequest = await buildPrivateMessageFormRequest(
+      request.url,
+      request.body,
+      runtimeDependencies.signParams,
+    )
+    return await requestPrivateMessageForm({
+      endpointName: request.endpointName,
+      ...formRequest,
+    }, runtimeDependencies, sender)
+  }
+  catch (error) {
+    return createPrivateMessageErrorResponse(
+      isPrivateMessageWbiUnavailableError(error) ? 'wbi-unavailable' : 'invalid-response',
+      request.endpointName,
+    )
+  }
 }
 
 export async function requestPrivateImageUpload(
@@ -175,13 +287,7 @@ async function requestSignedPrivateMessage(
 
     const response = await runtimeDependencies.fetch(requestUrl, {
       method,
-      body: method === 'POST'
-        ? new URLSearchParams(
-            Object.entries(signedParams).flatMap(([key, value]) => (
-              value === undefined || value === '' ? [] : [[key, String(value)]]
-            )),
-          ).toString()
-        : undefined,
+      body: method === 'POST' ? serializeRequestParams(signedParams) : undefined,
       credentials: 'include',
       headers,
     })
@@ -193,4 +299,12 @@ async function requestSignedPrivateMessage(
       request.endpointName,
     )
   }
+}
+
+function serializeRequestParams(params: PrivateMessageRequestParams): string {
+  return new URLSearchParams(
+    Object.entries(params).flatMap(([key, value]) => (
+      value === undefined || value === '' ? [] : [[key, String(value)]]
+    )),
+  ).toString()
 }

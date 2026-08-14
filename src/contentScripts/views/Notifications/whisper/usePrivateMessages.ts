@@ -56,6 +56,23 @@ interface SendPrivateImageMessageOptions {
 
 export type PrivateImageFailureKind = 'upload-failed' | 'send-failed' | 'reconcile-failed'
 
+export type PrivateTextSendOutcome
+  = | 'confirmed'
+    | 'accepted-but-unconfirmed'
+    | 'protocol-mismatch'
+    | 'failed'
+    | null
+
+export interface PrivateTextSendDiagnostic {
+  kind: PrivateMessageTransportErrorKind
+  httpStatus: number
+  redirected: boolean
+  finalHost: string
+  apiCode: number | null
+}
+
+export const PRIVATE_TEXT_SEND_HISTORY_RETRY_DELAYS_MS = [250, 750, 1500] as const
+
 export interface PrivateImageDraftState {
   failureKind: PrivateImageFailureKind | null
   fileName: string
@@ -83,6 +100,8 @@ export interface PrivateConversationState {
   draft: string
   sending: boolean
   imageDraft: PrivateImageDraftState | null
+  lastTextSendOutcome: PrivateTextSendOutcome
+  lastTextSendDiagnostic: PrivateTextSendDiagnostic | null
 }
 
 export interface PrivateMessagesDependencies {
@@ -104,6 +123,7 @@ export interface PrivateMessagesDependencies {
   readFileBytes?: (file: File) => Promise<number[]>
   createUploadRequestId?: () => string
   getImageSummary?: () => string
+  wait?: (delayMs: number) => Promise<void>
 }
 
 export interface PrivateAckEligibility {
@@ -148,6 +168,30 @@ function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
     return null
   const response = value as Partial<PrivateMessageApiResponse<unknown>>
   return typeof response.code === 'number' ? response as PrivateMessageApiResponse<unknown> : null
+}
+
+function createTextSendDiagnostic(value: unknown): PrivateTextSendDiagnostic {
+  const response = asResponse(value)
+  const transportError = response?.bewlyError
+  if (transportError) {
+    return {
+      kind: transportError.kind,
+      httpStatus: transportError.httpStatus,
+      redirected: transportError.redirected,
+      finalHost: transportError.finalHost,
+      apiCode: typeof transportError.apiCode === 'number'
+        ? transportError.apiCode
+        : response.code,
+    }
+  }
+
+  return {
+    kind: response ? 'api-error' : 'invalid-response',
+    httpStatus: 0,
+    redirected: false,
+    finalHost: '',
+    apiCode: response?.code ?? null,
+  }
 }
 
 function extractMessages(response: unknown): PrivateMessagesData | null {
@@ -209,6 +253,8 @@ function createConversationState(talkerId: string): PrivateConversationState {
     draft: '',
     sending: false,
     imageDraft: null,
+    lastTextSendOutcome: null,
+    lastTextSendDiagnostic: null,
   })
 }
 
@@ -273,10 +319,19 @@ export function usePrivateMessages(
 
   function reconcilePendingMessages(state: PrivateConversationState) {
     const localIds = state.items.flatMap(item => (
-      item.localId && item.sendState === 'reconciling' ? [item.localId] : []
+      item.localId && (
+        item.sendState === 'reconciling'
+        || item.sendState === 'accepted-but-unconfirmed'
+      )
+        ? [item.localId]
+        : []
     ))
-    for (const localId of localIds)
-      state.items = reconcileOptimisticPrivateMessages(state.items, localId).items
+    for (const localId of localIds) {
+      const result = reconcileOptimisticPrivateMessages(state.items, localId)
+      state.items = result.items
+      if (result.reconciled)
+        state.lastTextSendOutcome = 'confirmed'
+    }
   }
 
   function requestFirstPage(
@@ -563,18 +618,38 @@ export function usePrivateMessages(
     imageRequests.delete(talkerId)
   }
 
+  async function waitForTextSendHistory(delayMs: number): Promise<void> {
+    if (dependencies.wait)
+      return dependencies.wait(delayMs)
+    await new Promise<void>(resolve => setTimeout(resolve, delayMs))
+  }
+
   async function pullLatestAfterSend(
     talkerId: string,
+    localId: string,
     mid: string,
     requestAccountGeneration: number,
     state: PrivateConversationState,
-  ) {
+  ): Promise<boolean> {
     const activeFirstPageRequest = firstPageRequests.get(talkerId)
     if (activeFirstPageRequest)
       await activeFirstPageRequest
     if (!isCurrentAccountState(mid, requestAccountGeneration, state))
-      return
-    await requestFirstPage(talkerId, state.loaded ? 'merge' : 'replace')
+      return false
+
+    for (const delayMs of [0, ...PRIVATE_TEXT_SEND_HISTORY_RETRY_DELAYS_MS]) {
+      if (delayMs > 0)
+        await waitForTextSendHistory(delayMs)
+      if (!isCurrentAccountState(mid, requestAccountGeneration, state))
+        return false
+
+      await requestFirstPage(talkerId, state.loaded ? 'merge' : 'replace')
+      if (!isCurrentAccountState(mid, requestAccountGeneration, state))
+        return false
+      if (!state.items.some(item => item.localId === localId))
+        return true
+    }
+    return false
   }
 
   function executeSend(
@@ -596,7 +671,10 @@ export function usePrivateMessages(
     const requestAccountGeneration = accountGeneration
     optimistic.sendState = 'pending'
     optimistic.serverMsgKey = undefined
+    state.lastTextSendOutcome = null
+    state.lastTextSendDiagnostic = null
     state.sending = true
+    let failureDiagnostic: PrivateTextSendDiagnostic | null = null
 
     const request = (async () => {
       const response = await dependencies.sendMessage!({
@@ -605,8 +683,10 @@ export function usePrivateMessages(
         talkerId,
         text,
       })
-      if (asResponse(response)?.code !== 0)
+      if (asResponse(response)?.code !== 0) {
+        failureDiagnostic = createTextSendDiagnostic(response)
         throw new Error('private message send failed')
+      }
       if (!isCurrentAccountState(mid, requestAccountGeneration, state))
         return false
 
@@ -616,17 +696,36 @@ export function usePrivateMessages(
       currentOptimistic.sendState = 'reconciling'
       currentOptimistic.serverMsgKey = extractSentMessageKey(response) || undefined
 
+      const confirmed = await pullLatestAfterSend(
+        talkerId,
+        localId,
+        mid,
+        requestAccountGeneration,
+        state,
+      )
+      if (!isCurrentAccountState(mid, requestAccountGeneration, state))
+        return false
+      if (!confirmed) {
+        const unconfirmed = state.items.find(item => item.localId === localId)
+        if (unconfirmed)
+          unconfirmed.sendState = 'accepted-but-unconfirmed'
+        state.lastTextSendOutcome = currentOptimistic.serverMsgKey
+          ? 'protocol-mismatch'
+          : 'accepted-but-unconfirmed'
+        return false
+      }
+
+      state.lastTextSendOutcome = 'confirmed'
       dependencies.markSessionSent?.(talkerId, text, currentOptimistic.timestamp)
-      const sessionRefresh = dependencies.refreshSessions?.().catch(() => {})
-      await pullLatestAfterSend(talkerId, mid, requestAccountGeneration, state)
-      if (sessionRefresh)
-        await sessionRefresh
-      return isCurrentAccountState(mid, requestAccountGeneration, state)
+      await dependencies.refreshSessions?.().catch(() => {})
+      return true
     })().catch(() => {
       if (isCurrentAccountState(mid, requestAccountGeneration, state)) {
         const currentOptimistic = state.items.find(item => item.localId === localId)
         if (currentOptimistic)
           currentOptimistic.sendState = 'failed'
+        state.lastTextSendOutcome = 'failed'
+        state.lastTextSendDiagnostic = failureDiagnostic ?? createTextSendDiagnostic(null)
       }
       return false
     }).finally(() => {
@@ -802,7 +901,7 @@ export function usePrivateMessages(
 
         failedKind = 'reconcile-failed'
         updateImageState(state, task, 'reconciling')
-        await pullLatestAfterSend(talkerId, mid, requestAccountGeneration, state)
+        await requestFirstPage(talkerId, state.loaded ? 'merge' : 'replace')
         if (!isCurrent())
           return false
         if (state.items.some(item => item.localId === localId))

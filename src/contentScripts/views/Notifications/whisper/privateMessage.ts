@@ -42,6 +42,7 @@ export type PrivateMessageSendState
     | 'uploading'
     | 'sending'
     | 'reconciling'
+    | 'accepted-but-unconfirmed'
     | 'sent'
     | 'failed'
 
@@ -219,6 +220,8 @@ export function reconcileOptimisticPrivateMessages(
       return false
     return (
       getPrivateMessageText(item) === optimisticText
+      && item.senderId === optimistic.senderId
+      && item.receiverId === optimistic.receiverId
       && Math.abs(item.timestamp - optimistic.timestamp) <= PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS
     )
   })

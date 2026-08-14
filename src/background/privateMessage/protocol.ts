@@ -496,7 +496,15 @@ export function parsePrivateMessagesResponse(
 export function parsePrivateSendResponse(
   response: PrivateMessageApiResponse,
 ): PrivateMessageApiResponse<PrivateSendData> | null {
-  if (response.code !== 0 || !isRecord(response.data))
+  if (response.code !== 0)
+    return null
+  if (response.data === null || response.data === undefined) {
+    return {
+      ...response,
+      data: {},
+    }
+  }
+  if (!isRecord(response.data))
     return null
   if (
     Object.hasOwn(response.data, 'msg_key')
