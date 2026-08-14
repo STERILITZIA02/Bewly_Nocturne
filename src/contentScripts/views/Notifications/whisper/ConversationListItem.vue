@@ -51,8 +51,19 @@ watch(() => props.session.avatar, () => {
     type="content"
     :aria-label="t('notifications.whisper.open_unsupported_original', { name: displayName })"
   >
-    <span class="conversation-list-item__fallback-avatar" aria-hidden="true">
-      {{ displayName.slice(0, 1) }}
+    <span class="conversation-list-item__avatar-wrap">
+      <img
+        v-if="session.avatar && !avatarFailed"
+        class="conversation-list-item__avatar"
+        :src="session.avatar"
+        :alt="displayName"
+        loading="lazy"
+        decoding="async"
+        @error="avatarFailed = true"
+      >
+      <span v-else class="conversation-list-item__fallback-avatar" aria-hidden="true">
+        {{ displayName.slice(0, 1) }}
+      </span>
     </span>
     <span class="conversation-list-item__copy">
       <strong>{{ displayName }}</strong>

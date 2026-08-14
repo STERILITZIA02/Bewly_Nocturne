@@ -927,6 +927,17 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
   assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), true)
 })
 
+verify('original-fallback sessions keep available avatars instead of always using initials', async () => {
+  const source = await readFile(
+    new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url),
+    'utf8',
+  )
+  assert.equal(
+    (source.match(/v-if="session\.avatar && !avatarFailed"/g) ?? []).length,
+    2,
+  )
+})
+
 verify('all locales expose private-message-specific failures and the read-only fallback', async () => {
   const localeNames = ['cmn-CN', 'cmn-TW', 'en', 'jyut']
   const requiredKeys = [
@@ -967,6 +978,76 @@ verify('runtime response fixtures are sanitized and preserve only confirmed real
   assert.equal(sessions.data?.session_list?.length, 5)
   assert.equal(messages.data?.messages?.length, 3)
   assert.equal(messages.data?.e_infos, null)
+})
+
+verify('authenticated history and ACK fixtures preserve the real pagination boundary and unread closure', async ({ privateMessage, protocol }) => {
+  const fixtureNames = [
+    'messages-real-first',
+    'messages-real-older',
+    'ack-real-success',
+    'unread-real-before',
+    'unread-real-after',
+  ]
+  const sources = await Promise.all(fixtureNames.map(async (fixtureName) => {
+    const fixtureUrl = new URL(`../tests/fixtures/private-message/runtime/${fixtureName}.json`, import.meta.url)
+    return readFile(fixtureUrl, 'utf8')
+  }))
+  for (const [index, source] of sources.entries()) {
+    assert.equal(/SESSDATA|bili_jct|csrf|cookie/i.test(source), false, fixtureNames[index])
+    assert.equal(/https?:\/\/[^"\s]+\?/i.test(source), false, fixtureNames[index])
+  }
+
+  const [firstRaw, olderRaw, ack, unreadBefore, unreadAfter] = await Promise.all(
+    fixtureNames.map(readRuntimeFixture),
+  ) as [
+    import('../src/background/privateMessage/types').PrivateMessageApiResponse,
+    import('../src/background/privateMessage/types').PrivateMessageApiResponse,
+    { code?: unknown },
+    { code?: unknown, data?: Record<string, unknown> },
+    { code?: unknown, data?: Record<string, unknown> },
+  ]
+  const first = protocol.parsePrivateMessagesResponse(firstRaw)
+  const older = protocol.parsePrivateMessagesResponse(olderRaw)
+  assert.ok(first)
+  assert.ok(older)
+  assert.equal(first.code, 0)
+  assert.equal(older.code, 0)
+  assert.equal(first.data.messages.length, 20)
+  assert.equal(older.data.messages.length, 20)
+  assert.equal(first.data.e_infos.length, 1)
+  assert.equal(older.data.e_infos.length, 4)
+  assert.equal(first.data.messages.every(message => message.msg_seqno.length === 16), true)
+  assert.equal(older.data.messages.every(message => message.msg_seqno.length === 16), true)
+  assert.equal(first.data.messages.every(message => message.msg_key.length === 19), true)
+  assert.equal(older.data.messages.every(message => message.msg_key.length === 19), true)
+  for (const messages of [first.data.messages, older.data.messages]) {
+    assert.equal(messages.every((message, index) => (
+      index === 0
+      || privateMessage.comparePrivateMessageSeqno(messages[index - 1]!.msg_seqno, message.msg_seqno) > 0
+    )), true)
+    assert.equal(messages.every((message, index) => (
+      index === 0 || messages[index - 1]!.timestamp > message.timestamp
+    )), true)
+  }
+
+  const firstDisplay = privateMessage.transformPrivateMessages(first.data.messages, first.data.e_infos, '8000000000000000001')
+  const olderDisplay = privateMessage.transformPrivateMessages(older.data.messages, older.data.e_infos, '8000000000000000001')
+  const firstBoundary = privateMessage.getOldestPrivateMessageSeqno(firstDisplay)
+  assert.ok(firstBoundary)
+  assert.equal(
+    olderDisplay.every(message => privateMessage.comparePrivateMessageSeqno(message.seqno, firstBoundary) < 0),
+    true,
+  )
+  const merged = privateMessage.mergePrivateMessages(firstDisplay, olderDisplay)
+  assert.equal(merged.length, 40)
+  assert.equal(new Set(merged.map(message => message.msgKey)).size, 40)
+
+  assert.equal(ack.code, 0)
+  assert.equal(unreadBefore.code, 0)
+  assert.equal(unreadAfter.code, 0)
+  assert.equal(unreadBefore.data?.follow_unread, 1)
+  assert.equal(unreadAfter.data?.follow_unread, 0)
+  assert.equal(unreadAfter.data?.unfollow_unread, unreadBefore.data?.unfollow_unread)
 })
 
 verify('automatic session merge updates head data without discarding existing rows', ({ privateSession }) => {
@@ -1450,6 +1531,47 @@ verify('conversation controller uses end_seqno for history and rejects old accou
   controller.updateViewport('200', { atLatest: false, scrollTop: 88 })
   assert.equal(controller.states.has('200'), false)
   assert.equal(controller.getState('200').items.length, 0)
+})
+
+verify('older-history requests are single-flight and stop after a page makes no seqno progress', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let olderRequests = 0
+  let resolveOlder: ((value: unknown) => void) | undefined
+  const olderResponse = new Promise<unknown>((resolve) => {
+    resolveOlder = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async (options) => {
+      if (!options.endSeqno) {
+        return createMessagesResponse([
+          createRawMessage('3', '103'),
+          createRawMessage('4', '104'),
+        ])
+      }
+      olderRequests++
+      return olderResponse
+    },
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  const firstRequest = controller.loadOlder('200')
+  const repeatedRequest = controller.loadOlder('200')
+  assert.equal(olderRequests, 1)
+  resolveOlder?.(createMessagesResponse([
+    createRawMessage('3', '103'),
+  ]))
+  await Promise.all([firstRequest, repeatedRequest])
+
+  const state = controller.getState('200')
+  assert.equal(state.noMore, true)
+  assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
+  await controller.loadOlder('200')
+  assert.equal(olderRequests, 1)
 })
 
 verify('latest refresh merges to the tail and reports new messages without discarding history', async ({ usePrivateMessages }) => {
