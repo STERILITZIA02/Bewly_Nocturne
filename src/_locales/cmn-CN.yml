@@ -899,6 +899,8 @@ notifications:
     muted: 已免打扰
     unread_count: '{count} 条未读私信'
     open_unsupported_original: 在原版中打开与{name}的会话
+    open_original_list: 打开原版私信列表
+    back_to_conversations: 返回会话列表
     messages:
       timeline_aria: 与{name}的私信记录
       loading: 正在加载聊天记录

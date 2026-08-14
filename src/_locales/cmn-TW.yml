@@ -900,6 +900,8 @@ notifications:
     muted: 已開啟勿擾
     unread_count: '{count} 則未讀私訊'
     open_unsupported_original: 在原版中開啟與{name}的會話
+    open_original_list: 開啟原版私訊列表
+    back_to_conversations: 返回會話列表
     messages:
       timeline_aria: 與{name}的私訊記錄
       loading: 正在載入聊天記錄

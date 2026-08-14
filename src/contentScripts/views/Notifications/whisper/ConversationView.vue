@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import MessageComposer from './MessageComposer.vue'
@@ -15,8 +16,13 @@ const props = defineProps<{
   session: DisplayPrivateSession
 }>()
 
+const emit = defineEmits<{
+  (event: 'back'): void
+}>()
+
 const { t } = useI18n()
 const originalUrl = buildOriginalNotificationUrl('whisper')
+const headingRef = ref<HTMLElement | null>(null)
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
 const composerRef = ref<InstanceType<typeof MessageComposer> | null>(null)
@@ -198,6 +204,15 @@ function handleVisibilityChange() {
     void refreshLatest()
 }
 
+function focusHeading() {
+  headingRef.value?.focus({ preventScroll: true })
+}
+
+function handleEscape() {
+  if (window.matchMedia(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`).matches)
+    emit('back')
+}
+
 watch(() => props.active, (active) => {
   if (active)
     void activateConversation()
@@ -215,14 +230,31 @@ onBeforeUnmount(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
-defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
+defineExpose({
+  focusHeading,
+  refresh: () => refreshLatest({ forceBottom: false }),
+})
 </script>
 
 <template>
-  <section class="conversation-view" :aria-label="t('notifications.whisper.messages.timeline_aria', { name: session.name })">
+  <section
+    class="conversation-view"
+    :aria-label="t('notifications.whisper.messages.timeline_aria', { name: session.name })"
+    @keydown.esc="handleEscape"
+  >
     <header class="conversation-view__header">
+      <IconButton
+        class="conversation-view__back"
+        shape="circle"
+        :label="t('notifications.whisper.back_to_conversations')"
+        @click="emit('back')"
+      >
+        <i i-mingcute:arrow-left-line aria-hidden="true" />
+      </IconButton>
       <div>
-        <strong>{{ session.name || t('notifications.whisper.unknown_user') }}</strong>
+        <strong ref="headingRef" tabindex="-1">
+          {{ session.name || t('notifications.whisper.unknown_user') }}
+        </strong>
         <span>{{ t('notifications.whisper.messages.readonly') }}</span>
       </div>
     </header>
@@ -322,6 +354,8 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/breakpoints";
+
 .conversation-view {
   position: relative;
   display: grid;
@@ -347,6 +381,11 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
 
 .conversation-view__header {
   border-bottom: 1px solid var(--bew-border-color);
+}
+
+.conversation-view__back {
+  display: none;
+  flex: 0 0 auto;
 }
 
 .conversation-view__footer {
@@ -488,6 +527,12 @@ defineExpose({ refresh: () => refreshLatest({ forceBottom: false }) })
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-2);
+}
+
+@media (max-width: breakpoints.$mobile-max) {
+  .conversation-view__back {
+    display: inline-flex;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

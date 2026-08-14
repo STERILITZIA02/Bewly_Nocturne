@@ -55,6 +55,7 @@ interface PrivateMessageModules {
   privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
+  privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
   topBarSharedRefresh: typeof import('../src/stores/topBarSharedRefresh')
 }
@@ -112,6 +113,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
+      privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
     ] = await Promise.all([
@@ -124,6 +126,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
+      import('../src/utils/privateConversationRoute'),
       import('../src/contentScripts/views/Notifications/notificationSections'),
       import('../src/stores/topBarSharedRefresh'),
     ])
@@ -137,6 +140,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
+      privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
     }
@@ -145,6 +149,54 @@ async function loadModules(): Promise<PrivateMessageModules> {
     assert.fail('private-message production modules must exist before verification can pass')
   }
 }
+
+verify('private conversation routes only preserve validated session identity', ({ privateConversationRoute }) => {
+  const listUrl = 'https://www.bilibili.com/?page=Notifications&notificationView=whisper'
+  const conversationUrl = privateConversationRoute.buildPrivateConversationUrl({
+    talkerId: '90071992547409931234',
+    sessionType: 1,
+  })
+  const parsedUrl = new URL(conversationUrl)
+
+  assert.deepEqual(privateConversationRoute.parsePrivateConversationRoute(conversationUrl), {
+    talkerId: '90071992547409931234',
+    sessionType: 1,
+  })
+  assert.equal(parsedUrl.searchParams.get('page'), 'Notifications')
+  assert.equal(parsedUrl.searchParams.get('notificationView'), 'whisper')
+  assert.equal(parsedUrl.searchParams.get('notificationTalker'), '90071992547409931234')
+  assert.equal(parsedUrl.searchParams.get('notificationSessionType'), '1')
+  assert.deepEqual([...parsedUrl.searchParams.keys()], [
+    'page',
+    'notificationView',
+    'notificationTalker',
+    'notificationSessionType',
+  ])
+  assert.deepEqual(privateConversationRoute.parsePrivateConversationRoute(
+    `${listUrl}&notificationTalker=42&notificationSessionType=2`,
+  ), { talkerId: '42', sessionType: 2 })
+  assert.equal(privateConversationRoute.clearPrivateConversationRoute(conversationUrl), listUrl)
+})
+
+verify('invalid private conversation route values safely fall back to the list route', ({ privateConversationRoute }) => {
+  const listUrl = 'https://www.bilibili.com/?page=Notifications&notificationView=whisper'
+  for (const query of [
+    'notificationTalker=&notificationSessionType=1',
+    'notificationTalker=-1&notificationSessionType=1',
+    'notificationTalker=1e3&notificationSessionType=1',
+    'notificationTalker=constructor&notificationSessionType=1',
+    'notificationTalker=42',
+    'notificationSessionType=1',
+    'notificationTalker=42&notificationSessionType=0',
+    'notificationTalker=42&notificationSessionType=1.5',
+    'notificationTalker=42&notificationSessionType=3',
+  ]) {
+    const url = `${listUrl}&${query}`
+    assert.equal(privateConversationRoute.parsePrivateConversationRoute(url), null, query)
+    assert.equal(privateConversationRoute.clearPrivateConversationRoute(url), listUrl, query)
+  }
+  assert.equal(privateConversationRoute.parsePrivateConversationRoute('not a valid absolute URL'), null)
+})
 
 verify('settings original frame cannot mutate unread state', ({ notificationSections }) => {
   assert.equal(notificationSections.canOriginalNotificationMutateUnread('settings'), false)
@@ -793,6 +845,34 @@ verify('session identity keeps the same talker separate across session types', (
     createRawSession('30', { session_type: 2 }),
   ], createCardsResponse([]))
   assert.deepEqual(display.map(item => item.key), ['1:30', '2:30'])
+})
+
+verify('session selection uses a composite key and clears with the active account', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse([
+      createRawSession('30', { session_type: 1 }),
+      createRawSession('30', { session_type: 2 }),
+    ]),
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => createSessionsResponse([]),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  controller.selectSession(controller.state.items[0]!)
+  assert.equal(controller.selectedSessionKey.value, '1:30')
+  assert.equal(controller.selectedTalkerId.value, '30')
+
+  controller.clearSelectedSession()
+  assert.equal(controller.selectedSessionKey.value, '')
+  assert.equal(controller.selectedTalkerId.value, '')
+
+  controller.selectSession(controller.state.items[0]!)
+  mid.value = '200'
+  await nextTick()
+  assert.equal(controller.selectedSessionKey.value, '')
+  assert.equal(controller.selectedTalkerId.value, '')
 })
 
 verify('user card response shapes are optional enhancements with stable fallbacks', ({ privateSession }) => {
@@ -1493,6 +1573,63 @@ verify('conversation list wires one bottom sentinel and localized loaded-list sc
     assert.ok(localeSource.includes('earliest_session:'))
     assert.ok(localeSource.includes('load_more_failed:'))
   }
+})
+
+verify('whisper conversation routing reuses route state and never guesses original deep links', async () => {
+  const [notificationsSource, workspaceSource, itemSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.ok(notificationsSource.includes('parsePrivateConversationRoute'))
+  assert.ok(notificationsSource.includes('buildPrivateConversationUrl'))
+  assert.ok(notificationsSource.includes('clearPrivateConversationRoute'))
+  assert.ok(notificationsSource.includes('privateSessions.selectedSessionKey'))
+  assert.ok(notificationsSource.includes(`watch(() => routeState.navigationId`))
+  assert.ok(notificationsSource.includes('window.history.pushState'))
+  assert.ok(notificationsSource.includes('window.history.replaceState'))
+  assert.ok(notificationsSource.includes('watch(currentMid'))
+  assert.ok(workspaceSource.includes(`emit('selectSession'`))
+  assert.ok(workspaceSource.includes(`emit('closeConversation'`))
+  assert.ok(itemSource.includes('notifications.whisper.open_original_list'))
+  assert.equal(notificationsSource.includes(`addEventListener('popstate'`), false)
+  assert.equal(workspaceSource.includes(`addEventListener('popstate'`), false)
+  assert.equal([notificationsSource, workspaceSource, itemSource].some(source => /#\/whisper\//.test(source)), false)
+})
+
+verify('mobile whisper master-detail preserves scroll and focus with reduced-motion support', async () => {
+  const [workspaceSource, listSource, itemSource, conversationSource, ...localeSources] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    ...['cmn-CN', 'cmn-TW', 'en', 'jyut'].map(locale => (
+      readFile(new URL(`../src/_locales/${locale}.yml`, import.meta.url), 'utf8')
+    )),
+  ])
+
+  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(nativeSelectedSession)`))
+  assert.ok(workspaceSource.includes('breakpoints.$mobile-max'))
+  assert.ok(workspaceSource.includes('translateX(100%)'))
+  assert.ok(workspaceSource.includes('translateX(-100%)'))
+  assert.ok(workspaceSource.includes('var(--bew-duration-normal)'))
+  assert.ok(workspaceSource.includes('@media (prefers-reduced-motion: reduce)'))
+  assert.ok(workspaceSource.includes('listScrollTop'))
+  assert.ok(workspaceSource.includes('restoreScrollTop'))
+  assert.ok(workspaceSource.includes('focusSession'))
+  assert.ok(listSource.includes('defineExpose'))
+  assert.ok(listSource.includes('getScrollTop'))
+  assert.ok(listSource.includes('restoreScrollTop'))
+  assert.ok(listSource.includes('focusSession'))
+  assert.ok(itemSource.includes(':data-session-key="session.key"'))
+  assert.ok(conversationSource.includes('conversation-view__back'))
+  assert.ok(conversationSource.includes('focusHeading'))
+  assert.ok(conversationSource.includes('@keydown.esc="handleEscape"'))
+  assert.ok(conversationSource.includes('LAYOUT_BREAKPOINTS.mobileMax'))
+  assert.equal(conversationSource.includes(`window.addEventListener('keydown'`), false)
+  for (const localeSource of localeSources)
+    assert.ok(localeSource.includes('back_to_conversations:'))
 })
 
 verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {

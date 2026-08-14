@@ -8,6 +8,7 @@ import OriginalNotificationsFrame from '../components/OriginalNotificationsFrame
 import type { NotificationAccountState } from '../notificationFeedPolicy'
 import ConversationList from './ConversationList.vue'
 import ConversationView from './ConversationView.vue'
+import type { DisplayPrivateSession } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateSessionsController } from './usePrivateSessions'
 
@@ -16,7 +17,14 @@ interface OriginalNotificationsFrameExposed {
 }
 
 interface ConversationViewExposed {
+  focusHeading: () => void
   refresh: () => Promise<void>
+}
+
+interface ConversationListExposed {
+  focusSession: (sessionKey: string) => void
+  getScrollTop: () => number
+  restoreScrollTop: (scrollTop: number) => void
 }
 
 const props = defineProps<{
@@ -26,13 +34,20 @@ const props = defineProps<{
   messagesController: PrivateMessagesController
 }>()
 
+const emit = defineEmits<{
+  (event: 'closeConversation'): void
+  (event: 'selectSession', session: DisplayPrivateSession): void
+}>()
+
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
+const conversationListRef = ref<ConversationListExposed | null>(null)
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const conversationViewRef = ref<ConversationViewExposed | null>(null)
+const listScrollTop = ref(0)
 const originalUrl = buildOriginalNotificationUrl('whisper')
 const selectedSession = computed(() => props.controller.state.items.find(
-  item => item.talkerId === props.controller.selectedTalkerId.value,
+  item => item.key === props.controller.selectedSessionKey.value,
 ))
 const nativeSelectedSession = computed(() => (
   selectedSession.value?.capabilities.canReadNative
@@ -71,6 +86,11 @@ function retry() {
   void props.controller.retryFailed()
 }
 
+function selectSession(session: DisplayPrivateSession) {
+  listScrollTop.value = conversationListRef.value?.getScrollTop() ?? 0
+  emit('selectSession', session)
+}
+
 function handleVisibilityChange() {
   if (
     document.visibilityState === 'visible'
@@ -99,6 +119,19 @@ watch(unreadCount, async (next, previous) => {
   }
 })
 
+watch(() => props.controller.selectedSessionKey.value, async (nextSessionKey, previousSessionKey) => {
+  if (nextSessionKey && !previousSessionKey)
+    listScrollTop.value = conversationListRef.value?.getScrollTop() ?? listScrollTop.value
+  await nextTick()
+  if (nextSessionKey) {
+    conversationViewRef.value?.focusHeading()
+  }
+  else if (previousSessionKey) {
+    conversationListRef.value?.restoreScrollTop(listScrollTop.value)
+    conversationListRef.value?.focusSession(previousSessionKey)
+  }
+})
+
 onMounted(() => document.addEventListener('visibilitychange', handleVisibilityChange))
 onBeforeUnmount(() => document.removeEventListener('visibilitychange', handleVisibilityChange))
 
@@ -106,7 +139,10 @@ defineExpose({ refresh })
 </script>
 
 <template>
-  <section class="whisper-workspace">
+  <section
+    class="whisper-workspace"
+    :class="{ 'whisper-workspace--detail': Boolean(nativeSelectedSession) }"
+  >
     <aside class="whisper-workspace__sessions">
       <div v-if="accountState === 'profile-pending'" class="whisper-workspace__state" aria-busy="true">
         <Loading />
@@ -158,15 +194,16 @@ defineExpose({ refresh })
           </button>
         </div>
         <ConversationList
+          ref="conversationListRef"
           :items="controller.state.items"
           :loading-more="controller.state.loadingMore"
           :no-more="controller.state.noMore"
           :pagination-stalled="controller.state.paginationStalled"
           :load-more-failed="controller.state.failedOperation === 'load-more'"
-          :selected-talker-id="controller.selectedTalkerId.value"
+          :selected-session-key="controller.selectedSessionKey.value"
           @load-more="controller.loadMore()"
           @retry-load-more="controller.loadMore({ retry: true })"
-          @select="controller.selectSession"
+          @select="selectSession"
         />
       </template>
     </aside>
@@ -179,6 +216,7 @@ defineExpose({ refresh })
         :active="active"
         :controller="messagesController"
         :session="nativeSelectedSession"
+        @back="emit('closeConversation')"
       />
       <OriginalNotificationsFrame v-else ref="originalFrameRef" view="whisper" />
     </div>
@@ -281,13 +319,53 @@ defineExpose({ refresh })
 
 @media (max-width: breakpoints.$mobile-max) {
   .whisper-workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(calc(var(--bew-space-12) * 4), 1fr) minmax(calc(var(--bew-space-12) * 5), 2fr);
+    position: relative;
+    display: block;
+  }
+
+  .whisper-workspace__sessions,
+  .whisper-workspace__detail {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    transition:
+      transform var(--bew-duration-normal) var(--bew-ease-standard),
+      visibility 0s linear var(--bew-duration-normal);
   }
 
   .whisper-workspace__sessions {
+    visibility: visible;
+    transform: translateX(0);
     border-right: 0;
-    border-bottom: 1px solid var(--bew-border-color);
+    transition-delay: 0s;
+  }
+
+  .whisper-workspace__detail {
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(100%);
+  }
+
+  .whisper-workspace--detail .whisper-workspace__sessions {
+    visibility: hidden;
+    pointer-events: none;
+    transform: translateX(-100%);
+    transition-delay: 0s, var(--bew-duration-normal);
+  }
+
+  .whisper-workspace--detail .whisper-workspace__detail {
+    visibility: visible;
+    pointer-events: auto;
+    transform: translateX(0);
+    transition-delay: 0s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .whisper-workspace__sessions,
+  .whisper-workspace__detail {
+    transition: none;
   }
 }
 </style>

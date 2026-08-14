@@ -885,6 +885,8 @@ notifications:
     muted: 已免打擾
     unread_count: '{count} 條未讀私訊'
     open_unsupported_original: 喺原版打開同{name}嘅會話
+    open_original_list: 打開原版私訊列表
+    back_to_conversations: 返回會話列表
     messages:
       timeline_aria: 同{name}嘅私訊記錄
       loading: 載入緊聊天記錄

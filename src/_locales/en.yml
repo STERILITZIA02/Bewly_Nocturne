@@ -952,6 +952,8 @@ notifications:
     muted: Muted
     unread_count: '{count} unread direct messages'
     open_unsupported_original: Open conversation with {name} in original Bilibili
+    open_original_list: Open the original direct-message list
+    back_to_conversations: Back to conversations
     messages:
       timeline_aria: Direct-message history with {name}
       loading: Loading message history

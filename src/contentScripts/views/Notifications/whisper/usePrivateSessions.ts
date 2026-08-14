@@ -1,5 +1,5 @@
-import type { Ref } from 'vue'
-import { reactive, ref, watch } from 'vue'
+import type { ComputedRef, Ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 
 import type {
   PrivateMessageApiResponse,
@@ -54,7 +54,8 @@ export interface PrivateSessionsDependencies {
 
 export interface PrivateSessionsController {
   state: PrivateSessionsState
-  selectedTalkerId: Ref<string>
+  selectedSessionKey: Ref<string>
+  selectedTalkerId: ComputedRef<string>
   loadInitial: () => Promise<void>
   loadMore: (options?: { retry?: boolean }) => Promise<void>
   refresh: () => Promise<void>
@@ -64,6 +65,7 @@ export interface PrivateSessionsController {
   retryFailed: () => Promise<void>
   observeUnreadCount: (unreadCount: number) => Promise<void>
   selectSession: (session: DisplayPrivateSession) => void
+  clearSelectedSession: () => void
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   markSessionSent: (talkerId: string, summary: string, timestamp: number) => void
 }
@@ -142,7 +144,10 @@ export function usePrivateSessions(
   dependencies: PrivateSessionsDependencies,
 ): PrivateSessionsController {
   const state = createState()
-  const selectedTalkerId = ref('')
+  const selectedSessionKey = ref('')
+  const selectedTalkerId = computed(() => (
+    state.items.find(item => item.key === selectedSessionKey.value)?.talkerId ?? ''
+  ))
   const userCardCache = new Map<string, CachedPrivateUserCard>()
   const now = dependencies.now ?? Date.now
   let firstPageRequest: Promise<void> | null = null
@@ -197,7 +202,7 @@ export function usePrivateSessions(
     state.newestSessionTs = 0
     state.loadedPageCount = 0
     state.loadedAt = 0
-    selectedTalkerId.value = ''
+    selectedSessionKey.value = ''
     userCardCache.clear()
     contentGeneration++
     firstPageRequest = null
@@ -300,10 +305,10 @@ export function usePrivateSessions(
         state.failedOperation = null
 
         if (
-          selectedTalkerId.value
-          && !state.items.some(item => item.talkerId === selectedTalkerId.value)
+          selectedSessionKey.value
+          && !state.items.some(item => item.key === selectedSessionKey.value)
         ) {
-          selectedTalkerId.value = ''
+          selectedSessionKey.value = ''
         }
       }
       catch (response) {
@@ -507,7 +512,11 @@ export function usePrivateSessions(
 
   function selectSession(session: DisplayPrivateSession) {
     if (isNativePrivateSession(session))
-      selectedTalkerId.value = session.talkerId
+      selectedSessionKey.value = session.key
+  }
+
+  function clearSelectedSession() {
+    selectedSessionKey.value = ''
   }
 
   function markSessionRead(talkerId: string, ackSeqno: string) {
@@ -541,6 +550,7 @@ export function usePrivateSessions(
 
   return {
     state,
+    selectedSessionKey,
     selectedTalkerId,
     loadInitial,
     loadMore,
@@ -551,6 +561,7 @@ export function usePrivateSessions(
     retryFailed,
     observeUnreadCount,
     selectSession,
+    clearSelectedSession,
     markSessionRead,
     markSessionSent,
   }

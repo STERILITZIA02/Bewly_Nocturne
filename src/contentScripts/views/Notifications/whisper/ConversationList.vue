@@ -11,7 +11,7 @@ const props = defineProps<{
   noMore: boolean
   paginationStalled: boolean
   loadMoreFailed: boolean
-  selectedTalkerId: string
+  selectedSessionKey: string
 }>()
 
 const emit = defineEmits<{
@@ -49,6 +49,23 @@ function disconnectObserver() {
   observer = null
 }
 
+function getScrollTop(): number {
+  return itemsRef.value?.scrollTop ?? 0
+}
+
+function restoreScrollTop(scrollTop: number) {
+  if (itemsRef.value)
+    itemsRef.value.scrollTop = Math.max(0, scrollTop)
+}
+
+function focusSession(sessionKey: string) {
+  const sessionItems = itemsRef.value?.querySelectorAll<HTMLElement>('[data-session-key]')
+  const sessionItem = sessionItems
+    ? Array.from(sessionItems).find(element => element.dataset.sessionKey === sessionKey)
+    : undefined
+  sessionItem?.focus({ preventScroll: true })
+}
+
 async function observeSentinel() {
   const generation = ++observerGeneration
   observer?.disconnect()
@@ -83,6 +100,8 @@ watch(
 )
 
 onBeforeUnmount(disconnectObserver)
+
+defineExpose({ focusSession, getScrollTop, restoreScrollTop })
 </script>
 
 <template>
@@ -131,7 +150,7 @@ onBeforeUnmount(disconnectObserver)
         v-for="session in filteredItems"
         :key="session.key"
         :session="session"
-        :selected="selectedTalkerId === session.talkerId"
+        :selected="selectedSessionKey === session.key"
         @select="emit('select', $event)"
       />
       <div ref="sentinelRef" class="conversation-list__sentinel" role="status">

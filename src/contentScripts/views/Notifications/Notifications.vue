@@ -9,6 +9,13 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF } from '~/utils/main'
 import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
+import type { PrivateConversationRoute } from '~/utils/privateConversationRoute'
+import {
+  buildPrivateConversationUrl,
+  clearPrivateConversationRoute,
+  parsePrivateConversationRoute,
+  PRIVATE_CONVERSATION_ROUTE_PARAMS,
+} from '~/utils/privateConversationRoute'
 
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
 import NotificationsNavigation from './components/NotificationsNavigation.vue'
@@ -29,6 +36,7 @@ import {
   isOriginalOnlyNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
+import type { DisplayPrivateSession } from './whisper/privateSession'
 import { usePrivateMessages } from './whisper/usePrivateMessages'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
 import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
@@ -54,6 +62,7 @@ const currentView = ref<NotificationView>(parseNotificationView(routeState.href 
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
+const pendingPrivateConversationRoute = ref<PrivateConversationRoute | null>(null)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
 const privateSessions = usePrivateSessions(currentMid, {
@@ -88,6 +97,100 @@ const usesWorkspaceLayout = computed(() => currentSection.value.layout === 'work
 
 const isPageActive = ref(false)
 
+function hasPrivateConversationRouteParams(url: URL): boolean {
+  return Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS).some(param => url.searchParams.has(param))
+}
+
+function replacePrivateConversationUrl(url: string) {
+  if (window.location.href !== url)
+    window.history.replaceState(window.history.state, '', url)
+}
+
+function applyPendingPrivateConversationRoute() {
+  const route = pendingPrivateConversationRoute.value
+  if (!route || currentView.value !== 'whisper')
+    return
+
+  const expectedSessionKey = `${route.sessionType}:${route.talkerId}`
+  const session = privateSessions.state.items.find(
+    item => item.key === expectedSessionKey,
+  )
+  if (!session) {
+    if (
+      privateSessions.state.loaded
+      && privateSessions.state.noMore
+      && !privateSessions.state.loadingMore
+    ) {
+      pendingPrivateConversationRoute.value = null
+      privateSessions.clearSelectedSession()
+      replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
+    }
+    return
+  }
+  if (!session.capabilities.canReadNative) {
+    pendingPrivateConversationRoute.value = null
+    privateSessions.clearSelectedSession()
+    replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
+    return
+  }
+  privateSessions.selectSession(session)
+}
+
+function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
+  if (view !== 'whisper') {
+    pendingPrivateConversationRoute.value = null
+    privateSessions.clearSelectedSession()
+    return
+  }
+
+  const route = parsePrivateConversationRoute(url)
+  if (!route) {
+    pendingPrivateConversationRoute.value = null
+    privateSessions.clearSelectedSession()
+    if (hasPrivateConversationRouteParams(url))
+      replacePrivateConversationUrl(clearPrivateConversationRoute(url))
+    return
+  }
+
+  const expectedSessionKey = `${route.sessionType}:${route.talkerId}`
+  if (
+    privateSessions.selectedSessionKey.value
+    && privateSessions.selectedSessionKey.value !== expectedSessionKey
+  ) {
+    privateSessions.clearSelectedSession()
+  }
+  pendingPrivateConversationRoute.value = route
+  applyPendingPrivateConversationRoute()
+}
+
+function selectPrivateConversation(session: DisplayPrivateSession) {
+  if (!session.capabilities.canReadNative || session.sessionType !== 1)
+    return
+
+  const route: PrivateConversationRoute = {
+    talkerId: session.talkerId,
+    sessionType: 1,
+  }
+  const currentRoute = parsePrivateConversationRoute(window.location.href)
+  const isCurrentSelection = privateSessions.selectedSessionKey.value === session.key
+  pendingPrivateConversationRoute.value = route
+  privateSessions.selectSession(session)
+  if (
+    isCurrentSelection
+    && currentRoute?.talkerId === route.talkerId
+    && currentRoute.sessionType === route.sessionType
+  ) {
+    return
+  }
+  window.history.pushState(window.history.state, '', buildPrivateConversationUrl(route))
+}
+
+function closePrivateConversation() {
+  pendingPrivateConversationRoute.value = null
+  privateSessions.clearSelectedSession()
+  replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
+}
+
 function replaceNotificationRoute(view: NotificationView) {
   const targetUrl = buildBewlyNotificationUrl(view)
   if (window.location.href !== targetUrl)
@@ -101,6 +204,8 @@ function syncViewFromRoute(href: string) {
   }
   catch {
     currentView.value = 'whisper'
+    pendingPrivateConversationRoute.value = null
+    privateSessions.clearSelectedSession()
     replaceNotificationRoute('whisper')
     return
   }
@@ -110,9 +215,13 @@ function syncViewFromRoute(href: string) {
   const requestedView = url.searchParams.get('notificationView')
   const nextView = parseNotificationView(url)
   currentView.value = nextView
-
-  if (!isNotificationView(requestedView))
+  if (!isNotificationView(requestedView)) {
+    pendingPrivateConversationRoute.value = null
+    privateSessions.clearSelectedSession()
     replaceNotificationRoute(nextView)
+    return
+  }
+  syncPrivateConversationFromRoute(url, nextView)
 }
 
 function selectView(view: NotificationView) {
@@ -179,12 +288,14 @@ function clearNotificationViewFromRoute() {
   if (activatedPage.value === AppPage.Notifications)
     return
 
-  const url = new URL(window.location.href)
-  if (!url.searchParams.has('notificationView'))
+  const currentUrl = new URL(window.location.href)
+  const url = new URL(clearPrivateConversationRoute(currentUrl))
+  const hasNotificationView = url.searchParams.has('notificationView')
+  if (!hasNotificationView && url.href === currentUrl.href)
     return
 
   url.searchParams.delete('notificationView')
-  window.history.replaceState(window.history.state, '', url)
+  replacePrivateConversationUrl(url.href)
 }
 
 function activatePage() {
@@ -207,6 +318,15 @@ function deactivatePage() {
 
 watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
 watch(currentView, resetOuterScrollForWorkspaceView)
+watch(() => privateSessions.state.items, applyPendingPrivateConversationRoute)
+watch(currentMid, (nextMid, previousMid) => {
+  if (!previousMid || nextMid === previousMid)
+    return
+  pendingPrivateConversationRoute.value = null
+  privateSessions.clearSelectedSession()
+  if (currentView.value === 'whisper')
+    replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
+})
 
 watchEffect(() => {
   if (isPageActive.value) {
@@ -249,6 +369,8 @@ onBeforeUnmount(() => {
           :active="isPageActive"
           :controller="privateSessions"
           :messages-controller="privateMessages"
+          @close-conversation="closePrivateConversation"
+          @select-session="selectPrivateConversation"
         />
         <NativeNotificationFeed
           v-if="nativeView"

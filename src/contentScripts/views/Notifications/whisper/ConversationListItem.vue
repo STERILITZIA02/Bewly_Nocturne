@@ -47,6 +47,7 @@ watch(() => props.session.avatar, () => {
   <ALink
     v-if="!usesNativeConversation"
     class="conversation-list-item bew-shape-smooth-rect"
+    :data-session-key="session.key"
     :href="originalUrl"
     type="content"
     :aria-label="t('notifications.whisper.open_unsupported_original', { name: displayName })"
@@ -68,6 +69,9 @@ watch(() => props.session.avatar, () => {
     <span class="conversation-list-item__copy">
       <strong>{{ displayName }}</strong>
       <span>{{ displaySummary }}</span>
+      <span class="conversation-list-item__original-list-label">
+        {{ t('notifications.whisper.open_original_list') }}
+      </span>
     </span>
   </ALink>
 
@@ -75,6 +79,7 @@ watch(() => props.session.avatar, () => {
     v-else
     type="button"
     class="conversation-list-item bew-shape-smooth-rect"
+    :data-session-key="session.key"
     :class="{ 'conversation-list-item--selected': selected }"
     :aria-current="selected ? 'true' : undefined"
     :aria-label="t('notifications.whisper.select_conversation', { name: displayName })"
