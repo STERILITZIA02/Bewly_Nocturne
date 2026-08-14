@@ -921,6 +921,8 @@ notifications:
       image_preview: 私訊圖片預覽
       image_alt: 私訊圖片
       emoticon_alt: 私訊表情
+      picture_card_alt: 私訊分享圖片
+      video_views: '{count} 次播放'
     errors:
       wbi-unavailable: 私訊簽章暫時無法使用
   native:

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import process from 'node:process'
 
 import { nextTick, ref } from 'vue'
@@ -56,6 +57,18 @@ function createMockResponse(text: string, options: MockResponseOptions = {}): Re
     text: async () => text,
     url: options.url ?? 'https://api.vc.bilibili.com/private-message-endpoint?removed=1',
   } as Response
+}
+
+interface PrivateMessageRendererFixture {
+  msg_type: number
+  content: string
+  e_infos?: unknown[]
+  [key: string]: unknown
+}
+
+async function readRendererFixture(name: string): Promise<PrivateMessageRendererFixture> {
+  const fixtureUrl = new URL(`../tests/fixtures/private-message/renderers/${name}.json`, import.meta.url)
+  return JSON.parse(await readFile(fixtureUrl, 'utf8')) as PrivateMessageRendererFixture
 }
 
 async function loadModules(): Promise<PrivateMessageModules> {
@@ -631,7 +644,7 @@ verify('authoritative DM unread changes trigger one merge refresh per observed v
   assert.deepEqual(controller.state.items.map(item => item.talkerId), ['2', '1'])
 })
 
-verify('private message parser supports text, image, recall, custom emoji, system, and safe unknown fallback', ({ privateMessage }) => {
+verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {
   const eInfos = [{
     text: '[smile]',
     uri: 'https://i0.hdslb.com/sanitized-emoji.png',
@@ -649,7 +662,10 @@ verify('private message parser supports text, image, recall, custom emoji, syste
       msg_type: 6,
       content: '{"url":"https://i0.hdslb.com/sanitized-sticker.gif","width":120,"height":120}',
     }),
-    createRawMessage('5', '105', { msg_type: 18, content: '{"content":"system notice"}' }),
+    createRawMessage('5', '105', {
+      msg_type: 18,
+      content: '{"content":"[{\\"text\\":\\"system notice\\"}]"}',
+    }),
     createRawMessage('6', '106', { msg_type: 99, content: '{"private":"must not render"}' }),
   ]
 
@@ -681,9 +697,203 @@ verify('private message parser supports text, image, recall, custom emoji, syste
     width: 120,
     height: 120,
   })
-  assert.deepEqual(display[4]?.content, { type: 'system', text: 'system notice' })
+  assert.deepEqual(display[4]?.content, { type: 'tip', lines: ['system notice'] })
   assert.deepEqual(display[5]?.content, { type: 'unknown' })
   assert.equal(JSON.stringify(display).includes('must not render'), false)
+})
+
+verify('renderer registry contains exactly the supported private-message types', ({ privateMessage }) => {
+  assert.deepEqual(
+    Object.keys(privateMessage.PRIVATE_MESSAGE_RENDERERS).map(Number).sort((left, right) => left - right),
+    [1, 2, 5, 6, 7, 10, 11, 12, 13, 14, 15, 16, 18],
+  )
+})
+
+verify('renderer fixtures parse every supported private-message type into typed display content', async ({ privateMessage }) => {
+  const fixtureNames = [
+    'text',
+    'pic',
+    'draw-back',
+    'custom-face',
+    'share-v2',
+    'notify-msg',
+    'video-card',
+    'article-card',
+    'picture-card',
+    'common-share-card',
+    'text-share',
+    'business-card',
+    'tip-message',
+  ] as const
+  const expectedTypes = [
+    'text',
+    'image',
+    'recalled',
+    'emoticon',
+    'share-v2',
+    'notification',
+    'video-card',
+    'article-card',
+    'picture-card',
+    'common-share-card',
+    'text-share',
+    'business-card',
+    'tip',
+  ] as const
+
+  for (const [index, fixtureName] of fixtureNames.entries()) {
+    const fixture = await readRendererFixture(fixtureName)
+    const content = privateMessage.parsePrivateMessageContent(
+      createRawMessage(`fixture-${fixtureName}`, String(200 + index), fixture),
+      privateMessage.collectPrivateMessageEmotions(fixture.e_infos ?? []),
+    )
+    assert.equal(content.type, expectedTypes[index], `${fixtureName} parser`)
+  }
+})
+
+verify('text renderer preserves newlines and creates safe ALink-ready URL segments', async ({ privateMessage }) => {
+  const fixture = await readRendererFixture('text')
+  const content = privateMessage.parsePrivateMessageContent(
+    createRawMessage('text-fixture', '300', fixture),
+    privateMessage.collectPrivateMessageEmotions(fixture.e_infos ?? []),
+  )
+  assert.equal(content.type, 'text')
+  if (content.type !== 'text')
+    return
+  assert.deepEqual(content.segments, [
+    { type: 'text', text: 'Hello ' },
+    {
+      type: 'emoji',
+      alt: '[smile]',
+      src: 'https://i0.hdslb.com/bfs/emote/sanitized.gif',
+      size: 2,
+    },
+    { type: 'text', text: '\n' },
+    {
+      type: 'link',
+      href: 'https://www.bilibili.com/video/BV1Fixture',
+      text: 'https://www.bilibili.com/video/BV1Fixture',
+    },
+  ])
+})
+
+verify('rich private-message fixtures retain only safe typed fields and links', async ({ privateMessage }) => {
+  const fixtureNames = [
+    'share-v2',
+    'notify-msg',
+    'video-card',
+    'article-card',
+    'picture-card',
+    'common-share-card',
+    'text-share',
+    'business-card',
+    'tip-message',
+  ] as const
+  const parsed = await Promise.all(fixtureNames.map(async (fixtureName, index) => {
+    const fixture = await readRendererFixture(fixtureName)
+    return privateMessage.parsePrivateMessageContent(
+      createRawMessage(`rich-${fixtureName}`, String(400 + index), fixture),
+      new Map(),
+    )
+  }))
+
+  assert.deepEqual(parsed[0], {
+    type: 'share-v2',
+    source: 'video',
+    sourceId: 'sanitized-id',
+    bvid: 'BV1Fixture',
+    cover: 'https://i0.hdslb.com/bfs/archive/sanitized-cover.jpg',
+    title: 'Sanitized video',
+    headline: 'Sanitized headline',
+    author: 'Sanitized creator',
+    href: 'https://www.bilibili.com/video/BV1Fixture',
+  })
+  assert.deepEqual(parsed[1], {
+    type: 'notification',
+    title: 'Sanitized notice',
+    text: 'Sanitized details',
+    modules: [{ title: 'Status', detail: 'Completed' }],
+    links: [
+      { text: 'Open history', href: 'https://www.bilibili.com/account/history' },
+      { text: 'Open account', href: 'https://www.bilibili.com/account' },
+    ],
+  })
+  assert.deepEqual(parsed[2], {
+    type: 'video-card',
+    bvid: 'BV1Fixture',
+    cover: 'https://i0.hdslb.com/bfs/archive/sanitized-video.jpg',
+    title: 'Sanitized video card',
+    times: 42,
+    attachMessage: 'Sanitized note',
+    href: 'https://www.bilibili.com/video/BV1Fixture',
+  })
+  assert.deepEqual(parsed[3], {
+    type: 'article-card',
+    rid: '123456789012345678',
+    images: ['https://i0.hdslb.com/bfs/article/sanitized-article.jpg'],
+    title: 'Sanitized article',
+    summary: 'Sanitized article summary',
+    href: 'https://www.bilibili.com/read/cv123456789012345678',
+  })
+  assert.deepEqual(parsed[4], {
+    type: 'picture-card',
+    src: 'https://i0.hdslb.com/bfs/im/sanitized-card.jpg',
+    href: 'https://www.bilibili.com/opus/123456789012345678',
+  })
+  assert.deepEqual(parsed[5], {
+    type: 'common-share-card',
+    source: 'article',
+    sourceId: '123456789012345678',
+    cover: 'https://i0.hdslb.com/bfs/article/sanitized-common.jpg',
+    title: 'Sanitized shared article',
+    author: 'Sanitized author',
+    href: 'https://www.bilibili.com/read/cv123456789012345678',
+  })
+  assert.deepEqual(parsed[6], {
+    type: 'text-share',
+    title: 'Sanitized shared text',
+    text: 'Sanitized shared summary',
+    href: 'https://www.bilibili.com/opus/123456789012345678',
+  })
+  assert.deepEqual(parsed[7], {
+    type: 'business-card',
+    title: 'Sanitized business message',
+    cards: [{
+      href: 'https://www.bilibili.com/video/BV1Fixture',
+      cover: 'https://i0.hdslb.com/bfs/archive/sanitized-business.jpg',
+      fields: ['Sanitized field one', 'Sanitized field two', 'Sanitized field three'],
+    }],
+  })
+  assert.deepEqual(parsed[8], {
+    type: 'tip',
+    lines: ['Sanitized tip one', 'Sanitized tip two'],
+  })
+})
+
+verify('malformed JSON, unsafe links, unknown sources, and unknown types fall back per message', async ({ privateMessage }) => {
+  const unknownFixture = await readRendererFixture('unknown')
+  const unknownCases = [
+    createRawMessage('bad-json', '501', { msg_type: 11, content: '{' }),
+    createRawMessage('bad-recall-json', '502', { msg_type: 5, content: '{' }),
+    createRawMessage('unsafe-link', '503', {
+      msg_type: 13,
+      content: '{"pic_url":"https://i0.hdslb.com/safe.jpg","jump_url":"javascript:alert(1)"}',
+    }),
+    createRawMessage('unknown-source', '504', {
+      msg_type: 7,
+      content: '{"source":"unverified","id":"1","bvid":"BV1Private","title":"private"}',
+    }),
+    createRawMessage('unknown-type', '505', unknownFixture),
+    ...[3, 4, 8, 9, 19, 50].map((msgType, index) => createRawMessage(
+      `unknown-type-${msgType}`,
+      String(506 + index),
+      { msg_type: msgType, content: '{"private":"must not render"}' },
+    )),
+  ]
+  const display = privateMessage.transformPrivateMessages(unknownCases, [], '100')
+  assert.equal(display.length, 11)
+  assert.equal(display.every(item => item.content.type === 'unknown'), true)
+  assert.equal(JSON.stringify(display).includes('private'), false)
 })
 
 verify('private message parsing rejects unsafe media URLs and preserves large string IDs', ({ privateMessage }) => {

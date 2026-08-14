@@ -920,6 +920,8 @@ notifications:
       image_preview: 私信图片预览
       image_alt: 私信图片
       emoticon_alt: 私信表情
+      picture_card_alt: 私信分享图片
+      video_views: '{count} 次播放'
     errors:
       wbi-unavailable: 私信签名暂时不可用
   native:

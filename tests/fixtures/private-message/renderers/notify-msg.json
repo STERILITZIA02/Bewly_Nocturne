@@ -1,0 +1,4 @@
+{
+  "msg_type": 10,
+  "content": "{\"title\":\"Sanitized notice\",\"text\":\"Sanitized details\",\"modules\":[{\"title\":\"Status\",\"detail\":\"Completed\"}],\"jump_uri\":\"https://www.bilibili.com/account/history\",\"jump_text\":\"Open history\",\"jump_uri_2\":\"https://www.bilibili.com/account\",\"jump_text_2\":\"Open account\"}"
+}

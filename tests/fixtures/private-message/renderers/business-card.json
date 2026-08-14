@@ -1,0 +1,4 @@
+{
+  "msg_type": 16,
+  "content": "{\"main_title\":\"Sanitized business message\",\"sub_cards\":[{\"jump_url\":\"https://www.bilibili.com/video/BV1Fixture\",\"cover_url\":\"https://i0.hdslb.com/bfs/archive/sanitized-business.jpg\",\"field1\":\"Sanitized field one\",\"field2\":\"Sanitized field two\",\"field3\":\"Sanitized field three\"}]}"
+}

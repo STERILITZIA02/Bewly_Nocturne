@@ -973,6 +973,8 @@ notifications:
       image_preview: Direct-message image preview
       image_alt: Direct-message image
       emoticon_alt: Direct-message sticker
+      picture_card_alt: Shared direct-message image
+      video_views: '{count} views'
     errors:
       wbi-unavailable: Direct-message signing is temporarily unavailable
   native:
