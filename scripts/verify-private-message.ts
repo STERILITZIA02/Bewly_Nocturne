@@ -53,6 +53,8 @@ interface PrivateMessageModules {
   privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
+  notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
+  topBarSharedRefresh: typeof import('../src/stores/topBarSharedRefresh')
 }
 
 const assertions: Array<{
@@ -91,6 +93,11 @@ async function readRendererFixture(name: string): Promise<PrivateMessageRenderer
   return JSON.parse(await readFile(fixtureUrl, 'utf8')) as PrivateMessageRendererFixture
 }
 
+async function readRuntimeFixture(name: string): Promise<unknown> {
+  const fixtureUrl = new URL(`../tests/fixtures/private-message/runtime/${name}.json`, import.meta.url)
+  return JSON.parse(await readFile(fixtureUrl, 'utf8')) as unknown
+}
+
 async function loadModules(): Promise<PrivateMessageModules> {
   try {
     const [
@@ -103,6 +110,8 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
+      notificationSections,
+      topBarSharedRefresh,
     ] = await Promise.all([
       import('../src/background/privateMessage/errors'),
       import('../src/background/privateMessage/losslessJson'),
@@ -113,6 +122,8 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
+      import('../src/contentScripts/views/Notifications/notificationSections'),
+      import('../src/stores/topBarSharedRefresh'),
     ])
     return {
       errors,
@@ -124,12 +135,98 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
+      notificationSections,
+      topBarSharedRefresh,
     }
   }
   catch {
     assert.fail('private-message production modules must exist before verification can pass')
   }
 }
+
+verify('settings original frame cannot mutate unread state', ({ notificationSections }) => {
+  assert.equal(notificationSections.canOriginalNotificationMutateUnread('settings'), false)
+  assert.equal(notificationSections.canOriginalNotificationMutateUnread('whisper'), true)
+  assert.equal(notificationSections.canOriginalNotificationMutateUnread('system'), true)
+})
+
+verify('shared refresh retries one transient failure without exposing the raw error', async ({ topBarSharedRefresh }) => {
+  let attempts = 0
+  const diagnostics: unknown[] = []
+  const result = await topBarSharedRefresh.runSharedRefreshRequest(
+    'getWatchLaterCount',
+    async () => {
+      attempts++
+      if (attempts === 1)
+        throw new TypeError('Failed to fetch sensitive stack')
+      return true
+    },
+    {
+      report: diagnostic => diagnostics.push(diagnostic),
+      wait: async () => {},
+    },
+  )
+  assert.equal(result, true)
+  assert.equal(attempts, 2)
+  assert.deepEqual(diagnostics, [])
+})
+
+verify('shared unread leaves settle independently and require all successes', async ({ topBarSharedRefresh }) => {
+  const executed: string[] = []
+  const result = await topBarSharedRefresh.settleSharedRefreshTasks([
+    async () => {
+      executed.push('message')
+      return false
+    },
+    async () => {
+      executed.push('dm')
+      return true
+    },
+  ])
+  assert.deepEqual(executed.sort(), ['dm', 'message'])
+  assert.equal(result, false)
+})
+
+verify('failed shared refresh releases its lease without publishing a fresh snapshot', async ({ topBarSharedRefresh }) => {
+  let released = 0
+  let published = 0
+  const result = await topBarSharedRefresh.completeSharedRefreshLease({
+    refresh: async () => false,
+    isCurrent: () => true,
+    release: async () => { released++ },
+    publish: async () => { published++ },
+  })
+  assert.equal(result, false)
+  assert.equal(released, 1)
+  assert.equal(published, 0)
+})
+
+verify('shared refresh production wiring is concurrent, gated, and free of raw Error logging', async () => {
+  const [storeSource, helperSource, frameSource, sectionSource, brokerSource] = await Promise.all([
+    readFile(new URL('../src/stores/topBarStore.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/stores/topBarSharedRefresh.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/OriginalNotificationsFrame.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/background/topBarStateBroker.ts', import.meta.url), 'utf8'),
+  ])
+  const unreadStart = storeSource.indexOf('async function getUnreadMessageCount')
+  const unreadEnd = storeSource.indexOf('// B币和大会员经验领取状态检查', unreadStart)
+  const unreadSource = storeSource.slice(unreadStart, unreadEnd)
+  const watchStart = storeSource.indexOf('async function getWatchLaterCount')
+  const watchEnd = storeSource.indexOf('// 获取稍后再看列表', watchStart)
+  const watchSource = storeSource.slice(watchStart, watchEnd)
+
+  assert.ok(unreadSource.includes('settleTopBarSharedRefreshTasks'))
+  assert.ok(unreadSource.includes(`'getUnreadMsg'`))
+  assert.ok(unreadSource.includes(`'getUnreadDm'`))
+  assert.equal(unreadSource.includes('console.error'), false)
+  assert.equal(watchSource.includes('console.error'), false)
+  assert.equal(helperSource.includes('console.error'), false)
+  assert.ok(helperSource.includes('Promise.allSettled'))
+  assert.ok(frameSource.includes('canOriginalNotificationMutateUnread(props.view)'))
+  assert.ok(sectionSource.includes(`value === 'whisper' || value === 'system'`))
+  assert.equal((brokerSource.match(/entry\.updatedAt = Date\.now\(\)/g) ?? []).length, 1)
+})
 
 verify('endpoints and request builders match the fixed Web IM contract', ({ protocol, types }) => {
   assert.deepEqual(types.PRIVATE_MESSAGE_ENDPOINTS, {
@@ -404,6 +501,43 @@ verify('message parser retains e_infos and numeric timestamps without ID precisi
   assert.deepEqual(parsedMessages.data.e_infos, [{ text: 'sanitized' }])
 })
 
+verify('private session parser keeps valid rows and normalizes nullable real response fields', async ({ protocol }) => {
+  const parsed = protocol.parsePrivateSessionsResponse(
+    await readRuntimeFixture('sessions-mixed') as import('../src/background/privateMessage/types').PrivateMessageApiResponse,
+  )
+  assert.ok(parsed)
+  assert.equal(parsed.data.session_list.length, 4)
+  assert.deepEqual(parsed.data.session_list.map(session => session.session_type), [1, 1, 2, 1])
+  assert.deepEqual(parsed.data.session_list[0]?.last_msg?.at_uids, [])
+  assert.equal(parsed.data.session_list[0]?.last_msg?.notify_code, '')
+  assert.equal(parsed.data.session_list[1]?.last_msg?.new_face_version, 0)
+  assert.equal(parsed.data.session_list[1]?.last_msg?.msg_source, 0)
+  assert.equal(parsed.data.session_list[1]?.system_msg_type, 7)
+  assert.equal(parsed.data.session_list[1]?.account_info?.name, 'Sanitized Assistant')
+  assert.equal(parsed.data.session_list[3]?.last_msg, null)
+})
+
+verify('private list parsers accept null collections and skip only malformed rows', async ({ protocol }) => {
+  const emptySessions = protocol.parsePrivateSessionsResponse(
+    await readRuntimeFixture('sessions-null') as import('../src/background/privateMessage/types').PrivateMessageApiResponse,
+  )
+  const mixedMessages = protocol.parsePrivateMessagesResponse(
+    await readRuntimeFixture('messages-mixed') as import('../src/background/privateMessage/types').PrivateMessageApiResponse,
+  )
+  const emptyMessages = protocol.parsePrivateMessagesResponse(
+    await readRuntimeFixture('messages-null') as import('../src/background/privateMessage/types').PrivateMessageApiResponse,
+  )
+  assert.deepEqual(emptySessions?.data.session_list, [])
+  assert.equal(mixedMessages?.data.messages.length, 2)
+  assert.deepEqual(mixedMessages?.data.e_infos, [])
+  assert.deepEqual(mixedMessages?.data.messages[0]?.at_uids, [])
+  assert.equal(mixedMessages?.data.messages[0]?.notify_code, '')
+  assert.equal(mixedMessages?.data.messages[1]?.new_face_version, 0)
+  assert.equal(mixedMessages?.data.messages[1]?.msg_source, 0)
+  assert.deepEqual(emptyMessages?.data.messages, [])
+  assert.deepEqual(emptyMessages?.data.e_infos, [])
+})
+
 verify('transport errors are structured without raw response data', async ({ errors, losslessJson, transport }) => {
   const login = await losslessJson.parsePrivateMessageResponse(createMockResponse(
     '{"code":-101,"message":"not logged in","data":null}',
@@ -493,7 +627,7 @@ function createRawSession(
     top_ts: 0,
     group_name: '',
     group_cover: '',
-    is_follow: 0,
+    is_follow: 1,
     is_dnd: 0,
     ack_seqno: '9223372036854775700',
     ack_ts: 1755000000000000,
@@ -523,6 +657,10 @@ function createRawSession(
     is_guardian: 0,
     is_intercept: 0,
     is_trust: 0,
+    system_msg_type: 0,
+    account_info: null,
+    live_status: 0,
+    biz_msg_unread_count: 0,
     ...overrides,
   }
 }
@@ -627,6 +765,63 @@ verify('session helpers batch and dedupe UIDs while preserving server order', ({
   assert.equal(display[0]?.pinned, true)
 })
 
+verify('user card response shapes are optional enhancements with stable fallbacks', ({ privateSession }) => {
+  const session = createRawSession('42', { group_name: 'Group fallback' })
+  const cardsArray = privateSession.transformPrivateSessions([session], {
+    code: 0,
+    data: { cards: [{ mid: '42', name: 'Cards array user', face: 'https://i0.hdslb.com/cards-array.png' }] },
+  })
+  const keyedCards = privateSession.transformPrivateSessions([session], {
+    code: 0,
+    data: { 42: { mid: '42', name: 'Keyed user', avatar: 'https://i0.hdslb.com/keyed.png' } },
+  })
+  const fallback = privateSession.transformPrivateSessions(
+    [createRawSession('43')],
+    { code: -1, data: null },
+    talkerId => `User ${talkerId}`,
+  )
+  assert.equal(cardsArray[0]?.name, 'Cards array user')
+  assert.equal(keyedCards[0]?.name, 'Keyed user')
+  assert.equal(keyedCards[0]?.avatar, 'https://i0.hdslb.com/keyed.png')
+  assert.equal(fallback[0]?.name, 'User 43')
+})
+
+verify('user card batches are best effort and never block the primary session list', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  const sessions = Array.from({ length: 31 }, (_, index) => createRawSession(String(index + 1), {
+    group_name: `Fallback ${index + 1}`,
+  }))
+  const requestedChunks: string[][] = []
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => createSessionsResponse(sessions),
+    fetchUserCards: async (uids) => {
+      requestedChunks.push(uids)
+      if (requestedChunks.length === 1)
+        throw new TypeError('sanitized profile enhancement failure')
+      return {
+        code: 0,
+        data: { 31: { mid: '31', name: 'Enhanced 31', face: '' } },
+      }
+    },
+    getFallbackName: talkerId => `User ${talkerId}`,
+  })
+
+  await controller.loadInitial()
+  assert.deepEqual(requestedChunks.map(chunk => chunk.length), [30, 1])
+  assert.equal(controller.state.errorKind, null)
+  assert.equal(controller.state.items.length, 31)
+  assert.equal(controller.state.items[0]?.name, 'Fallback 1')
+  assert.equal(controller.state.items[30]?.name, 'Enhanced 31')
+
+  const allFailed = usePrivateSessions.usePrivateSessions(ref('200'), {
+    fetchSessions: async () => createSessionsResponse([createRawSession('55', { group_name: 'Still visible' })]),
+    fetchUserCards: async () => { throw new TypeError('sanitized profile enhancement failure') },
+  })
+  await allFailed.loadInitial()
+  assert.equal(allFailed.state.errorKind, null)
+  assert.equal(allFailed.state.items[0]?.name, 'Still visible')
+})
+
 verify('local session filters combine all, unread, pinned, and username search', ({ privateSession }) => {
   const items = privateSession.transformPrivateSessions([
     createRawSession('1', { group_name: 'Alpha', unread_count: 2 }),
@@ -647,19 +842,131 @@ verify('local session filters combine all, unread, pinned, and username search',
     ['2'],
   )
   assert.equal(privateSession.normalizePrivateSessionLocale('jyut'), 'zh-HK')
-  assert.equal(privateSession.isNativePrivateSession({
-    ...items[0]!,
-    followed: true,
-  }), true)
-  assert.equal(privateSession.isNativePrivateSession({
-    ...items[0]!,
-    followed: false,
-  }), false)
-  assert.equal(privateSession.isNativePrivateSession({
-    ...items[0]!,
-    followed: true,
-    original: { ...items[0]!.original, can_fold: 1 },
-  }), false)
+  assert.equal(privateSession.isNativePrivateSession(items[0]!), true)
+  const [fallbackItem] = privateSession.transformPrivateSessions([
+    createRawSession('4', { is_follow: 0 }),
+  ], createCardsResponse([]))
+  assert.equal(privateSession.isNativePrivateSession(fallbackItem!), false)
+})
+
+verify('session kinds and capabilities keep native reads separate from disabled writes', ({ privateSession }) => {
+  const items = privateSession.transformPrivateSessions([
+    createRawSession('1'),
+    createRawSession('2', {
+      system_msg_type: 7,
+      account_info: {
+        name: 'Sanitized Assistant',
+        pic_url: 'https://i0.hdslb.com/assistant.png',
+      },
+    }),
+    createRawSession('3', { is_intercept: 1 }),
+    createRawSession('4', { is_follow: 0 }),
+    createRawSession('5', { can_fold: 1 }),
+    createRawSession('6', { session_type: 2 }),
+    createRawSession('7', { session_type: 99 }),
+  ], createCardsResponse([
+    { mid: '2', name: 'Card must not override assistant', face: 'https://i0.hdslb.com/card.png' },
+  ]), talkerId => `User ${talkerId}`)
+
+  assert.deepEqual(items.map(item => item.kind), [
+    'user',
+    'official-assistant',
+    'intercepted-user',
+    'unfollowed-user',
+    'unfollowed-user',
+    'fan-group',
+    'unsupported',
+  ])
+  assert.equal(items[1]?.name, 'Sanitized Assistant')
+  assert.equal(items[1]?.avatar, 'https://i0.hdslb.com/assistant.png')
+  assert.equal(items[0]?.capabilities.canReadNative, true)
+  assert.equal(items[0]?.capabilities.canAck, true)
+  assert.equal(items[0]?.capabilities.canOpenProfile, true)
+  assert.equal(items[1]?.capabilities.canReadNative, true)
+  assert.equal(items[1]?.capabilities.canAck, true)
+  assert.equal(items[1]?.capabilities.canOpenProfile, false)
+  assert.equal(items.every(item => !item.capabilities.canSendText), true)
+  assert.equal(items.every(item => !item.capabilities.canSendImage), true)
+  assert.equal(items.every(item => !item.capabilities.canPin), true)
+  assert.equal(items.every(item => !item.capabilities.canMute), true)
+  assert.equal(items.every(item => !item.capabilities.canRemove), true)
+  assert.equal(privateSession.isNativePrivateSession(items[0]!), true)
+  assert.equal(privateSession.isNativePrivateSession(items[1]!), true)
+  assert.equal(items.slice(2).every(item => !privateSession.isNativePrivateSession(item)), true)
+})
+
+verify('whisper is a workspace hybrid and native writes are unreachable from the page shell', async ({ notificationSections }) => {
+  assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
+  assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
+  assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
+  assert.equal(notificationSections.isOriginalFrameCapableView('whisper'), true)
+  assert.equal(notificationSections.isOriginalOnlyNotificationView('whisper'), false)
+  assert.equal(notificationSections.isOriginalOnlyNotificationView('settings'), true)
+  assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.reply.layout, 'document')
+
+  const notificationsSource = await readFile(
+    new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url),
+    'utf8',
+  )
+  const conversationSource = await readFile(
+    new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url),
+    'utf8',
+  )
+  for (const writeDependency of [
+    'sendPrivateMessage',
+    'uploadPrivateImage',
+    'cancelPrivateImageUpload',
+    'sendPrivateImageMessage',
+  ]) {
+    assert.equal(notificationsSource.includes(writeDependency), false, writeDependency)
+  }
+  assert.equal(
+    conversationSource.includes('v-if="session.capabilities.canSendText || session.capabilities.canSendImage"'),
+    true,
+  )
+  assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), true)
+})
+
+verify('all locales expose private-message-specific failures and the read-only fallback', async () => {
+  const localeNames = ['cmn-CN', 'cmn-TW', 'en', 'jyut']
+  const requiredKeys = [
+    'login-required:',
+    'risk-control:',
+    'server-error:',
+    'network:',
+    'invalid-response:',
+    'api-error:',
+    'wbi-unavailable:',
+  ]
+  for (const localeName of localeNames) {
+    const source = await readFile(new URL(`../src/_locales/${localeName}.yml`, import.meta.url), 'utf8')
+    const whisperStart = source.indexOf('  whisper:\n', source.indexOf('notifications:\n'))
+    const nativeStart = source.indexOf('  native:\n', whisperStart)
+    const whisperSource = source.slice(whisperStart, nativeStart)
+    for (const key of requiredKeys)
+      assert.ok(whisperSource.includes(`      ${key}`), `${localeName} ${key}`)
+    assert.ok(whisperSource.includes('user_fallback:'), `${localeName} user_fallback`)
+    assert.ok(whisperSource.includes('readonly:'), `${localeName} readonly`)
+  }
+})
+
+verify('runtime response fixtures are sanitized and preserve only confirmed real shapes', async () => {
+  const fixtureNames = ['sessions-mixed', 'sessions-null', 'messages-mixed', 'messages-null']
+  for (const fixtureName of fixtureNames) {
+    const fixtureUrl = new URL(`../tests/fixtures/private-message/runtime/${fixtureName}.json`, import.meta.url)
+    const source = await readFile(fixtureUrl, 'utf8')
+    assert.equal(/SESSDATA|bili_jct|csrf|cookie/i.test(source), false, fixtureName)
+    assert.equal(/https?:\/\/[^"\s]+\?/i.test(source), false, fixtureName)
+  }
+  const sessions = await readRuntimeFixture('sessions-mixed') as {
+    data?: { session_list?: unknown[] }
+  }
+  const messages = await readRuntimeFixture('messages-mixed') as {
+    data?: { e_infos?: unknown, messages?: unknown[] }
+  }
+  assert.equal(sessions.data?.session_list?.length, 5)
+  assert.equal(messages.data?.messages?.length, 3)
+  assert.equal(messages.data?.e_infos, null)
 })
 
 verify('automatic session merge updates head data without discarding existing rows', ({ privateSession }) => {
@@ -981,6 +1288,56 @@ verify('rich private-message fixtures retain only safe typed fields and links', 
   })
 })
 
+verify('real notification null modules and recalled status remain renderable', async ({ privateMessage }) => {
+  const nullModules = await readRendererFixture('notify-msg-null-modules')
+  const recalledStatus = await readRendererFixture('recalled-status')
+  const notification = privateMessage.parsePrivateMessageContent(
+    createRawMessage('notify-null-modules', '480', nullModules),
+    new Map(),
+  )
+  const recalledByStatus = privateMessage.parsePrivateMessageContent(
+    createRawMessage('recalled-status', '481', recalledStatus),
+    new Map(),
+  )
+  const recalledByType = privateMessage.parsePrivateMessageContent(
+    createRawMessage('recalled-type', '482', { msg_type: 5, content: '' }),
+    new Map(),
+  )
+  const partiallyMalformedModules = privateMessage.parsePrivateMessageContent(
+    createRawMessage('notify-partial-modules', '483', {
+      msg_type: 10,
+      content: JSON.stringify({
+        title: 'Sanitized partial notice',
+        modules: [
+          { title: 'Accepted', detail: 'Sanitized detail' },
+          { title: 'Skipped' },
+        ],
+      }),
+    }),
+    new Map(),
+  )
+
+  assert.deepEqual(notification, {
+    type: 'notification',
+    title: 'Sanitized assistant notice',
+    text: '',
+    modules: [],
+    links: [{
+      text: 'Open configured destination',
+      href: 'https://www.bilibili.com/account/history',
+    }],
+  })
+  assert.deepEqual(recalledByStatus, { type: 'recalled' })
+  assert.deepEqual(recalledByType, { type: 'recalled' })
+  assert.deepEqual(partiallyMalformedModules, {
+    type: 'notification',
+    title: 'Sanitized partial notice',
+    text: '',
+    modules: [{ title: 'Accepted', detail: 'Sanitized detail' }],
+    links: [],
+  })
+})
+
 verify('malformed JSON, unsafe links, unknown sources, and unknown types fall back per message', async ({ privateMessage }) => {
   const unknownFixture = await readRendererFixture('unknown')
   const unknownCases = [
@@ -1003,7 +1360,9 @@ verify('malformed JSON, unsafe links, unknown sources, and unknown types fall ba
   ]
   const display = privateMessage.transformPrivateMessages(unknownCases, [], '100')
   assert.equal(display.length, 11)
-  assert.equal(display.every(item => item.content.type === 'unknown'), true)
+  assert.equal(display[0]?.content.type, 'unknown')
+  assert.equal(display[1]?.content.type, 'recalled')
+  assert.equal(display.slice(2).every(item => item.content.type === 'unknown'), true)
   assert.equal(JSON.stringify(display).includes('private'), false)
 })
 
@@ -1300,31 +1659,20 @@ verify('in-flight ACK remains single-flight across a temporary conversation swit
   assert.equal(controller.getState('200').lastAckSeqno, '104')
 })
 
-verify('session controller clears unread only after confirmed ACK', ({ usePrivateSessions }) => {
+verify('session controller clears unread only after confirmed ACK', ({ privateSession, usePrivateSessions }) => {
   const mid = ref('100')
   const controller = usePrivateSessions.usePrivateSessions(mid, {
     fetchSessions: async () => createSessionsResponse([]),
     fetchUserCards: async () => createCardsResponse([]),
   })
-  controller.state.items = [
-    {
-      ...createRawSession('200', { unread_count: 4 }),
-      key: '1:200',
-      talkerId: '200',
-      sessionType: 1,
-      name: 'User 200',
-      avatar: '',
-      summary: 'summary',
-      timestamp: 1755000000000001,
-      unreadCount: 4,
-      ackSeqno: '100',
-      maxSeqno: '104',
-      pinned: false,
-      muted: false,
-      followed: true,
-      original: createRawSession('200', { unread_count: 4 }),
-    },
-  ]
+  controller.state.items = privateSession.transformPrivateSessions([
+    createRawSession('200', {
+      unread_count: 4,
+      ack_seqno: '100',
+      max_seqno: '104',
+      group_name: 'User 200',
+    }),
+  ], createCardsResponse([]))
 
   controller.markSessionRead('200', '104')
   assert.equal(controller.state.items[0]?.unreadCount, 0)
