@@ -2480,6 +2480,96 @@ verify('latest refresh merges to the tail and reports new messages without disca
   assert.equal(state.scrollTop, 40)
 })
 
+verify('conversation message limits retain the newest items without losing the older-page boundary', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const requests: Array<{ endSeqno?: string, talkerId: string }> = []
+  const pages = [
+    createMessagesResponse([
+      createRawMessage('3', '103'),
+      createRawMessage('4', '104'),
+    ]),
+    createMessagesResponse([
+      createRawMessage('1', '101'),
+      createRawMessage('2', '102'),
+    ]),
+    createMessagesResponse([]),
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async (options) => {
+      requests.push(options)
+      return pages.shift()
+    },
+    getCsrf: () => 'csrf',
+    getMaxMessagesPerConversation: () => 2,
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  await controller.loadOlder('200')
+  const state = controller.getState('200')
+  assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
+  assert.equal(state.oldestSeqno, '103')
+  assert.equal(state.historyBoundarySeqno, '101')
+  assert.equal(state.noMore, false)
+
+  await controller.loadOlder('200')
+  assert.deepEqual(requests, [
+    { talkerId: '200' },
+    { talkerId: '200', endSeqno: '103' },
+    { talkerId: '200', endSeqno: '101' },
+  ])
+  assert.equal(state.noMore, true)
+})
+
+verify('conversation cache evicts the least recently used inactive state and preserves the active state', ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('active')
+  let clock = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => createMessagesResponse([]),
+    getCsrf: () => 'csrf',
+    getMaxCachedConversations: () => 2,
+    markSessionRead: () => {},
+    now: () => ++clock,
+    syncUnread: async () => {},
+  })
+
+  controller.getState('old')
+  controller.getState('active')
+  controller.getState('new')
+
+  assert.equal(controller.states.has('old'), false)
+  assert.equal(controller.states.has('active'), true)
+  assert.equal(controller.states.has('new'), true)
+})
+
+verify('releasing the page cache invalidates in-flight conversation responses', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let resolveMessages: ((value: unknown) => void) | undefined
+  const messagesResponse = new Promise<unknown>((resolve) => {
+    resolveMessages = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => messagesResponse,
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  const request = controller.loadInitial('200', '100')
+  controller.release()
+  resolveMessages?.(createMessagesResponse([createRawMessage('1', '101')]))
+  await request
+
+  assert.equal(controller.states.size, 0)
+})
+
 verify('conversation failures retain the exact initial, refresh, or load-older retry operation', async ({ usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')

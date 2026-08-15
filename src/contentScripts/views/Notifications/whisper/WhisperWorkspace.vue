@@ -54,6 +54,7 @@ const nativeSelectedSession = computed(() => (
     ? selectedSession.value
     : null
 ))
+let mounted = false
 
 const unreadCount = computed(() => (
   (topBarStore.unReadDm.follow_unread || 0)
@@ -101,11 +102,18 @@ function handleVisibilityChange() {
   }
 }
 
+function syncVisibilityListener(active: boolean) {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (mounted && active)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
 watch(
   () => [props.active, props.accountState, props.controller.state.generation] as const,
   ensureLoaded,
   { immediate: true },
 )
+watch(() => props.active, syncVisibilityListener)
 
 watch(unreadCount, async (next, previous) => {
   if (
@@ -135,8 +143,14 @@ watch(() => props.controller.selectedSessionKey.value, async (nextSessionKey, pr
   }
 })
 
-onMounted(() => document.addEventListener('visibilitychange', handleVisibilityChange))
-onBeforeUnmount(() => document.removeEventListener('visibilitychange', handleVisibilityChange))
+onMounted(() => {
+  mounted = true
+  syncVisibilityListener(props.active)
+})
+onBeforeUnmount(() => {
+  mounted = false
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
 
 defineExpose({ refresh })
 </script>

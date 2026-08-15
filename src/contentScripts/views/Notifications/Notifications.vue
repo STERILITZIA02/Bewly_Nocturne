@@ -81,6 +81,8 @@ const privateMessageDependencies: PrivateMessagesDependencies = {
   fetchMessages: options => api.privateMessage.getPrivateMessages(options),
   ackSession: options => api.privateMessage.ackPrivateSession(options),
   getCsrf: getCSRF,
+  getMaxCachedConversations: () => settings.value.maxCachedPrivateConversations,
+  getMaxMessagesPerConversation: () => settings.value.maxPrivateMessagesPerConversation,
   markSessionRead: privateSessions.markSessionRead,
   syncUnread: () => topBarStore.syncUnreadMessageState(),
 }
@@ -410,6 +412,7 @@ function deactivatePage() {
     return
 
   isPageActive.value = false
+  privateMessages.release()
   clearRefreshHandler()
   clearNotificationViewFromRoute()
 }
@@ -420,6 +423,13 @@ watch(() => privateSessions.state.items, () => {
   applyPendingPrivateConversationRoute()
   maybeRestoreLastPrivateConversation()
 })
+watch(
+  () => [
+    settings.value.maxCachedPrivateConversations,
+    settings.value.maxPrivateMessagesPerConversation,
+  ] as const,
+  () => privateMessages.enforceCacheLimits(),
+)
 watch(currentMid, (nextMid, previousMid) => {
   if (!previousMid || nextMid === previousMid)
     return

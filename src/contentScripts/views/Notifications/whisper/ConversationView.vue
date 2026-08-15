@@ -40,6 +40,7 @@ const errorMessage = computed(() => {
 
 const SCROLL_EDGE_THRESHOLD = 48
 let activationGeneration = 0
+let mounted = false
 
 interface VisibleMessageAnchor {
   id: string
@@ -209,6 +210,12 @@ function handleVisibilityChange() {
     void refreshLatest()
 }
 
+function syncVisibilityListener(active: boolean) {
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  if (mounted && active)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
 function focusHeading() {
   headingRef.value?.focus({ preventScroll: true })
 }
@@ -219,6 +226,7 @@ function handleEscape() {
 }
 
 watch(() => props.active, (active) => {
+  syncVisibilityListener(active)
   if (active)
     void activateConversation()
   else
@@ -226,10 +234,12 @@ watch(() => props.active, (active) => {
 }, { immediate: true })
 
 onMounted(() => {
-  document.addEventListener('visibilitychange', handleVisibilityChange)
+  mounted = true
+  syncVisibilityListener(props.active)
 })
 
 onBeforeUnmount(() => {
+  mounted = false
   activationGeneration++
   saveViewportState()
   document.removeEventListener('visibilitychange', handleVisibilityChange)

@@ -41,6 +41,7 @@ export interface PrivateConversationState {
   generation: number
   newestSeqno: string
   oldestSeqno: string
+  historyBoundarySeqno: string
   lastAckSeqno: string
   scrollTop: number
   atLatest: boolean
@@ -53,6 +54,8 @@ export interface PrivateMessagesDependencies {
   fetchMessages: (options: FetchPrivateMessagesOptions) => Promise<unknown>
   ackSession: (options: AckPrivateMessagesOptions) => Promise<unknown>
   getCsrf: () => string
+  getMaxCachedConversations?: () => number
+  getMaxMessagesPerConversation?: () => number
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   syncUnread: () => Promise<void>
   now?: () => number
@@ -74,7 +77,9 @@ export interface PrivateMessagesController {
   refreshLatest: (talkerId: string) => Promise<void>
   updateViewport: (talkerId: string, viewport: { atLatest: boolean, scrollTop: number }) => void
   acknowledgeIfEligible: (talkerId: string, eligibility: PrivateAckEligibility) => Promise<boolean>
+  enforceCacheLimits: () => void
   invalidateConversation: (talkerId: string) => void
+  release: () => void
   dispose: () => void
 }
 
@@ -115,6 +120,14 @@ export function hasPrivateMessagePageProgress(
   )
 }
 
+export function trimPrivateConversationMessages(
+  items: DisplayPrivateMessage[],
+  maxMessages: number,
+): DisplayPrivateMessage[] {
+  const limit = Math.max(1, Math.trunc(maxMessages))
+  return items.length > limit ? items.slice(-limit) : items
+}
+
 function createConversationState(talkerId: string, now: number): PrivateConversationState {
   return reactive({
     talkerId,
@@ -130,6 +143,7 @@ function createConversationState(talkerId: string, now: number): PrivateConversa
     generation: 0,
     newestSeqno: '',
     oldestSeqno: '',
+    historyBoundarySeqno: '',
     lastAckSeqno: '0',
     scrollTop: 0,
     atLatest: true,
@@ -152,6 +166,50 @@ export function usePrivateMessages(
   let accountGeneration = 0
   let disposed = false
 
+  function maxCachedConversations(): number {
+    return Math.max(1, Math.trunc(dependencies.getMaxCachedConversations?.() ?? 8))
+  }
+
+  function maxMessagesPerConversation(): number {
+    return Math.max(1, Math.trunc(dependencies.getMaxMessagesPerConversation?.() ?? 200))
+  }
+
+  function invalidateState(state: PrivateConversationState) {
+    state.generation++
+    state.loadingInitial = false
+    state.loadingOlder = false
+    state.refreshing = false
+    state.failedOperation = null
+    state.items = []
+    firstPageRequests.delete(state.talkerId)
+    olderRequests.delete(state.talkerId)
+  }
+
+  function enforceCacheLimits(protectedTalkerIds: ReadonlySet<string> = new Set()) {
+    const messageLimit = maxMessagesPerConversation()
+    for (const state of states.values()) {
+      if (!state.historyBoundarySeqno)
+        state.historyBoundarySeqno = getOldestPrivateMessageSeqno(state.items)
+      state.items = trimPrivateConversationMessages(state.items, messageLimit)
+      updateBoundaries(state)
+    }
+
+    const conversationLimit = maxCachedConversations()
+    while (states.size > conversationLimit) {
+      const candidate = [...states.values()]
+        .filter(state => (
+          state.talkerId !== activeTalkerId.value
+          && !protectedTalkerIds.has(state.talkerId)
+          && !ackRequests.has(state.talkerId)
+        ))
+        .sort((left, right) => left.lastAccessedAt - right.lastAccessedAt)[0]
+      if (!candidate)
+        break
+      invalidateState(candidate)
+      states.delete(candidate.talkerId)
+    }
+  }
+
   function getState(talkerId: string): PrivateConversationState {
     let state = states.get(talkerId)
     if (!state) {
@@ -159,6 +217,7 @@ export function usePrivateMessages(
       states.set(talkerId, state)
     }
     state.lastAccessedAt = now()
+    enforceCacheLimits(new Set([talkerId]))
     return state
   }
 
@@ -230,9 +289,12 @@ export function usePrivateMessages(
         const incoming = transformPrivateMessages(data.messages, data.e_infos, mid)
         const previousKeys = new Set(state.items.map(item => item.msgKey))
         const hasNewItems = incoming.some(item => !previousKeys.has(item.msgKey))
-        state.items = mode === 'replace'
+        const mergedItems = mode === 'replace'
           ? incoming
           : mergePrivateMessages(state.items, incoming)
+        if (mode === 'replace' || !state.historyBoundarySeqno)
+          state.historyBoundarySeqno = getOldestPrivateMessageSeqno(incoming)
+        state.items = trimPrivateConversationMessages(mergedItems, maxMessagesPerConversation())
         state.loaded = true
         state.noMore = mode === 'replace' ? incoming.length === 0 : state.noMore
         state.paginationStalled = mode === 'replace' ? false : state.paginationStalled
@@ -284,7 +346,9 @@ export function usePrivateMessages(
     const state = getState(talkerId)
     if (explicitRetry)
       state.paginationStalled = false
-    const endSeqno = state.oldestSeqno || getOldestPrivateMessageSeqno(state.items)
+    const endSeqno = state.historyBoundarySeqno
+      || state.oldestSeqno
+      || getOldestPrivateMessageSeqno(state.items)
     if (!mid || disposed || !state.loaded || state.noMore || state.paginationStalled || !endSeqno)
       return Promise.resolve()
 
@@ -305,7 +369,18 @@ export function usePrivateMessages(
 
         const incoming = transformPrivateMessages(data.messages, data.e_infos, mid)
         const madeProgress = hasPrivateMessagePageProgress(endSeqno, previousKeys, incoming)
-        state.items = mergePrivateMessages(state.items, incoming)
+        const nextHistoryBoundary = getOldestPrivateMessageSeqno(incoming)
+        if (
+          nextHistoryBoundary
+          && (!state.historyBoundarySeqno
+            || comparePrivateMessageSeqno(nextHistoryBoundary, state.historyBoundarySeqno) < 0)
+        ) {
+          state.historyBoundarySeqno = nextHistoryBoundary
+        }
+        state.items = trimPrivateConversationMessages(
+          mergePrivateMessages(state.items, incoming),
+          maxMessagesPerConversation(),
+        )
         updateBoundaries(state)
         state.noMore = incoming.length === 0
         state.paginationStalled = !state.noMore && !madeProgress
@@ -411,6 +486,7 @@ export function usePrivateMessages(
     })().catch(() => false).finally(() => {
       if (ackRequests.get(talkerId) === request)
         ackRequests.delete(talkerId)
+      enforceCacheLimits()
     })
 
     ackRequests.set(talkerId, request)
@@ -421,32 +497,29 @@ export function usePrivateMessages(
     const state = states.get(talkerId)
     if (!state)
       return
-    state.generation++
-    state.loadingInitial = false
-    state.loadingOlder = false
-    state.refreshing = false
-    state.failedOperation = null
-    firstPageRequests.delete(talkerId)
-    olderRequests.delete(talkerId)
+    invalidateState(state)
+    state.historyBoundarySeqno = ''
   }
 
-  watch(currentMid, () => {
+  function release() {
     accountGeneration++
+    for (const state of states.values())
+      invalidateState(state)
     states.clear()
     firstPageRequests.clear()
     olderRequests.clear()
     ackRequests.clear()
+  }
+
+  watch(currentMid, () => {
+    release()
   }, { flush: 'sync' })
 
   function dispose() {
     if (disposed)
       return
     disposed = true
-    accountGeneration++
-    states.clear()
-    firstPageRequests.clear()
-    olderRequests.clear()
-    ackRequests.clear()
+    release()
   }
 
   return {
@@ -458,7 +531,9 @@ export function usePrivateMessages(
     refreshLatest,
     updateViewport,
     acknowledgeIfEligible,
+    enforceCacheLimits,
     invalidateConversation,
+    release,
     dispose,
   }
 }
