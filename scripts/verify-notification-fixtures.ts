@@ -27,7 +27,7 @@ import {
 } from '../src/contentScripts/views/Notifications/notificationFeedPolicy'
 import { reconcileNotificationBadge } from '../src/contentScripts/views/Notifications/notificationReadReconciliation'
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
-import { parseNotificationView } from '../src/utils/notificationRoute'
+import { normalizeNotificationRoute, parseNotificationView } from '../src/utils/notificationRoute'
 
 type FixtureName
   = | 'reply-first.json'
@@ -648,6 +648,25 @@ verify('invalid notificationView values safely fall back to whisper', () => {
     assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${value}`), value)
   }
   assert.equal(parseNotificationView('not a valid absolute URL'), 'whisper')
+})
+
+verify('legacy message settings routes normalize before the notification outlet renders', () => {
+  const legacy = normalizeNotificationRoute(
+    'https://www.bilibili.com/?page=Notifications&notificationView=settings',
+  )
+  assert.deepEqual(legacy, {
+    view: 'whisper',
+    openMessageSettings: true,
+    normalizedUrl: 'https://www.bilibili.com/?page=Notifications&notificationView=whisper',
+  })
+  assert.deepEqual(normalizeNotificationRoute(
+    'https://message.bilibili.com/#/config',
+  ), legacy)
+  const valid = normalizeNotificationRoute(
+    'https://www.bilibili.com/?page=Notifications&notificationView=reply',
+  )
+  assert.equal(valid.view, 'reply')
+  assert.equal(valid.openMessageSettings, false)
 })
 
 async function main() {

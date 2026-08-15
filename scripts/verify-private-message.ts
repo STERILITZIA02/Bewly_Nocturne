@@ -5,17 +5,6 @@ import process from 'node:process'
 import { nextTick, ref } from 'vue'
 
 import { storeWbiKeys } from '../src/background/wbiSign'
-import type { APIClient } from '../src/utils/api'
-
-if (false) {
-  const api = null as unknown as APIClient
-  void api.privateMessage.getPrivateSessions()
-  void api.privateMessage.getOlderPrivateSessions({ endTs: 1755000000000000 })
-  void api.privateMessage.getNewPrivateSessions({ beginTs: 1755000000000000 })
-  void api.privateMessage.getPrivateUserCards({ uids: ['1'] })
-  void api.privateMessage.getPrivateMessages({ talkerId: '1', endSeqno: '2' })
-  void api.privateMessage.ackPrivateSession({ talkerId: '1', ackSeqno: '2', csrf: 'token' })
-}
 
 interface MockResponseOptions {
   contentType?: string
@@ -36,9 +25,9 @@ interface PrivateMessageModules {
   privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
-  experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions')
-  experimentalUsePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites') & {
-    usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites').useExperimentalPrivateMessageWrites
+  experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental')
+  experimentalUsePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental') & {
+    usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental').useExperimentalPrivateMessageWrites
   }
   privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
@@ -105,8 +94,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
-      experimentalPrivateMessage,
-      experimentalUsePrivateMessages,
+      experimentalWrites,
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
@@ -122,8 +110,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
-      import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions'),
-      import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites'),
+      import('../src/contentScripts/views/Notifications/whisper/experimental'),
       import('../src/utils/privateConversationRoute'),
       import('../src/contentScripts/views/Notifications/notificationSections'),
       import('../src/stores/topBarSharedRefresh'),
@@ -140,10 +127,10 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
-      experimentalPrivateMessage,
+      experimentalPrivateMessage: experimentalWrites,
       experimentalUsePrivateMessages: {
-        ...experimentalUsePrivateMessages,
-        usePrivateMessages: experimentalUsePrivateMessages.useExperimentalPrivateMessageWrites,
+        ...experimentalWrites,
+        usePrivateMessages: experimentalWrites.useExperimentalPrivateMessageWrites,
       },
       privateConversationRoute,
       notificationSections,
@@ -181,6 +168,16 @@ verify('private conversation routes only preserve validated session identity', (
     `${listUrl}&notificationTalker=42&notificationSessionType=2`,
   ), { talkerId: '42', sessionType: 2 })
   assert.equal(privateConversationRoute.clearPrivateConversationRoute(conversationUrl), listUrl)
+  const conversationState = privateConversationRoute.createPrivateConversationHistoryState({ preserved: true })
+  assert.deepEqual(conversationState, {
+    preserved: true,
+    bewlyPrivateConversation: true,
+  })
+  assert.equal(privateConversationRoute.isPrivateConversationHistoryState(conversationState), true)
+  assert.deepEqual(privateConversationRoute.clearPrivateConversationHistoryState(conversationState), {
+    preserved: true,
+  })
+  assert.equal(privateConversationRoute.isPrivateConversationHistoryState(null), false)
 })
 
 verify('invalid private conversation route values safely fall back to the list route', ({ privateConversationRoute }) => {
@@ -205,7 +202,6 @@ verify('invalid private conversation route values safely fall back to the list r
 
 verify('settings is no longer a notification section while unread-capable frames stay explicit', ({ notificationSections }) => {
   assert.equal(notificationSections.isNotificationView('settings'), false)
-  assert.equal(notificationSections.canOriginalNotificationMutateUnread('whisper'), true)
   assert.equal(notificationSections.canOriginalNotificationMutateUnread('system'), true)
 })
 
@@ -283,7 +279,7 @@ verify('shared refresh production wiring is concurrent, gated, and free of raw E
   assert.equal(helperSource.includes('console.error'), false)
   assert.ok(helperSource.includes('Promise.allSettled'))
   assert.ok(frameSource.includes('canOriginalNotificationMutateUnread(props.view)'))
-  assert.ok(sectionSource.includes(`value === 'whisper' || value === 'system'`))
+  assert.ok(sectionSource.includes(`return value === 'system'`))
   assert.equal((brokerSource.match(/entry\.updatedAt = Date\.now\(\)/g) ?? []).length, 1)
 })
 
@@ -1007,7 +1003,7 @@ verify('local session filters combine all, unread, pinned, and username search',
   const [fallbackItem] = privateSession.transformPrivateSessions([
     createRawSession('4', { is_follow: 0 }),
   ], createCardsResponse([]))
-  assert.equal(privateSession.isNativePrivateSession(fallbackItem!), false)
+  assert.equal(privateSession.isNativePrivateSession(fallbackItem!), true)
 })
 
 verify('session-kind fixtures enforce classification, capabilities, profiles, and original fallback', async ({ privateSession, protocol }) => {
@@ -1032,7 +1028,7 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
     items.push(item)
   }
 
-  const [user, upAssistant, customerService, ...fallbackItems] = items
+  const [user, upAssistant, customerService, unfollowed, intercepted, ...fallbackItems] = items
   assert.equal(privateSession.getPrivateSessionProfileUrl(user!), 'https://space.bilibili.com/1000000000000001')
   assert.equal(user?.capabilities.canReadNative, true)
   assert.equal(user?.capabilities.canAck, true)
@@ -1063,6 +1059,13 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
     assert.equal(assistant?.capabilities.canAck, true)
     assert.equal(assistant?.capabilities.canOpenProfile, false)
     assert.equal(privateSession.getPrivateSessionProfileUrl(assistant!), '')
+  }
+
+  for (const item of [unfollowed, intercepted]) {
+    assert.equal(item?.capabilities.canReadNative, true)
+    assert.equal(item?.capabilities.canAck, false)
+    assert.equal(item?.capabilities.canOpenProfile, true)
+    assert.equal(item ? privateSession.getPrivateSessionProfileUrl(item).startsWith('https://space.bilibili.com/') : false, true)
   }
 
   for (const item of fallbackItems) {
@@ -1134,7 +1137,9 @@ verify('private-session UI consumes type filters, assistant labels, profile link
   assert.ok(itemSource.includes('session.assistantType'))
   assert.ok(conversationSource.includes('getPrivateSessionProfileUrl'))
   assert.ok(conversationSource.includes(':href="profileUrl"'))
-  assert.ok(itemSource.includes(':href="originalUrl"'))
+  assert.equal(itemSource.includes('<ALink'), false)
+  assert.equal((itemSource.match(/<button\b/g) ?? []).length, 1)
+  assert.ok(itemSource.includes(`emit('select', session)`))
   assert.ok(messageSource.includes('message.source'))
 
   for (const localeName of ['cmn-CN', 'cmn-TW', 'en', 'jyut']) {
@@ -1153,7 +1158,10 @@ verify('private-session UI consumes type filters, assistant labels, profile link
   }
 })
 
-verify('session kinds and capabilities keep native reads separate from disabled writes', ({ privateSession }) => {
+verify('session kinds and capabilities keep native reads separate from disabled writes', ({
+  privateConversationRoute,
+  privateSession,
+}) => {
   const items = privateSession.transformPrivateSessions([
     createRawSession('1'),
     createRawSession('2', {
@@ -1192,14 +1200,26 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   assert.equal(items.every(item => Object.keys(item.capabilities).length === 4), true)
   assert.equal(privateSession.isNativePrivateSession(items[0]!), true)
   assert.equal(privateSession.isNativePrivateSession(items[1]!), true)
-  assert.equal(items.slice(2).every(item => !privateSession.isNativePrivateSession(item)), true)
+  assert.equal(privateSession.isNativePrivateSession(items[2]!), true)
+  assert.equal(privateSession.isNativePrivateSession(items[3]!), true)
+  assert.equal(privateSession.isNativePrivateSession(items[4]!), true)
+  assert.equal(items.slice(5).every(item => !privateSession.isNativePrivateSession(item)), true)
+
+  const [unsupportedDirect] = privateSession.transformPrivateSessions([
+    createRawSession('8', { session_type: 1, system_msg_type: -1 }),
+  ], createCardsResponse([]))
+  assert.equal(unsupportedDirect?.kind, 'unsupported')
+  assert.equal(unsupportedDirect?.capabilities.canReadNative, false)
+  assert.deepEqual(privateConversationRoute.parsePrivateConversationRoute(
+    privateConversationRoute.buildPrivateConversationUrl({ talkerId: '8', sessionType: 1 }),
+  ), { talkerId: '8', sessionType: 1 })
 })
 
 verify('whisper is a workspace hybrid and native writes are unreachable from the page shell', async ({ notificationSections }) => {
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
-  assert.equal(notificationSections.isOriginalFrameCapableView('whisper'), true)
+  assert.equal(notificationSections.isOriginalFrameCapableView('whisper'), false)
   assert.equal(notificationSections.isOriginalOnlyNotificationView('whisper'), false)
   assert.equal(notificationSections.isNotificationView('settings'), false)
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.reply.layout, 'document')
@@ -1251,14 +1271,12 @@ verify('experimental private writes remain available only to explicit verificati
   api,
   experimentalApi,
 }) => {
-  const experimentalApiSource = await readFile(
-    new URL('../src/background/privateMessage/experimental/api.ts', import.meta.url),
-    'utf8',
-  )
-  const experimentalControllerSource = await readFile(
-    new URL('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites.ts', import.meta.url),
-    'utf8',
-  )
+  const [experimentalApiSource, experimentalControllerSource, experimentalEntrySource, knipSource] = await Promise.all([
+    readFile(new URL('../src/background/privateMessage/experimental/api.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/index.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../knip.json', import.meta.url), 'utf8'),
+  ])
   const requiredWarning = 'EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.'
   assert.ok(experimentalApiSource.includes(requiredWarning))
   assert.ok(experimentalControllerSource.includes(requiredWarning))
@@ -1271,6 +1289,12 @@ verify('experimental private writes remain available only to explicit verificati
     assert.ok(experimentalApiSource.includes(retainedWrite), retainedWrite)
   }
   assert.ok(experimentalControllerSource.includes('reconcileOptimisticPrivateMessages'))
+  assert.ok(experimentalEntrySource.includes(`export type { default as MessageComposer }`))
+  assert.ok(experimentalEntrySource.includes(`export * from './privateMessageWriteProtocolGate'`))
+  assert.ok(experimentalEntrySource.includes(`export * from './usePrivateMessageWrites'`))
+  assert.ok(knipSource.includes('whisper/experimental/index.ts'))
+  assert.equal(knipSource.includes('whisper/experimental/MessageComposer.vue'), false)
+  assert.equal(knipSource.includes('whisper/experimental/privateMessageWriteProtocolGate.ts'), false)
   assert.deepEqual(Object.keys(api.default).sort(), [
     'ackPrivateSession',
     'getNewPrivateSessions',
@@ -1337,7 +1361,7 @@ verify('original-fallback sessions keep available avatars instead of always usin
   )
   assert.equal(
     (source.match(/v-if="session\.avatar && !avatarFailed"/g) ?? []).length,
-    2,
+    1,
   )
 })
 
@@ -1927,12 +1951,17 @@ verify('whisper conversation routing reuses route state and never guesses origin
   assert.ok(notificationsSource.includes(`watch(() => routeState.navigationId`))
   assert.ok(notificationsSource.includes('window.history.pushState'))
   assert.ok(notificationsSource.includes('window.history.back()'))
-  assert.ok(notificationsSource.includes('PRIVATE_CONVERSATION_HISTORY_STATE_KEY'))
+  assert.ok(notificationsSource.includes('createPrivateConversationHistoryState'))
+  assert.ok(notificationsSource.includes('isPrivateConversationHistoryState'))
   assert.ok(notificationsSource.includes('window.history.replaceState'))
   assert.ok(notificationsSource.includes('watch(currentMid'))
   assert.ok(workspaceSource.includes(`emit('selectSession'`))
   assert.ok(workspaceSource.includes(`emit('closeConversation'`))
-  assert.ok(itemSource.includes('notifications.whisper.open_original_list'))
+  assert.equal(itemSource.includes('buildOriginalNotificationUrl'), false)
+  assert.equal(itemSource.includes('<ALink'), false)
+  assert.ok(itemSource.includes(`emit('select', session)`))
+  assert.ok(notificationsSource.includes('clearPrivateConversationHistoryState'))
+  assert.ok(notificationsSource.includes('sessionType: session.sessionType'))
   assert.equal(notificationsSource.includes(`addEventListener('popstate'`), false)
   assert.equal(workspaceSource.includes(`addEventListener('popstate'`), false)
   assert.equal([notificationsSource, workspaceSource, itemSource].some(source => /#\/whisper\//.test(source)), false)
@@ -1949,7 +1978,7 @@ verify('mobile whisper master-detail preserves scroll and focus with reduced-mot
     )),
   ])
 
-  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(nativeSelectedSession)`))
+  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession)`))
   assert.ok(workspaceSource.includes('breakpoints.$mobile-max'))
   assert.ok(workspaceSource.includes('translateX(100%)'))
   assert.ok(workspaceSource.includes('translateX(-100%)'))
@@ -2034,12 +2063,14 @@ verify('message settings live in the global Bewly settings page and the old sect
 
   assert.equal(sectionsSource.includes(`| 'settings'`), false)
   assert.equal(sectionsSource.includes(`id: 'settings'`), false)
-  assert.equal(routeSource.includes(`buildOriginalNotificationUrl('settings')`), false)
+  assert.ok(routeSource.includes(`buildOriginalNotificationUrl('settings')`))
   assert.ok(routeSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
-  assert.ok(notificationsSource.includes(`requestedView === 'settings'`))
-  assert.ok(notificationsSource.includes('openMessagesSettings'))
+  assert.ok(notificationsSource.includes('normalizeNotificationRoute'))
+  assert.ok(notificationsSource.includes('routeReady'))
+  assert.ok(notificationsSource.includes('openSettingsAt'))
   assert.ok(navigationSource.includes(`emit('openSettings'`))
-  assert.ok(appProviderSource.includes('openMessagesSettings'))
+  assert.ok(appProviderSource.includes('openSettingsAt'))
+  assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   for (const setting of [
     'autoMarkPrivateMessagesRead',
     'followNewPrivateMessages',
@@ -2068,6 +2099,117 @@ verify('message settings live in the global Bewly settings page and the old sect
     assert.ok(localeSource.includes('messages_auto_mark_read:'))
     assert.ok(localeSource.includes('messages_original_settings:'))
   }
+})
+
+verify('message interaction shell keeps selection internal, settings typed, surfaces transparent, and writes isolated', async () => {
+  const [
+    itemSource,
+    listSource,
+    workspaceSource,
+    emptySource,
+    fallbackSource,
+    conversationSource,
+    notificationsSource,
+    navigationSource,
+    pageHeaderSource,
+    sectionsSource,
+    routeSource,
+    appProviderSource,
+    appSource,
+    settingsSource,
+    messagesPageSource,
+  ] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationEmptyState.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationOriginalFallback.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsNavigation.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsPageHeader.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/utils/notificationRoute.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useAppProvider.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/App.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Settings/Settings.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.equal((itemSource.match(/<button\b/g) ?? []).length, 1)
+  assert.equal(itemSource.includes('<ALink'), false)
+  assert.ok(itemSource.includes('type="button"'))
+  assert.ok(itemSource.includes(':aria-current="selected'))
+  assert.ok(itemSource.includes(`@click="emit('select', session)"`))
+  assert.equal((listSource.match(/<ConversationListItem\b/g) ?? []).length, 1)
+  assert.ok(listSource.includes('v-for="session in filteredItems"'))
+  assert.ok(listSource.includes(`@select="emit('select', $event)"`))
+
+  assert.equal(workspaceSource.includes('OriginalNotificationsFrame'), false)
+  assert.ok(workspaceSource.includes('<ConversationEmptyState v-if="!selectedSession"'))
+  assert.ok(workspaceSource.includes('<ConversationView'))
+  assert.ok(workspaceSource.includes('<ConversationOriginalFallback'))
+  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession)`))
+  assert.equal(workspaceSource.includes('originalFrameRef'), false)
+  assert.equal(workspaceSource.includes('.reload()'), false)
+  assert.ok(emptySource.includes('notifications.whisper.select_conversation_empty'))
+  assert.ok(fallbackSource.includes('notifications.whisper.open_original_list'))
+  assert.ok(fallbackSource.includes('buildOriginalNotificationUrl'))
+  assert.ok(fallbackSource.includes('conversation-original-fallback__back'))
+
+  const selectConversationSource = notificationsSource.slice(
+    notificationsSource.indexOf('function selectPrivateConversation'),
+    notificationsSource.indexOf('function closePrivateConversation'),
+  )
+  assert.ok(selectConversationSource.includes('sessionType: session.sessionType'))
+  assert.ok(selectConversationSource.includes('window.history.pushState'))
+  assert.equal(selectConversationSource.includes('canReadNative'), false)
+  assert.ok(notificationsSource.includes('window.history.back()'))
+  assert.ok(notificationsSource.includes('clearPrivateConversationRoute'))
+  assert.ok(notificationsSource.includes('applyPendingPrivateConversationRoute'))
+  assert.ok(notificationsSource.includes('v-if="originalView"'))
+  assert.ok(sectionsSource.includes(`export type OriginalNotificationView = 'system'`))
+  assert.equal(sectionsSource.includes(`| 'settings'`), false)
+
+  const settingsButtonSource = navigationSource.slice(
+    navigationSource.indexOf('notifications-navigation__settings'),
+    navigationSource.indexOf('</nav>'),
+  )
+  assert.ok(settingsButtonSource.includes(`emit('openSettings')`))
+  assert.equal(settingsButtonSource.includes('aria-current'), false)
+  assert.equal(settingsButtonSource.includes('update:modelValue'), false)
+  assert.ok(navigationSource.includes('margin-top: auto'))
+  assert.ok(routeSource.includes(`settings: 'config'`))
+  assert.ok(routeSource.includes(`view: 'whisper'`))
+  assert.ok(routeSource.includes('openMessageSettings: true'))
+  assert.ok(notificationsSource.indexOf('v-if="!routeReady"') < notificationsSource.lastIndexOf('<OriginalNotificationsFrame'))
+  assert.ok(notificationsSource.includes(`openSettingsAt({ category: 'bewly-pages', page: 'messages' })`))
+  assert.ok(appProviderSource.includes(`category: 'bewly-pages'`))
+  assert.ok(appProviderSource.includes(`page: 'messages'`))
+  assert.ok(appSource.includes('settingsNavigationRequest'))
+  assert.ok(settingsSource.includes('navigationRequest'))
+  assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
+  assert.ok(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+
+  assert.ok(workspaceSource.includes('background: var(--bew-content-alt)'))
+  assert.ok(workspaceSource.includes('background: transparent'))
+  assert.equal(workspaceSource.includes('--bew-homepage-bg'), false)
+  assert.ok(conversationSource.includes('background: var(--bew-elevated)'))
+  assert.ok(conversationSource.includes('backdrop-filter: var(--bew-filter-glass-1)'))
+  assert.equal(conversationSource.includes('--bew-homepage-bg'), false)
+  assert.equal(conversationSource.includes('--bew-elevated-solid'), false)
+  assert.ok(fallbackSource.includes('background: transparent'))
+  assert.ok(pageHeaderSource.includes(`v-if="view !== 'whisper'"`))
+  assert.ok(pageHeaderSource.includes('background: var(--bew-fill-1)'))
+  assert.equal(pageHeaderSource.includes('--bew-content-solid'), false)
+
+  for (const forbiddenWrite of ['sendPrivateMessage', 'uploadPrivateImage', 'sendPrivateImageMessage', 'upload_bfs', 'send_msg']) {
+    assert.equal(notificationsSource.includes(forbiddenWrite), false, forbiddenWrite)
+    assert.equal(conversationSource.includes(forbiddenWrite), false, forbiddenWrite)
+  }
+  assert.equal(conversationSource.includes('MessageComposer'), false)
+  assert.ok(conversationSource.includes('notifications.whisper.messages.readonly_title'))
+  assert.ok(conversationSource.includes('notifications.whisper.messages.continue_original'))
 })
 
 verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {
