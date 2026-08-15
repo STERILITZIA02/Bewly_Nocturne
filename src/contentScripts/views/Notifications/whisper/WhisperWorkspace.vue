@@ -5,21 +5,18 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
-import OriginalNotificationsFrame from '../components/OriginalNotificationsFrame.vue'
 import type { NotificationAccountState } from '../notificationFeedPolicy'
+import ConversationEmptyState from './ConversationEmptyState.vue'
 import ConversationList from './ConversationList.vue'
+import ConversationOriginalFallback from './ConversationOriginalFallback.vue'
 import ConversationView from './ConversationView.vue'
 import type { DisplayPrivateSession } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateSessionsController } from './usePrivateSessions'
 
-interface OriginalNotificationsFrameExposed {
-  reload: () => void
-}
-
-interface ConversationViewExposed {
+interface ConversationDetailExposed {
   focusHeading: () => void
-  refresh: () => Promise<void>
+  refresh?: () => Promise<void>
 }
 
 interface ConversationListExposed {
@@ -43,8 +40,7 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
 const conversationListRef = ref<ConversationListExposed | null>(null)
-const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
-const conversationViewRef = ref<ConversationViewExposed | null>(null)
+const conversationDetailRef = ref<ConversationDetailExposed | null>(null)
 const originalUrl = buildOriginalNotificationUrl('whisper')
 const selectedSession = computed(() => props.controller.state.items.find(
   item => item.key === props.controller.selectedSessionKey.value,
@@ -78,9 +74,7 @@ async function refresh() {
     await props.controller.refresh()
   await nextTick()
   if (nativeSelectedSession.value)
-    await conversationViewRef.value?.refresh()
-  else
-    originalFrameRef.value?.reload()
+    await conversationDetailRef.value?.refresh?.()
 }
 
 function retry() {
@@ -123,7 +117,7 @@ watch(unreadCount, async (next, previous) => {
   ) {
     await props.controller.observeUnreadCount(next)
     if (next > previous)
-      await conversationViewRef.value?.refresh()
+      await conversationDetailRef.value?.refresh?.()
   }
 })
 
@@ -135,7 +129,7 @@ watch(() => props.controller.selectedSessionKey.value, async (nextSessionKey, pr
   }
   await nextTick()
   if (nextSessionKey) {
-    conversationViewRef.value?.focusHeading()
+    conversationDetailRef.value?.focusHeading()
   }
   else if (previousSessionKey) {
     conversationListRef.value?.restoreScrollTop(props.controller.state.scrollTop)
@@ -158,7 +152,7 @@ defineExpose({ refresh })
 <template>
   <section
     class="whisper-workspace"
-    :class="{ 'whisper-workspace--detail': Boolean(nativeSelectedSession) }"
+    :class="{ 'whisper-workspace--detail': Boolean(selectedSession) }"
   >
     <aside class="whisper-workspace__sessions">
       <div v-if="accountState === 'profile-pending'" class="whisper-workspace__state" aria-busy="true">
@@ -229,16 +223,23 @@ defineExpose({ refresh })
     </aside>
 
     <div class="whisper-workspace__detail">
+      <ConversationEmptyState v-if="!selectedSession" />
       <ConversationView
-        v-if="nativeSelectedSession"
+        v-else-if="nativeSelectedSession"
         :key="nativeSelectedSession.talkerId"
-        ref="conversationViewRef"
+        ref="conversationDetailRef"
         :active="active"
         :controller="messagesController"
         :session="nativeSelectedSession"
         @back="emit('closeConversation')"
       />
-      <OriginalNotificationsFrame v-else ref="originalFrameRef" view="whisper" />
+      <ConversationOriginalFallback
+        v-else
+        :key="selectedSession.key"
+        ref="conversationDetailRef"
+        :session="selectedSession"
+        @back="emit('closeConversation')"
+      />
     </div>
   </section>
 </template>

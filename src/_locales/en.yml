@@ -980,6 +980,17 @@ notifications:
     user_fallback: 'User {talkerId}'
     summary_unavailable: No message preview
     select_conversation: Select conversation with {name}
+    select_conversation_empty: Select a conversation to view messages
+    fallback_aria: Original direct-message entry for {name}
+    fallback_description: This conversation type currently needs to be viewed in original Bilibili direct messages
+    session_kinds:
+      user: Regular conversation
+      official-assistant: Official assistant
+      unfollowed-user: Unfollowed conversation
+      intercepted-user: Intercepted conversation
+      fan-group: Fan-group conversation
+      system: System conversation
+      unsupported: Other conversation
     pinned: Pinned
     muted: Muted
     unread_count: '{count} unread direct messages'

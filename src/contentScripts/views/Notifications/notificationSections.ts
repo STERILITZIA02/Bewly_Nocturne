@@ -9,9 +9,7 @@ export type NativeNotificationSection = 'reply' | 'at' | 'love'
 export type HybridNotificationView = 'whisper'
 export type OriginalOnlyNotificationView = 'system'
 
-export type OriginalNotificationView
-  = | 'whisper'
-    | 'system'
+export type OriginalNotificationView = 'system'
 
 export type NotificationSectionImplementation = 'native' | 'original' | 'hybrid'
 export type NotificationSectionLayout = 'document' | 'workspace'
@@ -87,7 +85,7 @@ export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
 const NOTIFICATION_VIEW_SET = new Set<NotificationView>(
   NOTIFICATION_SECTIONS.map(section => section.id),
 )
-const ORIGINAL_FRAME_VIEW_SET = new Set<OriginalNotificationView>(['whisper', 'system'])
+const ORIGINAL_FRAME_VIEW_SET = new Set<OriginalNotificationView>(['system'])
 const ORIGINAL_ONLY_VIEW_SET = new Set<OriginalOnlyNotificationView>(['system'])
 
 export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
@@ -124,5 +122,5 @@ export function isNativeNotificationSection(value: NotificationView): value is N
 }
 
 export function canOriginalNotificationMutateUnread(value: OriginalNotificationView): boolean {
-  return value === 'whisper' || value === 'system'
+  return value === 'system'
 }

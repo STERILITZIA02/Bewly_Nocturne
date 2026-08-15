@@ -927,6 +927,17 @@ notifications:
     user_fallback: '用户 {talkerId}'
     summary_unavailable: 暂无消息摘要
     select_conversation: 选择与{name}的会话
+    select_conversation_empty: 选择一个会话以查看消息
+    fallback_aria: '{name}的原版私信入口'
+    fallback_description: 此类型会话暂时需要在原版私信中查看
+    session_kinds:
+      user: 普通会话
+      official-assistant: 官方助手
+      unfollowed-user: 未关注会话
+      intercepted-user: 已拦截会话
+      fan-group: 粉丝团会话
+      system: 系统会话
+      unsupported: 其他会话
     pinned: 已置顶
     muted: 已免打扰
     unread_count: '{count} 条未读私信'

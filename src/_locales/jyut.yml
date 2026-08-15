@@ -913,6 +913,17 @@ notifications:
     user_fallback: '用戶 {talkerId}'
     summary_unavailable: 暫時未有訊息摘要
     select_conversation: 揀同{name}嘅會話
+    select_conversation_empty: 揀一個會話來查看訊息
+    fallback_aria: '{name}嘅原版私訊入口'
+    fallback_description: 呢類會話暫時需要喋原版私訊查看
+    session_kinds:
+      user: 普通會話
+      official-assistant: 官方助手
+      unfollowed-user: 未關注會話
+      intercepted-user: 已攔截會話
+      fan-group: 粉絲團會話
+      system: 系統會話
+      unsupported: 其他會話
     pinned: 已置頂
     muted: 已免打擾
     unread_count: '{count} 條未讀私訊'
