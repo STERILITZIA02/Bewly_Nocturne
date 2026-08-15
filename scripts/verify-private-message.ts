@@ -1701,7 +1701,7 @@ verify('private user-card cache is TTL-bound, best effort, and cleared by MID ch
   await controller.refreshNew()
   assert.deepEqual(requestedChunks, [['1'], ['2']])
 
-  now += usePrivateSessions.PRIVATE_SESSION_USER_CARD_CACHE_TTL_MS + 1
+  now += usePrivateSessions.PRIVATE_USER_CARD_CACHE_TTL_MS + 1
   await controller.refreshNew()
   assert.deepEqual(requestedChunks, [['1'], ['2'], ['1']])
 
@@ -1800,7 +1800,7 @@ verify('authoritative DM unread changes trigger one merge refresh per observed v
   assert.deepEqual(controller.state.items.map(item => item.talkerId), ['2', '1'])
 })
 
-verify('visibility refresh uses a finite TTL while whisper activation always checks new sessions', async ({ usePrivateSessions }) => {
+verify('visibility and whisper activation use independent finite stale windows', async ({ usePrivateSessions }) => {
   const mid = ref('100')
   let now = 1_000
   let incrementalRequests = 0
@@ -1825,6 +1825,10 @@ verify('visibility refresh uses a finite TTL while whisper activation always che
   await controller.refreshIfStale()
   assert.equal(incrementalRequests, 1)
 
+  await controller.activate(0)
+  assert.equal(incrementalRequests, 1)
+
+  now += usePrivateSessions.PRIVATE_SESSION_ACTIVATE_STALE_TIME_MS + 1
   await controller.activate(0)
   assert.equal(incrementalRequests, 2)
 })

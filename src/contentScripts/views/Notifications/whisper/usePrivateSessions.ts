@@ -22,8 +22,9 @@ import {
 export type PrivateSessionsFailedOperation = 'initial' | 'refresh' | 'incremental' | 'load-more' | null
 
 export const PRIVATE_SESSION_CARD_BATCH_SIZE = 30
-export const PRIVATE_SESSION_USER_CARD_CACHE_TTL_MS = 300_000
+export const PRIVATE_USER_CARD_CACHE_TTL_MS = 600_000
 export const PRIVATE_SESSION_VISIBILITY_STALE_TIME_MS = 60_000
+export const PRIVATE_SESSION_ACTIVATE_STALE_TIME_MS = 300_000
 
 export interface PrivateSessionsState {
   items: DisplayPrivateSession[]
@@ -220,7 +221,7 @@ export function usePrivateSessions(
     const uids = collectPrivateSessionUids(sessions)
     const missingUids = uids.filter((uid) => {
       const cached = userCardCache.get(uid)
-      return !cached || requestedAt - cached.updatedAt >= PRIVATE_SESSION_USER_CARD_CACHE_TTL_MS
+      return !cached || requestedAt - cached.updatedAt >= PRIVATE_USER_CARD_CACHE_TTL_MS
     })
     const chunks = chunkPrivateSessionUids(missingUids)
     const cardResults = await Promise.allSettled(
@@ -484,8 +485,21 @@ export function usePrivateSessions(
   }
 
   function activate(unreadCount: number): Promise<void> {
-    state.lastObservedUnreadCount = normalizeUnreadCount(unreadCount)
-    return state.loaded ? refreshNew() : loadInitial()
+    const normalizedUnreadCount = normalizeUnreadCount(unreadCount)
+    const previousUnreadCount = state.lastObservedUnreadCount
+    state.lastObservedUnreadCount = normalizedUnreadCount
+
+    if (!state.loaded)
+      return loadInitial()
+    if (previousUnreadCount >= 0 && previousUnreadCount !== normalizedUnreadCount)
+      return refreshNew()
+    if (
+      state.loadedAt <= 0
+      || now() - state.loadedAt >= PRIVATE_SESSION_ACTIVATE_STALE_TIME_MS
+    ) {
+      return refreshNew()
+    }
+    return Promise.resolve()
   }
 
   function observeUnreadCount(unreadCount: number): Promise<void> {
