@@ -1001,6 +1001,8 @@ notifications:
       preview_image: Preview image
       image_preview: Direct-message image preview
       image_alt: Direct-message image
+      click_load_image: Click to load image
+      image_load_failed: Image failed to load. Click to retry
       emoticon_alt: Direct-message sticker
       picture_card_alt: Shared direct-message image
       video_views: '{count} views'

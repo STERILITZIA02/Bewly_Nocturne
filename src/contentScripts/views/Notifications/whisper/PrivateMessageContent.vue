@@ -5,7 +5,8 @@ import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { ParsedPrivateMessageContent } from './privateMessageRenderers'
 
-defineProps<{
+const props = defineProps<{
+  autoLoadImages: boolean
   content: ParsedPrivateMessageContent
 }>()
 
@@ -15,6 +16,28 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const originalUrl = buildOriginalNotificationUrl('whisper')
+const mediaRequested = ref(false)
+const mediaFailed = ref(false)
+const mediaSource = computed(() => (
+  props.content.type === 'image' || props.content.type === 'emoticon'
+    ? props.content.src
+    : ''
+))
+const shouldLoadMedia = computed(() => (
+  props.content.type !== 'image'
+  || props.autoLoadImages
+  || mediaRequested.value
+))
+
+function requestMedia() {
+  mediaFailed.value = false
+  mediaRequested.value = true
+}
+
+watch(mediaSource, () => {
+  mediaRequested.value = false
+  mediaFailed.value = false
+})
 </script>
 
 <template>
@@ -41,27 +64,43 @@ const originalUrl = buildOriginalNotificationUrl('whisper')
     </template>
   </div>
 
-  <button
-    v-else-if="content.type === 'image' || content.type === 'emoticon'"
-    type="button"
-    class="private-message-content__media-button"
-    :aria-label="t('notifications.whisper.messages.preview_image')"
-    @click="emit('preview', content.src)"
-  >
-    <img
-      class="private-message-content__media"
-      :class="{ 'private-message-content__media--emoticon': content.type === 'emoticon' }"
-      :src="content.src"
-      :style="content.width > 0 && content.height > 0
-        ? { aspectRatio: `${content.width} / ${content.height}` }
-        : undefined"
-      :alt="content.type === 'emoticon'
-        ? t('notifications.whisper.messages.emoticon_alt')
-        : t('notifications.whisper.messages.image_alt')"
-      loading="lazy"
-      decoding="async"
+  <template v-else-if="content.type === 'image' || content.type === 'emoticon'">
+    <button
+      v-if="shouldLoadMedia && !mediaFailed"
+      type="button"
+      class="private-message-content__media-button"
+      :aria-label="t('notifications.whisper.messages.preview_image')"
+      @click="emit('preview', content.src)"
     >
-  </button>
+      <img
+        class="private-message-content__media"
+        :class="{ 'private-message-content__media--emoticon': content.type === 'emoticon' }"
+        :src="content.src"
+        :style="content.width > 0 && content.height > 0
+          ? { aspectRatio: `${content.width} / ${content.height}` }
+          : undefined"
+        :alt="content.type === 'emoticon'
+          ? t('notifications.whisper.messages.emoticon_alt')
+          : t('notifications.whisper.messages.image_alt')"
+        loading="lazy"
+        decoding="async"
+        @error="mediaFailed = true"
+      >
+    </button>
+    <button
+      v-else
+      type="button"
+      class="private-message-content__media-placeholder"
+      @click="requestMedia"
+    >
+      <i i-mingcute:pic-line aria-hidden="true" />
+      <span>
+        {{ t(mediaFailed
+          ? 'notifications.whisper.messages.image_load_failed'
+          : 'notifications.whisper.messages.click_load_image') }}
+      </span>
+    </button>
+  </template>
 
   <div v-else-if="content.type === 'recalled'" class="private-message-content__notice">
     {{ t('notifications.whisper.messages.recalled') }}
@@ -285,6 +324,31 @@ const originalUrl = buildOriginalNotificationUrl('whisper')
   border: 0;
   border-radius: var(--bew-media-radius);
   corner-shape: var(--bew-corner-shape);
+}
+
+.private-message-content__media-placeholder {
+  display: inline-flex;
+  gap: var(--bew-space-2);
+  align-items: center;
+  justify-content: center;
+  min-width: calc(var(--bew-space-12) * 3);
+  min-height: calc(var(--bew-space-12) * 2);
+  padding: var(--bew-space-3);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+  appearance: none;
+  cursor: pointer;
+  background: var(--bew-fill-1);
+  border: 1px solid var(--bew-border-color);
+  border-radius: var(--bew-media-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
+.private-message-content__media-placeholder:focus-visible {
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-1);
 }
 
 .private-message-content__media-button:focus-visible,

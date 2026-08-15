@@ -6,6 +6,7 @@ import PrivateMessageContent from './PrivateMessageContent.vue'
 import { normalizePrivateSessionLocale } from './privateSession'
 
 const props = defineProps<{
+  autoLoadImages: boolean
   message: DisplayPrivateMessage
 }>()
 
@@ -45,6 +46,7 @@ const sourceLabel = computed(() => props.message.source
       class="private-message-item__notice-content"
     >
       <PrivateMessageContent
+        :auto-load-images="autoLoadImages"
         :content="message.content"
         @preview="emit('preview', $event)"
       />
@@ -52,7 +54,11 @@ const sourceLabel = computed(() => props.message.source
     </div>
 
     <div v-else class="private-message-item__content">
-      <PrivateMessageContent :content="message.content" @preview="emit('preview', $event)" />
+      <PrivateMessageContent
+        :auto-load-images="autoLoadImages"
+        :content="message.content"
+        @preview="emit('preview', $event)"
+      />
 
       <div v-if="message.source || displayTime" class="private-message-item__metadata">
         <span v-if="message.source" class="private-message-item__source">{{ sourceLabel }}</span>

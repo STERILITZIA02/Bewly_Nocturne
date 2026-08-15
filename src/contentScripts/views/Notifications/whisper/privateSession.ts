@@ -21,13 +21,8 @@ export type OfficialAssistantType
 export interface PrivateSessionCapabilities {
   canReadNative: boolean
   canAck: boolean
-  canSendText: boolean
-  canSendImage: boolean
   canOpenProfile: boolean
   canOpenOriginal: boolean
-  canPin: boolean
-  canMute: boolean
-  canRemove: boolean
 }
 
 export interface DisplayPrivateSession {
@@ -164,13 +159,8 @@ function createPrivateSessionCapabilities(kind: PrivateSessionKind): PrivateSess
   return {
     canReadNative: isNativeReadable,
     canAck: isNativeReadable,
-    canSendText: false,
-    canSendImage: false,
     canOpenProfile: kind === 'user',
     canOpenOriginal: true,
-    canPin: false,
-    canMute: false,
-    canRemove: false,
   }
 }
 

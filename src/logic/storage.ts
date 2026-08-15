@@ -265,6 +265,7 @@ export interface Settings {
   topBarPinnedChannels: string[]
   openNotificationsPageAsDrawer: boolean
   showLikeNotificationReminder: boolean
+  autoLoadPrivateMessageImages: boolean
   hideTopBarUserPanelLv6LastLoginLocation: boolean
   showBCoinReceiveReminder: boolean
   autoReceiveBCoinCoupon: boolean
@@ -533,6 +534,7 @@ export const originalSettings: Settings = {
   topBarPinnedChannels: [],
   openNotificationsPageAsDrawer: true,
   showLikeNotificationReminder: false,
+  autoLoadPrivateMessageImages: true,
   hideTopBarUserPanelLv6LastLoginLocation: false,
   showBCoinReceiveReminder: true,
   autoReceiveBCoinCoupon: false,

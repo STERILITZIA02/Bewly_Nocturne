@@ -948,6 +948,8 @@ notifications:
       preview_image: 预览图片
       image_preview: 私信图片预览
       image_alt: 私信图片
+      click_load_image: 点击加载图片
+      image_load_failed: 图片加载失败，点击重试
       emoticon_alt: 私信表情
       picture_card_alt: 私信分享图片
       video_views: '{count} 次播放'

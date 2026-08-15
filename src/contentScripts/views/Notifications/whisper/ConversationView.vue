@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
+import { settings } from '~/logic'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
@@ -39,6 +40,44 @@ const errorMessage = computed(() => {
 
 const SCROLL_EDGE_THRESHOLD = 48
 let activationGeneration = 0
+
+interface VisibleMessageAnchor {
+  id: string
+  offset: number
+}
+
+function captureVisibleMessageAnchor(viewport: HTMLElement): VisibleMessageAnchor | null {
+  const viewportTop = viewport.getBoundingClientRect().top
+  const messageElements = Array.from(
+    viewport.querySelectorAll<HTMLElement>('[data-message-id]'),
+  )
+  for (const element of messageElements) {
+    const rect = element.getBoundingClientRect()
+    if (rect.bottom > viewportTop) {
+      return {
+        id: element.dataset.messageId ?? '',
+        offset: rect.top - viewportTop,
+      }
+    }
+  }
+  return null
+}
+
+function restoreVisibleMessageAnchor(
+  viewport: HTMLElement,
+  anchor: VisibleMessageAnchor | null,
+): boolean {
+  if (!anchor?.id)
+    return false
+  const target = Array.from(
+    viewport.querySelectorAll<HTMLElement>('[data-message-id]'),
+  ).find(element => element.dataset.messageId === anchor.id)
+  if (!target)
+    return false
+  const nextOffset = target.getBoundingClientRect().top - viewport.getBoundingClientRect().top
+  viewport.scrollTop += nextOffset - anchor.offset
+  return true
+}
 
 function isAtLatest() {
   const viewport = messageScrollRef.value
@@ -88,10 +127,15 @@ async function loadOlderMessages() {
 
   const oldScrollHeight = viewport.scrollHeight
   const oldScrollTop = viewport.scrollTop
+  const anchor = captureVisibleMessageAnchor(viewport)
   await props.controller.loadOlder(props.session.talkerId)
   await nextTick()
-  if (viewport === messageScrollRef.value)
+  if (
+    viewport === messageScrollRef.value
+    && !restoreVisibleMessageAnchor(viewport, anchor)
+  ) {
     viewport.scrollTop = oldScrollTop + viewport.scrollHeight - oldScrollHeight
+  }
   saveViewportState()
 }
 
@@ -273,6 +317,7 @@ defineExpose({
             v-for="message in state.items"
             :key="message.msgKey"
             :message="message"
+            :auto-load-images="settings.autoLoadPrivateMessageImages"
             @preview="previewImage = $event"
           />
         </div>

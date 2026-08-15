@@ -1032,8 +1032,12 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
   assert.equal(user?.capabilities.canReadNative, true)
   assert.equal(user?.capabilities.canAck, true)
   assert.equal(user?.capabilities.canOpenProfile, true)
-  assert.equal(user?.capabilities.canSendText, false)
-  assert.equal(user?.capabilities.canSendImage, false)
+  assert.deepEqual(Object.keys(user?.capabilities ?? {}).sort(), [
+    'canAck',
+    'canOpenOriginal',
+    'canOpenProfile',
+    'canReadNative',
+  ])
 
   assert.equal(upAssistant?.assistantType, 'up-assistant')
   assert.equal(upAssistant?.name, 'Sanitized UP Assistant')
@@ -1062,9 +1066,7 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
     assert.equal(item.capabilities.canOpenProfile, false)
     assert.equal(item.capabilities.canOpenOriginal, true)
   }
-  assert.equal(items.every(item => !item.capabilities.canPin), true)
-  assert.equal(items.every(item => !item.capabilities.canMute), true)
-  assert.equal(items.every(item => !item.capabilities.canRemove), true)
+  assert.equal(items.every(item => Object.keys(item.capabilities).length === 4), true)
 })
 
 verify('session type filter composes with unread, pinned, and search filters', ({ privateSession }) => {
@@ -1182,11 +1184,7 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   assert.equal(items[1]?.capabilities.canReadNative, true)
   assert.equal(items[1]?.capabilities.canAck, true)
   assert.equal(items[1]?.capabilities.canOpenProfile, false)
-  assert.equal(items.every(item => !item.capabilities.canSendText), true)
-  assert.equal(items.every(item => !item.capabilities.canSendImage), true)
-  assert.equal(items.every(item => !item.capabilities.canPin), true)
-  assert.equal(items.every(item => !item.capabilities.canMute), true)
-  assert.equal(items.every(item => !item.capabilities.canRemove), true)
+  assert.equal(items.every(item => Object.keys(item.capabilities).length === 4), true)
   assert.equal(privateSession.isNativePrivateSession(items[0]!), true)
   assert.equal(privateSession.isNativePrivateSession(items[1]!), true)
   assert.equal(items.slice(2).every(item => !privateSession.isNativePrivateSession(item)), true)
@@ -1924,6 +1922,33 @@ verify('mobile whisper master-detail preserves scroll and focus with reduced-mot
   assert.equal(conversationSource.includes(`window.addEventListener('keydown'`), false)
   for (const localeSource of localeSources)
     assert.ok(localeSource.includes('back_to_conversations:'))
+})
+
+verify('readonly history restores stable message anchors and gates received image loading', async () => {
+  const [conversationSource, contentSource, storageSource, ...localeSources] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageContent.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/logic/storage.ts', import.meta.url), 'utf8'),
+    ...['cmn-CN', 'cmn-TW', 'en', 'jyut'].map(locale => (
+      readFile(new URL(`../src/_locales/${locale}.yml`, import.meta.url), 'utf8')
+    )),
+  ])
+
+  assert.ok(conversationSource.includes('captureVisibleMessageAnchor'))
+  assert.ok(conversationSource.includes('[data-message-id]'))
+  assert.ok(conversationSource.includes('viewport.scrollHeight - oldScrollHeight'))
+  assert.ok(conversationSource.includes('settings.autoLoadPrivateMessageImages'))
+  assert.ok(contentSource.includes('autoLoadImages'))
+  assert.ok(contentSource.includes('notifications.whisper.messages.click_load_image'))
+  assert.ok(contentSource.includes('notifications.whisper.messages.image_load_failed'))
+  assert.ok(contentSource.includes('loading="lazy"'))
+  assert.ok(contentSource.includes('decoding="async"'))
+  assert.ok(storageSource.includes('autoLoadPrivateMessageImages: boolean'))
+  assert.ok(storageSource.includes('autoLoadPrivateMessageImages: true'))
+  for (const localeSource of localeSources) {
+    assert.ok(localeSource.includes('click_load_image:'))
+    assert.ok(localeSource.includes('image_load_failed:'))
+  }
 })
 
 verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {
