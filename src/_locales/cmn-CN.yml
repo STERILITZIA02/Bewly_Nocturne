@@ -876,7 +876,6 @@ notifications:
     refresh_tooltip: 重新加载当前消息分类
     retry: 重试
     open_original: 在原版中打开
-    open_message_settings: 消息设置
     open_original_aria: 在哔哩哔哩原版中打开{section}
     open_original_tooltip: 使用哔哩哔哩原版消息页打开
   sections:

@@ -862,7 +862,6 @@ notifications:
     refresh_tooltip: 重新載入而家嘅訊息分類
     retry: 再試
     open_original: 喺原版打開
-    open_message_settings: 訊息設定
     open_original_aria: 喺嗶哩嗶哩原版打開{section}
     open_original_tooltip: 用嗶哩嗶哩原版訊息頁打開
   sections:

@@ -303,10 +303,6 @@ function selectView(view: NotificationView) {
   )
 }
 
-function handleOpenMessagesSettings() {
-  openSettingsAt({ category: 'bewly-pages', page: 'messages' })
-}
-
 function resetOuterScrollForWorkspaceView(view: NotificationView) {
   if (NOTIFICATION_SECTION_BY_ID[view].layout !== 'workspace')
     return
@@ -457,7 +453,6 @@ onBeforeUnmount(() => {
       <div class="notifications-page__workspace">
         <NotificationsNavigation
           :model-value="currentView"
-          @open-settings="handleOpenMessagesSettings"
           @update:model-value="selectView"
         />
 

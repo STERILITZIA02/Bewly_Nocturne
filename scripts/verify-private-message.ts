@@ -2043,6 +2043,7 @@ verify('message settings live in the global Bewly settings page and the old sect
     conversationSource,
     workspaceSource,
     conversationListSource,
+    settingsCategorySource,
     ...localeSources
   ] = await Promise.all([
     readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue', import.meta.url), 'utf8'),
@@ -2056,6 +2057,7 @@ verify('message settings live in the global Bewly settings page and the old sect
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Settings/components/SettingsCategoryLayout.vue', import.meta.url), 'utf8'),
     ...['cmn-CN', 'cmn-TW', 'en', 'jyut'].map(locale => (
       readFile(new URL(`../src/_locales/${locale}.yml`, import.meta.url), 'utf8')
     )),
@@ -2068,7 +2070,9 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(notificationsSource.includes('normalizeNotificationRoute'))
   assert.ok(notificationsSource.includes('routeReady'))
   assert.ok(notificationsSource.includes('openSettingsAt'))
-  assert.ok(navigationSource.includes(`emit('openSettings'`))
+  assert.equal(navigationSource.includes('openSettings'), false)
+  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
+  assert.equal(notificationsSource.includes('handleOpenMessagesSettings'), false)
   assert.ok(appProviderSource.includes('openSettingsAt'))
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   for (const setting of [
@@ -2093,6 +2097,9 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(workspaceSource.includes('settings.privateMessageDensity'))
   assert.ok(conversationListSource.includes('showOfficialAssistants'))
   assert.ok(conversationListSource.includes('conversation-list--compact'))
+  assert.ok(settingsCategorySource.includes('color: var(--bew-theme-color)'))
+  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color-10)'))
+  assert.equal(settingsCategorySource.includes('color: var(--bew-theme-foreground)'), false)
   assert.ok(notificationsSource.includes('lastPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('privateMessageMobileOpenMode'))
   for (const localeSource of localeSources) {
@@ -2118,6 +2125,7 @@ verify('message interaction shell keeps selection internal, settings typed, surf
     appSource,
     settingsSource,
     messagesPageSource,
+    settingsCategorySource,
   ] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
@@ -2134,6 +2142,7 @@ verify('message interaction shell keeps selection internal, settings typed, surf
     readFile(new URL('../src/contentScripts/views/App.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/Settings/Settings.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Settings/components/SettingsCategoryLayout.vue', import.meta.url), 'utf8'),
   ])
 
   assert.equal((itemSource.match(/<button\b/g) ?? []).length, 1)
@@ -2171,14 +2180,9 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(sectionsSource.includes(`export type OriginalNotificationView = 'system'`))
   assert.equal(sectionsSource.includes(`| 'settings'`), false)
 
-  const settingsButtonSource = navigationSource.slice(
-    navigationSource.indexOf('notifications-navigation__settings'),
-    navigationSource.indexOf('</nav>'),
-  )
-  assert.ok(settingsButtonSource.includes(`emit('openSettings')`))
-  assert.equal(settingsButtonSource.includes('aria-current'), false)
-  assert.equal(settingsButtonSource.includes('update:modelValue'), false)
-  assert.ok(navigationSource.includes('margin-top: auto'))
+  assert.equal(navigationSource.includes('openSettings'), false)
+  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
+  assert.equal(notificationsSource.includes('@open-settings'), false)
   assert.ok(routeSource.includes(`settings: 'config'`))
   assert.ok(routeSource.includes(`view: 'whisper'`))
   assert.ok(routeSource.includes('openMessageSettings: true'))
@@ -2190,6 +2194,8 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(settingsSource.includes('navigationRequest'))
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   assert.ok(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+  assert.ok(settingsCategorySource.includes('color: var(--bew-theme-color)'))
+  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color-10)'))
 
   assert.ok(workspaceSource.includes('background: var(--bew-content-alt)'))
   assert.ok(workspaceSource.includes('background: transparent'))
