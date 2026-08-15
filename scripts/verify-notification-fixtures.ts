@@ -641,10 +641,10 @@ verify('MID change clears all states and rejects old account responses', async (
 })
 
 verify('invalid notificationView values safely fall back to whisper', () => {
-  for (const value of ['', 'unknown', 'toString', 'constructor', '__proto__', '**proto**', 'valueOf']) {
+  for (const value of ['', 'unknown', 'settings', 'toString', 'constructor', '__proto__', '**proto**', 'valueOf']) {
     assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${encodeURIComponent(value)}`), 'whisper')
   }
-  for (const value of ['whisper', 'reply', 'at', 'love', 'system', 'settings']) {
+  for (const value of ['whisper', 'reply', 'at', 'love', 'system']) {
     assert.equal(parseNotificationView(`https://www.bilibili.com/?notificationView=${value}`), value)
   }
   assert.equal(parseNotificationView('not a valid absolute URL'), 'whisper')

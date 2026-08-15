@@ -17,6 +17,7 @@ import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { setIframePageActive } from '~/logic/iframePageState'
+import { openSettingById } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -76,6 +77,15 @@ function toggleSettings(origin: DOMRect) {
     '--bew-settings-leave-y': `${enterY * 0.35}px`,
   }
   showSettings.value = true
+}
+
+function openMessagesSettings(origin?: DOMRect) {
+  sessionStorage.setItem('bewly-settings-active-menu', 'BewlyPages')
+  sessionStorage.setItem('bewly-settings-bewly-pages-page', 'messages')
+  if (!showSettings.value) {
+    toggleSettings(origin ?? new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
+  }
+  void nextTick(() => openSettingById('messages.autoMarkRead'))
 }
 
 interface ConfirmDialogRequest {
@@ -808,6 +818,7 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   setActiveDrawer,
   getDockPageHref,
   navigateToDockPage,
+  openMessagesSettings,
 })
 
 let isCleaningUrl = false

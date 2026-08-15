@@ -106,7 +106,29 @@ settings:
   category_navigation_search_desc: 配置搜索页外观、搜索建议、历史、热搜与结果页。
   category_navigation_moments_desc: 配置插件动态页的左侧组件和动态卡片打开方式。
   category_navigation_playback_page_desc: 为播放页后续设置预留独立配置区域。
-  category_navigation_messages_page_desc: 为消息页后续设置预留独立配置区域。
+  category_navigation_messages_page_desc: 配置私信阅读、会话列表、内存与移动端行为。
+  messages_reading_behavior: 阅读行为
+  messages_auto_mark_read: 自动标记已读
+  messages_auto_mark_read_desc: 位于当前会话最新消息区域时，自动提交已读状态。
+  messages_follow_new: 位于底部时自动跟随新消息
+  messages_follow_new_desc: 阅读最新消息时，刷新后保持在会话底部。
+  messages_auto_load_images: 自动加载私信图片
+  messages_auto_load_images_desc: 关闭后需要点击图片占位区域才会加载远端图片。
+  messages_conversation_list: 会话列表
+  messages_show_official_assistants: 显示官方助手
+  messages_density: 消息密度
+  messages_density_comfortable: 舒适
+  messages_density_compact: 紧凑
+  messages_memory: 内存
+  messages_max_cached_conversations: 最大缓存会话数
+  messages_max_messages_per_conversation: 每个会话最大缓存消息数
+  messages_mobile: 移动端
+  messages_mobile_open_mode: 打开消息页时
+  messages_mobile_open_list: 总是显示会话列表
+  messages_mobile_open_last: 恢复上次会话
+  messages_server_settings: Bilibili 服务端设置
+  messages_server_settings_desc: Bilibili 服务端消息设置仍由原版页面管理。
+  messages_original_settings: 在原版中管理
   category_playback_player_desc: 配置播放器模式、滚动行为、弹幕、字幕和播放状态。
   category_playback_autoplay_desc: 配置自动连播与自定义播放行为。
   category_bilibili_comments_desc: 增强评论区的用户信息与内容显示。
@@ -853,6 +875,7 @@ notifications:
     refresh_tooltip: 重新加载当前消息分类
     retry: 重试
     open_original: 在原版中打开
+    open_message_settings: 消息设置
     open_original_aria: 在哔哩哔哩原版中打开{section}
     open_original_tooltip: 使用哔哩哔哩原版消息页打开
   sections:
@@ -871,9 +894,6 @@ notifications:
     system:
       label: 系统通知
       description: 使用哔哩哔哩原版查看系统通知
-    settings:
-      label: 消息设置
-      description: 使用哔哩哔哩原版管理消息设置
   whisper:
     loading: 正在加载私信会话
     profile_pending: 正在确认账号

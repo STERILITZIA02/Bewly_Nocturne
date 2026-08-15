@@ -111,6 +111,8 @@ function scrollToLatest(behavior: ScrollBehavior = 'auto') {
 }
 
 async function acknowledgeIfEligible() {
+  if (!settings.value.autoMarkPrivateMessagesRead)
+    return
   await nextTick()
   await props.controller.acknowledgeIfEligible(props.session.talkerId, {
     atLatest: isAtLatest(),
@@ -140,10 +142,18 @@ async function loadOlderMessages() {
 }
 
 async function refreshLatest(options: { forceBottom?: boolean } = {}) {
-  const wasAtLatest = options.forceBottom || isAtLatest()
+  const wasAtLatest = isAtLatest()
+  const shouldFollow = options.forceBottom
+    || (settings.value.followNewPrivateMessages && wasAtLatest)
+  if (wasAtLatest && !shouldFollow) {
+    props.controller.updateViewport(props.session.talkerId, {
+      atLatest: false,
+      scrollTop: messageScrollRef.value?.scrollTop ?? state.value.scrollTop,
+    })
+  }
   await props.controller.refreshLatest(props.session.talkerId)
   await nextTick()
-  if (wasAtLatest)
+  if (shouldFollow)
     scrollToLatest()
   else
     saveViewportState()
@@ -234,6 +244,7 @@ defineExpose({
 <template>
   <section
     class="conversation-view"
+    :class="{ 'conversation-view--compact': settings.privateMessageDensity === 'compact' }"
     :aria-label="t('notifications.whisper.messages.timeline_aria', { name: session.name })"
     @keydown.esc="handleEscape"
   >
@@ -517,6 +528,16 @@ defineExpose({
 .conversation-view__timeline {
   display: grid;
   gap: var(--bew-space-3);
+}
+
+.conversation-view--compact .conversation-view__messages {
+  padding-right: var(--bew-space-3);
+  padding-bottom: var(--bew-space-3);
+  padding-left: var(--bew-space-3);
+}
+
+.conversation-view--compact .conversation-view__timeline {
+  gap: var(--bew-space-2);
 }
 
 .conversation-view__state {

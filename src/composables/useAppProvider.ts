@@ -43,6 +43,7 @@ export interface BewlyAppProvider {
   setActiveDrawer: (drawer: DrawerType) => void
   getDockPageHref: (page: AppPage) => string
   navigateToDockPage: (page: AppPage) => void
+  openMessagesSettings: (origin?: DOMRect) => void
 }
 
 export function useBewlyApp(): BewlyAppProvider {

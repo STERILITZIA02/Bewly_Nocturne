@@ -106,7 +106,29 @@ settings:
   category_navigation_search_desc: Configure search appearance, suggestions, history, trending, and results.
   category_navigation_moments_desc: Configure the dynamic feed sidebar and how dynamic cards are opened.
   category_navigation_playback_page_desc: Reserved for future playback page settings.
-  category_navigation_messages_page_desc: Reserved for future messages page settings.
+  category_navigation_messages_page_desc: Configure direct-message reading, conversation lists, memory, and mobile behavior.
+  messages_reading_behavior: Reading behavior
+  messages_auto_mark_read: Mark messages as read automatically
+  messages_auto_mark_read_desc: Submit read state automatically while viewing the latest part of the active conversation.
+  messages_follow_new: Follow new messages while at the bottom
+  messages_follow_new_desc: Stay at the conversation bottom after refreshing while reading the latest messages.
+  messages_auto_load_images: Load direct-message images automatically
+  messages_auto_load_images_desc: When disabled, remote images load only after selecting their placeholder.
+  messages_conversation_list: Conversation list
+  messages_show_official_assistants: Show official assistants
+  messages_density: Message density
+  messages_density_comfortable: Comfortable
+  messages_density_compact: Compact
+  messages_memory: Memory
+  messages_max_cached_conversations: Maximum cached conversations
+  messages_max_messages_per_conversation: Maximum cached messages per conversation
+  messages_mobile: Mobile
+  messages_mobile_open_mode: When opening Messages
+  messages_mobile_open_list: Always show the conversation list
+  messages_mobile_open_last: Restore the last conversation
+  messages_server_settings: Bilibili server settings
+  messages_server_settings_desc: Bilibili server-side message settings remain managed by the original page.
+  messages_original_settings: Manage in original Bilibili
   category_playback_player_desc: Configure player mode, scrolling, danmaku, captions, and playback state.
   category_playback_autoplay_desc: Configure autoplay and custom playback behavior.
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
@@ -906,6 +928,7 @@ notifications:
     refresh_tooltip: Reload the current message category
     retry: Retry
     open_original: Open original
+    open_message_settings: Message settings
     open_original_aria: Open {section} in original Bilibili messages
     open_original_tooltip: Open with the original Bilibili messages page
   sections:
@@ -924,9 +947,6 @@ notifications:
     system:
       label: System
       description: Use original Bilibili to view system notifications
-    settings:
-      label: Message settings
-      description: Manage message settings with original Bilibili
   whisper:
     loading: Loading direct-message conversations
     profile_pending: Confirming your account

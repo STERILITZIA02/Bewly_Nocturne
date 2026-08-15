@@ -7,6 +7,7 @@ import {
 
 const BEWLY_NOTIFICATION_ORIGIN = 'https://www.bilibili.com/'
 const ORIGINAL_NOTIFICATION_ORIGIN = 'https://message.bilibili.com/'
+export const ORIGINAL_MESSAGE_SETTINGS_URL = `${ORIGINAL_NOTIFICATION_ORIGIN}#/config`
 
 export function parseNotificationView(url: string | URL): NotificationView {
   try {

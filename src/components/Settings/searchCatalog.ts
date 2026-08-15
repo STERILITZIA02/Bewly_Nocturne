@@ -105,6 +105,12 @@ const searchPageRoute: SearchRoute = {
   secondaryTitleKey: 'settings.plugin.search',
   storageKey: bewlyPagesStorageKey,
 }
+const messagesPageRoute: SearchRoute = {
+  menu: MenuType.BewlyPages,
+  secondaryPage: 'messages',
+  secondaryTitleKey: 'settings.plugin.messages_page',
+  storageKey: bewlyPagesStorageKey,
+}
 const playerRoute: SearchRoute = {
   menu: MenuType.Bilibili,
   secondaryPage: 'player',
@@ -188,6 +194,25 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ...createEntries(homeRoute, [
     'settings.menu_bewly_pages',
   ], { targetTitleKey: 'settings.plugin.home' }),
+  ...createEntries(messagesPageRoute, [
+    'settings.messages_auto_mark_read',
+    'settings.messages_follow_new',
+    'settings.messages_auto_load_images',
+    'settings.messages_show_official_assistants',
+    'settings.messages_density',
+    'settings.messages_max_cached_conversations',
+    'settings.messages_max_messages_per_conversation',
+    'settings.messages_mobile_open_mode',
+    'settings.messages_original_settings',
+  ], {
+    keywordKeys: [
+      'settings.plugin.messages_page',
+      'settings.messages_reading_behavior',
+      'settings.messages_conversation_list',
+      'settings.messages_memory',
+      'settings.messages_server_settings',
+    ],
+  }),
   ...createEntries(videoCardRoute, [
     'settings.menu_bewly_components',
   ], { targetTitleKey: 'settings.plugin.video_card' }),

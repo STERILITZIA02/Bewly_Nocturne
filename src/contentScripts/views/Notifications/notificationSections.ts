@@ -4,16 +4,14 @@ export type NotificationView
     | 'at'
     | 'love'
     | 'system'
-    | 'settings'
 
 export type NativeNotificationSection = 'reply' | 'at' | 'love'
 export type HybridNotificationView = 'whisper'
-export type OriginalOnlyNotificationView = 'system' | 'settings'
+export type OriginalOnlyNotificationView = 'system'
 
 export type OriginalNotificationView
   = | 'whisper'
     | 'system'
-    | 'settings'
 
 export type NotificationSectionImplementation = 'native' | 'original' | 'hybrid'
 export type NotificationSectionLayout = 'document' | 'workspace'
@@ -80,16 +78,6 @@ export const NOTIFICATION_SECTIONS = [
     originalHash: 'system',
     unreadSource: 'system',
   },
-  {
-    id: 'settings',
-    implementation: 'original',
-    layout: 'workspace',
-    labelKey: 'notifications.sections.settings.label',
-    descriptionKey: 'notifications.sections.settings.description',
-    icon: 'i-solar:settings-bold-duotone',
-    originalHash: 'config',
-    unreadSource: null,
-  },
 ] as const satisfies readonly NotificationSectionDefinition[]
 
 export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
@@ -99,8 +87,8 @@ export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
 const NOTIFICATION_VIEW_SET = new Set<NotificationView>(
   NOTIFICATION_SECTIONS.map(section => section.id),
 )
-const ORIGINAL_FRAME_VIEW_SET = new Set<OriginalNotificationView>(['whisper', 'system', 'settings'])
-const ORIGINAL_ONLY_VIEW_SET = new Set<OriginalOnlyNotificationView>(['system', 'settings'])
+const ORIGINAL_FRAME_VIEW_SET = new Set<OriginalNotificationView>(['whisper', 'system'])
+const ORIGINAL_ONLY_VIEW_SET = new Set<OriginalOnlyNotificationView>(['system'])
 
 export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
   section => section.unreadSource !== null,

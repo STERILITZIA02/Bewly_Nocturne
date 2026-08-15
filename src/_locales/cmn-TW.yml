@@ -106,7 +106,29 @@ settings:
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋與結果頁。
   category_navigation_moments_desc: 設定插件動態頁的左側元件和動態卡片開啟方式。
   category_navigation_playback_page_desc: 為播放頁後續設定預留獨立配置區域。
-  category_navigation_messages_page_desc: 為訊息頁後續設定預留獨立配置區域。
+  category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體與行動版行為。
+  messages_reading_behavior: 閱讀行為
+  messages_auto_mark_read: 自動標記已讀
+  messages_auto_mark_read_desc: 位於目前會話最新訊息區域時，自動提交已讀狀態。
+  messages_follow_new: 位於底部時自動跟隨新訊息
+  messages_follow_new_desc: 閱讀最新訊息時，重新整理後保持在會話底部。
+  messages_auto_load_images: 自動載入私訊圖片
+  messages_auto_load_images_desc: 關閉後需要點選圖片預留區域才會載入遠端圖片。
+  messages_conversation_list: 會話列表
+  messages_show_official_assistants: 顯示官方助手
+  messages_density: 訊息密度
+  messages_density_comfortable: 舒適
+  messages_density_compact: 緊湊
+  messages_memory: 記憶體
+  messages_max_cached_conversations: 最大快取會話數
+  messages_max_messages_per_conversation: 每個會話最大快取訊息數
+  messages_mobile: 行動版
+  messages_mobile_open_mode: 開啟訊息頁時
+  messages_mobile_open_list: 永遠顯示會話列表
+  messages_mobile_open_last: 恢復上次會話
+  messages_server_settings: Bilibili 服務端設定
+  messages_server_settings_desc: Bilibili 服務端訊息設定仍由原版頁面管理。
+  messages_original_settings: 在原版中管理
   category_playback_player_desc: 設定播放器模式、捲動行為、彈幕、字幕和播放狀態。
   category_playback_autoplay_desc: 設定自動連播與自訂播放行為。
   category_bilibili_comments_desc: 增強留言區的使用者資訊與內容顯示。
@@ -854,6 +876,7 @@ notifications:
     refresh_tooltip: 重新載入目前訊息分類
     retry: 重試
     open_original: 在原版中開啟
+    open_message_settings: 訊息設定
     open_original_aria: 在嗶哩嗶哩原版中開啟{section}
     open_original_tooltip: 使用嗶哩嗶哩原版訊息頁開啟
   sections:
@@ -872,9 +895,6 @@ notifications:
     system:
       label: 系統通知
       description: 使用嗶哩嗶哩原版查看系統通知
-    settings:
-      label: 訊息設定
-      description: 使用嗶哩嗶哩原版管理訊息設定
   whisper:
     loading: 正在載入私訊會話
     profile_pending: 正在確認帳號

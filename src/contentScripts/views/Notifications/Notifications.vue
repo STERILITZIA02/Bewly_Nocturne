@@ -3,8 +3,9 @@ import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useRouteState } from '~/composables/useRouteState'
+import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { AppPage } from '~/enums/appEnums'
-import { settings } from '~/logic'
+import { localSettings, settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF } from '~/utils/main'
@@ -57,7 +58,7 @@ interface WhisperWorkspaceExposed {
 const PRIVATE_CONVERSATION_HISTORY_STATE_KEY = 'bewlyPrivateConversationEntry'
 
 const { t } = useI18n()
-const { activatedPage, handlePageRefresh, scrollViewportRef } = useBewlyApp()
+const { activatedPage, handlePageRefresh, openMessagesSettings, scrollViewportRef } = useBewlyApp()
 const routeState = useRouteState()
 const topBarStore = useTopBarStore()
 
@@ -66,6 +67,7 @@ const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
 const pendingPrivateConversationRoute = ref<PrivateConversationRoute | null>(null)
+const privateConversationRestoreAttempted = ref(false)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
 const privateSessions = usePrivateSessions(currentMid, {
@@ -114,6 +116,64 @@ function replacePrivateConversationUrl(url: string) {
     window.history.replaceState(window.history.state, '', url)
 }
 
+function isMobileWhisperLayout(): boolean {
+  return window.matchMedia(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`).matches
+}
+
+function rememberPrivateConversation(route: PrivateConversationRoute) {
+  if (!currentMid.value)
+    return
+  localSettings.value.lastPrivateConversationRoute = {
+    mid: currentMid.value,
+    talkerId: route.talkerId,
+    sessionType: route.sessionType,
+  }
+}
+
+function maybeRestoreLastPrivateConversation() {
+  if (
+    privateConversationRestoreAttempted.value
+    || currentView.value !== 'whisper'
+    || accountState.value !== 'ready'
+    || !privateSessions.state.loaded
+  ) {
+    return
+  }
+
+  if (
+    settings.value.privateMessageMobileOpenMode !== 'last-conversation'
+    || !isMobileWhisperLayout()
+  ) {
+    privateConversationRestoreAttempted.value = true
+    return
+  }
+
+  const savedRoute = localSettings.value.lastPrivateConversationRoute
+  if (!savedRoute || savedRoute.mid !== currentMid.value) {
+    privateConversationRestoreAttempted.value = true
+    return
+  }
+
+  const sessionKey = `${savedRoute.sessionType}:${savedRoute.talkerId}`
+  const session = privateSessions.state.items.find(item => item.key === sessionKey)
+  if (!session) {
+    if (privateSessions.state.noMore)
+      privateConversationRestoreAttempted.value = true
+    return
+  }
+
+  privateConversationRestoreAttempted.value = true
+  if (!session.capabilities.canReadNative || session.sessionType !== 1)
+    return
+  const route: PrivateConversationRoute = {
+    talkerId: session.talkerId,
+    sessionType: 1,
+  }
+  pendingPrivateConversationRoute.value = route
+  privateSessions.selectSession(session)
+  replacePrivateConversationUrl(buildPrivateConversationUrl(route))
+}
+
 function applyPendingPrivateConversationRoute() {
   const route = pendingPrivateConversationRoute.value
   if (!route || currentView.value !== 'whisper')
@@ -157,8 +217,11 @@ function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
     privateSessions.clearSelectedSession()
     if (hasPrivateConversationRouteParams(url))
       replacePrivateConversationUrl(clearPrivateConversationRoute(url))
+    void nextTick(maybeRestoreLastPrivateConversation)
     return
   }
+
+  privateConversationRestoreAttempted.value = true
 
   const expectedSessionKey = `${route.sessionType}:${route.talkerId}`
   if (
@@ -183,6 +246,7 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   const isCurrentSelection = privateSessions.selectedSessionKey.value === session.key
   pendingPrivateConversationRoute.value = route
   privateSessions.selectSession(session)
+  rememberPrivateConversation(route)
   if (
     isCurrentSelection
     && currentRoute?.talkerId === route.talkerId
@@ -235,6 +299,10 @@ function syncViewFromRoute(href: string) {
   const requestedView = url.searchParams.get('notificationView')
   const nextView = parseNotificationView(url)
   currentView.value = nextView
+  if (requestedView === 'settings') {
+    privateConversationRestoreAttempted.value = true
+    openMessagesSettings()
+  }
   if (!isNotificationView(requestedView)) {
     pendingPrivateConversationRoute.value = null
     privateSessions.clearSelectedSession()
@@ -249,7 +317,16 @@ function selectView(view: NotificationView) {
     return
 
   currentView.value = view
+  if (view === 'whisper')
+    privateConversationRestoreAttempted.value = false
   window.history.pushState(window.history.state, '', buildBewlyNotificationUrl(view))
+}
+
+function handleOpenMessagesSettings(event: MouseEvent) {
+  const origin = event.currentTarget instanceof Element
+    ? event.currentTarget.getBoundingClientRect()
+    : undefined
+  openMessagesSettings(origin)
 }
 
 function resetOuterScrollForWorkspaceView(view: NotificationView) {
@@ -323,6 +400,7 @@ function activatePage() {
     return
 
   isPageActive.value = true
+  privateConversationRestoreAttempted.value = false
   syncViewFromRoute(window.location.href)
   registerRefreshHandler()
 }
@@ -338,11 +416,15 @@ function deactivatePage() {
 
 watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
 watch(currentView, resetOuterScrollForWorkspaceView)
-watch(() => privateSessions.state.items, applyPendingPrivateConversationRoute)
+watch(() => privateSessions.state.items, () => {
+  applyPendingPrivateConversationRoute()
+  maybeRestoreLastPrivateConversation()
+})
 watch(currentMid, (nextMid, previousMid) => {
   if (!previousMid || nextMid === previousMid)
     return
   pendingPrivateConversationRoute.value = null
+  privateConversationRestoreAttempted.value = false
   privateSessions.clearSelectedSession()
   if (currentView.value === 'whisper')
     replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
@@ -381,7 +463,11 @@ onBeforeUnmount(() => {
     <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
 
     <div class="notifications-page__workspace">
-      <NotificationsNavigation :model-value="currentView" @update:model-value="selectView" />
+      <NotificationsNavigation
+        :model-value="currentView"
+        @open-settings="handleOpenMessagesSettings"
+        @update:model-value="selectView"
+      />
 
       <section class="notifications-page__outlet">
         <WhisperWorkspace

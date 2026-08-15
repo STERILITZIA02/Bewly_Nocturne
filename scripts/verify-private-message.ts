@@ -198,8 +198,8 @@ verify('invalid private conversation route values safely fall back to the list r
   assert.equal(privateConversationRoute.parsePrivateConversationRoute('not a valid absolute URL'), null)
 })
 
-verify('settings original frame cannot mutate unread state', ({ notificationSections }) => {
-  assert.equal(notificationSections.canOriginalNotificationMutateUnread('settings'), false)
+verify('settings is no longer a notification section while unread-capable frames stay explicit', ({ notificationSections }) => {
+  assert.equal(notificationSections.isNotificationView('settings'), false)
   assert.equal(notificationSections.canOriginalNotificationMutateUnread('whisper'), true)
   assert.equal(notificationSections.canOriginalNotificationMutateUnread('system'), true)
 })
@@ -1196,7 +1196,7 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
   assert.equal(notificationSections.isOriginalFrameCapableView('whisper'), true)
   assert.equal(notificationSections.isOriginalOnlyNotificationView('whisper'), false)
-  assert.equal(notificationSections.isOriginalOnlyNotificationView('settings'), true)
+  assert.equal(notificationSections.isNotificationView('settings'), false)
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.reply.layout, 'document')
 
   const notificationsSource = await readFile(
@@ -1948,6 +1948,75 @@ verify('readonly history restores stable message anchors and gates received imag
   for (const localeSource of localeSources) {
     assert.ok(localeSource.includes('click_load_image:'))
     assert.ok(localeSource.includes('image_load_failed:'))
+  }
+})
+
+verify('message settings live in the global Bewly settings page and the old section redirects once', async () => {
+  const [
+    messagesPageSource,
+    navigationSource,
+    notificationsSource,
+    sectionsSource,
+    routeSource,
+    searchSource,
+    storageSource,
+    appProviderSource,
+    conversationSource,
+    workspaceSource,
+    conversationListSource,
+    ...localeSources
+  ] = await Promise.all([
+    readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsNavigation.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/utils/notificationRoute.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Settings/searchCatalog.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/logic/storage.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/composables/useAppProvider.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    ...['cmn-CN', 'cmn-TW', 'en', 'jyut'].map(locale => (
+      readFile(new URL(`../src/_locales/${locale}.yml`, import.meta.url), 'utf8')
+    )),
+  ])
+
+  assert.equal(sectionsSource.includes(`| 'settings'`), false)
+  assert.equal(sectionsSource.includes(`id: 'settings'`), false)
+  assert.equal(routeSource.includes(`buildOriginalNotificationUrl('settings')`), false)
+  assert.ok(routeSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+  assert.ok(notificationsSource.includes(`requestedView === 'settings'`))
+  assert.ok(notificationsSource.includes('openMessagesSettings'))
+  assert.ok(navigationSource.includes(`emit('openSettings'`))
+  assert.ok(appProviderSource.includes('openMessagesSettings'))
+  for (const setting of [
+    'autoMarkPrivateMessagesRead',
+    'followNewPrivateMessages',
+    'autoLoadPrivateMessageImages',
+    'showOfficialPrivateAssistants',
+    'privateMessageDensity',
+    'maxPrivateMessagesPerConversation',
+    'maxCachedPrivateConversations',
+    'privateMessageMobileOpenMode',
+  ]) {
+    assert.ok(messagesPageSource.includes(`settings.${setting}`), setting)
+    assert.ok(storageSource.includes(`${setting}:`), setting)
+  }
+  assert.ok(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+  assert.ok(searchSource.includes(`secondaryPage: 'messages'`))
+  assert.ok(searchSource.includes('settings.messages_auto_mark_read'))
+  assert.ok(conversationSource.includes('settings.value.autoMarkPrivateMessagesRead'))
+  assert.ok(conversationSource.includes('settings.value.followNewPrivateMessages'))
+  assert.ok(workspaceSource.includes('settings.showOfficialPrivateAssistants'))
+  assert.ok(workspaceSource.includes('settings.privateMessageDensity'))
+  assert.ok(conversationListSource.includes('showOfficialAssistants'))
+  assert.ok(conversationListSource.includes('conversation-list--compact'))
+  assert.ok(notificationsSource.includes('lastPrivateConversationRoute'))
+  assert.ok(notificationsSource.includes('privateMessageMobileOpenMode'))
+  for (const localeSource of localeSources) {
+    assert.ok(localeSource.includes('messages_auto_mark_read:'))
+    assert.ok(localeSource.includes('messages_original_settings:'))
   }
 })
 

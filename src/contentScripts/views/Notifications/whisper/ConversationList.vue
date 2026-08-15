@@ -10,12 +10,15 @@ import type {
 import { filterPrivateSessions } from './privateSession'
 
 const props = defineProps<{
+  active: boolean
+  compact: boolean
   items: DisplayPrivateSession[]
   loadingMore: boolean
   noMore: boolean
   paginationStalled: boolean
   loadMoreFailed: boolean
   selectedSessionKey: string
+  showOfficialAssistants: boolean
 }>()
 
 const emit = defineEmits<{
@@ -35,14 +38,18 @@ const sentinelRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 let observerGeneration = 0
 
-const filteredItems = computed(() => filterPrivateSessions(props.items, {
+const visibleItems = computed(() => props.showOfficialAssistants
+  ? props.items
+  : props.items.filter(item => item.kind !== 'official-assistant'))
+const filteredItems = computed(() => filterPrivateSessions(visibleItems.value, {
   filter: filter.value,
   typeFilter: typeFilter.value,
   query: query.value,
 }))
 
 const canAutoLoad = computed(() => (
-  filter.value === 'all'
+  props.active
+  && filter.value === 'all'
   && typeFilter.value === 'all'
   && !query.value.trim()
   && !props.loadingMore
@@ -136,7 +143,11 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
 </script>
 
 <template>
-  <section class="conversation-list" :aria-label="t('notifications.whisper.list_aria')">
+  <section
+    class="conversation-list"
+    :class="{ 'conversation-list--compact': compact }"
+    :aria-label="t('notifications.whisper.list_aria')"
+  >
     <div class="conversation-list__tools">
       <div class="conversation-list__search">
         <i i-mingcute:search-line aria-hidden="true" />
@@ -197,6 +208,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
       <ConversationListItem
         v-for="session in filteredItems"
         :key="session.key"
+        :compact="compact"
         :session="session"
         :selected="selectedSessionKey === session.key"
         @select="emit('select', $event)"
@@ -215,7 +227,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
       </div>
     </div>
     <div v-else class="conversation-list__empty">
-      <Empty :description="items.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty')" />
+      <Empty :description="visibleItems.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty')" />
     </div>
   </section>
 </template>

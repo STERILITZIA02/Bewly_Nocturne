@@ -7,6 +7,7 @@ import type { DisplayPrivateSession } from './privateSession'
 import { normalizePrivateSessionLocale } from './privateSession'
 
 const props = defineProps<{
+  compact?: boolean
   selected: boolean
   session: DisplayPrivateSession
 }>()
@@ -50,6 +51,7 @@ watch(() => props.session.avatar, () => {
   <ALink
     v-if="!usesNativeConversation"
     class="conversation-list-item bew-shape-smooth-rect"
+    :class="{ 'conversation-list-item--compact': compact }"
     :data-session-key="session.key"
     :href="originalUrl"
     type="content"
@@ -83,7 +85,10 @@ watch(() => props.session.avatar, () => {
     type="button"
     class="conversation-list-item bew-shape-smooth-rect"
     :data-session-key="session.key"
-    :class="{ 'conversation-list-item--selected': selected }"
+    :class="{
+      'conversation-list-item--compact': compact,
+      'conversation-list-item--selected': selected,
+    }"
     :aria-current="selected ? 'true' : undefined"
     :aria-label="t('notifications.whisper.select_conversation', { name: displayName })"
     @click="emit('select', session)"
@@ -164,6 +169,10 @@ watch(() => props.session.avatar, () => {
 
 .conversation-list-item--selected {
   background: var(--bew-theme-color-10);
+}
+
+.conversation-list-item--compact {
+  padding: var(--bew-space-2) var(--bew-space-3);
 }
 
 .conversation-list-item__avatar-wrap,

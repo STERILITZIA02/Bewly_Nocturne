@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
@@ -197,12 +198,15 @@ defineExpose({ refresh })
         </div>
         <ConversationList
           ref="conversationListRef"
+          :active="active"
+          :compact="settings.privateMessageDensity === 'compact'"
           :items="controller.state.items"
           :loading-more="controller.state.loadingMore"
           :no-more="controller.state.noMore"
           :pagination-stalled="controller.state.paginationStalled"
           :load-more-failed="controller.state.failedOperation === 'load-more'"
           :selected-session-key="controller.selectedSessionKey.value"
+          :show-official-assistants="settings.showOfficialPrivateAssistants"
           @load-more="controller.loadMore()"
           @retry-load-more="controller.loadMore({ retry: true })"
           @select="selectSession"
