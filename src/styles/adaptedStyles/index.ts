@@ -16,12 +16,23 @@ async function setupStyles() {
 
   // notifications page 消息页
   else if (/https?:\/\/message\.bilibili\.com\.*/.test(currentUrl)) {
-    await import('./pages/notificationsPage.scss')
     document.documentElement.classList.add('notificationsPage')
 
-    if (isInIframe() && settings.value.openNotificationsPageAsDrawer) {
+    const isEmbeddedNotificationsPage = isInIframe()
+      && window.name === 'bewly-notifications-page'
+    if (isEmbeddedNotificationsPage) {
+      document.documentElement.classList.add('bewly-notifications-embedded')
+      document.documentElement.classList.add('remove-top-bar-without-placeholder')
+    }
+    else if (
+      window.name === 'bewly-notifications-drawer'
+      && isInIframe()
+      && settings.value.openNotificationsPageAsDrawer
+    ) {
       document.documentElement.classList.add('drawer')
     }
+
+    await import('./pages/notificationsPage.scss')
   }
 
   // moments page, new articles page 动态页, 新版专栏页

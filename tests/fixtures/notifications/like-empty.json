@@ -1,0 +1,19 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "latest": {
+      "items": [],
+      "last_view_at": 1754904000
+    },
+    "total": {
+      "cursor": {
+        "id": "0",
+        "time": 0,
+        "is_end": true
+      },
+      "items": []
+    }
+  }
+}

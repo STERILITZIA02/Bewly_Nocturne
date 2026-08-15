@@ -106,7 +106,30 @@ settings:
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋同結果頁。
   category_navigation_moments_desc: 設定插件動態頁左邊嘅元件同動態卡片開啟方式。
   category_navigation_playback_page_desc: 預留獨立區域當以後加入播放頁設定。
-  category_navigation_messages_page_desc: 預留獨立區域當以後加入訊息頁設定。
+  category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體同流動版行為。
+  messages_reading_behavior: 閱讀行為
+  messages_auto_mark_read: 自動標記已讀
+  messages_auto_mark_read_desc: 睇緊目前會話最新訊息嗰陣，自動提交已讀狀態。
+  messages_follow_new: 喺底部時自動跟隨新訊息
+  messages_follow_new_desc: 睇緊最新訊息嗰陣，重新整理後保持喺會話底部。
+  messages_auto_load_images: 自動載入私訊圖片
+  messages_auto_load_images_desc: 關閉後要撳圖片預留位置先會載入遠端圖片。
+  messages_conversation_list: 會話列表
+  messages_show_official_assistants: 顯示官方助手
+  messages_density: 訊息密度
+  messages_density_comfortable: 舒適
+  messages_density_compact: 緊湊
+  messages_memory: 記憶體
+  messages_max_cached_conversations: 最大快取會話數
+  messages_max_messages_per_conversation: 每個會話最大快取訊息數
+  messages_mobile: 流動版
+  messages_mobile_open_mode: 打開訊息頁嗰陣
+  messages_mobile_open_list: 總係顯示會話列表
+  messages_mobile_open_last: 恢復上次會話
+  messages_server_settings: Bilibili 服務端設定
+  messages_server_settings_desc: Bilibili 服務端訊息設定仍然由原版頁面管理。
+  messages_original_settings: 原版訊息設定
+  messages_manage_original: 喺原版管理
   category_playback_player_desc: 設定播放器模式、捲動、彈幕、字幕同播放狀態。
   category_playback_autoplay_desc: 設定自動連播同自訂播放行為。
   category_bilibili_comments_desc: 加強留言區嘅用戶資料同內容顯示。
@@ -827,6 +850,170 @@ topbar:
     sticker: 出貼圖
     video: Po 片
     manager: 內容管理
+notifications:
+  document_title: '{section} - 訊息 - 嗶哩嗶哩'
+  navigation_aria: 訊息分類
+  section_aria: 打開{section}
+  unread_count: '{count} 條未讀訊息'
+  original_frame_title: 嗶哩嗶哩原版訊息頁
+  actions:
+    refresh: 重新整理
+    refresh_aria: 重新整理而家嘅訊息分類
+    refresh_tooltip: 重新載入而家嘅訊息分類
+    retry: 再試
+    open_original: 喺原版打開
+    open_original_aria: 喺嗶哩嗶哩原版打開{section}
+    open_original_tooltip: 用嗶哩嗶哩原版訊息頁打開
+  sections:
+    whisper:
+      label: 私訊
+      description: 睇原生會話同唯讀聊天記錄，傳送同未支援會話繼續由原版提供
+    reply:
+      label: 回覆我嘅
+      description: 睇其他人畀你嘅回覆
+    at:
+      label: "{'@'} 我嘅"
+      description: 睇其他人提及你
+    love:
+      label: 收到嘅讚
+      description: 睇其他人畀你內容嘅讚
+    system:
+      label: 系統通知
+      description: 用嗶哩嗶哩原版睇系統通知
+  whisper:
+    loading: 載入緊私訊會話
+    profile_pending: 確認緊帳號
+    list_aria: 私訊會話列表
+    search_placeholder: 搜尋目前已載入會話
+    search_aria: 搜尋已載入嘅私訊會話
+    search_scope: 搜尋同篩選只套用於目前已載入會話
+    loading_more_sessions: 載入緊更早會話
+    earliest_session: 已經去到最早會話
+    load_more_failed: 更早會話載入失敗
+    clear_search: 清除搜尋
+    filters:
+      all: 全部
+      unread: 未讀
+      pinned: 置頂
+    type_filter_label: 會話類型
+    type_filters:
+      all: 全部類型
+      user: 普通會話
+      official-assistant: 官方助手
+      other: 其他會話
+    assistants:
+      streamer-assistant: 主播小助手
+      up-assistant: UP 主小助手
+      payment-assistant: 付款助手
+      customer-service: 客服
+      official-assistant: 官方助手
+    empty: 暫時未有私訊會話
+    empty_filtered: 冇符合條件嘅會話
+    unknown_user: 未知用戶
+    user_fallback: '用戶 {talkerId}'
+    summary_unavailable: 暫時未有訊息摘要
+    select_conversation: 揀同{name}嘅會話
+    select_conversation_empty: 揀一個會話來查看訊息
+    fallback_aria: '{name}嘅原版私訊入口'
+    fallback_description: 呢類會話暫時需要喋原版私訊查看
+    session_kinds:
+      user: 普通會話
+      official-assistant: 官方助手
+      unfollowed-user: 未關注會話
+      intercepted-user: 已攔截會話
+      fan-group: 粉絲團會話
+      system: 系統會話
+      unsupported: 其他會話
+    pinned: 已置頂
+    muted: 已免打擾
+    unread_count: '{count} 條未讀私訊'
+    open_unsupported_original: 喺原版打開同{name}嘅會話
+    open_original_list: 打開原版私訊列表
+    open_profile: 打開{name}嘅個人空間
+    back_to_conversations: 返回會話列表
+    messages:
+      timeline_aria: 同{name}嘅私訊記錄
+      loading: 載入緊聊天記錄
+      empty: 暫時未有聊天記錄
+      load_older: 載入更早訊息
+      history_start: 已經去到聊天記錄起點
+      readonly: 而家私訊頁面係唯讀模式
+      readonly_title: 而家 Bewly 私訊係唯讀模式
+      readonly_description: 傳送訊息或者管理對話請前往原版訊息頁
+      continue_original: 喺原版私訊繼續
+      open_original_header: 喺原版開啟
+      message_sources:
+        auto-reply: 自動回覆
+        fan-group-system: 粉絲團系統提示
+        mutual-follow: 互相關注
+        system: 系統提示
+        ai: AI
+      send_original: 喺原版傳送訊息
+      composer_placeholder: 輸入訊息
+      composer_aria: 私訊文字輸入框
+      composer_hint: Enter 傳送，Shift+Enter 換行
+      send: 傳送
+      sending: 傳送緊
+      reconciling: 同伺服器同步緊
+      send_failed: 傳送失敗
+      retry_send: 再試
+      edit_failed: 編輯
+      delete_failed: 刪除本機失敗項目
+      new_messages: 有新訊息
+      recalled: 訊息已經收回
+      unsupported: 而家個版本暫時未支援呢種訊息
+      preview_image: 預覽圖片
+      image_preview: 私訊圖片預覽
+      image_alt: 私訊圖片
+      click_load_image: 點擊載入圖片
+      image_load_failed: 圖片載入失敗，點擊重試
+      emoticon_alt: 私訊表情
+      picture_card_alt: 私訊分享圖片
+      video_views: '{count} 次播放'
+      image_summary: '[圖片]'
+      select_image: 揀圖片
+      selected_image_alt: 等待傳送嘅私訊圖片
+      image_size_kb: '{size} KB'
+      remove_image: 移除圖片
+      image_preparing: 準備緊圖片
+      image_uploading: 上傳緊圖片
+      image_upload_failed: 圖片上傳失敗
+      image_send_failed: 圖片傳送失敗
+      image_reconcile_failed: 圖片已傳送，等緊伺服器同步
+    errors:
+      login-required: 登入狀態已經失效
+      risk-control: 私訊請求暫時受到限制
+      server-error: 私訊服務暫時用唔到
+      network: 網絡連線失敗
+      invalid-response: 暫時讀唔到私訊資料
+      api-error: 私訊載入失敗，請再試
+      wbi-unavailable: 私訊簽名暫時用唔到
+  native:
+    unknown_user: 未知用戶
+    original_content: 原始內容
+    view_source: 睇原內容
+    loading:
+      reply: 載入緊回覆通知
+      at: 載入緊提及通知
+      love: 載入緊讚好通知
+    empty:
+      reply: 暫時未有回覆通知
+      at: 暫時未有提及通知
+      love: 暫時未有讚好通知
+    actions:
+      reply: 回覆咗你
+      at: 提及咗你
+      love: 讚咗你嘅內容
+      love_multiple: 等總共 {count} 人讚咗你嘅內容
+    more_actors: '+{count}'
+    more_actors_aria: 仲有 {count} 位用戶
+    errors:
+      login-required: 登入狀態已經失效
+      risk-control: 請求暫時受到限制
+      server-error: 服務暫時用唔到
+      network: 網絡連線失敗
+      invalid-response: 暫時讀唔到而家嘅通知
+      api-error: 載入失敗，請再試
 dock:
   search: 搵嘢
   home: 主頁

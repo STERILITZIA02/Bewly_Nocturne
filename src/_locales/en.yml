@@ -106,7 +106,30 @@ settings:
   category_navigation_search_desc: Configure search appearance, suggestions, history, trending, and results.
   category_navigation_moments_desc: Configure the dynamic feed sidebar and how dynamic cards are opened.
   category_navigation_playback_page_desc: Reserved for future playback page settings.
-  category_navigation_messages_page_desc: Reserved for future messages page settings.
+  category_navigation_messages_page_desc: Configure direct-message reading, conversation lists, memory, and mobile behavior.
+  messages_reading_behavior: Reading behavior
+  messages_auto_mark_read: Mark messages as read automatically
+  messages_auto_mark_read_desc: Submit read state automatically while viewing the latest part of the active conversation.
+  messages_follow_new: Follow new messages while at the bottom
+  messages_follow_new_desc: Stay at the conversation bottom after refreshing while reading the latest messages.
+  messages_auto_load_images: Load direct-message images automatically
+  messages_auto_load_images_desc: When disabled, remote images load only after selecting their placeholder.
+  messages_conversation_list: Conversation list
+  messages_show_official_assistants: Show official assistants
+  messages_density: Message density
+  messages_density_comfortable: Comfortable
+  messages_density_compact: Compact
+  messages_memory: Memory
+  messages_max_cached_conversations: Maximum cached conversations
+  messages_max_messages_per_conversation: Maximum cached messages per conversation
+  messages_mobile: Mobile
+  messages_mobile_open_mode: When opening Messages
+  messages_mobile_open_list: Always show the conversation list
+  messages_mobile_open_last: Restore the last conversation
+  messages_server_settings: Bilibili server settings
+  messages_server_settings_desc: Bilibili server-side message settings remain managed by the original page.
+  messages_original_settings: Original Bilibili message settings
+  messages_manage_original: Manage in original Bilibili
   category_playback_player_desc: Configure player mode, scrolling, danmaku, captions, and playback state.
   category_playback_autoplay_desc: Configure autoplay and custom playback behavior.
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
@@ -894,6 +917,170 @@ topbar:
     sticker: Sticker
     video: Video
     manager: Manager
+notifications:
+  document_title: '{section} - Messages - Bilibili'
+  navigation_aria: Message categories
+  section_aria: Open {section}
+  unread_count: '{count} unread messages'
+  original_frame_title: Original Bilibili messages
+  actions:
+    refresh: Refresh
+    refresh_aria: Refresh the current message category
+    refresh_tooltip: Reload the current message category
+    retry: Retry
+    open_original: Open original
+    open_original_aria: Open {section} in original Bilibili messages
+    open_original_tooltip: Open with the original Bilibili messages page
+  sections:
+    whisper:
+      label: Direct messages
+      description: Browse native conversations and read-only history; sending and unsupported chats remain in original Bilibili
+    reply:
+      label: Replies
+      description: See replies to your comments
+    at:
+      label: Mentions
+      description: See when others mention you
+    love:
+      label: Likes
+      description: See likes on your content
+    system:
+      label: System
+      description: Use original Bilibili to view system notifications
+  whisper:
+    loading: Loading direct-message conversations
+    profile_pending: Confirming your account
+    list_aria: Direct-message conversation list
+    search_placeholder: Search loaded conversations
+    search_aria: Search loaded direct-message conversations
+    search_scope: Search and filters only apply to loaded conversations
+    loading_more_sessions: Loading earlier conversations
+    earliest_session: Earliest conversation reached
+    load_more_failed: Earlier conversations failed to load
+    clear_search: Clear search
+    filters:
+      all: All
+      unread: Unread
+      pinned: Pinned
+    type_filter_label: Conversation type
+    type_filters:
+      all: All types
+      user: Regular
+      official-assistant: Official assistants
+      other: Other
+    assistants:
+      streamer-assistant: Streamer assistant
+      up-assistant: Creator assistant
+      payment-assistant: Payment assistant
+      customer-service: Customer service
+      official-assistant: Official assistant
+    empty: No direct-message conversations
+    empty_filtered: No conversations match these filters
+    unknown_user: Unknown user
+    user_fallback: 'User {talkerId}'
+    summary_unavailable: No message preview
+    select_conversation: Select conversation with {name}
+    select_conversation_empty: Select a conversation to view messages
+    fallback_aria: Original direct-message entry for {name}
+    fallback_description: This conversation type currently needs to be viewed in original Bilibili direct messages
+    session_kinds:
+      user: Regular conversation
+      official-assistant: Official assistant
+      unfollowed-user: Unfollowed conversation
+      intercepted-user: Intercepted conversation
+      fan-group: Fan-group conversation
+      system: System conversation
+      unsupported: Other conversation
+    pinned: Pinned
+    muted: Muted
+    unread_count: '{count} unread direct messages'
+    open_unsupported_original: Open conversation with {name} in original Bilibili
+    open_original_list: Open the original direct-message list
+    open_profile: Open {name}'s profile
+    back_to_conversations: Back to conversations
+    messages:
+      timeline_aria: Direct-message history with {name}
+      loading: Loading message history
+      empty: No messages in this conversation
+      load_older: Load earlier messages
+      history_start: Start of message history
+      readonly: Direct messages are currently read-only
+      readonly_title: Bewly direct messages are read-only
+      readonly_description: Use the original message page to send messages or manage conversations
+      continue_original: Continue in original direct messages
+      open_original_header: Open in original
+      message_sources:
+        auto-reply: Automatic reply
+        fan-group-system: Fan-group system notice
+        mutual-follow: Mutual follow
+        system: System notice
+        ai: AI
+      send_original: Send in original Bilibili
+      composer_placeholder: Write a message
+      composer_aria: Direct-message text field
+      composer_hint: Enter to send, Shift+Enter for a new line
+      send: Send
+      sending: Sending
+      reconciling: Syncing with the server
+      send_failed: Failed to send
+      retry_send: Retry
+      edit_failed: Edit
+      delete_failed: Delete local failed message
+      new_messages: New messages
+      recalled: Message recalled
+      unsupported: This message type is not supported yet
+      preview_image: Preview image
+      image_preview: Direct-message image preview
+      image_alt: Direct-message image
+      click_load_image: Click to load image
+      image_load_failed: Image failed to load. Click to retry
+      emoticon_alt: Direct-message sticker
+      picture_card_alt: Shared direct-message image
+      video_views: '{count} views'
+      image_summary: '[Image]'
+      select_image: Choose image
+      selected_image_alt: Direct-message image ready to send
+      image_size_kb: '{size} KB'
+      remove_image: Remove image
+      image_preparing: Preparing image
+      image_uploading: Uploading image
+      image_upload_failed: Image upload failed
+      image_send_failed: Image send failed
+      image_reconcile_failed: Image sent; waiting for server sync
+    errors:
+      login-required: Your sign-in has expired
+      risk-control: Direct-message requests are temporarily restricted
+      server-error: The direct-message service is temporarily unavailable
+      network: Network connection failed
+      invalid-response: Direct-message data is temporarily unavailable
+      api-error: Failed to load direct messages. Try again
+      wbi-unavailable: Direct-message signing is temporarily unavailable
+  native:
+    unknown_user: Unknown user
+    original_content: Original content
+    view_source: View original content
+    loading:
+      reply: Loading reply notifications
+      at: Loading mention notifications
+      love: Loading like notifications
+    empty:
+      reply: No reply notifications
+      at: No mention notifications
+      love: No like notifications
+    actions:
+      reply: replied to you
+      at: mentioned you
+      love: liked your content
+      love_multiple: and {count} people in total liked your content
+    more_actors: '+{count}'
+    more_actors_aria: '{count} more users'
+    errors:
+      login-required: Your sign-in has expired
+      risk-control: Requests are temporarily restricted
+      server-error: The service is temporarily unavailable
+      network: Network connection failed
+      invalid-response: These notifications are temporarily unavailable
+      api-error: Failed to load. Try again
 dock:
   search: Search
   home: Home

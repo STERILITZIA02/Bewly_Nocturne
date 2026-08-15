@@ -106,7 +106,30 @@ settings:
   category_navigation_search_desc: 配置搜索页外观、搜索建议、历史、热搜与结果页。
   category_navigation_moments_desc: 配置插件动态页的左侧组件和动态卡片打开方式。
   category_navigation_playback_page_desc: 为播放页后续设置预留独立配置区域。
-  category_navigation_messages_page_desc: 为消息页后续设置预留独立配置区域。
+  category_navigation_messages_page_desc: 配置私信阅读、会话列表、内存与移动端行为。
+  messages_reading_behavior: 阅读行为
+  messages_auto_mark_read: 自动标记已读
+  messages_auto_mark_read_desc: 位于当前会话最新消息区域时，自动提交已读状态。
+  messages_follow_new: 位于底部时自动跟随新消息
+  messages_follow_new_desc: 阅读最新消息时，刷新后保持在会话底部。
+  messages_auto_load_images: 自动加载私信图片
+  messages_auto_load_images_desc: 关闭后需要点击图片占位区域才会加载远端图片。
+  messages_conversation_list: 会话列表
+  messages_show_official_assistants: 显示官方助手
+  messages_density: 消息密度
+  messages_density_comfortable: 舒适
+  messages_density_compact: 紧凑
+  messages_memory: 内存
+  messages_max_cached_conversations: 最大缓存会话数
+  messages_max_messages_per_conversation: 每个会话最大缓存消息数
+  messages_mobile: 移动端
+  messages_mobile_open_mode: 打开消息页时
+  messages_mobile_open_list: 总是显示会话列表
+  messages_mobile_open_last: 恢复上次会话
+  messages_server_settings: Bilibili 服务端设置
+  messages_server_settings_desc: Bilibili 服务端消息设置仍由原版页面管理。
+  messages_original_settings: 原版消息设置
+  messages_manage_original: 在原版中管理
   category_playback_player_desc: 配置播放器模式、滚动行为、弹幕、字幕和播放状态。
   category_playback_autoplay_desc: 配置自动连播与自定义播放行为。
   category_bilibili_comments_desc: 增强评论区的用户信息与内容显示。
@@ -841,6 +864,170 @@ topbar:
     sticker: 上传贴纸
     video: 上传视频
     manager: 投稿管理
+notifications:
+  document_title: '{section} - 消息 - 哔哩哔哩'
+  navigation_aria: 消息分类
+  section_aria: 打开{section}
+  unread_count: '{count} 条未读消息'
+  original_frame_title: 哔哩哔哩原版消息页
+  actions:
+    refresh: 刷新
+    refresh_aria: 刷新当前消息分类
+    refresh_tooltip: 重新加载当前消息分类
+    retry: 重试
+    open_original: 在原版中打开
+    open_original_aria: 在哔哩哔哩原版中打开{section}
+    open_original_tooltip: 使用哔哩哔哩原版消息页打开
+  sections:
+    whisper:
+      label: 私信
+      description: 查看原生会话与只读聊天记录，发送和未支持会话继续由原版提供
+    reply:
+      label: 回复我的
+      description: 查看别人对你的回复
+    at:
+      label: "{'@'} 我的"
+      description: 查看别人对你的提及
+    love:
+      label: 收到的赞
+      description: 查看别人对你内容的点赞
+    system:
+      label: 系统通知
+      description: 使用哔哩哔哩原版查看系统通知
+  whisper:
+    loading: 正在加载私信会话
+    profile_pending: 正在确认账号
+    list_aria: 私信会话列表
+    search_placeholder: 搜索当前已加载会话
+    search_aria: 搜索已加载的私信会话
+    search_scope: 搜索和筛选仅作用于当前已加载会话
+    loading_more_sessions: 正在加载更早会话
+    earliest_session: 已到最早会话
+    load_more_failed: 更早会话加载失败
+    clear_search: 清除搜索
+    filters:
+      all: 全部
+      unread: 未读
+      pinned: 置顶
+    type_filter_label: 会话类型
+    type_filters:
+      all: 全部类型
+      user: 普通会话
+      official-assistant: 官方助手
+      other: 其他会话
+    assistants:
+      streamer-assistant: 主播小助手
+      up-assistant: UP 主小助手
+      payment-assistant: 支付助手
+      customer-service: 客服
+      official-assistant: 官方助手
+    empty: 暂无私信会话
+    empty_filtered: 没有符合条件的会话
+    unknown_user: 未知用户
+    user_fallback: '用户 {talkerId}'
+    summary_unavailable: 暂无消息摘要
+    select_conversation: 选择与{name}的会话
+    select_conversation_empty: 选择一个会话以查看消息
+    fallback_aria: '{name}的原版私信入口'
+    fallback_description: 此类型会话暂时需要在原版私信中查看
+    session_kinds:
+      user: 普通会话
+      official-assistant: 官方助手
+      unfollowed-user: 未关注会话
+      intercepted-user: 已拦截会话
+      fan-group: 粉丝团会话
+      system: 系统会话
+      unsupported: 其他会话
+    pinned: 已置顶
+    muted: 已免打扰
+    unread_count: '{count} 条未读私信'
+    open_unsupported_original: 在原版中打开与{name}的会话
+    open_original_list: 打开原版私信列表
+    open_profile: 打开{name}的个人空间
+    back_to_conversations: 返回会话列表
+    messages:
+      timeline_aria: 与{name}的私信记录
+      loading: 正在加载聊天记录
+      empty: 暂无聊天记录
+      load_older: 加载更早消息
+      history_start: 已到达聊天记录起点
+      readonly: 当前私信页面为只读模式
+      readonly_title: 当前 Bewly 私信为只读模式
+      readonly_description: 发送消息或管理会话请前往原版消息页
+      continue_original: 在原版私信中继续
+      open_original_header: 在原版中打开
+      message_sources:
+        auto-reply: 自动回复
+        fan-group-system: 粉丝团系统提示
+        mutual-follow: 互相关注
+        system: 系统提示
+        ai: AI
+      send_original: 在原版中发送消息
+      composer_placeholder: 输入消息
+      composer_aria: 私信文本输入框
+      composer_hint: Enter 发送，Shift+Enter 换行
+      send: 发送
+      sending: 发送中
+      reconciling: 正在与服务端同步
+      send_failed: 发送失败
+      retry_send: 重试
+      edit_failed: 编辑
+      delete_failed: 删除本地失败项
+      new_messages: 有新消息
+      recalled: 消息已撤回
+      unsupported: 当前版本暂未支持此消息
+      preview_image: 预览图片
+      image_preview: 私信图片预览
+      image_alt: 私信图片
+      click_load_image: 点击加载图片
+      image_load_failed: 图片加载失败，点击重试
+      emoticon_alt: 私信表情
+      picture_card_alt: 私信分享图片
+      video_views: '{count} 次播放'
+      image_summary: '[图片]'
+      select_image: 选择图片
+      selected_image_alt: 待发送的私信图片
+      image_size_kb: '{size} KB'
+      remove_image: 移除图片
+      image_preparing: 正在准备图片
+      image_uploading: 正在上传图片
+      image_upload_failed: 图片上传失败
+      image_send_failed: 图片发送失败
+      image_reconcile_failed: 图片已发送，正在等待服务端同步
+    errors:
+      login-required: 登录状态已失效
+      risk-control: 私信请求暂时受到限制
+      server-error: 私信服务暂时不可用
+      network: 网络连接失败
+      invalid-response: 私信数据暂时无法读取
+      api-error: 私信加载失败，请重试
+      wbi-unavailable: 私信签名暂时不可用
+  native:
+    unknown_user: 未知用户
+    original_content: 原始内容
+    view_source: 查看原内容
+    loading:
+      reply: 正在加载回复通知
+      at: 正在加载提及通知
+      love: 正在加载点赞通知
+    empty:
+      reply: 暂无回复通知
+      at: 暂无提及通知
+      love: 暂无点赞通知
+    actions:
+      reply: 回复了你
+      at: 提到了你
+      love: 赞了你的内容
+      love_multiple: 等 {count} 人赞了你的内容
+    more_actors: '+{count}'
+    more_actors_aria: 还有 {count} 位用户
+    errors:
+      login-required: 登录状态已失效
+      risk-control: 请求暂时受到限制
+      server-error: 服务暂时不可用
+      network: 网络连接失败
+      invalid-response: 当前通知暂时无法读取
+      api-error: 加载失败，请重试
 dock:
   search: 搜索
   home: 首页

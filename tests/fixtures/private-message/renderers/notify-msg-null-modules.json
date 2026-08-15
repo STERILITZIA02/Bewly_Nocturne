@@ -1,0 +1,4 @@
+{
+  "msg_type": 10,
+  "content": "{\"title\":\"Sanitized assistant notice\",\"text\":\"\",\"modules\":null,\"jump_uri\":\"\",\"jump_text\":\"\",\"jump_uri_2\":\"javascript:blocked\",\"jump_text_2\":\"Open configured destination\",\"jump_uri_2_config\":{\"all_uri\":\"https://www.bilibili.com/account/history\"},\"jump_uri_3\":\"https://www.bilibili.com/account\",\"jump_text_3\":\"\"}"
+}

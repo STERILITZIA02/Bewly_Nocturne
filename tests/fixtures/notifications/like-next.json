@@ -1,0 +1,39 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "latest": {
+      "items": [],
+      "last_view_at": 1754904000
+    },
+    "total": {
+      "cursor": {
+        "id": "0",
+        "time": 0,
+        "is_end": true
+      },
+      "items": [
+        {
+          "id": "7850110264738201806",
+          "users": [
+            {
+              "mid": "3499930000000005",
+              "nickname": "脱敏点赞用户戊",
+              "avatar": "https://i0.hdslb.com/bfs/face/sanitized-like-e.png"
+            }
+          ],
+          "counts": 1,
+          "item": {
+            "business": "专栏",
+            "business_id": "8850110264738201807",
+            "title": "脱敏点赞来源丙",
+            "uri": "https://www.bilibili.com/read/cv420007",
+            "target_reply_content": "脱敏被点赞内容丙"
+          },
+          "like_time": 1754903500
+        }
+      ]
+    }
+  }
+}

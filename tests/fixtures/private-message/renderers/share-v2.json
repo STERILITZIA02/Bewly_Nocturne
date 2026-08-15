@@ -1,0 +1,4 @@
+{
+  "msg_type": 7,
+  "content": "{\"source\":\"video\",\"id\":\"sanitized-id\",\"bvid\":\"BV1Fixture\",\"thumb\":\"https://i0.hdslb.com/bfs/archive/sanitized-cover.jpg\",\"title\":\"Sanitized video\",\"headline\":\"Sanitized headline\",\"author\":\"Sanitized creator\"}"
+}

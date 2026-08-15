@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
+import type { SettingsNavigationRequest } from '~/composables/useAppProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
@@ -14,6 +15,10 @@ import type { SettingsSearchEntry } from './searchCatalog'
 import { settingsSearchEntries } from './searchCatalog'
 import type { MenuItem } from './types'
 import { MenuType } from './types'
+
+const props = defineProps<{
+  navigationRequest?: SettingsNavigationRequest | null
+}>()
 
 const emit = defineEmits(['close'])
 
@@ -98,6 +103,14 @@ const activatedMenuItem = ref<MenuType>(
   initialMenuItem && Object.values(MenuType).includes(initialMenuItem)
     ? initialMenuItem
     : MenuType.General,
+)
+watch(
+  () => props.navigationRequest?.id,
+  () => {
+    if (props.navigationRequest?.target.category === 'bewly-pages')
+      activatedMenuItem.value = MenuType.BewlyPages
+  },
+  { immediate: true },
 )
 const settingsWindow = ref<HTMLDivElement>()
 const isPrimaryNavigationExpanded = ref(false)
@@ -215,6 +228,11 @@ const settingsMenuItems: MenuItem[] = [
     sectionStart: true,
   },
 ]
+const activeSettingsComponentProps = computed(() => (
+  activatedMenuItem.value === MenuType.BewlyPages
+    ? { navigationTarget: props.navigationRequest }
+    : {}
+))
 
 const title = computed(() => {
   const currentMenuItem = settingsMenuItems.find(item => item.value === activatedMenuItem.value)
@@ -648,6 +666,7 @@ function changeMenuItem(menuItem: MenuType) {
                 :is="settingsMenu[activatedMenuItem as keyof typeof settingsMenu]"
                 v-if="settingsContentReady"
                 :key="settingsContentKey"
+                v-bind="activeSettingsComponentProps"
               />
             </Transition>
           </main>

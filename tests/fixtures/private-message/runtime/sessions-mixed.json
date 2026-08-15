@@ -1,0 +1,91 @@
+{
+  "code": 0,
+  "data": {
+    "session_list": [
+      {
+        "talker_id": "9223372036854775801",
+        "session_type": 1,
+        "top_ts": 0,
+        "session_ts": 1755000000000001,
+        "unread_count": 2,
+        "ack_seqno": "9223372036854775701",
+        "max_seqno": "9223372036854775791",
+        "group_name": "Sanitized User",
+        "is_follow": 1,
+        "last_msg": {
+          "sender_uid": "9223372036854775801",
+          "receiver_type": 1,
+          "receiver_id": "100",
+          "msg_type": 1,
+          "content": "{\"content\":\"Sanitized message\"}",
+          "msg_seqno": "9223372036854775791",
+          "timestamp": 1755000000,
+          "at_uids": null,
+          "msg_key": "9223372036854775792",
+          "msg_status": 0,
+          "notify_code": null,
+          "new_face_version": 1,
+          "msg_source": 1
+        }
+      },
+      {
+        "talker_id": "9223372036854775802",
+        "session_type": 1,
+        "top_ts": 1,
+        "session_ts": 1755000000000002,
+        "unread_count": 1,
+        "ack_seqno": "9223372036854775702",
+        "max_seqno": "9223372036854775793",
+        "system_msg_type": 7,
+        "account_info": {
+          "name": "Sanitized Assistant",
+          "pic_url": "https://i0.hdslb.com/bfs/face/sanitized-assistant.png"
+        },
+        "last_msg": {
+          "sender_uid": "9223372036854775802",
+          "receiver_type": 1,
+          "receiver_id": "100",
+          "msg_type": 10,
+          "content": "{\"title\":\"Sanitized notice\",\"modules\":null}",
+          "msg_seqno": "9223372036854775793",
+          "timestamp": 1755000001,
+          "at_uids": null,
+          "msg_key": "9223372036854775794",
+          "msg_status": 0
+        }
+      },
+      {
+        "talker_id": "9223372036854775803",
+        "session_type": 2,
+        "top_ts": 0,
+        "session_ts": 1755000000000003,
+        "unread_count": 0,
+        "ack_seqno": "0",
+        "max_seqno": "9223372036854775795",
+        "group_name": "Sanitized Fan Group",
+        "last_msg": null
+      },
+      {
+        "talker_id": "9223372036854775804",
+        "session_type": 1,
+        "top_ts": 0,
+        "session_ts": 1755000000000004,
+        "unread_count": 0,
+        "ack_seqno": "0",
+        "max_seqno": "9223372036854775796",
+        "group_name": "Sanitized Invalid Last Message",
+        "last_msg": {
+          "unexpected": true
+        }
+      },
+      {
+        "session_type": 1,
+        "top_ts": 0,
+        "session_ts": 1755000000000005,
+        "unread_count": 0,
+        "ack_seqno": "0",
+        "max_seqno": "1"
+      }
+    ]
+  }
+}

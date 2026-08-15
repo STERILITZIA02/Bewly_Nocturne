@@ -1,0 +1,32 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "cursor": {
+      "id": 9223372036854775806,
+      "time": 1754905800,
+      "is_end": false
+    },
+    "items": [
+      {
+        "id": 9223372036854775807,
+        "user": {
+          "mid": 9223372036854775805,
+          "nickname": "脱敏大整数用户",
+          "avatar": "https://i0.hdslb.com/bfs/face/sanitized-large-id.png"
+        },
+        "item": {
+          "business": "评论",
+          "business_id": 9223372036854775804,
+          "title": "脱敏大整数来源",
+          "uri": "https://www.bilibili.com/video/BV1fixtureLargeId",
+          "source_content": "脱敏大整数回复",
+          "target_reply_content": "脱敏大整数原内容"
+        },
+        "reply_time": 1754905860
+      }
+    ],
+    "last_view_at": 1754905000
+  }
+}

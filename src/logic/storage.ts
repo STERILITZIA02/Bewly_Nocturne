@@ -125,6 +125,14 @@ export type RecommendationMode = 'web' | 'app' | 'webNoCookie'
  */
 export type CommentReplyTreeMode = 'lineCollapseMain' | 'lineKeepMain' | 'indentOnly'
 export type CommentReplyPaginationMode = 'loadMore' | 'pagination'
+export type PrivateMessageDensity = 'comfortable' | 'compact'
+export type PrivateMessageMobileOpenMode = 'list' | 'last-conversation'
+
+export interface LastPrivateConversationRoute {
+  mid: string
+  talkerId: string
+  sessionType: number
+}
 
 export interface ShadowCurvePoint {
   position: number
@@ -136,6 +144,7 @@ export interface LocalSettings {
   // 自定义CSS
   customizeCSS: boolean
   customizeCSSContent: string
+  lastPrivateConversationRoute: LastPrivateConversationRoute | null
 }
 
 /**
@@ -265,6 +274,14 @@ export interface Settings {
   topBarPinnedChannels: string[]
   openNotificationsPageAsDrawer: boolean
   showLikeNotificationReminder: boolean
+  autoMarkPrivateMessagesRead: boolean
+  followNewPrivateMessages: boolean
+  autoLoadPrivateMessageImages: boolean
+  showOfficialPrivateAssistants: boolean
+  privateMessageDensity: PrivateMessageDensity
+  maxPrivateMessagesPerConversation: 100 | 200 | 500
+  maxCachedPrivateConversations: 5 | 10 | 20
+  privateMessageMobileOpenMode: PrivateMessageMobileOpenMode
   hideTopBarUserPanelLv6LastLoginLocation: boolean
   showBCoinReceiveReminder: boolean
   autoReceiveBCoinCoupon: boolean
@@ -448,6 +465,7 @@ export interface Settings {
 export const originalLocalSettings: LocalSettings = {
   customizeCSS: false,
   customizeCSSContent: '',
+  lastPrivateConversationRoute: null,
 }
 
 export const originalSettings: Settings = {
@@ -533,6 +551,14 @@ export const originalSettings: Settings = {
   topBarPinnedChannels: [],
   openNotificationsPageAsDrawer: true,
   showLikeNotificationReminder: false,
+  autoMarkPrivateMessagesRead: true,
+  followNewPrivateMessages: true,
+  autoLoadPrivateMessageImages: true,
+  showOfficialPrivateAssistants: true,
+  privateMessageDensity: 'comfortable',
+  maxPrivateMessagesPerConversation: 200,
+  maxCachedPrivateConversations: 10,
+  privateMessageMobileOpenMode: 'list',
   hideTopBarUserPanelLv6LastLoginLocation: false,
   showBCoinReceiveReminder: true,
   autoReceiveBCoinCoupon: false,
@@ -926,6 +952,7 @@ watch(
     // 迁移旧的 customizeCSS/customizeCSSContent 到 localSettings
     if ('customizeCSS' in record || 'customizeCSSContent' in record) {
       localSettings.value = {
+        ...localSettings.value,
         customizeCSS: record.customizeCSS ?? localSettings.value.customizeCSS,
         customizeCSSContent: record.customizeCSSContent ?? localSettings.value.customizeCSSContent,
       }

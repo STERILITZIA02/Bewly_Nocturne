@@ -505,6 +505,7 @@ function handleFocusDrawer(e?: Event) {
               v-show="showIframe"
               ref="iframeRef"
               :src="src"
+              name="bewly-notifications-drawer"
               frameborder="0"
               pointer-events-auto
               pos="relative right-0"

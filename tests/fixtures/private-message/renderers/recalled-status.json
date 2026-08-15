@@ -1,0 +1,5 @@
+{
+  "msg_type": 1,
+  "msg_status": 1,
+  "content": "{\"content\":\"Sanitized text that must not render after recall\"}"
+}

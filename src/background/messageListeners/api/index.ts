@@ -1,5 +1,6 @@
 import { onMessage } from '~/utils/messaging'
 
+import API_PRIVATE_MESSAGE from '../../privateMessage'
 import { apiListenerFactory } from '../../utils'
 import API_ANIME from './anime'
 import API_AUTH from './auth'
@@ -21,6 +22,7 @@ export const API_COLLECTION = {
   FAVORITE: API_FAVORITE,
   MOMENT: API_MOMENT,
   NOTIFICATION: API_NOTIFICATION,
+  PRIVATE_MESSAGE: API_PRIVATE_MESSAGE,
   RANKING: API_RANKING,
   SEARCH: API_SEARCH,
   USER: API_USER,

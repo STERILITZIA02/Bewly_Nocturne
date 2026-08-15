@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
-import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import type { BewlyAppProvider, SettingsNavigationRequest, SettingsNavigationTarget } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -42,6 +42,8 @@ const { t } = useI18n()
 const { isDark } = useDark()
 const showSettings = ref(false)
 const settingsLaunchStyle = ref<Record<string, string>>({})
+const settingsNavigationRequest = shallowRef<SettingsNavigationRequest | null>(null)
+let settingsNavigationRequestId = 0
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -76,6 +78,15 @@ function toggleSettings(origin: DOMRect) {
     '--bew-settings-leave-y': `${enterY * 0.35}px`,
   }
   showSettings.value = true
+}
+
+function openSettingsAt(target: SettingsNavigationTarget) {
+  settingsNavigationRequest.value = {
+    id: ++settingsNavigationRequestId,
+    target,
+  }
+  if (!showSettings.value)
+    toggleSettings(new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
 }
 
 interface ConfirmDialogRequest {
@@ -449,8 +460,13 @@ const showBewlyPage = computed((): boolean => {
 // SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
 // currently selected Dock page (and Home sub-tab) and react to locale changes.
 const dockPageTitle = computed<string | undefined>(() => {
-  if (!showBewlyPage.value || activatedPage.value === AppPage.SearchResults)
+  if (
+    !showBewlyPage.value
+    || activatedPage.value === AppPage.SearchResults
+    || activatedPage.value === AppPage.Notifications
+  ) {
     return undefined
+  }
 
   const titleKey = activatedPage.value === AppPage.Home
     ? mainStore.homeTabs.find(tab => tab.page === homeActivatedPage.value)?.i18nKey
@@ -803,6 +819,7 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   setActiveDrawer,
   getDockPageHref,
   navigateToDockPage,
+  openSettingsAt,
 })
 
 let isCleaningUrl = false
@@ -917,6 +934,7 @@ onBeforeUnmount(stopUrlCleaner)
         <Settings
           v-if="showSettings"
           class="settings-layer"
+          :navigation-request="settingsNavigationRequest"
           :style="settingsLaunchStyle"
           @close="showSettings = false"
         />
@@ -999,7 +1017,11 @@ onBeforeUnmount(stopUrlCleaner)
                 </Transition>
 
                 <!-- ✅ IntersectionObserver 哨兵：用于检测滚动到底部，避免在 RAF 中读取 scrollHeight -->
-                <div ref="loadMoreSentinelRef" h-1px w-full pointer-events-none opacity-0 />
+                <div
+                  v-if="activatedPage !== AppPage.Notifications"
+                  ref="loadMoreSentinelRef"
+                  h-1px w-full pointer-events-none opacity-0
+                />
               </div>
             </main>
           </div>

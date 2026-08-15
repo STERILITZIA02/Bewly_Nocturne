@@ -1,0 +1,12 @@
+{
+  "msg_type": 1,
+  "content": "{\"content\":\"Hello [smile]\\nhttps://www.bilibili.com/video/BV1Fixture\"}",
+  "e_infos": [
+    {
+      "text": "[smile]",
+      "uri": "https://i0.hdslb.com/bfs/emote/sanitized.png",
+      "gif_url": "https://i0.hdslb.com/bfs/emote/sanitized.gif",
+      "size": 2
+    }
+  ]
+}

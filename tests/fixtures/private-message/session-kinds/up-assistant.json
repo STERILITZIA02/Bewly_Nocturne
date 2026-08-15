@@ -1,0 +1,27 @@
+{
+  "code": 0,
+  "data": {
+    "session_list": [
+      {
+        "talker_id": "1000000000000002",
+        "session_type": 1,
+        "top_ts": 0,
+        "session_ts": 1755000000000002,
+        "unread_count": 1,
+        "ack_seqno": "9200000000000001",
+        "max_seqno": "9200000000000002",
+        "is_follow": 0,
+        "can_fold": 1,
+        "is_intercept": 0,
+        "system_msg_type": 7,
+        "account_info": {
+          "name": "Sanitized UP Assistant",
+          "pic_url": "https://i0.hdslb.com/bfs/face/sanitized-up-assistant.webp"
+        },
+        "group_name": "Must Not Override Assistant",
+        "last_msg": null
+      }
+    ],
+    "has_more": 0
+  }
+}

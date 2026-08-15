@@ -1,73 +1,60 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import type { NotificationSectionDefinition } from '~/contentScripts/views/Notifications/notificationSections'
+import { TOP_BAR_NOTIFICATION_SECTIONS } from '~/contentScripts/views/Notifications/notificationSections'
+import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useSettingsStore } from '~/stores/settingsStore'
+import { resolveNotificationNavigationUrl } from '~/utils/notificationRoute'
+
+interface NotificationPopItem {
+  name: string
+  url: string
+  unreadCount: number
+  icon: string
+}
 
 const props = defineProps<{
-  // 接收外部传入的通知数据
-  unReadMessage?: any
-  unReadDm?: any
+  unReadMessage?: Record<string, number>
+  unReadDm?: Record<string, number>
 }>()
 
 const emit = defineEmits<{
-  (e: 'itemClick', item: { name: string, url: string, unreadCount: number, icon: string }): void
+  (event: 'itemClick', item: NotificationPopItem): void
 }>()
 
 const { t } = useI18n()
-const list = computed((): { name: string, url: string, unreadCount: number, icon: string }[] => [
-  {
-    name: t('topbar.noti_dropdown.replys'),
-    url: 'https://message.bilibili.com/#/reply',
-    unreadCount: 0,
-    icon: 'i-solar:reply-2-bold-duotone',
-  },
-  {
-    name: t('topbar.noti_dropdown.mentions'),
-    url: 'https://message.bilibili.com/#/at',
-    unreadCount: 0,
-    icon: 'i-solar:mention-circle-bold-duotone',
-  },
-  {
-    name: t('topbar.noti_dropdown.likes'),
-    url: 'https://message.bilibili.com/#/love',
-    unreadCount: 0,
-    icon: 'i-solar:like-bold-duotone',
-  },
-  {
-    name: t('topbar.noti_dropdown.messages'),
-    url: 'https://message.bilibili.com/#/system',
-    unreadCount: 0,
-    icon: 'i-solar:chat-line-bold-duotone',
-  },
-  {
-    name: t('topbar.noti_dropdown.chats'),
-    url: 'https://message.bilibili.com/#/whisper',
-    unreadCount: 0,
-    icon: 'i-solar:chat-round-bold-duotone',
-  },
-])
+const settingsStore = useSettingsStore()
 
-// 监听外部传入的数据变化，更新列表
-watch(() => props.unReadMessage, (newVal) => {
-  if (newVal) {
-    list.value[0].unreadCount = newVal.reply || 0
-    list.value[1].unreadCount = newVal.at || 0
-    const likeCount = typeof newVal.like === 'number' ? newVal.like : 0
-    const recvLikeCount = typeof newVal.recv_like === 'number' ? newVal.recv_like : 0
-    const likesCount = Math.max(likeCount, recvLikeCount)
-    list.value[2].unreadCount = likesCount
-    list.value[3].unreadCount = newVal.sys_msg || 0
+function unreadCount(section: NotificationSectionDefinition): number {
+  switch (section.unreadSource) {
+    case 'dm':
+      return (props.unReadDm?.follow_unread || 0) + (props.unReadDm?.unfollow_unread || 0)
+    case 'reply':
+      return props.unReadMessage?.reply || 0
+    case 'at':
+      return props.unReadMessage?.at || 0
+    case 'like':
+      return Math.max(props.unReadMessage?.like || 0, props.unReadMessage?.recv_like || 0)
+    case 'system':
+      return props.unReadMessage?.sys_msg || 0
+    default:
+      return 0
   }
-}, { immediate: true, deep: true })
+}
 
-watch(() => props.unReadDm, (newVal) => {
-  if (newVal) {
-    // 同时处理follow_unread和unfollow_unread
-    list.value[4].unreadCount = (newVal.follow_unread || 0) + (newVal.unfollow_unread || 0)
-  }
-}, { immediate: true, deep: true })
+const list = computed<NotificationPopItem[]>(() => TOP_BAR_NOTIFICATION_SECTIONS.map(section => ({
+  name: t(section.labelKey),
+  url: resolveNotificationNavigationUrl(section.id, {
+    openAsDrawer: settings.value.openNotificationsPageAsDrawer,
+    useOriginalPage: settingsStore.getDockItemIsUseOriginalBiliPage(AppPage.Notifications),
+  }),
+  unreadCount: unreadCount(section),
+  icon: section.icon,
+})))
 
-function handleClick(event: MouseEvent, item: { name: string, url: string, unreadCount: number, icon: string }) {
+function handleClick(item: NotificationPopItem) {
   emit('itemClick', item)
 }
 </script>
@@ -86,7 +73,7 @@ function handleClick(event: MouseEvent, item: { name: string, url: string, unrea
   >
     <ALink
       v-for="item in list"
-      :key="item.name"
+      :key="item.url"
       :href="item.url"
       type="topBar"
       pos="relative"
@@ -97,7 +84,7 @@ function handleClick(event: MouseEvent, item: { name: string, url: string, unrea
       transition="background-color duration-200, color duration-200, opacity duration-200"
       m="b-1 last:b-0"
       :custom-click-event="settings.openNotificationsPageAsDrawer"
-      @click="(event: MouseEvent) => handleClick(event, item)"
+      @click="handleClick(item)"
     >
       <div flex="~ items-center gap-2">
         <i :class="item.icon" text="$bew-text-2" />

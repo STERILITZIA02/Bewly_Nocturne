@@ -1,0 +1,26 @@
+{
+  "code": 0,
+  "data": {
+    "session_list": [
+      {
+        "talker_id": "1000000000000003",
+        "session_type": 1,
+        "top_ts": 0,
+        "session_ts": 1755000000000003,
+        "unread_count": 0,
+        "ack_seqno": "9300000000000001",
+        "max_seqno": "9300000000000002",
+        "is_follow": 1,
+        "can_fold": 0,
+        "is_intercept": 0,
+        "system_msg_type": 8,
+        "account_info": {
+          "name": "Sanitized Customer Service",
+          "pic_url": "https://i0.hdslb.com/bfs/face/sanitized-customer-service.webp"
+        },
+        "last_msg": null
+      }
+    ],
+    "has_more": 0
+  }
+}

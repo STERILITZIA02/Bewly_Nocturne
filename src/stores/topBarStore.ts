@@ -33,6 +33,11 @@ import { checkLoginStatus, LoginStatus, parseDedeUserID } from '~/logic/loginSta
 import { parseTopBarPublicationTime, recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { useSettingsStore } from '~/stores/settingsStore'
+import {
+  completeSharedRefreshLease,
+  runSharedRefreshRequest,
+  settleSharedRefreshTasks,
+} from '~/stores/topBarSharedRefresh'
 import api from '~/utils/api'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { getCSRF, isHomePage } from '~/utils/main'
@@ -55,6 +60,21 @@ function getNextReceiveAt(nextReceiveDays?: number, periodEndUnix?: number): num
 
 function isBeforeNextReceiveAt(nextReceiveAt: number | null): boolean {
   return nextReceiveAt !== null && nextReceiveAt > Date.now()
+}
+
+function runTopBarSharedRefreshRequest(
+  endpointName: Parameters<typeof runSharedRefreshRequest>[0],
+  operation: Parameters<typeof runSharedRefreshRequest>[1],
+): Promise<boolean> {
+  return runSharedRefreshRequest(endpointName, operation, {
+    isTerminalError: isExtensionContextInvalidatedError,
+  })
+}
+
+function settleTopBarSharedRefreshTasks(
+  tasks: Parameters<typeof settleSharedRefreshTasks>[0],
+): Promise<boolean> {
+  return settleSharedRefreshTasks(tasks, isExtensionContextInvalidatedError)
 }
 
 export const useTopBarStore = defineStore('topBar', () => {
@@ -117,7 +137,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   const moments = reactive<any[]>([])
   const addedWatchLaterList = reactive<number[]>([])
   let watchLaterStateAccountId: number | undefined
-  let watchLaterStateRequest: Promise<void> | null = null
+  let watchLaterStateRequest: Promise<boolean> | null = null
   let watchLaterStateRequestAccountId: number | undefined
   let watchLaterStateGeneration = 0
   let watchLaterAuthoritativeSyncTimer: ReturnType<typeof setTimeout> | null = null
@@ -418,112 +438,127 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // Notification Methods
-  async function getUnreadMessageCount() {
+  async function getUnreadMessageCount(): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
-      return
+      return false
 
-    try {
-      let res = await api.notification.getUnreadMsg()
-      if (res.code === 0 && isCurrentAccount(accountId)) {
-        Object.assign(unReadMessage, res.data)
-      }
-
-      res = await api.notification.getUnreadDm()
-      if (res.code === 0 && isCurrentAccount(accountId)) {
-        Object.assign(unReadDm, res.data)
-      }
-    }
-    catch (error) {
-      if (isExtensionContextInvalidatedError(error))
-        throw error
-      console.error(error)
-    }
+    return settleTopBarSharedRefreshTasks([
+      () => runTopBarSharedRefreshRequest('getUnreadMsg', async () => {
+        const response = await api.notification.getUnreadMsg()
+        if (!isCurrentAccount(accountId))
+          return 'account-changed'
+        if (response.code === -1)
+          return 'network'
+        if (response.code !== 0)
+          return 'api-error'
+        if (!response.data || typeof response.data !== 'object' || Array.isArray(response.data))
+          return 'invalid-response'
+        Object.assign(unReadMessage, response.data)
+        return true
+      }),
+      () => runTopBarSharedRefreshRequest('getUnreadDm', async () => {
+        const response = await api.notification.getUnreadDm()
+        if (!isCurrentAccount(accountId))
+          return 'account-changed'
+        if (response.code === -1)
+          return 'network'
+        if (response.code !== 0)
+          return 'api-error'
+        if (!response.data || typeof response.data !== 'object' || Array.isArray(response.data))
+          return 'invalid-response'
+        Object.assign(unReadDm, response.data)
+        return true
+      }),
+    ])
   }
 
   // B币和大会员经验领取状态检查
-  async function refreshVipRewardStatus() {
+  async function refreshVipRewardStatus(): Promise<boolean> {
     const accountId = userInfo.mid
     const shouldCheckBCoin = settings.value.showBCoinReceiveReminder
     const shouldCheckVipExp = settings.value.autoReceiveVipExp
-    if (!isCurrentAccount(accountId) || userInfo.vip?.status !== 1 || (!shouldCheckBCoin && !shouldCheckVipExp))
-      return
+    if (!isCurrentAccount(accountId))
+      return false
+    if (userInfo.vip?.status !== 1 || (!shouldCheckBCoin && !shouldCheckVipExp))
+      return true
 
     const shouldFetchBCoin = shouldCheckBCoin
       && !(bCoinAlreadyReceived.value && isBeforeNextReceiveAt(bCoinNextReceiveAt.value))
     const shouldFetchVipExp = shouldCheckVipExp
       && !(vipExpAlreadyReceived.value && isBeforeNextReceiveAt(vipExpNextReceiveAt.value))
     if (!shouldFetchBCoin && !shouldFetchVipExp)
-      return
+      return true
 
-    try {
-      const res = await api.user.getPrivilegeInfo()
-      if (res.code === 0 && isCurrentAccount(accountId)) {
-        Object.assign(privilegeInfo, res.data)
+    return runTopBarSharedRefreshRequest('refreshVipRewardStatus', async () => {
+      const response = await api.user.getPrivilegeInfo()
+      if (!isCurrentAccount(accountId))
+        return 'account-changed'
+      if (response.code === -1)
+        return 'network'
+      if (response.code !== 0)
+        return 'api-error'
+      if (!response.data || typeof response.data !== 'object')
+        return 'invalid-response'
 
-        const rewardRequests: Promise<void>[] = []
+      Object.assign(privilegeInfo, response.data)
 
-        if (shouldCheckBCoin) {
-          if (privilegeInfo.vip_type < 2) {
-            bCoinAlreadyReceived.value = false
-            hasBCoinToReceive.value = false
-            bCoinNextReceiveAt.value = null
-          }
+      const rewardRequests: Promise<void>[] = []
 
-          // 检查B币兑换状态 (type: 1)
-          const bCoinItem = privilegeInfo.vip_type >= 2
-            ? privilegeInfo.list?.find(item => item.type === 1)
-            : undefined
-          if (bCoinItem) {
-            const nextReceiveAt = getNextReceiveAt(bCoinItem.next_receive_days, bCoinItem.period_end_unix)
-            bCoinAlreadyReceived.value = bCoinItem.state === 1
-            bCoinNextReceiveAt.value = bCoinAlreadyReceived.value ? nextReceiveAt : null
-            if (bCoinAlreadyReceived.value) {
-              hasBCoinToReceive.value = false
-            }
-            else {
-              // 如果有权限领取且未领取
-              hasBCoinToReceive.value = bCoinItem.state === 0 && bCoinItem.next_receive_days > 0
-
-              // 如果开启了自动领取，则自动领取B币
-              if (hasBCoinToReceive.value && settings.value.autoReceiveBCoinCoupon)
-                rewardRequests.push(autoReceiveBCoin(accountId, nextReceiveAt))
-            }
-          }
-          else {
-            bCoinAlreadyReceived.value = false
-            hasBCoinToReceive.value = false
-            bCoinNextReceiveAt.value = null
-          }
+      if (shouldCheckBCoin) {
+        if (privilegeInfo.vip_type < 2) {
+          bCoinAlreadyReceived.value = false
+          hasBCoinToReceive.value = false
+          bCoinNextReceiveAt.value = null
         }
 
-        if (shouldCheckVipExp) {
-          // 每日 10 经验对应 type=9，状态和下一轮领取时间与 B 币一致。
-          const vipExpItem = privilegeInfo.list?.find(item => item.type === 9)
-          if (vipExpItem) {
-            const nextReceiveAt = getNextReceiveAt(vipExpItem.next_receive_days, vipExpItem.period_end_unix)
-            vipExpAlreadyReceived.value = vipExpItem.state === 1
-            vipExpNextReceiveAt.value = vipExpAlreadyReceived.value ? nextReceiveAt : null
-
-            if (vipExpItem.state === 0 && vipExpItem.next_receive_days > 0)
-              rewardRequests.push(autoReceiveVipExp(accountId, nextReceiveAt))
+        // 检查B币兑换状态 (type: 1)
+        const bCoinItem = privilegeInfo.vip_type >= 2
+          ? privilegeInfo.list?.find(item => item.type === 1)
+          : undefined
+        if (bCoinItem) {
+          const nextReceiveAt = getNextReceiveAt(bCoinItem.next_receive_days, bCoinItem.period_end_unix)
+          bCoinAlreadyReceived.value = bCoinItem.state === 1
+          bCoinNextReceiveAt.value = bCoinAlreadyReceived.value ? nextReceiveAt : null
+          if (bCoinAlreadyReceived.value) {
+            hasBCoinToReceive.value = false
           }
           else {
-            vipExpAlreadyReceived.value = false
-            vipExpNextReceiveAt.value = null
+            // 如果有权限领取且未领取
+            hasBCoinToReceive.value = bCoinItem.state === 0 && bCoinItem.next_receive_days > 0
+
+            // 如果开启了自动领取，则自动领取B币
+            if (hasBCoinToReceive.value && settings.value.autoReceiveBCoinCoupon)
+              rewardRequests.push(autoReceiveBCoin(accountId, nextReceiveAt))
           }
         }
-
-        await Promise.all(rewardRequests)
+        else {
+          bCoinAlreadyReceived.value = false
+          hasBCoinToReceive.value = false
+          bCoinNextReceiveAt.value = null
+        }
       }
-    }
-    catch (error) {
-      if (isExtensionContextInvalidatedError(error))
-        throw error
-      console.error('Failed to check VIP reward status:', error)
-      if (isCurrentAccount(accountId))
-        hasBCoinToReceive.value = false
-    }
+
+      if (shouldCheckVipExp) {
+        // 每日 10 经验对应 type=9，状态和下一轮领取时间与 B 币一致。
+        const vipExpItem = privilegeInfo.list?.find(item => item.type === 9)
+        if (vipExpItem) {
+          const nextReceiveAt = getNextReceiveAt(vipExpItem.next_receive_days, vipExpItem.period_end_unix)
+          vipExpAlreadyReceived.value = vipExpItem.state === 1
+          vipExpNextReceiveAt.value = vipExpAlreadyReceived.value ? nextReceiveAt : null
+
+          if (vipExpItem.state === 0 && vipExpItem.next_receive_days > 0)
+            rewardRequests.push(autoReceiveVipExp(accountId, nextReceiveAt))
+        }
+        else {
+          vipExpAlreadyReceived.value = false
+          vipExpNextReceiveAt.value = null
+        }
+      }
+
+      await Promise.all(rewardRequests)
+      return true
+    })
   }
 
   // 自动领取B币
@@ -600,27 +635,29 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // Moments Methods
-  async function getTopBarNewMomentsCount(selectedType: string = 'video') {
+  async function getTopBarNewMomentsCount(selectedType: string = 'video'): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId) || isLoadingMoments.value)
-      return
+      return false
 
+    isLoadingMoments.value = true
     try {
-      isLoadingMoments.value = true
-
-      const res = await api.moment.getMomentsUpdate({
-        type: selectedType,
-        update_baseline: '0',
+      return await runTopBarSharedRefreshRequest('getTopBarNewMomentsCount', async () => {
+        const response = await api.moment.getMomentsUpdate({
+          type: selectedType,
+          update_baseline: '0',
+        })
+        if (!isCurrentAccount(accountId))
+          return 'account-changed'
+        if (response.code === -1)
+          return 'network'
+        if (response.code !== 0)
+          return 'api-error'
+        if (!response.data || typeof response.data.update_num !== 'number')
+          return 'invalid-response'
+        newMomentsCount.value = response.data.update_num
+        return true
       })
-
-      if (res.code === 0 && res.data && isCurrentAccount(accountId)) {
-        newMomentsCount.value = res.data.update_num
-      }
-    }
-    catch (error) {
-      if (isExtensionContextInvalidatedError(error))
-        throw error
-      console.error(error)
     }
     finally {
       if (isCurrentAccount(accountId))
@@ -637,49 +674,46 @@ export const useTopBarStore = defineStore('topBar', () => {
     return aid !== undefined && addedWatchLaterList.includes(aid)
   }
 
-  async function ensureWatchLaterState(force = false) {
+  async function ensureWatchLaterState(force = false): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
-      return
+      return false
     if (force)
       invalidateWatchLaterState()
     else if (watchLaterStateAccountId === accountId)
-      return
+      return true
 
     if (watchLaterStateRequest && watchLaterStateRequestAccountId === accountId) {
-      try {
-        await watchLaterStateRequest
-      }
-      catch (error) {
-        if (!isExtensionContextInvalidatedError(error))
-          console.error('获取稍后再看状态失败:', error)
-      }
-      if (isCurrentAccount(accountId) && watchLaterStateAccountId !== accountId)
-        await ensureWatchLaterState()
-      return
+      const succeeded = await watchLaterStateRequest
+      if (succeeded && isCurrentAccount(accountId) && watchLaterStateAccountId !== accountId)
+        return ensureWatchLaterState()
+      return succeeded && isCurrentAccount(accountId)
     }
 
     const requestGeneration = watchLaterStateGeneration
-    const request = (async () => {
-      const res = await api.watchlater.getAllWatchLaterList()
-      if (res.code !== 0 || !isCurrentAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
-        return
+    const request = runTopBarSharedRefreshRequest('getWatchLaterMembership', async () => {
+      const response = await api.watchlater.getAllWatchLaterList()
+      if (!isCurrentAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
+        return 'account-changed'
+      if (response.code === -1)
+        return 'network'
+      if (response.code !== 0)
+        return 'api-error'
+      if (!response.data || (response.data.list !== undefined && !Array.isArray(response.data.list)))
+        return 'invalid-response'
 
-      const list = Array.isArray(res.data?.list) ? res.data.list as VideoItem[] : []
+      const list = Array.isArray(response.data.list) ? response.data.list as VideoItem[] : []
       const aids = [...new Set(list.map(item => item.aid).filter(aid => Number.isFinite(aid) && aid > 0))]
       addedWatchLaterList.splice(0, addedWatchLaterList.length, ...aids)
-      watchLaterCount.value = Number.isFinite(res.data?.count) ? res.data.count : aids.length
+      watchLaterCount.value = Number.isFinite(response.data.count) ? response.data.count : aids.length
       watchLaterStateAccountId = accountId
-    })()
+      return true
+    })
 
     watchLaterStateRequest = request
     watchLaterStateRequestAccountId = accountId
     try {
-      await request
-    }
-    catch (error) {
-      if (!isExtensionContextInvalidatedError(error))
-        console.error('获取稍后再看状态失败:', error)
+      return await request
     }
     finally {
       if (watchLaterStateRequest === request) {
@@ -689,10 +723,10 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
-  async function refreshWatchLaterAuthoritativeState() {
-    await Promise.all([
-      getAllWatchLaterList(),
-      ensureWatchLaterState(true),
+  async function refreshWatchLaterAuthoritativeState(): Promise<boolean> {
+    return settleTopBarSharedRefreshTasks([
+      () => getAllWatchLaterList(),
+      () => ensureWatchLaterState(true),
     ])
   }
 
@@ -785,25 +819,27 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // 获取稍后再看列表数量
-  async function getWatchLaterCount() {
+  async function getWatchLaterCount(): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
-      return
+      return false
 
-    try {
-      const res = await api.watchlater.getWatchLaterListByPage({
+    return runTopBarSharedRefreshRequest('getWatchLaterCount', async () => {
+      const response = await api.watchlater.getWatchLaterListByPage({
         pn: 1,
         ps: 10,
       })
-      if (res.code === 0 && isCurrentAccount(accountId)) {
-        watchLaterCount.value = res.data.count
-      }
-    }
-    catch (error) {
-      if (isExtensionContextInvalidatedError(error))
-        throw error
-      console.error(error)
-    }
+      if (!isCurrentAccount(accountId))
+        return 'account-changed'
+      if (response.code === -1)
+        return 'network'
+      if (response.code !== 0)
+        return 'api-error'
+      if (!response.data || typeof response.data.count !== 'number')
+        return 'invalid-response'
+      watchLaterCount.value = response.data.count
+      return true
+    })
   }
 
   // 获取稍后再看列表
@@ -817,30 +853,35 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
   }
 
-  async function getAllWatchLaterList() {
+  async function getAllWatchLaterList(): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
-      return
+      return false
 
     const requestGeneration = ++watchLaterListGeneration
     nextWatchLaterPage = 1
     isLoadingWatchLater.value = true
 
     try {
-      const res = await api.watchlater.getWatchLaterListByPage({
-        pn: 1,
-        ps: 10,
-      })
-      if (res.code === 0 && isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration) {
-        const list = dedupeWatchLaterItems(Array.isArray(res.data?.list) ? res.data.list : [])
-        watchLaterCount.value = res.data.count
+      return await runTopBarSharedRefreshRequest('getWatchLaterList', async () => {
+        const response = await api.watchlater.getWatchLaterListByPage({
+          pn: 1,
+          ps: 10,
+        })
+        if (!isCurrentAccount(accountId) || requestGeneration !== watchLaterListGeneration)
+          return 'account-changed'
+        if (response.code === -1)
+          return 'network'
+        if (response.code !== 0)
+          return 'api-error'
+        if (!response.data || !Array.isArray(response.data.list) || typeof response.data.count !== 'number')
+          return 'invalid-response'
+        const list = dedupeWatchLaterItems(response.data.list)
+        watchLaterCount.value = response.data.count
         watchLaterList.splice(0, watchLaterList.length, ...list)
         nextWatchLaterPage = 2
-      }
-    }
-    catch (error) {
-      if (!isExtensionContextInvalidatedError(error))
-        console.error(error)
+        return true
+      })
     }
     finally {
       if (isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration)
@@ -1277,18 +1318,18 @@ export const useTopBarStore = defineStore('topBar', () => {
   // 他处登录/登出/会话过期导致会话 Cookie 变化时，后台广播此消息（见 issue #921）
   onMessage(TOP_BAR_STATE_MESSAGE.LOGIN_STATE_CHANGED, reconcileLocalLoginState)
 
-  async function refreshSharedData() {
-    await Promise.all([
-      getUnreadMessageCount(),
-      getTopBarNewMomentsCount(),
-      getWatchLaterCount(),
-      refreshVipRewardStatus(),
+  async function refreshSharedData(): Promise<boolean> {
+    return settleTopBarSharedRefreshTasks([
+      () => getUnreadMessageCount(),
+      () => getTopBarNewMomentsCount(),
+      () => getWatchLaterCount(),
+      () => refreshVipRewardStatus(),
     ])
   }
 
   interface SyncSharedDataOptions {
     force?: boolean
-    refresh?: () => Promise<void>
+    refresh?: () => Promise<boolean>
   }
 
   async function syncSharedDataFromBroker(options: SyncSharedDataOptions) {
@@ -1321,51 +1362,29 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     const refreshId = claim.refreshId
 
-    try {
-      if (!isCurrentAccount(accountId)) {
-        await sendMessage<TopBarStateRelease>(
-          TOP_BAR_STATE_MESSAGE.RELEASE_REFRESH,
-          {
-            accountId,
-            refreshId,
-          },
-        )
-        return
-      }
+    const release = () => sendMessage<TopBarStateRelease>(
+      TOP_BAR_STATE_MESSAGE.RELEASE_REFRESH,
+      {
+        accountId,
+        refreshId,
+      },
+    )
 
-      await (options.refresh?.() ?? refreshSharedData())
-      if (!isCurrentAccount(accountId)) {
-        await sendMessage<TopBarStateRelease>(
-          TOP_BAR_STATE_MESSAGE.RELEASE_REFRESH,
-          {
-            accountId,
-            refreshId,
-          },
-        )
-        return
-      }
-
-      await sendMessage<TopBarStatePublish>(
+    await completeSharedRefreshLease({
+      refresh: () => isCurrentAccount(accountId)
+        ? (options.refresh?.() ?? refreshSharedData())
+        : Promise.resolve(false),
+      isCurrent: () => isCurrentAccount(accountId),
+      release,
+      publish: () => sendMessage<TopBarStatePublish>(
         TOP_BAR_STATE_MESSAGE.PUBLISH,
         {
           accountId,
           snapshot: createSharedStateSnapshot(),
           refreshId,
         },
-      )
-    }
-    catch (error) {
-      if (!isExtensionContextInvalidatedError(error)) {
-        await sendMessage<TopBarStateRelease>(
-          TOP_BAR_STATE_MESSAGE.RELEASE_REFRESH,
-          {
-            accountId,
-            refreshId,
-          },
-        )
-      }
-      throw error
-    }
+      ),
+    })
   }
 
   async function syncSharedData(options: SyncSharedDataOptions = {}) {

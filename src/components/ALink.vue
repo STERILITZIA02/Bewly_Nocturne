@@ -11,7 +11,7 @@ const props = defineProps<{
   title?: string
   ariaLabel?: string
   rel?: string
-  type: 'topBar' | 'videoCard' | 'searchBar'
+  type: 'topBar' | 'videoCard' | 'searchBar' | 'content'
   customClickEvent?: boolean
   customClickEventIncludesModifiers?: boolean
   stopPropagation?: boolean
@@ -35,7 +35,7 @@ const processedHref = computed(() => {
 const openMode = computed(() => {
   if (props.type === 'topBar')
     return settings.value.topBarLinkOpenMode
-  else if (props.type === 'videoCard')
+  else if (props.type === 'videoCard' || props.type === 'content')
     return settings.value.videoCardLinkOpenMode
   else if (props.type === 'searchBar')
     return settings.value.searchBarLinkOpenMode

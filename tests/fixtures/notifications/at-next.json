@@ -1,0 +1,32 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "cursor": {
+      "id": "0",
+      "time": 0,
+      "is_end": true
+    },
+    "items": [
+      {
+        "id": "7850010264738201704",
+        "user": {
+          "mid": "3499920000000002",
+          "nickname": "脱敏提及用户乙",
+          "avatar": "https://i0.hdslb.com/bfs/face/sanitized-at-b.png"
+        },
+        "item": {
+          "business": "动态",
+          "business_id": "8850010264738201705",
+          "title": "脱敏提及来源乙",
+          "uri": "https://t.bilibili.com/420005",
+          "source_content": "脱敏提及正文乙",
+          "target_reply_content": "脱敏被提及内容乙"
+        },
+        "at_time": 1754902800
+      }
+    ],
+    "last_view_at": 1754903000
+  }
+}

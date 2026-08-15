@@ -1,0 +1,32 @@
+{
+  "code": 0,
+  "message": "0",
+  "ttl": 1,
+  "data": {
+    "cursor": {
+      "id": "0",
+      "time": 0,
+      "is_end": true
+    },
+    "items": [
+      {
+        "id": "7849910264738201604",
+        "user": {
+          "mid": "3499910000000004",
+          "nickname": "脱敏用户丙",
+          "avatar": "https://i0.hdslb.com/bfs/face/sanitized-reply-c.png"
+        },
+        "item": {
+          "business": "专栏",
+          "business_id": "8849910264738201605",
+          "title": "脱敏专栏丙",
+          "uri": "https://www.bilibili.com/read/cv420004",
+          "source_content": "脱敏回复正文丙",
+          "target_reply_content": "脱敏原评论丙"
+        },
+        "reply_time": 1754902000
+      }
+    ],
+    "last_view_at": 1754902750
+  }
+}

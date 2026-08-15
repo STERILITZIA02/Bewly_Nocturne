@@ -1,0 +1,40 @@
+{
+  "code": 0,
+  "data": {
+    "messages": [
+      {
+        "sender_uid": "9223372036854775801",
+        "receiver_type": 1,
+        "receiver_id": "100",
+        "msg_type": 1,
+        "content": "{\"content\":\"Sanitized current message\"}",
+        "msg_seqno": "9223372036854775791",
+        "timestamp": 1755000000,
+        "at_uids": null,
+        "msg_key": "9223372036854775792",
+        "msg_status": 0,
+        "notify_code": null,
+        "new_face_version": 1,
+        "msg_source": 1
+      },
+      {
+        "sender_uid": "9223372036854775801",
+        "receiver_type": 1,
+        "receiver_id": "100",
+        "msg_type": 1,
+        "content": "{\"content\":\"Sanitized legacy message\"}",
+        "msg_seqno": "9223372036854775790",
+        "timestamp": 1754999999,
+        "at_uids": null,
+        "msg_key": "9223372036854775790",
+        "msg_status": 0
+      },
+      {
+        "sender_uid": "9223372036854775801",
+        "msg_type": 1,
+        "content": "invalid core fields"
+      }
+    ],
+    "e_infos": null
+  }
+}
