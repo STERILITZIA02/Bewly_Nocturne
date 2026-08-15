@@ -271,12 +271,14 @@ defineExpose({ refresh })
 .whisper-workspace__sessions {
   display: flex;
   flex-direction: column;
-  background: var(--bew-content);
+  background: var(--bew-content-alt);
   border-right: 1px solid var(--bew-border-color);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .whisper-workspace__detail {
-  background: var(--bew-homepage-bg);
+  background: transparent;
 }
 
 .whisper-workspace__state {

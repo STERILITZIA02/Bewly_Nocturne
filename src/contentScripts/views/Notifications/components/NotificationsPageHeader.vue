@@ -40,6 +40,7 @@ const originalUrl = computed(() => buildOriginalNotificationUrl(props.view))
         <span>{{ t('notifications.actions.refresh') }}</span>
       </Button>
       <ALink
+        v-if="view !== 'whisper'"
         class="notifications-page-header__original-link bew-shape-smooth-rect"
         :href="originalUrl"
         type="content"
@@ -102,7 +103,7 @@ const originalUrl = computed(() => buildOriginalNotificationUrl(props.view))
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
-  background: var(--bew-content-solid);
+  background: var(--bew-fill-1);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);

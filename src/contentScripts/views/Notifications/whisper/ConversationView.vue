@@ -289,9 +289,6 @@ defineExpose({
           <span>{{ t('notifications.whisper.messages.readonly') }}</span>
         </span>
       </div>
-      <ALink class="conversation-view__header-original" :href="originalUrl" type="content">
-        {{ t('notifications.whisper.messages.open_original_header') }}
-      </ALink>
     </header>
 
     <div
@@ -310,9 +307,6 @@ defineExpose({
             <Button type="tertiary" @click="retry">
               {{ t('notifications.actions.retry') }}
             </Button>
-            <ALink :href="originalUrl" type="content">
-              {{ t('notifications.actions.open_original') }}
-            </ALink>
           </div>
         </Empty>
       </div>
@@ -389,7 +383,7 @@ defineExpose({
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: var(--bew-homepage-bg);
+  background: transparent;
 }
 
 .conversation-view__header,
@@ -400,7 +394,9 @@ defineExpose({
   justify-content: space-between;
   min-width: 0;
   padding: var(--bew-space-3) var(--bew-space-4);
-  background: var(--bew-elevated-solid);
+  background: var(--bew-elevated);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .conversation-view__header {
@@ -458,15 +454,6 @@ defineExpose({
   min-width: 0;
 }
 
-.conversation-view__header-original {
-  flex: 0 0 auto;
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-control);
-  text-decoration: none;
-}
-
 .conversation-view__header strong {
   overflow: hidden;
   color: var(--bew-text-1);
@@ -516,7 +503,6 @@ defineExpose({
   corner-shape: var(--bew-corner-shape-round);
 }
 
-.conversation-view__state-actions a,
 .conversation-view__inline-error button,
 .conversation-view__history-status button {
   color: var(--bew-theme-color);
@@ -533,6 +519,7 @@ defineExpose({
   overflow: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  background: transparent;
 }
 
 .conversation-view__timeline {
