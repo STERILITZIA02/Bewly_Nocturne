@@ -8,7 +8,6 @@ import { ORIGINAL_MESSAGE_SETTINGS_URL } from '~/utils/notificationRoute'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
-import SettingsSectionHeading from '../../components/SettingsSectionHeading.vue'
 
 const { t } = useI18n()
 
@@ -26,12 +25,6 @@ const mobileOpenOptions = computed(() => [
 
 <template>
   <div>
-    <SettingsSectionHeading
-      :title="$t('settings.plugin.messages_page')"
-      :desc="$t('settings.category_navigation_messages_page_desc')"
-      icon="i-mingcute:message-3-fill"
-    />
-
     <SettingsItemGroup :title="$t('settings.messages_reading_behavior')">
       <SettingsItem setting-id="messages.autoMarkRead" :title="$t('settings.messages_auto_mark_read')" :desc="$t('settings.messages_auto_mark_read_desc')" right-width="auto">
         <Radio v-model="settings.autoMarkPrivateMessagesRead" />
@@ -75,7 +68,7 @@ const mobileOpenOptions = computed(() => [
             <template #left>
               <i i-mingcute:external-link-line aria-hidden="true" />
             </template>
-            {{ $t('settings.messages_original_settings') }}
+            {{ $t('settings.messages_manage_original') }}
           </Button>
         </ALink>
       </SettingsItem>

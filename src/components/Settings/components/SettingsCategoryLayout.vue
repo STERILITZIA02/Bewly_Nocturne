@@ -19,6 +19,8 @@ export interface CategoryPage {
 const props = defineProps<{
   pages: CategoryPage[]
   storageKey: string
+  navigationPage?: string
+  navigationRequestId?: number
 }>()
 
 const { t } = useI18n()
@@ -52,6 +54,14 @@ const pageGroups = computed(() => {
 })
 
 watch(activePage, page => sessionStorage.setItem(props.storageKey, page))
+watch(
+  () => [props.navigationRequestId, props.navigationPage] as const,
+  ([, page]) => {
+    if (page && props.pages.some(candidate => candidate.value === page))
+      activePage.value = page
+  },
+  { immediate: true },
+)
 watchEffect(() => setBreadcrumb?.(currentPage.value ? t(currentPage.value.titleKey) : undefined))
 
 function selectPage(page: string) {

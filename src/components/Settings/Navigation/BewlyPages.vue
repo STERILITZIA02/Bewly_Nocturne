@@ -1,5 +1,11 @@
 <script setup lang="ts">
+import type { SettingsNavigationRequest } from '~/composables/useAppProvider'
+
 import SettingsCategoryLayout from '../components/SettingsCategoryLayout.vue'
+
+const props = defineProps<{
+  navigationTarget?: SettingsNavigationRequest | null
+}>()
 
 const storageKey = 'bewly-settings-bewly-pages-page'
 const legacyStorageKey = 'bewly-settings-navigation-page'
@@ -56,5 +62,10 @@ const pages = [
 </script>
 
 <template>
-  <SettingsCategoryLayout :pages="pages" :storage-key="storageKey" />
+  <SettingsCategoryLayout
+    :navigation-page="props.navigationTarget?.target.category === 'bewly-pages' ? props.navigationTarget.target.page : undefined"
+    :navigation-request-id="props.navigationTarget?.id"
+    :pages="pages"
+    :storage-key="storageKey"
+  />
 </template>

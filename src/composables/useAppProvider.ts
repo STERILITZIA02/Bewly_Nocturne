@@ -18,6 +18,16 @@ export enum DrawerType {
   NotificationsDrawer = 'notifications',
 }
 
+export interface SettingsNavigationTarget {
+  category: 'bewly-pages'
+  page: 'messages'
+}
+
+export interface SettingsNavigationRequest {
+  id: number
+  target: SettingsNavigationTarget
+}
+
 export interface BewlyAppProvider {
   activatedPage: Ref<AppPage>
   // 添加Home页面的子页面状态
@@ -43,7 +53,7 @@ export interface BewlyAppProvider {
   setActiveDrawer: (drawer: DrawerType) => void
   getDockPageHref: (page: AppPage) => string
   navigateToDockPage: (page: AppPage) => void
-  openMessagesSettings: (origin?: DOMRect) => void
+  openSettingsAt: (target: SettingsNavigationTarget) => void
 }
 
 export function useBewlyApp(): BewlyAppProvider {

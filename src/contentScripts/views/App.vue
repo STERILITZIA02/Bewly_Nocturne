@@ -6,7 +6,7 @@ import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
-import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import type { BewlyAppProvider, SettingsNavigationRequest, SettingsNavigationTarget } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -17,7 +17,6 @@ import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { setIframePageActive } from '~/logic/iframePageState'
-import { openSettingById } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -43,6 +42,8 @@ const { t } = useI18n()
 const { isDark } = useDark()
 const showSettings = ref(false)
 const settingsLaunchStyle = ref<Record<string, string>>({})
+const settingsNavigationRequest = shallowRef<SettingsNavigationRequest | null>(null)
+let settingsNavigationRequestId = 0
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -79,13 +80,13 @@ function toggleSettings(origin: DOMRect) {
   showSettings.value = true
 }
 
-function openMessagesSettings(origin?: DOMRect) {
-  sessionStorage.setItem('bewly-settings-active-menu', 'BewlyPages')
-  sessionStorage.setItem('bewly-settings-bewly-pages-page', 'messages')
-  if (!showSettings.value) {
-    toggleSettings(origin ?? new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
+function openSettingsAt(target: SettingsNavigationTarget) {
+  settingsNavigationRequest.value = {
+    id: ++settingsNavigationRequestId,
+    target,
   }
-  void nextTick(() => openSettingById('messages.autoMarkRead'))
+  if (!showSettings.value)
+    toggleSettings(new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
 }
 
 interface ConfirmDialogRequest {
@@ -818,7 +819,7 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   setActiveDrawer,
   getDockPageHref,
   navigateToDockPage,
-  openMessagesSettings,
+  openSettingsAt,
 })
 
 let isCleaningUrl = false
@@ -933,6 +934,7 @@ onBeforeUnmount(stopUrlCleaner)
         <Settings
           v-if="showSettings"
           class="settings-layer"
+          :navigation-request="settingsNavigationRequest"
           :style="settingsLaunchStyle"
           @close="showSettings = false"
         />

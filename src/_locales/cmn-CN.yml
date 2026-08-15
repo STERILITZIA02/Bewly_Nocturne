@@ -128,7 +128,8 @@ settings:
   messages_mobile_open_last: 恢复上次会话
   messages_server_settings: Bilibili 服务端设置
   messages_server_settings_desc: Bilibili 服务端消息设置仍由原版页面管理。
-  messages_original_settings: 在原版中管理
+  messages_original_settings: 原版消息设置
+  messages_manage_original: 在原版中管理
   category_playback_player_desc: 配置播放器模式、滚动行为、弹幕、字幕和播放状态。
   category_playback_autoplay_desc: 配置自动连播与自定义播放行为。
   category_bilibili_comments_desc: 增强评论区的用户信息与内容显示。

@@ -21,7 +21,6 @@ export interface NotificationSectionDefinition {
   labelKey: string
   descriptionKey: string
   icon: string
-  originalHash: string
   unreadSource: 'dm' | 'reply' | 'at' | 'like' | 'system' | null
 }
 
@@ -33,7 +32,6 @@ export const NOTIFICATION_SECTIONS = [
     labelKey: 'notifications.sections.whisper.label',
     descriptionKey: 'notifications.sections.whisper.description',
     icon: 'i-solar:chat-round-bold-duotone',
-    originalHash: 'whisper',
     unreadSource: 'dm',
   },
   {
@@ -43,7 +41,6 @@ export const NOTIFICATION_SECTIONS = [
     labelKey: 'notifications.sections.reply.label',
     descriptionKey: 'notifications.sections.reply.description',
     icon: 'i-solar:reply-2-bold-duotone',
-    originalHash: 'reply',
     unreadSource: 'reply',
   },
   {
@@ -53,7 +50,6 @@ export const NOTIFICATION_SECTIONS = [
     labelKey: 'notifications.sections.at.label',
     descriptionKey: 'notifications.sections.at.description',
     icon: 'i-solar:mention-circle-bold-duotone',
-    originalHash: 'at',
     unreadSource: 'at',
   },
   {
@@ -63,7 +59,6 @@ export const NOTIFICATION_SECTIONS = [
     labelKey: 'notifications.sections.love.label',
     descriptionKey: 'notifications.sections.love.description',
     icon: 'i-solar:like-bold-duotone',
-    originalHash: 'love',
     unreadSource: 'like',
   },
   {
@@ -73,7 +68,6 @@ export const NOTIFICATION_SECTIONS = [
     labelKey: 'notifications.sections.system.label',
     descriptionKey: 'notifications.sections.system.description',
     icon: 'i-solar:chat-line-bold-duotone',
-    originalHash: 'system',
     unreadSource: 'system',
   },
 ] as const satisfies readonly NotificationSectionDefinition[]

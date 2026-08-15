@@ -9,7 +9,7 @@ import { localSettings, settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF } from '~/utils/main'
-import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notificationRoute'
+import { buildBewlyNotificationUrl, normalizeNotificationRoute } from '~/utils/notificationRoute'
 import type { PrivateConversationRoute } from '~/utils/privateConversationRoute'
 import {
   buildPrivateConversationUrl,
@@ -37,7 +37,6 @@ import type {
 import {
   isHybridNotificationView,
   isNativeNotificationSection,
-  isNotificationView,
   isOriginalOnlyNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
@@ -60,11 +59,12 @@ interface WhisperWorkspaceExposed {
 }
 
 const { t } = useI18n()
-const { activatedPage, handlePageRefresh, openMessagesSettings, scrollViewportRef } = useBewlyApp()
+const { activatedPage, handlePageRefresh, openSettingsAt, scrollViewportRef } = useBewlyApp()
 const routeState = useRouteState()
 const topBarStore = useTopBarStore()
 
-const currentView = ref<NotificationView>(parseNotificationView(routeState.href || window.location.href))
+const currentView = ref<NotificationView>('whisper')
+const routeReady = ref(false)
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
@@ -267,41 +267,21 @@ function closePrivateConversation() {
   replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
 }
 
-function replaceNotificationRoute(view: NotificationView) {
-  const targetUrl = buildBewlyNotificationUrl(view)
-  if (window.location.href !== targetUrl)
-    window.history.replaceState(window.history.state, '', targetUrl)
-}
-
 function syncViewFromRoute(href: string) {
-  let url: URL
-  try {
-    url = new URL(href || window.location.href)
-  }
-  catch {
-    currentView.value = 'whisper'
-    pendingPrivateConversationRoute.value = null
-    privateSessions.clearSelectedSession()
-    replaceNotificationRoute('whisper')
-    return
-  }
+  const normalizedRoute = normalizeNotificationRoute(href || window.location.href)
+  const url = new URL(normalizedRoute.normalizedUrl)
   if (url.searchParams.get('page') !== AppPage.Notifications)
     return
 
-  const requestedView = url.searchParams.get('notificationView')
-  const nextView = parseNotificationView(url)
+  if (window.location.href !== normalizedRoute.normalizedUrl)
+    replacePrivateConversationUrl(normalizedRoute.normalizedUrl)
+
+  const nextView = normalizedRoute.view
   currentView.value = nextView
-  if (requestedView === 'settings') {
-    privateConversationRestoreAttempted.value = true
-    openMessagesSettings()
-  }
-  if (!isNotificationView(requestedView)) {
-    pendingPrivateConversationRoute.value = null
-    privateSessions.clearSelectedSession()
-    replaceNotificationRoute(nextView)
-    return
-  }
   syncPrivateConversationFromRoute(url, nextView)
+  if (normalizedRoute.openMessageSettings)
+    openSettingsAt({ category: 'bewly-pages', page: 'messages' })
+  routeReady.value = true
 }
 
 function selectView(view: NotificationView) {
@@ -323,11 +303,8 @@ function selectView(view: NotificationView) {
   )
 }
 
-function handleOpenMessagesSettings(event: MouseEvent) {
-  const origin = event.currentTarget instanceof Element
-    ? event.currentTarget.getBoundingClientRect()
-    : undefined
-  openMessagesSettings(origin)
+function handleOpenMessagesSettings() {
+  openSettingsAt({ category: 'bewly-pages', page: 'messages' })
 }
 
 function resetOuterScrollForWorkspaceView(view: NotificationView) {
@@ -401,6 +378,7 @@ function activatePage() {
     return
 
   isPageActive.value = true
+  routeReady.value = false
   privateConversationRestoreAttempted.value = false
   syncViewFromRoute(window.location.href)
   registerRefreshHandler()
@@ -469,42 +447,48 @@ onBeforeUnmount(() => {
       'notifications-page--dock-bottom': isBottomDock,
     }"
   >
-    <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
-
-    <div class="notifications-page__workspace">
-      <NotificationsNavigation
-        :model-value="currentView"
-        @open-settings="handleOpenMessagesSettings"
-        @update:model-value="selectView"
-      />
-
-      <section class="notifications-page__outlet">
-        <WhisperWorkspace
-          v-if="isWhisperView"
-          ref="whisperWorkspaceRef"
-          :account-state="accountState"
-          :active="isPageActive"
-          :controller="privateSessions"
-          :messages-controller="privateMessages"
-          @close-conversation="closePrivateConversation"
-          @select-session="selectPrivateConversation"
-        />
-        <NativeNotificationFeed
-          v-if="nativeView"
-          :key="nativeView"
-          ref="nativeFeedRef"
-          :account-state="accountState"
-          :active="isPageActive"
-          :controller="notificationFeeds"
-          :section="nativeView"
-        />
-        <OriginalNotificationsFrame
-          v-if="originalView"
-          ref="originalFrameRef"
-          :view="originalView"
-        />
-      </section>
+    <div v-if="!routeReady" class="notifications-page__route-loading" aria-busy="true">
+      <Loading />
     </div>
+
+    <template v-else>
+      <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
+
+      <div class="notifications-page__workspace">
+        <NotificationsNavigation
+          :model-value="currentView"
+          @open-settings="handleOpenMessagesSettings"
+          @update:model-value="selectView"
+        />
+
+        <section class="notifications-page__outlet">
+          <WhisperWorkspace
+            v-if="isWhisperView"
+            ref="whisperWorkspaceRef"
+            :account-state="accountState"
+            :active="isPageActive"
+            :controller="privateSessions"
+            :messages-controller="privateMessages"
+            @close-conversation="closePrivateConversation"
+            @select-session="selectPrivateConversation"
+          />
+          <NativeNotificationFeed
+            v-if="nativeView"
+            :key="nativeView"
+            ref="nativeFeedRef"
+            :account-state="accountState"
+            :active="isPageActive"
+            :controller="notificationFeeds"
+            :section="nativeView"
+          />
+          <OriginalNotificationsFrame
+            v-if="originalView"
+            ref="originalFrameRef"
+            :view="originalView"
+          />
+        </section>
+      </div>
+    </template>
   </main>
 </template>
 
@@ -527,6 +511,15 @@ onBeforeUnmount(() => {
   grid-template-rows: auto minmax(0, 1fr);
   height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   overflow: hidden;
+}
+
+.notifications-page__route-loading {
+  display: flex;
+  width: 100%;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
 }
 
 .notifications-page--document {

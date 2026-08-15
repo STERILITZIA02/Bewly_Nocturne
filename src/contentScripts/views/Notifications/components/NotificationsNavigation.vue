@@ -12,7 +12,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', view: NotificationView): void
-  (event: 'openSettings', sourceEvent: MouseEvent): void
+  (event: 'openSettings'): void
 }>()
 
 const { t } = useI18n()
@@ -64,7 +64,7 @@ function unreadCount(section: NotificationSectionDefinition): number {
       class="notifications-navigation__item notifications-navigation__settings bew-shape-smooth-rect"
       :aria-label="t('notifications.actions.open_message_settings')"
       :title="t('notifications.actions.open_message_settings')"
-      @click="emit('openSettings', $event)"
+      @click="emit('openSettings')"
     >
       <i class="notifications-navigation__icon" i-solar:settings-bold-duotone aria-hidden="true" />
       <span class="notifications-navigation__label">

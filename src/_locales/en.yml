@@ -128,7 +128,8 @@ settings:
   messages_mobile_open_last: Restore the last conversation
   messages_server_settings: Bilibili server settings
   messages_server_settings_desc: Bilibili server-side message settings remain managed by the original page.
-  messages_original_settings: Manage in original Bilibili
+  messages_original_settings: Original Bilibili message settings
+  messages_manage_original: Manage in original Bilibili
   category_playback_player_desc: Configure player mode, scrolling, danmaku, captions, and playback state.
   category_playback_autoplay_desc: Configure autoplay and custom playback behavior.
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
