@@ -154,12 +154,26 @@ export function getOfficialAssistantType(systemMessageType: number): OfficialAss
   return 'official-assistant'
 }
 
-function createPrivateSessionCapabilities(kind: PrivateSessionKind): PrivateSessionCapabilities {
-  const isNativeReadable = kind === 'user' || kind === 'official-assistant'
+function createPrivateSessionCapabilities(
+  kind: PrivateSessionKind,
+  talkerId: string,
+  sessionType: number,
+): PrivateSessionCapabilities {
+  const isDirectConversation = sessionType === 1 && /^\d+$/.test(talkerId)
+  const isNativeReadable = isDirectConversation && (
+    kind === 'user'
+    || kind === 'official-assistant'
+    || kind === 'unfollowed-user'
+    || kind === 'intercepted-user'
+  )
+  const canAcknowledge = kind === 'user' || kind === 'official-assistant'
+  const canOpenProfile = kind === 'user'
+    || kind === 'unfollowed-user'
+    || kind === 'intercepted-user'
   return {
     canReadNative: isNativeReadable,
-    canAck: isNativeReadable,
-    canOpenProfile: kind === 'user',
+    canAck: isNativeReadable && canAcknowledge,
+    canOpenProfile: isDirectConversation && canOpenProfile,
     canOpenOriginal: true,
   }
 }
@@ -223,7 +237,7 @@ export function transformPrivateSessions(
       assistantType: kind === 'official-assistant'
         ? getOfficialAssistantType(session.system_msg_type)
         : null,
-      capabilities: createPrivateSessionCapabilities(kind),
+      capabilities: createPrivateSessionCapabilities(kind, talkerId, session.session_type),
       original: session,
     })
   }

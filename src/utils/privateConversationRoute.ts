@@ -12,6 +12,8 @@ export const PRIVATE_CONVERSATION_ROUTE_PARAMS = {
   sessionType: 'notificationSessionType',
 } as const
 
+export const PRIVATE_CONVERSATION_HISTORY_STATE_KEY = 'bewlyPrivateConversation'
+
 const KNOWN_PRIVATE_SESSION_TYPES = new Set<PrivateConversationSessionType>([1, 2])
 const DECIMAL_IDENTIFIER_PATTERN = /^\d+$/
 const PRIVATE_CONVERSATION_BASE_URL = buildBewlyNotificationUrl('whisper')
@@ -25,12 +27,17 @@ function toUrl(url: string | URL): URL | null {
   }
 }
 
+export function isPrivateConversationSessionType(value: unknown): value is PrivateConversationSessionType {
+  return typeof value === 'number'
+    && Number.isSafeInteger(value)
+    && KNOWN_PRIVATE_SESSION_TYPES.has(value as PrivateConversationSessionType)
+}
+
 function parseSessionType(value: string | null): PrivateConversationSessionType | null {
   if (!value || !DECIMAL_IDENTIFIER_PATTERN.test(value))
     return null
   const sessionType = Number(value)
-  return Number.isSafeInteger(sessionType)
-    && KNOWN_PRIVATE_SESSION_TYPES.has(sessionType as PrivateConversationSessionType)
+  return isPrivateConversationSessionType(sessionType)
     ? sessionType as PrivateConversationSessionType
     : null
 }
@@ -77,4 +84,30 @@ export function clearPrivateConversationRoute(url: string | URL): string {
   parsedUrl.searchParams.delete(PRIVATE_CONVERSATION_ROUTE_PARAMS.talkerId)
   parsedUrl.searchParams.delete(PRIVATE_CONVERSATION_ROUTE_PARAMS.sessionType)
   return parsedUrl.toString()
+}
+
+export function createPrivateConversationHistoryState(state: unknown): Record<string, unknown> {
+  const currentState = state && typeof state === 'object'
+    ? state as Record<string, unknown>
+    : {}
+  return {
+    ...currentState,
+    [PRIVATE_CONVERSATION_HISTORY_STATE_KEY]: true,
+  }
+}
+
+export function isPrivateConversationHistoryState(state: unknown): boolean {
+  return Boolean(
+    state
+    && typeof state === 'object'
+    && (state as Record<string, unknown>)[PRIVATE_CONVERSATION_HISTORY_STATE_KEY] === true,
+  )
+}
+
+export function clearPrivateConversationHistoryState(state: unknown): Record<string, unknown> {
+  const currentState = state && typeof state === 'object'
+    ? { ...state as Record<string, unknown> }
+    : {}
+  delete currentState[PRIVATE_CONVERSATION_HISTORY_STATE_KEY]
+  return currentState
 }

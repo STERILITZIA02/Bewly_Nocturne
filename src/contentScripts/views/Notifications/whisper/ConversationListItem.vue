@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
-
 import type { DisplayPrivateSession } from './privateSession'
 import { normalizePrivateSessionLocale } from './privateSession'
 
@@ -18,8 +16,6 @@ const emit = defineEmits<{
 
 const { locale, t } = useI18n()
 const avatarFailed = ref(false)
-const originalUrl = buildOriginalNotificationUrl('whisper')
-const usesNativeConversation = computed(() => props.session.capabilities.canReadNative)
 const assistantLabel = computed(() => props.session.assistantType
   ? t(`notifications.whisper.assistants.${props.session.assistantType}`)
   : '')
@@ -48,40 +44,7 @@ watch(() => props.session.avatar, () => {
 </script>
 
 <template>
-  <ALink
-    v-if="!usesNativeConversation"
-    class="conversation-list-item bew-shape-smooth-rect"
-    :class="{ 'conversation-list-item--compact': compact }"
-    :data-session-key="session.key"
-    :href="originalUrl"
-    type="content"
-    :aria-label="t('notifications.whisper.open_unsupported_original', { name: displayName })"
-  >
-    <span class="conversation-list-item__avatar-wrap">
-      <img
-        v-if="session.avatar && !avatarFailed"
-        class="conversation-list-item__avatar"
-        :src="session.avatar"
-        :alt="displayName"
-        loading="lazy"
-        decoding="async"
-        @error="avatarFailed = true"
-      >
-      <span v-else class="conversation-list-item__fallback-avatar" aria-hidden="true">
-        {{ displayName.slice(0, 1) }}
-      </span>
-    </span>
-    <span class="conversation-list-item__copy">
-      <strong>{{ displayName }}</strong>
-      <span>{{ displaySummary }}</span>
-      <span class="conversation-list-item__original-list-label">
-        {{ t('notifications.whisper.open_original_list') }}
-      </span>
-    </span>
-  </ALink>
-
   <button
-    v-else
     type="button"
     class="conversation-list-item bew-shape-smooth-rect"
     :data-session-key="session.key"
@@ -207,15 +170,13 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item__body,
-.conversation-list-item__copy,
 .conversation-list-item__heading,
 .conversation-list-item__name,
 .conversation-list-item__meta {
   min-width: 0;
 }
 
-.conversation-list-item__body,
-.conversation-list-item__copy {
+.conversation-list-item__body {
   display: grid;
   flex: 1 1 auto;
   gap: var(--bew-space-1);
@@ -262,8 +223,7 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item time,
-.conversation-list-item__summary,
-.conversation-list-item__copy > span {
+.conversation-list-item__summary {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);

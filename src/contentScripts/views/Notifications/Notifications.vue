@@ -13,7 +13,11 @@ import { buildBewlyNotificationUrl, parseNotificationView } from '~/utils/notifi
 import type { PrivateConversationRoute } from '~/utils/privateConversationRoute'
 import {
   buildPrivateConversationUrl,
+  clearPrivateConversationHistoryState,
   clearPrivateConversationRoute,
+  createPrivateConversationHistoryState,
+  isPrivateConversationHistoryState,
+  isPrivateConversationSessionType,
   parsePrivateConversationRoute,
   PRIVATE_CONVERSATION_ROUTE_PARAMS,
 } from '~/utils/privateConversationRoute'
@@ -54,8 +58,6 @@ interface NativeNotificationFeedExposed {
 interface WhisperWorkspaceExposed {
   refresh: () => Promise<void>
 }
-
-const PRIVATE_CONVERSATION_HISTORY_STATE_KEY = 'bewlyPrivateConversationEntry'
 
 const { t } = useI18n()
 const { activatedPage, handlePageRefresh, openMessagesSettings, scrollViewportRef } = useBewlyApp()
@@ -158,18 +160,16 @@ function maybeRestoreLastPrivateConversation() {
 
   const sessionKey = `${savedRoute.sessionType}:${savedRoute.talkerId}`
   const session = privateSessions.state.items.find(item => item.key === sessionKey)
-  if (!session) {
+  if (!session || !isPrivateConversationSessionType(session.sessionType)) {
     if (privateSessions.state.noMore)
       privateConversationRestoreAttempted.value = true
     return
   }
 
   privateConversationRestoreAttempted.value = true
-  if (!session.capabilities.canReadNative || session.sessionType !== 1)
-    return
   const route: PrivateConversationRoute = {
     talkerId: session.talkerId,
-    sessionType: 1,
+    sessionType: session.sessionType,
   }
   pendingPrivateConversationRoute.value = route
   privateSessions.selectSession(session)
@@ -195,12 +195,6 @@ function applyPendingPrivateConversationRoute() {
       privateSessions.clearSelectedSession()
       replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
     }
-    return
-  }
-  if (!session.capabilities.canReadNative) {
-    pendingPrivateConversationRoute.value = null
-    privateSessions.clearSelectedSession()
-    replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
     return
   }
   privateSessions.selectSession(session)
@@ -237,12 +231,12 @@ function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
 }
 
 function selectPrivateConversation(session: DisplayPrivateSession) {
-  if (!session.capabilities.canReadNative || session.sessionType !== 1)
+  if (!/^\d+$/.test(session.talkerId) || !isPrivateConversationSessionType(session.sessionType))
     return
 
   const route: PrivateConversationRoute = {
     talkerId: session.talkerId,
-    sessionType: 1,
+    sessionType: session.sessionType,
   }
   const currentRoute = parsePrivateConversationRoute(window.location.href)
   const isCurrentSelection = privateSessions.selectedSessionKey.value === session.key
@@ -256,21 +250,17 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   ) {
     return
   }
-  const currentHistoryState = window.history.state
-  const nextHistoryState = currentHistoryState && typeof currentHistoryState === 'object'
-    ? { ...currentHistoryState, [PRIVATE_CONVERSATION_HISTORY_STATE_KEY]: true }
-    : { [PRIVATE_CONVERSATION_HISTORY_STATE_KEY]: true }
-  window.history.pushState(nextHistoryState, '', buildPrivateConversationUrl(route))
+  window.history.pushState(
+    createPrivateConversationHistoryState(window.history.state),
+    '',
+    buildPrivateConversationUrl(route),
+  )
 }
 
 function closePrivateConversation() {
   pendingPrivateConversationRoute.value = null
   privateSessions.clearSelectedSession()
-  if (
-    window.history.state
-    && typeof window.history.state === 'object'
-    && window.history.state[PRIVATE_CONVERSATION_HISTORY_STATE_KEY] === true
-  ) {
+  if (isPrivateConversationHistoryState(window.history.state)) {
     window.history.back()
     return
   }
@@ -319,9 +309,18 @@ function selectView(view: NotificationView) {
     return
 
   currentView.value = view
-  if (view === 'whisper')
+  if (view === 'whisper') {
     privateConversationRestoreAttempted.value = false
-  window.history.pushState(window.history.state, '', buildBewlyNotificationUrl(view))
+  }
+  else {
+    pendingPrivateConversationRoute.value = null
+    privateSessions.clearSelectedSession()
+  }
+  window.history.pushState(
+    clearPrivateConversationHistoryState(window.history.state),
+    '',
+    buildBewlyNotificationUrl(view),
+  )
 }
 
 function handleOpenMessagesSettings(event: MouseEvent) {
