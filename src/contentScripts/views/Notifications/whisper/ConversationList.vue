@@ -74,6 +74,29 @@ function focusSession(sessionKey: string) {
   sessionItem?.focus({ preventScroll: true })
 }
 
+function handleListKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')
+    return
+  const target = event.target instanceof HTMLElement
+    ? event.target.closest<HTMLElement>('[data-session-key]')
+    : null
+  if (!target || !itemsRef.value?.contains(target))
+    return
+
+  const sessionItems = Array.from(
+    itemsRef.value.querySelectorAll<HTMLElement>('[data-session-key]'),
+  )
+  const currentIndex = sessionItems.indexOf(target)
+  if (currentIndex < 0)
+    return
+  const direction = event.key === 'ArrowDown' ? 1 : -1
+  const nextIndex = Math.min(sessionItems.length - 1, Math.max(0, currentIndex + direction))
+  if (nextIndex === currentIndex)
+    return
+  event.preventDefault()
+  sessionItems[nextIndex]?.focus()
+}
+
 async function observeSentinel() {
   const generation = ++observerGeneration
   observer?.disconnect()
@@ -165,7 +188,12 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
       </label>
     </div>
 
-    <div v-if="filteredItems.length" ref="itemsRef" class="conversation-list__items">
+    <div
+      v-if="filteredItems.length"
+      ref="itemsRef"
+      class="conversation-list__items"
+      @keydown="handleListKeydown"
+    >
       <ConversationListItem
         v-for="session in filteredItems"
         :key="session.key"

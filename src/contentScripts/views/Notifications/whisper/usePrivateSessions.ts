@@ -42,6 +42,7 @@ export interface PrivateSessionsState {
   newestSessionTs: number
   loadedPageCount: number
   loadedAt: number
+  scrollTop: number
 }
 
 export interface PrivateSessionsDependencies {
@@ -65,6 +66,7 @@ export interface PrivateSessionsController {
   activate: (unreadCount: number) => Promise<void>
   retryFailed: () => Promise<void>
   observeUnreadCount: (unreadCount: number) => Promise<void>
+  updateScrollTop: (scrollTop: number) => void
   selectSession: (session: DisplayPrivateSession) => void
   clearSelectedSession: () => void
   markSessionRead: (talkerId: string, ackSeqno: string) => void
@@ -137,6 +139,7 @@ function createState(): PrivateSessionsState {
     newestSessionTs: 0,
     loadedPageCount: 0,
     loadedAt: 0,
+    scrollTop: 0,
   })
 }
 
@@ -203,6 +206,7 @@ export function usePrivateSessions(
     state.newestSessionTs = 0
     state.loadedPageCount = 0
     state.loadedAt = 0
+    state.scrollTop = 0
     selectedSessionKey.value = ''
     userCardCache.clear()
     contentGeneration++
@@ -529,6 +533,10 @@ export function usePrivateSessions(
       selectedSessionKey.value = session.key
   }
 
+  function updateScrollTop(scrollTop: number) {
+    state.scrollTop = Number.isFinite(scrollTop) ? Math.max(0, scrollTop) : 0
+  }
+
   function clearSelectedSession() {
     selectedSessionKey.value = ''
   }
@@ -574,6 +582,7 @@ export function usePrivateSessions(
     activate,
     retryFailed,
     observeUnreadCount,
+    updateScrollTop,
     selectSession,
     clearSelectedSession,
     markSessionRead,

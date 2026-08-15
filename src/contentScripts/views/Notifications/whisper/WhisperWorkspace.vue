@@ -44,7 +44,6 @@ const topBarStore = useTopBarStore()
 const conversationListRef = ref<ConversationListExposed | null>(null)
 const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const conversationViewRef = ref<ConversationViewExposed | null>(null)
-const listScrollTop = ref(0)
 const originalUrl = buildOriginalNotificationUrl('whisper')
 const selectedSession = computed(() => props.controller.state.items.find(
   item => item.key === props.controller.selectedSessionKey.value,
@@ -87,7 +86,7 @@ function retry() {
 }
 
 function selectSession(session: DisplayPrivateSession) {
-  listScrollTop.value = conversationListRef.value?.getScrollTop() ?? 0
+  props.controller.updateScrollTop(conversationListRef.value?.getScrollTop() ?? 0)
   emit('selectSession', session)
 }
 
@@ -120,14 +119,17 @@ watch(unreadCount, async (next, previous) => {
 })
 
 watch(() => props.controller.selectedSessionKey.value, async (nextSessionKey, previousSessionKey) => {
-  if (nextSessionKey && !previousSessionKey)
-    listScrollTop.value = conversationListRef.value?.getScrollTop() ?? listScrollTop.value
+  if (nextSessionKey && !previousSessionKey) {
+    props.controller.updateScrollTop(
+      conversationListRef.value?.getScrollTop() ?? props.controller.state.scrollTop,
+    )
+  }
   await nextTick()
   if (nextSessionKey) {
     conversationViewRef.value?.focusHeading()
   }
   else if (previousSessionKey) {
-    conversationListRef.value?.restoreScrollTop(listScrollTop.value)
+    conversationListRef.value?.restoreScrollTop(props.controller.state.scrollTop)
     conversationListRef.value?.focusSession(previousSessionKey)
   }
 })
@@ -330,12 +332,14 @@ defineExpose({ refresh })
     width: 100%;
     height: 100%;
     transition:
+      opacity var(--bew-duration-normal) var(--bew-ease-standard),
       transform var(--bew-duration-normal) var(--bew-ease-standard),
       visibility 0s linear var(--bew-duration-normal);
   }
 
   .whisper-workspace__sessions {
     visibility: visible;
+    opacity: 1;
     transform: translateX(0);
     border-right: 0;
     transition-delay: 0s;
@@ -343,12 +347,14 @@ defineExpose({ refresh })
 
   .whisper-workspace__detail {
     visibility: hidden;
+    opacity: 0;
     pointer-events: none;
     transform: translateX(100%);
   }
 
   .whisper-workspace--detail .whisper-workspace__sessions {
     visibility: hidden;
+    opacity: 0;
     pointer-events: none;
     transform: translateX(-100%);
     transition-delay: 0s, var(--bew-duration-normal);
@@ -356,6 +362,7 @@ defineExpose({ refresh })
 
   .whisper-workspace--detail .whisper-workspace__detail {
     visibility: visible;
+    opacity: 1;
     pointer-events: auto;
     transform: translateX(0);
     transition-delay: 0s;

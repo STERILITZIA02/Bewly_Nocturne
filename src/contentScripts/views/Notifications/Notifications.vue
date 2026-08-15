@@ -54,6 +54,8 @@ interface WhisperWorkspaceExposed {
   refresh: () => Promise<void>
 }
 
+const PRIVATE_CONVERSATION_HISTORY_STATE_KEY = 'bewlyPrivateConversationEntry'
+
 const { t } = useI18n()
 const { activatedPage, handlePageRefresh, scrollViewportRef } = useBewlyApp()
 const routeState = useRouteState()
@@ -188,12 +190,24 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   ) {
     return
   }
-  window.history.pushState(window.history.state, '', buildPrivateConversationUrl(route))
+  const currentHistoryState = window.history.state
+  const nextHistoryState = currentHistoryState && typeof currentHistoryState === 'object'
+    ? { ...currentHistoryState, [PRIVATE_CONVERSATION_HISTORY_STATE_KEY]: true }
+    : { [PRIVATE_CONVERSATION_HISTORY_STATE_KEY]: true }
+  window.history.pushState(nextHistoryState, '', buildPrivateConversationUrl(route))
 }
 
 function closePrivateConversation() {
   pendingPrivateConversationRoute.value = null
   privateSessions.clearSelectedSession()
+  if (
+    window.history.state
+    && typeof window.history.state === 'object'
+    && window.history.state[PRIVATE_CONVERSATION_HISTORY_STATE_KEY] === true
+  ) {
+    window.history.back()
+    return
+  }
   replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
 }
 
