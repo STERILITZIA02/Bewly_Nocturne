@@ -15,27 +15,6 @@ if (false) {
   void api.privateMessage.getPrivateUserCards({ uids: ['1'] })
   void api.privateMessage.getPrivateMessages({ talkerId: '1', endSeqno: '2' })
   void api.privateMessage.ackPrivateSession({ talkerId: '1', ackSeqno: '2', csrf: 'token' })
-  void api.privateMessage.sendPrivateMessage({ senderId: '1', talkerId: '2', text: 'hello', csrf: 'token' })
-  void api.privateMessage.uploadPrivateImage({
-    requestId: 'request-1',
-    fileName: 'image.png',
-    mimeType: 'image/png',
-    bytes: [1, 2, 3],
-    csrf: 'token',
-  })
-  void api.privateMessage.sendPrivateImageMessage({
-    senderId: '1',
-    talkerId: '2',
-    csrf: 'token',
-    uploaded: {
-      url: 'https://i0.hdslb.com/bfs/im/sanitized.png',
-      width: 1,
-      height: 1,
-      size: 3,
-      imageType: 'png',
-    },
-  })
-  void api.privateMessage.cancelPrivateImageUpload({ requestId: 'request-1' })
 }
 
 interface MockResponseOptions {
@@ -46,6 +25,8 @@ interface MockResponseOptions {
 }
 
 interface PrivateMessageModules {
+  api: typeof import('../src/background/privateMessage/api')
+  experimentalApi: typeof import('../src/background/privateMessage/experimental/api')
   errors: typeof import('../src/background/privateMessage/errors')
   losslessJson: typeof import('../src/background/privateMessage/losslessJson')
   protocol: typeof import('../src/background/privateMessage/protocol')
@@ -55,6 +36,8 @@ interface PrivateMessageModules {
   privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
+  experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions')
+  experimentalUsePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites')
   privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
   topBarSharedRefresh: typeof import('../src/stores/topBarSharedRefresh')
@@ -109,6 +92,8 @@ async function readSessionKindFixture(name: string): Promise<unknown> {
 async function loadModules(): Promise<PrivateMessageModules> {
   try {
     const [
+      api,
+      experimentalApi,
       errors,
       losslessJson,
       protocol,
@@ -118,10 +103,14 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
+      experimentalPrivateMessage,
+      experimentalUsePrivateMessages,
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
     ] = await Promise.all([
+      import('../src/background/privateMessage/api'),
+      import('../src/background/privateMessage/experimental/api'),
       import('../src/background/privateMessage/errors'),
       import('../src/background/privateMessage/losslessJson'),
       import('../src/background/privateMessage/protocol'),
@@ -131,11 +120,15 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
+      import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions'),
+      import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites'),
       import('../src/utils/privateConversationRoute'),
       import('../src/contentScripts/views/Notifications/notificationSections'),
       import('../src/stores/topBarSharedRefresh'),
     ])
     return {
+      api,
+      experimentalApi,
       errors,
       losslessJson,
       protocol,
@@ -145,6 +138,8 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateMessage,
       usePrivateSessions,
       usePrivateMessages,
+      experimentalPrivateMessage,
+      experimentalUsePrivateMessages,
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
@@ -1211,6 +1206,14 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
     new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url),
     'utf8',
   )
+  const productionApiSource = await readFile(
+    new URL('../src/background/privateMessage/api.ts', import.meta.url),
+    'utf8',
+  )
+  const productionControllerSource = await readFile(
+    new URL('../src/contentScripts/views/Notifications/whisper/usePrivateMessages.ts', import.meta.url),
+    'utf8',
+  )
   for (const writeDependency of [
     'uploadPrivateImage',
     'cancelPrivateImageUpload',
@@ -1218,20 +1221,62 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
   ]) {
     assert.equal(notificationsSource.includes(writeDependency), false, writeDependency)
   }
-  assert.ok(notificationsSource.includes('import.meta.env.DEV'))
-  assert.ok(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'))
-  assert.ok(notificationsSource.includes('data-testid="private-text-send-protocol-gate"'))
-  assert.ok(notificationsSource.includes('data-testid="private-text-send-protocol-result"'))
-  assert.ok(notificationsSource.includes('v-if="devTextSendGateAvailable"'))
-  assert.ok(notificationsSource.includes('const devTextSendGateUsed = ref(false)'))
-  assert.ok(notificationsSource.includes('devTextSendGateUsed.value = true'))
-  assert.ok(notificationsSource.includes('sendPrivateMessage'))
-  assert.ok(notificationsSource.includes(`DEV_TEXT_SEND_VALUE = 'test-test'`))
-  assert.equal(
-    conversationSource.includes('v-if="session.capabilities.canSendText || session.capabilities.canSendImage"'),
-    true,
-  )
+  assert.equal(notificationsSource.includes('import.meta.env.DEV'), false)
+  assert.equal(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'), false)
+  assert.equal(notificationsSource.includes('private-text-send-protocol-gate'), false)
+  assert.equal(notificationsSource.includes('sendPrivateMessage'), false)
+  assert.equal(conversationSource.includes('MessageComposer'), false)
+  assert.equal(conversationSource.includes('sendDraft'), false)
+  assert.equal(productionControllerSource.includes('sendDraft'), false)
+  assert.equal(productionControllerSource.includes('sendImage'), false)
+  assert.equal(productionControllerSource.includes('optimistic'), false)
+  for (const writeApi of [
+    'sendPrivateMessage',
+    'uploadPrivateImage',
+    'sendPrivateImageMessage',
+    'cancelPrivateImageUpload',
+  ]) {
+    assert.equal(productionApiSource.includes(writeApi), false, writeApi)
+  }
   assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), true)
+})
+
+verify('experimental private writes remain available only to explicit verification imports', async ({
+  api,
+  experimentalApi,
+}) => {
+  const experimentalApiSource = await readFile(
+    new URL('../src/background/privateMessage/experimental/api.ts', import.meta.url),
+    'utf8',
+  )
+  const experimentalControllerSource = await readFile(
+    new URL('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites.ts', import.meta.url),
+    'utf8',
+  )
+  const requiredWarning = 'EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.'
+  assert.ok(experimentalApiSource.includes(requiredWarning))
+  assert.ok(experimentalControllerSource.includes(requiredWarning))
+  for (const retainedWrite of [
+    'sendPrivateMessage',
+    'uploadPrivateImage',
+    'sendPrivateImageMessage',
+    'cancelPrivateImageUpload',
+  ]) {
+    assert.ok(experimentalApiSource.includes(retainedWrite), retainedWrite)
+  }
+  assert.ok(experimentalControllerSource.includes('reconcileOptimisticPrivateMessages'))
+  assert.deepEqual(Object.keys(api.default).sort(), [
+    'ackPrivateSession',
+    'getNewPrivateSessions',
+    'getOlderPrivateSessions',
+    'getPrivateMessages',
+    'getPrivateSessions',
+    'getPrivateUserCards',
+  ])
+  assert.equal(typeof experimentalApi.sendPrivateMessage, 'function')
+  assert.equal(typeof experimentalApi.uploadPrivateImage, 'function')
+  assert.equal(typeof experimentalApi.sendPrivateImageMessage, 'function')
+  assert.equal(typeof experimentalApi.cancelPrivateImageUpload, 'function')
 })
 
 verify('original-fallback sessions keep available avatars instead of always using initials', async () => {
@@ -2251,7 +2296,8 @@ verify('conversation controller uses end_seqno for history and rejects old accou
   await nextTick()
   resolveOlder?.(createMessagesResponse([createRawMessage('1', '101')]))
   await loadOlder
-  assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
+  assert.deepEqual(state.items.map(item => item.msgKey), ['1', '3', '4'])
+  assert.equal(controller.getState('300').items.length, 0)
 
   mid.value = '300'
   await nextTick()
@@ -2295,7 +2341,8 @@ verify('older-history requests are single-flight and stop after a page makes no 
   await Promise.all([firstRequest, repeatedRequest])
 
   const state = controller.getState('200')
-  assert.equal(state.noMore, true)
+  assert.equal(state.noMore, false)
+  assert.equal(state.paginationStalled, true)
   assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
   await controller.loadOlder('200')
   assert.equal(olderRequests, 1)
@@ -2384,6 +2431,7 @@ verify('a failed latest refresh blocks ACK against stale cached history', async 
   await controller.refreshLatest('200')
   const acknowledged = await controller.acknowledgeIfEligible('200', {
     atLatest: true,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
@@ -2415,6 +2463,7 @@ verify('ACK requires an active visible latest conversation and dedupes successfu
   await controller.loadInitial('200', '9223372036854775700')
   const blocked = await controller.acknowledgeIfEligible('200', {
     atLatest: false,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
@@ -2422,11 +2471,13 @@ verify('ACK requires an active visible latest conversation and dedupes successfu
 
   const first = await controller.acknowledgeIfEligible('200', {
     atLatest: true,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
   const repeated = await controller.acknowledgeIfEligible('200', {
     atLatest: true,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
@@ -2459,6 +2510,7 @@ verify('failed ACK never clears local unread state or advances lastAckSeqno', as
   await controller.loadInitial('200', '100')
   const acknowledged = await controller.acknowledgeIfEligible('200', {
     atLatest: true,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
@@ -2491,6 +2543,7 @@ verify('in-flight ACK remains single-flight across a temporary conversation swit
   await controller.loadInitial('200', '100')
   const firstAck = controller.acknowledgeIfEligible('200', {
     atLatest: true,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
@@ -2498,6 +2551,7 @@ verify('in-flight ACK remains single-flight across a temporary conversation swit
   activeTalkerId.value = '200'
   const repeatedAck = controller.acknowledgeIfEligible('200', {
     atLatest: true,
+    canAck: true,
     pageActive: true,
     visible: true,
   })
@@ -2535,7 +2589,7 @@ verify('session controller clears unread only after confirmed ACK', ({ privateSe
   assert.equal(controller.state.items[0]?.original.session_ts, 1755000005000000)
 })
 
-verify('optimistic text messages reconcile to one server message without duplicates', ({ privateMessage }) => {
+verify('optimistic text messages reconcile to one server message without duplicates', ({ experimentalPrivateMessage: privateMessage }) => {
   const optimistic = privateMessage.createOptimisticPrivateTextMessage({
     localId: 'local-1',
     senderId: '100',
@@ -2601,7 +2655,7 @@ verify('optimistic text messages reconcile to one server message without duplica
   assert.deepEqual(reconciled.items.map(item => item.msgKey), ['9223372036854775807'])
 })
 
-verify('send controller inserts one optimistic item, clears draft, and reconciles after code zero', async ({ usePrivateMessages }) => {
+verify('send controller inserts one optimistic item, clears draft, and reconciles after code zero', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   let resolveSend: ((value: unknown) => void) | undefined
@@ -2657,7 +2711,7 @@ verify('send controller inserts one optimistic item, clears draft, and reconcile
   assert.equal(sessionRefreshes, 1)
 })
 
-verify('code-zero text send confirms from finite history retries without resending', async ({ usePrivateMessages }) => {
+verify('code-zero text send confirms from finite history retries without resending', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const waits: number[] = []
@@ -2702,7 +2756,7 @@ verify('code-zero text send confirms from finite history retries without resendi
   assert.deepEqual(state.items.map(item => item.msgKey), ['history-fallback-key'])
 })
 
-verify('accepted but unconfirmed text is retained and never automatically resent', async ({ usePrivateMessages }) => {
+verify('accepted but unconfirmed text is retained and never automatically resent', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const waits: number[] = []
@@ -2739,7 +2793,7 @@ verify('accepted but unconfirmed text is retained and never automatically resent
   assert.equal(sendRequests, 1)
 })
 
-verify('a response msg_key missing from bounded history fails the protocol gate without resending', async ({ usePrivateMessages }) => {
+verify('a response msg_key missing from bounded history fails the protocol gate without resending', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   let sendRequests = 0
@@ -2768,7 +2822,10 @@ verify('a response msg_key missing from bounded history fails the protocol gate 
   assert.equal(sendRequests, 1)
 })
 
-verify('failed optimistic sends retain text and retry remains single-flight', async ({ privateMessage, usePrivateMessages }) => {
+verify('failed optimistic sends retain text and retry remains single-flight', async ({
+  experimentalPrivateMessage: privateMessage,
+  experimentalUsePrivateMessages: usePrivateMessages,
+}) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   let sendAttempt = 0
@@ -2859,7 +2916,7 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   assert.equal(controller.states.has('200'), false)
 })
 
-verify('optimistic image messages retain local previews and reconcile by server msg_key', ({ privateMessage }) => {
+verify('optimistic image messages retain local previews and reconcile by server msg_key', ({ experimentalPrivateMessage: privateMessage }) => {
   const optimistic = privateMessage.createOptimisticPrivateImageMessage({
     localId: 'image-local-1',
     senderId: '100',
@@ -2895,7 +2952,7 @@ verify('optimistic image messages retain local previews and reconcile by server 
   assert.deepEqual(reconciled.items.map(item => item.msgKey), ['9223372036854775807'])
 })
 
-verify('image upload failure retries upload while send failure reuses the uploaded server image', async ({ usePrivateMessages }) => {
+verify('image upload failure retries upload while send failure reuses the uploaded server image', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const revoked: string[] = []
@@ -2971,7 +3028,7 @@ verify('image upload failure retries upload while send failure reuses the upload
   assert.equal(sessionRefreshes, 1)
 })
 
-verify('image reconcile failure retries only history and resource cleanup cancels stale uploads', async ({ usePrivateMessages }) => {
+verify('image reconcile failure retries only history and resource cleanup cancels stale uploads', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const revoked: string[] = []
@@ -3093,7 +3150,7 @@ verify('image reconcile failure retries only history and resource cleanup cancel
   await disposeSend
 })
 
-verify('image send waits for a valid account before allocating preview resources', async ({ usePrivateMessages }) => {
+verify('image send waits for a valid account before allocating preview resources', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('')
   const activeTalkerId = ref('200')
   let objectUrlsCreated = 0
@@ -3126,7 +3183,7 @@ verify('image send waits for a valid account before allocating preview resources
   assert.equal(controller.states.size, 0)
 })
 
-verify('account changes cancel an active image upload and reject the old account response', async ({ usePrivateMessages }) => {
+verify('account changes cancel an active image upload and reject the old account response', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const cancelled: string[] = []

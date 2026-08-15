@@ -1,9 +1,12 @@
 <script setup lang="ts">
+/**
+ * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
+ */
 import { useI18n } from 'vue-i18n'
 
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
-import type { PrivateImageDraftState } from './usePrivateMessages'
+import type { PrivateImageDraftState } from './usePrivateMessageWrites'
 
 const props = defineProps<{
   modelValue: string

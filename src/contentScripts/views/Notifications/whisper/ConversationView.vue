@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
-import MessageComposer from './MessageComposer.vue'
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { DisplayPrivateSession } from './privateSession'
@@ -30,12 +29,7 @@ const assistantLabel = computed(() => props.session.assistantType
 const headingRef = ref<HTMLElement | null>(null)
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
-const composerRef = ref<InstanceType<typeof MessageComposer> | null>(null)
 const state = computed(() => props.controller.getState(props.session.talkerId))
-const draft = computed({
-  get: () => state.value.draft,
-  set: value => props.controller.setDraft(props.session.talkerId, value),
-})
 const errorMessage = computed(() => {
   const kind = state.value.errorKind
   if (!kind)
@@ -81,6 +75,7 @@ async function acknowledgeIfEligible() {
   await nextTick()
   await props.controller.acknowledgeIfEligible(props.session.talkerId, {
     atLatest: isAtLatest(),
+    canAck: props.session.capabilities.canAck,
     pageActive: props.active,
     visible: document.visibilityState === 'visible',
   })
@@ -111,55 +106,6 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   await acknowledgeIfEligible()
 }
 
-async function sendDraft() {
-  const request = props.controller.sendDraft(props.session.talkerId)
-  await nextTick()
-  scrollToLatest()
-  await request
-  await nextTick()
-  if (isAtLatest())
-    scrollToLatest()
-}
-
-async function retrySend(localId: string) {
-  const message = state.value.items.find(item => item.localId === localId)
-  const request = message?.msgType === 2
-    ? props.controller.retryImage(props.session.talkerId, localId)
-    : props.controller.retrySend(props.session.talkerId, localId)
-  await nextTick()
-  scrollToLatest()
-  await request
-}
-
-async function sendImage(file: File) {
-  const request = props.controller.sendImage(props.session.talkerId, file)
-  await nextTick()
-  scrollToLatest()
-  await request
-  await nextTick()
-  if (isAtLatest())
-    scrollToLatest()
-}
-
-function deleteFailed(localId: string) {
-  const message = state.value.items.find(item => item.localId === localId)
-  if (message?.msgType === 2)
-    props.controller.removeImage(props.session.talkerId, localId)
-  else
-    props.controller.deleteFailed(props.session.talkerId, localId)
-}
-
-function getImageFailureKind(localId?: string) {
-  return localId && state.value.imageDraft?.localId === localId
-    ? state.value.imageDraft.failureKind
-    : null
-}
-
-function editFailed(localId: string) {
-  props.controller.editFailed(props.session.talkerId, localId)
-  void nextTick(() => composerRef.value?.focus())
-}
-
 async function activateConversation() {
   if (!props.active)
     return
@@ -186,7 +132,7 @@ async function activateConversation() {
 
 function retry() {
   if (state.value.failedOperation === 'load-older')
-    void loadOlderMessages()
+    void props.controller.retryLoadOlder(props.session.talkerId).then(() => nextTick()).then(saveViewportState)
   else if (state.value.failedOperation === 'refresh')
     void refreshLatest()
   else
@@ -256,7 +202,7 @@ defineExpose({
       >
         <i i-mingcute:arrow-left-line aria-hidden="true" />
       </IconButton>
-      <div>
+      <div class="conversation-view__identity">
         <ALink
           v-if="profileUrl"
           class="conversation-view__profile-link"
@@ -278,6 +224,9 @@ defineExpose({
           <span>{{ t('notifications.whisper.messages.readonly') }}</span>
         </span>
       </div>
+      <ALink class="conversation-view__header-original" :href="originalUrl" type="content">
+        {{ t('notifications.whisper.messages.open_original_header') }}
+      </ALink>
     </header>
 
     <div
@@ -285,7 +234,7 @@ defineExpose({
       class="conversation-view__messages"
       @scroll.passive="handleScroll"
     >
-      <div v-if="state.loading && !state.loaded" class="conversation-view__state" aria-busy="true">
+      <div v-if="state.loadingInitial && !state.loaded" class="conversation-view__state" aria-busy="true">
         <Loading />
         <span>{{ t('notifications.whisper.messages.loading') }}</span>
       </div>
@@ -324,11 +273,7 @@ defineExpose({
             v-for="message in state.items"
             :key="message.msgKey"
             :message="message"
-            :image-failure-kind="getImageFailureKind(message.localId)"
-            @delete-failed="deleteFailed"
-            @edit-failed="editFailed"
             @preview="previewImage = $event"
-            @retry="retrySend"
           />
         </div>
         <div v-else class="conversation-view__state">
@@ -347,21 +292,13 @@ defineExpose({
     </button>
 
     <footer class="conversation-view__footer">
-      <MessageComposer
-        v-if="session.capabilities.canSendText || session.capabilities.canSendImage"
-        ref="composerRef"
-        v-model="draft"
-        :sending="state.sending"
-        :image-draft="state.imageDraft"
-        @remove-image="controller.removeImage(session.talkerId, $event)"
-        @retry-image="controller.retryImage(session.talkerId, $event)"
-        @select-image="sendImage"
-        @submit="sendDraft"
-      />
-      <div v-else class="conversation-view__readonly">
-        <span>{{ t('notifications.whisper.messages.readonly') }}</span>
+      <div class="conversation-view__readonly">
+        <span class="conversation-view__readonly-copy">
+          <strong>{{ t('notifications.whisper.messages.readonly_title') }}</strong>
+          <span>{{ t('notifications.whisper.messages.readonly_description') }}</span>
+        </span>
         <ALink :href="originalUrl" type="content">
-          {{ t('notifications.whisper.messages.send_original') }}
+          {{ t('notifications.whisper.messages.continue_original') }}
         </ALink>
       </div>
     </footer>
@@ -425,6 +362,24 @@ defineExpose({
   line-height: var(--bew-line-height-control);
 }
 
+.conversation-view__readonly-copy {
+  display: grid;
+  min-width: 0;
+}
+
+.conversation-view__readonly-copy strong {
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-line-height-control);
+}
+
+.conversation-view__readonly-copy span {
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+
 .conversation-view__readonly a {
   flex: 0 0 auto;
   color: var(--bew-theme-color);
@@ -432,9 +387,18 @@ defineExpose({
   text-decoration: none;
 }
 
-.conversation-view__header > div {
+.conversation-view__identity {
   display: grid;
   min-width: 0;
+}
+
+.conversation-view__header-original {
+  flex: 0 0 auto;
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+  text-decoration: none;
 }
 
 .conversation-view__header strong {

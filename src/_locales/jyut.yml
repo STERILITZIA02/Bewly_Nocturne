@@ -907,6 +907,10 @@ notifications:
       load_older: 載入更早訊息
       history_start: 已經去到聊天記錄起點
       readonly: 而家私訊頁面係唯讀模式
+      readonly_title: 而家 Bewly 私訊係唯讀模式
+      readonly_description: 傳送訊息或者管理對話請前往原版訊息頁
+      continue_original: 喺原版私訊繼續
+      open_original_header: 喺原版開啟
       message_sources:
         auto-reply: 自動回覆
         fan-group-system: 粉絲團系統提示

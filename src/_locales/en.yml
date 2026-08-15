@@ -974,6 +974,10 @@ notifications:
       load_older: Load earlier messages
       history_start: Start of message history
       readonly: Direct messages are currently read-only
+      readonly_title: Bewly direct messages are read-only
+      readonly_description: Use the original message page to send messages or manage conversations
+      continue_original: Continue in original direct messages
+      open_original_header: Open in original
       message_sources:
         auto-reply: Automatic reply
         fan-group-system: Fan-group system notice

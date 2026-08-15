@@ -922,6 +922,10 @@ notifications:
       load_older: 載入更早訊息
       history_start: 已到達聊天記錄起點
       readonly: 目前私訊頁面為唯讀模式
+      readonly_title: 目前 Bewly 私訊為唯讀模式
+      readonly_description: 傳送訊息或管理對話請前往原版訊息頁
+      continue_original: 在原版私訊中繼續
+      open_original_header: 在原版中開啟
       message_sources:
         auto-reply: 自動回覆
         fan-group-system: 粉絲團系統提示

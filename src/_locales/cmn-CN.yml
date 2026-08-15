@@ -921,6 +921,10 @@ notifications:
       load_older: 加载更早消息
       history_start: 已到达聊天记录起点
       readonly: 当前私信页面为只读模式
+      readonly_title: 当前 Bewly 私信为只读模式
+      readonly_description: 发送消息或管理会话请前往原版消息页
+      continue_original: 在原版私信中继续
+      open_original_header: 在原版中打开
       message_sources:
         auto-reply: 自动回复
         fan-group-system: 粉丝团系统提示

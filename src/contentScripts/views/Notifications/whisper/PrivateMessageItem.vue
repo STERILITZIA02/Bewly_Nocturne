@@ -4,18 +4,13 @@ import { useI18n } from 'vue-i18n'
 import type { DisplayPrivateMessage } from './privateMessage'
 import PrivateMessageContent from './PrivateMessageContent.vue'
 import { normalizePrivateSessionLocale } from './privateSession'
-import type { PrivateImageFailureKind } from './usePrivateMessages'
 
 const props = defineProps<{
   message: DisplayPrivateMessage
-  imageFailureKind?: PrivateImageFailureKind | null
 }>()
 
 const emit = defineEmits<{
-  (event: 'deleteFailed', localId: string): void
-  (event: 'editFailed', localId: string): void
   (event: 'preview', src: string): void
-  (event: 'retry', localId: string): void
 }>()
 
 const { locale, t } = useI18n()
@@ -30,28 +25,6 @@ const displayTime = computed(() => {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
-})
-const sendStatus = computed(() => {
-  if (props.message.sendState === 'preparing')
-    return t('notifications.whisper.messages.image_preparing')
-  if (props.message.sendState === 'uploading')
-    return t('notifications.whisper.messages.image_uploading')
-  if (props.message.sendState === 'sending')
-    return t('notifications.whisper.messages.sending')
-  if (props.message.sendState === 'reconciling')
-    return t('notifications.whisper.messages.reconciling')
-  if (props.message.sendState === 'pending')
-    return t('notifications.whisper.messages.sending')
-  return ''
-})
-const failureMessage = computed(() => {
-  if (props.imageFailureKind === 'upload-failed')
-    return t('notifications.whisper.messages.image_upload_failed')
-  if (props.imageFailureKind === 'send-failed')
-    return t('notifications.whisper.messages.image_send_failed')
-  if (props.imageFailureKind === 'reconcile-failed')
-    return t('notifications.whisper.messages.image_reconcile_failed')
-  return t('notifications.whisper.messages.send_failed')
 })
 const sourceLabel = computed(() => props.message.source
   ? t(`notifications.whisper.messages.message_sources.${props.message.source}`)
@@ -86,21 +59,6 @@ const sourceLabel = computed(() => props.message.source
         <time v-if="displayTime" class="private-message-item__time">
           {{ displayTime }}
         </time>
-      </div>
-      <div v-if="message.localId" class="private-message-item__send-status" role="status">
-        <span v-if="sendStatus">{{ sendStatus }}</span>
-        <template v-else-if="message.sendState === 'failed'">
-          <span>{{ failureMessage }}</span>
-          <button type="button" @click="emit('retry', message.localId)">
-            {{ t('notifications.whisper.messages.retry_send') }}
-          </button>
-          <button v-if="message.msgType === 1" type="button" @click="emit('editFailed', message.localId)">
-            {{ t('notifications.whisper.messages.edit_failed') }}
-          </button>
-          <button type="button" @click="emit('deleteFailed', message.localId)">
-            {{ t('notifications.whisper.messages.delete_failed') }}
-          </button>
-        </template>
       </div>
     </div>
   </article>
@@ -142,8 +100,7 @@ const sourceLabel = computed(() => props.message.source
 }
 
 .private-message-item__time,
-.private-message-item__source,
-.private-message-item__send-status {
+.private-message-item__source {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
@@ -159,27 +116,5 @@ const sourceLabel = computed(() => props.message.source
 
 .private-message-item--self .private-message-item__metadata {
   justify-content: flex-end;
-}
-
-.private-message-item__send-status {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--bew-space-2);
-  justify-content: flex-end;
-}
-
-.private-message-item__send-status button {
-  padding: 0;
-  color: var(--bew-theme-color);
-  font: inherit;
-  appearance: none;
-  cursor: pointer;
-  background: transparent;
-  border: 0;
-}
-
-.private-message-item__send-status button:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
-  outline-offset: var(--bew-space-0-5);
 }
 </style>
