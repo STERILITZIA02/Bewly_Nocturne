@@ -1072,7 +1072,3 @@ export function useExperimentalPrivateMessageWrites(
     dispose,
   }
 }
-
-// Kept as a module-local compatibility name for the preserved synthetic
-// fixture harness. Production code never imports this experimental module.
-export const usePrivateMessages = useExperimentalPrivateMessageWrites

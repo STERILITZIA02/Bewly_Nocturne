@@ -1,0 +1,14 @@
+{
+  "nativeSections": [
+    "reply",
+    "at",
+    "love"
+  ],
+  "whisperImplementation": "hybrid-read-only",
+  "systemImplementation": "original",
+  "privateWritesEnabled": [],
+  "experimentalEvidence": {
+    "status": 412,
+    "verifiedCodeZero": false
+  }
+}

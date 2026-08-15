@@ -37,7 +37,9 @@ interface PrivateMessageModules {
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
   experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/privateMessageTransactions')
-  experimentalUsePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites')
+  experimentalUsePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites') & {
+    usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental/usePrivateMessageWrites').useExperimentalPrivateMessageWrites
+  }
   privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
   topBarSharedRefresh: typeof import('../src/stores/topBarSharedRefresh')
@@ -139,7 +141,10 @@ async function loadModules(): Promise<PrivateMessageModules> {
       usePrivateSessions,
       usePrivateMessages,
       experimentalPrivateMessage,
-      experimentalUsePrivateMessages,
+      experimentalUsePrivateMessages: {
+        ...experimentalUsePrivateMessages,
+        usePrivateMessages: experimentalUsePrivateMessages.useExperimentalPrivateMessageWrites,
+      },
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
@@ -1278,6 +1283,51 @@ verify('experimental private writes remain available only to explicit verificati
   assert.equal(typeof experimentalApi.uploadPrivateImage, 'function')
   assert.equal(typeof experimentalApi.sendPrivateImageMessage, 'function')
   assert.equal(typeof experimentalApi.cancelPrivateImageUpload, 'function')
+})
+
+verify('read-only initial build baseline protects runtime isolation, cache limits, and browser regression gates', async () => {
+  const [agentsSource, regressionSource, notificationsSource, messagesSource, workspaceSource, policyFixtureSource] = await Promise.all([
+    readFile(new URL('../AGENTS.md', import.meta.url), 'utf8'),
+    readFile(new URL('../docs/notifications/read-only-initial-build-regression.md', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/usePrivateMessages.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../tests/fixtures/private-message/read-only-initial-build.json', import.meta.url), 'utf8'),
+  ])
+  const policyFixture = JSON.parse(policyFixtureSource) as {
+    experimentalEvidence: { status: number, verifiedCodeZero: boolean }
+    nativeSections: string[]
+    privateWritesEnabled: string[]
+    systemImplementation: string
+    whisperImplementation: string
+  }
+
+  for (const baseline of [
+    'Native Read-Only Initial Build',
+    'ACK 是当前唯一 Native 私信服务端状态写入',
+    '页面级 LRU',
+    'experimental',
+    'HTTP `412`',
+  ]) {
+    assert.ok(agentsSource.includes(baseline), baseline)
+  }
+  assert.ok(notificationsSource.includes('privateMessages.release()'))
+  assert.ok(notificationsSource.includes('maxCachedPrivateConversations'))
+  assert.ok(notificationsSource.includes('maxPrivateMessagesPerConversation'))
+  assert.ok(messagesSource.includes('historyBoundarySeqno'))
+  assert.ok(messagesSource.includes('ackRequests.has'))
+  assert.ok(workspaceSource.includes('syncVisibilityListener'))
+  assert.equal(regressionSource.includes('send_msg` 或 `upload_bfs` 请求：不得出现'), true)
+  assert.deepEqual(policyFixture.nativeSections, ['reply', 'at', 'love'])
+  assert.equal(policyFixture.whisperImplementation, 'hybrid-read-only')
+  assert.equal(policyFixture.systemImplementation, 'original')
+  assert.deepEqual(policyFixture.privateWritesEnabled, [])
+  assert.deepEqual(policyFixture.experimentalEvidence, {
+    status: 412,
+    verifiedCodeZero: false,
+  })
+  for (const browser of ['Chrome', 'Firefox'])
+    assert.ok(regressionSource.includes(browser), browser)
 })
 
 verify('original-fallback sessions keep available avatars instead of always using initials', async () => {
