@@ -929,6 +929,7 @@ notifications:
     refresh_tooltip: Reload the current message category
     retry: Retry
     open_original: Open original
+    open_message_settings: Message settings
     open_original_aria: Open {section} in original Bilibili messages
     open_original_tooltip: Open with the original Bilibili messages page
   sections:

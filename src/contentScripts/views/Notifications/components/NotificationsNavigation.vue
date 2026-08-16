@@ -12,6 +12,7 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', view: NotificationView): void
+  (event: 'openSettings'): void
 }>()
 
 const { t } = useI18n()
@@ -56,6 +57,19 @@ function unreadCount(section: NotificationSectionDefinition): number {
         :aria-label="t('notifications.unread_count', { count: unreadCount(section) })"
       >
         {{ unreadCount(section) > 99 ? '99+' : unreadCount(section) }}
+      </span>
+    </button>
+
+    <button
+      type="button"
+      class="notifications-navigation__item notifications-navigation__settings bew-shape-smooth-rect"
+      :aria-label="t('notifications.actions.open_message_settings')"
+      :title="t('notifications.actions.open_message_settings')"
+      @click="emit('openSettings')"
+    >
+      <i class="notifications-navigation__icon" i-solar:settings-bold-duotone aria-hidden="true" />
+      <span class="notifications-navigation__label">
+        {{ t('notifications.actions.open_message_settings') }}
       </span>
     </button>
   </nav>
@@ -105,6 +119,10 @@ function unreadCount(section: NotificationSectionDefinition): number {
 .notifications-navigation__item--active {
   color: var(--bew-theme-color);
   background: var(--bew-theme-color-10);
+}
+
+.notifications-navigation__settings {
+  margin-top: auto;
 }
 
 .notifications-navigation__icon {
@@ -183,6 +201,11 @@ function unreadCount(section: NotificationSectionDefinition): number {
   .notifications-navigation__item {
     flex: 0 0 auto;
     width: auto;
+  }
+
+  .notifications-navigation__settings {
+    margin-top: 0;
+    margin-left: auto;
   }
 }
 

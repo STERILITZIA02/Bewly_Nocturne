@@ -2070,9 +2070,11 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(notificationsSource.includes('normalizeNotificationRoute'))
   assert.ok(notificationsSource.includes('routeReady'))
   assert.ok(notificationsSource.includes('openSettingsAt'))
-  assert.equal(navigationSource.includes('openSettings'), false)
-  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
-  assert.equal(notificationsSource.includes('handleOpenMessagesSettings'), false)
+  assert.ok(navigationSource.includes(`(event: 'openSettings'): void`))
+  assert.ok(navigationSource.includes('notifications-navigation__settings'))
+  assert.ok(navigationSource.includes(`@click="emit('openSettings')"`))
+  assert.ok(notificationsSource.includes('handleOpenMessagesSettings'))
+  assert.ok(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'))
   assert.ok(appProviderSource.includes('openSettingsAt'))
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   for (const setting of [
@@ -2105,6 +2107,7 @@ verify('message settings live in the global Bewly settings page and the old sect
   for (const localeSource of localeSources) {
     assert.ok(localeSource.includes('messages_auto_mark_read:'))
     assert.ok(localeSource.includes('messages_original_settings:'))
+    assert.ok(localeSource.includes('open_message_settings:'))
   }
 })
 
@@ -2180,9 +2183,17 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(sectionsSource.includes(`export type OriginalNotificationView = 'system'`))
   assert.equal(sectionsSource.includes(`| 'settings'`), false)
 
-  assert.equal(navigationSource.includes('openSettings'), false)
-  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
-  assert.equal(notificationsSource.includes('@open-settings'), false)
+  assert.ok(navigationSource.includes(`(event: 'openSettings'): void`))
+  assert.ok(navigationSource.includes('notifications-navigation__settings'))
+  assert.ok(navigationSource.includes(`@click="emit('openSettings')"`))
+  assert.equal(
+    navigationSource.slice(
+      navigationSource.indexOf('notifications-navigation__settings'),
+      navigationSource.indexOf('notifications-navigation__settings') + 500,
+    ).includes('aria-current'),
+    false,
+  )
+  assert.ok(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'))
   assert.ok(routeSource.includes(`settings: 'config'`))
   assert.ok(routeSource.includes(`view: 'whisper'`))
   assert.ok(routeSource.includes('openMessageSettings: true'))
