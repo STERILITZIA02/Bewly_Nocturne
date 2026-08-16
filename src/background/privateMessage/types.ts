@@ -128,6 +128,7 @@ export interface SendPrivateMessageOptions {
   talkerId: string
   text: string
   csrf: string
+  devId?: string
 }
 
 export interface UploadedPrivateImage {
@@ -151,6 +152,7 @@ export interface SendPrivateImageMessageOptions {
   talkerId: string
   csrf: string
   uploaded: UploadedPrivateImage
+  devId?: string
 }
 
 export interface PrivateSendData {

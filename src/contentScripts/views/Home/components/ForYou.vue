@@ -142,14 +142,27 @@ function logRecommendRequestFailure(
   context: RecommendRequestLogContext,
   details: Record<string, unknown> = {},
 ) {
-  console.error(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, {
+  const error = details.error
+  const diagnostic: Record<string, unknown> = {
     time: new Date().toLocaleString(),
     requestId: context.id,
     mode: context.mode,
     requestType: context.requestType,
     durationMs: getRequestDuration(context),
-    ...details,
-  })
+    errorKind: error !== undefined
+      ? isExtensionContextInvalidatedError(error)
+        ? 'extension-context-invalidated'
+        : isBilibiliRiskControl(error) ? 'risk-control' : 'network'
+      : isBilibiliRiskControl(details) ? 'risk-control' : 'api-error',
+  }
+
+  for (const key of ['code', 'message', 'reason', 'phase'] as const) {
+    const value = details[key]
+    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean')
+      diagnostic[key] = value
+  }
+
+  debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, diagnostic)
 }
 
 // 当前使用的视频列表（根据推荐模式）
@@ -760,7 +773,9 @@ async function getData(webRequestType: WebRecommendRequestType = 'refresh') {
         if (version !== requestVersion || settings.value.recommendationMode !== 'app')
           return
 
-        console.error('App recommendation failed:', error)
+        debugLog(`${HOME_LOAD_LOG_PREFIX} App 推荐接口请求失败`, {
+          errorKind: isBilibiliRiskControl(error) ? 'risk-control' : 'network',
+        })
 
         // 检查是否启用自动切换
         if (settings.value.autoSwitchRecommendationMode) {
@@ -1274,7 +1289,7 @@ async function getAppRecommendVideos(
 
   // 检查是否有有效的 access token
   if (!appAuthTokens.value.accessToken) {
-    console.error(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, {
+    debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, {
       time: new Date().toLocaleString(),
       mode: recommendationMode,
       requestType,

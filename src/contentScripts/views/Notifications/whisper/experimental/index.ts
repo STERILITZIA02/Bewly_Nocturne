@@ -1,9 +1,8 @@
 /**
  * Explicit entry for private-message write protocol experiments.
  *
- * Production Notifications code must not import this module. It exists so the
- * fixture verifier and deliberately constructed experimental harnesses can keep
- * the blocked text/image transports reviewable without exposing a runtime UI.
+ * The production bundle does not import this aggregate entry. Fixture verification
+ * and explicit DEV harnesses import the exact experimental modules they require.
  */
 export type { default as MessageComposer } from './MessageComposer.vue'
 export * from './privateMessageTransactions'

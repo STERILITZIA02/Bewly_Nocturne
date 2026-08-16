@@ -1,5 +1,6 @@
 import { onMessage } from '~/utils/messaging'
 
+import API_MESSAGE_SERVER_SETTINGS from '../../messageServerSettings'
 import API_PRIVATE_MESSAGE from '../../privateMessage'
 import { apiListenerFactory } from '../../utils'
 import API_ANIME from './anime'
@@ -22,6 +23,7 @@ export const API_COLLECTION = {
   FAVORITE: API_FAVORITE,
   MOMENT: API_MOMENT,
   NOTIFICATION: API_NOTIFICATION,
+  MESSAGE_SERVER_SETTINGS: API_MESSAGE_SERVER_SETTINGS,
   PRIVATE_MESSAGE: API_PRIVATE_MESSAGE,
   RANKING: API_RANKING,
   SEARCH: API_SEARCH,

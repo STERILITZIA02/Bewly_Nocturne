@@ -9,6 +9,10 @@ export type NotificationEndpointName
   = | 'getReplyNotifications'
     | 'getAtNotifications'
     | 'getLikeNotifications'
+    | 'getSystemUnifiedNotifications'
+    | 'getSystemUserNotifications'
+    | 'getSystemNotificationHistory'
+    | 'markSystemNotificationsRead'
 
 export interface NotificationTransportError {
   kind: NotificationTransportErrorKind
@@ -26,7 +30,7 @@ export interface NotificationApiResponse {
   bewlyError?: NotificationTransportError
 }
 
-const NOTIFICATION_IDENTIFIER_PATTERN = /("(?:id|mid|business_id|subject_id|source_id|root_id|target_id|item_id)"\s*:\s*)(-?\d+)/g
+const NOTIFICATION_IDENTIFIER_PATTERN = /("(?:id|cursor|mid|business_id|subject_id|source_id|root_id|target_id|item_id)"\s*:\s*)(-?\d+)/g
 const HTML_PREFIX_PATTERN = /^\s*</
 const LOGIN_URL_PATTERN = /passport|login/i
 const RISK_CONTROL_HTML_PATTERN = /请求(?:过于)?频繁|访问(?:过于)?频繁|风控|risk[\s_-]*control/i
@@ -148,4 +152,20 @@ export function parseAtNotificationResponse(response: Response): Promise<Notific
 
 export function parseLikeNotificationResponse(response: Response): Promise<NotificationApiResponse> {
   return parseNotificationResponse(response, 'getLikeNotifications')
+}
+
+export function parseSystemUnifiedNotificationResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'getSystemUnifiedNotifications')
+}
+
+export function parseSystemUserNotificationResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'getSystemUserNotifications')
+}
+
+export function parseSystemHistoryNotificationResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'getSystemNotificationHistory')
+}
+
+export function parseSystemReadResponse(response: Response): Promise<NotificationApiResponse> {
+  return parseNotificationResponse(response, 'markSystemNotificationsRead')
 }

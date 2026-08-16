@@ -285,6 +285,7 @@ export function createPrivateTextMessageParams(
   return createPrivateSendParams({
     content: JSON.stringify({ content: options.text }),
     csrf,
+    devId: options.devId,
     msgType: 1,
     runtime,
     senderId: options.senderId,
@@ -295,6 +296,7 @@ export function createPrivateTextMessageParams(
 interface CreatePrivateSendParamsOptions {
   content: string
   csrf: string
+  devId?: string
   msgType: 1 | 2
   runtime: PrivateMessageRuntime
   senderId: string
@@ -306,7 +308,7 @@ function createPrivateSendParams(
 ): PrivateMessageRequestParams {
   const { runtime } = options
 
-  const devId = runtime.randomUUID()
+  const devId = options.devId ?? runtime.randomUUID()
   if (!UUID_V4_PATTERN.test(devId))
     throw new TypeError('devId must be a UUID v4')
 
@@ -372,6 +374,7 @@ export function createPrivateImageMessageParams(
   return createPrivateSendParams({
     content,
     csrf: requireCsrf(options.csrf),
+    devId: options.devId,
     msgType: 2,
     runtime,
     senderId: options.senderId,

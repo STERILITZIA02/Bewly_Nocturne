@@ -3,10 +3,12 @@ import { useI18n } from 'vue-i18n'
 
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
-import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
+import MessageComposer from './experimental/MessageComposer.vue'
+import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
+import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
 import { getPrivateSessionProfileUrl } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
@@ -14,23 +16,54 @@ import type { PrivateMessagesController } from './usePrivateMessages'
 const props = defineProps<{
   active: boolean
   controller: PrivateMessagesController
-  session: DisplayPrivateSession
+  session?: DisplayPrivateSession | null
+  recipient?: TransientPrivateRecipient | null
+  writeController: PrivateMessageWriteController | null
 }>()
 
 const emit = defineEmits<{
   (event: 'back'): void
+  (event: 'sendConfirmed', talkerId: string): void
 }>()
 
 const { t } = useI18n()
-const originalUrl = buildOriginalNotificationUrl('whisper')
-const profileUrl = computed(() => getPrivateSessionProfileUrl(props.session))
-const assistantLabel = computed(() => props.session.assistantType
+const talkerId = computed(() => props.session?.talkerId ?? props.recipient?.mid ?? '')
+const displayName = computed(() => props.session?.name ?? props.recipient?.name ?? '')
+const profileUrl = computed(() => props.session
+  ? getPrivateSessionProfileUrl(props.session)
+  : /^\d+$/.test(props.recipient?.mid ?? '')
+    ? `https://space.bilibili.com/${props.recipient!.mid}`
+    : '')
+const assistantLabel = computed(() => props.session?.assistantType
   ? t(`notifications.whisper.assistants.${props.session.assistantType}`)
   : '')
 const headingRef = ref<HTMLElement | null>(null)
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
-const state = computed(() => props.controller.getState(props.session.talkerId))
+const state = computed(() => props.controller.getState(talkerId.value))
+const isTextSendEnabled = Boolean(props.recipient || props.session?.kind === 'user')
+  && Boolean(props.writeController)
+const writeState = computed(() => props.writeController?.getState(talkerId.value) ?? null)
+const draft = computed({
+  get: () => writeState.value?.draft ?? '',
+  set: value => props.writeController?.setDraft(talkerId.value, value),
+})
+const sendStatusMessage = computed(() => {
+  const current = writeState.value
+  if (!current || current.sending)
+    return ''
+  if (current.lastTextSendOutcome === 'confirmed')
+    return t('notifications.whisper.messages.test_send_success')
+  if (current.lastTextSendOutcome === 'accepted-but-unconfirmed')
+    return t('notifications.whisper.messages.test_send_accepted_unconfirmed')
+  if (current.lastTextSendOutcome === 'protocol-mismatch')
+    return t('notifications.whisper.messages.test_send_protocol_mismatch')
+  if (current.lastTextSendOutcome === 'failed') {
+    const kind = current.lastTextSendDiagnostic?.kind ?? 'api-error'
+    return t(`notifications.whisper.errors.${kind}`)
+  }
+  return ''
+})
 const errorMessage = computed(() => {
   const kind = state.value.errorKind
   if (!kind)
@@ -91,7 +124,7 @@ function saveViewportState() {
   const viewport = messageScrollRef.value
   if (!viewport)
     return
-  props.controller.updateViewport(props.session.talkerId, {
+  props.controller.updateViewport(talkerId.value, {
     atLatest: isAtLatest(),
     scrollTop: viewport.scrollTop,
   })
@@ -105,7 +138,7 @@ function scrollToLatest(behavior: ScrollBehavior = 'auto') {
     ? 'auto'
     : behavior
   viewport.scrollTo({ top: viewport.scrollHeight, behavior: resolvedBehavior })
-  props.controller.updateViewport(props.session.talkerId, {
+  props.controller.updateViewport(talkerId.value, {
     atLatest: true,
     scrollTop: viewport.scrollHeight,
   })
@@ -115,9 +148,9 @@ async function acknowledgeIfEligible() {
   if (!settings.value.autoMarkPrivateMessagesRead)
     return
   await nextTick()
-  await props.controller.acknowledgeIfEligible(props.session.talkerId, {
+  await props.controller.acknowledgeIfEligible(talkerId.value, {
     atLatest: isAtLatest(),
-    canAck: props.session.capabilities.canAck,
+    canAck: props.session?.capabilities.canAck ?? false,
     pageActive: props.active,
     visible: document.visibilityState === 'visible',
   })
@@ -131,7 +164,7 @@ async function loadOlderMessages() {
   const oldScrollHeight = viewport.scrollHeight
   const oldScrollTop = viewport.scrollTop
   const anchor = captureVisibleMessageAnchor(viewport)
-  await props.controller.loadOlder(props.session.talkerId)
+  await props.controller.loadOlder(talkerId.value)
   await nextTick()
   if (
     viewport === messageScrollRef.value
@@ -147,12 +180,12 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   const shouldFollow = options.forceBottom
     || (settings.value.followNewPrivateMessages && wasAtLatest)
   if (wasAtLatest && !shouldFollow) {
-    props.controller.updateViewport(props.session.talkerId, {
+    props.controller.updateViewport(talkerId.value, {
       atLatest: false,
       scrollTop: messageScrollRef.value?.scrollTop ?? state.value.scrollTop,
     })
   }
-  await props.controller.refreshLatest(props.session.talkerId)
+  await props.controller.refreshLatest(talkerId.value)
   await nextTick()
   if (shouldFollow)
     scrollToLatest()
@@ -161,15 +194,37 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   await acknowledgeIfEligible()
 }
 
+async function sendDraft() {
+  const writer = props.writeController
+  if (!isTextSendEnabled || !writer)
+    return
+  const submittedDraft = draft.value
+  const confirmed = await writer.sendDraft(talkerId.value)
+  if (!confirmed) {
+    if (
+      props.recipient
+      && writeState.value?.lastTextSendOutcome === 'failed'
+      && !writeState.value.draft
+    ) {
+      writer.setDraft(talkerId.value, submittedDraft)
+    }
+    return
+  }
+  await props.controller.refreshLatest(talkerId.value)
+  await nextTick()
+  scrollToLatest()
+  emit('sendConfirmed', talkerId.value)
+}
+
 async function activateConversation() {
   if (!props.active)
     return
   const generation = ++activationGeneration
   const wasLoaded = state.value.loaded
   if (wasLoaded)
-    await props.controller.refreshLatest(props.session.talkerId)
+    await props.controller.refreshLatest(talkerId.value)
   else
-    await props.controller.loadInitial(props.session.talkerId, props.session.ackSeqno)
+    await props.controller.loadInitial(talkerId.value, props.session?.ackSeqno ?? '0')
   await nextTick()
   if (generation !== activationGeneration || !props.active)
     return
@@ -187,7 +242,7 @@ async function activateConversation() {
 
 function retry() {
   if (state.value.failedOperation === 'load-older')
-    void props.controller.retryLoadOlder(props.session.talkerId).then(() => nextTick()).then(saveViewportState)
+    void props.controller.retryLoadOlder(talkerId.value).then(() => nextTick()).then(saveViewportState)
   else if (state.value.failedOperation === 'refresh')
     void refreshLatest()
   else
@@ -254,8 +309,11 @@ defineExpose({
 <template>
   <section
     class="conversation-view"
-    :class="{ 'conversation-view--compact': settings.privateMessageDensity === 'compact' }"
-    :aria-label="t('notifications.whisper.messages.timeline_aria', { name: session.name })"
+    :class="{
+      'conversation-view--compact': settings.privateMessageDensity === 'compact',
+      'conversation-view--has-composer': isTextSendEnabled && writeState,
+    }"
+    :aria-label="t('notifications.whisper.messages.timeline_aria', { name: displayName })"
     @keydown.esc="handleEscape"
   >
     <header class="conversation-view__header">
@@ -273,20 +331,17 @@ defineExpose({
           class="conversation-view__profile-link"
           :href="profileUrl"
           type="content"
-          :aria-label="t('notifications.whisper.open_profile', { name: session.name })"
+          :aria-label="t('notifications.whisper.open_profile', { name: displayName })"
         >
           <strong ref="headingRef" tabindex="-1">
-            {{ session.name || t('notifications.whisper.unknown_user') }}
+            {{ displayName || t('notifications.whisper.unknown_user') }}
           </strong>
         </ALink>
         <strong v-else ref="headingRef" tabindex="-1">
-          {{ session.name || t('notifications.whisper.unknown_user') }}
+          {{ displayName || t('notifications.whisper.unknown_user') }}
         </strong>
-        <span class="conversation-view__header-meta">
-          <span v-if="session.assistantType" class="conversation-view__assistant-label">
-            {{ assistantLabel }}
-          </span>
-          <span>{{ t('notifications.whisper.messages.readonly') }}</span>
+        <span v-if="session?.assistantType" class="conversation-view__assistant-label">
+          {{ assistantLabel }}
         </span>
       </div>
     </header>
@@ -351,15 +406,22 @@ defineExpose({
       {{ t('notifications.whisper.messages.new_messages') }}
     </button>
 
-    <footer class="conversation-view__footer">
-      <div class="conversation-view__readonly">
-        <span class="conversation-view__readonly-copy">
-          <strong>{{ t('notifications.whisper.messages.readonly_title') }}</strong>
-          <span>{{ t('notifications.whisper.messages.readonly_description') }}</span>
+    <footer v-if="isTextSendEnabled && writeState" class="conversation-view__footer">
+      <div class="conversation-view__test-send">
+        <MessageComposer
+          v-model="draft"
+          :sending="writeState.sending"
+          :image-draft="null"
+          :enable-image="false"
+          @submit="sendDraft"
+        />
+        <span
+          v-if="sendStatusMessage"
+          class="conversation-view__test-send-status"
+          role="status"
+        >
+          {{ sendStatusMessage }}
         </span>
-        <ALink :href="originalUrl" type="content">
-          {{ t('notifications.whisper.messages.continue_original') }}
-        </ALink>
       </div>
     </footer>
 
@@ -412,41 +474,17 @@ defineExpose({
   border-top: 1px solid var(--bew-border-color);
 }
 
-.conversation-view__readonly {
-  display: flex;
+.conversation-view__test-send {
+  display: grid;
   width: 100%;
   min-width: 0;
-  gap: var(--bew-space-3);
-  align-items: center;
-  justify-content: space-between;
+  gap: var(--bew-space-2);
+}
+
+.conversation-view__test-send-status {
   color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-}
-
-.conversation-view__readonly-copy {
-  display: grid;
-  min-width: 0;
-}
-
-.conversation-view__readonly-copy strong {
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-control);
-}
-
-.conversation-view__readonly-copy span {
-  color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
-}
-
-.conversation-view__readonly a {
-  flex: 0 0 auto;
-  color: var(--bew-theme-color);
-  font-weight: var(--bew-font-weight-semibold);
-  text-decoration: none;
 }
 
 .conversation-view__identity {
@@ -486,13 +524,6 @@ defineExpose({
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
-}
-
-.conversation-view__header-meta {
-  display: flex;
-  min-width: 0;
-  gap: var(--bew-space-2);
-  align-items: center;
 }
 
 .conversation-view__assistant-label {
@@ -593,7 +624,7 @@ defineExpose({
 .conversation-view__new-messages {
   position: absolute;
   right: var(--bew-space-4);
-  bottom: calc(var(--bew-control-height-lg) + var(--bew-space-12) + var(--bew-space-4));
+  bottom: var(--bew-space-4);
   z-index: 1;
   min-height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
@@ -608,6 +639,10 @@ defineExpose({
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-2);
+}
+
+.conversation-view--has-composer .conversation-view__new-messages {
+  bottom: calc(var(--bew-control-height-lg) + var(--bew-space-12) + var(--bew-space-4));
 }
 
 @media (max-width: breakpoints.$mobile-max) {

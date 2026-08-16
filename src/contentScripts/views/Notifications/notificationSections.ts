@@ -5,13 +5,10 @@ export type NotificationView
     | 'love'
     | 'system'
 
-export type NativeNotificationSection = 'reply' | 'at' | 'love'
+export type NativeNotificationSection = 'reply' | 'at' | 'love' | 'system'
 export type HybridNotificationView = 'whisper'
-export type OriginalOnlyNotificationView = 'system'
 
-export type OriginalNotificationView = 'system'
-
-export type NotificationSectionImplementation = 'native' | 'original' | 'hybrid'
+export type NotificationSectionImplementation = 'native' | 'hybrid'
 export type NotificationSectionLayout = 'document' | 'workspace'
 
 export interface NotificationSectionDefinition {
@@ -19,7 +16,7 @@ export interface NotificationSectionDefinition {
   implementation: NotificationSectionImplementation
   layout: NotificationSectionLayout
   labelKey: string
-  descriptionKey: string
+  descriptionKey: string | null
   icon: string
   unreadSource: 'dm' | 'reply' | 'at' | 'like' | 'system' | null
 }
@@ -30,7 +27,7 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'hybrid',
     layout: 'workspace',
     labelKey: 'notifications.sections.whisper.label',
-    descriptionKey: 'notifications.sections.whisper.description',
+    descriptionKey: null,
     icon: 'i-solar:chat-round-bold-duotone',
     unreadSource: 'dm',
   },
@@ -63,8 +60,8 @@ export const NOTIFICATION_SECTIONS = [
   },
   {
     id: 'system',
-    implementation: 'original',
-    layout: 'workspace',
+    implementation: 'native',
+    layout: 'document',
     labelKey: 'notifications.sections.system.label',
     descriptionKey: 'notifications.sections.system.description',
     icon: 'i-solar:chat-line-bold-duotone',
@@ -79,32 +76,13 @@ export const NOTIFICATION_SECTION_BY_ID = Object.fromEntries(
 const NOTIFICATION_VIEW_SET = new Set<NotificationView>(
   NOTIFICATION_SECTIONS.map(section => section.id),
 )
-const ORIGINAL_FRAME_VIEW_SET = new Set<OriginalNotificationView>(['system'])
-const ORIGINAL_ONLY_VIEW_SET = new Set<OriginalOnlyNotificationView>(['system'])
 
 export const TOP_BAR_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
   section => section.unreadSource !== null,
 )
 
-type NativeNotificationSectionDefinition = Extract<
-  (typeof NOTIFICATION_SECTIONS)[number],
-  { implementation: 'native' }
->
-
-export const NATIVE_NOTIFICATION_SECTIONS = NOTIFICATION_SECTIONS.filter(
-  (section): section is NativeNotificationSectionDefinition => section.implementation === 'native',
-)
-
 export function isNotificationView(value: unknown): value is NotificationView {
   return typeof value === 'string' && NOTIFICATION_VIEW_SET.has(value as NotificationView)
-}
-
-export function isOriginalOnlyNotificationView(value: NotificationView): value is OriginalOnlyNotificationView {
-  return ORIGINAL_ONLY_VIEW_SET.has(value as OriginalOnlyNotificationView)
-}
-
-export function isOriginalFrameCapableView(value: NotificationView): value is OriginalNotificationView {
-  return ORIGINAL_FRAME_VIEW_SET.has(value as OriginalNotificationView)
 }
 
 export function isHybridNotificationView(value: NotificationView): value is HybridNotificationView {
@@ -113,8 +91,4 @@ export function isHybridNotificationView(value: NotificationView): value is Hybr
 
 export function isNativeNotificationSection(value: NotificationView): value is NativeNotificationSection {
   return NOTIFICATION_SECTION_BY_ID[value].implementation === 'native'
-}
-
-export function canOriginalNotificationMutateUnread(value: OriginalNotificationView): boolean {
-  return value === 'system'
 }

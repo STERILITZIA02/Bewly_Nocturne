@@ -127,9 +127,33 @@ settings:
   messages_mobile_open_list: 總係顯示會話列表
   messages_mobile_open_last: 恢復上次會話
   messages_server_settings: Bilibili 服務端設定
-  messages_server_settings_desc: Bilibili 服務端訊息設定仍然由原版頁面管理。
-  messages_original_settings: 原版訊息設定
-  messages_manage_original: 喺原版管理
+  messages_server_refresh: 服務端狀態
+  messages_server_refresh_action: 重新整理
+  messages_server_loading: 讀取緊
+  messages_server_enabled: 開啟
+  messages_server_disabled: 關閉
+  messages_server_everyone: 所有人
+  messages_server_following: 關注嘅人
+  messages_server_nobody: 唔接收
+  messages_server_msg_notify: 訊息提醒
+  messages_server_ai_intercept: 私訊智能攔截
+  messages_server_reply: 回覆我嘅訊息提醒
+  messages_server_at: "{'@'} 我嘅訊息提醒"
+  messages_server_like: 收到嘅讚訊息提醒
+  messages_server_unfollowed: 收起未關注人訊息
+  messages_server_block_words: 訊息屏蔽詞
+  messages_server_block_words_limit: 加咗 {count}/{max} 個，每個最多 {length} 個字元。
+  messages_server_block_words_placeholder: 輸入屏蔽詞
+  messages_server_block_words_add: 加入
+  messages_server_block_words_remove: 刪除屏蔽詞 {word}
+  messages_server_block_words_empty: 暫時冇屏蔽詞
+  messages_server_errors:
+    login-required: 登入狀態已失效
+    risk-control: 請求暫時受到限制
+    server-error: 訊息設定服務暫時用唔到
+    network: 網絡連線失敗
+    invalid-response: 暫時讀唔到訊息設定
+    api-error: 操作失敗，請再試
   category_playback_player_desc: 設定播放器模式、捲動、彈幕、字幕同播放狀態。
   category_playback_autoplay_desc: 設定自動連播同自訂播放行為。
   category_bilibili_comments_desc: 加強留言區嘅用戶資料同內容顯示。
@@ -855,7 +879,6 @@ notifications:
   navigation_aria: 訊息分類
   section_aria: 打開{section}
   unread_count: '{count} 條未讀訊息'
-  original_frame_title: 嗶哩嗶哩原版訊息頁
   actions:
     refresh: 重新整理
     refresh_aria: 重新整理而家嘅訊息分類
@@ -867,7 +890,6 @@ notifications:
   sections:
     whisper:
       label: 私訊
-      description: 睇原生會話同唯讀聊天記錄，傳送同未支援會話繼續由原版提供
     reply:
       label: 回覆我嘅
       description: 睇其他人畀你嘅回覆
@@ -879,14 +901,25 @@ notifications:
       description: 睇其他人畀你內容嘅讚
     system:
       label: 系統通知
-      description: 用嗶哩嗶哩原版睇系統通知
+      description: 睇嚟自嗶哩嗶哩嘅系統同服務訊息
   whisper:
     loading: 載入緊私訊會話
     profile_pending: 確認緊帳號
     list_aria: 私訊會話列表
     search_placeholder: 搜尋目前已載入會話
     search_aria: 搜尋已載入嘅私訊會話
-    search_scope: 搜尋同篩選只套用於目前已載入會話
+    select_recipient: 揀{name}做私訊收件人
+    recipient_search:
+      search_following: 喺關注列表搜尋
+      following_empty: 關注列表搵唔到相關用戶
+      search_global: 全站搜尋用戶
+      global_empty: 全站搵唔到相關用戶
+      loading: 搜尋緊用戶
+      more: 顯示更多
+      error: 搜尋失敗，請再試
+      sources:
+        following: 關注列表
+        global: 全站用戶
     loading_more_sessions: 載入緊更早會話
     earliest_session: 已經去到最早會話
     load_more_failed: 更早會話載入失敗
@@ -927,7 +960,6 @@ notifications:
     pinned: 已置頂
     muted: 已免打擾
     unread_count: '{count} 條未讀私訊'
-    open_unsupported_original: 喺原版打開同{name}嘅會話
     open_original_list: 打開原版私訊列表
     open_profile: 打開{name}嘅個人空間
     back_to_conversations: 返回會話列表
@@ -937,22 +969,18 @@ notifications:
       empty: 暫時未有聊天記錄
       load_older: 載入更早訊息
       history_start: 已經去到聊天記錄起點
-      readonly: 而家私訊頁面係唯讀模式
-      readonly_title: 而家 Bewly 私訊係唯讀模式
-      readonly_description: 傳送訊息或者管理對話請前往原版訊息頁
-      continue_original: 喺原版私訊繼續
-      open_original_header: 喺原版開啟
       message_sources:
         auto-reply: 自動回覆
         fan-group-system: 粉絲團系統提示
         mutual-follow: 互相關注
         system: 系統提示
         ai: AI
-      send_original: 喺原版傳送訊息
       composer_placeholder: 輸入訊息
       composer_aria: 私訊文字輸入框
-      composer_hint: Enter 傳送，Shift+Enter 換行
       send: 傳送
+      test_send_success: 伺服器歷史已確認傳送成功
+      test_send_accepted_unconfirmed: 介面已接受，但伺服器歷史暫時未確認；唔會自動重送
+      test_send_protocol_mismatch: 介面已回傳訊息識別碼，但伺服器歷史未能核對；唔會自動重送
       sending: 傳送緊
       reconciling: 同伺服器同步緊
       send_failed: 傳送失敗
@@ -996,10 +1024,16 @@ notifications:
       reply: 載入緊回覆通知
       at: 載入緊提及通知
       love: 載入緊讚好通知
+      system: 載入緊系統通知
     empty:
       reply: 暫時未有回覆通知
       at: 暫時未有提及通知
       love: 暫時未有讚好通知
+      system: 暫時未有系統通知
+    system:
+      unknown_title: 系統通知
+      cover_alt: 系統通知封面
+      unsupported_content: 呢個通知包含而家版本暫時未支援嘅內容
     actions:
       reply: 回覆咗你
       at: 提及咗你

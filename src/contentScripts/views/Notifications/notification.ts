@@ -2,15 +2,18 @@ import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NativeNotificationSection } from './notificationSections'
 
+export type InteractionNotificationSection = Exclude<NativeNotificationSection, 'system'>
+
 export interface DisplayNotificationActor {
   id: string
   name: string
   avatar: string
 }
 
-export interface DisplayNotification {
+export interface InteractionNotification {
+  kind: 'interaction'
   id: string
-  section: NativeNotificationSection
+  section: InteractionNotificationSection
   actors: DisplayNotificationActor[]
   actorCount: number
   actionTextKey: string
@@ -23,6 +26,30 @@ export interface DisplayNotification {
   timestamp: number
   unread: boolean
 }
+
+export type DisplaySystemNotificationSegment
+  = | { type: 'text', text: string }
+    | { type: 'link', text: string, href: string }
+
+export interface SystemNotification {
+  kind: 'system'
+  id: string
+  section: 'system'
+  cursor: string
+  title: string
+  content: string
+  segments: DisplaySystemNotificationSegment[]
+  source: string
+  sourceLogo: string
+  timestamp: number
+  cardTitle: string
+  cardCover: string
+  cardUrl: string
+  originalUrl: string
+  unread: boolean
+}
+
+export type DisplayNotification = InteractionNotification | SystemNotification
 
 type UnknownRecord = Record<string, unknown>
 
@@ -102,7 +129,7 @@ function toActorCount(value: unknown, fallback: number): number {
     : fallback
 }
 
-export function transformReplyNotification(raw: unknown): DisplayNotification | null {
+export function transformReplyNotification(raw: unknown): InteractionNotification | null {
   const record = asNotificationRecord(raw)
   if (!record)
     return null
@@ -115,6 +142,7 @@ export function transformReplyNotification(raw: unknown): DisplayNotification | 
   const item = asNotificationRecord(record.item)
 
   return {
+    kind: 'interaction',
     id,
     section: 'reply',
     actors: [{
@@ -135,7 +163,7 @@ export function transformReplyNotification(raw: unknown): DisplayNotification | 
   }
 }
 
-export function transformAtNotification(raw: unknown): DisplayNotification | null {
+export function transformAtNotification(raw: unknown): InteractionNotification | null {
   const record = asNotificationRecord(raw)
   if (!record)
     return null
@@ -148,6 +176,7 @@ export function transformAtNotification(raw: unknown): DisplayNotification | nul
   const item = asNotificationRecord(record.item)
 
   return {
+    kind: 'interaction',
     id,
     section: 'at',
     actors: actor ? [actor] : [],
@@ -164,7 +193,7 @@ export function transformAtNotification(raw: unknown): DisplayNotification | nul
   }
 }
 
-export function transformLikeNotification(raw: unknown): DisplayNotification | null {
+export function transformLikeNotification(raw: unknown): InteractionNotification | null {
   const record = asNotificationRecord(raw)
   if (!record)
     return null
@@ -178,6 +207,7 @@ export function transformLikeNotification(raw: unknown): DisplayNotification | n
   const item = asNotificationRecord(record.item)
 
   return {
+    kind: 'interaction',
     id,
     section: 'love',
     actors,

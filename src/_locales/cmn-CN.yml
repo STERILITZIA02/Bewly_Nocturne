@@ -127,9 +127,33 @@ settings:
   messages_mobile_open_list: 总是显示会话列表
   messages_mobile_open_last: 恢复上次会话
   messages_server_settings: Bilibili 服务端设置
-  messages_server_settings_desc: Bilibili 服务端消息设置仍由原版页面管理。
-  messages_original_settings: 原版消息设置
-  messages_manage_original: 在原版中管理
+  messages_server_refresh: 服务端状态
+  messages_server_refresh_action: 刷新
+  messages_server_loading: 正在读取
+  messages_server_enabled: 开启
+  messages_server_disabled: 关闭
+  messages_server_everyone: 所有人
+  messages_server_following: 关注的人
+  messages_server_nobody: 不接收
+  messages_server_msg_notify: 消息提醒
+  messages_server_ai_intercept: 私信智能拦截
+  messages_server_reply: 回复我的消息提醒
+  messages_server_at: "{'@'} 我的消息提醒"
+  messages_server_like: 收到的赞消息提醒
+  messages_server_unfollowed: 收起未关注人消息
+  messages_server_block_words: 消息屏蔽词
+  messages_server_block_words_limit: 已添加 {count}/{max} 个，每个最多 {length} 个字符。
+  messages_server_block_words_placeholder: 输入屏蔽词
+  messages_server_block_words_add: 添加
+  messages_server_block_words_remove: 删除屏蔽词 {word}
+  messages_server_block_words_empty: 暂无屏蔽词
+  messages_server_errors:
+    login-required: 登录状态已失效
+    risk-control: 请求暂时受到限制
+    server-error: 消息设置服务暂时不可用
+    network: 网络连接失败
+    invalid-response: 消息设置暂时无法读取
+    api-error: 操作失败，请重试
   category_playback_player_desc: 配置播放器模式、滚动行为、弹幕、字幕和播放状态。
   category_playback_autoplay_desc: 配置自动连播与自定义播放行为。
   category_bilibili_comments_desc: 增强评论区的用户信息与内容显示。
@@ -869,7 +893,6 @@ notifications:
   navigation_aria: 消息分类
   section_aria: 打开{section}
   unread_count: '{count} 条未读消息'
-  original_frame_title: 哔哩哔哩原版消息页
   actions:
     refresh: 刷新
     refresh_aria: 刷新当前消息分类
@@ -881,7 +904,6 @@ notifications:
   sections:
     whisper:
       label: 私信
-      description: 查看原生会话与只读聊天记录，发送和未支持会话继续由原版提供
     reply:
       label: 回复我的
       description: 查看别人对你的回复
@@ -893,14 +915,25 @@ notifications:
       description: 查看别人对你内容的点赞
     system:
       label: 系统通知
-      description: 使用哔哩哔哩原版查看系统通知
+      description: 查看来自哔哩哔哩的系统与服务消息
   whisper:
     loading: 正在加载私信会话
     profile_pending: 正在确认账号
     list_aria: 私信会话列表
     search_placeholder: 搜索当前已加载会话
     search_aria: 搜索已加载的私信会话
-    search_scope: 搜索和筛选仅作用于当前已加载会话
+    select_recipient: 选择{name}作为私信收件人
+    recipient_search:
+      search_following: 在关注列表中搜索
+      following_empty: 关注列表中没有找到相关用户
+      search_global: 全站搜索用户
+      global_empty: 全站没有找到相关用户
+      loading: 正在搜索用户
+      more: 查看更多
+      error: 搜索失败，请重试
+      sources:
+        following: 关注列表
+        global: 全站用户
     loading_more_sessions: 正在加载更早会话
     earliest_session: 已到最早会话
     load_more_failed: 更早会话加载失败
@@ -941,7 +974,6 @@ notifications:
     pinned: 已置顶
     muted: 已免打扰
     unread_count: '{count} 条未读私信'
-    open_unsupported_original: 在原版中打开与{name}的会话
     open_original_list: 打开原版私信列表
     open_profile: 打开{name}的个人空间
     back_to_conversations: 返回会话列表
@@ -951,22 +983,18 @@ notifications:
       empty: 暂无聊天记录
       load_older: 加载更早消息
       history_start: 已到达聊天记录起点
-      readonly: 当前私信页面为只读模式
-      readonly_title: 当前 Bewly 私信为只读模式
-      readonly_description: 发送消息或管理会话请前往原版消息页
-      continue_original: 在原版私信中继续
-      open_original_header: 在原版中打开
       message_sources:
         auto-reply: 自动回复
         fan-group-system: 粉丝团系统提示
         mutual-follow: 互相关注
         system: 系统提示
         ai: AI
-      send_original: 在原版中发送消息
       composer_placeholder: 输入消息
       composer_aria: 私信文本输入框
-      composer_hint: Enter 发送，Shift+Enter 换行
       send: 发送
+      test_send_success: 服务端历史已确认发送成功
+      test_send_accepted_unconfirmed: 接口已接受，但服务端历史暂未确认；不会自动重发
+      test_send_protocol_mismatch: 接口已返回消息标识，但服务端历史未能对账；不会自动重发
       sending: 发送中
       reconciling: 正在与服务端同步
       send_failed: 发送失败
@@ -1010,10 +1038,16 @@ notifications:
       reply: 正在加载回复通知
       at: 正在加载提及通知
       love: 正在加载点赞通知
+      system: 正在加载系统通知
     empty:
       reply: 暂无回复通知
       at: 暂无提及通知
       love: 暂无点赞通知
+      system: 暂无系统通知
+    system:
+      unknown_title: 系统通知
+      cover_alt: 系统通知封面
+      unsupported_content: 该通知包含当前版本暂未支持的内容
     actions:
       reply: 回复了你
       at: 提到了你

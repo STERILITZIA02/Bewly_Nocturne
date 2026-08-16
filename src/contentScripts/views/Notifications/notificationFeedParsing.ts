@@ -1,10 +1,18 @@
 import type { NotificationApiResponse } from '~/background/notificationJson'
+import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NotificationErrorKind } from './composables/notificationFeedState'
-import type { DisplayNotification } from './notification'
+import type {
+  DisplayNotification,
+  DisplaySystemNotificationSegment,
+  InteractionNotification,
+  SystemNotification,
+} from './notification'
 import {
   asNotificationRecord,
+  sanitizeNotificationUrl,
   toNotificationIdentifier,
+  toNotificationText,
   transformAtNotification,
   transformLikeNotification,
   transformReplyNotification,
@@ -12,10 +20,16 @@ import {
 import type { NativeNotificationSection } from './notificationSections'
 
 export interface NotificationPageParams {
+  cursor?: string
   id?: string
   reply_time?: number
   at_time?: number
   like_time?: number
+}
+
+export interface SystemInitialPageResult extends NotificationPageResult {
+  items: SystemNotification[]
+  readCursor: string
 }
 
 export interface NotificationPageResult {
@@ -23,6 +37,7 @@ export interface NotificationPageResult {
   cursorId: string
   cursorTime: number
   noMore: boolean
+  serverReadCommitted?: boolean
 }
 
 export interface NotificationPageParseResult {
@@ -52,6 +67,226 @@ export function dedupeNotifications(items: DisplayNotification[]): DisplayNotifi
   })
 }
 
+function compareUnsignedIntegerStrings(left: string, right: string): number {
+  const normalizedLeft = left.replace(/^0+(?=\d)/, '')
+  const normalizedRight = right.replace(/^0+(?=\d)/, '')
+  if (normalizedLeft.length !== normalizedRight.length)
+    return normalizedLeft.length - normalizedRight.length
+  return normalizedLeft.localeCompare(normalizedRight)
+}
+
+function appendSystemTextSegment(
+  segments: DisplaySystemNotificationSegment[],
+  text: string,
+) {
+  if (!text)
+    return
+  const previous = segments.at(-1)
+  if (previous?.type === 'text')
+    previous.text += text
+  else
+    segments.push({ type: 'text', text })
+}
+
+function parseSystemPlainSegments(value: string): DisplaySystemNotificationSegment[] {
+  const segments: DisplaySystemNotificationSegment[] = []
+  const pattern = /https?:\/\/[^\s<>{}]+|\b(?:BV[0-9A-Za-z]+|av\d+|cv\d+|vc\d+)\b/g
+  let cursor = 0
+  for (const match of value.matchAll(pattern)) {
+    const index = match.index ?? 0
+    appendSystemTextSegment(segments, value.slice(cursor, index))
+    const raw = match[0]
+    const href = raw.startsWith('http')
+      ? sanitizeNotificationUrl(raw)
+      : raw.startsWith('cv')
+        ? sanitizeNotificationUrl(`https://www.bilibili.com/read/${raw}`)
+        : raw.startsWith('vc')
+          ? sanitizeNotificationUrl(`https://t.bilibili.com/${raw.slice(2)}`)
+          : sanitizeNotificationUrl(`https://www.bilibili.com/video/${raw}`)
+    if (href)
+      segments.push({ type: 'link', text: raw, href })
+    else
+      appendSystemTextSegment(segments, raw)
+    cursor = index + raw.length
+  }
+  appendSystemTextSegment(segments, value.slice(cursor))
+  return segments
+}
+
+function unwrapSystemContent(value: string): string | null {
+  if (!value.trim().startsWith('{') && !value.trim().startsWith('['))
+    return value
+  try {
+    const parsed = JSON.parse(value)
+    const record = asNotificationRecord(parsed)
+    return toNotificationText(record?.web) || null
+  }
+  catch {
+    return null
+  }
+}
+
+export function parseSystemContentSegments(value: string): DisplaySystemNotificationSegment[] {
+  const content = unwrapSystemContent(value)
+  if (content === null)
+    return []
+  const segments: DisplaySystemNotificationSegment[] = []
+  const legacyPattern = /#\{([^{}]+)\}\{("[^"]*"|[^{}]*)\}/g
+  let cursor = 0
+  for (const match of content.matchAll(legacyPattern)) {
+    const index = match.index ?? 0
+    segments.push(...parseSystemPlainSegments(content.slice(cursor, index)))
+    const rawTarget = match[2] || ''
+    let target = rawTarget
+    if (rawTarget.startsWith('"')) {
+      try {
+        target = JSON.parse(rawTarget)
+      }
+      catch {
+        target = ''
+      }
+    }
+    const href = sanitizeNotificationUrl(target)
+    if (href && /^https?:/i.test(target))
+      segments.push({ type: 'link', text: match[1] || target, href })
+    else
+      appendSystemTextSegment(segments, match[0])
+    cursor = index + match[0].length
+  }
+  segments.push(...parseSystemPlainSegments(content.slice(cursor)))
+  return segments.length > 0 ? segments : content ? [{ type: 'text', text: content }] : []
+}
+
+function transformSystemNotification(raw: unknown): SystemNotification | null {
+  const record = asNotificationRecord(raw)
+  if (!record)
+    return null
+  const id = toNotificationIdentifier(record.id)
+  const cursor = toNotificationIdentifier(record.cursor)
+  const timeAt = typeof record.time_at === 'number' && Number.isFinite(record.time_at)
+    ? record.time_at
+    : 0
+  if (!id || !cursor || timeAt <= 0)
+    return null
+
+  const content = toNotificationText(record.content)
+  return {
+    kind: 'system',
+    id,
+    section: 'system',
+    cursor,
+    title: toNotificationText(record.title),
+    content,
+    segments: parseSystemContentSegments(content),
+    source: '',
+    sourceLogo: '',
+    timestamp: Math.floor(timeAt / 1000),
+    cardTitle: '',
+    cardCover: '',
+    cardUrl: '',
+    originalUrl: buildOriginalNotificationUrl('system'),
+    unread: false,
+  }
+}
+
+function readSystemInitialItems(response: NotificationApiResponse): unknown[] | null {
+  if (classifyApiError(response))
+    return null
+  const data = asNotificationRecord(response.data)
+  const rawItems = data?.system_notify_list
+  return Array.isArray(rawItems) ? rawItems : null
+}
+
+export function parseSystemInitialPage(
+  unifiedResponse: NotificationApiResponse,
+  userResponse: NotificationApiResponse,
+): SystemInitialPageResult | null {
+  const unifiedItems = readSystemInitialItems(unifiedResponse)
+  const userItems = readSystemInitialItems(userResponse)
+  if (!unifiedItems || !userItems)
+    return null
+
+  const seen = new Set<string>()
+  const items = [...unifiedItems, ...userItems]
+    .map(transformSystemNotification)
+    .filter((item): item is SystemNotification => item !== null)
+    .sort((left, right) => compareUnsignedIntegerStrings(right.cursor, left.cursor))
+    .filter((item) => {
+      if (seen.has(item.id))
+        return false
+      seen.add(item.id)
+      return true
+    })
+  const first = items[0]
+  const last = items.at(-1)
+  return {
+    items,
+    cursorId: last?.cursor ?? '',
+    cursorTime: 0,
+    noMore: items.length === 0,
+    readCursor: first?.cursor ?? '',
+  }
+}
+
+export function parseSystemHistoryPage(
+  response: NotificationApiResponse,
+): NotificationPageResult | null {
+  if (classifyApiError(response) || !Array.isArray(response.data))
+    return null
+  const items = dedupeNotifications(response.data
+    .map(transformSystemNotification)
+    .filter((item): item is SystemNotification => item !== null))
+  if (response.data.length > 0 && items.length === 0)
+    return null
+  const last = items.at(-1)
+  return {
+    items,
+    cursorId: last?.kind === 'system' ? last.cursor : '',
+    cursorTime: 0,
+    noMore: response.data.length === 0,
+  }
+}
+
+export function buildSystemPageResponse(
+  page: NotificationPageResult,
+  serverReadCommitted = false,
+): NotificationApiResponse {
+  return {
+    code: 0,
+    data: {
+      system_native_page: true,
+      items: page.items,
+      cursor: page.cursorId,
+      no_more: page.noMore,
+      server_read_committed: serverReadCommitted,
+    },
+  }
+}
+
+function parseSystemNativePage(data: Record<string, unknown>): NotificationPageResult | null {
+  if (data.system_native_page !== true || !Array.isArray(data.items))
+    return null
+  const items = data.items.filter((item): item is SystemNotification => (
+    asNotificationRecord(item)?.kind === 'system'
+    && asNotificationRecord(item)?.section === 'system'
+    && typeof asNotificationRecord(item)?.id === 'string'
+    && typeof asNotificationRecord(item)?.cursor === 'string'
+  ))
+  if (items.length !== data.items.length)
+    return null
+  const cursorId = toNotificationIdentifier(data.cursor)
+  const noMore = data.no_more === true
+  if (!noMore && !cursorId)
+    return null
+  return {
+    items,
+    cursorId,
+    cursorTime: 0,
+    noMore,
+    serverReadCommitted: data.server_read_committed === true,
+  }
+}
+
 export function parseCursorResult(
   cursor: Record<string, unknown>,
   items: DisplayNotification[],
@@ -78,7 +313,7 @@ export function parseReplyPage(data: Record<string, unknown>): NotificationPageR
     : 0
   const items = dedupeNotifications((Array.isArray(rawItems) ? rawItems : [])
     .map(transformReplyNotification)
-    .filter((item): item is DisplayNotification => item !== null)
+    .filter((item): item is InteractionNotification => item !== null)
     .map(item => ({
       ...item,
       unread: item.timestamp > lastViewAt,
@@ -98,7 +333,7 @@ export function parseAtPage(data: Record<string, unknown>): NotificationPageResu
     : 0
   const items = dedupeNotifications((Array.isArray(rawItems) ? rawItems : [])
     .map(transformAtNotification)
-    .filter((item): item is DisplayNotification => item !== null)
+    .filter((item): item is InteractionNotification => item !== null)
     .map(item => ({
       ...item,
       unread: item.timestamp > lastViewAt,
@@ -147,14 +382,14 @@ export function parseLikePage(data: Record<string, unknown>): NotificationPageRe
     : 0
   const latestItems = dedupeNotifications((Array.isArray(rawLatestItems) ? rawLatestItems : [])
     .map(transformLikeNotification)
-    .filter((item): item is DisplayNotification => item !== null)
+    .filter((item): item is InteractionNotification => item !== null)
     .map(item => ({
       ...item,
       unread: lastViewAt === 0 || item.timestamp > lastViewAt,
     })))
   const totalItems = dedupeNotifications((Array.isArray(rawTotalItems) ? rawTotalItems : [])
     .map(transformLikeNotification)
-    .filter((item): item is DisplayNotification => item !== null)
+    .filter((item): item is InteractionNotification => item !== null)
     .map(item => ({ ...item, unread: false })))
 
   return parseCursorResult(cursor, mergeLikeItems(latestItems, totalItems))
@@ -180,7 +415,9 @@ export function parseNotificationPage(
     ? parseReplyPage(data)
     : section === 'at'
       ? parseAtPage(data)
-      : parseLikePage(data)
+      : section === 'love'
+        ? parseLikePage(data)
+        : parseSystemNativePage(data)
   return page ? { page } : { errorKind: 'invalid-response' }
 }
 
@@ -193,5 +430,7 @@ export function buildNextPageParams(
     return { id: cursorId, reply_time: cursorTime }
   if (section === 'at')
     return { id: cursorId, at_time: cursorTime }
-  return { id: cursorId, like_time: cursorTime }
+  if (section === 'love')
+    return { id: cursorId, like_time: cursorTime }
+  return { cursor: cursorId }
 }

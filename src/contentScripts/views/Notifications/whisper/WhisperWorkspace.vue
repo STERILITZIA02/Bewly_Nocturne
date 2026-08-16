@@ -10,8 +10,11 @@ import ConversationEmptyState from './ConversationEmptyState.vue'
 import ConversationList from './ConversationList.vue'
 import ConversationOriginalFallback from './ConversationOriginalFallback.vue'
 import ConversationView from './ConversationView.vue'
+import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
+import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
+import type { PrivateRecipientSearchController } from './usePrivateRecipientSearch'
 import type { PrivateSessionsController } from './usePrivateSessions'
 
 interface ConversationDetailExposed {
@@ -30,11 +33,16 @@ const props = defineProps<{
   active: boolean
   controller: PrivateSessionsController
   messagesController: PrivateMessagesController
+  recipientSearch: PrivateRecipientSearchController
+  transientRecipient: TransientPrivateRecipient | null
+  writeController: PrivateMessageWriteController | null
 }>()
 
 const emit = defineEmits<{
   (event: 'closeConversation'): void
+  (event: 'selectRecipient', recipient: TransientPrivateRecipient): void
   (event: 'selectSession', session: DisplayPrivateSession): void
+  (event: 'transientSendConfirmed', talkerId: string): void
 }>()
 
 const { t } = useI18n()
@@ -50,7 +58,10 @@ const nativeSelectedSession = computed(() => (
     ? selectedSession.value
     : null
 ))
+const selectedDetailKey = computed(() => selectedSession.value?.key
+  ?? (props.transientRecipient ? `transient:${props.transientRecipient.mid}` : ''))
 let mounted = false
+let pendingDetailFocusKey = ''
 
 const unreadCount = computed(() => (
   (topBarStore.unReadDm.follow_unread || 0)
@@ -73,7 +84,7 @@ async function refresh() {
   if (props.accountState === 'ready')
     await props.controller.refresh()
   await nextTick()
-  if (nativeSelectedSession.value)
+  if (nativeSelectedSession.value || props.transientRecipient)
     await conversationDetailRef.value?.refresh?.()
 }
 
@@ -83,7 +94,14 @@ function retry() {
 
 function selectSession(session: DisplayPrivateSession) {
   props.controller.updateScrollTop(conversationListRef.value?.getScrollTop() ?? 0)
+  pendingDetailFocusKey = session.key
   emit('selectSession', session)
+}
+
+function selectRecipient(recipient: TransientPrivateRecipient) {
+  props.controller.updateScrollTop(conversationListRef.value?.getScrollTop() ?? 0)
+  pendingDetailFocusKey = `transient:${recipient.mid}`
+  emit('selectRecipient', recipient)
 }
 
 function handleVisibilityChange() {
@@ -121,14 +139,16 @@ watch(unreadCount, async (next, previous) => {
   }
 })
 
-watch(() => props.controller.selectedSessionKey.value, async (nextSessionKey, previousSessionKey) => {
+watch(selectedDetailKey, async (nextSessionKey, previousSessionKey) => {
+  const shouldFocusHeading = nextSessionKey !== '' && nextSessionKey === pendingDetailFocusKey
+  pendingDetailFocusKey = ''
   if (nextSessionKey && !previousSessionKey) {
     props.controller.updateScrollTop(
       conversationListRef.value?.getScrollTop() ?? props.controller.state.scrollTop,
     )
   }
   await nextTick()
-  if (nextSessionKey) {
+  if (shouldFocusHeading) {
     conversationDetailRef.value?.focusHeading()
   }
   else if (previousSessionKey) {
@@ -152,7 +172,7 @@ defineExpose({ refresh })
 <template>
   <section
     class="whisper-workspace"
-    :class="{ 'whisper-workspace--detail': Boolean(selectedSession) }"
+    :class="{ 'whisper-workspace--detail': Boolean(selectedSession || transientRecipient) }"
   >
     <aside class="whisper-workspace__sessions">
       <div v-if="accountState === 'profile-pending'" class="whisper-workspace__state" aria-busy="true">
@@ -212,29 +232,34 @@ defineExpose({ refresh })
           :loading-more="controller.state.loadingMore"
           :no-more="controller.state.noMore"
           :pagination-stalled="controller.state.paginationStalled"
+          :recipient-search="recipientSearch"
           :load-more-failed="controller.state.failedOperation === 'load-more'"
           :selected-session-key="controller.selectedSessionKey.value"
           :show-official-assistants="settings.showOfficialPrivateAssistants"
           @load-more="controller.loadMore()"
           @retry-load-more="controller.loadMore({ retry: true })"
+          @select-recipient="selectRecipient"
           @select="selectSession"
         />
       </template>
     </aside>
 
     <div class="whisper-workspace__detail">
-      <ConversationEmptyState v-if="!selectedSession" />
+      <ConversationEmptyState v-if="!selectedSession && !transientRecipient" />
       <ConversationView
-        v-else-if="nativeSelectedSession"
-        :key="nativeSelectedSession.talkerId"
+        v-else-if="nativeSelectedSession || transientRecipient"
+        :key="nativeSelectedSession?.talkerId ?? `transient:${transientRecipient?.mid}`"
         ref="conversationDetailRef"
         :active="active"
         :controller="messagesController"
         :session="nativeSelectedSession"
+        :recipient="transientRecipient"
+        :write-controller="writeController"
         @back="emit('closeConversation')"
+        @send-confirmed="emit('transientSendConfirmed', $event)"
       />
       <ConversationOriginalFallback
-        v-else
+        v-else-if="selectedSession"
         :key="selectedSession.key"
         ref="conversationDetailRef"
         :session="selectedSession"

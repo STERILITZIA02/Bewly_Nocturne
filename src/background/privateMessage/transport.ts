@@ -65,6 +65,61 @@ export interface PrivateImageUploadRequest {
   url: string
 }
 
+export interface PrivateMessageSendDiagnostic {
+  endpoint: string
+  httpStatus: number
+  apiCode: number
+  responseContentType: string
+  riskControl: boolean
+  queryFieldNames: string[]
+  bodyFieldNames: string[]
+  devIdMatches: boolean
+  transport: 'signed-query-form-body'
+}
+
+interface PrivateMessageSendDiagnosticInput {
+  apiResponse: PrivateMessageApiResponse
+  body: PrivateMessageRequestParams
+  endpointName: PrivateMessageEndpointName
+  query: PrivateMessageRequestParams
+  responseContentType: string
+  responseStatus: number
+  url: string
+}
+
+function getEndpointWithoutQuery(url: string): string {
+  try {
+    const parsed = new URL(url)
+    return `${parsed.origin}${parsed.pathname}`
+  }
+  catch {
+    return ''
+  }
+}
+
+export function createPrivateMessageSendDiagnostic(
+  input: PrivateMessageSendDiagnosticInput,
+): PrivateMessageSendDiagnostic {
+  return {
+    endpoint: getEndpointWithoutQuery(input.url),
+    httpStatus: input.responseStatus,
+    apiCode: input.apiResponse.code,
+    responseContentType: input.responseContentType,
+    riskControl: input.apiResponse.bewlyError?.kind === 'risk-control'
+      || input.responseStatus === 403
+      || input.responseStatus === 412,
+    queryFieldNames: Object.keys(input.query).sort(),
+    bodyFieldNames: Object.keys(input.body).sort(),
+    devIdMatches: input.query.w_dev_id === input.body['msg[dev_id]'],
+    transport: 'signed-query-form-body',
+  }
+}
+
+function reportPrivateMessageSendDiagnostic(input: PrivateMessageSendDiagnosticInput) {
+  if (import.meta.env?.DEV)
+    console.debug('[Bewly private-message transport]', createPrivateMessageSendDiagnostic(input))
+}
+
 export async function signPrivateMessageParams(
   params: PrivateMessageRequestParams,
   dependencies: PrivateMessageSigningDependencies = DEFAULT_SIGNING_DEPENDENCIES,
@@ -158,10 +213,34 @@ export async function requestPrivateMessageForm(
       credentials: 'include',
       headers,
     })
-    return await parsePrivateMessageResponse(response, request.endpointName)
+    const apiResponse = await parsePrivateMessageResponse(response, request.endpointName)
+    if (request.endpointName === 'sendPrivateMessage') {
+      reportPrivateMessageSendDiagnostic({
+        apiResponse,
+        body: request.body,
+        endpointName: request.endpointName,
+        query: request.query,
+        responseContentType: response.headers.get('content-type') || '',
+        responseStatus: response.status,
+        url: request.url,
+      })
+    }
+    return apiResponse
   }
   catch {
-    return createPrivateMessageErrorResponse('network', request.endpointName)
+    const apiResponse = createPrivateMessageErrorResponse('network', request.endpointName)
+    if (request.endpointName === 'sendPrivateMessage') {
+      reportPrivateMessageSendDiagnostic({
+        apiResponse,
+        body: request.body,
+        endpointName: request.endpointName,
+        query: request.query,
+        responseContentType: '',
+        responseStatus: 0,
+        url: request.url,
+      })
+    }
+    return apiResponse
   }
 }
 
@@ -184,7 +263,12 @@ export async function buildPrivateMessageFormRequest(
     throw new TypeError('private-message form identity fields are required')
   }
 
-  const signed = await signParams({ ...body })
+  const identityQuery = {
+    w_sender_uid: senderId,
+    w_receiver_id: receiverId,
+    w_dev_id: devId,
+  }
+  const signed = await signParams(identityQuery)
   if (typeof signed.wts !== 'number' || typeof signed.w_rid !== 'string' || !signed.w_rid)
     throw new PrivateMessageWbiUnavailableError()
 
@@ -192,9 +276,7 @@ export async function buildPrivateMessageFormRequest(
     url,
     body: { ...body },
     query: {
-      w_sender_uid: senderId,
-      w_receiver_id: receiverId,
-      w_dev_id: devId,
+      ...identityQuery,
       wts: signed.wts,
       w_rid: signed.w_rid,
     },

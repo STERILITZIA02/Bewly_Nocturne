@@ -1,8 +1,5 @@
 export { default } from './api'
 export * from './api'
-export * from './deviceId'
-export * from './errors'
-export * from './losslessJson'
 export * from './protocol'
 export * from './transport'
 export * from './types'

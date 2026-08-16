@@ -2,6 +2,8 @@ import type { MaybeRefOrGetter } from 'vue'
 import { readonly, ref, shallowRef, toValue, watch } from 'vue'
 
 import api from '~/utils/api'
+import { debugLog } from '~/utils/debug'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 export interface HotSearchItem {
   keyword: string
@@ -40,13 +42,14 @@ let recommendationRequest: Promise<void> | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let hotSearchConsumerCount = 0
 let recommendationConsumerCount = 0
+let extensionContextInvalidated = false
 
 function hasConsumers() {
   return hotSearchConsumerCount > 0 || recommendationConsumerCount > 0
 }
 
 export async function loadSharedHotSearch(force = false): Promise<void> {
-  if (hotSearchConsumerCount === 0)
+  if (extensionContextInvalidated || hotSearchConsumerCount === 0)
     return
   if (!force && hotSearchList.value.length > 0 && Date.now() - hotSearchUpdatedAt < CACHE_TTL_MS)
     return
@@ -61,7 +64,7 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
         hotSearchUpdatedAt = Date.now()
       }
     })
-    .catch(error => console.error('Failed to load hot search list:', error))
+    .catch(error => reportSearchExperienceFailure('hot-search', error))
     .finally(() => {
       hotSearchRequest = null
       isLoadingHotSearch.value = false
@@ -70,7 +73,7 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
 }
 
 export async function loadSharedSearchRecommendation(force = false): Promise<void> {
-  if (recommendationConsumerCount === 0)
+  if (extensionContextInvalidated || recommendationConsumerCount === 0)
     return
   if (!force && searchRecommendation.value && Date.now() - recommendationUpdatedAt < CACHE_TTL_MS)
     return
@@ -85,7 +88,7 @@ export async function loadSharedSearchRecommendation(force = false): Promise<voi
         recommendationUpdatedAt = Date.now()
       }
     })
-    .catch(error => console.error('Failed to load search recommendation:', error))
+    .catch(error => reportSearchExperienceFailure('search-recommendation', error))
     .finally(() => {
       recommendationRequest = null
       isLoadingSearchRecommendation.value = false
@@ -99,9 +102,22 @@ function clearRefreshTimer() {
   refreshTimer = undefined
 }
 
+function reportSearchExperienceFailure(endpointName: string, error: unknown) {
+  if (isExtensionContextInvalidatedError(error)) {
+    extensionContextInvalidated = true
+    clearRefreshTimer()
+    return
+  }
+
+  debugLog('[SearchExperience] shared request failed', {
+    endpointName,
+    errorKind: 'network',
+  })
+}
+
 function scheduleRefresh() {
   clearRefreshTimer()
-  if (!hasConsumers() || document.hidden)
+  if (extensionContextInvalidated || !hasConsumers() || document.hidden)
     return
 
   refreshTimer = setTimeout(async () => {

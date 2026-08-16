@@ -127,9 +127,33 @@ settings:
   messages_mobile_open_list: Always show the conversation list
   messages_mobile_open_last: Restore the last conversation
   messages_server_settings: Bilibili server settings
-  messages_server_settings_desc: Bilibili server-side message settings remain managed by the original page.
-  messages_original_settings: Original Bilibili message settings
-  messages_manage_original: Manage in original Bilibili
+  messages_server_refresh: Server state
+  messages_server_refresh_action: Refresh
+  messages_server_loading: Loading
+  messages_server_enabled: On
+  messages_server_disabled: Off
+  messages_server_everyone: Everyone
+  messages_server_following: People you follow
+  messages_server_nobody: Do not receive
+  messages_server_msg_notify: Message notifications
+  messages_server_ai_intercept: Smart direct-message filtering
+  messages_server_reply: Reply notifications
+  messages_server_at: Mention notifications
+  messages_server_like: Like notifications
+  messages_server_unfollowed: Collapse messages from people you do not follow
+  messages_server_block_words: Blocked message words
+  messages_server_block_words_limit: '{count}/{max} added; each word can contain up to {length} characters.'
+  messages_server_block_words_placeholder: Enter a blocked word
+  messages_server_block_words_add: Add
+  messages_server_block_words_remove: Remove blocked word {word}
+  messages_server_block_words_empty: No blocked words
+  messages_server_errors:
+    login-required: Your login session has expired
+    risk-control: This request is temporarily restricted
+    server-error: Message settings are temporarily unavailable
+    network: Network connection failed
+    invalid-response: Message settings cannot be read right now
+    api-error: The operation failed. Try again.
   category_playback_player_desc: Configure player mode, scrolling, danmaku, captions, and playback state.
   category_playback_autoplay_desc: Configure autoplay and custom playback behavior.
   category_bilibili_comments_desc: Enhance user information and content displayed in comments.
@@ -922,7 +946,6 @@ notifications:
   navigation_aria: Message categories
   section_aria: Open {section}
   unread_count: '{count} unread messages'
-  original_frame_title: Original Bilibili messages
   actions:
     refresh: Refresh
     refresh_aria: Refresh the current message category
@@ -934,7 +957,6 @@ notifications:
   sections:
     whisper:
       label: Direct messages
-      description: Browse native conversations and read-only history; sending and unsupported chats remain in original Bilibili
     reply:
       label: Replies
       description: See replies to your comments
@@ -946,14 +968,25 @@ notifications:
       description: See likes on your content
     system:
       label: System
-      description: Use original Bilibili to view system notifications
+      description: System and service messages from Bilibili
   whisper:
     loading: Loading direct-message conversations
     profile_pending: Confirming your account
     list_aria: Direct-message conversation list
     search_placeholder: Search loaded conversations
     search_aria: Search loaded direct-message conversations
-    search_scope: Search and filters only apply to loaded conversations
+    select_recipient: Select {name} as the message recipient
+    recipient_search:
+      search_following: Search people you follow
+      following_empty: No matching users were found among people you follow
+      search_global: Search all Bilibili users
+      global_empty: No matching Bilibili users were found
+      loading: Searching users
+      more: Show more
+      error: Search failed. Try again.
+      sources:
+        following: Following
+        global: Bilibili users
     loading_more_sessions: Loading earlier conversations
     earliest_session: Earliest conversation reached
     load_more_failed: Earlier conversations failed to load
@@ -994,7 +1027,6 @@ notifications:
     pinned: Pinned
     muted: Muted
     unread_count: '{count} unread direct messages'
-    open_unsupported_original: Open conversation with {name} in original Bilibili
     open_original_list: Open the original direct-message list
     open_profile: Open {name}'s profile
     back_to_conversations: Back to conversations
@@ -1004,22 +1036,18 @@ notifications:
       empty: No messages in this conversation
       load_older: Load earlier messages
       history_start: Start of message history
-      readonly: Direct messages are currently read-only
-      readonly_title: Bewly direct messages are read-only
-      readonly_description: Use the original message page to send messages or manage conversations
-      continue_original: Continue in original direct messages
-      open_original_header: Open in original
       message_sources:
         auto-reply: Automatic reply
         fan-group-system: Fan-group system notice
         mutual-follow: Mutual follow
         system: System notice
         ai: AI
-      send_original: Send in original Bilibili
       composer_placeholder: Write a message
       composer_aria: Direct-message text field
-      composer_hint: Enter to send, Shift+Enter for a new line
       send: Send
+      test_send_success: Server history confirmed the message
+      test_send_accepted_unconfirmed: The API accepted the message, but server history has not confirmed it; it will not be resent automatically
+      test_send_protocol_mismatch: The API returned a message ID, but server history could not reconcile it; it will not be resent automatically
       sending: Sending
       reconciling: Syncing with the server
       send_failed: Failed to send
@@ -1063,10 +1091,16 @@ notifications:
       reply: Loading reply notifications
       at: Loading mention notifications
       love: Loading like notifications
+      system: Loading system notifications
     empty:
       reply: No reply notifications
       at: No mention notifications
       love: No like notifications
+      system: No system notifications
+    system:
+      unknown_title: System notification
+      cover_alt: System notification cover
+      unsupported_content: This notification contains content that is not supported yet
     actions:
       reply: replied to you
       at: mentioned you

@@ -1,5 +1,5 @@
 /**
- * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
+ * EXPERIMENTAL: retained one-shot harness; the DEV test Composer does not depend on this legacy gate.
  *
  * This helper is deliberately not mounted by Notifications.vue and does not
  * register a global or URL-triggered entry point. A future controlled protocol

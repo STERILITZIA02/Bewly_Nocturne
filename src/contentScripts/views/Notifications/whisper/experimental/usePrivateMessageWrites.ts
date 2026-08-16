@@ -1,8 +1,5 @@
 /**
- * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
- *
- * This controller preserves the former optimistic text/image transaction state
- * for fixture verification and an explicitly imported one-shot DEV helper only.
+ * EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.
  */
 import type { Ref } from 'vue'
 import { reactive, watch } from 'vue'
@@ -730,6 +727,8 @@ export function useExperimentalPrivateMessageWrites(
         const currentOptimistic = state.items.find(item => item.localId === localId)
         if (currentOptimistic)
           currentOptimistic.sendState = 'failed'
+        if (!state.draft)
+          state.draft = text
         state.lastTextSendOutcome = 'failed'
         state.lastTextSendDiagnostic = failureDiagnostic ?? createTextSendDiagnostic(null)
       }

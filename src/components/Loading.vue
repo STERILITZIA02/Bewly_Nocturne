@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import browser from 'webextension-polyfill'
+import { getExtensionAssetUrl } from '~/utils/messaging'
 
-const imgURL = browser.runtime.getURL('/assets/loading.gif')
+const imgURL = getExtensionAssetUrl('/assets/loading.gif')
 </script>
 
 <template>
@@ -14,6 +14,7 @@ const imgURL = browser.runtime.getURL('/assets/loading.gif')
     items="center"
   >
     <img
+      v-if="imgURL"
       :src="imgURL"
       alt="loading"
       w="46px"

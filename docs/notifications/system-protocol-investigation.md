@@ -1,105 +1,96 @@
-# System 通知协议调查（Stage 3B）
+# System 通知协议调查
 
-调查日期：2026-08-12
+调查日期：2026-08-16
 
-结论：**暂不将 `system` 切换为 Native Feed，继续使用原版 iframe。** 当前发布客户端足以确认请求路径、参数、基础条目字段和 read cursor，但在禁止使用浏览器登录态的条件下，无法取得成功响应的实际脱敏副本，也无法确认需求中描述的图片、字段模块和多按钮结构。按 Stage 3B 门禁，不猜测这些字段或注册未经验证的 renderer。
+结论：当前发布客户端仍使用 `unified + user` 首屏、单一 `legacy` 历史流与 `update_cursor` 已读提交。Bewly 只按这些当前客户端已证实的字段和行为实现 Native System Feed；原版 System URL 继续作为用户主动打开的 fallback。
 
 ## 证据范围
 
-- 当前 `https://message.bilibili.com/` 引用的发布 bundle：`index.716ab17b.js`
-- bundle URL：`https://s1.hdslb.com/bfs/static/2233-monorepo/message-pc/static/js/index.716ab17b.js`
-- SHA-256：`253a12987b20b1bd77ac6936522edae2c24b4863439dd969a8138926588f7138`
-- 无 Cookie 请求实测：下述四个 endpoint 均返回 HTTP 200、JSON `code=-101`、`message=-101`；响应副本保存在 `tests/fixtures/notifications/system/api-error.json`。
+- 调查页：`https://message.bilibili.com/#/system`
+- 当前发布 bundle：`https://s1.hdslb.com/bfs/static/2233-monorepo/message-pc/static/js/index.716ab17b.js`
+- bundle SHA-256：`253a12987b20b1bd77ac6936522edae2c24b4863439dd969a8138926588f7138`
+- bundle 大小：`1055810` bytes
+- 调查环境中原版登录态 System 时间线已成功渲染；同时以发布 bundle 中的实际调用点核对请求参数、合并、分页和已读行为。
+- 当前可用的浏览器审计接口不提供原始 XHR response body 导出，因此本仓库的成功 fixture 是保留当前 schema、数值类型、排序和 cursor 关系的脱敏结构 fixture，不声称为字节级原始响应副本。
 
-本调查没有读取、保存或输出 Cookie、CSRF、通知正文或个人账号信息。
+调查和 fixture 均不保存 Cookie、CSRF、MID、用户名、通知正文或私有 URL query。
 
-## 当前发布客户端的读取协议
+## Endpoint 矩阵
 
-所有请求均以 `https://message.bilibili.com` 为 origin，method 均为 GET。
+所有 System 请求均以 `https://message.bilibili.com` 为 host，method 均为 `GET`。
 
-| 流 | endpoint | 首次参数 | 返回数据职责 |
+| 职责 | endpoint | 参数 | 容器 |
 | --- | --- | --- | --- |
-| `unified` | `/x/sys-msg/query_unified_notify` | `page_size=10&build=0&mobi_app=web` | 首屏统一系统通知，客户端读取 `data.system_notify_list` |
-| `user` | `/x/sys-msg/query_user_notify` | `page_size=20&build=0&mobi_app=web` | 首屏用户定向系统通知，客户端读取 `data.system_notify_list` |
-| `legacy` | `/x/sys-msg/query_notify_list` | `cursor=<cursor>&data_type=1&build=0&mobi_app=web` | 首屏之后的历史通知，客户端读取 `data` 数组 |
+| unified 首屏 | `/x/sys-msg/query_unified_notify` | `page_size=10&build=0&mobi_app=web` | `data.system_notify_list` |
+| user 首屏 | `/x/sys-msg/query_user_notify` | `page_size=20&build=0&mobi_app=web` | `data.system_notify_list` |
+| legacy 历史 | `/x/sys-msg/query_notify_list` | `cursor=<legacy cursor>&data_type=1&build=0&mobi_app=web` | `data` 数组 |
+| 已读提交 | `/x/sys-msg/update_cursor` | `cursor=<首屏最新 cursor>&has_up=0&build=0&mobi_app=web` | `code=0` 成功响应 |
 
-首屏并行请求 `unified` 和 `user`。发布客户端将两组条目按 `cursor` 降序合并并按 `id` 去重，然后把合并后最旧条目的 `cursor` 作为 `legacy` 首次下一页请求的 cursor。这是发布代码的明确行为，不是从本项目展示列表推测的分页规则。
+`unified` 和 `user` 只是两个首屏数据源，当前客户端没有分别为它们持续分页。两组请求并行完成后：
 
-`unified` 与 `user` 没有在当前客户端中继续独立翻页；它们只负责首屏来源。后续分页只属于 `legacy` 流：
+1. 按 `cursor` 降序合并；
+2. 以 `id` 去重；
+3. 最新条目的 `cursor` 用于 `update_cursor`；
+4. 最旧条目的 `cursor` 作为第一次 legacy 历史请求边界。
 
-```text
-GET /x/sys-msg/query_notify_list
-  cursor=<上一次 legacy 返回的最后一条 cursor>
-  data_type=1
-  build=0
-  mobi_app=web
-```
+legacy 响应非空时，下一 cursor 取本次响应最后一条的 `cursor`；响应 `data=[]` 时到达尾页。不从合并后的展示列表猜测 cursor，也不为 unified/user 虚构独立分页。
 
-`legacy` 返回非空数组时，下一 cursor 取该响应最后一条的 `cursor`；返回空数组时，客户端将分页标记为结束。由于没有成功响应副本，本调查不把未被发布代码使用的 `data.cursor` 或 `has_more` 字段视为已确认协议。
+## 条目字段与内容格式
 
-## 条目结构与渲染行为
-
-当前发布客户端实际读取的字段只有：
+当前发布客户端的 System 列表实际读取：
 
 ```text
 id       唯一 ID，也是首屏跨流去重键
-cursor   排序、历史分页和 read marker
-title    通知标题
-time_at  时间；客户端按毫秒时间构造 Date
+cursor   排序、legacy 分页和已读 marker
+title    标题
+time_at  毫秒时间戳
 content  正文字符串
 ```
 
-当前原版 System renderer 只产生文本与链接节点：
+`id` 和 `cursor` 在 Bewly transport 中通过通知专用 lossless parser 保留为 string，不转为 `Number`。
 
-1. 优先尝试将 `content` 解析为 JSON，并读取其中的 `web` 字符串。
-2. 否则解析 `#{文案}{URL}` / `#{文案}{"URL"}` 形式的旧链接标记。
-3. 也识别普通 Bilibili URL，以及 BV、av、cv、vc 标识。
-4. 未识别内容按纯文本显示。
+当前发布 renderer 可确认的 content 格式：
 
-在当前 bundle 中没有发现 System 页面读取以下字段：
+- 纯文本；
+- JSON 对象中的 `web` 字符串；
+- `#{文案}{URL}`；
+- `#{文案}{"URL"}`；
+- 普通 Bilibili URL；
+- `BV` / `av` / `cv` / `vc` 标识。
 
-- 封面或图片模块；
-- fields/status 模块数组；
-- action/button 数组；
-- 需要 POST 的 System 条目操作。
+Bewly 只生成 text/link segment，不使用 `v-html`。链接只允许 `http/https`；非法链接作为文本，不执行。无法解析的 JSON 或条目只降级当前条目。
 
-因此不能依据当前证据制作真实的 `image-notification`、`multi-action-notification` fixture，也不能注册对应 renderer。创建这些结构会违反“只注册真实 fixture 已验证模块”的门禁。
+当前 bundle 没有读取 System 的 image、actions、fields 或 module array，因此本次不伪造这些字段，也不实现未经证实的 POST action。
 
-## 已读协议
+## 已读契约
 
-首屏成功合并后，当前发布客户端发起：
+System 首屏只在 unified 和 user 都是合法 `code=0` 响应后合并。有首屏条目时，再以最新 cursor 请求 `update_cursor`。只有 `update_cursor` 也返回 `code=0` 后，该首屏才交给 Native Feed，然后复用现有 read-commit 与有上限 badge reconcile，通过 `topBarStore.syncUnreadMessageState()` 重新读取权威 `sys_msg`。
+
+不会在进入页面时直接本地清零 `sys_msg`；`update_cursor` 失败时不发布首屏成功，也不伪造已读。
+
+本次调查时原版页在采样前已完成已读，因此没有捕获到正数 `sys_msg` 到 `0` 的完整时序，也不将这一未观察时序写成已通过。
+
+## 脱敏 fixture 与验证
 
 ```text
-GET /x/sys-msg/update_cursor
-  cursor=<首屏合并结果中最新一条的 cursor>
-  has_up=0
-  build=0
-  mobi_app=web
+tests/fixtures/notifications/system/
+├── unified-first.json
+├── user-first.json
+├── legacy-next.json
+├── legacy-empty.json
+├── update-cursor-success.json
+└── api-error.json
 ```
 
-页面 mounted 时客户端还会在本地调用 `syncNotifyCounts({ system: 0 })`，但服务端 read side effect 是上述 `update_cursor` GET。无 Cookie 实测只能确认该 endpoint 的登录错误响应；尚未确认成功响应结构，也未确认提交后 `sys_msg` 的最终一致性时序。因此本阶段不实现 Native read commit，也不在本地假清零。
+成功 fixture 保留了当前字段集、不安全数值 ID/cursor、跨流重复 ID、排序、legacy 非空页和空尾页；标题、正文和链接已替换。`api-error.json` 保留无 Cookie 实测的 `code=-101` 错误结构。
 
-## 错误行为
+`pnpm verify:notifications` 覆盖 lossless ID/cursor、首屏合并去重、legacy cursor/尾页、安全 content segment、已读先后顺序、read 失败不假成功、System 独立状态与 MID generation 隔离。
 
-2026-08-12 的无 Cookie 实测结果：
+## 仍未确认
 
-| endpoint | HTTP | Content-Type | Bilibili code |
-| --- | --- | --- | --- |
-| `query_unified_notify` | 200 | `application/json; charset=utf-8` | `-101` |
-| `query_user_notify` | 200 | `application/json; charset=utf-8` | `-101` |
-| `query_notify_list` | 200 | `application/json; charset=utf-8` | `-101` |
-| `update_cursor` | 200 | `application/json; charset=utf-8` | `-101` |
+- 正数 `sys_msg` 在 `update_cursor` 后归零的精确最终一致时序；
+- 浏览器审计工具不可导出的原始成功 response body 字节副本；
+- 当前发布客户端未读取的图片、字段、模块、多按钮或 POST action；
+- Firefox 登录态运行验证。
 
-这与现有 Notification transport 的 `login-required` 分类一致。HTML、5xx 与风控分类继续由 Stage 3A 的共享 transport 处理，本调查没有伪造 System 专用响应。
-
-## 阻断门禁
-
-以下条件尚未满足，因此 `notificationSections.ts` 中的 `system.implementation` 必须保持 `original`：
-
-- 成功首屏响应的实际脱敏 fixture；
-- 成功下一页响应的实际脱敏 fixture；
-- `update_cursor` 成功响应及 `sys_msg` 归零时序；
-- 图片、字段、多按钮模块的真实结构（当前发布客户端也未读取这些结构）；
-- Chrome/Firefox 登录态运行验证。
-
-解除阻断时应重新抓取当前发布客户端的成功 Network 响应，先补齐脱敏 fixture 和失败验证，再实现 System 专用模型、独立 `legacy` cursor、read commit 与 renderer。不得从旧 Stage_2_fix 客户端复制未验证的数据模型或操作 mutation。
+上述未确认内容不会被推断或伪造为生产能力。

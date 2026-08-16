@@ -1,11 +1,9 @@
 /**
- * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
- *
- * This module is intentionally absent from API_PRIVATE_MESSAGE. It exists only for
- * fixture verification and a separately imported one-shot DEV protocol helper.
+ * EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.
  */
 import type Browser from 'webextension-polyfill'
 
+import { getPrivateMessageDevId } from '../deviceId'
 import { createPrivateMessageErrorResponse } from '../errors'
 import {
   buildPrivateImageUploadForm,
@@ -17,12 +15,12 @@ import {
 } from '../protocol'
 import {
   requestPrivateImageUpload,
-  requestPrivateMessageForm,
   requestSignedPrivateMessageForm,
 } from '../transport'
 import type {
   PrivateImageUploadPayload,
   PrivateMessageApiResponse,
+  PrivateMessageRequestParams,
   SendPrivateImageMessageOptions,
 } from '../types'
 import { PRIVATE_MESSAGE_ENDPOINTS } from '../types'
@@ -51,6 +49,20 @@ function invalidRequest(endpointName: keyof typeof PRIVATE_MESSAGE_ENDPOINTS) {
   return createPrivateMessageErrorResponse('invalid-response', endpointName)
 }
 
+async function sendPrivateMessageForm(
+  body: PrivateMessageRequestParams,
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  const response = await requestSignedPrivateMessageForm({
+    endpointName: 'sendPrivateMessage',
+    body,
+    url: PRIVATE_MESSAGE_ENDPOINTS.sendPrivateMessage,
+  }, {}, sender)
+  if (response.code !== 0)
+    return response
+  return parsePrivateSendResponse(response) ?? invalidRequest('sendPrivateMessage')
+}
+
 export async function sendPrivateMessage(
   message: PrivateSendMessage = {},
   sender?: Browser.Runtime.MessageSender,
@@ -58,19 +70,14 @@ export async function sendPrivateMessage(
   try {
     if (!message.senderId || !message.talkerId || !message.text?.trim() || !message.csrf)
       return invalidRequest('sendPrivateMessage')
-    const response = await requestSignedPrivateMessageForm({
-      endpointName: 'sendPrivateMessage',
-      body: createPrivateTextMessageParams({
-        senderId: message.senderId,
-        talkerId: message.talkerId,
-        text: message.text,
-        csrf: message.csrf,
-      }),
-      url: PRIVATE_MESSAGE_ENDPOINTS.sendPrivateMessage,
-    }, {}, sender)
-    if (response.code !== 0)
-      return response
-    return parsePrivateSendResponse(response) ?? invalidRequest('sendPrivateMessage')
+    const devId = await getPrivateMessageDevId(message.senderId)
+    return await sendPrivateMessageForm(createPrivateTextMessageParams({
+      senderId: message.senderId,
+      talkerId: message.talkerId,
+      text: message.text,
+      csrf: message.csrf,
+      devId,
+    }), sender)
   }
   catch {
     return invalidRequest('sendPrivateMessage')
@@ -125,19 +132,14 @@ export async function sendPrivateImageMessage(
   try {
     if (!message.senderId || !message.talkerId || !message.csrf || !message.uploaded)
       return invalidRequest('sendPrivateMessage')
-    const response = await requestPrivateMessageForm({
-      endpointName: 'sendPrivateMessage',
-      params: createPrivateImageMessageParams({
-        senderId: message.senderId,
-        talkerId: message.talkerId,
-        csrf: message.csrf,
-        uploaded: message.uploaded,
-      }),
-      url: PRIVATE_MESSAGE_ENDPOINTS.sendPrivateMessage,
-    }, {}, sender)
-    if (response.code !== 0)
-      return response
-    return parsePrivateSendResponse(response) ?? invalidRequest('sendPrivateMessage')
+    const devId = await getPrivateMessageDevId(message.senderId)
+    return await sendPrivateMessageForm(createPrivateImageMessageParams({
+      senderId: message.senderId,
+      talkerId: message.talkerId,
+      csrf: message.csrf,
+      uploaded: message.uploaded,
+      devId,
+    }), sender)
   }
   catch {
     return invalidRequest('sendPrivateMessage')

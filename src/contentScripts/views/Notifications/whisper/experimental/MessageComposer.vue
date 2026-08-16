@@ -1,10 +1,8 @@
 <script setup lang="ts">
 /**
- * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
+ * EXPERIMENTAL: text send is available only through the explicit DEV test UI; image writes remain unexposed.
  */
 import { useI18n } from 'vue-i18n'
-
-import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { PrivateImageDraftState } from './usePrivateMessageWrites'
 
@@ -12,6 +10,7 @@ const props = defineProps<{
   modelValue: string
   sending: boolean
   imageDraft: PrivateImageDraftState | null
+  enableImage?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -23,12 +22,11 @@ const emit = defineEmits<{
 }>()
 
 const { locale, t } = useI18n()
-const originalUrl = buildOriginalNotificationUrl('whisper')
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isComposing = ref(false)
 const canSend = computed(() => !props.sending && !props.imageDraft && Boolean(props.modelValue.trim()))
-const canSelectImage = computed(() => !props.sending && !props.imageDraft)
+const canSelectImage = computed(() => props.enableImage && !props.sending && !props.imageDraft)
 const imageSize = computed(() => {
   if (!props.imageDraft)
     return ''
@@ -143,8 +141,8 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       @paste="handlePaste"
     />
     <div class="message-composer__actions">
-      <span>{{ t('notifications.whisper.messages.composer_hint') }}</span>
       <input
+        v-if="enableImage"
         ref="fileInputRef"
         class="message-composer__file-input"
         type="file"
@@ -153,7 +151,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         aria-hidden="true"
         @change="handleFileChange"
       >
-      <Tooltip :content="t('notifications.whisper.messages.select_image')" placement="top">
+      <Tooltip v-if="enableImage" :content="t('notifications.whisper.messages.select_image')" placement="top">
         <IconButton
           shape="circle"
           :label="t('notifications.whisper.messages.select_image')"
@@ -163,9 +161,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           <i i-mingcute:pic-line aria-hidden="true" />
         </IconButton>
       </Tooltip>
-      <ALink :href="originalUrl" type="content">
-        {{ t('notifications.whisper.messages.send_original') }}
-      </ALink>
       <Button native-type="submit" type="primary" :disabled="!canSend">
         <i v-if="sending" i-svg-spinners-ring-resize aria-hidden="true" />
         {{ sending
@@ -177,8 +172,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 </template>
 
 <style scoped lang="scss">
-@use "../../../../styles/breakpoints";
-
 .message-composer {
   display: grid;
   gap: var(--bew-space-2);
@@ -267,28 +260,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   min-width: 0;
   gap: var(--bew-space-2);
   align-items: center;
-}
-
-.message-composer__actions > span {
-  min-width: 0;
-  margin-right: auto;
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
-}
-
-.message-composer__actions a {
-  flex: 0 0 auto;
-  color: var(--bew-theme-color);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-control);
-  text-decoration: none;
-}
-
-@media (max-width: breakpoints.$mobile-max) {
-  .message-composer__actions > span {
-    display: none;
-  }
+  justify-content: flex-end;
 }
 </style>

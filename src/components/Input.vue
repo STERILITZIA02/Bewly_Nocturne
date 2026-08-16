@@ -5,6 +5,7 @@ interface Props {
   type?: 'text' | 'password' | 'email' | 'number'
   min?: number
   max?: number
+  maxlength?: number
   placeholder?: string
 }
 const props = withDefaults(defineProps<Props>(), { size: 'medium' })
@@ -62,6 +63,7 @@ defineExpose({ focus })
       :type="type"
       :min="min"
       :max="max"
+      :maxlength="maxlength"
       :placeholder="placeholder"
       w-inherit h-inherit
       outline-none flex-1 bg-transparent

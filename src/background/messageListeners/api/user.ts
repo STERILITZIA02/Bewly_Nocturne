@@ -106,6 +106,19 @@ const API_USER = {
     },
     afterHandle: AHS.J_D,
   },
+  searchUserFollowings: {
+    url: 'https://api.bilibili.com/x/relation/followings/search',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      vmid: '',
+      name: '',
+      pn: 1,
+      ps: 10,
+    },
+    afterHandle: AHS.J_D,
+  },
   // https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/user/space.md#查询用户投稿视频明细
   getUserVideos: {
     url: 'https://api.bilibili.com/x/space/wbi/arc/search',

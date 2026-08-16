@@ -13,6 +13,7 @@ import { reconcileNotificationBadge } from '../notificationReadReconciliation'
 import type { NativeNotificationSection } from '../notificationSections'
 import { NOTIFICATION_BADGE_RETRY_DELAYS_MS } from '../notificationTimings'
 import NativeNotificationItem from './NativeNotificationItem.vue'
+import NativeSystemNotificationItem from './NativeSystemNotificationItem.vue'
 
 const props = defineProps<{
   accountState: NotificationAccountState
@@ -33,6 +34,8 @@ const authoritativeUnreadCount = computed(() => {
     return topBarStore.unReadMessage.reply || 0
   if (props.section === 'at')
     return topBarStore.unReadMessage.at || 0
+  if (props.section === 'system')
+    return topBarStore.unReadMessage.sys_msg || 0
   return Math.max(
     topBarStore.unReadMessage.like || 0,
     (topBarStore.unReadMessage as { recv_like?: number }).recv_like || 0,
@@ -276,8 +279,8 @@ async function syncReadCandidate() {
   if (!candidate || !isReadCandidateEligible(candidate))
     return
 
-  // The successful first-page GET is the current message site's real read
-  // mutation. Only clear local dots after that response has rendered.
+  // The section adapter only publishes a first page after its verified server
+  // read mutation has succeeded. Clear local dots after that page has rendered.
   if (!props.controller.markCandidateReadLocally(props.section, candidate))
     return
 
@@ -438,11 +441,10 @@ defineExpose({ refresh })
 
     <template v-else>
       <div class="native-notification-feed__items">
-        <NativeNotificationItem
-          v-for="item in state.items"
-          :key="item.id"
-          :item="item"
-        />
+        <template v-for="item in state.items" :key="item.id">
+          <NativeSystemNotificationItem v-if="item.kind === 'system'" :item="item" />
+          <NativeNotificationItem v-else :item="item" />
+        </template>
       </div>
 
       <div v-if="state.errorKind" class="native-notification-feed__pagination-state" role="status">
