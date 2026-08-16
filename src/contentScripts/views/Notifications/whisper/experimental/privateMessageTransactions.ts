@@ -1,5 +1,5 @@
 /**
- * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
+ * EXPERIMENTAL: shared only by the explicit DEV text-send test and fixture verification.
  */
 import type { PrivateMessage } from '~/background/privateMessage/types'
 

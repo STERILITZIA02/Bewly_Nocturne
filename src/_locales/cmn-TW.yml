@@ -969,6 +969,10 @@ notifications:
       composer_aria: 私訊文字輸入框
       composer_hint: Enter 傳送，Shift+Enter 換行
       send: 傳送
+      test_send: 測試傳送
+      test_send_success: 伺服器歷史已確認傳送成功
+      test_send_accepted_unconfirmed: 介面已接受，但伺服器歷史暫未確認；不會自動重送
+      test_send_protocol_mismatch: 介面已回傳訊息識別碼，但伺服器歷史未能核對；不會自動重送
       sending: 傳送中
       reconciling: 正在與伺服器同步
       send_failed: 傳送失敗

@@ -968,6 +968,10 @@ notifications:
       composer_aria: 私信文本输入框
       composer_hint: Enter 发送，Shift+Enter 换行
       send: 发送
+      test_send: 测试发送
+      test_send_success: 服务端历史已确认发送成功
+      test_send_accepted_unconfirmed: 接口已接受，但服务端历史暂未确认；不会自动重发
+      test_send_protocol_mismatch: 接口已返回消息标识，但服务端历史未能对账；不会自动重发
       sending: 发送中
       reconciling: 正在与服务端同步
       send_failed: 发送失败

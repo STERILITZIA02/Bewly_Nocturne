@@ -5,6 +5,8 @@ import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
+import MessageComposer from './experimental/MessageComposer.vue'
+import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { DisplayPrivateSession } from './privateSession'
@@ -15,6 +17,7 @@ const props = defineProps<{
   active: boolean
   controller: PrivateMessagesController
   session: DisplayPrivateSession
+  writeController: PrivateMessageWriteController | null
 }>()
 
 const emit = defineEmits<{
@@ -31,6 +34,30 @@ const headingRef = ref<HTMLElement | null>(null)
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
 const state = computed(() => props.controller.getState(props.session.talkerId))
+const isDevTextSendEnabled = import.meta.env.DEV
+  && props.session.kind === 'user'
+  && Boolean(props.writeController)
+const writeState = computed(() => props.writeController?.getState(props.session.talkerId) ?? null)
+const draft = computed({
+  get: () => writeState.value?.draft ?? '',
+  set: value => props.writeController?.setDraft(props.session.talkerId, value),
+})
+const sendStatusMessage = computed(() => {
+  const current = writeState.value
+  if (!current || current.sending)
+    return ''
+  if (current.lastTextSendOutcome === 'confirmed')
+    return t('notifications.whisper.messages.test_send_success')
+  if (current.lastTextSendOutcome === 'accepted-but-unconfirmed')
+    return t('notifications.whisper.messages.test_send_accepted_unconfirmed')
+  if (current.lastTextSendOutcome === 'protocol-mismatch')
+    return t('notifications.whisper.messages.test_send_protocol_mismatch')
+  if (current.lastTextSendOutcome === 'failed') {
+    const kind = current.lastTextSendDiagnostic?.kind ?? 'api-error'
+    return t(`notifications.whisper.errors.${kind}`)
+  }
+  return ''
+})
 const errorMessage = computed(() => {
   const kind = state.value.errorKind
   if (!kind)
@@ -159,6 +186,18 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   else
     saveViewportState()
   await acknowledgeIfEligible()
+}
+
+async function sendDraft() {
+  const writer = props.writeController
+  if (!isDevTextSendEnabled || !writer)
+    return
+  const confirmed = await writer.sendDraft(props.session.talkerId)
+  if (!confirmed)
+    return
+  await props.controller.refreshLatest(props.session.talkerId)
+  await nextTick()
+  scrollToLatest()
 }
 
 async function activateConversation() {
@@ -352,7 +391,24 @@ defineExpose({
     </button>
 
     <footer class="conversation-view__footer">
-      <div class="conversation-view__readonly">
+      <div v-if="isDevTextSendEnabled && writeState" class="conversation-view__test-send">
+        <MessageComposer
+          v-model="draft"
+          :sending="writeState.sending"
+          :image-draft="null"
+          :enable-image="false"
+          test-mode
+          @submit="sendDraft"
+        />
+        <span
+          v-if="sendStatusMessage"
+          class="conversation-view__test-send-status"
+          role="status"
+        >
+          {{ sendStatusMessage }}
+        </span>
+      </div>
+      <div v-else class="conversation-view__readonly">
         <span class="conversation-view__readonly-copy">
           <strong>{{ t('notifications.whisper.messages.readonly_title') }}</strong>
           <span>{{ t('notifications.whisper.messages.readonly_description') }}</span>
@@ -422,6 +478,19 @@ defineExpose({
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
+}
+
+.conversation-view__test-send {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: var(--bew-space-2);
+}
+
+.conversation-view__test-send-status {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 
 .conversation-view__readonly-copy {

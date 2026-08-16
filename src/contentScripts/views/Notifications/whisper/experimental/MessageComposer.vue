@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.
+ * EXPERIMENTAL: text send is available only through the explicit DEV test UI; image writes remain unexposed.
  */
 import { useI18n } from 'vue-i18n'
 
@@ -12,6 +12,8 @@ const props = defineProps<{
   modelValue: string
   sending: boolean
   imageDraft: PrivateImageDraftState | null
+  enableImage?: boolean
+  testMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -28,7 +30,7 @@ const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isComposing = ref(false)
 const canSend = computed(() => !props.sending && !props.imageDraft && Boolean(props.modelValue.trim()))
-const canSelectImage = computed(() => !props.sending && !props.imageDraft)
+const canSelectImage = computed(() => props.enableImage && !props.sending && !props.imageDraft)
 const imageSize = computed(() => {
   if (!props.imageDraft)
     return ''
@@ -145,6 +147,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
     <div class="message-composer__actions">
       <span>{{ t('notifications.whisper.messages.composer_hint') }}</span>
       <input
+        v-if="enableImage"
         ref="fileInputRef"
         class="message-composer__file-input"
         type="file"
@@ -153,7 +156,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         aria-hidden="true"
         @change="handleFileChange"
       >
-      <Tooltip :content="t('notifications.whisper.messages.select_image')" placement="top">
+      <Tooltip v-if="enableImage" :content="t('notifications.whisper.messages.select_image')" placement="top">
         <IconButton
           shape="circle"
           :label="t('notifications.whisper.messages.select_image')"
@@ -170,14 +173,16 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         <i v-if="sending" i-svg-spinners-ring-resize aria-hidden="true" />
         {{ sending
           ? t('notifications.whisper.messages.sending')
-          : t('notifications.whisper.messages.send') }}
+          : t(testMode
+            ? 'notifications.whisper.messages.test_send'
+            : 'notifications.whisper.messages.send') }}
       </Button>
     </div>
   </form>
 </template>
 
 <style scoped lang="scss">
-@use "../../../../styles/breakpoints";
+@use "../../../../../styles/breakpoints";
 
 .message-composer {
   display: grid;

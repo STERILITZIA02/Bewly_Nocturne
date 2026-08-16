@@ -1021,6 +1021,10 @@ notifications:
       composer_aria: Direct-message text field
       composer_hint: Enter to send, Shift+Enter for a new line
       send: Send
+      test_send: Test send
+      test_send_success: Server history confirmed the message
+      test_send_accepted_unconfirmed: The API accepted the message, but server history has not confirmed it; it will not be resent automatically
+      test_send_protocol_mismatch: The API returned a message ID, but server history could not reconcile it; it will not be resent automatically
       sending: Sending
       reconciling: Syncing with the server
       send_failed: Failed to send

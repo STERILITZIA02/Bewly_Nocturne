@@ -8,7 +8,7 @@
 - Whisper：Hybrid workspace。普通用户和官方助手可读取 Native 会话与历史并执行 ACK；未关注、拦截、粉丝团和未知会话回退原版。
 - System：完整原版 iframe。
 - Message Settings：Bewly 本地阅读选项位于全局“Bewly 页面 → 消息页”；服务端设置打开原版 `#/config`。
-- 文字、图片、表情发送和其他私信写操作：仅由原版页面负责。Native 页面产生 `send_msg` 或 `upload_bfs` 请求：不得出现。
+- 正式发布版的文字、图片、表情发送和其他私信写操作仍由原版页面负责。开发版仅提供显式文本“测试发送”入口；图片上传和图片发送不开放。
 
 ## 浏览器核心路径
 
@@ -27,8 +27,9 @@ Chrome 与 Firefox 都必须实际检查：
 
 - 会话缓存超过设置上限时，淘汰最近最少访问的非当前、非 ACK-in-flight 会话。
 - 单会话消息超过设置上限时，仅保留最新消息；后续旧页继续使用独立 `historyBoundarySeqno`。
-- Native 页面不渲染 textarea、发送按钮或图片选择器。
-- Network 中 Native 页面不得出现 `web_im/send_msg` 或 `draw/upload_bfs`。
+- 正式发布版 Native 页面不渲染 textarea、发送按钮或图片选择器；开发版可渲染文本测试 Composer，但不得显示图片选择器。
+- 正式发布版 Native 页面产生 `send_msg` 或 `upload_bfs` 请求：不得出现。开发版只有用户明确点击“测试发送”后才允许出现 `web_im/send_msg`；`draw/upload_bfs` 仍不得出现。
+- DEV 文本发送只有在 API `code=0` 且服务端历史对账确认后才算成功；HTTP `412` 必须显示为 `risk-control`，不能伪造成功。
 - 原版发送入口必须仍然可达。
 
 ## 环境矩阵

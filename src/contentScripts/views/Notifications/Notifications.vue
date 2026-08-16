@@ -40,6 +40,7 @@ import {
   isOriginalOnlyNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
+import { useExperimentalPrivateMessageWrites } from './whisper/experimental/usePrivateMessageWrites'
 import type { DisplayPrivateSession } from './whisper/privateSession'
 import type { PrivateMessagesDependencies } from './whisper/usePrivateMessages'
 import { usePrivateMessages } from './whisper/usePrivateMessages'
@@ -93,6 +94,18 @@ const privateMessages = usePrivateMessages(
   privateSessions.selectedTalkerId,
   privateMessageDependencies,
 )
+const privateMessageWrites = import.meta.env.DEV
+  ? useExperimentalPrivateMessageWrites(currentMid, privateSessions.selectedTalkerId, {
+      fetchMessages: options => api.privateMessage.getPrivateMessages(options),
+      ackSession: options => api.privateMessage.ackPrivateSession(options),
+      getCsrf: getCSRF,
+      markSessionRead: privateSessions.markSessionRead,
+      syncUnread: () => topBarStore.syncUnreadMessageState(),
+      sendMessage: options => api.privateMessage.sendPrivateMessage(options),
+      markSessionSent: privateSessions.markSessionSent,
+      refreshSessions: privateSessions.refresh,
+    })
+  : null
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
@@ -431,6 +444,7 @@ onMounted(() => {
 onActivated(activatePage)
 onDeactivated(deactivatePage)
 onBeforeUnmount(() => {
+  privateMessageWrites?.dispose()
   privateMessages.dispose()
   deactivatePage()
   clearRefreshHandler()
@@ -469,6 +483,7 @@ onBeforeUnmount(() => {
             :active="isPageActive"
             :controller="privateSessions"
             :messages-controller="privateMessages"
+            :write-controller="privateMessageWrites"
             @close-conversation="closePrivateConversation"
             @select-session="selectPrivateConversation"
           />

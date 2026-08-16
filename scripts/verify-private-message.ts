@@ -507,7 +507,7 @@ verify('multipart upload transport does not set a multipart boundary and preserv
   assert.equal(capturedInit?.signal, controller.signal)
 })
 
-verify('text form transport signs the full body but separates WBI identity query fields', async ({ transport }) => {
+verify('text form transport signs only WBI identity query fields', async ({ transport }) => {
   let capturedUrl = ''
   let capturedInit: RequestInit | undefined
   let signedInput: Record<string, unknown> | undefined
@@ -548,7 +548,11 @@ verify('text form transport signs the full body but separates WBI identity query
 
   assert.equal(response.code, 0)
   assert.equal((response.data as { msg_key?: string }).msg_key, '9223372036854775807')
-  assert.deepEqual(signedInput, body)
+  assert.deepEqual(signedInput, {
+    w_sender_uid: '100',
+    w_receiver_id: '200',
+    w_dev_id: '123e4567-e89b-42d3-a456-426614174000',
+  })
   const url = new URL(capturedUrl)
   assert.equal(`${url.origin}${url.pathname}`, 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg')
   assert.equal(url.searchParams.get('w_sender_uid'), '100')
@@ -556,6 +560,13 @@ verify('text form transport signs the full body but separates WBI identity query
   assert.equal(url.searchParams.get('w_dev_id'), '123e4567-e89b-42d3-a456-426614174000')
   assert.equal(url.searchParams.get('wts'), '1755000000')
   assert.equal(url.searchParams.get('w_rid'), 'signed-rid')
+  assert.deepEqual([...url.searchParams.keys()].sort(), [
+    'w_dev_id',
+    'w_receiver_id',
+    'w_rid',
+    'w_sender_uid',
+    'wts',
+  ])
   assert.equal(capturedInit?.method, 'POST')
   assert.equal((capturedInit?.headers as Record<string, string>)['Content-Type'], 'application/x-www-form-urlencoded')
   const form = new URLSearchParams(String(capturedInit?.body))
@@ -568,6 +579,114 @@ verify('text form transport signs the full body but separates WBI identity query
   assert.equal(form.has('wts'), false)
   assert.equal(form.has('w_rid'), false)
   assert.equal(request.query.w_dev_id, request.body['msg[dev_id]'])
+})
+
+verify('private-message dev_id is generated once and reused from extension-local storage', async () => {
+  const { getPrivateMessageDevId } = await import('../src/background/privateMessage/deviceId')
+  let storedValue: unknown
+  let randomCalls = 0
+  let writeCalls = 0
+  const dependencies = {
+    read: async () => storedValue,
+    write: async (_key: string, value: string) => {
+      writeCalls++
+      storedValue = value
+    },
+    randomUUID: () => {
+      randomCalls++
+      return '123e4567-e89b-42d3-a456-426614174000'
+    },
+  }
+
+  const first = await getPrivateMessageDevId('100', dependencies)
+  const second = await getPrivateMessageDevId('100', dependencies)
+  assert.equal(first, '123e4567-e89b-42d3-a456-426614174000')
+  assert.equal(second, first)
+  assert.equal(randomCalls, 1)
+  assert.equal(writeCalls, 1)
+})
+
+verify('text and image send_msg share the signed query plus form-body transport', async () => {
+  const source = await readFile(
+    new URL('../src/background/privateMessage/experimental/api.ts', import.meta.url),
+    'utf8',
+  )
+  assert.equal(source.includes('requestPrivateMessageForm'), false)
+  assert.equal((source.match(/requestSignedPrivateMessageForm/g) ?? []).length, 2)
+  assert.equal((source.match(/sendPrivateMessageForm\(/g) ?? []).length, 3)
+})
+
+verify('Chromium DNR scopes message Origin and Referer rewriting to send_msg POST XHR', async () => {
+  const rules = JSON.parse(await readFile(
+    new URL('../assets/rules.json', import.meta.url),
+    'utf8',
+  )) as Array<{
+    action?: { requestHeaders?: Array<{ header?: string, operation?: string, value?: string }> }
+    condition?: { regexFilter?: string, requestMethods?: string[], resourceTypes?: string[] }
+  }>
+  const sendRule = rules.find(rule => rule.condition?.regexFilter?.includes('web_im/send_msg'))
+  assert.ok(sendRule)
+  assert.deepEqual(sendRule.condition?.requestMethods, ['post'])
+  assert.deepEqual(sendRule.condition?.resourceTypes, ['xmlhttprequest'])
+  assert.equal(
+    sendRule.condition?.regexFilter,
+    '^https://api\\.vc\\.bilibili\\.com/web_im/v1/web_im/send_msg\\?',
+  )
+  assert.deepEqual(sendRule.action?.requestHeaders, [
+    { header: 'origin', operation: 'set', value: 'https://message.bilibili.com' },
+    { header: 'referer', operation: 'set', value: 'https://message.bilibili.com/' },
+  ])
+  const manifestSource = await readFile(new URL('../src/manifest.ts', import.meta.url), 'utf8')
+  assert.equal((manifestSource.match(/'declarativeNetRequest'/g) ?? []).length, 1)
+  assert.equal((manifestSource.match(/'\*:\/\/\*\.bilibili\.com\/\*'/g) ?? []).length, 1)
+})
+
+verify('send_msg DEV diagnostics distinguish HTTP risk control without exposing values', ({
+  errors,
+  transport,
+}) => {
+  const diagnostic = transport.createPrivateMessageSendDiagnostic({
+    apiResponse: errors.createPrivateMessageErrorResponse('risk-control', 'sendPrivateMessage', {
+      httpStatus: 412,
+    }),
+    body: {
+      'msg[sender_uid]': '100',
+      'msg[receiver_id]': '200',
+      'msg[dev_id]': '123e4567-e89b-42d3-a456-426614174000',
+      'msg[content]': '{"content":"must-not-leak"}',
+      csrf: 'must-not-leak',
+    },
+    endpointName: 'sendPrivateMessage',
+    query: {
+      w_sender_uid: '100',
+      w_receiver_id: '200',
+      w_dev_id: '123e4567-e89b-42d3-a456-426614174000',
+      wts: 1755000000,
+      w_rid: 'must-not-leak',
+    },
+    responseContentType: 'text/html; charset=utf-8',
+    responseStatus: 412,
+    url: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+  })
+
+  assert.deepEqual(diagnostic, {
+    endpoint: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+    httpStatus: 412,
+    apiCode: -412,
+    responseContentType: 'text/html; charset=utf-8',
+    riskControl: true,
+    queryFieldNames: ['w_dev_id', 'w_receiver_id', 'w_rid', 'w_sender_uid', 'wts'],
+    bodyFieldNames: [
+      'csrf',
+      'msg[content]',
+      'msg[dev_id]',
+      'msg[receiver_id]',
+      'msg[sender_uid]',
+    ],
+    devIdMatches: true,
+    transport: 'signed-query-form-body',
+  })
+  assert.equal(JSON.stringify(diagnostic).includes('must-not-leak'), false)
 })
 
 verify('code-zero text send responses without data remain eligible for history confirmation', ({ protocol }) => {
@@ -1215,7 +1334,7 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   ), { talkerId: '8', sessionType: 1 })
 })
 
-verify('whisper is a workspace hybrid and native writes are unreachable from the page shell', async ({ notificationSections }) => {
+verify('whisper keeps reads stable while exposing only the DEV text-send test path', async ({ notificationSections }) => {
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
@@ -1247,12 +1366,16 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
   ]) {
     assert.equal(notificationsSource.includes(writeDependency), false, writeDependency)
   }
-  assert.equal(notificationsSource.includes('import.meta.env.DEV'), false)
+  assert.equal(notificationsSource.includes('useExperimentalPrivateMessageWrites'), true)
   assert.equal(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'), false)
   assert.equal(notificationsSource.includes('private-text-send-protocol-gate'), false)
-  assert.equal(notificationsSource.includes('sendPrivateMessage'), false)
-  assert.equal(conversationSource.includes('MessageComposer'), false)
-  assert.equal(conversationSource.includes('sendDraft'), false)
+  assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
+  assert.equal(conversationSource.includes('MessageComposer'), true)
+  assert.equal(conversationSource.includes('import.meta.env.DEV'), true)
+  assert.equal(conversationSource.includes(`props.session.kind === 'user'`), true)
+  assert.equal(conversationSource.includes('sendDraft'), true)
+  assert.equal(conversationSource.includes(':enable-image="false"'), true)
+  assert.equal(conversationSource.includes('controller.refreshLatest'), true)
   assert.equal(productionControllerSource.includes('sendDraft'), false)
   assert.equal(productionControllerSource.includes('sendImage'), false)
   assert.equal(productionControllerSource.includes('optimistic'), false)
@@ -1262,12 +1385,16 @@ verify('whisper is a workspace hybrid and native writes are unreachable from the
     'sendPrivateImageMessage',
     'cancelPrivateImageUpload',
   ]) {
-    assert.equal(productionApiSource.includes(writeApi), false, writeApi)
+    assert.equal(
+      productionApiSource.includes(writeApi),
+      writeApi === 'sendPrivateMessage',
+      writeApi,
+    )
   }
-  assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), true)
+  assert.equal(conversationSource.includes('notifications.whisper.messages.test_send'), true)
 })
 
-verify('experimental private writes remain available only to explicit verification imports', async ({
+verify('experimental writes retain fixtures while only text send enters the DEV API path', async ({
   api,
   experimentalApi,
 }) => {
@@ -1277,7 +1404,7 @@ verify('experimental private writes remain available only to explicit verificati
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/index.ts', import.meta.url), 'utf8'),
     readFile(new URL('../knip.json', import.meta.url), 'utf8'),
   ])
-  const requiredWarning = 'EXPERIMENTAL: server write protocol is blocked by real HTTP 412 evidence; do not expose to production UI.'
+  const requiredWarning = 'EXPERIMENTAL: text send is available only through the explicit DEV test UI; image writes remain unexposed.'
   assert.ok(experimentalApiSource.includes(requiredWarning))
   assert.ok(experimentalControllerSource.includes(requiredWarning))
   for (const retainedWrite of [
@@ -1302,6 +1429,7 @@ verify('experimental private writes remain available only to explicit verificati
     'getPrivateMessages',
     'getPrivateSessions',
     'getPrivateUserCards',
+    'sendPrivateMessage',
   ])
   assert.equal(typeof experimentalApi.sendPrivateMessage, 'function')
   assert.equal(typeof experimentalApi.uploadPrivateImage, 'function')
@@ -1328,7 +1456,7 @@ verify('read-only initial build baseline protects runtime isolation, cache limit
 
   for (const baseline of [
     'Native Read-Only Initial Build',
-    'ACK 是当前唯一 Native 私信服务端状态写入',
+    'DEV 文本发送测试',
     '页面级 LRU',
     'experimental',
     'HTTP `412`',
@@ -1365,7 +1493,7 @@ verify('original-fallback sessions keep available avatars instead of always usin
   )
 })
 
-verify('all locales expose private-message-specific failures and the read-only fallback', async () => {
+verify('all locales expose private-message failures and DEV text-send states', async () => {
   const localeNames = ['cmn-CN', 'cmn-TW', 'en', 'jyut']
   const requiredKeys = [
     'login-required:',
@@ -1385,6 +1513,14 @@ verify('all locales expose private-message-specific failures and the read-only f
       assert.ok(whisperSource.includes(`      ${key}`), `${localeName} ${key}`)
     assert.ok(whisperSource.includes('user_fallback:'), `${localeName} user_fallback`)
     assert.ok(whisperSource.includes('readonly:'), `${localeName} readonly`)
+    for (const key of [
+      'test_send:',
+      'test_send_success:',
+      'test_send_accepted_unconfirmed:',
+      'test_send_protocol_mismatch:',
+    ]) {
+      assert.ok(whisperSource.includes(`      ${key}`), `${localeName} ${key}`)
+    }
   }
 })
 
@@ -2220,12 +2356,15 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(pageHeaderSource.includes('background: var(--bew-fill-1)'))
   assert.equal(pageHeaderSource.includes('--bew-content-solid'), false)
 
-  for (const forbiddenWrite of ['sendPrivateMessage', 'uploadPrivateImage', 'sendPrivateImageMessage', 'upload_bfs', 'send_msg']) {
+  for (const forbiddenWrite of ['uploadPrivateImage', 'sendPrivateImageMessage', 'upload_bfs']) {
     assert.equal(notificationsSource.includes(forbiddenWrite), false, forbiddenWrite)
     assert.equal(conversationSource.includes(forbiddenWrite), false, forbiddenWrite)
   }
-  assert.equal(conversationSource.includes('MessageComposer'), false)
-  assert.ok(conversationSource.includes('notifications.whisper.messages.readonly_title'))
+  assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
+  assert.equal(conversationSource.includes('MessageComposer'), true)
+  assert.equal(conversationSource.includes('v-if="isDevTextSendEnabled && writeState"'), true)
+  assert.equal(conversationSource.includes(':enable-image="false"'), true)
+  assert.ok(conversationSource.includes('notifications.whisper.messages.test_send'))
   assert.ok(conversationSource.includes('notifications.whisper.messages.continue_original'))
 })
 

@@ -10,6 +10,7 @@ import ConversationEmptyState from './ConversationEmptyState.vue'
 import ConversationList from './ConversationList.vue'
 import ConversationOriginalFallback from './ConversationOriginalFallback.vue'
 import ConversationView from './ConversationView.vue'
+import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
 import type { DisplayPrivateSession } from './privateSession'
 import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateSessionsController } from './usePrivateSessions'
@@ -30,6 +31,7 @@ const props = defineProps<{
   active: boolean
   controller: PrivateSessionsController
   messagesController: PrivateMessagesController
+  writeController: PrivateMessageWriteController | null
 }>()
 
 const emit = defineEmits<{
@@ -231,6 +233,7 @@ defineExpose({ refresh })
         :active="active"
         :controller="messagesController"
         :session="nativeSelectedSession"
+        :write-controller="writeController"
         @back="emit('closeConversation')"
       />
       <ConversationOriginalFallback
