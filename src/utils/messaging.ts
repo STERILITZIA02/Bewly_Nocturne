@@ -30,6 +30,19 @@ function getRuntime(): typeof browser.runtime | undefined {
   }
 }
 
+export function getExtensionAssetUrl(path: string): string {
+  const runtime = getRuntime()
+  if (!runtime?.getURL)
+    return ''
+
+  try {
+    return runtime.getURL(path)
+  }
+  catch {
+    return ''
+  }
+}
+
 /**
  * 从 content script 发送消息到 background
  */

@@ -25,31 +25,27 @@ import {
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
 import NotificationsNavigation from './components/NotificationsNavigation.vue'
 import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
-import OriginalNotificationsFrame from './components/OriginalNotificationsFrame.vue'
 import type { NotificationPageParams } from './composables/useNotificationFeed'
 import { useNotificationFeeds } from './composables/useNotificationFeeds'
 import { resolveNotificationAccountState } from './notificationFeedPolicy'
 import type {
   NativeNotificationSection,
   NotificationView,
-  OriginalNotificationView,
 } from './notificationSections'
 import {
   isHybridNotificationView,
   isNativeNotificationSection,
-  isOriginalOnlyNotificationView,
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
+import { createSystemNotificationPageFetcher } from './systemNotificationFeed'
 import { useExperimentalPrivateMessageWrites } from './whisper/experimental/usePrivateMessageWrites'
+import type { TransientPrivateRecipient } from './whisper/privateRecipientSearch'
 import type { DisplayPrivateSession } from './whisper/privateSession'
 import type { PrivateMessagesDependencies } from './whisper/usePrivateMessages'
 import { usePrivateMessages } from './whisper/usePrivateMessages'
+import { usePrivateRecipientSearch } from './whisper/usePrivateRecipientSearch'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
 import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
-
-interface OriginalNotificationsFrameExposed {
-  reload: () => void
-}
 
 interface NativeNotificationFeedExposed {
   refresh: () => Promise<void>
@@ -66,10 +62,10 @@ const topBarStore = useTopBarStore()
 
 const currentView = ref<NotificationView>('whisper')
 const routeReady = ref(false)
-const originalFrameRef = ref<OriginalNotificationsFrameExposed | null>(null)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
 const pendingPrivateConversationRoute = ref<PrivateConversationRoute | null>(null)
+const transientPrivateRecipient = ref<TransientPrivateRecipient | null>(null)
 const privateConversationRestoreAttempted = ref(false)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
@@ -80,6 +76,13 @@ const privateSessions = usePrivateSessions(currentMid, {
   fetchUserCards: uids => api.privateMessage.getPrivateUserCards({ uids }),
   getFallbackName: talkerId => t('notifications.whisper.user_fallback', { talkerId }),
 })
+const privateRecipientSearch = usePrivateRecipientSearch(currentMid, {
+  fetchFollowing: params => api.user.searchUserFollowings(params),
+  fetchGlobal: params => api.search.searchUser(params),
+})
+const activePrivateTalkerId = computed(() => (
+  transientPrivateRecipient.value?.mid || privateSessions.selectedTalkerId.value
+))
 const privateMessageDependencies: PrivateMessagesDependencies = {
   fetchMessages: options => api.privateMessage.getPrivateMessages(options),
   ackSession: options => api.privateMessage.ackPrivateSession(options),
@@ -91,31 +94,30 @@ const privateMessageDependencies: PrivateMessagesDependencies = {
 }
 const privateMessages = usePrivateMessages(
   currentMid,
-  privateSessions.selectedTalkerId,
+  activePrivateTalkerId,
   privateMessageDependencies,
 )
-const privateMessageWrites = import.meta.env.DEV
-  ? useExperimentalPrivateMessageWrites(currentMid, privateSessions.selectedTalkerId, {
-      fetchMessages: options => api.privateMessage.getPrivateMessages(options),
-      ackSession: options => api.privateMessage.ackPrivateSession(options),
-      getCsrf: getCSRF,
-      markSessionRead: privateSessions.markSessionRead,
-      syncUnread: () => topBarStore.syncUnreadMessageState(),
-      sendMessage: options => api.privateMessage.sendPrivateMessage(options),
-      markSessionSent: privateSessions.markSessionSent,
-      refreshSessions: privateSessions.refresh,
-    })
-  : null
+const privateMessageWrites = useExperimentalPrivateMessageWrites(currentMid, activePrivateTalkerId, {
+  fetchMessages: options => api.privateMessage.getPrivateMessages(options),
+  ackSession: options => api.privateMessage.ackPrivateSession(options),
+  getCsrf: getCSRF,
+  markSessionRead: privateSessions.markSessionRead,
+  syncUnread: () => topBarStore.syncUnreadMessageState(),
+  sendMessage: options => api.privateMessage.sendPrivateMessage(options),
+  markSessionSent: privateSessions.markSessionSent,
+  refreshSessions: privateSessions.refresh,
+})
+const fetchSystemNotificationPage = createSystemNotificationPageFetcher({
+  fetchUnified: () => api.notification.getSystemUnifiedNotifications(),
+  fetchUser: () => api.notification.getSystemUserNotifications(),
+  fetchHistory: cursor => api.notification.getSystemNotificationHistory({ cursor }),
+  markRead: cursor => api.notification.markSystemNotificationsRead({ cursor }),
+})
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
-const originalView = computed<OriginalNotificationView | null>(() => (
-  isOriginalOnlyNotificationView(currentView.value)
-    ? currentView.value
-    : null
-))
 const nativeView = computed<NativeNotificationSection | null>(() => (
   isNativeNotificationSection(currentView.value) ? currentView.value : null
 ))
@@ -210,12 +212,14 @@ function applyPendingPrivateConversationRoute() {
     }
     return
   }
+  transientPrivateRecipient.value = null
   privateSessions.selectSession(session)
 }
 
 function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
   if (view !== 'whisper') {
     pendingPrivateConversationRoute.value = null
+    transientPrivateRecipient.value = null
     privateSessions.clearSelectedSession()
     return
   }
@@ -230,6 +234,7 @@ function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
     return
   }
 
+  transientPrivateRecipient.value = null
   privateConversationRestoreAttempted.value = true
 
   const expectedSessionKey = `${route.sessionType}:${route.talkerId}`
@@ -253,6 +258,7 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   }
   const currentRoute = parsePrivateConversationRoute(window.location.href)
   const isCurrentSelection = privateSessions.selectedSessionKey.value === session.key
+  transientPrivateRecipient.value = null
   pendingPrivateConversationRoute.value = route
   privateSessions.selectSession(session)
   rememberPrivateConversation(route)
@@ -270,8 +276,35 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   )
 }
 
+function selectTransientPrivateRecipient(recipient: TransientPrivateRecipient) {
+  if (!/^\d+$/.test(recipient.mid))
+    return
+  pendingPrivateConversationRoute.value = null
+  privateSessions.clearSelectedSession()
+  transientPrivateRecipient.value = recipient
+  const nextUrl = clearPrivateConversationRoute(window.location.href)
+  window.history.replaceState(
+    clearPrivateConversationHistoryState(window.history.state),
+    '',
+    nextUrl,
+  )
+}
+
+function resolveTransientPrivateRecipientAfterSend(talkerId: string) {
+  if (transientPrivateRecipient.value?.mid !== talkerId)
+    return
+  const session = privateSessions.state.items.find(
+    item => item.sessionType === 1 && item.talkerId === talkerId,
+  )
+  if (!session)
+    return
+  transientPrivateRecipient.value = null
+  selectPrivateConversation(session)
+}
+
 function closePrivateConversation() {
   pendingPrivateConversationRoute.value = null
+  transientPrivateRecipient.value = null
   privateSessions.clearSelectedSession()
   if (isPrivateConversationHistoryState(window.history.state)) {
     window.history.back()
@@ -307,6 +340,8 @@ function selectView(view: NotificationView) {
   }
   else {
     pendingPrivateConversationRoute.value = null
+    transientPrivateRecipient.value = null
+    privateRecipientSearch.reset()
     privateSessions.clearSelectedSession()
   }
   window.history.pushState(
@@ -316,16 +351,12 @@ function selectView(view: NotificationView) {
   )
 }
 
-function handleOpenMessagesSettings() {
-  openSettingsAt({ category: 'bewly-pages', page: 'messages' })
-}
-
 function resetOuterScrollForWorkspaceView(view: NotificationView) {
   if (NOTIFICATION_SECTION_BY_ID[view].layout !== 'workspace')
     return
 
   // Let the active Native Feed persist its own scrollTop before resetting the
-  // shared outer viewport for an iframe category.
+  // shared outer viewport for the whisper workspace.
   void nextTick(() => {
     if (currentView.value === view)
       scrollViewportRef.value?.scrollTo({ top: 0 })
@@ -337,8 +368,6 @@ function refreshCurrentView() {
     void whisperWorkspaceRef.value?.refresh()
   else if (nativeView.value)
     void nativeFeedRef.value?.refresh()
-  else
-    originalFrameRef.value?.reload()
 }
 
 function fetchNotificationPage(
@@ -357,10 +386,13 @@ function fetchNotificationPage(
       at_time: params?.at_time,
     })
   }
-  return api.notification.getLikeNotifications({
-    id: params?.id,
-    like_time: params?.like_time,
-  })
+  if (section === 'love') {
+    return api.notification.getLikeNotifications({
+      id: params?.id,
+      like_time: params?.like_time,
+    })
+  }
+  return fetchSystemNotificationPage(params)
 }
 
 function registerRefreshHandler() {
@@ -424,6 +456,8 @@ watch(currentMid, (nextMid, previousMid) => {
   if (!previousMid || nextMid === previousMid)
     return
   pendingPrivateConversationRoute.value = null
+  transientPrivateRecipient.value = null
+  privateRecipientSearch.reset()
   privateConversationRestoreAttempted.value = false
   privateSessions.clearSelectedSession()
   if (currentView.value === 'whisper')
@@ -471,7 +505,6 @@ onBeforeUnmount(() => {
       <div class="notifications-page__workspace">
         <NotificationsNavigation
           :model-value="currentView"
-          @open-settings="handleOpenMessagesSettings"
           @update:model-value="selectView"
         />
 
@@ -483,9 +516,13 @@ onBeforeUnmount(() => {
             :active="isPageActive"
             :controller="privateSessions"
             :messages-controller="privateMessages"
+            :recipient-search="privateRecipientSearch"
+            :transient-recipient="transientPrivateRecipient"
             :write-controller="privateMessageWrites"
             @close-conversation="closePrivateConversation"
             @select-session="selectPrivateConversation"
+            @select-recipient="selectTransientPrivateRecipient"
+            @transient-send-confirmed="resolveTransientPrivateRecipientAfterSend"
           />
           <NativeNotificationFeed
             v-if="nativeView"
@@ -495,11 +532,6 @@ onBeforeUnmount(() => {
             :active="isPageActive"
             :controller="notificationFeeds"
             :section="nativeView"
-          />
-          <OriginalNotificationsFrame
-            v-if="originalView"
-            ref="originalFrameRef"
-            :view="originalView"
           />
         </section>
       </div>

@@ -127,9 +127,33 @@ settings:
   messages_mobile_open_list: 永遠顯示會話列表
   messages_mobile_open_last: 恢復上次會話
   messages_server_settings: Bilibili 服務端設定
-  messages_server_settings_desc: Bilibili 服務端訊息設定仍由原版頁面管理。
-  messages_original_settings: 原版訊息設定
-  messages_manage_original: 在原版中管理
+  messages_server_refresh: 服務端狀態
+  messages_server_refresh_action: 重新整理
+  messages_server_loading: 正在讀取
+  messages_server_enabled: 開啟
+  messages_server_disabled: 關閉
+  messages_server_everyone: 所有人
+  messages_server_following: 關注的人
+  messages_server_nobody: 不接收
+  messages_server_msg_notify: 訊息提醒
+  messages_server_ai_intercept: 私訊智能攔截
+  messages_server_reply: 回覆我的訊息提醒
+  messages_server_at: "{'@'} 我的訊息提醒"
+  messages_server_like: 收到的讚訊息提醒
+  messages_server_unfollowed: 收起未關注人訊息
+  messages_server_block_words: 訊息屏蔽詞
+  messages_server_block_words_limit: 已新增 {count}/{max} 個，每個最多 {length} 個字元。
+  messages_server_block_words_placeholder: 輸入屏蔽詞
+  messages_server_block_words_add: 新增
+  messages_server_block_words_remove: 刪除屏蔽詞 {word}
+  messages_server_block_words_empty: 暫無屏蔽詞
+  messages_server_errors:
+    login-required: 登入狀態已失效
+    risk-control: 請求暫時受到限制
+    server-error: 訊息設定服務暫時無法使用
+    network: 網路連線失敗
+    invalid-response: 暫時無法讀取訊息設定
+    api-error: 操作失敗，請重試
   category_playback_player_desc: 設定播放器模式、捲動行為、彈幕、字幕和播放狀態。
   category_playback_autoplay_desc: 設定自動連播與自訂播放行為。
   category_bilibili_comments_desc: 增強留言區的使用者資訊與內容顯示。
@@ -870,20 +894,17 @@ notifications:
   navigation_aria: 訊息分類
   section_aria: 開啟{section}
   unread_count: '{count} 則未讀訊息'
-  original_frame_title: 嗶哩嗶哩原版訊息頁
   actions:
     refresh: 重新整理
     refresh_aria: 重新整理目前訊息分類
     refresh_tooltip: 重新載入目前訊息分類
     retry: 重試
     open_original: 在原版中開啟
-    open_message_settings: 訊息設定
     open_original_aria: 在嗶哩嗶哩原版中開啟{section}
     open_original_tooltip: 使用嗶哩嗶哩原版訊息頁開啟
   sections:
     whisper:
       label: 私訊
-      description: 查看原生會話與唯讀聊天記錄，傳送和未支援會話繼續由原版提供
     reply:
       label: 回覆我的
       description: 查看其他人對你的回覆
@@ -895,14 +916,25 @@ notifications:
       description: 查看別人對你內容的按讚
     system:
       label: 系統通知
-      description: 使用嗶哩嗶哩原版查看系統通知
+      description: 查看來自嗶哩嗶哩的系統與服務訊息
   whisper:
     loading: 正在載入私訊會話
     profile_pending: 正在確認帳號
     list_aria: 私訊會話列表
     search_placeholder: 搜尋目前已載入的會話
     search_aria: 搜尋已載入的私訊會話
-    search_scope: 搜尋和篩選僅套用於目前已載入的會話
+    select_recipient: 選擇{name}作為私訊收件人
+    recipient_search:
+      search_following: 在關注列表中搜尋
+      following_empty: 關注列表中找不到相關使用者
+      search_global: 全站搜尋使用者
+      global_empty: 全站找不到相關使用者
+      loading: 正在搜尋使用者
+      more: 顯示更多
+      error: 搜尋失敗，請重試
+      sources:
+        following: 關注列表
+        global: 全站使用者
     loading_more_sessions: 正在載入更早的會話
     earliest_session: 已到最早的會話
     load_more_failed: 更早的會話載入失敗
@@ -943,7 +975,6 @@ notifications:
     pinned: 已置頂
     muted: 已開啟勿擾
     unread_count: '{count} 則未讀私訊'
-    open_unsupported_original: 在原版中開啟與{name}的會話
     open_original_list: 開啟原版私訊列表
     open_profile: 開啟{name}的個人空間
     back_to_conversations: 返回會話列表
@@ -953,23 +984,15 @@ notifications:
       empty: 暫無聊天記錄
       load_older: 載入更早訊息
       history_start: 已到達聊天記錄起點
-      readonly: 目前私訊頁面為唯讀模式
-      readonly_title: 目前 Bewly 私訊為唯讀模式
-      readonly_description: 傳送訊息或管理對話請前往原版訊息頁
-      continue_original: 在原版私訊中繼續
-      open_original_header: 在原版中開啟
       message_sources:
         auto-reply: 自動回覆
         fan-group-system: 粉絲團系統提示
         mutual-follow: 互相關注
         system: 系統提示
         ai: AI
-      send_original: 在原版中傳送訊息
       composer_placeholder: 輸入訊息
       composer_aria: 私訊文字輸入框
-      composer_hint: Enter 傳送，Shift+Enter 換行
       send: 傳送
-      test_send: 測試傳送
       test_send_success: 伺服器歷史已確認傳送成功
       test_send_accepted_unconfirmed: 介面已接受，但伺服器歷史暫未確認；不會自動重送
       test_send_protocol_mismatch: 介面已回傳訊息識別碼，但伺服器歷史未能核對；不會自動重送
@@ -1016,10 +1039,16 @@ notifications:
       reply: 正在載入回覆通知
       at: 正在載入提及通知
       love: 正在載入按讚通知
+      system: 正在載入系統通知
     empty:
       reply: 暫無回覆通知
       at: 暫無提及通知
       love: 暫無按讚通知
+      system: 暫無系統通知
+    system:
+      unknown_title: 系統通知
+      cover_alt: 系統通知封面
+      unsupported_content: 此通知包含目前版本暫不支援的內容
     actions:
       reply: 回覆了你
       at: 提到了你

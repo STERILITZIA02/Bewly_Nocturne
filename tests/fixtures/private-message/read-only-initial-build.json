@@ -2,11 +2,14 @@
   "nativeSections": [
     "reply",
     "at",
-    "love"
+    "love",
+    "system"
   ],
-  "whisperImplementation": "hybrid-read-only",
-  "systemImplementation": "original",
-  "privateWritesEnabled": [],
+  "whisperImplementation": "hybrid-native-text",
+  "systemImplementation": "native",
+  "privateWritesEnabled": [
+    "text"
+  ],
   "experimentalEvidence": {
     "status": 412,
     "verifiedCodeZero": false

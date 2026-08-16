@@ -150,16 +150,19 @@ export function useNotificationFeed(
         state.failedOperation = null
         state.failedFirstPageApplyMode = null
       }
-      state.serverReadCommitted = true
-      // The verified message-pc contract commits category read in the
-      // successful first-page GET for Reply, At, and Like.
-      readCandidate.value = {
-        readCommitId: state.currentReadCommitId,
-        mid: requestMid,
-        section,
-        generation: requestGeneration,
-        serverReadCommitted: true,
-      }
+      const serverReadCommitted = result.page.serverReadCommitted ?? true
+      state.serverReadCommitted = serverReadCommitted
+      // Reply, At, and Like commit read in their successful first-page GET.
+      // System's adapter publishes its first page only after update_cursor.
+      readCandidate.value = serverReadCommitted
+        ? {
+            readCommitId: state.currentReadCommitId,
+            mid: requestMid,
+            section,
+            generation: requestGeneration,
+            serverReadCommitted: true,
+          }
+        : null
     }
     catch {
       if (isCurrentPageRequest(requestGeneration, requestMid, requestSerial)) {

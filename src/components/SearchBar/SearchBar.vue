@@ -10,7 +10,9 @@ import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
+import { debugLog } from '~/utils/debug'
 import { isHomePage } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
@@ -56,6 +58,16 @@ const originalKeywordBeforeKeyboardSelection = ref<string>(keyword.value)
 const searchHistory = shallowRef<HistoryItem[]>([])
 const { hotSearchList, searchRecommendation } = useSearchExperience()
 const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
+
+function reportSearchBarFailure(endpointName: string, error: unknown) {
+  if (isExtensionContextInvalidatedError(error))
+    return
+
+  debugLog('[SearchBar] request failed', {
+    endpointName,
+    errorKind: 'network',
+  })
+}
 
 const searchMode = computed(() => props.searchBehavior ?? 'navigate')
 const isInPlaceSearch = computed(() => searchMode.value === 'stay')
@@ -167,7 +179,7 @@ watch(isFocus, async (focus) => {
       }
     }
     catch (error) {
-      console.error('Failed to load search history:', error)
+      reportSearchBarFailure('search-history', error)
       searchHistory.value = []
     }
     // 加载热搜数据
@@ -176,7 +188,7 @@ watch(isFocus, async (focus) => {
         await loadSharedHotSearch()
       }
       catch (error) {
-        console.error('Failed to load hot search list:', error)
+        reportSearchBarFailure('hot-search', error)
       }
     }
   }
@@ -227,7 +239,7 @@ const handleKeywordInput = useDebounceFn(async (term: string, requestId: number)
   catch (error) {
     if (requestId === suggestionRequestId)
       suggestions.length = 0
-    console.error('获取搜索建议失败:', error)
+    reportSearchBarFailure('search-suggestion', error)
   }
 }, 200)
 
@@ -277,7 +289,7 @@ async function navigateToSearchResultPage(rawKeyword: string) {
       searchHistory.value = await addSearchHistory(searchItem)
     }
     catch (error) {
-      console.error('Failed to add search history:', error)
+      reportSearchBarFailure('search-history-write', error)
     }
   }
 

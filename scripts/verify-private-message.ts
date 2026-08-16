@@ -32,6 +32,10 @@ interface PrivateMessageModules {
   privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
   topBarSharedRefresh: typeof import('../src/stores/topBarSharedRefresh')
+  messageServerSettingsProtocol: typeof import('../src/background/messageServerSettings/protocol')
+  useMessageServerSettings: typeof import('../src/components/Settings/PluginComponentsAndPages/MessagesPage/useMessageServerSettings')
+  privateRecipientSearch: typeof import('../src/contentScripts/views/Notifications/whisper/privateRecipientSearch')
+  usePrivateRecipientSearch: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateRecipientSearch')
 }
 
 const assertions: Array<{
@@ -98,6 +102,10 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
+      messageServerSettingsProtocol,
+      useMessageServerSettings,
+      privateRecipientSearch,
+      usePrivateRecipientSearch,
     ] = await Promise.all([
       import('../src/background/privateMessage/api'),
       import('../src/background/privateMessage/experimental/api'),
@@ -114,6 +122,10 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/utils/privateConversationRoute'),
       import('../src/contentScripts/views/Notifications/notificationSections'),
       import('../src/stores/topBarSharedRefresh'),
+      import('../src/background/messageServerSettings/protocol'),
+      import('../src/components/Settings/PluginComponentsAndPages/MessagesPage/useMessageServerSettings'),
+      import('../src/contentScripts/views/Notifications/whisper/privateRecipientSearch'),
+      import('../src/contentScripts/views/Notifications/whisper/usePrivateRecipientSearch'),
     ])
     return {
       api,
@@ -135,6 +147,10 @@ async function loadModules(): Promise<PrivateMessageModules> {
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
+      messageServerSettingsProtocol,
+      useMessageServerSettings,
+      privateRecipientSearch,
+      usePrivateRecipientSearch,
     }
   }
   catch {
@@ -200,9 +216,9 @@ verify('invalid private conversation route values safely fall back to the list r
   assert.equal(privateConversationRoute.parsePrivateConversationRoute('not a valid absolute URL'), null)
 })
 
-verify('settings is no longer a notification section while unread-capable frames stay explicit', ({ notificationSections }) => {
+verify('settings is no longer a notification section and System is Native', ({ notificationSections }) => {
   assert.equal(notificationSections.isNotificationView('settings'), false)
-  assert.equal(notificationSections.canOriginalNotificationMutateUnread('system'), true)
+  assert.equal(notificationSections.isNativeNotificationSection('system'), true)
 })
 
 verify('shared refresh retries one transient failure without exposing the raw error', async ({ topBarSharedRefresh }) => {
@@ -257,10 +273,9 @@ verify('failed shared refresh releases its lease without publishing a fresh snap
 })
 
 verify('shared refresh production wiring is concurrent, gated, and free of raw Error logging', async () => {
-  const [storeSource, helperSource, frameSource, sectionSource, brokerSource] = await Promise.all([
+  const [storeSource, helperSource, sectionSource, brokerSource] = await Promise.all([
     readFile(new URL('../src/stores/topBarStore.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/stores/topBarSharedRefresh.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/components/OriginalNotificationsFrame.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/background/topBarStateBroker.ts', import.meta.url), 'utf8'),
   ])
@@ -278,8 +293,8 @@ verify('shared refresh production wiring is concurrent, gated, and free of raw E
   assert.equal(watchSource.includes('console.error'), false)
   assert.equal(helperSource.includes('console.error'), false)
   assert.ok(helperSource.includes('Promise.allSettled'))
-  assert.ok(frameSource.includes('canOriginalNotificationMutateUnread(props.view)'))
-  assert.ok(sectionSource.includes(`return value === 'system'`))
+  assert.ok(sectionSource.includes(`id: 'system'`))
+  assert.ok(sectionSource.includes(`implementation: 'native'`))
   assert.equal((brokerSource.match(/entry\.updatedAt = Date\.now\(\)/g) ?? []).length, 1)
 })
 
@@ -1334,14 +1349,14 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   ), { talkerId: '8', sessionType: 1 })
 })
 
-verify('whisper keeps reads stable while exposing only the DEV text-send test path', async ({ notificationSections }) => {
+verify('whisper keeps reads stable while exposing the confirmed text-send path in packaged builds', async ({ notificationSections }) => {
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
-  assert.equal(notificationSections.isOriginalFrameCapableView('whisper'), false)
-  assert.equal(notificationSections.isOriginalOnlyNotificationView('whisper'), false)
   assert.equal(notificationSections.isNotificationView('settings'), false)
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.reply.layout, 'document')
+  assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.system.implementation, 'native')
+  assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.system.layout, 'document')
 
   const notificationsSource = await readFile(
     new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url),
@@ -1349,6 +1364,10 @@ verify('whisper keeps reads stable while exposing only the DEV text-send test pa
   )
   const conversationSource = await readFile(
     new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url),
+    'utf8',
+  )
+  const composerSource = await readFile(
+    new URL('../src/contentScripts/views/Notifications/whisper/experimental/MessageComposer.vue', import.meta.url),
     'utf8',
   )
   const productionApiSource = await readFile(
@@ -1370,9 +1389,10 @@ verify('whisper keeps reads stable while exposing only the DEV text-send test pa
   assert.equal(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'), false)
   assert.equal(notificationsSource.includes('private-text-send-protocol-gate'), false)
   assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
+  assert.equal(notificationsSource.includes('import.meta.env.DEV'), false)
   assert.equal(conversationSource.includes('MessageComposer'), true)
-  assert.equal(conversationSource.includes('import.meta.env.DEV'), true)
-  assert.equal(conversationSource.includes(`props.session.kind === 'user'`), true)
+  assert.equal(conversationSource.includes('import.meta.env.DEV'), false)
+  assert.equal(conversationSource.includes(`props.session?.kind === 'user'`), true)
   assert.equal(conversationSource.includes('sendDraft'), true)
   assert.equal(conversationSource.includes(':enable-image="false"'), true)
   assert.equal(conversationSource.includes('controller.refreshLatest'), true)
@@ -1391,10 +1411,16 @@ verify('whisper keeps reads stable while exposing only the DEV text-send test pa
       writeApi,
     )
   }
-  assert.equal(conversationSource.includes('notifications.whisper.messages.test_send'), true)
+  assert.equal(composerSource.includes('notifications.whisper.messages.send'), true)
+  assert.equal(composerSource.includes('notifications.whisper.messages.test_send'), false)
+  assert.equal(composerSource.includes('notifications.whisper.messages.composer_hint'), false)
+  assert.equal(composerSource.includes('notifications.whisper.messages.send_original'), false)
+  assert.equal(composerSource.includes('testMode'), false)
+  assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), false)
+  assert.equal(conversationSource.includes('notifications.whisper.messages.continue_original'), false)
 })
 
-verify('experimental writes retain fixtures while only text send enters the DEV API path', async ({
+verify('experimental write assets remain isolated while confirmed text send enters the runtime API path', async ({
   api,
   experimentalApi,
 }) => {
@@ -1404,7 +1430,7 @@ verify('experimental writes retain fixtures while only text send enters the DEV 
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/index.ts', import.meta.url), 'utf8'),
     readFile(new URL('../knip.json', import.meta.url), 'utf8'),
   ])
-  const requiredWarning = 'EXPERIMENTAL: text send is available only through the explicit DEV test UI; image writes remain unexposed.'
+  const requiredWarning = 'EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.'
   assert.ok(experimentalApiSource.includes(requiredWarning))
   assert.ok(experimentalControllerSource.includes(requiredWarning))
   for (const retainedWrite of [
@@ -1437,7 +1463,7 @@ verify('experimental writes retain fixtures while only text send enters the DEV 
   assert.equal(typeof experimentalApi.cancelPrivateImageUpload, 'function')
 })
 
-verify('read-only initial build baseline protects runtime isolation, cache limits, and browser regression gates', async () => {
+verify('native message runtime protects cache limits and browser regression gates', async () => {
   const [agentsSource, regressionSource, notificationsSource, messagesSource, workspaceSource, policyFixtureSource] = await Promise.all([
     readFile(new URL('../AGENTS.md', import.meta.url), 'utf8'),
     readFile(new URL('../docs/notifications/read-only-initial-build-regression.md', import.meta.url), 'utf8'),
@@ -1455,8 +1481,8 @@ verify('read-only initial build baseline protects runtime isolation, cache limit
   }
 
   for (const baseline of [
-    'Native Read-Only Initial Build',
-    'DEV 文本发送测试',
+    'Native Message Center',
+    '打包构建',
     '页面级 LRU',
     'experimental',
     'HTTP `412`',
@@ -1469,11 +1495,11 @@ verify('read-only initial build baseline protects runtime isolation, cache limit
   assert.ok(messagesSource.includes('historyBoundarySeqno'))
   assert.ok(messagesSource.includes('ackRequests.has'))
   assert.ok(workspaceSource.includes('syncVisibilityListener'))
-  assert.equal(regressionSource.includes('send_msg` 或 `upload_bfs` 请求：不得出现'), true)
-  assert.deepEqual(policyFixture.nativeSections, ['reply', 'at', 'love'])
-  assert.equal(policyFixture.whisperImplementation, 'hybrid-read-only')
-  assert.equal(policyFixture.systemImplementation, 'original')
-  assert.deepEqual(policyFixture.privateWritesEnabled, [])
+  assert.equal(regressionSource.includes('只有用户明确提交文本后才允许出现 `web_im/send_msg`'), true)
+  assert.deepEqual(policyFixture.nativeSections, ['reply', 'at', 'love', 'system'])
+  assert.equal(policyFixture.whisperImplementation, 'hybrid-native-text')
+  assert.equal(policyFixture.systemImplementation, 'native')
+  assert.deepEqual(policyFixture.privateWritesEnabled, ['text'])
   assert.deepEqual(policyFixture.experimentalEvidence, {
     status: 412,
     verifiedCodeZero: false,
@@ -1493,7 +1519,7 @@ verify('original-fallback sessions keep available avatars instead of always usin
   )
 })
 
-verify('all locales expose private-message failures and DEV text-send states', async () => {
+verify('all locales expose private-message failures and meaningful text-send states only', async () => {
   const localeNames = ['cmn-CN', 'cmn-TW', 'en', 'jyut']
   const requiredKeys = [
     'login-required:',
@@ -1512,14 +1538,25 @@ verify('all locales expose private-message failures and DEV text-send states', a
     for (const key of requiredKeys)
       assert.ok(whisperSource.includes(`      ${key}`), `${localeName} ${key}`)
     assert.ok(whisperSource.includes('user_fallback:'), `${localeName} user_fallback`)
-    assert.ok(whisperSource.includes('readonly:'), `${localeName} readonly`)
     for (const key of [
-      'test_send:',
       'test_send_success:',
       'test_send_accepted_unconfirmed:',
       'test_send_protocol_mismatch:',
     ]) {
       assert.ok(whisperSource.includes(`      ${key}`), `${localeName} ${key}`)
+    }
+    for (const removedKey of [
+      'readonly:',
+      'readonly_title:',
+      'readonly_description:',
+      'continue_original:',
+      'composer_hint:',
+      'test_send:',
+      'send_original:',
+      'search_scope:',
+      'open_message_settings:',
+    ]) {
+      assert.equal(whisperSource.includes(removedKey), false, `${localeName} ${removedKey}`)
     }
   }
 })
@@ -2044,7 +2081,7 @@ verify('visibility and whisper activation use independent finite stale windows',
   assert.equal(incrementalRequests, 2)
 })
 
-verify('conversation list wires one bottom sentinel and localized loaded-list scope', async () => {
+verify('conversation list wires one bottom sentinel without development scope copy', async () => {
   const [listSource, workspaceSource, notificationsSource, ...localeSources] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
@@ -2058,7 +2095,7 @@ verify('conversation list wires one bottom sentinel and localized loaded-list sc
   assert.ok(listSource.includes('conversation-list__sentinel'))
   assert.ok(listSource.includes(`emit('loadMore')`))
   assert.ok(listSource.includes(`emit('retryLoadMore')`))
-  assert.ok(listSource.includes(`notifications.whisper.search_scope`))
+  assert.equal(listSource.includes(`notifications.whisper.search_scope`), false)
   assert.ok(listSource.includes('onBeforeUnmount(disconnectObserver)'))
   assert.ok(workspaceSource.includes(`document.addEventListener('visibilitychange'`))
   assert.ok(workspaceSource.includes('controller.refreshIfStale()'))
@@ -2066,7 +2103,7 @@ verify('conversation list wires one bottom sentinel and localized loaded-list sc
   assert.ok(notificationsSource.includes('getNewPrivateSessions'))
   assert.equal(`${listSource}\n${workspaceSource}\n${notificationsSource}`.includes('setInterval('), false)
   for (const localeSource of localeSources) {
-    assert.ok(localeSource.includes('search_scope:'))
+    assert.equal(localeSource.includes('search_scope:'), false)
     assert.ok(localeSource.includes('loading_more_sessions:'))
     assert.ok(localeSource.includes('earliest_session:'))
     assert.ok(localeSource.includes('load_more_failed:'))
@@ -2114,7 +2151,7 @@ verify('mobile whisper master-detail preserves scroll and focus with reduced-mot
     )),
   ])
 
-  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession)`))
+  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession || transientRecipient)`))
   assert.ok(workspaceSource.includes('breakpoints.$mobile-max'))
   assert.ok(workspaceSource.includes('translateX(100%)'))
   assert.ok(workspaceSource.includes('translateX(-100%)'))
@@ -2206,11 +2243,11 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(notificationsSource.includes('normalizeNotificationRoute'))
   assert.ok(notificationsSource.includes('routeReady'))
   assert.ok(notificationsSource.includes('openSettingsAt'))
-  assert.ok(navigationSource.includes(`(event: 'openSettings'): void`))
-  assert.ok(navigationSource.includes('notifications-navigation__settings'))
-  assert.ok(navigationSource.includes(`@click="emit('openSettings')"`))
-  assert.ok(notificationsSource.includes('handleOpenMessagesSettings'))
-  assert.ok(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'))
+  assert.equal(navigationSource.includes(`(event: 'openSettings'): void`), false)
+  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
+  assert.equal(navigationSource.includes(`@click="emit('openSettings')"`), false)
+  assert.equal(notificationsSource.includes('handleOpenMessagesSettings'), false)
+  assert.equal(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'), false)
   assert.ok(appProviderSource.includes('openSettingsAt'))
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   for (const setting of [
@@ -2226,7 +2263,9 @@ verify('message settings live in the global Bewly settings page and the old sect
     assert.ok(messagesPageSource.includes(`settings.${setting}`), setting)
     assert.ok(storageSource.includes(`${setting}:`), setting)
   }
-  assert.ok(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+  assert.equal(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
+  assert.ok(messagesPageSource.includes('useMessageServerSettings'))
+  assert.ok(messagesPageSource.includes('api.messageServerSettings'))
   assert.ok(searchSource.includes(`secondaryPage: 'messages'`))
   assert.ok(searchSource.includes('settings.messages_auto_mark_read'))
   assert.ok(conversationSource.includes('settings.value.autoMarkPrivateMessagesRead'))
@@ -2242,8 +2281,9 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(notificationsSource.includes('privateMessageMobileOpenMode'))
   for (const localeSource of localeSources) {
     assert.ok(localeSource.includes('messages_auto_mark_read:'))
-    assert.ok(localeSource.includes('messages_original_settings:'))
-    assert.ok(localeSource.includes('open_message_settings:'))
+    assert.ok(localeSource.includes('messages_server_block_words:'))
+    assert.equal(localeSource.includes('messages_original_settings:'), false)
+    assert.equal(localeSource.includes('open_message_settings:'), false)
   }
 })
 
@@ -2294,10 +2334,10 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(listSource.includes(`@select="emit('select', $event)"`))
 
   assert.equal(workspaceSource.includes('OriginalNotificationsFrame'), false)
-  assert.ok(workspaceSource.includes('<ConversationEmptyState v-if="!selectedSession"'))
+  assert.ok(workspaceSource.includes('<ConversationEmptyState v-if="!selectedSession && !transientRecipient"'))
   assert.ok(workspaceSource.includes('<ConversationView'))
   assert.ok(workspaceSource.includes('<ConversationOriginalFallback'))
-  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession)`))
+  assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession || transientRecipient)`))
   assert.equal(workspaceSource.includes('originalFrameRef'), false)
   assert.equal(workspaceSource.includes('.reload()'), false)
   assert.ok(emptySource.includes('notifications.whisper.select_conversation_empty'))
@@ -2315,32 +2355,35 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(notificationsSource.includes('window.history.back()'))
   assert.ok(notificationsSource.includes('clearPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('applyPendingPrivateConversationRoute'))
-  assert.ok(notificationsSource.includes('v-if="originalView"'))
-  assert.ok(sectionsSource.includes(`export type OriginalNotificationView = 'system'`))
+  assert.equal(notificationsSource.includes('originalView'), false)
+  assert.equal(notificationsSource.includes('OriginalNotificationsFrame'), false)
+  assert.ok(sectionsSource.includes(`export type NativeNotificationSection = 'reply' | 'at' | 'love' | 'system'`))
   assert.equal(sectionsSource.includes(`| 'settings'`), false)
 
-  assert.ok(navigationSource.includes(`(event: 'openSettings'): void`))
-  assert.ok(navigationSource.includes('notifications-navigation__settings'))
-  assert.ok(navigationSource.includes(`@click="emit('openSettings')"`))
-  assert.equal(
-    navigationSource.slice(
-      navigationSource.indexOf('notifications-navigation__settings'),
-      navigationSource.indexOf('notifications-navigation__settings') + 500,
-    ).includes('aria-current'),
-    false,
-  )
-  assert.ok(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'))
+  assert.equal(navigationSource.includes(`(event: 'openSettings'): void`), false)
+  assert.equal(navigationSource.includes('notifications-navigation__settings'), false)
+  assert.equal(navigationSource.includes(`@click="emit('openSettings')"`), false)
+  assert.equal(notificationsSource.includes('@open-settings="handleOpenMessagesSettings"'), false)
   assert.ok(routeSource.includes(`settings: 'config'`))
   assert.ok(routeSource.includes(`view: 'whisper'`))
   assert.ok(routeSource.includes('openMessageSettings: true'))
-  assert.ok(notificationsSource.indexOf('v-if="!routeReady"') < notificationsSource.lastIndexOf('<OriginalNotificationsFrame'))
+  assert.ok(notificationsSource.indexOf('v-if="!routeReady"') < notificationsSource.lastIndexOf('<NativeNotificationFeed'))
   assert.ok(notificationsSource.includes(`openSettingsAt({ category: 'bewly-pages', page: 'messages' })`))
   assert.ok(appProviderSource.includes(`category: 'bewly-pages'`))
   assert.ok(appProviderSource.includes(`page: 'messages'`))
   assert.ok(appSource.includes('settingsNavigationRequest'))
   assert.ok(settingsSource.includes('navigationRequest'))
+  const primarySelectedStyle = settingsSource.slice(
+    settingsSource.indexOf('.menu-item-activated'),
+    settingsSource.indexOf('.settings-primary-navigation__list'),
+  )
+  assert.ok(primarySelectedStyle.includes('background: var(--bew-theme-color)'))
+  assert.ok(primarySelectedStyle.includes('color: var(--bew-on-theme-color)'))
+  assert.equal(primarySelectedStyle.includes('--bew-theme-color-auto'), false)
+  assert.equal(primarySelectedStyle.includes('--bew-text-auto'), false)
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
-  assert.ok(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+  assert.equal(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
+  assert.ok(messagesPageSource.includes('useMessageServerSettings'))
   assert.ok(settingsCategorySource.includes('color: var(--bew-theme-color)'))
   assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color-10)'))
 
@@ -2352,7 +2395,7 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.equal(conversationSource.includes('--bew-homepage-bg'), false)
   assert.equal(conversationSource.includes('--bew-elevated-solid'), false)
   assert.ok(fallbackSource.includes('background: transparent'))
-  assert.ok(pageHeaderSource.includes(`v-if="view !== 'whisper'"`))
+  assert.ok(pageHeaderSource.includes(`v-if="view !== 'whisper' && view !== 'system'"`))
   assert.ok(pageHeaderSource.includes('background: var(--bew-fill-1)'))
   assert.equal(pageHeaderSource.includes('--bew-content-solid'), false)
 
@@ -2362,10 +2405,12 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   }
   assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
   assert.equal(conversationSource.includes('MessageComposer'), true)
-  assert.equal(conversationSource.includes('v-if="isDevTextSendEnabled && writeState"'), true)
+  assert.equal(conversationSource.includes('v-if="isTextSendEnabled && writeState"'), true)
   assert.equal(conversationSource.includes(':enable-image="false"'), true)
-  assert.ok(conversationSource.includes('notifications.whisper.messages.test_send'))
-  assert.ok(conversationSource.includes('notifications.whisper.messages.continue_original'))
+  assert.equal(conversationSource.includes(`t('notifications.whisper.messages.test_send')`), false)
+  assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), false)
+  assert.equal(conversationSource.includes('notifications.whisper.messages.continue_original'), false)
+  assert.equal(sectionsSource.includes('notifications.sections.whisper.description'), false)
 })
 
 verify('private message parser supports text, image, recall, custom emoji, tip, and safe unknown fallback', ({ privateMessage }) => {
@@ -3778,6 +3823,306 @@ verify('account changes cancel an active image upload and reject the old account
   assert.deepEqual(cancelled, ['upload-account-change'])
   assert.deepEqual(revoked, ['blob:https://www.bilibili.com/account-change'])
   assert.equal(controller.states.size, 0)
+})
+
+verify('message server settings preserve current enum contracts and submit one field at a time', ({ messageServerSettingsProtocol: protocol }) => {
+  assert.deepEqual(protocol.buildMessageServerSettingsGetParams(), {
+    msg_notify: 1,
+    show_unfollowed_msg: 1,
+    build: 0,
+    mobi_app: 'web',
+  })
+  assert.deepEqual(protocol.MESSAGE_SERVER_SETTING_VALUES, {
+    msg_notify: [1, 3],
+    ai_intercept: [0, 1],
+    set_comment: [0, 1, 2],
+    set_at: [0, 1, 2],
+    set_like: [0, 5],
+    show_unfollowed_msg: [0, 1],
+  })
+
+  const update = protocol.buildMessageServerSettingUpdate('set_comment', 2)
+  assert.equal(update.url, 'https://api.vc.bilibili.com/link_setting/v1/link_setting/set')
+  assert.deepEqual(update.body, {
+    set_comment: 2,
+    build: 0,
+    mobi_app: 'web',
+  })
+  assert.throws(() => protocol.buildMessageServerSettingUpdate('set_comment', 3))
+
+  const settings = protocol.parseMessageServerSettingsResponse({
+    code: 0,
+    data: {
+      msg_notify: 1,
+      ai_intercept: 0,
+      set_comment: 2,
+      set_at: 1,
+      set_like: 5,
+      show_unfollowed_msg: 1,
+      should_receive_group: 1,
+      receive_unfollow_msg: 1,
+    },
+  })
+  assert.deepEqual(settings, {
+    msg_notify: 1,
+    ai_intercept: 0,
+    set_comment: 2,
+    set_at: 1,
+    set_like: 5,
+    show_unfollowed_msg: 1,
+  })
+
+  const blockWords = protocol.parseMessageBlockWordsResponse({
+    code: 0,
+    data: {
+      words: [{ content: 'sanitized-one' }, { content: 'sanitized-two' }],
+      max_word_length: 20,
+      max_words_size: 10,
+    },
+  })
+  assert.deepEqual(blockWords, {
+    words: ['sanitized-one', 'sanitized-two'],
+    maxWordLength: 20,
+    maxWordsSize: 10,
+  })
+  assert.deepEqual(protocol.buildMessageBlockWordMutation('add', ' sanitized-one ').body, {
+    content: 'sanitized-one',
+  })
+})
+
+verify('message server settings keep confirmed values and reconcile each mutation independently', async ({ useMessageServerSettings }) => {
+  let confirmedComment = 0
+  const submissions: Array<{ field: string, value: number }> = []
+  let rejectLike = true
+  const controller = useMessageServerSettings.useMessageServerSettings({
+    fetchSettings: async () => ({
+      code: 0,
+      data: {
+        msg_notify: 1,
+        ai_intercept: 1,
+        set_comment: confirmedComment,
+        set_at: 0,
+        set_like: 0,
+        show_unfollowed_msg: 1,
+      },
+    }),
+    setSetting: async (field, value) => {
+      submissions.push({ field, value })
+      if (field === 'set_like' && rejectLike)
+        return { code: -1, data: null }
+      if (field === 'set_comment')
+        confirmedComment = value
+      return { code: 0, data: null }
+    },
+    fetchBlockWords: async () => ({
+      code: 0,
+      data: { words: [{ content: 'one' }], max_word_length: 12, max_words_size: 3 },
+    }),
+    addBlockWord: async () => ({ code: 0, data: null }),
+    deleteBlockWord: async () => ({ code: 0, data: null }),
+  })
+
+  await controller.load()
+  assert.equal(controller.state.settings.set_comment.serverValue, 0)
+  assert.equal(await controller.updateSetting('set_comment', 2), true)
+  assert.equal(controller.state.settings.set_comment.serverValue, 2)
+  assert.equal(controller.state.settings.set_comment.pending, false)
+  assert.equal(await controller.updateSetting('set_like', 5), false)
+  assert.equal(controller.state.settings.set_like.serverValue, 0)
+  assert.equal(controller.state.settings.set_like.pending, false)
+  assert.deepEqual(submissions, [
+    { field: 'set_comment', value: 2 },
+    { field: 'set_like', value: 5 },
+  ])
+  rejectLike = false
+})
+
+verify('private recipient search normalizes, bounds, parses, and reuses authoritative sessions', ({ privateRecipientSearch, privateSession }) => {
+  assert.equal(privateRecipientSearch.normalizePrivateRecipientQuery('  Alice  Example '), 'Alice Example')
+  assert.equal(privateRecipientSearch.normalizePrivateRecipientQuery('  Ａｌｉｃｅ　Example '), 'Alice Example')
+  assert.equal(privateRecipientSearch.canSearchPrivateRecipients('a'), false)
+  assert.equal(privateRecipientSearch.canSearchPrivateRecipients('9'), true)
+  assert.equal(privateRecipientSearch.canSearchPrivateRecipients('ab'), true)
+  assert.deepEqual(privateRecipientSearch.buildFollowingRecipientSearchParams('100', ' Alice ', 2), {
+    vmid: '100',
+    name: 'Alice',
+    pn: 2,
+    ps: 10,
+  })
+  assert.deepEqual(privateRecipientSearch.buildGlobalRecipientSearchParams(' Alice ', 3), {
+    keyword: 'Alice',
+    page: 3,
+    pagesize: 10,
+  })
+
+  const following = privateRecipientSearch.parseFollowingRecipientSearch({
+    code: 0,
+    data: {
+      list: [
+        { mid: 42, uname: 'Follower', face: 'https://i0.hdslb.com/follower.png' },
+        { mid: '42', uname: 'Duplicate', face: '' },
+      ],
+      total: 25,
+    },
+  }, 1)
+  const global = privateRecipientSearch.parseGlobalRecipientSearch({
+    code: 0,
+    data: {
+      result: [{ mid: '43', uname: '<em class="keyword">Global</em>', upic: 'https://i0.hdslb.com/global.png' }],
+      numPages: 4,
+    },
+  }, 1)
+  assert.ok(following)
+  assert.ok(global)
+  assert.deepEqual(following.items.map(item => item.mid), ['42'])
+  assert.equal(following.hasMore, true)
+  assert.deepEqual(global.items, [{
+    mid: '43',
+    name: 'Global',
+    avatar: 'https://i0.hdslb.com/global.png',
+    source: 'global',
+  }])
+  assert.equal(global.hasMore, true)
+
+  const [session] = privateSession.transformPrivateSessions(
+    [createRawSession('42', { group_name: 'Existing' })],
+    createCardsResponse([]),
+  )
+  assert.deepEqual(
+    privateRecipientSearch.resolvePrivateRecipientSelection(following.items[0]!, [session!]),
+    { session },
+  )
+  assert.deepEqual(
+    privateRecipientSearch.resolvePrivateRecipientSelection(global.items[0]!, [session!]),
+    { recipient: global.items[0] },
+  )
+})
+
+verify('private recipient remote search is explicit, single-flight, account-safe, cached, and capped', async ({ usePrivateRecipientSearch }) => {
+  const mid = ref('100')
+  let now = 1000
+  let followingRequests = 0
+  let globalRequests = 0
+  let releaseStale: ((value: unknown) => void) | undefined
+  let releaseChangedQuery: ((value: unknown) => void) | undefined
+  const controller = usePrivateRecipientSearch.usePrivateRecipientSearch(mid, {
+    fetchFollowing: async ({ name, pn }) => {
+      followingRequests++
+      if (name === 'stale')
+        return await new Promise((resolve) => { releaseStale = resolve })
+      if (name === 'changed-query-old')
+        return await new Promise((resolve) => { releaseChangedQuery = resolve })
+      return {
+        code: 0,
+        data: {
+          list: [{ mid: `${pn}01`, uname: `${name}-${pn}`, face: '' }],
+          total: 30,
+        },
+      }
+    },
+    fetchGlobal: async ({ keyword, page }) => {
+      globalRequests++
+      return {
+        code: 0,
+        data: {
+          result: [{ mid: `${page}02`, uname: `${keyword}-${page}`, upic: '' }],
+          numPages: 6,
+        },
+      }
+    },
+    now: () => now,
+  })
+
+  controller.setQuery('Alice')
+  assert.equal(followingRequests, 0, 'typing is local-only')
+  await controller.searchFollowing()
+  assert.equal(followingRequests, 1)
+  assert.equal(controller.state.source, 'following')
+  assert.equal(controller.state.items.length, 1)
+  await controller.loadMore()
+  await controller.loadMore()
+  await controller.loadMore()
+  assert.equal(followingRequests, 3, 'one query is capped at three pages')
+  assert.equal(controller.state.items.length, 3)
+  assert.equal(controller.state.hasMore, false)
+
+  controller.setQuery('Other')
+  controller.setQuery('Alice')
+  await controller.searchFollowing()
+  assert.equal(followingRequests, 3, 'fresh cached results avoid a network request')
+  now += usePrivateRecipientSearch.PRIVATE_RECIPIENT_SEARCH_CACHE_TTL_MS + 1
+  await controller.searchFollowing()
+  assert.equal(followingRequests, 4, 'expired cache is refreshed')
+
+  controller.setQuery('Nobody')
+  await controller.searchGlobal()
+  assert.equal(globalRequests, 1)
+  assert.equal(controller.state.source, 'global')
+
+  const requestsBeforeQueryChange = followingRequests
+  controller.setQuery('changed-query-old')
+  const changedQueryOld = controller.searchFollowing()
+  controller.setQuery('changed-query-new')
+  const changedQueryNew = controller.searchFollowing()
+  assert.equal(followingRequests, requestsBeforeQueryChange + 1)
+  releaseChangedQuery?.({
+    code: 0,
+    data: { list: [{ mid: '998', uname: 'Discarded', face: '' }], total: 1 },
+  })
+  await Promise.all([changedQueryOld, changedQueryNew])
+  assert.equal(followingRequests, requestsBeforeQueryChange + 2)
+  assert.equal(controller.state.items[0]?.name, 'changed-query-new-1')
+
+  controller.setQuery('stale')
+  const stale = controller.searchFollowing()
+  mid.value = '200'
+  await nextTick()
+  releaseStale?.({
+    code: 0,
+    data: { list: [{ mid: '999', uname: 'Old account', face: '' }], total: 1 },
+  })
+  await stale
+  assert.equal(controller.state.query, '')
+  assert.deepEqual(controller.state.items, [])
+  assert.equal(controller.cacheSize(), 0)
+})
+
+verify('native server settings and recipient search remain isolated from local settings and frozen send transport', async () => {
+  const [
+    settingsPageSource,
+    settingsControllerSource,
+    apiCollectionSource,
+    userApiSource,
+    listSource,
+    searchControllerSource,
+    notificationsSource,
+  ] = await Promise.all([
+    readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/MessagesPage.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Settings/PluginComponentsAndPages/MessagesPage/useMessageServerSettings.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/background/messageListeners/api/index.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/background/messageListeners/api/user.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/usePrivateRecipientSearch.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.ok(apiCollectionSource.includes('MESSAGE_SERVER_SETTINGS: API_MESSAGE_SERVER_SETTINGS'))
+  assert.ok(settingsPageSource.includes('api.messageServerSettings'))
+  assert.equal(settingsPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
+  assert.equal(settingsControllerSource.includes(`from '~/logic'`), false)
+  assert.equal(settingsControllerSource.includes('browser.storage'), false)
+  assert.equal(settingsControllerSource.includes('settings.value'), false)
+  assert.ok(userApiSource.includes('/x/relation/followings/search'))
+  assert.ok(userApiSource.includes('ps: 10'))
+  assert.ok(listSource.includes(`watch(query, value => props.recipientSearch.setQuery(value)`))
+  assert.ok(listSource.includes('@click="recipientSearch.searchFollowing()"'))
+  assert.ok(listSource.includes('@click="recipientSearch.searchGlobal()"'))
+  assert.ok(listSource.includes('@click="recipientSearch.loadMore()"'))
+  assert.equal(searchControllerSource.includes('setInterval'), false)
+  assert.equal(searchControllerSource.includes('fetchUserCards'), false)
+  assert.ok(notificationsSource.includes('transientPrivateRecipient'))
+  assert.ok(notificationsSource.includes('api.privateMessage.sendPrivateMessage(options)'))
+  assert.equal(notificationsSource.includes('state.items.push(transient'), false)
 })
 
 async function main() {

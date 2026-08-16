@@ -8,17 +8,29 @@ import {
   parseAtNotificationResponse,
   parseLikeNotificationResponse,
   parseReplyNotificationResponse,
+  parseSystemHistoryNotificationResponse,
+  parseSystemReadResponse,
+  parseSystemUnifiedNotificationResponse,
+  parseSystemUserNotificationResponse,
 } from '../src/background/notificationJson'
 import { useNotificationFeeds } from '../src/contentScripts/views/Notifications/composables/useNotificationFeeds'
-import type { DisplayNotification } from '../src/contentScripts/views/Notifications/notification'
+import type {
+  InteractionNotification,
+  SystemNotification,
+} from '../src/contentScripts/views/Notifications/notification'
+import type { NotificationPageResult } from '../src/contentScripts/views/Notifications/notificationFeedParsing'
 import {
   buildNextPageParams,
+  buildSystemPageResponse,
   classifyApiError,
   dedupeNotifications,
   parseAtPage,
   parseLikePage,
   parseNotificationPage,
   parseReplyPage,
+  parseSystemContentSegments,
+  parseSystemHistoryPage,
+  parseSystemInitialPage,
 } from '../src/contentScripts/views/Notifications/notificationFeedParsing'
 import {
   createReadCommitId,
@@ -27,6 +39,7 @@ import {
 } from '../src/contentScripts/views/Notifications/notificationFeedPolicy'
 import { reconcileNotificationBadge } from '../src/contentScripts/views/Notifications/notificationReadReconciliation'
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
+import { createSystemNotificationPageFetcher } from '../src/contentScripts/views/Notifications/systemNotificationFeed'
 import { normalizeNotificationRoute, parseNotificationView } from '../src/utils/notificationRoute'
 
 type FixtureName
@@ -43,6 +56,11 @@ type FixtureName
     | 'large-id.json'
     | 'api-error.json'
     | 'system/api-error.json'
+    | 'system/unified-first.json'
+    | 'system/user-first.json'
+    | 'system/legacy-next.json'
+    | 'system/legacy-empty.json'
+    | 'system/update-cursor-success.json'
     | 'html-response.html'
 
 interface MockResponseOptions {
@@ -82,16 +100,22 @@ function createMockResponse(text: string, options: MockResponseOptions = {}): Re
 }
 
 function requirePage(
-  section: NativeNotificationSection,
+  section: Exclude<NativeNotificationSection, 'system'>,
   response: unknown,
-) {
+): NotificationPageResult & { items: InteractionNotification[] }
+function requirePage(
+  section: 'system',
+  response: unknown,
+): NotificationPageResult & { items: SystemNotification[] }
+function requirePage(section: NativeNotificationSection, response: unknown): NotificationPageResult {
   const result = parseNotificationPage(section, response)
   assert.ok(result.page, `${section} fixture should parse`)
   return result.page
 }
 
-function sampleDisplayNotification(id: string): DisplayNotification {
+function sampleDisplayNotification(id: string): InteractionNotification {
   return {
+    kind: 'interaction',
     id,
     section: 'reply',
     actors: [],
@@ -387,6 +411,193 @@ verify('System anonymous probe fixture preserves the confirmed login error', asy
   assert.equal(response.message, '-101')
 })
 
+verify('System initial streams preserve lossless IDs, merge by cursor, and dedupe by ID', async () => {
+  const [unified, user] = await Promise.all([
+    parseSystemUnifiedNotificationResponse(createMockResponse(
+      await readFixtureText('system/unified-first.json'),
+      { url: 'https://message.bilibili.com/x/sys-msg/query_unified_notify?page_size=10' },
+    )),
+    parseSystemUserNotificationResponse(createMockResponse(
+      await readFixtureText('system/user-first.json'),
+      { url: 'https://message.bilibili.com/x/sys-msg/query_user_notify?page_size=20' },
+    )),
+  ])
+  const page = parseSystemInitialPage(unified, user)
+  assert.ok(page)
+  assert.deepEqual(page.items.map(item => item.id), [
+    '881234567890123401',
+    '881234567890123403',
+    '881234567890123402',
+  ])
+  assert.deepEqual(page.items.map(item => item.cursor), [
+    '991234567890123401',
+    '991234567890123400',
+    '991234567890123398',
+  ])
+  assert.equal(page.cursorId, '991234567890123398')
+  assert.equal(page.readCursor, '991234567890123401')
+  assert.equal(page.noMore, false)
+  assert.equal(page.items[0]?.kind, 'system')
+  assert.equal(typeof page.items[0]?.timestamp, 'number')
+})
+
+verify('System legacy pagination uses only its confirmed cursor and accepts an empty tail', async () => {
+  const nextResponse = await parseSystemHistoryNotificationResponse(createMockResponse(
+    await readFixtureText('system/legacy-next.json'),
+    { url: 'https://message.bilibili.com/x/sys-msg/query_notify_list?cursor=sanitized' },
+  ))
+  const nextPage = parseSystemHistoryPage(nextResponse)
+  assert.ok(nextPage)
+  assert.deepEqual(nextPage.items.map(item => item.id), [
+    '881234567890123404',
+    '881234567890123405',
+  ])
+  assert.equal(nextPage.cursorId, '991234567890123396')
+  assert.equal(nextPage.noMore, false)
+  assert.deepEqual(buildNextPageParams('system', nextPage.cursorId, nextPage.cursorTime), {
+    cursor: '991234567890123396',
+  })
+
+  const emptyResponse = await parseSystemHistoryNotificationResponse(createMockResponse(
+    await readFixtureText('system/legacy-empty.json'),
+    { url: 'https://message.bilibili.com/x/sys-msg/query_notify_list?cursor=sanitized' },
+  ))
+  const emptyPage = parseSystemHistoryPage(emptyResponse)
+  assert.ok(emptyPage)
+  assert.deepEqual(emptyPage.items, [])
+  assert.equal(emptyPage.noMore, true)
+})
+
+verify('System content parsing emits safe text and http links without HTML execution', () => {
+  assert.deepEqual(parseSystemContentSegments('#{查看详情}{https://www.bilibili.com/video/BV1xx411c7mD}'), [
+    { type: 'link', text: '查看详情', href: 'https://www.bilibili.com/video/BV1xx411c7mD' },
+  ])
+  assert.deepEqual(parseSystemContentSegments(JSON.stringify({
+    web: '通知正文 https://www.bilibili.com/read/cv1',
+  })), [
+    { type: 'text', text: '通知正文 ' },
+    { type: 'link', text: 'https://www.bilibili.com/read/cv1', href: 'https://www.bilibili.com/read/cv1' },
+  ])
+  assert.deepEqual(parseSystemContentSegments('#{危险链接}{javascript:alert(1)}'), [
+    { type: 'text', text: '#{危险链接}{javascript:alert(1)}' },
+  ])
+  assert.deepEqual(parseSystemContentSegments('{"unknown_module":{"private":"redacted"}}'), [])
+  assert.deepEqual(parseSystemContentSegments('{invalid-json'), [])
+})
+
+verify('System first-page adapter commits the confirmed read cursor once before publishing success', async () => {
+  const [unified, user, history, readSuccess] = await Promise.all([
+    parseSystemUnifiedNotificationResponse(createMockResponse(await readFixtureText('system/unified-first.json'))),
+    parseSystemUserNotificationResponse(createMockResponse(await readFixtureText('system/user-first.json'))),
+    parseSystemHistoryNotificationResponse(createMockResponse(await readFixtureText('system/legacy-next.json'))),
+    parseSystemReadResponse(createMockResponse(await readFixtureText('system/update-cursor-success.json'))),
+  ])
+  const calls: Array<{ name: string, cursor?: string }> = []
+  const fetchPage = createSystemNotificationPageFetcher({
+    fetchUnified: async () => {
+      calls.push({ name: 'unified' })
+      return unified
+    },
+    fetchUser: async () => {
+      calls.push({ name: 'user' })
+      return user
+    },
+    fetchHistory: async (cursor) => {
+      calls.push({ name: 'history', cursor })
+      return history
+    },
+    markRead: async (cursor) => {
+      calls.push({ name: 'read', cursor })
+      return readSuccess
+    },
+  })
+
+  const first = await fetchPage()
+  const parsedFirst = parseNotificationPage('system', first)
+  assert.ok(parsedFirst.page)
+  assert.equal(parsedFirst.page.serverReadCommitted, true)
+  assert.deepEqual(calls.slice(0, 3), [
+    { name: 'unified' },
+    { name: 'user' },
+    { name: 'read', cursor: '991234567890123401' },
+  ])
+
+  const next = await fetchPage({ cursor: '991234567890123398' })
+  assert.ok(parseNotificationPage('system', next).page)
+  assert.deepEqual(calls.at(-1), {
+    name: 'history',
+    cursor: '991234567890123398',
+  })
+})
+
+verify('System read failure does not publish a first page or fake local success', async () => {
+  const [unified, user, readFailure] = await Promise.all([
+    parseSystemUnifiedNotificationResponse(createMockResponse(await readFixtureText('system/unified-first.json'))),
+    parseSystemUserNotificationResponse(createMockResponse(await readFixtureText('system/user-first.json'))),
+    parseSystemReadResponse(createMockResponse(await readFixtureText('system/api-error.json'))),
+  ])
+  let readCount = 0
+  const fetchPage = createSystemNotificationPageFetcher({
+    fetchUnified: async () => unified,
+    fetchUser: async () => user,
+    fetchHistory: async () => ({ code: 0, data: [] }),
+    markRead: async () => {
+      readCount++
+      return readFailure
+    },
+  })
+  const result = parseNotificationPage('system', await fetchPage())
+  assert.equal(readCount, 1)
+  assert.equal(result.page, undefined)
+  assert.equal(result.errorKind, 'login-required')
+})
+
+verify('empty System first pages do not manufacture a server read commit', async () => {
+  const emptyResponse = {
+    code: 0,
+    data: { system_notify_list: [] },
+  }
+  let readCalls = 0
+  const fetchPage = createSystemNotificationPageFetcher({
+    fetchUnified: () => Promise.resolve(emptyResponse),
+    fetchUser: () => Promise.resolve(emptyResponse),
+    fetchHistory: () => Promise.resolve({ code: 0, data: [] }),
+    markRead: () => {
+      readCalls++
+      return Promise.resolve({ code: 0, data: null })
+    },
+  })
+  const response = await fetchPage()
+  const parsed = parseNotificationPage('system', response)
+  assert.ok(parsed.page)
+  assert.equal(parsed.page.serverReadCommitted, false)
+  assert.equal(readCalls, 0)
+
+  const mid = ref('100')
+  const controller = useNotificationFeeds(mid, {
+    fetchPage: () => Promise.resolve(response),
+  })
+  await controller.loadInitial('system')
+  assert.equal(controller.states.system.loaded, true)
+  assert.equal(controller.states.system.serverReadCommitted, false)
+  assert.equal(controller.getReadCandidate('system'), null)
+})
+
+verify('System fixtures are sanitized and contain only currently observed item fields', async () => {
+  for (const name of [
+    'system/unified-first.json',
+    'system/user-first.json',
+    'system/legacy-next.json',
+    'system/legacy-empty.json',
+    'system/update-cursor-success.json',
+  ] as const) {
+    const source = await readFixtureText(name)
+    assert.equal(/SESSDATA|bili_jct|csrf|cookie|mid|uid|uname|avatar/i.test(source), false, name)
+    assert.equal(/https?:\/\/[^"\s]+\?/i.test(source), false, name)
+    assert.equal(/"(?:modules|actions|fields|image|cover)"\s*:/i.test(source), false, name)
+  }
+})
+
 verify('invalid JSON and invalid response shapes are rejected', async () => {
   const malformed = await parseReplyNotificationResponse(createMockResponse('{not-json'))
   assert.equal(malformed.bewlyError?.kind, 'invalid-response')
@@ -401,8 +612,9 @@ verify('read commit IDs are unique per first-page request and independent per se
   const secondReply = createReadCommitId('reply', '100', 2, 2)
   const firstAt = createReadCommitId('at', '100', 2, 1)
   const firstLike = createReadCommitId('love', '100', 2, 1)
+  const firstSystem = createReadCommitId('system', '100', 2, 1)
   assert.notEqual(firstReply, secondReply)
-  assert.equal(new Set([firstReply, firstAt, firstLike]).size, 3)
+  assert.equal(new Set([firstReply, firstAt, firstLike, firstSystem]).size, 4)
 })
 
 verify('pagination does not create a new read commit', async () => {
@@ -589,10 +801,15 @@ verify('badge reconciliation policy rejects stale account, section, and commit s
 })
 
 verify('controller preserves independent section state and scroll positions', async () => {
+  const systemPage = parseSystemHistoryPage(await parseSystemHistoryNotificationResponse(createMockResponse(
+    await readFixtureText('system/legacy-next.json'),
+  )))
+  assert.ok(systemPage)
   const fixtures = {
     reply: await readFixtureJson('reply-first.json'),
     at: await readFixtureJson('at-first.json'),
     love: await readFixtureJson('like-first.json'),
+    system: buildSystemPageResponse(systemPage),
   }
   const mid = ref('100')
   const controller = useNotificationFeeds(mid, {
@@ -603,19 +820,23 @@ verify('controller preserves independent section state and scroll positions', as
     controller.loadInitial('reply'),
     controller.loadInitial('at'),
     controller.loadInitial('love'),
+    controller.loadInitial('system'),
   ])
   controller.states.reply.scrollTop = 480
   controller.states.at.scrollTop = 320
   controller.states.love.scrollTop = 160
+  controller.states.system.scrollTop = 80
 
   assert.equal(controller.states.reply.cursorId, '7849910264738201601')
   assert.equal(controller.states.at.cursorId, '7850010264738201701')
   assert.equal(controller.states.love.cursorId, '7850110264738201803')
+  assert.equal(controller.states.system.cursorId, '991234567890123396')
   assert.deepEqual([
     controller.states.reply.scrollTop,
     controller.states.at.scrollTop,
     controller.states.love.scrollTop,
-  ], [480, 320, 160])
+    controller.states.system.scrollTop,
+  ], [480, 320, 160, 80])
 })
 
 verify('MID change clears all states and rejects old account responses', async () => {
@@ -633,7 +854,7 @@ verify('MID change clears all states and rejects old account responses', async (
   resolveReply?.(await readFixtureJson('reply-first.json'))
   await oldRequest
 
-  for (const section of ['reply', 'at', 'love'] as const) {
+  for (const section of ['reply', 'at', 'love', 'system'] as const) {
     assert.equal(controller.states[section].loaded, false)
     assert.equal(controller.states[section].items.length, 0)
     assert.equal(controller.states[section].generation, 1)
@@ -667,6 +888,72 @@ verify('legacy message settings routes normalize before the notification outlet 
   )
   assert.equal(valid.view, 'reply')
   assert.equal(valid.openMessageSettings, false)
+})
+
+verify('System transport emulates only the verified message-site GET request context', async () => {
+  const rules = JSON.parse(await readFile(
+    new URL('../assets/rules.json', import.meta.url),
+    'utf8',
+  )) as Array<{
+    action?: { requestHeaders?: Array<{ header?: string, operation?: string, value?: string }> }
+    condition?: { regexFilter?: string, requestMethods?: string[], resourceTypes?: string[] }
+  }>
+  const systemRule = rules.find(rule => rule.condition?.regexFilter?.includes('/x/sys-msg/'))
+  assert.ok(systemRule)
+  assert.equal(
+    systemRule.condition?.regexFilter,
+    '^https://message\\.bilibili\\.com/x/sys-msg/(?:query_unified_notify|query_user_notify|query_notify_list|update_cursor)\\?',
+  )
+  assert.deepEqual(systemRule.condition?.requestMethods, ['get'])
+  assert.deepEqual(systemRule.condition?.resourceTypes, ['xmlhttprequest'])
+  assert.deepEqual(systemRule.action?.requestHeaders, [
+    { header: 'origin', operation: 'set', value: 'https://message.bilibili.com' },
+    { header: 'referer', operation: 'set', value: 'https://message.bilibili.com/' },
+  ])
+})
+
+verify('restored whisper routes do not focus the conversation heading without an explicit selection', async () => {
+  const source = await readFile(
+    new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url),
+    'utf8',
+  )
+  assert.ok(source.includes('pendingDetailFocusKey'))
+  assert.ok(source.includes('pendingDetailFocusKey = session.key'))
+  assert.ok(source.includes('pendingDetailFocusKey = `transient:' + '$' + '{recipient.mid}`'))
+  assert.ok(source.includes('nextSessionKey === pendingDetailFocusKey'))
+  assert.equal(source.includes('if (nextSessionKey) {\n    conversationDetailRef.value?.focusHeading()'), false)
+})
+
+verify('transient home and search failures never emit raw Error objects', async () => {
+  const [homeSource, searchSource, searchBarSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Home/components/ForYou.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/logic/searchExperience.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/SearchBar/SearchBar.vue', import.meta.url), 'utf8'),
+  ])
+  const homeFailureLogger = homeSource.slice(
+    homeSource.indexOf('function logRecommendRequestFailure'),
+    homeSource.indexOf('// 当前使用的视频列表'),
+  )
+  assert.ok(homeFailureLogger.includes('debugLog'))
+  assert.equal(homeFailureLogger.includes('console.error'), false)
+  assert.equal(homeFailureLogger.includes('...details'), false)
+  assert.ok(searchSource.includes('isExtensionContextInvalidatedError'))
+  assert.ok(searchSource.includes('extensionContextInvalidated'))
+  assert.equal(searchSource.includes('console.error(\'Failed to load hot search list:\''), false)
+  assert.ok(searchBarSource.includes('isExtensionContextInvalidatedError'))
+})
+
+verify('extension-invalidated empty and loading states do not throw during setup', async () => {
+  const [loadingSource, emptySource, messagingSource] = await Promise.all([
+    readFile(new URL('../src/components/Loading.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/Empty.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/utils/messaging.ts', import.meta.url), 'utf8'),
+  ])
+  assert.ok(messagingSource.includes('export function getExtensionAssetUrl'))
+  assert.equal(loadingSource.includes('browser.runtime.getURL'), false)
+  assert.equal(emptySource.includes('browser.runtime.getURL'), false)
+  assert.ok(loadingSource.includes('v-if="imgURL"'))
+  assert.ok(emptySource.includes('v-if="emptyImg"'))
 })
 
 async function main() {

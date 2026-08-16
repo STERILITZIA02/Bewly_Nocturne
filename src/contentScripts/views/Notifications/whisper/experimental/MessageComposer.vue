@@ -4,8 +4,6 @@
  */
 import { useI18n } from 'vue-i18n'
 
-import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
-
 import type { PrivateImageDraftState } from './usePrivateMessageWrites'
 
 const props = defineProps<{
@@ -13,7 +11,6 @@ const props = defineProps<{
   sending: boolean
   imageDraft: PrivateImageDraftState | null
   enableImage?: boolean
-  testMode?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -25,7 +22,6 @@ const emit = defineEmits<{
 }>()
 
 const { locale, t } = useI18n()
-const originalUrl = buildOriginalNotificationUrl('whisper')
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const isComposing = ref(false)
@@ -145,7 +141,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       @paste="handlePaste"
     />
     <div class="message-composer__actions">
-      <span>{{ t('notifications.whisper.messages.composer_hint') }}</span>
       <input
         v-if="enableImage"
         ref="fileInputRef"
@@ -166,24 +161,17 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           <i i-mingcute:pic-line aria-hidden="true" />
         </IconButton>
       </Tooltip>
-      <ALink :href="originalUrl" type="content">
-        {{ t('notifications.whisper.messages.send_original') }}
-      </ALink>
       <Button native-type="submit" type="primary" :disabled="!canSend">
         <i v-if="sending" i-svg-spinners-ring-resize aria-hidden="true" />
         {{ sending
           ? t('notifications.whisper.messages.sending')
-          : t(testMode
-            ? 'notifications.whisper.messages.test_send'
-            : 'notifications.whisper.messages.send') }}
+          : t('notifications.whisper.messages.send') }}
       </Button>
     </div>
   </form>
 </template>
 
 <style scoped lang="scss">
-@use "../../../../../styles/breakpoints";
-
 .message-composer {
   display: grid;
   gap: var(--bew-space-2);
@@ -272,28 +260,6 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   min-width: 0;
   gap: var(--bew-space-2);
   align-items: center;
-}
-
-.message-composer__actions > span {
-  min-width: 0;
-  margin-right: auto;
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
-}
-
-.message-composer__actions a {
-  flex: 0 0 auto;
-  color: var(--bew-theme-color);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-control);
-  text-decoration: none;
-}
-
-@media (max-width: breakpoints.$mobile-max) {
-  .message-composer__actions > span {
-    display: none;
-  }
+  justify-content: flex-end;
 }
 </style>

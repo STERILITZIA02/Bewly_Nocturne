@@ -25,7 +25,9 @@ const originalUrl = computed(() => buildOriginalNotificationUrl(props.view))
       <h1 class="bew-page-heading">
         {{ t(section.labelKey) }}
       </h1>
-      <p>{{ t(section.descriptionKey) }}</p>
+      <p v-if="section.descriptionKey">
+        {{ t(section.descriptionKey) }}
+      </p>
     </div>
     <div class="notifications-page-header__actions">
       <Button
@@ -40,7 +42,7 @@ const originalUrl = computed(() => buildOriginalNotificationUrl(props.view))
         <span>{{ t('notifications.actions.refresh') }}</span>
       </Button>
       <ALink
-        v-if="view !== 'whisper'"
+        v-if="view !== 'whisper' && view !== 'system'"
         class="notifications-page-header__original-link bew-shape-smooth-rect"
         :href="originalUrl"
         type="content"

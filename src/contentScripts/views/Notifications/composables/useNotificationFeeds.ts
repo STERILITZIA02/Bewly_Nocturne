@@ -54,11 +54,15 @@ export function useNotificationFeeds(
     love: useNotificationFeed(accountMid, 'love', {
       fetchPage: params => options.fetchPage('love', params),
     }),
+    system: useNotificationFeed(accountMid, 'system', {
+      fetchPage: params => options.fetchPage('system', params),
+    }),
   }
   const states: NotificationFeedStates = {
     reply: feeds.reply.state,
     at: feeds.at.state,
     love: feeds.love.state,
+    system: feeds.system.state,
   }
 
   return {

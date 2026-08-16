@@ -72,5 +72,29 @@
       "resourceTypes": ["xmlhttprequest"],
       "requestMethods": ["post"]
     }
+  },
+  {
+    "id": 4,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "origin",
+          "operation": "set",
+          "value": "https://message.bilibili.com"
+        },
+        {
+          "header": "referer",
+          "operation": "set",
+          "value": "https://message.bilibili.com/"
+        }
+      ]
+    },
+    "condition": {
+      "regexFilter": "^https://message\\.bilibili\\.com/x/sys-msg/(?:query_unified_notify|query_user_notify|query_notify_list|update_cursor)\\?",
+      "resourceTypes": ["xmlhttprequest"],
+      "requestMethods": ["get"]
+    }
   }
 ]

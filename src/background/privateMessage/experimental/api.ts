@@ -1,5 +1,5 @@
 /**
- * EXPERIMENTAL: text send is available only through the explicit DEV test UI; image writes remain unexposed.
+ * EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.
  */
 import type Browser from 'webextension-polyfill'
 

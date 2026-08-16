@@ -203,7 +203,13 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.messages_max_cached_conversations',
     'settings.messages_max_messages_per_conversation',
     'settings.messages_mobile_open_mode',
-    'settings.messages_original_settings',
+    'settings.messages_server_msg_notify',
+    'settings.messages_server_ai_intercept',
+    'settings.messages_server_reply',
+    'settings.messages_server_at',
+    'settings.messages_server_like',
+    'settings.messages_server_unfollowed',
+    'settings.messages_server_block_words',
   ], {
     keywordKeys: [
       'settings.plugin.messages_page',

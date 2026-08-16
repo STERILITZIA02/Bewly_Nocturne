@@ -717,8 +717,8 @@ function changeMenuItem(menuItem: MenuType) {
 @use "../../styles/breakpoints";
 
 .menu-item-activated {
-  --uno: "text-$bew-text-auto bg-$bew-theme-color-auto";
   color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
 }
 
 .settings-primary-navigation__list {

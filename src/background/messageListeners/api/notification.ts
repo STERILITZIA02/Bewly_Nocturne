@@ -2,6 +2,10 @@ import {
   parseAtNotificationResponse,
   parseLikeNotificationResponse,
   parseReplyNotificationResponse,
+  parseSystemHistoryNotificationResponse,
+  parseSystemReadResponse,
+  parseSystemUnifiedNotificationResponse,
+  parseSystemUserNotificationResponse,
 } from '../../notificationJson'
 import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
@@ -78,6 +82,72 @@ const API_NOTIFICATION = {
       like_time: undefined as number | undefined,
     },
     afterHandle: [parseLikeNotificationResponse],
+  },
+  // The current message-pc release loads two independent first-page sources,
+  // then merges them by cursor before using the single legacy history stream.
+  getSystemUnifiedNotifications: {
+    url: 'https://message.bilibili.com/x/sys-msg/query_unified_notify',
+    _fetch: {
+      method: 'get',
+      headers: {
+        Referer: 'https://message.bilibili.com/',
+      },
+    },
+    params: {
+      page_size: 10,
+      build: 0,
+      mobi_app: 'web',
+    },
+    afterHandle: [parseSystemUnifiedNotificationResponse],
+  },
+  getSystemUserNotifications: {
+    url: 'https://message.bilibili.com/x/sys-msg/query_user_notify',
+    _fetch: {
+      method: 'get',
+      headers: {
+        Referer: 'https://message.bilibili.com/',
+      },
+    },
+    params: {
+      page_size: 20,
+      build: 0,
+      mobi_app: 'web',
+    },
+    afterHandle: [parseSystemUserNotificationResponse],
+  },
+  getSystemNotificationHistory: {
+    url: 'https://message.bilibili.com/x/sys-msg/query_notify_list',
+    _fetch: {
+      method: 'get',
+      headers: {
+        Referer: 'https://message.bilibili.com/',
+      },
+    },
+    params: {
+      cursor: '' as string,
+      data_type: 1,
+      build: 0,
+      mobi_app: 'web',
+    },
+    afterHandle: [parseSystemHistoryNotificationResponse],
+  },
+  // System does not gain a local read shortcut. The first-page adapter only
+  // publishes success after this real message-pc update_cursor GET succeeds.
+  markSystemNotificationsRead: {
+    url: 'https://message.bilibili.com/x/sys-msg/update_cursor',
+    _fetch: {
+      method: 'get',
+      headers: {
+        Referer: 'https://message.bilibili.com/',
+      },
+    },
+    params: {
+      cursor: '' as string,
+      has_up: 0,
+      build: 0,
+      mobi_app: 'web',
+    },
+    afterHandle: [parseSystemReadResponse],
   },
 } satisfies APIMAP
 

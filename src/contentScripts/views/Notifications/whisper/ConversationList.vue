@@ -2,12 +2,16 @@
 import { useI18n } from 'vue-i18n'
 
 import ConversationListItem from './ConversationListItem.vue'
+import type { TransientPrivateRecipient } from './privateRecipientSearch'
+import { canSearchPrivateRecipients, normalizePrivateRecipientQuery } from './privateRecipientSearch'
+import PrivateRecipientSearchResultItem from './PrivateRecipientSearchResultItem.vue'
 import type {
   DisplayPrivateSession,
   PrivateSessionFilter,
   PrivateSessionTypeFilter,
 } from './privateSession'
 import { filterPrivateSessions } from './privateSession'
+import type { PrivateRecipientSearchController } from './usePrivateRecipientSearch'
 
 const props = defineProps<{
   active: boolean
@@ -19,10 +23,12 @@ const props = defineProps<{
   loadMoreFailed: boolean
   selectedSessionKey: string
   showOfficialAssistants: boolean
+  recipientSearch: PrivateRecipientSearchController
 }>()
 
 const emit = defineEmits<{
   (event: 'select', session: DisplayPrivateSession): void
+  (event: 'selectRecipient', recipient: TransientPrivateRecipient): void
   (event: 'loadMore'): void
   (event: 'retryLoadMore'): void
 }>()
@@ -46,6 +52,17 @@ const filteredItems = computed(() => filterPrivateSessions(visibleItems.value, {
   typeFilter: typeFilter.value,
   query: query.value,
 }))
+const normalizedQuery = computed(() => normalizePrivateRecipientQuery(query.value))
+const localSearchMatches = computed(() => {
+  const normalized = normalizedQuery.value.toLocaleLowerCase()
+  return normalized
+    ? visibleItems.value.filter(item => item.name.toLocaleLowerCase().includes(normalized))
+    : visibleItems.value
+})
+const canOfferRemoteSearch = computed(() => (
+  localSearchMatches.value.length === 0
+  && canSearchPrivateRecipients(normalizedQuery.value)
+))
 
 const canAutoLoad = computed(() => (
   props.active
@@ -139,6 +156,20 @@ watch(
 
 onBeforeUnmount(disconnectObserver)
 
+watch(query, value => props.recipientSearch.setQuery(value), { immediate: true })
+
+function findServerSession(talkerId: string): DisplayPrivateSession | undefined {
+  return props.items.find(item => item.sessionType === 1 && item.talkerId === talkerId)
+}
+
+function selectSearchResult(recipient: TransientPrivateRecipient) {
+  const session = findServerSession(recipient.mid)
+  if (session)
+    emit('select', session)
+  else
+    emit('selectRecipient', recipient)
+}
+
 defineExpose({ focusSession, getScrollTop, restoreScrollTop })
 </script>
 
@@ -168,10 +199,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
           </IconButton>
         </Tooltip>
       </div>
-      <span class="conversation-list__search-scope">
-        {{ t('notifications.whisper.search_scope') }}
-      </span>
-
       <div class="bew-segment-control bew-segment-control--static conversation-list__filters">
         <button
           v-for="filterId in filters"
@@ -227,7 +254,53 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
       </div>
     </div>
     <div v-else class="conversation-list__empty">
-      <Empty :description="visibleItems.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty')" />
+      <div v-if="canOfferRemoteSearch" class="conversation-list__remote-search">
+        <template v-if="recipientSearch.state.loading">
+          <Loading />
+          <span>{{ t('notifications.whisper.recipient_search.loading') }}</span>
+        </template>
+
+        <template v-else-if="recipientSearch.state.source && recipientSearch.state.items.length">
+          <div class="conversation-list__remote-results">
+            <PrivateRecipientSearchResultItem
+              v-for="recipient in recipientSearch.state.items"
+              :key="recipient.mid"
+              :recipient="recipient"
+              @select="selectSearchResult"
+            />
+          </div>
+          <Button
+            v-if="recipientSearch.state.hasMore"
+            type="tertiary"
+            @click="recipientSearch.loadMore()"
+          >
+            {{ t('notifications.whisper.recipient_search.more') }}
+          </Button>
+        </template>
+
+        <template v-else-if="recipientSearch.state.source === 'following'">
+          <Empty :description="t('notifications.whisper.recipient_search.following_empty')" />
+          <Button type="tertiary" @click="recipientSearch.searchGlobal()">
+            {{ t('notifications.whisper.recipient_search.search_global') }}
+          </Button>
+        </template>
+
+        <template v-else-if="recipientSearch.state.source === 'global'">
+          <Empty :description="t('notifications.whisper.recipient_search.global_empty')" />
+        </template>
+
+        <template v-else>
+          <Empty :description="t('notifications.whisper.empty_filtered')" />
+          <Button type="tertiary" @click="recipientSearch.searchFollowing()">
+            {{ t('notifications.whisper.recipient_search.search_following') }}
+          </Button>
+        </template>
+
+        <span v-if="recipientSearch.state.errorKind" class="conversation-list__remote-error" role="status">
+          {{ t('notifications.whisper.recipient_search.error') }}
+        </span>
+      </div>
+      <Empty v-else :description="visibleItems.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty')" />
     </div>
   </section>
 </template>
@@ -278,12 +351,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   background: transparent;
   border: 0;
   outline: none;
-}
-
-.conversation-list__search-scope {
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
 }
 
 .conversation-list__clear {
@@ -380,5 +447,27 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   min-height: 0;
   padding: var(--bew-space-4);
   overflow: auto;
+}
+
+.conversation-list__remote-search {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--bew-space-3);
+  align-items: center;
+}
+
+.conversation-list__remote-results {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  gap: var(--bew-space-1);
+}
+
+.conversation-list__remote-error {
+  color: var(--bew-warning-color);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 </style>

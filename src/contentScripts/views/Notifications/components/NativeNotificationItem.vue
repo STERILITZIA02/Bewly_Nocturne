@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import type { DisplayNotification, DisplayNotificationActor } from '../notification'
+import type { DisplayNotificationActor, InteractionNotification } from '../notification'
 
 const props = defineProps<{
-  item: DisplayNotification
+  item: InteractionNotification
 }>()
 
 const { locale, t } = useI18n()
