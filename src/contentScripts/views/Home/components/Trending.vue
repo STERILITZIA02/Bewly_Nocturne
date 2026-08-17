@@ -27,6 +27,7 @@ const isLoading = ref<boolean>(false)
 const pn = ref<number>(1)
 const noMoreContent = ref<boolean>(false)
 let requestGeneration = 0
+let reloadAfterActivation = false
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
@@ -35,7 +36,19 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    void initData()
+  }
   initPageAction()
+})
+
+onDeactivated(() => {
+  reloadAfterActivation = isLoading.value
+  requestGeneration++
+  if (isLoading.value)
+    emit('afterLoading')
+  isLoading.value = false
 })
 
 async function initData() {

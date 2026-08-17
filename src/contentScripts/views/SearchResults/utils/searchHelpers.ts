@@ -4,7 +4,7 @@ import { parseLocalCalendarDate, toLocalDate } from './localDate'
 /**
  * 获取时间范围参数
  */
-export function getTimeRangeParams(filters: VideoSearchFilters): Record<string, number> {
+export function getTimeRangeParams(filters: VideoSearchFilters): { pubtimeBegin?: number, pubtimeEnd?: number } {
   const { timeRange, customStartDate, customEndDate } = filters
 
   // 自定义日期范围
@@ -38,8 +38,8 @@ export function getTimeRangeParams(filters: VideoSearchFilters): Record<string, 
       [begin, end] = [end, begin]
 
     return {
-      pubtime_begin_s: begin,
-      pubtime_end_s: end,
+      pubtimeBegin: begin,
+      pubtimeEnd: end,
     }
   }
 
@@ -65,8 +65,8 @@ export function getTimeRangeParams(filters: VideoSearchFilters): Record<string, 
   if (begin <= 0)
     return {}
   return {
-    pubtime_begin_s: begin,
-    pubtime_end_s: now,
+    pubtimeBegin: begin,
+    pubtimeEnd: now,
   }
 }
 
@@ -77,21 +77,16 @@ export function buildVideoSearchParams(options: {
   loadMore: boolean
   context: string
   filters: VideoSearchFilters
-}): Record<string, any> {
+}) {
   const { loadMore, context, filters } = options
   const rangeParams = getTimeRangeParams(filters)
-  const timeParams = {
-    pubtime_begin_s: 0,
-    pubtime_end_s: 0,
-    ...rangeParams,
-  }
   return {
-    search_type: 'video',
-    duration: filters.duration,
-    order: filters.order,
-    category_id: '',
     context: loadMore ? context : '',
-    ...timeParams,
+    filters: {
+      duration: filters.duration,
+      order: filters.order,
+      ...rangeParams,
+    },
   }
 }
 

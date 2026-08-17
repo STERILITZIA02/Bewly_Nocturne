@@ -40,32 +40,40 @@ const activatedTab = ref<number>(0)
 const isLoading = ref<boolean>(false)
 // when noMoreContent is true, the user can't scroll down to load more content
 const noMoreContent = ref<boolean>(false)
+const loadError = ref(false)
+const failedRequest = ref<{ type: Business, viewAt: number } | null>(null)
 const livePage = ref<number>(1)
 const historysWrap = ref<HTMLElement>() as Ref<HTMLElement>
+let requestGeneration = 0
 
 watch(activatedTab, (newVal: number | undefined, oldVal: number | undefined) => {
   if (newVal === oldVal)
     return
 
+  requestGeneration++
+  isLoading.value = false
   historys.length = 0
+  noMoreContent.value = false
+  loadError.value = false
+  failedRequest.value = null
   if (historysWrap.value)
     scrollToTop(historysWrap.value)
 
   if (newVal === 0) {
-    getHistoryList(Business.ARCHIVE)
+    void getHistoryList(Business.ARCHIVE)
   }
   else if (newVal === 1) {
     livePage.value = 1
-    getHistoryList(Business.LIVE)
+    void getHistoryList(Business.LIVE)
   }
   else if (newVal === 2) {
-    getHistoryList(Business.ARTICLE)
+    void getHistoryList(Business.ARTICLE)
   }
 }, { immediate: true })
 
 // 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
-  if (isLoading.value || noMoreContent.value || historys.length === 0)
+  if (isLoading.value || loadError.value || noMoreContent.value || historys.length === 0)
     return
 
   const lastViewAt = historys[historys.length - 1]?.view_at
@@ -73,13 +81,13 @@ function handleReachBottom() {
     return
 
   if (activatedTab.value === 0) {
-    getHistoryList(Business.ARCHIVE, lastViewAt)
+    void getHistoryList(Business.ARCHIVE, lastViewAt)
   }
   else if (activatedTab.value === 1) {
-    getHistoryList(Business.LIVE, lastViewAt)
+    void getHistoryList(Business.LIVE, lastViewAt)
   }
   else if (activatedTab.value === 2) {
-    getHistoryList(Business.ARTICLE, lastViewAt)
+    void getHistoryList(Business.ARTICLE, lastViewAt)
   }
 }
 
@@ -88,6 +96,10 @@ useOptimizedScroll(
   { onReachBottom: handleReachBottom },
   { bottomThreshold: 400, throttleDelay: 100 },
 )
+
+onBeforeUnmount(() => {
+  requestGeneration++
+})
 
 function onClickTab(tabId: number) {
   // Prevent changing tab when loading, cuz it will cause a bug
@@ -139,7 +151,10 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
   if (noMoreContent.value)
     return
 
+  const generation = requestGeneration
   isLoading.value = true
+  loadError.value = false
+  failedRequest.value = null
 
   try {
     const res: HistoryResult = await api.history.getHistoryList({
@@ -147,26 +162,44 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
       view_at,
     })
 
-    if (res.code === 0) {
-      // 如果返回的数据为空，说明没有更多内容了
-      if (!res.data.list || res.data.list.length === 0) {
-        noMoreContent.value = true
-        return
-      }
+    if (generation !== requestGeneration)
+      return
+    if (res.code !== 0 || !Array.isArray(res.data?.list))
+      throw res
 
-      // 添加数据到列表
-      if (Array.isArray(res.data.list) && res.data.list.length > 0) {
-        historys.push(...res.data.list)
-      }
+    // API success with an empty list is a normal empty/end state.
+    if (res.data.list.length === 0) {
+      noMoreContent.value = true
+      return
     }
+
+    historys.push(...res.data.list)
+    loadError.value = false
+    failedRequest.value = null
   }
   catch (error) {
+    if (generation !== requestGeneration)
+      return
+    loadError.value = true
+    failedRequest.value = { type, viewAt: view_at }
+    noMoreContent.value = false
     if (!isExtensionContextInvalidatedError(error))
       console.error('Failed to load history list:', error)
   }
   finally {
-    isLoading.value = false
+    if (generation === requestGeneration)
+      isLoading.value = false
   }
+}
+
+function retryFailedLoad() {
+  const request = failedRequest.value
+  if (!request || isLoading.value)
+    return
+
+  loadError.value = false
+  noMoreContent.value = false
+  void getHistoryList(request.type, request.viewAt)
 }
 
 function getHistoryItemKey(historyItem: HistoryItem): string {
@@ -196,20 +229,24 @@ async function deleteHistoryItem(historyItem: HistoryItem) {
 }
 
 function initData() {
+  requestGeneration++
+  isLoading.value = false
   historys.length = 0
   noMoreContent.value = false
+  loadError.value = false
+  failedRequest.value = null
   if (historysWrap.value)
     scrollToTop(historysWrap.value)
 
   if (activatedTab.value === 0) {
-    getHistoryList(Business.ARCHIVE)
+    void getHistoryList(Business.ARCHIVE)
   }
   else if (activatedTab.value === 1) {
     livePage.value = 1
-    getHistoryList(Business.LIVE)
+    void getHistoryList(Business.LIVE)
   }
   else if (activatedTab.value === 2) {
-    getHistoryList(Business.ARTICLE)
+    void getHistoryList(Business.ARTICLE)
   }
 }
 
@@ -282,9 +319,24 @@ defineExpose({
         flex="~ items-center"
       />
 
+      <!-- error -->
+      <Empty
+        v-else-if="loadError && historys.length === 0"
+        pos="absolute top-0 left-0"
+        bg="$bew-content"
+        z="0" w="full" h="full"
+        flex="~ items-center"
+        rounded="$bew-radius"
+        :description="$t('common.load_failed')"
+      >
+        <Button type="primary" @click="retryFailedLoad">
+          {{ $t('common.operation.refresh') }}
+        </Button>
+      </Empty>
+
       <!-- empty -->
       <Empty
-        v-if="!isLoading && historys.length === 0"
+        v-else-if="historys.length === 0"
         pos="absolute top-0 left-0"
         bg="$bew-content"
         z="0" w="full" h="full"
@@ -473,6 +525,15 @@ defineExpose({
       <!-- loading -->
       <Transition name="fade">
         <Loading v-if="isLoading && historys.length !== 0" m="b-4" />
+        <div
+          v-else-if="loadError && historys.length !== 0"
+          class="history-pop__pagination-error"
+        >
+          <span>{{ $t('common.load_failed') }}</span>
+          <Button type="secondary" size="small" @click="retryFailedLoad">
+            {{ $t('common.operation.refresh') }}
+          </Button>
+        </div>
       </Transition>
     </main>
   </div>
@@ -497,5 +558,16 @@ defineExpose({
   &::after {
     --uno: "scale-x-80 opacity-40";
   }
+}
+
+.history-pop__pagination-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-3) 0 var(--bew-space-4);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 </style>

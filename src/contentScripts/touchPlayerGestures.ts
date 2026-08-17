@@ -8,8 +8,18 @@ import { calculateRelativeSeekTime } from '~/utils/touchGesture'
 const ROOT_CLASS = 'bewly-touch-player-gestures'
 const STYLE_ID = 'bewly-touch-player-gestures-style'
 const HUD_CLASS = 'bewly-touch-player-gesture-hud'
+const GESTURE_ACTIVE_CLASS = 'bewly-touch-player-gesture-active'
 const PLAYER_SELECTOR = '.bpx-player-container, #bilibili-player, .bilibili-player, .squirtle-video-wrap'
 const VIDEO_AREA_SELECTOR = '.bpx-player-video-area, .bilibili-player-video-wrap, .squirtle-video-wrap'
+const MINI_PLAYER_SELECTOR = [
+  '[data-screen="mini"]',
+  '.bpx-state-mini',
+  '.bpx-player-mini',
+  '.mini-player-window',
+].join(', ')
+const MINI_PLAYER_VIDEO_AREA_SELECTOR = MINI_PLAYER_SELECTOR.split(', ').flatMap(miniSelector => (
+  VIDEO_AREA_SELECTOR.split(', ').map(areaSelector => `.${ROOT_CLASS} ${miniSelector} ${areaSelector}`)
+)).join(', ')
 const INTERACTIVE_SELECTOR = [
   '.bpx-player-control-wrap',
   '.bpx-player-control-bottom',
@@ -59,12 +69,15 @@ interface LastTap {
 }
 
 let initialized = false
+let stopLifecycleWatch: (() => void) | null = null
 let gesture: GestureSession | null = null
 let lastTap: LastTap | null = null
 let suppressNativeDoubleClickUntil = 0
 let suppressClickUntil = 0
 let hudHideTimeout: number | null = null
 let listenersAttached = false
+let observedPlayer: HTMLElement | null = null
+let playerStateObserver: MutationObserver | null = null
 
 function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value))
@@ -95,6 +108,12 @@ function getActiveVideo(player: HTMLElement): HTMLVideoElement | null {
   return videosByArea.sort((first, second) => second.area - first.area)[0]?.video ?? null
 }
 
+function isMiniPlayer(player: HTMLElement): boolean {
+  return player.matches(MINI_PLAYER_SELECTOR)
+    || Boolean(player.closest(MINI_PLAYER_SELECTOR))
+    || Boolean(player.querySelector(MINI_PLAYER_SELECTOR))
+}
+
 function getPlayerContext(target: EventTarget | null, clientY?: number): PlayerContext | null {
   if (!(target instanceof Element))
     return null
@@ -106,6 +125,8 @@ function getPlayerContext(target: EventTarget | null, clientY?: number): PlayerC
     return null
 
   const player = area.closest<HTMLElement>(PLAYER_SELECTOR) ?? area
+  if (isMiniPlayer(player))
+    return null
   const rect = area.getBoundingClientRect()
   if (rect.width <= 0 || rect.height <= 0)
     return null
@@ -131,6 +152,11 @@ function ensureStyles() {
     .${ROOT_CLASS} ${VIDEO_AREA_SELECTOR.split(', ').join(`, .${ROOT_CLASS} `)} {
       touch-action: none !important;
       -webkit-touch-callout: none !important;
+    }
+
+    ${MINI_PLAYER_VIDEO_AREA_SELECTOR} {
+      touch-action: auto !important;
+      -webkit-touch-callout: default !important;
     }
 
     .${HUD_CLASS} {
@@ -186,18 +212,59 @@ function showHud(area: HTMLElement, text: string, persist = false) {
   }
 }
 
-function hideHud(area?: HTMLElement) {
+function removeHud(area?: HTMLElement) {
   if (hudHideTimeout !== null) {
     clearTimeout(hudHideTimeout)
     hudHideTimeout = null
   }
-  if (area) {
-    area.querySelector<HTMLElement>(`:scope > .${HUD_CLASS}`)?.classList.remove(`${HUD_CLASS}--visible`)
-    return
-  }
 
-  document.querySelectorAll<HTMLElement>(`.${HUD_CLASS}`).forEach((hud) => {
-    hud.classList.remove(`${HUD_CLASS}--visible`)
+  const root: ParentNode = area ?? document
+  root.querySelectorAll<HTMLElement>(`.${HUD_CLASS}`).forEach(hud => hud.remove())
+}
+
+function clearGestureVisualState(context?: PlayerContext) {
+  const areas = context
+    ? [context.area]
+    : Array.from(document.querySelectorAll<HTMLElement>(`.${GESTURE_ACTIVE_CLASS}`))
+
+  for (const area of areas) {
+    area.classList.remove(GESTURE_ACTIVE_CLASS)
+    area.style.removeProperty('--bewly-touch-gesture-transform')
+    area.style.removeProperty('--bewly-touch-gesture-translate')
+    area.style.removeProperty('--bewly-touch-gesture-brightness')
+  }
+  removeHud(context?.area)
+}
+
+function abortActiveGesture(player?: HTMLElement) {
+  if (player && gesture && gesture.player !== player)
+    return
+
+  const activeGesture = gesture
+  gesture = null
+  lastTap = null
+  suppressNativeDoubleClickUntil = 0
+  suppressClickUntil = 0
+  clearGestureVisualState(activeGesture ?? undefined)
+}
+
+function observePlayerState(player: HTMLElement) {
+  if (observedPlayer === player)
+    return
+
+  playerStateObserver?.disconnect()
+  observedPlayer = player
+  const observationRoot = player.closest<HTMLElement>('#bilibili-player, .bilibili-player')
+    ?? player.parentElement
+    ?? player
+  playerStateObserver = new MutationObserver(() => {
+    if (observedPlayer && isMiniPlayer(observedPlayer))
+      abortActiveGesture(observedPlayer)
+  })
+  playerStateObserver.observe(observationRoot, {
+    attributes: true,
+    attributeFilter: ['class', 'data-screen'],
+    subtree: true,
   })
 }
 
@@ -242,6 +309,11 @@ function handlePointerDown(event: PointerEvent) {
   const context = getPlayerContext(event.target, event.clientY)
   if (!context)
     return
+  observePlayerState(context.player)
+  if (isMiniPlayer(context.player)) {
+    abortActiveGesture(context.player)
+    return
+  }
 
   const horizontalRatio = (event.clientX - context.rect.left) / context.rect.width
   const volumeGesture = horizontalRatio <= EDGE_ZONE_RATIO || horizontalRatio >= 1 - EDGE_ZONE_RATIO
@@ -257,11 +329,16 @@ function handlePointerDown(event: PointerEvent) {
     volumeGesture,
     mode: null,
   }
+  context.area.classList.add(GESTURE_ACTIVE_CLASS)
 }
 
 function handlePointerMove(event: PointerEvent) {
   if (!gesture || gesture.pointerId !== event.pointerId)
     return
+  if (isMiniPlayer(gesture.player)) {
+    abortActiveGesture(gesture.player)
+    return
+  }
 
   const deltaX = event.clientX - gesture.startX
   const deltaY = event.clientY - gesture.startY
@@ -318,6 +395,12 @@ function handlePointerEnd(event: PointerEvent, cancelled = false) {
 
   const currentGesture = gesture
   gesture = null
+  currentGesture.area.classList.remove(GESTURE_ACTIVE_CLASS)
+
+  if (isMiniPlayer(currentGesture.player)) {
+    clearGestureVisualState(currentGesture)
+    return
+  }
 
   if (currentGesture.mode === 'seek' || currentGesture.mode === 'volume') {
     const feedback = currentGesture.mode === 'volume'
@@ -389,11 +472,7 @@ function handleDoubleClick(event: MouseEvent) {
 }
 
 function resetGestureState() {
-  gesture = null
-  lastTap = null
-  suppressNativeDoubleClickUntil = 0
-  suppressClickUntil = 0
-  hideHud()
+  abortActiveGesture()
 }
 
 function handlePointerUp(event: PointerEvent) {
@@ -426,6 +505,9 @@ function detachListeners() {
     return
 
   listenersAttached = false
+  playerStateObserver?.disconnect()
+  playerStateObserver = null
+  observedPlayer = null
   document.removeEventListener('pointerdown', handlePointerDown, { capture: true })
   document.removeEventListener('pointermove', handlePointerMove, { capture: true })
   document.removeEventListener('pointerup', handlePointerUp, { capture: true })
@@ -439,7 +521,7 @@ export function initTouchPlayerGestures() {
     return
   initialized = true
   const routeState = useRouteState()
-  watch(
+  stopLifecycleWatch = watch(
     [() => settings.value.touchScreenOptimization, () => routeState.navigationId],
     () => {
       if (settings.value.touchScreenOptimization && isVideoPlaybackPage(routeState.href))
@@ -449,4 +531,11 @@ export function initTouchPlayerGestures() {
     },
     { immediate: true },
   )
+}
+
+export function stopTouchPlayerGestures() {
+  stopLifecycleWatch?.()
+  stopLifecycleWatch = null
+  detachListeners()
+  initialized = false
 }

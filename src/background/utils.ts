@@ -61,6 +61,7 @@ interface _FETCH {
   }
   body?: any
   credentials?: RequestCredentials
+  strictParams?: boolean
 }
 
 interface API {
@@ -121,7 +122,7 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
     Object.keys(rest).forEach((key) => {
       if (body && body[key] !== undefined)
         targetBody[key] = rest[key]
-      else
+      else if (!_fetch.strictParams || Object.hasOwn(params, key))
         targetParams[key] = rest[key]
     })
 
@@ -314,6 +315,7 @@ export {
   type API,
   apiListenerFactory,
   type APIMAP,
+  doRequest,
   type FetchAfterHandler,
   type Message,
   toData,

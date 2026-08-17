@@ -3,6 +3,7 @@ import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
+import { parseDedeUserID } from '~/logic/loginStatus'
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
@@ -29,6 +30,15 @@ const page = ref<number>(1)
 const noMoreContent = ref<boolean>(false)
 const requestFailed = ref<boolean>(false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
+let requestGeneration = 0
+let loadedAccountId = parseDedeUserID(document.cookie) ?? null
+let reloadAfterActivation = false
+
+function isCurrentRequest(generation: number, accountId: number | null) {
+  return generation === requestGeneration
+    && accountId === loadedAccountId
+    && accountId === (parseDedeUserID(document.cookie) ?? null)
+}
 
 onMounted(() => {
   initData()
@@ -36,7 +46,22 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  const accountId = parseDedeUserID(document.cookie) ?? null
+  if (reloadAfterActivation || accountId !== loadedAccountId) {
+    reloadAfterActivation = false
+    void initData()
+  }
   initPageAction()
+})
+
+onDeactivated(() => {
+  reloadAfterActivation = isLoading.value
+  requestGeneration++
+  isLoading.value = false
+})
+
+onUnmounted(() => {
+  requestGeneration++
 })
 
 function initPageAction() {
@@ -57,13 +82,21 @@ function initPageAction() {
 }
 
 async function initData() {
+  const generation = ++requestGeneration
+  loadedAccountId = parseDedeUserID(document.cookie) ?? null
+  const accountId = loadedAccountId
   needToLoginFirst.value = false
   page.value = 1
   videoList.value = []
   noMoreContent.value = false
   requestFailed.value = false
 
-  await getData()
+  if (accountId === null) {
+    needToLoginFirst.value = true
+    return
+  }
+
+  await getData(generation, accountId)
 }
 
 // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
@@ -89,24 +122,30 @@ function transformLiveVideo(item: VideoElement): Video | undefined {
   }
 }
 
-async function getData() {
+async function getData(generation = requestGeneration, accountId = loadedAccountId) {
+  if (!isCurrentRequest(generation, accountId))
+    return
   emit('beforeLoading')
   isLoading.value = true
 
   try {
     // 初次加载时多加载几批确保有足够内容
     for (let i = 0; i < 3 && !noMoreContent.value; i++) {
-      if (!await getLiveVideos())
+      if (!await getLiveVideos(generation, accountId))
         break
     }
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (isCurrentRequest(generation, accountId)) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
-async function getLiveVideos() {
+async function getLiveVideos(generation = requestGeneration, accountId = loadedAccountId) {
+  if (!isCurrentRequest(generation, accountId))
+    return false
   if (noMoreContent.value)
     return true
 
@@ -115,6 +154,9 @@ async function getLiveVideos() {
       page: page.value,
       page_size: 9,
     })
+
+    if (!isCurrentRequest(generation, accountId))
+      return false
 
     if (response.code === -101) {
       noMoreContent.value = false
@@ -146,9 +188,11 @@ async function getLiveVideos() {
     return false
   }
   catch (error) {
-    requestFailed.value = true
-    noMoreContent.value = false
-    console.error('[Live] Failed to load followed live rooms:', error)
+    if (isCurrentRequest(generation, accountId)) {
+      requestFailed.value = true
+      noMoreContent.value = false
+      console.error('[Live] Failed to load followed live rooms:', error)
+    }
     return false
   }
 }
@@ -159,11 +203,14 @@ async function handleLoadMore() {
     return
 
   isLoading.value = true
+  const generation = requestGeneration
+  const accountId = loadedAccountId
   try {
-    await getLiveVideos()
+    await getLiveVideos(generation, accountId)
   }
   finally {
-    isLoading.value = false
+    if (isCurrentRequest(generation, accountId))
+      isLoading.value = false
   }
 }
 

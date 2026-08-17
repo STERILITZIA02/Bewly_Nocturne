@@ -1283,6 +1283,8 @@ video_card:
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
 home:
+  recommendation_empty: No recommendations are available
+  recommendation_filtered_empty: All current recommendations were removed by your local filters
   web_recommendation_risk_cooldown: Recommendation requests hit risk control and are paused for {seconds} seconds. Try again later.
   web_recommendation_risk_fallback_active: No-cookie recommendations are shown; further requests are paused for {seconds} seconds.
   web_recommendation_risk_fallback_failed: Recommendation risk fallback failed; requests are paused for {seconds} seconds.

@@ -7,7 +7,6 @@ import SmoothLoading from '~/components/SmoothLoading.vue'
 import UserCard from '~/components/UserCard/UserCard.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
-import api from '~/utils/api'
 
 import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
@@ -156,17 +155,17 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   }
   const orderConfig = userOrderMap[props.filters.order] || { order: '', order_sort: 0 }
 
-  const success = await search(
+  const success = await search({
+    searchType: 'bili_user',
     keyword,
-    params => api.search.searchUser(params),
-    {
-      page: targetPage,
-      pagesize: 30,
+    page: targetPage,
+    pageSize: 30,
+    filters: {
       order: orderConfig.order,
-      order_sort: orderConfig.order_sort,
-      user_type: props.filters.userType,
+      orderSort: orderConfig.order_sort,
+      userType: props.filters.userType,
     },
-  )
+  })
 
   if (!success)
     return false
@@ -242,12 +241,16 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
       'level_desc': { order: 'level', order_sort: 1 },
     }
     const orderConfig = userOrderMap[props.filters.order] || { order: '', order_sort: 0 }
-    const success = await search(keyword, params => api.search.searchUser(params), {
+    const success = await search({
+      searchType: 'bili_user',
+      keyword,
       page,
-      pagesize: 30,
-      order: orderConfig.order,
-      order_sort: orderConfig.order_sort,
-      user_type: props.filters.userType,
+      pageSize: 30,
+      filters: {
+        order: orderConfig.order,
+        orderSort: orderConfig.order_sort,
+        userType: props.filters.userType,
+      },
     })
     if (!success || !lastResponse.value?.data)
       return false

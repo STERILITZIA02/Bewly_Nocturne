@@ -17,6 +17,7 @@ let controlContainer: HTMLElement | null = null
 let hasInitialized = false
 let isCapturing = false
 let stopPlayerObserver: (() => void) | null = null
+let stopLifecycleWatch: (() => void) | null = null
 
 function translate(key: string): string {
   return String(i18n.global.t(key, settings.value.language))
@@ -185,12 +186,19 @@ function injectControl() {
   anchor.insertAdjacentElement('afterend', controlContainer)
 }
 
-function stopScreenshotControl() {
+function releaseScreenshotControlResources() {
   stopPlayerObserver?.()
   stopPlayerObserver = null
   controlContainer?.remove()
   controlContainer = null
   document.querySelector<HTMLElement>('.bewly-video-screenshot-control')?.remove()
+}
+
+export function stopVideoScreenshotControl() {
+  stopLifecycleWatch?.()
+  stopLifecycleWatch = null
+  releaseScreenshotControlResources()
+  hasInitialized = false
 }
 
 export function initVideoScreenshotControl() {
@@ -200,12 +208,12 @@ export function initVideoScreenshotControl() {
   hasInitialized = true
   const routeState = useRouteState()
   const updateLifecycle = () => {
-    stopScreenshotControl()
+    releaseScreenshotControlResources()
     if (settings.value.showVideoScreenshotButton && isVideoPlaybackPage(routeState.href))
       stopPlayerObserver = observePlayerDom(injectControl)
   }
 
-  watch(
+  stopLifecycleWatch = watch(
     [() => settings.value.showVideoScreenshotButton, () => routeState.navigationId],
     updateLifecycle,
     { immediate: true },

@@ -7,7 +7,7 @@ const INVALIDATION_DELAY = 800
 
 export function setupNotificationStateInvalidation() {
   if (!isNotificationPage())
-    return
+    return () => {}
 
   let timer: ReturnType<typeof setTimeout> | undefined
 
@@ -31,4 +31,12 @@ export function setupNotificationStateInvalidation() {
   window.addEventListener('hashchange', scheduleInvalidation)
   document.addEventListener('click', scheduleInvalidation, true)
   scheduleInvalidation()
+
+  return () => {
+    if (timer)
+      clearTimeout(timer)
+    timer = undefined
+    window.removeEventListener('hashchange', scheduleInvalidation)
+    document.removeEventListener('click', scheduleInvalidation, true)
+  }
 }

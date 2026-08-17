@@ -35,6 +35,7 @@ const props = withDefaults(defineProps<{
   centerFooter?: boolean
   loading?: boolean
   preventCloseWhenLoading?: boolean
+  layer?: 'dialog' | 'layout-editor' | 'critical-dialog'
 }>(), {
   preventCloseWhenLoading: true,
   frostedGlass: true,
@@ -44,6 +45,7 @@ const props = withDefaults(defineProps<{
   showFooter: true,
   contentFlush: false,
   transitionName: 'modal',
+  layer: 'dialog',
 })
 
 const emit = defineEmits(['close', 'confirm'])
@@ -184,6 +186,7 @@ function handleConfirm() {
       <div
         v-if="showDialog"
         class="dialog"
+        :class="`dialog--${layer}`"
         pos="fixed top-0 left-0" w-full h-full
         pointer-events-auto
       >
@@ -312,7 +315,15 @@ function handleConfirm() {
 
 <style lang="scss" scoped>
 .dialog {
-  z-index: var(--bew-z-modal);
+  z-index: var(--bew-z-dialog);
+}
+
+.dialog--layout-editor {
+  z-index: var(--bew-z-layout-editor);
+}
+
+.dialog--critical-dialog {
+  z-index: var(--bew-z-critical-dialog);
 }
 
 .dialog__panel {

@@ -1,13 +1,14 @@
 <script lang="ts" setup>
 import { useTitle } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 
 import SearchCategoryTabs from './components/SearchCategoryTabs.vue'
 import SearchLiveFilters from './components/SearchLiveFilters.vue'
@@ -111,6 +112,15 @@ const liveFilters = computed(() => ({
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const { searchKeyword: topBarSearchKeyword } = storeToRefs(topBarStore)
+const searchTransportScope = computed(() => {
+  if (settings.value.depersonalizeSearchResults)
+    return 'anonymous'
+
+  const accountId = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+  return accountId === null
+    ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
+    : `account:${accountId}`
+})
 
 const videoOrderOptions = computed(() => [
   { value: '', label: t('search.filters.order_relevance') },
@@ -283,33 +293,25 @@ function handlePageUpdate(page: number) {
 }
 
 function initPageAction() {
-  handleReachBottom.value = () => {
-    if (!normalizedKeyword.value)
-      return
-
-    // 翻页模式下不触发滚动加载
-    if (settings.value.searchResultsPaginationMode === 'pagination')
-      return
-
-    if (searchResultsPanelRef.value?.handleReachBottom) {
-      searchResultsPanelRef.value.handleReachBottom()
-    }
-  }
-
-  handlePageRefresh.value = () => {
-    // 刷新时保持在搜索结果页，重新触发搜索
-    const urlParams = new URLSearchParams(window.location.search)
-    const keyword = urlParams.get('keyword')
-    if (keyword) {
-      void searchResultsPanelRef.value?.refreshCurrentPage()
-    }
-    else {
-      window.location.reload()
-    }
-  }
+  handleReachBottom.value = handleSearchReachBottom
+  handlePageRefresh.value = handleSearchPageRefresh
 
   // 使用 App.vue 提供的 handleBackToTop，它会正确处理滚动条实例
   // 不需要重新赋值，直接使用从 useBewlyApp 获取的值即可
+}
+
+function handleSearchReachBottom() {
+  if (!normalizedKeyword.value || settings.value.searchResultsPaginationMode === 'pagination')
+    return
+  searchResultsPanelRef.value?.handleReachBottom?.()
+}
+
+function handleSearchPageRefresh() {
+  const urlParams = new URLSearchParams(window.location.search)
+  if (urlParams.get('keyword'))
+    void searchResultsPanelRef.value?.refreshCurrentPage()
+  else
+    window.location.reload()
 }
 
 onMounted(() => {
@@ -317,6 +319,14 @@ onMounted(() => {
   void handleUrlChange()
   // 初始化页面操作
   initPageAction()
+})
+
+onBeforeUnmount(() => {
+  urlRestoreGeneration++
+  if (handleReachBottom.value === handleSearchReachBottom)
+    handleReachBottom.value = undefined
+  if (handlePageRefresh.value === handleSearchPageRefresh)
+    handlePageRefresh.value = undefined
 })
 </script>
 
@@ -354,6 +364,7 @@ onMounted(() => {
     />
 
     <SearchResultsPanel
+      :key="searchTransportScope"
       ref="searchResultsPanelRef"
       :current-category="currentCategory"
       :keyword="normalizedKeyword"

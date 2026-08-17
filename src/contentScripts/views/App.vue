@@ -1085,13 +1085,13 @@ onBeforeUnmount(stopUrlCleaner)
 }
 
 .settings-layer {
-  z-index: var(--bew-z-modal);
+  z-index: var(--bew-z-dialog);
 }
 
 .bew-confirm-dialog {
   position: fixed;
   inset: 0;
-  z-index: var(--bew-z-modal);
+  z-index: var(--bew-z-dialog);
   pointer-events: auto;
 }
 

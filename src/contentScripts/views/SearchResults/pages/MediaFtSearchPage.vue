@@ -7,7 +7,6 @@ import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSele
 import SmoothLoading from '~/components/SmoothLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
-import api from '~/utils/api'
 
 import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
@@ -119,14 +118,12 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
   const previousLength = results.value?.length || 0
 
-  const success = await search(
+  const success = await search({
+    searchType: 'media_ft',
     keyword,
-    params => api.search.searchMediaFt(params),
-    {
-      page: targetPage,
-      pagesize: 30,
-    },
-  )
+    page: targetPage,
+    pageSize: 30,
+  })
 
   if (!success || !lastResponse.value?.data)
     return false
@@ -185,7 +182,12 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
   isPageChanging.value = true
 
   try {
-    const success = await search(keyword, params => api.search.searchMediaFt(params), { page, pagesize: 30 })
+    const success = await search({
+      searchType: 'media_ft',
+      keyword,
+      page,
+      pageSize: 30,
+    })
     if (!success || !lastResponse.value?.data)
       return false
     const rawData = lastResponse.value.data

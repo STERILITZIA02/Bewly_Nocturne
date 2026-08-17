@@ -10,6 +10,8 @@ import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/const
 import { gridLayout, settings } from '~/logic'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 
@@ -18,6 +20,7 @@ import type { GridLayoutIcon } from './types'
 import { HomeSubPage } from './types'
 
 const mainStore = useMainStore()
+const topBarStore = useTopBarStore()
 const searchFocusEffect = useSearchFocusEffect()
 const {
   handleBackToTop,
@@ -33,6 +36,7 @@ const cachedScrollTop = ref(0)
 const showHomeSearchCharacter = computed(() => cachedScrollTop.value < HOME_SEARCH_STICKY_SCROLL_TOP)
 const tabScrollPositions = new Map<HomeSubPage, number>()
 let pendingTabScrollTop: number | null = null
+let tabSwitchFrame: number | null = null
 
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
@@ -61,6 +65,16 @@ const pages = computed(() => ({
 const activatedPageCacheKey = computed(() => activatedPage.value === HomeSubPage.Following
   ? `${activatedPage.value}:${settings.value.useFollowingNewLayout ? 'new' : 'old'}`
   : activatedPage.value)
+const homeAccountId = computed(() => resolveAuthenticatedAccountId(
+  topBarStore.isLogin,
+  topBarStore.userInfo.mid,
+))
+const homeAccountScope = computed(() => {
+  if (homeAccountId.value !== null)
+    return `account:${homeAccountId.value}`
+  return topBarStore.isLogin ? 'profile-unavailable' : 'logged-out'
+})
+const homeAccountGeneration = ref(0)
 const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabPageRef = ref()
@@ -87,6 +101,18 @@ watch(() => settings.value.enableGridLayoutSwitcher, (enabled) => {
     void gridIndicatorRef.value?.updateIndicator(true)
 })
 
+watch(homeAccountScope, (nextScope, previousScope) => {
+  if (nextScope === previousScope || nextScope === 'profile-unavailable')
+    return
+
+  // Recreate the KeepAlive scope once per real identity transition. Only the
+  // active tab mounts and reloads now; other tabs reload lazily when selected.
+  // Destroying the old scope also prevents late anonymous/previous-account
+  // responses from becoming visible in the new account.
+  tabContentLoading.value = false
+  homeAccountGeneration.value++
+})
+
 function getInitialTabScrollTop(): number {
   return settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
 }
@@ -105,7 +131,10 @@ function restoreTabScrollPosition() {
 function finishTabSwitch() {
   // Also restore here as a safeguard for transitions that skip the enter hook.
   restoreTabScrollPosition()
-  requestAnimationFrame(() => {
+  if (tabSwitchFrame !== null)
+    cancelAnimationFrame(tabSwitchFrame)
+  tabSwitchFrame = requestAnimationFrame(() => {
+    tabSwitchFrame = null
     isHomeTabSwitching.value = false
   })
 }
@@ -176,6 +205,13 @@ onUnmounted(() => {
   emitter.off(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
   emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
   isHomeTabSwitching.value = false
+  if (tabSwitchFrame !== null) {
+    cancelAnimationFrame(tabSwitchFrame)
+    tabSwitchFrame = null
+  }
+  pendingTabScrollTop = null
+  tabScrollPositions.clear()
+  tabPageRef.value = null
 })
 
 function handleChangeTab(tab: HomeTab) {
@@ -312,7 +348,12 @@ function toggleTabContentLoading(loading: boolean) {
         @enter="restoreTabScrollPosition"
         @after-enter="finishTabSwitch"
       >
-        <KeepAlive :max="8">
+        <Loading
+          v-if="homeAccountScope === 'profile-unavailable'"
+          min-h="240px"
+          flex="~ items-center"
+        />
+        <KeepAlive v-else :key="homeAccountGeneration" :max="8">
           <Component
             :is="pages[activatedPage]" :key="activatedPageCacheKey"
             ref="tabPageRef"

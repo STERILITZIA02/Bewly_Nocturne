@@ -56,7 +56,6 @@ import {
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import type { DataItem as MomentItem, MomentResult } from '~/models/moment/moment'
 import { BadgeText } from '~/models/moment/moment'
-import { useTopBarStore } from '~/stores/topBarStore'
 import type { AccountId } from '~/utils/accountScope'
 import { getAccountScopedStorageKey, isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
@@ -109,7 +108,6 @@ const emit = defineEmits<{
 }>()
 
 useI18n()
-const topBarStore = useTopBarStore()
 
 const { scrollViewportRef, handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 const videoList = ref<VideoElement[]>([])
@@ -135,6 +133,7 @@ const userMomentsOffset = ref<string>('')
 const currentUserMid = ref<number>(0) // 当前登录用户的mid
 let loadedAccountMid: AccountId = null
 let followingAccountInitialized = false
+let reloadAfterActivation = false
 
 function syncRefreshAvailability() {
   canRefreshHomeSubPage.value = isRefreshContextActive.value && selectedUploader.value === null
@@ -1172,6 +1171,8 @@ function initData() {
         debugLog('[Following] Following list loaded')
         selectUploader(null)
       }).catch((error) => {
+        if (!isFollowingRequestCurrent(currentToken))
+          return
         console.error('[Following] Failed to initialize:', error)
         isLoading.value = false
         emit('afterLoading')
@@ -1212,13 +1213,14 @@ function resetFollowingAccountState(accountMid: AccountId) {
 function ensureFollowingAccount() {
   const accountMid = getCurrentAccountMid()
   if (followingAccountInitialized && isSameAccount(loadedAccountMid, accountMid))
-    return
+    return false
 
   loadedAccountMid = accountMid
   followingAccountInitialized = true
   resetFollowingAccountState(accountMid)
   if (accountMid !== null)
     initData()
+  return true
 }
 
 onMounted(() => {
@@ -1235,24 +1237,29 @@ onMounted(() => {
 onActivated(() => {
   isRefreshContextActive.value = true
   syncRefreshAvailability()
-  ensureFollowingAccount()
+  const accountChanged = ensureFollowingAccount()
+  if (accountChanged) {
+    reloadAfterActivation = false
+  }
+  else if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    initData()
+  }
   initPageAction()
 })
 
-watch([
-  () => topBarStore.isLogin,
-  () => topBarStore.userInfo.mid,
-], () => {
-  if (isRefreshContextActive.value)
-    ensureFollowingAccount()
-})
-
 onDeactivated(() => {
+  reloadAfterActivation = isLoading.value
+  selectionToken.value++
+  if (isLoading.value)
+    emit('afterLoading')
+  isLoading.value = false
   isRefreshContextActive.value = false
   syncRefreshAvailability()
 })
 
 onUnmounted(() => {
+  selectionToken.value++
   isRefreshContextActive.value = false
   syncRefreshAvailability()
 })

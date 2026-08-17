@@ -13,6 +13,8 @@ const SUPPORTED_ASPECT_RATIOS = new Set<VideoAspectRatio>(['0:0', '4:3', '16:9']
 let hasInitialized = false
 let stopPlayerObserver: (() => void) | null = null
 let syncFrame: number | null = null
+let stopLifecycleWatch: (() => void) | null = null
+let initializationGeneration = 0
 
 function isVideoAspectRatio(value: string): value is VideoAspectRatio {
   return SUPPORTED_ASPECT_RATIOS.has(value as VideoAspectRatio)
@@ -76,7 +78,7 @@ function scheduleSyncVideoAspectRatio() {
   })
 }
 
-function stopVideoAspectRatioMemory() {
+function releaseVideoAspectRatioResources() {
   document.removeEventListener('change', rememberSelectedAspectRatio, true)
   stopPlayerObserver?.()
   stopPlayerObserver = null
@@ -86,16 +88,27 @@ function stopVideoAspectRatioMemory() {
   }
 }
 
+export function stopVideoAspectRatioMemory() {
+  initializationGeneration++
+  stopLifecycleWatch?.()
+  stopLifecycleWatch = null
+  releaseVideoAspectRatioResources()
+  hasInitialized = false
+}
+
 export function initVideoAspectRatioMemory() {
   if (hasInitialized || location.hostname === 'live.bilibili.com')
     return
 
   hasInitialized = true
+  const generation = ++initializationGeneration
   const routeState = useRouteState()
 
   void settingsReady.then(() => {
+    if (generation !== initializationGeneration)
+      return
     const updateLifecycle = () => {
-      stopVideoAspectRatioMemory()
+      releaseVideoAspectRatioResources()
       if (!settings.value.rememberVideoAspectRatio || !isVideoPlaybackPage(routeState.href))
         return
 
@@ -103,7 +116,7 @@ export function initVideoAspectRatioMemory() {
       stopPlayerObserver = observePlayerDom(scheduleSyncVideoAspectRatio)
     }
 
-    watch(
+    stopLifecycleWatch = watch(
       [() => settings.value.rememberVideoAspectRatio, () => routeState.navigationId],
       updateLifecycle,
       { immediate: true },

@@ -30,6 +30,8 @@ const updateBaseline = ref<string>('')
 const noMoreContent = ref<boolean>(false)
 const requestFailed = ref<boolean>(false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
+let requestGeneration = 0
+let reloadAfterActivation = false
 
 onMounted(() => {
   initData()
@@ -37,10 +39,27 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    void initData()
+  }
   initPageAction()
 })
 
+onDeactivated(() => {
+  reloadAfterActivation = isLoading.value
+  requestGeneration++
+  if (isLoading.value)
+    emit('afterLoading')
+  isLoading.value = false
+})
+
+onUnmounted(() => {
+  requestGeneration++
+})
+
 async function initData() {
+  const generation = ++requestGeneration
   needToLoginFirst.value = false
   offset.value = ''
   updateBaseline.value = ''
@@ -48,7 +67,7 @@ async function initData() {
   noMoreContent.value = false
   requestFailed.value = false
 
-  await getData()
+  await getData(generation)
 }
 
 // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
@@ -76,20 +95,22 @@ function transformSubscribedSeriesVideo(item: VideoElement): Video | undefined {
   }
 }
 
-async function getData() {
+async function getData(generation: number) {
   emit('beforeLoading')
   isLoading.value = true
 
   try {
     // 初次加载时多加载几批确保有足够内容
     for (let i = 0; i < 3 && !noMoreContent.value; i++) {
-      if (!await getSubscribedSeriesVideos())
+      if (!await getSubscribedSeriesVideos(generation))
         break
     }
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (generation === requestGeneration) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
@@ -109,7 +130,9 @@ function initPageAction() {
   }
 }
 
-async function getSubscribedSeriesVideos() {
+async function getSubscribedSeriesVideos(generation = requestGeneration) {
+  if (generation !== requestGeneration)
+    return false
   if (noMoreContent.value)
     return true
 
@@ -124,6 +147,9 @@ async function getSubscribedSeriesVideos() {
       offset: offset.value || undefined,
       update_baseline: updateBaseline.value,
     })
+
+    if (generation !== requestGeneration)
+      return false
 
     if (response.code === -101) {
       noMoreContent.value = false
@@ -155,9 +181,11 @@ async function getSubscribedSeriesVideos() {
     return false
   }
   catch (error) {
-    requestFailed.value = true
-    noMoreContent.value = false
-    console.error('[SubscribedSeries] Failed to load series:', error)
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      noMoreContent.value = false
+      console.error('[SubscribedSeries] Failed to load series:', error)
+    }
     return false
   }
 }
@@ -168,11 +196,13 @@ async function handleLoadMore() {
     return
 
   isLoading.value = true
+  const generation = requestGeneration
   try {
-    await getSubscribedSeriesVideos()
+    await getSubscribedSeriesVideos(generation)
   }
   finally {
-    isLoading.value = false
+    if (generation === requestGeneration)
+      isLoading.value = false
   }
 }
 

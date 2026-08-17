@@ -32,6 +32,8 @@ const activatedSeries = ref<PopularSeriesItem | null>(null)
 const videoList = ref<VideoElement[]>([])
 const noMoreContent = ref<boolean>(true) // 每周必看没有分页
 let requestGeneration = 0
+let reloadAfterActivation = false
+let resizeListenerAttached = false
 
 // 下拉选择器相关
 const searchQuery = ref<string>('')
@@ -59,6 +61,20 @@ function calculatePosition() {
     left: rect.left + window.scrollX,
     width: rect.width,
   }
+}
+
+function attachResizeListener() {
+  if (resizeListenerAttached)
+    return
+  resizeListenerAttached = true
+  window.addEventListener('resize', calculatePosition)
+}
+
+function detachResizeListener() {
+  if (!resizeListenerAttached)
+    return
+  resizeListenerAttached = false
+  window.removeEventListener('resize', calculatePosition)
 }
 
 watchEffect(() => {
@@ -94,16 +110,33 @@ function transformWeeklyVideo(item: PopularSeriesVideoItem, rank: number): Video
 onMounted(() => {
   void initData()
   initPageAction()
-  window.addEventListener('resize', calculatePosition)
+  attachResizeListener()
 })
 
 onActivated(() => {
+  attachResizeListener()
+  if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    void initData()
+  }
   initPageAction()
+})
+
+onDeactivated(() => {
+  reloadAfterActivation = isLoading.value
+  requestGeneration++
+  if (isLoading.value)
+    emit('afterLoading')
+  isLoading.value = false
+  showDropdown.value = false
+  window.removeEventListener('click', closeDropdown)
+  detachResizeListener()
 })
 
 onUnmounted(() => {
   requestGeneration++
-  window.removeEventListener('resize', calculatePosition)
+  window.removeEventListener('click', closeDropdown)
+  detachResizeListener()
 })
 
 function initPageAction() {

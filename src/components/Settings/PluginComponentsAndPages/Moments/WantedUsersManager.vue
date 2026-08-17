@@ -95,10 +95,7 @@ async function addUser() {
       const response = await api.search.searchUser({
         keyword: input,
         page: 1,
-        pagesize: 10,
-        order: '',
-        order_sort: 0,
-        user_type: 0,
+        page_size: 10,
       })
       const results = response.code === 0 && Array.isArray(response.data?.result)
         ? response.data.result

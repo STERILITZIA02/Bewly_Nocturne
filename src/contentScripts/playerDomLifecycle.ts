@@ -50,6 +50,7 @@ bindPlayerRoot = () => {
   if (!nextRoot) {
     playerRoot = null
     disconnectScopedObservers()
+    notifySubscribers()
     startBootstrapObserver()
     return
   }

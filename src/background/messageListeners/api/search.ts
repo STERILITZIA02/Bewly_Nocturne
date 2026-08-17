@@ -1,7 +1,26 @@
-import { SEARCH_API_DEFINITIONS } from '~/constants/searchApi'
+import { buildSearchApiRequest, parseAnonymousSearchRequest, SEARCH_API_DEFINITIONS } from '~/constants/searchApi'
 
 import type { APIMAP } from '../../utils'
-import { AHS } from '../../utils'
+import { AHS, doRequest } from '../../utils'
+
+async function requestAnonymousSearch(message: Record<string, unknown>) {
+  const request = parseAnonymousSearchRequest(message.request)
+  const builtRequest = buildSearchApiRequest(request)
+
+  return await doRequest(
+    { contentScriptQuery: 'anonymousSearch' },
+    {
+      url: builtRequest.url,
+      _fetch: {
+        method: 'get',
+        credentials: 'omit',
+        strictParams: true,
+      },
+      params: builtRequest.params,
+      afterHandle: AHS.J_D,
+    },
+  )
+}
 
 const API_SEARCH = {
   getSearchSuggestion: {
@@ -39,6 +58,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchAll,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -47,6 +67,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchVideo,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -55,6 +76,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchBangumi,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -63,6 +85,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchMediaFt,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -71,6 +94,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchUser,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -79,6 +103,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchLive,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -87,6 +112,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchLiveRoom,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -95,6 +121,7 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchLiveUser,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
@@ -103,9 +130,13 @@ const API_SEARCH = {
     ...SEARCH_API_DEFINITIONS.searchArticle,
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },
+  // 去个性化搜索只接受类型化 request；endpoint、参数白名单与匿名 WBI
+  // scope 均在 background 内部确定，content/page 无法传入任意 URL。
+  anonymousSearch: requestAnonymousSearch,
 } satisfies APIMAP
 
 export default API_SEARCH
