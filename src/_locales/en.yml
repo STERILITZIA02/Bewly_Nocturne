@@ -959,16 +959,12 @@ notifications:
       label: Direct messages
     reply:
       label: Replies
-      description: See replies to your comments
     at:
       label: Mentions
-      description: See when others mention you
     love:
       label: Likes
-      description: See likes on your content
     system:
       label: System
-      description: System and service messages from Bilibili
   whisper:
     loading: Loading direct-message conversations
     profile_pending: Confirming your account

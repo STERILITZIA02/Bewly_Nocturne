@@ -16,7 +16,6 @@ export interface NotificationSectionDefinition {
   implementation: NotificationSectionImplementation
   layout: NotificationSectionLayout
   labelKey: string
-  descriptionKey: string | null
   icon: string
   unreadSource: 'dm' | 'reply' | 'at' | 'like' | 'system' | null
 }
@@ -27,7 +26,6 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'hybrid',
     layout: 'workspace',
     labelKey: 'notifications.sections.whisper.label',
-    descriptionKey: null,
     icon: 'i-solar:chat-round-bold-duotone',
     unreadSource: 'dm',
   },
@@ -36,7 +34,6 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.reply.label',
-    descriptionKey: 'notifications.sections.reply.description',
     icon: 'i-solar:reply-2-bold-duotone',
     unreadSource: 'reply',
   },
@@ -45,7 +42,6 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.at.label',
-    descriptionKey: 'notifications.sections.at.description',
     icon: 'i-solar:mention-circle-bold-duotone',
     unreadSource: 'at',
   },
@@ -54,7 +50,6 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.love.label',
-    descriptionKey: 'notifications.sections.love.description',
     icon: 'i-solar:like-bold-duotone',
     unreadSource: 'like',
   },
@@ -63,7 +58,6 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.system.label',
-    descriptionKey: 'notifications.sections.system.description',
     icon: 'i-solar:chat-line-bold-duotone',
     unreadSource: 'system',
   },

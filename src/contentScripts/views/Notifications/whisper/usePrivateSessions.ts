@@ -8,6 +8,7 @@ import type {
   PrivateSessionsData,
 } from '~/background/privateMessage/types'
 
+import { comparePrivateMessageSeqno } from './privateMessage'
 import type { DisplayPrivateSession, PrivateUserCard } from './privateSession'
 import {
   appendPrivateSessions,
@@ -62,6 +63,7 @@ export interface PrivateSessionsController {
   loadMore: (options?: { retry?: boolean }) => Promise<void>
   refresh: () => Promise<void>
   refreshNew: () => Promise<void>
+  invalidatePendingRequests: () => void
   refreshIfStale: () => Promise<void>
   activate: (unreadCount: number) => Promise<void>
   retryFailed: () => Promise<void>
@@ -153,11 +155,13 @@ export function usePrivateSessions(
     state.items.find(item => item.key === selectedSessionKey.value)?.talkerId ?? ''
   ))
   const userCardCache = new Map<string, CachedPrivateUserCard>()
+  const confirmedAckSeqnos = new Map<string, string>()
   const now = dependencies.now ?? Date.now
   let firstPageRequest: Promise<void> | null = null
   let olderSessionsRequest: Promise<void> | null = null
   let newSessionsRequest: Promise<void> | null = null
   let contentGeneration = 0
+  let incrementalGeneration = 0
 
   function isCurrentRequest(
     mid: string,
@@ -209,10 +213,36 @@ export function usePrivateSessions(
     state.scrollTop = 0
     selectedSessionKey.value = ''
     userCardCache.clear()
+    confirmedAckSeqnos.clear()
     contentGeneration++
+    incrementalGeneration++
     firstPageRequest = null
     olderSessionsRequest = null
     newSessionsRequest = null
+  }
+
+  function preserveConfirmedReadState(items: DisplayPrivateSession[]): DisplayPrivateSession[] {
+    return items.map((item) => {
+      const confirmedAckSeqno = confirmedAckSeqnos.get(item.key)
+      if (!confirmedAckSeqno || !item.maxSeqno)
+        return item
+      if (comparePrivateMessageSeqno(item.maxSeqno, confirmedAckSeqno) > 0) {
+        confirmedAckSeqnos.delete(item.key)
+        return item
+      }
+      if (item.unreadCount === 0 && comparePrivateMessageSeqno(item.ackSeqno, confirmedAckSeqno) >= 0)
+        return item
+      return {
+        ...item,
+        unreadCount: 0,
+        ackSeqno: confirmedAckSeqno,
+        original: {
+          ...item.original,
+          unread_count: 0,
+          ack_seqno: confirmedAckSeqno,
+        },
+      }
+    })
   }
 
   async function enrichSessions(
@@ -290,12 +320,12 @@ export function usePrivateSessions(
           throw response
         if (!isCurrentRequest(mid, generation, requestContentGeneration))
           return
-        const incoming = await enrichSessions(
+        const incoming = preserveConfirmedReadState(await enrichSessions(
           page.sessions,
           mid,
           generation,
           requestContentGeneration,
-        )
+        ))
         if (!isCurrentRequest(mid, generation, requestContentGeneration))
           return
 
@@ -356,6 +386,7 @@ export function usePrivateSessions(
       return
     const generation = state.generation
     const requestContentGeneration = contentGeneration
+    const requestIncrementalGeneration = incrementalGeneration
     const beginTs = state.newestSessionTs
     clearFailure('incremental')
 
@@ -366,16 +397,24 @@ export function usePrivateSessions(
         const page = extractSessions(response)
         if (!page)
           throw response
-        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+        if (
+          requestIncrementalGeneration !== incrementalGeneration
+          || !isCurrentRequest(mid, generation, requestContentGeneration)
+        ) {
           return
-        const incoming = await enrichSessions(
+        }
+        const incoming = preserveConfirmedReadState(await enrichSessions(
           page.sessions,
           mid,
           generation,
           requestContentGeneration,
-        )
-        if (!isCurrentRequest(mid, generation, requestContentGeneration))
+        ))
+        if (
+          requestIncrementalGeneration !== incrementalGeneration
+          || !isCurrentRequest(mid, generation, requestContentGeneration)
+        ) {
           return
+        }
 
         state.items = mergePrivateSessions(state.items, incoming)
         state.loadedAt = now()
@@ -383,12 +422,20 @@ export function usePrivateSessions(
         clearFailure('incremental')
       }
       catch (response) {
-        if (isCurrentRequest(mid, generation, requestContentGeneration))
+        if (
+          requestIncrementalGeneration === incrementalGeneration
+          && isCurrentRequest(mid, generation, requestContentGeneration)
+        ) {
           recordFailure('incremental', response)
+        }
       }
       finally {
-        if (isCurrentRequest(mid, generation, requestContentGeneration))
+        if (
+          requestIncrementalGeneration === incrementalGeneration
+          && isCurrentRequest(mid, generation, requestContentGeneration)
+        ) {
           state.refreshing = false
+        }
       }
     })().finally(() => {
       if (newSessionsRequest === request)
@@ -429,12 +476,12 @@ export function usePrivateSessions(
           throw response
         if (!isCurrentRequest(mid, generation, requestContentGeneration))
           return
-        const incoming = await enrichSessions(
+        const incoming = preserveConfirmedReadState(await enrichSessions(
           page.sessions,
           mid,
           generation,
           requestContentGeneration,
-        )
+        ))
         if (!isCurrentRequest(mid, generation, requestContentGeneration))
           return
 
@@ -475,6 +522,17 @@ export function usePrivateSessions(
 
   function refresh(): Promise<void> {
     return requestFirstPage('refresh')
+  }
+
+  function invalidatePendingRequests() {
+    contentGeneration++
+    incrementalGeneration++
+    state.loading = false
+    state.refreshing = false
+    state.loadingMore = false
+    firstPageRequest = null
+    olderSessionsRequest = null
+    newSessionsRequest = null
   }
 
   function refreshIfStale(): Promise<void> {
@@ -545,6 +603,9 @@ export function usePrivateSessions(
     const session = state.items.find(item => item.key === `1:${talkerId}`)
     if (!session)
       return
+    const previousAckSeqno = confirmedAckSeqnos.get(session.key)
+    if (!previousAckSeqno || comparePrivateMessageSeqno(ackSeqno, previousAckSeqno) > 0)
+      confirmedAckSeqnos.set(session.key, ackSeqno)
     session.unreadCount = 0
     session.ackSeqno = ackSeqno
     session.original = {
@@ -578,6 +639,7 @@ export function usePrivateSessions(
     loadMore,
     refresh,
     refreshNew,
+    invalidatePendingRequests,
     refreshIfStale,
     activate,
     retryFailed,

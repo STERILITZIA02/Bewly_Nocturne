@@ -906,16 +906,12 @@ notifications:
       label: 私信
     reply:
       label: 回复我的
-      description: 查看别人对你的回复
     at:
       label: "{'@'} 我的"
-      description: 查看别人对你的提及
     love:
       label: 收到的赞
-      description: 查看别人对你内容的点赞
     system:
       label: 系统通知
-      description: 查看来自哔哩哔哩的系统与服务消息
   whisper:
     loading: 正在加载私信会话
     profile_pending: 正在确认账号

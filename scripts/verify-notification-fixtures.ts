@@ -171,6 +171,22 @@ verify('only the current Native Feed is rendered', async () => {
   assert.match(source, /v-if="nativeView"/)
 })
 
+verify('notification headers keep only titles and delegate refresh to the Dock control', async () => {
+  const [headerSource, navigationSource, sectionsSource, pageSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsPageHeader.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsNavigation.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.doesNotMatch(headerSource, /descriptionKey|notifications\.actions\.refresh|notifications\.actions\.open_original/)
+  assert.doesNotMatch(headerSource, /<Button\b|<ALink\b/)
+  assert.doesNotMatch(navigationSource, /descriptionKey/)
+  assert.doesNotMatch(sectionsSource, /descriptionKey/)
+  assert.doesNotMatch(pageSource, /<NotificationsPageHeader[^>]*@refresh/)
+  assert.match(pageSource, /handlePageRefresh\.value\s*=\s*refreshCurrentView/)
+})
+
 verify('Native Feed retry, account pending, and scroll anchor wiring are explicit', async () => {
   const [feedSource, itemSource] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeed.vue', import.meta.url), 'utf8'),
@@ -439,6 +455,97 @@ verify('System initial streams preserve lossless IDs, merge by cursor, and dedup
   assert.equal(page.noMore, false)
   assert.equal(page.items[0]?.kind, 'system')
   assert.equal(typeof page.items[0]?.timestamp, 'number')
+})
+
+verify('System accepts current-client compatible string timestamps without dropping history', () => {
+  const unified = {
+    code: 0,
+    data: {
+      system_notify_list: [{
+        id: '881234567890123406',
+        cursor: '991234567890123395',
+        title: '脱敏系统通知',
+        content: '脱敏通知正文',
+        time_at: '2026-08-17T10:20:30+12:00',
+      }],
+    },
+  }
+  const user = {
+    code: 0,
+    data: {
+      system_notify_list: [{
+        id: '881234567890123407',
+        cursor: '991234567890123394',
+        title: '脱敏历史通知',
+        content: '脱敏历史正文',
+        time_at: '1786926030000',
+      }],
+    },
+  }
+
+  const initialPage = parseSystemInitialPage(unified, user)
+  assert.ok(initialPage)
+  assert.equal(initialPage.items.length, 2)
+  assert.deepEqual(initialPage.items.map(item => item.timestamp), [
+    Math.floor(Date.parse('2026-08-17T10:20:30+12:00') / 1000),
+    1786926030,
+  ])
+
+  const historyPage = parseSystemHistoryPage({
+    code: 0,
+    data: [{
+      id: '881234567890123408',
+      cursor: '991234567890123393',
+      title: '脱敏更早通知',
+      content: '脱敏更早正文',
+      time_at: '2026-08-16T10:20:30+12:00',
+    }],
+  })
+  assert.ok(historyPage)
+  assert.equal(historyPage.items.length, 1)
+})
+
+verify('System keeps otherwise valid history when its display timestamp is malformed', () => {
+  const malformedTimestamp = {
+    code: 0,
+    data: {
+      system_notify_list: [{
+        id: '881234567890123409',
+        cursor: '991234567890123392',
+        title: '脱敏通知',
+        content: '脱敏正文',
+        time_at: 'invalid-time',
+      }],
+    },
+  }
+  const emptyItems = {
+    code: 0,
+    data: { system_notify_list: [] },
+  }
+
+  const page = parseSystemInitialPage(malformedTimestamp, emptyItems)
+  assert.ok(page)
+  assert.equal(page.items.length, 1)
+  assert.equal(page.items[0]?.timestamp, 0)
+})
+
+verify('non-empty System payloads cannot silently degrade into an empty state', () => {
+  const malformedIdentity = {
+    code: 0,
+    data: {
+      system_notify_list: [{
+        title: '脱敏通知',
+        content: '脱敏正文',
+        time_at: 1786926030000,
+      }],
+    },
+  }
+  const emptyItems = {
+    code: 0,
+    data: { system_notify_list: [] },
+  }
+
+  assert.equal(parseSystemInitialPage(malformedIdentity, emptyItems), null)
 })
 
 verify('System legacy pagination uses only its confirmed cursor and accepts an empty tail', async () => {

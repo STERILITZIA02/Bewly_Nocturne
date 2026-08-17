@@ -907,16 +907,12 @@ notifications:
       label: 私訊
     reply:
       label: 回覆我的
-      description: 查看其他人對你的回覆
     at:
       label: "{'@'} 我的"
-      description: 查看別人對你的提及
     love:
       label: 收到的讚
-      description: 查看別人對你內容的按讚
     system:
       label: 系統通知
-      description: 查看來自嗶哩嗶哩的系統與服務訊息
   whisper:
     loading: 正在載入私訊會話
     profile_pending: 正在確認帳號

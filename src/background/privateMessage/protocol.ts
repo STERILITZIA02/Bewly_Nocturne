@@ -46,6 +46,23 @@ function asString(value: unknown): string {
   return typeof value === 'string' ? value : ''
 }
 
+function normalizeUnsignedDecimal(value: unknown): string {
+  if (typeof value === 'string' && /^\d+$/.test(value))
+    return value.replace(/^0+(?=\d)/, '')
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0)
+    return String(value)
+  return ''
+}
+
+function reportPrivateMessageMetadataIssues(fields: string[]) {
+  if (import.meta.env?.DEV && fields.length > 0) {
+    console.warn('[PrivateMessage] Normalized malformed pagination metadata', {
+      endpointName: 'getPrivateMessages',
+      fields: [...new Set(fields)].sort(),
+    })
+  }
+}
+
 function getMissingCoreFields(
   value: unknown,
   fields: ReadonlyArray<readonly [string, 'number' | 'string']>,
@@ -238,10 +255,13 @@ export function buildPrivateUserCardsParams(uids: string[]): PrivateMessageReque
 export function buildPrivateMessagesParams(
   options: GetPrivateMessagesOptions,
 ): PrivateMessageRequestParams {
+  const size = options.size === undefined
+    ? 20
+    : requirePositiveNumber(options.size, 'size')
   const params: PrivateMessageRequestParams = {
     talker_id: requireIdentifier(options.talkerId, 'talkerId'),
     session_type: 1,
-    size: 20,
+    size,
     sender_device_id: 1,
     build: 0,
     mobi_app: 'web',
@@ -486,12 +506,31 @@ export function parsePrivateMessagesResponse(
   if (rawCount > 0 && messages.length === 0)
     return null
 
+  const metadataIssues: string[] = []
+  const rawHasMore = response.data.has_more
+  const hasMore = typeof rawHasMore === 'number' && Number.isFinite(rawHasMore)
+    ? rawHasMore > 0 ? 1 : 0
+    : 0
+  if (typeof rawHasMore !== 'number' || !Number.isFinite(rawHasMore))
+    metadataIssues.push('has_more')
+
+  const minSeqno = normalizeUnsignedDecimal(response.data.min_seqno)
+  const maxSeqno = normalizeUnsignedDecimal(response.data.max_seqno)
+  if (!minSeqno)
+    metadataIssues.push('min_seqno')
+  if (!maxSeqno)
+    metadataIssues.push('max_seqno')
+  reportPrivateMessageMetadataIssues(metadataIssues)
+
   return {
     ...response,
     data: {
       ...response.data,
       messages,
       e_infos: rawEInfos ?? [],
+      has_more: hasMore,
+      min_seqno: minSeqno,
+      max_seqno: maxSeqno,
     },
   }
 }

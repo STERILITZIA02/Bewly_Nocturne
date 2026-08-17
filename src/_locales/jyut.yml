@@ -892,16 +892,12 @@ notifications:
       label: 私訊
     reply:
       label: 回覆我嘅
-      description: 睇其他人畀你嘅回覆
     at:
       label: "{'@'} 我嘅"
-      description: 睇其他人提及你
     love:
       label: 收到嘅讚
-      description: 睇其他人畀你內容嘅讚
     system:
       label: 系統通知
-      description: 睇嚟自嗶哩嗶哩嘅系統同服務訊息
   whisper:
     loading: 載入緊私訊會話
     profile_pending: 確認緊帳號

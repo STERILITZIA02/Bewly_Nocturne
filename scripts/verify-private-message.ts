@@ -358,16 +358,57 @@ verify('message request builder keeps first-page and older-history boundaries di
   assert.deepEqual(protocol.buildPrivateMessagesParams({
     talkerId: '9223372036854775807',
     endSeqno: '9223372036854775700',
+    size: 100,
   }), {
     talker_id: '9223372036854775807',
     session_type: 1,
-    size: 20,
+    size: 100,
     sender_device_id: 1,
     build: 0,
     mobi_app: 'web',
     begin_seqno: '0',
     end_seqno: '9223372036854775700',
   })
+})
+
+verify('message metadata preserves uint64 floors and normalizes pagination fields', async ({ losslessJson, protocol }) => {
+  const response = await losslessJson.parsePrivateMessageResponse(createMockResponse(JSON.stringify({
+    code: 0,
+    data: {
+      messages: [createRawMessage('page-1', '9223372036854775799')],
+      e_infos: null,
+      has_more: 7,
+      min_seqno: '18446744073709551615',
+      max_seqno: '9223372036854775807',
+    },
+  })), 'getPrivateMessages')
+  const parsed = protocol.parsePrivateMessagesResponse(response)
+  assert.ok(parsed)
+  assert.equal(parsed.data.has_more, 1)
+  assert.equal(parsed.data.min_seqno, '18446744073709551615')
+  assert.equal(parsed.data.max_seqno, '9223372036854775807')
+
+  const rawNumeric = '{"code":0,"data":{"messages":[],"e_infos":[],"has_more":1,"min_seqno":18446744073709551615,"max_seqno":9223372036854775807}}'
+  const lossless = protocol.parsePrivateMessagesResponse(
+    await losslessJson.parsePrivateMessageResponse(createMockResponse(rawNumeric), 'getPrivateMessages'),
+  )
+  assert.equal(lossless?.data.min_seqno, '18446744073709551615')
+  assert.equal(lossless?.data.max_seqno, '9223372036854775807')
+
+  const malformedMetadata = protocol.parsePrivateMessagesResponse({
+    code: 0,
+    data: {
+      messages: [createRawMessage('page-2', '102')],
+      e_infos: [],
+      has_more: 'unknown',
+      min_seqno: 'not-a-seqno',
+      max_seqno: null,
+    },
+  })
+  assert.equal(malformedMetadata?.data.messages.length, 1)
+  assert.equal(malformedMetadata?.data.has_more, 0)
+  assert.equal(malformedMetadata?.data.min_seqno, '')
+  assert.equal(malformedMetadata?.data.max_seqno, '')
 })
 
 verify('ACK request builder sends both CSRF fields and preserves seqno strings', ({ protocol }) => {
@@ -399,6 +440,78 @@ verify('private-message WBI signing reuses the shared signer and adds wts/w_rid'
   assert.match(String(signed.w_rid), /^[a-f\d]{32}$/)
   assert.equal(Object.hasOwn(original, 'wts'), false)
   assert.equal(Object.hasOwn(original, 'w_rid'), false)
+})
+
+verify('WBI keys survive worker cold starts with scope and MID isolation', async () => {
+  const wbi = await import('../src/background/wbiSign')
+  assert.equal(typeof wbi.invalidateWbiMemoryCache, 'function')
+
+  const storage = new Map<string, unknown>()
+  let now = 1_000_000
+  let navRequests = 0
+  const runtime = {
+    now: () => now,
+    fetch: async () => {
+      navRequests++
+      return createMockResponse(JSON.stringify({
+        code: 0,
+        data: {
+          wbi_img: {
+            img_url: 'https://i0.hdslb.com/bfs/wbi/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN.png',
+            sub_url: 'https://i0.hdslb.com/bfs/wbi/NMLKJIHGFEDCBA9876543210zyxwvutsrqponmlkjihgfedcba.png',
+          },
+        },
+      }))
+    },
+    getCookies: async () => [],
+    storage: {
+      get: async (key: string) => ({ [key]: storage.get(key) }),
+      set: async (values: Record<string, unknown>) => {
+        for (const [key, value] of Object.entries(values))
+          storage.set(key, value)
+      },
+      remove: async (key: string) => { storage.delete(key) },
+    },
+  }
+
+  wbi.invalidateWbiMemoryCache()
+  assert.equal(await wbi.initWbiKeys({ mid: '100' }, runtime), true)
+  assert.equal(navRequests, 1)
+  wbi.invalidateWbiMemoryCache()
+  runtime.fetch = async () => {
+    throw new TypeError('nav unavailable')
+  }
+  assert.equal(await wbi.initWbiKeys({ mid: '100' }, runtime), true)
+  assert.equal(navRequests, 1, 'valid persisted cache avoids nav after a worker restart')
+
+  wbi.invalidateWbiMemoryCache()
+  runtime.fetch = async () => {
+    navRequests++
+    return createMockResponse(JSON.stringify({
+      code: 0,
+      data: {
+        wbi_img: {
+          img_url: 'https://i0.hdslb.com/bfs/wbi/abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMN.png',
+          sub_url: 'https://i0.hdslb.com/bfs/wbi/NMLKJIHGFEDCBA9876543210zyxwvutsrqponmlkjihgfedcba.png',
+        },
+      },
+    }))
+  }
+  assert.equal(await wbi.initWbiKeys({ mid: '200' }, runtime), true)
+  assert.equal(navRequests, 2, 'a different MID cannot restore the authenticated slot')
+
+  wbi.invalidateWbiMemoryCache()
+  now += 24 * 60 * 60 * 1000 + 1
+  const concurrent = await Promise.all([
+    wbi.initWbiKeys({ mid: '200' }, runtime),
+    wbi.initWbiKeys({ mid: '200' }, runtime),
+  ])
+  assert.deepEqual(concurrent, [true, true])
+  assert.equal(navRequests, 3, 'concurrent refreshes share one nav request')
+
+  wbi.invalidateWbiMemoryCache({ noCookie: true })
+  assert.equal(await wbi.initWbiKeys({ noCookie: true }, runtime), true)
+  assert.equal(navRequests, 4, 'anonymous and authenticated slots initialize independently')
 })
 
 verify('text send builder creates a flat bracket form with UUID, seconds, JSON content, and dual CSRF', ({ protocol }) => {
@@ -733,7 +846,7 @@ verify('lossless parser preserves only confirmed IDs and seqnos as strings', asy
 })
 
 verify('message parser retains e_infos and numeric timestamps without ID precision loss', async ({ losslessJson, protocol }) => {
-  const rawMessagesJson = `{"code":0,"data":{"messages":[{"sender_uid":9223372036854775806,"receiver_type":1,"receiver_id":9223372036854775807,"msg_type":1,"content":"sanitized","msg_seqno":9223372036854775799,"timestamp":1755000000,"at_uids":[],"msg_key":9223372036854775798,"msg_status":0,"notify_code":"","new_face_version":0,"msg_source":0}],"e_infos":[{"text":"sanitized"}]}}`
+  const rawMessagesJson = `{"code":0,"data":{"messages":[{"sender_uid":9223372036854775806,"receiver_type":1,"receiver_id":9223372036854775807,"msg_type":1,"content":"sanitized","msg_seqno":9223372036854775799,"timestamp":1755000000,"at_uids":[],"msg_key":9223372036854775798,"msg_status":0,"notify_code":"","new_face_version":0,"msg_source":0}],"e_infos":[{"text":"sanitized"}],"has_more":1,"min_seqno":18446744073709551615,"max_seqno":9223372036854775799}}`
   const parsedMessages = protocol.parsePrivateMessagesResponse(
     await losslessJson.parsePrivateMessageResponse(createMockResponse(rawMessagesJson), 'getPrivateMessages'),
   )
@@ -745,6 +858,9 @@ verify('message parser retains e_infos and numeric timestamps without ID precisi
   assert.equal(message?.msg_key, '9223372036854775798')
   assert.equal(typeof message?.timestamp, 'number')
   assert.deepEqual(parsedMessages.data.e_infos, [{ text: 'sanitized' }])
+  assert.equal(parsedMessages.data.has_more, 1)
+  assert.equal(parsedMessages.data.min_seqno, '18446744073709551615')
+  assert.equal(parsedMessages.data.max_seqno, '9223372036854775799')
 })
 
 verify('private session parser keeps valid rows and normalizes nullable real response fields', async ({ protocol }) => {
@@ -833,7 +949,7 @@ verify('transport errors are structured without raw response data', async ({ err
   assert.equal(network.bewlyError?.kind, 'network')
 
   let fetchAfterWbiFailure = 0
-  const wbiUnavailable = await transport.requestPrivateMessage({
+  const preferredUnsigned = await transport.requestPrivateMessage({
     endpointName: 'getPrivateSessions',
     params: {},
     url: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/get_sessions',
@@ -844,22 +960,190 @@ verify('transport errors are structured without raw response data', async ({ err
     },
     signParams: () => Promise.reject(new errors.PrivateMessageWbiUnavailableError()),
   })
-  assert.equal(wbiUnavailable.bewlyError?.kind, 'wbi-unavailable')
-  assert.equal(fetchAfterWbiFailure, 0)
+  assert.equal(preferredUnsigned.code, 0)
+  assert.equal(fetchAfterWbiFailure, 1)
 
   await assert.rejects(
-    () => transport.signPrivateMessageParams({}, {
+    () => transport.signPrivateMessageParams({}, {}, {
       addWbiSign: params => params,
       initWbiKeys: async () => false,
     }),
     (error: unknown) => errors.isPrivateMessageWbiUnavailableError(error),
   )
 
-  for (const response of [login, loginRedirect, risk, server, invalid, api, network, wbiUnavailable]) {
+  for (const response of [login, loginRedirect, risk, server, invalid, api, network, preferredUnsigned]) {
     assert.equal(Object.hasOwn(response, 'raw'), false)
     assert.equal(Object.hasOwn(response.bewlyError ?? {}, 'url'), false)
     assert.equal(Object.hasOwn(response.bewlyError ?? {}, 'stack'), false)
   }
+})
+
+verify('preferred private-message transport retries only an API -403 signature rejection', async ({ errors, transport }) => {
+  const { PRIVATE_MESSAGE_SIGNING_POLICIES } = await import('../src/background/privateMessage/types')
+  assert.equal(PRIVATE_MESSAGE_SIGNING_POLICIES.getPrivateMessages, 'preferred')
+  assert.equal(PRIVATE_MESSAGE_SIGNING_POLICIES.ackPrivateSession, 'preferred')
+  assert.equal(PRIVATE_MESSAGE_SIGNING_POLICIES.sendPrivateMessage, 'required')
+
+  let fetchCount = 0
+  const signCalls: Array<boolean | undefined> = []
+  const response = await transport.requestPrivateMessage({
+    endpointName: 'getPrivateMessages',
+    params: { talker_id: '200' },
+    url: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
+  }, {
+    fetch: async () => {
+      fetchCount++
+      return createMockResponse(fetchCount === 1
+        ? '{"code":-403,"data":null}'
+        : '{"code":0,"data":{"messages":[],"e_infos":[]}}')
+    },
+    signParams: async (params, options) => {
+      signCalls.push(options?.forceRefresh)
+      return { ...params, wts: signCalls.length, w_rid: `signed-${signCalls.length}` }
+    },
+  })
+  assert.equal(response.code, 0)
+  assert.equal(fetchCount, 2)
+  assert.deepEqual(signCalls, [undefined, true])
+
+  let riskFetchCount = 0
+  const risk = await transport.requestPrivateMessage({
+    endpointName: 'getPrivateMessages',
+    params: { talker_id: '200' },
+    url: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
+  }, {
+    fetch: async () => {
+      riskFetchCount++
+      return createMockResponse('<html>risk control</html>', { contentType: 'text/html', status: 412 })
+    },
+    signParams: async params => ({ ...params, wts: 1, w_rid: 'signed' }),
+  })
+  assert.equal(risk.bewlyError?.kind, 'risk-control')
+  assert.equal(riskFetchCount, 1)
+
+  let requiredFetchCount = 0
+  const required = await transport.requestSignedPrivateMessageForm({
+    endpointName: 'sendPrivateMessage',
+    body: {
+      'msg[sender_uid]': '100',
+      'msg[receiver_id]': '200',
+      'msg[dev_id]': '123e4567-e89b-42d3-a456-426614174000',
+    },
+    url: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+  }, {
+    fetch: async () => {
+      requiredFetchCount++
+      return createMockResponse('{"code":0,"data":{}}')
+    },
+    signParams: async () => { throw new errors.PrivateMessageWbiUnavailableError() },
+  })
+  assert.equal(required.bewlyError?.kind, 'wbi-unavailable')
+  assert.equal(requiredFetchCount, 0)
+})
+
+verify('ACK uses preferred signed form POST with CSRF only in the body contract', async ({ errors, protocol, transport }) => {
+  const body = protocol.buildPrivateAckParams({
+    talkerId: '9223372036854775807',
+    ackSeqno: '9223372036854775799',
+    csrf: 'sanitized-csrf',
+  })
+  let capturedUrl = ''
+  let capturedInit: RequestInit | undefined
+  const response = await transport.requestPreferredPrivateMessageForm({
+    endpointName: 'ackPrivateSession',
+    body,
+    signingParams: {
+      talker_id: body.talker_id,
+      session_type: body.session_type,
+      ack_seqno: body.ack_seqno,
+      build: body.build,
+      mobi_app: body.mobi_app,
+    },
+    url: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
+  }, {
+    fetch: async (url, init) => {
+      capturedUrl = String(url)
+      capturedInit = init
+      return createMockResponse('{"code":0,"data":{}}')
+    },
+    signParams: async params => ({ ...params, wts: 1, w_rid: 'signed' }),
+  })
+  assert.equal(response.code, 0)
+  assert.equal(capturedInit?.method, 'POST')
+  assert.equal((capturedInit?.headers as Record<string, string>)['Content-Type'], 'application/x-www-form-urlencoded')
+  const form = new URLSearchParams(String(capturedInit?.body))
+  assert.equal(form.get('talker_id'), '9223372036854775807')
+  assert.equal(form.get('ack_seqno'), '9223372036854775799')
+  assert.equal(form.get('csrf'), 'sanitized-csrf')
+  assert.equal(form.get('csrf_token'), 'sanitized-csrf')
+  const url = new URL(capturedUrl)
+  assert.equal(url.searchParams.get('wts'), '1')
+  assert.equal(url.searchParams.get('w_rid'), 'signed')
+  assert.equal(url.searchParams.has('csrf'), false)
+  assert.equal(url.searchParams.has('csrf_token'), false)
+
+  let unsignedRequests = 0
+  const unsigned = await transport.requestPreferredPrivateMessageForm({
+    endpointName: 'ackPrivateSession',
+    body,
+    signingParams: {},
+    url: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
+  }, {
+    fetch: async (requestUrl, init) => {
+      unsignedRequests++
+      assert.equal(new URL(String(requestUrl)).search, '')
+      assert.equal(new URLSearchParams(String(init?.body)).get('csrf'), 'sanitized-csrf')
+      return createMockResponse('{"code":0,"data":{}}')
+    },
+    signParams: async () => { throw new errors.PrivateMessageWbiUnavailableError() },
+  })
+  assert.equal(unsigned.code, 0)
+  assert.equal(unsignedRequests, 1)
+
+  const apiSource = await readFile(new URL('../src/background/privateMessage/api.ts', import.meta.url), 'utf8')
+  const ackSource = apiSource.slice(apiSource.indexOf('export async function ackPrivateSession'))
+  assert.ok(ackSource.includes('requestPreferredPrivateMessageForm'))
+  assert.equal(ackSource.includes('requestPrivateMessage({'), false)
+})
+
+verify('Chromium rewrites Origin and Referer only for the exact update_ack POST', async () => {
+  const rules = JSON.parse(await readFile(
+    new URL('../assets/rules.json', import.meta.url),
+    'utf8',
+  )) as Array<{
+    action?: {
+      requestHeaders?: Array<{ header?: string, operation?: string, value?: string }>
+      type?: string
+    }
+    condition?: {
+      regexFilter?: string
+      requestMethods?: string[]
+      resourceTypes?: string[]
+    }
+  }>
+  const ackRules = rules.filter(rule => rule.condition?.regexFilter?.includes('update_ack'))
+  assert.equal(ackRules.length, 1)
+  const [ackRule] = ackRules
+  assert.equal(ackRule?.action?.type, 'modifyHeaders')
+  assert.deepEqual(ackRule?.condition?.requestMethods, ['post'])
+  assert.deepEqual(ackRule?.condition?.resourceTypes, ['xmlhttprequest'])
+  assert.equal(
+    ackRule?.condition?.regexFilter,
+    '^https://api\\.vc\\.bilibili\\.com/session_svr/v1/session_svr/update_ack(?:\\?|$)',
+  )
+  const headers = new Map(
+    ackRule?.action?.requestHeaders?.map(header => [header.header?.toLowerCase(), header]) ?? [],
+  )
+  assert.deepEqual(headers.get('origin'), {
+    header: 'origin',
+    operation: 'set',
+    value: 'https://message.bilibili.com',
+  })
+  assert.deepEqual(headers.get('referer'), {
+    header: 'referer',
+    operation: 'set',
+    value: 'https://message.bilibili.com/',
+  })
 })
 
 function createRawSession(
@@ -957,12 +1241,25 @@ function createRawMessage(
 function createMessagesResponse(
   messages: import('../src/background/privateMessage/types').PrivateMessage[],
   eInfos: unknown[] = [],
+  metadata: {
+    hasMore?: number
+    maxSeqno?: string
+    minSeqno?: string
+  } = {},
 ) {
+  const seqnos = messages.map(message => message.msg_seqno).sort((left, right) => {
+    if (left.length !== right.length)
+      return left.length - right.length
+    return left.localeCompare(right)
+  })
   return {
     code: 0,
     data: {
       messages,
       e_infos: eInfos,
+      has_more: metadata.hasMore ?? (messages.length > 0 ? 1 : 0),
+      min_seqno: metadata.minSeqno ?? '',
+      max_seqno: metadata.maxSeqno ?? seqnos.at(-1) ?? '',
     },
   }
 }
@@ -1292,6 +1589,24 @@ verify('private-session UI consumes type filters, assistant labels, profile link
   }
 })
 
+verify('confirmed outgoing text uses a theme bubble and a compact delivery check', async () => {
+  const [conversationSource, itemSource, contentSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageItem.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageContent.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.match(itemSource, /<PrivateMessageContent[\s\S]{0,240}:is-self="message\.isSelf"/)
+  assert.match(contentSource, /'private-message-content__bubble--self':\s*isSelf/)
+  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,160}background:\s*var\(--bew-theme-color\)/)
+  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,240}color:\s*var\(--bew-on-theme-color\)/)
+  assert.doesNotMatch(contentSource, /:global\(\.private-message-item--self\)/)
+  assert.match(itemSource, /v-if="message\.isSelf"[\s\S]{0,320}i-mingcute:check-line/)
+  assert.match(itemSource, /notifications\.whisper\.messages\.test_send_success/)
+  assert.doesNotMatch(itemSource, /notifications\.whisper\.messages\.sent/)
+  assert.match(conversationSource, /lastTextSendOutcome === 'confirmed'[\s\S]{0,80}return ''/)
+})
+
 verify('session kinds and capabilities keep native reads separate from disabled writes', ({
   privateConversationRoute,
   privateSession,
@@ -1494,7 +1809,7 @@ verify('native message runtime protects cache limits and browser regression gate
   assert.ok(notificationsSource.includes('maxPrivateMessagesPerConversation'))
   assert.ok(messagesSource.includes('historyBoundarySeqno'))
   assert.ok(messagesSource.includes('ackRequests.has'))
-  assert.ok(workspaceSource.includes('syncVisibilityListener'))
+  assert.ok(workspaceSource.includes('usePrivateMessagePolling'))
   assert.equal(regressionSource.includes('只有用户明确提交文本后才允许出现 `web_im/send_msg`'), true)
   assert.deepEqual(policyFixture.nativeSections, ['reply', 'at', 'love', 'system'])
   assert.equal(policyFixture.whisperImplementation, 'hybrid-native-text')
@@ -1625,7 +1940,11 @@ verify('controlled text send risk-control evidence is sanitized and cannot satis
   assert.equal(fixture.history?.server_confirmed, false)
 })
 
-verify('authenticated history and ACK fixtures preserve the real pagination boundary and unread closure', async ({ privateMessage, protocol }) => {
+verify('authenticated history and ACK fixtures preserve the real pagination boundary and unread closure', async ({
+  losslessJson,
+  privateMessage,
+  protocol,
+}) => {
   const fixtureNames = [
     'messages-real-first',
     'messages-real-older',
@@ -1642,11 +1961,13 @@ verify('authenticated history and ACK fixtures preserve the real pagination boun
     assert.equal(/https?:\/\/[^"\s]+\?/i.test(source), false, fixtureNames[index])
   }
 
-  const [firstRaw, olderRaw, ack, unreadBefore, unreadAfter] = await Promise.all(
-    fixtureNames.map(readRuntimeFixture),
+  const [firstRaw, olderRaw] = await Promise.all([
+    losslessJson.parsePrivateMessageResponse(createMockResponse(sources[0]!), 'getPrivateMessages'),
+    losslessJson.parsePrivateMessageResponse(createMockResponse(sources[1]!), 'getPrivateMessages'),
+  ])
+  const [ack, unreadBefore, unreadAfter] = await Promise.all(
+    fixtureNames.slice(2).map(readRuntimeFixture),
   ) as [
-    import('../src/background/privateMessage/types').PrivateMessageApiResponse,
-    import('../src/background/privateMessage/types').PrivateMessageApiResponse,
     { code?: unknown },
     { code?: unknown, data?: Record<string, unknown> },
     { code?: unknown, data?: Record<string, unknown> },
@@ -1661,6 +1982,12 @@ verify('authenticated history and ACK fixtures preserve the real pagination boun
   assert.equal(older.data.messages.length, 20)
   assert.equal(first.data.e_infos.length, 1)
   assert.equal(older.data.e_infos.length, 4)
+  assert.equal(first.data.has_more, 1)
+  assert.equal(older.data.has_more, 1)
+  assert.equal(first.data.min_seqno, '8000000000000001')
+  assert.equal(older.data.min_seqno, '8000000000000001')
+  assert.equal(first.data.max_seqno, '8000000000000120')
+  assert.equal(older.data.max_seqno, '8000000000000020')
   assert.equal(first.data.messages.every(message => message.msg_seqno.length === 16), true)
   assert.equal(older.data.messages.every(message => message.msg_seqno.length === 16), true)
   assert.equal(first.data.messages.every(message => message.msg_key.length === 19), true)
@@ -1920,6 +2247,66 @@ verify('new sessions merge at the head with a single-flight begin_ts request', a
   assert.equal(controller.state.noMore, true)
 })
 
+verify('confirmed ACK is not overwritten by an eventually consistent incremental session row', async ({ usePrivateSessions }) => {
+  const mid = ref('100')
+  let initial = createSessionsResponse([
+    createRawSession('200', {
+      session_ts: 300,
+      unread_count: 4,
+      ack_seqno: '100',
+      max_seqno: '104',
+    }),
+  ])
+  const incremental = [
+    createSessionsResponse([
+      createRawSession('200', {
+        session_ts: 301,
+        unread_count: 4,
+        ack_seqno: '100',
+        max_seqno: '104',
+      }),
+    ]),
+    createSessionsResponse([
+      createRawSession('200', {
+        session_ts: 302,
+        unread_count: 1,
+        ack_seqno: '104',
+        max_seqno: '105',
+      }),
+    ]),
+  ]
+  const controller = usePrivateSessions.usePrivateSessions(mid, {
+    fetchSessions: async () => initial,
+    fetchOlderSessions: async () => createSessionsResponse([], 0),
+    fetchNewSessions: async () => incremental.shift() ?? createSessionsResponse([]),
+    fetchUserCards: async () => createCardsResponse([]),
+  })
+
+  await controller.loadInitial()
+  controller.markSessionRead('200', '104')
+  await controller.refreshNew()
+  assert.equal(controller.state.items[0]?.unreadCount, 0)
+  assert.equal(controller.state.items[0]?.ackSeqno, '104')
+
+  await controller.refreshNew()
+  assert.equal(controller.state.items[0]?.unreadCount, 1)
+  assert.equal(controller.state.items[0]?.maxSeqno, '105')
+
+  controller.markSessionRead('200', '105')
+  mid.value = '101'
+  await nextTick()
+  initial = createSessionsResponse([
+    createRawSession('200', {
+      session_ts: 303,
+      unread_count: 1,
+      ack_seqno: '104',
+      max_seqno: '105',
+    }),
+  ])
+  await controller.loadInitial()
+  assert.equal(controller.state.items[0]?.unreadCount, 1)
+})
+
 verify('private user-card cache is TTL-bound, best effort, and cleared by MID changes', async ({ usePrivateSessions }) => {
   const mid = ref('100')
   let now = 1_000
@@ -2081,6 +2468,171 @@ verify('visibility and whisper activation use independent finite stale windows',
   assert.equal(incrementalRequests, 2)
 })
 
+verify('private-message polling is lifecycle-bound, single-flight, and applies bounded backoff', async () => {
+  const polling = await import('../src/contentScripts/views/Notifications/whisper/usePrivateMessagePolling')
+  assert.equal(polling.PRIVATE_MESSAGE_POLL_INTERVAL_MS, 20_000)
+  assert.equal(polling.PRIVATE_MESSAGE_DETAIL_FALLBACK_MS, 60_000)
+
+  let now = 1_000
+  let eligible = true
+  let currentMid = '100'
+  let sessionMaxSeqno = '100'
+  let pendingSessionMaxSeqno = ''
+  let sessionError: import('../src/background/privateMessage/types').PrivateMessageTransportErrorKind | null = null
+  let sessionRefreshes = 0
+  let detailRefreshes = 0
+  let detailLoadedAt = now
+  let invalidations = 0
+  let nextTimerId = 0
+  const timers = new Map<number, { delay: number, callback: () => void }>()
+  let releaseRefresh: (() => void) | null = null
+  let blockRefresh = false
+
+  const coordinator = polling.createPrivateMessagePollingCoordinator({
+    getActiveConversation: () => ({
+      canReadNative: true,
+      maxSeqno: sessionMaxSeqno,
+      talkerId: '200',
+    }),
+    getConversationStatus: () => ({
+      errorKind: null,
+      failedOperation: null,
+      loading: false,
+      loadedAt: detailLoadedAt,
+    }),
+    getCurrentMid: () => currentMid,
+    getSessionRefreshError: () => sessionError,
+    invalidatePendingRequests: () => { invalidations++ },
+    isEligible: () => eligible,
+    refreshConversation: async () => {
+      detailRefreshes++
+      detailLoadedAt = now
+    },
+    refreshSessions: async () => {
+      sessionRefreshes++
+      if (blockRefresh) {
+        await new Promise<void>((resolve) => {
+          releaseRefresh = resolve
+        })
+      }
+      if (pendingSessionMaxSeqno) {
+        sessionMaxSeqno = pendingSessionMaxSeqno
+        pendingSessionMaxSeqno = ''
+      }
+    },
+  }, {
+    clearTimeout: id => timers.delete(id as unknown as number),
+    now: () => now,
+    setTimeout: (callback, delay) => {
+      const id = ++nextTimerId
+      timers.set(id, { callback, delay })
+      return id as unknown as ReturnType<typeof setTimeout>
+    },
+  })
+
+  coordinator.sync()
+  await coordinator.triggerNow()
+  assert.equal(sessionRefreshes, 1)
+  assert.deepEqual([...timers.values()].map(timer => timer.delay), [20_000])
+
+  pendingSessionMaxSeqno = '101'
+  await coordinator.triggerNow()
+  assert.equal(detailRefreshes, 1, 'a newer session max_seqno refreshes the selected detail')
+
+  now += 60_000
+  await coordinator.triggerNow()
+  assert.equal(detailRefreshes, 2, 'the active detail receives a 60 second safety refresh')
+
+  blockRefresh = true
+  const first = coordinator.triggerNow()
+  const overlapping = coordinator.triggerNow()
+  assert.equal(sessionRefreshes, 4, 'overlapping triggers reuse the active poll')
+  const unblockRefresh = releaseRefresh as (() => void) | null
+  unblockRefresh?.()
+  blockRefresh = false
+  await Promise.all([first, overlapping])
+
+  sessionError = 'network'
+  for (const expectedDelay of [20_000, 40_000, 80_000, 120_000]) {
+    await coordinator.triggerNow()
+    assert.deepEqual([...timers.values()].map(timer => timer.delay), [expectedDelay])
+  }
+  sessionError = null
+  await coordinator.triggerNow()
+  assert.deepEqual([...timers.values()].map(timer => timer.delay), [20_000])
+
+  sessionError = 'risk-control'
+  await coordinator.triggerNow()
+  assert.deepEqual([...timers.values()].map(timer => timer.delay), [120_000])
+
+  eligible = false
+  coordinator.sync()
+  assert.equal(timers.size, 0)
+  assert.equal(invalidations > 0, true)
+  const stoppedCount = sessionRefreshes
+  await coordinator.triggerNow()
+  assert.equal(sessionRefreshes, stoppedCount)
+
+  eligible = true
+  sessionError = null
+  coordinator.sync()
+  await coordinator.triggerNow()
+  assert.equal(sessionRefreshes, stoppedCount + 1, 'resuming eligibility runs one immediate poll')
+
+  const invalidationsBeforeAccountChange = invalidations
+  const refreshesBeforeAccountChange = sessionRefreshes
+  currentMid = '200'
+  coordinator.sync()
+  await coordinator.triggerNow()
+  assert.equal(invalidations, invalidationsBeforeAccountChange + 1)
+  assert.equal(sessionRefreshes, refreshesBeforeAccountChange + 1)
+  coordinator.dispose()
+  assert.equal(timers.size, 0)
+})
+
+verify('private-message polling runtime keeps browser timer receivers bound', async () => {
+  const polling = await import('../src/contentScripts/views/Notifications/whisper/usePrivateMessagePolling')
+  const createRuntime = Reflect.get(polling, 'createPrivateMessagePollingRuntime')
+  assert.equal(typeof createRuntime, 'function')
+
+  const timerHost = {
+    clearTimeout(this: unknown, timer: ReturnType<typeof setTimeout>) {
+      assert.equal(this, timerHost)
+      assert.equal(timer, 7)
+    },
+    setTimeout(this: unknown, callback: () => void, delay: number) {
+      assert.equal(this, timerHost)
+      assert.equal(delay, 20_000)
+      callback()
+      return 7 as unknown as ReturnType<typeof setTimeout>
+    },
+  }
+  const runtime = createRuntime(timerHost) as {
+    clearTimeout: (timer: ReturnType<typeof setTimeout>) => void
+    setTimeout: (callback: () => void, delay: number) => ReturnType<typeof setTimeout>
+  }
+  let called = false
+  const timer = runtime.setTimeout(() => {
+    called = true
+  }, 20_000)
+  runtime.clearTimeout(timer)
+  assert.equal(called, true)
+})
+
+verify('Whisper owns the only visibility refresh path and uses recursive timeout polling', async () => {
+  const [workspaceSource, conversationSource, pollingSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/usePrivateMessagePolling.ts', import.meta.url), 'utf8'),
+  ])
+  assert.ok(workspaceSource.includes('usePrivateMessagePolling'))
+  assert.equal(conversationSource.includes(`document.addEventListener('visibilitychange'`), false)
+  assert.equal(conversationSource.includes(`document.removeEventListener('visibilitychange'`), false)
+  assert.ok(pollingSource.includes(`document.addEventListener('visibilitychange'`))
+  assert.ok(pollingSource.includes('setTimeout'))
+  assert.equal(pollingSource.includes('setInterval'), false)
+})
+
 verify('conversation list wires one bottom sentinel without development scope copy', async () => {
   const [listSource, workspaceSource, notificationsSource, ...localeSources] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
@@ -2097,8 +2649,7 @@ verify('conversation list wires one bottom sentinel without development scope co
   assert.ok(listSource.includes(`emit('retryLoadMore')`))
   assert.equal(listSource.includes(`notifications.whisper.search_scope`), false)
   assert.ok(listSource.includes('onBeforeUnmount(disconnectObserver)'))
-  assert.ok(workspaceSource.includes(`document.addEventListener('visibilitychange'`))
-  assert.ok(workspaceSource.includes('controller.refreshIfStale()'))
+  assert.ok(workspaceSource.includes('usePrivateMessagePolling'))
   assert.ok(notificationsSource.includes('getOlderPrivateSessions'))
   assert.ok(notificationsSource.includes('getNewPrivateSessions'))
   assert.equal(`${listSource}\n${workspaceSource}\n${notificationsSource}`.includes('setInterval('), false)
@@ -2395,8 +2946,9 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.equal(conversationSource.includes('--bew-homepage-bg'), false)
   assert.equal(conversationSource.includes('--bew-elevated-solid'), false)
   assert.ok(fallbackSource.includes('background: transparent'))
-  assert.ok(pageHeaderSource.includes(`v-if="view !== 'whisper' && view !== 'system'"`))
-  assert.ok(pageHeaderSource.includes('background: var(--bew-fill-1)'))
+  assert.equal(pageHeaderSource.includes('<ALink'), false)
+  assert.equal(pageHeaderSource.includes('<Button'), false)
+  assert.equal(pageHeaderSource.includes('descriptionKey'), false)
   assert.equal(pageHeaderSource.includes('--bew-content-solid'), false)
 
   for (const forbiddenWrite of ['uploadPrivateImage', 'sendPrivateImageMessage', 'upload_bfs']) {
@@ -2788,7 +3340,7 @@ verify('conversation controller uses end_seqno for history and rejects old accou
   const state = controller.getState('200')
   assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
   const loadOlder = controller.loadOlder('200')
-  assert.deepEqual(requests[1], { talkerId: '200', endSeqno: '103' })
+  assert.deepEqual(requests[1], { talkerId: '200', endSeqno: '103', size: 20 })
 
   activeTalkerId.value = '300'
   await nextTick()
@@ -2844,6 +3396,129 @@ verify('older-history requests are single-flight and stop after a page makes no 
   assert.deepEqual(state.items.map(item => item.msgKey), ['3', '4'])
   await controller.loadOlder('200')
   assert.equal(olderRequests, 1)
+})
+
+verify('history pagination consumes has_more and the absolute min_seqno floor without using the floor as a cursor', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const requests: Array<{ endSeqno?: string, size?: number, talkerId: string }> = []
+  const pages = [
+    createMessagesResponse([
+      createRawMessage('3', '103'),
+      createRawMessage('4', '104'),
+    ], [], { hasMore: 1, minSeqno: '101', maxSeqno: '104' }),
+    createMessagesResponse([
+      createRawMessage('1', '101'),
+      createRawMessage('2', '102'),
+    ], [], { hasMore: 1, minSeqno: '101', maxSeqno: '104' }),
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async (options) => {
+      requests.push(options)
+      return pages.shift()
+    },
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  const state = controller.getState('200')
+  assert.equal(state.noMore, false)
+  assert.equal(state.historyBoundarySeqno, '103')
+  assert.equal(state.historyMinSeqno, '101')
+  assert.equal(state.serverMaxSeqno, '104')
+  await controller.loadOlder('200')
+  assert.deepEqual(requests, [
+    { talkerId: '200' },
+    { talkerId: '200', endSeqno: '103', size: 20 },
+  ])
+  assert.equal(state.historyBoundarySeqno, '101')
+  assert.equal(state.noMore, true)
+  assert.equal(state.paginationStalled, false)
+})
+
+verify('non-empty has_more zero pages terminate immediately and do not request an empty sentinel page', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let requestCount = 0
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async () => {
+      requestCount++
+      return createMessagesResponse([
+        createRawMessage('1', '101'),
+        createRawMessage('2', '102'),
+      ], [], { hasMore: 0, minSeqno: '101', maxSeqno: '102' })
+    },
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+  await controller.loadInitial('200', '100')
+  assert.equal(controller.getState('200').noMore, true)
+  await controller.loadOlder('200')
+  assert.equal(requestCount, 1)
+})
+
+verify('stalled history retries the exact cursor once with size 100 and never jumps to min_seqno', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const requests: Array<{ endSeqno?: string, size?: number, talkerId: string }> = []
+  const pages = [
+    createMessagesResponse([
+      createRawMessage('3', '103'),
+      createRawMessage('4', '104'),
+    ], [], { hasMore: 1, minSeqno: '1', maxSeqno: '104' }),
+    createMessagesResponse([], [], { hasMore: 1, minSeqno: '1', maxSeqno: '104' }),
+    createMessagesResponse([
+      createRawMessage('1', '101'),
+      createRawMessage('2', '102'),
+    ], [], { hasMore: 1, minSeqno: '1', maxSeqno: '104' }),
+  ]
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: {} }),
+    fetchMessages: async (options) => {
+      requests.push(options)
+      return pages.shift()
+    },
+    getCsrf: () => 'csrf',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '100')
+  await controller.loadOlder('200')
+  const state = controller.getState('200')
+  assert.equal(state.paginationStalled, true)
+  assert.equal(state.stalledEndSeqno, '103')
+  await controller.retryLoadOlder('200')
+  assert.deepEqual(requests, [
+    { talkerId: '200' },
+    { talkerId: '200', endSeqno: '103', size: 20 },
+    { talkerId: '200', endSeqno: '103', size: 100 },
+  ])
+  assert.equal(state.paginationStalled, false)
+  assert.equal(state.historyBoundarySeqno, '101')
+
+  const stalledPages = [
+    createMessagesResponse([
+      createRawMessage('3', '103'),
+      createRawMessage('4', '104'),
+    ], [], { hasMore: 1, minSeqno: '1' }),
+    createMessagesResponse([createRawMessage('3', '103')], [], { hasMore: 1, minSeqno: '1' }),
+    createMessagesResponse([createRawMessage('3', '103')], [], { hasMore: 1, minSeqno: '1' }),
+  ]
+  controller.invalidateConversation('200')
+  pages.push(...stalledPages)
+  await controller.loadInitial('200', '100')
+  const beforeSecondStall = requests.length
+  await controller.loadOlder('200')
+  await controller.retryLoadOlder('200')
+  await controller.retryLoadOlder('200')
+  assert.equal(requests.length, beforeSecondStall + 2, 'one normal and one expanded older request')
+  assert.equal(controller.getState('200').paginationStalled, true)
 })
 
 verify('latest refresh merges to the tail and reports new messages without discarding history', async ({ usePrivateMessages }) => {
@@ -2911,8 +3586,8 @@ verify('conversation message limits retain the newest items without losing the o
   await controller.loadOlder('200')
   assert.deepEqual(requests, [
     { talkerId: '200' },
-    { talkerId: '200', endSeqno: '103' },
-    { talkerId: '200', endSeqno: '101' },
+    { talkerId: '200', endSeqno: '103', size: 20 },
+    { talkerId: '200', endSeqno: '101', size: 20 },
   ])
   assert.equal(state.noMore, true)
 })
@@ -3021,12 +3696,56 @@ verify('a failed latest refresh blocks ACK against stale cached history', async 
     atLatest: true,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
 
   assert.equal(controller.getState('200').failedOperation, 'refresh')
   assert.equal(acknowledged, false)
   assert.equal(ackRequestCount, 0)
+})
+
+verify('authoritative unread state ACKs the server max seqno once even when the cached ack boundary is equal', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  const ackRequests: Array<{ ackSeqno: string, csrf: string, talkerId: string }> = []
+  const readUpdates: Array<{ ackSeqno: string, talkerId: string }> = []
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async (options) => {
+      ackRequests.push(options)
+      return { code: 0, data: {} }
+    },
+    fetchMessages: async () => createMessagesResponse(
+      [createRawMessage('1', '104')],
+      [],
+      { maxSeqno: '105' },
+    ),
+    getCsrf: () => 'csrf-token',
+    markSessionRead: (talkerId, ackSeqno) => readUpdates.push({ talkerId, ackSeqno }),
+    syncUnread: async () => {},
+  })
+
+  await controller.loadInitial('200', '105')
+  const eligibility = {
+    atLatest: true,
+    canAck: true,
+    pageActive: true,
+    sessionMaxSeqno: '105',
+    unreadCount: 1,
+    visible: true,
+  }
+  const first = await controller.acknowledgeIfEligible('200', eligibility)
+  const repeated = await controller.acknowledgeIfEligible('200', eligibility)
+
+  assert.equal(first, true)
+  assert.equal(repeated, false)
+  assert.deepEqual(ackRequests, [{
+    talkerId: '200',
+    ackSeqno: '105',
+    csrf: 'csrf-token',
+  }])
+  assert.deepEqual(readUpdates, [{ talkerId: '200', ackSeqno: '105' }])
 })
 
 verify('ACK requires an active visible latest conversation and dedupes successful seqnos', async ({ privateMessage, usePrivateMessages }) => {
@@ -3053,6 +3772,8 @@ verify('ACK requires an active visible latest conversation and dedupes successfu
     atLatest: false,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
   assert.equal(blocked, false)
@@ -3061,12 +3782,16 @@ verify('ACK requires an active visible latest conversation and dedupes successfu
     atLatest: true,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
   const repeated = await controller.acknowledgeIfEligible('200', {
     atLatest: true,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
   assert.equal(first, true)
@@ -3100,6 +3825,8 @@ verify('failed ACK never clears local unread state or advances lastAckSeqno', as
     atLatest: true,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
 
@@ -3133,6 +3860,8 @@ verify('in-flight ACK remains single-flight across a temporary conversation swit
     atLatest: true,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
   activeTalkerId.value = '300'
@@ -3141,6 +3870,8 @@ verify('in-flight ACK remains single-flight across a temporary conversation swit
     atLatest: true,
     canAck: true,
     pageActive: true,
+    sessionMaxSeqno: '',
+    unreadCount: 0,
     visible: true,
   })
 

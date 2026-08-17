@@ -45,14 +45,15 @@ function reportSystemResponse(
       ? dataRecord.system_notify_list.length
       : null
 
-  debugLog('[Bewly Nocturne][System notifications] response', {
+  const summary = {
     endpointName,
     code: response?.code ?? null,
     errorKind: response?.bewlyError?.kind ?? null,
     httpStatus: response?.bewlyError?.httpStatus ?? null,
     dataShape: Array.isArray(data) ? 'array' : data === null ? 'null' : typeof data,
     itemCount,
-  })
+  }
+  debugLog(`[Bewly Nocturne][System notifications] response ${JSON.stringify(summary)}`)
 }
 
 export function createSystemNotificationPageFetcher(

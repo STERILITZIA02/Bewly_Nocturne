@@ -500,7 +500,7 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
-      <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
+      <NotificationsPageHeader :view="currentView" />
 
       <div class="notifications-page__workspace">
         <NotificationsNavigation

@@ -45,7 +45,6 @@ function unreadCount(section: NotificationSectionDefinition): number {
       :class="{ 'notifications-navigation__item--active': modelValue === section.id }"
       :aria-current="modelValue === section.id ? 'page' : undefined"
       :aria-label="t('notifications.section_aria', { section: t(section.labelKey) })"
-      :title="section.descriptionKey ? t(section.descriptionKey) : undefined"
       @click="emit('update:modelValue', section.id)"
     >
       <i class="notifications-navigation__icon" :class="section.icon" />

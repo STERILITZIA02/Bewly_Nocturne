@@ -8,6 +8,7 @@ import type { ParsedPrivateMessageContent } from './privateMessageRenderers'
 const props = defineProps<{
   autoLoadImages: boolean
   content: ParsedPrivateMessageContent
+  isSelf: boolean
 }>()
 
 const emit = defineEmits<{
@@ -41,7 +42,11 @@ watch(mediaSource, () => {
 </script>
 
 <template>
-  <div v-if="content.type === 'text'" class="private-message-content__bubble">
+  <div
+    v-if="content.type === 'text'"
+    class="private-message-content__bubble"
+    :class="{ 'private-message-content__bubble--self': isSelf }"
+  >
     <template v-for="(segment, index) in content.segments" :key="index">
       <span v-if="segment.type === 'text'">{{ segment.text }}</span>
       <ALink
@@ -285,9 +290,14 @@ watch(mediaSource, () => {
   white-space: pre-wrap;
 }
 
-:global(.private-message-item--self) .private-message-content__bubble {
-  background: color-mix(in srgb, var(--bew-theme-color) 12%, var(--bew-elevated-solid));
-  border-color: var(--bew-surface-border-color);
+.private-message-content__bubble--self {
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
+  border-color: transparent;
+}
+
+.private-message-content__bubble--self .private-message-content__inline-link {
+  color: var(--bew-on-theme-color);
 }
 
 .private-message-content__inline-link,

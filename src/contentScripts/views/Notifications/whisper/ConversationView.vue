@@ -53,7 +53,7 @@ const sendStatusMessage = computed(() => {
   if (!current || current.sending)
     return ''
   if (current.lastTextSendOutcome === 'confirmed')
-    return t('notifications.whisper.messages.test_send_success')
+    return ''
   if (current.lastTextSendOutcome === 'accepted-but-unconfirmed')
     return t('notifications.whisper.messages.test_send_accepted_unconfirmed')
   if (current.lastTextSendOutcome === 'protocol-mismatch')
@@ -73,7 +73,6 @@ const errorMessage = computed(() => {
 
 const SCROLL_EDGE_THRESHOLD = 48
 let activationGeneration = 0
-let mounted = false
 
 interface VisibleMessageAnchor {
   id: string
@@ -152,6 +151,8 @@ async function acknowledgeIfEligible() {
     atLatest: isAtLatest(),
     canAck: props.session?.capabilities.canAck ?? false,
     pageActive: props.active,
+    sessionMaxSeqno: props.session?.maxSeqno ?? '',
+    unreadCount: props.session?.unreadCount ?? 0,
     visible: document.visibilityState === 'visible',
   })
 }
@@ -260,17 +261,6 @@ function handleScroll() {
     void acknowledgeIfEligible()
 }
 
-function handleVisibilityChange() {
-  if (props.active && document.visibilityState === 'visible')
-    void refreshLatest()
-}
-
-function syncVisibilityListener(active: boolean) {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  if (mounted && active)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-}
-
 function focusHeading() {
   headingRef.value?.focus({ preventScroll: true })
 }
@@ -281,23 +271,15 @@ function handleEscape() {
 }
 
 watch(() => props.active, (active) => {
-  syncVisibilityListener(active)
   if (active)
     void activateConversation()
   else
     activationGeneration++
 }, { immediate: true })
 
-onMounted(() => {
-  mounted = true
-  syncVisibilityListener(props.active)
-})
-
 onBeforeUnmount(() => {
-  mounted = false
   activationGeneration++
   saveViewportState()
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 defineExpose({

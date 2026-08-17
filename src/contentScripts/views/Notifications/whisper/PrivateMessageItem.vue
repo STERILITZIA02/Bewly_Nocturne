@@ -48,6 +48,7 @@ const sourceLabel = computed(() => props.message.source
       <PrivateMessageContent
         :auto-load-images="autoLoadImages"
         :content="message.content"
+        :is-self="message.isSelf"
         @preview="emit('preview', $event)"
       />
       <span v-if="message.source" class="private-message-item__source">{{ sourceLabel }}</span>
@@ -57,14 +58,23 @@ const sourceLabel = computed(() => props.message.source
       <PrivateMessageContent
         :auto-load-images="autoLoadImages"
         :content="message.content"
+        :is-self="message.isSelf"
         @preview="emit('preview', $event)"
       />
 
-      <div v-if="message.source || displayTime" class="private-message-item__metadata">
+      <div v-if="message.source || displayTime || message.isSelf" class="private-message-item__metadata">
         <span v-if="message.source" class="private-message-item__source">{{ sourceLabel }}</span>
         <time v-if="displayTime" class="private-message-item__time">
           {{ displayTime }}
         </time>
+        <span
+          v-if="message.isSelf"
+          class="private-message-item__delivery"
+          :aria-label="t('notifications.whisper.messages.test_send_success')"
+          :title="t('notifications.whisper.messages.test_send_success')"
+        >
+          <i i-mingcute:check-line aria-hidden="true" />
+        </span>
       </div>
     </div>
   </article>
@@ -106,11 +116,22 @@ const sourceLabel = computed(() => props.message.source
 }
 
 .private-message-item__time,
-.private-message-item__source {
+.private-message-item__source,
+.private-message-item__delivery {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-caption);
+}
+
+.private-message-item__delivery {
+  display: inline-flex;
+  align-items: center;
+  color: var(--bew-theme-color);
+}
+
+.private-message-item__delivery i {
+  font-size: var(--bew-icon-size-sm);
 }
 
 .private-message-item__metadata {
