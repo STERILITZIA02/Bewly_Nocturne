@@ -1,14 +1,13 @@
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
-import type { SearchCategory } from '../types'
+import type { SearchRequest } from '~/constants/searchApi'
+import { settings } from '~/logic'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { requestSearch } from '~/utils/searchRequest'
 
-export interface SearchRequestOptions {
-  page?: number
-  pageSize?: number
-  context?: string
-  [key: string]: any
-}
+import type { SearchCategory } from '../types'
 
 export interface SearchRequestState<T = any> {
   isLoading: boolean
@@ -25,6 +24,7 @@ export interface SearchRequestState<T = any> {
  */
 export function useSearchRequest<T = any>(category: SearchCategory) {
   const { t } = useI18n()
+  const topBarStore = useTopBarStore()
   const isLoading = ref(false)
   const error = ref('')
   const results = ref<T | null>(null)
@@ -35,20 +35,28 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
 
   // 请求令牌，用于取消过期的请求
   let activeRequestToken: symbol | null = null
+  let disposed = false
+
+  function getRequestScope(): string {
+    if (settings.value.depersonalizeSearchResults)
+      return 'anonymous'
+
+    const accountId = resolveAuthenticatedAccountId(
+      topBarStore.isLogin,
+      topBarStore.userInfo.mid,
+    )
+    return accountId === null
+      ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
+      : `account:${accountId}`
+  }
 
   /**
    * 执行搜索请求
-   * @param keyword 搜索关键词
-   * @param searchFn 实际的搜索函数
-   * @param options 额外的搜索参数
+   * @param request 类型化搜索请求
    * @returns 搜索是否成功
    */
-  async function search(
-    keyword: string,
-    searchFn: (params: any) => Promise<any>,
-    options: SearchRequestOptions = {},
-  ): Promise<boolean> {
-    if (!keyword.trim()) {
+  async function search(request: SearchRequest): Promise<boolean> {
+    if (!request.keyword.trim()) {
       activeRequestToken = null
       isLoading.value = false
       error.value = ''
@@ -60,16 +68,14 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     error.value = ''
 
     const requestToken = Symbol('search-request')
+    const requestScope = getRequestScope()
     activeRequestToken = requestToken
 
     try {
-      const response = await searchFn({
-        keyword,
-        ...options,
-      })
+      const response = await requestSearch(request)
 
       // 检查请求是否已过期
-      if (activeRequestToken !== requestToken)
+      if (disposed || activeRequestToken !== requestToken || getRequestScope() !== requestScope)
         return false
 
       if (!response || response.code !== 0) {
@@ -83,7 +89,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
       return true
     }
     catch (err) {
-      if (activeRequestToken !== requestToken)
+      if (disposed || activeRequestToken !== requestToken || getRequestScope() !== requestScope)
         return false
       console.error(`Search error for ${category}:`, err)
       error.value = t('search.errors.exception')
@@ -108,6 +114,11 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     lastResponse.value = null
     activeRequestToken = null
   }
+
+  onScopeDispose(() => {
+    disposed = true
+    activeRequestToken = null
+  })
 
   return {
     isLoading,

@@ -74,6 +74,9 @@ const rankingGridRef = ref<HTMLElement | null>(null)
 const rankingGridWidth = ref(0)
 let rankingGridResizeObserver: ResizeObserver | null = null
 let requestGeneration = 0
+let isComponentActive = false
+let reloadAfterActivation = false
+let resizeListenerAttached = false
 
 const isRankingAutoSwitchSingleColumn = computed(() => {
   if (props.gridLayout !== 'twoColumns' || !settings.value.autoSwitchListLayout || !rankingGridWidth.value)
@@ -98,6 +101,8 @@ function cleanupRankingGridResizeObserver() {
 
 function setupRankingGridResizeObserver() {
   cleanupRankingGridResizeObserver()
+  if (!isComponentActive)
+    return
   updateRankingGridWidth()
 
   const element = rankingGridRef.value
@@ -110,6 +115,20 @@ function setupRankingGridResizeObserver() {
       rankingGridWidth.value = width
   })
   rankingGridResizeObserver.observe(element)
+}
+
+function attachRankingResizeListener() {
+  if (resizeListenerAttached)
+    return
+  resizeListenerAttached = true
+  window.addEventListener('resize', updateRankingGridWidth, { passive: true })
+}
+
+function detachRankingResizeListener() {
+  if (!resizeListenerAttached)
+    return
+  resizeListenerAttached = false
+  window.removeEventListener('resize', updateRankingGridWidth)
 }
 
 // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
@@ -157,22 +176,42 @@ watch(() => props.topBarVisibility, () => {
 })
 
 onMounted(() => {
+  isComponentActive = true
   void initData()
   initPageAction()
-  window.addEventListener('resize', updateRankingGridWidth, { passive: true })
+  attachRankingResizeListener()
   nextTick(setupRankingGridResizeObserver)
 })
 
 watch(rankingGridRef, setupRankingGridResizeObserver, { flush: 'post' })
 
 onBeforeUnmount(() => {
+  isComponentActive = false
   requestGeneration++
   cleanupRankingGridResizeObserver()
-  window.removeEventListener('resize', updateRankingGridWidth)
+  detachRankingResizeListener()
 })
 
 onActivated(() => {
+  isComponentActive = true
+  attachRankingResizeListener()
+  nextTick(setupRankingGridResizeObserver)
+  if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    void initData()
+  }
   initPageAction()
+})
+
+onDeactivated(() => {
+  isComponentActive = false
+  reloadAfterActivation = isLoading.value
+  requestGeneration++
+  if (isLoading.value)
+    emit('afterLoading')
+  isLoading.value = false
+  cleanupRankingGridResizeObserver()
+  detachRankingResizeListener()
 })
 
 function initPageAction() {

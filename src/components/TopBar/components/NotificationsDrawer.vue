@@ -85,9 +85,12 @@ function syncIframeDarkModeState() {
   }
 }
 
-function handleIframeLoad() {
+function handleIframeLoad(event: Event) {
+  const iframe = event.currentTarget
+  if (!(iframe instanceof HTMLIFrameElement) || iframe !== iframeRef.value)
+    return
   // Ignore hidden or empty-src iframe load events (e.g. initial about:blank).
-  const iframeSrc = iframeRef.value?.getAttribute('src')
+  const iframeSrc = iframe.getAttribute('src')
   if (!showIframe.value || !iframeSrc || iframeSrc === 'about:blank')
     return
 
@@ -149,6 +152,9 @@ function handleOpen() {
     currentUrl.value = props.url
     beforeUrl.value = props.url
   }
+  else if (currentUrl.value === 'about:blank') {
+    currentUrl.value = props.url
+  }
   // 延迟加载iframe，确保抽屉动画完成后再开始加载内容
   openIframeTimer.value = setTimeout(() => {
     openIframeTimer.value = null
@@ -182,6 +188,7 @@ function handleClose() {
   isEscPressed.value = false
   showEscHint.value = false
   setActiveDrawer(DrawerType.None) // 清除活跃抽屉状态
+  void releaseIframeResources()
   delayCloseTimer.value = setTimeout(() => {
     delayCloseTimer.value = null
     emit('close')
@@ -189,24 +196,47 @@ function handleClose() {
 }
 
 async function releaseIframeResources() {
+  const iframe = iframeRef.value
+  stopIframeMedia(iframe)
   // Clear iframe content
   currentUrl.value = 'about:blank'
   /**
    * eg: When use 'iframeRef.value?.contentWindow?.document' of t.bilibili.com iframe on bilibili.com, there may be cross domain issues
    * set the src to 'about:blank' to avoid this issue, it also can release the memory
    */
-  if (iframeRef.value) {
-    iframeRef.value.src = 'about:blank'
-  }
+  if (iframe)
+    iframe.src = 'about:blank'
   await nextTick()
-  iframeRef.value?.contentWindow?.close()
+  try {
+    iframe?.contentWindow?.close()
+  }
+  catch {
+    // Cross-origin frames are already being released through about:blank.
+  }
 
   // Remove iframe from the DOM
-  iframeRef.value?.parentNode?.removeChild(iframeRef.value)
+  iframe?.parentNode?.removeChild(iframe)
   await nextTick()
 
   // Nullify the reference
-  iframeRef.value = null
+  if (iframeRef.value === iframe)
+    iframeRef.value = null
+}
+
+function stopIframeMedia(iframe: HTMLIFrameElement | null) {
+  if (!iframe)
+    return
+  try {
+    iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
+      media.pause()
+      media.removeAttribute('src')
+      media.querySelectorAll('source').forEach(source => source.remove())
+      media.load()
+    })
+  }
+  catch {
+    // Cross-origin frames are released by navigating to about:blank.
+  }
 }
 
 function handleOpenInNewTab() {
@@ -352,6 +382,7 @@ function deactivateDrawer() {
     unlockPageScroll()
     isPageScrollLocked.value = false
   }
+  void releaseIframeResources()
 }
 
 function activateDrawer() {

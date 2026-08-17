@@ -5,7 +5,6 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
-import api from '~/utils/api'
 
 import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
@@ -139,19 +138,17 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
   const previousLength = results.value?.length || 0
 
-  const success = await search(
+  const success = await search({
+    searchType: 'video',
     keyword,
-    params => api.search.searchVideo(params),
-    {
-      page: targetPage,
-      page_size: 30,
-      ...buildVideoSearchParams({
-        loadMore: isLoadMore,
-        context: context.value,
-        filters: props.filters,
-      }),
-    },
-  )
+    page: targetPage,
+    pageSize: 30,
+    ...buildVideoSearchParams({
+      loadMore: isLoadMore,
+      context: context.value,
+      filters: props.filters,
+    }),
+  })
 
   if (!success)
     return false
@@ -228,19 +225,17 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
 
   isPageChanging.value = true
   try {
-    const success = await search(
+    const success = await search({
+      searchType: 'video',
       keyword,
-      params => api.search.searchVideo(params),
-      {
-        page,
-        page_size: 30,
-        ...buildVideoSearchParams({
-          loadMore: false,
-          context: context.value,
-          filters: props.filters,
-        }),
-      },
-    )
+      page,
+      pageSize: 30,
+      ...buildVideoSearchParams({
+        loadMore: false,
+        context: context.value,
+        filters: props.filters,
+      }),
+    })
 
     if (!success || !lastResponse.value?.data)
       return false

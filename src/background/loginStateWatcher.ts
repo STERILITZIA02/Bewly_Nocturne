@@ -3,6 +3,8 @@ import browser from 'webextension-polyfill'
 import { CONTENT_SCRIPT_MATCHES } from '~/constants/contentScript'
 import { TOP_BAR_STATE_MESSAGE } from '~/constants/topBarState'
 
+import { invalidateWbiMemoryCache } from './wbiSign'
+
 // 登录态相关的会话 Cookie（见 bilibili-API-collect docs/login/exit.md：
 // 登出会清空它们，登录/扫码登录会写入）
 const WATCHED_COOKIE_NAMES = new Set(['DedeUserID', 'SESSDATA'])
@@ -28,6 +30,7 @@ export function setupLoginStateWatcher() {
     if (!WATCHED_COOKIE_NAMES.has(cookie.name) || !isBilibiliDomain)
       return
 
+    invalidateWbiMemoryCache()
     scheduleBroadcastLoginStateChanged()
   })
 }

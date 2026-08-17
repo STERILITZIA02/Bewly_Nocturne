@@ -11,7 +11,10 @@ import {
   parsePrivateMessagesResponse,
   parsePrivateSessionsResponse,
 } from './protocol'
-import { requestPrivateMessage } from './transport'
+import {
+  requestPreferredPrivateMessageForm,
+  requestPrivateMessage,
+} from './transport'
 import type { PrivateMessageApiResponse } from './types'
 import { PRIVATE_MESSAGE_ENDPOINTS } from './types'
 
@@ -33,6 +36,7 @@ interface NewPrivateSessionsMessage extends PrivateApiMessage {
 
 interface PrivateMessagesMessage extends PrivateApiMessage {
   endSeqno?: string
+  size?: number
   talkerId?: string
 }
 
@@ -123,6 +127,7 @@ export async function getPrivateMessages(
       params: buildPrivateMessagesParams({
         talkerId: message.talkerId,
         endSeqno: message.endSeqno,
+        size: message.size,
       }),
       url: PRIVATE_MESSAGE_ENDPOINTS.getPrivateMessages,
     }, {}, sender)
@@ -142,13 +147,21 @@ export async function ackPrivateSession(
   try {
     if (!message.talkerId || !message.ackSeqno || !message.csrf)
       return invalidRequest('ackPrivateSession')
-    return await requestPrivateMessage({
+    const body = buildPrivateAckParams({
+      talkerId: message.talkerId,
+      ackSeqno: message.ackSeqno,
+      csrf: message.csrf,
+    })
+    return await requestPreferredPrivateMessageForm({
       endpointName: 'ackPrivateSession',
-      params: buildPrivateAckParams({
-        talkerId: message.talkerId,
-        ackSeqno: message.ackSeqno,
-        csrf: message.csrf,
-      }),
+      body,
+      signingParams: {
+        talker_id: body.talker_id,
+        session_type: body.session_type,
+        ack_seqno: body.ack_seqno,
+        build: body.build,
+        mobi_app: body.mobi_app,
+      },
       url: PRIVATE_MESSAGE_ENDPOINTS.ackPrivateSession,
     }, {}, sender)
   }

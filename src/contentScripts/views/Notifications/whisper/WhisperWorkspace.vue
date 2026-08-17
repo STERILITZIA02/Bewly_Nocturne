@@ -13,6 +13,7 @@ import ConversationView from './ConversationView.vue'
 import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
+import { usePrivateMessagePolling } from './usePrivateMessagePolling'
 import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateRecipientSearchController } from './usePrivateRecipientSearch'
 import type { PrivateSessionsController } from './usePrivateSessions'
@@ -60,7 +61,6 @@ const nativeSelectedSession = computed(() => (
 ))
 const selectedDetailKey = computed(() => selectedSession.value?.key
   ?? (props.transientRecipient ? `transient:${props.transientRecipient.mid}` : ''))
-let mounted = false
 let pendingDetailFocusKey = ''
 
 const unreadCount = computed(() => (
@@ -73,6 +73,58 @@ const errorMessage = computed(() => {
   if (!kind)
     return ''
   return t(`notifications.whisper.errors.${kind}`)
+})
+
+function getActivePollingConversation() {
+  if (selectedSession.value) {
+    return {
+      canReadNative: selectedSession.value.capabilities.canReadNative,
+      maxSeqno: selectedSession.value.maxSeqno,
+      talkerId: selectedSession.value.talkerId,
+    }
+  }
+  if (props.transientRecipient) {
+    return {
+      canReadNative: true,
+      maxSeqno: '',
+      talkerId: props.transientRecipient.mid,
+    }
+  }
+  return null
+}
+
+const messagePolling = usePrivateMessagePolling({
+  getActiveConversation: getActivePollingConversation,
+  getConversationStatus: (talkerId) => {
+    const state = props.messagesController.getState(talkerId)
+    return {
+      errorKind: state.errorKind,
+      failedOperation: state.failedOperation,
+      loading: state.loadingInitial || state.refreshing,
+      loadedAt: state.loadedAt,
+    }
+  },
+  getCurrentMid: () => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '',
+  getSessionRefreshError: () => (
+    props.controller.state.failedOperation === 'load-more'
+      ? null
+      : props.controller.state.errorKind
+  ),
+  invalidatePendingRequests: () => {
+    props.controller.invalidatePendingRequests()
+    props.messagesController.invalidatePendingRequests()
+  },
+  isEligible: () => (
+    props.active
+    && props.accountState === 'ready'
+    && document.visibilityState === 'visible'
+  ),
+  refreshConversation: async (talkerId) => {
+    if (getActivePollingConversation()?.talkerId === talkerId)
+      await conversationDetailRef.value?.refresh?.()
+  },
+  refreshSessions: () => props.controller.refreshNew(),
+  shouldObserveVisibility: () => props.active && props.accountState === 'ready',
 })
 
 function ensureLoaded() {
@@ -104,28 +156,11 @@ function selectRecipient(recipient: TransientPrivateRecipient) {
   emit('selectRecipient', recipient)
 }
 
-function handleVisibilityChange() {
-  if (
-    document.visibilityState === 'visible'
-    && props.active
-    && props.accountState === 'ready'
-  ) {
-    void props.controller.refreshIfStale()
-  }
-}
-
-function syncVisibilityListener(active: boolean) {
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
-  if (mounted && active)
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-}
-
 watch(
   () => [props.active, props.accountState, props.controller.state.generation] as const,
   ensureLoaded,
   { immediate: true },
 )
-watch(() => props.active, syncVisibilityListener)
 
 watch(unreadCount, async (next, previous) => {
   if (
@@ -133,9 +168,10 @@ watch(unreadCount, async (next, previous) => {
     && props.accountState === 'ready'
     && next !== previous
   ) {
-    await props.controller.observeUnreadCount(next)
-    if (next > previous)
-      await conversationDetailRef.value?.refresh?.()
+    await Promise.all([
+      props.controller.observeUnreadCount(next),
+      messagePolling.triggerNow(),
+    ])
   }
 })
 
@@ -155,15 +191,6 @@ watch(selectedDetailKey, async (nextSessionKey, previousSessionKey) => {
     conversationListRef.value?.restoreScrollTop(props.controller.state.scrollTop)
     conversationListRef.value?.focusSession(previousSessionKey)
   }
-})
-
-onMounted(() => {
-  mounted = true
-  syncVisibilityListener(props.active)
-})
-onBeforeUnmount(() => {
-  mounted = false
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 defineExpose({ refresh })

@@ -179,7 +179,6 @@ defineExpose({
       <Empty
         v-else-if="!topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
         pos="absolute top-0 left-0"
-        bg="$bew-content"
         z="0" w="full" h="full"
         flex="~ items-center"
         rounded="$bew-radius-half"
@@ -239,7 +238,7 @@ defineExpose({
 
                 <!-- 联合投稿显示多个作者 -->
                 <div v-if="moment.isCollaborative && moment.authors" flex="~ wrap" items="center" gap="1">
-                  <template v-for="(author, idx) in moment.authors" :key="author.jump_url">
+                  <template v-for="(author, authorIndex) in moment.authors" :key="author.jump_url">
                     <ALink
                       :href="author.jump_url"
                       type="topBar"
@@ -248,7 +247,7 @@ defineExpose({
                     >
                       {{ author.name }}
                     </ALink>
-                    <span v-if="idx < moment.authors.length - 1" text="$bew-text-2">/</span>
+                    <span v-if="authorIndex < moment.authors.length - 1" text="$bew-text-2">/</span>
                   </template>
                 </div>
                 <!-- 单个作者 -->

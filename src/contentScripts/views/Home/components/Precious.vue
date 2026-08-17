@@ -27,6 +27,8 @@ const isLoading = ref<boolean>(false)
 const noMoreContent = ref<boolean>(true) // 入站必刷没有分页
 const requestFailed = ref<boolean>(false)
 const { handlePageRefresh } = useBewlyApp()
+let requestGeneration = 0
+let reloadAfterActivation = false
 
 onMounted(() => {
   initData()
@@ -34,24 +36,43 @@ onMounted(() => {
 })
 
 onActivated(() => {
+  if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    void initData()
+  }
   initPageAction()
 })
 
+onDeactivated(() => {
+  reloadAfterActivation = isLoading.value
+  requestGeneration++
+  if (isLoading.value)
+    emit('afterLoading')
+  isLoading.value = false
+})
+
+onUnmounted(() => {
+  requestGeneration++
+})
+
 async function initData() {
+  const generation = ++requestGeneration
   videoList.value = []
   requestFailed.value = false
-  await getData()
+  await getData(generation)
 }
 
-async function getData() {
+async function getData(generation: number) {
   emit('beforeLoading')
   isLoading.value = true
   try {
-    await getPreciousVideos()
+    await getPreciousVideos(generation)
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (generation === requestGeneration) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
@@ -87,9 +108,12 @@ function transformPreciousVideo(item: PreciousItem): Video {
   }
 }
 
-async function getPreciousVideos() {
+async function getPreciousVideos(generation: number) {
   try {
     const response: PreciousResult = await api.ranking.getPreciousVideos()
+
+    if (generation !== requestGeneration)
+      return
 
     if (response.code === 0) {
       requestFailed.value = false
@@ -105,11 +129,14 @@ async function getPreciousVideos() {
     }
   }
   catch (error) {
-    requestFailed.value = true
-    console.error('[Precious] Failed to load videos:', error)
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      console.error('[Precious] Failed to load videos:', error)
+    }
   }
   finally {
-    videoList.value = videoList.value.filter(video => video.item)
+    if (generation === requestGeneration)
+      videoList.value = videoList.value.filter(video => video.item)
   }
 }
 

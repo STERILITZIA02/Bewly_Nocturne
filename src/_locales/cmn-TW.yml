@@ -907,16 +907,12 @@ notifications:
       label: 私訊
     reply:
       label: 回覆我的
-      description: 查看其他人對你的回覆
     at:
       label: "{'@'} 我的"
-      description: 查看別人對你的提及
     love:
       label: 收到的讚
-      description: 查看別人對你內容的按讚
     system:
       label: 系統通知
-      description: 查看來自嗶哩嗶哩的系統與服務訊息
   whisper:
     loading: 正在載入私訊會話
     profile_pending: 正在確認帳號
@@ -1235,6 +1231,8 @@ video_card:
   watch_later_update_failed: 更新稍後觀看失敗
   feedback_unavailable: 無法取得意見回饋選項
 home:
+  recommendation_empty: 暫無推薦內容
+  recommendation_filtered_empty: 目前推薦已被本機篩選規則全部篩除
   web_recommendation_risk_cooldown: 推薦請求觸發風控，已暫停 {seconds} 秒，請稍後重試
   web_recommendation_risk_fallback_active: 已使用無 Cookie 推薦結果，並暫停後續請求 {seconds} 秒
   web_recommendation_risk_fallback_failed: 推薦請求觸發風控，備用請求失敗，已暫停 {seconds} 秒

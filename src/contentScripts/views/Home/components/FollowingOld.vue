@@ -4,6 +4,7 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
+import { parseDedeUserID } from '~/logic/loginStatus'
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import type { DataItem as MomentItem, MomentResult } from '~/models/moment/moment'
 import { BadgeText } from '~/models/moment/moment'
@@ -51,6 +52,44 @@ const noMoreVideoContent = ref<boolean>(false)
 const noMoreLiveContent = ref<boolean>(false)
 const requestFailed = ref<boolean>(false)
 const { handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
+let requestGeneration = 0
+let loadedAccountId = parseDedeUserID(document.cookie) ?? null
+let visibilityLoadTimer: ReturnType<typeof setTimeout> | null = null
+let reloadAfterActivation = false
+let visibilityListenerAttached = false
+let liveRequestActive = false
+
+function clearVisibilityLoadTimer() {
+  if (visibilityLoadTimer !== null) {
+    clearTimeout(visibilityLoadTimer)
+    visibilityLoadTimer = null
+  }
+}
+
+function isCurrentRequest(generation: number, accountId: number | null) {
+  return generation === requestGeneration
+    && accountId === loadedAccountId
+    && accountId === (parseDedeUserID(document.cookie) ?? null)
+}
+
+function invalidateRequests() {
+  clearVisibilityLoadTimer()
+  requestGeneration++
+}
+
+function attachVisibilityListener() {
+  if (visibilityListenerAttached)
+    return
+  visibilityListenerAttached = true
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+}
+
+function detachVisibilityListener() {
+  if (!visibilityListenerAttached)
+    return
+  visibilityListenerAttached = false
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+}
 
 // 合并直播和视频列表用于虚拟滚动
 const combinedVideoList = computed(() => {
@@ -82,8 +121,12 @@ async function handleVisibilityChange() {
   // 如果从不可见变为可见，且需要加载更多数据，则触发加载
   if (!wasVisible && isPageVisible.value && !noMoreVideoContent.value && !isLoading.value) {
     if (videoList.value.length < 30) {
-      setTimeout(() => {
-        if (isPageVisible.value && !isLoading.value && !noMoreVideoContent.value)
+      clearVisibilityLoadTimer()
+      const generation = requestGeneration
+      const accountId = loadedAccountId
+      visibilityLoadTimer = setTimeout(() => {
+        visibilityLoadTimer = null
+        if (isCurrentRequest(generation, accountId) && isPageVisible.value && !isLoading.value && !noMoreVideoContent.value)
           handleLoadMore()
       }, 200)
     }
@@ -91,6 +134,7 @@ async function handleVisibilityChange() {
 }
 
 onMounted(() => {
+  loadedAccountId = parseDedeUserID(document.cookie) ?? null
   canRefreshHomeSubPage.value = true
   initData()
 
@@ -100,15 +144,16 @@ onMounted(() => {
   })
 
   // 监听页面可见性变化
-  document.addEventListener('visibilitychange', handleVisibilityChange)
+  attachVisibilityListener()
   // 初始化页面可见性状态
   isPageVisible.value = !document.hidden
 })
 
 onUnmounted(() => {
+  invalidateRequests()
   canRefreshHomeSubPage.value = false
   // 清理页面可见性监听器
-  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  detachVisibilityListener()
 })
 
 onActivated(() => {
@@ -116,9 +161,18 @@ onActivated(() => {
   initPageAction()
   // 组件激活时重新检查页面可见性
   isPageVisible.value = !document.hidden
+  attachVisibilityListener()
+  if (reloadAfterActivation) {
+    reloadAfterActivation = false
+    void initData()
+  }
 })
 
 onDeactivated(() => {
+  reloadAfterActivation = isLoading.value || liveRequestActive
+  invalidateRequests()
+  detachVisibilityListener()
+  isLoading.value = false
   canRefreshHomeSubPage.value = false
   // 组件失活时设置为不可见
   isPageVisible.value = false
@@ -137,6 +191,9 @@ function initPageAction() {
 }
 
 async function initData() {
+  const generation = ++requestGeneration
+  loadedAccountId = parseDedeUserID(document.cookie) ?? null
+  const accountId = loadedAccountId
   needToLoginFirst.value = false
   offset.value = ''
   updateBaseline.value = ''
@@ -148,35 +205,47 @@ async function initData() {
   requestFailed.value = false
   recursionDepth.value = 0
 
+  if (accountId === null) {
+    needToLoginFirst.value = true
+    return
+  }
   if (settings.value.followingTabShowLivestreamingVideos)
-    getLiveVideoList()
-  await getData()
+    void getLiveVideoList(generation, accountId)
+  await getData(generation, accountId)
 }
 
-async function getData() {
+async function getData(generation = requestGeneration, accountId = loadedAccountId) {
+  if (!isCurrentRequest(generation, accountId))
+    return
   emit('beforeLoading')
   isLoading.value = true
 
   try {
-    await getFollowedUsersVideos()
+    await getFollowedUsersVideos(generation, accountId)
   }
   finally {
-    isLoading.value = false
-    emit('afterLoading')
+    if (isCurrentRequest(generation, accountId)) {
+      isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
-async function getLiveVideoList() {
+async function getLiveVideoList(generation = requestGeneration, accountId = loadedAccountId) {
   // 检查页面是否可见，如果不可见则不进行请求
   if (!isPageVisible.value || noMoreLiveContent.value)
     return
 
   const lastLiveVideoListLength = liveVideoList.value.length
+  liveRequestActive = true
   try {
     const response: FollowingLiveResult = await api.live.getFollowingLiveList({
       page: livePage.value,
       page_size: 9,
     })
+
+    if (!isCurrentRequest(generation, accountId))
+      return
 
     if (response.code === -101) {
       noMoreLiveContent.value = false
@@ -222,9 +291,15 @@ async function getLiveVideoList() {
   catch (error) {
     console.error('[FollowingOld] Failed to load live list:', error)
   }
+  finally {
+    if (isCurrentRequest(generation, accountId))
+      liveRequestActive = false
+  }
 }
 
-async function getFollowedUsersVideos() {
+async function getFollowedUsersVideos(generation = requestGeneration, accountId = loadedAccountId) {
+  if (!isCurrentRequest(generation, accountId))
+    return
   if (noMoreVideoContent.value)
     return
 
@@ -254,6 +329,9 @@ async function getFollowedUsersVideos() {
       offset: offset.value || undefined,
       update_baseline: updateBaseline.value,
     })
+
+    if (!isCurrentRequest(generation, accountId))
+      return
 
     if (response.code === -101) {
       noMoreVideoContent.value = false
@@ -323,7 +401,7 @@ async function getFollowedUsersVideos() {
       // 预加载由 VideoCardGrid 的虚拟滚动机制控制
       // 只在初次加载且数据不足时继续加载
       if (lastVideoListLength === 0 && videoList.value.length < 30 && !noMoreVideoContent.value) {
-        await getFollowedUsersVideos()
+        await getFollowedUsersVideos(generation, accountId)
       }
     }
     else {
@@ -332,12 +410,15 @@ async function getFollowedUsersVideos() {
     }
   }
   catch (error) {
-    requestFailed.value = true
-    noMoreVideoContent.value = false
-    console.error('[FollowingOld] Failed to load videos:', error)
+    if (isCurrentRequest(generation, accountId)) {
+      requestFailed.value = true
+      noMoreVideoContent.value = false
+      console.error('[FollowingOld] Failed to load videos:', error)
+    }
   }
   finally {
-    recursionDepth.value--
+    if (isCurrentRequest(generation, accountId))
+      recursionDepth.value--
   }
 }
 
@@ -376,11 +457,14 @@ async function handleLoadMore() {
     return
 
   isLoading.value = true
+  const generation = requestGeneration
+  const accountId = loadedAccountId
   try {
-    await getFollowedUsersVideos()
+    await getFollowedUsersVideos(generation, accountId)
   }
   finally {
-    isLoading.value = false
+    if (isCurrentRequest(generation, accountId))
+      isLoading.value = false
   }
 }
 

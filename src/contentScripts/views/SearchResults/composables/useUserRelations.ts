@@ -1,5 +1,7 @@
-import { ref } from 'vue'
+import { onScopeDispose, ref } from 'vue'
 
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 
 export interface UserRelation {
@@ -12,15 +14,23 @@ export interface UserRelation {
  * 处理批量查询用户关注状态
  */
 export function useUserRelations() {
+  const topBarStore = useTopBarStore()
   const userRelations = ref<Record<number, UserRelation>>({})
+  let requestGeneration = 0
+
+  function getCurrentAccountId() {
+    return resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+  }
 
   /**
    * 批量查询用户关系状态
    * @param mids 用户 mid 数组
    */
   async function batchQueryUserRelations(mids: number[]) {
-    if (mids.length === 0)
+    const accountId = getCurrentAccountId()
+    if (mids.length === 0 || accountId === null)
       return
+    const generation = ++requestGeneration
 
     // B站API限制最多40个mid
     const chunks: number[][] = []
@@ -33,6 +43,9 @@ export function useUserRelations() {
         const response = await api.user.getRelations({
           fids: chunk.join(','),
         })
+
+        if (generation !== requestGeneration || accountId !== getCurrentAccountId())
+          return
 
         if (response.code === 0 && response.data) {
           Object.keys(response.data).forEach((midStr) => {
@@ -91,8 +104,13 @@ export function useUserRelations() {
    * 重置所有用户关系状态
    */
   function reset() {
+    requestGeneration++
     userRelations.value = {}
   }
+
+  onScopeDispose(() => {
+    requestGeneration++
+  })
 
   return {
     userRelations,

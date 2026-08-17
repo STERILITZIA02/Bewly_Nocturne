@@ -36,6 +36,17 @@ export interface PrivateMessageApiResponse<T = unknown> {
 
 export type PrivateMessageRequestParams = Record<string, string | number | boolean | undefined>
 
+export type PrivateMessageSigningPolicy = 'required' | 'preferred'
+
+export const PRIVATE_MESSAGE_SIGNING_POLICIES = {
+  getPrivateSessions: 'preferred',
+  getNewPrivateSessions: 'preferred',
+  getPrivateUserCards: 'preferred',
+  getPrivateMessages: 'preferred',
+  ackPrivateSession: 'preferred',
+  sendPrivateMessage: 'required',
+} as const satisfies Partial<Record<PrivateMessageEndpointName, PrivateMessageSigningPolicy>>
+
 export interface PrivateMessageFormRequest {
   url: string
   query: PrivateMessageRequestParams
@@ -109,12 +120,16 @@ export interface GetNewPrivateSessionsOptions {
 export interface PrivateMessagesData {
   messages: PrivateMessage[]
   e_infos: unknown[]
+  has_more: number
+  min_seqno: string
+  max_seqno: string
   [key: string]: unknown
 }
 
 export interface GetPrivateMessagesOptions {
   talkerId: string
   endSeqno?: string
+  size?: number
 }
 
 export interface AckPrivateSessionOptions {

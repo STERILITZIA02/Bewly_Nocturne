@@ -3,8 +3,6 @@ export const PAGE_BRIDGE_PROTOCOL = 'bewly:v1'
 export const PAGE_BRIDGE_MESSAGE = {
   SETTINGS_REQUEST: 'settings:request',
   SETTINGS_UPDATE: 'settings:update',
-  NO_COOKIE_SEARCH_REQUEST: 'noCookieSearch:request',
-  NO_COOKIE_SEARCH_RESPONSE: 'noCookieSearch:response',
 } as const
 
 export interface PageBridgeMessage {

@@ -176,7 +176,6 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
       <Empty
         v-if="!isLoadingWatchLater && watchLaterList.length === 0"
         pos="absolute top-0 left-0"
-        bg="$bew-content"
         z="0" w="full" h="full"
         flex="~ items-center"
         rounded="$bew-radius"
@@ -202,7 +201,7 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
           <section class="popover-card__content" flex="~ gap-4 items-start">
             <!-- Video cover, live cover, ariticle cover -->
             <div
-              class="popover-card__media"
+              class="popover-card__media watch-later-pop__media aspect-video"
               bg="$bew-skeleton"
               w="150px"
               flex="shrink-0"
@@ -270,10 +269,10 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
               </button>
 
               <!-- Video -->
-              <div pos="relative">
+              <div pos="absolute inset-0">
                 <Picture
-                  w="150px" h-full
-                  class="aspect-video"
+                  class="watch-later-pop__cover"
+                  aspect-ratio="auto"
                   :src="`${removeHttpFromUrl(
                     item.pic,
                   )}@256w_144h_1c`"
@@ -300,6 +299,7 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                 </div>
               </div>
               <Progress
+                class="watch-later-pop__progress"
                 :percentage="
                   normalizePlaybackProgress(item.progress, item.duration)
                 "
@@ -349,6 +349,35 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 
 <style lang="scss" scoped>
 @use "../../styles/popoverCards";
+
+.watch-later-pop__media {
+  isolation: isolate;
+}
+
+.watch-later-pop__cover {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border-radius: inherit;
+  corner-shape: inherit;
+}
+
+.watch-later-pop__cover :deep(img) {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: inherit;
+  corner-shape: inherit;
+}
+
+.watch-later-pop__progress {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 0;
+}
 
 .tab {
   --uno: "relative text-$bew-text-2";

@@ -44,6 +44,10 @@ let stopIframePushStateListener: (() => void) | null = null
 let stopIframePopStateListener: (() => void) | null = null
 let stopIframeDOMContentLoadedListener: (() => void) | null = null
 let focusRetryTimer: ReturnType<typeof setTimeout> | null = null
+let focusFrame: number | null = null
+let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
+let iframeGeneration = 0
+const disposers: Array<() => void> = []
 
 // 计算iframe容器的样式
 const iframeContainerClasses = computed(() => {
@@ -70,7 +74,7 @@ const iframeStyles = computed(() => {
   }
 })
 
-useEventListener(window, 'popstate', updateIframeUrl)
+disposers.push(useEventListener(window, 'popstate', updateIframeUrl))
 
 // 监听黑暗模式变化
 watch([isDark, isOledDark], ([newValue, newOledValue]) => {
@@ -108,9 +112,15 @@ watch(() => settings.value.darkModeBaseColor, (newColor) => {
 // 监听iframe加载状态，加载完成后发送初始的黑暗模式状态
 watch(() => showIframe.value, (newValue) => {
   if (newValue && iframeRef.value?.contentWindow) {
-    setTimeout(() => {
+    clearInitialThemeTimer()
+    const generation = iframeGeneration
+    const iframeWindow = iframeRef.value.contentWindow
+    initialThemeTimer = setTimeout(() => {
+      initialThemeTimer = null
+      if (generation !== iframeGeneration || iframeWindow !== iframeRef.value?.contentWindow)
+        return
       try {
-        iframeRef.value?.contentWindow?.postMessage({
+        iframeWindow.postMessage({
           type: IFRAME_DARK_MODE_CHANGE,
           isDark: isDark.value,
           isOledDark: isOledDark.value,
@@ -146,13 +156,25 @@ function clearFocusRetryTimer() {
     clearTimeout(focusRetryTimer)
     focusRetryTimer = null
   }
+  if (focusFrame !== null) {
+    cancelAnimationFrame(focusFrame)
+    focusFrame = null
+  }
+}
+
+function clearInitialThemeTimer() {
+  if (initialThemeTimer !== null) {
+    clearTimeout(initialThemeTimer)
+    initialThemeTimer = null
+  }
 }
 
 function focusIframe(retryCount = 3) {
   clearFocusRetryTimer()
 
   nextTick(() => {
-    requestAnimationFrame(() => {
+    focusFrame = requestAnimationFrame(() => {
+      focusFrame = null
       const iframe = iframeRef.value
       if (!iframe || !show.value || activeDrawer.value !== DrawerType.IframeDrawer)
         return
@@ -186,8 +208,16 @@ function injectStyleClass() {
   }
 }
 
-function handleIframeLoad() {
-  const iframeWindow = iframeRef.value?.contentWindow
+function handleIframeLoad(event: Event) {
+  const iframe = event.currentTarget
+  if (!(iframe instanceof HTMLIFrameElement)
+    || iframe !== iframeRef.value
+    || currentUrl.value === 'about:blank'
+    || !show.value) {
+    return
+  }
+
+  const iframeWindow = iframe.contentWindow
   if (!iframeWindow) {
     console.error('Iframe or contentWindow is not available')
     return
@@ -227,7 +257,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(async () => {
-  cleanupIframeWindowListeners()
+  for (const dispose of disposers)
+    dispose()
+  disposers.length = 0
   if (isPageScrollLocked.value) {
     unlockPageScroll()
     isPageScrollLocked.value = false
@@ -293,7 +325,9 @@ async function handleClose() {
 }
 
 async function releaseIframeResources() {
+  iframeGeneration++
   clearFocusRetryTimer()
+  clearInitialThemeTimer()
   cleanupIframeWindowListeners()
   showIframe.value = false
   removeTopBarClassInjected.value = false
@@ -303,13 +337,14 @@ async function releaseIframeResources() {
   // and made iframeRef null — so contentWindow.close() was never actually called.
   // This is especially important for Firefox which doesn't always release media
   // resources (video decoders, buffers) when an iframe is simply removed from DOM.
+  const iframe = iframeRef.value
+  stopIframeMedia(iframe)
   currentUrl.value = 'about:blank'
-  if (iframeRef.value) {
-    iframeRef.value.src = 'about:blank'
-  }
+  if (iframe)
+    iframe.src = 'about:blank'
 
   try {
-    iframeRef.value?.contentWindow?.close()
+    iframe?.contentWindow?.close()
   }
   catch {
     // Cross-origin may block this
@@ -318,7 +353,27 @@ async function releaseIframeResources() {
   // Now safe to remove from DOM
   renderIframe.value = false
   await nextTick()
-  iframeRef.value = null
+  if (iframeRef.value === iframe)
+    iframeRef.value = null
+  isPageFullscreen.value = false
+  disableEscPress.value = false
+  removeTopBarClassInjected.value = false
+}
+
+function stopIframeMedia(iframe: HTMLIFrameElement | null) {
+  if (!iframe)
+    return
+  try {
+    iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
+      media.pause()
+      media.removeAttribute('src')
+      media.querySelectorAll('source').forEach(source => source.remove())
+      media.load()
+    })
+  }
+  catch {
+    // Cross-origin frames are released by navigating their browsing context to about:blank.
+  }
 }
 
 function handleOpenInNewTab() {
@@ -381,11 +436,10 @@ function handleKeydown(e: KeyboardEvent) {
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown, true)
   document.addEventListener('keydown', handleKeydown, true)
-})
-
-onBeforeUnmount(() => {
-  window.removeEventListener('keydown', handleKeydown, true)
-  document.removeEventListener('keydown', handleKeydown, true)
+  disposers.push(
+    () => window.removeEventListener('keydown', handleKeydown, true),
+    () => document.removeEventListener('keydown', handleKeydown, true),
+  )
 })
 
 function handleIframeMessage(event: MessageEvent) {
@@ -439,7 +493,7 @@ function handleIframeMessage(event: MessageEvent) {
   }
 }
 
-useEventListener(window, 'message', handleIframeMessage)
+disposers.push(useEventListener(window, 'message', handleIframeMessage))
 </script>
 
 <template>

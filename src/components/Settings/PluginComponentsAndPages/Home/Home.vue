@@ -30,9 +30,10 @@ const recommendationModeOptions = computed<{ label: string, value: Recommendatio
 
 const showQRCodeDialog = ref<boolean>(false)
 const loginQRCodeUrl = ref<string>()
-const pollLoginQRCodeInterval = ref<any>(null)
 const authCode = ref<string>('')
 const qrcodeMsg = ref<string>('')
+let authorizationTimer: ReturnType<typeof setTimeout> | null = null
+let authorizationGeneration = 0
 
 const appAccessToken = computed(() => appAuthTokens.value.accessToken)
 const showStandaloneSearchPage = computed({
@@ -43,26 +44,46 @@ const showStandaloneSearchPage = computed({
 })
 
 onDeactivated(() => {
-  clearInterval(pollLoginQRCodeInterval.value)
+  cancelAuthorization()
 })
 
 onBeforeUnmount(() => {
-  clearInterval(pollLoginQRCodeInterval.value)
+  cancelAuthorization()
 })
 
 function handleRecommendationModeChange(mode: RecommendationMode) {
   if (mode === 'app' && !hasValidAppAuthTokens())
-    handleAuthorize()
+    void handleAuthorize()
 }
 
 async function handleAuthorize() {
+  clearAuthorizationTimer()
+  const generation = ++authorizationGeneration
   showQRCodeDialog.value = true
+  loginQRCodeUrl.value = undefined
+  authCode.value = ''
+  qrcodeMsg.value = ''
+
   try {
-    await setLoginQRCode()
-    pollLoginQRCode()
+    const res = await getTVLoginQRCode()
+    if (generation !== authorizationGeneration)
+      return
+    if (res.code !== 0 || !res.data?.url || !res.data?.auth_code) {
+      qrcodeMsg.value = res.message || t('common.load_failed')
+      clearAuthorizationTimer()
+      return
+    }
+
+    loginQRCodeUrl.value = res.data.url
+    authCode.value = res.data.auth_code
+    startAuthorizationPolling(generation)
   }
   catch (error) {
-    console.error(error)
+    if (generation !== authorizationGeneration)
+      return
+    qrcodeMsg.value = t('common.load_failed')
+    clearAuthorizationTimer()
+    console.error('Failed to start APP recommendation authorization:', error)
   }
 }
 
@@ -70,47 +91,73 @@ function handleRevoke() {
   revokeAccessKey()
 }
 
-async function setLoginQRCode() {
-  const res = await getTVLoginQRCode()
-  if (res.code === 0) {
-    loginQRCodeUrl.value = res.data.url
-    authCode.value = res.data.auth_code
-  }
+function clearAuthorizationTimer() {
+  if (authorizationTimer === null)
+    return
+  clearTimeout(authorizationTimer)
+  authorizationTimer = null
 }
 
-function pollLoginQRCode() {
-  clearInterval(pollLoginQRCodeInterval.value)
+function cancelAuthorization() {
+  authorizationGeneration++
+  clearAuthorizationTimer()
+  showQRCodeDialog.value = false
+  loginQRCodeUrl.value = undefined
+  authCode.value = ''
+  qrcodeMsg.value = ''
+}
 
-  pollLoginQRCodeInterval.value = setInterval(async () => {
-    const pollRes = await pollTVLoginQRCode(authCode.value)
+function startAuthorizationPolling(generation = authorizationGeneration) {
+  clearAuthorizationTimer()
+  if (generation !== authorizationGeneration || !showQRCodeDialog.value || !authCode.value)
+    return
 
-    // 0：成功
-    // -3：API校验密匙错误
-    // -400：请求错误
-    // -404：啥都木有
-    // 86038：二维码已失效
-    // 86039：二维码尚未确认
-    // 86090：二维码已扫码未确认
-    if (pollRes.code !== 0)
-      qrcodeMsg.value = pollRes.message
+  authorizationTimer = setTimeout(async () => {
+    authorizationTimer = null
+    if (generation !== authorizationGeneration)
+      return
+
+    let pollRes: any
+    try {
+      pollRes = await pollTVLoginQRCode(authCode.value)
+    }
+    catch (error) {
+      if (generation !== authorizationGeneration)
+        return
+      qrcodeMsg.value = t('common.load_failed')
+      console.error('Failed to poll APP recommendation authorization:', error)
+      return
+    }
+
+    if (generation !== authorizationGeneration)
+      return
+
+    qrcodeMsg.value = pollRes.message || ''
     if (pollRes.code === 0) {
+      clearAuthorizationTimer()
+      authorizationGeneration++
       showQRCodeDialog.value = false
       saveAppAuthTokens(pollRes.data)
-      clearInterval(pollLoginQRCodeInterval.value)
       toast.success('授权成功')
+      return
     }
-    else if (pollRes.code === 86038) {
-      await setLoginQRCode()
+
+    // 86039: waiting for scan; 86090: scanned and awaiting confirmation.
+    if (pollRes.code === 86039 || pollRes.code === 86090) {
+      startAuthorizationPolling(generation)
+      return
     }
-    else if (pollRes.code === -3 || pollRes.code === -400 || pollRes.code === -404) {
+
+    // Expired and terminal failures deliberately stop. The refresh action
+    // starts a new generation and obtains a new QR code.
+    clearAuthorizationTimer()
+    if (pollRes.code === -3 || pollRes.code === -400 || pollRes.code === -404)
       toast.error(pollRes.message)
-    }
   }, 3000)
 }
 
 function handleCloseQRCodeDialog() {
-  clearInterval(pollLoginQRCodeInterval.value)
-  showQRCodeDialog.value = false
+  cancelAuthorization()
 }
 
 function handleExport(filterType: 'title' | 'user') {
@@ -257,6 +304,7 @@ function handleToggleHomeTab(tab: any) {
         append-to-bewly-body
         :show-footer="false"
         :title="$t('settings.authorize_app')" center
+        layer="critical-dialog"
         @close="handleCloseQRCodeDialog"
       >
         <div flex="~ col gap-4 items-center">
@@ -280,7 +328,7 @@ function handleToggleHomeTab(tab: any) {
 
           <Button
             type="secondary"
-            @click="setLoginQRCode"
+            @click="handleAuthorize"
           >
             {{ $t('common.operation.refresh') }}
           </Button>

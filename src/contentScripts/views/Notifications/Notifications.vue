@@ -78,7 +78,11 @@ const privateSessions = usePrivateSessions(currentMid, {
 })
 const privateRecipientSearch = usePrivateRecipientSearch(currentMid, {
   fetchFollowing: params => api.user.searchUserFollowings(params),
-  fetchGlobal: params => api.search.searchUser(params),
+  fetchGlobal: params => api.search.searchUser({
+    keyword: params.keyword,
+    page: params.page,
+    page_size: params.pagesize,
+  }),
 })
 const activePrivateTalkerId = computed(() => (
   transientPrivateRecipient.value?.mid || privateSessions.selectedTalkerId.value
@@ -500,7 +504,7 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
-      <NotificationsPageHeader :view="currentView" @refresh="refreshCurrentView" />
+      <NotificationsPageHeader :view="currentView" />
 
       <div class="notifications-page__workspace">
         <NotificationsNavigation

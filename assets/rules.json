@@ -96,5 +96,29 @@
       "resourceTypes": ["xmlhttprequest"],
       "requestMethods": ["get"]
     }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        {
+          "header": "origin",
+          "operation": "set",
+          "value": "https://message.bilibili.com"
+        },
+        {
+          "header": "referer",
+          "operation": "set",
+          "value": "https://message.bilibili.com/"
+        }
+      ]
+    },
+    "condition": {
+      "regexFilter": "^https://api\\.vc\\.bilibili\\.com/session_svr/v1/session_svr/update_ack(?:\\?|$)",
+      "resourceTypes": ["xmlhttprequest"],
+      "requestMethods": ["post"]
+    }
   }
 ]

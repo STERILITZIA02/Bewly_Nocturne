@@ -75,6 +75,27 @@ function compareUnsignedIntegerStrings(left: string, right: string): number {
   return normalizedLeft.localeCompare(normalizedRight)
 }
 
+function toSystemTimestamp(value: unknown): number {
+  let milliseconds = 0
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    milliseconds = value
+  }
+  else if (typeof value === 'string' && value.trim()) {
+    const normalized = value.trim()
+    milliseconds = /^\d+(?:\.\d+)?$/.test(normalized)
+      ? Number(normalized)
+      : Date.parse(normalized)
+  }
+
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0)
+    return 0
+
+  // The current message client passes `time_at` through `new Date(...)`. The
+  // service normally returns milliseconds, while accepting a seconds value is
+  // a safe compatibility path for older records and does not affect IDs.
+  return Math.floor(milliseconds >= 100_000_000_000 ? milliseconds / 1000 : milliseconds)
+}
+
 function appendSystemTextSegment(
   segments: DisplaySystemNotificationSegment[],
   text: string,
@@ -163,10 +184,8 @@ function transformSystemNotification(raw: unknown): SystemNotification | null {
     return null
   const id = toNotificationIdentifier(record.id)
   const cursor = toNotificationIdentifier(record.cursor)
-  const timeAt = typeof record.time_at === 'number' && Number.isFinite(record.time_at)
-    ? record.time_at
-    : 0
-  if (!id || !cursor || timeAt <= 0)
+  const timestamp = toSystemTimestamp(record.time_at)
+  if (!id || !cursor)
     return null
 
   const content = toNotificationText(record.content)
@@ -180,7 +199,7 @@ function transformSystemNotification(raw: unknown): SystemNotification | null {
     segments: parseSystemContentSegments(content),
     source: '',
     sourceLogo: '',
-    timestamp: Math.floor(timeAt / 1000),
+    timestamp,
     cardTitle: '',
     cardCover: '',
     cardUrl: '',
@@ -217,6 +236,8 @@ export function parseSystemInitialPage(
       seen.add(item.id)
       return true
     })
+  if (unifiedItems.length + userItems.length > 0 && items.length === 0)
+    return null
   const first = items[0]
   const last = items.at(-1)
   return {

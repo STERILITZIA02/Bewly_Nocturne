@@ -892,16 +892,12 @@ notifications:
       label: 私訊
     reply:
       label: 回覆我嘅
-      description: 睇其他人畀你嘅回覆
     at:
       label: "{'@'} 我嘅"
-      description: 睇其他人提及你
     love:
       label: 收到嘅讚
-      description: 睇其他人畀你內容嘅讚
     system:
       label: 系統通知
-      description: 睇嚟自嗶哩嗶哩嘅系統同服務訊息
   whisper:
     loading: 載入緊私訊會話
     profile_pending: 確認緊帳號
@@ -1220,6 +1216,8 @@ video_card:
   watch_later_update_failed: 更新陣間至睇失敗
   feedback_unavailable: 攞唔到意見選項
 home:
+  recommendation_empty: 暫時未有推薦內容
+  recommendation_filtered_empty: 而家啲推薦已經俾本機篩選規則全部篩走
   web_recommendation_risk_cooldown: 推薦請求觸發風控，暫停咗 {seconds} 秒，請遲啲再試
   web_recommendation_risk_fallback_active: 已使用無 Cookie 推薦結果，並暫停之後嘅請求 {seconds} 秒
   web_recommendation_risk_fallback_failed: 推薦請求觸發風控，備用請求失敗，暫停咗 {seconds} 秒

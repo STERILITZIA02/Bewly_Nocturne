@@ -9,7 +9,6 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
-import api from '~/utils/api'
 
 import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
@@ -224,39 +223,39 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   // 根据子分类选择不同的API
   if (props.filters.subCategory === 'live_room') {
     // 仅搜索直播间
-    success = await search(
+    success = await search({
+      searchType: 'live_room',
       keyword,
-      params => api.search.searchLiveRoom(params),
-      {
-        page: targetPage,
-        pagesize: 30,
+      page: targetPage,
+      pageSize: 30,
+      filters: {
         order: props.filters.roomOrder,
       },
-    )
+    })
   }
   else if (props.filters.subCategory === 'live_user') {
     // 仅搜索主播
-    success = await search(
+    success = await search({
+      searchType: 'live_user',
       keyword,
-      params => api.search.searchLiveUser(params),
-      {
-        page: targetPage,
-        page_size: 30,
+      page: targetPage,
+      pageSize: 30,
+      filters: {
         order: props.filters.userOrder,
       },
-    )
+    })
   }
   else {
     // 全部（默认使用live类型，包含直播间和主播）
-    success = await search(
+    success = await search({
+      searchType: 'live',
       keyword,
-      params => api.search.searchLive(params),
-      {
-        page: targetPage,
-        pagesize: 30,
+      page: targetPage,
+      pageSize: 30,
+      filters: {
         order: props.filters.roomOrder,
       },
-    )
+    })
   }
 
   if (!success || !lastResponse.value?.data)
@@ -414,39 +413,39 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
     // 根据子分类选择不同的API
     if (props.filters.subCategory === 'live_room') {
     // 仅搜索直播间
-      success = await search(
+      success = await search({
+        searchType: 'live_room',
         keyword,
-        params => api.search.searchLiveRoom(params),
-        {
-          page,
-          pagesize: 30,
+        page,
+        pageSize: 30,
+        filters: {
           order: props.filters.roomOrder,
         },
-      )
+      })
     }
     else if (props.filters.subCategory === 'live_user') {
     // 仅搜索主播
-      success = await search(
+      success = await search({
+        searchType: 'live_user',
         keyword,
-        params => api.search.searchLiveUser(params),
-        {
-          page,
-          page_size: 30,
+        page,
+        pageSize: 30,
+        filters: {
           order: props.filters.userOrder,
         },
-      )
+      })
     }
     else {
     // 全部（默认使用live类型，包含直播间和主播）
-      success = await search(
+      success = await search({
+        searchType: 'live',
         keyword,
-        params => api.search.searchLive(params),
-        {
-          page,
-          pagesize: 30,
+        page,
+        pageSize: 30,
+        filters: {
           order: props.filters.roomOrder,
         },
-      )
+      })
     }
 
     if (!success || !lastResponse.value?.data)
@@ -566,15 +565,19 @@ async function refreshLiveRoomsOnly() {
   isLoading.value = true
 
   try {
-    const response = await api.search.searchLive({
+    const success = await search({
+      searchType: 'live',
       keyword,
       page: 1,
-      pagesize: 30,
-      order: props.filters.roomOrder,
+      pageSize: 30,
+      filters: {
+        order: props.filters.roomOrder,
+      },
     })
 
-    if (!response || response.code !== 0)
+    if (!success || !lastResponse.value)
       return
+    const response = lastResponse.value
 
     const newLiveRooms = Array.isArray(response.data?.result?.live_room)
       ? response.data.result.live_room

@@ -1,6 +1,10 @@
 // 更完善的播放器元素选择器
+import { watch } from 'vue'
+
+import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
+import { applyConfiguredPlaybackRate, isValidPlaybackRate } from '~/utils/playbackRate'
 
 const _videoClassTag = {
   danmuBtn:
@@ -34,6 +38,11 @@ const _videoClassTag = {
 
 const monitoredDanmakuSwitches = new WeakSet<HTMLInputElement>()
 const monitoredCaptionControls = new WeakSet<HTMLElement>()
+const playbackRateListenerControllers = new Map<HTMLVideoElement, AbortController>()
+const applyingPlaybackRateVideos = new WeakSet<HTMLVideoElement>()
+const metadataCorrectionVideos = new WeakSet<HTMLVideoElement>()
+let stopPlaybackRatePlayerObserver: (() => void) | null = null
+let stopPlaybackRateSettingsWatch: (() => void) | null = null
 
 function monitorDanmakuState(danmakuSwitch: HTMLInputElement) {
   if (monitoredDanmakuSwitches.has(danmakuSwitch))
@@ -93,6 +102,8 @@ let clockElement: HTMLDivElement | null = null
 let titleElement: HTMLDivElement | null = null
 let timeInterval: number | null = null
 let clockInterval: number | null = null
+let autoExitFullscreenRetryTimer: ReturnType<typeof setTimeout> | null = null
+let autoExitFullscreenVideo: HTMLVideoElement | null = null
 
 // 获取视频元素
 export function getVideoElement(): HTMLVideoElement | null {
@@ -611,23 +622,32 @@ export function setLoopState(enable: boolean) {
 let userManuallyChangedAutoPlay = false
 // 标记是否为程序自动修改
 let isProgrammaticChange = false
+let autoPlayUserChangeMonitoringStarted = false
+
+function handleAutoPlayUserChange(event: MouseEvent) {
+  if (isProgrammaticChange)
+    return
+
+  const target = event.target
+  if (target instanceof HTMLElement
+    && target.closest('.auto-play .switch-btn, .continuous-btn .switch-btn')) {
+    userManuallyChangedAutoPlay = true
+  }
+}
 
 // 监听用户手动修改自动播放状态
 export function startAutoPlayUserChangeMonitoring() {
-  // 使用事件委托监听点击
-  document.addEventListener('click', (e) => {
-    // 如果是程序自动修改，忽略
-    if (isProgrammaticChange) {
-      return
-    }
+  if (autoPlayUserChangeMonitoringStarted)
+    return
+  autoPlayUserChangeMonitoringStarted = true
+  document.addEventListener('click', handleAutoPlayUserChange, true)
+}
 
-    const target = e.target as HTMLElement
-    // 检查是否点击了自动播放开关
-    const switchBtn = target.closest('.auto-play .switch-btn, .continuous-btn .switch-btn')
-    if (switchBtn) {
-      userManuallyChangedAutoPlay = true
-    }
-  }, true)
+export function stopAutoPlayUserChangeMonitoring() {
+  if (!autoPlayUserChangeMonitoringStarted)
+    return
+  autoPlayUserChangeMonitoringStarted = false
+  document.removeEventListener('click', handleAutoPlayUserChange, true)
 }
 
 // 重置用户手动修改标志(在页面导航时调用)
@@ -1102,59 +1122,127 @@ export function resetPlaybackRate() {
   }
 }
 
+function applyRememberedPlaybackRateToVideo(video: HTMLVideoElement): boolean {
+  if (!settings.value.rememberPlaybackRate)
+    return false
+
+  applyingPlaybackRateVideos.add(video)
+  try {
+    return applyConfiguredPlaybackRate(video, settings.value.savedPlaybackRate)
+  }
+  finally {
+    applyingPlaybackRateVideos.delete(video)
+  }
+}
+
+function cleanupReleasedPlaybackRateVideos() {
+  for (const [video, controller] of playbackRateListenerControllers) {
+    if (video.isConnected)
+      continue
+    controller.abort()
+    playbackRateListenerControllers.delete(video)
+  }
+}
+
+function monitorPlaybackRateVideo(video: HTMLVideoElement) {
+  if (playbackRateListenerControllers.has(video))
+    return
+
+  const controller = new AbortController()
+  playbackRateListenerControllers.set(video, controller)
+
+  video.addEventListener('loadedmetadata', () => {
+    metadataCorrectionVideos.add(video)
+    applyRememberedPlaybackRateToVideo(video)
+
+    // Player code may synchronously rewrite playbackRate from another
+    // loadedmetadata listener. Keep the correction guard through this frame,
+    // then apply once more without introducing a polling loop.
+    requestAnimationFrame(() => {
+      if (playbackRateListenerControllers.has(video))
+        applyRememberedPlaybackRateToVideo(video)
+      metadataCorrectionVideos.delete(video)
+    })
+  }, { signal: controller.signal })
+
+  video.addEventListener('ratechange', () => {
+    if (!settings.value.rememberPlaybackRate || applyingPlaybackRateVideos.has(video))
+      return
+
+    if (metadataCorrectionVideos.has(video)) {
+      applyRememberedPlaybackRateToVideo(video)
+      return
+    }
+
+    const currentRate = video.playbackRate
+    if (isValidPlaybackRate(currentRate)) {
+      video.defaultPlaybackRate = currentRate
+      settings.value.savedPlaybackRate = currentRate
+    }
+  }, { signal: controller.signal })
+
+  applyRememberedPlaybackRateToVideo(video)
+}
+
+function discoverPlaybackRateVideos(root: ParentNode | HTMLVideoElement = document) {
+  if (root instanceof HTMLVideoElement && root.matches(_videoClassTag.video))
+    monitorPlaybackRateVideo(root)
+
+  root.querySelectorAll?.(_videoClassTag.video).forEach((element) => {
+    if (element instanceof HTMLVideoElement)
+      monitorPlaybackRateVideo(element)
+  })
+}
+
+function ensurePlaybackRateMonitoring() {
+  if (!stopPlaybackRatePlayerObserver) {
+    stopPlaybackRatePlayerObserver = observePlayerDom(() => {
+      cleanupReleasedPlaybackRateVideos()
+      discoverPlaybackRateVideos()
+    })
+  }
+
+  if (!stopPlaybackRateSettingsWatch) {
+    stopPlaybackRateSettingsWatch = watch(
+      [() => settings.value.rememberPlaybackRate, () => settings.value.savedPlaybackRate],
+      ([rememberPlaybackRate]) => {
+        if (!rememberPlaybackRate)
+          return
+        discoverPlaybackRateVideos()
+        playbackRateListenerControllers.forEach((_controller, video) => {
+          applyRememberedPlaybackRateToVideo(video)
+        })
+      },
+      { flush: 'sync' },
+    )
+  }
+
+  discoverPlaybackRateVideos()
+}
+
 // 应用记住的倍速
 export function applyRememberedPlaybackRate() {
-  if (!settings.value.rememberPlaybackRate) {
-    return
-  }
-
+  ensurePlaybackRateMonitoring()
   const video = getVideoElement()
-  if (!video) {
-    // 如果视频元素还没有加载，延迟重试
-    setTimeout(() => applyRememberedPlaybackRate(), 1000)
+  if (!video || !applyRememberedPlaybackRateToVideo(video))
     return
-  }
 
-  // 确保倍速值在有效范围内
-  const savedRate = settings.value.savedPlaybackRate
-  if (savedRate >= 0.25 && savedRate <= 5) {
-    video.playbackRate = savedRate
-    // 只在倍速不是1时显示状态
-    if (savedRate !== 1) {
-      showState(`倍速 ${savedRate}`)
-    }
-  }
+  if (settings.value.savedPlaybackRate !== 1)
+    showState(`倍速 ${settings.value.savedPlaybackRate}`)
 }
 
 // 监听播放器倍速变化并记录（监听所有倍速变化，包括播放器UI操作）
 export function startPlaybackRateMonitoring() {
-  if (!settings.value.rememberPlaybackRate) {
-    return
-  }
+  ensurePlaybackRateMonitoring()
+}
 
-  const video = getVideoElement()
-  if (!video) {
-    // 如果视频元素还没有加载，延迟重试
-    setTimeout(() => startPlaybackRateMonitoring(), 1000)
-    return
-  }
-
-  // 避免重复添加监听器
-  if (video.hasAttribute('bewly-rate-listener')) {
-    return
-  }
-  video.setAttribute('bewly-rate-listener', 'true')
-
-  // 监听倍速变化事件，这会捕获所有倍速变化（包括UI操作）
-  video.addEventListener('ratechange', () => {
-    if (settings.value.rememberPlaybackRate) {
-      const currentRate = video.playbackRate
-      // 确保倍速值在有效范围内
-      if (currentRate >= 0.25 && currentRate <= 5) {
-        settings.value.savedPlaybackRate = currentRate
-      }
-    }
-  })
+export function stopPlaybackRateMonitoring() {
+  stopPlaybackRatePlayerObserver?.()
+  stopPlaybackRatePlayerObserver = null
+  stopPlaybackRateSettingsWatch?.()
+  stopPlaybackRateSettingsWatch = null
+  playbackRateListenerControllers.forEach(controller => controller.abort())
+  playbackRateListenerControllers.clear()
 }
 
 // 重播
@@ -1587,59 +1675,79 @@ function checkAndCancelAutoPlayForRecommendation() {
   }
 }
 
+async function handleAutoExitFullscreenVideoEnded() {
+  // 如果是互动视频，不处理（因为URL变化会由pushstate处理）
+  if (isInteractiveVideo()) {
+    return
+  }
+
+  // 检查是否应该取消自动连播（针对推广视频）
+  // 延迟检查，等待结束面板完全渲染
+  setTimeout(() => {
+    checkAndCancelAutoPlayForRecommendation()
+  }, 1500)
+
+  // 非互动视频且开启了自动退出全屏
+  if (settings.value.autoExitFullscreenOnEnd) {
+    // 单集循环、随机播放、自动连播等播放行为优先级高于自动退出全屏
+    if (await hasHigherPriorityEndPlaybackBehavior()) {
+      return
+    }
+
+    // 检查是否处于全屏状态
+    if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
+      // 退出浏览器全屏
+      if (document.exitFullscreen) {
+        document.exitFullscreen()
+      }
+      else if ((document as any).webkitExitFullscreen) {
+        (document as any).webkitExitFullscreen()
+      }
+    }
+
+    // 检查是否处于网页全屏状态
+    const webFullscreenBtn = document.querySelector(_videoClassTag.pagefullscreen) as HTMLElement
+    if (webFullscreenBtn && webFullscreenBtn.classList.contains('bpx-state-entered')) {
+      webFullscreenBtn.click()
+    }
+  }
+}
+
 // 监听视频结束事件并自动退出全屏
 export function startAutoExitFullscreenMonitoring() {
   const video = getVideoElement()
   if (!video) {
-    // 如果视频元素还没有加载，延迟重试
-    setTimeout(() => startAutoExitFullscreenMonitoring(), 1000)
+    if (autoExitFullscreenRetryTimer === null) {
+      autoExitFullscreenRetryTimer = setTimeout(() => {
+        autoExitFullscreenRetryTimer = null
+        startAutoExitFullscreenMonitoring()
+      }, 1000)
+    }
     return
   }
 
-  // 避免重复添加监听器
-  if (video.hasAttribute('bewly-auto-exit-listener')) {
+  if (video === autoExitFullscreenVideo)
     return
+
+  if (autoExitFullscreenVideo) {
+    autoExitFullscreenVideo.removeEventListener('ended', handleAutoExitFullscreenVideoEnded)
+    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
   }
+  autoExitFullscreenVideo = video
   video.setAttribute('bewly-auto-exit-listener', 'true')
+  video.addEventListener('ended', handleAutoExitFullscreenVideoEnded)
+}
 
-  // 监听视频结束事件
-  video.addEventListener('ended', async () => {
-    // 如果是互动视频，不处理（因为URL变化会由pushstate处理）
-    if (isInteractiveVideo()) {
-      return
-    }
-
-    // 检查是否应该取消自动连播（针对推广视频）
-    // 延迟检查，等待结束面板完全渲染
-    setTimeout(() => {
-      checkAndCancelAutoPlayForRecommendation()
-    }, 1500)
-
-    // 非互动视频且开启了自动退出全屏
-    if (settings.value.autoExitFullscreenOnEnd) {
-      // 单集循环、随机播放、自动连播等播放行为优先级高于自动退出全屏
-      if (await hasHigherPriorityEndPlaybackBehavior()) {
-        return
-      }
-
-      // 检查是否处于全屏状态
-      if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
-        // 退出浏览器全屏
-        if (document.exitFullscreen) {
-          document.exitFullscreen()
-        }
-        else if ((document as any).webkitExitFullscreen) {
-          (document as any).webkitExitFullscreen()
-        }
-      }
-
-      // 检查是否处于网页全屏状态
-      const webFullscreenBtn = document.querySelector(_videoClassTag.pagefullscreen) as HTMLElement
-      if (webFullscreenBtn && webFullscreenBtn.classList.contains('bpx-state-entered')) {
-        webFullscreenBtn.click()
-      }
-    }
-  })
+export function stopAutoExitFullscreenMonitoring() {
+  if (autoExitFullscreenRetryTimer !== null) {
+    clearTimeout(autoExitFullscreenRetryTimer)
+    autoExitFullscreenRetryTimer = null
+  }
+  if (autoExitFullscreenVideo) {
+    autoExitFullscreenVideo.removeEventListener('ended', handleAutoExitFullscreenVideoEnded)
+    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
+    autoExitFullscreenVideo = null
+  }
 }
 
 // 为Window接口添加自定义属性

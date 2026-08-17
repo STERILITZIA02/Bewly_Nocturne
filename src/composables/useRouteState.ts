@@ -60,6 +60,12 @@ function scheduleRouteSync() {
   queueMicrotask(syncRouteState)
 }
 
+function handleRouteVisibilityChange() {
+  if (!document.hidden)
+    syncRouteState()
+  scheduleFallback()
+}
+
 function startRouteObserver() {
   if (routeObserverStarted || typeof window === 'undefined')
     return
@@ -70,12 +76,25 @@ function startRouteObserver() {
   window.addEventListener('popstate', scheduleRouteSync)
   window.addEventListener('hashchange', scheduleRouteSync)
 
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden)
-      syncRouteState()
-    scheduleFallback()
-  })
+  document.addEventListener('visibilitychange', handleRouteVisibilityChange)
+  syncRouteState()
   scheduleFallback()
+}
+
+export function stopRouteObserver() {
+  if (!routeObserverStarted || typeof window === 'undefined')
+    return
+  routeObserverStarted = false
+  window.removeEventListener('pushstate', scheduleRouteSync)
+  window.removeEventListener('replacestate', scheduleRouteSync)
+  window.removeEventListener('popstate', scheduleRouteSync)
+  window.removeEventListener('hashchange', scheduleRouteSync)
+  document.removeEventListener('visibilitychange', handleRouteVisibilityChange)
+  if (fallbackTimer !== undefined) {
+    clearTimeout(fallbackTimer)
+    fallbackTimer = undefined
+  }
+  listeners.clear()
 }
 
 export function useRouteState() {

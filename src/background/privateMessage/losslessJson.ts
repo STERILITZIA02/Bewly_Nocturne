@@ -8,7 +8,7 @@ import type {
   PrivateMessageTransportErrorKind,
 } from './types'
 
-const PRIVATE_MESSAGE_IDENTIFIER_PATTERN = /("(?:talker_id|sender_uid|receiver_id|msg_seqno|msg_key|ack_seqno|max_seqno)"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g
+const PRIVATE_MESSAGE_IDENTIFIER_PATTERN = /("(?:talker_id|sender_uid|receiver_id|msg_seqno|msg_key|ack_seqno|min_seqno|max_seqno)"\s*:\s*)(-?\d+)(?=\s*[,}\]])/g
 const HTML_PREFIX_PATTERN = /^\s*</
 const LOGIN_URL_PATTERN = /passport|login/i
 const RISK_CONTROL_HTML_PATTERN = /请求(?:过于)?频繁|访问(?:过于)?频繁|风控|risk[\s_-]*control/i

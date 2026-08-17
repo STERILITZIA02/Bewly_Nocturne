@@ -906,16 +906,12 @@ notifications:
       label: 私信
     reply:
       label: 回复我的
-      description: 查看别人对你的回复
     at:
       label: "{'@'} 我的"
-      description: 查看别人对你的提及
     love:
       label: 收到的赞
-      description: 查看别人对你内容的点赞
     system:
       label: 系统通知
-      description: 查看来自哔哩哔哩的系统与服务消息
   whisper:
     loading: 正在加载私信会话
     profile_pending: 正在确认账号
@@ -1234,6 +1230,8 @@ video_card:
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
 home:
+  recommendation_empty: 暂无推荐内容
+  recommendation_filtered_empty: 当前推荐已被本地过滤规则全部过滤
   web_recommendation_risk_cooldown: 推荐请求触发风控，已暂停 {seconds} 秒，请稍后重试
   web_recommendation_risk_fallback_active: 已使用无 Cookie 推荐结果，并暂停后续请求 {seconds} 秒
   web_recommendation_risk_fallback_failed: 推荐请求触发风控，备用请求失败，已暂停 {seconds} 秒

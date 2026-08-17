@@ -32,13 +32,26 @@ export interface SignedPrivateMessageFormRequest {
   url: string
 }
 
+export interface PreferredPrivateMessageFormRequest extends SignedPrivateMessageFormRequest {
+  signingParams: PrivateMessageRequestParams
+}
+
 export interface PrivateMessageFormTransportRequest extends PrivateMessageFormRequest {
   endpointName: PrivateMessageEndpointName
 }
 
+export interface PrivateMessageSignOptions {
+  forceRefresh?: boolean
+}
+
+type SignPrivateMessageParams = (
+  params: PrivateMessageRequestParams,
+  options?: PrivateMessageSignOptions,
+) => Promise<PrivateMessageRequestParams>
+
 interface PrivateMessageRequestDependencies {
   fetch: typeof fetch
-  signParams: typeof signPrivateMessageParams
+  signParams: SignPrivateMessageParams
 }
 
 interface PrivateImageUploadDependencies {
@@ -122,11 +135,17 @@ function reportPrivateMessageSendDiagnostic(input: PrivateMessageSendDiagnosticI
 
 export async function signPrivateMessageParams(
   params: PrivateMessageRequestParams,
+  options: PrivateMessageSignOptions = {},
   dependencies: PrivateMessageSigningDependencies = DEFAULT_SIGNING_DEPENDENCIES,
 ): Promise<PrivateMessageRequestParams> {
+  const senderMid = typeof params.w_sender_uid === 'string' ? params.w_sender_uid : undefined
+  const keyOptions = {
+    forceRefresh: options.forceRefresh,
+    mid: senderMid,
+  }
   let initialized = false
   try {
-    initialized = await dependencies.initWbiKeys()
+    initialized = await dependencies.initWbiKeys(keyOptions)
   }
   catch {
     throw new PrivateMessageWbiUnavailableError()
@@ -135,7 +154,7 @@ export async function signPrivateMessageParams(
   if (!initialized)
     throw new PrivateMessageWbiUnavailableError()
 
-  const signed = dependencies.addWbiSign({ ...params }) as PrivateMessageRequestParams
+  const signed = dependencies.addWbiSign({ ...params }, keyOptions) as PrivateMessageRequestParams
   if (typeof signed.wts !== 'number' || typeof signed.w_rid !== 'string' || !signed.w_rid)
     throw new PrivateMessageWbiUnavailableError()
 
@@ -172,27 +191,19 @@ export async function requestPrivateMessage(
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
-  return requestSignedPrivateMessage(request, 'GET', dependencies, sender)
+  return requestPreferredPrivateMessage(request, dependencies, sender)
 }
 
-export function requestPrivateMessageForm(
-  request: PrivateMessageRequest,
-  dependencies?: Partial<PrivateMessageRequestDependencies>,
-  sender?: Browser.Runtime.MessageSender,
-): Promise<PrivateMessageApiResponse>
 export function requestPrivateMessageForm(
   request: PrivateMessageFormTransportRequest,
   dependencies?: Partial<PrivateMessageRequestDependencies>,
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse>
 export async function requestPrivateMessageForm(
-  request: PrivateMessageRequest | PrivateMessageFormTransportRequest,
+  request: PrivateMessageFormTransportRequest,
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
-  if ('params' in request)
-    return requestSignedPrivateMessage(request, 'POST', dependencies, sender)
-
   const runtimeDependencies = {
     ...DEFAULT_REQUEST_DEPENDENCIES,
     ...dependencies,
@@ -241,6 +252,55 @@ export async function requestPrivateMessageForm(
       })
     }
     return apiResponse
+  }
+}
+
+/**
+ * Form POST used by preferred-signature mutations such as update_ack. CSRF and
+ * mutation fields remain in the body; WBI parameters are carried only by the URL.
+ */
+export async function requestPreferredPrivateMessageForm(
+  request: PreferredPrivateMessageFormRequest,
+  dependencies: Partial<PrivateMessageRequestDependencies> = {},
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  const runtimeDependencies = {
+    ...DEFAULT_REQUEST_DEPENDENCIES,
+    ...dependencies,
+  }
+
+  let signedParams: PrivateMessageRequestParams
+  try {
+    signedParams = await runtimeDependencies.signParams(request.signingParams)
+  }
+  catch (error) {
+    if (!isPrivateMessageWbiUnavailableError(error))
+      return createPrivateMessageErrorResponse('network', request.endpointName)
+    return await performPrivateMessageFormRequest(request, {}, runtimeDependencies, sender)
+  }
+
+  const initialResponse = await performPrivateMessageFormRequest(
+    request,
+    signedParams,
+    runtimeDependencies,
+    sender,
+  )
+  if (!isExplicitWbiSignatureRejection(initialResponse))
+    return initialResponse
+
+  try {
+    const refreshedParams = await runtimeDependencies.signParams(request.signingParams, {
+      forceRefresh: true,
+    })
+    return await performPrivateMessageFormRequest(
+      request,
+      refreshedParams,
+      runtimeDependencies,
+      sender,
+    )
+  }
+  catch {
+    return initialResponse
   }
 }
 
@@ -342,9 +402,8 @@ export async function requestPrivateImageUpload(
   }
 }
 
-async function requestSignedPrivateMessage(
+async function requestPreferredPrivateMessage(
   request: PrivateMessageRequest,
-  method: 'GET' | 'POST',
   dependencies: Partial<PrivateMessageRequestDependencies>,
   sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
@@ -353,33 +412,99 @@ async function requestSignedPrivateMessage(
     ...dependencies,
   }
 
+  let signedParams: PrivateMessageRequestParams
   try {
-    const signedParams = await runtimeDependencies.signParams(request.params)
-    const requestUrl = method === 'GET'
-      ? appendRequestParams(request.url, signedParams)
-      : request.url
+    signedParams = await runtimeDependencies.signParams(request.params)
+  }
+  catch (error) {
+    if (!isPrivateMessageWbiUnavailableError(error))
+      return createPrivateMessageErrorResponse('network', request.endpointName)
+    return await performPrivateMessageGetRequest(request, request.params, runtimeDependencies, sender)
+  }
+
+  const initialResponse = await performPrivateMessageGetRequest(
+    request,
+    signedParams,
+    runtimeDependencies,
+    sender,
+  )
+  if (!isExplicitWbiSignatureRejection(initialResponse))
+    return initialResponse
+
+  try {
+    const refreshedParams = await runtimeDependencies.signParams(request.params, {
+      forceRefresh: true,
+    })
+    return await performPrivateMessageGetRequest(
+      request,
+      refreshedParams,
+      runtimeDependencies,
+      sender,
+    )
+  }
+  catch {
+    return initialResponse
+  }
+}
+
+function isExplicitWbiSignatureRejection(response: PrivateMessageApiResponse): boolean {
+  const error = response.bewlyError
+  return error?.apiCode === -403
+    && error.httpStatus >= 200
+    && error.httpStatus < 300
+}
+
+async function performPrivateMessageGetRequest(
+  request: PrivateMessageRequest,
+  query: PrivateMessageRequestParams,
+  dependencies: PrivateMessageRequestDependencies,
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  const requestUrl = appendRequestParams(request.url, query)
+  try {
     const headers: Record<string, string> = {
       Referer: 'https://message.bilibili.com/',
     }
-    if (method === 'POST')
-      headers['Content-Type'] = 'application/x-www-form-urlencoded'
     const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
     if (cookieHeader)
       headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
-
-    const response = await runtimeDependencies.fetch(requestUrl, {
-      method,
-      body: method === 'POST' ? serializeRequestParams(signedParams) : undefined,
+    const response = await dependencies.fetch(requestUrl, {
+      method: 'GET',
       credentials: 'include',
       headers,
     })
     return await parsePrivateMessageResponse(response, request.endpointName)
   }
-  catch (error) {
-    return createPrivateMessageErrorResponse(
-      isPrivateMessageWbiUnavailableError(error) ? 'wbi-unavailable' : 'network',
-      request.endpointName,
-    )
+  catch {
+    return createPrivateMessageErrorResponse('network', request.endpointName)
+  }
+}
+
+async function performPrivateMessageFormRequest(
+  request: PreferredPrivateMessageFormRequest,
+  query: PrivateMessageRequestParams,
+  dependencies: PrivateMessageRequestDependencies,
+  sender?: Browser.Runtime.MessageSender,
+): Promise<PrivateMessageApiResponse> {
+  const requestUrl = appendRequestParams(request.url, query)
+  try {
+    const headers: Record<string, string> = {
+      Referer: 'https://message.bilibili.com/',
+      'Content-Type': 'application/x-www-form-urlencoded',
+    }
+    const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
+    if (cookieHeader)
+      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
+    const response = await dependencies.fetch(requestUrl, {
+      method: 'POST',
+      body: serializeRequestParams(request.body),
+      credentials: 'include',
+      headers,
+    })
+    return await parsePrivateMessageResponse(response, request.endpointName)
+  }
+  catch {
+    return createPrivateMessageErrorResponse('network', request.endpointName)
   }
 }
 

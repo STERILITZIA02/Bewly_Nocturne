@@ -347,31 +347,27 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   const useVideoFilters = isVideoFilterActive.value
 
   if (useVideoFilters) {
-    success = await search(
+    success = await search({
+      searchType: 'video',
       keyword,
-      params => api.search.searchVideo(params),
-      {
-        page: targetPage,
-        page_size: 30,
-        ...buildVideoSearchParams({
-          loadMore: isLoadMore,
-          context: context.value,
-          filters: props.filters,
-        }),
-      },
-    )
+      page: targetPage,
+      pageSize: 30,
+      ...buildVideoSearchParams({
+        loadMore: isLoadMore,
+        context: context.value,
+        filters: props.filters,
+      }),
+    })
   }
   else {
-    success = await search(
+    success = await search({
+      searchType: 'all',
       keyword,
-      params => api.search.searchAll(params),
-      {
-        page: targetPage,
-        page_size: 30,
-        context: targetPage > 1 ? context.value : '',
-        web_roll_page: targetPage,
-      },
-    )
+      page: targetPage,
+      pageSize: 30,
+      context: targetPage > 1 ? context.value : '',
+      webRollPage: targetPage,
+    })
   }
 
   if (!success || !lastResponse.value?.data)
@@ -533,31 +529,27 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
     const useVideoFilters = isVideoFilterActive.value
 
     if (useVideoFilters) {
-      success = await search(
+      success = await search({
+        searchType: 'video',
         keyword,
-        params => api.search.searchVideo(params),
-        {
-          page,
-          page_size: 30,
-          ...buildVideoSearchParams({
-            loadMore: false,
-            context: context.value,
-            filters: props.filters,
-          }),
-        },
-      )
+        page,
+        pageSize: 30,
+        ...buildVideoSearchParams({
+          loadMore: false,
+          context: context.value,
+          filters: props.filters,
+        }),
+      })
     }
     else {
-      success = await search(
+      success = await search({
+        searchType: 'all',
         keyword,
-        params => api.search.searchAll(params),
-        {
-          page,
-          page_size: 30,
-          context: page > 1 ? context.value : '',
-          web_roll_page: page,
-        },
-      )
+        page,
+        pageSize: 30,
+        context: page > 1 ? context.value : '',
+        webRollPage: page,
+      })
     }
 
     if (!success || !lastResponse.value?.data)

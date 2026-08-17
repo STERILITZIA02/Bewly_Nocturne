@@ -543,6 +543,13 @@ export function setupLoginButtonClickHandlers(doc: Document) {
     return existingCleanup
 
   const LOGIN_URL = 'https://passport.bilibili.com/login'
+  const boundButtons = new Set<HTMLElement>()
+
+  function handleLoginButtonClick(event: MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    window.location.href = LOGIN_URL
+  }
 
   // Function to handle login button binding
   function bindLoginButton(button: HTMLElement) {
@@ -551,11 +558,8 @@ export function setupLoginButtonClickHandlers(doc: Document) {
 
     button.setAttribute('data-bewly-login-handler', 'true')
     button.style.cursor = 'pointer'
-    button.addEventListener('click', (e) => {
-      e.preventDefault()
-      e.stopPropagation()
-      window.location.href = LOGIN_URL
-    })
+    button.addEventListener('click', handleLoginButtonClick)
+    boundButtons.add(button)
   }
 
   // Bind existing login buttons
@@ -597,6 +601,11 @@ export function setupLoginButtonClickHandlers(doc: Document) {
 
   const cleanup = () => {
     observer?.disconnect()
+    boundButtons.forEach((button) => {
+      button.removeEventListener('click', handleLoginButtonClick)
+      button.removeAttribute('data-bewly-login-handler')
+    })
+    boundButtons.clear()
     if (loginButtonSetupCleanups.get(doc) === cleanup)
       loginButtonSetupCleanups.delete(doc)
   }

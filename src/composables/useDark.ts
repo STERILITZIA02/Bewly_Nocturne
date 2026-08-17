@@ -1,5 +1,5 @@
 import { usePreferredDark } from '@vueuse/core'
-import { effectScope } from 'vue'
+import { effectScope, onScopeDispose } from 'vue'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { DARK_MODE_BASE_COLOR_CHANGE } from '~/constants/globalEvents'
@@ -8,6 +8,7 @@ import { isVideoPlaybackPage, setCookie } from '~/utils/main'
 
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
 let isScheduleClockStarted = false
+let scheduleClockInterval: number | null = null
 let lastThemeChangeState: boolean | undefined
 let lastDarkModeBaseColor: string | undefined
 
@@ -45,7 +46,7 @@ function startScheduleClock() {
     return
 
   isScheduleClockStarted = true
-  window.setInterval(() => {
+  scheduleClockInterval = window.setInterval(() => {
     currentMinuteOfDay.value = getCurrentMinuteOfDay()
   }, 30_000)
 }
@@ -128,6 +129,9 @@ function createDarkState() {
       setDarkModeBaseColor(data.darkModeBaseColor)
   }
   window.addEventListener('message', handleIframeThemeMessage)
+  onScopeDispose(() => {
+    window.removeEventListener('message', handleIframeThemeMessage)
+  })
 
   // Apply appearance only when an effective theme input changes. The settings
   // adapter replaces its object on every write, so a getter returning an array
@@ -318,11 +322,22 @@ function createDarkState() {
 }
 
 type DarkState = ReturnType<typeof createDarkState>
-const darkStateScope = effectScope(true)
+let darkStateScope = effectScope(true)
 let darkState: DarkState | undefined
 
 export function useDark(): DarkState {
   if (!darkState)
     darkState = darkStateScope.run(createDarkState)
   return darkState!
+}
+
+export function stopDarkState() {
+  darkStateScope.stop()
+  darkState = undefined
+  darkStateScope = effectScope(true)
+  if (scheduleClockInterval !== null) {
+    clearInterval(scheduleClockInterval)
+    scheduleClockInterval = null
+  }
+  isScheduleClockStarted = false
 }

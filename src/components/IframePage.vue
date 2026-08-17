@@ -19,6 +19,8 @@ const currentUrl = ref<string>(props.url)
 const showLoading = ref<boolean>(false)
 const iframeScrollCleanupFns = ref<Array<() => void>>([])
 const iframeScrollSyncFailed = ref(false)
+let iframeGeneration = 0
+let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
 
 function shouldUseOriginalBilibiliTopBar() {
   return showNativeBilibiliTopBar(settingsStore.getEffectiveTopBarSource())
@@ -159,12 +161,33 @@ watch(() => settings.value.darkModeBaseColor, (newColor) => {
 // })
 
 // Only show loading animation after 1.5 seconds to prevent annoying flash when content loads quickly
-const showLoadingTimeout = ref()
+const showLoadingTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
+
+function clearLifecycleTimers() {
+  if (showLoadingTimeout.value !== null) {
+    clearTimeout(showLoadingTimeout.value)
+    showLoadingTimeout.value = null
+  }
+  if (initialThemeTimer !== null) {
+    clearTimeout(initialThemeTimer)
+    initialThemeTimer = null
+  }
+}
 
 // 处理iframe加载完成事件
-function handleIframeLoad() {
+function handleIframeLoad(event: Event) {
+  const iframe = event.currentTarget
+  if (!(iframe instanceof HTMLIFrameElement)
+    || iframe !== iframeRef.value
+    || currentUrl.value === 'about:blank') {
+    return
+  }
+
   // 清除loading状态
-  clearTimeout(showLoadingTimeout.value)
+  if (showLoadingTimeout.value !== null) {
+    clearTimeout(showLoadingTimeout.value)
+    showLoadingTimeout.value = null
+  }
   showLoading.value = false
 
   setupIframeScrollSync()
@@ -172,9 +195,18 @@ function handleIframeLoad() {
 
   // 当iframe加载完成后，发送当前的黑暗模式状态（仅在跨域时需要）
   if (iframeRef.value?.contentWindow) {
-    setTimeout(() => {
+    const generation = iframeGeneration
+    const iframeWindow = iframe.contentWindow
+    if (!iframeWindow)
+      return
+    if (initialThemeTimer !== null)
+      clearTimeout(initialThemeTimer)
+    initialThemeTimer = setTimeout(() => {
+      initialThemeTimer = null
+      if (generation !== iframeGeneration || iframeWindow !== iframeRef.value?.contentWindow)
+        return
       try {
-        iframeRef.value?.contentWindow?.postMessage({
+        iframeWindow.postMessage({
           type: IFRAME_DARK_MODE_CHANGE,
           isDark: isDark.value,
           isOledDark: isOledDark.value,
@@ -189,9 +221,12 @@ function handleIframeLoad() {
   }
 }
 
-watch(() => props.url, () => {
+watch(() => props.url, (url) => {
   // URL变化时启动loading逻辑，但保持iframe可见以避免样式计算错误
+  iframeGeneration++
+  currentUrl.value = url
   cleanupIframeScrollSync()
+  clearLifecycleTimers()
   showLoadingTimeout.value = setTimeout(() => {
     showLoading.value = true
   }, 1500)
@@ -209,31 +244,57 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  releaseIframeResources()
+  clearLifecycleTimers()
+  void releaseIframeResources()
 })
 
 async function releaseIframeResources() {
+  iframeGeneration++
+  clearLifecycleTimers()
   cleanupIframeScrollSync()
   reachTop.value = true
 
   // Clear iframe content
+  const iframe = iframeRef.value
+  stopIframeMedia(iframe)
   currentUrl.value = 'about:blank'
   /**
    * eg: When use 'iframeRef.value?.contentWindow?.document' of t.bilibili.com iframe on bilibili.com, there may be cross domain issues
    * set the src to 'about:blank' to avoid this issue, it also can release the memory
    */
-  if (iframeRef.value) {
-    iframeRef.value.src = 'about:blank'
-  }
+  if (iframe)
+    iframe.src = 'about:blank'
   await nextTick()
-  iframeRef.value?.contentWindow?.close()
+  try {
+    iframe?.contentWindow?.close()
+  }
+  catch {
+    // Cross-origin frames are already being released through about:blank.
+  }
 
   // Remove iframe from the DOM
-  iframeRef.value?.parentNode?.removeChild(iframeRef.value)
+  iframe?.parentNode?.removeChild(iframe)
   await nextTick()
 
   // Nullify the reference
-  iframeRef.value = null
+  if (iframeRef.value === iframe)
+    iframeRef.value = null
+}
+
+function stopIframeMedia(iframe: HTMLIFrameElement | null) {
+  if (!iframe)
+    return
+  try {
+    iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
+      media.pause()
+      media.removeAttribute('src')
+      media.querySelectorAll('source').forEach(source => source.remove())
+      media.load()
+    })
+  }
+  catch {
+    // Cross-origin frames are released by navigating to about:blank.
+  }
 }
 
 function handleBackToTop() {
@@ -264,7 +325,7 @@ defineExpose({
     <!-- Iframe -->
     <iframe
       ref="iframeRef"
-      :src="props.url"
+      :src="currentUrl"
       :style="{
         bottom: headerShow ? `var(--bew-top-bar-height)` : '0',
       }"
