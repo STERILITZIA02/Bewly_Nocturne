@@ -9,7 +9,7 @@ const props = defineProps<{
 
 const storageKey = 'bewly-settings-bewly-pages-page'
 const legacyStorageKey = 'bewly-settings-navigation-page'
-const pageValues = ['home', 'moments', 'search', 'playback', 'messages']
+const pageValues = ['home', 'moments', 'watch-later', 'search', 'playback', 'messages']
 const legacyPage = sessionStorage.getItem(legacyStorageKey)
 
 if (!sessionStorage.getItem(storageKey) && legacyPage && pageValues.includes(legacyPage))
@@ -33,6 +33,14 @@ const pages = [
     icon: 'i-mingcute:moment-line',
     iconActivated: 'i-mingcute:moment-fill',
     component: defineAsyncComponent(() => import('../PluginComponentsAndPages/Moments/Moments.vue')),
+  },
+  {
+    value: 'watch-later',
+    titleKey: 'settings.plugin.watch_later_page',
+    descriptionKey: 'settings.category_navigation_watch_later_page_desc',
+    icon: 'i-mingcute:carplay-line',
+    iconActivated: 'i-mingcute:carplay-fill',
+    component: defineAsyncComponent(() => import('../PluginComponentsAndPages/WatchLaterPage/WatchLaterPage.vue')),
   },
   {
     value: 'search',

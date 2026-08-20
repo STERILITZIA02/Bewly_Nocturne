@@ -1,0 +1,61 @@
+@use "./breakpoints";
+
+// Shared content-grid geometry. Components provide the CSS column variables
+// through useGridLayout and only own their card-specific presentation.
+.bew-grid-adaptive {
+  display: grid;
+  gap: var(--bew-layout-content-gap);
+  grid-template-columns: repeat(var(--grid-cols-base, 1), minmax(0, 1fr));
+  contain: layout style;
+  align-items: stretch;
+}
+
+@container (min-width: #{breakpoints.$grid-sm}) {
+  .bew-grid-adaptive {
+    grid-template-columns: repeat(var(--grid-cols-sm, 2), minmax(0, 1fr));
+  }
+}
+
+@container (min-width: #{breakpoints.$grid-md}) {
+  .bew-grid-adaptive {
+    grid-template-columns: repeat(var(--grid-cols-md, 3), minmax(0, 1fr));
+  }
+}
+
+@container (min-width: #{breakpoints.$grid-lg}) {
+  .bew-grid-adaptive {
+    grid-template-columns: repeat(var(--grid-cols-lg, 4), minmax(0, 1fr));
+  }
+}
+
+@container (min-width: #{breakpoints.$grid-xl}) {
+  .bew-grid-adaptive {
+    grid-template-columns: repeat(var(--grid-cols-xl, 5), minmax(0, 1fr));
+  }
+}
+
+@container (min-width: #{breakpoints.$grid-xxl}) {
+  .bew-grid-adaptive {
+    grid-template-columns: repeat(var(--grid-cols-xxl, 6), minmax(0, 1fr));
+  }
+}
+
+.bew-grid-two-columns {
+  display: grid;
+  gap: var(--bew-layout-content-gap);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  contain: layout style;
+  align-items: stretch;
+}
+
+.bew-grid-one-column {
+  display: grid;
+  gap: var(--bew-layout-content-gap);
+  grid-template-columns: minmax(0, 1fr);
+  contain: layout style;
+  align-items: stretch;
+}
+
+.bew-grid-two-columns.bew-grid-list-auto-switch-single {
+  grid-template-columns: minmax(0, 1fr);
+}

@@ -654,7 +654,7 @@ const isAutoSwitchSingleColumn = computed(() => {
 
 const renderedGridClass = computed(() => [
   ...gridClass.value,
-  ...(isAutoSwitchSingleColumn.value ? ['grid-list-auto-switch-single'] : []),
+  ...(isAutoSwitchSingleColumn.value ? ['bew-grid-list-auto-switch-single'] : []),
 ])
 
 // 判断是否应该显示空状态（确认无更多内容且数据为空）
@@ -994,71 +994,8 @@ function getUniqueKey(item: T, index: number): string | number {
 </template>
 
 <style lang="scss" scoped>
-@use "../styles/breakpoints";
-
 .video-card-grid-root {
   container-type: inline-size;
-}
-
-// Grid 布局 - 根据设置页声明的容器断点和 CSS 变量控制列数
-.grid-adaptive {
-  display: grid;
-  gap: var(--bew-layout-content-gap);
-  grid-template-columns: repeat(var(--grid-cols-base, 1), 1fr);
-  contain: layout style;
-  align-items: stretch;
-}
-
-@container (min-width: #{breakpoints.$grid-sm}) {
-  .grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-sm, 2), 1fr);
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-md}) {
-  .grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-md, 3), 1fr);
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-lg}) {
-  .grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-lg, 4), 1fr);
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-xl}) {
-  .grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-xl, 5), 1fr);
-  }
-}
-
-@container (min-width: #{breakpoints.$grid-xxl}) {
-  .grid-adaptive {
-    grid-template-columns: repeat(var(--grid-cols-xxl, 6), 1fr);
-  }
-}
-
-.grid-two-columns {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  contain: layout style;
-  align-items: stretch;
-}
-
-.grid-one-column {
-  display: grid;
-  grid-template-columns: repeat(1, minmax(0, 1fr));
-  gap: 16px;
-  contain: layout style;
-  align-items: stretch;
-}
-
-// The single-column state is toggled by the measured grid container width so
-// users can choose a breakpoint instead of being locked to 640px.
-.grid-two-columns.grid-list-auto-switch-single {
-  grid-template-columns: repeat(1, minmax(0, 1fr));
 }
 
 .video-card-grid-container {

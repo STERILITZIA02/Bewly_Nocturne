@@ -62,6 +62,37 @@ common:
     right: Right
     top: Top
     bottom: Bottom
+layout_editor:
+  hint: 'Layout editing: select an area to adjust, or press Esc to cancel'
+  menu_label: Layout editor menu
+  edit_layout: Edit this layout
+  adjust_target: Adjust this element
+  open_setting: Open corresponding setting
+  preview: Live preview
+  done: Done
+  scope_current_page: Current page
+  scope_all_pages: All pages
+  target_dock: Dock
+  target_topbar: Top Bar
+  target_sidebar: Sidebar
+  target_page_mode_switcher: Page mode switcher
+  target_topbar_logo: Top Bar logo and channels
+  target_topbar_pinned_channels: Pinned Top Bar channels
+  target_search_bar: Search bar
+  target_topbar_actions: Top Bar actions
+  target_home_tabs: Home tabs
+  target_home_grid_switcher: Home grid switcher
+  target_moments_sidebar: Dynamic feed sidebar
+  target_moments_up_list: Dynamic feed uploader row
+  target_home_grid: Home video grid
+  target_moments_grid: Dynamic feed grid
+  target_watch_later: Watch Later layout
+  layout_adaptive: Adaptive grid
+  layout_two_columns: Two columns
+  layout_one_column: One column
+  columns_one: 1 column
+  columns_two: 2 columns
+  columns_three: 3 columns
 iframe_drawer:
   open_in_new_tab: Open in new tab
   close: Close
@@ -97,6 +128,12 @@ settings:
   breadcrumb: Settings location
   group_interaction_layout: Interaction & Layout
   group_memory_saving: Memory Saving
+  home_grid_layout: Home video layout
+  home_grid_layout_desc: Choose an adaptive grid or a one- or two-column list for Home videos.
+  group_watch_later_layout: Watch Later Layout
+  group_watch_later_layout_desc: Changes only the presentation of loaded items without requesting the list again.
+  watch_later_layout_mode: Layout mode
+  watch_later_layout_mode_desc: Switch between the list and responsive grid presentations.
   category_browsing_home_desc: Configure home recommendations, content filters, following, and home tabs.
   category_browsing_video_card_desc: Configure video card layout, previews, metadata, and link behavior.
   category_browsing_favorites_desc: Configure how favorite content is displayed and opened.
@@ -105,6 +142,7 @@ settings:
   category_navigation_dock_desc: Configure Dock and sidebar position, visibility, and quick actions.
   category_navigation_search_desc: Configure search appearance, suggestions, history, trending, and results.
   category_navigation_moments_desc: Configure the dynamic feed sidebar and how dynamic cards are opened.
+  category_navigation_watch_later_page_desc: Configure the content layout of the Watch Later page.
   category_navigation_playback_page_desc: Reserved for future playback page settings.
   category_navigation_messages_page_desc: Configure direct-message reading, conversation lists, memory, and mobile behavior.
   messages_reading_behavior: Reading behavior
@@ -187,6 +225,7 @@ settings:
     dock_and_sidebar: Dock
     home: Home
     moments: Dynamic Feed
+    watch_later_page: Watch Later
     favorites: Favorites
     search: Search
     playback_page: Playback Page
@@ -787,6 +826,8 @@ settings:
   enable_undo_refresh_button_desc: >-
     After refreshing the page, display an undo button that restores the content
     before the refresh when clicked.
+  show_layout_edit_button: Show layout editor button
+  show_layout_edit_button_desc: Show the layout editor entry in the Dock or sidebar; its exit button remains available while editing.
   clean_url_argument: Clean URL Tracking Parameters
   clean_url_argument_desc: Automatically clean tracking parameters from URLs to make links cleaner
 
@@ -1405,6 +1446,8 @@ version_reminder:
   settings_hint: You can turn off “New version reminders” under Settings → About.
 watch_later:
   title: Watch Later
+  layout_list: List
+  layout_grid: Grid
   clear_all: Clear all watch later
   clear_all_confirm: >-
     Clear all watch later?

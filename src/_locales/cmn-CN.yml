@@ -62,6 +62,37 @@ common:
     right: 右侧
     top: 顶部
     bottom: 底部
+layout_editor:
+  hint: 布局编辑中：选择一个区域进行调整，按 Esc 可取消
+  menu_label: 布局编辑菜单
+  edit_layout: 编辑此布局
+  adjust_target: 调整此元素
+  open_setting: 打开对应设置
+  preview: 实时预览
+  done: 完成
+  scope_current_page: 当前页面
+  scope_all_pages: 所有页面
+  target_dock: Dock
+  target_topbar: 顶栏
+  target_sidebar: 侧栏
+  target_page_mode_switcher: 页面模式切换器
+  target_topbar_logo: 顶栏标志与频道
+  target_topbar_pinned_channels: 顶栏固定频道
+  target_search_bar: 搜索栏
+  target_topbar_actions: 顶栏操作区
+  target_home_tabs: 首页标签栏
+  target_home_grid_switcher: 首页网格切换器
+  target_moments_sidebar: 动态页侧栏
+  target_moments_up_list: 动态页 UP 列
+  target_home_grid: 首页视频网格
+  target_moments_grid: 动态网格
+  target_watch_later: 稍后再看布局
+  layout_adaptive: 自适应网格
+  layout_two_columns: 双列
+  layout_one_column: 单列
+  columns_one: 1 列
+  columns_two: 2 列
+  columns_three: 3 列
 iframe_drawer:
   open_in_new_tab: 在新标签页打开
   close: 关闭
@@ -97,6 +128,12 @@ settings:
   breadcrumb: 设置位置
   group_interaction_layout: 交互与布局
   group_memory_saving: 内存节省
+  home_grid_layout: 首页视频布局
+  home_grid_layout_desc: 调整首页视频内容的自适应网格或列表列数。
+  group_watch_later_layout: 稍后再看布局
+  group_watch_later_layout_desc: 仅改变已加载内容的呈现方式，不会重新请求列表。
+  watch_later_layout_mode: 布局模式
+  watch_later_layout_mode_desc: 在列表和响应式网格之间切换。
   category_browsing_home_desc: 配置首页推荐、内容过滤、关注页和首页标签。
   category_browsing_video_card_desc: 配置视频卡片的布局、预览、信息展示与打开方式。
   category_browsing_favorites_desc: 配置收藏内容的显示与交互方式。
@@ -105,6 +142,7 @@ settings:
   category_navigation_dock_desc: 配置 Dock 栏与侧栏的位置、显隐和快捷操作。
   category_navigation_search_desc: 配置搜索页外观、搜索建议、历史、热搜与结果页。
   category_navigation_moments_desc: 配置插件动态页的左侧组件和动态卡片打开方式。
+  category_navigation_watch_later_page_desc: 配置稍后再看页面的内容布局。
   category_navigation_playback_page_desc: 为播放页后续设置预留独立配置区域。
   category_navigation_messages_page_desc: 配置私信阅读、会话列表、内存与移动端行为。
   messages_reading_behavior: 阅读行为
@@ -187,6 +225,7 @@ settings:
     dock_and_sidebar: Dock栏
     home: 首页
     moments: 动态页
+    watch_later_page: 稍后再看
     favorites: 收藏
     search: 搜索页
     playback_page: 播放页
@@ -748,6 +787,8 @@ settings:
   contributors_image_failed: 贡献者图片加载失败
   enable_undo_refresh_button: 启用撤销刷新按钮（仅在Web推荐模式下有效）
   enable_undo_refresh_button_desc: 刷新页面后显示撤销按钮，点击可恢复刷新前的内容
+  show_layout_edit_button: 显示布局编辑按钮
+  show_layout_edit_button_desc: 在 Dock 或侧栏中显示布局编辑入口；编辑期间退出按钮始终保留。
   clean_url_argument: 清理URL追踪参数
   clean_url_argument_desc: 自动清理URL中的追踪参数，使链接更加简洁
 
@@ -1349,6 +1390,8 @@ version_reminder:
   settings_hint: 可在“设置 → 关于”中关闭“新版本提醒”。
 watch_later:
   title: 稍后再看
+  layout_list: 列表
+  layout_grid: 网格
   clear_all: 清空稍后再看
   clear_all_confirm: |-
     要清空稍后再看吗？

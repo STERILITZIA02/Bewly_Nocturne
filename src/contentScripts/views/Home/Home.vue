@@ -8,6 +8,7 @@ import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
+import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -79,6 +80,7 @@ const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabPageRef = ref()
 const topBarVisibility = ref<boolean>(true)
+const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
@@ -259,7 +261,11 @@ function toggleTabContentLoading(loading: boolean) {
               :glow="settings.searchPageLogoGlow"
             />
           </div>
-          <div class="home-search-stage__sticky-search">
+          <div
+            v-layout-editable="'home-search'"
+            class="home-search-stage__sticky-search"
+            data-layout-editable-id="home-search"
+          >
             <SearchBar
               :darken-on-focus="searchFocusEffect.darkened"
               :blurred-on-focus="searchFocusEffect.blurred"
@@ -282,7 +288,9 @@ function toggleTabContentLoading(loading: boolean) {
       >
         <section
           v-if="shouldShowHomeTabs"
+          v-layout-editable="'home-tabs'"
           class="glass-panel home-tabs-panel bew-segment-control bew-segment-control--surface"
+          data-layout-editable-id="home-tabs"
           :class="{
             'bew-segment-control--solid': settings.disableFrostedGlass,
           }"
@@ -312,7 +320,9 @@ function toggleTabContentLoading(loading: boolean) {
 
         <div
           v-if="settings.enableGridLayoutSwitcher"
+          v-layout-editable="'home-grid-switcher'"
           class="glass-panel home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
+          data-layout-editable-id="home-grid-switcher"
           :class="{
             'bew-segment-control--solid': settings.disableFrostedGlass,
           }"
@@ -321,49 +331,55 @@ function toggleTabContentLoading(loading: boolean) {
         >
           <LiquidSegmentIndicator
             ref="gridIndicatorRef"
-            :active-key="gridLayout.home"
+            :active-key="homeGridLayout"
           />
           <button
             v-for="icon in gridLayoutIcons" :key="icon.value"
             type="button"
             class="home-grid-layout-item bew-segment-control__item bew-segment-control__item--icon"
             data-segment-item
-            :data-active="gridLayout.home === icon.value ? 'true' : undefined"
-            :aria-pressed="gridLayout.home === icon.value"
+            :data-active="homeGridLayout === icon.value ? 'true' : undefined"
+            :aria-pressed="homeGridLayout === icon.value"
             :title="icon.value"
             @click="gridLayout.home = icon.value"
           >
             <Icon
               class="home-grid-layout-item__icon bew-segment-control__icon"
-              :icon="gridLayout.home === icon.value ? icon.iconActivated : icon.icon"
+              :icon="homeGridLayout === icon.value ? icon.iconActivated : icon.icon"
               aria-hidden="true"
             />
           </button>
         </div>
       </header>
 
-      <Transition
-        name="home-tab"
-        mode="out-in"
-        @enter="restoreTabScrollPosition"
-        @after-enter="finishTabSwitch"
+      <div
+        v-layout-editable="'home-video-grid'"
+        data-layout-editable-id="home-video-grid"
+        min-w-0
       >
-        <Loading
-          v-if="homeAccountScope === 'profile-unavailable'"
-          min-h="240px"
-          flex="~ items-center"
-        />
-        <KeepAlive v-else :key="homeAccountGeneration" :max="8">
-          <Component
-            :is="pages[activatedPage]" :key="activatedPageCacheKey"
-            ref="tabPageRef"
-            :grid-layout="gridLayout.home"
-            :top-bar-visibility="topBarVisibility"
-            @before-loading="toggleTabContentLoading(true)"
-            @after-loading="toggleTabContentLoading(false)"
+        <Transition
+          name="home-tab"
+          mode="out-in"
+          @enter="restoreTabScrollPosition"
+          @after-enter="finishTabSwitch"
+        >
+          <Loading
+            v-if="homeAccountScope === 'profile-unavailable'"
+            min-h="240px"
+            flex="~ items-center"
           />
-        </KeepAlive>
-      </Transition>
+          <KeepAlive v-else :key="homeAccountGeneration" :max="8">
+            <Component
+              :is="pages[activatedPage]" :key="activatedPageCacheKey"
+              ref="tabPageRef"
+              :grid-layout="homeGridLayout"
+              :top-bar-visibility="topBarVisibility"
+              @before-loading="toggleTabContentLoading(true)"
+              @after-loading="toggleTabContentLoading(false)"
+            />
+          </KeepAlive>
+        </Transition>
+      </div>
     </main>
 
     <VersionReminder />

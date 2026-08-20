@@ -4,6 +4,7 @@ import { computed, ref, toRef } from 'vue'
 
 import { usePageModeSwitcher } from '~/composables/usePageModeSwitcher'
 import type { AppPage } from '~/enums/appEnums'
+import { vLayoutEditable } from '~/logic/layoutEdit'
 
 import Tooltip from './Tooltip.vue'
 
@@ -29,13 +30,16 @@ const {
 } = usePageModeSwitcher(toRef(props, 'activatedPage'))
 const previewNextMode = computed(() => (hovered.value || focused.value) && !disabled.value)
 const displayedIcon = computed(() => previewNextMode.value ? nextIcon.value : currentIcon.value)
+const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 </script>
 
 <template>
   <Tooltip :content="tooltip" :placement="placement">
     <button
+      v-layout-editable="layoutEditableId"
       type="button"
       class="page-mode-switcher"
+      :data-layout-editable-id="layoutEditableId"
       :class="[
         `page-mode-switcher--${variant}`,
         { 'page-mode-switcher--no-glow': disableGlowingEffect },

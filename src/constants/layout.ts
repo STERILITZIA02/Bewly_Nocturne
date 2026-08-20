@@ -31,6 +31,14 @@ export const DOCK_LAYOUT = {
   controlGap: 8,
 } as const
 
+/** Keep aligned with the single global LayoutEditorOverlay menu geometry. */
+export const LAYOUT_EDITOR_LAYOUT = {
+  actionMenuWidth: 288,
+  actionMenuFallbackHeight: 176,
+  contextMenuWidth: 224,
+  contextMenuFallbackHeight: 104,
+} as const
+
 /** Keep aligned with --bew-media-episode-menu-max-height. */
 export const MEDIA_EPISODE_MENU_MAX_HEIGHT = 400
 

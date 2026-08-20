@@ -4,7 +4,9 @@ import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { useGridLayout } from '~/composables/useGridLayout'
 import { settings } from '~/logic'
+import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import type { List as VideoItem, WatchLaterResult } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
@@ -13,6 +15,8 @@ import { getCSRF, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
 import { mergeWatchLaterItemsByAid } from '~/utils/watchLaterList'
+
+import WatchLaterGridCard from './WatchLaterGridCard.vue'
 
 const { t } = useI18n()
 const { confirm: showConfirmDialog } = useConfirmDialog()
@@ -27,6 +31,11 @@ const watchLaterCount = ref<number>(0)
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const pageNum = ref<number>(1)
 const pageSize = ref<number>(20)
+const watchLaterLayoutMode = useLayoutEditSettingValue(
+  'page.watchLater.layout',
+  () => settings.value.watchLaterLayoutMode,
+)
+const { gridClass: watchLaterGridClass, gridCssVars: watchLaterGridCssVars } = useGridLayout(() => 'adaptive')
 let requestGeneration = 0
 let loadedAccountId: number | null = null
 let loadMoreTimer: ReturnType<typeof setTimeout> | null = null
@@ -315,11 +324,27 @@ async function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
   if (await deleteWatchLaterItem(aid))
     handleVideoLinkClick(bvid)
 }
+
+function handleGridPlayAndRemove(item: VideoItem) {
+  void handleOpenVideoPageAndRemove(item.bvid, item.aid)
+}
+
+function handleGridPlayInWatchLater(item: VideoItem) {
+  handleLinkClick(`https://www.bilibili.com/list/watchlater?bvid=${item.bvid}`)
+}
+
+function handleGridRemove(item: VideoItem) {
+  void deleteWatchLaterItem(item.aid)
+}
 </script>
 
 <template>
   <div v-if="getCSRF()" flex="~ col md:row lg:row items-stretch" gap-4>
-    <main w="full md:60% lg:70% xl:75%" order="2 md:1 lg:1" mb-6>
+    <main
+      v-layout-editable="'watch-later-layout'"
+      data-layout-editable-id="watch-later-layout"
+      w="full md:60% lg:70% xl:75%" order="2 md:1 lg:1" mb-6
+    >
       <h3 class="bew-page-heading" text="$bew-text-1" mb-6>
         {{ t('watch_later.title') }} ({{ watchLaterCount }})
       </h3>
@@ -330,8 +355,13 @@ async function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
       </Empty>
       <Empty v-else-if="watchLaterCount === 0 && !isLoading" />
       <template v-else>
+        <Loading
+          v-if="isLoading && currentWatchLaterList.length === 0 && watchLaterLayoutMode === 'list'"
+          min-h="240px"
+          flex="~ items-center"
+        />
         <!-- watcher later list -->
-        <TransitionGroup name="list">
+        <TransitionGroup v-else-if="watchLaterLayoutMode === 'list'" name="list">
           <ALink
             v-for="item in currentWatchLaterList"
             :key="item.aid"
@@ -492,6 +522,38 @@ async function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
             </section>
           </ALink>
         </TransitionGroup>
+
+        <div v-else class="watch-later-grid-root">
+          <TransitionGroup
+            tag="div"
+            name="list"
+            class="watch-later-grid"
+            :class="watchLaterGridClass"
+            :style="watchLaterGridCssVars"
+          >
+            <WatchLaterGridCard
+              v-for="item in currentWatchLaterList"
+              :key="item.aid"
+              :item="item"
+              @play-and-remove="handleGridPlayAndRemove"
+              @play-in-watch-later="handleGridPlayInWatchLater"
+              @remove="handleGridRemove"
+            />
+            <article
+              v-for="index in (isLoading && currentWatchLaterList.length === 0 ? 8 : 0)"
+              :key="`watch-later-grid-skeleton-${index}`"
+              class="watch-later-grid-skeleton"
+              aria-hidden="true"
+            >
+              <div class="watch-later-grid-skeleton__media">
+                <span />
+              </div>
+              <div class="watch-later-grid-skeleton__line" />
+              <div class="watch-later-grid-skeleton__line watch-later-grid-skeleton__line--short" />
+            </article>
+          </TransitionGroup>
+        </div>
+
         <!-- loading -->
         <Transition name="fade">
           <loading
@@ -590,4 +652,68 @@ async function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
 </template>
 
 <style lang="scss" scoped>
+.watch-later-grid-root {
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.watch-later-grid {
+  min-width: 0;
+}
+
+.watch-later-grid-skeleton {
+  display: flex;
+  min-width: 0;
+  padding: var(--bew-space-2);
+  flex-direction: column;
+  gap: var(--bew-space-3);
+  border-radius: var(--bew-card-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
+.watch-later-grid-skeleton__media {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: var(--bew-skeleton);
+  border-radius: var(--bew-media-radius);
+  corner-shape: var(--bew-corner-shape);
+
+  span {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklab, var(--bew-fill-4), transparent 35%) 50%,
+      transparent 80%
+    );
+    animation: watch-later-skeleton-shimmer 1.4s linear infinite;
+    transform: translateX(-100%);
+  }
+}
+
+.watch-later-grid-skeleton__line {
+  width: 100%;
+  height: var(--bew-space-4);
+  background: var(--bew-skeleton);
+  border-radius: var(--bew-radius-sm);
+  corner-shape: var(--bew-corner-shape);
+}
+
+.watch-later-grid-skeleton__line--short {
+  width: 62%;
+}
+
+@keyframes watch-later-skeleton-shimmer {
+  to {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .watch-later-grid-skeleton__media span {
+    animation: none;
+  }
+}
 </style>

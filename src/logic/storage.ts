@@ -100,6 +100,7 @@ export type DrawerEscapeBehavior = 'immediate' | 'secondPress'
 
 export type VideoCardFontSizeSetting = 'xs' | 'sm' | 'base' | 'lg'
 export type VideoCardLayoutSetting = 'modern' | 'old'
+export type WatchLaterLayoutMode = 'list' | 'grid'
 export type TopBarLogoStyle = 'icon' | 'brand'
 export type AutoPlayMode = 'default' | 'autoPlay' | 'autoPlayWithRecommend' | 'pauseAtEnd' | 'loop'
 export type RandomPlayOrder = 'sequential' | 'reverse' | 'random'
@@ -220,6 +221,7 @@ export interface Settings {
   /** Automatic two-column -> one-column switch threshold in CSS pixels. */
   autoSwitchListLayoutBreakpoint: number
   releaseOffscreenVideoCardImages: boolean
+  watchLaterLayoutMode: WatchLaterLayoutMode
 
   language: string
   customizeFont: 'default' | 'recommend' | 'custom'
@@ -331,6 +333,7 @@ export interface Settings {
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
+  showLayoutEditButton: boolean
 
   sidebarPosition: 'left' | 'right'
   autoHideSidebar: boolean
@@ -490,6 +493,7 @@ export const originalSettings: Settings = {
   autoSwitchListLayout: true,
   autoSwitchListLayoutBreakpoint: MOBILE_LIST_LAYOUT_BREAKPOINT,
   releaseOffscreenVideoCardImages: false,
+  watchLaterLayoutMode: 'list',
 
   language: '',
   customizeFont: 'default',
@@ -601,6 +605,7 @@ export const originalSettings: Settings = {
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
+  showLayoutEditButton: true,
 
   sidebarPosition: 'right',
   autoHideSidebar: false,

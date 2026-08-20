@@ -8,7 +8,7 @@ import { useDark } from '~/composables/useDark'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
-import { useLayoutEditableRoot } from '~/logic/layoutEdit'
+import { isLayoutEditing, useLayoutEditableRoot } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { isHomePage, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
@@ -66,10 +66,15 @@ const hasActivePopup = computed(() => {
 
 function applyTopBarVisibility() {
   const shouldShow = !bewlyWidescreenActive.value
-    && desiredTopBarVisible.value
     && (
-      !forceHideTopBar.value
-      || hasActivePopup.value
+      isLayoutEditing.value
+      || (
+        desiredTopBarVisible.value
+        && (
+          !forceHideTopBar.value
+          || hasActivePopup.value
+        )
+      )
     )
 
   hideTopBar.value = !shouldShow
@@ -81,6 +86,11 @@ function applyTopBarVisibility() {
 function handleTopBarVisibility() {
   if (bewlyWidescreenActive.value)
     return
+  if (isLayoutEditing.value) {
+    clearHideTimer()
+    toggleTopBarVisible(true)
+    return
+  }
 
   if (isVideoOrBangumiPage() && effectiveVideoTopBarConfig.value === VideoPageTopBarConfig.ShowOnMouse) {
     // 清除之前的计时器
@@ -115,6 +125,15 @@ watch(hasActivePopup, () => {
 })
 
 watch(forceHideTopBar, () => {
+  applyTopBarVisibility()
+})
+
+watch(isLayoutEditing, (editing) => {
+  clearHideTimer()
+  if (editing) {
+    desiredTopBarVisible.value = true
+    topBarStore.closeAllPopups()
+  }
   applyTopBarVisibility()
 })
 
@@ -581,6 +600,7 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
         v-if="topBarStore.showTopBar"
         ref="headerTarget"
         class="top-bar"
+        data-layout-editable-id="topbar"
         w="full" transition="opacity duration-300, transform duration-300, background-color duration-300"
         :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon }"
       >

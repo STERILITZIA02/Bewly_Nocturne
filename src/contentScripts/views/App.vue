@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
+import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
 import type { BewlyAppProvider, SettingsNavigationRequest, SettingsNavigationTarget } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
@@ -17,6 +18,7 @@ import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { setIframePageActive } from '~/logic/iframePageState'
+import { exitLayoutEditMode, openSettingById } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -87,6 +89,14 @@ function openSettingsAt(target: SettingsNavigationTarget) {
   }
   if (!showSettings.value)
     toggleSettings(new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
+}
+
+function openLayoutEditorSetting(settingId: string, origin?: DOMRect) {
+  exitLayoutEditMode()
+  if (!showSettings.value) {
+    toggleSettings(origin ?? new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
+  }
+  openSettingById(settingId)
 }
 
 interface ConfirmDialogRequest {
@@ -212,6 +222,7 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 
 // 监听 URL 变化,同步更新 activatedPage
 watch(currentLocationHref, () => {
+  exitLayoutEditMode()
   const pageParam = getPageParam()
   if (!pageParam)
     return
@@ -530,6 +541,7 @@ const isFirstTimeActivatedPageChange = ref<boolean>(true)
 watch(
   () => activatedPage.value,
   () => {
+    exitLayoutEditMode()
     cancelPendingRefreshScroll()
     if (!isFirstTimeActivatedPageChange.value) {
       // Update the URL query parameter when activatedPage changes
@@ -547,13 +559,20 @@ watch(
 
 watch(homeActivatedPage, cancelPendingRefreshScroll)
 
-onScopeDispose(cancelPendingRefreshScroll)
+watch(() => settings.value.pageMode, exitLayoutEditMode)
+
+onScopeDispose(() => {
+  cancelPendingRefreshScroll()
+  exitLayoutEditMode()
+})
 
 watch(
   () => showBewlyPage.value,
   (visible) => {
     if (visible)
       focusScrollViewport()
+    else
+      exitLayoutEditMode()
   },
   { immediate: true, flush: 'post' },
 )
@@ -927,6 +946,8 @@ onBeforeUnmount(stopUrlCleaner)
     <template v-if="showBewlyPage">
       <AppGradientBackground :activated-page="activatedPage" />
     </template>
+
+    <LayoutEditorOverlay v-if="!isInIframe()" @open-setting="openLayoutEditorSetting" />
 
     <!-- Settings -->
     <Transition name="settings-launch">

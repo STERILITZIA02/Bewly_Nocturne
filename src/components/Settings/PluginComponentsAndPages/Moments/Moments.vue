@@ -96,6 +96,7 @@ const gridColumnOptions = computed(() => [
   <div>
     <SettingsItemGroup :title="$t('settings.group_original_moments_page')">
       <SettingsItem
+        setting-id="page.moments.sidebar"
         :title="$t('settings.moments_visible_components')"
         :desc="$t('settings.moments_visible_components_original_desc')"
       >
@@ -135,6 +136,7 @@ const gridColumnOptions = computed(() => [
         </template>
       </SettingsItem>
       <SettingsItem
+        setting-id="page.moments.gridColumns"
         :title="$t('settings.moments_grid_columns')"
         :desc="$t('settings.moments_grid_columns_desc')"
         right-width="auto"

@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 
 import ALink from '~/components/ALink.vue'
 import { settings } from '~/logic'
+import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
@@ -233,7 +234,9 @@ const shouldShowDivider = computed(() => {
           <div
             v-if="isComponentVisible('moments')"
             ref="moments"
+            v-layout-editable="getTopBarItemLayoutEditableId('moments')"
             class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('moments')"
             :class="{ active: popupVisible?.moments }"
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
           >
@@ -275,7 +278,9 @@ const shouldShowDivider = computed(() => {
           <div
             v-if="isComponentVisible('favorites')"
             ref="favorites"
+            v-layout-editable="getTopBarItemLayoutEditableId('favorites')"
             class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('favorites')"
             :class="{ active: popupVisible?.favorites }"
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
           >
@@ -305,7 +310,9 @@ const shouldShowDivider = computed(() => {
           <div
             v-if="isComponentVisible('history')"
             ref="history"
+            v-layout-editable="getTopBarItemLayoutEditableId('history')"
             class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('history')"
             :class="{ active: popupVisible?.history }"
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
           >
@@ -335,7 +342,9 @@ const shouldShowDivider = computed(() => {
           <div
             v-if="isComponentVisible('watchLater')"
             ref="watchLater"
+            v-layout-editable="getTopBarItemLayoutEditableId('watchLater')"
             class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('watchLater')"
             :class="{ active: popupVisible?.watchLater }"
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
           >
@@ -374,7 +383,12 @@ const shouldShowDivider = computed(() => {
           </div>
 
           <!-- Creative center -->
-          <div v-if="isComponentVisible('creatorCenter')" class="right-side-item">
+          <div
+            v-if="isComponentVisible('creatorCenter')"
+            v-layout-editable="getTopBarItemLayoutEditableId('creatorCenter')"
+            class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('creatorCenter')"
+          >
             <a
               class="top-bar-trigger"
               :class="{ 'white-icon': forceWhiteIcon }"
@@ -390,7 +404,9 @@ const shouldShowDivider = computed(() => {
         <!-- More -->
         <div
           ref="more"
+          v-layout-editable="'topbar-more'"
           class="right-side-item lg:!hidden flex"
+          data-layout-editable-id="topbar-more"
           :class="{ active: popupVisible?.more }"
           @click="(event: MouseEvent) => handleClickTopBarItem(event, 'more')"
         >
@@ -428,7 +444,9 @@ const shouldShowDivider = computed(() => {
           <div
             v-if="isComponentVisible('upload')"
             ref="upload"
+            v-layout-editable="getTopBarItemLayoutEditableId('upload')"
             class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('upload')"
             :class="{ active: popupVisible?.upload }"
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'upload')"
           >
@@ -457,7 +475,9 @@ const shouldShowDivider = computed(() => {
           <div
             v-if="isComponentVisible('notifications')"
             ref="notifications"
+            v-layout-editable="getTopBarItemLayoutEditableId('notifications')"
             class="right-side-item"
+            :data-layout-editable-id="getTopBarItemLayoutEditableId('notifications')"
             :class="{ active: popupVisible?.notifications }"
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'notifications')"
           >

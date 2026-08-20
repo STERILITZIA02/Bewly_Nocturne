@@ -180,7 +180,7 @@ function toggleChannel(value: string) {
       >
         <Radio v-model="settings.openTopBarItemsInBewly" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.auto_hide_top_bar')" right-width="auto">
+      <SettingsItem setting-id="navigation.topBar.autoHide" :title="$t('settings.auto_hide_top_bar')" right-width="auto">
         <Radio v-model="settings.autoHideTopBar" />
       </SettingsItem>
       <SettingsItem
@@ -200,6 +200,7 @@ function toggleChannel(value: string) {
       :desc="$t('settings.topbar_logo_and_channels_desc')"
     >
       <SettingsItem
+        setting-id="navigation.topBar.logo"
         :title="$t('settings.top_bar_logo_style')"
         :desc="$t('settings.top_bar_logo_style_desc')"
         right-width="auto"
@@ -255,6 +256,7 @@ function toggleChannel(value: string) {
     </SettingsItemGroup>
 
     <SettingsItemGroup
+      data-setting-id="navigation.topBar.pinnedChannels"
       :title="$t('settings.group_topbar_pinned_channels')"
       :desc="$t('settings.topbar_pinned_channels_desc')"
       icon="i-tabler:pin-filled"
@@ -311,6 +313,7 @@ function toggleChannel(value: string) {
     </SettingsItemGroup>
 
     <SettingsItemGroup
+      data-setting-id="navigation.topBar.components"
       :title="$t('settings.topbar_actions')"
       :desc="$t('settings.topbar_actions_desc')"
     >
