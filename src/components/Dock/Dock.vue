@@ -17,7 +17,15 @@ import { DOCK_LAYOUT } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
-import { useLayoutEditableRoot } from '~/logic/layoutEdit'
+import {
+  completeLayoutEditMode,
+  enterLayoutEditMode,
+  getDockItemLayoutEditableId,
+  isLayoutEditing,
+  useLayoutEditableRoot,
+  useLayoutEditSettingValue,
+  vLayoutEditable,
+} from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
@@ -46,6 +54,7 @@ const emit = defineEmits<{
 const settingsStore = useSettingsStore()
 const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
+const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
 
 // 计算属性：是否显示撤销按钮
 const showUndo = computed(() => undoForwardState.value === UndoForwardState.ShowUndo)
@@ -75,15 +84,23 @@ const dockContentRef = useDelayedHover({
   enterDelay: 100,
   leaveDelay: 600,
   beforeEnter: () => {
+    if (isLayoutEditing.value)
+      return
     if (shouldAutoCollapseDock(settings.value.dockCollapseMode))
       expandDock()
   },
   enter: () => {
+    if (isLayoutEditing.value)
+      return
     dockContentHover.value = true
   },
   leave: () => {
+    if (isLayoutEditing.value) {
+      dockContentHover.value = false
+      return
+    }
     dockContentHover.value = false
-    if (shouldAutoCollapseDock(settings.value.dockCollapseMode) && !dockInteractionActive.value && !props.settingsOpen)
+    if (shouldAutoCollapseDock(settings.value.dockCollapseMode) && !isLayoutEditing.value && !dockInteractionActive.value && !props.settingsOpen)
       collapseDock()
   },
 })
@@ -107,16 +124,16 @@ const hoveringDockItem = reactive<HoveringDockItem>({
 const currentDockItems = ref<DockItem[]>([])
 
 const tooltipPlacement = computed(() => {
-  if (settings.value.dockPosition === 'left')
+  if (dockPosition.value === 'left')
     return 'right'
-  else if (settings.value.dockPosition === 'right')
+  else if (dockPosition.value === 'right')
     return 'left'
-  else if (settings.value.dockPosition === 'bottom')
+  else if (dockPosition.value === 'bottom')
     return 'top'
   return 'right'
 })
 
-const dockCollapseIcon = computed(() => settings.value.dockPosition === 'bottom'
+const dockCollapseIcon = computed(() => dockPosition.value === 'bottom'
   ? 'mingcute:fold-horizontal-line'
   : 'mingcute:fold-vertical-line')
 
@@ -182,6 +199,11 @@ watch(
     dockContentHover.value = false
     dockInteractionActive.value = false
     clearAutoCollapseTimer()
+
+    if (isLayoutEditing.value) {
+      expandDock()
+      return
+    }
 
     const shouldCollapse = getDockCollapsedStateForMode(
       settings.value.dockCollapseMode,
@@ -353,7 +375,7 @@ function handleDockShellTransitionEnd(event: TransitionEvent) {
   if (event.target !== event.currentTarget)
     return
 
-  const primaryAxisProperty = settings.value.dockPosition === 'bottom' ? 'width' : 'height'
+  const primaryAxisProperty = dockPosition.value === 'bottom' ? 'width' : 'height'
   if (event.propertyName !== primaryAxisProperty)
     return
 
@@ -390,7 +412,7 @@ function clearAutoCollapseTimer() {
 
 function scheduleAutoCollapse(delay = 900) {
   clearAutoCollapseTimer()
-  if (!shouldAutoCollapseDock(settings.value.dockCollapseMode) || props.settingsOpen || dockContentHover.value || dockInteractionActive.value)
+  if (isLayoutEditing.value || !shouldAutoCollapseDock(settings.value.dockCollapseMode) || props.settingsOpen || dockContentHover.value || dockInteractionActive.value)
     return
 
   autoCollapseTimer = setTimeout(() => {
@@ -467,6 +489,13 @@ function handleHistoryNavigation() {
   }
 }
 
+function toggleLayoutEditMode() {
+  if (isLayoutEditing.value)
+    completeLayoutEditMode()
+  else
+    enterLayoutEditMode('dock', 'dock')
+}
+
 function isDockItemActivated(dockItem: DockItem): boolean {
   if (props.activatedPage === AppPage.SearchResults) {
     const searchOwnerPage = settings.value.useSearchPageModeOnHomePage
@@ -508,8 +537,15 @@ watch([dockShellWidth, dockShellHeight], ([width, height]) => {
 }, { flush: 'post' })
 
 watch(
-  [() => settings.value.dockCollapseMode, () => props.settingsOpen, dockReady],
-  ([mode, settingsOpen, ready]) => {
+  [() => settings.value.dockCollapseMode, () => props.settingsOpen, dockReady, isLayoutEditing],
+  ([mode, settingsOpen, ready, editing]) => {
+    if (editing) {
+      clearAutoCollapseTimer()
+      dockContentHover.value = false
+      dockInteractionActive.value = false
+      expandDock()
+      return
+    }
     const shouldCollapse = getDockCollapsedStateForMode(mode, dockContentHover.value || settingsOpen)
     if (shouldCollapse && ready)
       collapseDock()
@@ -537,7 +573,7 @@ const dockScale = computed((): number => {
   let heightMargin: number
   let widthMargin: number
 
-  if (settings.value.dockPosition === 'bottom') {
+  if (dockPosition.value === 'bottom') {
     // For bottom position, use original logic
     heightMargin = Math.max(100, Math.min(150, windowHeight.value * 0.1))
     widthMargin = Math.max(100, Math.min(150, windowWidth.value * 0.1))
@@ -557,7 +593,7 @@ const dockScale = computed((): number => {
   let additionalHeight = 0
   let additionalWidth = 0
 
-  if (settings.value.dockPosition === 'bottom') {
+  if (dockPosition.value === 'bottom') {
     const maxButtonCount = settings.value.backToTopAndRefreshButtonsAreSeparated ? 2 : 1
     const maxUndoForwardButtonCount = settings.value.enableUndoRefreshButton ? 1 : 0
     additionalWidth = (maxButtonCount + maxUndoForwardButtonCount) * buttonSize + maxButtonCount * buttonGap
@@ -586,15 +622,15 @@ const dockScale = computed((): number => {
 
 const dockActionButtonsStyle = computed<CSSProperties>(() => {
   return {
-    bottom: settings.value.dockPosition === 'bottom' ? 'unset' : 0,
-    right: settings.value.dockPosition === 'bottom' ? 0 : 'unset',
-    transform: settings.value.dockPosition === 'bottom' ? 'translate(100%, 0)' : 'translateY(100%)',
-    flexDirection: settings.value.dockPosition === 'bottom' ? 'row' : 'column',
+    bottom: dockPosition.value === 'bottom' ? 'unset' : 0,
+    right: dockPosition.value === 'bottom' ? 0 : 'unset',
+    transform: dockPosition.value === 'bottom' ? 'translate(100%, 0)' : 'translateY(100%)',
+    flexDirection: dockPosition.value === 'bottom' ? 'row' : 'column',
   }
 })
 
 const dockTransformStyle = computed((): CSSProperties => {
-  const position = settings.value.dockPosition
+  const position = dockPosition.value
   const scale = dockScale.value
   const preservedSize = getPreservedDockStageSize(
     isDockCollapsed.value || isDockTransitioning.value,
@@ -623,7 +659,7 @@ const dockTransformStyle = computed((): CSSProperties => {
 })
 
 const dockShellStyle = computed((): CSSProperties => {
-  const collapsedSize = settings.value.dockPosition === 'bottom'
+  const collapsedSize = dockPosition.value === 'bottom'
     ? expandedDockShellHeight.value
     : expandedDockShellWidth.value
 
@@ -653,10 +689,11 @@ onUnmounted(() => {
     <div
       ref="dockContentRef"
       class="dock-content"
+      data-layout-editable-id="dock"
       :class="{
-        left: settings.dockPosition === 'left',
-        right: settings.dockPosition === 'right',
-        bottom: settings.dockPosition === 'bottom',
+        left: dockPosition === 'left',
+        right: dockPosition === 'right',
+        bottom: dockPosition === 'bottom',
         hover: dockContentHover,
         ready: dockReady,
         collapsed: isDockCollapsed,
@@ -700,6 +737,7 @@ onUnmounted(() => {
             <template v-for="dockItem in currentDockItems" :key="dockItem.page">
               <Tooltip :content="$t(dockItem.i18nKey)" :placement="tooltipPlacement">
                 <button
+                  v-layout-editable="getDockItemLayoutEditableId(dockItem.page)"
                   type="button"
                   class="dock-page-navigation__item bew-segment-control__item bew-segment-control__item--icon bew-shape-circle"
                   :class="{ inactive: hoveringDockItem.themeMode && isDark }"
@@ -783,6 +821,23 @@ onUnmounted(() => {
               @click="openSettings"
             >
               <div i-mingcute:settings-3-line text-xl group-hover:rotate-180 transition="transform duration-400 ease-out" />
+            </button>
+          </Tooltip>
+
+          <Tooltip
+            v-if="settings.showLayoutEditButton || isLayoutEditing"
+            :content="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
+            :placement="tooltipPlacement"
+          >
+            <button
+              type="button"
+              class="dock-item layout-edit-button bew-shape-circle"
+              :class="{ active: isLayoutEditing }"
+              data-layout-editor-control
+              :aria-pressed="isLayoutEditing"
+              @click="toggleLayoutEditMode"
+            >
+              <Icon :icon="isLayoutEditing ? 'mingcute:check-line' : 'mingcute:edit-3-line'" />
             </button>
           </Tooltip>
 

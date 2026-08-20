@@ -6,6 +6,7 @@ import SearchFocusOverlay from '~/components/SearchFocusOverlay.vue'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
+import { vLayoutEditable } from '~/logic/layoutEdit'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 import TopBarLogo from './TopBarLogo.vue'
@@ -225,14 +226,21 @@ function refreshSearchContent() {
       />
     </Transition>
 
-    <div ref="leftSection" class="top-bar-header__side top-bar-header__side--left">
+    <div
+      ref="leftSection"
+      v-layout-editable="'topbar-logo'"
+      class="top-bar-header__side top-bar-header__side--left"
+      data-layout-editable-id="topbar-logo"
+    >
       <TopBarLogo :force-white-icon="forceWhiteIcon" />
     </div>
 
     <!-- search bar -->
     <div
       ref="searchSection"
+      v-layout-editable="'topbar-search'"
       class="top-bar-header__search"
+      data-layout-editable-id="topbar-search"
       :class="{ 'top-bar-header__search--focused': topBarSearchFocused }"
       :style="{ transform: `translateX(${searchOffset}px)` }"
     >

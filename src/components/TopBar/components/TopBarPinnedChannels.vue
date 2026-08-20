@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 
 import ALink from '~/components/ALink.vue'
 import { settings } from '~/logic'
+import { vLayoutEditable } from '~/logic/layoutEdit'
 
 import type { TopBarChannelConfig } from '../constants/channels'
 import { allChannelConfigs } from '../constants/channels'
@@ -175,7 +176,9 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
   <div
     v-if="validPinnedKeys.length"
     ref="containerRef"
+    v-layout-editable="'topbar-pinned-channels'"
     class="pinned-channels bew-segment-control bew-segment-control--surface"
+    data-layout-editable-id="topbar-pinned-channels"
     :class="{
       'white-theme': props.forceWhiteIcon,
       'bew-segment-control--solid': settings.disableFrostedGlass,

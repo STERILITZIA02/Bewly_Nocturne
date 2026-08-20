@@ -62,6 +62,37 @@ common:
     right: 右邊
     top: 上頭
     bottom: 下低
+layout_editor:
+  hint: 版面編輯緊：揀一個區域嚟調整，撳 Esc 可以取消
+  menu_label: 版面編輯選單
+  edit_layout: 編輯呢個版面
+  adjust_target: 調整呢個元素
+  open_setting: 打開對應設定
+  preview: 即時預覽
+  done: 完成
+  scope_current_page: 而家頁面
+  scope_all_pages: 所有頁面
+  target_dock: Dock
+  target_topbar: 頂欄
+  target_sidebar: 側欄
+  target_page_mode_switcher: 頁面模式切換器
+  target_topbar_logo: 頂欄標誌同頻道
+  target_topbar_pinned_channels: 頂欄固定頻道
+  target_search_bar: 搜尋列
+  target_topbar_actions: 頂欄操作區
+  target_home_tabs: 主頁分頁列
+  target_home_grid_switcher: 主頁網格切換器
+  target_moments_sidebar: 動態頁側欄
+  target_moments_up_list: 動態頁 UP 列
+  target_home_grid: 主頁影片網格
+  target_moments_grid: 動態網格
+  target_watch_later: 陣間至睇版面
+  layout_adaptive: 自適應網格
+  layout_two_columns: 雙欄
+  layout_one_column: 單欄
+  columns_one: 1 欄
+  columns_two: 2 欄
+  columns_three: 3 欄
 iframe_drawer:
   open_in_new_tab: 喺新嘅分頁度打開連結
   close: 關閉
@@ -97,6 +128,12 @@ settings:
   breadcrumb: 設定位置
   group_interaction_layout: 互動同版面
   group_memory_saving: 記憶體節省
+  home_grid_layout: 主頁影片版面
+  home_grid_layout_desc: 調整主頁影片內容嘅自適應網格或者清單欄數。
+  group_watch_later_layout: 陣間至睇版面
+  group_watch_later_layout_desc: 淨係改已載入內容嘅顯示方式，唔會重新請求清單。
+  watch_later_layout_mode: 版面模式
+  watch_later_layout_mode_desc: 喺清單同響應式網格之間切換。
   category_browsing_home_desc: 設定首頁推薦、內容過濾、關注頁同首頁分頁。
   category_browsing_video_card_desc: 設定影片卡片嘅版面、預覽、資料顯示同開啟方式。
   category_browsing_favorites_desc: 設定收藏內容嘅顯示同互動方式。
@@ -105,6 +142,7 @@ settings:
   category_navigation_dock_desc: 設定 Dock 欄同側欄嘅位置、顯示同快捷操作。
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋同結果頁。
   category_navigation_moments_desc: 設定插件動態頁左邊嘅元件同動態卡片開啟方式。
+  category_navigation_watch_later_page_desc: 設定陣間至睇頁面嘅內容版面。
   category_navigation_playback_page_desc: 預留獨立區域當以後加入播放頁設定。
   category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體同流動版行為。
   messages_reading_behavior: 閱讀行為
@@ -187,6 +225,7 @@ settings:
     dock_and_sidebar: Dock
     home: 主頁
     moments: 動態頁
+    watch_later_page: 陣間至睇
     favorites: 收藏
     search: 搵嘢頁
     playback_page: 播放頁
@@ -712,6 +751,8 @@ settings:
   settings_sync_last_error: '最近同步錯誤：{error}'
   enable_undo_refresh_button: 啓用復原更新掣（淨係得 Web 推介模式下有效）
   enable_undo_refresh_button_desc: 更新頁面後顯示復原更新掣，撳低可以回復更新前內容。
+  show_layout_edit_button: 顯示版面編輯掣
+  show_layout_edit_button_desc: 喺 Dock 或者側欄顯示版面編輯入口；編輯期間退出掣會一直保留。
   video_default_player_mode: 預設影片顯示模式
   video_danmaku_default_state: 彈幕預設狀態
   video_danmaku_default_state_desc: 開片時自動幫你調整彈幕開關，亦可以保持唔變。
@@ -1330,6 +1371,8 @@ version_reminder:
   settings_hint: 可以去「設定 → 關於」閂咗「新版本提醒」。
 watch_later:
   title: 陣間至睇
+  layout_list: 清單
+  layout_grid: 網格
   clear_all: 剷曬陣間至睇啲片
   clear_all_confirm: |-
     係咪要剷曬陣間至睇啲片呀？

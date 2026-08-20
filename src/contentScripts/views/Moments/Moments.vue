@@ -19,6 +19,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { useStorageLocal } from '~/composables/useStorageLocal'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
+import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import { momentsPinnedUsers, momentsWantedUsers } from '~/logic/storage'
 import { recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
@@ -104,6 +105,10 @@ const MOMENT_FEED_FEATURES = 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVo
 const toast = useToast()
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
+const momentsGridColumns = useLayoutEditSettingValue(
+  'page.moments.gridColumns',
+  () => settings.value.momentsGridColumns,
+)
 
 const moments = ref<DisplayMoment[]>([])
 type MomentFilter = 'all' | 'video' | 'pgc' | 'article'
@@ -1866,7 +1871,7 @@ function updateGridColumnCount() {
   showMomentsSidebar.value = hasSidebarContent && layoutWidth >= SIDEBAR_MIN_LAYOUT_WIDTH
   const sidebarSpace = showMomentsSidebar.value ? SIDEBAR_WIDTH + GRID_GAP : 0
   const containerWidth = Math.max(CARD_COMPACT_MIN_WIDTH, layoutWidth - sidebarSpace)
-  const preferredColumns = Math.min(3, Math.max(1, Number(settings.value.momentsGridColumns) || 3))
+  const preferredColumns = Math.min(3, Math.max(1, Number(momentsGridColumns.value) || 3))
   const fittingColumns = Math.max(
     1,
     Math.floor((containerWidth + GRID_GAP) / (CARD_MIN_WIDTH + GRID_GAP)),
@@ -3404,7 +3409,7 @@ watch(
 )
 
 watch(
-  () => settings.value.momentsGridColumns,
+  momentsGridColumns,
   async () => {
     Object.keys(cardHeights).forEach(key => delete cardHeights[key])
     settledHeights.clear()
@@ -3538,7 +3543,13 @@ watch(
         </section>
       </header>
 
-      <aside v-if="showMomentsSidebar" class="moments-sidebar" :aria-label="t('moments.user_info')">
+      <aside
+        v-if="showMomentsSidebar"
+        v-layout-editable="'moments-sidebar'"
+        class="moments-sidebar"
+        data-layout-editable-id="moments-sidebar"
+        :aria-label="t('moments.user_info')"
+      >
         <div v-if="isPortalLoading" class="moments-sidebar-skeleton" aria-hidden="true">
           <div v-if="settings.momentsSidebarShowUserCard" class="moments-sidebar-skeleton__profile">
             <span class="moments-sidebar-skeleton__avatar moments-skeleton-block" />
@@ -3617,7 +3628,9 @@ watch(
       <main class="moments-content" :style="momentsContentStyle">
         <section
           v-if="showMomentsUpList"
+          v-layout-editable="'moments-up-list'"
           class="moments-up-list"
+          data-layout-editable-id="moments-up-list"
           :aria-label="t('moments.feed_bar')"
         >
           <div class="moments-up-list__start" role="list" :aria-label="t('moments.feed_groups')">
@@ -3783,7 +3796,12 @@ watch(
             <span i-svg-spinners:ring-resize />
             {{ t('moments.initial_loading') }}
           </div>
-          <div class="moments-skeleton-grid" :style="momentsGridStyle">
+          <div
+            v-layout-editable="'moments-grid'"
+            class="moments-skeleton-grid"
+            data-layout-editable-id="moments-grid"
+            :style="momentsGridStyle"
+          >
             <div
               v-for="columnIndex in Math.max(1, gridColumnCount)"
               :key="columnIndex"
@@ -3818,7 +3836,9 @@ watch(
         <div
           v-else-if="moments.length"
           ref="gridRef"
+          v-layout-editable="'moments-grid'"
           class="moments-grid"
+          data-layout-editable-id="moments-grid"
           :style="momentsGridStyle"
         >
           <div v-for="(column, columnIndex) in virtualColumns" :key="columnIndex" class="moments-grid__column">

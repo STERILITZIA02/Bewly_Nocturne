@@ -7,8 +7,8 @@ import draggable from 'vuedraggable'
 import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
-import { appAuthTokens, settings } from '~/logic'
-import type { RecommendationMode } from '~/logic/storage'
+import { appAuthTokens, gridLayout, settings } from '~/logic'
+import type { GridLayoutType, RecommendationMode } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
 import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, revokeAccessKey, saveAppAuthTokens } from '~/utils/authProvider'
 
@@ -26,6 +26,11 @@ const recommendationModeOptions = computed<{ label: string, value: Recommendatio
   { label: 'Web', value: 'web' },
   { label: t('settings.recommendation_mode_web_no_cookie'), value: 'webNoCookie' },
   { label: 'App', value: 'app' },
+])
+const homeGridLayoutOptions = computed<{ label: string, value: GridLayoutType }[]>(() => [
+  { label: t('layout_editor.layout_adaptive'), value: 'adaptive' },
+  { label: t('layout_editor.layout_two_columns'), value: 'twoColumns' },
+  { label: t('layout_editor.layout_one_column'), value: 'oneColumn' },
 ])
 
 const showQRCodeDialog = ref<boolean>(false)
@@ -245,6 +250,21 @@ function handleToggleHomeTab(tab: any) {
 
 <template>
   <div>
+    <SettingsItemGroup :title="$t('settings.group_home_layout')">
+      <SettingsItem
+        setting-id="page.home.gridLayout"
+        :title="$t('settings.home_grid_layout')"
+        :desc="$t('settings.home_grid_layout_desc')"
+        right-width="auto"
+      >
+        <SettingsSegmentedControl
+          v-model="gridLayout.home"
+          :label="$t('settings.home_grid_layout')"
+          :options="homeGridLayoutOptions"
+        />
+      </SettingsItem>
+    </SettingsItemGroup>
+
     <SettingsItemGroup :title="$t('settings.group_recommendation_mode')">
       <SettingsItem :title="$t('settings.recommendation_mode')" right-width="auto">
         <template #desc>
@@ -501,6 +521,7 @@ function handleToggleHomeTab(tab: any) {
       :title="$t('settings.group_home_tabs')"
     >
       <SettingsItem
+        setting-id="page.home.tabs"
         :title="$t('settings.home_tabs_adjustment')"
         :desc="$t('settings.home_tabs_adjustment_desc')"
         right-width="auto"

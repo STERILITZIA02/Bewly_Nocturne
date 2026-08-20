@@ -180,6 +180,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
 
           <draggable
             v-model="settings.dockItemsConfig"
+            data-setting-id="navigation.dock.items"
             item-key="page"
             :component-data="{ style: 'display: flex; gap: 0.5rem; flex-wrap: wrap; flex-direction: column;' }"
           >
@@ -239,6 +240,14 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
       </SettingsItem>
       <SettingsItem :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">
         <Radio v-model="settings.enableUndoRefreshButton" />
+      </SettingsItem>
+      <SettingsItem
+        setting-id="navigation.dock.showLayoutEditButton"
+        :title="$t('settings.show_layout_edit_button')"
+        :desc="$t('settings.show_layout_edit_button_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.showLayoutEditButton" />
       </SettingsItem>
     </SettingsItemGroup>
 

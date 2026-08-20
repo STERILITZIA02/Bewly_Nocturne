@@ -75,6 +75,12 @@ const momentsRoute: SearchRoute = {
   secondaryTitleKey: 'settings.plugin.moments',
   storageKey: bewlyPagesStorageKey,
 }
+const watchLaterPageRoute: SearchRoute = {
+  menu: MenuType.BewlyPages,
+  secondaryPage: 'watch-later',
+  secondaryTitleKey: 'settings.plugin.watch_later_page',
+  storageKey: bewlyPagesStorageKey,
+}
 const favoritesRoute: SearchRoute = {
   menu: MenuType.BewlyPages,
   secondaryPage: 'favorites',
@@ -230,6 +236,8 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
 
   ...createEntries(homeRoute, [
     'settings.plugin.home',
+    'settings.group_home_layout',
+    'settings.home_grid_layout',
     'settings.group_recommendation_mode',
     'settings.remember_no_cookie_recommendation_state',
     'settings.authorize_app',
@@ -300,6 +308,16 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.group_moments_pinned_users',
     'settings.moments_pinned_users',
   ]),
+  ...createEntries(watchLaterPageRoute, [
+    'settings.watch_later_layout_mode',
+  ], {
+    keywordKeys: [
+      'settings.plugin.watch_later_page',
+      'settings.group_watch_later_layout',
+      'watch_later.layout_list',
+      'watch_later.layout_grid',
+    ],
+  }),
   ...createEntries(momentsRoute, [
     'settings.moments_filter_up_recommendation',
   ], { targetTitleKey: 'settings.moments_filter_up_recommendation_short' }),
@@ -413,6 +431,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.disable_light_dark_mode_switcher',
     'settings.back_to_top_and_refresh_buttons_are_separated',
     'settings.enable_undo_refresh_button',
+    'settings.show_layout_edit_button',
     'settings.group_sidebar',
     'settings.auto_hide_sidebar',
   ]),

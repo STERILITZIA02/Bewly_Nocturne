@@ -62,6 +62,37 @@ common:
     right: 右側
     top: 頂部
     bottom: 底部
+layout_editor:
+  hint: 版面編輯中：選擇一個區域進行調整，按 Esc 可取消
+  menu_label: 版面編輯選單
+  edit_layout: 編輯此版面
+  adjust_target: 調整此元素
+  open_setting: 開啟對應設定
+  preview: 即時預覽
+  done: 完成
+  scope_current_page: 目前頁面
+  scope_all_pages: 所有頁面
+  target_dock: Dock
+  target_topbar: 頂欄
+  target_sidebar: 側欄
+  target_page_mode_switcher: 頁面模式切換器
+  target_topbar_logo: 頂欄標誌與頻道
+  target_topbar_pinned_channels: 頂欄固定頻道
+  target_search_bar: 搜尋列
+  target_topbar_actions: 頂欄操作區
+  target_home_tabs: 首頁分頁列
+  target_home_grid_switcher: 首頁網格切換器
+  target_moments_sidebar: 動態頁側欄
+  target_moments_up_list: 動態頁 UP 列
+  target_home_grid: 首頁影片網格
+  target_moments_grid: 動態網格
+  target_watch_later: 稍後觀看版面
+  layout_adaptive: 自適應網格
+  layout_two_columns: 雙欄
+  layout_one_column: 單欄
+  columns_one: 1 欄
+  columns_two: 2 欄
+  columns_three: 3 欄
 iframe_drawer:
   open_in_new_tab: 在新索引標籤開啟連結
   close: 關閉
@@ -97,6 +128,12 @@ settings:
   breadcrumb: 設定位置
   group_interaction_layout: 互動與版面
   group_memory_saving: 記憶體節省
+  home_grid_layout: 首頁影片版面
+  home_grid_layout_desc: 調整首頁影片內容的自適應網格或清單欄數。
+  group_watch_later_layout: 稍後觀看版面
+  group_watch_later_layout_desc: 僅變更已載入內容的呈現方式，不會重新請求清單。
+  watch_later_layout_mode: 版面模式
+  watch_later_layout_mode_desc: 在清單和響應式網格之間切換。
   category_browsing_home_desc: 設定首頁推薦、內容過濾、關注頁和首頁分頁。
   category_browsing_video_card_desc: 設定影片卡片的版面、預覽、資訊顯示與開啟方式。
   category_browsing_favorites_desc: 設定收藏內容的顯示與互動方式。
@@ -105,6 +142,7 @@ settings:
   category_navigation_dock_desc: 設定 Dock 列與側欄的位置、顯示和快捷操作。
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋與結果頁。
   category_navigation_moments_desc: 設定插件動態頁的左側元件和動態卡片開啟方式。
+  category_navigation_watch_later_page_desc: 設定稍後觀看頁面的內容版面。
   category_navigation_playback_page_desc: 為播放頁後續設定預留獨立配置區域。
   category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體與行動版行為。
   messages_reading_behavior: 閱讀行為
@@ -187,6 +225,7 @@ settings:
     dock_and_sidebar: Dock
     home: 首頁
     moments: 動態頁
+    watch_later_page: 稍後觀看
     favorites: 收藏
     search: 搜尋頁
     playback_page: 播放頁
@@ -716,6 +755,8 @@ settings:
   random_play_min_videos_required: 需要至少{count}個影片才能啟用隨機播放
   enable_undo_refresh_button: 啟用撤銷重新整理按鈕（僅在Web推薦模式下有效）
   enable_undo_refresh_button_desc: 重新整理頁面後顯示撤銷按鈕，點擊可恢復重新整理前的內容
+  show_layout_edit_button: 顯示版面編輯按鈕
+  show_layout_edit_button_desc: 在 Dock 或側欄顯示版面編輯入口；編輯期間退出按鈕會一直保留。
   clean_url_argument: 清理 URL 追蹤參數
   clean_url_argument_desc: 自動清理 URL 中的追蹤參數，使連結更加簡潔
 
@@ -1350,6 +1391,8 @@ version_reminder:
   settings_hint: 可在「設定 → 關於」中關閉「新版本提醒」。
 watch_later:
   title: 稍後觀看
+  layout_list: 清單
+  layout_grid: 網格
   clear_all: 清空稍後觀看
   clear_all_confirm: |-
     要清空稍後觀看的影片嗎？
