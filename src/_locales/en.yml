@@ -1267,6 +1267,14 @@ moment_card:
   open_new_tab: Open in new tab
   open_new_tab_short: New tab
   view_comments: View comments
+  collapse_comments: Collapse comments
+  comments: Comments
+  comments_loading: Loading comments…
+  comments_empty: No comments yet
+  comments_load_failed: Comments failed to load. Try again later.
+  comments_retry: Retry
+  comments_load_more: View more comments
+  comments_reply_count: '{count} replies'
   live_popularity: '{count} popularity'
   no_data: No data
   live_now: Live now

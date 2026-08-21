@@ -10,6 +10,7 @@ import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 
 import type { Author, Video } from '../VideoCard/types'
 import VideoCardContextMenu from '../VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
+import MomentCommentSection from './MomentCommentSection.vue'
 import type { DisplayForwardVideo, DisplayMoment, WatchLaterTarget } from './types'
 import {
   formatCount,
@@ -61,6 +62,7 @@ const emit = defineEmits<{
   toggleLike: [moment: DisplayMoment]
   toggleReservation: [moment: DisplayMoment]
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
+  commentToggle: [expanded: boolean]
 }>()
 
 const { t } = useI18n()
@@ -141,6 +143,12 @@ const menuButtonLabel = computed(() => menuVideo.value
 const showVideoOptions = ref(false)
 const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
+const commentExpanded = ref(false)
+const canExpandComments = computed(() => Boolean(moment.commentId && moment.commentType))
+const commentSectionId = computed(() => `moment-comment-section-${moment.id}`)
+const primaryActionLabel = computed(() => moment.isVideo && !moment.isLive
+  ? t('moment_card.open_new_tab')
+  : t('moment_card.open_detail', { author: moment.author.name }))
 
 const isReservationAdditional = computed(() => Boolean(
   moment.additional?.reservationId
@@ -179,6 +187,15 @@ function closeVideoOptions() {
 
 function openPrimaryDetail() {
   emit('openDetail', moment)
+}
+
+function toggleComments() {
+  if (!canExpandComments.value)
+    return
+  closeVideoOptions()
+  const expanded = !commentExpanded.value
+  commentExpanded.value = expanded
+  emit('commentToggle', expanded)
 }
 
 // VideoCardContextMenu uses this injection to select its common option set.
@@ -222,6 +239,7 @@ function getImagePreviewLabel(author: string, index: number) {
       'moment-card--forward-video': !!moment.forward?.video,
       'moment-card--forward-draw': Boolean(moment.forward?.images?.length),
       'moment-card--charge': moment.isChargeExclusive,
+      'moment-card--comments-expanded': commentExpanded,
       'moment-card--preparing': !ready,
       'moment-card--entering': entering,
     }"
@@ -230,7 +248,7 @@ function getImagePreviewLabel(author: string, index: number) {
     <button
       type="button"
       class="moment-card__primary-action"
-      :aria-label="$t('moment_card.open_detail', { author: moment.author.name })"
+      :aria-label="primaryActionLabel"
       @click="openPrimaryDetail"
     />
     <div class="moment-card__surface">
@@ -238,7 +256,7 @@ function getImagePreviewLabel(author: string, index: number) {
         <img :src="getAvatarThumbnailUrl(moment.author.face)" :alt="moment.author.name" class="moment-card__avatar" loading="lazy" decoding="async">
         <span class="moment-card__identity">
           <strong>{{ moment.author.name }}</strong>
-          <small>{{ moment.time || $t('moment_card.just_now') }}</small>
+          <small>{{ moment.time || t('moment_card.just_now') }}</small>
         </span>
         <button
           v-if="menuVideo"
@@ -310,7 +328,7 @@ function getImagePreviewLabel(author: string, index: number) {
             <span i-svg-spinners:pulse-3 aria-hidden="true" />
           </span>
           <span v-if="moment.isChargeExclusive" class="moment-card__charge-badge">
-            {{ moment.chargeBadge || $t('moment_card.charge_exclusive') }}
+            {{ moment.chargeBadge || t('moment_card.charge_exclusive') }}
           </span>
           <button
             v-if="settings.showVideoCardWatchLater && moment.isVideo && !moment.isLive"
@@ -318,9 +336,9 @@ function getImagePreviewLabel(author: string, index: number) {
             class="moment-card__watch-later"
             :class="{ 'is-added': isWatchLaterAdded(moment) }"
             :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) ? $t('moment_card.watch_later_added') : $t('moment_card.add_watch_later')"
+            :aria-label="isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) ? $t('moment_card.added') : $t('moment_card.watch_later')"
+            :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="emit('toggleWatchLater', moment)"
           >
             <span v-if="isWatchLaterLoading(moment)" i-svg-spinners:ring-resize aria-hidden="true" />
@@ -335,16 +353,16 @@ function getImagePreviewLabel(author: string, index: number) {
         >
           <span v-if="moment.isLive" i-tabler-live-photo class="moment-card__text-cover-icon" />
           <span v-else i-tabler-player-play-filled class="moment-card__text-cover-icon" />
-          <span>{{ moment.isLive ? $t('moment_card.live_moment') : $t('moment_card.video_moment') }}</span>
+          <span>{{ moment.isLive ? t('moment_card.live_moment') : t('moment_card.video_moment') }}</span>
           <button
             v-if="settings.showVideoCardWatchLater && moment.isVideo && !moment.isLive"
             type="button"
             class="moment-card__watch-later"
             :class="{ 'is-added': isWatchLaterAdded(moment) }"
             :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) ? $t('moment_card.watch_later_added') : $t('moment_card.add_watch_later')"
+            :aria-label="isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) ? $t('moment_card.added') : $t('moment_card.watch_later')"
+            :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="emit('toggleWatchLater', moment)"
           >
             <span v-if="isWatchLaterLoading(moment)" i-svg-spinners:ring-resize aria-hidden="true" />
@@ -411,7 +429,7 @@ function getImagePreviewLabel(author: string, index: number) {
                 target="_blank"
                 rel="noopener noreferrer"
                 class="moment-card__forward-video-cover-link"
-                :aria-label="$t('moment_card.open_original_video', { title: moment.forward.video.title })"
+                :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
                 @click.stop="handleForwardVideoClick"
               >
                 <img
@@ -442,9 +460,9 @@ function getImagePreviewLabel(author: string, index: number) {
                 }"
                 :disabled="isWatchLaterLoading(moment.forward.video)"
                 :aria-disabled="isWatchLaterLoading(moment.forward.video)"
-                :aria-label="isWatchLaterAdded(moment.forward.video) ? $t('moment_card.watch_later_added') : $t('moment_card.add_watch_later')"
+                :aria-label="isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
                 :aria-pressed="isWatchLaterAdded(moment.forward.video)"
-                :title="isWatchLaterAdded(moment.forward.video) ? $t('moment_card.added') : $t('moment_card.watch_later')"
+                :title="isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
                 @click.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
               >
                 <span v-if="isWatchLaterLoading(moment.forward.video)" i-svg-spinners:ring-resize aria-hidden="true" />
@@ -457,7 +475,7 @@ function getImagePreviewLabel(author: string, index: number) {
               target="_blank"
               rel="noopener noreferrer"
               class="moment-card__forward-video-info"
-              :aria-label="$t('moment_card.open_original_video', { title: moment.forward.video.title })"
+              :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
               @click.stop="handleForwardVideoClick"
             >
               <strong>
@@ -494,7 +512,7 @@ function getImagePreviewLabel(author: string, index: number) {
               >
                 <img
                   :src="getMomentThumbnailUrl(image, 360)"
-                  :alt="$t('moment_card.moment_image_alt', { author: moment.forward.author, index: imageIndex + 1 })"
+                  :alt="t('moment_card.moment_image_alt', { author: moment.forward.author, index: imageIndex + 1 })"
                   loading="lazy"
                   decoding="async"
                 >
@@ -519,7 +537,7 @@ function getImagePreviewLabel(author: string, index: number) {
           >
             <img
               :src="getMomentThumbnailUrl(image, 360)"
-              :alt="$t('moment_card.moment_image_alt', { author: moment.author.name, index: imageIndex + 1 })"
+              :alt="t('moment_card.moment_image_alt', { author: moment.author.name, index: imageIndex + 1 })"
               loading="lazy"
               decoding="async"
               @load="handleCoverLoad"
@@ -527,7 +545,7 @@ function getImagePreviewLabel(author: string, index: number) {
           </button>
           <span v-if="moment.images.length > 9" class="moment-card__image-count">+{{ moment.images.length - 9 }}</span>
           <span v-if="moment.isChargeExclusive" class="moment-card__charge-badge">
-            {{ moment.chargeBadge || $t('moment_card.charge_exclusive') }}
+            {{ moment.chargeBadge || t('moment_card.charge_exclusive') }}
           </span>
         </div>
       </div>
@@ -561,7 +579,7 @@ function getImagePreviewLabel(author: string, index: number) {
             loading="lazy"
             decoding="async"
           >
-          <span><strong>{{ moment.additional.title || $t('moment_card.additional_content') }}</strong><small v-if="moment.additional.desc">{{ moment.additional.desc }}</small></span>
+          <span><strong>{{ moment.additional.title || t('moment_card.additional_content') }}</strong><small v-if="moment.additional.desc">{{ moment.additional.desc }}</small></span>
         </a>
         <button
           v-if="isReservationAdditional"
@@ -590,12 +608,16 @@ function getImagePreviewLabel(author: string, index: number) {
         v-if="moment.hotComment"
         type="button"
         class="moment-card__hot-comment"
-        :aria-label="$t('moment_card.view_hot_comment')"
-        @click.stop="emit('openDetail', moment)"
+        :class="{ 'is-active': commentExpanded }"
+        :aria-label="commentExpanded ? t('moment_card.collapse_comments') : t('moment_card.view_hot_comment')"
+        :aria-expanded="commentExpanded"
+        :aria-controls="commentSectionId"
+        :disabled="!canExpandComments"
+        @click.stop="toggleComments"
       >
         <span class="moment-card__hot-comment-label">
           <span i-tabler-message-circle-filled aria-hidden="true" />
-          {{ $t('moment_card.hot_comment') }}
+          {{ t('moment_card.hot_comment') }}
         </span>
         <span class="moment-card__hot-comment-content">
           <template v-if="moment.hotComment.richText.length">
@@ -619,42 +641,61 @@ function getImagePreviewLabel(author: string, index: number) {
 
       <footer class="moment-card__footer">
         <button
-          v-if="settings.momentsCardOpenMode !== 'dialog' && !moment.isLive"
+          v-if="moment.isVideo && !moment.isLive"
           type="button"
-          :aria-label="$t('moment_card.open_dialog')"
+          :aria-label="t('moment_card.open_new_tab')"
+          @click.stop="openPrimaryDetail"
+          @keydown.enter.stop
+        >
+          <span i-tabler-external-link />
+          <span class="moment-card__open-label">{{ t('moment_card.open_new_tab_short') }}</span>
+        </button>
+        <button
+          v-else-if="settings.momentsCardOpenMode !== 'dialog' && !moment.isLive"
+          type="button"
+          :aria-label="t('moment_card.open_dialog')"
           @click.stop="emit('openDetail', moment, true)"
           @keydown.enter.stop
         >
           <span i-tabler-layout-dashboard />
-          <span class="moment-card__open-label">{{ $t('moment_card.open_dialog_short') }}</span>
+          <span class="moment-card__open-label">{{ t('moment_card.open_dialog_short') }}</span>
         </button>
         <a
           v-else
           :href="moment.url"
           target="_blank"
           rel="noopener noreferrer"
-          :aria-label="$t('moment_card.open_new_tab')"
+          :aria-label="t('moment_card.open_new_tab')"
           @click.stop
         >
           <span i-tabler-external-link />
-          <span class="moment-card__open-label">{{ $t('moment_card.open_new_tab_short') }}</span>
+          <span class="moment-card__open-label">{{ t('moment_card.open_new_tab_short') }}</span>
         </a>
-        <button v-if="!moment.isLive" type="button" :aria-label="$t('moment_card.view_comments')" @click.stop="emit('openDetail', moment)">
+        <button
+          v-if="!moment.isLive"
+          type="button"
+          :class="{ 'is-active': commentExpanded }"
+          :aria-label="commentExpanded ? t('moment_card.collapse_comments') : t('moment_card.view_comments')"
+          :aria-expanded="commentExpanded"
+          :aria-controls="commentSectionId"
+          :disabled="!canExpandComments"
+          @click.stop="toggleComments"
+        >
           <span i-tabler-message-circle />
           {{ formatCount(moment.commentCount) }}
         </button>
-        <span v-else class="moment-card__footer-stat" :aria-label="$t('moment_card.live_popularity', { value: moment.livePopularity || $t('moment_card.no_data') })">
+        <span v-else class="moment-card__footer-stat" :aria-label="t('moment_card.live_popularity', { value: moment.livePopularity || t('moment_card.no_data') })">
           <span i-tabler-users />
-          {{ moment.livePopularity || $t('moment_card.live_now') }}
+          {{ moment.livePopularity || t('moment_card.live_now') }}
         </span>
         <button
           type="button"
           class="moment-card__likes"
           :class="{ 'is-liked': moment.isLiked, 'is-unavailable': moment.isLikeDisabled }"
           :disabled="isLikeLoading || moment.isLikeDisabled"
-          :aria-label="moment.isLikeDisabled ? $t('moment_card.like_unavailable') : moment.isLiked ? $t('moment_card.cancel_like') : $t('moment_card.like')"
+          :aria-label="moment.isLikeDisabled ? t('moment_card.like_unavailable') : moment.isLiked ? t('moment_card.cancel_like') : t('moment_card.like')"
           :aria-pressed="moment.isLiked"
-          :title="moment.isLikeDisabled ? $t('moment_card.like_unavailable') : moment.isLiked ? $t('moment_card.cancel_like') : $t('moment_card.like')"
+          :title="moment.isLikeDisabled ? t('moment_card.like_unavailable') : moment.isLiked ? t('moment_card.cancel_like') : t('moment_card.like')"
           @click.stop="emit('toggleLike', moment)"
           @keydown.enter.stop
         >
@@ -663,6 +704,22 @@ function getImagePreviewLabel(author: string, index: number) {
           {{ formatCount(moment.likeCount) }}
         </button>
       </footer>
+
+      <Transition name="moment-comments">
+        <div
+          v-if="commentExpanded && moment.commentId && moment.commentType"
+          :id="commentSectionId"
+          class="moment-card__comments"
+        >
+          <div class="moment-card__comments-inner">
+            <MomentCommentSection
+              :comment-id="moment.commentId"
+              :comment-type="moment.commentType"
+              :comment-count="moment.commentCount"
+            />
+          </div>
+        </div>
+      </Transition>
     </div>
   </article>
 </template>
@@ -742,9 +799,13 @@ function getImagePreviewLabel(author: string, index: number) {
     transform: translateY(-2px);
     box-shadow: var(--bew-shadow-1);
   }
+
+  .moment-card--comments-expanded:hover {
+    transform: none;
+  }
 }
 
-.moment-card:active {
+.moment-card:has(.moment-card__primary-action:active) {
   transform: translateY(0) scale(0.99);
 }
 
@@ -1666,6 +1727,16 @@ function getImagePreviewLabel(author: string, index: number) {
   background: var(--bew-fill-2);
 }
 
+.moment-card__hot-comment.is-active {
+  color: var(--bew-theme-foreground);
+  background: var(--bew-theme-color-10);
+}
+
+.moment-card__hot-comment:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .moment-card__hot-comment-label {
   display: inline-flex;
   flex: 0 0 auto;
@@ -1729,6 +1800,16 @@ function getImagePreviewLabel(author: string, index: number) {
   background: color-mix(in srgb, var(--bew-theme-color) 8%, transparent);
 }
 
+.moment-card__footer > button.is-active {
+  color: var(--bew-theme-foreground);
+  background: var(--bew-theme-color-10);
+}
+
+.moment-card__footer > button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
 .moment-card__footer > :not(:first-child) {
   border-left: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 72%);
 }
@@ -1740,6 +1821,42 @@ function getImagePreviewLabel(author: string, index: number) {
 .moment-card__footer .moment-card__likes:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+.moment-card__comments {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: 1fr;
+  border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
+  opacity: 1;
+  pointer-events: auto;
+  cursor: default;
+}
+
+.moment-card__comments-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.moment-comments-enter-active,
+.moment-comments-leave-active {
+  overflow: hidden;
+  transition:
+    grid-template-rows var(--bew-duration-moderate) var(--bew-ease-emphasized),
+    opacity var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.moment-comments-enter-from,
+.moment-comments-leave-to {
+  grid-template-rows: 0fr;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moment-comments-enter-active,
+  .moment-comments-leave-active {
+    transition: none;
+  }
 }
 
 @container (max-width: 359px) {

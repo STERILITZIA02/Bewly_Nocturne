@@ -1214,6 +1214,14 @@ moment_card:
   open_new_tab: 在新标签页打开
   open_new_tab_short: 新标签页
   view_comments: 查看评论
+  collapse_comments: 收起评论
+  comments: 评论
+  comments_loading: 正在加载评论…
+  comments_empty: 暂无评论
+  comments_load_failed: 评论加载失败，请稍后重试
+  comments_retry: 重试
+  comments_load_more: 查看更多评论
+  comments_reply_count: '{count} 条回复'
   live_popularity: '{count} 人气'
   no_data: 暂无数据
   live_now: 正在直播

@@ -50,6 +50,10 @@ export interface DisplayMoment {
   isLiked: boolean
   isLikeDisabled: boolean
   commentCount: number
+  /** 评论 API 的权威 oid，来自动态 basic.comment_id_str */
+  commentId?: string
+  /** 评论 API 的权威 type，来自动态 basic.comment_type */
+  commentType?: number
   /** 动态列表接口附带的评论互动摘要（type = 1） */
   hotComment?: {
     text: string

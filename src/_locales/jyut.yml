@@ -1200,6 +1200,14 @@ moment_card:
   open_new_tab: 喺新分頁開啟
   open_new_tab_short: 新分頁
   view_comments: 睇留言
+  collapse_comments: 收起留言
+  comments: 留言
+  comments_loading: 載入緊留言…
+  comments_empty: 暫時未有留言
+  comments_load_failed: 留言載入失敗，請遲啲再試
+  comments_retry: 再試
+  comments_load_more: 睇更多留言
+  comments_reply_count: '{count} 條回覆'
   live_popularity: '{count} 人氣'
   no_data: 暫時冇數據
   live_now: 直播緊
