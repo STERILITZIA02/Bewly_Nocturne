@@ -139,7 +139,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
         />
       </SettingsItem>
       <SettingsItem
-        setting-id="navigation.topBar.mode"
+        setting-id="navigation.dock.items"
         :title="$t('settings.dock_content_adjustment')"
         :desc="$t('settings.dock_content_adjustment_desc')"
       >
@@ -158,6 +158,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
         <template #bottom>
           <div
             class="bew-settings-option--lift"
+            data-setting-id="navigation.topBar.mode"
             flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-radius"
             mb-2
           >
@@ -232,13 +233,13 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
       >
         <Radio v-model="settings.showBewlyOrBiliPageSwitcher" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.disable_light_dark_mode_switcher')" right-width="auto">
+      <SettingsItem setting-id="navigation.dock.themeSwitcher" :title="$t('settings.disable_light_dark_mode_switcher')" right-width="auto">
         <Radio v-model="settings.disableLightDarkModeSwitcherOnDock" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.back_to_top_and_refresh_buttons_are_separated')" right-width="auto">
+      <SettingsItem setting-id="navigation.dock.actionButtons" :title="$t('settings.back_to_top_and_refresh_buttons_are_separated')" right-width="auto">
         <Radio v-model="settings.backToTopAndRefreshButtonsAreSeparated" />
       </SettingsItem>
-      <SettingsItem :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">
+      <SettingsItem setting-id="navigation.dock.undoRefresh" :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">
         <Radio v-model="settings.enableUndoRefreshButton" />
       </SettingsItem>
       <SettingsItem

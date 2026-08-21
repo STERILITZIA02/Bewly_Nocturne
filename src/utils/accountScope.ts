@@ -15,6 +15,15 @@ export function isSameAccount(cachedAccountId: AccountId, currentAccountId: Acco
   return cachedAccountId === currentAccountId
 }
 
+export function isAccountRequestCurrent(
+  requestAccountId: number,
+  requestGeneration: number,
+  currentAccountId: AccountId,
+  currentGeneration: number,
+): boolean {
+  return requestGeneration === currentGeneration && requestAccountId === currentAccountId
+}
+
 export function getAccountScopedStorageKey(baseKey: string, accountId: number): string {
   return `${baseKey}:${accountId}`
 }

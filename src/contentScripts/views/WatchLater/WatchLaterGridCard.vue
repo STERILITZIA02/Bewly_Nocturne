@@ -8,9 +8,12 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   item: VideoItem
-}>()
+  disabled?: boolean
+}>(), {
+  disabled: false,
+})
 
 const emit = defineEmits<{
   (event: 'playAndRemove', item: VideoItem): void
@@ -55,27 +58,30 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.play_video')"
+            :disabled="disabled"
             @click="emit('playAndRemove', item)"
           >
-            <Icon icon="tabler:player-play" />
+            <Icon icon="tabler:player-play" aria-hidden="true" />
           </IconButton>
         </Tooltip>
         <Tooltip :content="$t('watch_later.play_in_watch_later')" placement="top">
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.play_in_watch_later')"
+            :disabled="disabled"
             @click="emit('playInWatchLater', item)"
           >
-            <Icon icon="tabler:list-check" />
+            <Icon icon="tabler:list-check" aria-hidden="true" />
           </IconButton>
         </Tooltip>
         <Tooltip :content="$t('watch_later.remove_from_watch_later')" placement="top">
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.remove_from_watch_later')"
+            :disabled="disabled"
             @click="emit('remove', item)"
           >
-            <Icon icon="tabler:trash" />
+            <Icon icon="tabler:trash" aria-hidden="true" />
           </IconButton>
         </Tooltip>
       </div>

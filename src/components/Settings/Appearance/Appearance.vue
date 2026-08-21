@@ -166,7 +166,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_color')">
-      <SettingsItem :title="$t('settings.theme')" right-width="auto">
+      <SettingsItem setting-id="appearance.theme" :title="$t('settings.theme')" right-width="auto">
         <Select v-model="settings.theme" w="160px" :options="themeOptions" />
       </SettingsItem>
       <SettingsItem

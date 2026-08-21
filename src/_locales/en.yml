@@ -514,8 +514,12 @@ settings:
   show_bcoin_receive_reminder: VIP B-coin receive reminder
   auto_receive_bcoin_coupon: Auto receive B-coin coupon
   auto_receive_bcoin_coupon_desc: When enabled, B-coin coupons will be automatically received when detected
+  auto_receive_bcoin_coupon_success: B-coin coupon received automatically
+  auto_receive_bcoin_coupon_failed: 'Failed to receive B-coin coupon: {message}'
+  auto_receive_bcoin_coupon_error: Unable to receive the B-coin coupon. Please try again later.
   auto_receive_vip_exp: Auto receive VIP experience
   auto_receive_vip_exp_desc: When enabled, will automatically receive daily VIP experience
+  auto_receive_vip_exp_success: VIP experience received automatically
   open_notifications_page_as_drawer: Open notifications page as drawer
   show_like_notification_reminder: Show like notifications
   show_like_notification_reminder_desc: When enabled, likes are included in the top bar notifications badge count.
@@ -660,6 +664,8 @@ settings:
   auto_switch_recommendation_mode: Auto switch recommendation mode
   auto_switch_recommendation_mode_desc: >
     Automatically switch from App mode to Web mode when App recommendation fails.
+  app_recommendation_auto_switched_to_web: App recommendations failed to load. Switched to Web mode automatically.
+  app_recommendation_failed: App recommendations failed to load. Switch to Web mode or try again later.
   authorize_app: Authorize the BewlyBewly to use the access key
   authorize_app_desc: >
     After authentication, you will receive the video recommendations based on
@@ -667,6 +673,7 @@ settings:
     one month. After that, remember to re-authorize the BewlyBewly to use the
     access key.
   authorize_app_more_info_access_key: More information about the access key
+  app_authorization_success: App recommendation authorization succeeded
   scan_qrcode_desc: >-
     Use the Bilibili mobile app to scan this QR code in order to authorize the
     access key.
@@ -688,6 +695,11 @@ settings:
   filter_by_publish_time_desc: Filter out videos published more than the specified number of days ago (only works in Web recommendation mode, minimum 7 days).
   filter_by_publish_time_unit: days
   filter_item_already_exist: This filter item already exists!
+  filter_type_title: title
+  filter_type_user: user
+  filter_import_failed: 'Failed to import {type} filters: {message}'
+  filter_import_invalid_format: Invalid file format
+  filter_import_unknown_error: Unknown error
   filter_by_title: Filter by title
   filter_by_title_desc: >-
     Filtered out the videos that contain the titles you set (case-insensitive).

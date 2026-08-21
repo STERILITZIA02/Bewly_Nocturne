@@ -34,8 +34,13 @@ withDefaults(defineProps<{
     background-color var(--bew-duration-fast) var(--bew-ease-standard),
     transform var(--bew-duration-fast) var(--bew-ease-emphasized);
 
-  &:active {
+  &:active:not(:disabled) {
     transform: scale(0.92);
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
   }
 
   &:focus-visible {

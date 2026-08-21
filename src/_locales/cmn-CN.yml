@@ -573,8 +573,12 @@ settings:
   show_bcoin_receive_reminder: 大会员B币领取提醒
   auto_receive_bcoin_coupon: 大会员B币自动领取
   auto_receive_bcoin_coupon_desc: 启用后，当检测到有未领取的B币券时将自动领取
+  auto_receive_bcoin_coupon_success: B币券自动领取成功
+  auto_receive_bcoin_coupon_failed: 'B币券自动领取失败：{message}'
+  auto_receive_bcoin_coupon_error: B币券自动领取异常，请稍后重试
   auto_receive_vip_exp: 大会员经验自动领取
   auto_receive_vip_exp_desc: 启用后，将自动领取大会员每日经验
+  auto_receive_vip_exp_success: 大会员经验自动领取成功
   open_notifications_page_as_drawer: 以抽屉形式打开通知页面
   show_like_notification_reminder: 显示点赞提醒
   show_like_notification_reminder_desc: 启用后，顶栏通知角标会将收到的赞计入总数。
@@ -714,10 +718,13 @@ settings:
   auto_switch_recommendation_mode: 自动切换推荐模式
   auto_switch_recommendation_mode_desc: |
     当 App 推荐失败时自动切换至 Web 模式。
+  app_recommendation_auto_switched_to_web: App 推荐数据加载失败，已自动切换至 Web 模式
+  app_recommendation_failed: App 推荐数据加载失败，请手动切换至 Web 模式或稍后重试
   authorize_app: 授权 Bewly Nocturne 使用 access key
   authorize_app_desc: |
     授权使用后能在首页推送 bilibili App 端算法的推荐视频，授权 key 有效期约为一个月，过后记得重新授权获取 access key。
   authorize_app_more_info_access_key: 关于 access key
+  app_authorization_success: APP 推荐授权成功
   scan_qrcode_desc: 使用 Bilibili 移动应用程序扫描此二维码，以授权获取 access key。
   disable_filters_for_followed_users: 关注的用户不受过滤条件限制
   disable_filters_for_followed_users_desc: |
@@ -736,6 +743,11 @@ settings:
   filter_by_publish_time_desc: 筛选掉发布时间超过设定天数的视频（仅在 Web 推荐模式下有效，最少 7 天）。
   filter_by_publish_time_unit: 天
   filter_item_already_exist: 这个筛选项目已经存在！
+  filter_type_title: 标题
+  filter_type_user: 用户
+  filter_import_failed: '导入{type}过滤规则失败：{message}'
+  filter_import_invalid_format: 文件格式无效
+  filter_import_unknown_error: 未知错误
   filter_by_title: 按标题筛选
   filter_by_title_desc: >-
     按标题筛选掉包含您设置关键字的视频（不区分大小写），也可以使用正则表达式，如 {regex}，用 {slash} 包裹。{lineBreak}
