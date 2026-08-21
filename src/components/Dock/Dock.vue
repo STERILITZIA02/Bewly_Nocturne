@@ -28,6 +28,7 @@ import {
 } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
+import { resolveActiveDockItemPage } from '~/utils/dockActiveItem'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
 
 import IconButton from '../IconButton.vue'
@@ -122,6 +123,7 @@ const hoveringDockItem = reactive<HoveringDockItem>({
   settings: false,
 })
 const currentDockItems = ref<DockItem[]>([])
+const dockIndicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>(null)
 
 const tooltipPlacement = computed(() => {
   if (dockPosition.value === 'left')
@@ -192,6 +194,10 @@ watch(
   },
   { immediate: true },
 )
+
+watch(currentDockItems, () => {
+  void dockIndicatorRef.value?.updateIndicator(false)
+}, { flush: 'post' })
 
 watch(
   () => settings.value.touchScreenOptimization,
@@ -496,19 +502,16 @@ function toggleLayoutEditMode() {
     enterLayoutEditMode('dock', 'dock')
 }
 
-function isDockItemActivated(dockItem: DockItem): boolean {
-  if (props.activatedPage === AppPage.SearchResults) {
-    const searchOwnerPage = settings.value.useSearchPageModeOnHomePage
-      ? AppPage.Home
-      : AppPage.Search
-    return dockItem.page === searchOwnerPage && isHomePage()
-  }
-  return props.activatedPage === dockItem.page && isHomePage()
-}
+const activeDockItemPage = computed(() => resolveActiveDockItemPage(
+  currentDockItems.value,
+  props.activatedPage,
+  settings.value.useSearchPageModeOnHomePage,
+  isHomePage(),
+))
 
-const activeDockItemPage = computed(() => {
-  return currentDockItems.value.find(isDockItemActivated)?.page
-})
+function isDockItemActivated(dockItem: DockItem): boolean {
+  return activeDockItemPage.value === dockItem.page
+}
 
 const { width: windowWidth, height: windowHeight } = useWindowSize()
 
@@ -732,7 +735,7 @@ onUnmounted(() => {
             class="dock-page-navigation bew-segment-control"
             :class="{ 'disable-glowing-effect': settings.disableDockGlowingEffect }"
           >
-            <LiquidSegmentIndicator class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" white />
+            <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" white />
 
             <template v-for="dockItem in currentDockItems" :key="dockItem.page">
               <Tooltip :content="$t(dockItem.i18nKey)" :placement="tooltipPlacement">
@@ -743,6 +746,7 @@ onUnmounted(() => {
                   :class="{ inactive: hoveringDockItem.themeMode && isDark }"
                   data-segment-item
                   :data-active="isDockItemActivated(dockItem) ? 'true' : undefined"
+                  :aria-label="$t(dockItem.i18nKey)"
                   :aria-current="isDockItemActivated(dockItem) ? 'page' : undefined"
                   @click="handleDockItemClick($event, dockItem)"
                   @click.middle="openDockItemInNewTab(dockItem)"
@@ -789,7 +793,10 @@ onUnmounted(() => {
             />
 
             <button
+              v-layout-editable="'dock-theme-toggle'"
+              type="button"
               class="dock-item bew-shape-circle"
+              :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
               bg="!dark-hover:$bew-bg" transform="!dark-hover:scale-100"
               :shadow="settings.disableDockGlowingEffect ? 'none' : '!dark-hover:[inset_4px_-2px_8px_hsla(226deg,85%,77%,1)]'"
               pointer-events-auto
@@ -814,10 +821,12 @@ onUnmounted(() => {
 
           <Tooltip :content="$t('dock.settings')" :placement="tooltipPlacement">
             <button
+              type="button"
               class="dock-item group bew-shape-circle"
               :class="{
                 inactive: hoveringDockItem.themeMode && isDark,
               }"
+              :aria-label="$t('dock.settings')"
               @click="openSettings"
             >
               <div i-mingcute:settings-3-line text-xl group-hover:rotate-180 transition="transform duration-400 ease-out" />
@@ -834,6 +843,7 @@ onUnmounted(() => {
               class="dock-item layout-edit-button bew-shape-circle"
               :class="{ active: isLayoutEditing }"
               data-layout-editor-control
+              :aria-label="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
               :aria-pressed="isLayoutEditing"
               @click="toggleLayoutEditMode"
             >
@@ -847,6 +857,7 @@ onUnmounted(() => {
             :placement="tooltipPlacement"
           >
             <button
+              v-layout-editable="'dock-collapse-toggle'"
               type="button"
               class="dock-item bew-shape-circle"
               :aria-label="$t('dock.collapse_dock')"
@@ -885,6 +896,7 @@ onUnmounted(() => {
             <Transition name="fade">
               <IconButton
                 v-if="(key === 1 && canRefreshCurrentPage) || (key === 2 && !reachTop)"
+                v-layout-editable="key === 1 ? 'dock-refresh-action' : 'dock-back-to-top-action'"
                 class="back-to-top-or-refresh-btn"
                 :label="key === 1 ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
                 :class="{
@@ -910,6 +922,7 @@ onUnmounted(() => {
         </template>
         <template v-else>
           <IconButton
+            v-layout-editable="'dock-refresh-back-to-top-action'"
             class="back-to-top-or-refresh-btn"
             :label="reachTop && canRefreshCurrentPage ? $t('common.operation.refresh') : $t('common.operation.back_to_top')"
             :class="{
@@ -937,6 +950,7 @@ onUnmounted(() => {
         <Transition name="fade">
           <IconButton
             v-if="showUndoForwardActions"
+            v-layout-editable="showUndo ? 'dock-undo-refresh-action' : 'dock-forward-refresh-action'"
             class="back-to-top-or-refresh-btn"
             :label="showUndo ? $t('common.operation.undo_refresh') : $t('common.operation.forward_refresh')"
             :class="{

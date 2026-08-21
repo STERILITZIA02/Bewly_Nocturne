@@ -321,7 +321,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   flex: 0 0 auto;
   gap: var(--bew-space-2);
   padding: var(--bew-space-3);
-  border-bottom: 1px solid var(--bew-border-color);
 }
 
 .conversation-list__search {

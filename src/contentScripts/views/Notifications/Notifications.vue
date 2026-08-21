@@ -23,7 +23,6 @@ import {
 } from '~/utils/privateConversationRoute'
 
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
-import NotificationsNavigation from './components/NotificationsNavigation.vue'
 import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
 import type { NotificationPageParams } from './composables/useNotificationFeed'
 import { useNotificationFeeds } from './composables/useNotificationFeeds'
@@ -504,13 +503,8 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
-      <NotificationsPageHeader :view="currentView" />
-
       <div class="notifications-page__workspace">
-        <NotificationsNavigation
-          :model-value="currentView"
-          @update:model-value="selectView"
-        />
+        <NotificationsPageHeader :view="currentView" @select="selectView" />
 
         <section class="notifications-page__outlet">
           <WhisperWorkspace
@@ -558,8 +552,6 @@ onBeforeUnmount(() => {
 }
 
 .notifications-page--workspace {
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
   height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   overflow: hidden;
 }
@@ -591,11 +583,19 @@ onBeforeUnmount(() => {
 
 .notifications-page__workspace {
   display: grid;
-  grid-template-columns: calc(var(--bew-space-10) * 5) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: var(--bew-space-4);
   min-width: 0;
   min-height: 0;
-  padding-top: var(--bew-space-4);
+}
+
+.notifications-page--workspace .notifications-page__workspace {
+  height: 100%;
+}
+
+.notifications-page--document .notifications-page__workspace {
+  grid-template-rows: auto auto;
 }
 
 .notifications-page__outlet {
@@ -608,17 +608,8 @@ onBeforeUnmount(() => {
   overflow: hidden;
 }
 
-@media (min-width: breakpoints.$grid-md) and (max-width: breakpoints.$compact-max) {
-  .notifications-page__workspace {
-    grid-template-columns: calc(var(--bew-space-8) * 2) minmax(0, 1fr);
-    gap: var(--bew-space-2);
-  }
-}
-
 @media (max-width: breakpoints.$mobile-max) {
   .notifications-page__workspace {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto minmax(0, 1fr);
     gap: var(--bew-space-3);
   }
 }

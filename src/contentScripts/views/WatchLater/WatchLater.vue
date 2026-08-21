@@ -2,6 +2,7 @@
 import { useDateFormat } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import IconButton from '~/components/IconButton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
@@ -28,6 +29,7 @@ const noMoreContent = ref(false)
 const requestFailed = ref(false)
 const currentWatchLaterList = ref<VideoItem[]>([])
 const watchLaterCount = ref<number>(0)
+const pendingAction = ref<{ accountId: number, aid: number } | null>(null)
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const pageNum = ref<number>(1)
 const pageSize = ref<number>(20)
@@ -94,6 +96,7 @@ async function initData() {
   requestFailed.value = false
   currentWatchLaterList.value = []
   watchLaterCount.value = 0
+  pendingAction.value = null
   pageNum.value = 1
   if (accountId === null)
     return
@@ -199,31 +202,36 @@ async function getWatchLaterListByPage(generation: number, accountId: number) {
 
 async function deleteWatchLaterItem(aid: number): Promise<boolean> {
   const accountId = getCurrentAccountId()
-  if (!accountId)
+  if (!accountId || pendingAction.value)
     return false
 
+  const action = { accountId, aid }
+  pendingAction.value = action
   invalidateRequests()
-  let res
   try {
-    res = await api.watchlater.removeFromWatchLater({
+    const res = await api.watchlater.removeFromWatchLater({
       aid,
       csrf: getCSRF(),
     })
+    if (res.code !== 0 || accountId !== getCurrentAccountId())
+      return false
+
+    const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
+    if (currentIndex !== -1) {
+      currentWatchLaterList.value.splice(currentIndex, 1)
+      watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
+    }
+    await topBarStore.commitWatchLaterMutation(aid, false, accountId)
+    return true
   }
   catch (error) {
     console.error('[WatchLater] Failed to remove item:', error)
     return false
   }
-  if (res.code !== 0 || accountId !== getCurrentAccountId())
-    return false
-
-  const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
-  if (currentIndex !== -1) {
-    currentWatchLaterList.value.splice(currentIndex, 1)
-    watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
+  finally {
+    if (pendingAction.value === action)
+      pendingAction.value = null
   }
-  await topBarStore.commitWatchLaterMutation(aid, false, accountId)
-  return true
 }
 
 async function handleClearAllWatchLater() {
@@ -328,21 +336,25 @@ function handleVideoLinkClick(bvid: string) {
   }
 }
 
-async function handleOpenVideoPageAndRemove(bvid: string, aid: number) {
-  if (await deleteWatchLaterItem(aid))
-    handleVideoLinkClick(bvid)
+async function openVideoPageAndRemove(item: VideoItem) {
+  if (await deleteWatchLaterItem(item.aid))
+    handleVideoLinkClick(item.bvid)
 }
 
-function handleGridPlayAndRemove(item: VideoItem) {
-  void handleOpenVideoPageAndRemove(item.bvid, item.aid)
+function playAndRemove(item: VideoItem) {
+  void openVideoPageAndRemove(item)
 }
 
-function handleGridPlayInWatchLater(item: VideoItem) {
+function playInWatchLater(item: VideoItem) {
   handleLinkClick(`https://www.bilibili.com/list/watchlater?bvid=${item.bvid}`)
 }
 
-function handleGridRemove(item: VideoItem) {
+function remove(item: VideoItem) {
   void deleteWatchLaterItem(item.aid)
+}
+
+function isItemActionPending(): boolean {
+  return pendingAction.value?.accountId === getCurrentAccountId()
 }
 </script>
 
@@ -490,40 +502,46 @@ function handleGridRemove(item: VideoItem) {
 
                 <div flex items-center gap-1>
                   <Tooltip :content="t('watch_later.play_video')" placement="top">
-                    <button
+                    <IconButton
+                      :label="t('watch_later.play_video')"
+                      :disabled="isItemActionPending()"
                       text="size-$bew-icon-size-lg $bew-text-3"
                       hover:color="$bew-theme-color"
                       opacity-0 group-hover:opacity-100
                       p-2
                       duration-300
-                      @click.prevent.stop="handleOpenVideoPageAndRemove(item.bvid, item.aid)"
+                      @click.prevent.stop="playAndRemove(item)"
                     >
-                      <div i-tabler:player-play />
-                    </button>
+                      <div i-tabler:player-play aria-hidden="true" />
+                    </IconButton>
                   </Tooltip>
                   <Tooltip :content="t('watch_later.play_in_watch_later')" placement="top">
-                    <button
+                    <IconButton
+                      :label="t('watch_later.play_in_watch_later')"
+                      :disabled="isItemActionPending()"
                       text="size-$bew-icon-size-lg $bew-text-3"
                       hover:color="$bew-theme-color"
                       opacity-0 group-hover:opacity-100
                       p-2
                       duration-300
-                      @click.prevent.stop="handleLinkClick(`https://www.bilibili.com/list/watchlater?bvid=${item.bvid}`)"
+                      @click.prevent.stop="playInWatchLater(item)"
                     >
-                      <div i-tabler:list-check />
-                    </button>
+                      <div i-tabler:list-check aria-hidden="true" />
+                    </IconButton>
                   </Tooltip>
                   <Tooltip :content="t('watch_later.remove_from_watch_later')" placement="top">
-                    <button
+                    <IconButton
+                      :label="t('watch_later.remove_from_watch_later')"
+                      :disabled="isItemActionPending()"
                       text="size-$bew-icon-size-lg $bew-text-3"
                       hover:color="$bew-theme-color"
                       opacity-0 group-hover:opacity-100
                       p-2
                       duration-300
-                      @click.prevent.stop="deleteWatchLaterItem(item.aid)"
+                      @click.prevent.stop="remove(item)"
                     >
-                      <div i-tabler:trash />
-                    </button>
+                      <div i-tabler:trash aria-hidden="true" />
+                    </IconButton>
                   </Tooltip>
                 </div>
               </div>
@@ -543,9 +561,10 @@ function handleGridRemove(item: VideoItem) {
               v-for="item in currentWatchLaterList"
               :key="item.aid"
               :item="item"
-              @play-and-remove="handleGridPlayAndRemove"
-              @play-in-watch-later="handleGridPlayInWatchLater"
-              @remove="handleGridRemove"
+              :disabled="isItemActionPending()"
+              @play-and-remove="playAndRemove"
+              @play-in-watch-later="playInWatchLater"
+              @remove="remove"
             />
             <article
               v-for="index in (isLoading && currentWatchLaterList.length === 0 ? 8 : 0)"

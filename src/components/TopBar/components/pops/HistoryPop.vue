@@ -12,6 +12,8 @@ import Progress from '~/components/Progress.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
@@ -20,6 +22,11 @@ import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
 const { t } = useI18n()
 const toast = useToast()
+const topBarStore = useTopBarStore()
+const currentAccountId = computed(() => resolveAuthenticatedAccountId(
+  topBarStore.isLogin,
+  topBarStore.userInfo.mid,
+))
 const historys = reactive<Array<HistoryItem>>([])
 const historyTabs = computed(() => [
   {
@@ -48,29 +55,41 @@ const livePage = ref<number>(1)
 const historysWrap = ref<HTMLElement>() as Ref<HTMLElement>
 let requestGeneration = 0
 
+function resetHistoryState() {
+  requestGeneration++
+  historys.length = 0
+  isLoading.value = false
+  noMoreContent.value = false
+  loadError.value = false
+  failedRequest.value = null
+  livePage.value = 1
+  if (historysWrap.value)
+    scrollToTop(historysWrap.value)
+}
+
+function loadActiveTab() {
+  if (currentAccountId.value === null)
+    return
+
+  if (activatedTab.value === 0)
+    void getHistoryList(Business.ARCHIVE)
+  else if (activatedTab.value === 1)
+    void getHistoryList(Business.LIVE)
+  else if (activatedTab.value === 2)
+    void getHistoryList(Business.ARTICLE)
+}
+
 watch(activatedTab, (newVal: number | undefined, oldVal: number | undefined) => {
   if (newVal === oldVal)
     return
 
-  requestGeneration++
-  isLoading.value = false
-  historys.length = 0
-  noMoreContent.value = false
-  loadError.value = false
-  failedRequest.value = null
-  if (historysWrap.value)
-    scrollToTop(historysWrap.value)
+  resetHistoryState()
+  loadActiveTab()
+})
 
-  if (newVal === 0) {
-    void getHistoryList(Business.ARCHIVE)
-  }
-  else if (newVal === 1) {
-    livePage.value = 1
-    void getHistoryList(Business.LIVE)
-  }
-  else if (newVal === 2) {
-    void getHistoryList(Business.ARTICLE)
-  }
+watch(currentAccountId, () => {
+  resetHistoryState()
+  loadActiveTab()
 }, { immediate: true })
 
 // 使用 useOptimizedScroll 处理滚动加载
@@ -153,6 +172,10 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
   if (noMoreContent.value)
     return
 
+  const requestAccountId = currentAccountId.value
+  if (requestAccountId === null)
+    return
+
   const generation = requestGeneration
   isLoading.value = true
   loadError.value = false
@@ -164,7 +187,7 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
       view_at,
     })
 
-    if (generation !== requestGeneration)
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       return
     if (res.code !== 0 || !Array.isArray(res.data?.list))
       throw res
@@ -180,7 +203,7 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
     failedRequest.value = null
   }
   catch (error) {
-    if (generation !== requestGeneration)
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       return
     loadError.value = true
     failedRequest.value = { type, viewAt: view_at }
@@ -189,7 +212,7 @@ async function getHistoryList(type: Business, view_at = 0 as number) {
       console.error('Failed to load history list:', error)
   }
   finally {
-    if (generation === requestGeneration)
+    if (isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
       isLoading.value = false
   }
 }
@@ -209,12 +232,19 @@ function getHistoryItemKey(historyItem: HistoryItem): string {
 }
 
 async function deleteHistoryItem(historyItem: HistoryItem) {
+  const requestAccountId = currentAccountId.value
+  if (requestAccountId === null)
+    return
+
+  const generation = requestGeneration
   const itemKey = getHistoryItemKey(historyItem)
   try {
     const res = await api.history.deleteHistoryItem({
       kid: itemKey,
       csrf: getCSRF(),
     })
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      return
     if (res.code !== 0) {
       toast.error(t('common.load_failed'))
       return
@@ -225,31 +255,16 @@ async function deleteHistoryItem(historyItem: HistoryItem) {
       historys.splice(currentIndex, 1)
   }
   catch (error) {
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      return
     console.error('Failed to delete history item:', error)
     toast.error(t('common.load_failed'))
   }
 }
 
 function initData() {
-  requestGeneration++
-  isLoading.value = false
-  historys.length = 0
-  noMoreContent.value = false
-  loadError.value = false
-  failedRequest.value = null
-  if (historysWrap.value)
-    scrollToTop(historysWrap.value)
-
-  if (activatedTab.value === 0) {
-    void getHistoryList(Business.ARCHIVE)
-  }
-  else if (activatedTab.value === 1) {
-    livePage.value = 1
-    void getHistoryList(Business.LIVE)
-  }
-  else if (activatedTab.value === 2) {
-    void getHistoryList(Business.ARTICLE)
-  }
+  resetHistoryState()
+  loadActiveTab()
 }
 
 defineExpose({

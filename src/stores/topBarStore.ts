@@ -40,6 +40,7 @@ import {
 } from '~/stores/topBarSharedRefresh'
 import api from '~/utils/api'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
+import { i18n } from '~/utils/i18n'
 import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, sendMessage } from '~/utils/messaging'
 
@@ -80,6 +81,7 @@ function settleTopBarSharedRefreshTasks(
 export const useTopBarStore = defineStore('topBar', () => {
   const settingsStore = useSettingsStore()
   const toast = useToast()
+  const { t } = i18n.global
   const currentLocationHref = useCurrentLocationHref()
   // 登录态是本地事实而非网络推导：初始值取 DedeUserID 存在性（同步、零请求），
   // 之后只有 -101 或本地 Cookie 清除才能翻转为未登录，瞬态失败永不翻转。
@@ -225,7 +227,17 @@ export const useTopBarStore = defineStore('topBar', () => {
     vipExpNextReceiveAt.value = null
   }
 
+  function closeAccountScopedSurfaces() {
+    const accountScopedPopups = ['userPanel', 'notifications', 'moments', 'favorites', 'history', 'watchLater'] as const
+    accountScopedPopups.forEach((key) => {
+      popupVisible[key] = false
+    })
+    drawerVisible.notifications = false
+    notificationsDrawerUrl.value = 'https://message.bilibili.com/'
+  }
+
   function resetAccountScopedState() {
+    closeAccountScopedSurfaces()
     Object.keys(unReadMessage).forEach((key) => {
       unReadMessage[key as keyof UnReadMessage] = 0
     })
@@ -581,17 +593,19 @@ export const useTopBarStore = defineStore('topBar', () => {
         bCoinAlreadyReceived.value = true
         hasBCoinToReceive.value = false
         bCoinNextReceiveAt.value = nextReceiveAt
-        toast.success('B币券自动领取成功')
+        toast.success(t('settings.auto_receive_bcoin_coupon_success'))
       }
       else {
-        toast.error(`B币券自动领取失败: ${res.message}`)
+        toast.error(t('settings.auto_receive_bcoin_coupon_failed', {
+          message: res.message || t('settings.auto_receive_bcoin_coupon_error'),
+        }))
       }
     }
     catch (error) {
       if (isExtensionContextInvalidatedError(error))
         throw error
       if (isCurrentAccount(accountId))
-        toast.error('B币券自动领取失败，请稍后重试')
+        toast.error(t('settings.auto_receive_bcoin_coupon_error'))
     }
   }
 
@@ -618,7 +632,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         // 领取成功，更新状态并显示消息
         vipExpAlreadyReceived.value = true
         vipExpNextReceiveAt.value = nextReceiveAt
-        toast.success('大会员经验自动领取成功', { timeout: 1500 })
+        toast.success(t('settings.auto_receive_vip_exp_success'), { timeout: 1500 })
       }
       else if (res.code === 69198) {
         // 经验已领取，静默更新状态

@@ -143,7 +143,7 @@ function startAuthorizationPolling(generation = authorizationGeneration) {
       authorizationGeneration++
       showQRCodeDialog.value = false
       saveAppAuthTokens(pollRes.data)
-      toast.success('授权成功')
+      toast.success(t('settings.app_authorization_success'))
       return
     }
 
@@ -191,7 +191,11 @@ function handleImport(filterType: 'title' | 'user') {
       const importedFilters = JSON.parse(fileContent) as { keyword: string, remark: string }[]
 
       if (!Array.isArray(importedFilters) || !importedFilters.every(filter => 'keyword' in filter && 'remark' in filter)) {
-        throw new Error('Invalid file format')
+        toast.error(t('settings.filter_import_failed', {
+          type: t(`settings.filter_type_${filterType}`),
+          message: t('settings.filter_import_invalid_format'),
+        }))
+        return
       }
 
       if (filterType === 'title') {
@@ -200,11 +204,15 @@ function handleImport(filterType: 'title' | 'user') {
       else {
         settings.value.filterByUser = importedFilters
       }
-      // toast.success(`${filterType} filters imported successfully`)
     }
     catch (error) {
       console.error(`Error importing filter by ${filterType}:`, error)
-      toast.error(`Failed to import ${filterType} filters: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      toast.error(t('settings.filter_import_failed', {
+        type: t(`settings.filter_type_${filterType}`),
+        message: error instanceof SyntaxError
+          ? t('settings.filter_import_invalid_format')
+          : t('settings.filter_import_unknown_error'),
+      }))
     }
     finally {
       input.remove()

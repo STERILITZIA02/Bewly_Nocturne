@@ -5,11 +5,12 @@ import { useI18n } from 'vue-i18n'
 
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { revokeAccessKey } from '~/utils/authProvider'
 import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON, LV6_LIGHTNING_ICON } from '~/utils/lvIcons'
-import { getCSRF, getUserID, isHomePage } from '~/utils/main'
+import { getCSRF, isHomePage } from '~/utils/main'
 
 import type { UserInfo, UserStat } from '../../types'
 
@@ -30,10 +31,11 @@ const { t } = useI18n()
 
 const topBarStore = useTopBarStore()
 const { hasBCoinToReceive } = storeToRefs(topBarStore)
-
-const mid = computed(() => {
-  return props.userInfo.mid || getUserID()
-})
+const currentAccountId = computed(() => resolveAuthenticatedAccountId(
+  topBarStore.isLogin,
+  topBarStore.userInfo.mid,
+))
+const mid = computed(() => currentAccountId.value ?? 0)
 
 const otherLinks = computed((): { name: string, url: string, icon: string, code?: string }[] => {
   return [
@@ -101,22 +103,57 @@ const loginLog = reactive<Partial<LoginLogItem>>({})
 const showLv6LastLoginInfo = computed(() => {
   return !(props.userInfo?.level_info?.current_level >= 6 && settings.value.hideTopBarUserPanelLv6LastLoginLocation)
 })
+const shouldLoadLoginLog = computed(() => Boolean(
+  props.userInfo?.level_info?.current_level >= 6 && showLv6LastLoginInfo.value,
+))
+let requestGeneration = 0
 
-onMounted(() => {
-  api.user.getUserStat()
-    .then((res) => {
-      if (res.code === 0)
-        Object.assign(userStat, res.data)
-    })
+function clearAccountData() {
+  Object.keys(userStat).forEach(key => Reflect.deleteProperty(userStat, key))
+  Object.keys(loginLog).forEach(key => Reflect.deleteProperty(loginLog, key))
+}
 
-  if (showLv6LastLoginInfo.value) {
-    // 获取最近一周登录情况的第一条记录
-    api.user.getLoginLog()
-      .then((res) => {
-        if (res.code === 0 && res.data?.list?.length > 0)
-          Object.assign(loginLog, res.data.list[0])
-      })
+async function loadUserStat(requestAccountId: number, generation: number) {
+  try {
+    const res = await api.user.getUserStat()
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      return
+    if (res.code === 0)
+      Object.assign(userStat, res.data)
   }
+  catch (error) {
+    if (isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      console.error('Failed to load user statistics:', error)
+  }
+}
+
+async function loadLoginLog(requestAccountId: number, generation: number) {
+  try {
+    const res = await api.user.getLoginLog()
+    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      return
+    if (res.code === 0 && res.data?.list?.length > 0)
+      Object.assign(loginLog, res.data.list[0])
+  }
+  catch (error) {
+    if (isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+      console.error('Failed to load recent login information:', error)
+  }
+}
+
+watch([currentAccountId, shouldLoadLoginLog], ([accountId, shouldLoadLogin]) => {
+  const generation = ++requestGeneration
+  clearAccountData()
+  if (accountId === null)
+    return
+
+  void loadUserStat(accountId, generation)
+  if (shouldLoadLogin)
+    void loadLoginLog(accountId, generation)
+}, { immediate: true })
+
+onBeforeUnmount(() => {
+  requestGeneration++
 })
 
 async function logout() {
@@ -126,11 +163,16 @@ async function logout() {
   topBarStore.isLogin = false
   topBarStore.cleanup()
 
-  api.auth.logout({
-    biliCSRF: getCSRF(),
-  }).then(() => {
+  try {
+    await api.auth.logout({
+      biliCSRF: getCSRF(),
+    })
     location.reload()
-  })
+  }
+  catch (error) {
+    console.error('Failed to log out:', error)
+    topBarStore.reconcileLocalLoginState()
+  }
 }
 
 const levelIcons: string[] = [

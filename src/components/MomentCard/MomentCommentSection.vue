@@ -7,6 +7,7 @@ import { normalizeIntlLocale } from '~/utils/locale'
 
 import type { MomentCommentItem } from './commentUtils'
 import { mergeMomentComments, normalizeMomentCommentPage } from './commentUtils'
+import MomentCommentRichText from './MomentCommentRichText.vue'
 import { formatCount, getAvatarThumbnailUrl } from './utils'
 
 interface Props {
@@ -145,7 +146,8 @@ onBeforeUnmount(() => {
           target="_blank"
           rel="noopener noreferrer"
           class="moment-comment__avatar"
-          :aria-label="getAuthorName(comment)"
+          tabindex="-1"
+          aria-hidden="true"
         >
           <img :src="getAvatarThumbnailUrl(comment.author.avatar)" alt="" loading="lazy" decoding="async">
         </a>
@@ -167,7 +169,7 @@ onBeforeUnmount(() => {
             <strong v-else :style="{ color: comment.author.nameColor || undefined }">{{ getAuthorName(comment) }}</strong>
             <time>{{ formatCommentTime(comment.createdAt) }}</time>
           </header>
-          <p>{{ comment.message }}</p>
+          <p><MomentCommentRichText :segments="comment.segments" /></p>
           <footer>
             <span><span i-tabler-thumb-up aria-hidden="true" />{{ formatCount(comment.likeCount) }}</span>
             <span v-if="comment.replyCount">
@@ -182,7 +184,7 @@ onBeforeUnmount(() => {
                 <strong :style="{ color: reply.author.nameColor || undefined }">{{ getAuthorName(reply) }}</strong>
                 <time>{{ formatCommentTime(reply.createdAt) }}</time>
               </header>
-              <p>{{ reply.message }}</p>
+              <p><MomentCommentRichText :segments="reply.segments" /></p>
             </article>
           </div>
         </div>

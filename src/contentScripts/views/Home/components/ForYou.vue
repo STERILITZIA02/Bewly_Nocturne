@@ -881,11 +881,11 @@ async function getData(webRequestType: WebRecommendRequestType = 'refresh') {
         if (settings.value.autoSwitchRecommendationMode) {
           // 切换到 web 模式并提示用户
           settings.value.recommendationMode = 'web'
-          toast.warning('App 推荐数据加载失败，已自动切换至 Web 模式')
+          toast.warning(t('settings.app_recommendation_auto_switched_to_web'))
         }
         else {
           setRecommendationFailure(error)
-          toast.error('App 推荐数据加载失败，请手动切换至 Web 模式或稍后重试')
+          toast.error(t('settings.app_recommendation_failed'))
         }
       }
     }

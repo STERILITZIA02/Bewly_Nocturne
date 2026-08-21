@@ -199,7 +199,10 @@ defineExpose({ refresh })
 <template>
   <section
     class="whisper-workspace"
-    :class="{ 'whisper-workspace--detail': Boolean(selectedSession || transientRecipient) }"
+    :class="{
+      'whisper-workspace--detail': Boolean(selectedSession || transientRecipient),
+      'whisper-workspace--solid': settings.disableFrostedGlass,
+    }"
   >
     <aside class="whisper-workspace__sessions">
       <div v-if="accountState === 'profile-pending'" class="whisper-workspace__state" aria-busy="true">
@@ -301,16 +304,25 @@ defineExpose({ refresh })
 
 .whisper-workspace {
   display: grid;
-  grid-template-columns: minmax(calc(var(--bew-space-12) * 5), calc(var(--bew-space-12) * 7)) minmax(0, 1fr);
+  grid-template-columns: minmax(calc(var(--bew-space-12) * 6), calc(var(--bew-space-12) * 8)) minmax(0, 1fr);
   width: 100%;
   min-width: 0;
   height: 100%;
   min-height: 0;
   overflow: hidden;
-  background: transparent;
-  border: 0;
-  border-radius: 0;
-  box-shadow: none;
+  background: var(--bew-elevated);
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-panel-radius);
+  corner-shape: var(--bew-corner-shape);
+  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+}
+
+.whisper-workspace--solid {
+  background: var(--bew-elevated-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .whisper-workspace__sessions,
@@ -324,9 +336,6 @@ defineExpose({ refresh })
   display: flex;
   flex-direction: column;
   background: var(--bew-content-alt);
-  border-right: 1px solid var(--bew-border-color);
-  backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .whisper-workspace__detail {
@@ -374,7 +383,6 @@ defineExpose({ refresh })
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-fill-1);
-  border-bottom: 1px solid var(--bew-border-color);
 }
 
 .whisper-workspace__inline-error button {
@@ -414,7 +422,6 @@ defineExpose({ refresh })
     visibility: visible;
     opacity: 1;
     transform: translateX(0);
-    border-right: 0;
     transition-delay: 0s;
   }
 

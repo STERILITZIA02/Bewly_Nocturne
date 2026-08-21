@@ -4,7 +4,12 @@ import { watch } from 'vue'
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
-import { applyConfiguredPlaybackRate, isValidPlaybackRate, shouldRestoreConfiguredPlaybackRate } from '~/utils/playbackRate'
+import {
+  applyConfiguredPlaybackRate,
+  clampPlaybackRate,
+  PLAYBACK_RATE_STEP,
+  resolvePlaybackRateChange,
+} from '~/utils/playbackRate'
 
 const _videoClassTag = {
   danmuBtn:
@@ -42,8 +47,19 @@ const playbackRateListenerControllers = new Map<HTMLVideoElement, AbortControlle
 const applyingPlaybackRateVideos = new WeakSet<HTMLVideoElement>()
 const metadataCorrectionVideos = new WeakSet<HTMLVideoElement>()
 const playbackRateCorrectionFrameIds = new Map<HTMLVideoElement, number>()
+const playbackRateUserIntentUntil = new WeakMap<HTMLVideoElement, number>()
+const PLAYBACK_RATE_USER_INTENT_DURATION_MS = 1500
+const PLAYBACK_RATE_CONTROL_SELECTOR = [
+  '.bpx-player-ctrl-playbackrate-menu-item',
+  '.bpx-player-ctrl-playbackrate-menu [data-value]',
+  '.bilibili-player-video-btn-speed-menu-list li',
+  '.squirtle-video-speed-item',
+].join(',')
+const playbackRateEnhancementTimers = new Set<ReturnType<typeof setTimeout>>()
+let playbackRateLifecycleActive = true
 let stopPlaybackRatePlayerObserver: (() => void) | null = null
 let stopPlaybackRateSettingsWatch: (() => void) | null = null
+let playbackRateControlIntentController: AbortController | null = null
 
 function monitorDanmakuState(danmakuSwitch: HTMLInputElement) {
   if (monitoredDanmakuSwitches.has(danmakuSwitch))
@@ -168,8 +184,21 @@ export function showState(text: string) {
 
 // 应用播放器辅助功能（倍速记忆等）
 function applyPlayerEnhancements() {
+  if (!playbackRateLifecycleActive)
+    return
   applyRememberedPlaybackRate()
   startPlaybackRateMonitoring()
+}
+
+function schedulePlayerEnhancements(delay: number) {
+  if (!playbackRateLifecycleActive)
+    return
+
+  const timer = setTimeout(() => {
+    playbackRateEnhancementTimers.delete(timer)
+    applyPlayerEnhancements()
+  }, delay)
+  playbackRateEnhancementTimers.add(timer)
 }
 
 export function fullscreen() {
@@ -177,9 +206,7 @@ export function fullscreen() {
     const result = fullscreenClick()
     if (result) {
       // 在成功进入全屏后应用倍速记忆
-      setTimeout(() => {
-        applyPlayerEnhancements()
-      }, 1000)
+      schedulePlayerEnhancements(1000)
     }
     return result
   }).start()
@@ -190,18 +217,14 @@ export function webFullscreen() {
     // 检查是否已经处于网页全屏状态
     if (document.querySelector('[data-screen=\'web\']')) {
       // 即使已经是网页全屏状态，也应用倍速记忆
-      setTimeout(() => {
-        applyPlayerEnhancements()
-      }, 1000)
+      schedulePlayerEnhancements(1000)
       return true
     }
 
     const result = webFullscreenClick()
     if (result) {
       // 在成功进入网页全屏后应用倍速记忆
-      setTimeout(() => {
-        applyPlayerEnhancements()
-      }, 1000)
+      schedulePlayerEnhancements(1000)
     }
     return result
   }).start()
@@ -251,9 +274,7 @@ export function widescreen() {
     if (document.querySelector('[data-screen=\'wide\']')) {
       // 即使已经是宽屏状态，也执行滚动和倍速记忆
       scrollPlayerToOptimalPosition()
-      setTimeout(() => {
-        applyPlayerEnhancements()
-      }, 1000)
+      schedulePlayerEnhancements(1000)
       return true
     }
 
@@ -261,9 +282,7 @@ export function widescreen() {
     if (result) {
       scrollPlayerToOptimalPosition()
       // 在成功进入宽屏后应用倍速记忆
-      setTimeout(() => {
-        applyPlayerEnhancements()
-      }, 1000)
+      schedulePlayerEnhancements(1000)
     }
     return result
   }).start()
@@ -300,9 +319,7 @@ export function webFullscreenClick() {
 export function defaultMode() {
   scrollPlayerToOptimalPosition()
   // 在默认模式下也应用倍速记忆
-  setTimeout(() => {
-    applyPlayerEnhancements()
-  }, 2000) // 默认模式延迟稍长一些，确保页面完全加载
+  schedulePlayerEnhancements(2000) // 默认模式延迟稍长一些，确保页面完全加载
   return true
 }
 
@@ -1091,24 +1108,29 @@ export function toggleCaption() {
   showState('当前视频无字幕')
 }
 
+function markPlaybackRateUserIntent(video: HTMLVideoElement) {
+  playbackRateUserIntentUntil.set(video, Date.now() + PLAYBACK_RATE_USER_INTENT_DURATION_MS)
+}
+
+function consumePlaybackRateUserIntent(video: HTMLVideoElement): boolean {
+  const intentUntil = playbackRateUserIntentUntil.get(video) ?? 0
+  playbackRateUserIntentUntil.delete(video)
+  return intentUntil >= Date.now()
+}
+
 // 改变播放速度
 export function changePlaybackRate(increase: boolean) {
   const video = getVideoElement()
   if (!video)
     return
 
-  const speedStep = 0.25
-
-  if (increase) {
-    if (video.playbackRate < 5) {
-      video.playbackRate = Number.parseFloat((video.playbackRate + speedStep).toFixed(2))
-    }
-  }
-  else {
-    const newRate = Number.parseFloat((video.playbackRate - speedStep).toFixed(2))
-    if (newRate >= 0.25) {
-      video.playbackRate = newRate
-    }
+  const direction = increase ? 1 : -1
+  const nextRate = Number.parseFloat(clampPlaybackRate(
+    video.playbackRate + direction * PLAYBACK_RATE_STEP,
+  ).toFixed(2))
+  if (nextRate !== video.playbackRate) {
+    markPlaybackRateUserIntent(video)
+    video.playbackRate = nextRate
   }
 
   showState(`倍速 ${video.playbackRate}`)
@@ -1118,6 +1140,9 @@ export function changePlaybackRate(increase: boolean) {
 export function resetPlaybackRate() {
   const video = getVideoElement()
   if (video) {
+    markPlaybackRateUserIntent(video)
+    settings.value.savedPlaybackRate = 1
+    video.defaultPlaybackRate = 1
     video.playbackRate = 1
     showState('倍速 1')
   }
@@ -1146,6 +1171,7 @@ function cleanupReleasedPlaybackRateVideos() {
       cancelAnimationFrame(correctionFrameId)
     playbackRateCorrectionFrameIds.delete(video)
     metadataCorrectionVideos.delete(video)
+    playbackRateUserIntentUntil.delete(video)
     playbackRateListenerControllers.delete(video)
   }
 }
@@ -1200,25 +1226,33 @@ function monitorPlaybackRateVideo(video: HTMLVideoElement) {
       cancelAnimationFrame(correctionFrameId)
     playbackRateCorrectionFrameIds.delete(video)
     metadataCorrectionVideos.delete(video)
+    playbackRateUserIntentUntil.delete(video)
   }, { signal: controller.signal })
 
   video.addEventListener('ratechange', () => {
-    if (!settings.value.rememberPlaybackRate || applyingPlaybackRateVideos.has(video))
+    if (!settings.value.rememberPlaybackRate) {
+      playbackRateUserIntentUntil.delete(video)
       return
+    }
+    if (applyingPlaybackRateVideos.has(video)) {
+      playbackRateUserIntentUntil.delete(video)
+      return
+    }
 
     const currentRate = video.playbackRate
-    if (shouldRestoreConfiguredPlaybackRate(
+    const decision = resolvePlaybackRateChange(
       currentRate,
       settings.value.savedPlaybackRate,
-      metadataCorrectionVideos.has(video),
-    )) {
+      consumePlaybackRateUserIntent(video),
+    )
+    if (decision.type === 'restore') {
       applyRememberedPlaybackRateToVideo(video)
       return
     }
 
-    if (isValidPlaybackRate(currentRate)) {
-      video.defaultPlaybackRate = currentRate
-      settings.value.savedPlaybackRate = currentRate
+    if (decision.type === 'save') {
+      video.defaultPlaybackRate = decision.rate
+      settings.value.savedPlaybackRate = decision.rate
     }
   }, { signal: controller.signal })
 
@@ -1237,7 +1271,32 @@ function discoverPlaybackRateVideos(root: ParentNode | HTMLVideoElement = docume
   })
 }
 
+function ensurePlaybackRateControlIntentMonitoring() {
+  if (playbackRateControlIntentController)
+    return
+
+  const controller = new AbortController()
+  playbackRateControlIntentController = controller
+  const markIntentFromControl = (event: Event) => {
+    const target = event.target
+    if (!(target instanceof Element) || !target.closest(PLAYBACK_RATE_CONTROL_SELECTOR))
+      return
+    if (event instanceof KeyboardEvent && !['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key))
+      return
+
+    const video = getVideoElement()
+    if (video)
+      markPlaybackRateUserIntent(video)
+  }
+
+  document.addEventListener('pointerdown', markIntentFromControl, { capture: true, signal: controller.signal })
+  document.addEventListener('keydown', markIntentFromControl, { capture: true, signal: controller.signal })
+}
+
 function ensurePlaybackRateMonitoring() {
+  if (!playbackRateLifecycleActive)
+    return
+  ensurePlaybackRateControlIntentMonitoring()
   if (!stopPlaybackRatePlayerObserver) {
     stopPlaybackRatePlayerObserver = observePlayerDom(() => {
       cleanupReleasedPlaybackRateVideos()
@@ -1273,6 +1332,8 @@ function ensurePlaybackRateMonitoring() {
 
 // 应用记住的倍速
 export function applyRememberedPlaybackRate() {
+  if (!playbackRateLifecycleActive)
+    return
   ensurePlaybackRateMonitoring()
   const video = getVideoElement()
   if (!video || !applyRememberedPlaybackRateToVideo(video))
@@ -1288,13 +1349,19 @@ export function startPlaybackRateMonitoring() {
 }
 
 export function stopPlaybackRateMonitoring() {
+  playbackRateLifecycleActive = false
+  playbackRateEnhancementTimers.forEach(timer => clearTimeout(timer))
+  playbackRateEnhancementTimers.clear()
   stopPlaybackRatePlayerObserver?.()
   stopPlaybackRatePlayerObserver = null
   stopPlaybackRateSettingsWatch?.()
   stopPlaybackRateSettingsWatch = null
+  playbackRateControlIntentController?.abort()
+  playbackRateControlIntentController = null
   playbackRateListenerControllers.forEach((controller, video) => {
     controller.abort()
     metadataCorrectionVideos.delete(video)
+    playbackRateUserIntentUntil.delete(video)
   })
   playbackRateListenerControllers.clear()
   playbackRateCorrectionFrameIds.forEach(frameId => cancelAnimationFrame(frameId))

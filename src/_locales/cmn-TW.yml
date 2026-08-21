@@ -540,8 +540,12 @@ settings:
   show_bcoin_receive_reminder: 大會員B幣領取提醒
   auto_receive_bcoin_coupon: 大會員B幣自動領取
   auto_receive_bcoin_coupon_desc: 啟用後，當檢測到有未領取的B幣券時將自動領取
+  auto_receive_bcoin_coupon_success: B幣券自動領取成功
+  auto_receive_bcoin_coupon_failed: 'B幣券自動領取失敗：{message}'
+  auto_receive_bcoin_coupon_error: B幣券自動領取異常，請稍後再試
   auto_receive_vip_exp: 大會員經驗自動領取
   auto_receive_vip_exp_desc: 啟用後，將自動領取大會員每日經驗
+  auto_receive_vip_exp_success: 大會員經驗自動領取成功
   open_notifications_page_as_drawer: 以抽屜形式打開通知頁面
   show_like_notification_reminder: 顯示按讚提醒
   show_like_notification_reminder_desc: 啟用後，頂欄通知角標會將按讚提醒計入總數。
@@ -619,11 +623,14 @@ settings:
   auto_switch_recommendation_mode: 自動切換推薦模式
   auto_switch_recommendation_mode_desc: |
     當手機端推薦失敗時自動切換至網頁模式。
+  app_recommendation_auto_switched_to_web: App 推薦資料載入失敗，已自動切換至 Web 模式
+  app_recommendation_failed: App 推薦資料載入失敗，請手動切換至 Web 模式或稍後再試
   authorize_app: 授權 BewlyBewly 使用 access key
   authorize_app_desc: >
     授權使用後能在首頁推送 bilibili 手機端推介演算法的影片，授權金鑰的有效期約為一個月，過了有效期後，請記得重新取得授權以取得 access
     key。
   authorize_app_more_info_access_key: 關於 access key
+  app_authorization_success: APP 推薦授權成功
   scan_qrcode_desc: 使用 Bilibili 手機應用程式掃描這個行動條碼，以授權取得 access key。
   disable_filters_for_followed_users: 正在跟隨的使用者不受過濾條件限制
   disable_filters_for_followed_users_desc: |
@@ -642,6 +649,11 @@ settings:
   filter_by_publish_time_desc: 篩選掉發布時間超過設定天數的影片（僅在 Web 推薦模式下有效，最少 7 天）。
   filter_by_publish_time_unit: 天
   filter_item_already_exist: 這個篩選項目已經存在！
+  filter_type_title: 標題
+  filter_type_user: 使用者
+  filter_import_failed: '匯入{type}過濾規則失敗：{message}'
+  filter_import_invalid_format: 檔案格式無效
+  filter_import_unknown_error: 未知錯誤
   filter_by_title: 依標題篩選
   filter_by_title_desc: >-
     依標題篩選掉包含你設定的字串的影片（不區分大小寫），或使用正規表示式，如 {regex}，用 {slash} 包裡。{lineBreak}

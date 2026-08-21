@@ -12,6 +12,7 @@ import {
   isLayoutEditing,
   useLayoutEditableRoot,
   useLayoutEditSettingValue,
+  vLayoutEditable,
 } from '~/logic/layoutEdit'
 
 import PageModeSwitcherButton from '../PageModeSwitcherButton.vue'
@@ -97,6 +98,7 @@ function toggleLayoutEditMode() {
 
 <template>
   <div
+    v-layout-editable="'sidebar-auto-hide'"
     :class="{
       'left-side': sidebarPosition === 'left',
       'right-side': sidebarPosition === 'right',
@@ -134,8 +136,10 @@ function toggleLayoutEditMode() {
       />
       <Tooltip :content="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')" :placement="tooltipPlacement">
         <Button
+          v-layout-editable="'sidebar-theme-toggle'"
           class="ctrl-btn bew-shape-circle"
           style="backdrop-filter: var(--bew-filter-glass-1);"
+          :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
           center size="small" round
           @click="toggleDark"
           @mouseenter="hoveringDockItem.themeMode = true"
@@ -159,6 +163,7 @@ function toggleLayoutEditMode() {
         <Button
           class="ctrl-btn group bew-shape-circle"
           style="backdrop-filter: var(--bew-filter-glass-1);"
+          :aria-label="$t('dock.settings')"
           center size="small" round
           @click="openSettings"
         >
@@ -180,6 +185,7 @@ function toggleLayoutEditMode() {
           :class="{ active: isLayoutEditing }"
           style="backdrop-filter: var(--bew-filter-glass-1);"
           data-layout-editor-control
+          :aria-label="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
           :aria-pressed="isLayoutEditing"
           center size="small" round
           @click="toggleLayoutEditMode"
