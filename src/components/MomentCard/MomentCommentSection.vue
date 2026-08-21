@@ -3,6 +3,7 @@ import { onBeforeUnmount, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import api from '~/utils/api'
+import { normalizeIntlLocale } from '~/utils/locale'
 
 import type { MomentCommentItem } from './commentUtils'
 import { mergeMomentComments, normalizeMomentCommentPage } from './commentUtils'
@@ -28,7 +29,7 @@ let requestGeneration = 0
 function formatCommentTime(timestamp: number) {
   if (!timestamp)
     return ''
-  return new Intl.DateTimeFormat(locale.value, {
+  return new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',

@@ -21,3 +21,13 @@ export function applyConfiguredPlaybackRate(
   video.playbackRate = rate
   return true
 }
+
+export function shouldRestoreConfiguredPlaybackRate(
+  currentRate: number,
+  configuredRate: number,
+  initializationCorrectionActive: boolean,
+): boolean {
+  return initializationCorrectionActive
+    && isValidPlaybackRate(configuredRate)
+    && currentRate !== configuredRate
+}

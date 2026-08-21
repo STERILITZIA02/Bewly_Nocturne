@@ -694,11 +694,54 @@ function handleClearKeyword() {
 
   @mixin card-content {
     --uno: "text-base outline-none w-full bg-$b-search-bar-normal-color border-1 border-$bew-surface-border-color";
-    --uno: "shadow-[var(--bew-shadow-2),var(--bew-shadow-edge-glow-1)]";
     backdrop-filter: var(--bew-filter-glass-1);
   }
 
+  .search-bar::before,
+  .search-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: var(--b-search-bar-current-radius);
+    corner-shape: var(--bew-corner-shape);
+    pointer-events: none;
+    transition:
+      opacity var(--bew-duration-normal) var(--bew-ease-standard),
+      border-radius var(--bew-duration-moderate) var(--bew-ease-standard);
+  }
+
+  .search-bar::before {
+    box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+    opacity: 1;
+  }
+
+  .search-bar::after {
+    box-shadow:
+      0 0 0 2px var(--bew-theme-focus-ring),
+      0 6px 16px var(--bew-theme-color-40),
+      inset 0 0 6px var(--bew-theme-color-30);
+    opacity: 0;
+  }
+
+  .search-bar.focus::before {
+    opacity: 0;
+  }
+
+  .search-bar.focus::after {
+    opacity: 1;
+  }
+
   .search-bar {
+    --b-search-bar-current-radius: var(
+      --b-search-bar-radius,
+      calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
+    );
+
+    &.focus {
+      --b-search-bar-current-radius: var(--bew-radius);
+    }
+
     .focus-character-image {
       position: absolute;
       right: 0;
@@ -721,17 +764,14 @@ function handleClearKeyword() {
       appearance: none;
       min-width: 0;
       position: relative;
-      z-index: 1;
-      border-radius: var(
-        --b-search-bar-radius,
-        calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
-      );
+      z-index: 0;
+      border-radius: var(--b-search-bar-current-radius);
       corner-shape: var(--bew-corner-shape);
       transition:
         background-color var(--bew-duration-normal) var(--bew-ease-standard),
         color var(--bew-duration-normal) var(--bew-ease-standard),
         opacity var(--bew-duration-normal) var(--bew-ease-standard),
-        box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
+        border-color var(--bew-duration-normal) var(--bew-ease-standard),
         border-radius var(--bew-duration-moderate) var(--bew-ease-standard);
 
       &::placeholder {
@@ -746,11 +786,6 @@ function handleClearKeyword() {
 
     &.focus input {
       border-color: var(--bew-theme-focus-ring);
-      border-radius: var(--bew-radius);
-      box-shadow:
-        0 0 0 2px var(--bew-theme-focus-ring),
-        0 6px 16px var(--bew-theme-color-40),
-        inset 0 0 6px var(--bew-theme-color-30);
     }
 
     .search-submit-btn {

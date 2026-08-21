@@ -8,9 +8,10 @@ import Empty from '~/components/Empty.vue'
 import Loading from '~/components/Loading.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { getUserID, removeHttpFromUrl, scrollToTop } from '~/utils/main'
+import { removeHttpFromUrl, scrollToTop } from '~/utils/main'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
 
@@ -31,9 +32,13 @@ const toast = useToast()
 const { favoriteStateVersion } = storeToRefs(topBarStore)
 let favoriteDataRequestVersion = 0
 let favoriteResourcesRequestVersion = 0
+const currentAccountId = computed(() => resolveAuthenticatedAccountId(
+  topBarStore.isLogin,
+  topBarStore.userInfo.mid,
+))
 
 const viewAllUrl = computed((): string => {
-  return `//space.bilibili.com/${getUserID()}/favlist?fid=${
+  return `//space.bilibili.com/${currentAccountId.value ?? 0}/favlist?fid=${
     activatedMediaId.value
   }&ftype=create`
 })
@@ -52,16 +57,20 @@ watch(activatedMediaId, (newId, oldId) => {
 
   currentPageNum.value = 1
   noMoreContent.value = false
-  void getFavoriteResources(true)
+  if (newId)
+    void getFavoriteResources(true)
 })
 
 watch(favoriteStateVersion, () => {
-  void refreshFavoriteData()
+  if (currentAccountId.value !== null)
+    void refreshFavoriteData()
 })
 
-onMounted(() => {
-  initData()
-})
+watch(currentAccountId, (accountId) => {
+  resetFavoriteState()
+  if (accountId !== null)
+    void refreshFavoriteData()
+}, { immediate: true })
 
 // 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
@@ -79,16 +88,28 @@ useOptimizedScroll(
   { bottomThreshold: 400, throttleDelay: 100 },
 )
 
-async function initData() {
-  await refreshFavoriteData()
+function resetFavoriteState() {
+  favoriteDataRequestVersion++
+  favoriteResourcesRequestVersion++
+  favoriteCategories.length = 0
+  favoriteResources.length = 0
+  activatedMediaId.value = 0
+  activatedFavoriteTitle.value = undefined
+  currentPageNum.value = 1
+  noMoreContent.value = false
+  isLoading.value = false
 }
 
 async function refreshFavoriteData() {
   const requestVersion = ++favoriteDataRequestVersion
+  const requestAccountId = currentAccountId.value
   favoriteResourcesRequestVersion++
+  if (requestAccountId === null)
+    return
+
   const previousMediaId = activatedMediaId.value
-  const loaded = await getFavoriteCategories(requestVersion)
-  if (requestVersion !== favoriteDataRequestVersion)
+  const loaded = await getFavoriteCategories(requestVersion, requestAccountId)
+  if (requestVersion !== favoriteDataRequestVersion || requestAccountId !== currentAccountId.value)
     return
   if (!loaded) {
     isLoading.value = false
@@ -114,12 +135,12 @@ async function refreshFavoriteData() {
   }
 }
 
-async function getFavoriteCategories(requestVersion?: number): Promise<boolean> {
+async function getFavoriteCategories(requestVersion: number, requestAccountId: number): Promise<boolean> {
   try {
     const res = await api.favorite.getFavoriteCategories({
-      up_mid: getUserID(),
+      up_mid: String(requestAccountId),
     })
-    if (requestVersion !== undefined && requestVersion !== favoriteDataRequestVersion)
+    if (requestVersion !== favoriteDataRequestVersion || requestAccountId !== currentAccountId.value)
       return false
 
     if (res.code !== 0) {
@@ -134,7 +155,7 @@ async function getFavoriteCategories(requestVersion?: number): Promise<boolean> 
   }
   catch (error) {
     console.error('Failed to load favorite categories:', error)
-    if (requestVersion === undefined || requestVersion === favoriteDataRequestVersion)
+    if (requestVersion === favoriteDataRequestVersion && requestAccountId === currentAccountId.value)
       toast.error(t('common.load_failed'))
     return false
   }
@@ -148,6 +169,9 @@ async function getFavoriteResources(force = false) {
     return
 
   const requestVersion = ++favoriteResourcesRequestVersion
+  const requestAccountId = currentAccountId.value
+  if (requestAccountId === null)
+    return
   const mediaId = activatedMediaId.value
   const pageNum = currentPageNum.value
   isLoading.value = true
@@ -159,8 +183,13 @@ async function getFavoriteResources(force = false) {
       keyword: '',
     })
 
-    if (requestVersion !== favoriteResourcesRequestVersion || mediaId !== activatedMediaId.value)
+    if (
+      requestVersion !== favoriteResourcesRequestVersion
+      || requestAccountId !== currentAccountId.value
+      || mediaId !== activatedMediaId.value
+    ) {
       return
+    }
 
     const { code, data } = res
     if (code === 0) {
@@ -198,11 +227,11 @@ async function getFavoriteResources(force = false) {
   }
   catch (error) {
     console.error('Failed to load favorite resources:', error)
-    if (requestVersion === favoriteResourcesRequestVersion)
+    if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value)
       toast.error(t('common.load_failed'))
   }
   finally {
-    if (requestVersion === favoriteResourcesRequestVersion)
+    if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value)
       isLoading.value = false
   }
 }

@@ -4,7 +4,7 @@ import { watch } from 'vue'
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
-import { applyConfiguredPlaybackRate, isValidPlaybackRate } from '~/utils/playbackRate'
+import { applyConfiguredPlaybackRate, isValidPlaybackRate, shouldRestoreConfiguredPlaybackRate } from '~/utils/playbackRate'
 
 const _videoClassTag = {
   danmuBtn:
@@ -41,6 +41,7 @@ const monitoredCaptionControls = new WeakSet<HTMLElement>()
 const playbackRateListenerControllers = new Map<HTMLVideoElement, AbortController>()
 const applyingPlaybackRateVideos = new WeakSet<HTMLVideoElement>()
 const metadataCorrectionVideos = new WeakSet<HTMLVideoElement>()
+const playbackRateCorrectionFrameIds = new Map<HTMLVideoElement, number>()
 let stopPlaybackRatePlayerObserver: (() => void) | null = null
 let stopPlaybackRateSettingsWatch: (() => void) | null = null
 
@@ -1140,8 +1141,28 @@ function cleanupReleasedPlaybackRateVideos() {
     if (video.isConnected)
       continue
     controller.abort()
+    const correctionFrameId = playbackRateCorrectionFrameIds.get(video)
+    if (correctionFrameId !== undefined)
+      cancelAnimationFrame(correctionFrameId)
+    playbackRateCorrectionFrameIds.delete(video)
+    metadataCorrectionVideos.delete(video)
     playbackRateListenerControllers.delete(video)
   }
+}
+
+function schedulePlaybackRateInitializationCorrection(video: HTMLVideoElement, finish: boolean) {
+  const previousFrameId = playbackRateCorrectionFrameIds.get(video)
+  if (previousFrameId !== undefined)
+    cancelAnimationFrame(previousFrameId)
+
+  const frameId = requestAnimationFrame(() => {
+    playbackRateCorrectionFrameIds.delete(video)
+    if (playbackRateListenerControllers.has(video))
+      applyRememberedPlaybackRateToVideo(video)
+    if (finish)
+      metadataCorrectionVideos.delete(video)
+  })
+  playbackRateCorrectionFrameIds.set(video, frameId)
 }
 
 function monitorPlaybackRateVideo(video: HTMLVideoElement) {
@@ -1150,31 +1171,51 @@ function monitorPlaybackRateVideo(video: HTMLVideoElement) {
 
   const controller = new AbortController()
   playbackRateListenerControllers.set(video, controller)
+  if (settings.value.rememberPlaybackRate)
+    metadataCorrectionVideos.add(video)
 
   video.addEventListener('loadedmetadata', () => {
+    if (!settings.value.rememberPlaybackRate)
+      return
     metadataCorrectionVideos.add(video)
     applyRememberedPlaybackRateToVideo(video)
+    schedulePlaybackRateInitializationCorrection(video, false)
+  }, { signal: controller.signal })
 
-    // Player code may synchronously rewrite playbackRate from another
-    // loadedmetadata listener. Keep the correction guard through this frame,
-    // then apply once more without introducing a polling loop.
-    requestAnimationFrame(() => {
-      if (playbackRateListenerControllers.has(video))
-        applyRememberedPlaybackRateToVideo(video)
-      metadataCorrectionVideos.delete(video)
-    })
+  video.addEventListener('loadeddata', () => {
+    if (metadataCorrectionVideos.has(video))
+      applyRememberedPlaybackRateToVideo(video)
+  }, { signal: controller.signal })
+
+  video.addEventListener('canplay', () => {
+    if (!metadataCorrectionVideos.has(video))
+      return
+    applyRememberedPlaybackRateToVideo(video)
+    schedulePlaybackRateInitializationCorrection(video, true)
+  }, { signal: controller.signal })
+
+  video.addEventListener('emptied', () => {
+    const correctionFrameId = playbackRateCorrectionFrameIds.get(video)
+    if (correctionFrameId !== undefined)
+      cancelAnimationFrame(correctionFrameId)
+    playbackRateCorrectionFrameIds.delete(video)
+    metadataCorrectionVideos.delete(video)
   }, { signal: controller.signal })
 
   video.addEventListener('ratechange', () => {
     if (!settings.value.rememberPlaybackRate || applyingPlaybackRateVideos.has(video))
       return
 
-    if (metadataCorrectionVideos.has(video)) {
+    const currentRate = video.playbackRate
+    if (shouldRestoreConfiguredPlaybackRate(
+      currentRate,
+      settings.value.savedPlaybackRate,
+      metadataCorrectionVideos.has(video),
+    )) {
       applyRememberedPlaybackRateToVideo(video)
       return
     }
 
-    const currentRate = video.playbackRate
     if (isValidPlaybackRate(currentRate)) {
       video.defaultPlaybackRate = currentRate
       settings.value.savedPlaybackRate = currentRate
@@ -1182,6 +1223,8 @@ function monitorPlaybackRateVideo(video: HTMLVideoElement) {
   }, { signal: controller.signal })
 
   applyRememberedPlaybackRateToVideo(video)
+  if (metadataCorrectionVideos.has(video) && video.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA)
+    schedulePlaybackRateInitializationCorrection(video, true)
 }
 
 function discoverPlaybackRateVideos(root: ParentNode | HTMLVideoElement = document) {
@@ -1206,8 +1249,16 @@ function ensurePlaybackRateMonitoring() {
     stopPlaybackRateSettingsWatch = watch(
       [() => settings.value.rememberPlaybackRate, () => settings.value.savedPlaybackRate],
       ([rememberPlaybackRate]) => {
-        if (!rememberPlaybackRate)
+        if (!rememberPlaybackRate) {
+          playbackRateListenerControllers.forEach((_controller, video) => {
+            const correctionFrameId = playbackRateCorrectionFrameIds.get(video)
+            if (correctionFrameId !== undefined)
+              cancelAnimationFrame(correctionFrameId)
+            playbackRateCorrectionFrameIds.delete(video)
+            metadataCorrectionVideos.delete(video)
+          })
           return
+        }
         discoverPlaybackRateVideos()
         playbackRateListenerControllers.forEach((_controller, video) => {
           applyRememberedPlaybackRateToVideo(video)
@@ -1241,8 +1292,13 @@ export function stopPlaybackRateMonitoring() {
   stopPlaybackRatePlayerObserver = null
   stopPlaybackRateSettingsWatch?.()
   stopPlaybackRateSettingsWatch = null
-  playbackRateListenerControllers.forEach(controller => controller.abort())
+  playbackRateListenerControllers.forEach((controller, video) => {
+    controller.abort()
+    metadataCorrectionVideos.delete(video)
+  })
   playbackRateListenerControllers.clear()
+  playbackRateCorrectionFrameIds.forEach(frameId => cancelAnimationFrame(frameId))
+  playbackRateCorrectionFrameIds.clear()
 }
 
 // 重播
