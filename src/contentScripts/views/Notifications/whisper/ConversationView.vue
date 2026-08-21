@@ -443,17 +443,9 @@ defineExpose({
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
-.conversation-view__header {
-  border-bottom: 1px solid var(--bew-border-color);
-}
-
 .conversation-view__back {
   display: none;
   flex: 0 0 auto;
-}
-
-.conversation-view__footer {
-  border-top: 1px solid var(--bew-border-color);
 }
 
 .conversation-view__test-send {

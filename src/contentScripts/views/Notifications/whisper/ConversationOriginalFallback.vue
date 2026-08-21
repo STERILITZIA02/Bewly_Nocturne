@@ -85,7 +85,6 @@ defineExpose({ focusHeading })
   min-width: 0;
   padding: var(--bew-space-3) var(--bew-space-4);
   background: var(--bew-elevated);
-  border-bottom: 1px solid var(--bew-border-color);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }

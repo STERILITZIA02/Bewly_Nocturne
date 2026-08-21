@@ -472,7 +472,9 @@ defineExpose({ refresh })
 }
 
 .native-notification-feed__items {
+  display: grid;
   min-width: 0;
+  gap: var(--bew-space-1);
 }
 
 .native-notification-feed__state {

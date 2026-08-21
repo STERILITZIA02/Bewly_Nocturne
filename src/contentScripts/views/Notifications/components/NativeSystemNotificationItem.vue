@@ -108,7 +108,8 @@ watch(() => props.item.id, () => {
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--bew-space-3);
   padding: var(--bew-space-4) var(--bew-space-2);
-  border-bottom: 1px solid var(--bew-border-color);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 

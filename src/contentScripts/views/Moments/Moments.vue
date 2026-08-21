@@ -3693,12 +3693,10 @@ watch(
           <div class="moments-up-list__main">
             <span
               class="moments-up-list__fade moments-up-list__fade--prev"
-              :class="{ 'moments-up-list__fade--visible': canScrollUpListLeft }"
               aria-hidden="true"
             />
             <span
               class="moments-up-list__fade moments-up-list__fade--next"
-              :class="{ 'moments-up-list__fade--visible': canScrollUpListRight }"
               aria-hidden="true"
             />
             <button
@@ -4088,6 +4086,7 @@ watch(
   margin-bottom: var(--bew-space-4);
   padding: var(--bew-space-3) var(--bew-space-2) var(--bew-space-2);
   box-sizing: border-box;
+  overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-card-radius);
   background: var(--bew-elevated);
@@ -4112,30 +4111,59 @@ watch(
   overflow-y: hidden;
   overscroll-behavior-x: contain;
   scrollbar-width: none;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(0 0 0 / 16%) var(--bew-space-4),
+    rgb(0 0 0 / 48%) var(--bew-space-10),
+    rgb(0 0 0 / 78%) calc(var(--bew-space-12) + var(--bew-space-4)),
+    #000 calc(var(--bew-space-12) + var(--bew-space-10)),
+    #000 calc(100% - var(--bew-space-12) - var(--bew-space-10)),
+    rgb(0 0 0 / 78%) calc(100% - var(--bew-space-12) - var(--bew-space-4)),
+    rgb(0 0 0 / 48%) calc(100% - var(--bew-space-10)),
+    rgb(0 0 0 / 16%) calc(100% - var(--bew-space-4)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(0 0 0 / 16%) var(--bew-space-4),
+    rgb(0 0 0 / 48%) var(--bew-space-10),
+    rgb(0 0 0 / 78%) calc(var(--bew-space-12) + var(--bew-space-4)),
+    #000 calc(var(--bew-space-12) + var(--bew-space-10)),
+    #000 calc(100% - var(--bew-space-12) - var(--bew-space-10)),
+    rgb(0 0 0 / 78%) calc(100% - var(--bew-space-12) - var(--bew-space-4)),
+    rgb(0 0 0 / 48%) calc(100% - var(--bew-space-10)),
+    rgb(0 0 0 / 16%) calc(100% - var(--bew-space-4)),
+    transparent 100%
+  );
 }
 .moments-up-list__scroller::-webkit-scrollbar {
   display: none;
 }
 .moments-up-list__fade {
   position: absolute;
-  top: 0;
-  bottom: 0;
+  top: 50%;
   z-index: 1;
-  width: 32px;
-  opacity: 0;
+  width: calc(var(--bew-space-12) + var(--bew-space-12) + var(--bew-space-12));
+  height: calc(100% + var(--bew-space-12));
+  opacity: 0.72;
   pointer-events: none;
-  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+  background: radial-gradient(
+    ellipse at center,
+    color-mix(in oklab, var(--bew-elevated-solid) 24%, transparent) 0%,
+    color-mix(in oklab, var(--bew-elevated-solid) 10%, transparent) 38%,
+    transparent 74%
+  );
+  filter: var(--bew-filter-glass-1);
+  transform: translateY(-50%);
+  transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
 }
 .moments-up-list__fade--prev {
-  left: 0;
-  background: linear-gradient(90deg, var(--bew-elevated), transparent);
+  left: calc(0px - var(--bew-space-12) - var(--bew-space-6));
 }
 .moments-up-list__fade--next {
-  right: 0;
-  background: linear-gradient(270deg, var(--bew-elevated), transparent);
-}
-.moments-up-list__fade--visible {
-  opacity: 1;
+  right: calc(0px - var(--bew-space-12) - var(--bew-space-6));
 }
 .moments-up-list__arrow {
   position: absolute;
@@ -4147,8 +4175,10 @@ watch(
   border: 0;
   border-radius: 50%;
   color: var(--bew-text-1);
-  background: color-mix(in oklab, var(--bew-elevated-solid, var(--bew-elevated)) 88%, var(--bew-text-1) 12%);
-  box-shadow: var(--bew-shadow-1, 0 2px 8px rgb(0 0 0 / 12%));
+  background: color-mix(in oklab, var(--bew-elevated-solid) 48%, transparent);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  backdrop-filter: var(--bew-filter-glass-1);
+  box-shadow: none;
   opacity: 0;
   place-items: center;
   pointer-events: none;
@@ -4170,7 +4200,7 @@ watch(
   pointer-events: auto;
 }
 .moments-up-list__arrow:hover {
-  background: color-mix(in oklab, var(--bew-elevated-solid, var(--bew-elevated)) 78%, var(--bew-text-1) 22%);
+  background: color-mix(in oklab, var(--bew-elevated-solid) 64%, transparent);
 }
 .moments-up-list__arrow:focus-visible {
   outline: 2px solid var(--bew-theme-color);
