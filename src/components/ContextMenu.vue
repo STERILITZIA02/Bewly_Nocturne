@@ -26,12 +26,8 @@ const { mainAppRef } = useBewlyApp()
 <template>
   <Teleport :to="mainAppRef">
     <div
-      class="context-menu-container bew-shape-smooth-rect"
+      class="context-menu-container bew-popover-surface"
       :style="menuStyles"
-      style="backdrop-filter: var(--bew-filter-glass-1); box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1); z-index: var(--bew-z-popover);"
-      p-1 bg="$bew-elevated" rounded="$bew-popover-radius"
-      min-w-140px m="t-1 l-[calc(-140px+0.5rem)]"
-      border="1 $bew-surface-border-color" box-border
     >
       <ul flex="~ col gap-1">
         <li
@@ -57,6 +53,14 @@ const { mainAppRef } = useBewlyApp()
 </template>
 
 <style lang="scss" scoped>
+.context-menu-container {
+  z-index: var(--bew-z-popover);
+  min-width: 140px;
+  padding: var(--bew-space-1);
+  margin-top: var(--bew-space-1);
+  margin-left: calc(-140px + var(--bew-space-2));
+}
+
 .context-menu-item {
   --uno: "hover:bg-$bew-fill-2 rounded-$bew-interactive-radius cursor-pointer";
   --uno: "flex items-center";

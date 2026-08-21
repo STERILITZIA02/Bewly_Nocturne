@@ -195,6 +195,21 @@
   --bew-top-bar-height: 64px;
   --bew-popover-gap: var(--bew-space-1);
   --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
+  --bew-popover-surface-background: var(--bew-elevated);
+  --bew-popover-surface-background-solid: var(--bew-elevated-solid);
+  --bew-popover-surface-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
+  --bew-popover-padding: var(--bew-space-3);
+  --bew-popover-header-min-height: 52px;
+  --bew-popover-header-padding-block: var(--bew-space-3);
+  --bew-popover-header-padding-inline: var(--bew-space-5);
+  --bew-popover-body-padding-inline: var(--bew-space-3);
+  --bew-popover-body-padding-bottom: var(--bew-space-3);
+  --bew-popover-inner-radius: var(--bew-radius-md);
+  --bew-popover-card-radius: var(--bew-radius-md);
+  --bew-popover-media-radius: var(--bew-radius-half);
+  --bew-popover-card-padding: var(--bew-space-2);
+  --bew-popover-card-gap: var(--bew-space-4);
+  --bew-popover-row-min-height: var(--bew-control-height);
   --bew-date-picker-input-width: 115px;
   --bew-date-picker-panel-width: 280px;
   --bew-date-picker-day-size: 32px;
@@ -524,6 +539,7 @@
   --bew-shadow-edge-glow-1: 0 0 0 transparent;
   --bew-shadow-edge-glow-2: 0 0 0 transparent;
   --bew-fill-alt: var(--bew-content-solid);
+  --bew-popover-surface-background: var(--bew-popover-surface-background-solid);
 }
 
 :host(.disable-frosted-glass.dark),

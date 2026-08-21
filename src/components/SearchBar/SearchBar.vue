@@ -532,113 +532,117 @@ function handleClearKeyword() {
       </button>
     </div>
 
-    <Transition name="result-list">
+    <Transition name="slide-in">
       <div
         v-if="shouldShowSearchDropdown"
         id="search-dropdown"
-        class="bew-popover-surface"
+        class="bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
-        <!-- 热搜区块 -->
-        <div
-          v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0"
-          class="hot-search-section"
-        >
-          <div class="title p-2 pb-0">
-            <span>{{ $t('search_bar.hot_search_title') }}</span>
-          </div>
+        <div class="search-popover__scroll bew-popover__scroll">
+          <!-- 热搜区块 -->
+          <div
+            v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0"
+            class="hot-search-section"
+          >
+            <div class="title p-2 pb-0">
+              <span>{{ $t('search_bar.hot_search_title') }}</span>
+            </div>
 
-          <div class="hot-search-container p-2 grid grid-cols-2 gap-x-4 gap-y-1">
-            <ALink
-              v-for="(item, index) in visibleHotSearchList" :key="item.keyword"
-              :href="buildKeywordHref(item.keyword)"
-              type="searchBar"
-              :custom-click-event="true"
-              class="hot-search-item cursor-pointer duration-300"
-              flex items-center gap-2 p="x-2 y-1"
-              @click="handleKeywordLinkClick(item.keyword, $event)"
-            >
-              <span
-                class="index"
-                :class="{
-                  'top-1': index === 0,
-                  'top-2': index === 1,
-                  'top-3': index === 2,
-                  'normal': index > 2,
-                }"
+            <div class="hot-search-container p-2 grid grid-cols-2 gap-x-4 gap-y-1">
+              <ALink
+                v-for="(item, index) in visibleHotSearchList" :key="item.keyword"
+                :href="buildKeywordHref(item.keyword)"
+                type="searchBar"
+                :custom-click-event="true"
+                class="hot-search-item cursor-pointer duration-300"
+                flex items-center gap-2 p="x-2 y-1"
+                @click="handleKeywordLinkClick(item.keyword, $event)"
               >
-                {{ index + 1 }}
-              </span>
-              <span class="keyword" text="base $bew-text-1" truncate flex-1>{{ item.show_name }}</span>
-              <img
-                v-if="item.icon && !item.icon.includes('.gif')"
-                :src="item.icon"
-                class="hot-search-icon"
-                w-4 h-4 object-contain
-                alt=""
+                <span
+                  class="index"
+                  :class="{
+                    'top-1': index === 0,
+                    'top-2': index === 1,
+                    'top-3': index === 2,
+                    'normal': index > 2,
+                  }"
+                >
+                  {{ index + 1 }}
+                </span>
+                <span class="keyword" text="base $bew-text-1" truncate flex-1>{{ item.show_name }}</span>
+                <img
+                  v-if="item.icon && !item.icon.includes('.gif')"
+                  :src="item.icon"
+                  class="hot-search-icon"
+                  w-4 h-4 object-contain
+                  alt=""
+                >
+              </ALink>
+            </div>
+          </div>
+
+          <!-- 分割线 -->
+          <div
+            v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0 && searchHistory.length > 0"
+            class="divider"
+            mx-2 my-1 h-px bg="$bew-border-color"
+          />
+
+          <!-- 搜索历史区块 -->
+          <div
+            v-if="searchHistory.length !== 0"
+            class="history-section"
+          >
+            <div class="title p-2 pb-0 flex justify-between">
+              <span>{{ $t('search_bar.history_title') }}</span>
+              <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
+                {{ $t('search_bar.clear_history') }}
+              </button>
+            </div>
+
+            <div class="history-item-container p2 flex flex-wrap gap-x-3 gap-y-3">
+              <ALink
+                v-for="(item, index) in searchHistory" :key="item.timestamp"
+                :href="buildKeywordHref(item.value)"
+                type="searchBar"
+                :custom-click-event="true"
+                class="history-item group"
+                :class="{ active: keyboardSelectionMode === 'history' && selectedIndex === index }"
+                flex justify-between items-center
+                @click="handleKeywordLinkClick(item.value, $event)"
               >
-            </ALink>
-          </div>
-        </div>
-
-        <!-- 分割线 -->
-        <div
-          v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0 && searchHistory.length > 0"
-          class="divider"
-          mx-2 my-1 h-px bg="$bew-border-color"
-        />
-
-        <!-- 搜索历史区块 -->
-        <div
-          v-if="searchHistory.length !== 0"
-          class="history-section"
-        >
-          <div class="title p-2 pb-0 flex justify-between">
-            <span>{{ $t('search_bar.history_title') }}</span>
-            <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
-              {{ $t('search_bar.clear_history') }}
-            </button>
-          </div>
-
-          <div class="history-item-container p2 flex flex-wrap gap-x-3 gap-y-3">
-            <ALink
-              v-for="(item, index) in searchHistory" :key="item.timestamp"
-              :href="buildKeywordHref(item.value)"
-              type="searchBar"
-              :custom-click-event="true"
-              class="history-item group"
-              :class="{ active: keyboardSelectionMode === 'history' && selectedIndex === index }"
-              flex justify-between items-center
-              @click="handleKeywordLinkClick(item.value, $event)"
-            >
-              <span> {{ item.value }}</span>
-              <TagRemoveButton
-                class="history-item__remove"
-                :label="$t('common.operation.remove')"
-                @mousedown.prevent
-                @click.stop.prevent="handleDelete(item.value)"
-              />
-            </ALink>
+                <span> {{ item.value }}</span>
+                <TagRemoveButton
+                  class="history-item__remove"
+                  :label="$t('common.operation.remove')"
+                  @mousedown.prevent
+                  @click.stop.prevent="handleDelete(item.value)"
+                />
+              </ALink>
+            </div>
           </div>
         </div>
       </div>
     </Transition>
 
-    <Transition name="result-list">
+    <Transition name="slide-in">
       <div
         v-if="isFocus && suggestions.length !== 0 && keyword.length > 0"
         id="search-suggestion"
-        class="bew-popover-surface"
+        class="bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
-        <div
-          v-for="(item, index) in suggestions"
-          :key="index"
-          class="suggestion-item"
-          :class="{ active: keyboardSelectionMode === 'suggestions' && selectedIndex === index }"
-          @click="navigateToSearchResultPage(item.value)"
-        >
-          <span v-html="DOMPurify.sanitize(item.name)" />
+        <div class="search-popover__scroll bew-popover__scroll">
+          <div
+            v-for="(item, index) in suggestions"
+            :key="index"
+            class="suggestion-item"
+            :class="{ active: keyboardSelectionMode === 'suggestions' && selectedIndex === index }"
+            @click="navigateToSearchResultPage(item.value)"
+          >
+            <span v-html="DOMPurify.sanitize(item.name)" />
+          </div>
         </div>
       </div>
     </Transition>
@@ -650,18 +654,6 @@ function handleClearKeyword() {
 
 ::v-deep(.suggest_high_light) {
   --uno: "text-$bew-theme-foreground not-italic";
-}
-
-.result-list-enter-active,
-.result-list-leave-active {
-  transition:
-    opacity var(--bew-duration-moderate) var(--bew-ease-in-out),
-    transform var(--bew-duration-moderate) var(--bew-ease-in-out);
-}
-
-.result-list-enter-from,
-.result-list-leave-to {
-  --uno: "transform translate-y-4 opacity-0 scale-95";
 }
 
 .focus-character-enter-active,
@@ -807,7 +799,7 @@ function handleClearKeyword() {
   }
 
   @mixin search-content {
-    --uno: "text-base outline-none w-full p-2 mt-2 absolute hover:block";
+    --uno: "text-base outline-none w-full mt-2 absolute hover:block";
   }
 
   @mixin search-content-item {
@@ -816,7 +808,7 @@ function handleClearKeyword() {
 
   #search-dropdown {
     @include search-content;
-    --uno: "max-h-420px important-overflow-y-auto";
+    --uno: "max-h-420px";
     z-index: var(--bew-z-topbar-interaction);
 
     .title {
@@ -914,7 +906,7 @@ function handleClearKeyword() {
 
   #search-suggestion {
     @include search-content;
-    --uno: "max-h-420px important-overflow-y-auto";
+    --uno: "max-h-420px";
     z-index: var(--bew-z-topbar-interaction);
 
     .suggestion-item {
@@ -924,6 +916,12 @@ function handleClearKeyword() {
         --uno: "bg-$bew-fill-2 shadow-[var(--bew-shadow-1),var(--bew-shadow-edge-glow-1)]";
       }
     }
+  }
+
+  .search-popover__scroll {
+    max-height: inherit;
+    padding: var(--bew-space-2);
+    box-sizing: border-box;
   }
 
   &.search-wrap--top-bar {

@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
+import IconButton from '~/components/IconButton.vue'
 import Loading from '~/components/Loading.vue'
 import Picture from '~/components/Picture.vue'
 import Progress from '~/components/Progress.vue'
@@ -110,75 +111,44 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1);"
-    h="[calc(100vh-100px)]" max-h-500px important-overflow-y-overlay
-    bg="$bew-elevated"
-    w="380px"
-    rounded="$bew-radius"
-    pos="relative"
-    of="hidden"
-    shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-3)]"
-    border="1 $bew-surface-border-color"
-    class="watchLater-pop bew-popover"
+    class="watchLater-pop bew-popover bew-popover-surface"
     data-key="watchLater"
-    flex="~ col"
   >
-    <!-- top bar -->
-    <header
-      flex="~ items-center justify-between"
-      p="x-6"
-      pos="sticky top-0 left-0"
-      w="full"
-      h-50px
-      z="2"
-    >
-      <div flex="~">
-        <div>
-          {{ $t('topbar.watch_later') }}
-        </div>
-      </div>
+    <header class="bew-popover__header">
+      <h3 class="bew-popover__title">
+        {{ $t('topbar.watch_later') }}
+      </h3>
 
-      <div flex="~ gap-4">
+      <div class="bew-popover__actions">
         <ALink
           :href="playAllUrl"
           type="topBar"
-          flex="~" items="center"
+          class="bew-popover__action"
         >
-          <span text="sm">{{ $t('common.play_all') }}</span>
+          {{ $t('common.play_all') }}
         </ALink>
         <ALink
           :href="viewAllUrl"
           type="topBar"
-          flex="~" items="center"
+          class="bew-popover__action"
         >
-          <span text="sm">{{ $t('common.view_all') }}</span>
+          {{ $t('common.view_all') }}
         </ALink>
       </div>
     </header>
 
-    <!-- watchLater wrapper -->
     <main
       ref="scrollContainer"
-      overflow-y-auto rounded="$bew-radius"
-      flex="~ col gap-2"
-      p="x-4"
-      flex-1
-      min-h-0
+      class="bew-popover__body bew-popover__scroll bew-popover__list watch-later-pop__scroll"
     >
-      <!-- loading -->
       <Loading
         v-if="isLoadingWatchLater && watchLaterList.length === 0"
-        h="full"
-        flex="~ items-center"
+        class="bew-popover__state"
       />
 
-      <!-- empty -->
       <Empty
         v-if="!isLoadingWatchLater && watchLaterList.length === 0"
-        pos="absolute top-0 left-0"
-        z="0" w="full" h="full"
-        flex="~ items-center"
-        rounded="$bew-radius"
+        class="bew-popover__state"
       />
 
       <!-- watchlater -->
@@ -187,10 +157,6 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
           v-for="item in watchLaterList"
           :key="item.aid"
           class="group popover-card"
-          m="last:b-4" p="2"
-          rounded="$bew-radius"
-          hover:bg="$bew-fill-2"
-          duration-300
         >
           <ALink
             class="popover-card__primary"
@@ -202,71 +168,47 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
             <!-- Video cover, live cover, ariticle cover -->
             <div
               class="popover-card__media watch-later-pop__media aspect-video"
-              bg="$bew-skeleton"
-              w="150px"
-              flex="shrink-0"
             >
               <div
-                class="group-hover:opacity-100 opacity-0 popover-card__interactive popover-card-action"
+                class="popover-card__interactive popover-card-action watch-later-pop__leading-actions"
                 pos="absolute top-0 left-0" z-1
                 flex="~ gap-1"
                 m="1"
-                duration-300
               >
                 <!-- Open in regular video page button -->
                 <Tooltip :content="$t('watch_later.open_video_page')" placement="top">
-                  <button
-                    class="p-0 bew-shape-circle popover-card__interactive"
-                    type="button"
-                    :aria-label="$t('watch_later.open_video_page')"
+                  <IconButton
+                    class="popover-card__interactive popover-card__overlay-action"
+                    :label="$t('watch_later.open_video_page')"
                     :disabled="pendingActions.has(item.aid)"
-                    w-24px h-24px
-                    bg="black opacity-60 hover:$bew-theme-color"
-                    grid="~ place-items-center"
-                    text="white xs"
-                    border="rounded-full"
                     @click.stop.prevent="openVideoPage(getVideoPageUrl(item.bvid))"
                   >
                     <i i-tabler:external-link />
-                  </button>
+                  </IconButton>
                 </Tooltip>
 
                 <!-- Open in video page and remove button -->
                 <Tooltip :content="$t('watch_later.play_video')" placement="top">
-                  <button
-                    class="p-0 bew-shape-circle popover-card__interactive"
-                    type="button"
-                    :aria-label="$t('watch_later.play_video')"
+                  <IconButton
+                    class="popover-card__interactive popover-card__overlay-action"
+                    :label="$t('watch_later.play_video')"
                     :disabled="pendingActions.has(item.aid)"
-                    w-24px h-24px
-                    bg="black opacity-60 hover:$bew-theme-color"
-                    grid="~ place-items-center"
-                    text="white xs"
-                    border="rounded-full"
                     @click.stop.prevent="handleOpenVideoPageAndRemove(item.aid, item.bvid)"
                   >
                     <i i-tabler:player-play />
-                  </button>
+                  </IconButton>
                 </Tooltip>
               </div>
 
               <!-- Delete button -->
-              <button
-                type="button"
-                class="group-hover:opacity-100 opacity-0 p-0 bew-shape-circle popover-card__interactive popover-card-action"
-                :aria-label="$t('common.operation.delete')"
+              <IconButton
+                class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger watch-later-pop__remove"
+                :label="$t('common.operation.delete')"
                 :disabled="pendingActions.has(item.aid)"
-                pos="absolute top-0 right-0" z-1 w-24px h-24px
-                bg="black opacity-60 hover:$bew-error-color"
-                grid="~ place-items-center"
-                m="1"
-                text="white xs"
-                duration-300
-                border="rounded-full"
                 @click.stop.prevent="deleteWatchLaterItem(item.aid)"
               >
                 <i i-mingcute:close-line />
-              </button>
+              </IconButton>
 
               <!-- Video -->
               <div pos="absolute inset-0">
@@ -307,16 +249,16 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
             </div>
 
             <!-- Description -->
-            <div>
+            <div class="popover-card__copy">
               <h3
-                class="keep-two-lines"
+                class="keep-two-lines popover-card__title"
                 overflow="hidden"
                 text="ellipsis"
                 break-anywhere
               >
                 {{ item.title }}
               </h3>
-              <div text="$bew-text-2 sm" m="t-4" flex="~" align="items-center">
+              <div class="popover-card__meta" flex="~" align="items-center">
                 <ALink
                   :href="`https://space.bilibili.com/${item.owner.mid}`"
                   type="topBar"
@@ -350,24 +292,44 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 <style lang="scss" scoped>
 @use "../../styles/popoverCards";
 
+.watchLater-pop {
+  width: 380px;
+  height: min(500px, var(--bew-popover-max-height));
+}
+
+.watch-later-pop__scroll {
+  position: relative;
+}
+
 .watch-later-pop__media {
-  isolation: isolate;
+  flex: 0 0 144px;
+  width: 144px;
 }
 
 .watch-later-pop__cover {
   width: 100%;
   height: 100%;
-  overflow: hidden;
-  border-radius: inherit;
-  corner-shape: inherit;
+  overflow: visible;
+  border-radius: 0;
+  corner-shape: unset;
 }
 
 .watch-later-pop__cover :deep(img) {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: inherit;
-  corner-shape: inherit;
+  border-radius: 0;
+  corner-shape: unset;
+}
+
+.watch-later-pop__leading-actions {
+  z-index: 3;
+}
+
+.watch-later-pop__remove {
+  z-index: 3;
+  top: var(--bew-space-1);
+  right: var(--bew-space-1);
 }
 
 .watch-later-pop__progress {
@@ -377,23 +339,5 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
   bottom: 0;
   left: 0;
   border-radius: 0;
-}
-
-.tab {
-  --uno: "relative text-$bew-text-2";
-
-  &::after {
-    --uno: "absolute bottom-0 left-0 w-full h-12px bg-$bew-theme-color opacity-0 transform scale-x-0 -z-1";
-    --uno: "transition-colors duration-200";
-    content: "";
-  }
-}
-
-.tab-selected {
-  --uno: "font-bold text-$bew-text-1";
-
-  &::after {
-    --uno: "scale-x-80 opacity-40";
-  }
 }
 </style>

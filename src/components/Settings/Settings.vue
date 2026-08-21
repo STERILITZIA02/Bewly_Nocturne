@@ -685,8 +685,7 @@ function changeMenuItem(menuItem: MenuType) {
           :style="[
             searchPopoverStyle,
             {
-              backgroundColor: settings.disableFrostedGlass ? 'var(--bew-elevated-alt-solid)' : 'var(--bew-elevated-alt)',
-              zIndex: 10010,
+              zIndex: 'var(--bew-z-control-menu)',
             },
           ]"
         >

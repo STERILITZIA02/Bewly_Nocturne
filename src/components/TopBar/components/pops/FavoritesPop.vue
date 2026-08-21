@@ -231,61 +231,41 @@ defineExpose({
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1);"
-    h="[calc(100vh-100px)]" max-h-500px important-overflow-y-overlay
-    bg="$bew-elevated"
-    w="450px"
-    rounded="$bew-radius"
-    pos="relative"
-    shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-3)]"
-    border="1 $bew-surface-border-color"
-    class="favorites-pop"
+    class="favorites-pop bew-popover bew-popover-surface"
   >
-    <!-- top bar -->
-    <header
-      flex="~" items-center justify-between
-      p="x-6"
-      pos="sticky top-0 left-0"
-      w="full"
-      h-50px
-      z="2"
-    >
-      <h3 cursor="pointer" font-600 @click="scrollToTop(favoriteVideosWrap)">
+    <header class="bew-popover__header">
+      <h3 class="bew-popover__title" cursor="pointer" @click="scrollToTop(favoriteVideosWrap)">
         {{ activatedFavoriteTitle }}
       </h3>
 
-      <div flex="~ gap-4">
+      <div class="bew-popover__actions">
         <ALink
           :href="playAllUrl"
           type="topBar"
-          flex="~" items="center"
+          class="bew-popover__action"
         >
-          <span text="sm">{{ $t('common.play_all') }}</span>
+          {{ $t('common.play_all') }}
         </ALink>
         <ALink
           :href="viewAllUrl"
           type="topBar"
-          flex="~" items="center"
+          class="bew-popover__action"
         >
-          <span text="sm">{{ $t('common.view_all') }}</span>
+          {{ $t('common.view_all') }}
         </ALink>
       </div>
     </header>
 
-    <main flex="~" h="[calc(100%-50px)]" rounded="$bew-radius">
+    <main class="bew-popover__split-body">
       <aside
-        pos="sticky top-50px left-0"
-        w="140px" h-full overflow="y-auto"
-        flex="shrink-0" bg="$bew-fill-1"
+        class="bew-popover__sidebar favorites-pop__sidebar"
       >
         <ul grid="~ cols-1">
           <li
             v-for="item in favoriteCategories"
             :key="item.id"
             :class="activatedMediaId === item.id ? 'activated-category' : ''"
-            p="y-2 x-6"
-            cursor="pointer"
-            transition="background-color duration-200, color duration-200, opacity duration-200"
+            class="favorites-pop__category"
             @click="changeCategory(item)"
           >
             {{ item.title }}
@@ -296,30 +276,16 @@ defineExpose({
       <!-- Favorite videos wrapper -->
       <div
         ref="favoriteVideosWrap"
-        flex="~ col gap-2 1"
-        overflow="y-auto"
-        p="x-4"
-        pos="relative"
-        h-full
+        class="bew-popover__scroll bew-popover__list favorites-pop__content"
       >
-        <!-- loading -->
         <Loading
           v-if="isLoading && favoriteResources.length === 0"
-          pos="absolute left-0"
-          bg="$bew-content"
-          z="1"
-          w="full"
-          h="full"
-          flex="~"
-          items="center"
-          rounded="$bew-radius"
+          class="bew-popover__state"
         />
 
-        <!-- empty -->
         <Empty
           v-if="!isLoading && favoriteResources.length === 0"
-          w="full" h="full"
-          rounded="$bew-radius-half"
+          class="bew-popover__state"
         />
 
         <!-- favorites -->
@@ -327,11 +293,7 @@ defineExpose({
           <article
             v-for="item in favoriteResources"
             :key="`${item.type}:${item.id}`"
-            hover:bg="$bew-fill-2"
-            rounded="$bew-radius"
-            m="last:b-4" p="2"
             class="group popover-card"
-            transition="background-color duration-200, color duration-200, opacity duration-200"
           >
             <ALink
               class="popover-card__primary"
@@ -342,9 +304,6 @@ defineExpose({
             <section class="popover-card__content" flex="~ gap-4" items-start>
               <div
                 class="popover-card__media aspect-video"
-                bg="$bew-skeleton"
-                w="120px"
-                flex="shrink-0"
               >
                 <div pos="relative" w-full h-full>
                   <img
@@ -367,15 +326,14 @@ defineExpose({
               </div>
 
               <!-- Description -->
-              <div>
+              <div class="popover-card__copy">
                 <h3
-                  class="keep-two-lines"
+                  class="keep-two-lines popover-card__title"
                 >
                   {{ item.title }}
                 </h3>
                 <div
-                  text="$bew-text-2 sm"
-                  m="t-2"
+                  class="popover-card__meta"
                   flex="~"
                   items-center
                 >
@@ -404,7 +362,64 @@ defineExpose({
 <style lang="scss" scoped>
 @use "../../styles/popoverCards";
 
+.favorites-pop {
+  width: 450px;
+  height: min(500px, var(--bew-popover-max-height));
+}
+
+.favorites-pop__sidebar {
+  width: 140px;
+  padding: var(--bew-space-2);
+  background: var(--bew-fill-1);
+}
+
+.favorites-pop__category {
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-2) var(--bew-space-3);
+  overflow: hidden;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+  cursor: pointer;
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition:
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.favorites-pop__category:hover {
+  background: var(--bew-fill-1);
+}
+
 .activated-category {
-  --uno: "bg-$bew-theme-color text-$bew-on-theme-color";
+  color: var(--bew-theme-foreground);
+  background: var(--bew-fill-2);
+}
+
+.favorites-pop__content {
+  position: relative;
+  padding-top: var(--bew-space-1);
+}
+
+.favorites-pop .popover-card__media {
+  flex: 0 0 120px;
+  width: 120px;
+}
+
+@media (max-width: 480px) {
+  .favorites-pop__sidebar {
+    width: 112px;
+  }
+
+  .favorites-pop .popover-card__content {
+    gap: var(--bew-space-3);
+  }
+
+  .favorites-pop .popover-card__media {
+    flex-basis: 96px;
+    width: 96px;
+  }
 }
 </style>

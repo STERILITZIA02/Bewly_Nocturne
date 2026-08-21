@@ -1,5 +1,13 @@
 .popover-card {
   position: relative;
+  padding: var(--bew-popover-card-padding);
+  border-radius: var(--bew-popover-card-radius);
+  corner-shape: var(--bew-corner-shape);
+  transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.popover-card:hover {
+  background: var(--bew-fill-2);
 }
 
 .popover-card__primary {
@@ -18,7 +26,30 @@
 .popover-card__content {
   position: relative;
   z-index: 1;
+  min-width: 0;
+  gap: var(--bew-popover-card-gap);
   pointer-events: none;
+}
+
+.popover-card__copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.popover-card__title {
+  margin: 0;
+  overflow: hidden;
+  font-size: var(--bew-font-size-title);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-line-height-title);
+  overflow-wrap: anywhere;
+}
+
+.popover-card__meta {
+  margin-top: var(--bew-space-2);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 
 .popover-card__interactive {
@@ -30,12 +61,59 @@
 .popover-card__media {
   position: relative;
   overflow: hidden;
-  border-radius: var(--bew-radius-half);
+  isolation: isolate;
+  border-radius: var(--bew-popover-media-radius);
   corner-shape: var(--bew-corner-shape);
+  background: var(--bew-skeleton);
+}
+
+.popover-card__media > img,
+.popover-card__media > picture,
+.popover-card__media > video,
+.popover-card__media > picture > img,
+.popover-card__media img,
+.popover-card__media video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 0;
+  corner-shape: unset;
 }
 
 .popover-card-action {
   position: absolute;
+  opacity: 0;
+  transition:
+    opacity var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
+}
+
+.popover-card:hover .popover-card-action,
+.popover-card:focus-within .popover-card-action {
+  opacity: 1;
+}
+
+button.popover-card__overlay-action {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  color: var(--bew-on-overlay-color);
+  background: var(--bew-overlay-background);
+  border: 0;
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+}
+
+button.popover-card__overlay-action:hover {
+  background: var(--bew-theme-color);
+}
+
+button.popover-card__overlay-action--danger:hover {
+  background: var(--bew-error-color);
 }
 
 button.popover-card__interactive {

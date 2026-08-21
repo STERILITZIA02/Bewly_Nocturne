@@ -10,20 +10,6 @@
   --uno: "opacity-0 transform -translate-y-full";
 }
 
-.slide-in-enter-active,
-.slide-in-leave-active {
-  transition:
-    opacity 250ms var(--bew-ease-standard, ease),
-    transform 250ms var(--bew-ease-standard, ease),
-    margin-top 250ms var(--bew-ease-standard, ease);
-  pointer-events: none;
-}
-
-.slide-in-leave-to,
-.slide-in-enter-from {
-  --uno: "transform mt--10px opacity-0";
-}
-
 .slide-out-enter-active,
 .slide-out-leave-active {
   transition:
@@ -55,20 +41,6 @@
   input:not(:focus, :focus-within) {
     --uno: "!border-$bew-surface-border-color !shadow-$bew-shadow-1";
   }
-}
-
-.bew-popover {
-  --uno: "fixed";
-  --uno: "overflow-hidden";
-  --uno: "after:content-empty";
-  --uno: "after:opacity-100 after:w-full after:h-100px";
-  --uno: "after:absolute after:top--30px after:left-1/2 after:-z-1";
-  --uno: "after:transform after:-translate-x-1/2";
-  border-radius: var(--bew-popover-radius);
-  corner-shape: var(--bew-corner-shape);
-  box-sizing: border-box;
-  z-index: var(--bew-z-popover);
-  max-width: calc(100vw - var(--bew-space-8));
 }
 
 .logo.activated {

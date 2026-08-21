@@ -169,225 +169,210 @@ function handleClickChannel() {
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1); overflow-y: auto;"
-    w-300px max-h="[calc(100vh-120px)]" min-h-0
-    p-4 rounded="$bew-radius" z--1 bg="$bew-elevated-alt"
-    border="1 $bew-surface-border-color"
-    shadow="[var(--bew-shadow-3),var(--bew-shadow-edge-glow-1)]"
-    class="userPanel-pop bew-popover"
+    class="userPanel-pop bew-popover bew-popover-surface"
     data-key="userPanel"
   >
-    <div
-      text="xl" font-medium flex="~ items-center gap-2"
-    >
-      <Button
-        v-if="settings.touchScreenOptimization"
-        type="secondary" strong @click="handleClickChannel"
-      >
-        {{ userInfo.uname ? userInfo.uname : '-' }}
-      </Button>
-      <span v-else>
-        {{ userInfo.uname ? userInfo.uname : '-' }}
-      </span>
-    </div>
-    <div
-      text="xs $bew-text-2"
-      m="t-1 b-2"
-    >
-      <ALink
-        class="group mr-4"
-        href="https://account.bilibili.com/account/coin"
-        type="topBar"
-      >
-        {{ $t('topbar.user_dropdown.money') + (userInfo.money ?? '-') }}
-      </ALink>
-      <ALink
-        class="group"
-        href="https://pay.bilibili.com/pay-v2-web/bcoin_index"
-        type="topBar"
-      >
-        {{
-          $t('topbar.user_dropdown.b_coins') + (userInfo.wallet?.bcoin_balance ?? '-')
-        }}
-      </ALink>
-    </div>
-
-    <ALink
-      v-if="userInfo?.level_info?.current_level < 6"
-      href="//account.bilibili.com/account/record?type=exp"
-      type="topBar"
-      block mt-2 mb-2 w-full
-      flex="~ col justify-center items-start"
-    >
+    <div class="bew-popover__scroll user-panel-pop__scroll">
       <div
-        flex="~ items-center justify-center gap-2"
-        w-full
+        text="xl" font-medium flex="~ items-center gap-2"
+      >
+        <Button
+          v-if="settings.touchScreenOptimization"
+          type="secondary" strong @click="handleClickChannel"
+        >
+          {{ userInfo.uname ? userInfo.uname : '-' }}
+        </Button>
+        <span v-else>
+          {{ userInfo.uname ? userInfo.uname : '-' }}
+        </span>
+      </div>
+      <div
+        text="xs $bew-text-2"
+        m="t-1 b-2"
+      >
+        <ALink
+          class="group mr-4"
+          href="https://account.bilibili.com/account/coin"
+          type="topBar"
+        >
+          {{ $t('topbar.user_dropdown.money') + (userInfo.money ?? '-') }}
+        </ALink>
+        <ALink
+          class="group"
+          href="https://pay.bilibili.com/pay-v2-web/bcoin_index"
+          type="topBar"
+        >
+          {{
+            $t('topbar.user_dropdown.b_coins') + (userInfo.wallet?.bcoin_balance ?? '-')
+          }}
+        </ALink>
+      </div>
+
+      <ALink
+        v-if="userInfo?.level_info?.current_level < 6"
+        href="//account.bilibili.com/account/record?type=exp"
+        type="topBar"
+        block mt-2 mb-2 w-full
+        flex="~ col justify-center items-start"
       >
         <div
-          flex="~ items-center"
-          class="level"
-          v-html="DOMPurify.sanitize(getLvIcon(userInfo.level_info.current_level))"
-        />
-        <div relative w="full" h="2px" bg="$bew-fill-3">
+          flex="~ items-center justify-center gap-2"
+          w-full
+        >
           <div
-            pos="absolute top-0 left-0" h-2px
-            h="2px"
-            rounded="$bew-radius-full"
-            bg="$bew-warning-color"
-            :style="{ width: levelProgressBarWidth }"
+            flex="~ items-center"
+            class="level"
+            v-html="DOMPurify.sanitize(getLvIcon(userInfo.level_info.current_level))"
+          />
+          <div relative w="full" h="2px" bg="$bew-fill-3">
+            <div
+              pos="absolute top-0 left-0" h-2px
+              h="2px"
+              rounded="$bew-radius-full"
+              bg="$bew-warning-color"
+              :style="{ width: levelProgressBarWidth }"
+            />
+          </div>
+          <div
+            class="level level-next"
+            flex="~ items-center"
+            v-html="DOMPurify.sanitize(getLvIcon(userInfo.level_info.current_level + 1))"
           />
         </div>
-        <div
-          class="level level-next"
-          flex="~ items-center"
-          v-html="DOMPurify.sanitize(getLvIcon(userInfo.level_info.current_level + 1))"
-        />
-      </div>
-      <div w-full text="xs $bew-text-3">
-        {{
-          $t('topbar.user_dropdown.exp_desc', {
-            current_exp: userInfo.level_info.current_exp,
-            level: userInfo.level_info.current_level + 1,
-            need_exp: userInfo.level_info.next_exp - userInfo.level_info.current_exp || 0,
-          })
-        }}
-      </div>
-    </ALink>
-
-    <ALink
-      v-else
-      href="//account.bilibili.com/account/record?type=exp"
-      type="topBar"
-      mt-2 mb-2
-      duration-300
-      flex="~ items-center gap-2"
-      class="lv6-entry"
-      :class="showLv6LastLoginInfo ? 'lv6-entry--card' : 'lv6-entry--compact'"
-    >
-      <div
-        :style="{ width: userInfo?.is_senior_member ? '36px' : '28px' }"
-        class="level"
-        h-20px
-        v-html="DOMPurify.sanitize(getLvIcon(userInfo?.level_info?.current_level, userInfo?.is_senior_member))"
-      />
-      <div v-if="showLv6LastLoginInfo" flex="~ col 1" text="xs $bew-text-3">
-        <div v-if="loginLog.time_at">
-          {{ $t('topbar.user_dropdown.last_login_time') }}: {{ loginLog.time_at }}
-        </div>
-        <div v-if="loginLog.geo">
-          {{ $t('topbar.user_dropdown.last_login_location') }}: {{ loginLog.geo }}
-        </div>
-      </div>
-    </ALink>
-
-    <div grid="~ cols-3 gap-2" mb-2>
-      <ALink
-        class="channel-info-item"
-        :href="`https://space.bilibili.com/${mid}/fans/follow`"
-        :title="`${userStat.following}`"
-        type="topBar"
-      >
-        <div class="num">
-          {{ userStat.following ? numFormatter(userStat.following) : '0' }}
-        </div>
-        <div>{{ $t('topbar.user_dropdown.following') }}</div>
-      </ALink>
-      <ALink
-        class="channel-info-item"
-        :href="`https://space.bilibili.com/${mid}/fans/fans`"
-        :title="`${userStat.follower}`"
-        type="topBar"
-      >
-        <div class="num">
-          {{ userStat.follower ? numFormatter(userStat.follower) : '0' }}
-        </div>
-        <div>{{ $t('topbar.user_dropdown.followers') }}</div>
-      </ALink>
-      <ALink
-        class="channel-info-item"
-        :href="`https://space.bilibili.com/${mid}/dynamic`"
-        :title="`${userStat.dynamic_count}`"
-        type="topBar"
-      >
-        <div class="num">
+        <div w-full text="xs $bew-text-3">
           {{
-            userStat.dynamic_count ? numFormatter(userStat.dynamic_count) : '0'
+            $t('topbar.user_dropdown.exp_desc', {
+              current_exp: userInfo.level_info.current_exp,
+              level: userInfo.level_info.current_level + 1,
+              need_exp: userInfo.level_info.next_exp - userInfo.level_info.current_exp || 0,
+            })
           }}
         </div>
-        <div>{{ $t('topbar.user_dropdown.posts') }}</div>
       </ALink>
-    </div>
 
-    <div
-      flex="~ justify-between col gap-1"
-      mb-2 p-2 bg="$bew-fill-alt" rounded="$bew-radius"
-      shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-1)]"
-    >
       <ALink
-        v-for="item in otherLinks.filter((_, index) => index <= 1)"
-        :key="item.url"
-        :href="item.url"
+        v-else
+        href="//account.bilibili.com/account/record?type=exp"
         type="topBar"
-        p="x-4 y-2" flex="~ items-center justify-between"
-        rounded="$bew-radius"
+        mt-2 mb-2
         duration-300
-        hover:bg="$bew-fill-2"
-        relative
+        flex="~ items-center gap-2"
+        class="lv6-entry"
+        :class="showLv6LastLoginInfo ? 'lv6-entry--card' : 'lv6-entry--compact'"
       >
-        <!-- B币领取提醒dot -->
         <div
-          v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
-          class="unread-dot"
-          pos="absolute top-1 right-1"
+          :style="{ width: userInfo?.is_senior_member ? '36px' : '28px' }"
+          class="level"
+          h-20px
+          v-html="DOMPurify.sanitize(getLvIcon(userInfo?.level_info?.current_level, userInfo?.is_senior_member))"
         />
-
-        <div flex="~ items-center gap-2">
-          <div :class="item.icon" text="$bew-text-2" />
-          {{ item.name }}
+        <div v-if="showLv6LastLoginInfo" flex="~ col 1" text="xs $bew-text-3">
+          <div v-if="loginLog.time_at">
+            {{ $t('topbar.user_dropdown.last_login_time') }}: {{ loginLog.time_at }}
+          </div>
+          <div v-if="loginLog.geo">
+            {{ $t('topbar.user_dropdown.last_login_location') }}: {{ loginLog.geo }}
+          </div>
         </div>
-        <div i-mingcute:arrow-right-line />
       </ALink>
-    </div>
 
-    <div
-      flex="~ justify-between col gap-1"
-      p-2 bg="$bew-fill-alt" rounded="$bew-radius"
-      shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-1)]"
-    >
-      <ALink
-        v-for="item in otherLinks.filter((_, index) => index > 1)"
-        :key="item.url"
-        :href="item.url"
-        type="topBar"
-        p="x-4 y-2" flex="~ items-center justify-between"
-        rounded="$bew-radius"
-        duration-300
-        hover:bg="$bew-fill-2"
-        relative
-      >
-        <!-- B币领取提醒dot -->
-        <div
-          v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
-          class="unread-dot"
-          pos="absolute top-1 right-1"
-        />
+      <div grid="~ cols-3 gap-2" mb-2>
+        <ALink
+          class="channel-info-item"
+          :href="`https://space.bilibili.com/${mid}/fans/follow`"
+          :title="`${userStat.following}`"
+          type="topBar"
+        >
+          <div class="num">
+            {{ userStat.following ? numFormatter(userStat.following) : '0' }}
+          </div>
+          <div>{{ $t('topbar.user_dropdown.following') }}</div>
+        </ALink>
+        <ALink
+          class="channel-info-item"
+          :href="`https://space.bilibili.com/${mid}/fans/fans`"
+          :title="`${userStat.follower}`"
+          type="topBar"
+        >
+          <div class="num">
+            {{ userStat.follower ? numFormatter(userStat.follower) : '0' }}
+          </div>
+          <div>{{ $t('topbar.user_dropdown.followers') }}</div>
+        </ALink>
+        <ALink
+          class="channel-info-item"
+          :href="`https://space.bilibili.com/${mid}/dynamic`"
+          :title="`${userStat.dynamic_count}`"
+          type="topBar"
+        >
+          <div class="num">
+            {{
+              userStat.dynamic_count ? numFormatter(userStat.dynamic_count) : '0'
+            }}
+          </div>
+          <div>{{ $t('topbar.user_dropdown.posts') }}</div>
+        </ALink>
+      </div>
 
-        <div flex="~ items-center gap-2">
-          <div :class="item.icon" text="$bew-text-2" />
-          {{ item.name }}
-        </div>
-        <div i-mingcute:arrow-right-line />
-      </ALink>
       <div
-        text="$bew-error-color"
-        p="x-4 y-2" flex="~ items-center"
-        rounded="$bew-radius"
-        duration-300 cursor-pointer
-        hover:bg="$bew-fill-2"
-        @click="logout()"
+        class="user-panel-section"
+        flex="~ justify-between col gap-1"
+        mb-2
       >
-        <div i-solar:logout-2-bold-duotone text="$bew-error-60" mr-2 />
-        {{ $t('topbar.user_dropdown.log_out') }}
+        <ALink
+          v-for="item in otherLinks.filter((_, index) => index <= 1)"
+          :key="item.url"
+          :href="item.url"
+          type="topBar"
+          class="user-panel-section__row"
+        >
+          <!-- B币领取提醒dot -->
+          <div
+            v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
+            class="unread-dot"
+            pos="absolute top-1 right-1"
+          />
+
+          <div flex="~ items-center gap-2">
+            <div :class="item.icon" text="$bew-text-2" />
+            {{ item.name }}
+          </div>
+          <div i-mingcute:arrow-right-line />
+        </ALink>
+      </div>
+
+      <div
+        class="user-panel-section"
+        flex="~ justify-between col gap-1"
+      >
+        <ALink
+          v-for="item in otherLinks.filter((_, index) => index > 1)"
+          :key="item.url"
+          :href="item.url"
+          type="topBar"
+          class="user-panel-section__row"
+        >
+          <!-- B币领取提醒dot -->
+          <div
+            v-if="hasBCoinToReceive && item?.code === 'vip_rewards' && settings.showBCoinReceiveReminder"
+            class="unread-dot"
+            pos="absolute top-1 right-1"
+          />
+
+          <div flex="~ items-center gap-2">
+            <div :class="item.icon" text="$bew-text-2" />
+            {{ item.name }}
+          </div>
+          <div i-mingcute:arrow-right-line />
+        </ALink>
+        <div
+          class="user-panel-section__row user-panel-section__row--danger"
+          text="$bew-error-color"
+          @click="logout()"
+        >
+          <div i-solar:logout-2-bold-duotone text="$bew-error-60" mr-2 />
+          {{ $t('topbar.user_dropdown.log_out') }}
+        </div>
       </div>
     </div>
   </div>
@@ -395,6 +380,45 @@ function handleClickChannel() {
 
 <style lang="scss" scoped>
 @use "../../styles/index.scss";
+
+.userPanel-pop {
+  width: 300px;
+  max-height: min(620px, var(--bew-popover-max-height));
+}
+
+.user-panel-pop__scroll {
+  padding: var(--bew-popover-padding);
+}
+
+.user-panel-section {
+  padding: var(--bew-space-2);
+  background: var(--bew-fill-alt);
+  border-radius: var(--bew-popover-inner-radius);
+  corner-shape: var(--bew-corner-shape);
+  box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+}
+
+.user-panel-section__row {
+  position: relative;
+  display: flex;
+  min-height: var(--bew-control-height);
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--bew-space-2) var(--bew-space-4);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+  cursor: pointer;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.user-panel-section__row:hover {
+  background: var(--bew-fill-2);
+}
+
+.user-panel-section__row--danger {
+  justify-content: flex-start;
+  color: var(--bew-error-color);
+}
 
 .level :deep(svg) {
   --uno: "w-25px h-16px";
@@ -405,7 +429,9 @@ function handleClickChannel() {
 }
 
 .lv6-entry--card {
-  --uno: "w-full p-2 bg-$bew-fill-alt rounded-$bew-radius hover:bg-$bew-fill-2";
+  --uno: "w-full p-2 bg-$bew-fill-alt hover:bg-$bew-fill-2";
+  border-radius: var(--bew-popover-inner-radius);
+  corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
 }
 
@@ -419,9 +445,11 @@ function handleClickChannel() {
 }
 
 .channel-info-item {
-  --uno: "p-2 m-0 rounded-$bew-radius text-sm flex flex-col items-center transition-colors duration-200";
+  --uno: "p-2 m-0 text-sm flex flex-col items-center transition-colors duration-200";
   --uno: "bg-$bew-fill-alt hover:bg-$bew-fill-2";
   --uno: "shadow-[var(--bew-shadow-edge-glow-1),var(--bew-shadow-1)]";
+  border-radius: var(--bew-popover-inner-radius);
+  corner-shape: var(--bew-corner-shape);
 
   > * {
     --uno: "transition-colors duration-200";

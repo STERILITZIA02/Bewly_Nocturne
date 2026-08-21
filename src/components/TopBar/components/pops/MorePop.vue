@@ -21,36 +21,44 @@ const list = computed((): { name: string, url: string, icon: string, bewlyKey?: 
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1);"
-    h="[calc(100vh-100px)]" max-h-264px important-overflow-y-auto
-    w="180px"
-    bg="$bew-elevated"
-    p="4"
-    rounded="$bew-radius"
-    flex="~ col"
-    shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-3)]"
-    border="1 $bew-surface-border-color"
-    class="more-pop bew-popover"
+    class="more-pop bew-popover bew-popover-surface"
     data-key="more"
   >
-    <ALink
-      v-for="item in list"
-      :key="item.name"
-      :href="item.bewlyKey ? getTopBarItemHref(item.bewlyKey, item.url) : item.url"
-      type="topBar"
-      :custom-click-event="!!item.bewlyKey && !settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem(item.bewlyKey)"
-      pos="relative"
-      p="x-4 y-2"
-      bg="hover:$bew-fill-2"
-      rounded="$bew-radius"
-      transition="background-color duration-200, color duration-200, opacity duration-200"
-      m="b-1 last:b-0"
-      flex="~"
-      items="center"
-      @click="item.bewlyKey && handleClickTopBarItem($event, item.bewlyKey)"
-    >
-      <i :class="item.icon" class="mr-4" />
-      <span class="flex-1">{{ item.name }}</span>
-    </ALink>
+    <div class="bew-popover__scroll bew-popover__compact-list more-pop__list">
+      <ALink
+        v-for="item in list"
+        :key="item.name"
+        :href="item.bewlyKey ? getTopBarItemHref(item.bewlyKey, item.url) : item.url"
+        type="topBar"
+        class="bew-popover-row more-pop__row"
+        :custom-click-event="!!item.bewlyKey && !settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem(item.bewlyKey)"
+        @click="item.bewlyKey && handleClickTopBarItem($event, item.bewlyKey)"
+      >
+        <i :class="item.icon" />
+        <span>{{ item.name }}</span>
+      </ALink>
+    </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.more-pop {
+  width: 180px;
+  max-height: min(320px, var(--bew-popover-max-height));
+}
+
+.more-pop__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+}
+
+.more-pop__row {
+  gap: var(--bew-space-3);
+}
+
+.more-pop__row i {
+  flex: 0 0 auto;
+  color: var(--bew-text-2);
+}
+</style>
