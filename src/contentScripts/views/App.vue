@@ -385,8 +385,21 @@ const handleThrottledReachBottom = useThrottleFn(() => handleReachBottom.value?.
 const handleThrottledBackToTop = useThrottleFn(() => handleBackToTop(), 500)
 const handleThrottledPageUnRefresh = useThrottleFn(() => handleUndoRefresh.value?.(), 500)
 const handleThrottledPageForwardRefresh = useThrottleFn(() => handleForwardRefresh.value?.(), 500)
+const { stop: stopLoadMoreObserver } = useIntersectionObserver(
+  loadMoreSentinelRef,
+  ([{ isIntersecting }]) => {
+    if (isIntersecting && !isHomeTabSwitching.value)
+      handleThrottledReachBottom()
+  },
+  {
+    root: scrollViewportRef,
+    rootMargin: '200px',
+    threshold: 0,
+  },
+)
 const topBarRef = ref()
 const reachTop = ref<boolean>(true)
+let tabSwitchRafId: number | null = null
 
 watch(isHomeTabSwitching, (switching) => {
   if (switching)
@@ -395,7 +408,10 @@ watch(isHomeTabSwitching, (switching) => {
   // IntersectionObserver may have reported an intersection while callbacks were
   // suspended. Recheck once after restoration so a genuinely short/bottom page
   // can still request more content without waiting for another scroll event.
-  requestAnimationFrame(() => {
+  if (tabSwitchRafId !== null)
+    cancelAnimationFrame(tabSwitchRafId)
+  tabSwitchRafId = requestAnimationFrame(() => {
+    tabSwitchRafId = null
     const viewport = scrollViewportRef.value
     const sentinel = loadMoreSentinelRef.value
     if (!viewport || !sentinel || isHomeTabSwitching.value)
@@ -581,43 +597,18 @@ watch(
 setupNecessarySettingsWatchers()
 let scrollingEmitted = false
 
+function handleDocumentScroll() {
+  reachTop.value = window.scrollY <= 0
+}
+
 onMounted(() => {
   window.dispatchEvent(new CustomEvent(BEWLY_MOUNTED))
-
-  // ✅ 设置 IntersectionObserver 用于无限滚动底部检测（仅在首页且使用Bewly页面时）
-  // 避免在每次滚动时读取 scrollHeight/clientHeight
-  if (isHomePage()) {
-    nextTick(() => {
-      const viewport = scrollViewportRef.value
-      if (!viewport)
-        return
-
-      useIntersectionObserver(
-        loadMoreSentinelRef,
-        ([{ isIntersecting }]) => {
-          if (isIntersecting && !isHomeTabSwitching.value) {
-            handleThrottledReachBottom()
-          }
-        },
-        {
-          root: viewport,
-          rootMargin: '200px', // 提前 200px 触发加载
-          threshold: 0,
-        },
-      )
-    })
-  }
 
   if (isHomePage()) {
     focusScrollViewport()
   }
 
-  document.addEventListener('scroll', () => {
-    if (window.scrollY > 0)
-      reachTop.value = false
-    else
-      reachTop.value = true
-  })
+  document.addEventListener('scroll', handleDocumentScroll, { passive: true })
 })
 
 function handleDockItemClick(dockItem: DockItem) {
@@ -753,6 +744,27 @@ function handleOsScroll(_instance: any, event: Event) {
 function handleNativeScroll(event: Event) {
   handleOsScroll(null, event)
 }
+
+onBeforeUnmount(() => {
+  stopLoadMoreObserver()
+  document.removeEventListener('scroll', handleDocumentScroll)
+  if (tabSwitchRafId !== null) {
+    cancelAnimationFrame(tabSwitchRafId)
+    tabSwitchRafId = null
+  }
+  if (rafId !== null) {
+    cancelAnimationFrame(rafId)
+    rafId = null
+  }
+  if (scrollStateTimer) {
+    clearTimeout(scrollStateTimer)
+    scrollStateTimer = null
+  }
+  if (scrollingEmitted) {
+    emitter.emit(OVERLAY_SCROLL_STATE_CHANGE, false)
+    scrollingEmitted = false
+  }
+})
 
 function openIframeDrawer(url: string) {
   const isSameOrigin = (origin: URL, destination: URL) =>

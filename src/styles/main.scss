@@ -1,4 +1,5 @@
 @use "./gridLayout";
+@use "./popover";
 
 * {
   outline-color: var(--bew-theme-focus-ring);
@@ -223,18 +224,6 @@ img:not(.pswp__img) {
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-caption);
-}
-
-// Shared surface for search suggestions, filters and other anchored Pop UI.
-.bew-popover-surface {
-  box-sizing: border-box;
-  color: var(--bew-text-1);
-  background: var(--bew-elevated);
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-popover-radius);
-  corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
-  backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .bew-settings-option--lift {

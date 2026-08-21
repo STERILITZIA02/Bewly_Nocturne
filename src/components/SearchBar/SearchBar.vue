@@ -532,113 +532,117 @@ function handleClearKeyword() {
       </button>
     </div>
 
-    <Transition name="result-list">
+    <Transition name="slide-in">
       <div
         v-if="shouldShowSearchDropdown"
         id="search-dropdown"
-        class="bew-popover-surface"
+        class="bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
-        <!-- 热搜区块 -->
-        <div
-          v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0"
-          class="hot-search-section"
-        >
-          <div class="title p-2 pb-0">
-            <span>{{ $t('search_bar.hot_search_title') }}</span>
-          </div>
+        <div class="search-popover__scroll bew-popover__scroll">
+          <!-- 热搜区块 -->
+          <div
+            v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0"
+            class="hot-search-section"
+          >
+            <div class="title p-2 pb-0">
+              <span>{{ $t('search_bar.hot_search_title') }}</span>
+            </div>
 
-          <div class="hot-search-container p-2 grid grid-cols-2 gap-x-4 gap-y-1">
-            <ALink
-              v-for="(item, index) in visibleHotSearchList" :key="item.keyword"
-              :href="buildKeywordHref(item.keyword)"
-              type="searchBar"
-              :custom-click-event="true"
-              class="hot-search-item cursor-pointer duration-300"
-              flex items-center gap-2 p="x-2 y-1"
-              @click="handleKeywordLinkClick(item.keyword, $event)"
-            >
-              <span
-                class="index"
-                :class="{
-                  'top-1': index === 0,
-                  'top-2': index === 1,
-                  'top-3': index === 2,
-                  'normal': index > 2,
-                }"
+            <div class="hot-search-container p-2 grid grid-cols-2 gap-x-4 gap-y-1">
+              <ALink
+                v-for="(item, index) in visibleHotSearchList" :key="item.keyword"
+                :href="buildKeywordHref(item.keyword)"
+                type="searchBar"
+                :custom-click-event="true"
+                class="hot-search-item cursor-pointer duration-300"
+                flex items-center gap-2 p="x-2 y-1"
+                @click="handleKeywordLinkClick(item.keyword, $event)"
               >
-                {{ index + 1 }}
-              </span>
-              <span class="keyword" text="base $bew-text-1" truncate flex-1>{{ item.show_name }}</span>
-              <img
-                v-if="item.icon && !item.icon.includes('.gif')"
-                :src="item.icon"
-                class="hot-search-icon"
-                w-4 h-4 object-contain
-                alt=""
+                <span
+                  class="index"
+                  :class="{
+                    'top-1': index === 0,
+                    'top-2': index === 1,
+                    'top-3': index === 2,
+                    'normal': index > 2,
+                  }"
+                >
+                  {{ index + 1 }}
+                </span>
+                <span class="keyword" text="base $bew-text-1" truncate flex-1>{{ item.show_name }}</span>
+                <img
+                  v-if="item.icon && !item.icon.includes('.gif')"
+                  :src="item.icon"
+                  class="hot-search-icon"
+                  w-4 h-4 object-contain
+                  alt=""
+                >
+              </ALink>
+            </div>
+          </div>
+
+          <!-- 分割线 -->
+          <div
+            v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0 && searchHistory.length > 0"
+            class="divider"
+            mx-2 my-1 h-px bg="$bew-border-color"
+          />
+
+          <!-- 搜索历史区块 -->
+          <div
+            v-if="searchHistory.length !== 0"
+            class="history-section"
+          >
+            <div class="title p-2 pb-0 flex justify-between">
+              <span>{{ $t('search_bar.history_title') }}</span>
+              <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
+                {{ $t('search_bar.clear_history') }}
+              </button>
+            </div>
+
+            <div class="history-item-container p2 flex flex-wrap gap-x-3 gap-y-3">
+              <ALink
+                v-for="(item, index) in searchHistory" :key="item.timestamp"
+                :href="buildKeywordHref(item.value)"
+                type="searchBar"
+                :custom-click-event="true"
+                class="history-item group"
+                :class="{ active: keyboardSelectionMode === 'history' && selectedIndex === index }"
+                flex justify-between items-center
+                @click="handleKeywordLinkClick(item.value, $event)"
               >
-            </ALink>
-          </div>
-        </div>
-
-        <!-- 分割线 -->
-        <div
-          v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0 && searchHistory.length > 0"
-          class="divider"
-          mx-2 my-1 h-px bg="$bew-border-color"
-        />
-
-        <!-- 搜索历史区块 -->
-        <div
-          v-if="searchHistory.length !== 0"
-          class="history-section"
-        >
-          <div class="title p-2 pb-0 flex justify-between">
-            <span>{{ $t('search_bar.history_title') }}</span>
-            <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
-              {{ $t('search_bar.clear_history') }}
-            </button>
-          </div>
-
-          <div class="history-item-container p2 flex flex-wrap gap-x-3 gap-y-3">
-            <ALink
-              v-for="(item, index) in searchHistory" :key="item.timestamp"
-              :href="buildKeywordHref(item.value)"
-              type="searchBar"
-              :custom-click-event="true"
-              class="history-item group"
-              :class="{ active: keyboardSelectionMode === 'history' && selectedIndex === index }"
-              flex justify-between items-center
-              @click="handleKeywordLinkClick(item.value, $event)"
-            >
-              <span> {{ item.value }}</span>
-              <TagRemoveButton
-                class="history-item__remove"
-                :label="$t('common.operation.remove')"
-                @mousedown.prevent
-                @click.stop.prevent="handleDelete(item.value)"
-              />
-            </ALink>
+                <span> {{ item.value }}</span>
+                <TagRemoveButton
+                  class="history-item__remove"
+                  :label="$t('common.operation.remove')"
+                  @mousedown.prevent
+                  @click.stop.prevent="handleDelete(item.value)"
+                />
+              </ALink>
+            </div>
           </div>
         </div>
       </div>
     </Transition>
 
-    <Transition name="result-list">
+    <Transition name="slide-in">
       <div
         v-if="isFocus && suggestions.length !== 0 && keyword.length > 0"
         id="search-suggestion"
-        class="bew-popover-surface"
+        class="bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
-        <div
-          v-for="(item, index) in suggestions"
-          :key="index"
-          class="suggestion-item"
-          :class="{ active: keyboardSelectionMode === 'suggestions' && selectedIndex === index }"
-          @click="navigateToSearchResultPage(item.value)"
-        >
-          <span v-html="DOMPurify.sanitize(item.name)" />
+        <div class="search-popover__scroll bew-popover__scroll">
+          <div
+            v-for="(item, index) in suggestions"
+            :key="index"
+            class="suggestion-item"
+            :class="{ active: keyboardSelectionMode === 'suggestions' && selectedIndex === index }"
+            @click="navigateToSearchResultPage(item.value)"
+          >
+            <span v-html="DOMPurify.sanitize(item.name)" />
+          </div>
         </div>
       </div>
     </Transition>
@@ -650,18 +654,6 @@ function handleClearKeyword() {
 
 ::v-deep(.suggest_high_light) {
   --uno: "text-$bew-theme-foreground not-italic";
-}
-
-.result-list-enter-active,
-.result-list-leave-active {
-  transition:
-    opacity var(--bew-duration-moderate) var(--bew-ease-in-out),
-    transform var(--bew-duration-moderate) var(--bew-ease-in-out);
-}
-
-.result-list-enter-from,
-.result-list-leave-to {
-  --uno: "transform translate-y-4 opacity-0 scale-95";
 }
 
 .focus-character-enter-active,
@@ -702,11 +694,54 @@ function handleClearKeyword() {
 
   @mixin card-content {
     --uno: "text-base outline-none w-full bg-$b-search-bar-normal-color border-1 border-$bew-surface-border-color";
-    --uno: "shadow-[var(--bew-shadow-2),var(--bew-shadow-edge-glow-1)]";
     backdrop-filter: var(--bew-filter-glass-1);
   }
 
+  .search-bar::before,
+  .search-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    border-radius: var(--b-search-bar-current-radius);
+    corner-shape: var(--bew-corner-shape);
+    pointer-events: none;
+    transition:
+      opacity var(--bew-duration-normal) var(--bew-ease-standard),
+      border-radius var(--bew-duration-moderate) var(--bew-ease-standard);
+  }
+
+  .search-bar::before {
+    box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+    opacity: 1;
+  }
+
+  .search-bar::after {
+    box-shadow:
+      0 0 0 2px var(--bew-theme-focus-ring),
+      0 6px 16px var(--bew-theme-color-40),
+      inset 0 0 6px var(--bew-theme-color-30);
+    opacity: 0;
+  }
+
+  .search-bar.focus::before {
+    opacity: 0;
+  }
+
+  .search-bar.focus::after {
+    opacity: 1;
+  }
+
   .search-bar {
+    --b-search-bar-current-radius: var(
+      --b-search-bar-radius,
+      calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
+    );
+
+    &.focus {
+      --b-search-bar-current-radius: var(--bew-radius);
+    }
+
     .focus-character-image {
       position: absolute;
       right: 0;
@@ -729,17 +764,14 @@ function handleClearKeyword() {
       appearance: none;
       min-width: 0;
       position: relative;
-      z-index: 1;
-      border-radius: var(
-        --b-search-bar-radius,
-        calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
-      );
+      z-index: 0;
+      border-radius: var(--b-search-bar-current-radius);
       corner-shape: var(--bew-corner-shape);
       transition:
         background-color var(--bew-duration-normal) var(--bew-ease-standard),
         color var(--bew-duration-normal) var(--bew-ease-standard),
         opacity var(--bew-duration-normal) var(--bew-ease-standard),
-        box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
+        border-color var(--bew-duration-normal) var(--bew-ease-standard),
         border-radius var(--bew-duration-moderate) var(--bew-ease-standard);
 
       &::placeholder {
@@ -754,11 +786,6 @@ function handleClearKeyword() {
 
     &.focus input {
       border-color: var(--bew-theme-focus-ring);
-      border-radius: var(--bew-radius);
-      box-shadow:
-        0 0 0 2px var(--bew-theme-focus-ring),
-        0 6px 16px var(--bew-theme-color-40),
-        inset 0 0 6px var(--bew-theme-color-30);
     }
 
     .search-submit-btn {
@@ -807,7 +834,7 @@ function handleClearKeyword() {
   }
 
   @mixin search-content {
-    --uno: "text-base outline-none w-full p-2 mt-2 absolute hover:block";
+    --uno: "text-base outline-none w-full mt-2 absolute hover:block";
   }
 
   @mixin search-content-item {
@@ -816,7 +843,7 @@ function handleClearKeyword() {
 
   #search-dropdown {
     @include search-content;
-    --uno: "max-h-420px important-overflow-y-auto";
+    --uno: "max-h-420px";
     z-index: var(--bew-z-topbar-interaction);
 
     .title {
@@ -914,7 +941,7 @@ function handleClearKeyword() {
 
   #search-suggestion {
     @include search-content;
-    --uno: "max-h-420px important-overflow-y-auto";
+    --uno: "max-h-420px";
     z-index: var(--bew-z-topbar-interaction);
 
     .suggestion-item {
@@ -924,6 +951,12 @@ function handleClearKeyword() {
         --uno: "bg-$bew-fill-2 shadow-[var(--bew-shadow-1),var(--bew-shadow-edge-glow-1)]";
       }
     }
+  }
+
+  .search-popover__scroll {
+    max-height: inherit;
+    padding: var(--bew-space-2);
+    box-sizing: border-box;
   }
 
   &.search-wrap--top-bar {

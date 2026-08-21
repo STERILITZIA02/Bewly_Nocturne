@@ -339,7 +339,7 @@ onBeforeUnmount(() => {
     />
 
     <SearchVideoFilters
-      v-if="currentCategory === 'video' || currentCategory === 'all'"
+      v-if="currentCategory === 'video'"
       v-model:video-order="currentVideoOrder"
       v-model:duration="currentDuration"
       v-model:time-range="currentTimeRange"

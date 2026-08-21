@@ -994,8 +994,11 @@ function openDetailFrameInNewTab() {
 }
 
 function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
-  if (moment.isVideo && !moment.isLive)
+  if (moment.isVideo && !moment.isLive) {
     recordVideoVisit(moment)
+    openMomentInNewTab(moment, settings.value.momentsCardOpenMode === 'background')
+    return
+  }
 
   // 小屏、直播与「新标签/后台标签」设置：外部打开，避免狭窄 Dialog 与跨域直播占用
   if (!forceDialog && shouldOpenMomentExternally(moment)) {
@@ -1219,6 +1222,8 @@ function mapMoment(item: DataItem): DisplayMoment {
       || raw.modules?.module_stat?.like?.disabled,
     ),
     commentCount: Number(raw.modules?.module_stat?.comment?.count || 0),
+    commentId: raw.basic?.comment_id_str ? String(raw.basic.comment_id_str) : undefined,
+    commentType: Number(raw.basic?.comment_type) || undefined,
     hotComment: hotCommentText || hotCommentRichText.length
       ? {
           text: hotCommentText,
@@ -1514,12 +1519,14 @@ function getValidMomentsCache(filter: MomentFilter) {
   const entry = momentsFeedCache.value.entries[filter]
   if (!entry)
     return undefined
-  const usesCurrentVideoShape = entry.items.every(moment => (
+  const usesCurrentMomentShape = entry.items.every(moment => (
     typeof moment.videoPlay === 'string'
     && typeof moment.videoDanmaku === 'string'
     && !(moment.isForward && moment.isVideo)
+    && 'commentId' in moment
+    && 'commentType' in moment
   ))
-  if (usesCurrentVideoShape && Date.now() - entry.updatedAt < MOMENTS_CACHE_TTL_MS)
+  if (usesCurrentMomentShape && Date.now() - entry.updatedAt < MOMENTS_CACHE_TTL_MS)
     return entry
 
   const { [filter]: _expired, ...validEntries } = momentsFeedCache.value.entries
@@ -1966,6 +1973,14 @@ function scheduleBottomRebalance() {
       updateVirtualColumns()
     }
   }, 720)
+}
+
+function handleMomentCommentToggle() {
+  suppressBottomRebalanceUntil = Date.now() + 1200
+  if (rebalanceTimer) {
+    clearTimeout(rebalanceTimer)
+    rebalanceTimer = null
+  }
 }
 
 /** 提交卡片高度；瀑布流各列独立变化，不修正全局 scrollTop */
@@ -3868,6 +3883,7 @@ watch(
               @toggle-like="toggleMomentLike"
               @toggle-reservation="toggleMomentReservation"
               @open-image-preview="openMomentImagePreview"
+              @comment-toggle="handleMomentCommentToggle"
             />
             <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
           </div>

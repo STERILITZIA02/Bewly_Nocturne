@@ -36,7 +36,7 @@ import {
   removeUnusedActivityCard,
 } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
-import { applyVideoTimeFilter, buildVideoSearchParams } from '../utils/searchHelpers'
+import { applyVideoTimeFilter } from '../utils/searchHelpers'
 
 const props = defineProps<{
   keyword: string
@@ -106,17 +106,6 @@ const {
   return { success, appendedCount }
 }, {
   isLoading: () => isLoading.value,
-})
-
-// 是否激活视频筛选
-const isVideoFilterActive = computed(() => {
-  if (props.filters.order !== '' || props.filters.duration !== 0)
-    return true
-  if (props.filters.timeRange !== 'all')
-    return true
-  if (props.filters.customStartDate !== '' || props.filters.customEndDate !== '')
-    return true
-  return false
 })
 
 // 是否在翻页模式的非首页
@@ -343,56 +332,29 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
   const previousLength = getCurrentResultLength()
 
-  let success = false
-  const useVideoFilters = isVideoFilterActive.value
-
-  if (useVideoFilters) {
-    success = await search({
-      searchType: 'video',
-      keyword,
-      page: targetPage,
-      pageSize: 30,
-      ...buildVideoSearchParams({
-        loadMore: isLoadMore,
-        context: context.value,
-        filters: props.filters,
-      }),
-    })
-  }
-  else {
-    success = await search({
-      searchType: 'all',
-      keyword,
-      page: targetPage,
-      pageSize: 30,
-      context: targetPage > 1 ? context.value : '',
-      webRollPage: targetPage,
-    })
-  }
+  const success = await search({
+    searchType: 'all',
+    keyword,
+    page: targetPage,
+    pageSize: 30,
+    context: targetPage > 1 ? context.value : '',
+    webRollPage: targetPage,
+  })
 
   if (!success || !lastResponse.value?.data)
     return false
 
   const rawData = lastResponse.value.data
 
-  let normalizedData = rawData
-  if (useVideoFilters) {
-    const list = Array.isArray(rawData?.result) ? rawData.result : []
-    normalizedData = {
-      ...rawData,
-      result: [{ result_type: 'video', data: list }],
-    }
-  }
-
-  const incomingSections = Array.isArray(normalizedData?.result) ? normalizedData.result : []
+  const incomingSections = Array.isArray(rawData?.result) ? rawData.result : []
 
   if (isLoadMore && results.value) {
-    results.value = mergeSections(results.value, normalizedData, {
+    results.value = mergeSections(results.value, rawData, {
       appendVideoOnly: paginationMode.value === 'scroll',
     })
   }
   else {
-    results.value = normalizedData
+    results.value = rawData
   }
 
   if (Array.isArray(results.value?.result)) {
@@ -525,50 +487,23 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
 
   isPageChanging.value = true
   try {
-    let success = false
-    const useVideoFilters = isVideoFilterActive.value
-
-    if (useVideoFilters) {
-      success = await search({
-        searchType: 'video',
-        keyword,
-        page,
-        pageSize: 30,
-        ...buildVideoSearchParams({
-          loadMore: false,
-          context: context.value,
-          filters: props.filters,
-        }),
-      })
-    }
-    else {
-      success = await search({
-        searchType: 'all',
-        keyword,
-        page,
-        pageSize: 30,
-        context: page > 1 ? context.value : '',
-        webRollPage: page,
-      })
-    }
+    const success = await search({
+      searchType: 'all',
+      keyword,
+      page,
+      pageSize: 30,
+      context: page > 1 ? context.value : '',
+      webRollPage: page,
+    })
 
     if (!success || !lastResponse.value?.data)
       return false
 
     const rawData = lastResponse.value.data
 
-    let normalizedData = rawData
-    if (useVideoFilters) {
-      const list = Array.isArray(rawData?.result) ? rawData.result : []
-      normalizedData = {
-        ...rawData,
-        result: [{ result_type: 'video', data: list }],
-      }
-    }
+    const incomingSections = Array.isArray(rawData?.result) ? rawData.result : []
 
-    const incomingSections = Array.isArray(normalizedData?.result) ? normalizedData.result : []
-
-    results.value = normalizedData
+    results.value = rawData
 
     if (Array.isArray(results.value?.result)) {
       const userSection = results.value.result.find((s: any) => s?.result_type === 'bili_user')

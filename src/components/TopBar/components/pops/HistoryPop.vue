@@ -5,6 +5,8 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
+import IconButton from '~/components/IconButton.vue'
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Loading from '~/components/Loading.vue'
 import Progress from '~/components/Progress.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
@@ -257,76 +259,46 @@ defineExpose({
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1);"
-    h="[calc(100vh-100px)]" max-h-500px important-overflow-y-overlay
-    bg="$bew-elevated"
-    w="380px"
-    rounded="$bew-radius"
-    pos="relative"
-    shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-3)]"
-    border="1 $bew-surface-border-color"
-    class="history-pop bew-popover"
+    class="history-pop bew-popover bew-popover-surface"
     data-key="history"
-    flex="~ col"
   >
-    <!-- top bar -->
-    <header
-      flex="~ items-center justify-between"
-      p="x-6"
-      pos="sticky top-0 left-0"
-      w="full"
-      h-50px
-      z="2"
-    >
-      <div flex="~">
-        <div
+    <header class="bew-popover__header">
+      <div class="history-pop__tabs bew-segment-control">
+        <LiquidSegmentIndicator :active-key="activatedTab" />
+        <button
           v-for="tab in historyTabs"
           :key="tab.id"
-          m="r-4"
-          transition="background-color duration-200, color duration-200, opacity duration-200"
-          class="tab"
-          :class="tab.id === activatedTab ? 'tab-selected' : ''"
-          cursor="pointer"
+          type="button"
+          class="bew-segment-control__item"
+          data-segment-item
+          :data-active="tab.id === activatedTab ? 'true' : 'false'"
+          :disabled="isLoading"
           @click="onClickTab(tab.id)"
         >
           {{ tab.name }}
-        </div>
+        </button>
       </div>
       <ALink
         href="https://www.bilibili.com/history"
         type="topBar"
-        flex="~ items-center"
+        class="bew-popover__action"
       >
-        <span text="sm">{{ $t('common.view_all') }}</span>
+        {{ $t('common.view_all') }}
       </ALink>
     </header>
 
-    <!-- historys wrapper -->
     <main
       ref="historysWrap"
-      overflow-y-auto
-      rounded="$bew-radius"
-      flex="~ col gap-2"
-      p="x-4"
-      flex-1
-      min-h-0
-      pos="relative"
+      class="bew-popover__body bew-popover__scroll bew-popover__list history-pop__scroll"
     >
-      <!-- loading -->
       <Loading
         v-if="isLoading && historys.length === 0"
-        h="full"
-        flex="~ items-center"
+        class="bew-popover__state"
       />
 
-      <!-- error -->
       <Empty
         v-else-if="loadError && historys.length === 0"
-        pos="absolute top-0 left-0"
-        bg="$bew-content"
-        z="0" w="full" h="full"
-        flex="~ items-center"
-        rounded="$bew-radius"
+        class="bew-popover__state"
         :description="$t('common.load_failed')"
       >
         <Button type="primary" @click="retryFailedLoad">
@@ -334,14 +306,9 @@ defineExpose({
         </Button>
       </Empty>
 
-      <!-- empty -->
       <Empty
         v-else-if="historys.length === 0"
-        pos="absolute top-0 left-0"
-        bg="$bew-content"
-        z="0" w="full" h="full"
-        flex="~ items-center"
-        rounded="$bew-radius"
+        class="bew-popover__state"
       />
 
       <!-- historys -->
@@ -350,10 +317,6 @@ defineExpose({
           v-for="historyItem in historys"
           :key="historyItem.kid"
           class="group popover-card"
-          m="last:b-4" p="2"
-          rounded="$bew-radius"
-          hover:bg="$bew-fill-2"
-          duration-300
         >
           <ALink
             class="popover-card__primary"
@@ -365,26 +328,15 @@ defineExpose({
             <!-- Video cover, live cover, ariticle cover -->
             <div
               class="popover-card__media"
-              bg="$bew-skeleton"
-              w="150px"
-              flex="shrink-0"
             >
               <!-- Delete button -->
-              <button
-                type="button"
-                class="group-hover:opacity-100 opacity-0 p-0 bew-shape-circle popover-card__interactive popover-card-action"
-                :aria-label="$t('common.operation.delete')"
-                pos="absolute top-0 right-0" z-1 w-24px h-24px
-                bg="black opacity-60 hover:$bew-error-color"
-                grid="~ place-items-center"
-                m="1"
-                text="white xs"
-                duration-300
-                border="rounded-full"
+              <IconButton
+                class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger history-pop__remove"
+                :label="$t('common.operation.delete')"
                 @click.stop.prevent="deleteHistoryItem(historyItem)"
               >
                 <i i-mingcute:close-line />
-              </button>
+              </IconButton>
 
               <!-- Video -->
               <template v-if="activatedTab === 0">
@@ -418,6 +370,7 @@ defineExpose({
                   </div>
                 </div>
                 <Progress
+                  class="history-pop__progress"
                   :percentage="
                     normalizePlaybackProgress(historyItem.progress, historyItem.duration)
                   "
@@ -481,16 +434,16 @@ defineExpose({
             </div>
 
             <!-- Description -->
-            <div>
+            <div class="popover-card__copy">
               <h3
-                class="keep-two-lines"
+                class="keep-two-lines popover-card__title"
                 overflow="hidden"
                 text="ellipsis"
                 break-anywhere
               >
                 {{ historyItem.title }}
               </h3>
-              <div text="$bew-text-2 sm" m="t-4" flex="~" align="items-center">
+              <div class="popover-card__meta" flex="~" align="items-center">
                 <ALink
                   :href="`https://space.bilibili.com/${historyItem.author_mid}`"
                   type="topBar"
@@ -510,7 +463,7 @@ defineExpose({
                   <i i-svg-spinners:pulse-3 align-middle mt--0.2em />
                 </span>
               </div>
-              <p text="$bew-text-2 sm">
+              <p class="popover-card__meta">
                 {{
                   useDateFormat(
                     historyItem.view_at * 1000,
@@ -542,22 +495,38 @@ defineExpose({
 <style lang="scss" scoped>
 @use "../../styles/popoverCards";
 
-.tab {
-  --uno: "relative text-$bew-text-2";
-
-  &::after {
-    --uno: "absolute bottom-0 left-0 w-full h-12px bg-$bew-theme-color opacity-0 transform scale-x-0 -z-1";
-    --uno: "transition-colors duration-200";
-    content: "";
-  }
+.history-pop {
+  width: 380px;
+  height: min(500px, var(--bew-popover-max-height));
 }
 
-.tab-selected {
-  --uno: "font-bold text-$bew-text-1";
+.history-pop__tabs {
+  flex: 0 0 auto;
+}
 
-  &::after {
-    --uno: "scale-x-80 opacity-40";
-  }
+.history-pop__scroll {
+  position: relative;
+}
+
+.history-pop .popover-card__media {
+  flex: 0 0 144px;
+  width: 144px;
+  aspect-ratio: 16 / 9;
+}
+
+.history-pop__remove {
+  z-index: 3;
+  top: var(--bew-space-1);
+  right: var(--bew-space-1);
+}
+
+.history-pop__progress {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 0;
 }
 
 .history-pop__pagination-error {
@@ -569,5 +538,20 @@ defineExpose({
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+}
+
+@media (max-width: 420px) {
+  .history-pop .bew-popover__header {
+    gap: var(--bew-space-2);
+    padding-inline: var(--bew-space-3);
+  }
+
+  .history-pop__tabs {
+    --bew-control-item-padding-x: var(--bew-space-2);
+  }
+
+  .history-pop .bew-popover__action {
+    padding-inline: var(--bew-space-1);
+  }
 }
 </style>

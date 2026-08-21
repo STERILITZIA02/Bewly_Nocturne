@@ -69,6 +69,21 @@ const API_MOMENT = {
     },
     afterHandle: AHS.J_D,
   },
+  getMomentComments: {
+    url: 'https://api.bilibili.com/x/v2/reply',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      type: 1,
+      oid: '' as string | number,
+      sort: 0,
+      nohot: 0,
+      pn: 1,
+      ps: 8,
+    },
+    afterHandle: AHS.J_D,
+  },
   setMomentLike: {
     url: 'https://api.bilibili.com/x/dynamic/feed/dyn/thumb',
     _fetch: {

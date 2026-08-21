@@ -27,15 +27,34 @@ export function useAnchoredPopoverPosition(
 
     const triggerRect = triggerElement.getBoundingClientRect()
     const popupRect = popupElement.getBoundingClientRect()
+    const visualViewport = window.visualViewport
+    const viewportLeft = visualViewport?.offsetLeft ?? 0
+    const viewportTop = visualViewport?.offsetTop ?? 0
+    const viewportWidth = visualViewport?.width ?? window.innerWidth
+    const viewportHeight = visualViewport?.height ?? window.innerHeight
     const position = computeAnchoredPopoverPosition(
-      triggerRect,
+      {
+        top: triggerRect.top - viewportTop,
+        right: triggerRect.right - viewportLeft,
+        bottom: triggerRect.bottom - viewportTop,
+        left: triggerRect.left - viewportLeft,
+        width: triggerRect.width,
+      },
       popupRect,
-      window.innerWidth,
-      window.innerHeight,
+      viewportWidth,
+      viewportHeight,
     )
-    popupElement.style.top = `${position.top}px`
-    popupElement.style.left = `${position.left}px`
+    const top = position.top + viewportTop
+    const left = position.left + viewportLeft
+    const anchorCenter = triggerRect.left + triggerRect.width / 2
+    const originX = Math.min(Math.max(anchorCenter - left, 0), popupRect.width)
+    popupElement.style.top = `${top}px`
+    popupElement.style.left = `${left}px`
+    popupElement.style.setProperty('--bew-popover-origin-x', `${originX}px`)
+    popupElement.style.setProperty('--bew-popover-origin-y', position.openUp ? '100%' : '0%')
     popupElement.dataset.openUp = String(position.openUp)
+    popupElement.dataset.positioned = 'true'
+    popupElement.style.removeProperty('visibility')
   }
 
   function scheduleUpdate() {
@@ -49,6 +68,8 @@ export function useAnchoredPopoverPosition(
     resizeObserver = undefined
     window.removeEventListener('resize', scheduleUpdate)
     window.removeEventListener('scroll', scheduleUpdate, true)
+    window.visualViewport?.removeEventListener('resize', scheduleUpdate)
+    window.visualViewport?.removeEventListener('scroll', scheduleUpdate)
   }
 
   function start() {
@@ -63,7 +84,10 @@ export function useAnchoredPopoverPosition(
     resizeObserver.observe(popupElement)
     window.addEventListener('resize', scheduleUpdate)
     window.addEventListener('scroll', scheduleUpdate, true)
-    scheduleUpdate()
+    window.visualViewport?.addEventListener('resize', scheduleUpdate)
+    window.visualViewport?.addEventListener('scroll', scheduleUpdate)
+    popupElement.style.visibility = 'hidden'
+    updatePosition()
   }
 
   watch([trigger, popup, visible], () => {

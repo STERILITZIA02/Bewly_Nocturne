@@ -1,4 +1,5 @@
 import type { PrivateSession } from '~/background/privateMessage/types'
+import { normalizeIntlLocale } from '~/utils/locale'
 
 export type RawSessionReference = Readonly<PrivateSession>
 
@@ -315,5 +316,5 @@ export function isNativePrivateSession(session: DisplayPrivateSession): boolean 
 }
 
 export function normalizePrivateSessionLocale(locale: string): string {
-  return locale === 'jyut' ? 'zh-HK' : locale
+  return normalizeIntlLocale(locale)
 }

@@ -107,13 +107,20 @@ function getData() {
     void getWatchLaterListByPage(requestGeneration, accountId)
 }
 
+function retryWatchLaterRequest() {
+  if (isLoading.value)
+    return
+  requestFailed.value = false
+  getData()
+}
+
 function initPageAction() {
   handlePageRefresh.value = async () => {
     await initData()
   }
 
   handleReachBottom.value = async () => {
-    if (isLoading.value || noMoreContent.value) {
+    if (isLoading.value || noMoreContent.value || requestFailed.value) {
       return
     }
 
@@ -135,10 +142,11 @@ function initPageAction() {
  * Get watch later list by page
  */
 async function getWatchLaterListByPage(generation: number, accountId: number) {
-  if (!isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value) {
+  if (!isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value || requestFailed.value) {
     return
   }
 
+  requestFailed.value = false
   isLoading.value = true
 
   try {
@@ -348,8 +356,8 @@ function handleGridRemove(item: VideoItem) {
       <h3 class="bew-page-heading" text="$bew-text-1" mb-6>
         {{ t('watch_later.title') }} ({{ watchLaterCount }})
       </h3>
-      <Empty v-if="requestFailed && !isLoading" :description="$t('common.load_failed')">
-        <Button type="primary" @click="initData">
+      <Empty v-if="requestFailed && !isLoading && currentWatchLaterList.length === 0" :description="$t('common.load_failed')">
+        <Button type="primary" @click="retryWatchLaterRequest">
           {{ $t('common.operation.refresh') }}
         </Button>
       </Empty>
@@ -561,6 +569,15 @@ function handleGridRemove(item: VideoItem) {
             m="-t-4"
           />
         </Transition>
+        <div
+          v-if="requestFailed && !isLoading && currentWatchLaterList.length > 0"
+          class="watch-later-load-more-error"
+        >
+          <span>{{ $t('common.load_failed') }}</span>
+          <Button type="tertiary" @click="retryWatchLaterRequest">
+            {{ $t('common.operation.refresh') }}
+          </Button>
+        </div>
       </template>
     </main>
 
@@ -659,6 +676,16 @@ function handleGridRemove(item: VideoItem) {
 
 .watch-later-grid {
   min-width: 0;
+}
+
+.watch-later-load-more-error {
+  display: flex;
+  min-height: var(--bew-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-control);
 }
 
 .watch-later-grid-skeleton {

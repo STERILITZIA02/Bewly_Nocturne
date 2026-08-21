@@ -3,6 +3,8 @@ import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
 
 import Empty from '~/components/Empty.vue'
+import IconButton from '~/components/IconButton.vue'
+import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import Loading from '~/components/Loading.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
@@ -113,87 +115,55 @@ defineExpose({
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1);" h="[calc(100vh-100px)]" max-h-500px
-    important-overflow-y-overlay
-    bg="$bew-elevated"
-    w="380px"
-    rounded="$bew-radius"
-    pos="relative"
-    shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-3)]"
-    border="1 $bew-surface-border-color"
-    class="moments-pop bew-popover"
+    class="moments-pop bew-popover bew-popover-surface"
     data-key="moments"
-    flex="~ col"
   >
-    <!-- top bar -->
-    <header
-      flex="~ items-center justify-between"
-      p="x-6"
-      pos="sticky top-0 left-0"
-      w="full"
-      h-50px
-      z="2"
-    >
-      <div flex="~">
-        <div
+    <header class="bew-popover__header">
+      <div
+        class="moments-pop__tabs bew-segment-control"
+        :class="{ 'bew-segment-control--solid': settings.disableFrostedGlass }"
+      >
+        <LiquidSegmentIndicator :active-key="selectedMomentTab.type" />
+        <button
           v-for="tab in momentTabs"
           :key="tab.type"
-          m="r-4"
-          transition="background-color duration-200, color duration-200, opacity duration-200"
-          class="tab"
-          :class="tab.type === selectedMomentTab.type ? 'tab-selected' : ''"
-          cursor="pointer"
+          type="button"
+          class="bew-segment-control__item"
+          data-segment-item
+          :data-active="tab.type === selectedMomentTab.type ? 'true' : 'false'"
+          :disabled="topBarStore.isLoadingMoments"
           @click="onClickTab(tab)"
         >
           {{ tab.name }}
-        </div>
+        </button>
       </div>
       <ALink
         href="https://t.bilibili.com/"
         type="topBar"
-        flex="~ items-center"
+        class="bew-popover__action"
       >
-        <span text="sm">{{ $t('common.view_all') }}</span>
+        {{ $t('common.view_all') }}
       </ALink>
     </header>
 
-    <!-- moments wrapper -->
     <main
       ref="momentsWrap"
-      rounded="$bew-radius"
-      overflow-x-hidden
-      overflow-y-auto
-      p="x-4"
-      flex-1
-      min-h-0
+      class="bew-popover__body bew-popover__scroll bew-popover__list moments-pop__scroll"
     >
-      <!-- loading -->
       <Loading
         v-if="topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
-        h="full"
-        flex="~"
-        items="center"
+        class="bew-popover__state"
       />
 
-      <!-- empty -->
       <Empty
         v-else-if="!topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
-        pos="absolute top-0 left-0"
-        z="0" w="full" h="full"
-        flex="~ items-center"
-        rounded="$bew-radius-half"
+        class="bew-popover__state"
       />
 
-      <!-- moments -->
       <TransitionGroup name="list">
         <article
           v-for="(moment, index) in topBarStore.moments"
           :key="index"
-          flex="~ justify-between"
-          m="b-2" p="2"
-          rounded="$bew-radius"
-          hover:bg="$bew-fill-2"
-          duration-300
           class="group popover-card"
         >
           <ALink
@@ -214,7 +184,7 @@ defineExpose({
             pos="absolute -top-12px -left-12px"
             style="box-shadow: 0 0 4px var(--bew-theme-color)"
           />
-          <div class="popover-card__content" flex="~ justify-between" w="full">
+          <div class="popover-card__content moments-pop__card-content">
             <ALink
               :href="moment.authorJumpUrl"
               type="topBar"
@@ -231,13 +201,13 @@ defineExpose({
               >
             </ALink>
 
-            <div flex="~" justify="between" w="full">
-              <div>
+            <div class="moments-pop__content-row">
+              <div class="moments-pop__copy popover-card__copy">
                 <!-- <span v-if="selectedTab !== 1">{{ `${moment.name} ${t('topbar.moments_dropdown.uploaded')}` }}</span> -->
                 <!-- <span v-else>{{ `${moment.name} ${t('topbar.moments_dropdown.now_streaming')}` }}</span> -->
 
                 <!-- 联合投稿显示多个作者 -->
-                <div v-if="moment.isCollaborative && moment.authors" flex="~ wrap" items="center" gap="1">
+                <div v-if="moment.isCollaborative && moment.authors" class="moments-pop__authors">
                   <template v-for="(author, authorIndex) in moment.authors" :key="author.jump_url">
                     <ALink
                       :href="author.jump_url"
@@ -260,13 +230,10 @@ defineExpose({
                 >
                   {{ moment.author }}
                 </ALink>
-                <div overflow-hidden text-ellipsis break-anywhere>
+                <div class="moments-pop__title popover-card__title">
                   {{ moment.title }}
                 </div>
-                <div
-                  text="$bew-text-2 sm"
-                  m="y-2"
-                >
+                <div class="popover-card__meta moments-pop__meta">
                   <!-- publish time -->
                   <div v-if="selectedMomentTab.type !== 'live'">
                     {{ moment.pubTime }}
@@ -287,23 +254,15 @@ defineExpose({
               </div>
               <div
                 class="group popover-card__media"
-                flex="~ items-center justify-center" w="82px"
-                h="46px" m="l-4" shrink-0
-                bg="$bew-skeleton"
               >
                 <img
                   :src="`${moment.cover}@128w_72h_1c`"
-                  w="82px" h="46px"
+                  :alt="moment.title"
                 >
-                <button
+                <IconButton
                   v-if="moment.watchLaterAid"
-                  type="button"
-                  class="popover-card__interactive popover-card-action"
-                  :aria-label="topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
-                  opacity-0 group-hover:opacity-100
-                  pos="absolute" duration-300 bg="black opacity-60"
-                  rounded="$bew-radius-half" p-1
-                  z-1 color-white
+                  :label="topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
+                  class="popover-card__interactive popover-card-action popover-card__overlay-action"
                   @click.stop.prevent="toggleWatchLater(moment.watchLaterAid)"
                 >
                   <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="$t('common.save_to_watch_later')" placement="bottom" type="dark">
@@ -312,7 +271,7 @@ defineExpose({
                   <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">
                     <Icon icon="line-md:confirm" />
                   </Tooltip>
-                </button>
+                </IconButton>
               </div>
             </div>
           </div>
@@ -330,21 +289,72 @@ defineExpose({
 <style lang="scss" scoped>
 @use "../../styles/popoverCards";
 
-.tab {
-  --uno: "relative text-$bew-text-2";
-
-  &::after {
-    --uno: "absolute bottom-0 left-0 w-full h-12px bg-$bew-theme-color opacity-0 transform scale-x-0 -z-1";
-    --uno: "transition-colors duration-200";
-    content: "";
-  }
+.moments-pop {
+  width: 380px;
+  height: min(500px, var(--bew-popover-max-height));
 }
 
-.tab-selected {
-  --uno: "font-bold text-$bew-text-1";
+.moments-pop__tabs {
+  flex: 0 0 auto;
+}
 
-  &::after {
-    --uno: "scale-x-80 opacity-40";
-  }
+.moments-pop__scroll {
+  position: relative;
+}
+
+.moments-pop__card-content,
+.moments-pop__content-row {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+}
+
+.moments-pop__card-content {
+  align-items: flex-start;
+}
+
+.moments-pop__content-row {
+  justify-content: space-between;
+}
+
+.moments-pop__copy {
+  min-width: 0;
+}
+
+.moments-pop__authors {
+  display: flex;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--bew-space-1);
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.moments-pop__authors a {
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--bew-font-weight-semibold);
+  text-overflow: ellipsis;
+}
+
+.moments-pop__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+}
+
+.moments-pop .popover-card__media {
+  display: flex;
+  flex: 0 0 82px;
+  width: 82px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  margin-left: var(--bew-space-4);
+}
+
+.moments-pop .popover-card__overlay-action {
+  inset: 50% auto auto 50%;
+  transform: translate(-50%, -50%);
 }
 </style>

@@ -57,52 +57,104 @@ const list = computed<NotificationPopItem[]>(() => TOP_BAR_NOTIFICATION_SECTIONS
 function handleClick(item: NotificationPopItem) {
   emit('itemClick', item)
 }
+
+function notificationBadgeWidth(count: number): string {
+  if (count > 99)
+    return '28px'
+  if (count > 9)
+    return '22px'
+  return '18px'
+}
 </script>
 
 <template>
   <div
-    style="backdrop-filter: var(--bew-filter-glass-1);"
-    bg="$bew-elevated"
-    p="4"
-    rounded="$bew-radius"
-    shadow="[var(--bew-shadow-edge-glow-1),var(--bew-shadow-3)]"
-    border="1 $bew-surface-border-color"
-    flex="~ col"
-    class="notifications-pop bew-popover"
+    class="notifications-pop bew-popover bew-popover-surface"
     data-key="notifications"
   >
-    <ALink
-      v-for="item in list"
-      :key="item.url"
-      :href="item.url"
-      type="topBar"
-      pos="relative"
-      flex="~ items-center justify-between gap-2"
-      p="x-4 y-2"
-      bg="hover:$bew-fill-2"
-      rounded="$bew-radius"
-      transition="background-color duration-200, color duration-200, opacity duration-200"
-      m="b-1 last:b-0"
-      :custom-click-event="settings.openNotificationsPageAsDrawer"
-      @click="handleClick(item)"
-    >
-      <div flex="~ items-center gap-2">
-        <i :class="item.icon" text="$bew-text-2" />
-        <span flex="1 shrink-0" text-nowrap>{{ item.name }}</span>
-      </div>
-      <!-- Use visibility to control the number of notifications to prevent width changes as soon as there is a number -->
-      <div
-        :style="{ visibility: item.unreadCount > 0 ? 'visible' : 'hidden' }"
-        bg="$bew-theme-color"
-        rounded="$bew-radius"
-        text="$bew-on-theme-color xs leading-none center"
-        grid="~ place-items-center"
-        px-1
-        min-w="16px"
-        h="16px"
+    <div class="bew-popover__scroll bew-popover__compact-list notifications-pop__list">
+      <ALink
+        v-for="item in list"
+        :key="item.url"
+        :href="item.url"
+        type="topBar"
+        class="bew-popover-row notifications-pop__row"
+        :custom-click-event="settings.openNotificationsPageAsDrawer"
+        @click="handleClick(item)"
       >
-        {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
-      </div>
-    </ALink>
+        <div class="notifications-pop__label">
+          <i :class="item.icon" />
+          <span>{{ item.name }}</span>
+        </div>
+        <Transition name="notification-badge">
+          <span
+            v-if="item.unreadCount > 0"
+            class="notification-pop__badge"
+            :style="{ width: notificationBadgeWidth(item.unreadCount) }"
+          >
+            {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
+          </span>
+        </Transition>
+      </ALink>
+    </div>
   </div>
 </template>
+
+<style lang="scss" scoped>
+.notifications-pop {
+  width: 190px;
+  max-height: min(360px, var(--bew-popover-max-height));
+}
+
+.notifications-pop__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+}
+
+.notifications-pop__row {
+  justify-content: space-between;
+  gap: var(--bew-space-2);
+}
+
+.notifications-pop__label {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: var(--bew-space-2);
+  white-space: nowrap;
+}
+
+.notifications-pop__label i {
+  flex: 0 0 auto;
+  color: var(--bew-text-2);
+}
+
+.notification-pop__badge {
+  display: grid;
+  flex: 0 0 auto;
+  height: 18px;
+  max-width: 28px;
+  place-items: center;
+  overflow: hidden;
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
+  border-radius: var(--bew-badge-radius);
+  corner-shape: var(--bew-corner-shape-round);
+  font-size: var(--bew-font-size-caption);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  white-space: nowrap;
+  transition:
+    width var(--bew-duration-fast) var(--bew-ease-standard),
+    opacity var(--bew-duration-fast) var(--bew-ease-standard),
+    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
+}
+
+.notification-badge-enter-from,
+.notification-badge-leave-to {
+  width: 0 !important;
+  opacity: 0;
+  transform: scale(0.8);
+}
+</style>
