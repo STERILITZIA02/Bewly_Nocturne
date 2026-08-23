@@ -4,7 +4,7 @@ import { useDark } from '~/composables/useDark'
 import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
-import { getIframeMessageData } from '~/utils/iframeMessage'
+import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
 const props = defineProps<{
@@ -70,18 +70,16 @@ function scheduleRevealIframe() {
 }
 
 function syncIframeDarkModeState() {
-  if (iframeRef.value?.contentWindow) {
-    try {
-      iframeRef.value.contentWindow.postMessage({
-        type: IFRAME_DARK_MODE_CHANGE,
-        isDark: isDark.value,
-        isOledDark: isOledDark.value,
-        darkModeBaseColor: settings.value.darkModeBaseColor,
-      }, '*')
-    }
-    catch (error) {
-      console.warn('Failed to send dark mode change message to iframe:', error)
-    }
+  try {
+    postMessageToIframe(iframeRef.value, {
+      type: IFRAME_DARK_MODE_CHANGE,
+      isDark: isDark.value,
+      isOledDark: isOledDark.value,
+      darkModeBaseColor: settings.value.darkModeBaseColor,
+    })
+  }
+  catch (error) {
+    console.warn('Failed to send dark mode change message to iframe:', error)
   }
 }
 
@@ -94,6 +92,7 @@ function handleIframeLoad(event: Event) {
   if (!showIframe.value || !iframeSrc || iframeSrc === 'about:blank')
     return
 
+  markIframeReadyForMessaging(iframe)
   isIframeLoaded.value = true
 }
 

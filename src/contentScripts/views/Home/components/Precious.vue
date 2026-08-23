@@ -117,7 +117,7 @@ async function getPreciousVideos(generation: number) {
 
     if (response.code === 0) {
       requestFailed.value = false
-      const list = Array.isArray((response.data as any)?.list) ? (response.data as any).list as PreciousItem[] : []
+      const list = Array.isArray(response.data?.list) ? response.data.list : []
       videoList.value = list.map(item => ({
         uniqueId: `${item.aid}`,
         item,

@@ -84,9 +84,7 @@ defineExpose({ focusHeading })
   align-items: center;
   min-width: 0;
   padding: var(--bew-space-3) var(--bew-space-4);
-  background: var(--bew-elevated);
-  backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  background: transparent;
 }
 
 .conversation-original-fallback__header > div {

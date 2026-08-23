@@ -1,7 +1,12 @@
 import type Browser from 'webextension-polyfill'
 
 import { createPrivateMessageErrorResponse } from './errors'
-import { sendPrivateMessage } from './experimental/api'
+import {
+  cancelPrivateImageUpload,
+  sendPrivateImageMessage,
+  sendPrivateMessage,
+  uploadPrivateImage,
+} from './experimental/api'
 import {
   buildNewPrivateSessionsParams,
   buildPrivateAckParams,
@@ -178,6 +183,9 @@ const API_PRIVATE_MESSAGE = {
   getPrivateMessages,
   ackPrivateSession,
   sendPrivateMessage,
+  uploadPrivateImage,
+  cancelPrivateImageUpload,
+  sendPrivateImageMessage,
 }
 
 export default API_PRIVATE_MESSAGE

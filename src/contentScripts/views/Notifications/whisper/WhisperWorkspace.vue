@@ -204,7 +204,7 @@ defineExpose({ refresh })
       'whisper-workspace--solid': settings.disableFrostedGlass,
     }"
   >
-    <aside class="whisper-workspace__sessions">
+    <aside class="whisper-workspace__sessions conversation-list-card">
       <div v-if="accountState === 'profile-pending'" class="whisper-workspace__state" aria-busy="true">
         <Loading />
         <span>{{ t('notifications.whisper.profile_pending') }}</span>
@@ -274,7 +274,12 @@ defineExpose({ refresh })
       </template>
     </aside>
 
-    <div class="whisper-workspace__detail">
+    <div
+      class="whisper-workspace__detail"
+      :class="{
+        'whisper-workspace__detail--fallback-card': selectedSession && !nativeSelectedSession && !transientRecipient,
+      }"
+    >
       <ConversationEmptyState v-if="!selectedSession && !transientRecipient" />
       <ConversationView
         v-else-if="nativeSelectedSession || transientRecipient"
@@ -304,13 +309,27 @@ defineExpose({ refresh })
 
 .whisper-workspace {
   display: grid;
-  grid-template-columns: minmax(calc(var(--bew-space-12) * 6), calc(var(--bew-space-12) * 8)) minmax(0, 1fr);
+  grid-template-columns: minmax(0, var(--notifications-conversation-list-width)) minmax(0, 1fr);
+  gap: var(--bew-space-4);
+  align-items: start;
   width: 100%;
   min-width: 0;
   height: 100%;
   min-height: 0;
-  overflow: hidden;
-  background: var(--bew-elevated);
+  overflow: visible;
+  background: transparent;
+}
+
+.whisper-workspace__sessions,
+.whisper-workspace__detail {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 0;
+}
+
+.whisper-workspace__sessions,
+.whisper-workspace__detail--fallback-card {
+  background: var(--bew-elevated-alt);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
@@ -319,27 +338,28 @@ defineExpose({ refresh })
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
-.whisper-workspace--solid {
-  background: var(--bew-elevated-solid);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
+.whisper-workspace__sessions {
+  display: flex;
+  height: 100%;
+  overflow: hidden;
+  flex-direction: column;
 }
 
-.whisper-workspace__sessions,
 .whisper-workspace__detail {
-  min-width: 0;
-  min-height: 0;
+  height: 100%;
+  overflow: visible;
+  background: transparent;
+}
+
+.whisper-workspace__detail--fallback-card {
   overflow: hidden;
 }
 
-.whisper-workspace__sessions {
-  display: flex;
-  flex-direction: column;
-  background: var(--bew-content-alt);
-}
-
-.whisper-workspace__detail {
-  background: transparent;
+.whisper-workspace--solid .whisper-workspace__sessions,
+.whisper-workspace--solid .whisper-workspace__detail--fallback-card {
+  background: var(--bew-elevated-alt-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .whisper-workspace__state {
@@ -396,7 +416,7 @@ defineExpose({ refresh })
 
 @media (max-width: breakpoints.$compact-max) {
   .whisper-workspace {
-    grid-template-columns: minmax(calc(var(--bew-space-12) * 4), calc(var(--bew-space-12) * 5)) minmax(0, 1fr);
+    gap: var(--bew-space-3);
   }
 }
 
@@ -404,6 +424,7 @@ defineExpose({ refresh })
   .whisper-workspace {
     position: relative;
     display: block;
+    overflow: hidden;
   }
 
   .whisper-workspace__sessions,
@@ -412,6 +433,7 @@ defineExpose({ refresh })
     inset: 0;
     width: 100%;
     height: 100%;
+    overflow: hidden;
     transition:
       opacity var(--bew-duration-normal) var(--bew-ease-standard),
       transform var(--bew-duration-normal) var(--bew-ease-standard),

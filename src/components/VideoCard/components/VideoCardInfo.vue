@@ -32,7 +32,7 @@ const emit = defineEmits<{
   moreBtnClick: [event: MouseEvent]
 }>()
 
-const moreBtnRef = ref<HTMLDivElement | null>(null)
+const moreBtnRef = ref<HTMLButtonElement | null>(null)
 
 defineExpose({
   moreBtnRef,
@@ -277,10 +277,14 @@ const content = computed(() => {
             </a>
           </h3>
 
-          <div
+          <button
             v-if="moreBtn"
             ref="moreBtnRef"
+            type="button"
             class="video-card__more-btn bew-shape-circle"
+            :aria-label="$t('video_card.operation.more_options')"
+            aria-haspopup="menu"
+            :aria-expanded="showVideoOptions"
             :class="[
               { 'more-active': showVideoOptions },
               content.isModernLayout ? 'overflow-hidden rounded-full' : '',
@@ -290,8 +294,8 @@ const content = computed(() => {
             grid place-items-center cursor-pointer rounded="50%"
             @click.stop.prevent="emit('moreBtnClick', $event)"
           >
-            <div i-mingcute:more-2-line text="lg" />
-          </div>
+            <div i-mingcute:more-2-line text="lg" aria-hidden="true" />
+          </button>
         </div>
 
         <!-- Modern layout with hideAuthor: Tags directly under title -->
@@ -590,6 +594,10 @@ const content = computed(() => {
 
 .video-card__more-btn {
   position: relative;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  border: 0;
   border-radius: 50%;
   overflow: hidden;
   transition:

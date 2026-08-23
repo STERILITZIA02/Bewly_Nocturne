@@ -19,6 +19,7 @@ const { t } = useI18n()
 const originalUrl = buildOriginalNotificationUrl('whisper')
 const mediaRequested = ref(false)
 const mediaFailed = ref(false)
+const failedInlineEmotes = ref<Set<number>>(new Set())
 const mediaSource = computed(() => (
   props.content.type === 'image' || props.content.type === 'emoticon'
     ? props.content.src
@@ -35,9 +36,16 @@ function requestMedia() {
   mediaRequested.value = true
 }
 
+function markInlineEmoteFailed(index: number) {
+  failedInlineEmotes.value = new Set([...failedInlineEmotes.value, index])
+}
+
 watch(mediaSource, () => {
   mediaRequested.value = false
   mediaFailed.value = false
+})
+watch(() => props.content, () => {
+  failedInlineEmotes.value = new Set()
 })
 </script>
 
@@ -57,14 +65,16 @@ watch(mediaSource, () => {
       >
         {{ segment.text }}
       </ALink>
+      <span v-else-if="failedInlineEmotes.has(index)">{{ segment.text }}</span>
       <img
         v-else
-        class="private-message-content__inline-emoji"
-        :class="{ 'private-message-content__inline-emoji--large': segment.size > 1 }"
-        :src="segment.src"
-        :alt="segment.alt"
+        class="private-message-content__inline-emote"
+        :class="{ 'private-message-content__inline-emote--large': segment.size > 1 }"
+        :src="segment.url"
+        :alt="segment.text"
         loading="lazy"
         decoding="async"
+        @error="markInlineEmoteFailed(index)"
       >
     </template>
   </div>
@@ -311,7 +321,7 @@ watch(mediaSource, () => {
   text-decoration: underline;
 }
 
-.private-message-content__inline-emoji {
+.private-message-content__inline-emote {
   display: inline-block;
   width: var(--bew-icon-size-lg);
   height: var(--bew-icon-size-lg);
@@ -320,7 +330,7 @@ watch(mediaSource, () => {
   object-fit: contain;
 }
 
-.private-message-content__inline-emoji--large {
+.private-message-content__inline-emote--large {
   width: var(--bew-icon-size-xl);
   height: var(--bew-icon-size-xl);
 }
@@ -341,7 +351,7 @@ watch(mediaSource, () => {
   gap: var(--bew-space-2);
   align-items: center;
   justify-content: center;
-  min-width: calc(var(--bew-space-12) * 3);
+  width: min(100%, calc(var(--bew-space-12) * 3));
   min-height: calc(var(--bew-space-12) * 2);
   padding: var(--bew-space-3);
   color: var(--bew-text-2);

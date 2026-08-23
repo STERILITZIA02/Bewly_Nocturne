@@ -68,20 +68,24 @@ const { isDark } = useDark()
 
 <template>
   <div mb-6>
-    <ALink
+    <div
       v-if="!skeleton && bangumi"
       ref="cardRootRef"
-      class="group"
+      class="bangumi-card group"
       :style="{
         display: horizontal ? 'flex' : 'block',
       }"
-      :href="bangumi.url"
-      type="videoCard"
       gap-4 hover:bg="$bew-fill-2" hover:ring="8 $bew-fill-2"
       content-visibility-auto intrinsic-size-400px
       transition="background-color duration-300, box-shadow duration-300"
       rounded="$bew-card-radius" h-fit
     >
+      <ALink
+        class="bangumi-card__overlay"
+        :href="bangumi.url"
+        type="videoCard"
+        :aria-label="bangumi.title"
+      />
       <!-- Cover -->
       <div
         :style="{ width: horizontal ? '170px' : '100%' }"
@@ -198,7 +202,7 @@ const { isDark } = useDark()
         <p un-text="lg" mb-2 :class="{ 'bew-title-auto': settings.homeAdaptiveTitleAutoSize }" :style="!settings.homeAdaptiveTitleAutoSize && settings.homeAdaptiveTitleFontSize ? { fontSize: `${settings.homeAdaptiveTitleFontSize}px`, lineHeight: '1.25' } : {}">
           <a
             :href="bangumi.url" target="_blank"
-            class="keep-two-lines"
+            class="bangumi-card__title-link keep-two-lines"
             :title="bangumi.title"
           >
             {{ bangumi.title }}
@@ -220,7 +224,7 @@ const { isDark } = useDark()
           <span lh="$bew-line-height-body"> {{ bangumi.desc }} </span>
         </div>
       </div>
-    </ALink>
+    </div>
     <BangumiCardSkeleton
       v-else-if="skeleton"
       :horizontal="horizontal"
@@ -230,6 +234,21 @@ const { isDark } = useDark()
 </template>
 
 <style scoped lang="scss">
+.bangumi-card {
+  position: relative;
+}
+
+.bangumi-card__overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+
+.bangumi-card__title-link {
+  position: relative;
+  z-index: 2;
+}
+
 .bangumi-capsule {
   display: inline-flex;
   min-height: calc(var(--bew-line-height-control) + var(--bew-space-2));
@@ -244,9 +263,7 @@ const { isDark } = useDark()
   font-size: calc(var(--bew-font-size-data-emphasis) * 2.5);
   line-height: 1;
 }
-</style>
 
-<style lang="scss" scoped>
 .bew-title-auto {
   font-size: clamp(var(--bew-font-size-control), 5cqw, var(--bew-font-size-heading));
   line-height: var(--bew-line-height-heading);

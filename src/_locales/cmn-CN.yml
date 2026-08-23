@@ -370,6 +370,33 @@ settings:
   group_moments_pinned_users: 固定 UP 主
   group_moments_pinned_users_desc: 管理固定在动态栏右侧的 UP 主；支持输入 UID 或昵称，名单仅保存在本地。
   moments_pinned_users: 固定的 UP 主
+  moments_wanted_manager:
+    input_required: 请输入 UP 主 UID 或昵称
+    search_empty: 没有找到相关 UP 主，请尝试其他昵称
+    search_failed: 搜索 UP 主失败，请稍后重试
+    invalid_uid: 请输入有效的 UP 主 UID
+    pinned_limit: 最多只能固定 {count} 个 UP 主
+    user_not_found: 未找到该 UP 主
+    fetch_failed: 获取 UP 主信息失败，请稍后重试
+    placeholder: 输入 UP 主 UID 或昵称
+    add: 添加
+    search: 搜索
+    pinned:
+      already_in: 该 UP 主已经在“固定 UP”中
+      need_follow: 必须先关注 {name}，才能将其加入“固定 UP”
+      added: 已将 {name} 固定到动态栏
+      removed: 已取消固定 {name}
+      remove_aria: 取消固定 {name}
+      remove_title: 取消固定
+      empty: 尚未添加固定 UP 主。添加后会显示在动态栏右侧。
+    wanted:
+      already_in: 该 UP 主已经在“想看”分组中
+      need_follow: 必须先关注 {name}，才能将其加入“想看”分组
+      added: 已将 {name} 加入“想看”
+      removed: 已将 {name} 移出“想看”
+      remove_aria: 将 {name} 移出想看
+      remove_title: 移出想看
+      empty: 尚未添加 UP 主。添加后可在 Bewly 动态页的“想看”中筛选。
   btn:
     authorize: 授权
     revoke: 取消授权
@@ -465,15 +492,18 @@ settings:
     bewly_widescreen_sidebar_position_right: 右侧
   video_player_scroll: 调整显示模式后滚动
   video_player_scroll_desc: 启用后，在默认模式为宽屏和默认时，会自动滚动到合适位置。
-  exit_bewly_widescreen_loading: 退出宽屏模式
   enlarge_favorite_dialog: 放大收藏弹窗
   enlarge_favorite_dialog_desc: 启用后，视频页收藏弹窗将以更大的尺寸显示，方便查看和管理收藏夹。
   external_watch_later_button: 稍后再看按钮外置
   external_watch_later_button_desc: 启用后，视频页工具栏会显示独立的稍后再看按钮；按钮会显示当前视频状态，可点击添加或移除。
+  show_bewly_widescreen_button: 显示 Bewly 宽屏按钮
+  show_bewly_widescreen_button_desc: 在播放器控制栏显示进入 Bewly 宽屏模式的按钮；关闭后不会退出当前宽屏模式。
   show_vertical_video_zoom_button: 竖屏放大按钮
   show_vertical_video_zoom_button_desc: 在竖屏视频播放器中显示放大/缩小按钮和画面位置调节控件
   show_video_screenshot_button: 显示播放器截图按钮
   show_video_screenshot_button_desc: 启用后，在视频播放器控制栏中显示截取当前视频画面的按钮。
+  disable_auto_play_collection: 自动关闭合集自动连播
+  disable_auto_play_collection_desc: 自动关闭视频合集的自动连播功能
   keep_collection_video_default_mode: 合集视频保持默认模式
   keep_collection_video_default_mode_desc: 当启用时，合集视频将始终使用默认播放器模式，不会应用宽屏或全屏设置
   keep_watch_later_video_default_mode: 稍后再看保持默认模式
@@ -748,6 +778,7 @@ settings:
   filter_import_failed: '导入{type}过滤规则失败：{message}'
   filter_import_invalid_format: 文件格式无效
   filter_import_unknown_error: 未知错误
+  filter_import_result: '导入完成：已导入 {imported} 条，忽略 {ignored} 条'
   filter_by_title: 按标题筛选
   filter_by_title_desc: >-
     按标题筛选掉包含您设置关键字的视频（不区分大小写），也可以使用正则表达式，如 {regex}，用 {slash} 包裹。{lineBreak}
@@ -795,6 +826,8 @@ settings:
   reset_settings_confirm: |-
     重置设置？
     该操作无法撤销。你确定要重置你的设置吗？
+  new_version_badge: 新版本
+  development_build_badge: 开发版
   current_contributors: Bewly Nocturne（含 BewlyBewly）贡献者
   contributors_image_failed: 贡献者图片加载失败
   enable_undo_refresh_button: 启用撤销刷新按钮（仅在Web推荐模式下有效）
@@ -1009,7 +1042,13 @@ notifications:
     user_fallback: '用户 {talkerId}'
     summary_unavailable: 暂无消息摘要
     select_conversation: 选择与{name}的会话
-    select_conversation_empty: 选择一个会话以查看消息
+    select_conversation_empty: 选择一个会话开始聊天
+    select_conversation_hint: 消息会在独立阅读卡片中保持清晰聚焦
+    empty_tips:
+      emote: 可从输入区插入 Bilibili 表情
+      image: 可先预览图片，再直接发送
+      history: 向上滚动可加载并阅读更早消息
+      shortcut: Enter 发送，Shift+Enter 换行
     fallback_aria: '{name}的原版私信入口'
     fallback_description: 此类型会话暂时需要在原版私信中查看
     session_kinds:
@@ -1028,6 +1067,7 @@ notifications:
     back_to_conversations: 返回会话列表
     messages:
       timeline_aria: 与{name}的私信记录
+      self_label: 我
       loading: 正在加载聊天记录
       empty: 暂无聊天记录
       load_older: 加载更早消息
@@ -1062,10 +1102,18 @@ notifications:
       picture_card_alt: 私信分享图片
       video_views: '{count} 次播放'
       image_summary: '[图片]'
+      select_emote: 选择表情
+      emote_picker: 私信表情面板
+      emote_packages: 表情包系列
+      default_emotes: 默认
+      user_emotes: 我的表情
+      default_emotes_empty: 消息数据提供默认表情后会显示在这里
+      user_emotes_empty: 当前账号暂无可用的用户表情包
       select_image: 选择图片
       selected_image_alt: 待发送的私信图片
       image_size_kb: '{size} KB'
       remove_image: 移除图片
+      image_ready: 等待发送
       image_preparing: 正在准备图片
       image_uploading: 正在上传图片
       image_upload_failed: 图片上传失败
@@ -1266,6 +1314,8 @@ video_card:
     unfollow_user: 取消关注
     block_user: 拉黑用户
     more_options: 更多操作
+    scroll_to_top: 滚动到菜单顶部
+    scroll_to_bottom: 滚动到菜单底部
   follow_user_confirm:
     title: 确认关注用户
     message: 确定要关注 {name} 吗？
@@ -1424,7 +1474,30 @@ watch_later:
   play_video: 移除并进入视频页
   play_in_watch_later: 列表播放
   remove_from_watch_later: 移除
+widescreen:
+  enter: 进入 Bewly 宽屏
+  exit: 退出
+  exit_loading: 退出宽屏模式
+  loading: 正在加载宽屏模式…
+  comments: 评论
+  danmaku: 弹幕
+  playlist: 选集
+  recommendations: 推荐
+  collapse: 收起
+  expand_more: 展开更多
+  comments_loading: 评论区加载中
+  danmaku_loading: 弹幕列表加载中
+  list_loading: 列表加载中
+  show_narrow_right: 显示窄右栏
+  show_narrow_left: 显示窄左栏
+  collapse_right: 收起右栏
+  collapse_left: 收起左栏
 search_bar:
+  input_label: 搜索
+  clear_keyword: 清空搜索内容
+  submit: 搜索
+  suggestions_label: 搜索建议
+  search_options_label: 搜索选项
   history_title: 搜索历史
   hot_search_title: 热搜
   clear_history: 清空搜索历史

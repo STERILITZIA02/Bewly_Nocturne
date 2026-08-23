@@ -25,10 +25,10 @@ export interface List {
   view_at: number
   progress: number
   badge: string
-  show_title: ShowTitle
+  show_title: string
   duration: number
   total: number
-  new_desc: NewDesc
+  new_desc: string
   is_finish: number
   is_fav: number
   kid: number
@@ -43,24 +43,8 @@ export interface History {
   page: number
   cid: number
   part: string
-  business: Business
+  business: string
   dt: number
-}
-
-export enum Business {
-  Archive = 'archive',
-}
-
-export enum NewDesc {
-  Empty = '',
-  共2P = '共2P',
-  共4P = '共4P',
-}
-
-export enum ShowTitle {
-  Empty = '',
-  JohnLennonOnceSaid = 'john lennon once said',
-  The4K = '4K',
 }
 
 export interface Page {

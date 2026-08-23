@@ -1,7 +1,10 @@
+import { watch } from 'vue'
 import browser from 'webextension-polyfill'
 
 import { settings } from '~/logic'
 
+import type { WidescreenMutationOrigin } from './bewlyWidescreenPolicy'
+import { shortenCommentDateText, shouldScheduleWidescreenRefresh } from './bewlyWidescreenPolicy'
 import { i18n } from './i18n'
 import { injectCSS } from './main'
 import { getVideoElement } from './player'
@@ -36,10 +39,12 @@ interface BewlyWidescreenState {
   mutationObserver?: MutationObserver
   metadataListener?: () => void
   resizeSyncTimers?: Array<ReturnType<typeof setTimeout>>
+  danmakuExpandTimer?: ReturnType<typeof setTimeout>
   sidebarInteractionCleanup?: () => void
   sidebarToggleAutoHideCleanup?: () => void
   descriptionCleanup?: () => void
   escapeKeyCleanup?: () => void
+  colorProbe?: HTMLSpanElement
   descriptionExpanded: boolean
 }
 
@@ -66,11 +71,20 @@ const COMMENT_NESTED_UI_SELECTOR = '.reply-item, .sub-reply-item, bili-comment-r
 // Light-DOM markers only. Modern bili-comments mounts most UI in shadow roots,
 // so readiness must not require these descendants to exist.
 const COMMENT_CONTENT_MARKER_SELECTOR = 'bili-comments, bili-comment-box, bili-comment-renderer, .reply-list, .comment-list, .reply-box, .comment-header'
+const COMMENT_TIME_SELECTOR = [
+  '.reply-time',
+  '.sub-reply-time',
+  '.reply-time-location',
+  '.comment-time',
+  'bili-comment-user-info .time',
+  'bili-comment-user-info .pubdate',
+].join(',')
 
 let state: BewlyWidescreenState | null = null
 let loadingOverlay: HTMLElement | null = null
 let loadingStyleEl: HTMLStyleElement | null = null
 let loadingFadeTimer: ReturnType<typeof setTimeout> | undefined
+let loadingFadeFrame: number | undefined
 let loadingPlaybackCleanup: (() => void) | undefined
 let loadingPreparationFallbackTimer: ReturnType<typeof setTimeout> | undefined
 let loadingExitTimer: ReturnType<typeof setTimeout> | undefined
@@ -83,6 +97,7 @@ let pageLoadHandler: (() => void) | undefined
 let readyRetryCount = 0
 let waitingForLoad = false
 let pendingSidebarPosition: 'left' | 'right' = 'right'
+let stopLanguageWatch: (() => void) | undefined
 
 const selectors = {
   player: [
@@ -169,6 +184,54 @@ const selectors = {
     '.rec-list',
     '.next-play',
   ],
+}
+
+const SIDEBAR_RELEVANT_SELECTOR = [
+  ...selectors.player,
+  ...selectors.title,
+  ...selectors.upPanel,
+  ...selectors.toolbar,
+  ...selectors.description,
+  ...selectors.danmakuInput,
+  ...selectors.danmaku,
+  ...selectors.comment,
+  ...selectors.playlist,
+  ...selectors.playlistControls,
+  ...selectors.recommend,
+].join(',')
+
+function isWidescreenInternalMutation(record: MutationRecord, currentState: BewlyWidescreenState): boolean {
+  if (currentState.root.contains(record.target))
+    return true
+
+  const changedNodes = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
+  return changedNodes.length > 0 && changedNodes.every(node => (
+    (node !== currentState.root && currentState.root.contains(node))
+    || (node.nodeType === Node.COMMENT_NODE && node.nodeValue === 'bewly-widescreen-placeholder')
+  ))
+}
+
+function mutationNodeIsRelevant(node: Node): boolean {
+  const element = node instanceof Element ? node : node.parentElement
+  if (!element)
+    return false
+  return element.matches(SIDEBAR_RELEVANT_SELECTOR)
+    || !!element.closest(SIDEBAR_RELEVANT_SELECTOR)
+    || (node instanceof Element && !!node.querySelector(SIDEBAR_RELEVANT_SELECTOR))
+}
+
+function classifyWidescreenMutation(
+  record: MutationRecord,
+  currentState: BewlyWidescreenState,
+): WidescreenMutationOrigin {
+  const insideRoot = isWidescreenInternalMutation(record, currentState)
+  return {
+    insideRoot,
+    relevant: !insideRoot && (
+      mutationNodeIsRelevant(record.target)
+      || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(mutationNodeIsRelevant)
+    ),
+  }
 }
 
 function findFirst(selectors: string[], root: ParentNode = document): HTMLElement | null {
@@ -396,9 +459,9 @@ function setSidebarMode(nextMode: BewlyWidescreenSidebarMode) {
   state.sidebarToggleButton.textContent = isRight
     ? (isFit ? '‹' : '›')
     : (isFit ? '›' : '‹')
-  state.sidebarToggleButton.title = isFit
-    ? (isRight ? '显示窄右栏' : '显示窄左栏')
-    : (isRight ? '收起右栏' : '收起左栏')
+  state.sidebarToggleButton.title = t(isFit
+    ? (isRight ? 'widescreen.show_narrow_right' : 'widescreen.show_narrow_left')
+    : (isRight ? 'widescreen.collapse_right' : 'widescreen.collapse_left'))
   state.sidebarToggleButton.setAttribute('aria-label', state.sidebarToggleButton.title)
   updateSidebarToggleState()
   schedulePlayerResizeSync(state)
@@ -428,7 +491,7 @@ function createSidebarToolbar() {
   const closeButton = document.createElement('button')
   closeButton.type = 'button'
   closeButton.className = 'bewly-widescreen-close'
-  closeButton.textContent = '退出'
+  closeButton.textContent = t('widescreen.exit')
   closeButton.addEventListener('click', () => exitBewlyWidescreen())
 
   toolbar.append(createSidebarTitle(), closeButton)
@@ -468,6 +531,49 @@ function t(key: string) {
   return String(i18n.global.t(key, settings.value.language))
 }
 
+function syncLocalizedWidescreenText(currentState = state) {
+  const loadingLabel = loadingOverlay?.querySelector<HTMLElement>('.bewly-widescreen-loading-label')
+  if (loadingLabel)
+    loadingLabel.textContent = t('widescreen.loading')
+  const loadingExitButton = loadingOverlay?.querySelector<HTMLButtonElement>('.bewly-widescreen-loading-exit')
+  if (loadingExitButton)
+    loadingExitButton.textContent = t('widescreen.exit_loading')
+
+  if (!currentState || state !== currentState)
+    return
+
+  const closeButton = currentState.sidebarTop.querySelector<HTMLButtonElement>('.bewly-widescreen-close')
+  if (closeButton)
+    closeButton.textContent = t('widescreen.exit')
+  currentState.tabButtons.comment.textContent = t('widescreen.comments')
+  currentState.tabButtons.danmaku.textContent = t('widescreen.danmaku')
+  currentState.tabButtons.playlist.textContent = currentState.panels.playlist.querySelector(selectors.playlist.join(','))
+    ? t('widescreen.playlist')
+    : t('widescreen.recommendations')
+  setSidebarMode(currentState.sidebarMode)
+  syncDescription(currentState)
+
+  const emptyLabels: Array<[HTMLElement, string]> = [
+    [currentState.panels.comment, 'widescreen.comments_loading'],
+    [currentState.panels.danmaku, 'widescreen.danmaku_loading'],
+    [currentState.panels.playlist, 'widescreen.list_loading'],
+  ]
+  for (const [panel, key] of emptyLabels) {
+    const empty = panel.querySelector<HTMLElement>(`.${EMPTY_CLASS}`)
+    if (empty)
+      empty.textContent = t(key)
+  }
+}
+
+function startWidescreenLanguageWatch() {
+  if (stopLanguageWatch)
+    return
+  stopLanguageWatch = watch(
+    () => settings.value.language,
+    () => syncLocalizedWidescreenText(),
+  )
+}
+
 function showWidescreenLoading() {
   if (loadingOverlay)
     return
@@ -504,7 +610,7 @@ function showWidescreenLoading() {
       flex-direction: column;
       align-items: center;
       gap: var(--bew-space-3, 12px);
-      font-size: 13px;
+      font-size: var(--bew-font-size-control, 13px);
       line-height: 20px;
     }
 
@@ -571,7 +677,8 @@ function showWidescreenLoading() {
   }
 
   const label = document.createElement('span')
-  label.textContent = '正在加载宽屏模式…'
+  label.className = 'bewly-widescreen-loading-label'
+  label.textContent = t('widescreen.loading')
   status.appendChild(label)
   content.appendChild(status)
 
@@ -588,7 +695,7 @@ function showWidescreenLoading() {
     const exitButton = document.createElement('button')
     exitButton.type = 'button'
     exitButton.className = 'bewly-widescreen-loading-exit'
-    exitButton.textContent = t('settings.exit_bewly_widescreen_loading')
+    exitButton.textContent = t('widescreen.exit_loading')
     exitButton.addEventListener('click', exitBewlyWidescreen, { once: true })
     content.appendChild(exitButton)
   }, LOADING_EXIT_DELAY)
@@ -638,6 +745,10 @@ function removeWidescreenLoading(immediate = false) {
     clearTimeout(loadingFadeTimer)
     loadingFadeTimer = undefined
   }
+  if (loadingFadeFrame !== undefined) {
+    cancelAnimationFrame(loadingFadeFrame)
+    loadingFadeFrame = undefined
+  }
 
   const overlay = loadingOverlay
   const styleEl = loadingStyleEl
@@ -659,11 +770,16 @@ function removeWidescreenLoading(immediate = false) {
     return
   }
 
-  requestAnimationFrame(() => overlay.classList.add('is-leaving'))
+  loadingFadeFrame = requestAnimationFrame(() => {
+    loadingFadeFrame = undefined
+    if (loadingOverlay === overlay && overlay.isConnected)
+      overlay.classList.add('is-leaving')
+  })
   loadingFadeTimer = setTimeout(remove, LOADING_FADE_DURATION)
 }
 
 export function prepareBewlyWidescreenLoading(allowPlayingDismiss = false) {
+  startWidescreenLanguageWatch()
   if (state || loadingSuppressedUntilExit)
     return
 
@@ -726,9 +842,9 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   tablist.setAttribute('role', 'tablist')
 
   const tabButtons = {
-    comment: createTabButton('comment', '评论'),
-    danmaku: createTabButton('danmaku', '弹幕'),
-    playlist: createTabButton('playlist', '选集'),
+    comment: createTabButton('comment', t('widescreen.comments')),
+    danmaku: createTabButton('danmaku', t('widescreen.danmaku')),
+    playlist: createTabButton('playlist', t('widescreen.playlist')),
   }
   tablist.append(tabButtons.comment, tabButtons.danmaku, tabButtons.playlist)
 
@@ -1075,14 +1191,14 @@ function injectLayoutStyle() {
       height: 42px;
       padding: 0;
       border: 1px solid rgba(255, 255, 255, 0.18);
-      border-radius: 8px 0 0 8px;
+      border-radius: var(--bew-interactive-radius, 8px) 0 0 var(--bew-interactive-radius, 8px);
       color: #fff;
       background: rgba(24, 25, 28, 0.72);
       box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
       backdrop-filter: blur(10px);
       cursor: pointer;
       font-size: 14px;
-      font-weight: 600;
+      font-weight: var(--bew-font-weight-semibold, 600);
       line-height: 1;
       opacity: 0;
       pointer-events: none;
@@ -1093,7 +1209,7 @@ function injectLayoutStyle() {
     #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-sidebar-toggle {
       right: auto;
       left: 0;
-      border-radius: 0 8px 8px 0;
+      border-radius: 0 var(--bew-interactive-radius, 8px) var(--bew-interactive-radius, 8px) 0;
     }
 
     #${ROOT_ID}[data-sidebar-toggle-visible="true"][data-pointer-active="true"] .bewly-widescreen-player-slot:hover .bewly-widescreen-sidebar-toggle,
@@ -1177,7 +1293,7 @@ function injectLayoutStyle() {
       margin: 0;
       color: var(--bewly-widescreen-text-primary);
       font-size: 18px;
-      font-weight: 600;
+      font-weight: var(--bew-font-weight-semibold, 600);
       line-height: 24px;
     }
 
@@ -1219,7 +1335,7 @@ function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-description-slot .basic-desc-info {
       height: auto !important;
       color: var(--bewly-widescreen-text-secondary) !important;
-      font-size: 13px !important;
+      font-size: var(--bew-font-size-control, 13px) !important;
       line-height: 20px !important;
       overflow: hidden !important;
       overflow-wrap: anywhere;
@@ -1264,7 +1380,7 @@ function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-description-slot .subtitle-maker-list {
       padding-top: 6px !important;
       color: var(--bewly-widescreen-text-secondary) !important;
-      font-size: 13px !important;
+      font-size: var(--bew-font-size-control, 13px) !important;
       line-height: 20px !important;
     }
 
@@ -1281,7 +1397,7 @@ function injectLayoutStyle() {
       background: transparent;
       cursor: pointer;
       font: inherit;
-      font-size: 13px;
+      font-size: var(--bew-font-size-control, 13px);
       line-height: 20px;
     }
 
@@ -1358,7 +1474,7 @@ function injectLayoutStyle() {
       border-radius: 0 !important;
       color: var(--bewly-widescreen-text-secondary) !important;
       background: transparent !important;
-      font-size: 13px !important;
+      font-size: var(--bew-font-size-control, 13px) !important;
       line-height: 20px !important;
       min-height: 28px !important;
       white-space: nowrap !important;
@@ -1543,7 +1659,7 @@ function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-tab.is-active {
       color: var(--bew-theme-color, #00aeec);
-      font-weight: 600;
+      font-weight: var(--bew-font-weight-semibold, 600);
     }
 
     #${ROOT_ID} .bewly-widescreen-tab.is-active::after {
@@ -1826,25 +1942,28 @@ function rgbToHsl({ r, g, b }: { r: number, g: number, b: number }) {
   return { hue: hue * 60, saturation, lightness }
 }
 
-function resolveCssColor(value: string) {
+function resolveCssColor(currentState: BewlyWidescreenState, value: string) {
   if (!value)
     return null
 
-  const probe = document.createElement('span')
-  probe.style.position = 'fixed'
-  probe.style.pointerEvents = 'none'
-  probe.style.opacity = '0'
-  probe.style.color = value
-  document.body.appendChild(probe)
-  const resolved = getComputedStyle(probe).color
-  probe.remove()
-
-  return parseRgbColor(resolved)
+  let probe = currentState.colorProbe
+  if (!probe) {
+    probe = document.createElement('span')
+    probe.style.position = 'fixed'
+    probe.style.pointerEvents = 'none'
+    probe.style.opacity = '0'
+    probe.setAttribute('aria-hidden', 'true')
+    currentState.root.appendChild(probe)
+    currentState.colorProbe = probe
+  }
+  if (probe.style.color !== value)
+    probe.style.color = value
+  return parseRgbColor(getComputedStyle(probe).color)
 }
 
 function syncActionAnimationTheme(currentState: BewlyWidescreenState) {
   const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--bew-theme-color').trim()
-  const rgb = resolveCssColor(themeColor || '#00aeec')
+  const rgb = resolveCssColor(currentState, themeColor || '#00aeec')
   if (!rgb)
     return
 
@@ -1890,6 +2009,8 @@ function setupAspectObservers(currentState: BewlyWidescreenState) {
   }
 
   currentState.resizeObserver = new ResizeObserver(() => {
+    if (!state || state !== currentState)
+      return
     updateAspectRatio()
     updateDanmakuDockHeight()
     syncDescription(currentState)
@@ -1996,11 +2117,17 @@ function setupSidebarToggleAutoHide(currentState: BewlyWidescreenState) {
 }
 
 function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
-  currentState.mutationObserver = new MutationObserver(() => {
+  currentState.mutationObserver = new MutationObserver((records) => {
     if (!state || state !== currentState)
       return
+    if (!currentState.root.isConnected) {
+      exitBewlyWidescreen()
+      return
+    }
 
-    scheduleSidebarRefresh()
+    const origins = records.map(record => classifyWidescreenMutation(record, currentState))
+    if (shouldScheduleWidescreenRefresh(origins))
+      scheduleSidebarRefresh(currentState)
   })
 
   currentState.mutationObserver.observe(document.body, { childList: true, subtree: true })
@@ -2024,7 +2151,12 @@ function expandDanmakuTab(currentState: BewlyWidescreenState) {
     return
 
   currentState.panels.danmaku.scrollTo({ top: 0, behavior: 'smooth' })
-  setTimeout(() => {
+  if (currentState.danmakuExpandTimer)
+    clearTimeout(currentState.danmakuExpandTimer)
+  currentState.danmakuExpandTimer = setTimeout(() => {
+    currentState.danmakuExpandTimer = undefined
+    if (state !== currentState || !focusable.isConnected)
+      return
     focusable.click()
     focusable.focus?.({ preventScroll: true })
   }, 120)
@@ -2035,7 +2167,9 @@ function syncDescription(currentState: BewlyWidescreenState) {
   const description = findFirst(selectors.description, descriptionSlot)
   if (!description) {
     descriptionSlot.classList.add('is-empty')
-    descriptionSlot.querySelector<HTMLButtonElement>('.bewly-widescreen-description-toggle')?.setAttribute('hidden', '')
+    const toggleButton = descriptionSlot.querySelector<HTMLButtonElement>('.bewly-widescreen-description-toggle')
+    if (toggleButton && !toggleButton.hidden)
+      toggleButton.hidden = true
     return
   }
 
@@ -2075,9 +2209,15 @@ function syncDescription(currentState: BewlyWidescreenState) {
     currentState.descriptionExpanded = false
 
   descriptionSlot.classList.toggle('is-empty', !hasContent)
-  toggleButton.hidden = !hasContent || !canExpand
-  toggleButton.textContent = currentState.descriptionExpanded ? '收起' : '展开更多'
-  toggleButton.setAttribute('aria-expanded', String(canExpand && currentState.descriptionExpanded))
+  const shouldHideToggle = !hasContent || !canExpand
+  if (toggleButton.hidden !== shouldHideToggle)
+    toggleButton.hidden = shouldHideToggle
+  const nextLabel = currentState.descriptionExpanded ? t('widescreen.collapse') : t('widescreen.expand_more')
+  if (toggleButton.textContent !== nextLabel)
+    toggleButton.textContent = nextLabel
+  const ariaExpanded = String(canExpand && currentState.descriptionExpanded)
+  if (toggleButton.getAttribute('aria-expanded') !== ariaExpanded)
+    toggleButton.setAttribute('aria-expanded', ariaExpanded)
   descriptionSlot.classList.toggle('is-collapsed', canExpand && !currentState.descriptionExpanded)
   descriptionSlot.classList.toggle('is-expanded', canExpand && currentState.descriptionExpanded)
 }
@@ -2108,8 +2248,11 @@ function placeRecommendAfterPlaylist(panel: HTMLElement, movedNodes: MovedNode[]
   // Only reorder the top-level nodes that Bewly moved into this panel. This
   // avoids detaching recommendation/episode elements nested inside a shared
   // Bilibili wrapper.
-  if (playlistNode.parentElement === panel && recommendNode.parentElement === panel)
+  if (playlistNode.parentElement === panel
+    && recommendNode.parentElement === panel
+    && playlistNode.nextElementSibling !== recommendNode) {
     playlistNode.after(recommendNode)
+  }
 }
 
 function findEpisodeSectionNode(panel: HTMLElement, movedNodes: MovedNode[]) {
@@ -2157,7 +2300,7 @@ function fillSidebar(currentState: BewlyWidescreenState) {
   moveDanmakuInput(currentState)
   const commentResult = moveCommentRoot(currentState.panels.comment, currentState.movedNodes)
   if (!commentResult.found) {
-    ensureEmptyPanel(currentState.panels.comment, '评论区加载中')
+    ensureEmptyPanel(currentState.panels.comment, t('widescreen.comments_loading'))
   }
   else {
     clearEmptyPanel(currentState.panels.comment)
@@ -2166,7 +2309,7 @@ function fillSidebar(currentState: BewlyWidescreenState) {
 
   const danmakuResult = moveOrReplaceNode(selectors.danmaku, currentState.panels.danmaku, currentState.movedNodes)
   if (!danmakuResult.found)
-    ensureEmptyPanel(currentState.panels.danmaku, '弹幕列表加载中')
+    ensureEmptyPanel(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
   else
     clearEmptyPanel(currentState.panels.danmaku)
 
@@ -2184,9 +2327,11 @@ function fillSidebar(currentState: BewlyWidescreenState) {
   syncEpisodeSectionMarker(currentState.panels.playlist, currentState.movedNodes)
   const hasPlaylist = !!(existingPlaylist || playlistMoved)
   const hasRecommend = !!(existingRecommend || recommendMoved)
-  currentState.tabButtons.playlist.textContent = hasPlaylist ? '选集' : '推荐'
+  const playlistLabel = hasPlaylist ? t('widescreen.playlist') : t('widescreen.recommendations')
+  if (currentState.tabButtons.playlist.textContent !== playlistLabel)
+    currentState.tabButtons.playlist.textContent = playlistLabel
   if (!hasPlaylist && !hasRecommend)
-    ensureEmptyPanel(currentState.panels.playlist, '列表加载中')
+    ensureEmptyPanel(currentState.panels.playlist, t('widescreen.list_loading'))
   else
     clearEmptyPanel(currentState.panels.playlist)
 }
@@ -2196,28 +2341,29 @@ function clearEmptyPanel(panel: HTMLElement) {
 }
 
 function ensureEmptyPanel(panel: HTMLElement, label: string) {
-  if (panel.querySelector(`.${EMPTY_CLASS}`))
+  const existing = panel.querySelector<HTMLElement>(`.${EMPTY_CLASS}`)
+  if (existing) {
+    if (existing.textContent !== label)
+      existing.textContent = label
     return
+  }
 
   panel.appendChild(createPanelEmpty(label))
 }
 
 function shortenCommentTimes(panel: HTMLElement) {
-  const walker = document.createTreeWalker(panel, NodeFilter.SHOW_TEXT)
-  const textNodes: Text[] = []
-
-  while (walker.nextNode()) {
-    if (walker.currentNode instanceof Text)
-      textNodes.push(walker.currentNode)
-  }
-
-  for (const textNode of textNodes) {
-    const value = textNode.nodeValue
-    if (!value || !/\d{4}-\d{2}-\d{2}/.test(value))
-      continue
-
-    textNode.nodeValue = value.replace(/\b\d{4}-(\d{2})-(\d{2})\b/g, '$1-$2')
-  }
+  const timeElements = panel.querySelectorAll<HTMLElement>(COMMENT_TIME_SELECTOR)
+  timeElements.forEach((element) => {
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
+    while (walker.nextNode()) {
+      const textNode = walker.currentNode
+      if (!(textNode instanceof Text) || !textNode.nodeValue)
+        continue
+      const nextValue = shortenCommentDateText(textNode.nodeValue)
+      if (textNode.nodeValue !== nextValue)
+        textNode.nodeValue = nextValue
+    }
+  })
 }
 
 function cleanupState(currentState: BewlyWidescreenState) {
@@ -2225,11 +2371,20 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.sidebarInteractionCleanup?.()
   currentState.sidebarToggleAutoHideCleanup?.()
   currentState.metadataListener?.()
+  currentState.metadataListener = undefined
   currentState.resizeObserver?.disconnect()
+  currentState.resizeObserver = undefined
   currentState.mutationObserver?.disconnect()
+  currentState.mutationObserver = undefined
   currentState.descriptionCleanup?.()
+  currentState.descriptionCleanup = undefined
+  if (currentState.danmakuExpandTimer)
+    clearTimeout(currentState.danmakuExpandTimer)
+  currentState.danmakuExpandTimer = undefined
   clearPlayerResizeSync(currentState)
   clearSidebarRefreshTimer()
+  currentState.colorProbe?.remove()
+  currentState.colorProbe = undefined
 
   // If Bilibili created a replacement while its original comment root was in
   // the sidebar, keep the replacement instead of restoring a duplicate editor.
@@ -2315,7 +2470,9 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   setupDomRefreshObserver(nextState)
   setupSidebarInteractionTracking(nextState)
   setupSidebarToggleAutoHide(nextState)
-  setTimeout(() => window.dispatchEvent(new Event('resize')), 0)
+  const initialResizeTimer = setTimeout(() => window.dispatchEvent(new Event('resize')), 0)
+  nextState.resizeSyncTimers ??= []
+  nextState.resizeSyncTimers.push(initialResizeTimer)
   removeWidescreenLoading()
 
   return true
@@ -2362,7 +2519,7 @@ function scheduleReadyRetry(delay = READY_RETRY_INTERVAL) {
       return
 
     readyRetryCount++
-    if (readyRetryCount <= READY_RETRY_MAX)
+    if (readyRetryCount < READY_RETRY_MAX)
       scheduleReadyRetry()
     else
       removeWidescreenLoading()
@@ -2381,16 +2538,16 @@ function startAfterPageLoad(sidebarPosition: 'left' | 'right' = 'right') {
   scheduleReadyRetry(LOAD_SETTLE_DELAY)
 }
 
-function scheduleSidebarRefresh() {
-  if (!state || sidebarRefreshTimer)
+function scheduleSidebarRefresh(currentState = state) {
+  if (!currentState || state !== currentState || sidebarRefreshTimer)
     return
 
   sidebarRefreshTimer = setTimeout(() => {
     sidebarRefreshTimer = undefined
-    if (!state)
+    if (!state || state !== currentState)
       return
 
-    fillSidebar(state)
+    fillSidebar(currentState)
   }, SIDEBAR_REFRESH_DELAY)
 }
 
@@ -2398,6 +2555,7 @@ export function applyBewlyWidescreen(
   sidebarPosition: 'left' | 'right' = 'right',
   showLoading = true,
 ) {
+  startWidescreenLanguageWatch()
   if (state || waitingForLoad || readyRetryTimer)
     return
 
@@ -2422,6 +2580,8 @@ export function applyBewlyWidescreen(
 }
 
 export function exitBewlyWidescreen() {
+  stopLanguageWatch?.()
+  stopLanguageWatch = undefined
   clearReadyRetryTimer()
   clearLoadFallbackTimer()
   clearPageLoadHandler()

@@ -474,7 +474,27 @@ defineExpose({ refresh })
 .native-notification-feed__items {
   display: grid;
   min-width: 0;
-  gap: var(--bew-space-1);
+  gap: var(--bew-space-3);
+}
+
+.native-notification-feed__items :deep(.native-notification-surface) {
+  box-sizing: border-box;
+  isolation: isolate;
+  background: var(--bew-elevated-alt);
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-card-radius);
+  box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  transition:
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    border-color var(--bew-duration-fast) var(--bew-ease-standard),
+    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.native-notification-feed__items :deep(.native-notification-surface:hover) {
+  background: var(--bew-elevated-alt-hover);
+  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
 }
 
 .native-notification-feed__state {

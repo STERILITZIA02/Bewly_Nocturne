@@ -3,6 +3,7 @@ import { createVNode, render } from 'vue'
 import browser from 'webextension-polyfill'
 
 import { GRID_BREAKPOINTS } from '~/constants/layout'
+import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isInIframe } from '~/utils/main'
 
 const SPLIT_FLAG = 'bewlyOpusSplit'
@@ -914,7 +915,7 @@ function notifyLayoutReady() {
   layoutReadyNotified = true
   hideIframeLoading()
   try {
-    window.parent.postMessage({ type: LAYOUT_READY_MSG, source: 'bewly-opus' }, '*')
+    postMessageToParent({ type: LAYOUT_READY_MSG, source: 'bewly-opus' })
   }
   catch {
     // ignore
@@ -1752,11 +1753,14 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
     if (window.parent !== window) {
       viewerIndex = target
       viewerHostedByParent = false
-      window.parent.postMessage({
+      if (!postMessageToParent({
         type: 'BEWLY_OPUS_IMAGE_VIEWER_OPEN',
         urls,
         index: target,
-      }, '*')
+      })) {
+        openLocalViewer(target)
+        return
+      }
       if (galleryViewerAckTimer)
         clearTimeout(galleryViewerAckTimer)
       // 非动态 Dialog 场景没有父级查看器时，回退到 iframe 内查看
@@ -1981,10 +1985,14 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
 
   // 点击舞台空白不切图（仅按钮/缩略图）
   unbindGalleryViewerBridge()
-  galleryViewerMessageHandler = (e: MessageEvent) => {
-    if (e.source !== window.parent)
+  galleryViewerMessageHandler = (event: MessageEvent) => {
+    const data = getParentMessageData(event, [
+      'BEWLY_OPUS_IMAGE_VIEWER_ACK',
+      'BEWLY_OPUS_IMAGE_VIEWER_CLOSE',
+    ])
+    if (!data)
       return
-    if (e.data?.type === 'BEWLY_OPUS_IMAGE_VIEWER_ACK') {
+    if (data.type === 'BEWLY_OPUS_IMAGE_VIEWER_ACK') {
       viewerHostedByParent = true
       gallery.classList.add('is-viewer-hosted')
       if (galleryViewerAckTimer) {
@@ -1993,10 +2001,10 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
       }
       return
     }
-    if (e.data?.type === 'BEWLY_OPUS_IMAGE_VIEWER_CLOSE') {
+    if (data.type === 'BEWLY_OPUS_IMAGE_VIEWER_CLOSE') {
       viewerHostedByParent = false
       gallery.classList.remove('is-viewer-hosted')
-      const nextIndex = Number(e.data.index)
+      const nextIndex = Number(data.index)
       if (Number.isFinite(nextIndex)) {
         viewerIndex = wrapIndex(nextIndex)
         if (viewerIndex !== index)
@@ -2386,7 +2394,7 @@ export function disposeOpusDetailDrawerLayout() {
 }
 
 function handleOpusDisposeMessage(event: MessageEvent) {
-  if (event.data?.type === 'BEWLY_OPUS_DISPOSE')
+  if (getParentMessageData(event, ['BEWLY_OPUS_DISPOSE']))
     disposeOpusDetailDrawerLayout()
 }
 

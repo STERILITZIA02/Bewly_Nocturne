@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
+import { useDark } from '~/composables/useDark'
+import { settings } from '~/logic'
 import type { ShadowCurvePoint } from '~/logic/storage'
+import { resolveCanvasCssColor } from '~/utils/canvasTheme'
 
 interface Props {
   modelValue: ShadowCurvePoint[]
@@ -19,6 +22,7 @@ const emit = defineEmits<{
 }>()
 
 const canvasRef = ref<HTMLCanvasElement | null>(null)
+const { isDark, isOledDark } = useDark()
 const selectedPointIndex = ref<number | null>(null)
 const isDragging = ref(false)
 const padding = 16
@@ -103,7 +107,12 @@ function draw() {
   const dpr = window.devicePixelRatio || 1
   canvas.width = props.width * dpr
   canvas.height = props.height * dpr
-  ctx.scale(dpr, dpr)
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+
+  const canvasStyle = getComputedStyle(canvas)
+  const borderColor = resolveCanvasCssColor(canvasStyle, '--bew-border-color', 'rgba(128, 128, 128, 0.35)')
+  const themeColor = resolveCanvasCssColor(canvasStyle, '--bew-theme-color', '#00a1d6')
+  const textColor = resolveCanvasCssColor(canvasStyle, '--bew-text-2', 'rgba(128, 128, 128, 0.8)')
 
   // Clear canvas
   ctx.clearRect(0, 0, props.width, props.height)
@@ -112,7 +121,7 @@ function draw() {
   const drawHeight = props.height - padding * 2
 
   // Draw background grid
-  ctx.strokeStyle = 'var(--bew-border-color, rgba(128, 128, 128, 0.2))'
+  ctx.strokeStyle = borderColor
   ctx.lineWidth = 1
 
   // Vertical grid lines (position)
@@ -134,7 +143,7 @@ function draw() {
   }
 
   // Draw border
-  ctx.strokeStyle = 'var(--bew-border-color, rgba(128, 128, 128, 0.5))'
+  ctx.strokeStyle = borderColor
   ctx.lineWidth = 1.5
   ctx.strokeRect(padding, padding, drawWidth, drawHeight)
 
@@ -160,7 +169,7 @@ function draw() {
 
   // Draw curve line (thicker for easier dragging)
   ctx.beginPath()
-  ctx.strokeStyle = 'var(--bew-theme-color, #00a1d6)'
+  ctx.strokeStyle = themeColor
   ctx.lineWidth = 3
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
@@ -190,7 +199,7 @@ function draw() {
     ctx.arc(pos.x, pos.y, isSelected ? 7 : 5, 0, Math.PI * 2)
 
     if (isSelected) {
-      ctx.fillStyle = 'var(--bew-theme-color, #00a1d6)'
+      ctx.fillStyle = themeColor
       ctx.strokeStyle = '#fff'
       ctx.lineWidth = 2
       ctx.fill()
@@ -205,7 +214,7 @@ function draw() {
     }
     else {
       ctx.fillStyle = '#fff'
-      ctx.strokeStyle = 'var(--bew-theme-color, #00a1d6)'
+      ctx.strokeStyle = themeColor
       ctx.lineWidth = 2
       ctx.fill()
       ctx.stroke()
@@ -213,7 +222,7 @@ function draw() {
   })
 
   // Draw labels
-  ctx.fillStyle = 'var(--bew-text-2, rgba(128, 128, 128, 0.8))'
+  ctx.fillStyle = textColor
   ctx.font = '10px sans-serif'
   ctx.textAlign = 'center'
   ctx.fillText('0%', padding, props.height - 2)
@@ -225,6 +234,7 @@ function draw() {
 
 // Mouse event handlers
 function handleMouseDown(e: MouseEvent) {
+  canvasRef.value?.focus({ preventScroll: true })
   const rect = canvasRef.value?.getBoundingClientRect()
   if (!rect)
     return
@@ -306,6 +316,14 @@ function handleMouseMove(e: MouseEvent) {
   if (currentPoint.position === 0 || currentPoint.position === 100) {
     newPoint.position = currentPoint.position
   }
+  else {
+    newPoint.position = Math.max(1, Math.min(99, newPoint.position))
+    if (props.modelValue.some((point, index) => (
+      index !== selectedPointIndex.value && point.position === newPoint.position
+    ))) {
+      return
+    }
+  }
 
   const newPoints = [...props.modelValue]
   newPoints[selectedPointIndex.value] = newPoint
@@ -334,6 +352,10 @@ function handleContextMenu(e: MouseEvent) {
 
 function deletePoint(index: number) {
   const point = props.modelValue[index]
+  if (!point) {
+    selectedPointIndex.value = null
+    return
+  }
 
   // Cannot delete endpoints
   if (point.position === 0 || point.position === 100)
@@ -345,9 +367,44 @@ function deletePoint(index: number) {
 }
 
 function handleKeyDown(e: KeyboardEvent) {
-  if ((e.key === 'Delete' || e.key === 'Backspace') && selectedPointIndex.value !== null) {
-    deletePoint(selectedPointIndex.value)
+  const index = selectedPointIndex.value
+  if (index === null)
+    return
+  const point = props.modelValue[index]
+  if (!point) {
+    selectedPointIndex.value = null
+    return
   }
+
+  if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault()
+    deletePoint(index)
+    return
+  }
+
+  const nextPoint = { ...point }
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    e.preventDefault()
+    if (point.position === 0 || point.position === 100)
+      return
+    const delta = e.key === 'ArrowLeft' ? -1 : 1
+    const nextPosition = Math.max(1, Math.min(99, point.position + delta))
+    if (props.modelValue.some((item, itemIndex) => itemIndex !== index && item.position === nextPosition))
+      return
+    nextPoint.position = nextPosition
+  }
+  else if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    e.preventDefault()
+    const delta = e.key === 'ArrowUp' ? 1 : -1
+    nextPoint.opacity = Math.max(0, Math.min(100, point.opacity + delta))
+  }
+  else {
+    return
+  }
+
+  const newPoints = [...props.modelValue]
+  newPoints[index] = nextPoint
+  emit('update:modelValue', newPoints)
 }
 
 // Lifecycle
@@ -355,17 +412,23 @@ onMounted(() => {
   draw()
   document.addEventListener('mousemove', handleMouseMove)
   document.addEventListener('mouseup', handleMouseUp)
-  document.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('resize', draw)
 })
 
 onUnmounted(() => {
   document.removeEventListener('mousemove', handleMouseMove)
   document.removeEventListener('mouseup', handleMouseUp)
-  document.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('resize', draw)
 })
 
-watch(() => props.modelValue, draw, { deep: true })
-watch(() => [props.width, props.height], draw)
+watch(() => props.modelValue, draw, { deep: true, flush: 'post' })
+watch(() => [props.width, props.height], draw, { flush: 'post' })
+watch(selectedPointIndex, draw, { flush: 'post' })
+watch(
+  [() => settings.value.themeColor, isDark, isOledDark],
+  () => nextTick(draw),
+  { flush: 'post' },
+)
 </script>
 
 <template>
@@ -376,8 +439,12 @@ watch(() => [props.width, props.height], draw)
       :height="height"
       :style="{ width: `${width}px`, height: `${height}px` }"
       class="curve-canvas"
+      tabindex="0"
+      role="application"
+      :aria-label="$t('settings.video_card_shadow_curve_hint')"
       @mousedown="handleMouseDown"
       @contextmenu="handleContextMenu"
+      @keydown="handleKeyDown"
     />
     <p class="hint">
       {{ $t('settings.video_card_shadow_curve_hint') }}

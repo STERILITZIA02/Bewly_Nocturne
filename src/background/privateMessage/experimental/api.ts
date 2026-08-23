@@ -1,5 +1,5 @@
 /**
- * EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.
+ * Private-message write API handlers. Image upload cancellation remains request-scoped.
  */
 import type Browser from 'webextension-polyfill'
 

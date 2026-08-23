@@ -382,15 +382,20 @@ function isItemActionPending(): boolean {
         />
         <!-- watcher later list -->
         <TransitionGroup v-else-if="watchLaterLayoutMode === 'list'" name="list">
-          <ALink
+          <div
             v-for="item in currentWatchLaterList"
             :key="item.aid"
-            :href="`https://www.bilibili.com/video/${item.bvid}/`"
-            type="videoCard"
-            class="group"
+            class="watch-later-list-card group"
             flex cursor-pointer
           >
+            <ALink
+              class="watch-later-list-card__overlay"
+              :href="`https://www.bilibili.com/video/${item.bvid}/`"
+              type="videoCard"
+              :aria-label="item.title"
+            />
             <section
+              class="watch-later-list-card__content"
               rounded="$bew-radius"
               flex="~ gap-6 col md:col lg:row items-start"
               relative
@@ -458,15 +463,17 @@ function isItemActionPending(): boolean {
               <!-- Description -->
               <div flex justify-between w-full h-full>
                 <div flex="~ col">
-                  <a
-                    class="keep-two-lines"
+                  <ALink
+                    class="watch-later-list-card__action keep-two-lines"
+                    :href="`https://www.bilibili.com/video/${item.bvid}/`"
+                    type="videoCard"
                     overflow="hidden"
                     un-text="lg overflow-ellipsis"
-                    @click.stop.prevent="handleVideoLinkClick(item.bvid)"
                   >
                     {{ item.title }}
-                  </a>
+                  </ALink>
                   <a
+                    class="watch-later-list-card__action"
                     un-text="$bew-text-2 sm"
                     m="t-4 b-2"
                     flex="~"
@@ -503,6 +510,7 @@ function isItemActionPending(): boolean {
                 <div flex items-center gap-1>
                   <Tooltip :content="t('watch_later.play_video')" placement="top">
                     <IconButton
+                      class="watch-later-list-card__action"
                       :label="t('watch_later.play_video')"
                       :disabled="isItemActionPending()"
                       text="size-$bew-icon-size-lg $bew-text-3"
@@ -517,6 +525,7 @@ function isItemActionPending(): boolean {
                   </Tooltip>
                   <Tooltip :content="t('watch_later.play_in_watch_later')" placement="top">
                     <IconButton
+                      class="watch-later-list-card__action"
                       :label="t('watch_later.play_in_watch_later')"
                       :disabled="isItemActionPending()"
                       text="size-$bew-icon-size-lg $bew-text-3"
@@ -531,6 +540,7 @@ function isItemActionPending(): boolean {
                   </Tooltip>
                   <Tooltip :content="t('watch_later.remove_from_watch_later')" placement="top">
                     <IconButton
+                      class="watch-later-list-card__action"
                       :label="t('watch_later.remove_from_watch_later')"
                       :disabled="isItemActionPending()"
                       text="size-$bew-icon-size-lg $bew-text-3"
@@ -546,7 +556,7 @@ function isItemActionPending(): boolean {
                 </div>
               </div>
             </section>
-          </ALink>
+          </div>
         </TransitionGroup>
 
         <div v-else class="watch-later-grid-root">
@@ -688,6 +698,21 @@ function isItemActionPending(): boolean {
 </template>
 
 <style lang="scss" scoped>
+.watch-later-list-card {
+  position: relative;
+}
+
+.watch-later-list-card__overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+
+.watch-later-list-card__action {
+  position: relative;
+  z-index: 2;
+}
+
 .watch-later-grid-root {
   min-width: 0;
   container-type: inline-size;

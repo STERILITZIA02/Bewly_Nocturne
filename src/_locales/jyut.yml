@@ -398,6 +398,33 @@ settings:
   group_moments_pinned_users: 固定 UP 主
   group_moments_pinned_users_desc: 管理固定喺動態欄右側嘅 UP 主；支援輸入 UID 或暱稱，名單只會儲存喺本機。
   moments_pinned_users: 固定嘅 UP 主
+  moments_wanted_manager:
+    input_required: 請輸入 UP 主 UID 或暱稱
+    search_empty: 搵唔到相關 UP 主，試下其他暱稱
+    search_failed: 搜尋 UP 主失敗，請遲啲再試
+    invalid_uid: 請輸入有效嘅 UP 主 UID
+    pinned_limit: 最多只可以固定 {count} 個 UP 主
+    user_not_found: 搵唔到呢個 UP 主
+    fetch_failed: 攞取 UP 主資料失敗，請遲啲再試
+    placeholder: 輸入 UP 主 UID 或暱稱
+    add: 加入
+    search: 搜尋
+    pinned:
+      already_in: 呢個 UP 主已經喺「固定 UP」入面
+      need_follow: 要先關注 {name}，先可以加佢入「固定 UP」
+      added: 已經將 {name} 固定到動態欄
+      removed: 已經取消固定 {name}
+      remove_aria: 取消固定 {name}
+      remove_title: 取消固定
+      empty: 暫時未有固定 UP 主。加入之後會顯示喺動態欄右邊。
+    wanted:
+      already_in: 呢個 UP 主已經喺「想睇」分組入面
+      need_follow: 要先關注 {name}，先可以加佢入「想睇」分組
+      added: 已經將 {name} 加入「想睇」
+      removed: 已經將 {name} 移出「想睇」
+      remove_aria: 將 {name} 移出想睇
+      remove_title: 移出想睇
+      empty: 暫時未有 UP 主。加入之後可以喺 Bewly 動態頁嘅「想睇」篩選。
   btn:
     authorize: 授權
     revoke: 解除授權
@@ -662,6 +689,7 @@ settings:
   filter_import_failed: '匯入{type}過濾規則失敗：{message}'
   filter_import_invalid_format: 檔案格式唔啱
   filter_import_unknown_error: 未知錯誤
+  filter_import_result: '匯入完成：匯入咗 {imported} 條，忽略咗 {ignored} 條'
   filter_by_title: 根據標題篩選
   filter_by_title_desc: >-
     避開啲標題係你指定嘅字嘅片（唔理大細楷），抑或用正則表達式，好似 {regex} 噉，用 {slash} 包住。{lineBreak}
@@ -709,6 +737,8 @@ settings:
   reset_settings_confirm: |-
     重設設定？
     噉做冇得返轉頭噃，你確定要重設你之前嘅設定？
+  new_version_badge: 新版本
+  development_build_badge: 開發版
   current_contributors: Bewly Nocturne（含 BewlyBewly）貢獻者
   contributors_image_failed: 貢獻者圖片載入失敗
   video_page_top_bar_config: 影片頁頂欄配置
@@ -822,15 +852,28 @@ settings:
   hide_comment_image_scrollbar_desc: 開啟留言區圖片預覽時隱藏頁面右側滾動條，避免滾動條顯示喺遮罩右側
   video_player_scroll: 校好顯示模式後自動轆到合適嘅位置
   video_player_scroll_desc: 啓用後，若果顯示模式係闊螢幕或預設嗰陣，會自動轆到合適嘅位置。
-  exit_bewly_widescreen_loading: 退出闊螢幕模式
   enlarge_favorite_dialog: 放大收藏彈窗
   enlarge_favorite_dialog_desc: 啓用後，影片頁收藏彈窗會用更大嘅尺寸顯示，方便睇同管理收藏夾。
   external_watch_later_button: 稍後再睇按鈕外置
   external_watch_later_button_desc: 啓用後，影片頁工具欄會顯示獨立嘅陣間至睇按鈕；按鈕會顯示目前影片狀態，可以撳一下加入或者剷走。
+  show_bewly_widescreen_button: 顯示 Bewly 闊螢幕按鈕
+  show_bewly_widescreen_button_desc: 喺播放器控制欄顯示進入 Bewly 闊螢幕模式嘅按鈕；閂咗之後唔會退出而家嘅闊螢幕模式。
   show_vertical_video_zoom_button: 直屏影片放大按鈕
   show_vertical_video_zoom_button_desc: 喺直屏影片播放器顯示放大/縮小按鈕同畫面位置調整控制
   show_video_screenshot_button: 顯示播放器截圖按鈕
   show_video_screenshot_button_desc: 啓用後，喺影片播放器控制欄顯示擷取目前影片畫面嘅按鈕。
+  adjust_comment_image_height: 調整留言區圖片高度
+  adjust_comment_image_height_desc: 自動按實際長寬比例調整留言區圖片高度，避免圖片變形
+  badge_type: 角標類型
+  dark_mode_base_color: 深色模式基準顏色
+  group_search_results: 搜尋結果
+  group_topbar_components: 頂欄元件設定
+  topbar_components_adjustment: 頂欄元件角標設定
+  topbar_components_adjustment_desc: 設定每個頂欄圖示嘅角標顯示方式
+  visibility: 顯示
+  remember_playback_rate_desc: 啓用後，播放器會記住你上次設定嘅倍速，下次開片時自動套用
+  disable_auto_play_collection: 自動關閉合集自動連播
+  disable_auto_play_collection_desc: 自動關閉影片合集嘅自動連播功能
   group_fonts: ''
   group_visual_effects: ''
 auth:
@@ -1000,7 +1043,13 @@ notifications:
     user_fallback: '用戶 {talkerId}'
     summary_unavailable: 暫時未有訊息摘要
     select_conversation: 揀同{name}嘅會話
-    select_conversation_empty: 揀一個會話來查看訊息
+    select_conversation_empty: 揀一個會話開始傾偈
+    select_conversation_hint: 訊息會喺獨立閱讀卡片入面保持清晰聚焦
+    empty_tips:
+      emote: 可以喺輸入區插入 Bilibili 表情
+      image: 可以先預覽圖片，再直接傳送
+      history: 向上捲動可以載入同閱讀更早訊息
+      shortcut: Enter 傳送，Shift+Enter 換行
     fallback_aria: '{name}嘅原版私訊入口'
     fallback_description: 呢類會話暫時需要喋原版私訊查看
     session_kinds:
@@ -1019,6 +1068,7 @@ notifications:
     back_to_conversations: 返回會話列表
     messages:
       timeline_aria: 同{name}嘅私訊記錄
+      self_label: 我
       loading: 載入緊聊天記錄
       empty: 暫時未有聊天記錄
       load_older: 載入更早訊息
@@ -1053,10 +1103,18 @@ notifications:
       picture_card_alt: 私訊分享圖片
       video_views: '{count} 次播放'
       image_summary: '[圖片]'
+      select_emote: 揀表情
+      emote_picker: 私訊表情面板
+      emote_packages: 表情包系列
+      default_emotes: 預設
+      user_emotes: 我嘅表情
+      default_emotes_empty: 訊息資料有預設表情之後會顯示喺呢度
+      user_emotes_empty: 而家個帳號冇可用嘅用戶表情包
       select_image: 揀圖片
       selected_image_alt: 等待傳送嘅私訊圖片
       image_size_kb: '{size} KB'
       remove_image: 移除圖片
+      image_ready: 等待傳送
       image_preparing: 準備緊圖片
       image_uploading: 上傳緊圖片
       image_upload_failed: 圖片上傳失敗
@@ -1257,6 +1315,8 @@ video_card:
     unfollow_user: 取消關注
     block_user: 拉黑用戶
     more_options: 更多操作
+    scroll_to_top: 轆到選單頂
+    scroll_to_bottom: 轆到選單底
   follow_user_confirm:
     title: 確認關注用戶
     message: 確定要關注 {name} 嗎？
@@ -1367,6 +1427,8 @@ favorites:
   batch_unfavorite_confirm: |-
     係咪要剷走已揀嘅 {count} 條片呀？
     噉做冇得返轉頭噃，你確定要剷走呢啲片？
+  global_search_hint: 輸入關鍵字搜尋所有收藏
+  global_search_placeholder: 搜尋所有收藏
   season_play_all_fallback: 合集列表未就緒，已退回合集開頭
   sidebar_manage: 管理
   sidebar_manage_exit: 退出管理
@@ -1383,6 +1445,9 @@ favorites:
   delete_folders_failed: 收藏夾刪除失敗，請稍後再試
   unfav_seasons_confirm: 確定取消收藏已選嘅 {count} 個合集嗎？
   unfav_seasons_failed: '{count} 個合集取消收藏失敗'
+  search_all_folders: 全部
+  search_current_folder: 目前收藏夾
+  search_placeholder: 搜尋目前收藏
 version_reminder:
   trigger: 新版本說明
   title: Bewly Nocturne 已更新
@@ -1410,7 +1475,30 @@ watch_later:
   play_video: 剷走兼入去影片頁
   play_in_watch_later: 清單播
   remove_from_watch_later: 剷走
+widescreen:
+  enter: 進入 Bewly 闊螢幕
+  exit: 退出
+  exit_loading: 退出闊螢幕模式
+  loading: 載入緊闊螢幕模式…
+  comments: 留言
+  danmaku: 彈幕
+  playlist: 選集
+  recommendations: 推介
+  collapse: 收起
+  expand_more: 展開更多
+  comments_loading: 留言區載入緊
+  danmaku_loading: 彈幕列表載入緊
+  list_loading: 列表載入緊
+  show_narrow_right: 顯示窄右欄
+  show_narrow_left: 顯示窄左欄
+  collapse_right: 收起右欄
+  collapse_left: 收起左欄
 search_bar:
+  input_label: 搜尋
+  clear_keyword: 清空搜尋內容
+  submit: 搜尋
+  suggestions_label: 搜尋建議
+  search_options_label: 搜尋選項
   history_title: 搜尋記錄
   hot_search_title: 熱搜
   clear_history: 剷晒你啲搜尋記錄
@@ -1418,6 +1506,7 @@ search_page:
   hot_search_ranking: 熱搜排行榜
   loading: 載入緊...
   no_hot_search_data: 暫時冇熱搜資料
+  view_all_esports: 睇晒所有電競賽事
 
 search:
   page_title: 搜尋 - 嗶哩嗶哩

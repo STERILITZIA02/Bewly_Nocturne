@@ -23,6 +23,7 @@ interface PrivateMessageModules {
   types: typeof import('../src/background/privateMessage/types')
   privateSession: typeof import('../src/contentScripts/views/Notifications/whisper/privateSession')
   privateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/privateMessage')
+  conversationExpansion: typeof import('../src/contentScripts/views/Notifications/whisper/conversationExpansion')
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
   experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental')
@@ -96,6 +97,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       types,
       privateSession,
       privateMessage,
+      conversationExpansion,
       usePrivateSessions,
       usePrivateMessages,
       experimentalWrites,
@@ -116,6 +118,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/background/privateMessage/types'),
       import('../src/contentScripts/views/Notifications/whisper/privateSession'),
       import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
+      import('../src/contentScripts/views/Notifications/whisper/conversationExpansion'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
       import('../src/contentScripts/views/Notifications/whisper/experimental'),
@@ -137,6 +140,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       types,
       privateSession,
       privateMessage,
+      conversationExpansion,
       usePrivateSessions,
       usePrivateMessages,
       experimentalPrivateMessage: experimentalWrites,
@@ -1469,7 +1473,9 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
     'canOpenOriginal',
     'canOpenProfile',
     'canReadNative',
+    'canSend',
   ])
+  assert.equal(user?.capabilities.canSend, true)
 
   assert.equal(upAssistant?.assistantType, 'up-assistant')
   assert.equal(upAssistant?.name, 'Sanitized UP Assistant')
@@ -1488,24 +1494,28 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
   for (const assistant of [upAssistant, customerService]) {
     assert.equal(assistant?.capabilities.canReadNative, true)
     assert.equal(assistant?.capabilities.canAck, true)
+    assert.equal(assistant?.capabilities.canSend, false)
     assert.equal(assistant?.capabilities.canOpenProfile, false)
     assert.equal(privateSession.getPrivateSessionProfileUrl(assistant!), '')
   }
 
   for (const item of [unfollowed, intercepted]) {
     assert.equal(item?.capabilities.canReadNative, true)
-    assert.equal(item?.capabilities.canAck, false)
+    assert.equal(item?.capabilities.canAck, true)
     assert.equal(item?.capabilities.canOpenProfile, true)
     assert.equal(item ? privateSession.getPrivateSessionProfileUrl(item).startsWith('https://space.bilibili.com/') : false, true)
   }
+  assert.equal(unfollowed?.capabilities.canSend, true)
+  assert.equal(intercepted?.capabilities.canSend, false)
 
   for (const item of fallbackItems) {
     assert.equal(item.capabilities.canReadNative, false)
     assert.equal(item.capabilities.canAck, false)
+    assert.equal(item.capabilities.canSend, false)
     assert.equal(item.capabilities.canOpenProfile, false)
     assert.equal(item.capabilities.canOpenOriginal, true)
   }
-  assert.equal(items.every(item => Object.keys(item.capabilities).length === 4), true)
+  assert.equal(items.every(item => Object.keys(item.capabilities).length === 5), true)
 })
 
 verify('session type filter composes with unread, pinned, and search filters', ({ privateSession }) => {
@@ -1556,7 +1566,7 @@ verify('confirmed private-message source values map to weak display identifiers 
   ])
 })
 
-verify('private-session UI consumes type filters, assistant labels, profile links, and source labels', async () => {
+verify('private-session UI keeps type filters while moving participant identity onto message rows', async () => {
   const [listSource, itemSource, conversationSource, messageSource] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListItem.vue', import.meta.url), 'utf8'),
@@ -1566,12 +1576,18 @@ verify('private-session UI consumes type filters, assistant labels, profile link
   assert.ok(listSource.includes('PrivateSessionTypeFilter'))
   assert.ok(listSource.includes('typeFilter'))
   assert.ok(itemSource.includes('session.assistantType'))
-  assert.ok(conversationSource.includes('getPrivateSessionProfileUrl'))
-  assert.ok(conversationSource.includes(':href="profileUrl"'))
+  assert.equal(conversationSource.includes('getPrivateSessionProfileUrl'), false)
+  assert.equal(conversationSource.includes('conversation-view__header'), false)
+  assert.ok(conversationSource.includes(':sender-avatar-url="message.isSelf ? selfAvatarUrl : avatarUrl"'))
+  assert.ok(conversationSource.includes(':sender-name="message.isSelf ? selfDisplayName : displayName"'))
   assert.equal(itemSource.includes('<ALink'), false)
   assert.equal((itemSource.match(/<button\b/g) ?? []).length, 1)
   assert.ok(itemSource.includes(`emit('select', session)`))
   assert.ok(messageSource.includes('message.source'))
+  assert.ok(messageSource.includes('private-message-item__avatar'))
+  assert.ok(messageSource.includes('private-message-item__sender'))
+  assert.ok(messageSource.includes('private-message-item--self .private-message-item__message'))
+  assert.ok(messageSource.includes('flex-direction: row-reverse'))
 
   for (const localeName of ['cmn-CN', 'cmn-TW', 'en', 'jyut']) {
     const localeSource = await readFile(new URL(`../src/_locales/${localeName}.yml`, import.meta.url), 'utf8')
@@ -1583,6 +1599,7 @@ verify('private-session UI consumes type filters, assistant labels, profile link
       'auto-reply:',
       'fan-group-system:',
       'mutual-follow:',
+      'self_label:',
     ]) {
       assert.ok(localeSource.includes(key), `${localeName}: ${key}`)
     }
@@ -1600,8 +1617,12 @@ verify('confirmed outgoing text uses a theme bubble and a compact delivery check
   assert.match(contentSource, /'private-message-content__bubble--self':\s*isSelf/)
   assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,160}background:\s*var\(--bew-theme-color\)/)
   assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,240}color:\s*var\(--bew-on-theme-color\)/)
+  assert.match(contentSource, /\.private-message-content__media-placeholder\s*\{[\s\S]{0,220}width:\s*min\(100%/)
+  assert.match(itemSource, /\.private-message-item__failed-actions\s*\{[\s\S]{0,120}max-width:\s*100%/)
   assert.doesNotMatch(contentSource, /:global\(\.private-message-item--self\)/)
-  assert.match(itemSource, /v-if="message\.isSelf"[\s\S]{0,320}i-mingcute:check-line/)
+  assert.match(itemSource, /v-if="message\.isSelf"/)
+  assert.match(itemSource, /i-mingcute:check-line/)
+  assert.match(itemSource, /sendState === 'failed'/)
   assert.match(itemSource, /notifications\.whisper\.messages\.test_send_success/)
   assert.doesNotMatch(itemSource, /notifications\.whisper\.messages\.sent/)
   assert.match(conversationSource, /lastTextSendOutcome === 'confirmed'[\s\S]{0,80}return ''/)
@@ -1642,11 +1663,19 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   assert.equal(items[1]?.avatar, 'https://i0.hdslb.com/assistant.png')
   assert.equal(items[0]?.capabilities.canReadNative, true)
   assert.equal(items[0]?.capabilities.canAck, true)
+  assert.equal(items[0]?.capabilities.canSend, true)
   assert.equal(items[0]?.capabilities.canOpenProfile, true)
   assert.equal(items[1]?.capabilities.canReadNative, true)
   assert.equal(items[1]?.capabilities.canAck, true)
+  assert.equal(items[1]?.capabilities.canSend, false)
   assert.equal(items[1]?.capabilities.canOpenProfile, false)
-  assert.equal(items.every(item => Object.keys(item.capabilities).length === 4), true)
+  assert.equal(items[2]?.capabilities.canAck, true)
+  assert.equal(items[2]?.capabilities.canSend, false)
+  assert.equal(items[3]?.capabilities.canAck, true)
+  assert.equal(items[3]?.capabilities.canSend, true)
+  assert.equal(items[4]?.capabilities.canAck, true)
+  assert.equal(items[4]?.capabilities.canSend, true)
+  assert.equal(items.every(item => Object.keys(item.capabilities).length === 5), true)
   assert.equal(privateSession.isNativePrivateSession(items[0]!), true)
   assert.equal(privateSession.isNativePrivateSession(items[1]!), true)
   assert.equal(privateSession.isNativePrivateSession(items[2]!), true)
@@ -1659,12 +1688,13 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   ], createCardsResponse([]))
   assert.equal(unsupportedDirect?.kind, 'unsupported')
   assert.equal(unsupportedDirect?.capabilities.canReadNative, false)
+  assert.equal(unsupportedDirect?.capabilities.canSend, false)
   assert.deepEqual(privateConversationRoute.parsePrivateConversationRoute(
     privateConversationRoute.buildPrivateConversationUrl({ talkerId: '8', sessionType: 1 }),
   ), { talkerId: '8', sessionType: 1 })
 })
 
-verify('whisper keeps reads stable while exposing the confirmed text-send path in packaged builds', async ({ notificationSections }) => {
+verify('whisper keeps reads stable while exposing confirmed text and image Composer paths', async ({ notificationSections }) => {
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
@@ -1698,7 +1728,7 @@ verify('whisper keeps reads stable while exposing the confirmed text-send path i
     'cancelPrivateImageUpload',
     'sendPrivateImageMessage',
   ]) {
-    assert.equal(notificationsSource.includes(writeDependency), false, writeDependency)
+    assert.equal(notificationsSource.includes(writeDependency), true, writeDependency)
   }
   assert.equal(notificationsSource.includes('useExperimentalPrivateMessageWrites'), true)
   assert.equal(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'), false)
@@ -1707,9 +1737,10 @@ verify('whisper keeps reads stable while exposing the confirmed text-send path i
   assert.equal(notificationsSource.includes('import.meta.env.DEV'), false)
   assert.equal(conversationSource.includes('MessageComposer'), true)
   assert.equal(conversationSource.includes('import.meta.env.DEV'), false)
-  assert.equal(conversationSource.includes(`props.session?.kind === 'user'`), true)
+  assert.equal(conversationSource.includes('props.session?.capabilities.canSend'), true)
   assert.equal(conversationSource.includes('sendDraft'), true)
-  assert.equal(conversationSource.includes(':enable-image="false"'), true)
+  assert.equal(conversationSource.includes('enable-image'), true)
+  assert.equal(conversationSource.includes(':image-draft="writeState.imageDraft"'), true)
   assert.equal(conversationSource.includes('controller.refreshLatest'), true)
   assert.equal(productionControllerSource.includes('sendDraft'), false)
   assert.equal(productionControllerSource.includes('sendImage'), false)
@@ -1720,11 +1751,7 @@ verify('whisper keeps reads stable while exposing the confirmed text-send path i
     'sendPrivateImageMessage',
     'cancelPrivateImageUpload',
   ]) {
-    assert.equal(
-      productionApiSource.includes(writeApi),
-      writeApi === 'sendPrivateMessage',
-      writeApi,
-    )
+    assert.equal(productionApiSource.includes(writeApi), true, writeApi)
   }
   assert.equal(composerSource.includes('notifications.whisper.messages.send'), true)
   assert.equal(composerSource.includes('notifications.whisper.messages.test_send'), false)
@@ -1735,7 +1762,7 @@ verify('whisper keeps reads stable while exposing the confirmed text-send path i
   assert.equal(conversationSource.includes('notifications.whisper.messages.continue_original'), false)
 })
 
-verify('experimental write assets remain isolated while confirmed text send enters the runtime API path', async ({
+verify('private write assets reuse the existing controller while text and image handlers enter the runtime API path', async ({
   api,
   experimentalApi,
 }) => {
@@ -1745,9 +1772,8 @@ verify('experimental write assets remain isolated while confirmed text send ente
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/index.ts', import.meta.url), 'utf8'),
     readFile(new URL('../knip.json', import.meta.url), 'utf8'),
   ])
-  const requiredWarning = 'EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.'
-  assert.ok(experimentalApiSource.includes(requiredWarning))
-  assert.ok(experimentalControllerSource.includes(requiredWarning))
+  assert.ok(experimentalApiSource.includes('Private-message write API handlers'))
+  assert.ok(experimentalControllerSource.includes('Private-message write controller'))
   for (const retainedWrite of [
     'sendPrivateMessage',
     'uploadPrivateImage',
@@ -1765,12 +1791,15 @@ verify('experimental write assets remain isolated while confirmed text send ente
   assert.equal(knipSource.includes('whisper/experimental/privateMessageWriteProtocolGate.ts'), false)
   assert.deepEqual(Object.keys(api.default).sort(), [
     'ackPrivateSession',
+    'cancelPrivateImageUpload',
     'getNewPrivateSessions',
     'getOlderPrivateSessions',
     'getPrivateMessages',
     'getPrivateSessions',
     'getPrivateUserCards',
+    'sendPrivateImageMessage',
     'sendPrivateMessage',
+    'uploadPrivateImage',
   ])
   assert.equal(typeof experimentalApi.sendPrivateMessage, 'function')
   assert.equal(typeof experimentalApi.uploadPrivateImage, 'function')
@@ -2691,6 +2720,115 @@ verify('whisper conversation routing reuses route state and never guesses origin
   assert.equal([notificationsSource, workspaceSource, itemSource].some(source => /#\/whisper\//.test(source)), false)
 })
 
+verify('conversation expansion transitions compact, expanding, history-open, and back to compact', ({ conversationExpansion }) => {
+  const compact = { ...conversationExpansion.COMPACT_CONVERSATION_EXPANSION }
+  const progress = conversationExpansion.calculateConversationTopProgress({
+    clientHeight: 600,
+    scrollHeight: 1800,
+    scrollTop: 80,
+  }, {
+    atLatest: false,
+  })
+  assert.equal(progress, 1)
+
+  const expanding = conversationExpansion.reduceConversationExpansion(compact, {
+    type: 'scroll',
+    atLatest: false,
+    noMore: false,
+    progress,
+  })
+  assert.deepEqual(expanding, { state: 'expanding', topExpansionProgress: 1 })
+
+  const loading = conversationExpansion.reduceConversationExpansion(expanding, {
+    type: 'load-start',
+    noMore: false,
+  })
+  assert.deepEqual(loading, { state: 'expanding', topExpansionProgress: 1 })
+
+  const historyOpen = conversationExpansion.reduceConversationExpansion(loading, {
+    type: 'load-end',
+    noMore: false,
+  })
+  assert.deepEqual(historyOpen, { state: 'history-open', topExpansionProgress: 1 })
+  assert.equal(conversationExpansion.getConversationLayoutProgress(historyOpen), 1)
+
+  const atHistoryStart = conversationExpansion.reduceConversationExpansion(historyOpen, {
+    type: 'scroll',
+    atLatest: false,
+    noMore: true,
+    progress: 1,
+  })
+  assert.deepEqual(atHistoryStart, { state: 'history-open', topExpansionProgress: 1 })
+  assert.equal(conversationExpansion.getConversationLayoutProgress(atHistoryStart), 1)
+  assert.deepEqual(conversationExpansion.reduceConversationExpansion(compact, {
+    type: 'scroll',
+    atLatest: false,
+    noMore: true,
+    progress: 1,
+  }), { state: 'history-open', topExpansionProgress: 1 })
+  assert.equal(conversationExpansion.shouldCollapseConversationAtLatest({
+    physicalAtLatest: true,
+    requestedLatest: false,
+    userHasReadUpward: true,
+  }), false)
+  assert.equal(conversationExpansion.shouldCollapseConversationAtLatest({
+    physicalAtLatest: true,
+    requestedLatest: true,
+    userHasReadUpward: true,
+  }), true)
+
+  const returning = conversationExpansion.reduceConversationExpansion(atHistoryStart, {
+    type: 'scroll',
+    atLatest: true,
+    noMore: true,
+    progress: 0,
+  })
+  assert.deepEqual(returning, { state: 'expanding', topExpansionProgress: 0 })
+  assert.deepEqual(
+    conversationExpansion.reduceConversationExpansion(returning, { type: 'settle' }),
+    compact,
+  )
+  const expandedGeometry = conversationExpansion.calculateConversationExpandedGeometry({
+    bottom: 740,
+    top: 140,
+    viewportHeight: 900,
+  }, false)
+  assert.deepEqual(expandedGeometry, {
+    extraHeight: 316,
+    topLift: -148,
+  })
+  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry({
+    bottom: 1,
+    top: 1,
+  }, false, expandedGeometry), expandedGeometry)
+  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry({
+    bottom: 1,
+    top: 0,
+  }, false, expandedGeometry), {
+    extraHeight: 168,
+    topLift: 0,
+  })
+  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry({
+    bottom: 1,
+    top: 1,
+  }, true, expandedGeometry), {
+    extraHeight: 0,
+    topLift: 0,
+  })
+  assert.deepEqual(conversationExpansion.getConversationCornerProgress(compact), {
+    bottom: 1,
+    top: 1,
+  })
+  assert.deepEqual(conversationExpansion.getConversationCornerProgress(historyOpen), {
+    bottom: 0,
+    top: 0,
+  })
+  assert.deepEqual(conversationExpansion.getConversationCornerProgress(atHistoryStart), {
+    bottom: 0,
+    top: 0,
+  })
+})
+
 verify('mobile whisper master-detail preserves scroll and focus with reduced-motion support', async () => {
   const [workspaceSource, listSource, itemSource, conversationSource, ...localeSources] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
@@ -2718,7 +2856,9 @@ verify('mobile whisper master-detail preserves scroll and focus with reduced-mot
   assert.ok(listSource.includes('handleListKeydown'))
   assert.ok(listSource.includes('@keydown="handleListKeydown"'))
   assert.ok(itemSource.includes(':data-session-key="session.key"'))
-  assert.ok(conversationSource.includes('conversation-view__back'))
+  assert.ok(conversationSource.includes('<CloseButton'))
+  assert.ok(conversationSource.includes('conversation-view__close'))
+  assert.ok(conversationSource.includes(`:label="t('common.close')"`))
   assert.ok(conversationSource.includes('focusHeading'))
   assert.ok(conversationSource.includes('@keydown.esc="handleEscape"'))
   assert.ok(conversationSource.includes('LAYOUT_BREAKPOINTS.mobileMax'))
@@ -2838,7 +2978,7 @@ verify('message settings live in the global Bewly settings page and the old sect
   }
 })
 
-verify('message interaction shell keeps selection internal, settings typed, surfaces transparent, and writes isolated', async () => {
+verify('message interaction shell keeps selection internal, settings typed, and surfaces independently layered', async () => {
   const [
     itemSource,
     listSource,
@@ -2938,27 +3078,117 @@ verify('message interaction shell keeps selection internal, settings typed, surf
   assert.ok(settingsCategorySource.includes('color: var(--bew-theme-color)'))
   assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color-10)'))
 
-  assert.ok(workspaceSource.includes('background: var(--bew-content-alt)'))
-  assert.ok(workspaceSource.includes('background: transparent'))
+  const workspaceLayoutStyle = workspaceSource.slice(
+    workspaceSource.indexOf('.whisper-workspace {'),
+    workspaceSource.indexOf('.whisper-workspace__sessions,'),
+  )
+  assert.ok(workspaceLayoutStyle.includes('background: transparent'))
+  assert.ok(workspaceLayoutStyle.includes('gap: var(--bew-space-4)'))
+  assert.equal(workspaceLayoutStyle.includes('border:'), false)
+  assert.equal(workspaceLayoutStyle.includes('backdrop-filter:'), false)
+  assert.ok(workspaceSource.includes('conversation-list-card'))
+  assert.ok(notificationsSource.includes('--notifications-conversation-list-max-width'))
+  assert.ok(notificationsSource.includes('--notifications-navigation-width'))
+  assert.ok(navigationSource.includes('useResizeObserver(insideRef, measureNavigationWidth)'))
+  assert.ok(navigationSource.includes(`emit('widthChange', width)`))
+  assert.ok(pageHeaderSource.includes(`emit('navigationWidthChange', $event)`))
+  assert.ok(navigationSource.includes('width: min(100%, var(--notifications-conversation-list-width))'))
+  assert.ok(workspaceSource.includes('var(--notifications-conversation-list-width)'))
+  assert.match(workspaceSource, /\.whisper-workspace__sessions\s*\{[\s\S]{0,180}height:\s*100%/)
+  assert.match(workspaceSource, /\.whisper-workspace__detail\s*\{[\s\S]{0,120}height:\s*100%/)
+  assert.ok(workspaceSource.includes('background: var(--bew-elevated-alt)'))
+  assert.ok(workspaceSource.includes('overflow: hidden'))
   assert.equal(workspaceSource.includes('--bew-homepage-bg'), false)
-  assert.ok(conversationSource.includes('background: var(--bew-elevated)'))
+  assert.ok(emptySource.includes('conversation-empty-state__tips'))
+  assert.ok(emptySource.includes('background: transparent'))
+  assert.ok(conversationSource.includes('class="conversation-card"'))
+  assert.ok(conversationSource.includes('background: var(--bew-elevated-alt)'))
   assert.ok(conversationSource.includes('backdrop-filter: var(--bew-filter-glass-1)'))
+  assert.ok(conversationSource.includes('conversation-view__floating-composer'))
+  assert.ok(conversationSource.includes('conversation-view__close'))
+  assert.equal(conversationSource.includes('conversation-view__header'), false)
+  assert.ok(conversationSource.includes('conversation-card__top-edge'))
+  assert.ok(conversationSource.includes('conversation-card__bottom-edge'))
   assert.equal(conversationSource.includes('--bew-homepage-bg'), false)
   assert.equal(conversationSource.includes('--bew-elevated-solid'), false)
   assert.ok(fallbackSource.includes('background: transparent'))
+  assert.ok(conversationSource.includes(`data-expansion-state`))
+  assert.ok(conversationSource.includes('expansionModel.state'))
+  assert.ok(conversationSource.includes('requestAnimationFrame(processScrollFrame)'))
+  assert.ok(conversationSource.includes('cancelAnimationFrame(scrollFrameId)'))
+  assert.ok(conversationSource.includes('new ResizeObserver'))
+  assert.ok(conversationSource.includes('conversationResizeObserver.observe(conversationViewRef.value)'))
+  assert.equal(conversationSource.includes('conversationResizeObserver.observe(messageScrollRef.value)'), false)
+  assert.ok(conversationSource.includes('conversationResizeObserver?.disconnect()'))
+  assert.ok(conversationSource.includes('isLayoutTransitioning'))
+  assert.ok(conversationSource.includes('beginLayoutTransition('))
+  assert.ok(conversationSource.includes('completeLayoutTransition'))
+  assert.equal(conversationSource.includes('compactSettlementTimer'), false)
+  assert.ok(conversationSource.includes('directScrollGestureActive'))
+  assert.ok(conversationSource.includes('layoutTransitionTarget'))
+  assert.ok(conversationSource.includes('layoutProgress.value > 0'))
+  assert.ok(conversationSource.includes('initialScrollGeneration !== scrollInteractionGeneration'))
+  assert.ok(conversationSource.includes('conversationActivationPending'))
+  assert.ok(conversationSource.includes('state.value.newMessagesAvailable'))
+  assert.match(conversationSource, /function applyReadingDirection\([\s\S]{0,180}scrollInteractionGeneration\+\+/)
+  assert.match(conversationSource, /function handleScroll\(\)[\s\S]{0,420}applyReadingDirection/)
+  assert.ok(conversationSource.includes('@touchmove.passive="handleDirectGestureMove"'))
+  assert.ok(conversationSource.includes(`window.addEventListener('pointerup', endDirectScrollGesture`))
+  assert.ok(conversationSource.includes('will-change: height, transform, border-radius'))
+  const conversationCardStyle = conversationSource.slice(
+    conversationSource.indexOf('.conversation-card {'),
+    conversationSource.indexOf('.conversation-view--layout-transitioning'),
+  )
+  assert.ok(conversationCardStyle.includes('var(--bew-ease-standard)'))
+  assert.equal(conversationCardStyle.includes('var(--bew-ease-emphasized)'), false)
+  assert.ok(conversationSource.includes('requestLayoutGeneration !== layoutGeneration'))
+  assert.ok(conversationSource.includes('requestScrollGeneration !== scrollInteractionGeneration'))
+  assert.ok(conversationSource.includes('requestLifecycleEpoch !== props.controller.lifecycleEpoch.value'))
+  assert.ok(conversationSource.includes('requestStateGeneration !== state.value.generation'))
+  assert.ok(conversationSource.includes(`state.value.failedOperation !== 'load-older'`))
+  assert.ok(conversationSource.includes('!state.value.paginationStalled'))
+  assert.match(conversationSource, /watch\(talkerId,[\s\S]{0,100}resetConversationExpansion\(\)/)
+  assert.ok(conversationSource.includes('restoreVisibleMessageAnchor(viewport, anchor)'))
+  assert.ok(conversationSource.includes('viewport.scrollHeight - oldScrollHeight'))
+  assert.ok(conversationSource.includes('lastProcessedScrollTop = viewport.scrollTop'))
+  assert.ok(conversationSource.includes('--conversation-top-radius'))
+  assert.ok(conversationSource.includes('--conversation-bottom-radius'))
+  assert.ok(conversationSource.includes('--conversation-extra-height'))
+  assert.match(conversationSource, /\.conversation-view\s*\{[\s\S]{0,240}height:\s*100%/)
+  assert.match(conversationSource, /\.conversation-card\s*\{[\s\S]{0,320}height:\s*calc\(100% \+ var\(--conversation-extra-height/)
+  assert.ok(notificationsSource.includes('overflow: visible'))
+  assert.match(
+    notificationsSource,
+    /\.bewly-scroll-viewport:has\(\.notifications-page--workspace\)[\s\S]{0,100}overflow-y:\s*hidden/,
+  )
+  assert.equal(notificationsSource.includes('--notifications-dock-safe-space'), false)
+  assert.ok(conversationSource.includes('--conversation-new-message-reserve'))
+  assert.match(conversationSource, /\.conversation-view__floating-composer\s*\{[\s\S]{0,120}position:\s*absolute/)
+  assert.equal(conversationSource.includes('--conversation-edge-left'), false)
+  assert.equal(conversationSource.includes('--conversation-edge-right'), false)
+  assert.equal(conversationSource.includes('--conversation-edge-top'), false)
+  assert.equal(conversationSource.includes('--conversation-edge-bottom'), false)
+  assert.match(conversationSource, /\.conversation-card__top-edge,[\s\S]{0,180}position:\s*absolute/)
+  assert.match(conversationSource, /\.conversation-card__top-edge\s*\{[\s\S]{0,180}border-radius:/)
+  assert.match(conversationSource, /\.conversation-card__bottom-edge\s*\{[\s\S]{0,180}border-radius:/)
+  assert.ok(conversationSource.includes('top: layoutProgress.value'))
+  assert.equal(conversationSource.includes('MutationObserver'), false)
   assert.equal(pageHeaderSource.includes('<ALink'), false)
   assert.equal(pageHeaderSource.includes('<Button'), false)
   assert.equal(pageHeaderSource.includes('descriptionKey'), false)
   assert.equal(pageHeaderSource.includes('--bew-content-solid'), false)
 
-  for (const forbiddenWrite of ['uploadPrivateImage', 'sendPrivateImageMessage', 'upload_bfs']) {
-    assert.equal(notificationsSource.includes(forbiddenWrite), false, forbiddenWrite)
-    assert.equal(conversationSource.includes(forbiddenWrite), false, forbiddenWrite)
+  for (const imageWrite of ['uploadPrivateImage', 'sendPrivateImageMessage']) {
+    assert.equal(notificationsSource.includes(imageWrite), true, imageWrite)
+    assert.equal(conversationSource.includes(imageWrite), false, imageWrite)
   }
+  assert.equal(notificationsSource.includes('upload_bfs'), false)
+  assert.equal(conversationSource.includes('upload_bfs'), false)
   assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
   assert.equal(conversationSource.includes('MessageComposer'), true)
   assert.equal(conversationSource.includes('v-if="isTextSendEnabled && writeState"'), true)
-  assert.equal(conversationSource.includes(':enable-image="false"'), true)
+  assert.equal(conversationSource.includes('enable-image'), true)
+  assert.equal(conversationSource.includes('@select-image="selectImage"'), true)
   assert.equal(conversationSource.includes(`t('notifications.whisper.messages.test_send')`), false)
   assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), false)
   assert.equal(conversationSource.includes('notifications.whisper.messages.continue_original'), false)
@@ -2998,9 +3228,9 @@ verify('private message parser supports text, image, recall, custom emoji, tip, 
     segments: [
       { type: 'text', text: 'hello ' },
       {
-        type: 'emoji',
-        alt: '[smile]',
-        src: 'https://i0.hdslb.com/sanitized-emoji.gif',
+        type: 'emote',
+        text: '[smile]',
+        url: 'https://i0.hdslb.com/sanitized-emoji.gif',
         size: 2,
       },
     ],
@@ -3084,9 +3314,9 @@ verify('text renderer preserves newlines and creates safe ALink-ready URL segmen
   assert.deepEqual(content.segments, [
     { type: 'text', text: 'Hello ' },
     {
-      type: 'emoji',
-      alt: '[smile]',
-      src: 'https://i0.hdslb.com/bfs/emote/sanitized.gif',
+      type: 'emote',
+      text: '[smile]',
+      url: 'https://i0.hdslb.com/bfs/emote/sanitized.gif',
       size: 2,
     },
     { type: 'text', text: '\n' },
@@ -3096,6 +3326,162 @@ verify('text renderer preserves newlines and creates safe ALink-ready URL segmen
       text: 'https://www.bilibili.com/video/BV1Fixture',
     },
   ])
+})
+
+verify('private emote catalog groups default and account-owned token packages without hardcoded assets', ({ privateMessage }) => {
+  const packages = privateMessage.collectPrivateEmotePackages([
+    {
+      text: '[doge]',
+      url: 'https://i0.hdslb.com/bfs/emote/default-doge.png',
+      size: 1,
+    },
+    {
+      id: 'user-1',
+      text: '[my-emote]',
+      gif_url: 'https://i0.hdslb.com/bfs/emote/user-emote.gif',
+      owner_mid: '100',
+      package_id: 'owned-1',
+      package_name: 'Owned package',
+      type: 'user',
+      size: 2,
+    },
+    {
+      text: '[other-account]',
+      url: 'https://i0.hdslb.com/bfs/emote/other-account.png',
+      owner_mid: '999',
+      type: 'user',
+    },
+    {
+      text: '[unsafe]',
+      url: 'javascript:alert(1)',
+      type: 'user',
+    },
+  ], '100')
+  assert.deepEqual(packages.map(pkg => ({
+    id: pkg.id,
+    name: pkg.name,
+    type: pkg.type,
+    tokens: pkg.emotes.map(emote => emote.text),
+  })), [
+    { id: 'default', name: '', type: 'default', tokens: ['[doge]'] },
+    { id: 'owned-1', name: 'Owned package', type: 'user', tokens: ['[my-emote]'] },
+  ])
+  assert.equal(packages.flatMap(pkg => pkg.emotes).some(emote => emote.text === '[unsafe]'), false)
+  assert.equal(packages.flatMap(pkg => pkg.emotes).some(emote => emote.text === '[other-account]'), false)
+  assert.deepEqual(privateMessage.insertPrivateEmoteToken('hello world', '[doge]', 6, 11), {
+    cursor: 12,
+    value: 'hello [doge]',
+  })
+
+  const merged = privateMessage.mergePrivateEmotePackages(packages, privateMessage.collectPrivateEmotePackages([{
+    id: 'user-2',
+    text: '[my-emote-2]',
+    uri: 'https://i0.hdslb.com/bfs/emote/user-emote-2.png',
+    package_id: 'owned-1',
+    package_name: 'Owned package',
+    type: 'user',
+  }]))
+  assert.deepEqual(
+    merged.find(pkg => pkg.id === 'owned-1')?.emotes.map(emote => emote.text),
+    ['[my-emote]', '[my-emote-2]'],
+  )
+
+  const unresolved = privateMessage.transformPrivateMessages([
+    createRawMessage('emote-late', '401', { content: '{"content":"late [doge]"}' }),
+  ], [], '100')
+  const hydrated = privateMessage.hydratePrivateMessageEmotes(unresolved, merged)
+  assert.deepEqual(hydrated[0]?.content, {
+    type: 'text',
+    segments: [
+      { type: 'text', text: 'late ' },
+      {
+        type: 'emote',
+        text: '[doge]',
+        url: 'https://i0.hdslb.com/bfs/emote/default-doge.png',
+        size: 1,
+      },
+    ],
+  })
+})
+
+verify('private emote catalog drops stale account responses and resets before loading the next account', async ({ usePrivateMessages }) => {
+  const mid = ref('100')
+  const activeTalkerId = ref('200')
+  let resolveFirst: ((value: unknown) => void) | undefined
+  let requestCount = 0
+  const firstResponse = new Promise<unknown>((resolve) => {
+    resolveFirst = resolve
+  })
+  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+    ackSession: async () => ({ code: 0, data: null }),
+    fetchMessages: async () => {
+      requestCount++
+      return requestCount === 1
+        ? firstResponse
+        : createMessagesResponse([], [{
+            text: '[account-b]',
+            url: 'https://i0.hdslb.com/bfs/emote/account-b.png',
+            type: 'user',
+          }])
+    },
+    getCsrf: () => 'csrf-token',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+
+  const staleLoad = controller.loadInitial('200')
+  mid.value = '300'
+  await nextTick()
+  resolveFirst?.(createMessagesResponse([], [{
+    text: '[account-a]',
+    url: 'https://i0.hdslb.com/bfs/emote/account-a.png',
+    type: 'user',
+  }]))
+  await staleLoad
+  assert.equal(controller.emotePackages.value.length, 0)
+
+  await controller.loadInitial('200')
+  assert.deepEqual(
+    controller.emotePackages.value.flatMap(pkg => pkg.emotes.map(emote => emote.text)),
+    ['[account-b]'],
+  )
+  assert.equal(
+    controller.emotePackages.value.some(pkg => pkg.emotes.some(emote => emote.text === '[account-a]')),
+    false,
+  )
+})
+
+verify('Composer emote insertion and inline fallback remain typed and accessible', async () => {
+  const [composerSource, pickerSource, contentSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/experimental/MessageComposer.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateEmotePicker.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageContent.vue', import.meta.url), 'utf8'),
+  ])
+  assert.ok(composerSource.includes('selectionStart'))
+  assert.ok(composerSource.includes('setSelectionRange'))
+  assert.ok(composerSource.includes(`emit('update:modelValue', insertion.value)`))
+  assert.ok(composerSource.includes('PrivateEmotePicker'))
+  assert.ok(composerSource.includes(':aria-expanded="emotePickerOpen"'))
+  assert.ok(composerSource.includes('@keydown.esc.stop="emotePickerOpen = false"'))
+  const emoteActionIndex = composerSource.indexOf('class="message-composer__emote-control"')
+  const textareaIndex = composerSource.indexOf('<textarea')
+  const sendActionIndex = composerSource.indexOf('message-composer__send')
+  assert.ok(emoteActionIndex < textareaIndex && textareaIndex < sendActionIndex)
+  assert.ok(pickerSource.includes('bew-popover-surface'))
+  const pickerStyle = pickerSource.slice(pickerSource.indexOf('.private-emote-picker {'))
+  assert.match(pickerStyle, /bottom:\s*calc\(100% \+ var\(--bew-space-2\)\);[\s\S]{0,80}left:\s*0;/)
+  assert.doesNotMatch(pickerStyle, /right:\s*0;/)
+  assert.ok(pickerSource.includes(`(['default', 'user'] as const)`))
+  assert.ok(pickerSource.includes(':aria-label="emote.text"'))
+  assert.ok(pickerSource.includes('role="tabpanel"'))
+  assert.ok(pickerSource.includes('notifications.whisper.messages.emote_packages'))
+  assert.ok(pickerSource.includes('private-emote-picker__package-button'))
+  assert.ok(pickerSource.includes('activePackageKey'))
+  assert.ok(pickerSource.includes('handleTabKeydown'))
+  assert.ok(pickerSource.includes('@error="markImageFailed(emote.id)"'))
+  assert.ok(contentSource.includes('failedInlineEmotes.has(index)'))
+  assert.ok(contentSource.includes('@error="markInlineEmoteFailed(index)"'))
+  assert.equal(contentSource.includes('v-html'), false)
 })
 
 verify('rich private-message fixtures retain only safe typed fields and links', async ({ privateMessage }) => {
@@ -3630,8 +4016,10 @@ verify('releasing the page cache invalidates in-flight conversation responses', 
     syncUnread: async () => {},
   })
 
+  assert.equal(controller.lifecycleEpoch.value, 0)
   const request = controller.loadInitial('200', '100')
   controller.release()
+  assert.equal(controller.lifecycleEpoch.value, 1)
   resolveMessages?.(createMessagesResponse([createRawMessage('1', '101')]))
   await request
 
@@ -4235,7 +4623,7 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   assert.equal(controller.states.has('200'), false)
 })
 
-verify('optimistic image messages retain local previews and reconcile by server msg_key', ({ experimentalPrivateMessage: privateMessage }) => {
+verify('optimistic image messages retain local previews and reconcile by server msg_key or uploaded URL', ({ experimentalPrivateMessage: privateMessage }) => {
   const optimistic = privateMessage.createOptimisticPrivateImageMessage({
     localId: 'image-local-1',
     senderId: '100',
@@ -4269,6 +4657,22 @@ verify('optimistic image messages retain local previews and reconcile by server 
   ], 'image-local-1')
   assert.equal(reconciled.reconciled, true)
   assert.deepEqual(reconciled.items.map(item => item.msgKey), ['9223372036854775807'])
+
+  const mediaFallback = privateMessage.createOptimisticPrivateImageMessage({
+    localId: 'image-local-2',
+    senderId: '100',
+    receiverId: '200',
+    objectUrl: 'blob:https://www.bilibili.com/sanitized-preview-2',
+    timestamp: 1755000000,
+  })
+  mediaFallback.sendState = 'reconciling'
+  mediaFallback.serverMediaUrl = 'https://i0.hdslb.com/bfs/im/sanitized.png'
+  const mediaReconciled = privateMessage.reconcileOptimisticPrivateMessages([
+    mediaFallback,
+    server!,
+  ], 'image-local-2')
+  assert.equal(mediaReconciled.reconciled, true)
+  assert.deepEqual(mediaReconciled.items.map(item => item.msgKey), ['9223372036854775807'])
 })
 
 verify('image upload failure retries upload while send failure reuses the uploaded server image', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
@@ -4325,8 +4729,12 @@ verify('image upload failure retries upload while send failure reuses the upload
   })
   const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
 
-  assert.equal(await controller.sendImage('200', image), false)
+  assert.equal(controller.selectImage('200', image), true)
   const state = controller.getState('200')
+  assert.equal(state.imageDraft?.status, 'ready')
+  assert.equal(state.items.length, 0, 'selection must not create an optimistic message')
+  assert.equal(uploadAttempts, 0, 'selection must not upload immediately')
+  assert.equal(await controller.sendImage('200'), false)
   assert.equal(state.imageDraft?.failureKind, 'upload-failed')
   assert.equal(state.items[0]?.sendState, 'failed')
   assert.equal(uploadAttempts, 1)
@@ -4345,6 +4753,15 @@ verify('image upload failure retries upload while send failure reuses the upload
   assert.deepEqual(revoked, ['blob:https://www.bilibili.com/sanitized-preview'])
   assert.deepEqual(cancelled, [])
   assert.equal(sessionRefreshes, 1)
+
+  assert.equal(controller.selectImage('200', image), true, 'a new draft can be selected after success')
+  controller.removeImage('200', 'image-local-1')
+  assert.equal(state.imageDraft, null, 'removing a selected draft clears it before upload')
+  assert.equal(uploadAttempts, 2, 'removing a selected draft must not upload')
+  assert.deepEqual(revoked, [
+    'blob:https://www.bilibili.com/sanitized-preview',
+    'blob:https://www.bilibili.com/sanitized-preview',
+  ])
 })
 
 verify('image reconcile failure retries only history and resource cleanup cancels stale uploads', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
@@ -4410,7 +4827,8 @@ verify('image reconcile failure retries only history and resource cleanup cancel
   })
   const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
 
-  assert.equal(await controller.sendImage('200', image), false, 'first send must stop at reconciliation')
+  assert.equal(controller.selectImage('200', image), true)
+  assert.equal(await controller.sendImage('200'), false, 'first send must stop at reconciliation')
   const state = controller.getState('200')
   assert.equal(state.imageDraft?.failureKind, 'reconcile-failed', 'failure stage')
   assert.equal(uploadAttempts, 1, 'initial upload count')
@@ -4443,7 +4861,8 @@ verify('image reconcile failure retries only history and resource cleanup cancel
       return deferredUpload
     },
   })
-  const staleSend = staleController.sendImage('200', image)
+  assert.equal(staleController.selectImage('200', image), true)
+  const staleSend = staleController.sendImage('200')
   await uploadStarted
   activeTalkerId.value = '300'
   await nextTick()
@@ -4462,7 +4881,8 @@ verify('image reconcile failure retries only history and resource cleanup cancel
   assert.ok(revoked.includes('blob:https://www.bilibili.com/stale-preview'), 'conversation switch revokes preview')
 
   activeTalkerId.value = '200'
-  const disposeSend = staleController.sendImage('200', image)
+  assert.equal(staleController.selectImage('200', image), true)
+  const disposeSend = staleController.sendImage('200')
   staleController.dispose()
   assert.ok(cancelled.includes('upload-stale'), 'dispose keeps upload cancellation invariant')
   resolveUpload?.({ code: -1, data: null })
@@ -4497,7 +4917,8 @@ verify('image send waits for a valid account before allocating preview resources
   })
   const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
 
-  assert.equal(await controller.sendImage('200', image), false)
+  assert.equal(controller.selectImage('200', image), false)
+  assert.equal(await controller.sendImage('200'), false)
   assert.equal(objectUrlsCreated, 0)
   assert.equal(controller.states.size, 0)
 })
@@ -4535,7 +4956,8 @@ verify('account changes cancel an active image upload and reject the old account
   })
   const image = new File([new Uint8Array([1, 2, 3])], 'sanitized.png', { type: 'image/png' })
 
-  const send = controller.sendImage('200', image)
+  assert.equal(controller.selectImage('200', image), true)
+  const send = controller.sendImage('200')
   await uploadStarted
   mid.value = '300'
   await nextTick()

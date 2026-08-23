@@ -1,5 +1,5 @@
 /**
- * EXPERIMENTAL: confirmed text send is available through the private-message composer; image writes remain unexposed.
+ * Private-message write controller for confirmed text and image Composer transactions.
  */
 import type { Ref } from 'vue'
 import { reactive, watch } from 'vue'
@@ -82,7 +82,7 @@ export interface PrivateImageDraftState {
   localId: string
   objectUrl: string
   size: number
-  status: 'preparing' | 'uploading' | 'sending' | 'reconciling' | 'failed'
+  status: 'ready' | 'preparing' | 'uploading' | 'sending' | 'reconciling' | 'failed'
 }
 
 export interface PrivateConversationState {
@@ -146,9 +146,11 @@ export interface PrivateMessagesController {
   setDraft: (talkerId: string, text: string) => void
   sendDraft: (talkerId: string) => Promise<boolean>
   retrySend: (talkerId: string, localId: string) => Promise<boolean>
-  sendImage: (talkerId: string, file: File) => Promise<boolean>
+  selectImage: (talkerId: string, file: File) => boolean
+  sendImage: (talkerId: string) => Promise<boolean>
   retryImage: (talkerId: string, localId: string) => Promise<boolean>
   removeImage: (talkerId: string, localId: string) => void
+  releaseImages: (talkerId?: string) => void
   editFailed: (talkerId: string, localId: string) => void
   deleteFailed: (talkerId: string, localId: string) => void
   invalidateConversation: (talkerId: string) => void
@@ -588,7 +590,7 @@ export function useExperimentalPrivateMessageWrites(
     failureKind: PrivateImageFailureKind | null = null,
   ) {
     const message = state.items.find(item => item.localId === task.localId)
-    if (message)
+    if (message && status !== 'ready')
       message.sendState = status
     if (state.imageDraft?.localId === task.localId) {
       state.imageDraft.status = status
@@ -619,6 +621,19 @@ export function useExperimentalPrivateMessageWrites(
         releaseImageTask(task, true)
     }
     imageRequests.delete(talkerId)
+    const state = states.get(talkerId)
+    if (state && !sendRequests.has(talkerId))
+      state.sending = false
+  }
+
+  function releaseImages(talkerId?: string) {
+    if (talkerId) {
+      cancelConversationImages(talkerId)
+      return
+    }
+    for (const task of [...imageTasks.values()])
+      releaseImageTask(task, true)
+    imageRequests.clear()
   }
 
   async function waitForTextSendHistory(delayMs: number): Promise<void> {
@@ -877,6 +892,9 @@ export function useExperimentalPrivateMessageWrites(
             if (!uploaded)
               throw new Error('upload failed')
             task.uploaded = uploaded
+            const optimistic = state.items.find(item => item.localId === localId)
+            if (optimistic)
+              optimistic.serverMediaUrl = uploaded.url
           }
 
           failedKind = 'send-failed'
@@ -901,7 +919,6 @@ export function useExperimentalPrivateMessageWrites(
             dependencies.getImageSummary?.() ?? '[image]',
             optimistic.timestamp,
           )
-          void dependencies.refreshSessions?.().catch(() => {})
         }
 
         failedKind = 'reconcile-failed'
@@ -912,6 +929,9 @@ export function useExperimentalPrivateMessageWrites(
         if (state.items.some(item => item.localId === localId))
           throw new Error('reconcile failed')
 
+        await dependencies.refreshSessions?.().catch(() => {})
+        if (!isCurrent())
+          return false
         releaseImageTask(task, false)
         return true
       }
@@ -920,70 +940,99 @@ export function useExperimentalPrivateMessageWrites(
           updateImageState(state, task, 'failed', failedKind)
         return false
       }
-      finally {
+    })().finally(() => {
+      if (imageRequests.get(talkerId) === request) {
         if (isCurrentAccountState(mid, requestAccountGeneration, state))
           state.sending = false
-      }
-    })().finally(() => {
-      if (imageRequests.get(talkerId) === request)
         imageRequests.delete(talkerId)
+      }
     })
 
     imageRequests.set(talkerId, request)
     return request
   }
 
-  function sendImage(talkerId: string, file: File): Promise<boolean> {
+  function selectImage(talkerId: string, file: File): boolean {
     if (
       disposed
       || !currentMid.value
       || activeTalkerId.value !== talkerId
       || !file.type.startsWith('image/')
+      || file.size <= 0
       || imageRequests.has(talkerId)
       || sendRequests.has(talkerId)
       || !dependencies.uploadImage
       || !dependencies.sendImageMessage
     ) {
-      return Promise.resolve(false)
+      return false
     }
 
     const state = getState(talkerId)
     if (state.imageDraft)
-      return Promise.resolve(false)
+      return false
 
     let objectUrl = ''
     try {
       const localId = createLocalId()
       objectUrl = createObjectUrl(file)
-      const optimistic = createOptimisticPrivateImageMessage({
-        localId,
-        objectUrl,
-        receiverId: talkerId,
-        senderId: currentMid.value,
-        timestamp: nowSeconds(),
-      })
-      const task: PrivateImageTask = {
+      imageTasks.set(localId, {
         failureKind: null,
         file,
         localId,
         objectUrl,
         talkerId,
-      }
-      imageTasks.set(localId, task)
-      state.items = mergePrivateMessages(state.items, [optimistic])
+      })
       state.imageDraft = {
         failureKind: null,
         fileName: file.name,
         localId,
         objectUrl,
         size: file.size,
-        status: 'preparing',
+        status: 'ready',
       }
-      return executeImageSend(talkerId, localId)
+      return true
     }
     catch {
       if (objectUrl)
         revokeObjectUrl(objectUrl)
+      return false
+    }
+  }
+
+  function sendImage(talkerId: string): Promise<boolean> {
+    if (imageRequests.has(talkerId) || sendRequests.has(talkerId))
+      return Promise.resolve(false)
+    const state = states.get(talkerId)
+    const draft = state?.imageDraft
+    const task = draft ? imageTasks.get(draft.localId) : undefined
+    if (
+      disposed
+      || !state
+      || !draft
+      || draft.status !== 'ready'
+      || !task
+      || task.talkerId !== talkerId
+      || activeTalkerId.value !== talkerId
+      || !currentMid.value
+      || !dependencies.getCsrf().trim()
+      || !dependencies.uploadImage
+      || !dependencies.sendImageMessage
+    ) {
+      return Promise.resolve(false)
+    }
+
+    try {
+      const optimistic = createOptimisticPrivateImageMessage({
+        localId: task.localId,
+        objectUrl: task.objectUrl,
+        receiverId: talkerId,
+        senderId: currentMid.value,
+        timestamp: nowSeconds(),
+      })
+      state.items = mergePrivateMessages(state.items, [optimistic])
+      return executeImageSend(talkerId, task.localId)
+    }
+    catch {
       return Promise.resolve(false)
     }
   }
@@ -1062,9 +1111,11 @@ export function useExperimentalPrivateMessageWrites(
     setDraft,
     sendDraft,
     retrySend,
+    selectImage,
     sendImage,
     retryImage,
     removeImage,
+    releaseImages,
     editFailed,
     deleteFailed,
     invalidateConversation,

@@ -8,7 +8,7 @@ import type { VideoInfo } from '~/models/video/videoInfo'
 import type { VideoPreviewResult } from '~/models/video/videoPreview'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
-import { getTvSign, TVAppKey } from '~/utils/authProvider'
+import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
 import { calcCurrentTime, numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getCSRF, removeHttpFromUrl } from '~/utils/main'
@@ -40,8 +40,8 @@ function createAppFeedFeedbackParams(video: Video, selection?: AppFeedFeedbackSe
     access_key: appAuthTokens.value.accessToken,
     goto: video.goto,
     id: video.param || video.id,
-    reason_id: selection?.reasonId,
-    feedback_id: selection?.feedbackId,
+    ...(selection?.reasonId !== undefined ? { reason_id: selection.reasonId } : {}),
+    ...(selection?.feedbackId !== undefined ? { feedback_id: selection.feedbackId } : {}),
     build: 1,
     mobi_app: 'android',
     appkey: TVAppKey.appkey,
@@ -66,7 +66,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const showVideoOptions = ref<boolean>(false)
   const videoOptionsFloatingStyles = ref<CSSProperties>({})
   const removed = ref<boolean>(false)
-  const moreBtnRef = ref<HTMLDivElement | null>(null)
+  const moreBtnRef = ref<HTMLButtonElement | null>(null)
   const contextMenuRef = ref<HTMLDivElement | null>(null)
   const selectedDislikeOpt = ref<AppFeedFeedbackSelection>()
   const videoCurrentTime = ref<number | null>(null)
@@ -452,23 +452,31 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     showVideoOptions.value = true
   }
 
-  function handleUndo() {
+  async function handleUndo() {
     const video = props.value.video
 
     if (props.value.type === 'appRcmd' && video) {
-      const params = createAppFeedFeedbackParams(video, selectedDislikeOpt.value)
+      if (!await ensureFreshAppAccessToken()) {
+        toast.warning(t('auth.auth_access_key_first'))
+        return
+      }
 
-      api.video.undoDislikeVideo({
-        ...params,
-        sign: getTvSign(params),
-      }).then((res) => {
-        if (res.code === 0) {
-          removed.value = false
-        }
-        else {
-          toast.error(res.message)
-        }
-      })
+      const sendUndo = () => {
+        const params = createAppFeedFeedbackParams(video, selectedDislikeOpt.value)
+        return api.video.undoDislikeVideo({
+          ...params,
+          sign: getTvSign(params),
+        })
+      }
+
+      let response = await sendUndo()
+      if (isAppAccessTokenInvalidResponse(response) && await refreshInvalidAppAccessToken())
+        response = await sendUndo()
+
+      if (response.code === 0)
+        removed.value = false
+      else
+        toast.error(response.message)
     }
     else {
       removed.value = false

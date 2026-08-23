@@ -24,6 +24,7 @@ const historyStatus = ref<boolean>()
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 let historyCursor = 0
 let requestGeneration = 0
+let reachBottomTimer: number | undefined
 
 const HistoryBusiness = computed(() => {
   return Business
@@ -38,6 +39,13 @@ onMounted(() => {
 
 onScopeDispose(() => {
   requestGeneration++
+  if (reachBottomTimer !== undefined)
+    window.clearTimeout(reachBottomTimer)
+  reachBottomTimer = undefined
+  if (handleReachBottom.value === handleHistoryReachBottom)
+    handleReachBottom.value = undefined
+  if (handlePageRefresh.value === handleHistoryPageRefresh)
+    handlePageRefresh.value = undefined
 })
 
 function isSearchMode(): boolean {
@@ -61,27 +69,31 @@ function reloadCurrentMode() {
     void getHistoryList()
 }
 
+function handleHistoryReachBottom() {
+  if (isLoading.value || noMoreContent.value)
+    return
+
+  if (reachBottomTimer !== undefined)
+    window.clearTimeout(reachBottomTimer)
+  // 优化：添加延迟执行提高触发成功率
+  reachBottomTimer = window.setTimeout(() => {
+    reachBottomTimer = undefined
+    if (!isLoading.value && !noMoreContent.value) {
+      if (isSearchMode())
+        void searchHistoryList()
+      else
+        void getHistoryList()
+    }
+  }, 50)
+}
+
+function handleHistoryPageRefresh() {
+  reloadCurrentMode()
+}
+
 function initPageAction() {
-  handleReachBottom.value = () => {
-    if (isLoading.value)
-      return
-    if (noMoreContent.value)
-      return
-
-    // 优化：添加延迟执行提高触发成功率
-    setTimeout(() => {
-      if (!isLoading.value && !noMoreContent.value) {
-        if (isSearchMode())
-          void searchHistoryList()
-        else
-          void getHistoryList()
-      }
-    }, 50)
-  }
-
-  handlePageRefresh.value = () => {
-    reloadCurrentMode()
-  }
+  handleReachBottom.value = handleHistoryReachBottom
+  handlePageRefresh.value = handleHistoryPageRefresh
 }
 
 /**
@@ -159,7 +171,7 @@ async function searchHistoryList() {
 
     const list = Array.isArray(res.data?.list) ? res.data.list : []
     list.forEach((item: HistorySearchItem) => {
-      historyList.push(item as unknown as HistoryItem)
+      historyList.push(item)
     })
 
     currentPageNum.value = page + 1
@@ -299,16 +311,19 @@ function jumpToLoginPage() {
       </h3>
       <!-- historyList -->
       <TransitionGroup name="list">
-        <ALink
+        <div
           v-for="historyItem in historyList"
           :key="historyItem.kid"
-          type="videoCard"
-          :href="getHistoryUrl(historyItem)"
-          block
-          class="group"
+          class="history-list-card group"
           flex
           cursor-pointer
         >
+          <ALink
+            class="history-list-card__overlay"
+            type="videoCard"
+            :href="getHistoryUrl(historyItem)"
+            :aria-label="historyItem.show_title || historyItem.title"
+          />
           <!-- time slot -->
           <div
             mr-8 px-4
@@ -349,6 +364,7 @@ function jumpToLoginPage() {
           </div>
 
           <section
+            class="history-list-card__content"
             rounded="$bew-radius"
             flex="~ gap-6 col md:col lg:row items-start"
             relative
@@ -435,6 +451,7 @@ function jumpToLoginPage() {
             <div flex justify-between w-full h-full>
               <div flex="~ col">
                 <a
+                  class="history-list-card__action"
                   :href="`${getHistoryUrl(historyItem)}`" target="_blank"
                   :title="historyItem.show_title ? historyItem.show_title : historyItem.title"
                 >
@@ -447,6 +464,7 @@ function jumpToLoginPage() {
                   </h3>
                 </a>
                 <a
+                  class="history-list-card__action"
                   un-text="$bew-text-2 sm"
                   m="t-4 b-2"
                   flex="~ items-center"
@@ -515,6 +533,9 @@ function jumpToLoginPage() {
               </div>
 
               <button
+                type="button"
+                class="history-list-card__action"
+                :aria-label="$t('common.remove')"
                 text="size-$bew-icon-size-lg $bew-text-3"
                 hover:color="$bew-theme-color"
                 opacity-0 group-hover:opacity-100
@@ -526,7 +547,7 @@ function jumpToLoginPage() {
               </button>
             </div>
           </section>
-        </ALink>
+        </div>
       </TransitionGroup>
 
       <!-- no more content -->
@@ -544,14 +565,14 @@ function jumpToLoginPage() {
     <aside relative w="full md:40% lg:30% xl:25%" order="1 md:2 lg:2">
       <div pos="sticky top-120px" flex="~ col gap-4" justify-start my-10 w-full>
         <input
-          v-model.lazy.trim="keyword"
+          v-model.trim="keyword"
           type="text"
           :placeholder="t('history.search_watch_history')"
-          class="p-x-14px lh-35px h-35px"
+          :aria-label="t('history.search_watch_history')"
+          class="history-search-input p-x-14px lh-35px h-35px"
           rounded="$bew-radius"
           bg="$bew-content-solid"
           shadow="$bew-shadow-1"
-          outline-none
           w-full
           @keyup.enter="handleSearch"
         >
@@ -604,4 +625,18 @@ function jumpToLoginPage() {
 </template>
 
 <style lang="scss" scoped>
+.history-list-card {
+  position: relative;
+}
+
+.history-list-card__overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+
+.history-list-card__action {
+  position: relative;
+  z-index: 2;
+}
 </style>

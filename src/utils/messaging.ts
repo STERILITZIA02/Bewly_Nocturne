@@ -73,7 +73,7 @@ export function onMessage<T = any, R = any>(
   if (!runtime?.onMessage)
     return
 
-  runtime.onMessage.addListener((message: any, sender) => {
+  runtime.onMessage.addListener((message: any, sender: browser.Runtime.MessageSender) => {
     if (message?.type === type) {
       return handler(message.data, sender)
     }

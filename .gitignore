@@ -6,6 +6,7 @@
 .kiro
 .claude
 .pnpm-store/
+.cache/
 *.backup
 *.crx
 *.local

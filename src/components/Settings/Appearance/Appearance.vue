@@ -190,11 +190,14 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       </SettingsItem>
       <SettingsItem :title="$t('settings.theme_color')" right-width="auto">
         <div class="theme-color-options" flex="~ gap-2 wrap" justify-end>
-          <div
+          <button
             v-for="color in themeColorOptions" :key="color"
-            class="color-option"
-            w-20px h-20px rounded-8 cursor-pointer transition
-            duration-300 box-border
+            type="button"
+            class="color-option color-option--preset"
+            :aria-label="`${$t('settings.theme_color')}: ${color}`"
+            :aria-pressed="color === settings.themeColor"
+            w-20px h-20px p-0 appearance-none rounded-8
+            cursor-pointer transition duration-300 box-border
             :style="{
               background: color,
               transform: color === settings.themeColor ? 'scale(1.3)' : 'scale(1)',
@@ -221,6 +224,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             <input
               :value="settings.themeColor"
               type="color"
+              :aria-label="$t('settings.theme_color')"
               w-30px h-30px p-0 m-0 block
               shrink-0 rounded-8 border-none cursor-pointer
               @input="(e) => changeThemeColorThrottle((e.target as HTMLInputElement)?.value)"
@@ -231,11 +235,14 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
 
       <SettingsItem :title="$t('settings.dark_mode_base_color')" right-width="auto">
         <div class="dark-mode-base-color-options" flex="~ gap-2 wrap" justify-end>
-          <div
+          <button
             v-for="color in darkModeBaseColorOptions" :key="color"
-            class="color-option"
-            w-20px h-20px rounded-8 cursor-pointer transition
-            duration-300 box-border
+            type="button"
+            class="color-option color-option--preset"
+            :aria-label="`${$t('settings.dark_mode_base_color')}: ${color}`"
+            :aria-pressed="color === settings.darkModeBaseColor"
+            w-20px h-20px p-0 appearance-none rounded-8
+            cursor-pointer transition duration-300 box-border
             :style="{
               background: color,
               transform: color === settings.darkModeBaseColor ? 'scale(1.3)' : 'scale(1)',
@@ -262,6 +269,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             <input
               :value="settings.darkModeBaseColor"
               type="color"
+              :aria-label="$t('settings.dark_mode_base_color')"
               w-30px h-30px p-0 m-0 block
               shrink-0 rounded-8 border-none cursor-pointer
               @input="(e) => changeDarkModeBaseColorThrottle((e.target as HTMLInputElement)?.value)"
@@ -341,6 +349,16 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
     filter var(--bew-duration-normal) var(--bew-ease-standard),
     outline-color var(--bew-duration-normal) var(--bew-ease-standard),
     transform var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.color-option--preset {
+  position: relative;
+
+  &::after {
+    position: absolute;
+    inset: calc(-1 * var(--bew-space-0-5));
+    content: "";
+  }
 }
 
 .color-option:hover {

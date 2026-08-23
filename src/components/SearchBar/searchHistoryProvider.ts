@@ -1,3 +1,5 @@
+import { getIframeMessageData, isIframeReadyForMessaging, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+
 const SEARCH_HISTORY_LIMIT = 20
 const SEARCH_HISTORY_RESPONSE_TIMEOUT_MS = 1200
 const SEARCH_HISTORY_IFRAME_LOAD_TIMEOUT_MS = 1500
@@ -41,10 +43,7 @@ class BilibiliStorageProvider {
   static BILIBILI_COLS_IFRAME_URL = 'https://s1.hdslb.com/bfs/seed/jinkela/short/cols/iframe.html'
 
   private iframe?: HTMLIFrameElement
-
-  private findIframe() {
-    return Array.from(document.getElementsByTagName('iframe')).find(i => i.src.includes(BilibiliStorageProvider.BILIBILI_COLS_IFRAME_URL))
-  }
+  private iframeLoadPromise?: Promise<HTMLIFrameElement | undefined>
 
   private async waitForBody() {
     if (document.body)
@@ -55,11 +54,14 @@ class BilibiliStorageProvider {
     })
   }
 
-  private async createIframe() {
+  private async createIframe(): Promise<HTMLIFrameElement | undefined> {
     await this.waitForBody()
 
+    document.querySelectorAll<HTMLIFrameElement>('iframe[data-bewly-cols-storage="true"]')
+      .forEach(staleIframe => staleIframe.remove())
+
     const iframe = document.createElement('iframe')
-    iframe.src = BilibiliStorageProvider.BILIBILI_COLS_IFRAME_URL
+    iframe.dataset.bewlyColsStorage = 'true'
     iframe.tabIndex = -1
     iframe.setAttribute('aria-hidden', 'true')
     iframe.style.position = 'absolute'
@@ -68,32 +70,73 @@ class BilibiliStorageProvider {
     iframe.style.border = '0'
     iframe.style.visibility = 'hidden'
     iframe.style.pointerEvents = 'none'
-    document.body.appendChild(iframe)
 
-    await new Promise<void>((resolve) => {
-      const timer = window.setTimeout(resolve, SEARCH_HISTORY_IFRAME_LOAD_TIMEOUT_MS)
-      iframe.addEventListener('load', () => {
+    const loadedPromise = new Promise<boolean>((resolve) => {
+      let settled = false
+      let timer = 0
+      let handleLoad: () => void
+      let handleError: () => void
+      const finish = (value: boolean) => {
+        if (settled)
+          return
+        settled = true
         window.clearTimeout(timer)
-        resolve()
-      }, { once: true })
+        iframe.removeEventListener('load', handleLoad)
+        iframe.removeEventListener('error', handleError)
+        resolve(value)
+      }
+      handleLoad = () => {
+        markIframeReadyForMessaging(iframe)
+        if (isIframeReadyForMessaging(iframe))
+          finish(true)
+      }
+      handleError = () => finish(false)
+      timer = window.setTimeout(() => finish(false), SEARCH_HISTORY_IFRAME_LOAD_TIMEOUT_MS)
+      iframe.addEventListener('load', handleLoad)
+      iframe.addEventListener('error', handleError)
     })
 
+    iframe.src = BilibiliStorageProvider.BILIBILI_COLS_IFRAME_URL
+    document.body.appendChild(iframe)
+    const loaded = await loadedPromise
+
+    if (!loaded) {
+      iframe.remove()
+      return undefined
+    }
+
+    iframe.dataset.bewlyColsReady = 'true'
     return iframe
   }
 
   private async getIframe() {
-    if (this.iframe?.isConnected)
+    if (this.iframe?.isConnected && this.iframe.dataset.bewlyColsReady === 'true')
       return this.iframe
 
-    this.iframe = this.findIframe() ?? await this.createIframe()
-    return this.iframe
+    if (!this.iframeLoadPromise)
+      this.iframeLoadPromise = this.createIframe()
+
+    const pending = this.iframeLoadPromise
+    try {
+      this.iframe = await pending
+      return this.iframe
+    }
+    finally {
+      if (this.iframeLoadPromise === pending)
+        this.iframeLoadPromise = undefined
+    }
   }
 
   private async operate(type: 'COLS_GET'): Promise<BilibiliStorageEvent | undefined>
   private async operate(type: 'COLS_SET', value: string): Promise<void>
   private async operate(type: 'COLS_CLR'): Promise<void>
-  private async operate(type: 'COLS_GET' | 'COLS_CLR' | 'COLS_SET', value?: string) {
+  private async operate(
+    type: 'COLS_GET' | 'COLS_CLR' | 'COLS_SET',
+    value?: string,
+  ): Promise<BilibiliStorageEvent | undefined | void> {
     const iframe = await this.getIframe()
+    if (!iframe)
+      return undefined
 
     switch (type) {
       case 'COLS_GET':
@@ -104,10 +147,18 @@ class BilibiliStorageProvider {
             window.clearTimeout(timer)
             window.removeEventListener('message', handleMessage)
           }
-          handleMessage = (e: MessageEvent<BilibiliStorageEvent>) => {
-            if (e.origin === 'https://s1.hdslb.com' && e.data && e.data?.type === 'COLS_RES' && e.data?.key === BilibiliStorageProvider.BILIBILI_HISTORY_KEY) {
+          handleMessage = (event: MessageEvent<BilibiliStorageEvent>) => {
+            const data = getIframeMessageData(event, iframe)
+            if (data?.type === 'COLS_RES'
+              && data.key === BilibiliStorageProvider.BILIBILI_HISTORY_KEY
+              && typeof data.value === 'string') {
               cleanup()
-              resolve(e.data)
+              resolve({
+                type: 'COLS_RES',
+                id: typeof data.id === 'string' ? data.id : undefined,
+                key: data.key,
+                value: data.value,
+              })
             }
           }
           timer = window.setTimeout(() => {
@@ -116,12 +167,23 @@ class BilibiliStorageProvider {
           }, SEARCH_HISTORY_RESPONSE_TIMEOUT_MS)
 
           window.addEventListener('message', handleMessage)
-          iframe.contentWindow!.postMessage({ type: 'COLS_GET', key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY }, iframe!.src)
+          if (!postMessageToIframe(iframe, {
+            type: 'COLS_GET',
+            key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY,
+          })) {
+            cleanup()
+            resolve(undefined)
+          }
         })
       case 'COLS_CLR':
-        return iframe.contentWindow!.postMessage({ type: 'COLS_CLR', key: 'search_history' }, iframe.src)
+        postMessageToIframe(iframe, { type: 'COLS_CLR', key: 'search_history' })
+        return
       case 'COLS_SET':
-        return iframe.contentWindow!.postMessage({ type: 'COLS_SET', key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY, value }, iframe.src)
+        postMessageToIframe(iframe, {
+          type: 'COLS_SET',
+          key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY,
+          value,
+        })
     }
   }
 

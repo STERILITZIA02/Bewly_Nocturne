@@ -4,12 +4,13 @@ import { useI18n } from 'vue-i18n'
 import { settings } from '~/logic'
 import { getUserID } from '~/utils/main'
 
+import type { TopBarPopupKey } from '../../composables/useTopBarInteraction'
 import { useTopBarInteraction } from '../../composables/useTopBarInteraction'
 
 const { t } = useI18n()
 const { getTopBarItemHref, handleClickTopBarItem, shouldOpenConfiguredTopBarItem } = useTopBarInteraction()
 
-const list = computed((): { name: string, url: string, icon: string, bewlyKey?: string }[] => [
+const list = computed((): { name: string, url: string, icon: string, bewlyKey?: TopBarPopupKey }[] => [
   { name: t('topbar.notifications'), url: '//message.bilibili.com', icon: 'i-mingcute:notification-line' },
   { name: t('topbar.moments'), url: '//t.bilibili.com/', icon: 'i-tabler:windmill', bewlyKey: 'moments' },
   { name: t('topbar.favorites'), url: `//space.bilibili.com/${getUserID() ?? ''}/favlist`, icon: 'i-mingcute:star-line', bewlyKey: 'favorites' },

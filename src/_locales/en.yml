@@ -373,6 +373,33 @@ settings:
   group_moments_pinned_users: Pinned uploaders
   group_moments_pinned_users_desc: Manage uploaders pinned to the right side of the Moments bar by UID or name. The list is stored only on this device.
   moments_pinned_users: Pinned uploaders
+  moments_wanted_manager:
+    input_required: Enter an uploader UID or name
+    search_empty: No matching uploader was found. Try another name.
+    search_failed: Failed to search for uploaders. Try again later.
+    invalid_uid: Enter a valid uploader UID
+    pinned_limit: You can pin at most {count} uploaders
+    user_not_found: This uploader was not found
+    fetch_failed: Failed to load uploader information. Try again later.
+    placeholder: Enter an uploader UID or name
+    add: Add
+    search: Search
+    pinned:
+      already_in: This uploader is already pinned
+      need_follow: Follow {name} before pinning them
+      added: Pinned {name} to the Moments bar
+      removed: Unpinned {name}
+      remove_aria: Unpin {name}
+      remove_title: Unpin
+      empty: No uploaders are pinned. Pinned uploaders appear on the right side of the Moments bar.
+    wanted:
+      already_in: This uploader is already in the Watchlist
+      need_follow: Follow {name} before adding them to the Watchlist
+      added: Added {name} to the Watchlist
+      removed: Removed {name} from the Watchlist
+      remove_aria: Remove {name} from the Watchlist
+      remove_title: Remove from Watchlist
+      empty: No uploaders have been added. Add uploaders to filter them from the Watchlist on the Bewly Moments page.
   btn:
     authorize: Authorize
     revoke: Revoke
@@ -700,6 +727,7 @@ settings:
   filter_import_failed: 'Failed to import {type} filters: {message}'
   filter_import_invalid_format: Invalid file format
   filter_import_unknown_error: Unknown error
+  filter_import_result: 'Import complete: {imported} imported, {ignored} ignored'
   filter_by_title: Filter by title
   filter_by_title_desc: >-
     Filtered out the videos that contain the titles you set (case-insensitive).
@@ -755,6 +783,8 @@ settings:
 
     This operation cannot be reversed. Are you sure you want to reset your
     settings?
+  new_version_badge: New
+  development_build_badge: Development
   current_contributors: Bewly Nocturne Contributors (including BewlyBewly)
   contributors_image_failed: Contributor image failed to load
   enable_settings_sync: Allow syncing settings
@@ -883,11 +913,12 @@ settings:
   video_player_scroll_desc: >-
     When enabled, it will automatically scroll to the appropriate position when
     the default mode is widescreen and default.
-  exit_bewly_widescreen_loading: Exit widescreen mode
   enlarge_favorite_dialog: Enlarge favorite dialog
   enlarge_favorite_dialog_desc: When enabled, the favorite dialog on video pages will be displayed in a larger size for easier viewing and management.
   external_watch_later_button: External watch later button
   external_watch_later_button_desc: Show a standalone Watch later button in the video toolbar. It displays the current state and can add or remove the video.
+  show_bewly_widescreen_button: Show Bewly Widescreen button
+  show_bewly_widescreen_button_desc: Show a button in the player controls for entering Bewly Widescreen. Hiding it does not exit the active mode.
   show_vertical_video_zoom_button: Vertical video zoom button
   show_vertical_video_zoom_button_desc: Show zoom controls and the visible-area position control for vertical videos
   show_video_screenshot_button: Show player screenshot button
@@ -1062,7 +1093,13 @@ notifications:
     user_fallback: 'User {talkerId}'
     summary_unavailable: No message preview
     select_conversation: Select conversation with {name}
-    select_conversation_empty: Select a conversation to view messages
+    select_conversation_empty: Select a conversation to start chatting
+    select_conversation_hint: Messages stay in their own focused reading card
+    empty_tips:
+      emote: Insert Bilibili emotes from the Composer
+      image: Preview and send images without leaving the conversation
+      history: Scroll upward to load and read earlier messages
+      shortcut: Enter sends; Shift+Enter starts a new line
     fallback_aria: Original direct-message entry for {name}
     fallback_description: This conversation type currently needs to be viewed in original Bilibili direct messages
     session_kinds:
@@ -1081,6 +1118,7 @@ notifications:
     back_to_conversations: Back to conversations
     messages:
       timeline_aria: Direct-message history with {name}
+      self_label: You
       loading: Loading message history
       empty: No messages in this conversation
       load_older: Load earlier messages
@@ -1115,10 +1153,18 @@ notifications:
       picture_card_alt: Shared direct-message image
       video_views: '{count} views'
       image_summary: '[Image]'
+      select_emote: Choose emote
+      emote_picker: Direct-message emote picker
+      emote_packages: Emote package series
+      default_emotes: Default
+      user_emotes: My emotes
+      default_emotes_empty: Default emotes will appear after they are available in message data
+      user_emotes_empty: No user emote packages are available for this account
       select_image: Choose image
       selected_image_alt: Direct-message image ready to send
       image_size_kb: '{size} KB'
       remove_image: Remove image
+      image_ready: Ready to send
       image_preparing: Preparing image
       image_uploading: Uploading image
       image_upload_failed: Image upload failed
@@ -1319,6 +1365,8 @@ video_card:
     unfollow_user: Unfollow User
     block_user: Block User
     more_options: More options
+    scroll_to_top: Scroll to the top of the menu
+    scroll_to_bottom: Scroll to the bottom of the menu
   follow_user_confirm:
     title: Confirm Follow User
     message: Are you sure you want to follow {name}?
@@ -1484,7 +1532,30 @@ watch_later:
   play_video: Remove and open video page
   play_in_watch_later: Playlist
   remove_from_watch_later: Remove
+widescreen:
+  enter: Enter Bewly Widescreen
+  exit: Exit
+  exit_loading: Exit Widescreen mode
+  loading: Loading Widescreen mode…
+  comments: Comments
+  danmaku: Danmaku
+  playlist: Playlist
+  recommendations: Recommendations
+  collapse: Collapse
+  expand_more: Expand more
+  comments_loading: Loading comments
+  danmaku_loading: Loading danmaku
+  list_loading: Loading list
+  show_narrow_right: Show narrow right sidebar
+  show_narrow_left: Show narrow left sidebar
+  collapse_right: Collapse right sidebar
+  collapse_left: Collapse left sidebar
 search_bar:
+  input_label: Search
+  clear_keyword: Clear search query
+  submit: Search
+  suggestions_label: Search suggestions
+  search_options_label: Search options
   history_title: Search History
   hot_search_title: Hot Search
   clear_history: Clear search history

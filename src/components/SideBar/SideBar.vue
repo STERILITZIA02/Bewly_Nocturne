@@ -138,7 +138,6 @@ function toggleLayoutEditMode() {
         <Button
           v-layout-editable="'sidebar-theme-toggle'"
           class="ctrl-btn bew-shape-circle"
-          style="backdrop-filter: var(--bew-filter-glass-1);"
           :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
           center size="small" round
           @click="toggleDark"
@@ -162,7 +161,6 @@ function toggleLayoutEditMode() {
       <Tooltip :content="$t('dock.settings')" :placement="tooltipPlacement">
         <Button
           class="ctrl-btn group bew-shape-circle"
-          style="backdrop-filter: var(--bew-filter-glass-1);"
           :aria-label="$t('dock.settings')"
           center size="small" round
           @click="openSettings"
@@ -183,7 +181,6 @@ function toggleLayoutEditMode() {
         <Button
           class="ctrl-btn layout-edit-button bew-shape-circle"
           :class="{ active: isLayoutEditing }"
-          style="backdrop-filter: var(--bew-filter-glass-1);"
           data-layout-editor-control
           :aria-label="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
           :aria-pressed="isLayoutEditing"
@@ -207,6 +204,8 @@ function toggleLayoutEditMode() {
   --b-button-shadow: var(--bew-shadow-1);
   --b-button-shadow-hover: var(--bew-shadow-2);
   --b-button-shadow-active: var(--bew-shadow-1);
+
+  backdrop-filter: var(--bew-filter-glass-1);
 
   svg {
     width: var(--bew-floating-control-icon-size);

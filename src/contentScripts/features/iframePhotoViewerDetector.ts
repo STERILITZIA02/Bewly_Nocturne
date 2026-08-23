@@ -1,3 +1,4 @@
+import { postMessageToParent } from '~/utils/iframeMessage'
 import { runWhenIdle } from '~/utils/lazyLoad'
 
 let observer: MutationObserver | null = null
@@ -89,10 +90,10 @@ function checkPhotoViewerState() {
     isPhotoViewerOpen = isOpen
 
     // 通知父页面 PhotoSwipe 的状态
-    window.parent.postMessage({
+    postMessageToParent({
       type: 'IFRAME_PHOTO_VIEWER_STATE',
       isOpen,
-    }, '*')
+    })
   }
 }
 

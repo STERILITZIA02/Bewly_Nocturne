@@ -4,8 +4,9 @@ import { settings } from '~/logic'
 import type { CustomPlayOrderContext, RandomPlayOrder } from '~/logic/storage'
 import { debugLog } from '~/utils/debug'
 import { i18n } from '~/utils/i18n'
+import { RANDOM_PLAY_UI_RETRY_MAX, shouldRetryRandomPlayVideo } from '~/utils/randomPlayRetry'
 
-import { applyAutoPlayByVideoType, detectVideoType, disableNativeEndPlaybackBehavior, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
+import { applyAutoPlayByVideoType, detectVideoType, disableNativeEndPlaybackBehavior, getVideoElement, setCustomEndPlaybackHandlerActive, supportsCustomPlaybackForVideoType, VideoType } from './player'
 
 // 随机播放状态管理
 let isRandomPlayEnabled = false
@@ -20,7 +21,12 @@ let pageObserver: MutationObserver | null = null
 let pageObserverTarget: Node | null = null
 let stopRouteChangeListener: (() => void) | null = null
 let videoListenerRetryTimer: number | null = null
+let videoListenerProcessingTimer: number | null = null
+let videoListenerRetryCount = 0
+let videoListenerGeneration = 0
 let initializationTimer: number | null = null
+let initializationRetryCount = 0
+let randomPlayLifecycleGeneration = 0
 let routeInitTimer: number | null = null
 let domChangeTimer: number | null = null
 let recreateTimer: number | null = null
@@ -306,8 +312,6 @@ export function getCurrentEpisodeIndex(episodes: HTMLElement[]): number {
 
 // 获取随机下一集
 export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: number): number {
-  debugLog('[Bewly Nocturne Random Play] getRandomNextEpisode called, currentIndex:', currentIndex, 'visitedEpisodes:', Array.from(visitedEpisodes))
-
   if (episodes.length <= 1)
     return currentIndex
 
@@ -318,7 +322,6 @@ export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: numb
 
   // 如果所有视频都已访问，重置访问记录
   if (visitedEpisodes.size >= episodes.length) {
-    debugLog('[Bewly Nocturne Random Play] All episodes visited, resetting')
     visitedEpisodes.clear()
     if (currentKey)
       visitedEpisodes.add(currentKey)
@@ -329,26 +332,19 @@ export function getRandomNextEpisode(episodes: HTMLElement[], currentIndex: numb
     .map((_, index) => index)
     .filter(index => !visitedEpisodes.has(episodeKeys[index]))
 
-  debugLog('[Bewly Nocturne Random Play] Unvisited indices:', unvisitedIndices)
-
   if (unvisitedIndices.length === 0) {
-    debugLog('[Bewly Nocturne Random Play] No unvisited indices, selecting random excluding current')
     // 如果没有未访问的视频，随机选择一个不是当前视频的
     const availableIndices = episodes
       .map((_, index) => index)
       .filter(index => index !== currentIndex)
 
-    if (availableIndices.length === 0) {
-      debugLog('[Bewly Nocturne Random Play] No available indices')
+    if (availableIndices.length === 0)
       return currentIndex
-    }
     const selected = availableIndices[Math.floor(Math.random() * availableIndices.length)]
-    debugLog('[Bewly Nocturne Random Play] Selected from available:', selected)
     return selected
   }
 
   const selected = unvisitedIndices[Math.floor(Math.random() * unvisitedIndices.length)]
-  debugLog('[Bewly Nocturne Random Play] Selected from unvisited:', selected)
   return selected
 }
 
@@ -375,7 +371,6 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
 
   const targetEpisode = episodes[targetIndex]
   const targetKey = getEpisodeEntries(episodes)[targetIndex]?.key
-  debugLog('[Bewly Nocturne Random Play] Target episode element:', targetEpisode)
 
   // 尝试多种方式找到可点击的元素
   let clickableElement: HTMLElement | null = null
@@ -384,7 +379,6 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   const link = targetEpisode.matches('a[href]')
     ? targetEpisode as HTMLAnchorElement
     : targetEpisode.querySelector<HTMLAnchorElement>('a[href]')
-  debugLog('[Bewly Nocturne Random Play] Found link:', link, 'href:', link?.href)
 
   if (link && link.href) {
     clickableElement = link
@@ -392,7 +386,6 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
   else {
     // 2. 查找 .simple-base-item 元素（B站新版播放列表项）
     const simpleBaseItem = targetEpisode.querySelector('.simple-base-item') as HTMLElement
-    debugLog('[Bewly Nocturne Random Play] Found .simple-base-item:', simpleBaseItem)
 
     if (simpleBaseItem) {
       clickableElement = simpleBaseItem
@@ -415,27 +408,21 @@ export function jumpToEpisode(episodes: HTMLElement[], targetIndex: number): voi
     return
   }
 
-  debugLog('[Bewly Nocturne Random Play] Clickable element:', clickableElement)
-
   // 使用更智能的点击策略
   const performClick = () => {
     try {
-      debugLog('[Bewly Nocturne Random Play] Attempting to click element:', targetIndex, clickableElement)
-
       // 标记为已访问（在点击前标记，防止点击失败后重复尝试）
       if (targetKey)
         visitedEpisodes.add(targetKey)
 
       // 如果是链接，尝试点击
       if (clickableElement instanceof HTMLAnchorElement && clickableElement.href) {
-        debugLog('[Bewly Nocturne Random Play] Clicking anchor element, href:', clickableElement.href)
         clickableElement.click()
         return
       }
 
       // 对于没有链接的元素（如 video-pod__item），只触发一次点击。
       // 重复派发 click 会让 B 站 Vue 路由执行两次卸载流程。
-      debugLog('[Bewly Nocturne Random Play] Clicking episode element')
       clickableElement!.click()
     }
     catch (error) {
@@ -809,39 +796,64 @@ export function createRandomPlayUI(): HTMLElement | null {
   return randomPlayContainer
 }
 
+function invalidateVideoListenerRetry() {
+  videoListenerGeneration++
+  videoListenerRetryCount = 0
+  if (videoListenerRetryTimer !== null)
+    clearTimeout(videoListenerRetryTimer)
+  videoListenerRetryTimer = null
+}
+
+function detachRandomPlayVideoListeners() {
+  if (listenerVideo && originalEndedListener)
+    listenerVideo.removeEventListener('ended', originalEndedListener, true)
+  if (listenerVideo && originalPauseListener)
+    listenerVideo.removeEventListener('pause', originalPauseListener)
+  originalEndedListener = null
+  originalPauseListener = null
+  listenerVideo?.removeAttribute('data-bewly-random-play-listener')
+  listenerVideo = null
+  if (videoListenerProcessingTimer !== null)
+    clearTimeout(videoListenerProcessingTimer)
+  videoListenerProcessingTimer = null
+}
+
+function stopRandomPlayVideoMonitoring() {
+  detachRandomPlayVideoListeners()
+  stopVideoDomObserver?.()
+  stopVideoDomObserver = null
+}
+
 // 启用随机播放
 export function enableRandomPlay(): void {
+  invalidateVideoListenerRetry()
+  const generation = videoListenerGeneration
+
   // 使用更可靠的方式监听视频结束
   const setupVideoListener = () => {
-    if (!isRandomPlayEnabled)
+    if (!isRandomPlayEnabled || generation !== videoListenerGeneration)
       return
 
-    const video = document.querySelector<HTMLVideoElement>('video')
+    const video = getVideoElement()
     if (!video) {
-      // 如果找不到视频，稍后重试
-      if (videoListenerRetryTimer === null) {
-        videoListenerRetryTimer = window.setTimeout(() => {
-          videoListenerRetryTimer = null
+      if (!shouldRetryRandomPlayVideo(videoListenerRetryCount) || videoListenerRetryTimer !== null)
+        return
+      videoListenerRetryCount++
+      videoListenerRetryTimer = window.setTimeout(() => {
+        videoListenerRetryTimer = null
+        if (generation === videoListenerGeneration)
           setupVideoListener()
-        }, 1000)
-      }
+      }, 1000)
       return
     }
+    videoListenerRetryCount = 0
     if (videoListenerRetryTimer !== null) {
       clearTimeout(videoListenerRetryTimer)
       videoListenerRetryTimer = null
     }
 
     // 移除之前的监听器
-    if (listenerVideo && originalEndedListener) {
-      listenerVideo.removeEventListener('ended', originalEndedListener, true)
-      originalEndedListener = null
-    }
-    if (listenerVideo && originalPauseListener) {
-      listenerVideo.removeEventListener('pause', originalPauseListener)
-      originalPauseListener = null
-    }
-    listenerVideo?.removeAttribute('data-bewly-random-play-listener')
+    detachRandomPlayVideoListeners()
     listenerVideo = video
 
     // 标记视频元素，防止重复添加监听器
@@ -852,17 +864,16 @@ export function enableRandomPlay(): void {
 
     // 创建新的随机播放监听器
     const randomPlayListener = () => {
-      debugLog('[Bewly Nocturne Random Play] Video ended, random play listener triggered')
+      if (generation !== videoListenerGeneration || !isRandomPlayEnabled)
+        return
 
       // 防止重复触发（ended 和 pause 事件可能都会触发）
       if (isProcessing) {
-        debugLog('[Bewly Nocturne Random Play] Already processing, skipping')
         return
       }
 
       // 关键：检查随机播放是否仍然启用
       if (!isRandomPlayEnabled) {
-        debugLog('[Bewly Nocturne Random Play] Random play disabled, skipping')
         return
       }
 
@@ -870,28 +881,23 @@ export function enableRandomPlay(): void {
 
       // 在捕获阶段立即接管切集，避免被 B 站原生连播按 DOM 顺序抢先跳转。
       const episodes = getPlaybackEpisodeEntries().map(entry => entry.element)
-      debugLog('[Bewly Nocturne Random Play] Found episodes:', episodes.length)
 
       if (episodes.length <= 1) {
-        debugLog('[Bewly Nocturne Random Play] Not enough episodes')
         isProcessing = false
         return
       }
 
       const currentIndex = getCurrentEpisodeIndex(episodes)
-      debugLog('[Bewly Nocturne Random Play] Current episode index:', currentIndex)
 
       const playOrder = getActivePlayOrder()
       const nextIndex = getNextEpisodeIndex(episodes, currentIndex, playOrder)
-      debugLog('[Bewly Nocturne Random Play] Next episode index:', nextIndex, 'order:', playOrder)
 
-      if (nextIndex !== currentIndex) {
+      if (nextIndex !== currentIndex)
         jumpToEpisode(episodes, nextIndex)
-      }
-      else {
-        debugLog('[Bewly Nocturne Random Play] Next index same as current, not jumping')
-      }
-      setTimeout(() => {
+      if (videoListenerProcessingTimer !== null)
+        clearTimeout(videoListenerProcessingTimer)
+      videoListenerProcessingTimer = window.setTimeout(() => {
+        videoListenerProcessingTimer = null
         isProcessing = false
       }, 1500)
     }
@@ -917,8 +923,11 @@ export function enableRandomPlay(): void {
   // 监听DOM变化，如果视频元素被替换，重新设置监听器
   stopVideoDomObserver?.()
   stopVideoDomObserver = observePlayerDom(() => {
-    const video = document.querySelector('video')
+    if (generation !== videoListenerGeneration || !isRandomPlayEnabled)
+      return
+    const video = getVideoElement()
     if (video && !video.hasAttribute('data-bewly-random-play-listener')) {
+      videoListenerRetryCount = 0
       setupVideoListener()
     }
   })
@@ -926,22 +935,8 @@ export function enableRandomPlay(): void {
 
 // 禁用随机播放
 export function disableRandomPlay(): void {
-  if (videoListenerRetryTimer !== null) {
-    clearTimeout(videoListenerRetryTimer)
-    videoListenerRetryTimer = null
-  }
-  if (listenerVideo && originalEndedListener)
-    listenerVideo.removeEventListener('ended', originalEndedListener, true)
-  if (listenerVideo && originalPauseListener)
-    listenerVideo.removeEventListener('pause', originalPauseListener)
-  originalEndedListener = null
-  originalPauseListener = null
-
-  // 移除标记，以便下次可以重新添加
-  listenerVideo?.removeAttribute('data-bewly-random-play-listener')
-  listenerVideo = null
-  stopVideoDomObserver?.()
-  stopVideoDomObserver = null
+  invalidateVideoListenerRetry()
+  stopRandomPlayVideoMonitoring()
 
   // 清空访问记录
   visitedEpisodes.clear()
@@ -1004,13 +999,25 @@ export function applyRandomPlayActivationSettings(): void {
 // 重置初始化状态
 export function resetRandomPlayInitialization(): void {
   stopNativePlaylistEditing()
+  randomPlayLifecycleGeneration++
+  initializationRetryCount = 0
+  clearRandomPlayLifecycleTimers()
+  invalidateVideoListenerRetry()
+  stopRandomPlayVideoMonitoring()
   isRandomPlayInitialized = false
   // 注意：这里不清除isRandomPlayEnabled，保持用户的选择
   // 也不清除userManuallySetRandomPlay标志，保持用户手动设置的状态
   visitedEpisodes.clear()
+  customEpisodeOrder = []
+  clearCustomEpisodeVisualOrder()
+  playlistEditorButton = null
+  document.querySelector('.random-play')?.remove()
 }
 
 export function destroyRandomPlay(): void {
+  randomPlayLifecycleGeneration++
+  initializationRetryCount = 0
+  invalidateVideoListenerRetry()
   stopRouteChangeListener?.()
   stopRouteChangeListener = null
   isPageObserverInitialized = false
@@ -1105,13 +1112,19 @@ export function syncRandomPlayUI(): void {
 
 // 在视频页面初始化随机播放
 export function initRandomPlayOnVideoPage(): void {
-  if (!isCustomPlayPage() || isRandomPlayInitialized)
+  if (!isCustomPlayPage() || isRandomPlayInitialized || initializationTimer !== null)
     return
 
+  const generation = randomPlayLifecycleGeneration
   // 等待页面元素加载
   const checkAndInit = () => {
+    initializationTimer = null
+    if (generation !== randomPlayLifecycleGeneration || !isCustomPlayPage() || isRandomPlayInitialized)
+      return
+
     const autoPlayContainer = findPlaylistAutoPlayContainer()
     if (autoPlayContainer) {
+      initializationRetryCount = 0
       // 只要启用了随机播放功能就创建UI（基于扩展设置）
       if (settings.value.enableRandomPlay) {
         createRandomPlayUI()
@@ -1120,6 +1133,8 @@ export function initRandomPlayOnVideoPage(): void {
         if (userManuallySetRandomPlay) {
           // 保持用户手动设置的状态，无需重新设置
           syncRandomPlayUI()
+          if (isRandomPlayEnabled)
+            enableRandomPlay()
         }
         else {
           // 随机播放选择自动启用时由数量阈值决定；其余情况使用默认开关。
@@ -1128,20 +1143,17 @@ export function initRandomPlayOnVideoPage(): void {
 
         isRandomPlayInitialized = true
       }
+      return
     }
-    else {
-      // 如果元素还没有加载，继续等待
-      initializationTimer = window.setTimeout(checkAndInit, 100)
-    }
+
+    if (initializationRetryCount >= RANDOM_PLAY_UI_RETRY_MAX)
+      return
+    initializationRetryCount++
+    initializationTimer = window.setTimeout(checkAndInit, 100)
   }
 
   // 延迟初始化，确保页面完全加载
-  if (initializationTimer !== null)
-    clearTimeout(initializationTimer)
-  initializationTimer = window.setTimeout(() => {
-    initializationTimer = null
-    checkAndInit()
-  }, 500)
+  initializationTimer = window.setTimeout(checkAndInit, 500)
 }
 
 // 监听页面变化
@@ -1242,9 +1254,9 @@ export function observeRandomPlayPageChanges(): void {
     })
   }
 
-  let lastPath = `${location.origin}${location.pathname}`
+  let lastPath = `${location.origin}${location.pathname}${location.search}`
   stopRouteChangeListener = onRouteChange((route) => {
-    const nextPath = `${location.origin}${route.pathname}`
+    const nextPath = `${location.origin}${route.pathname}${route.search}`
     if (nextPath === lastPath)
       return
 

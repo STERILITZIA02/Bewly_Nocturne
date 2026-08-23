@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
@@ -14,11 +15,40 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'update:modelValue', view: NotificationView): void
+  (event: 'widthChange', width: number): void
 }>()
 
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
+const navigationRef = ref<HTMLElement | null>(null)
+const insideRef = ref<HTMLElement | null>(null)
 const indicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>(null)
+let lastEmittedWidth = 0
+
+function measureNavigationWidth() {
+  const navigation = navigationRef.value
+  const inside = insideRef.value
+  if (!navigation || !inside)
+    return
+
+  const style = getComputedStyle(navigation)
+  const horizontalChrome = Number.parseFloat(style.paddingLeft)
+    + Number.parseFloat(style.paddingRight)
+    + Number.parseFloat(style.borderLeftWidth)
+    + Number.parseFloat(style.borderRightWidth)
+  const width = Math.ceil(inside.getBoundingClientRect().width + horizontalChrome)
+  if (!Number.isFinite(width) || width <= 0 || width === lastEmittedWidth)
+    return
+
+  lastEmittedWidth = width
+  emit('widthChange', width)
+}
+
+useResizeObserver(insideRef, measureNavigationWidth)
+
+onMounted(() => {
+  void nextTick(measureNavigationWidth)
+})
 
 watch(() => props.modelValue, () => {
   void indicatorRef.value?.updateIndicator(true)
@@ -44,12 +74,13 @@ function unreadCount(section: NotificationSectionDefinition): number {
 
 <template>
   <nav
+    ref="navigationRef"
     class="notifications-navigation bew-segment-control bew-segment-control--surface"
     :class="{ 'bew-segment-control--solid': settings.disableFrostedGlass }"
     :aria-label="t('notifications.navigation_aria')"
   >
     <div class="notifications-navigation__scroll">
-      <div class="notifications-navigation__inside">
+      <div ref="insideRef" class="notifications-navigation__inside">
         <LiquidSegmentIndicator ref="indicatorRef" :active-key="modelValue" />
         <button
           v-for="section in NOTIFICATION_SECTIONS"
@@ -79,7 +110,7 @@ function unreadCount(section: NotificationSectionDefinition): number {
 <style scoped lang="scss">
 .notifications-navigation {
   display: block;
-  width: fit-content;
+  width: min(100%, var(--notifications-conversation-list-width));
   max-width: 100%;
   min-width: 0;
   justify-self: start;

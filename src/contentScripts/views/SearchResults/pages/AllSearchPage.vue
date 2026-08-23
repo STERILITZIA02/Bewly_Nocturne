@@ -15,6 +15,7 @@ import { settings } from '~/logic'
 import api from '~/utils/api'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
 import { getCSRF } from '~/utils/main'
+import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 
 import Pagination from '../components/Pagination.vue'
 import EsportsMatchCard from '../components/renderers/EsportsMatchCard.vue'
@@ -646,7 +647,12 @@ defineExpose({
                 </div>
               </a>
               <div class="media-ft-highlight-info">
-                <div class="media-ft-highlight-title" text="lg $bew-text-1" font-medium v-html="item.title" />
+                <div
+                  class="media-ft-highlight-title"
+                  text="lg $bew-text-1"
+                  font-medium
+                  v-html="sanitizeSearchHighlight(item.title)"
+                />
                 <div class="media-ft-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
                   <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-bold>
                     {{ t('search.media.score', { score: item.media_score.score.toFixed(1) }) }}

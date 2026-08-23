@@ -18,7 +18,7 @@ import { useForYouStore } from '~/stores/forYouStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { TVAppKey } from '~/utils/authProvider'
+import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { debugLog } from '~/utils/debug'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
@@ -135,29 +135,11 @@ function startRecommendRequestLog(
     requestType,
     startedAt: performance.now(),
   }
-  debugLog(`${HOME_LOAD_LOG_PREFIX} 插件开始请求推荐接口`, {
-    time: new Date().toLocaleString(),
-    requestId: context.id,
-    mode,
-    requestType,
-  })
   return context
 }
 
 function getRequestDuration(context: RecommendRequestLogContext): number {
   return Math.round((performance.now() - context.startedAt) * 100) / 100
-}
-
-function logRecommendRequestSuccess(
-  context: RecommendRequestLogContext,
-) {
-  debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求成功`, {
-    time: new Date().toLocaleString(),
-    requestId: context.id,
-    mode: context.mode,
-    requestType: context.requestType,
-    durationMs: getRequestDuration(context),
-  })
 }
 
 function logRecommendRequestFailure(
@@ -207,17 +189,6 @@ const hasInitializedData = ref<boolean>(false)
 
 function getCurrentAccountId(): AccountId {
   return parseDedeUserID(document.cookie) ?? null
-}
-
-function logHomeLoadComplete(source: 'api' | 'cache', startedAt: number) {
-  debugLog(`${HOME_LOAD_LOG_PREFIX} 加载完成`, {
-    time: new Date().toLocaleString(),
-    source,
-    mode: settings.value.recommendationMode,
-    failed: requestFailed.value,
-    needToLogin: needToLoginFirst.value,
-    durationMs: Math.round((performance.now() - startedAt) * 100) / 100,
-  })
 }
 
 // 页面可见性状态
@@ -377,7 +348,6 @@ disposers.push(detachVisibilityListener)
 
 // 添加页面可见性监听器
 onMounted(() => {
-  const loadStartedAt = performance.now()
   isComponentActive = true
   attachVisibilityListener()
   loadedAccountId = getCurrentAccountId()
@@ -401,8 +371,6 @@ onMounted(() => {
     rebuildShowlistGroupsFromList(videoList.value)
     hasInitializedData.value = true
     isLoading.value = false
-
-    nextTick(() => logHomeLoadComplete('cache', loadStartedAt))
 
     // 确保撤销按钮不显示（因为这是状态恢复，不是刷新操作）
     hasBackState.value = false
@@ -814,7 +782,6 @@ async function initData() {
     return
   }
 
-  const loadStartedAt = performance.now()
   requestVersion++
   const version = requestVersion
   const recommendationMode = settings.value.recommendationMode
@@ -841,7 +808,6 @@ async function initData() {
     if (isCurrentWebRequest(version, recommendationMode, accountId)) {
       hasInitializedData.value = true
       await nextTick()
-      logHomeLoadComplete('api', loadStartedAt)
     }
   }
 }
@@ -1336,7 +1302,6 @@ async function getRecommendVideos(version = requestVersion, requestType: WebReco
         // 没有加载到新内容，增加空加载计数器
         consecutiveEmptyLoads.value++
       }
-      logRecommendRequestSuccess(requestLog)
       canFillViewport = true
     }
     else if (response.code === 62011) {
@@ -1403,8 +1368,8 @@ async function getAppRecommendVideos(
     return
   }
 
-  // 检查是否有有效的 access token
-  if (!appAuthTokens.value.accessToken) {
+  // 仅在 APP 推荐真正发起请求前按需刷新 access token。
+  if (!await ensureFreshAppAccessToken()) {
     debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, {
       time: new Date().toLocaleString(),
       mode: recommendationMode,
@@ -1415,6 +1380,8 @@ async function getAppRecommendVideos(
     recommendationDataState.value = 'idle'
     return
   }
+  if (!isCurrentWebRequest(version, recommendationMode, accountId))
+    return
 
   const batchesToLoad = APP_LOAD_BATCHES.value
   const beforeLoadCount = appVideoList.value.length
@@ -1434,13 +1401,26 @@ async function getAppRecommendVideos(
 
       let response: AppForYouResult
       try {
-        response = await api.video.getAppRecommendVideos({
-          access_key: appAuthTokens.value.accessToken,
-          s_locale: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
-          c_locate: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
-          appkey: TVAppKey.appkey,
-          idx: lastIdx,
-        })
+        const requestAppRecommendations = () => {
+          const params = {
+            access_key: appAuthTokens.value.accessToken,
+            s_locale: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
+            c_locate: settings.value.language === LanguageType.Mandarin_TW || settings.value.language === LanguageType.Cantonese ? 'zh-Hant_TW' : 'zh-Hans_CN',
+            appkey: TVAppKey.appkey,
+            idx: lastIdx,
+            ts: Math.floor(Date.now() / 1000).toString(),
+          }
+          return api.video.getAppRecommendVideos({
+            ...params,
+            sign: getTvSign(params),
+          })
+        }
+        response = await requestAppRecommendations()
+        if (isAppAccessTokenInvalidResponse(response)
+          && await refreshInvalidAppAccessToken()
+          && isCurrentWebRequest(version, recommendationMode, accountId)) {
+          response = await requestAppRecommendations()
+        }
       }
       catch (error) {
         if (!isExtensionContextInvalidatedError(error))
@@ -1511,7 +1491,6 @@ async function getAppRecommendVideos(
           filterKeptCount: filteredKeptCount,
           filtersActive: Boolean(activeAppFilter),
         })
-        logRecommendRequestSuccess(requestLog)
       }
       else if (response.code === 62011) {
         logRecommendRequestFailure(requestLog, {

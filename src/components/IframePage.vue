@@ -5,6 +5,7 @@ import { IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/glob
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
+import { markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 
 const props = defineProps<{
   url: string
@@ -109,10 +110,10 @@ function syncIframeTopBarVisibility(useOriginalBilibiliTopBar: boolean) {
   }
 
   try {
-    iframeWindow.postMessage({
+    postMessageToIframe(iframeRef.value, {
       type: IFRAME_TOP_BAR_CHANGE,
       useOriginalBilibiliTopBar,
-    }, '*')
+    })
   }
   catch (error) {
     console.warn('Failed to send top bar change message to iframe:', error)
@@ -122,11 +123,11 @@ function syncIframeTopBarVisibility(useOriginalBilibiliTopBar: boolean) {
 watch([isDark, isOledDark], ([newValue, newOledValue]) => {
   if (iframeRef.value?.contentWindow) {
     try {
-      iframeRef.value.contentWindow.postMessage({
+      postMessageToIframe(iframeRef.value, {
         type: IFRAME_DARK_MODE_CHANGE,
         isDark: newValue,
         isOledDark: newOledValue,
-      }, '*')
+      })
     }
     catch (error) {
       console.warn('Failed to send dark mode change message to iframe:', error)
@@ -143,12 +144,12 @@ watch(() => settingsStore.getEffectiveTopBarSource(), (source) => {
 watch(() => settings.value.darkModeBaseColor, (newColor) => {
   if (iframeRef.value?.contentWindow && isDark.value) {
     try {
-      iframeRef.value.contentWindow.postMessage({
+      postMessageToIframe(iframeRef.value, {
         type: IFRAME_DARK_MODE_CHANGE,
         isDark: isDark.value,
         isOledDark: isOledDark.value,
         darkModeBaseColor: newColor,
-      }, '*')
+      })
     }
     catch (error) {
       console.warn('Failed to send dark mode base color change message to iframe:', error)
@@ -183,6 +184,7 @@ function handleIframeLoad(event: Event) {
     return
   }
 
+  markIframeReadyForMessaging(iframe)
   // 清除loading状态
   if (showLoadingTimeout.value !== null) {
     clearTimeout(showLoadingTimeout.value)
@@ -206,12 +208,12 @@ function handleIframeLoad(event: Event) {
       if (generation !== iframeGeneration || iframeWindow !== iframeRef.value?.contentWindow)
         return
       try {
-        iframeWindow.postMessage({
+        postMessageToIframe(iframeRef.value, {
           type: IFRAME_DARK_MODE_CHANGE,
           isDark: isDark.value,
           isOledDark: isOledDark.value,
           darkModeBaseColor: settings.value.darkModeBaseColor,
-        }, '*')
+        })
         syncIframeTopBarVisibility(shouldUseOriginalBilibiliTopBar())
       }
       catch (error) {

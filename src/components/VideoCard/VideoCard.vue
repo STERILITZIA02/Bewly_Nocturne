@@ -344,6 +344,11 @@ watchEffect(() => {
   }
 })
 
+function closeVideoOptionsAndRestoreFocus() {
+  logic.showVideoOptions.value = false
+  void nextTick(() => logic.moreBtnRef.value?.focus())
+}
+
 provide('getVideoType', () => props.type!)
 </script>
 
@@ -450,7 +455,7 @@ provide('getVideoType', () => props.type!)
         }"
         :context-menu-styles="logic.videoOptionsFloatingStyles.value"
         :is-following-page="props.isFollowingPage"
-        @close="logic.showVideoOptions.value = false"
+        @close="closeVideoOptionsAndRestoreFocus"
         @removed="logic.handleRemoved"
       />
     </Teleport>

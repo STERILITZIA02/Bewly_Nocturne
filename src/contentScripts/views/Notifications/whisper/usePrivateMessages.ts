@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { reactive, watch } from 'vue'
+import { reactive, ref, watch } from 'vue'
 
 import type {
   PrivateMessageApiResponse,
@@ -12,9 +12,15 @@ import {
   comparePrivateMessageSeqno,
   getLatestPrivateMessageSeqno,
   getOldestPrivateMessageSeqno,
+  hydratePrivateMessageEmotes,
   mergePrivateMessages,
   transformPrivateMessages,
 } from './privateMessage'
+import type { PrivateEmotePackage } from './privateMessageRenderers'
+import {
+  collectPrivateEmotePackages,
+  mergePrivateEmotePackages,
+} from './privateMessageRenderers'
 
 interface FetchPrivateMessagesOptions {
   endSeqno?: string
@@ -78,6 +84,8 @@ export interface PrivateAckEligibility {
 
 export interface PrivateMessagesController {
   states: Map<string, PrivateConversationState>
+  emotePackages: Ref<PrivateEmotePackage[]>
+  lifecycleEpoch: Ref<number>
   getState: (talkerId: string) => PrivateConversationState
   loadInitial: (talkerId: string, lastAckSeqno?: string) => Promise<void>
   loadOlder: (talkerId: string) => Promise<void>
@@ -189,6 +197,8 @@ export function usePrivateMessages(
   dependencies: PrivateMessagesDependencies,
 ): PrivateMessagesController {
   const states = reactive(new Map<string, PrivateConversationState>())
+  const emotePackages = ref<PrivateEmotePackage[]>([])
+  const lifecycleEpoch = ref(0)
   const firstPageRequests = new Map<string, Promise<void>>()
   const olderRequests = new Map<string, Promise<void>>()
   const ackRequests = new Map<string, Promise<boolean>>()
@@ -292,6 +302,13 @@ export function usePrivateMessages(
       && states.get(state.talkerId) === state
   }
 
+  function ingestEmotePackages(eInfos: unknown[]) {
+    emotePackages.value = mergePrivateEmotePackages(
+      emotePackages.value,
+      collectPrivateEmotePackages(eInfos, currentMid.value),
+    )
+  }
+
   function updateBoundaries(state: PrivateConversationState) {
     state.oldestSeqno = getOldestPrivateMessageSeqno(state.items)
     state.newestSeqno = getLatestPrivateMessageSeqno(state.items)
@@ -350,6 +367,7 @@ export function usePrivateMessages(
         if (!isCurrentRequest(mid, requestAccountGeneration, requestLifecycleGeneration, state, conversationGeneration))
           return
 
+        ingestEmotePackages(data.e_infos)
         const incoming = transformPrivateMessages(data.messages, data.e_infos, mid)
         const previousKeys = new Set(state.items.map(item => item.msgKey))
         const hasNewItems = incoming.some(item => !previousKeys.has(item.msgKey))
@@ -374,7 +392,10 @@ export function usePrivateMessages(
           if (data.max_seqno)
             state.serverMaxSeqno = data.max_seqno
         }
-        state.items = trimPrivateConversationMessages(mergedItems, maxMessagesPerConversation())
+        state.items = trimPrivateConversationMessages(
+          hydratePrivateMessageEmotes(mergedItems, emotePackages.value),
+          maxMessagesPerConversation(),
+        )
         state.loaded = true
         state.loadedAt = now()
         state.lastAccessedAt = state.loadedAt
@@ -462,6 +483,7 @@ export function usePrivateMessages(
         if (!isCurrentRequest(mid, requestAccountGeneration, requestLifecycleGeneration, state, conversationGeneration))
           return
 
+        ingestEmotePackages(data.e_infos)
         const incoming = transformPrivateMessages(data.messages, data.e_infos, mid)
         const madeProgress = hasPrivateMessagePageProgress(endSeqno, previousKeys, incoming)
         const nextHistoryBoundary = getOldestPrivateMessageSeqno(incoming)
@@ -472,7 +494,10 @@ export function usePrivateMessages(
         if (nextHistoryBoundary && comparePrivateMessageSeqno(nextHistoryBoundary, endSeqno) < 0)
           state.historyBoundarySeqno = nextHistoryBoundary
         state.items = trimPrivateConversationMessages(
-          mergePrivateMessages(state.items, incoming),
+          hydratePrivateMessageEmotes(
+            mergePrivateMessages(state.items, incoming),
+            emotePackages.value,
+          ),
           maxMessagesPerConversation(),
         )
         updateBoundaries(state)
@@ -635,6 +660,7 @@ export function usePrivateMessages(
 
   function invalidatePendingRequests() {
     lifecycleGeneration++
+    lifecycleEpoch.value++
     for (const state of states.values()) {
       state.loadingInitial = false
       state.loadingOlder = false
@@ -645,9 +671,11 @@ export function usePrivateMessages(
   function release() {
     accountGeneration++
     lifecycleGeneration++
+    lifecycleEpoch.value++
     for (const state of states.values())
       invalidateState(state)
     states.clear()
+    emotePackages.value = []
     firstPageRequests.clear()
     olderRequests.clear()
     ackRequests.clear()
@@ -666,6 +694,8 @@ export function usePrivateMessages(
 
   return {
     states,
+    emotePackages,
+    lifecycleEpoch,
     getState,
     loadInitial,
     loadOlder,

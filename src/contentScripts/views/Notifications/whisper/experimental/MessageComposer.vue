@@ -1,20 +1,23 @@
 <script setup lang="ts">
-/**
- * EXPERIMENTAL: text send is available only through the explicit DEV test UI; image writes remain unexposed.
- */
+import { onClickOutside } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import PrivateEmotePicker from '../PrivateEmotePicker.vue'
+import type { PrivateEmote, PrivateEmotePackage } from '../privateMessageRenderers'
+import { insertPrivateEmoteToken } from '../privateMessageRenderers'
 import type { PrivateImageDraftState } from './usePrivateMessageWrites'
 
 const props = defineProps<{
   modelValue: string
   sending: boolean
   imageDraft: PrivateImageDraftState | null
+  emotePackages: PrivateEmotePackage[]
   enableImage?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'submit'): void
+  (event: 'submitImage', localId: string): void
   (event: 'update:modelValue', value: string): void
   (event: 'selectImage', file: File): void
   (event: 'removeImage', localId: string): void
@@ -24,8 +27,14 @@ const emit = defineEmits<{
 const { locale, t } = useI18n()
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const emoteControlRef = ref<HTMLElement | null>(null)
 const isComposing = ref(false)
-const canSend = computed(() => !props.sending && !props.imageDraft && Boolean(props.modelValue.trim()))
+const emotePickerOpen = ref(false)
+const canSendText = computed(() => !props.sending && Boolean(props.modelValue.trim()))
+const canSendImage = computed(() => (
+  !props.sending && props.imageDraft?.status === 'ready'
+))
+const canSubmit = computed(() => canSendImage.value || canSendText.value)
 const canSelectImage = computed(() => props.enableImage && !props.sending && !props.imageDraft)
 const imageSize = computed(() => {
   if (!props.imageDraft)
@@ -45,6 +54,8 @@ const imageStatus = computed(() => {
     return t('notifications.whisper.messages.image_send_failed')
   if (draft.failureKind === 'reconcile-failed')
     return t('notifications.whisper.messages.image_reconcile_failed')
+  if (draft.status === 'ready')
+    return t('notifications.whisper.messages.image_ready')
   if (draft.status === 'preparing')
     return t('notifications.whisper.messages.image_preparing')
   if (draft.status === 'uploading')
@@ -58,20 +69,29 @@ function updateValue(event: Event) {
   emit('update:modelValue', (event.target as HTMLTextAreaElement).value)
 }
 
-function submit() {
-  if (canSend.value)
+function submitText() {
+  if (canSendText.value)
     emit('submit')
+}
+
+function submitCurrent() {
+  const draft = props.imageDraft
+  if (draft?.status === 'ready' && canSendImage.value) {
+    emit('submitImage', draft.localId)
+    return
+  }
+  submitText()
 }
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing || isComposing.value)
     return
   event.preventDefault()
-  submit()
+  submitCurrent()
 }
 
 function selectImage(file: File | undefined) {
-  if (file && canSelectImage.value && file.type.startsWith('image/'))
+  if (file && canSelectImage.value && file.type.startsWith('image/') && file.size > 0)
     emit('selectImage', file)
 }
 
@@ -82,7 +102,9 @@ function handleFileChange(event: Event) {
 }
 
 function handlePaste(event: ClipboardEvent) {
-  const image = Array.from(event.clipboardData?.files ?? []).find(file => file.type.startsWith('image/'))
+  const image = Array.from(event.clipboardData?.files ?? []).find(file => (
+    file.type.startsWith('image/') && file.size > 0
+  ))
   if (!image || !canSelectImage.value)
     return
   event.preventDefault()
@@ -94,11 +116,30 @@ function openImagePicker() {
     fileInputRef.value?.click()
 }
 
+async function insertEmote(emote: PrivateEmote) {
+  const textarea = textareaRef.value
+  const start = textarea?.selectionStart ?? props.modelValue.length
+  const end = textarea?.selectionEnd ?? start
+  const insertion = insertPrivateEmoteToken(props.modelValue, emote.text, start, end)
+  emit('update:modelValue', insertion.value)
+  await nextTick()
+  textareaRef.value?.focus()
+  textareaRef.value?.setSelectionRange(insertion.cursor, insertion.cursor)
+}
+
+onClickOutside(emoteControlRef, () => {
+  emotePickerOpen.value = false
+})
+
 defineExpose({ focus: () => textareaRef.value?.focus() })
 </script>
 
 <template>
-  <form class="message-composer" @submit.prevent="submit">
+  <form
+    class="message-composer"
+    @keydown.esc.stop="emotePickerOpen = false"
+    @submit.prevent="submitCurrent"
+  >
     <div v-if="imageDraft" class="message-composer__image-preview" role="status">
       <img
         :src="imageDraft.objectUrl"
@@ -119,6 +160,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       </Button>
       <Tooltip :content="t('notifications.whisper.messages.remove_image')" placement="top">
         <IconButton
+          class="message-composer__action"
           shape="circle"
           :label="t('notifications.whisper.messages.remove_image')"
           @click="emit('removeImage', imageDraft.localId)"
@@ -127,20 +169,29 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         </IconButton>
       </Tooltip>
     </div>
-    <textarea
-      ref="textareaRef"
-      class="message-composer__input"
-      :value="modelValue"
-      :placeholder="t('notifications.whisper.messages.composer_placeholder')"
-      :aria-label="t('notifications.whisper.messages.composer_aria')"
-      rows="2"
-      @input="updateValue"
-      @keydown="handleKeydown"
-      @compositionstart="isComposing = true"
-      @compositionend="isComposing = false"
-      @paste="handlePaste"
-    />
+
     <div class="message-composer__actions">
+      <div ref="emoteControlRef" class="message-composer__emote-control">
+        <Tooltip :content="t('notifications.whisper.messages.select_emote')" placement="top">
+          <IconButton
+            class="message-composer__action"
+            shape="circle"
+            :label="t('notifications.whisper.messages.select_emote')"
+            :aria-expanded="emotePickerOpen"
+            aria-controls="private-message-emote-picker"
+            @click="emotePickerOpen = !emotePickerOpen"
+          >
+            <i i-mingcute:emoji-line aria-hidden="true" />
+          </IconButton>
+        </Tooltip>
+        <PrivateEmotePicker
+          v-if="emotePickerOpen"
+          :packages="emotePackages"
+          @close="emotePickerOpen = false"
+          @select="insertEmote"
+        />
+      </div>
+
       <input
         v-if="enableImage"
         ref="fileInputRef"
@@ -153,6 +204,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       >
       <Tooltip v-if="enableImage" :content="t('notifications.whisper.messages.select_image')" placement="top">
         <IconButton
+          class="message-composer__action"
           shape="circle"
           :label="t('notifications.whisper.messages.select_image')"
           :disabled="!canSelectImage"
@@ -161,12 +213,33 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           <i i-mingcute:pic-line aria-hidden="true" />
         </IconButton>
       </Tooltip>
-      <Button native-type="submit" type="primary" :disabled="!canSend">
-        <i v-if="sending" i-svg-spinners-ring-resize aria-hidden="true" />
-        {{ sending
-          ? t('notifications.whisper.messages.sending')
-          : t('notifications.whisper.messages.send') }}
-      </Button>
+
+      <textarea
+        ref="textareaRef"
+        class="message-composer__input"
+        :value="modelValue"
+        :placeholder="t('notifications.whisper.messages.composer_placeholder')"
+        :aria-label="t('notifications.whisper.messages.composer_aria')"
+        rows="2"
+        @input="updateValue"
+        @keydown="handleKeydown"
+        @compositionstart="isComposing = true"
+        @compositionend="isComposing = false"
+        @paste="handlePaste"
+      />
+
+      <Tooltip :content="t('notifications.whisper.messages.send')" placement="top">
+        <IconButton
+          class="message-composer__action message-composer__send"
+          shape="circle"
+          :label="t('notifications.whisper.messages.send')"
+          :disabled="!canSubmit"
+          @click="submitCurrent"
+        >
+          <i v-if="sending" i-svg-spinners-ring-resize aria-hidden="true" />
+          <i v-else i-mingcute:send-plane-line aria-hidden="true" />
+        </IconButton>
+      </Tooltip>
     </div>
   </form>
 </template>
@@ -181,11 +254,12 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 
 .message-composer__input {
   box-sizing: border-box;
+  flex: 1 1 auto;
   width: 100%;
   min-width: 0;
-  max-height: calc(var(--bew-space-12) * 3);
+  max-height: calc(var(--bew-space-12) * 2);
   padding: var(--bew-space-2) var(--bew-space-3);
-  resize: vertical;
+  resize: none;
   color: var(--bew-text-1);
   font: inherit;
   line-height: var(--bew-line-height-body);
@@ -260,6 +334,37 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   min-width: 0;
   gap: var(--bew-space-2);
   align-items: center;
-  justify-content: flex-end;
+}
+
+.message-composer__emote-control {
+  position: relative;
+  display: grid;
+}
+
+.message-composer__action {
+  width: var(--bew-control-height);
+  height: var(--bew-control-height);
+  color: var(--bew-text-2);
+  background: var(--bew-fill-1);
+}
+
+.message-composer__action:hover:not(:disabled) {
+  color: var(--bew-text-1);
+  background: var(--bew-fill-2);
+}
+
+.message-composer__action i {
+  font-size: var(--bew-icon-size-md);
+}
+
+.message-composer__send {
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
+}
+
+.message-composer__send:hover:not(:disabled) {
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
+  filter: brightness(1.05);
 }
 </style>

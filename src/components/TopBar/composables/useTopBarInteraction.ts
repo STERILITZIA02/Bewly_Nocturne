@@ -21,7 +21,18 @@ import { isHomePage } from '~/utils/main'
 import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
-const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<string, AppPage>> = {
+export type TopBarPopupKey
+  = | 'channels'
+    | 'userPanel'
+    | 'notifications'
+    | 'moments'
+    | 'favorites'
+    | 'history'
+    | 'watchLater'
+    | 'upload'
+    | 'more'
+
+const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, AppPage>> = {
   channels: AppPage.Home,
   moments: AppPage.Moments,
   favorites: AppPage.Favorites,
@@ -36,16 +47,16 @@ interface TopBarHoverController {
   leaveTimer?: ReturnType<typeof setTimeout>
 }
 
-const hoverControllers = new Map<string, TopBarHoverController>()
+const hoverControllers = new Map<TopBarPopupKey, TopBarHoverController>()
 
 export function useTopBarInteraction() {
   const topBarStore = useTopBarStore()
   const settingsStore = useSettingsStore()
   const { closeAllPopups } = topBarStore
-  const topBarItemElements: Record<string, Ref<MaybeElement>> = {}
+  const topBarItemElements: Partial<Record<TopBarPopupKey, Ref<MaybeElement>>> = {}
 
   // 当前点击的顶栏项
-  const currentClickedTopBarItem = ref<string | null>(null)
+  const currentClickedTopBarItem = ref<TopBarPopupKey | null>(null)
   const handledClickEvents = new WeakSet<MouseEvent>()
 
   function clearControllerTimers(controller: TopBarHoverController) {
@@ -57,7 +68,7 @@ export function useTopBarInteraction() {
     controller.leaveTimer = undefined
   }
 
-  function clearOtherHoverTimers(activeKey?: string) {
+  function clearOtherHoverTimers(activeKey?: TopBarPopupKey) {
     hoverControllers.forEach((controller, key) => {
       if (key !== activeKey)
         clearControllerTimers(controller)
@@ -118,7 +129,7 @@ export function useTopBarInteraction() {
   })
 
   // 设置顶栏项悬停事件
-  function setupTopBarItemHoverEvent(key: string) {
+  function setupTopBarItemHoverEvent(key: TopBarPopupKey) {
     const element = ref<MaybeElement>()
     const controller: TopBarHoverController = {
       triggerHovered: false,
@@ -204,7 +215,7 @@ export function useTopBarInteraction() {
   }
 
   // 设置顶栏项变换器
-  function setupTopBarItemTransformer(key: string, popupRef: Ref<MaybeElement>) {
+  function setupTopBarItemTransformer(key: TopBarPopupKey, popupRef: Ref<MaybeElement>) {
     const triggerRef = topBarItemElements[key]
     if (!triggerRef)
       return popupRef
@@ -283,11 +294,11 @@ export function useTopBarInteraction() {
     location.href = pageUrl
   }
 
-  function getConfiguredTopBarPage(key: string): AppPage | undefined {
+  function getConfiguredTopBarPage(key: TopBarPopupKey): AppPage | undefined {
     return BEWLY_PAGE_BY_TOP_BAR_ITEM[key]
   }
 
-  function shouldOpenConfiguredTopBarItem(key: string): boolean {
+  function shouldOpenConfiguredTopBarItem(key: TopBarPopupKey): boolean {
     const page = getConfiguredTopBarPage(key)
     return Boolean(
       page
@@ -296,14 +307,14 @@ export function useTopBarInteraction() {
     )
   }
 
-  function getTopBarItemHref(key: string, originalHref: string): string {
+  function getTopBarItemHref(key: TopBarPopupKey, originalHref: string): string {
     const page = getConfiguredTopBarPage(key)
     return page && shouldOpenConfiguredTopBarItem(key)
       ? `https://www.bilibili.com/?page=${page}`
       : originalHref
   }
 
-  function handleClickTopBarItem(event: MouseEvent, key: string) {
+  function handleClickTopBarItem(event: MouseEvent, key: TopBarPopupKey) {
     if (handledClickEvents.has(event))
       return
 
