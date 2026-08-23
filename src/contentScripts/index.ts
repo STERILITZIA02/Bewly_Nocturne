@@ -136,7 +136,6 @@ if (shouldInitializeContentScript) {
   contentScriptDisposers.push(() => browser.runtime.onMessage.removeListener(handleRuntimeMessage))
 }
 
-const isFirefox: boolean = /Firefox/i.test(navigator.userAgent)
 const isElectronEnv = isElectron()
 
 const currentUrl = document.URL
@@ -315,16 +314,6 @@ else if (shouldInitializeContentScript) {
     '.upinfo .face img',
   ].join(',')
   contentScriptDisposers.push(setupNotificationStateInvalidation())
-  // Fix `OverlayScrollbars` not working in Firefox
-  // https://github.com/fingerprintjs/fingerprintjs/issues/683#issuecomment-881210244
-  if (isFirefox) {
-    window.requestIdleCallback = window.requestIdleCallback.bind(window)
-    window.cancelIdleCallback = window.cancelIdleCallback.bind(window)
-    window.requestAnimationFrame = window.requestAnimationFrame.bind(window)
-    window.cancelAnimationFrame = window.cancelAnimationFrame.bind(window)
-    window.setTimeout = window.setTimeout.bind(window)
-    window.clearTimeout = window.clearTimeout.bind(window)
-  }
 
   let beforeLoadedStyleEl: HTMLStyleElement | undefined
   let beforeLoadedStyleFailsafeTimer: ReturnType<typeof setTimeout> | undefined

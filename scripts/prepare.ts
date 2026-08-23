@@ -5,14 +5,14 @@ import chokidar from 'chokidar'
 import fs from 'fs-extra'
 
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
-import { isDev, isFirefox, isSafari, r } from './utils'
+import { isDev, isSafari, r } from './utils'
 
 function writeManifest() {
   execSync('npx esno ./scripts/manifest.ts', { stdio: 'inherit' })
 }
 
 async function prepare() {
-  const extensionDirectory = r(isFirefox ? 'extension-firefox' : isSafari ? 'extension-safari' : 'extension')
+  const extensionDirectory = r(isSafari ? 'extension-safari' : 'extension')
   fs.ensureDirSync(extensionDirectory)
   fs.copySync(r('assets'), `${extensionDirectory}/assets`)
   await prepareContributorsImage({

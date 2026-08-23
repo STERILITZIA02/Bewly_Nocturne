@@ -7,7 +7,7 @@ Bewly_Nocturne：基于 BewlyCat 持续维护的 bilibili 浏览器扩展（Vue 
 - `pnpm lint` / `pnpm lint:fix`
 - `pnpm typecheck`
 - 验证时不执行任何 `build` 操作；开发阶段使用 `pnpm dev` 持续编译与验证。
-- 构建产物：Chrome/Edge → `extension/`，Firefox → `extension-firefox/`
+- 构建产物：Chrome/Edge → `extension/`，Safari → `extension-safari/`
 
 仅当本次任务实际执行 `git commit` 时，提交前必须通过：
 
@@ -136,7 +136,6 @@ pnpm typecheck
 - 2026-08-09：扩展重载后的旧 content script 将 context invalidated 视为终止状态；停止共享状态轮询并收敛未处理 Promise。Shadow DOM 样式失败时卸载该次插件 UI，不得显示透明、错位的无样式 Dock 或设置页；刷新页面后由新上下文正常挂载。
 - 2026-08-09：For You、Moments 和 Following 的内容缓存、分页与本地状态按 Bilibili MID 隔离，未登录状态与任意已登录账号也必须分开；切换账号时旧请求必须失效。
 - 2026-08-09：稍后再看以 `topBarStore` 的完整 `aid` 集合为唯一成员状态源；Moments、VideoCard、顶栏和原站增强不得各自维护 aid/bvid/epid 真值，mutation 后通过专用失效消息跨标签重新获取服务端权威集合。
-- 2026-08-09：MAIN-world 设置与无 Cookie 搜索通信共用版本化 protocol、页面级 channelId、requestId 和有限 timeout；iframe 消息只接受当前 iframe source。Firefox Container Cookie 必须按最终 URL 的 domain/path/secure/expiry 筛选，不得把整个 Cookie Store 直接拼入请求。
 - 2026-08-09：Bewly 全局播放器/页面快捷键和快捷键设置入口已移除，不得重新注册会与 Bilibili 原站竞争的 window/document 键盘监听；Dialog、Drawer、图片查看器和菜单/输入控件的局部无障碍键盘交互必须保留。
 - 2026-08-09：Cloud Sync 保留 pending/quota blocked/failed/synced 语义和有上限退避；存储初读失败不得解释为空存储并回写默认值。MV3 App Auth 使用 `browser.alarms` 保持 token 新鲜度，不恢复后台长期 interval。
 - 2026-08-09：站内导航收敛到 `useRouteState.ts` 单例，共享 pushstate/replacestate/popstate/hashchange 和一个低频 fallback；页面模式、主题、顶栏和内容脚本不得重新建立各自的高频 URL 轮询。截图、画面比例、触屏手势、随机播放和收藏弹窗的 observer/listener 必须跟随页面与设置生命周期启停。
@@ -201,7 +200,7 @@ pnpm typecheck
 - `src/utils/bilibiliUrl.ts` 是当前页与分享链接的统一净化来源，必须保留 `p`、`t`、hash 等导航/播放语义；不得为恢复 Bewly 全局快捷键而重建 `src/utils/keyboard.ts` / `src/utils/shortcuts.ts` 运行时。
 - 液态分段指示器保持固定启用及现有 morph、ResizeObserver 和 reduced-motion 行为；不得恢复 `enableLiquidSegmentIndicator` 的可见设置项、搜索入口或静态视觉分支。
 - `vite.config.content.ts` 的开发构建必须保持 `minify: false`，防止 Vite watch 增量更新后函数重命名与调用点错配；该约束仅用于 `pnpm dev`，不得借此改变生产构建策略。
-- `pnpm dev` / `pnpm dev-firefox` 只启动 prepare、content/inject 和 background 等真实扩展任务；已移除的 popup/options HTML 入口、`build:web` 和 `dev:web` 不得恢复为假构建流程。
+- `pnpm dev` 只启动 prepare、content/inject 和 background 等真实扩展任务；已移除的 popup/options HTML 入口、`build:web` 和 `dev:web` 不得恢复为假构建流程。
 
 ## 通用工程原则
 

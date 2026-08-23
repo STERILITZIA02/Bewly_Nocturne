@@ -630,7 +630,7 @@ verify('multipart upload transport does not set a multipart boundary and preserv
       capturedInit = init
       return createMockResponse('{"code":0,"data":{"image_url":"https://i0.hdslb.com/bfs/im/sanitized.png","image_height":1,"image_width":1,"img_size":3}}')
     },
-  }, undefined, controller.signal)
+  }, controller.signal)
 
   assert.equal(response.code, 0)
   assert.equal(capturedInit?.method, 'POST')
@@ -1848,8 +1848,7 @@ verify('native message runtime protects cache limits and browser regression gate
     status: 412,
     verifiedCodeZero: false,
   })
-  for (const browser of ['Chrome', 'Firefox'])
-    assert.ok(regressionSource.includes(browser), browser)
+  assert.ok(regressionSource.includes('Chrome'), 'Chrome')
 })
 
 verify('original-fallback sessions keep available avatars instead of always using initials', async () => {

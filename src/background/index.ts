@@ -1,9 +1,8 @@
 import browser from 'webextension-polyfill'
 
-import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl, isPreventMobileRedirectEnabled } from '~/utils/bilibiliDesktopNavigation'
+import { BILIBILI_DESKTOP_USER_AGENT, isPreventMobileRedirectEnabled } from '~/utils/bilibiliDesktopNavigation'
 
 import { setupContentScriptRefreshPrompt } from './contentScriptRefreshPrompt'
-import { replaceFirefoxContainerCookieHeader } from './firefoxCookies'
 import { setupLoginStateWatcher } from './loginStateWatcher'
 import { setupApiMsgListeners } from './messageListeners/api'
 import { setupTabMsgListeners } from './messageListeners/tabs'
@@ -42,14 +41,7 @@ const preventMobileRedirectRule: browser.DeclarativeNetRequest.Rule = {
   },
 }
 
-// eslint-disable-next-line node/prefer-global/process
-const isFirefoxBuild = Boolean(process.env.FIREFOX)
-let preventMobileRedirectEnabled = false
-
 async function syncPreventMobileRedirectRule(enabled: boolean) {
-  if (isFirefoxBuild)
-    return
-
   try {
     await browser.declarativeNetRequest.updateDynamicRules({
       removeRuleIds: [PREVENT_MOBILE_REDIRECT_RULE_ID],
@@ -61,79 +53,21 @@ async function syncPreventMobileRedirectRule(enabled: boolean) {
   }
 }
 
-const preventMobileRedirectReady = browser.storage.local.get('settings').then((result) => {
-  preventMobileRedirectEnabled = isPreventMobileRedirectEnabled(result.settings)
-  return syncPreventMobileRedirectRule(preventMobileRedirectEnabled)
+void browser.storage.local.get('settings').then((result) => {
+  return syncPreventMobileRedirectRule(isPreventMobileRedirectEnabled(result.settings))
 })
 
 browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local' || !changes.settings)
     return
 
-  preventMobileRedirectEnabled = isPreventMobileRedirectEnabled(changes.settings.newValue)
-  void syncPreventMobileRedirectRule(preventMobileRedirectEnabled)
+  void syncPreventMobileRedirectRule(isPreventMobileRedirectEnabled(changes.settings.newValue))
 })
 
 // 扩展启动时初始化 WBI 密钥
 initWbiKeys().catch((error) => {
   console.error('[Bewly Nocturne] WBI keys initialization error:', error)
 })
-
-function isExtensionUri(url: string) {
-  return new URL(url).origin === new URL(browser.runtime.getURL('')).origin
-}
-
-// Firefox specific header handling
-if (isFirefoxBuild) {
-  browser.webRequest.onBeforeSendHeaders.addListener(
-    async (details: any) => {
-      const requestHeaders: browser.WebRequest.HttpHeaders = []
-      await preventMobileRedirectReady
-      const filteredHeaders = replaceFirefoxContainerCookieHeader(details.requestHeaders || [])
-      if (preventMobileRedirectEnabled && details.type === 'main_frame' && isBilibiliWwwUrl(details.url)) {
-        let hasUserAgent = false
-        for (const header of filteredHeaders) {
-          const headerName = header.name.toLowerCase()
-          if (headerName === 'user-agent') {
-            requestHeaders.push({ name: header.name, value: BILIBILI_DESKTOP_USER_AGENT })
-            hasUserAgent = true
-          }
-          else if (headerName === 'sec-ch-ua-mobile') {
-            requestHeaders.push({ name: header.name, value: '?0' })
-          }
-          else if (headerName === 'sec-ch-ua-platform') {
-            requestHeaders.push({ name: header.name, value: '"Windows"' })
-          }
-          else {
-            requestHeaders.push(header)
-          }
-        }
-
-        if (!hasUserAgent)
-          requestHeaders.push({ name: 'User-Agent', value: BILIBILI_DESKTOP_USER_AGENT })
-
-        return { ...details, requestHeaders }
-      }
-
-      if (details.documentUrl) {
-        const url = new URL(details.documentUrl)
-        const extensionUri = isExtensionUri(details.documentUrl)
-        for (let i = 0; i < filteredHeaders.length; i++) {
-          if (filteredHeaders[i].name.toLowerCase() === 'origin' || filteredHeaders[i].name.toLowerCase() === 'referer')
-            requestHeaders.push({ name: filteredHeaders[i].name, value: extensionUri ? 'https://www.bilibili.com' : url.origin })
-          else
-            requestHeaders.push(filteredHeaders[i])
-        }
-
-        return { ...details, requestHeaders }
-      }
-
-      return { ...details, requestHeaders: filteredHeaders }
-    },
-    { urls: ['<all_urls>'] },
-    ['blocking', 'requestHeaders'],
-  )
-}
 
 // Setup all message listeners
 setupSettingsStorageCoordinator()

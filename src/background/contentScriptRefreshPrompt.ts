@@ -475,7 +475,7 @@ let refreshPromptListenersInitialized = false
 
 export function setupContentScriptRefreshPrompt(): void {
   // eslint-disable-next-line node/prefer-global/process
-  if (refreshPromptListenersInitialized || process.env.FIREFOX || process.env.SAFARI)
+  if (refreshPromptListenersInitialized || process.env.SAFARI)
     return
 
   refreshPromptListenersInitialized = true

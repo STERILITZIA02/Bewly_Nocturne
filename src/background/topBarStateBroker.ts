@@ -103,22 +103,19 @@ function isPersistedTopBarState(value: unknown): value is PersistedTopBarState {
     && Object.values(value.entries).every(isTopBarStateEntry)
 }
 
-function getStateKey(tab: Browser.Tabs.Tab | undefined, accountId: number) {
-  const cookieStoreId = tab?.cookieStoreId || 'default'
+function getBrowserContextKey(tab?: Browser.Tabs.Tab) {
   const privacyContext = tab?.incognito ? 'private' : 'normal'
-  return `${privacyContext}:${cookieStoreId}:${accountId}`
+  return `${privacyContext}:default`
 }
 
-function getBrowserContextKey(tab?: Browser.Tabs.Tab) {
-  const cookieStoreId = tab?.cookieStoreId || 'default'
-  const privacyContext = tab?.incognito ? 'private' : 'normal'
-  return `${privacyContext}:${cookieStoreId}`
+function getStateKey(tab: Browser.Tabs.Tab | undefined, accountId: number) {
+  return `${getBrowserContextKey(tab)}:${accountId}`
 }
 
 export function createTopBarStateBroker(
   extensionApi: TopBarStateBrokerBrowser = browser,
 ): TopBarStateBroker {
-  const stateByCookieStore = new Map<string, TopBarStateEntry>()
+  const stateByContext = new Map<string, TopBarStateEntry>()
   const sessionStorage = extensionApi.storage?.session
   let stateLoadPromise: Promise<void> | undefined
   let operationQueue: Promise<void> = Promise.resolve()
@@ -141,7 +138,7 @@ export function createTopBarStateBroker(
         return
 
       Object.entries(persistedState.entries).forEach(([key, entry]) => {
-        stateByCookieStore.set(key, entry)
+        stateByContext.set(key, entry)
       })
     }
     catch {
@@ -160,7 +157,7 @@ export function createTopBarStateBroker(
 
     const persistedState: PersistedTopBarState = {
       version: TOP_BAR_STATE_STORAGE_VERSION,
-      entries: Object.fromEntries(stateByCookieStore),
+      entries: Object.fromEntries(stateByContext),
     }
 
     try {
@@ -175,7 +172,7 @@ export function createTopBarStateBroker(
 
   function getEntry(accountId: number, sender?: Browser.Runtime.MessageSender) {
     const key = getStateKey(sender?.tab, accountId)
-    let entry = stateByCookieStore.get(key)
+    let entry = stateByContext.get(key)
 
     if (!entry) {
       entry = {
@@ -183,7 +180,7 @@ export function createTopBarStateBroker(
         refreshStartedAt: 0,
         refreshId: 0,
       }
-      stateByCookieStore.set(key, entry)
+      stateByContext.set(key, entry)
     }
 
     return entry

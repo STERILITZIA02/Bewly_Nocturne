@@ -1,5 +1,3 @@
-import type Browser from 'webextension-polyfill'
-
 import {
   buildMessageBlockWordMutation,
   buildMessageServerSettingsGetParams,
@@ -31,19 +29,17 @@ function invalidResponse(endpointName: keyof typeof MESSAGE_SERVER_SETTINGS_ENDP
 
 export function getMessageServerSettings(
   _message: MessageServerSettingsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ) {
   return requestMessageServerSettings({
     endpointName: 'getSettings',
     url: MESSAGE_SERVER_SETTINGS_ENDPOINTS.getSettings,
     method: 'GET',
     params: buildMessageServerSettingsGetParams(),
-  }, {}, sender)
+  })
 }
 
 export function setMessageServerSetting(
   message: MessageServerSettingsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ) {
   if (!isMessageServerSettingField(message.field) || typeof message.value !== 'number')
     return Promise.resolve(invalidResponse('setSetting'))
@@ -54,7 +50,7 @@ export function setMessageServerSetting(
       url: request.url,
       method: 'POST',
       body: request.body,
-    }, {}, sender)
+    })
   }
   catch {
     return Promise.resolve(invalidResponse('setSetting'))
@@ -63,19 +59,17 @@ export function setMessageServerSetting(
 
 export function getMessageBlockWords(
   _message: MessageServerSettingsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ) {
   return requestMessageServerSettings({
     endpointName: 'getBlockWords',
     url: MESSAGE_SERVER_SETTINGS_ENDPOINTS.getBlockWords,
     method: 'GET',
-  }, {}, sender)
+  })
 }
 
 function mutateMessageBlockWord(
   operation: 'add' | 'delete',
   message: MessageServerSettingsMessage,
-  sender?: Browser.Runtime.MessageSender,
 ) {
   if (typeof message.word !== 'string')
     return Promise.resolve(invalidResponse(operation === 'add' ? 'addBlockWord' : 'deleteBlockWord'))
@@ -87,7 +81,7 @@ function mutateMessageBlockWord(
       url: mutation.url,
       method: 'POST',
       body: mutation.body,
-    }, {}, sender)
+    })
   }
   catch {
     return Promise.resolve(invalidResponse(operation === 'add' ? 'addBlockWord' : 'deleteBlockWord'))
@@ -96,16 +90,14 @@ function mutateMessageBlockWord(
 
 export function addMessageBlockWord(
   message: MessageServerSettingsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ) {
-  return mutateMessageBlockWord('add', message, sender)
+  return mutateMessageBlockWord('add', message)
 }
 
 export function deleteMessageBlockWord(
   message: MessageServerSettingsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ) {
-  return mutateMessageBlockWord('delete', message, sender)
+  return mutateMessageBlockWord('delete', message)
 }
 
 const API_MESSAGE_SERVER_SETTINGS = {

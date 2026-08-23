@@ -697,7 +697,7 @@ async function unfollowUser() {
 
   /* 完全隐藏滚动条 */
   -ms-overflow-style: none; /* IE 和 Edge */
-  scrollbar-width: none; /* Firefox */
+  scrollbar-width: none;
 
   /* 隐藏 Webkit 浏览器的滚动条 */
   &::-webkit-scrollbar {

@@ -298,8 +298,8 @@ function cancelListLayoutBreakpointEditing() {
     border: 1px solid color-mix(in oklab, var(--bew-border-color), var(--bew-fill-2) 60%);
 
     // Keep the native number stepper integrated with the input surface. The
-    // pseudo-elements are Chromium/WebKit-specific; Firefox keeps its native
-    // controls and still receives the same input background below.
+    // pseudo-elements are Chromium/WebKit-specific; all inputs still receive
+    // the same background below.
     :deep(input[type="number"]) {
       background-color: var(--bew-fill-1);
       color-scheme: inherit;
@@ -367,30 +367,6 @@ function cancelListLayoutBreakpointEditing() {
     width: 16px;
     height: 16px;
     appearance: none;
-    background: var(--bew-theme-color);
-    border: 2px solid var(--bew-elevated-solid);
-    border-radius: 50%;
-    corner-shape: var(--bew-corner-shape-round);
-    box-shadow: var(--bew-shadow-1);
-  }
-
-  &::-moz-range-track {
-    height: 4px;
-    background: var(--bew-fill-2);
-    border-radius: var(--bew-radius-full);
-    corner-shape: round;
-  }
-
-  &::-moz-range-progress {
-    height: 4px;
-    background: var(--bew-theme-color);
-    border-radius: var(--bew-radius-full);
-    corner-shape: round;
-  }
-
-  &::-moz-range-thumb {
-    width: 12px;
-    height: 12px;
     background: var(--bew-theme-color);
     border: 2px solid var(--bew-elevated-solid);
     border-radius: 50%;

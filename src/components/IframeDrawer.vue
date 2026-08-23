@@ -329,8 +329,7 @@ async function releaseIframeResources() {
   // Navigate to about:blank and close browsing context BEFORE removing from DOM.
   // Previously, renderIframe was set to false first, which removed the iframe via v-if
   // and made iframeRef null — so contentWindow.close() was never actually called.
-  // This is especially important for Firefox which doesn't always release media
-  // resources (video decoders, buffers) when an iframe is simply removed from DOM.
+  // Closing first ensures media resources are released before removing the iframe.
   const iframe = iframeRef.value
   stopIframeMedia(iframe)
   currentUrl.value = 'about:blank'

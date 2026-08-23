@@ -1,6 +1,3 @@
-import type Browser from 'webextension-polyfill'
-
-import { FIREFOX_CONTAINER_COOKIE_HEADER, serializeCookiesForUrl } from '../firefoxCookies'
 import { addWbiSign, initWbiKeys } from '../wbiSign'
 import {
   createPrivateMessageErrorResponse,
@@ -170,39 +167,20 @@ function appendRequestParams(url: string, params: PrivateMessageRequestParams): 
   return requestUrl.toString()
 }
 
-async function getFirefoxContainerCookieHeader(
-  sender: Browser.Runtime.MessageSender | undefined,
-  requestUrl: string,
-): Promise<string> {
-  // eslint-disable-next-line node/prefer-global/process
-  if (!process.env.FIREFOX || !sender?.tab?.id)
-    return ''
-
-  const browser = await import('webextension-polyfill').then(module => module.default)
-  const tab = await browser.tabs.get(sender.tab!.id!)
-  const cookies = await browser.cookies.getAll({
-    storeId: tab.cookieStoreId || 'default',
-  })
-  return serializeCookiesForUrl(cookies, requestUrl)
-}
-
 export async function requestPrivateMessage(
   request: PrivateMessageRequest,
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
-  return requestPreferredPrivateMessage(request, dependencies, sender)
+  return requestPreferredPrivateMessage(request, dependencies)
 }
 
 export function requestPrivateMessageForm(
   request: PrivateMessageFormTransportRequest,
   dependencies?: Partial<PrivateMessageRequestDependencies>,
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse>
 export async function requestPrivateMessageForm(
   request: PrivateMessageFormTransportRequest,
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const runtimeDependencies = {
     ...DEFAULT_REQUEST_DEPENDENCIES,
@@ -214,9 +192,6 @@ export async function requestPrivateMessageForm(
       Referer: 'https://message.bilibili.com/',
       'Content-Type': 'application/x-www-form-urlencoded',
     }
-    const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
-    if (cookieHeader)
-      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
 
     const response = await runtimeDependencies.fetch(requestUrl, {
       method: 'POST',
@@ -262,7 +237,6 @@ export async function requestPrivateMessageForm(
 export async function requestPreferredPrivateMessageForm(
   request: PreferredPrivateMessageFormRequest,
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const runtimeDependencies = {
     ...DEFAULT_REQUEST_DEPENDENCIES,
@@ -276,14 +250,13 @@ export async function requestPreferredPrivateMessageForm(
   catch (error) {
     if (!isPrivateMessageWbiUnavailableError(error))
       return createPrivateMessageErrorResponse('network', request.endpointName)
-    return await performPrivateMessageFormRequest(request, {}, runtimeDependencies, sender)
+    return await performPrivateMessageFormRequest(request, {}, runtimeDependencies)
   }
 
   const initialResponse = await performPrivateMessageFormRequest(
     request,
     signedParams,
     runtimeDependencies,
-    sender,
   )
   if (!isExplicitWbiSignatureRejection(initialResponse))
     return initialResponse
@@ -296,7 +269,6 @@ export async function requestPreferredPrivateMessageForm(
       request,
       refreshedParams,
       runtimeDependencies,
-      sender,
     )
   }
   catch {
@@ -346,7 +318,6 @@ export async function buildPrivateMessageFormRequest(
 export async function requestSignedPrivateMessageForm(
   request: SignedPrivateMessageFormRequest,
   dependencies: Partial<PrivateMessageRequestDependencies> = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const runtimeDependencies = {
     ...DEFAULT_REQUEST_DEPENDENCIES,
@@ -361,7 +332,7 @@ export async function requestSignedPrivateMessageForm(
     return await requestPrivateMessageForm({
       endpointName: request.endpointName,
       ...formRequest,
-    }, runtimeDependencies, sender)
+    }, runtimeDependencies)
   }
   catch (error) {
     return createPrivateMessageErrorResponse(
@@ -374,7 +345,6 @@ export async function requestSignedPrivateMessageForm(
 export async function requestPrivateImageUpload(
   request: PrivateImageUploadRequest,
   dependencies: Partial<PrivateImageUploadDependencies> = {},
-  sender?: Browser.Runtime.MessageSender,
   signal?: AbortSignal,
 ): Promise<PrivateMessageApiResponse> {
   const runtimeDependencies = {
@@ -385,9 +355,6 @@ export async function requestPrivateImageUpload(
     const headers: Record<string, string> = {
       Referer: 'https://www.bilibili.com/',
     }
-    const cookieHeader = await getFirefoxContainerCookieHeader(sender, request.url)
-    if (cookieHeader)
-      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
     const response = await runtimeDependencies.fetch(request.url, {
       method: 'POST',
       body: request.form,
@@ -405,7 +372,6 @@ export async function requestPrivateImageUpload(
 async function requestPreferredPrivateMessage(
   request: PrivateMessageRequest,
   dependencies: Partial<PrivateMessageRequestDependencies>,
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const runtimeDependencies = {
     ...DEFAULT_REQUEST_DEPENDENCIES,
@@ -419,14 +385,13 @@ async function requestPreferredPrivateMessage(
   catch (error) {
     if (!isPrivateMessageWbiUnavailableError(error))
       return createPrivateMessageErrorResponse('network', request.endpointName)
-    return await performPrivateMessageGetRequest(request, request.params, runtimeDependencies, sender)
+    return await performPrivateMessageGetRequest(request, request.params, runtimeDependencies)
   }
 
   const initialResponse = await performPrivateMessageGetRequest(
     request,
     signedParams,
     runtimeDependencies,
-    sender,
   )
   if (!isExplicitWbiSignatureRejection(initialResponse))
     return initialResponse
@@ -439,7 +404,6 @@ async function requestPreferredPrivateMessage(
       request,
       refreshedParams,
       runtimeDependencies,
-      sender,
     )
   }
   catch {
@@ -458,16 +422,12 @@ async function performPrivateMessageGetRequest(
   request: PrivateMessageRequest,
   query: PrivateMessageRequestParams,
   dependencies: PrivateMessageRequestDependencies,
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const requestUrl = appendRequestParams(request.url, query)
   try {
     const headers: Record<string, string> = {
       Referer: 'https://message.bilibili.com/',
     }
-    const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
-    if (cookieHeader)
-      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
     const response = await dependencies.fetch(requestUrl, {
       method: 'GET',
       credentials: 'include',
@@ -484,7 +444,6 @@ async function performPrivateMessageFormRequest(
   request: PreferredPrivateMessageFormRequest,
   query: PrivateMessageRequestParams,
   dependencies: PrivateMessageRequestDependencies,
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const requestUrl = appendRequestParams(request.url, query)
   try {
@@ -492,9 +451,6 @@ async function performPrivateMessageFormRequest(
       Referer: 'https://message.bilibili.com/',
       'Content-Type': 'application/x-www-form-urlencoded',
     }
-    const cookieHeader = await getFirefoxContainerCookieHeader(sender, requestUrl)
-    if (cookieHeader)
-      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
     const response = await dependencies.fetch(requestUrl, {
       method: 'POST',
       body: serializeRequestParams(request.body),

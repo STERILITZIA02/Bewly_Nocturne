@@ -187,7 +187,7 @@ Run: `pnpm exec esno /private/tmp/bewly-stage2-pure-logic.test.ts`
 
 - [ ] **Step 2: 运行五项验收**
 
-Run sequentially: `pnpm lint`, `pnpm typecheck`, `pnpm knip`, `pnpm build`, `pnpm build-firefox`。
+Run sequentially: `pnpm lint`, `pnpm typecheck`, `pnpm knip`, `pnpm build`。
 
 - [ ] **Step 3: 审查差异边界**
 

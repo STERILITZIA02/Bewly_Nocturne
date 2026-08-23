@@ -74,66 +74,6 @@ pnpm build
 
 Then package it to the `extension` folder
 
-### Development (Firefox)
-
-#### The First Method for Firefox
-
-<details>
- <summary>Show more</summary>
-
-1. Run the pnpm command
-
-```bash
-# Install dependencies
-pnpm install
-
-# Create a profile folder for the extension to store the login status
-mkdir firefox-web-ext-profile
-
-# Run the project
-pnpm dev-firefox
-
-# After typing this commend, it will automatically open a new Firefox window that opens BiliBili website
-pnpm start:firefox
-```
-
-2. Every time you change the extension, it will reload, and you can see the changes by refreshing the webpage
-
-</details>
-
-#### The Alternative Method for Firefox
-
-<details>
- <summary>Show more</summary>
-
-1. Run the pnpm command
-
-```bash
-# Install dependencies
-pnpm install
-
-# Run the project
-pnpm dev-firefox
-```
-
-2. In the browser, enter `about:addons`, click on `Extensions` and then `Debug Add-ons`
-
-<img width="655" alt="image" src="https://github.com/hakadao/BewlyBewly/assets/33394391/7c49e4ca-2a87-4c56-bc00-3259d6eba128">
-
-3. Load the generated `extension-firefox/` folder in the browser
-
-</details>
-
-#### Building (Firefox)
-
-To build the extension, run
-
-```bash
-pnpm build-firefox
-```
-
-Then package it to the `extension-firefox` folder
-
 ## 🤝 Contribution
 
 ### About Branches

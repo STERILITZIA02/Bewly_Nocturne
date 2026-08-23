@@ -35,16 +35,12 @@ Set the metadata to:
 
 Do not restore the removed `private` flag.
 
-- [ ] **Step 2: Rename CI artifacts**
+- [ ] **Step 2: Rename the CI artifact**
 
-Change the artifact names without changing workflow behavior:
+Change the artifact name without changing workflow behavior:
 
 ```yaml
 name: BewlyMac-chrome-extension
-```
-
-```yaml
-name: BewlyMac-firefox-extension
 ```
 
 - [ ] **Step 3: Point the issue template to the personal repository**
@@ -112,7 +108,7 @@ pnpm pack:zip
 Run:
 
 ```bash
-rg -n 'shields.io|Chrome应用商店|Edge应用商店|Firefox应用商店|Star History|主要功能异同' README.md
+rg -n 'shields.io|Chrome应用商店|Edge应用商店|Star History|主要功能异同' README.md
 ```
 
 Expected: no matches.

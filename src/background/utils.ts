@@ -3,9 +3,7 @@
 // 2. json化后返回data
 
 import type Browser from 'webextension-polyfill'
-import browser from 'webextension-polyfill'
 
-import { FIREFOX_CONTAINER_COOKIE_HEADER, serializeCookiesForUrl } from './firefoxCookies'
 import { addWbiSign, clearWbiKeys, getWbiKeys, initWbiKeys, isBilibiliNavUrl, needsWbiSign, storeWbiKeys } from './wbiSign'
 
 export class ApiRiskControlError extends Error {
@@ -93,23 +91,11 @@ function apiListenerFactory(API_MAP: APIMAP) {
 
     const api = API_MAP[contentScriptQuery] as API
 
-    // eslint-disable-next-line node/prefer-global/process
-    if (process.env.FIREFOX && sender && sender.tab?.id) {
-      if (api._fetch.credentials === 'omit')
-        return await doRequest(typedMessage, api)
-
-      // 获取tab信息以获取正确的cookieStoreId
-      const tab = await browser.tabs.get(sender.tab.id)
-      const storeId = tab.cookieStoreId || 'default'
-      const cookies = await browser.cookies.getAll({ storeId })
-      return await doRequest(typedMessage, api, cookies)
-    }
-
     return await doRequest(typedMessage, api)
   }
 }
 
-async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.Cookie[]) {
+async function doRequest(message: Message, api: API) {
   try {
     const { contentScriptQuery: _contentScriptQuery, ...rest } = message
 
@@ -180,13 +166,7 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
         }
       }
 
-      // generate cookies
       const requestHeaders = { ...headers }
-      if (cookies && credentials !== 'omit') {
-        const cookieStr = serializeCookiesForUrl(cookies, requestUrl)
-        if (cookieStr)
-          requestHeaders[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieStr
-      }
 
       // 添加Referer以防止风控
       if (!requestHeaders.Referer) {

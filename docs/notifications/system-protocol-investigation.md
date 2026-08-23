@@ -90,7 +90,6 @@ tests/fixtures/notifications/system/
 
 - 正数 `sys_msg` 在 `update_cursor` 后归零的精确最终一致时序；
 - 浏览器审计工具不可导出的原始成功 response body 字节副本；
-- 当前发布客户端未读取的图片、字段、模块、多按钮或 POST action；
-- Firefox 登录态运行验证。
+- 当前发布客户端未读取的图片、字段、模块、多按钮或 POST action。
 
 上述未确认内容不会被推断或伪造为生产能力。

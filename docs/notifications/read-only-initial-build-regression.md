@@ -12,7 +12,7 @@
 
 ## 浏览器核心路径
 
-Chrome 与 Firefox 都必须实际检查：
+Chrome 必须实际检查：
 
 1. Reply / At / Love / System 首屏、一次分页、刷新、已读和原版 fallback。
 2. Whisper 会话首屏、旧会话分页、搜索筛选、普通用户与官方助手只读历史、旧消息分页、图片查看、未知消息降级和 ACK。

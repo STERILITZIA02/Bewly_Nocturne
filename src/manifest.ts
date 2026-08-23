@@ -2,7 +2,7 @@ import fs from 'fs-extra'
 import type { Manifest } from 'webextension-polyfill'
 
 import type PkgType from '../package.json'
-import { isDev, isFirefox, isSafari, port, r } from '../scripts/utils'
+import { isDev, isSafari, port, r } from '../scripts/utils'
 import { CONTENT_SCRIPT_EXCLUDE_MATCHES, CONTENT_SCRIPT_MATCHES } from './constants/contentScript'
 
 export async function getManifest() {
@@ -16,10 +16,8 @@ export async function getManifest() {
     version: pkg.version,
     description: pkg.description,
     homepage_url: pkg.homepage,
-    // Setting `persistent` to true in Manifest V3 results in an error in Firefox
-    // https://developer.mozilla.org/en-US/docs/Mozilla/Add-ons/WebExtensions/manifest.json/background
-    background: (isFirefox || isSafari)
-      ? { scripts: ['./dist/background/index.js'], persistent: isFirefox ? undefined : false }
+    background: isSafari
+      ? { scripts: ['./dist/background/index.js'], persistent: false }
       : { service_worker: './dist/background/index.js', type: 'module' },
 
     icons: {
@@ -31,10 +29,7 @@ export async function getManifest() {
       'storage',
       'declarativeNetRequest',
       'cookies',
-      ...(!isFirefox && !isSafari ? ['scripting'] : []),
-      ...isFirefox
-        ? ['webRequest', 'webRequestBlocking']
-        : [],
+      ...(!isSafari ? ['scripting'] : []),
     ],
     host_permissions: [
       '*://*.bilibili.com/*',
@@ -70,41 +65,25 @@ export async function getManifest() {
         // matches: ['./assets/*'],
       },
     ],
-    content_security_policy: isFirefox
-      ? {
-          extension_pages: 'script-src \'self\'; object-src \'self\'',
-        }
-      : {
-          extension_pages: isDev
-          // this is required on dev for Vite script to load
-            ? `script-src 'self' http://localhost:${port}; object-src 'self' http://localhost:${port}`
-            : 'script-src \'self\'; object-src \'self\'',
+    content_security_policy: {
+      extension_pages: isDev
+      // this is required on dev for Vite script to load
+        ? `script-src 'self' http://localhost:${port}; object-src 'self' http://localhost:${port}`
+        : 'script-src \'self\'; object-src \'self\'',
+    },
+    declarative_net_request: {
+      rule_resources: [
+        {
+          id: 'ruleset_1',
+          enabled: true,
+          path: 'assets/rules.json',
         },
-    ...isFirefox
-      ? {}
-      : {
-          declarative_net_request: {
-            rule_resources: [
-              {
-                id: 'ruleset_1',
-                enabled: true,
-                path: 'assets/rules.json',
-              },
-            ],
-          },
-        },
+      ],
+    },
   }
 
   if (isDev)
     manifest.permissions?.push('webNavigation')
-
-  if (isFirefox) {
-    manifest.browser_specific_settings = {
-      gecko: {
-        id: 'addon@celeus.cn',
-      },
-    }
-  }
 
   return manifest
 }

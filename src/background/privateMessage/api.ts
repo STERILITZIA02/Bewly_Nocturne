@@ -1,5 +1,3 @@
-import type Browser from 'webextension-polyfill'
-
 import { createPrivateMessageErrorResponse } from './errors'
 import {
   cancelPrivateImageUpload,
@@ -57,14 +55,13 @@ function invalidRequest(endpointName: keyof typeof PRIVATE_MESSAGE_ENDPOINTS) {
 
 export async function getPrivateSessions(
   message: PrivateSessionsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     const response = await requestPrivateMessage({
       endpointName: 'getPrivateSessions',
       params: buildPrivateSessionsParams({ endTs: message.endTs }),
       url: PRIVATE_MESSAGE_ENDPOINTS.getPrivateSessions,
-    }, {}, sender)
+    })
     if (response.code !== 0)
       return response
     return parsePrivateSessionsResponse(response) ?? invalidRequest('getPrivateSessions')
@@ -76,16 +73,14 @@ export async function getPrivateSessions(
 
 export async function getOlderPrivateSessions(
   message: PrivateSessionsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   if (message.endTs === undefined)
     return invalidRequest('getPrivateSessions')
-  return getPrivateSessions(message, sender)
+  return getPrivateSessions(message)
 }
 
 export async function getNewPrivateSessions(
   message: NewPrivateSessionsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     if (message.beginTs === undefined)
@@ -94,7 +89,7 @@ export async function getNewPrivateSessions(
       endpointName: 'getNewPrivateSessions',
       params: buildNewPrivateSessionsParams({ beginTs: message.beginTs }),
       url: PRIVATE_MESSAGE_ENDPOINTS.getNewPrivateSessions,
-    }, {}, sender)
+    })
     if (response.code !== 0)
       return response
     return parsePrivateSessionsResponse(response) ?? invalidRequest('getNewPrivateSessions')
@@ -106,14 +101,13 @@ export async function getNewPrivateSessions(
 
 export async function getPrivateUserCards(
   message: PrivateUserCardsMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     return await requestPrivateMessage({
       endpointName: 'getPrivateUserCards',
       params: buildPrivateUserCardsParams(message.uids ?? []),
       url: PRIVATE_MESSAGE_ENDPOINTS.getPrivateUserCards,
-    }, {}, sender)
+    })
   }
   catch {
     return invalidRequest('getPrivateUserCards')
@@ -122,7 +116,6 @@ export async function getPrivateUserCards(
 
 export async function getPrivateMessages(
   message: PrivateMessagesMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     if (!message.talkerId)
@@ -135,7 +128,7 @@ export async function getPrivateMessages(
         size: message.size,
       }),
       url: PRIVATE_MESSAGE_ENDPOINTS.getPrivateMessages,
-    }, {}, sender)
+    })
     if (response.code !== 0)
       return response
     return parsePrivateMessagesResponse(response) ?? invalidRequest('getPrivateMessages')
@@ -147,7 +140,6 @@ export async function getPrivateMessages(
 
 export async function ackPrivateSession(
   message: PrivateAckMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     if (!message.talkerId || !message.ackSeqno || !message.csrf)
@@ -168,7 +160,7 @@ export async function ackPrivateSession(
         mobi_app: body.mobi_app,
       },
       url: PRIVATE_MESSAGE_ENDPOINTS.ackPrivateSession,
-    }, {}, sender)
+    })
   }
   catch {
     return invalidRequest('ackPrivateSession')
