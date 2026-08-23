@@ -18,7 +18,7 @@ const { confirm: showConfirmDialog } = useConfirmDialog()
 const importSettingsRef = ref<HTMLInputElement>()
 
 const blockedPropertyNames = new Set(['__proto__', 'constructor', 'prototype'])
-const settingEnumValues = {
+const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   language: ['', 'en', 'cmn-CN', 'cmn-TW', 'jyut'],
   commentReplyTreeMode: ['lineCollapseMain', 'lineKeepMain', 'indentOnly'],
   commentReplyPaginationMode: ['loadMore', 'pagination'],
@@ -56,7 +56,7 @@ const settingEnumValues = {
   savedVideoAspectRatio: [null, '0:0', '4:3', '16:9'],
   defaultCustomPlayOrder: ['sequential', 'reverse', 'random'],
   randomPlayMode: ['manual', 'auto'],
-} satisfies Partial<Record<keyof Settings, readonly unknown[]>>
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value))
@@ -108,7 +108,7 @@ const homeSubPageValues = new Set<string>(Object.values(HomeSubPage))
 const videoPlayerModeOverrideValues = new Set(['default', 'webFullscreen', 'widescreen', 'bewlyWidescreen', 'inherit'])
 const customPlayOrderOverrideValues = new Set(['sequential', 'reverse', 'random', 'inherit'])
 
-const settingValueValidators = {
+const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) => boolean>> = {
   videoCardContextMenuConfig: value => Array.isArray(value) && value.every(item =>
     isPlainObject(item)
     && hasExactProperties(item, ['key', 'visible'])
@@ -154,7 +154,7 @@ const settingValueValidators = {
     && Object.values(value).every(mode => videoPlayerModeOverrideValues.has(mode as string)),
   customPlayOrderOverrides: value => isPlainObject(value)
     && Object.values(value).every(mode => customPlayOrderOverrideValues.has(mode as string)),
-} satisfies Partial<Record<keyof Settings, (value: unknown) => boolean>>
+}
 
 function handleImportSettings() {
   importSettingsRef.value?.click()

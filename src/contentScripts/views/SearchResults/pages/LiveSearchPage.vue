@@ -31,7 +31,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-function convertSearchUser(user: any) {
+function convertSearchUser(user: unknown) {
   return convertUserCardData(user, index => t('search.user.sample_title', { index }))
 }
 
@@ -113,7 +113,7 @@ const gridLayout: GridLayoutType = 'adaptive'
 
 // 转换后的直播间列表
 const transformedLiveRoomList = computed(() => {
-  return liveRoomList.value.map(live => convertLiveRoomData(live))
+  return liveRoomList.value.map((live: unknown) => convertLiveRoomData(live))
 })
 
 // 检查是否在翻页模式下且不在第一页
@@ -622,9 +622,7 @@ function handleFollowStateChanged(data: { mid: number, isFollowing: boolean }) {
 }
 
 function handleSwitchToLiveUser() {
-  // 切换到主播模式 - 这个逻辑需要通知父组件
-  // 暂时不实现，因为需要修改 SearchResults.vue 中的逻辑
-  console.log('Switch to live_user mode')
+  // 切换到主播模式需要由父级筛选器统一实现。
 }
 
 // 预加载更多直播间
@@ -703,6 +701,7 @@ defineExpose({
             mt-4 flex justify-center
           >
             <button
+              type="button"
               class="view-more-btn"
               px-6 py-2 rounded="$bew-radius-half"
               bg="$bew-fill-1 hover:$bew-fill-2"
@@ -784,6 +783,11 @@ defineExpose({
   cursor: pointer;
   border: none;
   outline: none;
+
+  &:focus-visible {
+    outline: 2px solid var(--bew-theme-focus-ring);
+    outline-offset: var(--bew-space-0-5);
+  }
 }
 
 .error-message {

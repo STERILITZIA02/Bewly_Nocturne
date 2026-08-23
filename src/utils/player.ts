@@ -90,26 +90,58 @@ function monitorCaptionState(closeSwitch: HTMLElement, languageItem: HTMLElement
   }
 }
 
+const activePlayerRetryTasks = new Set<RetryTask>()
+
 // 重试任务类，用于处理重试逻辑
 export class RetryTask {
   private count = 0
-  private repeat: () => void
+  private cancelled = false
+  private timer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private max: number,
     private timeout: number,
     private fn: () => boolean,
-  ) {
-    this.repeat = this.start.bind(this)
-  }
+  ) {}
 
   start() {
-    this.count++
-    if (this.count > this.max)
+    if (this.cancelled || this.timer !== null)
       return
-    if (!this.fn())
-      setTimeout(this.repeat, this.timeout)
+    activePlayerRetryTasks.add(this)
+    this.runAttempt()
   }
+
+  cancel() {
+    this.cancelled = true
+    if (this.timer !== null)
+      clearTimeout(this.timer)
+    this.timer = null
+    activePlayerRetryTasks.delete(this)
+  }
+
+  private runAttempt = () => {
+    this.timer = null
+    if (this.cancelled || this.count >= this.max) {
+      activePlayerRetryTasks.delete(this)
+      return
+    }
+
+    this.count++
+    if (this.fn()) {
+      activePlayerRetryTasks.delete(this)
+      return
+    }
+    if (this.count >= this.max) {
+      activePlayerRetryTasks.delete(this)
+      return
+    }
+    this.timer = setTimeout(this.runAttempt, this.timeout)
+  }
+}
+
+export function cancelPlayerRetryTasks() {
+  for (const task of [...activePlayerRetryTasks])
+    task.cancel()
 }
 
 // 状态显示元素
@@ -119,8 +151,15 @@ let clockElement: HTMLDivElement | null = null
 let titleElement: HTMLDivElement | null = null
 let timeInterval: number | null = null
 let clockInterval: number | null = null
+export const AUTO_EXIT_FULLSCREEN_RETRY_MAX = 20
+
 let autoExitFullscreenRetryTimer: ReturnType<typeof setTimeout> | null = null
+let autoExitFullscreenRetryCount = 0
+let autoExitFullscreenGeneration = 0
 let autoExitFullscreenVideo: HTMLVideoElement | null = null
+let autoExitFullscreenEndedListener: (() => void) | null = null
+let autoExitFullscreenEndTimer: ReturnType<typeof setTimeout> | null = null
+let stopAutoExitFullscreenDomObserver: (() => void) | null = null
 
 // 获取视频元素
 export function getVideoElement(): HTMLVideoElement | null {
@@ -1798,7 +1837,9 @@ function checkAndCancelAutoPlayForRecommendation() {
   }
 }
 
-async function handleAutoExitFullscreenVideoEnded() {
+async function handleAutoExitFullscreenVideoEnded(generation: number) {
+  if (generation !== autoExitFullscreenGeneration)
+    return
   // 如果是互动视频，不处理（因为URL变化会由pushstate处理）
   if (isInteractiveVideo()) {
     return
@@ -1806,16 +1847,21 @@ async function handleAutoExitFullscreenVideoEnded() {
 
   // 检查是否应该取消自动连播（针对推广视频）
   // 延迟检查，等待结束面板完全渲染
-  setTimeout(() => {
-    checkAndCancelAutoPlayForRecommendation()
+  if (autoExitFullscreenEndTimer !== null)
+    clearTimeout(autoExitFullscreenEndTimer)
+  autoExitFullscreenEndTimer = setTimeout(() => {
+    autoExitFullscreenEndTimer = null
+    if (generation === autoExitFullscreenGeneration)
+      checkAndCancelAutoPlayForRecommendation()
   }, 1500)
 
   // 非互动视频且开启了自动退出全屏
   if (settings.value.autoExitFullscreenOnEnd) {
     // 单集循环、随机播放、自动连播等播放行为优先级高于自动退出全屏
-    if (await hasHigherPriorityEndPlaybackBehavior()) {
+    if (await hasHigherPriorityEndPlaybackBehavior())
       return
-    }
+    if (generation !== autoExitFullscreenGeneration)
+      return
 
     // 检查是否处于全屏状态
     if (document.fullscreenElement || (document as any).webkitFullscreenElement) {
@@ -1836,41 +1882,83 @@ async function handleAutoExitFullscreenVideoEnded() {
   }
 }
 
-// 监听视频结束事件并自动退出全屏
-export function startAutoExitFullscreenMonitoring() {
+function attachAutoExitFullscreenListener(generation: number) {
+  if (generation !== autoExitFullscreenGeneration)
+    return
+
   const video = getVideoElement()
   if (!video) {
-    if (autoExitFullscreenRetryTimer === null) {
-      autoExitFullscreenRetryTimer = setTimeout(() => {
-        autoExitFullscreenRetryTimer = null
-        startAutoExitFullscreenMonitoring()
-      }, 1000)
+    if (autoExitFullscreenRetryCount >= AUTO_EXIT_FULLSCREEN_RETRY_MAX
+      || autoExitFullscreenRetryTimer !== null) {
+      return
     }
+    autoExitFullscreenRetryCount++
+    autoExitFullscreenRetryTimer = setTimeout(() => {
+      autoExitFullscreenRetryTimer = null
+      attachAutoExitFullscreenListener(generation)
+    }, 1000)
     return
   }
 
+  autoExitFullscreenRetryCount = 0
   if (video === autoExitFullscreenVideo)
     return
 
-  if (autoExitFullscreenVideo) {
-    autoExitFullscreenVideo.removeEventListener('ended', handleAutoExitFullscreenVideoEnded)
+  if (autoExitFullscreenVideo && autoExitFullscreenEndedListener) {
+    autoExitFullscreenVideo.removeEventListener('ended', autoExitFullscreenEndedListener)
     autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
   }
   autoExitFullscreenVideo = video
+  autoExitFullscreenEndedListener = () => {
+    void handleAutoExitFullscreenVideoEnded(generation)
+  }
   video.setAttribute('bewly-auto-exit-listener', 'true')
-  video.addEventListener('ended', handleAutoExitFullscreenVideoEnded)
+  video.addEventListener('ended', autoExitFullscreenEndedListener)
+}
+
+// 监听视频结束事件并自动退出全屏
+export function startAutoExitFullscreenMonitoring() {
+  autoExitFullscreenGeneration++
+  autoExitFullscreenRetryCount = 0
+  if (autoExitFullscreenRetryTimer !== null)
+    clearTimeout(autoExitFullscreenRetryTimer)
+  autoExitFullscreenRetryTimer = null
+  if (autoExitFullscreenEndTimer !== null)
+    clearTimeout(autoExitFullscreenEndTimer)
+  autoExitFullscreenEndTimer = null
+  if (autoExitFullscreenVideo && autoExitFullscreenEndedListener) {
+    autoExitFullscreenVideo.removeEventListener('ended', autoExitFullscreenEndedListener)
+    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
+  }
+  autoExitFullscreenVideo = null
+  autoExitFullscreenEndedListener = null
+  stopAutoExitFullscreenDomObserver?.()
+  const generation = autoExitFullscreenGeneration
+  stopAutoExitFullscreenDomObserver = observePlayerDom(() => {
+    attachAutoExitFullscreenListener(generation)
+  })
+  attachAutoExitFullscreenListener(generation)
 }
 
 export function stopAutoExitFullscreenMonitoring() {
+  autoExitFullscreenGeneration++
+  autoExitFullscreenRetryCount = 0
   if (autoExitFullscreenRetryTimer !== null) {
     clearTimeout(autoExitFullscreenRetryTimer)
     autoExitFullscreenRetryTimer = null
   }
-  if (autoExitFullscreenVideo) {
-    autoExitFullscreenVideo.removeEventListener('ended', handleAutoExitFullscreenVideoEnded)
-    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
-    autoExitFullscreenVideo = null
+  if (autoExitFullscreenEndTimer !== null) {
+    clearTimeout(autoExitFullscreenEndTimer)
+    autoExitFullscreenEndTimer = null
   }
+  stopAutoExitFullscreenDomObserver?.()
+  stopAutoExitFullscreenDomObserver = null
+  if (autoExitFullscreenVideo && autoExitFullscreenEndedListener) {
+    autoExitFullscreenVideo.removeEventListener('ended', autoExitFullscreenEndedListener)
+    autoExitFullscreenVideo.removeAttribute('bewly-auto-exit-listener')
+  }
+  autoExitFullscreenEndedListener = null
+  autoExitFullscreenVideo = null
 }
 
 // 为Window接口添加自定义属性

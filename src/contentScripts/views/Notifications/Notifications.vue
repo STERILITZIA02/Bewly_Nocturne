@@ -60,6 +60,7 @@ const routeState = useRouteState()
 const topBarStore = useTopBarStore()
 
 const currentView = ref<NotificationView>('whisper')
+const measuredNavigationWidth = ref<number | null>(null)
 const routeReady = ref(false)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
@@ -107,6 +108,10 @@ const privateMessageWrites = useExperimentalPrivateMessageWrites(currentMid, act
   markSessionRead: privateSessions.markSessionRead,
   syncUnread: () => topBarStore.syncUnreadMessageState(),
   sendMessage: options => api.privateMessage.sendPrivateMessage(options),
+  uploadImage: options => api.privateMessage.uploadPrivateImage(options),
+  cancelImageUpload: requestId => api.privateMessage.cancelPrivateImageUpload({ requestId }),
+  sendImageMessage: options => api.privateMessage.sendPrivateImageMessage(options),
+  getImageSummary: () => t('notifications.whisper.messages.image_summary'),
   markSessionSent: privateSessions.markSessionSent,
   refreshSessions: privateSessions.refresh,
 })
@@ -126,8 +131,16 @@ const nativeView = computed<NativeNotificationSection | null>(() => (
 ))
 const isWhisperView = computed(() => isHybridNotificationView(currentView.value))
 const usesWorkspaceLayout = computed(() => currentSection.value.layout === 'workspace')
+const notificationsPageStyle = computed(() => measuredNavigationWidth.value === null
+  ? undefined
+  : { '--notifications-navigation-width': `${measuredNavigationWidth.value}px` })
 
 const isPageActive = ref(false)
+
+function updateNavigationWidth(width: number) {
+  if (Number.isFinite(width) && width > 0)
+    measuredNavigationWidth.value = Math.ceil(width)
+}
 
 function hasPrivateConversationRouteParams(url: URL): boolean {
   return Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS).some(param => url.searchParams.has(param))
@@ -251,6 +264,10 @@ function syncPrivateConversationFromRoute(url: URL, view: NotificationView) {
   applyPendingPrivateConversationRoute()
 }
 
+function resetWorkspacePagePosition() {
+  void nextTick(() => scrollViewportRef.value?.scrollTo({ top: 0 }))
+}
+
 function selectPrivateConversation(session: DisplayPrivateSession) {
   if (!/^\d+$/.test(session.talkerId) || !isPrivateConversationSessionType(session.sessionType))
     return
@@ -265,6 +282,7 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   pendingPrivateConversationRoute.value = route
   privateSessions.selectSession(session)
   rememberPrivateConversation(route)
+  resetWorkspacePagePosition()
   if (
     isCurrentSelection
     && currentRoute?.talkerId === route.talkerId
@@ -285,6 +303,7 @@ function selectTransientPrivateRecipient(recipient: TransientPrivateRecipient) {
   pendingPrivateConversationRoute.value = null
   privateSessions.clearSelectedSession()
   transientPrivateRecipient.value = recipient
+  resetWorkspacePagePosition()
   const nextUrl = clearPrivateConversationRoute(window.location.href)
   window.history.replaceState(
     clearPrivateConversationHistoryState(window.history.state),
@@ -309,6 +328,7 @@ function closePrivateConversation() {
   pendingPrivateConversationRoute.value = null
   transientPrivateRecipient.value = null
   privateSessions.clearSelectedSession()
+  resetWorkspacePagePosition()
   if (isPrivateConversationHistoryState(window.history.state)) {
     window.history.back()
     return
@@ -437,6 +457,7 @@ function deactivatePage() {
     return
 
   isPageActive.value = false
+  privateMessageWrites.releaseImages(activePrivateTalkerId.value || undefined)
   privateMessages.release()
   clearRefreshHandler()
   clearNotificationViewFromRoute()
@@ -497,6 +518,7 @@ onBeforeUnmount(() => {
       'notifications-page--document': !usesWorkspaceLayout,
       'notifications-page--dock-bottom': isBottomDock,
     }"
+    :style="notificationsPageStyle"
   >
     <div v-if="!routeReady" class="notifications-page__route-loading" aria-busy="true">
       <Loading />
@@ -504,7 +526,11 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div class="notifications-page__workspace">
-        <NotificationsPageHeader :view="currentView" @select="selectView" />
+        <NotificationsPageHeader
+          :view="currentView"
+          @navigation-width-change="updateNavigationWidth"
+          @select="selectView"
+        />
 
         <section class="notifications-page__outlet">
           <WhisperWorkspace
@@ -541,6 +567,12 @@ onBeforeUnmount(() => {
 @use "../../../styles/breakpoints";
 
 .notifications-page {
+  --notifications-conversation-list-max-width: calc(var(--bew-space-12) * 9);
+  --notifications-conversation-list-width: min(
+    var(--notifications-navigation-width, var(--notifications-conversation-list-max-width)),
+    var(--notifications-conversation-list-max-width)
+  );
+
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
@@ -553,7 +585,11 @@ onBeforeUnmount(() => {
 
 .notifications-page--workspace {
   height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
-  overflow: hidden;
+  overflow: visible;
+}
+
+:global(.bewly-scroll-viewport:has(.notifications-page--workspace)) {
+  overflow-y: hidden;
 }
 
 .notifications-page__route-loading {
@@ -605,12 +641,22 @@ onBeforeUnmount(() => {
 
 .notifications-page--workspace .notifications-page__outlet {
   height: 100%;
-  overflow: hidden;
+  overflow: visible;
 }
 
 @media (max-width: breakpoints.$mobile-max) {
+  .notifications-page {
+    --notifications-conversation-list-width: 100%;
+  }
+
   .notifications-page__workspace {
     gap: var(--bew-space-3);
+  }
+}
+
+@media (min-width: breakpoints.$grid-md) and (max-width: breakpoints.$compact-max) {
+  .notifications-page {
+    --notifications-conversation-list-max-width: calc(var(--bew-space-12) * 8);
   }
 }
 

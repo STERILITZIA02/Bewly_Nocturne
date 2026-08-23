@@ -2,28 +2,37 @@
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 
+type SelectValue = string | number | boolean | null | undefined
+
+interface OptionType {
+  value: SelectValue
+  label: string
+}
+
 const props = withDefaults(defineProps<{
   options: readonly OptionType[]
-  modelValue: any
+  modelValue: SelectValue
   disabled?: boolean
 }>(), {
   disabled: false,
 })
 
-const emit = defineEmits(['update:modelValue', 'change'])
-
-interface OptionType {
-  value: any
-  label: string
-}
+const emit = defineEmits<{
+  'update:modelValue': [value: SelectValue]
+  change: [value: SelectValue]
+}>()
 
 const { mainAppRef } = useBewlyApp()
 
 // UX 上限：菜单不应无限高，实际高度始终与可用空间取小
 const DROPDOWN_MAX_HEIGHT = 300
 
-const label = ref<string>('')
+const selectInstanceId = getCurrentInstance()?.uid ?? 0
+const listboxId = `bew-select-listbox-${selectInstanceId}`
+const label = computed(() => props.options.find(item => Object.is(item.value, props.modelValue))?.label ?? '')
 const showOptions = ref<boolean>(false)
+const activeOptionIndex = ref(-1)
+const triggerRef = ref<HTMLButtonElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const {
@@ -33,24 +42,37 @@ const {
   stop: stopPositionTracking,
 } = useFloatingMenuPosition(containerRef, dropdownRef, DROPDOWN_MAX_HEIGHT)
 
-onUpdated(() => {
-  // fix the issue when the dropdown menu text doesn't update in real-time based on the updated page language
-  if (props.options)
-    label.value = `${props.options.find((item: OptionType) => item.value === props.modelValue)?.label}`
-})
+function selectedOptionIndex() {
+  return props.options.findIndex(option => Object.is(option.value, props.modelValue))
+}
 
-onMounted(() => {
-  if (props.options)
-    label.value = `${props.options.find((item: OptionType) => item.value === props.modelValue)?.label}`
-})
-
-function openOptions() {
-  if (props.disabled)
+async function focusOption(index: number) {
+  if (props.options.length === 0)
     return
 
+  activeOptionIndex.value = Math.max(0, Math.min(index, props.options.length - 1))
+  await nextTick()
+  const option = dropdownRef.value?.querySelector<HTMLElement>(`[data-option-index="${activeOptionIndex.value}"]`)
+  option?.focus({ preventScroll: true })
+  option?.scrollIntoView({ block: 'nearest' })
+}
+
+function openOptions(initialIndex = selectedOptionIndex()) {
+  if (props.disabled || props.options.length === 0)
+    return
+
+  activeOptionIndex.value = initialIndex >= 0 ? initialIndex : 0
   // 先写好坐标再挂载，避免 enter 动画把 top/left 从 0 过渡到真实位置（左上角飞入）
   startPositionTracking()
   showOptions.value = true
+  void focusOption(activeOptionIndex.value)
+}
+
+function closeOptions(restoreFocus = false) {
+  showOptions.value = false
+  window.removeEventListener('click', handleWindowClick)
+  if (restoreFocus)
+    void nextTick(() => triggerRef.value?.focus())
 }
 
 function toggleOptions() {
@@ -58,9 +80,79 @@ function toggleOptions() {
     return
 
   if (showOptions.value)
-    showOptions.value = false
+    closeOptions(true)
   else
     openOptions()
+}
+
+function selectOption(option: OptionType) {
+  if (props.disabled)
+    return
+
+  emit('update:modelValue', option.value)
+  emit('change', option.value)
+  closeOptions(true)
+}
+
+function handleTriggerKeyDown(event: KeyboardEvent) {
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      openOptions(Math.max(0, selectedOptionIndex()))
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      openOptions(selectedOptionIndex() >= 0 ? selectedOptionIndex() : props.options.length - 1)
+      break
+    case 'Home':
+      event.preventDefault()
+      openOptions(0)
+      break
+    case 'End':
+      event.preventDefault()
+      openOptions(props.options.length - 1)
+      break
+    case 'Escape':
+      if (showOptions.value) {
+        event.preventDefault()
+        closeOptions(true)
+      }
+      break
+  }
+}
+
+function handleOptionKeyDown(event: KeyboardEvent) {
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      void focusOption((activeOptionIndex.value + 1) % props.options.length)
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      void focusOption((activeOptionIndex.value - 1 + props.options.length) % props.options.length)
+      break
+    case 'Home':
+      event.preventDefault()
+      void focusOption(0)
+      break
+    case 'End':
+      event.preventDefault()
+      void focusOption(props.options.length - 1)
+      break
+    case 'Enter':
+    case ' ':
+      event.preventDefault()
+      if (activeOptionIndex.value >= 0)
+        selectOption(props.options[activeOptionIndex.value])
+      break
+    case 'Escape':
+      event.preventDefault()
+      closeOptions(true)
+      break
+    case 'Tab':
+      closeOptions()
+      break
+  }
 }
 
 // 打开后再用真实内容高度校正方向与 maxHeight（此时坐标已接近正确，不再从 0,0 起步）
@@ -75,38 +167,25 @@ watch(showOptions, async (visible) => {
 }, { flush: 'post' })
 
 watch(() => props.disabled, (disabled) => {
-  if (disabled) {
-    showOptions.value = false
-    window.removeEventListener('click', closeOptions)
-  }
+  if (disabled)
+    closeOptions()
 })
 
-function onClickOption(val: OptionType) {
-  if (props.disabled)
-    return
-
-  window.removeEventListener('click', closeOptions)
-  label.value = val.label
-  emit('update:modelValue', val.value)
-  emit('change', val.value)
-  showOptions.value = false
-}
-
-function closeOptions() {
-  showOptions.value = false
+function handleWindowClick() {
+  closeOptions()
 }
 
 /** when you click on it outside, the selection option will be turned off  */
 function onMouseLeave() {
   if (!props.disabled)
-    window.addEventListener('click', closeOptions)
+    window.addEventListener('click', handleWindowClick)
 }
 
 function onMouseEnter() {
-  window.removeEventListener('click', closeOptions)
+  window.removeEventListener('click', handleWindowClick)
 }
 
-onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
+onBeforeUnmount(() => window.removeEventListener('click', handleWindowClick))
 </script>
 
 <template>
@@ -116,10 +195,15 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
     @mouseleave="onMouseLeave"
     @mouseenter="onMouseEnter"
   >
-    <div
+    <button
+      ref="triggerRef"
+      type="button"
       class="select-trigger"
       :class="{ 'is-disabled': props.disabled }"
-      :aria-disabled="props.disabled"
+      :disabled="props.disabled"
+      aria-haspopup="listbox"
+      :aria-expanded="showOptions"
+      :aria-controls="listboxId"
       p="x-4 y-2"
       bg="$bew-fill-1"
       rounded="$bew-interactive-radius"
@@ -132,12 +216,13 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
       items="center" w="full"
       :ring="showOptions ? '2px $bew-theme-color' : ''" duration-300
       @click="toggleOptions"
+      @keydown="handleTriggerKeyDown"
     >
       <div
         truncate
         overflow="hidden"
         m="r-2"
-        v-text="label === 'undefined' ? '' : label"
+        v-text="label"
       />
 
       <div class="select-arrow-slot" flex="none" grid place-items="center" m="l-2">
@@ -152,14 +237,16 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
           transition="background-color duration-200, border-color duration-200, transform duration-200"
         />
       </div>
-    </div>
+    </button>
 
     <Teleport :to="mainAppRef">
       <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'">
         <div
           v-if="showOptions"
+          :id="listboxId"
           ref="dropdownRef"
           class="bew-popover-surface"
+          role="listbox"
           :style="{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,
@@ -172,15 +259,21 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
           w="full" overflow-y-overlay will-change-transform
         >
           <div
-            v-for="option in options"
-            :key="option.value"
+            v-for="(option, index) in options"
+            :key="String(option.value)"
+            :data-option-index="index"
+            role="option"
+            :aria-selected="Object.is(option.value, modelValue)"
+            :tabindex="activeOptionIndex === index ? 0 : -1"
             p="x-2 y-2"
             rounded="$bew-interactive-radius"
             w="full"
             bg="hover:$bew-fill-2"
             transition="background-color duration-200, border-color duration-200, transform duration-200"
             cursor="pointer"
-            @click="onClickOption(option)"
+            @focus="activeOptionIndex = index"
+            @keydown="handleOptionKeyDown"
+            @click="selectOption(option)"
           >
             <span v-text="option.label" />
           </div>
@@ -190,8 +283,10 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
       <!-- 遮罩 外部滚动时关闭下拉菜单 -->
       <div
         v-if="showOptions"
+        aria-hidden="true"
         pos="fixed top-0 left-0" w-full h-full
         z="$bew-z-control-backdrop"
+        @click="closeOptions()"
       />
     </Teleport>
   </div>
@@ -199,6 +294,8 @@ onBeforeUnmount(() => window.removeEventListener('click', closeOptions))
 
 <style lang="scss" scoped>
 .select-trigger {
+  appearance: none;
+  font: inherit;
   transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 }
 

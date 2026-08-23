@@ -5,6 +5,7 @@ import Radio from '~/components/Radio.vue'
 import { useSettingsCloudSyncPreference } from '~/composables/useSettingsCloudSyncPreference'
 import { useStorageLocal } from '~/composables/useStorageLocal'
 import { settings } from '~/logic'
+import { getExtensionAssetUrl } from '~/utils/messaging'
 import {
   DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
   SETTINGS_CLOUD_SYNC_STATUS_KEY,
@@ -31,7 +32,9 @@ const repositoryPath = new URL(homepage).pathname.replace(/^\//, '')
 const releasesUrl = `${homepage}/releases`
 const latestReleaseApiUrl = `https://api.github.com/repos/${repositoryPath}/releases/latest`
 const contributorsUrl = `${homepage}/graphs/contributors`
-const contributorsImageUrl = `https://contrib.rocks/image?repo=${repositoryPath}`
+const contributorsRemoteImageUrl = 'https://contrib.rocks/image?repo=STERILITZIA02/Bewly_Nocturne'
+const contributorsImageUrl = ref(getExtensionAssetUrl('/assets/contributors.svg'))
+let contributorRemoteFallbackUsed = false
 
 const isDev = computed((): boolean => import.meta.env.DEV)
 
@@ -59,6 +62,11 @@ async function checkGitHubRelease() {
 }
 
 function handleContributorImageError() {
+  if (!contributorRemoteFallbackUsed) {
+    contributorRemoteFallbackUsed = true
+    contributorsImageUrl.value = contributorsRemoteImageUrl
+    return
+  }
   contributorsImageFailed.value = true
 }
 </script>
@@ -77,7 +85,7 @@ function handleContributorImageError() {
           pos="absolute bottom-0 right-0" transform="translate-x-50%" un-text="xs $bew-text-1" p="y-1 x-2" bg="$bew-fill-1"
           rounded="$bew-radius"
         >
-          NEW
+          {{ $t('settings.new_version_badge') }}
         </a>
       </div>
       <section class="about-brand" text-center mt-2>
@@ -88,7 +96,7 @@ function handleContributorImageError() {
             class="bew-warning-text"
             inline-block
           >
-            Dev
+            {{ $t('settings.development_build_badge') }}
           </span>
         </p>
         <p text-center>

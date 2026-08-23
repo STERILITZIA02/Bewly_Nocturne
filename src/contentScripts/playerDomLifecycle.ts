@@ -39,8 +39,11 @@ function startBootstrapObserver() {
     return
 
   bootstrapObserver = new MutationObserver((mutations) => {
-    if (mutations.some(mutation => Array.from(mutation.addedNodes).some(containsPlayerRoot)))
+    if (!playerRoot?.isConnected
+      || findPlayerRoot() !== playerRoot
+      || mutations.some(mutation => Array.from(mutation.addedNodes).some(containsPlayerRoot))) {
       bindPlayerRoot()
+    }
   })
   bootstrapObserver.observe(document.body, { childList: true, subtree: true })
 }
@@ -58,9 +61,8 @@ bindPlayerRoot = () => {
     return
 
   playerRoot = nextRoot
-  bootstrapObserver?.disconnect()
-  bootstrapObserver = null
   disconnectScopedObservers()
+  startBootstrapObserver()
 
   playerObserver = new MutationObserver(notifySubscribers)
   playerObserver.observe(playerRoot, { childList: true, subtree: true })

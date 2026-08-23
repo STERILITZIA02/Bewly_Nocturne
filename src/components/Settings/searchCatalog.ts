@@ -469,6 +469,8 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.bilibili_features.video_playback',
     'settings.group_player_display_mode',
     'settings.video_player_mode.bewly_widescreen_sidebar_position',
+    'settings.show_bewly_widescreen_button',
+    'settings.show_bewly_widescreen_button_desc',
     'settings.video_player_mode.enable_overrides',
     'settings.video_player_mode.overrides',
     'settings.video_player_scroll',

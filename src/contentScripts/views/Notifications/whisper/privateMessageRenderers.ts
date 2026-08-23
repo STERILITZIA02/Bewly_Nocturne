@@ -18,7 +18,7 @@ export type ParsedPrivateMessageContent
 export type PrivateMessageTextSegment
   = | { type: 'text', text: string }
     | { type: 'link', href: string, text: string }
-    | { type: 'emoji', alt: string, src: string, size: number }
+    | { type: 'emote', text: string, url: string, size: number }
 
 export interface PrivateMessageTextContent {
   type: 'text'
@@ -119,14 +119,26 @@ export interface PrivateMessageUnknownContent {
   type: 'unknown'
 }
 
-export interface PrivateMessageEmotion {
-  alt: string
-  src: string
+export interface PrivateEmote {
+  id: string
+  text: string
+  url: string
+  ownerId?: string
+  packageId?: string
+  packageName?: string
   size: number
+  type: 'default' | 'user'
+}
+
+export interface PrivateEmotePackage {
+  id: string
+  name: string
+  type: PrivateEmote['type']
+  emotes: PrivateEmote[]
 }
 
 interface PrivateMessageRendererContext {
-  emotions: Map<string, PrivateMessageEmotion>
+  emotions: Map<string, PrivateEmote>
 }
 
 interface PrivateMessageRenderer {
@@ -223,7 +235,7 @@ function splitTextUrls(text: string): PrivateMessageTextSegment[] {
 
 function splitTextWithEmotions(
   text: string,
-  emotions: Map<string, PrivateMessageEmotion>,
+  emotions: Map<string, PrivateEmote>,
 ): PrivateMessageTextSegment[] {
   if (!text)
     return []
@@ -234,9 +246,9 @@ function splitTextWithEmotions(
   let offset = 0
   while (offset < text.length) {
     let nextIndex = -1
-    let nextEmotion: PrivateMessageEmotion | undefined
+    let nextEmotion: PrivateEmote | undefined
     for (const emotion of emotions.values()) {
-      const index = text.indexOf(emotion.alt, offset)
+      const index = text.indexOf(emotion.text, offset)
       if (index !== -1 && (nextIndex === -1 || index < nextIndex)) {
         nextIndex = index
         nextEmotion = emotion
@@ -250,32 +262,134 @@ function splitTextWithEmotions(
     if (nextIndex > offset)
       segments.push(...splitTextUrls(text.slice(offset, nextIndex)))
     segments.push({
-      type: 'emoji',
-      alt: nextEmotion.alt,
-      src: nextEmotion.src,
+      type: 'emote',
+      text: nextEmotion.text,
+      url: nextEmotion.url,
       size: nextEmotion.size,
     })
-    offset = nextIndex + nextEmotion.alt.length
+    offset = nextIndex + nextEmotion.text.length
   }
 
   return segments
 }
 
-export function collectPrivateMessageEmotions(eInfos: unknown[]): Map<string, PrivateMessageEmotion> {
-  const result = new Map<string, PrivateMessageEmotion>()
-  for (const rawInfo of eInfos) {
-    const info = asRecord(rawInfo)
-    const alt = typeof info?.text === 'string' ? info.text : ''
-    const src = normalizeHttpUrl(info?.gif_url) || normalizeHttpUrl(info?.uri)
-    if (!alt || !src)
-      continue
-    result.set(alt, {
-      alt,
-      src,
-      size: normalizeDimension(info?.size),
-    })
+function resolvePrivateEmoteType(info: Record<string, unknown>): PrivateEmote['type'] {
+  const type = normalizeString(info.type ?? info.emote_type).toLowerCase()
+  return info.is_user === true || ['custom', 'favorite', 'favourite', 'user'].includes(type)
+    ? 'user'
+    : 'default'
+}
+
+function normalizePrivateEmote(rawInfo: unknown): PrivateEmote | null {
+  const info = asRecord(rawInfo)
+  if (!info)
+    return null
+  const text = normalizeString(info.text)
+  const url = normalizeHttpUrl(info.gif_url)
+    || normalizeHttpUrl(info.uri)
+    || normalizeHttpUrl(info.url)
+  if (!text || !url)
+    return null
+  const ownerId = normalizeString(info.owner_mid ?? info.owner_id ?? info.ownerId)
+  const packageId = normalizeString(info.package_id ?? info.packageId ?? info.pkg_id)
+  const packageName = normalizeString(info.package_name ?? info.packageName ?? info.pkg_name)
+  const explicitId = normalizeString(info.id ?? info.emote_id ?? info.emotion_id)
+  const type = resolvePrivateEmoteType(info)
+  return {
+    id: `${packageId || type}:${explicitId || text}`,
+    text,
+    url,
+    ownerId: ownerId || undefined,
+    packageId: packageId || undefined,
+    packageName: packageName || undefined,
+    size: normalizeDimension(info.size),
+    type,
   }
-  return result
+}
+
+export function collectPrivateEmotes(eInfos: unknown[]): PrivateEmote[] {
+  const result = new Map<string, PrivateEmote>()
+  for (const rawInfo of eInfos) {
+    const emote = normalizePrivateEmote(rawInfo)
+    if (emote)
+      result.set(emote.id, emote)
+  }
+  return [...result.values()]
+}
+
+export function collectPrivateEmotePackages(
+  eInfos: unknown[],
+  currentMid = '',
+): PrivateEmotePackage[] {
+  const packages = new Map<string, PrivateEmotePackage>()
+  for (const emote of collectPrivateEmotes(eInfos)) {
+    if (emote.type === 'user' && currentMid && emote.ownerId && emote.ownerId !== currentMid)
+      continue
+    const packageId = emote.packageId || emote.type
+    const key = `${emote.type}:${packageId}`
+    let pkg = packages.get(key)
+    if (!pkg) {
+      pkg = {
+        id: packageId,
+        name: emote.packageName ?? '',
+        type: emote.type,
+        emotes: [],
+      }
+      packages.set(key, pkg)
+    }
+    if (!pkg.emotes.some(item => item.id === emote.id))
+      pkg.emotes.push(emote)
+  }
+  return [...packages.values()]
+}
+
+export function mergePrivateEmotePackages(
+  current: PrivateEmotePackage[],
+  incoming: PrivateEmotePackage[],
+): PrivateEmotePackage[] {
+  const packages = new Map<string, PrivateEmotePackage>()
+  for (const source of [...current, ...incoming]) {
+    const key = `${source.type}:${source.id}`
+    const existing = packages.get(key)
+    if (!existing) {
+      packages.set(key, { ...source, emotes: [...source.emotes] })
+      continue
+    }
+    const emotes = new Map(existing.emotes.map(emote => [emote.id, emote]))
+    source.emotes.forEach(emote => emotes.set(emote.id, emote))
+    existing.emotes = [...emotes.values()]
+    if (source.name)
+      existing.name = source.name
+  }
+  return [...packages.values()]
+}
+
+export function collectPrivateMessageEmotions(eInfos: unknown[]): Map<string, PrivateEmote> {
+  return new Map(collectPrivateEmotes(eInfos).map(emote => [emote.text, emote]))
+}
+
+export function parsePrivateMessageTextSegments(
+  text: string,
+  emotes: Iterable<PrivateEmote>,
+): PrivateMessageTextSegment[] {
+  return splitTextWithEmotions(
+    text,
+    new Map([...emotes].map(emote => [emote.text, emote])),
+  )
+}
+
+export function insertPrivateEmoteToken(
+  value: string,
+  token: string,
+  selectionStart: number,
+  selectionEnd: number,
+): { cursor: number, value: string } {
+  const start = Math.max(0, Math.min(value.length, selectionStart))
+  const end = Math.max(start, Math.min(value.length, selectionEnd))
+  return {
+    cursor: start + token.length,
+    value: `${value.slice(0, start)}${token}${value.slice(end)}`,
+  }
 }
 
 function parseTextContent(
@@ -566,7 +680,7 @@ export const PRIVATE_MESSAGE_RENDERERS: Readonly<Record<number, PrivateMessageRe
 
 export function parsePrivateMessageContent(
   message: PrivateMessage,
-  emotions: Map<string, PrivateMessageEmotion>,
+  emotions: Map<string, PrivateEmote>,
 ): ParsedPrivateMessageContent {
   if (message.msg_status === 1 || message.msg_type === 5)
     return { type: 'recalled' }

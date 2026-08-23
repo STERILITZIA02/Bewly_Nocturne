@@ -1,16 +1,27 @@
 import type { PrivateMessage } from '~/background/privateMessage/types'
 
-import type { ParsedPrivateMessageContent } from './privateMessageRenderers'
+import type {
+  ParsedPrivateMessageContent,
+  PrivateEmotePackage,
+} from './privateMessageRenderers'
 import {
   collectPrivateMessageEmotions,
   parsePrivateMessageContent,
+  parsePrivateMessageTextSegments,
 } from './privateMessageRenderers'
 
 export {
+  collectPrivateEmotePackages,
+  collectPrivateEmotes,
   collectPrivateMessageEmotions,
+  insertPrivateEmoteToken,
+  mergePrivateEmotePackages,
   type ParsedPrivateMessageContent,
   parsePrivateMessageContent,
+  parsePrivateMessageTextSegments,
   PRIVATE_MESSAGE_RENDERERS,
+  type PrivateEmote,
+  type PrivateEmotePackage,
   type PrivateMessageTextSegment,
 } from './privateMessageRenderers'
 
@@ -92,6 +103,27 @@ export function transformPrivateMessages(
     source: classifyPrivateMessageSource(message.msg_source),
     content: parsePrivateMessageContent(message, emotions),
   })).sort(compareDisplayPrivateMessages)
+}
+
+export function hydratePrivateMessageEmotes(
+  items: DisplayPrivateMessage[],
+  packages: PrivateEmotePackage[],
+): DisplayPrivateMessage[] {
+  const emotes = packages.flatMap(pkg => pkg.emotes)
+  if (emotes.length === 0)
+    return items
+  return items.map((item) => {
+    if (item.content.type !== 'text')
+      return item
+    const text = item.content.segments.map(segment => segment.text).join('')
+    return {
+      ...item,
+      content: {
+        type: 'text',
+        segments: parsePrivateMessageTextSegments(text, emotes),
+      },
+    }
+  })
 }
 
 export function mergePrivateMessages(

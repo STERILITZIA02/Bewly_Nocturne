@@ -79,7 +79,9 @@ function transformTrendingVideo(item: VideoElement): Video | undefined {
     view: typeof videoItem.stat.view === 'number' ? videoItem.stat.view : Number(videoItem.stat.view),
     danmaku: typeof videoItem.stat.danmaku === 'number' ? videoItem.stat.danmaku : Number(videoItem.stat.danmaku),
     like: typeof videoItem.stat.like === 'number' ? videoItem.stat.like : Number(videoItem.stat.like),
-    likeStr: (videoItem.stat as any)?.like_str ?? videoItem.stat.like,
+    likeStr: typeof videoItem.stat.like_str === 'string'
+      ? videoItem.stat.like_str
+      : String(videoItem.stat.like),
     publishedTimestamp: videoItem.pubdate,
     bvid: videoItem.bvid,
     tag: decodeHtmlEntities(videoItem.rcmd_reason.content),

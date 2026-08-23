@@ -785,12 +785,23 @@ function inferVideoTypeFromVideo(video: Video | undefined): 'rcmd' | 'appRcmd' |
   return props.videoType || 'common'
 }
 
+function isGeneratedSkeleton(item: unknown): boolean {
+  return typeof item === 'object' && item !== null && Reflect.get(item, '_isSkeleton') === true
+}
+
+function getGeneratedSkeletonId(item: unknown): string | number | undefined {
+  if (typeof item !== 'object' || item === null)
+    return undefined
+  const id = Reflect.get(item, '_skeletonId')
+  return typeof id === 'string' || typeof id === 'number' ? id : undefined
+}
+
 function createRenderItem(item: T, index: number): VideoCardRenderItem {
   const key = getUniqueKey(item, index)
   const fallbackType = props.videoType || 'common'
 
   // 自动生成骨架屏
-  if ((item as any)?._isSkeleton) {
+  if (isGeneratedSkeleton(item)) {
     return {
       key,
       index,
@@ -832,7 +843,7 @@ const renderItems = computed<VideoCardRenderItem[]>(() => {
   return displayItems.value.map((item, index) => createRenderItem(item, index))
 })
 
-interface VideoTransformCacheEntry<T = any> {
+interface VideoTransformCacheEntry<T = unknown> {
   item: T
   video: Video | undefined
 }
@@ -865,7 +876,7 @@ function getTransformedVideo(item: T, key: string | number): Video | undefined {
     return undefined
 
   // 检查是否为骨架屏占位，骨架屏不需要转换
-  if ((item as any)?._isSkeleton)
+  if (isGeneratedSkeleton(item))
     return undefined
 
   try {
@@ -895,8 +906,9 @@ function handleRefresh() {
 // 生成唯一 key
 function getUniqueKey(item: T, index: number): string | number {
   // 如果是骨架屏占位，使用骨架屏 ID
-  if ((item as any)?._skeletonId)
-    return (item as any)._skeletonId
+  const skeletonId = getGeneratedSkeletonId(item)
+  if (skeletonId !== undefined)
+    return skeletonId
 
   // 如果 item 为空或无效，使用稳定的 index 作为 key（避免随机值破坏 v-memo）
   if (!item)

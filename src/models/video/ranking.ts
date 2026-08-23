@@ -28,7 +28,13 @@ export interface List {
   mission_id?: number
   rights: { [key: string]: number }
   owner: Owner
-  stat: { [key: string]: number }
+  stat: {
+    view: number
+    danmaku: number
+    like: number
+    like_str?: string
+    [key: string]: number | string | undefined
+  }
   dynamic: string
   cid: number
   dimension: Dimension

@@ -26,7 +26,6 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   (event: 'removed', selectedOpt?: { reasonId?: number, feedbackId?: number }): void
   (event: 'close'): void
-  (event: 'reopen'): void
 }>()
 // 添加滚动相关的变量和方法
 const menuListRef = ref<HTMLElement | null>(null)
@@ -61,6 +60,59 @@ function scrollToBottom() {
     top: menuListRef.value.scrollHeight,
     behavior: 'smooth',
   })
+}
+
+function getMenuItems() {
+  return Array.from(menuListRef.value?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [])
+}
+
+function focusMenuItem(index: number) {
+  const items = getMenuItems()
+  if (items.length === 0)
+    return
+  const nextIndex = (index + items.length) % items.length
+  items[nextIndex]?.focus({ preventScroll: true })
+  items[nextIndex]?.scrollIntoView({ block: 'nearest' })
+}
+
+function handleMenuKeydown(event: KeyboardEvent) {
+  const items = getMenuItems()
+  if (items.length === 0)
+    return
+  const eventTarget = event.target instanceof Element
+    ? event.target.closest<HTMLElement>('[role="menuitem"]')
+    : null
+  const currentIndex = eventTarget ? items.indexOf(eventTarget) : -1
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      focusMenuItem(currentIndex + 1)
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      focusMenuItem(currentIndex <= 0 ? items.length - 1 : currentIndex - 1)
+      break
+    case 'Home':
+      event.preventDefault()
+      focusMenuItem(0)
+      break
+    case 'End':
+      event.preventDefault()
+      focusMenuItem(items.length - 1)
+      break
+    case 'Enter':
+    case ' ':
+      if (currentIndex >= 0) {
+        event.preventDefault()
+        items[currentIndex]?.click()
+      }
+      break
+    case 'Escape':
+      event.preventDefault()
+      handleClose()
+      break
+  }
 }
 
 const getVideoType = inject<() => string>('getVideoType')!
@@ -199,6 +251,7 @@ onMounted(() => {
   showContextMenu.value = true
   nextTick(() => {
     handleScroll()
+    focusMenuItem(0)
 
     // 监听菜单列表的尺寸变化
     if (menuListRef.value) {
@@ -366,10 +419,6 @@ function handleClose() {
 }
 
 function handleReopen() {
-  // showContextMenu.value = false
-  // showPipWindow.value = false
-  // console.log('reopen')
-  // emit('reopen')
   handleClose()
 }
 
@@ -471,26 +520,29 @@ async function unfollowUser() {
     <!-- more popup -->
     <div v-if="showContextMenu">
       <div
-        style="backdrop-filter: var(--bew-filter-glass-1); box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);"
         :style="contextMenuStyles"
-        p-1 bg="$bew-elevated" rounded="$bew-radius"
-        border="1 $bew-surface-border-color"
-        class="context-menu-container"
+        p-1
+        class="context-menu-container bew-popover-surface"
       >
         <!-- 顶部滚动指示器 -->
-        <div
+        <button
           v-show="canScrollUp"
+          type="button"
           class="scroll-indicator scroll-indicator-top"
+          :aria-label="$t('video_card.operation.scroll_to_top')"
           @click="scrollToTop"
         >
-          <i class="i-mingcute:up-line" />
-        </div>
+          <i class="i-mingcute:up-line" aria-hidden="true" />
+        </button>
 
         <ul
           ref="menuListRef"
+          role="menu"
+          :aria-label="$t('video_card.operation.more_options')"
           flex="~ col gap-1"
           class="context-menu-list"
           @scroll="handleScroll"
+          @keydown="handleMenuKeydown"
         >
           <!-- 现有内容不变 -->
           <template v-if="getVideoType() === 'appRcmd'">
@@ -500,6 +552,8 @@ async function unfollowUser() {
                   && option.type !== ThreePointV2Type.Feedback
                   && (option.type !== ThreePointV2Type.Dislike || isOptionVisible('notInterested'))"
                 class="context-menu-item"
+                role="menuitem"
+                tabindex="-1"
                 @click="handleAppMoreCommand(option.type)"
               >
                 <i class="item-icon" i-solar:confounded-circle-bold-duotone />
@@ -512,6 +566,8 @@ async function unfollowUser() {
             <li
               v-for="option in videoOptions" :key="option.id"
               class="context-menu-item"
+              role="menuitem"
+              tabindex="-1"
               @click="handleMoreCommand(option.id)"
             >
               <i class="item-icon" i-solar:confounded-circle-bold-duotone />
@@ -527,6 +583,8 @@ async function unfollowUser() {
               :key="option.command"
               class="context-menu-item"
               :class="option.color"
+              role="menuitem"
+              tabindex="-1"
               @click="handleCommonCommand(option.command)"
             >
               <i class="item-icon" :class="[option.icon, option.color]" />
@@ -538,19 +596,22 @@ async function unfollowUser() {
         </ul>
 
         <!-- 底部滚动指示器 -->
-        <div
+        <button
           v-show="canScrollDown"
+          type="button"
           class="scroll-indicator scroll-indicator-bottom"
+          :aria-label="$t('video_card.operation.scroll_to_bottom')"
           @click="scrollToBottom"
         >
-          <i class="i-mingcute:down-line" />
-        </div>
+          <i class="i-mingcute:down-line" aria-hidden="true" />
+        </button>
       </div>
     </div>
 
     <!-- mask -->
     <div
       v-if="showContextMenu"
+      aria-hidden="true"
       pos="fixed top-0 left-0" w-full h-full
       style="z-index: var(--bew-z-context-backdrop);"
       @click="handleClose"
@@ -620,6 +681,8 @@ async function unfollowUser() {
 }
 
 .context-menu-container {
+  --bew-popover-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+
   width: min(240px, calc(100vw - var(--bew-space-4)));
   max-height: min(406px, calc(100vh - var(--bew-space-4)));
   overflow: hidden;
@@ -644,6 +707,9 @@ async function unfollowUser() {
 
 .scroll-indicator {
   height: 20px;
+  padding: 0;
+  font: inherit;
+  border: 0;
   display: flex;
   align-items: center;
   justify-content: center;

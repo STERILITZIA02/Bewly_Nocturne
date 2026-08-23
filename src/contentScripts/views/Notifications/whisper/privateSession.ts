@@ -22,6 +22,7 @@ export type OfficialAssistantType
 export interface PrivateSessionCapabilities {
   canReadNative: boolean
   canAck: boolean
+  canSend: boolean
   canOpenProfile: boolean
   canOpenOriginal: boolean
 }
@@ -167,13 +168,14 @@ function createPrivateSessionCapabilities(
     || kind === 'unfollowed-user'
     || kind === 'intercepted-user'
   )
-  const canAcknowledge = kind === 'user' || kind === 'official-assistant'
+  const canSend = kind === 'user' || kind === 'unfollowed-user'
   const canOpenProfile = kind === 'user'
     || kind === 'unfollowed-user'
     || kind === 'intercepted-user'
   return {
     canReadNative: isNativeReadable,
-    canAck: isNativeReadable && canAcknowledge,
+    canAck: isNativeReadable,
+    canSend: isDirectConversation && canSend,
     canOpenProfile: isDirectConversation && canOpenProfile,
     canOpenOriginal: true,
   }

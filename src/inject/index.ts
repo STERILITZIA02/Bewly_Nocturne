@@ -1,13 +1,14 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
-import { createPageBridgeChannelId, matchesPageBridgeMessage, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
+import { createPageBridgeChannelId, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
-import type { Settings } from '~/logic/storage'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { isElectron } from '~/utils/main'
+import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
+import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
 
 // 存储当前设置状态
-let currentSettings: Settings | null = null
+let currentSettings: PageSettingsPayload | null = null
 let settingsReady = false
 let preventMobileRedirectEnabled = false
 let resolveSettingsReady: (() => void) | null = null
@@ -1240,7 +1241,7 @@ else if (shouldInitializePageScript) {
     y: number
   }
 
-  type CommentReplyTreeMode = 'lineCollapseMain' | 'lineKeepMain' | 'indentOnly'
+  type CommentReplyTreeMode = PageSettingsPayload['commentReplyTreeMode']
 
   function getCommentReplyTreeMode(): CommentReplyTreeMode | null {
     if (!currentSettings)
@@ -1249,15 +1250,7 @@ else if (shouldInitializePageScript) {
     if (currentSettings.enableCommentReplyTreeDisplay === false)
       return null
 
-    const mode = currentSettings.commentReplyTreeMode
-    if (mode === 'lineCollapseMain' || mode === 'lineKeepMain' || mode === 'indentOnly')
-      return mode
-
-    // 兼容尚未迁移的旧设置载荷
-    if ((currentSettings as { enableCommentReplyTree?: boolean }).enableCommentReplyTree === true)
-      return 'lineCollapseMain'
-
-    return 'lineKeepMain'
+    return currentSettings.commentReplyTreeMode
   }
 
   const commentReplyPaginationLabels = {
@@ -3191,41 +3184,55 @@ else if (shouldInitializePageScript) {
       patchCommentCustomElement(name, window.customElements.get(name))
   }
 
+  const settingsRequestTimers: number[] = []
+  const stopSettingsRequests = () => {
+    settingsRequestTimers.forEach(timer => window.clearTimeout(timer))
+    settingsRequestTimers.length = 0
+  }
+  const requestSettings = () => {
+    if (settingsReady)
+      return
+    window.postMessage({
+      protocol: PAGE_BRIDGE_PROTOCOL,
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST,
+    }, window.location.origin)
+  }
+
   // 添加消息监听器
   window.addEventListener('message', (event) => {
-  // 确保消息来源是插件环境
-    if (event.source !== window)
-      return
-
-    if (matchesPageBridgeMessage(event.data, {
+    if (!matchesPageBridgeEvent(event, {
+      source: window,
+      origin: window.location.origin,
       channelId: pageBridgeChannelId,
       type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
     })) {
-      const { data } = event.data
-      // 更新设置
-      if (typeof data === 'object' && data !== null) {
-        const isFirstTime = !settingsReady
-        currentSettings = data as Settings
-        preventMobileRedirectEnabled = currentSettings.preventMobileRedirect === true
-        settingsReady = true
-        refreshCommentReplyTrees()
-        if (getCommentReplyTreeMode() === null)
-          clearCommentReplyDeepLinkSettlement()
-        // 设置就绪后 B 站可能才开始 #reply 定位/展开
-        if (getCommentReplyDeepLinkId())
-          scheduleCommentReplyDeepLinkSettlement(isFirstTime ? 'immediate' : 'hash')
-        resolveSettingsReady?.()
-        resolveSettingsReady = null
-      }
+      return
     }
+
+    const payload = createPageSettingsPayload(event.data.data)
+    if (!payload)
+      return
+
+    const isFirstTime = !settingsReady
+    currentSettings = payload
+    preventMobileRedirectEnabled = currentSettings.preventMobileRedirect
+    settingsReady = true
+    stopSettingsRequests()
+    refreshCommentReplyTrees()
+    if (getCommentReplyTreeMode() === null)
+      clearCommentReplyDeepLinkSettlement()
+    // 设置就绪后 B 站可能才开始 #reply 定位/展开
+    if (getCommentReplyDeepLinkId())
+      scheduleCommentReplyDeepLinkSettlement(isFirstTime ? 'immediate' : 'hash')
+    resolveSettingsReady?.()
+    resolveSettingsReady = null
   })
 
-  // 请求初始设置
-  window.postMessage({
-    protocol: PAGE_BRIDGE_PROTOCOL,
-    channelId: pageBridgeChannelId,
-    type: PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST,
-  }, '*')
+  // MAIN / isolated world 的 document_start 调度顺序不保证，有限重试避免丢失初始握手。
+  requestSettings()
+  for (const delay of [100, 300, 700])
+    settingsRequestTimers.push(window.setTimeout(requestSettings, delay))
 
   // 拦截 navigator.clipboard.writeText，启用净化分享链接功能
   const originalWriteText = navigator.clipboard.writeText.bind(navigator.clipboard)

@@ -424,6 +424,7 @@ export interface Settings {
   // Video Player
   defaultVideoPlayerMode: DefaultVideoPlayerMode
   bewlyWidescreenSidebarPosition: BewlyWidescreenSidebarPosition
+  showBewlyWidescreenButton: boolean
   defaultDanmakuState: PlayerDefaultState
   defaultCaptionState: PlayerDefaultState
   lastDanmakuState: boolean
@@ -693,6 +694,7 @@ export const originalSettings: Settings = {
   // Video Player
   defaultVideoPlayerMode: 'default',
   bewlyWidescreenSidebarPosition: 'right',
+  showBewlyWidescreenButton: true,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
   lastDanmakuState: true,
@@ -756,10 +758,15 @@ export const settings = useSettingsStorage(originalSettings, {
   onReady: value => resolveSettingsReady(value),
 })
 
+function asUnknownRecord(value: object): Record<string, unknown> {
+  return value as Record<string, unknown>
+}
+
 watch(
   () => settings.value,
   (value) => {
-    const record = value as Record<string, any>
+    const record = value as Settings & Record<string, unknown>
+    const legacyRecord = asUnknownRecord(value)
 
     Reflect.deleteProperty(record, 'detectCommentShadowBan')
     Reflect.deleteProperty(record, 'homeTabsPosition')
@@ -838,9 +845,8 @@ watch(
     }
 
     // 确保 useBilibiliDefaultAutoPlay 存在（新用户或旧版本升级）
-    if (!('useBilibiliDefaultAutoPlay' in record)) {
+    if (typeof legacyRecord.useBilibiliDefaultAutoPlay !== 'boolean')
       record.useBilibiliDefaultAutoPlay = true
-    }
 
     Reflect.deleteProperty(record, 'enableIndependentAutoPlay')
     Reflect.deleteProperty(record, 'independentAutoPlayStates')
@@ -885,7 +891,7 @@ watch(
     let migratedLegacyCustomAutoPlay = false
 
     for (const [field, context] of legacyCustomAutoPlayFields) {
-      const legacyMode = record[field]
+      const legacyMode = legacyRecord[field]
       const migratedOrder = legacyMode === 'customSequential'
         ? 'sequential'
         : legacyMode === 'customReverse'
@@ -915,7 +921,7 @@ watch(
     Reflect.deleteProperty(record, 'randomPlayOrder')
 
     // 紧凑布局已由卡片元素显示设置替代
-    if (record.videoCardLayout === 'compact')
+    if (legacyRecord.videoCardLayout === 'compact')
       record.videoCardLayout = 'modern'
 
     if (record.rememberDanmakuState === true)
@@ -958,8 +964,12 @@ watch(
     if ('customizeCSS' in record || 'customizeCSSContent' in record) {
       localSettings.value = {
         ...localSettings.value,
-        customizeCSS: record.customizeCSS ?? localSettings.value.customizeCSS,
-        customizeCSSContent: record.customizeCSSContent ?? localSettings.value.customizeCSSContent,
+        customizeCSS: typeof legacyRecord.customizeCSS === 'boolean'
+          ? legacyRecord.customizeCSS
+          : localSettings.value.customizeCSS,
+        customizeCSSContent: typeof legacyRecord.customizeCSSContent === 'string'
+          ? legacyRecord.customizeCSSContent
+          : localSettings.value.customizeCSSContent,
       }
 
       Reflect.deleteProperty(record, 'customizeCSS')

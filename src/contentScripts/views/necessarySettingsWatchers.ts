@@ -12,6 +12,7 @@ import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, 
 import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clipboardSelection'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
+import { postMessageToIframe } from '~/utils/iframeMessage'
 import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 import { getThemeColorTokens } from '~/utils/themeColor'
 
@@ -387,7 +388,7 @@ export function setupNecessarySettingsWatchers() {
           }
 
           try {
-            iframe.contentWindow?.postMessage(message, '*')
+            postMessageToIframe(iframe, message)
           }
           catch {
             // Ignore cross-origin / sandbox restrictions.

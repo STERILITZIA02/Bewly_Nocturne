@@ -2,7 +2,6 @@ import browser from 'webextension-polyfill'
 
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl, isPreventMobileRedirectEnabled } from '~/utils/bilibiliDesktopNavigation'
 
-import { setupAppAuthScheduler } from './appAuthScheduler'
 import { setupContentScriptRefreshPrompt } from './contentScriptRefreshPrompt'
 import { replaceFirefoxContainerCookieHeader } from './firefoxCookies'
 import { setupLoginStateWatcher } from './loginStateWatcher'
@@ -12,11 +11,6 @@ import { setupSettingsCloudSync } from './settingsCloudSync'
 import { setupSettingsStorageCoordinator } from './settingsStorageCoordinator'
 import { setupTopBarStateBroker } from './topBarStateBroker'
 import { initWbiKeys } from './wbiSign'
-
-// Initialize extension and set up message handlers
-browser.runtime.onInstalled.addListener(async () => {
-  console.log('Extension installed')
-})
 
 const PREVENT_MOBILE_REDIRECT_RULE_ID = 1001
 const preventMobileRedirectRule: browser.DeclarativeNetRequest.Rule = {
@@ -147,6 +141,5 @@ setupSettingsCloudSync()
 setupApiMsgListeners()
 setupTabMsgListeners()
 setupTopBarStateBroker()
-setupAppAuthScheduler()
 setupContentScriptRefreshPrompt()
 setupLoginStateWatcher()

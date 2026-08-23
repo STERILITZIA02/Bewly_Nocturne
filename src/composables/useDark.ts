@@ -2,8 +2,9 @@ import { usePreferredDark } from '@vueuse/core'
 import { effectScope, onScopeDispose } from 'vue'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
-import { DARK_MODE_BASE_COLOR_CHANGE } from '~/constants/globalEvents'
+import { DARK_MODE_BASE_COLOR_CHANGE, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
+import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
 
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
@@ -111,19 +112,24 @@ function createDarkState() {
   const isDark = computed(() => currentAppColorScheme.value === 'dark' || isVideoPageDark.value)
   const isOledDark = computed(() => isDark.value && settings.value.enableOledDarkMode === true)
 
-  const handleIframeThemeMessage = ({ data, source }: MessageEvent) => {
-    if (window.parent === window || source !== window.parent || !data || typeof data !== 'object' || data.type !== 'iframeDarkModeChange')
+  const handleIframeThemeMessage = (event: MessageEvent) => {
+    const data = getParentMessageData(event, [IFRAME_DARK_MODE_CHANGE])
+    if (!data
+      || typeof data.isDark !== 'boolean'
+      || (data.isOledDark !== undefined && typeof data.isOledDark !== 'boolean')
+      || (data.darkModeBaseColor !== undefined && typeof data.darkModeBaseColor !== 'string')) {
       return
+    }
 
     const selective = isFestivalPage()
     const bewlyContainer = document.getElementById('bewly')
-    bewlyContainer?.classList.toggle('dark', data.isDark === true)
-    bewlyContainer?.classList.toggle('oled-dark', data.isDark === true && data.isOledDark === true)
+    bewlyContainer?.classList.toggle('dark', data.isDark)
+    bewlyContainer?.classList.toggle('oled-dark', data.isDark && data.isOledDark === true)
     if (!selective) {
-      document.documentElement.classList.toggle('dark', data.isDark === true)
-      document.documentElement.classList.toggle('oled-dark', data.isDark === true && data.isOledDark === true)
-      document.body?.classList.toggle('dark', data.isDark === true)
-      document.body?.classList.toggle('oled-dark', data.isDark === true && data.isOledDark === true)
+      document.documentElement.classList.toggle('dark', data.isDark)
+      document.documentElement.classList.toggle('oled-dark', data.isDark && data.isOledDark === true)
+      document.body?.classList.toggle('dark', data.isDark)
+      document.body?.classList.toggle('oled-dark', data.isDark && data.isOledDark === true)
     }
     if (typeof data.darkModeBaseColor === 'string')
       setDarkModeBaseColor(data.darkModeBaseColor)

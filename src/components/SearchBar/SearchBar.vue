@@ -1,8 +1,7 @@
 <script setup lang="ts">
-import { onClickOutside, onKeyStroke, useDebounceFn, useElementBounding, useMediaQuery } from '@vueuse/core'
-import DOMPurify from 'dompurify'
+import { onClickOutside, useDebounceFn, useElementBounding, useMediaQuery } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
-import { computed, inject, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, getCurrentInstance, inject, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
@@ -13,6 +12,7 @@ import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
 import { isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
@@ -49,6 +49,10 @@ const emit = defineEmits<{
 const searchWrapRef = ref<HTMLElement>()
 const { left: searchWrapLeft, top: searchWrapTop } = useElementBounding(searchWrapRef)
 const keywordRef = ref<HTMLInputElement>()
+const searchBarInstanceId = getCurrentInstance()?.uid ?? 0
+const suggestionListId = `search-suggestion-list-${searchBarInstanceId}`
+const historyListId = `search-history-list-${searchBarInstanceId}`
+const searchDropdownId = `search-dropdown-${searchBarInstanceId}`
 const isFocus = ref<boolean>(false)
 const keyword = ref<string>(props.modelValue ?? '')
 const suggestions = reactive<SuggestionItem[]>([])
@@ -124,6 +128,15 @@ const shouldShowSearchDropdown = computed(() => {
 
   return keyword.value.length === 0 || keyboardSelectionMode.value === 'history'
 })
+const comboboxExpanded = computed(() => (
+  isFocus.value && keyword.value.length > 0 && suggestions.length > 0
+))
+const activeDescendantId = computed(() => {
+  if (selectedIndex.value < 0 || keyboardSelectionMode.value !== 'suggestions')
+    return undefined
+  const value = suggestions[selectedIndex.value]?.value
+  return value === undefined ? undefined : getSearchOptionId('suggestions', value)
+})
 
 // 计算 placeholder 显示文本
 const placeholderText = computed(() => {
@@ -195,10 +208,7 @@ watch(isFocus, async (focus) => {
 })
 
 // 点击外部关闭搜索框
-onClickOutside(searchWrapRef, () => {
-  isFocus.value = false
-  resetKeyboardSelection()
-})
+onClickOutside(searchWrapRef, () => closeSearch())
 
 const releaseSearchExperience = acquireSearchExperience({
   hotSearch: computed(() => isFocus.value && (props.showHotSearch ?? settings.value.showHotSearchInTopBar)),
@@ -217,13 +227,6 @@ onBeforeUnmount(() => {
   releaseSearchExperience()
 })
 
-onKeyStroke('Escape', (e: KeyboardEvent) => {
-  e.preventDefault()
-  keywordRef.value?.blur()
-  isFocus.value = false
-  resetKeyboardSelection()
-}, { target: keywordRef })
-
 let suggestionRequestId = 0
 const handleKeywordInput = useDebounceFn(async (term: string, requestId: number) => {
   try {
@@ -234,7 +237,14 @@ const handleKeywordInput = useDebounceFn(async (term: string, requestId: number)
     const nextSuggestions = res?.code === 0 && Array.isArray(res.result?.tag)
       ? res.result.tag
       : []
-    suggestions.splice(0, suggestions.length, ...nextSuggestions)
+    const seenValues = new Set<string>()
+    const uniqueSuggestions = nextSuggestions.filter((item) => {
+      if (seenValues.has(item.value))
+        return false
+      seenValues.add(item.value)
+      return true
+    })
+    suggestions.splice(0, suggestions.length, ...uniqueSuggestions)
   }
   catch (error) {
     if (requestId === suggestionRequestId)
@@ -247,11 +257,10 @@ function handleNativeInput(event: Event) {
   const value = (event.target as HTMLInputElement).value
   resetKeyboardSelection()
   keyword.value = value
+  suggestions.length = 0
   const requestId = ++suggestionRequestId
   if (value.trim())
     handleKeywordInput(value, requestId)
-  else
-    suggestions.length = 0
 }
 
 function buildKeywordHref(keyword: string) {
@@ -351,6 +360,10 @@ function getKeyboardSelectionItems(mode: KeyboardSelectionMode) {
   return []
 }
 
+function getSearchOptionId(mode: KeyboardSelectionMode, value: string) {
+  return `search-${mode}-option-${searchBarInstanceId}-${encodeURIComponent(value)}`
+}
+
 function resetKeyboardSelection(options: { restoreKeyword?: boolean } = {}) {
   const { restoreKeyword = false } = options
   const originalKeyword = originalKeywordBeforeKeyboardSelection.value
@@ -383,47 +396,63 @@ function getKeyboardSelectionContext() {
   return { items, mode }
 }
 
-function handleKeyUp(e: KeyboardEvent) {
-  // Skip the key event triggered by IME
-  if (e.isComposing)
-    return
-
-  const context = getKeyboardSelectionContext()
-  if (!context || selectedIndex.value === -1)
-    return
-
-  if (selectedIndex.value === 0) {
-    resetKeyboardSelection({ restoreKeyword: true })
-    return
-  }
-
-  selectedIndex.value--
-  keyword.value = context.items[selectedIndex.value]
-}
-
-function handleKeyDown(e: KeyboardEvent) {
-  // Skip the key event triggered by IME
-  if (e.isComposing)
-    return
-
+function selectPreviousKeyboardOption() {
   const context = getKeyboardSelectionContext()
   if (!context)
     return
 
-  if (selectedIndex.value >= context.items.length - 1) {
+  if (selectedIndex.value === -1) {
     selectedIndex.value = context.items.length - 1
-    keyword.value = context.items[selectedIndex.value]
+  }
+  else if (selectedIndex.value === 0) {
+    resetKeyboardSelection({ restoreKeyword: true })
     return
   }
-
-  selectedIndex.value++
+  else {
+    selectedIndex.value--
+  }
   keyword.value = context.items[selectedIndex.value]
 }
 
-function handleKeyEnter(e: KeyboardEvent) {
-  if (!e.shiftKey && e.key === 'Enter' && !e.isComposing) {
-    e.preventDefault()
-    navigateToSearchResultPage(keyword.value)
+function selectNextKeyboardOption() {
+  const context = getKeyboardSelectionContext()
+  if (!context)
+    return
+
+  selectedIndex.value = Math.min(selectedIndex.value + 1, context.items.length - 1)
+  keyword.value = context.items[selectedIndex.value]
+}
+
+function closeSearch(blur = false) {
+  if (blur)
+    keywordRef.value?.blur()
+  isFocus.value = false
+  resetKeyboardSelection()
+}
+
+function handleComboboxKeyDown(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229)
+    return
+
+  switch (event.key) {
+    case 'ArrowDown':
+      event.preventDefault()
+      selectNextKeyboardOption()
+      break
+    case 'ArrowUp':
+      event.preventDefault()
+      selectPreviousKeyboardOption()
+      break
+    case 'Enter':
+      if (event.shiftKey)
+        return
+      event.preventDefault()
+      void navigateToSearchResultPage(keyword.value)
+      break
+    case 'Escape':
+      event.preventDefault()
+      closeSearch(true)
+      break
   }
 }
 
@@ -446,6 +475,7 @@ function handleClearKeyword() {
   suggestionRequestId++
   keyword.value = ''
   suggestions.length = 0
+  void nextTick(() => keywordRef.value?.focus())
 }
 </script>
 
@@ -467,7 +497,7 @@ function handleClearKeyword() {
       :active="!topBarMode && isFocus && Boolean(darkenOnFocus || blurredOnFocus)"
       :darkened="darkenOnFocus"
       :blurred="blurredOnFocus"
-      @dismiss="isFocus = false"
+      @dismiss="closeSearch(true)"
     />
 
     <div
@@ -490,6 +520,12 @@ function handleClearKeyword() {
         ref="keywordRef"
         :value="keyword"
         :placeholder="placeholderText"
+        role="combobox"
+        :aria-label="$t('search_bar.input_label')"
+        aria-autocomplete="list"
+        :aria-expanded="comboboxExpanded"
+        :aria-controls="suggestionListId"
+        :aria-activedescendant="activeDescendantId"
         autocomplete="off"
         autocapitalize="off"
         autocorrect="off"
@@ -503,13 +539,12 @@ function handleClearKeyword() {
         un-border="1 solid $bew-surface-border-color"
         @focus="isFocus = true"
         @input="handleNativeInput"
-        @keydown.enter.stop="handleKeyEnter"
-        @keyup.up.stop.passive="handleKeyUp"
-        @keyup.down.stop.passive="handleKeyDown"
-        @keydown.stop="() => {}"
+        @keydown.stop="handleComboboxKeyDown"
       >
       <button
         v-if="isFocus && keyword"
+        type="button"
+        :aria-label="$t('search_bar.clear_keyword')"
         pos="absolute right-12" bg="$bew-fill-1 hover:$bew-fill-2" text="xs" rounded="$bew-radius-half"
         p-1
         flex="~ items-center justify-between"
@@ -519,7 +554,9 @@ function handleClearKeyword() {
       </button>
 
       <button
+        type="button"
         class="search-submit-btn bew-shape-circle"
+        :aria-label="$t('search_bar.submit')"
         p-2
         rounded-full
         text="lg leading-0"
@@ -535,8 +572,10 @@ function handleClearKeyword() {
     <Transition name="slide-in">
       <div
         v-if="shouldShowSearchDropdown"
-        id="search-dropdown"
-        class="bew-popover-surface bew-popover-surface--clip"
+        :id="searchDropdownId"
+        class="search-dropdown bew-popover-surface bew-popover-surface--clip"
+        role="region"
+        :aria-label="$t('search_bar.search_options_label')"
         :style="narrowTopBarPopupStyle"
       >
         <div class="search-popover__scroll bew-popover__scroll">
@@ -596,30 +635,43 @@ function handleClearKeyword() {
           >
             <div class="title p-2 pb-0 flex justify-between">
               <span>{{ $t('search_bar.history_title') }}</span>
-              <button class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
+              <button type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
                 {{ $t('search_bar.clear_history') }}
               </button>
             </div>
 
-            <div class="history-item-container p2 flex flex-wrap gap-x-3 gap-y-3">
-              <ALink
-                v-for="(item, index) in searchHistory" :key="item.timestamp"
-                :href="buildKeywordHref(item.value)"
-                type="searchBar"
-                :custom-click-event="true"
+            <div
+              :id="historyListId"
+              class="history-item-container p2 flex flex-wrap gap-x-3 gap-y-3"
+              role="list"
+              :aria-label="$t('search_bar.history_title')"
+            >
+              <div
+                v-for="(item, index) in searchHistory"
+                :id="getSearchOptionId('history', item.value)"
+                :key="item.timestamp"
                 class="history-item group"
                 :class="{ active: keyboardSelectionMode === 'history' && selectedIndex === index }"
+                role="listitem"
                 flex justify-between items-center
-                @click="handleKeywordLinkClick(item.value, $event)"
               >
-                <span> {{ item.value }}</span>
+                <ALink
+                  :href="buildKeywordHref(item.value)"
+                  type="searchBar"
+                  :custom-click-event="true"
+                  class="history-item__link"
+                  flex-1
+                  @click="handleKeywordLinkClick(item.value, $event)"
+                >
+                  <span>{{ item.value }}</span>
+                </ALink>
                 <TagRemoveButton
                   class="history-item__remove"
                   :label="$t('common.operation.remove')"
                   @mousedown.prevent
                   @click.stop.prevent="handleDelete(item.value)"
                 />
-              </ALink>
+              </div>
             </div>
           </div>
         </div>
@@ -629,19 +681,27 @@ function handleClearKeyword() {
     <Transition name="slide-in">
       <div
         v-if="isFocus && suggestions.length !== 0 && keyword.length > 0"
-        id="search-suggestion"
-        class="bew-popover-surface bew-popover-surface--clip"
+        class="search-suggestion bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
-        <div class="search-popover__scroll bew-popover__scroll">
+        <div
+          :id="suggestionListId"
+          class="search-popover__scroll bew-popover__scroll"
+          role="listbox"
+          :aria-label="$t('search_bar.suggestions_label')"
+        >
           <div
             v-for="(item, index) in suggestions"
-            :key="index"
+            :id="getSearchOptionId('suggestions', item.value)"
+            :key="item.value"
             class="suggestion-item"
             :class="{ active: keyboardSelectionMode === 'suggestions' && selectedIndex === index }"
+            role="option"
+            :aria-selected="keyboardSelectionMode === 'suggestions' && selectedIndex === index"
+            tabindex="-1"
             @click="navigateToSearchResultPage(item.value)"
           >
-            <span v-html="DOMPurify.sanitize(item.name)" />
+            <span v-html="sanitizeSearchHighlight(item.name)" />
           </div>
         </div>
       </div>
@@ -841,7 +901,7 @@ function handleClearKeyword() {
     --uno: "px-4 py-2 w-full rounded-$bew-radius duration-300 cursor-pointer not-first:mt-1 tracking-wider hover:bg-$bew-fill-2";
   }
 
-  #search-dropdown {
+  .search-dropdown {
     @include search-content;
     --uno: "max-h-420px";
     z-index: var(--bew-z-topbar-interaction);
@@ -916,6 +976,11 @@ function handleClearKeyword() {
           --uno: "relative cursor-pointer duration-300";
           --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-color-20 hover:text-$bew-theme-foreground rounded-$bew-radius-half";
 
+          .history-item__link {
+            min-width: 0;
+            color: inherit;
+          }
+
           .history-item__remove {
             position: absolute;
             top: 0;
@@ -939,7 +1004,7 @@ function handleClearKeyword() {
     }
   }
 
-  #search-suggestion {
+  .search-suggestion {
     @include search-content;
     --uno: "max-h-420px";
     z-index: var(--bew-z-topbar-interaction);
@@ -961,12 +1026,12 @@ function handleClearKeyword() {
 
   &.search-wrap--top-bar {
     @media (max-width: breakpoints.$mobile-max) {
-      #search-dropdown,
-      #search-suggestion {
+      .search-dropdown,
+      .search-suggestion {
         max-height: calc(100dvh - var(--bew-top-bar-height) - 12px);
       }
 
-      #search-dropdown .hot-search-container {
+      .search-dropdown .hot-search-container {
         grid-template-columns: minmax(0, 1fr);
       }
     }

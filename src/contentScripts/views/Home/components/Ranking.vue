@@ -147,7 +147,7 @@ function transformRankingVideo(item: RankingVideoItem, rank: number): Video {
     view: item.stat.view,
     danmaku: item.stat.danmaku,
     like: item.stat.like,
-    likeStr: (item.stat as any)?.like_str ?? item.stat.like,
+    likeStr: item.stat.like_str ?? String(item.stat.like),
     publishedTimestamp: item.pubdate,
     bvid: item.bvid,
     rank,

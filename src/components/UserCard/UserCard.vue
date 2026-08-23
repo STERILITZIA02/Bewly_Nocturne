@@ -83,10 +83,6 @@ function getLvIcon(level: number): string {
   return levelIcons[level] || LV0_ICON
 }
 
-function openUserSpace() {
-  window.open(`https://space.bilibili.com/${props.mid}`, '_blank')
-}
-
 async function handleFollowClick(e: Event) {
   e.preventDefault()
   e.stopPropagation()
@@ -129,9 +125,7 @@ async function handleFollowClick(e: Event) {
 <template>
   <!-- Compact模式布局 -->
   <template v-if="compact">
-    <ALink
-      :href="`https://space.bilibili.com/${mid}`"
-      type="videoCard"
+    <article
       class="user-card cursor-pointer compact bew-surface-border"
       relative
       flex
@@ -142,6 +136,12 @@ async function handleFollowClick(e: Event) {
       rounded="$bew-radius"
       cursor="pointer"
     >
+      <ALink
+        class="user-card__overlay"
+        :href="`https://space.bilibili.com/${mid}`"
+        type="videoCard"
+        :aria-label="name"
+      />
       <div flex items-center gap-5 w-full>
         <!-- 左侧：头像（带角标） -->
         <div class="avatar-wrapper-compact" relative flex-shrink-0>
@@ -221,7 +221,8 @@ async function handleFollowClick(e: Event) {
             flex items-center
           >
             <button
-              class="follow-button-compact"
+              type="button"
+              class="user-card__interactive follow-button-compact"
               :class="{ followed: isFollowing }"
               :disabled="isFollowLoading"
               @click="handleFollowClick"
@@ -231,12 +232,12 @@ async function handleFollowClick(e: Event) {
           </div>
         </div>
       </div>
-    </ALink>
+    </article>
   </template>
 
   <!-- 非Compact模式布局 -->
   <template v-else>
-    <div
+    <article
       class="user-card cursor-pointer bew-surface-border"
       :class="{ horizontal }"
       relative
@@ -247,8 +248,14 @@ async function handleFollowClick(e: Event) {
       bg="$bew-elevated hover:$bew-elevated-hover"
       rounded="$bew-radius"
       cursor="pointer"
-      @click="openUserSpace()"
     >
+      <a
+        class="user-card__overlay"
+        :href="`https://space.bilibili.com/${mid}`"
+        target="_blank"
+        rel="noopener"
+        :aria-label="name"
+      />
       <!-- 头像 -->
       <div class="avatar-wrapper" flex-shrink-0>
         <img
@@ -307,7 +314,7 @@ async function handleFollowClick(e: Event) {
           <a
             v-for="sample in sampleList"
             :key="sample.id"
-            class="sample-card"
+            class="user-card__interactive sample-card"
             :href="sample.url"
             target="_blank"
             rel="noopener"
@@ -333,7 +340,7 @@ async function handleFollowClick(e: Event) {
           </a>
         </div>
       </div>
-    </div>
+    </article>
   </template>
 </template>
 
@@ -377,6 +384,17 @@ async function handleFollowClick(e: Event) {
       transform: translateY(0) scale(0.98);
     }
   }
+}
+
+.user-card__overlay {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+}
+
+.user-card__interactive {
+  position: relative;
+  z-index: 2;
 }
 
 .follow-button,

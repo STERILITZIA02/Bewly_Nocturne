@@ -14,7 +14,7 @@ import api from '~/utils/api'
 import { getCSRF, scrollToTop } from '~/utils/main'
 
 type MomentType = 'video' | 'live' | 'article'
-interface MomentTab { type: MomentType, name: any }
+interface MomentTab { type: MomentType, name: string }
 
 const topBarStore = useTopBarStore()
 

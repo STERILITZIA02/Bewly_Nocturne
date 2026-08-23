@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import type { MomentsWantedUser } from '~/logic/storage'
@@ -12,6 +13,7 @@ const props = withDefaults(defineProps<{
 })
 
 const toast = useToast()
+const { t } = useI18n()
 const query = ref('')
 const error = ref('')
 const loading = ref(false)
@@ -39,25 +41,16 @@ const managedUsers = computed<MomentsWantedUser[]>({
 const managedUserMids = computed(() => new Set(managedUsers.value.map(user => user.mid)))
 
 const copy = computed(() => {
-  if (isPinnedMode.value) {
-    return {
-      alreadyIn: '该 UP 主已经在“固定 UP”中',
-      needFollow: (name: string) => `必须先关注 ${name}，才能将其加入“固定 UP”`,
-      added: (name: string) => `已将 ${name} 固定到动态栏`,
-      removed: (name: string) => `已取消固定 ${name}`,
-      removeAria: (name: string) => `取消固定 ${name}`,
-      removeTitle: '取消固定',
-      empty: '尚未添加固定 UP 主。添加后会显示在动态栏右侧。',
-    }
-  }
+  const modeKey = isPinnedMode.value ? 'pinned' : 'wanted'
+  const key = (name: string) => `settings.moments_wanted_manager.${modeKey}.${name}`
   return {
-    alreadyIn: '该 UP 主已经在“想看”分组中',
-    needFollow: (name: string) => `必须先关注 ${name}，才能将其加入“想看”分组`,
-    added: (name: string) => `已将 ${name} 加入“想看”`,
-    removed: (name: string) => `已将 ${name} 移出“想看”`,
-    removeAria: (name: string) => `将 ${name} 移出想看`,
-    removeTitle: '移出想看',
-    empty: '尚未添加 UP 主。添加后可在 Bewly 动态页的“想看”中筛选。',
+    alreadyIn: t(key('already_in')),
+    needFollow: (name: string) => t(key('need_follow'), { name }),
+    added: (name: string) => t(key('added'), { name }),
+    removed: (name: string) => t(key('removed'), { name }),
+    removeAria: (name: string) => t(key('remove_aria'), { name }),
+    removeTitle: t(key('remove_title')),
+    empty: t(key('empty')),
   }
 })
 
@@ -77,6 +70,22 @@ function stripSearchHighlight(value: unknown) {
     .trim()
 }
 
+function normalizeSearchCandidate(value: unknown): UserSearchCandidate | undefined {
+  if (!value || typeof value !== 'object')
+    return undefined
+  const record = value as Record<string, unknown>
+  const mid = String(record.mid || '')
+  const name = stripSearchHighlight(record.uname)
+  if (!mid || !name)
+    return undefined
+  return {
+    mid,
+    name,
+    face: httpsUrl(String(record.upic || record.face || '')),
+    sign: stripSearchHighlight(record.usign || record.sign),
+  }
+}
+
 async function addUser() {
   if (loading.value)
     return
@@ -84,7 +93,7 @@ async function addUser() {
   const input = query.value.trim()
   error.value = ''
   if (!input) {
-    error.value = '请输入 UP 主 UID 或昵称'
+    error.value = t('settings.moments_wanted_manager.input_required')
     return
   }
 
@@ -100,17 +109,14 @@ async function addUser() {
       const results = response.code === 0 && Array.isArray(response.data?.result)
         ? response.data.result
         : []
-      searchCandidates.value = results.slice(0, 10).map((user: any) => ({
-        mid: String(user.mid || ''),
-        name: stripSearchHighlight(user.uname),
-        face: httpsUrl(user.upic || user.face || ''),
-        sign: stripSearchHighlight(user.usign || user.sign),
-      })).filter(user => user.mid && user.name)
+      searchCandidates.value = results.slice(0, 10)
+        .map((user: unknown) => normalizeSearchCandidate(user))
+        .filter((user: UserSearchCandidate | undefined): user is UserSearchCandidate => Boolean(user))
       if (!searchCandidates.value.length)
-        error.value = '没有找到相关 UP 主，请尝试其他昵称'
+        error.value = t('settings.moments_wanted_manager.search_empty')
     }
     catch (cause) {
-      error.value = cause instanceof Error ? cause.message : '搜索 UP 主失败，请稍后重试'
+      error.value = cause instanceof Error ? cause.message : t('settings.moments_wanted_manager.search_failed')
     }
     finally {
       loading.value = false
@@ -120,7 +126,7 @@ async function addUser() {
 
   const mid = input.replace(/^0+/, '')
   if (!mid) {
-    error.value = '请输入有效的 UP 主 UID'
+    error.value = t('settings.moments_wanted_manager.invalid_uid')
     return
   }
   await addUserByMid(mid)
@@ -136,7 +142,7 @@ async function addUserByMid(mid: string) {
     return
   }
   if (isPinnedMode.value && managedUsers.value.length >= MAX_PINNED_USERS) {
-    error.value = `最多只能固定 ${MAX_PINNED_USERS} 个 UP 主`
+    error.value = t('settings.moments_wanted_manager.pinned_limit', { count: MAX_PINNED_USERS })
     return
   }
 
@@ -148,7 +154,7 @@ async function addUserByMid(mid: string) {
     ])
     const card = cardResponse.code === 0 ? cardResponse.data?.card : null
     if (!card?.mid || !card?.name) {
-      error.value = cardResponse.message || '未找到该 UP 主'
+      error.value = cardResponse.message || t('settings.moments_wanted_manager.user_not_found')
       return
     }
 
@@ -169,7 +175,7 @@ async function addUserByMid(mid: string) {
     toast.success(copy.value.added(card.name))
   }
   catch (cause) {
-    error.value = cause instanceof Error ? cause.message : '获取 UP 主信息失败，请稍后重试'
+    error.value = cause instanceof Error ? cause.message : t('settings.moments_wanted_manager.fetch_failed')
   }
   finally {
     loading.value = false
@@ -191,7 +197,7 @@ function removeUser(mid: string) {
         v-model="query"
         type="text"
         autocomplete="off"
-        placeholder="输入 UP 主 UID 或昵称"
+        :placeholder="$t('settings.moments_wanted_manager.placeholder')"
         :disabled="loading"
         @input="error = ''; searchCandidates = []"
       >
@@ -199,7 +205,7 @@ function removeUser(mid: string) {
         <span v-if="loading" i-svg-spinners:ring-resize />
         <span v-else-if="/^\d+$/.test(query.trim())" i-tabler-user-plus />
         <span v-else i-tabler-search />
-        {{ /^\d+$/.test(query.trim()) ? '添加' : '搜索' }}
+        {{ /^\d+$/.test(query.trim()) ? $t('settings.moments_wanted_manager.add') : $t('settings.moments_wanted_manager.search') }}
       </button>
     </form>
     <p v-if="error" class="wanted-users-manager__error">

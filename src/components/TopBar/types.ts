@@ -56,17 +56,6 @@ export interface UnReadDm {
   biz_msg_follow_unread: number
 }
 
-export enum MomentType {
-  Video = 8,
-  Article = 64,
-  Bangumi = 512,
-  PGC = 4097,
-  Movie = 4098,
-  TvShow = 4099,
-  ChineseAnime = 4100,
-  Documentary = 4101,
-}
-
 export interface FavoriteCategory {
   id: number
   fid: number

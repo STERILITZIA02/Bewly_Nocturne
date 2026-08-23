@@ -1,6 +1,7 @@
 // import browser from 'webextension-polyfill'
 import { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from '~/logic/appAuthStorage'
 
+import { createBooleanSingleFlight, resolveAppAccessTokenFreshness } from './appAuthTokenPolicy'
 import { appSign } from './appSign'
 
 export function revokeAccessKey() {
@@ -46,6 +47,9 @@ const APP_TOKEN_REFRESH_ENDPOINTS = [
   'https://passport.bilibili.com/api/v3/oauth2/refresh_token',
   'https://passport.bilibili.com/api/v2/oauth2/refresh_token',
 ]
+
+let ensureFreshAppAccessTokenPromise: Promise<boolean> | null = null
+const runAppAccessTokenRefreshSingleFlight = createBooleanSingleFlight()
 
 export function saveAppAuthTokens(payload: PollLoginTokenPayload) {
   const tokenInfo = payload.token_info || {}
@@ -123,6 +127,11 @@ export async function refreshAppAccessToken(): Promise<boolean> {
       const tokenInfo = data.data.token_info || {}
       const refreshInfo = data.data.refresh_token_info || {}
 
+      if (appAuthTokens.value.accessToken !== accessToken
+        || appAuthTokens.value.refreshToken !== refreshToken) {
+        return false
+      }
+
       const nextAccessToken = tokenInfo.access_token || appAuthTokens.value.accessToken
       const nextRefreshToken = tokenInfo.refresh_token || appAuthTokens.value.refreshToken
       const expiresIn = tokenInfo.expires_in ?? null
@@ -144,6 +153,55 @@ export async function refreshAppAccessToken(): Promise<boolean> {
   }
 
   return false
+}
+
+function refreshAppAccessTokenSingleFlight(): Promise<boolean> {
+  if (ensureFreshAppAccessTokenPromise)
+    return ensureFreshAppAccessTokenPromise
+
+  const refreshPromise = runAppAccessTokenRefreshSingleFlight(refreshAppAccessToken).finally(() => {
+    if (ensureFreshAppAccessTokenPromise === refreshPromise)
+      ensureFreshAppAccessTokenPromise = null
+  })
+  ensureFreshAppAccessTokenPromise = refreshPromise
+  return refreshPromise
+}
+
+export async function ensureFreshAppAccessToken(
+  bufferMs = 10 * 60 * 1000,
+): Promise<boolean> {
+  const freshness = resolveAppAccessTokenFreshness(
+    appAuthTokens.value,
+    Date.now(),
+    bufferMs,
+  )
+  if (freshness === 'missing')
+    return false
+  if (freshness === 'refresh-expired') {
+    resetAppAuthTokens()
+    return false
+  }
+  if (freshness === 'valid')
+    return true
+  return refreshAppAccessTokenSingleFlight()
+}
+
+export async function refreshInvalidAppAccessToken(): Promise<boolean> {
+  const freshness = resolveAppAccessTokenFreshness(appAuthTokens.value, Date.now(), 0)
+  if (freshness === 'missing')
+    return false
+  if (freshness === 'refresh-expired') {
+    resetAppAuthTokens()
+    return false
+  }
+  return refreshAppAccessTokenSingleFlight()
+}
+
+export function isAppAccessTokenInvalidResponse(value: unknown): boolean {
+  return typeof value === 'object'
+    && value !== null
+    && 'code' in value
+    && value.code === 62011
 }
 
 export function hasValidAppAuthTokens(bufferMs = 5 * 60 * 1000) {

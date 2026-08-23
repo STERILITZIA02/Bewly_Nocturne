@@ -30,7 +30,7 @@ import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
-import { getIframeMessageData } from '~/utils/iframeMessage'
+import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
@@ -847,10 +847,10 @@ function closeDetailImageViewer() {
     return
 
   try {
-    detailImageViewerSource.value?.postMessage({
+    postMessageToIframe(detailIframeRef.value, {
       type: 'BEWLY_OPUS_IMAGE_VIEWER_CLOSE',
       index: detailImageViewerIndex.value,
-    }, '*')
+    })
   }
   catch {
     // iframe 已销毁时忽略
@@ -1038,6 +1038,7 @@ function handleDetailIframeLoad(event: Event) {
 
   // 与抽屉一致：同域时去掉顶栏占位，并保证视频/直播页可滚动
   const iframe = event.target as HTMLIFrameElement | null
+  markIframeReadyForMessaging(iframe)
   const win = iframe?.contentWindow
   if (win) {
     try {
@@ -1078,7 +1079,7 @@ function destroyDetailIframe() {
 
   // 通知同域 iframe 内部主动释放观察器/媒体
   try {
-    iframe.contentWindow?.postMessage({ type: 'BEWLY_OPUS_DISPOSE' }, '*')
+    postMessageToIframe(iframe, { type: 'BEWLY_OPUS_DISPOSE' })
   }
   catch {
     // ignore
@@ -3293,7 +3294,7 @@ function handleDetailFrameMessage(event: MessageEvent) {
     if (!openDetailImageViewer(data.urls, data.index, source))
       return
     try {
-      source.postMessage({ type: 'BEWLY_OPUS_IMAGE_VIEWER_ACK' }, '*')
+      source.postMessage({ type: 'BEWLY_OPUS_IMAGE_VIEWER_ACK' }, event.origin)
     }
     catch {
       // iframe 已销毁时忽略
@@ -3648,12 +3649,11 @@ watch(
           data-layout-editable-id="moments-up-list"
           :aria-label="t('moments.feed_bar')"
         >
-          <div class="moments-up-list__start" role="list" :aria-label="t('moments.feed_groups')">
+          <div class="moments-up-list__start" role="group" :aria-label="t('moments.feed_groups')">
             <button
               type="button"
               class="moments-up-list__item"
               :class="{ 'moments-up-list__item--active': !selectedHostMid && activeMomentGroup === 'all' }"
-              role="listitem"
               :aria-pressed="!selectedHostMid && activeMomentGroup === 'all'"
               :title="t('moments.all_moments')"
               @click="handleUpFilterChange('')"
@@ -3671,7 +3671,6 @@ watch(
               type="button"
               class="moments-up-list__item"
               :class="{ 'moments-up-list__item--active': activeMomentGroup === 'wanted' }"
-              role="listitem"
               :aria-pressed="activeMomentGroup === 'wanted'"
               :disabled="activeMomentFilter !== 'all' && activeMomentFilter !== 'video'"
               :aria-label="activeMomentGroup === 'wanted' ? t('moments.wanted_disable') : t('moments.wanted_enable')"
@@ -3739,7 +3738,7 @@ watch(
               v-else
               ref="upListScrollerRef"
               class="moments-up-list__scroller"
-              role="list"
+              role="group"
               :aria-label="t('moments.frequent_uploaders')"
               @scroll="updateUpListScrollState"
               @wheel="handleUpListWheel"
@@ -3750,7 +3749,6 @@ watch(
                 type="button"
                 class="moments-up-list__item"
                 :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid && activeMomentGroup === 'all' }"
-                role="listitem"
                 :aria-pressed="selectedHostMid === up.mid && activeMomentGroup === 'all'"
                 :title="up.uname"
                 @click="handleUpFilterChange(up.mid)"
@@ -3776,7 +3774,7 @@ watch(
           <div
             v-if="momentsPinnedUsers.length"
             class="moments-up-list__pinned"
-            role="list"
+            role="group"
             :aria-label="t('moments.pinned_uploaders')"
             @wheel="handleUpListWheel"
           >
@@ -3787,7 +3785,6 @@ watch(
               type="button"
               class="moments-up-list__item"
               :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
-              role="listitem"
               :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
               :title="user.name"
               @click="handleUpFilterChange(user.mid)"

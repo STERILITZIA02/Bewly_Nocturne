@@ -42,7 +42,7 @@ export interface List {
   badge: string
   show_title: string
   duration: number
-  current: string
+  current?: string
   total: number
   new_desc: string
   is_finish: number
@@ -59,7 +59,7 @@ export interface History {
   page: number
   cid: number
   part: string
-  business: Business
+  business: Business | string
   dt: number
 }
 

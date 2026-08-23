@@ -102,11 +102,19 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
       </SettingsItem>
 
       <SettingsItem
-        v-if="usesBewlyWidescreen"
+        v-if="usesBewlyWidescreen || settings.showBewlyWidescreenButton"
         :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
         right-width="auto"
       >
         <Select v-model="settings.bewlyWidescreenSidebarPosition" :options="bewlyWidescreenSidebarPositionOptions" w="160px" />
+      </SettingsItem>
+
+      <SettingsItem
+        :title="t('settings.show_bewly_widescreen_button')"
+        :desc="t('settings.show_bewly_widescreen_button_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.showBewlyWidescreenButton" />
       </SettingsItem>
 
       <SettingsItem

@@ -369,6 +369,33 @@ settings:
   group_moments_pinned_users: 固定 UP 主
   group_moments_pinned_users_desc: 管理固定在動態欄右側的 UP 主；支援輸入 UID 或暱稱，名單僅儲存在本機。
   moments_pinned_users: 固定的 UP 主
+  moments_wanted_manager:
+    input_required: 請輸入 UP 主 UID 或暱稱
+    search_empty: 找不到相關 UP 主，請嘗試其他暱稱
+    search_failed: 搜尋 UP 主失敗，請稍後再試
+    invalid_uid: 請輸入有效的 UP 主 UID
+    pinned_limit: 最多只能固定 {count} 個 UP 主
+    user_not_found: 找不到該 UP 主
+    fetch_failed: 取得 UP 主資訊失敗，請稍後再試
+    placeholder: 輸入 UP 主 UID 或暱稱
+    add: 新增
+    search: 搜尋
+    pinned:
+      already_in: 該 UP 主已在「固定 UP」中
+      need_follow: 必須先追蹤 {name}，才能將其加入「固定 UP」
+      added: 已將 {name} 固定到動態欄
+      removed: 已取消固定 {name}
+      remove_aria: 取消固定 {name}
+      remove_title: 取消固定
+      empty: 尚未新增固定 UP 主。新增後會顯示在動態欄右側。
+    wanted:
+      already_in: 該 UP 主已在「想看」分組中
+      need_follow: 必須先追蹤 {name}，才能將其加入「想看」分組
+      added: 已將 {name} 加入「想看」
+      removed: 已將 {name} 移出「想看」
+      remove_aria: 將 {name} 移出想看
+      remove_title: 移出想看
+      empty: 尚未新增 UP 主。新增後可在 Bewly 動態頁的「想看」中篩選。
   btn:
     authorize: 授權
     revoke: 解除授權
@@ -654,6 +681,7 @@ settings:
   filter_import_failed: '匯入{type}過濾規則失敗：{message}'
   filter_import_invalid_format: 檔案格式無效
   filter_import_unknown_error: 未知錯誤
+  filter_import_result: '匯入完成：已匯入 {imported} 條，忽略 {ignored} 條'
   filter_by_title: 依標題篩選
   filter_by_title_desc: >-
     依標題篩選掉包含你設定的字串的影片（不區分大小寫），或使用正規表示式，如 {regex}，用 {slash} 包裡。{lineBreak}
@@ -701,6 +729,8 @@ settings:
   reset_settings_confirm: |-
     重設設定？
     此操作無法撤消，你確定要重設你的設定嗎？
+  new_version_badge: 新版本
+  development_build_badge: 開發版
   current_contributors: Bewly Nocturne（含 BewlyBewly）貢獻者
   contributors_image_failed: 貢獻者圖片載入失敗
   enable_settings_sync: 允許同步設定
@@ -708,6 +738,8 @@ settings:
   settings_sync_unsynced_count: '未同步欄位：{count}'
   settings_sync_quota_blocked_count: '受雲端配額限制：{count}'
   settings_sync_last_error: '最近同步錯誤：{error}'
+  disable_auto_play_collection: 自動關閉合集自動連播
+  disable_auto_play_collection_desc: 自動關閉影片合集的自動連播功能
   keep_collection_video_default_mode: 合集影片保持預設模式
   keep_collection_video_default_mode_desc: 當啟用時，合集影片將始終使用預設播放器模式，不會套用寬螢幕或全螢幕設定
   keep_watch_later_video_default_mode: 稍後觀看保持預設模式
@@ -810,11 +842,12 @@ settings:
   hide_comment_image_scrollbar_desc: 開啟評論區圖片預覽時隱藏頁面右側滾動條，避免滾動條顯示在遮罩右側
   video_player_scroll: 調整顯示模式後滾動
   video_player_scroll_desc: 啟用後，在默認模式為寬屏和默認時，會自動滾動到合適位置。
-  exit_bewly_widescreen_loading: 退出寬螢幕模式
   enlarge_favorite_dialog: 放大收藏彈窗
   enlarge_favorite_dialog_desc: 啟用後，影片頁收藏彈窗將以更大的尺寸顯示，方便查看和管理收藏夾。
   external_watch_later_button: 稍後再看按鈕外置
   external_watch_later_button_desc: 啟用後，影片頁工具欄會顯示獨立的稍後觀看按鈕；按鈕會顯示目前影片狀態，可點擊加入或移除。
+  show_bewly_widescreen_button: 顯示 Bewly 寬螢幕按鈕
+  show_bewly_widescreen_button_desc: 在播放器控制列顯示進入 Bewly 寬螢幕模式的按鈕；關閉後不會退出目前的寬螢幕模式。
   show_vertical_video_zoom_button: 直式影片放大按鈕
   show_vertical_video_zoom_button_desc: 在直式影片播放器中顯示放大/縮小按鈕與畫面位置調整控制項
   show_video_screenshot_button: 顯示播放器截圖按鈕
@@ -1010,7 +1043,13 @@ notifications:
     user_fallback: '使用者 {talkerId}'
     summary_unavailable: 暫無訊息摘要
     select_conversation: 選擇與{name}的會話
-    select_conversation_empty: 選擇一個會話以查看訊息
+    select_conversation_empty: 選擇一個會話開始聊天
+    select_conversation_hint: 訊息會在獨立閱讀卡片中保持清晰聚焦
+    empty_tips:
+      emote: 可從輸入區插入 Bilibili 表情
+      image: 可先預覽圖片，再直接傳送
+      history: 向上捲動可載入並閱讀更早訊息
+      shortcut: Enter 傳送，Shift+Enter 換行
     fallback_aria: '{name}的原版私訊入口'
     fallback_description: 此類型會話暫時需在原版私訊中查看
     session_kinds:
@@ -1029,6 +1068,7 @@ notifications:
     back_to_conversations: 返回會話列表
     messages:
       timeline_aria: 與{name}的私訊記錄
+      self_label: 我
       loading: 正在載入聊天記錄
       empty: 暫無聊天記錄
       load_older: 載入更早訊息
@@ -1063,10 +1103,18 @@ notifications:
       picture_card_alt: 私訊分享圖片
       video_views: '{count} 次播放'
       image_summary: '[圖片]'
+      select_emote: 選擇表情
+      emote_picker: 私訊表情面板
+      emote_packages: 表情包系列
+      default_emotes: 預設
+      user_emotes: 我的表情
+      default_emotes_empty: 訊息資料提供預設表情後會顯示在這裡
+      user_emotes_empty: 目前帳號沒有可用的使用者表情包
       select_image: 選擇圖片
       selected_image_alt: 待傳送的私訊圖片
       image_size_kb: '{size} KB'
       remove_image: 移除圖片
+      image_ready: 等待傳送
       image_preparing: 正在準備圖片
       image_uploading: 正在上傳圖片
       image_upload_failed: 圖片上傳失敗
@@ -1267,6 +1315,8 @@ video_card:
     unfollow_user: 取消關注
     block_user: 拉黑用戶
     more_options: 更多操作
+    scroll_to_top: 捲動到選單頂部
+    scroll_to_bottom: 捲動到選單底部
   follow_user_confirm:
     title: 確認關注用戶
     message: 確定要關注 {name} 嗎？
@@ -1425,7 +1475,30 @@ watch_later:
   play_video: 移除並進入影片頁
   play_in_watch_later: 清單播放
   remove_from_watch_later: 移除
+widescreen:
+  enter: 進入 Bewly 寬螢幕
+  exit: 退出
+  exit_loading: 退出寬螢幕模式
+  loading: 正在載入寬螢幕模式…
+  comments: 留言
+  danmaku: 彈幕
+  playlist: 選集
+  recommendations: 推薦
+  collapse: 收起
+  expand_more: 展開更多
+  comments_loading: 留言區載入中
+  danmaku_loading: 彈幕列表載入中
+  list_loading: 列表載入中
+  show_narrow_right: 顯示窄右欄
+  show_narrow_left: 顯示窄左欄
+  collapse_right: 收起右欄
+  collapse_left: 收起左欄
 search_bar:
+  input_label: 搜尋
+  clear_keyword: 清空搜尋內容
+  submit: 搜尋
+  suggestions_label: 搜尋建議
+  search_options_label: 搜尋選項
   history_title: 搜尋記錄
   hot_search_title: 熱門搜尋
   clear_history: 清除所有搜尋記錄

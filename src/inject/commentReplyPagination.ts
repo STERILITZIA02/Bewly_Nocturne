@@ -269,14 +269,14 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
         const invisibleRpids = getInvisibleRpids(this)
         if (invisibleRpids.size > 0) {
           state.pages.forEach((replies, page) => {
-            state.pages.set(page, replies.filter(reply => !invisibleRpids.has(adapter.getRpid(reply) ?? '')))
+            state.pages.set(page, replies.filter((reply: unknown) => !invisibleRpids.has(adapter.getRpid(reply) ?? '')))
           })
           if (state.mergedList)
             state.mergedList = state.mergedList.filter(reply => !invisibleRpids.has(adapter.getRpid(reply) ?? ''))
         }
 
         const currentList = Array.isArray(this.list)
-          ? this.list.filter(reply => !invisibleRpids.has(adapter.getRpid(reply) ?? ''))
+          ? this.list.filter((reply: unknown) => !invisibleRpids.has(adapter.getRpid(reply) ?? ''))
           : []
         const pending = {
           beforeList: mergeLists(state.mergedList ?? [], currentList),
@@ -309,9 +309,9 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
               && Array.isArray(this.list)) {
               const latestInvisibleRpids = getInvisibleRpids(this)
               const retainedBeforeList = pending.beforeList
-                .filter(reply => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
+                .filter((reply: unknown) => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
               const loadedList = this.list
-                .filter(reply => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
+                .filter((reply: unknown) => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
               const newPage = getNewPage(retainedBeforeList, loadedList)
               state.pages.forEach((replies, page) => {
                 state.pages.set(page, replies.filter(reply => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? '')))

@@ -11,6 +11,7 @@ import { appAuthTokens, gridLayout, settings } from '~/logic'
 import type { GridLayoutType, RecommendationMode } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
 import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, revokeAccessKey, saveAppAuthTokens } from '~/utils/authProvider'
+import { normalizeImportedFilterRules } from '~/utils/filterRules'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
@@ -188,9 +189,9 @@ function handleImport(filterType: 'title' | 'user') {
 
     try {
       const fileContent = await file.text()
-      const importedFilters = JSON.parse(fileContent) as { keyword: string, remark: string }[]
+      const result = normalizeImportedFilterRules(JSON.parse(fileContent))
 
-      if (!Array.isArray(importedFilters) || !importedFilters.every(filter => 'keyword' in filter && 'remark' in filter)) {
+      if (!result.valid) {
         toast.error(t('settings.filter_import_failed', {
           type: t(`settings.filter_type_${filterType}`),
           message: t('settings.filter_import_invalid_format'),
@@ -198,12 +199,22 @@ function handleImport(filterType: 'title' | 'user') {
         return
       }
 
-      if (filterType === 'title') {
-        settings.value.filterByTitle = importedFilters
+      const ignored = result.ignored + result.duplicates
+      if (result.rules.length > 0 || ignored === 0) {
+        if (filterType === 'title')
+          settings.value.filterByTitle = result.rules
+        else
+          settings.value.filterByUser = result.rules
       }
-      else {
-        settings.value.filterByUser = importedFilters
-      }
+
+      const message = t('settings.filter_import_result', {
+        imported: result.rules.length,
+        ignored,
+      })
+      if (result.rules.length > 0 || ignored === 0)
+        toast.success(message)
+      else
+        toast.warning(message)
     }
     catch (error) {
       console.error(`Error importing filter by ${filterType}:`, error)

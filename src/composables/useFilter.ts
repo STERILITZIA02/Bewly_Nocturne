@@ -1,4 +1,5 @@
 import { settings } from '~/logic'
+import { compileFilterRules } from '~/utils/filterRules'
 import { isVerticalVideo } from '~/utils/uriParse'
 
 const get = (obj: any, path: string[]) => path.reduce((acc, part) => acc && acc[part], obj)
@@ -21,27 +22,6 @@ type FuncMap = { [key in FilterType]: {
 } }
 
 type KeyPath = Array<string>[]
-
-function compileFilterRules(rules: Array<{ keyword: string }>) {
-  const stringValues: string[] = []
-  const regExpValues: RegExp[] = []
-
-  rules.forEach(({ keyword }) => {
-    if (keyword.startsWith('/') && keyword.endsWith('/')) {
-      try {
-        regExpValues.push(new RegExp(keyword.slice(1, -1), 'i'))
-      }
-      catch {
-        // Ignore an invalid user-supplied regular expression.
-      }
-    }
-    else {
-      stringValues.push(keyword.toUpperCase())
-    }
-  })
-
-  return { regExpValues, stringValues }
-}
 
 export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], keyList: KeyPath) {
   function filterOutVerticalVideos(item: any, keyPath: string[], _filterValue: number) {
@@ -224,25 +204,19 @@ export function useFilter(isFollowedKeyPath: string[], filterOpt: FilterType[], 
 
     filterOpt.forEach((type, index) => {
       const { func, enabledKey, valueKey } = funcMap[type]
-      if ((settings.value as { [key: string]: any })[enabledKey]) {
+      if (Reflect.get(settings.value, enabledKey)) {
+        const settingValue = valueKey ? Reflect.get(settings.value, valueKey) : ''
         const funcParams: FuncParams = {
           keyPath: keyList[index],
           func,
-          value: valueKey ? (settings.value as { [key: string]: any })[valueKey] : '',
+          value: typeof settingValue === 'number' || typeof settingValue === 'string' ? settingValue : '',
         }
-        // if (valueKey)
-        //   funcParams.value = (settings.value as { [key: string]: any })[valueKey]
         funcs.push(funcParams)
       }
     })
 
     return (item: object): boolean => {
       const result = funcs.every(({ keyPath, func, value }) => {
-        // const check = func(item, keyPath, value)
-        // if (!check) {
-        //   // console.log('当前项目被拦截! 原因: ', '目标路径值 :>> ', keyPath, '大于', value, 'currentValue :>> ', get(item, keyPath))
-        //   console.log('当前项目被拦截! 原因: ', '目标路径值 :>> ', keyPath, '過濾內容', value, 'currentValue :>> ', get(item, keyPath))
-        // }
         if (isAllowedContent(item))
           return true
 

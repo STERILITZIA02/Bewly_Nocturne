@@ -17,15 +17,6 @@ export enum AppPage {
   Notifications = 'Notifications',
 }
 
-export enum TopBarPopup {
-  FavoritesPop = 'FavoritesPop',
-  HistoryPop = 'HistoryPop',
-  MomentsPop = 'MomentsPop',
-  NotificationsPop = 'NotificationsPop',
-  UploadPop = 'UploadPop',
-  WatchLaterPop = 'WatchLaterPop',
-}
-
 export enum VideoPageTopBarConfig {
   AlwaysShow = 'alwaysShow', // 总是显示
   AlwaysHide = 'alwaysHide', // 总是隐藏

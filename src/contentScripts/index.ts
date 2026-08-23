@@ -8,7 +8,7 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import { BEWLY_MOUNTED, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
-import { isPageBridgeMessage, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
+import { isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
 import { settings, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -20,13 +20,15 @@ import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, re
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
+import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { runWhenIdle } from '~/utils/lazyLoad'
 import { executeResolvedLinkAction, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
 import { getCookie, injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage, openLinkToNewTab } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept, stopNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
-import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
+import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
 import { getPluginSearchResultsUrl, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { SVG_ICONS } from '~/utils/svgIcons'
@@ -36,6 +38,7 @@ import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
 
 import { version } from '../../package.json'
+import { initBewlyWidescreenControl, stopBewlyWidescreenControl } from './bewlyWidescreenControl'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
@@ -86,6 +89,7 @@ function disposeContentScriptRuntime() {
     stopTouchPlayerGestures,
     stopVideoAspectRatioMemory,
     stopVideoScreenshotControl,
+    stopBewlyWidescreenControl,
     stopAutoPlayUserChangeMonitoring,
     stopAutoExitFullscreenMonitoring,
     stopPlaybackRateMonitoring,
@@ -93,7 +97,9 @@ function disposeContentScriptRuntime() {
     stopDarkState,
     cleanupIframePhotoViewerDetector,
     disposeOpusDetailDrawerLayout,
+    exitBewlyWidescreen,
     destroyRandomPlay,
+    cancelPlayerRetryTasks,
     resetVerticalVideoZoom,
   ]
   for (const finalize of finalizers) {
@@ -255,6 +261,41 @@ else if (shouldInitializeContentScript) {
     detachedTimers.forEach(timer => clearTimeout(timer))
     detachedTimers.clear()
   })
+
+  // MAIN world 在 document_start 阶段发起握手，因此必须在等待 DOM 前注册。
+  function sendSettingsToPage(value: unknown) {
+    const channelId = getPageBridgeChannelId()
+    const payload = createPageSettingsPayload(value)
+    if (!channelId || !payload)
+      return
+
+    window.postMessage({
+      protocol: PAGE_BRIDGE_PROTOCOL,
+      channelId,
+      type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
+      data: payload,
+    }, window.location.origin)
+  }
+
+  window.addEventListener('message', (event) => {
+    if (!isPageBridgeMessage(event.data)
+      || event.data.type !== PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
+      || !matchesPageBridgeEvent(event, {
+        source: window,
+        origin: window.location.origin,
+        channelId: event.data.channelId,
+        type: PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST,
+      })
+      || !setPageBridgeChannelId(event.data.channelId)) {
+      return
+    }
+
+    void settingsReady.then(() => {
+      if (!contentScriptSignal.aborted)
+        sendSettingsToPage(settings.value)
+    })
+  }, { signal: contentScriptSignal })
+
   const playerModeLoadSettleDelay = 500
   const videoOwnerAvatarReadyTimeout = 8000
   const videoOwnerAvatarSelector = [
@@ -460,7 +501,8 @@ else if (shouldInitializeContentScript) {
     if (isFestivalPage() && targetPlayerMode === 'bewlyWidescreen')
       targetPlayerMode = 'widescreen'
 
-    const isInFullscreen = !!(document.fullscreenElement || (document as any).webkitFullscreenElement)
+    const fullscreenDocument = document as Document & { webkitFullscreenElement?: Element | null }
+    const isInFullscreen = !!(document.fullscreenElement || fullscreenDocument.webkitFullscreenElement)
     const webFullscreenBtn = document.querySelector('.bpx-player-ctrl-web,.bilibili-player-video-web-fullscreen') as HTMLElement
     const isInWebFullscreen = webFullscreenBtn?.classList.contains('bpx-state-entered')
 
@@ -734,7 +776,7 @@ else if (shouldInitializeContentScript) {
   }
 
   async function reloadCommentsForWidescreenNavigation(targetNavigationKey: string, requestId: number, identifier: VideoCommentIdentifier) {
-    let response: any
+    let response: { code?: number, data?: { aid?: unknown } }
     try {
       response = await api.video.getVideoInfo(identifier)
     }
@@ -827,6 +869,9 @@ else if (shouldInitializeContentScript) {
 
       if (!isVideoOrBangumiPage()) {
         clearPendingWidescreenReloadNavigation()
+        cancelPlayerRetryTasks()
+        stopAutoExitFullscreenMonitoring()
+        resetRandomPlayInitialization()
         exitBewlyWidescreen()
         autoContinuationNavigationKey = undefined
         lastAppliedPlayerModeNavigationKey = undefined
@@ -865,6 +910,8 @@ else if (shouldInitializeContentScript) {
         document.querySelector('.bewly-watch-later-btn')?.remove()
         watchLaterButtonAdded = false // URL变化时重置稍后再看按钮标志
         resetAutoPlayUserChangeFlag()
+        cancelPlayerRetryTasks()
+        stopAutoExitFullscreenMonitoring()
 
         // 重置随机播放初始化状态，避免重复加载
         resetRandomPlayInitialization()
@@ -1207,6 +1254,7 @@ else if (shouldInitializeContentScript) {
 
     initVideoAspectRatioMemory()
     initVideoScreenshotControl()
+    initBewlyWidescreenControl()
     initTouchPlayerGestures()
 
     // Initialize Favorite Dialog Enhancement (for video pages)
@@ -1324,28 +1372,6 @@ else if (shouldInitializeContentScript) {
     mountedVueContainer = container
   }
 
-  // 发送设置更新到网页环境
-  function sendSettingsToPage(settings: any) {
-    const channelId = getPageBridgeChannelId()
-    if (!channelId)
-      return
-
-    // 将响应式对象转换为普通对象
-    const serializedSettings = JSON.parse(JSON.stringify(settings))
-    window.postMessage({
-      protocol: PAGE_BRIDGE_PROTOCOL,
-      channelId,
-      type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
-      data: serializedSettings,
-    }, '*')
-  }
-
-  void settingsReady.then(() => {
-    if (contentScriptSignal.aborted)
-      return
-    sendSettingsToPage(settings.value)
-  })
-
   contentScriptDisposers.push(watch(
     [
       () => settings.value.enableRandomPlay,
@@ -1444,30 +1470,21 @@ else if (shouldInitializeContentScript) {
     }
   }, { deep: true }))
 
-  // 监听来自网页环境的请求
-  window.addEventListener('message', (event) => {
-    if (event.source !== window)
-      return
-
-    if (isPageBridgeMessage(event.data)
-      && event.data.type === PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
-      && setPageBridgeChannelId(event.data.channelId)) {
-    // 发送当前设置到网页环境
-      void settingsReady.then(() => {
-        sendSettingsToPage(settings.value)
-      })
-    }
-  }, { signal: contentScriptSignal })
-
   // 监听来自父页面的黑暗模式切换消息（用于iframe跨域场景）
   window.addEventListener('message', (event) => {
-    if (event.source !== window.parent)
+    const data = getParentMessageData(event, [IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE])
+    if (!data)
       return
 
-    const { type, isDark, isOledDark, darkModeBaseColor, useOriginalBilibiliTopBar } = event.data
+    const { type, isDark, isOledDark, darkModeBaseColor, useOriginalBilibiliTopBar } = data
 
     if (type === IFRAME_DARK_MODE_CHANGE) {
-    // Check if we should apply selective dark mode (plugin UI only) on festival pages
+      if (typeof isDark !== 'boolean'
+        || (isOledDark !== undefined && typeof isOledDark !== 'boolean')
+        || (darkModeBaseColor !== undefined && typeof darkModeBaseColor !== 'string')) {
+        return
+      }
+      // Check if we should apply selective dark mode (plugin UI only) on festival pages
       const isSelectiveDark = isFestivalPage()
 
       if (isDark) {
@@ -1487,7 +1504,7 @@ else if (shouldInitializeContentScript) {
         }
 
         // 如果提供了深色模式基准颜色，则应用它
-        if (darkModeBaseColor) {
+        if (typeof darkModeBaseColor === 'string' && darkModeBaseColor) {
           document.documentElement.style.setProperty('--bew-dark-base-color', darkModeBaseColor)
         }
       }
@@ -1527,15 +1544,10 @@ else if (shouldInitializeContentScript) {
     || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(currentUrl)
   const isNotificationsDrawer = isNotificationPage() && window.name === 'bewly-notifications-drawer'
   if (isInIframe() && (isNotificationsDrawer || isVideoOrBangumiPage() || isMomentDetailPage)) {
-    const pageType = isNotificationsDrawer ? 'message' : isVideoOrBangumiPage() ? 'video' : 'moment-detail'
-    console.log(`[Bewly IFrame] ESC listener initialized for ${pageType} page`)
-
     window.addEventListener('keydown', (e: KeyboardEvent) => {
     // 只处理ESC键
       if (e.key !== 'Escape' && e.code !== 'Escape')
         return
-
-      console.log('[Bewly IFrame] ESC key pressed in iframe')
 
       // 检查当前焦点元素
       const activeElement = document.activeElement
@@ -1547,13 +1559,9 @@ else if (shouldInitializeContentScript) {
         || tagName === 'textarea'
         || activeElement?.hasAttribute('contenteditable')
 
-      console.log('[Bewly IFrame] Active element:', tagName, 'isInput:', isInputElement)
-
       // 如果焦点在输入框内，不处理ESC键，让用户正常使用
-      if (isInputElement) {
-        console.log('[Bewly IFrame] Focus in input element, ignoring ESC')
+      if (isInputElement)
         return
-      }
 
       // 视频页面：检查视频播放器是否处于网页全屏或宽屏状态
       if (isVideoOrBangumiPage()) {
@@ -1562,24 +1570,19 @@ else if (shouldInitializeContentScript) {
         const isWebFull = webFullBtn?.classList.contains('bpx-state-entered')
         const isWide = wideBtn?.classList.contains('bpx-state-entered')
 
-        console.log('[Bewly IFrame] Video state - webFull:', isWebFull, 'wide:', isWide)
-
         // 如果视频处于网页全屏或宽屏状态，让播放器自己处理ESC
-        if (isWebFull || isWide) {
-          console.log('[Bewly IFrame] Video in fullscreen/wide mode, letting player handle ESC')
+        if (isWebFull || isWide)
           return
-        }
       }
 
       // 焦点不在输入框，通知父窗口关闭抽屉
-      console.log('[Bewly IFrame] Sending close request to parent')
       e.preventDefault()
       e.stopPropagation()
 
-      window.parent.postMessage({
+      postMessageToParent({
         type: 'BEWLY_DRAWER_CLOSE_REQUEST',
         source: 'iframe',
-      }, '*')
+      })
     }, { capture: true, signal: contentScriptSignal }) // 使用捕获阶段
   }
 }

@@ -47,6 +47,8 @@ const API_VIDEO = {
       idx: 0,
       appkey: '27eb53fc9058f8c3',
       access_key: '',
+      ts: '',
+      sign: '',
     },
     afterHandle: AHS.J_D,
   },

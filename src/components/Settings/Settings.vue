@@ -523,11 +523,6 @@ function changeMenuItem(menuItem: MenuType) {
           <!-- https://github.com/BewlyBewly/BewlyBewly/issues/1162 -->
           <div
             class="settings-primary-navigation__surface"
-            :style="{
-              backgroundColor: settings.disableFrostedGlass ? 'var(--bew-elevated-alt-solid)' : 'var(--bew-elevated-alt)',
-              backdropFilter: settings.disableFrostedGlass ? 'none' : 'var(--bew-filter-glass-1)',
-              WebkitBackdropFilter: settings.disableFrostedGlass ? 'none' : 'var(--bew-filter-glass-1)',
-            }"
             pointer-events-none rounded-inherit
           />
 
@@ -584,11 +579,6 @@ function changeMenuItem(menuItem: MenuType) {
       >
         <div
           class="settings-content__surface"
-          :style="{
-            backgroundColor: settings.disableFrostedGlass ? 'var(--bew-elevated-alt-solid)' : 'var(--bew-elevated-alt)',
-            backdropFilter: settings.disableFrostedGlass ? 'none' : 'var(--bew-filter-glass-1)',
-            WebkitBackdropFilter: settings.disableFrostedGlass ? 'none' : 'var(--bew-filter-glass-1)',
-          }"
           aria-hidden="true"
         />
         <header
@@ -625,10 +615,11 @@ function changeMenuItem(menuItem: MenuType) {
               v-model="searchQuery"
               type="search"
               :placeholder="$t('settings.search.placeholder')"
+              :aria-label="$t('settings.search.placeholder')"
               role="combobox"
               aria-autocomplete="list"
               aria-controls="settings-search-results"
-              :aria-expanded="Boolean(searchQuery)"
+              :aria-expanded="Boolean(searchQuery && isSearchFocused)"
               :aria-activedescendant="activeSearchResultIndex >= 0 ? `settings-search-result-${activeSearchResultIndex}` : undefined"
               @keydown.esc="searchQuery = ''"
               @keydown.down="moveSearchResultSelection($event, 1)"
@@ -695,6 +686,7 @@ function changeMenuItem(menuItem: MenuType) {
             :key="`${entry.menu}-${entry.secondaryTitleKey ?? ''}-${entry.titleKey ?? entry.title}-${index}`"
             type="button"
             role="option"
+            tabindex="-1"
             :aria-selected="index === activeSearchResultIndex"
             :class="{ active: index === activeSearchResultIndex }"
             @mouseenter="activeSearchResultIndex = index"
@@ -749,6 +741,13 @@ function changeMenuItem(menuItem: MenuType) {
     width: 100%;
     flex: 0 0 auto;
   }
+}
+
+.settings-primary-navigation__surface,
+.settings-content__surface {
+  background: var(--bew-elevated-alt);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .settings-primary-navigation__surface {
@@ -949,12 +948,13 @@ function changeMenuItem(menuItem: MenuType) {
 }
 
 .settings-search-results {
+  --bew-popover-radius: var(--bew-radius-xl);
+
   box-sizing: border-box;
   padding: var(--bew-space-2);
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-radius: calc(var(--bew-radius) + 4px);
 
   button {
     display: flex;

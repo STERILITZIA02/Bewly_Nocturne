@@ -200,6 +200,23 @@ verify('Native Feed retry, account pending, and scroll anchor wiring are explici
   assert.match(itemSource, /data-notification-id/)
 })
 
+verify('all Native Feed items share the smooth glass card surface and top-align identities', async () => {
+  const [feedSource, interactionItemSource, systemItemSource] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeed.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationItem.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeSystemNotificationItem.vue', import.meta.url), 'utf8'),
+  ])
+
+  for (const source of [interactionItemSource, systemItemSource]) {
+    assert.match(source, /native-notification-surface bew-shape-smooth-rect/)
+  }
+  assert.match(feedSource, /:deep\(\.native-notification-surface\)[\s\S]{0,420}background: var\(--bew-elevated-alt\)/)
+  assert.match(feedSource, /border-radius: var\(--bew-card-radius\)/)
+  assert.match(feedSource, /backdrop-filter: var\(--bew-filter-glass-1\)/)
+  assert.match(interactionItemSource, /\.native-notification-item__avatars \{[\s\S]{0,120}align-self: start;[\s\S]{0,80}align-items: flex-start;/)
+  assert.match(systemItemSource, /\.native-system-notification__icon \{[\s\S]{0,100}align-self: start;/)
+})
+
 verify('pure parsing and policy modules have no Vue or Store dependency', async () => {
   const sources = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/notificationFeedParsing.ts', import.meta.url), 'utf8'),

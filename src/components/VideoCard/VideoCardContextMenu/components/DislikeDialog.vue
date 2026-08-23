@@ -9,7 +9,7 @@ import { appAuthTokens } from '~/logic'
 import type { DislikeReason } from '~/models/video/appForYou'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
 import api from '~/utils/api'
-import { getTvSign, TVAppKey } from '~/utils/authProvider'
+import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
 
 const props = defineProps<{
   modelValue: boolean
@@ -75,8 +75,8 @@ function closeDislikeDialog() {
   emit('close')
 }
 
-function handleAppDislike() {
-  if (!appAuthTokens.value.accessToken) {
+async function handleAppDislike() {
+  if (!await ensureFreshAppAccessToken()) {
     toast.warning(t('auth.auth_access_key_first'))
     return
   }
@@ -87,34 +87,38 @@ function handleAppDislike() {
     return
   }
 
-  loadingDislikeDialog.value = true
-  const params = {
-    access_key: appAuthTokens.value.accessToken,
-    goto: props.video?.goto,
-    id: props.video?.param || props.video?.id,
-    reason_id: selectedPayload.reasonId,
-    feedback_id: selectedPayload.feedbackId,
-    build: 1,
-    mobi_app: 'android',
-    appkey: TVAppKey.appkey,
-    ts: Math.floor(Date.now() / 1000).toString(),
+  const sendFeedback = () => {
+    const params = {
+      access_key: appAuthTokens.value.accessToken,
+      goto: props.video?.goto,
+      id: props.video?.param || props.video?.id,
+      ...(selectedPayload.reasonId !== undefined ? { reason_id: selectedPayload.reasonId } : {}),
+      ...(selectedPayload.feedbackId !== undefined ? { feedback_id: selectedPayload.feedbackId } : {}),
+      build: 1,
+      mobi_app: 'android',
+      appkey: TVAppKey.appkey,
+      ts: Math.floor(Date.now() / 1000).toString(),
+    }
+    return api.video.dislikeVideo({
+      ...params,
+      sign: getTvSign(params),
+    })
   }
 
-  api.video.dislikeVideo({
-    ...params,
-    sign: getTvSign(params),
-  })
-    .then((res) => {
-      if (res.code === 0) {
-        emit('removed', selectedPayload)
-      }
-      else {
-        toast.error(res.message)
-      }
-    })
-    .finally(() => {
-      loadingDislikeDialog.value = false
-    })
+  loadingDislikeDialog.value = true
+  try {
+    let response = await sendFeedback()
+    if (isAppAccessTokenInvalidResponse(response) && await refreshInvalidAppAccessToken())
+      response = await sendFeedback()
+
+    if (response.code === 0)
+      emit('removed', selectedPayload)
+    else
+      toast.error(response.message)
+  }
+  finally {
+    loadingDislikeDialog.value = false
+  }
 }
 
 onKeyStroke((e: KeyboardEvent) => {

@@ -15,9 +15,13 @@ export class ApiRiskControlError extends Error {
   }
 }
 
-type FetchAfterHandler = ((data: Response) => Promise<any>) | ((data: any) => any)
+type FetchAfterHandler
+  = | ((data: Response) => unknown | Promise<unknown>)
+    | ((data: unknown) => unknown | Promise<unknown>)
 
-async function toJsonHandler(data: Response): Promise<any> {
+async function toJsonHandler(data: unknown): Promise<unknown> {
+  if (!(data instanceof Response))
+    throw new TypeError('Expected a fetch Response')
   const contentType = data.headers.get('content-type')
 
   // 检测是否返回了HTML（风控页面）
@@ -38,7 +42,7 @@ async function toJsonHandler(data: Response): Promise<any> {
     throw error
   }
 }
-function toData(data: Promise<any>): Promise<any> {
+function toData(data: unknown): unknown {
   return data
 }
 
@@ -51,15 +55,13 @@ const AHS: {
 
 interface Message {
   contentScriptQuery: string
-  [key: string]: any
+  [key: string]: unknown
 }
 
 interface _FETCH {
   method: string
-  headers?: {
-    [key: string]: any
-  }
-  body?: any
+  headers?: Record<string, string>
+  body?: Record<string, unknown>
   credentials?: RequestCredentials
   strictParams?: boolean
 }
@@ -67,20 +69,20 @@ interface _FETCH {
 interface API {
   url: string
   _fetch: _FETCH
-  params?: {
-    [key: string]: any
-  }
+  params?: Record<string, unknown>
   afterHandle: FetchAfterHandler[]
 }
 // 重载API 可以为函数
-type APIFunction = (message: Message, sender?: any) => any
+type APIFunction = (message: Message, sender?: Browser.Runtime.MessageSender) => unknown | Promise<unknown>
 export type APIType = API | APIFunction
 interface APIMAP {
   [key: string]: APIType
 }
 // 工厂函数API_LISTENER_FACTORY
 function apiListenerFactory(API_MAP: APIMAP) {
-  return async (data: any, sender?: Browser.Runtime.MessageSender) => {
+  return async (data: unknown, sender?: Browser.Runtime.MessageSender) => {
+    if (!data || typeof data !== 'object' || Array.isArray(data))
+      return console.error('Invalid API message')
     const typedMessage = data as Message
     const contentScriptQuery = typedMessage.contentScriptQuery
     // 检测是否有contentScriptQuery
@@ -109,16 +111,14 @@ function apiListenerFactory(API_MAP: APIMAP) {
 
 async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.Cookie[]) {
   try {
-    let { contentScriptQuery, ...rest } = message
-    // rest above two part body or params
-    rest = rest || {}
+    const { contentScriptQuery: _contentScriptQuery, ...rest } = message
 
     let { _fetch, url, params = {}, afterHandle } = api
     const { method, headers = {}, body, credentials = 'include' } = _fetch as _FETCH
     const isGET = method.toLocaleLowerCase() === 'get'
     // merge params and body
-    const targetParams = Object.assign({}, params)
-    const targetBody = Object.assign({}, body)
+    const targetParams: Record<string, unknown> = { ...params }
+    const targetBody: Record<string, unknown> = { ...body }
     Object.keys(rest).forEach((key) => {
       if (body && body[key] !== undefined)
         targetBody[key] = rest[key]
@@ -144,7 +144,7 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
     // 内部函数：执行实际请求
     const performRequest = (useWbi: boolean) => {
       let requestUrl = baseUrl
-      let requestParams = Object.assign({}, targetParams)
+      let requestParams: Record<string, unknown> = { ...targetParams }
 
       // 为需要WBI签名的API添加签名
       if (needsWbi && useWbi) {
@@ -158,18 +158,26 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
           // 过滤空值参数：undefined、null、空字符串
           // 保留数字 0 和布尔值 false
           if (value !== undefined && value !== null && value !== '') {
-            urlParams.append(key, value)
+            urlParams.append(key, String(value))
           }
         }
         requestUrl += `?${urlParams.toString()}`
       }
 
       // generate body
-      let requestBody = targetBody
+      let requestBody: BodyInit | undefined
       if (!isGET) {
-        requestBody = (headers && headers['Content-Type'] && headers['Content-Type'].includes('application/x-www-form-urlencoded'))
-          ? new URLSearchParams(targetBody)
-          : JSON.stringify(targetBody)
+        if (headers['Content-Type']?.includes('application/x-www-form-urlencoded')) {
+          const formBody = new URLSearchParams()
+          for (const [key, value] of Object.entries(targetBody)) {
+            if (value !== undefined && value !== null)
+              formBody.append(key, String(value))
+          }
+          requestBody = formBody
+        }
+        else {
+          requestBody = JSON.stringify(targetBody)
+        }
       }
 
       // generate cookies
@@ -191,7 +199,7 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
       }
 
       // get cant take body
-      const fetchOpt: any = {
+      const fetchOpt: RequestInit = {
         method,
         headers: requestHeaders,
         credentials,
@@ -217,16 +225,19 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
 
     // 执行完整请求流程的函数（包括响应处理）
     const executeFullRequest = async (useWbi: boolean) => {
-      let response = await performRequest(useWbi)
+      const response = await performRequest(useWbi)
 
       // 如果是获取用户信息的API，在响应后存储WBI密钥
       if (isBilibiliNavUrl(baseUrl)) {
         const clonedResponse = response.clone()
 
         try {
-          const data = await clonedResponse.json()
+          const data = await clonedResponse.json() as {
+            code?: number
+            data?: { wbi_img?: { img_url?: string, sub_url?: string } }
+          }
 
-          if (data.code === 0 && data.data && data.data.wbi_img) {
+          if (data.code === 0 && data.data?.wbi_img) {
             const { img_url, sub_url } = data.data.wbi_img
             if (img_url && sub_url) {
               storeWbiKeys(img_url, sub_url, wbiKeyOptions)
@@ -239,11 +250,13 @@ async function doRequest(message: Message, api: API, cookies?: Browser.Cookies.C
       }
 
       // 执行 afterHandle 处理
+      let handledResponse: unknown = response
       for (const func of afterHandle) {
-        response = await func(response as any)
+        const invoke = func as (data: unknown) => unknown | Promise<unknown>
+        handledResponse = await invoke(handledResponse)
       }
 
-      return response
+      return handledResponse
     }
 
     // 执行请求的包装函数，支持 WBI 降级重试

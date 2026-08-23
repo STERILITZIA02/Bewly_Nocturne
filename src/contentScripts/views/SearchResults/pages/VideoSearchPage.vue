@@ -160,10 +160,10 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
 
   // 过滤广告和应用时间过滤
-  const filteredList = applyVideoTimeFilter(incomingList.filter(item => !isAdVideo(item)))
+  const filteredList = applyVideoTimeFilter(incomingList.filter((item: Record<string, unknown>) => !isAdVideo(item)))
 
   // 转换数据格式 - 根据类型选择正确的转换函数
-  const convertedList = filteredList.map((item) => {
+  const convertedList = filteredList.map((item: Record<string, unknown>) => {
     // 如果是直播间类型，使用直播间转换函数
     if (item.type === 'live_room') {
       return convertLiveRoomData(item)
@@ -242,8 +242,8 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
 
     const rawData = lastResponse.value.data
     const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-    const filteredList = applyVideoTimeFilter(incomingList.filter(item => !isAdVideo(item)))
-    const convertedList = filteredList.map(item => item.type === 'live_room'
+    const filteredList = applyVideoTimeFilter(incomingList.filter((item: Record<string, unknown>) => !isAdVideo(item)))
+    const convertedList = filteredList.map((item: Record<string, unknown>) => item.type === 'live_room'
       ? convertLiveRoomData(item)
       : convertVideoData(item))
 

@@ -54,7 +54,7 @@ function markAvatarFailed(index: number) {
 </script>
 
 <template>
-  <article class="native-notification-item" :data-notification-id="item.id">
+  <article class="native-notification-item native-notification-surface bew-shape-smooth-rect" :data-notification-id="item.id">
     <div
       class="native-notification-item__avatars"
       :class="{ 'native-notification-item__avatars--grouped': item.actorCount > 1 }"
@@ -137,19 +137,13 @@ function markAvatarFailed(index: number) {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--bew-space-3);
-  padding: var(--bew-space-4) var(--bew-space-2);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-.native-notification-item:hover {
-  background: var(--bew-fill-1);
+  padding: var(--bew-space-4);
 }
 
 .native-notification-item__avatars {
   display: flex;
-  align-items: center;
+  align-self: start;
+  align-items: flex-start;
   min-width: var(--bew-space-12);
 }
 

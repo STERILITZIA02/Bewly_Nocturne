@@ -133,7 +133,7 @@ function generateMixinKey(imgKey: string, subKey: string): string {
  * 对参数进行URL编码（符合WBI要求）
  * 注意：根据官方规范，需要先过滤掉 !'()* 字符，然后再进行URL编码
  */
-function encodeWbiParam(value: any): string {
+function encodeWbiParam(value: unknown): string {
   // 先过滤掉 !'()* 字符
   const filtered = String(value).replace(/[!'()*]/g, '')
   // 再进行URL编码
@@ -290,7 +290,7 @@ export function addWbiSign(params: Record<string, any>, options: WbiKeyOptions =
 
   // 添加时间戳
   const wts = Math.floor(Date.now() / 1000)
-  const signParams = { ...params, wts }
+  const signParams: Record<string, unknown> = { ...params, wts }
 
   // 按键名升序排序
   const sortedKeys = Object.keys(signParams).sort()
@@ -391,7 +391,7 @@ export async function initWbiKeys(
 
       // Service Worker 冷启动时先恢复持久缓存，MID 不匹配时不得复用 authenticated slot。
       if (!options.forceRefresh && !invalidatedPersistentScopes.has(scope)) {
-        const stored = await runtime.storage.get(WBI_KEYS_STORAGE_KEYS[scope]).catch(() => ({}))
+        const stored = await runtime.storage.get(WBI_KEYS_STORAGE_KEYS[scope]).catch((): Record<string, unknown> => ({}))
         const persisted = parsePersistedWbiKeys(stored[WBI_KEYS_STORAGE_KEYS[scope]])
         if (persisted && isWbiKeysValid(persisted, { ...options, mid }, runtime.now())) {
           setMemoryWbiKeys(scope, persisted)

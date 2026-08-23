@@ -6,8 +6,7 @@ import { useDark } from '~/composables/useDark'
 import { DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
-import { debugLog } from '~/utils/debug'
-import { getIframeMessageData } from '~/utils/iframeMessage'
+import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { isHomePage, isInIframe } from '~/utils/main'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
@@ -78,34 +77,32 @@ disposers.push(useEventListener(window, 'popstate', updateIframeUrl))
 
 // 监听黑暗模式变化
 watch([isDark, isOledDark], ([newValue, newOledValue]) => {
-  if (iframeRef.value?.contentWindow) {
-    try {
-      iframeRef.value.contentWindow.postMessage({
-        type: IFRAME_DARK_MODE_CHANGE,
-        isDark: newValue,
-        isOledDark: newOledValue,
-      }, '*')
-    }
-    catch (error) {
-      console.warn('Failed to send dark mode change message to iframe:', error)
-    }
+  try {
+    postMessageToIframe(iframeRef.value, {
+      type: IFRAME_DARK_MODE_CHANGE,
+      isDark: newValue,
+      isOledDark: newOledValue,
+    })
+  }
+  catch (error) {
+    console.warn('Failed to send dark mode change message to iframe:', error)
   }
 })
 
 // 监听深色模式基准颜色变化
 watch(() => settings.value.darkModeBaseColor, (newColor) => {
-  if (iframeRef.value?.contentWindow && isDark.value) {
-    try {
-      iframeRef.value.contentWindow.postMessage({
-        type: IFRAME_DARK_MODE_CHANGE,
-        isDark: isDark.value,
-        isOledDark: isOledDark.value,
-        darkModeBaseColor: newColor,
-      }, '*')
-    }
-    catch (error) {
-      console.warn('Failed to send dark mode base color change message to iframe:', error)
-    }
+  if (!isDark.value)
+    return
+  try {
+    postMessageToIframe(iframeRef.value, {
+      type: IFRAME_DARK_MODE_CHANGE,
+      isDark: isDark.value,
+      isOledDark: isOledDark.value,
+      darkModeBaseColor: newColor,
+    })
+  }
+  catch (error) {
+    console.warn('Failed to send dark mode base color change message to iframe:', error)
   }
 })
 
@@ -120,12 +117,12 @@ watch(() => showIframe.value, (newValue) => {
       if (generation !== iframeGeneration || iframeWindow !== iframeRef.value?.contentWindow)
         return
       try {
-        iframeWindow.postMessage({
+        postMessageToIframe(iframeRef.value, {
           type: IFRAME_DARK_MODE_CHANGE,
           isDark: isDark.value,
           isOledDark: isOledDark.value,
           darkModeBaseColor: settings.value.darkModeBaseColor,
-        }, '*')
+        })
       }
       catch (error) {
         console.warn('Failed to send initial dark mode state to iframe:', error)
@@ -217,6 +214,7 @@ function handleIframeLoad(event: Event) {
     return
   }
 
+  markIframeReadyForMessaging(iframe)
   const iframeWindow = iframe.contentWindow
   if (!iframeWindow) {
     console.error('Iframe or contentWindow is not available')
@@ -241,7 +239,6 @@ async function remountIframe(url: string) {
 }
 
 onMounted(() => {
-  debugLog('[IframeDrawer] onMounted called')
   originUrl.value = window.location.href
   history.pushState(null, '', props.url)
   show.value = true
@@ -249,7 +246,6 @@ onMounted(() => {
   currentUrl.value = props.url
   renderIframe.value = true
   setActiveDrawer(DrawerType.IframeDrawer) // 设置为当前活跃抽屉
-  debugLog('[IframeDrawer] show.value:', show.value, 'activeDrawer:', activeDrawer.value)
   if (!isPageScrollLocked.value) {
     lockPageScroll()
     isPageScrollLocked.value = true
@@ -306,7 +302,6 @@ async function updateIframeUrl() {
 }
 
 async function handleClose() {
-  debugLog('[IframeDrawer] handleClose called')
   if (delayCloseTimer.value) {
     clearTimeout(delayCloseTimer.value)
   }
@@ -318,7 +313,6 @@ async function handleClose() {
   show.value = false
   headerShow.value = false
   setActiveDrawer(DrawerType.None) // 清除活跃抽屉状态
-  debugLog('[IframeDrawer] show.value:', show.value, 'activeDrawer:', activeDrawer.value)
   delayCloseTimer.value = setTimeout(() => {
     emit('close')
   }, DRAWER_TRANSITION_MS)
@@ -391,38 +385,24 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key !== 'Escape' && e.code !== 'Escape')
     return
 
-  debugLog('[IframeDrawer] ESC key pressed!')
-  debugLog('[IframeDrawer] show.value:', show.value)
-  debugLog('[IframeDrawer] activeDrawer.value:', activeDrawer.value)
-  debugLog('[IframeDrawer] DrawerType.IframeDrawer:', DrawerType.IframeDrawer)
-  debugLog('[IframeDrawer] Match:', activeDrawer.value === DrawerType.IframeDrawer)
-
   // Only handle when this drawer is the active drawer
-  if (activeDrawer.value !== DrawerType.IframeDrawer) {
-    debugLog('[IframeDrawer] Not active drawer, ignoring ESC')
+  if (activeDrawer.value !== DrawerType.IframeDrawer)
     return
-  }
 
-  debugLog('[IframeDrawer] Processing ESC key')
   e.preventDefault()
   e.stopPropagation()
 
   if (settings.value.drawerEscapeBehavior === 'immediate') {
-    debugLog('[IframeDrawer] drawerEscapeBehavior = immediate, closing immediately')
     clearTimeout(escPressedTimer.value!)
     handleClose()
     return
   }
-  debugLog('[IframeDrawer] disableEscPress:', disableEscPress.value)
-  debugLog('[IframeDrawer] isEscPressed:', isEscPressed.value)
   if (disableEscPress.value)
     return
   if (isEscPressed.value) {
-    debugLog('[IframeDrawer] ESC pressed twice, closing')
     handleClose()
   }
   else {
-    debugLog('[IframeDrawer] First ESC press, waiting for second press')
     isEscPressed.value = true
     if (escPressedTimer.value) {
       clearTimeout(escPressedTimer.value)
@@ -443,15 +423,14 @@ onMounted(() => {
 })
 
 function handleIframeMessage(event: MessageEvent) {
-  if (isInIframe() || event.source !== iframeRef.value?.contentWindow)
+  if (isInIframe())
     return
 
-  const message = event.data
-  const type = typeof message === 'string'
-    ? message
-    : getIframeMessageData(event, iframeRef.value)?.type
+  const message = getIframeMessageData(event, iframeRef.value)
+  if (!message)
+    return
 
-  switch (type) {
+  switch (message.type) {
     case DRAWER_VIDEO_ENTER_PAGE_FULL:
       headerShow.value = false
       disableEscPress.value = true
@@ -464,20 +443,16 @@ function handleIframeMessage(event: MessageEvent) {
       break
     case 'BEWLY_DRAWER_CLOSE_REQUEST':
     {
-      const data = getIframeMessageData(event, iframeRef.value)
       // 来自 iframe 的关闭请求
-      if (data?.source === 'iframe' && activeDrawer.value === DrawerType.IframeDrawer) {
-        debugLog('[IframeDrawer] Received close request from iframe')
+      if (message.source === 'iframe' && activeDrawer.value === DrawerType.IframeDrawer) {
         if (settings.value.drawerEscapeBehavior === 'immediate') {
           handleClose()
         }
         else {
           if (isEscPressed.value) {
-            debugLog('[IframeDrawer] Second ESC from iframe, closing')
             handleClose()
           }
           else {
-            debugLog('[IframeDrawer] First ESC from iframe, waiting for second press')
             isEscPressed.value = true
             if (escPressedTimer.value) {
               clearTimeout(escPressedTimer.value)

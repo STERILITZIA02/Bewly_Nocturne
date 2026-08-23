@@ -31,7 +31,7 @@ watch(() => props.item.id, () => {
 </script>
 
 <template>
-  <article class="native-system-notification" :data-notification-id="item.id">
+  <article class="native-system-notification native-notification-surface bew-shape-smooth-rect" :data-notification-id="item.id">
     <div class="native-system-notification__icon" aria-hidden="true">
       <img
         v-if="item.sourceLogo && !sourceLogoFailed"
@@ -107,18 +107,12 @@ watch(() => props.item.id, () => {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--bew-space-3);
-  padding: var(--bew-space-4) var(--bew-space-2);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-.native-system-notification:hover {
-  background: var(--bew-fill-1);
+  padding: var(--bew-space-4);
 }
 
 .native-system-notification__icon {
   display: grid;
+  align-self: start;
   place-items: center;
   width: var(--bew-space-12);
   height: var(--bew-space-12);
@@ -126,6 +120,7 @@ watch(() => props.item.id, () => {
   color: var(--bew-theme-color);
   font-size: var(--bew-icon-size-lg);
   background: var(--bew-fill-1);
+  border: 1px solid var(--bew-surface-border-color);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
 }

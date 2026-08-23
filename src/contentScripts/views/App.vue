@@ -27,6 +27,7 @@ import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
+import { getIframeMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
@@ -439,16 +440,12 @@ const hideUIForIframePhotoViewer = ref<boolean>(false)
 const iframePageRef = ref()
 
 // 监听来自iframe的图片预览器状态
-useEventListener(window, 'message', ({ data, source }) => {
-  // 确保消息来自iframe
-  if (!data || data.type !== 'IFRAME_PHOTO_VIEWER_STATE')
+useEventListener(window, 'message', (event) => {
+  const iframe = iframePageRef.value?.$el?.querySelector('iframe') as HTMLIFrameElement | null
+  const data = getIframeMessageData(event, iframe)
+  if (data?.type !== 'IFRAME_PHOTO_VIEWER_STATE' || typeof data.isOpen !== 'boolean')
     return
-
-  // 检查消息来源是否是iframe
-  const iframe = iframePageRef.value?.$el?.querySelector('iframe')
-  if (iframe && source === iframe.contentWindow) {
-    hideUIForIframePhotoViewer.value = data.isOpen
-  }
+  hideUIForIframePhotoViewer.value = data.isOpen
 })
 
 const iframePageURL = computed((): string => {
@@ -809,10 +806,10 @@ watchEffect(async (onCleanUp) => {
     if (!(el instanceof HTMLElement))
       return null
     if (el.classList.contains('bpx-state-entered')) {
-      parent.postMessage(DRAWER_VIDEO_ENTER_PAGE_FULL)
+      postMessageToParent({ type: DRAWER_VIDEO_ENTER_PAGE_FULL })
     }
     else {
-      parent.postMessage(DRAWER_VIDEO_EXIT_PAGE_FULL)
+      postMessageToParent({ type: DRAWER_VIDEO_EXIT_PAGE_FULL })
     }
   })
 

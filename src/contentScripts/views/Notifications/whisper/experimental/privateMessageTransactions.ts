@@ -1,5 +1,5 @@
 /**
- * EXPERIMENTAL: shared only by the explicit DEV text-send test and fixture verification.
+ * Private-message optimistic write transactions shared by the packaged Composer and fixture verification.
  */
 import type { PrivateMessage } from '~/background/privateMessage/types'
 
@@ -30,6 +30,7 @@ export interface DisplayPrivateMessage {
   localId?: string
   sendState?: PrivateMessageSendState
   serverMsgKey?: string
+  serverMediaUrl?: string
 }
 
 export type PrivateMessageSource
@@ -199,9 +200,7 @@ export function createOptimisticPrivateImageMessage(
 export function getPrivateMessageText(message: DisplayPrivateMessage): string {
   if (message.content.type !== 'text')
     return ''
-  return message.content.segments.map(segment => (
-    segment.type === 'emoji' ? segment.alt : segment.text
-  )).join('')
+  return message.content.segments.map(segment => segment.text).join('')
 }
 
 export function reconcileOptimisticPrivateMessages(
@@ -219,6 +218,13 @@ export function reconcileOptimisticPrivateMessages(
       return false
     if (optimistic.serverMsgKey)
       return item.msgKey === optimistic.serverMsgKey
+    if (optimistic.msgType === 2) {
+      return Boolean(
+        optimistic.serverMediaUrl
+        && item.content.type === 'image'
+        && item.content.src === optimistic.serverMediaUrl,
+      )
+    }
     if (optimistic.msgType !== 1)
       return false
     return (
