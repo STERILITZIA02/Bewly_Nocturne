@@ -751,7 +751,7 @@ onBeforeUnmount(() => {
     color: var(--bew-on-theme-color);
     background: var(--bew-theme-color);
     border-radius: var(--bew-badge-radius);
-    corner-shape: var(--bew-corner-shape);
+    corner-shape: var(--bew-corner-shape-round);
     box-shadow: var(--bew-shadow-2);
     font-size: var(--bew-font-size-control);
     font-weight: var(--bew-font-weight-semibold);

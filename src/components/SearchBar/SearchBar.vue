@@ -863,6 +863,7 @@ function handleClearKeyword() {
         width: 8px;
         height: 8px;
         border-radius: 50%;
+        corner-shape: var(--bew-corner-shape-round);
         pointer-events: none;
         z-index: 0;
         background: var(--bew-theme-color);

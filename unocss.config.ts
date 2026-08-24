@@ -4,7 +4,7 @@ const remRE = /(-?[.\d]+)rem/g
 const radiusPropertyRE = /^border(?:-.+)?-radius$/
 const zeroRadiusRE = /^0(?:px|rem|em|%)?$/
 const circleRadiusRE = /^50%$/
-const fullRadiusRE = /^(?:9999px|var\(--bew-radius-full\))$/
+const fullRadiusRE = /^(?:9999px|var\(--bew-(?:radius-full|badge-radius|control-radius|control-item-radius|liquid-indicator-radius|top-bar-primary-control-radius)\))$/
 
 export default defineConfig({
   content: {
@@ -70,19 +70,26 @@ export default defineConfig({
         if (radiusEntries.length === 0)
           return
 
+        const hasRoundRadius = radiusEntries.some(([, value]) => {
+          return typeof value === 'string'
+            && (circleRadiusRE.test(value) || fullRadiusRE.test(value))
+        })
         const hasSmoothRadius = radiusEntries.some(([, value]) => {
           return typeof value === 'string'
             && !zeroRadiusRE.test(value)
             && !circleRadiusRE.test(value)
             && !fullRadiusRE.test(value)
+            && value !== 'inherit'
         })
-        if (!hasSmoothRadius)
+        const inheritsRadius = radiusEntries.every(([, value]) => value === 'inherit')
+        if (!hasSmoothRadius && !hasRoundRadius && !inheritsRadius)
           return
 
-        const inheritsRadius = radiusEntries.every(([, value]) => value === 'inherit')
         util.entries.push([
           'corner-shape',
-          inheritsRadius ? 'inherit' : 'var(--bew-corner-shape)',
+          inheritsRadius
+            ? 'inherit'
+            : hasSmoothRadius ? 'var(--bew-corner-shape)' : 'var(--bew-corner-shape-round)',
         ])
       },
     },

@@ -1112,6 +1112,7 @@ defineExpose({
   width: 56px;
   height: 56px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   object-fit: cover;
   cursor: pointer;
 }

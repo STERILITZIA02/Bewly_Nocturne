@@ -12,6 +12,7 @@ import type { NotificationBadgeReconcileResult } from '../notificationReadReconc
 import { reconcileNotificationBadge } from '../notificationReadReconciliation'
 import type { NativeNotificationSection } from '../notificationSections'
 import { NOTIFICATION_BADGE_RETRY_DELAYS_MS } from '../notificationTimings'
+import NativeNotificationFeedSkeleton from './NativeNotificationFeedSkeleton.vue'
 import NativeNotificationItem from './NativeNotificationItem.vue'
 import NativeSystemNotificationItem from './NativeSystemNotificationItem.vue'
 
@@ -410,7 +411,10 @@ defineExpose({ refresh })
     :aria-label="feedAriaLabel"
     :aria-busy="accountState === 'profile-pending' || (accountState === 'ready' && (!state.loaded || state.loading || state.loadingMore))"
   >
-    <Loading v-if="accountState === 'profile-pending'" />
+    <NativeNotificationFeedSkeleton
+      v-if="accountState === 'profile-pending'"
+      :label="feedAriaLabel"
+    />
 
     <div v-else-if="accountState === 'logged-out'" class="native-notification-feed__state">
       <Empty :description="t('notifications.native.errors.login-required')">
@@ -420,7 +424,10 @@ defineExpose({ refresh })
       </Empty>
     </div>
 
-    <Loading v-else-if="!state.loaded && !state.errorKind" />
+    <NativeNotificationFeedSkeleton
+      v-else-if="!state.loaded && !state.errorKind"
+      :label="feedAriaLabel"
+    />
 
     <div v-else-if="state.errorKind && state.items.length === 0" class="native-notification-feed__state">
       <Empty :description="errorMessage">
@@ -445,6 +452,11 @@ defineExpose({ refresh })
           <NativeSystemNotificationItem v-if="item.kind === 'system'" :item="item" />
           <NativeNotificationItem v-else :item="item" />
         </template>
+        <NativeNotificationFeedSkeleton
+          v-if="state.loadingMore"
+          :count="2"
+          :label="feedAriaLabel"
+        />
       </div>
 
       <div v-if="state.errorKind" class="native-notification-feed__pagination-state" role="status">
@@ -453,7 +465,6 @@ defineExpose({ refresh })
           {{ t('notifications.actions.retry') }}
         </Button>
       </div>
-      <Loading v-else-if="state.loadingMore" />
 
       <div
         v-if="!state.noMore && !state.paginationStalled"
@@ -475,26 +486,6 @@ defineExpose({ refresh })
   display: grid;
   min-width: 0;
   gap: var(--bew-space-3);
-}
-
-.native-notification-feed__items :deep(.native-notification-surface) {
-  box-sizing: border-box;
-  isolation: isolate;
-  background: var(--bew-elevated-alt);
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
-  box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
-  backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
-  transition:
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    border-color var(--bew-duration-fast) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-.native-notification-feed__items :deep(.native-notification-surface:hover) {
-  background: var(--bew-elevated-alt-hover);
-  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
 }
 
 .native-notification-feed__state {

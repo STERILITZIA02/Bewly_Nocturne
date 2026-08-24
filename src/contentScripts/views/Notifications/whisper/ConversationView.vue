@@ -22,6 +22,8 @@ import {
   reduceConversationExpansion,
   shouldCollapseConversationAtLatest,
 } from './conversationExpansion'
+import ConversationHistorySkeleton from './ConversationHistorySkeleton.vue'
+import ConversationTimelineSkeleton from './ConversationTimelineSkeleton.vue'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
 import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
@@ -869,6 +871,7 @@ defineExpose({
     :data-at-history-start="isAtHistoryStart ? 'true' : undefined"
     :data-at-latest="isAtLatestPosition ? 'true' : undefined"
     :aria-label="t('notifications.whisper.messages.timeline_aria', { name: displayName })"
+    :aria-busy="state.loadingInitial && !state.loaded || historyLoading"
     @keydown.esc="handleEscape"
   >
     <div
@@ -896,9 +899,20 @@ defineExpose({
         @touchstart.passive="markReadingIntent"
         @wheel.passive="markReadingIntent"
       >
-        <div v-if="state.loadingInitial && !state.loaded" class="conversation-view__state" aria-busy="true">
-          <Loading />
-          <span>{{ t('notifications.whisper.messages.loading') }}</span>
+        <div
+          v-if="state.loadingInitial && !state.loaded"
+          class="conversation-view__initial-skeleton"
+        >
+          <div class="conversation-view__history-status conversation-view__history-status--loading">
+            <ConversationHistorySkeleton
+              :announce="false"
+              :label="t('notifications.whisper.messages.loading')"
+            />
+          </div>
+          <ConversationTimelineSkeleton
+            :compact="settings.privateMessageDensity === 'compact'"
+            :label="t('notifications.whisper.messages.loading')"
+          />
         </div>
 
         <div v-else-if="state.errorKind && !timelineItems.length" class="conversation-view__state">
@@ -912,8 +926,14 @@ defineExpose({
         </div>
 
         <template v-else>
-          <div class="conversation-view__history-status">
-            <i v-if="historyLoading" i-svg-spinners-ring-resize aria-hidden="true" />
+          <div
+            class="conversation-view__history-status"
+            :class="{ 'conversation-view__history-status--loading': historyLoading }"
+          >
+            <ConversationHistorySkeleton
+              v-if="historyLoading"
+              :label="t('notifications.whisper.messages.loading')"
+            />
             <span v-else-if="isAtHistoryStart">{{ t('notifications.whisper.messages.history_start') }}</span>
             <button v-else type="button" @click="loadOlderMessages()">
               {{ t('notifications.whisper.messages.load_older') }}
@@ -1099,6 +1119,10 @@ defineExpose({
   outline-offset: calc(0px - var(--bew-space-1));
 }
 
+.conversation-view__initial-skeleton {
+  min-width: 0;
+}
+
 .conversation-view__timeline {
   display: grid;
   gap: var(--bew-space-3);
@@ -1141,6 +1165,10 @@ defineExpose({
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+}
+
+.conversation-view__history-status--loading {
+  padding: 0;
 }
 
 .conversation-view__inline-error button,
@@ -1192,7 +1220,8 @@ defineExpose({
 .conversation-card__top-edge {
   top: 0;
   height: var(--bew-space-12);
-  border-radius: var(--conversation-top-radius) var(--conversation-top-radius) 0 0;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
   mask-image: linear-gradient(to bottom, black, transparent);
   -webkit-mask-image: linear-gradient(to bottom, black, transparent);
 }
@@ -1204,7 +1233,8 @@ defineExpose({
 .conversation-card__bottom-edge {
   bottom: 0;
   height: var(--bew-space-12);
-  border-radius: 0 0 var(--conversation-bottom-radius) var(--conversation-bottom-radius);
+  border-bottom-right-radius: inherit;
+  border-bottom-left-radius: inherit;
   mask-image: linear-gradient(to bottom, transparent, black 70%);
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 70%);
 }

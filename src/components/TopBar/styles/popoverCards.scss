@@ -77,8 +77,8 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
-  border-radius: 0;
-  corner-shape: unset;
+  border-radius: inherit;
+  corner-shape: inherit;
 }
 
 .popover-card-action {

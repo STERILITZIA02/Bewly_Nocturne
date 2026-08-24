@@ -197,18 +197,40 @@ img:not(.pswp__img) {
 
 .bew-shape-pill {
   border-radius: var(--bew-radius-full) !important;
-  corner-shape: round !important;
+  corner-shape: var(--bew-corner-shape-round) !important;
 }
 
 .bew-shape-circle {
   aspect-ratio: 1;
   border-radius: 50% !important;
-  corner-shape: round !important;
+  corner-shape: var(--bew-corner-shape-round) !important;
 }
 
 .bew-surface-border {
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
+}
+
+// Native notification entries and their loading placeholders share one
+// feed-card surface so loading never changes the page geometry.
+.native-notification-surface {
+  box-sizing: border-box;
+  isolation: isolate;
+  background: var(--bew-elevated-alt);
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-card-radius);
+  box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  transition:
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    border-color var(--bew-duration-fast) var(--bew-ease-standard),
+    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.native-notification-surface:hover {
+  background: var(--bew-elevated-alt-hover);
+  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
 }
 
 // Warning badges share one visual language across settings headings and items.
@@ -219,7 +241,7 @@ img:not(.pswp__img) {
   color: var(--bew-warning-color);
   background: color-mix(in oklab, var(--bew-warning-color), transparent 88%);
   border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-caption);

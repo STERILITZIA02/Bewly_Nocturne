@@ -245,6 +245,7 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .moment-comments__skeleton-row > div {
@@ -326,6 +327,7 @@ onBeforeUnmount(() => {
   width: 28px;
   height: 28px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-fill-1);
 }
 
@@ -334,6 +336,7 @@ onBeforeUnmount(() => {
   width: 100%;
   height: 100%;
   border-radius: inherit;
+  corner-shape: inherit;
   object-fit: cover;
 }
 

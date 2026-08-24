@@ -492,9 +492,9 @@ function isItemActionPending(): boolean {
                       :src="removeHttpFromUrl(`${item.owner.face}@40w_40h_1c`)"
                       w-30px
                       aspect-square
+                      class="bew-shape-circle"
                       object-cover
                       alt=""
-                      rounded="1/2"
                       mr-2
                     >
                     {{ item.owner.name }}

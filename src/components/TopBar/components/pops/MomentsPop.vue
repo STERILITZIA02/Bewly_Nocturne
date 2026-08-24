@@ -188,15 +188,14 @@ defineExpose({
             <ALink
               :href="moment.authorJumpUrl"
               type="topBar"
-              class="popover-card__interactive"
-              rounded="1/2"
+              class="popover-card__interactive bew-shape-circle"
               w="40px" h="40px" m="r-4"
               bg="$bew-skeleton"
               shrink-0
             >
               <img
                 :src="`${moment.authorFace}@50w_50h_1c`"
-                rounded="1/2"
+                rounded-inherit
                 w="40px" h="40px"
               >
             </ALink>

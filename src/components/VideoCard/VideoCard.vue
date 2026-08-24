@@ -369,7 +369,7 @@ provide('getVideoType', () => props.type!)
     <div
       class="video-card group"
       w="full"
-      rounded="$bew-card-radius"
+      rounded-inherit
     >
       <component
         :is="coverSkeleton ? 'div' : 'ALink'"

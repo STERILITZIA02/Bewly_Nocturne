@@ -10,7 +10,7 @@
   padding: var(--bew-control-padding);
   border: var(--bew-control-border-width) solid var(--bew-control-border-color);
   border-radius: var(--bew-control-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   background: transparent;
   box-shadow: none;
   backdrop-filter: none;
@@ -41,7 +41,7 @@
   padding: 0 var(--bew-control-item-padding-x);
   border: 0;
   border-radius: var(--bew-control-item-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-segment-item-color, var(--bew-text-2));
   background: transparent;
   box-shadow: none;

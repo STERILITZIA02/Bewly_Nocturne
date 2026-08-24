@@ -24,6 +24,7 @@ import {
 
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
 import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
+import NotificationsPageSkeleton from './components/NotificationsPageSkeleton.vue'
 import type { NotificationPageParams } from './composables/useNotificationFeed'
 import { useNotificationFeeds } from './composables/useNotificationFeeds'
 import { resolveNotificationAccountState } from './notificationFeedPolicy'
@@ -521,7 +522,7 @@ onBeforeUnmount(() => {
     :style="notificationsPageStyle"
   >
     <div v-if="!routeReady" class="notifications-page__route-loading" aria-busy="true">
-      <Loading />
+      <NotificationsPageSkeleton :label="t('common.loading')" />
     </div>
 
     <template v-else>
@@ -593,11 +594,9 @@ onBeforeUnmount(() => {
 }
 
 .notifications-page__route-loading {
-  display: flex;
   width: 100%;
+  height: 100%;
   min-height: 100%;
-  align-items: center;
-  justify-content: center;
   background: transparent;
 }
 

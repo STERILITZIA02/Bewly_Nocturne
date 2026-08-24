@@ -113,7 +113,8 @@ const content = computed(() => {
       <!-- Old layout skeleton: Avatar on left -->
       <div
         v-if="layout === 'old' && !horizontal && content.authorAvatarEnabled"
-        m="r-4" w="34px" h="34px" rounded="1/2" bg="$bew-skeleton"
+        class="bew-shape-circle"
+        m="r-4" w="34px" h="34px" bg="$bew-skeleton"
         shrink-0
       />
 
@@ -134,7 +135,7 @@ const content = computed(() => {
             <div w="3/4" bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em;" />
           </div>
           <div
-            v-if="content.isModernLayout" shrink-0 w-8 h-8 rounded="1/2"
+            v-if="content.isModernLayout" class="bew-shape-circle" shrink-0 w-8 h-8
             bg="$bew-skeleton"
           />
         </div>
@@ -148,7 +149,8 @@ const content = computed(() => {
         >
           <div
             v-if="content.authorAvatarEnabled"
-            w="34px" h="34px" rounded="1/2" bg="$bew-skeleton" shrink-0
+            class="bew-shape-circle"
+            w="34px" h="34px" bg="$bew-skeleton" shrink-0
           />
           <div v-if="content.authorNameEnabled || content.metaPlaceholderEnabled" flex="~ col gap-1" w="[calc(100%-50px)]">
             <!-- 作者名称骨架：使用与真实文本相同的字体大小和行高 -->
@@ -176,7 +178,8 @@ const content = computed(() => {
           :class="metaFontSizeClass"
         >
           <div
-            w="60px" bg="$bew-skeleton" rounded="$bew-radius"
+            class="bew-shape-pill"
+            w="60px" bg="$bew-skeleton"
             style="height: calc(1em + 0.24em);"
           />
         </div>
@@ -191,7 +194,8 @@ const content = computed(() => {
             :class="metaFontSizeClass"
           >
             <div
-              bg="$bew-skeleton" rounded="$bew-radius"
+              class="bew-shape-pill"
+              bg="$bew-skeleton"
               lh-6 p="x-2" w="60px"
               style="height: calc(1em + 0.24em);"
             />
@@ -211,7 +215,8 @@ const content = computed(() => {
               <!-- Horizontal mode avatar -->
               <div
                 v-if="horizontal && content.authorAvatarEnabled"
-                w="34px" h="34px" rounded="1/2" bg="$bew-skeleton"
+                class="bew-shape-circle"
+                w="34px" h="34px" bg="$bew-skeleton"
                 shrink-0 m-r-2
               />
               <div v-if="content.authorNameEnabled" w="100px" bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em;" />
@@ -235,7 +240,8 @@ const content = computed(() => {
               :class="metaFontSizeClass"
             >
               <div
-                bg="$bew-skeleton" rounded="$bew-radius"
+                class="bew-shape-pill"
+                bg="$bew-skeleton"
                 lh-6 p="x-2" w="60px"
                 style="height: calc(1em + 0.24em);"
               />
@@ -287,11 +293,11 @@ const content = computed(() => {
             :aria-expanded="showVideoOptions"
             :class="[
               { 'more-active': showVideoOptions },
-              content.isModernLayout ? 'overflow-hidden rounded-full' : '',
+              content.isModernLayout ? 'overflow-hidden' : '',
             ]"
             bg="hover:$bew-fill-2 active:$bew-fill-3"
             shrink-0 w-32px h-32px m="t--3px"
-            grid place-items-center cursor-pointer rounded="50%"
+            grid place-items-center cursor-pointer
             @click.stop.prevent="emit('moreBtnClick', $event)"
           >
             <div i-mingcute:more-2-line text="lg" aria-hidden="true" />
@@ -598,7 +604,6 @@ const content = computed(() => {
   color: inherit;
   font: inherit;
   border: 0;
-  border-radius: 50%;
   overflow: hidden;
   transition:
     opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
@@ -608,6 +613,7 @@ const content = computed(() => {
 .video-card__more-btn::before,
 .video-card__more-btn::after {
   border-radius: inherit;
+  corner-shape: inherit;
 }
 
 .more-active {
@@ -636,6 +642,13 @@ const content = computed(() => {
   max-width: 100%;
   min-height: 24px;
   max-height: 24px;
+}
+
+.video-card-meta-row > a,
+.video-card-meta-row > span,
+.video-card-meta__chip {
+  border-radius: var(--bew-badge-radius);
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .video-card-meta__chip {

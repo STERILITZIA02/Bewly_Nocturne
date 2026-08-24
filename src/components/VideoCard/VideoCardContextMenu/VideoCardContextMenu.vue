@@ -716,6 +716,8 @@ async function unfollowUser() {
   color: var(--bew-text-color-2);
   cursor: pointer;
   background: var(--bew-elevated);
+  border-radius: inherit;
+  corner-shape: inherit;
   position: absolute;
   left: 0;
   right: 0;
@@ -728,15 +730,15 @@ async function unfollowUser() {
 
   &-top {
     top: 0;
-    border-top-left-radius: var(--bew-radius);
-    border-top-right-radius: var(--bew-radius);
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
     box-shadow: 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 
   &-bottom {
     bottom: 0;
-    border-bottom-left-radius: var(--bew-radius);
-    border-bottom-right-radius: var(--bew-radius);
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
     box-shadow: 0 -4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 }

@@ -6,6 +6,7 @@ import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
+import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
 
 const props = withDefaults(defineProps<{
   title?: string
@@ -53,6 +54,7 @@ const emit = defineEmits(['close', 'confirm'])
 const showShortcut = ref<boolean>(false)
 const { mainAppRef } = useBewlyApp()
 const showDialog = ref<boolean>(false)
+const dialogRef = ref<HTMLElement | null>(null)
 /**
  * Closing protocol:
  * 1) handleClose only sets showDialog=false (starts leave transition)
@@ -62,21 +64,71 @@ const showDialog = ref<boolean>(false)
  */
 let isClosing = false
 let closeEmitted = false
+let isConfirmPending = false
 
-onKeyStroke('Enter', (e: KeyboardEvent) => {
-  e.preventDefault()
-  if (!props.loading && showDialog.value && !isClosing)
+function isDialogEnterEditingContext(event: KeyboardEvent) {
+  return event.composedPath().some((target) => {
+    if (!(target instanceof Element))
+      return false
+
+    const tagName = target.tagName.toLowerCase()
+    const role = target.getAttribute('role')
+    return ['input', 'textarea', 'select', 'button'].includes(tagName)
+      || (tagName === 'a' && target.hasAttribute('href'))
+      || (target instanceof HTMLElement && target.isContentEditable)
+      || (target.hasAttribute('contenteditable') && target.getAttribute('contenteditable') !== 'false')
+      || ['button', 'combobox', 'listbox', 'option', 'menuitem'].includes(role ?? '')
+  })
+}
+
+function isDialogKeyboardOwner(event: KeyboardEvent) {
+  const dialog = dialogRef.value
+  if (!dialog)
+    return false
+
+  const dialogRoot = dialog.getRootNode() as ParentNode
+  const visibleDialogs = Array.from(dialogRoot.querySelectorAll<HTMLElement>('.dialog'))
+  if (visibleDialogs.at(-1) !== dialog)
+    return false
+
+  if (event.composedPath().includes(dialog))
+    return true
+
+  const activeElement = document.activeElement
+  return !activeElement
+    || activeElement === document.body
+    || activeElement === document.documentElement
+    || dialog.contains(activeElement)
+}
+
+function handleDialogKeyboardEvent(event: KeyboardEvent, eventType: 'keydown' | 'keyup') {
+  const decision = resolveDialogKeyboardAction({
+    closing: isClosing,
+    defaultPrevented: event.defaultPrevented,
+    editingContext: event.key === 'Enter' && isDialogEnterEditingContext(event),
+    eventType,
+    isComposing: event.isComposing || event.keyCode === 229,
+    key: event.key,
+    loading: Boolean(props.loading),
+    preventCloseWhenLoading: props.preventCloseWhenLoading,
+    visible: showDialog.value && isDialogKeyboardOwner(event),
+  })
+
+  if (decision.preventDefault)
+    event.preventDefault()
+
+  if (decision.action === 'confirm')
     handleConfirm()
-})
-onKeyStroke('Escape', (e: KeyboardEvent) => {
-  if (!showDialog.value || isClosing)
-    return
+  else if (decision.action === 'close')
+    handleClose()
+  else if (decision.action === 'show-shortcut')
+    showShortcut.value = true
+  else if (decision.action === 'hide-shortcut')
+    showShortcut.value = false
+}
 
-  e.preventDefault()
-  if (props.loading && props.preventCloseWhenLoading)
-    return
-  handleClose()
-})
+onKeyStroke('Enter', event => handleDialogKeyboardEvent(event, 'keydown'))
+onKeyStroke('Escape', event => handleDialogKeyboardEvent(event, 'keydown'))
 
 const dialogWidth = computed(() => {
   return typeof props.width === 'number' ? `${props.width}px` : props.width || '400px'
@@ -111,7 +163,7 @@ const dialogPanelStyle = computed(() => {
     left: '50%',
     transform: topAligned ? 'translateX(-50%)' : 'translate(-50%, -50%)',
     transition: 'transform 0.4s, width 0.4s, height 0.4s',
-    overflow: topAligned ? 'visible' : 'hidden',
+    boxShadow: props.showBorder ? 'var(--bew-shadow-4), var(--bew-shadow-edge-glow-2)' : 'var(--bew-shadow-4)',
   }
 })
 const dialogSurfaceStyle = computed(() => {
@@ -119,24 +171,18 @@ const dialogSurfaceStyle = computed(() => {
     backdropFilter: frostedGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
     WebkitBackdropFilter: frostedGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
     backgroundColor: frostedGlassEnabled.value ? 'var(--bew-elevated-alt)' : 'var(--bew-elevated-alt-solid)',
-    boxShadow: props.showBorder ? 'var(--bew-shadow-4), var(--bew-shadow-edge-glow-2)' : 'var(--bew-shadow-4)',
   }
 })
 
-onKeyStroke('Alt', (e: KeyboardEvent) => {
-  e.preventDefault()
-  showShortcut.value = true
-}, { eventName: 'keydown' })
-onKeyStroke('Alt', (e: KeyboardEvent) => {
-  e.preventDefault()
-  showShortcut.value = false
-}, { eventName: 'keyup' })
+onKeyStroke('Alt', event => handleDialogKeyboardEvent(event, 'keydown'), { eventName: 'keydown' })
+onKeyStroke('Alt', event => handleDialogKeyboardEvent(event, 'keyup'), { eventName: 'keyup' })
 
 onMounted(() => {
   showDialog.value = true
 })
 
 onBeforeUnmount(() => {
+  showShortcut.value = false
   // Parent forced unmount (e.g. v-if=false while still open) — ensure close is observed once.
   emitCloseOnce()
 })
@@ -161,6 +207,7 @@ function handleClose() {
     return
 
   isClosing = true
+  showShortcut.value = false
   // Already hidden (e.g. closed before enter finished) — no leave hook will run.
   if (!showDialog.value) {
     emitCloseOnce()
@@ -170,12 +217,15 @@ function handleClose() {
   // `close` is emitted in onAfterLeave after the leaving node is removed from DOM.
 }
 
-function handleConfirm() {
-  if (isClosing || closeEmitted)
+async function handleConfirm() {
+  if (props.loading || isClosing || closeEmitted || isConfirmPending)
     return
 
+  isConfirmPending = true
   emit('confirm')
-  if (!props.loading)
+  await nextTick()
+  isConfirmPending = false
+  if (!props.loading && showDialog.value && !isClosing)
     handleClose()
 }
 </script>
@@ -185,6 +235,7 @@ function handleConfirm() {
     <Transition :name="transitionName" @after-leave="onAfterLeave">
       <div
         v-if="showDialog"
+        ref="dialogRef"
         class="dialog"
         :class="`dialog--${layer}`"
         pos="fixed top-0 left-0" w-full h-full
@@ -204,109 +255,112 @@ function handleConfirm() {
           class="dialog__panel bew-shape-smooth-rect"
           :class="{ 'dialog__panel--borderless': !showBorder }"
         >
-          <div
-            class="dialog__surface"
-            :style="dialogSurfaceStyle"
-            aria-hidden="true"
-          />
-
-          <!-- loading masking -->
-          <Transition name="fade">
+          <div class="dialog__clip">
             <div
-              v-if="loading"
-              pos="absolute top-0 left-0" w-full h-full bg="white dark:black opacity-60 dark:opacity-60" flex="~ justify-center items-center"
-              rounded-inherit
-              z-2
-            >
-              <div i-svg-spinners-ring-resize text="size-$bew-icon-size-xl" />
-            </div>
-          </Transition>
+              class="dialog__surface"
+              :style="dialogSurfaceStyle"
+              aria-hidden="true"
+            />
 
-          <header
-            v-if="showHeader"
-            class="dialog__header"
-            style="
+            <!-- loading masking -->
+            <Transition name="fade">
+              <div
+                v-if="loading"
+                pos="absolute top-0 left-0" w-full h-full bg="white dark:black opacity-60 dark:opacity-60" flex="~ justify-center items-center"
+                rounded-inherit
+                class="dialog__loading-mask"
+                z-2
+              >
+                <div i-svg-spinners-ring-resize text="size-$bew-icon-size-xl" />
+              </div>
+            </Transition>
+
+            <header
+              v-if="showHeader"
+              class="dialog__header"
+              style="
               text-shadow: 0 0 10px var(--bew-elevated-solid), 0 0 15px var(--bew-elevated-solid)
             "
-            pos="sticky top-0 left-0" w-full h-70px px-8 flex
-            items-center justify-between
-            rounded="t-$bew-modal-radius" z-1
-          >
-            <PanelTopBlur v-if="showTopBlur" :enabled="frostedGlassEnabled" />
-            <div
-              class="dialog__heading"
-              :style="{ textAlign: center ? 'center' : 'left' }"
-              w-full
+              pos="sticky top-0 left-0" w-full h-70px px-8 flex
+              items-center justify-between
+              z-1
             >
-              <slot name="title">
-                <p class="dialog__title">
-                  {{ title }}
-                </p>
-              </slot>
-              <p class="dialog__description" text="$bew-text-2">
-                <slot name="desc">
-                  {{ desc }}
+              <PanelTopBlur v-if="showTopBlur" :enabled="frostedGlassEnabled" />
+              <div
+                class="dialog__heading"
+                :style="{ textAlign: center ? 'center' : 'left' }"
+                w-full
+              >
+                <slot name="title">
+                  <p class="dialog__title">
+                    {{ title }}
+                  </p>
                 </slot>
-              </p>
-            </div>
-
-            <CloseButton
-              class="dialog__close"
-              :label="$t('common.close')"
-              size="medium"
-              @click="handleClose"
-            />
-          </header>
-
-          <main
-            :style="{
-              height: dialogContentHeight,
-              maxHeight: dialogContentMaxHeight,
-              flex: dialogHeight ? '1 1 auto' : undefined,
-              minHeight: dialogHeight ? '0' : undefined,
-              ...(contentFlush
-                ? { padding: '0' }
-                : { paddingBottom: !showFooter ? '1.5rem' : '0.5rem' }),
-            }"
-            :p="contentFlush ? undefined : 'x-8 y-2'"
-            relative
-            :overflow="contentFlush ? 'hidden' : 'x-hidden y-overlay'"
-          >
-            <!-- <div h-80px mt--8 /> -->
-            <slot />
-          </main>
-          <footer
-            v-if="showFooter"
-            :style="{ justifyContent: centerFooter || center ? 'center' : 'flex-end' }"
-            flex="~ gap-2" p="x-8 t-2 b-6"
-          >
-            <Button type="tertiary" @click="handleClose">
-              <div>
-                {{ $t('common.operation.cancel') }}
-                <span
-                  v-show="showShortcut"
-                  text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-sm" bg="$bew-fill-1"
-                  border="1 $bew-border-color"
-                  mix-blend-color-dodge
-                >
-                  ESC
-                </span>
+                <p class="dialog__description" text="$bew-text-2">
+                  <slot name="desc">
+                    {{ desc }}
+                  </slot>
+                </p>
               </div>
-            </Button>
-            <Button type="primary" @click="handleConfirm">
-              <div>
-                {{ $t('common.operation.confirm') }}
-                <span
-                  v-show="showShortcut"
-                  text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-sm" bg="$bew-fill-1"
-                  border="1 $bew-border-color"
-                  mix-blend-color-dodge
-                >
-                  ENTER
-                </span>
-              </div>
-            </Button>
-          </footer>
+
+              <CloseButton
+                class="dialog__close"
+                :label="$t('common.close')"
+                size="medium"
+                @click="handleClose"
+              />
+            </header>
+
+            <main
+              :style="{
+                height: dialogContentHeight,
+                maxHeight: dialogContentMaxHeight,
+                flex: dialogHeight ? '1 1 auto' : undefined,
+                minHeight: dialogHeight ? '0' : undefined,
+                ...(contentFlush
+                  ? { padding: '0' }
+                  : { paddingBottom: !showFooter ? '1.5rem' : '0.5rem' }),
+              }"
+              :p="contentFlush ? undefined : 'x-8 y-2'"
+              relative
+              :overflow="contentFlush ? 'hidden' : 'x-hidden y-overlay'"
+            >
+              <!-- <div h-80px mt--8 /> -->
+              <slot />
+            </main>
+            <footer
+              v-if="showFooter"
+              :style="{ justifyContent: centerFooter || center ? 'center' : 'flex-end' }"
+              flex="~ gap-2" p="x-8 t-2 b-6"
+            >
+              <Button type="tertiary" @click="handleClose">
+                <div>
+                  {{ $t('common.operation.cancel') }}
+                  <span
+                    v-show="showShortcut"
+                    text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-sm" bg="$bew-fill-1"
+                    border="1 $bew-border-color"
+                    mix-blend-color-dodge
+                  >
+                    ESC
+                  </span>
+                </div>
+              </Button>
+              <Button type="primary" @click="handleConfirm">
+                <div>
+                  {{ $t('common.operation.confirm') }}
+                  <span
+                    v-show="showShortcut"
+                    text="xs $bew-text-2 lh-0" p="x-1" rounded="$bew-radius-sm" bg="$bew-fill-1"
+                    border="1 $bew-border-color"
+                    mix-blend-color-dodge
+                  >
+                    ENTER
+                  </span>
+                </div>
+              </Button>
+            </footer>
+          </div>
         </div>
       </div>
     </Transition>
@@ -327,9 +381,20 @@ function handleConfirm() {
 }
 
 .dialog__panel {
+  box-sizing: border-box;
+}
+
+.dialog__clip {
+  position: relative;
   display: flex;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   flex-direction: column;
   box-sizing: border-box;
+  overflow: clip;
+  border-radius: inherit;
+  corner-shape: inherit;
   isolation: isolate;
 
   &::after {
@@ -343,10 +408,16 @@ function handleConfirm() {
     content: "";
     pointer-events: none;
   }
+}
 
-  &--borderless::after {
-    border: 0;
-  }
+.dialog__panel--borderless .dialog__clip::after {
+  border: 0;
+}
+
+.dialog__surface,
+.dialog__loading-mask {
+  border-radius: inherit;
+  corner-shape: inherit;
 }
 
 .dialog__surface {
@@ -354,9 +425,13 @@ function handleConfirm() {
   inset: 0;
   z-index: -1;
   box-sizing: border-box;
-  border-radius: inherit;
-  corner-shape: inherit;
   pointer-events: none;
+}
+
+.dialog__header {
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  corner-shape: inherit;
 }
 
 .dialog__title {

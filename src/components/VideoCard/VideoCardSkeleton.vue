@@ -25,11 +25,11 @@ defineProps<{
           <div w-full h-5 bg="$bew-skeleton" rounded="$bew-radius-sm" />
           <div w="3/4" h-5 bg="$bew-skeleton" rounded="$bew-radius-sm" />
         </div>
-        <div shrink-0 w-8 h-8 rounded="1/2" bg="$bew-skeleton" />
+        <div class="bew-shape-circle" shrink-0 w-8 h-8 bg="$bew-skeleton" />
       </div>
 
       <div v-if="settings.videoCardLayout === 'modern'" flex="~ gap-2 items-center" w="full" mt-1>
-        <div w="34px" h="34px" rounded="1/2" bg="$bew-skeleton" shrink-0 />
+        <div class="bew-shape-circle" w="34px" h="34px" bg="$bew-skeleton" shrink-0 />
         <div flex="~ col gap-1" w="[calc(100%-50px)]">
           <div w="60%" h-3 bg="$bew-skeleton" rounded="$bew-radius-sm" />
           <div w="80%" h-3 bg="$bew-skeleton" rounded="$bew-radius-sm" />
@@ -57,11 +57,11 @@ defineProps<{
     <div w-full mt-0 flex="~ col gap-2">
       <div flex="~ gap-1 justify-between items-start" w="full">
         <div w-full h-5 bg="$bew-skeleton" rounded="$bew-radius-sm" />
-        <div shrink-0 w-8 h-8 rounded="1/2" bg="$bew-skeleton" />
+        <div class="bew-shape-circle" shrink-0 w-8 h-8 bg="$bew-skeleton" />
       </div>
 
       <div v-if="settings.videoCardLayout === 'modern'" flex="~ gap-2 items-center" w="full" mt-2>
-        <div w="30px" h="30px" rounded="1/2" bg="$bew-skeleton" shrink-0 />
+        <div class="bew-shape-circle" w="30px" h="30px" bg="$bew-skeleton" shrink-0 />
         <div flex="~ col gap-1" w="[calc(100%-46px)]">
           <div w="60%" h-3 bg="$bew-skeleton" rounded="$bew-radius-sm" />
           <div w="80%" h-3 bg="$bew-skeleton" rounded="$bew-radius-sm" />
@@ -83,7 +83,8 @@ defineProps<{
     />
     <div flex mt-5>
       <div
-        m="r-4" w="34px" h="34px" rounded="1/2" bg="$bew-skeleton"
+        class="bew-shape-circle"
+        m="r-4" w="34px" h="34px" bg="$bew-skeleton"
         shrink-0
       />
       <div w="[calc(100%-34px)]">
@@ -132,7 +133,8 @@ defineProps<{
         <div mt-4 flex="~ col gap-2">
           <div flex="~ items-center justify-start" w-inherit>
             <div
-              m="r-2" w="30px" h="30px" rounded="1/2" bg="$bew-skeleton"
+              class="bew-shape-circle"
+              m="r-2" w="30px" h="30px" bg="$bew-skeleton"
               shrink-0
             />
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
+import { createSelectOptionKey } from '~/utils/selectOptionKey'
 
 type SelectValue = string | number | boolean | null | undefined
 
@@ -260,7 +261,7 @@ onBeforeUnmount(() => window.removeEventListener('click', handleWindowClick))
         >
           <div
             v-for="(option, index) in options"
-            :key="String(option.value)"
+            :key="createSelectOptionKey(option.value, index)"
             :data-option-index="index"
             role="option"
             :aria-selected="Object.is(option.value, modelValue)"

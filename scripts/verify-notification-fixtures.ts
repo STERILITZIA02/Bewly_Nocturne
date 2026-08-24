@@ -201,8 +201,8 @@ verify('Native Feed retry, account pending, and scroll anchor wiring are explici
 })
 
 verify('all Native Feed items share the smooth glass card surface and top-align identities', async () => {
-  const [feedSource, interactionItemSource, systemItemSource] = await Promise.all([
-    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeed.vue', import.meta.url), 'utf8'),
+  const [mainStyles, interactionItemSource, systemItemSource] = await Promise.all([
+    readFile(new URL('../src/styles/main.scss', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationItem.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeSystemNotificationItem.vue', import.meta.url), 'utf8'),
   ])
@@ -210,11 +210,66 @@ verify('all Native Feed items share the smooth glass card surface and top-align 
   for (const source of [interactionItemSource, systemItemSource]) {
     assert.match(source, /native-notification-surface bew-shape-smooth-rect/)
   }
-  assert.match(feedSource, /:deep\(\.native-notification-surface\)[\s\S]{0,420}background: var\(--bew-elevated-alt\)/)
-  assert.match(feedSource, /border-radius: var\(--bew-card-radius\)/)
-  assert.match(feedSource, /backdrop-filter: var\(--bew-filter-glass-1\)/)
+  assert.match(mainStyles, /\.native-notification-surface \{[\s\S]{0,420}background: var\(--bew-elevated-alt\)/)
+  assert.match(mainStyles, /border-radius: var\(--bew-card-radius\)/)
+  assert.match(mainStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(interactionItemSource, /\.native-notification-item__avatars \{[\s\S]{0,120}align-self: start;[\s\S]{0,80}align-items: flex-start;/)
   assert.match(systemItemSource, /\.native-system-notification__icon \{[\s\S]{0,100}align-self: start;/)
+})
+
+verify('all message-page data loading states use feed-shaped skeletons', async () => {
+  const [
+    pageSource,
+    pageSkeletonSource,
+    feedSource,
+    feedSkeletonSource,
+    skeletonBlockSource,
+    workspaceSource,
+    listSource,
+    listSkeletonSource,
+    conversationDetailSkeletonSource,
+    conversationSource,
+    historySkeletonSource,
+    timelineSkeletonSource,
+  ] = await Promise.all([
+    readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsPageSkeleton.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeed.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeedSkeleton.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationSkeletonBlock.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListSkeleton.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationDetailSkeleton.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationHistorySkeleton.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationTimelineSkeleton.vue', import.meta.url), 'utf8'),
+  ])
+
+  assert.match(pageSource, /v-if="!routeReady"[\s\S]{0,220}<NotificationsPageSkeleton/)
+  assert.match(pageSkeletonSource, /<ConversationListSkeleton[\s\S]{0,180}:announce="false"/)
+  assert.match(pageSkeletonSource, /<ConversationDetailSkeleton[\s\S]{0,100}:announce="false"/)
+  assert.match(feedSource, /accountState === 'profile-pending'[\s\S]{0,180}:label="feedAriaLabel"/)
+  assert.match(feedSource, /v-if="state\.loadingMore"[\s\S]{0,120}:count="2"/)
+  assert.match(workspaceSource, /<ConversationListSkeleton[\s\S]{0,120}v-else-if="controller\.state\.loading && !controller\.state\.loaded"/)
+  assert.match(workspaceSource, /<ConversationDetailSkeleton[\s\S]{0,180}controller\.state\.loading && !controller\.state\.loaded/)
+  assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="loadingMore"/)
+  assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="recipientSearch\.state\.loading"/)
+  assert.match(conversationSource, /v-if="state\.loadingInitial && !state\.loaded"[\s\S]{0,520}<ConversationTimelineSkeleton/)
+  assert.match(conversationSource, /<ConversationHistorySkeleton[\s\S]{0,100}:announce="false"/)
+  assert.match(conversationSource, /<ConversationHistorySkeleton[\s\S]{0,120}v-if="historyLoading"/)
+  assert.match(feedSkeletonSource, /native-notification-surface bew-shape-smooth-rect/)
+  assert.match(feedSkeletonSource, /native-notification-feed-skeleton__reference[\s\S]{0,520}native-notification-feed-skeleton__reference-source/)
+  assert.match(feedSkeletonSource, /width="96px"[\s\S]{0,100}height="var\(--bew-line-height-control\)"/)
+  assert.match(listSkeletonSource, /conversation-list-skeleton__item/)
+  assert.match(conversationDetailSkeletonSource, /<ConversationTimelineSkeleton[\s\S]{0,100}:announce="announce"/)
+  assert.match(historySkeletonSource, /height: var\(--bew-control-height\)/)
+  assert.match(timelineSkeletonSource, /conversation-timeline-skeleton__item--self/)
+  assert.match(skeletonBlockSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
+
+  for (const source of [pageSource, feedSource, workspaceSource, listSource, conversationSource]) {
+    assert.doesNotMatch(source, /<Loading\b/)
+  }
 })
 
 verify('pure parsing and policy modules have no Vue or Store dependency', async () => {

@@ -7,7 +7,7 @@ import { i18n } from '~/utils/i18n'
 
 const pinia = createPinia()
 
-export async function setupApp(app: App) {
+export function setupApp(app: App) {
   // Inject a globally available `$app` object in template
   app.config.globalProperties.$app = { context: '' }
 
