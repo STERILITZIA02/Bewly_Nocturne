@@ -450,7 +450,7 @@ useEventListener(window, 'message', (event) => {
 
 const iframePageURL = computed((): string => {
   // If the iframe is not the BiliBili homepage or in iframe, then don't show the iframe page
-  if (!isHomePage(window.self.location.href) || isInIframe())
+  if (!isHomePage(currentLocationHref.value) || isInIframe())
     return ''
   const dockItem = mainStore.getDockItemByPage(activatedPage.value)
   if (!dockItem)
@@ -466,10 +466,10 @@ const showBewlyPage = computed((): boolean => {
   if (isInIframe())
     return false
 
+  const onHomePage = isHomePage(currentLocationHref.value)
   // SearchResults 页面是虚拟页面，不在 dockItems 中，但应该显示
-  if (activatedPage.value === AppPage.SearchResults) {
-    return isHomePage()
-  }
+  if (activatedPage.value === AppPage.SearchResults)
+    return onHomePage
 
   const dockItem = mainStore.getDockItemByPage(activatedPage.value)
   if (!dockItem?.hasBewlyPage)
@@ -478,7 +478,7 @@ const showBewlyPage = computed((): boolean => {
   if (iframePageURL.value)
     return false
 
-  return isHomePage()
+  return onHomePage
 })
 
 // SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
@@ -504,6 +504,7 @@ watch(dockPageTitle, (title) => {
     document.title = title
 }, { immediate: true })
 const showTopBar = computed((): boolean => {
+  const onHomePage = isHomePage(currentLocationHref.value)
   // When using the open in drawer feature, the iframe inside the page will hide the top bar
   if (isVideoOrBangumiPage() && isInIframe())
     return false
@@ -518,11 +519,11 @@ const showTopBar = computed((): boolean => {
     return false
 
   // when using original bilibili homepage, show top bar
-  return (isHomePage() && !settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
+  return (onHomePage && !settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
   // when using original bilibili page on home page, show top bar in outer layer
-    || (isHomePage() && settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
+    || (onHomePage && settingsStore.getDockItemIsUseOriginalBiliPage(activatedPage.value))
   // when not on home page, show top bar
-    || !isHomePage()
+    || !onHomePage
 })
 
 function getActiveElement(): Element | null {
@@ -947,7 +948,7 @@ onBeforeUnmount(stopUrlCleaner)
     class="bewly-wrapper"
     :class="{
       'dark': isDark,
-      'bewly-wrapper--viewport': isHomePage(),
+      'bewly-wrapper--viewport': isHomePage(currentLocationHref),
     }"
     text="$bew-text-1 size-$bew-base-font-size"
   >

@@ -8,20 +8,24 @@ import { effectScope, nextTick } from 'vue'
 
 import { normalizeMomentCommentPage } from '../src/components/MomentCard/commentUtils'
 import type { StorageLocalRuntime } from '../src/composables/useStorageLocal'
-import { matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '../src/constants/pageBridge'
+import { getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '../src/constants/pageBridge'
 import { AppPage } from '../src/enums/appEnums'
 import { isAccountRequestCurrent } from '../src/utils/accountScope'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness } from '../src/utils/appAuthTokenPolicy'
 import { shortenCommentDateText, shouldScheduleWidescreenRefresh } from '../src/utils/bewlyWidescreenPolicy'
 import { resolveCanvasCssColor } from '../src/utils/canvasTheme'
+import { resolveDialogKeyboardAction } from '../src/utils/dialogKeyboard'
 import { resolveActiveDockItemPage } from '../src/utils/dockActiveItem'
 import { compileFilterRules, normalizeImportedFilterRules } from '../src/utils/filterRules'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '../src/utils/iframeMessage'
+import { calculateContainedImageSize, queryDomUntilFound } from '../src/utils/main'
 import { createPageSettingsPayload } from '../src/utils/pageSettingsProtocol'
 import { applyConfiguredPlaybackRate, resolvePlaybackRateChange } from '../src/utils/playbackRate'
 import { RANDOM_PLAY_VIDEO_RETRY_MAX, shouldRetryRandomPlayVideo } from '../src/utils/randomPlayRetry'
 import { getRangeProgress } from '../src/utils/range'
 import { sanitizeSearchHighlight } from '../src/utils/searchHighlight'
+import { createSelectOptionKey } from '../src/utils/selectOptionKey'
+import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '../src/utils/settingsBootPolicy'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
 
 function verifyAccountScopes() {
@@ -155,6 +159,73 @@ function verifySliderProgress() {
   assert.equal(getRangeProgress(20, 10, 10), 0)
 }
 
+function verifyDialogKeyboardPolicy() {
+  const base = {
+    closing: false,
+    defaultPrevented: false,
+    eventType: 'keydown' as const,
+    key: 'Enter',
+    loading: false,
+    preventCloseWhenLoading: true,
+    visible: true,
+  }
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, visible: false }), { action: 'ignore', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, closing: true }), { action: 'ignore', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, loading: true }), { action: 'ignore', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, editingContext: true }), { action: 'ignore', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, isComposing: true }), { action: 'ignore', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction(base), { action: 'confirm', preventDefault: true })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, key: 'Escape' }), { action: 'close', preventDefault: true })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, key: 'Escape', loading: true }), { action: 'block', preventDefault: true })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, key: 'Escape', defaultPrevented: true }), { action: 'ignore', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, key: 'Alt' }), { action: 'show-shortcut', preventDefault: false })
+  assert.deepEqual(resolveDialogKeyboardAction({ ...base, key: 'Alt', eventType: 'keyup' }), { action: 'hide-shortcut', preventDefault: false })
+}
+
+function verifySettingsBootPolicy() {
+  assert.equal(canStartSettingsDependentBoot('loading', false), false)
+  assert.equal(canStartSettingsDependentBoot('degraded', false), false)
+  assert.equal(canStartSettingsDependentBoot('loaded', true), false)
+  assert.equal(canStartSettingsDependentBoot('loaded', false), true)
+
+  assert.equal(shouldShowBewlyBootOverlay('https://www.bilibili.com/?page=SearchResults&keyword=test', false), true)
+  assert.equal(shouldShowBewlyBootOverlay('https://www.bilibili.com/index.html?page=Home', false), true)
+  assert.equal(shouldShowBewlyBootOverlay('https://www.bilibili.com/', false), false)
+  assert.equal(shouldShowBewlyBootOverlay('https://www.bilibili.com/?page=Unknown', false), false)
+  assert.equal(shouldShowBewlyBootOverlay('https://search.bilibili.com/all?keyword=test', false), false)
+  assert.equal(shouldShowBewlyBootOverlay('https://www.bilibili.com/?page=Home', true), false)
+}
+
+function verifySelectOptionKeys() {
+  const values = [1, '1', true, 'true', null, 'null', undefined, 'undefined', 0, -0, Number.NaN]
+  const keys = values.map((value, index) => createSelectOptionKey(value, index))
+  assert.equal(new Set(keys).size, keys.length)
+  assert.notEqual(createSelectOptionKey(1, 0), createSelectOptionKey('1', 0))
+  assert.notEqual(createSelectOptionKey(true, 0), createSelectOptionKey('true', 0))
+}
+
+async function verifyImmediateDomQuery() {
+  const existingElement = {} as HTMLElement
+  let queryCount = 0
+  assert.equal(await queryDomUntilFound('.existing', 500, undefined, 10_000, () => {
+    queryCount++
+    return existingElement
+  }), existingElement)
+  assert.equal(queryCount, 1)
+
+  const abort = new AbortController()
+  const pending = queryDomUntilFound('.missing', 500, abort, 10_000, () => null)
+  abort.abort()
+  assert.equal(await pending, null)
+}
+
+function verifyContainedImageSize() {
+  assert.deepEqual(calculateContainedImageSize(2000, 1500, 1000, 500), { width: 667, height: 500 })
+  assert.deepEqual(calculateContainedImageSize(900, 1000, 800, 1200), { width: 800, height: 889 })
+  assert.deepEqual(calculateContainedImageSize(400, 300, 1000, 500), { width: 400, height: 300 })
+  assert.throws(() => calculateContainedImageSize(0, 100, 100, 100), RangeError)
+}
+
 async function verifyStorageScopeLifecycle() {
   ;(globalThis as typeof globalThis & { chrome?: unknown }).chrome ??= { runtime: { id: 'targeted-test' } }
   const { useStorageLocal } = await import('../src/composables/useStorageLocal')
@@ -194,6 +265,7 @@ async function verifyStorageScopeLifecycle() {
       writeDefaults: false,
     })
   })
+  assert.equal(storedRef!.initializationState.value, 'loading')
   scope.stop()
   resolveInitialRead({ 'scope-disposal': 'stored' })
   await Promise.resolve()
@@ -204,6 +276,54 @@ async function verifyStorageScopeLifecycle() {
   assert.equal(subscribeCount, 0)
   assert.equal(persistCount, 0)
   assert.equal(onReadyCount, 0)
+}
+
+async function verifyStorageDegradedRecoveryState() {
+  const { useStorageLocal } = await import('../src/composables/useStorageLocal')
+  let readShouldFail = true
+  let recoveryTask: (() => void | Promise<void>) | undefined
+  let resolveReady!: () => void
+  const ready = new Promise<void>((resolve) => {
+    resolveReady = resolve
+  })
+  const runtime: StorageLocalRuntime = {
+    clearTimeout: timer => clearTimeout(timer),
+    get: async () => {
+      if (readShouldFail)
+        throw new Error('temporary storage failure')
+      return { degraded: 'stored' }
+    },
+    remove: async () => {},
+    set: async () => {},
+    setTimeout: (callback) => {
+      recoveryTask = callback
+      const timer = setTimeout(() => {}, 60_000)
+      timer.unref()
+      return timer
+    },
+    sleep: async () => {},
+    subscribe: () => () => {},
+  }
+  const scope = effectScope()
+  let storedRef: ReturnType<typeof useStorageLocal<string>> | undefined
+  scope.run(() => {
+    storedRef = useStorageLocal('degraded', 'initial', {
+      onError: () => {},
+      onReady: resolveReady,
+      runtime,
+      writeDefaults: false,
+    })
+  })
+
+  assert.equal(storedRef!.initializationState.value, 'loading')
+  await ready
+  assert.equal(storedRef!.initializationState.value, 'degraded')
+  readShouldFail = false
+  await recoveryTask?.()
+  await nextTick()
+  assert.equal(storedRef!.initializationState.value, 'loaded')
+  assert.equal(storedRef!.value, 'stored')
+  scope.stop()
 }
 
 async function verifyStorageSuppressionRecovery() {
@@ -249,6 +369,7 @@ async function verifyStorageSuppressionRecovery() {
     })
   })
   await ready
+  assert.equal(storedRef!.initializationState.value, 'loaded')
   await storageListener?.({ suppression: { newValue: 'malformed' } }, 'local')
   storedRef!.value = 'local-edit'
   await nextTick()
@@ -310,6 +431,13 @@ function verifyPageSettingsPayload() {
 }
 
 function verifyPageBridgeBoundary() {
+  assert.equal(getPageBridgeTargetOrigin('https://www.bilibili.com'), 'https://www.bilibili.com')
+  assert.equal(getPageBridgeTargetOrigin('http://localhost:5173'), 'http://localhost:5173')
+  assert.equal(getPageBridgeTargetOrigin('null'), undefined)
+  assert.equal(getPageBridgeTargetOrigin('about:blank'), undefined)
+  assert.equal(getPageBridgeTargetOrigin('https://www.bilibili.com/path'), undefined)
+  assert.equal(getPageBridgeTargetOrigin('not a URL'), undefined)
+
   const source = {} as Window
   const channelId = 'channel-id'
   const data = {
@@ -317,7 +445,7 @@ function verifyPageBridgeBoundary() {
     channelId,
     type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
     data: {},
-  }
+  } as const
   const expected = {
     source,
     origin: 'https://www.bilibili.com',
@@ -325,6 +453,22 @@ function verifyPageBridgeBoundary() {
     type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
   } as const
   const validEvent = { data, origin: expected.origin, source }
+  const postedMessages: Array<{ message: unknown, origin: string }> = []
+  const target = {
+    postMessage(message: unknown, origin: string) {
+      postedMessages.push({ message, origin })
+    },
+  }
+
+  assert.equal(postPageBridgeMessage(target, data, expected.origin), true)
+  assert.deepEqual(postedMessages, [{ message: data, origin: expected.origin }])
+  assert.equal(postPageBridgeMessage(target, data, 'null'), false)
+  assert.equal(postedMessages.length, 1)
+  assert.equal(postPageBridgeMessage({
+    postMessage() {
+      throw new SyntaxError('Invalid target origin')
+    },
+  }, data, expected.origin), false)
 
   assert.equal(matchesPageBridgeEvent(validEvent, expected), true)
   assert.equal(matchesPageBridgeEvent({ ...validEvent, data: { ...data, protocol: 'wrong' } }, expected), false)
@@ -542,6 +686,7 @@ async function verifyP1Contracts() {
     videoCardLogic,
     shadowCurve,
     homeSettings,
+    searchExperience,
   ] = await Promise.all([
     readFile(`${root}/src/composables/useStorageLocal.ts`, 'utf8'),
     readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
@@ -555,6 +700,7 @@ async function verifyP1Contracts() {
     readFile(`${root}/src/components/VideoCard/composables/useVideoCardLogic.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/components/ShadowCurveEditor.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/Home/Home.vue`, 'utf8'),
+    readFile(`${root}/src/logic/searchExperience.ts`, 'utf8'),
   ])
 
   assert.match(storageLocal, /const ownerScope = getCurrentScope\(\)/)
@@ -598,6 +744,10 @@ async function verifyP1Contracts() {
   assert.match(shadowCurve, /resolveCanvasCssColor/)
   assert.match(homeSettings, /normalizeImportedFilterRules/)
   assert.match(homeSettings, /filter_import_result/)
+
+  assert.match(searchExperience, /isExtensionContextInvalidatedError\(error\)/)
+  assert.match(searchExperience, /extensionContextInvalidated = true[\s\S]{0,80}clearRefreshTimer\(\)/)
+  assert.doesNotMatch(searchExperience, /Failed to load hot search list|console\.error/)
 }
 
 function collectLocaleKeys(source: string) {
@@ -638,11 +788,12 @@ function collectLocaleKeys(source: string) {
 
 async function verifyP2AccessibilityAndLocales() {
   const root = process.cwd()
-  const [searchBar, select, contextMenu, videoInfo, en, cn, tw, yue] = await Promise.all([
+  const [searchBar, select, contextMenu, videoInfo, history, en, cn, tw, yue] = await Promise.all([
     readFile(`${root}/src/components/SearchBar/SearchBar.vue`, 'utf8'),
     readFile(`${root}/src/components/Select.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/components/VideoCardInfo.vue`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/History/History.vue`, 'utf8'),
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-CN.yml`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-TW.yml`, 'utf8'),
@@ -674,6 +825,9 @@ async function verifyP2AccessibilityAndLocales() {
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'])
     assert.match(contextMenu, new RegExp(`case '${key}'`))
 
+  assert.match(history, /:aria-label="\$t\('common\.operation\.delete'\)"/)
+  assert.doesNotMatch(history, /common\.remove/)
+
   const localeKeySets = [en, cn, tw, yue].map(collectLocaleKeys)
   for (const keys of localeKeySets.slice(1))
     assert.deepEqual([...keys].sort(), [...localeKeySets[0]].sort())
@@ -683,6 +837,7 @@ async function verifyP2AccessibilityAndLocales() {
     'settings.show_bewly_widescreen_button',
     'search_bar.input_label',
     'video_card.operation.scroll_to_bottom',
+    'common.operation.delete',
   ]) {
     localeKeySets.forEach(keys => assert.equal(keys.has(key), true, `missing locale key: ${key}`))
   }
@@ -839,8 +994,9 @@ async function verifySecurityContracts() {
     contentScript.indexOf('void settingsReady.then', sendSettingsStart),
   )
   assert.match(sendSettingsSection, /createPageSettingsPayload\(value\)/)
-  assert.match(sendSettingsSection, /window\.location\.origin/)
-  assert.doesNotMatch(sendSettingsSection, /JSON\.parse|JSON\.stringify|['"]\*['"]/)
+  assert.match(sendSettingsSection, /postPageBridgeMessage\(window/)
+  assert.match(sendSettingsSection, /\}, window\.location\.origin\)/)
+  assert.doesNotMatch(sendSettingsSection, /JSON\.parse|JSON\.stringify|['"]\*['"]|window\.postMessage/)
   assert.match(contentScript, /matchesPageBridgeEvent\(event/)
   assert.ok(
     contentScript.indexOf('MAIN world 在 document_start 阶段发起握手')
@@ -848,8 +1004,9 @@ async function verifySecurityContracts() {
   )
   assert.match(injectScript, /let currentSettings: PageSettingsPayload \| null/)
   assert.match(injectScript, /createPageSettingsPayload\(event\.data\.data\)/)
-  assert.match(injectScript, /origin: window\.location\.origin/)
-  assert.match(injectScript, /SETTINGS_REQUEST,[\s\S]{0,80}window\.location\.origin/)
+  assert.match(injectScript, /const targetOrigin = getPageBridgeTargetOrigin\(window\.location\.origin\)/)
+  assert.match(injectScript, /origin: targetOrigin/)
+  assert.match(injectScript, /postPageBridgeMessage\(window,[\s\S]{0,160}SETTINGS_REQUEST,[\s\S]{0,80}window\.location\.origin/)
   assert.match(injectScript, /for \(const delay of \[100, 300, 700\]\)/)
   assert.doesNotMatch(injectScript, /data as Settings|enableCommentReplyTree\?:/)
 
@@ -876,7 +1033,13 @@ async function verify() {
   verifyCanvasThemeResolution()
   verifyFilterRuleImport()
   verifySliderProgress()
+  verifyDialogKeyboardPolicy()
+  verifySettingsBootPolicy()
+  verifySelectOptionKeys()
+  await verifyImmediateDomQuery()
+  verifyContainedImageSize()
   await verifyStorageScopeLifecycle()
+  await verifyStorageDegradedRecoveryState()
   await verifyStorageSuppressionRecovery()
   verifyDockReorderPolicy()
   verifyPageSettingsPayload()

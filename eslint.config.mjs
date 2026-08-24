@@ -17,7 +17,6 @@ export default antfu(
       '**/.pnpm-store/**',
       '**/public/**',
       '**/extension/**',
-      '**/extension-firefox/**',
       '**/.kiro/**',
     ],
     rules: {

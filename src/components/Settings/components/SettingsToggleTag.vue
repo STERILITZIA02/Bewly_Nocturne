@@ -46,7 +46,7 @@ function toggle() {
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-3);
   background: var(--bew-fill-1);
   font: inherit;

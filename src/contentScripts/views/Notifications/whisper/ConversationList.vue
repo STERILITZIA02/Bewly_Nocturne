@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import ConversationListItem from './ConversationListItem.vue'
+import ConversationListSkeleton from './ConversationListSkeleton.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import { canSearchPrivateRecipients, normalizePrivateRecipientQuery } from './privateRecipientSearch'
 import PrivateRecipientSearchResultItem from './PrivateRecipientSearchResultItem.vue'
@@ -240,10 +241,19 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
         :selected="selectedSessionKey === session.key"
         @select="emit('select', $event)"
       />
-      <div ref="sentinelRef" class="conversation-list__sentinel" role="status">
-        <template v-if="loadingMore">
-          <span>{{ t('notifications.whisper.loading_more_sessions') }}</span>
-        </template>
+      <div
+        ref="sentinelRef"
+        class="conversation-list__sentinel"
+        :class="{ 'conversation-list__sentinel--loading': loadingMore }"
+        :role="loadingMore ? undefined : 'status'"
+      >
+        <ConversationListSkeleton
+          v-if="loadingMore"
+          :compact="compact"
+          :count="2"
+          :label="t('notifications.whisper.loading_more_sessions')"
+          :show-tools="false"
+        />
         <span v-else-if="noMore">{{ t('notifications.whisper.earliest_session') }}</span>
         <template v-else-if="paginationStalled || loadMoreFailed">
           <span>{{ t('notifications.whisper.load_more_failed') }}</span>
@@ -255,10 +265,13 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
     </div>
     <div v-else class="conversation-list__empty">
       <div v-if="canOfferRemoteSearch" class="conversation-list__remote-search">
-        <template v-if="recipientSearch.state.loading">
-          <Loading />
-          <span>{{ t('notifications.whisper.recipient_search.loading') }}</span>
-        </template>
+        <ConversationListSkeleton
+          v-if="recipientSearch.state.loading"
+          :compact="compact"
+          :count="3"
+          :label="t('notifications.whisper.recipient_search.loading')"
+          :show-tools="false"
+        />
 
         <template v-else-if="recipientSearch.state.source && recipientSearch.state.items.length">
           <div class="conversation-list__remote-results">
@@ -437,6 +450,12 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   text-align: center;
+}
+
+.conversation-list__sentinel--loading {
+  display: block;
+  min-height: 0;
+  padding: 0;
 }
 
 .conversation-list__empty {

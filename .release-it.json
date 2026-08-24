@@ -12,17 +12,14 @@
     "before:init": [
       "pnpm run lint",
       "pnpm run typecheck",
-      "pnpm run test --run"
+      "pnpm test"
     ],
     "after:bump": [
       "pnpm run build",
-      "pnpm run build-firefox",
-      "pnpm run pack:zip",
-      "pnpm run pack:zip-firefox",
-      "pnpm run pack:zip-firefox-sources"
+      "pnpm run pack:zip"
     ],
     "after:release": [
-      "gh release upload v${version} extension.zip extension-firefox.zip",
+      "gh release upload v${version} extension.zip",
       "pnpm run submit"
     ]
   }

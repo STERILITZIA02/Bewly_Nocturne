@@ -572,6 +572,7 @@ async function handleFollowClick(e: Event) {
   position: absolute;
   display: block;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   border: 2px solid var(--bew-elevated);
 }
 

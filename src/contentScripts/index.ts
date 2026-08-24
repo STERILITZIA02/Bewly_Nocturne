@@ -8,8 +8,8 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import { BEWLY_MOUNTED, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
-import { isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
-import { settings, settingsReady } from '~/logic'
+import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
+import { settings, settingsInitializationState, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
 import { useTopBarStore } from '~/stores/topBarStore'
 import RESET_BEWLY_CSS from '~/styles/reset.css?raw'
@@ -18,7 +18,7 @@ import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenActive, pre
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
-import { applyEffectiveTopBarSource, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
+import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { runWhenIdle } from '~/utils/lazyLoad'
@@ -31,6 +31,7 @@ import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
 import { getPluginSearchResultsUrl, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
+import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '~/utils/settingsBootPolicy'
 import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
@@ -38,6 +39,7 @@ import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
 
 import { version } from '../../package.json'
+import { mountBewlyBootOverlay } from './bewlyBootOverlay'
 import { initBewlyWidescreenControl, stopBewlyWidescreenControl } from './bewlyWidescreenControl'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
@@ -56,6 +58,8 @@ const contentScriptDisposers: Array<() => void> = []
 let contentScriptAbortController: AbortController | null = null
 let mountedVueApp: VueApp<Element> | null = null
 let mountedVueContainer: HTMLElement | null = null
+let mountedVueRoot: HTMLElement | null = null
+let restoreOriginalPageVisibilityOwner: (() => void) | null = null
 
 function unmountInjectedApp() {
   const app = mountedVueApp
@@ -70,6 +74,7 @@ function unmountInjectedApp() {
   }
   mountedVueContainer?.remove()
   mountedVueContainer = null
+  mountedVueRoot = null
 }
 
 function disposeContentScriptRuntime() {
@@ -121,7 +126,14 @@ if (shouldInitializeContentScript) {
   contentScriptAbortController = new AbortController()
   const signal = contentScriptAbortController.signal
   window.addEventListener(CONTENT_SCRIPT_DISPOSE_EVENT, disposeContentScriptRuntime, { signal })
-  window.addEventListener('pagehide', unmountInjectedApp, { once: true, signal })
+  window.addEventListener('pagehide', (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      if (mountedVueApp === null)
+        restoreOriginalPageVisibilityOwner?.()
+      return
+    }
+    disposeContentScriptRuntime()
+  }, { signal })
   window.addEventListener('unhandledrejection', (event) => {
     if (isExtensionContextInvalidatedError(event.reason))
       event.preventDefault()
@@ -136,7 +148,6 @@ if (shouldInitializeContentScript) {
   contentScriptDisposers.push(() => browser.runtime.onMessage.removeListener(handleRuntimeMessage))
 }
 
-const isFirefox: boolean = /Firefox/i.test(navigator.userAgent)
 const isElectronEnv = isElectron()
 
 const currentUrl = document.URL
@@ -248,6 +259,17 @@ if (isElectronEnv) {
 }
 else if (shouldInitializeContentScript) {
   const contentScriptSignal = contentScriptAbortController!.signal
+  const bootOverlay = shouldShowBewlyBootOverlay(location.href, isInIframe())
+    ? mountBewlyBootOverlay(document)
+    : null
+  if (bootOverlay) {
+    contentScriptDisposers.push(() => bootOverlay.remove(true))
+    contentScriptDisposers.push(watch(settingsInitializationState, (state) => {
+      if (state === 'degraded')
+        bootOverlay.reveal()
+    }, { immediate: true }))
+  }
+
   const detachedTimers = new Set<ReturnType<typeof setTimeout>>()
   const scheduleDetachedTimer = (callback: () => void, delay: number) => {
     const timer = setTimeout(() => {
@@ -269,7 +291,7 @@ else if (shouldInitializeContentScript) {
     if (!channelId || !payload)
       return
 
-    window.postMessage({
+    postPageBridgeMessage(window, {
       protocol: PAGE_BRIDGE_PROTOCOL,
       channelId,
       type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
@@ -278,11 +300,13 @@ else if (shouldInitializeContentScript) {
   }
 
   window.addEventListener('message', (event) => {
-    if (!isPageBridgeMessage(event.data)
+    const targetOrigin = getPageBridgeTargetOrigin(window.location.origin)
+    if (!targetOrigin
+      || !isPageBridgeMessage(event.data)
       || event.data.type !== PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
       || !matchesPageBridgeEvent(event, {
         source: window,
-        origin: window.location.origin,
+        origin: targetOrigin,
         channelId: event.data.channelId,
         type: PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST,
       })
@@ -315,19 +339,13 @@ else if (shouldInitializeContentScript) {
     '.upinfo .face img',
   ].join(',')
   contentScriptDisposers.push(setupNotificationStateInvalidation())
-  // Fix `OverlayScrollbars` not working in Firefox
-  // https://github.com/fingerprintjs/fingerprintjs/issues/683#issuecomment-881210244
-  if (isFirefox) {
-    window.requestIdleCallback = window.requestIdleCallback.bind(window)
-    window.cancelIdleCallback = window.cancelIdleCallback.bind(window)
-    window.requestAnimationFrame = window.requestAnimationFrame.bind(window)
-    window.cancelAnimationFrame = window.cancelAnimationFrame.bind(window)
-    window.setTimeout = window.setTimeout.bind(window)
-    window.clearTimeout = window.clearTimeout.bind(window)
-  }
 
   let beforeLoadedStyleEl: HTMLStyleElement | undefined
+  let beforeLoadedTransitionStyleEl: HTMLStyleElement | undefined
   let beforeLoadedStyleFailsafeTimer: ReturnType<typeof setTimeout> | undefined
+  let originalTopBarBootStyleEl: HTMLStyleElement | undefined
+  let homePageHiddenStyleEl: HTMLStyleElement | undefined
+  let settingsBootLoaded = false
   let lastUrl = location.href
   let lastVideoNavigationKey = getVideoNavigationKey(location.href)
   let lastAppliedPlayerModeNavigationKey: string | undefined
@@ -361,6 +379,11 @@ else if (shouldInitializeContentScript) {
     playerModeSettingsReady = true
     recordVideoVisitFromUrl(lastUrl)
     applyDefaultPlayerMode()
+    if (document.readyState === 'complete' && isCustomPlayPage() && settings.value.enableRandomPlay) {
+      scheduleDetachedTimer(() => {
+        initRandomPlayFeature()
+      }, 3000)
+    }
   })
 
   function setupPluginSearchLinkNavigation() {
@@ -407,52 +430,167 @@ else if (shouldInitializeContentScript) {
     return shouldApply
   }
 
-  if (isSupportedPages() || isSupportedIframePages()) {
+  function applySettingsDependentPageStyles() {
+    if (!(isSupportedPages() || isSupportedIframePages()))
+      return
+
     if (settings.value.adaptToOtherPageStyles || settings.value.videoPageDarkMode)
       useDark()
 
     const shouldApplyFullStyles = applyBewlyDesignClasses()
-
     // opus 详情分栏布局不依赖“适配其他页样式”，只要在 iframe 内就尝试重排
     if (isInIframe())
       setupOpusDetailDrawerLayout()
-
-    if (shouldApplyFullStyles) {
-      // Setup iframe photo viewer detector (only in iframe)
-      if (isInIframe())
-        setupIframePhotoViewerDetector()
-    }
+    if (shouldApplyFullStyles && isInIframe())
+      setupIframePhotoViewerDetector()
   }
 
-  // 挂载完成与保险丝两条路径共用的清理，重复调用无副作用
+  // 挂载完成、异常、路由切换与保险丝共用清理，重复调用无副作用。
   function removeBeforeLoadedStyleEl() {
     beforeLoadedStyleEl?.remove()
     beforeLoadedStyleEl = undefined
-    clearTimeout(beforeLoadedStyleFailsafeTimer)
+    beforeLoadedTransitionStyleEl?.remove()
+    beforeLoadedTransitionStyleEl = undefined
+    if (beforeLoadedStyleFailsafeTimer !== undefined)
+      clearTimeout(beforeLoadedStyleFailsafeTimer)
+    beforeLoadedStyleFailsafeTimer = undefined
   }
-  contentScriptDisposers.push(removeBeforeLoadedStyleEl)
 
-  if (settings.value.adaptToOtherPageStyles && isHomePage()) {
+  function installBeforeLoadedStyle() {
+    removeBeforeLoadedStyleEl()
+    if (!settings.value.adaptToOtherPageStyles || !isHomePage())
+      return
+
     beforeLoadedStyleEl = injectCSS(`
-    html.bewly-design {
-      background-color: var(--bew-bg);
-      transition: background-color 0.2s ease-in;
-    }
+      html.bewly-design {
+        background-color: var(--bew-bg);
+        transition: background-color 0.2s ease-in;
+      }
 
-    body {
-      display: none;
-    }
-  `)
-
-    // Add opacity transition effect for page loaded
-    injectCSS(`
-    body {
-      transition: opacity 0.5s;
-    }
-  `)
-    // Failsafe: never keep the page hidden for too long.
+      body {
+        display: none;
+      }
+    `)
+    beforeLoadedTransitionStyleEl = injectCSS(`
+      body {
+        transition: opacity 0.5s;
+      }
+    `)
     beforeLoadedStyleFailsafeTimer = setTimeout(removeBeforeLoadedStyleEl, 4000)
   }
+
+  function removeOriginalTopBarBootStyle() {
+    originalTopBarBootStyleEl?.remove()
+    originalTopBarBootStyleEl = undefined
+  }
+
+  function installOriginalTopBarBootStyle() {
+    removeOriginalTopBarBootStyle()
+    originalTopBarBootStyleEl = injectCSS(`
+      .bili-header,
+      #biliMainHeader,
+      .header-channel,
+      .bili-header-channel-panel {
+        visibility: hidden !important;
+      }
+    `)
+  }
+
+  function removeHomePageHiddenStyle() {
+    homePageHiddenStyleEl?.remove()
+    homePageHiddenStyleEl = undefined
+    document.documentElement.classList.remove('bewly-custom-homepage')
+  }
+
+  function ensureHomePageHiddenStyle() {
+    if (homePageHiddenStyleEl)
+      return
+    document.documentElement.classList.add('bewly-custom-homepage')
+    homePageHiddenStyleEl = injectCSS(`
+      html,
+      body {
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        overflow-x: hidden !important;
+      }
+      body > #app,
+      body > #i_cecream,
+      .bilibili-gate-root {
+        display: none !important;
+        visibility: hidden !important;
+        pointer-events: none !important;
+        position: absolute !important;
+        left: -9999px !important;
+      }
+      body > .bili-header {
+        position: relative !important;
+        left: 0 !important;
+        pointer-events: auto !important;
+      }
+    `)
+  }
+
+  function applyAppRouteLayout(
+    container: HTMLElement | null = mountedVueContainer,
+    root: HTMLElement | null = mountedVueRoot,
+  ) {
+    if (!container || !root)
+      return
+
+    const useViewportLayout = !isInIframe() && isHomePage()
+    if (useViewportLayout) {
+      Object.assign(container.style, {
+        position: 'fixed',
+        inset: '0',
+        width: 'auto',
+        minWidth: '0',
+        maxWidth: 'none',
+        height: '100dvh',
+        overflow: 'hidden',
+      })
+      Object.assign(root.style, {
+        width: '100%',
+        height: '100%',
+        minWidth: '0',
+      })
+      return
+    }
+
+    for (const property of ['position', 'inset', 'width', 'min-width', 'max-width', 'height', 'overflow'])
+      container.style.removeProperty(property)
+    for (const property of ['width', 'height', 'min-width'])
+      root.style.removeProperty(property)
+  }
+
+  function syncHomePageHiddenStyleScope() {
+    applyAppRouteLayout()
+    const shouldHideOriginalHome = settingsBootLoaded
+      && mountedVueApp !== null
+      && !isInIframe()
+      && isHomePage()
+    if (shouldHideOriginalHome)
+      ensureHomePageHiddenStyle()
+    else
+      removeHomePageHiddenStyle()
+  }
+
+  function restoreOriginalPageVisibility() {
+    bootOverlay?.reveal()
+    removeBeforeLoadedStyleEl()
+    removeOriginalTopBarBootStyle()
+    removeHomePageHiddenStyle()
+    document.documentElement.classList.remove('bewly-design', 'bewly-video-dark-only', 'remove-top-bar')
+    document.documentElement.removeAttribute(EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE)
+    resetBilibiliTopBarInlineStyles(document)
+  }
+
+  restoreOriginalPageVisibilityOwner = restoreOriginalPageVisibility
+  contentScriptDisposers.push(() => {
+    restoreOriginalPageVisibility()
+    if (restoreOriginalPageVisibilityOwner === restoreOriginalPageVisibility)
+      restoreOriginalPageVisibilityOwner = null
+  })
 
   window.addEventListener(BEWLY_MOUNTED, () => {
     removeBeforeLoadedStyleEl()
@@ -863,6 +1001,12 @@ else if (shouldInitializeContentScript) {
 
       lastUrl = location.href
       lastVideoNavigationKey = currentVideoNavigationKey
+      if (!shouldShowBewlyBootOverlay(lastUrl, isInIframe()))
+        bootOverlay?.reveal()
+      syncHomePageHiddenStyleScope()
+      if (!settingsBootLoaded)
+        return
+
       recordVideoVisitFromUrl(lastUrl)
       applyBewlyDesignClasses()
       syncFavoriteDialogLifecycle()
@@ -952,6 +1096,9 @@ else if (shouldInitializeContentScript) {
 
   // 添加页面加载监听
   window.addEventListener('load', () => {
+    if (!settingsBootLoaded)
+      return
+
     waitForPlayerModePageSettle()
     if (isVideoPage()) {
       applyDefaultPlayerMode()
@@ -1139,129 +1286,66 @@ else if (shouldInitializeContentScript) {
     widescreenCommentReloadRequestId++
   })
 
-  // Set the original Bilibili top bar to `display: none` to prevent it from showing before the load
-  // see: https://github.com/BewlyBewly/BewlyBewly/issues/967
-  const removeOriginalTopBar = injectCSS(`
-    .bili-header,
-    #biliMainHeader,
-    .header-channel,
-    .bili-header-channel-panel {
-      visibility: hidden !important;
-    }
-  `)
-
   async function onDOMLoaded() {
-    // 所有页面都先完成设置读取，避免启动期 watcher 基于默认值生成陈旧写入。
-    await settingsReady
-    if (contentScriptSignal.aborted)
-      return
+    let changeHomePage = false
+    try {
+      // settingsReady 只在后台权威设置真实加载后解决；degraded 状态保留原站可用。
+      await settingsReady
+      if (!canStartSettingsDependentBoot(settingsInitializationState.value, contentScriptSignal.aborted))
+        return
 
-    const changeHomePage = !isInIframe() && isHomePage()
-    const initialTopBarSource = resolveEffectiveTopBarSource(
-      settings.value.pageMode,
-      settings.value.useOriginalBilibiliTopBar,
-    )
-    applyEffectiveTopBarSource(document, initialTopBarSource)
-    document.documentElement.classList.toggle('bewly-custom-homepage', changeHomePage)
+      settingsBootLoaded = true
+      applySettingsDependentPageStyles()
+      changeHomePage = !isInIframe() && isHomePage()
+      const shouldMountApp = isSupportedPages() || isSupportedIframePages()
+      const initialTopBarSource = resolveEffectiveTopBarSource(
+        settings.value.pageMode,
+        settings.value.useOriginalBilibiliTopBar,
+      )
+      applyEffectiveTopBarSource(document, initialTopBarSource)
 
-    // 启用自定义首页时隐藏 B 站原始首页。
-    if (changeHomePage) {
-      // 移动端缺少 viewport 声明时会按 980px 排版后整体缩放，导致响应式断点失效。
-      ensureResponsiveViewport(document)
-
-      // 提前保存原始顶栏，以便需要时重新挂载。
-      captureOriginalBilibiliTopBar(document)
-
-      // 方案选择：
-      // 方案 1: 清理脚本 + 删除 DOM（可能更彻底，但有风险）
-      // 方案 2: CSS 隐藏（更安全，性能更好，推荐）
-
-      // 方案2：CSS 完整隐藏原站首页根节点，不再把 #app / .bili-feed4 保活露出。
-      // 原版顶栏需要用时再 portal 到 body（见 ensureOriginalBilibiliTopBarAppended），
-      // 避免「半隐藏的 B 站首页 Vue 树」与自定义首页双开抢资源。
-      injectCSS(`
-      /* 自定义首页始终以当前可视视口为尺寸基准，避免原站最小宽度撑大文档。 */
-      html,
-      body {
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: 100% !important;
-        overflow-x: hidden !important;
+      if (shouldMountApp) {
+        installOriginalTopBarBootStyle()
+        installBeforeLoadedStyle()
       }
-      /* Hide Bilibili's own page elements while preserving the independent Bilibili-Gate root. */
-      body > #app,
-      body > #i_cecream,
-      .bilibili-gate-root {
-        display: none !important;
-        visibility: hidden !important;
-        pointer-events: none !important;
-        position: absolute !important;
-        left: -9999px !important;
+
+      if (changeHomePage) {
+        ensureResponsiveViewport(document)
+        captureOriginalBilibiliTopBar(document)
+        ensureHomePageHiddenStyle()
       }
-      /* 顶栏 portal 到 body 后的定位；显隐由 .remove-top-bar 控制 */
-      body > .bili-header {
-        position: relative !important;
-        left: 0 !important;
-        pointer-events: auto !important;
+
+      if (shouldMountApp) {
+        if (isHomePage())
+          injectApp()
+        else
+          await injectAppWhenIdle()
       }
-    `)
 
-      // 温和的脚本清理（可选，减少后台资源消耗）
-      cleanupBilibiliScripts()
+      if (contentScriptSignal.aborted || (shouldMountApp && mountedVueApp === null))
+        return
 
-      // 只有原生顶栏成为有效来源时才将其移出被隐藏的 #app。
-      if (initialTopBarSource === 'bilibili-native')
-        ensureOriginalBilibiliTopBarAppended(document)
-
-      // Setup login button click handlers for the original Bilibili top bar
-      ensureLoginButtonClickHandlers()
-
-      // 如果要使用方案1（删除DOM），取消注释以下代码并注释掉上面的 CSS 方案：
-    /*
-    // 清理 B 站脚本资源，避免内存泄漏和性能问题
-    cleanupBilibiliScripts()
-
-    // 延迟一小段时间，让清理逻辑生效
-    await new Promise(resolve => setTimeout(resolve, 100))
-
-    // Remove the original Bilibili homepage
-    document.body.innerHTML = ''
-
-    // Remove the Bilibili-Gate homepage
-    injectCSS(`
-      .bilibili-gate-root {
-        display: none !important;
-      }
-    `)
-
-    ensureOriginalBilibiliTopBarAppended(document)
-    */
+      syncHomePageHiddenStyleScope()
+      initVideoAspectRatioMemory()
+      initVideoScreenshotControl()
+      initBewlyWidescreenControl()
+      initTouchPlayerGestures()
+      syncFavoriteDialogLifecycle()
+      initNativeFavoriteSeasonPlayAllIntercept()
     }
-
-    if (isSupportedPages() || isSupportedIframePages()) {
-    // Then inject the app
-      if (isHomePage()) {
-        injectApp()
-      }
-      else {
-        await injectAppWhenIdle()
-      }
+    catch (error) {
+      restoreOriginalPageVisibility()
+      if (!isExtensionContextInvalidatedError(error))
+        console.error('[Bewly Nocturne] Failed to bootstrap the content script:', error)
     }
-
-    // Reset the original Bilibili top bar display style
-    if (removeOriginalTopBar)
-      document.documentElement.removeChild(removeOriginalTopBar)
-
-    initVideoAspectRatioMemory()
-    initVideoScreenshotControl()
-    initBewlyWidescreenControl()
-    initTouchPlayerGestures()
-
-    // Initialize Favorite Dialog Enhancement (for video pages)
-    syncFavoriteDialogLifecycle()
-
-    // 原生空间订阅合集 favlist「播放全部」按设置起播
-    initNativeFavoriteSeasonPlayAllIntercept()
+    finally {
+      removeBeforeLoadedStyleEl()
+      removeOriginalTopBarBootStyle()
+      if (mountedVueApp === null)
+        bootOverlay?.reveal()
+      if (changeHomePage && mountedVueApp === null)
+        removeHomePageHiddenStyle()
+    }
   }
 
   if (document.readyState !== 'loading') {
@@ -1274,17 +1358,24 @@ else if (shouldInitializeContentScript) {
   }
 
   function injectAppWhenIdle() {
-    return new Promise<void>((resolve) => {
-    // Inject app when idle
-      const idleTask = runWhenIdle(async () => {
+    return new Promise<void>((resolve, reject) => {
+      const idleTask = runWhenIdle(() => {
         if (contentScriptSignal.aborted) {
           resolve()
           return
         }
-        injectApp()
+        try {
+          injectApp()
+          resolve()
+        }
+        catch (error) {
+          reject(error)
+        }
+      })
+      contentScriptDisposers.push(() => {
+        idleTask.dispose()
         resolve()
       })
-      contentScriptDisposers.push(() => idleTask.dispose())
     })
   }
 
@@ -1307,23 +1398,7 @@ else if (shouldInitializeContentScript) {
 
     const root = document.createElement('div')
     const useViewportLayout = !isInIframe() && isHomePage()
-
-    if (useViewportLayout) {
-      Object.assign(container.style, {
-        position: 'fixed',
-        inset: '0',
-        width: 'auto',
-        minWidth: '0',
-        maxWidth: 'none',
-        height: '100dvh',
-        overflow: 'hidden',
-      })
-      Object.assign(root.style, {
-        width: '100%',
-        height: '100%',
-        minWidth: '0',
-      })
-    }
+    applyAppRouteLayout(container, root)
 
     const styleEl = document.createElement('link')
     // Fix #69 https://github.com/hakadao/BewlyBewly/issues/69
@@ -1337,25 +1412,63 @@ else if (shouldInitializeContentScript) {
     shadowDOM.appendChild(styleEl)
     shadowDOM.appendChild(root)
 
-    // 样式就绪前隐藏整个 Shadow DOM，避免未应用样式的内容闪现。
-    // 就绪后一次性展示，避免容器淡入与页面样式透明度叠加，造成内容延迟出现。
-    container.style.visibility = 'hidden'
-    const revealContainer = () => {
-      container.style.visibility = 'visible'
-    }
-    styleEl.addEventListener('load', revealContainer, { once: true })
-
     const app = createApp(App)
     setupApp(app)
     let isAppMounted = false
-    styleEl.addEventListener('error', () => {
+
+    // 样式就绪前隐藏整个 Shadow DOM，避免未应用样式的内容闪现。
+    // 就绪后一次性展示，避免容器淡入与页面样式透明度叠加，造成内容延迟出现。
+    container.style.visibility = 'hidden'
+    let styleLoaded = false
+    let styleSettled = false
+    let styleLoadFailsafeTimer: ReturnType<typeof setTimeout> | undefined
+    const clearStyleLoadFailsafe = () => {
+      if (styleLoadFailsafeTimer !== undefined)
+        clearTimeout(styleLoadFailsafeTimer)
+      styleLoadFailsafeTimer = undefined
+    }
+    const activateHomePageAfterStyles = () => {
+      if (!styleLoaded || !isAppMounted || !useViewportLayout)
+        return
+      cleanupBilibiliScripts()
+      const topBarSource = resolveEffectiveTopBarSource(
+        settings.value.pageMode,
+        settings.value.useOriginalBilibiliTopBar,
+      )
+      if (topBarSource === 'bilibili-native')
+        ensureOriginalBilibiliTopBarAppended(document)
+      ensureLoginButtonClickHandlers()
+    }
+    const revealContainer = () => {
+      styleLoaded = true
+      styleSettled = true
+      clearStyleLoadFailsafe()
+      container.style.visibility = 'visible'
+      activateHomePageAfterStyles()
+      requestAnimationFrame(() => bootOverlay?.reveal())
+    }
+
+    const handleStyleFailure = () => {
+      if (styleSettled)
+        return
+      styleSettled = true
+      clearStyleLoadFailsafe()
       if (isAppMounted && mountedVueApp === app) {
-        app.unmount()
+        try {
+          app.unmount()
+        }
+        catch {
+          // Continue restoring the original page even if Vue teardown fails.
+        }
         mountedVueApp = null
         mountedVueContainer = null
-        container.remove()
+        mountedVueRoot = null
       }
-    }, { once: true })
+      container.remove()
+      restoreOriginalPageVisibility()
+    }
+    styleEl.addEventListener('load', revealContainer, { once: true })
+    styleEl.addEventListener('error', handleStyleFailure, { once: true })
 
     // startShadowDOMStyleInjection()
 
@@ -1366,10 +1479,22 @@ else if (shouldInitializeContentScript) {
 
     document.body.appendChild(container)
 
-    app.mount(root)
-    isAppMounted = true
-    mountedVueApp = app
-    mountedVueContainer = container
+    try {
+      app.mount(root)
+      isAppMounted = true
+      mountedVueApp = app
+      mountedVueContainer = container
+      mountedVueRoot = root
+      activateHomePageAfterStyles()
+      if (!styleSettled) {
+        styleLoadFailsafeTimer = setTimeout(handleStyleFailure, 8000)
+        contentScriptDisposers.push(clearStyleLoadFailsafe)
+      }
+    }
+    catch (error) {
+      container.remove()
+      throw error
+    }
   }
 
   contentScriptDisposers.push(watch(

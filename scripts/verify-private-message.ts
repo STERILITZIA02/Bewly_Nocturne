@@ -630,7 +630,7 @@ verify('multipart upload transport does not set a multipart boundary and preserv
       capturedInit = init
       return createMockResponse('{"code":0,"data":{"image_url":"https://i0.hdslb.com/bfs/im/sanitized.png","image_height":1,"image_width":1,"img_size":3}}')
     },
-  }, undefined, controller.signal)
+  }, controller.signal)
 
   assert.equal(response.code, 0)
   assert.equal(capturedInit?.method, 'POST')
@@ -1848,8 +1848,7 @@ verify('native message runtime protects cache limits and browser regression gate
     status: 412,
     verifiedCodeZero: false,
   })
-  for (const browser of ['Chrome', 'Firefox'])
-    assert.ok(regressionSource.includes(browser), browser)
+  assert.ok(regressionSource.includes('Chrome'), 'Chrome')
 })
 
 verify('original-fallback sessions keep available avatars instead of always using initials', async () => {
@@ -3025,7 +3024,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(listSource.includes(`@select="emit('select', $event)"`))
 
   assert.equal(workspaceSource.includes('OriginalNotificationsFrame'), false)
-  assert.ok(workspaceSource.includes('<ConversationEmptyState v-if="!selectedSession && !transientRecipient"'))
+  assert.ok(workspaceSource.includes('<ConversationEmptyState v-else-if="!selectedSession && !transientRecipient"'))
   assert.ok(workspaceSource.includes('<ConversationView'))
   assert.ok(workspaceSource.includes('<ConversationOriginalFallback'))
   assert.ok(workspaceSource.includes(`'whisper-workspace--detail': Boolean(selectedSession || transientRecipient)`))
@@ -3169,8 +3168,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.equal(conversationSource.includes('--conversation-edge-top'), false)
   assert.equal(conversationSource.includes('--conversation-edge-bottom'), false)
   assert.match(conversationSource, /\.conversation-card__top-edge,[\s\S]{0,180}position:\s*absolute/)
-  assert.match(conversationSource, /\.conversation-card__top-edge\s*\{[\s\S]{0,180}border-radius:/)
-  assert.match(conversationSource, /\.conversation-card__bottom-edge\s*\{[\s\S]{0,180}border-radius:/)
+  assert.match(conversationSource, /\.conversation-card__top-edge\s*\{[\s\S]{0,180}border-top-left-radius:\s*inherit/)
+  assert.match(conversationSource, /\.conversation-card__bottom-edge\s*\{[\s\S]{0,180}border-bottom-right-radius:\s*inherit/)
   assert.ok(conversationSource.includes('top: layoutProgress.value'))
   assert.equal(conversationSource.includes('MutationObserver'), false)
   assert.equal(pageHeaderSource.includes('<ALink'), false)

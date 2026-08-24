@@ -8,7 +8,7 @@
   z-index: 0;
   pointer-events: none;
   border-radius: var(--bew-liquid-indicator-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-liquid-indicator-bg, var(--bew-theme-color-20));
   box-shadow: var(--bew-liquid-indicator-shadow);
   // Geometry (x/y/w/h/clip-path) is driven by JS for droplet morph —

@@ -258,7 +258,7 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
     min-width: var(--bew-control-item-height);
     padding: 0 8px;
     border-radius: var(--bew-control-item-radius);
-    corner-shape: var(--bew-corner-shape);
+    corner-shape: var(--bew-corner-shape-round);
     background: transparent;
     color: var(--bew-text-2);
     font-size: var(--bew-control-label-size);

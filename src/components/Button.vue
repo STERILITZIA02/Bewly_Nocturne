@@ -4,13 +4,11 @@ interface Props {
     | 'primary'
     | 'secondary'
     | 'tertiary'
-    | 'info'
-    | 'success'
-    | 'warning'
     | 'error'
   size?: 'small' | 'medium' | 'large'
   color?: string
   textColor?: string
+  disabled?: boolean
   strong?: boolean
   round?: boolean
   block?: boolean
@@ -30,8 +28,10 @@ function handleClick(evt: MouseEvent) {
 <template>
   <button
     :type="nativeType ?? 'button'"
-    class="b-button bew-shape-smooth-rect"
+    :disabled="disabled"
+    class="b-button"
     :class="[
+      round ? 'bew-shape-pill' : 'bew-shape-smooth-rect',
       `b-button--type-${type ?? 'default'}`,
       `b-button--size-${size ?? 'medium'}`,
       `${strong ? 'b-button--strong' : ''}`,

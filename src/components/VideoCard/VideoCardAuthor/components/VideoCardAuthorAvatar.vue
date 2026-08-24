@@ -45,7 +45,6 @@ const isKetang = computed(() => {
     <div
       class="ketang-icon video-card-author-avatar bew-shape-circle"
       w-34px h-34px
-      rounded="1/2"
       bg="$bew-theme-color-10"
       grid="~ place-items-center"
     >
@@ -69,7 +68,6 @@ const isKetang = computed(() => {
       :key="index"
       :href="getAuthorJumpUrl(item)" target="_blank"
       class="video-card-author-avatar bew-shape-circle"
-      rounded="1/2"
       object="center cover" bg="$bew-skeleton" cursor="pointer"
       position-absolute top-0 inline-block
       :style="{
@@ -85,29 +83,30 @@ const isKetang = computed(() => {
       <Picture
         :src="`${removeHttpFromUrl(item.authorFace)}@50w_50h_1c`"
         loading="lazy"
+        class="bew-shape-circle"
         w-full h-full
         aspect-ratio="1/1"
-        rounded="1/2"
       />
 
       <!-- Following Flag -->
       <div
         v-if="item.followed && !Array.isArray(author)"
+        class="bew-shape-circle"
         pos="absolute top-21px left-22px"
         w-14px h-14px
         bg="$bew-theme-color"
         border="2 outset solid white"
-        rounded="1/2"
         grid place-items-center
       >
         <div color="$bew-on-theme-color" text-sm class="i-mingcute:check-fill w-8px h-8px" />
       </div>
       <div
         v-else-if="isLive"
+        class="bew-shape-circle"
         pos="absolute top-18px left-22px"
         w-14px h-14px
         bg="$bew-theme-color"
-        rounded="1/2" grid place-items-center
+        grid place-items-center
       >
         <div color="$bew-on-theme-color" text-sm class="i-svg-spinners:pulse-3 w-12px h-12px" />
       </div>
@@ -120,7 +119,6 @@ const isKetang = computed(() => {
       pos="absolute right--4px"
       w="28px" h="28px"
       bg="$bew-skeleton"
-      rounded="1/2"
       flex="~ items-center justify-end"
     >
       <span text="sm $bew-text-2" mr-1px>+</span>

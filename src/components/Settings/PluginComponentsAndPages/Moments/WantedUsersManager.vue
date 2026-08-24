@@ -339,6 +339,7 @@ function removeUser(mid: string) {
   height: 40px;
   flex: 0 0 auto;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   object-fit: cover;
 }
 .wanted-users-manager__candidates button > span {
@@ -389,6 +390,7 @@ function removeUser(mid: string) {
   height: 40px;
   flex: 0 0 auto;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   object-fit: cover;
 }
 .wanted-users-manager__list article > span {

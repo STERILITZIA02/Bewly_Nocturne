@@ -74,66 +74,6 @@ pnpm build
 
 然後打包 `extension` 下的檔案
 
-### 開發（Firefox）
-
-#### Firefox 的第一種方法
-
-<details>
- <summary>詳細內容</summary>
-
-1. 執行 pnpm 命令
-
-```bash
-# 安裝依賴
-pnpm install
-
-# 建立一個用戶的帳戶資料夾，用於擴充功能存儲登入狀態
-mkdir firefox-web-ext-profile
-
-# 運行專案
-pnpm dev-firefox
-
-# 打完這條指令之後，會自動開啓一個新的 Firefox 視窗並打開 BiliBili 網站
-pnpm start:firefox
-```
-
-2. 之後每次修改擴充功能，它都會重新加載，你可以透過重新整理頁面來查看變更內容
-
-</details>
-
-#### Firefox 的另一種方法
-
-<details>
- <summary>詳細內容</summary>
-
-1. 執行 pnpm 命令
-
-```bash
-# 安裝依賴
-pnpm install
-
-# 運行專案
-pnpm dev-firefox
-```
-
-2. 在瀏覽器中輸入 `about:addons`，點擊 `Extensions` 然後 `Debug Add-ons`
-
-<img width="655" alt="image" src="https://github.com/hakadao/BewlyBewly/assets/33394391/7c49e4ca-2a87-4c56-bc00-3259d6eba128">
-
-3. 然後在瀏覽器中使用 `extension-firefox/` 資料夾載入此擴充功能。
-
-</details>
-
-#### 構建（Firefox）
-
-要構建擴展，運行
-
-```bash
-pnpm build-firefox
-```
-
-然後打包 `extension-firefox` 下的檔案
-
 ## 🤝 貢獻
 
 ### 關於分支

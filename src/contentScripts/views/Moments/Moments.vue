@@ -4171,6 +4171,7 @@ watch(
   height: 28px;
   border: 0;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: color-mix(in oklab, var(--bew-elevated-solid) 48%, transparent);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
@@ -4275,6 +4276,7 @@ watch(
   width: 48px;
   height: 48px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   object-fit: cover;
   background: var(--bew-fill-1);
 }
@@ -4287,6 +4289,7 @@ watch(
   box-sizing: border-box;
   border: 0;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-theme-foreground);
   background: var(--bew-theme-color-20);
 }
@@ -4315,6 +4318,7 @@ watch(
   height: 10px;
   border: 2px solid var(--bew-elevated);
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-bili-pink);
   box-sizing: border-box;
 }
@@ -4371,6 +4375,7 @@ watch(
   width: 58px;
   height: 58px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-fill-1);
   object-fit: cover;
 }
@@ -4524,6 +4529,7 @@ watch(
   width: 48px;
   height: 48px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-fill-1);
   object-fit: cover;
 }
@@ -4537,6 +4543,7 @@ watch(
   height: 17px;
   padding: 0 var(--bew-space-1);
   border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
   color: #fff;
   background: #fb7299;
   font-size: var(--bew-font-size-caption);
@@ -4550,6 +4557,7 @@ watch(
   inset: -3px;
   border: 1px solid #fb7299;
   border-radius: inherit;
+  corner-shape: inherit;
   content: "";
   pointer-events: none;
   animation: moments-live-pulse 1.05s ease-out infinite;
@@ -4589,6 +4597,7 @@ watch(
   width: 58px;
   height: 58px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
 }
 .moments-sidebar-skeleton__name {
   width: 104px;
@@ -4739,6 +4748,7 @@ watch(
   width: 36px;
   height: 36px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
 }
 .moments-skeleton-card__author {
   display: block;
@@ -4912,6 +4922,7 @@ watch(
   padding: 0 var(--bew-space-4);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: var(--bew-elevated);
   font: inherit;
@@ -5010,6 +5021,7 @@ watch(
   padding: 0 var(--bew-space-3);
   border: 0;
   border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
   color: var(--bew-text-1);
   background: var(--bew-elevated-solid);
   box-shadow: var(--bew-shadow-2);

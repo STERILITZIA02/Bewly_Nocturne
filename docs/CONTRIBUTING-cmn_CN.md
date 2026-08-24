@@ -75,68 +75,6 @@ pnpm build
 
 然后打包到 `extension` 文件夹
 
-### 开发 (Firefox)
-
-#### Firefox 的第一种方法
-
-<details>
- <summary>详细内容</summary>
-
-1. 运行 pnpm 命令
-
-```bash
-# 安装依赖
-pnpm install
-
-# 创建一个用于存储登录状态的扩展程序文件夹
-mkdir firefox-web-ext-profile
-
-# 运行项目
-pnpm dev-firefox
-
-# 打完这条指令之后，会自动打开一个新的 Firefox 窗口并打开 BiliBili 网站
-pnpm start:firefox
-```
-
-2. 每次修改扩展程序，它都会重新加载，您可以通过刷新网页来查看更改
-
-</details>
-
-#### Firefox 的另外一种方法
-
-<details>
- <summary>详细内容</summary>
-
-1. 运行 pnpm 命令
-
-```bash
-# 安装依赖
-pnpm install
-
-# 运行项目
-pnpm dev-firefox
-```
-
-2. 在浏览器输入 `about:addons` 之后点击 `Extensions` 然后 `Debug Add-ons`
-
-<img width="655" alt="image" src="https://github.com/hakadao/BewlyBewly/assets/33394391/7c49e4ca-2a87-4c56-bc00-3259d6eba128">
-
-3. 在浏览器中加载生成的 `extension-firefox/` 文件夹
-
-</details>
-
-#### 构建 (Firefox)
-
-要构建拓展程序，运行
-
-```bash
-
-pnpm build-firefox
-
-```
-
-然后打包到 `extension-firefox` 文件夹
-
 ## 🤝 贡献
 
 ### 关于分支

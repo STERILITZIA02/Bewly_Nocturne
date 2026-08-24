@@ -713,8 +713,9 @@ onBeforeUnmount(() => {
       >
         <div
           v-if="Number(video?.rank) <= 3"
+          class="bew-shape-circle"
           bg="$bew-theme-color" text-center lh-0 h-30px w-30px
-          text="$bew-on-theme-color xl" rounded="1/2" shadow="$bew-shadow-1"
+          text="$bew-on-theme-color xl" shadow="$bew-shadow-1"
           border="1 $bew-theme-color"
           grid="~ place-content-center"
           fw-bold
@@ -723,8 +724,9 @@ onBeforeUnmount(() => {
         </div>
         <div
           v-else
+          class="bew-shape-circle"
           bg="$bew-elevated-solid" text-center lh-30px h-30px w-30px
-          rounded="1/2" shadow="$bew-shadow-1"
+          shadow="$bew-shadow-1"
           border="1 $bew-border-color"
         >
           {{ video?.rank }}
@@ -735,12 +737,11 @@ onBeforeUnmount(() => {
         <!-- Old layout: Video Duration (right bottom) -->
         <div
           v-if="layout === 'old' && settings.showVideoCardDuration && (video?.duration || video?.durationStr)"
-          class="video-card-overlay-transition"
+          class="video-card-overlay-transition bew-shape-pill"
           pos="absolute bottom-0 right-0"
           z="2"
           p="x-2 y-1"
           m="1"
-          rounded="$bew-radius"
           text="!white xs"
           bg="black opacity-60"
           :class="{ 'opacity-0': shouldHideOverlayElements }"
@@ -760,10 +761,10 @@ onBeforeUnmount(() => {
 
         <div
           v-if="video?.liveStatus === 1"
-          class="video-card-overlay-transition"
+          class="video-card-overlay-transition bew-shape-pill"
           :class="layout !== 'old' ? 'group-hover:opacity-0' : { 'opacity-0': shouldHideOverlayElements }"
           pos="absolute left-0 top-0" bg="$bew-theme-color" text="xs $bew-on-theme-color" fw-bold
-          p="x-2 y-1" m-1 inline-block rounded="$bew-radius"
+          p="x-2 y-1" m-1 inline-block
         >
           LIVE
           <i i-svg-spinners:pulse-3 align-middle mt--0.2em />
@@ -771,14 +772,14 @@ onBeforeUnmount(() => {
 
         <div
           v-if="Object.keys(video?.badge ?? {}).length > 0"
-          class="video-card-overlay-transition"
+          class="video-card-overlay-transition bew-shape-pill"
           :class="layout !== 'old' ? 'group-hover:opacity-0' : { 'opacity-0': shouldHideOverlayElements }"
           :style="{
             backgroundColor: video?.badge?.bgColor,
             color: video?.badge?.color,
           }"
           pos="absolute right-0 top-0" bg="$bew-theme-color" text="xs $bew-on-theme-color"
-          p="x-2 y-1" m-1 inline-block rounded="$bew-radius"
+          p="x-2 y-1" m-1 inline-block
         >
           {{ video?.badge?.text }}
         </div>
@@ -1032,6 +1033,7 @@ onBeforeUnmount(() => {
   border: 3px solid rgba(255, 255, 255, 0.3);
   border-top-color: #fff;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   animation: spin 0.8s linear infinite;
 }
 

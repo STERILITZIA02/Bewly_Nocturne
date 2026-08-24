@@ -338,6 +338,10 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
   right: 0;
   bottom: 0;
   left: 0;
-  border-radius: 0;
+  border-top-left-radius: 0;
+  border-top-right-radius: 0;
+  border-bottom-right-radius: inherit;
+  border-bottom-left-radius: inherit;
+  corner-shape: inherit;
 }
 </style>

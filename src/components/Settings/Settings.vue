@@ -585,7 +585,7 @@ function changeMenuItem(menuItem: MenuType) {
           class="settings-header"
           flex justify-between items-center w-full h-92px
           pos="absolute top-0 left-0" p="x-11" box-border gap-4
-          z-1 rounded="t-$bew-modal-radius"
+          z-1
           style="
             text-shadow: 0 0 10px var(--bew-elevated-solid), 0 0 15px var(--bew-elevated-solid)
           "
@@ -602,7 +602,7 @@ function changeMenuItem(menuItem: MenuType) {
           </nav>
           <div
             ref="settingsSearchRef"
-            class="settings-search bew-shape-smooth-rect"
+            class="settings-search"
             :class="{ 'has-query': Boolean(searchQuery) }"
             :style="{
               backgroundColor: settings.disableFrostedGlass ? 'var(--bew-content-solid)' : 'var(--bew-content)',
@@ -799,7 +799,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   .settings-primary-navigation__item {
-    border-radius: var(--bew-modal-radius);
+    border-radius: var(--bew-panel-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
@@ -836,6 +836,9 @@ function changeMenuItem(menuItem: MenuType) {
 
 .settings-header {
   z-index: 2;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  corner-shape: inherit;
 }
 
 .settings-breadcrumb,
@@ -901,6 +904,7 @@ function changeMenuItem(menuItem: MenuType) {
   background: var(--bew-content);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: calc(var(--bew-control-height) / 2);
+  corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-edge-glow-1);
   transition:
     width var(--bew-duration-moderate) var(--bew-ease-standard),
@@ -915,7 +919,8 @@ function changeMenuItem(menuItem: MenuType) {
 
   &:focus-within {
     border-color: var(--bew-theme-focus-ring);
-    border-radius: var(--bew-radius);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
     box-shadow:
       var(--bew-shadow-edge-glow-1),
       0 0 0 2px var(--bew-theme-focus-ring);
@@ -948,8 +953,6 @@ function changeMenuItem(menuItem: MenuType) {
 }
 
 .settings-search-results {
-  --bew-popover-radius: var(--bew-radius-xl);
-
   box-sizing: border-box;
   padding: var(--bew-space-2);
   overflow-x: hidden;
@@ -965,7 +968,7 @@ function changeMenuItem(menuItem: MenuType) {
     min-height: var(--bew-control-height);
     padding: var(--bew-space-2) var(--bew-space-4);
     text-align: left;
-    border-radius: var(--bew-radius);
+    border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
     transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
 
@@ -1061,7 +1064,7 @@ function changeMenuItem(menuItem: MenuType) {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
   border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-2);
   content: attr(data-settings-search-highlight);
   font-size: var(--bew-font-size-control);

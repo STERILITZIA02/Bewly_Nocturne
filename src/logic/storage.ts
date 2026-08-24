@@ -750,21 +750,28 @@ export const originalSettings: Settings = {
 export const localSettings = useStorageLocal('localSettings', originalLocalSettings, { mergeDefaults: true, writeDefaults: false })
 
 let resolveSettingsReady: (value: Settings) => void = () => {}
+let settingsReadyResolved = false
 export const settingsReady = new Promise<Settings>((resolve) => {
   resolveSettingsReady = resolve
 })
 
-export const settings = useSettingsStorage(originalSettings, {
-  onReady: value => resolveSettingsReady(value),
-})
+export const settings = useSettingsStorage(originalSettings)
+export const settingsInitializationState = settings.initializationState
 
 function asUnknownRecord(value: object): Record<string, unknown> {
   return value as Record<string, unknown>
 }
 
 watch(
-  () => settings.value,
-  (value) => {
+  [
+    () => settings.value,
+    () => settings.initializationState.value,
+    () => localSettings.initializationState.value,
+  ] as const,
+  ([value, settingsState, localSettingsState]) => {
+    if (settingsState !== 'loaded')
+      return
+
     const record = value as Settings & Record<string, unknown>
     const legacyRecord = asUnknownRecord(value)
 
@@ -960,8 +967,9 @@ watch(
     // 清理已移除的 NVIDIA RTX 视频增强兼容设置
     Reflect.deleteProperty(record, 'nvidiaRtxVideoEnhancementCompatibility')
 
-    // 迁移旧的 customizeCSS/customizeCSSContent 到 localSettings
-    if ('customizeCSS' in record || 'customizeCSSContent' in record) {
+    // 迁移旧的 customizeCSS/customizeCSSContent 到 localSettings。
+    // 两个存储均真实加载后才允许移动字段，避免默认 localSettings 覆盖已有值。
+    if (localSettingsState === 'loaded' && ('customizeCSS' in record || 'customizeCSSContent' in record)) {
       localSettings.value = {
         ...localSettings.value,
         customizeCSS: typeof legacyRecord.customizeCSS === 'boolean'
@@ -975,11 +983,18 @@ watch(
       Reflect.deleteProperty(record, 'customizeCSS')
       Reflect.deleteProperty(record, 'customizeCSSContent')
     }
+
+    if (!settingsReadyResolved && localSettingsState === 'loaded') {
+      settingsReadyResolved = true
+      resolveSettingsReady(value)
+    }
   },
   { immediate: true },
 )
 
-void browser.storage.local.remove(['gridBreakpoints', 'gridColumns']).catch(() => {})
+void settingsReady
+  .then(() => browser.storage.local.remove(['gridBreakpoints', 'gridColumns']))
+  .catch(() => {})
 
 export type GridLayoutType = 'adaptive' | 'twoColumns' | 'oneColumn'
 

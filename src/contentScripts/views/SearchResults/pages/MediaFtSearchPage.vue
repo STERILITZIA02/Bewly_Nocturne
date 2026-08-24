@@ -400,7 +400,7 @@ defineExpose({
   left: 0.75rem;
   padding: 0.25rem 0.5rem;
   border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   background: rgba(0, 0, 0, 0.65);
   color: #fff;
   font-size: var(--bew-font-size-control);

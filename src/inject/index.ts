@@ -1,5 +1,5 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
-import { createPageBridgeChannelId, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL } from '~/constants/pageBridge'
+import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
@@ -3192,7 +3192,7 @@ else if (shouldInitializePageScript) {
   const requestSettings = () => {
     if (settingsReady)
       return
-    window.postMessage({
+    postPageBridgeMessage(window, {
       protocol: PAGE_BRIDGE_PROTOCOL,
       channelId: pageBridgeChannelId,
       type: PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST,
@@ -3201,9 +3201,10 @@ else if (shouldInitializePageScript) {
 
   // 添加消息监听器
   window.addEventListener('message', (event) => {
-    if (!matchesPageBridgeEvent(event, {
+    const targetOrigin = getPageBridgeTargetOrigin(window.location.origin)
+    if (!targetOrigin || !matchesPageBridgeEvent(event, {
       source: window,
-      origin: window.location.origin,
+      origin: targetOrigin,
       channelId: pageBridgeChannelId,
       type: PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE,
     })) {

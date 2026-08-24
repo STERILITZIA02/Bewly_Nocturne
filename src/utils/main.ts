@@ -289,6 +289,22 @@ export function isUserSpacePage(url: string = location.href): boolean {
   return false
 }
 
+export function calculateContainedImageSize(
+  width: number,
+  height: number,
+  maxWidth: number,
+  maxHeight: number,
+) {
+  if (![width, height, maxWidth, maxHeight].every(value => Number.isFinite(value) && value > 0))
+    throw new RangeError('Image dimensions must be positive finite numbers')
+
+  const scale = Math.min(1, maxWidth / width, maxHeight / height)
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  }
+}
+
 /**
  * Compresses and resizes an image file.
  *
@@ -297,66 +313,89 @@ export function isUserSpacePage(url: string = location.href): boolean {
  * @param maxHeight - The maximum height of the resized image.
  * @param quality - The quality of the compressed image (0-1).
  * @param callback - The callback function to execute with the compressed file.
+ * @param onError - The callback invoked when reading, decoding, or encoding fails.
  */
-export function compressAndResizeImage(file: File, maxWidth: number, maxHeight: number, quality: number, callback: any) {
-  // Create an Image object
+export function compressAndResizeImage(
+  file: File,
+  maxWidth: number,
+  maxHeight: number,
+  quality: number,
+  callback: (compressedFile: File) => void,
+  onError: (error: Error) => void = error => console.error('compressAndResizeImage failed', error),
+) {
+  const fail = (error: unknown) => {
+    onError(error instanceof Error ? error : new Error(String(error)))
+  }
+
+  if (!Number.isFinite(quality) || quality < 0 || quality > 1) {
+    fail(new RangeError('Image quality must be between 0 and 1'))
+    return
+  }
+
   const img = new Image()
-
-  // Create a FileReader to read the file
   const reader = new FileReader()
-  reader.onload = function (e) {
-    img.src = e.target?.result as string
 
-    img.onload = function () {
-      // Create a canvas
+  reader.onerror = () => fail(reader.error ?? new Error('Failed to read image file'))
+  reader.onabort = () => fail(new Error('Image file reading was aborted'))
+  img.onerror = () => fail(new Error('Failed to decode image file'))
+
+  reader.onload = (event) => {
+    const result = event.target?.result
+    if (typeof result !== 'string') {
+      fail(new Error('Image file did not produce a data URL'))
+      return
+    }
+    img.src = result
+  }
+
+  img.onload = () => {
+    try {
+      const size = calculateContainedImageSize(
+        img.naturalWidth || img.width,
+        img.naturalHeight || img.height,
+        maxWidth,
+        maxHeight,
+      )
       const canvas = document.createElement('canvas')
       const ctx = canvas.getContext('2d')
-
-      // Calculate new size
-      let width = img.width
-      let height = img.height
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round(height * maxWidth / width)
-          width = maxWidth
-        }
-      }
-      else {
-        if (height > maxHeight) {
-          width = Math.round(width * maxHeight / height)
-          height = maxHeight
-        }
-      }
-
-      // Set canvas dimensions
-      canvas.width = width
-      canvas.height = height
-
       if (!ctx) {
-        console.error('compressAndResizeImage => ctx is null')
+        fail(new Error('Unable to create image canvas context'))
         return
       }
 
-      // Draw the image on the canvas
-      ctx.drawImage(img, 0, 0, width, height)
-
-      // Compress the image
+      canvas.width = size.width
+      canvas.height = size.height
+      ctx.drawImage(img, 0, 0, size.width, size.height)
       canvas.toBlob((blob) => {
-        // Create a new blob file
-        const compressedFile = new File([blob as Blob], file.name, {
-          type: 'image/jpeg',
-          lastModified: Date.now(),
-        })
-
-        // Execute the callback with the new compressed file
+        if (!blob) {
+          fail(new Error('Image encoding returned an empty blob'))
+          return
+        }
+        let compressedFile: File
+        try {
+          compressedFile = new File([blob], file.name, {
+            type: 'image/jpeg',
+            lastModified: Date.now(),
+          })
+        }
+        catch (error) {
+          fail(error)
+          return
+        }
         callback(compressedFile)
       }, 'image/jpeg', quality)
     }
+    catch (error) {
+      fail(error)
+    }
   }
 
-  // Read the file as a Data URL (base64)
-  reader.readAsDataURL(file)
+  try {
+    reader.readAsDataURL(file)
+  }
+  catch (error) {
+    fail(error)
+  }
 }
 
 /**
@@ -385,34 +424,52 @@ export function compareVersions(version1: string, version2: string): number {
   return 0 // Versions are equal
 }
 
-export function queryDomUntilFound(selector: string, timeout = 500, abort?: AbortController, maxWait = 10_000): Promise<HTMLElement | null> {
+export function queryDomUntilFound(
+  selector: string,
+  timeout = 500,
+  abort?: AbortController,
+  maxWait = 10_000,
+  query: (selector: string) => HTMLElement | null = selector => document.querySelector<HTMLElement>(selector),
+): Promise<HTMLElement | null> {
   return new Promise((resolve) => {
     if (abort?.signal.aborted) {
       resolve(null)
       return
     }
 
+    const existingElement = query(selector)
+    if (existingElement) {
+      resolve(existingElement)
+      return
+    }
+
     let settled = false
-    let interval = 0
-    let deadline = 0
+    let interval: ReturnType<typeof setInterval> | undefined
+    let deadline: ReturnType<typeof setTimeout> | undefined
+    let handleAbort: (() => void) | undefined
     const finish = (element: HTMLElement | null) => {
       if (settled)
         return
       settled = true
-      clearInterval(interval)
-      clearTimeout(deadline)
+      if (interval !== undefined)
+        clearInterval(interval)
+      if (deadline !== undefined)
+        clearTimeout(deadline)
+      if (handleAbort)
+        abort?.signal.removeEventListener('abort', handleAbort)
       resolve(element)
     }
-    interval = window.setInterval(() => {
-      const element = document.querySelector(selector)
-      if (element)
-        finish(element as HTMLElement)
-    }, timeout)
-    deadline = window.setTimeout(() => finish(null), maxWait)
+    handleAbort = () => finish(null)
 
-    if (abort) {
-      abort.signal.addEventListener('abort', () => finish(null), { once: true })
-    }
+    interval = setInterval(() => {
+      const element = query(selector)
+      if (element)
+        finish(element)
+    }, timeout)
+    deadline = setTimeout(() => finish(null), maxWait)
+    abort?.signal.addEventListener('abort', handleAbort, { once: true })
+    if (abort?.signal.aborted)
+      finish(null)
   })
 }
 

@@ -100,13 +100,3 @@ jobs:
         with:
           name: BewlyMac-chrome-extension
           path: extension
-
-      - name: Build Firefox Extension
-        run: pnpm build-firefox
-
-      - name: Upload Firefox Extension Zip
-        if: ${{ matrix.os == 'ubuntu-latest' && matrix.node == 'lts/*' && github.ref_name == 'main' }}
-        uses: actions/upload-artifact@v4.3.1
-        with:
-          name: BewlyMac-firefox-extension
-          path: extension-firefox

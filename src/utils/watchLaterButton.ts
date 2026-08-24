@@ -230,7 +230,8 @@ function createButton(ids: VideoIds): HTMLButtonElement {
     margin: 0 4px;
     padding: 0;
     border: 0;
-    border-radius: 6px;
+    border-radius: 50%;
+    corner-shape: var(--bew-corner-shape-round, round);
     background: transparent;
     font: inherit;
     transition: color 0.2s ease, background-color 0.2s ease, transform 0.15s ease, opacity 0.2s ease;

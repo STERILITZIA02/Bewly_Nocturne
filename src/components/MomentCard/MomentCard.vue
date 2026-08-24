@@ -869,7 +869,8 @@ function getImagePreviewLabel(author: string, index: number) {
   height: 32px;
   padding: 0;
   border: 0;
-  border-radius: var(--bew-interactive-radius);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   place-items: center;
   color: #fff;
   background: rgb(0 0 0 / 62%);
@@ -917,6 +918,7 @@ function getImagePreviewLabel(author: string, index: number) {
   gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
   color: #fff;
   background: rgb(0 0 0 / 58%);
   font-size: var(--bew-font-size-control);
@@ -952,6 +954,7 @@ function getImagePreviewLabel(author: string, index: number) {
   gap: var(--bew-space-1);
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
   color: #fff;
   background: linear-gradient(135deg, #ff8eb4, #fb7299);
   font-size: var(--bew-font-size-control);
@@ -1169,6 +1172,7 @@ function getImagePreviewLabel(author: string, index: number) {
   width: 21px;
   height: 21px;
   border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
   object-fit: cover;
   background: var(--bew-fill-1);
 }
@@ -1388,6 +1392,7 @@ function getImagePreviewLabel(author: string, index: number) {
   padding: 0;
   border: 0;
   border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
   place-items: center;
   color: var(--bew-text-2);
   background: transparent;

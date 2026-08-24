@@ -6,8 +6,10 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NotificationAccountState } from '../notificationFeedPolicy'
+import ConversationDetailSkeleton from './ConversationDetailSkeleton.vue'
 import ConversationEmptyState from './ConversationEmptyState.vue'
 import ConversationList from './ConversationList.vue'
+import ConversationListSkeleton from './ConversationListSkeleton.vue'
 import ConversationOriginalFallback from './ConversationOriginalFallback.vue'
 import ConversationView from './ConversationView.vue'
 import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
@@ -204,11 +206,15 @@ defineExpose({ refresh })
       'whisper-workspace--solid': settings.disableFrostedGlass,
     }"
   >
-    <aside class="whisper-workspace__sessions conversation-list-card">
-      <div v-if="accountState === 'profile-pending'" class="whisper-workspace__state" aria-busy="true">
-        <Loading />
-        <span>{{ t('notifications.whisper.profile_pending') }}</span>
-      </div>
+    <aside
+      class="whisper-workspace__sessions conversation-list-card"
+      :aria-busy="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
+    >
+      <ConversationListSkeleton
+        v-if="accountState === 'profile-pending'"
+        :compact="settings.privateMessageDensity === 'compact'"
+        :label="t('notifications.whisper.profile_pending')"
+      />
 
       <div v-else-if="accountState === 'logged-out'" class="whisper-workspace__state">
         <Empty :description="t('notifications.whisper.errors.login-required')">
@@ -218,14 +224,11 @@ defineExpose({ refresh })
         </Empty>
       </div>
 
-      <div
+      <ConversationListSkeleton
         v-else-if="controller.state.loading && !controller.state.loaded"
-        class="whisper-workspace__state"
-        aria-busy="true"
-      >
-        <Loading />
-        <span>{{ t('notifications.whisper.loading') }}</span>
-      </div>
+        :compact="settings.privateMessageDensity === 'compact'"
+        :label="t('notifications.whisper.loading')"
+      />
 
       <div
         v-else-if="controller.state.errorKind && !controller.state.items.length"
@@ -279,8 +282,16 @@ defineExpose({ refresh })
       :class="{
         'whisper-workspace__detail--fallback-card': selectedSession && !nativeSelectedSession && !transientRecipient,
       }"
+      :aria-busy="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
     >
-      <ConversationEmptyState v-if="!selectedSession && !transientRecipient" />
+      <ConversationDetailSkeleton
+        v-if="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
+        :compact="settings.privateMessageDensity === 'compact'"
+        :label="accountState === 'profile-pending'
+          ? t('notifications.whisper.profile_pending')
+          : t('notifications.whisper.loading')"
+      />
+      <ConversationEmptyState v-else-if="!selectedSession && !transientRecipient" />
       <ConversationView
         v-else-if="nativeSelectedSession || transientRecipient"
         :key="nativeSelectedSession?.talkerId ?? `transient:${transientRecipient?.mid}`"

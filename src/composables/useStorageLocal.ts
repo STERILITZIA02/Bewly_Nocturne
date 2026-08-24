@@ -1,5 +1,5 @@
 import type { MaybeRef, Ref, WatchOptions } from 'vue'
-import { getCurrentScope, isProxy, onScopeDispose, ref, shallowRef, toRaw, toValue, watch } from 'vue'
+import { getCurrentScope, isProxy, onScopeDispose, readonly, ref, shallowRef, toRaw, toValue, watch } from 'vue'
 import browser from 'webextension-polyfill'
 
 import { shouldWriteStorageDefault } from '~/utils/storageInitialization'
@@ -41,9 +41,12 @@ export interface UseStorageLocalOptions<T> {
   writeDefaults?: boolean
 }
 
+export type StorageInitializationState = 'degraded' | 'loaded' | 'loading'
+
 export type StorageRef<T> = Omit<Ref<T>, 'value'> & {
   get value(): T
   set value(value: T | null | undefined)
+  initializationState: Readonly<Ref<StorageInitializationState>>
 }
 
 const storageSerializers: Record<SerializerType, StorageSerializer<any>> = {
@@ -160,8 +163,8 @@ function mergeStoredValue<T>(storedValue: T, defaults: T, mergeDefaults: UseStor
   return storedValue
 }
 
-function createStorageRef<T>(value: T, useShallow: boolean): StorageRef<T> {
-  return (useShallow ? shallowRef(value) : ref(value)) as StorageRef<T>
+function createStorageRef<T>(value: T, useShallow: boolean): Omit<StorageRef<T>, 'initializationState'> {
+  return (useShallow ? shallowRef(value) : ref(value)) as Omit<StorageRef<T>, 'initializationState'>
 }
 
 const defaultStorageLocalRuntime: StorageLocalRuntime = {
@@ -211,6 +214,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   const initial = createInitialValue(initialValue)
   const serializer = (customSerializer ?? storageSerializers[guessSerializerType(initial)]) as StorageSerializer<T>
   const data = createStorageRef(createInitialValue(initialValue), shallow)
+  const initializationState = ref<StorageInitializationState>('loading')
 
   let ready = false
   let initialReadSucceeded = false
@@ -375,6 +379,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
             assignStorageValue(nextValue)
             initialReadSucceeded = true
             degraded = false
+            initializationState.value = 'loaded'
             hasDegradedEdits = false
             clearRecoveryTimer()
           }
@@ -449,6 +454,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
         }
         initialReadSucceeded = true
         degraded = false
+        initializationState.value = 'loaded'
       }
       catch (error) {
         if (!isOwnerActive())
@@ -536,6 +542,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     if (!isOwnerActive())
       return
     ready = true
+    initializationState.value = initialReadSucceeded ? 'loaded' : 'degraded'
     startSync()
     if (!isOwnerActive())
       return
@@ -578,5 +585,9 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
       onReady?.(data.value)
   })()
 
-  return data
+  Object.defineProperty(data, 'initializationState', {
+    value: readonly(initializationState),
+  })
+
+  return data as StorageRef<T>
 }

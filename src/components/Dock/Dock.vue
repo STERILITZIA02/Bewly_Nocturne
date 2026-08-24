@@ -781,8 +781,9 @@ onUnmounted(() => {
             <!-- moon -->
             <div
               v-if="isDark"
+              class="bew-shape-circle"
               pos="absolute top-0 left-0 group-hover:top-2px group-hover:left--4px"
-              w-full h-full bg-white rounded="1/2"
+              w-full h-full bg-white
               z--2 pointer-events-none
               :shadow="
                 settings.disableDockGlowingEffect

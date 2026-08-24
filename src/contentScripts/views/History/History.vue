@@ -485,9 +485,9 @@ function jumpToLoginPage() {
                     "
                     w-30px
                     aspect-square
+                    class="bew-shape-circle"
                     object-cover
                     alt=""
-                    rounded="1/2"
                     mr-2
                   >
                   {{
@@ -535,7 +535,7 @@ function jumpToLoginPage() {
               <button
                 type="button"
                 class="history-list-card__action"
-                :aria-label="$t('common.remove')"
+                :aria-label="$t('common.operation.delete')"
                 text="size-$bew-icon-size-lg $bew-text-3"
                 hover:color="$bew-theme-color"
                 opacity-0 group-hover:opacity-100

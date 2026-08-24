@@ -1,6 +1,3 @@
-import type Browser from 'webextension-polyfill'
-
-import { FIREFOX_CONTAINER_COOKIE_HEADER, serializeCookiesForUrl } from '../firefoxCookies'
 import type {
   MessageServerSettingsApiResponse,
   MessageServerSettingsEndpointName,
@@ -40,19 +37,6 @@ function classifyApiCode(code: number): MessageServerSettingsErrorKind {
   if (code === -403 || code === -412)
     return 'risk-control'
   return 'api-error'
-}
-
-async function getFirefoxCookieHeader(
-  sender: Browser.Runtime.MessageSender | undefined,
-  requestUrl: string,
-): Promise<string> {
-  // eslint-disable-next-line node/prefer-global/process
-  if (!process.env.FIREFOX || !sender?.tab?.id)
-    return ''
-  const browser = await import('webextension-polyfill').then(module => module.default)
-  const tab = await browser.tabs.get(sender.tab.id)
-  const cookies = await browser.cookies.getAll({ storeId: tab.cookieStoreId || 'default' })
-  return serializeCookiesForUrl(cookies, requestUrl)
 }
 
 function appendParams(url: string, params: Record<string, string | number | undefined> = {}) {
@@ -109,7 +93,6 @@ async function parseResponse(
 export async function requestMessageServerSettings(
   request: MessageServerSettingsRequest,
   dependencies: Partial<MessageServerSettingsTransportDependencies> = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<MessageServerSettingsApiResponse> {
   const runtimeDependencies = { ...DEFAULT_DEPENDENCIES, ...dependencies }
   const requestUrl = appendParams(request.url, request.params)
@@ -117,9 +100,6 @@ export async function requestMessageServerSettings(
     const headers: Record<string, string> = {
       Referer: 'https://message.bilibili.com/',
     }
-    const cookieHeader = await getFirefoxCookieHeader(sender, requestUrl)
-    if (cookieHeader)
-      headers[FIREFOX_CONTAINER_COOKIE_HEADER] = cookieHeader
     if (request.method === 'POST')
       headers['Content-Type'] = 'application/x-www-form-urlencoded'
     const response = await runtimeDependencies.fetch(requestUrl, {

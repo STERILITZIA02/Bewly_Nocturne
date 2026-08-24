@@ -319,7 +319,7 @@ const awayScore = computed(() => {
   padding: 0.25rem 0.5rem;
   background: var(--bew-fill-2);
   border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape);
+  corner-shape: var(--bew-corner-shape-round);
   text-align: center;
 }
 </style>

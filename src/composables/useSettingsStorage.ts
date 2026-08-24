@@ -1,5 +1,5 @@
-import type { MaybeRef } from 'vue'
-import { getCurrentScope, isProxy, onScopeDispose, ref, toRaw, toValue, watch } from 'vue'
+import type { MaybeRef, Ref } from 'vue'
+import { getCurrentScope, isProxy, onScopeDispose, readonly, ref, toRaw, toValue, watch } from 'vue'
 import browser from 'webextension-polyfill'
 
 import type { StorageRef } from '~/composables/useStorageLocal'
@@ -19,13 +19,17 @@ import {
   SETTINGS_STORAGE_READ_MESSAGE,
 } from '~/utils/settingsStorageProtocol'
 
+export type SettingsStorageInitializationState = 'degraded' | 'loaded' | 'loading'
+
 interface UseSettingsStorageOptions<T> {
   onError?: (error: unknown) => void
+  onLoaded?: (value: T) => void
   onReady?: (value: T) => void
 }
 
 export interface SettingsStorageRef<T extends object> extends StorageRef<T> {
   flush: () => Promise<void>
+  initializationState: Readonly<Ref<SettingsStorageInitializationState>>
 }
 
 interface SettingsStorageFlushWaiter {
@@ -95,7 +99,7 @@ export function useSettingsStorage<T extends object>(
   options: UseSettingsStorageOptions<T> = {},
 ): SettingsStorageRef<T> {
   const defaults = cloneValue(toValue(initialValue))
-  const data = ref(cloneValue(defaults)) as StorageRef<T>
+  const data = ref(cloneValue(defaults)) as Omit<StorageRef<T>, 'initializationState'>
   const onError = options.onError ?? ((error: unknown) => console.error(error))
 
   let applyingCanonicalValue = false
@@ -113,7 +117,7 @@ export function useSettingsStorage<T extends object>(
   let disposed = false
   let storageGeneration = 0
   let readInFlightGeneration: number | null = null
-  let initializationState: 'loading' | 'loaded' | 'degraded' = 'loading'
+  const initializationState = ref<SettingsStorageInitializationState>('loading')
   let recoveryReadAttempt = 0
   let recoveryReadTimer: ReturnType<typeof setTimeout> | null = null
   const flushWaiters = new Set<SettingsStorageFlushWaiter>()
@@ -322,7 +326,7 @@ export function useSettingsStorage<T extends object>(
   }
 
   function scheduleRecoveryRead() {
-    if (disposed || initializationState === 'loaded' || recoveryReadTimer != null || recoveryReadAttempt >= RECOVERY_READ_DELAYS.length)
+    if (disposed || initializationState.value === 'loaded' || recoveryReadTimer != null || recoveryReadAttempt >= RECOVERY_READ_DELAYS.length)
       return
 
     const delay = RECOVERY_READ_DELAYS[recoveryReadAttempt++]
@@ -352,21 +356,24 @@ export function useSettingsStorage<T extends object>(
         currentEpoch = response.epoch
 
       persistenceReady = true
-      initializationState = 'loaded'
       recoveryReadAttempt = 0
       clearRecoveryReadTimer()
       applyCanonicalValue(response.storedValue, response.revision, epochChanged)
+      const wasLoaded = initializationState.value === 'loaded'
+      initializationState.value = 'loaded'
+      if (!wasLoaded)
+        options.onLoaded?.(data.value)
       void flushQueuedPatch()
     }
     catch (error) {
       if (error instanceof StaleStorageGenerationError)
         return
 
+      initializationState.value = 'degraded'
       if (isExtensionContextInvalidatedError(error)) {
         disposed = true
       }
       else {
-        initializationState = 'degraded'
         onError(error)
         scheduleRecoveryRead()
       }
@@ -410,10 +417,13 @@ export function useSettingsStorage<T extends object>(
     }
 
     persistenceReady = true
-    initializationState = 'loaded'
     recoveryReadAttempt = 0
     clearRecoveryReadTimer()
     applyCanonicalValue(settingsChange.newValue, meta?.revision ?? canonicalRevision, epochChanged)
+    const wasLoaded = initializationState.value === 'loaded'
+    initializationState.value = 'loaded'
+    if (!wasLoaded)
+      options.onLoaded?.(data.value)
     void flushQueuedPatch()
   }
 
@@ -429,8 +439,13 @@ export function useSettingsStorage<T extends object>(
 
   void refreshCanonicalValue(true)
 
-  Object.defineProperty(data, 'flush', {
-    value: flushPendingWrites,
+  Object.defineProperties(data, {
+    flush: {
+      value: flushPendingWrites,
+    },
+    initializationState: {
+      value: readonly(initializationState),
+    },
   })
 
   return data as SettingsStorageRef<T>

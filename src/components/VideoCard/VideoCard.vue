@@ -369,7 +369,7 @@ provide('getVideoType', () => props.type!)
     <div
       class="video-card group"
       w="full"
-      rounded="$bew-card-radius"
+      rounded-inherit
     >
       <component
         :is="coverSkeleton ? 'div' : 'ALink'"
@@ -484,7 +484,6 @@ provide('getVideoType', () => props.type!)
   text-rendering: optimizeSpeed;
   /* 防止字体度量变化 */
   -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
 
   /* 防止骨架屏和真实内容切换时的布局偏移：
      确保容器在加载过程中保持稳定的最小高度 */

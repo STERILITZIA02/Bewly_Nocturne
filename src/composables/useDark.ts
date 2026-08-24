@@ -245,7 +245,7 @@ function createDarkState() {
       const style = document.createElement('style')
       const styleString = `
             *, *::before, *::after
-            {-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}`
+            {-webkit-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}`
       style.appendChild(document.createTextNode(styleString))
       document.head.appendChild(style)
 
@@ -264,7 +264,7 @@ function createDarkState() {
       const shadowDomStyle = document.createElement('style')
       const shadowDomStyleString = `
             *, *::before, *::after
-            {-webkit-transition:none!important;-moz-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important; will-change: background}`
+            {-webkit-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important; will-change: background}`
       shadowDomStyle.appendChild(document.createTextNode(shadowDomStyleString))
 
       const bewlyShadowRoot = document.getElementById('bewly')?.shadowRoot

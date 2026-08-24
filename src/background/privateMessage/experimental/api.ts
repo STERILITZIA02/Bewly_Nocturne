@@ -1,8 +1,6 @@
 /**
  * Private-message write API handlers. Image upload cancellation remains request-scoped.
  */
-import type Browser from 'webextension-polyfill'
-
 import { getPrivateMessageDevId } from '../deviceId'
 import { createPrivateMessageErrorResponse } from '../errors'
 import {
@@ -51,13 +49,12 @@ function invalidRequest(endpointName: keyof typeof PRIVATE_MESSAGE_ENDPOINTS) {
 
 async function sendPrivateMessageForm(
   body: PrivateMessageRequestParams,
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const response = await requestSignedPrivateMessageForm({
     endpointName: 'sendPrivateMessage',
     body,
     url: PRIVATE_MESSAGE_ENDPOINTS.sendPrivateMessage,
-  }, {}, sender)
+  })
   if (response.code !== 0)
     return response
   return parsePrivateSendResponse(response) ?? invalidRequest('sendPrivateMessage')
@@ -65,7 +62,6 @@ async function sendPrivateMessageForm(
 
 export async function sendPrivateMessage(
   message: PrivateSendMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     if (!message.senderId || !message.talkerId || !message.text?.trim() || !message.csrf)
@@ -77,7 +73,7 @@ export async function sendPrivateMessage(
       text: message.text,
       csrf: message.csrf,
       devId,
-    }), sender)
+    }))
   }
   catch {
     return invalidRequest('sendPrivateMessage')
@@ -92,7 +88,6 @@ function isValidImageBytes(bytes: unknown): bytes is number[] {
 
 export async function uploadPrivateImage(
   message: PrivateImageUploadMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   const { bytes, csrf, fileName, mimeType, requestId } = message
   if (!requestId?.trim() || !fileName?.trim() || !mimeType || !csrf || !isValidImageBytes(bytes))
@@ -110,7 +105,7 @@ export async function uploadPrivateImage(
         endpointName: 'uploadPrivateImage',
         form,
         url: PRIVATE_MESSAGE_ENDPOINTS.uploadPrivateImage,
-      }, {}, sender, controller.signal)
+      }, {}, controller.signal)
       if (response.code !== 0)
         return response
       return parsePrivateImageUploadResponse(response, imageType) ?? invalidRequest('uploadPrivateImage')
@@ -127,7 +122,6 @@ export async function uploadPrivateImage(
 
 export async function sendPrivateImageMessage(
   message: PrivateImageSendMessage = {},
-  sender?: Browser.Runtime.MessageSender,
 ): Promise<PrivateMessageApiResponse> {
   try {
     if (!message.senderId || !message.talkerId || !message.csrf || !message.uploaded)
@@ -139,7 +133,7 @@ export async function sendPrivateImageMessage(
       csrf: message.csrf,
       uploaded: message.uploaded,
       devId,
-    }), sender)
+    }))
   }
   catch {
     return invalidRequest('sendPrivateMessage')

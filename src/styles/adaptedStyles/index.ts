@@ -2,8 +2,24 @@ import './common'
 import './shadowDom'
 import './thirdParties'
 
-import { settings, settingsReady } from '~/logic/storage'
+import { watch } from 'vue'
+
+import { settings, settingsInitializationState, settingsReady } from '~/logic/storage'
 import { isHomePage, isInIframe, isWatchLaterListPage } from '~/utils/main'
+
+function waitForSettingsLoadAttempt(): Promise<boolean> {
+  if (settingsInitializationState.value !== 'loading')
+    return Promise.resolve(settingsInitializationState.value === 'loaded')
+
+  return new Promise((resolve) => {
+    const stop = watch(settingsInitializationState, (state) => {
+      if (state === 'loading')
+        return
+      stop()
+      resolve(state === 'loaded')
+    }, { flush: 'sync' })
+  })
+}
 
 async function setupStyles() {
   const currentUrl = document.URL
@@ -73,19 +89,36 @@ async function setupStyles() {
       document.documentElement.appendChild(initialVisibilityGuard)
     }
 
-    await Promise.all([
-      import('./pages/momentsPage.scss'),
-      isOriginalMomentsFeed ? settingsReady : Promise.resolve(),
-    ])
-
-    if (isOriginalMomentsFeed) {
+    const applyOriginalMomentsVisibility = () => {
       document.documentElement.classList.toggle('moments-hide-original-user-card', !settings.value.originalMomentsShowUserCard)
       document.documentElement.classList.toggle('moments-hide-original-live-list', !settings.value.originalMomentsShowLiveList)
       document.documentElement.classList.toggle('moments-hide-original-community-center', !settings.value.originalMomentsShowCommunityCenter)
       document.documentElement.classList.toggle('moments-hide-original-hot-search', !settings.value.originalMomentsShowHotSearch)
       document.documentElement.classList.toggle('moments-hide-original-up-list', !settings.value.originalMomentsShowUpList)
-      document.documentElement.classList.add('moments-original-components-ready')
-      initialVisibilityGuard?.remove()
+    }
+
+    let settingsLoaded = !isOriginalMomentsFeed
+    try {
+      const results = await Promise.all([
+        import('./pages/momentsPage.scss'),
+        isOriginalMomentsFeed ? waitForSettingsLoadAttempt() : Promise.resolve(true),
+      ])
+      settingsLoaded = results[1]
+    }
+    finally {
+      if (isOriginalMomentsFeed) {
+        document.documentElement.classList.add('moments-original-components-ready')
+        initialVisibilityGuard?.remove()
+      }
+    }
+
+    if (isOriginalMomentsFeed) {
+      if (settingsLoaded) {
+        applyOriginalMomentsVisibility()
+      }
+      else {
+        void settingsReady.then(applyOriginalMomentsVisibility)
+      }
     }
 
     // 插件动态页通过抽屉 iframe 打开详情时，隐藏原站冗余布局并聚焦正文。

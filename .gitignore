@@ -12,15 +12,13 @@
 *.local
 *.log
 *.pem
-*.xpi
 *.zip
 dist
 dist-ssr
 extension/
-extension-firefox/
 extension-safari/
 node_modules
-*-web-ext-profile
+chromium-web-ext-profile/
 extension-safari-macos/
 # src/old-extension/
 .playwright-mcp/

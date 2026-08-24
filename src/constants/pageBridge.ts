@@ -24,6 +24,44 @@ export interface PageBridgeEventMatch extends PageBridgeMessageMatch {
   source: MessageEventSource
 }
 
+interface PageBridgeMessageTarget {
+  postMessage: (message: unknown, targetOrigin: string) => void
+}
+
+export function getPageBridgeTargetOrigin(
+  origin = globalThis.location?.origin,
+): string | undefined {
+  if (!origin || origin === 'null')
+    return undefined
+  try {
+    const parsed = new URL(origin)
+    if ((parsed.protocol !== 'http:' && parsed.protocol !== 'https:') || parsed.origin !== origin)
+      return undefined
+    return origin
+  }
+  catch {
+    return undefined
+  }
+}
+
+export function postPageBridgeMessage(
+  target: PageBridgeMessageTarget,
+  message: PageBridgeMessage,
+  origin = globalThis.location?.origin,
+): boolean {
+  const targetOrigin = getPageBridgeTargetOrigin(origin)
+  if (!targetOrigin)
+    return false
+  try {
+    target.postMessage(message, targetOrigin)
+    return true
+  }
+  catch {
+    // The document may become detached between validating its origin and posting.
+    return false
+  }
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (Object.prototype.toString.call(value) !== '[object Object]')
     return false
