@@ -32,6 +32,8 @@ export interface DisplayAdditional {
   isUpRecommendation: boolean
   isVideoReservation: boolean
   isLiveReservation: boolean
+  isVote: boolean
+  voteEndTime: number
   reservationId?: string
   reservationTotal?: number
   isReserved?: boolean
@@ -45,6 +47,8 @@ export interface DisplayMoment {
   text: string
   richText: DisplayRichTextSegment[]
   images: string[]
+  /** 与 images 按索引对齐的宽高比；未知项为 null。 */
+  imageRatios?: Array<number | null>
   time: string
   likeCount: number
   isLiked: boolean
@@ -98,12 +102,17 @@ export interface DisplayMoment {
   videoUrl?: string
   additional?: DisplayAdditional
   forward?: {
+    id: string
+    url: string
+    authorMid: string
+    isArticle: boolean
     author: string
     title: string
     text: string
     fallback: string
     /** 转发原动态的图片，用于在嵌套卡片中保持原卡片形态 */
     images?: string[]
+    imageRatios?: Array<number | null>
     video?: DisplayForwardVideo
   }
 }

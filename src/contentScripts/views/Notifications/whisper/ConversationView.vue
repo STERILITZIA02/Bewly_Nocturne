@@ -121,12 +121,18 @@ const expansionGeometry = computed(() => getConversationExpansionGeometry(
   isMobileLayout.value,
   expandedGeometry.value,
 ))
-const conversationLayoutStyle = computed<Record<string, string>>(() => ({
-  '--conversation-extra-height': `${expansionGeometry.value.extraHeight}px`,
-  '--conversation-top-lift': `${expansionGeometry.value.topLift}px`,
-  '--conversation-top-radius': `${baseTopRadius.value * cornerProgress.value.top}px`,
-  '--conversation-bottom-radius': `${baseTopRadius.value * cornerProgress.value.bottom}px`,
-}))
+const conversationLayoutStyle = computed<Record<string, string>>(() => {
+  const topExpansion = Math.max(0, -expansionGeometry.value.topLift)
+  const bottomExpansion = Math.max(0, expansionGeometry.value.extraHeight - topExpansion)
+  return {
+    '--conversation-extra-height': `${expansionGeometry.value.extraHeight}px`,
+    '--conversation-top-expansion': `${topExpansion}px`,
+    '--conversation-bottom-expansion': `${bottomExpansion}px`,
+    '--conversation-top-lift': `${expansionGeometry.value.topLift}px`,
+    '--conversation-top-radius': `${baseTopRadius.value * cornerProgress.value.top}px`,
+    '--conversation-bottom-radius': `${baseTopRadius.value * cornerProgress.value.bottom}px`,
+  }
+})
 
 const SCROLL_EDGE_THRESHOLD = 48
 let activationGeneration = 0
@@ -157,6 +163,12 @@ function readScrollMetrics(viewport: HTMLElement): ConversationScrollMetrics {
     scrollHeight: viewport.scrollHeight,
     scrollTop: viewport.scrollTop,
   }
+}
+
+function readVerticalScrollPadding(viewport: HTMLElement): number {
+  const style = getComputedStyle(viewport)
+  return (Number.parseFloat(style.paddingTop) || 0)
+    + (Number.parseFloat(style.paddingBottom) || 0)
 }
 
 function isMetricsAtLatest(metrics: ConversationScrollMetrics): boolean {
@@ -575,6 +587,7 @@ async function loadOlderMessages(explicitRetry = false) {
   const requestStateGeneration = state.value.generation
   const oldScrollHeight = viewport.scrollHeight
   const oldScrollTop = viewport.scrollTop
+  const oldScrollPadding = readVerticalScrollPadding(viewport)
   const anchor = captureVisibleMessageAnchor(viewport)
   applyExpansionAction({ type: 'load-start', noMore: state.value.noMore })
 
@@ -583,22 +596,35 @@ async function loadOlderMessages(explicitRetry = false) {
   else
     await props.controller.loadOlder(requestTalkerId)
   await nextTick()
-  if (
-    viewport !== messageScrollRef.value
-    || requestTalkerId !== talkerId.value
-    || requestLayoutGeneration !== layoutGeneration
-    || requestScrollGeneration !== scrollInteractionGeneration
-    || requestActivationGeneration !== activationGeneration
-    || requestLifecycleEpoch !== props.controller.lifecycleEpoch.value
-    || requestStateGeneration !== state.value.generation
-    || !props.active
-  ) {
+  const requestContextCurrent = viewport === messageScrollRef.value
+    && requestTalkerId === talkerId.value
+    && requestLayoutGeneration === layoutGeneration
+    && requestActivationGeneration === activationGeneration
+    && requestLifecycleEpoch === props.controller.lifecycleEpoch.value
+    && requestStateGeneration === state.value.generation
+    && props.active
+  if (!requestContextCurrent) {
+    if (
+      props.active
+      && requestTalkerId === talkerId.value
+      && expansionModel.value.state === 'expanding'
+    ) {
+      applyExpansionAction({ type: 'load-end', noMore: state.value.noMore })
+    }
     scheduleScrollFrame()
     return
   }
 
-  if (!restoreVisibleMessageAnchor(viewport, anchor))
-    viewport.scrollTop = oldScrollTop + viewport.scrollHeight - oldScrollHeight
+  if (requestScrollGeneration === scrollInteractionGeneration) {
+    if (!restoreVisibleMessageAnchor(viewport, anchor)) {
+      const scrollPaddingGrowth = readVerticalScrollPadding(viewport) - oldScrollPadding
+      const messageContentGrowth = Math.max(
+        0,
+        viewport.scrollHeight - oldScrollHeight - scrollPaddingGrowth,
+      )
+      viewport.scrollTop = oldScrollTop + messageContentGrowth
+    }
+  }
   lastProcessedScrollTop = viewport.scrollTop
   applyExpansionAction({ type: 'load-end', noMore: state.value.noMore })
   saveViewportState()
@@ -735,6 +761,7 @@ async function activateConversation() {
     finishConversationActivation(generation)
     return
   }
+  updateConversationGeometry()
   if (!wasLoaded || state.value.atLatest) {
     scrollToLatest()
   }
@@ -1105,11 +1132,18 @@ defineExpose({
   z-index: 1;
   min-width: 0;
   min-height: 0;
-  padding: var(--bew-space-3) var(--bew-space-4)
-    calc(var(--conversation-composer-reserve) + var(--conversation-new-message-reserve) + var(--bew-space-4));
+  padding: calc(var(--bew-space-3) + var(--conversation-top-expansion, 0px)) var(--bew-space-4)
+    calc(
+      var(--conversation-composer-reserve) + var(--conversation-new-message-reserve) +
+        var(--conversation-bottom-expansion, 0px) + var(--bew-space-4)
+    );
   overflow: auto;
+  overflow-anchor: none;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  transition:
+    padding-top var(--bew-duration-normal) var(--bew-ease-standard),
+    padding-bottom var(--bew-duration-normal) var(--bew-ease-standard);
   background: transparent;
   outline: none;
 }
@@ -1327,6 +1361,7 @@ defineExpose({
 @media (prefers-reduced-motion: reduce) {
   .conversation-view,
   .conversation-card,
+  .conversation-view__messages,
   .conversation-card__top-edge,
   .conversation-card__bottom-edge {
     transition: none;

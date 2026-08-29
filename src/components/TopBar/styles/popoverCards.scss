@@ -39,9 +39,9 @@
 .popover-card__title {
   margin: 0;
   overflow: hidden;
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
+  font-size: var(--bew-media-pop-title-font-size);
+  font-weight: var(--bew-media-pop-title-font-weight);
+  line-height: var(--bew-media-pop-title-line-height);
   overflow-wrap: anywhere;
 }
 

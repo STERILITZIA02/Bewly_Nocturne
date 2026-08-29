@@ -31,6 +31,8 @@ const emit = defineEmits<{
 const menuListRef = ref<HTMLElement | null>(null)
 const canScrollUp = ref(false)
 const canScrollDown = ref(false)
+let closeRequested = false
+let observedVisualViewport: VisualViewport | null = null
 
 // 处理滚动事件，更新箭头显示状态
 function handleScroll() {
@@ -248,6 +250,9 @@ watch(() => showContextMenu.value, (newVal) => {
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
+  window.addEventListener('resize', handleViewportResize)
+  observedVisualViewport = window.visualViewport
+  observedVisualViewport?.addEventListener('resize', handleViewportResize)
   showContextMenu.value = true
   nextTick(() => {
     handleScroll()
@@ -264,6 +269,9 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  window.removeEventListener('resize', handleViewportResize)
+  observedVisualViewport?.removeEventListener('resize', handleViewportResize)
+  observedVisualViewport = null
   if (resizeObserver) {
     resizeObserver.disconnect()
     resizeObserver = null
@@ -413,9 +421,16 @@ function openBlockUserConfirmDialog() {
 }
 
 function handleClose() {
+  if (closeRequested)
+    return
+  closeRequested = true
   showContextMenu.value = false
   showPipWindow.value = false
   emit('close')
+}
+
+function handleViewportResize() {
+  handleClose()
 }
 
 function handleReopen() {
@@ -521,7 +536,6 @@ async function unfollowUser() {
     <div v-if="showContextMenu">
       <div
         :style="contextMenuStyles"
-        p-1
         class="context-menu-container bew-popover-surface"
       >
         <!-- 顶部滚动指示器 -->
@@ -660,14 +674,32 @@ async function unfollowUser() {
 
 <style lang="scss" scoped>
 .context-menu-item {
-  --uno: "hover:bg-$bew-fill-2 rounded-$bew-interactive-radius cursor-pointer";
+  --uno: "rounded-$bew-interactive-radius cursor-pointer";
   --uno: "flex items-center";
 
-  min-height: 32px;
-  padding: var(--bew-space-2);
+  box-sizing: border-box;
+  min-height: var(--bew-popover-row-min-height);
+  padding: var(--bew-space-2) var(--bew-space-3);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
+  transition:
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard);
+
+  &:hover,
+  &:focus-visible {
+    background: var(--bew-fill-2);
+  }
+
+  &:focus-visible {
+    outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+    outline-offset: calc(-1 * var(--bew-space-0-5));
+  }
+
+  &:active {
+    background: var(--bew-fill-3);
+  }
 }
 
 .item-icon {
@@ -681,19 +713,22 @@ async function unfollowUser() {
 }
 
 .context-menu-container {
-  --bew-popover-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
-
   width: min(240px, calc(100vw - var(--bew-space-4)));
   max-height: min(406px, calc(100vh - var(--bew-space-4)));
+  display: flex;
+  flex-direction: column;
+  padding: var(--bew-space-1);
   overflow: hidden;
   z-index: var(--bew-z-popover);
+  animation: bew-context-menu-enter var(--bew-duration-fast) var(--bew-ease-standard) both;
 }
 
 .context-menu-list {
-  max-height: inherit;
+  min-height: 0;
+  max-height: 100%;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: var(--bew-space-1) 0;
+  padding: 0;
 
   /* 完全隐藏滚动条 */
   -ms-overflow-style: none; /* IE 和 Edge */
@@ -715,7 +750,7 @@ async function unfollowUser() {
   justify-content: center;
   color: var(--bew-text-color-2);
   cursor: pointer;
-  background: var(--bew-elevated);
+  background: var(--bew-popover-surface-background);
   border-radius: inherit;
   corner-shape: inherit;
   position: absolute;
@@ -730,16 +765,34 @@ async function unfollowUser() {
 
   &-top {
     top: 0;
+    border-bottom: 1px solid var(--bew-border-color);
     border-bottom-right-radius: 0;
     border-bottom-left-radius: 0;
-    box-shadow: 0 4px 6px -2px rgba(0, 0, 0, 0.05);
   }
 
   &-bottom {
     bottom: 0;
+    border-top: 1px solid var(--bew-border-color);
     border-top-left-radius: 0;
     border-top-right-radius: 0;
-    box-shadow: 0 -4px 6px -2px rgba(0, 0, 0, 0.05);
+  }
+}
+
+@keyframes bew-context-menu-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .context-menu-container {
+    animation: none;
   }
 }
 </style>

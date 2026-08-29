@@ -1,38 +1,57 @@
 <script setup lang="ts">
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+
 defineProps<{
   horizontal?: boolean
 }>()
 </script>
 
 <template>
-  <div
-    :style="{
-      display: horizontal ? 'flex' : 'block',
-    }"
-    gap-4
-    mb-6
-  >
-    <div
-      rounded="$bew-media-radius" aspect="12/16" overflow-hidden mb-4 bg="$bew-skeleton"
-      class="bew-surface-border"
-      shrink-0
-      :style="{ width: horizontal ? '170px' : '100%' }"
-    />
-    <div w-full>
-      <p
-        w-full h-5 mt-2 mb-3 my-4
-        bg="$bew-skeleton"
-        rounded="$bew-radius-sm"
-      />
-      <div text="$bew-skeleton" mb-10 flex items-center rounded="$bew-radius-sm">
-        <div
-          text="transparent" bg="$bew-skeleton" p="x-3 y-1" mr-2 h-24px
-          rounded="$bew-radius-sm"
-        >
-          0.0
-        </div>
-        <div w="60%" h-22px bg="$bew-skeleton" rounded="$bew-radius-sm" />
+  <article class="bangumi-card-skeleton" :class="{ 'bangumi-card-skeleton--horizontal': horizontal }" aria-hidden="true">
+    <SkeletonBlock class="bangumi-card-skeleton__media" height="auto" radius="media" />
+    <div class="bangumi-card-skeleton__content">
+      <SkeletonBlock height="var(--bew-space-5)" />
+      <div class="bangumi-card-skeleton__meta">
+        <SkeletonBlock width="52px" height="24px" radius="interactive" />
+        <SkeletonBlock width="60%" height="22px" />
       </div>
     </div>
-  </div>
+  </article>
 </template>
+
+<style scoped lang="scss">
+.bangumi-card-skeleton {
+  display: block;
+  min-width: 0;
+  margin-bottom: var(--bew-space-6);
+}
+
+.bangumi-card-skeleton--horizontal {
+  display: flex;
+  gap: var(--bew-space-4);
+}
+
+.bangumi-card-skeleton__media {
+  width: 100% !important;
+  aspect-ratio: 12 / 16;
+  margin-bottom: var(--bew-space-4);
+}
+
+.bangumi-card-skeleton--horizontal .bangumi-card-skeleton__media {
+  width: 170px !important;
+  flex: 0 0 170px;
+}
+
+.bangumi-card-skeleton__content {
+  display: grid;
+  width: 100%;
+  gap: var(--bew-space-3);
+}
+
+.bangumi-card-skeleton__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  margin-bottom: var(--bew-space-10);
+}
+</style>

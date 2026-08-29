@@ -6,6 +6,7 @@ import { i18n } from '~/utils/i18n'
 import { isVideoPlaybackPage } from '~/utils/main'
 import { showState } from '~/utils/player'
 
+import { createPlayerControlTooltip, updatePlayerControlTooltip } from './playerControlTooltip'
 import { observePlayerDom } from './playerDomLifecycle'
 
 const screenshotIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 88" style="width: 100%; height: 100%;">
@@ -21,6 +22,16 @@ let stopLifecycleWatch: (() => void) | null = null
 
 function translate(key: string): string {
   return String(i18n.global.t(key, settings.value.language))
+}
+
+function updateControlLabel(control = controlContainer) {
+  if (!control)
+    return
+
+  const label = translate('player_screenshot.capture')
+  control.removeAttribute('title')
+  control.setAttribute('aria-label', label)
+  updatePlayerControlTooltip(control, label)
 }
 
 function findPlayerControlBar(): HTMLElement | null {
@@ -139,7 +150,6 @@ function createControlContainer(): HTMLElement {
   container.setAttribute('role', 'button')
   container.setAttribute('aria-label', label)
   container.setAttribute('tabindex', '0')
-  container.title = label
 
   const icon = document.createElement('div')
   icon.className = 'bpx-player-ctrl-btn-icon bewly-video-screenshot-icon'
@@ -148,7 +158,7 @@ function createControlContainer(): HTMLElement {
   iconWrapper.className = 'bpx-common-svg-icon'
   iconWrapper.innerHTML = screenshotIcon
   icon.appendChild(iconWrapper)
-  container.appendChild(icon)
+  container.append(icon, createPlayerControlTooltip(label))
 
   container.addEventListener('click', () => {
     void captureCurrentFrame(container)
@@ -165,8 +175,10 @@ function createControlContainer(): HTMLElement {
 }
 
 function injectControl() {
-  if (controlContainer?.isConnected)
+  if (controlContainer?.isConnected) {
+    updateControlLabel()
     return
+  }
 
   const controlBar = findPlayerControlBar()
   if (!controlBar)
@@ -175,6 +187,7 @@ function injectControl() {
   const existingControl = controlBar.querySelector<HTMLElement>('.bewly-video-screenshot-control')
   if (existingControl) {
     controlContainer = existingControl
+    updateControlLabel()
     return
   }
 
@@ -191,7 +204,7 @@ function releaseScreenshotControlResources() {
   stopPlayerObserver = null
   controlContainer?.remove()
   controlContainer = null
-  document.querySelector<HTMLElement>('.bewly-video-screenshot-control')?.remove()
+  document.querySelectorAll<HTMLElement>('.bewly-video-screenshot-control').forEach(element => element.remove())
 }
 
 export function stopVideoScreenshotControl() {
@@ -214,7 +227,7 @@ export function initVideoScreenshotControl() {
   }
 
   stopLifecycleWatch = watch(
-    [() => settings.value.showVideoScreenshotButton, () => routeState.navigationId],
+    [() => settings.value.showVideoScreenshotButton, () => settings.value.language, () => routeState.navigationId],
     updateLifecycle,
     { immediate: true },
   )

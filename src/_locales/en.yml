@@ -504,6 +504,12 @@ settings:
     bewly_widescreen_sidebar_position_desc: Choose the sidebar position in Bewly Widescreen mode
     bewly_widescreen_sidebar_position_left: Left
     bewly_widescreen_sidebar_position_right: Right
+    bewly_widescreen_center_video: Center video in Bewly Widescreen
+    bewly_widescreen_center_video_desc: Center the video, danmaku, and click area across the viewport only in video-first layout when the measured letterbox space can contain the full sidebar. Otherwise, keep the video-first layout.
+    bewly_widescreen_layout_priority: Bewly Widescreen layout priority
+    bewly_widescreen_layout_priority_desc: Video-first preserves the video size and starts with a compact sidebar. Sidebar-first shows the full sidebar immediately and reserves separate space for the player.
+    bewly_widescreen_layout_priority_video: Video-first
+    bewly_widescreen_layout_priority_sidebar: Sidebar-first
   enable_video_preview: Enable video preview feature (if possible)
   enable_video_ctrl_bar_on_video_card: Display the video control bar on the video card
   video_preview_swipe_seek: Swipe to seek nearby
@@ -556,6 +562,10 @@ settings:
   auto_switch_list_layout: Automatically switch list columns based on video grid width
   auto_switch_list_layout_desc: When enabled, two-column mode switches to one column when the video grid is narrower than the configured width.
   auto_switch_list_layout_breakpoint: Switch at
+  video_card_cover_ratio: Cover width
+  video_card_cover_ratio_desc: Set the cover width separately for one-column and two-column horizontal video cards.
+  video_card_cover_ratio_one_column: One-column layout
+  video_card_cover_ratio_two_columns: Two-column layout
   grid_breakpoints: Grid Breakpoints
   grid_breakpoints_desc: Set the number of columns at different video grid widths. The matching column count is used when the grid reaches each breakpoint.
   grid_min_width: Width ≥
@@ -794,6 +804,13 @@ settings:
   settings_sync_unsynced_count: 'Unsynced fields: {count}'
   settings_sync_quota_blocked_count: 'Blocked by cloud quota: {count}'
   settings_sync_last_error: 'Last sync error: {error}'
+  sync_cloud_conflict_title: Cloud settings backup found
+  sync_cloud_conflict_desc: A settings backup already exists in cloud storage. Settings present on both sides will follow the side you choose.
+  sync_cloud_use_cloud: 'Download: cloud settings take precedence'
+  sync_cloud_use_local: 'Upload: local settings take precedence'
+  sync_cloud_status_failed: Failed to read cloud sync status
+  sync_cloud_enable_failed: Failed to enable settings cloud sync
+  sync_cloud_incompatible: The cloud data was written by a newer version of the extension. Update the extension before enabling sync.
   disable_auto_play_collection: Auto disable collection autoplay
   disable_auto_play_collection_desc: Automatically turn off the autoplay feature for video collections
   keep_collection_video_default_mode: Keep collection videos in default mode
@@ -917,7 +934,7 @@ settings:
   enlarge_favorite_dialog_desc: When enabled, the favorite dialog on video pages will be displayed in a larger size for easier viewing and management.
   external_watch_later_button: External watch later button
   external_watch_later_button_desc: Show a standalone Watch later button in the video toolbar. It displays the current state and can add or remove the video.
-  show_bewly_widescreen_button: Show Bewly Widescreen button
+  show_bewly_widescreen_button: Show player Bewly Widescreen button
   show_bewly_widescreen_button_desc: Show a button in the player controls for entering Bewly Widescreen. Hiding it does not exit the active mode.
   show_vertical_video_zoom_button: Vertical video zoom button
   show_vertical_video_zoom_button_desc: Show zoom controls and the visible-area position control for vertical videos
@@ -1237,6 +1254,9 @@ moments:
   emoji: Emoji
   unlock_with_charge: Unlock with Charge
   view: View
+  vote_ongoing: Ongoing
+  vote_ended: Ended
+  vote_status_unknown: Status unavailable
   live_popularity: '{count} popularity'
   charge_exclusive: Charge exclusive
   charge_unlock_hint: Join this creator's Charge to unlock this content
@@ -1308,6 +1328,7 @@ moments:
 moment_card:
   video_moment: Video post
   open_detail: Open {author}'s post details
+  open_origin_moment: View {name}'s original post
   just_now: Just now
   charge_exclusive: Charge-exclusive
   watch_later_added: Added to Watch Later
@@ -1333,6 +1354,17 @@ moment_card:
   comments_retry: Retry
   comments_load_more: View more comments
   comments_reply_count: '{count} replies'
+  comment_like: Like comment
+  comment_unlike: Remove comment like
+  comment_reply: Reply
+  comment_reply_to: Reply to {name}
+  comment_reply_placeholder: Write a reply…
+  comment_send: Send
+  comment_sending: Sending…
+  comment_login_required: Sign in to interact with comments
+  comment_like_failed: Failed to update comment like. Try again later.
+  comment_reply_failed: Failed to send reply. Try again later.
+  comment_reply_succeeded: Reply sent
   live_popularity: '{count} popularity'
   no_data: No data
   live_now: Live now
@@ -1392,6 +1424,8 @@ video_card:
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
 home:
+  app_authorization_required: The App mode access token is missing or expired. Re-authorize to continue using personalized recommendations.
+  reauthorize_app: Re-authorize
   recommendation_empty: No recommendations are available
   recommendation_filtered_empty: All current recommendations were removed by your local filters
   web_recommendation_risk_cooldown: Recommendation requests hit risk control and are paused for {seconds} seconds. Try again later.
@@ -1546,10 +1580,8 @@ widescreen:
   comments_loading: Loading comments
   danmaku_loading: Loading danmaku
   list_loading: Loading list
-  show_narrow_right: Show narrow right sidebar
-  show_narrow_left: Show narrow left sidebar
-  collapse_right: Collapse right sidebar
-  collapse_left: Collapse left sidebar
+  show_full_sidebar: Show full sidebar
+  show_compact_sidebar: Switch to compact sidebar
 search_bar:
   input_label: Search
   clear_keyword: Clear search query

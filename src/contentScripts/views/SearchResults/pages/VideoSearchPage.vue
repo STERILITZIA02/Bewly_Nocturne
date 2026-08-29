@@ -266,8 +266,14 @@ function refreshCurrentPage() {
     : performSearch(false)
 }
 
-function restorePage(page: number) {
-  return page === currentPage.value ? Promise.resolve(true) : handlePageChange(page, false, false)
+async function restorePage(page: number): Promise<boolean> {
+  if (page === currentPage.value)
+    return true
+  if (paginationMode.value === 'pagination')
+    return handlePageChange(page, false, false)
+
+  updatePage(page)
+  return performSearch(false)
 }
 
 function resetAll() {
@@ -323,8 +329,8 @@ defineExpose({
         :transform-item="transformVideo"
         :get-item-key="(video: any) => video.aid || video.id"
         :empty-description="$t('common.no_data')"
-        :show-loading-more-skeleton="false"
-        :show-load-more-indicator="paginationMode === 'scroll' && (results?.length || 0) > 0 && hasMore"
+        :show-loading-more-skeleton="true"
+        :show-load-more-indicator="false"
         enable-row-padding
         show-preview
         @load-more="handleLoadMore"

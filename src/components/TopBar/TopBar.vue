@@ -9,6 +9,7 @@ import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VI
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditableRoot } from '~/logic/layoutEdit'
+import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { isHomePage, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
@@ -16,11 +17,12 @@ import emitter from '~/utils/mitt'
 
 import NotificationsDrawer from './components/NotificationsDrawer.vue'
 import TopBarHeader from './components/TopBarHeader.vue'
-import { useTopBarInteraction } from './composables/useTopBarInteraction'
+import { resetTopBarTransientInteraction, useTopBarInteraction } from './composables/useTopBarInteraction'
 
 const { reachTop } = useBewlyApp()
 // 顶栏状态管理
 const topBarStore = useTopBarStore()
+const settingsStore = useSettingsStore()
 const { forceWhiteIcon } = useTopBarInteraction()
 
 const conflictingHeaderSelectors = ['.fixed-author-header', '.fixed-top-header']
@@ -40,12 +42,19 @@ const { isOutside: isOutsideTopBar } = useMouseInElement(headerTarget)
 const { isOutside: isOutsideTopArea } = useMouseInElement(topAreaTarget)
 
 const currentLocationHref = useCurrentLocationHref()
+const effectiveTopBarSource = computed(() => settingsStore.getEffectiveTopBarSource())
+const usesNativeTopBar = computed(() => effectiveTopBarSource.value === 'bilibili-native')
+const isCurrentVideoPage = computed(() => isVideoOrBangumiPage(currentLocationHref.value))
 const coarsePointer = useMediaQuery('(pointer: coarse)')
 const lastPointerType = ref<'mouse' | 'touch' | 'pen'>(coarsePointer.value ? 'touch' : 'mouse')
 const effectiveVideoTopBarConfig = computed(() => {
-  if (settings.value.videoPageTopBarConfig === VideoPageTopBarConfig.ShowOnMouse && lastPointerType.value !== 'mouse')
+  const configuredMode = settings.value.videoPageTopBarConfig
+  // 原版顶栏没有 Bewly 顶栏的顶部 Hover 感应层；该模式仅属于 Bewly 顶栏。
+  if (usesNativeTopBar.value && configuredMode === VideoPageTopBarConfig.ShowOnMouse)
+    return VideoPageTopBarConfig.AlwaysShow
+  if (configuredMode === VideoPageTopBarConfig.ShowOnMouse && lastPointerType.value !== 'mouse')
     return VideoPageTopBarConfig.ShowOnScroll
-  return settings.value.videoPageTopBarConfig
+  return configuredMode
 })
 
 // 延迟隐藏计时器
@@ -64,6 +73,25 @@ const hasActivePopup = computed(() => {
   return Object.values(topBarStore.popupVisible).some(visible => visible)
 })
 
+const ORIGINAL_VIDEO_TOP_BAR_CONTROLLED_CLASS = 'bewly-original-video-top-bar-controlled'
+const ORIGINAL_VIDEO_TOP_BAR_HIDDEN_CLASS = 'bewly-original-video-top-bar-hidden'
+
+function clearOriginalVideoTopBarVisibility() {
+  document.documentElement.classList.remove(
+    ORIGINAL_VIDEO_TOP_BAR_CONTROLLED_CLASS,
+    ORIGINAL_VIDEO_TOP_BAR_HIDDEN_CLASS,
+  )
+}
+
+function syncOriginalVideoTopBarVisibility(shouldShow: boolean) {
+  const shouldControl = usesNativeTopBar.value
+    && isCurrentVideoPage.value
+    && settings.value.videoPageTopBarConfig !== VideoPageTopBarConfig.ShowOnMouse
+
+  document.documentElement.classList.toggle(ORIGINAL_VIDEO_TOP_BAR_CONTROLLED_CLASS, shouldControl)
+  document.documentElement.classList.toggle(ORIGINAL_VIDEO_TOP_BAR_HIDDEN_CLASS, shouldControl && !shouldShow)
+}
+
 function applyTopBarVisibility() {
   const shouldShow = !bewlyWidescreenActive.value
     && (
@@ -78,6 +106,7 @@ function applyTopBarVisibility() {
     )
 
   hideTopBar.value = !shouldShow
+  syncOriginalVideoTopBarVisibility(shouldShow)
   topBarStore.setTopBarVisible(shouldShow)
   emitter.emit(TOP_BAR_VISIBILITY_CHANGE, shouldShow)
 }
@@ -132,7 +161,7 @@ watch(isLayoutEditing, (editing) => {
   clearHideTimer()
   if (editing) {
     desiredTopBarVisible.value = true
-    topBarStore.closeAllPopups()
+    resetTopBarTransientInteraction()
   }
   applyTopBarVisibility()
 })
@@ -140,6 +169,11 @@ watch(isLayoutEditing, (editing) => {
 watch(currentLocationHref, () => {
   setupScrollListeners()
   startConflictingHeaderObservation()
+}, { flush: 'post' })
+
+watch(effectiveTopBarSource, () => {
+  clearHideTimer()
+  setupScrollListeners()
 }, { flush: 'post' })
 
 // 滚动处理
@@ -505,12 +539,26 @@ function handleClickOutsidePopup(event: MouseEvent) {
     return
 
   // 点击在弹窗外部，关闭所有弹窗
-  topBarStore.closeAllPopups()
+  resetTopBarTransientInteraction()
 }
 
 // 生命周期钩子
 onMounted(() => {
   topBarMounted = true
+  // 可见性策略必须先于异步数据初始化生效，避免原版 AlwaysHide 首屏闪现，
+  // 也确保 ShowOnScroll 在初始化期间已经接管滚动。
+  setupScrollListeners()
+  startConflictingHeaderObservation()
+  startWidescreenStateObservation()
+
+  // 添加全局点击事件监听器（用于触屏模式下点击外部关闭弹窗）
+  document.addEventListener('click', handleClickOutsidePopup)
+  // 页面重新可见时按本地 Cookie 校正登录态：覆盖「他处登录/登出后
+  // 本标签处于后台」的场景，无需轮询（见 issue #921）
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  window.addEventListener('blur', resetTopBarTransientInteraction)
+  window.addEventListener('pointerdown', handlePointerDown, { passive: true })
+
   nextTick(async () => {
     // 初始化数据和更新定时器
     try {
@@ -524,23 +572,15 @@ onMounted(() => {
     // 启动定时器：已登录时同步角标/补填 userInfo；未登录时不启动轮询，
     // 登录态由本地 Cookie 事实与事件驱动维护（见 issue #921）
     topBarStore.startUpdateTimer()
-    setupScrollListeners()
-
-    startConflictingHeaderObservation()
-    startWidescreenStateObservation()
-
-    // 添加全局点击事件监听器（用于触屏模式下点击外部关闭弹窗）
-    document.addEventListener('click', handleClickOutsidePopup)
-    // 页面重新可见时按本地 Cookie 校正登录态：覆盖「他处登录/登出后
-    // 本标签处于后台」的场景，无需轮询（见 issue #921）
-    document.addEventListener('visibilitychange', handleVisibilityChange)
-    window.addEventListener('pointerdown', handlePointerDown, { passive: true })
   })
 })
 
 function handleVisibilityChange() {
-  if (!document.hidden)
-    topBarStore.reconcileLocalLoginState()
+  if (document.hidden) {
+    resetTopBarTransientInteraction()
+    return
+  }
+  topBarStore.reconcileLocalLoginState()
 }
 
 function handlePointerDown(event: PointerEvent) {
@@ -559,6 +599,7 @@ onUnmounted(() => {
   stopConflictingHeaderObservation()
   widescreenStateObserver?.disconnect()
   widescreenStateObserver = undefined
+  clearOriginalVideoTopBarVisibility()
 
   cleanupScrollListeners()
   // 使用 store 中的方法清理定时器
@@ -567,6 +608,7 @@ onUnmounted(() => {
   // 移除全局点击事件监听器
   document.removeEventListener('click', handleClickOutsidePopup)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  window.removeEventListener('blur', resetTopBarTransientInteraction)
   window.removeEventListener('pointerdown', handlePointerDown)
 })
 
@@ -575,7 +617,7 @@ onKeyStroke('Escape', (event: KeyboardEvent) => {
     return
 
   event.preventDefault()
-  topBarStore.closeAllPopups()
+  resetTopBarTransientInteraction()
 })
 
 defineExpose({
@@ -591,7 +633,7 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
   <div class="top-bar-container">
     <!-- 顶部监听区域 -->
     <div
-      v-if="!bewlyWidescreenActive && isVideoOrBangumiPage() && effectiveVideoTopBarConfig === VideoPageTopBarConfigEnum.ShowOnMouse"
+      v-if="!bewlyWidescreenActive && isCurrentVideoPage && effectiveVideoTopBarConfig === VideoPageTopBarConfigEnum.ShowOnMouse"
       ref="topAreaTarget"
       class="top-area-listener"
     />

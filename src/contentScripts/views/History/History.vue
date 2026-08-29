@@ -2,6 +2,7 @@
 import { useDateFormat } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
@@ -16,6 +17,7 @@ const { t } = useI18n()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
 const isLoading = ref<boolean>(false)
+const requestFailed = ref(false)
 const noMoreContent = ref<boolean>(false)
 const historyList = reactive<Array<HistoryItem>>([])
 const currentPageNum = ref<number>(1)
@@ -24,7 +26,6 @@ const historyStatus = ref<boolean>()
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 let historyCursor = 0
 let requestGeneration = 0
-let reachBottomTimer: number | undefined
 
 const HistoryBusiness = computed(() => {
   return Business
@@ -39,9 +40,6 @@ onMounted(() => {
 
 onScopeDispose(() => {
   requestGeneration++
-  if (reachBottomTimer !== undefined)
-    window.clearTimeout(reachBottomTimer)
-  reachBottomTimer = undefined
   if (handleReachBottom.value === handleHistoryReachBottom)
     handleReachBottom.value = undefined
   if (handlePageRefresh.value === handleHistoryPageRefresh)
@@ -58,6 +56,7 @@ function resetListState() {
   historyCursor = 0
   currentPageNum.value = 1
   noMoreContent.value = false
+  requestFailed.value = false
   isLoading.value = false
 }
 
@@ -69,22 +68,15 @@ function reloadCurrentMode() {
     void getHistoryList()
 }
 
-function handleHistoryReachBottom() {
-  if (isLoading.value || noMoreContent.value)
-    return
+async function handleHistoryReachBottom() {
+  if (isLoading.value || noMoreContent.value || requestFailed.value)
+    return false
 
-  if (reachBottomTimer !== undefined)
-    window.clearTimeout(reachBottomTimer)
-  // 优化：添加延迟执行提高触发成功率
-  reachBottomTimer = window.setTimeout(() => {
-    reachBottomTimer = undefined
-    if (!isLoading.value && !noMoreContent.value) {
-      if (isSearchMode())
-        void searchHistoryList()
-      else
-        void getHistoryList()
-    }
-  }, 50)
+  if (isSearchMode())
+    await searchHistoryList()
+  else
+    await getHistoryList()
+  return true
 }
 
 function handleHistoryPageRefresh() {
@@ -104,6 +96,7 @@ async function getHistoryList() {
     return
 
   const generation = requestGeneration
+  requestFailed.value = false
   isLoading.value = true
   try {
     while (!noMoreContent.value) {
@@ -116,14 +109,18 @@ async function getHistoryList() {
         })
       }
       catch (error) {
+        if (generation === requestGeneration)
+          requestFailed.value = true
         console.error('获取历史记录失败:', error)
         break
       }
 
       if (generation !== requestGeneration || isSearchMode())
         return
-      if (res.code !== 0)
+      if (res.code !== 0) {
+        requestFailed.value = true
         break
+      }
 
       const list = Array.isArray(res.data?.list) ? res.data.list : []
       if (list.length === 0) {
@@ -131,6 +128,7 @@ async function getHistoryList() {
         break
       }
 
+      requestFailed.value = false
       historyList.push(...list)
       const nextCursor = list[list.length - 1].view_at
       if (nextCursor === requestedCursor)
@@ -157,6 +155,7 @@ async function searchHistoryList() {
     return
 
   const generation = requestGeneration
+  requestFailed.value = false
   isLoading.value = true
   const page = currentPageNum.value
   try {
@@ -166,10 +165,13 @@ async function searchHistoryList() {
     })
     if (generation !== requestGeneration || keyword.value.trim() !== searchKeyword)
       return
-    if (res.code !== 0)
+    if (res.code !== 0) {
+      requestFailed.value = true
       return
+    }
 
     const list = Array.isArray(res.data?.list) ? res.data.list : []
+    requestFailed.value = false
     list.forEach((item: HistorySearchItem) => {
       historyList.push(item)
     })
@@ -178,6 +180,8 @@ async function searchHistoryList() {
     noMoreContent.value = list.length < 20
   }
   catch (error) {
+    if (generation === requestGeneration)
+      requestFailed.value = true
     console.error('搜索历史记录失败:', error)
   }
   finally {
@@ -188,6 +192,16 @@ async function searchHistoryList() {
 
 function handleSearch() {
   reloadCurrentMode()
+}
+
+function retryHistoryRequest() {
+  if (isLoading.value)
+    return
+  requestFailed.value = false
+  if (isSearchMode())
+    void searchHistoryList()
+  else
+    void getHistoryList()
 }
 
 function deleteHistoryItem(historyItem: HistoryItem) {
@@ -309,8 +323,15 @@ function jumpToLoginPage() {
       <h3 class="bew-page-heading" text="$bew-text-1" mb-6>
         {{ $t('history.title') }}
       </h3>
+      <Empty v-if="requestFailed && !isLoading && historyList.length === 0" :description="$t('common.load_failed')">
+        <Button type="primary" @click="retryHistoryRequest">
+          {{ $t('common.operation.refresh') }}
+        </Button>
+      </Empty>
+      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0" :count="5" />
+
       <!-- historyList -->
-      <TransitionGroup name="list">
+      <TransitionGroup v-else name="list">
         <div
           v-for="historyItem in historyList"
           :key="historyItem.kid"
@@ -550,16 +571,20 @@ function jumpToLoginPage() {
         </div>
       </TransitionGroup>
 
+      <div v-if="requestFailed && !isLoading && historyList.length > 0" class="history-load-more-error">
+        <span>{{ $t('common.load_failed') }}</span>
+        <Button type="tertiary" @click="retryHistoryRequest">
+          {{ $t('common.operation.refresh') }}
+        </Button>
+      </div>
+
       <!-- no more content -->
       <Empty v-if="noMoreContent" class="py-4" :description="$t('common.no_more_content')" />
 
-      <!-- loading -->
-      <Transition name="fade">
-        <loading
-          v-if="isLoading && historyList.length !== 0 && !noMoreContent"
-          m="-t-4"
-        />
-      </Transition>
+      <VideoListSkeleton
+        v-if="isLoading && historyList.length !== 0 && !noMoreContent"
+        :count="2"
+      />
     </main>
 
     <aside relative w="full md:40% lg:30% xl:25%" order="1 md:2 lg:2">
@@ -638,5 +663,15 @@ function jumpToLoginPage() {
 .history-list-card__action {
   position: relative;
   z-index: 2;
+}
+
+.history-load-more-error {
+  display: flex;
+  min-height: var(--bew-control-height);
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-control);
 }
 </style>

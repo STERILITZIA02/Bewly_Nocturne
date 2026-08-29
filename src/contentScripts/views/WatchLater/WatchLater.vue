@@ -3,6 +3,8 @@ import { useDateFormat } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import IconButton from '~/components/IconButton.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
@@ -40,28 +42,39 @@ const watchLaterLayoutMode = useLayoutEditSettingValue(
 const { gridClass: watchLaterGridClass, gridCssVars: watchLaterGridCssVars } = useGridLayout(() => 'adaptive')
 let requestGeneration = 0
 let loadedAccountId: number | null = null
-let loadMoreTimer: ReturnType<typeof setTimeout> | null = null
 
 function getCurrentAccountId(): number | null {
   const mid = Number(topBarStore.userInfo.mid)
   return topBarStore.isLogin && Number.isFinite(mid) && mid > 0 ? mid : null
 }
 
-function clearLoadMoreTimer() {
-  if (loadMoreTimer) {
-    clearTimeout(loadMoreTimer)
-    loadMoreTimer = null
-  }
-}
-
 function invalidateRequests(): number {
-  clearLoadMoreTimer()
   isLoading.value = false
   return ++requestGeneration
 }
 
 function isCurrentRequest(generation: number, accountId: number): boolean {
   return generation === requestGeneration && accountId === getCurrentAccountId()
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+function isValidWatchLaterItem(value: unknown): value is VideoItem {
+  if (!isRecord(value) || !isRecord(value.owner))
+    return false
+
+  return typeof value.aid === 'number' && Number.isFinite(value.aid) && value.aid > 0
+    && typeof value.bvid === 'string' && value.bvid.length > 0
+    && typeof value.title === 'string'
+    && typeof value.pic === 'string'
+    && typeof value.duration === 'number' && Number.isFinite(value.duration)
+    && typeof value.progress === 'number' && Number.isFinite(value.progress)
+    && typeof value.pubdate === 'number' && Number.isFinite(value.pubdate)
+    && typeof value.owner.mid === 'number' && Number.isFinite(value.owner.mid)
+    && typeof value.owner.name === 'string'
+    && typeof value.owner.face === 'string'
 }
 
 onMounted(() => {
@@ -84,8 +97,10 @@ watch(
 
 onBeforeUnmount(() => {
   invalidateRequests()
-  handlePageRefresh.value = undefined
-  handleReachBottom.value = undefined
+  if (handlePageRefresh.value === handleWatchLaterPageRefresh)
+    handlePageRefresh.value = undefined
+  if (handleReachBottom.value === handleWatchLaterReachBottom)
+    handleReachBottom.value = undefined
 })
 
 async function initData() {
@@ -104,50 +119,47 @@ async function initData() {
   await getWatchLaterListByPage(generation, accountId)
 }
 
-function getData() {
+async function getData(): Promise<boolean> {
   const accountId = getCurrentAccountId()
-  if (accountId !== null)
-    void getWatchLaterListByPage(requestGeneration, accountId)
+  return accountId !== null
+    ? getWatchLaterListByPage(requestGeneration, accountId)
+    : false
 }
 
 function retryWatchLaterRequest() {
   if (isLoading.value)
     return
   requestFailed.value = false
-  getData()
+  void getData()
+}
+
+async function handleWatchLaterPageRefresh() {
+  if (isLoading.value || pendingAction.value)
+    return
+  await initData()
+}
+
+async function handleWatchLaterReachBottom(): Promise<boolean> {
+  if (isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value)
+    return false
+
+  // Observer and geometry fallback signals share the request/loading guards.
+  // Awaiting the page request lets App recheck a still-intersecting sentinel
+  // after the list has settled, without adding polling or another observer.
+  return getData()
 }
 
 function initPageAction() {
-  handlePageRefresh.value = async () => {
-    await initData()
-  }
-
-  handleReachBottom.value = async () => {
-    if (isLoading.value || noMoreContent.value || requestFailed.value) {
-      return
-    }
-
-    // 优化：添加延迟执行提高触发成功率
-    clearLoadMoreTimer()
-    const generation = requestGeneration
-    loadMoreTimer = setTimeout(() => {
-      loadMoreTimer = null
-      if (generation !== requestGeneration)
-        return
-      if (!isLoading.value && !noMoreContent.value) {
-        getData()
-      }
-    }, 50)
-  }
+  handlePageRefresh.value = handleWatchLaterPageRefresh
+  handleReachBottom.value = handleWatchLaterReachBottom
 }
 
 /**
  * Get watch later list by page
  */
-async function getWatchLaterListByPage(generation: number, accountId: number) {
-  if (!isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value || requestFailed.value) {
-    return
-  }
+async function getWatchLaterListByPage(generation: number, accountId: number): Promise<boolean> {
+  if (!isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value || requestFailed.value)
+    return false
 
   requestFailed.value = false
   isLoading.value = true
@@ -161,28 +173,46 @@ async function getWatchLaterListByPage(generation: number, accountId: number) {
       })
 
       if (!isCurrentRequest(generation, accountId))
-        return
+        return false
       if (res.code !== 0) {
         requestFailed.value = true
         noMoreContent.value = false
         break
       }
 
-      const list = Array.isArray(res.data?.list) ? res.data.list : []
-      if (requestedPage === 1)
-        watchLaterCount.value = Number.isFinite(res.data?.count) ? res.data.count : list.length
+      const payload = res.data
+      if (
+        !payload
+        || !Array.isArray(payload.list)
+        || !payload.list.every(isValidWatchLaterItem)
+        || !Number.isSafeInteger(payload.count)
+        || payload.count < 0
+      ) {
+        requestFailed.value = true
+        noMoreContent.value = false
+        break
+      }
 
-      currentWatchLaterList.value = mergeWatchLaterItemsByAid(currentWatchLaterList.value, list)
+      const list = payload.list
+      if (requestedPage === 1)
+        watchLaterCount.value = payload.count
+
+      const previousListLength = currentWatchLaterList.value.length
+      const mergedList = mergeWatchLaterItemsByAid(currentWatchLaterList.value, list)
+      const madeProgress = mergedList.length > previousListLength
+      currentWatchLaterList.value = mergedList
       requestFailed.value = false
       pageNum.value = requestedPage + 1
       noMoreContent.value = list.length < pageSize.value
+        || mergedList.length >= payload.count
+        || !madeProgress
 
       if (noMoreContent.value)
         break
 
       const hasScrollbar = await haveScrollbar()
       if (!isCurrentRequest(generation, accountId))
-        return
+        return false
       if (hasScrollbar)
         break
     }
@@ -198,6 +228,8 @@ async function getWatchLaterListByPage(generation: number, accountId: number) {
     if (isCurrentRequest(generation, accountId))
       isLoading.value = false
   }
+
+  return true
 }
 
 async function deleteWatchLaterItem(aid: number): Promise<boolean> {
@@ -207,13 +239,13 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
 
   const action = { accountId, aid }
   pendingAction.value = action
-  invalidateRequests()
+  const generation = invalidateRequests()
   try {
     const res = await api.watchlater.removeFromWatchLater({
       aid,
       csrf: getCSRF(),
     })
-    if (res.code !== 0 || accountId !== getCurrentAccountId())
+    if (res.code !== 0 || !isCurrentRequest(generation, accountId))
       return false
 
     const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
@@ -249,11 +281,12 @@ async function handleClearAllWatchLater() {
       const res = await api.watchlater.clearAllWatchLater({
         csrf: getCSRF(),
       })
-      if (res.code === 0 && accountId === getCurrentAccountId()) {
+      if (res.code === 0 && isCurrentRequest(generation, accountId)) {
         currentWatchLaterList.value = []
         watchLaterCount.value = 0
         await topBarStore.commitWatchLaterClear(accountId)
-        await initData()
+        if (isCurrentRequest(generation, accountId))
+          await initData()
       }
     }
     catch (error) {
@@ -282,9 +315,10 @@ async function handleRemoveWatchedVideos() {
         viewed: true,
         csrf: getCSRF(),
       })
-      if (res.code === 0 && accountId === getCurrentAccountId()) {
+      if (res.code === 0 && isCurrentRequest(generation, accountId)) {
         await topBarStore.invalidateWatchLaterMembership(accountId)
-        await initData()
+        if (isCurrentRequest(generation, accountId))
+          await initData()
       }
     }
     catch (error) {
@@ -375,10 +409,10 @@ function isItemActionPending(): boolean {
       </Empty>
       <Empty v-else-if="watchLaterCount === 0 && !isLoading" />
       <template v-else>
-        <Loading
+        <VideoListSkeleton
           v-if="isLoading && currentWatchLaterList.length === 0 && watchLaterLayoutMode === 'list'"
-          min-h="240px"
-          flex="~ items-center"
+          :count="5"
+          :action-count="3"
         />
         <!-- watcher later list -->
         <TransitionGroup v-else-if="watchLaterLayoutMode === 'list'" name="list">
@@ -577,27 +611,27 @@ function isItemActionPending(): boolean {
               @remove="remove"
             />
             <article
-              v-for="index in (isLoading && currentWatchLaterList.length === 0 ? 8 : 0)"
+              v-for="index in (isLoading ? (currentWatchLaterList.length === 0 ? 8 : 4) : 0)"
               :key="`watch-later-grid-skeleton-${index}`"
               class="watch-later-grid-skeleton"
               aria-hidden="true"
             >
-              <div class="watch-later-grid-skeleton__media">
-                <span />
+              <SkeletonBlock class="watch-later-grid-skeleton__media" height="auto" radius="media" />
+              <SkeletonBlock height="var(--bew-line-height-title)" />
+              <SkeletonBlock width="82%" height="var(--bew-line-height-title)" />
+              <div class="watch-later-grid-skeleton__author">
+                <SkeletonBlock width="30px" height="30px" radius="circle" />
+                <SkeletonBlock width="104px" height="var(--bew-line-height-control)" />
               </div>
-              <div class="watch-later-grid-skeleton__line" />
-              <div class="watch-later-grid-skeleton__line watch-later-grid-skeleton__line--short" />
             </article>
           </TransitionGroup>
         </div>
 
-        <!-- loading -->
-        <Transition name="fade">
-          <loading
-            v-if="isLoading && currentWatchLaterList.length !== 0 && !noMoreContent"
-            m="-t-4"
-          />
-        </Transition>
+        <VideoListSkeleton
+          v-if="isLoading && currentWatchLaterList.length !== 0 && !noMoreContent && watchLaterLayoutMode === 'list'"
+          :count="2"
+          :action-count="3"
+        />
         <div
           v-if="requestFailed && !isLoading && currentWatchLaterList.length > 0"
           class="watch-later-load-more-error"
@@ -743,48 +777,13 @@ function isItemActionPending(): boolean {
 }
 
 .watch-later-grid-skeleton__media {
-  position: relative;
+  width: 100% !important;
   aspect-ratio: 16 / 9;
-  overflow: hidden;
-  background: var(--bew-skeleton);
-  border-radius: var(--bew-media-radius);
-  corner-shape: var(--bew-corner-shape);
-
-  span {
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(
-      100deg,
-      transparent 20%,
-      color-mix(in oklab, var(--bew-fill-4), transparent 35%) 50%,
-      transparent 80%
-    );
-    animation: watch-later-skeleton-shimmer 1.4s linear infinite;
-    transform: translateX(-100%);
-  }
 }
 
-.watch-later-grid-skeleton__line {
-  width: 100%;
-  height: var(--bew-space-4);
-  background: var(--bew-skeleton);
-  border-radius: var(--bew-radius-sm);
-  corner-shape: var(--bew-corner-shape);
-}
-
-.watch-later-grid-skeleton__line--short {
-  width: 62%;
-}
-
-@keyframes watch-later-skeleton-shimmer {
-  to {
-    transform: translateX(100%);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .watch-later-grid-skeleton__media span {
-    animation: none;
-  }
+.watch-later-grid-skeleton__author {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
 }
 </style>

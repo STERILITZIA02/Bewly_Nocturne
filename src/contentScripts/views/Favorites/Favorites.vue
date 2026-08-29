@@ -1,5 +1,11 @@
 <script setup lang="ts">
-const FavoritesPage = defineAsyncComponent(() => import('./FavoritesPage.vue'))
+import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
+
+const FavoritesPage = defineAsyncComponent({
+  loader: () => import('./FavoritesPage.vue'),
+  loadingComponent: PageAsyncLoading,
+  delay: 120,
+})
 </script>
 
 <template>

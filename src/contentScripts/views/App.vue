@@ -1,12 +1,14 @@
 <script setup lang="ts">
 import { onKeyStroke, useEventListener, useIntersectionObserver, useThrottleFn } from '@vueuse/core'
-import type { Ref } from 'vue'
+import type { AsyncComponentLoader, Ref } from 'vue'
 import { provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import AppAuthorizationDialog from '~/components/AppAuthorizationDialog.vue'
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
+import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import type { BewlyAppProvider, SettingsNavigationRequest, SettingsNavigationTarget } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
@@ -16,19 +18,26 @@ import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FUL
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
-import { settings } from '~/logic'
+import { appAuthTokens, settings } from '~/logic'
+import {
+  appAuthorizationState,
+  completeExternalAppAuthorization,
+  synchronizeValidAppAuthorization,
+} from '~/logic/appAuthorizationCoordinator'
 import { setIframePageActive } from '~/logic/iframePageState'
 import { exitLayoutEditMode, openSettingById } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { hasValidAppAuthTokens } from '~/utils/authProvider'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import { getIframeMessageData, postMessageToParent } from '~/utils/iframeMessage'
-import { isHomePage, isInIframe, isNotificationPage, isSearchResultsPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
+import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
+import { isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
 
@@ -44,6 +53,32 @@ const { t } = useI18n()
 
 const { isDark } = useDark()
 const showSettings = ref(false)
+const showAppAuthorizationDialog = computed(() => (
+  settings.value.recommendationMode === 'app'
+  && (
+    appAuthorizationState.value === 'invalid'
+    || appAuthorizationState.value === 'authorizing'
+  )
+))
+let appAuthorizationTokenObserverReady = false
+watch(() => [
+  appAuthTokens.value.accessToken,
+  appAuthTokens.value.refreshToken,
+  appAuthTokens.value.accessTokenExpiresAt,
+  appAuthTokens.value.refreshTokenExpiresAt,
+] as const, () => {
+  if (!appAuthorizationTokenObserverReady) {
+    appAuthorizationTokenObserverReady = true
+    if (hasValidAppAuthTokens())
+      synchronizeValidAppAuthorization(appAuthTokens.value.accessToken)
+    return
+  }
+  if (!hasValidAppAuthTokens())
+    return
+  if (appAuthorizationState.value !== 'authorizing')
+    completeExternalAppAuthorization(appAuthTokens.value.accessToken)
+}, { immediate: true })
+
 const settingsLaunchStyle = ref<Record<string, string>>({})
 const settingsNavigationRequest = shallowRef<SettingsNavigationRequest | null>(null)
 let settingsNavigationRequestId = 0
@@ -197,9 +232,11 @@ function replacePageParam(page: AppPage) {
   window.history.replaceState({}, '', url.toString())
 }
 
-const requestedInitialPage = getPageParam()
-  || settings.value.dockItemsConfig.find(e => e.visible === true)?.page
-  || AppPage.Home
+function getDefaultAppPage(): AppPage {
+  return settings.value.dockItemsConfig.find(item => item.visible)?.page ?? AppPage.Home
+}
+
+const requestedInitialPage = getPageParam() || getDefaultAppPage()
 const initialPage = resolveAvailableAppPage(requestedInitialPage)
 const activatedPage = ref<AppPage>(initialPage)
 
@@ -222,15 +259,21 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 }, { immediate: true })
 
 // 监听 URL 变化,同步更新 activatedPage
-watch(currentLocationHref, () => {
+watch(currentLocationHref, (href) => {
   exitLayoutEditMode()
   const pageParam = getPageParam()
-  if (!pageParam)
+  const requestedPage = pageParam ?? (isHomePage(href) ? getDefaultAppPage() : null)
+  if (!requestedPage)
     return
 
-  const availablePage = resolveAvailableAppPage(pageParam)
-  if (availablePage !== pageParam)
+  const availablePage = resolveAvailableAppPage(requestedPage)
+  if (pageParam && availablePage !== pageParam)
     replacePageParam(availablePage)
+
+  if (availablePage !== AppPage.SearchResults) {
+    topBarStore.searchKeyword = ''
+    clearSearchParamsFromUrl()
+  }
 
   if (availablePage !== activatedPage.value)
     activatedPage.value = availablePage
@@ -245,10 +288,9 @@ watch(() => settings.value.useSearchPageModeOnHomePage, (useOnHomePage) => {
 
 // 清理搜索相关的URL参数（仅在首页生效）
 function clearSearchParamsFromUrl() {
-  // 只在首页清理搜索参数，避免影响其他B站页面（如搜索结果页）
-  if (!isHomePage() || isSearchResultsPage()) {
+  // 只清理 Bilibili 首页 shell 的参数，不触碰原生搜索结果页。
+  if (!isHomePage())
     return
-  }
 
   const urlParams = new URLSearchParams(window.location.search)
   const hasSearchParams = urlParams.has('keyword')
@@ -277,7 +319,7 @@ function clearSearchParamsFromUrl() {
 }
 
 // 页面加载时，如果不是Search或SearchResults页面且在首页则清理搜索参数
-if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.SearchResults && isHomePage() && !isSearchResultsPage()) {
+if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.SearchResults && isHomePage()) {
   clearSearchParamsFromUrl()
   topBarStore.searchKeyword = ''
 }
@@ -315,22 +357,31 @@ watch(
   },
   { deep: true, immediate: true },
 )
+function definePageComponent(loader: AsyncComponentLoader) {
+  return defineAsyncComponent({
+    loader,
+    loadingComponent: PageAsyncLoading,
+    delay: 120,
+  })
+}
+
 const pages = {
-  [AppPage.Home]: defineAsyncComponent(() => import('./Home/Home.vue')),
-  [AppPage.Search]: defineAsyncComponent(() => import('./Search/Search.vue')),
-  [AppPage.SearchResults]: defineAsyncComponent(() => import('./SearchResults/SearchResults.vue')),
-  [AppPage.Anime]: defineAsyncComponent(() => import('./Anime/Anime.vue')),
-  [AppPage.History]: defineAsyncComponent(() => import('./History/History.vue')),
-  [AppPage.WatchLater]: defineAsyncComponent(() => import('./WatchLater/WatchLater.vue')),
-  [AppPage.Favorites]: defineAsyncComponent(() => import('./Favorites/Favorites.vue')),
-  [AppPage.Moments]: defineAsyncComponent(() => import('./Moments/Moments.vue')),
-  [AppPage.Notifications]: defineAsyncComponent(() => import('./Notifications/Notifications.vue')),
+  [AppPage.Home]: definePageComponent(() => import('./Home/Home.vue')),
+  [AppPage.Search]: definePageComponent(() => import('./Search/Search.vue')),
+  [AppPage.SearchResults]: definePageComponent(() => import('./SearchResults/SearchResults.vue')),
+  [AppPage.Anime]: definePageComponent(() => import('./Anime/Anime.vue')),
+  [AppPage.History]: definePageComponent(() => import('./History/History.vue')),
+  [AppPage.WatchLater]: definePageComponent(() => import('./WatchLater/WatchLater.vue')),
+  [AppPage.Favorites]: definePageComponent(() => import('./Favorites/Favorites.vue')),
+  [AppPage.Moments]: definePageComponent(() => import('./Moments/Moments.vue')),
+  [AppPage.Notifications]: definePageComponent(() => import('./Notifications/Notifications.vue')),
 }
 const mainAppRef = ref<HTMLElement>() as Ref<HTMLElement>
 const scrollViewportRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement>() // ✅ IntersectionObserver 哨兵元素
 const handlePageRefresh = ref<() => void>()
-const handleReachBottom = ref<() => void>()
+type ReachBottomResult = boolean | void
+const handleReachBottom = ref<() => ReachBottomResult | Promise<ReachBottomResult>>()
 const handleUndoRefresh = ref<() => void>()
 const handleForwardRefresh = ref<() => void>()
 const canRefreshHomeSubPage = ref<boolean>(false)
@@ -382,10 +433,38 @@ const handleThrottledPageRefresh = useThrottleFn(() => {
     refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, performance.now()), 50)
   }
 }, 500)
-const handleThrottledReachBottom = useThrottleFn(() => handleReachBottom.value?.(), 200)
+const LOAD_MORE_THRESHOLD = 200
+const handleThrottledReachBottom = useThrottleFn(async () => {
+  const handler = handleReachBottom.value
+  if (!handler)
+    return
+
+  const requestStarted = await handler()
+  if (requestStarted === true)
+    scheduleLoadMoreSentinelCheck()
+}, 200)
 const handleThrottledBackToTop = useThrottleFn(() => handleBackToTop(), 500)
 const handleThrottledPageUnRefresh = useThrottleFn(() => handleUndoRefresh.value?.(), 500)
 const handleThrottledPageForwardRefresh = useThrottleFn(() => handleForwardRefresh.value?.(), 500)
+
+function checkLoadMoreSentinelGeometry() {
+  const viewport = scrollViewportRef.value
+  const sentinel = loadMoreSentinelRef.value
+  if (!viewport || !sentinel || isHomeTabSwitching.value)
+    return
+
+  if (isSentinelWithinLoadThreshold(
+    viewport.getBoundingClientRect(),
+    sentinel.getBoundingClientRect(),
+    LOAD_MORE_THRESHOLD,
+  )) {
+    handleThrottledReachBottom()
+  }
+}
+
+// Scroll events may fire every frame. Coalesce geometry reads separately so the
+// IntersectionObserver fallback cannot create repeated synchronous layout work.
+const handleThrottledLoadMoreGeometryCheck = useThrottleFn(checkLoadMoreSentinelGeometry, 200)
 const { stop: stopLoadMoreObserver } = useIntersectionObserver(
   loadMoreSentinelRef,
   ([{ isIntersecting }]) => {
@@ -394,35 +473,37 @@ const { stop: stopLoadMoreObserver } = useIntersectionObserver(
   },
   {
     root: scrollViewportRef,
-    rootMargin: '200px',
+    rootMargin: `${LOAD_MORE_THRESHOLD}px`,
     threshold: 0,
   },
 )
 const topBarRef = ref()
 const reachTop = ref<boolean>(true)
-let tabSwitchRafId: number | null = null
+let loadMoreCheckRafId: number | null = null
+let loadMoreCheckGeneration = 0
 
-watch(isHomeTabSwitching, (switching) => {
-  if (switching)
-    return
+function scheduleLoadMoreSentinelCheck() {
+  const generation = ++loadMoreCheckGeneration
+  if (loadMoreCheckRafId !== null) {
+    cancelAnimationFrame(loadMoreCheckRafId)
+    loadMoreCheckRafId = null
+  }
 
-  // IntersectionObserver may have reported an intersection while callbacks were
-  // suspended. Recheck once after restoration so a genuinely short/bottom page
-  // can still request more content without waiting for another scroll event.
-  if (tabSwitchRafId !== null)
-    cancelAnimationFrame(tabSwitchRafId)
-  tabSwitchRafId = requestAnimationFrame(() => {
-    tabSwitchRafId = null
-    const viewport = scrollViewportRef.value
-    const sentinel = loadMoreSentinelRef.value
-    if (!viewport || !sentinel || isHomeTabSwitching.value)
+  void nextTick(() => {
+    if (generation !== loadMoreCheckGeneration)
       return
 
-    const viewportRect = viewport.getBoundingClientRect()
-    const sentinelRect = sentinel.getBoundingClientRect()
-    if (sentinelRect.top <= viewportRect.bottom + 200 && sentinelRect.bottom >= viewportRect.top)
-      handleThrottledReachBottom()
+    loadMoreCheckRafId = requestAnimationFrame(() => {
+      loadMoreCheckRafId = null
+      if (generation === loadMoreCheckGeneration)
+        checkLoadMoreSentinelGeometry()
+    })
   })
+}
+
+watch(isHomeTabSwitching, (switching) => {
+  if (!switching)
+    scheduleLoadMoreSentinelCheck()
 })
 
 const iframeDrawerURL = ref<string>('')
@@ -557,6 +638,8 @@ watch(
   () => {
     exitLayoutEditMode()
     cancelPendingRefreshScroll()
+    handlePageRefresh.value = undefined
+    handleReachBottom.value = undefined
     if (!isFirstTimeActivatedPageChange.value) {
       // Update the URL query parameter when activatedPage changes
       const url = new URL(window.location.href)
@@ -566,6 +649,7 @@ watch(
 
     scrollViewportRef.value?.scrollTo({ top: 0 })
     focusScrollViewport()
+    scheduleLoadMoreSentinelCheck()
     isFirstTimeActivatedPageChange.value = false
   },
   { immediate: true },
@@ -634,18 +718,11 @@ function handleDockItemClick(dockItem: DockItem) {
     // When not opened in a new tab, change the `activatedPage`
     activatedPage.value = dockItem.page
 
-    // Clear search keyword and URL params when switching to/from search pages (only on homepage)
-    if (isHomePage() && !isSearchResultsPage()) {
-      // 从 SearchResults 返回 Search 页面时清理搜索参数
-      if (dockItem.page === AppPage.Search) {
-        topBarStore.searchKeyword = ''
-        clearSearchParamsFromUrl()
-      }
-      // 从 Search/SearchResults 切换到其他页面时清理搜索参数
-      else if (dockItem.page !== AppPage.SearchResults) {
-        topBarStore.searchKeyword = ''
-        clearSearchParamsFromUrl()
-      }
+    // Search state belongs only to the SearchResults destination. Clear it
+    // even when the current URL is still a SearchResults route.
+    if (isHomePage() && dockItem.page !== AppPage.SearchResults) {
+      topBarStore.searchKeyword = ''
+      clearSearchParamsFromUrl()
     }
   }
 }
@@ -721,8 +798,10 @@ function handleOsScroll(_instance: any, event: Event) {
 
     reachTop.value = scrollTop === 0
 
-    // ✅ 移除手动的"到达底部"检测，改用 IntersectionObserver（见 loadMoreSentinelRef）
-    // 这避免了在每次滚动时计算 threshold 和读取 scrollHeight/clientHeight
+    // IntersectionObserver only reports intersection state changes. A page can
+    // return with the sentinel still intersecting, so run the throttled geometry
+    // fallback while scrolling without replacing the observer.
+    handleThrottledLoadMoreGeometryCheck()
 
     // 清除之前的滚动状态定时器
     if (scrollStateTimer) {
@@ -746,9 +825,10 @@ function handleNativeScroll(event: Event) {
 onBeforeUnmount(() => {
   stopLoadMoreObserver()
   document.removeEventListener('scroll', handleDocumentScroll)
-  if (tabSwitchRafId !== null) {
-    cancelAnimationFrame(tabSwitchRafId)
-    tabSwitchRafId = null
+  loadMoreCheckGeneration++
+  if (loadMoreCheckRafId !== null) {
+    cancelAnimationFrame(loadMoreCheckRafId)
+    loadMoreCheckRafId = null
   }
   if (rafId !== null) {
     cancelAnimationFrame(rafId)
@@ -1043,7 +1123,7 @@ onBeforeUnmount(stopUrlCleaner)
                   ? { paddingTop: 'calc(var(--bew-top-bar-height) + 120px)' }
                   : undefined"
               >
-                <Transition name="page-fade">
+                <Transition name="page-fade" @after-enter="scheduleLoadMoreSentinelCheck">
                   <Component :is="pages[activatedPage]" :key="activatedPage" />
                 </Transition>
 
@@ -1069,6 +1149,8 @@ onBeforeUnmount(stopUrlCleaner)
       :url="iframeDrawerURL"
       @close="showIframeDrawer = false"
     />
+
+    <AppAuthorizationDialog v-if="showAppAuthorizationDialog" />
 
     <!-- Static confirm overlay: no Transition/Teleport (see finishConfirmDialog). -->
     <div

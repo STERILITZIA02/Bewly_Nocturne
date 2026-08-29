@@ -4,8 +4,44 @@ import './thirdParties'
 
 import { watch } from 'vue'
 
+import { onRouteChange } from '~/composables/useRouteState'
 import { settings, settingsInitializationState, settingsReady } from '~/logic/storage'
-import { isHomePage, isInIframe, isWatchLaterListPage } from '~/utils/main'
+import { isHomePage, isInIframe, isTopicPage, isWatchLaterListPage } from '~/utils/main'
+
+const PAGE_STYLE_CLASSES = [
+  'homePage',
+  'notificationsPage',
+  'momentsPage',
+  'historyPage',
+  'watchLaterPage',
+  'notePage',
+  'userSpacePage',
+  'searchPage',
+  'videoPage',
+  'animePlaybackAndMoviePage',
+  'animePage',
+  'channelPage',
+  'articlesPage',
+  'topicPage',
+  'error404Page',
+  'forceDark',
+  'creativeCenterPage',
+  'accountSettingsPage',
+  'premiumPage',
+  'loginPage',
+] as const
+
+const MOMENTS_ROUTE_CLASSES = [
+  'moments-original-components-ready',
+  'moments-hide-original-user-card',
+  'moments-hide-original-live-list',
+  'moments-hide-original-community-center',
+  'moments-hide-original-hot-search',
+  'moments-hide-original-up-list',
+] as const
+
+let styleSetupRevision = 0
+let activeMomentsVisibilityGuard: HTMLStyleElement | undefined
 
 function waitForSettingsLoadAttempt(): Promise<boolean> {
   if (settingsInitializationState.value !== 'loading')
@@ -21,31 +57,49 @@ function waitForSettingsLoadAttempt(): Promise<boolean> {
   })
 }
 
-async function setupStyles() {
-  const currentUrl = document.URL
+function clearRouteStyles() {
+  const root = document.documentElement
+  root.classList.remove(...PAGE_STYLE_CLASSES, ...MOMENTS_ROUTE_CLASSES, 'bewly-notifications-embedded')
+  activeMomentsVisibilityGuard?.remove()
+  activeMomentsVisibilityGuard = undefined
+}
+
+async function setupStyles(currentUrl: string) {
+  const revision = ++styleSetupRevision
+  const root = document.documentElement
+  const isCurrentSetup = () => revision === styleSetupRevision && window.location.href === currentUrl
+  const activatePage = (...classNames: string[]) => {
+    if (!isCurrentSetup())
+      return false
+
+    root.classList.add(...classNames)
+    return true
+  }
+
+  clearRouteStyles()
 
   // homepage 首页
-  if (isHomePage()) {
+  if (isHomePage(currentUrl)) {
     await import('./pages/homePage.scss')
-    document.documentElement.classList.add('homePage')
+    activatePage('homePage')
   }
 
   // notifications page 消息页
-  else if (/https?:\/\/message\.bilibili\.com\.*/.test(currentUrl)) {
-    document.documentElement.classList.add('notificationsPage')
+  else if (/https?:\/\/message\.bilibili\.com\/.*/.test(currentUrl)) {
+    if (!activatePage('notificationsPage'))
+      return
 
     const isEmbeddedNotificationsPage = isInIframe()
       && window.name === 'bewly-notifications-page'
     if (isEmbeddedNotificationsPage) {
-      document.documentElement.classList.add('bewly-notifications-embedded')
-      document.documentElement.classList.add('remove-top-bar-without-placeholder')
+      root.classList.add('bewly-notifications-embedded', 'remove-top-bar-without-placeholder')
     }
     else if (
       window.name === 'bewly-notifications-drawer'
       && isInIframe()
       && settings.value.openNotificationsPageAsDrawer
     ) {
-      document.documentElement.classList.add('drawer')
+      root.classList.add('drawer')
     }
 
     await import('./pages/notificationsPage.scss')
@@ -54,10 +108,11 @@ async function setupStyles() {
   // moments page, new articles page 动态页, 新版专栏页
   else if (
     // moments
-    /https?:\/\/t\.bilibili\.com\.*/.test(currentUrl)
+    /https?:\/\/t\.bilibili\.com\/.*/.test(currentUrl)
     // moment detail, new articles page
     || /https?:\/\/www\.bilibili\.com\/opus\/.*/.test(currentUrl)) {
-    document.documentElement.classList.add('momentsPage')
+    if (!activatePage('momentsPage'))
+      return
 
     const isOriginalMomentsFeed = /https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(currentUrl)
     let initialVisibilityGuard: HTMLStyleElement | undefined
@@ -86,15 +141,19 @@ async function setupStyles() {
           visibility: hidden !important;
         }
       `
-      document.documentElement.appendChild(initialVisibilityGuard)
+      root.appendChild(initialVisibilityGuard)
+      activeMomentsVisibilityGuard = initialVisibilityGuard
     }
 
     const applyOriginalMomentsVisibility = () => {
-      document.documentElement.classList.toggle('moments-hide-original-user-card', !settings.value.originalMomentsShowUserCard)
-      document.documentElement.classList.toggle('moments-hide-original-live-list', !settings.value.originalMomentsShowLiveList)
-      document.documentElement.classList.toggle('moments-hide-original-community-center', !settings.value.originalMomentsShowCommunityCenter)
-      document.documentElement.classList.toggle('moments-hide-original-hot-search', !settings.value.originalMomentsShowHotSearch)
-      document.documentElement.classList.toggle('moments-hide-original-up-list', !settings.value.originalMomentsShowUpList)
+      if (!isCurrentSetup() || !isOriginalMomentsFeed)
+        return
+
+      root.classList.toggle('moments-hide-original-user-card', !settings.value.originalMomentsShowUserCard)
+      root.classList.toggle('moments-hide-original-live-list', !settings.value.originalMomentsShowLiveList)
+      root.classList.toggle('moments-hide-original-community-center', !settings.value.originalMomentsShowCommunityCenter)
+      root.classList.toggle('moments-hide-original-hot-search', !settings.value.originalMomentsShowHotSearch)
+      root.classList.toggle('moments-hide-original-up-list', !settings.value.originalMomentsShowUpList)
     }
 
     let settingsLoaded = !isOriginalMomentsFeed
@@ -106,11 +165,15 @@ async function setupStyles() {
       settingsLoaded = results[1]
     }
     finally {
-      if (isOriginalMomentsFeed) {
-        document.documentElement.classList.add('moments-original-components-ready')
-        initialVisibilityGuard?.remove()
-      }
+      if (isCurrentSetup() && isOriginalMomentsFeed)
+        root.classList.add('moments-original-components-ready')
+      initialVisibilityGuard?.remove()
+      if (activeMomentsVisibilityGuard === initialVisibilityGuard)
+        activeMomentsVisibilityGuard = undefined
     }
+
+    if (!isCurrentSetup())
+      return
 
     if (isOriginalMomentsFeed) {
       if (settingsLoaded) {
@@ -124,10 +187,8 @@ async function setupStyles() {
     // 插件动态页通过抽屉 iframe 打开详情时，隐藏原站冗余布局并聚焦正文。
     const isMomentDetail = /https?:\/\/t\.bilibili\.com\/\d+/.test(currentUrl)
       || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(currentUrl)
-    if (isInIframe() && isMomentDetail) {
-      document.documentElement.classList.add('drawer')
-      document.documentElement.classList.add('remove-top-bar-without-placeholder')
-    }
+    if (isInIframe() && isMomentDetail)
+      root.classList.add('drawer', 'remove-top-bar-without-placeholder')
   }
 
   // history page 历史记录页
@@ -136,114 +197,114 @@ async function setupStyles() {
     || /https?:\/\/(?:www\.)?bilibili\.com\/history.*/.test(currentUrl)
   ) {
     await import('./pages/historyPage.scss')
-    document.documentElement.classList.add('historyPage')
+    activatePage('historyPage')
   }
 
   // watch later page 稍候再看页
   else if (isWatchLaterListPage(currentUrl)) {
     await import('./pages/watchLaterPage.scss')
-    document.documentElement.classList.add('watchLaterPage')
+    activatePage('watchLaterPage')
   }
 
   // user note page 笔记页
   else if (/^https?:\/\/space\.bilibili\.com\/v\/note-list/.test(currentUrl)) {
     await import('./pages/notePage.scss')
-    document.documentElement.classList.add('notePage')
+    activatePage('notePage')
   }
 
   // user space page 空间页
   else if (/^https?:\/\/space\.bilibili\.com(?:\/|$).*/.test(currentUrl)) {
     await import('./pages/userSpacePage.scss')
-    document.documentElement.classList.add('userSpacePage')
+    activatePage('userSpacePage')
   }
 
   // search page 搜索结果页
   else if (/^https?:\/\/search\.bilibili\.com(?:\/|$).*/.test(currentUrl)) {
     await import('./pages/searchPage.scss')
-    document.documentElement.classList.add('searchPage')
+    activatePage('searchPage')
   }
 
   // video page 视频页
   else if (
     /https?:\/\/(?:www\.)?bilibili\.com\/video\/.*/.test(currentUrl)
-    // watch later playlist 稍候再看播放页
     || /https?:\/\/(?:www\.)?bilibili\.com\/list\/watchlater.*/.test(currentUrl)
-    // favorite playlist 收藏播放页
     || /https?:\/\/(?:www\.)?bilibili\.com\/list\/ml.*/.test(currentUrl)
-    // 旧版收藏播放页
     || /https?:\/\/(?:www\.)?bilibili\.com\/medialist\/play\/.*/.test(currentUrl)
-    // 视频合集
     || /https?:\/\/(?:www\.)?bilibili\.com\/list\/.*/.test(currentUrl)
   ) {
     await import('./pages/videoPage.scss')
-    document.documentElement.classList.add('videoPage')
+    activatePage('videoPage')
   }
 
-  else if (
-    // anime playback & movie page 番剧播放页与电影播放页
-    /https?:\/\/(?:www\.)?bilibili\.com\/bangumi\/play\/.*/.test(currentUrl)
-  ) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/bangumi\/play\/.*/.test(currentUrl)) {
     await import('./pages/animePlayback&MoviePage.scss')
-    document.documentElement.classList.add('animePlaybackAndMoviePage')
+    activatePage('animePlaybackAndMoviePage')
   }
 
   // anime page & chinese anime page 番剧页 与 国创动漫
-  else if (
-    /https?:\/\/(?:www\.)?bilibili\.com\/(?:anime|guochuang).*/.test(currentUrl)) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/(?:anime|guochuang).*/.test(currentUrl)) {
     await import('./pages/animePage.scss')
-    document.documentElement.classList.add('animePage')
+    activatePage('animePage')
   }
 
   // channel page e.g. tv shows, movie, variety shows & mooc pages 分区页
-  else if (
-    /https?:\/\/(?:www\.)?bilibili\.com\/(?:tv|movie|variety|mooc|documentary).*/.test(currentUrl)) {
+  else if (/https?:\/\/(?:www\.)?bilibili\.com\/(?:tv|movie|variety|mooc|documentary).*/.test(currentUrl)) {
     await import('./pages/channelPage.scss')
-    document.documentElement.classList.add('channelPage')
+    activatePage('channelPage')
   }
 
   // articles, articles list & articles ranking pages 专栏页, 专栏列表页, 专栏排行榜页
   else if (/https?:\/\/(?:www\.)?bilibili\.com\/read.*/.test(currentUrl)) {
     await import('./pages/articlesPage.scss')
-    document.documentElement.classList.add('articlesPage')
+    activatePage('articlesPage')
   }
 
-  // topic page 话题页
-  else if (/https?:\/\/(?:www\.)?bilibili\.com\/v\/topic\/detail\/.*/.test(currentUrl)) {
+  // topic page 话题页（真实链接为 /v/topic/detail?topic_id=…）
+  else if (isTopicPage(currentUrl)) {
     await import('./pages/topicPage.scss')
-    document.documentElement.classList.add('topicPage')
+    activatePage('topicPage')
   }
 
   // 404 page 404页
   else if (/^https?:\/\/(?:www\.)?bilibili\.com\/404.*$/.test(currentUrl)) {
     await import('./pages/error404Page.scss')
-    document.documentElement.classList.add('error404Page')
+    activatePage('error404Page')
   }
 
   // creative center page 创作中心页
   else if (/^https?:\/\/member\.bilibili\.com\/platform.*$/.test(currentUrl)) {
     await import('./forceDark.scss')
-    document.documentElement.classList.add('forceDark')
+    if (!activatePage('forceDark'))
+      return
     await import('./pages/creativeCenterPage.scss')
-    document.documentElement.classList.add('creativeCenterPage')
+    activatePage('creativeCenterPage')
   }
 
   // account settings page 帳戶設定頁，除了大會員頁
   else if (/^https?:\/\/account\.bilibili\.com\/(?!big).*$/.test(currentUrl)) {
     await import('./pages/accountSettingsPage.scss')
-    document.documentElement.classList.add('accountSettingsPage')
+    activatePage('accountSettingsPage')
   }
 
   // premium page bilibili 大會員頁
   else if (/^https?:\/\/account\.bilibili\.com\/big.*$/.test(currentUrl)) {
     await import('./pages/premiumPage.scss')
-    document.documentElement.classList.add('premiumPage')
+    activatePage('premiumPage')
   }
 
   // login page 登入頁
   else if (/^https?:\/\/passport\.bilibili\.com\/login.*$/.test(currentUrl)) {
     await import('./pages/loginPage.scss')
-    document.documentElement.classList.add('loginPage')
+    activatePage('loginPage')
   }
 }
 
-setupStyles()
+const stopAdaptedStylesRouteWatch = onRouteChange(({ href }) => {
+  void setupStyles(href)
+}, true)
+
+export function stopAdaptedStyles() {
+  styleSetupRevision++
+  stopAdaptedStylesRouteWatch()
+  clearRouteStyles()
+}

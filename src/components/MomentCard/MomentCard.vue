@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance, CSSProperties } from 'vue'
-import { computed, provide, ref } from 'vue'
+import { computed, nextTick, provide, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
@@ -71,7 +71,6 @@ const { mainAppRef } = useBewlyApp()
 const cardLayoutStyles = computed<CSSProperties>(() => {
   const scale = Math.max(1, cardWidth / 520)
   return {
-    '--moment-card-text-body-min-height': `${Math.round(120 + 230 * (scale - 1))}px`,
     '--moment-card-text-cover-min-height': `${Math.round(176 * scale)}px`,
   } as CSSProperties
 })
@@ -158,6 +157,15 @@ const isReservationAdditional = computed(() => Boolean(
 const reservationActionLabel = computed(() => moment.additional?.isReserved
   ? t('moment_card.cancel_reservation')
   : t('moment_card.reserve'))
+const forwardSingleImageStyle = computed<CSSProperties | undefined>(() => {
+  if (moment.forward?.images?.length !== 1)
+    return undefined
+  const ratio = moment.forward.imageRatios?.[0]
+  const normalizedRatio = typeof ratio === 'number' && Number.isFinite(ratio) && ratio > 0
+    ? Math.min(2, Math.max(0.5, ratio))
+    : 1
+  return { '--moment-forward-single-image-ratio': normalizedRatio } as CSSProperties
+})
 
 // VideoCard positions its menu from the trigger and teleports the shared menu
 // into the app root. Keep the same positioning behavior for MomentCard.
@@ -173,20 +181,84 @@ function handleMoreBtnClick(event: Event) {
   showVideoOptions.value = false
   videoOptionsFloatingStyles.value = {
     position: 'fixed',
-    top: `${position.top}px`,
-    left: `${position.left}px`,
-    width: `${position.width}px`,
-    maxHeight: `${position.maxHeight}px`,
+    top: position.top,
+    bottom: position.bottom,
+    left: position.left,
+    width: position.width,
+    maxHeight: position.maxHeight,
+    transformOrigin: position.direction === 'up' ? 'bottom right' : 'top right',
   }
   showVideoOptions.value = true
 }
 
 function closeVideoOptions() {
   showVideoOptions.value = false
+  void nextTick(() => moreBtnRef.value?.focus())
 }
 
 function openPrimaryDetail() {
   emit('openDetail', moment)
+}
+
+function getForwardOriginMoment(): DisplayMoment | null {
+  const forward = moment.forward
+  if (!forward?.url)
+    return null
+
+  const images = forward.images || []
+  return {
+    id: forward.id || forward.url,
+    author: {
+      mid: forward.authorMid,
+      name: forward.author,
+      face: '',
+    },
+    publishedAt: moment.publishedAt,
+    title: forward.title,
+    text: forward.text,
+    richText: [],
+    images,
+    imageRatios: forward.imageRatios,
+    time: '',
+    likeCount: 0,
+    isLiked: false,
+    isLikeDisabled: true,
+    commentCount: 0,
+    url: forward.url,
+    isVideo: false,
+    isRegularVideo: false,
+    isUgcSeason: false,
+    isDraw: images.length > 0,
+    isPgc: false,
+    isLive: false,
+    isChargeExclusive: false,
+    // Origin opened from an embedded reference stays in the native/plain path;
+    // the iframe layout must not attempt another forwarded-card reconstruction.
+    isForward: true,
+    isArticle: forward.isArticle,
+    isUpRecommendation: false,
+    isVideoReservation: false,
+    isLiveReservation: false,
+    mediaMeta: '',
+    liveArea: '',
+    livePopularity: '',
+    duration: '',
+    videoPlay: '',
+    videoDanmaku: '',
+  }
+}
+
+function handleForwardOriginClick(event: MouseEvent) {
+  event.stopPropagation()
+  emit('openDetail', getForwardOriginMoment() || moment)
+}
+
+function handleForwardOriginKeydown(event: KeyboardEvent) {
+  if (event.target !== event.currentTarget || (event.key !== 'Enter' && event.key !== ' '))
+    return
+  event.preventDefault()
+  event.stopPropagation()
+  emit('openDetail', getForwardOriginMoment() || moment)
 }
 
 function toggleComments() {
@@ -205,8 +277,9 @@ function handleCardRef(element: Element | ComponentPublicInstance | null) {
   emit('cardElement', element instanceof HTMLElement ? element : null)
 }
 
-function handleCoverLoad(event: Event) {
-  emit('coverLoad', event, moment.id)
+function handleCoverLoad(event: Event, imageIndex = 0) {
+  if (imageIndex === 0)
+    emit('coverLoad', event, moment.id)
 }
 
 function handlePreviewVideo(element: Element | ComponentPublicInstance | null) {
@@ -492,6 +565,11 @@ function getImagePreviewLabel(author: string, index: number) {
             v-else-if="moment.forward"
             class="moment-card__forward"
             :class="{ 'moment-card__forward--draw': Boolean(moment.forward.images?.length) }"
+            role="button"
+            tabindex="0"
+            :aria-label="t('moment_card.open_origin_moment', { name: moment.forward.author })"
+            @click="handleForwardOriginClick"
+            @keydown="handleForwardOriginKeydown"
           >
             <div class="moment-card__forward-copy">
               <strong>@{{ moment.forward.author }}</strong>
@@ -501,6 +579,7 @@ function getImagePreviewLabel(author: string, index: number) {
               v-if="moment.forward.images?.length"
               class="moment-card__forward-gallery"
               :class="`moment-card__forward-gallery--${Math.min(moment.forward.images.length, 9)}`"
+              :style="forwardSingleImageStyle"
             >
               <button
                 v-for="(image, imageIndex) in moment.forward.images.slice(0, 9)"
@@ -540,7 +619,7 @@ function getImagePreviewLabel(author: string, index: number) {
               :alt="t('moment_card.moment_image_alt', { author: moment.author.name, index: imageIndex + 1 })"
               loading="lazy"
               decoding="async"
-              @load="handleCoverLoad"
+              @load="handleCoverLoad($event, imageIndex)"
             >
           </button>
           <span v-if="moment.images.length > 9" class="moment-card__image-count">+{{ moment.images.length - 9 }}</span>
@@ -579,7 +658,13 @@ function getImagePreviewLabel(author: string, index: number) {
             loading="lazy"
             decoding="async"
           >
-          <span><strong>{{ moment.additional.title || t('moment_card.additional_content') }}</strong><small v-if="moment.additional.desc">{{ moment.additional.desc }}</small></span>
+          <span>
+            <strong>
+              <span v-if="moment.additional.isVote" i-tabler-chart-bar aria-hidden="true" class="moment-card__additional-vote-icon" />
+              {{ moment.additional.title || t('moment_card.additional_content') }}
+            </strong>
+            <small v-if="moment.additional.desc">{{ moment.additional.desc }}</small>
+          </span>
         </a>
         <button
           v-if="isReservationAdditional"
@@ -641,7 +726,17 @@ function getImagePreviewLabel(author: string, index: number) {
 
       <footer class="moment-card__footer">
         <button
-          v-if="moment.isVideo && !moment.isLive"
+          v-if="moment.isVideo && !moment.isLive && settings.momentsCardOpenMode === 'dialog'"
+          type="button"
+          :aria-label="t('moment_card.open_dialog')"
+          @click.stop="emit('openDetail', moment, true)"
+          @keydown.enter.stop
+        >
+          <span i-tabler-layout-dashboard />
+          <span class="moment-card__open-label">{{ t('moment_card.open_dialog_short') }}</span>
+        </button>
+        <button
+          v-else-if="moment.isVideo && !moment.isLive"
           type="button"
           :aria-label="t('moment_card.open_new_tab')"
           @click.stop="openPrimaryDetail"
@@ -659,6 +754,16 @@ function getImagePreviewLabel(author: string, index: number) {
         >
           <span i-tabler-layout-dashboard />
           <span class="moment-card__open-label">{{ t('moment_card.open_dialog_short') }}</span>
+        </button>
+        <button
+          v-else-if="moment.isLive"
+          type="button"
+          :aria-label="t('moment_card.open_new_tab')"
+          @click.stop="openPrimaryDetail"
+          @keydown.enter.stop
+        >
+          <span i-tabler-external-link />
+          <span class="moment-card__open-label">{{ t('moment_card.open_new_tab_short') }}</span>
         </button>
         <a
           v-else
@@ -992,7 +1097,6 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card--text .moment-card__body {
-  min-height: 240px;
   display: flex;
   flex-direction: column;
   padding-top: var(--bew-space-4);
@@ -1049,9 +1153,25 @@ function getImagePreviewLabel(author: string, index: number) {
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-card-radius);
   color: var(--bew-text-2);
-  background: var(--bew-fill-1);
+  background: transparent;
+  cursor: pointer;
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
+  pointer-events: auto;
+  transition:
+    border-color var(--bew-duration-normal) var(--bew-ease-standard),
+    background-color var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.moment-card__forward:hover,
+.moment-card__forward:focus-visible {
+  border-color: var(--bew-theme-color-60);
+  background: var(--bew-theme-color-10);
+  outline: none;
+}
+
+.moment-card__forward:focus-visible {
+  box-shadow: 0 0 0 2px var(--bew-theme-focus-ring);
 }
 
 .moment-card__forward-copy {
@@ -1095,6 +1215,12 @@ function getImagePreviewLabel(author: string, index: number) {
 
 .moment-card__additional--no-cover .moment-card__additional-main {
   grid-template-columns: minmax(0, 1fr);
+}
+
+.moment-card__additional-vote-icon {
+  margin-right: var(--bew-space-1);
+  font-size: var(--bew-icon-size-sm);
+  vertical-align: -0.125em;
 }
 
 .moment-card__additional-main img {
@@ -1460,7 +1586,6 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card--text .moment-card__body {
-  min-height: var(--moment-card-text-body-min-height, 120px);
   padding-top: 0;
 }
 
@@ -1596,6 +1721,7 @@ function getImagePreviewLabel(author: string, index: number) {
 
 .moment-card__forward-gallery--1 {
   grid-template-columns: 1fr;
+  aspect-ratio: var(--moment-forward-single-image-ratio, 1);
 }
 
 .moment-card__forward-gallery--2,

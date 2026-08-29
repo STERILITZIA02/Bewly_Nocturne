@@ -1,56 +1,14 @@
 <script lang="ts" setup>
-import { storeToRefs } from 'pinia'
-import { onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { settings } from '~/logic'
-import { useTopBarStore } from '~/stores/topBarStore'
-import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 
-// 搜索关键词
 const searchInput = ref<string>('')
-const topBarStore = useTopBarStore()
-const { searchKeyword: topBarSearchKeyword } = storeToRefs(topBarStore)
 const searchFocusEffect = useSearchFocusEffect()
-
-// 页面卸载时清空顶栏搜索框（真正离开搜索页面）
-onUnmounted(() => {
-  topBarSearchKeyword.value = ''
-})
-
-function performInPlaceSearch(keyword: string) {
-  const normalized = keyword.trim()
-  if (!normalized)
-    return
-
-  const params = new URLSearchParams(window.location.search)
-  params.set('page', 'SearchResults')
-  params.set('keyword', normalized)
-  // 清除旧的筛选参数，从搜索首页进入搜索结果页时重置筛选条件
-  params.delete('category')
-  params.delete('pn')
-  params.delete('user_order')
-  params.delete('user_type')
-  params.delete('search_type')
-  params.delete('live_room_order')
-  params.delete('live_user_order')
-
-  const newUrl = `${window.location.pathname}?${params.toString()}`
-
-  window.history.pushState({}, '', newUrl)
-  searchInput.value = normalized
-  topBarSearchKeyword.value = normalized
-}
-
-function handleSearch(keyword: string) {
-  if (!shouldUsePluginSearchResultsPage())
-    return
-  performInPlaceSearch(keyword)
-}
 </script>
 
 <template>
-  <!-- 显示搜索页面 -->
   <div
     flex="~ col"
     justify-center
@@ -70,9 +28,7 @@ function handleSearch(keyword: string) {
       :blurred-on-focus="searchFocusEffect.blurred"
       :focused-character="settings.searchPageSearchBarFocusCharacter"
       :show-hot-search="settings.showHotSearchInTopBar"
-      :search-behavior="shouldUsePluginSearchResultsPage() ? 'stay' : 'navigate'"
       :top-bar-appearance="true"
-      @search="handleSearch"
     />
   </div>
 </template>

@@ -5,6 +5,7 @@ import Button from '~/components/Button.vue'
 import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import Slider from '~/components/Slider.vue'
 import { originalSettings, settings } from '~/logic'
 import type { GridColumnsConfig, VideoCardFontSizeSetting, VideoCardLayoutSetting } from '~/logic/storage'
 import { defaultGridColumns, GRID_BREAKPOINTS } from '~/logic/storage'
@@ -13,6 +14,11 @@ import {
   MIN_LIST_LAYOUT_BREAKPOINT,
   normalizeListLayoutBreakpoint,
 } from '~/utils/gridLayout'
+import {
+  VIDEO_CARD_COVER_RATIO_MAX,
+  VIDEO_CARD_COVER_RATIO_MIN,
+  VIDEO_CARD_COVER_RATIO_STEP,
+} from '~/utils/videoCardLayout'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
@@ -162,6 +168,30 @@ function cancelListLayoutBreakpointEditing() {
         </div>
       </SettingsItem>
 
+      <SettingsItem
+        :title="$t('settings.video_card_cover_ratio')"
+        :desc="$t('settings.video_card_cover_ratio_desc')"
+      >
+        <template #bottom>
+          <div class="cover-ratio-controls">
+            <Slider
+              v-model="settings.videoCardCoverRatioOneColumn"
+              :min="VIDEO_CARD_COVER_RATIO_MIN"
+              :max="VIDEO_CARD_COVER_RATIO_MAX"
+              :step="VIDEO_CARD_COVER_RATIO_STEP"
+              :label="`${$t('settings.video_card_cover_ratio_one_column')} · ${settings.videoCardCoverRatioOneColumn}%`"
+            />
+            <Slider
+              v-model="settings.videoCardCoverRatioTwoColumns"
+              :min="VIDEO_CARD_COVER_RATIO_MIN"
+              :max="VIDEO_CARD_COVER_RATIO_MAX"
+              :step="VIDEO_CARD_COVER_RATIO_STEP"
+              :label="`${$t('settings.video_card_cover_ratio_two_columns')} · ${settings.videoCardCoverRatioTwoColumns}%`"
+            />
+          </div>
+        </template>
+      </SettingsItem>
+
       <SettingsItem :title="$t('settings.grid_breakpoints')" :desc="$t('settings.grid_breakpoints_desc')" right-width="auto">
         <template #bottom>
           <div class="grid-breakpoints">
@@ -270,6 +300,12 @@ function cancelListLayoutBreakpointEditing() {
 </template>
 
 <style lang="scss" scoped>
+.cover-ratio-controls {
+  display: grid;
+  gap: var(--bew-space-4);
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+
 .grid-breakpoints {
   display: grid;
   width: 100%;

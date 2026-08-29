@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import NotificationSkeletonBlock from './NotificationSkeletonBlock.vue'
+import NotificationSkeletonBlock from '~/components/SkeletonBlock.vue'
 
 withDefaults(defineProps<{
   count?: number

@@ -9,7 +9,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
 
-import { useTopBarInteraction } from '../composables/useTopBarInteraction'
+import { resetTopBarTransientInteraction, useTopBarInteraction } from '../composables/useTopBarInteraction'
 import { MESSAGE_URL } from '../constants/urls'
 import FavoritesPop from './pops/FavoritesPop.vue'
 import HistoryPop from './pops/HistoryPop.vue'
@@ -162,25 +162,6 @@ watch(
       }
     }
   },
-)
-
-watch(
-  () => popupVisible.value?.favorites ?? false,
-  (newVal, oldVal) => {
-    if (newVal === undefined || oldVal === undefined)
-      return
-
-    if (newVal === oldVal)
-      return
-
-    if (newVal) {
-      nextTick(() => {
-        if (favoritesPopRef.value)
-          favoritesPopRef.value.refreshFavoriteData?.()
-      })
-    }
-  },
-  { immediate: true },
 )
 
 // 修改通知点击处理
@@ -395,6 +376,7 @@ const shouldShowDivider = computed(() => {
               href="https://member.bilibili.com/platform/home"
               target="_blank"
               :title="$t('topbar.creative_center')"
+              @click="resetTopBarTransientInteraction"
             >
               <div i-mingcute:bulb-line />
             </a>
@@ -457,6 +439,7 @@ const shouldShowDivider = computed(() => {
               href="https://member.bilibili.com/platform/upload/video/frame"
               target="_blank"
               :title="$t('topbar.upload')"
+              @click="resetTopBarTransientInteraction"
             >
               <div i-mingcute:upload-line flex-shrink-0 />
             </a>

@@ -9,6 +9,7 @@ import Loading from '~/components/Loading.vue'
 import Picture from '~/components/Picture.vue'
 import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
+import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -64,6 +65,7 @@ function getWatchLaterVideoUrl(bvid: string): string {
 
 function openVideoPage(url: string) {
   if (settings.value.topBarLinkOpenMode === 'background') {
+    resetTopBarTransientInteraction()
     void openLinkInBackground(url)
     return
   }
@@ -71,6 +73,7 @@ function openVideoPage(url: string) {
   if (settings.value.topBarLinkOpenMode === 'currentTabIfNotHomepage') {
     // Keep the behavior consistent with ALink's target logic.
     if (isInIframe() || isHomePage()) {
+      resetTopBarTransientInteraction()
       window.open(url, '_blank')
     }
     else {
@@ -80,6 +83,7 @@ function openVideoPage(url: string) {
   }
 
   if (settings.value.topBarLinkOpenMode === 'newTab') {
+    resetTopBarTransientInteraction()
     window.open(url, '_blank')
     return
   }

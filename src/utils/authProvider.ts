@@ -1,4 +1,5 @@
-// import browser from 'webextension-polyfill'
+import browser from 'webextension-polyfill'
+
 import { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from '~/logic/appAuthStorage'
 
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness } from './appAuthTokenPolicy'
@@ -71,6 +72,20 @@ export function saveAppAuthTokens(payload: PollLoginTokenPayload) {
   }
 }
 
+async function isPersistedRefreshSourceCurrent(refreshToken: string, lastUpdatedAt: number | null) {
+  try {
+    const stored = await browser.storage.local.get('appAuthTokens')
+    const raw = stored.appAuthTokens
+    const persisted: typeof appAuthTokens.value | undefined
+      = typeof raw === 'string' ? JSON.parse(raw) : raw
+    return persisted?.refreshToken === refreshToken
+      && persisted?.lastUpdatedAt === lastUpdatedAt
+  }
+  catch {
+    return false
+  }
+}
+
 interface RefreshTokenResponse {
   code: number
   message?: string
@@ -88,7 +103,7 @@ interface RefreshTokenResponse {
 }
 
 export async function refreshAppAccessToken(): Promise<boolean> {
-  const { accessToken, refreshToken } = appAuthTokens.value
+  const { accessToken, refreshToken, lastUpdatedAt } = appAuthTokens.value
   if (!accessToken || !refreshToken)
     return false
 
@@ -127,8 +142,11 @@ export async function refreshAppAccessToken(): Promise<boolean> {
       const tokenInfo = data.data.token_info || {}
       const refreshInfo = data.data.refresh_token_info || {}
 
-      if (appAuthTokens.value.accessToken !== accessToken
-        || appAuthTokens.value.refreshToken !== refreshToken) {
+      if (
+        appAuthTokens.value.accessToken !== accessToken
+        || appAuthTokens.value.refreshToken !== refreshToken
+        || !await isPersistedRefreshSourceCurrent(refreshToken, lastUpdatedAt)
+      ) {
         return false
       }
 
@@ -183,7 +201,16 @@ export async function ensureFreshAppAccessToken(
   }
   if (freshness === 'valid')
     return true
-  return refreshAppAccessTokenSingleFlight()
+
+  const refreshed = await refreshAppAccessTokenSingleFlight()
+  if (refreshed)
+    return true
+  // A proactive refresh can fail because of a transient network/backend error.
+  // Keep using an access token that is still valid instead of forcing the user
+  // into authorization before the actual expiry boundary.
+  const accessTokenExpiresAt = appAuthTokens.value.accessTokenExpiresAt
+  return Boolean(appAuthTokens.value.accessToken)
+    && (!accessTokenExpiresAt || accessTokenExpiresAt > Date.now())
 }
 
 export async function refreshInvalidAppAccessToken(): Promise<boolean> {

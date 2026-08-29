@@ -490,13 +490,19 @@ settings:
     bewly_widescreen_sidebar_position_desc: 选择 Bewly 宽屏模式下侧边栏的显示位置
     bewly_widescreen_sidebar_position_left: 左侧
     bewly_widescreen_sidebar_position_right: 右侧
+    bewly_widescreen_center_video: Bewly宽屏画面居中
+    bewly_widescreen_center_video_desc: 仅在视频优先且实际单侧黑边能完整容纳侧栏时，让视频、弹幕和点击区域在整个画面中水平居中；空间不足时保持视频优先布局。
+    bewly_widescreen_layout_priority: Bewly宽屏布局优先级
+    bewly_widescreen_layout_priority_desc: 视频优先默认保留视频尺寸并显示窄侧栏；侧栏优先直接显示完整侧栏并为播放器保留独立空间。
+    bewly_widescreen_layout_priority_video: 视频优先
+    bewly_widescreen_layout_priority_sidebar: 侧栏优先
   video_player_scroll: 调整显示模式后滚动
   video_player_scroll_desc: 启用后，在默认模式为宽屏和默认时，会自动滚动到合适位置。
   enlarge_favorite_dialog: 放大收藏弹窗
   enlarge_favorite_dialog_desc: 启用后，视频页收藏弹窗将以更大的尺寸显示，方便查看和管理收藏夹。
   external_watch_later_button: 稍后再看按钮外置
   external_watch_later_button_desc: 启用后，视频页工具栏会显示独立的稍后再看按钮；按钮会显示当前视频状态，可点击添加或移除。
-  show_bewly_widescreen_button: 显示 Bewly 宽屏按钮
+  show_bewly_widescreen_button: 显示播放器 Bewly 宽屏按钮
   show_bewly_widescreen_button_desc: 在播放器控制栏显示进入 Bewly 宽屏模式的按钮；关闭后不会退出当前宽屏模式。
   show_vertical_video_zoom_button: 竖屏放大按钮
   show_vertical_video_zoom_button_desc: 在竖屏视频播放器中显示放大/缩小按钮和画面位置调节控件
@@ -596,6 +602,13 @@ settings:
   settings_sync_unsynced_count: '未同步字段：{count}'
   settings_sync_quota_blocked_count: '受云端配额限制：{count}'
   settings_sync_last_error: '最近同步错误：{error}'
+  sync_cloud_conflict_title: 检测到云端设置备份
+  sync_cloud_conflict_desc: 云端已有一份设置备份。两侧都存在的设置将以你所选的一侧为准。
+  sync_cloud_use_cloud: 下载：以云端设置为准
+  sync_cloud_use_local: 上传：以本地设置为准
+  sync_cloud_status_failed: 无法读取云端同步状态
+  sync_cloud_enable_failed: 开启云同步失败
+  sync_cloud_incompatible: 云端数据由更新版本的扩展写入，请先升级扩展再开启同步
   top_bar_icon_badges_opt:
     number: 数字
     dot: 圆点
@@ -618,6 +631,10 @@ settings:
   auto_switch_list_layout: 根据视频卡片区域宽度自动切换单双列
   auto_switch_list_layout_desc: 开启后，双列模式会在视频卡片区域宽度小于设定宽度时自动切换为单列。
   auto_switch_list_layout_breakpoint: 切换宽度
+  video_card_cover_ratio: 封面占比
+  video_card_cover_ratio_desc: 分别设置单列与双列横向视频卡片中封面所占的宽度。
+  video_card_cover_ratio_one_column: 单列布局
+  video_card_cover_ratio_two_columns: 双列布局
   grid_breakpoints: 网格断点配置
   grid_breakpoints_desc: 设置不同视频卡片区域宽度下显示的列数。当区域宽度大于等于设定值时，使用对应的列数。
   grid_min_width: 宽度 ≥
@@ -1186,6 +1203,9 @@ moments:
   emoji: 表情
   unlock_with_charge: 充电解锁
   view: 查看
+  vote_ongoing: 进行中
+  vote_ended: 已结束
+  vote_status_unknown: 状态未知
   live_popularity: '{count} 人气'
   charge_exclusive: 充电专属
   charge_unlock_hint: 加入当前 UP 主的充电即可解锁观看
@@ -1257,6 +1277,7 @@ moments:
 moment_card:
   video_moment: 视频动态
   open_detail: 打开 {author} 的动态详情
+  open_origin_moment: 查看 {name} 的原动态
   just_now: 刚刚
   charge_exclusive: 充电专属
   watch_later_added: 已添加到稍后再看
@@ -1282,6 +1303,17 @@ moment_card:
   comments_retry: 重试
   comments_load_more: 查看更多评论
   comments_reply_count: '{count} 条回复'
+  comment_like: 点赞评论
+  comment_unlike: 取消评论点赞
+  comment_reply: 回复
+  comment_reply_to: 回复 {name}
+  comment_reply_placeholder: 写下你的回复…
+  comment_send: 发送
+  comment_sending: 发送中…
+  comment_login_required: 登录后才能进行评论互动
+  comment_like_failed: 评论点赞失败，请稍后重试
+  comment_reply_failed: 回复发送失败，请稍后重试
+  comment_reply_succeeded: 回复已发送
   live_popularity: '{count} 人气'
   no_data: 暂无数据
   live_now: 正在直播
@@ -1341,6 +1373,8 @@ video_card:
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
 home:
+  app_authorization_required: App 模式的 access token 已缺失或过期，请重新授权后继续使用个性推荐
+  reauthorize_app: 重新授权
   recommendation_empty: 暂无推荐内容
   recommendation_filtered_empty: 当前推荐已被本地过滤规则全部过滤
   web_recommendation_risk_cooldown: 推荐请求触发风控，已暂停 {seconds} 秒，请稍后重试
@@ -1488,10 +1522,8 @@ widescreen:
   comments_loading: 评论区加载中
   danmaku_loading: 弹幕列表加载中
   list_loading: 列表加载中
-  show_narrow_right: 显示窄右栏
-  show_narrow_left: 显示窄左栏
-  collapse_right: 收起右栏
-  collapse_left: 收起左栏
+  show_full_sidebar: 显示完整侧栏
+  show_compact_sidebar: 切换为窄侧栏
 search_bar:
   input_label: 搜索
   clear_keyword: 清空搜索内容

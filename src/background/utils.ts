@@ -3,7 +3,9 @@
 // 2. json化后返回data
 
 import type Browser from 'webextension-polyfill'
+import browser from 'webextension-polyfill'
 
+import type { WbiKeyOptions } from './wbiSign'
 import { addWbiSign, clearWbiKeys, getWbiKeys, initWbiKeys, isBilibiliNavUrl, needsWbiSign, storeWbiKeys } from './wbiSign'
 
 export class ApiRiskControlError extends Error {
@@ -114,7 +116,19 @@ async function doRequest(message: Message, api: API) {
 
     const baseUrl = url
     const needsWbi = needsWbiSign(url)
-    const wbiKeyOptions = { noCookie: credentials === 'omit' }
+    const wbiKeyOptions: WbiKeyOptions = { noCookie: credentials === 'omit' }
+    const captureAuthenticatedMid = async () => {
+      if (wbiKeyOptions.noCookie)
+        return ''
+      const cookie = await browser.cookies.get({
+        url: 'https://www.bilibili.com/',
+        name: 'DedeUserID',
+      }).catch(() => null)
+      wbiKeyOptions.mid = cookie?.value.trim() ?? ''
+      return wbiKeyOptions.mid
+    }
+    if (needsWbi || isBilibiliNavUrl(baseUrl))
+      await captureAuthenticatedMid()
 
     // 如果需要WBI签名但没有密钥，主动获取密钥
     if (needsWbi && !getWbiKeys(wbiKeyOptions)) {
@@ -220,7 +234,10 @@ async function doRequest(message: Message, api: API) {
           if (data.code === 0 && data.data?.wbi_img) {
             const { img_url, sub_url } = data.data.wbi_img
             if (img_url && sub_url) {
-              storeWbiKeys(img_url, sub_url, wbiKeyOptions)
+              const responseMid = wbiKeyOptions.mid
+              const currentMid = await captureAuthenticatedMid()
+              if (wbiKeyOptions.noCookie || currentMid === responseMid)
+                storeWbiKeys(img_url, sub_url, wbiKeyOptions)
             }
           }
         }
@@ -250,6 +267,7 @@ async function doRequest(message: Message, api: API) {
         if (needsWbi && !hasRefreshedWbiKeys && isWbiSignatureRejected(response)) {
           hasRefreshedWbiKeys = true
           clearWbiKeys(wbiKeyOptions)
+          await captureAuthenticatedMid()
           const refreshed = await initWbiKeys(wbiKeyOptions)
           if (refreshed)
             response = await executeFullRequest(true)

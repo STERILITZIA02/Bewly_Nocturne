@@ -1,6 +1,8 @@
 export type CommentReplyPaginationMode = 'loadMore' | 'pagination'
 
 interface PaginationLabels {
+  expandAll: string
+  expandingAll: string
   loadMore: string
   loading: string
   noMore: string
@@ -27,8 +29,13 @@ interface LayoutReservation {
 }
 
 interface PaginationState {
+  allRepliesExpanded: boolean
   currentPage: number
+  expandAllLoading: boolean
+  expandAllOperation?: symbol
+  expandAllPromise?: Promise<void>
   identity: string
+  initialList: any[]
   loading?: Promise<unknown>
   mergedList?: any[]
   collapsedList?: any[]
@@ -41,6 +48,77 @@ interface PaginationState {
   }
 }
 
+export interface SequentialCommentReplyPageLoader {
+  getCurrentPage: () => number
+  getTotalPage: () => number
+  isValid: () => boolean
+  loadNextPage: (currentPage: number) => Promise<unknown>
+}
+
+export interface SequentialCommentReplyPageResult {
+  completed: boolean
+  lastPage: number
+  reason: 'completed' | 'invalid' | 'no-progress'
+}
+
+export async function loadCommentReplyPagesSequentially({
+  getCurrentPage,
+  getTotalPage,
+  isValid,
+  loadNextPage,
+}: SequentialCommentReplyPageLoader): Promise<SequentialCommentReplyPageResult> {
+  let currentPage = getCurrentPage()
+  let totalPage = getTotalPage()
+  if (!isValid() || !Number.isFinite(currentPage) || !Number.isFinite(totalPage) || totalPage < 1) {
+    return { completed: false, lastPage: currentPage, reason: 'invalid' }
+  }
+
+  while (currentPage < totalPage) {
+    if (!isValid())
+      return { completed: false, lastPage: currentPage, reason: 'invalid' }
+
+    const previousPage = currentPage
+    await loadNextPage(previousPage)
+    if (!isValid())
+      return { completed: false, lastPage: previousPage, reason: 'invalid' }
+
+    currentPage = getCurrentPage()
+    totalPage = getTotalPage()
+    if (!Number.isFinite(currentPage) || currentPage <= previousPage)
+      return { completed: false, lastPage: currentPage, reason: 'no-progress' }
+    if (!Number.isFinite(totalPage) || totalPage < 1)
+      return { completed: false, lastPage: currentPage, reason: 'invalid' }
+  }
+
+  return { completed: true, lastPage: currentPage, reason: 'completed' }
+}
+
+export function mergeCommentReplyLists<T>(
+  lists: readonly (readonly T[])[],
+  getRpid: (reply: T) => string | null | undefined,
+): T[] {
+  const merged: T[] = []
+  const seenRpids = new Set<string>()
+  const seenReplies = new Set<T>()
+  lists.forEach((list) => {
+    list.forEach((reply) => {
+      const rpid = getRpid(reply)
+      if (rpid) {
+        if (seenRpids.has(rpid))
+          return
+        seenRpids.add(rpid)
+      }
+      else if (seenReplies.has(reply)) {
+        return
+      }
+      seenReplies.add(reply)
+      merged.push(reply)
+    })
+  })
+  return merged
+}
+
+const EXPAND_ALL_BUTTON_CLASS = 'bewly-comment-expand-all'
 const PAGINATION_PATCHED = Symbol('bewly-comment-reply-pagination-patched')
 
 function findPropertyDescriptor(prototype: object, property: string): PropertyDescriptor | null {
@@ -57,6 +135,7 @@ function findPropertyDescriptor(prototype: object, property: string): PropertyDe
 export function createCommentReplyPaginationController(adapter: CommentReplyPaginationAdapter) {
   const states = new WeakMap<object, PaginationState>()
   const enabledStates = new WeakMap<object, boolean>()
+  const expandAllTasks = new WeakMap<object, Promise<void>>()
   const activeLayoutReservations = new WeakMap<HTMLElement, LayoutReservation>()
 
   const isEnabled = () => adapter.isTreeEnabled() && adapter.getMode() === 'loadMore'
@@ -127,11 +206,22 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     return `${oid}|${type}|${root}`
   }
 
+  function removeExpandAllButton(renderer: any) {
+    const root = renderer?.shadowRoot as ShadowRoot | null | undefined
+    root?.querySelector<HTMLElement>(`.${EXPAND_ALL_BUTTON_CLASS}`)?.remove()
+  }
+
   function clear(renderer: any, restoreCurrentPage: boolean) {
     const state = states.get(renderer)
-    if (!state)
+    if (!state) {
+      removeExpandAllButton(renderer)
       return
+    }
 
+    state.expandAllOperation = undefined
+    state.expandAllLoading = false
+    state.expandAllPromise = undefined
+    expandAllTasks.delete(renderer)
     const currentPage = state.pages.get(state.currentPage)
     if (restoreCurrentPage && state.mergedList && renderer.list === state.mergedList && currentPage) {
       renderer.list = currentPage.slice()
@@ -143,35 +233,26 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     state.pending = undefined
     state.pages.clear()
     states.delete(renderer)
+    removeExpandAllButton(renderer)
     renderer.requestUpdate?.()
   }
 
   function mergeLists(...lists: any[][]): any[] {
-    const merged: any[] = []
-    const seenRpids = new Set<string>()
-    const seenReplies = new Set<any>()
-    lists.forEach((list) => {
-      list.forEach((reply) => {
-        const rpid = adapter.getRpid(reply)
-        if (rpid) {
-          if (seenRpids.has(rpid))
-            return
-          seenRpids.add(rpid)
-        }
-        else if (seenReplies.has(reply)) {
-          return
-        }
-        seenReplies.add(reply)
-        merged.push(reply)
-      })
-    })
-    return merged
+    return mergeCommentReplyLists(lists, adapter.getRpid)
   }
 
   function invalidateLoading(renderer: any) {
     const state = states.get(renderer)
-    if (!state || (!state.pending && !state.loading))
+    if (!state)
       return
+
+    state.expandAllOperation = undefined
+    if (!state.expandAllPromise)
+      state.expandAllLoading = false
+    if (!state.pending && !state.loading) {
+      updateExpandAllButton(renderer)
+      return
+    }
 
     releaseLayoutReservation(state.pending?.layoutReservation)
     if (!state.mergedList && state.pages.size > 0)
@@ -181,6 +262,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     state.pending = undefined
     state.loading = undefined
     renderer.requestUpdate?.()
+    updateExpandAllButton(renderer)
   }
 
   function suspendForNativeCollapse(renderer: any, captureCollapsedList: boolean) {
@@ -202,18 +284,175 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       clear(renderer, false)
 
     const state: PaginationState = {
+      allRepliesExpanded: false,
       currentPage: Number(renderer.currentPage) || 1,
+      expandAllLoading: false,
       identity,
+      initialList: Array.isArray(renderer.list) ? renderer.list.slice() : [],
       pages: new Map(),
     }
     states.set(renderer, state)
     return state
   }
 
+  function isExpandAllOperationValid(renderer: any, state: PaginationState, operation: symbol) {
+    return isEnabled()
+      && renderer?.isConnected !== false
+      && states.get(renderer) === state
+      && state.identity === getIdentity(renderer)
+      && state.expandAllOperation === operation
+  }
+
+  function updateExpandAllButton(renderer: any) {
+    const root = renderer?.shadowRoot as ShadowRoot | null | undefined
+    if (!root)
+      return
+
+    const existing = root.querySelector<HTMLButtonElement>(`.${EXPAND_ALL_BUTTON_CLASS}`)
+    if (!isEnabled()) {
+      existing?.remove()
+      return
+    }
+
+    const state = getState(renderer)
+    const totalPage = Number(renderer.totalPage) || 0
+    state.allRepliesExpanded = hasLoadedEveryPage(state, totalPage)
+    const shouldShow = renderer.isConnected !== false && totalPage > 1 && !state.allRepliesExpanded
+    if (!shouldShow) {
+      existing?.remove()
+      return
+    }
+
+    const button = existing ?? document.createElement('button')
+    if (!existing) {
+      button.type = 'button'
+      button.className = EXPAND_ALL_BUTTON_CLASS
+      button.addEventListener('click', () => {
+        void expandAllReplies(renderer)
+      })
+      root.append(button)
+    }
+
+    const labels = adapter.getLabels()
+    const expandAllLoading = state.expandAllLoading || expandAllTasks.has(renderer)
+    button.disabled = expandAllLoading
+    button.textContent = expandAllLoading ? labels.expandingAll : labels.expandAll
+    button.setAttribute('aria-busy', String(expandAllLoading))
+  }
+
+  function expandAllReplies(renderer: any): Promise<void> {
+    const runningTask = expandAllTasks.get(renderer)
+    if (runningTask)
+      return runningTask
+
+    const state = getState(renderer)
+    if (state.expandAllPromise)
+      return state.expandAllPromise
+
+    const operation = Symbol('bewly-comment-expand-all-operation')
+    const identity = state.identity
+    const layoutReservation = reserveLayoutHeight(renderer)
+    state.allRepliesExpanded = false
+    state.expandAllLoading = true
+    state.expandAllOperation = operation
+    updateExpandAllButton(renderer)
+    renderer.requestUpdate?.()
+
+    const request = (async () => {
+      if (renderer.showPagination !== true) {
+        if (typeof renderer.handleViewMore !== 'function')
+          return
+        const initialRequest = Reflect.apply(renderer.handleViewMore, renderer, [{
+          preventDefault() {},
+          stopImmediatePropagation() {},
+          stopPropagation() {},
+        }])
+        await Promise.resolve(initialRequest)
+        if (state.loading)
+          await state.loading
+        await Promise.resolve(renderer.updateComplete)
+      }
+
+      if (renderer.showPagination !== true || !isExpandAllOperationValid(renderer, state, operation))
+        return
+
+      const loadPage = async (pageIndex: number) => {
+        const pageTarget = document.createElement('button')
+        pageTarget.dataset.idx = String(pageIndex)
+        const nextRequest = renderer.handleChangePage({
+          currentTarget: pageTarget,
+          idx: pageIndex,
+          preventDefault() {},
+          stopImmediatePropagation() {},
+          stopPropagation() {},
+          target: pageTarget,
+        })
+        await Promise.resolve(nextRequest)
+        if (state.loading && state.loading !== nextRequest)
+          await state.loading
+        await Promise.resolve(renderer.updateComplete)
+      }
+      const currentPage = Number(renderer.currentPage) || 1
+      if (currentPage > 1 && !hasLoadedEveryPage(state, currentPage))
+        await loadPage(0)
+      if (!isExpandAllOperationValid(renderer, state, operation))
+        return
+
+      const result = await loadCommentReplyPagesSequentially({
+        getCurrentPage: () => Number(renderer.currentPage) || 1,
+        getTotalPage: () => Number(renderer.totalPage) || 0,
+        isValid: () => isExpandAllOperationValid(renderer, state, operation),
+        loadNextPage: loadPage,
+      })
+
+      if (isExpandAllOperationValid(renderer, state, operation))
+        state.allRepliesExpanded = result.completed
+    })().catch((error) => {
+      console.error('[Bewly Nocturne] Failed to expand all comment replies:', error)
+    }).finally(() => {
+      if (expandAllTasks.get(renderer) === request)
+        expandAllTasks.delete(renderer)
+      if (states.get(renderer) !== state || state.identity !== identity || state.expandAllOperation !== operation) {
+        if (states.get(renderer) === state) {
+          state.expandAllLoading = false
+          state.expandAllPromise = undefined
+          updateExpandAllButton(renderer)
+        }
+        releaseLayoutReservation(layoutReservation)
+        updateExpandAllButton(renderer)
+        return
+      }
+
+      state.expandAllLoading = false
+      state.expandAllOperation = undefined
+      state.expandAllPromise = undefined
+      renderer.requestUpdate?.()
+      if (renderer.isConnected !== false && isEnabled())
+        scheduleTreeUpdate(renderer, layoutReservation)
+      else
+        releaseLayoutReservation(layoutReservation)
+      updateExpandAllButton(renderer)
+    })
+
+    state.expandAllPromise = request
+    expandAllTasks.set(renderer, request)
+    return request
+  }
+
   function mergePages(state: PaginationState): any[] {
     return mergeLists(...[...state.pages.entries()]
       .sort(([left], [right]) => left - right)
       .map(([, replies]) => replies))
+  }
+
+  function hasLoadedEveryPage(state: PaginationState, totalPage: number) {
+    if (!Number.isFinite(totalPage) || totalPage < 1)
+      return false
+    for (let page = 1; page <= totalPage; page += 1) {
+      if (!state.pages.has(page))
+        return false
+    }
+    return true
   }
 
   function getNewPage(beforeList: any[], loadedList: any[]): any[] {
@@ -280,7 +519,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
           : []
         const pending = {
           beforeList: mergeLists(state.mergedList ?? [], currentList),
-          layoutReservation: reserveLayoutHeight(this),
+          layoutReservation: state.expandAllLoading ? undefined : reserveLayoutHeight(this),
           page: Number(this.currentPage) || 1,
         }
         state.mergedList = pending.beforeList
@@ -299,6 +538,24 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
         }
 
         const request = Promise.resolve(result).then((value) => {
+          const currentState = states.get(this)
+          if (currentState !== state || state.identity !== getIdentity(this)) {
+            if (state.pending === pending) {
+              releaseLayoutReservation(pending.layoutReservation)
+              state.pending = undefined
+              state.loading = undefined
+            }
+            if (currentState?.identity === getIdentity(this)) {
+              this.list = currentState.mergedList
+                ?? currentState.pending?.beforeList
+                ?? currentState.collapsedList
+                ?? currentState.initialList
+              this.requestUpdate?.()
+            }
+            updateExpandAllButton(this)
+            return value
+          }
+
           if (state.pending === pending) {
             state.pending = undefined
             state.loading = undefined
@@ -318,9 +575,16 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
               })
               state.pages.set(pending.page, loadedList)
               state.currentPage = pending.page
+              state.allRepliesExpanded = hasLoadedEveryPage(state, Number(this.totalPage) || 0)
               state.mergedList = mergeLists(retainedBeforeList, newPage)
               this.list = state.mergedList
-              scheduleTreeUpdate(this, pending.layoutReservation)
+              if (state.expandAllLoading) {
+                releaseLayoutReservation(pending.layoutReservation)
+                this.requestUpdate?.()
+              }
+              else {
+                scheduleTreeUpdate(this, pending.layoutReservation)
+              }
             }
             else {
               releaseLayoutReservation(pending.layoutReservation)
@@ -336,6 +600,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
               scheduleTreeUpdate(this)
             }
           }
+          updateExpandAllButton(this)
           return value
         }, (error) => {
           if (state.pending === pending) {
@@ -343,9 +608,11 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
             state.pending = undefined
             state.loading = undefined
           }
+          updateExpandAllButton(this)
           throw error
         })
         state.loading = request
+        updateExpandAllButton(this)
         return request
       },
     })
@@ -379,9 +646,12 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
         const state = getState(this)
         const currentPage = Number(this.currentPage) || 1
         const labels = adapter.getLabels()
+        if (state.expandAllLoading || state.allRepliesExpanded)
+          return []
         if (state.loading)
           return [{ clickable: false, idx: currentPage, text: labels.loading }]
-        const hasNext = items.some(item => Number(item?.idx) === currentPage && item?.clickable !== false)
+        const hasNext = currentPage < (Number(this.totalPage) || 0)
+          && items.some(item => Number(item?.idx) === currentPage && item?.clickable !== false)
         return [{
           clickable: hasNext,
           idx: currentPage,
@@ -427,14 +697,21 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       enabledStates.set(renderer, enabled)
       renderer.requestUpdate?.()
     }
-    if (!enabled)
+    if (!enabled) {
       clear(renderer, true)
-    else
+    }
+    else {
       getState(renderer)
+      updateExpandAllButton(renderer)
+    }
   }
 
   return {
     clear,
+    dispose(renderer: any) {
+      enabledStates.delete(renderer)
+      clear(renderer, false)
+    },
     invalidateLoading,
     patchPrototype,
     suspendForNativeCollapse,

@@ -13,11 +13,15 @@ export type MomentCommentSegment
 
 export interface MomentCommentItem {
   id: string
+  rpid: string
+  rootRpid: string
+  parentRpid: string
   author: MomentCommentAuthor
   message: string
   segments: MomentCommentSegment[]
   createdAt: number
   likeCount: number
+  isLiked: boolean
   replyCount: number
   replies: MomentCommentItem[]
 }
@@ -40,6 +44,11 @@ function toId(value: unknown) {
   if (typeof value === 'string' || typeof value === 'number')
     return String(value)
   return ''
+}
+
+function toReplyRelationId(value: unknown) {
+  const id = toId(value)
+  return id === '0' ? '' : id
 }
 
 function firstString(...values: unknown[]): string {
@@ -170,8 +179,8 @@ function normalizeComment(value: unknown): MomentCommentItem | null {
   const message = firstString(content.message, richNodeMessage).trim()
   const createdAt = Number(raw.ctime) || 0
   const authorId = toId(member.mid || raw.mid)
-  const id = toId(raw.rpid_str || raw.rpid)
-    || `${authorId}-${createdAt}-${message}`
+  const rpid = toId(raw.rpid_str || raw.rpid)
+  const id = rpid || `${authorId}-${createdAt}-${message}`
   if (!id || !message)
     return null
 
@@ -179,8 +188,14 @@ function normalizeComment(value: unknown): MomentCommentItem | null {
     .map(normalizeComment)
     .filter((item): item is MomentCommentItem => Boolean(item))
 
+  const action = asRecord(raw.action)
+  const upAction = asRecord(raw.up_action)
+
   return {
     id,
+    rpid,
+    rootRpid: toReplyRelationId(raw.root_str || raw.root),
+    parentRpid: toReplyRelationId(raw.parent_str || raw.parent),
     author: {
       id: authorId,
       name: typeof member.uname === 'string' && member.uname.trim()
@@ -195,6 +210,9 @@ function normalizeComment(value: unknown): MomentCommentItem | null {
     segments: normalizeMomentCommentSegments(content, message),
     createdAt,
     likeCount: Math.max(0, Number(raw.like) || 0),
+    isLiked: Number(raw.action) === 1
+      || Number(action.like) === 1
+      || Number(upAction.like) === 1,
     replyCount: Math.max(replies.length, Number(raw.rcount ?? raw.count) || 0),
     replies,
   }

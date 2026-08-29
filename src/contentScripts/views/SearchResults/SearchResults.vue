@@ -199,17 +199,19 @@ async function handleUrlChange() {
       return
 
     const sameSearch = previousKeyword === normalizedKeyword.value && previousCategory === categoryFromUrl
-    if (sameSearch && previousPage !== filters.page) {
+    const needsPageRestore = filters.page > 1 || (sameSearch && previousPage !== filters.page)
+    if (needsPageRestore) {
       const restored = await searchResultsPanelRef.value?.restoreCurrentPage(filters.page)
       if (restoreGeneration !== urlRestoreGeneration)
         return
       if (!restored) {
-        currentPage.value = previousPage
+        const fallbackPage = sameSearch ? previousPage : 1
+        currentPage.value = fallbackPage
         const params = new URLSearchParams(window.location.search)
-        if (previousPage === 1)
+        if (fallbackPage === 1)
           params.delete('pn')
         else
-          params.set('pn', String(previousPage))
+          params.set('pn', String(fallbackPage))
         history.replaceState({}, '', buildSearchResultsUrl(location.pathname, params, location.hash))
       }
     }

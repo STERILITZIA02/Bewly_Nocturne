@@ -3,11 +3,11 @@ import DOMPurify from 'dompurify'
 import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 
+import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { revokeAccessKey } from '~/utils/authProvider'
 import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON, LV6_LIGHTNING_ICON } from '~/utils/lvIcons'
 import { getCSRF, isHomePage } from '~/utils/main'
@@ -157,8 +157,7 @@ onBeforeUnmount(() => {
 })
 
 async function logout() {
-  revokeAccessKey()
-
+  // Web session logout is independent from optional App recommendation auth.
   // 立即更新登录状态，让顶栏立即显示未登录状态
   topBarStore.isLogin = false
   topBarStore.cleanup()
@@ -195,13 +194,17 @@ function getLvIcon(level: number, isSigma: boolean = false): string {
 
 function handleClickChannel() {
   if (settings.value.topBarLinkOpenMode === 'newTab') {
+    resetTopBarTransientInteraction()
     window.open(`https://space.bilibili.com/${mid.value}`, '_blank')
   }
   else if (settings.value.topBarLinkOpenMode === 'currentTabIfNotHomepage') {
-    if (isHomePage())
+    if (isHomePage()) {
+      resetTopBarTransientInteraction()
       window.open(`https://space.bilibili.com/${mid.value}`, '_blank')
-    else
+    }
+    else {
       window.open(`https://space.bilibili.com/${mid.value}`, '_self')
+    }
   }
   else {
     window.open(`https://space.bilibili.com/${mid.value}`, '_self')

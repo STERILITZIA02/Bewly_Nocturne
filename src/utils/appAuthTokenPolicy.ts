@@ -6,6 +6,57 @@ export interface AppAccessTokenState {
 }
 
 export type AppAccessTokenFreshness = 'missing' | 'refresh-expired' | 'refresh-required' | 'valid'
+export type AppAuthorizationState = 'valid' | 'invalid' | 'authorizing' | 'dismissed'
+
+export interface AppAuthorizationSnapshot {
+  state: AppAuthorizationState
+  invalidToken: string
+}
+
+export type AppAuthorizationEvent
+  = | { type: 'invalid', token: string }
+    | { type: 'authorize', token: string }
+    | { type: 'dismiss' }
+    | { type: 'authorized', token: string }
+    | { type: 'token-valid', token: string }
+
+export function resolveAppAuthorizationState(
+  current: AppAuthorizationSnapshot,
+  event: AppAuthorizationEvent,
+): AppAuthorizationSnapshot {
+  if (event.type === 'authorized' || event.type === 'token-valid') {
+    return {
+      state: 'valid',
+      invalidToken: event.token,
+    }
+  }
+
+  if (event.type === 'dismiss') {
+    return {
+      ...current,
+      state: 'dismissed',
+    }
+  }
+
+  if (event.type === 'authorize') {
+    return {
+      state: 'authorizing',
+      invalidToken: event.token,
+    }
+  }
+
+  if (
+    current.state === 'authorizing'
+    || (current.state === 'dismissed' && current.invalidToken === event.token)
+  ) {
+    return current
+  }
+
+  return {
+    state: 'invalid',
+    invalidToken: event.token,
+  }
+}
 
 export function createBooleanSingleFlight() {
   let activePromise: Promise<boolean> | null = null

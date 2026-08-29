@@ -2,12 +2,36 @@ export const SETTINGS_CLOUD_SYNC_ENABLED_KEY = 'settingsCloudSyncEnabled:v1'
 export const SETTINGS_CLOUD_SYNC_STATUS_KEY = 'settingsCloudSyncStatus:v1'
 export const SETTINGS_CLOUD_SYNC_KEY_PREFIX = 'bewlycat:settings:v1:'
 export const SETTINGS_CLOUD_SYNC_SCHEMA_VERSION = 1
+export const SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE = 'getSettingsCloudSyncAvailability'
+export const SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE = 'enableSettingsCloudSync'
 
 // Leave headroom below the browser storage.sync quotas (8 KiB per item and
 // about 100 KiB in total) for differences in quota accounting across browsers.
 export const SETTINGS_CLOUD_SYNC_ITEM_BYTES_LIMIT = 7_500
 export const SETTINGS_CLOUD_SYNC_TOTAL_BYTES_LIMIT = 90_000
 export const SETTINGS_CLOUD_SYNC_RETRY_DELAYS = [2_000, 5_000, 15_000, 60_000] as const
+
+export type SettingsCloudSyncMode = 'auto' | 'pull' | 'push'
+export type SettingsCloudSyncAvailabilityState = 'empty' | 'compatible' | 'incompatible'
+
+export interface SettingsCloudSyncAvailability {
+  state: SettingsCloudSyncAvailabilityState
+}
+
+export interface SettingsCloudSyncEnableRequest {
+  mode: SettingsCloudSyncMode
+  expectedState: Exclude<SettingsCloudSyncAvailabilityState, 'incompatible'>
+}
+
+export type SettingsCloudSyncEnableResponse
+  = | { ok: true }
+    | { ok: false, reason: 'conflict' | 'incompatible' | 'initialization-failed' }
+
+export type SettingsCloudSyncEnableDecision
+  = | { action: 'enable', mode: SettingsCloudSyncMode }
+    | { action: 'choose' }
+    | { action: 'blocked' }
+    | { action: 'cancel' }
 
 export interface SettingsCloudSyncStatus {
   pendingCount: number
@@ -67,6 +91,18 @@ function hasOwn(record: Record<string, unknown>, key: string) {
 
 export function isSettingsCloudSyncEnabled(value: unknown) {
   return value === true || value === 'true'
+}
+
+export function normalizeSettingsCloudSyncMode(value: unknown): SettingsCloudSyncMode {
+  return value === 'pull' || value === 'push' ? value : 'auto'
+}
+
+export function isBlockedSettingsCloudSyncField(field: string) {
+  return BLOCKED_FIELDS.has(field)
+}
+
+export function isKnownLocalOnlySettingsCloudSyncField(field: string) {
+  return LOCAL_ONLY_SETTINGS_FIELDS.has(field) || LOCAL_ONLY_RUNTIME_FIELDS.has(field)
 }
 
 export function isSettingsCloudSyncField(field: string) {
@@ -133,6 +169,13 @@ export function normalizeSettingsCloudSyncVersion(value: unknown): SettingsCloud
   }
 }
 
+export function isCorruptCurrentSchemaSettingsCloudSyncEntry(value: unknown) {
+  if (!value || typeof value !== 'object' || Array.isArray(value))
+    return false
+  return (value as { schemaVersion?: unknown }).schemaVersion === SETTINGS_CLOUD_SYNC_SCHEMA_VERSION
+    && normalizeSettingsCloudSyncEntry(value) == null
+}
+
 export function normalizeSettingsCloudSyncEntry(value: unknown): SettingsCloudSyncEntry | null {
   if (!value || typeof value !== 'object' || Array.isArray(value))
     return null
@@ -160,6 +203,62 @@ export function normalizeSettingsCloudSyncEntry(value: unknown): SettingsCloudSy
         value: candidate.value,
         version,
       }
+}
+
+function decodeSettingsCloudSyncKeyField(key: string) {
+  if (!key.startsWith(SETTINGS_CLOUD_SYNC_KEY_PREFIX))
+    return null
+
+  try {
+    const field = decodeURIComponent(key.slice(SETTINGS_CLOUD_SYNC_KEY_PREFIX.length))
+    return createSettingsCloudSyncKey(field) === key ? field : null
+  }
+  catch {
+    return null
+  }
+}
+
+export function classifySettingsCloudSyncSnapshot(
+  items: Record<string, unknown>,
+): SettingsCloudSyncAvailability {
+  let hasCompatibleEntry = false
+
+  for (const [key, value] of Object.entries(items)) {
+    if (!key.startsWith(SETTINGS_CLOUD_SYNC_KEY_PREFIX))
+      continue
+
+    const field = decodeSettingsCloudSyncKeyField(key)
+    if (field == null)
+      return { state: 'incompatible' }
+    if (isBlockedSettingsCloudSyncField(field) || isKnownLocalOnlySettingsCloudSyncField(field))
+      continue
+
+    if (parseSettingsCloudSyncKey(key) && normalizeSettingsCloudSyncEntry(value)) {
+      hasCompatibleEntry = true
+      continue
+    }
+    if (isCorruptCurrentSchemaSettingsCloudSyncEntry(value))
+      return { state: 'incompatible' }
+
+    return { state: 'incompatible' }
+  }
+
+  return { state: hasCompatibleEntry ? 'compatible' : 'empty' }
+}
+
+export function resolveSettingsCloudSyncEnableDecision(
+  state: SettingsCloudSyncAvailabilityState,
+  choice?: 'pull' | 'push' | 'cancel',
+): SettingsCloudSyncEnableDecision {
+  if (state === 'incompatible')
+    return { action: 'blocked' }
+  if (state === 'empty')
+    return { action: 'enable', mode: 'auto' }
+  if (choice === 'pull' || choice === 'push')
+    return { action: 'enable', mode: choice }
+  if (choice === 'cancel')
+    return { action: 'cancel' }
+  return { action: 'choose' }
 }
 
 export function createSettingsCloudSyncEntry(

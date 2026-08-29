@@ -1,3 +1,89 @@
+.video-toolbar-right-item.bewly-watch-later-btn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  width: var(--bew-icon-button-size-md);
+  min-width: var(--bew-icon-button-size-md);
+  height: var(--bew-icon-button-size-md);
+  margin: 0 var(--bew-space-1);
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  color: var(--text2, #61666d);
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color var(--bew-duration-fast) var(--bew-ease-out),
+    background-color var(--bew-duration-fast) var(--bew-ease-out),
+    opacity var(--bew-duration-fast) var(--bew-ease-out);
+
+  &:focus-visible {
+    outline: 2px solid var(--bew-theme-color);
+    outline-offset: var(--bew-space-0-5);
+  }
+
+  &.is-active {
+    color: var(--bew-theme-color, var(--brand_blue, #00aeec));
+    background: color-mix(in srgb, var(--bew-theme-color, #00aeec) 12%, transparent);
+  }
+
+  &.is-pending {
+    cursor: wait;
+    opacity: 0.65;
+  }
+
+  > .bewly-watch-later-btn__icon {
+    flex: none;
+    color: inherit;
+    font-size: var(--bew-icon-size-md);
+    line-height: 1;
+  }
+}
+
+.bewly-widescreen-entry-control,
+.bewly-video-screenshot-control {
+  position: relative;
+  overflow: visible;
+
+  > .bewly-player-tooltip {
+    position: absolute;
+    right: 0;
+    bottom: calc(100% + var(--bew-space-2));
+    z-index: 2;
+    max-width: min(240px, calc(100vw - var(--bew-space-4)));
+    overflow: hidden;
+    padding: var(--bew-space-1) var(--bew-space-2);
+    border-radius: var(--bew-radius-sm);
+    color: #fff;
+    background: rgb(0 0 0 / 80%);
+    box-shadow: var(--bew-shadow-1);
+    font-size: var(--bew-font-size-caption);
+    font-weight: var(--bew-font-weight-medium);
+    line-height: var(--bew-line-height-caption);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(var(--bew-space-1));
+    transition:
+      opacity var(--bew-duration-fast) var(--bew-ease-out),
+      visibility var(--bew-duration-fast) var(--bew-ease-out),
+      transform var(--bew-duration-fast) var(--bew-ease-out);
+  }
+
+  &:hover > .bewly-player-tooltip,
+  &:focus-visible > .bewly-player-tooltip {
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+  }
+}
+
 .bewly-design {
   .bpx-player-toast-row .bpx-player-toast-item {
     --bpx-toast-fn-color: var(--bew-theme-color);

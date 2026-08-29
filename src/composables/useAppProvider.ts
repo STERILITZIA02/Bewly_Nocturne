@@ -37,7 +37,7 @@ export interface BewlyAppProvider {
   scrollViewportRef: Ref<HTMLElement | null>
   reachTop: Ref<boolean>
   mainAppRef: Ref<HTMLElement>
-  handleReachBottom: Ref<(() => void) | undefined>
+  handleReachBottom: Ref<(() => boolean | void | Promise<boolean | void>) | undefined>
   handlePageRefresh: Ref<(() => void) | undefined>
   canRefreshHomeSubPage: Ref<boolean>
   // 添加撤销刷新的处理函数

@@ -13,6 +13,7 @@ import {
   normalizeListLayoutBreakpoint,
 } from '~/utils/gridLayout'
 import type { PageMode } from '~/utils/pageMode'
+import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 
 export type { AppAuthTokens } from './appAuthStorage'
 export { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from './appAuthStorage'
@@ -112,6 +113,7 @@ export type CustomPlayOrderOverrides = Record<CustomPlayOrderContext, CustomPlay
 export type CollectedSeasonPlayAllMode = 'beginning' | 'latest' | 'lastWatched'
 export type DefaultVideoPlayerMode = 'default' | 'webFullscreen' | 'widescreen' | 'bewlyWidescreen'
 export type BewlyWidescreenSidebarPosition = 'left' | 'right'
+export type BewlyWidescreenLayoutPriority = 'video-first' | 'sidebar-first'
 export type PlayerDefaultState = 'system' | 'remember' | 'on' | 'off'
 export type VideoAspectRatio = '0:0' | '4:3' | '16:9'
 export type VideoPlayerModeOverride = DefaultVideoPlayerMode | 'inherit'
@@ -220,6 +222,8 @@ export interface Settings {
   autoSwitchListLayout: boolean
   /** Automatic two-column -> one-column switch threshold in CSS pixels. */
   autoSwitchListLayoutBreakpoint: number
+  videoCardCoverRatioOneColumn: number
+  videoCardCoverRatioTwoColumns: number
   releaseOffscreenVideoCardImages: boolean
   watchLaterLayoutMode: WatchLaterLayoutMode
 
@@ -424,6 +428,8 @@ export interface Settings {
   // Video Player
   defaultVideoPlayerMode: DefaultVideoPlayerMode
   bewlyWidescreenSidebarPosition: BewlyWidescreenSidebarPosition
+  bewlyWidescreenLayoutPriority: BewlyWidescreenLayoutPriority
+  bewlyWidescreenCenterVideo: boolean
   showBewlyWidescreenButton: boolean
   defaultDanmakuState: PlayerDefaultState
   defaultCaptionState: PlayerDefaultState
@@ -493,6 +499,9 @@ export const originalSettings: Settings = {
   gridColumns: { ...defaultGridColumns },
   autoSwitchListLayout: true,
   autoSwitchListLayoutBreakpoint: MOBILE_LIST_LAYOUT_BREAKPOINT,
+  // Preserve the former equal split and 400px maximum at default values.
+  videoCardCoverRatioOneColumn: 50,
+  videoCardCoverRatioTwoColumns: 50,
   releaseOffscreenVideoCardImages: false,
   watchLaterLayoutMode: 'list',
 
@@ -546,8 +555,8 @@ export const originalSettings: Settings = {
   topBarLogoStyle: 'icon',
   topBarComponentsConfig: [
     { key: 'moments', visible: true, badgeType: 'number' },
-    { key: 'favorites', visible: true, badgeType: 'number' },
-    { key: 'history', visible: true, badgeType: 'number' },
+    { key: 'favorites', visible: true, badgeType: 'none' },
+    { key: 'history', visible: true, badgeType: 'none' },
     { key: 'watchLater', visible: true, badgeType: 'number' },
     { key: 'creatorCenter', visible: true, badgeType: 'none' },
     { key: 'upload', visible: true, badgeType: 'none' },
@@ -694,6 +703,8 @@ export const originalSettings: Settings = {
   // Video Player
   defaultVideoPlayerMode: 'default',
   bewlyWidescreenSidebarPosition: 'right',
+  bewlyWidescreenLayoutPriority: 'video-first',
+  bewlyWidescreenCenterVideo: false,
   showBewlyWidescreenButton: true,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
@@ -815,6 +826,19 @@ watch(
     if (!validTopBarLogoStyles.includes(record.topBarLogoStyle))
       record.topBarLogoStyle = originalSettings.topBarLogoStyle
 
+    const unsupportedBadgeKeys = new Set(['favorites', 'history'])
+    if (Array.isArray(record.topBarComponentsConfig)) {
+      const hasUnsupportedBadge = record.topBarComponentsConfig.some((component) => {
+        return unsupportedBadgeKeys.has(component.key) && component.badgeType !== 'none'
+      })
+      if (hasUnsupportedBadge) {
+        record.topBarComponentsConfig = record.topBarComponentsConfig.map(component => ({
+          ...component,
+          badgeType: unsupportedBadgeKeys.has(component.key) ? 'none' : component.badgeType,
+        }))
+      }
+    }
+
     if (!Number.isFinite(record.frostedGlassBlurIntensity))
       record.frostedGlassBlurIntensity = originalSettings.frostedGlassBlurIntensity
 
@@ -834,6 +858,14 @@ watch(
     // Normalize the user-configurable two-column list breakpoint. Older
     // versions used a fixed 640px threshold and do not have this field.
     record.autoSwitchListLayoutBreakpoint = normalizeListLayoutBreakpoint(record.autoSwitchListLayoutBreakpoint)
+    record.videoCardCoverRatioOneColumn = normalizeVideoCardCoverRatio(
+      record.videoCardCoverRatioOneColumn,
+      originalSettings.videoCardCoverRatioOneColumn,
+    )
+    record.videoCardCoverRatioTwoColumns = normalizeVideoCardCoverRatio(
+      record.videoCardCoverRatioTwoColumns,
+      originalSettings.videoCardCoverRatioTwoColumns,
+    )
 
     // 迁移旧的布尔类型自动播放设置到新的 AutoPlayMode 类型
     const autoPlayFields = ['autoPlayMultipart', 'autoPlayCollection', 'autoPlayRecommend', 'autoPlayWatchLater', 'autoPlayPlaylist'] as const

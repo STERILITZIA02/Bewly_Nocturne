@@ -65,7 +65,7 @@ defineExpose({ focus })
       :max="max"
       :maxlength="maxlength"
       :placeholder="placeholder"
-      w-inherit h-inherit
+      w-inherit min-w-0 h-inherit
       outline-none flex-1 bg-transparent
       @keydown.enter="$emit('enter')"
       @blur="$emit('blur')"
@@ -83,6 +83,9 @@ defineExpose({ focus })
 .prefix,
 .suffix {
   --uno: "flex items-center";
+
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .b-input input {

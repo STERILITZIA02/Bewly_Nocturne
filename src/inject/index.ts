@@ -169,6 +169,7 @@ else if (shouldInitializePageScript) {
      * 楼中楼翻页后父评论可能不在当前 DOM，仍需靠此结构挂到最近可见祖先。
      */
     replyMetaByRpid: Map<string, CommentReplyTreeCachedMeta>
+    identity: string
     enabled: boolean
     nextOriginalOrder: number
     originalOrderByRenderer: WeakMap<HTMLElement, number>
@@ -339,13 +340,63 @@ else if (shouldInitializePageScript) {
 
         :host([data-bewly-comment-reply-tree]) #expander-contents {
           position: relative;
+          display: flex;
+          flex-direction: column;
         }
 
         :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer)[data-bewly-comment-reply-depth] {
           box-sizing: border-box;
           display: block;
+          order: var(--bew-comment-reply-order, 0);
           padding-inline-start: var(--bew-comment-reply-indent, 0px);
           width: 100%;
+        }
+
+        :host([data-bewly-comment-reply-tree]) #expander-contents > :not(:is(bili-comment-reply-renderer, bili-comment-renderer)) {
+          order: 2147483647;
+        }
+
+        :host > .bewly-comment-expand-all {
+          min-height: var(--bew-control-height-sm, 28px);
+          margin-block-start: var(--bew-space-1, 4px);
+          padding: var(--bew-space-1, 4px) 0;
+          border: 0;
+          border-radius: var(--bew-interactive-radius, 8px);
+          background: transparent;
+          color: var(--bew-text-3, var(--text3));
+          font: inherit;
+          font-size: var(--bew-font-size-control, 13px);
+          font-weight: var(--bew-font-weight-medium, 500);
+          line-height: var(--bew-line-height-control, 18px);
+          cursor: pointer;
+          transition:
+            color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
+            opacity var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
+            transform var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+        }
+
+        :host > .bewly-comment-expand-all:hover:not(:disabled) {
+          color: var(--bew-text-2, var(--text2));
+        }
+
+        :host > .bewly-comment-expand-all:focus-visible {
+          outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-focus-ring, var(--bew-theme-color));
+          outline-offset: var(--bew-space-0-5, 2px);
+        }
+
+        :host > .bewly-comment-expand-all:active:not(:disabled) {
+          transform: scale(0.98);
+        }
+
+        :host > .bewly-comment-expand-all:disabled {
+          cursor: wait;
+          opacity: 0.56;
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+          :host > .bewly-comment-expand-all {
+            transition: none;
+          }
         }
 
         :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer)[data-bewly-comment-reply-hidden] {
@@ -379,8 +430,9 @@ else if (shouldInitializePageScript) {
     'bili-comment-box': {
       id: 'bewly-comment-box-style',
       css: `
-        #editor:not(:hover):not(.active) {
-          border-color: var(--bew-comment-editor-border, var(--Ga1)) !important;
+        #editor:not(:hover):not(.active),
+        .tool-btn {
+          border-color: var(--bew-comment-box-border, var(--Ga1)) !important;
         }
 
         :is(#pub button, button[data-v-risk="fingerprint"]):not(:hover, :active, .active) {
@@ -806,8 +858,24 @@ else if (shouldInitializePageScript) {
     return null
   }
 
-  function getCommentReplyTreeState(component: object): CommentReplyTreeState {
+  function getCommentReplyTreeIdentity(component: any) {
+    const data = getCommentReplyData(component)
+    const rootRpid = component?.root
+      ?? component?.rootRpid
+      ?? getReplyRootRpid(data)
+      ?? getReplyRpid(data)
+      ?? ''
+    const oid = component?.oid ?? getReplyOid(data) ?? ''
+    return `${String(oid)}:${String(rootRpid)}`
+  }
+
+  function getCommentReplyTreeState(component: any): CommentReplyTreeState {
+    const identity = getCommentReplyTreeIdentity(component)
     let state = commentReplyTreeStates.get(component)
+    if (state && state.identity !== identity) {
+      clearCommentReplyTreeState(component)
+      state = undefined
+    }
     if (!state) {
       state = {
         collapsedNodeKeys: new Set(),
@@ -815,6 +883,7 @@ else if (shouldInitializePageScript) {
         branchToggleOffsetByKey: new Map(),
         tailToggleOffsetByKey: new Map(),
         replyMetaByRpid: new Map(),
+        identity,
         enabled: false,
         nextOriginalOrder: 0,
         originalOrderByRenderer: new WeakMap(),
@@ -851,6 +920,7 @@ else if (shouldInitializePageScript) {
             delete renderer.dataset.bewlyCommentReplyHidden
             delete renderer.dataset.bewlyCommentReplyCollapsed
             renderer.style.removeProperty('--bew-comment-reply-indent')
+            renderer.style.removeProperty('--bew-comment-reply-order')
             setCommentReplyAtPrefixHidden(renderer, false)
             clearCommentReplyOffpageParentLabel(renderer)
           })
@@ -1254,10 +1324,10 @@ else if (shouldInitializePageScript) {
   }
 
   const commentReplyPaginationLabels = {
-    'cmn-CN': { loadMore: '加载更多', loading: '加载中…', noMore: '没有更多回复' },
-    'cmn-TW': { loadMore: '載入更多', loading: '載入中…', noMore: '沒有更多回覆' },
-    en: { loadMore: 'Load more', loading: 'Loading…', noMore: 'No more replies' },
-    jyut: { loadMore: '載入更多', loading: '載入中…', noMore: '冇更多回覆' },
+    'cmn-CN': { expandAll: '展开全部回复', expandingAll: '正在展开…', loadMore: '加载更多', loading: '加载中…', noMore: '没有更多回复' },
+    'cmn-TW': { expandAll: '展開全部回覆', expandingAll: '正在展開…', loadMore: '載入更多', loading: '載入中…', noMore: '沒有更多回覆' },
+    en: { expandAll: 'Expand all replies', expandingAll: 'Expanding…', loadMore: 'Load more', loading: 'Loading…', noMore: 'No more replies' },
+    jyut: { expandAll: '展開全部回覆', expandingAll: '展開緊…', loadMore: '載入更多', loading: '載入中…', noMore: '冇更多回覆' },
   } as const
 
   function getCommentReplyPaginationLabels() {
@@ -2576,31 +2646,6 @@ else if (shouldInitializePageScript) {
     })
   }
 
-  function reorderCommentReplyRenderers(
-    container: HTMLElement,
-    currentRenderers: HTMLElement[],
-    orderedRenderers: HTMLElement[],
-  ) {
-    if (orderedRenderers.every((renderer, index) => renderer === currentRenderers[index]))
-      return
-
-    const replyRendererSet = new Set(currentRenderers)
-    const findNextReplyRenderer = (renderer: HTMLElement): ChildNode | null => {
-      let sibling = renderer.nextSibling
-      while (sibling && !(sibling instanceof HTMLElement && replyRendererSet.has(sibling)))
-        sibling = sibling.nextSibling
-      return sibling
-    }
-
-    let insertionPoint: ChildNode | null = currentRenderers[0] ?? null
-    orderedRenderers.forEach((renderer) => {
-      if (renderer === insertionPoint)
-        insertionPoint = findNextReplyRenderer(renderer)
-      else
-        container.insertBefore(renderer, insertionPoint)
-    })
-  }
-
   function buildCommentReplyTreeOrder(
     nodes: CommentReplyTreeNode[],
     metaByRpid: Map<string, CommentReplyTreeCachedMeta> = new Map(),
@@ -2656,16 +2701,26 @@ else if (shouldInitializePageScript) {
     return orderedNodes
   }
 
+  function pruneDisconnectedCommentReplyRenderers() {
+    commentRepliesRenderers.forEach((renderer) => {
+      if (renderer?.isConnected)
+        return
+      commentReplyPagination.dispose(renderer)
+      clearCommentReplyTreeState(renderer)
+    })
+  }
+
   function updateCommentReplyTree(component: any) {
     const root = component?.shadowRoot as ShadowRoot | null | undefined
     if (!root)
       return
 
-    commentRepliesRenderers.add(component)
+    pruneDisconnectedCommentReplyRenderers()
     commentReplyPagination.sync(component)
     const treeMode = getCommentReplyTreeMode()
-    const existingState = commentReplyTreeStates.get(component)
-    if (treeMode === null && !existingState?.enabled) {
+    const state = getCommentReplyTreeState(component)
+    commentRepliesRenderers.add(component)
+    if (treeMode === null && !state.enabled) {
       component.removeAttribute('data-bewly-comment-reply-tree')
       return
     }
@@ -2676,7 +2731,6 @@ else if (shouldInitializePageScript) {
 
     const replyRenderers = Array.from(replyContainer.children)
       .filter(isCommentReplyRenderer)
-    const state = existingState ?? getCommentReplyTreeState(component)
     replyRenderers.forEach(renderer => getCommentReplyOriginalOrder(state, renderer))
 
     const enabled = treeMode !== null
@@ -2693,18 +2747,13 @@ else if (shouldInitializePageScript) {
       state.collapsedTailKeys.clear()
       state.branchToggleOffsetByKey.clear()
       state.tailToggleOffsetByKey.clear()
-      if (state.enabled) {
-        const originalOrder = [...replyRenderers].sort((a, b) => (
-          getCommentReplyOriginalOrder(state, a) - getCommentReplyOriginalOrder(state, b)
-        ))
-        reorderCommentReplyRenderers(replyContainer, replyRenderers, originalOrder)
-      }
 
       replyRenderers.forEach((replyRenderer) => {
         delete replyRenderer.dataset.bewlyCommentReplyDepth
         delete replyRenderer.dataset.bewlyCommentReplyHidden
         delete replyRenderer.dataset.bewlyCommentReplyCollapsed
         replyRenderer.style.removeProperty('--bew-comment-reply-indent')
+        replyRenderer.style.removeProperty('--bew-comment-reply-order')
         setCommentReplyAtPrefixHidden(replyRenderer, false)
         clearCommentReplyOffpageParentLabel(replyRenderer)
       })
@@ -2754,17 +2803,13 @@ else if (shouldInitializePageScript) {
     const indentStep = getCommentReplyTreeIndentStep(replyContainer)
     const depthLimit = getCommentReplyTreeDepthLimit(replyContainer, indentStep)
     component.style.setProperty('--bew-comment-reply-indent-step', `${indentStep}px`)
-    orderedNodes.forEach(({ depth, node }) => {
+    orderedNodes.forEach(({ depth, node }, visualOrder) => {
       const visualDepth = Math.min(depth, depthLimit)
       node.renderer.dataset.bewlyCommentReplyDepth = String(visualDepth)
       node.renderer.style.setProperty('--bew-comment-reply-indent', getCommentReplyIndent(visualDepth))
+      node.renderer.style.setProperty('--bew-comment-reply-order', String(visualOrder))
     })
     updateCommentReplyTreeVisibility(component, state, orderedNodes, rootNodes, collapseParentBody)
-    reorderCommentReplyRenderers(
-      replyContainer,
-      replyRenderers,
-      orderedNodes.map(({ node }) => node.renderer),
-    )
     // 父节点展示：
     // - 直接父在本页：引导线/缩进表达层级；线条模式隐藏正文「回复 @xxx」
     // - 直接父不在本页且有正文缓存：引用卡展示原正文
@@ -2812,7 +2857,7 @@ else if (shouldInitializePageScript) {
   function refreshCommentReplyTrees() {
     commentRepliesRenderers.forEach((component) => {
       if (!component?.isConnected) {
-        commentReplyPagination.suspendForNativeCollapse(component, true)
+        commentReplyPagination.dispose(component)
         clearCommentReplyTreeState(component)
         return
       }

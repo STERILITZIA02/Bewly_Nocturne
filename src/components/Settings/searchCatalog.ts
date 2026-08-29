@@ -329,6 +329,10 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.group_video_card_grid',
     'settings.auto_switch_list_layout',
     'settings.auto_switch_list_layout_breakpoint',
+    'settings.video_card_cover_ratio',
+    'settings.video_card_cover_ratio_desc',
+    'settings.video_card_cover_ratio_one_column',
+    'settings.video_card_cover_ratio_two_columns',
     'settings.grid_breakpoints',
     'settings.group_video_card_display',
     'settings.video_card_layout',
@@ -410,14 +414,18 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ], { keywordKeys: linkOpeningOptionKeys }),
   ...[
     ['moments', 'topbar.moments'],
-    ['favorites', 'topbar.favorites'],
-    ['history', 'topbar.history'],
     ['watchLater', 'topbar.watch_later'],
-    ['creatorCenter', 'topbar.creative_center'],
-    ['upload', 'topbar.upload'],
     ['notifications', 'topbar.notifications'],
   ].flatMap(([, titleKey]) => createEntries(topBarRoute, [titleKey!], {
     keywordKeys: ['settings.visibility', 'settings.badge_type', 'settings.top_bar_icon_badges_opt'],
+  })),
+  ...[
+    ['favorites', 'topbar.favorites'],
+    ['history', 'topbar.history'],
+    ['creatorCenter', 'topbar.creative_center'],
+    ['upload', 'topbar.upload'],
+  ].flatMap(([, titleKey]) => createEntries(topBarRoute, [titleKey!], {
+    keywordKeys: ['settings.visibility'],
   })),
 
   ...createEntries(dockRoute, [
@@ -471,6 +479,10 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.video_player_mode.bewly_widescreen_sidebar_position',
     'settings.show_bewly_widescreen_button',
     'settings.show_bewly_widescreen_button_desc',
+    'settings.video_player_mode.bewly_widescreen_center_video',
+    'settings.video_player_mode.bewly_widescreen_center_video_desc',
+    'settings.video_player_mode.bewly_widescreen_layout_priority',
+    'settings.video_player_mode.bewly_widescreen_layout_priority_desc',
     'settings.video_player_mode.enable_overrides',
     'settings.video_player_mode.overrides',
     'settings.video_player_scroll',

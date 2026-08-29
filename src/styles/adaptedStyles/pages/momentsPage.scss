@@ -165,7 +165,12 @@
 
   &.dark {
     #app div.bg {
+      background-image: url("https://i0.hdslb.com/bfs/static/jinkela/long/images/dynamic/bg_dark.png") !important;
       opacity: 0.15;
+    }
+
+    .opus-collection__item.active {
+      background-color: var(--bew-theme-color-10) !important;
     }
 
     .bili-dyn-home--member,

@@ -178,12 +178,20 @@ class BilibiliStorageProvider {
       case 'COLS_CLR':
         postMessageToIframe(iframe, { type: 'COLS_CLR', key: 'search_history' })
         return
-      case 'COLS_SET':
-        postMessageToIframe(iframe, {
+      case 'COLS_SET': {
+        const sent = postMessageToIframe(iframe, {
           type: 'COLS_SET',
           key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY,
           value,
         })
+        if (!sent)
+          throw new Error('Failed to send the search history write.')
+
+        // COLS_SET 没有独立 ACK；同源 iframe 会按消息顺序处理，随后回读即为写入确认。
+        const confirmation = await this.operate('COLS_GET')
+        if (confirmation?.value !== value)
+          throw new Error('Failed to confirm the search history write.')
+      }
     }
   }
 
@@ -205,8 +213,9 @@ class BilibiliStorageProvider {
 }
 
 const provider = new BilibiliStorageProvider()
+let searchHistoryMutationQueue: Promise<void> = Promise.resolve()
 
-export async function getSearchHistory(): Promise<HistoryItem[]> {
+async function readSearchHistory(): Promise<HistoryItem[]> {
   const e = await provider.getSearchHistory()
 
   if (!e)
@@ -221,38 +230,45 @@ export async function getSearchHistory(): Promise<HistoryItem[]> {
   }
 }
 
-export async function addSearchHistory(historyItem: HistoryItem) {
-  let history = await getSearchHistory()
-
-  let hasSameValue = false
-  history.forEach((item) => {
-    if (item.value === historyItem.value) {
-      item.timestamp = historyItem.timestamp
-      hasSameValue = true
-    }
-  })
-  if (!hasSameValue)
-    history.unshift(historyItem)
-
-  // if out of limit, remove overflow items
-  history = history.filter((item, index) => {
-    if (index < SEARCH_HISTORY_LIMIT)
-      return item
-    else
-      return false
-  })
-
-  provider.addSearchHistory(JSON.stringify(history))
-  return history
+function enqueueSearchHistoryMutation<T>(mutation: () => Promise<T>): Promise<T> {
+  const result = searchHistoryMutationQueue.then(mutation, mutation)
+  searchHistoryMutationQueue = result.then(() => undefined, () => undefined)
+  return result
 }
 
-export async function removeSearchHistory(value: string) {
-  let history = await getSearchHistory()
-  history = history.filter(item => item.value !== value)
-  provider.removeSearchHistory(JSON.stringify(history))
-  return history
+export async function getSearchHistory(): Promise<HistoryItem[]> {
+  await searchHistoryMutationQueue
+  return readSearchHistory()
 }
 
-export async function clearAllSearchHistory() {
-  return provider.clearSearchHistory()
+export function addSearchHistory(historyItem: HistoryItem): Promise<HistoryItem[]> {
+  return enqueueSearchHistoryMutation(async () => {
+    let history = await readSearchHistory()
+
+    let hasSameValue = false
+    history.forEach((item) => {
+      if (item.value === historyItem.value) {
+        item.timestamp = historyItem.timestamp
+        hasSameValue = true
+      }
+    })
+    if (!hasSameValue)
+      history.unshift(historyItem)
+
+    history = history.slice(0, SEARCH_HISTORY_LIMIT)
+    await provider.addSearchHistory(JSON.stringify(history))
+    return history
+  })
+}
+
+export function removeSearchHistory(value: string): Promise<HistoryItem[]> {
+  return enqueueSearchHistoryMutation(async () => {
+    const history = (await readSearchHistory()).filter(item => item.value !== value)
+    await provider.removeSearchHistory(JSON.stringify(history))
+    return history
+  })
+}
+
+export function clearAllSearchHistory(): Promise<unknown> {
+  return enqueueSearchHistoryMutation(() => provider.clearSearchHistory())
 }

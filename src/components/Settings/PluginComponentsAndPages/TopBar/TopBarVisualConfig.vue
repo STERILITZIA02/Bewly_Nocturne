@@ -35,13 +35,13 @@ const topBarComponents = computed<TopBarComponent[]>(() => [
     key: 'favorites',
     i18nKey: 'topbar.favorites',
     icon: 'i-mingcute:star-line',
-    supportsBadge: true,
+    supportsBadge: false,
   },
   {
     key: 'history',
     i18nKey: 'topbar.history',
     icon: 'i-mingcute:time-line',
-    supportsBadge: true,
+    supportsBadge: false,
   },
   {
     key: 'watchLater',
@@ -103,11 +103,22 @@ function ensureTopBarComponentsConfig() {
   const hasExpectedKeys = currentConfig.length === topBarComponents.value.length
     && topBarComponents.value.every((component, index) => currentConfig[index]?.key === component.key)
 
-  if (hasExpectedKeys)
+  const hasUnsupportedBadges = topBarComponents.value.some((component) => {
+    return !component.supportsBadge && currentConfig.find(config => config.key === component.key)?.badgeType !== 'none'
+  })
+
+  if (hasExpectedKeys && !hasUnsupportedBadges)
     return
 
   settings.value.topBarComponentsConfig = topBarComponents.value.map((component) => {
-    return currentConfig.find(config => config.key === component.key) ?? createDefaultComponentConfig(component)
+    const storedConfig = currentConfig.find(config => config.key === component.key)
+    if (!storedConfig)
+      return createDefaultComponentConfig(component)
+
+    return {
+      ...storedConfig,
+      badgeType: component.supportsBadge ? storedConfig.badgeType : 'none',
+    }
   })
 }
 
