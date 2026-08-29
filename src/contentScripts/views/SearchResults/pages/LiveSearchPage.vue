@@ -3,8 +3,8 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Empty from '~/components/Empty.vue'
-import SmoothLoading from '~/components/SmoothLoading.vue'
 import UserCard from '~/components/UserCard/UserCard.vue'
+import UserCardSkeleton from '~/components/UserCard/UserCardSkeleton.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
@@ -550,10 +550,14 @@ function refreshCurrentPage() {
     ? handlePageChange(currentPage.value, false, false)
     : performSearch(false)
 }
-function restorePage(page: number) {
-  return page === currentPage.value
-    ? Promise.resolve(true)
-    : handlePageChange(page, false, false)
+async function restorePage(page: number): Promise<boolean> {
+  if (page === currentPage.value)
+    return true
+  if (paginationMode.value === 'pagination')
+    return handlePageChange(page, false, false)
+
+  updatePage(page)
+  return performSearch(false)
 }
 
 // 只刷新直播间数据（用于"全部"模式下改变排序）
@@ -670,7 +674,7 @@ defineExpose({
         <!-- 主播 (上面) -->
         <div
           v-if="!isInPaginationNonFirstPage
-            && liveUserList.length > 0
+            && (liveUserList.length > 0 || isLoading)
             && (filters.subCategory === 'all' || filters.subCategory === 'live_user')"
         >
           <div flex items-center gap-3 mb-3>
@@ -682,6 +686,10 @@ defineExpose({
             </span>
           </div>
           <div grid="~ cols-3 gap-4">
+            <UserCardSkeleton
+              v-for="index in (isLoading && liveUserList.length === 0 ? 3 : 0)"
+              :key="`live-user-initial-skeleton-${index}`"
+            />
             <UserCard
               v-for="user in (filters.subCategory === 'all'
                 ? liveUserList.slice(0, 6)
@@ -693,6 +701,10 @@ defineExpose({
               }"
               :compact="true"
               @follow-state-changed="(mid: number, isFollowing: boolean) => handleFollowStateChanged({ mid, isFollowing })"
+            />
+            <UserCardSkeleton
+              v-for="index in (isLoading && liveUserList.length > 0 ? 3 : 0)"
+              :key="`live-user-more-skeleton-${index}`"
             />
           </div>
           <!-- 查看更多按钮 (仅在全部模式下且主播总数>6时显示) -->
@@ -734,8 +746,8 @@ defineExpose({
             :request-failed="!!error"
             :show-watch-later="false"
             :empty-description="t('common.no_data')"
-            :show-loading-more-skeleton="false"
-            :show-load-more-indicator="paginationMode === 'scroll' && transformedLiveRoomList.length > 0 && hasMore"
+            :show-loading-more-skeleton="true"
+            :show-load-more-indicator="false"
             enable-row-padding
             show-preview
             @load-more="handleLoadMore"
@@ -745,11 +757,6 @@ defineExpose({
 
       <!-- 滚动加载模式：主播列表没有更多时显示提示（主播不用 VideoCardGrid） -->
       <template v-if="paginationMode === 'scroll' && filters.subCategory === 'live_user'">
-        <SmoothLoading
-          :show="isLoading && liveUserList.length > 0"
-          :keep-space="true"
-        />
-
         <Empty
           v-if="!isLoading && liveUserList.length > 0 && !hasMore"
           :description="t('common.no_more_content')"

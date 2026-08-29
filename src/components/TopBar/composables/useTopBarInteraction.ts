@@ -1,7 +1,7 @@
 import type { MaybeElement } from '@vueuse/core'
 import { unrefElement } from '@vueuse/core'
 import type { Ref } from 'vue'
-import { computed, ref, watch } from 'vue'
+import { computed, onScopeDispose, ref, watch } from 'vue'
 
 import {
   ACCOUNT_URL,
@@ -48,6 +48,25 @@ interface TopBarHoverController {
 }
 
 const hoverControllers = new Map<TopBarPopupKey, TopBarHoverController>()
+const transientResetters = new Set<() => void>()
+
+function clearControllerTimers(controller: TopBarHoverController) {
+  if (controller.enterTimer !== undefined)
+    clearTimeout(controller.enterTimer)
+  if (controller.leaveTimer !== undefined)
+    clearTimeout(controller.leaveTimer)
+  controller.enterTimer = undefined
+  controller.leaveTimer = undefined
+}
+
+export function resetTopBarTransientInteraction() {
+  hoverControllers.forEach((controller) => {
+    clearControllerTimers(controller)
+    controller.triggerHovered = false
+    controller.popupHovered = false
+  })
+  transientResetters.forEach(reset => reset())
+}
 
 export function useTopBarInteraction() {
   const topBarStore = useTopBarStore()
@@ -58,15 +77,12 @@ export function useTopBarInteraction() {
   // 当前点击的顶栏项
   const currentClickedTopBarItem = ref<TopBarPopupKey | null>(null)
   const handledClickEvents = new WeakSet<MouseEvent>()
-
-  function clearControllerTimers(controller: TopBarHoverController) {
-    if (controller.enterTimer !== undefined)
-      clearTimeout(controller.enterTimer)
-    if (controller.leaveTimer !== undefined)
-      clearTimeout(controller.leaveTimer)
-    controller.enterTimer = undefined
-    controller.leaveTimer = undefined
+  const resetLocalTransientState = () => {
+    currentClickedTopBarItem.value = null
+    closeAllPopups()
   }
+  transientResetters.add(resetLocalTransientState)
+  onScopeDispose(() => transientResetters.delete(resetLocalTransientState))
 
   function clearOtherHoverTimers(activeKey?: TopBarPopupKey) {
     hoverControllers.forEach((controller, key) => {
@@ -191,16 +207,11 @@ export function useTopBarInteraction() {
       onCleanup(() => {
         triggerElement?.removeEventListener('mouseenter', handleTriggerEnter)
         triggerElement?.removeEventListener('mouseleave', handleTriggerLeave)
-        const hadMouseInteraction = controller.triggerHovered
-          || controller.popupHovered
-          || controller.enterTimer !== undefined
-          || controller.leaveTimer !== undefined
         controller.triggerHovered = false
         controller.popupHovered = false
         clearEnterTimer()
         clearLeaveTimer()
-        if (hadMouseInteraction)
-          topBarStore.popupVisible[key] = false
+        topBarStore.popupVisible[key] = false
       })
     }, { immediate: true, flush: 'post' })
 
@@ -276,11 +287,13 @@ export function useTopBarInteraction() {
     const openMode = settings.value.topBarLinkOpenMode
 
     if (openMode === 'background') {
+      resetTopBarTransientInteraction()
       void openLinkInBackground(pageUrl)
       return
     }
 
     if (openMode === 'newTab' || (openMode === 'currentTabIfNotHomepage' && isHomePage())) {
+      resetTopBarTransientInteraction()
       window.open(pageUrl, '_blank')
       return
     }

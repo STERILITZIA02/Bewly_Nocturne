@@ -13,8 +13,12 @@ const BILIBILI_TOP_BAR_SELECTORS = [
 let cachedOriginalTopBar: HTMLElement | null = null
 let cachedOriginalTopBarParent: HTMLElement | null = null
 const initializedHoverHeaders = new WeakSet<HTMLElement>()
+const hoverHeaderCleanups = new WeakMap<HTMLElement, () => void>()
 const initializedScrollStateHeaders = new WeakSet<HTMLElement>()
+const preparedHiddenContents = new WeakMap<HTMLElement, Map<HTMLElement, string>>()
 const initializedTopBarDocuments = new WeakSet<Document>()
+const topBarDocumentObservers = new WeakMap<Document, MutationObserver>()
+const scrollStateObservers = new WeakMap<HTMLElement, MutationObserver>()
 const loginButtonSetupCleanups = new WeakMap<Document, () => void>()
 const channelPanelColumns = [
   [
@@ -99,8 +103,19 @@ function prepareOriginalTopBar(header: HTMLElement) {
   const innerUselessContents = header.querySelectorAll<HTMLElement>(
     ':scope > *:not(.bili-header__bar):not(.bili-header__channel)',
   )
-  innerUselessContents.forEach(item => (item.style.display = 'none'))
-  header.querySelector<HTMLElement>(':scope > .bili-header__channel')?.style.removeProperty('display')
+  const originalDisplays = preparedHiddenContents.get(header) ?? new Map<HTMLElement, string>()
+  innerUselessContents.forEach((item) => {
+    if (!originalDisplays.has(item))
+      originalDisplays.set(item, item.style.display)
+    item.style.display = 'none'
+  })
+  const channel = header.querySelector<HTMLElement>(':scope > .bili-header__channel')
+  if (channel) {
+    if (!originalDisplays.has(channel))
+      originalDisplays.set(channel, channel.style.display)
+    channel.style.removeProperty('display')
+  }
+  preparedHiddenContents.set(header, originalDisplays)
   applyOriginalTopBarSlideDown(header)
   setupOriginalTopBarChannelHover(header)
   ensureOriginalTopBarScrolledLayout(header)
@@ -205,6 +220,7 @@ function keepOriginalTopBarAvailable(doc: Document) {
     childList: true,
     subtree: true,
   })
+  topBarDocumentObservers.set(doc, observer)
 }
 
 function restoreOriginalTopBarVisibility(header: HTMLElement) {
@@ -247,6 +263,7 @@ function keepOriginalTopBarScrolled(header: HTMLElement) {
     childList: true,
     subtree: true,
   })
+  scrollStateObservers.set(header, observer)
 }
 
 /**
@@ -397,6 +414,7 @@ function setupOriginalTopBarChannelHover(header: HTMLElement) {
 
   let closeTimer: ReturnType<typeof setTimeout> | null = null
   let closeAnimationTimer: ReturnType<typeof setTimeout> | null = null
+  const abortController = new AbortController()
 
   const clearCloseTimer = () => {
     if (closeTimer) {
@@ -423,7 +441,7 @@ function setupOriginalTopBarChannelHover(header: HTMLElement) {
       nativePopover?.classList.add('bewly-original-native-channel-open')
       setOriginalTopBarHomeArrowExpanded(header, true)
     }
-  })
+  }, { signal: abortController.signal })
 
   header.addEventListener('pointerout', (event) => {
     const target = event.target as Element | null
@@ -445,6 +463,13 @@ function setupOriginalTopBarChannelHover(header: HTMLElement) {
         closeAnimationTimer = null
       }, 300)
     }, 120)
+  }, { signal: abortController.signal })
+
+  hoverHeaderCleanups.set(header, () => {
+    abortController.abort()
+    clearCloseTimer()
+    initializedHoverHeaders.delete(header)
+    hoverHeaderCleanups.delete(header)
   })
 }
 
@@ -522,6 +547,45 @@ export function restoreOriginalBilibiliTopBarParent(doc: Document): boolean {
  * When toggling between Bewly and Bili top bars, Bilibili scripts may leave inline styles behind.
  * Clear a small set of inline properties so the original top bar can be shown immediately.
  */
+export function restorePreparedOriginalBilibiliTopBars(doc: Document) {
+  topBarDocumentObservers.get(doc)?.disconnect()
+  topBarDocumentObservers.delete(doc)
+  initializedTopBarDocuments.delete(doc)
+
+  const headers = new Set<HTMLElement>(Array.from(doc.querySelectorAll<HTMLElement>('.bili-header')))
+  if (cachedOriginalTopBar?.ownerDocument === doc)
+    headers.add(cachedOriginalTopBar)
+
+  headers.forEach((header) => {
+    hoverHeaderCleanups.get(header)?.()
+    scrollStateObservers.get(header)?.disconnect()
+    scrollStateObservers.delete(header)
+    initializedScrollStateHeaders.delete(header)
+    const originalDisplays = preparedHiddenContents.get(header)
+    originalDisplays?.forEach((display, element) => {
+      if (display)
+        element.style.display = display
+      else
+        element.style.removeProperty('display')
+    })
+    preparedHiddenContents.delete(header)
+    header.classList.remove(
+      'bewly-original-top-bar-scrolled',
+      'bewly-original-channel-open',
+      'bewly-original-channel-closing',
+    )
+    getOriginalTopBarNativeChannelPopover(header)?.classList.remove(
+      'bewly-original-native-channel-open',
+      'bewly-original-native-channel-closing',
+    )
+    header.querySelector('.bili-header__bar')?.classList.remove('slide-down')
+  })
+
+  doc.querySelectorAll<HTMLElement>(
+    '.bewly-bili-logo-entry, .bewly-home-entry-arrow, .bewly-bili-channel-panel, [data-bewly-channel-icons]',
+  ).forEach(element => element.remove())
+}
+
 export function resetBilibiliTopBarInlineStyles(doc: Document) {
   for (const selector of BILIBILI_TOP_BAR_SELECTORS) {
     doc.querySelectorAll<HTMLElement>(selector).forEach((el) => {

@@ -7,7 +7,7 @@ export const VIDEO_LIST_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:video|lis
 export const BANGUMI_PLAY_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/bangumi\/play\/.*/
 
 // 频道页面
-export const CHANNEL_PAGE_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:c|v|anime|guochuang|tv|movie|variety|mooc).*/
+export const CHANNEL_PAGE_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:c|v(?!\/topic)|anime|guochuang|tv|movie|variety|mooc).*/
 
 // 用户相关页面
 export const SPACE_URL = /^https?:\/\/space\.bilibili\.com(?:\/|$).*/

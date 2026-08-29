@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import NotificationSkeletonBlock from '~/components/SkeletonBlock.vue'
+
 import ConversationDetailSkeleton from '../whisper/ConversationDetailSkeleton.vue'
 import ConversationListSkeleton from '../whisper/ConversationListSkeleton.vue'
-import NotificationSkeletonBlock from './NotificationSkeletonBlock.vue'
 
 defineProps<{
   label: string

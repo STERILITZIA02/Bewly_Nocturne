@@ -24,6 +24,25 @@ const navigationRef = ref<HTMLElement | null>(null)
 const insideRef = ref<HTMLElement | null>(null)
 const indicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>(null)
 let lastEmittedWidth = 0
+const ACTIVE_SECTION_EDGE_GAP = 4
+
+function revealActiveSection() {
+  const navigation = navigationRef.value
+  const inside = insideRef.value
+  const scroller = navigation?.querySelector<HTMLElement>('.notifications-navigation__scroll')
+  const activeItem = inside?.querySelector<HTMLElement>('[data-active="true"]')
+  if (!scroller || !activeItem)
+    return
+
+  const itemStart = activeItem.offsetLeft
+  const itemEnd = itemStart + activeItem.offsetWidth
+  const viewportStart = scroller.scrollLeft
+  const viewportEnd = viewportStart + scroller.clientWidth
+  if (itemStart < viewportStart)
+    scroller.scrollTo({ left: Math.max(0, itemStart - ACTIVE_SECTION_EDGE_GAP), behavior: 'auto' })
+  else if (itemEnd > viewportEnd)
+    scroller.scrollTo({ left: itemEnd - scroller.clientWidth + ACTIVE_SECTION_EDGE_GAP, behavior: 'auto' })
+}
 
 function measureNavigationWidth() {
   const navigation = navigationRef.value
@@ -42,16 +61,23 @@ function measureNavigationWidth() {
 
   lastEmittedWidth = width
   emit('widthChange', width)
+  revealActiveSection()
 }
 
 useResizeObserver(insideRef, measureNavigationWidth)
 
 onMounted(() => {
-  void nextTick(measureNavigationWidth)
+  void nextTick(() => {
+    measureNavigationWidth()
+    revealActiveSection()
+  })
 })
 
 watch(() => props.modelValue, () => {
-  void indicatorRef.value?.updateIndicator(true)
+  void nextTick(() => {
+    revealActiveSection()
+    void indicatorRef.value?.updateIndicator(true)
+  })
 }, { flush: 'post' })
 
 function unreadCount(section: NotificationSectionDefinition): number {
@@ -95,11 +121,12 @@ function unreadCount(section: NotificationSectionDefinition): number {
         >
           <span class="notifications-navigation__label">{{ t(section.labelKey) }}</span>
           <span
-            v-if="unreadCount(section) > 0"
             class="notifications-navigation__badge"
-            :aria-label="t('notifications.unread_count', { count: unreadCount(section) })"
+            :class="{ 'notifications-navigation__badge--empty': unreadCount(section) <= 0 }"
+            :aria-hidden="unreadCount(section) <= 0"
+            :aria-label="unreadCount(section) > 0 ? t('notifications.unread_count', { count: unreadCount(section) }) : undefined"
           >
-            {{ unreadCount(section) > 99 ? '99+' : unreadCount(section) }}
+            {{ unreadCount(section) > 99 ? '99+' : Math.max(0, unreadCount(section)) }}
           </span>
         </button>
       </div>
@@ -136,6 +163,8 @@ function unreadCount(section: NotificationSectionDefinition): number {
   gap: var(--bew-control-gap);
   width: max-content;
   height: 100%;
+  box-sizing: border-box;
+  padding-inline: var(--bew-space-0-5);
 }
 
 .notifications-navigation__label {
@@ -144,17 +173,23 @@ function unreadCount(section: NotificationSectionDefinition): number {
 
 .notifications-navigation__badge {
   display: inline-grid;
+  box-sizing: border-box;
   flex: 0 0 auto;
   place-items: center;
-  min-width: var(--bew-space-4);
+  width: var(--bew-space-8);
   height: var(--bew-space-4);
   padding: 0 var(--bew-space-1);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-caption);
+  white-space: nowrap;
   background: var(--bew-theme-color);
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
+}
+
+.notifications-navigation__badge--empty {
+  visibility: hidden;
 }
 </style>

@@ -8,8 +8,12 @@ import type { Result as TimetableItem, TimetableResult } from '~/models/anime/ti
 import api from '~/utils/api'
 import { removeHttpFromUrl } from '~/utils/main'
 
+import AnimeTimeTableSkeleton from './AnimeTimeTableSkeleton.vue'
+
 const { t } = useI18n()
 const animeTimeTable = reactive<TimetableItem[]>([])
+const isLoading = ref(true)
+const requestFailed = ref(false)
 const animeTimeTableWrap = ref<HTMLElement>() as Ref<HTMLElement>
 
 const daysOfTheWeekList = computed(() => {
@@ -25,21 +29,31 @@ const daysOfTheWeekList = computed(() => {
 })
 
 onMounted(() => {
-  getAnimeTimeTable()
+  void getAnimeTimeTable()
 })
 
 function refreshAnimeTimeTable() {
   animeTimeTable.length = 0
-  getAnimeTimeTable()
+  void getAnimeTimeTable()
 }
 
-function getAnimeTimeTable() {
-  api.anime.getAnimeTimeTable()
-    .then((res: TimetableResult) => {
-      const { code, result } = res
-      if (code === 0)
-        Object.assign(animeTimeTable, result as TimetableItem[])
-    })
+async function getAnimeTimeTable() {
+  isLoading.value = true
+  requestFailed.value = false
+  try {
+    const res: TimetableResult = await api.anime.getAnimeTimeTable()
+    const { code, result } = res
+    if (code === 0)
+      Object.assign(animeTimeTable, result as TimetableItem[])
+    else
+      requestFailed.value = true
+  }
+  catch {
+    requestFailed.value = true
+  }
+  finally {
+    isLoading.value = false
+  }
 }
 
 defineExpose({ refreshAnimeTimeTable })
@@ -47,7 +61,13 @@ defineExpose({ refreshAnimeTimeTable })
 
 <template>
   <div>
-    <HorizontalScrollView>
+    <AnimeTimeTableSkeleton v-if="isLoading" />
+    <Empty v-else-if="requestFailed" :description="t('common.load_failed')">
+      <Button type="tertiary" @click="refreshAnimeTimeTable">
+        {{ t('common.operation.refresh') }}
+      </Button>
+    </Empty>
+    <HorizontalScrollView v-else>
       <ul ref="animeTimeTableWrap" flex="~">
         <li
           v-for="item in animeTimeTable"

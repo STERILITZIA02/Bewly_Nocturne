@@ -163,7 +163,7 @@ defineExpose({
       <TransitionGroup name="list">
         <article
           v-for="(moment, index) in topBarStore.moments"
-          :key="index"
+          :key="moment.id_str"
           class="group popover-card"
         >
           <ALink

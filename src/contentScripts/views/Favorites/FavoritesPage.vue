@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
+import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vue'
 import type { ContextMenuOption } from '~/components/ContextMenu.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
 import type { Video } from '~/components/VideoCard/types'
@@ -52,6 +53,7 @@ const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const isLoading = ref<boolean>(false)
 const isFullPageLoading = ref<boolean>(true)
+const bootstrapFailed = ref(false)
 const noMoreContent = ref<boolean>(false)
 const loadedSeasonMedias = ref<FavoriteSeasonMedia[]>([])
 const loadedSeasonComplete = ref<boolean>(false)
@@ -194,14 +196,38 @@ const searchScopeOptions = computed(() => [
 
 onMounted(() => {
   initPageAction()
-  initData()
+  void initData()
+})
+
+onScopeDispose(() => {
+  contentRequestVersion += 1
+  if (handleReachBottom.value === handleFavoriteReachBottom)
+    handleReachBottom.value = undefined
+  if (handlePageRefresh.value === handleFavoritePageRefresh)
+    handlePageRefresh.value = undefined
 })
 
 async function initData() {
-  await Promise.all([
-    getFavoriteCategories(),
-    getCollectedFavoriteSeasons(),
+  const requestVersion = ++contentRequestVersion
+  favoriteCategories.length = 0
+  collectedFavoriteSeasons.length = 0
+  selectedCategory.value = undefined
+  selectedSeason.value = undefined
+  bootstrapFailed.value = false
+  noMoreContent.value = false
+  isFullPageLoading.value = true
+
+  const results = await Promise.allSettled([
+    getFavoriteCategories(requestVersion),
+    getCollectedFavoriteSeasons(requestVersion),
   ])
+  if (requestVersion !== contentRequestVersion)
+    return
+  if (results.some(result => result.status === 'rejected')) {
+    bootstrapFailed.value = true
+    isFullPageLoading.value = false
+    return
+  }
 
   if (favoriteCategories.length > 0) {
     selectedCategory.value = favoriteCategories[0]
@@ -213,42 +239,43 @@ async function initData() {
   }
 }
 
-function initPageAction() {
-  handleReachBottom.value = async () => {
-    // 视频/合集列表由 VideoCardGrid 自己监听 sentinel；全局哨兵只负责图文收藏。
-    if (favoriteView.value !== 'article')
-      return
-
-    if (isLoading.value || noMoreContent.value)
-      return
-
-    setTimeout(() => {
-      if (!isLoading.value && !noMoreContent.value)
-        loadNextPage()
-    }, 50)
-  }
-
-  handlePageRefresh.value = () => {
-    if (isLoading.value)
-      return
-
-    loadSelectedContent()
-  }
+function retryFavoritesBootstrap() {
+  if (!isFullPageLoading.value)
+    void initData()
 }
 
-async function getFavoriteCategories() {
+async function handleFavoriteReachBottom() {
+  // 视频/合集列表由 VideoCardGrid 自己监听 sentinel；全局哨兵只负责图文收藏。
+  if (favoriteView.value !== 'article')
+    return false
+  if (isLoading.value || noMoreContent.value)
+    return false
+  return loadNextPage()
+}
+
+function handleFavoritePageRefresh() {
+  if (!isLoading.value)
+    loadSelectedContent()
+}
+
+function initPageAction() {
+  handleReachBottom.value = handleFavoriteReachBottom
+  handlePageRefresh.value = handleFavoritePageRefresh
+}
+
+async function getFavoriteCategories(requestVersion: number) {
   const res: FavoritesCategoryResult = await api.favorite.getFavoriteCategories({
     up_mid: getUserID(),
   })
-  if (res.code === 0)
+  if (requestVersion === contentRequestVersion && res.code === 0)
     favoriteCategories.push(...res.data.list)
 }
 
-async function getCollectedFavoriteSeasons() {
+async function getCollectedFavoriteSeasons(requestVersion: number) {
   const res: CollectedFavoriteSeasonsResult = await api.favorite.getCollectedFavoriteSeasons({
     up_mid: getUserID(),
   })
-  if (res.code === 0)
+  if (requestVersion === contentRequestVersion && res.code === 0)
     collectedFavoriteSeasons.push(...res.data.list)
 }
 
@@ -751,12 +778,13 @@ function loadSelectedContent() {
   void loadActiveContent(1, requestVersion)
 }
 
-function loadNextPage() {
+async function loadNextPage() {
   if (isLoading.value || noMoreContent.value)
-    return
+    return false
 
   currentPageNum.value += 1
-  void loadActiveContent(currentPageNum.value, contentRequestVersion)
+  await loadActiveContent(currentPageNum.value, contentRequestVersion)
+  return true
 }
 
 async function loadActiveContent(pn: number, requestVersion: number) {
@@ -1217,7 +1245,13 @@ function transformFavoriteArticle(item: FavoriteArticle) {
         </div>
       </div>
 
-      <template v-if="favoriteView === 'article'">
+      <Empty v-if="bootstrapFailed" :description="t('common.load_failed')">
+        <Button type="primary" @click="retryFavoritesBootstrap">
+          {{ t('common.operation.refresh') }}
+        </Button>
+      </Empty>
+
+      <template v-else-if="favoriteView === 'article'">
         <div v-if="favoriteArticles.length > 0" class="article-favorites-content">
           <div class="article-favorites-grid">
             <ArticleCard
@@ -1226,13 +1260,13 @@ function transformFavoriteArticle(item: FavoriteArticle) {
               v-bind="transformFavoriteArticle(article)"
             />
           </div>
-          <div v-if="isLoading" class="content-loading">
-            <Loading />
+          <div v-if="isLoading" class="article-favorites-grid" aria-hidden="true">
+            <ArticleCardSkeleton v-for="index in 2" :key="`favorite-article-more-${index}`" />
           </div>
           <Empty v-else-if="noMoreContent" :description="t('common.no_more_content')" />
         </div>
-        <div v-else-if="isLoading || isFullPageLoading" class="content-loading content-loading--initial">
-          <Loading />
+        <div v-else-if="isLoading || isFullPageLoading" class="article-favorites-grid" aria-hidden="true">
+          <ArticleCardSkeleton v-for="index in 6" :key="`favorite-article-initial-${index}`" />
         </div>
         <Empty v-else :description="t('common.no_data')" />
       </template>

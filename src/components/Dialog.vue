@@ -49,7 +49,7 @@ const props = withDefaults(defineProps<{
   layer: 'dialog',
 })
 
-const emit = defineEmits(['close', 'confirm'])
+const emit = defineEmits(['beforeClose', 'close', 'confirm'])
 
 const showShortcut = ref<boolean>(false)
 const { mainAppRef } = useBewlyApp()
@@ -208,6 +208,7 @@ function handleClose() {
 
   isClosing = true
   showShortcut.value = false
+  emit('beforeClose')
   // Already hidden (e.g. closed before enter finished) — no leave hook will run.
   if (!showDialog.value) {
     emitCloseOnce()
@@ -216,6 +217,8 @@ function handleClose() {
   showDialog.value = false
   // `close` is emitted in onAfterLeave after the leaving node is removed from DOM.
 }
+
+defineExpose({ close: handleClose })
 
 async function handleConfirm() {
   if (props.loading || isClosing || closeEmitted || isConfirmPending)

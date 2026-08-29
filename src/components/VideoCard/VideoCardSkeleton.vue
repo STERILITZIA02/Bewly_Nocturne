@@ -49,12 +49,12 @@ defineProps<{
     <div
       :class="horizontal ? 'horizontal-card-cover' : 'vertical-card-cover'"
       class="bew-surface-border"
-      shrink-0 aspect-video h-fit bg="$bew-skeleton"
+      aspect-video h-fit bg="$bew-skeleton"
       rounded="$bew-media-radius"
       style="aspect-ratio: 16 / 9;"
     />
     <!-- Other Information -->
-    <div w-full mt-0 flex="~ col gap-2">
+    <div class="horizontal-card-info" w-full mt-0 flex="~ col gap-2">
       <div flex="~ gap-1 justify-between items-start" w="full">
         <div w-full h-5 bg="$bew-skeleton" rounded="$bew-radius-sm" />
         <div class="bew-shape-circle" shrink-0 w-8 h-8 bg="$bew-skeleton" />
@@ -117,11 +117,12 @@ defineProps<{
     <div
       :class="horizontal ? 'horizontal-card-cover' : 'vertical-card-cover'"
       class="bew-surface-border"
-      shrink-0 aspect-video h-fit bg="$bew-skeleton"
+      aspect-video h-fit bg="$bew-skeleton"
       rounded="$bew-media-radius"
     />
     <!-- Other Information -->
     <div
+      class="horizontal-card-info"
       w-full mt-0
       flex="~ gap-4"
     >
@@ -156,7 +157,15 @@ defineProps<{
 
 <style lang="scss" scoped>
 .horizontal-card-cover {
-  --uno: "xl:w-280px lg:w-250px md:w-200px w-200px";
+  width: 100%;
+  flex: var(--video-card-cover-flex, 50) 1 0;
+  min-width: 0;
+  max-width: var(--video-card-cover-max-width, 400px);
+}
+
+.horizontal-card-info {
+  flex: var(--video-card-info-flex, 50) 1 0;
+  min-width: 0;
 }
 
 .vertical-card-cover {

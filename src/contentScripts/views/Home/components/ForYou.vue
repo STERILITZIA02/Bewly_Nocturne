@@ -9,6 +9,11 @@ import { FilterType, useFilter } from '~/composables/useFilter'
 import { LanguageType } from '~/enums/appEnums'
 import type { GridLayoutType } from '~/logic'
 import { appAuthTokens, noCookieForYouRecommendationState, settings } from '~/logic'
+import {
+  appAuthorizationSuccessVersion,
+  reportAppAuthorizationInvalid,
+  requestAppAuthorization,
+} from '~/logic/appAuthorizationCoordinator'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import type { AppForYouResult, Item as AppVideoItem } from '~/models/video/appForYou'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
@@ -181,6 +186,8 @@ const requestFailed = computed(() => (
   || recommendationDataState.value === 'request-error'
 ))
 const needToLoginFirst = ref<boolean>(false)
+const appAuthorizationRequired = ref(false)
+let refreshAfterAppAuthorization = false
 const refreshIdx = ref<number>(1)
 const noMoreContent = ref<boolean>(false)
 const activatedAppVideo = ref<AppVideoItem | null>()
@@ -189,6 +196,13 @@ const hasInitializedData = ref<boolean>(false)
 
 function getCurrentAccountId(): AccountId {
   return parseDedeUserID(document.cookie) ?? null
+}
+
+function requireAppAuthorization() {
+  needToLoginFirst.value = false
+  appAuthorizationRequired.value = true
+  recommendationDataState.value = 'idle'
+  reportAppAuthorizationInvalid(appAuthTokens.value.accessToken)
 }
 
 // 页面可见性状态
@@ -277,15 +291,8 @@ function applyRecommendationSuccessState(input: {
   filtersActive: boolean
 }) {
   recommendationDataState.value = resolveRecommendationSuccessState(input)
-  if (
-    input.displayedItemCount === 0
-    && (
-      recommendationDataState.value === 'empty'
-      || recommendationDataState.value === 'filtered-empty'
-    )
-  ) {
-    noMoreContent.value = true
-  }
+  if (input.displayedItemCount === 0)
+    noMoreContent.value = recommendationDataState.value === 'empty'
 }
 
 const recommendationFilterSettingsSignature = computed(() => JSON.stringify([
@@ -415,11 +422,31 @@ onMounted(() => {
   }
 })
 
+watch(appAuthorizationSuccessVersion, () => {
+  appAuthorizationRequired.value = false
+  if (settings.value.recommendationMode !== 'app')
+    return
+
+  if (isComponentActive) {
+    refreshAfterAppAuthorization = false
+    void initData()
+  }
+  else {
+    refreshAfterAppAuthorization = true
+  }
+})
+
 onActivated(() => {
   isComponentActive = true
   attachVisibilityListener()
-  if (ensureForYouAccount() || (!initializationPending && !hasInitializedData.value && !isLoading.value))
+  if (refreshAfterAppAuthorization && settings.value.recommendationMode === 'app') {
+    refreshAfterAppAuthorization = false
+    appAuthorizationRequired.value = false
     void initData()
+  }
+  else if (ensureForYouAccount() || (!initializationPending && !hasInitializedData.value && !isLoading.value)) {
+    void initData()
+  }
   initPageAction()
 })
 
@@ -741,8 +768,12 @@ function ensureForYouAccount() {
   return true
 }
 
-watch(() => settings.value.recommendationMode, () => {
+watch(() => settings.value.recommendationMode, (mode) => {
   requestVersion++
+  if (mode !== 'app') {
+    appAuthorizationRequired.value = false
+    refreshAfterAppAuthorization = false
+  }
   recommendationDataState.value = 'idle'
   noMoreContent.value = false
   hasInitializedData.value = false
@@ -801,6 +832,7 @@ async function initData() {
   appConsecutiveEmptyLoads.value = 0 // 重置APP模式空加载计数器
   recommendationDataState.value = 'idle'
   needToLoginFirst.value = false
+  appAuthorizationRequired.value = false
   try {
     await getData('refresh')
   }
@@ -1369,19 +1401,19 @@ async function getAppRecommendVideos(
   }
 
   // 仅在 APP 推荐真正发起请求前按需刷新 access token。
-  if (!await ensureFreshAppAccessToken()) {
+  const tokenReady = await ensureFreshAppAccessToken()
+  if (!isCurrentWebRequest(version, recommendationMode, accountId) || recommendationMode !== 'app')
+    return
+  if (!tokenReady) {
     debugLog(`${HOME_LOAD_LOG_PREFIX} 推荐接口请求失败`, {
       time: new Date().toLocaleString(),
       mode: recommendationMode,
       requestType,
-      reason: '缺少 access token',
+      reason: 'App authorization invalid',
     })
-    needToLoginFirst.value = true
-    recommendationDataState.value = 'idle'
+    requireAppAuthorization()
     return
   }
-  if (!isCurrentWebRequest(version, recommendationMode, accountId))
-    return
 
   const batchesToLoad = APP_LOAD_BATCHES.value
   const beforeLoadCount = appVideoList.value.length
@@ -1416,13 +1448,23 @@ async function getAppRecommendVideos(
           })
         }
         response = await requestAppRecommendations()
-        if (isAppAccessTokenInvalidResponse(response)
+        if (
+          isAppAccessTokenInvalidResponse(response)
+          && isCurrentWebRequest(version, recommendationMode, accountId)
           && await refreshInvalidAppAccessToken()
-          && isCurrentWebRequest(version, recommendationMode, accountId)) {
+          && isCurrentWebRequest(version, recommendationMode, accountId)
+        ) {
           response = await requestAppRecommendations()
         }
       }
       catch (error) {
+        if (!isCurrentWebRequest(version, recommendationMode, accountId))
+          return
+        if (isAppAccessTokenInvalidResponse(error)) {
+          logRecommendRequestFailure(requestLog, { error })
+          requireAppAuthorization()
+          return
+        }
         if (!isExtensionContextInvalidatedError(error))
           logRecommendRequestFailure(requestLog, { error })
         throw error
@@ -1497,8 +1539,7 @@ async function getAppRecommendVideos(
           code: response.code,
           message: response.message,
         })
-        needToLoginFirst.value = true
-        recommendationDataState.value = 'idle'
+        requireAppAuthorization()
         break
       }
       else {
@@ -1573,6 +1614,10 @@ async function getAppRecommendVideos(
   }
 }
 
+function handleAppAuthorization() {
+  requestAppAuthorization(appAuthTokens.value.accessToken)
+}
+
 function jumpToLoginPage() {
   location.href = 'https://passport.bilibili.com/login'
 }
@@ -1606,7 +1651,7 @@ defineExpose({
 <template>
   <div>
     <VideoCardGrid
-      v-if="!needToLoginFirst"
+      v-if="!needToLoginFirst && !appAuthorizationRequired"
       :items="currentVideoList"
       :grid-layout="gridLayout"
       :loading="isLoading"
@@ -1639,6 +1684,12 @@ defineExpose({
     <Empty v-if="needToLoginFirst" mt-6 :description="$t('common.please_log_in_first')">
       <Button type="primary" @click="jumpToLoginPage()">
         {{ $t('common.login') }}
+      </Button>
+    </Empty>
+
+    <Empty v-else-if="appAuthorizationRequired" mt-6 :description="$t('home.app_authorization_required')">
+      <Button type="primary" @click="handleAppAuthorization">
+        {{ $t('home.reauthorize_app') }}
       </Button>
     </Empty>
   </div>

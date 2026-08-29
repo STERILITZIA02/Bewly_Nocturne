@@ -1,6 +1,8 @@
 <script setup>
 import { useI18n } from 'vue-i18n'
 
+import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
+
 const { t } = useI18n()
 
 const list = computed(() => {
@@ -46,6 +48,7 @@ const list = computed(() => {
         class="upload-item bew-popover-row"
         :href="item.url"
         target="_blank"
+        @click="resetTopBarTransientInteraction"
       >
         <i :class="item.icon" />
         <span>{{ item.name }}</span>

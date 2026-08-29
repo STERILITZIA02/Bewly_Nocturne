@@ -1,6 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
+    ".github/scripts/pr-policy-check.mjs",
     "scripts/manifest.ts",
     "scripts/prepare.ts",
     "scripts/verify-notification-fixtures.ts",

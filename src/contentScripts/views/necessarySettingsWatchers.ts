@@ -5,7 +5,7 @@ import { useDark } from '~/composables/useDark'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
 import { LanguageType } from '~/enums/appEnums'
-import { appAuthTokens, FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
+import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
@@ -13,7 +13,7 @@ import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clip
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { postMessageToIframe } from '~/utils/iframeMessage'
-import { cleanBilibiliShareText, getUserID, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
+import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 import { getThemeColorTokens } from '~/utils/themeColor'
 
 function isFestivalPage(): boolean {
@@ -268,13 +268,15 @@ export function setupNecessarySettingsWatchers() {
       () => settings.value.originalMomentsShowCommunityCenter,
       () => settings.value.originalMomentsShowHotSearch,
       () => settings.value.originalMomentsShowUpList,
+      currentLocationHref,
     ],
-    ([showUserCard, showLiveList, showCommunityCenter, showHotSearch, showUpList]) => {
-      document.documentElement.classList.toggle('moments-hide-original-user-card', !showUserCard)
-      document.documentElement.classList.toggle('moments-hide-original-live-list', !showLiveList)
-      document.documentElement.classList.toggle('moments-hide-original-community-center', !showCommunityCenter)
-      document.documentElement.classList.toggle('moments-hide-original-hot-search', !showHotSearch)
-      document.documentElement.classList.toggle('moments-hide-original-up-list', !showUpList)
+    ([showUserCard, showLiveList, showCommunityCenter, showHotSearch, showUpList, href]) => {
+      const isOriginalMomentsFeed = /https?:\/\/t\.bilibili\.com\/?(?:[?#].*)?$/.test(href)
+      document.documentElement.classList.toggle('moments-hide-original-user-card', isOriginalMomentsFeed && !showUserCard)
+      document.documentElement.classList.toggle('moments-hide-original-live-list', isOriginalMomentsFeed && !showLiveList)
+      document.documentElement.classList.toggle('moments-hide-original-community-center', isOriginalMomentsFeed && !showCommunityCenter)
+      document.documentElement.classList.toggle('moments-hide-original-hot-search', isOriginalMomentsFeed && !showHotSearch)
+      document.documentElement.classList.toggle('moments-hide-original-up-list', isOriginalMomentsFeed && !showUpList)
     },
     { immediate: true },
   )
@@ -339,19 +341,6 @@ export function setupNecessarySettingsWatchers() {
           bewlyStyleEL.setAttribute('data-bewly-customizeCSS', '')
         }
       }
-    },
-    { immediate: true },
-  )
-
-  watch(
-    () => appAuthTokens.value.accessToken,
-    (token) => {
-      if (!token)
-        return
-
-      // Clear accessKey if not logged in
-      if (!getUserID())
-        appAuthTokens.value.accessToken = ''
     },
     { immediate: true },
   )

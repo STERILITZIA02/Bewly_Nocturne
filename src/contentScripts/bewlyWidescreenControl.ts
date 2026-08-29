@@ -1,11 +1,14 @@
 import { watch } from 'vue'
 
 import { useRouteState } from '~/composables/useRouteState'
+import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
+import { BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
-import { applyBewlyWidescreen } from '~/utils/bewlyWidescreen'
+import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
 import { i18n } from '~/utils/i18n'
 import { isVideoOrBangumiPage } from '~/utils/main'
 
+import { createPlayerControlTooltip, updatePlayerControlTooltip } from './playerControlTooltip'
 import { observePlayerDom } from './playerDomLifecycle'
 
 const CONTROL_CLASS = 'bewly-widescreen-entry-control'
@@ -31,8 +34,9 @@ function updateControlLabel(button = controlButton) {
   if (!button)
     return
   const label = translate('widescreen.enter')
-  button.title = label
+  button.removeAttribute('title')
   button.setAttribute('aria-label', label)
+  updatePlayerControlTooltip(button, label)
 }
 
 function createControlButton() {
@@ -45,10 +49,26 @@ function createControlButton() {
   const icon = document.createElement('span')
   icon.className = 'bpx-player-ctrl-btn-icon bewly-widescreen-entry-icon'
   icon.innerHTML = widescreenIcon
-  button.appendChild(icon)
+  button.append(icon, createPlayerControlTooltip(translate('widescreen.enter')))
   controlButtonAbortController?.abort()
   controlButtonAbortController = new AbortController()
-  button.addEventListener('click', () => {
+  button.addEventListener('keydown', (event) => {
+    if (!event.repeat || (event.key !== 'Enter' && event.key !== ' '))
+      return
+    event.preventDefault()
+    event.stopImmediatePropagation()
+  }, { signal: controlButtonAbortController.signal })
+  button.addEventListener('click', (event) => {
+    if (isBewlyWidescreenEngaged()) {
+      event.preventDefault()
+      event.stopPropagation()
+      exitBewlyWidescreen({ userInitiated: true })
+      return
+    }
+    window.dispatchEvent(new CustomEvent<BewlyWidescreenManualToggleDetail>(
+      BEWLY_WIDESCREEN_MANUAL_TOGGLE,
+      { detail: { action: 'enter', userInitiated: true } },
+    ))
     applyBewlyWidescreen(settings.value.bewlyWidescreenSidebarPosition)
   }, { signal: controlButtonAbortController.signal })
   return button

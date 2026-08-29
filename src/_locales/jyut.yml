@@ -492,6 +492,10 @@ settings:
   auto_switch_list_layout: 根據影片卡片區域闊度自動切換單雙列
   auto_switch_list_layout_desc: 開啟之後，雙列模式會喺影片卡片區域闊度細過設定闊度時自動切換做單列。
   auto_switch_list_layout_breakpoint: 切換闊度
+  video_card_cover_ratio: 封面占比
+  video_card_cover_ratio_desc: 分開設定單列同雙列橫向影片卡片入面封面所占嘅闊度。
+  video_card_cover_ratio_one_column: 單列版型
+  video_card_cover_ratio_two_columns: 雙列版型
   grid_breakpoints: 網格斷點設定
   grid_breakpoints_desc: 設定唔同影片卡片區域闊度時顯示嘅列數。當區域闊度大過或者等於設定值時，用對應嘅列數。
   grid_min_width: 闊度 ≥
@@ -792,10 +796,17 @@ settings:
   auto_play_playlist: 收藏列表
   auto_play_playlist_desc: 揀收藏列表嘅自動播放行為。「連播推薦」表示目前影片完咗之後繼續播推薦影片。
   enable_settings_sync: 允許同步設定
-  enable_settings_sync_desc: 開啟之後會同時儲存喺本機同瀏覽器雲端；牆紙背景同裝置播放狀態唔會同步（需要登入瀏覽器帳戶）。
+  enable_settings_sync_desc: 開啟之後會同時儲存喺本機同瀏覽器雲端；裝置播放狀態唔會同步（需要登入瀏覽器帳戶）。
   settings_sync_unsynced_count: '未同步欄位：{count}'
   settings_sync_quota_blocked_count: '受雲端配額限制：{count}'
   settings_sync_last_error: '最近同步錯誤：{error}'
+  sync_cloud_conflict_title: 偵測到雲端設定備份
+  sync_cloud_conflict_desc: 雲端已經有一份設定備份。兩邊都存在嘅設定會跟你揀嘅一邊做準。
+  sync_cloud_use_cloud: 下載：以雲端設定做準
+  sync_cloud_use_local: 上載：以本機設定做準
+  sync_cloud_status_failed: 讀取唔到雲端同步狀態
+  sync_cloud_enable_failed: 開啟雲端同步失敗
+  sync_cloud_incompatible: 雲端資料係由較新版本嘅擴充功能寫入，請先升級擴充功能再開啟同步
   enable_undo_refresh_button: 啓用復原更新掣（淨係得 Web 推介模式下有效）
   enable_undo_refresh_button_desc: 更新頁面後顯示復原更新掣，撳低可以回復更新前內容。
   show_layout_edit_button: 顯示版面編輯掣
@@ -829,6 +840,12 @@ settings:
     bewly_widescreen_sidebar_position_desc: 選擇 Bewly 闊螢幕模式下側邊欄嘅顯示位置
     bewly_widescreen_sidebar_position_left: 左側
     bewly_widescreen_sidebar_position_right: 右側
+    bewly_widescreen_center_video: Bewly闊螢幕畫面置中
+    bewly_widescreen_center_video_desc: 只會喺影片優先而且實際單邊黑邊足夠完整容納側欄嗰陣，令影片、彈幕同點擊區域喺成個畫面水平置中；空間唔夠就維持影片優先版面。
+    bewly_widescreen_layout_priority: Bewly闊螢幕版面優先次序
+    bewly_widescreen_layout_priority_desc: 影片優先會預設保留影片尺寸同顯示窄側欄；側欄優先會直接顯示完整側欄，並為播放器保留獨立空間。
+    bewly_widescreen_layout_priority_video: 影片優先
+    bewly_widescreen_layout_priority_sidebar: 側欄優先
   show_ip_location: 顯示 IP 歸屬地
   show_ip_location_desc: 喺影片/動向頁留言區顯示 IP 歸屬地。
   show_sex: 顯示用戶性別
@@ -856,7 +873,7 @@ settings:
   enlarge_favorite_dialog_desc: 啓用後，影片頁收藏彈窗會用更大嘅尺寸顯示，方便睇同管理收藏夾。
   external_watch_later_button: 稍後再睇按鈕外置
   external_watch_later_button_desc: 啓用後，影片頁工具欄會顯示獨立嘅陣間至睇按鈕；按鈕會顯示目前影片狀態，可以撳一下加入或者剷走。
-  show_bewly_widescreen_button: 顯示 Bewly 闊螢幕按鈕
+  show_bewly_widescreen_button: 顯示播放器 Bewly 闊螢幕按鈕
   show_bewly_widescreen_button_desc: 喺播放器控制欄顯示進入 Bewly 闊螢幕模式嘅按鈕；閂咗之後唔會退出而家嘅闊螢幕模式。
   show_vertical_video_zoom_button: 直屏影片放大按鈕
   show_vertical_video_zoom_button_desc: 喺直屏影片播放器顯示放大/縮小按鈕同畫面位置調整控制
@@ -1187,6 +1204,9 @@ moments:
   emoji: 表情
   unlock_with_charge: 充電解鎖
   view: 睇吓
+  vote_ongoing: 進行緊
+  vote_ended: 已結束
+  vote_status_unknown: 狀態未知
   live_popularity: '{count} 人氣'
   charge_exclusive: 充電專屬
   charge_unlock_hint: 加入而家呢位 UP 主嘅充電就可以解鎖
@@ -1258,6 +1278,7 @@ moments:
 moment_card:
   video_moment: 影片動態
   open_detail: 開啟 {author} 嘅動態詳情
+  open_origin_moment: 睇 {name} 嘅原動態
   just_now: 啱啱
   charge_exclusive: 充電專屬
   watch_later_added: 已加入稍後再睇
@@ -1283,6 +1304,17 @@ moment_card:
   comments_retry: 再試
   comments_load_more: 睇更多留言
   comments_reply_count: '{count} 條回覆'
+  comment_like: 讚好留言
+  comment_unlike: 取消留言讚好
+  comment_reply: 回覆
+  comment_reply_to: 回覆 {name}
+  comment_reply_placeholder: 寫低你嘅回覆…
+  comment_send: 傳送
+  comment_sending: 傳送緊…
+  comment_login_required: 登入後先可以同留言互動
+  comment_like_failed: 留言讚好失敗，請遲啲再試
+  comment_reply_failed: 回覆傳送失敗，請遲啲再試
+  comment_reply_succeeded: 回覆已傳送
   live_popularity: '{count} 人氣'
   no_data: 暫時冇數據
   live_now: 直播緊
@@ -1342,6 +1374,8 @@ video_card:
   watch_later_update_failed: 更新陣間至睇失敗
   feedback_unavailable: 攞唔到意見選項
 home:
+  app_authorization_required: App 模式嘅 access token 已經遺失或者過期，請重新授權之後再繼續使用個人化推介
+  reauthorize_app: 重新授權
   recommendation_empty: 暫時未有推薦內容
   recommendation_filtered_empty: 而家啲推薦已經俾本機篩選規則全部篩走
   web_recommendation_risk_cooldown: 推薦請求觸發風控，暫停咗 {seconds} 秒，請遲啲再試
@@ -1489,10 +1523,8 @@ widescreen:
   comments_loading: 留言區載入緊
   danmaku_loading: 彈幕列表載入緊
   list_loading: 列表載入緊
-  show_narrow_right: 顯示窄右欄
-  show_narrow_left: 顯示窄左欄
-  collapse_right: 收起右欄
-  collapse_left: 收起左欄
+  show_full_sidebar: 顯示完整側欄
+  show_compact_sidebar: 切換做窄側欄
 search_bar:
   input_label: 搜尋
   clear_keyword: 清空搜尋內容

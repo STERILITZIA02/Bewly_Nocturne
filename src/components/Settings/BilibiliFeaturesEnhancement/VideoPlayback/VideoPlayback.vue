@@ -26,6 +26,19 @@ const bewlyWidescreenSidebarPositionOptions = computed(() => {
   ]
 })
 
+const bewlyWidescreenLayoutPriorityOptions = computed(() => {
+  return [
+    {
+      label: t('settings.video_player_mode.bewly_widescreen_layout_priority_video'),
+      value: 'video-first',
+    },
+    {
+      label: t('settings.video_player_mode.bewly_widescreen_layout_priority_sidebar'),
+      value: 'sidebar-first',
+    },
+  ]
+})
+
 // 视频播放器模式选项
 const videoPlayerModeOptions = computed(() => {
   return [
@@ -64,10 +77,6 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
   { label: t('settings.video_player_mode.context_playlist'), value: 'playlist' },
 ])
 
-const usesBewlyWidescreen = computed(() => settings.value.defaultVideoPlayerMode === 'bewlyWidescreen'
-  || (settings.value.enableVideoPlayerModeOverrides
-    && Object.values(settings.value.videoPlayerModeOverrides).includes('bewlyWidescreen')))
-
 type ToggleSetting
   = | 'rememberPlaybackRate'
     | 'rememberVideoAspectRatio'
@@ -101,21 +110,39 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         <Select v-model="settings.defaultVideoPlayerMode" :options="videoPlayerModeOptions" w="160px" />
       </SettingsItem>
 
-      <SettingsItem
-        v-if="usesBewlyWidescreen || settings.showBewlyWidescreenButton"
-        :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
-        right-width="auto"
-      >
-        <Select v-model="settings.bewlyWidescreenSidebarPosition" :options="bewlyWidescreenSidebarPositionOptions" w="160px" />
-      </SettingsItem>
+      <SettingsItemSubgroup :title="t('settings.video_player_mode.bewly_widescreen')">
+        <SettingsItem
+          :title="t('settings.show_bewly_widescreen_button')"
+          :desc="t('settings.show_bewly_widescreen_button_desc')"
+          right-width="auto"
+        >
+          <Radio v-model="settings.showBewlyWidescreenButton" />
+        </SettingsItem>
 
-      <SettingsItem
-        :title="t('settings.show_bewly_widescreen_button')"
-        :desc="t('settings.show_bewly_widescreen_button_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.showBewlyWidescreenButton" />
-      </SettingsItem>
+        <SettingsItem
+          :title="t('settings.video_player_mode.bewly_widescreen_center_video')"
+          :desc="t('settings.video_player_mode.bewly_widescreen_center_video_desc')"
+          right-width="auto"
+        >
+          <Radio v-model="settings.bewlyWidescreenCenterVideo" />
+        </SettingsItem>
+
+        <SettingsItem
+          :title="t('settings.video_player_mode.bewly_widescreen_layout_priority')"
+          :desc="t('settings.video_player_mode.bewly_widescreen_layout_priority_desc')"
+          right-width="auto"
+        >
+          <Select v-model="settings.bewlyWidescreenLayoutPriority" :options="bewlyWidescreenLayoutPriorityOptions" w="160px" />
+        </SettingsItem>
+
+        <SettingsItem
+          :title="t('settings.video_player_mode.bewly_widescreen_sidebar_position')"
+          :desc="t('settings.video_player_mode.bewly_widescreen_sidebar_position_desc')"
+          right-width="auto"
+        >
+          <Select v-model="settings.bewlyWidescreenSidebarPosition" :options="bewlyWidescreenSidebarPositionOptions" w="160px" />
+        </SettingsItem>
+      </SettingsItemSubgroup>
 
       <SettingsItem
         :title="t('settings.video_player_scroll')"

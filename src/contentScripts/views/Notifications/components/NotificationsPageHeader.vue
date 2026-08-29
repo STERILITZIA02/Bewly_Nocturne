@@ -25,6 +25,7 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .notifications-page-header {
   display: flex;
+  width: 100%;
   min-width: 0;
 }
 </style>

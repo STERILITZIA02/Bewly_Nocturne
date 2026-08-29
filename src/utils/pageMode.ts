@@ -150,20 +150,52 @@ export function resolvePageModeTarget(rawUrl: string, activatedPage: AppPage): P
   }
 }
 
-export function buildNativeSearchUrl(rawUrl: string): string {
-  const targetUrl = new URL('https://search.bilibili.com/all')
+const NATIVE_SEARCH_PATH_BY_PLUGIN_CATEGORY: Readonly<Record<string, string>> = {
+  article: 'article',
+  bangumi: 'bangumi',
+  live: 'live',
+  media_ft: 'media_ft',
+  user: 'upuser',
+  video: 'video',
+}
 
+export function buildNativeSearchUrl(rawUrl: string): string {
   try {
     const sourceUrl = new URL(rawUrl)
+    const category = sourceUrl.searchParams.get('category') ?? 'all'
+    const nativePath = NATIVE_SEARCH_PATH_BY_PLUGIN_CATEGORY[category] ?? 'all'
+    const targetUrl = new URL(`https://search.bilibili.com/${nativePath}`)
     const keyword = sourceUrl.searchParams.get('keyword')?.trim()
     if (keyword)
       targetUrl.searchParams.set('keyword', keyword)
+
+    const page = Number(sourceUrl.searchParams.get('pn'))
+    if (Number.isInteger(page) && page > 1)
+      targetUrl.searchParams.set('page', String(page))
+
+    if (category === 'user') {
+      const userOrder = sourceUrl.searchParams.get('user_order')
+      if (userOrder === 'fans' || userOrder === 'fans_desc' || userOrder === 'level' || userOrder === 'level_desc') {
+        targetUrl.searchParams.set('order', userOrder.startsWith('fans') ? 'fans' : 'level')
+        targetUrl.searchParams.set('order_sort', userOrder.endsWith('_desc') ? '1' : '0')
+      }
+
+      const userType = Number(sourceUrl.searchParams.get('user_type'))
+      if (Number.isInteger(userType) && userType >= 1 && userType <= 3)
+        targetUrl.searchParams.set('user_type', String(userType))
+    }
+
+    if (category === 'live') {
+      const searchType = sourceUrl.searchParams.get('search_type')
+      if (searchType === 'live_room' || searchType === 'live_user')
+        targetUrl.searchParams.set('search_type', searchType)
+    }
+
+    return targetUrl.toString()
   }
   catch {
-    // Invalid input falls back to the native search landing page.
+    return 'https://search.bilibili.com/all'
   }
-
-  return targetUrl.toString()
 }
 
 export function resolvePageModeNavigationUrl(

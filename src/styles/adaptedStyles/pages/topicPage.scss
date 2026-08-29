@@ -1,3 +1,15 @@
+// 仅在 Bewly 顶栏接管话题页时移除原版实色顶栏，并在横幅内补回等高空间。
+// 原版顶栏模式和抽屉 iframe 均保持 Bilibili 自己的布局。
+html.topicPage.remove-top-bar:not(.remove-top-bar-without-placeholder) {
+  #bili-header-container {
+    display: none !important;
+  }
+
+  .topic-detail__header {
+    padding-top: var(--bew-top-bar-height) !important;
+  }
+}
+
 .bewly-design.topicPage {
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`

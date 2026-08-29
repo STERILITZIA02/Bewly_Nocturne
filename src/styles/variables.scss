@@ -25,6 +25,10 @@
   --bew-font-weight-semibold: 600;
   --bew-font-weight-bold: 700;
   --bew-base-font-size: var(--bew-font-size-body);
+  // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
+  --bew-media-pop-title-font-size: 14px;
+  --bew-media-pop-title-line-height: 20px;
+  --bew-media-pop-title-font-weight: var(--bew-font-weight-regular);
   // #endregion
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.

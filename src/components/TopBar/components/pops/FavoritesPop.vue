@@ -15,6 +15,31 @@ import { removeHttpFromUrl, scrollToTop } from '~/utils/main'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object'
+}
+
+function isValidFavoriteCategory(value: unknown): value is FavoriteCategory {
+  return isRecord(value)
+    && Number.isFinite(value.id)
+    && typeof value.title === 'string'
+}
+
+function isValidFavoriteResource(value: unknown): value is FavoriteResource {
+  if (!isRecord(value) || !isRecord(value.upper))
+    return false
+
+  return Number.isFinite(value.id)
+    && Number.isFinite(value.type)
+    && typeof value.title === 'string'
+    && typeof value.cover === 'string'
+    && typeof value.link === 'string'
+    && Number.isFinite(value.duration)
+    && Number.isFinite(value.upper.mid)
+    && typeof value.upper.name === 'string'
+    && typeof value.bvid === 'string'
+}
+
 const favoriteCategories = reactive<Array<FavoriteCategory>>([])
 const favoriteResources = reactive<Array<FavoriteResource>>([])
 
@@ -22,7 +47,9 @@ const activatedMediaId = ref<number>(0)
 const activatedFavoriteTitle = ref<string>()
 const currentPageNum = ref<number>(1)
 
+const isLoadingCategories = ref<boolean>(false)
 const isLoading = ref<boolean>(false)
+const isRefreshingResources = ref<boolean>(false)
 // when noMoreContent is true, the user can't scroll down to load more content
 const noMoreContent = ref<boolean>(false)
 const favoriteVideosWrap = ref<HTMLElement>() as Ref<HTMLElement>
@@ -74,7 +101,7 @@ watch(currentAccountId, (accountId) => {
 
 // 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
-  if (isLoading.value || noMoreContent.value || favoriteResources.length === 0)
+  if (isLoadingCategories.value || isLoading.value || noMoreContent.value || favoriteResources.length === 0)
     return
 
   if (activatedMediaId.value) {
@@ -97,38 +124,48 @@ function resetFavoriteState() {
   activatedFavoriteTitle.value = undefined
   currentPageNum.value = 1
   noMoreContent.value = false
+  isLoadingCategories.value = false
   isLoading.value = false
+  isRefreshingResources.value = false
 }
 
 async function refreshFavoriteData() {
   const requestVersion = ++favoriteDataRequestVersion
   const requestAccountId = currentAccountId.value
-  favoriteResourcesRequestVersion++
+  const invalidatedResourcesVersion = ++favoriteResourcesRequestVersion
+  isLoading.value = false
+  isRefreshingResources.value = false
   if (requestAccountId === null)
     return
 
-  const previousMediaId = activatedMediaId.value
+  const selectedMediaIdAtStart = activatedMediaId.value
+  isLoadingCategories.value = true
   const loaded = await getFavoriteCategories(requestVersion, requestAccountId)
   if (requestVersion !== favoriteDataRequestVersion || requestAccountId !== currentAccountId.value)
     return
-  if (!loaded) {
-    isLoading.value = false
+  isLoadingCategories.value = false
+  if (!loaded)
     return
-  }
 
-  const category = favoriteCategories.find(item => item.id === previousMediaId) || favoriteCategories[0]
+  // A category click made while this refresh was pending remains authoritative.
+  const selectedMediaId = activatedMediaId.value !== selectedMediaIdAtStart
+    ? activatedMediaId.value
+    : selectedMediaIdAtStart
+  const category = favoriteCategories.find(item => item.id === selectedMediaId) || favoriteCategories[0]
   if (!category) {
     activatedMediaId.value = 0
     activatedFavoriteTitle.value = undefined
     favoriteResources.length = 0
     favoriteResourcesRequestVersion++
     isLoading.value = false
+    isRefreshingResources.value = false
     return
   }
 
   if (activatedMediaId.value === category.id) {
     activatedFavoriteTitle.value = category.title
-    refreshFavoriteResources()
+    if (favoriteResourcesRequestVersion === invalidatedResourcesVersion)
+      refreshFavoriteResources()
   }
   else {
     changeCategory(category)
@@ -148,8 +185,13 @@ async function getFavoriteCategories(requestVersion: number, requestAccountId: n
       return false
     }
 
-    favoriteCategories.length = 0
-    favoriteCategories.push(...res.data.list)
+    const categories = res.data?.list
+    if (!Array.isArray(categories) || !categories.every(isValidFavoriteCategory)) {
+      toast.error(t('common.load_failed'))
+      return false
+    }
+
+    favoriteCategories.splice(0, favoriteCategories.length, ...categories)
     noMoreContent.value = false
     return true
   }
@@ -164,17 +206,22 @@ async function getFavoriteCategories(requestVersion: number, requestAccountId: n
 /**
  * Get favorite video resources
  */
-async function getFavoriteResources(force = false) {
+async function getFavoriteResources(
+  force = false,
+  replace = false,
+  requestedPage = currentPageNum.value,
+): Promise<boolean> {
   if (isLoading.value && !force)
-    return
+    return false
 
   const requestVersion = ++favoriteResourcesRequestVersion
   const requestAccountId = currentAccountId.value
   if (requestAccountId === null)
-    return
+    return false
   const mediaId = activatedMediaId.value
-  const pageNum = currentPageNum.value
+  const pageNum = requestedPage
   isLoading.value = true
+  isRefreshingResources.value = replace
 
   try {
     const res = await api.favorite.getFavoriteResources({
@@ -188,59 +235,79 @@ async function getFavoriteResources(force = false) {
       || requestAccountId !== currentAccountId.value
       || mediaId !== activatedMediaId.value
     ) {
-      return
+      return false
     }
 
     const { code, data } = res
     if (code === 0) {
-      // 检查是否还有更多内容
-      if (data && 'has_more' in data && !data.has_more) {
-        noMoreContent.value = true
-      }
-      else {
-        noMoreContent.value = false
+      if (!data || !('medias' in data)) {
+        toast.error(t('common.load_failed'))
+        return false
       }
 
-      // 添加数据到列表
-      if (data && 'medias' in data && Array.isArray(data.medias) && data.medias.length > 0) {
+      const rawMedias = data.medias
+      const isAuthoritativeEmpty = rawMedias == null && data.has_more === false
+      const hasValidMediaArray = Array.isArray(rawMedias)
+        && rawMedias.every(isValidFavoriteResource)
+        && (rawMedias.length > 0 || data.has_more === false)
+      if (typeof data.has_more !== 'boolean' || (!hasValidMediaArray && !isAuthoritativeEmpty)) {
+        toast.error(t('common.load_failed'))
+        return false
+      }
+
+      const medias: FavoriteResource[] = hasValidMediaArray ? rawMedias : []
+      const seenResponseIds = new Set<string>()
+      const uniqueMedias = medias.filter((item) => {
+        const key = `${item.type}:${item.id}`
+        if (seenResponseIds.has(key))
+          return false
+        seenResponseIds.add(key)
+        return true
+      })
+
+      if (replace) {
+        // Keep existing cards throughout the request, then replace the complete
+        // page atomically once all account/version/media guards have passed.
+        favoriteResources.splice(0, favoriteResources.length, ...uniqueMedias)
+      }
+      else {
         const existingIds = new Set(favoriteResources.map(item => `${item.type}:${item.id}`))
-        const newResources = data.medias.filter((item: FavoriteResource | null) => {
-          if (!item)
-            return false
+        favoriteResources.push(...uniqueMedias.filter((item) => {
           const key = `${item.type}:${item.id}`
           if (existingIds.has(key))
             return false
           existingIds.add(key)
           return true
-        })
-        favoriteResources.push(...newResources)
+        }))
       }
-      else if (!data || !data.medias || data.medias.length === 0) {
-        // 如果没有数据返回，也标记为没有更多内容
-        noMoreContent.value = true
-      }
+
+      noMoreContent.value = uniqueMedias.length === 0 || !data.has_more
       currentPageNum.value = pageNum + 1
+      return true
     }
-    else {
-      toast.error(t('common.load_failed'))
-    }
+
+    toast.error(t('common.load_failed'))
+    return false
   }
   catch (error) {
     console.error('Failed to load favorite resources:', error)
     if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value)
       toast.error(t('common.load_failed'))
+    return false
   }
   finally {
-    if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value)
+    if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value) {
       isLoading.value = false
+      isRefreshingResources.value = false
+    }
   }
 }
 
 function refreshFavoriteResources() {
-  favoriteResources.length = 0
-  currentPageNum.value = 1
-  noMoreContent.value = false
-  void getFavoriteResources(true)
+  // Page 1 refreshes in the background. Pagination state and old cards remain
+  // authoritative until a guarded response succeeds, so failures do not flash
+  // an empty/loading state or strand the old list at page 1.
+  void getFavoriteResources(true, true, 1)
 }
 
 function changeCategory(categoryItem: FavoriteCategory) {
@@ -308,12 +375,12 @@ defineExpose({
         class="bew-popover__scroll bew-popover__list favorites-pop__content"
       >
         <Loading
-          v-if="isLoading && favoriteResources.length === 0"
+          v-if="(isLoadingCategories || isLoading) && favoriteResources.length === 0"
           class="bew-popover__state"
         />
 
         <Empty
-          v-if="!isLoading && favoriteResources.length === 0"
+          v-if="!isLoadingCategories && !isLoading && favoriteResources.length === 0"
           class="bew-popover__state"
         />
 
@@ -381,7 +448,7 @@ defineExpose({
 
         <!-- loading -->
         <Transition name="fade">
-          <Loading v-if="isLoading && favoriteResources.length !== 0" m="b-4" />
+          <Loading v-if="isLoading && !isRefreshingResources && favoriteResources.length !== 0 && currentPageNum > 1" m="b-4" />
         </Transition>
       </div>
     </main>

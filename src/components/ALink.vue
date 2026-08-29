@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { settings } from '~/logic'
@@ -57,16 +58,22 @@ function handleClick(event: MouseEvent) {
   }
 
   if (props.customClickEvent) {
-    if (!props.customClickEventIncludesModifiers && (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey))
+    if (!props.customClickEventIncludesModifiers && (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)) {
+      if (props.type === 'topBar')
+        resetTopBarTransientInteraction()
       return
+    }
 
     event.preventDefault()
     emit('click', event)
     return
   }
 
-  if (event.button !== 0 || hasNavigationModifier(event))
+  if (event.button !== 0 || hasNavigationModifier(event)) {
+    if (props.type === 'topBar')
+      resetTopBarTransientInteraction()
     return
+  }
 
   // 在触屏模式下，topBar 类型的链接不执行打开操作，只显示弹窗
   // 但有以下例外情况应该允许点击并响应打开行为设置：
@@ -89,6 +96,8 @@ function handleClick(event: MouseEvent) {
     isHomepage: isHomePage(currentLocationHref.value),
     inIframe: isInIframe(),
   })
+  if (props.type === 'topBar' && (action === 'newTab' || action === 'background'))
+    resetTopBarTransientInteraction()
   if (action === 'drawer' || action === 'background') {
     event.preventDefault()
     if (props.href) {

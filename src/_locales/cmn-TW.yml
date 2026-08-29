@@ -463,6 +463,10 @@ settings:
   auto_switch_list_layout: 根據影片卡片區域寬度自動切換單雙列
   auto_switch_list_layout_desc: 開啟後，雙列模式會在影片卡片區域寬度小於設定寬度時自動切換為單列。
   auto_switch_list_layout_breakpoint: 切換寬度
+  video_card_cover_ratio: 封面占比
+  video_card_cover_ratio_desc: 分別設定單列與雙列橫向影片卡片中封面所占的寬度。
+  video_card_cover_ratio_one_column: 單列版型
+  video_card_cover_ratio_two_columns: 雙列版型
   grid_breakpoints: 網格斷點配置
   grid_breakpoints_desc: 設定不同影片卡片區域寬度下顯示的列數。當區域寬度大於等於設定值時，使用對應的列數。
   grid_min_width: 寬度 ≥
@@ -530,6 +534,12 @@ settings:
     bewly_widescreen_sidebar_position_desc: 選擇 Bewly 寬螢幕模式下側邊欄的顯示位置
     bewly_widescreen_sidebar_position_left: 左側
     bewly_widescreen_sidebar_position_right: 右側
+    bewly_widescreen_center_video: Bewly寬螢幕畫面置中
+    bewly_widescreen_center_video_desc: 僅在影片優先且實際單側黑邊能完整容納側欄時，讓影片、彈幕和點擊區域在整個畫面中水平置中；空間不足時維持影片優先版面。
+    bewly_widescreen_layout_priority: Bewly寬螢幕版面優先級
+    bewly_widescreen_layout_priority_desc: 影片優先預設保留影片尺寸並顯示窄側欄；側欄優先直接顯示完整側欄並為播放器保留獨立空間。
+    bewly_widescreen_layout_priority_video: 影片優先
+    bewly_widescreen_layout_priority_sidebar: 側欄優先
   enable_video_preview: 啟用影片預覽功能（如果可以的話）
   enable_video_ctrl_bar_on_video_card: 在影片卡片上顯示影片控制欄
   video_preview_swipe_seek: 滑動小範圍跳轉
@@ -738,6 +748,13 @@ settings:
   settings_sync_unsynced_count: '未同步欄位：{count}'
   settings_sync_quota_blocked_count: '受雲端配額限制：{count}'
   settings_sync_last_error: '最近同步錯誤：{error}'
+  sync_cloud_conflict_title: 偵測到雲端設定備份
+  sync_cloud_conflict_desc: 雲端已有一份設定備份。兩側都存在的設定將以你所選的一側為準。
+  sync_cloud_use_cloud: 下載：以雲端設定為準
+  sync_cloud_use_local: 上傳：以本機設定為準
+  sync_cloud_status_failed: 無法讀取雲端同步狀態
+  sync_cloud_enable_failed: 開啟雲端同步失敗
+  sync_cloud_incompatible: 雲端資料由較新版本的擴充功能寫入，請先升級擴充功能再開啟同步
   disable_auto_play_collection: 自動關閉合集自動連播
   disable_auto_play_collection_desc: 自動關閉影片合集的自動連播功能
   keep_collection_video_default_mode: 合集影片保持預設模式
@@ -846,7 +863,7 @@ settings:
   enlarge_favorite_dialog_desc: 啟用後，影片頁收藏彈窗將以更大的尺寸顯示，方便查看和管理收藏夾。
   external_watch_later_button: 稍後再看按鈕外置
   external_watch_later_button_desc: 啟用後，影片頁工具欄會顯示獨立的稍後觀看按鈕；按鈕會顯示目前影片狀態，可點擊加入或移除。
-  show_bewly_widescreen_button: 顯示 Bewly 寬螢幕按鈕
+  show_bewly_widescreen_button: 顯示播放器 Bewly 寬螢幕按鈕
   show_bewly_widescreen_button_desc: 在播放器控制列顯示進入 Bewly 寬螢幕模式的按鈕；關閉後不會退出目前的寬螢幕模式。
   show_vertical_video_zoom_button: 直式影片放大按鈕
   show_vertical_video_zoom_button_desc: 在直式影片播放器中顯示放大/縮小按鈕與畫面位置調整控制項
@@ -1187,6 +1204,9 @@ moments:
   emoji: 表情
   unlock_with_charge: 充電解鎖
   view: 查看
+  vote_ongoing: 進行中
+  vote_ended: 已結束
+  vote_status_unknown: 狀態未知
   live_popularity: '{count} 人氣'
   charge_exclusive: 充電專屬
   charge_unlock_hint: 加入目前 UP 主的充電即可解鎖觀看
@@ -1258,6 +1278,7 @@ moments:
 moment_card:
   video_moment: 影片動態
   open_detail: 開啟 {author} 的動態詳情
+  open_origin_moment: 查看 {name} 的原動態
   just_now: 剛剛
   charge_exclusive: 充電專屬
   watch_later_added: 已加入稍後再看
@@ -1283,6 +1304,17 @@ moment_card:
   comments_retry: 重試
   comments_load_more: 查看更多留言
   comments_reply_count: '{count} 則回覆'
+  comment_like: 讚好留言
+  comment_unlike: 取消留言讚好
+  comment_reply: 回覆
+  comment_reply_to: 回覆 {name}
+  comment_reply_placeholder: 寫下你的回覆…
+  comment_send: 傳送
+  comment_sending: 傳送中…
+  comment_login_required: 登入後才能進行留言互動
+  comment_like_failed: 留言讚好失敗，請稍後再試
+  comment_reply_failed: 回覆傳送失敗，請稍後再試
+  comment_reply_succeeded: 回覆已傳送
   live_popularity: '{count} 人氣'
   no_data: 暫無資料
   live_now: 正在直播
@@ -1342,6 +1374,8 @@ video_card:
   watch_later_update_failed: 更新稍後觀看失敗
   feedback_unavailable: 無法取得意見回饋選項
 home:
+  app_authorization_required: App 模式的 access token 已遺失或過期，請重新授權後繼續使用個人化推薦
+  reauthorize_app: 重新授權
   recommendation_empty: 暫無推薦內容
   recommendation_filtered_empty: 目前推薦已被本機篩選規則全部篩除
   web_recommendation_risk_cooldown: 推薦請求觸發風控，已暫停 {seconds} 秒，請稍後重試
@@ -1489,10 +1523,8 @@ widescreen:
   comments_loading: 留言區載入中
   danmaku_loading: 彈幕列表載入中
   list_loading: 列表載入中
-  show_narrow_right: 顯示窄右欄
-  show_narrow_left: 顯示窄左欄
-  collapse_right: 收起右欄
-  collapse_left: 收起左欄
+  show_full_sidebar: 顯示完整側欄
+  show_compact_sidebar: 切換為窄側欄
 search_bar:
   input_label: 搜尋
   clear_keyword: 清空搜尋內容

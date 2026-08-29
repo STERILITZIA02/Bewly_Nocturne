@@ -4,6 +4,7 @@ import { useToast } from 'vue-toastification'
 
 import CloseButton from '~/components/CloseButton.vue'
 import Dialog from '~/components/Dialog.vue'
+import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import type { DisplayForwardVideo, DisplayMoment, DisplayRichTextSegment, WatchLaterTarget } from '~/components/MomentCard/types'
@@ -30,13 +31,13 @@ import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
+import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
+import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { openLinkInBackground } from '~/utils/tabs'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
 import { getDirectWatchLaterAid, resolveWatchLaterAid } from '~/utils/watchLater'
-
-const loadingGifUrl = browser.runtime.getURL('/assets/loading.gif')
 
 interface MomentsPortalUser {
   mid: string
@@ -179,6 +180,13 @@ const detailImageViewerPanY = ref(0)
 const detailImageViewerSource = shallowRef<Window | null>(null)
 const detailImageViewerTrigger = shallowRef<HTMLElement | null>(null)
 let detailLoadTimer: ReturnType<typeof setTimeout> | null = null
+let detailFocusRetryTimer: ReturnType<typeof setTimeout> | null = null
+let detailFocusRetryRaf = 0
+let detailFocusGeneration = 0
+let detailFocusOrigin: Element | null = null
+const DETAIL_FOCUS_MAX_ATTEMPTS = 4
+const DETAIL_FOCUS_RETRY_DELAY = 120
+const DETAIL_FOCUS_DEADLINE = 720
 const layoutRef = ref<HTMLElement | null>(null)
 const gridRef = ref<HTMLElement | null>(null)
 /** 按当前实际列数限制卡片最大宽度 */
@@ -200,6 +208,9 @@ const previewUrls = reactive<Record<string, string>>({})
 const likingMomentIds = reactive(new Set<string>())
 const reservationLoadingMomentIds = reactive(new Set<string>())
 const watchLaterLoadingMomentIds = reactive(new Set<string>())
+const likingMomentRequests = new Map<string, symbol>()
+const reservationRequests = new Map<string, symbol>()
+const watchLaterRequests = new Map<string, symbol>()
 const watchLaterAidByTarget = reactive(new Map<string, number>())
 const watchLaterAidRequests = new Map<string, Promise<number | undefined>>()
 const videoCidCache = new Map<string, number>()
@@ -254,6 +265,7 @@ let lastScrollAt = 0
 let virtualRaf = 0
 let feedRequestToken = 0
 let portalRequestToken = 0
+let momentsMounted = false
 let loadedAccountId: AccountId = getCurrentAccountId()
 let suppressBottomRebalanceUntil = 0
 const detailImageViewerDragging = ref(false)
@@ -419,6 +431,19 @@ function extractImageUrl(image: any) {
   return image.src || image.url || image.img_src || image.live_cover || ''
 }
 
+function extractImageRatio(image: any): number | null {
+  if (!image || typeof image !== 'object')
+    return null
+  const dimension = image.dimension || image.size || image
+  let width = Number(dimension.width || dimension.w || image.img_width || 0)
+  let height = Number(dimension.height || dimension.h || image.img_height || 0)
+  const rotation = Math.abs(Number(dimension.rotate || image.rotate || 0)) % 180
+  if (rotation === 90)
+    [width, height] = [height, width]
+  const ratio = width > 0 && height > 0 ? width / height : 0
+  return Number.isFinite(ratio) && ratio > 0 ? ratio : null
+}
+
 function pickText(...values: any[]) {
   for (const value of values) {
     if (typeof value === 'string' && value.trim())
@@ -464,17 +489,13 @@ function extractRichTextSegments(...nodeLists: any[]): DisplayRichTextSegment[] 
 
     const isSupportedLink = node?.type === 'RICH_TEXT_NODE_TYPE_TOPIC'
       || node?.type === 'RICH_TEXT_NODE_TYPE_WEB'
+      || node?.type === 'RICH_TEXT_NODE_TYPE_VOTE'
     const url = isSupportedLink ? normalizeRichTextJumpUrl(node?.jump_url) : ''
     if (text && url)
       return [{ type: 'link' as const, text, url }]
 
     return text ? [{ type: 'text' as const, text }] : []
   })
-}
-
-function extractOpusImages(opus: any) {
-  const pics = opus?.pics || opus?.images || []
-  return pics.map(extractImageUrl).filter(Boolean)
 }
 
 function extractBlockedInfo(blocked: any) {
@@ -490,12 +511,12 @@ function extractBlockedInfo(blocked: any) {
   }
 }
 
-function getAdditionalActionText(button: any) {
+function getAdditionalActionText(button: any, isReservation = false) {
   if (!button || typeof button !== 'object')
     return t('moments.view')
 
-  // 预约按钮：status 1 为未预约，2 为已预约。
-  if (Number(button.type) === 1 || Number(button.type) === 2) {
+  // 只有真正的预约卡才能把 button.type 1/2 解释为预约状态。
+  if (isReservation && (Number(button.type) === 1 || Number(button.type) === 2)) {
     return Number(button.status) === 2
       ? pickText(button.check?.text, t('moment_card.reserved'))
       : pickText(button.uncheck?.text, t('moment_card.reserve'))
@@ -519,12 +540,17 @@ function getMomentContent(item: any) {
   )
 
   const drawItems = major.draw?.items || []
-  const opusImages = extractOpusImages(major.opus)
+  const opusImageItems = major.opus?.pics || major.opus?.images || []
   const articleCovers = major.article?.covers || []
-  const images = [...drawItems, ...opusImages, ...articleCovers]
-    .map(extractImageUrl)
-    .filter(Boolean)
-    .filter((url: string, index: number, list: string[]) => list.indexOf(url) === index)
+  const imageEntries = [...drawItems, ...opusImageItems, ...articleCovers]
+    .map((image) => {
+      const url = httpsUrl(extractImageUrl(image))
+      return url ? { url, ratio: extractImageRatio(image) } : null
+    })
+    .filter((entry): entry is { url: string, ratio: number | null } => Boolean(entry))
+    .filter((entry, index, list) => list.findIndex(item => item.url === entry.url) === index)
+  const images = imageEntries.map(entry => entry.url)
+  const imageRatios = imageEntries.map(entry => entry.ratio)
 
   const live = parseLiveInfo(major.live_rcmd?.content) || major.live || null
   // ugc_season：合集订阅更新，字段形态接近 archive（bvid/aid/cover/jump_url）
@@ -582,6 +608,8 @@ function getMomentContent(item: any) {
   if (!text && isChargeExclusive)
     text = chargeHint || t('moments.charge_exclusive_moment')
 
+  const additionalKind = classifyMomentAdditional(additional.type)
+  const isVoteAdditional = additionalKind === 'vote'
   let additionalView = additional.type
     ? {
         title: pickText(additionalCard.head_text, additionalCard.title, additionalCard.desc?.text),
@@ -591,22 +619,37 @@ function getMomentContent(item: any) {
           additionalCard.desc,
         ),
         cover: httpsUrl(additionalCard.cover || additionalCard.icon || ''),
-        action: getAdditionalActionText(additionalCard.button),
-        url: additionalCard.jump_url || additionalCard.button?.jump_url || '',
+        action: getAdditionalActionText(
+          additionalCard.button,
+          additionalKind === 'reservation',
+        ),
+        url: httpsUrl(additionalCard.jump_url || additionalCard.button?.jump_url || ''),
         isUpRecommendation: additional.type === 'ADDITIONAL_TYPE_UP_RCMD'
           || pickText(additionalCard.head_text, additionalCard.title) === 'UP主的推荐',
-        isVideoReservation: additional.type === 'ADDITIONAL_TYPE_RESERVE'
+        isVideoReservation: additionalKind === 'reservation'
           && Number(additionalCard.button?.type) === 1,
-        isLiveReservation: additional.type === 'ADDITIONAL_TYPE_RESERVE'
+        isLiveReservation: additionalKind === 'reservation'
           && Number(additionalCard.button?.type) === 2,
-        reservationId: additional.type === 'ADDITIONAL_TYPE_RESERVE'
+        isVote: isVoteAdditional,
+        voteEndTime: isVoteAdditional ? Number(additionalCard.end_time) || 0 : 0,
+        reservationId: additionalKind === 'reservation'
           ? String(additionalCard.rid || '')
           : '',
         reservationTotal: Math.max(0, Number(additionalCard.reserve_total) || 0),
-        isReserved: additional.type === 'ADDITIONAL_TYPE_RESERVE'
+        isReserved: additionalKind === 'reservation'
           && Number(additionalCard.button?.status) === 2,
       }
     : undefined
+
+  if (isVoteAdditional && additionalView) {
+    const voteStatus = resolveMomentVoteStatus(additionalView.voteEndTime, Date.now() / 1000)
+    const status = voteStatus === 'ended'
+      ? t('moments.vote_ended')
+      : voteStatus === 'ongoing'
+        ? t('moments.vote_ongoing')
+        : t('moments.vote_status_unknown')
+    additionalView.desc = [additionalView.desc, status].filter(Boolean).join(' · ')
+  }
 
   // 未解锁充电：构造充电卡片附加区（列表没有 additional 时）
   if (!additionalView && isChargeExclusive && (blocked?.buttonUrl || chargeBadge)) {
@@ -620,6 +663,8 @@ function getMomentContent(item: any) {
       isUpRecommendation: false,
       isVideoReservation: false,
       isLiveReservation: false,
+      isVote: false,
+      voteEndTime: 0,
       reservationId: '',
       reservationTotal: 0,
       isReserved: false,
@@ -643,14 +688,18 @@ function getMomentContent(item: any) {
     item.type === 'DYNAMIC_TYPE_DRAW'
     || major?.type === 'MAJOR_TYPE_DRAW'
     || drawItems.length > 0
-    || opusImages.length > 0
+    || opusImageItems.length > 0
   )
 
   return {
     title: pickText(live?.title, opus.title, archive.title, article.title, common.title),
     text,
     richText,
-    images: [...images, ...(cover ? [cover] : [])].map(httpsUrl).filter(Boolean).filter((url: string, index: number, list: string[]) => list.indexOf(url) === index),
+    images: [...images, ...(cover ? [httpsUrl(cover)] : [])].filter(Boolean).filter((url: string, index: number, list: string[]) => list.indexOf(url) === index),
+    imageRatios: [
+      ...imageRatios,
+      ...(cover && !images.includes(httpsUrl(cover)) ? [null] : []),
+    ],
     isVideo: isRegularVideo || isUgcSeason,
     isRegularVideo,
     isUgcSeason,
@@ -695,17 +744,8 @@ function resolveLiveUrl(moment: DisplayMoment) {
 }
 
 function resolveDetailUrl(moment: DisplayMoment) {
-  if (moment.isLive) {
-    const liveUrl = resolveLiveUrl(moment)
-    if (liveUrl)
-      return liveUrl
-  }
-  if (moment.isVideo) {
-    const videoUrl = resolveVideoUrl(moment)
-    if (videoUrl)
-      return videoUrl
-  }
-  // 转发 / 专栏：通过 query 告知 iframe 布局策略
+  // Forwarded/live and article cards own an opus detail URL. Resolve that
+  // before embedded media so the card never leaves its source dynamic.
   if (moment.isForward || moment.isArticle) {
     try {
       const url = new URL(moment.url)
@@ -724,6 +764,16 @@ function resolveDetailUrl(moment: DisplayMoment) {
       return params ? `${moment.url}${join}${params}` : moment.url
     }
   }
+  if (moment.isLive) {
+    const liveUrl = resolveLiveUrl(moment)
+    if (liveUrl)
+      return liveUrl
+  }
+  if (moment.isVideo) {
+    const videoUrl = resolveVideoUrl(moment)
+    if (videoUrl)
+      return videoUrl
+  }
   return moment.url
 }
 
@@ -732,6 +782,103 @@ function clearDetailLoadTimer() {
     clearTimeout(detailLoadTimer)
     detailLoadTimer = null
   }
+}
+
+function clearDetailFocusRetry() {
+  detailFocusGeneration++
+  if (detailFocusRetryTimer) {
+    clearTimeout(detailFocusRetryTimer)
+    detailFocusRetryTimer = null
+  }
+  if (detailFocusRetryRaf) {
+    cancelAnimationFrame(detailFocusRetryRaf)
+    detailFocusRetryRaf = 0
+  }
+}
+
+function getDetailActiveElement(iframe: HTMLIFrameElement | null = detailIframeRef.value) {
+  const root = iframe?.getRootNode() ?? mainAppRef.value?.getRootNode()
+  if (root instanceof Document || root instanceof ShadowRoot)
+    return root.activeElement
+  return document.activeElement
+}
+
+function shouldYieldDetailFocus(iframe: HTMLIFrameElement) {
+  const active = getDetailActiveElement(iframe)
+  return Boolean(
+    active
+    && active !== document.body
+    && active !== document.documentElement
+    && active !== iframe
+    && active !== detailFocusOrigin,
+  )
+}
+
+async function focusDetailIframe(iframe: HTMLIFrameElement) {
+  clearDetailFocusRetry()
+  const generation = detailFocusGeneration
+  const startedAt = performance.now()
+  let attemptCount = 0
+
+  const canContinue = () => Boolean(
+    selectedMoment.value
+    && detailFrameUrl.value
+    && shouldContinueIframeFocusRetry({
+      attemptCount,
+      maxAttempts: DETAIL_FOCUS_MAX_ATTEMPTS,
+      elapsedMs: performance.now() - startedAt,
+      deadlineMs: DETAIL_FOCUS_DEADLINE,
+      cancelled: generation !== detailFocusGeneration,
+      iframeReplaced: iframe !== detailIframeRef.value,
+      viewerOpen: detailImageViewerOpen.value,
+      userMovedFocus: shouldYieldDetailFocus(iframe),
+    }),
+  )
+
+  const attempt = async () => {
+    if (!canContinue())
+      return
+
+    await nextTick()
+    if (!canContinue())
+      return
+
+    detailFocusRetryRaf = requestAnimationFrame(() => {
+      detailFocusRetryRaf = 0
+      if (!canContinue())
+        return
+
+      attemptCount++
+      iframe.focus({ preventScroll: true })
+      try {
+        iframe.contentWindow?.focus()
+      }
+      catch {
+        // Cross-origin frames may reject window focus; the element focus remains.
+      }
+
+      // Once the parent active element is the iframe, focus is established.
+      // Retrying after that could steal focus from controls inside the frame.
+      if (getDetailActiveElement(iframe) !== iframe && canContinue()) {
+        detailFocusRetryTimer = setTimeout(() => {
+          detailFocusRetryTimer = null
+          void attempt()
+        }, DETAIL_FOCUS_RETRY_DELAY)
+      }
+    })
+  }
+
+  await attempt()
+}
+
+function syncDetailFrameViewport() {
+  const iframe = detailIframeRef.value
+  if (!iframe || !detailFrameUrl.value)
+    return
+  postMessageToIframe(iframe, {
+    type: 'BEWLY_OPUS_VIEWPORT',
+    width: window.innerWidth,
+  })
 }
 
 function isPlayerMoment(moment: DisplayMoment | null | undefined) {
@@ -747,12 +894,17 @@ function getDimensionAspectRatio(dimension: any) {
   return width > 0 && height > 0 ? width / height : undefined
 }
 
-/** 图文：小红书 note 风格固定宽高；视频/直播：按视口比例缩放 */
+/** 图文保留自己的布局；播放器与图文弹窗都严格受可用视口约束。 */
 const isOpusDetailMoment = computed(() => Boolean(selectedMoment.value && !isPlayerMoment(selectedMoment.value)))
-
-const detailViewportSafeWidth = `calc(100vw - ${MOMENTS_DETAIL_LAYOUT.viewportGutter * 2}px)`
-const detailViewportSafeHeight = `max(0px, calc(100dvh - ${MOMENTS_DETAIL_LAYOUT.viewportGutter * 2}px))`
-const detailPlayerHeight = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}dvh, ${detailViewportSafeHeight})`
+const detailViewportGutter = MOMENTS_DETAIL_LAYOUT.viewportGutter * 2
+const detailViewportSafeWidth = `calc(100vw - ${detailViewportGutter}px)`
+const detailReferenceHeight = 'min(88dvh, 49.5vw)'
+const detailSafeHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MOMENTS_DETAIL_LAYOUT.playerMinHeight}px, ${detailReferenceHeight}))`
+const detailPlayerMaxWidth = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}vw, calc(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}dvh * 16 / 9), ${detailViewportSafeWidth})`
+const opusDetailCommentPageRatio = 0.29
+const opusDetailLongImageRatio = MIN_SINGLE_IMAGE_RATIO
+const opusDetailMaxWidth = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}vw, ${detailViewportSafeWidth})`
+const opusDetailMaxHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MOMENTS_DETAIL_LAYOUT.playerMinHeight}px, 88dvh), ${opusDetailMaxWidth})`
 const selectedVideoAspectRatio = computed(() => {
   const moment = selectedMoment.value
   if (!moment?.isVideo || moment.isLive || moment.isPgc)
@@ -760,35 +912,58 @@ const selectedVideoAspectRatio = computed(() => {
   return (moment.bvid ? videoAspectRatios[moment.bvid] : undefined)
     || coverRatios[moment.id]
 })
-const isSelectedVerticalVideo = computed(() => {
+const isSelectedSquareOrVerticalVideo = computed(() => {
   const ratio = selectedVideoAspectRatio.value
-  return Boolean(ratio && ratio < 0.9)
+  return Boolean(ratio && ratio <= 1)
 })
+
+function isUsableImageRatio(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
+function isOpusSplitDetailMoment(moment: DisplayMoment | null | undefined) {
+  return Boolean(
+    moment
+    && !isPlayerMoment(moment)
+    && !moment.isArticle
+    && !moment.isForward
+    && moment.images.length > 0,
+  )
+}
+
+function getOpusSplitLayoutRatio(moment: DisplayMoment | null | undefined) {
+  if (!moment)
+    return 1
+  const metadataRatio = moment.imageRatios?.[0]
+  const ratio = isUsableImageRatio(metadataRatio)
+    ? metadataRatio
+    : coverRatios[moment.id]
+  return Math.max(isUsableImageRatio(ratio) ? ratio : 1, opusDetailLongImageRatio)
+}
+
+const detailDialogHeight = computed(() => (
+  isOpusSplitDetailMoment(selectedMoment.value) ? opusDetailMaxHeight : detailSafeHeight
+))
 
 const detailDialogWidth = computed(() => {
   if (selectedMoment.value?.isLive)
-    return `min(calc(${detailPlayerHeight} * 16 / 9), ${detailViewportSafeWidth})`
+    return detailPlayerMaxWidth
   if (selectedMoment.value?.isVideo) {
-    if (isSelectedVerticalVideo.value && settings.value.defaultVideoPlayerMode === 'bewlyWidescreen') {
+    if (isSelectedSquareOrVerticalVideo.value && settings.value.defaultVideoPlayerMode === 'bewlyWidescreen') {
       const ratio = Math.max(0.4, selectedVideoAspectRatio.value || 9 / 16)
-      return `min(max(${MOMENTS_DETAIL_LAYOUT.verticalWidescreenMinWidth}px, calc(${detailPlayerHeight} * ${ratio} + ${MOMENTS_DETAIL_LAYOUT.verticalWidescreenSidebarWidth}px)), ${detailViewportSafeWidth})`
+      return `min(max(${MOMENTS_DETAIL_LAYOUT.verticalWidescreenMinWidth}px, calc(${detailDialogHeight.value} * ${ratio} + ${MOMENTS_DETAIL_LAYOUT.verticalWidescreenSidebarWidth}px)), ${detailPlayerMaxWidth})`
     }
-    return `min(calc(${detailPlayerHeight} * 16 / 9), ${detailViewportSafeWidth})`
+    return detailPlayerMaxWidth
+  }
+  const moment = selectedMoment.value
+  if (isOpusSplitDetailMoment(moment)) {
+    const commentWidth = `${opusDetailCommentPageRatio * 100}vw`
+    return `min(${opusDetailMaxWidth}, calc(${getOpusSplitLayoutRatio(moment)} * ${detailDialogHeight.value} + ${commentWidth}))`
   }
   return `min(${MOMENTS_DETAIL_LAYOUT.opusMaxWidth}px, ${detailViewportSafeWidth})`
 })
 
-const detailDialogHeight = computed(() => {
-  if (isPlayerMoment(selectedMoment.value))
-    return detailPlayerHeight
-  return detailViewportSafeHeight
-})
-
-const detailContentHeight = computed(() => {
-  return isPlayerMoment(selectedMoment.value)
-    ? detailPlayerHeight
-    : detailViewportSafeHeight
-})
+const detailContentHeight = computed(() => detailDialogHeight.value)
 
 const detailImageViewerUrl = computed(() => detailImageViewerUrls.value[detailImageViewerIndex.value] || '')
 const detailImageViewerTransform = computed(() => {
@@ -833,6 +1008,7 @@ function openDetailImageViewer(
   detailImageViewerSource.value = source
   detailImageViewerTrigger.value = trigger
   detailImageViewerOpen.value = true
+  clearDetailFocusRetry()
   resetDetailImageViewerTransform()
   nextTick(() => detailImageViewerRef.value?.focus({ preventScroll: true }))
   return true
@@ -994,11 +1170,8 @@ function openDetailFrameInNewTab() {
 }
 
 function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
-  if (moment.isVideo && !moment.isLive) {
+  if (moment.isVideo && !moment.isLive)
     recordVideoVisit(moment)
-    openMomentInNewTab(moment, settings.value.momentsCardOpenMode === 'background')
-    return
-  }
 
   // 小屏、直播与「新标签/后台标签」设置：外部打开，避免狭窄 Dialog 与跨域直播占用
   if (!forceDialog && shouldOpenMomentExternally(moment)) {
@@ -1013,6 +1186,8 @@ function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
   if (selectedMoment.value || detailFrameUrl.value)
     destroyDetailIframe()
 
+  clearDetailFocusRetry()
+  detailFocusOrigin = getDetailActiveElement()
   selectedMoment.value = moment
   detailFrameUrl.value = resolveDetailUrl(moment)
   detailFrameLoaded.value = false
@@ -1034,11 +1209,17 @@ function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
 }
 
 function handleDetailIframeLoad(event: Event) {
+  const iframe = event.target as HTMLIFrameElement | null
+  if (!iframe || iframe !== detailIframeRef.value || !selectedMoment.value || !detailFrameUrl.value)
+    return
+
   clearDetailLoadTimer()
+  // Ready identity is established before viewport/focus messages are sent.
+  markIframeReadyForMessaging(iframe)
+  syncDetailFrameViewport()
+  void focusDetailIframe(iframe)
 
   // 与抽屉一致：同域时去掉顶栏占位，并保证视频/直播页可滚动
-  const iframe = event.target as HTMLIFrameElement | null
-  markIframeReadyForMessaging(iframe)
   const win = iframe?.contentWindow
   if (win) {
     try {
@@ -1073,6 +1254,7 @@ function handleDetailIframeLoad(event: Event) {
 
 /** 关闭详情时销毁 iframe 文档与媒体，避免内存堆积 */
 function destroyDetailIframe() {
+  clearDetailFocusRetry()
   const iframe = detailIframeRef.value
   if (!iframe)
     return
@@ -1138,7 +1320,9 @@ function destroyDetailIframe() {
 function closeMomentDetail() {
   closeDetailImageViewer()
   clearDetailLoadTimer()
+  clearDetailFocusRetry()
   destroyDetailIframe()
+  detailFocusOrigin = null
   selectedMoment.value = null
   detailFrameUrl.value = ''
   detailFrameLoaded.value = false
@@ -1200,6 +1384,26 @@ function mapMoment(item: DataItem): DisplayMoment {
   )?.desc
   const hotCommentText = normalizeDescText(commentInteraction)
   const hotCommentRichText = extractRichTextSegments(commentInteraction?.rich_text_nodes)
+  const rawForwardedJumpUrl = String(
+    contentRaw.modules?.module_dynamic?.major?.opus?.jump_url
+    || contentRaw.modules?.module_dynamic?.major?.jump_url
+    || '',
+  )
+  const forwardedJumpUrl = httpsUrl(
+    rawForwardedJumpUrl.startsWith('//') ? `https:${rawForwardedJumpUrl}` : rawForwardedJumpUrl,
+  )
+  const forwardedJumpId = forwardedJumpUrl.match(/\/(?:opus|t)\/(\d+)/)?.[1] || ''
+  const forwardedId = isForward
+    ? String(contentRaw.id_str || contentRaw.id || forwardedJumpId || contentRaw.basic?.comment_id_str || '')
+    : ''
+  const forwardedUrl = forwardedJumpUrl || (forwardedId
+    ? `https://www.bilibili.com/opus/${forwardedId}`
+    : '')
+  const forwardedIsArticle = Boolean(isForward && (
+    contentRaw.type === 'DYNAMIC_TYPE_ARTICLE'
+    || Number(contentRaw.basic?.comment_type) === 12
+    || contentRaw.modules?.module_dynamic?.major?.type === 'MAJOR_TYPE_ARTICLE'
+  ))
 
   return {
     id,
@@ -1214,6 +1418,7 @@ function mapMoment(item: DataItem): DisplayMoment {
     richText,
     // 转发卡片只展示原动态摘要，不能把原动态图片提升为外层卡片媒体。
     images: isForward || (isChargeExclusive && !content.isVideo) ? [] : content.images,
+    imageRatios: isForward || (isChargeExclusive && !content.isVideo) ? [] : content.imageRatios,
     time: author.pub_time || '',
     likeCount: Number(raw.modules?.module_stat?.like?.count || 0),
     isLiked: raw.modules?.module_stat?.like?.status === true
@@ -1266,6 +1471,10 @@ function mapMoment(item: DataItem): DisplayMoment {
     additional,
     forward: isForward
       ? {
+          id: forwardedId,
+          url: forwardedUrl,
+          authorMid: String(forwardedAuthor.mid || ''),
+          isArticle: forwardedIsArticle,
           author: forwardedAuthor.name || t('moments.original_author'),
           title: content.title,
           text: content.text,
@@ -1283,6 +1492,9 @@ function mapMoment(item: DataItem): DisplayMoment {
           // 转发动态的原图只放在嵌套卡片中，避免被提升成外层动态媒体。
           images: !content.isVideo && !content.isLive && !content.isChargeExclusive
             ? content.images
+            : [],
+          imageRatios: !content.isVideo && !content.isLive && !content.isChargeExclusive
+            ? content.imageRatios
             : [],
           video: forwardedArchive
             ? {
@@ -1320,7 +1532,7 @@ function estimateCardHeight(moment: DisplayMoment) {
       (total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)),
       0,
     )))
-    return 118 + lineCount * 21 + scaledTextBodyExtra + interactionHeight
+    return 118 + lineCount * 21 + interactionHeight
   }
   if (moment.forward?.images?.length) {
     const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
@@ -1370,7 +1582,16 @@ function estimateCardHeight(moment: DisplayMoment) {
             : 1
     return Math.round((columnWidth - 32) / galleryRatio) + 220 + interactionHeight
   }
-  return 230 + scaledTextBodyExtra + interactionHeight
+  const charsPerLine = Math.max(12, Math.floor((columnWidth - 32) / 14))
+  const textLineCount = Math.min(12, Math.max(1, (moment.text || '').split('\n').reduce(
+    (total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)),
+    0,
+  )))
+  return 112
+    + textLineCount * 24
+    + (moment.title ? 30 : 0)
+    + (moment.additional ? 68 : 0)
+    + interactionHeight
 }
 
 function handleMomentFilterChange(filter: MomentFilter) {
@@ -1657,8 +1878,13 @@ function loadMoreFilteredMoments() {
 }
 
 function getMomentImageRatio(moment: DisplayMoment) {
-  const ratio = coverRatios[moment.id]
-  return Number.isFinite(ratio) && ratio > 0 ? Math.max(1, ratio) : 1
+  const metadataRatio = moment.imageRatios?.[0]
+  const ratio = isUsableImageRatio(metadataRatio)
+    ? metadataRatio
+    : coverRatios[moment.id]
+  return isUsableImageRatio(ratio)
+    ? Math.max(MIN_SINGLE_IMAGE_RATIO, ratio)
+    : 1
 }
 
 const normalizedMomentBlockedKeywords = computed(() => {
@@ -2627,10 +2853,18 @@ function playPreview(event: Event) {
   void video.play().catch(() => {})
 }
 
+function isMomentMutationCurrent(accountId: AccountId) {
+  return isSameAccount(accountId, loadedAccountId)
+    && isSameAccount(accountId, getCurrentAccountId())
+}
+
 async function toggleMomentLike(moment: DisplayMoment) {
   if (likingMomentIds.has(moment.id) || moment.isLikeDisabled)
     return
 
+  const requestAccountId = getCurrentAccountId()
+  if (!isMomentMutationCurrent(requestAccountId))
+    return
   const previousLiked = moment.isLiked
   const previousCount = moment.likeCount
   const csrf = getCSRF()
@@ -2641,6 +2875,8 @@ async function toggleMomentLike(moment: DisplayMoment) {
 
   moment.isLiked = !previousLiked
   moment.likeCount = Math.max(0, previousCount + (moment.isLiked ? 1 : -1))
+  const requestId = Symbol(moment.id)
+  likingMomentRequests.set(moment.id, requestId)
   likingMomentIds.add(moment.id)
 
   try {
@@ -2651,21 +2887,30 @@ async function toggleMomentLike(moment: DisplayMoment) {
       from_spmid: '333.999.0.0',
       csrf,
     })
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     if (response.code !== 0)
       throw new Error(response.message || t('moments.like_failed'))
   }
   catch (error) {
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     // 请求失败时恢复接口返回前的状态，避免界面与服务端不一致
     moment.isLiked = previousLiked
     moment.likeCount = previousCount
     toast.error(error instanceof Error ? error.message : t('moments.like_failed_retry'))
   }
   finally {
-    likingMomentIds.delete(moment.id)
+    if (likingMomentRequests.get(moment.id) === requestId) {
+      likingMomentRequests.delete(moment.id)
+      likingMomentIds.delete(moment.id)
+    }
   }
 }
 
 async function toggleMomentReservation(moment: DisplayMoment) {
+  if (!isMomentMutationCurrent(getCurrentAccountId()))
+    return
   const additional = moment.additional
   const reservationId = additional?.reservationId
   if (!additional || !reservationId || reservationLoadingMomentIds.has(moment.id))
@@ -2677,13 +2922,18 @@ async function toggleMomentReservation(moment: DisplayMoment) {
     return
   }
 
+  const requestAccountId = getCurrentAccountId()
   const wasReserved = Boolean(additional.isReserved)
+  const requestId = Symbol(moment.id)
+  reservationRequests.set(moment.id, requestId)
   reservationLoadingMomentIds.add(moment.id)
 
   try {
     const response = wasReserved
       ? await api.moment.cancelMomentReservation({ sid: reservationId, csrf })
       : await api.moment.reserveMoment({ sid: reservationId, csrf })
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     if (response.code !== 0)
       throw new Error(response.message || t('moment_card.reservation_failed'))
 
@@ -2697,10 +2947,15 @@ async function toggleMomentReservation(moment: DisplayMoment) {
       : 'moment_card.reservation_cancelled'))
   }
   catch (error) {
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     toast.error(error instanceof Error ? error.message : t('moment_card.reservation_failed'))
   }
   finally {
-    reservationLoadingMomentIds.delete(moment.id)
+    if (reservationRequests.get(moment.id) === requestId) {
+      reservationRequests.delete(moment.id)
+      reservationLoadingMomentIds.delete(moment.id)
+    }
   }
 }
 
@@ -2760,13 +3015,23 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
     return
   }
 
+  const requestAccountId = getCurrentAccountId()
+  if (!isMomentMutationCurrent(requestAccountId))
+    return
+  const requestId = Symbol(stateKey)
+  watchLaterRequests.set(stateKey, requestId)
   watchLaterLoadingMomentIds.add(stateKey)
   try {
-    await topBarStore.ensureWatchLaterState()
+    if (!await topBarStore.ensureWatchLaterState())
+      return
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     const accountId = topBarStore.userInfo.mid
     if (!topBarStore.isLogin || !accountId)
       return
     const aid = await resolveMomentWatchLaterAid(target)
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     if (!aid) {
       toast.error(t('moments.watch_later_unavailable'))
       return
@@ -2777,6 +3042,8 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
       ? await api.watchlater.removeFromWatchLater({ aid, csrf })
       : await api.watchlater.saveToWatchLater({ aid, csrf })
 
+    if (!isMomentMutationCurrent(requestAccountId))
+      return
     if (response.code !== 0) {
       toast.error(response.message)
       return
@@ -2785,12 +3052,56 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
     await topBarStore.commitWatchLaterMutation(aid, !isAdded, accountId)
   }
   catch (error) {
-    console.error('[Bewly Nocturne] Watch Later mutation failed:', error)
-    toast.error(error instanceof Error ? error.message : t('moments.watch_later_failed_retry'))
+    if (isMomentMutationCurrent(requestAccountId)) {
+      console.error('[Bewly Nocturne] Watch Later mutation failed:', error)
+      toast.error(error instanceof Error ? error.message : t('moments.watch_later_failed_retry'))
+    }
   }
   finally {
-    watchLaterLoadingMomentIds.delete(stateKey)
+    if (watchLaterRequests.get(stateKey) === requestId) {
+      watchLaterRequests.delete(stateKey)
+      watchLaterLoadingMomentIds.delete(stateKey)
+    }
   }
+}
+
+function isUsableMomentResponse(
+  response: MomentResult,
+  requestToken: number,
+  requestType: MomentFilter,
+  requestGroup: MomentGroup,
+  requestHostMid: string,
+) {
+  if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+    return false
+  if (response.code !== 0)
+    throw new Error(response.message || `Moments request failed with code ${response.code}`)
+  return true
+}
+
+function clearMomentPresentationForRefresh() {
+  moments.value = []
+  momentColumns.value = []
+  virtualColumns.value = []
+  Object.keys(cardHeights).forEach(key => delete cardHeights[key])
+  Object.keys(previewUrls).forEach(key => delete previewUrls[key])
+  Object.keys(coverRatios).forEach(key => delete coverRatios[key])
+  readyCoverIds.clear()
+  readyCardIds.clear()
+  enteringCardIds.clear()
+  revealedCardIds.clear()
+  cardEnterTimers.forEach(timer => clearTimeout(timer))
+  cardEnterTimers.clear()
+  settledHeights.clear()
+  visibleMomentIds.clear()
+  likingMomentIds.clear()
+  reservationLoadingMomentIds.clear()
+  watchLaterLoadingMomentIds.clear()
+  likingMomentRequests.clear()
+  reservationRequests.clear()
+  watchLaterRequests.clear()
+  cleanupLivePreviewPlayer()
+  hoveredMediaId.value = ''
 }
 
 async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false) {
@@ -2807,32 +3118,27 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 
   if (reset) {
     feedRequestToken += 1
-    moments.value = []
-    momentColumns.value = []
-    virtualColumns.value = []
-    Object.keys(cardHeights).forEach(key => delete cardHeights[key])
-    Object.keys(previewUrls).forEach(key => delete previewUrls[key])
-    Object.keys(coverRatios).forEach(key => delete coverRatios[key])
-    readyCoverIds.clear()
-    readyCardIds.clear()
-    enteringCardIds.clear()
-    revealedCardIds.clear()
-    cardEnterTimers.forEach(timer => clearTimeout(timer))
-    cardEnterTimers.clear()
-    settledHeights.clear()
-    visibleMomentIds.clear()
-    likingMomentIds.clear()
-    cleanupLivePreviewPlayer()
-    hoveredMediaId.value = ''
-    isInitialLoading.value = true
+    // Keep the last usable feed visible until the replacement request succeeds.
+    isInitialLoading.value = moments.value.length === 0
   }
   const requestToken = feedRequestToken
   const requestType = activeMomentFilter.value
   const requestGroup = activeMomentGroup.value
   const requestHostMid = selectedHostMid.value
+  const requestOffset = offset.value
+  const requestUpdateBaseline = updateBaseline.value
   let filteredRequestPages = 0
   let pageApplied = false
   let preservedPaginationScrollTop: number | null = null
+  const previousPagination = reset
+    ? {
+        offset: offset.value,
+        updateBaseline: updateBaseline.value,
+        page: momentsFeedPage.value,
+        noMoreContent: noMoreContent.value,
+        wantedCacheCursor: wantedCacheCursor.value,
+      }
+    : null
   isLoading.value = true
   if (reset) {
     offset.value = ''
@@ -2869,12 +3175,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
             features: MOMENT_FEED_FEATURES,
             web_location: '333.1365',
           }) as MomentResult
-          if (
-            !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
-            || response.code !== 0
-          ) {
+          if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
             return
-          }
 
           const pageItems = response.data?.items || []
           scanned.push(...pageItems)
@@ -2902,12 +3204,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
           features: MOMENT_FEED_FEATURES,
           web_location: '333.1365',
         }) as MomentResult
-        if (
-          !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
-          || response.code !== 0
-        ) {
+        if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
           return
-        }
         rawItems = response.data?.items || []
         hasMore = Boolean(response.data?.has_more) && rawItems.length > 0
         nextOffset = response.data?.offset || ''
@@ -2955,12 +3253,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
               update_baseline: scanUpdateBaseline || undefined,
               features: MOMENT_FEED_FEATURES,
             }) as MomentResult
-            if (
-              !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
-              || response.code !== 0
-            ) {
+            if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
               return
-            }
 
             const pageItems = (response.data?.items || []).map(mapMoment)
             reachedCache = pageItems.some(moment => existingIds.has(moment.id))
@@ -3009,12 +3303,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
             update_baseline: cacheEntry.updateBaseline || undefined,
             features: MOMENT_FEED_FEATURES,
           }) as MomentResult
-          if (
-            !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
-            || response.code !== 0
-          ) {
+          if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
             return
-          }
 
           const pageItems = (response.data?.items || []).map(mapMoment)
           const responseOffset = response.data?.offset || ''
@@ -3076,12 +3366,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
           update_baseline: scanUpdateBaseline || undefined,
           features: MOMENT_FEED_FEATURES,
         }) as MomentResult
-        if (
-          !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
-          || response.code !== 0
-        ) {
+        if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
           return
-        }
 
         const pageItems = response.data?.items || []
         scanned.push(...pageItems)
@@ -3105,12 +3391,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         update_baseline: updateBaseline.value || undefined,
         features: MOMENT_FEED_FEATURES,
       }) as MomentResult
-      if (
-        !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
-        || response.code !== 0
-      ) {
+      if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
         return
-      }
       rawItems = response.data?.items || []
       hasMore = Boolean(response.data?.has_more) && rawItems.length > 0
       nextOffset = response.data?.offset || ''
@@ -3118,6 +3400,13 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     }
 
     const normalizedItems = cachedBatch ?? rawItems.map(mapMoment)
+    const existingMomentIds = new Set(moments.value.map(moment => moment.id))
+    const hasUniqueResponseItem = normalizedItems.some(moment => !existingMomentIds.has(moment.id))
+    const cursorAdvanced = nextOffset !== requestOffset
+      || nextUpdateBaseline !== requestUpdateBaseline
+    if (!reset && hasMore && !hasUniqueResponseItem && !cursorAdvanced)
+      hasMore = false
+
     void recordUploaderLatestVideoTimes(
       [
         ...collectVideoPublicationTimes(rawItems),
@@ -3154,16 +3443,33 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       preservedPaginationScrollTop = scrollViewportRef.value?.scrollTop ?? null
     if (!reset)
       suppressBottomRebalanceUntil = Date.now() + 1500
+    else
+      clearMomentPresentationForRefresh()
     appendMoments(items)
     if (reset) {
       await nextTick()
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+      if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+        return
     }
 
     offset.value = nextOffset
     updateBaseline.value = nextUpdateBaseline
     noMoreContent.value = !hasMore
     pageApplied = true
+  }
+  catch (error) {
+    if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
+      if (!pageApplied && previousPagination) {
+        offset.value = previousPagination.offset
+        updateBaseline.value = previousPagination.updateBaseline
+        momentsFeedPage.value = previousPagination.page
+        noMoreContent.value = previousPagination.noMoreContent
+        wantedCacheCursor.value = previousPagination.wantedCacheCursor
+      }
+      console.error('[Bewly Nocturne] Failed to load Moments feed:', error)
+      toast.error(t('common.load_failed'))
+    }
   }
   finally {
     if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
@@ -3250,6 +3556,7 @@ function refresh() {
 }
 
 function resetMomentsAccountState() {
+  closeMomentDetail()
   feedRequestToken++
   portalRequestToken++
   moments.value = []
@@ -3268,6 +3575,12 @@ function resetMomentsAccountState() {
   hoveredMediaId.value = ''
   watchLaterAidByTarget.clear()
   watchLaterAidRequests.clear()
+  likingMomentIds.clear()
+  reservationLoadingMomentIds.clear()
+  watchLaterLoadingMomentIds.clear()
+  likingMomentRequests.clear()
+  reservationRequests.clear()
+  watchLaterRequests.clear()
 }
 
 async function ensureMomentsAccount(): Promise<boolean> {
@@ -3305,6 +3618,7 @@ function handleDetailFrameMessage(event: MessageEvent) {
   if (type === 'BEWLY_OPUS_LAYOUT_READY') {
     detailFrameLoaded.value = true
     clearDetailLoadTimer()
+    syncDetailFrameViewport()
     return
   }
   // iframe 内 ESC 会 post 该消息；Dialog 场景下同步关闭详情
@@ -3312,7 +3626,14 @@ function handleDetailFrameMessage(event: MessageEvent) {
     closeMomentDetail()
 }
 
+function handleMomentsReachBottom() {
+  if (requiresManualMomentPaging())
+    return
+  void loadMoments()
+}
+
 onMounted(() => {
+  momentsMounted = true
   setupVirtualObservers()
   gridObserver = new ResizeObserver(() => {
     updateGridColumnCount()
@@ -3329,16 +3650,15 @@ onMounted(() => {
     updateVirtualColumns()
   })
   window.addEventListener('message', handleDetailFrameMessage)
+  window.addEventListener('resize', syncDetailFrameViewport)
   void ensureMomentsAccount().then(() => {
+    if (!momentsMounted)
+      return
     void topBarStore.ensureWatchLaterState()
     refresh()
   })
   handlePageRefresh.value = refresh
-  handleReachBottom.value = () => {
-    if (requiresManualMomentPaging())
-      return
-    void loadMoments()
-  }
+  handleReachBottom.value = handleMomentsReachBottom
 })
 
 watch([
@@ -3348,12 +3668,15 @@ watch([
   if (topBarStore.isLogin && topBarStore.userInfo.mid)
     void topBarStore.ensureWatchLaterState()
   void ensureMomentsAccount().then((changed) => {
-    if (changed)
+    if (momentsMounted && changed)
       refresh()
   })
 })
 
 onBeforeUnmount(() => {
+  momentsMounted = false
+  feedRequestToken += 1
+  portalRequestToken += 1
   gridObserver?.disconnect()
   cardMeasureObserver?.disconnect()
   visibilityObserver?.disconnect()
@@ -3381,8 +3704,11 @@ onBeforeUnmount(() => {
     virtualRaf = 0
   }
   window.removeEventListener('message', handleDetailFrameMessage)
-  handlePageRefresh.value = undefined
-  handleReachBottom.value = undefined
+  window.removeEventListener('resize', syncDetailFrameViewport)
+  if (handlePageRefresh.value === refresh)
+    handlePageRefresh.value = undefined
+  if (handleReachBottom.value === handleMomentsReachBottom)
+    handleReachBottom.value = undefined
 })
 
 watch(() => scrollViewportRef.value, () => {
@@ -3610,9 +3936,9 @@ watch(
             target="_blank"
             rel="noopener noreferrer"
           >
-            <span i-tabler-edit />
+            <span i-tabler-edit aria-hidden="true" />
             <span>{{ t('moments.publish') }}</span>
-            <span i-tabler-external-link />
+            <span i-tabler-external-link aria-hidden="true" />
           </a>
 
           <section v-if="settings.momentsSidebarShowLive && portalLiveUsers.length" class="moments-live-card">
@@ -3698,26 +4024,24 @@ watch(
               class="moments-up-list__fade moments-up-list__fade--next"
               aria-hidden="true"
             />
-            <button
+            <IconButton
               v-show="canScrollUpListLeft"
-              type="button"
               class="moments-up-list__arrow moments-up-list__arrow--prev"
-              :aria-label="t('moments.scroll_frequent_left')"
+              :label="t('moments.scroll_frequent_left')"
               :title="t('moments.scroll_left')"
               @click="scrollUpListBy(-1)"
             >
               <span i-tabler-chevron-left aria-hidden="true" />
-            </button>
-            <button
+            </IconButton>
+            <IconButton
               v-show="canScrollUpListRight"
-              type="button"
               class="moments-up-list__arrow moments-up-list__arrow--next"
-              :aria-label="t('moments.scroll_frequent_right')"
+              :label="t('moments.scroll_frequent_right')"
               :title="t('moments.scroll_right')"
               @click="scrollUpListBy(1)"
             >
               <span i-tabler-chevron-right aria-hidden="true" />
-            </button>
+            </IconButton>
 
             <div
               v-if="isPortalLoading && !portalUpList.length"
@@ -3768,44 +4092,33 @@ watch(
                 </span>
                 <span class="moments-up-list__name">{{ up.uname }}</span>
               </button>
-            </div>
-          </div>
-
-          <div
-            v-if="momentsPinnedUsers.length"
-            class="moments-up-list__pinned"
-            role="group"
-            :aria-label="t('moments.pinned_uploaders')"
-            @wheel="handleUpListWheel"
-          >
-            <span class="moments-up-list__divider" aria-hidden="true" />
-            <button
-              v-for="user in momentsPinnedUsers"
-              :key="user.mid"
-              type="button"
-              class="moments-up-list__item"
-              :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
-              :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
-              :title="user.name"
-              @click="handleUpFilterChange(user.mid)"
-            >
-              <span class="moments-up-list__avatar">
-                <img
-                  :src="getSidebarAvatarUrl(user.face, 96)"
-                  :alt="user.name"
-                  loading="lazy"
-                  decoding="async"
+              <template v-if="momentsPinnedUsers.length">
+                <span class="moments-up-list__divider" aria-hidden="true" />
+                <button
+                  v-for="user in momentsPinnedUsers"
+                  :key="user.mid"
+                  type="button"
+                  class="moments-up-list__item"
+                  :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
+                  :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
+                  :title="user.name"
+                  @click="handleUpFilterChange(user.mid)"
                 >
-              </span>
-              <span class="moments-up-list__name">{{ user.name }}</span>
-            </button>
+                  <span class="moments-up-list__avatar">
+                    <img
+                      :src="getSidebarAvatarUrl(user.face, 96)"
+                      :alt="user.name"
+                      loading="lazy"
+                      decoding="async"
+                    >
+                  </span>
+                  <span class="moments-up-list__name">{{ user.name }}</span>
+                </button>
+              </template>
+            </div>
           </div>
         </section>
         <div v-if="isInitialLoading" class="moments-page__initial-loading">
-          <div class="moments-skeleton__status">
-            <span i-svg-spinners:ring-resize />
-            {{ t('moments.initial_loading') }}
-          </div>
           <div
             v-layout-editable="'moments-grid'"
             class="moments-skeleton-grid"
@@ -3934,6 +4247,7 @@ watch(
       :height="detailDialogHeight"
       :content-height="detailContentHeight"
       :content-max-height="detailContentHeight"
+      @before-close="clearDetailFocusRetry"
       @close="closeMomentDetail"
     >
       <div
@@ -3946,7 +4260,7 @@ watch(
         }"
       >
         <div class="moment-detail-frame__loading" aria-hidden="true">
-          <img class="moment-detail-frame__loading-icon" :src="loadingGifUrl" alt="" aria-hidden="true">
+          <span class="moment-detail-frame__loading-icon" />
           {{ selectedMoment.isLive ? t('moments.opening_live') : selectedMoment.isVideo ? t('moments.opening_video') : selectedMoment.isForward ? t('moments.opening_forward') : t('moments.loading_detail') }}
         </div>
         <iframe
@@ -4104,9 +4418,11 @@ watch(
 .moments-up-list__scroller {
   display: flex;
   gap: var(--bew-space-1);
+  padding-inline: var(--bew-space-4);
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
+  scroll-padding-inline: var(--bew-space-4);
   scrollbar-width: none;
   -webkit-mask-image: linear-gradient(
     90deg,
@@ -4166,25 +4482,21 @@ watch(
   position: absolute;
   top: 50%;
   z-index: 2;
-  display: grid;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
+  width: var(--bew-control-item-height);
+  height: var(--bew-control-item-height);
+  border: 1px solid var(--bew-surface-border-color);
   color: var(--bew-text-1);
-  background: color-mix(in oklab, var(--bew-elevated-solid) 48%, transparent);
+  background: var(--bew-elevated-solid);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
   backdrop-filter: var(--bew-filter-glass-1);
-  box-shadow: none;
+  box-shadow: var(--bew-shadow-1);
   opacity: 0;
-  place-items: center;
   pointer-events: none;
   transform: translateY(-50%);
   transition:
     opacity var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard);
-  cursor: pointer;
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
 }
 .moments-up-list__arrow--prev {
   left: 4px;
@@ -4198,27 +4510,14 @@ watch(
   pointer-events: auto;
 }
 .moments-up-list__arrow:hover {
-  background: color-mix(in oklab, var(--bew-elevated-solid) 64%, transparent);
+  background: var(--bew-elevated-solid-hover);
+}
+.moments-up-list__arrow:active:not(:disabled) {
+  transform: translateY(-50%) scale(0.92);
 }
 .moments-up-list__arrow:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
-  outline-offset: 2px;
   opacity: 1;
   pointer-events: auto;
-}
-.moments-up-list__pinned {
-  display: flex;
-  flex: 0 1 max-content;
-  align-items: center;
-  gap: var(--bew-space-1);
-  min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  overscroll-behavior-x: contain;
-  scrollbar-width: none;
-}
-.moments-up-list__pinned::-webkit-scrollbar {
-  display: none;
 }
 .moments-up-list__divider {
   flex: 0 0 auto;
@@ -4245,11 +4544,20 @@ watch(
   text-decoration: none;
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
-    transform var(--bew-duration-fast) var(--bew-ease-standard);
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
+}
+.moments-up-list__item:hover:not(:disabled) {
+  color: var(--bew-text-1);
+  background: var(--bew-fill-1);
+  transform: translateY(-2px);
+}
+.moments-up-list__item:active:not(:disabled) {
+  transform: translateY(0) scale(0.98);
 }
 .moments-up-list__item:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
-  outline-offset: 2px;
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
 }
 .moments-up-list__item--active .moments-up-list__name {
   color: var(--bew-theme-foreground);
@@ -4367,8 +4675,16 @@ watch(
   display: flex;
   align-items: center;
   gap: var(--bew-space-3);
+  margin: calc(0px - var(--bew-space-2));
+  padding: var(--bew-space-2);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
   color: inherit;
   text-decoration: none;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+.moments-user-card__profile:hover {
+  background: var(--bew-fill-1);
 }
 .moments-user-card__profile > img {
   flex: 0 0 auto;
@@ -4445,11 +4761,12 @@ watch(
 }
 .moments-publish-link {
   display: flex;
+  box-sizing: border-box;
   align-items: center;
   gap: var(--bew-space-2);
   min-height: 44px;
   padding: 0 var(--bew-space-4);
-  border: 0;
+  border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-1);
   background: var(--bew-elevated);
@@ -4469,7 +4786,13 @@ watch(
 }
 .moments-publish-link:hover {
   color: var(--bew-text-1);
-  background: color-mix(in oklab, var(--bew-elevated-solid) 92%, var(--bew-text-1) 8%);
+  background: var(--bew-elevated-hover);
+}
+.moments-publish-link:focus-visible,
+.moments-user-card__profile:focus-visible,
+.moments-live-card__list > a:focus-visible {
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
 }
 .moments-live-card {
   display: flex;
@@ -4645,18 +4968,6 @@ watch(
   position: relative;
   min-height: calc(100dvh - var(--bew-top-bar-height) - 90px);
 }
-.moments-skeleton__status {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bew-space-2);
-  height: 32px;
-  margin-bottom: var(--bew-space-3);
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  pointer-events: none;
-}
 .moments-skeleton-grid {
   display: grid;
   align-items: start;
@@ -4683,14 +4994,16 @@ watch(
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bew-border-color), transparent 72%);
 }
 .moments-skeleton-block {
-  background: linear-gradient(
-    100deg,
-    color-mix(in oklab, var(--bew-fill-1), transparent 24%) 25%,
-    color-mix(in oklab, var(--bew-fill-2), transparent 14%) 38%,
-    color-mix(in oklab, var(--bew-fill-1), transparent 24%) 63%
-  );
-  background-size: 400% 100%;
-  animation: moment-shimmer 1.5s ease infinite;
+  background:
+    linear-gradient(
+      100deg,
+      transparent 20%,
+      color-mix(in oklab, var(--bew-fill-4), transparent 28%) 50%,
+      transparent 80%
+    ),
+    var(--bew-skeleton);
+  background-size: 220% 100%;
+  animation: moment-shimmer 1.4s linear infinite;
 }
 .moments-skeleton-card__header {
   display: flex;
@@ -4991,10 +5304,30 @@ watch(
   transition: opacity 0.18s ease;
 }
 .moment-detail-frame__loading-icon {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  flex-shrink: 0;
+  width: var(--bew-icon-size-lg);
+  height: var(--bew-icon-size-lg);
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  border: 2px solid var(--bew-theme-color-20);
+  border-top-color: var(--bew-theme-color);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  animation: moment-detail-loading-spin 720ms linear infinite;
+}
+@keyframes moment-detail-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .moments-skeleton-block,
+  .moment-detail-frame__loading-icon {
+    animation: none;
+  }
+
+  .moment-detail-frame__loading-icon {
+    border-color: var(--bew-theme-color);
+  }
 }
 .moment-detail-frame:not(.is-loading) .moment-detail-frame__loading {
   opacity: 0;
@@ -5222,8 +5555,12 @@ watch(
   }
 }
 @keyframes moment-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
   to {
-    background-position: -400% 0;
+    background-position: -120% 0;
   }
 }
 </style>

@@ -5,10 +5,10 @@ import { useI18n } from 'vue-i18n'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
 import Empty from '~/components/Empty.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
-import SmoothLoading from '~/components/SmoothLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 
+import MediaHighlightSkeleton from '../components/MediaHighlightSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
@@ -220,10 +220,14 @@ function refreshCurrentPage() {
     ? handlePageChange(currentPage.value, false, false)
     : performSearch(false)
 }
-function restorePage(page: number) {
-  return page === currentPage.value
-    ? Promise.resolve(true)
-    : handlePageChange(page, false, false)
+async function restorePage(page: number): Promise<boolean> {
+  if (page === currentPage.value)
+    return true
+  if (paginationMode.value === 'pagination')
+    return handlePageChange(page, false, false)
+
+  updatePage(page)
+  return performSearch(false)
 }
 
 function resetAll() {
@@ -258,6 +262,9 @@ defineExpose({
     </div>
 
     <div v-else class="bangumi-results" space-y-6>
+      <div v-if="isLoading && (!results || results.length === 0)" class="bangumi-highlight-grid">
+        <MediaHighlightSkeleton v-for="index in 4" :key="`bangumi-initial-skeleton-${index}`" />
+      </div>
       <div v-if="bangumiGroups.bangumi.length" class="bangumi-highlight-grid">
         <div
           v-for="bangumi in bangumiGroups.bangumi.map(convertBangumiHighlight)"
@@ -387,15 +394,13 @@ defineExpose({
           </div>
         </div>
       </div>
+      <div v-if="isLoading && results && results.length > 0" class="bangumi-highlight-grid">
+        <MediaHighlightSkeleton v-for="index in 2" :key="`bangumi-more-skeleton-${index}`" />
+      </div>
     </div>
 
     <!-- 滚动加载模式 -->
     <template v-if="paginationMode === 'scroll'">
-      <SmoothLoading
-        :show="isLoading && results && results.length > 0"
-        :keep-space="true"
-      />
-
       <Empty
         v-if="!isLoading && results && results.length > 0 && !hasMore"
         :description="t('common.no_more_content')"

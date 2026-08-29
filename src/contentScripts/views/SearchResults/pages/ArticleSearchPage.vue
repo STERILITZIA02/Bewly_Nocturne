@@ -3,8 +3,8 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
+import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vue'
 import Empty from '~/components/Empty.vue'
-import SmoothLoading from '~/components/SmoothLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 
@@ -209,10 +209,14 @@ function refreshCurrentPage() {
     ? handlePageChange(currentPage.value, false, false)
     : performSearch(false)
 }
-function restorePage(page: number) {
-  return page === currentPage.value
-    ? Promise.resolve(true)
-    : handlePageChange(page, false, false)
+async function restorePage(page: number): Promise<boolean> {
+  if (page === currentPage.value)
+    return true
+  if (paginationMode.value === 'pagination')
+    return handlePageChange(page, false, false)
+
+  updatePage(page)
+  return performSearch(false)
 }
 
 function resetAll() {
@@ -247,20 +251,23 @@ defineExpose({
     </div>
 
     <div v-else class="article-grid">
+      <ArticleCardSkeleton
+        v-for="index in (isLoading && (!results || results.length === 0) ? 6 : 0)"
+        :key="`article-search-initial-skeleton-${index}`"
+      />
       <ArticleCard
         v-for="article in results"
         :key="article.id"
         v-bind="convertArticleCardData(article)"
       />
+      <ArticleCardSkeleton
+        v-for="index in (isLoading && results && results.length > 0 ? 2 : 0)"
+        :key="`article-search-more-skeleton-${index}`"
+      />
     </div>
 
     <!-- 滚动加载模式 -->
     <template v-if="paginationMode === 'scroll'">
-      <SmoothLoading
-        :show="isLoading && results && results.length > 0"
-        :keep-space="true"
-      />
-
       <Empty
         v-if="!isLoading && results && results.length > 0 && !hasMore"
         :description="t('common.no_more_content')"

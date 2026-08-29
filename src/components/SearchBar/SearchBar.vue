@@ -1,20 +1,16 @@
 <script setup lang="ts">
 import { onClickOutside, useDebounceFn, useElementBounding, useMediaQuery } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
-import { computed, getCurrentInstance, inject, nextTick, reactive, ref, shallowRef, watch } from 'vue'
+import { computed, getCurrentInstance, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 
-import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
-import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
-import { isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
-import { resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
-import { openLinkInBackground } from '~/utils/tabs'
+import { openSearchResults, resolveSearchNavigationTarget } from '~/utils/searchNavigation'
 
 import SearchFocusOverlay from '../SearchFocusOverlay.vue'
 import TagRemoveButton from '../TagRemoveButton.vue'
@@ -146,22 +142,6 @@ const placeholderText = computed(() => {
   return ''
 })
 
-// 尝试获取 BEWLY_APP（在首页时可用）
-const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
-
-// 判断是否在搜索结果页且启用了插件搜索
-const shouldHandleInCurrentPage = computed(() => {
-  if (!shouldUsePluginSearchResultsPage())
-    return false
-  // 如果能获取到 bewlyApp，使用 activatedPage 来判断
-  if (bewlyApp?.activatedPage) {
-    return bewlyApp.activatedPage.value === AppPage.SearchResults
-  }
-  // 降级方案：检查 URL 参数（在非首页或无法获取 bewlyApp 时使用）
-  const urlParams = new URLSearchParams(window.location.search)
-  return urlParams.get('page') === 'SearchResults' && !!urlParams.get('keyword')
-})
-
 watch(() => props.modelValue, (value) => {
   const next = value ?? ''
   if (next !== keyword.value) {
@@ -178,31 +158,40 @@ watch(keyword, (value) => {
     emit('update:modelValue', value)
 })
 
+let searchBarDisposed = false
+let focusRequestId = 0
+let suggestionRequestId = 0
+
 watch(isFocus, async (focus) => {
+  const requestId = ++focusRequestId
   emit('focusChange', focus)
 
+  if (!focus) {
+    suggestionRequestId++
+    return
+  }
+
   // 延后加载搜索历史
-  if (focus) {
+  try {
+    const nextHistory = settings.value.enableSearchHistory
+      ? await getSearchHistory()
+      : []
+    if (!searchBarDisposed && isFocus.value && requestId === focusRequestId)
+      searchHistory.value = nextHistory
+  }
+  catch (error) {
+    reportSearchBarFailure('search-history', error)
+    if (!searchBarDisposed && isFocus.value && requestId === focusRequestId)
+      searchHistory.value = []
+  }
+
+  // 加载热搜数据
+  if (props.showHotSearch ?? settings.value.showHotSearchInTopBar) {
     try {
-      if (settings.value.enableSearchHistory) {
-        searchHistory.value = await getSearchHistory()
-      }
-      else {
-        searchHistory.value = []
-      }
+      await loadSharedHotSearch()
     }
     catch (error) {
-      reportSearchBarFailure('search-history', error)
-      searchHistory.value = []
-    }
-    // 加载热搜数据
-    if (props.showHotSearch ?? settings.value.showHotSearchInTopBar) {
-      try {
-        await loadSharedHotSearch()
-      }
-      catch (error) {
-        reportSearchBarFailure('hot-search', error)
-      }
+      reportSearchBarFailure('hot-search', error)
     }
   }
 })
@@ -223,15 +212,17 @@ watch(() => settings.value.enableSearchHistory, (enabled) => {
 
 // 组件卸载时清理定时器
 onBeforeUnmount(() => {
+  searchBarDisposed = true
+  focusRequestId++
+  suggestionRequestId++
   emit('focusChange', false)
   releaseSearchExperience()
 })
 
-let suggestionRequestId = 0
 const handleKeywordInput = useDebounceFn(async (term: string, requestId: number) => {
   try {
     const res: SuggestionResponse = await api.search.getSearchSuggestion({ term })
-    if (requestId !== suggestionRequestId)
+    if (searchBarDisposed || requestId !== suggestionRequestId)
       return
 
     const nextSuggestions = res?.code === 0 && Array.isArray(res.result?.tag)
@@ -247,7 +238,7 @@ const handleKeywordInput = useDebounceFn(async (term: string, requestId: number)
     suggestions.splice(0, suggestions.length, ...uniqueSuggestions)
   }
   catch (error) {
-    if (requestId === suggestionRequestId)
+    if (!searchBarDisposed && requestId === suggestionRequestId)
       suggestions.length = 0
     reportSearchBarFailure('search-suggestion', error)
   }
@@ -278,7 +269,10 @@ function extractKeywordFromUrl(url: string): string {
   }
 }
 
-async function navigateToSearchResultPage(rawKeyword: string) {
+let lastSubmittedKeyword = ''
+let lastSubmittedAt = Number.NEGATIVE_INFINITY
+
+function navigateToSearchResultPage(rawKeyword: string) {
   let normalized = (rawKeyword || keyword.value).trim()
 
   // 如果输入为空且启用了搜索推荐，使用推荐的搜索词
@@ -289,55 +283,39 @@ async function navigateToSearchResultPage(rawKeyword: string) {
   if (!normalized)
     return
 
-  if (settings.value.enableSearchHistory) {
-    const searchItem = {
-      value: normalized,
-      timestamp: Number(new Date()),
+  const submittedAt = performance.now()
+  if (normalized === lastSubmittedKeyword && submittedAt - lastSubmittedAt < 500)
+    return
+  lastSubmittedKeyword = normalized
+  lastSubmittedAt = submittedAt
+
+  const persistHistory = settings.value.enableSearchHistory
+    ? async () => {
+      try {
+        const nextHistory = await addSearchHistory({
+          value: normalized,
+          timestamp: Date.now(),
+        })
+        if (!searchBarDisposed)
+          searchHistory.value = nextHistory
+      }
+      catch (error) {
+        reportSearchBarFailure('search-history-write', error)
+      }
     }
-    try {
-      searchHistory.value = await addSearchHistory(searchItem)
-    }
-    catch (error) {
-      reportSearchBarFailure('search-history-write', error)
-    }
-  }
+    : undefined
 
   // 如果是就地搜索模式，则 emit 事件（这是组件级别的行为设置）
   if (isInPlaceSearch.value) {
+    void persistHistory?.()
     emit('search', normalized)
     isFocus.value = false
     resetKeyboardSelection()
     return
   }
 
-  // 如果在搜索页且启用了插件搜索，则在当前页加载
-  if (shouldHandleInCurrentPage.value) {
-    emit('search', normalized)
-    isFocus.value = false
-    resetKeyboardSelection()
-    return
-  }
-
-  // 不在搜索页时，遵循顶栏链接行为设置
-  const searchUrl = buildKeywordHref(normalized)
-
-  if (settings.value.searchBarLinkOpenMode === 'background') {
-    // 使用后台标签页打开
-    void openLinkInBackground(searchUrl)
-  }
-  else {
-    // 使用 window.open 打开
-    let target = '_blank'
-    if (settings.value.searchBarLinkOpenMode === 'currentTabIfNotHomepage')
-      target = isHomePage() ? '_blank' : '_self'
-    else if (settings.value.searchBarLinkOpenMode === 'currentTab')
-      target = '_self'
-    else if (settings.value.searchBarLinkOpenMode === 'newTab')
-      target = '_blank'
-
-    window.open(searchUrl, target)
-  }
-
+  openSearchResults(buildKeywordHref(normalized), { persistHistory })
+  isFocus.value = false
   resetKeyboardSelection()
 }
 

@@ -3,8 +3,8 @@ import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Empty from '~/components/Empty.vue'
-import SmoothLoading from '~/components/SmoothLoading.vue'
 import UserCard from '~/components/UserCard/UserCard.vue'
+import UserCardSkeleton from '~/components/UserCard/UserCardSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 
@@ -277,10 +277,14 @@ function refreshCurrentPage() {
     ? handlePageChange(currentPage.value, false, false)
     : performSearch(false)
 }
-function restorePage(page: number) {
-  return page === currentPage.value
-    ? Promise.resolve(true)
-    : handlePageChange(page, false, false)
+async function restorePage(page: number): Promise<boolean> {
+  if (page === currentPage.value)
+    return true
+  if (paginationMode.value === 'pagination')
+    return handlePageChange(page, false, false)
+
+  updatePage(page)
+  return performSearch(false)
 }
 
 function resetAll() {
@@ -322,6 +326,10 @@ defineExpose({
     </div>
 
     <div v-else class="user-grid">
+      <UserCardSkeleton
+        v-for="index in (isLoading && (!results || results.length === 0) ? 6 : 0)"
+        :key="`user-search-initial-skeleton-${index}`"
+      />
       <UserCard
         v-for="user in results"
         :key="user.mid"
@@ -332,15 +340,14 @@ defineExpose({
         :compact="true"
         @follow-state-changed="(mid: number, isFollowing: boolean) => handleFollowStateChanged({ mid, isFollowing })"
       />
+      <UserCardSkeleton
+        v-for="index in (isLoading && results && results.length > 0 ? 3 : 0)"
+        :key="`user-search-more-skeleton-${index}`"
+      />
     </div>
 
     <!-- 滚动加载模式 -->
     <template v-if="paginationMode === 'scroll'">
-      <SmoothLoading
-        :show="isLoading && results && results.length > 0"
-        :keep-space="true"
-      />
-
       <Empty
         v-if="!isLoading && results && results.length > 0 && !hasMore"
         :description="t('common.no_more_content')"

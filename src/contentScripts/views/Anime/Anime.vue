@@ -16,6 +16,7 @@ const cursor = ref<number>(0)
 const isLoadingAnimeWatchList = ref<boolean>()
 const isLoadingPopularAnime = ref<boolean>()
 const isLoadingRecommendAnime = ref<boolean>()
+const recommendRequestFailed = ref(false)
 const activatedSeasonId = ref<number>()
 const noMoreContent = ref<boolean>()
 const animeTimeTableRef = ref()
@@ -28,35 +29,44 @@ const isLoading = computed(() => {
 onMounted(() => {
   getAnimeWatchList()
   getPopularAnimeList()
-  getRecommendAnimeList()
+  void getRecommendAnimeList()
 
   initPageAction()
 })
 
+onScopeDispose(() => {
+  if (handleReachBottom.value === handleAnimeReachBottom)
+    handleReachBottom.value = undefined
+  if (handlePageRefresh.value === handleAnimePageRefresh)
+    handlePageRefresh.value = undefined
+})
+
+async function handleAnimeReachBottom() {
+  if (isLoadingRecommendAnime.value || noMoreContent.value || recommendRequestFailed.value)
+    return false
+  return getRecommendAnimeList()
+}
+
+function handleAnimePageRefresh() {
+  if (isLoading.value)
+    return
+
+  animeWatchList.length = 0
+  recommendAnimeList.length = 0
+  popularAnimeList.length = 0
+  cursor.value = 0
+  noMoreContent.value = false
+  recommendRequestFailed.value = false
+
+  getAnimeWatchList()
+  getPopularAnimeList()
+  void getRecommendAnimeList()
+  animeTimeTableRef.value?.refreshAnimeTimeTable()
+}
+
 function initPageAction() {
-  handleReachBottom.value = () => {
-    if (isLoadingRecommendAnime.value)
-      return
-    if (noMoreContent.value)
-      return
-
-    getRecommendAnimeList()
-  }
-  handlePageRefresh.value = () => {
-    if (isLoading.value)
-      return
-
-    animeWatchList.length = 0
-    recommendAnimeList.length = 0
-    popularAnimeList.length = 0
-    cursor.value = 0
-    noMoreContent.value = false
-
-    getAnimeWatchList()
-    getPopularAnimeList()
-    getRecommendAnimeList()
-    animeTimeTableRef.value?.refreshAnimeTimeTable()
-  }
+  handleReachBottom.value = handleAnimeReachBottom
+  handlePageRefresh.value = handleAnimePageRefresh
 }
 
 function getAnimeWatchList() {
@@ -81,24 +91,35 @@ function getAnimeWatchList() {
     })
 }
 
-function getRecommendAnimeList() {
+async function getRecommendAnimeList(): Promise<boolean> {
+  if (isLoadingRecommendAnime.value)
+    return false
+  recommendRequestFailed.value = false
   isLoadingRecommendAnime.value = true
-  api.anime.getRecommendAnimeList({
-    coursor: cursor.value,
-  })
-    .then((response: RecommendationResult) => {
-      if (response.code !== 0)
-        return
+  try {
+    const response: RecommendationResult = await api.anime.getRecommendAnimeList({
+      coursor: cursor.value,
+    })
+    if (response.code !== 0) {
+      recommendRequestFailed.value = true
+      return true
+    }
 
-      const items = Array.isArray(response.data?.items) ? response.data.items : []
-      const subItems = Array.isArray(items[0]?.sub_items) ? items[0].sub_items : []
-      recommendAnimeList.push(...subItems)
-      cursor.value = response.data.coursor
-      noMoreContent.value = !response.data.has_next || subItems.length === 0
-    })
-    .finally(() => {
-      isLoadingRecommendAnime.value = false
-    })
+    const items = Array.isArray(response.data?.items) ? response.data.items : []
+    const subItems = Array.isArray(items[0]?.sub_items) ? items[0].sub_items : []
+    recommendAnimeList.push(...subItems)
+    cursor.value = response.data.coursor
+    noMoreContent.value = !response.data.has_next || subItems.length === 0
+    return true
+  }
+  catch (error) {
+    recommendRequestFailed.value = true
+    console.error('获取番剧推荐失败:', error)
+    return true
+  }
+  finally {
+    isLoadingRecommendAnime.value = false
+  }
 }
 
 function getPopularAnimeList() {
@@ -278,14 +299,16 @@ function getPopularAnimeList() {
             important-mb-0
           />
         </div>
+        <Empty v-if="recommendRequestFailed" :description="$t('common.load_failed')">
+          <Button type="tertiary" @click="getRecommendAnimeList">
+            {{ $t('common.operation.refresh') }}
+          </Button>
+        </Empty>
       </section>
     </div>
 
     <!-- no more content -->
     <Empty v-if="noMoreContent" class="pb-4" :description="$t('common.no_more_content')" />
-
-    <!-- loading -->
-    <Loading v-if="isLoadingRecommendAnime && recommendAnimeList.length !== 0" m="-t-4" />
   </div>
 </template>
 

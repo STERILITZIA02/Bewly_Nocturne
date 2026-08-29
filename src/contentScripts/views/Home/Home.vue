@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
 import { useThrottleFn } from '@vueuse/core'
+import type { AsyncComponentLoader } from 'vue'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
@@ -41,16 +43,24 @@ let tabSwitchFrame: number | null = null
 
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
+function defineHomePageComponent(loader: AsyncComponentLoader) {
+  return defineAsyncComponent({
+    loader,
+    loadingComponent: PageAsyncLoading,
+    delay: 120,
+  })
+}
+
 // KeepAlive 依赖稳定的组件类型，不能在 computed 内重复创建异步组件包装器。
-const forYouPage = defineAsyncComponent(() => import('./components/ForYou.vue'))
-const followingPage = defineAsyncComponent(() => import('./components/Following.vue'))
-const followingOldPage = defineAsyncComponent(() => import('./components/FollowingOld.vue'))
-const subscribedSeriesPage = defineAsyncComponent(() => import('./components/SubscribedSeries.vue'))
-const trendingPage = defineAsyncComponent(() => import('./components/Trending.vue'))
-const rankingPage = defineAsyncComponent(() => import('./components/Ranking.vue'))
-const preciousPage = defineAsyncComponent(() => import('./components/Precious.vue'))
-const weeklyPage = defineAsyncComponent(() => import('./components/Weekly.vue'))
-const livePage = defineAsyncComponent(() => import('./components/Live.vue'))
+const forYouPage = defineHomePageComponent(() => import('./components/ForYou.vue'))
+const followingPage = defineHomePageComponent(() => import('./components/Following.vue'))
+const followingOldPage = defineHomePageComponent(() => import('./components/FollowingOld.vue'))
+const subscribedSeriesPage = defineHomePageComponent(() => import('./components/SubscribedSeries.vue'))
+const trendingPage = defineHomePageComponent(() => import('./components/Trending.vue'))
+const rankingPage = defineHomePageComponent(() => import('./components/Ranking.vue'))
+const preciousPage = defineHomePageComponent(() => import('./components/Precious.vue'))
+const weeklyPage = defineHomePageComponent(() => import('./components/Weekly.vue'))
+const livePage = defineHomePageComponent(() => import('./components/Live.vue'))
 const pages = computed(() => ({
   [HomeSubPage.ForYou]: forYouPage,
   [HomeSubPage.Following]: settings.value.useFollowingNewLayout

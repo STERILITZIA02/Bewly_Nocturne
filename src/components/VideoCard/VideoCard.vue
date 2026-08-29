@@ -187,15 +187,6 @@ const primaryTags = computed(() => {
   return [tag]
 })
 
-// 使用 CSS 变量定义，让浏览器通过 CSS 容器查询自动响应
-const coverStatsStyle = computed(() => {
-  if (layout.value === 'old')
-    return {}
-
-  // 所有响应式样式都通过 CSS 容器查询处理，这里只设置基础值
-  return {}
-})
-
 // Highlight tags calculation - 使用查找表优化性能
 const LIKE_RATIO_THRESHOLDS = [
   { view: 1_000_000, ratio: 0.01 },
@@ -220,11 +211,12 @@ const highlightTags = computed(() => {
     return [] as string[]
 
   const tags: string[] = []
+  const durationTag = getDurationHighlight(props.video)
   const stats = logic.videoStatNumbers.value
   const viewCount = stats.view ?? 0
 
   if (viewCount <= 0)
-    return tags
+    return durationTag ? [durationTag] : tags
 
   if (viewCount >= 10_000) {
     const likeCount = stats.like ?? 0
@@ -245,8 +237,6 @@ const highlightTags = computed(() => {
       tags.push(t('video_card.highlight_high_engagement'))
     }
   }
-
-  const durationTag = props.video ? getDurationHighlight(props.video) : undefined
 
   if (durationTag)
     tags.push(durationTag)
@@ -407,7 +397,6 @@ provide('getVideoType', () => props.type!)
             :cover-stats-visibility="coverStatsVisibility"
             :has-cover-stats="Boolean(hasCoverStats)"
             :should-hide-cover-stats="Boolean(shouldHideCoverStats)"
-            :cover-stats-style="coverStatsStyle as Record<string, string>"
             @toggle-watch-later="logic.toggleWatchLater"
             @undo="logic.handleUndo"
             @image-loaded="handleImageLoaded"
@@ -526,13 +515,14 @@ provide('getVideoType', () => props.type!)
 }
 
 .horizontal-card-cover {
-  --uno: "w-full max-w-400px aspect-video";
-  flex: 1 1 0;
+  --uno: "w-full aspect-video";
+  flex: var(--video-card-cover-flex, 50) 1 0;
   min-width: 0;
+  max-width: var(--video-card-cover-max-width, 400px);
 }
 
 .horizontal-card-info {
-  flex: 1 1 0;
+  flex: var(--video-card-info-flex, 50) 1 0;
   min-width: 0;
 }
 
@@ -556,6 +546,7 @@ provide('getVideoType', () => props.type!)
 /* 使用固定样式变量 */
 :deep(.video-card-stats) {
   --video-card-stats-font-size: var(--bew-font-size-control);
+  --video-card-stats-line-height: var(--bew-line-height-control);
   --video-card-stats-overlay-scale: 1.4;
   --video-card-stats-icon-size: 0.825rem;
 }

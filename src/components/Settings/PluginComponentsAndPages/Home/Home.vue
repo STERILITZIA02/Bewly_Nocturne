@@ -1,5 +1,4 @@
 <script lang="ts" setup>
-import QRCodeVue from 'qrcode.vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 import draggable from 'vuedraggable'
@@ -8,9 +7,14 @@ import Input from '~/components/Input.vue'
 import Radio from '~/components/Radio.vue'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { appAuthTokens, gridLayout, settings } from '~/logic'
+import {
+  appAuthorizationState,
+  dismissAppAuthorization,
+  requestAppAuthorization,
+} from '~/logic/appAuthorizationCoordinator'
 import type { GridLayoutType, RecommendationMode } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
-import { getTVLoginQRCode, hasValidAppAuthTokens, pollTVLoginQRCode, revokeAccessKey, saveAppAuthTokens } from '~/utils/authProvider'
+import { hasValidAppAuthTokens, revokeAccessKey } from '~/utils/authProvider'
 import { normalizeImportedFilterRules } from '~/utils/filterRules'
 
 import SettingsItem from '../../components/SettingsItem.vue'
@@ -34,14 +38,11 @@ const homeGridLayoutOptions = computed<{ label: string, value: GridLayoutType }[
   { label: t('layout_editor.layout_one_column'), value: 'oneColumn' },
 ])
 
-const showQRCodeDialog = ref<boolean>(false)
-const loginQRCodeUrl = ref<string>()
-const authCode = ref<string>('')
-const qrcodeMsg = ref<string>('')
-let authorizationTimer: ReturnType<typeof setTimeout> | null = null
-let authorizationGeneration = 0
+const hasUsableAppAuthorization = computed(() => (
+  appAuthorizationState.value === 'valid'
+  && hasValidAppAuthTokens()
+))
 
-const appAccessToken = computed(() => appAuthTokens.value.accessToken)
 const showStandaloneSearchPage = computed({
   get: () => !settings.value.useSearchPageModeOnHomePage,
   set: (showStandalone: boolean) => {
@@ -49,121 +50,18 @@ const showStandaloneSearchPage = computed({
   },
 })
 
-onDeactivated(() => {
-  cancelAuthorization()
-})
-
-onBeforeUnmount(() => {
-  cancelAuthorization()
-})
-
 function handleRecommendationModeChange(mode: RecommendationMode) {
   if (mode === 'app' && !hasValidAppAuthTokens())
-    void handleAuthorize()
+    requestAppAuthorization(appAuthTokens.value.accessToken)
 }
 
-async function handleAuthorize() {
-  clearAuthorizationTimer()
-  const generation = ++authorizationGeneration
-  showQRCodeDialog.value = true
-  loginQRCodeUrl.value = undefined
-  authCode.value = ''
-  qrcodeMsg.value = ''
-
-  try {
-    const res = await getTVLoginQRCode()
-    if (generation !== authorizationGeneration)
-      return
-    if (res.code !== 0 || !res.data?.url || !res.data?.auth_code) {
-      qrcodeMsg.value = res.message || t('common.load_failed')
-      clearAuthorizationTimer()
-      return
-    }
-
-    loginQRCodeUrl.value = res.data.url
-    authCode.value = res.data.auth_code
-    startAuthorizationPolling(generation)
-  }
-  catch (error) {
-    if (generation !== authorizationGeneration)
-      return
-    qrcodeMsg.value = t('common.load_failed')
-    clearAuthorizationTimer()
-    console.error('Failed to start APP recommendation authorization:', error)
-  }
+function handleAuthorize() {
+  requestAppAuthorization(appAuthTokens.value.accessToken)
 }
 
 function handleRevoke() {
   revokeAccessKey()
-}
-
-function clearAuthorizationTimer() {
-  if (authorizationTimer === null)
-    return
-  clearTimeout(authorizationTimer)
-  authorizationTimer = null
-}
-
-function cancelAuthorization() {
-  authorizationGeneration++
-  clearAuthorizationTimer()
-  showQRCodeDialog.value = false
-  loginQRCodeUrl.value = undefined
-  authCode.value = ''
-  qrcodeMsg.value = ''
-}
-
-function startAuthorizationPolling(generation = authorizationGeneration) {
-  clearAuthorizationTimer()
-  if (generation !== authorizationGeneration || !showQRCodeDialog.value || !authCode.value)
-    return
-
-  authorizationTimer = setTimeout(async () => {
-    authorizationTimer = null
-    if (generation !== authorizationGeneration)
-      return
-
-    let pollRes: any
-    try {
-      pollRes = await pollTVLoginQRCode(authCode.value)
-    }
-    catch (error) {
-      if (generation !== authorizationGeneration)
-        return
-      qrcodeMsg.value = t('common.load_failed')
-      console.error('Failed to poll APP recommendation authorization:', error)
-      return
-    }
-
-    if (generation !== authorizationGeneration)
-      return
-
-    qrcodeMsg.value = pollRes.message || ''
-    if (pollRes.code === 0) {
-      clearAuthorizationTimer()
-      authorizationGeneration++
-      showQRCodeDialog.value = false
-      saveAppAuthTokens(pollRes.data)
-      toast.success(t('settings.app_authorization_success'))
-      return
-    }
-
-    // 86039: waiting for scan; 86090: scanned and awaiting confirmation.
-    if (pollRes.code === 86039 || pollRes.code === 86090) {
-      startAuthorizationPolling(generation)
-      return
-    }
-
-    // Expired and terminal failures deliberately stop. The refresh action
-    // starts a new generation and obtains a new QR code.
-    clearAuthorizationTimer()
-    if (pollRes.code === -3 || pollRes.code === -400 || pollRes.code === -404)
-      toast.error(pollRes.message)
-  }, 3000)
-}
-
-function handleCloseQRCodeDialog() {
-  cancelAuthorization()
+  dismissAppAuthorization('')
 }
 
 function handleExport(filterType: 'title' | 'user') {
@@ -316,7 +214,7 @@ function handleToggleHomeTab(tab: any) {
         </template>
 
         <div w-full>
-          <Button v-if="!appAccessToken" type="primary" center @click="handleAuthorize">
+          <Button v-if="!hasUsableAppAuthorization" type="primary" center @click="handleAuthorize">
             {{ $t('settings.btn.authorize') }}...
           </Button>
           <Button
@@ -335,44 +233,6 @@ function handleToggleHomeTab(tab: any) {
       <SettingsItem :title="$t('settings.preserve_for_you_state')" :desc="$t('settings.preserve_for_you_state_desc')" right-width="auto">
         <Radio v-model="settings.preserveForYouState" />
       </SettingsItem>
-
-      <Dialog
-        v-if="showQRCodeDialog"
-        width="50%"
-        max-width="800px"
-        append-to-bewly-body
-        :show-footer="false"
-        :title="$t('settings.authorize_app')" center
-        layer="critical-dialog"
-        @close="handleCloseQRCodeDialog"
-      >
-        <div flex="~ col gap-4 items-center">
-          <div>
-            <p mb-2 text-center>
-              {{ $t('settings.scan_qrcode_desc') }}
-            </p>
-            <p text="$bew-text-2 sm">
-              {{ $t('settings.authorize_app_desc') }}
-            </p>
-          </div>
-
-          <div bg-white border="white 4">
-            <QRCodeVue v-if="loginQRCodeUrl" :value="loginQRCodeUrl" :size="150" />
-            <div v-else w-150px h-150px grid="~ place-items-center">
-              <div i-svg-spinners:ring-resize />
-            </div>
-          </div>
-
-          <p>{{ qrcodeMsg }}</p>
-
-          <Button
-            type="secondary"
-            @click="handleAuthorize"
-          >
-            {{ $t('common.operation.refresh') }}
-          </Button>
-        </div>
-      </Dialog>
     </SettingsItemGroup>
 
     <SettingsItemGroup

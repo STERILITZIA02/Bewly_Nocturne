@@ -10,6 +10,7 @@ const SPLIT_FLAG = 'bewlyOpusSplit'
 const READY_FLAG = 'bewlyOpusReady'
 const LAYOUT_MODE_FLAG = 'bewlyOpusLayoutMode'
 const LAYOUT_READY_MSG = 'BEWLY_OPUS_LAYOUT_READY'
+const OPUS_DETAIL_COMMENT_PAGE_RATIO = 0.29
 
 /** 只从相册/图文主图容器抽图，避免评论、游戏推荐等杂图 */
 const ALBUM_SELECTORS = [
@@ -77,6 +78,7 @@ let loadingEl: HTMLElement | null = null
 let appliedSuccessfully = false
 let layoutMode: LayoutMode = 'pending'
 let disabledSplit = false
+const albumNodeOrigins = new WeakMap<Node, Comment>()
 let teardownCount = 0
 let lastMutationAt = 0
 let stableTimer: ReturnType<typeof setTimeout> | null = null
@@ -86,6 +88,7 @@ let galleryIconHosts: HTMLElement[] = []
 let layoutReadyNotified = false
 let setupDomReadyListener: (() => void) | null = null
 let setupRootReadyRetryTimer: number | null = null
+let parentViewportWidth = 0
 
 const BASE_CSS = `
 html.momentsPage.drawer.bewly-opus-layout #bili-header-container,
@@ -216,7 +219,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split {
   inset: 0 !important;
   z-index: 20 !important;
   display: grid !important;
-  grid-template-columns: minmax(0, 4fr) minmax(0, 3fr) !important;
+  grid-template-columns: minmax(0, 1fr) var(--bewly-opus-comment-width, 29%) !important;
   column-gap: 0 !important;
   width: 100% !important;
   height: 100% !important;
@@ -920,6 +923,18 @@ function notifyLayoutReady() {
   catch {
     // ignore
   }
+}
+
+function getOpusPageWidth() {
+  if (parentViewportWidth > 0)
+    return parentViewportWidth
+  return window.innerWidth || document.documentElement.clientWidth || 1080
+}
+
+function syncOpusCommentColumnWidth() {
+  const width = Math.round(getOpusPageWidth() * OPUS_DETAIL_COMMENT_PAGE_RATIO)
+  document.documentElement.style.setProperty('--bewly-opus-comment-width', `${width}px`)
+  return width
 }
 
 function findOpusRoot(): HTMLElement | null {
@@ -2084,8 +2099,15 @@ function teardownSplit(root: HTMLElement, permanent = false) {
   const source = mediaPane?.querySelector(':scope > .bewly-opus-gallery__source')
   const fragment = document.createDocumentFragment()
   if (source) {
-    while (source.firstChild)
-      fragment.appendChild(source.firstChild)
+    while (source.firstChild) {
+      const node = source.firstChild
+      const placeholder = albumNodeOrigins.get(node)
+      if (placeholder?.parentNode && split.contains(placeholder.parentNode))
+        placeholder.parentNode.replaceChild(node, placeholder)
+      else
+        fragment.appendChild(node)
+      albumNodeOrigins.delete(node)
+    }
   }
   else if (mediaPane) {
     Array.from(mediaPane.childNodes).forEach((node) => {
@@ -2177,6 +2199,7 @@ function applySplitLayout(root: HTMLElement): boolean {
     const panel = existing.querySelector<HTMLElement>(':scope > .bewly-opus-split__panel')
     const media = existing.querySelector<HTMLElement>(':scope > .bewly-opus-split__media')
     if (panel && media && (hasMeaningfulContent(panel) || hasMeaningfulContent(media)) && isLayoutVisible(existing)) {
+      syncOpusCommentColumnWidth()
       markSplitReady(true)
       markTextOnly(false)
       appliedSuccessfully = true
@@ -2228,8 +2251,12 @@ function applySplitLayout(root: HTMLElement): boolean {
   const source = document.createElement('div')
   source.className = 'bewly-opus-gallery__source'
   albumNodes.forEach((node) => {
-    if (panelPane.contains(node))
-      source.appendChild(node)
+    if (!panelPane.contains(node) || !node.parentNode)
+      return
+    const placeholder = document.createComment('bewly-opus-media-origin')
+    node.parentNode.replaceChild(placeholder, node)
+    albumNodeOrigins.set(node, placeholder)
+    source.appendChild(node)
   })
   const gallery = createImageGallery(imageUrls)
   mediaPane.appendChild(gallery)
@@ -2256,7 +2283,7 @@ function applySplitLayout(root: HTMLElement): boolean {
   split.style.inset = '0'
   split.style.zIndex = '20'
   split.style.display = 'grid'
-  split.style.gridTemplateColumns = 'minmax(0, 4fr) minmax(0, 3fr)'
+  split.style.gridTemplateColumns = 'minmax(0, 1fr) var(--bewly-opus-comment-width, 29%)'
   split.style.columnGap = '0'
   split.style.width = '100%'
   split.style.height = '100%'
@@ -2330,6 +2357,7 @@ function scheduleStableApply() {
  */
 export function disposeOpusDetailDrawerLayout() {
   clearDeferredSetup()
+  window.removeEventListener('message', handleOpusParentMessage)
 
   try {
     observer?.disconnect()
@@ -2389,13 +2417,30 @@ export function disposeOpusDetailDrawerLayout() {
   teardownCount = 0
   layoutReadyNotified = false
   lastMutationAt = 0
+  parentViewportWidth = 0
+  document.documentElement.style.removeProperty('--bewly-opus-comment-width')
   styleEl = null
   loadingEl = null
 }
 
-function handleOpusDisposeMessage(event: MessageEvent) {
-  if (getParentMessageData(event, ['BEWLY_OPUS_DISPOSE']))
+function handleOpusParentMessage(event: MessageEvent) {
+  const data = getParentMessageData(event, [
+    'BEWLY_OPUS_DISPOSE',
+    'BEWLY_OPUS_VIEWPORT',
+  ])
+  if (!data)
+    return
+
+  if (data.type === 'BEWLY_OPUS_DISPOSE') {
     disposeOpusDetailDrawerLayout()
+    return
+  }
+
+  const width = Number(data.width)
+  if (Number.isFinite(width) && width > 0) {
+    parentViewportWidth = Math.round(width)
+    syncOpusCommentColumnWidth()
+  }
 }
 
 export function setupOpusDetailDrawerLayout() {
@@ -2412,10 +2457,11 @@ export function setupOpusDetailDrawerLayout() {
   layoutReadyNotified = false
   ensureBaseClasses()
   ensureStyles()
+  syncOpusCommentColumnWidth()
 
-  // 父页关闭 iframe 时销毁内部观察器与媒体
-  window.removeEventListener('message', handleOpusDisposeMessage)
-  window.addEventListener('message', handleOpusDisposeMessage)
+  // 父页关闭 iframe 时销毁内部观察器与媒体，并同步真实父视口宽。
+  window.removeEventListener('message', handleOpusParentMessage)
+  window.addEventListener('message', handleOpusParentMessage)
   window.removeEventListener('pagehide', disposeOpusDetailDrawerLayout)
   window.addEventListener('pagehide', disposeOpusDetailDrawerLayout, { once: true })
 

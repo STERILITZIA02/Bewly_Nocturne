@@ -182,6 +182,14 @@ verify('notification headers keep only titles and delegate refresh to the Dock c
   assert.doesNotMatch(headerSource, /descriptionKey|notifications\.actions\.refresh|notifications\.actions\.open_original/)
   assert.doesNotMatch(headerSource, /<Button\b|<ALink\b/)
   assert.doesNotMatch(navigationSource, /descriptionKey/)
+  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,220}box-sizing: border-box/)
+  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,260}width: var\(--bew-space-8\)/)
+  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,420}white-space: nowrap/)
+  assert.match(navigationSource, /notifications-navigation__badge--empty/)
+  assert.match(navigationSource, /function revealActiveSection\(\)/)
+  assert.match(navigationSource, /scrollTo\(\{ left:[\s\S]{0,120}behavior: 'auto'/)
+  assert.match(navigationSource, /\.notifications-navigation__inside \{[\s\S]{0,260}padding-inline: var\(--bew-space-0-5\)/)
+  assert.match(headerSource, /\.notifications-page-header \{[\s\S]{0,100}width: 100%/)
   assert.doesNotMatch(sectionsSource, /descriptionKey/)
   assert.doesNotMatch(pageSource, /<NotificationsPageHeader[^>]*@refresh/)
   assert.match(pageSource, /handlePageRefresh\.value\s*=\s*refreshCurrentView/)
@@ -236,7 +244,7 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
     readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsPageSkeleton.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeed.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationFeedSkeleton.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationSkeletonBlock.vue', import.meta.url), 'utf8'),
+    readFile(new URL('../src/components/SkeletonBlock.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/WhisperWorkspace.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationList.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListSkeleton.vue', import.meta.url), 'utf8'),
@@ -1131,7 +1139,8 @@ verify('extension-invalidated empty and loading states do not throw during setup
   assert.ok(messagingSource.includes('export function getExtensionAssetUrl'))
   assert.equal(loadingSource.includes('browser.runtime.getURL'), false)
   assert.equal(emptySource.includes('browser.runtime.getURL'), false)
-  assert.ok(loadingSource.includes('v-if="imgURL"'))
+  assert.match(loadingSource, /<PageLoadingIndicator/)
+  assert.doesNotMatch(loadingSource, /loading\.gif|<img\b/)
   assert.ok(emptySource.includes('v-if="emptyImg"'))
 })
 

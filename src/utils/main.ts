@@ -177,6 +177,22 @@ export function isHomePage(url: string = location.href): boolean {
 }
 
 /**
+ * Check if the URL points to Bilibili's topic detail page.
+ * The real route carries the topic id in the query string rather than a path segment.
+ */
+export function isTopicPage(url: string = location.href): boolean {
+  try {
+    const urlObj = new URL(url)
+    const isHttp = urlObj.protocol === 'http:' || urlObj.protocol === 'https:'
+    const isBilibiliHost = urlObj.hostname === 'www.bilibili.com' || urlObj.hostname === 'bilibili.com'
+    return isHttp && isBilibiliHost && urlObj.pathname === '/v/topic/detail'
+  }
+  catch {
+    return false
+  }
+}
+
+/**
  * Check if the URL points to Bilibili's watch later list page.
  * Supports both the canonical path and the legacy hash route used by the
  * user-space favorites entry. See https://github.com/keleus/BewlyCat/issues/841

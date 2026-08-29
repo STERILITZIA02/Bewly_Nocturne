@@ -4,13 +4,22 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { i18n } from '~/utils/i18n'
-import { getCSRF } from '~/utils/main'
+import { getCSRF, getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { resolveWatchLaterAid } from '~/utils/watchLater'
 
 const BUTTON_CLASS = 'bewly-watch-later-btn'
 const WATCH_LATER_ICON_CLASS = 'i-mingcute:carplay-line'
+const TOOLBAR_LIFECYCLE_SELECTOR = '.video-tool-more, .video-toolbar-container, #arc_toolbar_report, .bewly-watch-later-btn'
 const buttonMembershipWatchers = new WeakMap<HTMLButtonElement, () => void>()
+const buttonInitializationContexts = new WeakMap<HTMLButtonElement, { ids: VideoIds, state: WatchLaterButtonState }>()
+const mountedButtons = new Set<HTMLButtonElement>()
+let toolbarLifecycleObserver: MutationObserver | undefined
+let toolbarLifecycleFrame: number | undefined
+let toolbarLifecycleActive = false
+let firstMountPromise: Promise<boolean> | undefined
+let resolveFirstMount: ((mounted: boolean) => void) | undefined
+let toolbarLifecycleEventCleanup: (() => void) | undefined
 
 export interface VideoIds {
   bvid?: string
@@ -20,6 +29,8 @@ export interface VideoIds {
 interface WatchLaterButtonState {
   aid?: number
   isInWatchLater: boolean
+  requestPending: boolean
+  initializationPending: boolean
   pendingAid?: Promise<number | undefined>
 }
 
@@ -85,35 +96,26 @@ function updateButtonState(button: HTMLButtonElement, isInWatchLater: boolean) {
   button.setAttribute('aria-pressed', String(isInWatchLater))
   button.setAttribute('aria-label', actionLabel)
   button.title = actionLabel
-  button.style.color = isInWatchLater
-    ? 'var(--bew-theme-color, var(--brand_blue, #00aeec))'
-    : 'var(--text2, #61666d)'
-
-  if (isInWatchLater) {
-    button.style.backgroundColor = 'rgba(0, 174, 236, 0.12)'
-    button.style.setProperty('background-color', 'color-mix(in srgb, var(--bew-theme-color, #00aeec) 12%, transparent)')
-  }
-  else {
-    button.style.backgroundColor = 'transparent'
-  }
 
   if (icon)
     icon.className = `${WATCH_LATER_ICON_CLASS} bewly-watch-later-btn__icon`
 }
 
+function isWatchLaterAccountCurrent(accountId: number, csrf: string) {
+  return String(getUserID() || '') === String(accountId) && getCSRF() === csrf
+}
+
 function setButtonBusy(button: HTMLButtonElement, isBusy: boolean) {
   button.disabled = isBusy
+  button.classList.toggle('is-pending', isBusy)
   button.setAttribute('aria-busy', String(isBusy))
-  button.style.cursor = isBusy ? 'wait' : 'pointer'
-  button.style.opacity = isBusy ? '0.65' : '1'
 }
 
 function animateButton(button: HTMLButtonElement) {
-  button.style.transform = 'scale(1.05)'
-  window.setTimeout(() => {
-    if (button.isConnected)
-      button.style.transform = 'scale(1)'
-  }, 150)
+  button.animate(
+    [{ transform: 'scale(1)' }, { transform: 'scale(1.08)' }, { transform: 'scale(1)' }],
+    { duration: 220, easing: 'ease-out' },
+  )
 }
 
 async function resolveAid(ids: VideoIds, state: WatchLaterButtonState): Promise<number | undefined> {
@@ -137,80 +139,128 @@ async function resolveAid(ids: VideoIds, state: WatchLaterButtonState): Promise<
 }
 
 async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, state: WatchLaterButtonState) {
+  if (state.initializationPending)
+    return
+  state.initializationPending = true
+  let initialized = false
   try {
     const topBarStore = useTopBarStore()
     await topBarStore.getUserInfo()
-    await topBarStore.ensureWatchLaterState()
-    const aid = await resolveAid(ids, state)
-    if (!button.isConnected)
+    if (!await topBarStore.ensureWatchLaterState())
       return
+    const accountId = topBarStore.userInfo.mid
+    const csrf = getCSRF()
+    if (!accountId || !csrf || !isWatchLaterAccountCurrent(accountId, csrf))
+      return
+    const aid = await resolveAid(ids, state)
+    if (
+      !button.isConnected
+      || !aid
+      || topBarStore.userInfo.mid !== accountId
+      || !isWatchLaterAccountCurrent(accountId, csrf)
+    ) {
+      return
+    }
 
     state.isInWatchLater = topBarStore.isInWatchLater(aid)
     updateButtonState(button, state.isInWatchLater)
+    initialized = true
   }
   catch (error) {
     if (!isExtensionContextInvalidatedError(error))
       console.error('获取稍后再看状态失败:', error)
   }
   finally {
-    if (button.isConnected)
+    state.initializationPending = false
+    if (button.isConnected) {
       setButtonBusy(button, false)
+      button.disabled = !initialized
+      button.setAttribute('aria-disabled', String(!initialized))
+    }
   }
 }
 
 async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state: WatchLaterButtonState) {
+  if (state.requestPending)
+    return
+
+  state.requestPending = true
   setButtonBusy(button, true)
+  let previousState = state.isInWatchLater
+  let requestAccepted = false
+  let accountStateValid = true
 
   try {
     const topBarStore = useTopBarStore()
-    await topBarStore.ensureWatchLaterState()
-    const accountId = topBarStore.userInfo.mid
-    if (!topBarStore.isLogin || !accountId)
+    if (!await topBarStore.ensureWatchLaterState()) {
+      accountStateValid = false
       return
+    }
+    const accountId = topBarStore.userInfo.mid
+    const csrf = getCSRF()
+    if (
+      !topBarStore.isLogin
+      || !accountId
+      || !csrf
+      || !isWatchLaterAccountCurrent(accountId, csrf)
+    ) {
+      accountStateValid = false
+      return
+    }
     const aid = await resolveAid(ids, state)
+    if (
+      !button.isConnected
+      || topBarStore.userInfo.mid !== accountId
+      || !isWatchLaterAccountCurrent(accountId, csrf)
+    ) {
+      accountStateValid = false
+      return
+    }
     if (!aid) {
       console.warn('无法获取当前视频的 aid，不能更新稍后再看')
       return
     }
 
-    state.isInWatchLater = topBarStore.isInWatchLater(aid)
-    if (state.isInWatchLater) {
-      const result = await api.watchlater.removeFromWatchLater({
-        aid,
-        csrf: getCSRF(),
-      })
-      if (result.code !== 0) {
-        console.warn('从稍后再看中移除失败:', result.message || result.code)
-        return
-      }
+    previousState = topBarStore.isInWatchLater(aid)
+    const nextState = !previousState
+    state.isInWatchLater = nextState
+    updateButtonState(button, nextState)
 
-      state.isInWatchLater = false
-      await topBarStore.commitWatchLaterMutation(aid, false, accountId)
+    const result = previousState
+      ? await api.watchlater.removeFromWatchLater({ aid, csrf })
+      : await api.watchlater.saveToWatchLater({ ...ids, csrf })
+    if (
+      !button.isConnected
+      || topBarStore.userInfo.mid !== accountId
+      || !isWatchLaterAccountCurrent(accountId, csrf)
+    ) {
+      accountStateValid = false
+      return
     }
-    else {
-      const result = await api.watchlater.saveToWatchLater({
-        ...ids,
-        csrf: getCSRF(),
-      })
-      if (result.code !== 0) {
-        console.warn('添加到稍后再看失败:', result.message || result.code)
-        return
-      }
+    if (result.code !== 0)
+      throw new Error(result.message || `Watch later request failed with code ${result.code}`)
 
-      state.isInWatchLater = true
-      await topBarStore.commitWatchLaterMutation(aid, true, accountId)
-    }
-
-    updateButtonState(button, state.isInWatchLater)
+    requestAccepted = true
+    await topBarStore.commitWatchLaterMutation(aid, nextState, accountId)
     animateButton(button)
   }
   catch (error) {
+    if (!requestAccepted && button.isConnected) {
+      state.isInWatchLater = previousState
+      updateButtonState(button, previousState)
+    }
     if (!isExtensionContextInvalidatedError(error))
       console.error('更新稍后再看状态失败:', error)
   }
   finally {
-    if (button.isConnected)
+    state.requestPending = false
+    if (button.isConnected) {
       setButtonBusy(button, false)
+      if (!accountStateValid) {
+        button.disabled = true
+        button.setAttribute('aria-disabled', 'true')
+      }
+    }
   }
 }
 
@@ -219,51 +269,41 @@ function createButton(ids: VideoIds): HTMLButtonElement {
   button.type = 'button'
   button.className = `video-toolbar-right-item ${BUTTON_CLASS}`
   button.dataset.videoKey = getVideoKey(ids)
-  button.style.cssText = `
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    box-sizing: border-box;
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    margin: 0 4px;
-    padding: 0;
-    border: 0;
-    border-radius: 50%;
-    corner-shape: var(--bew-corner-shape-round, round);
-    background: transparent;
-    font: inherit;
-    transition: color 0.2s ease, background-color 0.2s ease, transform 0.15s ease, opacity 0.2s ease;
-  `
-  button.innerHTML = `
-    <i class="${WATCH_LATER_ICON_CLASS} bewly-watch-later-btn__icon" style="
-      flex: none;
-      color: inherit;
-      font-size: 18px;
-      line-height: 1;
-    "></i>
-  `
+  button.innerHTML = `<i class="${WATCH_LATER_ICON_CLASS} bewly-watch-later-btn__icon"></i>`
 
   updateButtonState(button, false)
   setButtonBusy(button, true)
   return button
 }
 
-function removeWatchLaterButton(button: HTMLButtonElement) {
+function teardownMountedWatchLaterButton(button: HTMLButtonElement) {
+  mountedButtons.delete(button)
+  buttonInitializationContexts.delete(button)
   buttonMembershipWatchers.get(button)?.()
   buttonMembershipWatchers.delete(button)
   button.remove()
 }
 
 function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefined {
-  const moreButton = document.querySelector('.video-tool-more')
+  const moreButton = Array.from(document.querySelectorAll<HTMLElement>('.video-tool-more'))
+    .find((element) => {
+      if (element.closest(`#bewly-widescreen-root .bewly-widescreen-action-slot`))
+        return true
+      const rect = element.getBoundingClientRect()
+      const style = getComputedStyle(element)
+      return rect.width > 0
+        && rect.height > 0
+        && style.display !== 'none'
+        && style.visibility !== 'hidden'
+    })
   if (!moreButton?.parentNode)
     return undefined
 
   const state: WatchLaterButtonState = {
     aid: ids.aid,
     isInWatchLater: false,
+    requestPending: false,
+    initializationPending: false,
   }
   const button = createButton(ids)
   const mounted: MountedWatchLaterButton = {
@@ -279,16 +319,34 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
 
   const topBarStore = useTopBarStore()
   buttonMembershipWatchers.set(button, watch(
-    () => [...topBarStore.addedWatchLaterList],
+    [
+      () => i18n.global.locale.value,
+      () => topBarStore.isLogin,
+      () => topBarStore.userInfo.mid,
+      () => [...topBarStore.addedWatchLaterList],
+    ],
     () => {
-      if (!button.isConnected)
+      if (!button.isConnected || state.requestPending)
         return
+      if (!topBarStore.isLogin) {
+        state.isInWatchLater = false
+        updateButtonState(button, false)
+        button.disabled = true
+        button.setAttribute('aria-disabled', 'true')
+        return
+      }
+      if (button.getAttribute('aria-disabled') === 'true') {
+        void initializeButtonState(button, ids, state)
+        return
+      }
       state.isInWatchLater = topBarStore.isInWatchLater(state.aid)
       updateButtonState(button, state.isInWatchLater)
     },
   ))
 
   moreButton.parentNode.insertBefore(button, moreButton)
+  mountedButtons.add(button)
+  buttonInitializationContexts.set(button, { ids, state })
   mounted.ready = initializeButtonState(button, ids, state)
   return mounted
 }
@@ -301,7 +359,7 @@ async function handleButtonClick(mounted: MountedWatchLaterButton) {
     return
 
   if (currentVideoKey !== getVideoKey(mounted.ids)) {
-    removeWatchLaterButton(mounted.button)
+    teardownMountedWatchLaterButton(mounted.button)
     const replacement = mountWatchLaterButton(currentIds)
     if (!replacement)
       return
@@ -332,10 +390,123 @@ export function addWatchLaterButton(): boolean {
     return false
 
   const existingButton = document.querySelector<HTMLButtonElement>(`.${BUTTON_CLASS}`)
-  if (existingButton?.dataset.videoKey === videoKey)
+  if (existingButton?.dataset.videoKey === videoKey) {
+    const context = buttonInitializationContexts.get(existingButton)
+    if (existingButton.disabled && context && !context.state.initializationPending)
+      void initializeButtonState(existingButton, context.ids, context.state)
     return true
+  }
   if (existingButton)
-    removeWatchLaterButton(existingButton)
+    teardownMountedWatchLaterButton(existingButton)
 
   return Boolean(mountWatchLaterButton(ids))
+}
+
+function nodeTouchesToolbarLifecycle(node: Node) {
+  if (!(node instanceof Element))
+    return false
+  return node.matches(TOOLBAR_LIFECYCLE_SELECTOR)
+    || !!node.querySelector(TOOLBAR_LIFECYCLE_SELECTOR)
+}
+
+function settleFirstMount(mounted: boolean) {
+  resolveFirstMount?.(mounted)
+  resolveFirstMount = undefined
+}
+
+function ensureLifecycleButton() {
+  toolbarLifecycleFrame = undefined
+  for (const button of [...mountedButtons]) {
+    if (!button.isConnected)
+      teardownMountedWatchLaterButton(button)
+  }
+  if (!toolbarLifecycleActive)
+    return
+  if (!settings.value.externalWatchLaterButton) {
+    removeWatchLaterButton()
+    return
+  }
+  try {
+    if (addWatchLaterButton())
+      settleFirstMount(true)
+  }
+  catch (error) {
+    if (!isExtensionContextInvalidatedError(error))
+      console.error('挂载稍后再看按钮失败:', error)
+  }
+}
+
+function scheduleLifecycleButtonCheck() {
+  if (!toolbarLifecycleActive || toolbarLifecycleFrame !== undefined)
+    return
+  toolbarLifecycleFrame = requestAnimationFrame(ensureLifecycleButton)
+}
+
+/**
+ * Keep the shared Watch Later button attached to the current video toolbar.
+ * The observer follows actual toolbar insertion/replacement instead of guessing
+ * when Bilibili's asynchronous toolbar will be ready.
+ */
+export function mountWatchLaterButtonWhenToolbarReady(): Promise<boolean> {
+  toolbarLifecycleActive = true
+  if (!firstMountPromise) {
+    firstMountPromise = new Promise<boolean>((resolve) => {
+      resolveFirstMount = resolve
+    })
+  }
+
+  if (!toolbarLifecycleEventCleanup) {
+    const handleBrowserActivity = () => scheduleLifecycleButtonCheck()
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible')
+        scheduleLifecycleButtonCheck()
+    }
+    window.addEventListener('online', handleBrowserActivity)
+    window.addEventListener('focus', handleBrowserActivity)
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    toolbarLifecycleEventCleanup = () => {
+      window.removeEventListener('online', handleBrowserActivity)
+      window.removeEventListener('focus', handleBrowserActivity)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
+    }
+  }
+
+  if (!toolbarLifecycleObserver && document.body) {
+    toolbarLifecycleObserver = new MutationObserver((records) => {
+      const relevant = records.some((record) => {
+        if (record.type === 'attributes')
+          return nodeTouchesToolbarLifecycle(record.target)
+        return Array.from(record.addedNodes)
+          .concat(Array.from(record.removedNodes))
+          .some(nodeTouchesToolbarLifecycle)
+      })
+      if (relevant)
+        scheduleLifecycleButtonCheck()
+    })
+    toolbarLifecycleObserver.observe(document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ['class', 'style', 'hidden'],
+    })
+  }
+
+  scheduleLifecycleButtonCheck()
+  return firstMountPromise
+}
+
+export function removeWatchLaterButton() {
+  toolbarLifecycleActive = false
+  toolbarLifecycleObserver?.disconnect()
+  toolbarLifecycleObserver = undefined
+  toolbarLifecycleEventCleanup?.()
+  toolbarLifecycleEventCleanup = undefined
+  if (toolbarLifecycleFrame !== undefined)
+    cancelAnimationFrame(toolbarLifecycleFrame)
+  toolbarLifecycleFrame = undefined
+  settleFirstMount(false)
+  firstMountPromise = undefined
+  for (const button of [...mountedButtons])
+    teardownMountedWatchLaterButton(button)
+  document.querySelectorAll<HTMLButtonElement>(`.${BUTTON_CLASS}`).forEach(teardownMountedWatchLaterButton)
 }

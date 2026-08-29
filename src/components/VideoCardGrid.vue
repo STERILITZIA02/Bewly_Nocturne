@@ -7,9 +7,10 @@ import { useGridLayout } from '~/composables/useGridLayout'
 import { useVideoCardShadowStyle } from '~/composables/useVideoCardShadowStyle'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import type { GridLayoutType } from '~/logic'
-import { settings } from '~/logic'
+import { originalSettings, settings } from '~/logic'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
 import emitter from '~/utils/mitt'
+import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 
 import SmoothLoading from './SmoothLoading.vue'
 
@@ -627,12 +628,6 @@ const isHorizontal = computed(() => {
   return props.gridLayout !== 'adaptive'
 })
 
-// 合并 shadow 样式变量和 grid 列数变量
-const gridContainerStyle = computed(() => ({
-  ...shadowStyleVars.value,
-  ...gridCssVars.value,
-}))
-
 // A configurable breakpoint cannot be expressed with a CSS container query
 // value, so the measured container width toggles the single-column class.
 const isAutoSwitchSingleColumn = computed(() => {
@@ -650,6 +645,33 @@ const isAutoSwitchSingleColumn = computed(() => {
     settings.value.autoSwitchListLayoutBreakpoint,
   ) === 1
 })
+
+const horizontalCoverLayout = computed(() => {
+  const useOneColumnRatio = props.gridLayout === 'oneColumn' || isAutoSwitchSingleColumn.value
+  const fallback = useOneColumnRatio
+    ? originalSettings.videoCardCoverRatioOneColumn
+    : originalSettings.videoCardCoverRatioTwoColumns
+  const value = useOneColumnRatio
+    ? settings.value.videoCardCoverRatioOneColumn
+    : settings.value.videoCardCoverRatioTwoColumns
+  const ratio = normalizeVideoCardCoverRatio(value, fallback)
+
+  return {
+    ratio,
+    preserveOriginalMaxWidth: ratio === fallback,
+  }
+})
+
+// Skeleton and real cards share these variables, so their cover geometry stays
+// identical while loading. Default values retain the former equal split and
+// 400px cap; choosing a custom ratio explicitly releases that cap.
+const gridContainerStyle = computed(() => ({
+  ...shadowStyleVars.value,
+  ...gridCssVars.value,
+  '--video-card-cover-flex': horizontalCoverLayout.value.ratio,
+  '--video-card-info-flex': 100 - horizontalCoverLayout.value.ratio,
+  '--video-card-cover-max-width': horizontalCoverLayout.value.preserveOriginalMaxWidth ? '400px' : 'none',
+}))
 
 const renderedGridClass = computed(() => [
   ...gridClass.value,

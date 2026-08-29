@@ -6,7 +6,6 @@ import { useI18n } from 'vue-i18n'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
-import Loading from '~/components/Loading.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
@@ -17,6 +16,7 @@ import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } 
 import { getCSRF } from '~/utils/main'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 
+import AllSearchSkeleton from '../components/AllSearchSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
 import EsportsMatchCard from '../components/renderers/EsportsMatchCard.vue'
 import { useLoadMore } from '../composables/useLoadMore'
@@ -536,10 +536,14 @@ function refreshCurrentPage() {
     ? handlePageChange(currentPage.value, false, false)
     : performSearch(false)
 }
-function restorePage(page: number) {
-  return page === currentPage.value
-    ? Promise.resolve(true)
-    : handlePageChange(page, false, false)
+async function restorePage(page: number): Promise<boolean> {
+  if (page === currentPage.value)
+    return true
+  if (paginationMode.value === 'pagination')
+    return handlePageChange(page, false, false)
+
+  updatePage(page)
+  return performSearch(false)
 }
 
 function resetAll() {
@@ -576,8 +580,7 @@ defineExpose({
 
 <template>
   <div ref="searchContentRef" class="all-search-page">
-    <!-- Loading -->
-    <Loading v-if="isLoading && !results" />
+    <AllSearchSkeleton v-if="isLoading && !results" />
 
     <!-- Results -->
     <div v-else class="all-results" space-y-6>
@@ -883,8 +886,8 @@ defineExpose({
           :show-preview="true"
           :show-watch-later="true"
           :empty-description="t('common.no_data')"
-          :show-loading-more-skeleton="false"
-          :show-load-more-indicator="paginationMode === 'scroll' && videoList.length > 0 && hasMore"
+          :show-loading-more-skeleton="true"
+          :show-load-more-indicator="false"
           enable-row-padding
           @load-more="handleLoadMore"
         />

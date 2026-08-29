@@ -84,6 +84,42 @@ const API_MOMENT = {
     },
     afterHandle: AHS.J_D,
   },
+  setMomentCommentLike: {
+    url: 'https://api.bilibili.com/x/v2/reply/action',
+    _fetch: {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: {
+        oid: '' as string | number,
+        type: 1,
+        rpid: '',
+        action: 1 as 0 | 1,
+        csrf: '',
+      },
+    },
+    afterHandle: AHS.J_D,
+  },
+  addMomentCommentReply: {
+    url: 'https://api.bilibili.com/x/v2/reply/add',
+    _fetch: {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+      },
+      body: {
+        oid: '' as string | number,
+        type: 1,
+        message: '',
+        plat: 1,
+        root: '',
+        parent: '',
+        csrf: '',
+      },
+    },
+    afterHandle: AHS.J_D,
+  },
   setMomentLike: {
     url: 'https://api.bilibili.com/x/dynamic/feed/dyn/thumb',
     _fetch: {
