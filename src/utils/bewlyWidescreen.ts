@@ -7,9 +7,12 @@ import { settings } from '~/logic'
 
 import type { WidescreenMutationOrigin } from './bewlyWidescreenPolicy'
 import { resolveWidescreenCenterGeometry, resolveWidescreenEngagedState, shortenCommentDateText, shouldScheduleWidescreenRefresh } from './bewlyWidescreenPolicy'
+import { isEditableLeafActiveElement } from './drawerEscape'
+import { hasIframeEscapePriorityState } from './escapePriority'
 import { i18n } from './i18n'
 import { injectCSS } from './main'
 import { getVideoElement } from './player'
+import { isNativePlaylistEditing } from './randomPlay'
 import { initVerticalVideoZoom } from './verticalVideoZoom'
 
 type BewlyWidescreenTab = 'comment' | 'danmaku' | 'playlist'
@@ -136,15 +139,33 @@ function clearPendingEscapeHandler() {
 function ensurePendingEscapeHandler() {
   if (pendingEscapeCleanup)
     return
+  let arbitrationTimer: number | undefined
   const handlePendingEscape = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.repeat || event.defaultPrevented || state || !isBewlyWidescreenEngaged())
+    if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229 || state || !isBewlyWidescreenEngaged())
       return
-    event.preventDefault()
-    event.stopPropagation()
-    exitBewlyWidescreen({ userInitiated: true })
+    const hadPriorityState = isEditableLeafActiveElement()
+      || hasIframeEscapePriorityState({ editingStateActive: isNativePlaylistEditing() })
+    if (arbitrationTimer !== undefined)
+      return
+    arbitrationTimer = window.setTimeout(() => {
+      arbitrationTimer = undefined
+      if (!isBewlyWidescreenEngaged()
+        || hadPriorityState
+        || isEditableLeafActiveElement()
+        || hasIframeEscapePriorityState({ editingStateActive: isNativePlaylistEditing() })) {
+        return
+      }
+      exitBewlyWidescreen({ userInitiated: true })
+    }, 0)
   }
-  document.addEventListener('keydown', handlePendingEscape)
-  pendingEscapeCleanup = () => document.removeEventListener('keydown', handlePendingEscape)
+  window.addEventListener('keydown', handlePendingEscape, { capture: true })
+  pendingEscapeCleanup = () => {
+    window.removeEventListener('keydown', handlePendingEscape, { capture: true })
+    if (arbitrationTimer !== undefined) {
+      window.clearTimeout(arbitrationTimer)
+      arbitrationTimer = undefined
+    }
+  }
 }
 
 function leaveMutuallyExclusivePlayerModes() {
@@ -2938,8 +2959,22 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   clearPendingEscapeHandler()
   document.body.classList.add(BODY_CLASS)
 
+  const hasVisiblePlayerDialog = () => Array.from(document.querySelectorAll<HTMLElement>(
+    '[role="dialog"], .bili-mini-mask, .bpx-player-dialog-wrap',
+  )).some((element) => {
+    const rect = element.getBoundingClientRect()
+    const style = getComputedStyle(element)
+    return rect.width > 0
+      && rect.height > 0
+      && style.display !== 'none'
+      && style.visibility !== 'hidden'
+  })
+  const hasEscapePriorityState = () => hasIframeEscapePriorityState({
+    editingStateActive: isNativePlaylistEditing(),
+  }) || hasVisiblePlayerDialog()
+  let escapeArbitrationTimer: number | undefined
   const handleWidescreenKeydown = (event: KeyboardEvent) => {
-    if (event.repeat || event.defaultPrevented || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
+    if (event.repeat || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
     const ownsPlayerShortcut = event.composedPath().some(node => (
       node instanceof Element
@@ -2954,27 +2989,27 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
       exitBewlyWidescreen({ userInitiated: true })
       return
     }
-    if (event.key !== 'Escape')
-      return
-    const hasVisibleDialog = Array.from(document.querySelectorAll<HTMLElement>(
-      '[role="dialog"], .bili-mini-mask, .bpx-player-dialog-wrap',
-    )).some((element) => {
-      const rect = element.getBoundingClientRect()
-      const style = getComputedStyle(element)
-      return rect.width > 0
-        && rect.height > 0
-        && style.display !== 'none'
-        && style.visibility !== 'hidden'
-    })
-    if (hasVisibleDialog)
+    if (event.key !== 'Escape' || escapeArbitrationTimer !== undefined)
       return
 
-    event.preventDefault()
-    event.stopPropagation()
-    exitBewlyWidescreen({ userInitiated: true })
+    const hadPriorityState = hasEscapePriorityState()
+    // Bilibili's base player prevents Escape even when no mode is active, so
+    // explicit priority ownership—not defaultPrevented alone—decides here.
+    escapeArbitrationTimer = window.setTimeout(() => {
+      escapeArbitrationTimer = undefined
+      if (!nextState.root.isConnected || hadPriorityState || hasEscapePriorityState())
+        return
+      exitBewlyWidescreen({ userInitiated: true })
+    }, 0)
   }
-  document.addEventListener('keydown', handleWidescreenKeydown, { capture: true })
-  nextState.escapeKeyCleanup = () => document.removeEventListener('keydown', handleWidescreenKeydown, { capture: true })
+  window.addEventListener('keydown', handleWidescreenKeydown, { capture: true })
+  nextState.escapeKeyCleanup = () => {
+    window.removeEventListener('keydown', handleWidescreenKeydown, { capture: true })
+    if (escapeArbitrationTimer !== undefined) {
+      window.clearTimeout(escapeArbitrationTimer)
+      escapeArbitrationTimer = undefined
+    }
+  }
 
   moveNode(player, playerFrame, movedNodes, false, true)
   fillSidebar(nextState)

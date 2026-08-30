@@ -48,7 +48,14 @@ export function removeHttpFromUrl(url: string): string {
 }
 
 export function openLinkToNewTab(url: string, features: string = '') {
-  window.open(url, '_blank', features)
+  const safeFeatures = Array.from(new Set([
+    ...features.split(',').map(feature => feature.trim()).filter(Boolean),
+    'noopener',
+    'noreferrer',
+  ])).join(',')
+  const openedWindow = window.open(url, '_blank', safeFeatures)
+  if (openedWindow)
+    openedWindow.opener = null
 }
 
 export function isElectron(): boolean {

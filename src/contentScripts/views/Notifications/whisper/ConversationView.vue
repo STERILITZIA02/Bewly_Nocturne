@@ -1031,7 +1031,6 @@ defineExpose({
           :sending="writeState.sending"
           :image-draft="writeState.imageDraft"
           :emote-packages="emotePackages"
-          enable-image
           @remove-image="writeController?.removeImage(talkerId, $event)"
           @retry-image="retryImage"
           @select-image="selectImage"

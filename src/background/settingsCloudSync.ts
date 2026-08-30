@@ -113,6 +113,9 @@ function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error)
 }
 
+let cloudSyncStatusWriteVersion = 0
+let cloudSyncStatusWriteQueue: Promise<void> = Promise.resolve()
+
 function publishCloudSyncStatus() {
   const counts = {
     ...DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
@@ -128,7 +131,13 @@ function publishCloudSyncStatus() {
     else
       counts.syncedCount++
   }
-  void browser.storage.local.set({ [SETTINGS_CLOUD_SYNC_STATUS_KEY]: counts })
+  const writeVersion = ++cloudSyncStatusWriteVersion
+  cloudSyncStatusWriteQueue = cloudSyncStatusWriteQueue
+    .then(async () => {
+      if (writeVersion !== cloudSyncStatusWriteVersion)
+        return
+      await browser.storage.local.set({ [SETTINGS_CLOUD_SYNC_STATUS_KEY]: counts })
+    })
     .catch(error => logCloudSyncError('Failed to publish settings cloud sync status:', error))
 }
 

@@ -1694,7 +1694,7 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   ), { talkerId: '8', sessionType: 1 })
 })
 
-verify('whisper keeps reads stable while exposing confirmed text and image Composer paths', async ({ notificationSections }) => {
+verify('whisper keeps reads stable while exposing confirmed text Composer paths only', async ({ notificationSections }) => {
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
@@ -1739,7 +1739,7 @@ verify('whisper keeps reads stable while exposing confirmed text and image Compo
   assert.equal(conversationSource.includes('import.meta.env.DEV'), false)
   assert.equal(conversationSource.includes('props.session?.capabilities.canSend'), true)
   assert.equal(conversationSource.includes('sendDraft'), true)
-  assert.equal(conversationSource.includes('enable-image'), true)
+  assert.equal(conversationSource.includes('enable-image'), false)
   assert.equal(conversationSource.includes(':image-draft="writeState.imageDraft"'), true)
   assert.equal(conversationSource.includes('controller.refreshLatest'), true)
   assert.equal(productionControllerSource.includes('sendDraft'), false)
@@ -3195,7 +3195,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
   assert.equal(conversationSource.includes('MessageComposer'), true)
   assert.equal(conversationSource.includes('v-if="isTextSendEnabled && writeState"'), true)
-  assert.equal(conversationSource.includes('enable-image'), true)
+  assert.equal(conversationSource.includes('enable-image'), false)
   assert.equal(conversationSource.includes('@select-image="selectImage"'), true)
   assert.equal(conversationSource.includes(`t('notifications.whisper.messages.test_send')`), false)
   assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), false)

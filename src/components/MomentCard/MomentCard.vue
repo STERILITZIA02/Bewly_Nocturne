@@ -1,16 +1,26 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance, CSSProperties } from 'vue'
-import { computed, nextTick, provide, ref } from 'vue'
+import { computed, nextTick, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
+import { useTopBarStore } from '~/stores/topBarStore'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
+import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 
 import type { Author, Video } from '../VideoCard/types'
 import VideoCardContextMenu from '../VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
 import MomentCommentSection from './MomentCommentSection.vue'
+import MomentForwardComposer from './MomentForwardComposer.vue'
+import type { MomentDisclosure } from './momentForwardContent'
+import {
+  getCachedMomentDisclosure,
+  normalizeForwardCount,
+  setCachedMomentDisclosure,
+  toggleMomentDisclosure,
+} from './momentForwardContent'
 import type { DisplayForwardVideo, DisplayMoment, WatchLaterTarget } from './types'
 import {
   formatCount,
@@ -63,10 +73,12 @@ const emit = defineEmits<{
   toggleReservation: [moment: DisplayMoment]
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
   commentToggle: [expanded: boolean]
+  forwardCountChange: [momentId: string, forwardCount: number]
 }>()
 
 const { t } = useI18n()
 const { mainAppRef } = useBewlyApp()
+const topBarStore = useTopBarStore()
 
 const cardLayoutStyles = computed<CSSProperties>(() => {
   const scale = Math.max(1, cardWidth / 520)
@@ -142,9 +154,15 @@ const menuButtonLabel = computed(() => menuVideo.value
 const showVideoOptions = ref(false)
 const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
-const commentExpanded = ref(false)
+const getDisclosureCacheKey = () => `${topBarStore.userInfo.mid || 'guest'}:${moment.id}`
+const disclosure = ref<MomentDisclosure>(getCachedMomentDisclosure(getDisclosureCacheKey()))
+const forwardComposerMounted = ref(disclosure.value === 'forward')
+const displayedForwardCount = ref(normalizeForwardCount(moment.forwardCount))
+const commentExpanded = computed(() => disclosure.value === 'comments')
+const forwardExpanded = computed(() => disclosure.value === 'forward')
 const canExpandComments = computed(() => Boolean(moment.commentId && moment.commentType))
 const commentSectionId = computed(() => `moment-comment-section-${moment.id}`)
+const forwardSectionId = computed(() => `moment-forward-section-${moment.id}`)
 const primaryActionLabel = computed(() => moment.isVideo && !moment.isLive
   ? t('moment_card.open_new_tab')
   : t('moment_card.open_detail', { author: moment.author.name }))
@@ -153,6 +171,7 @@ const isReservationAdditional = computed(() => Boolean(
   moment.additional?.reservationId
   && (moment.additional.isVideoReservation || moment.additional.isLiveReservation),
 ))
+const supportsWideCardLayout = computed(() => supportsWideMomentCardLayout(moment))
 
 const reservationActionLabel = computed(() => moment.additional?.isReserved
   ? t('moment_card.cancel_reservation')
@@ -224,6 +243,7 @@ function getForwardOriginMoment(): DisplayMoment | null {
     isLiked: false,
     isLikeDisabled: true,
     commentCount: 0,
+    forwardCount: 0,
     url: forward.url,
     isVideo: false,
     isRegularVideo: false,
@@ -261,14 +281,53 @@ function handleForwardOriginKeydown(event: KeyboardEvent) {
   emit('openDetail', getForwardOriginMoment() || moment)
 }
 
-function toggleComments() {
-  if (!canExpandComments.value)
-    return
+function setDisclosure(target: Exclude<MomentDisclosure, 'none'>) {
   closeVideoOptions()
-  const expanded = !commentExpanded.value
-  commentExpanded.value = expanded
-  emit('commentToggle', expanded)
+  const nextDisclosure = toggleMomentDisclosure(disclosure.value, target)
+  if (nextDisclosure === 'forward')
+    forwardComposerMounted.value = true
+  disclosure.value = nextDisclosure
+  emit('commentToggle', nextDisclosure !== 'none')
 }
+
+function toggleComments() {
+  if (canExpandComments.value)
+    setDisclosure('comments')
+}
+
+function toggleForward() {
+  setDisclosure('forward')
+}
+
+function closeForwardComposer() {
+  if (disclosure.value === 'forward') {
+    disclosure.value = 'none'
+    emit('commentToggle', false)
+  }
+}
+
+function handleForwardSubmitted(nextForwardCount: number) {
+  const normalizedCount = normalizeForwardCount(nextForwardCount)
+  displayedForwardCount.value = normalizedCount
+  emit('forwardCountChange', moment.id, normalizedCount)
+}
+
+watch(
+  () => moment.forwardCount,
+  forwardCount => displayedForwardCount.value = normalizeForwardCount(forwardCount),
+)
+
+watch(disclosure, value => setCachedMomentDisclosure(getDisclosureCacheKey(), value))
+
+watch(
+  [() => moment.id, () => topBarStore.userInfo.mid],
+  () => {
+    disclosure.value = getCachedMomentDisclosure(getDisclosureCacheKey())
+    forwardComposerMounted.value = disclosure.value === 'forward'
+    displayedForwardCount.value = normalizeForwardCount(moment.forwardCount)
+    emit('commentToggle', disclosure.value !== 'none')
+  },
+)
 
 // VideoCardContextMenu uses this injection to select its common option set.
 provide('getVideoType', () => 'common')
@@ -297,6 +356,10 @@ function handleImagePreview(images: string[], index: number, event: MouseEvent) 
   emit('openImagePreview', images, index, event.currentTarget)
 }
 
+function handleCommentImagePreview(images: string[], index: number, trigger: HTMLElement) {
+  emit('openImagePreview', images, index, trigger)
+}
+
 function getImagePreviewLabel(author: string, index: number) {
   return t('moment_card.preview_image', { author, index: index + 1 })
 }
@@ -312,7 +375,10 @@ function getImagePreviewLabel(author: string, index: number) {
       'moment-card--forward-video': !!moment.forward?.video,
       'moment-card--forward-draw': Boolean(moment.forward?.images?.length),
       'moment-card--charge': moment.isChargeExclusive,
+      'moment-card--supports-wide-layout': supportsWideCardLayout,
+      'moment-card--wide-single-image': supportsWideCardLayout && !moment.isVideo && !moment.isLive,
       'moment-card--comments-expanded': commentExpanded,
+      'moment-card--forward-expanded': forwardExpanded,
       'moment-card--preparing': !ready,
       'moment-card--entering': entering,
     }"
@@ -726,56 +792,17 @@ function getImagePreviewLabel(author: string, index: number) {
 
       <footer class="moment-card__footer">
         <button
-          v-if="moment.isVideo && !moment.isLive && settings.momentsCardOpenMode === 'dialog'"
           type="button"
-          :aria-label="t('moment_card.open_dialog')"
-          @click.stop="emit('openDetail', moment, true)"
-          @keydown.enter.stop
+          :class="{ 'is-active': forwardExpanded }"
+          :aria-label="forwardExpanded ? t('moment_card.forward_collapse') : t('moment_card.forward')"
+          :aria-expanded="forwardExpanded"
+          :aria-controls="forwardSectionId"
+          :disabled="!moment.id"
+          @click.stop="toggleForward"
         >
-          <span i-tabler-layout-dashboard />
-          <span class="moment-card__open-label">{{ t('moment_card.open_dialog_short') }}</span>
+          <span i-tabler-repeat />
+          {{ formatCount(displayedForwardCount) }}
         </button>
-        <button
-          v-else-if="moment.isVideo && !moment.isLive"
-          type="button"
-          :aria-label="t('moment_card.open_new_tab')"
-          @click.stop="openPrimaryDetail"
-          @keydown.enter.stop
-        >
-          <span i-tabler-external-link />
-          <span class="moment-card__open-label">{{ t('moment_card.open_new_tab_short') }}</span>
-        </button>
-        <button
-          v-else-if="settings.momentsCardOpenMode !== 'dialog' && !moment.isLive"
-          type="button"
-          :aria-label="t('moment_card.open_dialog')"
-          @click.stop="emit('openDetail', moment, true)"
-          @keydown.enter.stop
-        >
-          <span i-tabler-layout-dashboard />
-          <span class="moment-card__open-label">{{ t('moment_card.open_dialog_short') }}</span>
-        </button>
-        <button
-          v-else-if="moment.isLive"
-          type="button"
-          :aria-label="t('moment_card.open_new_tab')"
-          @click.stop="openPrimaryDetail"
-          @keydown.enter.stop
-        >
-          <span i-tabler-external-link />
-          <span class="moment-card__open-label">{{ t('moment_card.open_new_tab_short') }}</span>
-        </button>
-        <a
-          v-else
-          :href="moment.url"
-          target="_blank"
-          rel="noopener noreferrer"
-          :aria-label="t('moment_card.open_new_tab')"
-          @click.stop
-        >
-          <span i-tabler-external-link />
-          <span class="moment-card__open-label">{{ t('moment_card.open_new_tab_short') }}</span>
-        </a>
         <button
           v-if="!moment.isLive"
           type="button"
@@ -810,21 +837,37 @@ function getImagePreviewLabel(author: string, index: number) {
         </button>
       </footer>
 
-      <Transition name="moment-comments">
-        <div
-          v-if="commentExpanded && moment.commentId && moment.commentType"
-          :id="commentSectionId"
-          class="moment-card__comments"
-        >
-          <div class="moment-card__comments-inner">
+      <div
+        class="moment-card__disclosure"
+        :class="{ 'is-open': disclosure !== 'none' }"
+      >
+        <div class="moment-card__disclosure-inner">
+          <div
+            v-if="commentExpanded && moment.commentId && moment.commentType"
+            :id="commentSectionId"
+            class="moment-card__comments"
+          >
             <MomentCommentSection
-              :comment-id="moment.commentId"
-              :comment-type="moment.commentType"
-              :comment-count="moment.commentCount"
+              :moment="moment"
+              @open-image-preview="handleCommentImagePreview"
+            />
+          </div>
+          <div
+            v-if="forwardComposerMounted"
+            v-show="forwardExpanded"
+            :id="forwardSectionId"
+            class="moment-card__forward-disclosure"
+          >
+            <MomentForwardComposer
+              :moment="moment"
+              :active="forwardExpanded"
+              :forward-count="displayedForwardCount"
+              @close="closeForwardComposer"
+              @submitted="handleForwardSubmitted"
             />
           </div>
         </div>
-      </Transition>
+      </div>
     </div>
   </article>
 </template>
@@ -1954,39 +1997,32 @@ function getImagePreviewLabel(author: string, index: number) {
   opacity: 0.65;
 }
 
-.moment-card__comments {
+.moment-card__disclosure {
   display: grid;
-  min-height: 0;
-  grid-template-rows: 1fr;
-  border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
-  opacity: 1;
   pointer-events: auto;
+  grid-template-rows: 0fr;
+  min-width: 0;
+  transition: grid-template-rows var(--bew-duration-moderate) var(--bew-ease-emphasized);
+}
+
+.moment-card__disclosure.is-open {
+  grid-template-rows: 1fr;
+}
+
+.moment-card__disclosure-inner {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.moment-card__comments,
+.moment-card__forward-disclosure {
+  min-width: 0;
   cursor: default;
 }
 
-.moment-card__comments-inner {
-  min-height: 0;
-  overflow: hidden;
-}
-
-.moment-comments-enter-active,
-.moment-comments-leave-active {
-  overflow: hidden;
-  transition:
-    grid-template-rows var(--bew-duration-moderate) var(--bew-ease-emphasized),
-    opacity var(--bew-duration-normal) var(--bew-ease-standard);
-}
-
-.moment-comments-enter-from,
-.moment-comments-leave-to {
-  grid-template-rows: 0fr;
-  opacity: 0;
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .moment-comments-enter-active,
-  .moment-comments-leave-active {
-    transition: none;
+  .moment-card__disclosure {
+    transition-duration: 0ms;
   }
 }
 
@@ -2010,9 +2046,57 @@ function getImagePreviewLabel(author: string, index: number) {
   }
 }
 
-@container (max-width: 379px) {
-  .moment-card__open-label {
-    display: none;
+// 880px keeps two- and three-column cards vertical while allowing a genuinely
+// wide single-column card to use its own inline size for a split composition.
+@container (min-width: 880px) {
+  .moment-card--supports-wide-layout .moment-card__surface {
+    display: grid;
+    grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
+    align-items: start;
+  }
+
+  .moment-card--supports-wide-layout .moment-card__header,
+  .moment-card--supports-wide-layout .moment-card__hot-comment,
+  .moment-card--supports-wide-layout .moment-card__footer,
+  .moment-card--supports-wide-layout .moment-card__disclosure {
+    grid-column: 1 / -1;
+  }
+
+  .moment-card--supports-wide-layout .moment-card__main {
+    display: contents;
+  }
+
+  .moment-card--supports-wide-layout .moment-card__main .moment-card__media {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    width: auto;
+    margin: 0 0 var(--bew-space-3) var(--bew-space-4);
+  }
+
+  .moment-card--supports-wide-layout .moment-card__main .moment-card__body {
+    grid-column: 2;
+    grid-row: 2;
+    align-self: stretch;
+    min-width: 0;
+    height: auto;
+    max-height: none;
+    padding: 0 var(--bew-space-4) var(--bew-space-3);
+    overflow: hidden;
+  }
+
+  .moment-card--wide-single-image .moment-card__gallery--1 {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    width: auto;
+    margin: 0 0 var(--bew-space-3) var(--bew-space-4);
+  }
+
+  .moment-card--supports-wide-layout .moment-card__additional {
+    grid-column: 2;
+    align-self: start;
+    margin: 0 var(--bew-space-4) var(--bew-space-3);
   }
 }
 </style>

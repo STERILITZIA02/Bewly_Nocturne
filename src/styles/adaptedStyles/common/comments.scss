@@ -3,12 +3,16 @@
   // 仅滚动条规则受该设置控制，其余评论适配始终生效。
   &.bewly-hide-comment-image-scrollbar {
     &:has(.pswp.pswp--open),
-    &:has(.pswp.pswp--open) body {
+    &:has(.pswp.pswp--open) body,
+    &.bewly-moment-image-viewer-open,
+    &.bewly-moment-image-viewer-open body {
       scrollbar-width: none !important;
     }
 
     &:has(.pswp.pswp--open)::-webkit-scrollbar,
-    &:has(.pswp.pswp--open) body::-webkit-scrollbar {
+    &:has(.pswp.pswp--open) body::-webkit-scrollbar,
+    &.bewly-moment-image-viewer-open::-webkit-scrollbar,
+    &.bewly-moment-image-viewer-open body::-webkit-scrollbar {
       display: none;
     }
   }

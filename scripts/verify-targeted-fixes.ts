@@ -6,7 +6,24 @@ import process from 'node:process'
 
 import { effectScope, nextTick } from 'vue'
 
-import { normalizeMomentCommentPage } from '../src/components/MomentCard/commentUtils'
+import type { MomentCommentItem } from '../src/components/MomentCard/commentUtils'
+import { normalizeMomentComment, normalizeMomentCommentPage, normalizeMomentCommentRepliesPage } from '../src/components/MomentCard/commentUtils'
+import {
+  buildMomentForwardRequest,
+  createMomentForwardSubmissionController,
+  createMomentTopicSearchController,
+  getCachedMomentDisclosure,
+  insertMomentForwardEmoji,
+  normalizeForwardCount,
+  normalizeMomentForwardEmotePackages,
+  normalizeMomentTopics,
+  parseMomentForwardTokens,
+  resolveForwardCountAfterSuccess,
+  serializeMomentForwardContents,
+  setCachedMomentDisclosure,
+  toggleMomentDisclosure,
+} from '../src/components/MomentCard/momentForwardContent'
+import type { DisplayMoment } from '../src/components/MomentCard/types'
 import type { StorageLocalRuntime } from '../src/composables/useStorageLocal'
 import { getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '../src/constants/pageBridge'
 import { AppPage } from '../src/enums/appEnums'
@@ -15,8 +32,11 @@ import { isAccountRequestCurrent } from '../src/utils/accountScope'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness, resolveAppAuthorizationState } from '../src/utils/appAuthTokenPolicy'
 import { resolveWidescreenCenterGeometry, resolveWidescreenEngagedState, shortenCommentDateText, shouldScheduleWidescreenRefresh, shouldSuppressWidescreenAutoEntry } from '../src/utils/bewlyWidescreenPolicy'
 import { resolveCanvasCssColor } from '../src/utils/canvasTheme'
+import { buildMomentCommentPermalink } from '../src/utils/commentPermalink'
+import { buildCommentTree } from '../src/utils/commentTree'
 import { resolveDialogKeyboardAction } from '../src/utils/dialogKeyboard'
 import { resolveActiveDockItemPage } from '../src/utils/dockActiveItem'
+import { isEligibleDrawerEscape, resolveDrawerEscapeBehavior, resolveIframeEscapeAction, shouldHandleDrawerEscape } from '../src/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '../src/utils/effectiveTopBarSource'
 import { resolveEffectiveTopBarSource } from '../src/utils/effectiveTopBarSource'
 import { compileFilterRules, normalizeImportedFilterRules } from '../src/utils/filterRules'
@@ -26,8 +46,12 @@ import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe 
 import { isSentinelWithinLoadThreshold } from '../src/utils/loadMoreSentinel'
 import { calculateContainedImageSize, isTopicPage, queryDomUntilFound } from '../src/utils/main'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '../src/utils/momentAdditionalPolicy'
+import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '../src/utils/momentCardLayout'
+import { createMomentCommentThreadController } from '../src/utils/momentCommentThread'
 import { countVisibleNewMomentItems } from '../src/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '../src/utils/momentKey'
+import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '../src/utils/momentsLayout'
+import { normalizeMomentRemoteUrl } from '../src/utils/momentUrl'
 import { buildNativeSearchUrl } from '../src/utils/pageMode'
 import { createPageSettingsPayload } from '../src/utils/pageSettingsProtocol'
 import { applyConfiguredPlaybackRate, resolvePlaybackRateChange } from '../src/utils/playbackRate'
@@ -752,6 +776,12 @@ function verifyCommentRichText() {
     code: 0,
     data: {
       page: { num: 1, size: 8, count: 1 },
+      hots: [{
+        rpid_str: '90071992547409930',
+        ctime: 99,
+        member: { mid: 10, uname: 'Duplicate', avatar: '' },
+        content: { message: 'duplicate hot copy' },
+      }],
       replies: [{
         rpid_str: '90071992547409930',
         root: 0,
@@ -764,6 +794,12 @@ function verifyCommentRichText() {
           message: 'plain [doge] @Alice [unknown]',
           emote: { '[doge]': { url: 'https://i.example/doge.webp' } },
           members: [{ mid: 20, uname: 'Alice' }],
+          pictures: [{
+            img_src: '//i.example/comment.webp',
+            img_width: 1280,
+            img_height: 720,
+            img_size: 88,
+          }],
         },
         replies: [{
           rpid_str: '90071992547409931',
@@ -776,6 +812,7 @@ function verifyCommentRichText() {
           content: {
             message: 'nested [tv]',
             emote: { '[tv]': { url: 'https://i.example/tv.webp' } },
+            pictures: [{ img_src: 'http://i.example/nested.webp', img_width: 320, img_height: 640 }],
           },
         }],
       }],
@@ -783,10 +820,11 @@ function verifyCommentRichText() {
   }
 
   const page = normalizeMomentCommentPage(response, 1, 8)
+  assert.equal(page.items.length, 1)
   const comment = page.items[0]
   assert.ok(comment)
   assert.equal(comment.rpid, '90071992547409930')
-  assert.equal(comment.rootRpid, '')
+  assert.equal(comment.rootRpid, '90071992547409930')
   assert.equal(comment.parentRpid, '')
   assert.equal(comment.isLiked, true)
   assert.equal(comment.likeCount, 7)
@@ -794,11 +832,433 @@ function verifyCommentRichText() {
   assert.ok(comment.segments.some(segment => segment.type === 'emote' && segment.text === '[doge]'))
   assert.ok(comment.segments.some(segment => segment.type === 'mention' && segment.mid === '20'))
   assert.ok(comment.segments.some(segment => segment.type === 'text' && segment.text.includes('[unknown]')))
+  assert.deepEqual(comment.pictures, [{
+    url: 'https://i.example/comment.webp',
+    width: 1280,
+    height: 720,
+    sizeKb: 88,
+  }])
   assert.equal(comment.replies[0]?.rootRpid, '90071992547409930')
   assert.equal(comment.replies[0]?.parentRpid, '90071992547409930')
   assert.equal(comment.replies[0]?.isLiked, false)
   assert.equal(comment.replies[0]?.likeCount, 2)
   assert.ok(comment.replies[0]?.segments.some(segment => segment.type === 'emote' && segment.text === '[tv]'))
+  assert.equal(comment.replies[0]?.pictures[0]?.url, 'https://i.example/nested.webp')
+
+  const pictureOnly = normalizeMomentComment({
+    rpid_str: 'picture-only',
+    ctime: 102,
+    member: { mid: 12, uname: 'Picture', avatar: '' },
+    content: {
+      message: '',
+      pictures: [{ img_src: 'https://i.example/pure.webp', img_width: 0, img_height: Number.NaN }],
+    },
+  })
+  assert.ok(pictureOnly)
+  assert.equal(pictureOnly.message, '')
+  assert.equal(pictureOnly.segments.length, 0)
+  assert.deepEqual(pictureOnly.pictures, [{ url: 'https://i.example/pure.webp', width: 0, height: 0 }])
+
+  const invalidPictureOnly = normalizeMomentComment({
+    rpid_str: 'invalid-picture',
+    member: { mid: 13, uname: 'Invalid', avatar: '' },
+    content: { message: '', pictures: [{ img_src: 'javascript:alert(1)' }] },
+  })
+  assert.equal(invalidPictureOnly, null)
+}
+
+function createMomentCommentFixture(
+  id: string,
+  rootRpid = id,
+  parentRpid = '',
+  createdAt = 1,
+): MomentCommentItem {
+  return {
+    id,
+    rpid: id,
+    rootRpid,
+    parentRpid,
+    author: { id: `author-${id}`, name: id, avatar: '' },
+    message: id,
+    segments: [{ type: 'text', text: id }],
+    pictures: [],
+    createdAt,
+    likeCount: 0,
+    isLiked: false,
+    replyCount: 0,
+    replies: [],
+  }
+}
+
+async function verifyMomentCommentTreeAndThread() {
+  const layout = buildCommentTree([
+    { id: 'root', rootId: 'root', parentId: '', createdAt: 1, originalOrder: 0 },
+    { id: 'child', rootId: 'root', parentId: 'root', createdAt: 2, originalOrder: 1 },
+    { id: 'grandchild', rootId: 'root', parentId: 'child', createdAt: 3, originalOrder: 2 },
+    { id: 'orphan', rootId: 'root', parentId: 'missing', createdAt: 4, originalOrder: 3 },
+    { id: 'child', rootId: 'root', parentId: 'root', createdAt: 99, originalOrder: 4 },
+  ])
+  assert.deepEqual(layout.map(node => node.id), ['root', 'child', 'grandchild', 'orphan'])
+  assert.deepEqual(layout.map(node => node.depth), [0, 1, 2, 1])
+  assert.equal(layout.find(node => node.id === 'orphan')?.parentId, 'root')
+  assert.equal(layout.find(node => node.id === 'orphan')?.directParentVisible, false)
+  assert.deepEqual(layout.find(node => node.id === 'grandchild')?.ancestorContinuationDepths, [1])
+  assert.deepEqual(layout.map(node => node.visualOrder), [0, 1, 2, 3])
+
+  const cycleLayout = buildCommentTree([
+    { id: 'a', rootId: 'b', parentId: 'b', createdAt: 1, originalOrder: 0 },
+    { id: 'b', rootId: 'a', parentId: 'a', createdAt: 2, originalOrder: 1 },
+  ])
+  assert.equal(cycleLayout.length, 2)
+  assert.equal(cycleLayout[0]?.depth, 0)
+  assert.equal(cycleLayout[1]?.depth, 1)
+
+  const preview = createMomentCommentFixture('preview', 'root', 'root', 2)
+  const loaded = createMomentCommentFixture('loaded', 'root', 'preview', 3)
+  let resolvePage!: (page: { items: MomentCommentItem[], hasMore: boolean, nextPage: number }) => void
+  let activeRequests = 0
+  let maxActiveRequests = 0
+  let requestCount = 0
+  const controller = createMomentCommentThreadController({
+    getIdentity: () => 'account-a:1:100',
+    fetchPage: () => {
+      requestCount += 1
+      activeRequests += 1
+      maxActiveRequests = Math.max(maxActiveRequests, activeRequests)
+      return new Promise((resolve) => {
+        resolvePage = (page) => {
+          activeRequests -= 1
+          resolve(page)
+        }
+      })
+    },
+  })
+  controller.seed('root', [preview], 3)
+  const firstLoad = controller.loadMore('root')
+  const repeatedLoad = controller.loadMore('root')
+  assert.equal(firstLoad, repeatedLoad)
+  resolvePage({ items: [preview, loaded], hasMore: true, nextPage: 2 })
+  await firstLoad
+  assert.equal(requestCount, 1)
+  assert.equal(maxActiveRequests, 1)
+  assert.deepEqual(controller.getState('root')?.items.map(item => item.id), ['preview', 'loaded'])
+  assert.equal(controller.getState('root')?.nextPage, 2)
+  const stagnantLoad = controller.loadMore('root')
+  resolvePage({ items: [preview], hasMore: true, nextPage: 2 })
+  await stagnantLoad
+  assert.equal(controller.getState('root')?.hasMore, false)
+  assert.equal(controller.getState('root')?.nextPage, 2)
+  controller.dispose()
+  controller.seed('root', [loaded], 1)
+  assert.equal(controller.states.size, 0)
+
+  const failedController = createMomentCommentThreadController({
+    getIdentity: () => 'account-a:1:101',
+    fetchPage: async () => {
+      throw new Error('failed page')
+    },
+  })
+  failedController.seed('root', [], 2)
+  await assert.rejects(failedController.loadMore('root'), /failed page/)
+  assert.equal(failedController.getState('root')?.nextPage, 1)
+  assert.equal(failedController.getState('root')?.items.length, 0)
+
+  let identity = 'account-a:1:102'
+  let resolveStalePage!: (page: { items: MomentCommentItem[], hasMore: boolean, nextPage: number }) => void
+  const staleController = createMomentCommentThreadController({
+    getIdentity: () => identity,
+    fetchPage: () => new Promise((resolve) => {
+      resolveStalePage = resolve
+    }),
+  })
+  staleController.seed('root', [], 1)
+  const staleLoad = staleController.loadMore('root')
+  identity = 'account-b:1:102'
+  assert.equal(staleController.getState('root'), undefined)
+  resolveStalePage({ items: [loaded], hasMore: false, nextPage: 2 })
+  await staleLoad
+  assert.equal(staleController.getState('root'), undefined)
+
+  let failingIdentity = 'account-a:1:103'
+  let rejectStalePage!: (error: Error) => void
+  const staleFailureController = createMomentCommentThreadController({
+    getIdentity: () => failingIdentity,
+    fetchPage: () => new Promise((_resolve, reject) => {
+      rejectStalePage = reject
+    }),
+  })
+  staleFailureController.seed('root', [], 1)
+  const staleFailure = staleFailureController.loadMore('root')
+  failingIdentity = 'account-b:1:103'
+  assert.equal(staleFailureController.getState('root'), undefined)
+  rejectStalePage(new Error('stale failure'))
+  await assert.rejects(staleFailure, /stale failure/)
+  assert.equal(staleFailureController.getState('root'), undefined)
+
+  const normalizedReplies = normalizeMomentCommentRepliesPage({
+    code: 0,
+    data: {
+      page: { num: 1, size: 20, count: 2 },
+      replies: [
+        { rpid_str: 'preview', root_str: 'root', parent_str: 'root', ctime: 2, member: { mid: 2, uname: 'preview' }, content: { message: 'preview' } },
+        { rpid_str: 'loaded', root_str: 'root', parent_str: 'preview', ctime: 3, member: { mid: 3, uname: 'loaded' }, content: { message: 'loaded' } },
+      ],
+    },
+  }, 1, 20)
+  assert.deepEqual(normalizedReplies.items.map(item => item.id), ['preview', 'loaded'])
+  assert.equal(normalizedReplies.hasMore, false)
+
+  const videoMoment = {
+    id: '9000',
+    commentType: 1,
+    videoUrl: 'https://www.bilibili.com/video/BV1TEST/?p=2',
+    bvid: 'BV1TEST',
+    aid: 123,
+    url: 'https://www.bilibili.com/opus/9000',
+  } as DisplayMoment
+  const rootComment = createMomentCommentFixture('100')
+  const childComment = createMomentCommentFixture('101', '100', '100')
+  const videoRootUrl = new URL(buildMomentCommentPermalink(videoMoment, rootComment))
+  assert.equal(videoRootUrl.pathname, '/video/BV1TEST/')
+  assert.equal(videoRootUrl.searchParams.get('p'), '2')
+  assert.equal(videoRootUrl.searchParams.get('comment_on'), '1')
+  assert.equal(videoRootUrl.searchParams.get('comment_root_id'), '100')
+  assert.equal(videoRootUrl.searchParams.has('comment_secondary_id'), false)
+  assert.equal(videoRootUrl.hash, '#reply100')
+  const videoChildUrl = new URL(buildMomentCommentPermalink(videoMoment, childComment))
+  assert.equal(videoChildUrl.searchParams.get('comment_root_id'), '100')
+  assert.equal(videoChildUrl.searchParams.get('comment_secondary_id'), '101')
+  assert.equal(videoChildUrl.hash, '#reply101')
+
+  const dynamicMoment = {
+    ...videoMoment,
+    id: '9001',
+    commentType: 11,
+    videoUrl: undefined,
+    bvid: undefined,
+    aid: undefined,
+    url: 'https://www.bilibili.com/opus/9001',
+  } as DisplayMoment
+  const dynamicRootUrl = new URL(buildMomentCommentPermalink(dynamicMoment, rootComment))
+  assert.equal(dynamicRootUrl.origin, 'https://t.bilibili.com')
+  assert.equal(dynamicRootUrl.pathname, '/9001')
+  assert.equal(dynamicRootUrl.searchParams.get('comment_on'), '1')
+  assert.equal(dynamicRootUrl.searchParams.get('comment_root_id'), '100')
+  assert.equal(dynamicRootUrl.searchParams.has('comment_secondary_id'), false)
+  assert.equal(dynamicRootUrl.hash, '#reply100')
+  const dynamicChildUrl = new URL(buildMomentCommentPermalink(dynamicMoment, childComment))
+  assert.equal(dynamicChildUrl.searchParams.get('comment_secondary_id'), '101')
+  assert.equal(dynamicChildUrl.hash, '#reply101')
+  const articleUrl = new URL(buildMomentCommentPermalink({
+    ...dynamicMoment,
+    isArticle: true,
+    url: 'https://www.bilibili.com/read/cv123?from=dynamic',
+  }, rootComment))
+  assert.equal(articleUrl.pathname, '/read/cv123')
+  assert.equal(articleUrl.searchParams.get('from'), 'dynamic')
+  assert.equal(articleUrl.searchParams.get('comment_root_id'), '100')
+
+  const bvidFallbackUrl = new URL(buildMomentCommentPermalink({
+    ...videoMoment,
+    videoUrl: 'https://example.com/video/BV1BAD',
+  }, rootComment))
+  assert.equal(bvidFallbackUrl.hostname, 'www.bilibili.com')
+  assert.equal(bvidFallbackUrl.pathname, '/video/BV1TEST')
+  const aidFallbackUrl = new URL(buildMomentCommentPermalink({
+    ...videoMoment,
+    videoUrl: undefined,
+    bvid: undefined,
+  }, rootComment))
+  assert.equal(aidFallbackUrl.pathname, '/video/av123')
+
+  const mainSource = await readFile(`${process.cwd()}/src/utils/main.ts`, 'utf8')
+  assert.match(mainSource, /noopener[\s\S]*noreferrer/)
+  assert.match(mainSource, /openedWindow\.opener = null/)
+}
+
+async function verifyMomentForwardContracts() {
+  assert.equal(normalizeForwardCount(12), 12)
+  assert.equal(normalizeForwardCount(Number.NaN), 0)
+  assert.equal(normalizeForwardCount(-1), 0)
+  assert.equal(normalizeMomentRemoteUrl('javascript:alert(1)'), '')
+  assert.equal(normalizeMomentRemoteUrl('http://www.bilibili.com/opus/1'), 'https://www.bilibili.com/opus/1')
+  assert.equal(normalizeMomentRemoteUrl('//i0.hdslb.com/test.webp'), 'https://i0.hdslb.com/test.webp')
+
+  const textTokens = parseMomentForwardTokens('hello', [])
+  assert.deepEqual(serializeMomentForwardContents(textTokens), [{ raw_text: 'hello', type: 1, biz_id: '' }])
+  const mixedTokens = parseMomentForwardTokens('hello[doge]world', ['[doge]'])
+  assert.deepEqual(mixedTokens, [
+    { type: 'text', text: 'hello' },
+    { type: 'emoji', text: '[doge]' },
+    { type: 'text', text: 'world' },
+  ])
+  assert.deepEqual(serializeMomentForwardContents(mixedTokens), [
+    { raw_text: 'hello', type: 1, biz_id: '' },
+    { raw_text: '[doge]', type: 9, biz_id: '' },
+    { raw_text: 'world', type: 1, biz_id: '' },
+  ])
+  assert.deepEqual(serializeMomentForwardContents([]), [])
+  const insertion = insertMomentForwardEmoji(
+    [{ type: 'text', text: 'hello world' }],
+    '[doge]',
+    6,
+    11,
+    ['[doge]'],
+  )
+  assert.equal(insertion.value, 'hello [doge]')
+  assert.equal(insertion.caret, 12)
+  assert.equal(insertion.tokens[1]?.type, 'emoji')
+
+  const topic = { id: 42, name: 'Topic' }
+  const requestWithTopic = buildMomentForwardRequest({
+    momentId: '9001',
+    mid: 100,
+    tokens: mixedTokens,
+    topic,
+    now: 123456789,
+    random: 0,
+  })
+  assert.equal(requestWithTopic.dyn_req.scene, 4)
+  assert.equal(requestWithTopic.web_repost_src.dyn_id_str, '9001')
+  assert.equal(requestWithTopic.dyn_req.upload_id, '100_123456789_1000')
+  assert.deepEqual(requestWithTopic.dyn_req.topic, {
+    id: 42,
+    name: 'Topic',
+    from_source: 'dyn.web.list',
+    from_topic_id: 0,
+  })
+  const emptyRequest = buildMomentForwardRequest({
+    momentId: '9002',
+    mid: 100,
+    tokens: [],
+    topic: null,
+    now: 1,
+    random: 0,
+  })
+  assert.deepEqual(emptyRequest.dyn_req.content.contents, [])
+  assert.equal('topic' in emptyRequest.dyn_req, false)
+
+  assert.deepEqual(normalizeMomentForwardEmotePackages({
+    code: 0,
+    data: {
+      packages: [{
+        id: 1,
+        text: 'Basic',
+        url: '//i.example/package.webp',
+        emote: [{ id: 2, text: '[doge]', url: 'http://i.example/doge.webp' }],
+      }],
+    },
+  }), [{
+    id: 1,
+    name: 'Basic',
+    iconUrl: 'https://i.example/package.webp',
+    emotes: [{ id: 2, text: '[doge]', url: 'https://i.example/doge.webp' }],
+  }])
+  assert.deepEqual(normalizeMomentTopics({
+    code: 0,
+    data: {
+      topic_items: [
+        { id: 1, name: 'One' },
+        { id: 1, name: 'Duplicate' },
+        { id: 2, name: 'Two' },
+      ],
+    },
+  }), [{ id: 1, name: 'One' }, { id: 2, name: 'Two' }])
+
+  let resolveTopicA!: (topics: Array<{ id: number, name: string }>) => void
+  let resolveTopicB!: (topics: Array<{ id: number, name: string }>) => void
+  const topicController = createMomentTopicSearchController({
+    search: query => new Promise((resolve) => {
+      if (query === 'a')
+        resolveTopicA = resolve
+      else
+        resolveTopicB = resolve
+    }),
+  })
+  const topicRequestA = topicController.search('a', '')
+  const topicRequestB = topicController.search('abc', '')
+  resolveTopicB([{ id: 2, name: 'ABC' }])
+  await topicRequestB
+  resolveTopicA([{ id: 1, name: 'A' }])
+  await topicRequestA
+  assert.deepEqual(topicController.state.results, [{ id: 2, name: 'ABC' }])
+  topicController.invalidate()
+  assert.deepEqual(topicController.state.results, [])
+
+  let failureResolve!: (response: unknown) => void
+  let submitCalls = 0
+  const failureController = createMomentForwardSubmissionController({
+    getIdentity: () => 'account-a:moment-a',
+    submit: () => {
+      submitCalls += 1
+      return new Promise(resolve => failureResolve = resolve)
+    },
+  })
+  failureController.setTokens(mixedTokens)
+  failureController.selectTopic(topic)
+  const failedSubmit = failureController.submit()
+  const duplicateSubmit = failureController.submit()
+  assert.equal(failedSubmit, duplicateSubmit)
+  failureResolve({ code: -412, message: 'risk control' })
+  const failedResult = await failedSubmit
+  assert.equal(submitCalls, 1)
+  assert.equal(failedResult.success, false)
+  assert.equal(failureController.state.status, 'error')
+  assert.deepEqual(failureController.state.tokens, mixedTokens)
+  assert.deepEqual(failureController.state.selectedTopic, topic)
+  failureController.clearTopic()
+  assert.equal(failureController.state.selectedTopic, null)
+  assert.equal(failureController.state.error, undefined)
+
+  const successController = createMomentForwardSubmissionController({
+    getIdentity: () => 'account-a:moment-b',
+    submit: async () => ({ code: 0, data: { forward_count: 99 } }),
+  })
+  successController.setTokens(textTokens)
+  successController.selectTopic(topic)
+  const successResult = await successController.submit()
+  assert.equal(successResult.success, true)
+  assert.equal(successController.state.status, 'success')
+  assert.deepEqual(successController.state.tokens, [])
+  assert.equal(successController.state.selectedTopic, null)
+  assert.equal(resolveForwardCountAfterSuccess(successResult.response, 7), 99)
+  assert.equal(resolveForwardCountAfterSuccess({ code: 0, data: {} }, 7), 8)
+
+  let identity = 'account-a:moment-c'
+  let staleResolve!: (response: unknown) => void
+  const staleController = createMomentForwardSubmissionController({
+    getIdentity: () => identity,
+    submit: () => new Promise(resolve => staleResolve = resolve),
+  })
+  staleController.setTokens(textTokens)
+  const staleSubmit = staleController.submit()
+  identity = 'account-b:moment-c'
+  staleResolve({ code: 0 })
+  const staleResult = await staleSubmit
+  assert.equal(staleResult.applied, false)
+  assert.deepEqual(staleController.state.tokens, textTokens)
+
+  let invalidatedResolve!: (response: unknown) => void
+  const invalidatedController = createMomentForwardSubmissionController({
+    getIdentity: () => 'account-a:moment-d',
+    submit: () => new Promise(resolve => invalidatedResolve = resolve),
+  })
+  invalidatedController.setTokens(textTokens)
+  const invalidatedSubmit = invalidatedController.submit()
+  invalidatedController.invalidate()
+  const repeatedAfterInvalidate = invalidatedController.submit()
+  assert.equal(invalidatedSubmit, repeatedAfterInvalidate)
+  invalidatedResolve({ code: 0 })
+  await invalidatedSubmit
+
+  assert.equal(toggleMomentDisclosure('none', 'forward'), 'forward')
+  assert.equal(toggleMomentDisclosure('forward', 'forward'), 'none')
+  assert.equal(toggleMomentDisclosure('comments', 'forward'), 'forward')
+  assert.equal(toggleMomentDisclosure('forward', 'comments'), 'comments')
+  setCachedMomentDisclosure('test:moment', 'forward')
+  assert.equal(getCachedMomentDisclosure('test:moment'), 'forward')
+  setCachedMomentDisclosure('test:moment', 'none')
+  assert.equal(getCachedMomentDisclosure('test:moment'), 'none')
 }
 
 async function verifyComponentContracts() {
@@ -811,8 +1271,16 @@ async function verifyComponentContracts() {
     gridCard,
     commentSection,
     commentRichText,
+    commentMedia,
+    momentCard,
+    forwardComposer,
+    emojiPicker,
+    topicPicker,
+    forwardContent,
+    forwardComposable,
     momentsPage,
     momentApi,
+    conversationView,
     bootOverlay,
     skeletonBlock,
     historyPage,
@@ -828,8 +1296,16 @@ async function verifyComponentContracts() {
     readFile(`${root}/src/contentScripts/views/WatchLater/WatchLaterGridCard.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/MomentCommentSection.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/MomentCommentRichText.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentCommentMedia.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentForwardComposer.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentForwardEmojiPicker.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentForwardTopicPicker.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/momentForwardContent.ts`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/useMomentForwardComposer.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
     readFile(`${root}/src/background/messageListeners/api/moment.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/Notifications/whisper/ConversationView.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/bewlyBootOverlay.ts`, 'utf8'),
     readFile(`${root}/src/components/SkeletonBlock.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/History/History.vue`, 'utf8'),
@@ -862,23 +1338,80 @@ async function verifyComponentContracts() {
   assert.match(watchLater, /handlePageRefresh\.value === handleWatchLaterPageRefresh/)
   assert.match(gridCard, /:disabled="disabled"/)
 
-  assert.match(commentSection, /tabindex="-1"/)
-  assert.match(commentSection, /aria-hidden="true"/)
-  assert.match(commentSection, /MomentCommentRichText :segments="reply\.segments"/)
-  assert.match(commentSection, /setMomentCommentLike/)
-  assert.match(commentSection, /addMomentCommentReply/)
-  assert.match(commentSection, /:aria-pressed="comment\.isLiked"/)
-  assert.match(commentSection, /moment-comment__reply-composer/)
-  assert.match(commentSection, /function setReplyInputRef\(element: Element \| ComponentPublicInstance \| null\)/)
-  assert.match(commentSection, /:ref="setReplyInputRef"/)
-  assert.doesNotMatch(commentSection, /ref="replyInputRef"/)
+  assert.match(commentSection, /buildCommentTree/)
+  assert.match(commentSection, /MomentCommentRichText/)
+  assert.match(commentSection, /MomentCommentMedia/)
+  assert.match(commentSection, /comments_reply_new_tab/)
+  assert.match(commentSection, /openLinkToNewTab\(buildMomentCommentPermalink/)
+  assert.match(commentSection, /loadMoreReplies/)
+  assert.match(commentSection, /ancestorContinuationDepths/)
+  assert.match(commentSection, /onBeforeUnmount\(\(\) =>/)
+  assert.match(commentSection, /requestIdentity !== getCommentIdentity\(\)/)
+  assert.match(commentSection, /page\.hasMore && madeProgress && pageAdvanced/)
+  assert.match(commentSection, /aria-pressed="likedIds\.has\(node\.comment\.id\)"/)
+  assert.doesNotMatch(commentSection, /replyDraft|replyTarget|replyComposerRootId|<textarea|addMomentCommentReply/)
+  assert.match(commentMedia, /pictures: MomentCommentPicture\[\]/)
+  assert.match(commentMedia, /moment-comment-media--four/)
+  assert.match(commentMedia, /:width="picture\.width \|\| undefined"/)
+  assert.match(commentMedia, /getMomentThumbnailUrl\(picture\.url\)/)
+  assert.match(commentMedia, /moment-comment-media__fallback/)
+  assert.match(commentMedia, /openImagePreview: \[urls: string\[\], index: number, trigger: HTMLElement\]/)
   assert.match(commentRichText, /@error="markEmoteFailed/)
   assert.match(momentApi, /x\/v2\/reply\/action[\s\S]{0,260}application\/x-www-form-urlencoded/)
-  assert.match(momentApi, /x\/v2\/reply\/add[\s\S]{0,360}root:/)
+  assert.match(momentApi, /x\/v2\/reply\/reply[\s\S]{0,260}root:/)
+  assert.doesNotMatch(momentApi, /x\/v2\/reply\/add/)
+  assert.match(momentCard, /i-tabler-repeat/)
+  assert.match(momentCard, /displayedForwardCount/)
+  assert.match(momentCard, /aria-controls="forwardSectionId"/)
+  assert.match(momentCard, /toggleMomentDisclosure/)
+  assert.match(momentCard, /MomentForwardComposer/)
+  assert.match(momentCard, /moment-card__forward-disclosure/)
+  assert.match(momentCard, /grid-template-rows: 0fr/)
+  assert.match(momentCard, /\.moment-card__disclosure \{[\s\S]{0,100}pointer-events: auto/)
+  assert.match(momentCard, /forwardCountChange/)
+  assert.match(forwardComposer, /field-sizing: content/)
+  assert.match(forwardComposer, /event\.ctrlKey \|\| event\.metaKey/)
+  assert.match(forwardComposer, /insertMomentForwardEmoji/)
+  assert.match(forwardComposer, /resolveForwardCountAfterSuccess/)
+  assert.match(emojiPicker, /loadMomentForwardEmotes/)
+  assert.doesNotMatch(emojiPicker, /position: absolute/)
+  assert.match(topicPicker, /setTimeout\([\s\S]{0,160}280/)
+  assert.match(topicPicker, /createMomentTopicSearchController/)
+  assert.match(topicPicker, /state: searchState/)
+  assert.doesNotMatch(topicPicker, /position: absolute/)
+  assert.doesNotMatch(emojiPicker, /backdrop-filter/)
+  assert.doesNotMatch(topicPicker, /backdrop-filter/)
+  assert.match(forwardContent, /scene: 4/)
+  assert.match(forwardContent, /web_repost_src/)
+  assert.match(forwardContent, /type: token\.type === 'emoji' \? 9 as const : 1 as const/)
+  assert.match(forwardComposable, /business: 'dynamic'/)
+  assert.match(forwardComposable, /momentEmotesRequest/)
+  assert.match(forwardComposable, /momentForwardDraftCache/)
+  assert.match(forwardComposable, /MAX_CACHED_MOMENT_FORWARD_DRAFTS/)
+  assert.match(forwardComposable, /storeMid !== cookieMid/)
+  assert.match(forwardComposable, /state,\n\s+fallbackError/)
+  assert.match(forwardComposable, /if \(!context\.isCurrent\(\)\)[\s\S]{0,100}Stale moment forward request/)
+  assert.match(momentApi, /x\/dynamic\/feed\/create\/submit_check[\s\S]{0,420}application\/json/)
+  assert.match(momentApi, /x\/dynamic\/feed\/create\/dyn[\s\S]{0,420}application\/json/)
+  assert.match(momentApi, /x-bili-device-req-json/)
+  assert.match(momentApi, /x\/emote\/user\/panel\/web[\s\S]{0,180}business: 'dynamic'/)
+  assert.match(momentApi, /x\/topic\/pub\/search/)
+  assert.match(momentsPage, /forwardCount: resolveMomentForwardCount\(id, raw\.modules\?\.module_stat\?\.forward\?\.count\)/)
+  assert.match(momentsPage, /function handleMomentForwardCountChange/)
+  assert.match(momentsPage, /forwardCountOverrides/)
+  assert.match(momentsPage, /canonicalMoment/)
+  assert.match(momentsPage, /momentColumns\.value = momentColumns\.value\.map\(updateItems\)/)
+  assert.match(momentsPage, /momentsFeedCache\.value = \{[\s\S]{0,120}entries: nextEntries/)
+  assert.match(momentsPage, /saveMomentsCache\(filter, entry\)/)
+  assert.match(momentsPage, /@forward-count-change="handleMomentForwardCountChange"/)
+  assert.match(momentsPage, /bewly-moment-image-viewer-open/)
+  assert.match(momentsPage, /moment-image-viewer__nav:focus-visible/)
+  assert.doesNotMatch(conversationView, /\benable-image\b/)
   assert.match(momentsPage, /<span\s+class="moments-up-list__fade moments-up-list__fade--prev"/)
-  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]{0,180}padding-inline: var\(--bew-space-4\)/)
+  assert.match(momentsPage, /\.moments-up-list__track \{[\s\S]{0,180}padding-block: 6px var\(--bew-space-1\)/)
   assert.match(momentsPage, /\.moments-up-list__item:hover:not\(:disabled\)/)
-  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]{0,1000}mask-image: linear-gradient\(\s*90deg,[\s\S]{0,160}rgb\(0 0 0 \/ 16%\) var\(--bew-space-4\)/)
+  assert.match(momentsPage, /@property --moments-up-list-left-clear[\s\S]*@property --moments-up-list-right-clear/)
+  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]*--moments-up-list-base-mask:[\s\S]*-webkit-mask-image:/)
   assert.match(momentsPage, /\.moments-up-list__fade \{[\s\S]{0,460}background: radial-gradient\([\s\S]{0,260}filter: var\(--bew-filter-glass-1\)/)
   assert.match(momentsPage, /handleReachBottom\.value === handleMomentsReachBottom/)
   assert.match(momentsPage, /handlePageRefresh\.value === refresh/)
@@ -991,6 +1524,8 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(about, /enableSettingsCloudSync\('push'\)/)
   assert.match(about, /common\.operation\.cancel/)
   assert.match(about, /cloudSyncControlRevision/)
+  assert.match(cloudBackground, /cloudSyncStatusWriteQueue/)
+  assert.match(cloudBackground, /writeVersion !== cloudSyncStatusWriteVersion/)
   assert.match(about, /cloud-sync-warning/)
 
   assert.match(moments, /classifyMomentAdditional\(additional\.type\)/)
@@ -1000,7 +1535,7 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(moments, /clearDetailFocusRetry\(\)/)
   assert.match(moments, /function resetMomentsAccountState\(\) \{[\s\S]{0,80}closeMomentDetail\(\)/)
   assert.match(moments, /Failed to load Moments feed/)
-  assert.match(moments, /clearMomentPresentationForRefresh\(\)/)
+  assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /isInitialLoading\.value = moments\.value\.length === 0/)
   assert.match(moments, /likingMomentRequests\.get\(moment\.id\) === requestId/)
   assert.match(moments, /const cursorAdvanced = nextOffset !== requestOffset/)
@@ -1011,7 +1546,8 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(momentCard, /role="button"[\s\S]{0,180}@click="handleForwardOriginClick"/)
   assert.match(momentCard, /@click\.stop="handleImagePreview/)
   assert.match(momentCard, /moment-card__additional-vote-icon/)
-  assert.match(momentCard, /moment\.isVideo && !moment\.isLive && settings\.momentsCardOpenMode === 'dialog'/)
+  assert.match(momentCard, /const primaryActionLabel/)
+  assert.match(momentCard, /i-tabler-repeat/)
   assert.doesNotMatch(momentCard, /--moment-card-text-body-min-height|min-height: var\(--moment-card-text-body-min-height|moment-card--text[\s\S]{0,80}min-height: 240px/)
   assert.match(opusLayout, /--bewly-opus-comment-width/)
   assert.match(opusLayout, /getParentMessageData\(event,[\s\S]{0,120}'BEWLY_OPUS_VIEWPORT'/)
@@ -1617,13 +2153,16 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(contentScript, /openSearchResults\(pluginSearchResultsUrl\)/)
   assert.match(momentsPage, /<span\s+class="moments-up-list__fade moments-up-list__fade--prev"/)
   assert.doesNotMatch(momentsPage, /v-show="canScrollUpList(?:Left|Right)"\s+class="moments-up-list__fade/)
-  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]{0,180}padding-inline: var\(--bew-space-4\);[\s\S]{0,180}scroll-padding-inline: var\(--bew-space-4\);/)
+  assert.match(momentsPage, /\.moments-up-list__scroller \{[\s\S]{0,2500}scroll-padding-inline: var\(--bew-space-2\);/)
+  assert.match(momentsPage, /\.moments-up-list__track \{[\s\S]{0,180}padding-block: 6px var\(--bew-space-1\);/)
   const momentsScrollerSection = momentsPage.slice(
     momentsPage.indexOf('.moments-up-list__scroller {'),
     momentsPage.indexOf('.moments-up-list__scroller::-webkit-scrollbar'),
   )
-  assert.match(momentsScrollerSection, /-webkit-mask-image: linear-gradient\(\s*90deg,[\s\S]{0,220}rgb\(0 0 0 \/ 16%\) var\(--bew-space-4\)/)
-  assert.match(momentsScrollerSection, /#000 calc\(var\(--bew-space-12\) \+ var\(--bew-space-10\)\)/)
+  assert.doesNotMatch(momentsScrollerSection, /^\s*padding-inline:/m)
+  assert.match(momentsScrollerSection, /--moments-up-list-left-clear-mask:/)
+  assert.match(momentsScrollerSection, /--moments-up-list-right-clear-mask:/)
+  assert.match(momentsScrollerSection, /--moments-up-list-base-mask:/)
   const momentsFadeSection = momentsPage.slice(
     momentsPage.indexOf('.moments-up-list__fade {'),
     momentsPage.indexOf('.moments-up-list__arrow {'),
@@ -1880,6 +2419,137 @@ async function verifySecurityContracts() {
   assert.match(notificationsDrawer, /getIframeMessageData\(event, iframeRef\.value\)/)
 }
 
+async function verifyDrawerAndMomentsLayoutContracts() {
+  assert.equal(isEligibleDrawerEscape({ key: 'Escape', repeat: false, isComposing: false }), true)
+  assert.equal(isEligibleDrawerEscape({ key: 'Escape', repeat: true, isComposing: false }), false)
+  assert.equal(isEligibleDrawerEscape({ key: 'Escape', repeat: false, isComposing: true }), false)
+  assert.equal(isEligibleDrawerEscape({ key: 'Enter', repeat: false, isComposing: false }), false)
+
+  const drawerEscapeBase = {
+    active: true,
+    defaultPrevented: false,
+    propagationStopped: false,
+    hadPriorityState: false,
+    hasPriorityState: false,
+    iframeHandled: false,
+  }
+  assert.equal(shouldHandleDrawerEscape(drawerEscapeBase), true)
+  assert.equal(shouldHandleDrawerEscape({ ...drawerEscapeBase, defaultPrevented: true }), false)
+  assert.equal(shouldHandleDrawerEscape({ ...drawerEscapeBase, propagationStopped: true }), false)
+  assert.equal(shouldHandleDrawerEscape({ ...drawerEscapeBase, hadPriorityState: true }), false)
+  assert.equal(shouldHandleDrawerEscape({ ...drawerEscapeBase, hasPriorityState: true }), false)
+  assert.equal(shouldHandleDrawerEscape({ ...drawerEscapeBase, iframeHandled: true }), false)
+  assert.equal(resolveDrawerEscapeBehavior('immediate', false), 'close')
+  assert.equal(resolveDrawerEscapeBehavior('secondPress', false), 'arm-second-press')
+  assert.equal(resolveDrawerEscapeBehavior('secondPress', true), 'close')
+  assert.equal(resolveIframeEscapeAction({
+    defaultPrevented: true,
+    propagationStopped: false,
+    hadPriorityState: false,
+    hasPriorityState: false,
+    editableActiveElement: false,
+  }), 'handled')
+  assert.equal(resolveIframeEscapeAction({
+    defaultPrevented: false,
+    propagationStopped: false,
+    hadPriorityState: false,
+    hasPriorityState: false,
+    editableActiveElement: false,
+  }), 'request-close')
+
+  assert.deepEqual(resolveHorizontalScrollState({ scrollLeft: 0, scrollWidth: 1000, clientWidth: 400 }), {
+    canScrollLeft: false,
+    canScrollRight: true,
+  })
+  assert.equal(resolveHorizontalScrollState({ scrollLeft: 1.9, scrollWidth: 1000, clientWidth: 400 }).canScrollLeft, false)
+  assert.equal(resolveHorizontalScrollState({ scrollLeft: 2.1, scrollWidth: 1000, clientWidth: 400 }).canScrollLeft, true)
+  assert.equal(resolveHorizontalScrollState({ scrollLeft: 598.1, scrollWidth: 1000, clientWidth: 400 }).canScrollRight, false)
+  assert.equal(resolveHorizontalScrollState({ scrollLeft: 597.9, scrollWidth: 1000, clientWidth: 400 }).canScrollRight, true)
+  assert.equal(resolveHorizontalScrollState({ scrollLeft: 0, scrollWidth: 400, clientWidth: 400 }).canScrollRight, false)
+
+  assert.equal(resolveMomentGridColumnCount({ containerWidth: 1592, preferredColumns: 1, minCardWidth: 360, gap: 16 }), 1)
+  assert.equal(resolveMomentGridColumnCount({ containerWidth: 1592, preferredColumns: 2, minCardWidth: 360, gap: 16 }), 2)
+  assert.equal(resolveMomentGridColumnCount({ containerWidth: 1592, preferredColumns: 3, minCardWidth: 360, gap: 16 }), 3)
+  assert.equal(resolveMomentGridColumnCount({ containerWidth: 800, preferredColumns: 3, minCardWidth: 360, gap: 16 }), 2)
+  assert.equal(resolveMomentGridColumnCount({ containerWidth: 700, preferredColumns: 3, minCardWidth: 360, gap: 16 }), 1)
+  assert.equal(resolveMomentCardWidth({ gridClientWidth: 1592, columns: 1, gap: 16 }), 1592)
+  assert.equal(resolveMomentCardWidth({ gridClientWidth: 1592, columns: 2, gap: 16 }), 788)
+  assert.equal(resolveMomentCardWidth({ gridClientWidth: 1592, columns: 3, gap: 16 }), 520)
+  assert.equal(resolveVirtualSpacerSize(0, 16), 0)
+  assert.equal(resolveVirtualSpacerSize(116, 16), 100)
+  assert.equal(resolveVirtualSpacerSize(232, 16), 216)
+  assert.equal(shouldShowMomentsSidebar({ layoutWidth: 999, sidebarWidth: 248, gap: 16, minMainWidth: 736, hasContent: true }), false)
+  assert.equal(shouldShowMomentsSidebar({ layoutWidth: 1000, sidebarWidth: 248, gap: 16, minMainWidth: 736, hasContent: true }), true)
+
+  const videoMoment = {
+    additional: undefined,
+    forward: undefined,
+    images: ['cover'],
+    isChargeExclusive: false,
+    isLive: false,
+    isVideo: true,
+  }
+  assert.equal(supportsWideMomentCardLayout(videoMoment), true)
+  assert.equal(shouldUseWideMomentCardLayout(videoMoment, 879), false)
+  assert.equal(shouldUseWideMomentCardLayout(videoMoment, 880), true)
+  assert.equal(supportsWideMomentCardLayout({ ...videoMoment, isVideo: false, images: ['one'] }), true)
+  assert.equal(supportsWideMomentCardLayout({ ...videoMoment, isVideo: false, images: ['one', 'two'] }), false)
+  assert.equal(supportsWideMomentCardLayout({ ...videoMoment, images: ['cover', 'gallery'] }), false)
+  assert.equal(supportsWideMomentCardLayout({ ...videoMoment, isChargeExclusive: true }), false)
+  assert.equal(supportsWideMomentCardLayout({ ...videoMoment, additional: { isVote: true } }), false)
+
+  const root = process.cwd()
+  const [app, iframeDrawer, notificationsDrawer, contentScript, escapePriority, photoViewerDetector, moments, momentCard, photoViewer, randomPlay, widescreen] = await Promise.all([
+    readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
+    readFile(`${root}/src/components/IframeDrawer.vue`, 'utf8'),
+    readFile(`${root}/src/components/TopBar/components/NotificationsDrawer.vue`, 'utf8'),
+    readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
+    readFile(`${root}/src/utils/escapePriority.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/features/iframePhotoViewerDetector.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
+    readFile(`${root}/src/utils/photoViewer.ts`, 'utf8'),
+    readFile(`${root}/src/utils/randomPlay.ts`, 'utf8'),
+    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+  ])
+  assert.equal((iframeDrawer.match(/addEventListener\('keydown'/g) || []).length, 1)
+  assert.equal((notificationsDrawer.match(/addEventListener\('keydown'/g) || []).length, 1)
+  assert.doesNotMatch(notificationsDrawer, /@keydown="handleKeydown"/)
+  assert.match(iframeDrawer, /window\.setTimeout\(\(\) => \{[\s\S]*event\.defaultPrevented[\s\S]*event\.cancelBubble/)
+  assert.match(notificationsDrawer, /window\.setTimeout\(\(\) => \{[\s\S]*event\.defaultPrevented[\s\S]*event\.cancelBubble/)
+  assert.match(iframeDrawer, /name="bewly-iframe-drawer"/)
+  assert.match(contentScript, /window\.name === 'bewly-iframe-drawer'/)
+  assert.match(escapePriority, /rect\.width > 0[\s\S]*rect\.height > 0/)
+  assert.match(contentScript, /resolveIframeEscapeAction\([\s\S]*BEWLY_DRAWER_ESCAPE_HANDLED[\s\S]*BEWLY_DRAWER_CLOSE_REQUEST/)
+  assert.match(photoViewer, /\.pswp\.pswp--open[\s\S]*\.photo-imager-container/)
+  assert.match(photoViewerDetector, /cleanupIframePhotoViewerDetector\(\)[\s\S]*IFRAME_PHOTO_VIEWER_STATE[\s\S]*isOpen: false/)
+  assert.match(app, /configuredUrl !== expectedUrl/)
+  assert.match(app, /watch\(iframePageURL,[\s\S]*hideUIForIframePhotoViewer\.value = false/)
+  assert.match(randomPlay, /event\.preventDefault\(\)[\s\S]*event\.stopPropagation\(\)[\s\S]*stopNativePlaylistEditing\(\)/)
+  assert.doesNotMatch(moments, /momentsContentStyle/)
+  assert.match(moments, /moments-layout--with-sidebar/)
+  assert.match(moments, /padding: var\(--bew-space-2\) 0 var\(--bew-space-12\)/)
+  assert.match(moments, /grid-template-columns: var\(--bew-layout-moments-sidebar-width\) minmax\(0, 1fr\)/)
+  assert.match(moments, /row-gap: var\(--bew-space-8\)/)
+  assert.match(moments, /grid-template-columns:\s*repeat\(var\(--moments-columns\), minmax\(0, 1fr\)\)/)
+  assert.match(moments, /class="moments-up-list__track"/)
+  assert.match(moments, /'can-scroll-left': canScrollUpListLeft[\s\S]*'can-scroll-right': canScrollUpListRight/)
+  assert.match(moments, /transition:\s*opacity 700ms var\(--bew-ease-standard\)/)
+  assert.match(moments, /--moments-up-list-left-clear 700ms var\(--bew-ease-standard\)/)
+  assert.match(moments, /@scroll="scheduleUpListStateUpdate"/)
+  assert.match(moments, /upListResizeObserver\.observe\(upListTrackRef\.value\)/)
+  assert.match(moments, /gridClientWidth = gridRef\.value\?\.clientWidth \|\| mainRailWidth/)
+  assert.match(moments, /:style="momentsGridStyle"/)
+  assert.match(moments, /resolveVirtualSpacerSize\(topPad, gap\)/)
+  assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
+  assert.match(moments, /reapplyMomentFiltersFromCache\([\s\S]*maybeLoadMoreNearBottom\(\)/)
+  assert.match(momentCard, /moment-card--supports-wide-layout/)
+  assert.match(momentCard, /moment-card--wide-single-image \.moment-card__gallery--1/)
+  assert.match(momentCard, /@container \(min-width: 880px\)/)
+  assert.match(widescreen, /explicit priority ownership—not defaultPrevented alone/)
+  assert.match(widescreen, /escapeArbitrationTimer = window\.setTimeout/)
+}
+
 async function verify() {
   verifyAccountScopes()
   verifyPlaybackRatePolicy()
@@ -1910,6 +2580,8 @@ async function verify() {
   verifyIframeBoundary()
   verifySearchHighlightSanitizer()
   verifyCommentRichText()
+  await verifyMomentCommentTreeAndThread()
+  await verifyMomentForwardContracts()
   verifyStageRouteAndTopBarPolicies()
   verifyUpstreamReliabilityPolicies()
   await verifyUpstreamReliabilityContracts()
@@ -1921,6 +2593,7 @@ async function verify() {
   await verifyContributorCache()
   await verifyP2WidescreenControl()
   await verifyIncrementalInteractionContracts()
+  await verifyDrawerAndMomentsLayoutContracts()
   await verifySecurityContracts()
   console.log('Targeted fix verification passed.')
 }

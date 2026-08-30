@@ -1,6 +1,22 @@
 @use "./gridLayout";
 @use "./popover";
 
+.bew-spinner {
+  animation: bew-spinner-rotate 0.8s linear infinite;
+}
+
+@keyframes bew-spinner-rotate {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bew-spinner {
+    animation: none;
+  }
+}
+
 * {
   outline-color: var(--bew-theme-focus-ring);
   font-feature-settings: "tnum";

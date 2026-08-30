@@ -8,7 +8,7 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_MOUNTED, BEWLY_WIDESCREEN_FAILED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_MOUNTED, BEWLY_WIDESCREEN_FAILED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { settings, settingsInitializationState, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
@@ -20,8 +20,10 @@ import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenActive, isB
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
+import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
+import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { runWhenIdle } from '~/utils/lazyLoad'
@@ -32,7 +34,7 @@ import { initNativeFavoriteSeasonPlayAllIntercept, stopNativeFavoriteSeasonPlayA
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
-import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
+import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, isNativePlaylistEditing, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
 import { getPluginSearchResultsUrl, openSearchResults, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '~/utils/settingsBootPolicy'
 import { SVG_ICONS } from '~/utils/svgIcons'
@@ -1712,50 +1714,38 @@ else if (shouldInitializeContentScript) {
   const isMomentDetailPage = /https?:\/\/t\.bilibili\.com\/\d+/.test(currentUrl)
     || /https?:\/\/(?:www\.)?bilibili\.com\/opus\/\d+/.test(currentUrl)
   const isNotificationsDrawer = isNotificationPage() && window.name === 'bewly-notifications-drawer'
-  if (isInIframe() && (isNotificationsDrawer || isVideoOrBangumiPage() || isMomentDetailPage)) {
-    window.addEventListener('keydown', (e: KeyboardEvent) => {
-    // 只处理ESC键
-      if (e.key !== 'Escape' && e.code !== 'Escape')
+  const isIframeDrawer = window.name === 'bewly-iframe-drawer'
+  if (isInIframe() && (isIframeDrawer || isNotificationsDrawer || isVideoOrBangumiPage() || isMomentDetailPage)) {
+    window.addEventListener('keydown', (event: KeyboardEvent) => {
+      if (!isEligibleDrawerEscape(event))
         return
 
-      // 检查当前焦点元素
-      const activeElement = document.activeElement
-      const tagName = activeElement?.tagName?.toLowerCase()
-
-      // 检查是否是输入框或可编辑元素
-      const isInputElement
-      = tagName === 'input'
-        || tagName === 'textarea'
-        || activeElement?.hasAttribute('contenteditable')
-
-      // 如果焦点在输入框内，不处理ESC键，让用户正常使用
-      if (isInputElement)
-        return
-
-      // Bewly Widescreen 自己拥有 Escape；让事件继续到其局部处理器。
-      if (isBewlyWidescreenEngaged())
-        return
-
-      // 视频页面：检查视频播放器是否处于网页全屏或宽屏状态
-      if (isVideoOrBangumiPage()) {
-        const webFullBtn = document.querySelector('.bpx-player-ctrl-btn.bpx-player-ctrl-web')
-        const wideBtn = document.querySelector('.bpx-player-ctrl-btn.bpx-player-ctrl-wide')
-        const isWebFull = webFullBtn?.classList.contains('bpx-state-entered')
-        const isWide = wideBtn?.classList.contains('bpx-state-entered')
-
-        // 如果视频处于网页全屏或宽屏状态，让播放器自己处理ESC
-        if (isWebFull || isWide)
-          return
-      }
-
-      // 焦点不在输入框，通知父窗口关闭抽屉
-      e.preventDefault()
-      e.stopPropagation()
-
-      postMessageToParent({
-        type: 'BEWLY_DRAWER_CLOSE_REQUEST',
-        source: 'iframe',
+      const hadPriorityState = hasIframeEscapePriorityState({
+        bewlyWidescreenEngaged: isBewlyWidescreenEngaged(),
+        editingStateActive: isNativePlaylistEditing(),
       })
-    }, { capture: true, signal: contentScriptSignal }) // 使用捕获阶段
+      const hadEditableActiveElement = isEditableLeafActiveElement()
+
+      // Capture only records the starting state. Arbitration happens after all
+      // local handlers have had the opportunity to consume this same event.
+      window.setTimeout(() => {
+        if (contentScriptSignal.aborted)
+          return
+        const action = resolveIframeEscapeAction({
+          defaultPrevented: event.defaultPrevented,
+          propagationStopped: event.cancelBubble,
+          hadPriorityState,
+          hasPriorityState: hasIframeEscapePriorityState({
+            bewlyWidescreenEngaged: isBewlyWidescreenEngaged(),
+            editingStateActive: isNativePlaylistEditing(),
+          }),
+          editableActiveElement: hadEditableActiveElement || isEditableLeafActiveElement(),
+        })
+        postMessageToParent({
+          type: action === 'handled' ? BEWLY_DRAWER_ESCAPE_HANDLED : BEWLY_DRAWER_CLOSE_REQUEST,
+          source: 'iframe',
+        })
+      }, 0)
+    }, { capture: true, signal: contentScriptSignal })
   }
 }

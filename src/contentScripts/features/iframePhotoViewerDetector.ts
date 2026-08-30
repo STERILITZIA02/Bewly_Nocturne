@@ -1,8 +1,9 @@
 import { postMessageToParent } from '~/utils/iframeMessage'
 import { runWhenIdle } from '~/utils/lazyLoad'
+import { isPhotoViewerOpen } from '~/utils/photoViewer'
 
 let observer: MutationObserver | null = null
-let isPhotoViewerOpen = false
+let photoViewerOpen = false
 let idleSetup: ReturnType<typeof runWhenIdle> | null = null
 let domReadyListener: (() => void) | null = null
 let rootReadyRetryTimer: number | null = null
@@ -81,13 +82,11 @@ export function setupIframePhotoViewerDetector() {
 }
 
 function checkPhotoViewerState() {
-  // 检查是否存在打开的 PhotoSwipe 元素
-  const pswpElement = document.querySelector('.pswp')
-  const isOpen = pswpElement?.classList.contains('pswp--open') ?? false
+  const isOpen = isPhotoViewerOpen()
 
   // 只在状态变化时发送消息
-  if (isOpen !== isPhotoViewerOpen) {
-    isPhotoViewerOpen = isOpen
+  if (isOpen !== photoViewerOpen) {
+    photoViewerOpen = isOpen
 
     // 通知父页面 PhotoSwipe 的状态
     postMessageToParent({
@@ -101,5 +100,11 @@ export function cleanupIframePhotoViewerDetector() {
   clearDeferredSetup()
   observer?.disconnect()
   observer = null
-  isPhotoViewerOpen = false
+  if (photoViewerOpen) {
+    postMessageToParent({
+      type: 'IFRAME_PHOTO_VIEWER_STATE',
+      isOpen: false,
+    })
+  }
+  photoViewerOpen = false
 }

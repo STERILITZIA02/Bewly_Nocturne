@@ -3,9 +3,12 @@ import { useEventListener } from '@vueuse/core'
 
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
-import { DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
+import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
+import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
+import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { isHomePage, isInIframe } from '~/utils/main'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
@@ -46,6 +49,8 @@ let focusRetryTimer: ReturnType<typeof setTimeout> | null = null
 let focusFrame: number | null = null
 let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
 let iframeGeneration = 0
+let iframeEscapeHandledGeneration = 0
+const escapeArbitrationTimers = new Set<number>()
 const disposers: Array<() => void> = []
 
 // 计算iframe容器的样式
@@ -166,6 +171,27 @@ function clearInitialThemeTimer() {
   }
 }
 
+function clearEscapeConfirmation() {
+  isEscPressed.value = false
+  if (escPressedTimer.value) {
+    clearTimeout(escPressedTimer.value)
+    escPressedTimer.value = null
+  }
+}
+
+function clearEscapeArbitrationTimers() {
+  for (const timer of escapeArbitrationTimers)
+    window.clearTimeout(timer)
+  escapeArbitrationTimers.clear()
+}
+
+function hasDrawerEscapePriorityState() {
+  return hasIframeEscapePriorityState({
+    bewlyWidescreenEngaged: isBewlyWidescreenEngaged(),
+    editingStateActive: isPageFullscreen.value || disableEscPress.value,
+  }) || isEditableLeafActiveElement()
+}
+
 function focusIframe(retryCount = 3) {
   clearFocusRetryTimer()
 
@@ -263,9 +289,8 @@ onBeforeUnmount(async () => {
   if (delayCloseTimer.value) {
     clearTimeout(delayCloseTimer.value)
   }
-  if (escPressedTimer.value) {
-    clearTimeout(escPressedTimer.value)
-  }
+  clearEscapeConfirmation()
+  clearEscapeArbitrationTimers()
   clearFocusRetryTimer()
   await releaseIframeResources()
 })
@@ -302,6 +327,8 @@ async function updateIframeUrl() {
 }
 
 async function handleClose() {
+  clearEscapeConfirmation()
+  clearEscapeArbitrationTimers()
   if (delayCloseTimer.value) {
     clearTimeout(delayCloseTimer.value)
   }
@@ -376,49 +403,53 @@ function handleOpenInNewTab() {
   }
 }
 
-/**
- * Listen to Escape key on the main window using capture phase
- * Only active when this drawer is the active drawer
- */
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape' && e.code !== 'Escape')
+function applyDrawerEscapeRequest() {
+  if (!show.value || activeDrawer.value !== DrawerType.IframeDrawer)
     return
 
-  // Only handle when this drawer is the active drawer
-  if (activeDrawer.value !== DrawerType.IframeDrawer)
-    return
-
-  e.preventDefault()
-  e.stopPropagation()
-
-  if (settings.value.drawerEscapeBehavior === 'immediate') {
-    clearTimeout(escPressedTimer.value!)
-    handleClose()
+  const action = resolveDrawerEscapeBehavior(settings.value.drawerEscapeBehavior, isEscPressed.value)
+  if (action === 'close') {
+    void handleClose()
     return
   }
-  if (disableEscPress.value)
+
+  isEscPressed.value = true
+  if (escPressedTimer.value)
+    clearTimeout(escPressedTimer.value)
+  escPressedTimer.value = setTimeout(() => {
+    escPressedTimer.value = null
+    isEscPressed.value = false
+  }, ESC_CONFIRM_WINDOW_MS)
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!isEligibleDrawerEscape(event) || activeDrawer.value !== DrawerType.IframeDrawer || !show.value)
     return
-  if (isEscPressed.value) {
-    handleClose()
-  }
-  else {
-    isEscPressed.value = true
-    if (escPressedTimer.value) {
-      clearTimeout(escPressedTimer.value)
+
+  const hadPriorityState = hasDrawerEscapePriorityState()
+  const handledGeneration = iframeEscapeHandledGeneration
+  const timer = window.setTimeout(() => {
+    escapeArbitrationTimers.delete(timer)
+    const canHandle = shouldHandleDrawerEscape({
+      active: show.value && activeDrawer.value === DrawerType.IframeDrawer,
+      defaultPrevented: event.defaultPrevented,
+      propagationStopped: event.cancelBubble,
+      hadPriorityState,
+      hasPriorityState: hasDrawerEscapePriorityState(),
+      iframeHandled: iframeEscapeHandledGeneration !== handledGeneration,
+    })
+    if (!canHandle) {
+      clearEscapeConfirmation()
+      return
     }
-    escPressedTimer.value = setTimeout(() => {
-      isEscPressed.value = false
-    }, ESC_CONFIRM_WINDOW_MS)
-  }
+    applyDrawerEscapeRequest()
+  }, 0)
+  escapeArbitrationTimers.add(timer)
 }
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeydown, true)
-  document.addEventListener('keydown', handleKeydown, true)
-  disposers.push(
-    () => window.removeEventListener('keydown', handleKeydown, true),
-    () => document.removeEventListener('keydown', handleKeydown, true),
-  )
+  disposers.push(() => window.removeEventListener('keydown', handleKeydown, true))
 })
 
 function handleIframeMessage(event: MessageEvent) {
@@ -431,6 +462,7 @@ function handleIframeMessage(event: MessageEvent) {
 
   switch (message.type) {
     case DRAWER_VIDEO_ENTER_PAGE_FULL:
+      clearEscapeConfirmation()
       headerShow.value = false
       disableEscPress.value = true
       isPageFullscreen.value = true
@@ -440,30 +472,20 @@ function handleIframeMessage(event: MessageEvent) {
       disableEscPress.value = false
       isPageFullscreen.value = false
       break
-    case 'BEWLY_DRAWER_CLOSE_REQUEST':
-    {
-      // 来自 iframe 的关闭请求
-      if (message.source === 'iframe' && activeDrawer.value === DrawerType.IframeDrawer) {
-        if (settings.value.drawerEscapeBehavior === 'immediate') {
-          handleClose()
-        }
-        else {
-          if (isEscPressed.value) {
-            handleClose()
-          }
-          else {
-            isEscPressed.value = true
-            if (escPressedTimer.value) {
-              clearTimeout(escPressedTimer.value)
-            }
-            escPressedTimer.value = setTimeout(() => {
-              isEscPressed.value = false
-            }, ESC_CONFIRM_WINDOW_MS)
-          }
-        }
+    case BEWLY_DRAWER_ESCAPE_HANDLED:
+      if (message.source === 'iframe') {
+        iframeEscapeHandledGeneration += 1
+        clearEscapeConfirmation()
       }
       break
-    }
+    case BEWLY_DRAWER_CLOSE_REQUEST:
+      if (message.source === 'iframe' && activeDrawer.value === DrawerType.IframeDrawer) {
+        if (hasDrawerEscapePriorityState())
+          clearEscapeConfirmation()
+        else
+          applyDrawerEscapeRequest()
+      }
+      break
   }
 }
 
@@ -549,6 +571,7 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
             v-show="showIframe"
             :key="iframeKey"
             ref="iframeRef"
+            name="bewly-iframe-drawer"
             :src="currentUrl"
             :style="iframeStyles"
             frameborder="0"
