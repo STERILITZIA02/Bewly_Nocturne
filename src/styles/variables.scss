@@ -121,6 +121,7 @@
   --bew-z-native-overlay: 100000;
   --bew-z-drawer: 999999;
   --bew-z-widescreen: 2147483000;
+  --bew-z-widescreen-loading: calc(var(--bew-z-widescreen) + 1);
   --bew-z-hud: 2147483646;
   // #endregion
 

@@ -16,6 +16,7 @@ export interface CommentReplyPaginationAdapter {
   getRootRpid: (reply: any) => string | null
   getLabels: () => PaginationLabels
   isTreeEnabled: () => boolean
+  shouldShowExpandAll?: (renderer: any) => boolean
   onNativeCollapse?: (renderer: any) => void
   scheduleTreeUpdate: (renderer: any) => void
 }
@@ -309,7 +310,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       return
 
     const existing = root.querySelector<HTMLButtonElement>(`.${EXPAND_ALL_BUTTON_CLASS}`)
-    if (!isEnabled()) {
+    if (!isEnabled() || adapter.shouldShowExpandAll?.(renderer) === false) {
       existing?.remove()
       return
     }

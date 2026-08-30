@@ -117,6 +117,12 @@ const messagesPageRoute: SearchRoute = {
   secondaryTitleKey: 'settings.plugin.messages_page',
   storageKey: bewlyPagesStorageKey,
 }
+const playbackPageRoute: SearchRoute = {
+  menu: MenuType.BewlyPages,
+  secondaryPage: 'playback',
+  secondaryTitleKey: 'settings.plugin.playback_page',
+  storageKey: bewlyPagesStorageKey,
+}
 const playerRoute: SearchRoute = {
   menu: MenuType.Bilibili,
   secondaryPage: 'player',
@@ -475,6 +481,17 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
 
   ...createEntries(playerRoute, [
     'settings.bilibili_features.video_playback',
+    'settings.group_player_components',
+    'settings.group_playback_memory',
+    'settings.remember_playback_rate',
+    'settings.remember_video_aspect_ratio',
+    'settings.group_video_page_actions',
+    'settings.enlarge_favorite_dialog',
+    'settings.external_watch_later_button',
+    'settings.show_vertical_video_zoom_button',
+    'settings.show_video_screenshot_button',
+  ]),
+  ...createEntries(playbackPageRoute, [
     'settings.group_player_display_mode',
     'settings.video_player_mode.bewly_widescreen_sidebar_position',
     'settings.show_bewly_widescreen_button',
@@ -487,20 +504,11 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.video_player_mode.overrides',
     'settings.video_player_scroll',
     'settings.auto_exit_fullscreen_on_end',
-    'settings.group_player_components',
-    'settings.group_playback_memory',
-    'settings.remember_playback_rate',
-    'settings.remember_video_aspect_ratio',
-    'settings.group_video_page_actions',
-    'settings.enlarge_favorite_dialog',
-    'settings.external_watch_later_button',
-    'settings.show_vertical_video_zoom_button',
-    'settings.show_video_screenshot_button',
   ]),
-  ...createEntries(playerRoute, [
+  ...createEntries(playbackPageRoute, [
     'settings.video_default_player_mode',
   ], { keywordKeys: playerModeOptionKeys }),
-  ...createEntries(playerRoute, [
+  ...createEntries(playbackPageRoute, [
     'settings.video_player_mode.context_multipart',
     'settings.video_player_mode.context_collection',
     'settings.video_player_mode.context_bangumi',

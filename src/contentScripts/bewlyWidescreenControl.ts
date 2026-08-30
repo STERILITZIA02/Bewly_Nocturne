@@ -27,7 +27,7 @@ let stopLifecycleWatch: (() => void) | null = null
 let initialized = false
 
 function translate(key: string) {
-  return String(i18n.global.t(key, settings.value.language))
+  return String(i18n.global.t(key))
 }
 
 function updateControlLabel(button = controlButton) {

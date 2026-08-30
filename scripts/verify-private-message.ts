@@ -246,6 +246,13 @@ verify('shared refresh retries one transient failure without exposing the raw er
   assert.deepEqual(diagnostics, [])
 })
 
+verify('shared refresh diagnostics remain non-error and string-safe', ({ topBarSharedRefresh }) => {
+  assert.equal(topBarSharedRefresh.formatSharedRefreshDiagnostic({
+    endpointName: 'getTopBarNewMomentsCount',
+    errorKind: 'api-error',
+  }), '[TopBar] Shared refresh skipped: getTopBarNewMomentsCount (api-error)')
+})
+
 verify('shared unread leaves settle independently and require all successes', async ({ topBarSharedRefresh }) => {
   const executed: string[] = []
   const result = await topBarSharedRefresh.settleSharedRefreshTasks([
@@ -296,6 +303,8 @@ verify('shared refresh production wiring is concurrent, gated, and free of raw E
   assert.equal(unreadSource.includes('console.error'), false)
   assert.equal(watchSource.includes('console.error'), false)
   assert.equal(helperSource.includes('console.error'), false)
+  assert.equal(helperSource.includes('console.warn'), false)
+  assert.ok(helperSource.includes('console.debug'))
   assert.ok(helperSource.includes('Promise.allSettled'))
   assert.ok(sectionSource.includes(`id: 'system'`))
   assert.ok(sectionSource.includes(`implementation: 'native'`))

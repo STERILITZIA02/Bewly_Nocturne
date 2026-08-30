@@ -270,7 +270,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
 .moment-forward-composer {
   padding: var(--bew-space-4);
   border-top: 1px solid var(--bew-border-color);
-  background: var(--bew-fill-1);
+  background: transparent;
 }
 .moment-forward-composer textarea {
   display: block;
