@@ -6,10 +6,11 @@ import { BEWLY_WIDESCREEN_FAILED, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/const
 import { settings } from '~/logic'
 
 import type { WidescreenMutationOrigin } from './bewlyWidescreenPolicy'
-import { resolveWidescreenCenterGeometry, resolveWidescreenEngagedState, shortenCommentDateText, shouldScheduleWidescreenRefresh } from './bewlyWidescreenPolicy'
+import { canCommitWidescreenLayout, clampWidescreenSidebarWidth, resolveWidescreenCenterGeometry, resolveWidescreenEngagedState, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shortenCommentDateText, shouldContinueWidescreenSidebarHydration, shouldScheduleWidescreenRefresh, WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, WIDESCREEN_SIDEBAR_MIN_WIDTH, WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH } from './bewlyWidescreenPolicy'
 import { isEditableLeafActiveElement } from './drawerEscape'
 import { hasIframeEscapePriorityState } from './escapePriority'
 import { i18n } from './i18n'
+import { ensureInterfaceLanguage } from './interfaceLanguage'
 import { injectCSS } from './main'
 import { getVideoElement } from './player'
 import { isNativePlaylistEditing } from './randomPlay'
@@ -23,6 +24,19 @@ interface MovedNode {
   placeholder: Comment
   originalParent: Node
   preserveIfOriginMissing: boolean
+}
+
+interface WidescreenSidebarReadiness {
+  top: boolean
+  comment: boolean
+  danmaku: boolean
+  playlist: boolean
+  complete: boolean
+}
+
+interface CommentPrewarmState {
+  root: HTMLElement
+  styleAttribute: string | null
 }
 
 interface BewlyWidescreenState {
@@ -39,6 +53,7 @@ interface BewlyWidescreenState {
   tagsSlot: HTMLElement
   panels: Record<BewlyWidescreenTab, HTMLElement>
   tabButtons: Record<BewlyWidescreenTab, HTMLButtonElement>
+  sidebarResizer: HTMLDivElement
   sidebarToggleButton: HTMLButtonElement
   movedNodes: MovedNode[]
   styleEl: HTMLStyleElement
@@ -58,6 +73,8 @@ interface BewlyWidescreenState {
   layoutEventCleanup?: () => void
   settingsWatchCleanup?: Array<() => void>
   danmakuExpandTimer?: ReturnType<typeof setTimeout>
+  sidebarHydrationTimer?: ReturnType<typeof setTimeout>
+  sidebarHydrationWarningShown?: boolean
   sidebarInteractionCleanup?: () => void
   sidebarToggleAutoHideCleanup?: () => void
   activeControlCleanup?: () => void
@@ -73,13 +90,18 @@ const BODY_CLASS = 'bewly-widescreen-active'
 const EMPTY_CLASS = 'bewly-widescreen-empty'
 const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
 const EPISODE_ITEM_SELECTOR = '.video-pod__item, .multi-page__item, .page-item, .list-item, .episode-item, .section-item, .collect-item'
-const SIDEBAR_FULL_MIN_WIDTH = 360
-const SIDEBAR_FULL_MAX_WIDTH = 460
+const SIDEBAR_RESIZE_KEYBOARD_STEP = 16
 const MOBILE_BREAKPOINT = 900
 const LOADING_FADE_DURATION = 240
 const LOADING_EXIT_DELAY = 5000
 const PREPARED_LOADING_TIMEOUT = 30_000
 const READY_WAIT_TIMEOUT = 15_000
+const READY_POLL_INTERVAL = 100
+const READY_STABILITY_DELAY = 160
+const SIDEBAR_HYDRATION_FAST_DURATION = 1500
+const SIDEBAR_HYDRATION_FAST_INTERVAL = 100
+const SIDEBAR_HYDRATION_INTERVAL = 250
+const SIDEBAR_HYDRATION_TIMEOUT = 12_000
 const SIDEBAR_TOGGLE_IDLE_DELAY = 1000
 const BILIBILI_ACTION_ANIMATION_HUE = 196
 const COMMENT_ROOT_ID_SELECTOR = '#comment-module, #comment-body, #commentapp'
@@ -110,9 +132,14 @@ let readyObserver: MutationObserver | undefined
 let readyFrame: number | undefined
 let readyDeadlineTimer: ReturnType<typeof setTimeout> | undefined
 let readyMetadataHandler: ((event: Event) => void) | undefined
-let loadFallbackTimer: ReturnType<typeof setTimeout> | undefined
+let readyPollTimer: ReturnType<typeof setTimeout> | undefined
 let sidebarRefreshFrame: number | undefined
-let pageLoadHandler: (() => void) | undefined
+let pageReadyHandler: (() => void) | undefined
+let pageReadyForLayout = false
+let playerReadyForLayout = false
+let contentReadyForLayout = false
+let readinessStableSince: number | undefined
+let commentPrewarmState: CommentPrewarmState | undefined
 let waitingForLoad = false
 let enteringWidescreen = false
 let pendingEscapeCleanup: (() => void) | undefined
@@ -230,12 +257,6 @@ const selectors = {
     '.bpx-player-sending-bar',
     '.bilibili-player-video-sendbar',
     '.bilibili-player-video-inputbar',
-  ],
-  danmakuFocusable: [
-    '.danmaku-wrap .bui-collapse-header',
-    '.danmaku-box .bui-collapse-header',
-    '.danmaku-wrap .bpx-player-dm-setting-left',
-    '.danmaku-box .bpx-player-dm-setting-left',
   ],
   comment: [
     '#comment-module',
@@ -481,10 +502,23 @@ function moveOrReplaceNode(selectors: string[], target: HTMLElement, movedNodes:
 }
 
 function hasCommentShadowTree(root: HTMLElement) {
-  return Array.from(root.querySelectorAll('*')).some((element) => {
+  const candidates: Element[] = [root, ...Array.from(root.querySelectorAll('*'))]
+  const visited = new Set<Element>()
+  while (candidates.length) {
+    const element = candidates.shift()!
+    if (visited.has(element))
+      continue
+    visited.add(element)
     const shadowRoot = (element as HTMLElement & { shadowRoot?: ShadowRoot | null }).shadowRoot
-    return !!shadowRoot
-  })
+    if (!shadowRoot || shadowRoot.childElementCount === 0)
+      continue
+    if (element.matches('bili-comment-box, bili-comment-renderer, bili-comment-thread-renderer')
+      && shadowRoot.querySelector(':not(style)')) {
+      return true
+    }
+    candidates.push(...Array.from(shadowRoot.querySelectorAll('*')))
+  }
+  return false
 }
 
 function isCommentRootUsable(root: HTMLElement) {
@@ -492,8 +526,14 @@ function isCommentRootUsable(root: HTMLElement) {
     return false
 
   // B 站会先创建空评论壳，再异步挂载 bili-comments / shadow DOM。提前搬走
-  // 空壳会与它的初始化竞争，导致头像、编辑器或评论列表漏渲染。
-  if (root.querySelector(COMMENT_CONTENT_MARKER_SELECTOR))
+  // 空壳会与它的初始化竞争，导致头像、编辑器、登录态或评论列表漏渲染。
+  const modernRoots = Array.from(root.querySelectorAll<HTMLElement>(
+    'bili-comments, bili-comment-box, bili-comment-renderer',
+  ))
+  if (modernRoots.length)
+    return hasCommentShadowTree(root)
+
+  if (root.querySelector('.reply-list, .comment-list, .reply-box, .comment-header'))
     return true
 
   return hasCommentShadowTree(root)
@@ -510,6 +550,8 @@ function moveCommentRoot(target: HTMLElement, movedNodes: MovedNode[]) {
   if (!next || !isCommentRootUsable(next))
     return { found: false, changed: false }
 
+  if (commentPrewarmState?.root === next)
+    restoreCommentPrewarm()
   const moved = moveNode(next, target, movedNodes)
   return { found: moved, changed: moved }
 }
@@ -556,11 +598,15 @@ function setActiveTab(nextTab: BewlyWidescreenTab) {
     const active = tab === nextTab
     button.classList.toggle('is-active', active)
     button.setAttribute('aria-selected', String(active))
+    button.tabIndex = active ? 0 : -1
     state.panels[tab].hidden = !active
   }
 
-  if (nextTab === 'danmaku')
+  if (nextTab === 'danmaku') {
     expandDanmakuTab(state)
+    // Native long-list virtualization measures the visible viewport on resize.
+    schedulePlayerResizeSync(state)
+  }
 }
 
 function syncSidebarToggleButton(currentState: BewlyWidescreenState) {
@@ -579,6 +625,7 @@ function syncSidebarToggleButton(currentState: BewlyWidescreenState) {
 function setSidebarLayout(
   nextLayout: BewlyWidescreenSidebarLayout,
   currentState: BewlyWidescreenState | null = state,
+  userClosed = false,
 ) {
   if (!currentState || state !== currentState)
     return
@@ -586,9 +633,17 @@ function setSidebarLayout(
   currentState.sidebarLayout = nextLayout
   currentState.root.dataset.sidebarLayout = nextLayout
   currentState.root.dataset.sidebarHoverExpanded = 'false'
+  if (userClosed && nextLayout === 'compact') {
+    currentState.root.dataset.sidebarEdgeRevealSuppressed = 'true'
+    currentState.root.dataset.sidebarManuallyClosed = 'true'
+  }
+  else {
+    delete currentState.root.dataset.sidebarEdgeRevealSuppressed
+    if (nextLayout === 'expanded')
+      delete currentState.root.dataset.sidebarManuallyClosed
+  }
   syncSidebarToggleButton(currentState)
   updateSidebarLayoutState(currentState)
-  schedulePlayerResizeSync(currentState)
 }
 
 function getTitleText() {
@@ -615,8 +670,16 @@ function createSidebarToolbar() {
   const closeButton = document.createElement('button')
   closeButton.type = 'button'
   closeButton.className = 'bewly-widescreen-close'
-  closeButton.textContent = t('widescreen.exit')
-  closeButton.addEventListener('click', () => exitBewlyWidescreen({ userInitiated: true }))
+  const closeLabel = t('widescreen.close_sidebar')
+  closeButton.textContent = closeLabel
+  closeButton.setAttribute('aria-label', closeLabel)
+  closeButton.addEventListener('click', () => {
+    const currentState = state
+    if (!currentState)
+      return
+    setSidebarLayout('compact', currentState, true)
+    currentState.sidebarToggleButton.focus({ preventScroll: true })
+  })
 
   toolbar.append(createSidebarTitle(), closeButton)
   return toolbar
@@ -637,9 +700,22 @@ function createSidebarToggleButton() {
   button.type = 'button'
   button.className = 'bewly-widescreen-sidebar-toggle'
   button.addEventListener('click', () => {
-    setSidebarLayout(state?.sidebarLayout === 'compact' ? 'expanded' : 'compact')
+    const nextLayout = state?.sidebarLayout === 'compact' ? 'expanded' : 'compact'
+    setSidebarLayout(nextLayout, state, nextLayout === 'compact')
   })
   return button
+}
+
+function createSidebarResizer() {
+  const resizer = document.createElement('div')
+  resizer.className = 'bewly-widescreen-sidebar-resizer'
+  resizer.tabIndex = 0
+  resizer.setAttribute('role', 'separator')
+  resizer.setAttribute('aria-orientation', 'vertical')
+  const label = t('widescreen.resize_sidebar')
+  resizer.setAttribute('aria-label', label)
+  resizer.title = label
+  return resizer
 }
 
 function getLoadingGifUrl() {
@@ -652,7 +728,7 @@ function getLoadingGifUrl() {
 }
 
 function t(key: string) {
-  return String(i18n.global.t(key, settings.value.language))
+  return String(i18n.global.t(key))
 }
 
 function syncLocalizedWidescreenText(currentState = state) {
@@ -667,8 +743,14 @@ function syncLocalizedWidescreenText(currentState = state) {
     return
 
   const closeButton = currentState.sidebarTop.querySelector<HTMLButtonElement>('.bewly-widescreen-close')
-  if (closeButton)
-    closeButton.textContent = t('widescreen.exit')
+  if (closeButton) {
+    const closeLabel = t('widescreen.close_sidebar')
+    closeButton.textContent = closeLabel
+    closeButton.setAttribute('aria-label', closeLabel)
+  }
+  const resizeLabel = t('widescreen.resize_sidebar')
+  currentState.sidebarResizer.setAttribute('aria-label', resizeLabel)
+  currentState.sidebarResizer.title = resizeLabel
   currentState.tabButtons.comment.textContent = t('widescreen.comments')
   currentState.tabButtons.danmaku.textContent = t('widescreen.danmaku')
   currentState.tabButtons.playlist.textContent = currentState.panels.playlist.querySelector(selectors.playlist.join(','))
@@ -694,7 +776,10 @@ function startWidescreenLanguageWatch() {
     return
   stopLanguageWatch = watch(
     () => settings.value.language,
-    () => syncLocalizedWidescreenText(),
+    async () => {
+      await ensureInterfaceLanguage()
+      syncLocalizedWidescreenText()
+    },
   )
 }
 
@@ -707,7 +792,7 @@ function showWidescreenLoading() {
     #${LOADING_ROOT_ID} {
       position: fixed;
       inset: 0;
-      z-index: var(--bew-z-widescreen);
+      z-index: var(--bew-z-widescreen-loading);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -958,6 +1043,7 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
 
   const sidebar = document.createElement('aside')
   sidebar.className = 'bewly-widescreen-sidebar'
+  const sidebarResizer = createSidebarResizer()
 
   const sidebarTop = document.createElement('div')
   sidebarTop.className = 'bewly-widescreen-sidebar-top'
@@ -992,12 +1078,50 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   }
 
   for (const [tab, panel] of Object.entries(panels) as Array<[BewlyWidescreenTab, HTMLElement]>) {
+    const tabId = `${ROOT_ID}-tab-${tab}`
+    const panelId = `${ROOT_ID}-panel-${tab}`
+    tabButtons[tab].id = tabId
+    tabButtons[tab].tabIndex = -1
+    tabButtons[tab].setAttribute('aria-controls', panelId)
     panel.className = `bewly-widescreen-panel bewly-widescreen-panel-${tab}`
+    panel.id = panelId
     panel.setAttribute('role', 'tabpanel')
+    panel.setAttribute('aria-labelledby', tabId)
+    panel.tabIndex = 0
     panelWrap.appendChild(panel)
   }
 
-  sidebar.append(sidebarTop, tablist, panelWrap)
+  const tabOrder = Object.keys(tabButtons) as BewlyWidescreenTab[]
+  tablist.addEventListener('keydown', (event) => {
+    const currentIndex = tabOrder.findIndex(tab => tabButtons[tab] === event.target)
+    if (currentIndex < 0)
+      return
+
+    let nextIndex = currentIndex
+    switch (event.key) {
+      case 'ArrowRight':
+        nextIndex = (currentIndex + 1) % tabOrder.length
+        break
+      case 'ArrowLeft':
+        nextIndex = (currentIndex - 1 + tabOrder.length) % tabOrder.length
+        break
+      case 'Home':
+        nextIndex = 0
+        break
+      case 'End':
+        nextIndex = tabOrder.length - 1
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    const nextTab = tabOrder[nextIndex]
+    setActiveTab(nextTab)
+    tabButtons[nextTab].focus({ preventScroll: true })
+  })
+
+  sidebar.append(sidebarResizer, sidebarTop, tablist, panelWrap)
   if (sidebarPosition === 'left')
     stage.append(sidebar, playerSlot)
   else
@@ -1005,7 +1129,7 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   root.appendChild(stage)
   document.body.appendChild(root)
 
-  return { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, sidebarToggleButton }
+  return { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, sidebarResizer, sidebarToggleButton }
 }
 
 function injectLayoutStyle() {
@@ -1037,23 +1161,20 @@ function injectLayoutStyle() {
       --bewly-widescreen-divider: rgba(0, 0, 0, 0.08);
       --bewly-widescreen-control-bg: #f1f2f3;
       --bewly-widescreen-control-hover-bg: #e3e5e7;
-      --bewly-widescreen-sidebar-full-width: clamp(
-        ${SIDEBAR_FULL_MIN_WIDTH}px,
+      --bew-comment-expand-all-display: none;
+      --bewly-widescreen-sidebar-user-width: clamp(
+        ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px,
         26vw,
-        ${SIDEBAR_FULL_MAX_WIDTH}px
+        ${WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH}px
       );
-      --bewly-widescreen-sidebar-max: 40vw;
+      --bewly-widescreen-sidebar-full-width: clamp(
+        ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px,
+        var(--bewly-widescreen-sidebar-user-width),
+        min(${WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH}px, 50vw)
+      );
       --bewly-widescreen-layout-aspect: 1.7777778;
       --bewly-widescreen-player-available-height: calc(100dvh - var(--bewly-widescreen-danmaku-height, 0px));
-      --bewly-widescreen-player-target-width: calc(var(--bewly-widescreen-player-available-height) * var(--bewly-widescreen-layout-aspect));
-      --bewly-widescreen-sidebar-fit-width: clamp(
-        0px,
-        calc(100vw - var(--bewly-widescreen-player-target-width)),
-        var(--bewly-widescreen-sidebar-max)
-      );
-      --bewly-widescreen-sidebar-column-width: var(--bewly-widescreen-sidebar-full-width);
       --bewly-widescreen-sidebar-panel-width: var(--bewly-widescreen-sidebar-full-width);
-      --bewly-widescreen-sidebar-offset: 0px;
       --bewly-widescreen-center-offset: 0px;
     }
 
@@ -1069,29 +1190,13 @@ function injectLayoutStyle() {
       --bewly-widescreen-control-hover-bg: var(--bew-fill-2, rgba(255, 255, 255, 0.16));
     }
 
-    #${ROOT_ID}[data-sidebar-layout="compact"] {
-      --bewly-widescreen-sidebar-column-width: min(
-        var(--bewly-widescreen-sidebar-fit-width),
-        calc(var(--bew-control-height, 36px) * 2)
-      );
-      --bewly-widescreen-sidebar-offset: calc(
-        var(--bewly-widescreen-sidebar-panel-width) - var(--bewly-widescreen-sidebar-column-width)
-      );
-    }
-
-    #${ROOT_ID}[data-sidebar-layout="expanded"] {
-      --bewly-widescreen-player-target-width: calc(100vw - var(--bewly-widescreen-sidebar-full-width));
-    }
-
     #${ROOT_ID} * {
       box-sizing: border-box;
     }
 
     #${ROOT_ID} .bewly-widescreen-stage {
       display: grid;
-      grid-template-columns:
-        minmax(0, calc(100vw - var(--bewly-widescreen-sidebar-column-width)))
-        minmax(0, var(--bewly-widescreen-sidebar-column-width));
+      grid-template-columns: minmax(0, 100vw) 0;
       width: 100%;
       height: 100dvh;
       overflow: hidden;
@@ -1109,6 +1214,8 @@ function injectLayoutStyle() {
       background: #050609;
       overflow: hidden;
       gap: 0;
+      grid-column: 1;
+      grid-row: 1;
     }
 
     #${ROOT_ID} .bewly-widescreen-player-frame {
@@ -1261,6 +1368,7 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-sidebar {
+      position: relative;
       display: flex;
       flex-direction: column;
       justify-self: end;
@@ -1272,43 +1380,100 @@ function injectLayoutStyle() {
       border-left: 1px solid var(--bewly-widescreen-sidebar-border);
       box-shadow: -12px 0 28px rgba(0, 0, 0, 0.28);
       overflow: hidden;
+      visibility: hidden;
+      pointer-events: none;
+      --bewly-widescreen-sidebar-offset: var(--bewly-widescreen-sidebar-panel-width);
       transform: translateX(var(--bewly-widescreen-sidebar-offset));
-      transition: transform 180ms ease;
+      transition: transform 180ms ease, visibility 0s linear 180ms;
       will-change: transform;
       z-index: 2002;
+      grid-column: 2;
+      grid-row: 1;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-sidebar-resizer {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      z-index: 4;
+      width: var(--bew-space-6, 24px);
+      outline: none;
+      cursor: ew-resize;
+      touch-action: none;
+    }
+
+    #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-sidebar-resizer {
+      right: 0;
+      left: auto;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-sidebar-resizer::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: var(--bew-space-0-5, 2px);
+      height: var(--bew-space-12, 48px);
+      border-radius: var(--bew-radius-full);
+      background: var(--bewly-widescreen-divider);
+      opacity: 0;
+      transform: translateY(-50%);
+      transition:
+        opacity var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
+        background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+    }
+
+    #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-sidebar-resizer::before {
+      right: 0;
+      left: auto;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-sidebar-resizer:hover::before,
+    #${ROOT_ID} .bewly-widescreen-sidebar-resizer:focus-visible::before,
+    #${ROOT_ID}[data-sidebar-resizing="true"] .bewly-widescreen-sidebar-resizer::before {
+      background: var(--bew-theme-color, #00aeec);
+      opacity: 1;
+    }
+
+    #${ROOT_ID}[data-sidebar-resizing="true"],
+    #${ROOT_ID}[data-sidebar-resizing="true"] * {
+      cursor: ew-resize !important;
+      user-select: none !important;
     }
 
     #${ROOT_ID}[data-sidebar-layout="expanded"] .bewly-widescreen-sidebar,
+    #${ROOT_ID}[data-sidebar-hover-expanded="true"] .bewly-widescreen-sidebar,
     #${ROOT_ID}[data-centered="true"] .bewly-widescreen-sidebar {
+      visibility: visible;
+      pointer-events: auto;
       transform: translateX(0);
+      transition-delay: 0s;
+    }
+
+    #${ROOT_ID}[data-centered="true"] .bewly-widescreen-sidebar {
       box-shadow: none;
     }
 
-    #${ROOT_ID}[data-sidebar-layout="compact"][data-sidebar-hover-expanded="true"] .bewly-widescreen-sidebar {
-      transform: translateX(0);
+    #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-stage {
+      grid-template-columns: 0 minmax(0, 100vw);
     }
 
-    #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-stage {
-      grid-template-columns:
-        minmax(0, var(--bewly-widescreen-sidebar-column-width))
-        minmax(0, calc(100vw - var(--bewly-widescreen-sidebar-column-width)));
+    #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-player-slot {
+      grid-column: 2;
     }
 
     #${ROOT_ID}[data-sidebar-position="left"] .bewly-widescreen-sidebar {
       justify-self: start;
+      grid-column: 1;
       border-left: none;
       border-right: 1px solid var(--bewly-widescreen-sidebar-border);
       box-shadow: 12px 0 28px rgba(0, 0, 0, 0.28);
+      --bewly-widescreen-sidebar-offset: calc(0px - var(--bewly-widescreen-sidebar-panel-width));
     }
 
-    #${ROOT_ID}[data-sidebar-position="left"][data-sidebar-layout="expanded"] .bewly-widescreen-sidebar {
+    #${ROOT_ID}[data-sidebar-position="left"][data-centered="true"] .bewly-widescreen-sidebar {
       box-shadow: none;
-    }
-
-    #${ROOT_ID}[data-sidebar-position="left"][data-sidebar-layout="compact"] {
-      --bewly-widescreen-sidebar-offset: calc(
-        var(--bewly-widescreen-sidebar-column-width) - var(--bewly-widescreen-sidebar-panel-width)
-      );
     }
 
     #${ROOT_ID}[data-centered="true"] .bewly-widescreen-stage {
@@ -1382,10 +1547,14 @@ function injectLayoutStyle() {
       border-radius: 0 var(--bew-interactive-radius, 8px) var(--bew-interactive-radius, 8px) 0;
     }
 
+    #${ROOT_ID}[data-sidebar-layout="expanded"] .bewly-widescreen-sidebar-toggle,
+    #${ROOT_ID}[data-sidebar-hover-expanded="true"] .bewly-widescreen-sidebar-toggle,
     #${ROOT_ID}[data-centered="true"] .bewly-widescreen-sidebar-toggle {
       right: var(--bewly-widescreen-sidebar-full-width);
     }
 
+    #${ROOT_ID}[data-sidebar-position="left"][data-sidebar-layout="expanded"] .bewly-widescreen-sidebar-toggle,
+    #${ROOT_ID}[data-sidebar-position="left"][data-sidebar-hover-expanded="true"] .bewly-widescreen-sidebar-toggle,
     #${ROOT_ID}[data-sidebar-position="left"][data-centered="true"] .bewly-widescreen-sidebar-toggle {
       right: auto;
       left: var(--bewly-widescreen-sidebar-full-width);
@@ -1405,9 +1574,10 @@ function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-sidebar-top {
       position: relative;
-      z-index: 0;
-      flex: 0 1 auto;
+      z-index: 1;
+      flex: 0 0 auto;
       min-height: 0;
+      max-height: 52%;
       overflow-x: hidden;
       overflow-y: auto;
       overscroll-behavior: contain;
@@ -1874,7 +2044,7 @@ function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-tabs {
       position: relative;
-      z-index: 0;
+      z-index: 1;
       display: grid;
       grid-template-columns: repeat(3, 1fr);
       flex: 0 0 auto;
@@ -1912,8 +2082,8 @@ function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-panels {
       position: relative;
-      z-index: 1;
-      flex: 1 1 auto;
+      z-index: 0;
+      flex: 1 1 0;
       min-height: 0;
       overflow: hidden;
       background: var(--bewly-widescreen-sidebar-bg);
@@ -1925,6 +2095,105 @@ function injectLayoutStyle() {
       overflow: auto;
       overscroll-behavior: contain;
       padding: 8px 8px 16px;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-comment,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku {
+      background: var(--bewly-widescreen-sidebar-bg);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku {
+      padding: 0;
+      overflow: hidden;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .danmaku-box,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .danmaku-wrap,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-auxiliary,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-collapse,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-wrap {
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-collapse,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-wrap {
+      display: flex !important;
+      flex-direction: column;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-header {
+      flex: 0 0 auto;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+      border-bottom-color: var(--bewly-widescreen-divider) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-arrow {
+      display: none !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter {
+      pointer-events: auto;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-body {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      flex: 1 1 auto;
+      overflow: hidden;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-wraplist {
+      display: flex !important;
+      width: 100% !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      flex-direction: column;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-filter-wrap.bpx-player-dm {
+      display: flex !important;
+      height: 100% !important;
+      min-height: 0 !important;
+      flex: 1 1 auto;
+      flex-direction: column;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-management,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-function,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-footer {
+      flex: 0 0 auto;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-wrap {
+      height: auto !important;
+      min-height: 0 !important;
+      flex: 1 1 auto;
+      overflow: hidden;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-container,
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-long-list-wrap {
+      height: 100% !important;
+      min-height: 0 !important;
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-long-list-list {
+      background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-load-status {
+      border-radius: var(--bew-radius-sm);
+      background: var(--bew-skeleton) !important;
     }
 
     /* B 站表情面板可能向上展开；只在打开期间允许它越过评论面板边界。 */
@@ -2051,12 +2320,17 @@ function injectLayoutStyle() {
       font-size: 14px;
     }
 
+    @media (prefers-reduced-motion: reduce) {
+      #${ROOT_ID} .bewly-widescreen-sidebar,
+      #${ROOT_ID} .bewly-widescreen-sidebar-toggle {
+        transition: none;
+      }
+    }
+
     @media (max-width: ${MOBILE_BREAKPOINT}px) {
       #${ROOT_ID} {
         --bewly-widescreen-player-available-height: calc(56dvh - var(--bewly-widescreen-danmaku-height, 0px));
-        --bewly-widescreen-sidebar-column-width: 100vw;
         --bewly-widescreen-sidebar-panel-width: 100vw;
-        --bewly-widescreen-sidebar-offset: 0px;
       }
 
       #${ROOT_ID} .bewly-widescreen-stage,
@@ -2077,12 +2351,15 @@ function injectLayoutStyle() {
         grid-column: 1;
         grid-row: 2;
         width: 100%;
+        visibility: visible;
+        pointer-events: auto;
         transform: none;
         transition: none;
         box-shadow: none;
       }
 
-      #${ROOT_ID} .bewly-widescreen-sidebar-toggle {
+      #${ROOT_ID} .bewly-widescreen-sidebar-toggle,
+      #${ROOT_ID} .bewly-widescreen-sidebar-resizer {
         display: none;
       }
 
@@ -2140,13 +2417,15 @@ function updateSidebarLayoutState(currentState: BewlyWidescreenState | null = st
   })
   const direction = currentState.sidebarPosition === 'right' ? 1 : -1
 
-  currentState.root.dataset.centered = String(geometry.enabled)
+  const centered = geometry.enabled
+    && currentState.root.dataset.sidebarManuallyClosed !== 'true'
+  currentState.root.dataset.centered = String(centered)
   currentState.root.dataset.sidebarToggleVisible = 'true'
   currentState.root.style.setProperty(
     '--bewly-widescreen-center-offset',
     `${geometry.offset * direction}px`,
   )
-  if (geometry.enabled)
+  if (centered)
     currentState.root.dataset.sidebarHoverExpanded = 'false'
   scheduleActionGeometrySync(currentState)
 }
@@ -2506,34 +2785,275 @@ function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
 }
 
 function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
-  const { root, sidebarEl: sidebar, playerFrame } = currentState
+  const { root, sidebarEl: sidebar, sidebarResizer } = currentState
+  let collapseTimer: ReturnType<typeof setTimeout> | undefined
+  let resizeFrame: number | undefined
+  let pendingSidebarWidth: number | undefined
+  let resizingPointerId: number | undefined
+  let lastPointerX: number | undefined
 
   function canTemporarilyExpand() {
     return currentState.sidebarLayout === 'compact'
       && currentState.root.dataset.centered !== 'true'
   }
 
-  function expandSidebar() {
-    if (canTemporarilyExpand())
-      root.dataset.sidebarHoverExpanded = 'true'
+  function clearCollapseTimer() {
+    if (collapseTimer) {
+      clearTimeout(collapseTimer)
+      collapseTimer = undefined
+    }
+  }
+
+  function setHoverExpanded(expanded: boolean) {
+    if (expanded)
+      clearCollapseTimer()
+    root.dataset.sidebarHoverExpanded = String(expanded)
+    if (expanded)
+      delete root.dataset.sidebarManuallyClosed
   }
 
   function collapseSidebar() {
-    if (currentState.sidebarLayout === 'compact')
-      root.dataset.sidebarHoverExpanded = 'false'
+    clearCollapseTimer()
+    setHoverExpanded(false)
   }
 
-  sidebar.addEventListener('pointerenter', expandSidebar)
-  sidebar.addEventListener('pointerleave', collapseSidebar)
-  playerFrame.addEventListener('pointerenter', collapseSidebar)
-  root.addEventListener('pointerleave', collapseSidebar)
+  function scheduleCollapse() {
+    if (
+      collapseTimer
+      || resizingPointerId !== undefined
+      || !canTemporarilyExpand()
+      || sidebarResizer.matches(':focus-visible')
+    ) {
+      return
+    }
+
+    collapseTimer = setTimeout(() => {
+      collapseTimer = undefined
+      if (resizingPointerId === undefined && !sidebarResizer.matches(':focus-visible'))
+        setHoverExpanded(false)
+    }, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY)
+  }
+
+  function getResizeBounds() {
+    const rootRect = root.getBoundingClientRect()
+    const viewportWidth = rootRect.width
+    return {
+      rootRect,
+      minWidth: Math.min(WIDESCREEN_SIDEBAR_MIN_WIDTH, viewportWidth),
+      maxWidth: clampWidescreenSidebarWidth(WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH, viewportWidth),
+    }
+  }
+
+  function syncSidebarResizerValue(width = sidebar.getBoundingClientRect().width) {
+    const { minWidth, maxWidth } = getResizeBounds()
+    sidebarResizer.setAttribute('aria-valuemin', String(Math.round(minWidth)))
+    sidebarResizer.setAttribute('aria-valuemax', String(Math.round(maxWidth)))
+    sidebarResizer.setAttribute('aria-valuenow', String(Math.round(width)))
+  }
+
+  function applySidebarWidth(width: number) {
+    const rootRect = root.getBoundingClientRect()
+    const nextWidth = clampWidescreenSidebarWidth(width, rootRect.width)
+    root.style.setProperty('--bewly-widescreen-sidebar-user-width', `${Math.round(nextWidth)}px`)
+    syncSidebarResizerValue(nextWidth)
+    schedulePlayerResizeSync(currentState)
+  }
+
+  function flushPendingSidebarWidth() {
+    if (resizeFrame !== undefined) {
+      cancelAnimationFrame(resizeFrame)
+      resizeFrame = undefined
+    }
+    if (pendingSidebarWidth === undefined)
+      return
+    const width = pendingSidebarWidth
+    pendingSidebarWidth = undefined
+    applySidebarWidth(width)
+  }
+
+  function scheduleSidebarWidth(width: number) {
+    pendingSidebarWidth = width
+    if (resizeFrame !== undefined)
+      return
+    resizeFrame = requestAnimationFrame(() => {
+      resizeFrame = undefined
+      if (state !== currentState || !root.isConnected) {
+        pendingSidebarWidth = undefined
+        return
+      }
+      flushPendingSidebarWidth()
+    })
+  }
+
+  function resizeFromPointer(pointerX: number) {
+    const rootRect = root.getBoundingClientRect()
+    scheduleSidebarWidth(resolveWidescreenSidebarResizeWidth({
+      position: currentState.sidebarPosition,
+      pointerX,
+      viewportStart: rootRect.left,
+      viewportEnd: rootRect.right,
+    }))
+  }
+
+  function handlePointerPosition(pointerX: number, pointerType: string) {
+    lastPointerX = pointerX
+    if (resizingPointerId !== undefined)
+      return
+    if (pointerType === 'touch' || !canTemporarilyExpand()) {
+      collapseSidebar()
+      return
+    }
+
+    const rootRect = root.getBoundingClientRect()
+    const pointerInput = {
+      position: currentState.sidebarPosition,
+      pointerX,
+      viewportStart: rootRect.left,
+      viewportEnd: rootRect.right,
+      sidebarWidth: sidebar.getBoundingClientRect().width,
+    }
+    const pointerIsAtActivationEdge = resolveWidescreenSidebarHoverExpanded({
+      ...pointerInput,
+      currentlyExpanded: false,
+    })
+    if (root.dataset.sidebarEdgeRevealSuppressed === 'true') {
+      if (!pointerIsAtActivationEdge)
+        delete root.dataset.sidebarEdgeRevealSuppressed
+      collapseSidebar()
+      return
+    }
+
+    const currentlyExpanded = root.dataset.sidebarHoverExpanded === 'true'
+    const shouldRemainExpanded = resolveWidescreenSidebarHoverExpanded({
+      ...pointerInput,
+      currentlyExpanded,
+    })
+    if (shouldRemainExpanded) {
+      setHoverExpanded(true)
+    }
+    else if (currentlyExpanded) {
+      scheduleCollapse()
+    }
+    else {
+      collapseSidebar()
+    }
+  }
+
+  function handlePointerMove(event: PointerEvent) {
+    handlePointerPosition(event.clientX, event.pointerType)
+  }
+
+  function handlePointerLeave() {
+    if (resizingPointerId === undefined && root.dataset.sidebarHoverExpanded === 'true')
+      scheduleCollapse()
+  }
+
+  function handleResizePointerDown(event: PointerEvent) {
+    if (event.pointerType === 'mouse' && event.button !== 0)
+      return
+    event.preventDefault()
+    clearCollapseTimer()
+    resizingPointerId = event.pointerId
+    lastPointerX = event.clientX
+    root.dataset.sidebarResizing = 'true'
+    if (canTemporarilyExpand())
+      setHoverExpanded(true)
+    sidebarResizer.setPointerCapture(event.pointerId)
+    resizeFromPointer(event.clientX)
+  }
+
+  function handleResizePointerMove(event: PointerEvent) {
+    if (resizingPointerId !== event.pointerId)
+      return
+    lastPointerX = event.clientX
+    resizeFromPointer(event.clientX)
+  }
+
+  function finishResize(event: PointerEvent) {
+    if (resizingPointerId !== event.pointerId)
+      return
+    lastPointerX = event.clientX
+    flushPendingSidebarWidth()
+    if (sidebarResizer.hasPointerCapture(event.pointerId))
+      sidebarResizer.releasePointerCapture(event.pointerId)
+    resizingPointerId = undefined
+    delete root.dataset.sidebarResizing
+    handlePointerPosition(event.clientX, event.pointerType)
+  }
+
+  function handleResizeKeydown(event: KeyboardEvent) {
+    const currentWidth = sidebar.getBoundingClientRect().width
+    const { minWidth, maxWidth } = getResizeBounds()
+    let nextWidth: number | undefined
+    switch (event.key) {
+      case 'ArrowLeft':
+        nextWidth = currentWidth + (currentState.sidebarPosition === 'right' ? SIDEBAR_RESIZE_KEYBOARD_STEP : -SIDEBAR_RESIZE_KEYBOARD_STEP)
+        break
+      case 'ArrowRight':
+        nextWidth = currentWidth + (currentState.sidebarPosition === 'left' ? SIDEBAR_RESIZE_KEYBOARD_STEP : -SIDEBAR_RESIZE_KEYBOARD_STEP)
+        break
+      case 'Home':
+        nextWidth = minWidth
+        break
+      case 'End':
+        nextWidth = maxWidth
+        break
+      default:
+        return
+    }
+
+    event.preventDefault()
+    event.stopPropagation()
+    clearCollapseTimer()
+    if (canTemporarilyExpand())
+      setHoverExpanded(true)
+    applySidebarWidth(nextWidth)
+  }
+
+  function handleResizeFocus() {
+    clearCollapseTimer()
+    if (canTemporarilyExpand())
+      setHoverExpanded(true)
+  }
+
+  function handleResizeBlur() {
+    if (lastPointerX !== undefined)
+      handlePointerPosition(lastPointerX, 'mouse')
+  }
+
+  syncSidebarResizerValue()
+  root.addEventListener('pointermove', handlePointerMove)
+  root.addEventListener('pointerleave', handlePointerLeave)
+  sidebarResizer.addEventListener('pointerdown', handleResizePointerDown)
+  sidebarResizer.addEventListener('pointermove', handleResizePointerMove)
+  sidebarResizer.addEventListener('pointerup', finishResize)
+  sidebarResizer.addEventListener('pointercancel', finishResize)
+  sidebarResizer.addEventListener('keydown', handleResizeKeydown)
+  sidebarResizer.addEventListener('focus', handleResizeFocus)
+  sidebarResizer.addEventListener('blur', handleResizeBlur)
 
   currentState.sidebarInteractionCleanup = () => {
-    sidebar.removeEventListener('pointerenter', expandSidebar)
-    sidebar.removeEventListener('pointerleave', collapseSidebar)
-    playerFrame.removeEventListener('pointerenter', collapseSidebar)
-    root.removeEventListener('pointerleave', collapseSidebar)
+    clearCollapseTimer()
+    if (resizeFrame !== undefined)
+      cancelAnimationFrame(resizeFrame)
+    resizeFrame = undefined
+    pendingSidebarWidth = undefined
+    if (resizingPointerId !== undefined && sidebarResizer.hasPointerCapture(resizingPointerId))
+      sidebarResizer.releasePointerCapture(resizingPointerId)
+    resizingPointerId = undefined
+    root.removeEventListener('pointermove', handlePointerMove)
+    root.removeEventListener('pointerleave', handlePointerLeave)
+    sidebarResizer.removeEventListener('pointerdown', handleResizePointerDown)
+    sidebarResizer.removeEventListener('pointermove', handleResizePointerMove)
+    sidebarResizer.removeEventListener('pointerup', finishResize)
+    sidebarResizer.removeEventListener('pointercancel', finishResize)
+    sidebarResizer.removeEventListener('keydown', handleResizeKeydown)
+    sidebarResizer.removeEventListener('focus', handleResizeFocus)
+    sidebarResizer.removeEventListener('blur', handleResizeBlur)
     delete root.dataset.sidebarHoverExpanded
+    delete root.dataset.sidebarEdgeRevealSuppressed
+    delete root.dataset.sidebarManuallyClosed
+    delete root.dataset.sidebarResizing
   }
 }
 
@@ -2633,19 +3153,24 @@ function moveDanmakuInput(currentState: BewlyWidescreenState) {
 }
 
 function expandDanmakuTab(currentState: BewlyWidescreenState) {
-  const focusable = findFirst(selectors.danmakuFocusable, currentState.panels.danmaku)
-  if (!focusable)
+  const collapseHeader = currentState.panels.danmaku.querySelector<HTMLElement>('.bui-collapse-header')
+  const collapseBody = currentState.panels.danmaku.querySelector<HTMLElement>('.bui-collapse-body')
+  const shouldExpand = collapseBody?.style.height === '0px'
+  currentState.panels.danmaku.scrollTo({ top: 0, behavior: 'auto' })
+  if (!collapseHeader || !shouldExpand)
     return
 
-  currentState.panels.danmaku.scrollTo({ top: 0, behavior: 'smooth' })
   if (currentState.danmakuExpandTimer)
     clearTimeout(currentState.danmakuExpandTimer)
   currentState.danmakuExpandTimer = setTimeout(() => {
     currentState.danmakuExpandTimer = undefined
-    if (state !== currentState || !focusable.isConnected)
+    if (state !== currentState
+      || !collapseHeader.isConnected
+      || collapseBody?.style.height !== '0px') {
       return
-    focusable.click()
-    focusable.focus?.({ preventScroll: true })
+    }
+    collapseHeader.click()
+    schedulePlayerResizeSync(currentState)
   }, 120)
 }
 
@@ -2771,14 +3296,29 @@ function syncEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedNode[]) {
     episodeSection.classList.add(EPISODE_SECTION_CLASS)
 }
 
-function fillSidebar(currentState: BewlyWidescreenState) {
+function syncSidebarReadiness(
+  currentState: BewlyWidescreenState,
+  readiness: WidescreenSidebarReadiness,
+) {
+  currentState.root.dataset.sidebarTopReady = String(readiness.top)
+  currentState.root.dataset.sidebarCommentReady = String(readiness.comment)
+  currentState.root.dataset.sidebarDanmakuReady = String(readiness.danmaku)
+  currentState.root.dataset.sidebarPlaylistReady = String(readiness.playlist)
+  currentState.root.dataset.sidebarContentReady = String(readiness.complete)
+  currentState.sidebarTop.setAttribute('aria-busy', String(!readiness.top))
+  currentState.panels.comment.setAttribute('aria-busy', String(!readiness.comment))
+  currentState.panels.danmaku.setAttribute('aria-busy', String(!readiness.danmaku))
+  currentState.panels.playlist.setAttribute('aria-busy', String(!readiness.playlist))
+}
+
+function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadiness {
   syncActionAnimationTheme(currentState)
   syncSidebarTitle(currentState)
 
-  moveOrReplaceNode(selectors.toolbar, currentState.toolbarSlot, currentState.movedNodes)
+  const toolbarResult = moveOrReplaceNode(selectors.toolbar, currentState.toolbarSlot, currentState.movedNodes)
   scheduleActionGeometrySync(currentState)
 
-  moveOrReplaceNode(selectors.upPanel, currentState.upSlot, currentState.movedNodes)
+  const upResult = moveOrReplaceNode(selectors.upPanel, currentState.upSlot, currentState.movedNodes)
 
   const descriptionResult = moveOrReplaceNode(selectors.description, currentState.descriptionSlot, currentState.movedNodes)
   if (descriptionResult.changed)
@@ -2824,6 +3364,20 @@ function fillSidebar(currentState: BewlyWidescreenState) {
     ensureEmptyPanel(currentState.panels.playlist, t('widescreen.list_loading'))
   else
     clearEmptyPanel(currentState.panels.playlist)
+
+  const readiness = {
+    top: toolbarResult.found && upResult.found,
+    comment: commentResult.found,
+    danmaku: danmakuResult.found,
+    playlist: hasPlaylist || hasRecommend,
+    complete: false,
+  }
+  readiness.complete = readiness.top
+    && readiness.comment
+    && readiness.danmaku
+    && readiness.playlist
+  syncSidebarReadiness(currentState, readiness)
+  return readiness
 }
 
 function clearEmptyPanel(panel: HTMLElement) {
@@ -2856,6 +3410,56 @@ function shortenCommentTimes(panel: HTMLElement) {
   })
 }
 
+function clearSidebarHydration(currentState: BewlyWidescreenState) {
+  if (currentState.sidebarHydrationTimer)
+    clearTimeout(currentState.sidebarHydrationTimer)
+  currentState.sidebarHydrationTimer = undefined
+}
+
+function runSidebarHydration(currentState: BewlyWidescreenState): WidescreenSidebarReadiness | null {
+  try {
+    const readiness = fillSidebar(currentState)
+    currentState.sidebarHydrationWarningShown = false
+    return readiness
+  }
+  catch {
+    if (!currentState.sidebarHydrationWarningShown) {
+      currentState.sidebarHydrationWarningShown = true
+      console.warn('[Bewly Nocturne] Sidebar hydration failed; retrying within the bounded hydration window.')
+    }
+    return null
+  }
+}
+
+function startSidebarHydration(currentState: BewlyWidescreenState) {
+  clearSidebarHydration(currentState)
+  const startedAt = Date.now()
+  const deadline = startedAt + SIDEBAR_HYDRATION_TIMEOUT
+
+  const hydrate = () => {
+    currentState.sidebarHydrationTimer = undefined
+    if (state !== currentState || !currentState.root.isConnected)
+      return
+
+    if (!findCommentRoot(currentState.panels.comment))
+      startCommentPrewarm()
+    const readiness = runSidebarHydration(currentState)
+    const now = Date.now()
+    if (!shouldContinueWidescreenSidebarHydration({ complete: readiness?.complete ?? false, now, deadline })) {
+      if (!readiness?.comment)
+        restoreCommentPrewarm()
+      return
+    }
+
+    const interval = now - startedAt < SIDEBAR_HYDRATION_FAST_DURATION
+      ? SIDEBAR_HYDRATION_FAST_INTERVAL
+      : SIDEBAR_HYDRATION_INTERVAL
+    currentState.sidebarHydrationTimer = setTimeout(hydrate, interval)
+  }
+
+  hydrate()
+}
+
 function cleanupState(currentState: BewlyWidescreenState) {
   currentState.escapeKeyCleanup?.()
   currentState.sidebarInteractionCleanup?.()
@@ -2885,6 +3489,7 @@ function cleanupState(currentState: BewlyWidescreenState) {
   if (currentState.danmakuExpandTimer)
     clearTimeout(currentState.danmakuExpandTimer)
   currentState.danmakuExpandTimer = undefined
+  clearSidebarHydration(currentState)
   clearPlayerResizeSync(currentState)
   clearActionGeometry(currentState)
   clearSidebarRefreshTimer()
@@ -2922,12 +3527,97 @@ function isReadyForLayout() {
     && ((customVideo.readyState ?? 0) >= HTMLMediaElement.HAVE_METADATA || !!customVideo.currentSrc)
 }
 
+function isUpPanelTransferReady(upPanel: HTMLElement | null): boolean {
+  if (!upPanel)
+    return false
+
+  const buttonPanel = upPanel.querySelector<HTMLElement>('.upinfo-btn-panel, .up-info__btn-panel')
+  return !buttonPanel || (buttonPanel.textContent?.trim().length ?? 0) > 0
+}
+
+function isRecommendationTransferReady(recommendation: HTMLElement | null): boolean {
+  if (!recommendation)
+    return false
+
+  const firstCard = recommendation.querySelector(
+    '.video-page-card-small, .video-page-game-card-small, .bili-video-card, .video-card',
+  )
+  return !!firstCard || (recommendation.textContent?.trim().length ?? 0) > 0
+}
+
+function isDanmakuTransferReady(danmaku: HTMLElement | null): boolean {
+  if (!danmaku)
+    return false
+  return danmaku.matches('.bpx-player-dm-wrap')
+    || !!danmaku.querySelector('.bpx-player-dm-wrap, .bui-collapse-body')
+}
+
+function isWidescreenTransferContentReady(): boolean {
+  if (!location.pathname.startsWith('/video/'))
+    return true
+
+  const upPanel = findMovable(selectors.upPanel)
+  const toolbar = findMovable(selectors.toolbar)
+  const danmaku = findMovable(selectors.danmaku)
+  const recommendation = findMovable(selectors.recommend)
+    || findMovable(selectors.playlist)
+  const commentRoot = findCommentRoot(document, true)
+  return isUpPanelTransferReady(upPanel)
+    && !!toolbar?.childElementCount
+    && isDanmakuTransferReady(danmaku)
+    && isRecommendationTransferReady(recommendation)
+    && !!commentRoot
+    && isCommentRootUsable(commentRoot)
+}
+
+function restoreCommentPrewarm() {
+  const snapshot = commentPrewarmState
+  commentPrewarmState = undefined
+  if (!snapshot)
+    return
+
+  if (snapshot.styleAttribute === null)
+    snapshot.root.removeAttribute('style')
+  else
+    snapshot.root.setAttribute('style', snapshot.styleAttribute)
+}
+
+function startCommentPrewarm() {
+  if (commentPrewarmState) {
+    if (commentPrewarmState.root.isConnected)
+      return
+    restoreCommentPrewarm()
+  }
+
+  const commentRoot = findCommentRoot(document, true)
+  if (!commentRoot || isCommentRootUsable(commentRoot))
+    return
+
+  const width = Math.max(
+    commentRoot.getBoundingClientRect().width,
+    commentRoot.parentElement?.getBoundingClientRect().width ?? 0,
+    320,
+  )
+  commentPrewarmState = {
+    root: commentRoot,
+    styleAttribute: commentRoot.getAttribute('style'),
+  }
+  commentRoot.style.setProperty('position', 'fixed', 'important')
+  commentRoot.style.setProperty('top', '0', 'important')
+  commentRoot.style.setProperty('left', '0', 'important')
+  commentRoot.style.setProperty('width', `${width}px`, 'important')
+  commentRoot.style.setProperty('display', 'block', 'important')
+  commentRoot.style.setProperty('opacity', '0', 'important')
+  commentRoot.style.setProperty('pointer-events', 'none', 'important')
+  commentRoot.style.setProperty('z-index', '-1', 'important')
+}
+
 function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   const player = findMovable(selectors.player)
   if (!player)
     return false
 
-  const { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, sidebarTop, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, sidebarToggleButton } = createRoot(sidebarPosition)
+  const { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, sidebarTop, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, sidebarResizer, sidebarToggleButton } = createRoot(sidebarPosition)
   const styleEl = injectLayoutStyle()
   const movedNodes: MovedNode[] = []
 
@@ -2945,6 +3635,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     tagsSlot,
     panels,
     tabButtons,
+    sidebarResizer,
     sidebarToggleButton,
     movedNodes,
     styleEl,
@@ -2958,6 +3649,13 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   enteringWidescreen = false
   clearPendingEscapeHandler()
   document.body.classList.add(BODY_CLASS)
+  syncSidebarReadiness(nextState, {
+    complete: false,
+    top: false,
+    comment: false,
+    danmaku: false,
+    playlist: false,
+  })
 
   const hasVisiblePlayerDialog = () => Array.from(document.querySelectorAll<HTMLElement>(
     '[role="dialog"], .bili-mini-mask, .bpx-player-dialog-wrap',
@@ -3012,7 +3710,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   }
 
   moveNode(player, playerFrame, movedNodes, false, true)
-  fillSidebar(nextState)
+  startSidebarHydration(nextState)
   setActiveTab('comment')
   setSidebarLayout(nextState.sidebarLayout, nextState)
   setupActionGeometryObservers(nextState)
@@ -3030,7 +3728,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   return true
 }
 
-function clearReadyWait() {
+function clearReadyWait({ preserveCommentPrewarm = false }: { preserveCommentPrewarm?: boolean } = {}) {
   readyObserver?.disconnect()
   readyObserver = undefined
   if (readyFrame !== undefined)
@@ -3044,21 +3742,26 @@ function clearReadyWait() {
     document.removeEventListener('loadedmetadata', readyMetadataHandler, true)
     readyMetadataHandler = undefined
   }
-}
-
-function clearLoadFallbackTimer() {
-  if (loadFallbackTimer) {
-    clearTimeout(loadFallbackTimer)
-    loadFallbackTimer = undefined
+  if (readyPollTimer !== undefined) {
+    clearTimeout(readyPollTimer)
+    readyPollTimer = undefined
   }
+  if (!preserveCommentPrewarm)
+    restoreCommentPrewarm()
+  clearPageReadyHandler()
+  pageReadyForLayout = false
+  playerReadyForLayout = false
+  contentReadyForLayout = false
+  readinessStableSince = undefined
+  waitingForLoad = false
 }
 
-function clearPageLoadHandler() {
-  if (!pageLoadHandler)
+function clearPageReadyHandler() {
+  if (!pageReadyHandler)
     return
 
-  window.removeEventListener('load', pageLoadHandler)
-  pageLoadHandler = undefined
+  document.removeEventListener('DOMContentLoaded', pageReadyHandler)
+  pageReadyHandler = undefined
 }
 
 function clearSidebarRefreshTimer() {
@@ -3070,6 +3773,34 @@ function clearSidebarRefreshTimer() {
 
 function waitForReadyLayout() {
   clearReadyWait()
+  pageReadyForLayout = document.readyState !== 'loading'
+  waitingForLoad = !pageReadyForLayout
+
+  const tryCommitLayout = () => {
+    if (state) {
+      clearReadyWait({ preserveCommentPrewarm: true })
+      return true
+    }
+    if (!canCommitWidescreenLayout({
+      pageReady: pageReadyForLayout,
+      playerReady: playerReadyForLayout,
+      contentReady: contentReadyForLayout,
+    })) {
+      readinessStableSince = undefined
+      return false
+    }
+    const now = Date.now()
+    readinessStableSince ??= now
+    if (now - readinessStableSince < READY_STABILITY_DELAY)
+      return false
+    if (!applyNow(pendingSidebarPosition)) {
+      playerReadyForLayout = false
+      readinessStableSince = undefined
+      return false
+    }
+    clearReadyWait({ preserveCommentPrewarm: true })
+    return true
+  }
 
   const scheduleAttempt = () => {
     if (readyFrame !== undefined)
@@ -3080,8 +3811,11 @@ function waitForReadyLayout() {
         clearReadyWait()
         return
       }
-      if (isReadyForLayout() && applyNow(pendingSidebarPosition))
-        clearReadyWait()
+      if (pageReadyForLayout)
+        startCommentPrewarm()
+      playerReadyForLayout = isReadyForLayout()
+      contentReadyForLayout = isWidescreenTransferContentReady()
+      tryCommitLayout()
     })
   }
 
@@ -3089,6 +3823,17 @@ function waitForReadyLayout() {
   readyObserver.observe(document.body || document.documentElement, { childList: true, subtree: true })
   readyMetadataHandler = scheduleAttempt
   document.addEventListener('loadedmetadata', readyMetadataHandler, true)
+  if (!pageReadyForLayout) {
+    pageReadyHandler = () => {
+      pageReadyForLayout = true
+      waitingForLoad = false
+      clearPageReadyHandler()
+      scheduleAttempt()
+    }
+    document.addEventListener('DOMContentLoaded', pageReadyHandler, { once: true })
+    if (document.readyState !== 'loading')
+      pageReadyHandler()
+  }
   readyDeadlineTimer = setTimeout(() => {
     clearReadyWait()
     enteringWidescreen = false
@@ -3098,20 +3843,15 @@ function waitForReadyLayout() {
     stopLanguageWatch = undefined
     window.dispatchEvent(new Event(BEWLY_WIDESCREEN_FAILED))
   }, READY_WAIT_TIMEOUT)
-  scheduleAttempt()
-}
-
-function startAfterPageLoad(sidebarPosition: 'left' | 'right' = 'right') {
-  if (state) {
-    enteringWidescreen = false
-    return
+  const pollReadiness = () => {
+    readyPollTimer = undefined
+    if (!enteringWidescreen || state)
+      return
+    scheduleAttempt()
+    readyPollTimer = setTimeout(pollReadiness, READY_POLL_INTERVAL)
   }
-
-  waitingForLoad = false
-  clearPageLoadHandler()
-  clearLoadFallbackTimer()
-  pendingSidebarPosition = sidebarPosition
-  waitForReadyLayout()
+  readyPollTimer = setTimeout(pollReadiness, READY_POLL_INTERVAL)
+  scheduleAttempt()
 }
 
 function scheduleSidebarRefresh(currentState = state) {
@@ -3123,7 +3863,15 @@ function scheduleSidebarRefresh(currentState = state) {
     if (!state || state !== currentState)
       return
 
-    fillSidebar(currentState)
+    if (!findCommentRoot(currentState.panels.comment))
+      startCommentPrewarm()
+    const readiness = runSidebarHydration(currentState)
+    if (readiness?.complete) {
+      clearSidebarHydration(currentState)
+    }
+    else if (!currentState.sidebarHydrationTimer) {
+      startSidebarHydration(currentState)
+    }
   })
 }
 
@@ -3141,21 +3889,7 @@ export function applyBewlyWidescreen(
   pendingSidebarPosition = sidebarPosition
   if (showLoading)
     showWidescreenLoading()
-
-  if (document.readyState === 'complete') {
-    startAfterPageLoad(sidebarPosition)
-    return
-  }
-
-  waitingForLoad = true
-  pageLoadHandler = () => startAfterPageLoad(sidebarPosition)
-  window.addEventListener('load', pageLoadHandler, { once: true })
-
-  clearLoadFallbackTimer()
-  loadFallbackTimer = setTimeout(() => {
-    if (waitingForLoad)
-      startAfterPageLoad(pendingSidebarPosition)
-  }, 6000)
+  waitForReadyLayout()
 }
 
 export interface ExitBewlyWidescreenOptions {
@@ -3175,8 +3909,7 @@ export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescre
   stopLanguageWatch?.()
   stopLanguageWatch = undefined
   clearReadyWait()
-  clearLoadFallbackTimer()
-  clearPageLoadHandler()
+  clearPageReadyHandler()
   clearPendingEscapeHandler()
   loadingSuppressedUntilExit = false
   removeWidescreenLoading(true)
@@ -3203,8 +3936,7 @@ export function isBewlyWidescreenEngaged() {
     hasReadyRetry: !!readyObserver
       || readyFrame !== undefined
       || !!readyDeadlineTimer
-      || !!loadFallbackTimer
-      || !!pageLoadHandler,
+      || !!pageReadyHandler,
     waitingForLoad,
   })
 }

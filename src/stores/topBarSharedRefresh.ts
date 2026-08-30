@@ -54,9 +54,13 @@ function isTransientNetworkError(error: unknown): boolean {
     || message.includes('network request failed')
 }
 
+export function formatSharedRefreshDiagnostic(diagnostic: SharedRefreshDiagnostic): string {
+  return `[TopBar] Shared refresh skipped: ${diagnostic.endpointName} (${diagnostic.errorKind})`
+}
+
 export function reportSharedRefreshFailure(diagnostic: SharedRefreshDiagnostic) {
   if (import.meta.env?.DEV)
-    console.warn('[TopBar] Shared refresh failed', diagnostic)
+    console.debug(formatSharedRefreshDiagnostic(diagnostic))
 }
 
 export async function runSharedRefreshRequest(

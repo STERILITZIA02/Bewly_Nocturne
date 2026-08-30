@@ -156,6 +156,7 @@ const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
 const getDisclosureCacheKey = () => `${topBarStore.userInfo.mid || 'guest'}:${moment.id}`
 const disclosure = ref<MomentDisclosure>(getCachedMomentDisclosure(getDisclosureCacheKey()))
+const displayedDisclosure = ref<MomentDisclosure>(disclosure.value)
 const forwardComposerMounted = ref(disclosure.value === 'forward')
 const displayedForwardCount = ref(normalizeForwardCount(moment.forwardCount))
 const commentExpanded = computed(() => disclosure.value === 'comments')
@@ -306,6 +307,22 @@ function closeForwardComposer() {
   }
 }
 
+function syncDisplayedDisclosure(value: MomentDisclosure) {
+  if (value !== 'none') {
+    displayedDisclosure.value = value
+    return
+  }
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches)
+    displayedDisclosure.value = 'none'
+}
+
+function handleDisclosureTransitionEnd(event: TransitionEvent) {
+  if (event.target !== event.currentTarget || event.propertyName !== 'grid-template-rows')
+    return
+  if (disclosure.value === 'none')
+    displayedDisclosure.value = 'none'
+}
+
 function handleForwardSubmitted(nextForwardCount: number) {
   const normalizedCount = normalizeForwardCount(nextForwardCount)
   displayedForwardCount.value = normalizedCount
@@ -317,12 +334,16 @@ watch(
   forwardCount => displayedForwardCount.value = normalizeForwardCount(forwardCount),
 )
 
-watch(disclosure, value => setCachedMomentDisclosure(getDisclosureCacheKey(), value))
+watch(disclosure, (value) => {
+  setCachedMomentDisclosure(getDisclosureCacheKey(), value)
+  syncDisplayedDisclosure(value)
+})
 
 watch(
   [() => moment.id, () => topBarStore.userInfo.mid],
   () => {
     disclosure.value = getCachedMomentDisclosure(getDisclosureCacheKey())
+    displayedDisclosure.value = disclosure.value
     forwardComposerMounted.value = disclosure.value === 'forward'
     displayedForwardCount.value = normalizeForwardCount(moment.forwardCount)
     emit('commentToggle', disclosure.value !== 'none')
@@ -840,10 +861,14 @@ function getImagePreviewLabel(author: string, index: number) {
       <div
         class="moment-card__disclosure"
         :class="{ 'is-open': disclosure !== 'none' }"
+        :aria-hidden="disclosure === 'none'"
+        :inert="disclosure === 'none'"
+        @transitionend="handleDisclosureTransitionEnd"
+        @transitioncancel="handleDisclosureTransitionEnd"
       >
         <div class="moment-card__disclosure-inner">
           <div
-            v-if="commentExpanded && moment.commentId && moment.commentType"
+            v-if="displayedDisclosure === 'comments' && moment.commentId && moment.commentType"
             :id="commentSectionId"
             class="moment-card__comments"
           >
@@ -854,7 +879,7 @@ function getImagePreviewLabel(author: string, index: number) {
           </div>
           <div
             v-if="forwardComposerMounted"
-            v-show="forwardExpanded"
+            v-show="displayedDisclosure === 'forward'"
             :id="forwardSectionId"
             class="moment-card__forward-disclosure"
           >
@@ -948,7 +973,8 @@ function getImagePreviewLabel(author: string, index: number) {
     box-shadow: var(--bew-shadow-1);
   }
 
-  .moment-card--comments-expanded:hover {
+  .moment-card--comments-expanded:hover,
+  .moment-card--forward-expanded:hover {
     transform: none;
   }
 }
@@ -2002,27 +2028,44 @@ function getImagePreviewLabel(author: string, index: number) {
   pointer-events: auto;
   grid-template-rows: 0fr;
   min-width: 0;
-  transition: grid-template-rows var(--bew-duration-moderate) var(--bew-ease-emphasized);
+  transition: grid-template-rows var(--bew-duration-moderate) var(--bew-ease-standard);
 }
 
 .moment-card__disclosure.is-open {
   grid-template-rows: 1fr;
 }
 
+.moment-card__disclosure:not(.is-open) {
+  pointer-events: none;
+}
+
 .moment-card__disclosure-inner {
   min-height: 0;
   overflow: hidden;
+  opacity: 0;
+  background: transparent;
+  transform: translateY(calc(0px - var(--bew-space-2)));
+  transition:
+    opacity var(--bew-duration-normal) var(--bew-ease-standard),
+    transform var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+.moment-card__disclosure.is-open .moment-card__disclosure-inner {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .moment-card__comments,
 .moment-card__forward-disclosure {
   min-width: 0;
+  background: transparent;
   cursor: default;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .moment-card__disclosure {
-    transition-duration: 0ms;
+  .moment-card__disclosure,
+  .moment-card__disclosure-inner {
+    transition: none;
   }
 }
 

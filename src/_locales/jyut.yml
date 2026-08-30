@@ -143,7 +143,7 @@ settings:
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋同結果頁。
   category_navigation_moments_desc: 設定插件動態頁左邊嘅元件同動態卡片開啟方式。
   category_navigation_watch_later_page_desc: 設定陣間至睇頁面嘅內容版面。
-  category_navigation_playback_page_desc: 預留獨立區域當以後加入播放頁設定。
+  category_navigation_playback_page_desc: 設定影片預設顯示模式同 Bewly 闊螢幕互動。
   category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體同流動版行為。
   messages_reading_behavior: 閱讀行為
   messages_auto_mark_read: 自動標記已讀
@@ -385,7 +385,7 @@ settings:
   moments_hide_charge_exclusive: 隱藏充電專屬動態
   moments_hide_charge_exclusive_desc: 喺插件動態流入面過濾所有充電專屬動態。
   moments_card_open_mode: 動態卡片點擊行為
-  moments_card_open_mode_desc: 選擇撳動態卡片嗰陣用彈窗、新分頁定後台分頁。直播動態只可以喺新分頁或者後台分頁開啟。
+  moments_card_open_mode_desc: 圖文等動態可以選彈窗、新分頁定後台分頁；影片動態一律喺新分頁開啟，直播動態唔用彈窗。
   moments_card_open_mode_opt:
     dialog: 彈窗
     new_tab: 新分頁
@@ -843,7 +843,7 @@ settings:
     bewly_widescreen_center_video: Bewly闊螢幕畫面置中
     bewly_widescreen_center_video_desc: 只會喺影片優先而且實際單邊黑邊足夠完整容納側欄嗰陣，令影片、彈幕同點擊區域喺成個畫面水平置中；空間唔夠就維持影片優先版面。
     bewly_widescreen_layout_priority: Bewly闊螢幕版面優先次序
-    bewly_widescreen_layout_priority_desc: 影片優先會預設保留影片尺寸同顯示窄側欄；側欄優先會直接顯示完整側欄，並為播放器保留獨立空間。
+    bewly_widescreen_layout_priority_desc: 影片優先預設完全收埋側欄，靠近邊緣時展開；側欄優先預設展開完整側欄。兩種狀態都會用覆蓋層顯示，唔會改變播放器闊度。
     bewly_widescreen_layout_priority_video: 影片優先
     bewly_widescreen_layout_priority_sidebar: 側欄優先
   show_ip_location: 顯示 IP 歸屬地
@@ -1526,6 +1526,8 @@ watch_later:
 widescreen:
   enter: 進入 Bewly 闊螢幕
   exit: 退出
+  close_sidebar: 收埋側欄
+  resize_sidebar: 調整側欄闊度
   exit_loading: 退出闊螢幕模式
   loading: 載入緊闊螢幕模式…
   comments: 留言
@@ -1538,7 +1540,7 @@ widescreen:
   danmaku_loading: 彈幕列表載入緊
   list_loading: 列表載入緊
   show_full_sidebar: 顯示完整側欄
-  show_compact_sidebar: 切換做窄側欄
+  show_compact_sidebar: 收埋側欄
 search_bar:
   input_label: 搜尋
   clear_keyword: 清空搜尋內容

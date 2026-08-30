@@ -460,6 +460,7 @@ onBeforeUnmount(() => {
   padding: 0 var(--bew-space-4) var(--bew-space-4);
   border-top: 1px solid var(--bew-border-color);
   color: var(--bew-text-1);
+  background: transparent;
 }
 .moment-comments__header {
   display: flex;

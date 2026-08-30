@@ -13,7 +13,6 @@ import {
   formatCount,
   getCardPreviewText,
   getMomentOriginalImageUrl,
-  getMomentThumbnailUrl,
   getWatchLaterStateKey,
   isCompactPlainTextMoment,
 } from '~/components/MomentCard/utils'
@@ -36,6 +35,7 @@ import { loadHlsModule } from '~/utils/hls'
 import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
@@ -217,11 +217,8 @@ const watchLaterAidRequests = new Map<string, Promise<number | undefined>>()
 const videoCidCache = new Map<string, number>()
 const videoCidRequests = new Map<string, Promise<number | undefined>>()
 const forwardCountOverrides = new Map<string, number>()
-const videoAspectRatios = reactive<Record<string, number>>({})
-const videoAspectRatioRequests = new Map<string, Promise<number | undefined>>()
 const cardHeights = reactive<Record<string, number>>({})
 const visibleMomentIds = reactive(new Set<string>())
-const readyCoverIds = reactive(new Set<string>())
 const readyCardIds = reactive(new Set<string>())
 const enteringCardIds = reactive(new Set<string>())
 const revealedCardIds = new Set<string>()
@@ -269,6 +266,7 @@ let cardGeometryFrame = 0
 let feedRequestToken = 0
 let portalRequestToken = 0
 let momentsMounted = false
+let momentsExtensionContextInvalidated = false
 let loadedAccountId: AccountId = getCurrentAccountId()
 let suppressBottomRebalanceUntil = 0
 const detailImageViewerDragging = ref(false)
@@ -891,15 +889,6 @@ function isPlayerMoment(moment: DisplayMoment | null | undefined) {
   return Boolean(moment?.isVideo || moment?.isLive)
 }
 
-function getDimensionAspectRatio(dimension: any) {
-  let width = Number(dimension?.width || 0)
-  let height = Number(dimension?.height || 0)
-  const rotation = Math.abs(Number(dimension?.rotate || 0)) % 180
-  if (rotation === 90)
-    [width, height] = [height, width]
-  return width > 0 && height > 0 ? width / height : undefined
-}
-
 /** 图文保留自己的布局；播放器与图文弹窗都严格受可用视口约束。 */
 const isOpusDetailMoment = computed(() => Boolean(selectedMoment.value && !isPlayerMoment(selectedMoment.value)))
 const detailViewportGutter = MOMENTS_DETAIL_LAYOUT.viewportGutter * 2
@@ -911,18 +900,6 @@ const opusDetailCommentPageRatio = 0.29
 const opusDetailLongImageRatio = MIN_SINGLE_IMAGE_RATIO
 const opusDetailMaxWidth = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}vw, ${detailViewportSafeWidth})`
 const opusDetailMaxHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MOMENTS_DETAIL_LAYOUT.playerMinHeight}px, 88dvh), ${opusDetailMaxWidth})`
-const selectedVideoAspectRatio = computed(() => {
-  const moment = selectedMoment.value
-  if (!moment?.isVideo || moment.isLive || moment.isPgc)
-    return undefined
-  return (moment.bvid ? videoAspectRatios[moment.bvid] : undefined)
-    || coverRatios[moment.id]
-})
-const isSelectedSquareOrVerticalVideo = computed(() => {
-  const ratio = selectedVideoAspectRatio.value
-  return Boolean(ratio && ratio <= 1)
-})
-
 function isUsableImageRatio(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
@@ -954,13 +931,6 @@ const detailDialogHeight = computed(() => (
 const detailDialogWidth = computed(() => {
   if (selectedMoment.value?.isLive)
     return detailPlayerMaxWidth
-  if (selectedMoment.value?.isVideo) {
-    if (isSelectedSquareOrVerticalVideo.value && settings.value.defaultVideoPlayerMode === 'bewlyWidescreen') {
-      const ratio = Math.max(0.4, selectedVideoAspectRatio.value || 9 / 16)
-      return `min(max(${MOMENTS_DETAIL_LAYOUT.verticalWidescreenMinWidth}px, calc(${detailDialogHeight.value} * ${ratio} + ${MOMENTS_DETAIL_LAYOUT.verticalWidescreenSidebarWidth}px)), ${detailPlayerMaxWidth})`
-    }
-    return detailPlayerMaxWidth
-  }
   const moment = selectedMoment.value
   if (isOpusSplitDetailMoment(moment)) {
     const commentWidth = `${opusDetailCommentPageRatio * 100}vw`
@@ -1178,17 +1148,17 @@ function openDetailFrameInNewTab() {
 }
 
 function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
-  if (moment.isVideo && !moment.isLive)
+  if (moment.isVideo && !moment.isLive) {
     recordVideoVisit(moment)
+    openMomentInNewTab(moment)
+    return
+  }
 
   // 小屏、直播与「新标签/后台标签」设置：外部打开，避免狭窄 Dialog 与跨域直播占用
   if (!forceDialog && shouldOpenMomentExternally(moment)) {
     openMomentInNewTab(moment, settings.value.momentsCardOpenMode === 'background')
     return
   }
-
-  if (moment.isVideo && !moment.isLive && moment.bvid)
-    void loadVideoAspectRatio(moment.bvid)
 
   // 若已有详情在开，先销毁旧 iframe，避免叠内存
   if (selectedMoment.value || detailFrameUrl.value)
@@ -2047,7 +2017,6 @@ async function reapplyMomentFiltersFromCache() {
   isLoading.value = false
 
   if (filteredItems.length > 0 || !cacheEntry.hasMore) {
-    void prepareMomentCovers(filteredItems, requestToken)
     await nextTick()
     if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
       updateGridColumnCount()
@@ -2629,7 +2598,6 @@ function handleCoverLoad(event: Event, momentId: string) {
   if (!img.naturalWidth || !img.naturalHeight)
     return
 
-  readyCoverIds.add(momentId)
   const ratio = img.naturalWidth / img.naturalHeight
   const moment = moments.value.find(item => item.id === momentId)
   const nextRatio = Math.max(ratio, MIN_SINGLE_IMAGE_RATIO)
@@ -2643,45 +2611,6 @@ function handleCoverLoad(event: Event, momentId: string) {
       scheduleVirtualUpdate()
     }
   }
-}
-
-async function prepareMomentCovers(items: DisplayMoment[], requestToken: number) {
-  const imageItems = items.filter(item => item.images[0])
-  await Promise.all(imageItems.map(item => new Promise<void>((resolve) => {
-    const image = new Image()
-    let finished = false
-    let timeout = 0
-    const finish = () => {
-      if (finished)
-        return
-      finished = true
-      clearTimeout(timeout)
-      image.onload = null
-      image.onerror = null
-      resolve()
-    }
-    timeout = window.setTimeout(finish, 5000)
-    image.decoding = 'async'
-    image.onload = async () => {
-      if (requestToken === feedRequestToken && image.naturalWidth && image.naturalHeight) {
-        const ratio = image.naturalWidth / image.naturalHeight
-        coverRatios[item.id] = Math.max(ratio, MIN_SINGLE_IMAGE_RATIO)
-      }
-      try {
-        await image.decode()
-      }
-      catch {
-        // 浏览器已完成加载但不支持显式解码时继续
-      }
-      if (requestToken === feedRequestToken)
-        readyCoverIds.add(item.id)
-      finish()
-    }
-    image.onerror = finish
-    image.src = item.images.length === 1 && !item.isVideo && !item.isLive
-      ? getMomentOriginalImageUrl(item.images[0])
-      : getMomentThumbnailUrl(item.images[0])
-  })))
 }
 
 function cleanupLivePreviewPlayer(invalidate = true) {
@@ -2836,36 +2765,6 @@ function cacheVideoCid(bvid: string, cid: number) {
   }
 }
 
-function cacheVideoAspectRatio(bvid: string, dimension: any) {
-  const ratio = getDimensionAspectRatio(dimension)
-  if (ratio)
-    videoAspectRatios[bvid] = ratio
-  return ratio
-}
-
-function loadVideoAspectRatio(bvid: string) {
-  if (videoAspectRatios[bvid])
-    return Promise.resolve(videoAspectRatios[bvid])
-
-  const pendingRequest = videoAspectRatioRequests.get(bvid)
-  if (pendingRequest)
-    return pendingRequest
-
-  const request = api.video.getVideoInfo({ bvid })
-    .then((response) => {
-      if (response.code !== 0)
-        return undefined
-      return cacheVideoAspectRatio(
-        bvid,
-        response.data?.dimension || response.data?.pages?.[0]?.dimension,
-      )
-    })
-    .catch(() => undefined)
-    .finally(() => videoAspectRatioRequests.delete(bvid))
-  videoAspectRatioRequests.set(bvid, request)
-  return request
-}
-
 async function getVideoCid(bvid: string) {
   const cachedCid = videoCidCache.get(bvid)
   if (cachedCid) {
@@ -2879,8 +2778,6 @@ async function getVideoCid(bvid: string) {
 
   const request = api.video.getVideoPageList({ bvid })
     .then((response) => {
-      if (response.code === 0)
-        cacheVideoAspectRatio(bvid, response.data?.[0]?.dimension)
       const cid = Number(response.code === 0 ? response.data?.[0]?.cid : 0)
       if (!cid)
         return undefined
@@ -3208,15 +3105,12 @@ function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
     const ratio = coverRatios[item.id]
     return ratio ? [[item.id, ratio] as const] : []
   }))
-  const preparedCoverIds = new Set(nextItems.filter(item => readyCoverIds.has(item.id)).map(item => item.id))
-
   moments.value = []
   momentColumns.value = []
   virtualColumns.value = []
   Object.keys(cardHeights).forEach(key => delete cardHeights[key])
   Object.keys(previewUrls).forEach(key => delete previewUrls[key])
   Object.keys(coverRatios).forEach(key => delete coverRatios[key])
-  readyCoverIds.clear()
   readyCardIds.clear()
   enteringCardIds.clear()
   revealedCardIds.clear()
@@ -3233,13 +3127,17 @@ function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
   preparedCoverRatios.forEach((ratio, id) => {
     coverRatios[id] = ratio
   })
-  preparedCoverIds.forEach(id => readyCoverIds.add(id))
   cleanupLivePreviewPlayer()
   hoveredMediaId.value = ''
 }
 
 async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false) {
+  if (momentsExtensionContextInvalidated)
+    return
+
   await momentsFeedCacheReady
+  if (momentsExtensionContextInvalidated)
+    return
   if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
     return
   ensureMomentsCacheAccount(loadedAccountId)
@@ -3252,8 +3150,9 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 
   if (reset) {
     feedRequestToken += 1
-    // Keep the last usable feed visible until the replacement request succeeds.
-    isInitialLoading.value = moments.value.length === 0
+    // Keep old data in memory for failure recovery, but never present it as the
+    // newly selected filter while its replacement request is pending.
+    isInitialLoading.value = true
   }
   const requestToken = feedRequestToken
   const requestType = activeMomentFilter.value
@@ -3569,10 +3468,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       .filter(moment => requestGroup !== 'wanted' || matchesMomentFilter(moment))
       .filter(passesMomentSettings)
       .sort((a, b) => b.publishedAt - a.publishedAt)
-    await prepareMomentCovers(items, requestToken)
-    if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
-      return
-    }
     if (!reset)
       preservedPaginationScrollTop = scrollViewportRef.value?.scrollTop ?? null
     if (!reset)
@@ -3593,6 +3488,16 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     pageApplied = true
   }
   catch (error) {
+    if (isExtensionContextInvalidatedError(error)) {
+      momentsExtensionContextInvalidated = true
+      feedRequestToken += 1
+      portalRequestToken += 1
+      isLoading.value = false
+      isInitialLoading.value = false
+      isPortalLoading.value = false
+      return
+    }
+
     if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
       if (!pageApplied && previousPagination) {
         offset.value = previousPagination.offset
@@ -3659,6 +3564,9 @@ function clearMomentsPortalState() {
 }
 
 async function loadMomentsPortal() {
+  if (momentsExtensionContextInvalidated)
+    return
+
   const requestToken = ++portalRequestToken
   const accountId = loadedAccountId
   isPortalLoading.value = true
@@ -3838,8 +3746,6 @@ onBeforeUnmount(() => {
   Object.keys(previewUrls).forEach(key => delete previewUrls[key])
   videoCidCache.clear()
   videoCidRequests.clear()
-  Object.keys(videoAspectRatios).forEach(key => delete videoAspectRatios[key])
-  videoAspectRatioRequests.clear()
   visibleMomentIds.clear()
   cardElements.clear()
   cardEnterTimers.forEach(timer => clearTimeout(timer))

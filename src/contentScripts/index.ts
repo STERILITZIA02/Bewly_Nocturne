@@ -26,6 +26,7 @@ import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolve
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
+import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { runWhenIdle } from '~/utils/lazyLoad'
 import { executeResolvedLinkAction, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
 import { injectCSS, isElectron, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, isVideoPlaybackPage, isWatchLaterListPage, openLinkToNewTab } from '~/utils/main'
@@ -381,7 +382,10 @@ else if (shouldInitializeContentScript) {
     stopLoginButtonClickHandlers = null
   })
 
-  void settingsReady.then(() => {
+  void settingsReady.then(async () => {
+    if (contentScriptSignal.aborted)
+      return
+    await ensureInterfaceLanguage()
     if (contentScriptSignal.aborted)
       return
     playerModeSettingsReady = true
@@ -703,6 +707,11 @@ else if (shouldInitializeContentScript) {
     if (targetPlayerMode === 'bewlyWidescreen' && !isInFullscreen && !isInWebFullscreen) {
       prepareBewlyWidescreenLoading(
         autoContinuationNavigationKey === currentNavigationKey,
+      )
+      // DOM、播放器 metadata 与原生侧栏结构并行准备；图片等非结构资源不阻塞提交。
+      applyBewlyWidescreen(
+        settings.value.bewlyWidescreenSidebarPosition || 'right',
+        false,
       )
     }
     else if (isBewlyWidescreenEngaged()) {

@@ -184,6 +184,18 @@ else if (shouldInitializePageScript) {
     layoutRetryCount?: number
   }
 
+  interface CommentReplyMotionState {
+    animation?: Animation
+    cleanupTimer?: number
+    fromHeight: number
+    previousHeight: string
+    previousOverflow: string
+    target: HTMLElement
+  }
+
+  const COMMENT_REPLY_MOTION_FALLBACK_DURATION = 300
+  const COMMENT_REPLY_MOTION_CLEANUP_BUFFER = 80
+  const commentReplyMotionStates = new WeakMap<HTMLElement, CommentReplyMotionState>()
   const pendingCommentReplyTreeLayoutUpdates = new WeakSet<object>()
 
   interface CommentReplyTreeNode {
@@ -330,7 +342,21 @@ else if (shouldInitializePageScript) {
       id: 'bewly-comment-replies-style',
       css: `
         #spinner {
-          background: var(--bew-comment-replies-mask-bg, rgba(var(--bg1_rgb), 0.85)) !important;
+          position: relative !important;
+          inset: auto !important;
+          z-index: auto !important;
+          display: grid;
+          place-items: center;
+          box-sizing: border-box;
+          width: 100% !important;
+          height: var(--bew-comment-replies-loading-height, var(--bew-space-12, 48px)) !important;
+          min-height: var(--bew-comment-replies-loading-height, var(--bew-space-12, 48px)) !important;
+          margin: 0;
+          padding: 0;
+          background-color: transparent !important;
+          backdrop-filter: none !important;
+          box-shadow: none !important;
+          pointer-events: none;
         }
 
         :host([data-bewly-comment-reply-tree]) {
@@ -357,6 +383,7 @@ else if (shouldInitializePageScript) {
         }
 
         :host > .bewly-comment-expand-all {
+          display: var(--bew-comment-expand-all-display, block);
           min-height: var(--bew-control-height-sm, 28px);
           margin-block-start: var(--bew-space-1, 4px);
           padding: var(--bew-space-1, 4px) 0;
@@ -460,6 +487,163 @@ else if (shouldInitializePageScript) {
     root.appendChild(style)
   }
 
+  function getCommentReplyMotionTarget(component: HTMLElement): HTMLElement | null {
+    const rootNode = component.getRootNode()
+    if (
+      rootNode instanceof ShadowRoot
+      && rootNode.host instanceof HTMLElement
+      && rootNode.host.localName === 'bili-comment-thread-renderer'
+    ) {
+      return rootNode.host
+    }
+
+    return component.shadowRoot?.querySelector<HTMLElement>('#expander') ?? null
+  }
+
+  function restoreCommentReplyMotionStyle(target: HTMLElement, property: 'height' | 'overflow', value: string) {
+    if (value)
+      target.style.setProperty(property, value)
+    else
+      target.style.removeProperty(property)
+  }
+
+  function finishCommentReplyMotion(
+    component: HTMLElement,
+    motionState: CommentReplyMotionState,
+    relayout: boolean,
+  ) {
+    if (commentReplyMotionStates.get(component) !== motionState)
+      return
+
+    commentReplyMotionStates.delete(component)
+    if (motionState.cleanupTimer !== undefined)
+      window.clearTimeout(motionState.cleanupTimer)
+    if (motionState.animation) {
+      motionState.animation.onfinish = null
+      motionState.animation.oncancel = null
+      motionState.animation.cancel()
+    }
+    restoreCommentReplyMotionStyle(motionState.target, 'height', motionState.previousHeight)
+    restoreCommentReplyMotionStyle(motionState.target, 'overflow', motionState.previousOverflow)
+    if (relayout && component.isConnected)
+      scheduleCommentReplyTreeLayoutUpdate(component)
+  }
+
+  function captureCommentReplyMotion(component: any) {
+    if (!(component instanceof HTMLElement))
+      return
+
+    const target = getCommentReplyMotionTarget(component)
+    if (!target)
+      return
+
+    const fromHeight = target.getBoundingClientRect().height
+    if (!Number.isFinite(fromHeight) || fromHeight <= 0)
+      return
+
+    const runningMotion = commentReplyMotionStates.get(component)
+    const previousHeight = runningMotion?.previousHeight ?? target.style.height
+    const previousOverflow = runningMotion?.previousOverflow ?? target.style.overflow
+    if (runningMotion)
+      finishCommentReplyMotion(component, runningMotion, false)
+
+    target.style.height = `${fromHeight}px`
+    target.style.overflow = 'hidden'
+    commentReplyMotionStates.set(component, {
+      fromHeight,
+      previousHeight,
+      previousOverflow,
+      target,
+    })
+  }
+
+  function parseCommentReplyMotionDuration(rawValue: string): number {
+    const value = Number.parseFloat(rawValue)
+    if (!Number.isFinite(value) || value < 0)
+      return COMMENT_REPLY_MOTION_FALLBACK_DURATION
+    if (rawValue.trim().endsWith('ms'))
+      return value
+    if (rawValue.trim().endsWith('s'))
+      return value * 1000
+    return COMMENT_REPLY_MOTION_FALLBACK_DURATION
+  }
+
+  function animateCommentReplyMotion(component: any) {
+    if (!(component instanceof HTMLElement))
+      return
+
+    const motionState = commentReplyMotionStates.get(component)
+    if (!motionState)
+      return
+
+    const { target } = motionState
+    if (!target.isConnected) {
+      finishCommentReplyMotion(component, motionState, false)
+      return
+    }
+
+    restoreCommentReplyMotionStyle(target, 'height', motionState.previousHeight)
+    restoreCommentReplyMotionStyle(target, 'overflow', motionState.previousOverflow)
+    const targetHeight = target.getBoundingClientRect().height
+    target.style.height = `${motionState.fromHeight}px`
+    target.style.overflow = 'hidden'
+
+    const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    if (
+      reducedMotion
+      || !Number.isFinite(targetHeight)
+      || Math.abs(targetHeight - motionState.fromHeight) < 1
+      || typeof target.animate !== 'function'
+    ) {
+      finishCommentReplyMotion(component, motionState, true)
+      return
+    }
+
+    const style = getComputedStyle(target)
+    const duration = parseCommentReplyMotionDuration(
+      style.getPropertyValue('--bew-duration-moderate'),
+    )
+    const easing = style.getPropertyValue('--bew-ease-standard').trim()
+      || 'cubic-bezier(0.22, 0.61, 0.36, 1)'
+    target.style.height = `${targetHeight}px`
+
+    try {
+      const animation = target.animate([
+        { height: `${motionState.fromHeight}px` },
+        { height: `${targetHeight}px` },
+      ], {
+        duration,
+        easing,
+      })
+      motionState.animation = animation
+      const finish = () => finishCommentReplyMotion(component, motionState, true)
+      animation.onfinish = finish
+      animation.oncancel = finish
+      motionState.cleanupTimer = window.setTimeout(
+        finish,
+        Math.ceil(duration) + COMMENT_REPLY_MOTION_CLEANUP_BUFFER,
+      )
+    }
+    catch {
+      finishCommentReplyMotion(component, motionState, true)
+    }
+  }
+
+  function isInsideBewlyWidescreen(element: Element): boolean {
+    let current: Element | null = element
+    while (current) {
+      if (current.id === 'bewly-widescreen-root')
+        return true
+      if (current.parentElement) {
+        current = current.parentElement
+        continue
+      }
+      const root = current.getRootNode()
+      current = root instanceof ShadowRoot ? root.host : null
+    }
+    return false
+  }
+
   function updateWidescreenCommentEmojiOverflow(component: HTMLElement, root: ShadowRoot) {
     const emojiPopover = root.querySelector<HTMLElement>('#emoji-popover')
     const emojiPickerOpen = (component as HTMLElement & { showEmojiPicker?: boolean }).showEmojiPicker === true
@@ -507,7 +691,11 @@ else if (shouldInitializePageScript) {
     name: string,
     classConstructor: any,
     enhance: (component: any) => void,
-    options?: { silent?: boolean },
+    options?: {
+      afterUpdate?: (component: any) => void
+      beforeUpdate?: (component: any) => void
+      silent?: boolean
+    },
   ) {
     const prototype = classConstructor?.prototype as object | undefined
     if (!prototype) {
@@ -536,6 +724,9 @@ else if (shouldInitializePageScript) {
             }
             catch (error) {
               console.warn(`[Bewly Nocturne] Failed to enhance ${name}.`, error)
+            }
+            finally {
+              options?.afterUpdate?.(instance)
             }
           })
         })
@@ -569,6 +760,8 @@ else if (shouldInitializePageScript) {
 
     const boundOriginal = originalMethod
     const patched = function (this: any, ...updateArgs: any[]) {
+      if (settingsReady)
+        options?.beforeUpdate?.(this)
       const result = Reflect.apply(boundOriginal, this, updateArgs)
       scheduleEnhance(this)
       return result
@@ -1347,6 +1540,7 @@ else if (shouldInitializePageScript) {
     getRootRpid: getReplyRootRpid,
     getRpid: getReplyRpid,
     isTreeEnabled: () => getCommentReplyTreeMode() !== null,
+    shouldShowExpandAll: renderer => !isInsideBewlyWidescreen(renderer),
     onNativeCollapse: clearCommentReplyTreeState,
     scheduleTreeUpdate: (renderer) => {
       const treeEpoch = commentReplyTreeEpochs.get(renderer) ?? 0
@@ -1651,6 +1845,7 @@ else if (shouldInitializePageScript) {
     state: CommentReplyTreeState,
     branchKey: string,
   ) {
+    captureCommentReplyMotion(component)
     if (state.collapsedNodeKeys.has(branchKey)) {
       state.collapsedNodeKeys.delete(branchKey)
     }
@@ -1659,6 +1854,7 @@ else if (shouldInitializePageScript) {
       state.collapsedNodeKeys.add(branchKey)
     }
     updateCommentReplyTree(component)
+    animateCommentReplyMotion(component)
   }
 
   function toggleCommentReplyTreeTail(
@@ -1666,6 +1862,7 @@ else if (shouldInitializePageScript) {
     state: CommentReplyTreeState,
     tailKey: string,
   ) {
+    captureCommentReplyMotion(component)
     if (state.collapsedTailKeys.has(tailKey)) {
       state.collapsedTailKeys.delete(tailKey)
     }
@@ -1674,6 +1871,7 @@ else if (shouldInitializePageScript) {
       state.collapsedTailKeys.add(tailKey)
     }
     updateCommentReplyTree(component)
+    animateCommentReplyMotion(component)
   }
 
   function createCommentReplyTreeTailElement(
@@ -3101,7 +3299,12 @@ else if (shouldInitializePageScript) {
             else if (name === 'bili-comment-box') {
               updateWidescreenCommentEmojiOverflow(component, root)
             }
-          })
+          }, name === 'bili-comment-replies-renderer'
+            ? {
+                afterUpdate: animateCommentReplyMotion,
+                beforeUpdate: captureCommentReplyMotion,
+              }
+            : undefined)
         }
         catch (error) {
           console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)

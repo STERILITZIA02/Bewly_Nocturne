@@ -1,10 +1,7 @@
-import { useI18n } from 'vue-i18n'
-
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
-import { LanguageType } from '~/enums/appEnums'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -13,6 +10,7 @@ import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clip
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { postMessageToIframe } from '~/utils/iframeMessage'
+import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
 import { getThemeColorTokens } from '~/utils/themeColor'
 
@@ -21,7 +19,6 @@ function isFestivalPage(): boolean {
 }
 
 export function setupNecessarySettingsWatchers() {
-  const { locale } = useI18n()
   const settingsStore = useSettingsStore()
   const currentLocationHref = useCurrentLocationHref()
   const iframePageActive = useIframePageActive()
@@ -82,41 +79,7 @@ export function setupNecessarySettingsWatchers() {
   watch(
     () => settings.value.language,
     async () => {
-      // if there is first-time load extension, set the default language by browser display language
-      if (!settings.value.language) {
-        if (browser.i18n.getUILanguage() === 'zh-CN') {
-          settings.value.language = LanguageType.Mandarin_CN
-        }
-        else if (browser.i18n.getUILanguage() === 'zh-TW') {
-          // Since getUILanguage() cannot get the zh-HK language code
-          // use getAcceptLanguages() to get the language code
-          const languages: string[] = await browser.i18n.getAcceptLanguages()
-          if (languages.includes('zh-HK')) {
-            settings.value.language = LanguageType.Cantonese
-          }
-          else {
-            settings.value.language = LanguageType.Mandarin_TW
-          }
-        }
-        else {
-          settings.value.language = LanguageType.English
-        }
-      }
-
-      locale.value = settings.value.language
-
-      if (locale.value === LanguageType.Mandarin_CN) {
-        document.documentElement.lang = 'zh-CN'
-      }
-      else if (locale.value === LanguageType.Mandarin_TW) {
-        document.documentElement.lang = 'zh-TW'
-      }
-      else if (locale.value === LanguageType.Cantonese) {
-        document.documentElement.lang = 'zh-HK'
-      }
-      else {
-        document.documentElement.lang = 'en'
-      }
+      await ensureInterfaceLanguage()
     },
     { immediate: true },
   )
