@@ -520,15 +520,6 @@ const hideUIForIframePhotoViewer = ref<boolean>(false)
 
 const iframePageRef = ref()
 
-// 监听来自iframe的图片预览器状态
-useEventListener(window, 'message', (event) => {
-  const iframe = iframePageRef.value?.$el?.querySelector('iframe') as HTMLIFrameElement | null
-  const data = getIframeMessageData(event, iframe)
-  if (data?.type !== 'IFRAME_PHOTO_VIEWER_STATE' || typeof data.isOpen !== 'boolean')
-    return
-  hideUIForIframePhotoViewer.value = data.isOpen
-})
-
 const iframePageURL = computed((): string => {
   // If the iframe is not the BiliBili homepage or in iframe, then don't show the iframe page
   if (!isHomePage(currentLocationHref.value) || isInIframe())
@@ -541,7 +532,26 @@ const iframePageURL = computed((): string => {
     ? mainStore.getBiliWebPageURLByPage(activatedPage.value)
     : ''
 })
-watch(iframePageURL, url => setIframePageActive(Boolean(url)), { immediate: true })
+
+// 监听来自当前 iframe page 的图片预览器状态；旧 iframe 的延迟消息不得重新隐藏 UI。
+useEventListener(window, 'message', (event) => {
+  const iframe = iframePageRef.value?.$el?.querySelector('iframe') as HTMLIFrameElement | null
+  if (!iframe || !iframePageURL.value)
+    return
+  const configuredUrl = new URL(iframe.getAttribute('src') || '', window.location.href).href
+  const expectedUrl = new URL(iframePageURL.value, window.location.href).href
+  if (configuredUrl !== expectedUrl)
+    return
+  const data = getIframeMessageData(event, iframe)
+  if (data?.type !== 'IFRAME_PHOTO_VIEWER_STATE' || typeof data.isOpen !== 'boolean')
+    return
+  hideUIForIframePhotoViewer.value = data.isOpen
+})
+
+watch(iframePageURL, (url) => {
+  hideUIForIframePhotoViewer.value = false
+  setIframePageActive(Boolean(url))
+}, { immediate: true })
 onBeforeUnmount(() => setIframePageActive(false))
 const showBewlyPage = computed((): boolean => {
   if (isInIframe())

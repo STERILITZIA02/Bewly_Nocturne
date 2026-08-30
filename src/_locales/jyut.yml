@@ -1298,23 +1298,37 @@ moment_card:
   view_comments: 睇留言
   collapse_comments: 收起留言
   comments: 留言
+  forward: 轉發
+  forward_collapse: 收起轉發
+  forward_placeholder: 講兩句…
+  forward_emoji: 表情
+  forward_select_topic: 揀話題
+  forward_search_topic: 搜尋話題
+  forward_topic_empty: 搵唔到話題
+  forward_clear_topic: 清除話題
+  forward_submitting: 轉發緊
+  forward_success: 轉發成功
+  forward_failed: 轉發失敗，請遲啲再試
+  forward_emote_failed: 表情載入失敗，可以重試
+  forward_topic_search_failed: 話題搜尋失敗，可以重試
+  forward_account_unavailable: 登入後先可以轉發動態
+  forward_csrf_unavailable: 讀唔到登入憑證，請重新整理再試
+  forward_moment_unavailable: 而家轉發唔到呢條動態
   comments_loading: 載入緊留言…
   comments_empty: 暫時未有留言
   comments_load_failed: 留言載入失敗，請遲啲再試
   comments_retry: 再試
+  comments_refresh: 重新整理
   comments_load_more: 睇更多留言
-  comments_reply_count: '{count} 條回覆'
+  comments_missing_parent: 上層回覆仲未載入
+  comments_reply_new_tab: 喺新分頁回覆
+  comments_expand_replies: 展開其餘回覆
+  comments_load_more_replies: 載入更多回覆
+  comments_replies_failed: 回覆載入失敗，可以重試
   comment_like: 讚好留言
   comment_unlike: 取消留言讚好
-  comment_reply: 回覆
-  comment_reply_to: 回覆 {name}
-  comment_reply_placeholder: 寫低你嘅回覆…
-  comment_send: 傳送
-  comment_sending: 傳送緊…
   comment_login_required: 登入後先可以同留言互動
   comment_like_failed: 留言讚好失敗，請遲啲再試
-  comment_reply_failed: 回覆傳送失敗，請遲啲再試
-  comment_reply_succeeded: 回覆已傳送
   live_popularity: '{count} 人氣'
   no_data: 暫時冇數據
   live_now: 直播緊

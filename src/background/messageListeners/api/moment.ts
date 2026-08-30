@@ -84,6 +84,87 @@ const API_MOMENT = {
     },
     afterHandle: AHS.J_D,
   },
+  getMomentCommentReplies: {
+    url: 'https://api.bilibili.com/x/v2/reply/reply',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      type: 1,
+      oid: '' as string | number,
+      root: '',
+      pn: 1,
+      ps: 20,
+    },
+    afterHandle: AHS.J_D,
+  },
+  getMomentEmotes: {
+    url: 'https://api.bilibili.com/x/emote/user/panel/web',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      business: 'dynamic',
+    },
+    afterHandle: AHS.J_D,
+  },
+  searchMomentTopics: {
+    url: 'https://app.bilibili.com/x/topic/pub/search',
+    _fetch: {
+      method: 'get',
+    },
+    params: {
+      keywords: '',
+      content: '',
+      page_size: 10,
+      page_num: 1,
+      web_location: '333.1365',
+    },
+    afterHandle: AHS.J_D,
+  },
+  // Current Web publishing traffic uses CSRF + JSON and x-bili-device-req-json here.
+  // It does not send x-bili-web-req-json or require client-side WBI signing.
+  checkMomentCreate: {
+    url: 'https://api.bilibili.com/x/dynamic/feed/create/submit_check',
+    _fetch: {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: {
+        content: {} as Record<string, unknown>,
+        pics: [] as unknown[],
+        attach_card: null as null,
+        scene: 4,
+        create_option: {} as Record<string, unknown>,
+      },
+    },
+    params: {
+      platform: 'web',
+      csrf: '',
+      'x-bili-device-req-json': '{"platform":"web","device":"pc","spmid":"333.1365"}',
+    },
+    afterHandle: AHS.J_D,
+  },
+  createMoment: {
+    url: 'https://api.bilibili.com/x/dynamic/feed/create/dyn',
+    _fetch: {
+      method: 'post',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: {
+        dyn_req: {} as Record<string, unknown>,
+        web_repost_src: {} as Record<string, unknown>,
+      },
+    },
+    params: {
+      platform: 'web',
+      csrf: '',
+      'x-bili-device-req-json': '{"platform":"web","device":"pc","spmid":"333.1365"}',
+    },
+    afterHandle: AHS.J_D,
+  },
   setMomentCommentLike: {
     url: 'https://api.bilibili.com/x/v2/reply/action',
     _fetch: {
@@ -101,25 +182,7 @@ const API_MOMENT = {
     },
     afterHandle: AHS.J_D,
   },
-  addMomentCommentReply: {
-    url: 'https://api.bilibili.com/x/v2/reply/add',
-    _fetch: {
-      method: 'post',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      },
-      body: {
-        oid: '' as string | number,
-        type: 1,
-        message: '',
-        plat: 1,
-        root: '',
-        parent: '',
-        csrf: '',
-      },
-    },
-    afterHandle: AHS.J_D,
-  },
+
   setMomentLike: {
     url: 'https://api.bilibili.com/x/dynamic/feed/dyn/thumb',
     _fetch: {

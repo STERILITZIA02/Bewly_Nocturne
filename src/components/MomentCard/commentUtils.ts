@@ -5,6 +5,13 @@ export interface MomentCommentAuthor {
   nameColor?: string
 }
 
+export interface MomentCommentPicture {
+  url: string
+  width: number
+  height: number
+  sizeKb?: number
+}
+
 export type MomentCommentSegment
   = | { type: 'text', text: string }
     | { type: 'emote', text: string, url: string }
@@ -19,6 +26,7 @@ export interface MomentCommentItem {
   author: MomentCommentAuthor
   message: string
   segments: MomentCommentSegment[]
+  pictures: MomentCommentPicture[]
   createdAt: number
   likeCount: number
   isLiked: boolean
@@ -57,6 +65,39 @@ function firstString(...values: unknown[]): string {
 
 function isSafeRemoteUrl(url: string): boolean {
   return /^(?:https?:)?\/\//i.test(url)
+}
+
+function toPositiveFiniteNumber(value: unknown): number {
+  const number = Number(value)
+  return Number.isFinite(number) && number > 0 ? number : 0
+}
+
+export function normalizeMomentCommentPictureUrl(value: unknown): string {
+  if (typeof value !== 'string')
+    return ''
+  const url = value.trim()
+  if (!url)
+    return ''
+  const normalizedUrl = url.startsWith('//')
+    ? `https:${url}`
+    : url.replace(/^http:/i, 'https:')
+  return /^https:\/\//i.test(normalizedUrl) ? normalizedUrl : ''
+}
+
+export function normalizeMomentCommentPictures(contentValue: unknown): MomentCommentPicture[] {
+  return asArray(asRecord(contentValue).pictures).flatMap((value) => {
+    const raw = asRecord(value)
+    const url = normalizeMomentCommentPictureUrl(raw.img_src)
+    if (!url)
+      return []
+    const sizeKb = toPositiveFiniteNumber(raw.img_size)
+    return [{
+      url,
+      width: toPositiveFiniteNumber(raw.img_width),
+      height: toPositiveFiniteNumber(raw.img_height),
+      ...(sizeKb ? { sizeKb } : {}),
+    }]
+  })
 }
 
 function appendText(segments: MomentCommentSegment[], text: string) {
@@ -137,6 +178,8 @@ export function normalizeMomentCommentSegments(
   contentValue: unknown,
   message: string,
 ): MomentCommentSegment[] {
+  if (!message)
+    return []
   const replacements = Array.from(getRichNodeReplacements(asRecord(contentValue)).values())
     .sort((left, right) => right.text.length - left.text.length)
   if (!replacements.length)
@@ -168,7 +211,7 @@ export function normalizeMomentCommentSegments(
   return segments.length ? segments : [{ type: 'text', text: message }]
 }
 
-function normalizeComment(value: unknown): MomentCommentItem | null {
+export function normalizeMomentComment(value: unknown): MomentCommentItem | null {
   const raw = asRecord(value)
   const member = asRecord(raw.member)
   const vip = asRecord(member.vip)
@@ -177,16 +220,18 @@ function normalizeComment(value: unknown): MomentCommentItem | null {
     .map(node => firstString(asRecord(node).text, asRecord(node).orig_text))
     .join('')
   const message = firstString(content.message, richNodeMessage).trim()
+  const pictures = normalizeMomentCommentPictures(content)
   const createdAt = Number(raw.ctime) || 0
   const authorId = toId(member.mid || raw.mid)
   const rpid = toId(raw.rpid_str || raw.rpid)
-  const id = rpid || `${authorId}-${createdAt}-${message}`
-  if (!id || !message)
+  const fallbackContentKey = message || pictures.map(picture => picture.url).join('|')
+  const id = rpid || `${authorId}-${createdAt}-${fallbackContentKey}`
+  if (!id || (!message && !pictures.length))
     return null
 
-  const replies = asArray(raw.replies)
-    .map(normalizeComment)
-    .filter((item): item is MomentCommentItem => Boolean(item))
+  const replies = mergeMomentComments([], asArray(raw.replies)
+    .map(normalizeMomentComment)
+    .filter((item): item is MomentCommentItem => Boolean(item)))
 
   const action = asRecord(raw.action)
   const upAction = asRecord(raw.up_action)
@@ -194,7 +239,7 @@ function normalizeComment(value: unknown): MomentCommentItem | null {
   return {
     id,
     rpid,
-    rootRpid: toReplyRelationId(raw.root_str || raw.root),
+    rootRpid: toReplyRelationId(raw.root_str || raw.root) || rpid,
     parentRpid: toReplyRelationId(raw.parent_str || raw.parent),
     author: {
       id: authorId,
@@ -208,6 +253,7 @@ function normalizeComment(value: unknown): MomentCommentItem | null {
     },
     message,
     segments: normalizeMomentCommentSegments(content, message),
+    pictures,
     createdAt,
     likeCount: Math.max(0, Number(raw.like) || 0),
     isLiked: Number(raw.action) === 1
@@ -237,6 +283,20 @@ export function mergeMomentComments(
   return items
 }
 
+export function flattenMomentCommentReplies(items: MomentCommentItem[]): MomentCommentItem[] {
+  const flattened: MomentCommentItem[] = []
+  const visited = new Set<string>()
+  const visit = (item: MomentCommentItem) => {
+    if (visited.has(item.id))
+      return
+    visited.add(item.id)
+    flattened.push(item)
+    item.replies.forEach(visit)
+  }
+  items.forEach(visit)
+  return flattened
+}
+
 export function normalizeMomentCommentPage(
   response: unknown,
   requestedPage: number,
@@ -256,7 +316,7 @@ export function normalizeMomentCommentPage(
   const items = mergeMomentComments(
     [],
     source
-      .map(normalizeComment)
+      .map(normalizeMomentComment)
       .filter((item): item is MomentCommentItem => Boolean(item)),
   )
 
@@ -269,6 +329,36 @@ export function normalizeMomentCommentPage(
     : total > 0
       ? pageNumber * pageSize < total
       : replies.length >= pageSize
+
+  return {
+    items,
+    hasMore,
+    nextPage: pageNumber + 1,
+  }
+}
+
+export function normalizeMomentCommentRepliesPage(
+  response: unknown,
+  requestedPage: number,
+  requestedPageSize: number,
+): MomentCommentPage {
+  const root = asRecord(response)
+  if (Number(root.code) !== 0)
+    throw new Error(typeof root.message === 'string' && root.message ? root.message : 'Comment reply request failed')
+
+  const data = asRecord(root.data)
+  const page = asRecord(data.page)
+  const source = mergeMomentComments([], [
+    ...asArray(data.replies),
+    ...asArray(asRecord(data.root).replies),
+  ].map(normalizeMomentComment).filter((item): item is MomentCommentItem => Boolean(item)))
+  const items = flattenMomentCommentReplies(source)
+  const pageNumber = Math.max(1, Number(page.num) || requestedPage)
+  const pageSize = Math.max(1, Number(page.size) || requestedPageSize)
+  const total = Math.max(0, Number(page.count ?? page.acount) || 0)
+  const hasMore = total > 0
+    ? pageNumber * pageSize < total
+    : source.length >= pageSize
 
   return {
     items,

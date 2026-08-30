@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
-import { IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
+import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
+import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
+import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
@@ -34,6 +37,8 @@ const isEscPressed = ref<boolean>(false)
 const escPressedTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const showEscHint = ref<boolean>(false)
 const escHintTimer = ref<ReturnType<typeof setTimeout> | null>(null)
+let iframeEscapeHandledGeneration = 0
+const escapeArbitrationTimers = new Set<number>()
 
 // 计算属性：只有在显示iframe时才设置src，避免隐藏时提前加载
 const src = computed(() => showIframe.value ? currentUrl.value : undefined)
@@ -169,6 +174,8 @@ function handleClose() {
   if (!show.value)
     return
 
+  clearEscapeConfirmation()
+  clearEscapeArbitrationTimers()
   if (delayCloseTimer.value) {
     clearTimeout(delayCloseTimer.value)
     delayCloseTimer.value = null
@@ -250,32 +257,24 @@ function handleOpenInNewTab() {
   }
 }
 
-/**
- * Listen to Escape key using native event listener
- */
-function handleKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape' && e.code !== 'Escape')
-    return
-
-  // Only handle when this drawer is the active drawer
-  if (activeDrawer.value !== DrawerType.NotificationsDrawer)
-    return
-
-  e.preventDefault()
-  e.stopPropagation()
-
-  if (settings.value.drawerEscapeBehavior === 'immediate') {
-    if (escPressedTimer.value)
-      clearTimeout(escPressedTimer.value)
-    handleClose()
-    return
+function clearEscapeConfirmation() {
+  isEscPressed.value = false
+  if (escPressedTimer.value) {
+    clearTimeout(escPressedTimer.value)
+    escPressedTimer.value = null
   }
-  if (isEscPressed.value) {
-    handleClose()
-  }
-  else {
-    startEscConfirmation()
-  }
+}
+
+function clearEscapeArbitrationTimers() {
+  for (const timer of escapeArbitrationTimers)
+    window.clearTimeout(timer)
+  escapeArbitrationTimers.clear()
+}
+
+function hasDrawerEscapePriorityState() {
+  return hasIframeEscapePriorityState({
+    bewlyWidescreenEngaged: isBewlyWidescreenEngaged(),
+  }) || isEditableLeafActiveElement()
 }
 
 function startEscConfirmation() {
@@ -288,15 +287,57 @@ function startEscConfirmation() {
   }, ESC_CONFIRM_WINDOW_MS)
 }
 
-function handleWindowMessage(event: MessageEvent) {
-  const data = getIframeMessageData(event, iframeRef.value)
-  if (data?.type !== 'BEWLY_DRAWER_CLOSE_REQUEST' || data.source !== 'iframe')
+function applyDrawerEscapeRequest() {
+  if (!show.value || activeDrawer.value !== DrawerType.NotificationsDrawer)
     return
-
-  if (settings.value.drawerEscapeBehavior === 'immediate' || isEscPressed.value)
+  const action = resolveDrawerEscapeBehavior(settings.value.drawerEscapeBehavior, isEscPressed.value)
+  if (action === 'close')
     handleClose()
   else
     startEscConfirmation()
+}
+
+function handleKeydown(event: KeyboardEvent) {
+  if (!isEligibleDrawerEscape(event) || activeDrawer.value !== DrawerType.NotificationsDrawer || !show.value)
+    return
+
+  const hadPriorityState = hasDrawerEscapePriorityState()
+  const handledGeneration = iframeEscapeHandledGeneration
+  const timer = window.setTimeout(() => {
+    escapeArbitrationTimers.delete(timer)
+    const canHandle = shouldHandleDrawerEscape({
+      active: show.value && activeDrawer.value === DrawerType.NotificationsDrawer,
+      defaultPrevented: event.defaultPrevented,
+      propagationStopped: event.cancelBubble,
+      hadPriorityState,
+      hasPriorityState: hasDrawerEscapePriorityState(),
+      iframeHandled: iframeEscapeHandledGeneration !== handledGeneration,
+    })
+    if (!canHandle) {
+      clearEscapeConfirmation()
+      return
+    }
+    applyDrawerEscapeRequest()
+  }, 0)
+  escapeArbitrationTimers.add(timer)
+}
+
+function handleWindowMessage(event: MessageEvent) {
+  const data = getIframeMessageData(event, iframeRef.value)
+  if (!data || data.source !== 'iframe')
+    return
+
+  if (data.type === BEWLY_DRAWER_ESCAPE_HANDLED) {
+    iframeEscapeHandledGeneration += 1
+    clearEscapeConfirmation()
+    return
+  }
+  if (data.type !== BEWLY_DRAWER_CLOSE_REQUEST)
+    return
+  if (hasDrawerEscapePriorityState())
+    clearEscapeConfirmation()
+  else
+    applyDrawerEscapeRequest()
 }
 
 function showEscHintTemporarily() {
@@ -362,10 +403,8 @@ function clearLifecycleTimers() {
   clearOpenIframeTimer()
   clearRevealIframeTimer()
   clearDarkModeSyncTimers()
-  if (escPressedTimer.value) {
-    clearTimeout(escPressedTimer.value)
-    escPressedTimer.value = null
-  }
+  clearEscapeConfirmation()
+  clearEscapeArbitrationTimers()
   if (escHintTimer.value) {
     clearTimeout(escHintTimer.value)
     escHintTimer.value = null
@@ -437,7 +476,6 @@ function handleFocusDrawer(e?: Event) {
           pos="absolute top-0 right-0" of-hidden bg="$bew-bg"
           w="xl:70vw lg:80vw md:100vw 100vw" max-w="$bew-layout-drawer-max-width" h-full
           outline-none
-          @keydown="handleKeydown"
           @mousedown.self="handleFocusDrawer"
         >
           <div

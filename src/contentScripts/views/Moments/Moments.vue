@@ -7,6 +7,7 @@ import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
+import { normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
 import type { DisplayForwardVideo, DisplayMoment, DisplayRichTextSegment, WatchLaterTarget } from '~/components/MomentCard/types'
 import {
   formatCount,
@@ -18,6 +19,7 @@ import {
 } from '~/components/MomentCard/utils'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useStorageLocal } from '~/composables/useStorageLocal'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
@@ -35,6 +37,9 @@ import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
+import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
+import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
+import { normalizeMomentRemoteUrl } from '~/utils/momentUrl'
 import { openLinkInBackground } from '~/utils/tabs'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
 import { getDirectWatchLaterAid, resolveWatchLaterAid } from '~/utils/watchLater'
@@ -160,10 +165,12 @@ const portalUpList = ref<MomentsPortalUpItem[]>([])
 const selectedHostMid = ref('')
 const isPortalLoading = ref(true)
 const upListScrollerRef = ref<HTMLElement | null>(null)
+const upListTrackRef = ref<HTMLElement | null>(null)
 const canScrollUpListLeft = ref(false)
 const canScrollUpListRight = ref(false)
 let upListResizeObserver: ResizeObserver | undefined
-const showMomentsSidebar = ref(true)
+let upListStateFrame: number | undefined
+const showMomentsSidebar = ref(false)
 const momentColumns = ref<DisplayMoment[][]>([])
 const selectedMoment = ref<DisplayMoment | null>(null)
 const detailFrameUrl = ref('')
@@ -188,20 +195,14 @@ const DETAIL_FOCUS_MAX_ATTEMPTS = 4
 const DETAIL_FOCUS_RETRY_DELAY = 120
 const DETAIL_FOCUS_DEADLINE = 720
 const layoutRef = ref<HTMLElement | null>(null)
+const momentsContentRef = ref<HTMLElement | null>(null)
 const gridRef = ref<HTMLElement | null>(null)
-/** 按当前实际列数限制卡片最大宽度 */
-const CARD_MAX_WIDTH_BY_COLUMNS = {
-  1: 720,
-  2: 600,
-  3: 520,
-} as const
 const CARD_MIN_WIDTH = 360
-const CARD_COMPACT_MIN_WIDTH = 260
 const GRID_GAP = 16
 const SIDEBAR_WIDTH = 248
-const SIDEBAR_MIN_LAYOUT_WIDTH = SIDEBAR_WIDTH + GRID_GAP + CARD_MIN_WIDTH
+const SIDEBAR_MIN_MAIN_WIDTH = CARD_MIN_WIDTH * 2 + GRID_GAP
 const gridColumnCount = ref(1)
-const gridCardWidth = ref<number>(CARD_MAX_WIDTH_BY_COLUMNS[1])
+const gridCardWidth = ref(520)
 let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
 const hoveredMediaId = ref('')
 const previewUrls = reactive<Record<string, string>>({})
@@ -215,6 +216,7 @@ const watchLaterAidByTarget = reactive(new Map<string, number>())
 const watchLaterAidRequests = new Map<string, Promise<number | undefined>>()
 const videoCidCache = new Map<string, number>()
 const videoCidRequests = new Map<string, Promise<number | undefined>>()
+const forwardCountOverrides = new Map<string, number>()
 const videoAspectRatios = reactive<Record<string, number>>({})
 const videoAspectRatioRequests = new Map<string, Promise<number | undefined>>()
 const cardHeights = reactive<Record<string, number>>({})
@@ -263,6 +265,7 @@ let visibilityObserver: IntersectionObserver | undefined
 /** 最近滚动时间，用于避免滚动中重排导致抖动 */
 let lastScrollAt = 0
 let virtualRaf = 0
+let cardGeometryFrame = 0
 let feedRequestToken = 0
 let portalRequestToken = 0
 let momentsMounted = false
@@ -281,11 +284,16 @@ const pinnedUserMids = computed(() => new Set(momentsPinnedUsers.value.map(user 
 const visiblePortalUpList = computed(() =>
   portalUpList.value.filter(up => !pinnedUserMids.value.has(up.mid)),
 )
+const directWantedUsers = computed(() => momentsWantedUsers.value.filter(user => (
+  !portalUpList.value.some(up => up.mid === user.mid)
+  && !pinnedUserMids.value.has(user.mid)
+)))
 const showMomentsUpList = computed(() =>
   settings.value.momentsShowUpList
   && (
     isPortalLoading.value
     || portalUpList.value.length > 0
+    || momentsWantedUsers.value.length > 0
     || momentsPinnedUsers.value.length > 0
     || settings.value.momentsEnableWantedFilter
   ),
@@ -305,9 +313,7 @@ function ensureMomentsCacheAccount(accountId: AccountId) {
   }
 }
 
-function httpsUrl(url = '') {
-  return url.replace(/^http:/, 'https:')
-}
+const httpsUrl = normalizeMomentRemoteUrl
 
 function getDetailImageUrlKey(url: string) {
   const path = httpsUrl(url.trim())
@@ -1008,6 +1014,7 @@ function openDetailImageViewer(
   detailImageViewerSource.value = source
   detailImageViewerTrigger.value = trigger
   detailImageViewerOpen.value = true
+  document.documentElement.classList.add('bewly-moment-image-viewer-open')
   clearDetailFocusRetry()
   resetDetailImageViewerTransform()
   nextTick(() => detailImageViewerRef.value?.focus({ preventScroll: true }))
@@ -1032,6 +1039,7 @@ function closeDetailImageViewer() {
     // iframe 已销毁时忽略
   }
   detailImageViewerOpen.value = false
+  document.documentElement.classList.remove('bewly-moment-image-viewer-open')
   detailImageViewerUrls.value = []
   const source = detailImageViewerSource.value
   const trigger = detailImageViewerTrigger.value
@@ -1355,6 +1363,19 @@ function collectVideoPublicationTimes(items: DataItem[]) {
   })
 }
 
+function resolveMomentForwardCount(momentId: string, value: unknown): number {
+  const serverCount = normalizeForwardCount(value)
+  const key = `${getCurrentAccountId()}:${momentId}`
+  const override = forwardCountOverrides.get(key)
+  if (override === undefined)
+    return serverCount
+  if (serverCount >= override) {
+    forwardCountOverrides.delete(key)
+    return serverCount
+  }
+  return override
+}
+
 function mapMoment(item: DataItem): DisplayMoment {
   const raw = item as any
   const author = raw.modules?.module_author || {}
@@ -1428,6 +1449,7 @@ function mapMoment(item: DataItem): DisplayMoment {
       || raw.modules?.module_stat?.like?.disabled,
     ),
     commentCount: Number(raw.modules?.module_stat?.comment?.count || 0),
+    forwardCount: resolveMomentForwardCount(id, raw.modules?.module_stat?.forward?.count),
     commentId: raw.basic?.comment_id_str ? String(raw.basic.comment_id_str) : undefined,
     commentType: Number(raw.basic?.comment_type) || undefined,
     hotComment: hotCommentText || hotCommentRichText.length
@@ -1519,48 +1541,62 @@ function mapMoment(item: DataItem): DisplayMoment {
 }
 
 function estimateCardHeight(moment: DisplayMoment) {
-  const columnWidth = Math.max(
-    CARD_COMPACT_MIN_WIDTH,
-    gridCardWidth.value || CARD_MAX_WIDTH_BY_COLUMNS[gridColumnCount.value as 1 | 2 | 3],
-  )
-  const contentScale = Math.max(1, columnWidth / CARD_MAX_WIDTH_BY_COLUMNS[3])
+  const columnWidth = Math.max(1, gridCardWidth.value || 520)
+  const contentScale = Math.max(1, Math.min(1.6, columnWidth / 520))
   const scaledTextBodyExtra = Math.round(230 * (contentScale - 1))
   const interactionHeight = moment.hotComment ? 52 : 0
+  const additionalHeight = moment.additional ? 68 : 0
+  if (shouldUseWideMomentCardLayout(moment, columnWidth)) {
+    const mediaWidth = Math.max(1, (columnWidth - GRID_GAP * 3) * 0.6)
+    const mediaRatio = moment.isVideo || moment.isLive ? 16 / 9 : getMomentImageRatio(moment)
+    const mediaHeight = mediaWidth / mediaRatio
+    const bodyWidth = Math.max(160, (columnWidth - GRID_GAP * 3) * 0.4 - GRID_GAP * 2)
+    const charsPerLine = Math.max(12, Math.floor(bodyWidth / 14))
+    const textLineCount = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / charsPerLine)))
+    const bodyHeight = 96 + textLineCount * 24 + (moment.title ? 44 : 0)
+    return 115 + Math.round(Math.max(mediaHeight, bodyHeight)) + additionalHeight + interactionHeight
+  }
   if (isCompactPlainTextMoment(moment)) {
     const charsPerLine = Math.max(12, Math.floor((columnWidth - 32) / 14))
     const lineCount = Math.min(7, Math.max(1, (moment.text || '').split('\n').reduce(
       (total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)),
       0,
     )))
-    return 118 + lineCount * 21 + interactionHeight
+    return 118 + lineCount * 21 + additionalHeight + interactionHeight
   }
   if (moment.forward?.images?.length) {
     const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
-    const galleryRatio = moment.forward.images.length <= 3
-      ? moment.forward.images.length
-      : moment.forward.images.length <= 4
-        ? 1
-        : moment.forward.images.length <= 6
-          ? 3 / 2
-          : 1
+    const firstImageRatio = moment.forward.imageRatios?.[0]
+    const singleImageRatio = typeof firstImageRatio === 'number' && Number.isFinite(firstImageRatio) && firstImageRatio > 0
+      ? Math.min(2, Math.max(0.5, firstImageRatio))
+      : 1
+    const galleryRatio = moment.forward.images.length === 1
+      ? singleImageRatio
+      : moment.forward.images.length <= 3
+        ? moment.forward.images.length
+        : moment.forward.images.length <= 4
+          ? 1
+          : moment.forward.images.length <= 6
+            ? 3 / 2
+            : 1
     // Forward galleries sit inside the bordered card with 12px side/bottom
     // insets; subtract the 16px main inset and the 2px card border as well.
     const galleryWidth = Math.max(1, columnWidth - 58)
-    return 190 + introLines * 21 + Math.round(galleryWidth / galleryRatio) + interactionHeight
+    return 190 + introLines * 21 + Math.round(galleryWidth / galleryRatio) + additionalHeight + interactionHeight
   }
   if (moment.forward?.video) {
     const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
     const forwardMediaWidth = Math.max(150, (columnWidth - 32) * 0.44)
-    return 117 + Math.round(forwardMediaWidth * 9 / 16) + introLines * 21 + interactionHeight
+    return 117 + Math.round(forwardMediaWidth * 9 / 16) + introLines * 21 + additionalHeight + interactionHeight
   }
   if (moment.isChargeExclusive && !moment.isVideo)
-    return 230 + scaledTextBodyExtra + interactionHeight
+    return 230 + scaledTextBodyExtra + additionalHeight + interactionHeight
   if (columnWidth < CARD_MIN_WIDTH) {
     if (moment.isLive)
-      return Math.round(columnWidth * 9 / 16) + 210 + interactionHeight
+      return Math.round(columnWidth * 9 / 16) + 210 + additionalHeight + interactionHeight
   }
   if (moment.isLive)
-    return Math.round((columnWidth - 32) * 9 / 16) + 190 + interactionHeight
+    return Math.round((columnWidth - 32) * 9 / 16) + 190 + additionalHeight + interactionHeight
   if (moment.isVideo) {
     const contentWidth = Math.max(1, columnWidth - 32)
     const charsPerLine = Math.max(12, Math.floor(contentWidth / 15))
@@ -1568,7 +1604,7 @@ function estimateCardHeight(moment: DisplayMoment) {
     const description = getCardPreviewText(moment)
     const descriptionLines = description ? Math.min(3, Math.max(1, Math.ceil(description.length / charsPerLine))) : 0
     const bodyHeight = titleLines * 22 + descriptionLines * 24 + (titleLines && descriptionLines ? 8 : 0)
-    return Math.round(contentWidth * 9 / 16) + 116 + bodyHeight + (moment.additional ? 68 : 0) + interactionHeight
+    return Math.round(contentWidth * 9 / 16) + 116 + bodyHeight + additionalHeight + interactionHeight
   }
   if (moment.images.length && !moment.isVideo && !moment.isLive) {
     const galleryRatio = moment.images.length === 1
@@ -1580,7 +1616,7 @@ function estimateCardHeight(moment: DisplayMoment) {
           : moment.images.length <= 6
             ? 3 / 2
             : 1
-    return Math.round((columnWidth - 32) / galleryRatio) + 220 + interactionHeight
+    return Math.round((columnWidth - 32) / galleryRatio) + 220 + additionalHeight + interactionHeight
   }
   const charsPerLine = Math.max(12, Math.floor((columnWidth - 32) / 14))
   const textLineCount = Math.min(12, Math.max(1, (moment.text || '').split('\n').reduce(
@@ -1590,7 +1626,7 @@ function estimateCardHeight(moment: DisplayMoment) {
   return 112
     + textLineCount * 24
     + (moment.title ? 30 : 0)
-    + (moment.additional ? 68 : 0)
+    + additionalHeight
     + interactionHeight
 }
 
@@ -1674,7 +1710,7 @@ function handleUpListWheel(event: WheelEvent) {
 
   scroller.scrollLeft += event.deltaY
   event.preventDefault()
-  updateUpListScrollState()
+  scheduleUpListStateUpdate()
 }
 
 function updateUpListScrollState() {
@@ -1685,9 +1721,22 @@ function updateUpListScrollState() {
     return
   }
 
-  const maxScrollLeft = scroller.scrollWidth - scroller.clientWidth
-  canScrollUpListLeft.value = scroller.scrollLeft > 1
-  canScrollUpListRight.value = maxScrollLeft > 1 && scroller.scrollLeft < maxScrollLeft - 1
+  const state = resolveHorizontalScrollState({
+    scrollLeft: scroller.scrollLeft,
+    scrollWidth: scroller.scrollWidth,
+    clientWidth: scroller.clientWidth,
+  })
+  canScrollUpListLeft.value = state.canScrollLeft
+  canScrollUpListRight.value = state.canScrollRight
+}
+
+function scheduleUpListStateUpdate() {
+  if (upListStateFrame !== undefined)
+    return
+  upListStateFrame = requestAnimationFrame(() => {
+    upListStateFrame = undefined
+    updateUpListScrollState()
+  })
 }
 
 function scrollUpListBy(direction: -1 | 1) {
@@ -1706,11 +1755,11 @@ function setupUpListScrollerObserver() {
   if (!scroller)
     return
 
-  upListResizeObserver = new ResizeObserver(() => {
-    updateUpListScrollState()
-  })
+  upListResizeObserver = new ResizeObserver(scheduleUpListStateUpdate)
   upListResizeObserver.observe(scroller)
-  updateUpListScrollState()
+  if (upListTrackRef.value)
+    upListResizeObserver.observe(upListTrackRef.value)
+  scheduleUpListStateUpdate()
 }
 
 function isFeedRequestCurrent(
@@ -1719,7 +1768,8 @@ function isFeedRequestCurrent(
   requestGroup: MomentGroup,
   requestHostMid: string,
 ) {
-  return requestToken === feedRequestToken
+  return momentsMounted
+    && requestToken === feedRequestToken
     && isSameAccount(loadedAccountId, getCurrentAccountId())
     && requestType === activeMomentFilter.value
     && requestGroup === activeMomentGroup.value
@@ -1976,6 +2026,9 @@ async function reapplyMomentFiltersFromCache() {
     return false
 
   const requestToken = ++feedRequestToken
+  const requestType = activeMomentFilter.value
+  const requestGroup = activeMomentGroup.value
+  const requestHostMid = selectedHostMid.value
   const filteredItems = cacheEntry.items
     .filter(passesMomentSettings)
     .sort((a, b) => b.publishedAt - a.publishedAt)
@@ -1995,6 +2048,12 @@ async function reapplyMomentFiltersFromCache() {
 
   if (filteredItems.length > 0 || !cacheEntry.hasMore) {
     void prepareMomentCovers(filteredItems, requestToken)
+    await nextTick()
+    if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
+      updateGridColumnCount()
+      updateVirtualColumns()
+      maybeLoadMoreNearBottom()
+    }
     return true
   }
   return false
@@ -2096,34 +2155,61 @@ function redistributeColumns() {
   updateVirtualColumns()
 }
 
+function invalidateCardMeasurementsForWidthChange() {
+  Object.keys(cardHeights).forEach(id => delete cardHeights[id])
+  settledHeights.clear()
+  if (cardGeometryFrame)
+    cancelAnimationFrame(cardGeometryFrame)
+  cardGeometryFrame = requestAnimationFrame(() => {
+    cardGeometryFrame = 0
+    cardElements.forEach((element, id) => {
+      fitVideoCardDescription(element)
+      const height = element.getBoundingClientRect().height
+      if (height > 0)
+        commitCardHeight(id, height, { force: true })
+    })
+    updateVirtualColumns()
+    maybeLoadMoreNearBottom()
+  })
+}
+
 /** 按设置的期望列数排布；空间不足时降列，避免卡片窄于最小可读宽度。 */
 function updateGridColumnCount() {
-  const layoutWidth = layoutRef.value?.clientWidth || Math.max(CARD_MAX_WIDTH_BY_COLUMNS[1], window.innerWidth - 220)
+  const layoutWidth = layoutRef.value?.clientWidth || window.innerWidth
+  const mainRailWidth = momentsContentRef.value?.clientWidth || layoutWidth
   const hasSidebarContent = settings.value.momentsSidebarShowUserCard
     || settings.value.momentsSidebarShowPublish
     || settings.value.momentsSidebarShowLive
-  showMomentsSidebar.value = hasSidebarContent && layoutWidth >= SIDEBAR_MIN_LAYOUT_WIDTH
-  const sidebarSpace = showMomentsSidebar.value ? SIDEBAR_WIDTH + GRID_GAP : 0
-  const containerWidth = Math.max(CARD_COMPACT_MIN_WIDTH, layoutWidth - sidebarSpace)
+  showMomentsSidebar.value = shouldShowMomentsSidebar({
+    layoutWidth,
+    sidebarWidth: SIDEBAR_WIDTH,
+    gap: GRID_GAP,
+    minMainWidth: SIDEBAR_MIN_MAIN_WIDTH,
+    hasContent: hasSidebarContent,
+  })
+
   const preferredColumns = Math.min(3, Math.max(1, Number(momentsGridColumns.value) || 3))
-  const fittingColumns = Math.max(
-    1,
-    Math.floor((containerWidth + GRID_GAP) / (CARD_MIN_WIDTH + GRID_GAP)),
-  )
-  const nextCols = Math.min(
+  const nextCols = resolveMomentGridColumnCount({
+    containerWidth: mainRailWidth,
     preferredColumns,
-    fittingColumns,
-  )
-  const availableCardWidth = Math.floor((containerWidth - GRID_GAP * (nextCols - 1)) / nextCols)
-  const cardMaxWidth = CARD_MAX_WIDTH_BY_COLUMNS[nextCols as 1 | 2 | 3]
-  const nextCardWidth = Math.max(CARD_COMPACT_MIN_WIDTH, Math.min(cardMaxWidth, availableCardWidth))
+    minCardWidth: CARD_MIN_WIDTH,
+    gap: GRID_GAP,
+  })
+  const gridClientWidth = gridRef.value?.clientWidth || mainRailWidth
+  const nextCardWidth = resolveMomentCardWidth({
+    gridClientWidth,
+    columns: nextCols,
+    gap: GRID_GAP,
+  })
 
   const colsChanged = nextCols !== gridColumnCount.value
-  const widthChanged = nextCardWidth !== gridCardWidth.value
+  const widthChanged = Math.abs(nextCardWidth - gridCardWidth.value) > 0.01
   const needInitColumns = momentColumns.value.length !== nextCols
 
   gridColumnCount.value = nextCols
   gridCardWidth.value = nextCardWidth
+  if (widthChanged)
+    invalidateCardMeasurementsForWidthChange()
 
   if (colsChanged || needInitColumns)
     redistributeColumns()
@@ -2157,14 +2243,7 @@ function appendMoments(items: DisplayMoment[]) {
 }
 
 const momentsGridStyle = computed(() => ({
-  gridTemplateColumns: `repeat(${Math.max(1, gridColumnCount.value)}, ${gridCardWidth.value}px)`,
-  justifyContent: 'center',
-  gap: `${GRID_GAP}px`,
-  width: '100%',
-}))
-
-const momentsContentStyle = computed(() => ({
-  width: `${Math.max(1, gridColumnCount.value) * gridCardWidth.value + Math.max(0, gridColumnCount.value - 1) * GRID_GAP}px`,
+  '--moments-columns': String(Math.max(1, gridColumnCount.value)),
 }))
 
 function scheduleBottomRebalance() {
@@ -2208,6 +2287,48 @@ function handleMomentCommentToggle() {
     clearTimeout(rebalanceTimer)
     rebalanceTimer = null
   }
+}
+
+function handleMomentForwardCountChange(momentId: string, forwardCount: number) {
+  forwardCountOverrides.set(`${getCurrentAccountId()}:${momentId}`, forwardCount)
+  let canonicalMoment: DisplayMoment | undefined
+  const updateItems = (items: DisplayMoment[]) => items.map((moment) => {
+    if (moment.id !== momentId)
+      return moment
+    canonicalMoment ??= { ...moment, forwardCount }
+    return canonicalMoment
+  })
+  moments.value = updateItems(moments.value)
+  momentColumns.value = momentColumns.value.map(updateItems)
+  const nextEntries: MomentsFeedCacheEntries = {}
+  for (const filter of Object.keys(momentsFeedCache.value.entries) as MomentFilter[]) {
+    const entry = momentsFeedCache.value.entries[filter]
+    if (!entry)
+      continue
+    nextEntries[filter] = {
+      ...entry,
+      items: updateItems(entry.items),
+      ...(entry.continuation
+        ? {
+            continuation: {
+              ...entry.continuation,
+              items: updateItems(entry.continuation.items),
+            },
+          }
+        : {}),
+    }
+  }
+  momentsFeedCache.value = {
+    ...momentsFeedCache.value,
+    entries: nextEntries,
+  }
+  for (const filter of Object.keys(nextEntries) as MomentFilter[]) {
+    const entry = nextEntries[filter]
+    if (entry)
+      saveMomentsCache(filter, entry)
+  }
+  if (selectedMoment.value?.id === momentId)
+    selectedMoment.value = canonicalMoment ?? { ...selectedMoment.value, forwardCount }
 }
 
 /** 提交卡片高度；瀑布流各列独立变化，不修正全局 scrollTop */
@@ -2306,8 +2427,11 @@ function updateVirtualColumns() {
       y += height + gap
     })
 
-    // 最后一项不需要 gap，修正 padding 里多加的 gap 边界误差可忽略
-    return { topPad, bottomPad, items }
+    return {
+      topPad: resolveVirtualSpacerSize(topPad, gap),
+      bottomPad: resolveVirtualSpacerSize(bottomPad, gap),
+      items,
+    }
   })
 
   prunePreviewCache()
@@ -3079,7 +3203,13 @@ function isUsableMomentResponse(
   return true
 }
 
-function clearMomentPresentationForRefresh() {
+function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
+  const preparedCoverRatios = new Map(nextItems.flatMap((item) => {
+    const ratio = coverRatios[item.id]
+    return ratio ? [[item.id, ratio] as const] : []
+  }))
+  const preparedCoverIds = new Set(nextItems.filter(item => readyCoverIds.has(item.id)).map(item => item.id))
+
   moments.value = []
   momentColumns.value = []
   virtualColumns.value = []
@@ -3100,6 +3230,10 @@ function clearMomentPresentationForRefresh() {
   likingMomentRequests.clear()
   reservationRequests.clear()
   watchLaterRequests.clear()
+  preparedCoverRatios.forEach((ratio, id) => {
+    coverRatios[id] = ratio
+  })
+  preparedCoverIds.forEach(id => readyCoverIds.add(id))
   cleanupLivePreviewPlayer()
   hoveredMediaId.value = ''
 }
@@ -3444,7 +3578,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     if (!reset)
       suppressBottomRebalanceUntil = Date.now() + 1500
     else
-      clearMomentPresentationForRefresh()
+      clearMomentPresentationForRefresh(items)
     appendMoments(items)
     if (reset) {
       await nextTick()
@@ -3486,6 +3620,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     await nextTick()
     updateVirtualColumns()
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+      return
     const viewport = scrollViewportRef.value
     if (viewport)
       viewport.scrollTop = preservedPaginationScrollTop
@@ -3505,6 +3641,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   await nextTick()
   updateVirtualColumns()
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+  if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+    return
   const viewport = scrollViewportRef.value
   if (!viewport)
     return
@@ -3622,14 +3760,17 @@ function handleDetailFrameMessage(event: MessageEvent) {
     return
   }
   // iframe 内 ESC 会 post 该消息；Dialog 场景下同步关闭详情
-  if (type === 'BEWLY_DRAWER_CLOSE_REQUEST' && selectedMoment.value)
+  if (type === BEWLY_DRAWER_ESCAPE_HANDLED)
+    return
+  if (type === BEWLY_DRAWER_CLOSE_REQUEST && selectedMoment.value)
     closeMomentDetail()
 }
 
 function handleMomentsReachBottom() {
-  if (requiresManualMomentPaging())
-    return
+  if (requiresManualMomentPaging() || isLoading.value || noMoreContent.value)
+    return false
   void loadMoments()
+  return true
 }
 
 onMounted(() => {
@@ -3640,8 +3781,12 @@ onMounted(() => {
     updateVirtualColumns()
   })
   nextTick(() => {
+    if (!momentsMounted)
+      return
     if (layoutRef.value)
       gridObserver?.observe(layoutRef.value)
+    if (momentsContentRef.value)
+      gridObserver?.observe(momentsContentRef.value)
     if (gridRef.value)
       gridObserver?.observe(gridRef.value)
     updateGridColumnCount()
@@ -3675,6 +3820,7 @@ watch([
 
 onBeforeUnmount(() => {
   momentsMounted = false
+  document.documentElement.classList.remove('bewly-moment-image-viewer-open')
   feedRequestToken += 1
   portalRequestToken += 1
   gridObserver?.disconnect()
@@ -3682,6 +3828,10 @@ onBeforeUnmount(() => {
   visibilityObserver?.disconnect()
   upListResizeObserver?.disconnect()
   upListResizeObserver = undefined
+  if (upListStateFrame !== undefined) {
+    cancelAnimationFrame(upListStateFrame)
+    upListStateFrame = undefined
+  }
   detachViewportScroll()
   cleanupLivePreviewPlayer()
   closeMomentDetail()
@@ -3702,6 +3852,10 @@ onBeforeUnmount(() => {
   if (virtualRaf) {
     cancelAnimationFrame(virtualRaf)
     virtualRaf = 0
+  }
+  if (cardGeometryFrame) {
+    cancelAnimationFrame(cardGeometryFrame)
+    cardGeometryFrame = 0
   }
   window.removeEventListener('message', handleDetailFrameMessage)
   window.removeEventListener('resize', syncDetailFrameViewport)
@@ -3761,7 +3915,7 @@ watch(
   },
 )
 
-watch(upListScrollerRef, async () => {
+watch([upListScrollerRef, upListTrackRef], async () => {
   await nextTick()
   setupUpListScrollerObserver()
 })
@@ -3769,12 +3923,13 @@ watch(upListScrollerRef, async () => {
 watch(
   [
     () => visiblePortalUpList.value.map(up => up.mid).join(','),
+    () => directWantedUsers.value.map(user => user.mid).join(','),
     () => settings.value.momentsEnableWantedFilter,
     () => isPortalLoading.value,
   ],
   async () => {
     await nextTick()
-    updateUpListScrollState()
+    scheduleUpListStateUpdate()
   },
 )
 
@@ -3790,7 +3945,7 @@ watch(
   () => momentsPinnedUsers.value.map(user => user.mid).join(','),
   async () => {
     await nextTick()
-    updateUpListScrollState()
+    scheduleUpListStateUpdate()
   },
 )
 
@@ -3854,7 +4009,7 @@ watch(
     <div
       ref="layoutRef"
       class="moments-layout"
-      :class="{ 'moments-layout--without-sidebar': !showMomentsSidebar }"
+      :class="{ 'moments-layout--with-sidebar': showMomentsSidebar }"
     >
       <header class="moments-filter-header">
         <section
@@ -3967,7 +4122,7 @@ watch(
         </template>
       </aside>
 
-      <main class="moments-content" :style="momentsContentStyle">
+      <main ref="momentsContentRef" class="moments-content">
         <section
           v-if="showMomentsUpList"
           v-layout-editable="'moments-up-list'"
@@ -4018,10 +4173,12 @@ watch(
           <div class="moments-up-list__main">
             <span
               class="moments-up-list__fade moments-up-list__fade--prev"
+              :class="{ 'is-visible': canScrollUpListLeft }"
               aria-hidden="true"
             />
             <span
               class="moments-up-list__fade moments-up-list__fade--next"
+              :class="{ 'is-visible': canScrollUpListRight }"
               aria-hidden="true"
             />
             <IconButton
@@ -4049,72 +4206,103 @@ watch(
               class="moments-up-list__scroller"
               aria-hidden="true"
             >
-              <div
-                v-for="index in 8"
-                :key="index"
-                class="moments-up-list__item moments-up-list__item--skeleton"
-              >
-                <span class="moments-up-list__avatar moments-skeleton-block" />
-                <span class="moments-up-list__name moments-skeleton-block" />
+              <div ref="upListTrackRef" class="moments-up-list__track">
+                <div
+                  v-for="index in 8"
+                  :key="index"
+                  class="moments-up-list__item moments-up-list__item--skeleton"
+                >
+                  <span class="moments-up-list__avatar moments-skeleton-block" />
+                  <span class="moments-up-list__name moments-skeleton-block" />
+                </div>
               </div>
             </div>
             <div
               v-else
               ref="upListScrollerRef"
               class="moments-up-list__scroller"
+              :class="{
+                'can-scroll-left': canScrollUpListLeft,
+                'can-scroll-right': canScrollUpListRight,
+              }"
               role="group"
               :aria-label="t('moments.frequent_uploaders')"
-              @scroll="updateUpListScrollState"
+              @scroll="scheduleUpListStateUpdate"
               @wheel="handleUpListWheel"
             >
-              <button
-                v-for="up in visiblePortalUpList"
-                :key="up.mid"
-                type="button"
-                class="moments-up-list__item"
-                :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid && activeMomentGroup === 'all' }"
-                :aria-pressed="selectedHostMid === up.mid && activeMomentGroup === 'all'"
-                :title="up.uname"
-                @click="handleUpFilterChange(up.mid)"
-              >
-                <span class="moments-up-list__avatar">
-                  <img
-                    :src="getSidebarAvatarUrl(up.face, 96)"
-                    :alt="up.uname"
-                    loading="lazy"
-                    decoding="async"
-                  >
-                  <span
-                    v-if="up.has_update"
-                    class="moments-up-list__dot"
-                    :aria-label="t('moments.has_update')"
-                  />
-                </span>
-                <span class="moments-up-list__name">{{ up.uname }}</span>
-              </button>
-              <template v-if="momentsPinnedUsers.length">
-                <span class="moments-up-list__divider" aria-hidden="true" />
+              <div ref="upListTrackRef" class="moments-up-list__track">
                 <button
-                  v-for="user in momentsPinnedUsers"
-                  :key="user.mid"
+                  v-for="up in visiblePortalUpList"
+                  :key="up.mid"
                   type="button"
                   class="moments-up-list__item"
-                  :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
-                  :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
-                  :title="user.name"
-                  @click="handleUpFilterChange(user.mid)"
+                  :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid && activeMomentGroup === 'all' }"
+                  :aria-pressed="selectedHostMid === up.mid && activeMomentGroup === 'all'"
+                  :title="up.uname"
+                  @click="handleUpFilterChange(up.mid)"
                 >
                   <span class="moments-up-list__avatar">
                     <img
-                      :src="getSidebarAvatarUrl(user.face, 96)"
-                      :alt="user.name"
+                      :src="getSidebarAvatarUrl(up.face, 96)"
+                      :alt="up.uname"
                       loading="lazy"
                       decoding="async"
                     >
+                    <span
+                      v-if="up.has_update"
+                      class="moments-up-list__dot"
+                      :aria-label="t('moments.has_update')"
+                    />
                   </span>
-                  <span class="moments-up-list__name">{{ user.name }}</span>
+                  <span class="moments-up-list__name">{{ up.uname }}</span>
                 </button>
-              </template>
+                <template v-if="directWantedUsers.length">
+                  <span v-if="visiblePortalUpList.length" class="moments-up-list__divider" aria-hidden="true" />
+                  <button
+                    v-for="user in directWantedUsers"
+                    :key="user.mid"
+                    type="button"
+                    class="moments-up-list__item"
+                    :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
+                    :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
+                    :title="user.name"
+                    @click="handleUpFilterChange(user.mid)"
+                  >
+                    <span class="moments-up-list__avatar">
+                      <img
+                        :src="getSidebarAvatarUrl(user.face, 96)"
+                        :alt="user.name"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    </span>
+                    <span class="moments-up-list__name">{{ user.name }}</span>
+                  </button>
+                </template>
+                <template v-if="momentsPinnedUsers.length">
+                  <span class="moments-up-list__divider" aria-hidden="true" />
+                  <button
+                    v-for="user in momentsPinnedUsers"
+                    :key="user.mid"
+                    type="button"
+                    class="moments-up-list__item"
+                    :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
+                    :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
+                    :title="user.name"
+                    @click="handleUpFilterChange(user.mid)"
+                  >
+                    <span class="moments-up-list__avatar">
+                      <img
+                        :src="getSidebarAvatarUrl(user.face, 96)"
+                        :alt="user.name"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                    </span>
+                    <span class="moments-up-list__name">{{ user.name }}</span>
+                  </button>
+                </template>
+              </div>
             </div>
           </div>
         </section>
@@ -4192,6 +4380,7 @@ watch(
               @toggle-reservation="toggleMomentReservation"
               @open-image-preview="openMomentImagePreview"
               @comment-toggle="handleMomentCommentToggle"
+              @forward-count-change="handleMomentForwardCountChange"
             />
             <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
           </div>
@@ -4371,24 +4560,40 @@ watch(
 <style scoped lang="scss">
 @use "../../../styles/breakpoints";
 
+@property --moments-up-list-left-clear {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
+@property --moments-up-list-right-clear {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 1;
+}
+
 .moments-page {
-  padding: var(--bew-space-2) var(--bew-space-3) var(--bew-space-12);
+  padding: var(--bew-space-2) 0 var(--bew-space-12);
 }
 .moments-layout {
   display: grid;
-  grid-template-columns: 248px auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: start;
-  justify-content: center;
-  gap: var(--bew-space-4);
+  row-gap: var(--bew-space-8);
   width: 100%;
 }
-.moments-layout--without-sidebar {
-  grid-template-columns: auto;
+.moments-layout--with-sidebar {
+  grid-template-columns: var(--bew-layout-moments-sidebar-width) minmax(0, 1fr);
+  column-gap: var(--bew-space-4);
 }
 .moments-content {
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 2;
+  width: 100%;
   min-width: 0;
+}
+.moments-layout--with-sidebar .moments-content {
+  grid-column: 2;
 }
 .moments-up-list {
   display: flex;
@@ -4416,43 +4621,62 @@ watch(
   margin-right: var(--bew-space-2);
 }
 .moments-up-list__scroller {
-  display: flex;
-  gap: var(--bew-space-1);
-  padding-inline: var(--bew-space-4);
+  --moments-up-list-left-clear: 1;
+  --moments-up-list-right-clear: 1;
+  --moments-up-list-left-clear-mask: linear-gradient(
+    90deg,
+    rgb(0 0 0 / var(--moments-up-list-left-clear)) 0,
+    transparent calc(var(--bew-space-12) + var(--bew-space-10))
+  );
+  --moments-up-list-right-clear-mask: linear-gradient(
+    270deg,
+    rgb(0 0 0 / var(--moments-up-list-right-clear)) 0,
+    transparent calc(var(--bew-space-12) + var(--bew-space-10))
+  );
+  --moments-up-list-base-mask: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgb(0 0 0 / 16%) var(--bew-space-4),
+    rgb(0 0 0 / 48%) var(--bew-space-10),
+    rgb(0 0 0 / 78%) calc(var(--bew-space-12) + var(--bew-space-4)),
+    #000 calc(var(--bew-space-12) + var(--bew-space-10)),
+    #000 calc(100% - var(--bew-space-12) - var(--bew-space-10)),
+    rgb(0 0 0 / 78%) calc(100% - var(--bew-space-12) - var(--bew-space-4)),
+    rgb(0 0 0 / 48%) calc(100% - var(--bew-space-10)),
+    rgb(0 0 0 / 16%) calc(100% - var(--bew-space-4)),
+    transparent 100%
+  );
   overflow-x: auto;
   overflow-y: hidden;
   overscroll-behavior-x: contain;
-  scroll-padding-inline: var(--bew-space-4);
+  scroll-padding-inline: var(--bew-space-2);
   scrollbar-width: none;
-  -webkit-mask-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgb(0 0 0 / 16%) var(--bew-space-4),
-    rgb(0 0 0 / 48%) var(--bew-space-10),
-    rgb(0 0 0 / 78%) calc(var(--bew-space-12) + var(--bew-space-4)),
-    #000 calc(var(--bew-space-12) + var(--bew-space-10)),
-    #000 calc(100% - var(--bew-space-12) - var(--bew-space-10)),
-    rgb(0 0 0 / 78%) calc(100% - var(--bew-space-12) - var(--bew-space-4)),
-    rgb(0 0 0 / 48%) calc(100% - var(--bew-space-10)),
-    rgb(0 0 0 / 16%) calc(100% - var(--bew-space-4)),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    90deg,
-    transparent 0%,
-    rgb(0 0 0 / 16%) var(--bew-space-4),
-    rgb(0 0 0 / 48%) var(--bew-space-10),
-    rgb(0 0 0 / 78%) calc(var(--bew-space-12) + var(--bew-space-4)),
-    #000 calc(var(--bew-space-12) + var(--bew-space-10)),
-    #000 calc(100% - var(--bew-space-12) - var(--bew-space-10)),
-    rgb(0 0 0 / 78%) calc(100% - var(--bew-space-12) - var(--bew-space-4)),
-    rgb(0 0 0 / 48%) calc(100% - var(--bew-space-10)),
-    rgb(0 0 0 / 16%) calc(100% - var(--bew-space-4)),
-    transparent 100%
-  );
+  -webkit-mask-image:
+    var(--moments-up-list-left-clear-mask), var(--moments-up-list-right-clear-mask), var(--moments-up-list-base-mask);
+  mask-image:
+    var(--moments-up-list-left-clear-mask), var(--moments-up-list-right-clear-mask), var(--moments-up-list-base-mask);
+  mask-repeat: no-repeat;
+  transition:
+    --moments-up-list-left-clear 700ms var(--bew-ease-standard),
+    --moments-up-list-right-clear 700ms var(--bew-ease-standard);
+}
+.moments-up-list__scroller.can-scroll-left {
+  --moments-up-list-left-clear: 0;
+}
+.moments-up-list__scroller.can-scroll-right {
+  --moments-up-list-right-clear: 0;
 }
 .moments-up-list__scroller::-webkit-scrollbar {
   display: none;
+}
+.moments-up-list__track {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-1);
+  width: max-content;
+  min-width: 100%;
+  padding-block: 6px var(--bew-space-1);
+  box-sizing: border-box;
 }
 .moments-up-list__fade {
   position: absolute;
@@ -4460,7 +4684,7 @@ watch(
   z-index: 1;
   width: calc(var(--bew-space-12) + var(--bew-space-12) + var(--bew-space-12));
   height: calc(100% + var(--bew-space-12));
-  opacity: 0.72;
+  opacity: 0;
   pointer-events: none;
   background: radial-gradient(
     ellipse at center,
@@ -4470,7 +4694,10 @@ watch(
   );
   filter: var(--bew-filter-glass-1);
   transform: translateY(-50%);
-  transition: opacity var(--bew-duration-moderate) var(--bew-ease-standard);
+  transition: opacity 700ms var(--bew-ease-standard);
+}
+.moments-up-list__fade.is-visible {
+  opacity: 0.72;
 }
 .moments-up-list__fade--prev {
   left: calc(0px - var(--bew-space-12) - var(--bew-space-6));
@@ -4544,12 +4771,10 @@ watch(
   text-decoration: none;
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
     transform var(--bew-duration-fast) var(--bew-ease-emphasized);
 }
 .moments-up-list__item:hover:not(:disabled) {
   color: var(--bew-text-1);
-  background: var(--bew-fill-1);
   transform: translateY(-2px);
 }
 .moments-up-list__item:active:not(:disabled) {
@@ -4653,6 +4878,8 @@ watch(
   position: sticky;
   top: calc(var(--bew-top-bar-height, 64px) + var(--bew-space-3));
   display: flex;
+  justify-self: end;
+  width: var(--bew-layout-moments-sidebar-width);
   max-height: calc(100dvh - var(--bew-top-bar-height, 64px) - var(--bew-space-6));
   flex-direction: column;
   gap: var(--bew-space-3);
@@ -4970,8 +5197,8 @@ watch(
 }
 .moments-skeleton-grid {
   display: grid;
+  grid-template-columns: repeat(var(--moments-columns), minmax(0, 1fr));
   align-items: start;
-  justify-content: center;
   gap: var(--bew-space-4);
   width: 100%;
 }
@@ -5082,7 +5309,7 @@ watch(
 .moments-filter-header {
   position: relative;
   z-index: 8;
-  grid-column: 2;
+  grid-column: 1;
   grid-row: 1;
   display: grid;
   grid-template-columns: minmax(0, max-content);
@@ -5092,11 +5319,8 @@ watch(
   width: 100%;
   min-width: 0;
 }
-.moments-layout--without-sidebar .moments-filter-header {
-  grid-column: 1;
-}
-.moments-layout--without-sidebar .moments-content {
-  grid-column: 1;
+.moments-layout--with-sidebar .moments-filter-header {
+  grid-column: 2;
 }
 .moments-filter-panel {
   max-width: 100%;
@@ -5160,9 +5384,9 @@ watch(
 }
 .moments-grid {
   display: grid;
+  grid-template-columns: repeat(var(--moments-columns), minmax(0, 1fr));
   gap: var(--bew-space-4);
   width: 100%;
-  justify-content: center;
   justify-items: stretch;
   /* 虚拟 spacer 会持续变化，禁用浏览器自动锚定以免与滚动输入互相拉扯 */
   overflow-anchor: none;
@@ -5325,6 +5549,11 @@ watch(
     animation: none;
   }
 
+  .moments-up-list__fade,
+  .moments-up-list__scroller {
+    transition-duration: 0ms;
+  }
+
   .moment-detail-frame__loading-icon {
     border-color: var(--bew-theme-color);
   }
@@ -5380,8 +5609,8 @@ watch(
   overflow: hidden;
   color: #fff;
   background: rgb(18 18 18 / 76%);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
   touch-action: none;
 }
 .moment-image-viewer__stage {
@@ -5436,6 +5665,11 @@ watch(
 .moment-image-viewer__nav:hover,
 .moment-image-viewer__toolbar button:hover {
   background: rgb(0 0 0 / 72%);
+}
+.moment-image-viewer__nav:focus-visible,
+.moment-image-viewer__toolbar button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 .moment-image-viewer__close {
   position: absolute;

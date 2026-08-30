@@ -1297,23 +1297,37 @@ moment_card:
   view_comments: 查看评论
   collapse_comments: 收起评论
   comments: 评论
+  forward: 转发
+  forward_collapse: 收起转发
+  forward_placeholder: 说点什么…
+  forward_emoji: 表情
+  forward_select_topic: 选择话题
+  forward_search_topic: 搜索话题
+  forward_topic_empty: 未找到话题
+  forward_clear_topic: 清除话题
+  forward_submitting: 正在转发
+  forward_success: 转发成功
+  forward_failed: 转发失败，请稍后重试
+  forward_emote_failed: 表情加载失败，请重试
+  forward_topic_search_failed: 话题搜索失败，请重试
+  forward_account_unavailable: 登录后才能转发动态
+  forward_csrf_unavailable: 无法读取登录凭证，请刷新后重试
+  forward_moment_unavailable: 当前动态无法转发
   comments_loading: 正在加载评论…
   comments_empty: 暂无评论
   comments_load_failed: 评论加载失败，请稍后重试
   comments_retry: 重试
+  comments_refresh: 刷新
   comments_load_more: 查看更多评论
-  comments_reply_count: '{count} 条回复'
+  comments_missing_parent: 上级回复暂未加载
+  comments_reply_new_tab: 在新标签页回复
+  comments_expand_replies: 展开剩余回复
+  comments_load_more_replies: 加载更多回复
+  comments_replies_failed: 回复加载失败，可重试
   comment_like: 点赞评论
   comment_unlike: 取消评论点赞
-  comment_reply: 回复
-  comment_reply_to: 回复 {name}
-  comment_reply_placeholder: 写下你的回复…
-  comment_send: 发送
-  comment_sending: 发送中…
   comment_login_required: 登录后才能进行评论互动
   comment_like_failed: 评论点赞失败，请稍后重试
-  comment_reply_failed: 回复发送失败，请稍后重试
-  comment_reply_succeeded: 回复已发送
   live_popularity: '{count} 人气'
   no_data: 暂无数据
   live_now: 正在直播

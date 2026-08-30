@@ -530,6 +530,10 @@ function updatePlaylistEditorButton(editing: boolean): void {
   playlistEditorButton.setAttribute('aria-pressed', String(editing))
 }
 
+export function isNativePlaylistEditing(): boolean {
+  return playlistEditorController !== null
+}
+
 function stopNativePlaylistEditing(): void {
   playlistEditorController?.abort()
   playlistEditorController = null
@@ -606,8 +610,11 @@ function startNativePlaylistEditing(button: HTMLButtonElement): void {
   }
 
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape')
-      stopNativePlaylistEditing()
+    if (event.key !== 'Escape' || event.repeat || event.isComposing)
+      return
+    event.preventDefault()
+    event.stopPropagation()
+    stopNativePlaylistEditing()
   }, { signal })
   updatePlaylistEditorButton(true)
 }
