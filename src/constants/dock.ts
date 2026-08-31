@@ -22,3 +22,11 @@ export function getPreservedDockStageSize(
 
   return { width, height }
 }
+
+export function resolveDockCollapsedShellSize(measuredSize: number, expectedSize: number): number {
+  const safeExpectedSize = Number.isFinite(expectedSize) && expectedSize > 0 ? expectedSize : 1
+  const tolerance = Math.max(2, safeExpectedSize * 0.1)
+  if (!Number.isFinite(measuredSize) || Math.abs(measuredSize - safeExpectedSize) > tolerance)
+    return safeExpectedSize
+  return measuredSize
+}

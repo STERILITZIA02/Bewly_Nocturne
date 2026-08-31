@@ -13,6 +13,7 @@ import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { isHomePage, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
+import { reportRuntimeFailure } from '~/utils/messaging'
 import emitter from '~/utils/mitt'
 
 import NotificationsDrawer from './components/NotificationsDrawer.vue'
@@ -565,7 +566,7 @@ onMounted(() => {
       await topBarStore.initData()
     }
     catch (error) {
-      console.error('初始化顶栏数据失败:', error)
+      reportRuntimeFailure('Failed to initialize TopBar data', error)
     }
     if (!topBarMounted)
       return

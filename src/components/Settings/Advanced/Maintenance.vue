@@ -16,6 +16,7 @@ const { t } = useI18n()
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 const importSettingsRef = ref<HTMLInputElement>()
+const developmentBuildId = __DEV__ ? __BEWLY_BUILD_ID__ : ''
 
 const blockedPropertyNames = new Set(['__proto__', 'constructor', 'prototype'])
 const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
@@ -301,11 +302,34 @@ async function handleResetSettings() {
         </Button>
       </SettingsItem>
     </SettingsItemGroup>
+
+    <SettingsItemGroup
+      v-if="developmentBuildId"
+      :title="$t('settings.maintenance.development_title')"
+      :desc="$t('settings.maintenance.development_desc')"
+    >
+      <SettingsItem
+        :title="$t('settings.maintenance.build_id')"
+        right-width="auto"
+      >
+        <code class="build-id">{{ developmentBuildId }}</code>
+      </SettingsItem>
+    </SettingsItemGroup>
   </div>
 </template>
 
 <style lang="scss" scoped>
 .danger-button {
   color: var(--bew-error-color);
+}
+
+.build-id {
+  display: block;
+  padding: var(--bew-space-2) var(--bew-space-3);
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  background: var(--bew-fill-2);
+  border-radius: var(--bew-interactive-radius);
 }
 </style>

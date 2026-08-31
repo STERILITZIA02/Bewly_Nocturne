@@ -35,7 +35,7 @@ import { loadHlsModule } from '~/utils/hls'
 import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { getCSRF } from '~/utils/main'
-import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
@@ -239,6 +239,7 @@ let liveHlsPlayer: any = null
 let livePreviewGeneration = 0
 const isLoading = ref(false)
 const isInitialLoading = ref(true)
+const feedRequestFailed = ref(false)
 const noMoreContent = ref(false)
 const offset = ref('')
 const updateBaseline = ref('')
@@ -3074,7 +3075,7 @@ async function toggleMomentWatchLater(target: WatchLaterTarget) {
   }
   catch (error) {
     if (isMomentMutationCurrent(requestAccountId)) {
-      console.error('[Bewly Nocturne] Watch Later mutation failed:', error)
+      reportRuntimeFailure('Watch Later mutation failed', error)
       toast.error(error instanceof Error ? error.message : t('moments.watch_later_failed_retry'))
     }
   }
@@ -3150,9 +3151,9 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 
   if (reset) {
     feedRequestToken += 1
-    // Keep old data in memory for failure recovery, but never present it as the
-    // newly selected filter while its replacement request is pending.
+    feedRequestFailed.value = false
     isInitialLoading.value = true
+    clearMomentPresentationForRefresh([])
   }
   const requestToken = feedRequestToken
   const requestType = activeMomentFilter.value
@@ -3485,6 +3486,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     offset.value = nextOffset
     updateBaseline.value = nextUpdateBaseline
     noMoreContent.value = !hasMore
+    feedRequestFailed.value = false
     pageApplied = true
   }
   catch (error) {
@@ -3499,6 +3501,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     }
 
     if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
+      feedRequestFailed.value = reset || moments.value.length === 0
       if (!pageApplied && previousPagination) {
         offset.value = previousPagination.offset
         updateBaseline.value = previousPagination.updateBaseline
@@ -3506,7 +3509,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         noMoreContent.value = previousPagination.noMoreContent
         wantedCacheCursor.value = previousPagination.wantedCacheCursor
       }
-      console.error('[Bewly Nocturne] Failed to load Moments feed:', error)
+      reportRuntimeFailure('Failed to load Moments feed', error)
       toast.error(t('common.load_failed'))
     }
   }
@@ -3614,6 +3617,7 @@ function resetMomentsAccountState() {
   updateBaseline.value = ''
   momentsFeedPage.value = 1
   noMoreContent.value = false
+  feedRequestFailed.value = false
   isLoading.value = false
   isInitialLoading.value = true
   clearMomentsPortalState()
@@ -4249,6 +4253,13 @@ watch(
               </article>
             </div>
           </div>
+        </div>
+        <div v-else-if="feedRequestFailed" class="moments-page__empty moments-page__error" role="status">
+          <span i-tabler-alert-circle text="size-$bew-icon-size-xl" />
+          <p>{{ t('common.load_failed') }}</p>
+          <button type="button" :disabled="isLoading" @click="refresh">
+            {{ t('moments.retry') }}
+          </button>
         </div>
         <div
           v-else-if="moments.length"

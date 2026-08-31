@@ -202,6 +202,9 @@ settings:
     title: Backup & Reset
     backup_title: Settings backup
     backup_desc: Export settings for backup or migration, or restore an existing backup.
+    development_title: Development build
+    development_desc: Confirms whether the extension loaded by the browser matches the current local development output.
+    build_id: Build ID
     import_desc: Import recognized settings from a Bewly Nocturne JSON backup.
     import_failed: The settings file could not be read. Make sure it is a valid JSON backup.
     import_no_matches: No recognized settings were found in this backup.
@@ -1247,6 +1250,7 @@ dock:
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
 moments:
+  retry: Retry
   filter_all: All
   filter_video: Videos
   filter_pgc: Series
@@ -1589,6 +1593,9 @@ widescreen:
   loading: Loading Widescreen mode…
   comments: Comments
   danmaku: Danmaku
+  danmaku_settings: Danmaku settings
+  danmaku_style: Danmaku style
+  send_danmaku: Send danmaku
   playlist: Playlist
   recommendations: Recommendations
   collapse: Collapse
@@ -1596,6 +1603,12 @@ widescreen:
   comments_loading: Loading comments
   danmaku_loading: Loading danmaku
   list_loading: Loading list
+  stat_likes: Likes
+  stat_coins: Coins
+  stat_favorites: Favorites
+  stat_shares: Shares
+  video_description: Video description
+  video_category: Video category
   show_full_sidebar: Show full sidebar
   show_compact_sidebar: Collapse sidebar
 search_bar:

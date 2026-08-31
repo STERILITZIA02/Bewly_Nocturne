@@ -1,4 +1,5 @@
 import { dirname, relative } from 'node:path'
+import process from 'node:process'
 
 import VueI18nPlugin from '@intlify/unplugin-vue-i18n/vite'
 import replace from '@rollup/plugin-replace'
@@ -9,6 +10,8 @@ import { defineConfig } from 'vite'
 
 import { isDev, isSafari, port, r } from './scripts/utils'
 // import { MV3Hmr } from './vite-mv3-hmr'
+
+const buildId = process.env.BEWLY_BUILD_ID || (isDev ? Date.now().toString(36) : '')
 
 export const sharedConfig: UserConfig = {
   root: r('src'),
@@ -45,6 +48,7 @@ export const sharedConfig: UserConfig = {
 
     replace({
       '__DEV__': JSON.stringify(isDev),
+      '__BEWLY_BUILD_ID__': JSON.stringify(buildId),
       'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
       '__VUE_OPTIONS_API__': JSON.stringify(true),
       '__VUE_PROD_DEVTOOLS__': JSON.stringify(false),

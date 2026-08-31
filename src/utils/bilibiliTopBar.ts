@@ -171,50 +171,26 @@ function keepOriginalTopBarAvailable(doc: Document) {
     return
 
   initializedTopBarDocuments.add(doc)
-  let reparenting = false
   const observer = new MutationObserver(() => {
-    if (reparenting)
-      return
     if (doc.documentElement.dataset.bewlyTopBarSource !== 'bilibili-native')
       return
 
-    // 已有挂在 body 上的稳定 portal：绝不要再 adopt #app 内再生的顶栏。
-    // 否则会「删 body 顶栏 → portal 新节点 → Vue 再造 → 再删」无限循环，
-    // 主线程卡死，页面白屏转圈且 Network 看不到后续请求。
-    if (cachedOriginalTopBar?.isConnected && cachedOriginalTopBar.parentElement === doc.body) {
-      if (cachedOriginalTopBar !== doc.body.firstElementChild) {
-        reparenting = true
-        try {
-          doc.body.prepend(cachedOriginalTopBar)
-        }
-        finally {
-          reparenting = false
-        }
-      }
-      return
-    }
-
-    // 缓存已掉线时再找新顶栏；优先 body 上的，避免去抢隐藏 #app 树
-    const header = doc.querySelector<HTMLElement>('body > .bili-header')
-      || getNativeDocumentTopBar(doc)
+    // Keep Bilibili's Vue-owned header in its native application tree. Moving
+    // the host to body makes Bilibili mount a replacement app and corrupts its
+    // sibling bookkeeping.
+    const header = getNativeDocumentTopBar(doc)
+      || doc.querySelector<HTMLElement>('body > .bili-header')
       || getDocumentTopBar(doc)
-    if (!header || header === cachedOriginalTopBar)
+    if (!header)
       return
 
     const scrolled = cachedOriginalTopBar?.classList.contains('bewly-original-top-bar-scrolled') ?? false
-    reparenting = true
-    try {
+    if (header !== cachedOriginalTopBar) {
       cachedOriginalTopBar = header
       rememberOriginalTopBarParent(doc, header)
       prepareOriginalTopBar(header)
-      // 自定义首页会隐藏 #app：新生成的原生顶栏 portal 到 body
-      if (header.parentElement !== doc.body)
-        doc.body.prepend(header)
-      setOriginalBilibiliTopBarScrolled(doc, scrolled)
     }
-    finally {
-      reparenting = false
-    }
+    setOriginalBilibiliTopBarScrolled(doc, scrolled)
   })
   observer.observe(doc.body ?? doc.documentElement, {
     childList: true,
@@ -492,28 +468,16 @@ export function detachOriginalBilibiliTopBar(doc: Document) {
 }
 
 export function ensureOriginalBilibiliTopBarAppended(doc: Document): boolean {
-  // 已有 body portal 则复用，切勿用 #app 内新生顶栏替换（会死循环）
-  if (cachedOriginalTopBar?.isConnected && cachedOriginalTopBar.parentElement === doc.body) {
-    prepareOriginalTopBar(cachedOriginalTopBar)
-    if (cachedOriginalTopBar !== doc.body.firstElementChild)
-      doc.body.prepend(cachedOriginalTopBar)
-    return true
-  }
-
-  const bodyHeader = doc.querySelector<HTMLElement>('body > .bili-header')
   const nativeHeader = getNativeDocumentTopBar(doc)
-  const header = bodyHeader || cachedOriginalTopBar || nativeHeader || getDocumentTopBar(doc)
+  const bodyHeader = doc.querySelector<HTMLElement>('body > .bili-header')
+  const header = nativeHeader || cachedOriginalTopBar || bodyHeader || getDocumentTopBar(doc)
   if (!header)
     return false
 
   cachedOriginalTopBar = header
   rememberOriginalTopBarParent(doc, header)
   prepareOriginalTopBar(header)
-
-  // 自定义首页会整树隐藏 #app，必须把顶栏 portal 到 body，不能依赖 #app 保活露出。
-  if (header.parentElement !== doc.body || header !== doc.body.firstElementChild)
-    doc.body.prepend(header)
-
+  keepOriginalTopBarAvailable(doc)
   return true
 }
 

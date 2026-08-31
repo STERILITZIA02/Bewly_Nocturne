@@ -27,10 +27,83 @@ const breadcrumbDetail = ref<string>()
 const searchQuery = ref('')
 const settingsContentKey = ref(0)
 const settingsContentReady = ref(false)
+const settingsLayerRef = ref<HTMLElement | null>(null)
 let settingsContentFrame: number | undefined
 let settingNavigationTimer: number | undefined
+let settingsModalActive = false
+let previouslyFocusedElement: HTMLElement | null = null
+const inertSiblingStates = new Map<HTMLElement, boolean>()
+
+const settingsFocusableSelector = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]:not([tabindex="-1"])',
+].join(',')
+
+function getSettingsActiveElement() {
+  const root = settingsLayerRef.value?.getRootNode()
+  return root instanceof ShadowRoot ? root.activeElement : document.activeElement
+}
+
+function activateSettingsModal() {
+  if (settingsModalActive || !settingsLayerRef.value)
+    return
+  settingsModalActive = true
+  const activeElement = getSettingsActiveElement()
+  previouslyFocusedElement = activeElement instanceof HTMLElement ? activeElement : null
+
+  const parent = settingsLayerRef.value.parentElement
+  if (parent) {
+    for (const sibling of Array.from(parent.children)) {
+      if (!(sibling instanceof HTMLElement) || sibling === settingsLayerRef.value)
+        continue
+      inertSiblingStates.set(sibling, sibling.inert)
+      sibling.inert = true
+    }
+  }
+
+  nextTick(() => settingsLayerRef.value?.focus({ preventScroll: true }))
+}
+
+function deactivateSettingsModal() {
+  if (!settingsModalActive)
+    return
+  settingsModalActive = false
+  inertSiblingStates.forEach((inert, sibling) => {
+    if (sibling.isConnected)
+      sibling.inert = inert
+  })
+  inertSiblingStates.clear()
+  if (previouslyFocusedElement?.isConnected)
+    previouslyFocusedElement.focus({ preventScroll: true })
+  previouslyFocusedElement = null
+}
+
+function trapSettingsFocus(event: KeyboardEvent) {
+  if (!settingsModalActive || event.key !== 'Tab' || !settingsLayerRef.value)
+    return
+  const focusable = Array.from(settingsLayerRef.value.querySelectorAll<HTMLElement>(settingsFocusableSelector))
+    .filter(element => element.offsetParent !== null && !element.inert)
+  if (!focusable.length) {
+    event.preventDefault()
+    settingsLayerRef.value.focus({ preventScroll: true })
+    return
+  }
+
+  const activeElement = getSettingsActiveElement()
+  const currentIndex = focusable.indexOf(activeElement as HTMLElement)
+  const nextIndex = event.shiftKey
+    ? (currentIndex <= 0 ? focusable.length - 1 : currentIndex - 1)
+    : (currentIndex < 0 || currentIndex === focusable.length - 1 ? 0 : currentIndex + 1)
+  event.preventDefault()
+  focusable[nextIndex].focus({ preventScroll: true })
+}
 
 onMounted(() => {
+  activateSettingsModal()
   // 先让设置外壳完成首帧绘制，再挂载异步设置页，避免点击反馈被重组件初始化阻塞。
   settingsContentFrame = requestAnimationFrame(() => {
     settingsContentFrame = requestAnimationFrame(() => {
@@ -39,6 +112,9 @@ onMounted(() => {
     })
   })
 })
+onActivated(activateSettingsModal)
+onDeactivated(deactivateSettingsModal)
+useEventListener(window, 'keydown', trapSettingsFocus, { capture: true })
 
 provide('setSettingsBreadcrumb', (detail?: string) => {
   breadcrumbDetail.value = detail
@@ -472,6 +548,7 @@ function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
 const unsubscribeSettingNavigation = subscribeSettingNavigation(navigateToSettingDescriptor)
 
 onBeforeUnmount(() => {
+  deactivateSettingsModal()
   unsubscribeSettingNavigation()
   if (settingsContentFrame !== undefined)
     cancelAnimationFrame(settingsContentFrame)
@@ -491,7 +568,14 @@ function changeMenuItem(menuItem: MenuType) {
 </script>
 
 <template>
-  <div class="settings-layer fixed w-full h-full top-0 left-0">
+  <div
+    ref="settingsLayerRef"
+    class="settings-layer fixed w-full h-full top-0 left-0"
+    role="dialog"
+    aria-modal="true"
+    :aria-label="$t('settings.title')"
+    tabindex="-1"
+  >
     <div
       class="settings-backdrop fixed w-full h-full top-0 left-0"
       @click="handleClose"

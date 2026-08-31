@@ -558,6 +558,27 @@ else if (shouldInitializeContentScript) {
         left: 0 !important;
         pointer-events: auto !important;
       }
+
+      html[data-bewly-top-bar-source="bilibili-native"] body > #app:has(> .bili-feed4 > .bili-header) {
+        display: contents !important;
+        visibility: visible !important;
+        pointer-events: none !important;
+        position: static !important;
+        left: auto !important;
+      }
+
+      html[data-bewly-top-bar-source="bilibili-native"] body > #app > .bili-feed4 {
+        display: contents !important;
+      }
+
+      html[data-bewly-top-bar-source="bilibili-native"] body > #app > .bili-feed4 > :not(.bili-header) {
+        display: none !important;
+      }
+
+      html[data-bewly-top-bar-source="bilibili-native"] body > #app > .bili-feed4 > .bili-header {
+        visibility: visible !important;
+        pointer-events: auto !important;
+      }
     `)
   }
 
@@ -1456,6 +1477,7 @@ else if (shouldInitializeContentScript) {
     container.id = 'bewly'
     container.setAttribute('data-version', version)
     container.setAttribute('data-dev', import.meta.env.DEV ? 'true' : 'false')
+    container.dataset.bewlyBuildId = __BEWLY_BUILD_ID__
     container.classList.toggle('dark', document.documentElement.classList.contains('dark'))
     container.classList.toggle('oled-dark', document.documentElement.classList.contains('oled-dark'))
 

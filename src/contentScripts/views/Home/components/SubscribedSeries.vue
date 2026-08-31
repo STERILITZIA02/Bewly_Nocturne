@@ -4,8 +4,11 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
 import type { DataItem as MomentItem, MomentResult } from '~/models/moment/moment'
+import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { getUserID } from '~/utils/main'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 interface VideoElement {
   uniqueId: string
@@ -30,15 +33,27 @@ const updateBaseline = ref<string>('')
 const noMoreContent = ref<boolean>(false)
 const requestFailed = ref<boolean>(false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
+const topBarStore = useTopBarStore()
 let requestGeneration = 0
 let reloadAfterActivation = false
+let componentActive = false
+
+function getSubscribedSeriesAccountId() {
+  return String(topBarStore.userInfo.mid || getUserID() || 0)
+}
+
+function isSubscribedSeriesRequestCurrent(generation: number, requestAccountId: string) {
+  return generation === requestGeneration && requestAccountId === getSubscribedSeriesAccountId()
+}
 
 onMounted(() => {
+  componentActive = true
   initData()
   initPageAction()
 })
 
 onActivated(() => {
+  componentActive = true
   if (reloadAfterActivation) {
     reloadAfterActivation = false
     void initData()
@@ -47,6 +62,7 @@ onActivated(() => {
 })
 
 onDeactivated(() => {
+  componentActive = false
   reloadAfterActivation = isLoading.value
   requestGeneration++
   if (isLoading.value)
@@ -55,11 +71,18 @@ onDeactivated(() => {
 })
 
 onUnmounted(() => {
+  componentActive = false
   requestGeneration++
+})
+
+watch(() => topBarStore.userInfo.mid, () => {
+  if (componentActive)
+    void initData()
 })
 
 async function initData() {
   const generation = ++requestGeneration
+  const requestAccountId = getSubscribedSeriesAccountId()
   needToLoginFirst.value = false
   offset.value = ''
   updateBaseline.value = ''
@@ -67,7 +90,7 @@ async function initData() {
   noMoreContent.value = false
   requestFailed.value = false
 
-  await getData(generation)
+  await getData(generation, requestAccountId)
 }
 
 // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
@@ -95,19 +118,19 @@ function transformSubscribedSeriesVideo(item: VideoElement): Video | undefined {
   }
 }
 
-async function getData(generation: number) {
+async function getData(generation: number, requestAccountId: string) {
   emit('beforeLoading')
   isLoading.value = true
 
   try {
     // 初次加载时多加载几批确保有足够内容
     for (let i = 0; i < 3 && !noMoreContent.value; i++) {
-      if (!await getSubscribedSeriesVideos(generation))
+      if (!await getSubscribedSeriesVideos(generation, requestAccountId))
         break
     }
   }
   finally {
-    if (generation === requestGeneration) {
+    if (isSubscribedSeriesRequestCurrent(generation, requestAccountId)) {
       isLoading.value = false
       emit('afterLoading')
     }
@@ -130,8 +153,11 @@ function initPageAction() {
   }
 }
 
-async function getSubscribedSeriesVideos(generation = requestGeneration) {
-  if (generation !== requestGeneration)
+async function getSubscribedSeriesVideos(
+  generation = requestGeneration,
+  requestAccountId = getSubscribedSeriesAccountId(),
+) {
+  if (!isSubscribedSeriesRequestCurrent(generation, requestAccountId))
     return false
   if (noMoreContent.value)
     return true
@@ -148,7 +174,7 @@ async function getSubscribedSeriesVideos(generation = requestGeneration) {
       update_baseline: updateBaseline.value,
     })
 
-    if (generation !== requestGeneration)
+    if (!isSubscribedSeriesRequestCurrent(generation, requestAccountId))
       return false
 
     if (response.code === -101) {
@@ -181,10 +207,10 @@ async function getSubscribedSeriesVideos(generation = requestGeneration) {
     return false
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (isSubscribedSeriesRequestCurrent(generation, requestAccountId)) {
       requestFailed.value = true
       noMoreContent.value = false
-      console.error('[SubscribedSeries] Failed to load series:', error)
+      reportRuntimeFailure('Failed to load subscribed series', error)
     }
     return false
   }
@@ -197,11 +223,12 @@ async function handleLoadMore() {
 
   isLoading.value = true
   const generation = requestGeneration
+  const requestAccountId = getSubscribedSeriesAccountId()
   try {
-    await getSubscribedSeriesVideos(generation)
+    await getSubscribedSeriesVideos(generation, requestAccountId)
   }
   finally {
-    if (generation === requestGeneration)
+    if (isSubscribedSeriesRequestCurrent(generation, requestAccountId))
       isLoading.value = false
   }
 }

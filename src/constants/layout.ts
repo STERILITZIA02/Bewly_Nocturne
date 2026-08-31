@@ -25,8 +25,11 @@ export const TOP_BAR_HEIGHT = 64
 export const HOME_SEARCH_STICKY_SCROLL_TOP = HOME_SEARCH_STAGE_LEAD_HEIGHT
   - (TOP_BAR_HEIGHT - TOP_BAR_PRIMARY_CONTROL_HEIGHT) / 2
 
-/** Keep aligned with --bew-dock-control-size-lg and --bew-space-2. */
+/** Keep aligned with --bew-dock-control-size, --bew-dock-control-size-lg and --bew-space-4. */
 export const DOCK_LAYOUT = {
+  controlSize: 35,
+  controlSizeLarge: 45,
+  shellPadding: 16,
   actionControlSize: 45,
   controlGap: 8,
 } as const

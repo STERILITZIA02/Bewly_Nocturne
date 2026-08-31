@@ -10,10 +10,11 @@ import { useDelayedHover } from '~/composables/useDelayedHover'
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
+  resolveDockCollapsedShellSize,
   shouldAutoCollapseDock,
   shouldShowDockCollapseButton,
 } from '~/constants/dock'
-import { DOCK_LAYOUT } from '~/constants/layout'
+import { DOCK_LAYOUT, GRID_BREAKPOINTS } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
@@ -662,16 +663,19 @@ const dockTransformStyle = computed((): CSSProperties => {
 })
 
 const dockShellStyle = computed((): CSSProperties => {
-  const collapsedSize = dockPosition.value === 'bottom'
+  const measuredSize = dockPosition.value === 'bottom'
     ? expandedDockShellHeight.value
     : expandedDockShellWidth.value
+  const controlSize = windowWidth.value >= GRID_BREAKPOINTS.lg
+    ? DOCK_LAYOUT.controlSizeLarge
+    : DOCK_LAYOUT.controlSize
+  const expectedDockShellSize = controlSize + DOCK_LAYOUT.shellPadding
+  const collapsedSize = resolveDockCollapsedShellSize(measuredSize, expectedDockShellSize)
 
-  return collapsedSize
-    ? {
-        '--dock-shell-size': `${collapsedSize}px`,
-        '--dock-shell-radius': `${collapsedSize / 2}px`,
-      }
-    : {}
+  return {
+    '--dock-shell-size': `${collapsedSize}px`,
+    '--dock-shell-radius': `${collapsedSize / 2}px`,
+  }
 })
 
 onUnmounted(() => {

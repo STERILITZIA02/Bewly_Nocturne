@@ -21,6 +21,26 @@ export function isExtensionContextInvalidatedError(error: unknown): boolean {
     || message.includes('receiving end does not exist')
 }
 
+function formatRuntimeError(error: unknown): string {
+  if (error instanceof Error)
+    return error.message || error.name
+  if (typeof error === 'string')
+    return error
+  try {
+    return JSON.stringify(error) ?? String(error)
+  }
+  catch {
+    return String(error)
+  }
+}
+
+export function reportRuntimeFailure(context: string, error: unknown): boolean {
+  if (isExtensionContextInvalidatedError(error))
+    return false
+  console.warn(`[Bewly Nocturne] ${context}: ${formatRuntimeError(error)}`)
+  return true
+}
+
 function getRuntime(): typeof browser.runtime | undefined {
   try {
     return browser.runtime
