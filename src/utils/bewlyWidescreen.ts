@@ -87,10 +87,12 @@ interface BewlyWidescreenState {
   danmakuActivationTimer?: ReturnType<typeof setTimeout>
   danmakuResizeTimers?: Array<ReturnType<typeof setTimeout>>
   danmakuActivatedSource?: HTMLElement
+  danmakuPendingSource?: HTMLElement
   danmakuSemanticsCleanup?: () => void
   danmakuSettingsCleanup?: () => void
   danmakuSemanticsSource?: HTMLElement
   danmakuSourceHost?: HTMLElement
+  danmakuGlass?: HTMLElement
   escapeKeyCleanup?: () => void
   colorProbe?: HTMLSpanElement
   descriptionExpanded: boolean
@@ -112,6 +114,7 @@ const EMPTY_CLASS = 'bewly-widescreen-empty'
 const DANMAKU_SKELETON_CLASS = 'bewly-widescreen-danmaku-skeleton'
 const DANMAKU_SOURCE_CLASS = 'bewly-widescreen-danmaku-source'
 const DANMAKU_SOURCE_HOST_CLASS = 'bewly-widescreen-danmaku-source-host'
+const DANMAKU_GLASS_CLASS = 'bewly-widescreen-danmaku-glass'
 const DANMAKU_SURFACE_SELECTOR = `:is(#${ROOT_ID} .bewly-widescreen-danmaku-dock, body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .${DANMAKU_SOURCE_HOST_CLASS})`
 const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
 const EPISODE_ITEM_SELECTOR = '.video-pod__item, .multi-page__item, .page-item, .list-item, .episode-item, .section-item, .collect-item'
@@ -139,6 +142,10 @@ const COMMENT_NESTED_UI_SELECTOR = '.reply-item, .sub-reply-item, bili-comment-r
 // Light-DOM markers only. Modern bili-comments mounts most UI in shadow roots,
 // so readiness must not require these descendants to exist.
 const COMMENT_CONTENT_MARKER_SELECTOR = 'bili-comments, bili-comment-box, bili-comment-renderer, .reply-list, .comment-list, .reply-box, .comment-header'
+const COMMENT_SHADOW_HOST_SELECTOR = 'bili-comments, bili-comment-box, bili-comment-renderer, bili-comment-thread-renderer'
+const DANMAKU_LIST_VIEWPORT_SELECTOR = '.bui-long-list-list, .bpx-player-dm-container'
+const DANMAKU_LIST_ITEM_SELECTOR = '.bui-long-list-item, .bpx-player-dm-item, .bui-long-list-list > li, .bui-long-list-list > [data-index]'
+const DANMAKU_EMPTY_STATE_SELECTOR = '.bpx-player-dm-empty, .bui-empty, [class*="dm-empty"], [class*="danmaku-empty"]'
 const COMMENT_TIME_SELECTOR = [
   '.reply-time',
   '.sub-reply-time',
@@ -300,7 +307,6 @@ const selectors = {
     '[class*="DanmukuBox_wrap"]',
     '.danmaku-box',
     '.danmaku-wrap',
-    '.bpx-player-dm-wrap',
   ],
   playlist: [
     // Watch Later and Favorites use this inner list. Their `.playlist-container`
@@ -526,21 +532,28 @@ function moveOrReplaceNode(selectors: string[], target: HTMLElement, movedNodes:
 }
 
 function hasCommentShadowTree(root: HTMLElement) {
-  const candidates: Element[] = [root, ...Array.from(root.querySelectorAll('*'))]
-  const visited = new Set<Element>()
-  while (candidates.length) {
-    const element = candidates.shift()!
-    if (visited.has(element))
+  const roots: ParentNode[] = [root]
+  const visited = new Set<ParentNode>()
+  while (roots.length) {
+    const currentRoot = roots.shift()!
+    if (visited.has(currentRoot))
       continue
-    visited.add(element)
-    const shadowRoot = (element as HTMLElement & { shadowRoot?: ShadowRoot | null }).shadowRoot
-    if (!shadowRoot || shadowRoot.childElementCount === 0)
-      continue
-    if (element.matches('bili-comment-box, bili-comment-renderer, bili-comment-thread-renderer')
-      && shadowRoot.querySelector(':not(style)')) {
-      return true
+    visited.add(currentRoot)
+
+    const candidates = [
+      ...(currentRoot instanceof Element && currentRoot.matches(COMMENT_SHADOW_HOST_SELECTOR) ? [currentRoot] : []),
+      ...Array.from(currentRoot.querySelectorAll(COMMENT_SHADOW_HOST_SELECTOR)),
+    ]
+    for (const element of candidates) {
+      const shadowRoot = (element as HTMLElement & { shadowRoot?: ShadowRoot | null }).shadowRoot
+      if (!shadowRoot || shadowRoot.childElementCount === 0)
+        continue
+      if (element.matches('bili-comment-box, bili-comment-renderer, bili-comment-thread-renderer')
+        && shadowRoot.querySelector(':not(style)')) {
+        return true
+      }
+      roots.push(shadowRoot)
     }
-    candidates.push(...Array.from(shadowRoot.querySelectorAll('*')))
   }
   return false
 }
@@ -1232,7 +1245,7 @@ function injectLayoutStyle() {
       --bewly-widescreen-bottom-controls-height: calc(
         var(--bew-control-height, 36px) + var(--bew-space-4, 16px) + 1px
       );
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid, #fff);
+      --bewly-widescreen-danmaku-bar-bg: var(--bew-elevated-alt);
       --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 3 + var(--bew-space-2, 8px) * 3);
       overflow: hidden !important;
       background: var(--bew-dark-page-bg) !important;
@@ -1289,7 +1302,7 @@ function injectLayoutStyle() {
         var(--bewly-widescreen-sidebar-full-width) + var(--bewly-widescreen-sidebar-floating-inset) * 2
       );
       --bewly-widescreen-layout-aspect: 1.7777778;
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid, #fff);
+      --bewly-widescreen-danmaku-bar-bg: var(--bew-elevated-alt);
       --bewly-widescreen-sidebar-panel-width: var(--bewly-widescreen-sidebar-full-width);
       --bewly-widescreen-center-offset: 0px;
       --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 3 + var(--bew-space-2, 8px) * 3);
@@ -1298,17 +1311,6 @@ function injectLayoutStyle() {
     html:not(.dark) #${ROOT_ID},
     html:not(.dark) body.${BODY_CLASS} {
       --bewly-widescreen-sidebar-resize-accent: var(--bew-theme-color, #00aeec);
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid, #fff);
-    }
-
-    html.dark #${ROOT_ID},
-    html.dark body.${BODY_CLASS} {
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid);
-    }
-
-    html.dark.oled-dark #${ROOT_ID},
-    html.dark.oled-dark body.${BODY_CLASS} {
-      --bewly-widescreen-danmaku-bar-bg: var(--bew-bg, #000);
     }
 
     #${ROOT_ID} * {
@@ -1438,24 +1440,58 @@ function injectLayoutStyle() {
       margin: 0 !important;
       padding: var(--bew-space-2, 8px) var(--bew-space-8, 32px) !important;
       color: var(--bew-text-1) !important;
-      background: var(--bewly-widescreen-danmaku-bar-bg) !important;
+      background: transparent !important;
       border: 0 !important;
-      border-top: 1px solid var(--bew-border-color) !important;
       box-shadow: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      isolation: auto !important;
       opacity: 1 !important;
-      transform: translate3d(0, 0, 0) !important;
+      transform: none !important;
       transition:
         border-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
         opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
         transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
         background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
-      will-change: opacity, transform;
+      will-change: auto;
       pointer-events: auto !important;
       overflow: visible !important;
       z-index: 4 !important;
     }
 
+    ${DANMAKU_SURFACE_SELECTOR}::before,
+    ${DANMAKU_SURFACE_SELECTOR}::after {
+      content: none !important;
+      display: none !important;
+    }
+
+    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS} {
+      box-sizing: border-box !important;
+      position: absolute !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      width: 100% !important;
+      height: var(--bewly-widescreen-bottom-controls-height) !important;
+      z-index: calc(var(--bew-z-popover) - 1) !important;
+      background: var(--bewly-widescreen-danmaku-bar-bg) !important;
+      border-top: 1px solid var(--bew-border-color) !important;
+      box-shadow: var(--bew-shadow-edge-glow-1) !important;
+      backdrop-filter: var(--bew-filter-glass-1) !important;
+      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
+      background-clip: padding-box !important;
+      opacity: 1 !important;
+      transform: none !important;
+      transition:
+        opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
+      will-change: opacity, transform;
+      pointer-events: none !important;
+    }
+
     #${ROOT_ID}[data-player-controls-hidden="true"] .bewly-widescreen-danmaku-dock,
+    body.${BODY_CLASS}.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS} .${DANMAKU_GLASS_CLASS},
     body.${BODY_CLASS}.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}
       ${DANMAKU_SURFACE_SELECTOR}.${DANMAKU_SOURCE_HOST_CLASS} {
       opacity: 0 !important;
@@ -1548,7 +1584,7 @@ function injectLayoutStyle() {
       min-height: var(--bew-control-height, 36px) !important;
       margin: 0 !important;
       padding: 0 var(--bew-space-3, 12px) !important;
-      color: var(--bew-text-2) !important;
+      color: var(--bew-text-1) !important;
       border-radius: var(--bew-badge-radius) !important;
       corner-shape: var(--bew-corner-shape-round);
       font-size: var(--bew-font-size-caption, 12px) !important;
@@ -1576,7 +1612,7 @@ function injectLayoutStyle() {
       margin: 0 !important;
       padding: 0 !important;
       flex: 0 0 var(--bew-control-height, 36px) !important;
-      color: var(--bew-text-2) !important;
+      color: var(--bew-text-1) !important;
       background: var(--bew-elevated) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: 50% !important;
@@ -1744,13 +1780,60 @@ function injectLayoutStyle() {
       height: var(--bew-control-height, 36px) !important;
       min-width: 0 !important;
       flex: 1 1 auto !important;
-      color: var(--bew-text-2) !important;
+      color: var(--bew-text-1) !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       border-radius: var(--bew-interactive-radius) !important;
       corner-shape: var(--bew-corner-shape);
       overflow: visible !important;
       transition:
         border-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
         box-shadow var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar::before {
+      content: "" !important;
+      position: absolute !important;
+      inset: 0 !important;
+      z-index: 0 !important;
+      display: block !important;
+      width: auto !important;
+      height: auto !important;
+      border-radius: inherit !important;
+      corner-shape: inherit;
+      background: var(--bew-popover-surface-background) !important;
+      backdrop-filter: var(--bew-filter-glass-1) !important;
+      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
+      background-clip: padding-box !important;
+      pointer-events: none !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar > * {
+      position: relative !important;
+      z-index: 1 !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} :is(
+      .bpx-player-video-info,
+      .bpx-player-dm-switch,
+      .bpx-player-dm-setting,
+      .bpx-player-video-btn-dm,
+      .bpx-player-video-inputbar,
+      .bpx-player-dm-input,
+      .bpx-player-dm-btn-send
+    ) {
+      opacity: 1 !important;
+      filter: none !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} :is(
+      .bpx-player-dm-switch,
+      .bpx-player-dm-setting,
+      .bpx-player-video-btn-dm
+    ) svg {
+      color: currentColor !important;
+      opacity: 1 !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar:focus-within {
@@ -1784,7 +1867,7 @@ function injectLayoutStyle() {
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-mode-selection-panel {
       color: var(--bew-text-1) !important;
-      background: var(--bew-popover-surface-background) !important;
+      background: var(--bew-elevated-alt) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
@@ -1859,7 +1942,7 @@ function injectLayoutStyle() {
         - var(--bew-space-12, 48px)
       ) !important;
       color: var(--bew-text-1) !important;
-      background: var(--bew-popover-surface-background) !important;
+      background: var(--bew-elevated-alt) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
@@ -3037,27 +3120,14 @@ function injectLayoutStyle() {
       flex-direction: column;
       overflow: hidden;
       padding: var(--bew-space-3, 12px) var(--bew-space-4, 16px) var(--bew-space-4, 16px);
-      background: var(--bewly-widescreen-sidebar-bg);
+      background: transparent;
       pointer-events: none;
-      isolation: isolate;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton::after {
-      content: "";
-      position: absolute;
-      inset: 0 auto 0 -50%;
-      z-index: 1;
-      width: 50%;
-      background: linear-gradient(
-        100deg,
-        transparent 20%,
-        color-mix(in oklab, var(--bew-fill-4), transparent 42%) 50%,
-        transparent 80%
-      );
-      transform: translate3d(0, 0, 0);
-      animation: bewly-widescreen-skeleton-shimmer 1.4s linear infinite;
-      will-change: transform;
-      pointer-events: none;
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku:has(.bewly-widescreen-danmaku-skeleton)
+      .bpx-player-dm-load-status {
+      visibility: hidden !important;
+      background: transparent !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__rows {
@@ -3079,6 +3149,7 @@ function injectLayoutStyle() {
       border-radius: var(--bew-radius-sm);
       corner-shape: var(--bew-corner-shape);
       background: var(--bew-skeleton);
+      animation: bewly-widescreen-skeleton-shimmer 1.4s ease-in-out infinite alternate;
     }
 
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__time {
@@ -3099,7 +3170,7 @@ function injectLayoutStyle() {
 
     @keyframes bewly-widescreen-skeleton-shimmer {
       to {
-        transform: translate3d(300%, 0, 0);
+        opacity: 0.48;
       }
     }
 
@@ -3310,7 +3381,7 @@ function injectLayoutStyle() {
       #${ROOT_ID} .bewly-widescreen-sidebar-toggle,
       #${ROOT_ID} .bewly-widescreen-playlist-toggle::after,
       #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS},
-      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton::after {
+      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block {
         transition: none;
         animation: none;
       }
@@ -4441,7 +4512,17 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
         return false
       return node.matches(danmakuInputSelector) || !!node.querySelector(danmakuInputSelector)
     }))
-    if (addedDanmakuInput) {
+    const nativeDanmakuChanged = currentState.activeTab === 'danmaku' && records.some((record) => {
+      const target = record.target instanceof Element ? record.target : record.target.parentElement
+      if (!target || !currentState.panels.danmaku.contains(target))
+        return false
+
+      return [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some((node) => {
+        const element = node instanceof Element ? node : node.parentElement
+        return !element || !element.closest(`.${DANMAKU_SKELETON_CLASS}`)
+      })
+    })
+    if (addedDanmakuInput || nativeDanmakuChanged) {
       scheduleSidebarRefresh(currentState)
       return
     }
@@ -4456,27 +4537,42 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
 
 function setupDanmakuSettingsClickToggle(source: HTMLElement) {
   let settingsPinned = false
+  let stylePinned = false
+  let dispatchingNativeHover = false
   const settingSelector = '.bpx-player-dm-setting'
   const settingPanelSelector = '.bpx-player-dm-setting-wrap, .bpx-player-dm-setting-box'
   const styleSelector = '.bpx-player-video-btn-dm'
+  const stylePanelSelector = '.bpx-player-mode-selection-container'
   const setting = source.querySelector<HTMLElement>(settingSelector)
+  const styleButton = source.querySelector<HTMLElement>(styleSelector)
   const originalAriaExpanded = setting?.getAttribute('aria-expanded') ?? null
+  const originalStyleAriaExpanded = styleButton?.getAttribute('aria-expanded') ?? null
   const settingPanel = setting?.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
+  const stylePanel = styleButton?.querySelector<HTMLElement>(stylePanelSelector)
   const originalPanelDisplay = settingPanel?.style.display ?? ''
+  const originalStylePanelActive = stylePanel?.classList.contains('active') ?? false
   setting?.setAttribute('aria-expanded', 'false')
+  styleButton?.setAttribute('aria-expanded', 'false')
+  stylePanel?.classList.remove('active')
 
   function dispatchNativeSettingHover(currentSetting: HTMLElement, entering: boolean) {
     const types = entering
       ? ['mouseover', 'mouseenter'] as const
       : ['mouseout', 'mouseleave'] as const
-    for (const type of types) {
-      currentSetting.dispatchEvent(new MouseEvent(type, {
-        bubbles: type === 'mouseover' || type === 'mouseout',
-        cancelable: true,
-        composed: true,
-        relatedTarget: entering ? null : source,
-        view: window,
-      }))
+    dispatchingNativeHover = true
+    try {
+      for (const type of types) {
+        currentSetting.dispatchEvent(new MouseEvent(type, {
+          bubbles: type === 'mouseover' || type === 'mouseout',
+          cancelable: true,
+          composed: true,
+          relatedTarget: entering ? null : source,
+          view: window,
+        }))
+      }
+    }
+    finally {
+      dispatchingNativeHover = false
     }
   }
 
@@ -4500,43 +4596,106 @@ function setupDanmakuSettingsClickToggle(source: HTMLElement) {
       dispatchNativeSettingHover(currentSetting, false)
   }
 
+  const setStylePinned = (nextPinned: boolean) => {
+    const currentStyleButton = source.querySelector<HTMLElement>(styleSelector)
+    if (!currentStyleButton || stylePinned === nextPinned)
+      return
+
+    stylePinned = nextPinned
+    currentStyleButton.setAttribute('aria-expanded', String(nextPinned))
+    let currentPanel = currentStyleButton.querySelector<HTMLElement>(stylePanelSelector)
+    if (nextPinned && !currentPanel) {
+      dispatchNativeSettingHover(currentStyleButton, true)
+      currentPanel = currentStyleButton.querySelector<HTMLElement>(stylePanelSelector)
+    }
+    currentPanel?.classList.toggle('active', nextPinned)
+    if (!nextPinned) {
+      dispatchNativeSettingHover(currentStyleButton, false)
+      currentPanel?.classList.remove('active')
+    }
+  }
+
+  const handleStyleHover = (event: Event) => {
+    if (dispatchingNativeHover || !(event.target instanceof Element))
+      return
+    const currentStyleButton = event.target.closest<HTMLElement>(styleSelector)
+    if (!currentStyleButton
+      || !source.contains(currentStyleButton)
+      || event.target.closest(stylePanelSelector)) {
+      return
+    }
+
+    event.preventDefault()
+    event.stopImmediatePropagation()
+    if (!stylePinned)
+      currentStyleButton.querySelector<HTMLElement>(stylePanelSelector)?.classList.remove('active')
+  }
+
   const handleClick = (event: MouseEvent) => {
     if (!(event.target instanceof Element))
       return
 
     const target = event.target
     const currentSetting = target.closest<HTMLElement>(settingSelector)
-    const styleButton = target.closest<HTMLElement>(styleSelector)
-    if ((!currentSetting && !styleButton) || !source.contains(target))
+    const currentStyleButton = target.closest<HTMLElement>(styleSelector)
+    if ((!currentSetting && !currentStyleButton) || !source.contains(target))
       return
 
     const insideSettingPanel = !!target.closest(settingPanelSelector)
+    const insideStylePanel = !!target.closest(stylePanelSelector)
     if (currentSetting && !insideSettingPanel) {
       event.preventDefault()
       event.stopImmediatePropagation()
+      setStylePinned(false)
       setSettingsPinned(!settingsPinned)
       return
     }
 
-    if (styleButton && settingsPinned)
+    if (currentStyleButton && !insideStylePanel) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
       setSettingsPinned(false)
+      setStylePinned(!stylePinned)
+    }
   }
 
   const handleOutsideClick = (event: MouseEvent) => {
-    if (!settingsPinned)
+    if (!settingsPinned && !stylePinned)
       return
     const currentSetting = source.querySelector<HTMLElement>(settingSelector)
-    if (event.target instanceof Node && currentSetting?.contains(event.target))
-      return
+    const currentStyleButton = source.querySelector<HTMLElement>(styleSelector)
+    if (event.target instanceof Node) {
+      if (currentSetting?.contains(event.target) || currentStyleButton?.contains(event.target))
+        return
+    }
     setSettingsPinned(false)
+    setStylePinned(false)
   }
 
+  source.addEventListener('mouseover', handleStyleHover, true)
+  source.addEventListener('mouseenter', handleStyleHover, true)
+  source.addEventListener('mouseout', handleStyleHover, true)
+  source.addEventListener('mouseleave', handleStyleHover, true)
+  source.addEventListener('pointerover', handleStyleHover, true)
+  source.addEventListener('pointerenter', handleStyleHover, true)
+  source.addEventListener('pointerout', handleStyleHover, true)
+  source.addEventListener('pointerleave', handleStyleHover, true)
   source.addEventListener('click', handleClick, true)
   document.addEventListener('click', handleOutsideClick, true)
 
   return () => {
     if (settingsPinned)
       setSettingsPinned(false)
+    if (stylePinned)
+      setStylePinned(false)
+    source.removeEventListener('mouseover', handleStyleHover, true)
+    source.removeEventListener('mouseenter', handleStyleHover, true)
+    source.removeEventListener('mouseout', handleStyleHover, true)
+    source.removeEventListener('mouseleave', handleStyleHover, true)
+    source.removeEventListener('pointerover', handleStyleHover, true)
+    source.removeEventListener('pointerenter', handleStyleHover, true)
+    source.removeEventListener('pointerout', handleStyleHover, true)
+    source.removeEventListener('pointerleave', handleStyleHover, true)
     source.removeEventListener('click', handleClick, true)
     document.removeEventListener('click', handleOutsideClick, true)
     const currentSetting = source.querySelector<HTMLElement>(settingSelector)
@@ -4548,6 +4707,15 @@ function setupDanmakuSettingsClickToggle(source: HTMLElement) {
         currentSetting.removeAttribute('aria-expanded')
       else
         currentSetting.setAttribute('aria-expanded', originalAriaExpanded)
+    }
+    const currentStyleButton = source.querySelector<HTMLElement>(styleSelector)
+    const currentStylePanel = currentStyleButton?.querySelector<HTMLElement>(stylePanelSelector)
+    currentStylePanel?.classList.toggle('active', originalStylePanelActive)
+    if (currentStyleButton) {
+      if (originalStyleAriaExpanded === null)
+        currentStyleButton.removeAttribute('aria-expanded')
+      else
+        currentStyleButton.setAttribute('aria-expanded', originalStyleAriaExpanded)
     }
   }
 }
@@ -4561,12 +4729,16 @@ function syncDanmakuInputSource(currentState: BewlyWidescreenState, force = fals
 
   if (!force
     && source === currentState.danmakuSemanticsSource
-    && host === currentState.danmakuSourceHost) {
+    && host === currentState.danmakuSourceHost
+    && currentState.danmakuGlass?.isConnected
+    && currentState.danmakuGlass.parentElement === host.parentElement) {
     return true
   }
 
   currentState.danmakuSemanticsCleanup?.()
   currentState.danmakuSettingsCleanup?.()
+  currentState.danmakuGlass?.remove()
+  currentState.danmakuGlass = undefined
   currentState.danmakuSemanticsSource?.classList.remove(DANMAKU_SOURCE_CLASS)
   currentState.danmakuSourceHost?.classList.remove(DANMAKU_SOURCE_HOST_CLASS)
   if (currentState.danmakuSourceHost && currentState.danmakuSourceHost !== host)
@@ -4574,6 +4746,11 @@ function syncDanmakuInputSource(currentState: BewlyWidescreenState, force = fals
 
   source.classList.add(DANMAKU_SOURCE_CLASS)
   host.classList.add(DANMAKU_SOURCE_HOST_CLASS)
+  const glass = document.createElement('div')
+  glass.className = DANMAKU_GLASS_CLASS
+  glass.setAttribute('aria-hidden', 'true')
+  host.parentElement?.insertBefore(glass, host)
+  currentState.danmakuGlass = glass
   currentState.danmakuSemanticsSource = source
   currentState.danmakuSourceHost = host
   currentState.danmakuSemanticsCleanup = setupWidescreenDanmakuSemantics(
@@ -4596,6 +4773,7 @@ function clearDanmakuActivation(currentState: BewlyWidescreenState) {
   currentState.danmakuResizeTimers?.forEach(timer => clearTimeout(timer))
   currentState.danmakuResizeTimers = []
   currentState.danmakuActivatedSource = undefined
+  currentState.danmakuPendingSource = undefined
 }
 
 function scheduleDanmakuNativeRelayout(currentState: BewlyWidescreenState) {
@@ -4607,8 +4785,22 @@ function scheduleDanmakuNativeRelayout(currentState: BewlyWidescreenState) {
 }
 
 function isDanmakuPanelReady(panel: HTMLElement) {
+  const listViewport = panel.querySelector<HTMLElement>(DANMAKU_LIST_VIEWPORT_SELECTOR)
+  if (!listViewport)
+    return false
+
   const loading = panel.querySelector<HTMLElement>('.bpx-player-dm-load-status')
-  return !loading || getComputedStyle(loading).display === 'none'
+  if (loading) {
+    const loadingStyle = getComputedStyle(loading)
+    if (loadingStyle.display !== 'none'
+      && loadingStyle.visibility !== 'hidden'
+      && loadingStyle.opacity !== '0') {
+      return false
+    }
+  }
+
+  return !!panel.querySelector(DANMAKU_LIST_ITEM_SELECTOR)
+    || !!panel.querySelector(DANMAKU_EMPTY_STATE_SELECTOR)
 }
 
 function activateDanmakuTab(currentState: BewlyWidescreenState) {
@@ -4621,10 +4813,14 @@ function activateDanmakuTab(currentState: BewlyWidescreenState) {
     scheduleDanmakuNativeRelayout(currentState)
     return
   }
+  if (currentState.danmakuActivationTimer && currentState.danmakuPendingSource === source)
+    return
 
   clearDanmakuActivation(currentState)
+  currentState.danmakuPendingSource = source
   currentState.danmakuActivationTimer = setTimeout(() => {
     currentState.danmakuActivationTimer = undefined
+    currentState.danmakuPendingSource = undefined
     if (state !== currentState || currentState.activeTab !== 'danmaku' || !source.isConnected)
       return
 
@@ -5249,6 +5445,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.danmakuSemanticsCleanup = undefined
   currentState.danmakuSettingsCleanup?.()
   currentState.danmakuSettingsCleanup = undefined
+  currentState.danmakuGlass?.remove()
+  currentState.danmakuGlass = undefined
   currentState.danmakuSemanticsSource?.classList.remove(DANMAKU_SOURCE_CLASS)
   currentState.danmakuSourceHost?.classList.remove(DANMAKU_SOURCE_HOST_CLASS)
   currentState.danmakuSemanticsSource = undefined
@@ -5317,8 +5515,7 @@ function isRecommendationTransferReady(recommendation: HTMLElement | null): bool
 function isDanmakuTransferReady(danmaku: HTMLElement | null): boolean {
   if (!danmaku)
     return false
-  return danmaku.matches('.bpx-player-dm-wrap')
-    || !!danmaku.querySelector('.bpx-player-dm-wrap, .bui-collapse-body')
+  return !!danmaku.querySelector('.bui-collapse-body, .bpx-player-dm-container, .bui-long-list-wrap')
 }
 
 function isVideoMetadataTransferReady() {
@@ -5578,8 +5775,7 @@ function waitForReadyLayout() {
         clearReadyWait()
         return
       }
-      if (pageReadyForLayout)
-        startCommentPrewarm()
+      startCommentPrewarm()
       playerReadyForLayout = isReadyForLayout()
       contentReadyForLayout = isWidescreenTransferContentReady()
         || hasWidescreenTransferSettleElapsed()

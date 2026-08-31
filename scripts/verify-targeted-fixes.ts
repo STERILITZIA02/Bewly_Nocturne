@@ -2267,6 +2267,12 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /readinessStableSince/)
   assert.match(widescreen, /function startCommentPrewarm/)
   assert.match(widescreen, /function restoreCommentPrewarm/)
+  const readinessAttemptSection = widescreen.slice(
+    widescreen.indexOf('const scheduleAttempt = () =>'),
+    widescreen.indexOf('readyObserver = new MutationObserver', widescreen.indexOf('const scheduleAttempt = () =>')),
+  )
+  assert.match(readinessAttemptSection, /startCommentPrewarm\(\)[\s\S]{0,160}playerReadyForLayout = isReadyForLayout\(\)/)
+  assert.doesNotMatch(readinessAttemptSection, /if \(pageReadyForLayout\)\s*startCommentPrewarm\(\)/)
   assert.match(widescreen, /readyPollTimer/)
   assert.match(widescreen, /clearTimeout\(readyPollTimer\)/)
   assert.match(widescreen, /window\.removeEventListener\('load', pageReadyHandler\)/)
@@ -2334,10 +2340,26 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(danmakuPanelStyles, /max-height: none !important/)
   assert.doesNotMatch(widescreen, /--bew-comment-replies-(?:mask-bg|loading-animation)/)
   assert.match(widescreen, /danmakuFocusable:/)
+  const danmakuSelectorSection = widescreen.slice(
+    widescreen.indexOf('danmaku: ['),
+    widescreen.indexOf('playlist: [', widescreen.indexOf('danmaku: [')),
+  )
+  assert.doesNotMatch(danmakuSelectorSection, /'\.bpx-player-dm-wrap'/)
   assert.match(widescreen, /const DANMAKU_RESIZE_DELAYS = \[0, 80, 180, 360, 720\]/)
   assert.match(widescreen, /function activateDanmakuTab/)
   assert.match(widescreen, /focusable\.click\(\)/)
+  assert.match(widescreen, /danmakuPendingSource\?: HTMLElement/)
+  assert.match(widescreen, /currentState\.danmakuActivationTimer\s*&& currentState\.danmakuPendingSource === source/)
   assert.match(widescreen, /function isDanmakuPanelReady/)
+  const danmakuReadySection = widescreen.slice(
+    widescreen.indexOf('function isDanmakuPanelReady'),
+    widescreen.indexOf('function activateDanmakuTab'),
+  )
+  assert.match(widescreen, /DANMAKU_LIST_VIEWPORT_SELECTOR = '\.bui-long-list-list, \.bpx-player-dm-container'/)
+  assert.match(widescreen, /DANMAKU_LIST_ITEM_SELECTOR = '\.bui-long-list-item, \.bpx-player-dm-item,[^']*\[data-index\]'/)
+  assert.match(danmakuReadySection, /querySelector<HTMLElement>\(DANMAKU_LIST_VIEWPORT_SELECTOR\)/)
+  assert.match(danmakuReadySection, /querySelector\(DANMAKU_LIST_ITEM_SELECTOR\)/)
+  assert.match(danmakuReadySection, /return false/)
   assert.match(widescreen, /activeTab === 'danmaku'[\s\S]{0,480}activateDanmakuTab\(currentState\)/)
   assert.match(widescreen, /const DANMAKU_SKELETON_CLASS = 'bewly-widescreen-danmaku-skeleton'/)
   assert.match(widescreen, /function createDanmakuSkeleton\(label: string\)/)
@@ -2366,7 +2388,8 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(danmakuSkeletonStyles, /grid-template-columns:/)
   assert.match(danmakuSkeletonStyles, /background: var\(--bew-skeleton\)/)
-  assert.match(danmakuSkeletonStyles, /animation: bewly-widescreen-skeleton-shimmer/)
+  assert.match(danmakuSkeletonStyles, /\.bewly-widescreen-danmaku-skeleton__block[\s\S]{0,420}animation: bewly-widescreen-skeleton-shimmer/)
+  assert.doesNotMatch(danmakuSkeletonStyles, /\.bewly-widescreen-danmaku-skeleton::after/)
   assert.match(widescreen, /@keyframes bewly-widescreen-skeleton-shimmer/)
   assert.match(danmakuPanelStyles, /\.bpx-player-dm-wrap[\s\S]{0,180}position: relative !important/)
   assert.match(danmakuPanelStyles, /\.bui-collapse-header[\s\S]{0,320}height: auto !important/)
@@ -2436,7 +2459,7 @@ async function verifyP2WidescreenControl() {
   const danmakuSurfaceMarker = '$' + '{DANMAKU_SURFACE_SELECTOR}'
   const danmakuSurfaceStyles = widescreen.slice(
     widescreen.indexOf(`${danmakuSurfaceMarker} {`),
-    widescreen.indexOf(`#\${ROOT_ID}[data-player-controls-hidden="true"] .bewly-widescreen-danmaku-dock`),
+    widescreen.indexOf(`${danmakuSurfaceMarker}::before`),
   )
   assert.match(danmakuSurfaceStyles, /position: absolute !important/)
   assert.match(danmakuSurfaceStyles, /bottom: 0 !important/)
@@ -2444,9 +2467,34 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSurfaceStyles, /width: 100% !important/)
   assert.match(danmakuSurfaceStyles, /z-index: 4 !important/)
   assert.match(danmakuSurfaceStyles, /padding: var\(--bew-space-2, 8px\) var\(--bew-space-8, 32px\) !important/)
-  assert.match(danmakuSurfaceStyles, /background: var\(--bewly-widescreen-danmaku-bar-bg\) !important/)
-  assert.match(danmakuSurfaceStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
+  assert.match(danmakuSurfaceStyles, /background: transparent !important/)
+  assert.match(danmakuSurfaceStyles, /backdrop-filter: none !important/)
+  assert.match(danmakuSurfaceStyles, /isolation: auto !important/)
+  assert.doesNotMatch(danmakuSurfaceStyles, /isolation: isolate/)
+  assert.match(danmakuSurfaceStyles, /transform: none !important/)
+  assert.match(danmakuSurfaceStyles, /will-change: auto/)
+  assert.doesNotMatch(danmakuSurfaceStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
   assert.match(danmakuSurfaceStyles, /pointer-events: auto !important/)
+  assert.match(widescreen, /const DANMAKU_GLASS_CLASS = 'bewly-widescreen-danmaku-glass'/)
+  const danmakuSurfaceBackgroundStyles = widescreen.slice(
+    widescreen.indexOf(`body.\${BODY_CLASS} .\${DANMAKU_GLASS_CLASS} {`),
+    widescreen.indexOf(`#\${ROOT_ID}[data-player-controls-hidden="true"]`, widescreen.indexOf(`body.\${BODY_CLASS} .\${DANMAKU_GLASS_CLASS} {`)),
+  )
+  assert.match(danmakuSurfaceBackgroundStyles, /position: absolute !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /right: 0 !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /bottom: 0 !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /left: 0 !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /z-index: calc\(var\(--bew-z-popover\) - 1\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /background: var\(--bewly-widescreen-danmaku-bar-bg\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /backdrop-filter: var\(--bew-filter-glass-1\) !important/)
+  const hiddenGlassStyles = widescreen.slice(
+    widescreen.indexOf(`body.\${BODY_CLASS}.\${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS} .\${DANMAKU_GLASS_CLASS}`),
+    widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-danmaku-dock {`),
+  )
+  assert.match(hiddenGlassStyles, /translate3d\(0, 100%, 0\)/)
+  assert.match(widescreen, /host\.parentElement\?\.insertBefore\(glass, host\)/)
+  assert.match(widescreen, /currentState\.danmakuGlass\?\.remove\(\)/)
   const danmakuDockStyles = widescreen.slice(
     widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-danmaku-dock {`),
     widescreen.indexOf(`${danmakuSurfaceMarker}:empty`),
@@ -2464,9 +2512,9 @@ async function verifyP2WidescreenControl() {
   assert.match(hiddenDanmakuSourceStyles, /pointer-events: none/)
   assert.match(widescreen, /\.bpx-player-control-wrap[\s\S]{0,260}bottom: var\(--bewly-widescreen-bottom-controls-height\) !important/)
   assert.match(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}[\s\S]{0,260}bottom: 0 !important/)
-  assert.match(widescreen, /html:not\(\.dark\) #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid, #fff\)/)
-  assert.match(widescreen, /html\.dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid\)/)
-  assert.match(widescreen, /html\.dark\.oled-dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg: var\(--bew-bg, #000\)/)
+  assert.match(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-elevated-alt\)/)
+  assert.doesNotMatch(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid/)
+  assert.doesNotMatch(widescreen, /html\.dark\.oled-dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg/)
   const playerSlotStyles = widescreen.slice(
     widescreen.indexOf('.bewly-widescreen-player-slot {'),
     widescreen.indexOf('.bewly-widescreen-player-frame {'),
@@ -2586,11 +2634,15 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(danmakuInputbarStyles, /border-radius: var\(--bew-interactive-radius\)/)
   assert.match(danmakuInputbarStyles, /overflow: visible !important/)
+  assert.match(danmakuInputbarStyles, /background: transparent !important/)
+  assert.match(danmakuInputbarStyles, /backdrop-filter: none !important/)
+  assert.match(widescreen, /\.bpx-player-video-inputbar::before[\s\S]{0,500}background: var\(--bew-popover-surface-background\) !important[\s\S]{0,240}backdrop-filter: var\(--bew-filter-glass-1\) !important/)
+  assert.match(widescreen, /\.bpx-player-video-inputbar > \*[\s\S]{0,160}z-index: 1 !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-container[\s\S]{0,320}z-index: var\(--bew-z-popover\) !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-container[\s\S]{0,320}background: transparent !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-container \{[\s\S]{0,100}display: none !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-container\.active[\s\S]{0,80}display: block !important/)
-  assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,500}background: var\(--bew-popover-surface-background\) !important[\s\S]{0,280}border-radius: var\(--bew-popover-radius\) !important/)
+  assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,500}background: var\(--bew-elevated-alt\) !important[\s\S]{0,280}border-radius: var\(--bew-popover-radius\) !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,700}backdrop-filter: var\(--bew-filter-glass-1\) !important/)
   const danmakuSendButtonStyles = widescreen.slice(
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-btn-send {`),
@@ -2621,7 +2673,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-box {`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-box .bui-panel-wrap`),
   )
-  assert.match(danmakuSettingPanelStyles, /background: var\(--bew-popover-surface-background\) !important/)
+  assert.match(danmakuSettingPanelStyles, /background: var\(--bew-elevated-alt\) !important/)
   assert.match(danmakuSettingPanelStyles, /box-shadow: var\(--bew-popover-surface-shadow\) !important/)
   assert.match(danmakuSettingPanelStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(danmakuSettingPanelStyles, /backdrop-filter: var\(--bew-filter-glass-1\) !important/)
@@ -2722,6 +2774,10 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSettingsToggleSection, /currentPanel\.style\.display = nextPinned \? 'block' : 'none'/)
   assert.match(danmakuSettingsToggleSection, /function dispatchNativeSettingHover/)
   assert.match(danmakuSettingsToggleSection, /dispatchNativeSettingHover\(currentSetting, true\)/)
+  assert.match(danmakuSettingsToggleSection, /let stylePinned = false/)
+  assert.match(danmakuSettingsToggleSection, /currentPanel\?\.classList\.toggle\('active', nextPinned\)/)
+  assert.match(danmakuSettingsToggleSection, /source\.addEventListener\('mouseover', handleStyleHover, true\)/)
+  assert.match(danmakuSettingsToggleSection, /event\.stopImmediatePropagation\(\)/)
   assert.match(danmakuSettingsToggleSection, /source\.addEventListener\('click', handleClick, true\)/)
   assert.match(danmakuSettingsToggleSection, /document\.addEventListener\('click', handleOutsideClick, true\)/)
   assert.doesNotMatch(danmakuSettingsToggleSection, /blockSettingsHover/)
