@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { useMediaQuery } from '@vueuse/core'
+import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
@@ -28,13 +28,27 @@ const emit = defineEmits<{
 const { isDark, toggleDark } = useDark()
 const sidebarPosition = useLayoutEditSettingValue('navigation.sidebar.position', () => settings.value.sidebarPosition)
 
-const tooltipPlacement = computed<'left' | 'right'>(() => {
+const widescreenDocked = ref(document.body.classList.contains('bewly-widescreen-active'))
+useMutationObserver(
+  document.body,
+  () => {
+    widescreenDocked.value = document.body.classList.contains('bewly-widescreen-active')
+  },
+  { attributes: true, attributeFilter: ['class'] },
+)
+
+const tooltipPlacement = computed<'left' | 'right' | 'top'>(() => {
+  if (widescreenDocked.value)
+    return 'top'
   return sidebarPosition.value === 'left' ? 'right' : 'left'
 })
 
 const hideSidebar = ref<boolean>(false)
 const coarsePointer = useMediaQuery('(pointer: coarse)')
-const effectiveAutoHideSidebar = computed(() => settings.value.autoHideSidebar && !coarsePointer.value && !isLayoutEditing.value)
+const effectiveAutoHideSidebar = computed(() => settings.value.autoHideSidebar
+  && !coarsePointer.value
+  && !isLayoutEditing.value
+  && !widescreenDocked.value)
 const sideBarContentHover = ref<boolean>(false)
 const sideBarContentRef = useDelayedHover({
   enterDelay: 100,
@@ -103,6 +117,7 @@ function toggleLayoutEditMode() {
       'left-side': sidebarPosition === 'left',
       'right-side': sidebarPosition === 'right',
       'hide': hideSidebar,
+      'widescreen-docked': widescreenDocked,
     }"
     pos="fixed top-0" h-full flex items-center px-6px
     z-10 pointer-events-none
@@ -284,5 +299,25 @@ function toggleLayoutEditMode() {
 
 .hide.right-side .sidebar-content {
   --uno: "translate-x-100% opacity-0 pointer-events-none";
+}
+
+.widescreen-docked {
+  top: auto !important;
+  right: auto !important;
+  bottom: var(--bewly-widescreen-aux-controls-bottom, var(--bew-space-2));
+  left: var(--bewly-widescreen-aux-controls-left, var(--bew-space-8));
+  width: auto;
+  height: var(--bew-control-height);
+  padding: 0;
+
+  .sidebar-content {
+    --bew-floating-control-size: var(--bew-control-height);
+    --bew-floating-control-icon-size: var(--bew-icon-size-md);
+
+    flex-direction: row;
+    gap: var(--bew-space-2);
+    opacity: 1;
+    transform: none;
+  }
 }
 </style>

@@ -1,4 +1,4 @@
-import { execSync } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import process from 'node:process'
 
 import chokidar from 'chokidar'
@@ -8,7 +8,7 @@ import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributors
 import { isDev, isSafari, r } from './utils'
 
 function writeManifest() {
-  execSync('npx esno ./scripts/manifest.ts', { stdio: 'inherit' })
+  execFileSync('pnpm', ['exec', 'esno', './scripts/manifest.ts'], { stdio: 'inherit' })
 }
 
 async function prepare() {
@@ -41,6 +41,7 @@ async function prepare() {
 }
 
 void prepare().catch((error: unknown) => {
-  console.error('[prepare] failed:', error)
+  const message = error instanceof Error ? error.message : String(error)
+  console.error(`[prepare] failed: ${message}`)
   process.exitCode = 1
 })

@@ -202,6 +202,9 @@ settings:
     title: 备份与重置
     backup_title: 设置备份
     backup_desc: 导出设置用于备份或迁移，也可以从已有备份恢复。
+    development_title: 开发构建
+    development_desc: 用于确认浏览器当前加载的扩展产物是否与本地开发版本一致。
+    build_id: 构建编号
     import_desc: 从 Bewly Nocturne JSON 备份中导入已识别的设置项。
     import_failed: 设置文件无法读取，请确认它是有效的 JSON 备份。
     import_no_matches: 备份中没有可导入的设置项。
@@ -1196,6 +1199,7 @@ dock:
   collapse_dock: 收起 Dock
   expand_dock: 展开 Dock
 moments:
+  retry: 重试
   filter_all: 全部
   filter_video: 视频投稿
   filter_pgc: 追番追剧
@@ -1531,6 +1535,9 @@ widescreen:
   loading: 正在加载宽屏模式…
   comments: 评论
   danmaku: 弹幕
+  danmaku_settings: 弹幕设置
+  danmaku_style: 弹幕样式
+  send_danmaku: 发送弹幕
   playlist: 选集
   recommendations: 推荐
   collapse: 收起
@@ -1538,6 +1545,12 @@ widescreen:
   comments_loading: 评论区加载中
   danmaku_loading: 弹幕列表加载中
   list_loading: 列表加载中
+  stat_likes: 点赞
+  stat_coins: 投币
+  stat_favorites: 收藏
+  stat_shares: 分享
+  video_description: 视频简介
+  video_category: 视频分区
   show_full_sidebar: 显示完整侧栏
   show_compact_sidebar: 收起侧栏
 search_bar:

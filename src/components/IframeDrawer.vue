@@ -11,9 +11,8 @@ import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscap
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { isHomePage, isInIframe } from '~/utils/main'
+import { reportRuntimeFailure } from '~/utils/messaging'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
-
-// TODO: support shortcuts like `Ctrl+Alt+T` to open in new tab, `Esc` to close
 
 const props = defineProps<{
   url: string
@@ -90,7 +89,7 @@ watch([isDark, isOledDark], ([newValue, newOledValue]) => {
     })
   }
   catch (error) {
-    console.warn('Failed to send dark mode change message to iframe:', error)
+    reportRuntimeFailure('Failed to send dark mode change message to iframe', error)
   }
 })
 
@@ -107,7 +106,7 @@ watch(() => settings.value.darkModeBaseColor, (newColor) => {
     })
   }
   catch (error) {
-    console.warn('Failed to send dark mode base color change message to iframe:', error)
+    reportRuntimeFailure('Failed to send dark mode base color change message to iframe', error)
   }
 })
 
@@ -130,7 +129,7 @@ watch(() => showIframe.value, (newValue) => {
         })
       }
       catch (error) {
-        console.warn('Failed to send initial dark mode state to iframe:', error)
+        reportRuntimeFailure('Failed to send initial dark mode state to iframe', error)
       }
     }, 500) // 稍长的延迟确保iframe完全加载
   }
@@ -226,7 +225,7 @@ function injectStyleClass() {
       removeTopBarClassInjected.value = true
     }
     catch (error) {
-      console.warn('Failed to inject style class:', error)
+      reportRuntimeFailure('Failed to inject iframe style class', error)
     }
   }
 }
@@ -243,7 +242,7 @@ function handleIframeLoad(event: Event) {
   markIframeReadyForMessaging(iframe)
   const iframeWindow = iframe.contentWindow
   if (!iframeWindow) {
-    console.error('Iframe or contentWindow is not available')
+    reportRuntimeFailure('Iframe lifecycle', 'contentWindow is unavailable after load')
     return
   }
 
@@ -301,7 +300,7 @@ onUnmounted(() => {
 
 function updateCurrentUrl(e: any) {
   if (!iframeRef.value?.contentWindow) {
-    console.error('iframe contentWindow not available')
+    reportRuntimeFailure('Iframe navigation', 'contentWindow is unavailable')
     return
   }
   let newUrl = iframeRef.value.contentWindow.location.href
@@ -526,9 +525,6 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
             <i i-mingcute:external-link-line />
           </template>
           {{ $t('iframe_drawer.open_in_new_tab') }}
-          <!-- <div flex="~">
-            <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd>
-          </div> -->
         </Button>
         <Button
           v-if="!isEscPressed"

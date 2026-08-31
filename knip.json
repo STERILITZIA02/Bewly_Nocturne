@@ -1,7 +1,6 @@
 {
   "$schema": "https://unpkg.com/knip@5/schema.json",
   "entry": [
-    ".github/scripts/pr-policy-check.mjs",
     "scripts/manifest.ts",
     "scripts/prepare.ts",
     "scripts/verify-notification-fixtures.ts",
@@ -15,14 +14,15 @@
     "vite.config.content.ts",
     "vite.config.inject.ts"
   ],
+  "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
     "@iconify/json",
     "uno.css"
   ],
   "ignoreBinaries": ["gh", "xcrun"],
   "rules": {
-    "types": "off",
-    "enumMembers": "off",
-    "exports": "off"
+    "types": "warn",
+    "enumMembers": "warn",
+    "exports": "warn"
   }
 }

@@ -3,9 +3,11 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import type { List as PopularAnimeItem, PopularAnimeResult } from '~/models/anime/popular'
 import type { ItemSubItem as RecommendationItem, RecommendationResult } from '~/models/anime/recommendation'
 import type { List as WatchListItem, WatchListResult } from '~/models/anime/watchList'
+import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { numFormatter } from '~/utils/dataFormatter'
 import { getUserID, openLinkToNewTab } from '~/utils/main'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 import AnimeTimeTable from './components/AnimeTimeTable.vue'
 
@@ -21,25 +23,61 @@ const activatedSeasonId = ref<number>()
 const noMoreContent = ref<boolean>()
 const animeTimeTableRef = ref()
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
+const topBarStore = useTopBarStore()
+let requestGeneration = 0
+let animeMounted = false
 
 const isLoading = computed(() => {
   return isLoadingAnimeWatchList.value || isLoadingPopularAnime.value || isLoadingRecommendAnime.value
 })
 
 onMounted(() => {
-  getAnimeWatchList()
-  getPopularAnimeList()
-  void getRecommendAnimeList()
-
+  animeMounted = true
+  reloadAnimePage()
   initPageAction()
 })
 
 onScopeDispose(() => {
+  animeMounted = false
+  requestGeneration++
   if (handleReachBottom.value === handleAnimeReachBottom)
     handleReachBottom.value = undefined
   if (handlePageRefresh.value === handleAnimePageRefresh)
     handlePageRefresh.value = undefined
 })
+
+watch(() => topBarStore.userInfo.mid, () => {
+  if (animeMounted)
+    reloadAnimePage()
+})
+
+function getAnimeAccountId() {
+  return String(topBarStore.userInfo.mid || getUserID() || 0)
+}
+
+function isAnimeRequestCurrent(generation: number, requestAccountId: string) {
+  return animeMounted
+    && generation === requestGeneration
+    && requestAccountId === getAnimeAccountId()
+}
+
+function reloadAnimePage() {
+  const generation = ++requestGeneration
+  const requestAccountId = getAnimeAccountId()
+  animeWatchList.length = 0
+  recommendAnimeList.length = 0
+  popularAnimeList.length = 0
+  cursor.value = 0
+  noMoreContent.value = false
+  recommendRequestFailed.value = false
+  isLoadingAnimeWatchList.value = false
+  isLoadingPopularAnime.value = false
+  isLoadingRecommendAnime.value = false
+  void getAnimeWatchList(generation, requestAccountId)
+  void getPopularAnimeList(generation, requestAccountId)
+  void getRecommendAnimeList(generation, requestAccountId)
+  animeTimeTableRef.value?.refreshAnimeTimeTable()
+}
 
 async function handleAnimeReachBottom() {
   if (isLoadingRecommendAnime.value || noMoreContent.value || recommendRequestFailed.value)
@@ -50,18 +88,7 @@ async function handleAnimeReachBottom() {
 function handleAnimePageRefresh() {
   if (isLoading.value)
     return
-
-  animeWatchList.length = 0
-  recommendAnimeList.length = 0
-  popularAnimeList.length = 0
-  cursor.value = 0
-  noMoreContent.value = false
-  recommendRequestFailed.value = false
-
-  getAnimeWatchList()
-  getPopularAnimeList()
-  void getRecommendAnimeList()
-  animeTimeTableRef.value?.refreshAnimeTimeTable()
+  reloadAnimePage()
 }
 
 function initPageAction() {
@@ -69,29 +96,34 @@ function initPageAction() {
   handlePageRefresh.value = handleAnimePageRefresh
 }
 
-function getAnimeWatchList() {
+async function getAnimeWatchList(generation = requestGeneration, requestAccountId = getAnimeAccountId()) {
   isLoadingAnimeWatchList.value = true
-  api.anime.getAnimeWatchList({
-    vmid: getUserID() ?? 0,
-    pn: 1,
-    follow_status: 2,
-    ps: 30,
-  })
-    .then((response: WatchListResult) => {
-      const {
-        code,
-        data: { list },
-      } = response
-      if (code === 0)
-        Object.assign(animeWatchList, list as WatchListItem[])
+  try {
+    const response: WatchListResult = await api.anime.getAnimeWatchList({
+      vmid: requestAccountId,
+      pn: 1,
+      follow_status: 2,
+      ps: 30,
     })
-    .catch(() => Object.assign(animeWatchList, []))
-    .finally(() => {
+    if (!isAnimeRequestCurrent(generation, requestAccountId))
+      return
+    const list = Array.isArray(response.data?.list) ? response.data.list : []
+    animeWatchList.splice(0, animeWatchList.length, ...(response.code === 0 ? list : []))
+  }
+  catch {
+    if (isAnimeRequestCurrent(generation, requestAccountId))
+      animeWatchList.length = 0
+  }
+  finally {
+    if (isAnimeRequestCurrent(generation, requestAccountId))
       isLoadingAnimeWatchList.value = false
-    })
+  }
 }
 
-async function getRecommendAnimeList(): Promise<boolean> {
+async function getRecommendAnimeList(
+  generation = requestGeneration,
+  requestAccountId = getAnimeAccountId(),
+): Promise<boolean> {
   if (isLoadingRecommendAnime.value)
     return false
   recommendRequestFailed.value = false
@@ -100,6 +132,8 @@ async function getRecommendAnimeList(): Promise<boolean> {
     const response: RecommendationResult = await api.anime.getRecommendAnimeList({
       coursor: cursor.value,
     })
+    if (!isAnimeRequestCurrent(generation, requestAccountId))
+      return false
     if (response.code !== 0) {
       recommendRequestFailed.value = true
       return true
@@ -113,28 +147,31 @@ async function getRecommendAnimeList(): Promise<boolean> {
     return true
   }
   catch (error) {
-    recommendRequestFailed.value = true
-    console.error('获取番剧推荐失败:', error)
+    if (isAnimeRequestCurrent(generation, requestAccountId)) {
+      recommendRequestFailed.value = true
+      reportRuntimeFailure('Failed to load anime recommendations', error)
+    }
     return true
   }
   finally {
-    isLoadingRecommendAnime.value = false
+    if (isAnimeRequestCurrent(generation, requestAccountId))
+      isLoadingRecommendAnime.value = false
   }
 }
 
-function getPopularAnimeList() {
+async function getPopularAnimeList(generation = requestGeneration, requestAccountId = getAnimeAccountId()) {
   isLoadingPopularAnime.value = true
-  api.anime.getPopularAnimeList()
-    .then((response: PopularAnimeResult) => {
-      const {
-        code,
-        result: { list },
-      } = response
-      if (code === 0)
-        Object.assign(popularAnimeList, list as PopularAnimeItem[])
-    })
-    .catch(() => {})
-    .finally(() => isLoadingPopularAnime.value = false)
+  try {
+    const response: PopularAnimeResult = await api.anime.getPopularAnimeList()
+    if (!isAnimeRequestCurrent(generation, requestAccountId))
+      return
+    const list = Array.isArray(response.result?.list) ? response.result.list : []
+    popularAnimeList.splice(0, popularAnimeList.length, ...(response.code === 0 ? list : []))
+  }
+  finally {
+    if (isAnimeRequestCurrent(generation, requestAccountId))
+      isLoadingPopularAnime.value = false
+  }
 }
 </script>
 

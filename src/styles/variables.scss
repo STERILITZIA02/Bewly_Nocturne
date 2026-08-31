@@ -81,6 +81,8 @@
   --bew-layout-sidebar-sticky-top: 150px;
   --bew-layout-sidebar-viewport-offset: 140px;
   --bew-layout-dialog-width: 420px;
+  --bew-dialog-action-min-width: 120px;
+  --bew-dialog-grid-item-min-width: 260px;
   --bew-layout-drawer-max-width: 1400px;
   --bew-layout-moments-sidebar-width: 248px;
   --bew-comment-media-max-width: 520px;
@@ -93,6 +95,7 @@
   --bew-moment-forward-textarea-min-height: 72px;
   --bew-moment-forward-textarea-max-height: 180px;
   --bew-moment-forward-picker-state-min-height: 112px;
+  --bew-widescreen-episode-max-height: 560px;
   --bew-layout-home-search-stage-lead-height: 156px;
   --bew-layout-home-search-stage-tail-height: 116px;
   --bew-layout-home-search-stage-height: calc(
@@ -363,6 +366,8 @@
   // #region Webpage background colors
   // Used as a webpage background color, but not on the Bilibili homepage (www.bilibili.com)
   --bew-bg: hsl(0 0% 100%);
+  --bew-player-canvas: hsl(0 0% 0%);
+  --bew-static-white: hsl(0 0% 100%);
 
   // Used as the background color of the Bilibili homepage (www.bilibili.com)
   --bew-homepage-bg: hsl(240 31% 96%);
@@ -632,7 +637,7 @@
   --graph_bold: color-mix(in oklab, var(--bew-content-solid), white 60%);
   --graph_icon: color-mix(in oklab, var(--bew-content-solid), white 75%);
   --shadow: var(--Ba0);
-  --text_white: var(--Wh0_u);
+  --text_white: var(--bew-static-white);
   --text1: var(--bew-text-1);
   --text2: var(--bew-text-2);
   --text3: var(--bew-text-3);

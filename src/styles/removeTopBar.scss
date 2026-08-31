@@ -244,12 +244,6 @@ html.bewly-outer-top-bars-suppressed {
   }
 }
 
-// body portal 存在时，Bilibili SPA 偶尔会在 #app 再生一份顶栏。只用根状态
-// 隐藏再生副本，不改节点内联样式，切回原站或 portal 消失后会自然恢复。
-html[data-bewly-top-bar-source="bilibili-native"] body > .bili-header ~ #app .bili-header {
-  display: none !important;
-}
-
 // 原版 B 站顶栏复用当前视频页显示策略。只移动实际固定栏体，保留外层占位，
 // 因而 Bilibili SPA 替换节点后也会从根节点状态恢复，不会遗留内联隐藏状态。
 .bewly-original-video-top-bar-controlled {

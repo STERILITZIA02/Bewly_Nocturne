@@ -42,7 +42,7 @@ import api from '~/utils/api'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { i18n } from '~/utils/i18n'
 import { getCSRF, isHomePage } from '~/utils/main'
-import { isExtensionContextInvalidatedError, onMessage, sendMessage } from '~/utils/messaging'
+import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '~/utils/momentKey'
 
@@ -398,7 +398,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     if (status === LoginStatus.LoggedIn) {
       startUpdateTimer()
       void syncSharedData({ force: true }).catch((error) => {
-        console.error('登录态变化后同步顶栏共享状态失败:', error)
+        reportRuntimeFailure('Failed to sync TopBar state after login change', error)
       })
     }
     else if (status === LoginStatus.LoggedOut) {
@@ -764,8 +764,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         return
 
       void syncWatchLaterState(true).catch((error) => {
-        if (!isExtensionContextInvalidatedError(error))
-          console.error('刷新稍后再看权威状态失败:', error)
+        reportRuntimeFailure('Failed to refresh authoritative Watch Later state', error)
       })
     }, 800)
   }
@@ -807,7 +806,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       if (isExtensionContextInvalidatedError(error))
         disableSharedStateMessaging()
       else
-        console.error('广播稍后再看成员失效失败:', error)
+        reportRuntimeFailure('Failed to broadcast Watch Later invalidation', error)
     }
   }
 
@@ -941,8 +940,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       }
     }
     catch (error) {
-      if (!isExtensionContextInvalidatedError(error))
-        console.error(error)
+      reportRuntimeFailure('Failed to load Watch Later page', error)
     }
     finally {
       if (isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration)
@@ -968,8 +966,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       return false
     }
     catch (error) {
-      if (!isExtensionContextInvalidatedError(error))
-        console.error(error)
+      reportRuntimeFailure('Failed to remove Watch Later item', error)
       return false
     }
   }
@@ -1121,7 +1118,7 @@ export const useTopBarStore = defineStore('topBar', () => {
             || (!cursorAdvanced && addedMomentCount === 0)
         }
       })
-      .catch(error => console.error(error))
+      .catch(error => reportRuntimeFailure('Failed to load TopBar moments', error))
       .finally(() => {
         if (isCurrentAccount(accountId) && requestGeneration === momentsRequestGeneration)
           isLoadingMoments.value = false
@@ -1327,7 +1324,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         return
 
       syncSharedData({ force: true, refresh: getUnreadMessageCount }).catch((error) => {
-        console.error('刷新已失效的未读消息状态失败:', error)
+        reportRuntimeFailure('Failed to refresh invalidated unread-message state', error)
       })
     },
   )
@@ -1558,7 +1555,7 @@ export const useTopBarStore = defineStore('topBar', () => {
               // userInfo 填充成功后立即同步一次角标状态，不用等下一个 tick
               if (!needsRecheck()) {
                 void syncSharedData().catch((error) => {
-                  console.error('同步顶栏共享状态失败:', error)
+                  reportRuntimeFailure('Failed to sync shared TopBar state', error)
                 })
               }
               scheduleNext(needsRecheck() ? recheckInterval : UPDATE_INTERVAL)
@@ -1574,7 +1571,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
         recheckInterval = LOGIN_RECHECK_INTERVAL
         syncSharedData().catch((error) => {
-          console.error('同步顶栏共享状态失败:', error)
+          reportRuntimeFailure('Failed to sync shared TopBar state', error)
         })
         scheduleNext(UPDATE_INTERVAL)
       }, delay)

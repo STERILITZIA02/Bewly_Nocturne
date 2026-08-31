@@ -7,6 +7,7 @@ import { settings } from '~/logic'
 import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID, isInIframe, removeHttpFromUrl } from '~/utils/main'
+import { reportRuntimeFailure } from '~/utils/messaging'
 import { isComponentVisible, shouldShowBadge, shouldShowDotBadge, shouldShowNumberBadge } from '~/utils/topBarBadge'
 
 import { resetTopBarTransientInteraction, useTopBarInteraction } from '../composables/useTopBarInteraction'
@@ -41,7 +42,7 @@ const { invalidateUnreadMessageState, syncMomentsState, syncSharedData, syncUnre
 
 function refreshUnreadMessageSharedState() {
   syncUnreadMessageState().catch((error) => {
-    console.error('同步未读消息共享状态失败:', error)
+    reportRuntimeFailure('Failed to sync shared unread-message state', error)
   })
 }
 
@@ -132,7 +133,7 @@ watch(() => focused.value, (newVal, _) => {
   }
 
   syncSharedData().catch((error) => {
-    console.error('同步顶栏共享状态失败:', error)
+    reportRuntimeFailure('Failed to sync shared TopBar state', error)
   })
 
   nextTick(() => {
@@ -167,7 +168,7 @@ watch(
 // 修改通知点击处理
 function handleNotificationsClick(item: { name: string, url: string, unreadCount: number, icon: string }) {
   invalidateUnreadMessageState().catch((error) => {
-    console.error('标记未读消息缓存失效失败:', error)
+    reportRuntimeFailure('Failed to invalidate unread-message state', error)
   })
   emit('notificationsClick', item)
 }

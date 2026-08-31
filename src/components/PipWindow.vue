@@ -1,6 +1,4 @@
 <script setup lang="ts">
-// import { onKeyStroke } from '@vueuse/core'
-
 import { useDark } from '~/composables/useDark'
 import { settings } from '~/logic'
 
@@ -106,29 +104,6 @@ async function releaseIframeResources() {
   iframe?.remove()
   iframeRef.value = null
 }
-
-// TODO: figure out why the `esc` key doesn't work in here
-
-const isEscPressed = ref<boolean>(false)
-// const escPressedTimer = ref<NodeJS.Timeout | null>(null)
-
-// nextTick(() => {
-//   onKeyStroke('Escape', (e: KeyboardEvent) => {
-//     e.preventDefault()
-//     if (isEscPressed.value) {
-//       handleClose()
-//     }
-//     else {
-//       isEscPressed.value = true
-//       if (escPressedTimer.value) {
-//         clearTimeout(escPressedTimer.value)
-//       }
-//       escPressedTimer.value = setTimeout(() => {
-//         isEscPressed.value = false
-//       }, 1300)
-//     }
-//   }, { target: iframeRef.value?.contentWindow })
-// })
 </script>
 
 <template>
@@ -151,12 +126,8 @@ const isEscPressed = ref<boolean>(false)
             <i i-mingcute:external-link-line />
           </template>
           {{ $t('iframe_drawer.open_in_new_tab') }}
-          <!-- <div flex="~">
-              <kbd>Ctrl</kbd><kbd>Alt</kbd><kbd>T</kbd>
-            </div> -->
         </Button>
         <Button
-          v-if="!isEscPressed"
           style="
             --b-button-color: var(--bew-elevated-solid);
             --b-button-color-hover: var(--bew-elevated-solid-hover);
@@ -169,18 +140,6 @@ const isEscPressed = ref<boolean>(false)
             <i i-mingcute:close-line />
           </template>
           {{ $t('iframe_drawer.close') }}
-          <!-- <kbd>Esc</kbd> -->
-        </Button>
-        <Button
-          v-else
-          type="error"
-          @click="handleClose"
-        >
-          <template #left>
-            <i i-mingcute:close-line />
-          </template>
-          {{ $t('iframe_drawer.press_esc_again_to_close') }}
-          <!-- <kbd>Esc</kbd> -->
         </Button>
       </div>
       <iframe

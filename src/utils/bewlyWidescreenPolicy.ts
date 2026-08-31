@@ -39,7 +39,7 @@ export function shouldSuppressWidescreenAutoEntry(
 export interface WidescreenLayoutReadiness {
   pageReady: boolean
   playerReady: boolean
-  contentReady: boolean
+  contentReady?: boolean
 }
 
 export function canCommitWidescreenLayout({
@@ -47,7 +47,7 @@ export function canCommitWidescreenLayout({
   playerReady,
   contentReady,
 }: WidescreenLayoutReadiness): boolean {
-  return pageReady && playerReady && contentReady
+  return pageReady && playerReady && contentReady === true
 }
 
 export interface WidescreenSidebarHydrationState {
@@ -67,10 +67,31 @@ export function shouldContinueWidescreenSidebarHydration({
 export const WIDESCREEN_SIDEBAR_EDGE_ACTIVATION_WIDTH = 72
 export const WIDESCREEN_SIDEBAR_EDGE_EXIT_TOLERANCE = 48
 export const WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY = 320
+export const WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT = 96
 export const WIDESCREEN_SIDEBAR_MIN_WIDTH = 360
 export const WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH = 460
-export const WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH = 720
-export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 0.5
+export const WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH = 1920
+export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 2 / 3
+
+export interface WidescreenPlayerControlHoverInput {
+  playerBottom: number
+  playerTop: number
+  pointerY: number
+}
+
+export function isWidescreenPlayerControlHoverRegion({
+  playerBottom,
+  playerTop,
+  pointerY,
+}: WidescreenPlayerControlHoverInput): boolean {
+  if (![playerBottom, playerTop, pointerY].every(Number.isFinite))
+    return false
+
+  const top = Math.min(playerTop, playerBottom)
+  const bottom = Math.max(playerTop, playerBottom)
+  const guardHeight = Math.min(WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT, bottom - top)
+  return pointerY >= bottom - guardHeight && pointerY <= bottom
+}
 
 export interface WidescreenSidebarHoverInput {
   position: 'left' | 'right'
@@ -165,6 +186,49 @@ export interface WidescreenCenterGeometry {
   enabled: boolean
   offset: number
   sideGap: number
+}
+
+export interface WidescreenAnchoredPlayerGeometryInput {
+  centered: boolean
+  frameHeight: number
+  frameLeft: number
+  frameTop: number
+  frameWidth: number
+  sidebarPosition: 'left' | 'right'
+  sidebarReservedWidth: number
+}
+
+export interface WidescreenAnchoredPlayerGeometry {
+  height: number
+  left: number
+  top: number
+  width: number
+}
+
+export function resolveWidescreenAnchoredPlayerGeometry({
+  centered,
+  frameHeight,
+  frameLeft,
+  frameTop,
+  frameWidth,
+  sidebarPosition,
+  sidebarReservedWidth,
+}: WidescreenAnchoredPlayerGeometryInput): WidescreenAnchoredPlayerGeometry {
+  const left = Number.isFinite(frameLeft) ? frameLeft : 0
+  const top = Number.isFinite(frameTop) ? frameTop : 0
+  const width = Math.max(0, Number.isFinite(frameWidth) ? frameWidth : 0)
+  const height = Math.max(0, Number.isFinite(frameHeight) ? frameHeight : 0)
+  const reservedWidth = centered
+    ? Math.max(0, Math.min(Number.isFinite(sidebarReservedWidth) ? sidebarReservedWidth : 0, width))
+    : 0
+  const anchoredWidth = width - reservedWidth
+
+  return {
+    height,
+    left: left + (centered && sidebarPosition === 'left' ? reservedWidth : 0),
+    top,
+    width: anchoredWidth,
+  }
 }
 
 /**

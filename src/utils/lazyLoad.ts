@@ -1,5 +1,3 @@
-// copy with vscode
-
 interface IdleDeadline {
   readonly didTimeout: boolean
   timeRemaining: () => number
@@ -75,7 +73,10 @@ declare function cancelIdleCallback(handle: number): void;
   }
 })()
 
-// TODO: handle error
+/**
+ * Lazily memoize the first successful executor result. Executor errors remain
+ * visible to the caller and are retried on the next access.
+ */
 export class LazyValue<T> {
   private _value: T | undefined
   private _didRun = false

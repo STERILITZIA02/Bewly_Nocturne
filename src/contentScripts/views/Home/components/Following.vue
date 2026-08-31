@@ -61,6 +61,7 @@ import { getAccountScopedStorageKey, isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcTimeSince, parseStatNumber } from '~/utils/dataFormatter'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 interface Props {
   gridLayout?: GridLayoutType
@@ -226,7 +227,7 @@ function addToBlacklist(mid: number) {
     localStorage.setItem(key, JSON.stringify([...blacklist]))
   }
   catch (error) {
-    console.error('[Following] Failed to add to blacklist:', error)
+    reportRuntimeFailure('Following: failed to add user to blacklist', error)
   }
 }
 
@@ -243,7 +244,7 @@ function removeFromBlacklist(mid: number) {
     }
   }
   catch (error) {
-    console.error('[Following] Failed to remove from blacklist:', error)
+    reportRuntimeFailure('Following: failed to remove user from blacklist', error)
   }
 }
 
@@ -389,7 +390,7 @@ async function getCurrentUserInfo(requestToken: number, accountMid: number): Pro
       return { status: 'login-required' }
   }
   catch (error) {
-    console.error('[Following] Failed to get current user info:', error)
+    reportRuntimeFailure('Following: failed to get current user info', error)
   }
   return { status: 'error' }
 }
@@ -484,7 +485,7 @@ async function loadFollowingList(requestToken: number, accountMid: number): Prom
     return { status: 'success' }
   }
   catch (error) {
-    console.error('[Following] Failed to load following list:', error)
+    reportRuntimeFailure('Following: failed to load following list', error)
     if (isFollowingRequestCurrent(requestToken)) {
       requestFailed.value = true
       noMoreContent.value = false
@@ -536,7 +537,7 @@ async function loadFollowingLiveList(token: number): Promise<VideoElement[]> {
     }
   }
   catch (error) {
-    console.error('[Following] Failed to load live list:', error)
+    reportRuntimeFailure('Following: failed to load live list', error)
   }
 
   return []
@@ -657,7 +658,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
         })
       }
       else {
-        console.error('[Following] API returned error code:', response.code)
+        reportRuntimeFailure('Following: API returned an error code', response.code)
         requestFailed.value = true
         noMoreContent.value = false
         return
@@ -722,7 +723,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
     }
   }
   catch (error) {
-    console.error('[Following] Failed to load ALL view:', error)
+    reportRuntimeFailure('Following: failed to load all view', error)
     if (isFollowingRequestCurrent(token)) {
       requestFailed.value = true
       noMoreContent.value = false
@@ -835,7 +836,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
         })
       }
       else {
-        console.error('[Following] API returned error code:', response.code)
+        reportRuntimeFailure('Following: API returned an error code', response.code)
         requestFailed.value = true
         noMoreContent.value = false
         return
@@ -885,7 +886,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
     }
   }
   catch (error) {
-    console.error('[Following] Failed to load user moments:', error)
+    reportRuntimeFailure('Following: failed to load user moments', error)
     if (isFollowingRequestCurrent(token)) {
       requestFailed.value = true
       noMoreContent.value = false
@@ -1102,7 +1103,7 @@ function initData() {
       }).catch((error) => {
         if (!isFollowingRequestCurrent(currentToken))
           return
-        console.error('[Following] Failed to initialize:', error)
+        reportRuntimeFailure('Following: failed to initialize', error)
         isLoading.value = false
         emit('afterLoading')
       })
