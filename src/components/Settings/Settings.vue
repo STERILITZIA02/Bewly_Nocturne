@@ -9,7 +9,7 @@ import type { SettingsNavigationRequest } from '~/composables/useAppProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
-import { subscribeSettingNavigation } from '~/logic/layoutEdit'
+import { enterLayoutEditMode, subscribeSettingNavigation } from '~/logic/layoutEdit'
 
 import type { SettingsSearchEntry } from './searchCatalog'
 import { settingsSearchEntries } from './searchCatalog'
@@ -30,6 +30,7 @@ const settingsContentReady = ref(false)
 const settingsLayerRef = ref<HTMLElement | null>(null)
 let settingsContentFrame: number | undefined
 let settingNavigationTimer: number | undefined
+let quickLayoutEditFrame: number | undefined
 let settingsModalActive = false
 let previouslyFocusedElement: HTMLElement | null = null
 const inertSiblingStates = new Map<HTMLElement, boolean>()
@@ -119,6 +120,7 @@ useEventListener(window, 'keydown', trapSettingsFocus, { capture: true })
 provide('setSettingsBreadcrumb', (detail?: string) => {
   breadcrumbDetail.value = detail
 })
+provide('startQuickLayoutEdit', startQuickLayoutEdit)
 
 const settingsMenu = {
   [MenuType.General]: defineAsyncComponent(() => import('./PluginComponentsAndPages/General/General.vue')),
@@ -554,12 +556,24 @@ onBeforeUnmount(() => {
     cancelAnimationFrame(settingsContentFrame)
   if (settingNavigationTimer !== undefined)
     clearTimeout(settingNavigationTimer)
+  if (quickLayoutEditFrame !== undefined)
+    cancelAnimationFrame(quickLayoutEditFrame)
   searchNavigationId++
   clearSearchTargetHighlight()
 })
 
 function handleClose() {
   emit('close')
+}
+
+function startQuickLayoutEdit() {
+  handleClose()
+  if (quickLayoutEditFrame !== undefined)
+    cancelAnimationFrame(quickLayoutEditFrame)
+  quickLayoutEditFrame = requestAnimationFrame(() => {
+    quickLayoutEditFrame = undefined
+    enterLayoutEditMode('page')
+  })
 }
 
 function changeMenuItem(menuItem: MenuType) {

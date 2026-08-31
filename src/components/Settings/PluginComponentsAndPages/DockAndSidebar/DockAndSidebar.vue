@@ -242,14 +242,6 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
       <SettingsItem setting-id="navigation.dock.undoRefresh" :title="$t('settings.enable_undo_refresh_button')" :desc="$t('settings.enable_undo_refresh_button_desc')" right-width="auto">
         <Radio v-model="settings.enableUndoRefreshButton" />
       </SettingsItem>
-      <SettingsItem
-        setting-id="navigation.dock.showLayoutEditButton"
-        :title="$t('settings.show_layout_edit_button')"
-        :desc="$t('settings.show_layout_edit_button_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.showLayoutEditButton" />
-      </SettingsItem>
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_sidebar')" :desc="$t('settings.group_sidebar_desc')">

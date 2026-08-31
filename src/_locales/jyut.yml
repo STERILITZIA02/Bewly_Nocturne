@@ -66,6 +66,9 @@ layout_editor:
   hint: 版面編輯緊：揀一個區域嚟調整，撳 Esc 可以取消
   menu_label: 版面編輯選單
   edit_layout: 編輯呢個版面
+  quick_edit: 快速版面編輯
+  quick_edit_desc: 閂咗設定之後進入視覺化編輯；揀頁面元素就可以調整，撳 Esc 可以隨時取消。
+  start_quick_edit: 開始編輯
   adjust_target: 調整呢個元素
   open_setting: 打開對應設定
   preview: 即時預覽
@@ -812,8 +815,6 @@ settings:
   sync_cloud_incompatible: 雲端資料係由較新版本嘅擴充功能寫入，請先升級擴充功能再開啟同步
   enable_undo_refresh_button: 啓用復原更新掣（淨係得 Web 推介模式下有效）
   enable_undo_refresh_button_desc: 更新頁面後顯示復原更新掣，撳低可以回復更新前內容。
-  show_layout_edit_button: 顯示版面編輯掣
-  show_layout_edit_button_desc: 喺 Dock 或者側欄顯示版面編輯入口；編輯期間退出掣會一直保留。
   video_default_player_mode: 預設影片顯示模式
   video_danmaku_default_state: 彈幕預設狀態
   video_danmaku_default_state_desc: 開片時自動幫你調整彈幕開關，亦可以保持唔變。
@@ -876,8 +877,6 @@ settings:
   enlarge_favorite_dialog_desc: 啓用後，影片頁收藏彈窗會用更大嘅尺寸顯示，方便睇同管理收藏夾。
   external_watch_later_button: 稍後再睇按鈕外置
   external_watch_later_button_desc: 啓用後，影片頁工具欄會顯示獨立嘅陣間至睇按鈕；按鈕會顯示目前影片狀態，可以撳一下加入或者剷走。
-  show_bewly_widescreen_button: 顯示播放器 Bewly 闊螢幕按鈕
-  show_bewly_widescreen_button_desc: 喺播放器控制欄顯示進入 Bewly 闊螢幕模式嘅按鈕；閂咗之後唔會退出而家嘅闊螢幕模式。
   show_vertical_video_zoom_button: 直屏影片放大按鈕
   show_vertical_video_zoom_button_desc: 喺直屏影片播放器顯示放大/縮小按鈕同畫面位置調整控制
   show_video_screenshot_button: 顯示播放器截圖按鈕
@@ -1529,7 +1528,7 @@ watch_later:
   remove_from_watch_later: 剷走
 widescreen:
   enter: 進入 Bewly 闊螢幕
-  exit: 退出
+  exit: 退出 Bewly 闊螢幕
   close_sidebar: 收埋側欄
   resize_sidebar: 調整側欄闊度
   exit_loading: 退出闊螢幕模式

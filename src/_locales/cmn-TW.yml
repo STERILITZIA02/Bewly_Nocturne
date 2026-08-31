@@ -66,6 +66,9 @@ layout_editor:
   hint: 版面編輯中：選擇一個區域進行調整，按 Esc 可取消
   menu_label: 版面編輯選單
   edit_layout: 編輯此版面
+  quick_edit: 快速版面編輯
+  quick_edit_desc: 關閉設定後進入視覺化編輯；選擇頁面元素即可調整，按 Esc 可隨時取消。
+  start_quick_edit: 開始編輯
   adjust_target: 調整此元素
   open_setting: 開啟對應設定
   preview: 即時預覽
@@ -819,8 +822,6 @@ settings:
   random_play_min_videos_required: 需要至少{count}個影片才能啟用隨機播放
   enable_undo_refresh_button: 啟用撤銷重新整理按鈕（僅在Web推薦模式下有效）
   enable_undo_refresh_button_desc: 重新整理頁面後顯示撤銷按鈕，點擊可恢復重新整理前的內容
-  show_layout_edit_button: 顯示版面編輯按鈕
-  show_layout_edit_button_desc: 在 Dock 或側欄顯示版面編輯入口；編輯期間退出按鈕會一直保留。
   clean_url_argument: 清理 URL 追蹤參數
   clean_url_argument_desc: 自動清理 URL 中的追蹤參數，使連結更加簡潔
 
@@ -866,8 +867,6 @@ settings:
   enlarge_favorite_dialog_desc: 啟用後，影片頁收藏彈窗將以更大的尺寸顯示，方便查看和管理收藏夾。
   external_watch_later_button: 稍後再看按鈕外置
   external_watch_later_button_desc: 啟用後，影片頁工具欄會顯示獨立的稍後觀看按鈕；按鈕會顯示目前影片狀態，可點擊加入或移除。
-  show_bewly_widescreen_button: 顯示播放器 Bewly 寬螢幕按鈕
-  show_bewly_widescreen_button_desc: 在播放器控制列顯示進入 Bewly 寬螢幕模式的按鈕；關閉後不會退出目前的寬螢幕模式。
   show_vertical_video_zoom_button: 直式影片放大按鈕
   show_vertical_video_zoom_button_desc: 在直式影片播放器中顯示放大/縮小按鈕與畫面位置調整控制項
   show_video_screenshot_button: 顯示播放器截圖按鈕
@@ -1529,7 +1528,7 @@ watch_later:
   remove_from_watch_later: 移除
 widescreen:
   enter: 進入 Bewly 寬螢幕
-  exit: 退出
+  exit: 退出 Bewly 寬螢幕
   close_sidebar: 收合側欄
   resize_sidebar: 調整側欄寬度
   exit_loading: 退出寬螢幕模式

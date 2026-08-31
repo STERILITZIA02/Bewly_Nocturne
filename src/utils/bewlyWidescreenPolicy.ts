@@ -50,6 +50,34 @@ export function canCommitWidescreenLayout({
   return pageReady && playerReady && contentReady === true
 }
 
+export interface WidescreenControlSurfaceStateInput {
+  bottomControlsHovered: boolean
+  danmakuControlsReady: boolean
+  nativeControlsHidden: boolean
+  nativeControlsReady: boolean
+  pointerInsidePlayer: boolean
+  previousHidden: boolean
+  sidebarExpanded: boolean
+}
+
+export function resolveWidescreenControlSurfaceState({
+  bottomControlsHovered,
+  danmakuControlsReady,
+  nativeControlsHidden,
+  nativeControlsReady,
+  pointerInsidePlayer,
+  previousHidden,
+  sidebarExpanded,
+}: WidescreenControlSurfaceStateInput) {
+  const ready = danmakuControlsReady && nativeControlsReady
+  return {
+    hidden: !ready
+      || sidebarExpanded
+      || (!bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : previousHidden)),
+    ready,
+  }
+}
+
 export interface WidescreenSidebarHydrationState {
   complete: boolean
   now: number
@@ -68,6 +96,9 @@ export const WIDESCREEN_SIDEBAR_EDGE_ACTIVATION_WIDTH = 72
 export const WIDESCREEN_SIDEBAR_EDGE_EXIT_TOLERANCE = 48
 export const WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY = 320
 export const WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT = 96
+export const WIDESCREEN_BOTTOM_CONTROL_HOVER_ENTRY_TOLERANCE = 4
+export const WIDESCREEN_BOTTOM_CONTROL_HOVER_EXIT_TOLERANCE = 16
+export const WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY = 240
 export const WIDESCREEN_SIDEBAR_MIN_WIDTH = 360
 export const WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH = 460
 export const WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH = 1920
@@ -91,6 +122,41 @@ export function isWidescreenPlayerControlHoverRegion({
   const bottom = Math.max(playerTop, playerBottom)
   const guardHeight = Math.min(WIDESCREEN_PLAYER_CONTROL_HOVER_GUARD_HEIGHT, bottom - top)
   return pointerY >= bottom - guardHeight && pointerY <= bottom
+}
+
+export interface WidescreenBottomControlHoverInput {
+  currentlyHovered: boolean
+  pointerX: number
+  pointerY: number
+  surfaceHeight: number
+  viewportBottom: number
+  viewportLeft: number
+  viewportRight: number
+}
+
+export function isWidescreenBottomControlHoverRegion({
+  currentlyHovered,
+  pointerX,
+  pointerY,
+  surfaceHeight,
+  viewportBottom,
+  viewportLeft,
+  viewportRight,
+}: WidescreenBottomControlHoverInput): boolean {
+  if (![pointerX, pointerY, surfaceHeight, viewportBottom, viewportLeft, viewportRight].every(Number.isFinite))
+    return false
+
+  const left = Math.min(viewportLeft, viewportRight)
+  const right = Math.max(viewportLeft, viewportRight)
+  if (pointerX < left || pointerX > right)
+    return false
+
+  const tolerance = currentlyHovered
+    ? WIDESCREEN_BOTTOM_CONTROL_HOVER_EXIT_TOLERANCE
+    : WIDESCREEN_BOTTOM_CONTROL_HOVER_ENTRY_TOLERANCE
+  const bottom = viewportBottom + tolerance
+  const top = viewportBottom - Math.max(0, surfaceHeight) - tolerance
+  return pointerY >= top && pointerY <= bottom
 }
 
 export interface WidescreenSidebarHoverInput {

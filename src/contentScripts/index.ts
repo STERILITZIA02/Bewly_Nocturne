@@ -8,7 +8,7 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_MOUNTED, BEWLY_WIDESCREEN_FAILED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { settings, settingsInitializationState, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
@@ -47,7 +47,6 @@ import { mountWatchLaterButtonWhenToolbarReady, removeWatchLaterButton } from '~
 
 import { version } from '../../package.json'
 import { mountBewlyBootOverlay } from './bewlyBootOverlay'
-import { initBewlyWidescreenControl, stopBewlyWidescreenControl } from './bewlyWidescreenControl'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
@@ -101,7 +100,6 @@ function disposeContentScriptRuntime() {
     stopTouchPlayerGestures,
     stopVideoAspectRatioMemory,
     stopVideoScreenshotControl,
-    stopBewlyWidescreenControl,
     stopAutoPlayUserChangeMonitoring,
     stopAutoExitFullscreenMonitoring,
     stopPlaybackRateMonitoring,
@@ -668,12 +666,6 @@ else if (shouldInitializeContentScript) {
       ? currentNavigationKey
       : undefined
   }, { signal: contentScriptSignal })
-  window.addEventListener(BEWLY_WIDESCREEN_FAILED, () => {
-    clearPlayerModeRetry()
-    autoContinuationNavigationKey = undefined
-    lastAppliedPlayerModeNavigationKey = getVideoNavigationKey(location.href)
-  }, { signal: contentScriptSignal })
-
   // 应用默认播放器模式
   function isVideoOwnerAvatarReady() {
     return Array.from(document.querySelectorAll<HTMLImageElement>(videoOwnerAvatarSelector)).some((image) => {
@@ -1415,7 +1407,6 @@ else if (shouldInitializeContentScript) {
       syncHomePageHiddenStyleScope()
       initVideoAspectRatioMemory()
       initVideoScreenshotControl()
-      initBewlyWidescreenControl()
       if (isVideoOrBangumiPage())
         scheduleAddWatchLaterButton()
       initTouchPlayerGestures()

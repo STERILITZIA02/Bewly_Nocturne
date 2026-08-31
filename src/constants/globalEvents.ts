@@ -8,7 +8,7 @@ export interface BewlyWidescreenManualToggleDetail {
   action: 'enter' | 'exit'
   userInitiated: true
 }
-export const BEWLY_WIDESCREEN_FAILED = 'bewlyWidescreenFailed'
+export const BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS = 'bewly-widescreen-controls-hidden'
 export const DRAWER_VIDEO_ENTER_PAGE_FULL = 'drawerVideoEnterPageFull'
 export const DRAWER_VIDEO_EXIT_PAGE_FULL = 'drawerVideoExitPageFull'
 export const BEWLY_DRAWER_ESCAPE_HANDLED = 'BEWLY_DRAWER_ESCAPE_HANDLED'
