@@ -19,8 +19,6 @@ import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import {
-  completeLayoutEditMode,
-  enterLayoutEditMode,
   getDockItemLayoutEditableId,
   isLayoutEditing,
   useLayoutEditableRoot,
@@ -496,13 +494,6 @@ function handleHistoryNavigation() {
   }
 }
 
-function toggleLayoutEditMode() {
-  if (isLayoutEditing.value)
-    completeLayoutEditMode()
-  else
-    enterLayoutEditMode('dock', 'dock')
-}
-
 const activeDockItemPage = computed(() => resolveActiveDockItemPage(
   currentDockItems.value,
   props.activatedPage,
@@ -835,24 +826,6 @@ onUnmounted(() => {
               @click="openSettings"
             >
               <div i-mingcute:settings-3-line text-xl group-hover:rotate-180 transition="transform duration-400 ease-out" />
-            </button>
-          </Tooltip>
-
-          <Tooltip
-            v-if="settings.showLayoutEditButton || isLayoutEditing"
-            :content="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
-            :placement="tooltipPlacement"
-          >
-            <button
-              type="button"
-              class="dock-item layout-edit-button bew-shape-circle"
-              :class="{ active: isLayoutEditing }"
-              data-layout-editor-control
-              :aria-label="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
-              :aria-pressed="isLayoutEditing"
-              @click="toggleLayoutEditMode"
-            >
-              <Icon :icon="isLayoutEditing ? 'mingcute:check-line' : 'mingcute:edit-3-line'" />
             </button>
           </Tooltip>
 

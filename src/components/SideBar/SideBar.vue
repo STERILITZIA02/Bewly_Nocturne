@@ -4,11 +4,10 @@ import { useMediaQuery, useMutationObserver } from '@vueuse/core'
 
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
+import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
 import type { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import {
-  completeLayoutEditMode,
-  enterLayoutEditMode,
   isLayoutEditing,
   useLayoutEditableRoot,
   useLayoutEditSettingValue,
@@ -29,10 +28,12 @@ const { isDark, toggleDark } = useDark()
 const sidebarPosition = useLayoutEditSettingValue('navigation.sidebar.position', () => settings.value.sidebarPosition)
 
 const widescreenDocked = ref(document.body.classList.contains('bewly-widescreen-active'))
+const widescreenControlsHidden = ref(document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS))
 useMutationObserver(
   document.body,
   () => {
     widescreenDocked.value = document.body.classList.contains('bewly-widescreen-active')
+    widescreenControlsHidden.value = document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
   },
   { attributes: true, attributeFilter: ['class'] },
 )
@@ -101,13 +102,6 @@ function toggleHideSidebar(hide: boolean) {
 function openSettings(event: MouseEvent) {
   emit('settingsVisibilityChange', (event.currentTarget as HTMLElement).getBoundingClientRect())
 }
-
-function toggleLayoutEditMode() {
-  if (isLayoutEditing.value)
-    completeLayoutEditMode()
-  else
-    enterLayoutEditMode('sidebar', 'sidebar')
-}
 </script>
 
 <template>
@@ -118,6 +112,7 @@ function toggleLayoutEditMode() {
       'right-side': sidebarPosition === 'right',
       'hide': hideSidebar,
       'widescreen-docked': widescreenDocked,
+      'widescreen-controls-hidden': widescreenDocked && widescreenControlsHidden,
     }"
     pos="fixed top-0" h-full flex items-center px-6px
     z-10 pointer-events-none
@@ -188,23 +183,6 @@ function toggleLayoutEditMode() {
           </div>
         </Button>
       </Tooltip>
-      <Tooltip
-        v-if="settings.showLayoutEditButton || isLayoutEditing"
-        :content="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
-        :placement="tooltipPlacement"
-      >
-        <Button
-          class="ctrl-btn layout-edit-button bew-shape-circle"
-          :class="{ active: isLayoutEditing }"
-          data-layout-editor-control
-          :aria-label="isLayoutEditing ? $t('layout_editor.done') : $t('layout_editor.edit_layout')"
-          :aria-pressed="isLayoutEditing"
-          center size="small" round
-          @click="toggleLayoutEditMode"
-        >
-          <Icon :icon="isLayoutEditing ? 'mingcute:check-line' : 'mingcute:edit-3-line'" />
-        </Button>
-      </Tooltip>
     </div>
   </div>
 </template>
@@ -250,11 +228,6 @@ function toggleLayoutEditMode() {
   &:active {
     transform: scale(0.9);
   }
-}
-
-.layout-edit-button.active {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
 }
 
 .left-side {
@@ -317,7 +290,17 @@ function toggleLayoutEditMode() {
     flex-direction: row;
     gap: var(--bew-space-2);
     opacity: 1;
-    transform: none;
+    transform: translate3d(0, 0, 0);
+    transition:
+      opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard),
+      transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard);
+    will-change: opacity, transform;
+  }
+
+  &.widescreen-controls-hidden .sidebar-content {
+    opacity: 0;
+    transform: translate3d(0, calc(100% + var(--bew-space-2)), 0);
+    pointer-events: none;
   }
 }
 </style>

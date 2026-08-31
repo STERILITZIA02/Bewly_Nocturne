@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
@@ -10,6 +11,7 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import SettingsSectionHeading from '../../components/SettingsSectionHeading.vue'
 
 const { t, locale } = useI18n()
+const startQuickLayoutEdit = inject<() => void>('startQuickLayoutEdit')
 
 const langOptions = computed(() => {
   return [
@@ -61,6 +63,24 @@ watch(() => settings.value.language, (newValue) => {
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_interaction_layout')">
+      <SettingsItem
+        :title="$t('layout_editor.quick_edit')"
+        :desc="$t('layout_editor.quick_edit_desc')"
+        right-width="auto"
+      >
+        <Button
+          type="primary"
+          size="small"
+          :disabled="!startQuickLayoutEdit"
+          @click="startQuickLayoutEdit?.()"
+        >
+          <template #left>
+            <i i-mingcute:edit-3-line />
+          </template>
+          {{ $t('layout_editor.start_quick_edit') }}
+        </Button>
+      </SettingsItem>
+
       <SettingsItem :title="$t('settings.touch_screen_optimization')" :desc="$t('settings.touch_screen_optimization_desc')" right-width="auto">
         <Radio v-model="settings.touchScreenOptimization" />
       </SettingsItem>

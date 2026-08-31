@@ -3,6 +3,7 @@ import { watch } from 'vue'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
+import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { i18n } from '~/utils/i18n'
 import { getCSRF, getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
@@ -167,7 +168,7 @@ async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, s
     initialized = true
   }
   catch (error) {
-    if (!isExtensionContextInvalidatedError(error))
+    if (!isExtensionContextInvalidatedError(error) && !isBilibiliRiskControl(error))
       console.error('获取稍后再看状态失败:', error)
   }
   finally {

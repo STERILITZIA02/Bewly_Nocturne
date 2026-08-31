@@ -66,6 +66,9 @@ layout_editor:
   hint: 布局编辑中：选择一个区域进行调整，按 Esc 可取消
   menu_label: 布局编辑菜单
   edit_layout: 编辑此布局
+  quick_edit: 快速布局编辑
+  quick_edit_desc: 关闭设置后进入可视化编辑；选择页面元素即可调整，按 Esc 可随时取消。
+  start_quick_edit: 开始编辑
   adjust_target: 调整此元素
   open_setting: 打开对应设置
   preview: 实时预览
@@ -505,8 +508,6 @@ settings:
   enlarge_favorite_dialog_desc: 启用后，视频页收藏弹窗将以更大的尺寸显示，方便查看和管理收藏夹。
   external_watch_later_button: 稍后再看按钮外置
   external_watch_later_button_desc: 启用后，视频页工具栏会显示独立的稍后再看按钮；按钮会显示当前视频状态，可点击添加或移除。
-  show_bewly_widescreen_button: 显示播放器 Bewly 宽屏按钮
-  show_bewly_widescreen_button_desc: 在播放器控制栏显示进入 Bewly 宽屏模式的按钮；关闭后不会退出当前宽屏模式。
   show_vertical_video_zoom_button: 竖屏放大按钮
   show_vertical_video_zoom_button_desc: 在竖屏视频播放器中显示放大/缩小按钮和画面位置调节控件
   show_video_screenshot_button: 显示播放器截图按钮
@@ -852,8 +853,6 @@ settings:
   contributors_image_failed: 贡献者图片加载失败
   enable_undo_refresh_button: 启用撤销刷新按钮（仅在Web推荐模式下有效）
   enable_undo_refresh_button_desc: 刷新页面后显示撤销按钮，点击可恢复刷新前的内容
-  show_layout_edit_button: 显示布局编辑按钮
-  show_layout_edit_button_desc: 在 Dock 或侧栏中显示布局编辑入口；编辑期间退出按钮始终保留。
   clean_url_argument: 清理URL追踪参数
   clean_url_argument_desc: 自动清理URL中的追踪参数，使链接更加简洁
 
@@ -1528,7 +1527,7 @@ watch_later:
   remove_from_watch_later: 移除
 widescreen:
   enter: 进入 Bewly 宽屏
-  exit: 退出
+  exit: 退出 Bewly 宽屏
   close_sidebar: 收起侧栏
   resize_sidebar: 调整侧栏宽度
   exit_loading: 退出宽屏模式

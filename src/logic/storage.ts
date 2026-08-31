@@ -337,7 +337,6 @@ export interface Settings {
   disableLightDarkModeSwitcherOnDock: boolean
   backToTopAndRefreshButtonsAreSeparated: boolean
   enableUndoRefreshButton: boolean // 添加撤销刷新按钮配置项
-  showLayoutEditButton: boolean
 
   sidebarPosition: 'left' | 'right'
   autoHideSidebar: boolean
@@ -430,7 +429,6 @@ export interface Settings {
   bewlyWidescreenSidebarPosition: BewlyWidescreenSidebarPosition
   bewlyWidescreenLayoutPriority: BewlyWidescreenLayoutPriority
   bewlyWidescreenCenterVideo: boolean
-  showBewlyWidescreenButton: boolean
   defaultDanmakuState: PlayerDefaultState
   defaultCaptionState: PlayerDefaultState
   lastDanmakuState: boolean
@@ -615,7 +613,6 @@ export const originalSettings: Settings = {
   disableLightDarkModeSwitcherOnDock: false,
   backToTopAndRefreshButtonsAreSeparated: true,
   enableUndoRefreshButton: true, // 默认开启撤销刷新按钮
-  showLayoutEditButton: true,
 
   sidebarPosition: 'right',
   autoHideSidebar: false,
@@ -705,7 +702,6 @@ export const originalSettings: Settings = {
   bewlyWidescreenSidebarPosition: 'right',
   bewlyWidescreenLayoutPriority: 'video-first',
   bewlyWidescreenCenterVideo: false,
-  showBewlyWidescreenButton: true,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
   lastDanmakuState: true,

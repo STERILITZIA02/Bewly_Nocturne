@@ -66,6 +66,9 @@ layout_editor:
   hint: 'Layout editing: select an area to adjust, or press Esc to cancel'
   menu_label: Layout editor menu
   edit_layout: Edit this layout
+  quick_edit: Quick layout editing
+  quick_edit_desc: Close Settings and enter visual editing. Select a page element to adjust it, or press Esc to cancel at any time.
+  start_quick_edit: Start editing
   adjust_target: Adjust this element
   open_setting: Open corresponding setting
   preview: Live preview
@@ -888,8 +891,6 @@ settings:
   enable_undo_refresh_button_desc: >-
     After refreshing the page, display an undo button that restores the content
     before the refresh when clicked.
-  show_layout_edit_button: Show layout editor button
-  show_layout_edit_button_desc: Show the layout editor entry in the Dock or sidebar; its exit button remains available while editing.
   clean_url_argument: Clean URL Tracking Parameters
   clean_url_argument_desc: Automatically clean tracking parameters from URLs to make links cleaner
 
@@ -937,8 +938,6 @@ settings:
   enlarge_favorite_dialog_desc: When enabled, the favorite dialog on video pages will be displayed in a larger size for easier viewing and management.
   external_watch_later_button: External watch later button
   external_watch_later_button_desc: Show a standalone Watch later button in the video toolbar. It displays the current state and can add or remove the video.
-  show_bewly_widescreen_button: Show player Bewly Widescreen button
-  show_bewly_widescreen_button_desc: Show a button in the player controls for entering Bewly Widescreen. Hiding it does not exit the active mode.
   show_vertical_video_zoom_button: Vertical video zoom button
   show_vertical_video_zoom_button_desc: Show zoom controls and the visible-area position control for vertical videos
   show_video_screenshot_button: Show player screenshot button
@@ -1586,7 +1585,7 @@ watch_later:
   remove_from_watch_later: Remove
 widescreen:
   enter: Enter Bewly Widescreen
-  exit: Exit
+  exit: Exit Bewly Widescreen
   close_sidebar: Collapse sidebar
   resize_sidebar: Resize sidebar
   exit_loading: Exit Widescreen mode

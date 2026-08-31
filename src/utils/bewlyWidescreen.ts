@@ -2,22 +2,20 @@ import { watch } from 'vue'
 import browser from 'webextension-polyfill'
 
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_WIDESCREEN_FAILED, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
+import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, BEWLY_WIDESCREEN_MANUAL_TOGGLE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import type { Data as VideoInfoData, VideoInfo } from '~/models/video/videoInfo'
 
 import api from './api'
 import { setupWidescreenDanmakuSemantics } from './bewlyWidescreenNative'
 import type { WidescreenMutationOrigin } from './bewlyWidescreenPolicy'
-import { canCommitWidescreenLayout, clampWidescreenSidebarWidth, isWidescreenPlayerControlHoverRegion, resolveWidescreenAnchoredPlayerGeometry, resolveWidescreenCenterGeometry, resolveWidescreenEngagedState, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shortenCommentDateText, shouldContinueWidescreenSidebarHydration, shouldScheduleWidescreenRefresh, WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH, WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH } from './bewlyWidescreenPolicy'
-import { isEditableLeafActiveElement } from './drawerEscape'
-import { hasIframeEscapePriorityState } from './escapePriority'
+import { canCommitWidescreenLayout, clampWidescreenSidebarWidth, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenAnchoredPlayerGeometry, resolveWidescreenCenterGeometry, resolveWidescreenControlSurfaceState, resolveWidescreenEngagedState, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shortenCommentDateText, shouldContinueWidescreenSidebarHydration, shouldScheduleWidescreenRefresh, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH, WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH } from './bewlyWidescreenPolicy'
+import { isBilibiliRiskControl } from './bilibiliApiError'
 import { i18n } from './i18n'
 import { ensureInterfaceLanguage } from './interfaceLanguage'
 import { injectCSS } from './main'
 import { reportRuntimeFailure } from './messaging'
 import { getVideoElement } from './player'
-import { isNativePlaylistEditing } from './randomPlay'
 import { initVerticalVideoZoom } from './verticalVideoZoom'
 
 type BewlyWidescreenTab = 'comment' | 'danmaku' | 'playlist'
@@ -51,6 +49,7 @@ interface BewlyWidescreenState {
   danmakuDock: HTMLElement
   sidebarEl: HTMLElement
   sidebarTop: HTMLElement
+  titleNoticeSlot: HTMLElement
   metadataSlot: HTMLElement
   upSlot: HTMLElement
   toolbarSlot: HTMLElement
@@ -89,7 +88,9 @@ interface BewlyWidescreenState {
   danmakuResizeTimers?: Array<ReturnType<typeof setTimeout>>
   danmakuActivatedSource?: HTMLElement
   danmakuSemanticsCleanup?: () => void
+  danmakuSettingsCleanup?: () => void
   danmakuSemanticsSource?: HTMLElement
+  danmakuSourceHost?: HTMLElement
   escapeKeyCleanup?: () => void
   colorProbe?: HTMLSpanElement
   descriptionExpanded: boolean
@@ -99,6 +100,8 @@ interface BewlyWidescreenState {
   panelScrollFrames: Map<BewlyWidescreenTab, number>
   videoInfoData?: VideoInfoData
   videoInfoIdentity?: string
+  bottomControlsHovered: boolean
+  playerPointerInside: boolean
 }
 
 const ROOT_ID = 'bewly-widescreen-root'
@@ -106,6 +109,10 @@ const LOADING_ROOT_ID = 'bewly-widescreen-loading'
 const BODY_CLASS = 'bewly-widescreen-active'
 const NATIVE_PLAYER_CLASS = 'bewly-widescreen-native-player'
 const EMPTY_CLASS = 'bewly-widescreen-empty'
+const DANMAKU_SKELETON_CLASS = 'bewly-widescreen-danmaku-skeleton'
+const DANMAKU_SOURCE_CLASS = 'bewly-widescreen-danmaku-source'
+const DANMAKU_SOURCE_HOST_CLASS = 'bewly-widescreen-danmaku-source-host'
+const DANMAKU_SURFACE_SELECTOR = `:is(#${ROOT_ID} .bewly-widescreen-danmaku-dock, body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .${DANMAKU_SOURCE_HOST_CLASS})`
 const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
 const EPISODE_ITEM_SELECTOR = '.video-pod__item, .multi-page__item, .page-item, .list-item, .episode-item, .section-item, .collect-item'
 const SIDEBAR_RESIZE_KEYBOARD_STEP = 16
@@ -114,8 +121,9 @@ const MOBILE_BREAKPOINT = 900
 const LOADING_FADE_DURATION = 240
 const LOADING_EXIT_DELAY = 5000
 const PREPARED_LOADING_TIMEOUT = 30_000
-const READY_WAIT_TIMEOUT = 15_000
 const READY_POLL_INTERVAL = 100
+const READY_POLL_FAST_DURATION = 5000
+const READY_POLL_SLOW_INTERVAL = 500
 const READY_STABILITY_DELAY = 160
 const TRANSFER_SETTLE_DELAY = 1200
 const PAGE_READY_FALLBACK_DELAY = 3000
@@ -152,7 +160,6 @@ let loadingMayDismissOnPlaying = false
 let loadingSuppressedUntilExit = false
 let readyObserver: MutationObserver | undefined
 let readyFrame: number | undefined
-let readyDeadlineTimer: ReturnType<typeof setTimeout> | undefined
 let readyMetadataHandler: ((event: Event) => void) | undefined
 let readyPollTimer: ReturnType<typeof setTimeout> | undefined
 let pageReadyFallbackTimer: ReturnType<typeof setTimeout> | undefined
@@ -166,58 +173,31 @@ let readinessStableSince: number | undefined
 let commentPrewarmState: CommentPrewarmState | undefined
 let waitingForLoad = false
 let enteringWidescreen = false
-let pendingEscapeCleanup: (() => void) | undefined
 let pendingSidebarPosition: 'left' | 'right' = 'right'
 let stopLanguageWatch: (() => void) | undefined
 
-const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR = [
+const HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS = [
   '.bpx-player-ctrl-wide',
   '.bilibili-player-video-btn-widescreen',
   '.squirtle-video-widescreen',
   '.bpx-player-ctrl-web',
   '.bilibili-player-video-web-fullscreen',
   '.squirtle-video-pagefullscreen',
+] as const
+
+const NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR = [
+  '.bpx-player-control-wrap',
+  '.bilibili-player-video-control-wrap',
+  '.bilibili-player-video-control',
+  '.squirtle-controller',
+].join(',')
+
+const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR = [
+  ...HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS,
   '.bpx-player-ctrl-full',
   '.bilibili-player-video-btn-fullscreen',
   '.squirtle-video-fullscreen',
 ].join(',')
-
-function clearPendingEscapeHandler() {
-  pendingEscapeCleanup?.()
-  pendingEscapeCleanup = undefined
-}
-
-function ensurePendingEscapeHandler() {
-  if (pendingEscapeCleanup)
-    return
-  let arbitrationTimer: number | undefined
-  const handlePendingEscape = (event: KeyboardEvent) => {
-    if (event.key !== 'Escape' || event.repeat || event.isComposing || event.keyCode === 229 || state || !isBewlyWidescreenEngaged())
-      return
-    const hadPriorityState = isEditableLeafActiveElement()
-      || hasIframeEscapePriorityState({ editingStateActive: isNativePlaylistEditing() })
-    if (arbitrationTimer !== undefined)
-      return
-    arbitrationTimer = window.setTimeout(() => {
-      arbitrationTimer = undefined
-      if (!isBewlyWidescreenEngaged()
-        || hadPriorityState
-        || isEditableLeafActiveElement()
-        || hasIframeEscapePriorityState({ editingStateActive: isNativePlaylistEditing() })) {
-        return
-      }
-      exitBewlyWidescreen({ userInitiated: true })
-    }, 0)
-  }
-  window.addEventListener('keydown', handlePendingEscape, { capture: true })
-  pendingEscapeCleanup = () => {
-    window.removeEventListener('keydown', handlePendingEscape, { capture: true })
-    if (arbitrationTimer !== undefined) {
-      window.clearTimeout(arbitrationTimer)
-      arbitrationTimer = undefined
-    }
-  }
-}
 
 function leaveMutuallyExclusivePlayerModes() {
   const fullscreenDocument = document as Document & {
@@ -270,6 +250,9 @@ const selectors = {
     '[class*="mediainfo_mediaTitle"]',
     '#viewbox_report .title',
     'h1[title]',
+  ],
+  titleNotice: [
+    '.video-argue',
   ],
   upPanel: [
     '.up-panel-container',
@@ -351,6 +334,7 @@ const selectors = {
 const SIDEBAR_RELEVANT_SELECTOR = [
   ...selectors.player,
   ...selectors.title,
+  ...selectors.titleNotice,
   ...selectors.upPanel,
   ...selectors.toolbar,
   ...selectors.description,
@@ -629,6 +613,29 @@ function createPanelEmpty(label: string) {
   return empty
 }
 
+function createDanmakuSkeleton(label: string) {
+  const skeleton = document.createElement('div')
+  skeleton.className = DANMAKU_SKELETON_CLASS
+  skeleton.setAttribute('role', 'status')
+  skeleton.setAttribute('aria-label', label)
+
+  const rows = document.createElement('div')
+  rows.className = `${DANMAKU_SKELETON_CLASS}__rows`
+  for (let index = 0; index < 10; index++) {
+    const row = document.createElement('div')
+    row.className = `${DANMAKU_SKELETON_CLASS}__row`
+    for (const column of ['time', 'content', 'date']) {
+      const block = document.createElement('span')
+      block.className = `${DANMAKU_SKELETON_CLASS}__block ${DANMAKU_SKELETON_CLASS}__${column}`
+      block.setAttribute('aria-hidden', 'true')
+      row.appendChild(block)
+    }
+    rows.appendChild(row)
+  }
+  skeleton.appendChild(rows)
+  return skeleton
+}
+
 function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
   if (!state)
     return
@@ -703,6 +710,12 @@ function setSidebarLayout(
   updateSidebarLayoutState(currentState)
 }
 
+function isWidescreenSidebarExpanded(currentState: BewlyWidescreenState) {
+  return currentState.sidebarLayout === 'expanded'
+    || currentState.root.dataset.sidebarHoverExpanded === 'true'
+    || currentState.root.dataset.centered === 'true'
+}
+
 function getTitleText() {
   const titleElement = findFirst(selectors.title)
   const title = titleElement?.getAttribute('title') || titleElement?.textContent?.trim()
@@ -723,6 +736,12 @@ function createSidebarTitle() {
 function createSidebarToolbar() {
   const toolbar = document.createElement('div')
   toolbar.className = 'bewly-widescreen-toolbar'
+  const titleGroup = document.createElement('div')
+  titleGroup.className = 'bewly-widescreen-title-group'
+  const titleNoticeSlot = document.createElement('div')
+  titleNoticeSlot.className = 'bewly-widescreen-title-notice'
+  titleNoticeSlot.hidden = true
+  titleGroup.append(createSidebarTitle(), titleNoticeSlot)
 
   const closeButton = document.createElement('button')
   closeButton.type = 'button'
@@ -738,8 +757,8 @@ function createSidebarToolbar() {
     currentState.sidebarToggleButton.focus({ preventScroll: true })
   })
 
-  toolbar.append(createSidebarTitle(), closeButton)
-  return toolbar
+  toolbar.append(titleGroup, closeButton)
+  return { titleNoticeSlot, toolbar }
 }
 
 function createTabButton(tab: BewlyWidescreenTab, label: string) {
@@ -825,12 +844,11 @@ function syncLocalizedWidescreenText(currentState = state) {
   syncSidebarToggleButton(currentState)
   syncDescription(currentState)
   syncPlaylistToggleButton(currentState)
-  syncDanmakuDockSemantics(currentState, true)
+  syncDanmakuInputSource(currentState, true)
   renderFallbackVideoInfo(currentState)
 
   const emptyLabels: Array<[HTMLElement, string]> = [
     [currentState.panels.comment, 'widescreen.comments_loading'],
-    [currentState.panels.danmaku, 'widescreen.danmaku_loading'],
     [currentState.panels.playlist, 'widescreen.list_loading'],
   ]
   for (const [panel, key] of emptyLabels) {
@@ -838,6 +856,9 @@ function syncLocalizedWidescreenText(currentState = state) {
     if (empty)
       empty.textContent = t(key)
   }
+  currentState.panels.danmaku
+    .querySelector<HTMLElement>(`.${DANMAKU_SKELETON_CLASS}`)
+    ?.setAttribute('aria-label', t('widescreen.danmaku_loading'))
 }
 
 function startWidescreenLanguageWatch() {
@@ -853,7 +874,6 @@ function startWidescreenLanguageWatch() {
 }
 
 function showWidescreenLoading() {
-  ensurePendingEscapeHandler()
   if (loadingOverlay)
     return
 
@@ -1082,13 +1102,12 @@ export function prepareBewlyWidescreenLoading(allowPlayingDismiss = false) {
   if (!loadingPreparationFallbackTimer) {
     loadingPreparationFallbackTimer = setTimeout(() => {
       loadingPreparationFallbackTimer = undefined
+      if (enteringWidescreen)
+        return
       loadingSuppressedUntilExit = true
       removeWidescreenLoading()
-      if (!enteringWidescreen) {
-        clearPendingEscapeHandler()
-        stopLanguageWatch?.()
-        stopLanguageWatch = undefined
-      }
+      stopLanguageWatch?.()
+      stopLanguageWatch = undefined
     }, PREPARED_LOADING_TIMEOUT)
   }
 }
@@ -1116,6 +1135,7 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
 
   const sidebarTop = document.createElement('div')
   sidebarTop.className = 'bewly-widescreen-sidebar-top'
+  const { titleNoticeSlot, toolbar } = createSidebarToolbar()
   const metadataSlot = document.createElement('div')
   metadataSlot.className = 'bewly-widescreen-metadata-slot'
   const upSlot = document.createElement('div')
@@ -1126,7 +1146,7 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   descriptionSlot.className = 'bewly-widescreen-description-slot'
   const tagsSlot = document.createElement('div')
   tagsSlot.className = 'bewly-widescreen-tags-slot'
-  sidebarTop.append(createSidebarToolbar(), metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot)
+  sidebarTop.append(toolbar, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot)
 
   const tablist = document.createElement('div')
   tablist.className = 'bewly-widescreen-tabs'
@@ -1203,12 +1223,17 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   root.appendChild(stage)
   document.body.appendChild(root)
 
-  return { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton }
+  return { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl: sidebar, sidebarTop, titleNoticeSlot, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton }
 }
 
 function injectLayoutStyle() {
   return injectCSS(`
     body.${BODY_CLASS} {
+      --bewly-widescreen-bottom-controls-height: calc(
+        var(--bew-control-height, 36px) + var(--bew-space-4, 16px) + 1px
+      );
+      --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid, #fff);
+      --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 3 + var(--bew-space-2, 8px) * 3);
       overflow: hidden !important;
       background: var(--bew-dark-page-bg) !important;
     }
@@ -1221,6 +1246,12 @@ function injectLayoutStyle() {
     body.${BODY_CLASS} .bili-header,
     body.${BODY_CLASS} .fixed-sidenav-storage,
     body.${BODY_CLASS} .mini-player-window {
+      display: none !important;
+    }
+
+    ${HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS
+      .map(selector => `body.${BODY_CLASS} ${selector}`)
+      .join(',\n    ')} {
       display: none !important;
     }
 
@@ -1261,21 +1292,22 @@ function injectLayoutStyle() {
       --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid, #fff);
       --bewly-widescreen-sidebar-panel-width: var(--bewly-widescreen-sidebar-full-width);
       --bewly-widescreen-center-offset: 0px;
-      --bewly-widescreen-aux-controls-width: calc(
-        var(--bew-control-height, 36px) * 4 + var(--bew-space-2, 8px) * 4
-      );
+      --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 3 + var(--bew-space-2, 8px) * 3);
     }
 
-    html:not(.dark) #${ROOT_ID} {
+    html:not(.dark) #${ROOT_ID},
+    html:not(.dark) body.${BODY_CLASS} {
       --bewly-widescreen-sidebar-resize-accent: var(--bew-theme-color, #00aeec);
       --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid, #fff);
     }
 
-    html.dark #${ROOT_ID} {
+    html.dark #${ROOT_ID},
+    html.dark body.${BODY_CLASS} {
       --bewly-widescreen-danmaku-bar-bg: var(--bew-content-solid);
     }
 
-    html.dark.oled-dark #${ROOT_ID} {
+    html.dark.oled-dark #${ROOT_ID},
+    html.dark.oled-dark body.${BODY_CLASS} {
       --bewly-widescreen-danmaku-bar-bg: var(--bew-bg, #000);
     }
 
@@ -1368,34 +1400,92 @@ function injectLayoutStyle() {
       transform: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock {
-      position: relative;
-      left: auto;
-      bottom: auto;
-      display: flex;
-      align-items: center;
-      width: 100% !important;
-      max-width: 100%;
-      min-height: calc(var(--bew-control-height, 36px) + var(--bew-space-4, 16px));
-      padding: var(--bew-space-2, 8px) var(--bew-space-8, 32px);
-      flex: 0 0 auto;
-      color: var(--bew-text-1);
-      background: var(--bewly-widescreen-danmaku-bar-bg);
-      border: 0;
-      border-top: 1px solid var(--bew-border-color);
-      box-shadow: none;
-      transform: none;
-      transition: background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
-      pointer-events: auto;
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) {
+      bottom: var(--bewly-widescreen-bottom-controls-height) !important;
+      transition: bottom var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease) !important;
+      will-change: bottom;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock:empty {
+    body.${BODY_CLASS}.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) {
+      bottom: 0 !important;
+    }
+
+    /* Keep the player bounds stable while the bottom surfaces reveal. Changing
+       flex height here moves the native hover boundary and creates an enter / leave loop. */
+    ${DANMAKU_SURFACE_SELECTOR} {
+      box-sizing: border-box !important;
+      position: absolute !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: 0 !important;
+      display: flex !important;
+      align-items: center !important;
+      width: 100% !important;
+      max-width: 100% !important;
+      height: var(--bewly-widescreen-bottom-controls-height) !important;
+      max-height: var(--bewly-widescreen-bottom-controls-height) !important;
+      min-height: var(--bewly-widescreen-bottom-controls-height) !important;
+      margin: 0 !important;
+      padding: var(--bew-space-2, 8px) var(--bew-space-8, 32px) !important;
+      color: var(--bew-text-1) !important;
+      background: var(--bewly-widescreen-danmaku-bar-bg) !important;
+      border: 0 !important;
+      border-top: 1px solid var(--bew-border-color) !important;
+      box-shadow: none !important;
+      opacity: 1 !important;
+      transform: translate3d(0, 0, 0) !important;
+      transition:
+        border-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
+      will-change: opacity, transform;
+      pointer-events: auto !important;
+      overflow: visible !important;
+      z-index: 4 !important;
+    }
+
+    #${ROOT_ID}[data-player-controls-hidden="true"] .bewly-widescreen-danmaku-dock,
+    body.${BODY_CLASS}.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}
+      ${DANMAKU_SURFACE_SELECTOR}.${DANMAKU_SOURCE_HOST_CLASS} {
+      opacity: 0 !important;
+      transform: translate3d(0, 100%, 0) !important;
+      pointer-events: none !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-dock {
+      padding: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      pointer-events: none !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR}.${DANMAKU_SOURCE_HOST_CLASS} {
+      z-index: var(--bew-z-popover) !important;
+      font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
+    }
+
+    body.${BODY_CLASS} .bpx-player-tooltip-item {
+      z-index: var(--bew-z-hud) !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR}:empty {
       display: none;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-sending-bar,
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bilibili-player-video-sendbar,
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bilibili-player-video-inputbar {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-sending-bar,
+    ${DANMAKU_SURFACE_SELECTOR} .bilibili-player-video-sendbar,
+    ${DANMAKU_SURFACE_SELECTOR} .bilibili-player-video-inputbar {
       position: relative !important;
       display: flex !important;
       align-items: center !important;
@@ -1422,12 +1512,12 @@ function injectLayoutStyle() {
       z-index: auto !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(
+    ${DANMAKU_SURFACE_SELECTOR} :is(
       .bpx-player-sending-bar,
       .bilibili-player-video-sendbar,
       .bilibili-player-video-inputbar
     )::before,
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(
+    ${DANMAKU_SURFACE_SELECTOR} :is(
       .bpx-player-sending-bar,
       .bilibili-player-video-sendbar,
       .bilibili-player-video-inputbar
@@ -1436,7 +1526,7 @@ function injectLayoutStyle() {
       display: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(
+    ${DANMAKU_SURFACE_SELECTOR} :is(
       .bpx-player-video-info,
       .bpx-player-dm-switch,
       .bpx-player-dm-setting,
@@ -1450,12 +1540,13 @@ function injectLayoutStyle() {
       background-clip: padding-box !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-video-info {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-info {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
       height: var(--bew-control-height, 36px) !important;
       min-height: var(--bew-control-height, 36px) !important;
+      margin: 0 !important;
       padding: 0 var(--bew-space-3, 12px) !important;
       color: var(--bew-text-2) !important;
       border-radius: var(--bew-badge-radius) !important;
@@ -1465,7 +1556,7 @@ function injectLayoutStyle() {
       white-space: nowrap;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-root {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-root {
       display: flex !important;
       align-items: center !important;
       gap: var(--bew-space-2, 8px) !important;
@@ -1475,40 +1566,69 @@ function injectLayoutStyle() {
       background: transparent !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(.bpx-player-dm-switch, .bpx-player-dm-setting) {
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-switch, .bpx-player-dm-setting) {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
       position: relative !important;
       width: var(--bew-control-height, 36px) !important;
       height: var(--bew-control-height, 36px) !important;
+      margin: 0 !important;
       padding: 0 !important;
       flex: 0 0 var(--bew-control-height, 36px) !important;
       color: var(--bew-text-2) !important;
+      background: var(--bew-elevated) !important;
+      border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: 50% !important;
       corner-shape: var(--bew-corner-shape-round);
+      box-shadow: var(--bew-shadow-1) !important;
       cursor: pointer;
       font-size: var(--bew-icon-size-md, 20px) !important;
       line-height: 1 !important;
       transition:
-        color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
-        background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
-        border-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
-        transform var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+        color var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+        background-color var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+        border-color var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+        box-shadow var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+        transform var(--bew-duration-moderate, 300ms) var(--bew-ease-emphasized, ease);
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(.bpx-player-dm-switch, .bpx-player-dm-setting):hover {
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-switch, .bpx-player-dm-setting):hover {
       color: var(--bew-text-1) !important;
       background: var(--bew-elevated-hover) !important;
-      border-color: var(--bew-theme-color-40) !important;
+      border-color: var(--bew-surface-border-color) !important;
+      box-shadow: var(--bew-shadow-2) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(.bpx-player-dm-switch, .bpx-player-dm-setting):active {
-      transform: scale(0.96);
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-switch, .bpx-player-dm-setting):active {
+      box-shadow: var(--bew-shadow-1) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch > *,
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting > :not(.bpx-player-dm-setting-wrap, .bpx-player-dm-setting-box) {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch:hover {
+      transform: scale(1.1);
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch:active {
+      transform: scale(0.9);
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-setting, .bpx-player-video-btn-dm):hover {
+      transform: none !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-setting, .bpx-player-video-btn-dm):has(
+      .bpx-player-dm-setting-wrap,
+      .bpx-player-mode-selection-container.active
+    ) {
+      transform: none !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-setting, .bpx-player-video-btn-dm):active {
+      transform: none !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch > *,
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting > :not(.bpx-player-dm-setting-wrap, .bpx-player-dm-setting-box) {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1528,12 +1648,12 @@ function injectLayoutStyle() {
     }
 
     /* Keep the settings popover outside the button's backdrop root. */
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting {
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting::before {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting::before {
       content: "";
       position: absolute;
       inset: 0;
@@ -1545,7 +1665,7 @@ function injectLayoutStyle() {
       pointer-events: none;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock :is(.bpx-player-dm-switch, .bpx-player-dm-setting) svg {
+    ${DANMAKU_SURFACE_SELECTOR} :is(.bpx-player-dm-switch, .bpx-player-dm-setting) svg {
       position: static !important;
       inset: auto !important;
       display: block;
@@ -1556,7 +1676,7 @@ function injectLayoutStyle() {
       transform: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch > .bui-area {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch > .bui-area {
       position: absolute !important;
       inset: 0 !important;
       width: 100% !important;
@@ -1565,7 +1685,7 @@ function injectLayoutStyle() {
       transform: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch .bui-danmaku-switch-input {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch .bui-danmaku-switch-input {
       position: absolute !important;
       inset: 0 !important;
       width: 100% !important;
@@ -1574,7 +1694,7 @@ function injectLayoutStyle() {
       cursor: pointer;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch .bui-danmaku-switch-label {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch .bui-danmaku-switch-label {
       position: absolute !important;
       inset: 0 !important;
       width: 100% !important;
@@ -1583,7 +1703,7 @@ function injectLayoutStyle() {
       padding: 0 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch :is(
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch :is(
       .bui-danmaku-switch-on,
       .bui-danmaku-switch-middle,
       .bui-danmaku-switch-off
@@ -1597,7 +1717,7 @@ function injectLayoutStyle() {
       line-height: 0 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch :is(
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch :is(
       .bui-danmaku-switch-on,
       .bui-danmaku-switch-middle,
       .bui-danmaku-switch-off
@@ -1611,14 +1731,14 @@ function injectLayoutStyle() {
       transform: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch:focus-visible,
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting:focus-visible,
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-switch:has(.bui-danmaku-switch-input:focus-visible) {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch:focus-visible,
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting:focus-visible,
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch:has(.bui-danmaku-switch-input:focus-visible) {
       outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-focus-ring, var(--bew-theme-color));
       outline-offset: var(--bew-space-0-5, 2px);
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-video-inputbar {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar {
       display: flex !important;
       align-items: stretch !important;
       height: var(--bew-control-height, 36px) !important;
@@ -1633,7 +1753,7 @@ function injectLayoutStyle() {
         box-shadow var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-video-inputbar:focus-within {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar:focus-within {
       border-color: var(--bew-theme-color) !important;
       box-shadow:
         0 0 0 var(--bew-space-0-5, 2px) var(--bew-theme-color-20),
@@ -1641,7 +1761,7 @@ function injectLayoutStyle() {
         var(--bew-shadow-edge-glow-1) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-video-inputbar-wrap {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar-wrap {
       min-width: 0 !important;
       flex: 1 1 auto !important;
       background: transparent !important;
@@ -1649,7 +1769,8 @@ function injectLayoutStyle() {
       border-radius: inherit !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-mode-selection-container {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-mode-selection-container {
+      display: none !important;
       z-index: var(--bew-z-popover) !important;
       background: transparent !important;
       border-radius: var(--bew-popover-radius) !important;
@@ -1657,20 +1778,24 @@ function injectLayoutStyle() {
       box-shadow: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-mode-selection-panel {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-mode-selection-container.active {
+      display: block !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-mode-selection-panel {
       color: var(--bew-text-1) !important;
       background: var(--bew-popover-surface-background) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
+      backdrop-filter: var(--bew-filter-glass-1) !important;
+      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
       background-clip: padding-box !important;
       overflow: hidden !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-input {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-input {
       height: 100% !important;
       padding: 0 var(--bew-space-3, 12px) !important;
       color: var(--bew-text-1) !important;
@@ -1680,12 +1805,12 @@ function injectLayoutStyle() {
       line-height: var(--bew-line-height-control, 18px) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-input::placeholder {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-input::placeholder {
       color: var(--bew-text-3) !important;
       opacity: 1;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-btn-send {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1704,11 +1829,12 @@ function injectLayoutStyle() {
       transition: background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-btn-send:hover {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send:hover {
       background: var(--bew-theme-color-80) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-wrap {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-wrap {
+      display: none !important;
       position: absolute !important;
       top: auto !important;
       right: auto !important;
@@ -1721,7 +1847,11 @@ function injectLayoutStyle() {
       transform: none !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-box {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting[aria-expanded="true"] > .bpx-player-dm-setting-wrap {
+      display: block !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box {
       max-width: 100% !important;
       max-height: calc(
         100dvh
@@ -1734,23 +1864,33 @@ function injectLayoutStyle() {
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
+      backdrop-filter: var(--bew-filter-glass-1) !important;
+      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
       background-clip: padding-box !important;
       overflow-x: hidden !important;
       overflow-y: auto !important;
       overscroll-behavior: contain;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-box .bui-panel-wrap {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box .bui-panel-wrap {
       background: transparent !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-right {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-left-block {
+      overflow: visible !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-left-block-content {
+      height: var(--bew-space-12, 48px) !important;
+      min-height: var(--bew-space-12, 48px) !important;
+      overflow: visible !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-right {
       padding-top: var(--bew-space-3, 12px) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-right-more {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-right-more {
       display: flex !important;
       align-items: center !important;
       gap: var(--bew-space-1, 4px) !important;
@@ -1758,7 +1898,7 @@ function injectLayoutStyle() {
       line-height: var(--bew-line-height-control, 18px) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-right-more > .bpx-common-svg-icon {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-right-more > .bpx-common-svg-icon {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
@@ -1769,13 +1909,13 @@ function injectLayoutStyle() {
       line-height: 0 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-right-more > .bpx-common-svg-icon svg {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-right-more > .bpx-common-svg-icon svg {
       display: block !important;
       width: var(--bew-icon-size-md, 20px) !important;
       height: var(--bew-icon-size-md, 20px) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-danmaku-dock .bpx-player-dm-setting-right-more-text {
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-right-more-text {
       display: inline-flex !important;
       align-items: center !important;
       height: var(--bew-icon-size-md, 20px) !important;
@@ -1905,13 +2045,14 @@ function injectLayoutStyle() {
       visibility: hidden;
       pointer-events: none;
       --bewly-widescreen-sidebar-offset: var(--bewly-widescreen-sidebar-reserved-width);
-      transform: translateX(var(--bewly-widescreen-sidebar-offset));
+      transform: translate3d(var(--bewly-widescreen-sidebar-offset), 0, 0);
       transition:
-        transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
-        visibility 0s linear var(--bew-duration-normal, 200ms),
+        transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
+        visibility 0s linear var(--bew-duration-moderate, 300ms),
         border-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
         box-shadow var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
       will-change: transform;
+      backface-visibility: hidden;
       z-index: 2;
       grid-column: 2;
       grid-row: 1;
@@ -1999,7 +2140,7 @@ function injectLayoutStyle() {
     #${ROOT_ID}[data-centered="true"] .bewly-widescreen-sidebar {
       visibility: visible;
       pointer-events: auto;
-      transform: translateX(0);
+      transform: translate3d(0, 0, 0);
       transition-delay: 0s;
     }
 
@@ -2150,6 +2291,14 @@ function injectLayoutStyle() {
       margin-bottom: var(--bew-space-2);
     }
 
+    #${ROOT_ID} .bewly-widescreen-title-group {
+      display: flex;
+      flex: 1 1 auto;
+      flex-direction: column;
+      min-width: 0;
+      gap: var(--bew-space-2, 8px);
+    }
+
     #${ROOT_ID} .bewly-widescreen-close {
       position: relative;
       display: inline-flex;
@@ -2189,16 +2338,41 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-title {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      flex: 1 1 auto;
-      overflow: hidden;
+      display: block;
+      overflow: visible;
       margin: 0;
       color: var(--bewly-widescreen-text-primary);
       font-size: var(--bew-font-size-heading);
       font-weight: var(--bew-font-weight-semibold, 600);
       line-height: var(--bew-line-height-heading);
+      overflow-wrap: anywhere;
+      white-space: normal;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-title-notice[hidden] {
+      display: none;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-title-notice-content,
+    #${ROOT_ID} .bewly-widescreen-title-notice .video-argue {
+      width: 100% !important;
+      margin: 0 !important;
+      color: var(--bewly-widescreen-text-secondary) !important;
+      font-size: var(--bew-font-size-caption) !important;
+      line-height: var(--bew-line-height-caption) !important;
+      overflow-wrap: anywhere;
+      white-space: normal !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-title-notice .video-argue-inner,
+    #${ROOT_ID} .bewly-widescreen-title-notice-content.is-fallback {
+      display: block !important;
+      width: 100% !important;
+      padding: var(--bew-space-2, 8px) var(--bew-space-3, 12px) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bewly-widescreen-control-bg) !important;
+      color: inherit !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-metadata-slot {
@@ -2748,6 +2922,7 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku {
+      position: relative;
       padding: 0;
       overflow: hidden;
     }
@@ -2835,6 +3010,7 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-wrap {
+      position: relative !important;
       height: auto !important;
       min-height: 0 !important;
       flex: 1 1 auto;
@@ -2853,9 +3029,78 @@ function injectLayoutStyle() {
       background: var(--bewly-widescreen-sidebar-bg) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-load-status {
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton {
+      position: absolute;
+      inset: 0;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding: var(--bew-space-3, 12px) var(--bew-space-4, 16px) var(--bew-space-4, 16px);
+      background: var(--bewly-widescreen-sidebar-bg);
+      pointer-events: none;
+      isolation: isolate;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 -50%;
+      z-index: 1;
+      width: 50%;
+      background: linear-gradient(
+        100deg,
+        transparent 20%,
+        color-mix(in oklab, var(--bew-fill-4), transparent 42%) 50%,
+        transparent 80%
+      );
+      transform: translate3d(0, 0, 0);
+      animation: bewly-widescreen-skeleton-shimmer 1.4s linear infinite;
+      will-change: transform;
+      pointer-events: none;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__rows {
+      display: grid;
+      gap: var(--bew-space-3, 12px);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__row {
+      display: grid;
+      grid-template-columns: var(--bew-space-10, 40px) minmax(0, 1fr) calc(var(--bew-space-8, 32px) * 2);
+      align-items: center;
+      gap: var(--bew-space-3, 12px);
+      min-height: var(--bew-line-height-caption, 16px);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__block {
+      display: block;
+      height: var(--bew-space-3, 12px);
       border-radius: var(--bew-radius-sm);
-      background: var(--bew-skeleton) !important;
+      corner-shape: var(--bew-corner-shape);
+      background: var(--bew-skeleton);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__time {
+      width: 80%;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__content {
+      width: 88%;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__row:nth-child(3n + 2) .bewly-widescreen-danmaku-skeleton__content {
+      width: 68%;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__row:nth-child(3n) .bewly-widescreen-danmaku-skeleton__content {
+      width: 96%;
+    }
+
+    @keyframes bewly-widescreen-skeleton-shimmer {
+      to {
+        transform: translate3d(300%, 0, 0);
+      }
     }
 
     /* B 站表情面板可能向上展开；只在打开期间允许它越过评论面板边界。 */
@@ -2883,19 +3128,20 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-playlist-toggle {
-      position: sticky;
-      top: 0;
-      z-index: 1;
       display: flex;
       align-items: center;
       justify-content: space-between;
-      width: 100%;
+      width: auto !important;
       min-height: var(--bew-control-height, 36px);
-      margin: 0 0 var(--bew-space-2, 8px);
+      margin:
+        0
+        var(--bewly-widescreen-playlist-toggle-inset-end, 0px)
+        var(--bew-space-2, 8px)
+        var(--bewly-widescreen-playlist-toggle-inset-start, 0px);
       padding: 0 var(--bew-space-3, 12px);
       color: var(--bew-text-2);
       background: var(--bew-elevated-alt);
-      border: 1px solid var(--bew-surface-border-color);
+      border: 0;
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
@@ -2908,8 +3154,7 @@ function injectLayoutStyle() {
       line-height: var(--bew-line-height-control, 18px);
       transition:
         color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
-        background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
-        border-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+        background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
     }
 
     #${ROOT_ID} .bewly-widescreen-playlist-toggle[hidden] {
@@ -2934,7 +3179,6 @@ function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-playlist-toggle:hover {
       color: var(--bew-text-1);
       background: var(--bew-elevated-alt-hover);
-      border-color: var(--bew-theme-color-40);
     }
 
     #${ROOT_ID} .bewly-widescreen-playlist-toggle:focus-visible {
@@ -3005,11 +3249,9 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist.is-episode-section-collapsed .${EPISODE_SECTION_CLASS} {
-      max-height: 0 !important;
+      max-height: calc(var(--bew-control-height, 36px) + var(--bew-space-2, 8px)) !important;
       margin-bottom: 0 !important;
-      opacity: 0;
       overflow: hidden !important;
-      pointer-events: none;
       scrollbar-gutter: auto;
     }
 
@@ -3057,11 +3299,20 @@ function injectLayoutStyle() {
     }
 
     @media (prefers-reduced-motion: reduce) {
+      body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+        .bpx-player-control-wrap,
+        .bilibili-player-video-control-wrap,
+        .bilibili-player-video-control,
+        .squirtle-controller
+      ),
       #${ROOT_ID} .bewly-widescreen-sidebar,
+      ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-sidebar-toggle,
       #${ROOT_ID} .bewly-widescreen-playlist-toggle::after,
-      #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS} {
+      #${ROOT_ID} .bewly-widescreen-panel-playlist .${EPISODE_SECTION_CLASS},
+      #${ROOT_ID} .bewly-widescreen-danmaku-skeleton::after {
         transition: none;
+        animation: none;
       }
     }
 
@@ -3084,8 +3335,8 @@ function injectLayoutStyle() {
         padding: 0;
       }
 
-      #${ROOT_ID} .bewly-widescreen-danmaku-dock {
-        padding-inline: var(--bew-space-4, 16px);
+      ${DANMAKU_SURFACE_SELECTOR} {
+        padding-inline: var(--bew-space-4, 16px) !important;
       }
 
       #${ROOT_ID} .bewly-widescreen-sidebar {
@@ -3143,8 +3394,9 @@ function clearAuxiliaryControlGeometry() {
 
 function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
   const host = document.querySelector<HTMLElement>('#bewly')
-  const viewerInfo = currentState.danmakuDock.querySelector<HTMLElement>('.bpx-player-video-info')
-  const dockRect = currentState.danmakuDock.getBoundingClientRect()
+  const viewerInfo = currentState.danmakuSemanticsSource?.querySelector<HTMLElement>('.bpx-player-video-info')
+  const dockRect = (currentState.danmakuSourceHost ?? currentState.danmakuDock).getBoundingClientRect()
+  const rootRect = currentState.root.getBoundingClientRect()
   const viewerRect = viewerInfo?.getBoundingClientRect()
   if (!host || !viewerRect || dockRect.width <= 0 || dockRect.height <= 0) {
     clearAuxiliaryControlGeometry()
@@ -3155,7 +3407,7 @@ function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
   const gap = Number.parseFloat(rootStyle.getPropertyValue('--bew-space-2')) || 8
   const controlHeight = Number.parseFloat(rootStyle.getPropertyValue('--bew-control-height')) || 36
   const left = viewerRect.right + gap
-  const bottom = Math.max(window.innerHeight - dockRect.bottom + (dockRect.height - controlHeight) / 2, 0)
+  const bottom = Math.max(window.innerHeight - rootRect.bottom + (dockRect.height - controlHeight) / 2, 0)
   host.style.setProperty('--bewly-widescreen-aux-controls-left', `${left}px`)
   host.style.setProperty('--bewly-widescreen-aux-controls-bottom', `${bottom}px`)
 }
@@ -3258,6 +3510,7 @@ function updateSidebarLayoutState(currentState: BewlyWidescreenState | null = st
   if (centered)
     currentState.root.dataset.sidebarHoverExpanded = 'false'
   syncAnchoredPlayerGeometry(currentState)
+  syncNativePlayerControlVisibility(currentState)
   scheduleActionGeometrySync(currentState)
 }
 
@@ -3478,8 +3731,89 @@ function setupActionGeometryObservers(currentState: BewlyWidescreenState) {
   scheduleActionGeometrySync(currentState)
 }
 
+function getNativePlayerContainer(
+  currentState: BewlyWidescreenState,
+  playerHost: HTMLElement = currentState.playerEl,
+) {
+  return playerHost.matches('.bpx-player-container')
+    ? playerHost
+    : playerHost.querySelector<HTMLElement>('.bpx-player-container')
+}
+
+function syncNativePlayerControlVisibility(
+  currentState: BewlyWidescreenState,
+  playerHost: HTMLElement = currentState.playerEl,
+) {
+  const playerContainer = getNativePlayerContainer(currentState, playerHost)
+  const { hidden, ready } = resolveWidescreenControlSurfaceState({
+    bottomControlsHovered: currentState.bottomControlsHovered,
+    danmakuControlsReady: currentState.danmakuSemanticsSource?.isConnected === true,
+    nativeControlsHidden: (
+      playerContainer?.dataset.ctrlHidden === 'true'
+      || playerContainer?.classList.contains('bpx-state-no-cursor') === true
+    ),
+    nativeControlsReady: !!playerContainer?.querySelector(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR),
+    pointerInsidePlayer: currentState.playerPointerInside,
+    previousHidden: currentState.root.dataset.playerControlsHidden !== 'false',
+    sidebarExpanded: isWidescreenSidebarExpanded(currentState),
+  })
+  currentState.root.dataset.playerControlsReady = String(ready)
+  currentState.root.dataset.playerControlsHidden = String(hidden)
+  document.body.classList.toggle(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, hidden)
+}
+
+function forwardNativePlayerPointerActivity(
+  currentState: BewlyWidescreenState,
+  playerHost: HTMLElement,
+  event: PointerEvent,
+  allowSidebarExpanded = false,
+) {
+  if (!event.isTrusted || (!allowSidebarExpanded && isWidescreenSidebarExpanded(currentState)))
+    return
+
+  const playerContainer = getNativePlayerContainer(currentState, playerHost)
+  if (!playerContainer || event.composedPath().some(node => (
+    node === playerContainer
+    || (node instanceof Node && playerContainer.contains(node))
+  ))) {
+    return
+  }
+
+  const rootRect = currentState.root.getBoundingClientRect()
+  if (!isWidescreenPlayerControlHoverRegion({
+    playerBottom: rootRect.bottom,
+    playerTop: rootRect.top,
+    pointerY: event.clientY,
+  })) {
+    return
+  }
+
+  const mouseInit: MouseEventInit = {
+    bubbles: true,
+    composed: true,
+    clientX: event.clientX,
+    clientY: event.clientY,
+    screenX: event.screenX,
+    screenY: event.screenY,
+    button: event.button,
+    buttons: event.buttons,
+    ctrlKey: event.ctrlKey,
+    altKey: event.altKey,
+    metaKey: event.metaKey,
+    shiftKey: event.shiftKey,
+  }
+  const playerSurface = playerContainer.querySelector<HTMLElement>('.bpx-player-video-area') ?? playerContainer
+  playerSurface.dispatchEvent(new PointerEvent('pointermove', {
+    ...mouseInit,
+    pointerId: event.pointerId,
+    pointerType: event.pointerType,
+    isPrimary: event.isPrimary,
+  }))
+  playerSurface.dispatchEvent(new MouseEvent('mousemove', mouseInit))
+}
+
 function setupAspectObservers(currentState: BewlyWidescreenState) {
-  const video = getVideoElement()
+  const video = currentState.playerEl.querySelector<HTMLVideoElement>('video') ?? getVideoElement()
   if (video) {
     const onLoadedMetadata = () => {
       updateAspectRatio(currentState)
@@ -3502,16 +3836,107 @@ function setupAspectObservers(currentState: BewlyWidescreenState) {
   currentState.resizeObserver.observe(currentState.playerFrame)
   currentState.resizeObserver.observe(currentState.sidebarEl)
   currentState.resizeObserver.observe(currentState.danmakuDock)
+  if (currentState.danmakuSourceHost)
+    currentState.resizeObserver.observe(currentState.danmakuSourceHost)
   currentState.resizeObserver.observe(currentState.descriptionSlot)
 
   const playerHost = video?.closest<HTMLElement>('.bewly-vertical-video-zoom-host, .bpx-player-container, .player-wrap')
   if (playerHost) {
-    currentState.playerStateObserver = new MutationObserver(refreshMeasuredLayout)
+    const refreshPlayerState = () => {
+      syncNativePlayerControlVisibility(currentState, playerHost)
+      refreshMeasuredLayout()
+    }
+    currentState.playerStateObserver = new MutationObserver(refreshPlayerState)
     currentState.playerStateObserver.observe(playerHost, {
       attributes: true,
-      attributeFilter: ['class', 'data-screen', 'style'],
+      attributeFilter: ['class', 'data-screen', 'data-ctrl-hidden', 'style'],
     })
+    syncNativePlayerControlVisibility(currentState, playerHost)
   }
+  else {
+    syncNativePlayerControlVisibility(currentState)
+  }
+
+  let bottomControlsLeaveTimer: ReturnType<typeof setTimeout> | undefined
+  const clearBottomControlsLeaveTimer = () => {
+    if (bottomControlsLeaveTimer) {
+      clearTimeout(bottomControlsLeaveTimer)
+      bottomControlsLeaveTimer = undefined
+    }
+  }
+  const setBottomControlsHovered = (hovered: boolean) => {
+    if (currentState.bottomControlsHovered === hovered)
+      return false
+    currentState.bottomControlsHovered = hovered
+    currentState.root.dataset.bottomControlsHovered = String(hovered)
+    return true
+  }
+  const scheduleBottomControlsLeave = () => {
+    if (!currentState.bottomControlsHovered || bottomControlsLeaveTimer)
+      return
+    bottomControlsLeaveTimer = setTimeout(() => {
+      bottomControlsLeaveTimer = undefined
+      if (state === currentState && setBottomControlsHovered(false))
+        syncNativePlayerControlVisibility(currentState, playerHost ?? currentState.playerEl)
+    }, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY)
+  }
+  const updateBottomControlsHover = (event: PointerEvent) => {
+    const rootRect = currentState.root.getBoundingClientRect()
+    const sourceHost = currentState.danmakuSourceHost
+    const surfaceHeight = (sourceHost ?? currentState.danmakuDock).getBoundingClientRect().height
+    const pointerInBottomControlTree = event.composedPath().some(node => (
+      node === currentState.danmakuDock
+      || (node instanceof Node && currentState.danmakuDock.contains(node))
+      || node === sourceHost
+      || (node instanceof Node && !!sourceHost?.contains(node))
+    ))
+    const hovered = pointerInBottomControlTree || isWidescreenBottomControlHoverRegion({
+      currentlyHovered: currentState.bottomControlsHovered,
+      pointerX: event.clientX,
+      pointerY: event.clientY,
+      surfaceHeight,
+      viewportBottom: rootRect.bottom,
+      viewportLeft: rootRect.left,
+      viewportRight: rootRect.right,
+    })
+    if (hovered) {
+      clearBottomControlsLeaveTimer()
+      return setBottomControlsHovered(true)
+    }
+    scheduleBottomControlsLeave()
+    return false
+  }
+
+  currentState.root.dataset.bottomControlsHovered = String(currentState.bottomControlsHovered)
+  const handleBottomPointerActivity = (event: PointerEvent) => {
+    if (!event.isTrusted)
+      return
+    const pointerHost = playerHost ?? currentState.playerEl
+    const pointerRect = pointerHost.getBoundingClientRect()
+    const pointerInsidePlayer = event.clientX >= pointerRect.left
+      && event.clientX <= pointerRect.right
+      && event.clientY >= pointerRect.top
+      && event.clientY <= pointerRect.bottom
+    const bottomHoverChanged = updateBottomControlsHover(event)
+    const playerPointerChanged = currentState.playerPointerInside !== pointerInsidePlayer
+    if (playerPointerChanged)
+      currentState.playerPointerInside = pointerInsidePlayer
+    if (bottomHoverChanged || playerPointerChanged)
+      syncNativePlayerControlVisibility(currentState, pointerHost)
+    if (playerHost && pointerInsidePlayer)
+      forwardNativePlayerPointerActivity(currentState, playerHost, event)
+  }
+  const clearPlayerPointerState = () => {
+    clearBottomControlsLeaveTimer()
+    const bottomHoverChanged = setBottomControlsHovered(false)
+    if (!currentState.playerPointerInside && !bottomHoverChanged)
+      return
+    currentState.playerPointerInside = false
+    syncNativePlayerControlVisibility(currentState, playerHost ?? currentState.playerEl)
+  }
+  window.addEventListener('pointermove', handleBottomPointerActivity, { passive: true })
+  window.addEventListener('blur', clearPlayerPointerState)
+  document.documentElement.addEventListener('pointerleave', clearPlayerPointerState)
 
   const onWindowResize = (event: Event) => {
     if (!event.isTrusted)
@@ -3535,6 +3960,11 @@ function setupAspectObservers(currentState: BewlyWidescreenState) {
     window.visualViewport?.removeEventListener('resize', onWindowResize)
     document.removeEventListener('fullscreenchange', onFullscreenChange)
     document.removeEventListener('webkitfullscreenchange', onFullscreenChange)
+    clearBottomControlsLeaveTimer()
+    window.removeEventListener('pointermove', handleBottomPointerActivity)
+    window.removeEventListener('blur', clearPlayerPointerState)
+    document.documentElement.removeEventListener('pointerleave', clearPlayerPointerState)
+    delete currentState.root.dataset.bottomControlsHovered
   }
 
   updateAspectRatio(currentState)
@@ -3544,12 +3974,6 @@ function setupAspectObservers(currentState: BewlyWidescreenState) {
 function setupActiveWidescreenControl(currentState: BewlyWidescreenState) {
   const handleControlClick = (event: Event) => {
     const eventElements = event.composedPath().filter((node): node is Element => node instanceof Element)
-    if (eventElements.some(element => element.closest('.bewly-widescreen-entry-control'))) {
-      event.preventDefault()
-      event.stopImmediatePropagation()
-      exitBewlyWidescreen({ userInitiated: true })
-      return
-    }
     if (eventElements.some(element => element.closest(MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR)))
       exitBewlyWidescreen({ userInitiated: true })
   }
@@ -3614,6 +4038,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   let resizingPointerId: number | undefined
   let lastPointerX: number | undefined
   let lastPointerY: number | undefined
+  let lastPointerEvent: PointerEvent | undefined
 
   function canTemporarilyExpand() {
     return currentState.sidebarLayout === 'compact'
@@ -3630,7 +4055,11 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   function setHoverExpanded(expanded: boolean) {
     if (expanded)
       clearCollapseTimer()
-    root.dataset.sidebarHoverExpanded = String(expanded)
+    const nextValue = String(expanded)
+    if (root.dataset.sidebarHoverExpanded !== nextValue) {
+      root.dataset.sidebarHoverExpanded = nextValue
+      syncNativePlayerControlVisibility(currentState)
+    }
     if (expanded)
       delete root.dataset.sidebarManuallyClosed
   }
@@ -3652,8 +4081,26 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
 
     collapseTimer = setTimeout(() => {
       collapseTimer = undefined
-      if (resizingPointerId === undefined && !sidebarResizer.matches(':focus-visible'))
-        setHoverExpanded(false)
+      if (resizingPointerId !== undefined || sidebarResizer.matches(':focus-visible'))
+        return
+
+      const playerRect = currentState.playerEl.getBoundingClientRect()
+      const pointerIsInPlayerControls = lastPointerX !== undefined
+        && lastPointerY !== undefined
+        && lastPointerX >= playerRect.left
+        && lastPointerX <= playerRect.right
+        && isWidescreenPlayerControlHoverRegion({
+          playerBottom: playerRect.bottom,
+          playerTop: playerRect.top,
+          pointerY: lastPointerY,
+        })
+      if (lastPointerEvent && pointerIsInPlayerControls) {
+        // Let Bilibili reveal its own controller while the sidebar still masks
+        // the bottom surfaces, then hand over once instead of alternating states.
+        forwardNativePlayerPointerActivity(currentState, currentState.playerEl, lastPointerEvent, true)
+      }
+
+      setHoverExpanded(false)
     }, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY)
   }
 
@@ -3774,6 +4221,9 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   }
 
   function handlePointerMove(event: PointerEvent) {
+    if (!event.isTrusted)
+      return
+    lastPointerEvent = event
     pendingPointerPosition = { x: event.clientX, y: event.clientY, type: event.pointerType }
     if (pointerTrackingFrame !== undefined)
       return
@@ -3787,6 +4237,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   }
 
   function handlePointerLeave() {
+    lastPointerEvent = undefined
     pendingPointerPosition = undefined
     if (pointerTrackingFrame !== undefined)
       cancelAnimationFrame(pointerTrackingFrame)
@@ -3895,6 +4346,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
     pointerTrackingFrame = undefined
     pendingPointerPosition = undefined
     pendingSidebarWidth = undefined
+    lastPointerEvent = undefined
     if (resizingPointerId !== undefined && sidebarResizer.hasPointerCapture(resizingPointerId))
       sidebarResizer.releasePointerCapture(resizingPointerId)
     resizingPointerId = undefined
@@ -4002,14 +4454,139 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
   currentState.mutationObserver.observe(document.body, { childList: true, subtree: true })
 }
 
-function moveDanmakuInput(currentState: BewlyWidescreenState) {
-  if (currentState.danmakuDock.querySelector(selectors.danmakuInput.join(',')))
-    return true
+function setupDanmakuSettingsClickToggle(source: HTMLElement) {
+  let settingsPinned = false
+  const settingSelector = '.bpx-player-dm-setting'
+  const settingPanelSelector = '.bpx-player-dm-setting-wrap, .bpx-player-dm-setting-box'
+  const styleSelector = '.bpx-player-video-btn-dm'
+  const setting = source.querySelector<HTMLElement>(settingSelector)
+  const originalAriaExpanded = setting?.getAttribute('aria-expanded') ?? null
+  const settingPanel = setting?.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
+  const originalPanelDisplay = settingPanel?.style.display ?? ''
+  setting?.setAttribute('aria-expanded', 'false')
 
-  const inputBar = findFirst(selectors.danmakuInput, currentState.playerSlot)
+  function dispatchNativeSettingHover(currentSetting: HTMLElement, entering: boolean) {
+    const types = entering
+      ? ['mouseover', 'mouseenter'] as const
+      : ['mouseout', 'mouseleave'] as const
+    for (const type of types) {
+      currentSetting.dispatchEvent(new MouseEvent(type, {
+        bubbles: type === 'mouseover' || type === 'mouseout',
+        cancelable: true,
+        composed: true,
+        relatedTarget: entering ? null : source,
+        view: window,
+      }))
+    }
+  }
+
+  const setSettingsPinned = (nextPinned: boolean) => {
+    const currentSetting = source.querySelector<HTMLElement>(settingSelector)
+    if (!currentSetting || settingsPinned === nextPinned)
+      return
+
+    settingsPinned = nextPinned
+    currentSetting.setAttribute('aria-expanded', String(nextPinned))
+    let currentPanel = currentSetting.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
+    if (nextPinned && !currentPanel) {
+      // Bilibili creates this panel lazily on hover. Keep that initialization
+      // inside its native player tree, while CSS gates visibility to the click state.
+      dispatchNativeSettingHover(currentSetting, true)
+      currentPanel = currentSetting.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
+    }
+    if (currentPanel)
+      currentPanel.style.display = nextPinned ? 'block' : 'none'
+    if (!nextPinned)
+      dispatchNativeSettingHover(currentSetting, false)
+  }
+
+  const handleClick = (event: MouseEvent) => {
+    if (!(event.target instanceof Element))
+      return
+
+    const target = event.target
+    const currentSetting = target.closest<HTMLElement>(settingSelector)
+    const styleButton = target.closest<HTMLElement>(styleSelector)
+    if ((!currentSetting && !styleButton) || !source.contains(target))
+      return
+
+    const insideSettingPanel = !!target.closest(settingPanelSelector)
+    if (currentSetting && !insideSettingPanel) {
+      event.preventDefault()
+      event.stopImmediatePropagation()
+      setSettingsPinned(!settingsPinned)
+      return
+    }
+
+    if (styleButton && settingsPinned)
+      setSettingsPinned(false)
+  }
+
+  const handleOutsideClick = (event: MouseEvent) => {
+    if (!settingsPinned)
+      return
+    const currentSetting = source.querySelector<HTMLElement>(settingSelector)
+    if (event.target instanceof Node && currentSetting?.contains(event.target))
+      return
+    setSettingsPinned(false)
+  }
+
+  source.addEventListener('click', handleClick, true)
+  document.addEventListener('click', handleOutsideClick, true)
+
+  return () => {
+    if (settingsPinned)
+      setSettingsPinned(false)
+    source.removeEventListener('click', handleClick, true)
+    document.removeEventListener('click', handleOutsideClick, true)
+    const currentSetting = source.querySelector<HTMLElement>(settingSelector)
+    const currentPanel = currentSetting?.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
+    if (currentPanel)
+      currentPanel.style.display = originalPanelDisplay
+    if (currentSetting) {
+      if (originalAriaExpanded === null)
+        currentSetting.removeAttribute('aria-expanded')
+      else
+        currentSetting.setAttribute('aria-expanded', originalAriaExpanded)
+    }
+  }
+}
+
+function syncDanmakuInputSource(currentState: BewlyWidescreenState, force = false) {
+  const source = findFirst(selectors.danmakuInput, currentState.playerEl)
     || findMovable(selectors.danmakuInput)
+  const host = source?.parentElement
+  if (!source || !host)
+    return false
 
-  return moveNode(inputBar, currentState.danmakuDock, currentState.movedNodes, !!inputBar?.closest(`#${ROOT_ID}`))
+  if (!force
+    && source === currentState.danmakuSemanticsSource
+    && host === currentState.danmakuSourceHost) {
+    return true
+  }
+
+  currentState.danmakuSemanticsCleanup?.()
+  currentState.danmakuSettingsCleanup?.()
+  currentState.danmakuSemanticsSource?.classList.remove(DANMAKU_SOURCE_CLASS)
+  currentState.danmakuSourceHost?.classList.remove(DANMAKU_SOURCE_HOST_CLASS)
+  if (currentState.danmakuSourceHost && currentState.danmakuSourceHost !== host)
+    currentState.resizeObserver?.unobserve(currentState.danmakuSourceHost)
+
+  source.classList.add(DANMAKU_SOURCE_CLASS)
+  host.classList.add(DANMAKU_SOURCE_HOST_CLASS)
+  currentState.danmakuSemanticsSource = source
+  currentState.danmakuSourceHost = host
+  currentState.danmakuSemanticsCleanup = setupWidescreenDanmakuSemantics(
+    source,
+    {
+      send: t('widescreen.send_danmaku'),
+      settings: t('widescreen.danmaku_settings'),
+      style: t('widescreen.danmaku_style'),
+    },
+  )
+  currentState.danmakuSettingsCleanup = setupDanmakuSettingsClickToggle(source)
+  currentState.resizeObserver?.observe(host)
+  return true
 }
 
 function clearDanmakuActivation(currentState: BewlyWidescreenState) {
@@ -4127,9 +4704,40 @@ function syncDescription(currentState: BewlyWidescreenState) {
 
 function syncSidebarTitle(currentState: BewlyWidescreenState) {
   const titleElement = currentState.sidebarTop.querySelector<HTMLElement>('.bewly-widescreen-title')
-  const nextTitle = getTitleText()
+  const nextTitle = currentState.videoInfoData?.title?.trim() || getTitleText()
   if (titleElement && nextTitle && titleElement.textContent !== nextTitle)
     titleElement.textContent = nextTitle
+}
+
+function syncSidebarTitleNotice(currentState: BewlyWidescreenState) {
+  const source = findMovable(selectors.titleNotice)
+  const sourceText = source?.textContent?.replace(/\s+/g, ' ').trim() || ''
+  const fallbackText = currentState.videoInfoData?.argue_info?.argue_msg?.trim() || ''
+  const signature = sourceText ? `dom:${sourceText}` : (fallbackText ? `api:${fallbackText}` : '')
+  const { titleNoticeSlot } = currentState
+
+  if (titleNoticeSlot.dataset.sourceSignature === signature)
+    return
+
+  titleNoticeSlot.replaceChildren()
+  titleNoticeSlot.dataset.sourceSignature = signature
+  titleNoticeSlot.hidden = !signature
+  if (!signature)
+    return
+
+  if (source) {
+    const clone = source.cloneNode(true) as HTMLElement
+    clone.removeAttribute('id')
+    clone.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'))
+    clone.classList.add('bewly-widescreen-title-notice-content')
+    titleNoticeSlot.appendChild(clone)
+    return
+  }
+
+  const fallback = document.createElement('div')
+  fallback.className = 'bewly-widescreen-title-notice-content is-fallback'
+  fallback.textContent = fallbackText
+  titleNoticeSlot.appendChild(fallback)
 }
 
 function findManagedPanelNode(panel: HTMLElement, selectorsToMatch: string[], movedNodes: MovedNode[]) {
@@ -4179,6 +4787,42 @@ function clearEpisodeSectionMarker(panel: HTMLElement, movedNodes: MovedNode[]) 
   })
 }
 
+function syncPlaylistToggleInsets(
+  currentState: BewlyWidescreenState,
+  episodeSection: HTMLElement | null,
+) {
+  const { playlistToggleButton } = currentState
+  const clearInsets = () => {
+    playlistToggleButton.style.removeProperty('--bewly-widescreen-playlist-toggle-inset-start')
+    playlistToggleButton.style.removeProperty('--bewly-widescreen-playlist-toggle-inset-end')
+  }
+  const firstEpisode = episodeSection?.querySelector<HTMLElement>(EPISODE_ITEM_SELECTOR)
+  const list = firstEpisode?.parentElement
+  if (!episodeSection || !list || list === episodeSection || !episodeSection.contains(list)) {
+    clearInsets()
+    return
+  }
+
+  const sectionRect = episodeSection.getBoundingClientRect()
+  const listRect = list.getBoundingClientRect()
+  if (sectionRect.width <= 0 || listRect.width <= 0) {
+    clearInsets()
+    return
+  }
+
+  const leftInset = Math.max(0, listRect.left - sectionRect.left)
+  const rightInset = Math.max(0, sectionRect.right - listRect.right)
+  const rtl = getComputedStyle(episodeSection).direction === 'rtl'
+  playlistToggleButton.style.setProperty(
+    '--bewly-widescreen-playlist-toggle-inset-start',
+    `${rtl ? rightInset : leftInset}px`,
+  )
+  playlistToggleButton.style.setProperty(
+    '--bewly-widescreen-playlist-toggle-inset-end',
+    `${rtl ? leftInset : rightInset}px`,
+  )
+}
+
 function syncPlaylistToggleButton(currentState: BewlyWidescreenState) {
   const panel = currentState.panels.playlist
   const episodeSection = panel.querySelector<HTMLElement>(`.${EPISODE_SECTION_CLASS}`)
@@ -4186,6 +4830,7 @@ function syncPlaylistToggleButton(currentState: BewlyWidescreenState) {
   if (!hasEpisodeSection)
     currentState.playlistCollapsed = false
 
+  syncPlaylistToggleInsets(currentState, episodeSection)
   currentState.playlistToggleButton.hidden = !hasEpisodeSection
   const expanded = hasEpisodeSection && !currentState.playlistCollapsed
   currentState.playlistToggleButton.setAttribute('aria-expanded', String(expanded))
@@ -4208,6 +4853,7 @@ function setupPlaylistToggle(currentState: BewlyWidescreenState) {
   currentState.playlistToggleCleanup = () => {
     currentState.playlistToggleButton.removeEventListener('click', handleToggle)
     currentState.panels.playlist.classList.remove('is-episode-section-collapsed')
+    currentState.playlistToggleButton.remove()
   }
 }
 
@@ -4217,8 +4863,14 @@ function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
   clearEpisodeSectionMarker(panel, movedNodes)
 
   const episodeSection = findEpisodeSectionNode(panel, movedNodes)
-  if (episodeSection)
+  if (episodeSection) {
     episodeSection.classList.add(EPISODE_SECTION_CLASS)
+    if (currentState.playlistToggleButton.parentElement !== episodeSection)
+      episodeSection.prepend(currentState.playlistToggleButton)
+  }
+  else if (currentState.playlistToggleButton.parentElement !== panel) {
+    panel.prepend(currentState.playlistToggleButton)
+  }
   syncPlaylistToggleButton(currentState)
 }
 
@@ -4235,23 +4887,6 @@ function syncSidebarReadiness(
   currentState.panels.comment.setAttribute('aria-busy', String(!readiness.comment))
   currentState.panels.danmaku.setAttribute('aria-busy', String(!readiness.danmaku))
   currentState.panels.playlist.setAttribute('aria-busy', String(!readiness.playlist))
-}
-
-function syncDanmakuDockSemantics(currentState: BewlyWidescreenState, force = false) {
-  const source = currentState.danmakuDock.querySelector<HTMLElement>(selectors.danmakuInput.join(','))
-  if (!source || (!force && source === currentState.danmakuSemanticsSource))
-    return
-
-  currentState.danmakuSemanticsCleanup?.()
-  currentState.danmakuSemanticsSource = source
-  currentState.danmakuSemanticsCleanup = setupWidescreenDanmakuSemantics(
-    currentState.danmakuDock,
-    {
-      send: t('widescreen.send_danmaku'),
-      settings: t('widescreen.danmaku_settings'),
-      style: t('widescreen.danmaku_style'),
-    },
-  )
 }
 
 function syncVideoMetadata(currentState: BewlyWidescreenState) {
@@ -4365,7 +5000,8 @@ async function loadFallbackVideoInfo(currentState: BewlyWidescreenState) {
     scheduleSidebarRefresh(currentState)
   }
   catch (error) {
-    reportRuntimeFailure('Failed to load widescreen video information', error)
+    if (!isBilibiliRiskControl(error))
+      reportRuntimeFailure('Failed to load widescreen video information', error)
   }
 }
 
@@ -4373,6 +5009,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   ensureAnchoredPlayer(currentState)
   syncActionAnimationTheme(currentState)
   syncSidebarTitle(currentState)
+  syncSidebarTitleNotice(currentState)
   const activeTab = currentState.activeTab
 
   const metadataFound = syncVideoMetadata(currentState)
@@ -4389,8 +5026,8 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   moveOrReplaceNode(selectors.tags, currentState.tagsSlot, currentState.movedNodes)
   renderFallbackVideoInfo(currentState)
 
-  moveDanmakuInput(currentState)
-  syncDanmakuDockSemantics(currentState)
+  syncDanmakuInputSource(currentState)
+  syncNativePlayerControlVisibility(currentState)
   syncAuxiliaryControlGeometry(currentState)
 
   let commentFound = !!findCommentRoot(currentState.panels.comment)
@@ -4414,12 +5051,17 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
     const danmakuResult = moveOrReplaceNode(selectors.danmaku, currentState.panels.danmaku, currentState.movedNodes)
     danmakuFound = danmakuResult.found
     if (!danmakuFound) {
-      ensureEmptyPanel(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
+      clearEmptyPanel(currentState.panels.danmaku)
+      ensureDanmakuSkeleton(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
     }
     else {
       clearEmptyPanel(currentState.panels.danmaku)
       activateDanmakuTab(currentState)
       danmakuReady = isDanmakuPanelReady(currentState.panels.danmaku)
+      if (danmakuReady)
+        clearDanmakuSkeleton(currentState.panels.danmaku)
+      else
+        ensureDanmakuSkeleton(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
     }
   }
   if (danmakuReady)
@@ -4475,6 +5117,27 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
 
 function clearEmptyPanel(panel: HTMLElement) {
   panel.querySelectorAll(`.${EMPTY_CLASS}`).forEach(element => element.remove())
+}
+
+function clearDanmakuSkeleton(panel: HTMLElement) {
+  panel.querySelectorAll(`.${DANMAKU_SKELETON_CLASS}`).forEach(element => element.remove())
+}
+
+function getDanmakuSkeletonHost(panel: HTMLElement) {
+  return panel.querySelector<HTMLElement>('.bpx-player-dm-wrap') ?? panel
+}
+
+function ensureDanmakuSkeleton(panel: HTMLElement, label: string) {
+  const host = getDanmakuSkeletonHost(panel)
+  const existing = panel.querySelector<HTMLElement>(`.${DANMAKU_SKELETON_CLASS}`)
+  if (existing) {
+    existing.setAttribute('aria-label', label)
+    if (existing.parentElement !== host)
+      host.appendChild(existing)
+    return
+  }
+
+  host.appendChild(createDanmakuSkeleton(label))
 }
 
 function ensureEmptyPanel(panel: HTMLElement, label: string) {
@@ -4584,7 +5247,12 @@ function cleanupState(currentState: BewlyWidescreenState) {
   clearDanmakuActivation(currentState)
   currentState.danmakuSemanticsCleanup?.()
   currentState.danmakuSemanticsCleanup = undefined
+  currentState.danmakuSettingsCleanup?.()
+  currentState.danmakuSettingsCleanup = undefined
+  currentState.danmakuSemanticsSource?.classList.remove(DANMAKU_SOURCE_CLASS)
+  currentState.danmakuSourceHost?.classList.remove(DANMAKU_SOURCE_HOST_CLASS)
   currentState.danmakuSemanticsSource = undefined
+  currentState.danmakuSourceHost = undefined
   currentState.panelScrollFrames.forEach(frame => cancelAnimationFrame(frame))
   currentState.panelScrollFrames.clear()
   clearSidebarHydration(currentState)
@@ -4607,7 +5275,7 @@ function cleanupState(currentState: BewlyWidescreenState) {
   restoreMovedNodes(currentState.movedNodes)
   currentState.root.remove()
   currentState.styleEl.remove()
-  document.body.classList.remove(BODY_CLASS)
+  document.body.classList.remove(BODY_CLASS, BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)
   window.dispatchEvent(new Event('resize'))
 }
 
@@ -4616,7 +5284,7 @@ function isReadyForLayout() {
   if (!player)
     return false
 
-  const video = getVideoElement()
+  const video = player.querySelector<HTMLVideoElement>('video') ?? getVideoElement()
   if (video instanceof HTMLVideoElement) {
     return video.readyState >= HTMLMediaElement.HAVE_METADATA
       && video.videoWidth > 0
@@ -4726,7 +5394,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   if (!player)
     return false
 
-  const { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton } = createRoot(sidebarPosition)
+  const { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, sidebarTop, titleNoticeSlot, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton } = createRoot(sidebarPosition)
   const styleEl = injectLayoutStyle()
   const movedNodes: MovedNode[] = []
 
@@ -4739,6 +5407,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     danmakuDock,
     sidebarEl,
     sidebarTop,
+    titleNoticeSlot,
     metadataSlot,
     upSlot,
     toolbarSlot,
@@ -4759,11 +5428,13 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     hydratedTabs: new Set(),
     initialScrollResetTabs: new Set(),
     panelScrollFrames: new Map(),
+    bottomControlsHovered: false,
+    playerPointerInside: false,
   }
 
   state = nextState
   enteringWidescreen = false
-  clearPendingEscapeHandler()
+  syncNativePlayerControlVisibility(nextState)
   document.body.classList.add(BODY_CLASS)
   setupPlaylistToggle(nextState)
   syncSidebarReadiness(nextState, {
@@ -4774,20 +5445,6 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     playlist: false,
   })
 
-  const hasVisiblePlayerDialog = () => Array.from(document.querySelectorAll<HTMLElement>(
-    '[role="dialog"], .bili-mini-mask, .bpx-player-dialog-wrap',
-  )).some((element) => {
-    const rect = element.getBoundingClientRect()
-    const style = getComputedStyle(element)
-    return rect.width > 0
-      && rect.height > 0
-      && style.display !== 'none'
-      && style.visibility !== 'hidden'
-  })
-  const hasEscapePriorityState = () => hasIframeEscapePriorityState({
-    editingStateActive: isNativePlaylistEditing(),
-  }) || hasVisiblePlayerDialog()
-  let escapeArbitrationTimer: number | undefined
   const handleWidescreenKeydown = (event: KeyboardEvent) => {
     if (event.repeat || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
@@ -4802,28 +5459,11 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     if (event.key.toLowerCase() === 'f') {
       // 只在 Bewly Widescreen 生命周期内先恢复原播放器；不接管或阻止 Bilibili 的原生快捷键。
       exitBewlyWidescreen({ userInitiated: true })
-      return
     }
-    if (event.key !== 'Escape' || escapeArbitrationTimer !== undefined)
-      return
-
-    const hadPriorityState = hasEscapePriorityState()
-    // Bilibili's base player prevents Escape even when no mode is active, so
-    // explicit priority ownership—not defaultPrevented alone—decides here.
-    escapeArbitrationTimer = window.setTimeout(() => {
-      escapeArbitrationTimer = undefined
-      if (!nextState.root.isConnected || hadPriorityState || hasEscapePriorityState())
-        return
-      exitBewlyWidescreen({ userInitiated: true })
-    }, 0)
   }
   window.addEventListener('keydown', handleWidescreenKeydown, { capture: true })
   nextState.escapeKeyCleanup = () => {
     window.removeEventListener('keydown', handleWidescreenKeydown, { capture: true })
-    if (escapeArbitrationTimer !== undefined) {
-      window.clearTimeout(escapeArbitrationTimer)
-      escapeArbitrationTimer = undefined
-    }
   }
 
   player.classList.add(NATIVE_PLAYER_CLASS)
@@ -4853,10 +5493,6 @@ function clearReadyWait({ preserveCommentPrewarm = false }: { preserveCommentPre
   if (readyFrame !== undefined)
     cancelAnimationFrame(readyFrame)
   readyFrame = undefined
-  if (readyDeadlineTimer) {
-    clearTimeout(readyDeadlineTimer)
-    readyDeadlineTimer = undefined
-  }
   if (readyMetadataHandler) {
     document.removeEventListener('loadedmetadata', readyMetadataHandler, true)
     readyMetadataHandler = undefined
@@ -4902,6 +5538,7 @@ function hasWidescreenTransferSettleElapsed() {
 
 function waitForReadyLayout() {
   clearReadyWait()
+  const readinessStartedAt = Date.now()
   pageReadyForLayout = document.readyState === 'complete'
   pageReadySince = pageReadyForLayout ? Date.now() : undefined
   waitingForLoad = !pageReadyForLayout
@@ -4975,21 +5612,17 @@ function waitForReadyLayout() {
     if (document.readyState === 'complete')
       pageReadyHandler()
   }
-  readyDeadlineTimer = setTimeout(() => {
-    clearReadyWait()
-    enteringWidescreen = false
-    clearPendingEscapeHandler()
-    removeWidescreenLoading()
-    stopLanguageWatch?.()
-    stopLanguageWatch = undefined
-    window.dispatchEvent(new Event(BEWLY_WIDESCREEN_FAILED))
-  }, READY_WAIT_TIMEOUT)
   const pollReadiness = () => {
     readyPollTimer = undefined
     if (!enteringWidescreen || state)
       return
     scheduleAttempt()
-    readyPollTimer = setTimeout(pollReadiness, READY_POLL_INTERVAL)
+    // Slow CDN metadata is not a terminal failure. Keep the event-driven wait
+    // alive until navigation or an explicit exit, but reduce idle polling cost.
+    const interval = Date.now() - readinessStartedAt < READY_POLL_FAST_DURATION
+      ? READY_POLL_INTERVAL
+      : READY_POLL_SLOW_INTERVAL
+    readyPollTimer = setTimeout(pollReadiness, interval)
   }
   readyPollTimer = setTimeout(pollReadiness, READY_POLL_INTERVAL)
   scheduleAttempt()
@@ -5021,11 +5654,10 @@ export function applyBewlyWidescreen(
   showLoading = true,
 ) {
   startWidescreenLanguageWatch()
-  if (state || enteringWidescreen || waitingForLoad || readyObserver || readyFrame !== undefined || readyDeadlineTimer)
+  if (state || enteringWidescreen || waitingForLoad || readyObserver || readyFrame !== undefined)
     return
 
   enteringWidescreen = true
-  ensurePendingEscapeHandler()
   leaveMutuallyExclusivePlayerModes()
   pendingSidebarPosition = sidebarPosition
   if (showLoading)
@@ -5051,7 +5683,6 @@ export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescre
   stopLanguageWatch = undefined
   clearReadyWait()
   clearPageReadyHandler()
-  clearPendingEscapeHandler()
   loadingSuppressedUntilExit = false
   removeWidescreenLoading(true)
   waitingForLoad = false
@@ -5076,7 +5707,6 @@ export function isBewlyWidescreenEngaged() {
     hasLoadingOverlay: !!loadingOverlay,
     hasReadyRetry: !!readyObserver
       || readyFrame !== undefined
-      || !!readyDeadlineTimer
       || !!pageReadyHandler,
     waitingForLoad,
   })
