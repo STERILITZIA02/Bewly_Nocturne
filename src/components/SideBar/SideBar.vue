@@ -283,6 +283,18 @@ function openSettings(event: MouseEvent) {
   height: var(--bew-control-height);
   padding: 0;
 
+  /* 宽屏坞内控制键嵌在悬浮玻璃卡内：改实色，避免与底卡模糊层叠耗 GPU */
+  .ctrl-btn.ctrl-btn {
+    --b-button-color: var(--bew-elevated-alt-solid);
+    background: var(--bew-elevated-alt-solid);
+    backdrop-filter: none;
+  }
+
+  :deep(.page-mode-switcher--sidebar) {
+    background: var(--bew-elevated-alt-solid);
+    backdrop-filter: none;
+  }
+
   .sidebar-content {
     --bew-floating-control-size: var(--bew-control-height);
     --bew-floating-control-icon-size: var(--bew-icon-size-md);

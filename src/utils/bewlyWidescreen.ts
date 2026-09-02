@@ -93,6 +93,9 @@ interface BewlyWidescreenState {
   danmakuSemanticsSource?: HTMLElement
   danmakuSourceHost?: HTMLElement
   danmakuGlass?: HTMLElement
+  controlsGlassAppliedHeight?: number
+  highEnergyProgressElement?: HTMLElement
+  highEnergyProgressObserver?: MutationObserver
   escapeKeyCleanup?: () => void
   colorProbe?: HTMLSpanElement
   descriptionExpanded: boolean
@@ -201,6 +204,8 @@ const NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR = [
   '.bilibili-player-video-control',
   '.squirtle-controller',
 ].join(',')
+const HIGH_ENERGY_PROGRESS_SELECTOR = '.bpx-player-pbp'
+const HIGH_ENERGY_PROGRESS_PIN_SELECTOR = '.bpx-player-pbp-pin'
 
 const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR = [
   ...HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS,
@@ -1132,6 +1137,13 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   const root = document.createElement('div')
   root.id = ROOT_ID
   root.dataset.sidebarPosition = sidebarPosition
+  root.style.setProperty(
+    '--bewly-widescreen-sidebar-user-width',
+    `${clampWidescreenSidebarWidth(
+      settings.value.bewlyWidescreenSidebarWidth,
+      document.documentElement.clientWidth || window.innerWidth,
+    )}px`,
+  )
 
   const stage = document.createElement('div')
   stage.className = 'bewly-widescreen-stage'
@@ -1331,13 +1343,28 @@ function injectLayoutStyle() {
       --bewly-widescreen-layout-aspect: 1.7777778;
       --bewly-widescreen-danmaku-bar-bg: var(--bew-elevated-alt);
       --bewly-widescreen-sidebar-panel-width: var(--bewly-widescreen-sidebar-full-width);
+
       --bewly-widescreen-center-offset: 0px;
       --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 3 + var(--bew-space-2, 8px) * 3);
+    }
+
+    /* The native player is a body child, not a descendant of the Bewly overlay.
+       Keep its progress tokens on the shared widescreen owner so both themes inherit them. */
+    body.${BODY_CLASS} {
+      --bewly-widescreen-progress-track: color-mix(in srgb, var(--bew-text-1) 32%, transparent);
+      --bewly-widescreen-progress-buffer: color-mix(in srgb, var(--bew-text-1) 44%, transparent);
+      --bewly-widescreen-progress-played: var(--bew-theme-color);
+      --bewly-widescreen-progress-glow: none;
     }
 
     html:not(.dark) #${ROOT_ID},
     html:not(.dark) body.${BODY_CLASS} {
       --bewly-widescreen-sidebar-resize-accent: var(--bew-theme-color, #00aeec);
+    }
+
+    html.dark body.${BODY_CLASS} {
+      --bewly-widescreen-progress-played: #fff;
+      --bewly-widescreen-progress-glow: 0 0 4px rgb(255 255 255 / 85%), 0 0 8px rgb(255 255 255 / 45%);
     }
 
     #${ROOT_ID} * {
@@ -1442,9 +1469,9 @@ function injectLayoutStyle() {
       left: var(--bewly-widescreen-controls-glass-inset) !important;
       width: auto !important;
       transition:
-        bottom var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
         opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease) !important;
-      will-change: bottom;
+      will-change: transform;
     }
 
     /* 收起统一交给 BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS，忽略原生独立收起。
@@ -1497,7 +1524,7 @@ function injectLayoutStyle() {
       .bilibili-player-video-control,
       .squirtle-controller
     ) {
-      bottom: var(--bewly-widescreen-controls-glass-bottom) !important;
+      transform: translate3d(0, 100%, 0) !important;
       opacity: 0 !important;
       pointer-events: none !important;
     }
@@ -1569,6 +1596,8 @@ function injectLayoutStyle() {
       .bpx-player-control-wrap .bpx-player-ctrl-btn *,
       .bpx-player-control-wrap .bpx-player-ctrl-quality,
       .bpx-player-control-wrap .bpx-player-ctrl-quality *,
+      .bpx-player-control-wrap [class*="-ctrl-"],
+      .bpx-player-control-wrap [class*="-ctrl-"] *,
       .bilibili-player-video-control-wrap .bilibili-player-video-btn,
       .bilibili-player-video-control-wrap .bilibili-player-video-btn *,
       .squirtle-controller .squirtle-controller-left *,
@@ -1578,13 +1607,123 @@ function injectLayoutStyle() {
       color: var(--bew-text-1) !important;
     }
 
+    /* bpx 主题变量族主动接管：图标/文字/提示/辅助面板背景随 --bew-* 主题 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-container,
+      .bilibili-player,
+      .squirtle-video-wrap
+    ) {
+      --bpx-primary-color: var(--bew-text-1);
+      --bpx-primary-bgcolor: transparent;
+      --bpx-fn-color: var(--bew-text-1);
+      --bpx-fn-hover-color: var(--bew-text-1);
+      --bpx-tooltip-color: var(--bew-text-1);
+      --bpx-tooltip-bgcolor: var(--bew-elevated-alt-solid);
+      --bpx-aux-header-bg: var(--bew-elevated-alt-solid);
+      --bpx-aux-content-bg: var(--bew-elevated-alt-solid);
+    }
+
+    /* 控制栏全部图标统一为文字前景色，覆盖未知填充（三角播放/音量/小窗/截图/设置等） */
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
       .bpx-player-control-wrap,
       .bilibili-player-video-control-wrap,
       .bilibili-player-video-control,
       .squirtle-controller
-    ) svg :is([fill="#fff"], [fill="#FFF"], [fill="#ffffff"], [fill="#FFFFFF"], [fill="white"]) {
+    ) :is(svg, svg *) {
       fill: currentColor !important;
+      stroke: currentColor !important;
+    }
+
+    /* 原生空闲隐藏 (data-ctrl-hidden) 会连带把进度条本体压成 visibility:hidden /
+       背景透明；统一显隐接管后须补回可见性（否则任何着色都不画） */
+    body.${BODY_CLASS}:not(.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}) .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-progress-wrap,
+      .bpx-player-progress-wrap *
+    ) {
+      visibility: visible !important;
+    }
+
+    /* 进度条（实测 DOM）：轨道 = schedule 容器本体，缓冲 = schedule-buffer，
+       已播放 = schedule-current；thumb 拖拽头完全不触碰 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-progress-wrap :is(
+      .bpx-player-progress,
+      .bpx-player-progress-schedule
+    ) {
+      background: var(--bewly-widescreen-progress-track) !important;
+      box-shadow: none !important;
+    }
+    /* 部分播放器版本把可见细线画在伪元素上，覆盖同一轨道表面 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-progress-wrap :is(
+      .bpx-player-progress-schedule::before,
+      .bpx-player-progress-schedule::after,
+      .bpx-player-progress-schedule-wrap::before,
+      .bpx-player-progress-schedule-wrap::after
+    ) {
+      background: var(--bewly-widescreen-progress-track) !important;
+      background-color: var(--bewly-widescreen-progress-track) !important;
+      box-shadow: none !important;
+    }
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-progress-wrap
+      .bpx-player-progress-schedule-buffer {
+      background: var(--bewly-widescreen-progress-buffer) !important;
+      box-shadow: none !important;
+    }
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-progress-wrap
+      .bpx-player-progress-schedule-current {
+      background: var(--bewly-widescreen-progress-played) !important;
+      border-color: var(--bewly-widescreen-progress-played) !important;
+      box-shadow: var(--bewly-widescreen-progress-glow) !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} ${HIGH_ENERGY_PROGRESS_PIN_SELECTOR} {
+      display: none !important;
+    }
+
+    /* 画质/音质/倍速/音量/播放设置等弹窗统一为弹幕设置同款实色表面并适配文字 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-control-wrap :is(
+      [class*="panel"],
+      [class*="menu"],
+      [class*="popup"],
+      [class*="box"]
+    ):not(svg):not([class*="-item"]):not([class*="-btn"]):not([class*="-icon"]):not(.bpx-player-ctrl-btn):not(:where([class*="box"] *)) {
+      background: var(--bew-elevated-alt-solid) !important;
+      border: 1px solid var(--bew-surface-border-color) !important;
+      border-radius: var(--bew-popover-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      box-shadow: var(--bew-popover-surface-shadow) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      color: var(--bew-text-1) !important;
+    }
+
+    /* 弹窗后代文字/选项：原生白字类名逐个未覆盖，统一强制主题前景 + 交互态 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-control-wrap :is(
+      [class*="panel"],
+      [class*="menu"],
+      [class*="popup"],
+      [class*="box"]
+    ) :is(span, div, li, a, p, i) {
+      color: var(--bew-text-1) !important;
+    }
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-control-wrap [class*="box"] :is(
+      [class*="item"],
+      [class*="option"]
+    ):hover {
+      background: var(--bew-fill-1) !important;
+    }
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-control-wrap :is(
+      .bpx-state-active,
+      [class*="active"]
+    ):not(svg) {
+      color: var(--bew-theme-foreground) !important;
+    }
+
+    /* 弹幕设置/弹幕样式弹窗文字颜色适配浅色模式（含后代选项与交互态） */
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box,
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box :is(span, div, li, a, p, i),
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-mode-selection-container,
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-mode-selection-container :is(span, div, li, a, p, i) {
+      color: var(--bew-text-1) !important;
     }
 
     /* Keep the player bounds stable while the bottom surfaces reveal. Changing
@@ -1653,9 +1792,7 @@ function injectLayoutStyle() {
       transform: none !important;
       transition:
         opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
-        transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
-        height var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
-        background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
+        transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
       will-change: opacity, transform;
       pointer-events: none !important;
     }
@@ -1681,8 +1818,15 @@ function injectLayoutStyle() {
       font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif) !important;
     }
 
-    body.${BODY_CLASS} .bpx-player-tooltip-item {
+    /* 控制栏 hover 提示统一实色表面 + 主题前景（修复浅色模式深色底黑字） */
+    body.${BODY_CLASS} .bpx-player-tooltip-item,
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} [class*="tooltip"]:not(svg),
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} [class*="hover-tip"]:not(svg) {
       z-index: var(--bew-z-hud) !important;
+      background: var(--bew-elevated-alt-solid) !important;
+      border: 1px solid var(--bew-surface-border-color) !important;
+      box-shadow: var(--bew-popover-surface-shadow) !important;
+      color: var(--bew-text-1) !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR}:empty {
@@ -1738,11 +1882,11 @@ function injectLayoutStyle() {
       .bpx-player-dm-setting,
       .bpx-player-video-inputbar
     ) {
-      background: var(--bew-popover-surface-background) !important;
+      background: var(--bew-elevated-alt-solid) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       box-shadow: var(--bew-popover-surface-shadow) !important;
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       background-clip: padding-box !important;
     }
 
@@ -1866,8 +2010,9 @@ function injectLayoutStyle() {
       z-index: 0;
       border-radius: inherit;
       corner-shape: var(--bew-corner-shape-round);
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
+      background: var(--bew-elevated-alt-solid) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       pointer-events: none;
     }
 
@@ -1998,9 +2143,9 @@ function injectLayoutStyle() {
       height: auto !important;
       border-radius: inherit !important;
       corner-shape: inherit;
-      background: var(--bew-popover-surface-background) !important;
-      backdrop-filter: var(--bew-filter-glass-1) !important;
-      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
+      background: var(--bew-elevated-alt-solid) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       background-clip: padding-box !important;
       pointer-events: none !important;
     }
@@ -2063,13 +2208,13 @@ function injectLayoutStyle() {
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-mode-selection-panel {
       color: var(--bew-text-1) !important;
-      background: var(--bew-elevated-alt) !important;
+      background: var(--bew-elevated-alt-solid) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
-      backdrop-filter: var(--bew-filter-glass-1) !important;
-      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       background-clip: padding-box !important;
       overflow: hidden !important;
     }
@@ -2141,13 +2286,13 @@ function injectLayoutStyle() {
         - var(--bew-space-12, 48px)
       ) !important;
       color: var(--bew-text-1) !important;
-      background: var(--bew-elevated-alt) !important;
+      background: var(--bew-elevated-alt-solid) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
       border-radius: var(--bew-popover-radius) !important;
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-popover-surface-shadow) !important;
-      backdrop-filter: var(--bew-filter-glass-1) !important;
-      -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
       background-clip: padding-box !important;
       overflow-x: hidden !important;
       overflow-y: auto !important;
@@ -2492,10 +2637,10 @@ function injectLayoutStyle() {
       border-radius: var(--bew-interactive-radius, 8px) 0 0 var(--bew-interactive-radius, 8px);
       corner-shape: var(--bew-corner-shape);
       color: var(--bew-text-1);
-      background: var(--bew-elevated-alt);
+      background: var(--bew-elevated-alt-solid);
       box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       cursor: pointer;
       font-size: var(--bew-font-size-control, 13px);
       font-weight: var(--bew-font-weight-semibold, 600);
@@ -3435,8 +3580,8 @@ function injectLayoutStyle() {
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
       cursor: pointer;
       font-family: var(--bew-font-family);
       font-size: var(--bew-font-size-control, 13px);
@@ -3683,7 +3828,40 @@ function clearAuxiliaryControlGeometry() {
   AUXILIARY_CONTROL_GEOMETRY_PROPERTIES.forEach(property => host?.style.removeProperty(property))
 }
 
-/* 悬浮玻璃卡高度 = 弹幕区高度 + 原生控制栏实际高度。
+function disablePinnedHighEnergyProgress(highEnergyProgress: HTMLElement) {
+  if (!highEnergyProgress.classList.contains('pin'))
+    return
+  highEnergyProgress.querySelector<HTMLElement>(HIGH_ENERGY_PROGRESS_PIN_SELECTOR)?.click()
+}
+
+function syncHighEnergyProgressState(
+  currentState: BewlyWidescreenState,
+  highEnergyProgress: HTMLElement | null,
+) {
+  if (currentState.highEnergyProgressElement === highEnergyProgress) {
+    if (highEnergyProgress)
+      disablePinnedHighEnergyProgress(highEnergyProgress)
+    return
+  }
+
+  currentState.highEnergyProgressObserver?.disconnect()
+  currentState.highEnergyProgressObserver = undefined
+  currentState.highEnergyProgressElement = highEnergyProgress ?? undefined
+  if (!highEnergyProgress)
+    return
+
+  currentState.highEnergyProgressObserver = new MutationObserver(() => {
+    if (state === currentState && currentState.highEnergyProgressElement === highEnergyProgress)
+      disablePinnedHighEnergyProgress(highEnergyProgress)
+  })
+  currentState.highEnergyProgressObserver.observe(highEnergyProgress, {
+    attributes: true,
+    attributeFilter: ['class'],
+  })
+  disablePinnedHighEnergyProgress(highEnergyProgress)
+}
+
+/* 悬浮玻璃卡高度 = 弹幕区高度 + 原生控制栏实际高度 + 高能进度图高度。
    原生收起态由 CSS 属性选择器塌缩，无需在此处处理。 */
 function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
   const glass = currentState.danmakuGlass
@@ -3692,10 +3870,20 @@ function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
   const container = getNativePlayerContainer(currentState) ?? currentState.playerEl
   const wrap = container?.querySelector<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
   const wrapHeight = wrap?.isConnected ? Math.round(wrap.getBoundingClientRect().height) : 0
-  if (wrapHeight > 0) {
+  const highEnergyProgress = container?.querySelector<HTMLElement>(HIGH_ENERGY_PROGRESS_SELECTOR)
+  syncHighEnergyProgressState(currentState, highEnergyProgress ?? null)
+  const highEnergyProgressHeight = highEnergyProgress?.isConnected
+    ? Math.ceil(highEnergyProgress.getBoundingClientRect().height)
+    : 0
+  const controlsHeight = wrapHeight + highEnergyProgressHeight
+  // 同值跳过：visibility/resize/observer 链频繁触发本函数，重复写自定义属性会重启过渡
+  if (controlsHeight === currentState.controlsGlassAppliedHeight)
+    return
+  currentState.controlsGlassAppliedHeight = controlsHeight
+  if (controlsHeight > 0) {
     glass.style.setProperty(
       '--bewly-widescreen-controls-glass-height',
-      `calc(var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px) + ${wrapHeight}px)`,
+      `calc(var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px) + ${controlsHeight}px)`,
     )
   }
   else {
@@ -4060,6 +4248,34 @@ function getNativePlayerContainer(
     : playerHost.querySelector<HTMLElement>('.bpx-player-container')
 }
 
+function isPointerInBottomControlContainer(
+  currentState: BewlyWidescreenState,
+  pointerX: number,
+  pointerY: number,
+) {
+  const glass = currentState.danmakuGlass
+  if (!glass?.isConnected)
+    return false
+
+  const rect = glass.getBoundingClientRect()
+  const rootRect = currentState.root.getBoundingClientRect()
+  const glassBottom = Number.parseFloat(
+    getComputedStyle(currentState.root).getPropertyValue('--bewly-widescreen-controls-glass-bottom'),
+  ) || 0
+  return isWidescreenBottomControlHoverRegion({
+    currentlyHovered: currentState.bottomControlsHovered,
+    pointerX,
+    pointerY,
+    surfaceHeight: rect.height,
+    // The glass exits with a translate transform. Anchor the hit region to its
+    // stable layout edge so the same area can reveal hidden controls without
+    // handing the bottom-right corner to the sidebar edge trigger.
+    viewportBottom: rootRect.bottom - glassBottom,
+    viewportLeft: rect.left,
+    viewportRight: rect.right,
+  })
+}
+
 function syncNativePlayerControlVisibility(
   currentState: BewlyWidescreenState,
   playerHost: HTMLElement = currentState.playerEl,
@@ -4201,24 +4417,18 @@ function setupAspectObservers(currentState: BewlyWidescreenState) {
     }, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY)
   }
   const updateBottomControlsHover = (event: PointerEvent) => {
-    const rootRect = currentState.root.getBoundingClientRect()
     const sourceHost = currentState.danmakuSourceHost
-    const surfaceHeight = (sourceHost ?? currentState.danmakuDock).getBoundingClientRect().height
     const pointerInBottomControlTree = event.composedPath().some(node => (
       node === currentState.danmakuDock
       || (node instanceof Node && currentState.danmakuDock.contains(node))
       || node === sourceHost
       || (node instanceof Node && !!sourceHost?.contains(node))
     ))
-    const hovered = pointerInBottomControlTree || isWidescreenBottomControlHoverRegion({
-      currentlyHovered: currentState.bottomControlsHovered,
-      pointerX: event.clientX,
-      pointerY: event.clientY,
-      surfaceHeight,
-      viewportBottom: rootRect.bottom,
-      viewportLeft: rootRect.left,
-      viewportRight: rootRect.right,
-    })
+    const hovered = pointerInBottomControlTree || isPointerInBottomControlContainer(
+      currentState,
+      event.clientX,
+      event.clientY,
+    )
     if (hovered) {
       clearBottomControlsLeaveTimer()
       return setBottomControlsHovered(true)
@@ -4359,6 +4569,10 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   let lastPointerX: number | undefined
   let lastPointerY: number | undefined
   let lastPointerEvent: PointerEvent | undefined
+  let appliedSidebarWidth = clampWidescreenSidebarWidth(
+    settings.value.bewlyWidescreenSidebarWidth,
+    root.getBoundingClientRect().width,
+  )
 
   function canTemporarilyExpand() {
     return currentState.sidebarLayout === 'compact'
@@ -4444,8 +4658,16 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   function applySidebarWidth(width: number) {
     const rootRect = root.getBoundingClientRect()
     const nextWidth = clampWidescreenSidebarWidth(width, rootRect.width)
+    appliedSidebarWidth = nextWidth
     root.style.setProperty('--bewly-widescreen-sidebar-user-width', `${nextWidth}px`)
     syncSidebarResizerValue(nextWidth, rootRect.width)
+    return nextWidth
+  }
+
+  function persistSidebarWidth() {
+    const storedWidth = Math.round(appliedSidebarWidth)
+    if (settings.value.bewlyWidescreenSidebarWidth !== storedWidth)
+      settings.value.bewlyWidescreenSidebarWidth = storedWidth
   }
 
   function flushPendingSidebarWidth() {
@@ -4501,7 +4723,12 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
       playerTop: playerRect.top,
       pointerY,
     })
-    if (!currentlyExpanded && pointerIsInPlayerControls) {
+    const pointerIsInBottomControls = isPointerInBottomControlContainer(
+      currentState,
+      pointerX,
+      pointerY,
+    )
+    if (!currentlyExpanded && (pointerIsInPlayerControls || pointerIsInBottomControls)) {
       collapseSidebar()
       return
     }
@@ -4514,6 +4741,9 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
       viewportEnd: rootRect.right,
       sidebarWidth: sidebar.getBoundingClientRect().width,
     }
+    // 底部控制卡片展开期间，阻止右侧栏边缘唤出
+    if (!currentlyExpanded && root.dataset.playerControlsHidden === 'false')
+      return
     const pointerIsAtActivationEdge = resolveWidescreenSidebarHoverExpanded({
       ...pointerInput,
       currentlyExpanded: false,
@@ -4599,6 +4829,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
       sidebarResizer.releasePointerCapture(event.pointerId)
     resizingPointerId = undefined
     delete root.dataset.sidebarResizing
+    persistSidebarWidth()
     schedulePlayerResizeSync(currentState)
     handlePointerPosition(event.clientX, event.clientY, event.pointerType)
   }
@@ -4630,6 +4861,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
     if (canTemporarilyExpand())
       setHoverExpanded(true)
     applySidebarWidth(nextWidth)
+    persistSidebarWidth()
     schedulePlayerResizeSync(currentState)
   }
 
@@ -5477,6 +5709,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   renderFallbackVideoInfo(currentState)
 
   syncDanmakuInputSource(currentState)
+  syncControlsGlassGeometry(currentState)
   syncNativePlayerControlVisibility(currentState)
   syncAuxiliaryControlGeometry(currentState)
 
@@ -5686,6 +5919,9 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.toolbarResizeObserver = undefined
   currentState.themeObserver?.disconnect()
   currentState.themeObserver = undefined
+  currentState.highEnergyProgressObserver?.disconnect()
+  currentState.highEnergyProgressObserver = undefined
+  currentState.highEnergyProgressElement = undefined
   currentState.layoutEventCleanup?.()
   currentState.layoutEventCleanup = undefined
   currentState.settingsWatchCleanup?.forEach(stop => stop())
