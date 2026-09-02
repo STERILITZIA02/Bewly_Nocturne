@@ -104,6 +104,14 @@ export const WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH = 460
 export const WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH = 1920
 export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 2 / 3
 
+export function normalizeWidescreenSidebarStoredWidth(width: number): number {
+  const safeWidth = Number.isFinite(width) ? width : WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH
+  return Math.round(Math.min(
+    Math.max(safeWidth, WIDESCREEN_SIDEBAR_MIN_WIDTH),
+    WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH,
+  ))
+}
+
 export interface WidescreenPlayerControlHoverInput {
   playerBottom: number
   playerTop: number
@@ -212,7 +220,7 @@ export function clampWidescreenSidebarWidth(width: number, viewportWidth: number
       safeViewportWidth * WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO,
     ),
   )
-  const safeWidth = Number.isFinite(width) ? width : WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH
+  const safeWidth = normalizeWidescreenSidebarStoredWidth(width)
   return Math.min(Math.max(safeWidth, minWidth), maxWidth)
 }
 

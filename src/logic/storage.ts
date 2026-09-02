@@ -8,6 +8,7 @@ import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
+import { normalizeWidescreenSidebarStoredWidth, WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import {
   MOBILE_LIST_LAYOUT_BREAKPOINT,
   normalizeListLayoutBreakpoint,
@@ -429,6 +430,7 @@ export interface Settings {
   bewlyWidescreenSidebarPosition: BewlyWidescreenSidebarPosition
   bewlyWidescreenLayoutPriority: BewlyWidescreenLayoutPriority
   bewlyWidescreenCenterVideo: boolean
+  bewlyWidescreenSidebarWidth: number
   defaultDanmakuState: PlayerDefaultState
   defaultCaptionState: PlayerDefaultState
   lastDanmakuState: boolean
@@ -702,6 +704,7 @@ export const originalSettings: Settings = {
   bewlyWidescreenSidebarPosition: 'right',
   bewlyWidescreenLayoutPriority: 'video-first',
   bewlyWidescreenCenterVideo: false,
+  bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
   lastDanmakuState: true,
@@ -971,6 +974,10 @@ watch(
       record.defaultDanmakuState = originalSettings.defaultDanmakuState
     if (!validPlayerDefaultStates.includes(record.defaultCaptionState))
       record.defaultCaptionState = originalSettings.defaultCaptionState
+
+    record.bewlyWidescreenSidebarWidth = normalizeWidescreenSidebarStoredWidth(
+      record.bewlyWidescreenSidebarWidth,
+    )
 
     // 旧开关与新的按场景覆盖语义不同，直接清理并让用户重新设置。
     Reflect.deleteProperty(record, 'keepCollectionVideoDefaultMode')

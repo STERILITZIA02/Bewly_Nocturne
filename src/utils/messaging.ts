@@ -16,6 +16,8 @@ export function isExtensionContextInvalidatedError(error: unknown): boolean {
   const message = (error instanceof Error ? error.message : String(error)).toLowerCase()
   return message.includes('extension context invalidated')
     || message.includes('cannot read properties of undefined (reading \'sendmessage\')')
+    // 扩展重载后旧内容脚本访问 browser.runtime.getURL 等资源 API 同样属失效态
+    || message.includes('cannot read properties of undefined (reading \'geturl\')')
     || message.includes('message channel closed before a response was received')
     || message.includes('message port closed before a response was received')
     || message.includes('receiving end does not exist')
