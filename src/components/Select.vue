@@ -215,7 +215,7 @@ onBeforeUnmount(() => window.removeEventListener('click', handleWindowClick))
       flex="~"
       justify="between"
       items="center" w="full"
-      :ring="showOptions ? '2px $bew-theme-color' : ''" duration-300
+      :ring="showOptions ? '2px $bew-theme-focus-ring' : ''" duration-300
       @click="toggleOptions"
       @keydown="handleTriggerKeyDown"
     >

@@ -37,6 +37,11 @@ export interface Video {
   liveStatus?: number
   trackId?: string
 
+  /** Non-interactive labels such as recommendation reasons or status badges. */
+  displayTags?: string[]
+  /** Video content tags that open a corresponding search. */
+  searchableTags?: string[]
+  /** Legacy adapter input. Normalized as non-interactive before rendering. */
   tag?: string | string[]
   rank?: number
   type?: 'horizontal' | 'vertical' | 'bangumi' | 'ketang'

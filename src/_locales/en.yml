@@ -1538,11 +1538,17 @@ favorites:
   sidebar_manage_exit: Exit manage
   select_all: Select all
   unselect_all: Deselect all
-  rename_folder: Rename
-  rename_folder_dialog_title: Rename folder
-  rename_folder_placeholder: Enter folder name
-  rename_folder_empty: Folder name cannot be empty
-  default_folder_locked: The default folder cannot be renamed or deleted
+  edit_folder: Edit folder
+  edit_folder_dialog_title: Edit folder
+  edit_folder_title_placeholder: Enter folder name
+  edit_folder_title_empty: Folder name cannot be empty
+  edit_folder_failed: Failed to update the folder. Please try again later.
+  folder_visibility: Folder visibility
+  folder_public: Public
+  folder_private: Private
+  folder_public_desc: Public folders can be viewed by other users.
+  folder_private_desc: Private folders are visible only to you.
+  default_folder_locked: The default folder cannot be edited or deleted
   delete_folders_confirm: |-
     Delete the {count} selected folders?
     Videos in them will be unfavorited as well. This cannot be undone.

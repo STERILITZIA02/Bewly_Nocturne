@@ -5,13 +5,14 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
-import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_IFRAME_DRAWER_HOST_CHANGE, OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditableRoot } from '~/logic/layoutEdit'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
+import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { isHomePage, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import emitter from '~/utils/mitt'
@@ -45,7 +46,8 @@ const { isOutside: isOutsideTopArea } = useMouseInElement(topAreaTarget)
 const currentLocationHref = useCurrentLocationHref()
 const effectiveTopBarSource = computed(() => settingsStore.getEffectiveTopBarSource())
 const usesNativeTopBar = computed(() => effectiveTopBarSource.value === 'bilibili-native')
-const isCurrentVideoPage = computed(() => isVideoOrBangumiPage(currentLocationHref.value))
+const iframeDrawerHost = ref(isIframeDrawerHost())
+const isCurrentVideoPage = computed(() => !iframeDrawerHost.value && isVideoOrBangumiPage(currentLocationHref.value))
 const coarsePointer = useMediaQuery('(pointer: coarse)')
 const lastPointerType = ref<'mouse' | 'touch' | 'pen'>(coarsePointer.value ? 'touch' : 'mouse')
 const effectiveVideoTopBarConfig = computed(() => {
@@ -122,7 +124,7 @@ function handleTopBarVisibility() {
     return
   }
 
-  if (isVideoOrBangumiPage() && effectiveVideoTopBarConfig.value === VideoPageTopBarConfig.ShowOnMouse) {
+  if (isCurrentVideoPage.value && effectiveVideoTopBarConfig.value === VideoPageTopBarConfig.ShowOnMouse) {
     // 清除之前的计时器
     clearHideTimer()
 
@@ -217,7 +219,7 @@ function handleScroll(arg?: number | Event): void {
   }
 
   // 在视频页面处理不同的配置
-  if (isVideoOrBangumiPage()) {
+  if (isCurrentVideoPage.value) {
     const config = effectiveVideoTopBarConfig.value
 
     // 总是显示：不处理滚动隐藏
@@ -308,8 +310,16 @@ function emitTopBarScrollVisibilityChange(visible: boolean, scrollDelta: number)
 }
 
 function setupScrollListeners() {
+  cleanupScrollListeners()
+  if (iframeDrawerHost.value) {
+    clearHideTimer()
+    clearOriginalVideoTopBarVisibility()
+    applyTopBarVisibility()
+    return
+  }
+
   // 根据视频页面配置设置初始显示状态
-  if (isVideoOrBangumiPage()) {
+  if (isCurrentVideoPage.value) {
     const config = effectiveVideoTopBarConfig.value
     if (config === VideoPageTopBarConfig.AlwaysHide || config === VideoPageTopBarConfig.ShowOnMouse) {
       toggleTopBarVisible(false)
@@ -322,11 +332,8 @@ function setupScrollListeners() {
     toggleTopBarVisible(true)
   }
 
-  // 清理之前的监听器
-  cleanupScrollListeners()
-
   // 在视频页面根据配置决定是否设置滚动监听
-  if (isVideoOrBangumiPage()) {
+  if (isCurrentVideoPage.value) {
     const config = effectiveVideoTopBarConfig.value
     // 只有在滚动显示模式下才设置滚动监听
     if (config !== VideoPageTopBarConfig.ShowOnScroll) {
@@ -519,6 +526,11 @@ function startWidescreenStateObservation() {
   widescreenStateObserver.observe(document.body, { attributes: true, attributeFilter: ['class'] })
 }
 
+function handleIframeDrawerHostChange() {
+  iframeDrawerHost.value = isIframeDrawerHost()
+  setupScrollListeners()
+}
+
 // 处理点击外部关闭 POP 窗（仅在触屏优化开启时）
 function handleClickOutsidePopup(event: MouseEvent) {
   if (!settings.value.touchScreenOptimization)
@@ -546,6 +558,7 @@ function handleClickOutsidePopup(event: MouseEvent) {
 // 生命周期钩子
 onMounted(() => {
   topBarMounted = true
+  window.addEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, handleIframeDrawerHostChange)
   // 可见性策略必须先于异步数据初始化生效，避免原版 AlwaysHide 首屏闪现，
   // 也确保 ShowOnScroll 在初始化期间已经接管滚动。
   setupScrollListeners()
@@ -611,6 +624,7 @@ onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   window.removeEventListener('blur', resetTopBarTransientInteraction)
   window.removeEventListener('pointerdown', handlePointerDown)
+  window.removeEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, handleIframeDrawerHostChange)
 })
 
 onKeyStroke('Escape', (event: KeyboardEvent) => {

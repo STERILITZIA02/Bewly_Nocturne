@@ -85,7 +85,7 @@ input[type="checkbox"] {
   }
 
   &:checked + .radio-switch {
-    background: var(--bew-theme-color-60);
+    background: var(--bew-theme-color);
     border-color: var(--bew-theme-color);
   }
 
@@ -107,6 +107,9 @@ input[type="checkbox"] {
   }
 
   &:checked + .radio-switch::after {
+    // Solid theme track needs the adaptive on-theme thumb to keep contrast at
+    // extreme (near-white / near-black) theme colors.
+    background: var(--bew-on-theme-color);
     // Track width minus the thumb and equal outer-edge inset on both sides.
     --b-switch-thumb-offset: calc(
       var(--b-switch-width) - var(--b-switch-thumb-size) - var(--b-switch-edge-inset) - var(--b-switch-edge-inset)

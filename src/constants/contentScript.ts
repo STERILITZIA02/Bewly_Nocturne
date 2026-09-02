@@ -20,6 +20,30 @@ export const CONTENT_SCRIPT_EXCLUDE_MATCHES = [
 export const CONTENT_SCRIPT_PING = 'bewly-cat:content-script:ping'
 export const CONTENT_SCRIPT_PONG = 'bewly-cat:content-script:ready'
 
+export interface ContentScriptIdentity {
+  name: string
+  runtimeUrl: string
+  version: string
+}
+
+export interface ContentScriptPong extends ContentScriptIdentity {
+  type: typeof CONTENT_SCRIPT_PONG
+}
+
+export function isCurrentContentScriptPong(
+  value: unknown,
+  current: ContentScriptIdentity,
+): value is ContentScriptPong {
+  if (typeof value !== 'object' || value === null)
+    return false
+
+  const pong = value as Partial<ContentScriptPong>
+  return pong.type === CONTENT_SCRIPT_PONG
+    && pong.name === current.name
+    && pong.version === current.version
+    && pong.runtimeUrl === current.runtimeUrl
+}
+
 const CONTENT_SCRIPT_HOST_SET = new Set<string>(CONTENT_SCRIPT_HOSTS)
 
 export function isContentScriptTargetUrl(value?: string): boolean {

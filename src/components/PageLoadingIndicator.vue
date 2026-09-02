@@ -37,7 +37,7 @@ withDefaults(defineProps<{
   box-sizing: border-box;
   flex: 0 0 auto;
   border: 2px solid var(--bew-theme-color-20);
-  border-top-color: var(--bew-theme-color);
+  border-top-color: var(--bew-theme-foreground);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
   animation: bew-page-loading-spin 720ms linear infinite;
@@ -55,7 +55,7 @@ withDefaults(defineProps<{
 
 @media (prefers-reduced-motion: reduce) {
   .bew-page-loading-indicator__spinner {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-theme-foreground);
     animation: none;
   }
 }

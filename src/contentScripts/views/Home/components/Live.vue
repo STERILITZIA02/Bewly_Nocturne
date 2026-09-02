@@ -115,7 +115,7 @@ function transformLiveVideo(item: VideoElement): Video | undefined {
       mid: liveItem.uid,
     },
     viewStr: liveItem.text_small,
-    tag: decodeHtmlEntities(liveItem.area_name_v2),
+    displayTags: [decodeHtmlEntities(liveItem.area_name_v2)].filter(Boolean),
     roomid: liveItem.roomid,
     liveStatus: liveItem.live_status,
     threePointV2: [],

@@ -84,7 +84,7 @@ function transformTrendingVideo(item: VideoElement): Video | undefined {
       : String(videoItem.stat.like),
     publishedTimestamp: videoItem.pubdate,
     bvid: videoItem.bvid,
-    tag: decodeHtmlEntities(videoItem.rcmd_reason.content),
+    displayTags: [decodeHtmlEntities(videoItem.rcmd_reason.content)].filter(Boolean),
     cid: videoItem.cid,
     threePointV2: [],
   }

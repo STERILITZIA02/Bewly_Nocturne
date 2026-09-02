@@ -56,7 +56,6 @@ export interface WidescreenControlSurfaceStateInput {
   nativeControlsHidden: boolean
   nativeControlsReady: boolean
   pointerInsidePlayer: boolean
-  previousHidden: boolean
   sidebarExpanded: boolean
 }
 
@@ -66,14 +65,15 @@ export function resolveWidescreenControlSurfaceState({
   nativeControlsHidden,
   nativeControlsReady,
   pointerInsidePlayer,
-  previousHidden,
   sidebarExpanded,
 }: WidescreenControlSurfaceStateInput) {
   const ready = danmakuControlsReady && nativeControlsReady
   return {
+    // 指针离开播放器且不悬停底部控制区时统一隐藏；不再冻结上一帧结果，
+    // 否则移出页面/窗口后卡面会永久残留
     hidden: !ready
       || sidebarExpanded
-      || (!bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : previousHidden)),
+      || (!bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : true)),
     ready,
   }
 }

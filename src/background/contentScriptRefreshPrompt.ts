@@ -1,7 +1,7 @@
 import type { Scripting, Tabs } from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG, isContentScriptTargetUrl } from '~/constants/contentScript'
+import { CONTENT_SCRIPT_PING, isContentScriptTargetUrl, isCurrentContentScriptPong } from '~/constants/contentScript'
 import { LanguageType } from '~/enums/appEnums'
 
 const CONTENT_SCRIPT_STARTUP_GRACE_PERIOD_MS = 100
@@ -401,7 +401,12 @@ async function pingContentScript(tabId: number, extensionApi: ContentScriptRefre
       { type: CONTENT_SCRIPT_PING },
       { frameId: 0 },
     )
-    return response === CONTENT_SCRIPT_PONG
+    const manifest = browser.runtime.getManifest()
+    return isCurrentContentScriptPong(response, {
+      name: manifest.name,
+      version: manifest.version,
+      runtimeUrl: browser.runtime.getURL(''),
+    })
   }
   catch {
     // A missing receiver is expected after the extension or browser is reloaded.

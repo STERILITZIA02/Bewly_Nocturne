@@ -489,7 +489,7 @@ function mapLiveItemToVideo(item?: FollowingLiveItem): Video | undefined {
     },
     view: parseStatNumber(item.text_small),
     viewStr: item.text_small,
-    tag: decodeHtmlEntities(tag),
+    displayTags: [decodeHtmlEntities(tag)].filter(Boolean),
     roomid: item.roomid,
     liveStatus: item.live_status,
     threePointV2: [],
@@ -549,7 +549,7 @@ function mapMomentItemToVideo(item?: MomentItem, authors?: Author[]): Video | un
     publishedTimestamp: item.modules?.module_author?.pub_ts,
     bvid: archive.bvid,
     badge,
-    tag: isCollaboration ? '联合投稿' : undefined,
+    displayTags: isCollaboration ? ['联合投稿'] : undefined,
     threePointV2: [],
   }
 }

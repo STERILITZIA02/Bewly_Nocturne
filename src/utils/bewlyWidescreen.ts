@@ -190,6 +190,9 @@ const HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS = [
   '.bpx-player-ctrl-web',
   '.bilibili-player-video-web-fullscreen',
   '.squirtle-video-pagefullscreen',
+  '.bpx-player-ctrl-full',
+  '.bilibili-player-video-btn-fullscreen',
+  '.squirtle-video-fullscreen',
 ] as const
 
 const NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR = [
@@ -1242,11 +1245,23 @@ function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
 function injectLayoutStyle() {
   return injectCSS(`
     body.${BODY_CLASS} {
+      --bewly-widescreen-inputbar-height: calc(
+        var(--bew-control-height, 36px) + var(--bew-space-2, 8px)
+      );
       --bewly-widescreen-bottom-controls-height: calc(
-        var(--bew-control-height, 36px) + var(--bew-space-4, 16px) + 1px
+        var(--bewly-widescreen-inputbar-height, 44px) + var(--bew-space-4, 16px) + 1px
+      );
+      --bewly-widescreen-controls-block-padding: calc(
+        (var(--bewly-widescreen-bottom-controls-height) - var(--bew-control-height, 36px)) / 2
       );
       --bewly-widescreen-danmaku-bar-bg: var(--bew-elevated-alt);
       --bewly-widescreen-aux-controls-width: calc(var(--bew-control-height, 36px) * 3 + var(--bew-space-2, 8px) * 3);
+      --bewly-widescreen-shell-radius: var(--bew-modal-radius, 24px);
+      --bewly-widescreen-controls-glass-inset: var(--bew-space-4, 16px);
+      --bewly-widescreen-controls-glass-bottom: var(--bew-space-2, 8px);
+      --bewly-widescreen-controls-glass-height: calc(
+        var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px)
+      );
       overflow: hidden !important;
       background: var(--bew-dark-page-bg) !important;
     }
@@ -1254,6 +1269,18 @@ function injectLayoutStyle() {
     body.${BODY_CLASS} #bewly {
       position: relative;
       z-index: calc(var(--bew-z-widescreen) + 1);
+    }
+
+    /* Bilibili teleports uploader/user hover cards and the followed-user menu
+       directly under body. Keep those native interaction surfaces above the
+       widescreen shell instead of letting their legacy 1000/10099 layers hide
+       behind the sidebar. */
+    body.${BODY_CLASS} > :is(
+      .usercard-wrap,
+      bili-user-profile,
+      .van-popover.van-followed
+    ) {
+      z-index: var(--bew-z-hud) !important;
     }
 
     body.${BODY_CLASS} .bili-header,
@@ -1408,9 +1435,60 @@ function injectLayoutStyle() {
       .bilibili-player-video-control,
       .squirtle-controller
     ) {
-      bottom: var(--bewly-widescreen-bottom-controls-height) !important;
-      transition: bottom var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease) !important;
+      right: var(--bewly-widescreen-controls-glass-inset) !important;
+      bottom: calc(
+        var(--bewly-widescreen-controls-glass-bottom) + var(--bewly-widescreen-bottom-controls-height)
+      ) !important;
+      left: var(--bewly-widescreen-controls-glass-inset) !important;
+      width: auto !important;
+      transition:
+        bottom var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease) !important;
       will-change: bottom;
+    }
+
+    /* 收起统一交给 BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS，忽略原生独立收起。
+       常显只在非隐藏态生效，避免与统一隐藏规则发生 !important 级联战 */
+    body.${BODY_CLASS}:not(.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}) .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) {
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto !important;
+    }
+
+    /* 显式反超原生空闲隐藏链（data-ctrl-hidden / bpx-state-no-cursor），
+       原生隐藏只能由统一 BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS 表达 */
+    body.${BODY_CLASS}:not(.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}) .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-container[data-ctrl-hidden] .bpx-player-control-wrap,
+      .bpx-player-container.bpx-state-no-cursor .bpx-player-control-wrap,
+      .bpx-player-container[data-ctrl-hidden] .bpx-player-control-top,
+      .bpx-player-container[data-ctrl-hidden] .bpx-player-control-bottom,
+      .bpx-player-container.bpx-state-no-cursor .bpx-player-control-top,
+      .bpx-player-container.bpx-state-no-cursor .bpx-player-control-bottom
+    ) {
+      opacity: 1 !important;
+      visibility: visible !important;
+      transform: none !important;
+      pointer-events: auto !important;
+    }
+
+    /* 仅反制对整个 wrap 的 display:none 空闲隐藏，壳层内部布局不动 */
+    body.${BODY_CLASS}:not(.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}) .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-container[data-ctrl-hidden] .bpx-player-control-wrap,
+      .bpx-player-container.bpx-state-no-cursor .bpx-player-control-wrap,
+      .bpx-player-control-wrap[hidden]
+    ) {
+      display: block !important;
+    }
+
+    /* 原生底部渐变遮罩（180px repeat-x 暗化层）：禁用，悬浮卡只保留自己的玻璃表面 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-control-mask {
+      display: none !important;
+      background: none !important;
     }
 
     body.${BODY_CLASS}.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS} .${NATIVE_PLAYER_CLASS} :is(
@@ -1419,7 +1497,94 @@ function injectLayoutStyle() {
       .bilibili-player-video-control,
       .squirtle-controller
     ) {
-      bottom: 0 !important;
+      bottom: var(--bewly-widescreen-controls-glass-bottom) !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
+
+    /* 共用悬浮玻璃卡：原生控制栏去掉自带底色/渐变并提升到玻璃卡上方，
+       文字与单色图标跟随主题前景，保留彩色图标语义 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) {
+      z-index: var(--bew-z-popover) !important;
+      color: var(--bew-text-1) !important;
+      background: transparent !important;
+      background-image: none !important;
+      text-shadow: none !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) :is(.bpx-player-control-top, .bpx-player-control-bottom) {
+      background: transparent !important;
+    }
+
+    /* 整个悬浮卡统一模糊与表面：清除控制栏家族（含进度区）自带的
+       深色渐变 / backdrop 模糊层；仅移除 background-image，保留进度轨道纯色 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bpx-player-control-top,
+      .bpx-player-control-bottom,
+      .bpx-player-progress-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller,
+      .squirtle-controller > *
+    ) {
+      background-image: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bpx-player-control-top,
+      .bpx-player-control-bottom,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    )::before,
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bpx-player-control-top,
+      .bpx-player-control-bottom,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    )::after {
+      background-image: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap .bpx-player-ctrl-btn,
+      .bpx-player-control-wrap .bpx-player-ctrl-btn *,
+      .bpx-player-control-wrap .bpx-player-ctrl-quality,
+      .bpx-player-control-wrap .bpx-player-ctrl-quality *,
+      .bilibili-player-video-control-wrap .bilibili-player-video-btn,
+      .bilibili-player-video-control-wrap .bilibili-player-video-btn *,
+      .squirtle-controller .squirtle-controller-left *,
+      .squirtle-controller .squirtle-controller-right *,
+      .squirtle-controller .squirtle-progress-wrap *
+    ) {
+      color: var(--bew-text-1) !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) svg :is([fill="#fff"], [fill="#FFF"], [fill="#ffffff"], [fill="#FFFFFF"], [fill="white"]) {
+      fill: currentColor !important;
     }
 
     /* Keep the player bounds stable while the bottom surfaces reveal. Changing
@@ -1428,7 +1593,7 @@ function injectLayoutStyle() {
       box-sizing: border-box !important;
       position: absolute !important;
       right: 0 !important;
-      bottom: 0 !important;
+      bottom: var(--bewly-widescreen-controls-glass-bottom) !important;
       left: 0 !important;
       display: flex !important;
       align-items: center !important;
@@ -1465,17 +1630,21 @@ function injectLayoutStyle() {
       display: none !important;
     }
 
+    /* 统一悬浮玻璃卡：包住原生控制栏（含进度行）与底部弹幕控制区。
+       高度由 JS 测量原生控制栏后写入 --bewly-widescreen-controls-glass-height。 */
     body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS} {
       box-sizing: border-box !important;
       position: absolute !important;
-      right: 0 !important;
-      bottom: 0 !important;
-      left: 0 !important;
-      width: 100% !important;
-      height: var(--bewly-widescreen-bottom-controls-height) !important;
+      right: var(--bewly-widescreen-controls-glass-inset) !important;
+      bottom: var(--bewly-widescreen-controls-glass-bottom) !important;
+      left: var(--bewly-widescreen-controls-glass-inset) !important;
+      width: auto !important;
+      height: var(--bewly-widescreen-controls-glass-height) !important;
       z-index: calc(var(--bew-z-popover) - 1) !important;
       background: var(--bewly-widescreen-danmaku-bar-bg) !important;
-      border-top: 1px solid var(--bew-border-color) !important;
+      border: 1px solid var(--bew-surface-border-color) !important;
+      border-radius: var(--bewly-widescreen-shell-radius) !important;
+      corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-edge-glow-1) !important;
       backdrop-filter: var(--bew-filter-glass-1) !important;
       -webkit-backdrop-filter: var(--bew-filter-glass-1) !important;
@@ -1485,6 +1654,7 @@ function injectLayoutStyle() {
       transition:
         opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
         transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
+        height var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease),
         background-color var(--bew-duration-normal, 200ms) var(--bew-ease-standard, ease);
       will-change: opacity, transform;
       pointer-events: none !important;
@@ -1774,22 +1944,48 @@ function injectLayoutStyle() {
       outline-offset: var(--bew-space-0-5, 2px);
     }
 
+    /* 弹幕输入条：全圆角胶囊，高于其他弹幕控制按钮（36）一个 space-2（44）
+       内部件 36px 同心嵌套（22 半径 - 4 内边距 = 18 半径） */
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar {
       display: flex !important;
-      align-items: stretch !important;
-      height: var(--bew-control-height, 36px) !important;
+      align-items: center !important;
+      height: var(--bewly-widescreen-inputbar-height, 44px) !important;
       min-width: 0 !important;
       flex: 1 1 auto !important;
+      gap: var(--bew-space-1, 4px) !important;
+      padding-inline: var(--bew-space-1, 4px) !important;
       color: var(--bew-text-1) !important;
       background: transparent !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
-      border-radius: var(--bew-interactive-radius) !important;
-      corner-shape: var(--bew-corner-shape);
+      border-radius: var(--bew-radius-full) !important;
+      corner-shape: var(--bew-corner-shape-round);
       overflow: visible !important;
       transition:
         border-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),
         box-shadow var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
+    }
+
+    /* 风格按钮（A）嵌入输入框左半圆；发送按钮全圆角嵌右缘 */
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar .bpx-player-dm-setting {
+      order: -1 !important;
+      margin: 0 !important;
+    }
+
+    /* 弹幕礼仪链接移除 */
+    ${DANMAKU_SURFACE_SELECTOR} :is(
+      .bpx-player-sending-bar,
+      .bilibili-player-video-sendbar,
+      .bilibili-player-video-inputbar
+    ) a {
+      display: none !important;
+    }
+
+    /* 控制栏收起时的底部细进度条：宽屏下永远禁用 */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} [class*="shadow-progress"],
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .befilter-progress-area {
+      display: none !important;
+      content: none !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar::before {
@@ -1879,8 +2075,10 @@ function injectLayoutStyle() {
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-input {
-      height: 100% !important;
-      padding: 0 var(--bew-space-3, 12px) !important;
+      height: var(--bew-control-height, 36px) !important;
+      padding: 0 var(--bew-space-2, 8px) !important;
+      background: transparent !important;
+      border: 0 !important;
       color: var(--bew-text-1) !important;
       font-family: var(--bew-font-family) !important;
       font-size: var(--bew-font-size-control, 13px) !important;
@@ -1898,14 +2096,15 @@ function injectLayoutStyle() {
       align-items: center !important;
       justify-content: center !important;
       min-width: var(--bew-space-12, 48px) !important;
-      height: 100% !important;
+      height: var(--bew-control-height, 36px) !important;
       padding: 0 var(--bew-space-3, 12px) !important;
       flex: 0 0 auto !important;
+      margin: 0 !important;
       color: var(--bew-on-theme-color) !important;
       background: var(--bew-theme-color) !important;
       border: 0 !important;
-      border-radius: 0 var(--bew-interactive-radius) var(--bew-interactive-radius) 0 !important;
-      corner-shape: inherit;
+      border-radius: var(--bew-radius-full) !important;
+      corner-shape: var(--bew-corner-shape-round);
       font-size: var(--bew-font-size-control, 13px) !important;
       font-weight: var(--bew-font-weight-semibold, 600) !important;
       line-height: var(--bew-line-height-control, 18px) !important;
@@ -2119,7 +2318,7 @@ function injectLayoutStyle() {
       background: transparent;
       color: var(--bewly-widescreen-text-primary);
       border: 1px solid var(--bew-surface-border-color);
-      border-radius: var(--bew-panel-radius);
+      border-radius: var(--bewly-widescreen-shell-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
       backdrop-filter: none;
@@ -2447,15 +2646,35 @@ function injectLayoutStyle() {
       white-space: normal !important;
     }
 
+    /* 声明内容行内布局：感叹号图标与文字同行，不再分列。原生 .video-argue-inner
+       亦为 flex 行内结构，克隆后统一为固定小图标 + 可换行文字 */
     #${ROOT_ID} .bewly-widescreen-title-notice .video-argue-inner,
     #${ROOT_ID} .bewly-widescreen-title-notice-content.is-fallback {
-      display: block !important;
+      display: flex !important;
+      align-items: center !important;
+      gap: var(--bew-space-1, 4px) !important;
       width: 100% !important;
       padding: var(--bew-space-2, 8px) var(--bew-space-3, 12px) !important;
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
       background: var(--bewly-widescreen-control-bg) !important;
       color: inherit !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-title-notice .video-argue-inner .remark-icon,
+    #${ROOT_ID} .bewly-widescreen-title-notice .video-argue-inner svg {
+      width: var(--bew-icon-size-sm, 16px) !important;
+      height: var(--bew-icon-size-sm, 16px) !important;
+      margin: 0 !important;
+      flex: 0 0 auto !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-title-notice .video-argue-inner .argue-text {
+      min-width: 0 !important;
+      flex: 1 1 auto !important;
+      overflow: visible !important;
+      white-space: normal !important;
+      text-overflow: clip !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-metadata-slot {
@@ -3376,6 +3595,7 @@ function injectLayoutStyle() {
         .bilibili-player-video-control,
         .squirtle-controller
       ),
+      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS},
       #${ROOT_ID} .bewly-widescreen-sidebar,
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-sidebar-toggle,
@@ -3463,11 +3683,30 @@ function clearAuxiliaryControlGeometry() {
   AUXILIARY_CONTROL_GEOMETRY_PROPERTIES.forEach(property => host?.style.removeProperty(property))
 }
 
+/* 悬浮玻璃卡高度 = 弹幕区高度 + 原生控制栏实际高度。
+   原生收起态由 CSS 属性选择器塌缩，无需在此处处理。 */
+function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
+  const glass = currentState.danmakuGlass
+  if (!glass?.isConnected)
+    return
+  const container = getNativePlayerContainer(currentState) ?? currentState.playerEl
+  const wrap = container?.querySelector<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
+  const wrapHeight = wrap?.isConnected ? Math.round(wrap.getBoundingClientRect().height) : 0
+  if (wrapHeight > 0) {
+    glass.style.setProperty(
+      '--bewly-widescreen-controls-glass-height',
+      `calc(var(--bewly-widescreen-bottom-controls-height) + var(--bewly-widescreen-controls-block-padding, 12px) + ${wrapHeight}px)`,
+    )
+  }
+  else {
+    glass.style.removeProperty('--bewly-widescreen-controls-glass-height')
+  }
+}
+
 function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
   const host = document.querySelector<HTMLElement>('#bewly')
   const viewerInfo = currentState.danmakuSemanticsSource?.querySelector<HTMLElement>('.bpx-player-video-info')
   const dockRect = (currentState.danmakuSourceHost ?? currentState.danmakuDock).getBoundingClientRect()
-  const rootRect = currentState.root.getBoundingClientRect()
   const viewerRect = viewerInfo?.getBoundingClientRect()
   if (!host || !viewerRect || dockRect.width <= 0 || dockRect.height <= 0) {
     clearAuxiliaryControlGeometry()
@@ -3478,7 +3717,17 @@ function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
   const gap = Number.parseFloat(rootStyle.getPropertyValue('--bew-space-2')) || 8
   const controlHeight = Number.parseFloat(rootStyle.getPropertyValue('--bew-control-height')) || 36
   const left = viewerRect.right + gap
-  const bottom = Math.max(window.innerHeight - rootRect.bottom + (dockRect.height - controlHeight) / 2, 0)
+  // 圆键贴底必须锚定不受隐藏 translate 影响的稳定几何：strip/glass 隐藏时用 transform 位移，
+  // 直接读 dockRect 会在收起与归位过渡中漂移，导致圆键先贴视口底再跳回正确高度
+  const glassBottom = Number.parseFloat(rootStyle.getPropertyValue('--bewly-widescreen-controls-glass-bottom')) || 8
+  const stableDockBottom = currentState.danmakuSourceHost?.isConnected && currentState.playerEl.isConnected
+    ? currentState.playerEl.getBoundingClientRect().bottom - glassBottom
+    : currentState.playerFrame.isConnected
+      ? currentState.playerFrame.getBoundingClientRect().bottom + dockRect.height
+      : dockRect.bottom
+  // 按卡片内容块间距贴底，与原生 36px 控制按钮同水平线
+  const blockPadding = Math.max((dockRect.height - controlHeight) / 2, 0)
+  const bottom = Math.max(window.innerHeight - stableDockBottom + blockPadding, 0)
   host.style.setProperty('--bewly-widescreen-aux-controls-left', `${left}px`)
   host.style.setProperty('--bewly-widescreen-aux-controls-bottom', `${bottom}px`)
 }
@@ -3825,7 +4074,6 @@ function syncNativePlayerControlVisibility(
     ),
     nativeControlsReady: !!playerContainer?.querySelector(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR),
     pointerInsidePlayer: currentState.playerPointerInside,
-    previousHidden: currentState.root.dataset.playerControlsHidden !== 'false',
     sidebarExpanded: isWidescreenSidebarExpanded(currentState),
   })
   currentState.root.dataset.playerControlsReady = String(ready)
@@ -3900,6 +4148,7 @@ function setupAspectObservers(currentState: BewlyWidescreenState) {
     updateAspectRatio(currentState)
     syncDescription(currentState)
     scheduleActionGeometrySync(currentState)
+    syncControlsGlassGeometry(currentState)
   }
 
   currentState.resizeObserver = new ResizeObserver(refreshMeasuredLayout)
@@ -4763,6 +5012,11 @@ function syncDanmakuInputSource(currentState: BewlyWidescreenState, force = fals
   )
   currentState.danmakuSettingsCleanup = setupDanmakuSettingsClickToggle(source)
   currentState.resizeObserver?.observe(host)
+  syncControlsGlassGeometry(currentState)
+  requestAnimationFrame(() => {
+    if (state === currentState)
+      syncControlsGlassGeometry(currentState)
+  })
   return true
 }
 
