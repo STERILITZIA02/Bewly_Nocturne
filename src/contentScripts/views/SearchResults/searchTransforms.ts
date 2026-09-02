@@ -160,7 +160,7 @@ export function convertVideoData(video: any): Video {
     aid: video.aid,
     cid: video.cid,
     threePointV2: [],
-    tag: tags.length ? tags : undefined,
+    searchableTags: tags.length ? tags : undefined,
     capsuleText: capsuleText || undefined,
     type: video.type === 'ketang' ? 'ketang' : undefined,
     url,

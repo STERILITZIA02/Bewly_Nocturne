@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import type { ComponentPublicInstance, CSSProperties } from 'vue'
-import { computed, nextTick, provide, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
@@ -154,6 +155,7 @@ const menuButtonLabel = computed(() => menuVideo.value
 const showVideoOptions = ref(false)
 const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
+const authorAvatarLinkRef = ref<HTMLAnchorElement | null>(null)
 const getDisclosureCacheKey = () => `${topBarStore.userInfo.mid || 'guest'}:${moment.id}`
 const disclosure = ref<MomentDisclosure>(getCachedMomentDisclosure(getDisclosureCacheKey()))
 const displayedDisclosure = ref<MomentDisclosure>(disclosure.value)
@@ -384,6 +386,24 @@ function handleCommentImagePreview(images: string[], index: number, trigger: HTM
 function getImagePreviewLabel(author: string, index: number) {
   return t('moment_card.preview_image', { author, index: index + 1 })
 }
+
+function requestNativeUserProfile(event: MouseEvent) {
+  const trigger = event.currentTarget
+  if (!(trigger instanceof HTMLAnchorElement))
+    return
+
+  trigger.dispatchEvent(new CustomEvent(BEWLY_NATIVE_USER_PROFILE_REQUEST, {
+    bubbles: true,
+    composed: true,
+  }))
+}
+
+onBeforeUnmount(() => {
+  authorAvatarLinkRef.value?.dispatchEvent(new CustomEvent(BEWLY_NATIVE_USER_PROFILE_RELEASE, {
+    bubbles: true,
+    composed: true,
+  }))
+})
 </script>
 
 <template>
@@ -413,7 +433,19 @@ function getImagePreviewLabel(author: string, index: number) {
     />
     <div class="moment-card__surface">
       <header class="moment-card__header">
-        <img :src="getAvatarThumbnailUrl(moment.author.face)" :alt="moment.author.name" class="moment-card__avatar" loading="lazy" decoding="async">
+        <a
+          ref="authorAvatarLinkRef"
+          class="moment-card__avatar-link"
+          :href="`https://space.bilibili.com/${moment.author.mid}`"
+          target="_blank"
+          rel="noopener noreferrer"
+          :data-user-profile-id="moment.author.mid || undefined"
+          data-user-profile-spmid-follow="dynamic.profile.click"
+          @click.stop
+          @mouseenter="requestNativeUserProfile"
+        >
+          <img :src="getAvatarThumbnailUrl(moment.author.face)" :alt="moment.author.name" class="moment-card__avatar" loading="lazy" decoding="async">
+        </a>
         <span class="moment-card__identity">
           <strong>{{ moment.author.name }}</strong>
           <small>{{ moment.time || t('moment_card.just_now') }}</small>
@@ -1421,8 +1453,19 @@ function getImagePreviewLabel(author: string, index: number) {
 }
 
 .moment-card__header .moment-card__avatar {
+  display: block;
   width: 36px;
   height: 36px;
+}
+
+.moment-card__avatar-link {
+  display: block;
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .moment-card__identity {

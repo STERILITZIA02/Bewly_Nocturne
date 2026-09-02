@@ -105,15 +105,12 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     width: var(--bew-dock-control-size);
     height: var(--bew-dock-control-size);
     border: 0;
-    background: var(--bew-fill-alt);
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+    background: transparent;
+    box-shadow: none;
 
     &:hover:not(:disabled) {
-      background: var(--bew-fill-2);
-      box-shadow:
-        var(--bew-shadow-edge-glow-1),
-        0 0 0 2px var(--bew-fill-2),
-        var(--bew-shadow-2);
+      background: transparent;
+      box-shadow: none;
     }
 
     svg {
@@ -142,7 +139,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   }
 
   &--no-glow:hover:not(:disabled) {
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+    box-shadow: none;
   }
 
   &:disabled,
@@ -152,15 +149,17 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 }
 
 :global(.dark) .page-mode-switcher--dock:hover:not(:disabled) {
-  background: var(--bew-fill-4);
-  box-shadow:
-    var(--bew-shadow-edge-glow-1),
-    0 0 0 2px var(--bew-fill-4),
-    var(--bew-shadow-2);
+  background: transparent;
+  box-shadow: none;
 }
 
 :global(.dark) .page-mode-switcher--dock.page-mode-switcher--no-glow:hover:not(:disabled) {
-  box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+  box-shadow: none;
+}
+
+.page-mode-switcher--dock:disabled,
+.page-mode-switcher--dock:disabled:hover {
+  box-shadow: none;
 }
 
 @media (min-width: breakpoints.$grid-lg) {

@@ -533,7 +533,7 @@ function transformWebVideo(item: VideoItem): VideoCardDisplayData {
       followed: !!item.is_followed,
       mid: item.owner?.mid || 0,
     },
-    tag: decodeHtmlEntities(item?.rcmd_reason?.content),
+    displayTags: [decodeHtmlEntities(item?.rcmd_reason?.content)].filter(Boolean),
     view: item.stat?.view || 0,
     danmaku: item.stat?.danmaku || 0,
     like: item.stat?.like,

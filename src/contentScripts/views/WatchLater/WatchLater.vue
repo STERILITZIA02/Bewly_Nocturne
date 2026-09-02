@@ -15,6 +15,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
 import { mergeWatchLaterItemsByAid } from '~/utils/watchLaterList'
@@ -42,6 +43,7 @@ const watchLaterLayoutMode = useLayoutEditSettingValue(
 const { gridClass: watchLaterGridClass, gridCssVars: watchLaterGridCssVars } = useGridLayout(() => 'adaptive')
 let requestGeneration = 0
 let loadedAccountId: number | null = null
+let watchLaterExtensionContextInvalidated = false
 
 function getCurrentAccountId(): number | null {
   const mid = Number(topBarStore.userInfo.mid)
@@ -51,6 +53,17 @@ function getCurrentAccountId(): number | null {
 function invalidateRequests(): number {
   isLoading.value = false
   return ++requestGeneration
+}
+
+function settleExtensionContextInvalidation(error: unknown): boolean {
+  if (!isExtensionContextInvalidatedError(error))
+    return false
+
+  watchLaterExtensionContextInvalidated = true
+  requestFailed.value = false
+  pendingAction.value = null
+  invalidateRequests()
+  return true
 }
 
 function isCurrentRequest(generation: number, accountId: number): boolean {
@@ -104,6 +117,9 @@ onBeforeUnmount(() => {
 })
 
 async function initData() {
+  if (watchLaterExtensionContextInvalidated)
+    return
+
   const generation = invalidateRequests()
   const accountId = getCurrentAccountId()
   isLoading.value = false
@@ -127,20 +143,20 @@ async function getData(): Promise<boolean> {
 }
 
 function retryWatchLaterRequest() {
-  if (isLoading.value)
+  if (watchLaterExtensionContextInvalidated || isLoading.value)
     return
   requestFailed.value = false
   void getData()
 }
 
 async function handleWatchLaterPageRefresh() {
-  if (isLoading.value || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || isLoading.value || pendingAction.value)
     return
   await initData()
 }
 
 async function handleWatchLaterReachBottom(): Promise<boolean> {
-  if (isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value)
     return false
 
   // Observer and geometry fallback signals share the request/loading guards.
@@ -158,7 +174,7 @@ function initPageAction() {
  * Get watch later list by page
  */
 async function getWatchLaterListByPage(generation: number, accountId: number): Promise<boolean> {
-  if (!isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value || requestFailed.value)
+  if (watchLaterExtensionContextInvalidated || !isCurrentRequest(generation, accountId) || isLoading.value || noMoreContent.value || requestFailed.value)
     return false
 
   requestFailed.value = false
@@ -218,6 +234,9 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
     }
   }
   catch (error) {
+    if (settleExtensionContextInvalidation(error))
+      return false
+
     if (isCurrentRequest(generation, accountId)) {
       requestFailed.value = true
       noMoreContent.value = false
@@ -234,7 +253,7 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
 
 async function deleteWatchLaterItem(aid: number): Promise<boolean> {
   const accountId = getCurrentAccountId()
-  if (!accountId || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || !accountId || pendingAction.value)
     return false
 
   const action = { accountId, aid }
@@ -257,7 +276,8 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
     return true
   }
   catch (error) {
-    console.error('[WatchLater] Failed to remove item:', error)
+    if (!settleExtensionContextInvalidation(error))
+      console.error('[WatchLater] Failed to remove item:', error)
     return false
   }
   finally {
@@ -267,6 +287,9 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
 }
 
 async function handleClearAllWatchLater() {
+  if (watchLaterExtensionContextInvalidated)
+    return
+
   const result = await showConfirmDialog(
     t('watch_later.clear_all_confirm'),
   )
@@ -290,7 +313,8 @@ async function handleClearAllWatchLater() {
       }
     }
     catch (error) {
-      console.error('[WatchLater] Failed to clear list:', error)
+      if (!settleExtensionContextInvalidation(error))
+        console.error('[WatchLater] Failed to clear list:', error)
     }
     finally {
       if (generation === requestGeneration)
@@ -300,6 +324,9 @@ async function handleClearAllWatchLater() {
 }
 
 async function handleRemoveWatchedVideos() {
+  if (watchLaterExtensionContextInvalidated)
+    return
+
   const result = await showConfirmDialog(
     t('watch_later.remove_watched_videos_confirm'),
   )
@@ -322,7 +349,8 @@ async function handleRemoveWatchedVideos() {
       }
     }
     catch (error) {
-      console.error('[WatchLater] Failed to remove viewed items:', error)
+      if (!settleExtensionContextInvalidation(error))
+        console.error('[WatchLater] Failed to remove viewed items:', error)
     }
     finally {
       if (generation === requestGeneration)

@@ -3,7 +3,7 @@ import { useEventListener } from '@vueuse/core'
 
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_IFRAME_DRAWER_HOST_CLASS, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
 import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
@@ -49,6 +49,7 @@ let focusFrame: number | null = null
 let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
 let iframeGeneration = 0
 let iframeEscapeHandledGeneration = 0
+let iframeDrawerHostClaimed = false
 const escapeArbitrationTimers = new Set<number>()
 const disposers: Array<() => void> = []
 
@@ -184,6 +185,39 @@ function clearEscapeArbitrationTimers() {
   escapeArbitrationTimers.clear()
 }
 
+function dispatchIframeDrawerHostChange(active: boolean) {
+  window.dispatchEvent(new CustomEvent(BEWLY_IFRAME_DRAWER_HOST_CHANGE, {
+    detail: { active },
+  }))
+}
+
+function claimIframeDrawerHost() {
+  document.documentElement.classList.add(BEWLY_IFRAME_DRAWER_HOST_CLASS)
+  iframeDrawerHostClaimed = true
+  dispatchIframeDrawerHostChange(true)
+}
+
+function restoreOriginUrl() {
+  if (originUrl.value && window.location.href !== originUrl.value)
+    history.replaceState(null, '', originUrl.value)
+}
+
+function releaseIframeDrawerHost() {
+  if (!iframeDrawerHostClaimed)
+    return
+  try {
+    restoreOriginUrl()
+  }
+  catch (error) {
+    reportRuntimeFailure('Failed to restore iframe drawer host URL', error)
+  }
+  finally {
+    document.documentElement.classList.remove(BEWLY_IFRAME_DRAWER_HOST_CLASS)
+    iframeDrawerHostClaimed = false
+    dispatchIframeDrawerHostChange(false)
+  }
+}
+
 function hasDrawerEscapePriorityState() {
   return hasIframeEscapePriorityState({
     bewlyWidescreenEngaged: isBewlyWidescreenEngaged(),
@@ -265,7 +299,14 @@ async function remountIframe(url: string) {
 
 onMounted(() => {
   originUrl.value = window.location.href
-  history.pushState(null, '', props.url)
+  claimIframeDrawerHost()
+  try {
+    history.pushState(null, '', props.url)
+  }
+  catch (error) {
+    releaseIframeDrawerHost()
+    throw error
+  }
   show.value = true
   headerShow.value = true
   currentUrl.value = props.url
@@ -295,7 +336,7 @@ onBeforeUnmount(async () => {
 })
 
 onUnmounted(() => {
-  history.replaceState(null, '', originUrl.value)
+  releaseIframeDrawerHost()
 })
 
 function updateCurrentUrl(e: any) {
@@ -340,6 +381,7 @@ async function handleClose() {
   headerShow.value = false
   setActiveDrawer(DrawerType.None) // 清除活跃抽屉状态
   delayCloseTimer.value = setTimeout(() => {
+    releaseIframeDrawerHost()
     emit('close')
   }, DRAWER_TRANSITION_MS)
 }
@@ -385,8 +427,13 @@ function stopIframeMedia(iframe: HTMLIFrameElement | null) {
   try {
     iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
       media.pause()
+      media.srcObject = null
       media.removeAttribute('src')
-      media.querySelectorAll('source').forEach(source => source.remove())
+      media.removeAttribute('srcset')
+      media.querySelectorAll('source').forEach((source) => {
+        source.removeAttribute('src')
+        source.removeAttribute('srcset')
+      })
       media.load()
     })
   }

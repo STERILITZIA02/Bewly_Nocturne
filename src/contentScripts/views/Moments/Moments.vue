@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -38,6 +39,7 @@ import { getCSRF } from '~/utils/main'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
+import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
 import { normalizeMomentRemoteUrl } from '~/utils/momentUrl'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -176,6 +178,8 @@ const selectedMoment = ref<DisplayMoment | null>(null)
 const detailFrameUrl = ref('')
 const detailFrameLoaded = ref(false)
 const detailIframeRef = ref<HTMLIFrameElement | null>(null)
+const detailIframeGenerations = new WeakMap<HTMLIFrameElement, number>()
+let detailFrameGeneration = 0
 const detailImageViewerRef = ref<HTMLElement | null>(null)
 const detailImageViewerOpen = ref(false)
 const detailImageViewerUrls = ref<string[]>([])
@@ -236,6 +240,7 @@ const MIN_SINGLE_IMAGE_RATIO = 1 / 2
 let gridObserver: ResizeObserver | undefined
 let liveFlvPlayer: any = null
 let liveHlsPlayer: any = null
+let activePreviewVideo: { id: string, element: HTMLVideoElement } | null = null
 let livePreviewGeneration = 0
 const isLoading = ref(false)
 const isInitialLoading = ref(true)
@@ -254,10 +259,11 @@ const WANTED_SCAN_LIMIT = 100
 /** 开启过滤时，每次初始加载、刷新或手动加载最多请求的原始动态页数。 */
 const FILTERED_MAX_REQUEST_PAGES = 2
 const MOMENTS_CACHE_MAX_ITEMS = 1000
+const MOMENTS_MEMORY_MAX_ITEMS = MOMENTS_CACHE_MAX_ITEMS
 const MOMENTS_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000
 /** 虚拟瀑布流需要在全局哨兵进入视口前主动预取，避免高度修正后漏掉相交事件 */
 const LOAD_MORE_AHEAD_PX = 640
-let scrollListenerAttached = false
+let attachedScrollViewport: HTMLElement | null = null
 let cardMeasureObserver: ResizeObserver | undefined
 let visibilityObserver: IntersectionObserver | undefined
 /** 最近滚动时间，用于避免滚动中重排导致抖动 */
@@ -801,6 +807,13 @@ function clearDetailFocusRetry() {
   }
 }
 
+function bindDetailIframe(element: Element | ComponentPublicInstance | null) {
+  if (!(element instanceof HTMLIFrameElement))
+    return
+  detailIframeRef.value = element
+  detailIframeGenerations.set(element, detailFrameGeneration)
+}
+
 function getDetailActiveElement(iframe: HTMLIFrameElement | null = detailIframeRef.value) {
   const root = iframe?.getRootNode() ?? mainAppRef.value?.getRootNode()
   if (root instanceof Document || root instanceof ShadowRoot)
@@ -1167,6 +1180,7 @@ function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
 
   clearDetailFocusRetry()
   detailFocusOrigin = getDetailActiveElement()
+  detailFrameGeneration += 1
   selectedMoment.value = moment
   detailFrameUrl.value = resolveDetailUrl(moment)
   detailFrameLoaded.value = false
@@ -1174,7 +1188,6 @@ function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
   hoveredMediaId.value = ''
   cleanupLivePreviewPlayer()
   clearDetailLoadTimer()
-  destroyDetailIframe()
   // 视频/直播、转发：load 后即可；图文等待布局 ready
   // 兜底避免遮罩卡住
   const fallbackMs = isPlayerMoment(moment)
@@ -1182,15 +1195,25 @@ function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
     : moment.isForward
       ? 1200
       : 4500
+  const generation = detailFrameGeneration
+  const frameUrl = detailFrameUrl.value
   detailLoadTimer = setTimeout(() => {
-    detailFrameLoaded.value = true
+    if (generation === detailFrameGeneration && frameUrl === detailFrameUrl.value && selectedMoment.value)
+      detailFrameLoaded.value = true
   }, fallbackMs)
 }
 
 function handleDetailIframeLoad(event: Event) {
   const iframe = event.target as HTMLIFrameElement | null
-  if (!iframe || iframe !== detailIframeRef.value || !selectedMoment.value || !detailFrameUrl.value)
+  const frameUrl = detailFrameUrl.value
+  if (!iframe
+    || iframe !== detailIframeRef.value
+    || !selectedMoment.value
+    || !frameUrl
+    || iframe.getAttribute('src') !== frameUrl
+    || detailIframeGenerations.get(iframe) !== detailFrameGeneration) {
     return
+  }
 
   clearDetailLoadTimer()
   // Ready identity is established before viewport/focus messages are sent.
@@ -1226,15 +1249,20 @@ function handleDetailIframeLoad(event: Event) {
   }
 
   // 图文/专栏：再给布局一点时间，最终由 BEWLY_OPUS_LAYOUT_READY 解除
+  const generation = detailFrameGeneration
   detailLoadTimer = setTimeout(() => {
-    detailFrameLoaded.value = true
+    if (generation === detailFrameGeneration && frameUrl === detailFrameUrl.value && iframe === detailIframeRef.value)
+      detailFrameLoaded.value = true
   }, 2800)
 }
 
 /** 关闭详情时销毁 iframe 文档与媒体，避免内存堆积 */
 function destroyDetailIframe() {
   clearDetailFocusRetry()
+  clearDetailLoadTimer()
   const iframe = detailIframeRef.value
+  detailIframeRef.value = null
+  detailFrameGeneration += 1
   if (!iframe)
     return
 
@@ -1252,13 +1280,8 @@ function destroyDetailIframe() {
     const doc = win?.document
     if (doc) {
       doc.querySelectorAll('video, audio').forEach((el) => {
-        const media = el as HTMLMediaElement
         try {
-          media.pause()
-          media.removeAttribute('src')
-          while (media.firstChild)
-            media.removeChild(media.firstChild)
-          media.load()
+          releaseMediaElementSources(el as HTMLMediaElement)
         }
         catch {
           // ignore
@@ -1292,8 +1315,6 @@ function destroyDetailIframe() {
   catch {
     // ignore
   }
-
-  detailIframeRef.value = null
 }
 
 function closeMomentDetail() {
@@ -2196,6 +2217,8 @@ function appendMoments(items: DisplayMoment[]) {
   const columnHeights = momentColumns.value.map(column => getColumnStackHeight(column))
 
   items.forEach((item) => {
+    if (moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS)
+      return
     if (existingIds.has(item.id))
       return
 
@@ -2338,6 +2361,7 @@ function maybeLoadMoreNearBottom() {
     || isInitialLoading.value
     || isLoading.value
     || noMoreContent.value
+    || moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS
     || !moments.value.length
     || requiresManualMomentPaging()
   ) {
@@ -2489,6 +2513,10 @@ function bindCardEl(el: Element | null, moment: DisplayMoment) {
       hoveredMediaId.value = ''
       cleanupLivePreviewPlayer()
     }
+    else if (activePreviewVideo?.id === moment.id) {
+      releasePreviewVideoElement(activePreviewVideo.element)
+      activePreviewVideo = null
+    }
     if (previewUrls[moment.id])
       delete previewUrls[moment.id]
     return
@@ -2557,8 +2585,13 @@ function setupVirtualObservers() {
         visibleMomentIds.delete(id)
 
       // 离开视口时释放该卡预览资源
-      if (!entry.isIntersecting && hoveredMediaId.value !== id && previewUrls[id])
+      if (!entry.isIntersecting && hoveredMediaId.value !== id && previewUrls[id]) {
+        if (activePreviewVideo?.id === id) {
+          releasePreviewVideoElement(activePreviewVideo.element)
+          activePreviewVideo = null
+        }
         delete previewUrls[id]
+      }
     })
     prunePreviewCache()
   }, {
@@ -2581,17 +2614,16 @@ function handleViewportScroll() {
 
 function attachViewportScroll() {
   const viewport = scrollViewportRef.value
-  if (!viewport || scrollListenerAttached)
+  if (!viewport || attachedScrollViewport === viewport)
     return
+  detachViewportScroll()
   viewport.addEventListener('scroll', handleViewportScroll, { passive: true })
-  scrollListenerAttached = true
+  attachedScrollViewport = viewport
 }
 
 function detachViewportScroll() {
-  const viewport = scrollViewportRef.value
-  if (viewport && scrollListenerAttached)
-    viewport.removeEventListener('scroll', handleViewportScroll)
-  scrollListenerAttached = false
+  attachedScrollViewport?.removeEventListener('scroll', handleViewportScroll)
+  attachedScrollViewport = null
 }
 
 function handleCoverLoad(event: Event, momentId: string) {
@@ -2614,9 +2646,35 @@ function handleCoverLoad(event: Event, momentId: string) {
   }
 }
 
-function cleanupLivePreviewPlayer(invalidate = true) {
-  if (invalidate)
-    livePreviewGeneration++
+function releaseMediaElementSources(media: HTMLMediaElement) {
+  if (media instanceof HTMLVideoElement) {
+    releasePreviewVideoElement(media)
+    return
+  }
+  media.pause()
+  media.srcObject = null
+  media.removeAttribute('src')
+  media.removeAttribute('srcset')
+  media.querySelectorAll('source').forEach((source) => {
+    source.removeAttribute('src')
+    source.removeAttribute('srcset')
+  })
+  media.load()
+}
+
+function releasePreviewVideoElement(video: HTMLVideoElement) {
+  video.pause()
+  video.srcObject = null
+  video.removeAttribute('src')
+  video.removeAttribute('srcset')
+  video.querySelectorAll('source').forEach((source) => {
+    source.removeAttribute('src')
+    source.removeAttribute('srcset')
+  })
+  video.load()
+}
+
+function cleanupLivePreviewTransports() {
   if (liveHlsPlayer) {
     liveHlsPlayer.destroy()
     liveHlsPlayer = null
@@ -2635,6 +2693,16 @@ function cleanupLivePreviewPlayer(invalidate = true) {
   }
 }
 
+function cleanupLivePreviewPlayer(invalidate = true) {
+  if (invalidate)
+    livePreviewGeneration++
+  cleanupLivePreviewTransports()
+  if (activePreviewVideo) {
+    releasePreviewVideoElement(activePreviewVideo.element)
+    activePreviewVideo = null
+  }
+}
+
 function isLivePreviewCurrent(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
   return generation === livePreviewGeneration
     && hoveredMediaId.value === momentId
@@ -2645,18 +2713,17 @@ function isLivePreviewCurrent(generation: number, momentId: string, url: string,
 function failLivePreview(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
   if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
     return
-  cleanupLivePreviewPlayer(false)
-  videoEl.pause()
-  videoEl.removeAttribute('src')
-  videoEl.load()
+  cleanupLivePreviewTransports()
+  releasePreviewVideoElement(videoEl)
+  if (activePreviewVideo?.element === videoEl)
+    activePreviewVideo = null
 }
 
 async function setupStreamPreview(url: string, videoEl: HTMLVideoElement, momentId: string, generation: number) {
   if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
     return
-  cleanupLivePreviewPlayer(false)
-  videoEl.removeAttribute('src')
-  videoEl.load()
+  cleanupLivePreviewTransports()
+  releasePreviewVideoElement(videoEl)
 
   if (url.includes('.flv')) {
     try {
@@ -2795,6 +2862,8 @@ async function handleMediaEnter(moment: DisplayMoment) {
   if (!isMomentPreviewEnabled(moment))
     return
 
+  if (activePreviewVideo && activePreviewVideo.id !== moment.id)
+    cleanupLivePreviewPlayer()
   hoveredMediaId.value = moment.id
   const generation = ++livePreviewGeneration
 
@@ -2858,6 +2927,10 @@ function bindPreviewVideo(el: Element | null, moment: DisplayMoment) {
   const url = previewUrls[moment.id]
   if (!url || hoveredMediaId.value !== moment.id)
     return
+
+  if (activePreviewVideo && activePreviewVideo.element !== el)
+    cleanupLivePreviewPlayer(false)
+  activePreviewVideo = { id: moment.id, element: el }
 
   if (moment.isLive || url.includes('.flv') || url.includes('m3u8')) {
     const generation = livePreviewGeneration
@@ -3142,6 +3215,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
     return
   ensureMomentsCacheAccount(loadedAccountId)
+  if (!reset && moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS)
+    return
 
   // “想看”或任意类型过滤开启时只允许按钮触发后续批次。
   if (!reset && requiresManualMomentPaging() && !manualPaging)
@@ -3161,6 +3236,32 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   const requestHostMid = selectedHostMid.value
   const requestOffset = offset.value
   const requestUpdateBaseline = updateBaseline.value
+  const hostFollowStatePromise = reset && requestHostMid
+    ? api.user.getRelations({ fids: requestHostMid })
+        .then(response => resolveMomentHostFollowState(response, requestHostMid))
+        .catch((error) => {
+          if (isExtensionContextInvalidatedError(error))
+            throw error
+          return 'unknown' as const
+        })
+    : null
+  let hostFollowStateChecked = false
+
+  async function keepSelectedHostFilter() {
+    if (!hostFollowStatePromise || hostFollowStateChecked)
+      return true
+
+    hostFollowStateChecked = true
+    const followState = await hostFollowStatePromise
+    if (followState !== 'unfollowed')
+      return true
+    if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+      return false
+
+    handleUpFilterChange('')
+    return false
+  }
+
   let filteredRequestPages = 0
   let pageApplied = false
   let preservedPaginationScrollTop: number | null = null
@@ -3209,6 +3310,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
             features: MOMENT_FEED_FEATURES,
             web_location: '333.1365',
           }) as MomentResult
+          if (!await keepSelectedHostFilter())
+            return
           if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
             return
 
@@ -3238,6 +3341,8 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
           features: MOMENT_FEED_FEATURES,
           web_location: '333.1365',
         }) as MomentResult
+        if (!await keepSelectedHostFilter())
+          return
         if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
           return
         rawItems = response.data?.items || []
@@ -3538,6 +3643,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   if (
     !pageApplied
     || noMoreContent.value
+    || moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS
     || requiresManualMomentPaging()
     || autoFillDepth >= MAX_POST_LOAD_AUTOFILL_PAGES
     || !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
@@ -3679,7 +3785,7 @@ function handleDetailFrameMessage(event: MessageEvent) {
 }
 
 function handleMomentsReachBottom() {
-  if (requiresManualMomentPaging() || isLoading.value || noMoreContent.value)
+  if (requiresManualMomentPaging() || isLoading.value || noMoreContent.value || moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS)
     return false
   void loadMoments()
   return true
@@ -4370,7 +4476,7 @@ watch(
           {{ selectedMoment.isLive ? t('moments.opening_live') : selectedMoment.isVideo ? t('moments.opening_video') : selectedMoment.isForward ? t('moments.opening_forward') : t('moments.loading_detail') }}
         </div>
         <iframe
-          ref="detailIframeRef"
+          :ref="bindDetailIframe"
           :key="detailFrameUrl"
           class="moment-detail-frame__iframe"
           :src="detailFrameUrl"

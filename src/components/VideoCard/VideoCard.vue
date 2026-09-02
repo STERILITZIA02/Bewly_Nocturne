@@ -12,6 +12,7 @@ import { recordVideoVisit } from '~/utils/videoVisitHistory'
 import VideoCardCover from './components/VideoCardCover.vue'
 import VideoCardInfo from './components/VideoCardInfo.vue'
 import { useVideoCardLogic } from './composables/useVideoCardLogic'
+import { normalizeVideoCardTags } from './tagPolicy'
 import type { Video } from './types'
 import VideoCardContextMenu from './VideoCardContextMenu/VideoCardContextMenu.vue'
 
@@ -179,12 +180,7 @@ const primaryTags = computed(() => {
   const video = props.video
   if (!video)
     return []
-  const { tag } = video
-  if (!tag)
-    return []
-  if (Array.isArray(tag))
-    return tag.filter(Boolean)
-  return [tag]
+  return normalizeVideoCardTags(video).map(tag => tag.text)
 })
 
 // Highlight tags calculation - 使用查找表优化性能
@@ -363,7 +359,7 @@ provide('getVideoType', () => props.type!)
     >
       <component
         :is="coverSkeleton ? 'div' : 'ALink'"
-        :style="{ display: horizontal ? 'flex' : 'block', gap: horizontal ? '1.5rem' : '0' }"
+        :style="{ display: horizontal ? 'flex' : 'block', gap: horizontal ? 'var(--bew-space-6)' : '0' }"
         v-bind="coverSkeleton ? {} : {
           href: logic.videoUrl.value,
           type: 'videoCard',
@@ -428,6 +424,11 @@ provide('getVideoType', () => props.type!)
           :highlight-tags="highlightTags"
           :hide-author="hideAuthor"
           @more-btn-click="logic.handleMoreBtnClick"
+        />
+        <div
+          v-else-if="horizontal"
+          class="horizontal-card-info"
+          aria-hidden="true"
         />
       </component>
     </div>

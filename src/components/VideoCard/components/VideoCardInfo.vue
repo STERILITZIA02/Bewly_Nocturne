@@ -5,6 +5,7 @@ import { settings } from '~/logic'
 import { calcTimeSince, numFormatter } from '~/utils/dataFormatter'
 
 import VideoWatchedTag from '../../VideoWatchedTag.vue'
+import { normalizeVideoCardTags, selectVisibleVideoCardTags } from '../tagPolicy'
 import type { Video } from '../types'
 import { getTagSearchUrl } from '../utils'
 import VideoCardAuthorAvatar from '../VideoCardAuthor/components/VideoCardAuthorAvatar.vue'
@@ -38,25 +39,16 @@ defineExpose({
   moreBtnRef,
 })
 
-const MAX_LEADING_TAG_COUNT = 2
-
 // 将卡片内容开关集中到单个响应式计算，避免每张卡片为同一组设置创建大量 computed。
 const content = computed(() => {
   const video = props.video
   const currentSettings = settings.value
-  const rawTag = video?.tag
-  const primaryTags = !rawTag
-    ? []
-    : Array.isArray(rawTag)
-      ? rawTag.filter(Boolean)
-      : [rawTag]
-  const visiblePrimaryTags = currentSettings.showVideoCardVideoTag
-    ? primaryTags.slice(0, MAX_LEADING_TAG_COUNT)
-    : []
-  const remainingHighlightCount = MAX_LEADING_TAG_COUNT - visiblePrimaryTags.length
-  const visibleHighlightTags = currentSettings.showVideoCardRecommendTag && remainingHighlightCount > 0
-    ? props.highlightTags.slice(0, remainingHighlightCount)
-    : []
+  const visibleTags = selectVisibleVideoCardTags(
+    normalizeVideoCardTags(video ?? {}),
+    props.highlightTags,
+    currentSettings.showVideoCardVideoTag,
+    currentSettings.showVideoCardRecommendTag,
+  )
   const authorAvatarEnabled = !props.hideAuthor && currentSettings.showVideoCardAuthorAvatar
   const authorNameEnabled = !props.hideAuthor && currentSettings.showVideoCardAuthorName
   const showAuthorAvatar = authorAvatarEnabled && Boolean(video?.author)
@@ -74,8 +66,8 @@ const content = computed(() => {
     || Boolean(video?.type)
   const statsPlaceholderEnabled = currentSettings.showVideoCardViewCount
     || currentSettings.showVideoCardDanmakuCount
-  const hasVisibleMeta = visiblePrimaryTags.length > 0
-    || visibleHighlightTags.length > 0
+  const hasVisibleMeta = visibleTags.leading.length > 0
+    || visibleTags.highlights.length > 0
     || showPublishTime
     || showVideoType
 
@@ -94,8 +86,8 @@ const content = computed(() => {
     showVideoType,
     showWatchedBadge: currentSettings.showVideoWatchedBadge && !video?.roomid,
     statsPlaceholderEnabled,
-    visibleHighlightTags,
-    visiblePrimaryTags,
+    visibleHighlightTags: visibleTags.highlights,
+    visibleLeadingTags: visibleTags.leading,
   }
 })
 </script>
@@ -311,26 +303,30 @@ const content = computed(() => {
           flex="~ items-center gap-2 wrap"
           :class="metaFontSizeClass"
         >
-          <a
-            v-for="primaryTag in content.visiblePrimaryTags"
-            :key="`primary-${primaryTag}`"
+          <component
+            :is="tag.searchable ? 'a' : 'span'"
+            v-for="tag in content.visibleLeadingTags"
+            :key="`primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
             class="video-card-meta__chip"
+            :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
             un-text="$bew-theme-foreground"
             p="x-2"
             lh-6
             rounded="$bew-radius"
-            bg="$bew-theme-color-20 hover:$bew-theme-color-30"
-            :href="getTagSearchUrl(primaryTag)"
-            target="_blank"
-            @click.stop=""
+            bg="$bew-theme-color-20"
+            :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
+            :target="tag.searchable ? '_blank' : undefined"
+            :title="tag.text"
+            @click="tag.searchable ? $event.stopPropagation() : undefined"
           >
-            {{ primaryTag }}
-          </a>
+            {{ tag.text }}
+          </component>
 
           <span
             v-for="extraTag in content.visibleHighlightTags"
             :key="`highlight-${extraTag}`"
             class="video-card-meta__chip"
+            :title="extraTag"
             text="$bew-theme-foreground"
             p="x-2"
             lh-6
@@ -392,26 +388,30 @@ const content = computed(() => {
               flex="~ items-center gap-2 wrap"
               :class="metaFontSizeClass"
             >
-              <a
-                v-for="primaryTag in content.visiblePrimaryTags"
-                :key="`primary-${primaryTag}`"
+              <component
+                :is="tag.searchable ? 'a' : 'span'"
+                v-for="tag in content.visibleLeadingTags"
+                :key="`primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
                 class="video-card-meta__chip"
+                :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
                 un-text="$bew-theme-foreground"
                 p="x-2"
                 lh-6
                 rounded="$bew-radius"
-                bg="$bew-theme-color-20 hover:$bew-theme-color-30"
-                :href="getTagSearchUrl(primaryTag)"
-                target="_blank"
-                @click.stop=""
+                bg="$bew-theme-color-20"
+                :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
+                :target="tag.searchable ? '_blank' : undefined"
+                :title="tag.text"
+                @click="tag.searchable ? $event.stopPropagation() : undefined"
               >
-                {{ primaryTag }}
-              </a>
+                {{ tag.text }}
+              </component>
 
               <span
                 v-for="extraTag in content.visibleHighlightTags"
                 :key="`highlight-${extraTag}`"
                 class="video-card-meta__chip"
+                :title="extraTag"
                 text="$bew-theme-foreground"
                 p="x-2"
                 lh-6
@@ -456,19 +456,25 @@ const content = computed(() => {
             :class="metaFontSizeClass"
           >
             <!-- Tag -->
-            <a
-              v-for="primaryTag in content.visiblePrimaryTags"
-              :key="`legacy-primary-${primaryTag}`"
-              un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20 hover:$bew-theme-color-30"
-              :href="getTagSearchUrl(primaryTag)"
-              target="_blank"
-              @click.stop=""
+            <component
+              :is="tag.searchable ? 'a' : 'span'"
+              v-for="tag in content.visibleLeadingTags"
+              :key="`legacy-primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
+              class="video-card-meta__chip"
+              :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
+              un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20"
+              :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
+              :target="tag.searchable ? '_blank' : undefined"
+              :title="tag.text"
+              @click="tag.searchable ? $event.stopPropagation() : undefined"
             >
-              {{ primaryTag }}
-            </a>
+              {{ tag.text }}
+            </component>
             <span
               v-for="extraTag in content.visibleHighlightTags"
               :key="`highlight-${extraTag}`"
+              class="video-card-meta__chip"
+              :title="extraTag"
               text="$bew-theme-foreground"
               lh-6
               p="x-2"
@@ -547,19 +553,25 @@ const content = computed(() => {
               :class="metaFontSizeClass"
             >
               <!-- Tag -->
-              <a
-                v-for="primaryTag in content.visiblePrimaryTags"
-                :key="`legacy-primary-${primaryTag}`"
-                un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20 hover:$bew-theme-color-30"
-                :href="getTagSearchUrl(primaryTag)"
-                target="_blank"
-                @click.stop=""
+              <component
+                :is="tag.searchable ? 'a' : 'span'"
+                v-for="tag in content.visibleLeadingTags"
+                :key="`legacy-primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
+                class="video-card-meta__chip"
+                :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
+                un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20"
+                :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
+                :target="tag.searchable ? '_blank' : undefined"
+                :title="tag.text"
+                @click="tag.searchable ? $event.stopPropagation() : undefined"
               >
-                {{ primaryTag }}
-              </a>
+                {{ tag.text }}
+              </component>
               <span
                 v-for="extraTag in content.visibleHighlightTags"
                 :key="`highlight-${extraTag}`"
+                class="video-card-meta__chip"
+                :title="extraTag"
                 text="$bew-theme-foreground"
                 lh-6
                 p="x-2"
@@ -649,6 +661,10 @@ const content = computed(() => {
 .video-card-meta__chip {
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
+}
+
+.video-card-meta__chip--searchable:hover {
+  background: var(--bew-theme-color-30);
 }
 
 .video-card-meta__chip {

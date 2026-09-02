@@ -972,7 +972,7 @@ function mapLiveItemToVideo(liveItem: FollowingLiveItem): Video {
       mid: liveItem.uid,
     },
     viewStr: liveItem.text_small,
-    tag: decodeHtmlEntities(liveItem.area_name_v2),
+    displayTags: [decodeHtmlEntities(liveItem.area_name_v2)].filter(Boolean),
     roomid: liveItem.roomid,
     liveStatus: liveItem.live_status,
     threePointV2: [],
@@ -1031,7 +1031,7 @@ function mapMomentItemToVideo(item?: MomentItem, authors?: Author[]): Video | un
     publishedTimestamp: item.modules?.module_author?.pub_ts,
     bvid: archive.bvid,
     badge,
-    tag: isCollaboration ? '联合投稿' : undefined,
+    displayTags: isCollaboration ? ['联合投稿'] : undefined,
     threePointV2: [],
   }
 }
@@ -1230,7 +1230,7 @@ defineExpose({ initData })
             text="sm $bew-text-1"
             outline-none
             transition="border-color duration-300, background-color duration-300"
-            focus:border="$bew-theme-color"
+            focus:border="$bew-theme-focus-ring"
             focus:bg="$bew-fill-2"
             placeholder:text="$bew-text-3"
           >

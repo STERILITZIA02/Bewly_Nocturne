@@ -1,5 +1,28 @@
 export type CommentReplyPaginationMode = 'loadMore' | 'pagination'
 
+export interface CommentReplyInteractionState {
+  action?: number
+  like?: number
+}
+
+export function applyCommentReplyInteractionOverrides<T extends object>(
+  list: T[],
+  interactionByRpid: ReadonlyMap<string, CommentReplyInteractionState>,
+  getRpid: (reply: T) => string | null | undefined,
+): T[] {
+  list.forEach((reply) => {
+    const rpid = getRpid(reply)
+    const interaction = rpid ? interactionByRpid.get(rpid) : undefined
+    if (!interaction)
+      return
+    if (interaction.action !== undefined)
+      Object.assign(reply, { action: interaction.action })
+    if (interaction.like !== undefined)
+      Object.assign(reply, { like: interaction.like })
+  })
+  return list
+}
+
 interface PaginationLabels {
   expandAll: string
   expandingAll: string
@@ -37,6 +60,7 @@ interface PaginationState {
   expandAllPromise?: Promise<void>
   identity: string
   initialList: any[]
+  interactionByRpid: Map<string, CommentReplyInteractionState>
   loading?: Promise<unknown>
   mergedList?: any[]
   collapsedList?: any[]
@@ -233,6 +257,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     state.loading = undefined
     state.pending = undefined
     state.pages.clear()
+    state.interactionByRpid.clear()
     states.delete(renderer)
     removeExpandAllButton(renderer)
     renderer.requestUpdate?.()
@@ -290,6 +315,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       expandAllLoading: false,
       identity,
       initialList: Array.isArray(renderer.list) ? renderer.list.slice() : [],
+      interactionByRpid: new Map(),
       pages: new Map(),
     }
     states.set(renderer, state)
@@ -441,9 +467,41 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
   }
 
   function mergePages(state: PaginationState): any[] {
-    return mergeLists(...[...state.pages.entries()]
+    const merged = mergeLists(...[...state.pages.entries()]
       .sort(([left], [right]) => left - right)
       .map(([, replies]) => replies))
+    return applyCommentReplyInteractionOverrides(merged, state.interactionByRpid, adapter.getRpid)
+  }
+
+  function applyInteractionOverrides(state: PaginationState, list: any[] | undefined) {
+    if (list)
+      applyCommentReplyInteractionOverrides(list, state.interactionByRpid, adapter.getRpid)
+  }
+
+  function recordInteraction(
+    renderer: any,
+    rpid: string,
+    interaction: CommentReplyInteractionState,
+  ) {
+    const state = states.get(renderer)
+    if (!state || !rpid)
+      return
+
+    const nextInteraction: CommentReplyInteractionState = {
+      ...(Number.isFinite(interaction.action) ? { action: interaction.action } : {}),
+      ...(Number.isFinite(interaction.like) ? { like: interaction.like } : {}),
+    }
+    if (nextInteraction.action === undefined && nextInteraction.like === undefined)
+      return
+
+    state.interactionByRpid.set(rpid, nextInteraction)
+    applyInteractionOverrides(state, renderer.list)
+    applyInteractionOverrides(state, state.initialList)
+    applyInteractionOverrides(state, state.mergedList)
+    applyInteractionOverrides(state, state.collapsedList)
+    applyInteractionOverrides(state, state.pending?.beforeList)
+    state.pages.forEach(replies => applyInteractionOverrides(state, replies))
+    renderer.requestUpdate?.()
   }
 
   function hasLoadedEveryPage(state: PaginationState, totalPage: number) {
@@ -570,6 +628,8 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
                 .filter((reply: unknown) => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
               const loadedList = this.list
                 .filter((reply: unknown) => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
+              applyInteractionOverrides(state, retainedBeforeList)
+              applyInteractionOverrides(state, loadedList)
               const newPage = getNewPage(retainedBeforeList, loadedList)
               state.pages.forEach((replies, page) => {
                 state.pages.set(page, replies.filter(reply => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? '')))
@@ -630,7 +690,9 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
 
         const currentPage = Number(this.currentPage) || 1
         if (!state.pages.has(currentPage) && Array.isArray(this.list) && this.list !== state.mergedList) {
-          state.pages.set(currentPage, this.list.slice())
+          const currentList = this.list.slice()
+          applyInteractionOverrides(state, currentList)
+          state.pages.set(currentPage, currentList)
           state.currentPage = currentPage
         }
         return Reflect.apply(originalChangePage, this, args)
@@ -715,6 +777,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     },
     invalidateLoading,
     patchPrototype,
+    recordInteraction,
     suspendForNativeCollapse,
     sync,
   }

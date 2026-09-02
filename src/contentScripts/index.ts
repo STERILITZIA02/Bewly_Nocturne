@@ -8,7 +8,7 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { settings, settingsInitializationState, settingsReady } from '~/logic'
 import { setupApp } from '~/logic/common-setup'
@@ -25,6 +25,7 @@ import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
+import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { runWhenIdle } from '~/utils/lazyLoad'
@@ -57,9 +58,11 @@ import App from './views/App.vue'
 
 const CONTENT_SCRIPT_DISPOSE_EVENT = 'bewly:content-script-dispose'
 const contentScriptGlobal = globalThis as typeof globalThis & {
-  __BEWLYCAT_CONTENT_SCRIPT_INITIALIZED__?: boolean
+  __BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__?: string
+  __BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__?: boolean
 }
-const shouldInitializeContentScript = !contentScriptGlobal.__BEWLYCAT_CONTENT_SCRIPT_INITIALIZED__
+const bundledShadowStyleText = contentScriptGlobal.__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__
+const shouldInitializeContentScript = !contentScriptGlobal.__BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__
 const contentScriptDisposers: Array<() => void> = []
 let contentScriptAbortController: AbortController | null = null
 let mountedVueApp: VueApp<Element> | null = null
@@ -81,6 +84,10 @@ function unmountInjectedApp() {
   mountedVueContainer?.remove()
   mountedVueContainer = null
   mountedVueRoot = null
+}
+
+function removeExistingBewlyHosts() {
+  document.querySelectorAll('#bewly').forEach(host => host.remove())
 }
 
 function disposeContentScriptRuntime() {
@@ -129,7 +136,8 @@ if (shouldInitializeContentScript) {
   // A newly created extension world asks any stale world to release its Vue root
   // before mounting. Re-evaluation in the same world is still blocked by the flag.
   window.dispatchEvent(new Event(CONTENT_SCRIPT_DISPOSE_EVENT))
-  contentScriptGlobal.__BEWLYCAT_CONTENT_SCRIPT_INITIALIZED__ = true
+  removeExistingBewlyHosts()
+  contentScriptGlobal.__BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__ = true
   contentScriptAbortController = new AbortController()
   const signal = contentScriptAbortController.signal
   window.addEventListener(CONTENT_SCRIPT_DISPOSE_EVENT, disposeContentScriptRuntime, { signal })
@@ -146,8 +154,15 @@ if (shouldInitializeContentScript) {
       event.preventDefault()
   }, { signal })
   const handleRuntimeMessage = (message: unknown) => {
-    if (typeof message === 'object' && message !== null && 'type' in message && message.type === CONTENT_SCRIPT_PING)
-      return Promise.resolve(CONTENT_SCRIPT_PONG)
+    if (typeof message === 'object' && message !== null && 'type' in message && message.type === CONTENT_SCRIPT_PING) {
+      const manifest = browser.runtime.getManifest()
+      return Promise.resolve({
+        type: CONTENT_SCRIPT_PONG,
+        name: manifest.name,
+        version: manifest.version,
+        runtimeUrl: browser.runtime.getURL(''),
+      })
+    }
 
     return false
   }
@@ -652,8 +667,15 @@ else if (shouldInitializeContentScript) {
   window.addEventListener(BEWLY_MOUNTED, () => {
     removeBeforeLoadedStyleEl()
     // 根据设置应用默认播放器模式
-    if (isVideoPage())
+    if (!isIframeDrawerHost() && isVideoPage())
       applyDefaultPlayerMode()
+  }, { signal: contentScriptSignal })
+  window.addEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, () => {
+    if (!isIframeDrawerHost())
+      return
+    clearPlayerModeRetry()
+    cancelPlayerRetryTasks()
+    clearPendingWidescreenReloadNavigation()
   }, { signal: contentScriptSignal })
   window.addEventListener(BEWLY_WIDESCREEN_MANUAL_TOGGLE, (event) => {
     const currentNavigationKey = getVideoNavigationKey(location.href)
@@ -684,6 +706,11 @@ else if (shouldInitializeContentScript) {
   }
 
   function applyDefaultPlayerMode() {
+    if (isIframeDrawerHost()) {
+      clearPlayerModeRetry()
+      cancelPlayerRetryTasks()
+      return
+    }
     if (!isVideoOrBangumiPage()) {
       clearPlayerModeRetry()
       exitBewlyWidescreen()
@@ -699,6 +726,12 @@ else if (shouldInitializeContentScript) {
     }
 
     const currentNavigationKey = getVideoNavigationKey(location.href)
+    if (isBewlyWidescreenActive()) {
+      clearPlayerModeRetry()
+      cancelPlayerRetryTasks()
+      lastAppliedPlayerModeNavigationKey = currentNavigationKey
+      return
+    }
     if (shouldSuppressWidescreenAutoEntry(currentNavigationKey, userExitedWidescreenNavigationKey)) {
       clearPlayerModeRetry()
       lastAppliedPlayerModeNavigationKey = currentNavigationKey
@@ -863,6 +896,8 @@ else if (shouldInitializeContentScript) {
   }
 
   function getVideoNavigationKey(url: string) {
+    if (isIframeDrawerHost())
+      return ''
     try {
       const urlObj = new URL(url)
       if (!isVideoOrBangumiPage(urlObj.href))
@@ -1038,6 +1073,8 @@ else if (shouldInitializeContentScript) {
   }
 
   function prepareVideoNavigationBeforeRouteChange(event: Event) {
+    if (isIframeDrawerHost())
+      return
     const wasBewlyWidescreenActive = isBewlyWidescreenActive()
     if (!wasBewlyWidescreenActive)
       return
@@ -1080,6 +1117,14 @@ else if (shouldInitializeContentScript) {
 
       lastUrl = location.href
       lastVideoNavigationKey = currentVideoNavigationKey
+      if (isIframeDrawerHost()) {
+        bootOverlay?.reveal()
+        clearPendingWidescreenReloadNavigation()
+        clearPlayerModeRetry()
+        cancelPlayerRetryTasks()
+        autoContinuationNavigationKey = undefined
+        return
+      }
       if (!shouldShowBewlyBootOverlay(lastUrl, isInIframe()))
         bootOverlay?.reveal()
       syncHomePageHiddenStyleScope()
@@ -1159,7 +1204,7 @@ else if (shouldInitializeContentScript) {
   contentScriptDisposers.push(onRouteChange(checkForUrlChanges))
 
   function syncFavoriteDialogLifecycle() {
-    if (isVideoOrBangumiPage())
+    if (!isIframeDrawerHost() && isVideoOrBangumiPage())
       initFavoriteDialogEnhancement()
     else
       stopFavoriteDialogEnhancement()
@@ -1179,10 +1224,10 @@ else if (shouldInitializeContentScript) {
       return
 
     waitForPlayerModePageSettle()
-    if (isVideoPage()) {
+    if (!isIframeDrawerHost() && isVideoPage()) {
       applyDefaultPlayerMode()
     }
-    else if (isVideoOrBangumiPage()) {
+    else if (!isIframeDrawerHost() && isVideoOrBangumiPage()) {
       applyDefaultPlayerMode()
     }
 
@@ -1343,7 +1388,7 @@ else if (shouldInitializeContentScript) {
       return
     playerModeResumeFrame = requestAnimationFrame(() => {
       playerModeResumeFrame = undefined
-      if (document.visibilityState !== 'visible' || !isVideoOrBangumiPage())
+      if (document.visibilityState !== 'visible' || isIframeDrawerHost() || !isVideoOrBangumiPage())
         return
       waitForPlayerModePageSettle()
       applyDefaultPlayerMode()
@@ -1407,7 +1452,7 @@ else if (shouldInitializeContentScript) {
       syncHomePageHiddenStyleScope()
       initVideoAspectRatioMemory()
       initVideoScreenshotControl()
-      if (isVideoOrBangumiPage())
+      if (!isIframeDrawerHost() && isVideoOrBangumiPage())
         scheduleAddWatchLaterButton()
       initTouchPlayerGestures()
       syncFavoriteDialogLifecycle()
@@ -1461,7 +1506,9 @@ else if (shouldInitializeContentScript) {
 
   function injectApp() {
     unmountInjectedApp()
-    document.querySelectorAll('#bewly').forEach(el => el.remove())
+    removeExistingBewlyHosts()
+    if (!bundledShadowStyleText)
+      throw new Error('Bundled Shadow DOM styles are unavailable')
 
     // mount component to context window
     const container = document.createElement('div')
@@ -1469,6 +1516,7 @@ else if (shouldInitializeContentScript) {
     container.setAttribute('data-version', version)
     container.setAttribute('data-dev', import.meta.env.DEV ? 'true' : 'false')
     container.dataset.bewlyBuildId = __BEWLY_BUILD_ID__
+    container.dataset.bewlyRuntimeUrl = browser.runtime.getURL('')
     container.classList.toggle('dark', document.documentElement.classList.contains('dark'))
     container.classList.toggle('oled-dark', document.documentElement.classList.contains('oled-dark'))
 
@@ -1481,14 +1529,14 @@ else if (shouldInitializeContentScript) {
     const useViewportLayout = !isInIframe() && isHomePage()
     applyAppRouteLayout(container, root)
 
-    const styleEl = document.createElement('link')
     // Fix #69 https://github.com/hakadao/BewlyBewly/issues/69
     // https://medium.com/@emilio_martinez/shadow-dom-open-vs-closed-1a8cf286088a - open shadow dom
     const shadowDOM = container.attachShadow?.({ mode: 'open' }) || container
     const resetStyleEl = document.createElement('style')
+    const styleEl = document.createElement('style')
     resetStyleEl.textContent = `${RESET_BEWLY_CSS}`
-    styleEl.setAttribute('rel', 'stylesheet')
-    styleEl.setAttribute('href', browser.runtime.getURL('dist/contentScripts/style.css'))
+    styleEl.dataset.bewlyBundledStyles = ''
+    styleEl.textContent = bundledShadowStyleText
     shadowDOM.appendChild(resetStyleEl)
     shadowDOM.appendChild(styleEl)
     shadowDOM.appendChild(root)
@@ -1500,16 +1548,8 @@ else if (shouldInitializeContentScript) {
     // 样式就绪前隐藏整个 Shadow DOM，避免未应用样式的内容闪现。
     // 就绪后一次性展示，避免容器淡入与页面样式透明度叠加，造成内容延迟出现。
     container.style.visibility = 'hidden'
-    let styleLoaded = false
-    let styleSettled = false
-    let styleLoadFailsafeTimer: ReturnType<typeof setTimeout> | undefined
-    const clearStyleLoadFailsafe = () => {
-      if (styleLoadFailsafeTimer !== undefined)
-        clearTimeout(styleLoadFailsafeTimer)
-      styleLoadFailsafeTimer = undefined
-    }
     const activateHomePageAfterStyles = () => {
-      if (!styleLoaded || !isAppMounted || !useViewportLayout)
+      if (!isAppMounted || !useViewportLayout)
         return
       cleanupBilibiliScripts()
       const topBarSource = resolveEffectiveTopBarSource(
@@ -1521,25 +1561,10 @@ else if (shouldInitializeContentScript) {
       ensureLoginButtonClickHandlers()
     }
     const revealContainer = () => {
-      styleLoaded = true
-      styleSettled = true
-      clearStyleLoadFailsafe()
       container.style.visibility = 'visible'
       activateHomePageAfterStyles()
       requestAnimationFrame(() => bootOverlay?.reveal())
     }
-
-    const handleStyleFailure = () => {
-      if (styleSettled)
-        return
-      styleSettled = true
-      clearStyleLoadFailsafe()
-      // 样式失败是本轮 content script 的终止状态：统一释放播放器、宽屏、
-      // 路由样式和 Vue 所有权，避免留下被搬移的播放器或无样式控件。
-      disposeContentScriptRuntime()
-    }
-    styleEl.addEventListener('load', revealContainer, { once: true })
-    styleEl.addEventListener('error', handleStyleFailure, { once: true })
 
     // startShadowDOMStyleInjection()
 
@@ -1556,11 +1581,7 @@ else if (shouldInitializeContentScript) {
       mountedVueApp = app
       mountedVueContainer = container
       mountedVueRoot = root
-      activateHomePageAfterStyles()
-      if (!styleSettled) {
-        styleLoadFailsafeTimer = setTimeout(handleStyleFailure, 8000)
-        contentScriptDisposers.push(clearStyleLoadFailsafe)
-      }
+      revealContainer()
     }
     catch (error) {
       container.remove()
@@ -1609,7 +1630,7 @@ else if (shouldInitializeContentScript) {
   contentScriptDisposers.push(watch(
     () => settings.value.showVerticalVideoZoomButton,
     (enabled) => {
-      if (enabled && isVideoOrBangumiPage())
+      if (enabled && !isIframeDrawerHost() && isVideoOrBangumiPage())
         initVerticalVideoZoom()
       else
         resetVerticalVideoZoom()
@@ -1649,7 +1670,7 @@ else if (shouldInitializeContentScript) {
     }
 
     // 监听稍后再看按钮外置设置变化
-    if (isVideoOrBangumiPage() && oldSettings) {
+    if (!isIframeDrawerHost() && isVideoOrBangumiPage() && oldSettings) {
       if (newSettings.externalWatchLaterButton !== oldSettings.externalWatchLaterButton) {
         if (newSettings.externalWatchLaterButton) {
         // 启用稍后再看按钮

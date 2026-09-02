@@ -1,4 +1,5 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
+import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
@@ -1034,6 +1035,20 @@ else if (shouldInitializePageScript) {
     return null
   }
 
+  function findCommentReplyRendererHost(component: HTMLElement | null | undefined): HTMLElement | null {
+    let node: Node | null = component ?? null
+    for (let depth = 0; depth < 10 && node; depth++) {
+      if (node instanceof ShadowRoot) {
+        node = node.host
+        continue
+      }
+      if (node instanceof HTMLElement && node.localName === 'bili-comment-reply-renderer')
+        return node
+      node = node.parentNode
+    }
+    return null
+  }
+
   /** 从主评论内的图片等子组件向上找到同一楼层的回复容器 */
   function findCommentThreadRepliesRenderer(component: HTMLElement | null | undefined): HTMLElement | null {
     let node: Node | null = component ?? null
@@ -1556,6 +1571,28 @@ else if (shouldInitializePageScript) {
       }))
     },
   })
+
+  function recordCommentReplyInteraction(actionRenderer: HTMLElement & Record<string, any>) {
+    const replyRenderer = findCommentReplyRendererHost(actionRenderer)
+    const repliesRenderer = findCommentRepliesRendererHost(replyRenderer)
+    const reply = getCommentReplyData(replyRenderer)
+    const rpid = getReplyRpid(reply)
+    if (!repliesRenderer || !rpid)
+      return
+
+    const isLike = actionRenderer.isLike ?? actionRenderer.data?.isLike
+    const isDislike = actionRenderer.isDislike ?? actionRenderer.data?.isDislike
+    const hasActionRendererState = typeof isLike === 'boolean' || typeof isDislike === 'boolean'
+    const fallbackAction = Number(reply?.action)
+    const action = hasActionRendererState
+      ? (isLike ? 1 : isDislike ? 2 : 0)
+      : (Number.isFinite(fallbackAction) ? fallbackAction : undefined)
+    const rendererLikeCount = actionRenderer.likeCount ?? actionRenderer.data?.likeCount
+    const parsedLikeCount = Number(rendererLikeCount ?? reply?.like)
+    const like = Number.isFinite(parsedLikeCount) ? parsedLikeCount : undefined
+
+    commentReplyPagination.recordInteraction(repliesRenderer, rpid, { action, like })
+  }
 
   function getCommentReplyAvatarAnchor(
     renderer: HTMLElement,
@@ -3264,12 +3301,132 @@ else if (shouldInitializePageScript) {
   }
 
   if (window.customElements) {
+    interface BilibiliUserProfileElement extends HTMLElement {
+      setup?: (trigger: HTMLElement) => (() => void)
+    }
+
+    const BILIBILI_USER_PROFILE_SCRIPT_URL = 'https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.js'
+    const nativeUserProfileCleanups = new WeakMap<HTMLElement, () => void>()
+    const nativeUserProfileBindingTasks = new WeakMap<HTMLElement, Promise<void>>()
+    let nativeUserProfileElement: BilibiliUserProfileElement | null = null
+    let nativeUserProfileLoadPromise: Promise<void> | null = null
+
+    function waitForNativeUserProfileDefinition() {
+      return new Promise<void>((resolve, reject) => {
+        const timeoutId = window.setTimeout(() => reject(new Error('Timed out loading the native Bilibili user profile component.')), 10_000)
+        window.customElements.whenDefined('bili-user-profile').then(() => {
+          window.clearTimeout(timeoutId)
+          resolve()
+        }, (error) => {
+          window.clearTimeout(timeoutId)
+          reject(error)
+        })
+      })
+    }
+
+    function ensureNativeUserProfileComponent() {
+      if (window.customElements.get('bili-user-profile'))
+        return Promise.resolve()
+      if (nativeUserProfileLoadPromise)
+        return nativeUserProfileLoadPromise
+
+      const existingCommentsScript = document.querySelector<HTMLScriptElement>('script[src*="/commentpc/bili-comments"]')
+      if (existingCommentsScript) {
+        nativeUserProfileLoadPromise = waitForNativeUserProfileDefinition()
+        return nativeUserProfileLoadPromise
+      }
+
+      nativeUserProfileLoadPromise = new Promise<void>((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = BILIBILI_USER_PROFILE_SCRIPT_URL
+        script.async = true
+        script.dataset.bewlyNativeUserProfileLoader = ''
+        script.addEventListener('load', () => {
+          void waitForNativeUserProfileDefinition().then(resolve, reject)
+        }, { once: true })
+        script.addEventListener('error', () => {
+          script.remove()
+          reject(new Error('Failed to load the native Bilibili user profile component.'))
+        }, { once: true })
+        ;(document.head || document.documentElement).appendChild(script)
+      })
+      return nativeUserProfileLoadPromise
+    }
+
+    function getNativeUserProfileTrigger(event: Event) {
+      return event.composedPath().find((node): node is HTMLElement => (
+        node instanceof HTMLElement
+        && node.classList.contains('moment-card__avatar-link')
+        && node.hasAttribute('data-user-profile-id')
+      ))
+    }
+
+    async function bindNativeUserProfile(trigger: HTMLElement) {
+      await ensureNativeUserProfileComponent()
+      if (!trigger.isConnected || nativeUserProfileCleanups.has(trigger))
+        return
+
+      nativeUserProfileElement ??= document.querySelector<BilibiliUserProfileElement>('bili-user-profile')
+        || document.createElement('bili-user-profile') as BilibiliUserProfileElement
+      const cleanup = nativeUserProfileElement.setup?.(trigger)
+      if (!cleanup)
+        throw new Error('Native Bilibili user profile setup is unavailable.')
+
+      nativeUserProfileCleanups.set(trigger, cleanup)
+      if (trigger.matches(':hover')) {
+        trigger.dispatchEvent(new MouseEvent('mouseenter', {
+          bubbles: false,
+          composed: true,
+          view: window,
+        }))
+      }
+    }
+
+    window.addEventListener(BEWLY_NATIVE_USER_PROFILE_REQUEST, (event) => {
+      const trigger = getNativeUserProfileTrigger(event)
+      if (!trigger || nativeUserProfileCleanups.has(trigger) || nativeUserProfileBindingTasks.has(trigger))
+        return
+
+      const task = bindNativeUserProfile(trigger)
+        .catch((error) => {
+          nativeUserProfileLoadPromise = null
+          console.warn('[Bewly Nocturne] Failed to bind native Bilibili user profile.', error)
+        })
+        .finally(() => nativeUserProfileBindingTasks.delete(trigger))
+      nativeUserProfileBindingTasks.set(trigger, task)
+    })
+
+    window.addEventListener(BEWLY_NATIVE_USER_PROFILE_RELEASE, (event) => {
+      const trigger = getNativeUserProfileTrigger(event)
+      const cleanup = trigger && nativeUserProfileCleanups.get(trigger)
+      if (!trigger || !cleanup)
+        return
+
+      trigger.dispatchEvent(new MouseEvent('mouseleave', {
+        bubbles: false,
+        composed: true,
+        view: window,
+      }))
+      cleanup()
+      nativeUserProfileCleanups.delete(trigger)
+    })
+
     const patchCommentCustomElement = (name: string, classConstructor: unknown) => {
       if (typeof classConstructor !== 'function')
         return
 
       if (name === 'bili-comment-replies-renderer')
         commentReplyPagination.patchPrototype(classConstructor)
+
+      if (name === 'bili-comment-action-buttons-renderer') {
+        try {
+          patchCommentComponentUpdate(name, classConstructor, recordCommentReplyInteraction)
+        }
+        catch (error) {
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
+        }
+        return
+      }
 
       const shadowStylePatch = COMMENT_SHADOW_STYLE_PATCHES[name]
       if (shadowStylePatch) {
@@ -3424,6 +3581,7 @@ else if (shouldInitializePageScript) {
     // document_start 仍可能晚于页面内联脚本；回补已经注册的评论组件。
     const commentElementNames = new Set([
       ...Object.keys(COMMENT_SHADOW_STYLE_PATCHES),
+      'bili-comment-action-buttons-renderer',
       'bili-comment-reply-renderer',
       'bili-comment-pictures-renderer',
       'bili-comment-user-info',

@@ -300,7 +300,7 @@ defineExpose({ initData })
                 bg="$bew-fill-2" border="1px solid transparent"
                 text="$bew-text-1" outline-none
                 transition="background-color duration-200, color duration-200, border-color duration-200, box-shadow duration-200"
-                focus:border="$bew-theme-color"
+                focus:border="$bew-theme-focus-ring"
               >
             </div>
 

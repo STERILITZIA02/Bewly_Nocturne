@@ -44,7 +44,7 @@ defineExpose({ focus })
     class="b-input"
     :class="`b-input--${size}`"
     :style="{ height, padding }"
-    focus-within:ring="2px $bew-theme-color"
+    focus-within:ring="2px $bew-theme-focus-ring"
     p="x-4"
     rounded="$bew-interactive-radius" border="1 $bew-surface-border-color" box-border
     transition="border-color duration-300, background-color duration-300, box-shadow duration-300"

@@ -125,8 +125,9 @@ function handleClick(evt: MouseEvent) {
   }
 
   &--type-error {
-    --b-button-color: var(--bew-error-color);
-    --b-button-color-hover: var(--bew-error-color);
+    // Deepen the error fill so the white label reaches WCAG AA (>= 4.5:1).
+    --b-button-color: color-mix(in oklab, var(--bew-error-color), black 14%);
+    --b-button-color-hover: color-mix(in oklab, var(--bew-error-color), black 14%);
     --b-button-text-color: white;
   }
 

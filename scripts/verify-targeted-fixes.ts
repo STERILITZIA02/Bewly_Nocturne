@@ -24,11 +24,13 @@ import {
   toggleMomentDisclosure,
 } from '../src/components/MomentCard/momentForwardContent'
 import type { DisplayMoment } from '../src/components/MomentCard/types'
+import { normalizeVideoCardTags, selectVisibleVideoCardTags } from '../src/components/VideoCard/tagPolicy'
 import type { StorageLocalRuntime } from '../src/composables/useStorageLocal'
+import { CONTENT_SCRIPT_PONG, isCurrentContentScriptPong } from '../src/constants/contentScript'
 import { resolveDockCollapsedShellSize } from '../src/constants/dock'
 import { getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '../src/constants/pageBridge'
 import { AppPage } from '../src/enums/appEnums'
-import { loadCommentReplyPagesSequentially, mergeCommentReplyLists } from '../src/inject/commentReplyPagination'
+import { applyCommentReplyInteractionOverrides, loadCommentReplyPagesSequentially, mergeCommentReplyLists } from '../src/inject/commentReplyPagination'
 import { isAccountRequestCurrent } from '../src/utils/accountScope'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness, resolveAppAuthorizationState } from '../src/utils/appAuthTokenPolicy'
 import { canCommitWidescreenLayout, clampWidescreenSidebarWidth, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenAnchoredPlayerGeometry, resolveWidescreenCenterGeometry, resolveWidescreenControlSurfaceState, resolveWidescreenEngagedState, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shortenCommentDateText, shouldContinueWidescreenSidebarHydration, shouldScheduleWidescreenRefresh, shouldSuppressWidescreenAutoEntry, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY } from '../src/utils/bewlyWidescreenPolicy'
@@ -41,8 +43,10 @@ import { resolveActiveDockItemPage } from '../src/utils/dockActiveItem'
 import { isEligibleDrawerEscape, resolveDrawerEscapeBehavior, resolveIframeEscapeAction, shouldHandleDrawerEscape } from '../src/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '../src/utils/effectiveTopBarSource'
 import { resolveEffectiveTopBarSource } from '../src/utils/effectiveTopBarSource'
+import { getFavoriteFolderEditedAttr, getFavoriteFolderPrivacy, isFavoriteFolderPrivate } from '../src/utils/favoriteFolder'
 import { compileFilterRules, normalizeImportedFilterRules } from '../src/utils/filterRules'
 import { computeFloatingMenuPosition } from '../src/utils/floatingMenu'
+import { isIframeDrawerHost } from '../src/utils/iframeDrawerHost'
 import { shouldContinueIframeFocusRetry } from '../src/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '../src/utils/iframeMessage'
 import { resolveInterfaceLanguage } from '../src/utils/interfaceLanguagePolicy'
@@ -52,6 +56,7 @@ import { classifyMomentAdditional, resolveMomentVoteStatus } from '../src/utils/
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '../src/utils/momentCardLayout'
 import { createMomentCommentThreadController } from '../src/utils/momentCommentThread'
 import { countVisibleNewMomentItems } from '../src/utils/momentFeedOrder'
+import { resolveMomentHostFollowState } from '../src/utils/momentHostFollowState'
 import { resolveStableMomentKey } from '../src/utils/momentKey'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '../src/utils/momentsLayout'
 import { normalizeMomentRemoteUrl } from '../src/utils/momentUrl'
@@ -158,6 +163,73 @@ async function verifyCommentReplyPaginationPolicy() {
     loadNextPage: async () => {},
   })
   assert.deepEqual(stalled, { completed: false, lastPage: 1, reason: 'no-progress' })
+
+  const interactionByRpid = new Map([
+    ['2', { action: 1, like: 8 }],
+  ])
+  const pageOne = [{ rpid: '1', action: 0, like: 2 }, { rpid: '2', action: 0, like: 7 }]
+  const pageTwo = [{ rpid: '2', action: 0, like: 7 }, { rpid: '3', action: 0, like: 1 }]
+  applyCommentReplyInteractionOverrides(pageOne, interactionByRpid, reply => reply.rpid)
+  applyCommentReplyInteractionOverrides(pageTwo, interactionByRpid, reply => reply.rpid)
+  assert.deepEqual(pageOne[1], { rpid: '2', action: 1, like: 8 })
+  assert.deepEqual(pageTwo[0], { rpid: '2', action: 1, like: 8 })
+
+  const mergedWithLocalInteraction = mergeCommentReplyLists([pageOne, pageTwo], reply => reply.rpid)
+  interactionByRpid.set('2', { action: 0, like: 7 })
+  const collapsedList = mergedWithLocalInteraction.slice(0, 2)
+  const pendingBeforeList = mergedWithLocalInteraction.slice()
+  for (const list of [mergedWithLocalInteraction, collapsedList, pendingBeforeList, pageOne, pageTwo])
+    applyCommentReplyInteractionOverrides(list, interactionByRpid, reply => reply.rpid)
+  assert.equal(mergedWithLocalInteraction.find(reply => reply.rpid === '2')?.action, 0)
+  assert.equal(collapsedList.find(reply => reply.rpid === '2')?.like, 7)
+  assert.equal(pendingBeforeList.find(reply => reply.rpid === '2')?.action, 0)
+}
+
+function verifyIncrementalCorrectnessPolicies() {
+  const currentPong = {
+    type: CONTENT_SCRIPT_PONG,
+    name: 'Bewly Nocturne',
+    version: '0.1.1',
+    runtimeUrl: 'chrome-extension://current/',
+  }
+  assert.equal(isCurrentContentScriptPong(currentPong, currentPong), true)
+  assert.equal(isCurrentContentScriptPong({ ...currentPong, runtimeUrl: 'chrome-extension://old/' }, currentPong), false)
+  assert.equal(isCurrentContentScriptPong({ ...currentPong, name: 'BewlyCat' }, currentPong), false)
+  assert.equal(isCurrentContentScriptPong(CONTENT_SCRIPT_PONG, currentPong), false)
+
+  const classNames = new Set(['bewly-iframe-drawer-host'])
+  assert.equal(isIframeDrawerHost({ classList: { contains: value => classNames.has(value) } }), true)
+  classNames.clear()
+  assert.equal(isIframeDrawerHost({ classList: { contains: value => classNames.has(value) } }), false)
+
+  assert.equal(isFavoriteFolderPrivate({ attr: 1 }), true)
+  assert.equal(isFavoriteFolderPrivate({ attr: 2 }), false)
+  assert.equal(getFavoriteFolderPrivacy(true), 0)
+  assert.equal(getFavoriteFolderPrivacy(false), 1)
+  assert.equal(getFavoriteFolderEditedAttr(3, true), 2)
+  assert.equal(getFavoriteFolderEditedAttr(2, false), 3)
+
+  const normalizedTags = normalizeVideoCardTags({
+    displayTags: ['推荐理由'],
+    searchableTags: ['音乐'],
+  })
+  assert.deepEqual(normalizedTags, [
+    { text: '推荐理由', searchable: false },
+    { text: '音乐', searchable: true },
+  ])
+  assert.deepEqual(selectVisibleVideoCardTags(normalizedTags, ['高赞', '长视频'], true, true), {
+    leading: normalizedTags,
+    highlights: [],
+  })
+  assert.equal(selectVisibleVideoCardTags(normalizedTags.slice(0, 1), ['高赞', '长视频'], true, true).highlights.length, 1)
+  assert.equal(selectVisibleVideoCardTags([], ['高赞', '长视频', '百万播放'], true, true).highlights.length, 2)
+
+  assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 1 } } }, '42'), 'followed')
+  assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 2 } } }, '42'), 'followed')
+  assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 6 } } }, '42'), 'followed')
+  assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 0 } } }, '42'), 'unfollowed')
+  assert.equal(resolveMomentHostFollowState({ code: -1, data: { 42: { attribute: 0 } } }, '42'), 'unknown')
+  assert.equal(resolveMomentHostFollowState({ code: 0, data: {} }, '42'), 'unknown')
 }
 
 function verifyFloatingMenuPolicy() {
@@ -210,7 +282,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: false,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    previousHidden: false,
     sidebarExpanded: false,
   }), { hidden: true, ready: false })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
@@ -219,7 +290,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: false,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    previousHidden: true,
     sidebarExpanded: false,
   }), { hidden: false, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
@@ -228,7 +298,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: true,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    previousHidden: false,
     sidebarExpanded: false,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
@@ -237,16 +306,14 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: true,
     nativeControlsReady: true,
     pointerInsidePlayer: false,
-    previousHidden: false,
     sidebarExpanded: false,
-  }), { hidden: false, ready: true })
+  }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
     bottomControlsHovered: false,
     danmakuControlsReady: true,
     nativeControlsHidden: false,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    previousHidden: false,
     sidebarExpanded: true,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
@@ -255,7 +322,6 @@ function verifyWidescreenEngagementPolicy() {
     nativeControlsHidden: true,
     nativeControlsReady: true,
     pointerInsidePlayer: true,
-    previousHidden: true,
     sidebarExpanded: false,
   }), { hidden: false, ready: true })
   assert.equal(shouldContinueWidescreenSidebarHydration({ complete: false, now: 100, deadline: 200 }), true)
@@ -1439,6 +1505,7 @@ async function verifyComponentContracts() {
   const root = process.cwd()
   const [
     dock,
+    pageModeSwitcherButton,
     sidebar,
     slider,
     watchLater,
@@ -1469,6 +1536,7 @@ async function verifyComponentContracts() {
     player,
   ] = await Promise.all([
     readFile(`${root}/src/components/Dock/Dock.vue`, 'utf8'),
+    readFile(`${root}/src/components/PageModeSwitcherButton.vue`, 'utf8'),
     readFile(`${root}/src/components/SideBar/SideBar.vue`, 'utf8'),
     readFile(`${root}/src/components/Slider.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/WatchLater/WatchLater.vue`, 'utf8'),
@@ -1505,6 +1573,17 @@ async function verifyComponentContracts() {
   assert.match(dock, /dock-theme-toggle/)
   assert.match(dock, /dock-collapse-toggle/)
   assert.match(dock, /dock-refresh-back-to-top-action/)
+  assert.equal((dock.match(/class="dock-item dock-item--icon-only/g) ?? []).length, 2)
+  const dockUtilityStyles = dock.slice(dock.indexOf('&.dock-item--icon-only {'), dock.indexOf('&.active {', dock.indexOf('&.dock-item--icon-only {')))
+  assert.match(dockUtilityStyles, /border: 0;/)
+  assert.match(dockUtilityStyles, /background: transparent;/)
+  assert.match(dockUtilityStyles, /box-shadow: none;/)
+  const dockThemeButton = dock.slice(dock.indexOf(`v-layout-editable="'dock-theme-toggle'"`), dock.indexOf('</button>', dock.indexOf(`v-layout-editable="'dock-theme-toggle'"`)))
+  assert.doesNotMatch(dockThemeButton, /\s(?:bg|:shadow)=/)
+  const dockPageModeStyles = pageModeSwitcherButton.slice(pageModeSwitcherButton.indexOf('&--dock {'), pageModeSwitcherButton.indexOf('&--sidebar {'))
+  assert.match(dockPageModeStyles, /border: 0;/)
+  assert.match(dockPageModeStyles, /background: transparent;/)
+  assert.match(dockPageModeStyles, /box-shadow: none;/)
   assert.match(sidebar, /sidebar-theme-toggle/)
   assert.match(sidebar, /sidebar-auto-hide/)
   assert.doesNotMatch(dock, /layout-edit-button|toggleLayoutEditMode|showLayoutEditButton/)
@@ -2162,7 +2241,13 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(hiddenNativeControlSelectors, /\.bpx-player-ctrl-wide/)
   assert.match(hiddenNativeControlSelectors, /\.bpx-player-ctrl-web/)
-  assert.doesNotMatch(hiddenNativeControlSelectors, /\.bpx-player-ctrl-full/)
+  assert.match(hiddenNativeControlSelectors, /\.bpx-player-ctrl-full/)
+  assert.match(hiddenNativeControlSelectors, /\.bilibili-player-video-btn-fullscreen/)
+  assert.match(hiddenNativeControlSelectors, /\.squirtle-video-fullscreen/)
+  assert.match(widescreen, /window\.innerHeight - stableDockBottom \+ blockPadding/)
+  assert.match(widescreen, /danmakuSourceHost\?\.isConnected && currentState\.playerEl\.isConnected/)
+  assert.match(widescreen, /getBoundingClientRect\(\)\.bottom \+ dockRect\.height/)
+  assert.doesNotMatch(widescreen, /window\.innerHeight - rootRect\.bottom \+ \(dockRect\.height - controlHeight\)/)
   const hiddenNativeControlStyles = widescreen.slice(
     widescreen.indexOf('${HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS'),
     widescreen.indexOf(`#\${ROOT_ID} {`, widescreen.indexOf('${HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS')),
@@ -2185,7 +2270,8 @@ async function verifyP2WidescreenControl() {
   assert.match(sidebarSurfaceStyles, /margin: var\(--bewly-widescreen-sidebar-floating-inset\)/)
   assert.match(sidebarSurfaceStyles, /background: transparent/)
   assert.match(sidebarSurfaceStyles, /border: 1px solid var\(--bew-surface-border-color\)/)
-  assert.match(sidebarSurfaceStyles, /border-radius: var\(--bew-panel-radius\)/)
+  assert.match(sidebarSurfaceStyles, /border-radius: var\(--bewly-widescreen-shell-radius\)/)
+  assert.match(widescreen, /--bewly-widescreen-shell-radius: var\(--bew-modal-radius, 24px\)/)
   assert.match(sidebarSurfaceStyles, /corner-shape: var\(--bew-corner-shape\)/)
   assert.match(sidebarSurfaceStyles, /box-shadow: var\(--bew-shadow-3\), var\(--bew-shadow-edge-glow-1\)/)
   assert.match(sidebarSurfaceStyles, /backdrop-filter: none/)
@@ -2400,6 +2486,9 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /initVerticalVideoZoom\(\)/)
   assert.match(widescreen, /data-sidebar-position="left"\] \.bewly-widescreen-stage/)
   assert.match(widescreen, /titleNotice: \[[\s\S]{0,80}'\.video-argue'/)
+  assert.match(widescreen, /\.video-argue-inner,[\s\S]{0,160}display: flex !important;\s*align-items: center !important/)
+  assert.match(widescreen, /\.video-argue-inner \.remark-icon,[\s\S]{0,240}width: var\(--bew-icon-size-sm/)
+  assert.match(widescreen, /\.argue-text \{[\s\S]{0,240}white-space: normal !important/)
   assert.match(widescreen, /titleNoticeSlot: HTMLElement/)
   assert.match(widescreen, /function syncSidebarTitleNotice\(currentState: BewlyWidescreenState\)/)
   assert.match(widescreen, /currentState\.videoInfoData\?\.title\?\.trim\(\) \|\| getTitleText\(\)/)
@@ -2462,7 +2551,7 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker}::before`),
   )
   assert.match(danmakuSurfaceStyles, /position: absolute !important/)
-  assert.match(danmakuSurfaceStyles, /bottom: 0 !important/)
+  assert.match(danmakuSurfaceStyles, /bottom: var\(--bewly-widescreen-controls-glass-bottom\) !important/)
   assert.match(danmakuSurfaceStyles, /height: var\(--bewly-widescreen-bottom-controls-height\) !important/)
   assert.match(danmakuSurfaceStyles, /width: 100% !important/)
   assert.match(danmakuSurfaceStyles, /z-index: 4 !important/)
@@ -2481,12 +2570,17 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`#\${ROOT_ID}[data-player-controls-hidden="true"]`, widescreen.indexOf(`body.\${BODY_CLASS} .\${DANMAKU_GLASS_CLASS} {`)),
   )
   assert.match(danmakuSurfaceBackgroundStyles, /position: absolute !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /right: 0 !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /bottom: 0 !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /left: 0 !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /right: var\(--bewly-widescreen-controls-glass-inset\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /bottom: var\(--bewly-widescreen-controls-glass-bottom\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /width: auto !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /height: var\(--bewly-widescreen-controls-glass-height\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /border: 1px solid var\(--bew-surface-border-color\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /border-radius: var\(--bewly-widescreen-shell-radius\) !important/)
+  assert.match(danmakuSurfaceBackgroundStyles, /corner-shape: var\(--bew-corner-shape\)/)
+  assert.doesNotMatch(danmakuSurfaceBackgroundStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /z-index: calc\(var\(--bew-z-popover\) - 1\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /background: var\(--bewly-widescreen-danmaku-bar-bg\) !important/)
-  assert.match(danmakuSurfaceBackgroundStyles, /border-top: 1px solid var\(--bew-border-color\) !important/)
   assert.match(danmakuSurfaceBackgroundStyles, /backdrop-filter: var\(--bew-filter-glass-1\) !important/)
   const hiddenGlassStyles = widescreen.slice(
     widescreen.indexOf(`body.\${BODY_CLASS}.\${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS} .\${DANMAKU_GLASS_CLASS}`),
@@ -2510,8 +2604,21 @@ async function verifyP2WidescreenControl() {
   )
   assert.match(hiddenDanmakuSourceStyles, /transform: translate3d\(0, 100%, 0\)/)
   assert.match(hiddenDanmakuSourceStyles, /pointer-events: none/)
-  assert.match(widescreen, /\.bpx-player-control-wrap[\s\S]{0,260}bottom: var\(--bewly-widescreen-bottom-controls-height\) !important/)
-  assert.match(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}[\s\S]{0,260}bottom: 0 !important/)
+  assert.match(widescreen, /\.bpx-player-control-wrap[\s\S]{0,260}bottom: calc\([\s\S]{0,120}--bewly-widescreen-controls-glass-bottom[\s\S]{0,120}--bewly-widescreen-bottom-controls-height\)\s*\)\s*!important/)
+  assert.match(widescreen, /body\.\$\{BODY_CLASS\}\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}[\s\S]{0,260}bottom: var\(--bewly-widescreen-controls-glass-bottom\) !important;\s*opacity: 0 !important;\s*pointer-events: none !important/)
+  assert.match(widescreen, /BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}\) \.\$\{NATIVE_PLAYER_CLASS\} :is\([\s\S]{0,240}opacity: 1 !important;\s*visibility: visible !important;\s*pointer-events: auto !important/)
+  assert.match(widescreen, /data-ctrl-hidden\] \.bpx-player-control-wrap[\s\S]{0,200}display: block !important/)
+  assert.match(widescreen, /bpx-state-no-cursor \.bpx-player-control-top[\s\S]{0,120}opacity: 1 !important/)
+  assert.match(widescreen, /\.bpx-player-control-wrap\[hidden\][\s\S]{0,60}\{[\s\S]{0,60}display: block !important/)
+  assert.match(widescreen, /\.bpx-player-control-mask \{[\s\S]{0,80}display: none !important;\s*background: none !important/)
+  assert.match(widescreen, /\.bpx-player-progress-wrap,[\s\S]{0,600}background-image: none !important;\s*backdrop-filter: none !important/)
+  assert.match(widescreen, /z-index: var\(--bew-z-popover\) !important;\s*color: var\(--bew-text-1\) !important;\s*background: transparent !important;\s*background-image: none !important;\s*text-shadow: none !important/)
+  assert.match(widescreen, /function syncControlsGlassGeometry/)
+  assert.match(widescreen, /right: var\(--bewly-widescreen-controls-glass-inset\) !important[\s\S]{0,240}left: var\(--bewly-widescreen-controls-glass-inset\) !important/)
+  assert.match(widescreen, /--bewly-widescreen-bottom-controls-height\) \+ var\(--bewly-widescreen-controls-block-padding, 12px\) \+ \$\{wrapHeight\}px/)
+  assert.match(widescreen, /--bewly-widescreen-controls-glass-inset: var\(--bew-space-4, 16px\)/)
+  assert.match(widescreen, /--bewly-widescreen-controls-glass-bottom: var\(--bew-space-2, 8px\)/)
+  assert.match(widescreen, /body\.\$\{BODY_CLASS\} \.\$\{DANMAKU_GLASS_CLASS\},[\s\S]{0,80}#\$\{ROOT_ID\} \.bewly-widescreen-sidebar/)
   assert.match(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-elevated-alt\)/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-danmaku-bar-bg: var\(--bew-content-solid/)
   assert.doesNotMatch(widescreen, /html\.dark\.oled-dark #\$\{ROOT_ID\}[\s\S]{0,160}--bewly-widescreen-danmaku-bar-bg/)
@@ -2632,7 +2739,10 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-video-inputbar {`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-video-inputbar:focus-within`),
   )
-  assert.match(danmakuInputbarStyles, /border-radius: var\(--bew-interactive-radius\)/)
+  assert.match(danmakuInputbarStyles, /border-radius: var\(--bew-radius-full\) !important/)
+  assert.match(danmakuInputbarStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
+  assert.match(danmakuInputbarStyles, /height: var\(--bewly-widescreen-inputbar-height, 44px\) !important/)
+  assert.match(danmakuInputbarStyles, /padding-inline: var\(--bew-space-1, 4px\) !important/)
   assert.match(danmakuInputbarStyles, /overflow: visible !important/)
   assert.match(danmakuInputbarStyles, /background: transparent !important/)
   assert.match(danmakuInputbarStyles, /backdrop-filter: none !important/)
@@ -2652,6 +2762,14 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSendButtonStyles, /display: inline-flex !important/)
   assert.match(danmakuSendButtonStyles, /align-items: center !important/)
   assert.match(danmakuSendButtonStyles, /justify-content: center !important/)
+  assert.match(danmakuSendButtonStyles, /height: var\(--bew-control-height, 36px\) !important/)
+  assert.match(danmakuSendButtonStyles, /border-radius: var\(--bew-radius-full\) !important/)
+  assert.match(danmakuSendButtonStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
+  assert.match(widescreen, /\.bpx-player-video-inputbar \.bpx-player-dm-setting \{[\s\S]{0,60}order: -1 !important/)
+  assert.match(widescreen, /\.bilibili-player-video-inputbar\n[\s\S]{0,80}\) a \{\s*display: none !important/)
+  assert.match(widescreen, /\[class\*="shadow-progress"\][\s\S]{0,120}display: none !important/)
+  assert.match(widescreen, /--bewly-widescreen-controls-block-padding: calc\(/)
+  assert.match(widescreen, /--bewly-widescreen-inputbar-height: calc\(/)
   const danmakuInputStyles = widescreen.slice(
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-input {`),
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-btn-send {`),
@@ -2722,7 +2840,9 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /resolveWidescreenControlSurfaceState\(\{/)
   assert.match(widescreen, /bottomControlsHovered: currentState\.bottomControlsHovered/)
   assert.match(widescreen, /pointerInsidePlayer: currentState\.playerPointerInside/)
-  assert.match(widescreen, /previousHidden: currentState\.root\.dataset\.playerControlsHidden !== 'false'/)
+  assert.doesNotMatch(widescreen, /previousHidden/)
+  assert.doesNotMatch(widescreen, /`:not\(.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}\) .\$\{NATIVE_PLAYER_CLASS\}`/)
+  assert.match(widescreen, /body\.\$\{BODY_CLASS\}:not\(\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}\) \.\$\{NATIVE_PLAYER_CLASS\} :is\(/)
   assert.match(widescreen, /sidebarExpanded: isWidescreenSidebarExpanded\(currentState\)/)
   assert.match(widescreen, /dataset\.playerControlsReady = String\(ready\)/)
   const applyNowSection = widescreen.slice(
@@ -3042,6 +3162,19 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(watchLater, /async function handleWatchLaterReachBottom\(\): Promise<boolean>[\s\S]{0,420}return getData\(\)/)
   assert.match(watchLater, /payload\.list\.every\(isValidWatchLaterItem\)/)
   assert.match(watchLater, /mergedList\.length >= payload\.count[\s\S]{0,80}!madeProgress/)
+  assert.match(watchLater, /let watchLaterExtensionContextInvalidated = false/)
+  assert.match(watchLater, /function settleExtensionContextInvalidation\(error: unknown\): boolean/)
+  const watchLaterLoadSection = watchLater.slice(
+    watchLater.indexOf('async function getWatchLaterListByPage'),
+    watchLater.indexOf('async function deleteWatchLaterItem'),
+  )
+  assert.match(watchLaterLoadSection, /if \(watchLaterExtensionContextInvalidated/)
+  assert.match(watchLaterLoadSection, /if \(settleExtensionContextInvalidation\(error\)\)[\s\S]{0,80}return false/)
+  assert.ok(
+    watchLaterLoadSection.indexOf('if (settleExtensionContextInvalidation(error))')
+    < watchLaterLoadSection.indexOf('console.error(\'[WatchLater] Failed to load list:\''),
+  )
+  assert.equal((watchLater.match(/if \(!settleExtensionContextInvalidation\(error\)\)/g) ?? []).length, 3)
   assert.match(input, /w-inherit min-w-0 h-inherit/)
   assert.match(input, /\.prefix,[\s\S]{0,120}flex: 0 0 auto;[\s\S]{0,80}white-space: nowrap;/)
   assert.match(comments, /^\.bewly-design \{/)
@@ -3146,11 +3279,10 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(contentScript, /restorePreparedOriginalBilibiliTopBars\(document\)/)
   assert.match(contentScript, /restoreOriginalBilibiliTopBarParent\(document\)/)
   assert.match(contentScript, /stopAdaptedStyles/)
-  const styleFailureSection = contentScript.slice(
-    contentScript.indexOf('const handleStyleFailure'),
-    contentScript.indexOf('styleEl.addEventListener(\'load\'', contentScript.indexOf('const handleStyleFailure')),
-  )
-  assert.match(styleFailureSection, /disposeContentScriptRuntime\(\)/)
+  assert.match(contentScript, /const bundledShadowStyleText = contentScriptGlobal\.__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__/)
+  assert.match(contentScript, /styleEl\.textContent = bundledShadowStyleText/)
+  assert.match(contentScript, /container\.style\.visibility = 'hidden'[\s\S]{0,1600}app\.mount\(root\)[\s\S]{0,320}revealContainer\(\)/)
+  assert.doesNotMatch(contentScript, /browser\.runtime\.getURL\('dist\/contentScripts\/style\.css'\)/)
   assert.match(removeTopBarStyles, /\.bili-header > \.bili-header__bar/)
   const widescreenHeaderSection = bewlyWidescreen.slice(
     bewlyWidescreen.indexOf(`body.\${BODY_CLASS} .bili-header`),
@@ -3248,6 +3380,15 @@ async function verifyIncrementalInteractionContracts() {
   assert.match(commentPagination, /state\.expandAllLoading \|\| state\.allRepliesExpanded\)[\s\S]{0,40}return \[\]/)
   assert.match(commentPagination, /shouldShowExpandAll\?:/)
   assert.match(commentPagination, /adapter\.shouldShowExpandAll\?\.\(renderer\) === false/)
+  assert.match(commentPagination, /interactionByRpid: Map<string, CommentReplyInteractionState>/)
+  assert.match(commentPagination, /state\.interactionByRpid\.set\(rpid, nextInteraction\)/)
+  assert.match(commentPagination, /applyInteractionOverrides\(state, state\.mergedList\)/)
+  assert.match(commentPagination, /applyInteractionOverrides\(state, state\.collapsedList\)/)
+  assert.match(commentPagination, /applyInteractionOverrides\(state, state\.pending\?\.beforeList\)/)
+  assert.match(commentPagination, /state\.pages\.forEach\(replies => applyInteractionOverrides\(state, replies\)\)/)
+  assert.match(injectScript, /bili-comment-action-buttons-renderer/)
+  assert.match(injectScript, /isLike \? 1 : isDislike \? 2 : 0/)
+  assert.match(injectScript, /commentReplyPagination\.recordInteraction\(repliesRenderer, rpid, \{ action, like \}\)/)
   assert.match(injectScript, /function isInsideBewlyWidescreen/)
   assert.match(injectScript, /shouldShowExpandAll: renderer => !isInsideBewlyWidescreen\(renderer\)/)
   assert.match(injectScript, /expandAll: '展开全部回复'/)
@@ -3430,7 +3571,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.equal(supportsWideMomentCardLayout({ ...videoMoment, additional: { isVote: true } }), false)
 
   const root = process.cwd()
-  const [app, iframeDrawer, notificationsDrawer, contentScript, escapePriority, photoViewerDetector, moments, momentCard, photoViewer, randomPlay, widescreen] = await Promise.all([
+  const [app, iframeDrawer, notificationsDrawer, contentScript, escapePriority, photoViewerDetector, moments, momentCard, photoViewer, randomPlay, widescreen, topBar, globalEvents] = await Promise.all([
     readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
     readFile(`${root}/src/components/IframeDrawer.vue`, 'utf8'),
     readFile(`${root}/src/components/TopBar/components/NotificationsDrawer.vue`, 'utf8'),
@@ -3442,6 +3583,8 @@ async function verifyDrawerAndMomentsLayoutContracts() {
     readFile(`${root}/src/utils/photoViewer.ts`, 'utf8'),
     readFile(`${root}/src/utils/randomPlay.ts`, 'utf8'),
     readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readFile(`${root}/src/components/TopBar/TopBar.vue`, 'utf8'),
+    readFile(`${root}/src/constants/globalEvents.ts`, 'utf8'),
   ])
   assert.equal((iframeDrawer.match(/addEventListener\('keydown'/g) || []).length, 1)
   assert.equal((notificationsDrawer.match(/addEventListener\('keydown'/g) || []).length, 1)
@@ -3449,6 +3592,15 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(iframeDrawer, /window\.setTimeout\(\(\) => \{[\s\S]*event\.defaultPrevented[\s\S]*event\.cancelBubble/)
   assert.match(notificationsDrawer, /window\.setTimeout\(\(\) => \{[\s\S]*event\.defaultPrevented[\s\S]*event\.cancelBubble/)
   assert.match(iframeDrawer, /name="bewly-iframe-drawer"/)
+  assert.match(globalEvents, /BEWLY_IFRAME_DRAWER_HOST_CLASS = 'bewly-iframe-drawer-host'/)
+  const drawerMountedSection = iframeDrawer.slice(iframeDrawer.indexOf('onMounted(() => {'), iframeDrawer.indexOf('onBeforeUnmount'))
+  assert.ok(drawerMountedSection.indexOf('claimIframeDrawerHost()') < drawerMountedSection.indexOf(`history.pushState(null, '', props.url)`))
+  const drawerReleaseSection = iframeDrawer.slice(iframeDrawer.indexOf('function releaseIframeDrawerHost'), iframeDrawer.indexOf('function updateCurrentUrl'))
+  assert.ok(drawerReleaseSection.indexOf('restoreOriginUrl()') < drawerReleaseSection.indexOf('classList.remove(BEWLY_IFRAME_DRAWER_HOST_CLASS)'))
+  assert.match(topBar, /isIframeDrawerHost\(\)/)
+  assert.match(topBar, /cleanupScrollListeners\(\)[\s\S]{0,220}clearOriginalVideoTopBarVisibility\(\)/)
+  assert.match(contentScript, /if \(isIframeDrawerHost\(\)\) \{[\s\S]{0,180}cancelPlayerRetryTasks\(\)[\s\S]{0,80}return/)
+  assert.match(contentScript, /if \(isBewlyWidescreenActive\(\)\) \{[\s\S]{0,180}lastAppliedPlayerModeNavigationKey = currentNavigationKey[\s\S]{0,80}return/)
   assert.match(contentScript, /window\.name === 'bewly-iframe-drawer'/)
   assert.match(escapePriority, /rect\.width > 0[\s\S]*rect\.height > 0/)
   assert.match(contentScript, /resolveIframeEscapeAction\([\s\S]*BEWLY_DRAWER_ESCAPE_HANDLED[\s\S]*BEWLY_DRAWER_CLOSE_REQUEST/)
@@ -3474,10 +3626,107 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(moments, /resolveVirtualSpacerSize\(topPad, gap\)/)
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /reapplyMomentFiltersFromCache\([\s\S]*maybeLoadMoreNearBottom\(\)/)
+  assert.match(moments, /let attachedScrollViewport: HTMLElement \| null = null/)
+  assert.match(moments, /attachedScrollViewport\?\.removeEventListener\('scroll', handleViewportScroll\)/)
+  assert.match(moments, /const MOMENTS_MEMORY_MAX_ITEMS = MOMENTS_CACHE_MAX_ITEMS/)
+  assert.match(moments, /moments\.value\.length >= MOMENTS_MEMORY_MAX_ITEMS/)
+  assert.match(moments, /function releasePreviewVideoElement\(video: HTMLVideoElement\)/)
+  assert.match(moments, /video\.srcObject = null/)
+  assert.match(moments, /video\.removeAttribute\('srcset'\)/)
+  assert.match(moments, /detailIframeRef\.value = null[\s\S]{0,120}detailFrameGeneration \+= 1/)
+  assert.match(moments, /iframe !== detailIframeRef\.value[\s\S]{0,160}detailIframeGenerations\.get\(iframe\) !== detailFrameGeneration/)
   assert.match(momentCard, /moment-card--supports-wide-layout/)
   assert.match(momentCard, /moment-card--wide-single-image \.moment-card__gallery--1/)
   assert.match(momentCard, /@container \(min-width: 880px\)/)
   assert.doesNotMatch(widescreen, /explicit priority ownership—not defaultPrevented alone|escapeArbitrationTimer/)
+}
+
+async function verifyIncrementalCorrectnessContracts() {
+  const root = process.cwd()
+  const [videoCard, videoCardInfo, videoCardTypes, videoCardTagPolicy, forYou, searchTransforms, contentScript, contentScriptConstants, refreshPrompt, viteContent, manifest, favorites, favoriteApi, cmnCn, cmnTw, jyut, en, moments, momentCard, widescreen, injectScript, globalEvents] = await Promise.all([
+    readFile(`${root}/src/components/VideoCard/VideoCard.vue`, 'utf8'),
+    readFile(`${root}/src/components/VideoCard/components/VideoCardInfo.vue`, 'utf8'),
+    readFile(`${root}/src/components/VideoCard/types.ts`, 'utf8'),
+    readFile(`${root}/src/components/VideoCard/tagPolicy.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/SearchResults/searchTransforms.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
+    readFile(`${root}/src/constants/contentScript.ts`, 'utf8'),
+    readFile(`${root}/src/background/contentScriptRefreshPrompt.ts`, 'utf8'),
+    readFile(`${root}/vite.config.content.ts`, 'utf8'),
+    readFile(`${root}/src/manifest.ts`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/Favorites/FavoritesPage.vue`, 'utf8'),
+    readFile(`${root}/src/background/messageListeners/api/favorite.ts`, 'utf8'),
+    readFile(`${root}/src/_locales/cmn-CN.yml`, 'utf8'),
+    readFile(`${root}/src/_locales/cmn-TW.yml`, 'utf8'),
+    readFile(`${root}/src/_locales/jyut.yml`, 'utf8'),
+    readFile(`${root}/src/_locales/en.yml`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
+    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readFile(`${root}/src/inject/index.ts`, 'utf8'),
+    readFile(`${root}/src/constants/globalEvents.ts`, 'utf8'),
+  ])
+
+  assert.match(videoCardTypes, /displayTags\?: string\[\]/)
+  assert.match(videoCardTypes, /searchableTags\?: string\[\]/)
+  assert.match(videoCardInfo, /:is="tag\.searchable \? 'a' : 'span'"/)
+  assert.match(videoCardInfo, /:href="tag\.searchable \? getTagSearchUrl\(tag\.text\) : undefined"/)
+  assert.match(videoCardInfo, /@click="tag\.searchable \? \$event\.stopPropagation\(\) : undefined"/)
+  assert.match(videoCard, /v-else-if="horizontal"[\s\S]{0,120}class="horizontal-card-info"/)
+  assert.match(forYou, /displayTags:/)
+  assert.match(searchTransforms, /searchableTags:/)
+  assert.doesNotMatch([videoCard, videoCardInfo, videoCardTypes, videoCardTagPolicy].join('\n'), /MAX_INTERFACE_TAG_COUNT|typename.*displayTags|category.*displayTags/i)
+
+  assert.match(contentScriptConstants, /interface ContentScriptPong/)
+  assert.match(refreshPrompt, /isCurrentContentScriptPong/)
+  assert.match(contentScript, /runtimeUrl: browser\.runtime\.getURL\(''\)/)
+  assert.doesNotMatch(contentScript, /createElement\('link'\)[\s\S]{0,180}dist\/contentScripts\/style\.css/)
+  assert.match(contentScript, /__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__/)
+  assert.match(contentScript, /querySelectorAll\('#bewly'\)\.forEach\(host => host\.remove\(\)\)/)
+  assert.match(viteContent, /__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__/)
+  const webAccessibleResources = manifest.slice(manifest.indexOf('web_accessible_resources'), manifest.indexOf('content_security_policy'))
+  assert.doesNotMatch(webAccessibleResources, /dist\/contentScripts\/style\.css/)
+  assert.match(webAccessibleResources, /assets\/\*/)
+
+  assert.match(favoriteApi, /editFavoriteFolder:[\s\S]{0,260}privacy: 0/)
+  assert.match(favorites, /const submittedFolderPublic = editFolderPublic\.value/)
+  assert.match(favorites, /privacy: getFavoriteFolderPrivacy\(submittedFolderPublic\)/)
+  assert.match(favorites, /folder\.attr = getFavoriteFolderEditedAttr\(folder\.attr, submittedFolderPublic\)/)
+  assert.match(favorites, /SettingsSegmentedControl/)
+  assert.match(favorites, /if \(folderId === defaultFolderId\.value\)[\s\S]{0,80}return/)
+  const editFolderRequest = favorites.slice(
+    favorites.indexOf('async function handleEditFolderConfirm'),
+    favorites.indexOf('async function deleteFolders'),
+  )
+  assert.ok(editFolderRequest.indexOf('if (res.code !== 0)') < editFolderRequest.indexOf('folder.title = title'))
+  assert.match(editFolderRequest, /catch \(error\)[\s\S]{0,180}edit_folder_failed/)
+  for (const locale of [cmnCn, cmnTw, jyut, en]) {
+    assert.match(locale, /edit_folder:/)
+    assert.match(locale, /folder_visibility:/)
+    assert.match(locale, /folder_public:/)
+    assert.match(locale, /folder_private:/)
+    assert.match(locale, /folder_public_desc:/)
+  }
+
+  assert.match(momentCard, /:data-user-profile-id="moment\.author\.mid \|\| undefined"/)
+  assert.match(momentCard, /data-user-profile-spmid-follow="dynamic\.profile\.click"/)
+  assert.match(momentCard, /@mouseenter="requestNativeUserProfile"/)
+  assert.match(momentCard, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
+  assert.match(moments, /const hostFollowStatePromise = reset && requestHostMid/)
+  assert.match(moments, /api\.user\.getRelations\(\{ fids: requestHostMid \}\)/)
+  assert.match(moments, /if \(followState !== 'unfollowed'\)[\s\S]{0,220}handleUpFilterChange\(''\)/)
+  assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid })') < moments.indexOf('api.moment.getMomentsByUp({'))
+  assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
+  assert.match(globalEvents, /BEWLY_NATIVE_USER_PROFILE_REQUEST/)
+  assert.match(globalEvents, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
+  assert.match(injectScript, /BILIBILI_USER_PROFILE_SCRIPT_URL = 'https:\/\/s1\.hdslb\.com\/bfs\/seed\/jinkela\/commentpc\/bili-comments\.js'/)
+  assert.doesNotMatch(injectScript, /commentpc\/bili-comments\.[a-f0-9]+\.js/)
+  assert.match(injectScript, /window\.customElements\.whenDefined\('bili-user-profile'\)/)
+  assert.match(injectScript, /nativeUserProfileElement\.setup\?\.\(trigger\)/)
+  assert.match(injectScript, /new MouseEvent\('mouseenter'/)
+  assert.match(injectScript, /new MouseEvent\('mouseleave'/)
+  assert.match(injectScript, /nativeUserProfileCleanups\.delete\(trigger\)/)
 }
 
 async function verifyAuditRemediationContracts() {
@@ -3608,6 +3857,7 @@ async function verify() {
   verifyPlaybackRatePolicy()
   verifyWidescreenMutationPolicy()
   await verifyCommentReplyPaginationPolicy()
+  verifyIncrementalCorrectnessPolicies()
   verifyFloatingMenuPolicy()
   verifyWidescreenEngagementPolicy()
   verifyBilibiliApiErrorClassification()
@@ -3649,6 +3899,7 @@ async function verify() {
   await verifyP2WidescreenControl()
   await verifyIncrementalInteractionContracts()
   await verifyDrawerAndMomentsLayoutContracts()
+  await verifyIncrementalCorrectnessContracts()
   await verifyAuditRemediationContracts()
   await verifyP4CleanupContracts()
   await verifySecurityContracts()

@@ -791,10 +791,8 @@ onUnmounted(() => {
             <button
               v-layout-editable="'dock-theme-toggle'"
               type="button"
-              class="dock-item bew-shape-circle"
+              class="dock-item dock-item--icon-only bew-shape-circle"
               :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
-              bg="!dark-hover:$bew-bg" transform="!dark-hover:scale-100"
-              :shadow="settings.disableDockGlowingEffect ? 'none' : '!dark-hover:[inset_4px_-2px_8px_hsla(226deg,85%,77%,1)]'"
               pointer-events-auto
               @click="toggleDark"
               @mouseenter="hoveringDockItem.themeMode = true"
@@ -818,7 +816,7 @@ onUnmounted(() => {
           <Tooltip :content="$t('dock.settings')" :placement="tooltipPlacement">
             <button
               type="button"
-              class="dock-item group bew-shape-circle"
+              class="dock-item dock-item--icon-only group bew-shape-circle"
               :class="{
                 inactive: hoveringDockItem.themeMode && isDark,
               }"
@@ -1277,6 +1275,22 @@ onUnmounted(() => {
 
   &.disable-glowing-effect {
     box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1) !important;
+  }
+
+  &.dock-item--icon-only {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+
+    &:hover {
+      background: transparent;
+      box-shadow: none;
+    }
+
+    &.disable-glowing-effect {
+      box-shadow: none !important;
+    }
   }
 
   &.active {

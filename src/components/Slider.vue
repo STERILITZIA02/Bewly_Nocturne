@@ -71,7 +71,7 @@ input[type="range"] {
   }
 
   &::-webkit-slider-thumb:hover {
-    --uno: "ring-$bew-theme-color";
+    --uno: "ring-$bew-theme-focus-ring";
   }
 }
 </style>
