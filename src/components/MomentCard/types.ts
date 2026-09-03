@@ -45,6 +45,8 @@ export interface DisplayMoment {
   publishedAt: number
   title: string
   text: string
+  /** 视频正文来自动态/投稿简介回退，而非 UP 单独发布的动态正文。 */
+  descInherited?: boolean
   richText: DisplayRichTextSegment[]
   images: string[]
   /** 与 images 按索引对齐的宽高比；未知项为 null。 */

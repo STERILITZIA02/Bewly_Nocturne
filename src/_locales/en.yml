@@ -146,7 +146,7 @@ settings:
   category_navigation_search_desc: Configure search appearance, suggestions, history, trending, and results.
   category_navigation_moments_desc: Configure the dynamic feed sidebar and how dynamic cards are opened.
   category_navigation_watch_later_page_desc: Configure the content layout of the Watch Later page.
-  category_navigation_playback_page_desc: Configure the default video display mode and Bewly Widescreen interactions.
+  category_navigation_playback_page_desc: Configure the default video display mode and Bewly Playback Page interactions.
   category_navigation_messages_page_desc: Configure direct-message reading, conversation lists, memory, and mobile behavior.
   messages_reading_behavior: Reading behavior
   messages_auto_mark_read: Mark messages as read automatically
@@ -496,7 +496,7 @@ settings:
     default: Default
     web_fullscreen: Web Fullscreen
     widescreen: Widescreen
-    bewly_widescreen: Bewly Widescreen
+    bewly_widescreen: Bewly Playback Page
     enable_overrides: Enable Context Overrides
     enable_overrides_desc: Display mode settings for individual playback contexts only apply when enabled.
     overrides: Context Display Modes
@@ -506,13 +506,13 @@ settings:
     context_bangumi: Series / Movies
     context_watch_later: Watch Later
     context_playlist: Favorites / Playlists
-    bewly_widescreen_sidebar_position: Bewly Widescreen Sidebar Position
-    bewly_widescreen_sidebar_position_desc: Choose the sidebar position in Bewly Widescreen mode
+    bewly_widescreen_sidebar_position: Bewly Playback Page Sidebar Position
+    bewly_widescreen_sidebar_position_desc: Choose where the sidebar appears on the Bewly Playback Page
     bewly_widescreen_sidebar_position_left: Left
     bewly_widescreen_sidebar_position_right: Right
-    bewly_widescreen_center_video: Center video in Bewly Widescreen
+    bewly_widescreen_center_video: Center video on the Bewly Playback Page
     bewly_widescreen_center_video_desc: Center the video, danmaku, and click area across the viewport only in video-first layout when the measured letterbox space can contain the full sidebar. Otherwise, keep the video-first layout.
-    bewly_widescreen_layout_priority: Bewly Widescreen layout priority
+    bewly_widescreen_layout_priority: Bewly Playback Page layout priority
     bewly_widescreen_layout_priority_desc: Video-first fully hides the sidebar until the pointer reaches the edge. Sidebar-first starts fully expanded. Both states use an overlay and keep the player width unchanged.
     bewly_widescreen_layout_priority_video: Video-first
     bewly_widescreen_layout_priority_sidebar: Sidebar-first
@@ -1338,6 +1338,8 @@ moment_card:
   add_watch_later: Add to Watch Later
   added: Added
   watch_later: Watch Later
+  expand_text: Show more
+  collapse_text: Show less
   live_moment: Live post
   open_original_video: Open original video
   moment_image_alt: Post image {index}
@@ -1590,17 +1592,18 @@ watch_later:
   play_in_watch_later: Playlist
   remove_from_watch_later: Remove
 widescreen:
-  enter: Enter Bewly Widescreen
-  exit: Exit Bewly Widescreen
+  enter: Open Bewly Playback Page
+  exit: Leave Bewly Playback Page
   close_sidebar: Collapse sidebar
   resize_sidebar: Resize sidebar
-  exit_loading: Exit Widescreen mode
-  loading: Loading Widescreen mode…
+  exit_loading: Leave Bewly Playback Page
+  loading: Loading Bewly Playback Page…
   comments: Comments
   danmaku: Danmaku
   danmaku_settings: Danmaku settings
   danmaku_style: Danmaku style
   send_danmaku: Send danmaku
+  player_feedback: Playback feedback
   playlist: Playlist
   recommendations: Recommendations
   collapse: Collapse

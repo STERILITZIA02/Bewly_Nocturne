@@ -10,6 +10,7 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
+import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
 
 import type { Author, Video } from '../VideoCard/types'
 import VideoCardContextMenu from '../VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
@@ -73,7 +74,7 @@ const emit = defineEmits<{
   toggleLike: [moment: DisplayMoment]
   toggleReservation: [moment: DisplayMoment]
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
-  commentToggle: [expanded: boolean]
+  interactiveResize: []
   forwardCountChange: [momentId: string, forwardCount: number]
 }>()
 
@@ -166,6 +167,18 @@ const forwardExpanded = computed(() => disclosure.value === 'forward')
 const canExpandComments = computed(() => Boolean(moment.commentId && moment.commentType))
 const commentSectionId = computed(() => `moment-comment-section-${moment.id}`)
 const forwardSectionId = computed(() => `moment-forward-section-${moment.id}`)
+const descriptionRef = ref<HTMLElement | null>(null)
+const descriptionExpanded = ref(false)
+const descriptionCanToggle = ref(false)
+const descriptionId = computed(() => `moment-description-${moment.id}`)
+const descriptionPreviewText = computed(() => getCardPreviewText(moment))
+const hasUserDescription = computed(() => Boolean(
+  !moment.descInherited
+  && !moment.isChargeExclusive
+  && (moment.richText.length || moment.text.trim()),
+))
+let descriptionResizeObserver: ResizeObserver | null = null
+let descriptionMeasureFrame = 0
 const primaryActionLabel = computed(() => moment.isVideo && !moment.isLive
   ? t('moment_card.open_new_tab')
   : t('moment_card.open_detail', { author: moment.author.name }))
@@ -290,7 +303,7 @@ function setDisclosure(target: Exclude<MomentDisclosure, 'none'>) {
   if (nextDisclosure === 'forward')
     forwardComposerMounted.value = true
   disclosure.value = nextDisclosure
-  emit('commentToggle', nextDisclosure !== 'none')
+  emit('interactiveResize')
 }
 
 function toggleComments() {
@@ -305,8 +318,63 @@ function toggleForward() {
 function closeForwardComposer() {
   if (disclosure.value === 'forward') {
     disclosure.value = 'none'
-    emit('commentToggle', false)
+    emit('interactiveResize')
   }
+}
+
+function measureDescriptionOverflow() {
+  const element = descriptionRef.value
+  if (!element || !hasUserDescription.value) {
+    const wasExpanded = descriptionExpanded.value
+    descriptionExpanded.value = false
+    descriptionCanToggle.value = false
+    if (wasExpanded)
+      emit('interactiveResize')
+    return
+  }
+
+  if (descriptionExpanded.value)
+    element.dataset.descriptionMeasureCollapsed = ''
+  const canToggle = isMomentDescriptionOverflowing(element)
+  delete element.dataset.descriptionMeasureCollapsed
+
+  descriptionCanToggle.value = canToggle
+  if (!canToggle && descriptionExpanded.value) {
+    descriptionExpanded.value = false
+    emit('interactiveResize')
+  }
+}
+
+function scheduleDescriptionOverflowMeasure() {
+  if (descriptionMeasureFrame)
+    return
+  descriptionMeasureFrame = window.requestAnimationFrame(() => {
+    descriptionMeasureFrame = 0
+    measureDescriptionOverflow()
+  })
+}
+
+function bindDescription(element: Element | ComponentPublicInstance | null) {
+  const next = element instanceof HTMLElement ? element : null
+  if (descriptionRef.value === next)
+    return
+
+  descriptionResizeObserver?.disconnect()
+  descriptionRef.value = next
+  if (!next)
+    return
+
+  descriptionResizeObserver ??= new ResizeObserver(scheduleDescriptionOverflowMeasure)
+  descriptionResizeObserver.observe(next)
+  scheduleDescriptionOverflowMeasure()
+}
+
+function toggleDescription() {
+  if (!descriptionCanToggle.value)
+    return
+  descriptionExpanded.value = !descriptionExpanded.value
+  emit('interactiveResize')
+  void nextTick(scheduleDescriptionOverflowMeasure)
 }
 
 function syncDisplayedDisclosure(value: MomentDisclosure) {
@@ -348,7 +416,16 @@ watch(
     displayedDisclosure.value = disclosure.value
     forwardComposerMounted.value = disclosure.value === 'forward'
     displayedForwardCount.value = normalizeForwardCount(moment.forwardCount)
-    emit('commentToggle', disclosure.value !== 'none')
+    emit('interactiveResize')
+  },
+)
+
+watch(
+  () => moment.id,
+  () => {
+    descriptionExpanded.value = false
+    descriptionCanToggle.value = false
+    void nextTick(scheduleDescriptionOverflowMeasure)
   },
 )
 
@@ -399,6 +476,11 @@ function requestNativeUserProfile(event: MouseEvent) {
 }
 
 onBeforeUnmount(() => {
+  descriptionResizeObserver?.disconnect()
+  descriptionResizeObserver = null
+  if (descriptionMeasureFrame)
+    cancelAnimationFrame(descriptionMeasureFrame)
+  descriptionMeasureFrame = 0
   authorAvatarLinkRef.value?.dispatchEvent(new CustomEvent(BEWLY_NATIVE_USER_PROFILE_RELEASE, {
     bubbles: true,
     composed: true,
@@ -424,6 +506,7 @@ onBeforeUnmount(() => {
       'moment-card--entering': entering,
     }"
     :style="cardLayoutStyles"
+    :data-description-expanded="descriptionExpanded ? 'true' : undefined"
   >
     <button
       type="button"
@@ -579,38 +662,62 @@ onBeforeUnmount(() => {
           >
             {{ moment.mediaMeta }}
           </p>
-          <p v-if="!moment.isLive && (moment.richText.length || getCardPreviewText(moment))" class="moment-card__desc">
-            <template v-if="moment.richText.length">
-              <template v-for="(segment, segmentIndex) in moment.richText" :key="`${moment.id}-${segmentIndex}`">
-                <img
-                  v-if="segment.type === 'emoji' && segment.imageUrl"
-                  :src="segment.imageUrl"
-                  :alt="segment.text"
-                  :title="segment.text"
-                  class="moment-card__emoji"
-                  :class="{ 'moment-card__emoji--large': segment.size === 2 }"
-                  loading="lazy"
-                  decoding="async"
-                >
-                <a
-                  v-else-if="segment.type === 'link' && segment.url"
-                  :href="segment.url"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="moment-card__rich-link"
-                  @click.stop
-                >
-                  {{ segment.text }}
-                </a>
-                <template v-else>
-                  {{ segment.text }}
+          <div
+            v-if="!moment.isLive && (moment.richText.length || descriptionPreviewText)"
+            class="moment-card__description"
+            :class="{ 'moment-card__description--inherited': moment.descInherited }"
+          >
+            <p
+              :id="descriptionId"
+              :ref="bindDescription"
+              class="moment-card__desc"
+              :class="{
+                'is-expanded': descriptionExpanded,
+                'moment-card__desc--inherited': moment.descInherited,
+              }"
+            >
+              <template v-if="!moment.descInherited && moment.richText.length">
+                <template v-for="(segment, segmentIndex) in moment.richText" :key="`${moment.id}-${segmentIndex}`">
+                  <img
+                    v-if="segment.type === 'emoji' && segment.imageUrl"
+                    :src="segment.imageUrl"
+                    :alt="segment.text"
+                    :title="segment.text"
+                    class="moment-card__emoji"
+                    :class="{ 'moment-card__emoji--large': segment.size === 2 }"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                  <a
+                    v-else-if="segment.type === 'link' && segment.url"
+                    :href="segment.url"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    class="moment-card__rich-link"
+                    @click.stop
+                  >
+                    {{ segment.text }}
+                  </a>
+                  <template v-else>
+                    {{ segment.text }}
+                  </template>
                 </template>
               </template>
-            </template>
-            <template v-else>
-              {{ getCardPreviewText(moment) }}
-            </template>
-          </p>
+              <template v-else>
+                {{ descriptionPreviewText }}
+              </template>
+            </p>
+            <button
+              v-if="descriptionCanToggle"
+              type="button"
+              class="moment-card__description-toggle"
+              :aria-controls="descriptionId"
+              :aria-expanded="descriptionExpanded"
+              @click.stop="toggleDescription"
+            >
+              {{ t(descriptionExpanded ? 'moment_card.collapse_text' : 'moment_card.expand_text') }}
+            </button>
+          </div>
           <div
             v-if="moment.forward?.video"
             class="moment-card__forward-video"
@@ -1621,6 +1728,19 @@ onBeforeUnmount(() => {
   padding: 0;
 }
 
+.moment-card__description {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.moment-card__description--inherited {
+  flex: 0 0 auto;
+}
+
 .moment-card__more-btn {
   display: grid;
   flex: 0 0 auto;
@@ -1684,7 +1804,7 @@ onBeforeUnmount(() => {
 .moment-card__main--video .moment-card__desc {
   min-height: 0;
   flex: 1 1 auto;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: var(--moment-card-description-lines, 3);
   text-overflow: ellipsis;
 }
 
@@ -1703,7 +1823,7 @@ onBeforeUnmount(() => {
 
 .moment-card--text .moment-card__desc,
 .moment-card--forward-video .moment-card__desc {
-  -webkit-line-clamp: 7;
+  -webkit-line-clamp: var(--moment-card-description-lines, 7);
 }
 
 .moment-card--forward-draw .moment-card__body {
@@ -1727,7 +1847,53 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
-  -webkit-line-clamp: 7;
+  -webkit-line-clamp: var(--moment-card-description-lines, 7);
+}
+
+.moment-card__desc.is-expanded:not([data-description-measure-collapsed]) {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: unset;
+  text-overflow: clip;
+}
+
+.moment-card__desc--inherited {
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  -webkit-line-clamp: 2;
+}
+
+.moment-card__description-toggle {
+  display: inline-flex;
+  min-width: 24px;
+  min-height: 24px;
+  align-items: center;
+  margin-top: var(--bew-space-1);
+  padding: 0;
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  color: var(--bew-theme-foreground);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+}
+
+.moment-card__description-toggle:hover {
+  color: var(--bew-text-1);
+}
+
+.moment-card__description-toggle:focus-visible {
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
+}
+
+.moment-card[data-description-expanded="true"] .moment-card__main--video .moment-card__body {
+  max-height: none;
+  overflow: visible;
 }
 
 .moment-card__emoji {

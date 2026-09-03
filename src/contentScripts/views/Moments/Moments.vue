@@ -31,6 +31,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { numFormatter } from '~/utils/dataFormatter'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
 import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
@@ -39,6 +40,7 @@ import { getCSRF } from '~/utils/main'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
+import { resolveMomentTextSources } from '~/utils/momentDescription'
 import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
 import { normalizeMomentRemoteUrl } from '~/utils/momentUrl'
@@ -578,6 +580,16 @@ function getMomentContent(item: any) {
   const opus = major.opus || {}
   const article = major.article || {}
   const common = major.common || major.upower_common || {}
+  const isUgcSeason = item.type === 'DYNAMIC_TYPE_UGC_SEASON'
+    || major?.type === 'MAJOR_TYPE_UGC_SEASON'
+    || Boolean(ugcSeason)
+  const isPgc = item.type === 'DYNAMIC_TYPE_PGC_UNION' || Boolean(major.pgc)
+  const isRegularVideo = !isUgcSeason && (
+    item.type === 'DYNAMIC_TYPE_AV'
+    || Boolean(major.archive)
+    || isPgc
+  )
+  const isVideo = isRegularVideo || isUgcSeason
   const blocked = extractBlockedInfo(major.blocked)
   const additional = dynamic.additional || {}
   const additionalCard = additional.common
@@ -600,20 +612,28 @@ function getMomentContent(item: any) {
     isChargeExclusive ? t('moments.charge_unlock_hint') : '',
   )
 
-  // 图文/纯文字（itemOpusStyle）正文：major.opus.summary.text
-  // 旧结构可能在 module_dynamic.desc.text；视频/专栏等再回落到各自 desc
-  let text = pickText(
-    opus.summary?.text,
-    typeof opus.summary === 'string' ? opus.summary : '',
-    normalizeDescText(dynamic.desc),
-    archive.desc,
-    article.desc,
-    common.desc,
-  )
-  const richText = extractRichTextSegments(
-    opus.summary?.rich_text_nodes,
-    dynamic.desc?.rich_text_nodes,
-  )
+  const {
+    descInherited,
+    text: resolvedText,
+  } = resolveMomentTextSources({
+    archiveText: pickText(archive.desc),
+    articleText: pickText(article.desc),
+    commonText: pickText(common.desc),
+    dynamicText: normalizeDescText(dynamic.desc),
+    isVideo,
+    opusText: pickText(
+      opus.summary?.text,
+      typeof opus.summary === 'string' ? opus.summary : '',
+    ),
+  })
+  let text = resolvedText
+  // 视频继承简介只保留纯文本元数据；不能把简介节点冒充用户正文。
+  const richText = descInherited
+    ? []
+    : extractRichTextSegments(
+        opus.summary?.rich_text_nodes,
+        isVideo ? undefined : dynamic.desc?.rich_text_nodes,
+      )
 
   // 充电未解锁：列表往往无 desc/major，用提示文案顶上
   if (!text && isChargeExclusive)
@@ -682,15 +702,6 @@ function getMomentContent(item: any) {
     }
   }
 
-  const isUgcSeason = item.type === 'DYNAMIC_TYPE_UGC_SEASON'
-    || major?.type === 'MAJOR_TYPE_UGC_SEASON'
-    || Boolean(ugcSeason)
-  const isPgc = item.type === 'DYNAMIC_TYPE_PGC_UNION' || Boolean(major.pgc)
-  const isRegularVideo = !isUgcSeason && (
-    item.type === 'DYNAMIC_TYPE_AV'
-    || Boolean(major.archive)
-    || isPgc
-  )
   // 图文：DRAW / 带图 opus，不含视频、合集、直播与专栏
   const isArticleMajor = item.type === 'DYNAMIC_TYPE_ARTICLE'
     || major?.type === 'MAJOR_TYPE_ARTICLE'
@@ -705,13 +716,14 @@ function getMomentContent(item: any) {
   return {
     title: pickText(live?.title, opus.title, archive.title, article.title, common.title),
     text,
+    descInherited,
     richText,
     images: [...images, ...(cover ? [httpsUrl(cover)] : [])].filter(Boolean).filter((url: string, index: number, list: string[]) => list.indexOf(url) === index),
     imageRatios: [
       ...imageRatios,
       ...(cover && !images.includes(httpsUrl(cover)) ? [null] : []),
     ],
-    isVideo: isRegularVideo || isUgcSeason,
+    isVideo,
     isRegularVideo,
     isUgcSeason,
     isDraw,
@@ -1428,6 +1440,7 @@ function mapMoment(item: DataItem): DisplayMoment {
     publishedAt: Number(author.pub_ts || 0),
     title: content.title,
     text,
+    descInherited: isForward ? false : content.descInherited,
     richText,
     // 转发卡片只展示原动态摘要，不能把原动态图片提升为外层卡片媒体。
     images: isForward || (isChargeExclusive && !content.isVideo) ? [] : content.images,
@@ -1594,7 +1607,8 @@ function estimateCardHeight(moment: DisplayMoment) {
     const charsPerLine = Math.max(12, Math.floor(contentWidth / 15))
     const titleLines = moment.title ? Math.min(2, Math.max(1, Math.ceil(moment.title.length / charsPerLine))) : 0
     const description = getCardPreviewText(moment)
-    const descriptionLines = description ? Math.min(3, Math.max(1, Math.ceil(description.length / charsPerLine))) : 0
+    const descriptionMaxLines = moment.descInherited ? 2 : 3
+    const descriptionLines = description ? Math.min(descriptionMaxLines, Math.max(1, Math.ceil(description.length / charsPerLine))) : 0
     const bodyHeight = titleLines * 22 + descriptionLines * 24 + (titleLines && descriptionLines ? 8 : 0)
     return Math.round(contentWidth * 9 / 16) + 116 + bodyHeight + additionalHeight + interactionHeight
   }
@@ -1789,6 +1803,7 @@ function getValidMomentsCache(filter: MomentFilter) {
     && !(moment.isForward && moment.isVideo)
     && 'commentId' in moment
     && 'commentType' in moment
+    && 'descInherited' in moment
   ))
   if (usesCurrentMomentShape && Date.now() - entry.updatedAt < MOMENTS_CACHE_TTL_MS)
     return entry
@@ -2274,7 +2289,7 @@ function scheduleBottomRebalance() {
   }, 720)
 }
 
-function handleMomentCommentToggle() {
+function handleMomentCardInteractiveResize() {
   suppressBottomRebalanceUntil = Date.now() + 1200
   if (rebalanceTimer) {
     clearTimeout(rebalanceTimer)
@@ -2471,6 +2486,9 @@ function markCardReady(id: string) {
 }
 
 function fitVideoCardDescription(card: HTMLElement) {
+  if (card.dataset.descriptionExpanded === 'true')
+    return
+
   const body = card.querySelector<HTMLElement>('.moment-card__main--video:not(.moment-card__main--live) .moment-card__body')
   const description = body?.querySelector<HTMLElement>('.moment-card__desc')
   if (!body || !description)
@@ -4094,9 +4112,27 @@ watch(
               </span>
             </a>
             <div class="moments-user-card__stats">
-              <span><strong>{{ portalUser.following }}</strong><small>{{ t('moments.following') }}</small></span>
-              <span><strong>{{ portalUser.follower }}</strong><small>{{ t('moments.followers') }}</small></span>
-              <span><strong>{{ portalUser.dyns }}</strong><small>{{ t('moments.moments') }}</small></span>
+              <a
+                :href="`https://space.bilibili.com/${portalUser.mid}/fans/follow`"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="portalUser.following"
+                @click.stop
+              ><strong>{{ numFormatter(portalUser.following || 0) }}</strong><small>{{ t('moments.following') }}</small></a>
+              <a
+                :href="`https://space.bilibili.com/${portalUser.mid}/fans/fans`"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="portalUser.follower"
+                @click.stop
+              ><strong>{{ numFormatter(portalUser.follower || 0) }}</strong><small>{{ t('moments.followers') }}</small></a>
+              <a
+                :href="`https://space.bilibili.com/${portalUser.mid}/dynamic`"
+                target="_blank"
+                rel="noopener noreferrer"
+                :title="portalUser.dyns"
+                @click.stop
+              ><strong>{{ numFormatter(portalUser.dyns || 0) }}</strong><small>{{ t('moments.moments') }}</small></a>
             </div>
           </article>
 
@@ -4402,7 +4438,7 @@ watch(
               @toggle-like="toggleMomentLike"
               @toggle-reservation="toggleMomentReservation"
               @open-image-preview="openMomentImagePreview"
-              @comment-toggle="handleMomentCommentToggle"
+              @interactive-resize="handleMomentCardInteractiveResize"
               @forward-count-change="handleMomentForwardCountChange"
             />
             <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
@@ -4989,12 +5025,14 @@ watch(
   grid-template-columns: repeat(3, 1fr);
   margin-top: var(--bew-space-5);
 }
-.moments-user-card__stats > span {
+.moments-user-card__stats > a {
   display: flex;
   min-width: 0;
   flex-direction: column;
   align-items: center;
   gap: var(--bew-space-1);
+  color: inherit;
+  text-decoration: none;
 }
 .moments-user-card__stats strong {
   overflow: hidden;
@@ -5004,10 +5042,22 @@ watch(
   font-weight: var(--bew-font-weight-semibold);
   text-overflow: ellipsis;
 }
+.moments-user-card__stats strong,
+.moments-user-card__stats small {
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+}
 .moments-user-card__stats small {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
+}
+.moments-user-card__stats > a:hover strong,
+.moments-user-card__stats > a:hover small {
+  color: var(--bew-theme-foreground);
+}
+.moments-user-card__stats > a:focus-visible {
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: var(--bew-space-0-5);
 }
 .moments-publish-link {
   display: flex;
