@@ -103,6 +103,26 @@ export const WIDESCREEN_SIDEBAR_MIN_WIDTH = 360
 export const WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH = 460
 export const WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH = 1920
 export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 2 / 3
+const WIDESCREEN_CONTROL_POPOVER_MIN_SIZE = 24
+
+export function hasWidescreenControlPopoverArea(width: number, height: number): boolean {
+  return Number.isFinite(width)
+    && Number.isFinite(height)
+    && width >= WIDESCREEN_CONTROL_POPOVER_MIN_SIZE
+    && height >= WIDESCREEN_CONTROL_POPOVER_MIN_SIZE
+}
+
+export interface WidescreenSidebarRevealBlockInput {
+  bottomControlPopoverOpen: boolean
+  pointerInBottomControls: boolean
+}
+
+export function shouldBlockWidescreenSidebarReveal({
+  bottomControlPopoverOpen,
+  pointerInBottomControls,
+}: WidescreenSidebarRevealBlockInput): boolean {
+  return bottomControlPopoverOpen || pointerInBottomControls
+}
 
 export function normalizeWidescreenSidebarStoredWidth(width: number): number {
   const safeWidth = Number.isFinite(width) ? width : WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH

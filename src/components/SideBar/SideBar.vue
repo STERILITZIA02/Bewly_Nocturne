@@ -102,6 +102,10 @@ function toggleHideSidebar(hide: boolean) {
 function openSettings(event: MouseEvent) {
   emit('settingsVisibilityChange', (event.currentTarget as HTMLElement).getBoundingClientRect())
 }
+
+function openPlayerFeedback() {
+  document.querySelector<HTMLElement>('.bpx-player-top-issue')?.click()
+}
 </script>
 
 <template>
@@ -181,6 +185,20 @@ function openSettings(event: MouseEvent) {
               transition="transform duration-400 ease-out"
             />
           </div>
+        </Button>
+      </Tooltip>
+      <Tooltip
+        v-if="widescreenDocked"
+        :content="$t('widescreen.player_feedback')"
+        :placement="tooltipPlacement"
+      >
+        <Button
+          class="ctrl-btn bew-shape-circle"
+          :aria-label="$t('widescreen.player_feedback')"
+          center size="small" round
+          @click="openPlayerFeedback"
+        >
+          <Icon icon="mingcute:question-line" />
         </Button>
       </Tooltip>
     </div>
@@ -277,22 +295,60 @@ function openSettings(event: MouseEvent) {
 .widescreen-docked {
   top: auto !important;
   right: auto !important;
-  bottom: var(--bewly-widescreen-aux-controls-bottom, var(--bew-space-2));
+  bottom: var(
+    --bewly-widescreen-aux-controls-bottom,
+    var(--bewly-widescreen-controls-glass-bottom, var(--bew-space-8))
+  );
   left: var(--bewly-widescreen-aux-controls-left, var(--bew-space-8));
   width: auto;
   height: var(--bew-control-height);
   padding: 0;
 
-  /* 宽屏坞内控制键嵌在悬浮玻璃卡内：改实色，避免与底卡模糊层叠耗 GPU */
+  /* 控制键直接使用底部玻璃作为唯一表面；静止态只显示图标。 */
   .ctrl-btn.ctrl-btn {
-    --b-button-color: var(--bew-elevated-alt-solid);
-    background: var(--bew-elevated-alt-solid);
+    --b-button-border-width: 0px;
+    --b-button-color: transparent;
+    --b-button-color-hover: var(--bew-fill-2);
+    --b-button-text-color: var(--bew-text-1);
+    --b-button-shadow: none;
+    --b-button-shadow-hover: none;
+    --b-button-shadow-active: none;
+
+    color: var(--bew-text-1);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
     backdrop-filter: none;
+
+    &:hover {
+      background: var(--bew-fill-2);
+      box-shadow: none;
+      transform: none;
+    }
+
+    &:active {
+      background: var(--bew-fill-3);
+      transform: none;
+    }
   }
 
   :deep(.page-mode-switcher--sidebar) {
-    background: var(--bew-elevated-alt-solid);
+    color: var(--bew-text-1);
+    background: transparent;
+    border: 0;
+    box-shadow: none;
     backdrop-filter: none;
+  }
+
+  :deep(.page-mode-switcher--sidebar:hover:not(:disabled)) {
+    background: var(--bew-fill-2);
+    box-shadow: none;
+    transform: none;
+  }
+
+  :deep(.page-mode-switcher--sidebar:active:not(:disabled)) {
+    background: var(--bew-fill-3);
+    transform: none;
   }
 
   .sidebar-content {
@@ -301,17 +357,14 @@ function openSettings(event: MouseEvent) {
 
     flex-direction: row;
     gap: var(--bew-space-2);
-    opacity: 1;
+    opacity: var(--bewly-widescreen-controls-opacity, 0);
     transform: translate3d(0, 0, 0);
-    transition:
-      opacity var(--bew-duration-normal, 200ms) var(--bew-ease-standard),
-      transform var(--bew-duration-normal, 200ms) var(--bew-ease-standard);
-    will-change: opacity, transform;
+    transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard);
+    will-change: opacity;
   }
 
   &.widescreen-controls-hidden .sidebar-content {
-    opacity: 0;
-    transform: translate3d(0, calc(100% + var(--bew-space-2)), 0);
+    transform: none;
     pointer-events: none;
   }
 }

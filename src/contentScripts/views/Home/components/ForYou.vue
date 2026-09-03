@@ -30,6 +30,7 @@ import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { isVerticalVideo } from '~/utils/uriParse'
 
+import { createForYouInitialDataCoordinator } from '../forYouInitialData'
 import type { RecommendationDataState } from '../recommendationState'
 import { resolveRecommendationSuccessState } from '../recommendationState'
 
@@ -98,7 +99,6 @@ const isWebRecommendationMode = computed(() => settings.value.recommendationMode
 let requestVersion = 0
 let loadedAccountId: AccountId = getCurrentAccountId()
 let isComponentActive = false
-let initializationPending = false
 const pendingTimers = new Set<number>()
 const disposers: Array<() => void> = []
 type WebRecommendRequestType = 'refresh' | 'loadMore'
@@ -115,7 +115,6 @@ function scheduleTimer(callback: () => void, delay: number) {
 function clearPendingTimers() {
   pendingTimers.forEach(timer => window.clearTimeout(timer))
   pendingTimers.clear()
-  initializationPending = false
 }
 
 disposers.push(clearPendingTimers)
@@ -193,6 +192,10 @@ const noMoreContent = ref<boolean>(false)
 const activatedAppVideo = ref<AppVideoItem | null>()
 const showDislikeDialog = ref<boolean>(false)
 const hasInitializedData = ref<boolean>(false)
+const initialDataCoordinator = createForYouInitialDataCoordinator({
+  hasInitializedData: () => hasInitializedData.value,
+  runInitialData: () => initData(),
+})
 
 function getCurrentAccountId(): AccountId {
   return parseDedeUserID(document.cookie) ?? null
@@ -356,6 +359,7 @@ disposers.push(detachVisibilityListener)
 // 添加页面可见性监听器
 onMounted(() => {
   isComponentActive = true
+  initialDataCoordinator.activate()
   attachVisibilityListener()
   loadedAccountId = getCurrentAccountId()
 
@@ -411,14 +415,8 @@ onMounted(() => {
     }, 1000)
   }
   else {
-    // 首次加载或未启用状态保留时，初始化数据
-    initializationPending = true
-    scheduleTimer(() => {
-      initializationPending = false
-      if (isComponentActive)
-        void initData()
-    }, 200)
     initPageAction()
+    void initialDataCoordinator.ensure()
   }
 })
 
@@ -438,20 +436,23 @@ watch(appAuthorizationSuccessVersion, () => {
 
 onActivated(() => {
   isComponentActive = true
+  initialDataCoordinator.activate()
   attachVisibilityListener()
+  const accountChanged = ensureForYouAccount()
   if (refreshAfterAppAuthorization && settings.value.recommendationMode === 'app') {
     refreshAfterAppAuthorization = false
     appAuthorizationRequired.value = false
     void initData()
   }
-  else if (ensureForYouAccount() || (!initializationPending && !hasInitializedData.value && !isLoading.value)) {
-    void initData()
+  else if (accountChanged || !hasInitializedData.value) {
+    void initialDataCoordinator.ensure()
   }
   initPageAction()
 })
 
 onDeactivated(() => {
   isComponentActive = false
+  initialDataCoordinator.deactivate()
   detachVisibilityListener()
   requestVersion++
   clearPendingTimers()
@@ -464,6 +465,8 @@ onDeactivated(() => {
 })
 
 onBeforeUnmount(() => {
+  isComponentActive = false
+  initialDataCoordinator.deactivate()
   requestVersion++
   // 如果启用状态保留，保存当前状态到store
   if (settings.value.preserveForYouState

@@ -146,7 +146,7 @@ function injectStyle() {
       height: var(--bewly-vertical-video-zoom-window-height, 50px) !important;
       border: 0 !important;
       border-radius: 0 !important;
-      /* Bewly widescreen resets descendant borders and shadows; background layers keep all four edges visible. */
+      /* The Bewly Playback Page resets descendant borders and shadows; background layers keep all four edges visible. */
       background:
         linear-gradient(var(--bew-theme-color, #00aeec), var(--bew-theme-color, #00aeec)) top / 100% 2px no-repeat,
         linear-gradient(var(--bew-theme-color, #00aeec), var(--bew-theme-color, #00aeec)) right / 2px 100% no-repeat,

@@ -146,7 +146,7 @@ settings:
   category_navigation_search_desc: 配置搜索页外观、搜索建议、历史、热搜与结果页。
   category_navigation_moments_desc: 配置插件动态页的左侧组件和动态卡片打开方式。
   category_navigation_watch_later_page_desc: 配置稍后再看页面的内容布局。
-  category_navigation_playback_page_desc: 配置视频默认显示模式与 Bewly 宽屏交互。
+  category_navigation_playback_page_desc: 配置视频默认显示模式与 Bewly 播放页交互。
   category_navigation_messages_page_desc: 配置私信阅读、会话列表、内存与移动端行为。
   messages_reading_behavior: 阅读行为
   messages_auto_mark_read: 自动标记已读
@@ -482,7 +482,7 @@ settings:
     default: 默认
     web_fullscreen: 网页全屏
     widescreen: 宽屏
-    bewly_widescreen: Bewly宽屏
+    bewly_widescreen: Bewly播放页
     enable_overrides: 启用按场景覆盖
     enable_overrides_desc: 开启后，下方各播放场景的显示模式设置才会生效。
     overrides: 场景显示模式
@@ -492,13 +492,13 @@ settings:
     context_bangumi: 番剧 / 影视
     context_watch_later: 稍后再看
     context_playlist: 收藏 / 播放列表
-    bewly_widescreen_sidebar_position: Bewly宽屏侧边栏位置
-    bewly_widescreen_sidebar_position_desc: 选择 Bewly 宽屏模式下侧边栏的显示位置
+    bewly_widescreen_sidebar_position: Bewly播放页侧边栏位置
+    bewly_widescreen_sidebar_position_desc: 选择 Bewly 播放页侧边栏的显示位置
     bewly_widescreen_sidebar_position_left: 左侧
     bewly_widescreen_sidebar_position_right: 右侧
-    bewly_widescreen_center_video: Bewly宽屏画面居中
+    bewly_widescreen_center_video: Bewly播放页画面居中
     bewly_widescreen_center_video_desc: 仅在视频优先且实际单侧黑边能完整容纳侧栏时，让视频、弹幕和点击区域在整个画面中水平居中；空间不足时保持视频优先布局。
-    bewly_widescreen_layout_priority: Bewly宽屏布局优先级
+    bewly_widescreen_layout_priority: Bewly播放页布局优先级
     bewly_widescreen_layout_priority_desc: 视频优先默认完全隐藏侧栏，靠近边缘时展开；侧栏优先默认展开完整侧栏。两种状态都以覆盖层显示，不会改变播放器宽度。
     bewly_widescreen_layout_priority_video: 视频优先
     bewly_widescreen_layout_priority_sidebar: 侧栏优先
@@ -1287,6 +1287,8 @@ moment_card:
   add_watch_later: 添加到稍后再看
   added: 已添加
   watch_later: 稍后再看
+  expand_text: 展开正文
+  collapse_text: 收起正文
   live_moment: 直播动态
   open_original_video: 打开原视频
   moment_image_alt: 动态图片 {index}
@@ -1532,17 +1534,18 @@ watch_later:
   play_in_watch_later: 列表播放
   remove_from_watch_later: 移除
 widescreen:
-  enter: 进入 Bewly 宽屏
-  exit: 退出 Bewly 宽屏
+  enter: 进入 Bewly 播放页
+  exit: 退出 Bewly 播放页
   close_sidebar: 收起侧栏
   resize_sidebar: 调整侧栏宽度
-  exit_loading: 退出宽屏模式
-  loading: 正在加载宽屏模式…
+  exit_loading: 退出 Bewly 播放页
+  loading: 正在加载 Bewly 播放页…
   comments: 评论
   danmaku: 弹幕
   danmaku_settings: 弹幕设置
   danmaku_style: 弹幕样式
   send_danmaku: 发送弹幕
+  player_feedback: 播放反馈
   playlist: 选集
   recommendations: 推荐
   collapse: 收起

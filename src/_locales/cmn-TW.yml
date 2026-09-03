@@ -146,7 +146,7 @@ settings:
   category_navigation_search_desc: 設定搜尋頁外觀、建議、歷史、熱門搜尋與結果頁。
   category_navigation_moments_desc: 設定插件動態頁的左側元件和動態卡片開啟方式。
   category_navigation_watch_later_page_desc: 設定稍後觀看頁面的內容版面。
-  category_navigation_playback_page_desc: 設定影片預設顯示模式與 Bewly 寬螢幕互動。
+  category_navigation_playback_page_desc: 設定影片預設顯示模式與 Bewly 播放頁互動。
   category_navigation_messages_page_desc: 設定私訊閱讀、會話列表、記憶體與行動版行為。
   messages_reading_behavior: 閱讀行為
   messages_auto_mark_read: 自動標記已讀
@@ -526,7 +526,7 @@ settings:
     default: 預設
     web_fullscreen: 網頁全螢幕
     widescreen: 寬螢幕
-    bewly_widescreen: Bewly寬螢幕
+    bewly_widescreen: Bewly播放頁
     enable_overrides: 啟用依情境覆寫
     enable_overrides_desc: 開啟後，下方各播放情境的顯示模式設定才會生效。
     overrides: 情境顯示模式
@@ -536,13 +536,13 @@ settings:
     context_bangumi: 番劇 / 影視
     context_watch_later: 稍後觀看
     context_playlist: 收藏 / 播放列表
-    bewly_widescreen_sidebar_position: Bewly寬螢幕側邊欄位置
-    bewly_widescreen_sidebar_position_desc: 選擇 Bewly 寬螢幕模式下側邊欄的顯示位置
+    bewly_widescreen_sidebar_position: Bewly播放頁側邊欄位置
+    bewly_widescreen_sidebar_position_desc: 選擇 Bewly 播放頁側邊欄的顯示位置
     bewly_widescreen_sidebar_position_left: 左側
     bewly_widescreen_sidebar_position_right: 右側
-    bewly_widescreen_center_video: Bewly寬螢幕畫面置中
+    bewly_widescreen_center_video: Bewly播放頁畫面置中
     bewly_widescreen_center_video_desc: 僅在影片優先且實際單側黑邊能完整容納側欄時，讓影片、彈幕和點擊區域在整個畫面中水平置中；空間不足時維持影片優先版面。
-    bewly_widescreen_layout_priority: Bewly寬螢幕版面優先級
+    bewly_widescreen_layout_priority: Bewly播放頁版面優先級
     bewly_widescreen_layout_priority_desc: 影片優先預設完全隱藏側欄，靠近邊緣時展開；側欄優先預設展開完整側欄。兩種狀態都以覆蓋層顯示，不會改變播放器寬度。
     bewly_widescreen_layout_priority_video: 影片優先
     bewly_widescreen_layout_priority_sidebar: 側欄優先
@@ -1288,6 +1288,8 @@ moment_card:
   add_watch_later: 加入稍後再看
   added: 已加入
   watch_later: 稍後再看
+  expand_text: 展開正文
+  collapse_text: 收合正文
   live_moment: 直播動態
   open_original_video: 開啟原影片
   moment_image_alt: 動態圖片 {index}
@@ -1533,17 +1535,18 @@ watch_later:
   play_in_watch_later: 清單播放
   remove_from_watch_later: 移除
 widescreen:
-  enter: 進入 Bewly 寬螢幕
-  exit: 退出 Bewly 寬螢幕
+  enter: 進入 Bewly 播放頁
+  exit: 退出 Bewly 播放頁
   close_sidebar: 收合側欄
   resize_sidebar: 調整側欄寬度
-  exit_loading: 退出寬螢幕模式
-  loading: 正在載入寬螢幕模式…
+  exit_loading: 退出 Bewly 播放頁
+  loading: 正在載入 Bewly 播放頁…
   comments: 留言
   danmaku: 彈幕
   danmaku_settings: 彈幕設定
   danmaku_style: 彈幕樣式
   send_danmaku: 傳送彈幕
+  player_feedback: 播放回饋
   playlist: 選集
   recommendations: 推薦
   collapse: 收起
