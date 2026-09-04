@@ -256,7 +256,7 @@ function removeUser(mid: string) {
 }
 .wanted-users-manager__form {
   display: flex;
-  gap: 8px;
+  gap: var(--bew-space-2);
 }
 .wanted-users-manager__form input {
   min-width: 0;
@@ -309,7 +309,7 @@ function removeUser(mid: string) {
 .wanted-users-manager__candidates {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 8px;
+  gap: var(--bew-space-2);
   margin-top: 12px;
 }
 .wanted-users-manager__candidates > button {
@@ -317,7 +317,7 @@ function removeUser(mid: string) {
   align-items: center;
   gap: var(--bew-space-3);
   min-width: 0;
-  padding: 8px;
+  padding: var(--bew-space-2);
   border: 1px solid transparent;
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
@@ -372,7 +372,7 @@ function removeUser(mid: string) {
 .wanted-users-manager__list {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
-  gap: 8px;
+  gap: var(--bew-space-2);
   margin-top: var(--bew-space-4);
 }
 .wanted-users-manager__list article {
@@ -380,7 +380,7 @@ function removeUser(mid: string) {
   align-items: center;
   gap: var(--bew-space-3);
   min-width: 0;
-  padding: 8px;
+  padding: var(--bew-space-2);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-fill-1);

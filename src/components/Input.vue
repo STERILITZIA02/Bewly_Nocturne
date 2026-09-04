@@ -10,7 +10,7 @@ interface Props {
 }
 const props = withDefaults(defineProps<Props>(), { size: 'medium' })
 
-defineEmits(['enter', 'blur'])
+const emit = defineEmits(['enter', 'blur'])
 
 const modelValue = defineModel<string | number>()
 
@@ -18,11 +18,11 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const height = computed(() => {
   if (props.size === 'small')
-    return '28px'
+    return 'var(--bew-control-height-sm)'
   if (props.size === 'medium')
     return 'var(--bew-control-height)'
   if (props.size === 'large')
-    return '40px'
+    return 'var(--bew-control-height-lg)'
   return 'var(--bew-control-height)'
 })
 
@@ -34,6 +34,11 @@ const padding = computed(() => {
 
 function focus() {
   inputRef.value?.focus()
+}
+
+function handleEnter(event: KeyboardEvent) {
+  if (!event.isComposing && event.keyCode !== 229)
+    emit('enter')
 }
 
 defineExpose({ focus })
@@ -67,7 +72,7 @@ defineExpose({ focus })
       :placeholder="placeholder"
       w-inherit min-w-0 h-inherit
       outline-none flex-1 bg-transparent
-      @keydown.enter="$emit('enter')"
+      @keydown.enter="handleEnter"
       @blur="$emit('blur')"
     >
 

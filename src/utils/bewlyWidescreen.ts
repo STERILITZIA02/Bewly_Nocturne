@@ -10,10 +10,12 @@ import { setupWidescreenDanmakuSemantics } from './bewlyWidescreenNative'
 import type { WidescreenMutationOrigin } from './bewlyWidescreenPolicy'
 import { canCommitWidescreenLayout, clampWidescreenSidebarWidth, hasWidescreenControlPopoverArea, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenAnchoredPlayerGeometry, resolveWidescreenCenterGeometry, resolveWidescreenControlSurfaceState, resolveWidescreenEngagedState, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shortenCommentDateText, shouldBlockWidescreenSidebarReveal, shouldContinueWidescreenSidebarHydration, shouldScheduleWidescreenRefresh, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY, WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH, WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH } from './bewlyWidescreenPolicy'
 import { isBilibiliRiskControl } from './bilibiliApiError'
+import { transferCommentNode } from './commentDomTransfer'
 import { i18n } from './i18n'
 import { ensureInterfaceLanguage } from './interfaceLanguage'
 import { injectCSS } from './main'
 import { reportRuntimeFailure } from './messaging'
+import { isPhotoViewerOpen, PHOTO_VIEWER_SELECTOR } from './photoViewer'
 import { getVideoElement } from './player'
 import { initVerticalVideoZoom } from './verticalVideoZoom'
 
@@ -77,6 +79,8 @@ interface BewlyWidescreenState {
   settingsWatchCleanup?: Array<() => void>
   sidebarHydrationTimer?: ReturnType<typeof setTimeout>
   sidebarHydrationWarningShown?: boolean
+  sidebarHydrationTimedOut?: boolean
+  commentReadyCleanup?: () => void
   sidebarEdgeRevealSuppressionTimer?: ReturnType<typeof setTimeout>
   sidebarInteractionCleanup?: () => void
   sidebarToggleAutoHideCleanup?: () => void
@@ -224,6 +228,10 @@ const BOTTOM_CONTROL_POPOVER_SELECTOR = [
   '[class*="bpx-player-ctrl-"][class*="-box"]',
   '[class*="bilibili-player-video-btn-"][class*="-menu"]:not([class*="-menu-item"]):not([class*="-menu-wrap"])',
   '[class*="squirtle-"][class*="-menu"]:not([class*="-menu-item"]):not([class*="-menu-wrap"])',
+].join(',')
+const NATIVE_ACTION_OVERLAY_SELECTOR = [
+  '.bili-dialog-m',
+  '.video-share-popover',
 ].join(',')
 const HIGH_ENERGY_PROGRESS_SELECTOR = '.bpx-player-pbp'
 const HIGH_ENERGY_PROGRESS_PIN_SELECTOR = '.bpx-player-pbp-pin'
@@ -487,7 +495,7 @@ function moveNode(
   placeholder.hidden = true
   placeholder.setAttribute('aria-hidden', 'true')
   parent.insertBefore(placeholder, node)
-  target.appendChild(node)
+  transferCommentNode(node, target)
   movedNodes.push({ node, placeholder, originalParent: parent })
   return true
 }
@@ -515,12 +523,12 @@ function restoreMovedNodes(movedNodes: MovedNode[]) {
   for (const { node, placeholder, originalParent } of [...movedNodes].reverse()) {
     const parent = placeholder.parentNode
     if (parent) {
-      parent.insertBefore(node, placeholder)
+      transferCommentNode(node, parent, placeholder)
       placeholder.remove()
       continue
     }
     if (originalParent.isConnected)
-      originalParent.appendChild(node)
+      transferCommentNode(node, originalParent)
     else
       node.remove()
   }
@@ -589,6 +597,15 @@ function isCommentRootUsable(root: HTMLElement) {
 
   // B 站会先创建空评论壳，再异步挂载 bili-comments / shadow DOM。提前搬走
   // 空壳会与它的初始化竞争，导致头像、编辑器、登录态或评论列表漏渲染。
+  const comments = root.querySelector('bili-comments')
+  if (comments) {
+    const shadow = comments.shadowRoot
+    // A completed native render includes the header/feed even when the list is
+    // empty or comments are restricted. An editor alone is not a ready feed.
+    return !!shadow?.querySelector('#header')
+      && !!shadow.querySelector('#feed')
+      && !shadow.querySelector('#spinner-container')
+  }
   const modernRoots = Array.from(root.querySelectorAll<HTMLElement>(
     'bili-comments, bili-comment-box, bili-comment-renderer',
   ))
@@ -606,7 +623,7 @@ function moveCommentRoot(target: HTMLElement, movedNodes: MovedNode[]) {
   // mutation can race Bilibili's renderer and create another comment editor.
   const existing = findCommentRoot(target)
   if (existing)
-    return { found: true, changed: false }
+    return { found: isCommentRootUsable(existing), changed: false }
 
   const next = findCommentRoot(document, true)
   if (!next || !isCommentRootUsable(next))
@@ -679,6 +696,7 @@ function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
     return
 
   state.activeTab = nextTab
+  state.sidebarHydrationTimedOut = false
   for (const [tab, button] of Object.entries(state.tabButtons) as Array<[BewlyWidescreenTab, HTMLButtonElement]>) {
     const active = tab === nextTab
     button.classList.toggle('is-active', active)
@@ -896,7 +914,7 @@ function syncLocalizedWidescreenText(currentState = state) {
   ]
   for (const [panel, key] of emptyLabels) {
     const empty = panel.querySelector<HTMLElement>(`.${EMPTY_CLASS}`)
-    if (empty)
+    if (empty && !empty.classList.contains('bewly-widescreen-panel-error'))
       empty.textContent = t(key)
   }
   currentState.panels.danmaku
@@ -1738,15 +1756,20 @@ function injectLayoutStyle() {
       z-index: calc(var(--bew-z-widescreen) + 1);
     }
 
-    /* Bilibili teleports uploader/user hover cards and the followed-user menu
-       directly under body. Keep those native interaction surfaces above the
-       widescreen shell instead of letting their legacy 1000/10099 layers hide
-       behind the sidebar. */
+    /* Bilibili teleports native interaction surfaces directly under body. Keep
+       them above the Bewly Playback Page instead of letting their legacy
+       2000/10102 layers hide behind the widescreen shell. */
     body.${BODY_CLASS} > :is(
       .usercard-wrap,
       bili-user-profile,
-      .van-popover.van-followed
+      .van-popover.van-followed,
+      .bili-dialog-m,
+      .video-share-popover
     ) {
+      z-index: var(--bew-z-hud) !important;
+    }
+
+    body.${BODY_CLASS} > :is(${PHOTO_VIEWER_SELECTOR}) {
       z-index: var(--bew-z-hud) !important;
     }
 
@@ -4001,11 +4024,48 @@ function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel {
+      position: relative;
       width: 100%;
       height: 100%;
       overflow: auto;
       overscroll-behavior: contain;
       padding: var(--bew-space-2) var(--bew-space-2) var(--bew-space-4);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-empty.bewly-widescreen-panel-error {
+      position: absolute;
+      inset: 0;
+      z-index: var(--bew-z-base-overlay);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--bew-space-3);
+      padding: var(--bew-space-4);
+      background: var(--bewly-widescreen-sidebar-bg);
+      color: var(--bew-text-2);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+      text-align: center;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-error button {
+      min-height: var(--bew-control-height);
+      padding: 0 var(--bew-space-3);
+      border: 1px solid var(--bew-surface-border-color);
+      border-radius: var(--bew-interactive-radius);
+      background: var(--bew-elevated);
+      color: var(--bew-text-1);
+      cursor: pointer;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-error button:hover {
+      background: var(--bew-fill-1);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-error button:focus-visible {
+      outline: var(--bew-space-0-5) solid var(--bew-theme-color);
+      outline-offset: var(--bew-space-0-5);
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-comment,
@@ -4984,6 +5044,28 @@ function isBottomControlPopoverOpen(currentState: BewlyWidescreenState) {
   }))
 }
 
+function isNativeActionOverlayOpen() {
+  if (isPhotoViewerOpen())
+    return true
+  return Array.from(document.querySelectorAll<HTMLElement>(NATIVE_ACTION_OVERLAY_SELECTOR)).some((element) => {
+    if (element.hidden || element.getAttribute('aria-hidden') === 'true')
+      return false
+
+    const style = getComputedStyle(element)
+    const opacity = Number.parseFloat(style.opacity)
+    if (style.display === 'none'
+      || style.visibility === 'hidden'
+      || style.visibility === 'collapse'
+      || style.pointerEvents === 'none'
+      || (Number.isFinite(opacity) && opacity <= 0)) {
+      return false
+    }
+
+    const rect = element.getBoundingClientRect()
+    return rect.width > 0 && rect.height > 0
+  })
+}
+
 function isPointerInBottomControlContainer(
   currentState: BewlyWidescreenState,
   pointerX: number,
@@ -5350,7 +5432,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
 
     collapseTimer = setTimeout(() => {
       collapseTimer = undefined
-      if (resizingPointerId !== undefined || sidebarResizer.matches(':focus-visible'))
+      if (resizingPointerId !== undefined || sidebarResizer.matches(':focus-visible') || isNativeActionOverlayOpen())
         return
 
       const playerRect = currentState.playerEl.getBoundingClientRect()
@@ -5491,7 +5573,7 @@ function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
       ...pointerInput,
       currentlyExpanded,
     })
-    if (shouldRemainExpanded) {
+    if (shouldRemainExpanded || (currentlyExpanded && isNativeActionOverlayOpen())) {
       setHoverExpanded(true)
     }
     else if (currentlyExpanded) {
@@ -5730,6 +5812,21 @@ function disableNativeLightOffMode(playerRoot: ParentNode) {
 function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
   const danmakuInputSelector = selectors.danmakuInput.join(',')
   const lightOffControlSelector = NATIVE_LIGHT_OFF_CONTROL_SELECTORS.join(',')
+  const onCommentsReady = (event: Event) => {
+    const target = event.target
+    if (target instanceof HTMLElement && target.matches('bili-comments')
+      && (currentState.panels.comment.contains(target) || findCommentRoot(document, true)?.contains(target))) {
+      scheduleSidebarRefresh(currentState)
+    }
+  }
+  // Native completion is dispatched outside its shadow root, including when a
+  // slow request finishes after the bounded polling window has ended.
+  document.addEventListener('inited', onCommentsReady, true)
+  document.addEventListener('bili-comments-inited', onCommentsReady, true)
+  currentState.commentReadyCleanup = () => {
+    document.removeEventListener('inited', onCommentsReady, true)
+    document.removeEventListener('bili-comments-inited', onCommentsReady, true)
+  }
   currentState.mutationObserver = new MutationObserver((records) => {
     if (!state || state !== currentState)
       return
@@ -6034,6 +6131,11 @@ function isDanmakuPanelReady(panel: HTMLElement) {
   if (!listViewport)
     return false
 
+  // Current Bpx uses hide-status for a completed (possibly empty) list and
+  // dm-close/reset for authoritative disabled/error states. Reveal its retry UI.
+  if (panel.querySelector('.bpx-player-dm.bpx-player-hide-status, .bpx-player-dm-load-status.bpx-player-dm-close, .bpx-player-dm-load-status .bpx-player-reset'))
+    return true
+
   const loading = panel.querySelector<HTMLElement>('.bpx-player-dm-load-status')
   if (loading) {
     const loadingStyle = getComputedStyle(loading)
@@ -6054,10 +6156,8 @@ function activateDanmakuTab(currentState: BewlyWidescreenState) {
   if (!source)
     return
 
-  if (currentState.danmakuActivatedSource === source) {
-    scheduleDanmakuNativeRelayout(currentState)
+  if (currentState.danmakuActivatedSource === source)
     return
-  }
   if (currentState.danmakuActivationTimer && currentState.danmakuPendingSource === source)
     return
 
@@ -6076,9 +6176,13 @@ function activateDanmakuTab(currentState: BewlyWidescreenState) {
       scheduleDanmakuNativeRelayout(currentState)
       return
     }
-    if (focusable && (inlineHeight === '0' || inlineHeight === '0px'))
+    const isFolded = () => !!source.querySelector('.bui-collapse-wrap-folded')
+    if (focusable && (isFolded() || inlineHeight === '0' || inlineHeight === '0px'))
       focusable.click()
-    currentState.danmakuActivatedSource = source
+    // The header may appear before its native click handler is bound. A click
+    // that leaves it folded must not permanently mark activation as complete.
+    if (!isFolded() && (focusable || isDanmakuPanelReady(panel)))
+      currentState.danmakuActivatedSource = source
     scheduleDanmakuNativeRelayout(currentState)
   }, 120)
 }
@@ -6593,12 +6697,16 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   syncNativePlayerControlVisibility(currentState)
   syncAuxiliaryControlGeometry(currentState)
 
-  let commentFound = !!findCommentRoot(currentState.panels.comment)
+  const existingComment = findCommentRoot(currentState.panels.comment)
+  let commentFound = !!existingComment && isCommentRootUsable(existingComment)
   if (activeTab === 'comment') {
     const commentResult = moveCommentRoot(currentState.panels.comment, currentState.movedNodes)
     commentFound = commentResult.found
     if (!commentFound) {
-      ensureEmptyPanel(currentState.panels.comment, t('widescreen.comments_loading'))
+      if (currentState.sidebarHydrationTimedOut)
+        ensureSidebarHydrationFailure(currentState)
+      else
+        ensureEmptyPanel(currentState.panels.comment, t('widescreen.comments_loading'))
     }
     else {
       clearEmptyPanel(currentState.panels.comment)
@@ -6614,17 +6722,29 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
     const danmakuResult = moveOrReplaceNode(selectors.danmaku, currentState.panels.danmaku, currentState.movedNodes)
     danmakuFound = danmakuResult.found
     if (!danmakuFound) {
-      clearEmptyPanel(currentState.panels.danmaku)
-      ensureDanmakuSkeleton(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
+      if (currentState.sidebarHydrationTimedOut) {
+        ensureSidebarHydrationFailure(currentState)
+      }
+      else {
+        clearEmptyPanel(currentState.panels.danmaku)
+        ensureDanmakuSkeleton(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
+      }
     }
     else {
-      clearEmptyPanel(currentState.panels.danmaku)
-      activateDanmakuTab(currentState)
+      if (!currentState.sidebarHydrationTimedOut)
+        activateDanmakuTab(currentState)
       danmakuReady = isDanmakuPanelReady(currentState.panels.danmaku)
-      if (danmakuReady)
+      if (danmakuReady) {
+        clearEmptyPanel(currentState.panels.danmaku)
         clearDanmakuSkeleton(currentState.panels.danmaku)
-      else
+      }
+      else if (currentState.sidebarHydrationTimedOut) {
+        ensureSidebarHydrationFailure(currentState)
+      }
+      else {
+        clearEmptyPanel(currentState.panels.danmaku)
         ensureDanmakuSkeleton(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
+      }
     }
   }
   if (danmakuReady)
@@ -6678,12 +6798,43 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
     complete: false,
   }
   readiness.complete = readiness.top && readiness[activeTab]
+  if (readiness[activeTab])
+    currentState.sidebarHydrationTimedOut = false
   syncSidebarReadiness(currentState, readiness)
   return readiness
 }
 
 function clearEmptyPanel(panel: HTMLElement) {
   panel.querySelectorAll(`.${EMPTY_CLASS}`).forEach(element => element.remove())
+}
+
+function ensureSidebarHydrationFailure(currentState: BewlyWidescreenState) {
+  const panel = currentState.panels[currentState.activeTab]
+  if (panel.querySelector('.bewly-widescreen-panel-error'))
+    return
+  clearEmptyPanel(panel)
+  clearDanmakuSkeleton(panel)
+  const error = createPanelEmpty('')
+  error.classList.add('bewly-widescreen-panel-error')
+  error.setAttribute('role', 'status')
+  const label = document.createElement('span')
+  label.textContent = t('widescreen.panel_load_incomplete')
+  const reload = document.createElement('button')
+  reload.type = 'button'
+  reload.textContent = t('widescreen.reload_page')
+  reload.onclick = () => {
+    if (state === currentState && !currentState.navigationPending)
+      location.reload()
+  }
+  const exit = document.createElement('button')
+  exit.type = 'button'
+  exit.textContent = t('widescreen.exit')
+  exit.onclick = () => {
+    if (state === currentState)
+      exitBewlyWidescreen({ userInitiated: true })
+  }
+  error.append(label, reload, exit)
+  panel.appendChild(error)
 }
 
 function clearDanmakuSkeleton(panel: HTMLElement) {
@@ -6775,6 +6926,10 @@ function startSidebarHydration(currentState: BewlyWidescreenState) {
     const readiness = runSidebarHydration(currentState)
     const now = Date.now()
     if (!shouldContinueWidescreenSidebarHydration({ complete: readiness?.complete ?? false, now, deadline })) {
+      if (!readiness?.[currentState.activeTab]) {
+        currentState.sidebarHydrationTimedOut = true
+        ensureSidebarHydrationFailure(currentState)
+      }
       if (!readiness?.comment)
         restoreCommentPrewarm()
       return
@@ -6820,6 +6975,7 @@ function suspendSidebarForVideoNavigation(currentState: BewlyWidescreenState) {
     return
 
   currentState.navigationPending = true
+  currentState.sidebarHydrationTimedOut = false
   currentState.root.dataset.navigationPending = 'true'
   clearSidebarHydration(currentState)
   clearSidebarRefreshTimer()
@@ -6864,6 +7020,7 @@ function suspendSidebarForVideoNavigation(currentState: BewlyWidescreenState) {
 }
 
 function cleanupState(currentState: BewlyWidescreenState) {
+  currentState.commentReadyCleanup?.()
   currentState.escapeKeyCleanup?.()
   clearSidebarEdgeRevealSuppression(currentState)
   currentState.sidebarInteractionCleanup?.()
@@ -7285,13 +7442,13 @@ function scheduleSidebarRefresh(currentState = state) {
     if (!state || state !== currentState)
       return
 
-    if (currentState.activeTab === 'comment' && !findCommentRoot(currentState.panels.comment))
+    if (currentState.activeTab === 'comment' && !currentState.sidebarHydrationTimedOut && !findCommentRoot(currentState.panels.comment))
       startCommentPrewarm()
     const readiness = runSidebarHydration(currentState)
     if (readiness?.complete) {
       clearSidebarHydration(currentState)
     }
-    else if (!currentState.sidebarHydrationTimer) {
+    else if (!currentState.sidebarHydrationTimer && !currentState.sidebarHydrationTimedOut) {
       startSidebarHydration(currentState)
     }
   })

@@ -215,7 +215,7 @@ function acknowledgeCurrentVersion() {
 .version-reminder-dialog__link-icon {
   width: 38px;
   height: 38px;
-  padding: 8px;
+  padding: var(--bew-space-2);
   background: currentColor;
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);

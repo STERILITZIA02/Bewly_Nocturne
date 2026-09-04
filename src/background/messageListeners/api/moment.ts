@@ -1,7 +1,35 @@
+import { serializeMomentVoteBody } from '../../momentVoteSerializer'
 import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
 
 const API_MOMENT = {
+  getMomentVote: {
+    url: 'https://api.bilibili.com/x/vote/vote_info',
+    _fetch: { method: 'get', strictParams: true },
+    params: { vote_id: '' },
+    afterHandle: AHS.J_D,
+  },
+  submitMomentVote: {
+    url: 'https://api.bilibili.com/x/vote/do_vote',
+    _fetch: {
+      method: 'post',
+      strictParams: true,
+      headers: { 'Content-Type': 'application/json' },
+      body: {
+        vote_id: 0,
+        votes: [] as number[],
+        voter_uid: 0,
+        status: 0,
+        op_bit: 0,
+        dynamic_id: '',
+        csrf: '',
+        csrf_token: '',
+      },
+      bodySerializer: serializeMomentVoteBody,
+    },
+    params: { csrf: '' },
+    afterHandle: AHS.J_D,
+  },
   getTopBarNewMomentsCount: {
     url: 'https://api.bilibili.com/x/web-interface/dynamic/entrance',
     _fetch: {

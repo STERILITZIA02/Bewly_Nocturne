@@ -4,6 +4,8 @@ import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridge
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
+import { patchCommentTransferLifecycle } from '~/utils/commentDomTransfer'
+import { buildCommentBranchPath } from '~/utils/commentTreeGeometry'
 import { isElectron } from '~/utils/main'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
@@ -1793,64 +1795,7 @@ else if (shouldInitializePageScript) {
       ].join(' ')
     }
 
-    if (childAnchors.length === 0 && typeof trunkExtendY !== 'number')
-      return null
-
-    const pathCommands: string[] = []
-    const childRadii = childAnchors.map((childAnchor) => {
-      const horizontalGap = childAnchor.left - x
-      if (horizontalGap <= 0)
-        return 0
-      const verticalRoom = Math.max(0, childAnchor.centerY - parentAnchor.bottom)
-      if (verticalRoom <= 0)
-        return 0
-      return Math.min(branchRadius, horizontalGap, verticalRoom)
-    })
-
-    // 主干止于最后一条分支圆弧起点，避免竖线在拐角处多出一截；
-    // 若有平级 +，再延伸到其位置
-    let trunkEndY = parentAnchor.bottom
-    if (childAnchors.length > 0) {
-      const lastIndex = childAnchors.length - 1
-      const lastChild = childAnchors[lastIndex]
-      const lastRadius = childRadii[lastIndex]
-      trunkEndY = lastChild.centerY - lastRadius
-    }
-    if (typeof trunkExtendY === 'number' && Number.isFinite(trunkExtendY))
-      trunkEndY = Math.max(trunkEndY, trunkExtendY)
-
-    if (trunkEndY > parentAnchor.bottom + 0.5) {
-      pathCommands.push(
-        `M ${coordinate(x)} ${coordinate(parentAnchor.bottom)}`,
-        `V ${coordinate(trunkEndY)}`,
-      )
-    }
-
-    // 从主干向每个可见子评论画水平分支（正圆弧，不超出竖线）
-    childAnchors.forEach((childAnchor, index) => {
-      const horizontalGap = childAnchor.left - x
-      if (horizontalGap <= 0)
-        return
-
-      const radius = childRadii[index]
-      if (radius <= 0) {
-        pathCommands.push(
-          `M ${coordinate(x)} ${coordinate(childAnchor.centerY)}`,
-          `H ${coordinate(childAnchor.left)}`,
-        )
-        return
-      }
-
-      // 1/4 圆：从竖线 (x, cy-r) 转到水平 (x+r, cy)
-      // SVG y 向下时，从左侧点到下侧点的短弧为 sweep=0（逆时针）
-      pathCommands.push(
-        `M ${coordinate(x)} ${coordinate(childAnchor.centerY - radius)}`,
-        `A ${coordinate(radius)} ${coordinate(radius)} 0 0 0 ${coordinate(x + radius)} ${coordinate(childAnchor.centerY)}`,
-        `H ${coordinate(childAnchor.left)}`,
-      )
-    })
-
-    return pathCommands.length > 0 ? pathCommands.join(' ') : null
+    return buildCommentBranchPath(parentAnchor, childAnchors, branchRadius, trunkExtendY)
   }
 
   function getCommentReplyBranchToggleY(
@@ -3572,8 +3517,10 @@ else if (shouldInitializePageScript) {
     window.customElements.define = new Proxy(originalDefine, {
       apply: (target, thisArg, args) => {
         const [name, classConstructor] = args
-        if (typeof name === 'string')
+        if (typeof name === 'string') {
           patchCommentCustomElement(name, classConstructor)
+          patchCommentTransferLifecycle(name, classConstructor)
+        }
         return Reflect.apply(target, thisArg, args)
       },
     })

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { CSSProperties, Ref } from 'vue'
+import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -48,7 +48,7 @@ const selectedCategory = ref<CategoryItem>()
 const selectedSeason = ref<CollectedFavoriteSeason>()
 const activatedCategoryCover = ref<string>('')
 
-const currentPageNum = ref<number>(1)
+const currentPageNum = ref<number>(0)
 const keyword: Ref<string> = ref<string>('')
 const searchScope = ref<'current' | 'all'>('current')
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
@@ -56,6 +56,7 @@ const topBarStore = useTopBarStore()
 const isLoading = ref<boolean>(false)
 const isFullPageLoading = ref<boolean>(true)
 const bootstrapFailed = ref(false)
+const failedContentPage = ref<number | null>(null)
 const noMoreContent = ref<boolean>(false)
 const loadedSeasonMedias = ref<FavoriteSeasonMedia[]>([])
 const loadedSeasonComplete = ref<boolean>(false)
@@ -79,7 +80,7 @@ const editFolderId = ref<number>()
 const editFolderTitle = ref<string>('')
 const editFolderPublic = ref(true)
 const itemMenuTarget = ref<{ type: SidebarManageSection, id: number } | null>(null)
-const itemMenuStyles = ref<CSSProperties>({})
+const itemMenuAnchor = ref({ x: 0, y: 0 })
 let contentRequestVersion = 0
 
 function notifyTopBarFavoritesChanged() {
@@ -225,6 +226,7 @@ async function initData() {
   selectedCategory.value = undefined
   selectedSeason.value = undefined
   bootstrapFailed.value = false
+  failedContentPage.value = null
   noMoreContent.value = false
   isFullPageLoading.value = true
 
@@ -259,7 +261,7 @@ async function handleFavoriteReachBottom() {
   // 视频/合集列表由 VideoCardGrid 自己监听 sentinel；全局哨兵只负责图文收藏。
   if (favoriteView.value !== 'article')
     return false
-  if (isLoading.value || noMoreContent.value)
+  if (isLoading.value || noMoreContent.value || failedContentPage.value !== null)
     return false
   return loadNextPage()
 }
@@ -278,16 +280,22 @@ async function getFavoriteCategories(requestVersion: number) {
   const res: FavoritesCategoryResult = await api.favorite.getFavoriteCategories({
     up_mid: getUserID(),
   })
-  if (requestVersion === contentRequestVersion && res.code === 0)
-    favoriteCategories.push(...res.data.list)
+  if (requestVersion !== contentRequestVersion)
+    return
+  if (res.code !== 0 || !res.data)
+    throw new Error(res.message || t('common.load_failed'))
+  favoriteCategories.push(...(res.data.list || []))
 }
 
 async function getCollectedFavoriteSeasons(requestVersion: number) {
   const res: CollectedFavoriteSeasonsResult = await api.favorite.getCollectedFavoriteSeasons({
     up_mid: getUserID(),
   })
-  if (requestVersion === contentRequestVersion && res.code === 0)
-    collectedFavoriteSeasons.push(...res.data.list)
+  if (requestVersion !== contentRequestVersion)
+    return
+  if (res.code !== 0 || !res.data)
+    throw new Error(res.message || t('common.load_failed'))
+  collectedFavoriteSeasons.push(...(res.data.list || []))
 }
 
 function resetBatchSelection() {
@@ -392,16 +400,7 @@ function openSingleEditFolder(folderId: number) {
 
 function openItemMenu(type: SidebarManageSection, id: number, event: MouseEvent) {
   itemMenuTarget.value = { type, id }
-
-  const menuHeight = itemMenuOptions.value.length * 36 + 12
-  const bottomSpace = window.innerHeight - event.y
-  const offsetTop = bottomSpace > menuHeight + 10 ? 0 : -menuHeight - 8
-  itemMenuStyles.value = {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    transform: `translate(${event.x}px, ${event.y + offsetTop}px)`,
-  }
+  itemMenuAnchor.value = { x: event.clientX, y: event.clientY }
 }
 
 function closeItemMenu() {
@@ -766,7 +765,8 @@ async function handleBatchTransferConfirm() {
 function resetContentState() {
   contentRequestVersion += 1
   resetBatchSelection()
-  currentPageNum.value = 1
+  currentPageNum.value = 0
+  failedContentPage.value = null
   favoriteResources.length = 0
   favoriteArticles.length = 0
   articleFavoriteOffset.value = ''
@@ -802,21 +802,29 @@ function loadSelectedContent() {
 }
 
 async function loadNextPage() {
-  if (isLoading.value || noMoreContent.value)
+  if (isLoading.value || noMoreContent.value || failedContentPage.value !== null)
     return false
 
-  currentPageNum.value += 1
-  await loadActiveContent(currentPageNum.value, contentRequestVersion)
-  return true
+  return loadActiveContent(currentPageNum.value + 1, contentRequestVersion)
 }
 
-async function loadActiveContent(pn: number, requestVersion: number) {
-  if (requestVersion !== contentRequestVersion)
+function retryFavoriteContent() {
+  if (isLoading.value)
     return
+  if (failedContentPage.value !== null)
+    void loadActiveContent(failedContentPage.value, contentRequestVersion)
+  else
+    loadSelectedContent()
+}
+
+async function loadActiveContent(pn: number, requestVersion: number): Promise<boolean> {
+  if (requestVersion !== contentRequestVersion)
+    return false
 
   if (pn === 1)
     isFullPageLoading.value = true
   isLoading.value = true
+  failedContentPage.value = null
 
   try {
     if (favoriteView.value === 'article') {
@@ -831,24 +839,30 @@ async function loadActiveContent(pn: number, requestVersion: number) {
         : selectedCategory.value!.id
       await getFavoriteResources(mediaId, pn, keyword.value, searchScope.value === 'all' ? 1 : 0, requestVersion)
     }
+    if (requestVersion !== contentRequestVersion)
+      return false
+    currentPageNum.value = pn
+    if (noMoreContent.value)
+      return true
+    const hasScrollbar = await haveScrollbar()
+    if (requestVersion !== contentRequestVersion)
+      return false
+    if (!hasScrollbar)
+      return await loadActiveContent(pn + 1, requestVersion)
+    return true
   }
   catch {
-    if (requestVersion === contentRequestVersion)
-      noMoreContent.value = true
+    if (requestVersion === contentRequestVersion) {
+      failedContentPage.value = pn
+      noMoreContent.value = false
+    }
+    return false
   }
   finally {
     if (requestVersion === contentRequestVersion) {
       isLoading.value = false
       isFullPageLoading.value = false
     }
-  }
-
-  if (requestVersion !== contentRequestVersion || noMoreContent.value)
-    return
-
-  if (!(await haveScrollbar())) {
-    currentPageNum.value = pn + 1
-    await loadActiveContent(currentPageNum.value, requestVersion)
   }
 }
 
@@ -876,10 +890,8 @@ async function getFavoriteResources(
   if (requestVersion !== contentRequestVersion)
     return
 
-  if (res.code !== 0) {
-    noMoreContent.value = true
-    return
-  }
+  if (res.code !== 0 || !res.data)
+    throw new Error(res.message || t('common.load_failed'))
 
   const pageItems = Array.isArray(res.data.medias)
     ? res.data.medias.filter((item): item is FavoriteItem => item != null)
@@ -900,9 +912,8 @@ async function getFavoriteSeasonResources(
     return
 
   if (!page.ok) {
-    noMoreContent.value = true
     loadedSeasonComplete.value = false
-    return
+    throw new Error(t('common.load_failed'))
   }
 
   const merged = mergeFavoriteSeasonPage({
@@ -913,65 +924,55 @@ async function getFavoriteSeasonResources(
     pageSize: FAVORITE_SEASON_PAGE_SIZE,
   })
 
-  loadedSeasonMedias.value = await enrichFavoriteSeasonMediaFaces(merged.medias)
+  const enrichedMedias = await enrichFavoriteSeasonMediaFaces(merged.medias)
   if (requestVersion !== contentRequestVersion)
     return
+  const resources = enrichedMedias.map(normalizeSeasonMedia)
+  loadedSeasonMedias.value = enrichedMedias
 
   loadedSeasonComplete.value = !merged.hasMore
   noMoreContent.value = !merged.hasMore
   activatedCategoryCover.value = page.cover || selectedSeason.value?.cover || ''
-  favoriteResources.length = 0
-  favoriteResources.push(...loadedSeasonMedias.value.map(normalizeSeasonMedia))
+  favoriteResources.splice(0, favoriteResources.length, ...resources)
 }
 
 async function getFavoriteArticles(
   pn: number,
   requestVersion = contentRequestVersion,
 ) {
-  try {
-    const res: FavoriteArticlesResult = await api.favorite.getFavoriteArticles({
-      page: pn,
-      page_size: FAVORITE_ARTICLE_PAGE_SIZE,
-      offset: pn === 1 ? '' : articleFavoriteOffset.value,
-      timezone_offset: new Date().getTimezoneOffset(),
-      web_location: '333.1387',
-    })
+  const res: FavoriteArticlesResult = await api.favorite.getFavoriteArticles({
+    page: pn,
+    page_size: FAVORITE_ARTICLE_PAGE_SIZE,
+    offset: pn === 1 ? '' : articleFavoriteOffset.value,
+    timezone_offset: new Date().getTimezoneOffset(),
+    web_location: '333.1387',
+  })
 
-    if (requestVersion !== contentRequestVersion)
-      return
+  if (requestVersion !== contentRequestVersion)
+    return
 
-    if (res.code !== 0) {
-      noMoreContent.value = true
-      toast.error(res.message || t('favorites.article_load_failed'))
-      return
-    }
+  if (res.code !== 0 || !res.data)
+    throw new Error(res.message || t('favorites.article_load_failed'))
 
-    const pageArticles = Array.isArray(res.data?.items)
-      ? res.data.items.filter((item): item is FavoriteArticle => item != null && Boolean(item.opus_id))
-      : []
-    favoriteArticles.push(...pageArticles)
+  const pageArticles = Array.isArray(res.data?.items)
+    ? res.data.items.filter((item): item is FavoriteArticle => item != null && Boolean(item.opus_id))
+    : []
+  favoriteArticles.push(...pageArticles)
 
-    const nextOffset = res.data?.offset
-    articleFavoriteOffset.value = nextOffset != null && nextOffset !== ''
-      ? String(nextOffset)
-      : (pageArticles.at(-1)?.opus_id ?? '')
+  const nextOffset = res.data?.offset
+  articleFavoriteOffset.value = nextOffset != null && nextOffset !== ''
+    ? String(nextOffset)
+    : (pageArticles.at(-1)?.opus_id ?? '')
 
-    const hasMore = Boolean(res.data?.has_more) && pageArticles.length > 0
-    // polymer 接口无 total，仅在没有更多时用已加载条数作为总数
-    if (!hasMore)
-      articleFavoriteCount.value = favoriteArticles.length
+  const hasMore = Boolean(res.data?.has_more) && pageArticles.length > 0
+  // polymer 接口无 total，仅在没有更多时用已加载条数作为总数
+  if (!hasMore)
+    articleFavoriteCount.value = favoriteArticles.length
 
-    if (favoriteArticles[0])
-      activatedCategoryCover.value = getFavoriteArticleCover(favoriteArticles[0])
+  if (favoriteArticles[0])
+    activatedCategoryCover.value = getFavoriteArticleCover(favoriteArticles[0])
 
-    noMoreContent.value = !hasMore
-  }
-  catch {
-    if (requestVersion !== contentRequestVersion)
-      return
-    noMoreContent.value = true
-    toast.error(t('favorites.article_load_failed'))
-  }
+  noMoreContent.value = !hasMore
 }
 
 function handleFavoriteViewChange(view: FavoriteView) {
@@ -1291,7 +1292,12 @@ function transformFavoriteArticle(item: FavoriteArticle) {
         <div v-else-if="isLoading || isFullPageLoading" class="article-favorites-grid" aria-hidden="true">
           <ArticleCardSkeleton v-for="index in 6" :key="`favorite-article-initial-${index}`" />
         </div>
-        <Empty v-else :description="t('common.no_data')" />
+        <Empty v-else-if="failedContentPage === null" :description="t('common.no_data')" />
+        <Empty v-if="failedContentPage !== null && !isLoading" :description="t('common.load_failed')" role="alert">
+          <Button type="primary" @click="retryFavoriteContent">
+            {{ t('common.operation.refresh') }}
+          </Button>
+        </Empty>
       </template>
 
       <template v-else>
@@ -1310,13 +1316,14 @@ function transformFavoriteArticle(item: FavoriteArticle) {
           disable-content-visibility
           :loading="isLoading || isFullPageLoading"
           :no-more-content="noMoreContent"
+          :request-failed="failedContentPage !== null"
           :empty-description="$t('common.no_more_content')"
           :more-btn="favoriteView === 'video' && !isBatchManaging"
           :hide-author="favoriteView === 'season'"
           :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
           :cover-top-left-always-visible="isBatchManaging"
           enable-row-padding
-          @refresh="() => handlePageRefresh?.()"
+          @refresh="retryFavoriteContent"
           @load-more="loadNextPage"
         >
           <template v-if="favoriteView === 'video'" #coverTopLeft="{ item }">
@@ -1616,7 +1623,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
           <ContextMenu
             v-if="itemMenuTarget"
             :options="itemMenuOptions"
-            :menu-styles="itemMenuStyles"
+            :anchor="itemMenuAnchor"
             @select="handleItemMenuSelect"
             @close="closeItemMenu"
           />

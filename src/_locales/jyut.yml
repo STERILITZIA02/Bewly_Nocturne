@@ -1,4 +1,5 @@
 common:
+  dialog: 對話框
   view_all: 睇晒佢哋
   play_all: 播晒佢哋
   loading: 撈緊...
@@ -1210,6 +1211,17 @@ moments:
   vote_ongoing: 進行緊
   vote_ended: 已結束
   vote_status_unknown: 狀態未知
+  vote_loading: 讀取投票中…
+  vote_load_failed: 讀唔到投票，請再試
+  vote_select_up_to: '最多揀 {count} 項'
+  vote_image_option: '圖片選項 {index}'
+  vote_participants: '{count} 人參與'
+  vote_deadline: '截止 {time}'
+  vote_submitted: 已投票
+  vote_submit: 投票
+  vote_submitting: 提交中…
+  vote_submit_failed: 投票失敗，請再試
+  login_to_vote: 請先登入再投票
   live_popularity: '{count} 人氣'
   charge_exclusive: 充電專屬
   charge_unlock_hint: 加入而家呢位 UP 主嘅充電就可以解鎖
@@ -1323,6 +1335,7 @@ moment_card:
   comments_empty: 暫時未有留言
   comments_load_failed: 留言載入失敗，請遲啲再試
   comments_retry: 再試
+  comments_unavailable: 暫時睇唔到評論，請再試
   comments_refresh: 重新整理
   comments_load_more: 睇更多留言
   comments_missing_parent: 上層回覆仲未載入
@@ -1410,6 +1423,7 @@ home:
   ranking: 排行
   subscribed_series: 訂閱劇集
   weekly: 每周必睇
+  weekly_search_placeholder: 搜尋期數...
   precious: 入站必睇
   live: 直播
   moments: 動向
@@ -1437,6 +1451,7 @@ anime:
       sat: 週六
       sun: 週日
 history:
+  clear_failed: 清空歷史記錄失敗，請再試
   title: 收睇記錄
   turn_on_watch_history: 開返收睇記錄
   pause_watch_history: 暫停進行收睇記錄
@@ -1535,6 +1550,8 @@ watch_later:
   play_in_watch_later: 清單播
   remove_from_watch_later: 剷走
 widescreen:
+  panel_load_incomplete: 內容未能載入完成，可以重新整理頁面或者退出 Bewly 播放頁後再試
+  reload_page: 重新整理頁面
   enter: 進入 Bewly 播放頁
   exit: 退出 Bewly 播放頁
   close_sidebar: 收埋側欄

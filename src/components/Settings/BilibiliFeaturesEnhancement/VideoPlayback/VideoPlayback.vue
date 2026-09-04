@@ -121,7 +121,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 .video-setting-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--bew-space-2);
   padding: 0.25rem 0 0.5rem;
 }
 </style>

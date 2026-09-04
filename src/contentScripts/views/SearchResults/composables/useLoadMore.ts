@@ -1,4 +1,4 @@
-import { getCurrentScope, nextTick, onScopeDispose, ref } from 'vue'
+import { computed, getCurrentScope, nextTick, onScopeDispose, ref } from 'vue'
 
 export interface LoadMoreOptions {
   cooldownMs?: number
@@ -34,6 +34,8 @@ export function useLoadMore(
   const page = ref(0)
   const hasMore = ref(true)
   const exhausted = ref(false)
+  const autoFillPaused = ref(false)
+  const needsManualLoadMore = computed(() => autoFillPaused.value && hasMore.value && !exhausted.value)
 
   const state = ref<LoadMoreState>({
     pending: false,
@@ -45,6 +47,35 @@ export function useLoadMore(
   })
 
   let loadMoreTimer: number | undefined
+  let generation = 0
+  let disposed = false
+  let renderFrame: number | undefined
+  let finishRenderWait: (() => void) | undefined
+
+  function cancelRenderWait() {
+    if (renderFrame !== undefined)
+      window.cancelAnimationFrame(renderFrame)
+    finishRenderWait?.()
+    renderFrame = undefined
+    finishRenderWait = undefined
+  }
+
+  async function waitForRender(requestGeneration: number) {
+    await nextTick()
+    if (disposed || requestGeneration !== generation)
+      return false
+    if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+      await new Promise<void>((resolve) => {
+        finishRenderWait = () => {
+          renderFrame = undefined
+          finishRenderWait = undefined
+          resolve()
+        }
+        renderFrame = window.requestAnimationFrame(() => finishRenderWait?.())
+      })
+    }
+    return !disposed && requestGeneration === generation
+  }
 
   /**
    * 清除定时器
@@ -60,6 +91,8 @@ export function useLoadMore(
    * 调度加载更多尝试
    */
   function scheduleAttempt(delay: number) {
+    if (disposed || autoFillPaused.value)
+      return
     if (isLoading()) {
       state.value.pending = false
       return
@@ -79,7 +112,7 @@ export function useLoadMore(
    * 尝试加载更多
    */
   async function attemptLoadMore() {
-    if (state.value.running)
+    if (disposed || autoFillPaused.value || state.value.running)
       return
 
     if (isLoading()) {
@@ -96,21 +129,31 @@ export function useLoadMore(
     state.value.pending = false
     state.value.running = true
     state.value.lastTriggered = Date.now()
+    const requestGeneration = generation
 
     try {
       const result = await loadFn()
+      if (disposed || requestGeneration !== generation)
+        return
 
       if (result.success) {
         page.value += 1
         state.value.lastAppended = result.appendedCount
 
-        if (result.appendedCount === 0)
-          exhausted.value = true
+        // A filtered/duplicate page is not the end of the server result set.
+        // Pause automatic requests, while retaining an explicit continuation.
+        if (result.appendedCount === 0) {
+          autoFillPaused.value = true
+          state.value.pending = false
+          clearTimer()
+        }
       }
     }
     finally {
-      state.value.lastCompleted = Date.now()
-      state.value.running = false
+      if (!disposed && requestGeneration === generation) {
+        state.value.lastCompleted = Date.now()
+        state.value.running = false
+      }
     }
   }
 
@@ -118,7 +161,7 @@ export function useLoadMore(
    * 请求加载更多（带防抖）
    */
   function requestLoadMore() {
-    if (!hasMore.value || exhausted.value || isLoading() || state.value.running)
+    if (disposed || autoFillPaused.value || !hasMore.value || exhausted.value || isLoading() || state.value.running)
       return
 
     const now = Date.now()
@@ -137,12 +180,22 @@ export function useLoadMore(
     void attemptLoadMore()
   }
 
+  function resumeLoadMore() {
+    if (disposed || isLoading() || state.value.running)
+      return
+    autoFillPaused.value = false
+    state.value.autoFillAttempts = 0
+    requestLoadMore()
+  }
+
   /**
    * 处理加载完成后的自动填充逻辑
    * @param haveScrollbar 检查是否有滚动条的函数
    */
   async function handleLoadMoreCompletion(haveScrollbar: () => Promise<boolean>) {
-    await waitForRender()
+    const requestGeneration = generation
+    if (!await waitForRender(requestGeneration))
+      return
 
     if (isLoading()) {
       state.value.pending = false
@@ -178,6 +231,8 @@ export function useLoadMore(
     }
 
     const hasScrollBar = await haveScrollbar()
+    if (disposed || requestGeneration !== generation)
+      return
     if (hasScrollBar) {
       state.value.autoFillAttempts = 0
       return
@@ -191,6 +246,9 @@ export function useLoadMore(
    * 重置状态
    */
   function reset() {
+    generation++
+    cancelRenderWait()
+    autoFillPaused.value = false
     page.value = 0
     hasMore.value = true
     exhausted.value = false
@@ -219,27 +277,25 @@ export function useLoadMore(
     exhausted.value = value
   }
 
-  if (getCurrentScope())
-    onScopeDispose(clearTimer)
+  if (getCurrentScope()) {
+    onScopeDispose(() => {
+      disposed = true
+      generation++
+      clearTimer()
+      cancelRenderWait()
+    })
+  }
 
   return {
     page,
     hasMore,
     exhausted,
     requestLoadMore,
+    needsManualLoadMore,
+    resumeLoadMore,
     handleLoadMoreCompletion,
     reset,
     setHasMore,
     setExhausted,
-  }
-}
-
-/**
- * 等待渲染完成
- */
-async function waitForRender() {
-  await nextTick()
-  if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
-    await new Promise<void>(resolve => window.requestAnimationFrame(() => resolve()))
   }
 }

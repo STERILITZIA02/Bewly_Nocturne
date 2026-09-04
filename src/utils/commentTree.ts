@@ -61,7 +61,7 @@ function wouldCreateCycle(
   return false
 }
 
-export function buildCommentTree(inputs: CommentTreeNodeInput[]): CommentTreeLayoutNode[] {
+export function buildCommentTree(inputs: CommentTreeNodeInput[], maxDepth = Number.POSITIVE_INFINITY): CommentTreeLayoutNode[] {
   const uniqueInputs: CommentTreeNodeInput[] = []
   const seenIds = new Set<string>()
   inputs.forEach((input) => {
@@ -113,6 +113,24 @@ export function buildCommentTree(inputs: CommentTreeNodeInput[]): CommentTreeLay
       children: [],
     })
   })
+
+  // Flatten only the visual parent beyond the depth limit. Capping CSS offsets
+  // alone leaves parent and child avatars in the same column and breaks rails.
+  const depthById = new Map<string, number>()
+  const resolveDepth = (node: ResolvedCommentTreeNode): number => {
+    const cached = depthById.get(node.input.id)
+    if (cached !== undefined)
+      return cached
+    const parent = node.parentId ? resolvedById.get(node.parentId) : undefined
+    const parentDepth = parent ? resolveDepth(parent) : -1
+    const depth = Math.min(parentDepth + 1, Math.max(1, maxDepth))
+    if (parent && depth <= parentDepth)
+      node.parentId = parent.parentId
+    depthById.set(node.input.id, depth)
+    return depth
+  }
+  if (Number.isFinite(maxDepth))
+    resolvedById.forEach(resolveDepth)
 
   const roots: ResolvedCommentTreeNode[] = []
   resolvedById.forEach((node) => {

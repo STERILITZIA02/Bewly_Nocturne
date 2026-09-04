@@ -32,6 +32,9 @@ importers:
       qrcode.vue:
         specifier: ^3.6.0
         version: 3.6.0(vue@3.5.19(typescript@5.9.2))
+      tabbable:
+        specifier: ^6.5.0
+        version: 6.5.0
       vue-i18n:
         specifier: ^11.1.11
         version: 11.1.11(vue@3.5.19(typescript@5.9.2))
@@ -99,6 +102,9 @@ importers:
       fs-extra:
         specifier: ^11.3.1
         version: 11.3.1
+      jsdom:
+        specifier: ^26.1.0
+        version: 26.1.0
       knip:
         specifier: ^5.62.0
         version: 5.62.0(@types/node@24.3.0)(typescript@5.9.2)
@@ -5093,6 +5099,9 @@ packages:
   synckit@0.9.3:
     resolution: {integrity: sha512-JJoOEKTfL1urb1mDoEblhD9NhEbWmq9jHEMEnxoC4ujUaZ4itA8vKgwkFAyNClgxplLi9tsUKX+EduK0p/l7sg==}
     engines: {node: ^14.18.0 || >=16.0.0}
+
+  tabbable@6.5.0:
+    resolution: {integrity: sha512-wieBHXygIm7OyQOu5hQlkk62/WyCFYGlWg7L6/ZCUZwx0o398Zkn4pVmMyfYhfMG8kGrj/Krt8eIk6UKC6VzwA==}
 
   tapable@2.2.2:
     resolution: {integrity: sha512-Re10+NauLTMCudc7T5WLFLAwDhQ0JWdrMK+9B2M8zR5hRExKmsRDCBA7/aV/pNJFltmBFO5BAMlQFi/vq3nKOg==}
@@ -11389,6 +11398,8 @@ snapshots:
     dependencies:
       '@pkgr/core': 0.1.2
       tslib: 2.8.1
+
+  tabbable@6.5.0: {}
 
   tapable@2.2.2: {}
 

@@ -343,8 +343,9 @@ else if (shouldInitializeContentScript) {
     })
   }, { signal: contentScriptSignal })
 
-  const playerModeLoadSettleDelay = 500
-  const videoOwnerAvatarReadyTimeout = 8000
+  const playerModeLoadSettleDelay = 200
+  const playerModeReadinessRetryInterval = 200
+  const videoOwnerAvatarReadyTimeout = 4000
   const videoOwnerAvatarSelector = [
     '.up-panel-container .up-avatar-wrap img.bili-avatar-img',
     '.up-panel-container .up-avatar-wrap img',
@@ -405,7 +406,7 @@ else if (shouldInitializeContentScript) {
     playerModeSettingsReady = true
     recordVideoVisitFromUrl(lastUrl)
     if (document.readyState === 'complete')
-      waitForPlayerModePageSettle()
+      waitForPlayerModePageSettle(false)
     applyDefaultPlayerMode()
     if (document.readyState === 'complete' && isCustomPlayPage() && settings.value.enableRandomPlay) {
       scheduleDetachedTimer(() => {
@@ -865,10 +866,14 @@ else if (shouldInitializeContentScript) {
     playerModeRetryTimer = setTimeout(() => {
       playerModeRetryTimer = undefined
       applyDefaultPlayerMode()
-    }, delay ?? 500)
+    }, delay ?? playerModeReadinessRetryInterval)
   }
 
-  function waitForPlayerModePageSettle() {
+  function waitForPlayerModePageSettle(resetObservation = true) {
+    // 晚到的 load / settings hydration 沿用已形成的期限和待执行 retry。
+    // 新导航仍默认重置；尚未开始观察（Infinity）时才补建期限。
+    if (!resetObservation && Number.isFinite(playerModeReadyAfter))
+      return
     clearPlayerModeRetry()
     playerModeReadyAfter = Date.now() + playerModeLoadSettleDelay
     videoOwnerAvatarReadyDeadline = Date.now() + videoOwnerAvatarReadyTimeout
@@ -1267,7 +1272,7 @@ else if (shouldInitializeContentScript) {
     if (!settingsBootLoaded)
       return
 
-    waitForPlayerModePageSettle()
+    waitForPlayerModePageSettle(false)
     if (!isIframeDrawerHost() && isVideoPage()) {
       applyDefaultPlayerMode()
     }

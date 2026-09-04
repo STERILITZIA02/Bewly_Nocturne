@@ -748,7 +748,6 @@ async function unfollowUser() {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--bew-text-color-2);
   cursor: pointer;
   background: var(--bew-popover-surface-background);
   border-radius: inherit;

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref, toRef, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -10,11 +10,15 @@ import type { CommentTreeLayoutNode } from '~/utils/commentTree'
 import { buildCommentTree } from '~/utils/commentTree'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
+import { MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
+import type { MomentCommentTarget } from '~/utils/momentCommentTarget'
+import { readMomentCommentTarget, resolveMomentCommentTarget } from '~/utils/momentCommentTarget'
 
 import type { MomentCommentItem } from './commentUtils'
 import { flattenMomentCommentReplies, mergeMomentComments, normalizeMomentCommentPage } from './commentUtils'
 import MomentCommentMedia from './MomentCommentMedia.vue'
 import MomentCommentRichText from './MomentCommentRichText.vue'
+import MomentCommentTreeGuides from './MomentCommentTreeGuides.vue'
 import type { DisplayMoment } from './types'
 import { useMomentCommentThread } from './useMomentCommentThread'
 import { getAvatarThumbnailUrl } from './utils'
@@ -25,6 +29,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
+  interactiveResize: []
 }>()
 
 interface MomentCommentTreeViewNode {
@@ -46,9 +51,19 @@ const { locale, t } = useI18n()
 const toast = useToast()
 const topBarStore = useTopBarStore()
 const accountId = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
-const commentId = computed(() => props.moment.commentId || '')
-const commentType = computed(() => props.moment.commentType || 0)
-const getCommentIdentity = () => `${accountId.value}:${getUserID() ?? 'guest'}:${commentType.value}:${commentId.value}`
+const getAccountIdentity = () => `${accountId.value || 'guest'}:${getUserID() ?? 'guest'}`
+const getSourceIdentity = () => `${getAccountIdentity()}:${props.moment.id}:${props.moment.commentType || 0}:${props.moment.commentId || ''}`
+const target = ref<MomentCommentTarget | null>(null)
+const commentId = computed(() => target.value?.oid || '')
+const commentType = computed(() => target.value?.type || 0)
+const getCommentIdentity = () => `${getSourceIdentity()}:${commentType.value}:${commentId.value}`
+const sessions = inject(MOMENT_COMMENT_SESSIONS, null)
+let sessionLease: ReturnType<NonNullable<typeof sessions>['open']> = null
+let sessionSource = ''
+let hasLoaded = false
+const listRef = ref<HTMLElement | null>(null)
+let restoredScrollTop = 0
+const resolvingTarget = ref(false)
 const comments = ref<MomentCommentItem[]>([])
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -59,6 +74,7 @@ const likedIds = reactive(new Set<string>())
 const likeCounts = reactive<Record<string, number>>({})
 const pendingLikeIds = reactive(new Set<string>())
 const likeRequestTokens = new Map<string, symbol>()
+const pendingLikeSnapshots = new Map<string, { liked: boolean, count: number }>()
 let requestGeneration = 0
 
 const {
@@ -67,7 +83,105 @@ const {
   resetThreads,
   revision: threadRevision,
   seedThread,
+  snapshotThreads,
+  restoreThreads,
 } = useMomentCommentThread(toRef(() => commentId.value), toRef(() => commentType.value))
+
+function saveSession() {
+  if (!sessions || !sessionLease || !hasLoaded || sessionSource !== getSourceIdentity())
+    return
+  const savedLikedIds = new Set(likedIds)
+  const savedLikeCounts = { ...likeCounts }
+  for (const [id, previous] of pendingLikeSnapshots) {
+    if (previous.liked)
+      savedLikedIds.add(id)
+    else
+      savedLikedIds.delete(id)
+    savedLikeCounts[id] = previous.count
+  }
+  sessions.save(sessionLease, {
+    comments: comments.value,
+    nextPage: nextPage.value,
+    hasMore: hasMore.value,
+    threads: snapshotThreads(),
+    likedIds: [...savedLikedIds],
+    likeCounts: savedLikeCounts,
+    scrollTop: listRef.value?.scrollTop ?? restoredScrollTop,
+  })
+}
+
+async function restoreScroll() {
+  const identity = getCommentIdentity()
+  await nextTick()
+  if (identity === getCommentIdentity() && listRef.value)
+    listRef.value.scrollTop = restoredScrollTop
+}
+
+async function initializeComments() {
+  const generation = ++requestGeneration
+  sessionSource = getSourceIdentity()
+  const source = sessionSource
+  const isCurrent = () => generation === requestGeneration && source === getSourceIdentity()
+  sessionLease = null
+  target.value = null
+  hasLoaded = false
+  restoredScrollTop = 0
+  comments.value = []
+  loading.value = false
+  loadingMore.value = false
+  hasMore.value = false
+  nextPage.value = 1
+  loadError.value = ''
+  likedIds.clear()
+  Object.keys(likeCounts).forEach(key => delete likeCounts[key])
+  pendingLikeIds.clear()
+  pendingLikeSnapshots.clear()
+  likeRequestTokens.clear()
+  resetThreads()
+  resolvingTarget.value = true
+  try {
+    const resolved = readMomentCommentTarget(props.moment.commentId, props.moment.commentType)
+      || sessions?.getTarget(getAccountIdentity(), props.moment.id)
+      || await resolveMomentCommentTarget(props.moment, id => api.moment.getMomentDetail({ id }), isCurrent)
+    if (!isCurrent())
+      return
+    if (!resolved)
+      throw new Error('Comment target unavailable')
+    target.value = resolved
+    sessionLease = sessions?.open(getAccountIdentity(), props.moment.id, resolved) ?? null
+    const snapshot = sessionLease && sessions?.restore(sessionLease)
+    resolvingTarget.value = false
+    if (snapshot) {
+      comments.value = snapshot.comments
+      nextPage.value = snapshot.nextPage
+      hasMore.value = snapshot.hasMore
+      snapshot.likedIds.forEach(id => likedIds.add(id))
+      Object.assign(likeCounts, snapshot.likeCounts)
+      restoreThreads(snapshot.threads)
+      restoredScrollTop = snapshot.scrollTop
+      hasLoaded = true
+      void restoreScroll()
+    }
+    else {
+      void loadComments(true)
+    }
+  }
+  catch {
+    if (isCurrent())
+      loadError.value = t('moment_card.comments_unavailable')
+  }
+  finally {
+    if (isCurrent())
+      resolvingTarget.value = false
+  }
+}
+
+function refreshComments() {
+  if (target.value)
+    void loadComments(true)
+  else
+    void initializeComments()
+}
 
 const commentCountLabel = computed(() => props.moment.commentCount > 0 ? ` ${props.moment.commentCount}` : '')
 const threadViews = computed<MomentCommentThreadView[]>(() => comments.value.map((root) => {
@@ -86,7 +200,7 @@ const threadViews = computed<MomentCommentThreadView[]>(() => comments.value.map
         : rootId,
     createdAt: comment.createdAt,
     originalOrder,
-  })))
+  })), 6)
 
   return {
     root,
@@ -152,6 +266,8 @@ async function loadComments(reset = false) {
   const requestIdentity = getCommentIdentity()
   const pageNumber = reset ? 1 : nextPage.value
   if (reset) {
+    hasLoaded = false
+    restoredScrollTop = 0
     loading.value = true
     loadError.value = ''
     comments.value = []
@@ -160,6 +276,7 @@ async function loadComments(reset = false) {
     likedIds.clear()
     pendingLikeIds.clear()
     likeRequestTokens.clear()
+    pendingLikeSnapshots.clear()
     Object.keys(likeCounts).forEach(key => delete likeCounts[key])
     resetThreads()
   }
@@ -187,6 +304,7 @@ async function loadComments(reset = false) {
     const madeProgress = reset || mergedItems.length > previousItemCount
     const pageAdvanced = page.nextPage > pageNumber
     comments.value = mergedItems
+    hasLoaded = true
     hasMore.value = page.hasMore && madeProgress && pageAdvanced
     nextPage.value = pageAdvanced ? page.nextPage : pageNumber
     seedCommentLikeState(page.items)
@@ -215,13 +333,14 @@ async function toggleCommentLike(comment: MomentCommentItem) {
 
   const rpid = comment.rpid || comment.id
   const mutationGeneration = requestGeneration
-  const mutationIdentity = `${accountId.value}:${userId}:${commentType.value}:${commentId.value}`
+  const mutationIdentity = getCommentIdentity()
   const requestToken = Symbol(comment.id)
   const previousLiked = likedIds.has(comment.id)
   const previousCount = likeCounts[comment.id] ?? comment.likeCount
   const nextLiked = !previousLiked
   pendingLikeIds.add(comment.id)
   likeRequestTokens.set(comment.id, requestToken)
+  pendingLikeSnapshots.set(comment.id, { liked: previousLiked, count: previousCount })
   if (nextLiked)
     likedIds.add(comment.id)
   else
@@ -242,7 +361,7 @@ async function toggleCommentLike(comment: MomentCommentItem) {
   catch (error) {
     const requestIsCurrent = likeRequestTokens.get(comment.id) === requestToken
       && mutationGeneration === requestGeneration
-      && mutationIdentity === `${accountId.value}:${getUserID() ?? 'guest'}:${commentType.value}:${commentId.value}`
+      && mutationIdentity === getCommentIdentity()
     if (requestIsCurrent) {
       if (previousLiked)
         likedIds.add(comment.id)
@@ -256,24 +375,23 @@ async function toggleCommentLike(comment: MomentCommentItem) {
     if (likeRequestTokens.get(comment.id) === requestToken) {
       likeRequestTokens.delete(comment.id)
       pendingLikeIds.delete(comment.id)
+      pendingLikeSnapshots.delete(comment.id)
     }
   }
 }
 
 function getTreeNodeStyle(node: CommentTreeLayoutNode) {
   return {
-    '--moment-comment-depth': String(Math.min(6, Math.max(0, node.depth))),
-  }
-}
-
-function getAncestorBranchStyle(node: CommentTreeLayoutNode, ancestorDepth: number) {
-  return {
-    '--moment-comment-ancestor-offset': String(Math.max(1, node.depth - ancestorDepth)),
+    '--moment-comment-depth': String(node.depth),
   }
 }
 
 function openCommentInNewTab(comment: MomentCommentItem) {
-  openLinkToNewTab(buildMomentCommentPermalink(props.moment, comment))
+  openLinkToNewTab(buildMomentCommentPermalink({
+    ...props.moment,
+    commentId: commentId.value,
+    commentType: commentType.value,
+  }, comment))
 }
 
 function openCommentImage(images: string[], index: number, trigger: HTMLElement) {
@@ -281,30 +399,26 @@ function openCommentImage(images: string[], index: number, trigger: HTMLElement)
 }
 
 async function loadThreadReplies(root: MomentCommentItem) {
+  const generation = requestGeneration
+  const identity = getCommentIdentity()
   await loadMoreReplies(root)
+  if (generation !== requestGeneration || identity !== getCommentIdentity())
+    return
   const state = getThreadState(root)
   if (state)
     seedCommentLikeState(state.items)
 }
 
-watch(
-  [commentId, commentType, accountId],
-  () => {
-    requestGeneration += 1
-    loading.value = false
-    loadingMore.value = false
-    void loadComments(true)
-  },
-)
-
-onMounted(() => {
-  void loadComments(true)
-})
+watch(getSourceIdentity, () => void initializeComments(), { immediate: true, flush: 'sync' })
+watch(() => [comments.value, loading.value, loadingMore.value, resolvingTarget.value, loadError.value, threadRevision.value], () => emit('interactiveResize'), { flush: 'sync' })
+onMounted(() => void restoreScroll())
 
 onBeforeUnmount(() => {
+  saveSession()
   requestGeneration += 1
   pendingLikeIds.clear()
   likeRequestTokens.clear()
+  pendingLikeSnapshots.clear()
 })
 </script>
 
@@ -317,22 +431,22 @@ onBeforeUnmount(() => {
       <button
         type="button"
         class="moment-comments__refresh"
-        :disabled="loading"
-        @click="loadComments(true)"
+        :disabled="loading || resolvingTarget"
+        @click="refreshComments"
       >
         <span i-tabler-refresh :class="{ 'bew-spinner': loading }" aria-hidden="true" />
         {{ t('moment_card.comments_refresh') }}
       </button>
     </header>
 
-    <div v-if="loading && !comments.length" class="moment-comments__state" role="status">
+    <div v-if="resolvingTarget || (loading && !comments.length)" class="moment-comments__state" role="status">
       <span i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
       <span>{{ t('moment_card.comments_loading') }}</span>
     </div>
 
     <div v-else-if="loadError && !comments.length" class="moment-comments__state moment-comments__state--error" role="alert">
       <span>{{ loadError }}</span>
-      <button type="button" @click="loadComments(true)">
+      <button type="button" @click="refreshComments">
         {{ t('moment_card.comments_retry') }}
       </button>
     </div>
@@ -342,30 +456,20 @@ onBeforeUnmount(() => {
       <span>{{ t('moment_card.comments_empty') }}</span>
     </div>
 
-    <div v-else class="moment-comments__list">
+    <div v-else ref="listRef" class="moment-comments__list" tabindex="0" :aria-label="t('moment_card.comments')">
       <section
         v-for="thread in threadViews"
         :key="thread.root.id"
         class="moment-comments__thread"
       >
+        <MomentCommentTreeGuides :nodes="thread.nodes.map(node => node.layout)" />
         <article
           v-for="node in thread.nodes"
           :key="node.comment.id"
           class="moment-comments__item"
-          :class="{
-            'moment-comments__item--reply': node.layout.depth > 0,
-            'moment-comments__item--last-sibling': node.layout.isLastSibling,
-          }"
+          :data-comment-id="node.comment.id"
           :style="getTreeNodeStyle(node.layout)"
         >
-          <span
-            v-for="ancestorDepth in node.layout.ancestorContinuationDepths"
-            :key="`ancestor-${ancestorDepth}`"
-            class="moment-comments__ancestor-branch"
-            :style="getAncestorBranchStyle(node.layout, ancestorDepth)"
-            aria-hidden="true"
-          />
-          <span v-if="node.layout.depth > 0" class="moment-comments__branch" aria-hidden="true" />
           <img
             class="moment-comments__avatar"
             :src="getAvatarThumbnailUrl(node.comment.author.avatar)"
@@ -534,8 +638,12 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-3);
+  max-height: min(60dvh, var(--bew-moment-comments-max-height));
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .moment-comments__thread {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-2);
@@ -547,40 +655,10 @@ onBeforeUnmount(() => {
 .moment-comments__item {
   position: relative;
   display: grid;
-  grid-template-columns: 32px minmax(0, 1fr);
+  grid-template-columns: var(--bew-comment-avatar-size) minmax(0, 1fr);
   gap: var(--bew-space-2);
   min-width: 0;
-}
-.moment-comments__item--reply {
-  margin-inline-start: calc(var(--moment-comment-depth) * var(--bew-space-5));
-  padding-inline-start: var(--bew-space-4);
-}
-.moment-comments__ancestor-branch,
-.moment-comments__branch {
-  position: absolute;
-  top: calc(var(--bew-space-2) * -1);
-  bottom: calc(var(--bew-space-2) * -1);
-  left: 0;
-  width: var(--bew-space-4);
-  border-left: 1px solid var(--bew-comment-tree-line-color);
-  pointer-events: none;
-}
-.moment-comments__ancestor-branch {
-  left: calc(var(--moment-comment-ancestor-offset) * var(--bew-space-5) * -1);
-}
-.moment-comments__branch::after {
-  position: absolute;
-  top: var(--bew-space-6);
-  left: -1px;
-  width: var(--bew-space-3);
-  height: var(--bew-space-2);
-  border-bottom: 1px solid var(--bew-comment-tree-line-color);
-  border-left: 1px solid var(--bew-comment-tree-line-color);
-  border-bottom-left-radius: var(--bew-radius-md);
-  content: "";
-}
-.moment-comments__item--last-sibling > .moment-comments__branch {
-  bottom: calc(100% - var(--bew-comment-avatar-size));
+  margin-inline-start: calc(var(--moment-comment-depth) * var(--bew-space-8));
 }
 .moment-comments__avatar {
   width: var(--bew-comment-avatar-size);

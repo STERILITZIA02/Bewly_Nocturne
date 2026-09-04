@@ -127,7 +127,7 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
 .comment-setting-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--bew-space-2);
   padding: 1rem 0;
 }
 </style>

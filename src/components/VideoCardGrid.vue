@@ -289,7 +289,7 @@ function canLoadMore(): boolean {
     return false
   }
 
-  return !props.loading && !props.noMoreContent && !props.needToLoginFirst && props.items.length > 0
+  return !props.loading && !props.requestFailed && !props.noMoreContent && !props.needToLoginFirst && props.items.length > 0
 }
 
 // 触发加载更多
@@ -1015,7 +1015,12 @@ function getUniqueKey(item: T, index: number): string | number {
     />
 
     <!-- 无更多内容提示（仅在有数据时显示，避免与空列表提示重复） -->
-    <Empty v-if="noMoreContent && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.no_more_content')">
+    <Empty v-if="requestFailed && !loading && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.load_failed')" role="alert">
+      <Button type="primary" @click="handleRefresh">
+        {{ refreshButtonText || $t('common.operation.refresh') }}
+      </Button>
+    </Empty>
+    <Empty v-else-if="noMoreContent && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.no_more_content')">
       <Button type="primary" @click="handleRefresh">
         {{ refreshButtonText || $t('common.operation.refresh') }}
       </Button>

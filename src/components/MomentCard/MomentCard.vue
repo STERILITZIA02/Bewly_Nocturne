@@ -23,6 +23,7 @@ import {
   setCachedMomentDisclosure,
   toggleMomentDisclosure,
 } from './momentForwardContent'
+import MomentVote from './MomentVote.vue'
 import type { DisplayForwardVideo, DisplayMoment, WatchLaterTarget } from './types'
 import {
   formatCount,
@@ -164,7 +165,7 @@ const forwardComposerMounted = ref(disclosure.value === 'forward')
 const displayedForwardCount = ref(normalizeForwardCount(moment.forwardCount))
 const commentExpanded = computed(() => disclosure.value === 'comments')
 const forwardExpanded = computed(() => disclosure.value === 'forward')
-const canExpandComments = computed(() => Boolean(moment.commentId && moment.commentType))
+const canExpandComments = computed(() => Boolean(moment.id && !moment.isLive))
 const commentSectionId = computed(() => `moment-comment-section-${moment.id}`)
 const forwardSectionId = computed(() => `moment-forward-section-${moment.id}`)
 const descriptionRef = ref<HTMLElement | null>(null)
@@ -867,8 +868,17 @@ onBeforeUnmount(() => {
         />
       </Teleport>
 
+      <MomentVote
+        v-if="moment.additional?.isVote && moment.additional.voteId"
+        class="moment-card__vote"
+        :vote-id="moment.additional.voteId"
+        :moment-id="moment.id"
+        :fallback-title="moment.additional.title"
+        :fallback-end-time="moment.additional.voteEndTime"
+        @interactive-resize="emit('interactiveResize')"
+      />
       <div
-        v-if="moment.additional"
+        v-else-if="moment.additional"
         class="moment-card__additional moment-card__additional--footer"
         :class="{ 'moment-card__additional--no-cover': moment.isChargeExclusive || !moment.additional.cover }"
       >
@@ -1007,13 +1017,14 @@ onBeforeUnmount(() => {
       >
         <div class="moment-card__disclosure-inner">
           <div
-            v-if="displayedDisclosure === 'comments' && moment.commentId && moment.commentType"
+            v-if="displayedDisclosure === 'comments' && canExpandComments"
             :id="commentSectionId"
             class="moment-card__comments"
           >
             <MomentCommentSection
               :moment="moment"
               @open-image-preview="handleCommentImagePreview"
+              @interactive-resize="emit('interactiveResize')"
             />
           </div>
           <div
@@ -1327,7 +1338,7 @@ onBeforeUnmount(() => {
 
 .moment-card__media-meta--live {
   align-self: flex-start;
-  padding: 4px 8px;
+  padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-theme-foreground);
   background: var(--bew-theme-color-10);
@@ -1402,9 +1413,9 @@ onBeforeUnmount(() => {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: var(--bew-space-3);
   margin-top: var(--bew-space-3);
-  padding: 12px 16px;
+  padding: var(--bew-space-3) var(--bew-space-4);
   border-radius: var(--bew-interactive-radius);
   color: inherit;
   background: var(--bew-fill-1);
@@ -2044,7 +2055,7 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--bew-space-2);
   min-height: 28px;
-  padding: 12px 8px 4px;
+  padding: var(--bew-space-3) var(--bew-space-2) var(--bew-space-1);
   color: #fff;
   background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 72%));
   box-sizing: border-box;
@@ -2349,6 +2360,10 @@ onBeforeUnmount(() => {
     grid-column: 2;
     align-self: start;
     margin: 0 var(--bew-space-4) var(--bew-space-3);
+  }
+
+  .moment-card--supports-wide-layout .moment-card__vote {
+    grid-column: 2;
   }
 }
 </style>

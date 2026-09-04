@@ -10,6 +10,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
 import { enterLayoutEditMode, subscribeSettingNavigation } from '~/logic/layoutEdit'
+import { getTopDialog } from '~/utils/dialogFocus'
 
 import type { SettingsSearchEntry } from './searchCatalog'
 import { settingsSearchEntries } from './searchCatalog'
@@ -30,6 +31,7 @@ const settingsContentReady = ref(false)
 const settingsLayerRef = ref<HTMLElement | null>(null)
 let settingsContentFrame: number | undefined
 let settingNavigationTimer: number | undefined
+let settingNavigationFrame: number | undefined
 let quickLayoutEditFrame: number | undefined
 let settingsModalActive = false
 let previouslyFocusedElement: HTMLElement | null = null
@@ -70,6 +72,7 @@ function activateSettingsModal() {
 }
 
 function deactivateSettingsModal() {
+  cancelSettingNavigation()
   if (!settingsModalActive)
     return
   settingsModalActive = false
@@ -85,6 +88,9 @@ function deactivateSettingsModal() {
 
 function trapSettingsFocus(event: KeyboardEvent) {
   if (!settingsModalActive || event.key !== 'Tab' || !settingsLayerRef.value)
+    return
+  // A child Dialog owns Tab while open, including its teleported controls.
+  if (getTopDialog(settingsLayerRef.value.getRootNode() as ParentNode))
     return
   const focusable = Array.from(settingsLayerRef.value.querySelectorAll<HTMLElement>(settingsFocusableSelector))
     .filter(element => element.offsetParent !== null && !element.inert)
@@ -465,6 +471,33 @@ function expandSearchTarget(target: HTMLElement) {
   Array.from(new Set(collapsedControls)).reverse().forEach(control => control.click())
 }
 
+function cancelSettingNavigation() {
+  searchNavigationId++
+  if (settingNavigationTimer !== undefined)
+    clearTimeout(settingNavigationTimer)
+  if (settingNavigationFrame !== undefined)
+    cancelAnimationFrame(settingNavigationFrame)
+  settingNavigationTimer = undefined
+  settingNavigationFrame = undefined
+  clearSearchTargetHighlight()
+  return searchNavigationId
+}
+
+function revealSearchTarget(target: HTMLElement, navigationId: number) {
+  expandSearchTarget(target)
+  void nextTick(() => {
+    if (!settingsModalActive || navigationId !== searchNavigationId)
+      return
+    settingNavigationFrame = window.requestAnimationFrame(() => {
+      settingNavigationFrame = undefined
+      if (!settingsModalActive || navigationId !== searchNavigationId || !target.isConnected)
+        return
+      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      highlightSearchTarget(target)
+    })
+  })
+}
+
 function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: number, attempts = 0) {
   if (!expectedTitle || navigationId !== searchNavigationId || attempts > 30)
     return
@@ -476,13 +509,7 @@ function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: n
     )
 
   if (target) {
-    expandSearchTarget(target)
-    nextTick(() => {
-      window.requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        highlightSearchTarget(target)
-      })
-    })
+    revealSearchTarget(target, navigationId)
     return
   }
 
@@ -493,11 +520,7 @@ function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: n
 }
 
 function navigateToSearchResult(entry: SettingsSearchEntry) {
-  if (settingNavigationTimer !== undefined) {
-    clearTimeout(settingNavigationTimer)
-    settingNavigationTimer = undefined
-  }
-  const navigationId = ++searchNavigationId
+  const navigationId = cancelSettingNavigation()
   entry.storageValues?.forEach(({ key, value }) => sessionStorage.setItem(key, value))
 
   activatedMenuItem.value = entry.menu
@@ -521,11 +544,7 @@ function scrollToSettingId(settingId: string, navigationId: number, attempts = 0
     )
     return
   }
-  expandSearchTarget(target)
-  nextTick(() => window.requestAnimationFrame(() => {
-    target.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    highlightSearchTarget(target)
-  }))
+  revealSearchTarget(target, navigationId)
 }
 
 function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
@@ -537,11 +556,7 @@ function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
   else if (menu === MenuType.BewlyComponents)
     sessionStorage.setItem(bewlyComponentsStorageKey, descriptor.page)
 
-  if (settingNavigationTimer !== undefined) {
-    clearTimeout(settingNavigationTimer)
-    settingNavigationTimer = undefined
-  }
-  const navigationId = ++searchNavigationId
+  const navigationId = cancelSettingNavigation()
   activatedMenuItem.value = menu
   settingsContentKey.value++
   nextTick(() => scrollToSettingId(descriptor.id, navigationId))
@@ -554,12 +569,8 @@ onBeforeUnmount(() => {
   unsubscribeSettingNavigation()
   if (settingsContentFrame !== undefined)
     cancelAnimationFrame(settingsContentFrame)
-  if (settingNavigationTimer !== undefined)
-    clearTimeout(settingNavigationTimer)
   if (quickLayoutEditFrame !== undefined)
     cancelAnimationFrame(quickLayoutEditFrame)
-  searchNavigationId++
-  clearSearchTargetHighlight()
 })
 
 function handleClose() {
@@ -1105,7 +1116,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   p {
-    padding: 12px;
+    padding: var(--bew-space-3);
     text-align: center;
   }
 }

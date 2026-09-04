@@ -16,6 +16,14 @@ export interface MomentCommentThreadState {
   error?: string
 }
 
+export interface MomentCommentThreadSnapshot {
+  rootRpid: string
+  items: MomentCommentItem[]
+  loaded: boolean
+  hasMore: boolean
+  nextPage: number
+}
+
 interface MomentCommentThreadControllerOptions {
   getIdentity: () => string
   fetchPage: (rootRpid: string, pageNumber: number) => Promise<MomentCommentRepliesPage>
@@ -27,6 +35,8 @@ export interface MomentCommentThreadController {
   seed: (rootRpid: string, previewItems: MomentCommentItem[], replyCount: number) => MomentCommentThreadState
   loadMore: (rootRpid: string) => Promise<MomentCommentThreadState>
   invalidate: () => void
+  snapshot: () => MomentCommentThreadSnapshot[]
+  restore: (snapshots: MomentCommentThreadSnapshot[]) => void
   dispose: () => void
 }
 
@@ -160,6 +170,18 @@ export function createMomentCommentThreadController(
     seed,
     loadMore,
     invalidate,
+    snapshot: () => [...states].map(([rootRpid, state]) => ({
+      rootRpid,
+      items: state.items,
+      loaded: state.loaded,
+      hasMore: state.hasMore,
+      nextPage: state.nextPage,
+    })),
+    restore: (snapshots) => {
+      invalidate()
+      for (const { rootRpid, ...state } of snapshots)
+        states.set(rootRpid, { ...state, loading: false })
+    },
     dispose,
   }
 }

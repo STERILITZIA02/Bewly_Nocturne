@@ -6,6 +6,7 @@ import type { GridLayoutType } from '~/logic'
 import type { List as VideoItem, TrendingResult } from '~/models/video/trending'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 interface VideoElement {
   uniqueId: string
@@ -26,6 +27,7 @@ const videoList = ref<VideoElement[]>([])
 const isLoading = ref<boolean>(false)
 const pn = ref<number>(1)
 const noMoreContent = ref<boolean>(false)
+const requestFailed = ref(false)
 let requestGeneration = 0
 let reloadAfterActivation = false
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
@@ -54,6 +56,7 @@ onDeactivated(() => {
 async function initData() {
   const generation = ++requestGeneration
   noMoreContent.value = false
+  requestFailed.value = false
   videoList.value = []
   pn.value = 1
   await getData(generation)
@@ -129,38 +132,54 @@ async function getTrendingVideos(generation: number) {
     if (generation !== requestGeneration)
       return
 
-    if (response.code === 0) {
-      pn.value = page + 1
-      noMoreContent.value = response.data.no_more
+    if (response.code !== 0 || !Array.isArray(response.data?.list))
+      throw new Error(response.message || 'Popular videos request failed')
 
-      const newItems = response.data.list.map((item: VideoItem) => ({
-        uniqueId: `${item.aid}`,
-        item,
-        displayData: transformTrendingVideo({ uniqueId: `${item.aid}`, item }),
-      }))
+    const newItems = response.data.list.map((item: VideoItem) => ({
+      uniqueId: `${item.aid}`,
+      item,
+      displayData: transformTrendingVideo({ uniqueId: `${item.aid}`, item }),
+    }))
 
-      const existingIds = new Set(videoList.value.map(item => item.uniqueId))
-      videoList.value.push(...newItems.filter((item) => {
-        if (existingIds.has(item.uniqueId))
-          return false
-        existingIds.add(item.uniqueId)
-        return true
-      }))
+    const existingIds = new Set(videoList.value.map(item => item.uniqueId))
+    videoList.value.push(...newItems.filter((item) => {
+      if (existingIds.has(item.uniqueId))
+        return false
+      existingIds.add(item.uniqueId)
+      return true
+    }))
+    pn.value = page + 1
+    noMoreContent.value = response.data.no_more
+    requestFailed.value = false
 
-      // 初次加载且数据不足时继续加载
-      if (videoList.value.length < 30 && !noMoreContent.value) {
-        await getTrendingVideos(generation)
-      }
+    // 初次加载且数据不足时继续加载
+    if (newItems.length > 0 && videoList.value.length < 30 && !noMoreContent.value) {
+      await getTrendingVideos(generation)
     }
   }
-  catch {
-    // 忽略错误
+  catch (error) {
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      reportRuntimeFailure('Failed to load popular videos', error)
+    }
+  }
+}
+
+function retryTrendingRequest() {
+  if (isLoading.value)
+    return
+  if (requestFailed.value) {
+    requestFailed.value = false
+    void getData(requestGeneration)
+  }
+  else {
+    void initData()
   }
 }
 
 // 供 VideoCardGrid 预加载调用的函数
 async function handleLoadMore() {
-  if (isLoading.value || noMoreContent.value)
+  if (isLoading.value || noMoreContent.value || requestFailed.value)
     return
 
   const generation = requestGeneration
@@ -187,10 +206,11 @@ onScopeDispose(() => {
     :grid-layout="gridLayout"
     :loading="isLoading"
     :no-more-content="noMoreContent"
+    :request-failed="requestFailed"
     :transform-item="(item: VideoElement) => item.displayData"
     :get-item-key="(item: VideoElement) => item.uniqueId"
     show-preview
-    @refresh="initData"
+    @refresh="retryTrendingRequest"
     @load-more="handleLoadMore"
   />
 </template>

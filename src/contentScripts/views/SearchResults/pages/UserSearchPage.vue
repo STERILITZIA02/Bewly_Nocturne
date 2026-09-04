@@ -75,6 +75,8 @@ const {
   hasMore,
   exhausted,
   requestLoadMore,
+  needsManualLoadMore,
+  resumeLoadMore,
   handleLoadMoreCompletion,
   setHasMore,
   setExhausted,
@@ -126,6 +128,14 @@ watch(() => props.filters, () => {
   void performSearch(false)
 }, { deep: true })
 
+const userOrderMap: Record<string, { order: string, order_sort: number }> = {
+  '': { order: '', order_sort: 0 },
+  'fans': { order: 'fans', order_sort: 0 },
+  'fans_desc': { order: 'fans', order_sort: 1 },
+  'level': { order: 'level', order_sort: 0 },
+  'level_desc': { order: 'level', order_sort: 1 },
+}
+
 async function performSearch(loadMore: boolean): Promise<boolean> {
   const keyword = props.keyword.trim()
   if (!keyword)
@@ -146,14 +156,7 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
   const previousLength = results.value?.length || 0
 
   // 用户排序映射
-  const userOrderMap: Record<string, { order: string, order_sort: number }> = {
-    '': { order: '', order_sort: 0 },
-    'fans': { order: 'fans', order_sort: 0 },
-    'fans_desc': { order: 'fans', order_sort: 1 },
-    'level': { order: 'level', order_sort: 0 },
-    'level_desc': { order: 'level', order_sort: 1 },
-  }
-  const orderConfig = userOrderMap[props.filters.order] || { order: '', order_sort: 0 }
+  const orderConfig = userOrderMap[props.filters.order] || userOrderMap['']
 
   const success = await search({
     searchType: 'bili_user',
@@ -233,14 +236,7 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
   isPageChanging.value = true
 
   try {
-    const userOrderMap: Record<string, { order: string, order_sort: number }> = {
-      '': { order: '', order_sort: 0 },
-      'fans': { order: 'fans', order_sort: 0 },
-      'fans_desc': { order: 'fans', order_sort: 1 },
-      'level': { order: 'level', order_sort: 0 },
-      'level_desc': { order: 'level', order_sort: 1 },
-    }
-    const orderConfig = userOrderMap[props.filters.order] || { order: '', order_sort: 0 }
+    const orderConfig = userOrderMap[props.filters.order] || userOrderMap['']
     const success = await search({
       searchType: 'bili_user',
       keyword,
@@ -306,6 +302,8 @@ defineExpose({
   totalResults,
   hasMore,
   requestLoadMore,
+  needsManualLoadMore,
+  resumeLoadMore,
   userRelations,
   updateUserRelation,
   currentPage,

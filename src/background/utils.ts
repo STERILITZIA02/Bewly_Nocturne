@@ -62,6 +62,7 @@ interface _FETCH {
   method: string
   headers?: Record<string, string>
   body?: Record<string, unknown>
+  bodySerializer?: (body: Record<string, unknown>) => BodyInit
   credentials?: RequestCredentials
   strictParams?: boolean
 }
@@ -102,7 +103,7 @@ async function doRequest(message: Message, api: API) {
     const { contentScriptQuery: _contentScriptQuery, ...rest } = message
 
     let { _fetch, url, params = {}, afterHandle } = api
-    const { method, headers = {}, body, credentials = 'include' } = _fetch as _FETCH
+    const { method, headers = {}, body, bodySerializer, credentials = 'include' } = _fetch as _FETCH
     const isGET = method.toLocaleLowerCase() === 'get'
     // merge params and body
     const targetParams: Record<string, unknown> = { ...params }
@@ -110,7 +111,7 @@ async function doRequest(message: Message, api: API) {
     Object.keys(rest).forEach((key) => {
       if (body && body[key] !== undefined)
         targetBody[key] = rest[key]
-      else if (!_fetch.strictParams || Object.hasOwn(params, key))
+      if (Object.hasOwn(params, key) || ((!body || body[key] === undefined) && !_fetch.strictParams))
         targetParams[key] = rest[key]
     })
 
@@ -167,7 +168,10 @@ async function doRequest(message: Message, api: API) {
       // generate body
       let requestBody: BodyInit | undefined
       if (!isGET) {
-        if (headers['Content-Type']?.includes('application/x-www-form-urlencoded')) {
+        if (bodySerializer) {
+          requestBody = bodySerializer(targetBody)
+        }
+        else if (headers['Content-Type']?.includes('application/x-www-form-urlencoded')) {
           const formBody = new URLSearchParams()
           for (const [key, value] of Object.entries(targetBody)) {
             if (value !== undefined && value !== null)

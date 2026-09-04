@@ -33,6 +33,7 @@ export interface DisplayAdditional {
   isVideoReservation: boolean
   isLiveReservation: boolean
   isVote: boolean
+  voteId?: string
   voteEndTime: number
   reservationId?: string
   reservationTotal?: number

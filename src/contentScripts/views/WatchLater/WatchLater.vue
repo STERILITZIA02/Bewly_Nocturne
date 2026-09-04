@@ -271,6 +271,10 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
     if (currentIndex !== -1) {
       currentWatchLaterList.value.splice(currentIndex, 1)
       watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
+      // Removal shifts position-based server pages. Re-read the last partial
+      // page and let aid deduplication fill the gap without clearing the list.
+      pageNum.value = Math.max(1, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
+      noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
     }
     await topBarStore.commitWatchLaterMutation(aid, false, accountId)
     return true
@@ -383,19 +387,7 @@ function jumpToLoginPage() {
 }
 
 function handleVideoLinkClick(bvid: string) {
-  const videoUrl = `https://www.bilibili.com/video/${bvid}/`
-  if (settings.value.videoCardLinkOpenMode === 'drawer') {
-    openIframeDrawer(videoUrl) // 在抽屉打开
-  }
-  else if (settings.value.videoCardLinkOpenMode === 'currentTab') {
-    window.open(videoUrl, '_self') // 在当前标签页打开
-  }
-  else if (settings.value.videoCardLinkOpenMode === 'background') {
-    openLinkInBackground(videoUrl)
-  }
-  else {
-    openLinkToNewTab(videoUrl) // 在新标签页打开
-  }
+  handleLinkClick(`https://www.bilibili.com/video/${bvid}/`)
 }
 
 async function openVideoPageAndRemove(item: VideoItem) {

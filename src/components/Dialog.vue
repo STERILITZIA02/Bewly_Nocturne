@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { onKeyStroke } from '@vueuse/core'
+import { useId } from 'vue'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
+import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
 
 const props = withDefaults(defineProps<{
@@ -55,6 +57,12 @@ const showShortcut = ref<boolean>(false)
 const { mainAppRef } = useBewlyApp()
 const showDialog = ref<boolean>(false)
 const dialogRef = ref<HTMLElement | null>(null)
+const panelRef = ref<HTMLElement | null>(null)
+const dialogId = useId()
+const titleId = `${dialogId}-title`
+provide(DIALOG_FOCUS_OWNER, dialogId)
+let previousFocus: HTMLElement | null = null
+let focusRestored = false
 /**
  * Closing protocol:
  * 1) handleClose only sets showDialog=false (starts leave transition)
@@ -83,22 +91,7 @@ function isDialogEnterEditingContext(event: KeyboardEvent) {
 
 function isDialogKeyboardOwner(event: KeyboardEvent) {
   const dialog = dialogRef.value
-  if (!dialog)
-    return false
-
-  const dialogRoot = dialog.getRootNode() as ParentNode
-  const visibleDialogs = Array.from(dialogRoot.querySelectorAll<HTMLElement>('.dialog'))
-  if (visibleDialogs.at(-1) !== dialog)
-    return false
-
-  if (event.composedPath().includes(dialog))
-    return true
-
-  const activeElement = document.activeElement
-  return !activeElement
-    || activeElement === document.body
-    || activeElement === document.documentElement
-    || dialog.contains(activeElement)
+  return !!dialog && ownsDialogKeyboard(dialog, event)
 }
 
 function handleDialogKeyboardEvent(event: KeyboardEvent, eventType: 'keydown' | 'keyup') {
@@ -129,12 +122,20 @@ function handleDialogKeyboardEvent(event: KeyboardEvent, eventType: 'keydown' | 
 
 onKeyStroke('Enter', event => handleDialogKeyboardEvent(event, 'keydown'))
 onKeyStroke('Escape', event => handleDialogKeyboardEvent(event, 'keydown'))
+onKeyStroke('Tab', (event) => {
+  if (!event.defaultPrevented && !event.isComposing && event.keyCode !== 229 && showDialog.value && !isClosing && dialogRef.value && panelRef.value && isDialogKeyboardOwner(event))
+    moveDialogTabFocus(dialogRef.value, panelRef.value, event)
+})
 
 const dialogWidth = computed(() => {
   return typeof props.width === 'number' ? `${props.width}px` : props.width || '400px'
 })
 const dialogMaxWidth = computed(() => {
-  return typeof props.maxWidth === 'number' ? `${props.maxWidth}px` : props.maxWidth || 'unset'
+  const requested = typeof props.maxWidth === 'number' ? `${props.maxWidth}px` : props.maxWidth
+  const safeWidth = 'calc(100vw - var(--bew-space-4))'
+  return requested && requested !== 'unset' && requested !== 'none'
+    ? `min(${requested}, ${safeWidth})`
+    : safeWidth
 })
 const dialogHeight = computed(() => {
   if (props.height === undefined || props.height === null || props.height === '')
@@ -146,6 +147,9 @@ const dialogTopOffset = computed(() => {
     return undefined
   return typeof props.topOffset === 'number' ? `${props.topOffset}px` : props.topOffset
 })
+const dialogMaxHeight = computed(() => dialogTopOffset.value
+  ? `max(0px, calc(100dvh - max(var(--bew-space-2), ${dialogTopOffset.value}) - var(--bew-space-2)))`
+  : 'calc(100dvh - var(--bew-space-4))')
 const dialogContentHeight = computed(() => {
   return typeof props.contentHeight === 'number' ? `${props.contentHeight}px` : props.contentHeight || 'auto'
 })
@@ -159,7 +163,8 @@ const dialogPanelStyle = computed(() => {
     width: dialogWidth.value,
     maxWidth: dialogMaxWidth.value,
     height: dialogHeight.value,
-    top: topAligned ? dialogTopOffset.value : '50%',
+    maxHeight: dialogMaxHeight.value,
+    top: topAligned ? `max(var(--bew-space-2), ${dialogTopOffset.value})` : '50%',
     left: '50%',
     transform: topAligned ? 'translateX(-50%)' : 'translate(-50%, -50%)',
     transition: 'transform 0.4s, width 0.4s, height 0.4s',
@@ -178,8 +183,38 @@ onKeyStroke('Alt', event => handleDialogKeyboardEvent(event, 'keydown'), { event
 onKeyStroke('Alt', event => handleDialogKeyboardEvent(event, 'keyup'), { eventName: 'keyup' })
 
 onMounted(() => {
+  const active = getDeepActiveElement(document)
+  previousFocus = active instanceof HTMLElement ? active : null
   showDialog.value = true
+  void nextTick(() => {
+    const dialog = dialogRef.value
+    if (isClosing || !dialog || getTopDialog(dialog.getRootNode() as ParentNode) !== dialog)
+      return
+    // A detail iframe may already have acquired focus through its load owner.
+    if (!dialog.contains(getDeepActiveElement(document)))
+      panelRef.value?.focus({ preventScroll: true })
+  })
 })
+
+function restoreDialogFocus() {
+  if (focusRestored)
+    return
+  focusRestored = true
+  dialogRef.value?.removeAttribute('data-bewly-dialog-active')
+  const target = previousFocus
+  previousFocus = null
+  if (!target?.isConnected || target.closest('[inert]'))
+    return
+  const root = target.getRootNode() as ParentNode
+  const topDialog = getTopDialog(root)
+  if (topDialog && !topDialog.contains(target))
+    return
+  const active = getDeepActiveElement(document)
+  const otherModal = active?.closest('[aria-modal="true"]')
+  if (otherModal && !dialogRef.value?.contains(otherModal) && !otherModal.contains(target))
+    return
+  target.focus({ preventScroll: true })
+}
 
 onBeforeUnmount(() => {
   showShortcut.value = false
@@ -192,6 +227,7 @@ function emitCloseOnce() {
     return
   closeEmitted = true
   isClosing = true
+  restoreDialogFocus()
   emit('close')
 }
 
@@ -207,6 +243,7 @@ function handleClose() {
     return
 
   isClosing = true
+  dialogRef.value?.removeAttribute('data-bewly-dialog-active')
   showShortcut.value = false
   emit('beforeClose')
   // Already hidden (e.g. closed before enter finished) — no leave hook will run.
@@ -240,6 +277,7 @@ async function handleConfirm() {
         v-if="showDialog"
         ref="dialogRef"
         class="dialog"
+        :data-bewly-dialog-active="dialogId"
         :class="`dialog--${layer}`"
         pos="fixed top-0 left-0" w-full h-full
         pointer-events-auto
@@ -251,6 +289,12 @@ async function handleConfirm() {
         />
         <slot name="floating-actions" />
         <div
+          ref="panelRef"
+          role="dialog"
+          aria-modal="true"
+          :aria-labelledby="showHeader ? titleId : undefined"
+          :aria-label="showHeader ? undefined : title || $t('common.dialog')"
+          tabindex="-1"
           :style="dialogPanelStyle"
           pos="absolute" rounded="$bew-modal-radius"
           z-2
@@ -294,11 +338,13 @@ async function handleConfirm() {
                 :style="{ textAlign: center ? 'center' : 'left' }"
                 w-full
               >
-                <slot name="title">
-                  <p class="dialog__title">
-                    {{ title }}
-                  </p>
-                </slot>
+                <div :id="titleId">
+                  <slot name="title">
+                    <p class="dialog__title">
+                      {{ title }}
+                    </p>
+                  </slot>
+                </div>
                 <p class="dialog__description" text="$bew-text-2">
                   <slot name="desc">
                     {{ desc }}
@@ -318,8 +364,8 @@ async function handleConfirm() {
               :style="{
                 height: dialogContentHeight,
                 maxHeight: dialogContentMaxHeight,
-                flex: dialogHeight ? '1 1 auto' : undefined,
-                minHeight: dialogHeight ? '0' : undefined,
+                flex: '1 1 auto',
+                minHeight: '0',
                 ...(contentFlush
                   ? { padding: '0' }
                   : { paddingBottom: !showFooter ? '1.5rem' : '0.5rem' }),
@@ -385,6 +431,8 @@ async function handleConfirm() {
 
 .dialog__panel {
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
 }
 
 .dialog__clip {
@@ -392,6 +440,8 @@ async function handleConfirm() {
   display: flex;
   width: 100%;
   height: 100%;
+  max-height: inherit;
+  flex: 1 1 auto;
   min-height: 0;
   flex-direction: column;
   box-sizing: border-box;
@@ -432,9 +482,14 @@ async function handleConfirm() {
 }
 
 .dialog__header {
+  flex-shrink: 0;
   border-top-left-radius: inherit;
   border-top-right-radius: inherit;
   corner-shape: inherit;
+}
+
+.dialog__clip > footer {
+  flex-shrink: 0;
 }
 
 .dialog__title {
