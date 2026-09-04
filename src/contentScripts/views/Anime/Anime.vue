@@ -19,6 +19,7 @@ const isLoadingAnimeWatchList = ref<boolean>()
 const isLoadingPopularAnime = ref<boolean>()
 const isLoadingRecommendAnime = ref<boolean>()
 const recommendRequestFailed = ref(false)
+const popularRequestFailed = ref(false)
 const activatedSeasonId = ref<number>()
 const noMoreContent = ref<boolean>()
 const animeTimeTableRef = ref()
@@ -70,6 +71,7 @@ function reloadAnimePage() {
   cursor.value = 0
   noMoreContent.value = false
   recommendRequestFailed.value = false
+  popularRequestFailed.value = false
   isLoadingAnimeWatchList.value = false
   isLoadingPopularAnime.value = false
   isLoadingRecommendAnime.value = false
@@ -161,12 +163,20 @@ async function getRecommendAnimeList(
 
 async function getPopularAnimeList(generation = requestGeneration, requestAccountId = getAnimeAccountId()) {
   isLoadingPopularAnime.value = true
+  popularRequestFailed.value = false
   try {
     const response: PopularAnimeResult = await api.anime.getPopularAnimeList()
     if (!isAnimeRequestCurrent(generation, requestAccountId))
       return
-    const list = Array.isArray(response.result?.list) ? response.result.list : []
-    popularAnimeList.splice(0, popularAnimeList.length, ...(response.code === 0 ? list : []))
+    if (response.code !== 0 || !Array.isArray(response.result?.list))
+      throw new Error('Popular anime request failed')
+    popularAnimeList.splice(0, popularAnimeList.length, ...response.result.list)
+  }
+  catch (error) {
+    if (isAnimeRequestCurrent(generation, requestAccountId)) {
+      popularRequestFailed.value = true
+      reportRuntimeFailure('Failed to load popular anime', error)
+    }
   }
   finally {
     if (isAnimeRequestCurrent(generation, requestAccountId))
@@ -295,6 +305,12 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
         </HorizontalScrollView>
       </section>
 
+      <Empty v-if="popularRequestFailed" :description="$t('common.load_failed')" role="alert">
+        <Button type="primary" @click="getPopularAnimeList()">
+          {{ $t('common.operation.refresh') }}
+        </Button>
+      </Empty>
+
       <!-- Anime Timetable -->
       <section class="anime-section">
         <div flex justify-between items-end>
@@ -337,7 +353,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
           />
         </div>
         <Empty v-if="recommendRequestFailed" :description="$t('common.load_failed')">
-          <Button type="tertiary" @click="getRecommendAnimeList">
+          <Button type="tertiary" @click="getRecommendAnimeList()">
             {{ $t('common.operation.refresh') }}
           </Button>
         </Empty>

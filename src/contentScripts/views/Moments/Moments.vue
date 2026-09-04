@@ -40,6 +40,7 @@ import { getCSRF } from '~/utils/main'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
+import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import { resolveMomentTextSources } from '~/utils/momentDescription'
 import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
 import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
@@ -277,6 +278,10 @@ let portalRequestToken = 0
 let momentsMounted = false
 let momentsExtensionContextInvalidated = false
 let loadedAccountId: AccountId = getCurrentAccountId()
+const commentAccountIdentity = () => `${topBarStore.userInfo.mid || 'guest'}:${getCurrentAccountId() ?? 'guest'}`
+const commentSessions = createMomentCommentSessionCache(commentAccountIdentity())
+provide(MOMENT_COMMENT_SESSIONS, commentSessions)
+watch(commentAccountIdentity, accountId => commentSessions.setAccount(accountId), { flush: 'sync' })
 let suppressBottomRebalanceUntil = 0
 const detailImageViewerDragging = ref(false)
 let detailImageViewerDragStartX = 0
@@ -662,6 +667,7 @@ function getMomentContent(item: any) {
         isLiveReservation: additionalKind === 'reservation'
           && Number(additionalCard.button?.type) === 2,
         isVote: isVoteAdditional,
+        voteId: isVoteAdditional ? String(additionalCard.vote_id || '') : '',
         voteEndTime: isVoteAdditional ? Number(additionalCard.end_time) || 0 : 0,
         reservationId: additionalKind === 'reservation'
           ? String(additionalCard.rid || '')
@@ -695,6 +701,7 @@ function getMomentContent(item: any) {
       isVideoReservation: false,
       isLiveReservation: false,
       isVote: false,
+      voteId: '',
       voteEndTime: 0,
       reservationId: '',
       reservationTotal: 0,
@@ -924,7 +931,8 @@ const detailSafeHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MO
 const detailPlayerMaxWidth = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}vw, calc(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}dvh * 16 / 9), ${detailViewportSafeWidth})`
 const opusDetailCommentPageRatio = 0.29
 const opusDetailLongImageRatio = MIN_SINGLE_IMAGE_RATIO
-const opusDetailMaxWidth = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}vw, ${detailViewportSafeWidth})`
+const opusDetailMaxWidth = `min(90vw, ${detailViewportSafeWidth})`
+const opusSplitDetailBaseWidth = `${opusDetailCommentPageRatio * 200}vw`
 const opusDetailMaxHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MOMENTS_DETAIL_LAYOUT.playerMinHeight}px, 88dvh), ${opusDetailMaxWidth})`
 function isUsableImageRatio(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -960,7 +968,8 @@ const detailDialogWidth = computed(() => {
   const moment = selectedMoment.value
   if (isOpusSplitDetailMoment(moment)) {
     const commentWidth = `${opusDetailCommentPageRatio * 100}vw`
-    return `min(${opusDetailMaxWidth}, calc(${getOpusSplitLayoutRatio(moment)} * ${detailDialogHeight.value} + ${commentWidth}))`
+    const contentWidth = `calc(${getOpusSplitLayoutRatio(moment)} * ${detailDialogHeight.value} + ${commentWidth})`
+    return `min(${opusDetailMaxWidth}, max(${opusSplitDetailBaseWidth}, ${contentWidth}))`
   }
   return `min(${MOMENTS_DETAIL_LAYOUT.opusMaxWidth}px, ${detailViewportSafeWidth})`
 })
@@ -3193,6 +3202,7 @@ function isUsableMomentResponse(
 }
 
 function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
+  commentSessions.clear()
   const preparedCoverRatios = new Map(nextItems.flatMap((item) => {
     const ratio = coverRatios[item.id]
     return ratio ? [[item.id, ratio] as const] : []
@@ -3730,6 +3740,8 @@ function refresh() {
 
 function resetMomentsAccountState() {
   closeMomentDetail()
+  commentSessions.setAccount(commentAccountIdentity())
+  commentSessions.clear()
   feedRequestToken++
   portalRequestToken++
   moments.value = []
@@ -3856,6 +3868,7 @@ watch([
 
 onBeforeUnmount(() => {
   momentsMounted = false
+  commentSessions.clear()
   document.documentElement.classList.remove('bewly-moment-image-viewer-open')
   feedRequestToken += 1
   portalRequestToken += 1
@@ -4515,6 +4528,7 @@ watch(
           :ref="bindDetailIframe"
           :key="detailFrameUrl"
           class="moment-detail-frame__iframe"
+          tabindex="0"
           :src="detailFrameUrl"
           :title="t('moments.author_detail', { author: selectedMoment.author.name })"
           referrerpolicy="no-referrer-when-downgrade"
@@ -5189,7 +5203,7 @@ watch(
   display: flex;
   min-width: 0;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--bew-space-1);
 }
 .moments-live-card__info strong,
 .moments-live-card__info small {

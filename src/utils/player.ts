@@ -511,46 +511,30 @@ export function detectVideoType(): VideoType {
     return VideoType.PLAYLIST
   }
 
-  // 检测多P视频和合集视频的关键区别：
-  // 分P视频有 .view-mode 切换视图组件，合集视频没有
+  // 合集也可包含多 P 稿件；当前稿件的真实分 P 数优先于右侧合集 DOM。
+  const app = document.querySelector('#app') as (HTMLElement & {
+    __vue__?: { videoData?: { pages?: unknown[], videos?: number }, isSection?: boolean }
+  }) | null
+  const videoData = app?.__vue__?.videoData
+  if ((videoData?.pages?.length ?? videoData?.videos ?? 0) > 1)
+    return VideoType.MULTIPART
+
+  // 页面数据尚未可读时，分别检查分 P 和合集结构。
   const hasViewMode = !!document.querySelector('.view-mode')
-  const hasVideoPod = !!document.querySelector(
-    '.video-pod__item, .video-pod__list .simple-base-item, .multi-page__item, .page-item',
+  const hasMultipartItems = !!document.querySelector(
+    '.video-pod__item, .multi-page__item, .page-item',
   )
+  const hasCollectionItems = !!document.querySelector('.video-pod__list .simple-base-item')
 
-  if (hasVideoPod) {
-    // 有视频列表项
-    if (hasViewMode) {
-      // 有切换视图组件 = 分P视频
-      return VideoType.MULTIPART
-    }
-    else {
-      // 没有切换视图组件 = 合集视频
-      return VideoType.COLLECTION
-    }
-  }
-
-  // 尝试从页面中获取视频数据（备用方案）
-  const app = document.querySelector('#app') as any
-  if (app?.__vue__) {
-    const videoData = app.__vue__.videoData
-    if (videoData) {
-      const { videos: videosCount } = videoData
-      const isSection = app.__vue__.isSection
-
-      // 分P视频：videos > 1
-      if (videosCount > 1) {
-        return VideoType.MULTIPART
-      }
-      // 合集视频：isSection = true
-      if (isSection) {
-        return VideoType.COLLECTION
-      }
-    }
-  }
+  if (hasViewMode || (hasMultipartItems && hasCollectionItems))
+    return VideoType.MULTIPART
+  if (hasCollectionItems)
+    return VideoType.COLLECTION
+  if (hasMultipartItems)
+    return VideoType.MULTIPART
 
   // 如果以上都不是，检测是否为合集视频（通过DOM）
-  if (isCollectionVideo()) {
+  if (app?.__vue__?.isSection || isCollectionVideo()) {
     return VideoType.COLLECTION
   }
 

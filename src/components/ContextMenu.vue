@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { useEventListener } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { computeAnchoredFloatingMenuPosition } from '~/utils/floatingMenu'
 
 export interface ContextMenuOption {
   value: string | number
@@ -10,9 +12,9 @@ export interface ContextMenuOption {
   danger?: boolean
 }
 
-defineProps<{
+const props = defineProps<{
   options: ContextMenuOption[]
-  menuStyles: CSSProperties
+  anchor: { x: number, y: number }
 }>()
 
 const emit = defineEmits<{
@@ -21,11 +23,48 @@ const emit = defineEmits<{
 }>()
 
 const { mainAppRef } = useBewlyApp()
+const menuRef = ref<HTMLElement | null>(null)
+const menuStyles = ref<CSSProperties>({ position: 'fixed', visibility: 'hidden' })
+let resizeObserver: ResizeObserver | undefined
+
+function updatePosition() {
+  const menu = menuRef.value
+  if (!menu)
+    return
+  const width = menu.getBoundingClientRect().width
+  const x = Math.max(0, Math.min(props.anchor.x, window.innerWidth))
+  const y = Math.max(0, Math.min(props.anchor.y, window.innerHeight))
+  const position = computeAnchoredFloatingMenuPosition({
+    top: y,
+    bottom: y,
+    left: x - width,
+    right: x,
+    width,
+  }, menu.scrollHeight, window.innerWidth, window.innerHeight, window.innerHeight)
+  menuStyles.value = {
+    position: 'fixed',
+    top: `${position.top}px`,
+    left: `${position.left}px`,
+    maxHeight: `${position.maxHeight}px`,
+    transform: position.openUp ? 'translateY(-100%)' : undefined,
+  }
+}
+
+onMounted(() => {
+  updatePosition()
+  resizeObserver = new ResizeObserver(updatePosition)
+  if (menuRef.value)
+    resizeObserver.observe(menuRef.value)
+})
+watch(() => props.anchor, () => void nextTick(updatePosition))
+useEventListener(window, 'resize', updatePosition, { passive: true })
+onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <template>
   <Teleport :to="mainAppRef">
     <div
+      ref="menuRef"
       class="context-menu-container bew-popover-surface"
       :style="menuStyles"
     >
@@ -55,10 +94,13 @@ const { mainAppRef } = useBewlyApp()
 <style lang="scss" scoped>
 .context-menu-container {
   z-index: var(--bew-z-popover);
-  min-width: 140px;
+  width: max-content;
+  min-width: min(140px, calc(100vw - var(--bew-space-4)));
+  max-width: calc(100vw - var(--bew-space-4));
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--bew-space-1);
-  margin-top: var(--bew-space-1);
-  margin-left: calc(-140px + var(--bew-space-2));
 }
 
 .context-menu-item {
@@ -81,7 +123,7 @@ const { mainAppRef } = useBewlyApp()
 }
 
 .item-icon {
-  --uno: "inline-block color-$bew-text-color-2";
+  --uno: "inline-block";
 
   width: var(--bew-control-icon-size);
   height: var(--bew-control-icon-size);

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useDateFormat } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -10,10 +11,11 @@ import { Business } from '~/models/history/history'
 import type { HistorySearchResult, List as HistorySearchItem } from '~/models/video/historySearch'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { getCSRF, removeHttpFromUrl } from '~/utils/main'
+import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
 const { t } = useI18n()
+const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
 const isLoading = ref<boolean>(false)
@@ -22,6 +24,8 @@ const noMoreContent = ref<boolean>(false)
 const historyList = reactive<Array<HistoryItem>>([])
 const currentPageNum = ref<number>(1)
 const keyword = ref<string>('')
+const submittedKeyword = ref('')
+const isClearingHistory = ref(false)
 const historyStatus = ref<boolean>()
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 let historyCursor = 0
@@ -47,7 +51,7 @@ onScopeDispose(() => {
 })
 
 function isSearchMode(): boolean {
-  return keyword.value.trim().length > 0
+  return submittedKeyword.value.length > 0
 }
 
 function resetListState() {
@@ -61,6 +65,8 @@ function resetListState() {
 }
 
 function reloadCurrentMode() {
+  if (isClearingHistory.value)
+    return
   resetListState()
   if (isSearchMode())
     void searchHistoryList()
@@ -69,7 +75,7 @@ function reloadCurrentMode() {
 }
 
 async function handleHistoryReachBottom() {
-  if (isLoading.value || noMoreContent.value || requestFailed.value)
+  if (isClearingHistory.value || isLoading.value || noMoreContent.value || requestFailed.value)
     return false
 
   if (isSearchMode())
@@ -92,7 +98,7 @@ function initPageAction() {
  * Get history list
  */
 async function getHistoryList() {
-  if (isLoading.value || noMoreContent.value)
+  if (isClearingHistory.value || isLoading.value || noMoreContent.value)
     return
 
   const generation = requestGeneration
@@ -100,6 +106,8 @@ async function getHistoryList() {
   isLoading.value = true
   try {
     while (!noMoreContent.value) {
+      if (generation !== requestGeneration)
+        return
       const requestedCursor = historyCursor
       let res: HistoryResult
       try {
@@ -150,8 +158,8 @@ async function getHistoryList() {
 }
 
 async function searchHistoryList() {
-  const searchKeyword = keyword.value.trim()
-  if (!searchKeyword || isLoading.value || noMoreContent.value)
+  const searchKeyword = submittedKeyword.value
+  if (!searchKeyword || isClearingHistory.value || isLoading.value || noMoreContent.value)
     return
 
   const generation = requestGeneration
@@ -163,7 +171,7 @@ async function searchHistoryList() {
       pn: page,
       keyword: searchKeyword,
     })
-    if (generation !== requestGeneration || keyword.value.trim() !== searchKeyword)
+    if (generation !== requestGeneration || submittedKeyword.value !== searchKeyword)
       return
     if (res.code !== 0) {
       requestFailed.value = true
@@ -191,6 +199,9 @@ async function searchHistoryList() {
 }
 
 function handleSearch() {
+  if (isClearingHistory.value)
+    return
+  submittedKeyword.value = keyword.value.trim()
   reloadCurrentMode()
 }
 
@@ -278,14 +289,35 @@ function setHistoryPauseStatus(isPause: boolean) {
     })
 }
 
-function clearAllHistory() {
-  api.history.clearAllHistory({
-    csrf: getCSRF(),
-  })
-    .then((res) => {
-      if (res.code === 0)
-        historyList.length = 0
-    })
+async function clearAllHistory() {
+  if (isClearingHistory.value)
+    return
+  const generation = ++requestGeneration
+  const accountId = getUserID()
+  isClearingHistory.value = true
+  isLoading.value = false
+  try {
+    const res = await api.history.clearAllHistory({ csrf: getCSRF() })
+    if (generation !== requestGeneration || accountId !== getUserID())
+      return
+    if (res.code !== 0)
+      throw new Error(res.message || t('history.clear_failed'))
+    historyList.length = 0
+    historyCursor = 0
+    currentPageNum.value = 1
+    noMoreContent.value = true
+    requestFailed.value = false
+  }
+  catch (error) {
+    if (generation === requestGeneration && accountId === getUserID()) {
+      requestFailed.value = historyList.length === 0
+      toast.error(error instanceof Error ? error.message : t('history.clear_failed'))
+    }
+  }
+  finally {
+    if (generation === requestGeneration)
+      isClearingHistory.value = false
+  }
 }
 
 async function handleClearAllWatchHistory() {
@@ -606,6 +638,7 @@ function jumpToLoginPage() {
           style="
             --b-button-shadow: var(--bew-shadow-1);
           "
+          :disabled="isClearingHistory"
           @click="handleClearAllWatchHistory"
         >
           <template #left>

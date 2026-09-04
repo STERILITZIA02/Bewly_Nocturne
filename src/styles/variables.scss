@@ -144,6 +144,7 @@
   // Shared geometry and typography for top-bar controls, segmented tabs and
   // icon switchers. 36px outer - 2 * 4px padding = a 28px item target.
   --bew-control-height: 36px;
+  --bew-moment-comments-max-height: 480px;
   --bew-control-padding: var(--bew-space-1);
   --bew-control-gap: var(--bew-space-1);
   --bew-control-border-width: 0px;

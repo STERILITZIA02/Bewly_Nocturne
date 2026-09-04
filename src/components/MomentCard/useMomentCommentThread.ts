@@ -3,6 +3,7 @@ import { onUnmounted, ref, watch } from 'vue'
 
 import api from '~/utils/api'
 import { getUserID } from '~/utils/main'
+import type { MomentCommentThreadSnapshot } from '~/utils/momentCommentThread'
 import { createMomentCommentThreadController } from '~/utils/momentCommentThread'
 
 import type { MomentCommentItem } from './commentUtils'
@@ -33,7 +34,7 @@ export function useMomentCommentThread(
   watch([commentId, commentType], () => {
     controller.invalidate()
     revision.value += 1
-  })
+  }, { flush: 'sync' })
 
   function seedThread(root: MomentCommentItem) {
     const rootRpid = root.rpid || root.id
@@ -70,6 +71,11 @@ export function useMomentCommentThread(
     getThreadState,
     loadMoreReplies,
     resetThreads,
+    snapshotThreads: controller.snapshot,
+    restoreThreads: (snapshots: MomentCommentThreadSnapshot[]) => {
+      controller.restore(snapshots)
+      revision.value += 1
+    },
     revision,
     seedThread,
   }

@@ -456,7 +456,7 @@ watch(
 .shadow-curve-editor {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--bew-space-2);
   width: fit-content;
 }
 

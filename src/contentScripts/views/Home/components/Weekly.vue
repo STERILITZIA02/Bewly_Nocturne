@@ -8,6 +8,7 @@ import { settings } from '~/logic'
 import type { PopularSeriesItem, PopularSeriesListResult, PopularSeriesOneResult, PopularSeriesVideoItem } from '~/models/video/popularSeries'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 interface VideoElement extends PopularSeriesVideoItem {
   displayData?: Video
@@ -31,6 +32,7 @@ const seriesList = ref<PopularSeriesItem[]>([])
 const activatedSeries = ref<PopularSeriesItem | null>(null)
 const videoList = ref<VideoElement[]>([])
 const noMoreContent = ref<boolean>(true) // 每周必看没有分页
+const requestFailed = ref(false)
 let requestGeneration = 0
 let reloadAfterActivation = false
 let resizeListenerAttached = false
@@ -151,6 +153,7 @@ async function initData() {
   const generation = ++requestGeneration
   emit('beforeLoading')
   isLoading.value = true
+  requestFailed.value = false
   videoList.value.length = 0
   seriesList.value.length = 0
   activatedSeries.value = null
@@ -159,15 +162,19 @@ async function initData() {
     const res: PopularSeriesListResult = await api.ranking.getPopularSeriesList()
     if (generation !== requestGeneration)
       return
-    if (res && res.code === 0 && res.data && Array.isArray(res.data.list)) {
-      // sort by number desc (latest first) if available
-      seriesList.value = [...res.data.list].sort((a, b) => (b.number || 0) - (a.number || 0))
-      if (seriesList.value.length) {
-        // 默认选择第一期（通常为最新期）
-        activatedSeries.value = seriesList.value[0]
-        handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
-        await fetchSeriesOne(generation, seriesList.value[0])
-      }
+    if (res?.code !== 0 || !Array.isArray(res.data?.list))
+      throw new Error(res?.message || 'Weekly series request failed')
+    seriesList.value = [...res.data.list].sort((a, b) => (b.number || 0) - (a.number || 0))
+    if (seriesList.value.length) {
+      activatedSeries.value = seriesList.value[0]
+      handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
+      await fetchSeriesOne(generation, seriesList.value[0])
+    }
+  }
+  catch (error) {
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      reportRuntimeFailure('Failed to load weekly series', error)
     }
   }
   finally {
@@ -187,12 +194,12 @@ async function fetchSeriesOne(generation: number, series: PopularSeriesItem | nu
   })
   if (generation !== requestGeneration || activatedSeries.value?.number !== series.number)
     return
-  if (res && res.code === 0 && res.data && Array.isArray(res.data.list)) {
-    videoList.value = res.data.list.map((item, index) => ({
-      ...item,
-      displayData: transformWeeklyVideo(item, index + 1),
-    }))
-  }
+  if (res?.code !== 0 || !Array.isArray(res.data?.list))
+    throw new Error(res?.message || 'Weekly videos request failed')
+  videoList.value = res.data.list.map((item, index) => ({
+    ...item,
+    displayData: transformWeeklyVideo(item, index + 1),
+  }))
 }
 
 async function getSeriesOne() {
@@ -200,9 +207,16 @@ async function getSeriesOne() {
   const series = activatedSeries.value
   emit('beforeLoading')
   isLoading.value = true
+  requestFailed.value = false
   videoList.value.length = 0
   try {
     await fetchSeriesOne(generation, series)
+  }
+  catch (error) {
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      reportRuntimeFailure('Failed to load weekly videos', error)
+    }
   }
   finally {
     if (generation === requestGeneration) {
@@ -210,6 +224,15 @@ async function getSeriesOne() {
       emit('afterLoading')
     }
   }
+}
+
+function retryWeeklyRequest() {
+  if (isLoading.value)
+    return
+  if (requestFailed.value && activatedSeries.value)
+    void getSeriesOne()
+  else
+    void initData()
 }
 
 function selectSeries(item: PopularSeriesItem) {
@@ -295,7 +318,7 @@ defineExpose({ initData })
               <input
                 v-model="searchQuery"
                 type="text"
-                placeholder="搜索期号..."
+                :placeholder="$t('home.weekly_search_placeholder')"
                 w-full px-3 py-2 rounded="$bew-radius"
                 bg="$bew-fill-2" border="1px solid transparent"
                 text="$bew-text-1" outline-none
@@ -347,10 +370,11 @@ defineExpose({ initData })
         :grid-layout="gridLayout"
         :loading="isLoading"
         :no-more-content="noMoreContent"
+        :request-failed="requestFailed"
         :transform-item="(item: VideoElement) => item.displayData"
         :get-item-key="(item: VideoElement) => item.aid"
         show-preview
-        @refresh="initData"
+        @refresh="retryWeeklyRequest"
         @load-more="() => {}"
       />
     </div>

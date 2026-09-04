@@ -14,6 +14,7 @@ import api from '~/utils/api'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { getListGridColumnCount } from '~/utils/gridLayout'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 import type { RankingType } from '../types'
 
@@ -65,6 +66,7 @@ const rankingTypes = computed((): RankingType[] => {
 })
 
 const isLoading = ref<boolean>(false)
+const requestFailed = ref(false)
 const activatedRankingType = ref<RankingType>({ ...rankingTypes.value[0] })
 const videoList = reactive<RankingVideoElement[]>([])
 const PgcList = reactive<RankingPgcItem[]>([])
@@ -227,6 +229,7 @@ function initData() {
   const rankingType = { ...activatedRankingType.value }
   videoList.length = 0
   PgcList.length = 0
+  requestFailed.value = false
   return getData(generation, rankingType)
 }
 
@@ -246,14 +249,18 @@ async function getRankingVideos(generation: number, rankingType: RankingType) {
     })
     if (generation !== requestGeneration)
       return
-    if (response.code === 0) {
-      const { list } = response.data
-      // 添加 displayData 预处理
-      const processedList = list.map((item, index) => ({
-        ...item,
-        displayData: transformRankingVideo(item, index + 1),
-      }))
-      Object.assign(videoList, processedList)
+    if (response.code !== 0 || !Array.isArray(response.data?.list))
+      throw new Error(response.message || 'Ranking request failed')
+    const processedList = response.data.list.map((item, index) => ({
+      ...item,
+      displayData: transformRankingVideo(item, index + 1),
+    }))
+    Object.assign(videoList, processedList)
+  }
+  catch (error) {
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      reportRuntimeFailure('Failed to load ranking videos', error)
     }
   }
   finally {
@@ -265,17 +272,27 @@ async function getRankingVideos(generation: number, rankingType: RankingType) {
 }
 
 async function getRankingPgc(generation: number, seasonType: number) {
+  emit('beforeLoading')
   isLoading.value = true
   try {
     const response: RankingPgcResult = await api.ranking.getRankingPgc({ season_type: seasonType })
     if (generation !== requestGeneration)
       return
-    if (response.code === 0)
-      Object.assign(PgcList, response.data.list)
+    if (response.code !== 0 || !Array.isArray(response.data?.list))
+      throw new Error(response.message || 'PGC ranking request failed')
+    Object.assign(PgcList, response.data.list)
+  }
+  catch (error) {
+    if (generation === requestGeneration) {
+      requestFailed.value = true
+      reportRuntimeFailure('Failed to load PGC ranking', error)
+    }
   }
   finally {
-    if (generation === requestGeneration)
+    if (generation === requestGeneration) {
       isLoading.value = false
+      emit('afterLoading')
+    }
   }
 }
 
@@ -312,6 +329,7 @@ defineExpose({ initData })
           :grid-layout="gridLayout"
           :loading="isLoading"
           :no-more-content="noMoreContent"
+          :request-failed="requestFailed"
           :transform-item="(item: RankingVideoElement) => item.displayData"
           :get-item-key="(item: RankingVideoElement) => item.aid"
           show-preview
@@ -320,7 +338,13 @@ defineExpose({ initData })
         />
       </template>
       <template v-else>
+        <Empty v-if="requestFailed && !isLoading" :description="t('common.load_failed')" role="alert">
+          <Button type="primary" @click="initData">
+            {{ t('common.operation.refresh') }}
+          </Button>
+        </Empty>
         <div
+          v-else
           ref="rankingGridRef"
           :class="{
             'grid-adaptive-bangumi': gridLayout === 'adaptive',

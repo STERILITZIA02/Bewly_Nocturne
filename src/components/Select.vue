@@ -1,6 +1,9 @@
 <script setup lang="ts">
+import { onClickOutside } from '@vueuse/core'
+
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
+import { DIALOG_FOCUS_OWNER } from '~/utils/dialogFocus'
 import { createSelectOptionKey } from '~/utils/selectOptionKey'
 
 type SelectValue = string | number | boolean | null | undefined
@@ -24,6 +27,7 @@ const emit = defineEmits<{
 }>()
 
 const { mainAppRef } = useBewlyApp()
+const dialogOwner = inject(DIALOG_FOCUS_OWNER, undefined)
 
 // UX 上限：菜单不应无限高，实际高度始终与可用空间取小
 const DROPDOWN_MAX_HEIGHT = 300
@@ -71,7 +75,6 @@ function openOptions(initialIndex = selectedOptionIndex()) {
 
 function closeOptions(restoreFocus = false) {
   showOptions.value = false
-  window.removeEventListener('click', handleWindowClick)
   if (restoreFocus)
     void nextTick(() => triggerRef.value?.focus())
 }
@@ -141,11 +144,13 @@ function handleOptionKeyDown(event: KeyboardEvent) {
       void focusOption(props.options.length - 1)
       break
     case 'Enter':
-    case ' ':
+    case ' ': {
       event.preventDefault()
-      if (activeOptionIndex.value >= 0)
-        selectOption(props.options[activeOptionIndex.value])
+      const option = props.options[activeOptionIndex.value]
+      if (option)
+        selectOption(option)
       break
+    }
     case 'Escape':
       event.preventDefault()
       closeOptions(true)
@@ -157,12 +162,13 @@ function handleOptionKeyDown(event: KeyboardEvent) {
 }
 
 // 打开后再用真实内容高度校正方向与 maxHeight（此时坐标已接近正确，不再从 0,0 起步）
-watch(showOptions, async (visible) => {
+watch(showOptions, async (visible, _previous, onCleanup) => {
   if (!visible) {
     stopPositionTracking()
     return
   }
 
+  onCleanup(onClickOutside(dropdownRef, () => closeOptions(), { ignore: [containerRef] }))
   await nextTick()
   schedulePositionUpdate()
 }, { flush: 'post' })
@@ -171,30 +177,12 @@ watch(() => props.disabled, (disabled) => {
   if (disabled)
     closeOptions()
 })
-
-function handleWindowClick() {
-  closeOptions()
-}
-
-/** when you click on it outside, the selection option will be turned off  */
-function onMouseLeave() {
-  if (!props.disabled)
-    window.addEventListener('click', handleWindowClick)
-}
-
-function onMouseEnter() {
-  window.removeEventListener('click', handleWindowClick)
-}
-
-onBeforeUnmount(() => window.removeEventListener('click', handleWindowClick))
 </script>
 
 <template>
   <div
     ref="containerRef"
     pos="relative"
-    @mouseleave="onMouseLeave"
-    @mouseenter="onMouseEnter"
   >
     <button
       ref="triggerRef"
@@ -248,6 +236,7 @@ onBeforeUnmount(() => window.removeEventListener('click', handleWindowClick))
           ref="dropdownRef"
           class="bew-popover-surface"
           role="listbox"
+          :data-bewly-dialog-owner="dialogOwner"
           :style="{
             top: `${dropdownPosition.top}px`,
             left: `${dropdownPosition.left}px`,

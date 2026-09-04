@@ -220,6 +220,8 @@ onBeforeUnmount(() => {
 })
 
 const handleKeywordInput = useDebounceFn(async (term: string, requestId: number) => {
+  if (searchBarDisposed || requestId !== suggestionRequestId)
+    return
   try {
     const res: SuggestionResponse = await api.search.getSearchSuggestion({ term })
     if (searchBarDisposed || requestId !== suggestionRequestId)

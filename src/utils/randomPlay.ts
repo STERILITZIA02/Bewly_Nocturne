@@ -121,12 +121,19 @@ export function getRandomPlayText(): string {
 
 // 获取视频选集
 export function getVideoEpisodes(): HTMLElement[] {
-  // 多P视频选集（B站标准选集列表）
-  const episodes = queryEpisodeItems('.video-pod__item, .video-pod__list .simple-base-item, .multi-page__item, .page-item')
+  // A multipart manuscript can live inside a collection. Its custom order
+  // must contain only its parts, not the collection's other manuscripts.
+  const multipart = detectVideoType() === VideoType.MULTIPART
+  const multipartSelector = '.video-pod__item, .multi-page__item, .page-item'
+  const episodes = queryEpisodeItems(multipart
+    ? multipartSelector
+    : `${multipartSelector}, .video-pod__list .simple-base-item`)
 
   if (episodes.length > 0) {
     return episodes
   }
+  if (multipart)
+    return []
 
   // 合集视频选集（稍后再看、收藏夹等），只在明确的选集容器内查找，避免扫描评论区
   const collectionEpisodes = Array.from(document.querySelectorAll(episodeRootSelector))

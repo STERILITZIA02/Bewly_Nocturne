@@ -6,6 +6,7 @@
     "scripts/verify-notification-fixtures.ts",
     "scripts/verify-private-message.ts",
     "scripts/verify-targeted-fixes.ts",
+    "scripts/verify-selected-p2.mjs",
     "src/contentScripts/views/Notifications/whisper/experimental/index.ts",
     "src/components/*.vue",
     "src/components/*/*.vue",

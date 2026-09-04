@@ -246,6 +246,6 @@ const gridColumnOptions = computed(() => [
 .moment-setting-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--bew-space-2);
 }
 </style>

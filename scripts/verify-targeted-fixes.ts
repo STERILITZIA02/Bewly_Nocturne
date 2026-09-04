@@ -80,6 +80,8 @@ import {
 } from '../src/utils/settingsCloudSyncProtocol'
 import { normalizeVideoCardCoverRatio } from '../src/utils/videoCardLayout'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
+import { verifyFunctionalAuditFixes } from './verify-functional-audit-fixes'
+import { verifyMomentPlayerPorts } from './verify-moment-player-ports'
 
 function verifyAccountScopes() {
   for (const flow of ['History load', 'UserPanel load', 'History delete']) {
@@ -1737,7 +1739,7 @@ async function verifyComponentContracts() {
   assert.match(commentSection, /comments_reply_new_tab/)
   assert.match(commentSection, /openLinkToNewTab\(buildMomentCommentPermalink/)
   assert.match(commentSection, /loadMoreReplies/)
-  assert.match(commentSection, /ancestorContinuationDepths/)
+  assert.match(commentSection, /MomentCommentTreeGuides/)
   assert.match(commentSection, /onBeforeUnmount\(\(\) =>/)
   assert.match(commentSection, /requestIdentity !== getCommentIdentity\(\)/)
   assert.match(commentSection, /page\.hasMore && madeProgress && pageAdvanced/)
@@ -2501,7 +2503,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /sidebarHydrationTimer/)
   assert.match(widescreen, /function runSidebarHydration/)
   assert.match(widescreen, /Sidebar hydration failed; retrying within the bounded hydration window/)
-  assert.match(widescreen, /else if \(!currentState\.sidebarHydrationTimer\) \{[\s\S]{0,80}startSidebarHydration\(currentState\)/)
+  assert.match(widescreen, /else if \(!currentState\.sidebarHydrationTimer && !currentState\.sidebarHydrationTimedOut\) \{[\s\S]{0,80}startSidebarHydration\(currentState\)/)
   assert.match(widescreen, /syncSidebarReadiness\(nextState, \{[\s\S]{0,180}complete: false/)
   assert.match(dockPolicy, /function resolveDockCollapsedShellSize/)
   assert.match(dock, /resolveDockCollapsedShellSize/)
@@ -2633,7 +2635,7 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuReadySection, /querySelector<HTMLElement>\(DANMAKU_LIST_VIEWPORT_SELECTOR\)/)
   assert.match(danmakuReadySection, /querySelector\(DANMAKU_LIST_ITEM_SELECTOR\)/)
   assert.match(danmakuReadySection, /return false/)
-  assert.match(widescreen, /activeTab === 'danmaku'[\s\S]{0,480}activateDanmakuTab\(currentState\)/)
+  assert.match(widescreen, /activeTab === 'danmaku'[\s\S]{0,900}activateDanmakuTab\(currentState\)/)
   assert.match(widescreen, /const DANMAKU_SKELETON_CLASS = 'bewly-widescreen-danmaku-skeleton'/)
   assert.match(widescreen, /function createDanmakuSkeleton\(label: string\)/)
   assert.match(widescreen, /function getDanmakuSkeletonHost\(panel: HTMLElement\)/)
@@ -4084,7 +4086,10 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(moments, /api\.user\.getRelations\(\{ fids: requestHostMid \}\)/)
   assert.match(moments, /if \(followState !== 'unfollowed'\)[\s\S]{0,220}handleUpFilterChange\(''\)/)
   assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid })') < moments.indexOf('api.moment.getMomentsByUp({'))
-  assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
+  assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed,[\s\S]{0,120}\.bili-dialog-m,[\s\S]{0,120}\.video-share-popover[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
+  assert.match(widescreen, /const NATIVE_ACTION_OVERLAY_SELECTOR = \[[\s\S]{0,120}'\.bili-dialog-m',[\s\S]{0,80}'\.video-share-popover'/)
+  assert.match(widescreen, /function isNativeActionOverlayOpen\(\)[\s\S]{0,700}rect\.width > 0 && rect\.height > 0/)
+  assert.match(widescreen, /shouldRemainExpanded \|\| \(currentlyExpanded && isNativeActionOverlayOpen\(\)\)[\s\S]{0,100}setHoverExpanded\(true\)/)
   assert.match(globalEvents, /BEWLY_NATIVE_USER_PROFILE_REQUEST/)
   assert.match(globalEvents, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
   assert.match(injectScript, /BILIBILI_USER_PROFILE_SCRIPT_URL = 'https:\/\/s1\.hdslb\.com\/bfs\/seed\/jinkela\/commentpc\/bili-comments\.js'/)
@@ -4331,6 +4336,8 @@ async function verify() {
   await verifyP4CleanupContracts()
   await verifySemanticPortContracts()
   await verifySecurityContracts()
+  await verifyMomentPlayerPorts()
+  await verifyFunctionalAuditFixes()
   console.log('Targeted fix verification passed.')
 }
 

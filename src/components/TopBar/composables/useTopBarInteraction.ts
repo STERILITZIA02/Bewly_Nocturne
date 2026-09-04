@@ -110,8 +110,6 @@ export function useTopBarInteraction() {
       return true
     }
 
-    if (!isHomePage(currentUrl))
-      return false
     return false
   })
 

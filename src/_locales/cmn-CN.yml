@@ -1,4 +1,5 @@
 common:
+  dialog: 对话框
   view_all: 查看更多
   play_all: 播放全部
   loading: 加载中...
@@ -1209,6 +1210,17 @@ moments:
   vote_ongoing: 进行中
   vote_ended: 已结束
   vote_status_unknown: 状态未知
+  vote_loading: 正在读取投票…
+  vote_load_failed: 投票读取失败，请重试
+  vote_select_up_to: '最多选择 {count} 项'
+  vote_image_option: '图片选项 {index}'
+  vote_participants: '{count} 人参与'
+  vote_deadline: '截止 {time}'
+  vote_submitted: 已投票
+  vote_submit: 投票
+  vote_submitting: 正在提交…
+  vote_submit_failed: 投票失败，请重试
+  login_to_vote: 请先登录再投票
   live_popularity: '{count} 人气'
   charge_exclusive: 充电专属
   charge_unlock_hint: 加入当前 UP 主的充电即可解锁观看
@@ -1322,6 +1334,7 @@ moment_card:
   comments_empty: 暂无评论
   comments_load_failed: 评论加载失败，请稍后重试
   comments_retry: 重试
+  comments_unavailable: 评论暂不可用，请重试
   comments_refresh: 刷新
   comments_load_more: 查看更多评论
   comments_missing_parent: 上级回复暂未加载
@@ -1409,6 +1422,7 @@ home:
   ranking: 排行
   subscribed_series: 订阅剧集
   weekly: 每周必看
+  weekly_search_placeholder: 搜索期号...
   precious: 入站必刷
   live: 直播
   moments: 动态
@@ -1436,6 +1450,7 @@ anime:
       sat: 周六
       sun: 周日
 history:
+  clear_failed: 清空历史记录失败，请重试
   clear_all_watch_history: 清除所有观看历史
   clear_all_watch_history_confirm: |-
     要清除所有观看历史吗？
@@ -1534,6 +1549,8 @@ watch_later:
   play_in_watch_later: 列表播放
   remove_from_watch_later: 移除
 widescreen:
+  panel_load_incomplete: 内容未能完成加载，可刷新页面或退出 Bewly 播放页后重试
+  reload_page: 刷新页面
   enter: 进入 Bewly 播放页
   exit: 退出 Bewly 播放页
   close_sidebar: 收起侧栏

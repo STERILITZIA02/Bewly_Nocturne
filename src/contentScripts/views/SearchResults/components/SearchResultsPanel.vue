@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import { settings } from '~/logic'
+
 import AllSearchPage from '../pages/AllSearchPage.vue'
 import ArticleSearchPage from '../pages/ArticleSearchPage.vue'
 import BangumiSearchPage from '../pages/BangumiSearchPage.vue'
@@ -65,6 +67,14 @@ const currentPageRef = computed(() => {
     default:
       return null
   }
+})
+
+const canManuallyLoadMore = computed(() => {
+  const page = currentPageRef.value
+  if (settings.value.searchResultsPaginationMode !== 'scroll' || !page || page.isLoading || !page.hasMore)
+    return false
+  return page.needsManualLoadMore
+    || ('results' in page && Array.isArray(page.results) && page.results.length === 0 && page.totalResults > 0)
 })
 
 // 处理滚动到底部事件
@@ -167,11 +177,22 @@ defineExpose({
       :initial-page="initialPage"
       @update-page="handleUpdatePage"
     />
+    <div v-if="canManuallyLoadMore" class="search-results-panel__more">
+      <Button type="secondary" @click="currentPageRef?.resumeLoadMore()">
+        {{ $t('common.load_more') }}
+      </Button>
+    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 .search-results-panel {
   width: 100%;
+}
+
+.search-results-panel__more {
+  display: flex;
+  justify-content: center;
+  padding: var(--bew-space-4);
 }
 </style>

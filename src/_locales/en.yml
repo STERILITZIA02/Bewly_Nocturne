@@ -1,4 +1,5 @@
 common:
+  dialog: Dialog
   view_all: View ALL
   play_all: Play ALL
   loading: Loading...
@@ -1260,6 +1261,17 @@ moments:
   vote_ongoing: Ongoing
   vote_ended: Ended
   vote_status_unknown: Status unavailable
+  vote_loading: Loading poll…
+  vote_load_failed: Could not load poll. Please retry.
+  vote_select_up_to: 'Select up to {count} options'
+  vote_image_option: 'Image option {index}'
+  vote_participants: '{count} participants'
+  vote_deadline: 'Ends {time}'
+  vote_submitted: Voted
+  vote_submit: Vote
+  vote_submitting: Submitting…
+  vote_submit_failed: Could not submit vote. Please retry.
+  login_to_vote: Log in to vote
   live_popularity: '{count} popularity'
   charge_exclusive: Charge exclusive
   charge_unlock_hint: Join this creator's Charge to unlock this content
@@ -1373,6 +1385,7 @@ moment_card:
   comments_empty: No comments yet
   comments_load_failed: Comments failed to load. Try again later.
   comments_retry: Retry
+  comments_unavailable: Comments are unavailable. Please retry.
   comments_refresh: Refresh
   comments_load_more: View more comments
   comments_missing_parent: Parent reply is not loaded yet
@@ -1461,6 +1474,7 @@ home:
   ranking: Ranking
   subscribed_series: Subscribed Series
   weekly: Weekly
+  weekly_search_placeholder: Search editions...
   precious: Must Watch
   live: Live
   moments: Moments
@@ -1488,6 +1502,7 @@ anime:
       sat: SAT
       sun: SUN
 history:
+  clear_failed: Could not clear watch history. Please retry.
   title: Watch History
   search_watch_history: Search watch history
   clear_all_watch_history: Clear all watch history
@@ -1592,6 +1607,8 @@ watch_later:
   play_in_watch_later: Playlist
   remove_from_watch_later: Remove
 widescreen:
+  panel_load_incomplete: Content could not finish loading. Reload the page or exit Bewly Playback Page to try again.
+  reload_page: Reload page
   enter: Open Bewly Playback Page
   exit: Leave Bewly Playback Page
   close_sidebar: Collapse sidebar

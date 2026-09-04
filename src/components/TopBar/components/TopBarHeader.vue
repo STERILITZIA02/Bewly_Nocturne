@@ -325,7 +325,7 @@ function refreshSearchContent() {
 
 .top-bar-header__side--right {
   justify-self: end;
-  gap: 8px;
+  gap: var(--bew-space-2);
 }
 
 .top-bar-header__search {
@@ -358,14 +358,14 @@ function refreshSearchContent() {
 // 窄屏响应式 padding（避免窄屏下 x-48px 过于挤压）
 @media (max-width: breakpoints.$compact-max) {
   .top-bar-header {
-    gap: 12px;
+    gap: var(--bew-space-3);
     padding-inline: 16px;
   }
 }
 
 @media (max-width: breakpoints.$mobile-max) {
   .top-bar-header {
-    gap: 8px;
+    gap: var(--bew-space-2);
     padding-inline: 8px;
   }
 }
