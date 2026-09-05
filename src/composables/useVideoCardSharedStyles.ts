@@ -15,40 +15,45 @@ const VIDEO_CARD_FONT_SIZE_MAP = {
   lg: 'text-lg',
 } as const
 
-// 标题行高常量
-const TITLE_LINE_HEIGHT = 1.35
+const VIDEO_CARD_LINE_HEIGHT_MAP = {
+  xs: 'var(--bew-line-height-caption)',
+  sm: 'var(--bew-line-height-control)',
+  base: 'var(--bew-line-height-body)',
+  lg: 'var(--bew-line-height-heading)',
+} as const
 
-/**
- * 使用视频卡片共享样式
- * 所有卡片使用相同的字体大小，避免重复计算
- */
+// These depend only on global settings, so every card can share the same refs.
+const titleFontSizeClass = computed(() =>
+  VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardTitleFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.base,
+)
+
+const titleStyle = computed((): Record<string, string | number> => ({
+  '--bew-title-line-height': settings.value.videoCardTitleFontSize === 'base'
+    ? 'var(--bew-line-height-title)'
+    : VIDEO_CARD_LINE_HEIGHT_MAP[settings.value.videoCardTitleFontSize],
+  'lineHeight': 'var(--bew-title-line-height)',
+  'fontWeight': 'var(--bew-font-weight-semibold)',
+}))
+
+const metaStyle = computed(() => ({
+  '--bew-author-line-height': VIDEO_CARD_LINE_HEIGHT_MAP[settings.value.videoCardAuthorFontSize],
+  '--bew-meta-line-height': VIDEO_CARD_LINE_HEIGHT_MAP[settings.value.videoCardMetaFontSize],
+}))
+
+const authorFontSizeClass = computed(() =>
+  VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardAuthorFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.sm,
+)
+
+const metaFontSizeClass = computed(() =>
+  VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardMetaFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.xs,
+)
+
 export function useVideoCardSharedStyles() {
-  // 标题字体大小类（全局共享，使用4档预设）
-  const titleFontSizeClass = computed(() =>
-    VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardTitleFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.base,
-  )
-
-  // 标题样式（全局共享）
-  const titleStyle = computed((): Record<string, string | number> => {
-    return {
-      '--bew-title-line-height': TITLE_LINE_HEIGHT.toString(),
-    }
-  })
-
-  // 作者字体大小类（全局共享）
-  const authorFontSizeClass = computed(() =>
-    VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardAuthorFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.sm,
-  )
-
-  // 元数据字体大小类（全局共享）
-  const metaFontSizeClass = computed(() =>
-    VIDEO_CARD_FONT_SIZE_MAP[settings.value.videoCardMetaFontSize] ?? VIDEO_CARD_FONT_SIZE_MAP.xs,
-  )
-
   return {
     titleFontSizeClass,
     titleStyle,
     authorFontSizeClass,
     metaFontSizeClass,
+    metaStyle,
   }
 }

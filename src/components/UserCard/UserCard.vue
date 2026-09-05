@@ -2,12 +2,16 @@
 import DOMPurify from 'dompurify'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
 import { getCSRF } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 interface UserCardProps {
   mid: number
@@ -41,6 +45,10 @@ const emit = defineEmits<{
   followStateChanged: [mid: number, isFollowing: boolean]
 }>()
 const { t } = useI18n()
+const toast = useToast()
+const topBarStore = useTopBarStore()
+const currentAccountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+let followGeneration = 0
 
 interface UserSample {
   id: string
@@ -60,8 +68,16 @@ const isFollowLoading = ref(false)
 
 // 监听 isFollowed prop 的变化
 watch(() => props.isFollowed, (newVal) => {
-  isFollowing.value = newVal === 1
+  if (!isFollowLoading.value)
+    isFollowing.value = newVal === 1
 })
+
+watch([() => props.mid, currentAccountId], ([_mid, accountId], [_previousMid, previousAccountId]) => {
+  followGeneration++
+  isFollowLoading.value = false
+  isFollowing.value = accountId !== null && accountId === previousAccountId && props.isFollowed === 1
+}, { flush: 'sync' })
+onScopeDispose(() => followGeneration++)
 
 const followButtonText = computed(() => {
   if (isFollowLoading.value)
@@ -90,34 +106,52 @@ async function handleFollowClick(e: Event) {
   if (isFollowLoading.value)
     return
 
+  const accountId = currentAccountId.value
+  if (accountId === null) {
+    toast.warning(t(topBarStore.isLogin ? 'common.load_failed' : 'common.please_log_in_first'))
+    return
+  }
+  const mid = props.mid
+  const targetFollowing = !isFollowing.value
+  const generation = ++followGeneration
+  const isCurrent = () => generation === followGeneration && accountId === currentAccountId.value && mid === props.mid
+  let committed = false
   try {
     isFollowLoading.value = true
     const csrf = getCSRF()
 
     // act: 1=关注, 2=取关
-    const act = isFollowing.value ? 2 : 1
+    const act = targetFollowing ? 1 : 2
 
     const response = await api.user.relationModify({
-      fid: String(props.mid),
+      fid: String(mid),
       act,
       re_src: 11, // 11=搜索结果页
       csrf,
     })
 
+    if (!isCurrent())
+      return
     if (response.code === 0) {
-      isFollowing.value = !isFollowing.value
+      committed = true
+      isFollowing.value = targetFollowing
       // 通知父组件关注状态已改变
-      emit('followStateChanged', props.mid, isFollowing.value)
+      emit('followStateChanged', mid, targetFollowing)
     }
     else {
-      console.error('关注操作失败:', response.message)
+      toast.error(t('common.operation_failed'))
     }
   }
   catch (error) {
-    console.error('关注操作出错:', error)
+    if (isCurrent() && !isExtensionContextInvalidatedError(error))
+      toast.error(t('common.operation_failed'))
   }
   finally {
-    isFollowLoading.value = false
+    if (isCurrent()) {
+      isFollowLoading.value = false
+      if (!committed)
+        isFollowing.value = props.isFollowed === 1
+    }
   }
 }
 </script>

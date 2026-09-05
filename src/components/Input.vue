@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
+
 type Size = 'small' | 'medium' | 'large'
 interface Props {
   size?: Size
@@ -12,6 +14,7 @@ const props = withDefaults(defineProps<Props>(), { size: 'medium' })
 
 const emit = defineEmits(['enter', 'blur'])
 
+const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
 const modelValue = defineModel<string | number>()
 
 const inputRef = ref<HTMLInputElement | null>(null)
@@ -70,6 +73,7 @@ defineExpose({ focus })
       :max="max"
       :maxlength="maxlength"
       :placeholder="placeholder"
+      :aria-labelledby="fieldLabelId"
       w-inherit min-w-0 h-inherit
       outline-none flex-1 bg-transparent
       @keydown.enter="handleEnter"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
 
+import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { DIALOG_FOCUS_OWNER } from '~/utils/dialogFocus'
@@ -27,6 +28,7 @@ const emit = defineEmits<{
 }>()
 
 const { mainAppRef } = useBewlyApp()
+const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
 const dialogOwner = inject(DIALOG_FOCUS_OWNER, undefined)
 
 // UX 上限：菜单不应无限高，实际高度始终与可用空间取小
@@ -34,6 +36,7 @@ const DROPDOWN_MAX_HEIGHT = 300
 
 const selectInstanceId = getCurrentInstance()?.uid ?? 0
 const listboxId = `bew-select-listbox-${selectInstanceId}`
+const valueLabelId = `${listboxId}-value`
 const label = computed(() => props.options.find(item => Object.is(item.value, props.modelValue))?.label ?? '')
 const showOptions = ref<boolean>(false)
 const activeOptionIndex = ref(-1)
@@ -193,6 +196,7 @@ watch(() => props.disabled, (disabled) => {
       aria-haspopup="listbox"
       :aria-expanded="showOptions"
       :aria-controls="listboxId"
+      :aria-labelledby="fieldLabelId ? `${fieldLabelId} ${valueLabelId}` : undefined"
       p="x-4 y-2"
       bg="$bew-fill-1"
       rounded="$bew-interactive-radius"
@@ -208,6 +212,7 @@ watch(() => props.disabled, (disabled) => {
       @keydown="handleTriggerKeyDown"
     >
       <div
+        :id="valueLabelId"
         truncate
         overflow="hidden"
         m="r-2"

@@ -8,7 +8,6 @@ import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
 
 const currentMinuteOfDay = ref(getCurrentMinuteOfDay())
-let isScheduleClockStarted = false
 let scheduleClockInterval: number | null = null
 let lastThemeChangeState: boolean | undefined
 let lastDarkModeBaseColor: string | undefined
@@ -43,13 +42,20 @@ function isWithinLightSchedule(current: number, startTime: string, endTime: stri
 }
 
 function startScheduleClock() {
-  if (isScheduleClockStarted || typeof window === 'undefined')
+  if (scheduleClockInterval !== null || typeof window === 'undefined')
     return
 
-  isScheduleClockStarted = true
+  currentMinuteOfDay.value = getCurrentMinuteOfDay()
   scheduleClockInterval = window.setInterval(() => {
     currentMinuteOfDay.value = getCurrentMinuteOfDay()
   }, 30_000)
+}
+
+function stopScheduleClock() {
+  if (scheduleClockInterval !== null) {
+    clearInterval(scheduleClockInterval)
+    scheduleClockInterval = null
+  }
 }
 
 /**
@@ -88,7 +94,13 @@ function syncBilibiliTheme(isDark: boolean) {
 }
 
 function createDarkState() {
-  startScheduleClock()
+  watch(() => settings.value.theme, (theme) => {
+    if (theme === 'scheduled')
+      startScheduleClock()
+    else
+      stopScheduleClock()
+  }, { immediate: true })
+  onScopeDispose(stopScheduleClock)
   const currentUrl = useCurrentLocationHref()
 
   const isPreferredDark = usePreferredDark()
@@ -341,9 +353,4 @@ export function stopDarkState() {
   darkStateScope.stop()
   darkState = undefined
   darkStateScope = effectScope(true)
-  if (scheduleClockInterval !== null) {
-    clearInterval(scheduleClockInterval)
-    scheduleClockInterval = null
-  }
-  isScheduleClockStarted = false
 }

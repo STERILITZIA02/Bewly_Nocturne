@@ -2,8 +2,6 @@ import type { Ref } from 'vue'
 import { reactive, ref, watch } from 'vue'
 
 import type {
-  PrivateMessageApiResponse,
-  PrivateMessagesData,
   PrivateMessageTransportErrorKind,
 } from '~/background/privateMessage/types'
 
@@ -21,6 +19,7 @@ import {
   collectPrivateEmotePackages,
   mergePrivateEmotePackages,
 } from './privateMessageRenderers'
+import { asResponse, extractMessages, resolveErrorKind } from './privateMessageResponse'
 
 interface FetchPrivateMessagesOptions {
   endSeqno?: string
@@ -71,6 +70,7 @@ export interface PrivateMessagesDependencies {
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   syncUnread: () => Promise<void>
   now?: () => number
+  onMessagesReceived?: (talkerId: string, incoming: DisplayPrivateMessage[]) => void
 }
 
 export interface PrivateAckEligibility {
@@ -100,26 +100,9 @@ export interface PrivateMessagesController {
   dispose: () => void
 }
 
-function asResponse(value: unknown): PrivateMessageApiResponse<unknown> | null {
-  if (!value || typeof value !== 'object')
-    return null
-  const response = value as Partial<PrivateMessageApiResponse<unknown>>
-  return typeof response.code === 'number' ? response as PrivateMessageApiResponse<unknown> : null
-}
-
-function extractMessages(response: unknown): PrivateMessagesData | null {
-  const parsed = asResponse(response)
-  if (!parsed || parsed.code !== 0 || !parsed.data || typeof parsed.data !== 'object')
-    return null
-  const data = parsed.data as Partial<PrivateMessagesData>
-  return Array.isArray(data.messages) && Array.isArray(data.e_infos)
-    ? data as PrivateMessagesData
-    : null
-}
-
-function resolveErrorKind(response: unknown): PrivateMessageTransportErrorKind {
-  const parsed = asResponse(response)
-  return parsed?.bewlyError?.kind ?? (parsed ? 'api-error' : 'invalid-response')
+function trimPrivateConversationMessages(items: DisplayPrivateMessage[], maxMessages: number): DisplayPrivateMessage[] {
+  const limit = Math.max(1, Math.trunc(maxMessages))
+  return items.length > limit ? items.slice(-limit) : items
 }
 
 export function hasPrivateMessagePageProgress(
@@ -151,14 +134,6 @@ function hasReachedPrivateMessageHistoryFloor(oldestSeqno: string, minSeqno: str
     && isUsablePrivateMessageHistoryFloor(minSeqno)
     && comparePrivateMessageSeqno(oldestSeqno, minSeqno) <= 0,
   )
-}
-
-export function trimPrivateConversationMessages(
-  items: DisplayPrivateMessage[],
-  maxMessages: number,
-): DisplayPrivateMessage[] {
-  const limit = Math.max(1, Math.trunc(maxMessages))
-  return items.length > limit ? items.slice(-limit) : items
 }
 
 function createConversationState(talkerId: string, now: number): PrivateConversationState {
@@ -396,6 +371,7 @@ export function usePrivateMessages(
           hydratePrivateMessageEmotes(mergedItems, emotePackages.value),
           maxMessagesPerConversation(),
         )
+        dependencies.onMessagesReceived?.(talkerId, incoming)
         state.loaded = true
         state.loadedAt = now()
         state.lastAccessedAt = state.loadedAt

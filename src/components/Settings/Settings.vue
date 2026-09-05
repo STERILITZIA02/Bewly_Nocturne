@@ -646,6 +646,7 @@ function changeMenuItem(menuItem: MenuType) {
               cursor-pointer
               :class="{ 'menu-item-activated': menuItem.value === activatedMenuItem }"
               :aria-current="menuItem.value === activatedMenuItem ? 'page' : undefined"
+              :aria-label="$t(menuItem.titleKey)"
               @click="changeMenuItem(menuItem.value)"
             >
               <div

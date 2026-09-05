@@ -16,6 +16,27 @@ export default defineConfig({
     'ps',
     'container',
   ],
+  theme: {
+    fontSize: {
+      xs: ['var(--bew-font-size-caption)', 'var(--bew-line-height-caption)'],
+      sm: ['var(--bew-font-size-control)', 'var(--bew-line-height-control)'],
+      base: ['var(--bew-font-size-body)', 'var(--bew-line-height-body)'],
+      lg: ['var(--bew-font-size-heading)', 'var(--bew-line-height-heading)'],
+      xl: ['var(--bew-font-size-display)', 'var(--bew-line-height-data)'],
+      '2xl': ['var(--bew-font-size-data-emphasis)', 'var(--bew-line-height-data)'],
+    },
+    // Preserve existing weights while using the same tokens as component SCSS.
+    fontWeight: {
+      400: 'var(--bew-font-weight-regular)',
+      normal: 'var(--bew-font-weight-regular)',
+      500: 'var(--bew-font-weight-medium)',
+      medium: 'var(--bew-font-weight-medium)',
+      600: 'var(--bew-font-weight-semibold)',
+      semibold: 'var(--bew-font-weight-semibold)',
+      700: 'var(--bew-font-weight-bold)',
+      bold: 'var(--bew-font-weight-bold)',
+    },
+  },
   safelist: [
     'i-mingcute:home-5-line',
     'i-mingcute:home-5-fill',

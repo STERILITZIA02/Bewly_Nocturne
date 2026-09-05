@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
+
 type RightWidth = 'default' | 'auto'
 
 withDefaults(defineProps<{
@@ -10,6 +12,8 @@ withDefaults(defineProps<{
 }>(), {
   rightWidth: 'default',
 })
+const titleId = `bew-settings-field-${useId()}`
+provide(FORM_FIELD_LABEL_ID, titleId)
 </script>
 
 <template>
@@ -20,7 +24,7 @@ withDefaults(defineProps<{
     >
       <div class="left-content" flex-1 min-w-0>
         <div>
-          <span class="settings-item-title">
+          <span :id="titleId" class="settings-item-title">
             <slot name="title">
               {{ title }}
             </slot>
@@ -74,5 +78,24 @@ withDefaults(defineProps<{
   gap: var(--bew-space-2);
   align-items: center;
   flex-wrap: wrap;
+}
+
+// Let a wide control take a new line before the title is squeezed into one
+// character per line. Small switches keep their existing inline layout.
+.b-settings-item-row {
+  flex-wrap: wrap;
+}
+
+.b-settings-item-row > .left-content {
+  min-width: min(100%, var(--bew-settings-label-min-width));
+}
+
+.b-settings-item-row > .right-content {
+  min-width: 0;
+  max-width: 100%;
+
+  > :deep(*) {
+    max-width: 100%;
+  }
 }
 </style>

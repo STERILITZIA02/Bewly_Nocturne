@@ -1,19 +1,13 @@
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vue'
 import Empty from '~/components/Empty.vue'
-import { useBewlyApp } from '~/composables/useAppProvider'
-import { settings } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
-import { useLoadMore } from '../composables/useLoadMore'
-import { usePagination } from '../composables/usePagination'
-import { useSearchRequest } from '../composables/useSearchRequest'
+import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertArticleCardData } from '../searchTransforms'
-import { dedupeByKey } from '../utils/searchHelpers'
 
 const props = defineProps<{
   keyword: string
@@ -26,207 +20,14 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 
-const { haveScrollbar, handleBackToTop } = useBewlyApp()
-
-// 分页模式：scroll 滚动加载，pagination 翻页
-const paginationMode = computed(() => settings.value.searchResultsPaginationMode)
-
-// 翻页加载状态
-const isPageChanging = ref(false)
-
-const {
-  isLoading,
-  error,
-  results,
-  lastResponse,
-  search,
-  reset: resetSearch,
-} = useSearchRequest<any[]>('article')
-
-const {
-  currentPage,
-  totalResults,
-  totalPages,
-  hasMore: paginationHasMore,
-  extractPagination,
-  updatePage,
-  getNextPage,
-  reset: resetPagination,
-} = usePagination()
-
-const {
-  hasMore,
-  exhausted,
-  requestLoadMore,
-  needsManualLoadMore,
-  resumeLoadMore,
-  handleLoadMoreCompletion,
-  setHasMore,
-  setExhausted,
-  reset: resetLoadMore,
-} = useLoadMore(async () => {
-  const previousCount = results.value?.length || 0
-  const success = await performSearch(true)
-  const appendedCount = Math.max(0, (results.value?.length || 0) - previousCount)
-  return { success, appendedCount }
-}, {
-  isLoading: () => isLoading.value,
+const { paginationMode, isLoading, error, results, totalResults, hasMore, requestLoadMore, needsManualLoadMore, resumeLoadMore, currentPage, totalPages, handlePageChange, refreshCurrentPage, restorePage } = useSearchListPage<any>({
+  category: 'article',
+  keyword: () => props.keyword,
+  initialPage: () => props.initialPage,
+  buildRequest: ({ keyword, page }) => ({ searchType: 'article', keyword, page, pageSize: 30 }),
+  itemKey: item => String(item?.id ?? JSON.stringify(item)),
+  onPageChange: page => emit('updatePage', page),
 })
-
-watch(() => props.keyword, async (newKeyword, oldKeyword) => {
-  const normalizedNew = (newKeyword || '').trim()
-  const normalizedOld = (oldKeyword || '').trim()
-
-  if (!normalizedNew) {
-    resetAll()
-    return
-  }
-
-  // 关键词变化时才执行
-  if (normalizedNew !== normalizedOld) {
-    resetAll()
-    await performSearch(false)
-  }
-})
-
-// 组件挂载时立即执行搜索
-onMounted(() => {
-  const keyword = props.keyword.trim()
-  if (keyword) {
-    // 如果有初始页码，先设置页码
-    if (props.initialPage && props.initialPage > 1) {
-      updatePage(props.initialPage)
-    }
-    performSearch(false)
-  }
-})
-
-async function performSearch(loadMore: boolean): Promise<boolean> {
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
-
-  // 分页模式下不支持 loadMore
-  const isLoadMore = paginationMode.value === 'scroll' && loadMore
-
-  if (isLoadMore && (isLoading.value || exhausted.value))
-    return false
-
-  if (!isLoadMore)
-    setExhausted(false)
-
-  // 滚动模式下：loadMore 使用 getNextPage，否则从第1页开始
-  // 翻页模式下：使用 currentPage（如果有设置）或从第1页开始
-  const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
-  const previousLength = results.value?.length || 0
-
-  const success = await search({
-    searchType: 'article',
-    keyword,
-    page: targetPage,
-    pageSize: 30,
-  })
-
-  if (!success || !lastResponse.value?.data)
-    return false
-
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-
-  if (isLoadMore && results.value) {
-    const merged = [...results.value, ...incomingList]
-    results.value = dedupeByKey(merged, item => String(item?.id ?? JSON.stringify(item)))
-  }
-  else {
-    results.value = incomingList
-  }
-
-  extractPagination(rawData, incomingList.length)
-  updatePage(targetPage)
-  setHasMore(paginationHasMore.value)
-
-  // 检查是否已耗尽（仅在滚动模式下）
-  if (paginationMode.value === 'scroll') {
-    const finalLength = results.value!.length
-    const newItems = Math.max(finalLength - previousLength, 0)
-
-    if (incomingList.length === 0) {
-      setExhausted(true)
-    }
-    else if (newItems <= 0 && targetPage >= totalPages.value) {
-      setExhausted(true)
-    }
-
-    // 处理加载完成
-    if (isLoadMore)
-      await handleLoadMoreCompletion(haveScrollbar)
-  }
-
-  return true
-}
-
-// 翻页模式的页码切换
-async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
-  if (paginationMode.value !== 'pagination')
-    return false
-
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
-
-  // 先滚动到顶部
-  if (scrollToTop) {
-    handleBackToTop()
-    await nextTick()
-  }
-
-  isPageChanging.value = true
-
-  try {
-    const success = await search({
-      searchType: 'article',
-      keyword,
-      page,
-      pageSize: 30,
-    })
-    if (!success || !lastResponse.value?.data)
-      return false
-    const rawData = lastResponse.value.data
-    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-    results.value = incomingList
-    extractPagination(rawData, incomingList.length)
-    updatePage(page)
-    setHasMore(paginationHasMore.value)
-    if (updateUrl)
-      emit('updatePage', page)
-    return true
-  }
-  finally {
-    isPageChanging.value = false
-  }
-}
-
-function refreshCurrentPage() {
-  return paginationMode.value === 'pagination'
-    ? handlePageChange(currentPage.value, false, false)
-    : performSearch(false)
-}
-async function restorePage(page: number): Promise<boolean> {
-  if (page === currentPage.value)
-    return true
-  if (paginationMode.value === 'pagination')
-    return handlePageChange(page, false, false)
-
-  updatePage(page)
-  return performSearch(false)
-}
-
-function resetAll() {
-  resetSearch()
-  resetPagination()
-  resetLoadMore()
-  results.value = []
-}
 
 defineExpose({
   isLoading,
@@ -283,7 +84,7 @@ defineExpose({
       <Pagination
         :current-page="currentPage"
         :total-pages="totalPages"
-        :loading="isPageChanging"
+        :loading="isLoading"
         :disabled="isLoading"
         @change="handlePageChange"
       />

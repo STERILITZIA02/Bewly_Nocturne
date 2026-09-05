@@ -61,9 +61,11 @@ interface PendingImageRelease {
 
 const pendingImageReleases = new Map<Element, PendingImageRelease>()
 let releaseSweepTimer: ReturnType<typeof setTimeout> | null = null
+let releaseSweepDeadline = Number.POSITIVE_INFINITY
 
 function runReleaseSweep() {
   releaseSweepTimer = null
+  releaseSweepDeadline = Number.POSITIVE_INFINITY
   const now = Date.now()
   let nextDeadline = Number.POSITIVE_INFINITY
 
@@ -78,6 +80,7 @@ function runReleaseSweep() {
   }
 
   if (Number.isFinite(nextDeadline)) {
+    releaseSweepDeadline = nextDeadline
     releaseSweepTimer = setTimeout(
       runReleaseSweep,
       Math.max(0, nextDeadline - Date.now()),
@@ -86,19 +89,30 @@ function runReleaseSweep() {
 }
 
 function scheduleImageRelease(element: Element, delay: number, release: () => void) {
+  const deadline = Date.now() + Math.max(0, delay)
   pendingImageReleases.set(element, {
-    deadline: Date.now() + Math.max(0, delay),
+    deadline,
     release,
   })
 
+  // A batch of offscreen covers shares the earliest wakeup; do not rescan the
+  // entire pending set for every new cover in the same IntersectionObserver batch.
+  if (releaseSweepTimer !== null && deadline >= releaseSweepDeadline)
+    return
   if (releaseSweepTimer !== null)
     clearTimeout(releaseSweepTimer)
-  runReleaseSweep()
+  releaseSweepDeadline = deadline
+  releaseSweepTimer = setTimeout(runReleaseSweep, Math.max(0, deadline - Date.now()))
 }
 
 function cancelImageRelease(element: Element | undefined) {
   if (element)
     pendingImageReleases.delete(element)
+  if (pendingImageReleases.size === 0 && releaseSweepTimer !== null) {
+    clearTimeout(releaseSweepTimer)
+    releaseSweepTimer = null
+    releaseSweepDeadline = Number.POSITIVE_INFINITY
+  }
 }
 
 function hasLoadedPicture(src: string): boolean {
@@ -176,7 +190,10 @@ const imageElRef = ref<HTMLImageElement | null>(null)
 // 不再因为“曾经加载过”就立刻挂 src，避免离屏卡片重新吃内存。
 const isVisible = ref(props.loading === 'eager')
 const isLoaded = ref(false)
+const imageFailed = ref(!props.src)
+const usePreferredSources = ref(true)
 const actualSrc = ref(props.loading === 'eager' ? props.src : '')
+const imageKey = computed(() => `${actualSrc.value}:${usePreferredSources.value}`)
 const skipRevealTransition = ref(false)
 
 let stopObserving: (() => void) | null = null
@@ -218,11 +235,13 @@ function getObserverRootMargin(): string {
 }
 
 function startLoad() {
+  isVisible.value = true
+  if (imageFailed.value)
+    return
   const loadedBefore = hasLoadedPicture(props.src)
   skipRevealTransition.value = loadedBefore
   // 重新挂载解码资源时仍走短暂占位，避免空白闪断过长
   isLoaded.value = false
-  isVisible.value = true
   actualSrc.value = props.src
 }
 
@@ -313,10 +332,29 @@ onBeforeUnmount(() => {
   isLoaded.value = false
 })
 
-function handleImageLoad() {
+function isCurrentImage(event: Event) {
+  const image = event.target as HTMLImageElement
+  return image === imageElRef.value && image.dataset.imageKey === imageKey.value && Boolean(actualSrc.value)
+}
+
+function handleImageLoad(event: Event) {
+  if (!isCurrentImage(event))
+    return
   rememberLoadedPicture(actualSrc.value)
   isLoaded.value = true
   emit('loaded')
+}
+
+function handleImageError(event: Event) {
+  if (!isCurrentImage(event))
+    return
+  if (usePreferredSources.value) {
+    // The caller's original URL gets one attempt if the preferred CDN format fails.
+    usePreferredSources.value = false
+    return
+  }
+  imageFailed.value = true
+  forgetLoadedPicture(actualSrc.value)
 }
 
 watch(() => props.src, (newSrc, oldSrc) => {
@@ -325,6 +363,8 @@ watch(() => props.src, (newSrc, oldSrc) => {
 
   skipRevealTransition.value = hasLoadedPicture(newSrc)
   isLoaded.value = false
+  imageFailed.value = !newSrc
+  usePreferredSources.value = true
 
   if (isVisible.value) {
     actualSrc.value = newSrc
@@ -358,7 +398,7 @@ watch(
     style="aspect-ratio: 16 / 9; display: block; position: relative; contain: layout style;"
   >
     <div
-      v-if="showSkeleton && !isLoaded"
+      v-if="showSkeleton && !isLoaded && !imageFailed"
       aria-hidden="true"
       w-full h-full
       bg="$bew-skeleton"
@@ -366,12 +406,19 @@ watch(
       class="lazy-picture-skeleton"
     />
 
+    <div v-if="imageFailed" class="lazy-picture-error" role="img" :aria-label="$t('common.image_load_failed')">
+      <i i-mingcute:pic-line aria-hidden="true" />
+      <span>{{ $t('common.image_load_failed') }}</span>
+    </div>
+
     <!-- 实际图片 - 仅在进入加载区后挂载，离开保留区后卸载 -->
-    <template v-if="isVisible && actualSrc">
-      <source :srcset="`${actualSrc}.avif`" type="image/avif">
-      <source :srcset="`${actualSrc}.webp`" type="image/webp">
+    <template v-if="isVisible && actualSrc && !imageFailed">
+      <source v-if="usePreferredSources" :srcset="`${actualSrc}.avif`" type="image/avif">
+      <source v-if="usePreferredSources" :srcset="`${actualSrc}.webp`" type="image/webp">
       <img
+        :key="imageKey"
         :ref="bindImageEl"
+        :data-image-key="imageKey"
         :src="actualSrc"
         :alt="alt"
         loading="eager"
@@ -383,6 +430,7 @@ watch(
         class="image-transition"
         :class="{ 'image-transition--instant': skipRevealTransition }"
         @load="handleImageLoad"
+        @error="handleImageError"
       >
     </template>
   </picture>
@@ -393,6 +441,29 @@ watch(
   position: absolute;
   inset: 0;
   z-index: 0;
+}
+
+.lazy-picture-error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-2);
+  box-sizing: border-box;
+  background: var(--bew-skeleton);
+  color: var(--bew-text-2);
+  border-radius: inherit;
+  corner-shape: inherit;
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  text-align: center;
+}
+
+.lazy-picture-error i {
+  font-size: var(--bew-icon-size-lg);
 }
 
 .image-transition {

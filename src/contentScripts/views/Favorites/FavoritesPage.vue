@@ -81,6 +81,7 @@ const editFolderTitle = ref<string>('')
 const editFolderPublic = ref(true)
 const itemMenuTarget = ref<{ type: SidebarManageSection, id: number } | null>(null)
 const itemMenuAnchor = ref({ x: 0, y: 0 })
+const itemMenuTrigger = shallowRef<HTMLElement | null>(null)
 let contentRequestVersion = 0
 
 function notifyTopBarFavoritesChanged() {
@@ -399,8 +400,12 @@ function openSingleEditFolder(folderId: number) {
 }
 
 function openItemMenu(type: SidebarManageSection, id: number, event: MouseEvent) {
+  itemMenuTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   itemMenuTarget.value = { type, id }
-  itemMenuAnchor.value = { x: event.clientX, y: event.clientY }
+  const rect = itemMenuTrigger.value?.getBoundingClientRect()
+  itemMenuAnchor.value = event.detail === 0 && rect
+    ? { x: rect.right, y: rect.bottom }
+    : { x: event.clientX, y: event.clientY }
 }
 
 function closeItemMenu() {
@@ -1560,6 +1565,8 @@ function transformFavoriteArticle(item: FavoriteArticle) {
                   class="item-more-btn"
                   :disabled="isFullPageLoading"
                   :aria-label="t('favorites.sidebar_manage')"
+                  aria-haspopup="menu"
+                  :aria-expanded="itemMenuTarget?.type === 'folder' && itemMenuTarget.id === item.id"
                   @click.prevent.stop="openItemMenu('folder', item.id, $event)"
                 >
                   <span i-mingcute:more-2-line />
@@ -1606,6 +1613,8 @@ function transformFavoriteArticle(item: FavoriteArticle) {
                   class="item-more-btn"
                   :disabled="isFullPageLoading"
                   :aria-label="t('favorites.sidebar_manage')"
+                  aria-haspopup="menu"
+                  :aria-expanded="itemMenuTarget?.type === 'season' && itemMenuTarget.id === item.id"
                   @click.prevent.stop="openItemMenu('season', item.id, $event)"
                 >
                   <span i-mingcute:more-2-line />
@@ -1624,6 +1633,7 @@ function transformFavoriteArticle(item: FavoriteArticle) {
             v-if="itemMenuTarget"
             :options="itemMenuOptions"
             :anchor="itemMenuAnchor"
+            :trigger="itemMenuTrigger"
             @select="handleItemMenuSelect"
             @close="closeItemMenu"
           />

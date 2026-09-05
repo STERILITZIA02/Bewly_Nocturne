@@ -1,21 +1,21 @@
 <script setup lang="ts">
-import { onKeyStroke, useEventListener, useIntersectionObserver, useThrottleFn } from '@vueuse/core'
+import { useEventListener, useIntersectionObserver, useThrottleFn } from '@vueuse/core'
 import type { AsyncComponentLoader, Ref } from 'vue'
 import { provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import AppAuthorizationDialog from '~/components/AppAuthorizationDialog.vue'
-import Button from '~/components/Button.vue'
-import CloseButton from '~/components/CloseButton.vue'
+import ConfirmDialog from '~/components/ConfirmDialog.vue'
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
-import type { BewlyAppProvider, SettingsNavigationRequest, SettingsNavigationTarget } from '~/composables/useAppProvider'
+import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
+import { useConfirmDialogHost } from '~/composables/useConfirmDialogHost'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
+import { useSettingsPanel } from '~/composables/useSettingsPanel'
 import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
-import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { appAuthTokens, settings } from '~/logic'
@@ -25,7 +25,7 @@ import {
   synchronizeValidAppAuthorization,
 } from '~/logic/appAuthorizationCoordinator'
 import { setIframePageActive } from '~/logic/iframePageState'
-import { exitLayoutEditMode, openSettingById } from '~/logic/layoutEdit'
+import { exitLayoutEditMode } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
@@ -52,7 +52,7 @@ const useOriginalBilibiliTopBar = computed(() => showNativeBilibiliTopBar(effect
 const { t } = useI18n()
 
 const { isDark } = useDark()
-const showSettings = ref(false)
+const { showSettings, settingsLaunchStyle, settingsNavigationRequest, toggleSettings, openSettingsAt, openLayoutEditorSetting } = useSettingsPanel()
 const showAppAuthorizationDialog = computed(() => (
   settings.value.recommendationMode === 'app'
   && (
@@ -79,137 +79,14 @@ watch(() => [
     completeExternalAppAuthorization(appAuthTokens.value.accessToken)
 }, { immediate: true })
 
-const settingsLaunchStyle = ref<Record<string, string>>({})
-const settingsNavigationRequest = shallowRef<SettingsNavigationRequest | null>(null)
-let settingsNavigationRequestId = 0
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value))
-}
-
-function toggleSettings(origin: DOMRect) {
-  if (showSettings.value) {
-    showSettings.value = false
-    return
-  }
-
-  const viewportWidth = window.innerWidth
-  const viewportHeight = window.innerHeight
-  const compactLayout = viewportWidth <= LAYOUT_BREAKPOINTS.compactMax
-  const panelWidth = compactLayout
-    ? Math.min(1072, viewportWidth - 24)
-    : Math.min(viewportWidth * 0.9, 1000)
-  const panelHeight = Math.min(viewportHeight * 0.9, 900)
-  const panelCenterX = viewportWidth / 2 + (compactLayout ? -4 : 0)
-  const panelCenterY = viewportHeight / 2
-  const sourceX = origin.left + origin.width / 2
-  const sourceY = origin.top + origin.height / 2
-  const enterX = clamp(sourceX - panelCenterX, -96, 96)
-  const enterY = clamp(sourceY - panelCenterY, -72, 72)
-
-  settingsLaunchStyle.value = {
-    '--bew-settings-origin-x': `${clamp(sourceX - (panelCenterX - panelWidth / 2), 0, panelWidth)}px`,
-    '--bew-settings-origin-y': `${clamp(sourceY - (panelCenterY - panelHeight / 2), 0, panelHeight)}px`,
-    '--bew-settings-enter-x': `${enterX}px`,
-    '--bew-settings-enter-y': `${enterY}px`,
-    '--bew-settings-leave-x': `${enterX * 0.35}px`,
-    '--bew-settings-leave-y': `${enterY * 0.35}px`,
-  }
-  showSettings.value = true
-}
-
-function openSettingsAt(target: SettingsNavigationTarget) {
-  settingsNavigationRequest.value = {
-    id: ++settingsNavigationRequestId,
-    target,
-  }
-  if (!showSettings.value)
-    toggleSettings(new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
-}
-
-function openLayoutEditorSetting(settingId: string, origin?: DOMRect) {
-  exitLayoutEditMode()
-  if (!showSettings.value) {
-    toggleSettings(origin ?? new DOMRect(window.innerWidth / 2, window.innerHeight / 2))
-  }
-  openSettingById(settingId)
-}
-
-interface ConfirmDialogRequest {
-  id: number
-  message: string
-  resolve: (confirmed: boolean) => void
-  settled: boolean
-}
-
-/**
- * Lightweight confirm host (no Dialog / Transition / Teleport).
- * Resolving the promise often mutates large page lists (favorites, history…);
- * doing that in the same tick as a Transition/Teleport teardown races Vue's
- * patcher and throws insertBefore NotFoundError under <App>.
- */
-const activeConfirmDialog = ref<ConfirmDialogRequest>()
-const confirmDialogQueue: ConfirmDialogRequest[] = []
-let confirmDialogBusy = false
-let confirmDialogIdSeq = 0
-
-function showNextConfirmDialog() {
-  activeConfirmDialog.value = confirmDialogQueue.shift()
-}
-
-function showConfirmDialog(message: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const request: ConfirmDialogRequest = {
-      id: ++confirmDialogIdSeq,
-      message,
-      resolve,
-      settled: false,
-    }
-
-    if (activeConfirmDialog.value || confirmDialogBusy)
-      confirmDialogQueue.push(request)
-    else
-      activeConfirmDialog.value = request
-  })
-}
-
-function finishConfirmDialog(confirmed: boolean) {
-  const request = activeConfirmDialog.value
-  if (!request || request.settled)
-    return
-
-  request.settled = true
-  confirmDialogBusy = true
-  // Unmount the overlay first; only then resolve so callers' DOM updates
-  // (e.g. splicing favorite cards) never interleave with this node removal.
-  activeConfirmDialog.value = undefined
-
-  nextTick(() => {
-    request.resolve(confirmed)
-    confirmDialogBusy = false
-    showNextConfirmDialog()
-  })
-}
-
-onKeyStroke('Escape', (e: KeyboardEvent) => {
-  if (!activeConfirmDialog.value)
-    return
-  e.preventDefault()
-  e.stopPropagation()
-  finishConfirmDialog(false)
-}, { dedupe: true })
-
-onKeyStroke('Enter', (e: KeyboardEvent) => {
-  if (!activeConfirmDialog.value)
-    return
-  e.preventDefault()
-  e.stopPropagation()
-  finishConfirmDialog(true)
-}, { dedupe: true })
-
-provide(confirmDialogKey, {
-  confirm: showConfirmDialog,
-})
+const confirmDialogHost = useConfirmDialogHost()
+const { activeRequest: activeConfirmDialog } = confirmDialogHost
+provide(confirmDialogKey, { confirm: confirmDialogHost.confirm })
+watch([
+  currentLocationHref,
+  () => topBarStore.isLogin,
+  () => topBarStore.userInfo.mid,
+], confirmDialogHost.cancelAll, { flush: 'sync' })
 
 // Get the 'page' query parameter from the URL
 function getPageParam(): AppPage | null {
@@ -1162,43 +1039,13 @@ onBeforeUnmount(stopUrlCleaner)
 
     <AppAuthorizationDialog v-if="showAppAuthorizationDialog" />
 
-    <!-- Static confirm overlay: no Transition/Teleport (see finishConfirmDialog). -->
-    <div
+    <!-- Keep the static overlay removal before resolving a caller's request. -->
+    <ConfirmDialog
       v-if="activeConfirmDialog"
       :key="activeConfirmDialog.id"
-      class="bew-confirm-dialog"
-      role="alertdialog"
-      aria-modal="true"
-      :aria-label="$t('common.operation.confirm')"
-    >
-      <div class="bew-confirm-dialog__backdrop" @click="finishConfirmDialog(false)" />
-      <div class="bew-confirm-dialog__panel">
-        <header class="bew-confirm-dialog__header">
-          <p class="bew-confirm-dialog__title">
-            {{ $t('common.operation.confirm') }}
-          </p>
-          <CloseButton
-            class="bew-confirm-dialog__close"
-            :label="$t('common.close')"
-            size="medium"
-            @click="finishConfirmDialog(false)"
-          />
-        </header>
-        <div class="bew-confirm-dialog__body">
-          <p class="bew-confirm-dialog__message">
-            {{ activeConfirmDialog.message }}
-          </p>
-        </div>
-        <footer class="bew-confirm-dialog__footer">
-          <Button type="tertiary" @click="finishConfirmDialog(false)">
-            {{ $t('common.operation.cancel') }}
-          </Button>
-          <Button type="primary" @click="finishConfirmDialog(true)">
-            {{ $t('common.operation.confirm') }}
-          </Button>
-        </footer>
-      </div>
-    </div>
+      :message="activeConfirmDialog.message"
+      @finish="confirmDialogHost.finish"
+    />
   </div>
 </template>
 
@@ -1209,73 +1056,6 @@ onBeforeUnmount(stopUrlCleaner)
 
 .settings-layer {
   z-index: var(--bew-z-dialog);
-}
-
-.bew-confirm-dialog {
-  position: fixed;
-  inset: 0;
-  z-index: var(--bew-z-dialog);
-  pointer-events: auto;
-}
-
-.bew-confirm-dialog__backdrop {
-  position: absolute;
-  inset: 0;
-  background: rgb(0 0 0 / 40%);
-}
-
-.bew-confirm-dialog__panel {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  display: flex;
-  flex-direction: column;
-  width: var(--bew-layout-dialog-width);
-  max-width: calc(100vw - 32px);
-  overflow: hidden;
-  background: var(--bew-elevated-alt-solid);
-  box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-modal-radius);
-  corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-2);
-  transform: translate(-50%, -50%);
-}
-
-.bew-confirm-dialog__header {
-  display: flex;
-  gap: var(--bew-space-4);
-  align-items: center;
-  justify-content: space-between;
-  min-height: 70px;
-  padding: 0 var(--bew-space-8);
-}
-
-.bew-confirm-dialog__title {
-  margin: 0;
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
-}
-
-.bew-confirm-dialog__body {
-  padding: var(--bew-space-2) var(--bew-space-8) var(--bew-space-2);
-}
-
-.bew-confirm-dialog__message {
-  margin: 0;
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-regular);
-  line-height: var(--bew-line-height-body);
-  white-space: pre-line;
-}
-
-.bew-confirm-dialog__footer {
-  display: flex;
-  gap: var(--bew-space-2);
-  justify-content: flex-end;
-  padding: var(--bew-space-2) var(--bew-space-8) var(--bew-space-6);
 }
 
 .bewly-wrapper {

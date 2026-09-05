@@ -1,18 +1,14 @@
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, watch } from 'vue'
 
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
-import { useBewlyApp } from '~/composables/useAppProvider'
 import type { GridLayoutType } from '~/logic'
-import { settings } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
-import { useLoadMore } from '../composables/useLoadMore'
-import { usePagination } from '../composables/usePagination'
-import { useSearchRequest } from '../composables/useSearchRequest'
+import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertLiveRoomData, convertVideoData, isAdVideo } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
-import { applyVideoTimeFilter, buildVideoSearchParams, dedupeByKey } from '../utils/searchHelpers'
+import { applyVideoTimeFilter, buildVideoSearchParams } from '../utils/searchHelpers'
 
 const props = defineProps<{
   keyword: string
@@ -24,87 +20,22 @@ const emit = defineEmits<{
   updatePage: [page: number]
 }>()
 
-const { haveScrollbar, handleBackToTop } = useBewlyApp()
-
-// 分页模式：scroll 滚动加载，pagination 翻页
-const paginationMode = computed(() => settings.value.searchResultsPaginationMode)
-
-// 翻页加载状态
-const isPageChanging = ref(false)
-
-// Grid 布局：搜索结果使用 adaptive 布局
 const gridLayout = computed<GridLayoutType>(() => 'adaptive')
-
-// 搜索请求管理
-const {
-  isLoading,
-  error,
-  results,
-  lastResponse,
-  search,
-  reset: resetSearch,
-} = useSearchRequest<any[]>('video')
-
-// 分页管理
-const {
-  currentPage,
-  totalResults,
-  totalPages,
-  context,
-  hasMore: paginationHasMore,
-  extractPagination,
-  updatePage,
-  getNextPage,
-  reset: resetPagination,
-} = usePagination()
-
-// 无限加载管理
-const {
-  hasMore,
-  exhausted,
-  requestLoadMore,
-  needsManualLoadMore,
-  resumeLoadMore,
-  handleLoadMoreCompletion,
-  setHasMore,
-  setExhausted,
-  reset: resetLoadMore,
-} = useLoadMore(async () => {
-  const previousCount = results.value?.length || 0
-  const success = await performSearch(true)
-  const appendedCount = Math.max(0, (results.value?.length || 0) - previousCount)
-  return { success, appendedCount }
-}, {
-  isLoading: () => isLoading.value,
-})
-
-// 监听关键词变化
-watch(() => props.keyword, async (newKeyword, oldKeyword) => {
-  const normalizedNew = (newKeyword || '').trim()
-  const normalizedOld = (oldKeyword || '').trim()
-
-  if (!normalizedNew) {
-    resetAll()
-    return
-  }
-
-  // 关键词变化时才执行
-  if (normalizedNew !== normalizedOld) {
-    resetAll()
-    await performSearch(false)
-  }
-})
-
-// 组件挂载时立即执行搜索
-onMounted(() => {
-  const keyword = props.keyword.trim()
-  if (keyword) {
-    // 如果有初始页码，先设置页码
-    if (props.initialPage && props.initialPage > 1) {
-      updatePage(props.initialPage)
-    }
-    performSearch(false)
-  }
+const { paginationMode, isLoading, error, results, totalResults, hasMore, requestLoadMore, needsManualLoadMore, resumeLoadMore, currentPage, totalPages, handlePageChange, refreshCurrentPage, restorePage, exhausted, resetAll, performSearch } = useSearchListPage<any>({
+  category: 'video',
+  keyword: () => props.keyword,
+  initialPage: () => props.initialPage,
+  buildRequest: ({ keyword, page, loadMore, context }) => ({
+    searchType: 'video',
+    keyword,
+    page,
+    pageSize: 30,
+    ...buildVideoSearchParams({ loadMore, context, filters: props.filters }),
+  }),
+  transformItems: items => applyVideoTimeFilter(items.filter(item => !isAdVideo(item)))
+    .map(item => item.type === 'live_room' ? convertLiveRoomData(item) : convertVideoData(item)),
+  itemKey: item => String(item.aid ?? item.bvid ?? item.id ?? item.roomid),
+  onPageChange: page => emit('updatePage', page),
 })
 
 // 监听筛选条件变化
@@ -120,170 +51,6 @@ watch(() => props.filters, () => {
   resetAll()
   void performSearch(false)
 }, { deep: true })
-
-async function performSearch(loadMore: boolean): Promise<boolean> {
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
-
-  // 分页模式下不支持 loadMore
-  const isLoadMore = paginationMode.value === 'scroll' && loadMore
-
-  if (isLoadMore && (isLoading.value || exhausted.value))
-    return false
-
-  if (!isLoadMore)
-    setExhausted(false)
-
-  // 滚动模式下：loadMore 使用 getNextPage，否则从第1页开始
-  // 翻页模式下：使用 currentPage（如果有设置）或从第1页开始
-  const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
-  const previousLength = results.value?.length || 0
-
-  const success = await search({
-    searchType: 'video',
-    keyword,
-    page: targetPage,
-    pageSize: 30,
-    ...buildVideoSearchParams({
-      loadMore: isLoadMore,
-      context: context.value,
-      filters: props.filters,
-    }),
-  })
-
-  if (!success)
-    return false
-
-  if (!lastResponse.value?.data)
-    return false
-
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-
-  // 过滤广告和应用时间过滤
-  const filteredList = applyVideoTimeFilter(incomingList.filter((item: Record<string, unknown>) => !isAdVideo(item)))
-
-  // 转换数据格式 - 根据类型选择正确的转换函数
-  const convertedList = filteredList.map((item: Record<string, unknown>) => {
-    // 如果是直播间类型，使用直播间转换函数
-    if (item.type === 'live_room') {
-      return convertLiveRoomData(item)
-    }
-    // 否则使用视频转换函数
-    return convertVideoData(item)
-  })
-
-  // 合并或替换结果
-  if (isLoadMore && results.value) {
-    results.value = dedupeByKey(
-      [...results.value, ...convertedList],
-      item => String(item.aid ?? item.bvid ?? item.id ?? item.roomid),
-    )
-  }
-  else {
-    results.value = convertedList
-  }
-
-  // 提取分页信息
-  extractPagination(rawData, filteredList.length)
-  updatePage(targetPage)
-  setHasMore(paginationHasMore.value)
-
-  // 检查是否已耗尽（仅在滚动模式下）
-  if (paginationMode.value === 'scroll') {
-    const finalLength = results.value.length
-    const newItems = Math.max(finalLength - previousLength, 0)
-
-    if (incomingList.length === 0) {
-      setExhausted(true)
-    }
-    else if (newItems <= 0 && targetPage >= totalPages.value) {
-      setExhausted(true)
-    }
-
-    // 处理加载完成
-    if (isLoadMore)
-      await handleLoadMoreCompletion(haveScrollbar)
-  }
-
-  return true
-}
-
-// 翻页模式的页码切换
-async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
-  if (paginationMode.value !== 'pagination')
-    return false
-
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
-
-  // 先滚动到顶部
-  if (scrollToTop) {
-    handleBackToTop()
-    await nextTick()
-  }
-
-  isPageChanging.value = true
-  try {
-    const success = await search({
-      searchType: 'video',
-      keyword,
-      page,
-      pageSize: 30,
-      ...buildVideoSearchParams({
-        loadMore: false,
-        context: context.value,
-        filters: props.filters,
-      }),
-    })
-
-    if (!success || !lastResponse.value?.data)
-      return false
-
-    const rawData = lastResponse.value.data
-    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-    const filteredList = applyVideoTimeFilter(incomingList.filter((item: Record<string, unknown>) => !isAdVideo(item)))
-    const convertedList = filteredList.map((item: Record<string, unknown>) => item.type === 'live_room'
-      ? convertLiveRoomData(item)
-      : convertVideoData(item))
-
-    results.value = convertedList
-    extractPagination(rawData, filteredList.length)
-    updatePage(page)
-    setHasMore(paginationHasMore.value)
-    if (updateUrl)
-      emit('updatePage', page)
-    return true
-  }
-  finally {
-    isPageChanging.value = false
-  }
-}
-
-function refreshCurrentPage() {
-  return paginationMode.value === 'pagination'
-    ? handlePageChange(currentPage.value, false, false)
-    : performSearch(false)
-}
-
-async function restorePage(page: number): Promise<boolean> {
-  if (page === currentPage.value)
-    return true
-  if (paginationMode.value === 'pagination')
-    return handlePageChange(page, false, false)
-
-  updatePage(page)
-  return performSearch(false)
-}
-
-function resetAll() {
-  resetSearch()
-  resetPagination()
-  resetLoadMore()
-  results.value = []
-}
 
 // 供 VideoCardGrid 预加载调用
 function handleLoadMore() {
@@ -346,7 +113,7 @@ defineExpose({
       v-if="paginationMode === 'pagination'"
       :current-page="currentPage"
       :total-pages="totalPages"
-      :loading="isPageChanging"
+      :loading="isLoading"
       :disabled="isLoading"
       @change="handlePageChange"
     />

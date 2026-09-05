@@ -2,6 +2,7 @@
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
+import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { patchCommentTransferLifecycle } from '~/utils/commentDomTransfer'
@@ -41,6 +42,7 @@ if (isElectronEnv) {
   console.warn('[Bewly Nocturne] Detected Electron environment, extension disabled.')
 }
 else if (shouldInitializePageScript) {
+  setupVideoMetadataBridge(pageBridgeChannelId)
   // 根据兼容性设置动态返回桌面 UA，默认保持浏览器原始值。
   if (isBilibiliWwwUrl(location.href)) {
     const originalNavigatorValues = {

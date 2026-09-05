@@ -1,14 +1,14 @@
 import assert from 'node:assert/strict'
-import { readFile } from 'node:fs/promises'
 
 import { shouldContinueWidescreenSidebarHydration } from '../src/utils/bewlyWidescreenPolicy'
 import { patchCommentTransferLifecycle, transferCommentNode } from '../src/utils/commentDomTransfer'
 import { buildCommentTree } from '../src/utils/commentTree'
 import * as geometry from '../src/utils/commentTreeGeometry'
 import { isPhotoViewerOpen } from '../src/utils/photoViewer'
+import { playbackSourceFiles, readPlaybackSource } from './playbackSource'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 
-const widescreenFile = '../src/utils/bewlyWidescreen.ts'
+const widescreenFile = playbackSourceFiles
 const rect = (left, top, width, height) => ({ left, top, width, height, right: left + width, bottom: top + height })
 
 function clock() {
@@ -39,7 +39,75 @@ function clock() {
 }
 
 export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, flush }) {
-  check('visual QA: photo preview keeps the sidebar open, including an already queued collapse', async () => {
+  check('DOM fixture: extracted loading owner preserves exit, preparation timeout and cleanup', async () => {
+    const time = clock()
+    const constants = await import('../src/utils/bewlyWidescreen/constants')
+    const view = await import('../src/utils/bewlyWidescreen/loadingView')
+    const session = { current: null, entering: false }
+    const frames = new Map()
+    let frameId = 0
+    let exits = 0
+    let preparationTimeouts = 0
+    const context = await loadSourceFunctions('../src/utils/bewlyWidescreen/loading.ts', ['createWidescreenLoading'], {
+      ...time,
+      ...constants,
+      ...view,
+      session,
+      document,
+      settings: { value: { bewlyWidescreenLayoutPriority: 'sidebar-first', bewlyWidescreenSidebarPosition: 'right' } },
+      t: key => key,
+      getVideoElement: () => null,
+      HTMLVideoElement: window.HTMLVideoElement,
+      navigator: { userActivation: { hasBeenActive: true } },
+      injectLoadingStyle: () => document.head.appendChild(document.createElement('style')),
+      requestAnimationFrame: (callback) => {
+        frames.set(++frameId, callback)
+        return frameId
+      },
+      cancelAnimationFrame: id => frames.delete(id),
+    })
+    const initialStyles = document.head.querySelectorAll('style').length
+    const loading = context.createWidescreenLoading({
+      exit: () => {
+        exits++
+        loading.reset()
+      },
+      onPreparationTimeout: () => preparationTimeouts++,
+    })
+    loading.prepare()
+    loading.prepare()
+    assert.equal(document.querySelectorAll(`#${constants.LOADING_ROOT_ID}`).length, 1)
+    assert.equal(time.tasks.size, 2, 'one exit timer and one preparation timer')
+    time.tick(constants.LOADING_EXIT_DELAY)
+    document.querySelector('.bewly-widescreen-loading-exit').click()
+    assert.equal(exits, 1)
+    assert.equal(loading.hasOverlay, false)
+    assert.equal(time.tasks.size, 0)
+    loading.prepare()
+    time.tick(constants.PREPARED_LOADING_TIMEOUT)
+    for (const [id, frame] of frames) {
+      frames.delete(id)
+      frame()
+    }
+    time.tick(constants.LOADING_FADE_DURATION)
+    assert.equal(preparationTimeouts, 1)
+    assert.equal(loading.hasOverlay, false)
+    loading.prepare()
+    assert.equal(loading.hasOverlay, false, 'dismissed loading stays suppressed until exit')
+    loading.reset()
+    session.entering = true
+    loading.prepare()
+    time.tick(constants.PREPARED_LOADING_TIMEOUT)
+    assert.equal(loading.hasOverlay, true, 'an active entry owns its readiness deadline')
+    assert.equal(preparationTimeouts, 1)
+    loading.remove()
+    loading.reset()
+    assert.equal(time.tasks.size, 0)
+    assert.equal(frames.size, 0)
+    assert.equal(document.head.querySelectorAll('style').length, initialStyles)
+  })
+
+  check('DOM fixture: photo preview keeps the sidebar open, including an already queued collapse', async () => {
     const time = clock()
     const changes = []
     const context = await loadSourceFunctions(widescreenFile, [
@@ -76,11 +144,11 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     time.tick(200)
     assert.deepEqual(changes, [false])
     viewer.remove()
-    const source = await readFile(new URL(widescreenFile, import.meta.url), 'utf8')
+    const source = await readPlaybackSource()
     assert.match(source, /body\.\$\{BODY_CLASS\} > :is\(\$\{PHOTO_VIEWER_SELECTOR\}\) \{\s*z-index: var\(--bew-z-hud\)/)
   })
 
-  check('visual QA: transferring native comments preserves state; real removal still cleans up', () => {
+  check('DOM fixture: transferring native comments preserves state; real removal still cleans up', () => {
     const calls = { connect: 0, disconnect: 0 }
     class Comment extends HTMLElement {
       connectedCallback() {
@@ -130,7 +198,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     panel.remove()
   })
 
-  check('visual QA: native comment readiness accepts empty feeds and rejects a spinner/editor shell', async () => {
+  check('DOM fixture: native comment readiness accepts empty feeds and rejects a spinner/editor shell', async () => {
     const context = await loadSourceFunctions(widescreenFile, [
       'isCommentRootUsable',
       'hasCommentShadowTree',
@@ -151,7 +219,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(context.isCommentRootUsable(root), false)
   })
 
-  check('visual QA: native danmaku empty/error/disabled states are not covered by a skeleton', async () => {
+  check('DOM fixture: native danmaku empty/error/disabled states are not covered by a skeleton', async () => {
     const context = await loadSourceFunctions(widescreenFile, [
       'isDanmakuPanelReady',
       'DANMAKU_LIST_VIEWPORT_SELECTOR',
@@ -174,7 +242,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     panel.remove()
   })
 
-  check('visual QA: danmaku activation retries an unbound header and preserves its relayout sequence', async () => {
+  check('DOM fixture: danmaku activation retries an unbound header and preserves its relayout sequence', async () => {
     const time = clock()
     const panel = document.createElement('section')
     panel.innerHTML = '<div class="danmaku-box"><div class="bui-collapse-wrap-folded"><button class="bui-collapse-header"></button><div class="bui-collapse-body" style="height:0"></div></div></div>'
@@ -191,7 +259,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     ], {
       ...time,
       Event,
-      state: currentState,
+      session: { current: currentState },
       window: { dispatchEvent: () => resizes++ },
       selectors: { danmaku: ['.danmaku-box'], danmakuFocusable: ['.bui-collapse-header'] },
       isDanmakuPanelReady: () => false,
@@ -217,7 +285,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     panel.remove()
   })
 
-  check('visual QA: sidebar hydration stops at its deadline and exposes recovery instead of infinite loading', async () => {
+  check('DOM fixture: sidebar hydration stops at its deadline and exposes recovery instead of infinite loading', async () => {
     const time = clock()
     const root = document.createElement('div')
     const panels = Object.fromEntries(['comment', 'danmaku', 'playlist'].map(tab => [tab, document.createElement('section')]))
@@ -243,7 +311,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     ], {
       ...time,
       document,
-      state: currentState,
+      session: { current: currentState },
       shouldContinueWidescreenSidebarHydration,
       findCommentRoot: () => null,
       startCommentPrewarm: () => {},
@@ -251,8 +319,8 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       runSidebarHydration: () => ({ top: true, comment: false, complete: false }),
       t: key => key,
       location: { reload: () => reloads++ },
-      exitBewlyWidescreen: ({ userInitiated }) => exits += Number(userInitiated),
     })
+    currentState.exit = ({ userInitiated }) => exits += Number(userInitiated)
     context.startSidebarHydration(currentState)
     time.tick(12_000)
     assert.equal(currentState.sidebarHydrationTimedOut, true)
@@ -267,13 +335,13 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     currentState.navigationPending = true
     buttons[0].click()
     assert.equal(reloads, 1, 'a stale panel cannot reload the next navigation')
-    context.state = null
+    context.session.current = null
     buttons[1].click()
     assert.equal(exits, 1)
     root.remove()
   })
 
-  check('visual QA: moment/native trees share continuous avatar-based geometry and bounded visual depth', async () => {
+  check('DOM fixture: moment/native trees share continuous avatar-based geometry and bounded visual depth', async () => {
     const inputs = Array.from({ length: 10 }, (_, i) => ({ id: `id-${i}`, rootId: 'id-0', parentId: i ? `id-${i - 1}` : '', createdAt: i, originalOrder: i }))
     const layout = buildCommentTree(inputs, 3)
     assert.equal(Math.max(...layout.map(node => node.depth)), 3)
@@ -291,7 +359,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(native.getCommentReplyBranchPath({ parentAnchor: parent, childAnchors: [], collapsed: true, collapseParentBody: true }, 12, 12), 'M 16 16')
   })
 
-  check('visual QA: late native comment completion refreshes the current shell and cleans up on exit', async () => {
+  check('DOM fixture: late native comment completion refreshes the current shell and cleans up on exit', async () => {
     const root = document.createElement('div')
     const panel = document.createElement('section')
     const comments = document.createElement('bili-comments')
@@ -304,7 +372,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     const context = await loadSourceFunctions(widescreenFile, ['setupDomRefreshObserver', 'scheduleSidebarRefresh'], {
       document,
       HTMLElement,
-      state: currentState,
+      session: { current: currentState },
       sidebarRefreshFrame: undefined,
       selectors: { danmakuInput: [] },
       NATIVE_LIGHT_OFF_CONTROL_SELECTORS: [],
@@ -323,17 +391,17 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(frames.length, 1, 'capture the native non-bubbling event after the polling deadline')
     frames.shift()()
     assert.equal(refreshes, 1)
-    context.state = { root: document.createElement('div') }
+    context.session.current = { root: document.createElement('div') }
     comments.dispatchEvent(new CustomEvent('inited'))
     assert.equal(frames.length, 0, 'old native completion cannot refresh another shell')
-    context.state = currentState
+    context.session.current = currentState
     currentState.commentReadyCleanup()
     comments.dispatchEvent(new CustomEvent('inited'))
     assert.equal(frames.length, 0)
     root.remove()
   })
 
-  check('visual QA: moment rails recompute after reply image resize and release observers/RAF on unmount', async () => {
+  check('DOM fixture: moment rails recompute after reply image resize and release observers/RAF on unmount', async () => {
     const previousObserver = globalThis.ResizeObserver
     const observers = []
     class Observer {

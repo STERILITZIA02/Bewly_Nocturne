@@ -20,6 +20,7 @@ export interface RankingType {
 }
 
 export interface GridLayoutIcon {
+  labelKey: string
   icon: string
   iconActivated: string
   value: GridLayoutType

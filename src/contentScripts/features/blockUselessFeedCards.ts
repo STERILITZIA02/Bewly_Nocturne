@@ -14,7 +14,7 @@ const OBSERVER_OPTIONS: MutationObserverInit = {
 
 let feedCardObserver: MutationObserver | null = null
 let observeRoot: Element | null = null
-let flushScheduled = false
+let flushFrame: number | null = null
 const pendingRoots = new Set<Element>()
 
 interface UselessFeedCardBlockerContext {
@@ -87,7 +87,7 @@ function scanForRcmdCards(root: ParentNode) {
 }
 
 function flushPending() {
-  flushScheduled = false
+  flushFrame = null
 
   for (const root of pendingRoots)
     scanForRcmdCards(root)
@@ -99,11 +99,10 @@ function flushPending() {
 }
 
 function scheduleFlushPending() {
-  if (flushScheduled)
+  if (flushFrame !== null)
     return
 
-  flushScheduled = true
-  requestAnimationFrame(flushPending)
+  flushFrame = requestAnimationFrame(flushPending)
 }
 
 function start() {
@@ -155,7 +154,10 @@ function stop() {
   observeRoot = null
 
   pendingRoots.clear()
-  flushScheduled = false
+  if (flushFrame !== null) {
+    cancelAnimationFrame(flushFrame)
+    flushFrame = null
+  }
 }
 
 export function setUselessFeedCardBlockerEnabled(enabled: boolean) {

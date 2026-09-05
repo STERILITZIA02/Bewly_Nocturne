@@ -80,6 +80,7 @@ import {
 } from '../src/utils/settingsCloudSyncProtocol'
 import { normalizeVideoCardCoverRatio } from '../src/utils/videoCardLayout'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
+import { playbackFunctions, readPlaybackSource } from './playbackSource'
 import { verifyFunctionalAuditFixes } from './verify-functional-audit-fixes'
 import { verifyMomentPlayerPorts } from './verify-moment-player-ports'
 
@@ -2040,7 +2041,7 @@ async function verifyP1Contracts() {
     searchExperience,
   ] = await Promise.all([
     readFile(`${root}/src/composables/useStorageLocal.ts`, 'utf8'),
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/utils/randomPlay.ts`, 'utf8'),
     readFile(`${root}/src/utils/player.ts`, 'utf8'),
     readFile(`${root}/src/utils/authProvider.ts`, 'utf8'),
@@ -2301,7 +2302,7 @@ async function verifyP2WidescreenControl() {
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/PlaybackPage/PlaybackPage.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/Advanced/Maintenance.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/searchCatalog.ts`, 'utf8'),
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/composables/usePageModeSwitcher.ts`, 'utf8'),
     readFile(`${root}/src/utils/watchLaterButton.ts`, 'utf8'),
     readFile(`${root}/tsconfig.json`, 'utf8'),
@@ -2418,10 +2419,7 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(sidebarSurfaceStyles, /-12px 0 28px|12px 0 28px/)
   assert.match(widescreen, /data-centered="true"\] \.bewly-widescreen-player-frame > \*[\s\S]{0,220}100vw - var\(--bewly-widescreen-sidebar-reserved-width\)/)
   assert.match(widescreen, /sidebarWidth: sidebarRect\.width \+ sidebarFloatingInset \* 2/)
-  const sidebarToolbarSection = widescreen.slice(
-    widescreen.indexOf('function createSidebarToolbar'),
-    widescreen.indexOf('function createTabButton'),
-  )
+  const sidebarToolbarSection = playbackFunctions(widescreen, 'createSidebarToolbar')
   assert.doesNotMatch(sidebarToolbarSection, /exitBewlyWidescreen/)
   assert.match(sidebarToolbarSection, /setSidebarLayout\('compact', currentState, true\)/)
   assert.match(sidebarToolbarSection, /sidebarToggleButton\.focus\(\{ preventScroll: true \}\)/)
@@ -2449,15 +2447,12 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /function hasWidescreenTransferSettleElapsed/)
   assert.doesNotMatch(widescreen, /READY_WAIT_TIMEOUT|BEWLY_WIDESCREEN_FAILED/)
   assert.match(widescreen, /const READY_POLL_SLOW_INTERVAL = 500/)
-  assert.match(widescreen, /if \(enteringWidescreen\)\s*return[\s\S]{0,180}loadingSuppressedUntilExit = true/)
+  assert.match(widescreen, /if \(session\.entering\)\s*return[\s\S]{0,180}loadingSuppressedUntilExit = true/)
   assert.doesNotMatch(contentScript, /BEWLY_WIDESCREEN_FAILED/)
   assert.match(widescreen, /selectors\.metadata/)
   assert.match(widescreen, /function syncVideoMetadata/)
   assert.match(widescreen, /loadFallbackVideoInfo\(nextState\)/)
-  const fallbackVideoInfoSection = widescreen.slice(
-    widescreen.indexOf('async function loadFallbackVideoInfo'),
-    widescreen.indexOf('function fillSidebar'),
-  )
+  const fallbackVideoInfoSection = playbackFunctions(widescreen, 'loadFallbackVideoInfo')
   assert.match(fallbackVideoInfoSection, /if \(!isBilibiliRiskControl\(error\)\)/)
   assert.match(fallbackVideoInfoSection, /reportRuntimeFailure\('Failed to load Bewly Playback Page video information', error\)/)
   assert.doesNotMatch(widescreen, /moveNode\(player, playerFrame/)
@@ -2473,10 +2468,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /pageReadyForLayout = document\.readyState === 'complete'/)
   assert.match(widescreen, /window\.addEventListener\('load'/)
   assert.match(widescreen, /pageReadyFallbackTimer = setTimeout/)
-  const layoutReadinessSection = widescreen.slice(
-    widescreen.indexOf('function isReadyForLayout'),
-    widescreen.indexOf('function restoreCommentPrewarm'),
-  )
+  const layoutReadinessSection = playbackFunctions(widescreen, 'isReadyForLayout', 'isUpPanelTransferReady', 'isRecommendationTransferReady', 'isDanmakuTransferReady', 'isVideoMetadataTransferReady', 'isWidescreenTransferContentReady')
   assert.match(layoutReadinessSection, /HAVE_METADATA/)
   assert.doesNotMatch(layoutReadinessSection, /backgroundImage|naturalWidth/)
   assert.match(widescreen, /const READY_STABILITY_DELAY = 160/)
@@ -2494,10 +2486,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /window\.removeEventListener\('load', pageReadyHandler\)/)
   assert.match(widescreen, /styleAttribute: commentRoot\.getAttribute\('style'\)/)
   assert.doesNotMatch(widescreen, /restoreCommentPrewarm\(\)[\s\S]{0,160}applyNow\(pendingSidebarPosition\)/)
-  const moveCommentRootSection = widescreen.slice(
-    widescreen.indexOf('function moveCommentRoot'),
-    widescreen.indexOf('function movePlaylistControls'),
-  )
+  const moveCommentRootSection = playbackFunctions(widescreen, 'moveCommentRoot')
   assert.match(moveCommentRootSection, /commentPrewarmState\?\.root === next[\s\S]{0,120}restoreCommentPrewarm\(\)/)
   assert.match(widescreen, /function startSidebarHydration/)
   assert.match(widescreen, /sidebarHydrationTimer/)
@@ -2509,16 +2498,10 @@ async function verifyP2WidescreenControl() {
   assert.match(dock, /resolveDockCollapsedShellSize/)
   assert.match(dock, /expectedDockShellSize/)
   assert.match(dock, /resolveDockCollapsedShellSize\(measuredSize, expectedDockShellSize\)/)
-  const moveNodeSection = widescreen.slice(
-    widescreen.indexOf('function moveNode'),
-    widescreen.indexOf('function moveMatchingNodes'),
-  )
+  const moveNodeSection = playbackFunctions(widescreen, 'moveNode')
   assert.match(moveNodeSection, /document\.createElement\('span'\)/)
   assert.match(moveNodeSection, /bewly-widescreen-origin-placeholder/)
-  const restoreMovedNodesSection = widescreen.slice(
-    widescreen.indexOf('function restoreMovedNodes'),
-    widescreen.indexOf('function removeMovedNode'),
-  )
+  const restoreMovedNodesSection = playbackFunctions(widescreen, 'restoreMovedNodes')
   assert.doesNotMatch(restoreMovedNodesSection, /document\.body\.appendChild/)
   assert.match(restoreMovedNodesSection, /node\.remove\(\)/)
   const keepOriginalTopBarSection = bilibiliTopBar.slice(
@@ -2558,10 +2541,7 @@ async function verifyP2WidescreenControl() {
   assert.match(contentScript, /refreshBewlyPlaybackPageNavigation\(navigationVideoInfoRequest\)/)
   assert.match(contentScript, /reloadCommentsForWidescreenNavigation\([\s\S]{0,160}navigationVideoInfoRequest/)
   assert.match(contentScript, /commentRoots\.find\(root => !!root\.closest\('#bewly-widescreen-root'\)\)/)
-  const playbackNavigationLifecycleSection = widescreen.slice(
-    widescreen.indexOf('function suspendSidebarForVideoNavigation'),
-    widescreen.indexOf('function cleanupState'),
-  )
+  const playbackNavigationLifecycleSection = playbackFunctions(widescreen, 'suspendSidebarForVideoNavigation')
   assert.match(playbackNavigationLifecycleSection, /navigationPending = true/)
   assert.match(playbackNavigationLifecycleSection, /restoreMovedNodes\(currentState\.movedNodes\)/)
   assert.match(playbackNavigationLifecycleSection, /currentState\.videoInfoIdentity = undefined/)
@@ -2569,24 +2549,15 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.activeTab\s*=/)
   assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.sidebarLayout\s*=/)
   assert.doesNotMatch(playbackNavigationLifecycleSection, /currentState\.root\.remove\(\)/)
-  const refreshPlaybackNavigationSection = widescreen.slice(
-    widescreen.indexOf('export function refreshBewlyPlaybackPageNavigation'),
-    widescreen.indexOf('export interface ExitBewlyWidescreenOptions'),
-  )
+  const refreshPlaybackNavigationSection = playbackFunctions(widescreen, 'refreshBewlyPlaybackPageNavigation')
   assert.match(refreshPlaybackNavigationSection, /loadFallbackVideoInfo\(currentState, videoInfoRequest\)/)
   assert.match(refreshPlaybackNavigationSection, /scheduleSidebarRefresh\(currentState\)/)
   assert.doesNotMatch(refreshPlaybackNavigationSection, /showWidescreenLoading/)
-  const anchoredPlayerReplacementSection = widescreen.slice(
-    widescreen.indexOf('function clearAspectObservers'),
-    widescreen.indexOf('function isHorizontalWidescreenLayout'),
-  )
+  const anchoredPlayerReplacementSection = playbackFunctions(widescreen, 'clearAspectObservers', 'syncAnchoredPlayerGeometry', 'ensureAnchoredPlayer')
   assert.match(anchoredPlayerReplacementSection, /currentState\.playerEl = replacement/)
   assert.match(anchoredPlayerReplacementSection, /setupAspectObservers\(currentState\)/)
   assert.match(anchoredPlayerReplacementSection, /setupSidebarToggleAutoHide\(currentState\)/)
-  const playbackPageLoadingSection = widescreen.slice(
-    widescreen.indexOf('function createWidescreenLoadingSkeleton'),
-    widescreen.indexOf('function shouldDismissLoadingForPlaying'),
-  )
+  const playbackPageLoadingSection = playbackFunctions(widescreen, 'createWidescreenLoadingSkeleton', 'showWidescreenLoading', 'injectLoadingStyle')
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-stage/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-player/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-controls/)
@@ -2626,10 +2597,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /danmakuPendingSource\?: HTMLElement/)
   assert.match(widescreen, /currentState\.danmakuActivationTimer\s*&& currentState\.danmakuPendingSource === source/)
   assert.match(widescreen, /function isDanmakuPanelReady/)
-  const danmakuReadySection = widescreen.slice(
-    widescreen.indexOf('function isDanmakuPanelReady'),
-    widescreen.indexOf('function activateDanmakuTab'),
-  )
+  const danmakuReadySection = playbackFunctions(widescreen, 'isDanmakuPanelReady')
   assert.match(widescreen, /DANMAKU_LIST_VIEWPORT_SELECTOR = '\.bui-long-list-list, \.bpx-player-dm-container'/)
   assert.match(widescreen, /DANMAKU_LIST_ITEM_SELECTOR = '\.bui-long-list-item, \.bpx-player-dm-item,[^']*\[data-index\]'/)
   assert.match(danmakuReadySection, /querySelector<HTMLElement>\(DANMAKU_LIST_VIEWPORT_SELECTOR\)/)
@@ -2642,10 +2610,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /panel\.querySelector<HTMLElement>\('\.bpx-player-dm-wrap'\) \?\? panel/)
   assert.match(widescreen, /function ensureDanmakuSkeleton\(panel: HTMLElement, label: string\)/)
   assert.match(widescreen, /function clearDanmakuSkeleton\(panel: HTMLElement\)/)
-  const ensureDanmakuSkeletonSection = widescreen.slice(
-    widescreen.indexOf('function ensureDanmakuSkeleton'),
-    widescreen.indexOf('function ensureEmptyPanel'),
-  )
+  const ensureDanmakuSkeletonSection = playbackFunctions(widescreen, 'ensureDanmakuSkeleton')
   assert.match(ensureDanmakuSkeletonSection, /const host = getDanmakuSkeletonHost\(panel\)/)
   assert.match(ensureDanmakuSkeletonSection, /host\.appendChild\(existing\)/)
   assert.match(ensureDanmakuSkeletonSection, /host\.appendChild\(createDanmakuSkeleton\(label\)\)/)
@@ -2701,10 +2666,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /data-sidebar-resizing="true"\] \.bewly-widescreen-sidebar[\s\S]{0,100}border-color: var\(--bewly-widescreen-sidebar-resize-accent\)/)
   assert.match(widescreen, /data-sidebar-resizing="true"\] \.bewly-widescreen-sidebar[\s\S]{0,180}border-width: var\(--bew-space-0-5, 2px\)/)
   assert.match(widescreen, /data-sidebar-resizing="true"\] \.bewly-widescreen-sidebar[\s\S]{0,320}color-mix\(in oklab, var\(--bewly-widescreen-sidebar-resize-accent\) 42%, transparent\)/)
-  const sidebarInteractionSection = widescreen.slice(
-    widescreen.indexOf('function setupSidebarInteractionTracking'),
-    widescreen.indexOf('function setupSidebarToggleAutoHide'),
-  )
+  const sidebarInteractionSection = playbackFunctions(widescreen, 'setupSidebarInteractionTracking')
   assert.match(sidebarInteractionSection, /root\.dataset\.sidebarHoverExpanded !== nextValue/)
   assert.match(sidebarInteractionSection, /window\.addEventListener\('pointermove', handlePointerMove/)
   assert.match(sidebarInteractionSection, /isWidescreenPlayerControlHoverRegion/)
@@ -2736,10 +2698,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /settings\.value\.bewlyWidescreenSidebarWidth = storedWidth/)
   assert.match(widescreen, /--bewly-widescreen-sidebar-user-width',[\s\S]{0,220}settings\.value\.bewlyWidescreenSidebarWidth/)
   assert.match(widescreen, /viewportBottom: rootRect\.bottom - glassBottom/)
-  const sidebarToggleAutoHideSection = widescreen.slice(
-    widescreen.indexOf('function setupSidebarToggleAutoHide'),
-    widescreen.indexOf('function setupDomRefreshObserver'),
-  )
+  const sidebarToggleAutoHideSection = playbackFunctions(widescreen, 'setupSidebarToggleAutoHide', 'disableNativeLightOffMode')
   assert.match(sidebarToggleAutoHideSection, /playerEl\.addEventListener\('pointermove', showToggle/)
   assert.doesNotMatch(sidebarToggleAutoHideSection, /playerSlot\.addEventListener\('pointermove'/)
   const danmakuSurfaceMarker = '$' + '{DANMAKU_SURFACE_SELECTOR}'
@@ -3123,19 +3082,13 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /playlistToggleCleanup\?: \(\) => void/)
   assert.match(widescreen, /function setupPlaylistToggle/)
   assert.match(widescreen, /function syncPlaylistToggleButton/)
-  const playlistCoverLayoutSection = widescreen.slice(
-    widescreen.indexOf('function ensurePlaylistCoverLayout'),
-    widescreen.indexOf('function placePlaylistToggleButton'),
-  )
+  const playlistCoverLayoutSection = playbackFunctions(widescreen, 'ensurePlaylistCoverLayout')
   assert.match(playlistCoverLayoutSection, /classList\.contains\('expanded'\)/)
   assert.match(playlistCoverLayoutSection, /\.pod-expand-btn'/)
   assert.match(playlistCoverLayoutSection, /toggleButton\.click\(\)/)
   assert.match(playlistCoverLayoutSection, /bewlyCoverLayoutPending/)
   assert.match(widescreen, /PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR = '\.rec-footer'/)
-  const playlistToggleControllerSection = widescreen.slice(
-    widescreen.indexOf('function setupPlaylistToggle'),
-    widescreen.indexOf('function syncEpisodeSectionMarker'),
-  )
+  const playlistToggleControllerSection = playbackFunctions(widescreen, 'setupPlaylistToggle')
   assert.match(playlistToggleControllerSection, /handlePlaylistScroll/)
   assert.match(playlistToggleControllerSection, /PLAYLIST_AUTO_EXPAND_THRESHOLD/)
   assert.match(playlistToggleControllerSection, /footer\.click\(\)/)
@@ -3169,10 +3122,7 @@ async function verifyP2WidescreenControl() {
   assert.match(cmnTw, /player_feedback: 播放回饋/)
   assert.match(jyut, /player_feedback: 播放回報/)
   assert.match(en, /player_feedback: Playback feedback/)
-  const fallbackRenderSection = widescreen.slice(
-    widescreen.indexOf('function renderFallbackVideoInfo'),
-    widescreen.indexOf('async function loadFallbackVideoInfo'),
-  )
+  const fallbackRenderSection = playbackFunctions(widescreen, 'renderFallbackVideoInfo')
   assert.match(fallbackRenderSection, /bewly-widescreen-fallback-owner/)
   assert.match(fallbackRenderSection, /https:\/\/space\.bilibili\.com\/\$\{data\.owner\.mid\}/)
   assert.match(fallbackRenderSection, /fallbackOwner\?\.dataset\.sourceSignature !== ownerSignature/)
@@ -3195,19 +3145,13 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /body\.\$\{BODY_CLASS\}:not\(\.\$\{BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS\}\) \.\$\{NATIVE_PLAYER_CLASS\} :is\(/)
   assert.match(widescreen, /sidebarExpanded: isWidescreenSidebarExpanded\(currentState\)/)
   assert.match(widescreen, /dataset\.playerControlsReady = String\(ready\)/)
-  const applyNowSection = widescreen.slice(
-    widescreen.indexOf('function applyNow'),
-    widescreen.indexOf('function clearReadyWait'),
-  )
+  const applyNowSection = playbackFunctions(widescreen, 'applyNow')
   assert.ok(
     applyNowSection.indexOf('syncNativePlayerControlVisibility(nextState)')
     < applyNowSection.indexOf('document.body.classList.add(BODY_CLASS)'),
   )
   assert.match(widescreen, /function forwardNativePlayerPointerActivity\(/)
-  const pointerBridgeSection = widescreen.slice(
-    widescreen.indexOf('function forwardNativePlayerPointerActivity'),
-    widescreen.indexOf('function setupAspectObservers'),
-  )
+  const pointerBridgeSection = playbackFunctions(widescreen, 'forwardNativePlayerPointerActivity')
   assert.match(pointerBridgeSection, /if \(!event\.isTrusted \|\| \(!allowSidebarExpanded && isWidescreenSidebarExpanded\(currentState\)\)\)/)
   assert.match(pointerBridgeSection, /isWidescreenPlayerControlHoverRegion\(\{[\s\S]{0,180}playerBottom: rootRect\.bottom/)
   assert.match(pointerBridgeSection, /new PointerEvent\('pointermove'/)
@@ -3221,10 +3165,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /document\.documentElement\.addEventListener\('pointerleave', clearPlayerPointerState\)/)
   assert.match(widescreen, /document\.documentElement\.removeEventListener\('pointerleave', clearPlayerPointerState\)/)
   assert.match(widescreen, /playerPointerInside: false/)
-  const sidebarHoverStateSection = widescreen.slice(
-    widescreen.indexOf('function setHoverExpanded'),
-    widescreen.indexOf('function collapseSidebar'),
-  )
+  const sidebarHoverStateSection = playbackFunctions(widescreen, 'setHoverExpanded')
   assert.match(sidebarHoverStateSection, /syncNativePlayerControlVisibility\(currentState\)/)
   assert.match(widescreen, /bottomControlsHovered: false/)
   assert.match(widescreen, /dataset\.bottomControlsHovered = String\(hovered\)/)
@@ -3250,10 +3191,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /function temporarilySuppressSidebarEdgeReveal[\s\S]{0,420}setTimeout\([\s\S]{0,260}WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY/)
   assert.match(widescreen, /function cleanupState[\s\S]{0,180}clearSidebarEdgeRevealSuppression\(currentState\)/)
   assert.doesNotMatch(widescreen, /function setupDanmakuControlEventBridge|function withOriginalDanmakuEventRoot/)
-  const danmakuSettingsToggleSection = widescreen.slice(
-    widescreen.indexOf('function setupDanmakuSettingsClickToggle'),
-    widescreen.indexOf('function syncDanmakuInputSource'),
-  )
+  const danmakuSettingsToggleSection = playbackFunctions(widescreen, 'setupDanmakuSettingsClickToggle')
   assert.match(danmakuSettingsToggleSection, /currentPanel\.style\.display = nextPinned \? 'block' : 'none'/)
   assert.match(danmakuSettingsToggleSection, /function dispatchNativeSettingHover/)
   assert.match(danmakuSettingsToggleSection, /dispatchNativeSettingHover\(currentSetting, true\)/)
@@ -3264,10 +3202,7 @@ async function verifyP2WidescreenControl() {
   assert.match(danmakuSettingsToggleSection, /source\.addEventListener\('click', handleClick, true\)/)
   assert.match(danmakuSettingsToggleSection, /document\.addEventListener\('click', handleOutsideClick, true\)/)
   assert.doesNotMatch(danmakuSettingsToggleSection, /blockSettingsHover/)
-  const danmakuSourceSyncSection = widescreen.slice(
-    widescreen.indexOf('function syncDanmakuInputSource'),
-    widescreen.indexOf('function clearDanmakuActivation'),
-  )
+  const danmakuSourceSyncSection = playbackFunctions(widescreen, 'syncDanmakuInputSource')
   assert.match(danmakuSourceSyncSection, /findFirst\(selectors\.danmakuInput, currentState\.playerEl\)/)
   assert.match(danmakuSourceSyncSection, /source\.classList\.add\(DANMAKU_SOURCE_CLASS\)/)
   assert.match(danmakuSourceSyncSection, /setupWidescreenDanmakuSemantics\(\s*source/)
@@ -3502,7 +3437,7 @@ async function verifyUpstreamReliabilityContracts() {
     readFile(`${root}/src/components/TopBar/TopBar.vue`, 'utf8'),
     readFile(`${root}/src/styles/removeTopBar.scss`, 'utf8'),
     readFile(`${root}/src/utils/bilibiliTopBar.ts`, 'utf8'),
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/contentScripts/videoScreenshotControl.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/playerControlTooltip.ts`, 'utf8'),
     readFile(`${root}/src/styles/adaptedStyles/common/videoPlayer.scss`, 'utf8'),
@@ -3556,8 +3491,11 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(searchHistoryProvider, /const confirmation = await this\.operate\('COLS_GET'\)[\s\S]{0,100}confirmation\?\.value !== value/)
   assert.match(searchNavigation, /if \(action === 'currentTab'\)[\s\S]{0,220}persistSearchHistory\(options\)[\s\S]{0,160}openSearchResultsInCurrentTab\(destination\)/)
   assert.match(searchResults, /const needsPageRestore = filters\.page > 1/)
-  for (const searchResultPage of searchResultPageSources)
-    assert.match(searchResultPage, /if \(paginationMode\.value === 'pagination'\)[\s\S]{0,180}updatePage\(page\)[\s\S]{0,80}return performSearch\(false\)/)
+  const searchListPage = await readFile(`${root}/src/contentScripts/views/SearchResults/composables/useSearchListPage.ts`, 'utf8')
+  for (const searchResultPage of searchResultPageSources) {
+    const implementation = searchResultPage.includes('useSearchListPage') ? searchListPage : searchResultPage
+    assert.match(implementation, /if \(paginationMode\.value === 'pagination'\)[\s\S]{0,180}(?:pagination\.)?updatePage\(page\)[\s\S]{0,80}return performSearch\(false\)/)
+  }
   assert.match(searchBar, /openSearchResults/)
   assert.doesNotMatch(searchBar, /async function navigateToSearchResultPage|window\.open|openLinkInBackground/)
   assert.doesNotMatch(searchNavigation, /dispatchEvent\(new Event\('pushstate'\)\)/)
@@ -3684,9 +3622,9 @@ async function verifyUpstreamReliabilityContracts() {
   assert.doesNotMatch(gradientCondition, /forceWhiteIcon/)
   assert.match(gradientCondition, /disableFrostedGlass/)
 
-  assert.match(variables, /--bew-media-pop-title-font-size: 14px/)
-  assert.match(variables, /--bew-media-pop-title-line-height: 20px/)
-  assert.match(variables, /--bew-media-pop-title-font-weight: var\(--bew-font-weight-regular\)/)
+  assert.match(variables, /--bew-media-pop-title-font-size: var\(--bew-font-size-title\)/)
+  assert.match(variables, /--bew-media-pop-title-line-height: var\(--bew-line-height-title\)/)
+  assert.match(variables, /--bew-media-pop-title-font-weight: var\(--bew-font-weight-semibold\)/)
   assert.match(popoverCards, /\.popover-card__title[\s\S]{0,260}var\(--bew-media-pop-title-font-size\)[\s\S]{0,160}var\(--bew-media-pop-title-line-height\)/)
   assert.match(favoritesPopSource, /\.favorites-pop[\s\S]{0,120}width: 450px/)
   assert.match(historyPopSource, /\.history-pop[\s\S]{0,120}width: 380px/)
@@ -3729,7 +3667,7 @@ async function verifyIncrementalInteractionContracts() {
     readFile(`${root}/src/components/TopBar/composables/useTopBarInteraction.ts`, 'utf8'),
     readFile(`${root}/src/components/TopBar/TopBar.vue`, 'utf8'),
     readFile(`${root}/src/components/ALink.vue`, 'utf8'),
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/composables/usePageModeSwitcher.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
   ])
@@ -3803,7 +3741,7 @@ async function verifyIncrementalInteractionContracts() {
   assert.match(aLink, /action === 'newTab' \|\| action === 'background'[\s\S]{0,80}resetTopBarTransientInteraction\(\)/)
 
   assert.match(widescreen, /export function isBewlyWidescreenEngaged\(\)/)
-  assert.match(widescreen, /enteringWidescreen \|\| waitingForLoad/)
+  assert.match(widescreen, /session\.entering \|\| waitingForLoad/)
   assert.match(widescreen, /exitBewlyWidescreen\(\{ userInitiated: true \}\)/)
   assert.doesNotMatch(widescreen, /pendingEscape|event\.key !== 'Escape'|event\.key === 'Escape'/)
   assert.match(widescreen, /event\.key\.toLowerCase\(\) === 'f'/)
@@ -3951,7 +3889,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/utils/photoViewer.ts`, 'utf8'),
     readFile(`${root}/src/utils/randomPlay.ts`, 'utf8'),
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/components/TopBar/TopBar.vue`, 'utf8'),
     readFile(`${root}/src/constants/globalEvents.ts`, 'utf8'),
   ])
@@ -4017,7 +3955,7 @@ async function verifyIncrementalCorrectnessContracts() {
     readFile(`${root}/src/components/VideoCard/components/VideoCardInfo.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/types.ts`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/tagPolicy.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
+    readFile(`${root}/src/contentScripts/views/Home/adapters/recommendationVideo.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/searchTransforms.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/constants/contentScript.ts`, 'utf8'),
@@ -4032,7 +3970,7 @@ async function verifyIncrementalCorrectnessContracts() {
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/inject/index.ts`, 'utf8'),
     readFile(`${root}/src/constants/globalEvents.ts`, 'utf8'),
   ])
@@ -4104,7 +4042,7 @@ async function verifyIncrementalCorrectnessContracts() {
 async function verifyAuditRemediationContracts() {
   const root = process.cwd()
   const [widescreen, nativeAdapter, moments, settingsComponent, anime, subscribedSeries, messaging, contentScript, viteConfig, globals] = await Promise.all([
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/utils/bewlyWidescreenNative.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/Settings.vue`, 'utf8'),
@@ -4122,7 +4060,8 @@ async function verifyAuditRemediationContracts() {
   assert.match(widescreen, /\.bui-collapse-header[\s\S]{0,120}flex: 0 0 auto/)
   assert.match(widescreen, /hydratedTabs: Set<BewlyWidescreenTab>/)
   assert.match(widescreen, /function scheduleInitialPanelScrollReset/)
-  assert.match(widescreen, /startSidebarHydration\(state\)/)
+  assert.match(widescreen, /session\.current\.hydrateSidebar\(\)/)
+  assert.match(widescreen, /hydrateSidebar: \(\) => startSidebarHydration\(nextState\)/)
   assert.match(widescreen, /pointerTrackingFrame = requestAnimationFrame/)
   assert.match(widescreen, /setupWidescreenDanmakuSemantics/)
   assert.match(widescreen, /syncDanmakuInputSource\(currentState, true\)/)
@@ -4163,7 +4102,7 @@ async function verifyAuditRemediationContracts() {
 async function verifyP4CleanupContracts() {
   const root = process.cwd()
   const [widescreen, videoPageStyles, pipWindow, iframeDrawer, lazyLoad, knipConfig, packageJson, prepareScript] = await Promise.all([
-    readFile(`${root}/src/utils/bewlyWidescreen.ts`, 'utf8'),
+    readPlaybackSource(),
     readFile(`${root}/src/styles/adaptedStyles/pages/videoPage.scss`, 'utf8'),
     readFile(`${root}/src/components/PipWindow.vue`, 'utf8'),
     readFile(`${root}/src/components/IframeDrawer.vue`, 'utf8'),

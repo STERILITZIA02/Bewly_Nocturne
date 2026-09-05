@@ -376,6 +376,8 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
 }
 
 .theme-schedule input {
+  flex: 1 1 0;
+  min-width: 0;
   min-height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
   color: var(--bew-text-1);

@@ -352,21 +352,22 @@ async function verifyDetailGeometryAndWiring() {
 async function verifyPlayerAndTiming() {
   let pathname = '/video/BVfixture'
   let selectors = new Set<string>()
-  let app: unknown = null
+  let metadata: { pageCount: number, isCollection: boolean } | null = null
   const settings = { value: { autoPlayMultipart: 'loop', autoPlayCollection: 'list' } }
   const player = await loadSourceFunctions('../src/utils/player.ts', ['VideoType', 'isWatchLaterVideo', 'isCollectionVideo', 'detectVideoType', 'getAutoPlayModeForVideoType', 'detectVideoPlayerModeContext'], {
     location: { get pathname() { return pathname } },
     settings,
-    document: { querySelector: (selector: string) => selector === '#app' ? app : selector.split(',').some(part => selectors.has(part.trim())) ? {} : null },
+    readVideoPageMetadata: () => metadata,
+    document: { querySelector: (selector: string) => selector.split(',').some(part => selectors.has(part.trim())) ? {} : null },
   })
   assert.equal(player.detectVideoType(), 'recommend', 'normal single-part video')
-  app = { __vue__: { videoData: { pages: [{}, {}] }, isSection: true } }
+  metadata = { pageCount: 2, isCollection: true }
   selectors = new Set(['.video-pod__list .simple-base-item'])
   assert.equal(player.detectVideoType(), 'multipart', 'real multipart data wins over collection')
   assert.equal(player.getAutoPlayModeForVideoType(), 'loop')
-  app = { __vue__: { videoData: { pages: [{}] }, isSection: true } }
+  metadata = { pageCount: 1, isCollection: true }
   assert.equal(player.detectVideoType(), 'collection')
-  app = null
+  metadata = null
   selectors = new Set(['.view-mode', '.video-pod__item'])
   assert.equal(player.detectVideoType(), 'multipart')
   selectors = new Set(['.video-pod__item', '.video-pod__list .simple-base-item'])

@@ -27,9 +27,7 @@ interface PrivateMessageModules {
   usePrivateSessions: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions')
   usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages')
   experimentalPrivateMessage: typeof import('../src/contentScripts/views/Notifications/whisper/experimental')
-  experimentalUsePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental') & {
-    usePrivateMessages: typeof import('../src/contentScripts/views/Notifications/whisper/experimental').useExperimentalPrivateMessageWrites
-  }
+  privateMessageWorkspace: typeof import('../src/contentScripts/views/Notifications/whisper/usePrivateMessageWorkspace')
   privateConversationRoute: typeof import('../src/utils/privateConversationRoute')
   notificationSections: typeof import('../src/contentScripts/views/Notifications/notificationSections')
   topBarSharedRefresh: typeof import('../src/stores/topBarSharedRefresh')
@@ -101,6 +99,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       usePrivateSessions,
       usePrivateMessages,
       experimentalWrites,
+      privateMessageWorkspace,
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
@@ -122,6 +121,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       import('../src/contentScripts/views/Notifications/whisper/usePrivateSessions'),
       import('../src/contentScripts/views/Notifications/whisper/usePrivateMessages'),
       import('../src/contentScripts/views/Notifications/whisper/experimental'),
+      import('../src/contentScripts/views/Notifications/whisper/usePrivateMessageWorkspace'),
       import('../src/utils/privateConversationRoute'),
       import('../src/contentScripts/views/Notifications/notificationSections'),
       import('../src/stores/topBarSharedRefresh'),
@@ -144,10 +144,7 @@ async function loadModules(): Promise<PrivateMessageModules> {
       usePrivateSessions,
       usePrivateMessages,
       experimentalPrivateMessage: experimentalWrites,
-      experimentalUsePrivateMessages: {
-        ...experimentalWrites,
-        usePrivateMessages: experimentalWrites.useExperimentalPrivateMessageWrites,
-      },
+      privateMessageWorkspace,
       privateConversationRoute,
       notificationSections,
       topBarSharedRefresh,
@@ -1739,7 +1736,7 @@ verify('whisper keeps reads stable while exposing confirmed text Composer paths 
   ]) {
     assert.equal(notificationsSource.includes(writeDependency), true, writeDependency)
   }
-  assert.equal(notificationsSource.includes('useExperimentalPrivateMessageWrites'), true)
+  assert.equal(notificationsSource.includes('usePrivateMessageWorkspace'), true)
   assert.equal(notificationsSource.includes('__BEWLY_PRIVATE_TEXT_SEND_PROTOCOL_GATE__'), false)
   assert.equal(notificationsSource.includes('private-text-send-protocol-gate'), false)
   assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
@@ -1842,7 +1839,7 @@ verify('native message runtime protects cache limits and browser regression gate
   ]) {
     assert.ok(agentsSource.includes(baseline), baseline)
   }
-  assert.ok(notificationsSource.includes('privateMessages.release()'))
+  assert.ok(notificationsSource.includes('privateMessageWorkspace.release()'))
   assert.ok(notificationsSource.includes('maxCachedPrivateConversations'))
   assert.ok(notificationsSource.includes('maxPrivateMessagesPerConversation'))
   assert.ok(messagesSource.includes('historyBoundarySeqno'))
@@ -4379,7 +4376,7 @@ verify('optimistic text messages reconcile to one server message without duplica
   assert.deepEqual(reconciled.items.map(item => item.msgKey), ['9223372036854775807'])
 })
 
-verify('send controller inserts one optimistic item, clears draft, and reconciles after code zero', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('send controller inserts one optimistic item, clears draft, and reconciles after code zero', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   let resolveSend: ((value: unknown) => void) | undefined
@@ -4400,7 +4397,7 @@ verify('send controller inserts one optimistic item, clears draft, and reconcile
       }),
     ]),
   ]
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     fetchMessages: async () => historyResponses.shift(),
     getCsrf: () => 'csrf-token',
@@ -4416,7 +4413,7 @@ verify('send controller inserts one optimistic item, clears draft, and reconcile
     nowSeconds: () => 1755000000,
   })
 
-  await controller.loadInitial('200', '0')
+  await reader.loadInitial('200', '0')
   controller.setDraft('200', 'hello')
   const firstSend = controller.sendDraft('200')
   const repeatedSend = controller.sendDraft('200')
@@ -4428,20 +4425,54 @@ verify('send controller inserts one optimistic item, clears draft, and reconcile
 
   resolveSend?.({ code: 0, data: { msg_key: 'server-1' } })
   assert.deepEqual(await Promise.all([firstSend, repeatedSend]), [true, true])
-  assert.equal(state.items.length, 1)
-  assert.equal(state.items[0]?.msgKey, 'server-1')
-  assert.equal(state.items[0]?.sendState, 'sent')
+  assert.equal(state.items.length, 0, 'writer releases the confirmed transaction')
+  assert.equal(reader.getState('200').items[0]?.msgKey, 'server-1')
+  assert.equal(reader.getState('200').items[0]?.isSelf, true)
   assert.deepEqual(sessionUpdates, [{ talkerId: '200', summary: 'hello', timestamp: 1755000000 }])
   assert.equal(sessionRefreshes, 1)
 })
 
-verify('code-zero text send confirms from finite history retries without resending', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('workspace reconciles a send through an existing history request without retaining a second history', async ({ privateMessageWorkspace }) => {
+  let finishHistory!: (value: unknown) => void
+  let historyRequests = 0
+  const workspace = privateMessageWorkspace.usePrivateMessageWorkspace(ref('100'), ref('200'), {
+    fetchMessages: () => {
+      historyRequests++
+      return new Promise(resolve => finishHistory = resolve)
+    },
+    ackSession: async () => ({ code: 0 }),
+    getCsrf: () => 'fixture',
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+    sendMessage: async () => ({ code: 0, data: { msg_key: 'shared-history' } }),
+    createLocalId: () => 'shared-local',
+    nowSeconds: () => 1755000000,
+  })
+  const reading = workspace.messages.refreshLatest('200')
+  workspace.writes.setDraft('200', 'shared fixture')
+  const sending = workspace.writes.sendDraft('200')
+  await nextTick()
+  finishHistory(createMessagesResponse([createRawMessage('shared-history', '105', {
+    sender_uid: '100',
+    receiver_id: '200',
+    content: '{"content":"shared fixture"}',
+    timestamp: 1755000002,
+  })]))
+  await reading
+  assert.equal(await sending, true)
+  assert.equal(historyRequests, 1)
+  assert.equal(workspace.messages.getState('200').items.length, 1)
+  assert.equal(workspace.writes.getState('200').items.length, 0)
+  workspace.dispose()
+})
+
+verify('code-zero text send confirms from finite history retries without resending', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const waits: number[] = []
   let historyRequests = 0
   let sendRequests = 0
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     fetchMessages: async () => {
       historyRequests++
@@ -4468,7 +4499,7 @@ verify('code-zero text send confirms from finite history retries without resendi
     wait: async delayMs => void waits.push(delayMs),
   })
 
-  await controller.loadInitial('200', '0')
+  await reader.loadInitial('200', '0')
   controller.setDraft('200', 'controlled text')
   assert.equal(await controller.sendDraft('200'), true)
   const state = controller.getState('200')
@@ -4477,16 +4508,17 @@ verify('code-zero text send confirms from finite history retries without resendi
   assert.deepEqual(waits, [250, 750])
   assert.equal(state.lastTextSendOutcome, 'confirmed')
   assert.equal(state.items.some(item => item.localId === 'local-history-confirmed'), false)
-  assert.deepEqual(state.items.map(item => item.msgKey), ['history-fallback-key'])
+  assert.equal(state.items.length, 0)
+  assert.deepEqual(reader.getState('200').items.map(item => item.msgKey), ['history-fallback-key'])
 })
 
-verify('accepted but unconfirmed text is retained and never automatically resent', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('accepted but unconfirmed text is retained and never automatically resent', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const waits: number[] = []
   let historyRequests = 0
   let sendRequests = 0
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     fetchMessages: async () => {
       historyRequests++
@@ -4504,7 +4536,7 @@ verify('accepted but unconfirmed text is retained and never automatically resent
     wait: async delayMs => void waits.push(delayMs),
   })
 
-  await controller.loadInitial('200', '0')
+  await reader.loadInitial('200', '0')
   controller.setDraft('200', 'controlled text')
   assert.equal(await controller.sendDraft('200'), false)
   const state = controller.getState('200')
@@ -4517,11 +4549,11 @@ verify('accepted but unconfirmed text is retained and never automatically resent
   assert.equal(sendRequests, 1)
 })
 
-verify('a response msg_key missing from bounded history fails the protocol gate without resending', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('a response msg_key missing from bounded history fails the protocol gate without resending', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   let sendRequests = 0
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     fetchMessages: async () => createMessagesResponse([]),
     getCsrf: () => 'csrf-token',
@@ -4536,7 +4568,7 @@ verify('a response msg_key missing from bounded history fails the protocol gate 
     wait: async () => {},
   })
 
-  await controller.loadInitial('200', '0')
+  await reader.loadInitial('200', '0')
   controller.setDraft('200', 'controlled text')
   assert.equal(await controller.sendDraft('200'), false)
   const state = controller.getState('200')
@@ -4548,7 +4580,7 @@ verify('a response msg_key missing from bounded history fails the protocol gate 
 
 verify('failed optimistic sends retain text and retry remains single-flight', async ({
   experimentalPrivateMessage: privateMessage,
-  experimentalUsePrivateMessages: usePrivateMessages,
+  privateMessageWorkspace: writeWorkspace,
 }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
@@ -4557,7 +4589,7 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   const retryResponse = new Promise<unknown>((resolve) => {
     resolveRetry = resolve
   })
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     fetchMessages: async () => createMessagesResponse([
       createRawMessage('server-2', '106', {
@@ -4615,7 +4647,8 @@ verify('failed optimistic sends retain text and retry remains single-flight', as
   resolveRetry?.({ code: 0, data: { msg_key: 'server-2' } })
   assert.deepEqual(await Promise.all([firstRetry, repeatedRetry]), [true, true])
   assert.equal(sendAttempt, 2)
-  assert.deepEqual(state.items.map(item => item.msgKey), ['server-2'])
+  assert.equal(state.items.length, 0)
+  assert.deepEqual(reader.getState('200').items.map(item => item.msgKey), ['server-2'])
 
   controller.setDraft('200', 'editable')
   const failed = privateMessage.createOptimisticPrivateTextMessage({
@@ -4692,7 +4725,7 @@ verify('optimistic image messages retain local previews and reconcile by server 
   assert.deepEqual(mediaReconciled.items.map(item => item.msgKey), ['9223372036854775807'])
 })
 
-verify('image upload failure retries upload while send failure reuses the uploaded server image', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('image upload failure retries upload while send failure reuses the uploaded server image', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const revoked: string[] = []
@@ -4707,7 +4740,7 @@ verify('image upload failure retries upload while send failure reuses the upload
     content: '{"url":"https://i0.hdslb.com/bfs/im/sanitized.png","width":1280,"height":720}',
     timestamp: 1755000002,
   })
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     cancelImageUpload: async (requestId) => { cancelled.push(requestId) },
     createLocalId: () => 'image-local-1',
@@ -4765,7 +4798,8 @@ verify('image upload failure retries upload while send failure reuses the upload
   assert.equal(await controller.retryImage('200', 'image-local-1'), true)
   assert.equal(uploadAttempts, 2)
   assert.equal(sendAttempts, 2)
-  assert.deepEqual(state.items.map(item => item.msgKey), ['server-image-1'])
+  assert.equal(state.items.length, 0)
+  assert.deepEqual(reader.getState('200').items.map(item => item.msgKey), ['server-image-1'])
   assert.equal(state.imageDraft, null)
   assert.deepEqual(revoked, ['blob:https://www.bilibili.com/sanitized-preview'])
   assert.deepEqual(cancelled, [])
@@ -4781,7 +4815,7 @@ verify('image upload failure retries upload while send failure reuses the upload
   ])
 })
 
-verify('image reconcile failure retries only history and resource cleanup cancels stale uploads', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('image reconcile failure retries only history and resource cleanup cancels stale uploads', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const revoked: string[] = []
@@ -4804,7 +4838,7 @@ verify('image reconcile failure retries only history and resource cleanup cancel
     content: '{"url":"https://i0.hdslb.com/bfs/im/sanitized.png","width":1280,"height":720}',
     timestamp: 1755000002,
   })
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     cancelImageUpload: async (requestId) => { cancelled.push(requestId) },
     createLocalId: () => 'image-local-2',
@@ -4859,7 +4893,7 @@ verify('image reconcile failure retries only history and resource cleanup cancel
   assert.equal(state.imageDraft, null, 'draft clears after reconciliation')
   assert.deepEqual(revoked, ['blob:https://www.bilibili.com/reconcile-preview'], 'object URL cleanup')
 
-  const staleController = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: staleController } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     cancelImageUpload: async (requestId) => { cancelled.push(requestId) },
     createLocalId: () => 'image-local-stale',
@@ -4906,11 +4940,11 @@ verify('image reconcile failure retries only history and resource cleanup cancel
   await disposeSend
 })
 
-verify('image send waits for a valid account before allocating preview resources', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('image send waits for a valid account before allocating preview resources', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('')
   const activeTalkerId = ref('200')
   let objectUrlsCreated = 0
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     createObjectUrl: () => {
       objectUrlsCreated++
@@ -4940,7 +4974,7 @@ verify('image send waits for a valid account before allocating preview resources
   assert.equal(controller.states.size, 0)
 })
 
-verify('account changes cancel an active image upload and reject the old account response', async ({ experimentalUsePrivateMessages: usePrivateMessages }) => {
+verify('account changes cancel an active image upload and reject the old account response', async ({ privateMessageWorkspace: writeWorkspace }) => {
   const mid = ref('100')
   const activeTalkerId = ref('200')
   const cancelled: string[] = []
@@ -4953,7 +4987,7 @@ verify('account changes cancel an active image upload and reject the old account
   const uploadStarted = new Promise<void>((resolve) => {
     resolveUploadStarted = resolve
   })
-  const controller = usePrivateMessages.usePrivateMessages(mid, activeTalkerId, {
+  const { writes: controller } = writeWorkspace.usePrivateMessageWorkspace(mid, activeTalkerId, {
     ackSession: async () => ({ code: 0, data: {} }),
     cancelImageUpload: async requestId => void cancelled.push(requestId),
     createLocalId: () => 'image-account-change',
@@ -5293,6 +5327,116 @@ verify('native server settings and recipient search remain isolated from local s
   assert.ok(notificationsSource.includes('transientPrivateRecipient'))
   assert.ok(notificationsSource.includes('api.privateMessage.sendPrivateMessage(options)'))
   assert.equal(notificationsSource.includes('state.items.push(transient'), false)
+})
+
+verify('workspace retains history only in its reader and preserves the older-page cursor', async ({ privateMessageWorkspace: writeWorkspace }) => {
+  const mid = ref('100')
+  const active = ref('200')
+  const requests: Array<{ endSeqno?: string, talkerId: string }> = []
+  const pages = [
+    createMessagesResponse([createRawMessage('3', '103'), createRawMessage('4', '104')]),
+    createMessagesResponse([createRawMessage('1', '101'), createRawMessage('2', '102')]),
+    createMessagesResponse([]),
+  ]
+  const { writes: controller, messages: reader } = writeWorkspace.usePrivateMessageWorkspace(mid, active, {
+    fetchMessages: async (options) => {
+      requests.push(options)
+      return pages.shift()
+    },
+    ackSession: async () => ({ code: 0 }),
+    getCsrf: () => 'fixture',
+    getMaxCachedConversations: () => 2,
+    getMaxMessagesPerConversation: () => 2,
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+  await reader.loadInitial('200')
+  await reader.loadOlder('200')
+  assert.deepEqual(reader.getState('200').items.map(item => item.msgKey), ['3', '4'])
+  assert.equal(reader.getState('200').historyBoundarySeqno, '101')
+  assert.equal(controller.getState('200').items.length, 0, 'the writer never copies confirmed history')
+  await reader.loadOlder('200')
+  assert.deepEqual(requests.map(request => request.endSeqno), [undefined, '103', '101'])
+  controller.getState('old')
+  controller.getState('new')
+  assert.equal(controller.states.size, 2)
+  assert.equal(controller.states.has('old'), false)
+  assert.equal(controller.states.has('200'), true)
+  controller.dispose()
+  assert.equal(controller.states.size, 0)
+})
+
+verify('write cache never trims an unconfirmed send into a fake success and protects drafts', async ({ privateMessageWorkspace: writeWorkspace }) => {
+  const mid = ref('100')
+  const active = ref('200')
+  let sendCalls = 0
+  const { writes: controller } = writeWorkspace.usePrivateMessageWorkspace(mid, active, {
+    fetchMessages: async () => createMessagesResponse([createRawMessage('other', '103')]),
+    ackSession: async () => ({ code: 0 }),
+    sendMessage: async () => {
+      sendCalls++
+      return { code: 0, data: {} }
+    },
+    getCsrf: () => 'fixture',
+    getMaxCachedConversations: () => 1,
+    getMaxMessagesPerConversation: () => 1,
+    createLocalId: () => 'pending-local',
+    wait: async () => {},
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+  controller.setDraft('200', 'unconfirmed fixture')
+  assert.equal(await controller.sendDraft('200'), false)
+  const pending = controller.getState('200')
+  assert.equal(sendCalls, 1)
+  assert.equal(pending.lastTextSendOutcome, 'accepted-but-unconfirmed')
+  assert.equal(pending.items.length, 1)
+  assert.equal(pending.items[0].localId, 'pending-local')
+  active.value = '300'
+  controller.setDraft('300', 'unsent fixture')
+  controller.enforceCacheLimits()
+  assert.equal(controller.states.has('200'), true, 'accepted transactions cannot be evicted')
+  assert.equal(controller.getState('300').draft, 'unsent fixture')
+  controller.release()
+  assert.equal(controller.states.size, 0)
+  assert.equal(pending.items.length, 0)
+  controller.dispose()
+})
+
+verify('workspace reader owns ACK and page exit releases both histories and drafts', async ({ privateMessageWorkspace: writeWorkspace }) => {
+  const mid = ref('100')
+  const active = ref('200')
+  let finishAck!: (value: unknown) => void
+  let finishRead!: (value: unknown) => void
+  const workspace = writeWorkspace.usePrivateMessageWorkspace(mid, active, {
+    fetchMessages: () => new Promise(resolve => finishRead = resolve),
+    ackSession: () => new Promise(resolve => finishAck = resolve),
+    getCsrf: () => 'fixture',
+    getMaxCachedConversations: () => 1,
+    markSessionRead: () => {},
+    syncUnread: async () => {},
+  })
+  const { writes: controller, messages: reader } = workspace
+  const loading = reader.loadInitial('200')
+  finishRead(createMessagesResponse([createRawMessage('1', '101')]))
+  await loading
+  const ack = reader.acknowledgeIfEligible('200', { pageActive: true, visible: true, atLatest: true, canAck: true, sessionMaxSeqno: '101', unreadCount: 1 })
+  active.value = '300'
+  reader.getState('300')
+  assert.equal(reader.states.has('200'), true)
+  finishAck({ code: 0 })
+  assert.equal(await ack, true)
+  assert.equal(reader.states.has('200'), false)
+  const stale = reader.loadInitial('300')
+  const oldState = reader.getState('300')
+  controller.setDraft('300', 'unfinished draft')
+  workspace.release()
+  finishRead(createMessagesResponse([createRawMessage('late', '102')]))
+  await stale
+  assert.equal(controller.states.size, 0)
+  assert.equal(reader.states.size, 0)
+  assert.equal(oldState.items.length, 0)
+  workspace.dispose()
 })
 
 async function main() {

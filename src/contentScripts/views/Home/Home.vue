@@ -95,9 +95,9 @@ const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
   return [
-    { icon: 'mingcute:table-3-line', iconActivated: 'mingcute:table-3-fill', value: 'adaptive' },
-    { icon: 'mingcute:layout-grid-line', iconActivated: 'mingcute:layout-grid-fill', value: 'twoColumns' },
-    { icon: 'mingcute:list-check-3-line', iconActivated: 'mingcute:list-check-3-fill', value: 'oneColumn' },
+    { icon: 'mingcute:table-3-line', iconActivated: 'mingcute:table-3-fill', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
+    { icon: 'mingcute:layout-grid-line', iconActivated: 'mingcute:layout-grid-fill', value: 'twoColumns', labelKey: 'layout_editor.layout_two_columns' },
+    { icon: 'mingcute:list-check-3-line', iconActivated: 'mingcute:list-check-3-fill', value: 'oneColumn', labelKey: 'layout_editor.layout_one_column' },
   ]
 })
 
@@ -350,7 +350,7 @@ function toggleTabContentLoading(loading: boolean) {
             data-segment-item
             :data-active="homeGridLayout === icon.value ? 'true' : undefined"
             :aria-pressed="homeGridLayout === icon.value"
-            :title="icon.value"
+            :title="$t(icon.labelKey)"
             @click="gridLayout.home = icon.value"
           >
             <Icon

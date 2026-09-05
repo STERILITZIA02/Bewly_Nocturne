@@ -1342,7 +1342,7 @@ onBeforeUnmount(() => {
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-theme-foreground);
   background: var(--bew-theme-color-10);
-  line-height: 1.35;
+  line-height: var(--bew-line-height-control);
 }
 
 .moment-card__desc {

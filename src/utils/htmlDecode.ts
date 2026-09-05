@@ -38,12 +38,12 @@ export function decodeHtmlEntities(text: string | undefined): string {
     '&rsquo;': '\u2019',
   }
 
-  return text.replace(/&(?:#x?[0-9a-f]+|[a-z]+);/gi, (match) => {
+  return text.replace(/&(?:#(?:x[0-9a-f]+|\d+)|[a-z]+);/gi, (match) => {
     // 数字实体 &#123; 或 &#xAB;
     if (match.startsWith('&#')) {
       const isHex = match[2] === 'x' || match[2] === 'X'
       const code = Number.parseInt(match.slice(isHex ? 3 : 2, -1), isHex ? 16 : 10)
-      return Number.isNaN(code) ? match : String.fromCharCode(code)
+      return code >= 0 && code <= 0x10FFFF ? String.fromCodePoint(code) : match
     }
     // 命名实体
     return entities[match.toLowerCase()] || match

@@ -34,6 +34,8 @@ common:
   no_data: 暂无数据
   no_more_content: 没有更多内容了
   load_failed: 加载失败，请稍后重试
+  image_load_failed: 图片加载失败
+  operation_failed: 操作失败，请稍后重试
   load_more: 加载更多
   operation:
     add: 新增

@@ -25,7 +25,7 @@ const collapsed = ref(props.defaultCollapsed)
       @click="collapsed = !collapsed"
     >
       <span>
-        <span class="group-title" text="base $bew-text-1" fw-bold>
+        <span class="group-title" text="$bew-text-1">
           <i v-if="icon" :class="icon" />
           {{ title }}
         </span>
@@ -44,7 +44,7 @@ const collapsed = ref(props.defaultCollapsed)
       />
     </button>
     <template v-else-if="title || desc">
-      <p class="group-title" text="base $bew-text-1" fw-bold>
+      <p class="group-title" text="$bew-text-1">
         <i v-if="icon" :class="icon" />
         {{ title }}
       </p>
@@ -95,6 +95,9 @@ const collapsed = ref(props.defaultCollapsed)
   display: inline-flex;
   align-items: center;
   gap: var(--bew-space-2);
+  font-size: var(--bew-font-size-title);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-line-height-title);
 }
 
 .group-title > i {

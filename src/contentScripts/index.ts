@@ -43,6 +43,7 @@ import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '~/uti
 import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
+import { parseVideoMetadataEvent, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
 import { mountWatchLaterButtonWhenToolbarReady, removeWatchLaterButton } from '~/utils/watchLaterButton'
@@ -742,6 +743,14 @@ else if (shouldInitializeContentScript) {
     if (lastAppliedPlayerModeNavigationKey === currentNavigationKey)
       return
 
+    // Reuse the existing page-settle deadline while MAIN's current manuscript
+    // metadata is pending; do not commit a guessed context-specific mode early.
+    if (settings.value.enableVideoPlayerModeOverrides && isVideoPage()
+      && Date.now() < videoOwnerAvatarReadyDeadline && !readVideoPageMetadata()) {
+      schedulePlayerModeRetry()
+      return
+    }
+
     let targetPlayerMode = resolveDefaultVideoPlayerMode()
     if (isFestivalPage() && targetPlayerMode === 'bewlyWidescreen')
       targetPlayerMode = 'widescreen'
@@ -1251,6 +1260,22 @@ else if (shouldInitializeContentScript) {
   }
 
   contentScriptDisposers.push(onRouteChange(checkForUrlChanges))
+
+  window.addEventListener(VIDEO_METADATA_CHANGED, (event) => {
+    const message = parseVideoMetadataEvent(event)
+    if (!message || message.channelId !== getPageBridgeChannelId() || message.href !== location.href
+      || !validateVideoPageMetadata(message.metadata, location.href)) {
+      return
+    }
+    queueMicrotask(() => {
+      if (contentScriptSignal.aborted || message.href !== location.href || !settingsBootLoaded
+        || !playerModeSettingsReady || isIframeDrawerHost() || document.hidden) {
+        return
+      }
+      applyDefaultPlayerMode()
+      applyAutoPlayByVideoType()
+    })
+  }, { signal: contentScriptSignal })
 
   function syncFavoriteDialogLifecycle() {
     if (!isIframeDrawerHost() && isVideoOrBangumiPage())

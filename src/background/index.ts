@@ -61,7 +61,9 @@ browser.storage.onChanged.addListener((changes, areaName) => {
   if (areaName !== 'local' || !changes.settings)
     return
 
-  void syncPreventMobileRedirectRule(isPreventMobileRedirectEnabled(changes.settings.newValue))
+  const enabled = isPreventMobileRedirectEnabled(changes.settings.newValue)
+  if (enabled !== isPreventMobileRedirectEnabled(changes.settings.oldValue))
+    void syncPreventMobileRedirectRule(enabled)
 })
 
 // 扩展启动时初始化 WBI 密钥

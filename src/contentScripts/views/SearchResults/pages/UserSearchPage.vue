@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Empty from '~/components/Empty.vue'
@@ -38,14 +38,12 @@ const { haveScrollbar, handleBackToTop } = useBewlyApp()
 // 分页模式：scroll 滚动加载，pagination 翻页
 const paginationMode = computed(() => settings.value.searchResultsPaginationMode)
 
-// 翻页加载状态
-const isPageChanging = ref(false)
-
 // 用户关系管理
 const {
   userRelations,
   batchQueryUserRelations,
   updateUserRelation,
+  reset: resetUserRelations,
 } = useUserRelations()
 
 // 搜索请求管理
@@ -53,7 +51,7 @@ const {
   isLoading,
   error,
   results,
-  lastResponse,
+  requestScope,
   search,
   reset: resetSearch,
 } = useSearchRequest<any[]>('user')
@@ -128,6 +126,12 @@ watch(() => props.filters, () => {
   void performSearch(false)
 }, { deep: true })
 
+watch(requestScope, () => {
+  resetAll()
+  if (props.keyword.trim())
+    void performSearch(false)
+})
+
 const userOrderMap: Record<string, { order: string, order_sort: number }> = {
   '': { order: '', order_sort: 0 },
   'fans': { order: 'fans', order_sort: 0 },
@@ -136,29 +140,13 @@ const userOrderMap: Record<string, { order: string, order_sort: number }> = {
   'level_desc': { order: 'level', order_sort: 1 },
 }
 
-async function performSearch(loadMore: boolean): Promise<boolean> {
+async function runUserSearch(targetPage: number, isLoadMore: boolean, updateUrl = false): Promise<boolean> {
   const keyword = props.keyword.trim()
   if (!keyword)
     return false
-
-  // 分页模式下不支持 loadMore
-  const isLoadMore = paginationMode.value === 'scroll' && loadMore
-
-  if (isLoadMore && (isLoading.value || exhausted.value))
-    return false
-
-  if (!isLoadMore)
-    setExhausted(false)
-
-  // 滚动模式下：loadMore 使用 getNextPage，否则从第1页开始
-  // 翻页模式下：使用 currentPage（如果有设置）或从第1页开始
-  const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
   const previousLength = results.value?.length || 0
-
-  // 用户排序映射
   const orderConfig = userOrderMap[props.filters.order] || userOrderMap['']
-
-  const success = await search({
+  return search({
     searchType: 'bili_user',
     keyword,
     page: targetPage,
@@ -168,104 +156,49 @@ async function performSearch(loadMore: boolean): Promise<boolean> {
       orderSort: orderConfig.order_sort,
       userType: props.filters.userType,
     },
+  }, async (response, isCurrent) => {
+    const rawData = response.data
+    if (!rawData)
+      return false
+    const incomingList = Array.isArray(rawData.result) ? rawData.result : []
+    results.value = isLoadMore
+      ? dedupeByKey([...(results.value ?? []), ...incomingList], item => String(item?.mid ?? JSON.stringify(item)))
+      : incomingList
+    await batchQueryUserRelations(results.value!.map((user: any) => user.mid).filter(Boolean))
+    if (!isCurrent())
+      return false
+    extractPagination(rawData, incomingList.length)
+    updatePage(targetPage)
+    setHasMore(paginationHasMore.value)
+    if (paginationMode.value === 'scroll') {
+      const newItems = Math.max((results.value?.length ?? 0) - previousLength, 0)
+      setExhausted(incomingList.length === 0 || (newItems <= 0 && targetPage >= totalPages.value))
+    }
+    if (updateUrl)
+      emit('updatePage', targetPage)
+    return true
   })
-
-  if (!success)
-    return false
-
-  if (!lastResponse.value?.data)
-    return false
-
-  const rawData = lastResponse.value.data
-  const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-
-  // 合并或替换结果
-  if (isLoadMore && results.value) {
-    const merged = [...results.value, ...incomingList]
-    // 去重
-    results.value = dedupeByKey(merged, item => String(item?.mid ?? JSON.stringify(item)))
-  }
-  else {
-    results.value = incomingList
-  }
-
-  // 批量查询用户关系
-  const mids = results.value!.map((u: any) => u.mid).filter(Boolean)
-  await batchQueryUserRelations(mids)
-
-  // 提取分页信息
-  extractPagination(rawData, incomingList.length)
-  updatePage(targetPage)
-  setHasMore(paginationHasMore.value)
-
-  // 检查是否已耗尽（仅在滚动模式下）
-  if (paginationMode.value === 'scroll') {
-    const finalLength = results.value!.length
-    const newItems = Math.max(finalLength - previousLength, 0)
-
-    if (incomingList.length === 0) {
-      setExhausted(true)
-    }
-    else if (newItems <= 0 && targetPage >= totalPages.value) {
-      setExhausted(true)
-    }
-
-    // 处理加载完成
-    if (isLoadMore)
-      await handleLoadMoreCompletion(haveScrollbar)
-  }
-
-  return true
 }
 
-// 翻页模式的页码切换
-async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
-  if (paginationMode.value !== 'pagination')
+async function performSearch(loadMore: boolean): Promise<boolean> {
+  const isLoadMore = paginationMode.value === 'scroll' && loadMore
+  if (isLoadMore && (isLoading.value || exhausted.value))
     return false
+  if (!isLoadMore)
+    setExhausted(false)
+  const page = isLoadMore ? getNextPage(true) : (currentPage.value || getNextPage(false))
+  const success = await runUserSearch(page, isLoadMore)
+  if (success && isLoadMore)
+    await handleLoadMoreCompletion(haveScrollbar)
+  return success
+}
 
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
-
-  // 先滚动到顶部
-  if (scrollToTop) {
+function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
+  if (paginationMode.value !== 'pagination' || !props.keyword.trim())
+    return Promise.resolve(false)
+  if (scrollToTop)
     handleBackToTop()
-    await nextTick()
-  }
-
-  isPageChanging.value = true
-
-  try {
-    const orderConfig = userOrderMap[props.filters.order] || userOrderMap['']
-    const success = await search({
-      searchType: 'bili_user',
-      keyword,
-      page,
-      pageSize: 30,
-      filters: {
-        order: orderConfig.order,
-        orderSort: orderConfig.order_sort,
-        userType: props.filters.userType,
-      },
-    })
-    if (!success || !lastResponse.value?.data)
-      return false
-
-    const rawData = lastResponse.value.data
-    const incomingList = Array.isArray(rawData?.result) ? rawData.result : []
-    const mids = incomingList.map((u: any) => u.mid).filter(Boolean)
-    await batchQueryUserRelations(mids)
-    results.value = incomingList
-    extractPagination(rawData, incomingList.length)
-    updatePage(page)
-    setHasMore(paginationHasMore.value)
-    if (updateUrl)
-      emit('updatePage', page)
-    return true
-  }
-  finally {
-    isPageChanging.value = false
-  }
+  return runUserSearch(page, false, updateUrl)
 }
 
 function refreshCurrentPage() {
@@ -284,6 +217,7 @@ async function restorePage(page: number): Promise<boolean> {
 }
 
 function resetAll() {
+  resetUserRelations()
   resetSearch()
   resetPagination()
   resetLoadMore()
@@ -357,7 +291,7 @@ defineExpose({
       <Pagination
         :current-page="currentPage"
         :total-pages="totalPages"
-        :loading="isPageChanging"
+        :loading="isLoading"
         :disabled="isLoading"
         @change="handlePageChange"
       />

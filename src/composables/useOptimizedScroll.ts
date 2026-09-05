@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { onMounted, ref, watch } from 'vue'
 
 /**
  * 优化的滚动处理 Composable
@@ -41,7 +41,7 @@ export function useOptimizedScroll(
   const scrollPercentage = ref(0)
 
   // 使用 RAF 批量处理标志
-  let ticking = false
+  let scrollFrame: number | null = null
   let lastScrollTime = 0
   let scrollTimeout: ReturnType<typeof setTimeout> | null = null
 
@@ -60,7 +60,9 @@ export function useOptimizedScroll(
       scrollTop,
       scrollHeight,
       clientHeight,
-      percentage: (scrollTop / (scrollHeight - clientHeight)) * 100,
+      percentage: scrollHeight > clientHeight
+        ? Math.min(100, Math.max(0, scrollTop / (scrollHeight - clientHeight) * 100))
+        : 0,
     }
   }
 
@@ -108,12 +110,11 @@ export function useOptimizedScroll(
     }
 
     // 使用 RAF 批量处理
-    if (!ticking) {
-      requestAnimationFrame(() => {
+    if (scrollFrame === null) {
+      scrollFrame = requestAnimationFrame(() => {
+        scrollFrame = null
         handleScrollLogic()
-        ticking = false
       })
-      ticking = true
     }
 
     // 滚动结束检测
@@ -124,27 +125,27 @@ export function useOptimizedScroll(
     }, 150)
   }
 
-  // 挂载和卸载
+  // Bind cleanup to the actual node, including template-ref replacement.
   onMounted(() => {
-    const element = scrollElement.value
-    if (!element)
-      return
-
-    element.addEventListener('scroll', onScroll, { passive: true })
-
-    // 初始检查
-    handleScrollLogic()
-  })
-
-  onBeforeUnmount(() => {
-    const element = scrollElement.value
-    if (element) {
-      element.removeEventListener('scroll', onScroll)
-    }
-
-    if (scrollTimeout) {
-      clearTimeout(scrollTimeout)
-    }
+    watch(scrollElement, (element, _previous, onCleanup) => {
+      if (!element)
+        return
+      element.addEventListener('scroll', onScroll, { passive: true })
+      handleScrollLogic()
+      onCleanup(() => {
+        element.removeEventListener('scroll', onScroll)
+        if (scrollFrame !== null) {
+          cancelAnimationFrame(scrollFrame)
+          scrollFrame = null
+        }
+        if (scrollTimeout !== null) {
+          clearTimeout(scrollTimeout)
+          scrollTimeout = null
+        }
+        isScrolling.value = false
+        lastScrollTime = 0
+      })
+    }, { immediate: true, flush: 'post' })
   })
 
   // 手动触发滚动检查（用于数据加载后）

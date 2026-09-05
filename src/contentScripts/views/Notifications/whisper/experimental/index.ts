@@ -7,4 +7,5 @@
 export type { default as MessageComposer } from './MessageComposer.vue'
 export * from './privateMessageTransactions'
 export * from './privateMessageWriteProtocolGate'
+export type * from './privateMessageWriteTypes'
 export * from './usePrivateMessageWrites'

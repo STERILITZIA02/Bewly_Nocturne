@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
 import { clampRangeValue, getRangeProgress } from '~/utils/range'
 
 interface Props {
@@ -18,6 +19,8 @@ const emit = defineEmits<{
   (event: 'update:modelValue', value: number): void
 }>()
 
+const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
+
 const model = computed({
   get: () => clampRangeValue(props.modelValue, props.min, props.max),
   set: value => emit('update:modelValue', clampRangeValue(Number(value), props.min, props.max)),
@@ -35,6 +38,7 @@ const sliderStyle = computed(() => ({
       :min="min"
       :max="max"
       :step="step"
+      :aria-labelledby="fieldLabelId"
       :style="sliderStyle"
       class="slider"
       appearance-none outline-none rounded="$b-slider-height"

@@ -88,6 +88,7 @@ watchEffect(() => {
 function transformWeeklyVideo(item: PopularSeriesVideoItem, rank: number): Video {
   return {
     id: Number(item.aid),
+    aid: item.aid,
     duration: item.duration,
     title: decodeHtmlEntities(item.title),
     desc: decodeHtmlEntities(item.desc),

@@ -63,3 +63,9 @@ export interface Author {
   followed?: boolean | undefined
   mid?: number
 }
+
+// 预处理的显示数据，减少模板中的计算
+export interface VideoCardDisplayData extends Video {
+  author: Required<Pick<Author, 'name' | 'authorFace' | 'followed' | 'mid'>>
+  bvid: string
+}
