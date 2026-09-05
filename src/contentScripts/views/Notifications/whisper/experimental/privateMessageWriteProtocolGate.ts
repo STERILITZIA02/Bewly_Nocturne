@@ -9,7 +9,7 @@
 import type {
   PrivateTextSendDiagnostic,
   PrivateTextSendOutcome,
-} from './usePrivateMessageWrites'
+} from './privateMessageWriteTypes'
 
 export const PRIVATE_TEXT_PROTOCOL_GATE_CONFIRMATION = 'I_CONFIRM_ONE_PRIVATE_TEXT_SEND'
 export const PRIVATE_TEXT_PROTOCOL_GATE_VALUE = 'test-test'

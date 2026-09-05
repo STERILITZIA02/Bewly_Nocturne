@@ -1,4 +1,4 @@
-import { onScopeDispose, ref } from 'vue'
+import { onScopeDispose, ref, watch } from 'vue'
 
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
@@ -17,6 +17,7 @@ export function useUserRelations() {
   const topBarStore = useTopBarStore()
   const userRelations = ref<Record<number, UserRelation>>({})
   let requestGeneration = 0
+  const relationVersions = new Map<string, number>()
 
   function getCurrentAccountId() {
     return resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
@@ -39,6 +40,9 @@ export function useUserRelations() {
     }
 
     for (const chunk of chunks) {
+      if (generation !== requestGeneration || accountId !== getCurrentAccountId())
+        return
+      const versions = new Map(chunk.map(mid => [String(mid), relationVersions.get(String(mid)) ?? 0]))
       try {
         const response = await api.user.getRelations({
           fids: chunk.join(','),
@@ -50,6 +54,8 @@ export function useUserRelations() {
         if (response.code === 0 && response.data) {
           Object.keys(response.data).forEach((midStr) => {
             const mid = Number(midStr)
+            if (versions.get(midStr) !== (relationVersions.get(midStr) ?? 0))
+              return
             const relation = response.data[midStr]
             // attribute: 0=未关注, 1=悄悄关注, 2=关注, 6=互相关注, 128=拉黑
             const isFollowing = relation.attribute === 2 || relation.attribute === 6
@@ -72,6 +78,7 @@ export function useUserRelations() {
    * @param isFollowing 是否关注
    */
   function updateUserRelation(mid: number, isFollowing: boolean) {
+    relationVersions.set(String(mid), (relationVersions.get(String(mid)) ?? 0) + 1)
     if (userRelations.value[mid]) {
       userRelations.value[mid].isFollowing = isFollowing
     }
@@ -106,8 +113,10 @@ export function useUserRelations() {
   function reset() {
     requestGeneration++
     userRelations.value = {}
+    relationVersions.clear()
   }
 
+  watch(getCurrentAccountId, reset, { flush: 'sync' })
   onScopeDispose(() => {
     requestGeneration++
   })

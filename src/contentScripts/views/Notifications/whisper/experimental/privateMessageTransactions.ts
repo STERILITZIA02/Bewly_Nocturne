@@ -3,7 +3,8 @@
  */
 import type { PrivateMessage } from '~/background/privateMessage/types'
 
-import type { ParsedPrivateMessageContent } from '../privateMessageRenderers'
+import type { DisplayPrivateMessage as ServerPrivateMessage } from '../privateMessage'
+import { classifyPrivateMessageSource, comparePrivateMessageSeqno } from '../privateMessage'
 import {
   collectPrivateMessageEmotions,
   parsePrivateMessageContent,
@@ -17,28 +18,12 @@ export {
   type PrivateMessageTextSegment,
 } from '../privateMessageRenderers'
 
-export interface DisplayPrivateMessage {
-  msgKey: string
-  seqno: string
-  senderId: string
-  receiverId: string
-  msgType: number
-  timestamp: number
-  isSelf: boolean
-  source: PrivateMessageSource | null
-  content: ParsedPrivateMessageContent
+export interface DisplayPrivateMessage extends Omit<ServerPrivateMessage, 'msgStatus' | 'msgSource'> {
   localId?: string
   sendState?: PrivateMessageSendState
   serverMsgKey?: string
   serverMediaUrl?: string
 }
-
-export type PrivateMessageSource
-  = | 'auto-reply'
-    | 'fan-group-system'
-    | 'mutual-follow'
-    | 'system'
-    | 'ai'
 
 export type PrivateMessageSendState
   = | 'pending'
@@ -72,35 +57,6 @@ export interface PrivateMessageReconcileResult {
 }
 
 const PRIVATE_MESSAGE_RECONCILE_WINDOW_SECONDS = 30
-
-export function classifyPrivateMessageSource(msgSource: number): PrivateMessageSource | null {
-  if (msgSource >= 8 && msgSource <= 11)
-    return 'auto-reply'
-  if (msgSource === 13)
-    return 'fan-group-system'
-  if (msgSource === 17)
-    return 'mutual-follow'
-  if (msgSource === 18)
-    return 'system'
-  if (msgSource === 19)
-    return 'ai'
-  return null
-}
-
-function normalizeDecimal(value: string): string {
-  const normalized = value.replace(/^0+(?=\d)/, '')
-  return /^\d+$/.test(normalized) ? normalized : ''
-}
-
-export function comparePrivateMessageSeqno(left: string, right: string): number {
-  const normalizedLeft = normalizeDecimal(left)
-  const normalizedRight = normalizeDecimal(right)
-  if (!normalizedLeft || !normalizedRight)
-    return normalizedLeft.localeCompare(normalizedRight)
-  if (normalizedLeft.length !== normalizedRight.length)
-    return normalizedLeft.length - normalizedRight.length
-  return normalizedLeft.localeCompare(normalizedRight)
-}
 
 export function transformPrivateMessages(
   messages: PrivateMessage[],

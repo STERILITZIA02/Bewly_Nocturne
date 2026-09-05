@@ -7,7 +7,7 @@ import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { settings } from '~/logic'
-import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard } from '~/utils/dialogFocus'
+import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
 
 const props = withDefaults(defineProps<{
@@ -203,17 +203,7 @@ function restoreDialogFocus() {
   dialogRef.value?.removeAttribute('data-bewly-dialog-active')
   const target = previousFocus
   previousFocus = null
-  if (!target?.isConnected || target.closest('[inert]'))
-    return
-  const root = target.getRootNode() as ParentNode
-  const topDialog = getTopDialog(root)
-  if (topDialog && !topDialog.contains(target))
-    return
-  const active = getDeepActiveElement(document)
-  const otherModal = active?.closest('[aria-modal="true"]')
-  if (otherModal && !dialogRef.value?.contains(otherModal) && !otherModal.contains(target))
-    return
-  target.focus({ preventScroll: true })
+  restoreOverlayFocus(dialogRef.value, target)
 }
 
 onBeforeUnmount(() => {

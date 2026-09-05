@@ -26,9 +26,10 @@
   --bew-font-weight-bold: 700;
   --bew-base-font-size: var(--bew-font-size-body);
   // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
-  --bew-media-pop-title-font-size: 14px;
-  --bew-media-pop-title-line-height: 20px;
-  --bew-media-pop-title-font-weight: var(--bew-font-weight-regular);
+  --bew-media-pop-title-font-size: var(--bew-font-size-title);
+  --bew-media-pop-title-line-height: var(--bew-line-height-title);
+  --bew-media-pop-title-font-weight: var(--bew-font-weight-semibold);
+  --bew-video-card-meta-min-height: 46px;
   // #endregion
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.
@@ -81,6 +82,7 @@
   --bew-layout-sidebar-sticky-top: 150px;
   --bew-layout-sidebar-viewport-offset: 140px;
   --bew-layout-dialog-width: 420px;
+  --bew-settings-label-min-width: 160px;
   --bew-dialog-action-min-width: 120px;
   --bew-dialog-grid-item-min-width: 260px;
   --bew-layout-drawer-max-width: 1400px;

@@ -20,6 +20,7 @@ const isLoadingPopularAnime = ref<boolean>()
 const isLoadingRecommendAnime = ref<boolean>()
 const recommendRequestFailed = ref(false)
 const popularRequestFailed = ref(false)
+const watchListRequestFailed = ref(false)
 const activatedSeasonId = ref<number>()
 const noMoreContent = ref<boolean>()
 const animeTimeTableRef = ref()
@@ -72,6 +73,7 @@ function reloadAnimePage() {
   noMoreContent.value = false
   recommendRequestFailed.value = false
   popularRequestFailed.value = false
+  watchListRequestFailed.value = false
   isLoadingAnimeWatchList.value = false
   isLoadingPopularAnime.value = false
   isLoadingRecommendAnime.value = false
@@ -99,7 +101,10 @@ function initPageAction() {
 }
 
 async function getAnimeWatchList(generation = requestGeneration, requestAccountId = getAnimeAccountId()) {
+  if (isLoadingAnimeWatchList.value)
+    return
   isLoadingAnimeWatchList.value = true
+  watchListRequestFailed.value = false
   try {
     const response: WatchListResult = await api.anime.getAnimeWatchList({
       vmid: requestAccountId,
@@ -109,12 +114,15 @@ async function getAnimeWatchList(generation = requestGeneration, requestAccountI
     })
     if (!isAnimeRequestCurrent(generation, requestAccountId))
       return
-    const list = Array.isArray(response.data?.list) ? response.data.list : []
-    animeWatchList.splice(0, animeWatchList.length, ...(response.code === 0 ? list : []))
+    if (response.code !== 0 || !Array.isArray(response.data?.list)) {
+      watchListRequestFailed.value = true
+      return
+    }
+    animeWatchList.splice(0, animeWatchList.length, ...response.data.list)
   }
   catch {
     if (isAnimeRequestCurrent(generation, requestAccountId))
-      animeWatchList.length = 0
+      watchListRequestFailed.value = true
   }
   finally {
     if (isAnimeRequestCurrent(generation, requestAccountId))
@@ -205,7 +213,12 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
           </Button>
         </div>
 
-        <HorizontalScrollView w="[calc(100%+1.5rem)]">
+        <Empty v-if="watchListRequestFailed" :description="$t('common.load_failed')" role="alert">
+          <Button type="primary" @click="getAnimeWatchList()">
+            {{ $t('common.operation.refresh') }}
+          </Button>
+        </Empty>
+        <HorizontalScrollView v-else w="[calc(100%+1.5rem)]">
           <div w-full flex>
             <BangumiCardSkeleton
               v-for="item in 6"

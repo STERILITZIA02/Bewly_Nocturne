@@ -1,8 +1,12 @@
 <script lang="ts" setup>
+import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
+
 defineProps<{
   modelValue: boolean
   label?: string
 }>()
+
+const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
 
 const model = defineModel()
 </script>
@@ -10,7 +14,7 @@ const model = defineModel()
 <template>
   <label cursor="pointer" pointer="auto" flex items-center gap-3>
     <span>{{ label }}</span>
-    <input v-model="model" type="checkbox" class="radio-input">
+    <input v-model="model" type="checkbox" class="radio-input" :aria-labelledby="label ? undefined : fieldLabelId">
     <span class="radio-switch" aria-hidden="true" />
   </label>
 </template>

@@ -34,6 +34,8 @@ common:
   no_data: 暫時冇數據
   no_more_content: 唔使睇喇，冇嘢喇
   load_failed: 載入失敗，請遲啲再試
+  image_load_failed: 圖片載入失敗
+  operation_failed: 操作失敗，請遲啲再試
   load_more: 撈多啲
   operation:
     add: 新增

@@ -86,6 +86,7 @@ function initPageAction() {
 function transformPreciousVideo(item: PreciousItem): Video {
   return {
     id: Number(item.aid),
+    aid: item.aid,
     duration: item.duration,
     title: decodeHtmlEntities(item.title),
     desc: decodeHtmlEntities(item.desc),

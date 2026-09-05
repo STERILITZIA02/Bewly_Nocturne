@@ -1,7 +1,7 @@
 <script lang="ts" setup>
 import { useResizeObserver } from '@vueuse/core'
 import DOMPurify from 'dompurify'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
@@ -23,6 +23,7 @@ import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
 import { useUserRelations } from '../composables/useUserRelations'
+import { mergeSections } from '../searchSections'
 import {
   convertActivityData,
   convertArticleCardData,
@@ -37,7 +38,6 @@ import {
   removeUnusedActivityCard,
 } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
-import { applyVideoTimeFilter } from '../utils/searchHelpers'
 
 const props = defineProps<{
   keyword: string
@@ -59,13 +59,13 @@ const { haveScrollbar, handleBackToTop } = useBewlyApp()
 
 // 分页模式
 const paginationMode = computed(() => settings.value.searchResultsPaginationMode)
-const isPageChanging = ref(false)
 
 // 用户关系管理
 const {
   userRelations,
   batchQueryUserRelations,
   updateUserRelation,
+  reset: resetUserRelations,
 } = useUserRelations()
 
 // 搜索请求管理
@@ -73,7 +73,7 @@ const {
   isLoading,
   error,
   results,
-  lastResponse,
+  requestScope,
   search,
   reset: resetSearch,
 } = useSearchRequest<any>('all')
@@ -293,6 +293,12 @@ onUnmounted(() => {
     window.removeEventListener('resize', updateVideoGridGap)
 })
 
+watch(requestScope, () => {
+  resetAll()
+  if (props.keyword.trim())
+    void performSearch(false)
+})
+
 watch(() => props.keyword, async (newKeyword, oldKeyword) => {
   const normalizedNew = (newKeyword || '').trim()
   const normalizedOld = (oldKeyword || '').trim()
@@ -319,194 +325,32 @@ watch(() => props.filters, () => {
   void performSearch(false)
 }, { deep: true })
 
-async function performSearch(loadMore: boolean): Promise<boolean> {
+async function runAllSearch(targetPage: number, isLoadMore: boolean, updateUrl = false): Promise<boolean> {
   const keyword = props.keyword.trim()
   if (!keyword)
     return false
-
-  const isLoadMore = paginationMode.value === 'scroll' && loadMore
-
-  if (isLoadMore && (isLoading.value || exhausted.value))
-    return false
-
-  if (!isLoadMore)
-    setExhausted(false)
-
-  const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
   const previousLength = getCurrentResultLength()
-
-  const success = await search({
+  return search({
     searchType: 'all',
     keyword,
     page: targetPage,
     pageSize: 30,
     context: targetPage > 1 ? context.value : '',
     webRollPage: targetPage,
-  })
+  }, async (response, isCurrent) => {
+    const rawData = response.data
+    if (!rawData)
+      return false
+    const incomingSections = Array.isArray(rawData?.result) ? rawData.result : []
 
-  if (!success || !lastResponse.value?.data)
-    return false
-
-  const rawData = lastResponse.value.data
-
-  const incomingSections = Array.isArray(rawData?.result) ? rawData.result : []
-
-  if (isLoadMore && results.value) {
-    results.value = mergeSections(results.value, rawData, {
-      appendVideoOnly: paginationMode.value === 'scroll',
-    })
-  }
-  else {
-    results.value = rawData
-  }
-
-  if (Array.isArray(results.value?.result)) {
-    const userSection = results.value.result.find((s: any) => s?.result_type === 'bili_user')
-    if (userSection && Array.isArray(userSection.data)) {
-      const mids = userSection.data.map((u: any) => u.mid).filter(Boolean)
-      await batchQueryUserRelations(mids)
-    }
-  }
-
-  const fallbackLength = incomingSections.reduce((sum: number, section: any) => {
-    if (Array.isArray(section?.data))
-      return sum + section.data.length
-    return sum
-  }, 0)
-  extractPagination(rawData, fallbackLength)
-  updatePage(targetPage)
-  setHasMore(paginationHasMore.value)
-
-  if (paginationMode.value === 'scroll') {
-    const finalLength = getCurrentResultLength()
-    const newItems = Math.max(finalLength - previousLength, 0)
-    const incomingLength = incomingSections.reduce((sum: number, section: any) => {
-      if (isLoadMore && section?.result_type !== 'video')
-        return sum
-      if (Array.isArray(section?.data))
-        return sum + section.data.length
-      return sum
-    }, 0)
-
-    if (incomingLength === 0)
-      setExhausted(true)
-    else if (newItems <= 0 && targetPage >= totalPages.value)
-      setExhausted(true)
-
-    if (isLoadMore)
-      await handleLoadMoreCompletion(haveScrollbar)
-  }
-
-  return true
-}
-
-function mergeSections(previous: any, incoming: any, options: { appendVideoOnly?: boolean } = {}) {
-  const prevSections = Array.isArray(previous?.result) ? previous.result : []
-  const incomingSections = Array.isArray(incoming?.result) ? incoming.result : []
-  const sectionMap = new Map<string, any>()
-
-  prevSections.forEach((section: any) => {
-    const data = Array.isArray(section?.data)
-      ? dedupeSectionItems(section.result_type, [...section.data])
-      : section.data
-    sectionMap.set(section.result_type, { ...section, data })
-  })
-
-  incomingSections.forEach((section: any) => {
-    if (options.appendVideoOnly && section?.result_type !== 'video')
-      return
-
-    const data = Array.isArray(section?.data) ? [...section.data] : []
-    if (sectionMap.has(section.result_type)) {
-      const existing = sectionMap.get(section.result_type)
-      const merged = Array.isArray(existing?.data) ? [...existing.data, ...data] : data
-      sectionMap.set(section.result_type, {
-        ...existing,
-        ...section,
-        data: dedupeSectionItems(section.result_type, merged),
+    if (isLoadMore && results.value) {
+      results.value = mergeSections(results.value, rawData, {
+        appendVideoOnly: paginationMode.value === 'scroll',
       })
     }
     else {
-      sectionMap.set(section.result_type, {
-        ...section,
-        data: dedupeSectionItems(section.result_type, data),
-      })
+      results.value = rawData
     }
-  })
-
-  const resultSections = Array.from(sectionMap.values()).map((section: any) => {
-    if (section?.result_type === 'video' && Array.isArray(section.data)) {
-      return { ...section, data: applyVideoTimeFilter(section.data) }
-    }
-    return section
-  })
-
-  return { ...previous, ...incoming, result: resultSections }
-}
-
-function dedupeSectionItems(type: string, items: any[]): any[] {
-  const seen = new Set<string>()
-  const result: any[] = []
-  items.forEach((item) => {
-    const key = getSectionItemKey(type, item)
-    if (!seen.has(key)) {
-      seen.add(key)
-      result.push(item)
-    }
-  })
-  return result
-}
-
-function getSectionItemKey(type: string, item: any): string {
-  switch (type) {
-    case 'video':
-      return String(item?.aid ?? item?.id ?? item?.bvid ?? JSON.stringify(item))
-    case 'media_bangumi':
-    case 'media_ft':
-      return String(item?.season_id ?? item?.media_id ?? item?.id ?? JSON.stringify(item))
-    case 'bili_user':
-      return String(item?.mid ?? JSON.stringify(item))
-    case 'article':
-      return String(item?.id ?? JSON.stringify(item))
-    case 'live_room':
-      return String(item?.roomid ?? item?.id ?? JSON.stringify(item))
-    default:
-      return String(item?.id ?? item?.aid ?? item?.bvid ?? item?.mid ?? JSON.stringify(item))
-  }
-}
-
-async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
-  if (paginationMode.value !== 'pagination')
-    return false
-
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
-
-  if (scrollToTop) {
-    handleBackToTop()
-    await nextTick()
-  }
-
-  isPageChanging.value = true
-  try {
-    const success = await search({
-      searchType: 'all',
-      keyword,
-      page,
-      pageSize: 30,
-      context: page > 1 ? context.value : '',
-      webRollPage: page,
-    })
-
-    if (!success || !lastResponse.value?.data)
-      return false
-
-    const rawData = lastResponse.value.data
-
-    const incomingSections = Array.isArray(rawData?.result) ? rawData.result : []
-
-    results.value = rawData
 
     if (Array.isArray(results.value?.result)) {
       const userSection = results.value.result.find((s: any) => s?.result_type === 'bili_user')
@@ -516,21 +360,60 @@ async function handlePageChange(page: number, updateUrl = true, scrollToTop = tr
       }
     }
 
+    if (!isCurrent())
+      return false
+
     const fallbackLength = incomingSections.reduce((sum: number, section: any) => {
       if (Array.isArray(section?.data))
         return sum + section.data.length
       return sum
     }, 0)
     extractPagination(rawData, fallbackLength)
-    updatePage(page)
+    updatePage(targetPage)
     setHasMore(paginationHasMore.value)
+
+    if (paginationMode.value === 'scroll') {
+      const finalLength = getCurrentResultLength()
+      const newItems = Math.max(finalLength - previousLength, 0)
+      const incomingLength = incomingSections.reduce((sum: number, section: any) => {
+        if (isLoadMore && section?.result_type !== 'video')
+          return sum
+        if (Array.isArray(section?.data))
+          return sum + section.data.length
+        return sum
+      }, 0)
+
+      if (incomingLength === 0)
+        setExhausted(true)
+      else if (newItems <= 0 && targetPage >= totalPages.value)
+        setExhausted(true)
+    }
+
     if (updateUrl)
-      emit('updatePage', page)
+      emit('updatePage', targetPage)
     return true
-  }
-  finally {
-    isPageChanging.value = false
-  }
+  })
+}
+
+async function performSearch(loadMore: boolean): Promise<boolean> {
+  const isLoadMore = paginationMode.value === 'scroll' && loadMore
+  if (isLoadMore && (isLoading.value || exhausted.value))
+    return false
+  if (!isLoadMore)
+    setExhausted(false)
+  const page = isLoadMore ? getNextPage(true) : (currentPage.value || getNextPage(false))
+  const success = await runAllSearch(page, isLoadMore)
+  if (success && isLoadMore)
+    await handleLoadMoreCompletion(haveScrollbar)
+  return success
+}
+
+function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
+  if (paginationMode.value !== 'pagination' || !props.keyword.trim())
+    return Promise.resolve(false)
+  if (scrollToTop)
+    handleBackToTop()
+  return runAllSearch(page, false, updateUrl)
 }
 
 function refreshCurrentPage() {
@@ -549,6 +432,7 @@ async function restorePage(page: number): Promise<boolean> {
 }
 
 function resetAll() {
+  resetUserRelations()
   resetSearch()
   resetPagination()
   resetLoadMore()
@@ -575,6 +459,7 @@ defineExpose({
   resumeLoadMore,
   userRelations,
   updateUserRelation,
+  reset: resetUserRelations,
   currentPage,
   totalPages,
   refreshCurrentPage,
@@ -903,7 +788,7 @@ defineExpose({
       v-if="paginationMode === 'pagination'"
       :current-page="currentPage"
       :total-pages="totalPages"
-      :loading="isPageChanging"
+      :loading="isLoading"
       :disabled="isLoading"
       @change="handlePageChange"
     />

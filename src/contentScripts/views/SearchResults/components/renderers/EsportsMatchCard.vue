@@ -99,7 +99,7 @@ const awayScore = computed(() => {
     <div class="card-content">
       <!-- 赛事标题和状态 -->
       <div class="header-container">
-        <div text="base" font-bold class="season-title keep-one-line">
+        <div class="season-title keep-one-line">
           {{ contest.season.title }}
         </div>
         <!-- 状态标签 -->
@@ -194,6 +194,9 @@ const awayScore = computed(() => {
 }
 
 .season-title {
+  font-size: var(--bew-font-size-title);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-line-height-title);
   color: var(--bew-text-1);
   flex: 1;
   min-width: 0;
@@ -208,7 +211,6 @@ const awayScore = computed(() => {
   line-height: var(--bew-line-height-control);
   white-space: nowrap;
   flex-shrink: 0;
-  line-height: 1.2;
 
   &.finished {
     background: var(--bew-fill-2);

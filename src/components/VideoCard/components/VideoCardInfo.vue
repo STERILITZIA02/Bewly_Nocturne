@@ -23,6 +23,7 @@ interface Props {
   titleStyle: Record<string, string | number>
   authorFontSizeClass: string
   metaFontSizeClass: string
+  metaStyle: Record<string, string>
   highlightTags: string[]
   hideAuthor?: boolean
 }
@@ -95,6 +96,7 @@ const content = computed(() => {
 <template>
   <div
     :style="{
+      ...metaStyle,
       width: horizontal ? '100%' : 'unset',
       marginTop: horizontal ? '0' : content.isModernLayout ? '0.5rem' : '1rem',
     }"
@@ -118,12 +120,13 @@ const content = computed(() => {
             class="keep-two-lines" :class="[
               content.isModernLayout ? 'w-[calc(100%-40px)]' : 'w-full',
               content.isModernLayout ? 'video-card-title' : '',
+              titleFontSizeClass,
             ]"
             :style="titleStyle"
-            text="overflow-ellipsis $bew-text-1 lg"
+            text="overflow-ellipsis $bew-text-1"
           >
             <!-- 使用与真实文本相同的行高填充，考虑 line-height -->
-            <div w-full bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em; margin-bottom: calc((var(--bew-title-line-height, 1.35) - 1) * 0.5em);" />
+            <div w-full bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em; margin-bottom: calc(var(--bew-title-line-height) - 1em);" />
             <div w="3/4" bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em;" />
           </div>
           <div
@@ -538,7 +541,7 @@ const content = computed(() => {
                   {{ video.view ? $t('common.view', { count: numFormatter(video.view) }, video.view) : `${numFormatter(video.viewStr || '0')}${$t('common.viewWithoutNum')}` }}
                 </span>
                 <template v-if="content.showLegacyDanmakuCount">
-                  <span v-if="content.showLegacyViewCount" text-xs font-light mx-4px>•</span>
+                  <span v-if="content.showLegacyViewCount" text-xs font-normal mx-4px>•</span>
                   <span>{{ video.danmaku ? $t('common.danmaku', { count: numFormatter(video.danmaku) }, video.danmaku) : `${numFormatter(video.danmakuStr || '0')}${$t('common.danmakuWithoutNum')}` }}</span>
                 </template>
                 <br>
@@ -603,7 +606,7 @@ const content = computed(() => {
 <style lang="scss" scoped>
 .video-card-title {
   &.keep-two-lines {
-    min-height: calc(var(--bew-title-line-height, 1.35) * 2em);
+    min-height: calc(var(--bew-title-line-height) * 2);
   }
   &.keep-one-line {
     min-height: auto;
@@ -632,9 +635,21 @@ const content = computed(() => {
   --uno: "opacity-100";
 }
 
+.video-card-meta,
+.video-card-meta-row {
+  --bew-video-card-meta-row-height: max(
+    var(--bew-space-6),
+    calc(var(--bew-meta-line-height) + var(--bew-base-font-size) * 0.24)
+  );
+}
+
 .video-card-meta {
-  min-height: 46px;
-  max-height: 46px;
+  --bew-video-card-meta-height: max(
+    var(--bew-video-card-meta-min-height),
+    calc(var(--bew-author-line-height) + var(--bew-video-card-meta-row-height) + var(--bew-space-1))
+  );
+  min-height: var(--bew-video-card-meta-height);
+  max-height: var(--bew-video-card-meta-height);
   overflow: hidden;
 }
 
@@ -652,8 +667,8 @@ const content = computed(() => {
   flex-wrap: nowrap;
   overflow: hidden;
   max-width: 100%;
-  min-height: 24px;
-  max-height: 24px;
+  min-height: var(--bew-video-card-meta-row-height);
+  max-height: var(--bew-video-card-meta-row-height);
 }
 
 .video-card-meta-row > a,

@@ -166,9 +166,10 @@ const metaText = computed(() => {
 }
 
 .title {
+  font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-semibold);
   color: var(--bew-text-1);
-  line-height: var(--bew-line-height-body);
+  line-height: var(--bew-line-height-title);
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;

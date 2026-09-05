@@ -888,7 +888,9 @@ function handleClearKeyword() {
     z-index: var(--bew-z-topbar-interaction);
 
     .title {
-      --uno: "text-lg font-500";
+      font-size: var(--bew-font-size-title);
+      font-weight: var(--bew-font-weight-semibold);
+      line-height: var(--bew-line-height-title);
     }
 
     .hot-search-section {

@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Empty from '~/components/Empty.vue'
@@ -40,14 +40,12 @@ const { haveScrollbar, handleBackToTop } = useBewlyApp()
 // 分页模式：scroll 滚动加载，pagination 翻页
 const paginationMode = computed(() => settings.value.searchResultsPaginationMode)
 
-// 翻页加载状态
-const isPageChanging = ref(false)
-
 // 用户关系管理
 const {
   userRelations,
   batchQueryUserRelations,
   updateUserRelation,
+  reset: resetUserRelations,
 } = useUserRelations()
 
 // 搜索请求管理
@@ -55,7 +53,7 @@ const {
   isLoading,
   error,
   results,
-  lastResponse,
+  requestScope,
   search,
   reset: resetSearch,
 } = useSearchRequest<any>('live')
@@ -182,369 +180,129 @@ onMounted(() => {
 })
 
 // 监听筛选条件变化
-watch(() => props.filters, (newFilters, oldFilters) => {
+watch([
+  () => props.filters.subCategory,
+  () => props.filters.roomOrder,
+  () => props.filters.userOrder,
+], ([category, roomOrder, userOrder], [previousCategory, previousRoomOrder, previousUserOrder]) => {
   if (!props.keyword.trim())
     return
-
-  // 如果只是排序变化，特殊处理
-  if (newFilters.subCategory === oldFilters?.subCategory) {
-    // 只刷新对应的部分
-    if (newFilters.subCategory === 'all' && newFilters.roomOrder !== oldFilters?.roomOrder) {
-      // 全部模式下，只刷新直播间排序
-      void refreshLiveRoomsOnly()
-      return
-    }
+  if (category === 'all' && category === previousCategory && roomOrder !== previousRoomOrder && userOrder === previousUserOrder) {
+    void refreshLiveRoomsOnly()
+    return
   }
-
-  // 其他情况完全重新搜索
   resetAll()
   void performSearch(false)
-}, { deep: true })
+})
 
-async function performSearch(loadMore: boolean): Promise<boolean> {
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return false
+watch(requestScope, () => {
+  resetAll()
+  if (props.keyword.trim())
+    void performSearch(false)
+})
 
-  // 分页模式下不支持 loadMore
-  const isLoadMore = paginationMode.value === 'scroll' && loadMore
-
-  if (isLoadMore && (isLoading.value || exhausted.value))
-    return false
-
-  if (!isLoadMore)
-    setExhausted(false)
-
-  // 滚动模式下：loadMore 使用 getNextPage，否则从第1页开始
-  // 翻页模式下：使用 currentPage（如果有设置）或从第1页开始
-  const targetPage = isLoadMore ? getNextPage(true) : (currentPage.value > 0 ? currentPage.value : getNextPage(false))
-  const previousLength = getCurrentResultLength()
-
-  let success = false
-
-  // 根据子分类选择不同的API
-  if (props.filters.subCategory === 'live_room') {
-    // 仅搜索直播间
-    success = await search({
-      searchType: 'live_room',
-      keyword,
-      page: targetPage,
-      pageSize: 30,
-      filters: {
-        order: props.filters.roomOrder,
-      },
-    })
-  }
-  else if (props.filters.subCategory === 'live_user') {
-    // 仅搜索主播
-    success = await search({
-      searchType: 'live_user',
-      keyword,
-      page: targetPage,
-      pageSize: 30,
-      filters: {
-        order: props.filters.userOrder,
-      },
-    })
-  }
-  else {
-    // 全部（默认使用live类型，包含直播间和主播）
-    success = await search({
-      searchType: 'live',
-      keyword,
-      page: targetPage,
-      pageSize: 30,
-      filters: {
-        order: props.filters.roomOrder,
-      },
-    })
-  }
-
-  if (!success || !lastResponse.value?.data)
-    return false
-
-  const rawData = lastResponse.value.data
-
-  // 根据不同的子分类处理数据
-  // 统一返回 { result: { live_room: [...], live_user: [...] } } 格式
-  if (props.filters.subCategory === 'live_user') {
-    // 主播搜索：尝试嵌套结构和扁平结构
-    const incomingList = Array.isArray(rawData?.result?.live_user)
-      ? rawData.result.live_user
-      : (Array.isArray(rawData?.result) ? rawData.result : [])
-    const prevUsers = Array.isArray(results.value?.result?.live_user) ? results.value.result.live_user : []
-
-    const mergedUsers = isLoadMore
-      ? dedupeByKey([...prevUsers, ...incomingList], item => String(item?.mid ?? JSON.stringify(item)))
-      : incomingList
-
-    results.value = {
-      result: {
-        live_room: [],
-        live_user: mergedUsers,
-      },
-    }
-
-    // 批量查询用户关系
-    const mids = mergedUsers.map((u: any) => u.mid).filter(Boolean)
-    await batchQueryUserRelations(mids)
-
-    // 提取分页信息
-    extractPagination(rawData, incomingList.length)
-    liveUserTotalResults.value = totalResults.value
-  }
-  else if (props.filters.subCategory === 'live_room') {
-    // 直播间搜索：尝试嵌套结构和扁平结构
-    const incomingList = Array.isArray(rawData?.result?.live_room)
-      ? rawData.result.live_room
-      : (Array.isArray(rawData?.result) ? rawData.result : [])
-    const prevRooms = Array.isArray(results.value?.result?.live_room) ? results.value.result.live_room : []
-
-    const mergedRooms = isLoadMore
-      ? dedupeByKey([...prevRooms, ...incomingList], item => String(item?.roomid ?? item?.id ?? JSON.stringify(item)))
-      : incomingList
-
-    results.value = {
-      result: {
-        live_room: mergedRooms,
-        live_user: [],
-      },
-    }
-
-    // 提取分页信息
-    extractPagination(rawData, incomingList.length)
-    liveRoomTotalResults.value = totalResults.value
-  }
-  else {
-    // 全部模式：包含直播间和主播
-    const incomingRooms = Array.isArray(rawData?.result?.live_room) ? rawData.result.live_room : []
-    const incomingUsers = Array.isArray(rawData?.result?.live_user) ? rawData.result.live_user : []
-
-    const prevRooms = Array.isArray(results.value?.result?.live_room) ? results.value.result.live_room : []
-    const prevUsers = Array.isArray(results.value?.result?.live_user) ? results.value.result.live_user : []
-
-    const mergedRooms = isLoadMore
-      ? dedupeByKey([...prevRooms, ...incomingRooms], item => String(item?.roomid ?? item?.id ?? JSON.stringify(item)))
-      : incomingRooms
-
-    const mergedUsers = isLoadMore
-      ? prevUsers
-      : incomingUsers
-
-    results.value = {
-      result: {
-        live_room: mergedRooms,
-        live_user: mergedUsers,
-      },
-    }
-
-    // 批量查询主播关系
-    const mids = mergedUsers.map((u: any) => u.mid).filter(Boolean)
-    await batchQueryUserRelations(mids)
-
-    // 提取分页信息（基于直播间）
-    const liveRoomTotal = Number(rawData?.pageinfo?.live_room?.total)
-      || Number(rawData?.pageinfo?.live_room?.numResults)
-      || incomingRooms.length
-      || 0
-
-    const liveUserTotal = Number(rawData?.pageinfo?.live_user?.total)
-      || Number(rawData?.pageinfo?.live_user?.numResults)
-      || incomingUsers.length
-      || 0
-
-    liveRoomTotalResults.value = liveRoomTotal
-    liveUserTotalResults.value = liveUserTotal
-
-    // 使用直播间的分页信息
-    // 注意：只传递直播间相关的分页信息，避免使用原始数据中可能包含的错误总页数
-    extractPagination({
-      total: liveRoomTotal,
-      numResults: liveRoomTotal,
-      pagesize: rawData?.pagesize || 30,
-      pageinfo: rawData?.pageinfo?.live_room,
-    }, incomingRooms.length)
-  }
-
-  updatePage(targetPage)
-  setHasMore(paginationHasMore.value)
-
-  // 检查是否已耗尽（仅在滚动模式下）
-  if (paginationMode.value === 'scroll') {
-    const finalLength = getCurrentResultLength()
-    const newItems = Math.max(finalLength - previousLength, 0)
-
-    const incomingLength = props.filters.subCategory === 'all'
-      ? (Array.isArray(rawData?.result?.live_room) ? rawData.result.live_room.length : 0)
-      : (Array.isArray(rawData?.result) ? rawData.result.length : 0)
-
-    if (incomingLength === 0) {
-      setExhausted(true)
-    }
-    else if (newItems <= 0 && targetPage >= totalPages.value) {
-      setExhausted(true)
-    }
-
-    // 处理加载完成
-    if (isLoadMore)
-      await handleLoadMoreCompletion(haveScrollbar)
-  }
-
-  return true
+function getIncomingLiveResults(rawData: any, category: LiveSearchFilters['subCategory']) {
+  const result = rawData?.result
+  const rooms = category === 'live_user'
+    ? []
+    : Array.isArray(result?.live_room)
+      ? result.live_room
+      : category === 'live_room' && Array.isArray(result) ? result : []
+  const users = category === 'live_room'
+    ? []
+    : Array.isArray(result?.live_user)
+      ? result.live_user
+      : category === 'live_user' && Array.isArray(result) ? result : []
+  return { rooms, users }
 }
 
-// 翻页模式的页码切换
-async function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
-  if (paginationMode.value !== 'pagination')
-    return false
-
+async function runLiveSearch(targetPage: number, isLoadMore: boolean, preserveUsers = false, updateUrl = false): Promise<boolean> {
   const keyword = props.keyword.trim()
   if (!keyword)
     return false
-
-  // 先滚动到顶部
-  if (scrollToTop) {
-    handleBackToTop()
-    await nextTick()
-  }
-
-  isPageChanging.value = true
-  try {
-    let success = false
-
-    // 根据子分类选择不同的API
-    if (props.filters.subCategory === 'live_room') {
-    // 仅搜索直播间
-      success = await search({
-        searchType: 'live_room',
-        keyword,
-        page,
-        pageSize: 30,
-        filters: {
-          order: props.filters.roomOrder,
-        },
-      })
-    }
-    else if (props.filters.subCategory === 'live_user') {
-    // 仅搜索主播
-      success = await search({
-        searchType: 'live_user',
-        keyword,
-        page,
-        pageSize: 30,
-        filters: {
-          order: props.filters.userOrder,
-        },
-      })
-    }
-    else {
-    // 全部（默认使用live类型，包含直播间和主播）
-      success = await search({
-        searchType: 'live',
-        keyword,
-        page,
-        pageSize: 30,
-        filters: {
-          order: props.filters.roomOrder,
-        },
-      })
-    }
-
-    if (!success || !lastResponse.value?.data)
+  const category = props.filters.subCategory
+  const previousLength = getCurrentResultLength()
+  return search({
+    searchType: category === 'all' ? 'live' : category,
+    keyword,
+    page: targetPage,
+    pageSize: 30,
+    filters: { order: category === 'live_user' ? props.filters.userOrder : props.filters.roomOrder },
+  }, async (response, isCurrent) => {
+    const rawData = response.data
+    if (!rawData)
+      return false
+    const { rooms, users } = getIncomingLiveResults(rawData, category)
+    const previousRooms = liveRoomList.value
+    const previousUsers = liveUserList.value
+    const mergedRooms = isLoadMore
+      ? dedupeByKey([...previousRooms, ...rooms], item => String(item?.roomid ?? item?.id ?? JSON.stringify(item)))
+      : rooms
+    const mergedUsers = preserveUsers || (isLoadMore && category === 'all')
+      ? previousUsers
+      : isLoadMore
+        ? dedupeByKey([...previousUsers, ...users], item => String(item?.mid ?? JSON.stringify(item)))
+        : users
+    results.value = { result: { live_room: mergedRooms, live_user: mergedUsers } }
+    if (category !== 'live_room' && !preserveUsers)
+      await batchQueryUserRelations(mergedUsers.map((user: any) => user.mid).filter(Boolean))
+    if (!isCurrent())
       return false
 
-    const rawData = lastResponse.value.data
-
-    // 根据不同的子分类处理数据
-    // 统一返回 { result: { live_room: [...], live_user: [...] } } 格式
-    if (props.filters.subCategory === 'live_user') {
-    // 主播搜索：尝试嵌套结构和扁平结构
-      const incomingList = Array.isArray(rawData?.result?.live_user)
-        ? rawData.result.live_user
-        : (Array.isArray(rawData?.result) ? rawData.result : [])
-
-      results.value = {
-        result: {
-          live_room: [],
-          live_user: incomingList,
-        },
+    const incomingLength = category === 'live_user' ? users.length : rooms.length
+    if (category === 'all') {
+      const roomTotal = Number(rawData.pageinfo?.live_room?.total)
+        || Number(rawData.pageinfo?.live_room?.numResults) || rooms.length
+      liveRoomTotalResults.value = roomTotal
+      if (!preserveUsers) {
+        liveUserTotalResults.value = Number(rawData.pageinfo?.live_user?.total)
+          || Number(rawData.pageinfo?.live_user?.numResults) || users.length
       }
-
-      // 批量查询用户关系
-      const mids = incomingList.map((u: any) => u.mid).filter(Boolean)
-      await batchQueryUserRelations(mids)
-
-      // 提取分页信息
-      extractPagination(rawData, incomingList.length)
-      liveUserTotalResults.value = totalResults.value
-    }
-    else if (props.filters.subCategory === 'live_room') {
-    // 直播间搜索：尝试嵌套结构和扁平结构
-      const incomingList = Array.isArray(rawData?.result?.live_room)
-        ? rawData.result.live_room
-        : (Array.isArray(rawData?.result) ? rawData.result : [])
-
-      results.value = {
-        result: {
-          live_room: incomingList,
-          live_user: [],
-        },
-      }
-
-      // 提取分页信息
-      extractPagination(rawData, incomingList.length)
-      liveRoomTotalResults.value = totalResults.value
+      extractPagination({
+        total: roomTotal,
+        numResults: roomTotal,
+        pagesize: rawData.pagesize || 30,
+        pageinfo: rawData.pageinfo?.live_room,
+      }, rooms.length)
     }
     else {
-    // 全部模式：包含直播间和主播
-      const incomingRooms = Array.isArray(rawData?.result?.live_room) ? rawData.result.live_room : []
-      const incomingUsers = Array.isArray(rawData?.result?.live_user) ? rawData.result.live_user : []
-
-      results.value = {
-        result: {
-          live_room: incomingRooms,
-          live_user: incomingUsers,
-        },
-      }
-
-      // 批量查询主播关系
-      const mids = incomingUsers.map((u: any) => u.mid).filter(Boolean)
-      await batchQueryUserRelations(mids)
-
-      // 提取分页信息（基于直播间）
-      const liveRoomTotal = Number(rawData?.pageinfo?.live_room?.total)
-        || Number(rawData?.pageinfo?.live_room?.numResults)
-        || incomingRooms.length
-        || 0
-
-      const liveUserTotal = Number(rawData?.pageinfo?.live_user?.total)
-        || Number(rawData?.pageinfo?.live_user?.numResults)
-        || incomingUsers.length
-        || 0
-
-      liveRoomTotalResults.value = liveRoomTotal
-      liveUserTotalResults.value = liveUserTotal
-
-      // 使用直播间的分页信息
-      // 注意：只传递直播间相关的分页信息，避免使用原始数据中可能包含的错误总页数
-      extractPagination({
-        total: liveRoomTotal,
-        numResults: liveRoomTotal,
-        pagesize: rawData?.pagesize || 30,
-        pageinfo: rawData?.pageinfo?.live_room,
-      }, incomingRooms.length)
+      extractPagination(rawData, incomingLength)
+      if (category === 'live_user')
+        liveUserTotalResults.value = totalResults.value
+      else
+        liveRoomTotalResults.value = totalResults.value
     }
-
-    updatePage(page)
+    updatePage(targetPage)
     setHasMore(paginationHasMore.value)
-
+    if (paginationMode.value === 'scroll') {
+      const newItems = Math.max(getCurrentResultLength() - previousLength, 0)
+      setExhausted(incomingLength === 0 || (newItems <= 0 && targetPage >= totalPages.value))
+    }
     if (updateUrl)
-      emit('updatePage', page)
+      emit('updatePage', targetPage)
     return true
-  }
-  finally {
-    isPageChanging.value = false
-  }
+  })
+}
+
+async function performSearch(loadMore: boolean): Promise<boolean> {
+  const isLoadMore = paginationMode.value === 'scroll' && loadMore
+  if (isLoadMore && (isLoading.value || exhausted.value))
+    return false
+  if (!isLoadMore)
+    setExhausted(false)
+  const page = isLoadMore ? getNextPage(true) : (currentPage.value || getNextPage(false))
+  const success = await runLiveSearch(page, isLoadMore)
+  if (success && isLoadMore)
+    await handleLoadMoreCompletion(haveScrollbar)
+  return success
+}
+
+function handlePageChange(page: number, updateUrl = true, scrollToTop = true): Promise<boolean> {
+  if (paginationMode.value !== 'pagination' || !props.keyword.trim())
+    return Promise.resolve(false)
+  if (scrollToTop)
+    handleBackToTop()
+  return runLiveSearch(page, false, false, updateUrl)
 }
 
 function refreshCurrentPage() {
@@ -552,69 +310,24 @@ function refreshCurrentPage() {
     ? handlePageChange(currentPage.value, false, false)
     : performSearch(false)
 }
+
 async function restorePage(page: number): Promise<boolean> {
   if (page === currentPage.value)
     return true
   if (paginationMode.value === 'pagination')
     return handlePageChange(page, false, false)
-
   updatePage(page)
   return performSearch(false)
 }
 
-// 只刷新直播间数据（用于"全部"模式下改变排序）
-async function refreshLiveRoomsOnly() {
-  const keyword = props.keyword.trim()
-  if (!keyword)
-    return
-
-  isLoading.value = true
-
-  try {
-    const success = await search({
-      searchType: 'live',
-      keyword,
-      page: 1,
-      pageSize: 30,
-      filters: {
-        order: props.filters.roomOrder,
-      },
-    })
-
-    if (!success || !lastResponse.value)
-      return
-    const response = lastResponse.value
-
-    const newLiveRooms = Array.isArray(response.data?.result?.live_room)
-      ? response.data.result.live_room
-      : []
-
-    // 只更新 live_room 部分，保留 live_user
-    if (results.value?.result) {
-      results.value = {
-        result: {
-          ...results.value.result,
-          live_room: newLiveRooms,
-        },
-      }
-    }
-
-    // 更新直播间相关的分页信息
-    const liveRoomTotal = Number(response.data?.pageinfo?.live_room?.total)
-      || Number(response.data?.pageinfo?.live_room?.numResults)
-      || newLiveRooms.length
-      || 0
-    liveRoomTotalResults.value = liveRoomTotal
-  }
-  catch (err) {
-    console.error('Refresh live rooms error:', err)
-  }
-  finally {
-    isLoading.value = false
-  }
+function refreshLiveRoomsOnly(): Promise<boolean> {
+  resetPagination()
+  resetLoadMore()
+  return runLiveSearch(1, false, true, true)
 }
 
 function resetAll() {
+  resetUserRelations()
   resetSearch()
   resetPagination()
   resetLoadMore()
@@ -773,7 +486,7 @@ defineExpose({
       v-if="paginationMode === 'pagination'"
       :current-page="currentPage"
       :total-pages="totalPages"
-      :loading="isPageChanging"
+      :loading="isLoading"
       :disabled="isLoading"
       @change="handlePageChange"
     />

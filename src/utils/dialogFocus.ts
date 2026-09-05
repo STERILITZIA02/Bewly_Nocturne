@@ -57,7 +57,7 @@ export function moveDialogTabFocus(dialog: HTMLElement, panel: HTMLElement, even
   // Tab out of a Select's teleported list resumes next to its trigger, rather
   // than following the portal's unrelated position under the app root.
   const active = portal
-    ? focusable.find(element => element.getAttribute('aria-controls') === portal.id)
+    ? focusable.find(element => element.getAttribute('aria-controls') === portal.id) ?? getDeepActiveElement(dialog.ownerDocument)
     : getDeepActiveElement(dialog.ownerDocument)
   const index = focusable.indexOf(active as HTMLElement)
   const nextIndex = event.shiftKey
@@ -65,4 +65,17 @@ export function moveDialogTabFocus(dialog: HTMLElement, panel: HTMLElement, even
     : (index < 0 || index === focusable.length - 1 ? 0 : index + 1)
   event.preventDefault()
   ;(focusable[nextIndex] || panel).focus({ preventScroll: true })
+}
+
+export function restoreOverlayFocus(overlay: HTMLElement | null, target: HTMLElement | null) {
+  if (!target?.isConnected || target.closest('[inert]'))
+    return
+  const topDialog = getTopDialog(target.getRootNode() as ParentNode)
+  if (topDialog && !topDialog.contains(target))
+    return
+  const active = getDeepActiveElement(target.ownerDocument)
+  const otherModal = active?.closest('[aria-modal="true"]')
+  if (otherModal && !overlay?.contains(otherModal) && !otherModal.contains(target))
+    return
+  target.focus({ preventScroll: true })
 }

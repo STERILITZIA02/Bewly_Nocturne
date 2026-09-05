@@ -49,7 +49,7 @@ const { mainAppRef } = useBewlyApp()
 const { t } = useI18n()
 
 // 使用共享样式（避免每个卡片重复计算）
-const { titleFontSizeClass, titleStyle, authorFontSizeClass, metaFontSizeClass } = useVideoCardSharedStyles()
+const { titleFontSizeClass, titleStyle, authorFontSizeClass, metaFontSizeClass, metaStyle } = useVideoCardSharedStyles()
 
 // Modern layout specific: cover stats calculation
 const statSuffixPattern = /(播放量?|观看|弹幕|点赞|views?|likes?|danmakus?|comments?|回复|人气|转发|分享|[次条人])/gi
@@ -418,6 +418,7 @@ provide('getVideoType', () => props.type!)
           :more-btn="moreBtn"
           :show-video-options="logic.showVideoOptions.value"
           :title-font-size-class="titleFontSizeClass"
+          :meta-style="metaStyle"
           :title-style="titleStyle"
           :author-font-size-class="authorFontSizeClass"
           :meta-font-size-class="metaFontSizeClass"
@@ -529,19 +530,6 @@ provide('getVideoType', () => props.type!)
 
 .vertical-card-cover {
   --uno: "w-full";
-}
-
-.bew-title-auto {
-  /* 使用固定的响应式字体大小，不使用容器查询单位 */
-  font-size: clamp(var(--bew-font-size-control), 2.5vw, var(--bew-font-size-heading));
-  line-height: clamp(1.15, 1.35, 1.5);
-}
-
-.video-card-title {
-  min-height: calc(var(--bew-title-line-height, 1.35) * 2em);
-  /* 确保两行高度固定 */
-  max-height: calc(var(--bew-title-line-height, 1.35) * 2em);
-  overflow: hidden;
 }
 
 /* 使用固定样式变量 */

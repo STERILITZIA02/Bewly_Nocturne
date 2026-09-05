@@ -10,6 +10,7 @@ import {
   PLAYBACK_RATE_STEP,
   resolvePlaybackRateChange,
 } from '~/utils/playbackRate'
+import { readVideoPageMetadata } from '~/utils/videoMetadataBridge'
 
 const _videoClassTag = {
   danmuBtn:
@@ -512,12 +513,12 @@ export function detectVideoType(): VideoType {
   }
 
   // 合集也可包含多 P 稿件；当前稿件的真实分 P 数优先于右侧合集 DOM。
-  const app = document.querySelector('#app') as (HTMLElement & {
-    __vue__?: { videoData?: { pages?: unknown[], videos?: number }, isSection?: boolean }
-  }) | null
-  const videoData = app?.__vue__?.videoData
-  if ((videoData?.pages?.length ?? videoData?.videos ?? 0) > 1)
-    return VideoType.MULTIPART
+  const metadata = readVideoPageMetadata()
+  if (metadata) {
+    if (metadata.pageCount > 1)
+      return VideoType.MULTIPART
+    return metadata.isCollection ? VideoType.COLLECTION : VideoType.RECOMMEND
+  }
 
   // 页面数据尚未可读时，分别检查分 P 和合集结构。
   const hasViewMode = !!document.querySelector('.view-mode')
@@ -534,7 +535,7 @@ export function detectVideoType(): VideoType {
     return VideoType.MULTIPART
 
   // 如果以上都不是，检测是否为合集视频（通过DOM）
-  if (app?.__vue__?.isSection || isCollectionVideo()) {
+  if (isCollectionVideo()) {
     return VideoType.COLLECTION
   }
 

@@ -92,8 +92,7 @@ function formatDate(timestamp: number | string | undefined) {
       <!-- 标题 -->
       <h3
         class="article-title"
-        text="base $bew-text-1"
-        font-medium
+        text="$bew-text-1"
         line-clamp-2
         mb-2
       >
@@ -176,6 +175,12 @@ function formatDate(timestamp: number | string | undefined) {
 </template>
 
 <style lang="scss" scoped>
+.article-title {
+  font-size: var(--bew-font-size-title);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-line-height-title);
+}
+
 .article-card {
   text-decoration: none;
   color: inherit;

@@ -26,7 +26,7 @@ import ConversationHistorySkeleton from './ConversationHistorySkeleton.vue'
 import ConversationTimelineSkeleton from './ConversationTimelineSkeleton.vue'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
-import type { PrivateMessagesController as PrivateMessageWriteController } from './experimental/usePrivateMessageWrites'
+import type { PrivateMessageWritesController as PrivateMessageWriteController } from './experimental/privateMessageWriteTypes'
 import type { DisplayPrivateMessage } from './privateMessage'
 import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
@@ -670,7 +670,6 @@ async function sendDraft() {
     }
     return
   }
-  await props.controller.refreshLatest(talkerId.value)
   await nextTick()
   scrollToLatest()
   emit('sendConfirmed', talkerId.value)
@@ -681,7 +680,6 @@ function selectImage(file: File) {
 }
 
 async function finishConfirmedWrite() {
-  await props.controller.refreshLatest(talkerId.value)
   await nextTick()
   scrollToLatest()
   emit('sendConfirmed', talkerId.value)

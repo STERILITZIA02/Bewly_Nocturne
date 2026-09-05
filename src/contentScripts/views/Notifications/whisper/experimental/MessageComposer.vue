@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import PrivateEmotePicker from '../PrivateEmotePicker.vue'
 import type { PrivateEmote, PrivateEmotePackage } from '../privateMessageRenderers'
 import { insertPrivateEmoteToken } from '../privateMessageRenderers'
-import type { PrivateImageDraftState } from './usePrivateMessageWrites'
+import type { PrivateImageDraftState } from './privateMessageWriteTypes'
 
 const props = defineProps<{
   modelValue: string

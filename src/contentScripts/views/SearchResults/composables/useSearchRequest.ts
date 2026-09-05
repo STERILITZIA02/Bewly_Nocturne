@@ -1,22 +1,15 @@
-import { onScopeDispose, ref } from 'vue'
+import type { Ref } from 'vue'
+import { computed, onScopeDispose, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import type { SearchRequest } from '~/constants/searchApi'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { requestSearch } from '~/utils/searchRequest'
 
 import type { SearchCategory } from '../types'
-
-export interface SearchRequestState<T = any> {
-  isLoading: boolean
-  error: string
-  results: T
-  totalResults: number
-  totalPages: number
-  context: string
-}
 
 /**
  * 搜索请求的通用 composable
@@ -27,35 +20,38 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
   const topBarStore = useTopBarStore()
   const isLoading = ref(false)
   const error = ref('')
-  const results = ref<T | null>(null)
-  const totalResults = ref(0)
-  const totalPages = ref(0)
-  const context = ref('')
-  const lastResponse = ref<any>(null)
+  // Search responses contain plain data; keep deep reactivity and the caller's data type.
+  const results = ref<T | null>(null) as Ref<T | null>
 
   // 请求令牌，用于取消过期的请求
   let activeRequestToken: symbol | null = null
   let disposed = false
+  let contextInvalidated = false
 
   function getRequestScope(): string {
-    if (settings.value.depersonalizeSearchResults)
-      return 'anonymous'
-
     const accountId = resolveAuthenticatedAccountId(
       topBarStore.isLogin,
       topBarStore.userInfo.mid,
     )
-    return accountId === null
+    const account = accountId === null
       ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
       : `account:${accountId}`
+    return `${settings.value.depersonalizeSearchResults ? 'anonymous' : 'personalized'}:${account}`
   }
+  const requestScope = computed(getRequestScope)
 
   /**
    * 执行搜索请求
    * @param request 类型化搜索请求
    * @returns 搜索是否成功
    */
-  async function search(request: SearchRequest): Promise<boolean> {
+  async function search(
+    request: SearchRequest,
+    processResponse: (response: any, isCurrent: () => boolean) => boolean | Promise<boolean>,
+  ): Promise<boolean> {
+    if (disposed || contextInvalidated)
+      return false
+
     if (!request.keyword.trim()) {
       activeRequestToken = null
       isLoading.value = false
@@ -68,14 +64,15 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     error.value = ''
 
     const requestToken = Symbol('search-request')
-    const requestScope = getRequestScope()
+    const scope = getRequestScope()
     activeRequestToken = requestToken
+    const isCurrent = () => !disposed && activeRequestToken === requestToken && getRequestScope() === scope
 
     try {
       const response = await requestSearch(request)
 
       // 检查请求是否已过期
-      if (disposed || activeRequestToken !== requestToken || getRequestScope() !== requestScope)
+      if (!isCurrent())
         return false
 
       if (!response || response.code !== 0) {
@@ -83,13 +80,19 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
         return false
       }
 
-      // 保存响应数据供外部使用
-      lastResponse.value = response
-
-      return true
+      const processed = await processResponse(response, isCurrent)
+      return processed && isCurrent()
     }
     catch (err) {
-      if (disposed || activeRequestToken !== requestToken || getRequestScope() !== requestScope)
+      // Even a superseded request can prove that this entire extension world is stale.
+      if (isExtensionContextInvalidatedError(err)) {
+        contextInvalidated = true
+        activeRequestToken = null
+        isLoading.value = false
+        error.value = ''
+        return false
+      }
+      if (!isCurrent())
         return false
       console.error(`Search error for ${category}:`, err)
       error.value = t('search.errors.exception')
@@ -107,11 +110,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
   function reset() {
     isLoading.value = false
     results.value = null
-    totalResults.value = 0
-    totalPages.value = 0
-    context.value = ''
     error.value = ''
-    lastResponse.value = null
     activeRequestToken = null
   }
 
@@ -124,10 +123,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     isLoading,
     error,
     results,
-    totalResults,
-    totalPages,
-    context,
-    lastResponse,
+    requestScope,
     search,
     reset,
   }

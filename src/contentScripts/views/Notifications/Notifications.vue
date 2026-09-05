@@ -38,11 +38,9 @@ import {
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
 import { createSystemNotificationPageFetcher } from './systemNotificationFeed'
-import { useExperimentalPrivateMessageWrites } from './whisper/experimental/usePrivateMessageWrites'
 import type { TransientPrivateRecipient } from './whisper/privateRecipientSearch'
 import type { DisplayPrivateSession } from './whisper/privateSession'
-import type { PrivateMessagesDependencies } from './whisper/usePrivateMessages'
-import { usePrivateMessages } from './whisper/usePrivateMessages'
+import { usePrivateMessageWorkspace } from './whisper/usePrivateMessageWorkspace'
 import { usePrivateRecipientSearch } from './whisper/usePrivateRecipientSearch'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
 import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
@@ -88,24 +86,12 @@ const privateRecipientSearch = usePrivateRecipientSearch(currentMid, {
 const activePrivateTalkerId = computed(() => (
   transientPrivateRecipient.value?.mid || privateSessions.selectedTalkerId.value
 ))
-const privateMessageDependencies: PrivateMessagesDependencies = {
+const privateMessageWorkspace = usePrivateMessageWorkspace(currentMid, activePrivateTalkerId, {
   fetchMessages: options => api.privateMessage.getPrivateMessages(options),
   ackSession: options => api.privateMessage.ackPrivateSession(options),
   getCsrf: getCSRF,
   getMaxCachedConversations: () => settings.value.maxCachedPrivateConversations,
   getMaxMessagesPerConversation: () => settings.value.maxPrivateMessagesPerConversation,
-  markSessionRead: privateSessions.markSessionRead,
-  syncUnread: () => topBarStore.syncUnreadMessageState(),
-}
-const privateMessages = usePrivateMessages(
-  currentMid,
-  activePrivateTalkerId,
-  privateMessageDependencies,
-)
-const privateMessageWrites = useExperimentalPrivateMessageWrites(currentMid, activePrivateTalkerId, {
-  fetchMessages: options => api.privateMessage.getPrivateMessages(options),
-  ackSession: options => api.privateMessage.ackPrivateSession(options),
-  getCsrf: getCSRF,
   markSessionRead: privateSessions.markSessionRead,
   syncUnread: () => topBarStore.syncUnreadMessageState(),
   sendMessage: options => api.privateMessage.sendPrivateMessage(options),
@@ -116,6 +102,7 @@ const privateMessageWrites = useExperimentalPrivateMessageWrites(currentMid, act
   markSessionSent: privateSessions.markSessionSent,
   refreshSessions: privateSessions.refresh,
 })
+const { messages: privateMessages, writes: privateMessageWrites } = privateMessageWorkspace
 const fetchSystemNotificationPage = createSystemNotificationPageFetcher({
   fetchUnified: () => api.notification.getSystemUnifiedNotifications(),
   fetchUser: () => api.notification.getSystemUserNotifications(),
@@ -458,8 +445,7 @@ function deactivatePage() {
     return
 
   isPageActive.value = false
-  privateMessageWrites.releaseImages(activePrivateTalkerId.value || undefined)
-  privateMessages.release()
+  privateMessageWorkspace.release()
   clearRefreshHandler()
   clearNotificationViewFromRoute()
 }
@@ -475,7 +461,9 @@ watch(
     settings.value.maxCachedPrivateConversations,
     settings.value.maxPrivateMessagesPerConversation,
   ] as const,
-  () => privateMessages.enforceCacheLimits(),
+  () => {
+    privateMessageWorkspace.enforceCacheLimits()
+  },
 )
 watch(currentMid, (nextMid, previousMid) => {
   if (!previousMid || nextMid === previousMid)
@@ -503,8 +491,7 @@ onMounted(() => {
 onActivated(activatePage)
 onDeactivated(deactivatePage)
 onBeforeUnmount(() => {
-  privateMessageWrites?.dispose()
-  privateMessages.dispose()
+  privateMessageWorkspace.dispose()
   deactivatePage()
   clearRefreshHandler()
   clearNotificationViewFromRoute()

@@ -34,6 +34,8 @@ common:
   no_data: No data available
   no_more_content: No more content now, owari da
   load_failed: Failed to load. Please try again later.
+  image_load_failed: Image failed to load
+  operation_failed: Operation failed. Please try again later.
   load_more: Load more
   operation:
     add: Add

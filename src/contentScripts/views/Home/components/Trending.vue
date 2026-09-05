@@ -70,6 +70,7 @@ function transformTrendingVideo(item: VideoElement): Video | undefined {
   const videoItem = item.item
   return {
     id: Number(videoItem.aid),
+    aid: videoItem.aid,
     duration: videoItem.duration,
     title: decodeHtmlEntities(videoItem.title),
     desc: decodeHtmlEntities(videoItem.desc),

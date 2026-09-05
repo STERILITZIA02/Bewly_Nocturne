@@ -8,6 +8,7 @@ import { compileScript, parse } from 'vue/compiler-sfc'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
+import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://www.bilibili.com/', pretendToBeVisual: true })
 const savedGlobals = new Map()
@@ -41,10 +42,12 @@ const keyboard = await import('../src/utils/dialogKeyboard')
 const { computeAnchoredFloatingMenuPosition } = await import('../src/utils/floatingMenu')
 const { mergeWatchLaterItemsByAid } = await import('../src/utils/watchLaterList')
 const { createSelectOptionKey } = await import('../src/utils/selectOptionKey')
+const fieldLabels = await import('../src/components/formFieldLabel')
 const { useLoadMore } = await import('../src/contentScripts/views/SearchResults/composables/useLoadMore')
 const r = value => ({ value })
 const checks = []
 const check = (name, run) => checks.push({ name, run })
+registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -333,13 +336,14 @@ async function compileComponent(file, mocks = {}) {
   const source = compileScript(descriptor, { id: file, inlineTemplate: true }).content
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
   const exports = {}
-  const modules = { vue: Vue, '@vueuse/core': VueUse, ...mocks }
+  const modules = { vue: Vue, '@vueuse/core': VueUse, '~/components/formFieldLabel': fieldLabels, ...mocks }
   vm.runInNewContext(code, {
     ...Vue,
     exports,
     window,
     document,
     HTMLElement,
+    HTMLImageElement: window.HTMLImageElement,
     Element,
     ShadowRoot,
     Node,
@@ -369,6 +373,34 @@ check('P2-08 real Input composition-confirm Enter does not submit', async () => 
   assert.equal(enters, 0)
   input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
   assert.equal(enters, 1)
+  app.unmount()
+  host.remove()
+})
+
+check('settings controls reference their visible field title without changing the layout', async () => {
+  const SettingsItem = await compileComponent('../src/components/Settings/components/SettingsItem.vue')
+  const Radio = await compileComponent('../src/components/Radio.vue')
+  const Input = await compileComponent('../src/components/Input.vue')
+  const Slider = await compileComponent('../src/components/Slider.vue', {
+    '~/utils/range': await import('../src/utils/range'),
+  })
+  const host = document.body.appendChild(document.createElement('div'))
+  const title = Vue.ref('Setting title')
+  const app = Vue.createApp({ setup: () => () => Vue.h('div', [
+    Vue.h(SettingsItem, { title: title.value }, () => Vue.h(Radio, { modelValue: false })),
+    Vue.h(SettingsItem, { title: 'Text setting' }, () => Vue.h(Input, { modelValue: 'value' })),
+    Vue.h(SettingsItem, { title: 'Range setting' }, () => Vue.h(Slider, { modelValue: 50, label: '50' })),
+    Vue.h(SettingsItem, { title: 'Parent' }, () => Vue.h(Radio, { modelValue: false, label: 'Explicit label' })),
+  ]) })
+  app.mount(host)
+  const inputs = [...host.querySelectorAll('input')]
+  const labels = inputs.slice(0, 3).map(input => document.getElementById(input.getAttribute('aria-labelledby')))
+  assert.deepEqual(labels.map(label => label.textContent), ['Setting title', 'Text setting', 'Range setting'])
+  assert.equal(new Set(labels.map(label => label.id)).size, 3)
+  assert.equal(inputs[3].hasAttribute('aria-labelledby'), false, 'an explicit Radio label keeps precedence')
+  title.value = 'Translated title'
+  await Vue.nextTick()
+  assert.equal(labels[0].textContent, 'Translated title')
   app.unmount()
   host.remove()
 })
