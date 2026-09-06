@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 
 import type { VideoCardDisplayData } from '~/components/VideoCard/types'
+import type { HomeTabSnapshot } from '~/composables/useHomeTabState'
 import type { RecommendationMode } from '~/logic'
 import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import type { Item as VideoItem } from '~/models/video/forYou'
@@ -20,73 +21,32 @@ export interface AppVideoElement {
 
 export interface ForYouState {
   accountId: AccountId
-
-  // 视频列表数据 - 最关键的状态
-  videoList: VideoElement[]
-  appVideoList: AppVideoElement[]
-
-  // 基础页面状态
-  refreshIdx: number
-  noMoreContent: boolean
-
-  // 滚动位置
-  scrollTop?: number
-
-  // 是否已初始化
-  isInitialized: boolean
-
-  // 推荐模式，用于避免跨模式恢复旧推荐流
-  recommendationMode?: RecommendationMode
+  recommendationMode: RecommendationMode
+  scrollTop: number
+  snapshot: HomeTabSnapshot
 }
 
 export const useForYouStore = defineStore('forYou', () => {
-  const state = ref<ForYouState>({
-    accountId: null,
-    // 视频列表数据
-    videoList: [],
-    appVideoList: [],
-
-    // 基础页面状态
-    refreshIdx: 1,
-    noMoreContent: false,
-
-    // 是否已初始化
-    isInitialized: false,
-    recommendationMode: undefined,
-  })
-
-  // 简化的API - 只保存和恢复完整状态
+  // Only Home hands off one inactive snapshot. Active views consume it, never mirror it.
+  const state = shallowRef<ForYouState | null>(null)
   const saveCompleteState = (newState: ForYouState) => {
-    state.value = { ...newState }
+    state.value = newState
   }
-
-  const getCompleteState = (): ForYouState => {
-    return { ...state.value }
+  const takeCompleteState = (accountId: AccountId, mode: RecommendationMode) => {
+    if (state.value?.accountId !== accountId || state.value.recommendationMode !== mode)
+      return null
+    const saved = state.value
+    state.value = null
+    return saved
   }
-
-  // 重置状态
   const resetState = () => {
-    state.value = {
-      accountId: null,
-      videoList: [],
-      appVideoList: [],
-      refreshIdx: 1,
-      noMoreContent: false,
-      isInitialized: false,
-      recommendationMode: undefined,
-    }
-  }
-
-  // 标记为已初始化
-  const markAsInitialized = () => {
-    state.value.isInitialized = true
+    state.value = null
   }
 
   return {
     state: readonly(state),
     saveCompleteState,
-    getCompleteState,
+    takeCompleteState,
     resetState,
-    markAsInitialized,
   }
 })

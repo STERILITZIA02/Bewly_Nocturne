@@ -10,9 +10,9 @@ import type { MomentCommentItem } from '../src/components/MomentCard/commentUtil
 import { normalizeMomentComment, normalizeMomentCommentPage, normalizeMomentCommentRepliesPage } from '../src/components/MomentCard/commentUtils'
 import {
   buildMomentForwardRequest,
+  createMomentDisclosureCache,
   createMomentForwardSubmissionController,
   createMomentTopicSearchController,
-  getCachedMomentDisclosure,
   insertMomentForwardEmoji,
   normalizeForwardCount,
   normalizeMomentForwardEmotePackages,
@@ -20,7 +20,6 @@ import {
   parseMomentForwardTokens,
   resolveForwardCountAfterSuccess,
   serializeMomentForwardContents,
-  setCachedMomentDisclosure,
   toggleMomentDisclosure,
 } from '../src/components/MomentCard/momentForwardContent'
 import type { DisplayMoment } from '../src/components/MomentCard/types'
@@ -81,6 +80,7 @@ import {
 import { normalizeVideoCardCoverRatio } from '../src/utils/videoCardLayout'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
 import { playbackFunctions, readPlaybackSource } from './playbackSource'
+import { FAVORITES_SOURCE_FILES, FOR_YOU_SOURCE_FILES, MOMENTS_SOURCE_FILES, readSourceFiles } from './refactoredSources'
 import { verifyFunctionalAuditFixes } from './verify-functional-audit-fixes'
 import { verifyMomentPlayerPorts } from './verify-moment-player-ports'
 
@@ -1616,10 +1616,15 @@ async function verifyMomentForwardContracts() {
   assert.equal(toggleMomentDisclosure('forward', 'forward'), 'none')
   assert.equal(toggleMomentDisclosure('comments', 'forward'), 'forward')
   assert.equal(toggleMomentDisclosure('forward', 'comments'), 'comments')
-  setCachedMomentDisclosure('test:moment', 'forward')
-  assert.equal(getCachedMomentDisclosure('test:moment'), 'forward')
-  setCachedMomentDisclosure('test:moment', 'none')
-  assert.equal(getCachedMomentDisclosure('test:moment'), 'none')
+  const disclosures = createMomentDisclosureCache()
+  disclosures.set('test:moment', 'forward')
+  assert.equal(disclosures.get('test:moment'), 'forward')
+  assert.equal(createMomentDisclosureCache().get('test:moment'), 'none')
+  disclosures.set('test:moment', 'none')
+  assert.equal(disclosures.get('test:moment'), 'none')
+  disclosures.set('test:moment', 'comments')
+  disclosures.clear()
+  assert.equal(disclosures.get('test:moment'), 'none')
 }
 
 async function verifyComponentContracts() {
@@ -1671,7 +1676,7 @@ async function verifyComponentContracts() {
     readFile(`${root}/src/components/MomentCard/MomentForwardTopicPicker.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/momentForwardContent.ts`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/useMomentForwardComposer.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/background/messageListeners/api/moment.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Notifications/whisper/ConversationView.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/bewlyBootOverlay.ts`, 'utf8'),
@@ -1817,10 +1822,10 @@ async function verifyComponentContracts() {
   assert.match(momentsPage, /forwardCount: resolveMomentForwardCount\(id, raw\.modules\?\.module_stat\?\.forward\?\.count\)/)
   assert.match(momentsPage, /function handleMomentForwardCountChange/)
   assert.match(momentsPage, /forwardCountOverrides/)
-  assert.match(momentsPage, /canonicalMoment/)
-  assert.match(momentsPage, /momentColumns\.value = momentColumns\.value\.map\(updateItems\)/)
-  assert.match(momentsPage, /momentsFeedCache\.value = \{[\s\S]{0,120}entries: nextEntries/)
-  assert.match(momentsPage, /saveMomentsCache\(filter, entry\)/)
+  assert.match(momentsPage, /const updated = feedReader\.updateMoment\(id, patch\)/)
+  assert.match(momentsPage, /momentLayout\.updateMoment\(updated\)/)
+  assert.match(momentsPage, /feedCache\.updateMoment\(id/)
+  assert.match(momentsPage, /applyMomentPatch\(momentId, \{ forwardCount \}\)/)
   assert.match(momentsPage, /@forward-count-change="handleMomentForwardCountChange"/)
   assert.match(momentsPage, /bewly-moment-image-viewer-open/)
   assert.match(momentsPage, /moment-image-viewer__nav:focus-visible/)
@@ -1890,12 +1895,12 @@ async function verifyAuthCloudMomentsContracts() {
     readFile(`${root}/src/components/TopBar/components/pops/UserPanelPop.vue`, 'utf8'),
     readFile(`${root}/src/components/Dialog.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/Home/Home.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
     readFile(`${root}/src/utils/settingsCloudSyncProtocol.ts`, 'utf8'),
     readFile(`${root}/src/background/settingsCloudSync.ts`, 'utf8'),
     readFile(`${root}/src/background/settingsStorageCoordinator.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/About/About.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/features/opusDetailDrawerLayout.ts`, 'utf8'),
   ])
@@ -1958,10 +1963,11 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(moments, /if \(isExtensionContextInvalidatedError\(error\)\) \{[\s\S]{0,180}momentsExtensionContextInvalidated = true[\s\S]{0,180}return/)
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /isInitialLoading\.value = moments\.value\.length === 0/)
-  assert.match(moments, /likingMomentRequests\.get\(moment\.id\) === requestId/)
+  assert.match(moments, /likingMomentRequests\.get\(moment\.id\)\?\.requestId === requestId/)
   assert.match(moments, /const cursorAdvanced = nextOffset !== requestOffset/)
   assert.match(moments, /if \(!pageApplied && previousPagination\)/)
-  assert.match(moments, /isMomentMutationCurrent\(requestAccountId\)/)
+  assert.match(moments, /const owner = lifetime\.capture\(\)/)
+  assert.match(moments, /if \(!owner\.isCurrent\(\)\)/)
   assert.match(moments, /shouldContinueIframeFocusRetry/)
   assert.doesNotMatch(moments, /setInterval/)
   assert.match(momentCard, /role="button"[\s\S]{0,180}@click="handleForwardOriginClick"/)
@@ -1997,7 +2003,7 @@ async function verifyLoadingContracts() {
     readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Home/Home.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/WatchLater/WatchLater.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Favorites/FavoritesPage.vue`, 'utf8'),
+    readSourceFiles(FAVORITES_SOURCE_FILES),
     readFile(`${root}/src/contentScripts/views/Anime/Anime.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Anime/components/AnimeTimeTable.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/pages/ArticleSearchPage.vue`, 'utf8'),
@@ -2011,7 +2017,7 @@ async function verifyLoadingContracts() {
     assert.doesNotMatch(source, /loading\.gif|<img\b/)
   }
   assert.match(app, /loadingComponent: PageAsyncLoading/)
-  assert.match(app, /watch\([\s\S]{0,160}\(\) => activatedPage\.value,[\s\S]{0,180}handleReachBottom\.value = undefined/)
+  assert.match(app, /watch\(\[\s+activatedPage,[\s\S]*?\], \(\) => \{\s+cancelPendingRefreshScroll\(\)\s+handlePageRefresh\.value = undefined\s+handleReachBottom\.value = undefined\s+handleUndoRefresh\.value = undefined\s+handleForwardRefresh\.value = undefined/)
   assert.match(home, /loadingComponent: PageAsyncLoading/)
   assert.match(watchLater, /<VideoListSkeleton[\s\S]{0,180}:action-count="3"/)
   assert.match(favorites, /<ArticleCardSkeleton/)
@@ -2047,7 +2053,7 @@ async function verifyP1Contracts() {
     readFile(`${root}/src/utils/authProvider.ts`, 'utf8'),
     readFile(`${root}/src/background/index.ts`, 'utf8'),
     readFile(`${root}/src/manifest.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
     readFile(`${root}/src/components/VideoCard/VideoCardContextMenu/components/DislikeDialog.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/composables/useVideoCardLogic.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/components/ShadowCurveEditor.vue`, 'utf8'),
@@ -2584,7 +2590,8 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf('/* B 站表情面板可能向上展开'),
   )
   assert.doesNotMatch(danmakuPanelStyles, /max-height: none !important/)
-  assert.doesNotMatch(widescreen, /--bew-comment-replies-(?:mask-bg|loading-animation)/)
+  assert.doesNotMatch(widescreen, /--bew-comment-replies-loading-animation/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-comment \{\s*--bew-comment-replies-mask-bg: color-mix\(in oklab, var\(--bewly-widescreen-sidebar-bg\), transparent 15%\)/)
   assert.match(widescreen, /danmakuFocusable:/)
   const danmakuSelectorSection = widescreen.slice(
     widescreen.indexOf('danmaku: ['),
@@ -3410,7 +3417,7 @@ async function verifyUpstreamReliabilityContracts() {
     readFile(`${root}/src/utils/searchNavigation.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/SearchResults.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/TopBar/components/pops/MomentsPop.vue`, 'utf8'),
     readFile(`${root}/src/components/TopBar/components/pops/FavoritesPop.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCardGrid.vue`, 'utf8'),
@@ -3885,7 +3892,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/utils/escapePriority.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/features/iframePhotoViewerDetector.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/utils/photoViewer.ts`, 'utf8'),
     readFile(`${root}/src/utils/randomPlay.ts`, 'utf8'),
@@ -3930,16 +3937,16 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(moments, /upListResizeObserver\.observe\(upListTrackRef\.value\)/)
   assert.match(moments, /gridClientWidth = gridRef\.value\?\.clientWidth \|\| mainRailWidth/)
   assert.match(moments, /:style="momentsGridStyle"/)
-  assert.match(moments, /resolveVirtualSpacerSize\(topPad, gap\)/)
+  assert.match(moments, /resolveVirtualSpacerSize\(metrics\.offset\(first\), gap\)/)
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /reapplyMomentFiltersFromCache\([\s\S]*maybeLoadMoreNearBottom\(\)/)
   assert.match(moments, /let attachedScrollViewport: HTMLElement \| null = null/)
   assert.match(moments, /attachedScrollViewport\?\.removeEventListener\('scroll', handleViewportScroll\)/)
-  assert.match(moments, /const MOMENTS_MEMORY_MAX_ITEMS = MOMENTS_CACHE_MAX_ITEMS/)
-  assert.match(moments, /moments\.value\.length >= MOMENTS_MEMORY_MAX_ITEMS/)
-  assert.match(moments, /function releasePreviewVideoElement\(video: HTMLVideoElement\)/)
-  assert.match(moments, /video\.srcObject = null/)
-  assert.match(moments, /video\.removeAttribute\('srcset'\)/)
+  assert.doesNotMatch(moments, /MOMENTS_MEMORY_MAX_ITEMS/)
+  assert.match(moments, /entry\.items\.slice\(-MOMENTS_CACHE_MAX_ITEMS\)/)
+  assert.match(moments, /function releaseMediaElement\(media: HTMLMediaElement\)/)
+  assert.match(moments, /media\.srcObject = null/)
+  assert.match(moments, /media\.removeAttribute\('srcset'\)/)
   assert.match(moments, /detailIframeRef\.value = null[\s\S]{0,120}detailFrameGeneration \+= 1/)
   assert.match(moments, /iframe !== detailIframeRef\.value[\s\S]{0,160}detailIframeGenerations\.get\(iframe\) !== detailFrameGeneration/)
   assert.match(momentCard, /moment-card--supports-wide-layout/)
@@ -3962,13 +3969,13 @@ async function verifyIncrementalCorrectnessContracts() {
     readFile(`${root}/src/background/contentScriptRefreshPrompt.ts`, 'utf8'),
     readFile(`${root}/vite.config.content.ts`, 'utf8'),
     readFile(`${root}/src/manifest.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Favorites/FavoritesPage.vue`, 'utf8'),
+    readSourceFiles(FAVORITES_SOURCE_FILES),
     readFile(`${root}/src/background/messageListeners/api/favorite.ts`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-CN.yml`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-TW.yml`, 'utf8'),
     readFile(`${root}/src/_locales/jyut.yml`, 'utf8'),
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readPlaybackSource(),
     readFile(`${root}/src/inject/index.ts`, 'utf8'),
@@ -3997,17 +4004,17 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(webAccessibleResources, /assets\/\*/)
 
   assert.match(favoriteApi, /editFavoriteFolder:[\s\S]{0,260}privacy: 0/)
-  assert.match(favorites, /const submittedFolderPublic = editFolderPublic\.value/)
-  assert.match(favorites, /privacy: getFavoriteFolderPrivacy\(submittedFolderPublic\)/)
-  assert.match(favorites, /folder\.attr = getFavoriteFolderEditedAttr\(folder\.attr, submittedFolderPublic\)/)
+  assert.match(favorites, /const isPublic = editFolderPublic\.value/)
+  assert.match(favorites, /privacy: getFavoriteFolderPrivacy\(isPublic\)/)
+  assert.match(favorites, /folder\.attr = getFavoriteFolderEditedAttr\(folder\.attr, isPublic\)/)
   assert.match(favorites, /SettingsSegmentedControl/)
   assert.match(favorites, /if \(folderId === defaultFolderId\.value\)[\s\S]{0,80}return/)
   const editFolderRequest = favorites.slice(
     favorites.indexOf('async function handleEditFolderConfirm'),
     favorites.indexOf('async function deleteFolders'),
   )
-  assert.ok(editFolderRequest.indexOf('if (res.code !== 0)') < editFolderRequest.indexOf('folder.title = title'))
-  assert.match(editFolderRequest, /catch \(error\)[\s\S]{0,180}edit_folder_failed/)
+  assert.match(editFolderRequest, /const result = await writes\.execute\(transaction\)[\s\S]*if \(!result\)\s+return[\s\S]*data\.applyFolderEdit/)
+  assert.match(favorites, /onError: \(\) => toast\.error\(t\('common.operation_failed'\)\)/)
   for (const locale of [cmnCn, cmnTw, jyut, en]) {
     assert.match(locale, /edit_folder:/)
     assert.match(locale, /folder_visibility:/)
@@ -4020,9 +4027,10 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(momentCard, /data-user-profile-spmid-follow="dynamic\.profile\.click"/)
   assert.match(momentCard, /@mouseenter="requestNativeUserProfile"/)
   assert.match(momentCard, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
-  assert.match(moments, /const hostFollowStatePromise = reset && requestHostMid/)
+  assert.match(moments, /const hostFollowStatePromise = request\.reset && requestHostMid/)
   assert.match(moments, /api\.user\.getRelations\(\{ fids: requestHostMid \}\)/)
-  assert.match(moments, /if \(followState !== 'unfollowed'\)[\s\S]{0,220}handleUpFilterChange\(''\)/)
+  assert.match(moments, /return result\.state !== 'unfollowed'/)
+  assert.match(moments, /if \('hostUnfollowed' in response\) \{\s+handleUpFilterChange\(''\)/)
   assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid })') < moments.indexOf('api.moment.getMomentsByUp({'))
   assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed,[\s\S]{0,120}\.bili-dialog-m,[\s\S]{0,120}\.video-share-popover[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
   assert.match(widescreen, /const NATIVE_ACTION_OVERLAY_SELECTOR = \[[\s\S]{0,120}'\.bili-dialog-m',[\s\S]{0,80}'\.video-share-popover'/)
@@ -4044,7 +4052,7 @@ async function verifyAuditRemediationContracts() {
   const [widescreen, nativeAdapter, moments, settingsComponent, anime, subscribedSeries, messaging, contentScript, viteConfig, globals] = await Promise.all([
     readPlaybackSource(),
     readFile(`${root}/src/utils/bewlyWidescreenNative.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/Settings/Settings.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Anime/Anime.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Home/components/SubscribedSeries.vue`, 'utf8'),
@@ -4167,8 +4175,8 @@ async function verifyP4CleanupContracts() {
 async function verifySemanticPortContracts() {
   const root = process.cwd()
   const [forYou, moments, momentCard, momentTypes, cmnCn, cmnTw, jyut, en] = await Promise.all([
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/types.ts`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-CN.yml`, 'utf8'),

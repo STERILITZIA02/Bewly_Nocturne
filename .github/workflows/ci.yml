@@ -75,17 +75,9 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' }}
         run: pnpm run typecheck
 
-      - name: Verify targeted fixes
+      - name: Test
         if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm run verify:targeted-fixes
-
-      - name: Verify private messages
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm run verify:private-message
-
-      - name: Verify notifications
-        if: ${{ matrix.os == 'ubuntu-latest' }}
-        run: pnpm run verify:notifications
+        run: pnpm test
 
       - name: Knip
         if: ${{ matrix.os == 'ubuntu-latest' }}

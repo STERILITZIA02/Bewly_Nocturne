@@ -2,6 +2,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import type { GridLayoutType } from '~/logic'
 import type { PreciousItem, PreciousResult } from '~/models/video/precious'
 import api from '~/utils/api'
@@ -22,33 +23,21 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const videoList = ref<VideoElement[]>([])
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
-const noMoreContent = ref<boolean>(true) // 入站必刷没有分页
-const requestFailed = ref<boolean>(false)
+const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 入站必刷没有分页
+const requestFailed = tabState.ref<boolean>('requestFailed', false)
 const { handlePageRefresh } = useBewlyApp()
 let requestGeneration = 0
-let reloadAfterActivation = false
 
 onMounted(() => {
-  initData()
   initPageAction()
-})
-
-onActivated(() => {
-  if (reloadAfterActivation) {
-    reloadAfterActivation = false
+  if (!tabState.restored)
     void initData()
-  }
-  initPageAction()
-})
-
-onDeactivated(() => {
-  reloadAfterActivation = isLoading.value
-  requestGeneration++
-  if (isLoading.value)
-    emit('afterLoading')
-  isLoading.value = false
+  else if (!hasSettled.value)
+    void getData(requestGeneration)
 })
 
 onUnmounted(() => {
@@ -56,6 +45,9 @@ onUnmounted(() => {
 })
 
 async function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   videoList.value = []
   requestFailed.value = false
@@ -69,7 +61,8 @@ async function getData(generation: number) {
     await getPreciousVideos(generation)
   }
   finally {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -77,6 +70,8 @@ async function getData(generation: number) {
 }
 
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   handlePageRefresh.value = async () => {
     initData()
   }
@@ -113,7 +108,7 @@ async function getPreciousVideos(generation: number) {
   try {
     const response: PreciousResult = await api.ranking.getPreciousVideos()
 
-    if (generation !== requestGeneration)
+    if (!tabState.isCurrent() || generation !== requestGeneration)
       return
 
     if (response.code === 0) {
@@ -130,13 +125,13 @@ async function getPreciousVideos(generation: number) {
     }
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       console.error('[Precious] Failed to load videos:', error)
     }
   }
   finally {
-    if (generation === requestGeneration)
+    if (tabState.isCurrent() && generation === requestGeneration)
       videoList.value = videoList.value.filter(video => video.item)
   }
 }

@@ -10,6 +10,7 @@ import { createMomentCommentSessionCache } from '../src/utils/momentCommentSessi
 import { readMomentCommentTarget, resolveMomentCommentTarget } from '../src/utils/momentCommentTarget'
 import { createMomentCommentThreadController } from '../src/utils/momentCommentThread'
 import { createMomentVoteController, createMomentVoteState, isMomentVoteEnded, normalizeMomentVote } from '../src/utils/momentVote'
+import { MOMENTS_SOURCE_FILES } from './refactoredSources'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { verifyMomentCommentLifecycle } from './verify-moment-comment-lifecycle'
 
@@ -299,14 +300,14 @@ async function verifyCommentSessions() {
 
 async function verifyDetailGeometryAndWiring() {
   const selectedMoment = { value: { id: 'fixture', images: ['fixture.jpg'], imageRatios: [1] } }
-  const layout = await loadSourceFunctions('../src/contentScripts/views/Moments/Moments.vue', [
+  const layout = await loadSourceFunctions(MOMENTS_SOURCE_FILES, [
     'detailViewportGutter',
     'detailViewportSafeWidth',
     'detailReferenceHeight',
     'detailSafeHeight',
     'detailPlayerMaxWidth',
     'opusDetailCommentPageRatio',
-    'opusDetailLongImageRatio',
+    'getMomentImageRatio',
     'opusDetailMaxWidth',
     'opusSplitDetailBaseWidth',
     'opusDetailMaxHeight',
@@ -320,6 +321,7 @@ async function verifyDetailGeometryAndWiring() {
     MIN_SINGLE_IMAGE_RATIO: 0.5,
     selectedMoment,
     coverRatios: {},
+    getImageRatio: (moment: unknown) => layout.getMomentImageRatio(moment),
     isPlayerMoment: () => false,
     computed: (getter: () => unknown) => ({ get value() { return getter() } }),
   })

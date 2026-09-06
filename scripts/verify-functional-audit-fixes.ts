@@ -104,6 +104,9 @@ async function verifyRankingLoadingEvents() {
   const events: string[] = []
   const completions: Array<(value: unknown) => void> = []
   const context = await loadSourceFunctions('../src/contentScripts/views/Home/components/Ranking.vue', ['getRankingPgc'], {
+    tabState: { isCurrent: () => true },
+    hasSettled: { value: false },
+    requestFailed: { value: false },
     requestGeneration: 1,
     isLoading: { value: false },
     PgcList: [],

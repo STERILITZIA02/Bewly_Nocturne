@@ -133,7 +133,6 @@ settings:
   category_appearance_desc: Configure frosted glass, theme colors, fonts, custom styles, and page style adaptation.
   breadcrumb: Settings location
   group_interaction_layout: Interaction & Layout
-  group_memory_saving: Memory Saving
   home_grid_layout: Home video layout
   home_grid_layout_desc: Choose an adaptive grid or a one- or two-column list for Home videos.
   group_watch_later_layout: Watch Later Layout
@@ -300,6 +299,25 @@ settings:
   topbar_display_settings_desc: Adjust how the top bar behaves across pages and interaction modes.
   group_navigation: Dock & Sidebar
   group_dock: Dock
+  group_dock_glass: Dock glass material
+  dock_liquid_glass: Liquid glass
+  dock_liquid_glass_desc: Replace the frosted surface of the Dock and its separate action buttons with liquid glass while keeping their layout and collapse behavior. Follows the global setting to disable frosted glass and the top bar gradient.
+  dock_liquid_glass_paused: Frosted glass is disabled globally. The Dock currently uses a solid surface.
+  dock_glass_mode: Refraction style
+  dock_glass_mode_standard: Standard
+  dock_glass_mode_polar: Rounded
+  dock_glass_mode_prominent: Vivid
+  dock_glass_refraction: Refraction strength
+  dock_glass_blur: Blur amount
+  dock_glass_blur_desc: Set the Dock glass background blur radius independently. 0 px is the clearest.
+  dock_glass_tint: Glass tint
+  dock_glass_tint_theme: Match light/dark
+  dock_glass_tint_custom: Custom
+  dock_glass_tint_color: Custom glass color
+  dock_glass_tint_opacity: Tint opacity
+  dock_glass_tint_opacity_desc: 0% is untinted glass and 100% is a solid tint. Color covers the entire glass outline evenly.
+  dock_glass_dispersion: Edge color dispersion
+  dock_glass_saturation: Color saturation
   group_sidebar: Sidebar
   group_sidebar_desc: >-
     Located on the right or left side of pages other than the homepage,
@@ -600,9 +618,6 @@ settings:
   video_card_shadow_reset: Reset shadow settings
   video_card_layout: Video card layout
   video_card_layout_desc: Switch between the redesigned card and the legacy layout.
-  release_offscreen_images: Reclaim offscreen cover memory
-  release_offscreen_images_desc: Unload cover image resources outside the retained range to reduce long-list memory usage.
-  release_offscreen_images_warning: 'Warning: reclaiming offscreen memory may cause stutter when images are rendered again. Images are not reclaimed by default.'
   video_card_layout_option:
     modern: Modern layout
     old: Classic layout

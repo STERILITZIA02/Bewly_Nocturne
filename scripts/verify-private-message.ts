@@ -5099,6 +5099,7 @@ verify('message server settings keep confirmed values and reconcile each mutatio
   const submissions: Array<{ field: string, value: number }> = []
   let rejectLike = true
   const controller = useMessageServerSettings.useMessageServerSettings({
+    getAccountId: () => 1,
     fetchSettings: async () => ({
       code: 0,
       data: {

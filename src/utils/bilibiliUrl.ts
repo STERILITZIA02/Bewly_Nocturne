@@ -25,6 +25,7 @@ const COMMON_TRACKING_PARAMS = new Set([
   'source',
   'sourceFrom',
   'spm_id_from',
+  'hcfrom',
   'timestamp',
   'trackid',
   'ts',

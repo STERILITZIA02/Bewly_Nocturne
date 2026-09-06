@@ -2,6 +2,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import type { GridLayoutType } from '~/logic'
 import type { List as VideoItem, TrendingResult } from '~/models/video/trending'
 import api from '~/utils/api'
@@ -23,37 +24,28 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const videoList = ref<VideoElement[]>([])
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
-const pn = ref<number>(1)
-const noMoreContent = ref<boolean>(false)
-const requestFailed = ref(false)
+const pn = tabState.ref<number>('pn', 1)
+const noMoreContent = tabState.ref<boolean>('noMoreContent', false)
+const requestFailed = tabState.ref('requestFailed', false)
 let requestGeneration = 0
-let reloadAfterActivation = false
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 
 onMounted(() => {
-  initData()
   initPageAction()
-})
-
-onActivated(() => {
-  if (reloadAfterActivation) {
-    reloadAfterActivation = false
+  if (!tabState.restored)
     void initData()
-  }
-  initPageAction()
-})
-
-onDeactivated(() => {
-  reloadAfterActivation = isLoading.value
-  requestGeneration++
-  if (isLoading.value)
-    emit('afterLoading')
-  isLoading.value = false
+  else if (!hasSettled.value)
+    void getData(requestGeneration)
 })
 
 async function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   noMoreContent.value = false
   requestFailed.value = false
@@ -101,7 +93,8 @@ async function getData(generation: number) {
     await getTrendingVideos(generation)
   }
   finally {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -109,6 +102,8 @@ async function getData(generation: number) {
 }
 
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   handleReachBottom.value = async () => {
     if (!isLoading.value && !noMoreContent.value)
       handleLoadMore()
@@ -130,7 +125,7 @@ async function getTrendingVideos(generation: number) {
       ps: 30,
     })
 
-    if (generation !== requestGeneration)
+    if (!tabState.isCurrent() || generation !== requestGeneration)
       return
 
     if (response.code !== 0 || !Array.isArray(response.data?.list))
@@ -159,7 +154,7 @@ async function getTrendingVideos(generation: number) {
     }
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       reportRuntimeFailure('Failed to load popular videos', error)
     }
@@ -189,7 +184,7 @@ async function handleLoadMore() {
     await getTrendingVideos(generation)
   }
   finally {
-    if (generation === requestGeneration)
+    if (tabState.isCurrent() && generation === requestGeneration)
       isLoading.value = false
   }
 }

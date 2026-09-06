@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
@@ -65,19 +66,24 @@ const rankingTypes = computed((): RankingType[] => {
   ]
 })
 
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
 const isLoading = ref<boolean>(false)
-const requestFailed = ref(false)
-const activatedRankingType = ref<RankingType>({ ...rankingTypes.value[0] })
-const videoList = reactive<RankingVideoElement[]>([])
-const PgcList = reactive<RankingPgcItem[]>([])
+const requestFailed = tabState.ref('requestFailed', false)
+const activatedRankingTypeId = tabState.ref('activatedRankingTypeId', rankingTypes.value[0].id)
+const activatedRankingType = computed<RankingType>({
+  get: () => rankingTypes.value.find(type => type.id === activatedRankingTypeId.value) || rankingTypes.value[0],
+  set: type => activatedRankingTypeId.value = type.id,
+})
+const videoList = tabState.reactive<RankingVideoElement[]>('videoList', [])
+const PgcList = tabState.reactive<RankingPgcItem[]>('pgcList', [])
 const shouldMoveAsideUp = ref<boolean>(false)
-const noMoreContent = ref<boolean>(true) // 排行榜没有分页
+const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 排行榜没有分页
 const rankingGridRef = ref<HTMLElement | null>(null)
 const rankingGridWidth = ref(0)
 let rankingGridResizeObserver: ResizeObserver | null = null
 let requestGeneration = 0
 let isComponentActive = false
-let reloadAfterActivation = false
 let resizeListenerAttached = false
 
 const isRankingAutoSwitchSingleColumn = computed(() => {
@@ -180,7 +186,8 @@ watch(() => props.topBarVisibility, () => {
 
 onMounted(() => {
   isComponentActive = true
-  void initData()
+  if (!tabState.restored || !hasSettled.value)
+    void initData()
   initPageAction()
   attachRankingResizeListener()
   nextTick(setupRankingGridResizeObserver)
@@ -195,29 +202,9 @@ onBeforeUnmount(() => {
   detachRankingResizeListener()
 })
 
-onActivated(() => {
-  isComponentActive = true
-  attachRankingResizeListener()
-  nextTick(setupRankingGridResizeObserver)
-  if (reloadAfterActivation) {
-    reloadAfterActivation = false
-    void initData()
-  }
-  initPageAction()
-})
-
-onDeactivated(() => {
-  isComponentActive = false
-  reloadAfterActivation = isLoading.value
-  requestGeneration++
-  if (isLoading.value)
-    emit('afterLoading')
-  isLoading.value = false
-  cleanupRankingGridResizeObserver()
-  detachRankingResizeListener()
-})
-
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   handlePageRefresh.value = async () => {
     if (isLoading.value)
       return
@@ -226,6 +213,9 @@ function initPageAction() {
 }
 
 function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   const rankingType = { ...activatedRankingType.value }
   videoList.length = 0
@@ -248,7 +238,7 @@ async function getRankingVideos(generation: number, rankingType: RankingType) {
       rid: rankingType.rid,
       type: 'type' in rankingType ? rankingType.type : 'all',
     })
-    if (generation !== requestGeneration)
+    if (!tabState.isCurrent() || generation !== requestGeneration)
       return
     if (response.code !== 0 || !Array.isArray(response.data?.list))
       throw new Error(response.message || 'Ranking request failed')
@@ -259,13 +249,14 @@ async function getRankingVideos(generation: number, rankingType: RankingType) {
     Object.assign(videoList, processedList)
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       reportRuntimeFailure('Failed to load ranking videos', error)
     }
   }
   finally {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -277,20 +268,21 @@ async function getRankingPgc(generation: number, seasonType: number) {
   isLoading.value = true
   try {
     const response: RankingPgcResult = await api.ranking.getRankingPgc({ season_type: seasonType })
-    if (generation !== requestGeneration)
+    if (!tabState.isCurrent() || generation !== requestGeneration)
       return
     if (response.code !== 0 || !Array.isArray(response.data?.list))
       throw new Error(response.message || 'PGC ranking request failed')
     Object.assign(PgcList, response.data.list)
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       reportRuntimeFailure('Failed to load PGC ranking', error)
     }
   }
   finally {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }

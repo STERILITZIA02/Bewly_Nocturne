@@ -133,7 +133,6 @@ settings:
   category_appearance_desc: 設定毛玻璃、主題顏色、字型、自訂樣式同其他頁面嘅適配。
   breadcrumb: 設定位置
   group_interaction_layout: 互動同版面
-  group_memory_saving: 記憶體節省
   home_grid_layout: 主頁影片版面
   home_grid_layout_desc: 調整主頁影片內容嘅自適應網格或者清單欄數。
   group_watch_later_layout: 陣間至睇版面
@@ -329,6 +328,25 @@ settings:
   topbar_display_settings_desc: 調整頂欄喺唔同頁面同互動情況之下嘅顯示方式。
   group_navigation: Dock同側邊欄
   group_dock: Dock
+  group_dock_glass: Dock 玻璃材質
+  dock_liquid_glass: 液態玻璃
+  dock_liquid_glass_desc: 用液態玻璃取代 Dock 同獨立操作掣嘅毛玻璃，保留現有佈局同收埋方式。跟隨全域「關閉毛玻璃同頂欄漸變」設定。
+  dock_liquid_glass_paused: 全域毛玻璃已關閉，Dock 而家用實色表面。
+  dock_glass_mode: 折射風格
+  dock_glass_mode_standard: 標準
+  dock_glass_mode_polar: 圓潤
+  dock_glass_mode_prominent: 鮮明
+  dock_glass_refraction: 折射強度
+  dock_glass_blur: 模糊度
+  dock_glass_blur_desc: 獨立調整 Dock 玻璃嘅背景模糊半徑，0 px 最清透。
+  dock_glass_tint: 玻璃色調
+  dock_glass_tint_theme: 跟隨明暗主題
+  dock_glass_tint_custom: 自訂
+  dock_glass_tint_color: 自訂玻璃顏色
+  dock_glass_tint_opacity: 色調不透明度
+  dock_glass_tint_opacity_desc: 0% 係無色玻璃，100% 係實色色調；顏色均勻覆蓋成個玻璃輪廓。
+  dock_glass_dispersion: 邊緣色散
+  dock_glass_saturation: 色彩飽和度
   group_sidebar: 側邊欄
   group_sidebar_desc: 喺主頁以外嘅頁面嘅右邊或左邊，通常有淺/深色模式切換掣同設定掣。
   group_color: 顏色
@@ -530,9 +548,6 @@ settings:
   video_card_shadow_reset: 重設陰影設定
   video_card_layout: 影片卡片版面
   video_card_layout_desc: 喺新版同舊版嘅影片卡片樣式之間切換。
-  release_offscreen_images: 回收離屏封面記憶體
-  release_offscreen_images_desc: 影片封面離開保留範圍之後卸載圖片資源，減低長清單記憶體用量。
-  release_offscreen_images_warning: 警告：離屏回收記憶體可能會令圖片重新渲染嗰陣窒一窒，預設唔回收。
   video_card_layout_option:
     modern: 新版
     old: 經典版

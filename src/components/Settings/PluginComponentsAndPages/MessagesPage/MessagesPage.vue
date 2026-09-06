@@ -5,13 +5,19 @@ import type { MessageServerSettingField } from '~/background/messageServerSettin
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { getUserID } from '~/utils/main'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import { useMessageServerSettings } from './useMessageServerSettings'
 
 const { t } = useI18n()
+const topBarStore = useTopBarStore()
+const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+let active = true
 
 const densityOptions = computed(() => [
   { label: t('settings.messages_density_comfortable'), value: 'comfortable' },
@@ -41,6 +47,7 @@ const likeOptions = computed(() => [
   { label: t('settings.messages_server_disabled'), value: 5 },
 ])
 const serverSettings = useMessageServerSettings({
+  getAccountId: () => active && getUserID() === String(accountId.value) ? accountId.value : null,
   fetchSettings: () => api.messageServerSettings.getMessageServerSettings(),
   setSetting: (field, value) => api.messageServerSettings.setMessageServerSetting({ field, value }),
   fetchBlockWords: () => api.messageServerSettings.getMessageBlockWords(),
@@ -75,11 +82,27 @@ async function addBlockWord() {
   if (!canAddBlockWord.value)
     return
   const word = blockWordDraft.value.trim()
-  if (await serverSettings.addBlockWord(word))
+  const draft = blockWordDraft.value
+  if (await serverSettings.addBlockWord(word) && blockWordDraft.value === draft)
     blockWordDraft.value = ''
 }
 
 onMounted(() => void serverSettings.load())
+watch(accountId, () => {
+  serverSettings.reset()
+  blockWordDraft.value = ''
+  if (active)
+    void serverSettings.load()
+}, { flush: 'sync' })
+onActivated(() => {
+  active = true
+  void serverSettings.load()
+})
+onDeactivated(() => {
+  active = false
+  serverSettings.reset()
+})
+onScopeDispose(serverSettings.dispose)
 </script>
 
 <template>
@@ -216,6 +239,7 @@ onMounted(() => void serverSettings.load())
             <span v-for="word in serverSettings.state.blockWords.words" :key="word" class="message-block-word">
               <span>{{ word }}</span>
               <TagRemoveButton
+                :disabled="Boolean(serverSettings.state.blockWords.pendingWord)"
                 :label="$t('settings.messages_server_block_words_remove', { word })"
                 @click="serverSettings.deleteBlockWord(word)"
               />

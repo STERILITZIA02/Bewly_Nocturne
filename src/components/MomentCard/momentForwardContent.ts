@@ -1,3 +1,5 @@
+import type { InjectionKey } from 'vue'
+
 export type MomentDisclosure = 'none' | 'comments' | 'forward'
 export type MomentForwardState = 'idle' | 'editing' | 'submitting' | 'success' | 'error'
 
@@ -115,17 +117,21 @@ export interface MomentTopicSearchController {
   invalidate: () => void
 }
 
-const momentDisclosureCache = new Map<string, MomentDisclosure>()
+export const MOMENT_DISCLOSURES: InjectionKey<ReturnType<typeof createMomentDisclosureCache>> = Symbol('moment-disclosures')
 
-export function getCachedMomentDisclosure(key: string): MomentDisclosure {
-  return momentDisclosureCache.get(key) ?? 'none'
-}
-
-export function setCachedMomentDisclosure(key: string, disclosure: MomentDisclosure) {
-  if (disclosure === 'none')
-    momentDisclosureCache.delete(key)
-  else
-    momentDisclosureCache.set(key, disclosure)
+/** Page-owned reading state; released with the feed or account, never held by a module-global Map. */
+export function createMomentDisclosureCache() {
+  const entries = new Map<string, MomentDisclosure>()
+  return {
+    get(key: string): MomentDisclosure { return entries.get(key) ?? 'none' },
+    set(key: string, disclosure: MomentDisclosure) {
+      if (disclosure === 'none')
+        entries.delete(key)
+      else
+        entries.set(key, disclosure)
+    },
+    clear: () => entries.clear(),
+  }
 }
 
 export interface MomentForwardSubmissionController {

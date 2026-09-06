@@ -31,6 +31,7 @@ import { resolveActiveDockItemPage } from '~/utils/dockActiveItem'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
 
 import IconButton from '../IconButton.vue'
+import LiquidGlassSurface from '../LiquidGlassSurface.vue'
 import LiquidSegmentIndicator from '../LiquidSegmentIndicator.vue'
 import PageModeSwitcherButton from '../PageModeSwitcherButton.vue'
 import Tooltip from '../Tooltip.vue'
@@ -55,6 +56,16 @@ const settingsStore = useSettingsStore()
 const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
 const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
+const useLiquidGlass = computed(() => settings.value.enableDockLiquidGlass && !settings.value.disableFrostedGlass)
+const liquidGlassProps = computed(() => ({
+  mode: settings.value.dockLiquidGlassMode,
+  refraction: settings.value.dockLiquidGlassRefraction,
+  blur: settings.value.dockLiquidGlassBlur,
+  dispersion: settings.value.dockLiquidGlassDispersion,
+  saturation: settings.value.dockLiquidGlassSaturation,
+  tintColor: settings.value.dockLiquidGlassTintSource === 'custom' ? settings.value.dockLiquidGlassTintColor : 'var(--bew-liquid-glass-color)',
+  tintOpacity: settings.value.dockLiquidGlassTintOpacity,
+}))
 
 // 计算属性：是否显示撤销按钮
 const showUndo = computed(() => undoForwardState.value === UndoForwardState.ShowUndo)
@@ -475,13 +486,11 @@ function handleBackToTopOrRefresh(action: 'backToTop' | 'refresh' | 'auto' = 'au
 // 处理撤销刷新
 function handleUndoRefresh() {
   emit('undoRefresh')
-  undoForwardState.value = UndoForwardState.ShowForward
 }
 
 // 添加处理前进的方法
 function handleForwardRefresh() {
   emit('forwardRefresh')
-  undoForwardState.value = UndoForwardState.ShowUndo
 }
 
 // 添加统一的前进后退处理方法
@@ -689,12 +698,13 @@ onUnmounted(() => {
       class="dock-content"
       data-layout-editable-id="dock"
       :class="{
-        left: dockPosition === 'left',
-        right: dockPosition === 'right',
-        bottom: dockPosition === 'bottom',
-        hover: dockContentHover,
-        ready: dockReady,
-        collapsed: isDockCollapsed,
+        'left': dockPosition === 'left',
+        'right': dockPosition === 'right',
+        'bottom': dockPosition === 'bottom',
+        'hover': dockContentHover,
+        'ready': dockReady,
+        'collapsed': isDockCollapsed,
+        'liquid-glass': useLiquidGlass,
       }"
       :style="dockTransformStyle"
       @pointerdown="handleDockPointerDown"
@@ -718,7 +728,9 @@ onUnmounted(() => {
           class="dock-shell-surface"
           aria-hidden="true"
           @transitionend="handleDockShellTransitionEnd"
-        />
+        >
+          <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
+        </div>
 
         <div
           class="dock-expanded-content"
@@ -880,6 +892,7 @@ onUnmounted(() => {
                 }"
                 @click="handleBackToTopOrRefresh(key === 1 ? 'refresh' : 'backToTop')"
               >
+                <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
                 <Icon
                   v-if="key === 1"
                   icon="line-md:rotate-270"
@@ -906,6 +919,7 @@ onUnmounted(() => {
             }"
             @click="handleBackToTopOrRefresh('auto')"
           >
+            <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
             <Transition name="fade">
               <Icon
                 v-if="reachTop && canRefreshCurrentPage"
@@ -934,6 +948,7 @@ onUnmounted(() => {
             }"
             @click="handleHistoryNavigation"
           >
+            <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
             <Icon
               v-if="showUndo"
               icon="mdi:undo-variant"
@@ -1014,23 +1029,21 @@ onUnmounted(() => {
     box-sizing: border-box;
 
     &.collapsed:hover .dock-shell-surface {
-      background: var(--bew-fill-2);
-      box-shadow:
-        var(--bew-shadow-edge-glow-1),
-        0 0 0 2px var(--bew-fill-2),
-        var(--bew-shadow-2);
+      background: var(--dock-collapsed-hover-background, var(--bew-fill-2));
+      --dock-surface-shadow: var(--bew-shadow-edge-glow-1), 0 0 0 2px var(--bew-fill-2), var(--bew-shadow-2);
     }
 
     &.disable-glowing-effect .dock-shell-surface {
-      box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+      --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
     }
 
     &.collapsed.disable-glowing-effect:hover .dock-shell-surface {
-      box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
+      --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);
     }
   }
 
   .dock-shell-surface {
+    --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
     position: absolute;
     top: 50%;
     left: 50%;
@@ -1043,7 +1056,7 @@ onUnmounted(() => {
     corner-shape: var(--bew-corner-shape-round);
     backdrop-filter: var(--bew-filter-glass-1);
     box-sizing: border-box;
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
+    box-shadow: var(--dock-surface-shadow);
     pointer-events: none;
     transform: translate(-50%, -50%);
     transition:
@@ -1207,10 +1220,10 @@ onUnmounted(() => {
   }
 
   .back-to-top-or-refresh-btn {
+    --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
     --uno: "transform active:important-scale-90 hover:scale-110";
     --uno: "lg:w-45px w-35px lg:h-45px h-35px";
     --uno: "grid place-items-center";
-    --uno: "filter-$bew-filter-glass-1";
     --uno: "bg-$bew-elevated hover:bg-$bew-content-hover";
     --uno: "rounded-full shadow-$bew-shadow-2 border-1 border-$bew-surface-border-color";
 
@@ -1222,7 +1235,7 @@ onUnmounted(() => {
       color 300ms ease,
       box-shadow 300ms ease,
       opacity 300ms ease;
-    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
+    box-shadow: var(--dock-surface-shadow);
 
     &.active {
       --uno: "important-bg-$bew-theme-color-auto text-$bew-text-auto";
@@ -1231,12 +1244,46 @@ onUnmounted(() => {
     }
 
     &.inactive {
+      --dock-surface-shadow: none;
       --uno: "opacity-80 !shadow-none";
     }
   }
 
   &.bottom .back-to-top-or-refresh-btn {
     --uno: "bottom-unset lg:right--45px right--35px";
+  }
+
+  // Each surface owns one backdrop. The optical child replaces the old blur
+  // without changing the shell's border, shadow, layout or morph animation.
+  &.liquid-glass {
+    --dock-collapsed-hover-background: transparent;
+
+    .dock-content-inner .dock-shell-surface,
+    .back-to-top-or-refresh-btn {
+      background: transparent;
+      backdrop-filter: none;
+      border-color: transparent;
+      box-shadow: none;
+
+      // Paint the frame after the optics so refraction cannot sample its own
+      // border and inset glow. Keep the original 1px border's layout footprint.
+      &::after {
+        content: "";
+        position: absolute;
+        inset: -1px;
+        border: inherit;
+        border-color: var(--bew-surface-border-color);
+        border-radius: inherit;
+        corner-shape: inherit;
+        box-shadow: var(--dock-surface-shadow);
+        pointer-events: none;
+        transition: inherit;
+      }
+    }
+
+    .back-to-top-or-refresh-btn :deep(.dock-action-icon) {
+      z-index: 1;
+    }
   }
 }
 

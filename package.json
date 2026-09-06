@@ -34,6 +34,7 @@
     "verify:targeted-fixes": "esno scripts/verify-targeted-fixes.ts",
     "verify:selected-p2": "esno scripts/verify-selected-p2.mjs",
     "test": "run-s verify:targeted-fixes verify:selected-p2 verify:private-message verify:notifications",
+    "bench:card-window": "esno scripts/serve-card-window-benchmark.mjs",
     "postinstall": "simple-git-hooks",
     "knip": "knip --treat-config-hints-as-errors",
     "submit": "pnpm submit:chrome",
@@ -41,6 +42,7 @@
   },
   "dependencies": {
     "@types/md5": "^2.3.5",
+    "@wxperia/liquid-glass-vue": "1.0.9",
     "dompurify": "^3.2.6",
     "flv.js": "^1.6.2",
     "hls.js": "^1.6.14",

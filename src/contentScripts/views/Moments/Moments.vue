@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { ComponentPublicInstance } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -8,46 +7,34 @@ import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
-import { normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
-import type { DisplayForwardVideo, DisplayMoment, DisplayRichTextSegment, WatchLaterTarget } from '~/components/MomentCard/types'
-import {
-  formatCount,
-  getCardPreviewText,
-  getMomentOriginalImageUrl,
-  getWatchLaterStateKey,
-  isCompactPlainTextMoment,
-} from '~/components/MomentCard/utils'
+import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
+import type { DisplayForwardVideo, DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useStorageLocal } from '~/composables/useStorageLocal'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
-import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
+import { vLayoutEditable } from '~/logic/layoutEdit'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import { momentsPinnedUsers, momentsWantedUsers } from '~/logic/storage'
 import { recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
-import type { DataItem, MomentResult } from '~/models/moment/moment'
 import { useTopBarStore } from '~/stores/topBarStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { numFormatter } from '~/utils/dataFormatter'
-import { loadFlvModule } from '~/utils/flv'
-import { loadHlsModule } from '~/utils/hls'
-import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
-import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
-import { getCSRF } from '~/utils/main'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
-import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
-import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
-import { resolveMomentTextSources } from '~/utils/momentDescription'
-import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
-import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
+import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
 import { normalizeMomentRemoteUrl } from '~/utils/momentUrl'
-import { openLinkInBackground } from '~/utils/tabs'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
-import { getDirectWatchLaterAid, resolveWatchLaterAid } from '~/utils/watchLater'
+
+import { createMomentAdapter } from './momentAdapter'
+import { createMomentFeedReader } from './momentFeedReader'
+import { useMomentActions } from './useMomentActions'
+import { useMomentDetail } from './useMomentDetail'
+import { useMomentLayout } from './useMomentLayout'
+import { useMomentPreviews } from './useMomentPreviews'
+import type { MomentFilter } from './useMomentsFeedCache'
+import { useMomentsFeedCache } from './useMomentsFeedCache'
 
 interface MomentsPortalUser {
   mid: string
@@ -112,17 +99,31 @@ interface MomentsPortalResult {
 }
 
 /** 动态流 features：补齐 opus 图文与充电列表字段 */
-const MOMENT_FEED_FEATURES = 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete,onlyfansQaCard'
 const toast = useToast()
 const { t } = useI18n()
+const { mapMoment, collectVideoPublicationTimes } = createMomentAdapter(t, resolveMomentForwardCount)
 const topBarStore = useTopBarStore()
-const momentsGridColumns = useLayoutEditSettingValue(
-  'page.moments.gridColumns',
-  () => settings.value.momentsGridColumns,
-)
 
 const moments = ref<DisplayMoment[]>([])
-type MomentFilter = 'all' | 'video' | 'pgc' | 'article'
+const momentActions = useMomentActions(getMomentActionAccount, applyMomentPatch)
+const { likingMomentIds, reservationLoadingMomentIds, toggleMomentLike, toggleMomentReservation, isWatchLaterAdded, isWatchLaterLoading, toggleMomentWatchLater } = momentActions
+const previews = useMomentPreviews(getCurrentAccountId)
+const { hoveredMediaId, previewUrls, handleMediaEnter, handleMediaLeave, bindPreviewVideo, playPreview, isMomentPreviewEnabled } = previews
+
+const momentLayout = useMomentLayout(moments, {
+  onNearBottom: maybeLoadMoreNearBottom,
+  onRecycle: previews.release,
+  onViewportChange: (visible, hidden) => {
+    for (const id of hidden) {
+      if (hoveredMediaId.value !== id)
+        previews.release(id)
+    }
+    previews.prune(visible)
+  },
+})
+const { showMomentsSidebar, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad } = momentLayout
+const details = useMomentDetail(getMomentImageRatio, () => previews.clear())
+const { selectedMoment, detailFrameUrl, detailFrameLoaded, detailImageViewerRef, detailImageViewerOpen, detailImageViewerUrls, detailImageViewerIndex, detailImageViewerScale, detailImageViewerRotation, detailImageViewerDragging, isOpusDetailMoment, detailDialogHeight, detailDialogWidth, detailContentHeight, detailImageViewerUrl, detailImageViewerTransform, clearDetailFocusRetry, bindDetailIframe, resetDetailImageViewerTransform, setDetailImageViewerScale, showDetailImageViewerImage, openMomentImagePreview, closeDetailImageViewer, handleDetailImageViewerWheel, handleDetailImageViewerPointerDown, handleDetailImageViewerPointerMove, handleDetailImageViewerPointerEnd, handleDetailImageViewerDoubleClick, handleDetailImageViewerKeydown, openDetailFrameInNewTab, openMomentDetail, handleDetailIframeLoad, closeMomentDetail } = details
 const momentFilters = computed<Array<{ value: MomentFilter, label: string }>>(() => [
   { value: 'all', label: t('moments.filter_all') },
   { value: 'video', label: t('moments.filter_video') },
@@ -130,38 +131,12 @@ const momentFilters = computed<Array<{ value: MomentFilter, label: string }>>(()
   { value: 'article', label: t('moments.filter_article') },
 ])
 const activeMomentFilter = ref<MomentFilter>('all')
-interface MomentsFeedCacheEntry {
-  items: DisplayMoment[]
-  offset: string
-  updateBaseline: string
-  hasMore: boolean
-  updatedAt: number
-  continuation?: {
-    items: DisplayMoment[]
-    offset: string
-    updateBaseline: string
-    hasMore: boolean
-  }
-}
-type MomentsFeedCacheEntries = Partial<Record<MomentFilter, MomentsFeedCacheEntry>>
-interface MomentsFeedCache {
-  accountId: AccountId
-  entries: MomentsFeedCacheEntries
-}
-let resolveMomentsFeedCacheReady: (() => void) | undefined
-const momentsFeedCacheReady = new Promise<void>((resolve) => {
-  resolveMomentsFeedCacheReady = resolve
-})
-const momentsFeedCache = useStorageLocal<MomentsFeedCache>('momentsFeedCache', {
-  accountId: null,
-  entries: {},
-}, {
-  writeDefaults: false,
-  onReady: () => resolveMomentsFeedCacheReady?.(),
-})
+const feedCache = useMomentsFeedCache(getCurrentAccountId)
+const feedReader = createMomentFeedReader(feedCache, mapMoment)
+const momentsFeedCacheReady = feedCache.ready
+const { ensureMomentsCacheAccount } = feedCache
 type MomentGroup = 'all' | 'wanted'
 const activeMomentGroup = ref<MomentGroup>('all')
-const wantedCacheCursor = ref(0)
 const portalUser = ref<MomentsPortalUser | null>(null)
 const portalLiveUsers = ref<MomentsPortalLiveUser[]>([])
 const portalLiveCount = ref(0)
@@ -175,76 +150,11 @@ const canScrollUpListLeft = ref(false)
 const canScrollUpListRight = ref(false)
 let upListResizeObserver: ResizeObserver | undefined
 let upListStateFrame: number | undefined
-const showMomentsSidebar = ref(false)
-const momentColumns = ref<DisplayMoment[][]>([])
-const selectedMoment = ref<DisplayMoment | null>(null)
-const detailFrameUrl = ref('')
-const detailFrameLoaded = ref(false)
-const detailIframeRef = ref<HTMLIFrameElement | null>(null)
-const detailIframeGenerations = new WeakMap<HTMLIFrameElement, number>()
-let detailFrameGeneration = 0
-const detailImageViewerRef = ref<HTMLElement | null>(null)
-const detailImageViewerOpen = ref(false)
-const detailImageViewerUrls = ref<string[]>([])
-const detailImageViewerIndex = ref(0)
-const detailImageViewerScale = ref(1)
-const detailImageViewerRotation = ref(0)
-const detailImageViewerPanX = ref(0)
-const detailImageViewerPanY = ref(0)
-const detailImageViewerSource = shallowRef<Window | null>(null)
-const detailImageViewerTrigger = shallowRef<HTMLElement | null>(null)
-let detailLoadTimer: ReturnType<typeof setTimeout> | null = null
-let detailFocusRetryTimer: ReturnType<typeof setTimeout> | null = null
-let detailFocusRetryRaf = 0
-let detailFocusGeneration = 0
-let detailFocusOrigin: Element | null = null
-const DETAIL_FOCUS_MAX_ATTEMPTS = 4
-const DETAIL_FOCUS_RETRY_DELAY = 120
-const DETAIL_FOCUS_DEADLINE = 720
-const layoutRef = ref<HTMLElement | null>(null)
-const momentsContentRef = ref<HTMLElement | null>(null)
-const gridRef = ref<HTMLElement | null>(null)
-const CARD_MIN_WIDTH = 360
-const GRID_GAP = 16
-const SIDEBAR_WIDTH = 248
-const SIDEBAR_MIN_MAIN_WIDTH = CARD_MIN_WIDTH * 2 + GRID_GAP
-const gridColumnCount = ref(1)
-const gridCardWidth = ref(520)
-let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
-const hoveredMediaId = ref('')
-const previewUrls = reactive<Record<string, string>>({})
-const likingMomentIds = reactive(new Set<string>())
-const reservationLoadingMomentIds = reactive(new Set<string>())
-const watchLaterLoadingMomentIds = reactive(new Set<string>())
-const likingMomentRequests = new Map<string, symbol>()
-const reservationRequests = new Map<string, symbol>()
-const watchLaterRequests = new Map<string, symbol>()
-const watchLaterAidByTarget = reactive(new Map<string, number>())
-const watchLaterAidRequests = new Map<string, Promise<number | undefined>>()
-const videoCidCache = new Map<string, number>()
-const videoCidRequests = new Map<string, Promise<number | undefined>>()
+
 const forwardCountOverrides = new Map<string, number>()
-const cardHeights = reactive<Record<string, number>>({})
-const visibleMomentIds = reactive(new Set<string>())
-const readyCardIds = reactive(new Set<string>())
-const enteringCardIds = reactive(new Set<string>())
-const revealedCardIds = new Set<string>()
-const cardEnterTimers = new Map<string, ReturnType<typeof setTimeout>>()
-const cardElements = new Map<string, HTMLElement>()
-interface VirtualColumn {
-  topPad: number
-  bottomPad: number
-  items: DisplayMoment[]
-}
-const virtualColumns = ref<VirtualColumn[]>([])
+
 /** 封面宽高比（宽/高），用于单图布局、详情视频比例兜底和虚拟列表测量 */
-const coverRatios = reactive<Record<string, number>>({})
-const MIN_SINGLE_IMAGE_RATIO = 1 / 2
-let gridObserver: ResizeObserver | undefined
-let liveFlvPlayer: any = null
-let liveHlsPlayer: any = null
-let activePreviewVideo: { id: string, element: HTMLVideoElement } | null = null
-let livePreviewGeneration = 0
+
 const isLoading = ref(false)
 const isInitialLoading = ref(true)
 const feedRequestFailed = ref(false)
@@ -254,25 +164,14 @@ const updateBaseline = ref('')
 /** 按 UP 主筛选时 feed/all 的 page，从 1 递增 */
 const momentsFeedPage = ref(1)
 const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
-const OVERSCAN_PX = 1200
-const MAX_PREVIEW_CACHE = 12
-const MAX_VIDEO_CID_CACHE = 80
+
 const MAX_POST_LOAD_AUTOFILL_PAGES = 3
-const WANTED_SCAN_LIMIT = 100
 /** 开启过滤时，每次初始加载、刷新或手动加载最多请求的原始动态页数。 */
-const FILTERED_MAX_REQUEST_PAGES = 2
-const MOMENTS_CACHE_MAX_ITEMS = 1000
-const MOMENTS_MEMORY_MAX_ITEMS = MOMENTS_CACHE_MAX_ITEMS
-const MOMENTS_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000
 /** 虚拟瀑布流需要在全局哨兵进入视口前主动预取，避免高度修正后漏掉相交事件 */
 const LOAD_MORE_AHEAD_PX = 640
-let attachedScrollViewport: HTMLElement | null = null
-let cardMeasureObserver: ResizeObserver | undefined
-let visibilityObserver: IntersectionObserver | undefined
+
 /** 最近滚动时间，用于避免滚动中重排导致抖动 */
-let lastScrollAt = 0
-let virtualRaf = 0
-let cardGeometryFrame = 0
+
 let feedRequestToken = 0
 let portalRequestToken = 0
 let momentsMounted = false
@@ -280,16 +179,14 @@ let momentsExtensionContextInvalidated = false
 let loadedAccountId: AccountId = getCurrentAccountId()
 const commentAccountIdentity = () => `${topBarStore.userInfo.mid || 'guest'}:${getCurrentAccountId() ?? 'guest'}`
 const commentSessions = createMomentCommentSessionCache(commentAccountIdentity())
+const disclosureCache = createMomentDisclosureCache()
+provide(MOMENT_DISCLOSURES, disclosureCache)
+watch(commentAccountIdentity, () => disclosureCache.clear(), { flush: 'sync' })
+onScopeDispose(disclosureCache.clear)
 provide(MOMENT_COMMENT_SESSIONS, commentSessions)
 watch(commentAccountIdentity, accountId => commentSessions.setAccount(accountId), { flush: 'sync' })
-let suppressBottomRebalanceUntil = 0
-const detailImageViewerDragging = ref(false)
-let detailImageViewerDragStartX = 0
-let detailImageViewerDragStartY = 0
-let detailImageViewerDragOriginX = 0
-let detailImageViewerDragOriginY = 0
+
 /** 高度已稳定的卡片，避免反复 Resize 微抖动 */
-const settledHeights = new Set<string>()
 
 const wantedUserMids = computed(() => new Set(momentsWantedUsers.value.map(user => user.mid)))
 const pinnedUserMids = computed(() => new Set(momentsPinnedUsers.value.map(user => user.mid)))
@@ -315,78 +212,11 @@ function getCurrentAccountId(): AccountId {
   return parseDedeUserID(document.cookie) ?? null
 }
 
-function ensureMomentsCacheAccount(accountId: AccountId) {
-  if (isSameAccount(momentsFeedCache.value.accountId, accountId))
-    return
-
-  momentsFeedCache.value = {
-    accountId,
-    entries: {},
-  }
+function getMomentActionAccount(): AccountId {
+  return isSameAccount(loadedAccountId, getCurrentAccountId()) ? loadedAccountId : null
 }
 
 const httpsUrl = normalizeMomentRemoteUrl
-
-function getDetailImageUrlKey(url: string) {
-  const path = httpsUrl(url.trim())
-    .replace(/@[^/?#]*(?=[?#]|$)/, '')
-    .split(/[?#]/, 1)[0]
-  const isGif = /\.gif$/i.test(path)
-  return `${path.replace(/\.(?:avif|webp|gif|jpe?g|png)$/i, '').toLowerCase()}|${isGif ? 'gif' : 'static'}`
-}
-
-function isOriginalDetailImageUrl(url: string) {
-  return /\.(?:gif|jpe?g|png)$/i.test(url.split(/[?#]/, 1)[0])
-}
-
-function normalizeDetailImageViewerPayload(value: unknown, requestedIndex: unknown) {
-  const urls: string[] = []
-  const urlIndexes = new Map<string, number>()
-  const sourceIndexes: number[] = []
-  if (Array.isArray(value)) {
-    value.forEach((rawUrl, sourceIndex) => {
-      if (typeof rawUrl !== 'string' || !rawUrl.trim())
-        return
-      const url = httpsUrl(rawUrl.trim())
-      const key = getDetailImageUrlKey(url)
-      const existingIndex = urlIndexes.get(key)
-      if (existingIndex !== undefined) {
-        sourceIndexes[sourceIndex] = existingIndex
-        if (isOriginalDetailImageUrl(url) && !isOriginalDetailImageUrl(urls[existingIndex]))
-          urls[existingIndex] = url
-        return
-      }
-      urlIndexes.set(key, urls.length)
-      sourceIndexes[sourceIndex] = urls.length
-      urls.push(url)
-    })
-  }
-
-  const limitedUrls = urls.slice(0, 100)
-  const sourceIndex = Number(requestedIndex)
-  const mappedIndex = Number.isInteger(sourceIndex) ? sourceIndexes[sourceIndex] : undefined
-  return {
-    index: mappedIndex === undefined
-      ? Math.min(limitedUrls.length - 1, Math.max(0, Number(requestedIndex) || 0))
-      : Math.min(limitedUrls.length - 1, mappedIndex),
-    urls: limitedUrls,
-  }
-}
-
-function normalizeRichTextJumpUrl(url = '') {
-  if (!url)
-    return ''
-
-  try {
-    const normalized = new URL(url.startsWith('//') ? `https:${url}` : url, 'https://www.bilibili.com')
-    return normalized.protocol === 'http:' || normalized.protocol === 'https:'
-      ? httpsUrl(normalized.toString())
-      : ''
-  }
-  catch {
-    return ''
-  }
-}
 
 function getSidebarAvatarUrl(url = '', size = 96) {
   const normalized = httpsUrl(url).replace(/@[^/]*$/, '')
@@ -429,952 +259,9 @@ function normalizePortalUpList(list: MomentsPortalResult['data'] | undefined): M
   }, [])
 }
 
-function parseLiveInfo(content?: string) {
-  if (!content)
-    return null
-
-  try {
-    return JSON.parse(content).live_play_info || null
-  }
-  catch {
-    return null
-  }
-}
-
-function extractImageUrl(image: any) {
-  if (!image)
-    return ''
-  if (typeof image === 'string')
-    return image
-  return image.src || image.url || image.img_src || image.live_cover || ''
-}
-
-function extractImageRatio(image: any): number | null {
-  if (!image || typeof image !== 'object')
-    return null
-  const dimension = image.dimension || image.size || image
-  let width = Number(dimension.width || dimension.w || image.img_width || 0)
-  let height = Number(dimension.height || dimension.h || image.img_height || 0)
-  const rotation = Math.abs(Number(dimension.rotate || image.rotate || 0)) % 180
-  if (rotation === 90)
-    [width, height] = [height, width]
-  const ratio = width > 0 && height > 0 ? width / height : 0
-  return Number.isFinite(ratio) && ratio > 0 ? ratio : null
-}
-
-function pickText(...values: any[]) {
-  for (const value of values) {
-    if (typeof value === 'string' && value.trim())
-      return value.trim()
-    if (value && typeof value === 'object') {
-      const nested = value.text || value.summary || value.content
-      if (typeof nested === 'string' && nested.trim())
-        return nested.trim()
-    }
-  }
-  return ''
-}
-
-function normalizeDescText(desc: any) {
-  if (!desc)
-    return ''
-  if (typeof desc === 'string')
-    return desc.trim()
-  return pickText(desc.text, desc)
-}
-
-function extractRichTextSegments(...nodeLists: any[]): DisplayRichTextSegment[] {
-  const nodes = nodeLists.find(value => Array.isArray(value) && value.length)
-  if (!nodes)
-    return []
-
-  return nodes.flatMap((node: any) => {
-    const text = typeof node?.text === 'string'
-      ? node.text
-      : typeof node?.orig_text === 'string'
-        ? node.orig_text
-        : ''
-    const emoji = node?.emoji
-    const imageUrl = httpsUrl(emoji?.webp_url || emoji?.gif_url || emoji?.icon_url || '')
-    if (node?.type === 'RICH_TEXT_NODE_TYPE_EMOJI' && imageUrl) {
-      return [{
-        type: 'emoji' as const,
-        text: text || emoji?.text || t('moments.emoji'),
-        imageUrl,
-        size: Number(emoji?.size || 1),
-      }]
-    }
-
-    const isSupportedLink = node?.type === 'RICH_TEXT_NODE_TYPE_TOPIC'
-      || node?.type === 'RICH_TEXT_NODE_TYPE_WEB'
-      || node?.type === 'RICH_TEXT_NODE_TYPE_VOTE'
-    const url = isSupportedLink ? normalizeRichTextJumpUrl(node?.jump_url) : ''
-    if (text && url)
-      return [{ type: 'link' as const, text, url }]
-
-    return text ? [{ type: 'text' as const, text }] : []
-  })
-}
-
-function extractBlockedInfo(blocked: any) {
-  if (!blocked || typeof blocked !== 'object')
-    return null
-  const hint = pickText(blocked.hint_message, blocked.title, blocked.desc)
-  const button = blocked.button || {}
-  return {
-    hint,
-    cover: httpsUrl(blocked.bg_img?.img_day || blocked.bg_img?.img_dark || blocked.icon?.img_day || blocked.icon?.img_dark || ''),
-    buttonText: pickText(button.text, t('moments.unlock_with_charge')),
-    buttonUrl: button.jump_url || '',
-  }
-}
-
-function getAdditionalActionText(button: any, isReservation = false) {
-  if (!button || typeof button !== 'object')
-    return t('moments.view')
-
-  // 只有真正的预约卡才能把 button.type 1/2 解释为预约状态。
-  if (isReservation && (Number(button.type) === 1 || Number(button.type) === 2)) {
-    return Number(button.status) === 2
-      ? pickText(button.check?.text, t('moment_card.reserved'))
-      : pickText(button.uncheck?.text, t('moment_card.reserve'))
-  }
-
-  return pickText(button.jump_style?.text, button.text, t('moments.view'))
-}
-
-function getMomentContent(item: any) {
-  const dynamic = item.modules?.module_dynamic || {}
-  const major = dynamic.major || {}
-  const author = item.modules?.module_author || {}
-  const basic = item.basic || {}
-  const iconBadge = author.icon_badge || {}
-  const isChargeExclusive = Boolean(
-    basic.is_only_fans
-    || iconBadge.text === '充电专属'
-    || major?.type === 'MAJOR_TYPE_BLOCKED'
-    || major?.blocked
-    || major?.upower_common,
-  )
-
-  const drawItems = major.draw?.items || []
-  const opusImageItems = major.opus?.pics || major.opus?.images || []
-  const articleCovers = major.article?.covers || []
-  const imageEntries = [...drawItems, ...opusImageItems, ...articleCovers]
-    .map((image) => {
-      const url = httpsUrl(extractImageUrl(image))
-      return url ? { url, ratio: extractImageRatio(image) } : null
-    })
-    .filter((entry): entry is { url: string, ratio: number | null } => Boolean(entry))
-    .filter((entry, index, list) => list.findIndex(item => item.url === entry.url) === index)
-  const images = imageEntries.map(entry => entry.url)
-  const imageRatios = imageEntries.map(entry => entry.ratio)
-
-  const live = parseLiveInfo(major.live_rcmd?.content) || major.live || null
-  // ugc_season：合集订阅更新，字段形态接近 archive（bvid/aid/cover/jump_url）
-  const ugcSeason = major.ugc_season || null
-  const cover = live?.cover
-    || major.archive?.cover
-    || ugcSeason?.cover
-    || major.pgc?.cover
-    || major.opus?.cover
-    || major.common?.cover
-    || major.music?.cover
-    || major.upower_common?.cover
-  const archive = major.archive || ugcSeason || major.pgc || {}
-  const opus = major.opus || {}
-  const article = major.article || {}
-  const common = major.common || major.upower_common || {}
-  const isUgcSeason = item.type === 'DYNAMIC_TYPE_UGC_SEASON'
-    || major?.type === 'MAJOR_TYPE_UGC_SEASON'
-    || Boolean(ugcSeason)
-  const isPgc = item.type === 'DYNAMIC_TYPE_PGC_UNION' || Boolean(major.pgc)
-  const isRegularVideo = !isUgcSeason && (
-    item.type === 'DYNAMIC_TYPE_AV'
-    || Boolean(major.archive)
-    || isPgc
-  )
-  const isVideo = isRegularVideo || isUgcSeason
-  const blocked = extractBlockedInfo(major.blocked)
-  const additional = dynamic.additional || {}
-  const additionalCard = additional.common
-    || additional.vote
-    || additional.reserve
-    || additional.ugc
-    || additional.goods
-    || additional.match
-    || additional.upower_lottery
-    || {}
-  const liveArea = pickText(live?.area_name, live?.desc_first)
-  const livePopularity = live?.online
-    ? t('moments.live_popularity', { count: formatCount(Number(live.online)) })
-    : pickText(live?.desc_second)
-
-  const chargeBadge = pickText(iconBadge.text, isChargeExclusive ? t('moments.charge_exclusive') : '')
-  const chargeCover = httpsUrl(iconBadge.render_img || iconBadge.icon || blocked?.cover || '')
-  const chargeHint = pickText(
-    blocked?.hint,
-    isChargeExclusive ? t('moments.charge_unlock_hint') : '',
-  )
-
-  const {
-    descInherited,
-    text: resolvedText,
-  } = resolveMomentTextSources({
-    archiveText: pickText(archive.desc),
-    articleText: pickText(article.desc),
-    commonText: pickText(common.desc),
-    dynamicText: normalizeDescText(dynamic.desc),
-    isVideo,
-    opusText: pickText(
-      opus.summary?.text,
-      typeof opus.summary === 'string' ? opus.summary : '',
-    ),
-  })
-  let text = resolvedText
-  // 视频继承简介只保留纯文本元数据；不能把简介节点冒充用户正文。
-  const richText = descInherited
-    ? []
-    : extractRichTextSegments(
-        opus.summary?.rich_text_nodes,
-        isVideo ? undefined : dynamic.desc?.rich_text_nodes,
-      )
-
-  // 充电未解锁：列表往往无 desc/major，用提示文案顶上
-  if (!text && isChargeExclusive)
-    text = chargeHint || t('moments.charge_exclusive_moment')
-
-  const additionalKind = classifyMomentAdditional(additional.type)
-  const isVoteAdditional = additionalKind === 'vote'
-  let additionalView = additional.type
-    ? {
-        title: pickText(additionalCard.head_text, additionalCard.title, additionalCard.desc?.text),
-        desc: pickText(
-          typeof additionalCard.desc1 === 'string' ? additionalCard.desc1 : additionalCard.desc1?.text,
-          typeof additionalCard.desc2 === 'string' ? additionalCard.desc2 : additionalCard.desc2?.text,
-          additionalCard.desc,
-        ),
-        cover: httpsUrl(additionalCard.cover || additionalCard.icon || ''),
-        action: getAdditionalActionText(
-          additionalCard.button,
-          additionalKind === 'reservation',
-        ),
-        url: httpsUrl(additionalCard.jump_url || additionalCard.button?.jump_url || ''),
-        isUpRecommendation: additional.type === 'ADDITIONAL_TYPE_UP_RCMD'
-          || pickText(additionalCard.head_text, additionalCard.title) === 'UP主的推荐',
-        isVideoReservation: additionalKind === 'reservation'
-          && Number(additionalCard.button?.type) === 1,
-        isLiveReservation: additionalKind === 'reservation'
-          && Number(additionalCard.button?.type) === 2,
-        isVote: isVoteAdditional,
-        voteId: isVoteAdditional ? String(additionalCard.vote_id || '') : '',
-        voteEndTime: isVoteAdditional ? Number(additionalCard.end_time) || 0 : 0,
-        reservationId: additionalKind === 'reservation'
-          ? String(additionalCard.rid || '')
-          : '',
-        reservationTotal: Math.max(0, Number(additionalCard.reserve_total) || 0),
-        isReserved: additionalKind === 'reservation'
-          && Number(additionalCard.button?.status) === 2,
-      }
-    : undefined
-
-  if (isVoteAdditional && additionalView) {
-    const voteStatus = resolveMomentVoteStatus(additionalView.voteEndTime, Date.now() / 1000)
-    const status = voteStatus === 'ended'
-      ? t('moments.vote_ended')
-      : voteStatus === 'ongoing'
-        ? t('moments.vote_ongoing')
-        : t('moments.vote_status_unknown')
-    additionalView.desc = [additionalView.desc, status].filter(Boolean).join(' · ')
-  }
-
-  // 未解锁充电：构造充电卡片附加区（列表没有 additional 时）
-  if (!additionalView && isChargeExclusive && (blocked?.buttonUrl || chargeBadge)) {
-    additionalView = {
-      title: chargeBadge || t('moments.charge_exclusive'),
-      desc: chargeHint,
-      // 充电档位区不展示小图标
-      cover: '',
-      action: blocked?.buttonText || t('moments.go_charge'),
-      url: blocked?.buttonUrl || '',
-      isUpRecommendation: false,
-      isVideoReservation: false,
-      isLiveReservation: false,
-      isVote: false,
-      voteId: '',
-      voteEndTime: 0,
-      reservationId: '',
-      reservationTotal: 0,
-      isReserved: false,
-    }
-  }
-
-  // 图文：DRAW / 带图 opus，不含视频、合集、直播与专栏
-  const isArticleMajor = item.type === 'DYNAMIC_TYPE_ARTICLE'
-    || major?.type === 'MAJOR_TYPE_ARTICLE'
-    || Number(basic?.comment_type) === 12
-  const isDraw = !isRegularVideo && !isUgcSeason && !live && !isArticleMajor && (
-    item.type === 'DYNAMIC_TYPE_DRAW'
-    || major?.type === 'MAJOR_TYPE_DRAW'
-    || drawItems.length > 0
-    || opusImageItems.length > 0
-  )
-
-  return {
-    title: pickText(live?.title, opus.title, archive.title, article.title, common.title),
-    text,
-    descInherited,
-    richText,
-    images: [...images, ...(cover ? [httpsUrl(cover)] : [])].filter(Boolean).filter((url: string, index: number, list: string[]) => list.indexOf(url) === index),
-    imageRatios: [
-      ...imageRatios,
-      ...(cover && !images.includes(httpsUrl(cover)) ? [null] : []),
-    ],
-    isVideo,
-    isRegularVideo,
-    isUgcSeason,
-    isDraw,
-    isPgc,
-    isLive: Boolean(live),
-    isChargeExclusive,
-    chargeBadge,
-    chargeHint,
-    chargeCover,
-    roomId: live?.room_id ? Number(live.room_id) : undefined,
-    duration: archive.duration_text || '',
-    aid: archive.aid || undefined,
-    bvid: archive.bvid || undefined,
-    epid: major.pgc?.epid || undefined,
-    videoUrl: archive.jump_url ? httpsUrl(archive.jump_url.startsWith('//') ? `https:${archive.jump_url}` : archive.jump_url) : undefined,
-    videoPlay: pickText(archive.stat?.play),
-    videoDanmaku: pickText(archive.stat?.danmaku),
-    mediaMeta: live
-      ? liveArea
-      : (isChargeExclusive ? (chargeBadge || t('moments.charge_exclusive')) : (archive.duration_text || article.label || '')),
-    liveArea,
-    livePopularity,
-    additional: additionalView,
-  }
-}
-
-function resolveVideoUrl(moment: DisplayMoment) {
-  if (moment.videoUrl)
-    return moment.videoUrl
-  if (moment.bvid)
-    return `https://www.bilibili.com/video/${moment.bvid}`
-  if (moment.aid)
-    return `https://www.bilibili.com/video/av${moment.aid}`
-  return ''
-}
-
-function resolveLiveUrl(moment: DisplayMoment) {
-  if (!moment.roomId)
-    return ''
-  return `https://live.bilibili.com/${moment.roomId}`
-}
-
-function resolveDetailUrl(moment: DisplayMoment) {
-  // Forwarded/live and article cards own an opus detail URL. Resolve that
-  // before embedded media so the card never leaves its source dynamic.
-  if (moment.isForward || moment.isArticle) {
-    try {
-      const url = new URL(moment.url)
-      if (moment.isForward)
-        url.searchParams.set('bewly_opus_plain', '1')
-      if (moment.isArticle)
-        url.searchParams.set('bewly_opus_article', '1')
-      return url.toString()
-    }
-    catch {
-      const join = moment.url.includes('?') ? '&' : '?'
-      const params = [
-        moment.isForward ? 'bewly_opus_plain=1' : '',
-        moment.isArticle ? 'bewly_opus_article=1' : '',
-      ].filter(Boolean).join('&')
-      return params ? `${moment.url}${join}${params}` : moment.url
-    }
-  }
-  if (moment.isLive) {
-    const liveUrl = resolveLiveUrl(moment)
-    if (liveUrl)
-      return liveUrl
-  }
-  if (moment.isVideo) {
-    const videoUrl = resolveVideoUrl(moment)
-    if (videoUrl)
-      return videoUrl
-  }
-  return moment.url
-}
-
-function clearDetailLoadTimer() {
-  if (detailLoadTimer) {
-    clearTimeout(detailLoadTimer)
-    detailLoadTimer = null
-  }
-}
-
-function clearDetailFocusRetry() {
-  detailFocusGeneration++
-  if (detailFocusRetryTimer) {
-    clearTimeout(detailFocusRetryTimer)
-    detailFocusRetryTimer = null
-  }
-  if (detailFocusRetryRaf) {
-    cancelAnimationFrame(detailFocusRetryRaf)
-    detailFocusRetryRaf = 0
-  }
-}
-
-function bindDetailIframe(element: Element | ComponentPublicInstance | null) {
-  if (!(element instanceof HTMLIFrameElement))
-    return
-  detailIframeRef.value = element
-  detailIframeGenerations.set(element, detailFrameGeneration)
-}
-
-function getDetailActiveElement(iframe: HTMLIFrameElement | null = detailIframeRef.value) {
-  const root = iframe?.getRootNode() ?? mainAppRef.value?.getRootNode()
-  if (root instanceof Document || root instanceof ShadowRoot)
-    return root.activeElement
-  return document.activeElement
-}
-
-function shouldYieldDetailFocus(iframe: HTMLIFrameElement) {
-  const active = getDetailActiveElement(iframe)
-  return Boolean(
-    active
-    && active !== document.body
-    && active !== document.documentElement
-    && active !== iframe
-    && active !== detailFocusOrigin,
-  )
-}
-
-async function focusDetailIframe(iframe: HTMLIFrameElement) {
-  clearDetailFocusRetry()
-  const generation = detailFocusGeneration
-  const startedAt = performance.now()
-  let attemptCount = 0
-
-  const canContinue = () => Boolean(
-    selectedMoment.value
-    && detailFrameUrl.value
-    && shouldContinueIframeFocusRetry({
-      attemptCount,
-      maxAttempts: DETAIL_FOCUS_MAX_ATTEMPTS,
-      elapsedMs: performance.now() - startedAt,
-      deadlineMs: DETAIL_FOCUS_DEADLINE,
-      cancelled: generation !== detailFocusGeneration,
-      iframeReplaced: iframe !== detailIframeRef.value,
-      viewerOpen: detailImageViewerOpen.value,
-      userMovedFocus: shouldYieldDetailFocus(iframe),
-    }),
-  )
-
-  const attempt = async () => {
-    if (!canContinue())
-      return
-
-    await nextTick()
-    if (!canContinue())
-      return
-
-    detailFocusRetryRaf = requestAnimationFrame(() => {
-      detailFocusRetryRaf = 0
-      if (!canContinue())
-        return
-
-      attemptCount++
-      iframe.focus({ preventScroll: true })
-      try {
-        iframe.contentWindow?.focus()
-      }
-      catch {
-        // Cross-origin frames may reject window focus; the element focus remains.
-      }
-
-      // Once the parent active element is the iframe, focus is established.
-      // Retrying after that could steal focus from controls inside the frame.
-      if (getDetailActiveElement(iframe) !== iframe && canContinue()) {
-        detailFocusRetryTimer = setTimeout(() => {
-          detailFocusRetryTimer = null
-          void attempt()
-        }, DETAIL_FOCUS_RETRY_DELAY)
-      }
-    })
-  }
-
-  await attempt()
-}
-
-function syncDetailFrameViewport() {
-  const iframe = detailIframeRef.value
-  if (!iframe || !detailFrameUrl.value)
-    return
-  postMessageToIframe(iframe, {
-    type: 'BEWLY_OPUS_VIEWPORT',
-    width: window.innerWidth,
-  })
-}
-
-function isPlayerMoment(moment: DisplayMoment | null | undefined) {
-  return Boolean(moment?.isVideo || moment?.isLive)
-}
-
 /** 图文保留自己的布局；播放器与图文弹窗都严格受可用视口约束。 */
-const isOpusDetailMoment = computed(() => Boolean(selectedMoment.value && !isPlayerMoment(selectedMoment.value)))
-const detailViewportGutter = MOMENTS_DETAIL_LAYOUT.viewportGutter * 2
-const detailViewportSafeWidth = `calc(100vw - ${detailViewportGutter}px)`
-const detailReferenceHeight = 'min(88dvh, 49.5vw)'
-const detailSafeHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MOMENTS_DETAIL_LAYOUT.playerMinHeight}px, ${detailReferenceHeight}))`
-const detailPlayerMaxWidth = `min(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}vw, calc(${MOMENTS_DETAIL_LAYOUT.playerViewportScale * 100}dvh * 16 / 9), ${detailViewportSafeWidth})`
-const opusDetailCommentPageRatio = 0.29
-const opusDetailLongImageRatio = MIN_SINGLE_IMAGE_RATIO
-const opusDetailMaxWidth = `min(90vw, ${detailViewportSafeWidth})`
-const opusSplitDetailBaseWidth = `${opusDetailCommentPageRatio * 200}vw`
-const opusDetailMaxHeight = `min(calc(100dvh - ${detailViewportGutter}px), max(${MOMENTS_DETAIL_LAYOUT.playerMinHeight}px, 88dvh), ${opusDetailMaxWidth})`
-function isUsableImageRatio(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value) && value > 0
-}
-
-function isOpusSplitDetailMoment(moment: DisplayMoment | null | undefined) {
-  return Boolean(
-    moment
-    && !isPlayerMoment(moment)
-    && !moment.isArticle
-    && !moment.isForward
-    && moment.images.length > 0,
-  )
-}
-
-function getOpusSplitLayoutRatio(moment: DisplayMoment | null | undefined) {
-  if (!moment)
-    return 1
-  const metadataRatio = moment.imageRatios?.[0]
-  const ratio = isUsableImageRatio(metadataRatio)
-    ? metadataRatio
-    : coverRatios[moment.id]
-  return Math.max(isUsableImageRatio(ratio) ? ratio : 1, opusDetailLongImageRatio)
-}
-
-const detailDialogHeight = computed(() => (
-  isOpusSplitDetailMoment(selectedMoment.value) ? opusDetailMaxHeight : detailSafeHeight
-))
-
-const detailDialogWidth = computed(() => {
-  if (selectedMoment.value?.isLive)
-    return detailPlayerMaxWidth
-  const moment = selectedMoment.value
-  if (isOpusSplitDetailMoment(moment)) {
-    const commentWidth = `${opusDetailCommentPageRatio * 100}vw`
-    const contentWidth = `calc(${getOpusSplitLayoutRatio(moment)} * ${detailDialogHeight.value} + ${commentWidth})`
-    return `min(${opusDetailMaxWidth}, max(${opusSplitDetailBaseWidth}, ${contentWidth}))`
-  }
-  return `min(${MOMENTS_DETAIL_LAYOUT.opusMaxWidth}px, ${detailViewportSafeWidth})`
-})
-
-const detailContentHeight = computed(() => detailDialogHeight.value)
-
-const detailImageViewerUrl = computed(() => detailImageViewerUrls.value[detailImageViewerIndex.value] || '')
-const detailImageViewerTransform = computed(() => {
-  return `translate3d(${detailImageViewerPanX.value}px, ${detailImageViewerPanY.value}px, 0) scale(${detailImageViewerScale.value}) rotate(${detailImageViewerRotation.value}deg)`
-})
-
-function resetDetailImageViewerTransform() {
-  detailImageViewerScale.value = 1
-  detailImageViewerRotation.value = 0
-  detailImageViewerPanX.value = 0
-  detailImageViewerPanY.value = 0
-}
-
-function setDetailImageViewerScale(scale: number) {
-  detailImageViewerScale.value = Math.min(4, Math.max(0.25, scale))
-  if (detailImageViewerScale.value <= 1) {
-    detailImageViewerPanX.value = 0
-    detailImageViewerPanY.value = 0
-  }
-}
-
-function showDetailImageViewerImage(index: number) {
-  const count = detailImageViewerUrls.value.length
-  if (!count)
-    return
-  detailImageViewerIndex.value = ((index % count) + count) % count
-  resetDetailImageViewerTransform()
-}
-
-function openDetailImageViewer(
-  value: unknown,
-  requestedIndex: unknown,
-  source: Window | null = null,
-  trigger: HTMLElement | null = null,
-) {
-  const { index, urls } = normalizeDetailImageViewerPayload(value, requestedIndex)
-  if (!urls.length)
-    return false
-
-  detailImageViewerUrls.value = urls
-  detailImageViewerIndex.value = index
-  detailImageViewerSource.value = source
-  detailImageViewerTrigger.value = trigger
-  detailImageViewerOpen.value = true
-  document.documentElement.classList.add('bewly-moment-image-viewer-open')
-  clearDetailFocusRetry()
-  resetDetailImageViewerTransform()
-  nextTick(() => detailImageViewerRef.value?.focus({ preventScroll: true }))
-  return true
-}
-
-function openMomentImagePreview(images: string[], index: number, trigger: HTMLElement) {
-  openDetailImageViewer(images.map(getMomentOriginalImageUrl), index, null, trigger)
-}
-
-function closeDetailImageViewer() {
-  if (!detailImageViewerOpen.value)
-    return
-
-  try {
-    postMessageToIframe(detailIframeRef.value, {
-      type: 'BEWLY_OPUS_IMAGE_VIEWER_CLOSE',
-      index: detailImageViewerIndex.value,
-    })
-  }
-  catch {
-    // iframe 已销毁时忽略
-  }
-  detailImageViewerOpen.value = false
-  document.documentElement.classList.remove('bewly-moment-image-viewer-open')
-  detailImageViewerUrls.value = []
-  const source = detailImageViewerSource.value
-  const trigger = detailImageViewerTrigger.value
-  detailImageViewerSource.value = null
-  detailImageViewerTrigger.value = null
-  detailImageViewerDragging.value = false
-  resetDetailImageViewerTransform()
-  nextTick(() => {
-    if (source)
-      detailIframeRef.value?.focus({ preventScroll: true })
-    else
-      trigger?.focus({ preventScroll: true })
-  })
-}
-
-function handleDetailImageViewerWheel(event: WheelEvent) {
-  const delta = event.deltaY || event.deltaX
-  if (!delta)
-    return
-  setDetailImageViewerScale(detailImageViewerScale.value * (delta < 0 ? 1.15 : 0.87))
-}
-
-function handleDetailImageViewerPointerDown(event: PointerEvent) {
-  if (detailImageViewerScale.value <= 1)
-    return
-  event.preventDefault()
-  detailImageViewerDragging.value = true
-  detailImageViewerDragStartX = event.clientX
-  detailImageViewerDragStartY = event.clientY
-  detailImageViewerDragOriginX = detailImageViewerPanX.value
-  detailImageViewerDragOriginY = detailImageViewerPanY.value
-  ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
-}
-
-function handleDetailImageViewerPointerMove(event: PointerEvent) {
-  if (!detailImageViewerDragging.value)
-    return
-  detailImageViewerPanX.value = detailImageViewerDragOriginX + event.clientX - detailImageViewerDragStartX
-  detailImageViewerPanY.value = detailImageViewerDragOriginY + event.clientY - detailImageViewerDragStartY
-}
-
-function handleDetailImageViewerPointerEnd(event: PointerEvent) {
-  if (!detailImageViewerDragging.value)
-    return
-  detailImageViewerDragging.value = false
-  try {
-    ;(event.currentTarget as HTMLElement).releasePointerCapture(event.pointerId)
-  }
-  catch {
-    // 指针已经释放时忽略
-  }
-}
-
-function handleDetailImageViewerDoubleClick() {
-  if (detailImageViewerScale.value > 1)
-    resetDetailImageViewerTransform()
-  else
-    setDetailImageViewerScale(2)
-}
-
-function handleDetailImageViewerKeydown(event: KeyboardEvent) {
-  if (!detailImageViewerOpen.value)
-    return
-
-  if (event.key === 'Escape') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    closeDetailImageViewer()
-  }
-  else if (event.key === 'ArrowLeft') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    showDetailImageViewerImage(detailImageViewerIndex.value - 1)
-  }
-  else if (event.key === 'ArrowRight') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    showDetailImageViewerImage(detailImageViewerIndex.value + 1)
-  }
-  else if (event.key === '+' || event.key === '=') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    setDetailImageViewerScale(detailImageViewerScale.value + 0.25)
-  }
-  else if (event.key === '-' || event.key === '_') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    setDetailImageViewerScale(detailImageViewerScale.value - 0.25)
-  }
-  else if (event.key === '0') {
-    event.preventDefault()
-    event.stopImmediatePropagation()
-    resetDetailImageViewerTransform()
-  }
-}
-
-function shouldOpenMomentExternally(moment: DisplayMoment) {
-  return moment.isLive
-    || settings.value.momentsCardOpenMode === 'newTab'
-    || settings.value.momentsCardOpenMode === 'background'
-    || window.innerWidth <= MOMENTS_DETAIL_LAYOUT.dialogMinWidth
-}
-
-function openMomentInNewTab(moment: DisplayMoment, background = false) {
-  const url = resolveDetailUrl(moment) || moment.url
-  if (!url)
-    return
-
-  hoveredMediaId.value = ''
-  cleanupLivePreviewPlayer()
-  if (previewUrls[moment.id])
-    delete previewUrls[moment.id]
-  if (background)
-    void openLinkInBackground(url)
-  else
-    window.open(url, '_blank', 'noopener,noreferrer')
-}
-
-function openDetailFrameInNewTab() {
-  const url = detailFrameUrl.value
-  if (!url)
-    return
-
-  const newWindow = window.open('about:blank', '_blank')
-  if (!newWindow)
-    return
-
-  try {
-    newWindow.opener = null
-    newWindow.location.replace(url)
-    closeMomentDetail()
-  }
-  catch {
-    newWindow.close()
-  }
-}
-
-function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
-  if (moment.isVideo && !moment.isLive) {
-    recordVideoVisit(moment)
-    openMomentInNewTab(moment)
-    return
-  }
-
-  // 小屏、直播与「新标签/后台标签」设置：外部打开，避免狭窄 Dialog 与跨域直播占用
-  if (!forceDialog && shouldOpenMomentExternally(moment)) {
-    openMomentInNewTab(moment, settings.value.momentsCardOpenMode === 'background')
-    return
-  }
-
-  // 若已有详情在开，先销毁旧 iframe，避免叠内存
-  if (selectedMoment.value || detailFrameUrl.value)
-    destroyDetailIframe()
-
-  clearDetailFocusRetry()
-  detailFocusOrigin = getDetailActiveElement()
-  detailFrameGeneration += 1
-  selectedMoment.value = moment
-  detailFrameUrl.value = resolveDetailUrl(moment)
-  detailFrameLoaded.value = false
-  // 打开详情时释放悬停预览资源
-  hoveredMediaId.value = ''
-  cleanupLivePreviewPlayer()
-  clearDetailLoadTimer()
-  // 视频/直播、转发：load 后即可；图文等待布局 ready
-  // 兜底避免遮罩卡住
-  const fallbackMs = isPlayerMoment(moment)
-    ? 1800
-    : moment.isForward
-      ? 1200
-      : 4500
-  const generation = detailFrameGeneration
-  const frameUrl = detailFrameUrl.value
-  detailLoadTimer = setTimeout(() => {
-    if (generation === detailFrameGeneration && frameUrl === detailFrameUrl.value && selectedMoment.value)
-      detailFrameLoaded.value = true
-  }, fallbackMs)
-}
-
-function handleDetailIframeLoad(event: Event) {
-  const iframe = event.target as HTMLIFrameElement | null
-  const frameUrl = detailFrameUrl.value
-  if (!iframe
-    || iframe !== detailIframeRef.value
-    || !selectedMoment.value
-    || !frameUrl
-    || iframe.getAttribute('src') !== frameUrl
-    || detailIframeGenerations.get(iframe) !== detailFrameGeneration) {
-    return
-  }
-
-  clearDetailLoadTimer()
-  // Ready identity is established before viewport/focus messages are sent.
-  markIframeReadyForMessaging(iframe)
-  syncDetailFrameViewport()
-  void focusDetailIframe(iframe)
-
-  // 与抽屉一致：同域时去掉顶栏占位，并保证视频/直播页可滚动
-  const win = iframe?.contentWindow
-  if (win) {
-    try {
-      const doc = win.document
-      if (doc) {
-        doc.documentElement.classList.add('remove-top-bar-without-placeholder')
-        doc.documentElement.style.setProperty('overflow-x', 'hidden', 'important')
-        doc.documentElement.style.setProperty('overflow-y', 'auto', 'important')
-        if (doc.body) {
-          doc.body.style.setProperty('overflow-x', 'hidden', 'important')
-          doc.body.style.setProperty('overflow-y', 'auto', 'important')
-          doc.body.style.setProperty('height', 'auto', 'important')
-        }
-      }
-    }
-    catch {
-      // 跨域（如 live.bilibili.com）无法注入，依赖 iframe 默认滚动
-    }
-  }
-
-  // 视频/直播、转发：load 后立即显示，不做「整理动态」等待
-  if (isPlayerMoment(selectedMoment.value) || selectedMoment.value?.isForward) {
-    detailFrameLoaded.value = true
-    return
-  }
-
-  // 图文/专栏：再给布局一点时间，最终由 BEWLY_OPUS_LAYOUT_READY 解除
-  const generation = detailFrameGeneration
-  detailLoadTimer = setTimeout(() => {
-    if (generation === detailFrameGeneration && frameUrl === detailFrameUrl.value && iframe === detailIframeRef.value)
-      detailFrameLoaded.value = true
-  }, 2800)
-}
 
 /** 关闭详情时销毁 iframe 文档与媒体，避免内存堆积 */
-function destroyDetailIframe() {
-  clearDetailFocusRetry()
-  clearDetailLoadTimer()
-  const iframe = detailIframeRef.value
-  detailIframeRef.value = null
-  detailFrameGeneration += 1
-  if (!iframe)
-    return
-
-  // 通知同域 iframe 内部主动释放观察器/媒体
-  try {
-    postMessageToIframe(iframe, { type: 'BEWLY_OPUS_DISPOSE' })
-  }
-  catch {
-    // ignore
-  }
-
-  // 同域时尽量停掉播放器并清空文档
-  try {
-    const win = iframe.contentWindow
-    const doc = win?.document
-    if (doc) {
-      doc.querySelectorAll('video, audio').forEach((el) => {
-        try {
-          releaseMediaElementSources(el as HTMLMediaElement)
-        }
-        catch {
-          // ignore
-        }
-      })
-
-      // 断开页面脚本与 DOM，促使浏览器回收
-      try {
-        doc.open()
-        doc.write('<!doctype html><title></title>')
-        doc.close()
-      }
-      catch {
-        // ignore
-      }
-    }
-  }
-  catch {
-    // 跨域（直播等）无法访问 contentDocument
-  }
-
-  try {
-    iframe.src = 'about:blank'
-  }
-  catch {
-    // ignore
-  }
-  try {
-    iframe.removeAttribute('src')
-  }
-  catch {
-    // ignore
-  }
-}
-
-function closeMomentDetail() {
-  closeDetailImageViewer()
-  clearDetailLoadTimer()
-  clearDetailFocusRetry()
-  destroyDetailIframe()
-  detailFocusOrigin = null
-  selectedMoment.value = null
-  detailFrameUrl.value = ''
-  detailFrameLoaded.value = false
-}
-
-function collectVideoPublicationTimes(items: DataItem[]) {
-  return items.flatMap((item) => {
-    const raw = item as any
-    if (raw.type === 'DYNAMIC_TYPE_FORWARD')
-      return []
-
-    const author = raw.modules?.module_author
-    const major = raw.modules?.module_dynamic?.major
-    const archive = major?.archive || major?.ugc_season
-    const time = Number(author?.pub_ts || 0) * 1000
-    if (!archive || time <= 0)
-      return []
-
-    const mids = new Set<number | string>()
-    if (author?.mid)
-      mids.add(author.mid)
-    if (Array.isArray(archive.coop_info)) {
-      archive.coop_info.forEach((coop: any) => {
-        if (coop?.mid)
-          mids.add(coop.mid)
-      })
-    }
-
-    return Array.from(mids, mid => ({ mid, time }))
-  })
-}
 
 function resolveMomentForwardCount(momentId: string, value: unknown): number {
   const serverCount = normalizeForwardCount(value)
@@ -1389,270 +276,11 @@ function resolveMomentForwardCount(momentId: string, value: unknown): number {
   return override
 }
 
-function mapMoment(item: DataItem): DisplayMoment {
-  const raw = item as any
-  const author = raw.modules?.module_author || {}
-  const dynamic = raw.modules?.module_dynamic || {}
-  const isForward = raw.type === 'DYNAMIC_TYPE_FORWARD' && raw.orig
-  const contentRaw = isForward ? raw.orig : raw
-  const content = getMomentContent(contentRaw)
-  // 转发内嵌视频：archive / 合集订阅 ugc_season 均可作为摘要来源
-  const forwardedMajor = isForward
-    ? contentRaw.modules?.module_dynamic?.major
-    : undefined
-  const forwardedArchive = forwardedMajor?.archive || forwardedMajor?.ugc_season
-  // 转发时作者侧也可能挂充电角标
-  const selfContent = isForward ? getMomentContent(raw) : content
-  const forwardedAuthor = contentRaw.modules?.module_author || {}
-  const id = raw.id_str || raw.id || `${author.mid}-${author.pub_ts}`
-  const text = isForward
-    ? (normalizeDescText(dynamic.desc) || t('moments.forwarded_moment'))
-    : content.text
-  const richText = isForward
-    ? extractRichTextSegments(dynamic.desc?.rich_text_nodes)
-    : content.richText
-  const additional = content.additional || selfContent.additional
-  const isChargeExclusive = content.isChargeExclusive || selfContent.isChargeExclusive
-  const commentInteraction = raw.modules?.module_interaction?.items?.find(
-    (interaction: any) => Number(interaction?.type) === 1,
-  )?.desc
-  const hotCommentText = normalizeDescText(commentInteraction)
-  const hotCommentRichText = extractRichTextSegments(commentInteraction?.rich_text_nodes)
-  const rawForwardedJumpUrl = String(
-    contentRaw.modules?.module_dynamic?.major?.opus?.jump_url
-    || contentRaw.modules?.module_dynamic?.major?.jump_url
-    || '',
-  )
-  const forwardedJumpUrl = httpsUrl(
-    rawForwardedJumpUrl.startsWith('//') ? `https:${rawForwardedJumpUrl}` : rawForwardedJumpUrl,
-  )
-  const forwardedJumpId = forwardedJumpUrl.match(/\/(?:opus|t)\/(\d+)/)?.[1] || ''
-  const forwardedId = isForward
-    ? String(contentRaw.id_str || contentRaw.id || forwardedJumpId || contentRaw.basic?.comment_id_str || '')
-    : ''
-  const forwardedUrl = forwardedJumpUrl || (forwardedId
-    ? `https://www.bilibili.com/opus/${forwardedId}`
-    : '')
-  const forwardedIsArticle = Boolean(isForward && (
-    contentRaw.type === 'DYNAMIC_TYPE_ARTICLE'
-    || Number(contentRaw.basic?.comment_type) === 12
-    || contentRaw.modules?.module_dynamic?.major?.type === 'MAJOR_TYPE_ARTICLE'
-  ))
-
-  return {
-    id,
-    author: {
-      mid: String(author.mid || ''),
-      name: author.name || t('moments.bilibili_user'),
-      face: httpsUrl(author.face || ''),
-    },
-    publishedAt: Number(author.pub_ts || 0),
-    title: content.title,
-    text,
-    descInherited: isForward ? false : content.descInherited,
-    richText,
-    // 转发卡片只展示原动态摘要，不能把原动态图片提升为外层卡片媒体。
-    images: isForward || (isChargeExclusive && !content.isVideo) ? [] : content.images,
-    imageRatios: isForward || (isChargeExclusive && !content.isVideo) ? [] : content.imageRatios,
-    time: author.pub_time || '',
-    likeCount: Number(raw.modules?.module_stat?.like?.count || 0),
-    isLiked: raw.modules?.module_stat?.like?.status === true
-      || Number(raw.modules?.module_stat?.like?.status) === 1,
-    isLikeDisabled: Boolean(
-      raw.modules?.module_stat?.like?.forbidden
-      || raw.modules?.module_stat?.like?.disabled,
-    ),
-    commentCount: Number(raw.modules?.module_stat?.comment?.count || 0),
-    forwardCount: resolveMomentForwardCount(id, raw.modules?.module_stat?.forward?.count),
-    commentId: raw.basic?.comment_id_str ? String(raw.basic.comment_id_str) : undefined,
-    commentType: Number(raw.basic?.comment_type) || undefined,
-    hotComment: hotCommentText || hotCommentRichText.length
-      ? {
-          text: hotCommentText,
-          richText: hotCommentRichText,
-        }
-      : undefined,
-    url: `https://www.bilibili.com/opus/${id}`,
-    // 转发视频仍然是“转发动态”；原视频由卡片内的独立视频摘要展示。
-    isVideo: !isForward && content.isVideo,
-    isRegularVideo: !isForward && content.isRegularVideo,
-    isUgcSeason: !isForward && content.isUgcSeason,
-    isDraw: !isForward && content.isDraw,
-    isPgc: content.isPgc,
-    isLive: content.isLive,
-    isForward,
-    isArticle: raw.type === 'DYNAMIC_TYPE_ARTICLE'
-      || contentRaw.type === 'DYNAMIC_TYPE_ARTICLE'
-      || Number(raw.basic?.comment_type) === 12
-      || Number(contentRaw.basic?.comment_type) === 12
-      || raw.modules?.module_dynamic?.major?.type === 'MAJOR_TYPE_ARTICLE'
-      || contentRaw.modules?.module_dynamic?.major?.type === 'MAJOR_TYPE_ARTICLE',
-    isUpRecommendation: Boolean(additional?.isUpRecommendation),
-    isVideoReservation: Boolean(additional?.isVideoReservation),
-    isLiveReservation: Boolean(additional?.isLiveReservation),
-    isChargeExclusive,
-    chargeBadge: content.chargeBadge || selfContent.chargeBadge,
-    chargeHint: content.chargeHint || selfContent.chargeHint,
-    chargeCover: content.chargeCover || selfContent.chargeCover,
-    mediaMeta: content.mediaMeta,
-    liveArea: content.liveArea,
-    livePopularity: content.livePopularity,
-    roomId: content.roomId,
-    duration: content.duration,
-    videoPlay: content.videoPlay,
-    videoDanmaku: content.videoDanmaku,
-    aid: content.aid,
-    bvid: content.bvid,
-    videoUrl: content.videoUrl,
-    additional,
-    forward: isForward
-      ? {
-          id: forwardedId,
-          url: forwardedUrl,
-          authorMid: String(forwardedAuthor.mid || ''),
-          isArticle: forwardedIsArticle,
-          author: forwardedAuthor.name || t('moments.original_author'),
-          title: content.title,
-          text: content.text,
-          fallback: content.isChargeExclusive
-            ? (content.chargeBadge || t('moments.charge_exclusive_moment'))
-            : content.isLive
-              ? t('moments.live_moment')
-              : content.isVideo
-                ? t('moments.video_moment')
-                : content.images.length
-                  ? t('moments.image_moment')
-                  : content.text
-                    ? t('moments.text_moment')
-                    : t('moments.original_moment'),
-          // 转发动态的原图只放在嵌套卡片中，避免被提升成外层动态媒体。
-          images: !content.isVideo && !content.isLive && !content.isChargeExclusive
-            ? content.images
-            : [],
-          imageRatios: !content.isVideo && !content.isLive && !content.isChargeExclusive
-            ? content.imageRatios
-            : [],
-          video: forwardedArchive
-            ? {
-                title: pickText(forwardedArchive.title, content.title),
-                cover: httpsUrl(forwardedArchive.cover || content.images[0] || ''),
-                duration: pickText(forwardedArchive.duration_text, content.duration),
-                play: pickText(forwardedArchive.stat?.play, content.videoPlay),
-                danmaku: pickText(forwardedArchive.stat?.danmaku, content.videoDanmaku),
-                url: content.videoUrl
-                  || (content.bvid
-                    ? `https://www.bilibili.com/video/${content.bvid}`
-                    : content.aid
-                      ? `https://www.bilibili.com/video/av${content.aid}`
-                      : ''),
-                aid: content.aid,
-                bvid: content.bvid,
-              }
-            : undefined,
-        }
-      : undefined,
-  }
-}
-
-function estimateCardHeight(moment: DisplayMoment) {
-  const columnWidth = Math.max(1, gridCardWidth.value || 520)
-  const contentScale = Math.max(1, Math.min(1.6, columnWidth / 520))
-  const scaledTextBodyExtra = Math.round(230 * (contentScale - 1))
-  const interactionHeight = moment.hotComment ? 52 : 0
-  const additionalHeight = moment.additional ? 68 : 0
-  if (shouldUseWideMomentCardLayout(moment, columnWidth)) {
-    const mediaWidth = Math.max(1, (columnWidth - GRID_GAP * 3) * 0.6)
-    const mediaRatio = moment.isVideo || moment.isLive ? 16 / 9 : getMomentImageRatio(moment)
-    const mediaHeight = mediaWidth / mediaRatio
-    const bodyWidth = Math.max(160, (columnWidth - GRID_GAP * 3) * 0.4 - GRID_GAP * 2)
-    const charsPerLine = Math.max(12, Math.floor(bodyWidth / 14))
-    const textLineCount = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / charsPerLine)))
-    const bodyHeight = 96 + textLineCount * 24 + (moment.title ? 44 : 0)
-    return 115 + Math.round(Math.max(mediaHeight, bodyHeight)) + additionalHeight + interactionHeight
-  }
-  if (isCompactPlainTextMoment(moment)) {
-    const charsPerLine = Math.max(12, Math.floor((columnWidth - 32) / 14))
-    const lineCount = Math.min(7, Math.max(1, (moment.text || '').split('\n').reduce(
-      (total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)),
-      0,
-    )))
-    return 118 + lineCount * 21 + additionalHeight + interactionHeight
-  }
-  if (moment.forward?.images?.length) {
-    const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
-    const firstImageRatio = moment.forward.imageRatios?.[0]
-    const singleImageRatio = typeof firstImageRatio === 'number' && Number.isFinite(firstImageRatio) && firstImageRatio > 0
-      ? Math.min(2, Math.max(0.5, firstImageRatio))
-      : 1
-    const galleryRatio = moment.forward.images.length === 1
-      ? singleImageRatio
-      : moment.forward.images.length <= 3
-        ? moment.forward.images.length
-        : moment.forward.images.length <= 4
-          ? 1
-          : moment.forward.images.length <= 6
-            ? 3 / 2
-            : 1
-    // Forward galleries sit inside the bordered card with 12px side/bottom
-    // insets; subtract the 16px main inset and the 2px card border as well.
-    const galleryWidth = Math.max(1, columnWidth - 58)
-    return 190 + introLines * 21 + Math.round(galleryWidth / galleryRatio) + additionalHeight + interactionHeight
-  }
-  if (moment.forward?.video) {
-    const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
-    const forwardMediaWidth = Math.max(150, (columnWidth - 32) * 0.44)
-    return 117 + Math.round(forwardMediaWidth * 9 / 16) + introLines * 21 + additionalHeight + interactionHeight
-  }
-  if (moment.isChargeExclusive && !moment.isVideo)
-    return 230 + scaledTextBodyExtra + additionalHeight + interactionHeight
-  if (columnWidth < CARD_MIN_WIDTH) {
-    if (moment.isLive)
-      return Math.round(columnWidth * 9 / 16) + 210 + additionalHeight + interactionHeight
-  }
-  if (moment.isLive)
-    return Math.round((columnWidth - 32) * 9 / 16) + 190 + additionalHeight + interactionHeight
-  if (moment.isVideo) {
-    const contentWidth = Math.max(1, columnWidth - 32)
-    const charsPerLine = Math.max(12, Math.floor(contentWidth / 15))
-    const titleLines = moment.title ? Math.min(2, Math.max(1, Math.ceil(moment.title.length / charsPerLine))) : 0
-    const description = getCardPreviewText(moment)
-    const descriptionMaxLines = moment.descInherited ? 2 : 3
-    const descriptionLines = description ? Math.min(descriptionMaxLines, Math.max(1, Math.ceil(description.length / charsPerLine))) : 0
-    const bodyHeight = titleLines * 22 + descriptionLines * 24 + (titleLines && descriptionLines ? 8 : 0)
-    return Math.round(contentWidth * 9 / 16) + 116 + bodyHeight + additionalHeight + interactionHeight
-  }
-  if (moment.images.length && !moment.isVideo && !moment.isLive) {
-    const galleryRatio = moment.images.length === 1
-      ? getMomentImageRatio(moment)
-      : moment.images.length <= 3
-        ? moment.images.length
-        : moment.images.length <= 4
-          ? 1
-          : moment.images.length <= 6
-            ? 3 / 2
-            : 1
-    return Math.round((columnWidth - 32) / galleryRatio) + 220 + additionalHeight + interactionHeight
-  }
-  const charsPerLine = Math.max(12, Math.floor((columnWidth - 32) / 14))
-  const textLineCount = Math.min(12, Math.max(1, (moment.text || '').split('\n').reduce(
-    (total, line) => total + Math.max(1, Math.ceil(Array.from(line).length / charsPerLine)),
-    0,
-  )))
-  return 112
-    + textLineCount * 24
-    + (moment.title ? 30 : 0)
-    + additionalHeight
-    + interactionHeight
-}
-
 function handleMomentFilterChange(filter: MomentFilter) {
   if (activeMomentFilter.value === filter)
     return
 
-  hoveredMediaId.value = ''
-  cleanupLivePreviewPlayer()
-  Object.keys(previewUrls).forEach(key => delete previewUrls[key])
-  visibleMomentIds.clear()
+  previews.clear()
   activeMomentFilter.value = filter
   if (filter !== 'all' && filter !== 'video')
     activeMomentGroup.value = 'all'
@@ -1678,7 +306,7 @@ function handleMomentGroupChange(group: MomentGroup) {
   if (group === 'wanted')
     selectedHostMid.value = ''
   activeMomentGroup.value = group
-  wantedCacheCursor.value = 0
+  feedReader.reset()
   void loadMoments(true)
 }
 
@@ -1691,10 +319,7 @@ function clearUpUpdateDot(mid: string) {
 }
 
 function prepareMomentListTransition() {
-  hoveredMediaId.value = ''
-  cleanupLivePreviewPlayer()
-  Object.keys(previewUrls).forEach(key => delete previewUrls[key])
-  visibleMomentIds.clear()
+  previews.clear()
   if (scrollViewportRef.value)
     scrollViewportRef.value.scrollTop = 0
 }
@@ -1708,7 +333,7 @@ function handleUpFilterChange(mid = '') {
   prepareMomentListTransition()
   selectedHostMid.value = nextMid
   activeMomentGroup.value = 'all'
-  wantedCacheCursor.value = 0
+  feedReader.reset()
   if (nextMid)
     clearUpUpdateDot(nextMid)
   void loadMoments(true)
@@ -1801,156 +426,12 @@ function matchesMomentFilter(moment: DisplayMoment) {
   return moment.isArticle
 }
 
-function getValidMomentsCache(filter: MomentFilter) {
-  ensureMomentsCacheAccount(loadedAccountId)
-  const entry = momentsFeedCache.value.entries[filter]
-  if (!entry)
-    return undefined
-  const usesCurrentMomentShape = entry.items.every(moment => (
-    typeof moment.videoPlay === 'string'
-    && typeof moment.videoDanmaku === 'string'
-    && !(moment.isForward && moment.isVideo)
-    && 'commentId' in moment
-    && 'commentType' in moment
-    && 'descInherited' in moment
-  ))
-  if (usesCurrentMomentShape && Date.now() - entry.updatedAt < MOMENTS_CACHE_TTL_MS)
-    return entry
-
-  const { [filter]: _expired, ...validEntries } = momentsFeedCache.value.entries
-  momentsFeedCache.value = {
-    accountId: loadedAccountId,
-    entries: validEntries,
-  }
-  return undefined
-}
-
-function mergeCachedMoments(primary: DisplayMoment[], secondary: DisplayMoment[]) {
-  const result: DisplayMoment[] = []
-  const ids = new Set<string>()
-  for (const moment of [...primary, ...secondary]) {
-    if (ids.has(moment.id))
-      continue
-    ids.add(moment.id)
-    result.push(moment)
-    if (result.length >= MOMENTS_CACHE_MAX_ITEMS)
-      break
-  }
-  return result
-}
-
-function saveMomentsCache(filter: MomentFilter, entry: MomentsFeedCacheEntry) {
-  ensureMomentsCacheAccount(loadedAccountId)
-  const items = entry.items.slice(0, MOMENTS_CACHE_MAX_ITEMS)
-  const continuationLimit = Math.max(0, MOMENTS_CACHE_MAX_ITEMS - items.length)
-  const continuation = entry.continuation && continuationLimit > 0
-    ? { ...entry.continuation, items: entry.continuation.items.slice(0, continuationLimit) }
-    : undefined
-  momentsFeedCache.value = {
-    accountId: loadedAccountId,
-    entries: {
-      ...momentsFeedCache.value.entries,
-      [filter]: {
-        ...entry,
-        items,
-        continuation,
-        updatedAt: Date.now(),
-      },
-    },
-  }
-}
-
-function cacheRegularMomentPage(
-  filter: MomentFilter,
-  pageItems: DisplayMoment[],
-  pageOffset: string,
-  pageUpdateBaseline: string,
-  pageHasMore: boolean,
-  reset: boolean,
-) {
-  if ((filter !== 'all' && filter !== 'video') || !pageItems.length)
-    return
-
-  const existing = getValidMomentsCache(filter)
-  if (!existing) {
-    saveMomentsCache(filter, {
-      items: pageItems,
-      offset: pageOffset,
-      updateBaseline: pageUpdateBaseline,
-      hasMore: pageHasMore,
-      updatedAt: Date.now(),
-    })
-    return
-  }
-
-  const existingIds = new Set(existing.items.map(moment => moment.id))
-  const overlapsCache = pageItems.some(moment => existingIds.has(moment.id))
-  // 顶部刷新若尚未追上旧缓存，保留旧段，后续按每批 100 条继续寻找衔接点。
-  if (reset && !overlapsCache) {
-    saveMomentsCache(filter, {
-      items: pageItems,
-      offset: pageOffset,
-      updateBaseline: pageUpdateBaseline,
-      hasMore: pageHasMore,
-      updatedAt: Date.now(),
-      continuation: {
-        items: existing.items,
-        offset: existing.offset,
-        updateBaseline: existing.updateBaseline,
-        hasMore: existing.hasMore,
-      },
-    })
-    return
-  }
-
-  const continuationIds = new Set(existing.continuation?.items.map(moment => moment.id) || [])
-  const reachesContinuation = pageItems.some(moment => continuationIds.has(moment.id))
-  if (reachesContinuation && existing.continuation) {
-    saveMomentsCache(filter, {
-      items: mergeCachedMoments(existing.items, mergeCachedMoments(pageItems, existing.continuation.items))
-        .sort((a, b) => b.publishedAt - a.publishedAt),
-      offset: existing.continuation.offset,
-      updateBaseline: existing.continuation.updateBaseline,
-      hasMore: existing.continuation.hasMore,
-      updatedAt: Date.now(),
-    })
-    return
-  }
-
-  const existingOldest = Math.min(...existing.items.map(moment => moment.publishedAt || Infinity))
-  const pageOldest = Math.min(...pageItems.map(moment => moment.publishedAt || Infinity))
-  const extendsCachedTail = pageOldest < existingOldest
-  const items = mergeCachedMoments(
-    reset ? pageItems : existing.items,
-    reset ? existing.items : pageItems,
-  )
-    .sort((a, b) => b.publishedAt - a.publishedAt)
-  saveMomentsCache(filter, {
-    items,
-    offset: extendsCachedTail ? pageOffset : existing.offset,
-    updateBaseline: extendsCachedTail ? pageUpdateBaseline : existing.updateBaseline,
-    hasMore: extendsCachedTail ? pageHasMore : existing.hasMore,
-    updatedAt: Date.now(),
-    continuation: existing.continuation,
-  })
-}
-
 function loadMoreWantedMoments() {
   void loadMoments(false, 0, true)
 }
 
 function loadMoreFilteredMoments() {
   void loadMoments(false, 0, true)
-}
-
-function getMomentImageRatio(moment: DisplayMoment) {
-  const metadataRatio = moment.imageRatios?.[0]
-  const ratio = isUsableImageRatio(metadataRatio)
-    ? metadataRatio
-    : coverRatios[moment.id]
-  return isUsableImageRatio(ratio)
-    ? Math.max(MIN_SINGLE_IMAGE_RATIO, ratio)
-    : 1
 }
 
 const normalizedMomentBlockedKeywords = computed(() => {
@@ -2037,32 +518,28 @@ async function reapplyMomentFiltersFromCache() {
   if (activeMomentGroup.value !== 'all' || selectedHostMid.value)
     return false
 
-  const cacheEntry = getValidMomentsCache(activeMomentFilter.value)
-  if (!cacheEntry)
+  const sourceItems = feedReader.getLoaded(activeMomentFilter.value, activeMomentGroup.value, selectedHostMid.value)
+  if (!sourceItems)
     return false
 
   const requestToken = ++feedRequestToken
   const requestType = activeMomentFilter.value
   const requestGroup = activeMomentGroup.value
   const requestHostMid = selectedHostMid.value
-  const filteredItems = cacheEntry.items
+  const filteredItems = sourceItems
     .filter(passesMomentSettings)
     .sort((a, b) => b.publishedAt - a.publishedAt)
 
   moments.value = []
-  momentColumns.value = []
-  virtualColumns.value = []
+  momentLayout.clearColumns()
   if (scrollViewportRef.value)
     scrollViewportRef.value.scrollTop = 0
 
   appendMoments(filteredItems)
-  offset.value = cacheEntry.offset
-  updateBaseline.value = cacheEntry.updateBaseline
-  noMoreContent.value = !cacheEntry.hasMore
   isInitialLoading.value = false
   isLoading.value = false
 
-  if (filteredItems.length > 0 || !cacheEntry.hasMore) {
+  if (filteredItems.length > 0 || noMoreContent.value) {
     await nextTick()
     if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
       updateGridColumnCount()
@@ -2071,313 +548,33 @@ async function reapplyMomentFiltersFromCache() {
     }
     return true
   }
-  return false
-}
-
-function getCardHeight(moment: DisplayMoment) {
-  return cardHeights[moment.id] || estimateCardHeight(moment)
-}
-
-function getColumnStackHeight(column: DisplayMoment[]) {
-  if (!column.length)
-    return 0
-  return column.reduce((sum, moment, index) => {
-    return sum + getCardHeight(moment) + (index > 0 ? GRID_GAP : 0)
-  }, 0)
-}
-
-function findShortestColumnIndex(columns: DisplayMoment[][], heights?: number[]) {
-  let minIdx = 0
-  let minHeight = Infinity
-  for (let i = 0; i < columns.length; i++) {
-    const height = heights ? heights[i] : getColumnStackHeight(columns[i])
-    if (height < minHeight) {
-      minHeight = height
-      minIdx = i
-    }
-  }
-  return minIdx
+  return true
 }
 
 /**
  * 对各列底部做有限次数的跨列补位。
  * 仅从每列靠后的卡片中选择，并且只有能明确缩小列高差时才移动。
  */
-function balanceColumnBottoms(columns: DisplayMoment[][]) {
-  const next = columns.map(column => [...column])
-  if (next.length < 2)
-    return { columns: next, changed: false }
-
-  const sourceOrder = new Map(moments.value.map((moment, index) => [moment.id, index]))
-  let changed = false
-  const maxMoves = Math.min(moments.value.length, 24)
-
-  for (let moveCount = 0; moveCount < maxMoves; moveCount++) {
-    const heights = next.map(column => getColumnStackHeight(column))
-    const currentSpread = Math.max(...heights) - Math.min(...heights)
-    let bestMove: { sourceIndex: number, targetIndex: number, itemIndex: number, spread: number } | null = null
-
-    next.forEach((source, sourceIndex) => {
-      if (source.length <= 1)
-        return
-
-      // 只调整列尾附近的卡片，避免破坏上方已经阅读过的瀑布流
-      const firstCandidateIndex = Math.max(0, source.length - 4)
-      for (let itemIndex = firstCandidateIndex; itemIndex < source.length; itemIndex++) {
-        const itemHeight = getCardHeight(source[itemIndex])
-        next.forEach((target, targetIndex) => {
-          if (targetIndex === sourceIndex)
-            return
-
-          const candidateHeights = [...heights]
-          candidateHeights[sourceIndex] -= itemHeight + GRID_GAP
-          candidateHeights[targetIndex] += itemHeight + (target.length ? GRID_GAP : 0)
-          const spread = Math.max(...candidateHeights) - Math.min(...candidateHeights)
-          if (spread >= currentSpread - 4 || (bestMove && spread >= bestMove.spread))
-            return
-
-          bestMove = { sourceIndex, targetIndex, itemIndex, spread }
-        })
-      }
-    })
-
-    if (!bestMove)
-      break
-
-    const { sourceIndex, targetIndex, itemIndex } = bestMove
-    const [moved] = next[sourceIndex].splice(itemIndex, 1)
-    next[targetIndex].push(moved)
-    next[targetIndex].sort((a, b) => (sourceOrder.get(a.id) ?? 0) - (sourceOrder.get(b.id) ?? 0))
-    changed = true
-  }
-
-  return { columns: next, changed }
-}
 
 /** 按最短列排布，尽量让各列底部相对平齐 */
-function redistributeColumns() {
-  const count = Math.max(1, gridColumnCount.value)
-  const next = Array.from({ length: count }, () => [] as DisplayMoment[])
-  const heights = Array.from({ length: count }, () => 0)
-
-  moments.value.forEach((item) => {
-    const columnIndex = findShortestColumnIndex(next, heights)
-    next[columnIndex].push(item)
-    heights[columnIndex] += (heights[columnIndex] > 0 ? GRID_GAP : 0) + getCardHeight(item)
-  })
-
-  momentColumns.value = balanceColumnBottoms(next).columns
-  updateVirtualColumns()
-}
-
-function invalidateCardMeasurementsForWidthChange() {
-  Object.keys(cardHeights).forEach(id => delete cardHeights[id])
-  settledHeights.clear()
-  if (cardGeometryFrame)
-    cancelAnimationFrame(cardGeometryFrame)
-  cardGeometryFrame = requestAnimationFrame(() => {
-    cardGeometryFrame = 0
-    cardElements.forEach((element, id) => {
-      fitVideoCardDescription(element)
-      const height = element.getBoundingClientRect().height
-      if (height > 0)
-        commitCardHeight(id, height, { force: true })
-    })
-    updateVirtualColumns()
-    maybeLoadMoreNearBottom()
-  })
-}
 
 /** 按设置的期望列数排布；空间不足时降列，避免卡片窄于最小可读宽度。 */
-function updateGridColumnCount() {
-  const layoutWidth = layoutRef.value?.clientWidth || window.innerWidth
-  const mainRailWidth = momentsContentRef.value?.clientWidth || layoutWidth
-  const hasSidebarContent = settings.value.momentsSidebarShowUserCard
-    || settings.value.momentsSidebarShowPublish
-    || settings.value.momentsSidebarShowLive
-  showMomentsSidebar.value = shouldShowMomentsSidebar({
-    layoutWidth,
-    sidebarWidth: SIDEBAR_WIDTH,
-    gap: GRID_GAP,
-    minMainWidth: SIDEBAR_MIN_MAIN_WIDTH,
-    hasContent: hasSidebarContent,
-  })
 
-  const preferredColumns = Math.min(3, Math.max(1, Number(momentsGridColumns.value) || 3))
-  const nextCols = resolveMomentGridColumnCount({
-    containerWidth: mainRailWidth,
-    preferredColumns,
-    minCardWidth: CARD_MIN_WIDTH,
-    gap: GRID_GAP,
-  })
-  const gridClientWidth = gridRef.value?.clientWidth || mainRailWidth
-  const nextCardWidth = resolveMomentCardWidth({
-    gridClientWidth,
-    columns: nextCols,
-    gap: GRID_GAP,
-  })
-
-  const colsChanged = nextCols !== gridColumnCount.value
-  const widthChanged = Math.abs(nextCardWidth - gridCardWidth.value) > 0.01
-  const needInitColumns = momentColumns.value.length !== nextCols
-
-  gridColumnCount.value = nextCols
-  gridCardWidth.value = nextCardWidth
-  if (widthChanged)
-    invalidateCardMeasurementsForWidthChange()
-
-  if (colsChanged || needInitColumns)
-    redistributeColumns()
-  else if (widthChanged)
-    updateVirtualColumns()
+function applyMomentPatch(id: string, patch: Partial<DisplayMoment>) {
+  const updated = feedReader.updateMoment(id, patch)
+  if (!updated)
+    return
+  moments.value = moments.value.map(moment => moment.id === id ? updated : moment)
+  momentLayout.updateMoment(updated)
+  feedCache.updateMoment(id, moment => ({ ...moment, ...patch }))
+  if (selectedMoment.value?.id === id)
+    details.updateMoment(updated)
 }
-
-function appendMoments(items: DisplayMoment[]) {
-  const wasEmpty = moments.value.length === 0
-  if (!momentColumns.value.length)
-    momentColumns.value = Array.from({ length: Math.max(1, gridColumnCount.value) }, () => [])
-
-  const existingIds = new Set(moments.value.map(moment => moment.id))
-  const columnHeights = momentColumns.value.map(column => getColumnStackHeight(column))
-
-  items.forEach((item) => {
-    if (moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS)
-      return
-    if (existingIds.has(item.id))
-      return
-
-    const columnIndex = findShortestColumnIndex(momentColumns.value, columnHeights)
-    moments.value.push(item)
-    momentColumns.value[columnIndex].push(item)
-    columnHeights[columnIndex] += (columnHeights[columnIndex] > 0 ? GRID_GAP : 0) + getCardHeight(item)
-    existingIds.add(item.id)
-  })
-  // 初始布局可整体平衡；分页只追加，不能搬动用户正在查看的旧卡片
-  if (wasEmpty)
-    momentColumns.value = balanceColumnBottoms(momentColumns.value).columns
-  updateVirtualColumns()
-  scheduleBottomRebalance()
-}
-
-const momentsGridStyle = computed(() => ({
-  '--moments-columns': String(Math.max(1, gridColumnCount.value)),
-}))
-
-function scheduleBottomRebalance() {
-  // 滚动过程中不重排，避免瀑布流突然上下跳动
-  if (rebalanceTimer)
-    clearTimeout(rebalanceTimer)
-  rebalanceTimer = setTimeout(() => {
-    rebalanceTimer = null
-    if (Date.now() < suppressBottomRebalanceUntil)
-      return
-    if (Date.now() - lastScrollAt < 480) {
-      scheduleBottomRebalance()
-      return
-    }
-    if (momentColumns.value.length < 2 || moments.value.length < 2)
-      return
-    const viewport = scrollViewportRef.value
-    if (viewport) {
-      const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-      // 分页加载区不再缩短最高列，避免最大 scrollTop 变化把滚动位置向上夹回
-      if (distanceFromBottom < viewport.clientHeight * 1.25)
-        return
-    }
-    const heights = momentColumns.value.map(column => getColumnStackHeight(column))
-    const maxH = Math.max(...heights)
-    const minH = Math.min(...heights)
-    // 空闲时对列尾做小范围补位，让追加数据后的底边也保持相对平整
-    if (maxH - minH <= Math.max(120, gridCardWidth.value * 0.45))
-      return
-    const balanced = balanceColumnBottoms(momentColumns.value)
-    if (balanced.changed) {
-      momentColumns.value = balanced.columns
-      updateVirtualColumns()
-    }
-  }, 720)
-}
-
-function handleMomentCardInteractiveResize() {
-  suppressBottomRebalanceUntil = Date.now() + 1200
-  if (rebalanceTimer) {
-    clearTimeout(rebalanceTimer)
-    rebalanceTimer = null
-  }
-}
-
 function handleMomentForwardCountChange(momentId: string, forwardCount: number) {
   forwardCountOverrides.set(`${getCurrentAccountId()}:${momentId}`, forwardCount)
-  let canonicalMoment: DisplayMoment | undefined
-  const updateItems = (items: DisplayMoment[]) => items.map((moment) => {
-    if (moment.id !== momentId)
-      return moment
-    canonicalMoment ??= { ...moment, forwardCount }
-    return canonicalMoment
-  })
-  moments.value = updateItems(moments.value)
-  momentColumns.value = momentColumns.value.map(updateItems)
-  const nextEntries: MomentsFeedCacheEntries = {}
-  for (const filter of Object.keys(momentsFeedCache.value.entries) as MomentFilter[]) {
-    const entry = momentsFeedCache.value.entries[filter]
-    if (!entry)
-      continue
-    nextEntries[filter] = {
-      ...entry,
-      items: updateItems(entry.items),
-      ...(entry.continuation
-        ? {
-            continuation: {
-              ...entry.continuation,
-              items: updateItems(entry.continuation.items),
-            },
-          }
-        : {}),
-    }
-  }
-  momentsFeedCache.value = {
-    ...momentsFeedCache.value,
-    entries: nextEntries,
-  }
-  for (const filter of Object.keys(nextEntries) as MomentFilter[]) {
-    const entry = nextEntries[filter]
-    if (entry)
-      saveMomentsCache(filter, entry)
-  }
-  if (selectedMoment.value?.id === momentId)
-    selectedMoment.value = canonicalMoment ?? { ...selectedMoment.value, forwardCount }
+  applyMomentPatch(momentId, { forwardCount })
 }
 
-/** 提交卡片高度；瀑布流各列独立变化，不修正全局 scrollTop */
-function commitCardHeight(id: string, next: number, options?: { force?: boolean }) {
-  if (next <= 0)
-    return false
-  const prev = cardHeights[id] || 0
-  const threshold = options?.force ? 1 : (settledHeights.has(id) ? 10 : 4)
-  if (prev > 0 && Math.abs(prev - next) < threshold)
-    return false
-
-  cardHeights[id] = next
-  // 连续两次接近的高度视为稳定，后续忽略小幅 Resize 抖动
-  if (prev > 0 && Math.abs(next - prev) < 24)
-    settledHeights.add(id)
-  else if (prev > 0 && settledHeights.has(id) && Math.abs(next - prev) < 48)
-    settledHeights.add(id)
-
-  return true
-}
-
-function scheduleVirtualUpdate() {
-  if (virtualRaf)
-    return
-  virtualRaf = window.requestAnimationFrame(() => {
-    virtualRaf = 0
-    updateVirtualColumns()
-    maybeLoadMoreNearBottom()
-  })
-}
-
-/** 全局触底哨兵的本地兜底：滚动到最后一屏附近时直接请求下一页。 */
 function maybeLoadMoreNearBottom() {
   const viewport = scrollViewportRef.value
   if (
@@ -2385,7 +582,6 @@ function maybeLoadMoreNearBottom() {
     || isInitialLoading.value
     || isLoading.value
     || noMoreContent.value
-    || moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS
     || !moments.value.length
     || requiresManualMomentPaging()
   ) {
@@ -2398,853 +594,32 @@ function maybeLoadMoreNearBottom() {
     void loadMoments()
 }
 
-function getGridOffsetTop() {
-  const grid = gridRef.value
-  const viewport = scrollViewportRef.value
-  if (!grid || !viewport)
-    return 0
-
-  const gridRect = grid.getBoundingClientRect()
-  const viewportRect = viewport.getBoundingClientRect()
-  return gridRect.top - viewportRect.top + viewport.scrollTop
-}
-
-function updateVirtualColumns() {
-  if (!momentColumns.value.length) {
-    virtualColumns.value = []
-    return
-  }
-
-  const viewport = scrollViewportRef.value
-  const scrollTop = viewport?.scrollTop ?? 0
-  const viewportHeight = viewport?.clientHeight ?? window.innerHeight
-  const gridOffsetTop = getGridOffsetTop()
-  const viewStart = scrollTop - OVERSCAN_PX
-  const viewEnd = scrollTop + viewportHeight + OVERSCAN_PX
-  const gap = GRID_GAP
-
-  virtualColumns.value = momentColumns.value.map((column) => {
-    let y = 0
-    let topPad = 0
-    let bottomPad = 0
-    const items: DisplayMoment[] = []
-
-    column.forEach((moment) => {
-      const height = getCardHeight(moment)
-      const start = gridOffsetTop + y
-      const end = start + height
-      if (end < viewStart) {
-        topPad += height + gap
-      }
-      else if (start > viewEnd) {
-        bottomPad += height + gap
-      }
-      else {
-        items.push(moment)
-      }
-      y += height + gap
-    })
-
-    return {
-      topPad: resolveVirtualSpacerSize(topPad, gap),
-      bottomPad: resolveVirtualSpacerSize(bottomPad, gap),
-      items,
-    }
-  })
-
-  prunePreviewCache()
-}
-
-function prunePreviewCache() {
-  const keys = Object.keys(previewUrls)
-  if (keys.length <= MAX_PREVIEW_CACHE)
-    return
-
-  keys.forEach((id) => {
-    if (id === hoveredMediaId.value)
-      return
-    if (visibleMomentIds.has(id))
-      return
-    delete previewUrls[id]
-  })
-
-  // 仍过多时淘汰更早的非悬停项
-  const remain = Object.keys(previewUrls).filter(id => id !== hoveredMediaId.value)
-  if (remain.length > MAX_PREVIEW_CACHE) {
-    remain.slice(0, remain.length - MAX_PREVIEW_CACHE).forEach((id) => {
-      delete previewUrls[id]
-    })
-  }
-}
-
 /** 卡片仅在第一次完成测量时播放入场动画，虚拟列表重新挂载不重复播放 */
-function markCardReady(id: string) {
-  readyCardIds.add(id)
-  if (revealedCardIds.has(id))
-    return
-
-  revealedCardIds.add(id)
-  enteringCardIds.add(id)
-  const previousTimer = cardEnterTimers.get(id)
-  if (previousTimer)
-    clearTimeout(previousTimer)
-  cardEnterTimers.set(id, setTimeout(() => {
-    enteringCardIds.delete(id)
-    cardEnterTimers.delete(id)
-  }, 240))
-}
-
-function fitVideoCardDescription(card: HTMLElement) {
-  if (card.dataset.descriptionExpanded === 'true')
-    return
-
-  const body = card.querySelector<HTMLElement>('.moment-card__main--video:not(.moment-card__main--live) .moment-card__body')
-  const description = body?.querySelector<HTMLElement>('.moment-card__desc')
-  if (!body || !description)
-    return
-
-  // 先解除上一次测量得到的限制，让纵向卡片也能按当前宽高重新展开。
-  body.style.removeProperty('--moment-card-description-lines')
-
-  const bodyStyle = getComputedStyle(body)
-  const title = body.querySelector<HTMLElement>('.moment-card__title')
-  const titleStyle = title ? getComputedStyle(title) : undefined
-  const occupiedHeight = title
-    ? title.getBoundingClientRect().height
-    + Number.parseFloat(titleStyle?.marginTop || '0')
-    + Number.parseFloat(titleStyle?.marginBottom || '0')
-    : 0
-  const availableHeight = body.clientHeight
-    - Number.parseFloat(bodyStyle.paddingTop)
-    - Number.parseFloat(bodyStyle.paddingBottom)
-    - occupiedHeight
-  const lineHeight = Number.parseFloat(getComputedStyle(description).lineHeight)
-
-  if (!Number.isFinite(lineHeight) || lineHeight <= 0)
-    return
-
-  const visibleLines = Math.max(1, Math.floor((availableHeight + 0.5) / lineHeight))
-  body.style.setProperty('--moment-card-description-lines', String(visibleLines))
-}
-
-function bindCardEl(el: Element | null, moment: DisplayMoment) {
-  const previous = cardElements.get(moment.id)
-  if (!(el instanceof HTMLElement)) {
-    if (previous) {
-      cardMeasureObserver?.unobserve(previous)
-      visibilityObserver?.unobserve(previous)
-      cardElements.delete(moment.id)
-    }
-    visibleMomentIds.delete(moment.id)
-    if (hoveredMediaId.value === moment.id) {
-      hoveredMediaId.value = ''
-      cleanupLivePreviewPlayer()
-    }
-    else if (activePreviewVideo?.id === moment.id) {
-      releasePreviewVideoElement(activePreviewVideo.element)
-      activePreviewVideo = null
-    }
-    if (previewUrls[moment.id])
-      delete previewUrls[moment.id]
-    return
-  }
-
-  if (previous && previous !== el) {
-    cardMeasureObserver?.unobserve(previous)
-    visibilityObserver?.unobserve(previous)
-  }
-
-  cardElements.set(moment.id, el)
-  cardMeasureObserver?.observe(el)
-  visibilityObserver?.observe(el)
-  el.dataset.momentId = moment.id
-  fitVideoCardDescription(el)
-
-  // 初次挂载写入实测高度（带阈值，避免反复抖）
-  const measured = Math.round(el.getBoundingClientRect().height)
-  if (measured > 0) {
-    commitCardHeight(moment.id, measured)
-    requestAnimationFrame(() => {
-      if (cardElements.get(moment.id) === el) {
-        fitVideoCardDescription(el)
-        markCardReady(moment.id)
-      }
-    })
-  }
-  else if (!cardHeights[moment.id]) {
-    cardHeights[moment.id] = estimateCardHeight(moment)
-  }
-}
-
-function setupVirtualObservers() {
-  cardMeasureObserver?.disconnect()
-  visibilityObserver?.disconnect()
-
-  cardMeasureObserver = new ResizeObserver((entries) => {
-    let changed = false
-    entries.forEach((entry) => {
-      const card = entry.target as HTMLElement
-      const id = card.dataset.momentId
-      if (!id)
-        return
-      fitVideoCardDescription(card)
-      const next = Math.round(entry.contentRect.height)
-      if (commitCardHeight(id, next))
-        changed = true
-      if (next > 0)
-        markCardReady(id)
-    })
-    if (changed) {
-      scheduleVirtualUpdate()
-      // 测量变化不再立刻重排整列，避免抖动；仅空闲且列差极大时才 rebalance
-      scheduleBottomRebalance()
-    }
-  })
-
-  visibilityObserver = new IntersectionObserver((entries) => {
-    entries.forEach((entry) => {
-      const id = (entry.target as HTMLElement).dataset.momentId
-      if (!id)
-        return
-      if (entry.isIntersecting)
-        visibleMomentIds.add(id)
-      else
-        visibleMomentIds.delete(id)
-
-      // 离开视口时释放该卡预览资源
-      if (!entry.isIntersecting && hoveredMediaId.value !== id && previewUrls[id]) {
-        if (activePreviewVideo?.id === id) {
-          releasePreviewVideoElement(activePreviewVideo.element)
-          activePreviewVideo = null
-        }
-        delete previewUrls[id]
-      }
-    })
-    prunePreviewCache()
-  }, {
-    root: scrollViewportRef.value,
-    rootMargin: '200px 0px',
-    threshold: 0.01,
-  })
-
-  // 观察器重建后重新绑定当前虚拟窗口内的卡片
-  cardElements.forEach((el) => {
-    cardMeasureObserver?.observe(el)
-    visibilityObserver?.observe(el)
-  })
-}
-
-function handleViewportScroll() {
-  lastScrollAt = Date.now()
-  scheduleVirtualUpdate()
-}
-
-function attachViewportScroll() {
-  const viewport = scrollViewportRef.value
-  if (!viewport || attachedScrollViewport === viewport)
-    return
-  detachViewportScroll()
-  viewport.addEventListener('scroll', handleViewportScroll, { passive: true })
-  attachedScrollViewport = viewport
-}
-
-function detachViewportScroll() {
-  attachedScrollViewport?.removeEventListener('scroll', handleViewportScroll)
-  attachedScrollViewport = null
-}
-
-function handleCoverLoad(event: Event, momentId: string) {
-  const img = event.target as HTMLImageElement
-  if (!img.naturalWidth || !img.naturalHeight)
-    return
-
-  const ratio = img.naturalWidth / img.naturalHeight
-  const moment = moments.value.find(item => item.id === momentId)
-  const nextRatio = Math.max(ratio, MIN_SINGLE_IMAGE_RATIO)
-  const prevRatio = coverRatios[momentId]
-  coverRatios[momentId] = nextRatio
-
-  // 封面比例变化会改估算高度；若尚未实测稳定，用估算高度更新并补偿滚动
-  if (!settledHeights.has(momentId) && (!prevRatio || Math.abs(prevRatio - nextRatio) > 0.01)) {
-    if (moment && !cardHeights[momentId]) {
-      commitCardHeight(momentId, estimateCardHeight(moment), { force: true })
-      scheduleVirtualUpdate()
-    }
-  }
-}
-
-function releaseMediaElementSources(media: HTMLMediaElement) {
-  if (media instanceof HTMLVideoElement) {
-    releasePreviewVideoElement(media)
-    return
-  }
-  media.pause()
-  media.srcObject = null
-  media.removeAttribute('src')
-  media.removeAttribute('srcset')
-  media.querySelectorAll('source').forEach((source) => {
-    source.removeAttribute('src')
-    source.removeAttribute('srcset')
-  })
-  media.load()
-}
-
-function releasePreviewVideoElement(video: HTMLVideoElement) {
-  video.pause()
-  video.srcObject = null
-  video.removeAttribute('src')
-  video.removeAttribute('srcset')
-  video.querySelectorAll('source').forEach((source) => {
-    source.removeAttribute('src')
-    source.removeAttribute('srcset')
-  })
-  video.load()
-}
-
-function cleanupLivePreviewTransports() {
-  if (liveHlsPlayer) {
-    liveHlsPlayer.destroy()
-    liveHlsPlayer = null
-  }
-  if (liveFlvPlayer) {
-    try {
-      liveFlvPlayer.pause()
-      liveFlvPlayer.unload()
-      liveFlvPlayer.detachMediaElement()
-      liveFlvPlayer.destroy()
-    }
-    catch {
-      // 预览销毁失败可忽略
-    }
-    liveFlvPlayer = null
-  }
-}
-
-function cleanupLivePreviewPlayer(invalidate = true) {
-  if (invalidate)
-    livePreviewGeneration++
-  cleanupLivePreviewTransports()
-  if (activePreviewVideo) {
-    releasePreviewVideoElement(activePreviewVideo.element)
-    activePreviewVideo = null
-  }
-}
-
-function isLivePreviewCurrent(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
-  return generation === livePreviewGeneration
-    && hoveredMediaId.value === momentId
-    && previewUrls[momentId] === url
-    && videoEl.isConnected
-}
-
-function failLivePreview(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
-  if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
-    return
-  cleanupLivePreviewTransports()
-  releasePreviewVideoElement(videoEl)
-  if (activePreviewVideo?.element === videoEl)
-    activePreviewVideo = null
-}
-
-async function setupStreamPreview(url: string, videoEl: HTMLVideoElement, momentId: string, generation: number) {
-  if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
-    return
-  cleanupLivePreviewTransports()
-  releasePreviewVideoElement(videoEl)
-
-  if (url.includes('.flv')) {
-    try {
-      const flvjsModule = await loadFlvModule()
-      const flvjs = flvjsModule.default
-      if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
-        return
-      if (!flvjs.isSupported()) {
-        failLivePreview(generation, momentId, url, videoEl)
-        return
-      }
-
-      const player = flvjs.createPlayer({
-        type: 'flv',
-        url,
-        isLive: true,
-      }, {
-        enableWorker: false,
-        enableStashBuffer: false,
-        stashInitialSize: 128,
-        lazyLoad: false,
-      })
-      liveFlvPlayer = player
-      player.attachMediaElement(videoEl)
-      player.on(flvjs.Events.ERROR, () => {
-        if (liveFlvPlayer === player)
-          failLivePreview(generation, momentId, url, videoEl)
-      })
-      player.load()
-      void videoEl.play().catch(() => {
-        if (liveFlvPlayer === player)
-          failLivePreview(generation, momentId, url, videoEl)
-      })
-    }
-    catch {
-      failLivePreview(generation, momentId, url, videoEl)
-    }
-    return
-  }
-
-  if (url.includes('m3u8')) {
-    try {
-      const Hls = (await loadHlsModule()).default
-      if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
-        return
-      if (Hls.isSupported()) {
-        const player = new Hls({
-          enableWorker: true,
-          lowLatencyMode: true,
-          maxBufferLength: 10,
-        })
-        liveHlsPlayer = player
-        player.loadSource(url)
-        player.attachMedia(videoEl)
-        player.on(Hls.Events.MANIFEST_PARSED, () => {
-          if (liveHlsPlayer !== player || !isLivePreviewCurrent(generation, momentId, url, videoEl))
-            return
-          void videoEl.play().catch(() => {
-            if (liveHlsPlayer === player)
-              failLivePreview(generation, momentId, url, videoEl)
-          })
-        })
-        player.on(Hls.Events.ERROR, (_event, data) => {
-          if (data.fatal && liveHlsPlayer === player)
-            failLivePreview(generation, momentId, url, videoEl)
-        })
-        return
-      }
-      if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-        videoEl.src = url
-        void videoEl.play().catch(() => {
-          failLivePreview(generation, momentId, url, videoEl)
-        })
-      }
-      else {
-        failLivePreview(generation, momentId, url, videoEl)
-      }
-    }
-    catch {
-      failLivePreview(generation, momentId, url, videoEl)
-    }
-    return
-  }
-
-  videoEl.src = url
-  void videoEl.play().catch(() => {
-    failLivePreview(generation, momentId, url, videoEl)
-  })
-}
-
-function isMomentPreviewEnabled(moment: DisplayMoment) {
-  if (moment.isLive)
-    return settings.value.momentsEnableLivePreview
-  if (moment.isVideo)
-    return settings.value.momentsEnableVideoPreview
-  return false
-}
-
-function cacheVideoCid(bvid: string, cid: number) {
-  videoCidCache.delete(bvid)
-  videoCidCache.set(bvid, cid)
-  while (videoCidCache.size > MAX_VIDEO_CID_CACHE) {
-    const oldestBvid = videoCidCache.keys().next().value
-    if (!oldestBvid)
-      break
-    videoCidCache.delete(oldestBvid)
-  }
-}
-
-async function getVideoCid(bvid: string) {
-  const cachedCid = videoCidCache.get(bvid)
-  if (cachedCid) {
-    cacheVideoCid(bvid, cachedCid)
-    return cachedCid
-  }
-
-  const pendingRequest = videoCidRequests.get(bvid)
-  if (pendingRequest)
-    return pendingRequest
-
-  const request = api.video.getVideoPageList({ bvid })
-    .then((response) => {
-      const cid = Number(response.code === 0 ? response.data?.[0]?.cid : 0)
-      if (!cid)
-        return undefined
-      cacheVideoCid(bvid, cid)
-      return cid
-    })
-    .catch(() => undefined)
-    .finally(() => videoCidRequests.delete(bvid))
-  videoCidRequests.set(bvid, request)
-  return request
-}
-
-async function handleMediaEnter(moment: DisplayMoment) {
-  if (!isMomentPreviewEnabled(moment))
-    return
-
-  if (activePreviewVideo && activePreviewVideo.id !== moment.id)
-    cleanupLivePreviewPlayer()
-  hoveredMediaId.value = moment.id
-  const generation = ++livePreviewGeneration
-
-  if (previewUrls[moment.id])
-    return
-
-  try {
-    if (moment.isLive && moment.roomId) {
-      const res = await api.live.getLivePlayUrl({
-        cid: moment.roomId,
-        platform: 'web',
-        qn: 80,
-      })
-      if (generation !== livePreviewGeneration || hoveredMediaId.value !== moment.id || !isMomentPreviewEnabled(moment))
-        return
-      if (res.code === 0 && res.data?.durl?.[0]?.url)
-        previewUrls[moment.id] = httpsUrl(res.data.durl[0].url)
-      return
-    }
-
-    if (!moment.isVideo || !moment.bvid)
-      return
-
-    const cid = await getVideoCid(moment.bvid)
-    if (!cid || generation !== livePreviewGeneration || hoveredMediaId.value !== moment.id || !isMomentPreviewEnabled(moment))
-      return
-
-    const preview = await api.video.getVideoPreview({ bvid: moment.bvid, cid })
-    if (
-      preview.code === 0
-      && preview.data?.durl?.[0]?.url
-      && generation === livePreviewGeneration
-      && hoveredMediaId.value === moment.id
-      && isMomentPreviewEnabled(moment)
-    ) {
-      previewUrls[moment.id] = httpsUrl(preview.data.durl[0].url)
-    }
-  }
-  catch {
-    // 预览加载失败时保留封面
-  }
-}
-
-function handleMediaLeave(moment: DisplayMoment) {
-  if (hoveredMediaId.value !== moment.id)
-    return
-  hoveredMediaId.value = ''
-  cleanupLivePreviewPlayer()
-  // 悬停结束即释放预览地址，避免缓存堆积
-  if (previewUrls[moment.id])
-    delete previewUrls[moment.id]
-}
 
 function handleForwardVideoClick(video: DisplayForwardVideo) {
   recordVideoVisit(video)
 }
 
-function bindPreviewVideo(el: Element | null, moment: DisplayMoment) {
-  if (!(el instanceof HTMLVideoElement))
-    return
-  const url = previewUrls[moment.id]
-  if (!url || hoveredMediaId.value !== moment.id)
-    return
-
-  if (activePreviewVideo && activePreviewVideo.element !== el)
-    cleanupLivePreviewPlayer(false)
-  activePreviewVideo = { id: moment.id, element: el }
-
-  if (moment.isLive || url.includes('.flv') || url.includes('m3u8')) {
-    const generation = livePreviewGeneration
-    void setupStreamPreview(url, el, moment.id, generation).catch(() => {
-      failLivePreview(generation, moment.id, url, el)
-    })
-  }
-  else {
-    void el.play().catch(() => {})
-  }
-}
-
-function playPreview(event: Event) {
-  const video = event.target as HTMLVideoElement
-  void video.play().catch(() => {})
-}
-
-function isMomentMutationCurrent(accountId: AccountId) {
-  return isSameAccount(accountId, loadedAccountId)
-    && isSameAccount(accountId, getCurrentAccountId())
-}
-
-async function toggleMomentLike(moment: DisplayMoment) {
-  if (likingMomentIds.has(moment.id) || moment.isLikeDisabled)
-    return
-
-  const requestAccountId = getCurrentAccountId()
-  if (!isMomentMutationCurrent(requestAccountId))
-    return
-  const previousLiked = moment.isLiked
-  const previousCount = moment.likeCount
-  const csrf = getCSRF()
-  if (!csrf) {
-    toast.warning(t('moments.login_to_like'))
-    return
-  }
-
-  moment.isLiked = !previousLiked
-  moment.likeCount = Math.max(0, previousCount + (moment.isLiked ? 1 : -1))
-  const requestId = Symbol(moment.id)
-  likingMomentRequests.set(moment.id, requestId)
-  likingMomentIds.add(moment.id)
-
-  try {
-    const response = await api.moment.setMomentLike({
-      dyn_id_str: moment.id,
-      up: moment.isLiked ? 1 : 2,
-      spmid: '333.1369.0.0',
-      from_spmid: '333.999.0.0',
-      csrf,
-    })
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    if (response.code !== 0)
-      throw new Error(response.message || t('moments.like_failed'))
-  }
-  catch (error) {
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    // 请求失败时恢复接口返回前的状态，避免界面与服务端不一致
-    moment.isLiked = previousLiked
-    moment.likeCount = previousCount
-    toast.error(error instanceof Error ? error.message : t('moments.like_failed_retry'))
-  }
-  finally {
-    if (likingMomentRequests.get(moment.id) === requestId) {
-      likingMomentRequests.delete(moment.id)
-      likingMomentIds.delete(moment.id)
-    }
-  }
-}
-
-async function toggleMomentReservation(moment: DisplayMoment) {
-  if (!isMomentMutationCurrent(getCurrentAccountId()))
-    return
-  const additional = moment.additional
-  const reservationId = additional?.reservationId
-  if (!additional || !reservationId || reservationLoadingMomentIds.has(moment.id))
-    return
-
-  const csrf = getCSRF()
-  if (!csrf) {
-    toast.warning(t('moment_card.reservation_login_required'))
-    return
-  }
-
-  const requestAccountId = getCurrentAccountId()
-  const wasReserved = Boolean(additional.isReserved)
-  const requestId = Symbol(moment.id)
-  reservationRequests.set(moment.id, requestId)
-  reservationLoadingMomentIds.add(moment.id)
-
-  try {
-    const response = wasReserved
-      ? await api.moment.cancelMomentReservation({ sid: reservationId, csrf })
-      : await api.moment.reserveMoment({ sid: reservationId, csrf })
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    if (response.code !== 0)
-      throw new Error(response.message || t('moment_card.reservation_failed'))
-
-    additional.isReserved = !wasReserved
-    additional.reservationTotal = Math.max(
-      0,
-      (additional.reservationTotal || 0) + (additional.isReserved ? 1 : -1),
-    )
-    toast.success(t(additional.isReserved
-      ? 'moment_card.reservation_succeeded'
-      : 'moment_card.reservation_cancelled'))
-  }
-  catch (error) {
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    toast.error(error instanceof Error ? error.message : t('moment_card.reservation_failed'))
-  }
-  finally {
-    if (reservationRequests.get(moment.id) === requestId) {
-      reservationRequests.delete(moment.id)
-      reservationLoadingMomentIds.delete(moment.id)
-    }
-  }
-}
-
-function isWatchLaterAdded(target: WatchLaterTarget) {
-  const stateKey = getWatchLaterStateKey(target)
-  if (!stateKey)
-    return false
-
-  const aid = getDirectWatchLaterAid(target) ?? watchLaterAidByTarget.get(stateKey)
-  if (!aid) {
-    void resolveMomentWatchLaterAid(target)
-    return false
-  }
-  return topBarStore.isInWatchLater(aid)
-}
-
-function isWatchLaterLoading(target: WatchLaterTarget) {
-  const stateKey = getWatchLaterStateKey(target)
-  return Boolean(stateKey && watchLaterLoadingMomentIds.has(stateKey))
-}
-
-async function resolveMomentWatchLaterAid(target: WatchLaterTarget): Promise<number | undefined> {
-  const directAid = getDirectWatchLaterAid(target)
-  if (directAid)
-    return directAid
-
-  const stateKey = getWatchLaterStateKey(target)
-  if (!stateKey)
-    return undefined
-  const cachedAid = watchLaterAidByTarget.get(stateKey)
-  if (cachedAid)
-    return cachedAid
-  const pendingRequest = watchLaterAidRequests.get(stateKey)
-  if (pendingRequest)
-    return pendingRequest
-
-  const request = resolveWatchLaterAid(target)
-    .then((aid) => {
-      if (aid)
-        watchLaterAidByTarget.set(stateKey, aid)
-      return aid
-    })
-    .catch(() => undefined)
-    .finally(() => watchLaterAidRequests.delete(stateKey))
-  watchLaterAidRequests.set(stateKey, request)
-  return request
-}
-
-async function toggleMomentWatchLater(target: WatchLaterTarget) {
-  const stateKey = getWatchLaterStateKey(target)
-  if (!stateKey || watchLaterLoadingMomentIds.has(stateKey))
-    return
-
-  const csrf = getCSRF()
-  if (!csrf) {
-    toast.warning(t('moments.login_to_watch_later'))
-    return
-  }
-
-  const requestAccountId = getCurrentAccountId()
-  if (!isMomentMutationCurrent(requestAccountId))
-    return
-  const requestId = Symbol(stateKey)
-  watchLaterRequests.set(stateKey, requestId)
-  watchLaterLoadingMomentIds.add(stateKey)
-  try {
-    if (!await topBarStore.ensureWatchLaterState())
-      return
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    const accountId = topBarStore.userInfo.mid
-    if (!topBarStore.isLogin || !accountId)
-      return
-    const aid = await resolveMomentWatchLaterAid(target)
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    if (!aid) {
-      toast.error(t('moments.watch_later_unavailable'))
-      return
-    }
-
-    const isAdded = topBarStore.isInWatchLater(aid)
-    const response = isAdded
-      ? await api.watchlater.removeFromWatchLater({ aid, csrf })
-      : await api.watchlater.saveToWatchLater({ aid, csrf })
-
-    if (!isMomentMutationCurrent(requestAccountId))
-      return
-    if (response.code !== 0) {
-      toast.error(response.message)
-      return
-    }
-
-    await topBarStore.commitWatchLaterMutation(aid, !isAdded, accountId)
-  }
-  catch (error) {
-    if (isMomentMutationCurrent(requestAccountId)) {
-      reportRuntimeFailure('Watch Later mutation failed', error)
-      toast.error(error instanceof Error ? error.message : t('moments.watch_later_failed_retry'))
-    }
-  }
-  finally {
-    if (watchLaterRequests.get(stateKey) === requestId) {
-      watchLaterRequests.delete(stateKey)
-      watchLaterLoadingMomentIds.delete(stateKey)
-    }
-  }
-}
-
-function isUsableMomentResponse(
-  response: MomentResult,
-  requestToken: number,
-  requestType: MomentFilter,
-  requestGroup: MomentGroup,
-  requestHostMid: string,
-) {
-  if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
-    return false
-  if (response.code !== 0)
-    throw new Error(response.message || `Moments request failed with code ${response.code}`)
-  return true
-}
-
 function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
+  momentActions.reset()
   commentSessions.clear()
-  const preparedCoverRatios = new Map(nextItems.flatMap((item) => {
-    const ratio = coverRatios[item.id]
-    return ratio ? [[item.id, ratio] as const] : []
-  }))
+  disclosureCache.clear()
+  momentLayout.reset(nextItems)
   moments.value = []
-  momentColumns.value = []
-  virtualColumns.value = []
-  Object.keys(cardHeights).forEach(key => delete cardHeights[key])
-  Object.keys(previewUrls).forEach(key => delete previewUrls[key])
-  Object.keys(coverRatios).forEach(key => delete coverRatios[key])
-  readyCardIds.clear()
-  enteringCardIds.clear()
-  revealedCardIds.clear()
-  cardEnterTimers.forEach(timer => clearTimeout(timer))
-  cardEnterTimers.clear()
-  settledHeights.clear()
-  visibleMomentIds.clear()
-  likingMomentIds.clear()
-  reservationLoadingMomentIds.clear()
-  watchLaterLoadingMomentIds.clear()
-  likingMomentRequests.clear()
-  reservationRequests.clear()
-  watchLaterRequests.clear()
-  preparedCoverRatios.forEach((ratio, id) => {
-    coverRatios[id] = ratio
-  })
-  cleanupLivePreviewPlayer()
-  hoveredMediaId.value = ''
+  previews.clear()
 }
 
 async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false) {
   if (momentsExtensionContextInvalidated)
     return
 
+  const requestedGeneration = reset ? ++feedRequestToken : feedRequestToken
   await momentsFeedCacheReady
-  if (momentsExtensionContextInvalidated)
+  if (momentsExtensionContextInvalidated || !momentsMounted || requestedGeneration !== feedRequestToken)
     return
   if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
     return
   ensureMomentsCacheAccount(loadedAccountId)
-  if (!reset && moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS)
-    return
 
   // “想看”或任意类型过滤开启时只允许按钮触发后续批次。
   if (!reset && requiresManualMomentPaging() && !manualPaging)
@@ -3253,7 +628,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     return
 
   if (reset) {
-    feedRequestToken += 1
     feedRequestFailed.value = false
     isInitialLoading.value = true
     clearMomentPresentationForRefresh([])
@@ -3264,33 +638,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   const requestHostMid = selectedHostMid.value
   const requestOffset = offset.value
   const requestUpdateBaseline = updateBaseline.value
-  const hostFollowStatePromise = reset && requestHostMid
-    ? api.user.getRelations({ fids: requestHostMid })
-        .then(response => resolveMomentHostFollowState(response, requestHostMid))
-        .catch((error) => {
-          if (isExtensionContextInvalidatedError(error))
-            throw error
-          return 'unknown' as const
-        })
-    : null
-  let hostFollowStateChecked = false
-
-  async function keepSelectedHostFilter() {
-    if (!hostFollowStatePromise || hostFollowStateChecked)
-      return true
-
-    hostFollowStateChecked = true
-    const followState = await hostFollowStatePromise
-    if (followState !== 'unfollowed')
-      return true
-    if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
-      return false
-
-    handleUpFilterChange('')
-    return false
-  }
-
-  let filteredRequestPages = 0
   let pageApplied = false
   let preservedPaginationScrollTop: number | null = null
   const previousPagination = reset
@@ -3299,11 +646,11 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         updateBaseline: updateBaseline.value,
         page: momentsFeedPage.value,
         noMoreContent: noMoreContent.value,
-        wantedCacheCursor: wantedCacheCursor.value,
       }
     : null
   isLoading.value = true
   if (reset) {
+    feedReader.reset()
     offset.value = ''
     updateBaseline.value = ''
     momentsFeedPage.value = 1
@@ -3311,262 +658,27 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   }
 
   try {
-    let rawItems: DataItem[] = []
-    let cachedBatch: DisplayMoment[] | undefined
-    let hasMore = false
-    let nextOffset = ''
-    let nextUpdateBaseline = ''
-
-    if (requestHostMid) {
-      // 按 UP 主筛选：走 feed/all + host_mid，不写入全局全部动态缓存
-      let nextPage = momentsFeedPage.value
-      if (hasActiveMomentFilters()) {
-        let scanOffset = offset.value
-        let scanUpdateBaseline = updateBaseline.value
-        let canContinue = true
-        const scanned: DataItem[] = []
-
-        while (canContinue && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES) {
-          filteredRequestPages += 1
-          const response = await api.moment.getMomentsByUp({
-            host_mid: requestHostMid,
-            type: requestType,
-            offset: scanOffset || undefined,
-            update_baseline: scanUpdateBaseline || undefined,
-            page: nextPage,
-            platform: 'web',
-            features: MOMENT_FEED_FEATURES,
-            web_location: '333.1365',
-          }) as MomentResult
-          if (!await keepSelectedHostFilter())
-            return
-          if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
-            return
-
-          const pageItems = response.data?.items || []
-          scanned.push(...pageItems)
-          const responseOffset = response.data?.offset || ''
-          scanUpdateBaseline = response.data?.update_baseline || ''
-          canContinue = Boolean(response.data?.has_more)
-            && responseOffset !== scanOffset
-          scanOffset = responseOffset
-          nextPage += 1
-        }
-
-        rawItems = scanned
-        hasMore = canContinue
-        nextOffset = scanOffset
-        nextUpdateBaseline = scanUpdateBaseline
-      }
-      else {
-        const response = await api.moment.getMomentsByUp({
-          host_mid: requestHostMid,
-          type: requestType,
-          offset: offset.value || undefined,
-          update_baseline: updateBaseline.value || undefined,
-          page: nextPage,
-          platform: 'web',
-          features: MOMENT_FEED_FEATURES,
-          web_location: '333.1365',
-        }) as MomentResult
-        if (!await keepSelectedHostFilter())
-          return
-        if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
-          return
-        rawItems = response.data?.items || []
-        hasMore = Boolean(response.data?.has_more) && rawItems.length > 0
-        nextOffset = response.data?.offset || ''
-        nextUpdateBaseline = response.data?.update_baseline || ''
-        nextPage += 1
-      }
-      momentsFeedPage.value = nextPage
+    const response = await feedReader.read({
+      reset,
+      type: requestType,
+      group: requestGroup,
+      hostMid: requestHostMid,
+      offset: offset.value,
+      updateBaseline: updateBaseline.value,
+      page: momentsFeedPage.value,
+      filtered: hasActiveMomentFilters(),
+      hasWantedUsers: momentsWantedUsers.value.length > 0,
+    }, () => isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+    if (!response || !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+      return
+    if ('hostUnfollowed' in response) {
+      handleUpFilterChange('')
+      return
     }
-    else if (requestGroup === 'wanted') {
-      await momentsFeedCacheReady
-      let cacheEntry = getValidMomentsCache(requestType) ?? {
-        items: [],
-        offset: '',
-        updateBaseline: '',
-        hasMore: true,
-        updatedAt: Date.now(),
-      }
+    const { rawItems, normalizedItems, nextOffset, nextUpdateBaseline } = response
+    let { hasMore } = response
+    momentsFeedPage.value = response.nextPage
 
-      if (!momentsWantedUsers.value.length) {
-        wantedCacheCursor.value = 0
-        cachedBatch = []
-      }
-      else {
-        let cacheChanged = false
-        if (reset) {
-          wantedCacheCursor.value = 0
-          const existingCache = cacheEntry
-          const existingIds = new Set(existingCache.items.map(moment => moment.id))
-          const freshItems: DisplayMoment[] = []
-          let scanOffset = ''
-          let scanUpdateBaseline = ''
-          let canContinue = true
-          let reachedCache = false
-
-          while (
-            canContinue
-            && freshItems.length < WANTED_SCAN_LIMIT
-            && !reachedCache
-            && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES
-          ) {
-            filteredRequestPages += 1
-            const response = await api.moment.getMoments({
-              type: requestType,
-              offset: scanOffset || undefined,
-              update_baseline: scanUpdateBaseline || undefined,
-              features: MOMENT_FEED_FEATURES,
-            }) as MomentResult
-            if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
-              return
-
-            const pageItems = (response.data?.items || []).map(mapMoment)
-            reachedCache = pageItems.some(moment => existingIds.has(moment.id))
-            freshItems.push(...pageItems)
-            const responseOffset = response.data?.offset || ''
-            scanUpdateBaseline = response.data?.update_baseline || ''
-            canContinue = Boolean(response.data?.has_more)
-              && responseOffset !== scanOffset
-            scanOffset = responseOffset
-          }
-
-          cacheEntry = reachedCache
-            ? {
-                ...existingCache,
-                items: mergeCachedMoments(freshItems, existingCache.items),
-              }
-            : {
-                items: mergeCachedMoments(freshItems, []),
-                offset: scanOffset,
-                updateBaseline: scanUpdateBaseline,
-                hasMore: canContinue,
-                updatedAt: Date.now(),
-                continuation: existingCache.items.length
-                  ? {
-                      items: existingCache.items,
-                      offset: existingCache.offset,
-                      updateBaseline: existingCache.updateBaseline,
-                      hasMore: existingCache.hasMore,
-                    }
-                  : undefined,
-              }
-          cacheChanged = true
-        }
-
-        const batchEnd = Math.min(wantedCacheCursor.value + WANTED_SCAN_LIMIT, MOMENTS_CACHE_MAX_ITEMS)
-        while (
-          cacheEntry.items.length < batchEnd
-          && cacheEntry.items.length < MOMENTS_CACHE_MAX_ITEMS
-          && cacheEntry.hasMore
-          && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES
-        ) {
-          filteredRequestPages += 1
-          const response = await api.moment.getMoments({
-            type: requestType,
-            offset: cacheEntry.offset || undefined,
-            update_baseline: cacheEntry.updateBaseline || undefined,
-            features: MOMENT_FEED_FEATURES,
-          }) as MomentResult
-          if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
-            return
-
-          const pageItems = (response.data?.items || []).map(mapMoment)
-          const responseOffset = response.data?.offset || ''
-          const continuationIds = new Set(cacheEntry.continuation?.items.map(moment => moment.id) || [])
-          const reachesContinuation = pageItems.some(moment => continuationIds.has(moment.id))
-          if (reachesContinuation && cacheEntry.continuation) {
-            cacheEntry = {
-              items: mergeCachedMoments(
-                cacheEntry.items,
-                mergeCachedMoments(pageItems, cacheEntry.continuation.items),
-              ),
-              offset: cacheEntry.continuation.offset,
-              updateBaseline: cacheEntry.continuation.updateBaseline,
-              hasMore: cacheEntry.continuation.hasMore,
-              updatedAt: Date.now(),
-            }
-          }
-          else {
-            cacheEntry = {
-              items: mergeCachedMoments(cacheEntry.items, pageItems),
-              offset: responseOffset,
-              updateBaseline: response.data?.update_baseline || '',
-              hasMore: Boolean(response.data?.has_more)
-                && responseOffset !== cacheEntry.offset,
-              updatedAt: Date.now(),
-              continuation: cacheEntry.continuation,
-            }
-          }
-          cacheChanged = true
-          if (reachesContinuation)
-            break
-        }
-
-        if (cacheChanged)
-          saveMomentsCache(requestType, cacheEntry)
-        // 连续缓存可一次全部展示；存在缺口时仍按 API 原始条数每批推进 100 条。
-        const displayEnd = cacheEntry.continuation ? batchEnd : cacheEntry.items.length
-        cachedBatch = cacheEntry.items.slice(wantedCacheCursor.value, displayEnd)
-        wantedCacheCursor.value += cachedBatch.length
-        nextOffset = cacheEntry.offset
-        nextUpdateBaseline = cacheEntry.updateBaseline
-        hasMore = wantedCacheCursor.value < cacheEntry.items.length
-          || Boolean(cacheEntry.continuation)
-          || (cacheEntry.hasMore && cacheEntry.items.length < MOMENTS_CACHE_MAX_ITEMS)
-      }
-    }
-    else if (hasActiveMomentFilters()) {
-      // 过滤开启：每次用户操作最多请求两页原始动态，再交给本地过滤。
-      let scanOffset = offset.value
-      let scanUpdateBaseline = updateBaseline.value
-      let canContinue = true
-      const scanned: DataItem[] = []
-
-      while (canContinue && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES) {
-        filteredRequestPages += 1
-        const response = await api.moment.getMoments({
-          type: requestType,
-          offset: scanOffset || undefined,
-          update_baseline: scanUpdateBaseline || undefined,
-          features: MOMENT_FEED_FEATURES,
-        }) as MomentResult
-        if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
-          return
-
-        const pageItems = response.data?.items || []
-        scanned.push(...pageItems)
-        const responseOffset = response.data?.offset || ''
-        scanUpdateBaseline = response.data?.update_baseline || ''
-        canContinue = Boolean(response.data?.has_more)
-          && responseOffset !== scanOffset
-        scanOffset = responseOffset
-      }
-
-      // 以整页推进 offset，同一次刷新/手动加载不会在缓存或补屏阶段重置预算。
-      rawItems = scanned
-      hasMore = canContinue
-      nextOffset = scanOffset
-      nextUpdateBaseline = scanUpdateBaseline
-    }
-    else {
-      const response = await api.moment.getMoments({
-        type: requestType,
-        offset: offset.value || undefined,
-        update_baseline: updateBaseline.value || undefined,
-        features: MOMENT_FEED_FEATURES,
-      }) as MomentResult
-      if (!isUsableMomentResponse(response, requestToken, requestType, requestGroup, requestHostMid))
-        return
-      rawItems = response.data?.items || []
-      hasMore = Boolean(response.data?.has_more) && rawItems.length > 0
-      nextOffset = response.data?.offset || ''
-      nextUpdateBaseline = response.data?.update_baseline || ''
-    }
-
-    const normalizedItems = cachedBatch ?? rawItems.map(mapMoment)
     const existingMomentIds = new Set(moments.value.map(moment => moment.id))
     const hasUniqueResponseItem = normalizedItems.some(moment => !existingMomentIds.has(moment.id))
     const cursorAdvanced = nextOffset !== requestOffset
@@ -3586,17 +698,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       ],
       'moments-page',
     )
-    // 按 UP 主请求不写入全局全部动态缓存
-    if (requestGroup === 'all' && !requestHostMid) {
-      cacheRegularMomentPage(
-        requestType,
-        normalizedItems,
-        nextOffset,
-        nextUpdateBaseline,
-        hasMore,
-        reset,
-      )
-    }
     const items = normalizedItems
       .filter(moment => requestGroup !== 'wanted' || wantedUserMids.value.has(moment.author.mid))
       .filter(moment => requestGroup !== 'wanted' || matchesMomentFilter(moment))
@@ -3605,7 +706,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     if (!reset)
       preservedPaginationScrollTop = scrollViewportRef.value?.scrollTop ?? null
     if (!reset)
-      suppressBottomRebalanceUntil = Date.now() + 1500
+      momentLayout.suspendRebalance(1500)
     else
       clearMomentPresentationForRefresh(items)
     appendMoments(items)
@@ -3640,7 +741,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
         updateBaseline.value = previousPagination.updateBaseline
         momentsFeedPage.value = previousPagination.page
         noMoreContent.value = previousPagination.noMoreContent
-        wantedCacheCursor.value = previousPagination.wantedCacheCursor
       }
       reportRuntimeFailure('Failed to load Moments feed', error)
       toast.error(t('common.load_failed'))
@@ -3671,7 +771,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   if (
     !pageApplied
     || noMoreContent.value
-    || moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS
     || requiresManualMomentPaging()
     || autoFillDepth >= MAX_POST_LOAD_AUTOFILL_PAGES
     || !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
@@ -3739,16 +838,17 @@ function refresh() {
 }
 
 function resetMomentsAccountState() {
+  momentActions.reset()
+  previews.reset()
   closeMomentDetail()
   commentSessions.setAccount(commentAccountIdentity())
   commentSessions.clear()
   feedRequestToken++
   portalRequestToken++
   moments.value = []
-  momentColumns.value = []
-  virtualColumns.value = []
+  momentLayout.clearColumns()
   selectedHostMid.value = ''
-  wantedCacheCursor.value = 0
+  feedReader.reset()
   offset.value = ''
   updateBaseline.value = ''
   momentsFeedPage.value = 1
@@ -3757,16 +857,7 @@ function resetMomentsAccountState() {
   isLoading.value = false
   isInitialLoading.value = true
   clearMomentsPortalState()
-  cleanupLivePreviewPlayer()
-  hoveredMediaId.value = ''
-  watchLaterAidByTarget.clear()
-  watchLaterAidRequests.clear()
-  likingMomentIds.clear()
-  reservationLoadingMomentIds.clear()
-  watchLaterLoadingMomentIds.clear()
-  likingMomentRequests.clear()
-  reservationRequests.clear()
-  watchLaterRequests.clear()
+  previews.clear()
 }
 
 async function ensureMomentsAccount(): Promise<boolean> {
@@ -3782,40 +873,8 @@ async function ensureMomentsAccount(): Promise<boolean> {
   return changed
 }
 
-function handleDetailFrameMessage(event: MessageEvent) {
-  const data = getIframeMessageData(event, detailIframeRef.value)
-  if (!data)
-    return
-
-  const type = data.type
-  if (type === 'BEWLY_OPUS_IMAGE_VIEWER_OPEN') {
-    const source = event.source as Window
-    if (!openDetailImageViewer(data.urls, data.index, source))
-      return
-    try {
-      source.postMessage({ type: 'BEWLY_OPUS_IMAGE_VIEWER_ACK' }, event.origin)
-    }
-    catch {
-      // iframe 已销毁时忽略
-    }
-    return
-  }
-  // 图文详情布局完成后再去掉遮罩
-  if (type === 'BEWLY_OPUS_LAYOUT_READY') {
-    detailFrameLoaded.value = true
-    clearDetailLoadTimer()
-    syncDetailFrameViewport()
-    return
-  }
-  // iframe 内 ESC 会 post 该消息；Dialog 场景下同步关闭详情
-  if (type === BEWLY_DRAWER_ESCAPE_HANDLED)
-    return
-  if (type === BEWLY_DRAWER_CLOSE_REQUEST && selectedMoment.value)
-    closeMomentDetail()
-}
-
 function handleMomentsReachBottom() {
-  if (requiresManualMomentPaging() || isLoading.value || noMoreContent.value || moments.value.length >= MOMENTS_MEMORY_MAX_ITEMS)
+  if (requiresManualMomentPaging() || isLoading.value || noMoreContent.value)
     return false
   void loadMoments()
   return true
@@ -3823,27 +882,6 @@ function handleMomentsReachBottom() {
 
 onMounted(() => {
   momentsMounted = true
-  setupVirtualObservers()
-  gridObserver = new ResizeObserver(() => {
-    updateGridColumnCount()
-    updateVirtualColumns()
-  })
-  nextTick(() => {
-    if (!momentsMounted)
-      return
-    if (layoutRef.value)
-      gridObserver?.observe(layoutRef.value)
-    if (momentsContentRef.value)
-      gridObserver?.observe(momentsContentRef.value)
-    if (gridRef.value)
-      gridObserver?.observe(gridRef.value)
-    updateGridColumnCount()
-    attachViewportScroll()
-    setupVirtualObservers()
-    updateVirtualColumns()
-  })
-  window.addEventListener('message', handleDetailFrameMessage)
-  window.addEventListener('resize', syncDetailFrameViewport)
   void ensureMomentsAccount().then(() => {
     if (!momentsMounted)
       return
@@ -3868,67 +906,24 @@ watch([
 
 onBeforeUnmount(() => {
   momentsMounted = false
+  feedReader.reset()
+  moments.value = []
   commentSessions.clear()
-  document.documentElement.classList.remove('bewly-moment-image-viewer-open')
   feedRequestToken += 1
   portalRequestToken += 1
-  gridObserver?.disconnect()
-  cardMeasureObserver?.disconnect()
-  visibilityObserver?.disconnect()
   upListResizeObserver?.disconnect()
   upListResizeObserver = undefined
   if (upListStateFrame !== undefined) {
     cancelAnimationFrame(upListStateFrame)
     upListStateFrame = undefined
   }
-  detachViewportScroll()
-  cleanupLivePreviewPlayer()
-  closeMomentDetail()
-  Object.keys(previewUrls).forEach(key => delete previewUrls[key])
-  videoCidCache.clear()
-  videoCidRequests.clear()
-  visibleMomentIds.clear()
-  cardElements.clear()
-  cardEnterTimers.forEach(timer => clearTimeout(timer))
-  cardEnterTimers.clear()
-  clearDetailLoadTimer()
-  if (rebalanceTimer) {
-    clearTimeout(rebalanceTimer)
-    rebalanceTimer = null
-  }
-  if (virtualRaf) {
-    cancelAnimationFrame(virtualRaf)
-    virtualRaf = 0
-  }
-  if (cardGeometryFrame) {
-    cancelAnimationFrame(cardGeometryFrame)
-    cardGeometryFrame = 0
-  }
-  window.removeEventListener('message', handleDetailFrameMessage)
-  window.removeEventListener('resize', syncDetailFrameViewport)
   if (handlePageRefresh.value === refresh)
     handlePageRefresh.value = undefined
   if (handleReachBottom.value === handleMomentsReachBottom)
     handleReachBottom.value = undefined
 })
 
-watch(() => scrollViewportRef.value, () => {
-  detachViewportScroll()
-  attachViewportScroll()
-  setupVirtualObservers()
-  updateVirtualColumns()
-})
-
 // 列表从 skeleton 切到真实网格后补观察，确保列宽/列数及时更新
-watch(gridRef, (el, prev) => {
-  if (prev && gridObserver)
-    gridObserver.unobserve(prev)
-  if (el && gridObserver) {
-    gridObserver.observe(el)
-    updateGridColumnCount()
-    updateVirtualColumns()
-  }
-})
 
 // 骨架屏退出后网格位置会变化，立即按真实位置重算首屏虚拟窗口
 watch(isInitialLoading, async (loading) => {
@@ -3938,29 +933,6 @@ watch(isInitialLoading, async (loading) => {
   updateGridColumnCount()
   updateVirtualColumns()
 })
-
-watch(
-  [
-    () => settings.value.momentsSidebarShowUserCard,
-    () => settings.value.momentsSidebarShowPublish,
-    () => settings.value.momentsSidebarShowLive,
-  ],
-  async () => {
-    await nextTick()
-    updateGridColumnCount()
-  },
-)
-
-watch(
-  momentsGridColumns,
-  async () => {
-    Object.keys(cardHeights).forEach(key => delete cardHeights[key])
-    settledHeights.clear()
-    await nextTick()
-    updateGridColumnCount()
-    updateVirtualColumns()
-  },
-)
 
 watch([upListScrollerRef, upListTrackRef], async () => {
   await nextTick()
@@ -4003,7 +975,7 @@ watch(
       return
 
     activeMomentGroup.value = 'all'
-    wantedCacheCursor.value = 0
+    feedReader.reset()
     if (scrollViewportRef.value)
       scrollViewportRef.value.scrollTop = 0
     void loadMoments(true)
@@ -4043,12 +1015,22 @@ watch(
     if (!activeMoment || isMomentPreviewEnabled(activeMoment))
       return
 
-    hoveredMediaId.value = ''
-    cleanupLivePreviewPlayer()
-    if (previewUrls[activeMoment.id])
-      delete previewUrls[activeMoment.id]
+    previews.clear()
   },
 )
+
+function appendMoments(items: DisplayMoment[]) {
+  const wasEmpty = moments.value.length === 0
+  const ids = new Set(moments.value.map(item => item.id))
+  const incoming = items.filter((item) => {
+    if (ids.has(item.id))
+      return false
+    ids.add(item.id)
+    return true
+  })
+  moments.value.push(...incoming)
+  momentLayout.append(incoming, wasEmpty)
+}
 </script>
 
 <template>
@@ -4428,7 +1410,7 @@ watch(
             <div v-if="column.topPad" class="moments-grid__spacer" :style="{ height: `${column.topPad}px` }" />
             <MomentCard
               v-for="moment in column.items" :key="moment.id"
-              :moment="moment"
+              :moment="momentActions.getDisplayMoment(moment)"
               :card-width="gridCardWidth"
               :ready="readyCardIds.has(moment.id)"
               :entering="enteringCardIds.has(moment.id)"

@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import type { Ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -8,65 +7,46 @@ import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vu
 import type { ContextMenuOption } from '~/components/ContextMenu.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import type { FavoriteResource } from '~/components/TopBar/types'
-import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { settings } from '~/logic'
-import type { FavoriteArticle, FavoriteArticlesResult } from '~/models/article/favorite'
-import type { FavoritesResult, Media as FavoriteItem } from '~/models/video/favorite'
-import type { FavoritesCategoryResult, List as CategoryItem } from '~/models/video/favoriteCategory'
-import type { CollectedFavoriteSeason, CollectedFavoriteSeasonsResult, FavoriteSeasonMedia } from '~/models/video/favoriteSeason'
+import type { Media as FavoriteItem } from '~/models/video/favorite'
+import type { List as CategoryItem } from '~/models/video/favoriteCategory'
+import type { CollectedFavoriteSeason } from '~/models/video/favoriteSeason'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { getFavoriteFolderEditedAttr, getFavoriteFolderPrivacy, isFavoriteFolderPrivate } from '~/utils/favoriteFolder'
+import { getFavoriteFolderPrivacy, isFavoriteFolderPrivate } from '~/utils/favoriteFolder'
 import {
-  enrichFavoriteSeasonMediaFaces,
   FAVORITE_SEASON_PAGE_SIZE,
-  fetchFavoriteSeasonPage,
-  mergeFavoriteSeasonPage,
   resolveFavoriteSeasonPlayAllUrl,
 } from '~/utils/favoriteSeason'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
+
+import { getFavoriteArticleCover, getFavoriteResourceKey, transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
+import type { FavoriteView } from './useFavoritesData'
+import { useFavoritesData } from './useFavoritesData'
+import type { FavoriteWrite } from './useFavoriteWrites'
+import { useFavoriteWrites } from './useFavoriteWrites'
 
 const { t } = useI18n()
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
-const FAVORITE_ARTICLE_PAGE_SIZE = 20
-type FavoriteView = 'video' | 'season' | 'article'
 type BatchTransferAction = 'copy' | 'move'
 type SidebarManageSection = 'folder' | 'season'
 
-const favoriteCategories = reactive<CategoryItem[]>([])
-const collectedFavoriteSeasons = reactive<CollectedFavoriteSeason[]>([])
-const favoriteResources = reactive<FavoriteItem[]>([])
-const favoriteArticles = reactive<FavoriteArticle[]>([])
-
-const favoriteView = ref<FavoriteView>('video')
-const selectedCategory = ref<CategoryItem>()
-const selectedSeason = ref<CollectedFavoriteSeason>()
-const activatedCategoryCover = ref<string>('')
-
-const currentPageNum = ref<number>(0)
-const keyword: Ref<string> = ref<string>('')
-const searchScope = ref<'current' | 'all'>('current')
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const topBarStore = useTopBarStore()
-const isLoading = ref<boolean>(false)
-const isFullPageLoading = ref<boolean>(true)
-const bootstrapFailed = ref(false)
-const failedContentPage = ref<number | null>(null)
-const noMoreContent = ref<boolean>(false)
-const loadedSeasonMedias = ref<FavoriteSeasonMedia[]>([])
-const loadedSeasonComplete = ref<boolean>(false)
+const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+const data = useFavoritesData({ api: api.favorite, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
+const { favoriteCategories, collectedFavoriteSeasons, favoriteResources, favoriteArticles, favoriteView, selectedCategory, selectedSeason, activatedCategoryCover, keyword, searchScope, isLoading, isFullPageLoading, bootstrapFailed, failedContentPage, noMoreContent, loadedSeasonMedias, loadedSeasonComplete, articleFavoriteCount, initData, retryFavoritesBootstrap, loadSelectedContent, loadNextPage, retryFavoriteContent, contentVersion } = data
+const writes = useFavoriteWrites({ api: api.favorite, capture: data.capture, getCSRF, onError: () => toast.error(t('common.operation_failed')) })
+
 const isResolvingSeasonPlayAll = ref<boolean>(false)
-/** 图文收藏总数：官方 polymer 接口无 total，仅在 has_more=false 时等于已加载条数 */
-const articleFavoriteCount = ref<number>()
-/** 图文收藏下一页 offset（上页最后一条 opus_id） */
-const articleFavoriteOffset = ref<string>('')
 const isBatchManaging = ref<boolean>(false)
-const isBatchOperating = ref<boolean>(false)
+const isBatchOperating = computed(() => writes.pending.value)
 const selectedResourceKeys = ref<string[]>([])
 const targetCategory = ref<CategoryItem>()
 const batchTransferDialogVisible = ref<boolean>(false)
@@ -74,7 +54,7 @@ const batchTransferAction = ref<BatchTransferAction>('copy')
 const sidebarManageSection = ref<SidebarManageSection | null>(null)
 const selectedFolderIds = ref<number[]>([])
 const selectedSeasonIds = ref<number[]>([])
-const isSidebarOperating = ref<boolean>(false)
+const isSidebarOperating = computed(() => writes.pending.value)
 const editFolderDialogVisible = ref<boolean>(false)
 const editFolderId = ref<number>()
 const editFolderTitle = ref<string>('')
@@ -82,7 +62,6 @@ const editFolderPublic = ref(true)
 const itemMenuTarget = ref<{ type: SidebarManageSection, id: number } | null>(null)
 const itemMenuAnchor = ref({ x: 0, y: 0 })
 const itemMenuTrigger = shallowRef<HTMLElement | null>(null)
-let contentRequestVersion = 0
 
 function notifyTopBarFavoritesChanged() {
   void topBarStore.notifyFavoritesChanged().catch((error) => {
@@ -213,50 +192,13 @@ onMounted(() => {
 })
 
 onScopeDispose(() => {
-  contentRequestVersion += 1
+  data.dispose()
+  writes.reset()
   if (handleReachBottom.value === handleFavoriteReachBottom)
     handleReachBottom.value = undefined
   if (handlePageRefresh.value === handleFavoritePageRefresh)
     handlePageRefresh.value = undefined
 })
-
-async function initData() {
-  const requestVersion = ++contentRequestVersion
-  favoriteCategories.length = 0
-  collectedFavoriteSeasons.length = 0
-  selectedCategory.value = undefined
-  selectedSeason.value = undefined
-  bootstrapFailed.value = false
-  failedContentPage.value = null
-  noMoreContent.value = false
-  isFullPageLoading.value = true
-
-  const results = await Promise.allSettled([
-    getFavoriteCategories(requestVersion),
-    getCollectedFavoriteSeasons(requestVersion),
-  ])
-  if (requestVersion !== contentRequestVersion)
-    return
-  if (results.some(result => result.status === 'rejected')) {
-    bootstrapFailed.value = true
-    isFullPageLoading.value = false
-    return
-  }
-
-  if (favoriteCategories.length > 0) {
-    selectedCategory.value = favoriteCategories[0]
-    loadSelectedContent()
-  }
-  else {
-    isFullPageLoading.value = false
-    noMoreContent.value = true
-  }
-}
-
-function retryFavoritesBootstrap() {
-  if (!isFullPageLoading.value)
-    void initData()
-}
 
 async function handleFavoriteReachBottom() {
   // 视频/合集列表由 VideoCardGrid 自己监听 sentinel；全局哨兵只负责图文收藏。
@@ -275,28 +217,6 @@ function handleFavoritePageRefresh() {
 function initPageAction() {
   handleReachBottom.value = handleFavoriteReachBottom
   handlePageRefresh.value = handleFavoritePageRefresh
-}
-
-async function getFavoriteCategories(requestVersion: number) {
-  const res: FavoritesCategoryResult = await api.favorite.getFavoriteCategories({
-    up_mid: getUserID(),
-  })
-  if (requestVersion !== contentRequestVersion)
-    return
-  if (res.code !== 0 || !res.data)
-    throw new Error(res.message || t('common.load_failed'))
-  favoriteCategories.push(...(res.data.list || []))
-}
-
-async function getCollectedFavoriteSeasons(requestVersion: number) {
-  const res: CollectedFavoriteSeasonsResult = await api.favorite.getCollectedFavoriteSeasons({
-    up_mid: getUserID(),
-  })
-  if (requestVersion !== contentRequestVersion)
-    return
-  if (res.code !== 0 || !res.data)
-    throw new Error(res.message || t('common.load_failed'))
-  collectedFavoriteSeasons.push(...(res.data.list || []))
 }
 
 function resetBatchSelection() {
@@ -417,197 +337,79 @@ function closeEditFolderDialog() {
 }
 
 async function handleEditFolderConfirm() {
-  if (isSidebarOperating.value)
+  if (writes.pending.value)
     return
   const title = editFolderTitle.value.trim()
   if (!title) {
     toast.warning(t('favorites.edit_folder_title_empty'))
     return
   }
-
   const folderId = editFolderId.value
   if (!folderId || folderId === defaultFolderId.value)
     return
-  const folder = favoriteCategories.find(item => item.id === folderId)
-  if (!folder)
+  const isPublic = editFolderPublic.value
+  const transaction = writes.prepare({ kind: 'edit', folderId, title, privacy: getFavoriteFolderPrivacy(isPublic) })
+  const result = await writes.execute(transaction)
+  if (!result)
     return
-  const submittedFolderPublic = editFolderPublic.value
-
-  isSidebarOperating.value = true
-  try {
-    const res = await api.favorite.editFavoriteFolder({
-      media_id: folderId,
-      title,
-      privacy: getFavoriteFolderPrivacy(submittedFolderPublic),
-      csrf: getCSRF(),
-    })
-    if (res.code !== 0) {
-      toast.error(res.message)
-      return
-    }
-
-    folder.title = title
-    folder.attr = getFavoriteFolderEditedAttr(folder.attr, submittedFolderPublic)
+  data.applyFolderEdit(folderId, title, isPublic)
+  if (editFolderId.value === folderId && editFolderTitle.value.trim() === title && editFolderPublic.value === isPublic)
     closeEditFolderDialog()
-    exitSidebarManage()
-    notifyTopBarFavoritesChanged()
-  }
-  catch (error) {
-    toast.error(error instanceof Error && error.message ? error.message : t('favorites.edit_folder_failed'))
-  }
-  finally {
-    isSidebarOperating.value = false
-  }
+  notifyTopBarFavoritesChanged()
 }
 
 async function deleteFolders(ids: number[]) {
-  try {
-    const res = await api.favorite.delFavoriteFolder({
-      media_ids: ids.join(','),
-      csrf: getCSRF(),
-    })
-    if (res.code !== 0) {
-      toast.error(res.message || t('favorites.delete_folders_failed'))
-      return false
-    }
-  }
-  catch {
-    toast.error(t('favorites.delete_folders_failed'))
+  const transaction = writes.prepare({ kind: 'folders', ids: [...ids] })
+  if (!await showConfirmDialog(t('favorites.delete_folders_confirm', { count: ids.length })))
     return false
-  }
-
-  for (let index = favoriteCategories.length - 1; index >= 0; index--) {
-    if (ids.includes(favoriteCategories[index].id))
-      favoriteCategories.splice(index, 1)
-  }
-
-  if (selectedCategory.value && ids.includes(selectedCategory.value.id)) {
-    selectedCategory.value = favoriteCategories[0]
-    if (favoriteView.value === 'video')
-      loadSelectedContent()
-  }
+  const result = await writes.execute(transaction)
+  if (!result)
+    return false
+  data.removeFolders(result.succeeded)
+  selectedFolderIds.value = selectedFolderIds.value.filter(id => !result.succeeded.includes(id))
   notifyTopBarFavoritesChanged()
   return true
 }
 
 async function unfavSeasons(ids: number[]) {
-  const failedIds: number[] = []
-  for (const seasonId of ids) {
-    try {
-      const res = await api.favorite.unfavFavoriteSeason({
-        season_id: seasonId,
-        csrf: getCSRF(),
-      })
-      if (res.code !== 0)
-        failedIds.push(seasonId)
-    }
-    catch {
-      failedIds.push(seasonId)
-    }
-  }
-
-  const removedIds = ids.filter(id => !failedIds.includes(id))
-  for (let index = collectedFavoriteSeasons.length - 1; index >= 0; index--) {
-    if (removedIds.includes(collectedFavoriteSeasons[index].id))
-      collectedFavoriteSeasons.splice(index, 1)
-  }
-
-  if (selectedSeason.value && removedIds.includes(selectedSeason.value.id)) {
-    selectedSeason.value = collectedFavoriteSeasons[0]
-    if (favoriteView.value === 'season')
-      loadSelectedContent()
-  }
-
-  if (failedIds.length > 0)
-    toast.error(t('favorites.unfav_seasons_failed', { count: failedIds.length }))
-  if (removedIds.length > 0)
+  const transaction = writes.prepare({ kind: 'seasons', ids: [...ids] })
+  if (!await showConfirmDialog(t('favorites.unfav_seasons_confirm', { count: ids.length })))
+    return
+  const result = await writes.execute(transaction)
+  if (!result)
+    return
+  data.removeSeasons(result.succeeded)
+  selectedSeasonIds.value = selectedSeasonIds.value.filter(id => !result.succeeded.includes(id))
+  if (result.succeeded.length)
     notifyTopBarFavoritesChanged()
-  return failedIds
 }
 
 async function handleBatchDeleteFolders() {
-  if (selectedFolderCount.value === 0 || isSidebarOperating.value)
+  if (!selectedFolderCount.value || writes.pending.value)
     return
-
-  const result = await showConfirmDialog(t('favorites.delete_folders_confirm', { count: selectedFolderCount.value }))
-  if (!result)
-    return
-
-  isSidebarOperating.value = true
-  try {
-    if (await deleteFolders([...selectedFolderIds.value]))
-      exitSidebarManage()
-  }
-  finally {
-    isSidebarOperating.value = false
-  }
+  await deleteFolders([...selectedFolderIds.value])
 }
 
 async function handleBatchUnfavSeasons() {
-  if (selectedSeasonCount.value === 0 || isSidebarOperating.value)
+  if (!selectedSeasonCount.value || writes.pending.value)
     return
-
-  const result = await showConfirmDialog(t('favorites.unfav_seasons_confirm', { count: selectedSeasonCount.value }))
-  if (!result)
-    return
-
-  isSidebarOperating.value = true
-  try {
-    const failedIds = await unfavSeasons([...selectedSeasonIds.value])
-    if (failedIds.length === 0)
-      exitSidebarManage()
-    else
-      selectedSeasonIds.value = failedIds
-  }
-  finally {
-    isSidebarOperating.value = false
-  }
+  await unfavSeasons([...selectedSeasonIds.value])
 }
 
 async function handleItemMenuSelect(value: string | number) {
   const target = itemMenuTarget.value
-  if (!target || isSidebarOperating.value)
+  if (!target || writes.pending.value)
     return
-
-  // Capture target then close menu before any await, so a later closeItemMenu
-  // from ContextMenu cannot race with the confirm dialog lifecycle.
   closeItemMenu()
-
   if (target.type === 'folder') {
-    if (value === 'edit') {
+    if (value === 'edit')
       openSingleEditFolder(target.id)
-      return
-    }
-
-    const result = await showConfirmDialog(t('favorites.delete_folders_confirm', { count: 1 }))
-    if (!result)
-      return
-
-    isSidebarOperating.value = true
-    try {
+    else
       await deleteFolders([target.id])
-    }
-    finally {
-      isSidebarOperating.value = false
-    }
-    return
   }
-
-  const result = await showConfirmDialog(t('favorites.unfav_seasons_confirm', { count: 1 }))
-  if (!result)
-    return
-
-  isSidebarOperating.value = true
-  try {
+  else {
     await unfavSeasons([target.id])
   }
-  finally {
-    isSidebarOperating.value = false
-  }
-}
-
-function getFavoriteResourceKey(item: FavoriteResource | FavoriteItem) {
-  return `${item.id}:${item.type}`
 }
 
 function isSelectedFavoriteResource(item: FavoriteResource | FavoriteItem) {
@@ -647,29 +449,6 @@ function toggleBatchManage() {
   isBatchManaging.value = true
 }
 
-function getSelectedResourceParam() {
-  return selectedFavoriteResources.value.map(item => getFavoriteResourceKey(item)).join(',')
-}
-
-function removeSelectedResourcesFromList() {
-  const selectedKeys = new Set(selectedResourceKeys.value)
-  for (let index = favoriteResources.length - 1; index >= 0; index--) {
-    if (selectedKeys.has(getFavoriteResourceKey(favoriteResources[index])))
-      favoriteResources.splice(index, 1)
-  }
-  if (selectedCategory.value)
-    selectedCategory.value.media_count = Math.max(0, selectedCategory.value.media_count - selectedKeys.size)
-  resetBatchSelection()
-}
-
-function increaseTargetCategoryCount(count: number) {
-  if (!targetCategory.value)
-    return
-  const category = favoriteCategories.find(item => item.id === targetCategory.value?.id)
-  if (category)
-    category.media_count += count
-}
-
 function openBatchTransferDialog(action: BatchTransferAction) {
   if (selectedCount.value === 0 || targetCategoryOptions.value.length === 0 || isBatchOperating.value)
     return
@@ -685,79 +464,21 @@ function selectTargetCategory(category: CategoryItem) {
 }
 
 async function handleBatchDelete() {
-  if (!selectedCategory.value || selectedCount.value === 0)
+  if (!selectedCategory.value || !selectedCount.value)
     return
-  const result = await showConfirmDialog(t('favorites.batch_unfavorite_confirm', { count: selectedCount.value }))
-  if (!result)
-    return
-
-  isBatchOperating.value = true
-  try {
-    const res = await api.favorite.patchDelFavoriteResources({
-      resources: getSelectedResourceParam(),
-      media_id: selectedCategory.value.id,
-      csrf: getCSRF(),
-    })
-    if (res.code === 0)
-      removeSelectedResourcesFromList()
-    if (res.code === 0)
-      notifyTopBarFavoritesChanged()
-  }
-  finally {
-    isBatchOperating.value = false
-  }
+  await runResourceWrite({ kind: 'delete', sourceId: selectedCategory.value.id, resourceKeys: selectedFavoriteResources.value.map(getFavoriteResourceKey) }, true)
 }
 
 async function handleBatchMove() {
-  if (!selectedCategory.value || !targetCategory.value || selectedCount.value === 0)
+  if (!selectedCategory.value || !targetCategory.value || !selectedCount.value)
     return
-
-  isBatchOperating.value = true
-  try {
-    const movedCount = selectedCount.value
-    const res = await api.favorite.moveFavoriteResources({
-      resources: getSelectedResourceParam(),
-      src_media_id: selectedCategory.value.id,
-      tar_media_id: targetCategory.value.id,
-      mid: getUserID(),
-      csrf: getCSRF(),
-    })
-    if (res.code === 0) {
-      increaseTargetCategoryCount(movedCount)
-      removeSelectedResourcesFromList()
-      closeBatchManage()
-      notifyTopBarFavoritesChanged()
-    }
-  }
-  finally {
-    isBatchOperating.value = false
-  }
+  await runResourceWrite({ kind: 'move', sourceId: selectedCategory.value.id, targetId: targetCategory.value.id, resourceKeys: selectedFavoriteResources.value.map(getFavoriteResourceKey) })
 }
 
 async function handleBatchCopy() {
-  if (!selectedCategory.value || !targetCategory.value || selectedCount.value === 0)
+  if (!selectedCategory.value || !targetCategory.value || !selectedCount.value)
     return
-
-  isBatchOperating.value = true
-  try {
-    const copiedCount = selectedCount.value
-    const res = await api.favorite.copyFavoriteResources({
-      resources: getSelectedResourceParam(),
-      src_media_id: selectedCategory.value.id,
-      tar_media_id: targetCategory.value.id,
-      mid: getUserID(),
-      csrf: getCSRF(),
-    })
-    if (res.code === 0) {
-      increaseTargetCategoryCount(copiedCount)
-      resetBatchSelection()
-      closeBatchTransferDialog()
-      notifyTopBarFavoritesChanged()
-    }
-  }
-  finally {
-    isBatchOperating.value = false
-  }
+  await runResourceWrite({ kind: 'copy', sourceId: selectedCategory.value.id, targetId: targetCategory.value.id, resourceKeys: selectedFavoriteResources.value.map(getFavoriteResourceKey) })
 }
 
 async function handleBatchTransferConfirm() {
@@ -767,110 +488,6 @@ async function handleBatchTransferConfirm() {
     await handleBatchMove()
 }
 
-function resetContentState() {
-  contentRequestVersion += 1
-  resetBatchSelection()
-  currentPageNum.value = 0
-  failedContentPage.value = null
-  favoriteResources.length = 0
-  favoriteArticles.length = 0
-  articleFavoriteOffset.value = ''
-  if (favoriteView.value === 'article')
-    articleFavoriteCount.value = undefined
-  loadedSeasonMedias.value = []
-  loadedSeasonComplete.value = false
-  activatedCategoryCover.value = favoriteView.value === 'season' ? selectedSeason.value?.cover || '' : ''
-  noMoreContent.value = false
-  isLoading.value = false
-  isFullPageLoading.value = true
-  return contentRequestVersion
-}
-
-function loadSelectedContent() {
-  const requestVersion = resetContentState()
-
-  if (
-    (favoriteView.value === 'video' && !selectedCategory.value)
-    || (favoriteView.value === 'season' && !selectedSeason.value)
-  ) {
-    isFullPageLoading.value = false
-    noMoreContent.value = true
-    return
-  }
-
-  if (favoriteView.value === 'video' && searchScope.value === 'all' && !keyword.value.trim()) {
-    isFullPageLoading.value = false
-    return
-  }
-
-  void loadActiveContent(1, requestVersion)
-}
-
-async function loadNextPage() {
-  if (isLoading.value || noMoreContent.value || failedContentPage.value !== null)
-    return false
-
-  return loadActiveContent(currentPageNum.value + 1, contentRequestVersion)
-}
-
-function retryFavoriteContent() {
-  if (isLoading.value)
-    return
-  if (failedContentPage.value !== null)
-    void loadActiveContent(failedContentPage.value, contentRequestVersion)
-  else
-    loadSelectedContent()
-}
-
-async function loadActiveContent(pn: number, requestVersion: number): Promise<boolean> {
-  if (requestVersion !== contentRequestVersion)
-    return false
-
-  if (pn === 1)
-    isFullPageLoading.value = true
-  isLoading.value = true
-  failedContentPage.value = null
-
-  try {
-    if (favoriteView.value === 'article') {
-      await getFavoriteArticles(pn, requestVersion)
-    }
-    else if (favoriteView.value === 'season') {
-      await getFavoriteSeasonResources(selectedSeason.value!.id, pn, requestVersion)
-    }
-    else {
-      const mediaId = searchScope.value === 'all'
-        ? favoriteCategories[0]?.id ?? selectedCategory.value!.id
-        : selectedCategory.value!.id
-      await getFavoriteResources(mediaId, pn, keyword.value, searchScope.value === 'all' ? 1 : 0, requestVersion)
-    }
-    if (requestVersion !== contentRequestVersion)
-      return false
-    currentPageNum.value = pn
-    if (noMoreContent.value)
-      return true
-    const hasScrollbar = await haveScrollbar()
-    if (requestVersion !== contentRequestVersion)
-      return false
-    if (!hasScrollbar)
-      return await loadActiveContent(pn + 1, requestVersion)
-    return true
-  }
-  catch {
-    if (requestVersion === contentRequestVersion) {
-      failedContentPage.value = pn
-      noMoreContent.value = false
-    }
-    return false
-  }
-  finally {
-    if (requestVersion === contentRequestVersion) {
-      isLoading.value = false
-      isFullPageLoading.value = false
-    }
-  }
-}
-
 /**
  * 获取收藏夹视频
  * @param media_id 收藏夹 ID
@@ -878,107 +495,6 @@ async function loadActiveContent(pn: number, requestVersion: number): Promise<bo
  * @param keyword 搜索关键词
  * @param type 搜索类型：0-特定收藏夹，1-全部收藏夹
  */
-async function getFavoriteResources(
-  media_id: number,
-  pn: number,
-  keyword = '' as string,
-  type = 0 as number,
-  requestVersion = contentRequestVersion,
-) {
-  const res: FavoritesResult = await api.favorite.getFavoriteResources({
-    media_id,
-    pn,
-    keyword,
-    type,
-  })
-
-  if (requestVersion !== contentRequestVersion)
-    return
-
-  if (res.code !== 0 || !res.data)
-    throw new Error(res.message || t('common.load_failed'))
-
-  const pageItems = Array.isArray(res.data.medias)
-    ? res.data.medias.filter((item): item is FavoriteItem => item != null)
-    : []
-  if (searchScope.value === 'current')
-    activatedCategoryCover.value = res.data.info.cover
-  favoriteResources.push(...pageItems)
-  noMoreContent.value = !res.data.has_more || pageItems.length === 0
-}
-
-async function getFavoriteSeasonResources(
-  seasonId: number,
-  pn: number,
-  requestVersion = contentRequestVersion,
-) {
-  const page = await fetchFavoriteSeasonPage(seasonId, pn, FAVORITE_SEASON_PAGE_SIZE)
-  if (requestVersion !== contentRequestVersion)
-    return
-
-  if (!page.ok) {
-    loadedSeasonComplete.value = false
-    throw new Error(t('common.load_failed'))
-  }
-
-  const merged = mergeFavoriteSeasonPage({
-    pn,
-    pageMedias: page.pageMedias,
-    mediaCount: page.mediaCount,
-    previousMedias: loadedSeasonMedias.value,
-    pageSize: FAVORITE_SEASON_PAGE_SIZE,
-  })
-
-  const enrichedMedias = await enrichFavoriteSeasonMediaFaces(merged.medias)
-  if (requestVersion !== contentRequestVersion)
-    return
-  const resources = enrichedMedias.map(normalizeSeasonMedia)
-  loadedSeasonMedias.value = enrichedMedias
-
-  loadedSeasonComplete.value = !merged.hasMore
-  noMoreContent.value = !merged.hasMore
-  activatedCategoryCover.value = page.cover || selectedSeason.value?.cover || ''
-  favoriteResources.splice(0, favoriteResources.length, ...resources)
-}
-
-async function getFavoriteArticles(
-  pn: number,
-  requestVersion = contentRequestVersion,
-) {
-  const res: FavoriteArticlesResult = await api.favorite.getFavoriteArticles({
-    page: pn,
-    page_size: FAVORITE_ARTICLE_PAGE_SIZE,
-    offset: pn === 1 ? '' : articleFavoriteOffset.value,
-    timezone_offset: new Date().getTimezoneOffset(),
-    web_location: '333.1387',
-  })
-
-  if (requestVersion !== contentRequestVersion)
-    return
-
-  if (res.code !== 0 || !res.data)
-    throw new Error(res.message || t('favorites.article_load_failed'))
-
-  const pageArticles = Array.isArray(res.data?.items)
-    ? res.data.items.filter((item): item is FavoriteArticle => item != null && Boolean(item.opus_id))
-    : []
-  favoriteArticles.push(...pageArticles)
-
-  const nextOffset = res.data?.offset
-  articleFavoriteOffset.value = nextOffset != null && nextOffset !== ''
-    ? String(nextOffset)
-    : (pageArticles.at(-1)?.opus_id ?? '')
-
-  const hasMore = Boolean(res.data?.has_more) && pageArticles.length > 0
-  // polymer 接口无 total，仅在没有更多时用已加载条数作为总数
-  if (!hasMore)
-    articleFavoriteCount.value = favoriteArticles.length
-
-  if (favoriteArticles[0])
-    activatedCategoryCover.value = getFavoriteArticleCover(favoriteArticles[0])
-
-  noMoreContent.value = !hasMore
-}
 
 function handleFavoriteViewChange(view: FavoriteView) {
   closeBatchManage()
@@ -1037,6 +553,11 @@ async function handlePlayAll() {
     if (!selectedSeason.value)
       return
 
+    const owner = data.capture()
+    const version = contentVersion.value
+    const isCurrent = () => owner.isCurrent() && version === contentVersion.value
+    if (!isCurrent())
+      return
     isResolvingSeasonPlayAll.value = true
     try {
       const result = await resolveFavoriteSeasonPlayAllUrl({
@@ -1050,12 +571,15 @@ async function handlePlayAll() {
           expectedCount: selectedSeason.value.media_count,
         },
       })
+      if (!isCurrent())
+        return
       if (result.usedFallback && result.reason !== 'beginning')
         toast.warning(t('favorites.season_play_all_fallback'))
       openLinkToNewTab(result.url)
     }
     finally {
-      isResolvingSeasonPlayAll.value = false
+      if (isCurrent())
+        isResolvingSeasonPlayAll.value = false
     }
     return
   }
@@ -1068,118 +592,49 @@ function jumpToLoginPage() {
   location.href = 'https://passport.bilibili.com/login'
 }
 
-async function handleUnfavorite(favoriteResource: FavoriteResource) {
-  const result = await showConfirmDialog(
-    t('favorites.unfavorite_confirm'),
-  )
-  if (result) {
-    api.favorite.patchDelFavoriteResources({
-      resources: `${favoriteResource.id}:${favoriteResource.type}`,
-      media_id: selectedCategory.value?.id,
-      csrf: getCSRF(),
-    }).then((res) => {
-      if (res.code === 0) {
-        const resourceIndex = favoriteResources.indexOf(favoriteResource as FavoriteItem)
-        if (resourceIndex >= 0)
-          favoriteResources.splice(resourceIndex, 1)
-        if (selectedCategory.value)
-          selectedCategory.value.media_count = Math.max(0, selectedCategory.value.media_count - 1)
-        notifyTopBarFavoritesChanged()
-      }
-    })
+async function handleUnfavorite(resource: FavoriteResource) {
+  if (!selectedCategory.value)
+    return
+  await runResourceWrite({ kind: 'delete', sourceId: selectedCategory.value.id, resourceKeys: [getFavoriteResourceKey(resource)] }, true)
+}
+
+watch(accountId, () => {
+  data.resetAccount()
+  writes.reset()
+  closeBatchManage()
+  exitSidebarManage()
+  closeItemMenu()
+  closeEditFolderDialog()
+  isResolvingSeasonPlayAll.value = false
+  void initData()
+}, { flush: 'sync' })
+watch(contentVersion, () => {
+  resetBatchSelection()
+  isResolvingSeasonPlayAll.value = false
+}, { flush: 'sync' })
+
+async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: number }>, confirm = false) {
+  if (writes.pending.value)
+    return
+  const version = contentVersion.value
+  const selection = selectedResourceKeys.value
+  const transaction = writes.prepare(command)
+  if (confirm && !await showConfirmDialog(t('favorites.batch_unfavorite_confirm', { count: command.resourceKeys.length })))
+    return
+  const result = await writes.execute(transaction)
+  if (!result)
+    return
+  data.applyResourceWrite(command, version)
+  if (version === contentVersion.value && selection === selectedResourceKeys.value) {
+    selectedResourceKeys.value = selection.filter(key => !command.resourceKeys.includes(key))
+    if (command.targetId === targetCategory.value?.id) {
+      if (command.kind === 'move')
+        closeBatchManage()
+      else if (command.kind === 'copy')
+        closeBatchTransferDialog()
+    }
   }
-}
-
-function isMusic(item: FavoriteResource) {
-  return item.link.includes('bilibili://music')
-}
-
-function transformFavoriteItem(item: FavoriteItem): Video {
-  return {
-    id: item.id,
-    duration: item.duration,
-    title: item.title,
-    cover: item.cover,
-    author: {
-      name: item.upper.name,
-      authorFace: item.upper.face,
-      mid: item.upper.mid,
-    },
-    view: item.cnt_info.play,
-    danmaku: item.cnt_info.danmaku,
-    publishedTimestamp: item.pubtime,
-    bvid: isMusic(item) ? undefined : item.bvid,
-    url: isMusic(item) ? `https://www.bilibili.com/audio/au${item.id}` : undefined,
-    threePointV2: [],
-  }
-}
-
-function normalizeSeasonMedia(item: FavoriteSeasonMedia): FavoriteItem {
-  return {
-    id: item.id,
-    type: 2,
-    title: item.title,
-    cover: item.cover,
-    intro: '',
-    page: 1,
-    duration: item.duration,
-    upper: {
-      mid: item.upper.mid,
-      name: item.upper.name,
-      face: item.upper.face || '',
-    },
-    attr: 0,
-    cnt_info: {
-      ...item.cnt_info,
-      play_switch: 0,
-      reply: 0,
-      view_text_1: '',
-    },
-    link: item.bvid ? `https://www.bilibili.com/video/${item.bvid}` : '',
-    ctime: item.pubtime,
-    pubtime: item.pubtime,
-    fav_time: item.pubtime,
-    bv_id: item.bvid,
-    bvid: item.bvid,
-    season: null,
-    ogv: null,
-    ugc: {
-      first_cid: 0,
-    },
-  }
-}
-
-function getFavoriteArticleCover(item: FavoriteArticle) {
-  return item.cover?.url || ''
-}
-
-function normalizeFavoriteArticleUrl(url: string) {
-  if (url.startsWith('//'))
-    return `https:${url}`
-  if (url.startsWith('/'))
-    return `https://www.bilibili.com${url}`
-  return url
-}
-
-function getFavoriteArticleUrl(item: FavoriteArticle) {
-  if (item.jump_url)
-    return normalizeFavoriteArticleUrl(item.jump_url)
-  return `https://www.bilibili.com/opus/${item.opus_id}`
-}
-
-function transformFavoriteArticle(item: FavoriteArticle) {
-  const mid = item.author?.mid
-  return {
-    id: item.opus_id,
-    url: getFavoriteArticleUrl(item),
-    title: item.content || '',
-    cover: getFavoriteArticleCover(item),
-    author: item.author?.name || '',
-    authorMid: mid != null && mid !== '' ? Number(mid) : undefined,
-    view: item.stat?.view || undefined,
-    like: item.stat?.like || undefined,
-    publishTime: item.pub_time || undefined,
-  }
+  notifyTopBarFavoritesChanged()
 }
 </script>
 

@@ -247,6 +247,7 @@
 
   // Use this in dialogs if you want to add a frosted glass effect
   --bew-filter-glass-2: blur(30px) saturate(180%);
+  --bew-liquid-glass-color: var(--bew-content-alt-solid);
 
   // Apply this to the Bilibili icon if it is an image with the brand's original blue or pink color
   // Change it to glow effect to matches the user's theme color
@@ -507,6 +508,7 @@
 
   --bew-elevated-solid: color-mix(in oklab, var(--bew-dark-base-color), white 6%);
   --bew-elevated-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 11%);
+  --bew-liquid-glass-color: var(--bew-elevated-solid);
   --bew-elevated-alt-solid: var(--bew-elevated-solid);
   --bew-elevated-alt-solid-hover: var(--bew-elevated-solid-hover);
 

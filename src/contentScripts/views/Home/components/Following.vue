@@ -44,6 +44,7 @@ import { useI18n } from 'vue-i18n'
 import type { Author, Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import { mapMomentItemToVideo } from '~/contentScripts/views/Home/adapters/followingVideo'
 import type { GridLayoutType } from '~/logic'
@@ -111,30 +112,36 @@ const emit = defineEmits<{
 useI18n()
 
 const { scrollViewportRef, handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
-const videoList = ref<VideoElement[]>([])
-const uploaderList = ref<UploaderInfo[]>([])
-const selectedUploader = ref<number | null>(null) // null means "All"
-const previousSelectedUploader = ref<number | null>(null)
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const uploaderList = tabState.ref<UploaderInfo[]>('uploaderList', [])
+const selectedUploader = tabState.ref<number | null>('selectedUploader', null) // null means "All"
+const previousSelectedUploader = tabState.ref<number | null>('previousSelectedUploader', null)
 const selectionToken = ref<number>(0) // 用于防止竞态条件的令牌
-const liveListLoaded = ref<boolean>(false) // 标记直播列表是否已加载（防止重复加载）
+const liveListLoaded = tabState.ref<boolean>('liveListLoaded', false) // 标记直播列表是否已加载（防止重复加载）
 
 // Provide selectedUploader to child components for preview loading control
 provide('moments-selected-uploader', selectedUploader)
 const isLoading = ref<boolean>(false)
-const requestFailed = ref<boolean>(false)
-const noMoreContent = ref<boolean>(false)
-const needToLoginFirst = ref<boolean>(false)
+const requestFailed = tabState.ref<boolean>('requestFailed', false)
+const noMoreContent = tabState.ref<boolean>('noMoreContent', false)
+const needToLoginFirst = tabState.ref<boolean>('needToLoginFirst', false)
 const isRefreshContextActive = ref<boolean>(false)
 
 // 分别管理ALL和单个UP主的分页状态
-const allViewOffset = ref<string>('')
-const allViewUpdateBaseline = ref<string>('')
-const userMomentsOffset = ref<string>('')
+const allViewOffset = tabState.ref<string>('allViewOffset', '')
+const allViewUpdateBaseline = tabState.ref<string>('allViewUpdateBaseline', '')
+const userMomentsOffset = tabState.ref<string>('userMomentsOffset', '')
 
-const currentUserMid = ref<number>(0) // 当前登录用户的mid
-let loadedAccountMid: AccountId = null
-let followingAccountInitialized = false
-let reloadAfterActivation = false
+const currentUserMid = tabState.ref<number>('currentUserMid', 0) // 当前登录用户的mid
+let loadedAccountMid: AccountId = tabState.read('loadedAccountMid', null)
+tabState.capture('loadedAccountMid', () => loadedAccountMid)
+const followingPage = tabState.ref('followingPage', 1)
+const followingListLoaded = tabState.ref('followingListLoaded', false)
+const uploaderScrollRef = ref<HTMLElement | null>(null)
+tabState.capture('uploaderScrollTop', () => uploaderScrollRef.value?.scrollTop ?? 0)
+let followingAccountInitialized = tabState.restored
 
 function syncRefreshAvailability() {
   canRefreshHomeSubPage.value = isRefreshContextActive.value && selectedUploader.value === null
@@ -158,7 +165,7 @@ function getFollowingStorageKey(baseKey: string): string | undefined {
 }
 
 function isFollowingRequestCurrent(token?: number): boolean {
-  return (token === undefined || token === selectionToken.value)
+  return tabState.isCurrent() && (token === undefined || token === selectionToken.value)
     && isSameAccount(loadedAccountMid, getCurrentAccountMid())
 }
 
@@ -357,7 +364,7 @@ const unreadUploadersCount = computed(() => {
 })
 
 // 搜索关键词
-const searchKeyword = ref<string>('')
+const searchKeyword = tabState.ref<string>('searchKeyword', '')
 
 // 显示的UP主列表（包含黑名单，但黑名单排在最后，并支持搜索过滤）
 const displayedUploaderList = computed(() => {
@@ -383,6 +390,7 @@ async function getCurrentUserInfo(requestToken: number, accountMid: number): Pro
       && response.data?.mid === accountMid
       && requestToken === selectionToken.value
       && isSameAccount(loadedAccountMid, getCurrentAccountMid())
+      && tabState.isCurrent()
     ) {
       currentUserMid.value = response.data.mid
       return { status: 'success', mid: response.data.mid }
@@ -398,9 +406,12 @@ async function getCurrentUserInfo(requestToken: number, accountMid: number): Pro
 
 // 加载关注列表（独立API）- 渐进式加载所有关注的UP主
 async function loadFollowingList(requestToken: number, accountMid: number): Promise<FollowingLoadResult> {
+  if (!isFollowingRequestCurrent(requestToken))
+    return { status: 'error' }
   requestFailed.value = false
   needToLoginFirst.value = false
-  noMoreContent.value = false
+  if (!hasSettled.value)
+    noMoreContent.value = false
 
   if (!currentUserMid.value) {
     const result = await getCurrentUserInfo(requestToken, accountMid)
@@ -418,18 +429,17 @@ async function loadFollowingList(requestToken: number, accountMid: number): Prom
     if (!isFollowingRequestCurrent(requestToken))
       return { status: 'error' }
 
-    let currentPage = 1
     const pageSize = 50
     let hasMore = true
     const viewed = getViewedUploaders()
     const recordedTimes = uploaderLatestVideoTimes.value
 
     // 持续加载所有关注的UP主，每页加载后立即显示
-    while (hasMore) {
+    while (hasMore && isFollowingRequestCurrent(requestToken)) {
       const response: any = await api.user.getUserFollowings({
         vmid: currentUserMid.value.toString(),
         ps: pageSize,
-        pn: currentPage,
+        pn: followingPage.value,
       })
 
       if (!isFollowingRequestCurrent(requestToken))
@@ -471,9 +481,10 @@ async function loadFollowingList(requestToken: number, accountMid: number): Prom
         const total = response.data.total
         if (uploaderList.value.length >= total || followings.length < pageSize) {
           hasMore = false
+          followingListLoaded.value = true
         }
         else {
-          currentPage++
+          followingPage.value++
         }
       }
       else {
@@ -546,6 +557,8 @@ async function loadFollowingLiveList(token: number): Promise<VideoElement[]> {
 
 // 加载ALL视图的动态流（渐进式加载，每页加载后立即显示）
 async function loadAllViewVideos(maxPages: number = 3, token?: number) {
+  if (!isFollowingRequestCurrent(token))
+    return
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
@@ -733,6 +746,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
   finally {
     // 只有当前 token 仍然有效时才清除加载状态
     if (isFollowingRequestCurrent(token)) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -741,6 +755,8 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
 
 // 加载单个UP主的动态（渐进式加载，每页加载后立即显示）
 async function loadUserMoments(mid: number, maxPages: number = 3, token?: number) {
+  if (!isFollowingRequestCurrent(token))
+    return
   emit('beforeLoading')
   isLoading.value = true
   requestFailed.value = false
@@ -896,6 +912,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
   finally {
     // 只有当前 token 仍然有效时才清除加载状态
     if (isFollowingRequestCurrent(token)) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -904,6 +921,9 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
 
 // 切换UP主
 function selectUploader(mid: number | null) {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   // 生成新的选择令牌，用于防止竞态条件
   const currentToken = ++selectionToken.value
 
@@ -1001,6 +1021,9 @@ async function handleLoadMore() {
 
 // 初始化
 function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   // 生成新的令牌，确保旧的加载请求被取消
   const currentToken = ++selectionToken.value
   const accountMid = loadedAccountMid
@@ -1030,14 +1053,14 @@ function initData() {
   }
   else {
     // 否则，先加载关注列表，然后加载ALL视图
-    if (uploaderList.value.length === 0) {
+    if (!followingListLoaded.value) {
       // 设置加载状态，避免显示"没有数据"
       isLoading.value = true
       emit('beforeLoading')
 
       loadFollowingList(currentToken, accountMid).then((result) => {
-        if (result.status !== 'success' || currentToken !== selectionToken.value) {
-          if (currentToken === selectionToken.value) {
+        if (result.status !== 'success' || !isFollowingRequestCurrent(currentToken)) {
+          if (isFollowingRequestCurrent(currentToken)) {
             isLoading.value = false
             emit('afterLoading')
           }
@@ -1059,6 +1082,23 @@ function initData() {
   }
 }
 
+async function resumeFollowingData() {
+  if (!tabState.isCurrent() || loadedAccountMid === null || requestFailed.value || needToLoginFirst.value)
+    return
+  const token = selectionToken.value
+  if (!followingListLoaded.value) {
+    const result = await loadFollowingList(token, loadedAccountMid)
+    if (result.status !== 'success' || !isFollowingRequestCurrent(token))
+      return
+  }
+  if (!hasSettled.value) {
+    if (selectedUploader.value === null)
+      await loadAllViewVideos(3, token)
+    else
+      await loadUserMoments(selectedUploader.value, 3, token)
+  }
+}
+
 function jumpToLoginPage() {
   location.href = 'https://passport.bilibili.com/login'
 }
@@ -1066,6 +1106,8 @@ function jumpToLoginPage() {
 function resetFollowingAccountState(accountMid: AccountId) {
   const wasLoading = isLoading.value
   selectionToken.value++
+  followingPage.value = 1
+  followingListLoaded.value = false
   uploaderList.value = []
   selectedUploader.value = null
   previousSelectedUploader.value = null
@@ -1099,7 +1141,11 @@ function ensureFollowingAccount() {
 onMounted(() => {
   isRefreshContextActive.value = true
   syncRefreshAvailability()
-  ensureFollowingAccount()
+  const changed = ensureFollowingAccount()
+  if (!changed)
+    void resumeFollowingData()
+  if (uploaderScrollRef.value)
+    uploaderScrollRef.value.scrollTop = tabState.read('uploaderScrollTop', 0)
 
   // 确保在 nextTick 中调用，以保证所有依赖都已准备好
   nextTick(() => {
@@ -1107,37 +1153,16 @@ onMounted(() => {
   })
 })
 
-onActivated(() => {
-  isRefreshContextActive.value = true
-  syncRefreshAvailability()
-  const accountChanged = ensureFollowingAccount()
-  if (accountChanged) {
-    reloadAfterActivation = false
-  }
-  else if (reloadAfterActivation) {
-    reloadAfterActivation = false
-    initData()
-  }
-  initPageAction()
-})
-
-onDeactivated(() => {
-  reloadAfterActivation = isLoading.value
-  selectionToken.value++
-  if (isLoading.value)
-    emit('afterLoading')
-  isLoading.value = false
-  isRefreshContextActive.value = false
-  syncRefreshAvailability()
-})
-
 onUnmounted(() => {
   selectionToken.value++
   isRefreshContextActive.value = false
-  syncRefreshAvailability()
+  if (tabState.isActiveTab())
+    syncRefreshAvailability()
 })
 
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   // VideoCardGrid owns infinite scrolling. Clear callbacks left by other kept-alive tabs.
   handleReachBottom.value = undefined
 
@@ -1160,7 +1185,10 @@ defineExpose({ initData })
       duration-300
       ease-in-out
     >
-      <div h-inherit p="x-20px b-20px t-8px" m--20px of-y-auto of-x-hidden>
+      <div
+        ref="uploaderScrollRef" h-inherit p="x-20px b-20px t-8px" m--20px of-y-auto
+        of-x-hidden
+      >
         <!-- Search Box -->
         <div mb-3>
           <input

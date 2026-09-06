@@ -1,13 +1,18 @@
 <script setup lang="ts" generic="T = any">
 import { useDebounceFn } from '@vueuse/core'
 
-import type { Video } from '~/components/VideoCard/types'
+import type { Video, VideoCardState } from '~/components/VideoCard/types'
+import { createVideoCardState } from '~/components/VideoCard/types'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import type { CardWindowSnapshot } from '~/composables/useCardWindow'
+import { useCardWindow } from '~/composables/useCardWindow'
 import { useGridLayout } from '~/composables/useGridLayout'
+import { useHomeTabViewState } from '~/composables/useHomeTabState'
 import { useVideoCardShadowStyle } from '~/composables/useVideoCardShadowStyle'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import type { GridLayoutType } from '~/logic'
 import { originalSettings, settings } from '~/logic'
+import { isLayoutEditing } from '~/logic/layoutEdit'
 import { getAdaptiveGridColumnCount, getListGridColumnCount } from '~/utils/gridLayout'
 import emitter from '~/utils/mitt'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
@@ -24,6 +29,7 @@ interface VideoCardGridProps<T = any> {
    * 数据列表
    */
   items: T[]
+  stateKey?: string
 
   /**
    * Grid 布局模式
@@ -203,6 +209,21 @@ const isLoadMoreSentinelIntersecting = ref(false)
 const reachedLoadMoreDuringLoading = ref(false)
 const gridContainerWidth = ref(0)
 const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
+const tabState = useHomeTabViewState()
+interface GridSnapshot {
+  window: CardWindowSnapshot
+  cardStates: [string | number, VideoCardState][]
+}
+const gridStateKey = `grid:${props.stateKey || 'default'}`
+const restoredGrid = tabState?.take<GridSnapshot | undefined>(gridStateKey, undefined)
+let detachGridSnapshot: (() => void) | undefined
+onBeforeUnmount(() => detachGridSnapshot?.())
+const mountedCards = new Map<string | number, { canRecycle?: boolean }>()
+const cardStates = new Map<string | number, VideoCardState>(restoredGrid?.cardStates.map(([key, state]) => [key, reactive(state)]))
+let layoutPinnedKeys = new Set<string | number>()
+watch(isLayoutEditing, (editing) => {
+  layoutPinnedKeys = editing ? new Set(mountedCards.keys()) : new Set()
+})
 
 // 使用共享的 Grid 布局 composable（CSS 媒体查询驱动，无 JS 计算开销）
 const { gridClass, gridCssVars } = useGridLayout(() => props.gridLayout)
@@ -618,6 +639,8 @@ onUnmounted(() => {
     checkPreloadRAF = null
   }
   cleanupGridResizeObserver()
+  mountedCards.clear()
+  cardStates.clear()
   resetTransformCaches()
 })
 
@@ -858,10 +881,94 @@ function createRenderItem(item: T, index: number): VideoCardRenderItem {
   return { key, index, item, skeleton, type, video }
 }
 
-// 普通追加渲染：按 displayItems 顺序保留所有已加载卡片，
-// 对齐 B 站原生首页的连续滚动体验，不做虚拟窗口回收。
-const renderItems = computed<VideoCardRenderItem[]>(() => {
-  return displayItems.value.map((item, index) => createRenderItem(item, index))
+const cardWindowRoot = computed(() => {
+  void gridContainerRef.value
+  void bewlyApp?.scrollViewportRef.value
+  return findScrollElement() ?? document.scrollingElement as HTMLElement | null
+})
+const recycleCards = computed(() => Boolean(tabState?.enabled) || props.items.length > 80)
+const cardColumns = computed(() => getCurrentColumnCount(props.gridLayout, gridContainerWidth.value || window.innerWidth))
+const cardGap = computed(() => {
+  void gridContainerWidth.value
+  void isHorizontal.value
+  return gridContainerRef.value ? Number.parseFloat(getComputedStyle(gridContainerRef.value).rowGap) || 0 : 0
+})
+const cardKeys = computed(() => displayItems.value.map(getUniqueKey))
+const estimatedCardHeight = computed(() => {
+  const columns = cardColumns.value
+  const width = (gridContainerWidth.value || window.innerWidth) / columns
+  const cover = isHorizontal.value ? width * horizontalCoverLayout.value.ratio / 100 : width
+  // Estimates only seed unmeasured rows; one shared measurement index owns actual geometry.
+  return isHorizontal.value ? Math.max(cover * 9 / 16, 130) + 16 : cover * 9 / 16 + 110
+})
+const cardLayoutKey = computed(() => [
+  props.gridLayout,
+  settings.value.videoCardLayout,
+  settings.value.videoCardTitleFontSize,
+  settings.value.videoCardAuthorFontSize,
+  settings.value.videoCardMetaFontSize,
+  settings.value.showVideoCardAuthorAvatar,
+  settings.value.showVideoCardAuthorName,
+  settings.value.showVideoCardVideoTag,
+  settings.value.showVideoCardRecommendTag,
+  settings.value.showVideoCardPublishTime,
+  horizontalCoverLayout.value.ratio,
+  props.hideAuthor,
+].join(':'))
+const cardWindow = useCardWindow({
+  root: cardWindowRoot,
+  container: gridContainerRef,
+  keys: cardKeys,
+  columns: cardColumns,
+  gap: cardGap,
+  enabled: recycleCards,
+  estimatedHeight: estimatedCardHeight,
+  layout: cardLayoutKey,
+  canRelease: key => !(isLayoutEditing.value && layoutPinnedKeys.has(key)) && mountedCards.get(key)?.canRecycle !== false,
+  snapshot: restoredGrid?.window,
+  restoreScroll: tabState?.restoreScroll,
+})
+detachGridSnapshot = tabState?.capture(gridStateKey, (): GridSnapshot => ({
+  window: cardWindow.captureSnapshot(),
+  cardStates: [...cardStates],
+}))
+const renderItems = computed(() => {
+  const result: { key: string, height?: number, card?: VideoCardRenderItem }[] = []
+  for (const range of cardWindow.ranges.value) {
+    if (range.height !== undefined) {
+      result.push({ key: `spacer:${range.start}`, height: range.height })
+      continue
+    }
+    for (let index = range.start; index < range.end; index++) {
+      const card = createRenderItem(displayItems.value[index], index)
+      result.push({ key: `card:${typeof card.key}:${card.key}`, card })
+    }
+  }
+  return result
+})
+
+function getCardState(key: string | number) {
+  let state = cardStates.get(key)
+  if (!state) {
+    state = reactive(createVideoCardState())
+    cardStates.set(key, state)
+  }
+  return state
+}
+
+function setMountedCard(key: string | number, component: unknown) {
+  if (component)
+    mountedCards.set(key, component as { canRecycle?: boolean })
+  else
+    mountedCards.delete(key)
+}
+
+watch(cardKeys, (keys) => {
+  const validKeys = new Set(keys)
+  for (const key of cardStates.keys()) {
+    if (!validKeys.has(key))
+      cardStates.delete(key)
+  }
 })
 
 interface VideoTransformCacheEntry<T = unknown> {
@@ -880,7 +987,7 @@ watch(() => props.transformItem, () => {
 })
 
 watch(
-  () => renderItems.value.map(item => item.key),
+  () => renderItems.value.flatMap(item => item.card ? [item.card.key] : []),
   (activeKeys) => {
     const activeKeySet = new Set(activeKeys)
 
@@ -981,27 +1088,37 @@ function getUniqueKey(item: T, index: number): string | number {
       m="b-0 t-0" relative w-full
       :style="gridContainerStyle"
     >
-      <VideoCard
+      <div
         v-for="renderItem in renderItems"
         :key="renderItem.key"
-        :data-index="renderItem.index"
-        :skeleton="renderItem.skeleton"
-        :type="renderItem.type"
-        :video="renderItem.video"
-        :show-preview="showPreview"
-        :show-watch-later="showWatchLater"
-        :horizontal="isHorizontal"
-        :more-btn="moreBtn"
-        :hide-author="hideAuthor"
-        :disable-content-visibility="props.disableContentVisibility"
-        :is-following-page="props.isFollowingPage"
-        :custom-click-handler="props.cardClickHandler ? (event: MouseEvent) => props.cardClickHandler?.(renderItem.item, event) : undefined"
-        :cover-top-left-always-visible="props.coverTopLeftAlwaysVisible"
+        :ref="(element) => renderItem.card && cardWindow.setElement(renderItem.card.key, element)"
+        :class="renderItem.card ? 'video-card-slot' : 'video-card-spacer'"
+        :style="renderItem.card ? undefined : { height: `${String(renderItem.height)}px` }"
+        :aria-hidden="renderItem.card ? undefined : true"
       >
-        <template v-for="(_, name) in $slots" #[name]>
-          <slot :name="name" :item="renderItem.item" />
-        </template>
-      </VideoCard>
+        <VideoCard
+          v-if="renderItem.card"
+          :ref="(component: unknown) => setMountedCard(renderItem.card!.key, component)"
+          :persistent-state="getCardState(renderItem.card.key)"
+          :data-index="renderItem.card.index"
+          :skeleton="renderItem.card.skeleton"
+          :type="renderItem.card.type"
+          :video="renderItem.card.video"
+          :show-preview="showPreview"
+          :show-watch-later="showWatchLater"
+          :horizontal="isHorizontal"
+          :more-btn="moreBtn"
+          :hide-author="hideAuthor"
+          :disable-content-visibility="props.disableContentVisibility || recycleCards"
+          :is-following-page="props.isFollowingPage"
+          :custom-click-handler="props.cardClickHandler ? (event: MouseEvent) => props.cardClickHandler?.(renderItem.card!.item, event) : undefined"
+          :cover-top-left-always-visible="props.coverTopLeftAlwaysVisible"
+        >
+          <template v-for="(_, name) in $slots" #[name]>
+            <slot :name="name" :item="renderItem.card.item" />
+          </template>
+        </VideoCard>
+      </div>
 
       <div ref="loadMoreSentinelRef" class="load-more-sentinel" aria-hidden="true" />
     </div>
@@ -1031,6 +1148,18 @@ function getUniqueKey(item: T, index: number): string | number {
 <style lang="scss" scoped>
 .video-card-grid-root {
   container-type: inline-size;
+}
+
+.video-card-slot {
+  display: grid;
+  min-width: 0;
+  overflow-anchor: none;
+}
+
+.video-card-spacer {
+  grid-column: 1 / -1;
+  pointer-events: none;
+  overflow-anchor: none;
 }
 
 .video-card-grid-container {

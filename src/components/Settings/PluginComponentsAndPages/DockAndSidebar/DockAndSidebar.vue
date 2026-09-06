@@ -5,7 +5,9 @@ import draggable from 'vuedraggable'
 import Button from '~/components/Button.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import Slider from '~/components/Slider.vue'
 import type { DockCollapseMode } from '~/constants/dock'
+import { LIQUID_GLASS_MODES, LIQUID_GLASS_PARAMETERS, LIQUID_GLASS_TINT_SOURCES } from '~/constants/liquidGlass'
 import { settings } from '~/logic'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
@@ -17,6 +19,15 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 const { t } = useI18n()
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
+const liquidGlassModes = computed(() => LIQUID_GLASS_MODES.map(value => ({ label: t(`settings.dock_glass_mode_${value}`), value })))
+const liquidGlassTintSources = computed(() => LIQUID_GLASS_TINT_SOURCES.map(value => ({ label: t(`settings.dock_glass_tint_${value}`), value })))
+const liquidGlassSliders = [
+  { key: 'dockLiquidGlassRefraction', title: 'settings.dock_glass_refraction', unit: '', ...LIQUID_GLASS_PARAMETERS.refraction },
+  { key: 'dockLiquidGlassBlur', title: 'settings.dock_glass_blur', unit: 'px', ...LIQUID_GLASS_PARAMETERS.blur },
+  { key: 'dockLiquidGlassTintOpacity', title: 'settings.dock_glass_tint_opacity', unit: '%', ...LIQUID_GLASS_PARAMETERS.tintOpacity },
+  { key: 'dockLiquidGlassDispersion', title: 'settings.dock_glass_dispersion', unit: '', ...LIQUID_GLASS_PARAMETERS.dispersion },
+  { key: 'dockLiquidGlassSaturation', title: 'settings.dock_glass_saturation', unit: '%', ...LIQUID_GLASS_PARAMETERS.saturation },
+] as const
 
 const dockPositions = computed(() => {
   return [
@@ -244,6 +255,54 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
       </SettingsItem>
     </SettingsItemGroup>
 
+    <SettingsItemGroup :title="$t('settings.group_dock_glass')">
+      <SettingsItem
+        setting-id="navigation.dock.liquidGlass"
+        :title="$t('settings.dock_liquid_glass')"
+        :desc="$t('settings.dock_liquid_glass_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.enableDockLiquidGlass" />
+      </SettingsItem>
+      <template v-if="settings.enableDockLiquidGlass">
+        <p v-if="settings.disableFrostedGlass" class="dock-glass-paused">
+          {{ $t('settings.dock_liquid_glass_paused') }}
+        </p>
+        <SettingsItem setting-id="navigation.dock.glassMode" :title="$t('settings.dock_glass_mode')" right-width="auto">
+          <Select v-model="settings.dockLiquidGlassMode" :options="liquidGlassModes" w="160px" />
+        </SettingsItem>
+        <SettingsItem setting-id="navigation.dock.glassTint" :title="$t('settings.dock_glass_tint')" right-width="auto">
+          <div class="dock-glass-tint-controls">
+            <Select v-model="settings.dockLiquidGlassTintSource" :options="liquidGlassTintSources" w="160px" />
+            <input
+              v-if="settings.dockLiquidGlassTintSource === 'custom'"
+              v-model="settings.dockLiquidGlassTintColor"
+              type="color"
+              class="dock-glass-color"
+              :aria-label="$t('settings.dock_glass_tint_color')"
+            >
+          </div>
+        </SettingsItem>
+        <SettingsItem
+          v-for="slider in liquidGlassSliders"
+          :key="slider.key"
+          :setting-id="`navigation.dock.${slider.key}`"
+          :title="$t(slider.title)"
+          :desc="slider.key === 'dockLiquidGlassBlur' ? $t('settings.dock_glass_blur_desc') : slider.key === 'dockLiquidGlassTintOpacity' ? $t('settings.dock_glass_tint_opacity_desc') : undefined"
+        >
+          <template #bottom>
+            <Slider
+              v-model="settings[slider.key]"
+              :min="slider.min"
+              :max="slider.max"
+              :step="slider.step"
+              :label="`${settings[slider.key]}${slider.unit}`"
+            />
+          </template>
+        </SettingsItem>
+      </template>
+    </SettingsItemGroup>
+
     <SettingsItemGroup :title="$t('settings.group_sidebar')" :desc="$t('settings.group_sidebar_desc')">
       <SettingsItem setting-id="navigation.sidebar.position" :title="$t('settings.sidebar_position')" right-width="auto">
         <Select v-model="settings.sidebarPosition" :options="sidebarPositions" w="160px" />
@@ -256,4 +315,26 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
 </template>
 
 <style lang="scss" scoped>
+.dock-glass-paused {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
+
+.dock-glass-tint-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+}
+
+.dock-glass-color {
+  width: var(--bew-control-height);
+  height: var(--bew-control-height);
+  padding: var(--bew-space-1);
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-interactive-radius);
+  background: var(--bew-elevated-solid);
+  color-scheme: inherit;
+  cursor: pointer;
+}
 </style>

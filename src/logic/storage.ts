@@ -5,6 +5,8 @@ import { useSettingsStorage } from '~/composables/useSettingsStorage'
 import { useStorageLocal } from '~/composables/useStorageLocal'
 import type { DockCollapseMode } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
+import type { LiquidGlassMode, LiquidGlassTintSource } from '~/constants/liquidGlass'
+import { LIQUID_GLASS_MODES, LIQUID_GLASS_PARAMETERS, LIQUID_GLASS_TINT_SOURCES } from '~/constants/liquidGlass'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
@@ -14,6 +16,7 @@ import {
   normalizeListLayoutBreakpoint,
 } from '~/utils/gridLayout'
 import type { PageMode } from '~/utils/pageMode'
+import { clampRangeValue } from '~/utils/range'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
 
 export type { AppAuthTokens } from './appAuthStorage'
@@ -225,7 +228,6 @@ export interface Settings {
   autoSwitchListLayoutBreakpoint: number
   videoCardCoverRatioOneColumn: number
   videoCardCoverRatioTwoColumns: number
-  releaseOffscreenVideoCardImages: boolean
   watchLaterLayoutMode: WatchLaterLayoutMode
 
   language: string
@@ -332,6 +334,15 @@ export interface Settings {
   alwaysUseDock: boolean
   dockCollapseMode: DockCollapseMode
   dockPosition: 'left' | 'right' | 'bottom'
+  enableDockLiquidGlass: boolean
+  dockLiquidGlassMode: LiquidGlassMode
+  dockLiquidGlassRefraction: number
+  dockLiquidGlassBlur: number
+  dockLiquidGlassTintSource: LiquidGlassTintSource
+  dockLiquidGlassTintColor: string
+  dockLiquidGlassTintOpacity: number
+  dockLiquidGlassDispersion: number
+  dockLiquidGlassSaturation: number
   dockItemsConfig: { page: AppPage, visible: boolean, openInNewTab: boolean, useOriginalBiliPage: boolean }[]
   pageMode: PageMode
   disableDockGlowingEffect: boolean
@@ -502,7 +513,6 @@ export const originalSettings: Settings = {
   // Preserve the former equal split and 400px maximum at default values.
   videoCardCoverRatioOneColumn: 50,
   videoCardCoverRatioTwoColumns: 50,
-  releaseOffscreenVideoCardImages: false,
   watchLaterLayoutMode: 'list',
 
   language: '',
@@ -609,6 +619,15 @@ export const originalSettings: Settings = {
   alwaysUseDock: false,
   dockCollapseMode: 'button',
   dockPosition: 'bottom',
+  enableDockLiquidGlass: false,
+  dockLiquidGlassMode: 'standard',
+  dockLiquidGlassRefraction: LIQUID_GLASS_PARAMETERS.refraction.default,
+  dockLiquidGlassBlur: LIQUID_GLASS_PARAMETERS.blur.default,
+  dockLiquidGlassTintSource: 'theme',
+  dockLiquidGlassTintColor: '#ffffff',
+  dockLiquidGlassTintOpacity: LIQUID_GLASS_PARAMETERS.tintOpacity.default,
+  dockLiquidGlassDispersion: LIQUID_GLASS_PARAMETERS.dispersion.default,
+  dockLiquidGlassSaturation: LIQUID_GLASS_PARAMETERS.saturation.default,
   dockItemsConfig: [],
   pageMode: 'custom',
   disableDockGlowingEffect: false,
@@ -788,6 +807,7 @@ watch(
     Reflect.deleteProperty(record, 'detectCommentShadowBan')
     Reflect.deleteProperty(record, 'homeTabsPosition')
     Reflect.deleteProperty(record, 'enableHomeGridVirtualization')
+    Reflect.deleteProperty(record, 'releaseOffscreenVideoCardImages')
     Reflect.deleteProperty(record, 'showBewlyOrBiliTopBarSwitcher')
     Reflect.deleteProperty(record, 'enableFrostedGlass')
     Reflect.deleteProperty(record, 'alwaysUseTransparentTopBar')
@@ -853,6 +873,23 @@ watch(
 
     if (record.frostedGlassBlurIntensity > FROSTED_GLASS_BLUR_MAX_PX)
       record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MAX_PX
+
+    if (!LIQUID_GLASS_MODES.includes(record.dockLiquidGlassMode))
+      record.dockLiquidGlassMode = originalSettings.dockLiquidGlassMode
+    Reflect.deleteProperty(record, 'dockLiquidGlassFrost')
+    if (!LIQUID_GLASS_TINT_SOURCES.includes(record.dockLiquidGlassTintSource))
+      record.dockLiquidGlassTintSource = originalSettings.dockLiquidGlassTintSource
+    if (!/^#[\da-f]{6}$/i.test(record.dockLiquidGlassTintColor))
+      record.dockLiquidGlassTintColor = originalSettings.dockLiquidGlassTintColor
+    for (const [key, parameter] of [
+      ['dockLiquidGlassRefraction', LIQUID_GLASS_PARAMETERS.refraction],
+      ['dockLiquidGlassBlur', LIQUID_GLASS_PARAMETERS.blur],
+      ['dockLiquidGlassTintOpacity', LIQUID_GLASS_PARAMETERS.tintOpacity],
+      ['dockLiquidGlassDispersion', LIQUID_GLASS_PARAMETERS.dispersion],
+      ['dockLiquidGlassSaturation', LIQUID_GLASS_PARAMETERS.saturation],
+    ] as const) {
+      record[key] = clampRangeValue(Number.isFinite(record[key]) ? record[key] : parameter.default, parameter.min, parameter.max)
+    }
 
     // Normalize the user-configurable two-column list breakpoint. Older
     // versions used a fixed 640px threshold and do not have this field.

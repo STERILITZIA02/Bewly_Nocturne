@@ -6,11 +6,13 @@ import type { AsyncComponentLoader } from 'vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { provideHomeTabCache } from '~/composables/useHomeTabState'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
 import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
+import { useForYouStore } from '~/stores/forYouStore'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -24,6 +26,7 @@ import { HomeSubPage } from './types'
 
 const mainStore = useMainStore()
 const topBarStore = useTopBarStore()
+const forYouStore = useForYouStore()
 const searchFocusEffect = useSearchFocusEffect()
 const {
   handleBackToTop,
@@ -37,7 +40,7 @@ const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
 const cachedScrollTop = ref(0)
 const showHomeSearchCharacter = computed(() => cachedScrollTop.value < HOME_SEARCH_STICKY_SCROLL_TOP)
-const tabScrollPositions = new Map<HomeSubPage, number>()
+const tabScrollPositions = new Map<string, number>()
 let pendingTabScrollTop: number | null = null
 let tabSwitchFrame: number | null = null
 
@@ -51,7 +54,7 @@ function defineHomePageComponent(loader: AsyncComponentLoader) {
   })
 }
 
-// KeepAlive 依赖稳定的组件类型，不能在 computed 内重复创建异步组件包装器。
+// Reuse loaded component modules while inactive views keep data only.
 const forYouPage = defineHomePageComponent(() => import('./components/ForYou.vue'))
 const followingPage = defineHomePageComponent(() => import('./components/Following.vue'))
 const followingOldPage = defineHomePageComponent(() => import('./components/FollowingOld.vue'))
@@ -75,7 +78,9 @@ const pages = computed(() => ({
 }))
 const activatedPageCacheKey = computed(() => activatedPage.value === HomeSubPage.Following
   ? `${activatedPage.value}:${settings.value.useFollowingNewLayout ? 'new' : 'old'}`
-  : activatedPage.value)
+  : activatedPage.value === HomeSubPage.ForYou
+    ? `${activatedPage.value}:${settings.value.recommendationMode}`
+    : activatedPage.value)
 const homeAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
@@ -86,6 +91,23 @@ const homeAccountScope = computed(() => {
   return topBarStore.isLogin ? 'profile-unavailable' : 'logged-out'
 })
 const homeAccountGeneration = ref(0)
+const tabCache = provideHomeTabCache(() => activatedPageCacheKey.value, restoreTabScrollPosition)
+
+function restorePreservedForYou() {
+  if (!settings.value.preserveForYouState) {
+    forYouStore.resetState()
+    return
+  }
+  const saved = forYouStore.takeCompleteState(homeAccountId.value, settings.value.recommendationMode)
+  if (!saved)
+    return
+  const key = `${HomeSubPage.ForYou}:${saved.recommendationMode}`
+  tabCache.save(key, saved.snapshot, tabCache.generation)
+  tabScrollPositions.set(key, saved.scrollTop)
+  if (activatedPage.value === HomeSubPage.ForYou)
+    pendingTabScrollTop = saved.scrollTop
+}
+restorePreservedForYou()
 const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabPageRef = ref()
@@ -117,13 +139,13 @@ watch(homeAccountScope, (nextScope, previousScope) => {
   if (nextScope === previousScope || nextScope === 'profile-unavailable')
     return
 
-  // Recreate the KeepAlive scope once per real identity transition. Only the
-  // active tab mounts and reloads now; other tabs reload lazily when selected.
-  // Destroying the old scope also prevents late anonymous/previous-account
-  // responses from becoming visible in the new account.
+  tabCache.clear()
+  tabScrollPositions.clear()
+  pendingTabScrollTop = getInitialTabScrollTop()
+  restorePreservedForYou()
   tabContentLoading.value = false
   homeAccountGeneration.value++
-})
+}, { flush: 'sync' })
 
 function getInitialTabScrollTop(): number {
   return settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
@@ -151,12 +173,14 @@ function finishTabSwitch() {
   })
 }
 
-watch(activatedPage, (newPage, oldPage) => {
+watch(activatedPageCacheKey, (newPage, oldPage) => {
+  tabContentLoading.value = false
   const viewport = scrollViewportRef.value
   if (!viewport)
     return
 
-  tabScrollPositions.set(oldPage, viewport.scrollTop)
+  if (pendingTabScrollTop === null)
+    tabScrollPositions.set(oldPage, viewport.scrollTop)
   pendingTabScrollTop = tabScrollPositions.get(newPage) ?? getInitialTabScrollTop()
   isHomeTabSwitching.value = true
 }, { flush: 'sync' })
@@ -214,6 +238,18 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  const mode = settings.value.recommendationMode
+  const key = `${HomeSubPage.ForYou}:${mode}`
+  const snapshot = tabCache.take(key)
+  if (settings.value.preserveForYouState && snapshot) {
+    forYouStore.saveCompleteState({
+      accountId: homeAccountId.value,
+      recommendationMode: mode,
+      scrollTop: activatedPage.value === HomeSubPage.ForYou ? cachedScrollTop.value : tabScrollPositions.get(key) ?? getInitialTabScrollTop(),
+      snapshot,
+    })
+  }
+  tabCache.clear()
   emitter.off(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
   emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
   isHomeTabSwitching.value = false
@@ -378,16 +414,15 @@ function toggleTabContentLoading(loading: boolean) {
             min-h="240px"
             flex="~ items-center"
           />
-          <KeepAlive v-else :key="homeAccountGeneration" :max="8">
-            <Component
-              :is="pages[activatedPage]" :key="activatedPageCacheKey"
-              ref="tabPageRef"
-              :grid-layout="homeGridLayout"
-              :top-bar-visibility="topBarVisibility"
-              @before-loading="toggleTabContentLoading(true)"
-              @after-loading="toggleTabContentLoading(false)"
-            />
-          </KeepAlive>
+          <Component
+            :is="pages[activatedPage]"
+            v-else :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
+            ref="tabPageRef"
+            :grid-layout="homeGridLayout"
+            :top-bar-visibility="topBarVisibility"
+            @before-loading="toggleTabContentLoading(true)"
+            @after-loading="toggleTabContentLoading(false)"
+          />
         </Transition>
       </div>
     </main>

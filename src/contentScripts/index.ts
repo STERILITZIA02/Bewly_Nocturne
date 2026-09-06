@@ -28,6 +28,7 @@ import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { initFavoriteDialogEnhancement, stopFavoriteDialogEnhancement } from '~/utils/favoriteDialog'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
+import { handleIframeNavigationRequest } from '~/utils/iframeNavigation'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { runWhenIdle } from '~/utils/lazyLoad'
 import { executeResolvedLinkAction, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
@@ -142,6 +143,7 @@ if (shouldInitializeContentScript) {
   contentScriptGlobal.__BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__ = true
   contentScriptAbortController = new AbortController()
   const signal = contentScriptAbortController.signal
+  window.addEventListener('message', handleIframeNavigationRequest, { signal })
   window.addEventListener(CONTENT_SCRIPT_DISPOSE_EVENT, disposeContentScriptRuntime, { signal })
   window.addEventListener('pagehide', (event: PageTransitionEvent) => {
     if (event.persisted) {
@@ -504,21 +506,22 @@ else if (shouldInitializeContentScript) {
 
   function installBeforeLoadedStyle() {
     removeBeforeLoadedStyleEl()
-    if (!settings.value.adaptToOtherPageStyles || !isHomePage())
+    if (!settings.value.adaptToOtherPageStyles || !isHomePage() || isInIframe())
       return
 
     beforeLoadedStyleEl = injectCSS(`
-      html.bewly-design {
+      html.bewly-custom-homepage.bewly-design {
         background-color: var(--bew-bg);
         transition: background-color 0.2s ease-in;
       }
 
-      body {
-        display: none;
+      html.bewly-custom-homepage > body {
+        opacity: 0;
+        pointer-events: none;
       }
     `)
     beforeLoadedTransitionStyleEl = injectCSS(`
-      body {
+      html.bewly-custom-homepage > body {
         transition: opacity 0.5s;
       }
     `)
@@ -553,29 +556,29 @@ else if (shouldInitializeContentScript) {
       return
     document.documentElement.classList.add('bewly-custom-homepage')
     homePageHiddenStyleEl = injectCSS(`
-      html,
-      body {
+      html.bewly-custom-homepage,
+      html.bewly-custom-homepage > body {
         width: 100% !important;
         min-width: 0 !important;
         max-width: 100% !important;
         overflow-x: hidden !important;
       }
-      body > #app,
-      body > #i_cecream,
-      .bilibili-gate-root {
+      html.bewly-custom-homepage > body > #app,
+      html.bewly-custom-homepage > body > #i_cecream,
+      html.bewly-custom-homepage .bilibili-gate-root {
         display: none !important;
         visibility: hidden !important;
         pointer-events: none !important;
         position: absolute !important;
         left: -9999px !important;
       }
-      body > .bili-header {
+      html.bewly-custom-homepage > body > .bili-header {
         position: relative !important;
         left: 0 !important;
         pointer-events: auto !important;
       }
 
-      html[data-bewly-top-bar-source="bilibili-native"] body > #app:has(> .bili-feed4 > .bili-header) {
+      html.bewly-custom-homepage[data-bewly-top-bar-source="bilibili-native"] > body > #app:has(> .bili-feed4 > .bili-header) {
         display: contents !important;
         visibility: visible !important;
         pointer-events: none !important;
@@ -583,15 +586,15 @@ else if (shouldInitializeContentScript) {
         left: auto !important;
       }
 
-      html[data-bewly-top-bar-source="bilibili-native"] body > #app > .bili-feed4 {
+      html.bewly-custom-homepage[data-bewly-top-bar-source="bilibili-native"] > body > #app > .bili-feed4 {
         display: contents !important;
       }
 
-      html[data-bewly-top-bar-source="bilibili-native"] body > #app > .bili-feed4 > :not(.bili-header) {
+      html.bewly-custom-homepage[data-bewly-top-bar-source="bilibili-native"] > body > #app > .bili-feed4 > :not(.bili-header) {
         display: none !important;
       }
 
-      html[data-bewly-top-bar-source="bilibili-native"] body > #app > .bili-feed4 > .bili-header {
+      html.bewly-custom-homepage[data-bewly-top-bar-source="bilibili-native"] > body > #app > .bili-feed4 > .bili-header {
         visibility: visible !important;
         pointer-events: auto !important;
       }
@@ -1504,13 +1507,13 @@ else if (shouldInitializeContentScript) {
 
       if (shouldMountApp) {
         installOriginalTopBarBootStyle()
-        installBeforeLoadedStyle()
       }
 
       if (changeHomePage) {
         ensureResponsiveViewport(document)
         captureOriginalBilibiliTopBar(document)
         ensureHomePageHiddenStyle()
+        installBeforeLoadedStyle()
       }
 
       if (shouldMountApp) {

@@ -1,5 +1,7 @@
 <script lang="ts">
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import type { ImageLoadQueueHandle } from '~/utils/imageLoadQueue'
+import { enqueueImageLoad, getImageLoadPriority, subscribeImageLoadRoot } from '~/utils/imageLoadQueue'
 
 // 仅记录“曾经加载过”的 URL，避免重复淡入；不持有 ImageBitmap。
 const MAX_REMEMBERED_PICTURES = 240
@@ -151,7 +153,7 @@ function forgetLoadedPicture(src: string) {
 /**
  * 优化的懒加载图片组件
  * 使用 Intersection Observer API 实现精确的懒加载控制
- * 只在图片即将进入视口时才开始加载；可选在离开保留区后释放 img
+ * 只在图片即将进入视口时进入共享队列；离开保留区后释放 img
  */
 
 interface Props {
@@ -160,9 +162,7 @@ interface Props {
   loading?: 'lazy' | 'eager'
   // 无法取得滚动视口高度时使用的预加载边距
   rootMargin?: string
-  // 是否在图片离开保留范围后释放 img/src
-  releaseOffscreen?: boolean
-  // 提前加载多少屏；开启离屏回收时也作为保留范围
+  // 提前加载与离屏回收的保留范围
   retainScreens?: number
   // 离开保留范围后延迟释放，避免快速往返滚动时反复解码
   releaseDelay?: number
@@ -174,7 +174,6 @@ const props = withDefaults(defineProps<Props>(), {
   alt: '',
   loading: 'lazy',
   rootMargin: '150px',
-  releaseOffscreen: false,
   retainScreens: 3,
   releaseDelay: 2000,
   showSkeleton: true,
@@ -198,8 +197,15 @@ const skipRevealTransition = ref(false)
 
 let stopObserving: (() => void) | null = null
 let isWithinRetainedRange = props.loading === 'eager'
+let active = true
+let loadVersion = 0
+let queueHandle: ImageLoadQueueHandle | null = null
+let settleLoad: (() => void) | undefined
+let stopRootSubscription: (() => void) | undefined
 
 function cleanupObserver() {
+  stopRootSubscription?.()
+  stopRootSubscription = undefined
   stopObserving?.()
   stopObserving = null
 }
@@ -235,17 +241,59 @@ function getObserverRootMargin(): string {
 }
 
 function startLoad() {
-  isVisible.value = true
-  if (imageFailed.value)
+  if (!active || imageFailed.value || queueHandle || actualSrc.value)
     return
   const loadedBefore = hasLoadedPicture(props.src)
   skipRevealTransition.value = loadedBefore
   // 重新挂载解码资源时仍走短暂占位，避免空白闪断过长
   isLoaded.value = false
-  actualSrc.value = props.src
+  const source = props.src
+  const version = ++loadVersion
+  if (props.loading === 'eager') {
+    isVisible.value = true
+    actualSrc.value = source
+    return
+  }
+  queueHandle = enqueueImageLoad({
+    priority: () => imgRef.value ? getImageLoadPriority(imgRef.value, getObserverRoot()) : Infinity,
+    start: ({ isCurrent }) => {
+      if (!isCurrent() || version !== loadVersion || !active)
+        return
+      return new Promise<void>((resolve) => {
+        settleLoad = resolve
+        isVisible.value = true
+        actualSrc.value = source
+      })
+    },
+    onSettled: () => {
+      if (version === loadVersion)
+        queueHandle = null
+    },
+    onCancel: (reason) => {
+      if (version !== loadVersion)
+        return
+      settleLoad?.()
+      settleLoad = undefined
+      if (reason === 'timeout') {
+        imageFailed.value = true
+        detachImageElement()
+        actualSrc.value = ''
+      }
+    },
+  })
+}
+
+function cancelLoad() {
+  loadVersion++
+  const handle = queueHandle
+  queueHandle = null
+  settleLoad?.()
+  settleLoad = undefined
+  handle?.cancel()
 }
 
 function detachImageElement() {
+  imgRef.value?.querySelectorAll('source').forEach(source => source.removeAttribute('srcset'))
   const imageEl = imageElRef.value
   if (imageEl) {
     // 主动断开 src，帮助浏览器更快释放解码缓存。
@@ -256,9 +304,10 @@ function detachImageElement() {
 }
 
 function releaseImage() {
-  if (!props.releaseOffscreen || props.loading === 'eager')
+  if (props.loading === 'eager')
     return
 
+  cancelLoad()
   detachImageElement()
   actualSrc.value = ''
   isVisible.value = false
@@ -272,7 +321,7 @@ function cancelScheduledRelease() {
 
 function scheduleRelease() {
   const element = imgRef.value
-  if (!element || !isVisible.value || !props.releaseOffscreen || props.loading === 'eager')
+  if (!element || !isVisible.value || props.loading === 'eager')
     return
 
   scheduleImageRelease(element, props.releaseDelay, () => {
@@ -285,18 +334,26 @@ function createObserver() {
   cancelScheduledRelease()
   cleanupObserver()
 
-  if (props.loading === 'eager')
+  if (props.loading === 'eager' || !active)
     return
 
   const element = imgRef.value
   if (!element)
     return
+  stopRootSubscription = subscribeImageLoadRoot(getObserverRoot())
+  if (typeof IntersectionObserver === 'undefined') {
+    isWithinRetainedRange = true
+    startLoad()
+    return
+  }
 
   stopObserving = observeIntersection(
     element,
     getObserverRoot(),
     getObserverRootMargin(),
     (entry) => {
+      if (!active)
+        return
       isWithinRetainedRange = entry.isIntersecting
 
       if (entry.isIntersecting) {
@@ -306,6 +363,8 @@ function createObserver() {
         return
       }
 
+      if (queueHandle?.isQueued())
+        cancelLoad()
       scheduleRelease()
     },
   )
@@ -323,30 +382,53 @@ onMounted(() => {
   createObserver()
 })
 
-onBeforeUnmount(() => {
+function releaseResources() {
+  active = false
+  cancelLoad()
   cleanupObserver()
   cancelScheduledRelease()
   detachImageElement()
   actualSrc.value = ''
   isVisible.value = false
   isLoaded.value = false
+}
+onBeforeUnmount(releaseResources)
+onDeactivated(releaseResources)
+onActivated(() => {
+  active = true
+  if (props.loading === 'eager')
+    startLoad()
+  else
+    createObserver()
 })
 
-function isCurrentImage(event: Event) {
-  const image = event.target as HTMLImageElement
+function isCurrentImage(image: HTMLImageElement) {
   return image === imageElRef.value && image.dataset.imageKey === imageKey.value && Boolean(actualSrc.value)
 }
 
-function handleImageLoad(event: Event) {
-  if (!isCurrentImage(event))
+async function handleImageLoad(event: Event) {
+  // Keep the bound element across decode; target can be retargeted at the Shadow DOM boundary.
+  const image = event.currentTarget as HTMLImageElement
+  if (!isCurrentImage(image))
+    return
+  const version = loadVersion
+  try {
+    await image.decode?.()
+  }
+  catch {
+    // A successful load remains usable if decode is unavailable or rejected.
+  }
+  if (!active || version !== loadVersion || !isCurrentImage(image))
     return
   rememberLoadedPicture(actualSrc.value)
   isLoaded.value = true
+  settleLoad?.()
+  settleLoad = undefined
   emit('loaded')
 }
 
 function handleImageError(event: Event) {
-  if (!isCurrentImage(event))
+  if (!isCurrentImage(event.currentTarget as HTMLImageElement))
     return
   if (usePreferredSources.value) {
     // The caller's original URL gets one attempt if the preferred CDN format fails.
@@ -355,9 +437,15 @@ function handleImageError(event: Event) {
   }
   imageFailed.value = true
   forgetLoadedPicture(actualSrc.value)
+  settleLoad?.()
+  settleLoad = undefined
 }
 
 watch(() => props.src, (newSrc, oldSrc) => {
+  cancelLoad()
+  detachImageElement()
+  actualSrc.value = ''
+  isVisible.value = false
   if (oldSrc && oldSrc !== newSrc)
     forgetLoadedPicture(oldSrc)
 
@@ -366,12 +454,8 @@ watch(() => props.src, (newSrc, oldSrc) => {
   imageFailed.value = !newSrc
   usePreferredSources.value = true
 
-  if (isVisible.value) {
-    actualSrc.value = newSrc
-    return
-  }
-
-  actualSrc.value = ''
+  if (props.loading === 'eager' || isWithinRetainedRange)
+    startLoad()
 })
 
 // 滚动容器引用变化时重建 observer，保证 root 正确。
@@ -385,8 +469,17 @@ watch(
 )
 
 watch(
-  () => [props.releaseOffscreen, props.retainScreens, props.rootMargin] as const,
-  () => createObserver(),
+  () => [props.loading, props.retainScreens, props.rootMargin] as const,
+  () => {
+    if (props.loading === 'eager') {
+      cancelScheduledRelease()
+      cleanupObserver()
+      startLoad()
+    }
+    else {
+      createObserver()
+    }
+  },
 )
 </script>
 
@@ -396,15 +489,8 @@ watch(
     w-full max-w-full align-middle
     rounded-inherit
     style="aspect-ratio: 16 / 9; display: block; position: relative; contain: layout style;"
+    :style="{ backgroundColor: showSkeleton ? 'var(--bew-skeleton)' : undefined }"
   >
-    <div
-      v-if="showSkeleton && !isLoaded && !imageFailed"
-      aria-hidden="true"
-      w-full h-full
-      bg="$bew-skeleton"
-      rounded-inherit
-      class="lazy-picture-skeleton"
-    />
 
     <div v-if="imageFailed" class="lazy-picture-error" role="img" :aria-label="$t('common.image_load_failed')">
       <i i-mingcute:pic-line aria-hidden="true" />
@@ -437,12 +523,6 @@ watch(
 </template>
 
 <style scoped>
-.lazy-picture-skeleton {
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-}
-
 .lazy-picture-error {
   position: absolute;
   inset: 0;

@@ -16,7 +16,8 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
 import { resolveWatchLaterAid } from '~/utils/watchLater'
 
-import type { Video } from '../types'
+import type { Video, VideoCardState } from '../types'
+import { createVideoCardState } from '../types'
 import { getCurrentTime, getCurrentVideoUrl } from '../utils'
 import { releaseVideoPreviewCacheEntry, retainVideoPreviewCacheEntry } from './videoPreviewCache'
 
@@ -49,7 +50,7 @@ function createAppFeedFeedbackParams(video: Video, selection?: AppFeedFeedbackSe
   }
 }
 
-export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps>) {
+export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps>, savedState?: VideoCardState) {
   const toast = useToast()
   const { t } = useI18n()
   const { openIframeDrawer } = useBewlyApp()
@@ -65,13 +66,15 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   // Refs
   const showVideoOptions = ref<boolean>(false)
   const videoOptionsFloatingStyles = ref<CSSProperties>({})
-  const removed = ref<boolean>(false)
+  const interactionState = savedState ?? reactive(createVideoCardState())
+  const removed = toRef(interactionState, 'removed')
   const moreBtnRef = ref<HTMLButtonElement | null>(null)
   const contextMenuRef = ref<HTMLDivElement | null>(null)
-  const selectedDislikeOpt = ref<AppFeedFeedbackSelection>()
-  const videoCurrentTime = ref<number | null>(null)
-  const resolvedWatchLaterAid = ref<number>()
+  const selectedDislikeOpt = toRef(interactionState, 'selectedDislikeOpt')
+  const videoCurrentTime = toRef(interactionState, 'videoCurrentTime')
+  const resolvedWatchLaterAid = toRef(interactionState, 'resolvedWatchLaterAid')
   const isUpdatingWatchLater = ref(false)
+  const isUndoing = ref(false)
   let watchLaterResolutionId = 0
   let previewRequestGeneration = 0
   const watchLaterAid = computed(() => {
@@ -106,6 +109,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   // 清理函数 - 在组件卸载时调用
   onScopeDispose(() => {
     isDisposed.value = true
+    watchLaterResolutionId++
     previewRequestGeneration++
     releaseVideoPreviewCacheEntry(previewCacheKey)
 
@@ -195,9 +199,10 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     () => props.value.video,
     () => props.value.showWatchLater,
     () => topBarStore.userInfo.mid,
-  ], async ([video, showWatchLater]) => {
+  ], async ([video, showWatchLater], [previousVideo]) => {
     const resolutionId = ++watchLaterResolutionId
-    resolvedWatchLaterAid.value = undefined
+    if (previousVideo && (previousVideo.bvid !== video?.bvid || previousVideo.epid !== video?.epid || previousVideo.aid !== video?.aid))
+      resolvedWatchLaterAid.value = undefined
     if (!video || !showWatchLater)
       return
 
@@ -424,7 +429,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }
 
   function handleClick(event: MouseEvent) {
-    videoCurrentTime.value = getCurrentTime(videoElement)
+    videoCurrentTime.value = getCurrentTime(videoElement) ?? videoCurrentTime.value
     if (settings.value.videoCardLinkOpenMode === 'background' && videoUrl.value && !event.ctrlKey && !event.metaKey) {
       event.preventDefault()
       openLinkInBackground(videoUrl.value)
@@ -455,33 +460,41 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }
 
   async function handleUndo() {
-    const video = props.value.video
+    if (isUndoing.value)
+      return
+    isUndoing.value = true
+    try {
+      const video = props.value.video
 
-    if (props.value.type === 'appRcmd' && video) {
-      if (!await ensureFreshAppAccessToken()) {
-        toast.warning(t('auth.auth_access_key_first'))
-        return
+      if (props.value.type === 'appRcmd' && video) {
+        if (!await ensureFreshAppAccessToken()) {
+          toast.warning(t('auth.auth_access_key_first'))
+          return
+        }
+
+        const sendUndo = () => {
+          const params = createAppFeedFeedbackParams(video, selectedDislikeOpt.value)
+          return api.video.undoDislikeVideo({
+            ...params,
+            sign: getTvSign(params),
+          })
+        }
+
+        let response = await sendUndo()
+        if (isAppAccessTokenInvalidResponse(response) && await refreshInvalidAppAccessToken())
+          response = await sendUndo()
+
+        if (response.code === 0)
+          removed.value = false
+        else
+          toast.error(response.message)
       }
-
-      const sendUndo = () => {
-        const params = createAppFeedFeedbackParams(video, selectedDislikeOpt.value)
-        return api.video.undoDislikeVideo({
-          ...params,
-          sign: getTvSign(params),
-        })
-      }
-
-      let response = await sendUndo()
-      if (isAppAccessTokenInvalidResponse(response) && await refreshInvalidAppAccessToken())
-        response = await sendUndo()
-
-      if (response.code === 0)
+      else {
         removed.value = false
-      else
-        toast.error(response.message)
+      }
     }
-    else {
-      removed.value = false
+    finally {
+      isUndoing.value = false
     }
   }
 
@@ -501,6 +514,8 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     isInWatchLater,
     isHover,
     isPreviewFullscreen,
+    isUpdatingWatchLater,
+    isUndoing,
     previewVideoUrl,
     contentVisibility,
     videoElement,

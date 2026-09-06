@@ -2350,6 +2350,10 @@ export function injectLayoutStyle() {
       outline-offset: var(--bew-space-0-5);
     }
 
+    #${ROOT_ID} .bewly-widescreen-panel-comment {
+      --bew-comment-replies-mask-bg: color-mix(in oklab, var(--bewly-widescreen-sidebar-bg), transparent 15%);
+    }
+
     #${ROOT_ID} .bewly-widescreen-panel-comment,
     #${ROOT_ID} .bewly-widescreen-panel-danmaku {
       background: var(--bewly-widescreen-sidebar-bg);

@@ -13,7 +13,7 @@ import VideoCardCover from './components/VideoCardCover.vue'
 import VideoCardInfo from './components/VideoCardInfo.vue'
 import { useVideoCardLogic } from './composables/useVideoCardLogic'
 import { normalizeVideoCardTags } from './tagPolicy'
-import type { Video } from './types'
+import type { Video, VideoCardState } from './types'
 import VideoCardContextMenu from './VideoCardContextMenu/VideoCardContextMenu.vue'
 
 const props = withDefaults(defineProps<Props>(), {
@@ -24,6 +24,7 @@ const props = withDefaults(defineProps<Props>(), {
 })
 
 interface Props {
+  persistentState?: VideoCardState
   skeleton?: boolean
   video?: Video
   type?: 'rcmd' | 'appRcmd' | 'bangumi' | 'common'
@@ -44,7 +45,8 @@ const layout = computed((): VideoCardLayoutSetting => {
 })
 
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
-const logic = useVideoCardLogic(props)
+const logic = useVideoCardLogic(props, props.persistentState)
+defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
 const { mainAppRef } = useBewlyApp()
 const { t } = useI18n()
 
@@ -385,6 +387,7 @@ provide('getVideoType', () => props.type!)
             :should-hide-overlay-elements="Boolean(logic.shouldHideOverlayElements.value)"
             :preview-video-url="logic.previewVideoUrl.value || ''"
             :video-element="logic.videoElement.value || null"
+            :preview-current-time="logic.videoCurrentTime.value"
             :is-in-watch-later="logic.isInWatchLater.value"
             :show-watch-later="showWatchLater && settings.showVideoCardWatchLater"
             :cover-top-left-always-visible="coverTopLeftAlwaysVisible"
@@ -398,6 +401,7 @@ provide('getVideoType', () => props.type!)
             @image-loaded="handleImageLoaded"
             @preview-error="logic.clearPreviewVideoUrl"
             @preview-fullscreen-change="logic.handlePreviewFullscreenChange"
+            @preview-progress="logic.videoCurrentTime.value = $event"
           >
             <template #coverTopLeft>
               <slot name="coverTopLeft" />

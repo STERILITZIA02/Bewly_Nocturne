@@ -2,6 +2,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
@@ -26,19 +27,20 @@ const emit = defineEmits<{
 
 const { handleBackToTop, handlePageRefresh, mainAppRef } = useBewlyApp()
 
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
 const isLoading = ref<boolean>(true)
 
-const seriesList = ref<PopularSeriesItem[]>([])
-const activatedSeries = ref<PopularSeriesItem | null>(null)
-const videoList = ref<VideoElement[]>([])
-const noMoreContent = ref<boolean>(true) // 每周必看没有分页
-const requestFailed = ref(false)
+const seriesList = tabState.ref<PopularSeriesItem[]>('seriesList', [])
+const activatedSeries = tabState.ref<PopularSeriesItem | null>('activatedSeries', null)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
+const noMoreContent = tabState.ref<boolean>('noMoreContent', true) // 每周必看没有分页
+const requestFailed = tabState.ref('requestFailed', false)
 let requestGeneration = 0
-let reloadAfterActivation = false
 let resizeListenerAttached = false
 
 // 下拉选择器相关
-const searchQuery = ref<string>('')
+const searchQuery = tabState.ref<string>('searchQuery', '')
 const showDropdown = ref<boolean>(false)
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownPosition = ref({ top: 0, left: 0, width: 0 })
@@ -111,29 +113,18 @@ function transformWeeklyVideo(item: PopularSeriesVideoItem, rank: number): Video
 }
 
 onMounted(() => {
-  void initData()
-  initPageAction()
-  attachResizeListener()
-})
-
-onActivated(() => {
-  attachResizeListener()
-  if (reloadAfterActivation) {
-    reloadAfterActivation = false
+  isLoading.value = false
+  if (!tabState.restored) {
     void initData()
   }
+  else if (!hasSettled.value) {
+    if (activatedSeries.value)
+      void getSeriesOne()
+    else
+      void initData()
+  }
   initPageAction()
-})
-
-onDeactivated(() => {
-  reloadAfterActivation = isLoading.value
-  requestGeneration++
-  if (isLoading.value)
-    emit('afterLoading')
-  isLoading.value = false
-  showDropdown.value = false
-  window.removeEventListener('click', closeDropdown)
-  detachResizeListener()
+  attachResizeListener()
 })
 
 onUnmounted(() => {
@@ -143,6 +134,8 @@ onUnmounted(() => {
 })
 
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   handlePageRefresh.value = async () => {
     if (isLoading.value)
       return
@@ -151,6 +144,9 @@ function initPageAction() {
 }
 
 async function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   emit('beforeLoading')
   isLoading.value = true
@@ -161,7 +157,7 @@ async function initData() {
 
   try {
     const res: PopularSeriesListResult = await api.ranking.getPopularSeriesList()
-    if (generation !== requestGeneration)
+    if (!tabState.isCurrent() || generation !== requestGeneration)
       return
     if (res?.code !== 0 || !Array.isArray(res.data?.list))
       throw new Error(res?.message || 'Weekly series request failed')
@@ -173,13 +169,14 @@ async function initData() {
     }
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       reportRuntimeFailure('Failed to load weekly series', error)
     }
   }
   finally {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -193,7 +190,7 @@ async function fetchSeriesOne(generation: number, series: PopularSeriesItem | nu
   const res: PopularSeriesOneResult = await api.ranking.getPopularSeriesOne({
     number: series.number,
   })
-  if (generation !== requestGeneration || activatedSeries.value?.number !== series.number)
+  if (!tabState.isCurrent() || generation !== requestGeneration || activatedSeries.value?.number !== series.number)
     return
   if (res?.code !== 0 || !Array.isArray(res.data?.list))
     throw new Error(res?.message || 'Weekly videos request failed')
@@ -204,6 +201,9 @@ async function fetchSeriesOne(generation: number, series: PopularSeriesItem | nu
 }
 
 async function getSeriesOne() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   const series = activatedSeries.value
   emit('beforeLoading')
@@ -214,13 +214,14 @@ async function getSeriesOne() {
     await fetchSeriesOne(generation, series)
   }
   catch (error) {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
       requestFailed.value = true
       reportRuntimeFailure('Failed to load weekly videos', error)
     }
   }
   finally {
-    if (generation === requestGeneration) {
+    if (tabState.isCurrent() && generation === requestGeneration) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }

@@ -9,6 +9,7 @@ import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } 
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
+import { releaseElementImages } from '~/utils/mediaResources'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
 
@@ -18,9 +19,9 @@ import MomentCommentSection from './MomentCommentSection.vue'
 import MomentForwardComposer from './MomentForwardComposer.vue'
 import type { MomentDisclosure } from './momentForwardContent'
 import {
-  getCachedMomentDisclosure,
+  createMomentDisclosureCache,
+  MOMENT_DISCLOSURES,
   normalizeForwardCount,
-  setCachedMomentDisclosure,
   toggleMomentDisclosure,
 } from './momentForwardContent'
 import MomentVote from './MomentVote.vue'
@@ -159,7 +160,8 @@ const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
 const authorAvatarLinkRef = ref<HTMLAnchorElement | null>(null)
 const getDisclosureCacheKey = () => `${topBarStore.userInfo.mid || 'guest'}:${moment.id}`
-const disclosure = ref<MomentDisclosure>(getCachedMomentDisclosure(getDisclosureCacheKey()))
+const disclosureCache = inject(MOMENT_DISCLOSURES, undefined) ?? createMomentDisclosureCache()
+const disclosure = ref<MomentDisclosure>(disclosureCache.get(getDisclosureCacheKey()))
 const displayedDisclosure = ref<MomentDisclosure>(disclosure.value)
 const forwardComposerMounted = ref(disclosure.value === 'forward')
 const displayedForwardCount = ref(normalizeForwardCount(moment.forwardCount))
@@ -406,14 +408,14 @@ watch(
 )
 
 watch(disclosure, (value) => {
-  setCachedMomentDisclosure(getDisclosureCacheKey(), value)
+  disclosureCache.set(getDisclosureCacheKey(), value)
   syncDisplayedDisclosure(value)
 })
 
 watch(
   [() => moment.id, () => topBarStore.userInfo.mid],
   () => {
-    disclosure.value = getCachedMomentDisclosure(getDisclosureCacheKey())
+    disclosure.value = disclosureCache.get(getDisclosureCacheKey())
     displayedDisclosure.value = disclosure.value
     forwardComposerMounted.value = disclosure.value === 'forward'
     displayedForwardCount.value = normalizeForwardCount(moment.forwardCount)
@@ -433,8 +435,10 @@ watch(
 // VideoCardContextMenu uses this injection to select its common option set.
 provide('getVideoType', () => 'common')
 
+let cardElement: HTMLElement | null = null
 function handleCardRef(element: Element | ComponentPublicInstance | null) {
-  emit('cardElement', element instanceof HTMLElement ? element : null)
+  cardElement = element instanceof HTMLElement ? element : null
+  emit('cardElement', cardElement)
 }
 
 function handleCoverLoad(event: Event, imageIndex = 0) {
@@ -477,6 +481,8 @@ function requestNativeUserProfile(event: MouseEvent) {
 }
 
 onBeforeUnmount(() => {
+  releaseElementImages(cardElement)
+  cardElement = null
   descriptionResizeObserver?.disconnect()
   descriptionResizeObserver = null
   if (descriptionMeasureFrame)
@@ -657,7 +663,7 @@ onBeforeUnmount(() => {
             {{ moment.title }}
           </p>
           <p
-            v-if="moment.mediaMeta && !moment.isChargeExclusive && (!moment.isVideo || moment.isLive)"
+            v-if="moment.mediaMeta && !moment.isForward && !moment.isChargeExclusive && (!moment.isVideo || moment.isLive)"
             class="moment-card__media-meta"
             :class="{ 'moment-card__media-meta--live': moment.isLive }"
           >
