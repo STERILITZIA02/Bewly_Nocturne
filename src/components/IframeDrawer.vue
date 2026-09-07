@@ -11,6 +11,7 @@ import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscap
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { isHomePage, isInIframe } from '~/utils/main'
+import { releaseIframeMedia } from '~/utils/mediaResources'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
@@ -48,6 +49,10 @@ let focusRetryTimer: ReturnType<typeof setTimeout> | null = null
 let focusFrame: number | null = null
 let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
 let iframeGeneration = 0
+let navigationVersion = 0
+let focusVersion = 0
+let disposed = false
+let closing = false
 let iframeEscapeHandledGeneration = 0
 let iframeDrawerHostClaimed = false
 const escapeArbitrationTimers = new Set<number>()
@@ -137,7 +142,7 @@ watch(() => showIframe.value, (newValue) => {
 })
 
 watch(() => props.url, async (newUrl, oldUrl) => {
-  if (!show.value || newUrl === oldUrl)
+  if (disposed || closing || !show.value || newUrl === oldUrl)
     return
 
   history.replaceState(null, '', newUrl.replace(/\/$/, ''))
@@ -154,6 +159,7 @@ function cleanupIframeWindowListeners() {
 }
 
 function clearFocusRetryTimer() {
+  focusVersion++
   if (focusRetryTimer) {
     clearTimeout(focusRetryTimer)
     focusRetryTimer = null
@@ -227,12 +233,15 @@ function hasDrawerEscapePriorityState() {
 
 function focusIframe(retryCount = 3) {
   clearFocusRetryTimer()
+  const version = focusVersion
 
   nextTick(() => {
+    if (disposed || closing || version !== focusVersion)
+      return
     focusFrame = requestAnimationFrame(() => {
       focusFrame = null
       const iframe = iframeRef.value
-      if (!iframe || !show.value || activeDrawer.value !== DrawerType.IframeDrawer)
+      if (disposed || closing || version !== focusVersion || !iframe || !show.value || activeDrawer.value !== DrawerType.IframeDrawer)
         return
 
       iframe.focus({ preventScroll: true })
@@ -253,9 +262,9 @@ function focusIframe(retryCount = 3) {
 }
 
 function injectStyleClass() {
-  if (headerShow.value && iframeRef.value?.contentWindow?.document) {
+  if (headerShow.value) {
     try {
-      iframeRef.value.contentWindow.document.documentElement.classList.add('remove-top-bar-without-placeholder')
+      iframeRef.value?.contentDocument?.documentElement.classList.add('remove-top-bar-without-placeholder')
       removeTopBarClassInjected.value = true
     }
     catch (error) {
@@ -269,7 +278,7 @@ function handleIframeLoad(event: Event) {
   if (!(iframe instanceof HTMLIFrameElement)
     || iframe !== iframeRef.value
     || currentUrl.value === 'about:blank'
-    || !show.value) {
+    || !show.value || disposed || closing) {
     return
   }
 
@@ -282,15 +291,20 @@ function handleIframeLoad(event: Event) {
 
   cleanupIframeWindowListeners()
   injectStyleClass()
-  stopIframePushStateListener = useEventListener(iframeWindow, 'pushstate', updateCurrentUrl)
-  stopIframePopStateListener = useEventListener(iframeWindow, 'popstate', updateCurrentUrl)
-  stopIframeDOMContentLoadedListener = useEventListener(iframeWindow, 'DOMContentLoaded', injectStyleClass)
+  if (iframe.contentDocument) {
+    stopIframePushStateListener = useEventListener(iframeWindow, 'pushstate', updateCurrentUrl)
+    stopIframePopStateListener = useEventListener(iframeWindow, 'popstate', updateCurrentUrl)
+    stopIframeDOMContentLoadedListener = useEventListener(iframeWindow, 'DOMContentLoaded', injectStyleClass)
+  }
   showIframe.value = true
   focusIframe()
 }
 
 async function remountIframe(url: string) {
+  const version = ++navigationVersion
   await releaseIframeResources()
+  if (disposed || closing || version !== navigationVersion)
+    return
   currentUrl.value = url
   iframeKey.value += 1
   renderIframe.value = true
@@ -319,6 +333,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(async () => {
+  disposed = true
+  navigationVersion++
   for (const dispose of disposers)
     dispose()
   disposers.length = 0
@@ -355,18 +371,20 @@ function updateCurrentUrl(e: any) {
 }
 
 async function updateIframeUrl() {
+  if (disposed || closing)
+    return
   if (isHomePage()) {
     await handleClose()
     return
   }
-  await nextTick()
-
-  if (iframeRef.value?.contentWindow) {
-    iframeRef.value.contentWindow.location.replace(location.href.replace(/\/$/, ''))
-  }
+  await remountIframe(location.href.replace(/\/$/, ''))
 }
 
 async function handleClose() {
+  if (disposed || closing)
+    return
+  closing = true
+  navigationVersion++
   clearEscapeConfirmation()
   clearEscapeArbitrationTimers()
   if (delayCloseTimer.value) {
@@ -377,6 +395,8 @@ async function handleClose() {
     isPageScrollLocked.value = false
   }
   await releaseIframeResources()
+  if (disposed)
+    return
   show.value = false
   headerShow.value = false
   setActiveDrawer(DrawerType.None) // 清除活跃抽屉状态
@@ -394,52 +414,16 @@ async function releaseIframeResources() {
   showIframe.value = false
   removeTopBarClassInjected.value = false
 
-  // Navigate to about:blank and close browsing context BEFORE removing from DOM.
-  // Previously, renderIframe was set to false first, which removed the iframe via v-if
-  // and made iframeRef null — so contentWindow.close() was never actually called.
-  // Closing first ensures media resources are released before removing the iframe.
   const iframe = iframeRef.value
-  stopIframeMedia(iframe)
+  releaseIframeMedia(iframe)
   currentUrl.value = 'about:blank'
-  if (iframe)
-    iframe.src = 'about:blank'
-
-  try {
-    iframe?.contentWindow?.close()
-  }
-  catch {
-    // Cross-origin may block this
-  }
 
   // Now safe to remove from DOM
   renderIframe.value = false
-  await nextTick()
-  if (iframeRef.value === iframe)
-    iframeRef.value = null
   isPageFullscreen.value = false
   disableEscPress.value = false
   removeTopBarClassInjected.value = false
-}
-
-function stopIframeMedia(iframe: HTMLIFrameElement | null) {
-  if (!iframe)
-    return
-  try {
-    iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
-      media.pause()
-      media.srcObject = null
-      media.removeAttribute('src')
-      media.removeAttribute('srcset')
-      media.querySelectorAll('source').forEach((source) => {
-        source.removeAttribute('src')
-        source.removeAttribute('srcset')
-      })
-      media.load()
-    })
-  }
-  catch {
-    // Cross-origin frames are released by navigating their browsing context to about:blank.
-  }
+  await nextTick()
 }
 
 function handleOpenInNewTab() {

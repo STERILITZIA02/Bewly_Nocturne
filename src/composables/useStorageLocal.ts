@@ -286,7 +286,9 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   const persistValue = async () => {
     if (!isOwnerActive())
       return
-    const snapshot = cloneValue(data.value)
+    // Built-in serializers synchronously capture immutable strings. Only a custom
+    // (possibly async) serializer needs a separate defensive snapshot beforehand.
+    const snapshot = customSerializer ? cloneValue(data.value) : data.value
     if (snapshot == null) {
       enqueuePendingOwnStorageChange(null)
       try {

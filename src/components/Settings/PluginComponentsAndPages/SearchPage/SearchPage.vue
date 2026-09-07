@@ -180,6 +180,6 @@ async function clearSearchHistory() {
 }
 
 .selected-character {
-  --uno: "border-$bew-theme-color-60";
+  --uno: "border-$bew-theme-foreground";
 }
 </style>

@@ -55,8 +55,8 @@ const tips = ['emote', 'image', 'history', 'shortcut'] as const
   width: var(--bew-control-height-lg);
   height: var(--bew-control-height-lg);
   place-items: center;
-  color: var(--bew-theme-color);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }

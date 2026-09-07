@@ -45,7 +45,7 @@ const isKetang = computed(() => {
     <div
       class="ketang-icon video-card-author-avatar bew-shape-circle"
       w-34px h-34px
-      bg="$bew-theme-color-10"
+      bg="$bew-theme-surface"
       grid="~ place-items-center"
     >
       <div i-mingcute:book-2-line text="xl $bew-theme-color" />
@@ -135,6 +135,6 @@ const isKetang = computed(() => {
 .live {
   padding: 2px;
   border-width: 2px;
-  border-color: var(--bew-theme-color-60);
+  border-color: var(--bew-theme-foreground);
 }
 </style>

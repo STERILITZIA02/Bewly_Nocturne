@@ -3,11 +3,11 @@
 
   // #region theme color adaption part
   .bili-user-profile-view__info__button.follow:hover {
-    background-color: var(--bew-theme-color-80);
+    background-color: var(--bew-theme-color);
   }
 
   .bili-user-profile-view__info__button.follow:hover {
-    border-color: var(--bew-theme-color-80);
+    border-color: var(--bew-theme-foreground);
   }
   // #endregion
 
@@ -52,9 +52,9 @@
         border-color: var(--bew-theme-color);
 
         &:hover {
-          background-color: var(--bew-theme-color-80);
-          border-color: var(--bew-theme-color-80);
-          color: white;
+          background-color: var(--bew-theme-color);
+          border-color: var(--bew-theme-foreground);
+          color: var(--bew-on-theme-color);
         }
       }
     }

@@ -3,7 +3,6 @@ import { useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
-import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 
 import type { NotificationSectionDefinition, NotificationView } from '../notificationSections'
@@ -102,7 +101,6 @@ function unreadCount(section: NotificationSectionDefinition): number {
   <nav
     ref="navigationRef"
     class="notifications-navigation bew-segment-control bew-segment-control--surface"
-    :class="{ 'bew-segment-control--solid': settings.disableFrostedGlass }"
     :aria-label="t('notifications.navigation_aria')"
   >
     <div class="notifications-navigation__scroll">

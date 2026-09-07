@@ -1,3 +1,6 @@
+import GRID_CSS from '~/styles/gridLayout.scss?inline'
+import SKELETON_CSS from '~/styles/skeleton.scss?inline'
+
 const BOOT_OVERLAY_ID = 'bewly-boot-overlay'
 const BOOT_OVERLAY_STYLE_ID = 'bewly-boot-overlay-style'
 const BOOT_OVERLAY_FADE_MS = 220
@@ -15,17 +18,16 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
   const style = doc.createElement('style')
   style.id = BOOT_OVERLAY_STYLE_ID
   style.textContent = `
-    @keyframes bewly-boot-spinner-rotate {
-      to { transform: rotate(360deg); }
-    }
+    ${GRID_CSS}
+    ${SKELETON_CSS}
     #${BOOT_OVERLAY_ID} {
       position: fixed;
       inset: 0;
       z-index: 2147483647;
-      display: grid;
-      place-items: center;
+      display: block;
+      overflow: hidden;
       box-sizing: border-box;
-      background: var(--bew-dark-page-bg, #050607);
+      background: var(--bew-bg, #f6f7f8);
       opacity: 1;
       transition: opacity ${BOOT_OVERLAY_FADE_MS}ms cubic-bezier(0.2, 0, 0, 1);
       isolation: isolate;
@@ -35,23 +37,29 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
       opacity: 0;
       pointer-events: none;
     }
-    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__spinner {
-      width: 32px;
-      height: 32px;
-      box-sizing: border-box;
-      border: 3px solid rgba(255, 255, 255, 0.16);
-      border-top-color: var(--bew-theme-color, #00aeec);
-      border-radius: 50%;
-      animation: bewly-boot-spinner-rotate 720ms linear infinite;
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__content {
+      container-type: inline-size;
+      max-width: var(--bew-page-max-width, 2280px);
+      margin: auto;
+      padding: var(--bew-top-bar-height, 64px) var(--bew-space-12, 48px);
+    }
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__heading {
+      width: min(100%, 300px);
+      height: var(--bew-control-height, 36px);
+      margin-bottom: var(--bew-space-6, 24px);
+      border-radius: var(--bew-radius-md, 8px);
+    }
+    #${BOOT_OVERLAY_ID} .bew-grid-adaptive { gap: var(--bew-layout-content-gap, 20px); }
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__cover { aspect-ratio: 16 / 9; border-radius: var(--bew-media-radius, 12px); }
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__line { height: var(--bew-line-height-control, 18px); margin-top: var(--bew-space-2, 8px); border-radius: var(--bew-radius-sm, 4px); }
+    #${BOOT_OVERLAY_ID} .bewly-boot-overlay__line:last-child { width: 72%; }
+    @media (prefers-color-scheme: dark) {
+      #${BOOT_OVERLAY_ID} { background: var(--bew-bg, #050607); }
     }
     @media (prefers-reduced-motion: reduce) {
-      #${BOOT_OVERLAY_ID},
-      #${BOOT_OVERLAY_ID} .bewly-boot-overlay__spinner {
+      #${BOOT_OVERLAY_ID} {
         transition: none;
         animation: none;
-      }
-      #${BOOT_OVERLAY_ID} .bewly-boot-overlay__spinner {
-        border-color: var(--bew-theme-color, #00aeec);
       }
     }
   `
@@ -59,12 +67,28 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
   const overlay = doc.createElement('div')
   overlay.id = BOOT_OVERLAY_ID
   overlay.setAttribute('role', 'status')
-  overlay.setAttribute('aria-label', 'Bewly Nocturne 正在加载')
+  overlay.setAttribute('aria-label', 'Bewly Nocturne')
+  overlay.setAttribute('aria-busy', 'true')
 
-  const spinner = doc.createElement('div')
-  spinner.className = 'bewly-boot-overlay__spinner'
-  spinner.setAttribute('aria-hidden', 'true')
-  overlay.appendChild(spinner)
+  const content = doc.createElement('div')
+  content.className = 'bewly-boot-overlay__content'
+  content.setAttribute('aria-hidden', 'true')
+  const block = (name: string) => {
+    const element = doc.createElement('div')
+    element.className = `bewly-boot-overlay__${name}`
+    element.setAttribute('data-bew-skeleton', '')
+    return element
+  }
+  content.appendChild(block('heading'))
+  const grid = doc.createElement('div')
+  grid.className = 'bew-grid-adaptive'
+  for (let index = 0; index < 12; index++) {
+    const card = doc.createElement('div')
+    card.append(block('cover'), block('line'), block('line'))
+    grid.appendChild(card)
+  }
+  content.appendChild(grid)
+  overlay.appendChild(content)
   doc.documentElement.append(style, overlay)
 
   let removed = false

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import LazyPicture from './LazyPicture.vue'
+
 withDefaults(defineProps<{
   src: string
   loading?: 'lazy' | 'eager'
@@ -10,22 +12,5 @@ withDefaults(defineProps<{
 </script>
 
 <template>
-  <picture
-    w-full max-w-full align-middle object-cover
-    rounded="$bew-radius"
-    bg="$bew-skeleton"
-    :style="{ aspectRatio, display: 'block' }"
-  >
-    <source :srcset="`${src}.avif`" type="image/avif">
-    <source :srcset="`${src}.webp`" type="image/webp">
-    <img
-      :src="src"
-      :loading="loading || 'lazy'"
-      :alt="alt"
-      decoding="async"
-      block w-full h-full object-cover
-      rounded-inherit
-      :style="{ aspectRatio }"
-    >
-  </picture>
+  <LazyPicture :src="src" :loading="loading || 'lazy'" :alt="alt" :aspect-ratio="aspectRatio" />
 </template>

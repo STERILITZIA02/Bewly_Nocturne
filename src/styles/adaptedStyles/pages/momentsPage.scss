@@ -139,22 +139,22 @@
     }
 
     .bili-set-follow-group__add__btn {
-      background-color: var(--bew-theme-color-10);
+      background-color: var(--bew-theme-surface);
     }
 
     .bili-topic-new__default__create__icon,
     .bili-pics-uploader__add:hover:after,
     .bili-pics-uploader__add:hover:before,
     .bili-dyn-publishing__action.toarticle:hover {
-      background-color: var(--bew-theme-color-20);
+      background-color: var(--bew-theme-surface-hover);
     }
 
     .bili-dyn-publishing__action.launcher:not(.disabled):hover {
-      background-color: var(--bew-theme-color-80);
+      background-color: var(--bew-theme-color);
     }
 
     .bili-pics-uploader__add:hover {
-      border-color: var(--bew-theme-color-40);
+      border-color: var(--bew-theme-foreground);
     }
 
     .side-toolbar__action.is-active svg path,
@@ -170,7 +170,7 @@
     }
 
     .opus-collection__item.active {
-      background-color: var(--bew-theme-color-10) !important;
+      background-color: var(--bew-theme-surface) !important;
     }
 
     .bili-dyn-home--member,
@@ -279,7 +279,7 @@
   }
 
   .expand-btn:hover {
-    color: var(--bew-theme-color-80) !important;
+    color: var(--bew-theme-foreground) !important;
   }
 
   .bili-dyn-up-list__item__face span,

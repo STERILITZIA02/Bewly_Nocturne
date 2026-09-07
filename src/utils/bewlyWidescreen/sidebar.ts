@@ -2,7 +2,7 @@ import { scheduleActionGeometrySync, syncActionAnimationTheme } from '~/utils/be
 import { COMMENT_TIME_SELECTOR, DANMAKU_SKELETON_CLASS, EMPTY_CLASS, selectors, SIDEBAR_HYDRATION_FAST_DURATION, SIDEBAR_HYDRATION_FAST_INTERVAL, SIDEBAR_HYDRATION_INTERVAL, SIDEBAR_HYDRATION_TIMEOUT } from '~/utils/bewlyWidescreen/constants'
 import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
-import { ensureAnchoredPlayer, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
+import { ensureAnchoredPlayer, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { findCommentRoot, findMovable, isCommentRootUsable, moveCommentRoot, moveMatchingNodes, moveNode, moveOrReplaceNode, movePlaylistControls, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
@@ -37,6 +37,7 @@ function createDanmakuSkeleton(label: string) {
       const block = document.createElement('span')
       block.className = `${DANMAKU_SKELETON_CLASS}__block ${DANMAKU_SKELETON_CLASS}__${column}`
       block.setAttribute('aria-hidden', 'true')
+      block.setAttribute('data-bew-skeleton', '')
       row.appendChild(block)
     }
     rows.appendChild(row)
@@ -66,7 +67,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   syncSidebarTitle(currentState)
   const activeTab = currentState.activeTab
 
-  const metadataFound = syncVideoMetadata(currentState)
+  syncVideoMetadata(currentState)
   const toolbarResult = moveOrReplaceNode(selectors.toolbar, currentState.toolbarSlot, currentState.movedNodes)
   scheduleActionGeometrySync(currentState)
 
@@ -84,6 +85,8 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   syncControlsGlassGeometry(currentState)
   syncNativePlayerControlVisibility(currentState)
   syncAuxiliaryControlGeometry(currentState)
+  if (!currentState.controlsLayoutReady)
+    schedulePlayerResizeSync(currentState)
 
   const existingComment = findCommentRoot(currentState.panels.comment)
   let commentFound = !!existingComment && isCommentRootUsable(existingComment)
@@ -94,7 +97,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
       if (currentState.sidebarHydrationTimedOut)
         ensureSidebarHydrationFailure(currentState)
       else
-        ensureEmptyPanel(currentState.panels.comment, t('widescreen.comments_loading'))
+        ensureLoadingPanel(currentState.panels.comment, t('widescreen.comments_loading'), 'comment')
     }
     else {
       clearEmptyPanel(currentState.panels.comment)
@@ -163,7 +166,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
     currentState.tabButtons.playlist.textContent = playlistLabel
   if (!hasPlaylist && !hasRecommend) {
     if (activeTab === 'playlist')
-      ensureEmptyPanel(currentState.panels.playlist, t('widescreen.list_loading'))
+      ensureLoadingPanel(currentState.panels.playlist, t('widescreen.list_loading'), 'playlist')
   }
   else {
     clearEmptyPanel(currentState.panels.playlist)
@@ -176,17 +179,18 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
 
   const ownerReady = upResult.found
     || !!currentState.upSlot.querySelector('.bewly-widescreen-fallback-owner')
-  const toolbarReady = toolbarResult.found
-    || !!currentState.toolbarSlot.querySelector('.bewly-widescreen-fallback-stats')
   const readiness = {
-    top: ownerReady && (toolbarReady || metadataFound || !!currentState.videoInfoData),
+    // API counters are read-only information, never proof that native actions work.
+    top: ownerReady && toolbarResult.found,
     comment: commentFound,
     danmaku: danmakuReady,
     playlist: hasPlaylist || hasRecommend,
     complete: false,
   }
   readiness.complete = readiness.top && readiness[activeTab]
-  if (readiness[activeTab])
+  if (readiness.top)
+    clearEmptyPanel(currentState.sidebarTop)
+  if (readiness.complete)
     currentState.sidebarHydrationTimedOut = false
   syncSidebarReadiness(currentState, readiness)
   return readiness
@@ -196,8 +200,7 @@ function clearEmptyPanel(panel: HTMLElement) {
   panel.querySelectorAll(`.${EMPTY_CLASS}`).forEach(element => element.remove())
 }
 
-function ensureSidebarHydrationFailure(currentState: BewlyWidescreenState) {
-  const panel = currentState.panels[currentState.activeTab]
+function ensureSidebarHydrationFailure(currentState: BewlyWidescreenState, panel = currentState.panels[currentState.activeTab]) {
   if (panel.querySelector('.bewly-widescreen-panel-error'))
     return
   clearEmptyPanel(panel)
@@ -246,15 +249,31 @@ function ensureDanmakuSkeleton(panel: HTMLElement, label: string) {
   host.appendChild(createDanmakuSkeleton(label))
 }
 
-function ensureEmptyPanel(panel: HTMLElement, label: string) {
-  const existing = panel.querySelector<HTMLElement>(`.${EMPTY_CLASS}`)
+function ensureLoadingPanel(panel: HTMLElement, label: string, kind: 'comment' | 'playlist') {
+  const existing = panel.querySelector<HTMLElement>('.bewly-widescreen-panel-skeleton')
   if (existing) {
-    if (existing.textContent !== label)
-      existing.textContent = label
+    existing.setAttribute('aria-label', label)
     return
   }
-
-  panel.appendChild(createPanelEmpty(label))
+  clearEmptyPanel(panel)
+  const skeleton = createPanelEmpty('')
+  skeleton.classList.add('bewly-widescreen-panel-skeleton')
+  skeleton.dataset.kind = kind
+  skeleton.setAttribute('role', 'status')
+  skeleton.setAttribute('aria-label', label)
+  for (let index = 0; index < 5; index++) {
+    const row = document.createElement('div')
+    row.className = 'bewly-widescreen-panel-skeleton__row'
+    row.setAttribute('aria-hidden', 'true')
+    for (const part of ['leading', 'content']) {
+      const block = document.createElement('span')
+      block.className = `bewly-widescreen-panel-skeleton__${part}`
+      block.setAttribute('data-bew-skeleton', '')
+      row.appendChild(block)
+    }
+    skeleton.appendChild(row)
+  }
+  panel.appendChild(skeleton)
 }
 
 function shortenCommentTimes(panel: HTMLElement) {
@@ -314,6 +333,10 @@ export function startSidebarHydration(currentState: BewlyWidescreenState) {
     const readiness = runSidebarHydration(currentState)
     const now = Date.now()
     if (!shouldContinueWidescreenSidebarHydration({ complete: readiness?.complete ?? false, now, deadline })) {
+      if (!readiness?.top) {
+        currentState.sidebarHydrationTimedOut = true
+        ensureSidebarHydrationFailure(currentState, currentState.sidebarTop)
+      }
       if (!readiness?.[currentState.activeTab]) {
         currentState.sidebarHydrationTimedOut = true
         ensureSidebarHydrationFailure(currentState)
@@ -347,13 +370,13 @@ function showActivePanelNavigationLoading(currentState: BewlyWidescreenState) {
 
   switch (currentState.activeTab) {
     case 'comment':
-      ensureEmptyPanel(currentState.panels.comment, t('widescreen.comments_loading'))
+      ensureLoadingPanel(currentState.panels.comment, t('widescreen.comments_loading'), 'comment')
       break
     case 'danmaku':
       ensureDanmakuSkeleton(currentState.panels.danmaku, t('widescreen.danmaku_loading'))
       break
     case 'playlist':
-      ensureEmptyPanel(currentState.panels.playlist, t('widescreen.list_loading'))
+      ensureLoadingPanel(currentState.panels.playlist, t('widescreen.list_loading'), 'playlist')
       break
   }
 }

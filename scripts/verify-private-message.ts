@@ -2970,8 +2970,8 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(workspaceSource.includes('settings.privateMessageDensity'))
   assert.ok(conversationListSource.includes('showOfficialAssistants'))
   assert.ok(conversationListSource.includes('conversation-list--compact'))
-  assert.ok(settingsCategorySource.includes('color: var(--bew-theme-color)'))
-  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color-10)'))
+  assert.ok(settingsCategorySource.includes('color: var(--bew-on-theme-color)'))
+  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color)'))
   assert.equal(settingsCategorySource.includes('color: var(--bew-theme-foreground)'), false)
   assert.ok(notificationsSource.includes('lastPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('privateMessageMobileOpenMode'))
@@ -3080,8 +3080,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   assert.equal(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
   assert.ok(messagesPageSource.includes('useMessageServerSettings'))
-  assert.ok(settingsCategorySource.includes('color: var(--bew-theme-color)'))
-  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color-10)'))
+  assert.ok(settingsCategorySource.includes('color: var(--bew-on-theme-color)'))
+  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color)'))
 
   const workspaceLayoutStyle = workspaceSource.slice(
     workspaceSource.indexOf('.whisper-workspace {'),
@@ -5099,6 +5099,7 @@ verify('message server settings keep confirmed values and reconcile each mutatio
   const submissions: Array<{ field: string, value: number }> = []
   let rejectLike = true
   const controller = useMessageServerSettings.useMessageServerSettings({
+    getAccountId: () => 1,
     fetchSettings: async () => ({
       code: 0,
       data: {

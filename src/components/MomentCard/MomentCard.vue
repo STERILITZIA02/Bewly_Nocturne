@@ -9,6 +9,7 @@ import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } 
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
+import { releaseElementImages } from '~/utils/mediaResources'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
 
@@ -18,9 +19,9 @@ import MomentCommentSection from './MomentCommentSection.vue'
 import MomentForwardComposer from './MomentForwardComposer.vue'
 import type { MomentDisclosure } from './momentForwardContent'
 import {
-  getCachedMomentDisclosure,
+  createMomentDisclosureCache,
+  MOMENT_DISCLOSURES,
   normalizeForwardCount,
-  setCachedMomentDisclosure,
   toggleMomentDisclosure,
 } from './momentForwardContent'
 import MomentVote from './MomentVote.vue'
@@ -159,7 +160,8 @@ const videoOptionsFloatingStyles = ref<CSSProperties>({})
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
 const authorAvatarLinkRef = ref<HTMLAnchorElement | null>(null)
 const getDisclosureCacheKey = () => `${topBarStore.userInfo.mid || 'guest'}:${moment.id}`
-const disclosure = ref<MomentDisclosure>(getCachedMomentDisclosure(getDisclosureCacheKey()))
+const disclosureCache = inject(MOMENT_DISCLOSURES, undefined) ?? createMomentDisclosureCache()
+const disclosure = ref<MomentDisclosure>(disclosureCache.get(getDisclosureCacheKey()))
 const displayedDisclosure = ref<MomentDisclosure>(disclosure.value)
 const forwardComposerMounted = ref(disclosure.value === 'forward')
 const displayedForwardCount = ref(normalizeForwardCount(moment.forwardCount))
@@ -406,14 +408,14 @@ watch(
 )
 
 watch(disclosure, (value) => {
-  setCachedMomentDisclosure(getDisclosureCacheKey(), value)
+  disclosureCache.set(getDisclosureCacheKey(), value)
   syncDisplayedDisclosure(value)
 })
 
 watch(
   [() => moment.id, () => topBarStore.userInfo.mid],
   () => {
-    disclosure.value = getCachedMomentDisclosure(getDisclosureCacheKey())
+    disclosure.value = disclosureCache.get(getDisclosureCacheKey())
     displayedDisclosure.value = disclosure.value
     forwardComposerMounted.value = disclosure.value === 'forward'
     displayedForwardCount.value = normalizeForwardCount(moment.forwardCount)
@@ -433,8 +435,10 @@ watch(
 // VideoCardContextMenu uses this injection to select its common option set.
 provide('getVideoType', () => 'common')
 
+let cardElement: HTMLElement | null = null
 function handleCardRef(element: Element | ComponentPublicInstance | null) {
-  emit('cardElement', element instanceof HTMLElement ? element : null)
+  cardElement = element instanceof HTMLElement ? element : null
+  emit('cardElement', cardElement)
 }
 
 function handleCoverLoad(event: Event, imageIndex = 0) {
@@ -477,6 +481,8 @@ function requestNativeUserProfile(event: MouseEvent) {
 }
 
 onBeforeUnmount(() => {
+  releaseElementImages(cardElement)
+  cardElement = null
   descriptionResizeObserver?.disconnect()
   descriptionResizeObserver = null
   if (descriptionMeasureFrame)
@@ -617,7 +623,7 @@ onBeforeUnmount(() => {
             :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="emit('toggleWatchLater', moment)"
           >
-            <span v-if="isWatchLaterLoading(moment)" i-svg-spinners:ring-resize aria-hidden="true" />
+            <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
             <span v-else-if="isWatchLaterAdded(moment)" i-line-md:confirm aria-hidden="true" />
             <span v-else i-mingcute:carplay-line aria-hidden="true" />
           </button>
@@ -641,7 +647,7 @@ onBeforeUnmount(() => {
             :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="emit('toggleWatchLater', moment)"
           >
-            <span v-if="isWatchLaterLoading(moment)" i-svg-spinners:ring-resize aria-hidden="true" />
+            <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
             <span v-else-if="isWatchLaterAdded(moment)" i-line-md:confirm aria-hidden="true" />
             <span v-else i-mingcute:carplay-line aria-hidden="true" />
           </button>
@@ -657,7 +663,7 @@ onBeforeUnmount(() => {
             {{ moment.title }}
           </p>
           <p
-            v-if="moment.mediaMeta && !moment.isChargeExclusive && (!moment.isVideo || moment.isLive)"
+            v-if="moment.mediaMeta && !moment.isForward && !moment.isChargeExclusive && (!moment.isVideo || moment.isLive)"
             class="moment-card__media-meta"
             :class="{ 'moment-card__media-meta--live': moment.isLive }"
           >
@@ -765,7 +771,7 @@ onBeforeUnmount(() => {
                 :title="isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
                 @click.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
               >
-                <span v-if="isWatchLaterLoading(moment.forward.video)" i-svg-spinners:ring-resize aria-hidden="true" />
+                <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />
                 <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-line-md:confirm aria-hidden="true" />
                 <span v-else i-mingcute:carplay-line aria-hidden="true" />
               </button>
@@ -906,14 +912,16 @@ onBeforeUnmount(() => {
           v-if="isReservationAdditional"
           type="button"
           class="moment-card__additional-action"
+          relative
           :class="{ 'is-reserved': moment.additional.isReserved }"
           :disabled="isReservationLoading"
+          :aria-busy="isReservationLoading"
           :aria-label="reservationActionLabel"
           :aria-pressed="Boolean(moment.additional.isReserved)"
           @click.stop="emit('toggleReservation', moment)"
         >
-          <span v-if="isReservationLoading" i-svg-spinners:ring-resize aria-hidden="true" />
-          <span v-else>{{ reservationActionLabel }}</span>
+          <span>{{ reservationActionLabel }}</span>
+          <SkeletonBlock v-if="isReservationLoading" width="100%" height="var(--bew-space-0-5)" pos="absolute bottom-0 left-0" />
         </button>
         <a
           v-else
@@ -1048,6 +1056,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/breakpoints";
 .moment-card--preparing {
   visibility: hidden;
 }
@@ -1295,7 +1304,7 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: var(--bew-space-3);
   color: var(--bew-text-2);
-  background: linear-gradient(145deg, var(--bew-theme-color-20), var(--bew-fill-1));
+  background: var(--bew-theme-surface);
 }
 
 .moment-card__text-cover--video {
@@ -1340,8 +1349,8 @@ onBeforeUnmount(() => {
   align-self: flex-start;
   padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-interactive-radius);
-  color: var(--bew-theme-foreground);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
   line-height: var(--bew-line-height-control);
 }
 
@@ -1384,8 +1393,8 @@ onBeforeUnmount(() => {
 
 .moment-card__forward:hover,
 .moment-card__forward:focus-visible {
-  border-color: var(--bew-theme-color-60);
-  background: var(--bew-theme-color-10);
+  border-color: var(--bew-theme-foreground);
+  background: var(--bew-theme-surface);
   outline: none;
 }
 
@@ -1495,7 +1504,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__additional-action:hover {
-  background: var(--bew-theme-color-10);
+  background: var(--bew-theme-surface);
 }
 
 .moment-card__additional-action.is-reserved {
@@ -1542,8 +1551,8 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__likes:hover {
-  color: var(--bew-theme-foreground);
-  background: color-mix(in srgb, var(--bew-theme-color) 10%, transparent);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 
 .moment-card__likes:active {
@@ -1604,12 +1613,14 @@ onBeforeUnmount(() => {
 .moment-card__identity strong {
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-body);
+  line-height: var(--bew-line-height-body);
   font-weight: var(--bew-font-weight-semibold);
 }
 
 .moment-card__identity small {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 
 .moment-card__main {
@@ -1950,7 +1961,7 @@ onBeforeUnmount(() => {
 
 .moment-card__forward-video:hover,
 .moment-card__forward-video:focus-within {
-  border-color: color-mix(in oklab, var(--bew-theme-color), transparent 48%);
+  border-color: var(--bew-theme-foreground);
   background: color-mix(in oklab, var(--bew-theme-color) 7%, var(--bew-fill-1));
   outline: none;
 }
@@ -2148,8 +2159,8 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__hot-comment.is-active {
-  color: var(--bew-theme-foreground);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 
 .moment-card__hot-comment:disabled {
@@ -2216,13 +2227,13 @@ onBeforeUnmount(() => {
 
 .moment-card__footer > a:hover,
 .moment-card__footer > button:hover {
-  color: var(--bew-theme-foreground);
-  background: color-mix(in srgb, var(--bew-theme-color) 8%, transparent);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 
 .moment-card__footer > button.is-active {
-  color: var(--bew-theme-foreground);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 
 .moment-card__footer > button:disabled {
@@ -2311,7 +2322,7 @@ onBeforeUnmount(() => {
 
 // 880px keeps two- and three-column cards vertical while allowing a genuinely
 // wide single-column card to use its own inline size for a split composition.
-@container (min-width: 880px) {
+@container (min-width: #{breakpoints.$moment-card-wide}) {
   .moment-card--supports-wide-layout .moment-card__surface {
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);

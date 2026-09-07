@@ -2,7 +2,7 @@
 import type { ComponentPublicInstance } from 'vue'
 
 import { useDark } from '~/composables/useDark'
-import { settings } from '~/logic'
+import { useBangumiCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { numFormatter } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
 
@@ -64,6 +64,7 @@ interface Bangumi {
 }
 
 const { isDark } = useDark()
+const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 </script>
 
 <template>
@@ -199,7 +200,7 @@ const { isDark } = useDark()
           marginTop: horizontal ? '0' : '1rem',
         }"
       >
-        <p un-text="lg" mb-2 :class="{ 'bew-title-auto': settings.homeAdaptiveTitleAutoSize }" :style="!settings.homeAdaptiveTitleAutoSize && settings.homeAdaptiveTitleFontSize ? { fontSize: `${settings.homeAdaptiveTitleFontSize}px`, lineHeight: '1.25' } : {}">
+        <p un-text="lg" mb-2 :class="bangumiTitleClass" :style="bangumiTitleStyle">
           <a
             :href="bangumi.url" target="_blank"
             class="bangumi-card__title-link keep-two-lines"
@@ -216,7 +217,7 @@ const { isDark } = useDark()
           <div
             v-if="bangumi.capsuleText && bangumi.capsuleText.trim()"
             class="bangumi-capsule"
-            text="$bew-theme-foreground" bg="$bew-theme-color-20"
+            text="$bew-on-theme-surface" bg="$bew-theme-surface"
             p="x-2" rounded="$bew-badge-radius"
           >
             {{ bangumi.capsuleText }}
@@ -234,6 +235,8 @@ const { isDark } = useDark()
 </template>
 
 <style scoped lang="scss">
+@use "./title";
+
 .bangumi-card {
   position: relative;
 }
@@ -262,10 +265,5 @@ const { isDark } = useDark()
 .bangumi-rank {
   font-size: calc(var(--bew-font-size-data-emphasis) * 2.5);
   line-height: 1;
-}
-
-.bew-title-auto {
-  font-size: clamp(var(--bew-font-size-control), 5cqw, var(--bew-font-size-heading));
-  line-height: var(--bew-line-height-heading);
 }
 </style>

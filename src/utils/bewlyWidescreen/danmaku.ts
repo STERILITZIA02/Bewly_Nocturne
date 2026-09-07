@@ -1,10 +1,11 @@
 import { DANMAKU_EMPTY_STATE_SELECTOR, DANMAKU_GLASS_CLASS, DANMAKU_LIST_ITEM_SELECTOR, DANMAKU_LIST_VIEWPORT_SELECTOR, DANMAKU_RESIZE_DELAYS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, selectors } from '~/utils/bewlyWidescreen/constants'
-import { syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
+import { resetControlsLayout, schedulePlayerResizeSync, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { findFirst, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { setupWidescreenDanmakuSemantics } from '~/utils/bewlyWidescreenNative'
+import { attachLiquidGlass } from '~/utils/liquidGlass'
 
 function setupDanmakuSettingsClickToggle(source: HTMLElement) {
   let settingsPinned = false
@@ -207,7 +208,11 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
   }
 
   currentState.danmakuSemanticsCleanup?.()
+  if (source !== currentState.danmakuSemanticsSource || host !== currentState.danmakuSourceHost)
+    resetControlsLayout(currentState)
   currentState.danmakuSettingsCleanup?.()
+  currentState.danmakuGlassCleanup?.()
+  currentState.danmakuGlassCleanup = undefined
   currentState.danmakuGlass?.remove()
   currentState.danmakuGlass = undefined
   currentState.danmakuSemanticsSource?.classList.remove(DANMAKU_SOURCE_CLASS)
@@ -221,6 +226,7 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
   glass.className = DANMAKU_GLASS_CLASS
   glass.setAttribute('aria-hidden', 'true')
   host.parentElement?.insertBefore(glass, host)
+  currentState.danmakuGlassCleanup = attachLiquidGlass(glass).dispose
   currentState.danmakuGlass = glass
   currentState.danmakuSemanticsSource = source
   currentState.danmakuSourceHost = host
@@ -235,10 +241,7 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
   currentState.danmakuSettingsCleanup = setupDanmakuSettingsClickToggle(source)
   currentState.resizeObserver?.observe(host)
   syncControlsGlassGeometry(currentState)
-  requestAnimationFrame(() => {
-    if (session.current === currentState)
-      syncControlsGlassGeometry(currentState)
-  })
+  schedulePlayerResizeSync(currentState)
   return true
 }
 

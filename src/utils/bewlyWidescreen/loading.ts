@@ -43,6 +43,9 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       ? 'expanded'
       : 'compact'
     overlay.dataset.sidebarPosition = settings.value.bewlyWidescreenSidebarPosition
+    if (settings.value.bewlyWidescreenSidebarWidth > 0) {
+      overlay.style.setProperty('--bewly-widescreen-sidebar-user-width', `${settings.value.bewlyWidescreenSidebarWidth}px`)
+    }
     overlay.setAttribute('role', 'status')
     overlay.setAttribute('aria-live', 'polite')
 
@@ -94,6 +97,9 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
   }
 
   function shouldDismissLoadingForPlaying(video: HTMLVideoElement) {
+    // A playing event is media readiness, not the post-transfer shell layout.
+    if (session.entering || session.current)
+      return false
     return loadingMayDismissOnPlaying
       || video.autoplay
       || video.hasAttribute('autoplay')
@@ -196,6 +202,30 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
       loadingExitButton.textContent = t('widescreen.exit_loading')
   }
 
+  function alignToCurrentLayout() {
+    const currentState = session.current
+    if (!loadingOverlay || !currentState)
+      return
+    for (const [selector, source] of [
+      ['.bewly-widescreen-loading-skeleton-controls', currentState.danmakuGlass],
+      ['.bewly-widescreen-loading-skeleton-sidebar', currentState.sidebarEl],
+    ] as const) {
+      const target = loadingOverlay.querySelector<HTMLElement>(selector)
+      const rect = source?.getBoundingClientRect()
+      if (!target || !rect || rect.width <= 0 || rect.height <= 0)
+        continue
+      Object.assign(target.style, {
+        top: `${rect.top}px`,
+        left: `${rect.left}px`,
+        width: `${rect.width}px`,
+        height: `${rect.height}px`,
+        right: 'auto',
+        bottom: 'auto',
+        boxSizing: 'border-box',
+      })
+    }
+  }
+
   function reset() {
     loadingSuppressedUntilExit = false
     removeWidescreenLoading(true)
@@ -206,6 +236,7 @@ export function createWidescreenLoading(actions: WidescreenLoadingActions) {
     show: showWidescreenLoading,
     remove: removeWidescreenLoading,
     syncLabels,
+    alignToCurrentLayout,
     reset,
     get hasOverlay() { return Boolean(loadingOverlay) },
   }

@@ -41,6 +41,7 @@ import { reconcileNotificationBadge } from '../src/contentScripts/views/Notifica
 import type { NativeNotificationSection } from '../src/contentScripts/views/Notifications/notificationSections'
 import { createSystemNotificationPageFetcher } from '../src/contentScripts/views/Notifications/systemNotificationFeed'
 import { normalizeNotificationRoute, parseNotificationView } from '../src/utils/notificationRoute'
+import { FOR_YOU_SOURCE_FILES, readSourceFiles } from './refactoredSources'
 
 type FixtureName
   = | 'reply-first.json'
@@ -273,7 +274,8 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
   assert.match(conversationDetailSkeletonSource, /<ConversationTimelineSkeleton[\s\S]{0,100}:announce="announce"/)
   assert.match(historySkeletonSource, /height: var\(--bew-control-height\)/)
   assert.match(timelineSkeletonSource, /conversation-timeline-skeleton__item--self/)
-  assert.match(skeletonBlockSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
+  assert.match(skeletonBlockSource, /data-bew-skeleton/)
+  assert.match(await readFile(new URL('../src/styles/skeleton.scss', import.meta.url), 'utf8'), /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
 
   for (const source of [pageSource, feedSource, workspaceSource, listSource, conversationSource]) {
     assert.doesNotMatch(source, /<Loading\b/)
@@ -1113,7 +1115,7 @@ verify('restored whisper routes do not focus the conversation heading without an
 
 verify('transient home and search failures never emit raw Error objects', async () => {
   const [homeSource, searchSource, searchBarSource] = await Promise.all([
-    readFile(new URL('../src/contentScripts/views/Home/components/ForYou.vue', import.meta.url), 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
     readFile(new URL('../src/logic/searchExperience.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/SearchBar/SearchBar.vue', import.meta.url), 'utf8'),
   ])
@@ -1139,7 +1141,7 @@ verify('extension-invalidated empty and loading states do not throw during setup
   assert.ok(messagingSource.includes('export function getExtensionAssetUrl'))
   assert.equal(loadingSource.includes('browser.runtime.getURL'), false)
   assert.equal(emptySource.includes('browser.runtime.getURL'), false)
-  assert.match(loadingSource, /<PageLoadingIndicator/)
+  assert.match(loadingSource, /<SkeletonBlock/)
   assert.doesNotMatch(loadingSource, /loading\.gif|<img\b/)
   assert.ok(emptySource.includes('v-if="emptyImg"'))
 })

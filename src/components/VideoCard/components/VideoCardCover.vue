@@ -11,6 +11,8 @@ import { settings } from '~/logic'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
+import { releaseMediaElement } from '~/utils/mediaResources'
+import { createPreviewMediaSession } from '~/utils/previewMediaSession'
 
 import type { Video } from '../types'
 
@@ -24,6 +26,7 @@ interface Props {
   shouldHideOverlayElements: boolean
   previewVideoUrl: string
   videoElement: HTMLVideoElement | null
+  previewCurrentTime?: number | null
   isInWatchLater: boolean
   showWatchLater: boolean
   coverTopLeftAlwaysVisible?: boolean
@@ -47,13 +50,14 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
+  previewProgress: [time: number]
   toggleWatchLater: []
   undo: []
   imageLoaded: []
   previewError: []
   previewFullscreenChange: [isFullscreen: boolean]
 }>()
-
+const streamSession = createPreviewMediaSession()
 const videoRef = ref<HTMLVideoElement | null>(null)
 const isCoverHovered = ref(false)
 const isLoadingStream = ref<boolean>(false)
@@ -65,8 +69,7 @@ const shouldEnableSwipeSeek = computed(() => settings.value.enableVideoPreviewSw
 const showVideoControls = computed(() => shouldEnableVideoControls.value
   && Boolean(props.previewVideoUrl)
   && (props.isHover || isPreviewFullscreen.value || isScrubbing.value))
-let hls: Hls | null = null
-let flvPlayer: flvjs.Player | null = null
+
 let previewSetupGeneration = 0
 /** 仅记录 pointerdown 意图；真正 scrub 需横向拖过阈值后才激活 */
 let activeScrubPointerId: number | null = null
@@ -93,6 +96,20 @@ function updateScrubProgress(videoEl: HTMLVideoElement) {
   scrubProgress.value = Number.isFinite(videoEl.duration) && videoEl.duration > 0
     ? Math.min(100, Math.max(0, videoEl.currentTime / videoEl.duration * 100))
     : 0
+}
+
+function restorePreviewPosition(event: Event) {
+  const video = event.target as HTMLVideoElement
+  const time = props.previewCurrentTime
+  if (video !== videoRef.value || props.video?.roomid || !time || !Number.isFinite(video.duration))
+    return
+  video.currentTime = Math.min(time, Math.max(0, video.duration - 0.1))
+}
+
+function recordPreviewPosition(event: Event) {
+  const video = event.target as HTMLVideoElement
+  if (video === videoRef.value && !props.video?.roomid && video.readyState > 0 && Number.isFinite(video.currentTime))
+    emit('previewProgress', video.currentTime)
 }
 
 function clearScrubSeekSchedule() {
@@ -295,9 +312,7 @@ const previewInteractionEvents = computed(() => ({
 }))
 
 function resetVideoElement(videoEl: HTMLVideoElement) {
-  videoEl.pause()
-  videoEl.removeAttribute('src')
-  videoEl.load()
+  releaseMediaElement(videoEl)
 }
 
 function stopPreview(videoEl: HTMLVideoElement) {
@@ -335,35 +350,9 @@ function syncPreviewFullscreenState() {
   }
 }
 
-function destroyFlvPlayer(player: flvjs.Player) {
-  try {
-    player.pause()
-    player.unload()
-    player.detachMediaElement()
-    player.destroy()
-  }
-  catch {
-    // The stream can already be detached when its network request fails.
-  }
-}
-
 function cleanupPlayers() {
-  if (hls) {
-    hls.destroy()
-    hls = null
-  }
-  if (flvPlayer) {
-    const player = flvPlayer
-    flvPlayer = null
-    destroyFlvPlayer(player)
-  }
+  streamSession.clear()
   isLoadingStream.value = false
-}
-
-function cleanupHlsPlayer(player: Hls) {
-  if (hls === player)
-    hls = null
-  player.destroy()
 }
 
 function isPreviewSetupCurrent(generation: number, url: string, videoEl: HTMLVideoElement) {
@@ -374,11 +363,11 @@ function isPreviewSetupCurrent(generation: number, url: string, videoEl: HTMLVid
 }
 
 function isHlsPlayerCurrent(player: Hls, generation: number, url: string, videoEl: HTMLVideoElement) {
-  return hls === player && isPreviewSetupCurrent(generation, url, videoEl)
+  return streamSession.hls === player && isPreviewSetupCurrent(generation, url, videoEl)
 }
 
 function isFlvPlayerCurrent(player: flvjs.Player, generation: number, url: string, videoEl: HTMLVideoElement) {
-  return flvPlayer === player && isPreviewSetupCurrent(generation, url, videoEl)
+  return streamSession.flv === player && isPreviewSetupCurrent(generation, url, videoEl)
 }
 
 function failPreviewSetup(generation: number, url: string, videoEl: HTMLVideoElement) {
@@ -422,7 +411,7 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
           lazyLoadMaxDuration: 1,
           seekType: 'range',
         })
-        flvPlayer = player
+        streamSession.flv = player
 
         player.attachMediaElement(videoEl)
 
@@ -435,8 +424,8 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
           if (!isFlvPlayerCurrent(player, generation, url, videoEl))
             return
 
-          flvPlayer = null
-          destroyFlvPlayer(player)
+          streamSession.flv = null
+          streamSession.releaseFlv(player)
           failPreviewSetup(generation, url, videoEl)
         })
 
@@ -448,13 +437,13 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
           videoEl.play().catch(() => {
             // Ignore autoplay errors
           })
-        }, { once: true })
+        }, { once: true, signal: streamSession.signal })
 
         videoEl.addEventListener('canplay', () => {
           if (isFlvPlayerCurrent(player, generation, url, videoEl) && isLoadingStream.value) {
             isLoadingStream.value = false
           }
-        }, { once: true })
+        }, { once: true, signal: streamSession.signal })
 
         player.load()
       }
@@ -490,7 +479,7 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
           liveMaxLatencyDurationCount: 5,
           maxBufferSize: 60 * 1000 * 1000, // 60MB
         })
-        hls = player
+        streamSession.hls = player
 
         player.loadSource(url)
         player.attachMedia(videoEl)
@@ -513,7 +502,7 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
               player.recoverMediaError()
               break
             default:
-              cleanupHlsPlayer(player)
+              streamSession.releaseHls(player)
               failPreviewSetup(generation, url, videoEl)
               break
           }
@@ -537,7 +526,7 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
           videoEl.removeEventListener('canplay', handleCanPlay)
         }
 
-        videoEl.addEventListener('canplay', handleCanPlay)
+        videoEl.addEventListener('canplay', handleCanPlay, { once: true, signal: streamSession.signal })
         videoEl.play().catch(() => {
           if (isPreviewSetupCurrent(generation, url, videoEl))
             failPreviewSetup(generation, url, videoEl)
@@ -564,8 +553,11 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
 }
 
 // Watch for preview URL and videoRef changes
-watch([() => props.previewVideoUrl, () => props.isHover, videoRef], ([url, isHover, videoEl]) => {
+watch([() => props.previewVideoUrl, () => props.isHover, videoRef], ([url, isHover, videoEl], [, , previousVideo]) => {
   if (!videoEl) {
+    cleanupPlayers()
+    if (previousVideo)
+      releaseMediaElement(previousVideo)
     previewSetupGeneration++
     return
   }
@@ -600,6 +592,8 @@ onBeforeUnmount(() => {
   if (suppressPreviewClickTimeout !== null)
     clearTimeout(suppressPreviewClickTimeout)
   cleanupPlayers()
+  if (videoRef.value)
+    releaseMediaElement(videoRef.value)
 })
 
 // Shadow styles are now injected globally via CSS variables from App.vue
@@ -621,6 +615,7 @@ onBeforeUnmount(() => {
     <!-- Skeleton mode -->
     <div
       v-if="skeleton"
+      data-bew-skeleton
       w-full h-full bg="$bew-skeleton" rounded-inherit
       style="aspect-ratio: 16 / 9;"
     />
@@ -631,7 +626,6 @@ onBeforeUnmount(() => {
       <LazyPicture
         :src="coverImageUrl"
         loading="lazy"
-        :release-offscreen="settings.releaseOffscreenVideoCardImages"
         :retain-screens="3"
         :show-skeleton="true"
         @loaded="emit('imageLoaded')"
@@ -667,11 +661,13 @@ onBeforeUnmount(() => {
         >
           <video
             ref="videoRef"
-            autoplay muted
-            :draggable="false"
-            :controls="showVideoControls"
-            w-full h-full
-            class="video-card-preview__video"
+            autoplay
+            muted
+            :draggable="false" :controls="showVideoControls"
+            w-full
+            h-full
+            class="video-card-preview__video" @loadedmetadata="restorePreviewPosition"
+            @timeupdate="recordPreviewPosition"
           />
 
           <div
@@ -696,7 +692,7 @@ onBeforeUnmount(() => {
               rounded-inherit
               pointer-events-none
             >
-              <div class="loading-spinner" />
+              <SkeletonBlock height="100%" radius="media" />
             </div>
           </Transition>
         </div>
@@ -1030,21 +1026,5 @@ onBeforeUnmount(() => {
 .video-card-cover-stats--hidden {
   opacity: 0;
   visibility: hidden;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

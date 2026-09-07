@@ -7,6 +7,7 @@ import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import type { SettingsNavigationRequest } from '~/composables/useAppProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { GLASS_SURFACE_CONTEXT } from '~/composables/useLiquidGlass'
 import { settings } from '~/logic'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
 import { enterLayoutEditMode, subscribeSettingNavigation } from '~/logic/layoutEdit'
@@ -24,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits(['close'])
 
 const { t, tm, rt } = useI18n()
+provide(GLASS_SURFACE_CONTEXT, computed(() => !settings.value.disableFrostedGlass))
 const breadcrumbDetail = ref<string>()
 const searchQuery = ref('')
 const settingsContentKey = ref(0)
@@ -714,9 +716,7 @@ function changeMenuItem(menuItem: MenuType) {
             ref="settingsSearchRef"
             class="settings-search"
             :class="{ 'has-query': Boolean(searchQuery) }"
-            :style="{
-              backgroundColor: settings.disableFrostedGlass ? 'var(--bew-content-solid)' : 'var(--bew-content)',
-            }"
+            :style="{ backgroundColor: 'var(--bew-content-solid)' }"
             @click="focusSettingsSearch"
           >
             <i i-mingcute:search-2-line />

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+
 withDefaults(defineProps<{
   label?: string
   announce?: boolean
@@ -14,7 +16,10 @@ withDefaults(defineProps<{
     :role="announce ? 'status' : undefined"
     :aria-label="announce && label ? label : undefined"
   >
-    <span class="bew-page-loading-indicator__spinner" aria-hidden="true" />
+    <span class="bew-page-loading-indicator__skeleton" aria-hidden="true">
+      <SkeletonBlock width="100%" height="var(--bew-space-2)" />
+      <SkeletonBlock width="72%" height="var(--bew-space-2)" />
+    </span>
     <span v-if="label" class="bew-page-loading-indicator__label">{{ label }}</span>
   </div>
 </template>
@@ -31,32 +36,13 @@ withDefaults(defineProps<{
   line-height: var(--bew-line-height-control);
 }
 
-.bew-page-loading-indicator__spinner {
-  width: var(--bew-icon-size-lg);
-  height: var(--bew-icon-size-lg);
-  box-sizing: border-box;
-  flex: 0 0 auto;
-  border: 2px solid var(--bew-theme-color-20);
-  border-top-color: var(--bew-theme-foreground);
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  animation: bew-page-loading-spin 720ms linear infinite;
+.bew-page-loading-indicator__skeleton {
+  display: grid;
+  gap: var(--bew-space-2);
+  width: calc(var(--bew-space-12) * 2);
 }
 
 .bew-page-loading-indicator__label {
   color: inherit;
-}
-
-@keyframes bew-page-loading-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bew-page-loading-indicator__spinner {
-    border-color: var(--bew-theme-foreground);
-    animation: none;
-  }
 }
 </style>

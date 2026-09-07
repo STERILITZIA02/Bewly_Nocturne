@@ -2,6 +2,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import type { GridLayoutType } from '~/logic'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
@@ -23,41 +24,30 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const videoList = ref<VideoElement[]>([])
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
-const needToLoginFirst = ref<boolean>(false)
-const page = ref<number>(1)
-const noMoreContent = ref<boolean>(false)
-const requestFailed = ref<boolean>(false)
+const needToLoginFirst = tabState.ref<boolean>('needToLoginFirst', false)
+const page = tabState.ref<number>('page', 1)
+const noMoreContent = tabState.ref<boolean>('noMoreContent', false)
+const requestFailed = tabState.ref<boolean>('requestFailed', false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 let requestGeneration = 0
 let loadedAccountId = parseDedeUserID(document.cookie) ?? null
-let reloadAfterActivation = false
 
 function isCurrentRequest(generation: number, accountId: number | null) {
-  return generation === requestGeneration
+  return tabState.isCurrent() && generation === requestGeneration
     && accountId === loadedAccountId
     && accountId === (parseDedeUserID(document.cookie) ?? null)
 }
 
 onMounted(() => {
-  initData()
   initPageAction()
-})
-
-onActivated(() => {
-  const accountId = parseDedeUserID(document.cookie) ?? null
-  if (reloadAfterActivation || accountId !== loadedAccountId) {
-    reloadAfterActivation = false
+  if (!tabState.restored)
     void initData()
-  }
-  initPageAction()
-})
-
-onDeactivated(() => {
-  reloadAfterActivation = isLoading.value
-  requestGeneration++
-  isLoading.value = false
+  else if (!hasSettled.value)
+    void getData(requestGeneration, loadedAccountId)
 })
 
 onUnmounted(() => {
@@ -65,6 +55,8 @@ onUnmounted(() => {
 })
 
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   handleReachBottom.value = async () => {
     if (isLoading.value)
       return
@@ -82,6 +74,9 @@ function initPageAction() {
 }
 
 async function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   loadedAccountId = parseDedeUserID(document.cookie) ?? null
   const accountId = loadedAccountId
@@ -137,6 +132,7 @@ async function getData(generation = requestGeneration, accountId = loadedAccount
   }
   finally {
     if (isCurrentRequest(generation, accountId)) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }

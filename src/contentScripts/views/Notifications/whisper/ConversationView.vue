@@ -1021,7 +1021,6 @@ defineExpose({
     <footer
       v-if="isTextSendEnabled && writeState"
       class="conversation-view__floating-composer"
-      :class="{ 'conversation-view__floating-composer--solid': settings.disableFrostedGlass }"
     >
       <div class="conversation-view__test-send">
         <MessageComposer
@@ -1117,8 +1116,7 @@ defineExpose({
   z-index: 5;
 }
 
-.conversation-card--solid,
-.conversation-view__floating-composer--solid {
+.conversation-card--solid {
   background: var(--bew-elevated-alt-solid);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
@@ -1287,13 +1285,11 @@ defineExpose({
   left: var(--bew-space-4);
   z-index: 4;
   padding: var(--bew-space-2);
-  background: var(--bew-elevated-alt);
-  border: 1px solid var(--bew-surface-border-color);
+  background: var(--bew-elevated-alt-solid);
+  border: 1px solid transparent;
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
-  backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  box-shadow: var(--bew-shadow-3);
 }
 
 .conversation-view__test-send {

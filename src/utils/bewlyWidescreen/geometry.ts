@@ -1,6 +1,6 @@
 import { settings } from '~/logic'
 import { scheduleActionGeometrySync } from '~/utils/bewlyWidescreen/actionEffects'
-import { HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, selectors } from '~/utils/bewlyWidescreen/constants'
+import { HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, READY_STABILITY_DELAY, selectors } from '~/utils/bewlyWidescreen/constants'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { forwardNativePlayerPointerActivity, getNativePlayerContainer, isPointerInBottomControlContainer, setupSidebarToggleAutoHide, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { exitNativeMiniPlayer, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
@@ -22,9 +22,15 @@ const AUXILIARY_CONTROL_GEOMETRY_PROPERTIES = [
   '--bewly-widescreen-aux-controls-left',
 ] as const
 
+function setGeometryProperty(element: HTMLElement, name: string, value: string) {
+  if (element.style.getPropertyValue(name) !== value)
+    element.style.setProperty(name, value)
+}
+
 export function clearAuxiliaryControlGeometry() {
   const host = document.querySelector<HTMLElement>('#bewly')
   AUXILIARY_CONTROL_GEOMETRY_PROPERTIES.forEach(property => host?.style.removeProperty(property))
+  document.body.style.removeProperty('--bewly-widescreen-aux-controls-width')
 }
 
 function disablePinnedHighEnergyProgress(highEnergyProgress: HTMLElement) {
@@ -92,10 +98,25 @@ export function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
 
 export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState) {
   const host = document.querySelector<HTMLElement>('#bewly')
+  if (settings.value.alwaysUseDock) {
+    AUXILIARY_CONTROL_GEOMETRY_PROPERTIES.forEach(property => host?.style.removeProperty(property))
+    setGeometryProperty(document.body, '--bewly-widescreen-aux-controls-width', '0px')
+    return
+  }
+  const auxiliary = host?.shadowRoot?.querySelector<HTMLElement>('.widescreen-docked .sidebar-content')
+  if (auxiliary !== currentState.auxiliaryControlsElement) {
+    if (currentState.auxiliaryControlsElement)
+      currentState.resizeObserver?.unobserve(currentState.auxiliaryControlsElement)
+    currentState.auxiliaryControlsElement = auxiliary ?? undefined
+    if (auxiliary)
+      currentState.resizeObserver?.observe(auxiliary)
+  }
   const viewerInfo = currentState.danmakuSemanticsSource?.querySelector<HTMLElement>('.bpx-player-video-info')
   const dockRect = (currentState.danmakuSourceHost ?? currentState.danmakuDock).getBoundingClientRect()
   const viewerRect = viewerInfo?.getBoundingClientRect()
-  if (!host || !viewerRect || dockRect.width <= 0 || dockRect.height <= 0) {
+  const auxiliaryRect = auxiliary?.getBoundingClientRect()
+  if (!host || !viewerRect || viewerRect.width <= 0 || viewerRect.height <= 0 || dockRect.width <= 0 || dockRect.height <= 0
+    || !auxiliaryRect || auxiliaryRect.width <= 0 || auxiliaryRect.height <= 0) {
     clearAuxiliaryControlGeometry()
     return
   }
@@ -103,6 +124,7 @@ export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState)
   const rootStyle = getComputedStyle(currentState.root)
   const gap = Number.parseFloat(rootStyle.getPropertyValue('--bew-space-2')) || 8
   const controlHeight = Number.parseFloat(rootStyle.getPropertyValue('--bew-control-height')) || 36
+  setGeometryProperty(document.body, '--bewly-widescreen-aux-controls-width', `${auxiliaryRect.width + gap}px`)
   const left = viewerRect.right + gap
   // 圆键贴底锚定稳定布局几何，避免显隐过程中的绘制状态影响按钮位置。
   const glassBottom = Number.parseFloat(rootStyle.getPropertyValue('--bewly-widescreen-controls-glass-bottom')) || 32
@@ -114,8 +136,8 @@ export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState)
   // 按卡片内容块间距贴底，与原生 36px 控制按钮同水平线
   const blockPadding = Math.max((dockRect.height - controlHeight) / 2, 0)
   const bottom = Math.max(window.innerHeight - stableDockBottom + blockPadding, 0)
-  host.style.setProperty('--bewly-widescreen-aux-controls-left', `${left}px`)
-  host.style.setProperty('--bewly-widescreen-aux-controls-bottom', `${bottom}px`)
+  setGeometryProperty(host, '--bewly-widescreen-aux-controls-left', `${left}px`)
+  setGeometryProperty(host, '--bewly-widescreen-aux-controls-bottom', `${bottom}px`)
 }
 
 export function clearAnchoredPlayerElement(playerEl: HTMLElement) {
@@ -155,10 +177,10 @@ export function syncAnchoredPlayerGeometry(currentState: BewlyWidescreenState) {
     sidebarReservedWidth: sidebarRect.width + sidebarFloatingInset * 2,
   })
 
-  playerEl.style.setProperty('--bewly-widescreen-player-height', `${geometry.height}px`)
-  playerEl.style.setProperty('--bewly-widescreen-player-left', `${geometry.left}px`)
-  playerEl.style.setProperty('--bewly-widescreen-player-top', `${geometry.top}px`)
-  playerEl.style.setProperty('--bewly-widescreen-player-width', `${geometry.width}px`)
+  setGeometryProperty(playerEl, '--bewly-widescreen-player-height', `${geometry.height}px`)
+  setGeometryProperty(playerEl, '--bewly-widescreen-player-left', `${geometry.left}px`)
+  setGeometryProperty(playerEl, '--bewly-widescreen-player-top', `${geometry.top}px`)
+  setGeometryProperty(playerEl, '--bewly-widescreen-player-width', `${geometry.width}px`)
   syncAuxiliaryControlGeometry(currentState)
 }
 
@@ -176,6 +198,7 @@ export function ensureAnchoredPlayer(currentState: BewlyWidescreenState) {
     currentState.sidebarToggleAutoHideCleanup = undefined
     clearAnchoredPlayerElement(currentState.playerEl)
     currentState.playerEl = replacement
+    resetControlsLayout(currentState)
     if (shouldRestoreAspectObservers)
       setupAspectObservers(currentState)
     if (shouldRestoreToggleAutoHide)
@@ -231,10 +254,7 @@ export function updateSidebarLayoutState(currentState: BewlyWidescreenState | nu
     '--bewly-widescreen-center-offset',
     `${geometry.offset * direction}px`,
   )
-  currentState.playerEl.style.setProperty(
-    '--bewly-widescreen-center-offset',
-    `${geometry.offset * direction}px`,
-  )
+  setGeometryProperty(currentState.playerEl, '--bewly-widescreen-center-offset', `${geometry.offset * direction}px`)
   if (centered)
     currentState.root.dataset.sidebarHoverExpanded = 'false'
   syncAnchoredPlayerGeometry(currentState)
@@ -262,6 +282,71 @@ export function clearPlayerResizeSync(currentState: BewlyWidescreenState) {
   if (currentState.resizeSyncFrame !== undefined)
     cancelAnimationFrame(currentState.resizeSyncFrame)
   currentState.resizeSyncFrame = undefined
+  currentState.onInitialLayoutReady = undefined
+}
+
+export function resetControlsLayout(currentState: BewlyWidescreenState) {
+  currentState.controlsLayoutReady = false
+  currentState.controlsLayoutSignature = undefined
+  currentState.controlsLayoutStableSince = undefined
+  syncNativePlayerControlVisibility(currentState)
+}
+
+function settleControlsLayout(currentState: BewlyWidescreenState) {
+  currentState.resizeSyncFrame = undefined
+  if (session.current !== currentState || !currentState.root.isConnected)
+    return
+
+  syncAnchoredPlayerGeometry(currentState)
+  syncControlsGlassGeometry(currentState)
+  if (currentState.controlsLayoutReady)
+    return
+
+  const controls = currentState.playerEl.querySelector<HTMLElement>(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
+  const source = currentState.danmakuSemanticsSource
+  const viewers = source?.querySelector<HTMLElement>('.bpx-player-video-info')
+  const nativeButtons = controls?.matches('.bpx-player-control-wrap')
+    ? controls.querySelector<HTMLElement>('.bpx-player-control-bottom')
+    : controls
+  const nativeLayoutReady = !controls?.matches('.bpx-player-control-wrap')
+    || (nativeButtons && getComputedStyle(nativeButtons).display === 'flex')
+  const elements = [currentState.playerFrame, controls, nativeButtons, currentState.danmakuSourceHost, viewers]
+  if (!settings.value.alwaysUseDock) {
+    const auxiliary = currentState.auxiliaryControlsElement
+    elements.push(auxiliary)
+    if (!auxiliary || getComputedStyle(auxiliary).flexDirection !== 'row') {
+      currentState.controlsLayoutSignature = undefined
+      currentState.controlsLayoutStableSince = undefined
+      return
+    }
+  }
+  const rects = elements.map(element => element?.isConnected ? element.getBoundingClientRect() : undefined)
+  if (!nativeLayoutReady || !source?.isConnected || !currentState.danmakuGlass?.isConnected
+    || !nativeButtons?.childElementCount
+    || rects.some(rect => !rect || rect.width <= 0 || rect.height <= 0)) {
+    currentState.controlsLayoutSignature = undefined
+    currentState.controlsLayoutStableSince = undefined
+    return // Existing DOM/Resize observers resume this when native controls arrive.
+  }
+
+  const signature = `${rects.flatMap(rect => [rect!.left, rect!.top, rect!.width, rect!.height])
+    .map(value => value.toFixed(1))
+    .join(':')}:${nativeButtons.childElementCount}`
+  const now = Date.now()
+  if (signature !== currentState.controlsLayoutSignature) {
+    currentState.controlsLayoutSignature = signature
+    currentState.controlsLayoutStableSince = now
+  }
+  if (now - currentState.controlsLayoutStableSince! < READY_STABILITY_DELAY) {
+    currentState.resizeSyncFrame = requestAnimationFrame(() => settleControlsLayout(currentState))
+    return
+  }
+
+  currentState.controlsLayoutReady = true
+  syncNativePlayerControlVisibility(currentState)
+  const reveal = currentState.onInitialLayoutReady
+  currentState.onInitialLayoutReady = undefined
+  reveal?.()
 }
 
 export function schedulePlayerResizeSync(currentState: BewlyWidescreenState) {
@@ -275,6 +360,7 @@ export function schedulePlayerResizeSync(currentState: BewlyWidescreenState) {
 
     updateSidebarLayoutState(currentState)
     window.dispatchEvent(new Event('resize'))
+    settleControlsLayout(currentState)
   })
 }
 
@@ -303,6 +389,8 @@ export function setupAspectObservers(currentState: BewlyWidescreenState) {
   currentState.resizeObserver.observe(currentState.playerFrame)
   currentState.resizeObserver.observe(currentState.sidebarEl)
   currentState.resizeObserver.observe(currentState.danmakuDock)
+  if (currentState.auxiliaryControlsElement)
+    currentState.resizeObserver.observe(currentState.auxiliaryControlsElement)
   if (currentState.danmakuSourceHost)
     currentState.resizeObserver.observe(currentState.danmakuSourceHost)
   currentState.resizeObserver.observe(currentState.descriptionSlot)

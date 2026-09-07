@@ -65,7 +65,7 @@ export interface BewlyWidescreenState {
   sidebarHydrationTimer?: ReturnType<typeof setTimeout>
   sidebarHydrationWarningShown?: boolean
   sidebarHydrationTimedOut?: boolean
-  commentReadyCleanup?: () => void
+  sidebarReadyCleanup?: () => void
   sidebarEdgeRevealSuppressionTimer?: ReturnType<typeof setTimeout>
   sidebarInteractionCleanup?: () => void
   sidebarToggleAutoHideCleanup?: () => void
@@ -81,7 +81,13 @@ export interface BewlyWidescreenState {
   danmakuSemanticsSource?: HTMLElement
   danmakuSourceHost?: HTMLElement
   danmakuGlass?: HTMLElement
+  danmakuGlassCleanup?: () => void
   controlsGlassAppliedHeight?: number
+  auxiliaryControlsElement?: HTMLElement
+  controlsLayoutReady: boolean
+  controlsLayoutSignature?: string
+  controlsLayoutStableSince?: number
+  onInitialLayoutReady?: () => void
   highEnergyProgressElement?: HTMLElement
   highEnergyProgressObserver?: MutationObserver
   escapeKeyCleanup?: () => void

@@ -4,6 +4,8 @@ allowBuilds:
   oxc-resolver: true
   simple-git-hooks: true
   spawn-sync: true
+patchedDependencies:
+  '@wxperia/liquid-glass-vue@1.0.9': patches/@wxperia__liquid-glass-vue@1.0.9.patch
 onlyBuiltDependencies:
   - '@parcel/watcher'
   - dtrace-provider

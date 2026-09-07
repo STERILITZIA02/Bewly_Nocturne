@@ -1,0 +1,13 @@
+diff --git a/dist/index.js b/dist/index.js
+index 4f9848bc3fe483ff7bfa6c24d8ee282337c02f1f..43667a8a7485b035d6f4885a81085a296da3b9af 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -24,7 +24,7 @@ class ShaderDisplacementGenerator {
+     this.options = options;
+     this.worker = new Worker(new URL(
+       /* @vite-ignore */
+-      "/assets/shader-worker-CJN-6C3l.js",
++      "./assets/shader-worker-CJN-6C3l.js",
+       import.meta.url
+     ), {
+       type: "module"

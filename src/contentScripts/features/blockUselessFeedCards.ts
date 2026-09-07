@@ -1,11 +1,17 @@
 const BLOCKED_FEED_CARD_CLASS = 'bewly-blocked-feed-card'
 const VIDEO_CARD_CLASS = 'bili-video-card'
 
-// Homepage recommended cards (that do NOT support "not interested")
-const RCMD_VIDEO_CARD_SELECTOR = '.bili-video-card.is-rcmd:not(.enable-no-interest)'
-const FEED_CARD_SELECTOR = '.feed-card, .bili-feed-card'
+// Semantically adapted from AdGuard Chinese / EasyList China Bilibili rules.
+// Absence of a "not interested" menu is not evidence that a video is an ad.
+const AD_CLASS_NAMES = ['bili-video-card__info--ad', 'bili-video-card__info--creative-ad', 'ad-feedback-entry']
+const AD_CONTENT_SELECTOR = [
+  ...AD_CLASS_NAMES.map(name => `.${name}`),
+  'a[href^="https://cm.bilibili.com/"]',
+  'a[href^="//cm.bilibili.com/"]',
+].join(',')
+const FEED_CARD_SELECTOR = '.feed-card, .bili-feed-card, .floor-single-card, .video-list > div'
 const OBSERVER_OPTIONS: MutationObserverInit = {
-  attributeFilter: ['class'],
+  attributeFilter: ['class', 'href', 'data-target-url'],
   attributeOldValue: true,
   attributes: true,
   childList: true,
@@ -20,20 +26,22 @@ const pendingRoots = new Set<Element>()
 interface UselessFeedCardBlockerContext {
   blockAds: boolean
   homePage: boolean
+  searchPage?: boolean
   inIframe: boolean
 }
 
 export function shouldEnableUselessFeedCardBlocker({
   blockAds,
   homePage,
+  searchPage = false,
 }: UselessFeedCardBlockerContext) {
-  return blockAds && homePage
+  return blockAds && (homePage || searchPage)
 }
 
 function getObserveRoot(): Element {
   // Prefer the feed container if it exists; fallback to body.
-  const firstFeedCard = document.querySelector('.feed-card')
-  return firstFeedCard?.parentElement || document.body || document.documentElement
+  const firstFeedCard = document.querySelector('.feed-card, .bili-feed-card, .floor-single-card')
+  return firstFeedCard?.parentElement || document.querySelector('.video-list') || document.body || document.documentElement
 }
 
 function ensureObserveRoot() {
@@ -55,16 +63,17 @@ function ensureObserveRoot() {
 }
 
 function syncFeedCard(feedCard: HTMLElement) {
-  feedCard.classList.toggle(
-    BLOCKED_FEED_CARD_CLASS,
-    feedCard.querySelector(RCMD_VIDEO_CARD_SELECTOR) !== null,
-  )
+  const blocked = feedCard.querySelector(AD_CONTENT_SELECTOR) !== null
+  if (feedCard.classList.contains(BLOCKED_FEED_CARD_CLASS) !== blocked)
+    feedCard.classList.toggle(BLOCKED_FEED_CARD_CLASS, blocked)
 }
 
 function getFeedCardSlot(element: Element): HTMLElement | null {
   // 首屏卡片有 .feed-card 外层，后续懒加载卡片则可能直接使用 .bili-feed-card。
   return element.closest<HTMLElement>('.feed-card')
     || element.closest<HTMLElement>('.bili-feed-card')
+    || element.closest<HTMLElement>('.floor-single-card')
+    || element.closest<HTMLElement>('.video-list > div')
 }
 
 function scanForRcmdCards(root: ParentNode) {
@@ -106,8 +115,10 @@ function scheduleFlushPending() {
 }
 
 function start() {
-  if (feedCardObserver)
+  if (feedCardObserver) {
+    ensureObserveRoot()
     return
+  }
 
   // Initial scan (covers already-rendered cards)
   scanForRcmdCards(document)
@@ -117,10 +128,16 @@ function start() {
       if (mutation.type === 'attributes') {
         const target = mutation.target
         const wasVideoCard = mutation.oldValue?.split(/\s+/).includes(VIDEO_CARD_CLASS)
+        const wasAdMarker = mutation.attributeName === 'class'
+          && mutation.oldValue?.split(/\s+/).some(name => AD_CLASS_NAMES.includes(name))
+        const wasAdLink = mutation.attributeName === 'href'
+          && /^(?:https:)?\/\/cm\.bilibili\.com\//.test(mutation.oldValue || '')
 
         // Bilibili attaches recommendation classes asynchronously during hydration.
-        if (target instanceof Element && (target.classList.contains(VIDEO_CARD_CLASS) || wasVideoCard))
+        if (target instanceof Element && (target.closest(`.${VIDEO_CARD_CLASS}`)
+          || target.matches(AD_CONTENT_SELECTOR) || wasVideoCard || wasAdMarker || wasAdLink)) {
           pendingRoots.add(target)
+        }
 
         continue
       }

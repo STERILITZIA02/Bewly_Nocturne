@@ -1,0 +1,26 @@
+[data-bew-skeleton] {
+  background-color: var(--bew-skeleton, rgb(131 131 145 / 30%));
+  background-image: linear-gradient(
+    100deg,
+    transparent 20%,
+    color-mix(in oklab, var(--bew-fill-4, rgb(131 131 145 / 60%)), transparent 28%) 50%,
+    transparent 80%
+  );
+  background-size: 220% 100%;
+  animation: bew-skeleton-shimmer 1.4s linear infinite;
+}
+
+@keyframes bew-skeleton-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: -120% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-bew-skeleton] {
+    animation: none;
+  }
+}

@@ -158,11 +158,11 @@
 
     .i-live .i-live-fo-btn:hover,
     .expand-btn:hover {
-      color: var(--bew-theme-color-80);
+      color: var(--bew-theme-foreground);
     }
 
     .bili-dyn-topic__card:hover {
-      color: var(--bew-theme-color-80) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .n .n-cursor,
@@ -214,7 +214,7 @@
     }
 
     .i-live .i-live-fo-btn:hover {
-      border-color: var(--bew-theme-color-80);
+      border-color: var(--bew-theme-foreground);
     }
 
     .n .n-cursor,
@@ -253,12 +253,12 @@
     }
 
     .follow-dialog-wrap .follow-dialog-window .content .group-list .add-group .input-group .submit {
-      background-color: var(--bew-theme-color-10);
+      background-color: var(--bew-theme-surface);
     }
 
     .bili-topic-new__default__create__icon,
     .bili-topic-selector__bulletin__clear {
-      background-color: var(--bew-theme-color-20);
+      background-color: var(--bew-theme-surface-hover);
     }
 
     .btn.primary:focus,
@@ -269,15 +269,15 @@
     .favInfo-box .collection-details .collection-btn:hover,
     .bl-button--primary:hover,
     .comment-bilibili-con .btn .btn-submit:hover {
-      background-color: var(--bew-theme-color-80);
+      background-color: var(--bew-theme-color);
     }
 
     .channel-option .modify-channel:hover {
-      background-color: var(--bew-theme-color-80) !important;
+      background-color: var(--bew-theme-color) !important;
     }
 
     .h .h-guest-hint {
-      background-color: var(--bew-theme-color-90);
+      background-color: var(--bew-theme-color);
     }
 
     .create-wrapper .choose-action .confirm-btn,

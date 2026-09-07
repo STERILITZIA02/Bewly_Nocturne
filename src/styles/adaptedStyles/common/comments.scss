@@ -1,4 +1,5 @@
 .bewly-design {
+  --bew-comment-replies-mask-bg: color-mix(in oklab, var(--bew-bg), transparent 15%);
   // 评论图片预览打开时隐藏页面滚动条，避免其显示在遮罩右侧。
   // 仅滚动条规则受该设置控制，其余评论适配始终生效。
   &.bewly-hide-comment-image-scrollbar {
@@ -50,17 +51,17 @@
     }
 
     .bili-comment.browser-pc * a:hover {
-      color: var(--bew-theme-color-80);
+      color: var(--bew-theme-foreground);
     }
 
     // 登录后发表评论
     .reply-box.disabled .box-normal .reply-box-warp .disable-mask .no-login-mask .login-btn:hover {
-      background-color: var(--bew-theme-color-80);
+      background-color: var(--bew-theme-color);
     }
 
     // 登录后查看评论
     .reply-list .login-prompt:hover {
-      background-color: var(--bew-theme-color-40);
+      background-color: var(--bew-theme-surface-hover);
     }
 
     .reply-content-container .reply-content .icon,
@@ -76,7 +77,6 @@
   // #region dark mode adaption part
   &.dark {
     // 将个性化配色变量传入 Bilibili 评论组件的 Shadow DOM。
-    --bew-comment-replies-mask-bg: color-mix(in oklab, var(--bew-bg), transparent 15%);
     --bew-comment-tag-color: var(--bew-text-2);
     --bew-comment-tag-bg: var(--bew-fill-1);
     --bew-comment-box-border: var(--bew-border-color);
@@ -102,7 +102,7 @@
 
     @keyframes jumpReply {
       0% {
-        background-color: var(--bew-theme-color-10);
+        background-color: var(--bew-theme-surface);
       }
       100% {
         background-color: var(--bew-fill-1);
@@ -156,7 +156,7 @@
   .comment-bilibili-fold .comment-send .comment-submit:hover,
   .bb-comment .comment-send-lite .comment-submit:hover,
   .comment-bilibili-fold .comment-send-lite .comment-submit:hover {
-    background-color: var(--bew-theme-color-80);
+    background-color: var(--bew-theme-color);
   }
 
   .bb-comment .comment-header .tabs-order li:hover,
@@ -206,7 +206,7 @@
   }
 
   .textarea-container .comm-tool .comm-submit:hover {
-    background-color: var(--bew-theme-color-80) !important;
+    background-color: var(--bew-theme-color) !important;
   }
 
   .textarea-container textarea:hover,
@@ -241,7 +241,7 @@
   .comment-bilibili-fold .comment-send .comment-submit:hover,
   .bb-comment .comment-send-lite .comment-submit:hover,
   .comment-bilibili-fold .comment-send-lite .comment-submit:hover {
-    border-color: var(--bew-theme-color-80);
+    border-color: var(--bew-theme-foreground);
   }
 
   &.dark {

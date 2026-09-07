@@ -187,7 +187,7 @@ onBeforeUnmount(invalidateAuthorization)
       <div bg-white border="white 4">
         <QRCodeVue v-if="loginQRCodeUrl" :value="loginQRCodeUrl" :size="150" />
         <div v-else w-150px h-150px grid="~ place-items-center">
-          <div i-svg-spinners:ring-resize />
+          <SkeletonBlock width="150px" height="150px" radius="interactive" />
         </div>
       </div>
 

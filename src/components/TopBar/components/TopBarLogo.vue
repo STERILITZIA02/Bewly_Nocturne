@@ -5,6 +5,7 @@ import { ref } from 'vue'
 import bilibiliBrandLogoUrl from '~/assets/branding/bilibili-brand-logo.png'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { vLiquidGlass } from '~/utils/liquidGlass'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 import ChannelsPop from './pops/ChannelsPop.vue'
@@ -89,6 +90,7 @@ setupTopBarItemTransformer('channels', channelsPopRef)
           <ChannelsPop
             v-if="popupVisible.channels"
             ref="channelsPopRef"
+            v-liquid-glass
             class="bew-popover"
           />
         </Transition>

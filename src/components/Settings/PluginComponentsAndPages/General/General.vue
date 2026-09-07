@@ -94,22 +94,6 @@ watch(() => settings.value.language, (newValue) => {
       </SettingsItem>
     </SettingsItemGroup>
 
-    <SettingsItemGroup :title="$t('settings.group_memory_saving')">
-      <SettingsItem
-        :title="$t('settings.release_offscreen_images')"
-        :badge="$t('settings.badge_use_with_caution')"
-        right-width="auto"
-      >
-        <template #desc>
-          <span>{{ $t('settings.release_offscreen_images_desc') }}</span>
-          <span block class="bew-warning-text">
-            {{ $t('settings.release_offscreen_images_warning') }}
-          </span>
-        </template>
-        <Radio v-model="settings.releaseOffscreenVideoCardImages" />
-      </SettingsItem>
-    </SettingsItemGroup>
-
     <SettingsItemGroup :title="$t('settings.group_drawer_behavior')">
       <SettingsItem :title="$t('settings.drawer_escape_behavior')" right-width="auto">
         <Select v-model="settings.drawerEscapeBehavior" :options="drawerEscapeBehaviorOptions" w="160px" />

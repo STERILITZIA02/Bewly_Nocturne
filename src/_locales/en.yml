@@ -133,7 +133,6 @@ settings:
   category_appearance_desc: Configure frosted glass, theme colors, fonts, custom styles, and page style adaptation.
   breadcrumb: Settings location
   group_interaction_layout: Interaction & Layout
-  group_memory_saving: Memory Saving
   home_grid_layout: Home video layout
   home_grid_layout_desc: Choose an adaptive grid or a one- or two-column list for Home videos.
   group_watch_later_layout: Watch Later Layout
@@ -300,6 +299,25 @@ settings:
   topbar_display_settings_desc: Adjust how the top bar behaves across pages and interaction modes.
   group_navigation: Dock & Sidebar
   group_dock: Dock
+  group_liquid_glass: Floating surfaces
+  liquid_glass: Liquid glass
+  liquid_glass_desc: Apply to the Dock, bottom playback controls, standalone search fields and top bar popovers. Settings windows, their navigation and the playback sidebar retain frosted glass; inner controls remain solid.
+  liquid_glass_paused: Frosted glass is disabled globally. Liquid glass is paused and floating panels use solid surfaces.
+  liquid_glass_mode: Refraction style
+  liquid_glass_mode_standard: Standard
+  liquid_glass_mode_polar: Rounded
+  liquid_glass_mode_prominent: Vivid
+  liquid_glass_refraction: Refraction strength
+  liquid_glass_blur: Blur amount
+  liquid_glass_blur_desc: Set the background blur radius for all liquid glass surfaces. 0 px is the clearest. Top edge blur is unchanged.
+  liquid_glass_tint: Glass tint
+  liquid_glass_tint_theme: Match light/dark
+  liquid_glass_tint_custom: Custom
+  liquid_glass_tint_color: Custom glass color
+  liquid_glass_tint_opacity: Tint strength
+  liquid_glass_tint_opacity_desc: 0% is untinted and 100% is solid. Theme tint is whiter in light mode, blacker in dark mode and deeper in OLED. Custom colors use the selected opacity evenly.
+  liquid_glass_dispersion: Edge color dispersion
+  liquid_glass_saturation: Color saturation
   group_sidebar: Sidebar
   group_sidebar_desc: >-
     Located on the right or left side of pages other than the homepage,
@@ -600,9 +618,6 @@ settings:
   video_card_shadow_reset: Reset shadow settings
   video_card_layout: Video card layout
   video_card_layout_desc: Switch between the redesigned card and the legacy layout.
-  release_offscreen_images: Reclaim offscreen cover memory
-  release_offscreen_images_desc: Unload cover image resources outside the retained range to reduce long-list memory usage.
-  release_offscreen_images_warning: 'Warning: reclaiming offscreen memory may cause stutter when images are rendered again. Images are not reclaimed by default.'
   video_card_layout_option:
     modern: Modern layout
     old: Classic layout

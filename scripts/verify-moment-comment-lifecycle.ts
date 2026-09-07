@@ -127,10 +127,13 @@ export async function verifyMomentCommentLifecycle() {
   const file = await readFile(new URL('../src/components/MomentCard/MomentCommentSection.vue', import.meta.url), 'utf8')
   const { descriptor } = parse(file)
   const component = evaluate(compileScript(descriptor, { id: 'comment-lifecycle', inlineTemplate: true }).content).default
+  const skeleton = parse(await readFile(new URL('../src/components/SkeletonBlock.vue', import.meta.url), 'utf8')).descriptor
+  const SkeletonBlock = evaluate(compileScript(skeleton, { id: 'comment-skeleton', inlineTemplate: true }).content).default
   const cache = sessions.createMomentCommentSessionCache('1:1')
   const moment = vue.ref({ id: '123', commentCount: 40, commentId: '999', commentType: 17 } as DisplayMoment)
   const mount = () => {
     const app = renderer.createApp({ setup: () => () => vue.h(component, { moment: moment.value }) })
+    app.component('SkeletonBlock', SkeletonBlock)
     app.provide(sessions.MOMENT_COMMENT_SESSIONS, cache)
     app.mount(host)
     return app

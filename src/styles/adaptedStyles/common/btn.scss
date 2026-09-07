@@ -3,11 +3,12 @@
     .btn.primary {
       background-color: var(--bew-theme-color) !important;
       border-color: var(--bew-theme-color) !important;
+      color: var(--bew-on-theme-color) !important;
     }
     .btn.primary:focus,
     .btn.primary:hover {
-      background-color: var(--bew-theme-color-80) !important;
-      border-color: var(--bew-theme-color-80) !important;
+      background-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-theme-foreground) !important;
     }
 
     .btn.default {
@@ -39,6 +40,7 @@
     .be-pager-item-active {
       background-color: var(--bew-theme-color);
       border-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
   }
 

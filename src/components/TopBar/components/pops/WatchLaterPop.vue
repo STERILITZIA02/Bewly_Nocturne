@@ -5,7 +5,6 @@ import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
-import Loading from '~/components/Loading.vue'
 import Picture from '~/components/Picture.vue'
 import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
@@ -17,6 +16,8 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { isHomePage, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
+
+import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
 const topBarStore = useTopBarStore()
 const { t } = useI18n()
@@ -145,9 +146,8 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
       ref="scrollContainer"
       class="bew-popover__body bew-popover__scroll bew-popover__list watch-later-pop__scroll"
     >
-      <Loading
+      <PopoverListSkeleton
         v-if="isLoadingWatchLater && watchLaterList.length === 0"
-        class="bew-popover__state"
       />
 
       <Empty
@@ -278,7 +278,7 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 
       <!-- loading -->
       <Transition name="fade">
-        <Loading v-if="isLoadingWatchLater && watchLaterList.length !== 0" m="b-4" />
+        <PopoverListSkeleton v-if="isLoadingWatchLater && watchLaterList.length !== 0" :count="2" />
       </Transition>
 
       <!-- no more content -->
@@ -306,8 +306,8 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
 }
 
 .watch-later-pop__media {
-  flex: 0 0 144px;
-  width: 144px;
+  flex: 0 0 var(--bew-popover-media-width);
+  width: var(--bew-popover-media-width);
 }
 
 .watch-later-pop__cover {

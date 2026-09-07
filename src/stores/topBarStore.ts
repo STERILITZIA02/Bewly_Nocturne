@@ -1375,7 +1375,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     if (!accountId)
       return
 
-    const claim = await sendMessage<TopBarStateClaim, TopBarRefreshClaim>(
+    const claim = await sendMessage<TopBarStateClaim, TopBarRefreshClaim | null | undefined>(
       TOP_BAR_STATE_MESSAGE.CLAIM_REFRESH,
       {
         accountId,
@@ -1383,6 +1383,13 @@ export const useTopBarStore = defineStore('topBar', () => {
         force: options.force,
       },
     )
+
+    // webextension-polyfill can resolve a closed message port without a reply.
+    // A claim always returns an object; an empty reply is a terminal transport failure.
+    if (!claim) {
+      disableSharedStateMessaging()
+      return
+    }
 
     // 主动刷新必须使用当前操作的 API 结果，不能先用 broker 中可能过期的
     // snapshot 覆盖本地状态；普通定时同步仍复用 snapshot。

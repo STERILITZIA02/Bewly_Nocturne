@@ -133,7 +133,6 @@ settings:
   category_appearance_desc: 配置毛玻璃、主题颜色、字体、自定义样式和其他页面的适配。
   breadcrumb: 设置位置
   group_interaction_layout: 交互与布局
-  group_memory_saving: 内存节省
   home_grid_layout: 首页视频布局
   home_grid_layout_desc: 调整首页视频内容的自适应网格或列表列数。
   group_watch_later_layout: 稍后再看布局
@@ -300,6 +299,25 @@ settings:
   topbar_display_settings_desc: 调整顶栏在不同页面和交互场景下的显示方式。
   group_navigation: Dock和侧边栏
   group_dock: Dock 栏
+  group_liquid_glass: 悬浮表面材质
+  liquid_glass: 液态玻璃
+  liquid_glass_desc: 用于 Dock、播放页底部控制栏、独立搜索框和顶栏浮层。设置窗口、左侧导航和播放页侧栏保留毛玻璃，内部控件保持实色。
+  liquid_glass_paused: 全局毛玻璃已关闭，液态玻璃暂停，悬浮面板使用实色表面。
+  liquid_glass_mode: 折射风格
+  liquid_glass_mode_standard: 标准
+  liquid_glass_mode_polar: 圆润
+  liquid_glass_mode_prominent: 鲜明
+  liquid_glass_refraction: 折射强度
+  liquid_glass_blur: 模糊度
+  liquid_glass_blur_desc: 统一调节液态玻璃的背景模糊半径，0 px 最清透，不影响顶部渐变模糊。
+  liquid_glass_tint: 玻璃色调
+  liquid_glass_tint_theme: 跟随明暗主题
+  liquid_glass_tint_custom: 自定义
+  liquid_glass_tint_color: 自定义玻璃颜色
+  liquid_glass_tint_opacity: 色调强度
+  liquid_glass_tint_opacity_desc: 0% 无着色，100% 为实色。跟随主题时浅色偏白、深色偏黑、OLED 更深；自定义颜色按所选不透明度均匀着色。
+  liquid_glass_dispersion: 边缘色散
+  liquid_glass_saturation: 色彩饱和度
   group_sidebar: 侧边栏
   group_sidebar_desc: 位于主页以外的页面右侧或左侧，通常有亮/暗模式切换按钮和设置按钮。
   group_color: 颜色
@@ -667,9 +685,6 @@ settings:
   video_card_shadow_reset: 重置阴影设置
   video_card_layout: 视频卡片布局
   video_card_layout_desc: 在新版与旧版视频卡片显示样式之间切换。
-  release_offscreen_images: 回收离屏封面内存
-  release_offscreen_images_desc: 视频封面离开保留范围后卸载图片资源，降低长列表内存占用。
-  release_offscreen_images_warning: 警告：离屏回收内存功能可能会带来图片重新渲染上的性能卡顿，默认不回收。
   video_card_layout_option:
     modern: 新版
     old: 经典版

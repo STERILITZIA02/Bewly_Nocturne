@@ -89,15 +89,14 @@ function goToNextPage() {
 </script>
 
 <template>
-  <div v-if="totalPages > 1" class="pagination">
+  <div v-if="totalPages > 1" class="pagination" :aria-busy="loading">
     <button
       class="pagination-btn"
       :disabled="disabled || loading || currentPage === 1"
       :aria-label="t('search.pagination.previous')"
       @click="goToPrevPage"
     >
-      <div v-if="loading" class="i-tabler:loader-2 animate-spin" />
-      <div v-else class="i-tabler:chevron-left" />
+      <div class="i-tabler:chevron-left" />
     </button>
 
     <template v-for="(page, index) in pageNumbers" :key="index">
@@ -113,8 +112,8 @@ function goToNextPage() {
         :aria-current="page === currentPage ? 'page' : undefined"
         @click="handlePageChange(page)"
       >
-        <div v-if="loading && page === currentPage" class="i-tabler:loader-2 animate-spin" />
-        <span v-else>{{ page }}</span>
+        <span>{{ page }}</span>
+        <span v-if="loading && page === currentPage" class="pagination-loading-mark" data-bew-skeleton aria-hidden="true" />
       </button>
     </template>
 
@@ -124,8 +123,7 @@ function goToNextPage() {
       :aria-label="t('search.pagination.next')"
       @click="goToNextPage"
     >
-      <div v-if="loading" class="i-tabler:loader-2 animate-spin" />
-      <div v-else class="i-tabler:chevron-right" />
+      <div class="i-tabler:chevron-right" />
     </button>
   </div>
 </template>
@@ -141,6 +139,7 @@ function goToNextPage() {
 }
 
 .pagination-btn {
+  position: relative;
   min-width: 2.5rem;
   height: 2.5rem;
   padding: 0 0.75rem;
@@ -185,17 +184,13 @@ function goToNextPage() {
   }
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.animate-spin {
-  animation: spin 1s linear infinite;
+.pagination-loading-mark {
+  position: absolute;
+  left: var(--bew-space-2);
+  right: var(--bew-space-2);
+  bottom: var(--bew-space-1);
+  height: var(--bew-space-0-5);
+  border-radius: var(--bew-radius-full);
 }
 
 .pagination-ellipsis {

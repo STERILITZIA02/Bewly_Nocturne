@@ -1,0 +1,4 @@
+.bew-title-auto {
+  font-size: clamp(var(--bew-font-size-control), 5cqw, var(--bew-font-size-heading));
+  line-height: var(--bew-line-height-heading);
+}

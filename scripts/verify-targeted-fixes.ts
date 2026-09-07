@@ -10,9 +10,9 @@ import type { MomentCommentItem } from '../src/components/MomentCard/commentUtil
 import { normalizeMomentComment, normalizeMomentCommentPage, normalizeMomentCommentRepliesPage } from '../src/components/MomentCard/commentUtils'
 import {
   buildMomentForwardRequest,
+  createMomentDisclosureCache,
   createMomentForwardSubmissionController,
   createMomentTopicSearchController,
-  getCachedMomentDisclosure,
   insertMomentForwardEmoji,
   normalizeForwardCount,
   normalizeMomentForwardEmotePackages,
@@ -20,7 +20,6 @@ import {
   parseMomentForwardTokens,
   resolveForwardCountAfterSuccess,
   serializeMomentForwardContents,
-  setCachedMomentDisclosure,
   toggleMomentDisclosure,
 } from '../src/components/MomentCard/momentForwardContent'
 import type { DisplayMoment } from '../src/components/MomentCard/types'
@@ -81,6 +80,7 @@ import {
 import { normalizeVideoCardCoverRatio } from '../src/utils/videoCardLayout'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
 import { playbackFunctions, readPlaybackSource } from './playbackSource'
+import { FAVORITES_SOURCE_FILES, FOR_YOU_SOURCE_FILES, MOMENTS_SOURCE_FILES, readSourceFiles } from './refactoredSources'
 import { verifyFunctionalAuditFixes } from './verify-functional-audit-fixes'
 import { verifyMomentPlayerPorts } from './verify-moment-player-ports'
 
@@ -537,7 +537,7 @@ function verifyWidescreenSidebarRevealPolicy() {
     pointerX: 0,
     viewportStart: 0,
     viewportEnd: 1920,
-  }), 1280)
+  }), 1632)
   assert.equal(resolveWidescreenSidebarResizeWidth({
     position: 'right',
     pointerX: 1800,
@@ -550,10 +550,15 @@ function verifyWidescreenSidebarRevealPolicy() {
     viewportStart: 0,
     viewportEnd: 1920,
   }), 520)
-  assert.equal(clampWidescreenSidebarWidth(800, 1000), 2000 / 3)
-  assert.equal(normalizeWidescreenSidebarStoredWidth(Number.NaN), 460)
+  assert.equal(clampWidescreenSidebarWidth(800, 1000), 800)
+  assert.equal(clampWidescreenSidebarWidth(1000, 1000), 850)
+  assert.equal(clampWidescreenSidebarWidth(0, 1920), 960)
+  assert.equal(clampWidescreenSidebarWidth(0, 1440), 720)
+  assert.equal(clampWidescreenSidebarWidth(4000, 3840), 3264)
+  assert.equal(normalizeWidescreenSidebarStoredWidth(Number.NaN), 0)
+  assert.equal(normalizeWidescreenSidebarStoredWidth(0), 0)
   assert.equal(normalizeWidescreenSidebarStoredWidth(120), 360)
-  assert.equal(normalizeWidescreenSidebarStoredWidth(2600), 1920)
+  assert.equal(normalizeWidescreenSidebarStoredWidth(2600), 2600)
 }
 
 function verifyRandomPlayRetryPolicy() {
@@ -1616,10 +1621,15 @@ async function verifyMomentForwardContracts() {
   assert.equal(toggleMomentDisclosure('forward', 'forward'), 'none')
   assert.equal(toggleMomentDisclosure('comments', 'forward'), 'forward')
   assert.equal(toggleMomentDisclosure('forward', 'comments'), 'comments')
-  setCachedMomentDisclosure('test:moment', 'forward')
-  assert.equal(getCachedMomentDisclosure('test:moment'), 'forward')
-  setCachedMomentDisclosure('test:moment', 'none')
-  assert.equal(getCachedMomentDisclosure('test:moment'), 'none')
+  const disclosures = createMomentDisclosureCache()
+  disclosures.set('test:moment', 'forward')
+  assert.equal(disclosures.get('test:moment'), 'forward')
+  assert.equal(createMomentDisclosureCache().get('test:moment'), 'none')
+  disclosures.set('test:moment', 'none')
+  assert.equal(disclosures.get('test:moment'), 'none')
+  disclosures.set('test:moment', 'comments')
+  disclosures.clear()
+  assert.equal(disclosures.get('test:moment'), 'none')
 }
 
 async function verifyComponentContracts() {
@@ -1671,7 +1681,7 @@ async function verifyComponentContracts() {
     readFile(`${root}/src/components/MomentCard/MomentForwardTopicPicker.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/momentForwardContent.ts`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/useMomentForwardComposer.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/background/messageListeners/api/moment.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Notifications/whisper/ConversationView.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/bewlyBootOverlay.ts`, 'utf8'),
@@ -1817,10 +1827,10 @@ async function verifyComponentContracts() {
   assert.match(momentsPage, /forwardCount: resolveMomentForwardCount\(id, raw\.modules\?\.module_stat\?\.forward\?\.count\)/)
   assert.match(momentsPage, /function handleMomentForwardCountChange/)
   assert.match(momentsPage, /forwardCountOverrides/)
-  assert.match(momentsPage, /canonicalMoment/)
-  assert.match(momentsPage, /momentColumns\.value = momentColumns\.value\.map\(updateItems\)/)
-  assert.match(momentsPage, /momentsFeedCache\.value = \{[\s\S]{0,120}entries: nextEntries/)
-  assert.match(momentsPage, /saveMomentsCache\(filter, entry\)/)
+  assert.match(momentsPage, /const updated = feedReader\.updateMoment\(id, patch\)/)
+  assert.match(momentsPage, /momentLayout\.updateMoment\(updated\)/)
+  assert.match(momentsPage, /feedCache\.updateMoment\(id/)
+  assert.match(momentsPage, /applyMomentPatch\(momentId, \{ forwardCount \}\)/)
   assert.match(momentsPage, /@forward-count-change="handleMomentForwardCountChange"/)
   assert.match(momentsPage, /bewly-moment-image-viewer-open/)
   assert.match(momentsPage, /moment-image-viewer__nav:focus-visible/)
@@ -1835,8 +1845,9 @@ async function verifyComponentContracts() {
   assert.match(momentsPage, /handlePageRefresh\.value === refresh/)
   assert.match(momentsPage, /\.moments-publish-link \{[\s\S]{0,240}border: 1px solid var\(--bew-surface-border-color\)/)
   assert.doesNotMatch(bootOverlay, /radial-gradient|box-shadow/)
-  assert.match(bootOverlay, /border-top-color: var\(--bew-theme-color/)
-  assert.match(skeletonBlock, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
+  assert.match(bootOverlay, /data-bew-skeleton/)
+  assert.match(skeletonBlock, /data-bew-skeleton/)
+  assert.match(await readFile(`${root}/src/styles/skeleton.scss`, 'utf8'), /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
   assert.match(historyPage, /<VideoListSkeleton v-else-if="isLoading && historyList\.length === 0"/)
 
   assert.match(historyPop, /watch\(currentAccountId/)
@@ -1890,12 +1901,12 @@ async function verifyAuthCloudMomentsContracts() {
     readFile(`${root}/src/components/TopBar/components/pops/UserPanelPop.vue`, 'utf8'),
     readFile(`${root}/src/components/Dialog.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/Home/Home.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
     readFile(`${root}/src/utils/settingsCloudSyncProtocol.ts`, 'utf8'),
     readFile(`${root}/src/background/settingsCloudSync.ts`, 'utf8'),
     readFile(`${root}/src/background/settingsStorageCoordinator.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/About/About.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/features/opusDetailDrawerLayout.ts`, 'utf8'),
   ])
@@ -1958,10 +1969,11 @@ async function verifyAuthCloudMomentsContracts() {
   assert.match(moments, /if \(isExtensionContextInvalidatedError\(error\)\) \{[\s\S]{0,180}momentsExtensionContextInvalidated = true[\s\S]{0,180}return/)
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /isInitialLoading\.value = moments\.value\.length === 0/)
-  assert.match(moments, /likingMomentRequests\.get\(moment\.id\) === requestId/)
+  assert.match(moments, /likingMomentRequests\.get\(moment\.id\)\?\.requestId === requestId/)
   assert.match(moments, /const cursorAdvanced = nextOffset !== requestOffset/)
   assert.match(moments, /if \(!pageApplied && previousPagination\)/)
-  assert.match(moments, /isMomentMutationCurrent\(requestAccountId\)/)
+  assert.match(moments, /const owner = lifetime\.capture\(\)/)
+  assert.match(moments, /if \(!owner\.isCurrent\(\)\)/)
   assert.match(moments, /shouldContinueIframeFocusRetry/)
   assert.doesNotMatch(moments, /setInterval/)
   assert.match(momentCard, /role="button"[\s\S]{0,180}@click="handleForwardOriginClick"/)
@@ -1997,7 +2009,7 @@ async function verifyLoadingContracts() {
     readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Home/Home.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/WatchLater/WatchLater.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Favorites/FavoritesPage.vue`, 'utf8'),
+    readSourceFiles(FAVORITES_SOURCE_FILES),
     readFile(`${root}/src/contentScripts/views/Anime/Anime.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Anime/components/AnimeTimeTable.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/pages/ArticleSearchPage.vue`, 'utf8'),
@@ -2007,12 +2019,13 @@ async function verifyLoadingContracts() {
   ])
 
   for (const source of [loading, smoothLoading]) {
-    assert.match(source, /<PageLoadingIndicator/)
     assert.doesNotMatch(source, /loading\.gif|<img\b/)
   }
+  assert.match(loading, /<SkeletonBlock/)
+  assert.match(smoothLoading, /<PageLoadingIndicator/)
   assert.match(app, /loadingComponent: PageAsyncLoading/)
-  assert.match(app, /watch\([\s\S]{0,160}\(\) => activatedPage\.value,[\s\S]{0,180}handleReachBottom\.value = undefined/)
-  assert.match(home, /loadingComponent: PageAsyncLoading/)
+  assert.match(app, /watch\(\[\s+activatedPage,[\s\S]*?\], \(\) => \{\s+cancelPendingRefreshScroll\(\)\s+handlePageRefresh\.value = undefined\s+handleReachBottom\.value = undefined\s+handleUndoRefresh\.value = undefined\s+handleForwardRefresh\.value = undefined/)
+  assert.match(home, /loadingComponent: \{ render: \(\) => h\(PageAsyncLoading, \{ contentOnly: true, gridLayout: homeGridLayout\.value \}\)/)
   assert.match(watchLater, /<VideoListSkeleton[\s\S]{0,180}:action-count="3"/)
   assert.match(favorites, /<ArticleCardSkeleton/)
   assert.match(anime, /<BangumiCardSkeleton/)
@@ -2047,7 +2060,7 @@ async function verifyP1Contracts() {
     readFile(`${root}/src/utils/authProvider.ts`, 'utf8'),
     readFile(`${root}/src/background/index.ts`, 'utf8'),
     readFile(`${root}/src/manifest.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
     readFile(`${root}/src/components/VideoCard/VideoCardContextMenu/components/DislikeDialog.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/composables/useVideoCardLogic.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/components/ShadowCurveEditor.vue`, 'utf8'),
@@ -2325,7 +2338,7 @@ async function verifyP2WidescreenControl() {
   assert.match(storage, /bewlyWidescreenLayoutPriority: 'video-first'/)
   assert.match(storage, /bewlyWidescreenCenterVideo: false/)
   assert.match(storage, /bewlyWidescreenSidebarWidth: number/)
-  assert.match(storage, /bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH/)
+  assert.match(storage, /bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_WIDTH/)
   assert.doesNotMatch(playbackPage, /bewlyWidescreenSidebarWidth/)
   assert.match(playbackPage, /settings\.defaultVideoPlayerMode/)
   assert.doesNotMatch(playbackPage, /settings\.showBewlyWidescreenButton/)
@@ -2399,22 +2412,19 @@ async function verifyP2WidescreenControl() {
   assert.match(sidebarSurfaceStyles, /pointer-events: none/)
   assert.match(sidebarSurfaceStyles, /height: calc\(100dvh - var\(--bewly-widescreen-sidebar-floating-inset\) \* 2\)/)
   assert.match(sidebarSurfaceStyles, /margin: var\(--bewly-widescreen-sidebar-floating-inset\)/)
-  assert.match(sidebarSurfaceStyles, /background: transparent/)
+  assert.match(sidebarSurfaceStyles, /background: var\(--bew-elevated-alt\)/)
   assert.match(sidebarSurfaceStyles, /border: 1px solid var\(--bew-surface-border-color\)/)
   assert.match(sidebarSurfaceStyles, /border-radius: var\(--bewly-widescreen-shell-radius\)/)
   assert.match(widescreen, /--bewly-widescreen-shell-radius: var\(--bew-modal-radius, 24px\)/)
   assert.match(sidebarSurfaceStyles, /corner-shape: var\(--bew-corner-shape\)/)
   assert.match(sidebarSurfaceStyles, /box-shadow: var\(--bew-shadow-3\), var\(--bew-shadow-edge-glow-1\)/)
-  assert.match(sidebarSurfaceStyles, /backdrop-filter: none/)
+  assert.match(sidebarSurfaceStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(sidebarSurfaceStyles, /transform: translate3d\(var\(--bewly-widescreen-sidebar-offset\), 0, 0\)/)
   assert.match(sidebarSurfaceStyles, /transform var\(--bew-duration-moderate, 300ms\)/)
   assert.match(sidebarSurfaceStyles, /backface-visibility: hidden/)
-  const sidebarGlassLayerStyles = widescreen.slice(
-    widescreen.indexOf('.bewly-widescreen-sidebar::before'),
-    widescreen.indexOf('.bewly-widescreen-sidebar-resizer'),
-  )
-  assert.match(sidebarGlassLayerStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
-  assert.match(sidebarGlassLayerStyles, /background: var\(--bew-elevated-alt\)/)
+  assert.doesNotMatch(widescreen, /\.bewly-widescreen-sidebar::before/)
+  assert.match(widescreen, /--bewly-widescreen-sidebar-bg: transparent/)
+  assert.match(widescreen, /--bewly-widescreen-surface-bg: transparent/)
   assert.match(sidebarSurfaceStyles, /--bewly-widescreen-sidebar-offset: var\(--bewly-widescreen-sidebar-reserved-width\)/)
   assert.doesNotMatch(sidebarSurfaceStyles, /-12px 0 28px|12px 0 28px/)
   assert.match(widescreen, /data-centered="true"\] \.bewly-widescreen-player-frame > \*[\s\S]{0,220}100vw - var\(--bewly-widescreen-sidebar-reserved-width\)/)
@@ -2557,23 +2567,27 @@ async function verifyP2WidescreenControl() {
   assert.match(anchoredPlayerReplacementSection, /currentState\.playerEl = replacement/)
   assert.match(anchoredPlayerReplacementSection, /setupAspectObservers\(currentState\)/)
   assert.match(anchoredPlayerReplacementSection, /setupSidebarToggleAutoHide\(currentState\)/)
-  const playbackPageLoadingSection = playbackFunctions(widescreen, 'createWidescreenLoadingSkeleton', 'showWidescreenLoading', 'injectLoadingStyle')
+  const playbackPageLoadingSection = playbackFunctions(widescreen, 'createWidescreenLoadingSkeleton', 'createLoadingSkeletonBlock', 'showWidescreenLoading', 'injectLoadingStyle')
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-stage/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-player/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-controls/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-sidebar/)
   assert.match(playbackPageLoadingSection, /bewly-widescreen-loading-skeleton-list-row/)
   assert.match(playbackPageLoadingSection, /aria-hidden', 'true'/)
-  assert.match(playbackPageLoadingSection, /@keyframes bewly-widescreen-loading-shimmer/)
-  assert.match(playbackPageLoadingSection, /background: var\(--bew-skeleton/)
-  assert.match(playbackPageLoadingSection, /backdrop-filter: var\(--bew-filter-glass-1\)/)
+  assert.match(playbackPageLoadingSection, /data-bew-skeleton/)
+  assert.match(playbackPageLoadingSection, /\$\{SKELETON_CSS\}/)
+  const skeletonPaint = await readFile(`${root}/src/styles/skeleton.scss`, 'utf8')
+  assert.match(skeletonPaint, /@keyframes bew-skeleton-shimmer/)
+  assert.match(skeletonPaint, /background(?:-color)?: var\(--bew-skeleton/)
+  assert.match(playbackPageLoadingSection, /background: var\(--bew-elevated-alt-solid\)/)
+  assert.doesNotMatch(playbackPageLoadingSection, /backdrop-filter: var\(--bew-filter-glass-1\)/)
   assert.match(playbackPageLoadingSection, /@media \(prefers-reduced-motion: reduce\)/)
   assert.match(playbackPageLoadingSection, /data-sidebar-layout="compact"/)
   assert.match(playbackPageLoadingSection, /overlay\.dataset\.sidebarPosition = settings\.value\.bewlyWidescreenSidebarPosition/)
   assert.doesNotMatch(playbackPageLoadingSection, /loading\.gif|bewly-widescreen-loading-icon/)
   assert.match(widescreen, /@media \(prefers-reduced-motion: reduce\)/)
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header[\s\S]{0,80}display: none !important/)
-  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header[\s\S]{0,260}background: var\(--bewly-widescreen-sidebar-bg\) !important/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-header \{[^}]*background: var\(--bewly-widescreen-sidebar-bg\) !important/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bui-collapse-arrow[\s\S]{0,80}display: none !important/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-filter[\s\S]{0,80}pointer-events: auto/)
   assert.match(widescreen, /\.bewly-widescreen-panel-danmaku \.bpx-player-wraplist[\s\S]{0,180}display: flex[\s\S]{0,180}height: 100% !important/)
@@ -2584,7 +2598,8 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf('/* B 站表情面板可能向上展开'),
   )
   assert.doesNotMatch(danmakuPanelStyles, /max-height: none !important/)
-  assert.doesNotMatch(widescreen, /--bew-comment-replies-(?:mask-bg|loading-animation)/)
+  assert.doesNotMatch(widescreen, /--bew-comment-replies-loading-animation/)
+  assert.match(widescreen, /\.bewly-widescreen-panel-comment \{\s*--bew-comment-replies-mask-bg: color-mix\(in oklab, var\(--bewly-widescreen-sidebar-bg\), transparent 15%\)/)
   assert.match(widescreen, /danmakuFocusable:/)
   const danmakuSelectorSection = widescreen.slice(
     widescreen.indexOf('danmaku: ['),
@@ -2627,13 +2642,13 @@ async function verifyP2WidescreenControl() {
     widescreen.indexOf('/* B 站表情面板可能向上展开'),
   )
   assert.match(danmakuSkeletonStyles, /grid-template-columns:/)
-  assert.match(danmakuSkeletonStyles, /background: var\(--bew-skeleton\)/)
-  assert.match(danmakuSkeletonStyles, /\.bewly-widescreen-danmaku-skeleton__block[\s\S]{0,420}animation: bewly-widescreen-skeleton-shimmer/)
+  assert.match(skeletonPaint, /background-color: var\(--bew-skeleton/)
+  assert.match(playbackFunctions(widescreen, 'createDanmakuSkeleton'), /data-bew-skeleton/)
   assert.doesNotMatch(danmakuSkeletonStyles, /\.bewly-widescreen-danmaku-skeleton::after/)
-  assert.match(widescreen, /@keyframes bewly-widescreen-skeleton-shimmer/)
+  assert.match(skeletonPaint, /animation: bew-skeleton-shimmer/)
   assert.match(danmakuPanelStyles, /\.bpx-player-dm-wrap[\s\S]{0,180}position: relative !important/)
   assert.match(danmakuPanelStyles, /\.bui-collapse-header[\s\S]{0,320}height: auto !important/)
-  assert.match(danmakuPanelStyles, /\.bui-collapse-body[\s\S]{0,320}display: block !important[\s\S]{0,180}flex: 1 1 0 !important/)
+  assert.match(danmakuPanelStyles, /\.bui-collapse-body \{[^}]*display: block !important[^}]*flex: 1 1 0 !important/)
   assert.match(widescreen, /return String\(i18n\.global\.t\(key\)\)/)
   assert.doesNotMatch(widescreen, /i18n\.global\.t\(key, settings\.value\.language\)/)
   assert.doesNotMatch(widescreen, /startAfterPageLoad|loadFallbackTimer|clearLoadFallbackTimer/)
@@ -2652,7 +2667,7 @@ async function verifyP2WidescreenControl() {
   assert.match(sidebarTopStyles, /display: flex/)
   assert.match(sidebarTopStyles, /flex-direction: column/)
   assert.match(widescreen, /\.bewly-widescreen-metadata-slot \.video-info-meta,[\s\S]{0,420}position: static !important;[\s\S]{0,220}height: auto !important/)
-  assert.match(widescreen, /\.bewly-widescreen-up-slot:not\(:empty\)[\s\S]{0,260}margin-top: var\(--bew-space-2\)/)
+  assert.match(widescreen, /\.bewly-widescreen-author-actions \{[\s\S]{0,400}margin-top: var\(--bew-space-1\)/)
   assert.match(widescreen, /\.bewly-widescreen-up-slot \.up-panel-container,[\s\S]{0,360}position: relative !important;[\s\S]{0,180}inset: auto !important/)
   assert.match(widescreen, /className = 'bewly-widescreen-sidebar-resizer'/)
   assert.match(widescreen, /role', 'separator'/)
@@ -3095,7 +3110,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /panels\.playlist\.addEventListener\('scroll', handlePlaylistScroll/)
   assert.match(widescreen, /panels\.playlist\.removeEventListener\('scroll', handlePlaylistScroll\)/)
   assert.match(widescreen, /\.pod-expand-btn,[\s\S]{0,140}PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR[\s\S]{0,100}display: none !important/)
-  assert.match(widescreen, /\.subscribe-btn:hover \{[\s\S]{0,180}background: var\(--bew-theme-color-20\) !important/)
+  assert.match(widescreen, /\.subscribe-btn:hover \{[\s\S]{0,180}background: var\(--bew-theme-surface-hover\) !important/)
   assert.match(widescreen, /\.video-pod__header \.header-bottom > \.right \{[\s\S]{0,260}min-width: max-content !important[\s\S]{0,120}flex: 0 0 auto !important/)
   const subscribeButtonStyles = widescreen.slice(
     widescreen.indexOf('.bewly-widescreen-panel-playlist .subscribe-btn {'),
@@ -3130,11 +3145,11 @@ async function verifyP2WidescreenControl() {
   assert.match(fallbackRenderSection, /fallbackDescription\?\.dataset\.sourceSignature !== descriptionSignature/)
   assert.match(fallbackRenderSection, /createFallbackStatIcon\(icon\)/)
   assert.match(widescreen, /\.bewly-widescreen-fallback-stat-icon \{[\s\S]{0,160}width: var\(--bew-icon-size-sm\)/)
-  assert.match(widescreen, /\.bewly-widescreen-fallback-stat:hover \{[\s\S]{0,140}color: var\(--bew-theme-color\)[\s\S]{0,140}background: var\(--bewly-widescreen-control-hover-bg\)/)
+  assert.doesNotMatch(widescreen, /\.bewly-widescreen-fallback-stat:hover/)
+  assert.match(fallbackRenderSection, /item\.setAttribute\('aria-disabled', 'true'\)/)
   assert.match(widescreen, /\.bewly-widescreen-fallback-description \{[\s\S]{0,360}white-space: pre-wrap[\s\S]{0,100}word-break: break-word/)
   assert.match(widescreen, /const ownerReady = upResult\.found[\s\S]{0,180}bewly-widescreen-fallback-owner/)
-  assert.match(widescreen, /const toolbarReady = toolbarResult\.found[\s\S]{0,180}bewly-widescreen-fallback-stats/)
-  assert.match(widescreen, /top: ownerReady && \(toolbarReady \|\| metadataFound \|\| !!currentState\.videoInfoData\)/)
+  assert.match(widescreen, /top: ownerReady && toolbarResult\.found/)
   assert.match(widescreen, /\.video-toolbar-left-item:hover,[\s\S]{0,180}background: var\(--bewly-widescreen-control-hover-bg\) !important/)
   assert.match(widescreen, /function syncNativePlayerControlVisibility\([\s\S]{0,80}currentState: BewlyWidescreenState/)
   assert.match(widescreen, /resolveWidescreenControlSurfaceState\(\{/)
@@ -3410,13 +3425,13 @@ async function verifyUpstreamReliabilityContracts() {
     readFile(`${root}/src/utils/searchNavigation.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/SearchResults.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/TopBar/components/pops/MomentsPop.vue`, 'utf8'),
     readFile(`${root}/src/components/TopBar/components/pops/FavoritesPop.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCardGrid.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/VideoCard.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/components/VideoCardCover.vue`, 'utf8'),
-    readFile(`${root}/src/components/VideoCard/VideoCardSkeleton.vue`, 'utf8'),
+    readFile(`${root}/src/components/VideoCard/components/VideoCardInfo.vue`, 'utf8'),
     readFile(`${root}/src/components/TopBar/styles/index.scss`, 'utf8'),
     readFile(`${root}/src/logic/storage.ts`, 'utf8'),
   ])
@@ -3535,8 +3550,10 @@ async function verifyUpstreamReliabilityContracts() {
 
   assert.match(videoCardGrid, /--video-card-cover-max-width/)
   assert.match(videoCard, /max-width: var\(--video-card-cover-max-width, 400px\)/)
-  assert.match(videoCardSkeleton, /flex: var\(--video-card-cover-flex, 50\) 1 0/)
-  assert.match(videoCardSkeleton, /max-width: var\(--video-card-cover-max-width, 400px\)/)
+  assert.match(videoCard, /flex: var\(--video-card-cover-flex, 50\) 1 0/)
+  assert.match(videoCard, /:skeleton="infoSkeleton"/)
+  assert.match(videoCardSkeleton, /v-if="skeleton"/)
+  assert.match(videoCardSkeleton, /data-bew-skeleton/)
   assert.match(videoCard, /--video-card-cover-flex/)
   assert.match(videoCard, /--video-card-info-flex/)
   assert.match(videoCard, /if \(viewCount <= 0\)[\s\S]{0,80}return durationTag \? \[durationTag\] : tags/)
@@ -3885,7 +3902,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/utils/escapePriority.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/features/iframePhotoViewerDetector.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/utils/photoViewer.ts`, 'utf8'),
     readFile(`${root}/src/utils/randomPlay.ts`, 'utf8'),
@@ -3930,21 +3947,22 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(moments, /upListResizeObserver\.observe\(upListTrackRef\.value\)/)
   assert.match(moments, /gridClientWidth = gridRef\.value\?\.clientWidth \|\| mainRailWidth/)
   assert.match(moments, /:style="momentsGridStyle"/)
-  assert.match(moments, /resolveVirtualSpacerSize\(topPad, gap\)/)
+  assert.match(moments, /resolveVirtualSpacerSize\(metrics\.offset\(first\), gap\)/)
   assert.match(moments, /clearMomentPresentationForRefresh\(items\)/)
   assert.match(moments, /reapplyMomentFiltersFromCache\([\s\S]*maybeLoadMoreNearBottom\(\)/)
   assert.match(moments, /let attachedScrollViewport: HTMLElement \| null = null/)
   assert.match(moments, /attachedScrollViewport\?\.removeEventListener\('scroll', handleViewportScroll\)/)
-  assert.match(moments, /const MOMENTS_MEMORY_MAX_ITEMS = MOMENTS_CACHE_MAX_ITEMS/)
-  assert.match(moments, /moments\.value\.length >= MOMENTS_MEMORY_MAX_ITEMS/)
-  assert.match(moments, /function releasePreviewVideoElement\(video: HTMLVideoElement\)/)
-  assert.match(moments, /video\.srcObject = null/)
-  assert.match(moments, /video\.removeAttribute\('srcset'\)/)
+  assert.doesNotMatch(moments, /MOMENTS_MEMORY_MAX_ITEMS/)
+  assert.match(moments, /entry\.items\.slice\(-MOMENTS_CACHE_MAX_ITEMS\)/)
+  assert.match(moments, /function releaseMediaElement\(media: HTMLMediaElement\)/)
+  assert.match(moments, /media\.srcObject = null/)
+  assert.match(moments, /media\.removeAttribute\('srcset'\)/)
   assert.match(moments, /detailIframeRef\.value = null[\s\S]{0,120}detailFrameGeneration \+= 1/)
   assert.match(moments, /iframe !== detailIframeRef\.value[\s\S]{0,160}detailIframeGenerations\.get\(iframe\) !== detailFrameGeneration/)
   assert.match(momentCard, /moment-card--supports-wide-layout/)
   assert.match(momentCard, /moment-card--wide-single-image \.moment-card__gallery--1/)
-  assert.match(momentCard, /@container \(min-width: 880px\)/)
+  assert.match(momentCard, /@container \(min-width: #\{breakpoints\.\$moment-card-wide\}\)/)
+  assert.match(await readFile(`${root}/src/styles/_breakpoints.scss`, 'utf8'), /\$moment-card-wide: 880px/)
   assert.doesNotMatch(widescreen, /explicit priority ownership—not defaultPrevented alone|escapeArbitrationTimer/)
 }
 
@@ -3962,13 +3980,13 @@ async function verifyIncrementalCorrectnessContracts() {
     readFile(`${root}/src/background/contentScriptRefreshPrompt.ts`, 'utf8'),
     readFile(`${root}/vite.config.content.ts`, 'utf8'),
     readFile(`${root}/src/manifest.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Favorites/FavoritesPage.vue`, 'utf8'),
+    readSourceFiles(FAVORITES_SOURCE_FILES),
     readFile(`${root}/src/background/messageListeners/api/favorite.ts`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-CN.yml`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-TW.yml`, 'utf8'),
     readFile(`${root}/src/_locales/jyut.yml`, 'utf8'),
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readPlaybackSource(),
     readFile(`${root}/src/inject/index.ts`, 'utf8'),
@@ -3997,17 +4015,17 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(webAccessibleResources, /assets\/\*/)
 
   assert.match(favoriteApi, /editFavoriteFolder:[\s\S]{0,260}privacy: 0/)
-  assert.match(favorites, /const submittedFolderPublic = editFolderPublic\.value/)
-  assert.match(favorites, /privacy: getFavoriteFolderPrivacy\(submittedFolderPublic\)/)
-  assert.match(favorites, /folder\.attr = getFavoriteFolderEditedAttr\(folder\.attr, submittedFolderPublic\)/)
+  assert.match(favorites, /const isPublic = editFolderPublic\.value/)
+  assert.match(favorites, /privacy: getFavoriteFolderPrivacy\(isPublic\)/)
+  assert.match(favorites, /folder\.attr = getFavoriteFolderEditedAttr\(folder\.attr, isPublic\)/)
   assert.match(favorites, /SettingsSegmentedControl/)
   assert.match(favorites, /if \(folderId === defaultFolderId\.value\)[\s\S]{0,80}return/)
   const editFolderRequest = favorites.slice(
     favorites.indexOf('async function handleEditFolderConfirm'),
     favorites.indexOf('async function deleteFolders'),
   )
-  assert.ok(editFolderRequest.indexOf('if (res.code !== 0)') < editFolderRequest.indexOf('folder.title = title'))
-  assert.match(editFolderRequest, /catch \(error\)[\s\S]{0,180}edit_folder_failed/)
+  assert.match(editFolderRequest, /const result = await writes\.execute\(transaction\)[\s\S]*if \(!result\)\s+return[\s\S]*data\.applyFolderEdit/)
+  assert.match(favorites, /onError: \(\) => toast\.error\(t\('common.operation_failed'\)\)/)
   for (const locale of [cmnCn, cmnTw, jyut, en]) {
     assert.match(locale, /edit_folder:/)
     assert.match(locale, /folder_visibility:/)
@@ -4020,9 +4038,10 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(momentCard, /data-user-profile-spmid-follow="dynamic\.profile\.click"/)
   assert.match(momentCard, /@mouseenter="requestNativeUserProfile"/)
   assert.match(momentCard, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
-  assert.match(moments, /const hostFollowStatePromise = reset && requestHostMid/)
+  assert.match(moments, /const hostFollowStatePromise = request\.reset && requestHostMid/)
   assert.match(moments, /api\.user\.getRelations\(\{ fids: requestHostMid \}\)/)
-  assert.match(moments, /if \(followState !== 'unfollowed'\)[\s\S]{0,220}handleUpFilterChange\(''\)/)
+  assert.match(moments, /return result\.state !== 'unfollowed'/)
+  assert.match(moments, /if \('hostUnfollowed' in response\) \{\s+handleUpFilterChange\(''\)/)
   assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid })') < moments.indexOf('api.moment.getMomentsByUp({'))
   assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed,[\s\S]{0,120}\.bili-dialog-m,[\s\S]{0,120}\.video-share-popover[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
   assert.match(widescreen, /const NATIVE_ACTION_OVERLAY_SELECTOR = \[[\s\S]{0,120}'\.bili-dialog-m',[\s\S]{0,80}'\.video-share-popover'/)
@@ -4044,7 +4063,7 @@ async function verifyAuditRemediationContracts() {
   const [widescreen, nativeAdapter, moments, settingsComponent, anime, subscribedSeries, messaging, contentScript, viteConfig, globals] = await Promise.all([
     readPlaybackSource(),
     readFile(`${root}/src/utils/bewlyWidescreenNative.ts`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/Settings/Settings.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Anime/Anime.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/Home/components/SubscribedSeries.vue`, 'utf8'),
@@ -4114,11 +4133,19 @@ async function verifyP4CleanupContracts() {
 
   const widescreenTabStyles = widescreen.slice(
     widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-tab {`),
-    widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-tab.is-active::after`),
+    widescreen.indexOf(`#\${ROOT_ID} .bewly-widescreen-panels {`),
   )
-  assert.match(widescreenTabStyles, /font-size: var\(--bew-font-size-control/)
-  assert.match(widescreenTabStyles, /font-weight: var\(--bew-font-weight-semibold/)
-  assert.doesNotMatch(widescreenTabStyles, /\.is-active \{[\s\S]*font-weight:/)
+  assert.match(widescreenTabStyles, /flex: 1 1 0/)
+  assert.doesNotMatch(widescreenTabStyles, /font-size:|font-weight:/)
+  const segmentStyles = await readFile(`${root}/src/styles/segmentControl.scss`, 'utf8')
+  const tokens = await readFile(`${root}/src/styles/variables.scss`, 'utf8')
+  assert.match(widescreen, /\$\{SEGMENT_CONTROL_CSS\}/)
+  assert.match(widescreen, /bewly-widescreen-tab bew-segment-control__item/)
+  assert.match(segmentStyles, /font-size: var\(--bew-control-label-size\)/)
+  assert.match(segmentStyles, /font-weight: var\(--bew-control-label-weight\)/)
+  assert.match(tokens, /--bew-control-label-size: var\(--bew-font-size-control\)/)
+  assert.match(tokens, /--bew-control-label-weight: var\(--bew-font-weight-semibold\)/)
+  assert.doesNotMatch(segmentStyles, /\[data-active="true"\] \{[^}]*font-weight:/)
   for (const legacyStyle of [
     'padding: 8px 10px 8px',
     'font-size: 18px',
@@ -4167,8 +4194,8 @@ async function verifyP4CleanupContracts() {
 async function verifySemanticPortContracts() {
   const root = process.cwd()
   const [forYou, moments, momentCard, momentTypes, cmnCn, cmnTw, jyut, en] = await Promise.all([
-    readFile(`${root}/src/contentScripts/views/Home/components/ForYou.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/Moments/Moments.vue`, 'utf8'),
+    readSourceFiles(FOR_YOU_SOURCE_FILES),
+    readSourceFiles(MOMENTS_SOURCE_FILES),
     readFile(`${root}/src/components/MomentCard/MomentCard.vue`, 'utf8'),
     readFile(`${root}/src/components/MomentCard/types.ts`, 'utf8'),
     readFile(`${root}/src/_locales/cmn-CN.yml`, 'utf8'),
@@ -4216,8 +4243,9 @@ async function verifySemanticPortContracts() {
   }
 
   await assert.rejects(stat(`${root}/src/components/MomentCard/MomentVideoStrip.vue`))
-  assert.match(moments, /const GRID_GAP = 16/)
-  assert.match(momentCard, /@container \(min-width: 880px\)/)
+  assert.match(moments, /gap: GRID_GAP/)
+  assert.equal((await import('../src/utils/momentsLayout')).MOMENT_GRID_DIMENSIONS.gap, 16)
+  assert.match(momentCard, /@container \(min-width: #\{breakpoints\.\$moment-card-wide\}\)/)
   assert.match(momentCard, /grid-template-columns: minmax\(0, 3fr\) minmax\(320px, 2fr\)/)
 }
 

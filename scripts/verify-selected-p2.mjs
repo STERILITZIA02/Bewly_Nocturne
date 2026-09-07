@@ -7,12 +7,22 @@ import ts from 'typescript'
 import { compileScript, parse } from 'vue/compiler-sfc'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
+import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
+import { registerDockGlassChecks } from './verify-dock-glass.mjs'
+import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
+import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
+import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
+import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
+import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
+import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
+import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://www.bilibili.com/', pretendToBeVisual: true })
 const savedGlobals = new Map()
-for (const name of ['window', 'document', 'navigator', 'Node', 'Element', 'HTMLElement', 'SVGElement', 'ShadowRoot', 'MutationObserver', 'Event', 'KeyboardEvent', 'MouseEvent', 'CustomEvent', 'FocusEvent']) {
+for (const name of ['window', 'document', 'navigator', 'Document', 'Node', 'Element', 'HTMLElement', 'SVGElement', 'ShadowRoot', 'MutationObserver', 'Event', 'KeyboardEvent', 'MouseEvent', 'CustomEvent', 'FocusEvent', 'AbortController', 'AbortSignal']) {
   savedGlobals.set(name, Object.getOwnPropertyDescriptor(globalThis, name))
   Object.defineProperty(globalThis, name, { value: name === 'window' ? dom.window : dom.window[name], writable: true, configurable: true })
 }
@@ -43,11 +53,22 @@ const { computeAnchoredFloatingMenuPosition } = await import('../src/utils/float
 const { mergeWatchLaterItemsByAid } = await import('../src/utils/watchLaterList')
 const { createSelectOptionKey } = await import('../src/utils/selectOptionKey')
 const fieldLabels = await import('../src/components/formFieldLabel')
+const imageLoadQueue = await import('../src/utils/imageLoadQueue')
 const { useLoadMore } = await import('../src/contentScripts/views/SearchResults/composables/useLoadMore')
 const r = value => ({ value })
 const checks = []
 const check = (name, run) => checks.push({ name, run })
 registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
+registerAccountTransactionChecks(check, { Vue, compileComponent, flush })
+registerLongListResourceChecks(check, { Vue, compileComponent, flush })
+registerViewLifetimeChecks(check, { Vue, compileComponent, flush })
+registerDockGlassChecks(check, { Vue, compileComponent, flush })
+registerTopBarSyncChecks(check, { Vue, flush })
+registerSurfaceMaterialChecks(check, { Vue, compileComponent, flush })
+registerLoadingSkeletonChecks(check, { Vue, compileComponent, flush })
+registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent, flush })
+registerPlaybackContentChecks(check)
+registerAdvertisingRuleChecks(check, { flush })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -60,73 +81,46 @@ function deferred() {
 }
 
 check('P2-01/02 history clear invalidates old reads; submitted query owns pagination', async () => {
+  const { useHistoryTimeline } = await import('../src/contentScripts/views/History/useHistoryTimeline')
   const oldRead = deferred()
   const cleared = deferred()
   const searches = []
   const errors = []
-  const context = await loadSourceFunctions('../src/contentScripts/views/History/History.vue', [
-    'getHistoryList',
-    'searchHistoryList',
-    'clearAllHistory',
-    'handleSearch',
-    'isSearchMode',
-    'resetListState',
-    'reloadCurrentMode',
-  ], {
-    isLoading: r(false),
-    isClearingHistory: r(false),
-    requestFailed: r(false),
-    noMoreContent: r(false),
-    keyword: r(''),
-    submittedKeyword: r(''),
-    historyList: [],
-    historyCursor: 0,
-    requestGeneration: 0,
-    currentPageNum: r(1),
-    getUserID: () => '1',
-    getCSRF: () => 'fixture',
-    t: key => key,
-    toast: { error: message => errors.push(message) },
-    haveScrollbar: async () => true,
-    api: { history: {
-      getHistoryList: () => oldRead.promise,
-      clearAllHistory: () => cleared.promise,
-      searchHistoryList: async (options) => {
-        searches.push(options)
-        return { code: 0, data: { list: [] } }
-      },
-    } },
-  })
-  const reading = context.getHistoryList()
-  const clearing = context.clearAllHistory()
+  const api = {
+    getHistoryList: () => oldRead.promise,
+    clearAllHistory: () => cleared.promise,
+    searchHistoryList: async (options) => {
+      searches.push(options)
+      return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ view_at: i })) } }
+    },
+  }
+  const timeline = useHistoryTimeline({ api, getAccountId: () => 1, getCSRF: () => 'fixture', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
+  const reading = timeline.load()
+  const clearing = timeline.clearAllHistory()
   cleared.resolve({ code: 0 })
   await clearing
   oldRead.resolve({ code: 0, data: { list: [{ view_at: 100 }] } })
   await reading
-  assert.equal(context.historyList.length, 0)
-  assert.equal(context.historyCursor, 0)
-  assert.equal(context.currentPageNum.value, 1)
-  assert.equal(context.noMoreContent.value, true)
-  assert.equal(context.isClearingHistory.value, false)
-
-  context.noMoreContent.value = false
-  context.historyList.push({ view_at: 50 })
-  context.historyCursor = 50
-  context.api.history.clearAllHistory = async () => ({ code: -1, message: 'rejected' })
-  await context.clearAllHistory()
-  assert.equal(context.historyList.length, 1, 'failed clear retains the list')
-  assert.equal(context.historyCursor, 50)
+  assert.equal(timeline.historyList.length, 0)
+  assert.equal(timeline.noMoreContent.value, true)
+  assert.equal(timeline.isClearingHistory.value, false)
+  timeline.noMoreContent.value = false
+  timeline.historyList.push({ view_at: 50 })
+  api.clearAllHistory = async () => ({ code: -1, message: 'rejected' })
+  await timeline.clearAllHistory()
+  assert.equal(timeline.historyList.length, 1, 'failed clear retains the list')
   assert.equal(errors.length, 1)
-  context.submittedKeyword.value = 'old'
-  context.keyword.value = 'draft'
-  context.currentPageNum.value = 2
-  await context.searchHistoryList()
-  assert.equal(searches[0].keyword, 'old')
-  assert.equal(searches[0].pn, 2)
-  context.handleSearch()
+  timeline.submittedKeyword.value = 'old'
+  timeline.keyword.value = 'draft'
+  await timeline.load()
+  await timeline.load()
+  assert.equal(searches.at(-1).keyword, 'old')
+  assert.equal(searches.at(-1).pn, 2)
+  timeline.handleSearch()
   await flush()
   assert.equal(searches.at(-1).keyword, 'draft')
   assert.equal(searches.at(-1).pn, 1)
+  timeline.dispose()
 })
 
 function watchLaterItem(aid) {
@@ -185,49 +179,26 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
 })
 
 async function favoriteContext() {
-  return loadSourceFunctions('../src/contentScripts/views/Favorites/FavoritesPage.vue', [
-    'loadActiveContent',
-    'loadNextPage',
-    'retryFavoriteContent',
-    'getFavoriteResources',
-    'getFavoriteCategories',
-    'getCollectedFavoriteSeasons',
-    'getFavoriteSeasonResources',
-    'getFavoriteArticles',
-  ], {
-    contentRequestVersion: 1,
-    currentPageNum: r(0),
-    failedContentPage: r(null),
-    isLoading: r(false),
-    isFullPageLoading: r(false),
-    favoriteView: r('video'),
-    selectedCategory: r({ id: 1 }),
-    selectedSeason: r({ id: 77 }),
-    favoriteCategories: [],
-    collectedFavoriteSeasons: [],
-    favoriteResources: [],
-    favoriteArticles: [],
-    articleFavoriteOffset: r(''),
-    articleFavoriteCount: r(undefined),
-    noMoreContent: r(false),
-    activatedCategoryCover: r(''),
-    searchScope: r('current'),
-    keyword: r(''),
-    loadedSeasonMedias: r([]),
-    loadedSeasonComplete: r(false),
-    FAVORITE_SEASON_PAGE_SIZE: 20,
-    FAVORITE_ARTICLE_PAGE_SIZE: 20,
-    haveScrollbar: async () => true,
-    t: key => key,
-    getUserID: () => '1',
-    loadSelectedContent: noop,
-    getFavoriteArticleCover: () => 'cover',
-    normalizeSeasonMedia: item => item,
-    api: { favorite: {} },
-    fetchFavoriteSeasonPage: async () => ({ ok: true, pageMedias: [{ id: 'A' }], mediaCount: 40, cover: '' }),
-    mergeFavoriteSeasonPage: options => ({ medias: options.pageMedias, hasMore: true }),
-    enrichFavoriteSeasonMediaFaces: async items => items,
+  const { loadSourceModule } = await import('./sourceModuleHarness')
+  const lifetime = await import('../src/utils/accountLifetime')
+  const folders = await import('../src/utils/favoriteFolder')
+  const context = { api: { favorite: {} }, haveScrollbar: async () => true, enrichFavoriteSeasonMediaFaces: async items => items }
+  const module = await loadSourceModule('../src/contentScripts/views/Favorites/useFavoritesData.ts', {
+    vue: Vue,
+    '~/utils/accountLifetime': lifetime,
+    '~/utils/favoriteFolder': folders,
+    '~/utils/favoriteSeason': {
+      FAVORITE_SEASON_PAGE_SIZE: 20,
+      fetchFavoriteSeasonPage: async () => ({ ok: true, pageMedias: [{ id: 'A' }], mediaCount: 40, cover: '' }),
+      mergeFavoriteSeasonPage: options => ({ medias: options.pageMedias, hasMore: true }),
+      enrichFavoriteSeasonMediaFaces: items => context.enrichFavoriteSeasonMediaFaces(items),
+    },
+    './favoriteAdapters': { getFavoriteArticleCover: () => 'cover', normalizeSeasonMedia: item => item },
   })
+  Object.assign(context, module.useFavoritesData({ api: context.api.favorite, haveScrollbar: () => context.haveScrollbar(), getAccountId: () => 1, t: key => key }))
+  context.selectedCategory.value = { id: 1 }
+  context.selectedSeason.value = { id: 77 }
+  return context
 }
 
 check('P2-04 favorites retains the failed page, retries in place, and serializes autofill', async () => {
@@ -240,7 +211,7 @@ check('P2-04 favorites retains the failed page, retries in place, and serializes
       return { code: -412 }
     return { code: 0, data: { medias: [{ id: pn }], info: { cover: '' }, has_more: true } }
   }
-  assert.equal(await context.loadActiveContent(1, 1), true)
+  assert.equal(await context.loadNextPage(), true)
   fail = true
   assert.equal(await context.loadNextPage(), false)
   assert.equal(context.currentPageNum.value, 1)
@@ -258,19 +229,18 @@ check('P2-04 favorites retains the failed page, retries in place, and serializes
 
   context.api.favorite.getFavoriteCategories = async () => ({ code: -1 })
   context.api.favorite.getCollectedFavoriteSeasons = async () => ({ code: -1 })
-  await assert.rejects(context.getFavoriteCategories(1))
-  await assert.rejects(context.getCollectedFavoriteSeasons(1))
   context.api.favorite.getFavoriteArticles = async () => ({ code: -1 })
   context.favoriteView.value = 'article'
-  assert.equal(await context.loadActiveContent(3, 1), false)
+  assert.equal(await context.loadNextPage(), false)
   assert.equal(context.failedContentPage.value, 3)
   assert.equal(context.currentPageNum.value, 2)
 
   const measuring = deferred()
   let measurements = 0
   context.favoriteView.value = 'video'
+  context.failedContentPage.value = null
   context.haveScrollbar = () => ++measurements === 1 ? measuring.promise : Promise.resolve(true)
-  const pending = context.loadActiveContent(3, 1)
+  const pending = context.loadNextPage()
   await flush()
   assert.equal(context.isLoading.value, true)
   await context.loadNextPage()
@@ -278,15 +248,18 @@ check('P2-04 favorites retains the failed page, retries in place, and serializes
   measuring.resolve(false)
   await pending
   assert.deepEqual(requests.slice(-2), [3, 4], 'autofill does not race the observer')
+  await context.initData()
+  assert.equal(context.bootstrapFailed.value, true, 'both category API failures reach the bootstrap error state')
 })
 
 check('P2-05 stale favorite-season enrichment cannot replace a newer collection', async () => {
   const context = await favoriteContext()
   const enrichment = deferred()
   context.enrichFavoriteSeasonMediaFaces = () => enrichment.promise
-  const pending = context.getFavoriteSeasonResources(77, 1, 1)
+  context.favoriteView.value = 'season'
+  const pending = context.loadNextPage()
   await flush()
-  context.contentRequestVersion = 2
+  context.contentVersion.value++
   context.loadedSeasonMedias.value = [{ id: 'B' }]
   context.favoriteResources.push({ id: 'B' })
   enrichment.resolve([{ id: 'A' }])
@@ -330,13 +303,25 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
   assert.equal(requests.length, 3)
 })
 
-async function compileComponent(file, mocks = {}) {
+let sharedSkeletonComponent
+const glassSurfaceContext = Symbol('fixture-glass-surface')
+async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
   const text = await readFile(new URL(file, import.meta.url), 'utf8')
   const { descriptor } = parse(text)
-  const source = compileScript(descriptor, { id: file, inlineTemplate: true }).content
+  const source = compileScript(descriptor, { id: file, inlineTemplate: renderTemplate }).content.replaceAll('import.meta.env.DEV', 'true')
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
   const exports = {}
-  const modules = { vue: Vue, '@vueuse/core': VueUse, '~/components/formFieldLabel': fieldLabels, ...mocks }
+  const modules = {
+    'vue': Vue,
+    '@vueuse/core': VueUse,
+    '~/components/formFieldLabel': fieldLabels,
+    '~/utils/imageLoadQueue': imageLoadQueue,
+    // Non-material checks keep their existing leaf boundary. Material checks
+    // replace these dependencies with the real production modules.
+    '~/utils/liquidGlass': { vLiquidGlass: {} },
+    '~/composables/useLiquidGlass': { GLASS_SURFACE_CONTEXT: glassSurfaceContext, liquidGlassEnabled: Vue.ref(false) },
+    ...mocks,
+  }
   vm.runInNewContext(code, {
     ...Vue,
     exports,
@@ -344,6 +329,13 @@ async function compileComponent(file, mocks = {}) {
     document,
     HTMLElement,
     HTMLImageElement: window.HTMLImageElement,
+    HTMLIFrameElement: window.HTMLIFrameElement,
+    HTMLVideoElement: window.HTMLVideoElement,
+    HTMLMediaElement: window.HTMLMediaElement,
+    location: window.location,
+    history: window.history,
+    CustomEvent,
+    Document,
     Element,
     ShadowRoot,
     Node,
@@ -357,7 +349,14 @@ async function compileComponent(file, mocks = {}) {
       assert.ok(name in modules, `Unexpected component dependency: ${name}`)
       return modules[name]
     },
+    ...globals,
   })
+  if (!renderTemplate)
+    exports.default.render = () => null
+  if (!file.endsWith('/SkeletonBlock.vue')) {
+    sharedSkeletonComponent ??= await compileComponent('../src/components/SkeletonBlock.vue')
+    exports.default.components = { SkeletonBlock: sharedSkeletonComponent, ...exports.default.components }
+  }
   return exports.default
 }
 
@@ -548,6 +547,8 @@ check('P2-13 popular videos retain a failed page and retry without discarding lo
   const requests = []
   let fail = false
   const context = await loadSourceFunctions('../src/contentScripts/views/Home/components/Trending.vue', ['getTrendingVideos', 'getData', 'retryTrendingRequest'], {
+    tabState: { isCurrent: () => true },
+    hasSettled: r(false),
     requestGeneration: 1,
     pn: r(1),
     noMoreContent: r(false),
@@ -581,6 +582,8 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
   let seriesCalls = 0
   const editions = []
   const weekly = await loadSourceFunctions('../src/contentScripts/views/Home/components/Weekly.vue', ['initData', 'fetchSeriesOne', 'getSeriesOne', 'retryWeeklyRequest'], {
+    tabState: { isCurrent: () => true },
+    hasSettled: r(false),
     requestGeneration: 0,
     isLoading: r(false),
     requestFailed: r(false),
@@ -613,6 +616,8 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
   assert.deepEqual(editions, [42, 42])
   assert.equal(weekly.requestFailed.value, false)
   const ranking = await loadSourceFunctions('../src/contentScripts/views/Home/components/Ranking.vue', ['getRankingVideos', 'getRankingPgc'], {
+    tabState: { isCurrent: () => true },
+    hasSettled: r(false),
     requestGeneration: 1,
     isLoading: r(false),
     requestFailed: r(false),

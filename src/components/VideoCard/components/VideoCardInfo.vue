@@ -108,7 +108,7 @@ const content = computed(() => {
       <div
         v-if="layout === 'old' && !horizontal && content.authorAvatarEnabled"
         class="bew-shape-circle"
-        m="r-4" w="34px" h="34px" bg="$bew-skeleton"
+        m="r-4" w="34px" h="34px" bg="$bew-skeleton" data-bew-skeleton
         shrink-0
       />
 
@@ -117,8 +117,7 @@ const content = computed(() => {
         <div flex="~ gap-1 justify-between items-start" w="full">
           <!-- 使用与真实标题完全相同的样式和高度 -->
           <div
-            class="keep-two-lines" :class="[
-              content.isModernLayout ? 'w-[calc(100%-40px)]' : 'w-full',
+            class="keep-two-lines video-card-info-title video-card-info-title--skeleton" :class="[
               content.isModernLayout ? 'video-card-title' : '',
               titleFontSizeClass,
             ]"
@@ -126,12 +125,13 @@ const content = computed(() => {
             text="overflow-ellipsis $bew-text-1"
           >
             <!-- 使用与真实文本相同的行高填充，考虑 line-height -->
-            <div w-full bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em; margin-bottom: calc(var(--bew-title-line-height) - 1em);" />
-            <div w="3/4" bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em;" />
+            <div w-full bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm" style="height: 1em; margin-bottom: calc(var(--bew-title-line-height) - 1em);" />
+            <div w="3/4" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm" style="height: 1em;" />
           </div>
           <div
-            v-if="content.isModernLayout" class="bew-shape-circle" shrink-0 w-8 h-8
-            bg="$bew-skeleton"
+            v-if="moreBtn" class="bew-shape-circle" shrink-0 w-32px h-32px
+            m="t--3px"
+            bg="$bew-skeleton" data-bew-skeleton
           />
         </div>
 
@@ -145,22 +145,23 @@ const content = computed(() => {
           <div
             v-if="content.authorAvatarEnabled"
             class="bew-shape-circle"
-            w="34px" h="34px" bg="$bew-skeleton" shrink-0
+            w="34px" h="34px" bg="$bew-skeleton" data-bew-skeleton shrink-0
+            m-r-2
           />
-          <div v-if="content.authorNameEnabled || content.metaPlaceholderEnabled" flex="~ col gap-1" w="[calc(100%-50px)]">
+          <div v-if="content.authorNameEnabled || content.metaPlaceholderEnabled" flex="~ col gap-1 1" min-w-0>
             <!-- 作者名称骨架：使用与真实文本相同的字体大小和行高 -->
             <div
               v-if="content.authorNameEnabled"
-              w="60%" bg="$bew-skeleton" rounded="$bew-radius-sm"
+              w="60%" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm"
               :class="authorFontSizeClass"
-              style="height: 1em;"
+              style="height: var(--bew-author-line-height);"
             />
             <!-- 标签骨架：使用与真实标签相同的高度，包括 padding -->
             <div
               v-if="content.metaPlaceholderEnabled"
-              w="80%" bg="$bew-skeleton" rounded="$bew-radius-sm"
+              w="80%" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm"
               :class="metaFontSizeClass"
-              style="height: calc(1em + 0.24em);"
+              style="height: var(--bew-video-card-meta-row-height);"
             />
           </div>
         </div>
@@ -174,8 +175,8 @@ const content = computed(() => {
         >
           <div
             class="bew-shape-pill"
-            w="60px" bg="$bew-skeleton"
-            style="height: calc(1em + 0.24em);"
+            w="60px" bg="$bew-skeleton" data-bew-skeleton
+            style="height: var(--bew-video-card-meta-row-height);"
           />
         </div>
 
@@ -184,15 +185,16 @@ const content = computed(() => {
           <!-- Old layout with hideAuthor: Only tags skeleton -->
           <div
             v-if="hideAuthor && content.metaPlaceholderEnabled"
+            class="video-card-meta-row"
             mt-2
             flex="~ gap-1"
             :class="metaFontSizeClass"
           >
             <div
               class="bew-shape-pill"
-              bg="$bew-skeleton"
+              bg="$bew-skeleton" data-bew-skeleton
               lh-6 p="x-2" w="60px"
-              style="height: calc(1em + 0.24em);"
+              style="height: var(--bew-video-card-meta-row-height);"
             />
           </div>
 
@@ -211,10 +213,14 @@ const content = computed(() => {
               <div
                 v-if="horizontal && content.authorAvatarEnabled"
                 class="bew-shape-circle"
-                w="34px" h="34px" bg="$bew-skeleton"
-                shrink-0 m-r-2
+                w="34px" h="34px" bg="$bew-skeleton" data-bew-skeleton
+                shrink-0 m-r-4 mb-2
               />
-              <div v-if="content.authorNameEnabled" w="100px" bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em;" />
+              <div
+                v-if="content.authorNameEnabled" w="100px" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm"
+                :class="{ 'mb-2': horizontal }"
+                style="height: var(--bew-author-line-height);"
+              />
             </div>
 
             <!-- View & Danmaku skeleton -->
@@ -223,22 +229,23 @@ const content = computed(() => {
                 :class="metaFontSizeClass"
                 text="$bew-text-2"
               >
-                <div w="150px" bg="$bew-skeleton" rounded="$bew-radius-sm" style="height: 1em; display: inline-block;" />
+                <div w="150px" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm" style="height: 1em; display: inline-block;" />
               </div>
             </div>
 
             <!-- Tags skeleton -->
             <div
               v-if="content.metaPlaceholderEnabled"
+              class="video-card-meta-row"
               mt-2
               flex="~ gap-1"
               :class="metaFontSizeClass"
             >
               <div
                 class="bew-shape-pill"
-                bg="$bew-skeleton"
+                bg="$bew-skeleton" data-bew-skeleton
                 lh-6 p="x-2" w="60px"
-                style="height: calc(1em + 0.24em);"
+                style="height: var(--bew-video-card-meta-row-height);"
               />
             </div>
           </template>
@@ -258,6 +265,7 @@ const content = computed(() => {
       <div class="group/desc" flex="~ col" :class="content.isModernLayout ? 'gap-2' : ''" w="full" align="items-start">
         <div flex="~ gap-1 justify-between items-start" w="full" pos="relative">
           <h3
+            class="video-card-info-title"
             :class="[
               video.liveStatus === 1 ? 'keep-one-line' : 'keep-two-lines',
               content.isModernLayout ? 'video-card-title' : '',
@@ -312,11 +320,11 @@ const content = computed(() => {
             :key="`primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
             class="video-card-meta__chip"
             :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-            un-text="$bew-theme-foreground"
+            un-text="$bew-on-theme-surface"
             p="x-2"
             lh-6
             rounded="$bew-radius"
-            bg="$bew-theme-color-20"
+            bg="$bew-theme-surface"
             :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
             :target="tag.searchable ? '_blank' : undefined"
             :title="tag.text"
@@ -330,11 +338,11 @@ const content = computed(() => {
             :key="`highlight-${extraTag}`"
             class="video-card-meta__chip"
             :title="extraTag"
-            text="$bew-theme-foreground"
+            text="$bew-on-theme-surface"
             p="x-2"
             lh-6
             rounded="$bew-radius"
-            bg="$bew-theme-color-20"
+            bg="$bew-theme-surface"
           >
             {{ extraTag }}
           </span>
@@ -397,11 +405,11 @@ const content = computed(() => {
                 :key="`primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
                 class="video-card-meta__chip"
                 :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-                un-text="$bew-theme-foreground"
+                un-text="$bew-on-theme-surface"
                 p="x-2"
                 lh-6
                 rounded="$bew-radius"
-                bg="$bew-theme-color-20"
+                bg="$bew-theme-surface"
                 :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
                 :target="tag.searchable ? '_blank' : undefined"
                 :title="tag.text"
@@ -415,11 +423,11 @@ const content = computed(() => {
                 :key="`highlight-${extraTag}`"
                 class="video-card-meta__chip"
                 :title="extraTag"
-                text="$bew-theme-foreground"
+                text="$bew-on-theme-surface"
                 p="x-2"
                 lh-6
                 rounded="$bew-radius"
-                bg="$bew-theme-color-20"
+                bg="$bew-theme-surface"
               >
                 {{ extraTag }}
               </span>
@@ -465,7 +473,7 @@ const content = computed(() => {
               :key="`legacy-primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
               class="video-card-meta__chip"
               :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-              un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20"
+              un-text="$bew-on-theme-surface" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-surface"
               :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
               :target="tag.searchable ? '_blank' : undefined"
               :title="tag.text"
@@ -478,11 +486,11 @@ const content = computed(() => {
               :key="`highlight-${extraTag}`"
               class="video-card-meta__chip"
               :title="extraTag"
-              text="$bew-theme-foreground"
+              text="$bew-on-theme-surface"
               lh-6
               p="x-2"
               rounded="$bew-radius"
-              bg="$bew-theme-color-20"
+              bg="$bew-theme-surface"
             >
               {{ extraTag }}
             </span>
@@ -562,7 +570,7 @@ const content = computed(() => {
                 :key="`legacy-primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
                 class="video-card-meta__chip"
                 :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-                un-text="$bew-theme-foreground" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-color-20"
+                un-text="$bew-on-theme-surface" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-surface"
                 :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
                 :target="tag.searchable ? '_blank' : undefined"
                 :title="tag.text"
@@ -575,11 +583,11 @@ const content = computed(() => {
                 :key="`highlight-${extraTag}`"
                 class="video-card-meta__chip"
                 :title="extraTag"
-                text="$bew-theme-foreground"
+                text="$bew-on-theme-surface"
                 lh-6
                 p="x-2"
                 rounded="$bew-radius"
-                bg="$bew-theme-color-20"
+                bg="$bew-theme-surface"
               >
                 {{ extraTag }}
               </span>
@@ -604,6 +612,14 @@ const content = computed(() => {
 </template>
 
 <style lang="scss" scoped>
+.video-card-info-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.video-card-info-title--skeleton {
+  min-height: calc(var(--bew-title-line-height) * 2);
+}
 .video-card-title {
   &.keep-two-lines {
     min-height: calc(var(--bew-title-line-height) * 2);
@@ -679,7 +695,7 @@ const content = computed(() => {
 }
 
 .video-card-meta__chip--searchable:hover {
-  background: var(--bew-theme-color-30);
+  background: var(--bew-theme-surface-hover);
 }
 
 .video-card-meta__chip {

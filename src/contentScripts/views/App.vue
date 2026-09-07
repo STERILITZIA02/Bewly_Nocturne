@@ -275,17 +275,17 @@ function cancelPendingRefreshScroll() {
   }
 }
 
-function waitForScrollTop(viewport: HTMLElement, generation: number, startedAt: number) {
-  if (generation !== refreshScrollGeneration)
+function waitForScrollTop(viewport: HTMLElement, generation: number, startedAt: number, refresh = handlePageRefresh.value) {
+  if (generation !== refreshScrollGeneration || !viewport.isConnected || viewport !== scrollViewportRef.value || refresh !== handlePageRefresh.value)
     return
 
   if (viewport.scrollTop === 0 || performance.now() - startedAt >= 1800) {
     refreshScrollTimer = null
-    handlePageRefresh.value?.()
+    refresh?.()
     return
   }
 
-  refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, startedAt), 50)
+  refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, startedAt, refresh), 50)
 }
 
 const canRefreshCurrentPage = computed((): boolean => {
@@ -307,7 +307,8 @@ const handleThrottledPageRefresh = useThrottleFn(() => {
   else {
     handleBackToTop()
     const generation = refreshScrollGeneration
-    refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, performance.now()), 50)
+    const refresh = handlePageRefresh.value
+    refreshScrollTimer = setTimeout(() => waitForScrollTop(viewport, generation, performance.now(), refresh), 50)
   }
 }, 500)
 const LOAD_MORE_THRESHOLD = 200
@@ -525,8 +526,6 @@ watch(
   () => {
     exitLayoutEditMode()
     cancelPendingRefreshScroll()
-    handlePageRefresh.value = undefined
-    handleReachBottom.value = undefined
     if (!isFirstTimeActivatedPageChange.value) {
       // Update the URL query parameter when activatedPage changes
       const url = new URL(window.location.href)
@@ -561,6 +560,23 @@ watch(
   },
   { immediate: true, flush: 'post' },
 )
+
+// Drop outgoing closures before the incoming view installs its actions.
+watch([
+  activatedPage,
+  () => activatedPage.value === AppPage.Home ? homeActivatedPage.value : undefined,
+  () => activatedPage.value === AppPage.Home && homeActivatedPage.value === HomeSubPage.ForYou ? settings.value.recommendationMode : undefined,
+  () => activatedPage.value === AppPage.Home && homeActivatedPage.value === HomeSubPage.Following ? settings.value.useFollowingNewLayout : undefined,
+  showBewlyPage,
+], () => {
+  cancelPendingRefreshScroll()
+  handlePageRefresh.value = undefined
+  handleReachBottom.value = undefined
+  handleUndoRefresh.value = undefined
+  handleForwardRefresh.value = undefined
+  undoForwardState.value = UndoForwardState.Hidden
+  canRefreshHomeSubPage.value = false
+}, { flush: 'sync' })
 
 // Setup necessary settings watchers
 setupNecessarySettingsWatchers()

@@ -8,6 +8,7 @@ import { settings } from '~/logic'
 import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
+import { vLiquidGlass } from '~/utils/liquidGlass'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { openSearchResults, resolveSearchNavigationTarget } from '~/utils/searchNavigation'
@@ -56,7 +57,9 @@ const selectedIndex = ref<number>(-1)
 const keyboardSelectionMode = ref<KeyboardSelectionMode>('none')
 const originalKeywordBeforeKeyboardSelection = ref<string>(keyword.value)
 const searchHistory = shallowRef<HistoryItem[]>([])
-const { hotSearchList, searchRecommendation } = useSearchExperience()
+const { hotSearchList, searchRecommendation, isLoadingHotSearch } = useSearchExperience()
+const historyLoading = ref(false)
+const suggestionsLoading = ref(false)
 const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
 
 function reportSearchBarFailure(endpointName: string, error: unknown) {
@@ -71,9 +74,9 @@ function reportSearchBarFailure(endpointName: string, error: unknown) {
 
 const searchMode = computed(() => props.searchBehavior ?? 'navigate')
 const isInPlaceSearch = computed(() => searchMode.value === 'stay')
+const hotSearchDisplayLimit = computed(() => props.topBarMode && isNarrowLayout.value ? 5 : 10)
 const visibleHotSearchList = computed(() => {
-  const limit = props.topBarMode && isNarrowLayout.value ? 5 : 10
-  return hotSearchList.value.slice(0, limit)
+  return hotSearchList.value.slice(0, hotSearchDisplayLimit.value)
 })
 const topBarAppearanceStyle = computed<CSSProperties | undefined>(() => {
   if (!props.topBarAppearance)
@@ -117,8 +120,8 @@ const shouldShowSearchDropdown = computed(() => {
   if (!isFocus.value)
     return false
 
-  const hasHotSearch = (props.showHotSearch ?? settings.value.showHotSearchInTopBar) && hotSearchList.value.length > 0
-  const hasSearchHistory = searchHistory.value.length !== 0
+  const hasHotSearch = (props.showHotSearch ?? settings.value.showHotSearchInTopBar) && (hotSearchList.value.length > 0 || isLoadingHotSearch.value)
+  const hasSearchHistory = searchHistory.value.length !== 0 || historyLoading.value
   if (!hasHotSearch && !hasSearchHistory)
     return false
 
@@ -168,10 +171,13 @@ watch(isFocus, async (focus) => {
 
   if (!focus) {
     suggestionRequestId++
+    historyLoading.value = false
+    suggestionsLoading.value = false
     return
   }
 
   // 延后加载搜索历史
+  historyLoading.value = settings.value.enableSearchHistory && !searchHistory.value.length
   try {
     const nextHistory = settings.value.enableSearchHistory
       ? await getSearchHistory()
@@ -184,8 +190,14 @@ watch(isFocus, async (focus) => {
     if (!searchBarDisposed && isFocus.value && requestId === focusRequestId)
       searchHistory.value = []
   }
+  finally {
+    if (!searchBarDisposed && requestId === focusRequestId)
+      historyLoading.value = false
+  }
 
   // 加载热搜数据
+  if (searchBarDisposed || !isFocus.value || requestId !== focusRequestId)
+    return
   if (props.showHotSearch ?? settings.value.showHotSearchInTopBar) {
     try {
       await loadSharedHotSearch()
@@ -244,6 +256,10 @@ const handleKeywordInput = useDebounceFn(async (term: string, requestId: number)
       suggestions.length = 0
     reportSearchBarFailure('search-suggestion', error)
   }
+  finally {
+    if (!searchBarDisposed && requestId === suggestionRequestId)
+      suggestionsLoading.value = false
+  }
 }, 200)
 
 function handleNativeInput(event: Event) {
@@ -252,6 +268,7 @@ function handleNativeInput(event: Event) {
   keyword.value = value
   suggestions.length = 0
   const requestId = ++suggestionRequestId
+  suggestionsLoading.value = Boolean(value.trim())
   if (value.trim())
     handleKeywordInput(value, requestId)
 }
@@ -481,6 +498,7 @@ function handleClearKeyword() {
     />
 
     <div
+      v-liquid-glass
       class="search-bar group"
       :class="isFocus ? 'focus' : ''"
       flex="~ items-center" pos="relative"
@@ -553,6 +571,7 @@ function handleClearKeyword() {
       <div
         v-if="shouldShowSearchDropdown"
         :id="searchDropdownId"
+        v-liquid-glass
         class="search-dropdown bew-popover-surface bew-popover-surface--clip"
         role="region"
         :aria-label="$t('search_bar.search_options_label')"
@@ -561,7 +580,7 @@ function handleClearKeyword() {
         <div class="search-popover__scroll bew-popover__scroll">
           <!-- 热搜区块 -->
           <div
-            v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && hotSearchList.length > 0"
+            v-if="(showHotSearch ?? settings.showHotSearchInTopBar) && (hotSearchList.length > 0 || isLoadingHotSearch)"
             class="hot-search-section"
           >
             <div class="title p-2 pb-0">
@@ -569,6 +588,9 @@ function handleClearKeyword() {
             </div>
 
             <div class="hot-search-container p-2 grid grid-cols-2 gap-x-4 gap-y-1">
+              <template v-if="isLoadingHotSearch && !hotSearchList.length">
+                <SkeletonBlock v-for="index in hotSearchDisplayLimit" :key="`hot-loading-${index}`" height="var(--bew-control-height-sm)" radius="interactive" />
+              </template>
               <ALink
                 v-for="(item, index) in visibleHotSearchList" :key="item.keyword"
                 :href="buildKeywordHref(item.keyword)"
@@ -610,7 +632,7 @@ function handleClearKeyword() {
 
           <!-- 搜索历史区块 -->
           <div
-            v-if="searchHistory.length !== 0"
+            v-if="searchHistory.length !== 0 || historyLoading"
             class="history-section"
           >
             <div class="title p-2 pb-0 flex justify-between">
@@ -618,6 +640,9 @@ function handleClearKeyword() {
               <button type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
                 {{ $t('search_bar.clear_history') }}
               </button>
+            </div>
+            <div v-if="historyLoading" class="search-history-skeleton" aria-hidden="true">
+              <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height)" radius="interactive" />
             </div>
 
             <div
@@ -660,7 +685,8 @@ function handleClearKeyword() {
 
     <Transition name="slide-in">
       <div
-        v-if="isFocus && suggestions.length !== 0 && keyword.length > 0"
+        v-if="isFocus && keyboardSelectionMode !== 'history' && (suggestions.length !== 0 || suggestionsLoading) && keyword.length > 0"
+        v-liquid-glass
         class="search-suggestion bew-popover-surface bew-popover-surface--clip"
         :style="narrowTopBarPopupStyle"
       >
@@ -669,7 +695,11 @@ function handleClearKeyword() {
           class="search-popover__scroll bew-popover__scroll"
           role="listbox"
           :aria-label="$t('search_bar.suggestions_label')"
+          :aria-busy="suggestionsLoading"
         >
+          <div v-if="suggestionsLoading && !suggestions.length" class="search-history-skeleton" aria-hidden="true">
+            <SkeletonBlock v-for="index in 4" :key="index" height="var(--bew-control-height)" radius="interactive" />
+          </div>
           <div
             v-for="(item, index) in suggestions"
             :id="getSearchOptionId('suggestions', item.value)"
@@ -692,6 +722,12 @@ function handleClearKeyword() {
 <style lang="scss" scoped>
 @use "../../styles/breakpoints";
 
+.search-history-skeleton {
+  display: grid;
+  gap: var(--bew-space-1);
+  padding: var(--bew-space-2);
+}
+
 ::v-deep(.suggest_high_light) {
   --uno: "text-$bew-theme-foreground not-italic";
 }
@@ -713,8 +749,8 @@ function handleClearKeyword() {
   max-width: var(--b-search-bar-max-width, 550px);
   height: var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px));
 
-  --b-search-bar-normal-color: var(--bew-content);
-  --b-search-bar-focus-color: var(--bew-content-hover);
+  --b-search-bar-normal-color: var(--bew-content-solid);
+  --b-search-bar-focus-color: var(--bew-elevated-solid);
 
   --b-search-bar-normal-icon-color: var(--bew-text-1);
   --b-search-bar-hover-icon-color: var(--bew-theme-foreground);
@@ -734,7 +770,6 @@ function handleClearKeyword() {
 
   @mixin card-content {
     --uno: "text-base outline-none w-full bg-$b-search-bar-normal-color border-1 border-$bew-surface-border-color";
-    backdrop-filter: var(--bew-filter-glass-1);
   }
 
   .search-bar::before,
@@ -759,8 +794,7 @@ function handleClearKeyword() {
   .search-bar::after {
     box-shadow:
       0 0 0 2px var(--bew-theme-focus-ring),
-      0 6px 16px var(--bew-theme-color-40),
-      inset 0 0 6px var(--bew-theme-color-30);
+      var(--bew-shadow-2);
     opacity: 0;
   }
 
@@ -773,6 +807,10 @@ function handleClearKeyword() {
   }
 
   .search-bar {
+    --bew-liquid-frame-width: 0px;
+    --bew-liquid-frame-inset: 0px;
+    border-radius: var(--b-search-bar-current-radius);
+    corner-shape: var(--bew-corner-shape);
     --b-search-bar-current-radius: var(
       --b-search-bar-radius,
       calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
@@ -828,32 +866,16 @@ function handleClearKeyword() {
       border-color: var(--bew-theme-focus-ring);
     }
 
+    &[data-bew-liquid-glass] input {
+      background: transparent !important;
+    }
+
     .search-submit-btn {
       position: absolute;
       color: var(--b-search-bar-normal-icon-color);
       background: transparent;
       isolation: isolate;
       transition: color 280ms ease;
-
-      &::before {
-        content: "";
-        position: absolute;
-        left: 50%;
-        top: 50%;
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        corner-shape: var(--bew-corner-shape-round);
-        pointer-events: none;
-        z-index: 0;
-        background: var(--bew-theme-color);
-        filter: blur(4px);
-        opacity: 0;
-        transform: translate(-50%, -50%) scale(0.25);
-        transition:
-          transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-          opacity 320ms ease;
-      }
 
       > * {
         position: relative;
@@ -866,11 +888,6 @@ function handleClearKeyword() {
     .search-submit-btn:hover,
     .search-submit-btn:focus-visible {
       color: var(--b-search-bar-hover-icon-color, var(--bew-theme-foreground));
-
-      &::before {
-        opacity: 0.4;
-        transform: translate(-50%, -50%) scale(1.1);
-      }
     }
   }
 
@@ -957,7 +974,7 @@ function handleClearKeyword() {
       .history-item-container {
         .history-item {
           --uno: "relative cursor-pointer duration-300";
-          --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-color-20 hover:text-$bew-theme-foreground rounded-$bew-radius-half";
+          --uno: "py-2 px-6 bg-$bew-fill-1 hover:bg-$bew-theme-surface hover:text-$bew-theme-foreground rounded-$bew-radius-half";
 
           .history-item__link {
             min-width: 0;

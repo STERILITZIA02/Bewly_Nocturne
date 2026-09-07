@@ -5,6 +5,7 @@ import { computed, ref, toRef } from 'vue'
 import { usePageModeSwitcher } from '~/composables/usePageModeSwitcher'
 import type { AppPage } from '~/enums/appEnums'
 import { vLayoutEditable } from '~/logic/layoutEdit'
+import { vLiquidGlass } from '~/utils/liquidGlass'
 
 import Tooltip from './Tooltip.vue'
 
@@ -15,8 +16,10 @@ const props = withDefaults(defineProps<{
   placement: TooltipPlacement
   variant: 'dock' | 'sidebar'
   disableGlowingEffect?: boolean
+  liquidGlass?: boolean
 }>(), {
   disableGlowingEffect: false,
+  liquidGlass: false,
 })
 
 const hovered = ref(false)
@@ -37,6 +40,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   <Tooltip :content="tooltip" :placement="placement">
     <button
       v-layout-editable="layoutEditableId"
+      v-liquid-glass="liquidGlass && variant === 'sidebar'"
       type="button"
       class="page-mode-switcher"
       :data-layout-editable-id="layoutEditableId"
@@ -63,6 +67,9 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 @use "../styles/breakpoints";
 
 .page-mode-switcher {
+  --bew-liquid-frame-inset: 0px;
+  --bew-liquid-outer-shadow: var(--bew-shadow-1);
+  position: relative;
   box-sizing: border-box;
   display: grid;
   flex: none;

@@ -2,6 +2,7 @@
 import type { Author, Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import { mapMomentItemToVideo } from '~/contentScripts/views/Home/adapters/followingVideo'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
@@ -37,28 +38,29 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const videoList = ref<VideoElement[]>([])
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
+const liveHasSettled = tabState.ref('liveHasSettled', false)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
 /**
  * Get all livestreaming videos of followed users
  */
-const livePage = ref<number>(1)
-const liveVideoList = ref<LiveVideoElement[]>([])
+const livePage = tabState.ref<number>('livePage', 1)
+const liveVideoList = tabState.ref<LiveVideoElement[]>('liveVideoList', [])
 const isLoading = ref<boolean>(false)
-const needToLoginFirst = ref<boolean>(false)
+const needToLoginFirst = tabState.ref<boolean>('needToLoginFirst', false)
 const recursionDepth = ref<number>(0) // 递归深度计数器
 const isPageVisible = ref<boolean>(true) // 页面可见性状态
-const offset = ref<string>('')
-const updateBaseline = ref<string>('')
-const noMoreVideoContent = ref<boolean>(false)
-const noMoreLiveContent = ref<boolean>(false)
-const requestFailed = ref<boolean>(false)
+const offset = tabState.ref<string>('offset', '')
+const updateBaseline = tabState.ref<string>('updateBaseline', '')
+const noMoreVideoContent = tabState.ref<boolean>('noMoreVideoContent', false)
+const noMoreLiveContent = tabState.ref<boolean>('noMoreLiveContent', false)
+const requestFailed = tabState.ref<boolean>('requestFailed', false)
 const { handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 let requestGeneration = 0
 let loadedAccountId = parseDedeUserID(document.cookie) ?? null
 let visibilityLoadTimer: ReturnType<typeof setTimeout> | null = null
-let reloadAfterActivation = false
 let visibilityListenerAttached = false
-let liveRequestActive = false
 
 function clearVisibilityLoadTimer() {
   if (visibilityLoadTimer !== null) {
@@ -68,7 +70,7 @@ function clearVisibilityLoadTimer() {
 }
 
 function isCurrentRequest(generation: number, accountId: number | null) {
-  return generation === requestGeneration
+  return tabState.isCurrent() && generation === requestGeneration
     && accountId === loadedAccountId
     && accountId === (parseDedeUserID(document.cookie) ?? null)
 }
@@ -137,7 +139,15 @@ async function handleVisibilityChange() {
 onMounted(() => {
   loadedAccountId = parseDedeUserID(document.cookie) ?? null
   canRefreshHomeSubPage.value = true
-  initData()
+  if (!tabState.restored) {
+    void initData()
+  }
+  else {
+    if (!hasSettled.value && !requestFailed.value && !needToLoginFirst.value)
+      void getData()
+    if (settings.value.followingTabShowLivestreamingVideos && !liveHasSettled.value && !needToLoginFirst.value)
+      void getLiveVideoList()
+  }
 
   // 确保在 nextTick 中调用，以保证所有依赖都已准备好
   nextTick(() => {
@@ -152,34 +162,15 @@ onMounted(() => {
 
 onUnmounted(() => {
   invalidateRequests()
-  canRefreshHomeSubPage.value = false
+  if (tabState.isActiveTab())
+    canRefreshHomeSubPage.value = false
   // 清理页面可见性监听器
   detachVisibilityListener()
 })
 
-onActivated(() => {
-  canRefreshHomeSubPage.value = true
-  initPageAction()
-  // 组件激活时重新检查页面可见性
-  isPageVisible.value = !document.hidden
-  attachVisibilityListener()
-  if (reloadAfterActivation) {
-    reloadAfterActivation = false
-    void initData()
-  }
-})
-
-onDeactivated(() => {
-  reloadAfterActivation = isLoading.value || liveRequestActive
-  invalidateRequests()
-  detachVisibilityListener()
-  isLoading.value = false
-  canRefreshHomeSubPage.value = false
-  // 组件失活时设置为不可见
-  isPageVisible.value = false
-})
-
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   // VideoCardGrid owns infinite scrolling. Clear callbacks left by other kept-alive tabs.
   handleReachBottom.value = undefined
 
@@ -192,6 +183,10 @@ function initPageAction() {
 }
 
 async function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
+  liveHasSettled.value = false
   const generation = ++requestGeneration
   loadedAccountId = parseDedeUserID(document.cookie) ?? null
   const accountId = loadedAccountId
@@ -226,6 +221,7 @@ async function getData(generation = requestGeneration, accountId = loadedAccount
   }
   finally {
     if (isCurrentRequest(generation, accountId)) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -238,7 +234,6 @@ async function getLiveVideoList(generation = requestGeneration, accountId = load
     return
 
   const lastLiveVideoListLength = liveVideoList.value.length
-  liveRequestActive = true
   try {
     const response: FollowingLiveResult = await api.live.getFollowingLiveList({
       page: livePage.value,
@@ -293,8 +288,9 @@ async function getLiveVideoList(generation = requestGeneration, accountId = load
     console.error('[FollowingOld] Failed to load live list:', error)
   }
   finally {
-    if (isCurrentRequest(generation, accountId))
-      liveRequestActive = false
+    if (isCurrentRequest(generation, accountId)) {
+      liveHasSettled.value = true
+    }
   }
 }
 

@@ -6,11 +6,13 @@ import type { AsyncComponentLoader } from 'vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { provideHomeTabCache } from '~/composables/useHomeTabState'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
 import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
+import { useForYouStore } from '~/stores/forYouStore'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -24,6 +26,7 @@ import { HomeSubPage } from './types'
 
 const mainStore = useMainStore()
 const topBarStore = useTopBarStore()
+const forYouStore = useForYouStore()
 const searchFocusEffect = useSearchFocusEffect()
 const {
   handleBackToTop,
@@ -37,21 +40,22 @@ const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
 const cachedScrollTop = ref(0)
 const showHomeSearchCharacter = computed(() => cachedScrollTop.value < HOME_SEARCH_STICKY_SCROLL_TOP)
-const tabScrollPositions = new Map<HomeSubPage, number>()
+const tabScrollPositions = new Map<string, number>()
 let pendingTabScrollTop: number | null = null
 let tabSwitchFrame: number | null = null
 
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
+const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
 function defineHomePageComponent(loader: AsyncComponentLoader) {
   return defineAsyncComponent({
     loader,
-    loadingComponent: PageAsyncLoading,
+    loadingComponent: { render: () => h(PageAsyncLoading, { contentOnly: true, gridLayout: homeGridLayout.value }) },
     delay: 120,
   })
 }
 
-// KeepAlive 依赖稳定的组件类型，不能在 computed 内重复创建异步组件包装器。
+// Reuse loaded component modules while inactive views keep data only.
 const forYouPage = defineHomePageComponent(() => import('./components/ForYou.vue'))
 const followingPage = defineHomePageComponent(() => import('./components/Following.vue'))
 const followingOldPage = defineHomePageComponent(() => import('./components/FollowingOld.vue'))
@@ -75,7 +79,9 @@ const pages = computed(() => ({
 }))
 const activatedPageCacheKey = computed(() => activatedPage.value === HomeSubPage.Following
   ? `${activatedPage.value}:${settings.value.useFollowingNewLayout ? 'new' : 'old'}`
-  : activatedPage.value)
+  : activatedPage.value === HomeSubPage.ForYou
+    ? `${activatedPage.value}:${settings.value.recommendationMode}`
+    : activatedPage.value)
 const homeAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
@@ -86,11 +92,27 @@ const homeAccountScope = computed(() => {
   return topBarStore.isLogin ? 'profile-unavailable' : 'logged-out'
 })
 const homeAccountGeneration = ref(0)
+const tabCache = provideHomeTabCache(() => activatedPageCacheKey.value, restoreTabScrollPosition)
+
+function restorePreservedForYou() {
+  if (!settings.value.preserveForYouState) {
+    forYouStore.resetState()
+    return
+  }
+  const saved = forYouStore.takeCompleteState(homeAccountId.value, settings.value.recommendationMode)
+  if (!saved)
+    return
+  const key = `${HomeSubPage.ForYou}:${saved.recommendationMode}`
+  tabCache.save(key, saved.snapshot, tabCache.generation)
+  tabScrollPositions.set(key, saved.scrollTop)
+  if (activatedPage.value === HomeSubPage.ForYou)
+    pendingTabScrollTop = saved.scrollTop
+}
+restorePreservedForYou()
 const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabPageRef = ref()
 const topBarVisibility = ref<boolean>(true)
-const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
@@ -117,13 +139,13 @@ watch(homeAccountScope, (nextScope, previousScope) => {
   if (nextScope === previousScope || nextScope === 'profile-unavailable')
     return
 
-  // Recreate the KeepAlive scope once per real identity transition. Only the
-  // active tab mounts and reloads now; other tabs reload lazily when selected.
-  // Destroying the old scope also prevents late anonymous/previous-account
-  // responses from becoming visible in the new account.
+  tabCache.clear()
+  tabScrollPositions.clear()
+  pendingTabScrollTop = getInitialTabScrollTop()
+  restorePreservedForYou()
   tabContentLoading.value = false
   homeAccountGeneration.value++
-})
+}, { flush: 'sync' })
 
 function getInitialTabScrollTop(): number {
   return settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
@@ -151,12 +173,14 @@ function finishTabSwitch() {
   })
 }
 
-watch(activatedPage, (newPage, oldPage) => {
+watch(activatedPageCacheKey, (newPage, oldPage) => {
+  tabContentLoading.value = false
   const viewport = scrollViewportRef.value
   if (!viewport)
     return
 
-  tabScrollPositions.set(oldPage, viewport.scrollTop)
+  if (pendingTabScrollTop === null)
+    tabScrollPositions.set(oldPage, viewport.scrollTop)
   pendingTabScrollTop = tabScrollPositions.get(newPage) ?? getInitialTabScrollTop()
   isHomeTabSwitching.value = true
 }, { flush: 'sync' })
@@ -214,6 +238,18 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  const mode = settings.value.recommendationMode
+  const key = `${HomeSubPage.ForYou}:${mode}`
+  const snapshot = tabCache.take(key)
+  if (settings.value.preserveForYouState && snapshot) {
+    forYouStore.saveCompleteState({
+      accountId: homeAccountId.value,
+      recommendationMode: mode,
+      scrollTop: activatedPage.value === HomeSubPage.ForYou ? cachedScrollTop.value : tabScrollPositions.get(key) ?? getInitialTabScrollTop(),
+      snapshot,
+    })
+  }
+  tabCache.clear()
   emitter.off(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
   emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
   isHomeTabSwitching.value = false
@@ -299,11 +335,8 @@ function toggleTabContentLoading(loading: boolean) {
         <section
           v-if="shouldShowHomeTabs"
           v-layout-editable="'home-tabs'"
-          class="glass-panel home-tabs-panel bew-segment-control bew-segment-control--surface"
+          class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface"
           data-layout-editable-id="home-tabs"
-          :class="{
-            'bew-segment-control--solid': settings.disableFrostedGlass,
-          }"
         >
           <div class="home-tabs-scroll" h-full of-x-auto of-y-hidden>
             <div
@@ -331,11 +364,8 @@ function toggleTabContentLoading(loading: boolean) {
         <div
           v-if="settings.enableGridLayoutSwitcher"
           v-layout-editable="'home-grid-switcher'"
-          class="glass-panel home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
+          class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
           data-layout-editable-id="home-grid-switcher"
-          :class="{
-            'bew-segment-control--solid': settings.disableFrostedGlass,
-          }"
           flex="~ shrink-0 items-center"
           box-border
         >
@@ -373,21 +403,21 @@ function toggleTabContentLoading(loading: boolean) {
           @enter="restoreTabScrollPosition"
           @after-enter="finishTabSwitch"
         >
-          <Loading
+          <PageAsyncLoading
             v-if="homeAccountScope === 'profile-unavailable'"
-            min-h="240px"
+            content-only
+            :grid-layout="homeGridLayout"
             flex="~ items-center"
           />
-          <KeepAlive v-else :key="homeAccountGeneration" :max="8">
-            <Component
-              :is="pages[activatedPage]" :key="activatedPageCacheKey"
-              ref="tabPageRef"
-              :grid-layout="homeGridLayout"
-              :top-bar-visibility="topBarVisibility"
-              @before-loading="toggleTabContentLoading(true)"
-              @after-loading="toggleTabContentLoading(false)"
-            />
-          </KeepAlive>
+          <Component
+            :is="pages[activatedPage]"
+            v-else :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
+            ref="tabPageRef"
+            :grid-layout="homeGridLayout"
+            :top-bar-visibility="topBarVisibility"
+            @before-loading="toggleTabContentLoading(true)"
+            @after-loading="toggleTabContentLoading(false)"
+          />
         </Transition>
       </div>
     </main>
@@ -461,17 +491,11 @@ function toggleTabContentLoading(loading: boolean) {
   opacity: 0;
 }
 
-.glass-panel {
-  /* 毛玻璃关闭时 --bew-filter-glass-1 为 none；同时配合 --solid 去掉 surface 上的 filter */
-  backdrop-filter: var(--bew-filter-glass-1);
+.home-control-surface {
   /* 关键优化：绘制隔离，防止重绘传播 */
   contain: paint layout;
   /* 创建独立堆叠上下文，减少合成压力 */
   isolation: isolate;
-}
-
-.glass-panel.bew-segment-control--solid {
-  backdrop-filter: none;
 }
 
 .home-header {

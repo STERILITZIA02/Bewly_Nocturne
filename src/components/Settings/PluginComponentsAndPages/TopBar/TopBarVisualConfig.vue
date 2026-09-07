@@ -457,10 +457,6 @@ function toggleChannel(value: string) {
 }
 
 .logo-style-picker {
-  --bew-segment-item-active-bg: var(--bew-theme-color-20);
-  --bew-segment-item-active-color: var(--bew-theme-foreground);
-  --bew-segment-item-active-shadow: inset 0 0 0 1px var(--bew-theme-color-30);
-
   &__brand-option {
     padding-inline: var(--bew-space-3);
   }
@@ -527,13 +523,12 @@ function toggleChannel(value: string) {
   }
 
   &.selected {
-    border-color: var(--bew-theme-color-30);
-    background: color-mix(in oklab, var(--bew-theme-color-20), transparent 35%);
-    color: var(--bew-theme-foreground);
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
     transform: none;
 
     &:hover {
-      background: color-mix(in oklab, var(--bew-theme-color-20), transparent 20%);
+      background: var(--bew-theme-color);
     }
   }
 }

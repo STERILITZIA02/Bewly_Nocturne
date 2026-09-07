@@ -1,8 +1,11 @@
-import { LOADING_FADE_DURATION, LOADING_ROOT_ID, MOBILE_BREAKPOINT } from '~/utils/bewlyWidescreen/constants'
+import SKELETON_CSS from '~/styles/skeleton.scss?inline'
+import { LOADING_FADE_DURATION, LOADING_ROOT_ID, MOBILE_BREAKPOINT, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
+import { WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import { injectCSS } from '~/utils/main'
 
 export function injectLoadingStyle() {
   return injectCSS(`
+    ${SKELETON_CSS}
     #${LOADING_ROOT_ID} {
       position: fixed;
       inset: 0;
@@ -63,16 +66,6 @@ export function injectLoadingStyle() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-block {
       display: block;
       flex: 0 0 auto;
-      background: var(--bew-skeleton, rgb(131 131 145 / 30%));
-      background-image: linear-gradient(
-        100deg,
-        transparent 18%,
-        color-mix(in oklab, var(--bew-text-1) 10%, transparent) 38%,
-        transparent 58%
-      );
-      background-position: 180% 0;
-      background-size: 220% 100%;
-      animation: bewly-widescreen-loading-shimmer 1.6s var(--bew-ease-in-out, ease-in-out) infinite;
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-player-mark {
@@ -96,13 +89,11 @@ export function injectLoadingStyle() {
       display: grid;
       gap: var(--bew-space-2, 8px);
       padding: var(--bew-space-3, 12px);
-      background: var(--bew-elevated-alt);
+      background: var(--bew-elevated-alt-solid);
       border: 1px solid var(--bew-surface-border-color);
       border-radius: var(--bew-modal-radius, 24px);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-progress {
@@ -186,16 +177,14 @@ export function injectLoadingStyle() {
       z-index: 2;
       display: flex;
       flex-direction: column;
-      width: clamp(320px, 26vw, 520px);
+      width: min(${SIDEBAR_MAX_VIEWPORT_PERCENT}vw, max(${WIDESCREEN_SIDEBAR_MIN_WIDTH}px, var(--bewly-widescreen-sidebar-user-width, ${WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO * 100}vw)));
       min-height: 0;
       overflow: hidden;
-      background: var(--bew-elevated-alt);
+      background: var(--bew-elevated-alt-solid);
       border: 1px solid var(--bew-surface-border-color);
       border-radius: var(--bew-modal-radius, 24px);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
     }
 
     #${LOADING_ROOT_ID}[data-sidebar-layout="compact"] .bewly-widescreen-loading-skeleton-sidebar {
@@ -210,7 +199,7 @@ export function injectLoadingStyle() {
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-sidebar-top {
       display: grid;
       gap: var(--bew-space-2, 8px);
-      padding: var(--bew-space-3, 12px);
+      padding: var(--bew-space-4, 16px);
       border-bottom: 1px solid var(--bew-border-color);
     }
 
@@ -245,29 +234,46 @@ export function injectLoadingStyle() {
       height: var(--bew-space-2, 8px);
     }
 
-    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-owner {
-      display: flex;
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-author-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px), 1fr));
       align-items: center;
-      gap: var(--bew-space-2, 8px);
+      gap: var(--bew-space-3) var(--bew-space-4);
+      margin-top: var(--bew-space-1);
+    }
+
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-description {
+      padding: var(--bew-space-3);
+      background: var(--bew-surface-inset-bg);
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-owner {
+      display: grid;
+      grid-template-columns: var(--bew-space-12) auto minmax(0, 1fr);
+      align-items: center;
+      gap: var(--bew-space-2) var(--bew-space-3);
       min-width: 0;
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-avatar {
-      width: var(--bew-control-height-lg, 40px);
-      height: var(--bew-control-height-lg, 40px);
+      grid-row: span 2;
+      width: var(--bew-space-12);
+      height: var(--bew-space-12);
       border-radius: 50%;
       corner-shape: var(--bew-corner-shape-round, round);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-line--owner {
-      width: 28%;
+      grid-column: span 2;
+      width: 60%;
       min-width: var(--bew-space-10, 40px);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-owner-action {
       width: calc(var(--bew-space-10, 40px) + var(--bew-space-8, 32px));
-      height: var(--bew-control-height-sm, 28px);
-      margin-left: auto;
+      height: var(--bew-control-height);
       border-radius: var(--bew-interactive-radius, 8px);
       corner-shape: var(--bew-corner-shape);
     }
@@ -279,12 +285,12 @@ export function injectLoadingStyle() {
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-stats {
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: var(--bew-space-1, 4px);
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-stat {
-      height: var(--bew-control-height-sm, 28px);
+      height: var(--bew-control-height);
       border-radius: var(--bew-interactive-radius, 8px);
       corner-shape: var(--bew-corner-shape);
     }
@@ -331,12 +337,6 @@ export function injectLoadingStyle() {
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-skeleton-line--list-short {
       width: 62%;
-    }
-
-    @keyframes bewly-widescreen-loading-shimmer {
-      to {
-        background-position: -180% 0;
-      }
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-exit {

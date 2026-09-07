@@ -434,14 +434,21 @@ onBeforeUnmount(() => {
         :disabled="loading || resolvingTarget"
         @click="refreshComments"
       >
-        <span i-tabler-refresh :class="{ 'bew-spinner': loading }" aria-hidden="true" />
+        <SkeletonBlock v-if="loading" width="1em" height="1em" radius="interactive" />
+        <span v-else i-tabler-refresh aria-hidden="true" />
         {{ t('moment_card.comments_refresh') }}
       </button>
     </header>
 
-    <div v-if="resolvingTarget || (loading && !comments.length)" class="moment-comments__state" role="status">
-      <span i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
-      <span>{{ t('moment_card.comments_loading') }}</span>
+    <div v-if="resolvingTarget || (loading && !comments.length)" class="moment-comments__skeleton" role="status" :aria-label="t('moment_card.comments_loading')">
+      <div v-for="row in 3" :key="row" class="moment-comments__skeleton-row" aria-hidden="true">
+        <SkeletonBlock width="var(--bew-comment-avatar-size)" height="var(--bew-comment-avatar-size)" radius="circle" />
+        <div class="moment-comments__skeleton-copy">
+          <SkeletonBlock width="40%" height="var(--bew-line-height-control)" />
+          <SkeletonBlock height="var(--bew-line-height-body)" />
+          <SkeletonBlock width="72%" height="var(--bew-line-height-caption)" />
+        </div>
+      </div>
     </div>
 
     <div v-else-if="loadError && !comments.length" class="moment-comments__state moment-comments__state--error" role="alert">
@@ -532,7 +539,7 @@ onBeforeUnmount(() => {
             :disabled="thread.repliesLoading"
             @click="loadThreadReplies(thread.root)"
           >
-            <span v-if="thread.repliesLoading" i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
+            <SkeletonBlock v-if="thread.repliesLoading" width="1em" height="1em" radius="interactive" />
             {{ thread.repliesLoaded ? t('moment_card.comments_load_more_replies') : t('moment_card.comments_expand_replies') }}
           </button>
         </div>
@@ -553,13 +560,29 @@ onBeforeUnmount(() => {
       :disabled="loadingMore"
       @click="loadComments(false)"
     >
-      <span v-if="loadingMore" i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
+      <SkeletonBlock v-if="loadingMore" width="1em" height="1em" radius="interactive" />
       {{ t('moment_card.comments_load_more') }}
     </button>
   </section>
 </template>
 
 <style scoped lang="scss">
+.moment-comments__skeleton {
+  display: grid;
+  gap: var(--bew-space-4);
+  padding-block: var(--bew-space-3);
+}
+.moment-comments__skeleton-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bew-space-3);
+}
+.moment-comments__skeleton-copy {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: var(--bew-space-2);
+}
 .moment-comments {
   padding: 0 var(--bew-space-4) var(--bew-space-4);
   border-top: 1px solid var(--bew-border-color);

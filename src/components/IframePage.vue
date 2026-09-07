@@ -1,27 +1,37 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
+
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
-import { IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { IFRAME_DARK_MODE_CHANGE, IFRAME_NAVIGATION_ACK, IFRAME_NAVIGATION_REQUEST, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
-import { markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { isVideoOrBangumiPage } from '~/utils/main'
+import { releaseIframeMedia } from '~/utils/mediaResources'
 
 const props = defineProps<{
   url: string
 }>()
 const { reachTop } = useBewlyApp()
+const { t } = useI18n()
+const toast = useToast()
 const { isDark, isOledDark } = useDark()
 const settingsStore = useSettingsStore()
 const headerShow = ref(false)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
+const iframeKey = ref(0)
 
 const showLoading = ref<boolean>(false)
 const iframeScrollCleanupFns = ref<Array<() => void>>([])
 const iframeScrollSyncFailed = ref(false)
 let iframeGeneration = 0
 let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
+let commandId = 0
+let commandTimer: ReturnType<typeof setTimeout> | null = null
 
 function shouldUseOriginalBilibiliTopBar() {
   return showNativeBilibiliTopBar(settingsStore.getEffectiveTopBarSource())
@@ -157,14 +167,14 @@ watch(() => settings.value.darkModeBaseColor, (newColor) => {
   }
 })
 
-// watch(() => props.url, () => {
-//   showIframe.value = false
-// })
-
 // Only show loading animation after 1.5 seconds to prevent annoying flash when content loads quickly
 const showLoadingTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
 
 function clearLifecycleTimers() {
+  if (commandTimer !== null) {
+    clearTimeout(commandTimer)
+    commandTimer = null
+  }
   if (showLoadingTimeout.value !== null) {
     clearTimeout(showLoadingTimeout.value)
     showLoadingTimeout.value = null
@@ -185,6 +195,10 @@ function handleIframeLoad(event: Event) {
   }
 
   markIframeReadyForMessaging(iframe)
+  if (commandTimer !== null) {
+    clearTimeout(commandTimer)
+    commandTimer = null
+  }
   // 清除loading状态
   if (showLoadingTimeout.value !== null) {
     clearTimeout(showLoadingTimeout.value)
@@ -223,34 +237,43 @@ function handleIframeLoad(event: Event) {
   }
 }
 
-watch(() => props.url, (url) => {
-  // URL变化时启动loading逻辑，但保持iframe可见以避免样式计算错误
+function beginNavigation() {
   iframeGeneration++
-  currentUrl.value = url
+  commandId++
   cleanupIframeScrollSync()
   clearLifecycleTimers()
+  showLoading.value = false
+  const generation = iframeGeneration
   showLoadingTimeout.value = setTimeout(() => {
-    showLoading.value = true
+    if (generation === iframeGeneration)
+      showLoading.value = true
   }, 1500)
+}
+
+watch(() => props.url, (url) => {
+  releaseIframeMedia(iframeRef.value)
+  currentUrl.value = url
+  iframeKey.value++
+  beginNavigation()
 })
 
 onMounted(() => {
-  // 第一次加载时启动loading逻辑
-  showLoadingTimeout.value = setTimeout(() => {
-    showLoading.value = true
-  }, 1500)
-
+  beginNavigation()
+  window.addEventListener('message', handleNavigationAck)
+  const generation = iframeGeneration
   nextTick(() => {
-    iframeRef.value?.focus()
+    if (generation === iframeGeneration)
+      iframeRef.value?.focus()
   })
 })
 
 onBeforeUnmount(() => {
   clearLifecycleTimers()
-  void releaseIframeResources()
+  window.removeEventListener('message', handleNavigationAck)
+  releaseIframeResources()
 })
 
-async function releaseIframeResources() {
+function releaseIframeResources() {
   iframeGeneration++
   clearLifecycleTimers()
   cleanupIframeScrollSync()
@@ -258,57 +281,67 @@ async function releaseIframeResources() {
 
   // Clear iframe content
   const iframe = iframeRef.value
-  stopIframeMedia(iframe)
+  releaseIframeMedia(iframe)
   currentUrl.value = 'about:blank'
   /**
    * eg: When use 'iframeRef.value?.contentWindow?.document' of t.bilibili.com iframe on bilibili.com, there may be cross domain issues
    * set the src to 'about:blank' to avoid this issue, it also can release the memory
    */
-  if (iframe)
-    iframe.src = 'about:blank'
-  await nextTick()
-  try {
-    iframe?.contentWindow?.close()
-  }
-  catch {
-    // Cross-origin frames are already being released through about:blank.
-  }
-
-  // Remove iframe from the DOM
-  iframe?.parentNode?.removeChild(iframe)
-  await nextTick()
-
-  // Nullify the reference
-  if (iframeRef.value === iframe)
-    iframeRef.value = null
-}
-
-function stopIframeMedia(iframe: HTMLIFrameElement | null) {
-  if (!iframe)
-    return
-  try {
-    iframe.contentDocument?.querySelectorAll<HTMLMediaElement>('video, audio').forEach((media) => {
-      media.pause()
-      media.removeAttribute('src')
-      media.querySelectorAll('source').forEach(source => source.remove())
-      media.load()
-    })
-  }
-  catch {
-    // Cross-origin frames are released by navigating to about:blank.
-  }
 }
 
 function handleBackToTop() {
-  if (iframeRef.value) {
-    iframeRef.value.contentWindow?.scrollTo({ top: 0, behavior: 'smooth' })
-  }
+  const child = iframeRef.value?.contentWindow
+  if (!child)
+    return
+  if (canAccessIframeDocument(child))
+    child.scrollTo({ top: 0, behavior: 'smooth' })
+  else
+    requestChildNavigation('top')
 }
 
 function handleRefresh() {
-  if (iframeRef.value) {
-    iframeRef.value.contentWindow?.location.reload()
+  const child = iframeRef.value?.contentWindow
+  if (!child)
+    return
+  beginNavigation()
+  if (canAccessIframeDocument(child))
+    child.location.reload()
+  else
+    requestChildNavigation('reload')
+}
+
+function requestChildNavigation(action: 'reload' | 'top') {
+  // A scroll request must not replace the acknowledgement deadline of an in-flight reload.
+  if (action === 'top' && commandTimer !== null)
+    return
+  const requestId = ++commandId
+  const generation = iframeGeneration
+  if (commandTimer !== null)
+    clearTimeout(commandTimer)
+  const fail = () => {
+    commandTimer = null
+    if (generation !== iframeGeneration || requestId !== commandId)
+      return
+    if (action === 'reload') {
+      clearLifecycleTimers()
+      showLoading.value = false
+    }
+    toast.error(t('common.operation_failed'))
   }
+  if (!postMessageToIframe(iframeRef.value, { type: IFRAME_NAVIGATION_REQUEST, requestId, action })) {
+    fail()
+    return
+  }
+  commandTimer = setTimeout(fail, 1500)
+}
+
+function handleNavigationAck(event: MessageEvent) {
+  const data = getIframeMessageData(event, iframeRef.value)
+  if (data?.type !== IFRAME_NAVIGATION_ACK || data.requestId !== commandId)
+    return
+  if (commandTimer !== null)
+    clearTimeout(commandTimer)
+  commandTimer = null
 }
 
 defineExpose({
@@ -322,14 +355,19 @@ defineExpose({
     pos="relative top-0 left-0" of-hidden w-full h-full
   >
     <Transition name="fade">
-      <Loading v-if="showLoading" w-full h-full pos="absolute top-0 left-0" />
+      <Loading
+        v-if="showLoading" :kind="isVideoOrBangumiPage(currentUrl) ? 'video' : 'page'" class="iframe-page-loading" w-full h-full
+        pos="absolute top-0 left-0"
+      />
     </Transition>
     <!-- Iframe -->
     <iframe
+      :key="iframeKey"
       ref="iframeRef"
       :src="currentUrl"
       :style="{
         bottom: headerShow ? `var(--bew-top-bar-height)` : '0',
+        visibility: showLoading ? 'hidden' : 'visible',
       }"
       frameborder="0"
       pointer-events-auto
@@ -339,3 +377,10 @@ defineExpose({
     />
   </div>
 </template>
+
+<style scoped lang="scss">
+.iframe-page-loading {
+  z-index: 1;
+  background: var(--bew-bg);
+}
+</style>

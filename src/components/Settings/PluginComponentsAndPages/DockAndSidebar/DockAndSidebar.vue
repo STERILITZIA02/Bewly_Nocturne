@@ -191,8 +191,8 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
                 flex="~ gap-2 justify-between items-center wrap" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-radius" cursor-all-scroll
                 duration-300
                 :style="{
-                  background: element.visible ? 'var(--bew-theme-color-20)' : 'var(--bew-fill-1)',
-                  color: element.visible ? 'var(--bew-theme-color)' : 'var(--bew-text-1)',
+                  background: element.visible ? 'var(--bew-theme-surface)' : 'var(--bew-fill-1)',
+                  color: element.visible ? 'var(--bew-on-theme-surface)' : 'var(--bew-text-1)',
                 }"
                 @click="handleToggleDockItem(element)"
               >
@@ -254,6 +254,3 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
     </SettingsItemGroup>
   </div>
 </template>
-
-<style lang="scss" scoped>
-</style>

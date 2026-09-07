@@ -4,6 +4,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@wxperia/liquid-glass-vue@1.0.9': 7e04d71cec9bb942a34ad27f6150ec3c86d0d3bedb96462e08303a3d2fc996b1
+
 importers:
 
   .:
@@ -11,6 +14,9 @@ importers:
       '@types/md5':
         specifier: ^2.3.5
         version: 2.3.5
+      '@wxperia/liquid-glass-vue':
+        specifier: 1.0.9
+        version: 1.0.9(patch_hash=7e04d71cec9bb942a34ad27f6150ec3c86d0d3bedb96462e08303a3d2fc996b1)(typescript@5.9.2)
       dompurify:
         specifier: ^3.2.6
         version: 3.2.6
@@ -1667,6 +1673,9 @@ packages:
 
   '@webext-core/match-patterns@1.0.3':
     resolution: {integrity: sha512-NY39ACqCxdKBmHgw361M9pfJma8e4AZo20w9AY+5ZjIj1W2dvXC8J31G5fjfOGbulW9w4WKpT8fPooi0mLkn9A==}
+
+  '@wxperia/liquid-glass-vue@1.0.9':
+    resolution: {integrity: sha512-uCGz2GIxhjMY6OshbYUmu+mNKhwiaLb5tdeeM7fdCXhrSrIqxPAirvZ15BtGfTi0yYKmodU6ssBIdjLg0PUhag==}
 
   '@wxt-dev/browser@0.1.4':
     resolution: {integrity: sha512-9x03I15i79XU8qYwjv4le0K2HdMl/Yga2wUBSoUbcrCnamv8P3nvuYxREQ9C5QY/qPAfeEVdAtaTrS3KWak71g==}
@@ -7344,6 +7353,12 @@ snapshots:
       is-potential-custom-element-name: 1.0.1
 
   '@webext-core/match-patterns@1.0.3': {}
+
+  '@wxperia/liquid-glass-vue@1.0.9(patch_hash=7e04d71cec9bb942a34ad27f6150ec3c86d0d3bedb96462e08303a3d2fc996b1)(typescript@5.9.2)':
+    dependencies:
+      vue: 3.5.19(typescript@5.9.2)
+    transitivePeerDependencies:
+      - typescript
 
   '@wxt-dev/browser@0.1.4':
     dependencies:

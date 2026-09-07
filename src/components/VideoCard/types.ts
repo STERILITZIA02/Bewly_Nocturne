@@ -1,5 +1,17 @@
 import type { ThreePointV2 } from '~/models/video/appForYou'
 
+/** Local interaction state only. Watch-later membership stays in topBarStore. */
+export interface VideoCardState {
+  removed: boolean
+  selectedDislikeOpt?: { reasonId?: number, feedbackId?: number }
+  videoCurrentTime: number | null
+  resolvedWatchLaterAid?: number
+}
+
+export function createVideoCardState(): VideoCardState {
+  return { removed: false, videoCurrentTime: null }
+}
+
 export interface Video {
   id: number
   duration?: number

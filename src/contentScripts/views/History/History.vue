@@ -6,230 +6,59 @@ import { useToast } from 'vue-toastification'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
-import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
+import type { List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
-import type { HistorySearchResult, List as HistorySearchItem } from '~/models/video/historySearch'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 
+import { useHistoryTimeline } from './useHistoryTimeline'
+
 const { t } = useI18n()
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
-const isLoading = ref<boolean>(false)
-const requestFailed = ref(false)
-const noMoreContent = ref<boolean>(false)
-const historyList = reactive<Array<HistoryItem>>([])
-const currentPageNum = ref<number>(1)
-const keyword = ref<string>('')
-const submittedKeyword = ref('')
-const isClearingHistory = ref(false)
-const historyStatus = ref<boolean>()
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
-let historyCursor = 0
-let requestGeneration = 0
-
-const HistoryBusiness = computed(() => {
-  return Business
+const topBarStore = useTopBarStore()
+const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+const timeline = useHistoryTimeline({
+  api: api.history,
+  getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null,
+  getCSRF,
+  haveScrollbar,
+  onWriteError: () => toast.error(t('common.operation_failed')),
 })
-
+const { isLoading, requestFailed, noMoreContent, historyList, keyword, isClearingHistory, historyStatus, deleteHistoryItem, setHistoryPauseStatus, clearAllHistory, handleSearch } = timeline
+const HistoryBusiness = computed(() => Business)
+let mounted = false
 onMounted(() => {
-  void getHistoryList()
-  getHistoryPauseStatus()
-
-  initPageAction()
+  mounted = true
+  timeline.activate()
+  handleReachBottom.value = handleHistoryReachBottom
+  handlePageRefresh.value = handleHistoryPageRefresh
 })
-
+watch(accountId, () => {
+  if (mounted)
+    timeline.activate()
+}, { flush: 'sync' })
 onScopeDispose(() => {
-  requestGeneration++
+  timeline.dispose()
   if (handleReachBottom.value === handleHistoryReachBottom)
     handleReachBottom.value = undefined
   if (handlePageRefresh.value === handleHistoryPageRefresh)
     handlePageRefresh.value = undefined
 })
-
-function isSearchMode(): boolean {
-  return submittedKeyword.value.length > 0
+function handleHistoryReachBottom() {
+  return requestFailed.value ? Promise.resolve(false) : timeline.load()
 }
-
-function resetListState() {
-  requestGeneration++
-  historyList.length = 0
-  historyCursor = 0
-  currentPageNum.value = 1
-  noMoreContent.value = false
-  requestFailed.value = false
-  isLoading.value = false
-}
-
-function reloadCurrentMode() {
-  if (isClearingHistory.value)
-    return
-  resetListState()
-  if (isSearchMode())
-    void searchHistoryList()
-  else
-    void getHistoryList()
-}
-
-async function handleHistoryReachBottom() {
-  if (isClearingHistory.value || isLoading.value || noMoreContent.value || requestFailed.value)
-    return false
-
-  if (isSearchMode())
-    await searchHistoryList()
-  else
-    await getHistoryList()
-  return true
-}
-
 function handleHistoryPageRefresh() {
-  reloadCurrentMode()
+  timeline.reloadCurrentMode()
 }
-
-function initPageAction() {
-  handleReachBottom.value = handleHistoryReachBottom
-  handlePageRefresh.value = handleHistoryPageRefresh
-}
-
-/**
- * Get history list
- */
-async function getHistoryList() {
-  if (isClearingHistory.value || isLoading.value || noMoreContent.value)
-    return
-
-  const generation = requestGeneration
-  requestFailed.value = false
-  isLoading.value = true
-  try {
-    while (!noMoreContent.value) {
-      if (generation !== requestGeneration)
-        return
-      const requestedCursor = historyCursor
-      let res: HistoryResult
-      try {
-        res = await api.history.getHistoryList({
-          type: 'all',
-          view_at: requestedCursor,
-        })
-      }
-      catch (error) {
-        if (generation === requestGeneration)
-          requestFailed.value = true
-        console.error('获取历史记录失败:', error)
-        break
-      }
-
-      if (generation !== requestGeneration || isSearchMode())
-        return
-      if (res.code !== 0) {
-        requestFailed.value = true
-        break
-      }
-
-      const list = Array.isArray(res.data?.list) ? res.data.list : []
-      if (list.length === 0) {
-        noMoreContent.value = true
-        break
-      }
-
-      requestFailed.value = false
-      historyList.push(...list)
-      const nextCursor = list[list.length - 1].view_at
-      if (nextCursor === requestedCursor)
-        noMoreContent.value = true
-      else
-        historyCursor = nextCursor
-
-      if (list.length < 20)
-        noMoreContent.value = true
-
-      if (noMoreContent.value || await haveScrollbar())
-        break
-    }
-  }
-  finally {
-    if (generation === requestGeneration)
-      isLoading.value = false
-  }
-}
-
-async function searchHistoryList() {
-  const searchKeyword = submittedKeyword.value
-  if (!searchKeyword || isClearingHistory.value || isLoading.value || noMoreContent.value)
-    return
-
-  const generation = requestGeneration
-  requestFailed.value = false
-  isLoading.value = true
-  const page = currentPageNum.value
-  try {
-    const res: HistorySearchResult = await api.history.searchHistoryList({
-      pn: page,
-      keyword: searchKeyword,
-    })
-    if (generation !== requestGeneration || submittedKeyword.value !== searchKeyword)
-      return
-    if (res.code !== 0) {
-      requestFailed.value = true
-      return
-    }
-
-    const list = Array.isArray(res.data?.list) ? res.data.list : []
-    requestFailed.value = false
-    list.forEach((item: HistorySearchItem) => {
-      historyList.push(item)
-    })
-
-    currentPageNum.value = page + 1
-    noMoreContent.value = list.length < 20
-  }
-  catch (error) {
-    if (generation === requestGeneration)
-      requestFailed.value = true
-    console.error('搜索历史记录失败:', error)
-  }
-  finally {
-    if (generation === requestGeneration)
-      isLoading.value = false
-  }
-}
-
-function handleSearch() {
-  if (isClearingHistory.value)
-    return
-  submittedKeyword.value = keyword.value.trim()
-  reloadCurrentMode()
-}
-
 function retryHistoryRequest() {
-  if (isLoading.value)
-    return
-  requestFailed.value = false
-  if (isSearchMode())
-    void searchHistoryList()
-  else
-    void getHistoryList()
-}
-
-function deleteHistoryItem(historyItem: HistoryItem) {
-  const kid = `${historyItem.history.business}_${historyItem.history.oid}`
-  api.history.deleteHistoryItem({
-    kid,
-    csrf: getCSRF(),
-  })
-    .then((res) => {
-      if (res.code === 0) {
-        const targetIndex = historyList.findIndex(item =>
-          `${item.history.business}_${item.history.oid}` === kid,
-        )
-        if (targetIndex !== -1)
-          historyList.splice(targetIndex, 1)
-      }
-    })
+  void timeline.load()
 }
 
 /**
@@ -270,77 +99,30 @@ function getHistoryItemCover(item: HistoryItem) {
   return removeHttpFromUrl(item.cover)
 }
 
-function getHistoryPauseStatus() {
-  api.history.getHistoryPauseStatus()
-    .then((res) => {
-      if (res.code === 0)
-        historyStatus.value = res.data
-    })
-}
-
-function setHistoryPauseStatus(isPause: boolean) {
-  api.history.setHistoryPauseStatus({
-    csrf: getCSRF(),
-    switch: isPause,
-  })
-    .then((res) => {
-      if (res.code === 0)
-        getHistoryPauseStatus()
-    })
-}
-
-async function clearAllHistory() {
-  if (isClearingHistory.value)
-    return
-  const generation = ++requestGeneration
-  const accountId = getUserID()
-  isClearingHistory.value = true
-  isLoading.value = false
-  try {
-    const res = await api.history.clearAllHistory({ csrf: getCSRF() })
-    if (generation !== requestGeneration || accountId !== getUserID())
-      return
-    if (res.code !== 0)
-      throw new Error(res.message || t('history.clear_failed'))
-    historyList.length = 0
-    historyCursor = 0
-    currentPageNum.value = 1
-    noMoreContent.value = true
-    requestFailed.value = false
-  }
-  catch (error) {
-    if (generation === requestGeneration && accountId === getUserID()) {
-      requestFailed.value = historyList.length === 0
-      toast.error(error instanceof Error ? error.message : t('history.clear_failed'))
-    }
-  }
-  finally {
-    if (generation === requestGeneration)
-      isClearingHistory.value = false
-  }
-}
-
 async function handleClearAllWatchHistory() {
+  const owner = timeline.capture()
   const result = await showConfirmDialog(
     t('history.clear_all_watch_history_confirm'),
   )
-  if (result)
+  if (result && owner.isCurrent())
     clearAllHistory()
 }
 
 async function handlePauseWatchHistory() {
+  const owner = timeline.capture()
   const result = await showConfirmDialog(
     t('history.pause_watch_history_confirm'),
   )
-  if (result)
+  if (result && owner.isCurrent())
     setHistoryPauseStatus(true)
 }
 
 async function handleTurnOnWatchHistory() {
+  const owner = timeline.capture()
   const result = await showConfirmDialog(
     t('history.turn_on_watch_history_confirm'),
   )
-  if (result)
+  if (result && owner.isCurrent())
     setHistoryPauseStatus(false)
 }
 
@@ -360,7 +142,7 @@ function jumpToLoginPage() {
           {{ $t('common.operation.refresh') }}
         </Button>
       </Empty>
-      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0" :count="5" />
+      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0" :count="5" history />
 
       <!-- historyList -->
       <TransitionGroup v-else name="list">
@@ -379,14 +161,12 @@ function jumpToLoginPage() {
           />
           <!-- time slot -->
           <div
-            mr-8 px-4
+            class="bew-history-time-slot"
             b-l="~ 2px dashed $bew-fill-2"
-            group-hover:b-l="$bew-theme-color-40"
+            group-hover:b-l="$bew-theme-foreground"
             shrink-0
             relative
             duration-300
-            flex="important-xl:~ items-center justify-center"
-            hidden
           >
             <!-- hidden lg:flex -->
             <!-- Dot -->
@@ -401,12 +181,11 @@ function jumpToLoginPage() {
               duration-300
             />
             <div
-              text="sm $bew-text-3"
+              class="bew-history-time-chip"
+              text="$bew-text-3"
               group-hover:text="$bew-theme-foreground"
               bg="$bew-fill-1"
-              group-hover:bg="$bew-theme-color-20"
-              p="x-3 y-1"
-              rounded="$bew-radius-half"
+              group-hover:bg="$bew-theme-surface"
               duration-300
             >
               {{
@@ -525,7 +304,7 @@ function jumpToLoginPage() {
                   w-fit
                   rounded="$bew-radius"
                   hover:color="$bew-theme-color"
-                  hover:bg="$bew-theme-color-10"
+                  hover:bg="$bew-theme-surface"
                   duration-300
                   pr-2
                   :href="historyItem.author_mid ? `https://space.bilibili.com/${historyItem.author_mid}` : historyItem.uri" target="_blank"
@@ -616,6 +395,7 @@ function jumpToLoginPage() {
       <VideoListSkeleton
         v-if="isLoading && historyList.length !== 0 && !noMoreContent"
         :count="2"
+        history
       />
     </main>
 
@@ -683,6 +463,7 @@ function jumpToLoginPage() {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/videoList";
 .history-list-card {
   position: relative;
 }

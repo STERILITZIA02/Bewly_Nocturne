@@ -2,6 +2,7 @@
 import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useHomeTabState } from '~/composables/useHomeTabState'
 import type { GridLayoutType } from '~/logic'
 import type { DataItem as MomentItem, MomentResult } from '~/models/moment/moment'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -25,17 +26,18 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const videoList = ref<VideoElement[]>([])
+const tabState = useHomeTabState()
+const hasSettled = tabState.ref('hasSettled', false)
+const videoList = tabState.ref<VideoElement[]>('videoList', [])
 const isLoading = ref<boolean>(false)
-const needToLoginFirst = ref<boolean>(false)
-const offset = ref<string>('')
-const updateBaseline = ref<string>('')
-const noMoreContent = ref<boolean>(false)
-const requestFailed = ref<boolean>(false)
+const needToLoginFirst = tabState.ref<boolean>('needToLoginFirst', false)
+const offset = tabState.ref<string>('offset', '')
+const updateBaseline = tabState.ref<string>('updateBaseline', '')
+const noMoreContent = tabState.ref<boolean>('noMoreContent', false)
+const requestFailed = tabState.ref<boolean>('requestFailed', false)
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 const topBarStore = useTopBarStore()
 let requestGeneration = 0
-let reloadAfterActivation = false
 let componentActive = false
 
 function getSubscribedSeriesAccountId() {
@@ -43,31 +45,16 @@ function getSubscribedSeriesAccountId() {
 }
 
 function isSubscribedSeriesRequestCurrent(generation: number, requestAccountId: string) {
-  return generation === requestGeneration && requestAccountId === getSubscribedSeriesAccountId()
+  return tabState.isCurrent() && generation === requestGeneration && requestAccountId === getSubscribedSeriesAccountId()
 }
 
 onMounted(() => {
   componentActive = true
-  initData()
   initPageAction()
-})
-
-onActivated(() => {
-  componentActive = true
-  if (reloadAfterActivation) {
-    reloadAfterActivation = false
+  if (!tabState.restored)
     void initData()
-  }
-  initPageAction()
-})
-
-onDeactivated(() => {
-  componentActive = false
-  reloadAfterActivation = isLoading.value
-  requestGeneration++
-  if (isLoading.value)
-    emit('afterLoading')
-  isLoading.value = false
+  else if (!hasSettled.value)
+    void getData(requestGeneration, getSubscribedSeriesAccountId())
 })
 
 onUnmounted(() => {
@@ -81,6 +68,9 @@ watch(() => topBarStore.userInfo.mid, () => {
 })
 
 async function initData() {
+  if (!tabState.isCurrent())
+    return
+  hasSettled.value = false
   const generation = ++requestGeneration
   const requestAccountId = getSubscribedSeriesAccountId()
   needToLoginFirst.value = false
@@ -131,6 +121,7 @@ async function getData(generation: number, requestAccountId: string) {
   }
   finally {
     if (isSubscribedSeriesRequestCurrent(generation, requestAccountId)) {
+      hasSettled.value = true
       isLoading.value = false
       emit('afterLoading')
     }
@@ -138,6 +129,8 @@ async function getData(generation: number, requestAccountId: string) {
 }
 
 function initPageAction() {
+  if (!tabState.isCurrent())
+    return
   handleReachBottom.value = async () => {
     if (isLoading.value)
       return

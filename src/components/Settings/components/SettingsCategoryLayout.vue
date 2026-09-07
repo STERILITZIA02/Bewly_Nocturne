@@ -187,8 +187,8 @@ function handlePageMouseDown(event: MouseEvent) {
   }
 
   &.active {
-    color: var(--bew-theme-color);
-    background: var(--bew-theme-color-10);
+    color: var(--bew-on-theme-color);
+    background: var(--bew-theme-color);
   }
 
   > span:last-child {

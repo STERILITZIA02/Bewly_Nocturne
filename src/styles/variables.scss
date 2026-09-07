@@ -79,6 +79,7 @@
   // #region Layout
   --bew-layout-content-gap: var(--bew-space-5);
   --bew-layout-sidebar-width: 200px;
+  --bew-notifications-list-max-width: calc(var(--bew-space-12) * 9);
   --bew-layout-sidebar-sticky-top: 150px;
   --bew-layout-sidebar-viewport-offset: 140px;
   --bew-layout-dialog-width: 420px;
@@ -162,8 +163,8 @@
   --bew-control-label-line-height: var(--bew-line-height-control);
   --bew-control-label-weight: var(--bew-font-weight-semibold);
   --bew-control-brand-label-weight: var(--bew-font-weight-bold);
-  --bew-control-background: var(--bew-elevated);
-  --bew-control-background-white: color-mix(in oklab, var(--bew-elevated-solid), transparent 80%);
+  --bew-control-background: var(--bew-elevated-solid);
+  --bew-control-background-white: var(--bew-top-bar-solid-background-force-white);
   --bew-control-border-color: transparent;
   --bew-floating-control-size: 40px;
   --bew-control-height-sm: 28px;
@@ -199,13 +200,12 @@
   // Interaction tokens aligned with home tab buttons
   --bew-segment-item-hover-bg: var(--bew-fill-1);
   --bew-segment-item-hover-color: var(--bew-text-1);
-  --bew-segment-item-active-bg: var(--bew-theme-color-20);
-  --bew-segment-item-active-color: var(--bew-theme-foreground);
-  --bew-segment-item-active-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 6px var(--bew-theme-color-10);
+  --bew-segment-item-active-bg: var(--bew-theme-color);
+  --bew-segment-item-active-color: var(--bew-on-theme-color);
+  --bew-segment-item-active-shadow: inset 0 0 0 1px var(--bew-surface-border-color);
   --bew-segment-item-hover-bg-white: rgba(255, 255, 255, 0.16);
-  --bew-segment-item-active-bg-white: color-mix(in oklab, var(--bew-theme-color), transparent 55%);
-  --bew-segment-item-active-shadow-white:
-    inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 2px 6px color-mix(in oklab, var(--bew-theme-color), transparent 55%);
+  --bew-segment-item-active-bg-white: var(--bew-theme-color);
+  --bew-segment-item-active-shadow-white: var(--bew-segment-item-active-shadow);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
   --bew-liquid-indicator-radius: var(--bew-control-item-radius);
@@ -229,6 +229,7 @@
   --bew-popover-inner-radius: var(--bew-radius-md);
   --bew-popover-card-radius: var(--bew-radius-md);
   --bew-popover-media-radius: var(--bew-radius-half);
+  --bew-popover-media-width: 144px;
   --bew-popover-card-padding: var(--bew-space-2);
   --bew-popover-card-gap: var(--bew-space-4);
   --bew-popover-row-min-height: var(--bew-control-height);
@@ -247,6 +248,7 @@
 
   // Use this in dialogs if you want to add a frosted glass effect
   --bew-filter-glass-2: blur(30px) saturate(180%);
+  --bew-liquid-glass-color: #fff;
 
   // Apply this to the Bilibili icon if it is an image with the brand's original blue or pink color
   // Change it to glow effect to matches the user's theme color
@@ -296,6 +298,10 @@
   --bew-on-theme-color: white;
   --bew-theme-foreground: hsl(195 100% 32%);
   --bew-theme-focus-ring: hsl(195 100% 36%);
+  // Opaque secondary emphasis: consistent on glass, media and solid panels.
+  --bew-theme-surface: color-mix(in srgb, var(--bew-theme-color) 10%, var(--bew-content-solid));
+  --bew-theme-surface-hover: color-mix(in srgb, var(--bew-theme-color) 18%, var(--bew-content-solid));
+  --bew-on-theme-surface: var(--bew-text-1);
   --bew-theme-color-10: color-mix(in oklab, var(--bew-theme-color), transparent 90%);
   --bew-theme-color-20: color-mix(in oklab, var(--bew-theme-color), transparent 80%);
   --bew-theme-color-30: color-mix(in oklab, var(--bew-theme-color), transparent 70%);
@@ -411,6 +417,7 @@
   // #region Gray semi-transparent colors
   // You can used for buttons, input fields and the other components on the top of elements
   --bew-fill-1: rgb(131 131 145 / 15%);
+  --bew-surface-inset-bg: rgb(0 0 0 / 6%);
 
   // Used this for hovering color if it within the top layer of elements,
   // not just when hovering over the element itself; otherwise, use `--bew-content-*-hover` or `--bew-elevated--hover`
@@ -507,10 +514,12 @@
 
   --bew-elevated-solid: color-mix(in oklab, var(--bew-dark-base-color), white 6%);
   --bew-elevated-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 11%);
+  --bew-liquid-glass-color: color-mix(in oklab, var(--bew-dark-page-bg), black 40%);
   --bew-elevated-alt-solid: var(--bew-elevated-solid);
   --bew-elevated-alt-solid-hover: var(--bew-elevated-solid-hover);
 
   --bew-fill-1: rgb(131 131 145 / 10%);
+  --bew-surface-inset-bg: rgb(0 0 0 / 18%);
   --bew-fill-2: rgb(131 131 145 / 20%);
   --bew-fill-3: rgb(131 131 145 / 30%);
   --bew-fill-4: rgb(131 131 145 / 40%);
@@ -546,6 +555,7 @@
   --bew-bg: #000;
   --bew-homepage-bg: #000;
   --bew-surface-border-color: #4b4c4e;
+  --bew-liquid-glass-color: #000;
 }
 
 :root.dark.bewly-design.forceDark,
@@ -581,26 +591,26 @@
 :root.bewly-design,
 :root.bewly-design * {
   --brand_pink: var(--bew-theme-color);
-  --brand_pink_thin: var(--bew-theme-color-20);
+  --brand_pink_thin: var(--bew-theme-surface);
   --brand_blue: var(--bew-theme-color);
-  --brand_blue_thin: var(--bew-theme-color-20);
+  --brand_blue_thin: var(--bew-theme-surface);
 
-  --brand_pink_hover: var(--bew-theme-color-80);
+  --brand_pink_hover: var(--bew-theme-color);
   --brand_pink_active: var(--bew-theme-color);
-  --brand_pink_disabled: var(--bew-theme-color-60);
-  --brand_blue_hover: var(--bew-theme-color-80);
+  --brand_pink_disabled: var(--bew-fill-3);
+  --brand_blue_hover: var(--bew-theme-color);
   --brand_blue_active: var(--bew-theme-color);
-  --brand_blue_disabled: var(--bew-theme-color-60);
+  --brand_blue_disabled: var(--bew-fill-3);
 
-  --text_link: var(--bew-theme-color-80);
+  --text_link: var(--bew-theme-foreground);
 
   --bpx-fn-color: var(--bew-theme-color);
   --bpx-primary-color: var(--bew-theme-color);
-  --bpx-fn-hover-color: var(--bew-theme-color-80);
+  --bpx-fn-hover-color: var(--bew-theme-foreground);
 
   --bpx-box-shadow: rgba(0, 0, 0, 0.15);
   --bpx-toast-fn-color: var(--bew-theme-color);
-  --bpx-toast-fn-hover-color: var(--bew-theme-color-80);
+  --bpx-toast-fn-hover-color: var(--bew-theme-foreground);
   --bpx-primary-color: var(--bew-theme-color);
 
   --Lb0: color-mix(in oklab, var(--bew-theme-color), white 75%);

@@ -161,6 +161,7 @@ export function renderFallbackVideoInfo(currentState: BewlyWidescreenState) {
         text.className = 'bewly-widescreen-fallback-stat-label'
         text.textContent = `${label} ${formatWidescreenStat(value)}`
         item.className = 'bewly-widescreen-fallback-stat'
+        item.setAttribute('aria-disabled', 'true')
         item.title = `${label} ${new Intl.NumberFormat(document.documentElement.lang || navigator.language).format(value)}`
         item.append(createFallbackStatIcon(icon), text)
         stats.appendChild(item)

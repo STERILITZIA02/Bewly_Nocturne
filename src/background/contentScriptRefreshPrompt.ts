@@ -154,8 +154,7 @@ function showRefreshPrompt(...args: unknown[]): void {
   const themeStyles = getComputedStyle(themeSource)
   const themeProperties = [
     '--bew-theme-color',
-    '--bew-theme-color-80',
-    '--bew-theme-color-40',
+    '--bew-theme-focus-ring',
     '--bew-on-theme-color',
     '--bew-dark-base-color',
     '--bew-text-1',
@@ -282,7 +281,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       transform: scale(0.95);
     }
     button:focus-visible {
-      outline: 2px solid var(--bew-theme-color-40, rgb(0 174 236 / 40%));
+      outline: 2px solid var(--bew-theme-focus-ring, #00aeec);
       outline-offset: 2px;
     }
     .primary {
@@ -291,7 +290,7 @@ function showRefreshPrompt(...args: unknown[]): void {
     }
     .primary:hover {
       color: var(--bew-on-theme-color, white);
-      background: var(--bew-theme-color-80, var(--bew-theme-color, #00aeec));
+      background: var(--bew-theme-color, #00aeec);
     }
     :host([data-theme="dark"]) .prompt {
       color: var(--bew-text-1, #f1f2f3);
@@ -315,7 +314,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       background: var(--bew-theme-color, #00aeec);
     }
     :host([data-theme="dark"]) .primary:hover {
-      background: var(--bew-theme-color-80, var(--bew-theme-color, #00aeec));
+      background: var(--bew-theme-color, #00aeec);
     }
     @supports not (background: color-mix(in oklab, black, white)) {
       :host([data-theme="dark"]) .prompt {

@@ -7,6 +7,7 @@ function createLoadingSkeletonElement(className: string) {
 function createLoadingSkeletonBlock(modifier: string) {
   const block = document.createElement('span')
   block.className = `bewly-widescreen-loading-skeleton-block ${modifier}`
+  block.setAttribute('data-bew-skeleton', '')
   return block
 }
 
@@ -56,12 +57,14 @@ export function createWidescreenLoadingSkeleton() {
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-owner-action'),
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-owner-action bewly-widescreen-loading-skeleton-owner-action--wide'),
   )
-  sidebarTop.appendChild(owner)
+  const authorActions = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-author-actions')
+  authorActions.appendChild(owner)
 
   const stats = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-stats')
-  for (let index = 0; index < 4; index += 1)
+  for (let index = 0; index < 5; index += 1)
     stats.appendChild(createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-stat'))
-  sidebarTop.appendChild(stats)
+  authorActions.appendChild(stats)
+  sidebarTop.appendChild(authorActions)
   const description = createLoadingSkeletonElement('bewly-widescreen-loading-skeleton-description')
   description.append(
     createLoadingSkeletonBlock('bewly-widescreen-loading-skeleton-line'),
