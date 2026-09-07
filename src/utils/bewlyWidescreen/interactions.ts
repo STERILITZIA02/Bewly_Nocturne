@@ -5,7 +5,7 @@ import { forwardNativePlayerPointerActivity, isBottomControlPopoverOpen, isNativ
 import { session } from '~/utils/bewlyWidescreen/session'
 import { clearSidebarEdgeRevealSuppression } from '~/utils/bewlyWidescreen/shell'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
-import { clampWidescreenSidebarWidth, isWidescreenPlayerControlHoverRegion, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shouldBlockWidescreenSidebarReveal, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, WIDESCREEN_SIDEBAR_MIN_WIDTH, WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH } from '~/utils/bewlyWidescreenPolicy'
+import { clampWidescreenSidebarWidth, isWidescreenPlayerControlHoverRegion, resolveWidescreenSidebarHoverExpanded, resolveWidescreenSidebarResizeWidth, shouldBlockWidescreenSidebarReveal, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 
 export function setupSidebarInteractionTracking(currentState: BewlyWidescreenState) {
   const { root, sidebarEl: sidebar, sidebarResizer } = currentState
@@ -89,8 +89,8 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
 
   function getResizeBounds(viewportWidth = root.getBoundingClientRect().width) {
     return {
-      minWidth: Math.min(WIDESCREEN_SIDEBAR_MIN_WIDTH, viewportWidth),
-      maxWidth: clampWidescreenSidebarWidth(WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH, viewportWidth),
+      minWidth: clampWidescreenSidebarWidth(WIDESCREEN_SIDEBAR_MIN_WIDTH, viewportWidth),
+      maxWidth: clampWidescreenSidebarWidth(viewportWidth, viewportWidth),
     }
   }
 

@@ -536,7 +536,7 @@ function isItemActionPending(): boolean {
                     w-fit
                     rounded="$bew-radius"
                     hover:color="$bew-theme-color"
-                    hover:bg="$bew-theme-color-10"
+                    hover:bg="$bew-theme-surface"
                     duration-300
                     pr-2
                     :href="`//space.bilibili.com/${item.owner.mid}`" target="_blank"
@@ -637,11 +637,15 @@ function isItemActionPending(): boolean {
               aria-hidden="true"
             >
               <SkeletonBlock class="watch-later-grid-skeleton__media" height="auto" radius="media" />
-              <SkeletonBlock height="var(--bew-line-height-title)" />
-              <SkeletonBlock width="82%" height="var(--bew-line-height-title)" />
-              <div class="watch-later-grid-skeleton__author">
-                <SkeletonBlock width="30px" height="30px" radius="circle" />
-                <SkeletonBlock width="104px" height="var(--bew-line-height-control)" />
+              <div class="watch-later-grid-skeleton__body">
+                <div class="watch-later-grid-skeleton__title">
+                  <SkeletonBlock height="var(--bew-font-size-title)" />
+                  <SkeletonBlock width="82%" height="var(--bew-font-size-title)" />
+                </div>
+                <div class="watch-later-grid-skeleton__author">
+                  <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-space-6)" radius="circle" />
+                  <SkeletonBlock width="104px" height="var(--bew-line-height-control)" />
+                </div>
               </div>
             </article>
           </TransitionGroup>
@@ -805,5 +809,17 @@ function isItemActionPending(): boolean {
   display: flex;
   align-items: center;
   gap: var(--bew-space-2);
+}
+
+.watch-later-grid-skeleton__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-2);
+}
+
+.watch-later-grid-skeleton__title {
+  display: grid;
+  grid-template-rows: repeat(2, var(--bew-line-height-title));
+  align-items: center;
 }
 </style>

@@ -1,19 +1,16 @@
 // Do not use the "ads" keyword. AdGuard, AdBlock, and some ad-blocking extensions will
 // detect and remove it when the class name contains "ads"
 .block-useless-contents {
-  // 原版首頁最右則推介內容
-  .floor-single-card,
-  // 首頁不能使用不感興趣的影片都當廣告殺了
-  // NOTE: 避免使用 :has()，會在滾動動態插入卡片時引發大範圍樣式重算
+  // 仅标记含明确广告标识的卡片，不隐藏正常推荐或尚未挂载菜单的骨架。
+  // JS 复用列表 Observer，避免对整个信息流添加 :has()。
   .feed-card.bewly-blocked-feed-card,
   .bili-feed-card.bewly-blocked-feed-card,
-  .bili-video-card.is-rcmd:not(.enable-no-interest),
+  .floor-single-card.bewly-blocked-feed-card,
+  .video-list > .bewly-blocked-feed-card,
   .ad-report,
   .brand-ad-list,
   // 视频页游戏卡片
   .video-page-game-card-small,
-  // 大家围观的直播
-  .pop-live-small-mode,
   // 视频页面的侧栏
   .slide-ad-exp,
   .video-card-ad-small,

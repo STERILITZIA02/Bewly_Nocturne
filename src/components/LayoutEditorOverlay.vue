@@ -648,7 +648,6 @@ onBeforeUnmount(() => {
       v-if="isLayoutEditing && selectedDescriptor && selectedRect"
       ref="actionMenuRef"
       class="layout-editor-menu bew-shape-smooth-rect"
-      :class="{ 'layout-editor-menu--solid': settings.disableFrostedGlass }"
       :style="actionMenuStyle"
       data-layout-editor-control
       role="dialog"
@@ -775,13 +774,13 @@ onBeforeUnmount(() => {
 
 .layout-editor-outline--hovered {
   border: 2px solid var(--bew-theme-focus-ring);
-  box-shadow: 0 0 0 3px var(--bew-theme-color-20);
+  box-shadow: 0 0 0 3px var(--bew-theme-focus-ring);
 }
 
 .layout-editor-outline--selected {
   border: 2px solid var(--bew-theme-color);
   box-shadow:
-    0 0 0 4px var(--bew-theme-color-20),
+    0 0 0 4px var(--bew-theme-focus-ring),
     var(--bew-shadow-2);
 }
 
@@ -793,17 +792,11 @@ onBeforeUnmount(() => {
   flex-direction: column;
   gap: var(--bew-space-3);
   color: var(--bew-text-1);
-  background: var(--bew-elevated-alt);
+  background: var(--bew-elevated-alt-solid);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-popover-radius);
-  backdrop-filter: var(--bew-filter-glass-1);
   box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-1);
   pointer-events: auto;
-}
-
-.layout-editor-menu--solid {
-  background: var(--bew-elevated-alt-solid);
-  backdrop-filter: none;
 }
 
 .layout-editor-menu__header {

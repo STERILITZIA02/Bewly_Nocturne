@@ -99,20 +99,20 @@
     .report-dialog .vui_dialog--footer .report-dialog-footer .button-wrap .comfirm-report:hover,
     .collection-m-exp .bottom .btn:not(.disable):hover,
     .upinfo-btn-panel .following-charge-btn:hover {
-      background-color: var(--bew-theme-color-80);
+      background-color: var(--bew-theme-color);
     }
 
     .note-pc .note-container .note-header .note-operation:hover {
-      background-color: var(--bew-theme-color-80);
-      color: white;
+      background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .upinfo-btn-panel .follow-btn.not-follow:hover {
-      background-color: var(--bew-theme-color-80) !important;
+      background-color: var(--bew-theme-color) !important;
     }
 
     .bili-danmaku-x-vote-an.bili-danmaku-x-select .bili-danmaku-x-vote-an-bg-buffer {
-      background-color: var(--bew-theme-color-60) !important;
+      background-color: var(--bew-theme-color) !important;
     }
 
     .collection-m-exp.bewly-enlarged-favorite-dialog {
@@ -233,8 +233,8 @@
               box-sizing: border-box;
 
               &:hover {
-                color: var(--bew-theme-color);
-                background-color: var(--bew-theme-color-10);
+                color: var(--bew-on-theme-surface);
+                background-color: var(--bew-theme-surface);
                 border-color: var(--bew-theme-color);
               }
             }
@@ -287,7 +287,7 @@
                 flex-shrink: 0;
 
                 &:hover {
-                  background-color: var(--bew-theme-color-80);
+                  background-color: var(--bew-theme-color);
                 }
               }
 
@@ -356,11 +356,11 @@
     .collection-m-exp .content .group-list .add-group .input-group .submit,
     .collection-m-exp.bewly-enlarged-favorite-dialog .content .group-list .add-group .input-group .submit,
     .follow-dialog-wrap-exp .follow-dialog-window .content .group-list .add-group .input-group .submitGroup {
-      background-color: var(--bew-theme-color-10) !important;
-      color: var(--bew-theme-color) !important;
+      background-color: var(--bew-theme-surface) !important;
+      color: var(--bew-on-theme-surface) !important;
 
       &:hover {
-        background-color: var(--bew-theme-color-20) !important;
+        background-color: var(--bew-theme-surface-hover) !important;
       }
     }
 
@@ -391,9 +391,9 @@
         border-color var(--bew-duration-normal) var(--bew-ease-standard) !important;
 
       &:hover {
-        color: var(--bew-theme-color) !important;
+        color: var(--bew-on-theme-surface) !important;
         border-color: var(--bew-theme-color) !important;
-        background-color: var(--bew-theme-color-10) !important;
+        background-color: var(--bew-theme-surface) !important;
       }
     }
 
@@ -439,7 +439,7 @@
     }
 
     .upinfo-btn-panel .not-follow-charge-btn:hover {
-      color: var(--bew-theme-color-80);
+      color: var(--bew-theme-foreground);
     }
 
     .up-name.is_vip:hover,
@@ -447,7 +447,7 @@
     .up-detail .up-detail-top .up-name:hover,
     .up-detail .up-detail-top .up-name[style*="color: rgb(251, 114, 153)"]:hover,
     .up-detail .up-detail-top .up-name[style*="color:#FB7299;"]:hover {
-      color: var(--bew-theme-color-80) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .note-pc .note-container .note-header .note-operation.detail {
@@ -480,7 +480,7 @@
     .upinfo-btn-panel .not-follow-charge-btn:hover,
     .user-card-m-exp .user-info-wrapper .info .btn-box .like:not(.liked):hover,
     .coin-operated-m-exp .coin-bottom .bi-btn:hover {
-      border-color: var(--bew-theme-color-80);
+      border-color: var(--bew-theme-foreground);
     }
 
     // Tick icon for  danmaku enable

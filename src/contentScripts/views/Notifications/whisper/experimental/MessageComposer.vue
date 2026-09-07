@@ -236,7 +236,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           :disabled="!canSubmit"
           @click="submitCurrent"
         >
-          <i v-if="sending" i-svg-spinners-ring-resize aria-hidden="true" />
+          <SkeletonBlock v-if="sending" width="1em" height="1em" radius="interactive" />
           <i v-else i-mingcute:send-plane-line aria-hidden="true" />
         </IconButton>
       </Tooltip>

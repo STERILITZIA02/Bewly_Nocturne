@@ -46,10 +46,11 @@ let tabSwitchFrame: number | null = null
 
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
+const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
 function defineHomePageComponent(loader: AsyncComponentLoader) {
   return defineAsyncComponent({
     loader,
-    loadingComponent: PageAsyncLoading,
+    loadingComponent: { render: () => h(PageAsyncLoading, { contentOnly: true, gridLayout: homeGridLayout.value }) },
     delay: 120,
   })
 }
@@ -112,7 +113,6 @@ const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
 const tabPageRef = ref()
 const topBarVisibility = ref<boolean>(true)
-const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
@@ -335,11 +335,8 @@ function toggleTabContentLoading(loading: boolean) {
         <section
           v-if="shouldShowHomeTabs"
           v-layout-editable="'home-tabs'"
-          class="glass-panel home-tabs-panel bew-segment-control bew-segment-control--surface"
+          class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface"
           data-layout-editable-id="home-tabs"
-          :class="{
-            'bew-segment-control--solid': settings.disableFrostedGlass,
-          }"
         >
           <div class="home-tabs-scroll" h-full of-x-auto of-y-hidden>
             <div
@@ -367,11 +364,8 @@ function toggleTabContentLoading(loading: boolean) {
         <div
           v-if="settings.enableGridLayoutSwitcher"
           v-layout-editable="'home-grid-switcher'"
-          class="glass-panel home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
+          class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
           data-layout-editable-id="home-grid-switcher"
-          :class="{
-            'bew-segment-control--solid': settings.disableFrostedGlass,
-          }"
           flex="~ shrink-0 items-center"
           box-border
         >
@@ -409,9 +403,10 @@ function toggleTabContentLoading(loading: boolean) {
           @enter="restoreTabScrollPosition"
           @after-enter="finishTabSwitch"
         >
-          <Loading
+          <PageAsyncLoading
             v-if="homeAccountScope === 'profile-unavailable'"
-            min-h="240px"
+            content-only
+            :grid-layout="homeGridLayout"
             flex="~ items-center"
           />
           <Component
@@ -496,17 +491,11 @@ function toggleTabContentLoading(loading: boolean) {
   opacity: 0;
 }
 
-.glass-panel {
-  /* 毛玻璃关闭时 --bew-filter-glass-1 为 none；同时配合 --solid 去掉 surface 上的 filter */
-  backdrop-filter: var(--bew-filter-glass-1);
+.home-control-surface {
   /* 关键优化：绘制隔离，防止重绘传播 */
   contain: paint layout;
   /* 创建独立堆叠上下文，减少合成压力 */
   isolation: isolate;
-}
-
-.glass-panel.bew-segment-control--solid {
-  backdrop-filter: none;
 }
 
 .home-header {

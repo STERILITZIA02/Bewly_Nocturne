@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import NotificationSkeletonBlock from '~/components/SkeletonBlock.vue'
 
+import type { NativeNotificationSection } from '../notificationSections'
+
 withDefaults(defineProps<{
   count?: number
   label: string
+  section?: NativeNotificationSection
+  announce?: boolean
 }>(), {
   count: 5,
+  section: 'reply',
+  announce: true,
 })
 </script>
 
 <template>
-  <div class="native-notification-feed-skeleton" role="status" :aria-label="label">
+  <div class="native-notification-feed-skeleton" :role="announce ? 'status' : undefined" :aria-label="announce ? label : undefined">
     <article
       v-for="index in count"
       :key="index"
@@ -20,7 +26,7 @@ withDefaults(defineProps<{
       <NotificationSkeletonBlock
         width="var(--bew-space-12)"
         height="var(--bew-space-12)"
-        radius="circle"
+        :radius="section === 'system' ? 'panel' : 'circle'"
       />
       <div class="native-notification-feed-skeleton__content">
         <div class="native-notification-feed-skeleton__heading">
@@ -43,7 +49,7 @@ withDefaults(defineProps<{
           width="64%"
           height="var(--bew-line-height-body)"
         />
-        <div v-if="index % 2 === 1" class="native-notification-feed-skeleton__reference">
+        <div v-if="section !== 'system' && index % 2 === 1" class="native-notification-feed-skeleton__reference">
           <NotificationSkeletonBlock width="72%" height="var(--bew-line-height-control)" />
           <div class="native-notification-feed-skeleton__reference-source">
             <NotificationSkeletonBlock
@@ -58,6 +64,7 @@ withDefaults(defineProps<{
           </div>
         </div>
         <NotificationSkeletonBlock
+          v-if="section !== 'system'"
           width="96px"
           height="var(--bew-line-height-control)"
           radius="full"

@@ -13,6 +13,7 @@ import {
   useLayoutEditSettingValue,
   vLayoutEditable,
 } from '~/logic/layoutEdit'
+import { vLiquidGlass } from '~/utils/liquidGlass'
 
 import PageModeSwitcherButton from '../PageModeSwitcherButton.vue'
 import Tooltip from '../Tooltip.vue'
@@ -147,10 +148,12 @@ function openPlayerFeedback() {
         :activated-page="props.activatedPage"
         :placement="tooltipPlacement"
         variant="sidebar"
+        :liquid-glass="!widescreenDocked"
       />
       <Tooltip :content="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')" :placement="tooltipPlacement">
         <Button
           v-layout-editable="'sidebar-theme-toggle'"
+          v-liquid-glass="!widescreenDocked"
           class="ctrl-btn bew-shape-circle"
           :aria-label="isDark ? $t('dock.dark_mode') : $t('dock.light_mode')"
           center size="small" round
@@ -174,6 +177,7 @@ function openPlayerFeedback() {
       </Tooltip>
       <Tooltip :content="$t('dock.settings')" :placement="tooltipPlacement">
         <Button
+          v-liquid-glass="!widescreenDocked"
           class="ctrl-btn group bew-shape-circle"
           :aria-label="$t('dock.settings')"
           center size="small" round
@@ -207,6 +211,9 @@ function openPlayerFeedback() {
 
 <style lang="scss" scoped>
 .ctrl-btn {
+  position: relative;
+  --bew-liquid-frame-inset: 0px;
+  --bew-liquid-outer-shadow: var(--bew-shadow-1);
   --b-button-width: var(--bew-floating-control-size);
   --b-button-height: var(--bew-floating-control-size);
   --b-button-border-width: 1px;

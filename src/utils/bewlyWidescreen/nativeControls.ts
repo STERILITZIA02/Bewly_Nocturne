@@ -97,6 +97,12 @@ export function syncNativePlayerControlVisibility(
   playerHost: HTMLElement = currentState.playerEl,
 ) {
   const playerContainer = getNativePlayerContainer(currentState, playerHost)
+  const nativeControls = playerContainer?.querySelector(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR)
+  if (!nativeControls || !currentState.danmakuSemanticsSource?.isConnected) {
+    currentState.controlsLayoutReady = false
+    currentState.controlsLayoutSignature = undefined
+    currentState.controlsLayoutStableSince = undefined
+  }
   const { hidden, ready } = resolveWidescreenControlSurfaceState({
     bottomControlsHovered: currentState.bottomControlsHovered,
     danmakuControlsReady: currentState.danmakuSemanticsSource?.isConnected === true,
@@ -104,7 +110,8 @@ export function syncNativePlayerControlVisibility(
       playerContainer?.dataset.ctrlHidden === 'true'
       || playerContainer?.classList.contains('bpx-state-no-cursor') === true
     ),
-    nativeControlsReady: !!playerContainer?.querySelector(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR),
+    nativeControlsReady: currentState.controlsLayoutReady
+      && !!nativeControls,
     pointerInsidePlayer: currentState.playerPointerInside,
     sidebarExpanded: isWidescreenSidebarExpanded(currentState),
   })

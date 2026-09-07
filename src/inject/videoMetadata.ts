@@ -1,7 +1,11 @@
+import { selectors } from '~/utils/bewlyWidescreen/constants'
 import {
   parseVideoMetadataEvent,
   parseVideoPageIdentity,
   validateVideoPageMetadata,
+  VIDEO_COMPONENT_CHANGED,
+  VIDEO_COMPONENT_REQUEST,
+  VIDEO_COMPONENT_RESPONSE,
   VIDEO_METADATA_CHANGED,
   VIDEO_METADATA_REQUEST,
   VIDEO_METADATA_RESPONSE,
@@ -21,6 +25,15 @@ interface NativeVideoApp {
   $watch?: (getter: () => string, callback: () => void) => () => void
 }
 
+interface NativeVideoComponent {
+  $el?: HTMLElement
+  _isMounted?: boolean
+  _isDestroyed?: boolean
+  _isBeingDestroyed?: boolean
+  $once?: (event: string, handler: () => void) => void
+  $off?: (event: string, handler: () => void) => void
+}
+
 export function setupVideoMetadataBridge(channelId: string) {
   const controller = new AbortController()
   const { signal } = controller
@@ -28,6 +41,7 @@ export function setupVideoMetadataBridge(channelId: string) {
   let stopWatch: (() => void) | undefined
   let lastSignature = ''
   let refreshQueued = false
+  const nativeComponents = new Map<NativeVideoComponent, { node: HTMLElement, destroyed: () => void }>()
 
   function getApp() {
     return (document.getElementById('app') as (HTMLElement & { __vue__?: NativeVideoApp }) | null)?.__vue__
@@ -101,10 +115,47 @@ export function setupVideoMetadataBridge(channelId: string) {
       detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, metadata }),
     }))
   }, { signal })
+  const nativeComponentSelector = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags].join(',')
+  document.addEventListener(VIDEO_COMPONENT_REQUEST, (event) => {
+    const request = parseVideoMetadataEvent(event)
+    const node = event.target
+    if (request?.channelId !== channelId || !Number.isSafeInteger(request.requestId)
+      || request.href !== location.href || !parseVideoPageIdentity(location.href)
+      || !(node instanceof HTMLElement) || !node.isConnected || !node.matches(nativeComponentSelector)) {
+      return
+    }
+    const owner = (node as HTMLElement & { __vue__?: NativeVideoComponent }).__vue__
+    const ready = !!owner && owner.$el === node && owner._isMounted === true
+      && !owner._isDestroyed && !owner._isBeingDestroyed
+    if (ready && typeof owner.$once === 'function') {
+      const existing = nativeComponents.get(owner)
+      if (existing) {
+        existing.node = node
+      }
+      else {
+        const binding = { node, destroyed: () => {
+          nativeComponents.delete(owner)
+          binding.node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_CHANGED, {
+            bubbles: true,
+            detail: JSON.stringify({ channelId, href: location.href }),
+          }))
+        } }
+        nativeComponents.set(owner, binding)
+        owner.$once('hook:destroyed', binding.destroyed)
+      }
+    }
+    node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+      detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready }),
+    }))
+  }, { capture: true, signal })
   for (const name of ['pushstate', 'replacestate', 'popstate', 'hashchange', 'load'])
     window.addEventListener(name, scheduleRefresh, { signal })
   document.addEventListener('loadedmetadata', scheduleRefresh, { capture: true, signal })
-  signal.addEventListener('abort', () => stopWatch?.(), { once: true })
+  signal.addEventListener('abort', () => {
+    stopWatch?.()
+    nativeComponents.forEach((binding, owner) => owner.$off?.('hook:destroyed', binding.destroyed))
+    nativeComponents.clear()
+  }, { once: true })
   window.addEventListener('pagehide', (event: PageTransitionEvent) => {
     if (!event.persisted)
       controller.abort()

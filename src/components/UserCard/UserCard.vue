@@ -80,8 +80,6 @@ watch([() => props.mid, currentAccountId], ([_mid, accountId], [_previousMid, pr
 onScopeDispose(() => followGeneration++)
 
 const followButtonText = computed(() => {
-  if (isFollowLoading.value)
-    return '...'
   return isFollowing.value ? t('search.user.following') : t('search.user.follow')
 })
 
@@ -259,9 +257,11 @@ async function handleFollowClick(e: Event) {
               class="user-card__interactive follow-button-compact"
               :class="{ followed: isFollowing }"
               :disabled="isFollowLoading"
+              :aria-busy="isFollowLoading"
               @click="handleFollowClick"
             >
               {{ followButtonText }}
+              <SkeletonBlock v-if="isFollowLoading" width="100%" height="var(--bew-space-0-5)" pos="absolute bottom-0 left-0" />
             </button>
           </div>
         </div>
@@ -312,8 +312,8 @@ async function handleFollowClick(e: Event) {
             v-if="isVerified && verifyInfo"
             class="verify-badge"
             flex items-center gap-1
-            text="xs $bew-theme-color"
-            bg="$bew-theme-color-20"
+            text="xs $bew-on-theme-surface"
+            bg="$bew-theme-surface"
             px-2 py-0.5 rounded-full
           >
             <div i-tabler:rosette-discount-check />

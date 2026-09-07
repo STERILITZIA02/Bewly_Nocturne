@@ -208,6 +208,7 @@ export function setupNecessarySettingsWatchers() {
       shouldEnableUselessFeedCardBlocker({
         blockAds: settings.value.blockAds,
         homePage: isHomePage(),
+        searchPage: location.hostname === 'search.bilibili.com',
         inIframe: isInIframe(),
       }),
     )

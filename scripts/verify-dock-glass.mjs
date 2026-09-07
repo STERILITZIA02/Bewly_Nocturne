@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 
 import { compileStyleAsync, parse } from 'vue/compiler-sfc'
 
+import { loadSourceModule } from './sourceModuleHarness'
+
 export function registerDockGlassChecks(check, { Vue, compileComponent, flush }) {
-  check('Dock glass settings: real form writes blur, custom color and opacity without losing the saved tint', async () => {
+  check('Appearance glass settings: real form preserves blur, custom color and strength after moving from Dock', async () => {
     const parameters = await import('../src/constants/liquidGlass')
     const range = await import('../src/utils/range')
     const Radio = await compileComponent('../src/components/Radio.vue')
@@ -18,7 +20,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       setup: (props, { emit }) => () => Vue.h('select', { value: String(props.modelValue), onChange: event => emit('update:modelValue', event.target.value) }, props.options.map(option => Vue.h('option', { value: String(option.value) }, option.label))),
     }
     const settings = Vue.ref({ alwaysUseDock: false, dockCollapseMode: 'button', dockPosition: 'bottom', dockItemsConfig: [], pageMode: 'bewly', disableDockGlowingEffect: false, showBewlyOrBiliPageSwitcher: true, disableLightDarkModeSwitcherOnDock: false, backToTopAndRefreshButtonsAreSeparated: false, enableUndoRefreshButton: false, sidebarPosition: 'right', autoHideSidebar: false, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140 })
-    const page = await compileComponent('../src/components/Settings/PluginComponentsAndPages/DockAndSidebar/DockAndSidebar.vue', {
+    const page = await compileComponent('../src/components/Settings/Appearance/LiquidGlassSettings.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vuedraggable': { default: { render: () => null } },
       '~/components/Button.vue': { default: { render: () => null } },
@@ -29,29 +31,29 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       '~/logic': { settings },
       '~/stores/mainStore': { useMainStore: () => ({ dockItems: [] }) },
       '~/stores/settingsStore': { useSettingsStore: () => ({ getUseOriginalBilibiliTopBar: () => false }) },
-      '../../components/SettingsItem.vue': { default: Item },
-      '../../components/SettingsItemGroup.vue': { default: Group },
+      '../components/SettingsItem.vue': { default: Item },
+      '../components/SettingsItemGroup.vue': { default: Group },
     })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp(page)
     app.config.globalProperties.$t = key => key
     app.mount(host)
-    host.querySelector('[data-setting-id="navigation.dock.liquidGlass"] input').click()
+    host.querySelector('[data-setting-id="appearance.liquidGlass"] input').click()
     await flush()
     assert.equal(settings.value.enableDockLiquidGlass, true)
-    const blur = host.querySelector('[data-settings-title="settings.dock_glass_blur"] input')
+    const blur = host.querySelector('[data-settings-title="settings.liquid_glass_blur"] input')
     blur.value = '20'
     blur.dispatchEvent(new Event('input', { bubbles: true }))
     await flush()
     assert.equal(settings.value.dockLiquidGlassBlur, 20)
-    const source = host.querySelector('[data-setting-id="navigation.dock.glassTint"] select')
+    const source = host.querySelector('[data-setting-id="appearance.liquidGlass.tint"] select')
     source.value = 'custom'
     source.dispatchEvent(new Event('change', { bubbles: true }))
     await flush()
     const color = host.querySelector('input[type="color"]')
     color.value = '#7a3f91'
     color.dispatchEvent(new Event('input', { bubbles: true }))
-    const opacity = host.querySelector('[data-settings-title="settings.dock_glass_tint_opacity"] input')
+    const opacity = host.querySelector('[data-settings-title="settings.liquid_glass_tint_opacity"] input')
     opacity.value = '65'
     opacity.dispatchEvent(new Event('input', { bubbles: true }))
     await flush()
@@ -64,7 +66,12 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     assert.equal(settings.value.dockLiquidGlassTintColor, '#7a3f91')
     settings.value.disableFrostedGlass = true
     await flush()
-    assert.ok(host.textContent.includes('settings.dock_liquid_glass_paused'))
+    assert.ok(host.textContent.includes('settings.liquid_glass_paused'))
+    const { settingsSearchEntries } = await import('../src/components/Settings/searchCatalog')
+    const { MenuType } = await import('../src/components/Settings/types')
+    const entries = settingsSearchEntries.filter(entry => entry.titleKey?.startsWith('settings.liquid_glass'))
+    assert.equal(entries.length, 9)
+    assert.ok(entries.every(entry => entry.menu === MenuType.Appearance && !entry.storageValues?.length))
     app.unmount()
     host.remove()
   })
@@ -111,7 +118,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       const options = Vue.reactive({ blur: 6, tintColor: '#446688', tintOpacity: 30 })
       const file = new URL('../src/components/LiquidGlassSurface.vue', import.meta.url)
       const descriptor = parse(await readFile(file, 'utf8')).descriptor
-      const compiled = await compileStyleAsync({ source: descriptor.styles[0].content, filename: file.pathname, id: 'glass-test', preprocessLang: 'scss' })
+      const compiled = await compileStyleAsync({ source: descriptor.styles[0].content, filename: fileURLToPath(file), id: 'glass-test', preprocessLang: 'scss' })
       assert.equal(compiled.errors.length, 0)
       const style = document.head.appendChild(document.createElement('style'))
       style.textContent = compiled.code
@@ -158,6 +165,10 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       await resize(64, 64)
       assert.equal(host.querySelector('svg').style.width, '64px')
       assert.equal(host.querySelector('svg').style.height, '64px')
+      options.tintOpacity = 100
+      await flush()
+      assert.equal(host.querySelectorAll('filter').length, 0, 'opaque tint releases invisible refraction work')
+      assert.equal(host.querySelectorAll('.bew-liquid-glass-surface__warp').length, 0)
       enabled.value = false
       await flush()
       assert.equal(host.querySelectorAll('filter').length, 0)
@@ -179,11 +190,18 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140, frostedGlassBlurIntensity: 20 })
     const passthrough = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
     const Surface = { props: ['blur', 'tintColor', 'tintOpacity'], setup: props => () => Vue.h('span', { 'class': 'optical-test-surface', 'data-blur': props.blur, 'data-tint': props.tintColor, 'data-opacity': props.tintOpacity }) }
+    const material = await loadSourceModule('../src/composables/useLiquidGlass.ts', {
+      'vue': Vue,
+      '~/logic': { settings },
+      '~/constants/liquidGlass': await import('../src/constants/liquidGlass'),
+      '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false) }) },
+    })
     const Dock = await compileComponent('../src/components/Dock/Dock.vue', {
       '@iconify/vue': { Icon: { render: () => Vue.h('svg') } },
       '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(60) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
       '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop: Vue.ref(true), homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), toggleDark: () => {} }) },
+      '~/composables/useLiquidGlass': material,
       '~/composables/useDelayedHover': { useDelayedHover: () => Vue.ref(null) },
       '~/constants/dock': dockPolicy,
       '~/constants/layout': layout,

@@ -24,6 +24,7 @@ export const FOR_YOU_SOURCE_FILES = [
 
 export const FAVORITES_SOURCE_FILES = [
   '../src/contentScripts/views/Favorites/FavoritesPage.vue',
+  '../src/contentScripts/views/Favorites/favoritesLayout.scss',
   '../src/contentScripts/views/Favorites/useFavoritesData.ts',
   '../src/contentScripts/views/Favorites/useFavoriteWrites.ts',
   '../src/contentScripts/views/Favorites/favoriteAdapters.ts',

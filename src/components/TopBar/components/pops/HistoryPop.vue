@@ -7,7 +7,6 @@ import { useToast } from 'vue-toastification'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
-import Loading from '~/components/Loading.vue'
 import Progress from '~/components/Progress.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
@@ -19,6 +18,8 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
+
+import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
 const { t } = useI18n()
 const toast = useToast()
@@ -306,9 +307,9 @@ defineExpose({
       ref="historysWrap"
       class="bew-popover__body bew-popover__scroll bew-popover__list history-pop__scroll"
     >
-      <Loading
+      <PopoverListSkeleton
         v-if="isLoading && historys.length === 0"
-        class="bew-popover__state"
+        variant="history"
       />
 
       <Empty
@@ -492,7 +493,7 @@ defineExpose({
       </TransitionGroup>
       <!-- loading -->
       <Transition name="fade">
-        <Loading v-if="isLoading && historys.length !== 0" m="b-4" />
+        <PopoverListSkeleton v-if="isLoading && historys.length !== 0" variant="history" :count="2" />
         <div
           v-else-if="loadError && historys.length !== 0"
           class="history-pop__pagination-error"
@@ -524,8 +525,8 @@ defineExpose({
 }
 
 .history-pop .popover-card__media {
-  flex: 0 0 144px;
-  width: 144px;
+  flex: 0 0 var(--bew-popover-media-width);
+  width: var(--bew-popover-media-width);
   aspect-ratio: 16 / 9;
 }
 

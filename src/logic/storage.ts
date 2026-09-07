@@ -10,7 +10,7 @@ import { LIQUID_GLASS_MODES, LIQUID_GLASS_PARAMETERS, LIQUID_GLASS_TINT_SOURCES 
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
-import { normalizeWidescreenSidebarStoredWidth, WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH } from '~/utils/bewlyWidescreenPolicy'
+import { normalizeWidescreenSidebarStoredWidth, WIDESCREEN_SIDEBAR_DEFAULT_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import {
   MOBILE_LIST_LAYOUT_BREAKPOINT,
   normalizeListLayoutBreakpoint,
@@ -723,7 +723,7 @@ export const originalSettings: Settings = {
   bewlyWidescreenSidebarPosition: 'right',
   bewlyWidescreenLayoutPriority: 'video-first',
   bewlyWidescreenCenterVideo: false,
-  bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH,
+  bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_WIDTH,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
   lastDanmakuState: true,

@@ -28,7 +28,7 @@
 
   &.is-active {
     color: var(--bew-theme-color, var(--brand_blue, #00aeec));
-    background: color-mix(in srgb, var(--bew-theme-color, #00aeec) 12%, transparent);
+    background: var(--bew-theme-surface);
   }
 
   &.is-pending {
@@ -86,7 +86,7 @@
 .bewly-design {
   .bpx-player-toast-row .bpx-player-toast-item {
     --bpx-toast-fn-color: var(--bew-theme-color);
-    --bpx-toast-fn-hover-color: var(--bew-theme-color-80);
+    --bpx-toast-fn-hover-color: var(--bew-theme-foreground);
   }
 
   // https://github.com/BewlyBewly/BewlyBewly/issues/899
@@ -121,7 +121,7 @@
       }
 
       .BgmInfo .right .bottom .btn:hover {
-        color: white;
+        color: var(--bew-on-theme-color);
       }
 
       .BgmInfo .right .bottom .btn:hover {
@@ -129,7 +129,7 @@
       }
 
       .BgmInfo .right .bottom .btn {
-        background-color: var(--bew-theme-color-10);
+        background-color: var(--bew-theme-surface);
       }
     }
   }

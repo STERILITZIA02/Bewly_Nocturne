@@ -91,6 +91,8 @@ const selectedContentCount = computed(() => {
   return selectedCategory.value?.media_count ?? 0
 })
 
+const isInitialSidebarLoading = computed(() => isFullPageLoading.value && !selectedCategory.value && !selectedSeason.value && !bootstrapFailed.value)
+
 const selectedContentCover = computed(() => {
   if (activatedCategoryCover.value)
     return activatedCategoryCover.value
@@ -642,7 +644,10 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   <div v-if="getCSRF()" class="favorites-old-page">
     <main class="favorites-old-main">
       <h3 class="bew-page-heading favorites-main-heading">
-        {{ selectedContentTitle }} ({{ selectedContentCount }})
+        <SkeletonBlock v-if="isInitialSidebarLoading" width="12em" height="1lh" />
+        <template v-else>
+          {{ selectedContentTitle }} ({{ selectedContentCount }})
+        </template>
       </h3>
 
       <div
@@ -876,8 +881,9 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
         <div class="favorites-sidebar-content">
           <picture class="favorites-sidebar-cover">
+            <SkeletonBlock v-if="isInitialSidebarLoading" width="100%" height="100%" radius="media" />
             <img
-              v-if="selectedContentCover"
+              v-else-if="selectedContentCover"
               :src="removeHttpFromUrl(`${selectedContentCover}@480w_270h_1c`)"
               :alt="selectedContentTitle"
             >
@@ -886,12 +892,18 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
           <div class="favorites-sidebar-title">
             <h3 class="bew-page-heading">
-              {{ selectedContentTitle }}
+              <SkeletonBlock v-if="isInitialSidebarLoading" width="75%" height="1lh" />
+              <template v-else>
+                {{ selectedContentTitle }}
+              </template>
             </h3>
             <p>
-              {{ favoriteView === 'article'
-                ? t('favorites.article_count', { count: selectedContentCount })
-                : t('favorites.video_count', { count: selectedContentCount }) }}
+              <SkeletonBlock v-if="isInitialSidebarLoading" width="35%" height="1lh" />
+              <template v-else>
+                {{ favoriteView === 'article'
+                  ? t('favorites.article_count', { count: selectedContentCount })
+                  : t('favorites.video_count', { count: selectedContentCount }) }}
+              </template>
             </p>
           </div>
 
@@ -900,6 +912,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               v-model="favoriteView"
               class="favorite-view-select"
               :options="favoriteViewOptions"
+              :loading="isInitialSidebarLoading"
               @change="handleFavoriteViewChange"
             />
             <Tooltip v-if="favoriteView !== 'article'" :content="t('favorites.sidebar_manage')" placement="left" type="dark">
@@ -907,6 +920,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 class="sidebar-manage-toggle"
                 :class="{ active: sidebarManageSection !== null }"
                 :aria-label="t('favorites.sidebar_manage')"
+                :disabled="isInitialSidebarLoading"
                 @click="toggleCurrentSidebarManage"
               >
                 <span :class="sidebarManageSection ? 'i-tabler:x' : 'i-tabler:adjustments-horizontal'" />
@@ -968,17 +982,26 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             size="medium"
             text-color="white"
             strong
-            :disabled="searchScope === 'all' || isResolvingSeasonPlayAll"
+            :disabled="isInitialSidebarLoading || searchScope === 'all' || isResolvingSeasonPlayAll"
             @click="handlePlayAll"
           >
             <template #left>
-              <div i-tabler:player-play />
+              <SkeletonBlock v-if="isResolvingSeasonPlayAll" width="1em" height="1em" />
+              <div v-else i-tabler:player-play />
             </template>
             {{ t('common.play_all') }}
           </Button>
 
           <nav class="favorites-old-nav" :aria-label="selectedContentTitle">
-            <ul v-if="favoriteView === 'video'" class="category-list">
+            <ul v-if="isInitialSidebarLoading" class="category-list" aria-hidden="true">
+              <li v-for="index in 5" :key="index" class="category-item">
+                <div class="category-nav-item">
+                  <SkeletonBlock class="category-icon" width="1em" height="1em" />
+                  <SkeletonBlock class="category-title" width="65%" height="var(--bew-line-height-control)" />
+                </div>
+              </li>
+            </ul>
+            <ul v-else-if="favoriteView === 'video'" class="category-list">
               <li
                 v-for="item in favoriteCategories"
                 :key="`video:${item.id}`"
@@ -1105,45 +1128,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
 <style lang="scss" scoped>
 @use "../../../styles/breakpoints";
-
-.favorites-old-page {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bew-space-4);
-  // Keep the page's containing block as tall as the main list; the desktop
-  // sidebar can then stay pinned independently of grid height recalculation.
-  align-items: stretch;
-}
-
-.favorites-old-main {
-  order: 2;
-  width: 100%;
-  min-width: 0;
-  min-height: 100vh;
-  margin-bottom: var(--bew-space-6);
-}
-
-.favorites-main-heading {
-  margin: 0 0 var(--bew-space-6);
-  color: var(--bew-text-1);
-}
-
-.favorites-old-sidebar {
-  position: relative;
-  order: 1;
-  width: 100%;
-  align-self: stretch;
-}
-
-.favorites-sidebar-panel {
-  position: relative;
-  width: 100%;
-  height: 230px;
-  margin: var(--bew-space-10) 0;
-  overflow: hidden;
-  border-radius: var(--bew-panel-radius);
-  corner-shape: var(--bew-corner-shape);
-}
+@use "./favoritesLayout";
 
 .favorites-sidebar-background {
   position: absolute;
@@ -1409,7 +1394,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .category-item.row-selected {
-  background: color-mix(in oklab, var(--bew-theme-color), transparent 52%);
+  background: var(--bew-theme-color);
 }
 
 .item-more-btn,
@@ -1686,9 +1671,9 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .batch-target-folder.active {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-on-theme-surface);
   border-color: var(--bew-theme-color);
-  background: var(--bew-theme-color-10);
+  background: var(--bew-theme-surface);
 }
 
 .batch-target-folder-icon,
@@ -1730,49 +1715,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 @media (min-width: breakpoints.$grid-md) {
-  .favorites-old-page {
-    flex-direction: row;
-  }
-
-  .favorites-old-main {
-    order: 1;
-    width: 60%;
-  }
-
-  .favorites-old-sidebar {
-    position: sticky;
-    top: calc(var(--bew-top-bar-height, 64px) + var(--bew-space-4));
-    order: 2;
-    width: 40%;
-    align-self: flex-start;
-  }
-
-  .favorites-sidebar-panel {
-    height: calc(100vh - 160px);
-  }
-
   .favorites-sidebar-cover {
     display: grid;
-  }
-}
-
-@media (min-width: breakpoints.$grid-lg) {
-  .favorites-old-main {
-    width: 70%;
-  }
-
-  .favorites-old-sidebar {
-    width: 30%;
-  }
-}
-
-@media (min-width: breakpoints.$grid-xl) {
-  .favorites-old-main {
-    width: 75%;
-  }
-
-  .favorites-old-sidebar {
-    width: 25%;
   }
 }
 

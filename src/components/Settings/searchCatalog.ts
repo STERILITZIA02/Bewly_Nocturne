@@ -446,21 +446,9 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.disable_light_dark_mode_switcher',
     'settings.back_to_top_and_refresh_buttons_are_separated',
     'settings.enable_undo_refresh_button',
-    'settings.group_dock_glass',
-    'settings.dock_liquid_glass',
     'settings.group_sidebar',
     'settings.auto_hide_sidebar',
   ]),
-  ...createEntries(dockRoute, [
-    'settings.dock_glass_mode',
-    'settings.dock_glass_refraction',
-    'settings.dock_glass_blur',
-    'settings.dock_glass_tint',
-    'settings.dock_glass_tint_color',
-    'settings.dock_glass_tint_opacity',
-    'settings.dock_glass_dispersion',
-    'settings.dock_glass_saturation',
-  ], { targetTitleKey: 'settings.dock_liquid_glass', keywords: ['Liquid Glass', 'WXperia', 'liquid-glass-vue'] }),
   ...createEntries(dockRoute, [
     'settings.dock_position',
   ], { keywordKeys: ['common.position.left', 'common.position.right', 'common.position.bottom'] }),
@@ -584,6 +572,19 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     ],
   }),
 
+  ...createEntries(appearanceRoute, [
+    'settings.liquid_glass',
+  ], { keywords: ['Liquid Glass', 'WXperia', 'liquid-glass-vue'] }),
+  ...createEntries(appearanceRoute, [
+    'settings.liquid_glass_mode',
+    'settings.liquid_glass_refraction',
+    'settings.liquid_glass_blur',
+    'settings.liquid_glass_tint',
+    'settings.liquid_glass_tint_color',
+    'settings.liquid_glass_tint_opacity',
+    'settings.liquid_glass_dispersion',
+    'settings.liquid_glass_saturation',
+  ], { targetTitleKey: 'settings.liquid_glass', keywords: ['Liquid Glass', 'WXperia', 'OLED'] }),
   ...createEntries(appearanceRoute, [
     'settings.menu_appearance',
     'settings.group_visual_effects',

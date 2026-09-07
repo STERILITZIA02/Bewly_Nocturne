@@ -239,7 +239,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
         :disabled="submitting"
         @click="handleSubmit"
       >
-        <span v-if="submitting" i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
+        <SkeletonBlock v-if="submitting" width="1em" height="1em" radius="interactive" />
         {{ submitting ? t('moment_card.forward_submitting') : t('moment_card.forward') }}
       </button>
     </div>
@@ -293,7 +293,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
 }
 .moment-forward-composer textarea:focus-visible {
   border-color: var(--bew-theme-color);
-  box-shadow: 0 0 0 2px var(--bew-theme-color-20);
+  box-shadow: 0 0 0 2px var(--bew-theme-focus-ring);
 }
 .moment-forward-composer textarea:disabled {
   opacity: 0.65;
@@ -306,8 +306,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   margin-top: var(--bew-space-2);
   padding-left: var(--bew-space-2);
   border-radius: var(--bew-badge-radius);
-  color: var(--bew-theme-color);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
@@ -325,7 +325,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   corner-shape: var(--bew-corner-shape-round);
 }
 .moment-forward-composer__topic button:hover {
-  background: var(--bew-theme-color-20);
+  background: var(--bew-theme-surface-hover);
 }
 .moment-forward-composer__error {
   margin: var(--bew-space-2) 0 0;
@@ -369,8 +369,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   background: var(--bew-fill-2);
 }
 .moment-forward-composer__tools button[aria-expanded="true"] {
-  color: var(--bew-theme-color);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 .moment-forward-composer__submit {
   flex: 0 0 auto;

@@ -93,8 +93,8 @@ onBeforeUnmount(() => {
         :placeholder="searchPlaceholder"
       >
     </div>
-    <div v-if="searchState.loading" class="moment-forward-topic-picker__state" role="status">
-      <span i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
+    <div v-if="searchState.loading" class="moment-forward-topic-picker__results" role="status" :aria-label="$t('common.loading')">
+      <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height)" radius="interactive" />
     </div>
     <div v-else-if="searchState.error" class="moment-forward-topic-picker__state moment-forward-topic-picker__state--error" role="alert">
       <span>{{ searchState.error }}</span>

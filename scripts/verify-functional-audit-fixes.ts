@@ -68,6 +68,7 @@ async function verifySearchSuggestionLifecycle() {
     searchBarDisposed: false,
     suggestionRequestId: 2,
     suggestions,
+    suggestionsLoading: ref(true),
     reportSearchBarFailure: () => {},
     api: { search: { getSearchSuggestion: async () => {
       requests++
@@ -79,6 +80,7 @@ async function verifySearchSuggestionLifecycle() {
   await context.handleKeywordInput('current', 2)
   assert.equal(requests, 1)
   assert.equal(suggestions.length, 1)
+  assert.equal(context.suggestionsLoading.value, false)
   context.searchBarDisposed = true
   await context.handleKeywordInput('closed', 2)
   assert.equal(requests, 1, 'unmounted debounce callback does not send a new API request')

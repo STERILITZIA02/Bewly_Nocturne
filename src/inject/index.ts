@@ -325,6 +325,48 @@ else if (shouldInitializePageScript) {
   `
 
   const COMMENT_SHADOW_STYLE_PATCHES: Record<string, { id: string, css: string }> = {
+    'bili-comments-header-renderer': {
+      id: 'bewly-widescreen-comment-header-style',
+      css: `
+        :host-context(#bewly-widescreen-root) #navbar {
+          align-items: center;
+          gap: var(--bew-space-4);
+          min-height: var(--bew-control-height);
+        }
+        :host-context(#bewly-widescreen-root) #title {
+          display: inline-flex;
+          align-items: baseline;
+          gap: var(--bew-space-2);
+        }
+        :host-context(#bewly-widescreen-root) #title h2 {
+          font-size: var(--bew-font-size-heading) !important;
+          font-weight: var(--bew-font-weight-semibold) !important;
+          line-height: var(--bew-line-height-heading) !important;
+        }
+        :host-context(#bewly-widescreen-root) #count {
+          margin: 0;
+          font-size: var(--bew-font-size-caption) !important;
+          line-height: var(--bew-line-height-caption) !important;
+          color: var(--bew-text-3);
+        }
+        :host-context(#bewly-widescreen-root) #sort-actions {
+          margin-left: auto;
+        }
+        :host-context(#bewly-widescreen-root) #sort-actions bili-text-button {
+          font-size: var(--bew-font-size-control) !important;
+          line-height: var(--bew-line-height-control) !important;
+        }
+      `,
+    },
+    'bili-rich-text': {
+      id: 'bewly-widescreen-rich-text-style',
+      css: `
+        :host-context(#bewly-widescreen-root) #contents {
+          font-size: var(--bew-font-size-body) !important;
+          line-height: var(--bew-line-height-body) !important;
+        }
+      `,
+    },
     'bili-comment-thread-renderer': {
       id: 'bewly-comment-thread-style',
       css: `
@@ -468,7 +510,7 @@ else if (shouldInitializePageScript) {
         }
 
         :is(#pub button, button[data-v-risk="fingerprint"]):not(:hover, :active, .active) {
-          background-color: var(--bew-theme-color-60) !important;
+          background-color: var(--bew-theme-color) !important;
         }
       `,
     },
@@ -3237,7 +3279,7 @@ else if (shouldInitializePageScript) {
     }
     // 楼主标签使用主题色，明暗模式由主题变量自动适配
     else if (id === 'host-tag') {
-      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-medium, 500); color: var(--bew-theme-foreground); background-color: var(--bew-theme-color-10); border-radius: var(--bew-native-comment-tag-radius, 3px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
+      element.style.cssText = `display: inline-block; margin-left: var(--bew-space-1, 4px); padding: var(--bew-native-comment-tag-padding-block, 1px) var(--bew-space-1, 4px); font-size: var(--bew-native-comment-tag-font-size, 11px); font-weight: var(--bew-font-weight-medium, 500); color: var(--bew-on-theme-surface); background-color: var(--bew-theme-surface); border-radius: var(--bew-native-comment-tag-radius, 3px); vertical-align: middle; line-height: var(--bew-native-comment-tag-line-height, 1.4);`
       element.textContent = String(text)
     }
     else {

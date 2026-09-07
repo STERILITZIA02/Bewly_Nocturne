@@ -8,10 +8,15 @@ import { compileScript, parse } from 'vue/compiler-sfc'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
+import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
+import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
+import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
+import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
+import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
 
@@ -59,6 +64,11 @@ registerLongListResourceChecks(check, { Vue, compileComponent, flush })
 registerViewLifetimeChecks(check, { Vue, compileComponent, flush })
 registerDockGlassChecks(check, { Vue, compileComponent, flush })
 registerTopBarSyncChecks(check, { Vue, flush })
+registerSurfaceMaterialChecks(check, { Vue, compileComponent, flush })
+registerLoadingSkeletonChecks(check, { Vue, compileComponent, flush })
+registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent, flush })
+registerPlaybackContentChecks(check)
+registerAdvertisingRuleChecks(check, { flush })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -293,13 +303,25 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
   assert.equal(requests.length, 3)
 })
 
+let sharedSkeletonComponent
+const glassSurfaceContext = Symbol('fixture-glass-surface')
 async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
   const text = await readFile(new URL(file, import.meta.url), 'utf8')
   const { descriptor } = parse(text)
   const source = compileScript(descriptor, { id: file, inlineTemplate: renderTemplate }).content.replaceAll('import.meta.env.DEV', 'true')
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
   const exports = {}
-  const modules = { vue: Vue, '@vueuse/core': VueUse, '~/components/formFieldLabel': fieldLabels, '~/utils/imageLoadQueue': imageLoadQueue, ...mocks }
+  const modules = {
+    'vue': Vue,
+    '@vueuse/core': VueUse,
+    '~/components/formFieldLabel': fieldLabels,
+    '~/utils/imageLoadQueue': imageLoadQueue,
+    // Non-material checks keep their existing leaf boundary. Material checks
+    // replace these dependencies with the real production modules.
+    '~/utils/liquidGlass': { vLiquidGlass: {} },
+    '~/composables/useLiquidGlass': { GLASS_SURFACE_CONTEXT: glassSurfaceContext, liquidGlassEnabled: Vue.ref(false) },
+    ...mocks,
+  }
   vm.runInNewContext(code, {
     ...Vue,
     exports,
@@ -331,6 +353,10 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   })
   if (!renderTemplate)
     exports.default.render = () => null
+  if (!file.endsWith('/SkeletonBlock.vue')) {
+    sharedSkeletonComponent ??= await compileComponent('../src/components/SkeletonBlock.vue')
+    exports.default.components = { SkeletonBlock: sharedSkeletonComponent, ...exports.default.components }
+  }
   return exports.default
 }
 

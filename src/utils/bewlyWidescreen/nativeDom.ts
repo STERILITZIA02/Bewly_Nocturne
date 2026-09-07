@@ -3,8 +3,11 @@ import type { BewlyWidescreenState, CommentPrewarmState, MovedNode } from '~/uti
 import type { WidescreenMutationOrigin } from '~/utils/bewlyWidescreenPolicy'
 import { transferCommentNode } from '~/utils/commentDomTransfer'
 import { getVideoElement } from '~/utils/player'
+import { isNativeVideoComponentReady } from '~/utils/videoMetadataBridge'
 
 let commentPrewarmState: CommentPrewarmState | undefined
+const NATIVE_INFO_SELECTOR = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags].join(',')
+const NATIVE_DESCRIPTION_SELECTOR = [...selectors.description, ...selectors.tags].join(',')
 
 export function leaveMutuallyExclusivePlayerModes() {
   const fullscreenDocument = document as Document & {
@@ -42,8 +45,21 @@ export function exitNativeMiniPlayer(root: ParentNode = document) {
 }
 
 function isWidescreenInternalMutation(record: MutationRecord, currentState: BewlyWidescreenState): boolean {
-  if (currentState.root.contains(record.target))
+  if (currentState.root.contains(record.target)) {
+    // Native Vue may hydrate or replace these roots after we transfer them.
+    // Keep ignoring our decoration and the high-volume comment/danmaku trees.
+    const target = record.target instanceof Element ? record.target : record.target.parentElement
+    if (target && (currentState.upSlot?.contains(target)
+      || currentState.toolbarSlot?.contains(target)
+      || currentState.descriptionSlot?.contains(target)
+      || currentState.tagsSlot?.contains(target))) {
+      const nativeChange = !!target.closest(NATIVE_DESCRIPTION_SELECTOR)
+        || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
+          .some(node => node instanceof Element && (node.matches(NATIVE_INFO_SELECTOR) || !!node.querySelector(NATIVE_INFO_SELECTOR)))
+      return !nativeChange
+    }
     return true
+  }
 
   const changedNodes = [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
   return changedNodes.length > 0 && changedNodes.every(node => (
@@ -141,6 +157,9 @@ export function moveNode(
   if (target.contains(node))
     return false
 
+  if (node.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(node) !== true)
+    return false
+
   const parent = node.parentNode
   if (!parent)
     return false
@@ -176,6 +195,11 @@ export function moveMatchingNodes(selectors: string[], target: HTMLElement, move
 
 export function restoreMovedNodes(movedNodes: MovedNode[]) {
   for (const { node, placeholder, originalParent } of [...movedNodes].reverse()) {
+    if (node.matches(NATIVE_INFO_SELECTOR) && (!node.isConnected || isNativeVideoComponentReady(node) === false)) {
+      placeholder.remove()
+      node.remove()
+      continue
+    }
     const parent = placeholder.parentNode
     if (parent) {
       transferCommentNode(node, parent, placeholder)
@@ -201,12 +225,21 @@ export function removeMovedNode(node: HTMLElement, movedNodes: MovedNode[]) {
 }
 
 export function moveOrReplaceNode(selectors: string[], target: HTMLElement, movedNodes: MovedNode[], allowInsideLayout = false) {
-  const existing = findFirst(selectors, target)
+  let existing = findFirst(selectors, target)
+  if (existing?.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(existing) === false) {
+    removeMovedNode(existing, movedNodes)
+    existing = null
+  }
   const next = allowInsideLayout
     ? findFirst(selectors, target) || findMovable(selectors)
     : findMovable(selectors)
 
-  if (existing && next && existing !== next) {
+  // An outer selector can still match the native shell holding our placeholder.
+  // It is not a replacement for the intact inner component already in the slot.
+  const existingTransfer = existing && movedNodes.find(entry => entry.node === existing)
+  if (existing && next && existing !== next && !next.contains(existingTransfer?.placeholder ?? null)) {
+    if (next.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(next) !== true)
+      return { found: true, changed: false }
     removeMovedNode(existing, movedNodes)
     const moved = moveNode(next, target, movedNodes, allowInsideLayout)
     return { found: moved, changed: moved }

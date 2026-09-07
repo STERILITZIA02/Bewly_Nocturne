@@ -52,9 +52,16 @@ onMounted(loadEmotes)
     :aria-label="pickerLabel"
     @keydown.esc.stop.prevent="emit('close')"
   >
-    <div v-if="loading" class="moment-forward-picker__state" role="status">
-      <span i-tabler-loader-2 class="bew-spinner" aria-hidden="true" />
-    </div>
+    <template v-if="loading">
+      <div class="moment-forward-emoji-picker__categories" role="status" :aria-label="$t('common.loading')">
+        <SkeletonBlock v-for="index in 3" :key="index" width="var(--bew-control-height)" height="var(--bew-control-height)" radius="interactive" />
+      </div>
+      <div class="moment-forward-emoji-picker__grid" aria-hidden="true">
+        <div v-for="index in 18" :key="index" class="moment-forward-emoji-picker__placeholder">
+          <SkeletonBlock width="var(--bew-icon-size-lg)" height="var(--bew-icon-size-lg)" radius="interactive" />
+        </div>
+      </div>
+    </template>
     <div v-else-if="error" class="moment-forward-picker__state moment-forward-picker__state--error" role="alert">
       <span>{{ error }}</span>
       <button type="button" @click="loadEmotes">
@@ -101,6 +108,11 @@ onMounted(loadEmotes)
 </template>
 
 <style scoped lang="scss">
+.moment-forward-emoji-picker__placeholder {
+  display: grid;
+  min-height: var(--bew-control-height-lg);
+  place-items: center;
+}
 .moment-forward-emoji-picker {
   display: flex;
   width: min(var(--bew-moment-forward-picker-width), calc(100cqw - var(--bew-space-8)));
@@ -138,8 +150,8 @@ onMounted(loadEmotes)
   height: var(--bew-control-height);
 }
 .moment-forward-emoji-picker__categories button[aria-selected="true"] {
-  color: var(--bew-theme-color);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 .moment-forward-emoji-picker__categories img,
 .moment-forward-emoji-picker__grid img {

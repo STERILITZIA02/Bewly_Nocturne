@@ -36,6 +36,9 @@ export function syncDescription(currentState: BewlyWidescreenState) {
     }
   }
 
+  if (toggleButton !== descriptionSlot.lastElementChild)
+    descriptionSlot.appendChild(toggleButton)
+
   descriptionSlot.classList.remove('is-collapsed', 'is-expanded')
   const lineHeight = Number.parseFloat(getComputedStyle(basicDescription).lineHeight) || 20
   const subtitleList = description.querySelector<HTMLElement>('.subtitle-maker-list')

@@ -149,14 +149,19 @@ onScopeDispose(serverSettings.dispose)
         :desc="serverSettings.state.errorKind ? $t(`settings.messages_server_errors.${serverSettings.state.errorKind}`) : ''"
         right-width="auto"
       >
-        <Button type="tertiary" :disabled="serverSettings.state.loading" @click="serverSettings.refresh()">
-          {{ serverSettings.state.loading ? $t('settings.messages_server_loading') : $t('settings.messages_server_refresh_action') }}
+        <Button
+          type="tertiary" relative :disabled="serverSettings.state.loading" :aria-busy="serverSettings.state.loading" :aria-label="serverSettings.state.loading ? $t('settings.messages_server_loading') : undefined"
+          @click="serverSettings.refresh()"
+        >
+          {{ $t('settings.messages_server_refresh_action') }}
+          <SkeletonBlock v-if="serverSettings.state.loading" width="100%" height="var(--bew-space-0-5)" pos="absolute bottom-0 left-0" />
         </Button>
       </SettingsItem>
 
       <SettingsItem setting-id="messages.server.msgNotify" :title="$t('settings.messages_server_msg_notify')" :desc="getSettingError('msg_notify')" right-width="auto">
         <Select
           :model-value="getSettingValue('msg_notify')"
+          :loading="serverSettings.state.settings.msg_notify.pending || (serverSettings.state.loading && getSettingValue('msg_notify') === null)"
           :options="notificationOptions"
           :disabled="getSettingValue('msg_notify') === null || serverSettings.state.settings.msg_notify.pending"
           w="160px"
@@ -166,6 +171,7 @@ onScopeDispose(serverSettings.dispose)
       <SettingsItem setting-id="messages.server.aiIntercept" :title="$t('settings.messages_server_ai_intercept')" :desc="getSettingError('ai_intercept')" right-width="auto">
         <Select
           :model-value="getSettingValue('ai_intercept')"
+          :loading="serverSettings.state.settings.ai_intercept.pending || (serverSettings.state.loading && getSettingValue('ai_intercept') === null)"
           :options="binaryOptions"
           :disabled="getSettingValue('ai_intercept') === null || serverSettings.state.settings.ai_intercept.pending"
           w="160px"
@@ -175,6 +181,7 @@ onScopeDispose(serverSettings.dispose)
       <SettingsItem setting-id="messages.server.reply" :title="$t('settings.messages_server_reply')" :desc="getSettingError('set_comment')" right-width="auto">
         <Select
           :model-value="getSettingValue('set_comment')"
+          :loading="serverSettings.state.settings.set_comment.pending || (serverSettings.state.loading && getSettingValue('set_comment') === null)"
           :options="replyAtOptions"
           :disabled="getSettingValue('set_comment') === null || serverSettings.state.settings.set_comment.pending"
           w="160px"
@@ -184,6 +191,7 @@ onScopeDispose(serverSettings.dispose)
       <SettingsItem setting-id="messages.server.at" :title="$t('settings.messages_server_at')" :desc="getSettingError('set_at')" right-width="auto">
         <Select
           :model-value="getSettingValue('set_at')"
+          :loading="serverSettings.state.settings.set_at.pending || (serverSettings.state.loading && getSettingValue('set_at') === null)"
           :options="replyAtOptions"
           :disabled="getSettingValue('set_at') === null || serverSettings.state.settings.set_at.pending"
           w="160px"
@@ -193,6 +201,7 @@ onScopeDispose(serverSettings.dispose)
       <SettingsItem setting-id="messages.server.like" :title="$t('settings.messages_server_like')" :desc="getSettingError('set_like')" right-width="auto">
         <Select
           :model-value="getSettingValue('set_like')"
+          :loading="serverSettings.state.settings.set_like.pending || (serverSettings.state.loading && getSettingValue('set_like') === null)"
           :options="likeOptions"
           :disabled="getSettingValue('set_like') === null || serverSettings.state.settings.set_like.pending"
           w="160px"
@@ -202,6 +211,7 @@ onScopeDispose(serverSettings.dispose)
       <SettingsItem setting-id="messages.server.unfollowed" :title="$t('settings.messages_server_unfollowed')" :desc="getSettingError('show_unfollowed_msg')" right-width="auto">
         <Select
           :model-value="getSettingValue('show_unfollowed_msg')"
+          :loading="serverSettings.state.settings.show_unfollowed_msg.pending || (serverSettings.state.loading && getSettingValue('show_unfollowed_msg') === null)"
           :options="binaryOptions"
           :disabled="getSettingValue('show_unfollowed_msg') === null || serverSettings.state.settings.show_unfollowed_msg.pending"
           w="160px"
@@ -235,6 +245,9 @@ onScopeDispose(serverSettings.dispose)
           </Button>
         </div>
         <template #bottom>
+          <div v-if="serverSettings.state.blockWords.loading && !serverSettings.state.blockWords.words.length" class="message-block-words" role="status" :aria-label="$t('common.loading')">
+            <SkeletonBlock v-for="index in 3" :key="index" width="80px" height="var(--bew-control-height-sm)" radius="full" />
+          </div>
           <div v-if="serverSettings.state.blockWords.words.length" class="message-block-words">
             <span v-for="word in serverSettings.state.blockWords.words" :key="word" class="message-block-word">
               <span>{{ word }}</span>

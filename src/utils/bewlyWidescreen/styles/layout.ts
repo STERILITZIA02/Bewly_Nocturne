@@ -1,11 +1,17 @@
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
+import LIQUID_GLASS_CSS from '~/styles/liquidGlass.scss?inline'
+import SEGMENT_CONTROL_CSS from '~/styles/segmentControl.scss?inline'
+import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { BODY_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
-import { WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH, WIDESCREEN_SIDEBAR_MIN_WIDTH, WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH } from '~/utils/bewlyWidescreenPolicy'
+import { WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import { injectCSS } from '~/utils/main'
 import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
 
 export function injectLayoutStyle() {
   return injectCSS(`
+    ${SKELETON_CSS}
+    ${LIQUID_GLASS_CSS}
+    ${SEGMENT_CONTROL_CSS}
     body.${BODY_CLASS} {
       --bewly-widescreen-inputbar-height: calc(
         var(--bew-control-height, 36px) + var(--bew-space-2, 8px)
@@ -82,8 +88,8 @@ export function injectLayoutStyle() {
       background: transparent;
       font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
       pointer-events: none;
-      --bewly-widescreen-sidebar-bg: var(--bew-elevated-alt);
-      --bewly-widescreen-surface-bg: var(--bew-elevated);
+      --bewly-widescreen-sidebar-bg: transparent;
+      --bewly-widescreen-surface-bg: transparent;
       --bewly-widescreen-text-primary: var(--bew-text-1, #18191c);
       --bewly-widescreen-text-secondary: var(--bew-text-2, #61666d);
       --bewly-widescreen-text-muted: var(--bew-text-3, #9499a0);
@@ -94,15 +100,10 @@ export function injectLayoutStyle() {
       --bewly-widescreen-sidebar-floating-inset: var(--bew-popover-card-gap, var(--bew-space-4, 16px));
       --bewly-widescreen-sidebar-resize-accent: var(--bew-text-1, #fff);
       --bew-comment-expand-all-display: none;
-      --bewly-widescreen-sidebar-user-width: clamp(
-        ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px,
-        26vw,
-        ${WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH}px
-      );
-      --bewly-widescreen-sidebar-full-width: clamp(
-        ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px,
-        var(--bewly-widescreen-sidebar-user-width),
-        min(${WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH}px, ${SIDEBAR_MAX_VIEWPORT_PERCENT}vw)
+      --bewly-widescreen-sidebar-user-width: ${WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO * 100}vw;
+      --bewly-widescreen-sidebar-full-width: min(
+        ${SIDEBAR_MAX_VIEWPORT_PERCENT}vw,
+        max(${WIDESCREEN_SIDEBAR_MIN_WIDTH}px, var(--bewly-widescreen-sidebar-user-width))
       );
       --bewly-widescreen-sidebar-reserved-width: calc(
         var(--bewly-widescreen-sidebar-full-width) + var(--bewly-widescreen-sidebar-floating-inset) * 2
@@ -268,13 +269,19 @@ export function injectLayoutStyle() {
       pointer-events: auto !important;
     }
 
-    /* 仅反制对整个 wrap 的 display:none 空闲隐藏，壳层内部布局不动 */
-    body.${BODY_CLASS}:not(.${BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS}) .${NATIVE_PLAYER_CLASS} :is(
+    /* Hidden controls must still participate in measurement before reveal.
+       Only the outer wrap is displayed; opacity and pointer ownership stay unified. */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
       .bpx-player-container[data-ctrl-hidden] .bpx-player-control-wrap,
       .bpx-player-container.bpx-state-no-cursor .bpx-player-control-wrap,
       .bpx-player-control-wrap[hidden]
     ) {
       display: block !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(.bpx-player-control-top, .bpx-player-control-bottom) {
+      transform: none !important;
     }
 
     /* 原生底部渐变遮罩（180px repeat-x 暗化层）：禁用，悬浮卡只保留自己的玻璃表面 */
@@ -556,6 +563,7 @@ export function injectLayoutStyle() {
     /* 统一悬浮玻璃卡：包住原生控制栏（含进度行）与底部弹幕控制区。
        高度由 JS 测量原生控制栏后写入 --bewly-widescreen-controls-glass-height。 */
     body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS} {
+      --bew-liquid-frame-inset: 0px;
       box-sizing: border-box !important;
       position: absolute !important;
       right: var(--bewly-widescreen-controls-glass-inset) !important;
@@ -586,6 +594,30 @@ export function injectLayoutStyle() {
       opacity: var(--bewly-widescreen-controls-opacity, 0) !important;
       transform: none !important;
       pointer-events: none !important;
+    }
+
+    /* An opacity/will-change ancestor cuts off backdrop sampling. Fade only the
+       painted leaves so the optics can still see the video throughout the fade. */
+    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] {
+      background: transparent !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      border-color: transparent !important;
+      box-shadow: none !important;
+      opacity: 1 !important;
+      will-change: auto;
+      transition: none;
+    }
+
+    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-layer::after,
+    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__warp,
+    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint {
+      opacity: var(--bewly-widescreen-controls-opacity, 0);
+      transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
+    }
+
+    body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint {
+      opacity: calc(var(--bew-liquid-tint-opacity) * var(--bewly-widescreen-controls-opacity, 0)) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-danmaku-dock {
@@ -1014,7 +1046,7 @@ export function injectLayoutStyle() {
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar:focus-within {
       border-color: var(--bew-theme-color) !important;
       box-shadow:
-        0 0 0 var(--bew-space-0-5, 2px) var(--bew-theme-color-20),
+        0 0 0 var(--bew-space-0-5, 2px) var(--bew-theme-focus-ring),
         var(--bew-shadow-2),
         var(--bew-shadow-edge-glow-1) !important;
     }
@@ -1091,7 +1123,7 @@ export function injectLayoutStyle() {
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send:hover {
-      background: var(--bew-theme-color-80) !important;
+      background: var(--bew-theme-color) !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-wrap {
@@ -1362,14 +1394,14 @@ export function injectLayoutStyle() {
       min-width: 0;
       min-height: 0;
       isolation: isolate;
-      background: transparent;
+      background: var(--bew-elevated-alt);
       color: var(--bewly-widescreen-text-primary);
       border: 1px solid var(--bew-surface-border-color);
       border-radius: var(--bewly-widescreen-shell-radius);
       corner-shape: var(--bew-corner-shape);
       box-shadow: var(--bew-shadow-3), var(--bew-shadow-edge-glow-1);
-      backdrop-filter: none;
-      -webkit-backdrop-filter: none;
+      backdrop-filter: var(--bew-filter-glass-1);
+      -webkit-backdrop-filter: var(--bew-filter-glass-1);
       overflow: hidden;
       visibility: hidden;
       pointer-events: none;
@@ -1385,19 +1417,6 @@ export function injectLayoutStyle() {
       z-index: 2;
       grid-column: 2;
       grid-row: 1;
-    }
-
-    #${ROOT_ID} .bewly-widescreen-sidebar::before {
-      content: "";
-      position: absolute;
-      inset: 0;
-      z-index: -1;
-      border-radius: inherit;
-      corner-shape: inherit;
-      background: var(--bew-elevated-alt);
-      backdrop-filter: var(--bew-filter-glass-1);
-      -webkit-backdrop-filter: var(--bew-filter-glass-1);
-      pointer-events: none;
     }
 
     #${ROOT_ID} .bewly-widescreen-sidebar-resizer {
@@ -1602,6 +1621,7 @@ export function injectLayoutStyle() {
       z-index: 1;
       display: flex;
       flex-direction: column;
+      gap: var(--bew-space-2);
       flex: 0 0 auto;
       min-height: 0;
       max-height: 52%;
@@ -1609,8 +1629,7 @@ export function injectLayoutStyle() {
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
-      padding: var(--bew-space-2) var(--bew-space-3);
-      border-bottom: 1px solid var(--bewly-widescreen-divider);
+      padding: var(--bew-space-4);
       background: var(--bewly-widescreen-surface-bg);
     }
 
@@ -1619,7 +1638,6 @@ export function injectLayoutStyle() {
       align-items: flex-start;
       justify-content: space-between;
       gap: var(--bew-space-3);
-      margin-bottom: var(--bew-space-2);
     }
 
     #${ROOT_ID} .bewly-widescreen-title-group {
@@ -1726,9 +1744,18 @@ export function injectLayoutStyle() {
       color: currentColor !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-action-slot {
-      min-height: 0;
+    #${ROOT_ID} .bewly-widescreen-author-actions {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, ${WIDESCREEN_SIDEBAR_MIN_WIDTH}px), 1fr));
+      align-items: center;
+      gap: var(--bew-space-3) var(--bew-space-4);
+      min-width: 0;
       margin-top: var(--bew-space-1);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-action-slot {
+      min-width: 0;
+      min-height: 0;
       container-type: inline-size;
       overflow: visible;
     }
@@ -1736,7 +1763,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-fallback-stats {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
-      gap: var(--bew-space-1);
+      gap: var(--bew-space-2);
       width: 100%;
     }
 
@@ -1746,26 +1773,21 @@ export function injectLayoutStyle() {
       justify-content: center;
       gap: var(--bew-space-1);
       min-width: 0;
-      min-height: var(--bew-control-height-sm);
+      min-height: var(--bew-control-height);
       padding: 0 var(--bew-space-1);
       overflow: hidden;
       color: var(--bewly-widescreen-text-secondary);
       background: var(--bewly-widescreen-control-bg);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
-      font-size: var(--bew-font-size-caption);
+      font-size: var(--bew-font-size-control);
       font-weight: var(--bew-font-weight-medium);
-      line-height: var(--bew-line-height-caption);
+      line-height: var(--bew-line-height-control);
       text-overflow: ellipsis;
       white-space: nowrap;
       transition:
         color var(--bew-duration-fast) var(--bew-ease-standard),
         background-color var(--bew-duration-fast) var(--bew-ease-standard);
-    }
-
-    #${ROOT_ID} .bewly-widescreen-fallback-stat:hover {
-      color: var(--bew-theme-color);
-      background: var(--bewly-widescreen-control-hover-bg);
     }
 
     #${ROOT_ID} .bewly-widescreen-fallback-stat-icon {
@@ -1835,26 +1857,34 @@ export function injectLayoutStyle() {
       z-index: 0;
       flex: 0 0 auto;
       min-width: 0;
-      margin-top: var(--bew-space-2);
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot:empty {
       display: none;
     }
 
+    #${ROOT_ID} .bewly-widescreen-description-card {
+      display: flex;
+      flex-direction: column;
+      gap: var(--bew-space-3);
+      min-width: 0;
+      padding: var(--bew-space-3);
+      background: var(--bew-surface-inset-bg);
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-description-card:has(> .bewly-widescreen-description-slot:empty):has(> .bewly-widescreen-tags-slot:empty),
+    #${ROOT_ID} .bewly-widescreen-description-card:has(> .bewly-widescreen-description-slot.is-empty):has(> .bewly-widescreen-tags-slot:empty) {
+      display: none;
+    }
+
     #${ROOT_ID} .bewly-widescreen-description-slot {
-      margin-top: var(--bew-space-2);
-      padding-top: var(--bew-space-2);
-      border-top: 1px solid var(--bewly-widescreen-divider);
       color: var(--bewly-widescreen-text-primary);
     }
 
     #${ROOT_ID} .bewly-widescreen-description-slot:empty {
       display: none;
-    }
-
-    #${ROOT_ID} .bewly-widescreen-tags-slot {
-      margin-top: var(--bew-space-2, 8px);
     }
 
     #${ROOT_ID} .bewly-widescreen-tags-slot:empty {
@@ -1881,6 +1911,27 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-tags-slot .tag-panel .tag {
       float: none !important;
       margin: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag) {
+      transition:
+        background-color var(--bew-duration-fast) var(--bew-ease-standard),
+        color var(--bew-duration-fast) var(--bew-ease-standard);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag):is(:hover, :focus-within) {
+      background: var(--bew-theme-surface-hover) !important;
+      color: var(--bew-on-theme-surface) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag):is(:hover, :focus-within) .tag-link {
+      color: inherit !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-tags-slot .tag-link:focus-visible {
+      outline: 2px solid var(--bew-theme-focus-ring);
+      outline-offset: 2px;
+      border-radius: var(--bew-badge-radius);
     }
 
     #${ROOT_ID} .bewly-widescreen-description-slot.is-empty {
@@ -2038,7 +2089,7 @@ export function injectLayoutStyle() {
       position: relative !important;
       min-width: 0 !important;
       width: auto !important;
-      margin: 0 var(--bew-space-3, 12px) 0 0 !important;
+      margin: 0 var(--bew-space-2, 8px) 0 0 !important;
       overflow: visible !important;
     }
 
@@ -2064,7 +2115,8 @@ export function injectLayoutStyle() {
       background: transparent !important;
       font-size: var(--bew-font-size-control, 13px) !important;
       line-height: var(--bew-line-height-control, 18px) !important;
-      min-height: var(--bew-control-height-sm, 28px) !important;
+      font-weight: var(--bew-font-weight-medium) !important;
+      min-height: var(--bew-control-height, 36px) !important;
       white-space: nowrap !important;
       text-align: center !important;
       transition:
@@ -2210,7 +2262,7 @@ export function injectLayoutStyle() {
       display: flex !important;
       align-items: center !important;
       flex: 0 0 auto !important;
-      margin-left: var(--bew-space-3, 12px) !important;
+      margin-left: var(--bew-space-2, 8px) !important;
       padding: 0 !important;
       background: transparent !important;
       border: 0 !important;
@@ -2224,8 +2276,8 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-action-slot .bewly-watch-later-btn {
       display: inline-flex !important;
       width: auto !important;
-      min-width: var(--bew-control-height-sm, 28px) !important;
-      height: var(--bew-control-height-sm, 28px) !important;
+      min-width: var(--bew-control-height, 36px) !important;
+      height: var(--bew-control-height, 36px) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-right-item.bewly-watch-later-btn:hover {
@@ -2258,42 +2310,103 @@ export function injectLayoutStyle() {
       transform: none !important;
     }
 
+    /* Keep the native author, follow, charge and message nodes and handlers. */
+    #${ROOT_ID} .bewly-widescreen-up-slot .up-info-container {
+      display: flex !important;
+      align-items: flex-start !important;
+      height: auto !important;
+      min-height: 0 !important;
+      gap: var(--bew-space-3) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .up-info--left {
+      flex: 0 0 var(--bew-space-12) !important;
+      margin: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .up-info--right {
+      display: flex !important;
+      flex: 1 1 0 !important;
+      flex-direction: column !important;
+      width: auto !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      gap: var(--bew-space-2) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot :is(.up-info__detail, .up-info__btn-panel, .up-detail) {
+      height: auto !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .up-detail-top {
+      height: auto !important;
+      min-height: var(--bew-line-height-title) !important;
+      gap: var(--bew-space-3) !important;
+      align-items: center !important;
+      flex-wrap: wrap !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .up-name {
+      font-size: var(--bew-font-size-title) !important;
+      font-weight: var(--bew-font-weight-semibold) !important;
+      line-height: var(--bew-line-height-title) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot :is(.send-msg, .up-description) {
+      margin: 0 !important;
+      font-size: var(--bew-font-size-control) !important;
+      line-height: var(--bew-line-height-control) !important;
+      color: var(--bew-text-2) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .up-description {
+      height: auto !important;
+      margin-top: var(--bew-space-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .upinfo-btn-panel {
+      height: auto !important;
+      display: flex !important;
+      flex-wrap: wrap !important;
+      gap: var(--bew-space-2) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .upinfo-btn-panel > .default-btn {
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      flex: 0 1 auto !important;
+      width: auto !important;
+      max-width: 100% !important;
+      height: var(--bew-control-height) !important;
+      margin: 0 !important;
+      padding: 0 var(--bew-space-3) !important;
+      border-radius: var(--bew-interactive-radius) !important;
+      font-size: var(--bew-font-size-control) !important;
+      font-weight: var(--bew-font-weight-medium) !important;
+      line-height: var(--bew-line-height-control) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-up-slot .follow-btn-inner {
+      width: auto !important;
+      height: auto !important;
+      line-height: inherit !important;
+    }
+
     #${ROOT_ID} .bewly-widescreen-tabs {
-      position: relative;
+      --bew-segment-item-hover-current-bg: var(--bew-theme-surface-hover);
+      --bew-segment-item-hover-current-color: var(--bew-on-theme-surface);
       z-index: 1;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
+      display: flex;
       flex: 0 0 auto;
-      height: var(--bew-control-height-lg);
-      background: var(--bewly-widescreen-surface-bg);
-      border-bottom: 1px solid var(--bewly-widescreen-divider);
+      margin: 0 var(--bew-space-4) var(--bew-space-3);
     }
 
     #${ROOT_ID} .bewly-widescreen-tab {
-      position: relative;
-      border: 0;
-      color: var(--bewly-widescreen-text-secondary);
-      background: transparent;
-      cursor: pointer;
-      font-size: var(--bew-font-size-control);
-      font-weight: var(--bew-font-weight-semibold);
-      line-height: var(--bew-line-height-control);
-    }
-
-    #${ROOT_ID} .bewly-widescreen-tab.is-active {
-      color: var(--bew-theme-color, #00aeec);
-    }
-
-    #${ROOT_ID} .bewly-widescreen-tab.is-active::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      bottom: 0;
-      width: var(--bew-space-6);
-      height: var(--bew-space-0-5);
-      border-radius: var(--bew-radius-sm) var(--bew-radius-sm) 0 0;
-      background: var(--bew-theme-color, #00aeec);
-      transform: translateX(-50%);
+      flex: 1 1 0;
+      min-width: 0;
     }
 
     #${ROOT_ID} .bewly-widescreen-panels {
@@ -2311,7 +2424,7 @@ export function injectLayoutStyle() {
       height: 100%;
       overflow: auto;
       overscroll-behavior: contain;
-      padding: var(--bew-space-2) var(--bew-space-2) var(--bew-space-4);
+      padding: 0 var(--bew-space-4) var(--bew-space-4);
     }
 
     #${ROOT_ID} .bewly-widescreen-empty.bewly-widescreen-panel-error {
@@ -2363,6 +2476,7 @@ export function injectLayoutStyle() {
       position: relative;
       padding: 0;
       overflow: hidden;
+      container-type: size;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .danmaku-box,
@@ -2392,12 +2506,18 @@ export function injectLayoutStyle() {
       flex-direction: column;
     }
 
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-wrap {
+      position: relative;
+    }
+
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-header {
       flex: 0 0 auto;
       display: flex !important;
       align-items: center !important;
       height: auto !important;
       min-height: var(--bew-control-height-lg, 40px) !important;
+      /* Reserve room for the native history label and its horizontal padding. */
+      padding-inline-end: calc(var(--bew-font-size-control) * 8 + var(--bew-space-4) * 2) !important;
       background: var(--bewly-widescreen-sidebar-bg) !important;
       border-bottom-color: var(--bewly-widescreen-divider) !important;
       pointer-events: none;
@@ -2412,6 +2532,9 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bui-collapse-body {
+      /* The history footer remains in the native list tree; its containing
+         block is the collapse wrapper so list mode and delegated clicks survive. */
+      position: static !important;
       display: block !important;
       width: 100% !important;
       height: auto !important;
@@ -2445,6 +2568,59 @@ export function injectLayoutStyle() {
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-footer {
       flex: 0 0 auto;
       background: var(--bewly-widescreen-sidebar-bg) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-footer {
+      position: absolute !important;
+      top: 0;
+      right: var(--bew-space-4);
+      bottom: auto;
+      display: flex;
+      align-items: center;
+      width: auto !important;
+      height: var(--bew-control-height-lg) !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      z-index: 1;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history {
+      position: relative;
+      width: auto !important;
+      height: var(--bew-control-height-sm) !important;
+      padding: 0 var(--bew-space-2) !important;
+      border: 0 !important;
+      border-radius: var(--bew-interactive-radius);
+      background: var(--bew-fill-1) !important;
+      color: var(--bew-text-2) !important;
+      font-size: var(--bew-font-size-control) !important;
+      line-height: var(--bew-control-height-sm) !important;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history:hover {
+      background: var(--bew-fill-2) !important;
+      color: var(--bew-text-1) !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history:focus-visible {
+      outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+      outline-offset: var(--bew-space-0-5);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history .bpx-player-date-picker {
+      top: calc(100% + var(--bew-space-2)) !important;
+      right: 0 !important;
+      bottom: auto !important;
+      left: auto !important;
+      max-height: calc(100cqh - var(--bew-control-height-lg) - var(--bew-space-4));
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      background: var(--bew-elevated-solid) !important;
+      border-radius: var(--bew-popover-radius);
+      color: var(--bew-text-1);
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-wrap {
@@ -2503,8 +2679,6 @@ export function injectLayoutStyle() {
       height: var(--bew-space-3, 12px);
       border-radius: var(--bew-radius-sm);
       corner-shape: var(--bew-corner-shape);
-      background: var(--bew-skeleton);
-      animation: bewly-widescreen-skeleton-shimmer 1.4s ease-in-out infinite alternate;
     }
 
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__time {
@@ -2521,12 +2695,6 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-danmaku-skeleton__row:nth-child(3n) .bewly-widescreen-danmaku-skeleton__content {
       width: 96%;
-    }
-
-    @keyframes bewly-widescreen-skeleton-shimmer {
-      to {
-        opacity: 0.48;
-      }
     }
 
     /* B 站表情面板可能向上展开；只在打开期间允许它越过评论面板边界。 */
@@ -2632,8 +2800,8 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist .subscribe-btn:hover {
-      color: var(--bew-theme-color) !important;
-      background: var(--bew-theme-color-20) !important;
+      color: var(--bew-on-theme-surface) !important;
+      background: var(--bew-theme-surface-hover) !important;
       border-color: var(--bew-theme-color) !important;
     }
 
@@ -2752,6 +2920,34 @@ export function injectLayoutStyle() {
       font-size: var(--bew-font-size-caption) !important;
     }
 
+    #${ROOT_ID} .bewly-widescreen-empty.bewly-widescreen-panel-skeleton {
+      display: grid;
+      align-content: start;
+      gap: var(--bew-space-4);
+      padding: var(--bew-space-4);
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-skeleton__row {
+      display: flex;
+      align-items: flex-start;
+      gap: var(--bew-space-3);
+      width: 100%;
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-skeleton__leading {
+      width: var(--bew-space-8);
+      height: var(--bew-space-8);
+      flex: none;
+      border-radius: var(--bew-radius-full);
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-skeleton__content {
+      flex: 1;
+      min-width: 0;
+      height: var(--bew-space-12);
+      border-radius: var(--bew-radius-sm);
+    }
+    #${ROOT_ID} [data-kind="playlist"] .bewly-widescreen-panel-skeleton__leading {
+      border-radius: var(--bew-radius-sm);
+    }
+
     #${ROOT_ID} .bewly-widescreen-empty {
       display: flex;
       align-items: center;
@@ -2770,6 +2966,10 @@ export function injectLayoutStyle() {
       ),
       body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS},
       #${ROOT_ID} .bewly-widescreen-sidebar,
+      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-layer::after,
+      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__warp,
+      body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint,
+      #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag),
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-sidebar-toggle,
       #${ROOT_ID} .bewly-widescreen-playlist-toggle::after,

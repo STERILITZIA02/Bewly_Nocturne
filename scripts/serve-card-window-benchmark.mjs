@@ -54,7 +54,7 @@ h('nav',[h('button',{disabled:busy.value,onClick:()=>select('baseline')},'Baseli
 h('section',{id:'viewport',ref:viewport},mode.value==='none'?[]:[h(mode.value==='baseline'?Baseline:Current,{items,gridLayout:'adaptive',noMoreContent:true,transformItem:i=>i,getItemKey:i=>i.id})]),
 h('pre',{id:'results'},output.value)
 ])});
-app.component('VideoCard',card).component('VideoCardSkeleton',{render:()=>null}).component('Empty',{render:()=>null}).component('Button',{render:()=>null});
+app.component('VideoCard',card).component('Empty',{render:()=>null}).component('Button',{render:()=>null});
 app.config.globalProperties.$t=k=>k;
 app.provide('BEWLY_APP',{scrollViewportRef:viewport,isHomeTabSwitching:ref(false)});
 app.mount('#app');

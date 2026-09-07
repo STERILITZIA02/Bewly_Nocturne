@@ -100,9 +100,10 @@ export const WIDESCREEN_BOTTOM_CONTROL_HOVER_ENTRY_TOLERANCE = 4
 export const WIDESCREEN_BOTTOM_CONTROL_HOVER_EXIT_TOLERANCE = 16
 export const WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY = 240
 export const WIDESCREEN_SIDEBAR_MIN_WIDTH = 360
-export const WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH = 460
-export const WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH = 1920
-export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 2 / 3
+// Zero keeps the default responsive; positive stored widths are user-resized pixels.
+export const WIDESCREEN_SIDEBAR_DEFAULT_WIDTH = 0
+export const WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO = 0.5
+export const WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO = 0.85
 const WIDESCREEN_CONTROL_POPOVER_MIN_SIZE = 24
 
 export function hasWidescreenControlPopoverArea(width: number, height: number): boolean {
@@ -125,11 +126,9 @@ export function shouldBlockWidescreenSidebarReveal({
 }
 
 export function normalizeWidescreenSidebarStoredWidth(width: number): number {
-  const safeWidth = Number.isFinite(width) ? width : WIDESCREEN_SIDEBAR_DEFAULT_MAX_WIDTH
-  return Math.round(Math.min(
-    Math.max(safeWidth, WIDESCREEN_SIDEBAR_MIN_WIDTH),
-    WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH,
-  ))
+  if (!Number.isFinite(width) || width === WIDESCREEN_SIDEBAR_DEFAULT_WIDTH)
+    return WIDESCREEN_SIDEBAR_DEFAULT_WIDTH
+  return Math.round(Math.max(width, WIDESCREEN_SIDEBAR_MIN_WIDTH))
 }
 
 export interface WidescreenPlayerControlHoverInput {
@@ -232,15 +231,10 @@ export function resolveWidescreenSidebarHoverExpanded({
 
 export function clampWidescreenSidebarWidth(width: number, viewportWidth: number): number {
   const safeViewportWidth = Math.max(0, viewportWidth)
-  const minWidth = Math.min(WIDESCREEN_SIDEBAR_MIN_WIDTH, safeViewportWidth)
-  const maxWidth = Math.max(
-    minWidth,
-    Math.min(
-      WIDESCREEN_SIDEBAR_RESIZE_MAX_WIDTH,
-      safeViewportWidth * WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO,
-    ),
-  )
+  const maxWidth = safeViewportWidth * WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO
+  const minWidth = Math.min(WIDESCREEN_SIDEBAR_MIN_WIDTH, maxWidth)
   const safeWidth = normalizeWidescreenSidebarStoredWidth(width)
+    || safeViewportWidth * WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO
   return Math.min(Math.max(safeWidth, minWidth), maxWidth)
 }
 

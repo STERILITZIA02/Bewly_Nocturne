@@ -1,21 +1,6 @@
 @use "./gridLayout";
 @use "./popover";
-
-.bew-spinner {
-  animation: bew-spinner-rotate 0.8s linear infinite;
-}
-
-@keyframes bew-spinner-rotate {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bew-spinner {
-    animation: none;
-  }
-}
+@use "./skeleton";
 
 :host,
 :host *,
@@ -82,8 +67,8 @@ html.dark.bewly-design {
 
 .bewly-design *::selection,
 .bewly-wrapper *::selection {
-  background: color-mix(in oklab, var(--bew-theme-color-60), var(--bew-bg, white) 20%) !important;
-  color: revert !important;
+  background: var(--bew-theme-color) !important;
+  color: var(--bew-on-theme-color) !important;
 }
 
 .bewly-design {

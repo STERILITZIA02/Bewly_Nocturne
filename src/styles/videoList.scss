@@ -1,0 +1,22 @@
+@use "./breakpoints";
+
+.bew-history-time-slot {
+  display: none;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-right: var(--bew-space-8);
+  padding-inline: var(--bew-space-4);
+}
+.bew-history-time-chip {
+  padding: var(--bew-space-1) var(--bew-space-3);
+  border-radius: var(--bew-radius-half);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  white-space: nowrap;
+}
+@media (min-width: breakpoints.$grid-xl) {
+  .bew-history-time-slot {
+    display: flex;
+  }
+}

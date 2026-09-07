@@ -61,7 +61,7 @@ defineExpose({ refreshAnimeTimeTable })
 
 <template>
   <div>
-    <AnimeTimeTableSkeleton v-if="isLoading" />
+    <AnimeTimeTableSkeleton v-if="isLoading" :today-index="animeTimeTable.findIndex(day => day.is_today)" />
     <Empty v-else-if="requestFailed" :description="t('common.load_failed')">
       <Button type="tertiary" @click="refreshAnimeTimeTable">
         {{ t('common.operation.refresh') }}
@@ -75,7 +75,7 @@ defineExpose({ refreshAnimeTimeTable })
           w="1/1 sm:1/2 md:1/4 lg:1/5 xl:1/6 2xl:1/7"
           p="x-2 b-8"
           shrink-0
-          :bg="item.is_today ? '!$bew-theme-color-10' : ''"
+          :bg="item.is_today ? '!$bew-theme-surface' : ''"
           hover:bg="$bew-fill-1"
           duration-300
         >
@@ -120,7 +120,7 @@ defineExpose({ refreshAnimeTimeTable })
             grid
             gap-4
             :border-l="`~ 2px dashed ${
-              item.is_today ? '$bew-theme-color-40' : '$bew-fill-2'
+              item.is_today ? '$bew-theme-surface' : '$bew-fill-2'
             }`"
             p="t-3 l-3"
           >
@@ -131,7 +131,7 @@ defineExpose({ refreshAnimeTimeTable })
                 mb-2
                 rounded="$bew-radius-half"
                 :color="item.is_today ? '$bew-theme-color' : '$bew-text-3'"
-                :bg="item.is_today ? '$bew-theme-color-10' : '$bew-fill-1'"
+                :bg="item.is_today ? '$bew-theme-surface' : '$bew-fill-1'"
                 relative
                 grid
                 place-items-center

@@ -1,8 +1,9 @@
 import { Icon } from '@iconify/vue'
 import { createVNode, render } from 'vue'
-import browser from 'webextension-polyfill'
 
 import { GRID_BREAKPOINTS } from '~/constants/layout'
+import SKELETON_CSS from '~/styles/skeleton.scss?inline'
+import { i18n } from '~/utils/i18n'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isInIframe } from '~/utils/main'
 
@@ -75,6 +76,8 @@ let applyTimer: ReturnType<typeof setTimeout> | null = null
 let stopTimer: ReturnType<typeof setTimeout> | null = null
 let styleEl: HTMLStyleElement | null = null
 let loadingEl: HTMLElement | null = null
+let loadingHideTimer: ReturnType<typeof setTimeout> | undefined
+const layoutRetryTimers: Array<ReturnType<typeof setTimeout>> = []
 let appliedSuccessfully = false
 let layoutMode: LayoutMode = 'pending'
 let disabledSplit = false
@@ -184,10 +187,11 @@ html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-toc {
   position: fixed !important;
   inset: 0 !important;
   z-index: var(--bew-z-native-detail) !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  gap: 8px !important;
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, var(--bewly-opus-comment-width, 29%));
+  gap: var(--bew-space-4, 16px) !important;
+  padding: var(--bew-space-4, 16px);
+  box-sizing: border-box;
   background: var(--bew-bg, var(--bg1, #fff)) !important;
   color: var(--bew-text-2, var(--text2, #666)) !important;
   font-size: 13px !important;
@@ -198,12 +202,10 @@ html.momentsPage.drawer.bewly-opus-layout.bewly-opus-article-mode .opus-toc {
   opacity: 0 !important;
   pointer-events: none !important;
 }
-.bewly-opus-iframe-loading__icon {
-  width: 36px !important;
-  height: 36px !important;
-  object-fit: contain !important;
-  flex-shrink: 0 !important;
-}
+.bewly-opus-iframe-loading__media { border-radius: var(--bew-media-radius, 12px); }
+.bewly-opus-iframe-loading__copy { display: grid; align-content: start; gap: var(--bew-space-4, 16px); }
+.bewly-opus-iframe-loading__copy > span { height: var(--bew-line-height-body, 24px); border-radius: var(--bew-radius-sm, 4px); }
+.bewly-opus-iframe-loading__copy > span:first-child { height: var(--bew-space-12, 48px); }
 `
 
 /** 左右 4:3；长图宽占满可纵向滚动 */
@@ -877,28 +879,32 @@ function ensureStyles() {
     return
   styleEl = document.createElement('style')
   styleEl.id = 'bewly-opus-drawer-layout'
-  styleEl.textContent = `${BASE_CSS}\n${SPLIT_CSS}`
+  styleEl.textContent = `${SKELETON_CSS}\n${BASE_CSS}\n${SPLIT_CSS}`
   document.documentElement.appendChild(styleEl)
 }
 
-function showIframeLoading(text = '正在整理动态详情…') {
+function showIframeLoading(text = i18n.global.t('common.loading')) {
+  if (loadingHideTimer !== undefined)
+    clearTimeout(loadingHideTimer)
+  loadingHideTimer = undefined
   if (!loadingEl) {
     loadingEl = document.createElement('div')
     loadingEl.className = 'bewly-opus-iframe-loading'
-    let iconHtml = ''
-    try {
-      const gifUrl = browser.runtime.getURL('/assets/loading.gif')
-      iconHtml = `<img class="bewly-opus-iframe-loading__icon" src="${gifUrl}" alt="" aria-hidden="true">`
+    loadingEl.setAttribute('role', 'status')
+    const media = document.createElement('div')
+    media.className = 'bewly-opus-iframe-loading__media'
+    media.setAttribute('data-bew-skeleton', '')
+    const copy = document.createElement('div')
+    copy.className = 'bewly-opus-iframe-loading__copy'
+    for (let index = 0; index < 7; index++) {
+      const line = document.createElement('span')
+      line.setAttribute('data-bew-skeleton', '')
+      copy.appendChild(line)
     }
-    catch {
-      // ignore extension url resolution failures
-    }
-    loadingEl.innerHTML = `${iconHtml}<span></span>`
+    loadingEl.append(media, copy)
     document.documentElement.appendChild(loadingEl)
   }
-  const label = loadingEl.querySelector('span')
-  if (label)
-    label.textContent = text
+  loadingEl.setAttribute('aria-label', text)
   loadingEl.classList.remove('is-hide')
 }
 
@@ -906,9 +912,14 @@ function hideIframeLoading() {
   if (!loadingEl)
     return
   loadingEl.classList.add('is-hide')
-  window.setTimeout(() => {
-    loadingEl?.remove()
-    loadingEl = null
+  const target = loadingEl
+  if (loadingHideTimer !== undefined)
+    clearTimeout(loadingHideTimer)
+  loadingHideTimer = setTimeout(() => {
+    loadingHideTimer = undefined
+    target.remove()
+    if (loadingEl === target)
+      loadingEl = null
   }, 200)
 }
 
@@ -2356,8 +2367,13 @@ function scheduleStableApply() {
  * 纯文字保持单栏；图文左侧相册（可切换/滚动），右侧文字评论独立滚动。
  */
 export function disposeOpusDetailDrawerLayout() {
+  if (loadingHideTimer !== undefined)
+    clearTimeout(loadingHideTimer)
+  loadingHideTimer = undefined
   clearDeferredSetup()
   window.removeEventListener('message', handleOpusParentMessage)
+  window.removeEventListener('pagehide', disposeOpusDetailDrawerLayout)
+  layoutRetryTimers.splice(0).forEach(timer => clearTimeout(timer))
 
   try {
     observer?.disconnect()
@@ -2381,7 +2397,8 @@ export function disposeOpusDetailDrawerLayout() {
   }
 
   unbindGalleryViewerBridge()
-  hideIframeLoading()
+  loadingEl?.remove()
+  styleEl?.remove()
 
   try {
     const root = findOpusRoot()
@@ -2504,9 +2521,9 @@ export function setupOpusDetailDrawerLayout() {
     })
   }
 
-  window.setTimeout(() => scheduleStableApply(), 600)
-  window.setTimeout(() => scheduleStableApply(), 1400)
-  window.setTimeout(() => scheduleStableApply(), 2800)
+  layoutRetryTimers.splice(0).forEach(timer => clearTimeout(timer))
+  for (const delay of [600, 1400, 2800])
+    layoutRetryTimers.push(setTimeout(scheduleStableApply, delay))
 
   if (stopTimer)
     clearTimeout(stopTimer)

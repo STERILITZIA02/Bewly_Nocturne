@@ -53,7 +53,7 @@ function handleSubCategoryChange(value: LiveSubCategory) {
 <style scoped lang="scss">
 .sub-category-tab {
   &.active {
-    --uno: "bg-$bew-theme-color-20 text-$bew-theme-foreground";
+    --uno: "bg-$bew-theme-color text-$bew-on-theme-color";
   }
 }
 </style>

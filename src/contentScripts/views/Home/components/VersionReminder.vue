@@ -129,8 +129,8 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-trigger:hover {
   color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color-80);
-  border-color: var(--bew-theme-color-80);
+  background: var(--bew-theme-color);
+  border-color: var(--bew-theme-foreground);
   box-shadow: var(--bew-shadow-4);
 }
 
@@ -207,8 +207,8 @@ function acknowledgeCurrentVersion() {
 }
 
 .version-reminder-dialog__link:hover {
-  color: var(--bew-theme-foreground);
-  background: var(--bew-theme-color-10);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
   border-color: var(--bew-theme-color);
 }
 

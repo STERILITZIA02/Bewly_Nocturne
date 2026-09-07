@@ -150,11 +150,11 @@
     }
 
     & > a.upload {
-      --uno: "bg-$bew-theme-color-20 hover:bg-$bew-theme-color-40 text-$bew-theme-foreground";
+      --uno: "bg-$bew-theme-color hover:bg-$bew-theme-color text-$bew-on-theme-color";
     }
 
     &.active > a.upload {
-      --uno: "bg-$bew-theme-color-40";
+      --uno: "bg-$bew-theme-color";
     }
 
     &.active > a.upload.white-icon {
@@ -174,7 +174,7 @@
 
   .right-side-item .login {
     --uno: "!w-auto !flex items-center bg-$bew-theme-color";
-    --uno: "rounded-full important:text-$bew-on-theme-color important:px-4 hover:important-bg-$bew-theme-color-80 hover:important-text-$bew-on-theme-color important:text-base";
+    --uno: "rounded-full important:text-$bew-on-theme-color important:px-4 hover:important-bg-$bew-theme-color hover:important-text-$bew-on-theme-color important:text-base";
     box-sizing: border-box;
     height: var(--bew-control-height);
   }

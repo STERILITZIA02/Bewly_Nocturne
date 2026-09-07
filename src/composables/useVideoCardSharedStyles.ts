@@ -57,3 +57,12 @@ export function useVideoCardSharedStyles() {
     metaStyle,
   }
 }
+
+const bangumiTitleClass = computed(() => ({ 'bew-title-auto': settings.value.homeAdaptiveTitleAutoSize }))
+const bangumiTitleStyle = computed(() => !settings.value.homeAdaptiveTitleAutoSize && settings.value.homeAdaptiveTitleFontSize
+  ? { fontSize: `${settings.value.homeAdaptiveTitleFontSize}px`, lineHeight: '1.25' }
+  : {})
+
+export function useBangumiCardSharedStyles() {
+  return { bangumiTitleClass, bangumiTitleStyle }
+}

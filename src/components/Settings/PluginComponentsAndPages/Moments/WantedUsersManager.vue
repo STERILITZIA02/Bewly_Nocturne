@@ -202,7 +202,7 @@ function removeUser(mid: string) {
         @input="error = ''; searchCandidates = []"
       >
       <button type="submit" :disabled="loading || !query.trim()">
-        <span v-if="loading" i-svg-spinners:ring-resize />
+        <SkeletonBlock v-if="loading" width="1em" height="1em" radius="interactive" />
         <span v-else-if="/^\d+$/.test(query.trim())" i-tabler-user-plus />
         <span v-else i-tabler-search />
         {{ /^\d+$/.test(query.trim()) ? $t('settings.moments_wanted_manager.add') : $t('settings.moments_wanted_manager.search') }}
@@ -211,10 +211,20 @@ function removeUser(mid: string) {
     <p v-if="error" class="wanted-users-manager__error">
       <span i-tabler-alert-circle />{{ error }}
     </p>
-    <div v-if="searchCandidates.length" class="wanted-users-manager__candidates">
+    <div v-if="loading && !searchCandidates.length && !/^\d+$/.test(query.trim())" class="wanted-users-manager__candidates" role="status" :aria-label="$t('common.loading')">
+      <div v-for="index in 3" :key="index" class="wanted-users-manager__candidate" aria-hidden="true">
+        <SkeletonBlock width="var(--bew-space-10)" height="var(--bew-space-10)" radius="circle" />
+        <div flex="~ col 1" min-w-0>
+          <SkeletonBlock width="72%" height="var(--bew-line-height-body)" />
+          <SkeletonBlock width="48%" height="var(--bew-line-height-caption)" />
+        </div>
+      </div>
+    </div>
+    <div v-else-if="searchCandidates.length" class="wanted-users-manager__candidates">
       <button
         v-for="user in searchCandidates"
         :key="user.mid"
+        class="wanted-users-manager__candidate"
         type="button"
         :disabled="loading || managedUserMids.has(user.mid) || (isPinnedMode && managedUsers.length >= MAX_PINNED_USERS)"
         @click="addUserByMid(user.mid)"
@@ -312,7 +322,7 @@ function removeUser(mid: string) {
   gap: var(--bew-space-2);
   margin-top: 12px;
 }
-.wanted-users-manager__candidates > button {
+.wanted-users-manager__candidate {
   display: flex;
   align-items: center;
   gap: var(--bew-space-3);

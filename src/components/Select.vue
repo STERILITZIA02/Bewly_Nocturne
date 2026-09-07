@@ -18,8 +18,10 @@ const props = withDefaults(defineProps<{
   options: readonly OptionType[]
   modelValue: SelectValue
   disabled?: boolean
+  loading?: boolean
 }>(), {
   disabled: false,
+  loading: false,
 })
 
 const emit = defineEmits<{
@@ -38,6 +40,7 @@ const selectInstanceId = getCurrentInstance()?.uid ?? 0
 const listboxId = `bew-select-listbox-${selectInstanceId}`
 const valueLabelId = `${listboxId}-value`
 const label = computed(() => props.options.find(item => Object.is(item.value, props.modelValue))?.label ?? '')
+const unavailable = computed(() => props.disabled || props.loading)
 const showOptions = ref<boolean>(false)
 const activeOptionIndex = ref(-1)
 const triggerRef = ref<HTMLButtonElement | null>(null)
@@ -66,7 +69,7 @@ async function focusOption(index: number) {
 }
 
 function openOptions(initialIndex = selectedOptionIndex()) {
-  if (props.disabled || props.options.length === 0)
+  if (unavailable.value || props.options.length === 0)
     return
 
   activeOptionIndex.value = initialIndex >= 0 ? initialIndex : 0
@@ -83,7 +86,7 @@ function closeOptions(restoreFocus = false) {
 }
 
 function toggleOptions() {
-  if (props.disabled)
+  if (unavailable.value)
     return
 
   if (showOptions.value)
@@ -93,7 +96,7 @@ function toggleOptions() {
 }
 
 function selectOption(option: OptionType) {
-  if (props.disabled)
+  if (unavailable.value)
     return
 
   emit('update:modelValue', option.value)
@@ -176,7 +179,7 @@ watch(showOptions, async (visible, _previous, onCleanup) => {
   schedulePositionUpdate()
 }, { flush: 'post' })
 
-watch(() => props.disabled, (disabled) => {
+watch(unavailable, (disabled) => {
   if (disabled)
     closeOptions()
 })
@@ -191,8 +194,9 @@ watch(() => props.disabled, (disabled) => {
       ref="triggerRef"
       type="button"
       class="select-trigger"
-      :class="{ 'is-disabled': props.disabled }"
-      :disabled="props.disabled"
+      :class="{ 'is-disabled': unavailable }"
+      :disabled="unavailable"
+      :aria-busy="loading"
       aria-haspopup="listbox"
       :aria-expanded="showOptions"
       :aria-controls="listboxId"
@@ -216,8 +220,15 @@ watch(() => props.disabled, (disabled) => {
         truncate
         overflow="hidden"
         m="r-2"
-        v-text="label"
-      />
+        :aria-label="loading && !label ? $t('common.loading') : undefined"
+      >
+        <SkeletonBlock v-if="loading && !label" width="5em" height="1lh" />
+        <template v-else>
+          {{ label }}
+        </template>
+      </div>
+
+      <SkeletonBlock v-if="loading && label" class="select-loading-progress" width="calc(100% - var(--bew-space-8))" height="var(--bew-space-0-5)" radius="full" />
 
       <div class="select-arrow-slot" flex="none" grid place-items="center" m="l-2">
         <!-- arrow -->
@@ -288,6 +299,12 @@ watch(() => props.disabled, (disabled) => {
 </template>
 
 <style lang="scss" scoped>
+.select-loading-progress {
+  position: absolute;
+  left: var(--bew-space-4);
+  bottom: var(--bew-space-1);
+  pointer-events: none;
+}
 .select-trigger {
   appearance: none;
   font: inherit;

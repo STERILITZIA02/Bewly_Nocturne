@@ -9,6 +9,7 @@ import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { isVideoOrBangumiPage } from '~/utils/main'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 
 const props = defineProps<{
@@ -354,7 +355,10 @@ defineExpose({
     pos="relative top-0 left-0" of-hidden w-full h-full
   >
     <Transition name="fade">
-      <Loading v-if="showLoading" w-full h-full pos="absolute top-0 left-0" />
+      <Loading
+        v-if="showLoading" :kind="isVideoOrBangumiPage(currentUrl) ? 'video' : 'page'" class="iframe-page-loading" w-full h-full
+        pos="absolute top-0 left-0"
+      />
     </Transition>
     <!-- Iframe -->
     <iframe
@@ -363,6 +367,7 @@ defineExpose({
       :src="currentUrl"
       :style="{
         bottom: headerShow ? `var(--bew-top-bar-height)` : '0',
+        visibility: showLoading ? 'hidden' : 'visible',
       }"
       frameborder="0"
       pointer-events-auto
@@ -372,3 +377,10 @@ defineExpose({
     />
   </div>
 </template>
+
+<style scoped lang="scss">
+.iframe-page-loading {
+  z-index: 1;
+  background: var(--bew-bg);
+}
+</style>

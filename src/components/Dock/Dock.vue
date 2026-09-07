@@ -7,6 +7,7 @@ import { computed, ref } from 'vue'
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
 import { useDelayedHover } from '~/composables/useDelayedHover'
+import { liquidGlassEnabled as useLiquidGlass, useLiquidGlassOptions } from '~/composables/useLiquidGlass'
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
@@ -56,16 +57,7 @@ const settingsStore = useSettingsStore()
 const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
 const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
-const useLiquidGlass = computed(() => settings.value.enableDockLiquidGlass && !settings.value.disableFrostedGlass)
-const liquidGlassProps = computed(() => ({
-  mode: settings.value.dockLiquidGlassMode,
-  refraction: settings.value.dockLiquidGlassRefraction,
-  blur: settings.value.dockLiquidGlassBlur,
-  dispersion: settings.value.dockLiquidGlassDispersion,
-  saturation: settings.value.dockLiquidGlassSaturation,
-  tintColor: settings.value.dockLiquidGlassTintSource === 'custom' ? settings.value.dockLiquidGlassTintColor : 'var(--bew-liquid-glass-color)',
-  tintOpacity: settings.value.dockLiquidGlassTintOpacity,
-}))
+const liquidGlassProps = useLiquidGlassOptions()
 
 // 计算属性：是否显示撤销按钮
 const showUndo = computed(() => undoForwardState.value === UndoForwardState.ShowUndo)

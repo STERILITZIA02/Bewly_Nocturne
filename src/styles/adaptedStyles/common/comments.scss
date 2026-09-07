@@ -51,17 +51,17 @@
     }
 
     .bili-comment.browser-pc * a:hover {
-      color: var(--bew-theme-color-80);
+      color: var(--bew-theme-foreground);
     }
 
     // 登录后发表评论
     .reply-box.disabled .box-normal .reply-box-warp .disable-mask .no-login-mask .login-btn:hover {
-      background-color: var(--bew-theme-color-80);
+      background-color: var(--bew-theme-color);
     }
 
     // 登录后查看评论
     .reply-list .login-prompt:hover {
-      background-color: var(--bew-theme-color-40);
+      background-color: var(--bew-theme-surface-hover);
     }
 
     .reply-content-container .reply-content .icon,
@@ -102,7 +102,7 @@
 
     @keyframes jumpReply {
       0% {
-        background-color: var(--bew-theme-color-10);
+        background-color: var(--bew-theme-surface);
       }
       100% {
         background-color: var(--bew-fill-1);
@@ -156,7 +156,7 @@
   .comment-bilibili-fold .comment-send .comment-submit:hover,
   .bb-comment .comment-send-lite .comment-submit:hover,
   .comment-bilibili-fold .comment-send-lite .comment-submit:hover {
-    background-color: var(--bew-theme-color-80);
+    background-color: var(--bew-theme-color);
   }
 
   .bb-comment .comment-header .tabs-order li:hover,
@@ -206,7 +206,7 @@
   }
 
   .textarea-container .comm-tool .comm-submit:hover {
-    background-color: var(--bew-theme-color-80) !important;
+    background-color: var(--bew-theme-color) !important;
   }
 
   .textarea-container textarea:hover,
@@ -241,7 +241,7 @@
   .comment-bilibili-fold .comment-send .comment-submit:hover,
   .bb-comment .comment-send-lite .comment-submit:hover,
   .comment-bilibili-fold .comment-send-lite .comment-submit:hover {
-    border-color: var(--bew-theme-color-80);
+    border-color: var(--bew-theme-foreground);
   }
 
   &.dark {

@@ -23,7 +23,9 @@ import type { BewlyWidescreenState, ExitBewlyWidescreenOptions, MovedNode } from
 import { loadFallbackVideoInfo, renderFallbackVideoInfo, syncSidebarTitle } from '~/utils/bewlyWidescreen/videoInfo'
 import { canCommitWidescreenLayout, resolveWidescreenEngagedState, shouldScheduleWidescreenRefresh } from '~/utils/bewlyWidescreenPolicy'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
+import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { initVerticalVideoZoom } from '~/utils/verticalVideoZoom'
+import { parseVideoMetadataEvent, VIDEO_COMPONENT_CHANGED } from '~/utils/videoMetadataBridge'
 
 export type { ExitBewlyWidescreenOptions } from './bewlyWidescreen/types'
 
@@ -92,8 +94,12 @@ function syncLocalizedWidescreenText(currentState = session.current) {
   ]
   for (const [panel, key] of emptyLabels) {
     const empty = panel.querySelector<HTMLElement>(`.${EMPTY_CLASS}`)
-    if (empty && !empty.classList.contains('bewly-widescreen-panel-error'))
-      empty.textContent = t(key)
+    if (empty && !empty.classList.contains('bewly-widescreen-panel-error')) {
+      if (empty.classList.contains('bewly-widescreen-panel-skeleton'))
+        empty.setAttribute('aria-label', t(key))
+      else
+        empty.textContent = t(key)
+    }
   }
   currentState.panels.danmaku
     .querySelector<HTMLElement>(`.${DANMAKU_SKELETON_CLASS}`)
@@ -181,9 +187,18 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
   // slow request finishes after the bounded polling window has ended.
   document.addEventListener('inited', onCommentsReady, true)
   document.addEventListener('bili-comments-inited', onCommentsReady, true)
-  currentState.commentReadyCleanup = () => {
+  const onNativeComponentChanged = (event: Event) => {
+    const message = parseVideoMetadataEvent(event)
+    if (message && session.current === currentState && event.target instanceof Node && currentState.root.contains(event.target)
+      && message.channelId === getPageBridgeChannelId() && message.href === location.href) {
+      scheduleSidebarRefresh(currentState)
+    }
+  }
+  document.addEventListener(VIDEO_COMPONENT_CHANGED, onNativeComponentChanged, true)
+  currentState.sidebarReadyCleanup = () => {
     document.removeEventListener('inited', onCommentsReady, true)
     document.removeEventListener('bili-comments-inited', onCommentsReady, true)
+    document.removeEventListener(VIDEO_COMPONENT_CHANGED, onNativeComponentChanged, true)
   }
   currentState.mutationObserver = new MutationObserver((records) => {
     if (!session.current || session.current !== currentState)
@@ -231,7 +246,7 @@ function setupDomRefreshObserver(currentState: BewlyWidescreenState) {
 }
 
 function cleanupState(currentState: BewlyWidescreenState) {
-  currentState.commentReadyCleanup?.()
+  currentState.sidebarReadyCleanup?.()
   currentState.escapeKeyCleanup?.()
   clearSidebarEdgeRevealSuppression(currentState)
   currentState.sidebarInteractionCleanup?.()
@@ -252,6 +267,8 @@ function cleanupState(currentState: BewlyWidescreenState) {
   currentState.highEnergyProgressElement = undefined
   currentState.settingsWatchCleanup?.forEach(stop => stop())
   currentState.settingsWatchCleanup = undefined
+  currentState.danmakuGlassCleanup?.()
+  currentState.danmakuGlassCleanup = undefined
   currentState.descriptionCleanup?.()
   currentState.descriptionCleanup = undefined
   currentState.playlistToggleCleanup?.()
@@ -337,6 +354,11 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     navigationPending: false,
     bottomControlsHovered: false,
     playerPointerInside: false,
+    controlsLayoutReady: false,
+    onInitialLayoutReady: () => {
+      loading.alignToCurrentLayout()
+      loading.remove()
+    },
   }
 
   session.current = nextState
@@ -389,7 +411,6 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   if (settings.value.showVerticalVideoZoomButton)
     initVerticalVideoZoom()
   schedulePlayerResizeSync(nextState)
-  loading.remove()
 
   return true
 }

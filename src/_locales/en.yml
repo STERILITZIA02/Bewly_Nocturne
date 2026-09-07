@@ -299,25 +299,25 @@ settings:
   topbar_display_settings_desc: Adjust how the top bar behaves across pages and interaction modes.
   group_navigation: Dock & Sidebar
   group_dock: Dock
-  group_dock_glass: Dock glass material
-  dock_liquid_glass: Liquid glass
-  dock_liquid_glass_desc: Replace the frosted surface of the Dock and its separate action buttons with liquid glass while keeping their layout and collapse behavior. Follows the global setting to disable frosted glass and the top bar gradient.
-  dock_liquid_glass_paused: Frosted glass is disabled globally. The Dock currently uses a solid surface.
-  dock_glass_mode: Refraction style
-  dock_glass_mode_standard: Standard
-  dock_glass_mode_polar: Rounded
-  dock_glass_mode_prominent: Vivid
-  dock_glass_refraction: Refraction strength
-  dock_glass_blur: Blur amount
-  dock_glass_blur_desc: Set the Dock glass background blur radius independently. 0 px is the clearest.
-  dock_glass_tint: Glass tint
-  dock_glass_tint_theme: Match light/dark
-  dock_glass_tint_custom: Custom
-  dock_glass_tint_color: Custom glass color
-  dock_glass_tint_opacity: Tint opacity
-  dock_glass_tint_opacity_desc: 0% is untinted glass and 100% is a solid tint. Color covers the entire glass outline evenly.
-  dock_glass_dispersion: Edge color dispersion
-  dock_glass_saturation: Color saturation
+  group_liquid_glass: Floating surfaces
+  liquid_glass: Liquid glass
+  liquid_glass_desc: Apply to the Dock, bottom playback controls, standalone search fields and top bar popovers. Settings windows, their navigation and the playback sidebar retain frosted glass; inner controls remain solid.
+  liquid_glass_paused: Frosted glass is disabled globally. Liquid glass is paused and floating panels use solid surfaces.
+  liquid_glass_mode: Refraction style
+  liquid_glass_mode_standard: Standard
+  liquid_glass_mode_polar: Rounded
+  liquid_glass_mode_prominent: Vivid
+  liquid_glass_refraction: Refraction strength
+  liquid_glass_blur: Blur amount
+  liquid_glass_blur_desc: Set the background blur radius for all liquid glass surfaces. 0 px is the clearest. Top edge blur is unchanged.
+  liquid_glass_tint: Glass tint
+  liquid_glass_tint_theme: Match light/dark
+  liquid_glass_tint_custom: Custom
+  liquid_glass_tint_color: Custom glass color
+  liquid_glass_tint_opacity: Tint strength
+  liquid_glass_tint_opacity_desc: 0% is untinted and 100% is solid. Theme tint is whiter in light mode, blacker in dark mode and deeper in OLED. Custom colors use the selected opacity evenly.
+  liquid_glass_dispersion: Edge color dispersion
+  liquid_glass_saturation: Color saturation
   group_sidebar: Sidebar
   group_sidebar_desc: >-
     Located on the right or left side of pages other than the homepage,

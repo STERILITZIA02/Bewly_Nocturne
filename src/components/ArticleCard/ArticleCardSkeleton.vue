@@ -5,7 +5,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 <template>
   <article class="article-card-skeleton bew-surface-border" aria-hidden="true">
     <div class="article-card-skeleton__content">
-      <SkeletonBlock width="72%" height="var(--bew-line-height-body)" />
+      <SkeletonBlock width="72%" height="var(--bew-line-height-title)" />
       <div class="article-card-skeleton__description">
         <SkeletonBlock height="var(--bew-line-height-control)" />
         <SkeletonBlock width="84%" height="var(--bew-line-height-control)" />
@@ -15,48 +15,45 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
         <SkeletonBlock width="56px" height="var(--bew-line-height-caption)" />
         <SkeletonBlock width="64px" height="var(--bew-line-height-caption)" />
       </div>
-      <div class="article-card-skeleton__tags">
-        <SkeletonBlock width="56px" height="20px" radius="full" />
-        <SkeletonBlock width="68px" height="20px" radius="full" />
+      <div class="article-card-skeleton__stats">
+        <SkeletonBlock v-for="index in 3" :key="index" width="56px" height="var(--bew-line-height-caption)" />
       </div>
     </div>
-    <SkeletonBlock class="article-card-skeleton__cover" width="128px" height="96px" radius="media" />
+    <SkeletonBlock class="article-card-skeleton__cover bew-surface-border" width="calc(var(--bew-base-font-size) * 8)" height="calc(var(--bew-base-font-size) * 6)" radius="media" />
   </article>
 </template>
 
 <style scoped lang="scss">
 .article-card-skeleton {
+  --uno: "gap-4 p-4";
   display: flex;
   box-sizing: border-box;
-  gap: var(--bew-space-4);
-  min-height: 128px;
-  padding: var(--bew-space-4);
   border-radius: var(--bew-card-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);
 }
 
 .article-card-skeleton__content {
+  --uno: "gap-2";
   display: flex;
   min-width: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  gap: var(--bew-space-2);
 }
 
 .article-card-skeleton__description {
   display: grid;
-  gap: var(--bew-space-1);
+  gap: 0;
 }
 
 .article-card-skeleton__meta,
-.article-card-skeleton__tags {
+.article-card-skeleton__stats {
+  --uno: "gap-3";
   display: flex;
   align-items: center;
-  gap: var(--bew-space-3);
 }
 
 .article-card-skeleton__cover {
-  flex: 0 0 128px;
+  flex-shrink: 0;
 }
 </style>

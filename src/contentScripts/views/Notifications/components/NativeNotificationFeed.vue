@@ -413,7 +413,7 @@ defineExpose({ refresh })
   >
     <NativeNotificationFeedSkeleton
       v-if="accountState === 'profile-pending'"
-      :label="feedAriaLabel"
+      :label="feedAriaLabel" :section="section"
     />
 
     <div v-else-if="accountState === 'logged-out'" class="native-notification-feed__state">
@@ -426,7 +426,7 @@ defineExpose({ refresh })
 
     <NativeNotificationFeedSkeleton
       v-else-if="!state.loaded && !state.errorKind"
-      :label="feedAriaLabel"
+      :label="feedAriaLabel" :section="section"
     />
 
     <div v-else-if="state.errorKind && state.items.length === 0" class="native-notification-feed__state">
@@ -455,7 +455,7 @@ defineExpose({ refresh })
         <NativeNotificationFeedSkeleton
           v-if="state.loadingMore"
           :count="2"
-          :label="feedAriaLabel"
+          :label="feedAriaLabel" :section="section"
         />
       </div>
 

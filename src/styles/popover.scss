@@ -1,17 +1,30 @@
 .bew-popover-surface {
   box-sizing: border-box;
   color: var(--bew-text-1);
-  background: var(--bew-popover-surface-background);
+  background: var(--bew-popover-surface-background-solid);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-popover-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-popover-surface-shadow);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+// These fixed TopBar panels extend beyond the header's glass boundary.
+// Menus and controls inside them retain the default solid surface.
+.bew-popover.bew-popover-surface {
+  background: var(--bew-popover-surface-background);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .bew-popover-surface--clip {
   overflow: hidden;
+}
+
+.bew-popover-surface[data-bew-liquid-glass] {
+  --bew-liquid-frame-inset: 0px;
+  --bew-liquid-outer-shadow: var(--bew-shadow-3);
 }
 
 .bew-popover {

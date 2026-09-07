@@ -615,6 +615,7 @@ onBeforeUnmount(() => {
     <!-- Skeleton mode -->
     <div
       v-if="skeleton"
+      data-bew-skeleton
       w-full h-full bg="$bew-skeleton" rounded-inherit
       style="aspect-ratio: 16 / 9;"
     />
@@ -691,7 +692,7 @@ onBeforeUnmount(() => {
               rounded-inherit
               pointer-events-none
             >
-              <div class="loading-spinner" />
+              <SkeletonBlock height="100%" radius="media" />
             </div>
           </Transition>
         </div>
@@ -1025,21 +1026,5 @@ onBeforeUnmount(() => {
 .video-card-cover-stats--hidden {
   opacity: 0;
   visibility: hidden;
-}
-
-.loading-spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(255, 255, 255, 0.3);
-  border-top-color: #fff;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  animation: spin 0.8s linear infinite;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 </style>

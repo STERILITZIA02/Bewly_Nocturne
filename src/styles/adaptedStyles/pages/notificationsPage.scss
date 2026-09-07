@@ -147,13 +147,13 @@ html.bewly-design.notificationsPage {
 
     .space-right .space-right-bottom .bili-im .right .dialog .send-box .btn-box.send-btn.active,
     .bl-button--ghost:hover {
-      color: white;
+      color: var(--bew-on-theme-color);
     }
 
     .at:hover,
     .im-dynamic-link:hover,
     .im-topic-link:hover {
-      color: var(--bew-theme-color-80);
+      color: var(--bew-theme-foreground);
     }
 
     .css-o1815x .border,
@@ -213,12 +213,12 @@ html.bewly-design.notificationsPage {
     .bl-button--shallow-o.active,
     .bl-button--shallow-o[active],
     .cs-actions-wrap .cs-actions .cs-action-item:hover {
-      background-color: var(--bew-theme-color-20);
+      background-color: var(--bew-theme-surface-hover);
     }
 
     .space-right .space-right-bottom .bili-im .right .dialog .send-box .btn-box.send-btn.active:hover,
     .bl-button--primary:hover {
-      background-color: var(--bew-theme-color-80);
+      background-color: var(--bew-theme-color);
     }
 
     .emoji-container .emotion-btn-box:active,
@@ -608,8 +608,8 @@ html.notificationsPage.bewly-notifications-embedded {
 
   .message-main .interaction-item.active,
   .message-main .interaction-item[aria-current="page"] {
-    color: var(--bew-theme-color);
-    background: var(--bew-theme-color-10) !important;
+    color: var(--bew-on-theme-surface);
+    background: var(--bew-theme-surface) !important;
   }
 
   #message-navbar,
@@ -750,8 +750,8 @@ html.notificationsPage.bewly-notifications-embedded {
   .list-item.active,
   .tab-list .tab-item.active,
   .button-box .item > button.active {
-    color: var(--bew-theme-color) !important;
-    background: var(--bew-theme-color-10) !important;
+    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-theme-surface) !important;
   }
 
   .list-item.top:not(.active) {

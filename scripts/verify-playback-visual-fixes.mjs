@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 
-import { shouldContinueWidescreenSidebarHydration } from '../src/utils/bewlyWidescreenPolicy'
+import { clampWidescreenSidebarWidth, shouldContinueWidescreenSidebarHydration } from '../src/utils/bewlyWidescreenPolicy'
 import { patchCommentTransferLifecycle, transferCommentNode } from '../src/utils/commentDomTransfer'
 import { buildCommentTree } from '../src/utils/commentTree'
 import * as geometry from '../src/utils/commentTreeGeometry'
@@ -54,6 +54,8 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
       ...view,
       session,
       document,
+      window,
+      clampWidescreenSidebarWidth,
       settings: { value: { bewlyWidescreenLayoutPriority: 'sidebar-first', bewlyWidescreenSidebarPosition: 'right' } },
       t: key => key,
       getVideoElement: () => null,
@@ -372,6 +374,11 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     const context = await loadSourceFunctions(widescreenFile, ['setupDomRefreshObserver', 'scheduleSidebarRefresh'], {
       document,
       HTMLElement,
+      Node,
+      VIDEO_COMPONENT_CHANGED: 'bewly:video-component:changed',
+      parseVideoMetadataEvent: (await import('../src/utils/videoMetadataBridge')).parseVideoMetadataEvent,
+      getPageBridgeChannelId: () => 'fixture',
+      location: window.location,
       session: { current: currentState },
       sidebarRefreshFrame: undefined,
       selectors: { danmakuInput: [] },
@@ -391,12 +398,29 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     assert.equal(frames.length, 1, 'capture the native non-bubbling event after the polling deadline')
     frames.shift()()
     assert.equal(refreshes, 1)
+    const native = root.appendChild(document.createElement('div'))
+    native.dispatchEvent(new CustomEvent('bewly:video-component:changed', {
+      bubbles: true,
+      detail: JSON.stringify({ channelId: 'wrong', href: window.location.href }),
+    }))
+    assert.equal(frames.length, 0)
+    native.dispatchEvent(new CustomEvent('bewly:video-component:changed', {
+      bubbles: true,
+      detail: JSON.stringify({ channelId: 'fixture', href: window.location.href }),
+    }))
+    assert.equal(frames.length, 1, 'native destruction refreshes the existing sidebar controller')
+    frames.shift()()
+    assert.equal(refreshes, 2)
     context.session.current = { root: document.createElement('div') }
     comments.dispatchEvent(new CustomEvent('inited'))
     assert.equal(frames.length, 0, 'old native completion cannot refresh another shell')
     context.session.current = currentState
-    currentState.commentReadyCleanup()
+    currentState.sidebarReadyCleanup()
     comments.dispatchEvent(new CustomEvent('inited'))
+    native.dispatchEvent(new CustomEvent('bewly:video-component:changed', {
+      bubbles: true,
+      detail: JSON.stringify({ channelId: 'fixture', href: window.location.href }),
+    }))
     assert.equal(frames.length, 0)
     root.remove()
   })

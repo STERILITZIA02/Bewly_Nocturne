@@ -30,6 +30,8 @@ interface VideoCardGridProps<T = any> {
    */
   items: T[]
   stateKey?: string
+  /** Transient loading views must not consume or persist a page's cached grid. */
+  persistState?: boolean
 
   /**
    * Grid 布局模式
@@ -180,6 +182,7 @@ interface VideoCardGridProps<T = any> {
 
 const props = withDefaults(defineProps<VideoCardGridProps<T>>(), {
   loading: false,
+  persistState: true,
   noMoreContent: false,
   needToLoginFirst: false,
   showPreview: false,
@@ -209,7 +212,7 @@ const isLoadMoreSentinelIntersecting = ref(false)
 const reachedLoadMoreDuringLoading = ref(false)
 const gridContainerWidth = ref(0)
 const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
-const tabState = useHomeTabViewState()
+const tabState = props.persistState ? useHomeTabViewState() : undefined
 interface GridSnapshot {
   window: CardWindowSnapshot
   cardStates: [string | number, VideoCardState][]
@@ -1126,7 +1129,7 @@ function getUniqueKey(item: T, index: number): string | number {
     <SmoothLoading
       v-if="showLoadMoreIndicator"
       class="load-more-loading"
-      :show="loading"
+      :show="loading && !showLoadingMoreSkeletonItems"
       :keep-space="true"
       :min-height="loadMoreIndicatorHeight"
     />

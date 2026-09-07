@@ -163,14 +163,17 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
   })
 
   check('audit 12: image errors settle, try the original URL once, and reject stale image events', async () => {
-    const Picture = await compileComponent('../src/components/LazyPicture.vue')
+    const LazyPicture = await compileComponent('../src/components/LazyPicture.vue')
+    const Picture = await compileComponent('../src/components/Picture.vue', { './LazyPicture.vue': { default: LazyPicture } })
     const src = Vue.ref('https://i0.hdslb.com/bfs/archive/fixture-a.jpg')
     const host = document.body.appendChild(document.createElement('div'))
     let loads = 0
-    const app = Vue.createApp({ setup: () => () => Vue.h(Picture, { src: src.value, loading: 'eager', onLoaded: () => loads++ }) })
+    const app = Vue.createApp({ setup: () => () => Vue.h(Picture, { src: src.value, aspectRatio: '1 / 1', loading: 'eager', onLoaded: () => loads++ }) })
     app.config.globalProperties.$t = key => key
     app.mount(host)
     const preferred = host.querySelector('img')
+    assert.equal(preferred.style.aspectRatio, '1 / 1')
+    assert.ok(host.querySelector('[data-bew-skeleton]'))
     preferred.dispatchEvent(new Event('error'))
     await flush()
     assert.equal(host.querySelectorAll('source').length, 0)
@@ -182,6 +185,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     assert.ok(host.querySelector('.lazy-picture-error'))
     assert.equal(host.querySelector('.lazy-picture-skeleton'), null)
     assert.equal(host.querySelector('img'), null)
+    assert.equal(host.querySelector('[data-bew-skeleton]'), null, 'failed images stop animating')
     src.value = 'https://i0.hdslb.com/bfs/archive/fixture-b.jpg'
     await flush()
     original.dispatchEvent(new Event('load'))
@@ -194,6 +198,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     assert.equal(loads, 1)
     assert.equal(host.querySelector('img').style.opacity, '1', 'the bound image settles even when the event target is retargeted')
     assert.equal(host.querySelector('.lazy-picture-skeleton'), null)
+    assert.equal(host.querySelector('[data-bew-skeleton]'), null, 'completed images stop animating')
     app.unmount()
     host.remove()
   })
@@ -533,8 +538,10 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     }
     const main = await loadSourceFunctions('../src/inject/videoMetadata.ts', ['setupVideoMetadataBridge'], {
       ...bridge,
+      selectors: (await import('../src/utils/bewlyWidescreen/constants')).selectors,
       window,
       document,
+      HTMLElement,
       location: window.location,
       AbortController: window.AbortController,
       CustomEvent: window.CustomEvent,
@@ -548,6 +555,39 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       assert.deepEqual(bridge.readVideoPageMetadata(), { aid: 123, bvid: 'BV1ab411c7mD', pageCount: 2, isCollection: true })
       assert.equal(watchers.size, 1)
       assert.equal(changes.length, 1)
+      const toolbar = element.appendChild(document.createElement('div'))
+      toolbar.className = 'video-toolbar-container'
+      assert.equal(bridge.isNativeVideoComponentReady(toolbar), false, 'SSR markup is not a mounted native controller')
+      const componentHooks = new Set()
+      toolbar.__vue__ = {
+        $el: toolbar,
+        _isMounted: true,
+        _isDestroyed: false,
+        $once: (_name, callback) => componentHooks.add(callback),
+        $off: (_name, callback) => componentHooks.delete(callback),
+      }
+      assert.equal(bridge.isNativeVideoComponentReady(toolbar), true)
+      assert.equal(bridge.isNativeVideoComponentReady(toolbar), true)
+      assert.equal(componentHooks.size, 1, 'repeated probes keep one native lifecycle subscription')
+      const notifications = []
+      const onComponentChanged = event => notifications.push(bridge.parseVideoMetadataEvent(event))
+      toolbar.addEventListener(bridge.VIDEO_COMPONENT_CHANGED, onComponentChanged)
+      toolbar.__vue__._isDestroyed = true
+      for (const callback of componentHooks) {
+        componentHooks.delete(callback)
+        callback()
+      }
+      assert.equal(notifications.length, 1)
+      assert.equal(notifications[0].channelId, 'audit-fixture')
+      assert.equal(notifications[0].href, location.href)
+      toolbar.removeEventListener(bridge.VIDEO_COMPONENT_CHANGED, onComponentChanged)
+      toolbar.__vue__._isDestroyed = false
+      bridge.isNativeVideoComponentReady(toolbar)
+      toolbar.__vue__._isBeingDestroyed = true
+      assert.equal(bridge.isNativeVideoComponentReady(toolbar), false, 'destroyed native controller DOM must not be reused')
+      toolbar.__vue__._isBeingDestroyed = false
+      toolbar.__vue__.$el = document.createElement('div')
+      assert.equal(bridge.isNativeVideoComponentReady(toolbar), false, 'replaced Vue roots cannot own the old element')
       window.history.replaceState({}, '', '/video/BV1ab411c7mD/?tracking=fixture#same-video')
       assert.equal(bridge.readVideoPageMetadata().pageCount, 2)
       assert.equal(changes.length, 1, 'URL cleanup does not reapply autoplay for unchanged manuscript metadata')
@@ -565,7 +605,9 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       assert.equal(bridge.validateVideoPageMetadata({ aid: 456, bvid: 'BV1xx411c7mD', pageCount: Infinity, isCollection: false }, location.href), null)
       stop()
       assert.equal(watchers.size, 0)
+      assert.equal(componentHooks.size, 0)
       assert.equal(bridge.readVideoPageMetadata(), null)
+      assert.equal(bridge.isNativeVideoComponentReady(toolbar), undefined, 'component probe listener is released with the existing bridge')
     }
     finally {
       stop()

@@ -168,6 +168,7 @@ interface Props {
   releaseDelay?: number
   // 是否显示骨架占位
   showSkeleton?: boolean
+  aspectRatio?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -177,6 +178,7 @@ const props = withDefaults(defineProps<Props>(), {
   retainScreens: 3,
   releaseDelay: 2000,
   showSkeleton: true,
+  aspectRatio: '16 / 9',
 })
 
 const emit = defineEmits<{
@@ -488,8 +490,9 @@ watch(
     ref="imgRef"
     w-full max-w-full align-middle
     rounded-inherit
-    style="aspect-ratio: 16 / 9; display: block; position: relative; contain: layout style;"
-    :style="{ backgroundColor: showSkeleton ? 'var(--bew-skeleton)' : undefined }"
+    style="display: block; position: relative; contain: layout style;"
+    :style="{ aspectRatio, backgroundColor: showSkeleton ? 'var(--bew-skeleton)' : undefined }"
+    :data-bew-skeleton="showSkeleton && isVisible && !isLoaded && !imageFailed ? '' : undefined"
   >
 
     <div v-if="imageFailed" class="lazy-picture-error" role="img" :aria-label="$t('common.image_load_failed')">
@@ -511,8 +514,8 @@ watch(
         decoding="async"
         block w-full h-full
         rounded-inherit
-        style="aspect-ratio: 16 / 9; object-fit: cover; object-position: center;"
-        :style="{ opacity: isLoaded ? 1 : 0 }"
+        style="object-fit: cover; object-position: center;"
+        :style="{ aspectRatio, opacity: isLoaded ? 1 : 0 }"
         class="image-transition"
         :class="{ 'image-transition--instant': skipRevealTransition }"
         @load="handleImageLoad"

@@ -6,6 +6,7 @@ import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { GLASS_SURFACE_CONTEXT } from '~/composables/useLiquidGlass'
 import { settings } from '~/logic'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
@@ -157,6 +158,9 @@ const dialogContentMaxHeight = computed(() => {
   return typeof props.contentMaxHeight === 'number' ? `${props.contentMaxHeight}px` : props.contentMaxHeight || 'auto'
 })
 const frostedGlassEnabled = computed(() => !settings.value.disableFrostedGlass && props.frostedGlass !== false)
+const parentGlass = inject(GLASS_SURFACE_CONTEXT, undefined)
+const surfaceGlassEnabled = computed(() => frostedGlassEnabled.value && !parentGlass?.value)
+provide(GLASS_SURFACE_CONTEXT, computed(() => Boolean(parentGlass?.value) || surfaceGlassEnabled.value))
 const dialogPanelStyle = computed(() => {
   const topAligned = dialogTopOffset.value !== undefined
   return {
@@ -173,9 +177,9 @@ const dialogPanelStyle = computed(() => {
 })
 const dialogSurfaceStyle = computed(() => {
   return {
-    backdropFilter: frostedGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
-    WebkitBackdropFilter: frostedGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
-    backgroundColor: frostedGlassEnabled.value ? 'var(--bew-elevated-alt)' : 'var(--bew-elevated-alt-solid)',
+    backdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
+    WebkitBackdropFilter: surfaceGlassEnabled.value ? 'var(--bew-filter-glass-2)' : 'none',
+    backgroundColor: surfaceGlassEnabled.value ? 'var(--bew-elevated-alt)' : 'var(--bew-elevated-alt-solid)',
   }
 })
 
@@ -281,6 +285,7 @@ async function handleConfirm() {
         <div
           ref="panelRef"
           role="dialog"
+          :aria-busy="loading"
           aria-modal="true"
           :aria-labelledby="showHeader ? titleId : undefined"
           :aria-label="showHeader ? undefined : title || $t('common.dialog')"
@@ -308,7 +313,11 @@ async function handleConfirm() {
                 class="dialog__loading-mask"
                 z-2
               >
-                <div i-svg-spinners-ring-resize text="size-$bew-icon-size-xl" />
+                <div class="dialog__loading-skeleton" role="status" :aria-label="$t('common.loading')">
+                  <SkeletonBlock height="var(--bew-control-height)" radius="interactive" />
+                  <SkeletonBlock width="84%" height="var(--bew-line-height-body)" />
+                  <SkeletonBlock width="64%" height="var(--bew-line-height-body)" />
+                </div>
               </div>
             </Transition>
 
@@ -407,6 +416,14 @@ async function handleConfirm() {
 </template>
 
 <style lang="scss" scoped>
+.dialog__loading-skeleton {
+  display: grid;
+  gap: var(--bew-space-4);
+  width: min(100%, calc(var(--bew-space-12) * 8));
+  padding: var(--bew-space-8);
+  box-sizing: border-box;
+}
+
 .dialog {
   z-index: var(--bew-z-dialog);
 }

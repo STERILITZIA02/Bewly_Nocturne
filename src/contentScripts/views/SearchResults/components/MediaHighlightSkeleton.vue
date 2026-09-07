@@ -17,11 +17,9 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
         <SkeletonBlock width="76%" height="var(--bew-line-height-body)" />
       </div>
       <div class="media-highlight-skeleton__episodes">
-        <SkeletonBlock width="56px" height="var(--bew-control-item-height)" radius="interactive" />
-        <SkeletonBlock width="56px" height="var(--bew-control-item-height)" radius="interactive" />
-        <SkeletonBlock width="56px" height="var(--bew-control-item-height)" radius="interactive" />
+        <SkeletonBlock height="var(--bew-control-height-lg)" radius="interactive" />
       </div>
-      <SkeletonBlock width="96px" height="var(--bew-control-height)" radius="interactive" />
+      <SkeletonBlock class="media-highlight-skeleton__action" width="96px" height="var(--bew-control-height)" radius="interactive" />
     </div>
   </article>
 </template>
@@ -61,6 +59,9 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
 .media-highlight-skeleton__description {
   display: grid;
-  gap: var(--bew-space-1);
+  gap: 0;
+}
+.media-highlight-skeleton__action {
+  margin-top: var(--bew-space-2);
 }
 </style>

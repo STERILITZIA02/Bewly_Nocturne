@@ -142,7 +142,7 @@ function jumpToLoginPage() {
           {{ $t('common.operation.refresh') }}
         </Button>
       </Empty>
-      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0" :count="5" />
+      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0" :count="5" history />
 
       <!-- historyList -->
       <TransitionGroup v-else name="list">
@@ -161,14 +161,12 @@ function jumpToLoginPage() {
           />
           <!-- time slot -->
           <div
-            mr-8 px-4
+            class="bew-history-time-slot"
             b-l="~ 2px dashed $bew-fill-2"
-            group-hover:b-l="$bew-theme-color-40"
+            group-hover:b-l="$bew-theme-foreground"
             shrink-0
             relative
             duration-300
-            flex="important-xl:~ items-center justify-center"
-            hidden
           >
             <!-- hidden lg:flex -->
             <!-- Dot -->
@@ -183,12 +181,11 @@ function jumpToLoginPage() {
               duration-300
             />
             <div
-              text="sm $bew-text-3"
+              class="bew-history-time-chip"
+              text="$bew-text-3"
               group-hover:text="$bew-theme-foreground"
               bg="$bew-fill-1"
-              group-hover:bg="$bew-theme-color-20"
-              p="x-3 y-1"
-              rounded="$bew-radius-half"
+              group-hover:bg="$bew-theme-surface"
               duration-300
             >
               {{
@@ -307,7 +304,7 @@ function jumpToLoginPage() {
                   w-fit
                   rounded="$bew-radius"
                   hover:color="$bew-theme-color"
-                  hover:bg="$bew-theme-color-10"
+                  hover:bg="$bew-theme-surface"
                   duration-300
                   pr-2
                   :href="historyItem.author_mid ? `https://space.bilibili.com/${historyItem.author_mid}` : historyItem.uri" target="_blank"
@@ -398,6 +395,7 @@ function jumpToLoginPage() {
       <VideoListSkeleton
         v-if="isLoading && historyList.length !== 0 && !noMoreContent"
         :count="2"
+        history
       />
     </main>
 
@@ -465,6 +463,7 @@ function jumpToLoginPage() {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/videoList";
 .history-list-card {
   position: relative;
 }

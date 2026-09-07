@@ -39,6 +39,33 @@ pnpm typecheck
 - 同一行的同类控件必须使用一致的 surface 变体、外层高度、padding、gap、圆角、阴影和交互状态，避免一个透明、一个悬浮或各自维护胶囊样式。
 - 通用组件 token 使用 `--bew-control-*` / `--bew-segment-*` 命名；仅真正局限于 TopBar 的变量才使用 `--bew-top-bar-*`。
 
+### 玻璃层级与颜色
+
+- 为性能和可读性考虑，玻璃（背景模糊或液态折射）之上的覆盖层不得再次使用玻璃。仅当覆盖层会延伸到原玻璃组件边界之外时，才允许保留独立玻璃表面；Teleport 本身不构成例外，应按实际覆盖范围判断。
+- 玻璃内的文本、按钮、选项、搜索框和菜单使用实色或无滤镜的普通表面。禁止给实色背景继续附加无视觉收益的 backdrop-filter，也不要以低模糊强度代替移除重复采样。
+- 用户明确保留现有顶部模糊实现：顶栏渐进模糊、设置/Dialog 的 `PanelTopBlur.vue` 以及会话滚动边缘模糊不参与本轮收敛，保持参数、遮罩、层级和裁切行为。此保留项不作为新增内部玻璃控件的依据。
+- `LiquidSegmentIndicator` 只负责选中项的几何变形与滑动，不采样背景；保留其动画，使用实色选中表面，不把它误当成液态玻璃组件删除。
+- 避免半透明主题色标定状态。强选中项和主按钮使用 `--bew-theme-color` 配合 `--bew-on-theme-color`；次要标签、悬停和编辑底色使用不透明 `--bew-theme-surface` / `--bew-theme-surface-hover`，配合中性实色前景 `--bew-on-theme-surface`。独立主题色文字使用 `--bew-theme-foreground`，不要将主题色透明度当成强调层级。
+- 灰、黑、白的半透明颜色不受上述主题色限制，也可使用实色；此豁免不允许在玻璃内部再次添加模糊或折射。
+- 玻璃内的实色控件可无边框，优先通过表面、实色前景和明确选中状态区分；移除装饰边框时仍须保留 focus-visible 与必要的分隔线。玻璃自身的色调设置和既有页面装饰渐变不用于表达控件状态。
+- 液态玻璃统一在“外观 → 悬浮表面材质”中管理，复用 `useLiquidGlassOptions`、`LiquidGlassSurface.vue` 和 `attachLiquidGlass` / `vLiquidGlass`。保留现有持久化键及自定义值；不得另建 Dock、播放页或设置页各自的材质状态。挂载目标必须已有定位；隐藏的 `v-show` 浮层传入明确布尔值，卸载时释放挂载与观察器。
+- 液态材质限于 Dock、播放页底部控制栏、独立搜索框及顶栏浮层等独立小表面。设置窗口、外侧纵向导航、普通 Dialog 与播放页侧栏使用原有毛玻璃，不挂载液态滤镜或其尺寸观察器；侧栏排版保留。设置内输入框、内嵌菜单和嵌套 Dialog 使用实色；播放页内的 Bewly 辅助按钮复用底部容器表面，不再添加玻璃。独立搜索框与已保留的顶栏边缘模糊相交时，继续保留边缘模糊，不将其推广成其他内部控件的叠层依据。
+- 播放栏液态玻璃的外壳不得使用 opacity / will-change: opacity 创建背景采样边界；沿用统一控制栏显隐值，对折射、着色和边框绘制层分别淡入淡出，保留 reduced-motion。
+- 跟随主题的玻璃色调使用浅色白、深色受限黑、OLED 纯黑；着色强度保留 0/100 端点及完整可调范围，自定义模式使用原始不透明度。完全实色时不挂载不可见的 SVG 折射与 backdrop 层。
+
+### 加载反馈
+
+- Nocturne 页面、数据组件、预览初始化和操作中的占位统一使用 `SkeletonBlock.vue` 与 `src/styles/skeleton.scss` 的 `[data-bew-skeleton]`；原生 Bilibili 播放器的媒体缓冲提示保持原样，LIVE 状态图标不属于加载动画。
+- 骨架复用真实内容的列数、封面比例、字号、行高、按钮尺寸和布局设置。已有数据及提交中的已知标签保持可读，只占位尚未取得的数据；不要用全页骨架遮住可继续使用的旧内容。
+- 加载结束后卸载占位，离屏图片停止骨架动画；请求归属和清理复用现有 generation/lifecycle，reduced-motion 统一由共享骨架样式处理。
+- Bewly 播放栏须在原生控制栏、弹幕栏和 Shadow DOM 中辅助按钮的实际布局稳定后退出初始化骨架；`playing` 事件不能代替控件布局就绪。
+- 播放页侧栏排版优先保留原生作者、关注、充电、消息、评论和播放器节点。原生评论内的排版通过 MAIN world 既有 Shadow DOM 样式桥且限定于 `#bewly-widescreen-root`，不得为换材质重建业务控件。
+- 播放页简介、标签和原生操作根节点的迟到更新/替换须由既有侧栏 Observer 处理；不可把它们与装饰、评论长列表和操作动画一概作为内部变化忽略。不克隆业务按钮，不复用已释放导航的节点，也不把脱落的 DOM 当作仍存活的原生组件重新挂回。
+- 普通 BV/AV 页的作者、操作栏、简介和标签在移交前通过现有 videoMetadataBridge 同步确认 MAIN world 的原生 Vue 组件已挂载且拥有该根节点。ISOLATED 不直接读取 `__vue__`；DOM 存在、原位标记、API 统计均不能替代组件存活判断。组件销毁通知复用侧栏刷新及统一清理，不新增轮询或第二套业务状态。
+- API 返回的点赞/投币/收藏/分享统计不代表原生操作就绪；缺少原生工具栏时不得将侧栏标记为完整。超时提供现有刷新/退出恢复入口，迟到的原生工具栏恢复后清除错误。
+- 播放侧栏由 aside 容器自身绘制唯一毛玻璃背景，覆盖头部、分类和三个内容面板；内部内容面板透明以共享该背景，不使用负 z-index 伪元素承载整栏模糊。
+- 播放侧栏默认宽度为窗口 50%，可拖动至 85%；保留已保存的手动像素宽度。作者和完整操作栏按可用宽度并排或上下排布，简介与标签共用无滤镜的内嵌圆角容器；历史弹幕按钮只改变视觉定位，保留原生列表父子关系及模式显隐。
+
 ### 排版
 
 - 基础界面文字限定为：caption `12/16px`、control `13/18px`、body `15/24px`、title `15/22px`、heading `20/28px`，优先使用对应的 `--bew-font-size-*` 和 `--bew-line-height-*` token。
@@ -76,7 +103,7 @@ pnpm typecheck
 
 ### Pop 与浮层
 
-- 顶栏搜索、设置搜索、搜索筛选等同类 Pop 默认与触发控件等宽，并复用 `.bew-popover-surface`；不要在组件内重复维护背景、边框、圆角、阴影和毛玻璃参数。
+- 顶栏搜索、设置搜索、搜索筛选等同类 Pop 默认与触发控件等宽，并复用实色 `.bew-popover-surface`；不要在组件内重复维护背景、边框、圆角、阴影。伸出顶栏边界的固定 `.bew-popover` 可使用独立玻璃，其内部菜单和控件仍用实色。
 - Pop 与视口或所属主面板至少保留 `8px` 安全边距；窄屏允许扩展到所属内容区的安全宽度，但不能依赖固定宽度越界后再裁切。
 - 结果数量可能变化的 Pop 必须根据下方可用空间限制 `max-height`，内容超出时只在 Pop 内部滚动，并使用 `overscroll-behavior: contain` 避免滚动穿透。
 
@@ -157,7 +184,7 @@ pnpm typecheck
 - 顶栏模式只在“Dock 内容调整”中作为特殊配置项存在，不是 Dock 导航项，不参与拖拽，也没有“新标签页”选项。全 Bewly 使用 Bewly 顶栏；全原版使用 Bilibili 原生 `.bili-header`；自定义模式根据现有配置选择 Bewly 或 Bilibili 原生顶栏。不得探测、适配或承诺支持第三方顶栏实现。
 - 已删除的 `BewlyOrBiliTopBarSwitcher.vue`、搜索框下方悬浮入口、Teleport、层级、显隐设置和废弃文案不得恢复。任何新的上游顶栏视觉或交互更新默认不批准，移植前必须取得用户明确授权。
 - 首页默认整合搜索页并复用单一 SearchBar 实例：初始位置保留聚焦人物，滚动到顶栏后原实例粘附且人物隐藏，不得再生成第二个顶栏搜索框。独立搜索页开关关闭时，`AppPage.Search` 路由归一到首页且 Dock 不显示搜索项；两种形态直接共用现有搜索设置，不恢复“与搜索页共用的配置”跳转入口。首页与搜索页只复用顶栏表面样式，必须保留搜索框自身的 `550px` 最大宽度。
-- Dock 默认位于底部；`Notifications` 当前正式基线是 Native Message Center：`reply / at / love / system` 使用 Vue Native Feed，`whisper` 是原生会话列表与只读历史的 hybrid workspace。普通用户、官方助手、未关注和拦截的一对一会话均在当前 Bewly 页面读取；粉丝团和不支持的会话先进入 Native fallback 详情，只有用户明确点击“打开原版私信列表”才离开 Bewly。Whisper 未选择会话时只显示 Native 空状态，绝不能隐式挂载、刷新或预加载原版私信 iframe。不得一次性移植或重写完整私信客户端。Notifications 不包含消息设置分类；消息内容页不提供设置入口，消息设置只存在于全局“Bewly 页面 → 消息页”。旧 `notificationView=settings` 必须在 outlet 渲染前同步规范化并通过同一类型化 Settings API 打开该页面，当前发布版原版消息设置通过独立 background transport 与页面级 composable 原生接入；服务端值不得写入 Bewly 本地 settings，每个字段必须独立提交并以服务端回读结果对账，屏蔽词额度以服务端返回为准。Settings 二级纵向导航的浅色选中态使用主题色文字与低透明主题表面，不得回退为过黑的中性 fill。System 只使用当前发布客户端已验证的 `unified + user` 首屏、单一 legacy cursor 历史流和 `update_cursor` 已读契约；系统条目采用独立文本/链接模型，禁止猜测图片、按钮或 module 数组。原版 System URL 必须保留为显式失败 fallback，但 Notifications 不再挂载 System iframe。
+- Dock 默认位于底部；`Notifications` 当前正式基线是 Native Message Center：`reply / at / love / system` 使用 Vue Native Feed，`whisper` 是原生会话列表与只读历史的 hybrid workspace。普通用户、官方助手、未关注和拦截的一对一会话均在当前 Bewly 页面读取；粉丝团和不支持的会话先进入 Native fallback 详情，只有用户明确点击“打开原版私信列表”才离开 Bewly。Whisper 未选择会话时只显示 Native 空状态，绝不能隐式挂载、刷新或预加载原版私信 iframe。不得一次性移植或重写完整私信客户端。Notifications 不包含消息设置分类；消息内容页不提供设置入口，消息设置只存在于全局“Bewly 页面 → 消息页”。旧 `notificationView=settings` 必须在 outlet 渲染前同步规范化并通过同一类型化 Settings API 打开该页面，当前发布版原版消息设置通过独立 background transport 与页面级 composable 原生接入；服务端值不得写入 Bewly 本地 settings，每个字段必须独立提交并以服务端回读结果对账，屏蔽词额度以服务端返回为准。Settings 二级纵向导航的选中态使用主题实色与 `--bew-on-theme-color` 前景，深浅主题保持一致且不使用半透明主题底色。System 只使用当前发布客户端已验证的 `unified + user` 首屏、单一 legacy cursor 历史流和 `update_cursor` 已读契约；系统条目采用独立文本/链接模型，禁止猜测图片、按钮或 module 数组。原版 System URL 必须保留为显式失败 fallback，但 Notifications 不再挂载 System iframe。
 - 四类 Native Feed 共用加载、错误、刷新、分页、滚动锚点、账号隔离和 read-commit 生命周期；页面级 controller 按分类保存状态，但同一时间只允许渲染当前一个 Native Feed DOM。隐藏分类不得保留完整长列表、IntersectionObserver 或 visibility listener，也不得通过 KeepAlive 保留多套 Feed 组件。
 - Reply / At / Love / System 的 items、cursor、read commit、请求 single-flight、缓存与 scrollTop 必须独立；System 使用专用通知模型和单一 string cursor，不得强塞入 actor 模型。所有 Feed 按当前 MID 隔离，账号变化后旧 generation 的响应不得写入新账号。通知解析、聚合或分页规则变更必须同步脱敏 fixture，并通过 `pnpm verify:notifications`，不得绕过该门禁。
 - Native Feed 的自动激活、未读变化与可见性刷新必须使用 `merge-head` 更新首部并保留已加载历史与视觉锚点；用户手动刷新使用 `replace`、重置分页并回到顶部。分页必须检查 cursor 或唯一条目是否前进，停滞后停止 Observer 自动请求；Retry 必须根据 `failedOperation` 精确重试首次加载、刷新或分页，不得根据 items 数量猜测。
@@ -186,6 +213,7 @@ pnpm typecheck
 - 毛玻璃默认开启并继续服从全局模糊强度。`disableFrostedGlass` 是唯一关闭入口，开启后同时关闭毛玻璃和普通顶栏渐变；不要恢复 `enableFrostedGlass`、`enableTopBarGradient`、`alwaysUseTransparentTopBar` 等独立或正向旧状态。
 - 设置页和 Dialog 的顶部渐变模糊统一由 `PanelTopBlur.vue` 承担。装饰层不绘制背景或边框、不承担内容裁切，遮罩必须在物理边界前衰减透明；清晰表面边框必须在模糊层上方单独绘制，不得以 `overflow: hidden`、实色背景或重复 backdrop-filter 破坏渐变或模糊顶部圆角/边框。
 - 设置页从实际 Dock 设置按钮的 `DOMRect` 起源展开并保留 KeepAlive；只动画最外层面板的 opacity/transform，遮罩独立淡入淡出，不缩放顶部模糊层。
+- 广告规则优先使用明确广告标记、广告反馈入口及推广 URL，正常推荐缺少“不感兴趣”菜单不能作为广告证据。首页/原版搜索复用现有列表 Observer 标记外层广告槽位，不删除 Vue 所有的 DOM，不对简介、标签和操作弹窗应用文本关键词过滤。
 - 圆形操作使用 `IconButton.vue`，关闭浮层使用 `CloseButton.vue`，删除搜索历史或 Chip 使用 `TagRemoveButton.vue`；不得重新在页面组件中复制几何、前景继承和交互样式，也不得混淆三种语义。
 - 左下新版本提示与内容脚本重载提示必须共用 `--bew-panel-radius` 和 `corner-shape: round`；不得将其中一个单独改回 superellipse。顶栏登录按钮使用实色主题背景与 `--bew-on-theme-color`，`CloseButton.vue` 的 surface 变体使用 elevated solid token，以保持深浅主题可读性。
 - 内存节省相关设置集中在“通用 → 内存节省”，保留各自持久化 key 和独立行为；不得在旧页面重复入口或把网络、画质、动画等无关性能项混入。

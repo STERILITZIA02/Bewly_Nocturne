@@ -94,11 +94,9 @@ input[type="checkbox"] {
   }
 
   &:checked:hover + .radio-switch {
-    background: var(--bew-theme-color-80);
+    background: var(--bew-theme-color);
     border-color: var(--bew-theme-color);
-    box-shadow:
-      0 0 6px 2px var(--bew-theme-color-40),
-      inset 0 0 6px var(--bew-theme-color-30);
+    box-shadow: var(--bew-shadow-1);
   }
 
   & + .radio-switch,

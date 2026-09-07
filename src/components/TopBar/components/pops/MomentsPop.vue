@@ -5,13 +5,14 @@ import { useI18n } from 'vue-i18n'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
-import Loading from '~/components/Loading.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { getCSRF, scrollToTop } from '~/utils/main'
+
+import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
 type MomentType = 'video' | 'live' | 'article'
 interface MomentTab { type: MomentType, name: string }
@@ -121,7 +122,6 @@ defineExpose({
     <header class="bew-popover__header">
       <div
         class="moments-pop__tabs bew-segment-control"
-        :class="{ 'bew-segment-control--solid': settings.disableFrostedGlass }"
       >
         <LiquidSegmentIndicator :active-key="selectedMomentTab.type" />
         <button
@@ -150,9 +150,9 @@ defineExpose({
       ref="momentsWrap"
       class="bew-popover__body bew-popover__scroll bew-popover__list moments-pop__scroll"
     >
-      <Loading
+      <PopoverListSkeleton
         v-if="topBarStore.isLoadingMoments && topBarStore.moments.length === 0"
-        class="bew-popover__state"
+        variant="moments"
       />
 
       <Empty
@@ -279,7 +279,7 @@ defineExpose({
 
       <!-- loading -->
       <Transition name="fade">
-        <Loading v-if="topBarStore.isLoadingMoments && topBarStore.moments.length !== 0" m="b-4" />
+        <PopoverListSkeleton v-if="topBarStore.isLoadingMoments && topBarStore.moments.length !== 0" variant="moments" :count="2" />
       </Transition>
     </main>
   </div>
@@ -289,6 +289,8 @@ defineExpose({
 @use "../../styles/popoverCards";
 
 .moments-pop {
+  --bew-popover-media-width: 82px;
+  --bew-popover-media-ratio: 82 / 46;
   width: 380px;
   height: min(500px, var(--bew-popover-max-height));
 }
@@ -344,8 +346,8 @@ defineExpose({
 
 .moments-pop .popover-card__media {
   display: flex;
-  flex: 0 0 82px;
-  width: 82px;
+  flex: 0 0 var(--bew-popover-media-width);
+  width: var(--bew-popover-media-width);
   height: 46px;
   align-items: center;
   justify-content: center;

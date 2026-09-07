@@ -71,15 +71,14 @@ function toggle() {
 }
 
 .settings-toggle-tag.is-active {
-  border-color: var(--bew-theme-color-30);
-  color: var(--bew-theme-foreground);
-  background: color-mix(in oklab, var(--bew-theme-color-20), transparent 28%);
+  border-color: transparent;
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
 }
 
 .settings-toggle-tag.is-active:hover {
-  border-color: var(--bew-theme-color);
-  color: var(--bew-theme-foreground);
-  background: color-mix(in oklab, var(--bew-theme-color-20), transparent 10%);
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
 }
 
 .settings-toggle-tag__state {

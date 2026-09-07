@@ -5,7 +5,6 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
-import Loading from '~/components/Loading.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
@@ -14,6 +13,7 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { removeHttpFromUrl, scrollToTop } from '~/utils/main'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
+import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object'
@@ -374,9 +374,8 @@ defineExpose({
         ref="favoriteVideosWrap"
         class="bew-popover__scroll bew-popover__list favorites-pop__content"
       >
-        <Loading
+        <PopoverListSkeleton
           v-if="(isLoadingCategories || isLoading) && favoriteResources.length === 0"
-          class="bew-popover__state"
         />
 
         <Empty
@@ -448,7 +447,7 @@ defineExpose({
 
         <!-- loading -->
         <Transition name="fade">
-          <Loading v-if="isLoading && !isRefreshingResources && favoriteResources.length !== 0 && currentPageNum > 1" m="b-4" />
+          <PopoverListSkeleton v-if="isLoading && !isRefreshingResources && favoriteResources.length !== 0 && currentPageNum > 1" :count="2" />
         </Transition>
       </div>
     </main>
@@ -459,6 +458,7 @@ defineExpose({
 @use "../../styles/popoverCards";
 
 .favorites-pop {
+  --bew-popover-media-width: 120px;
   width: 450px;
   height: min(500px, var(--bew-popover-max-height));
 }
@@ -500,8 +500,8 @@ defineExpose({
 }
 
 .favorites-pop .popover-card__media {
-  flex: 0 0 120px;
-  width: 120px;
+  flex: 0 0 var(--bew-popover-media-width);
+  width: var(--bew-popover-media-width);
 }
 
 @media (max-width: 480px) {

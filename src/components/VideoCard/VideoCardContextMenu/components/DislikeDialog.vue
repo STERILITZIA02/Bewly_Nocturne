@@ -216,7 +216,7 @@ onKeyStroke((e: KeyboardEvent) => {
 
 <style lang="scss" scoped>
 .activated-dislike-reason {
-  --uno: "bg-$bew-theme-color-20 color-$bew-theme-color";
+  --uno: "bg-$bew-theme-color color-$bew-on-theme-color";
 }
 
 .divider {

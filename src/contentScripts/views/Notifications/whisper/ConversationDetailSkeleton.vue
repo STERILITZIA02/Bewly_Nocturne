@@ -30,12 +30,10 @@ withDefaults(defineProps<{
   min-height: 0;
   padding: var(--bew-space-3) var(--bew-space-4) var(--bew-space-4);
   overflow: hidden;
-  background: var(--bew-elevated-alt);
+  background: var(--bew-elevated-alt-solid);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
   box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
-  backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 </style>

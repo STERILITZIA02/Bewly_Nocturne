@@ -1,4 +1,5 @@
 export const MOMENTS_SCROLL_BOUNDARY_TOLERANCE_PX = 2
+export const MOMENT_GRID_DIMENSIONS = { minCardWidth: 360, gap: 16, sidebarWidth: 248 } as const
 
 interface HorizontalScrollStateInput {
   scrollLeft: number

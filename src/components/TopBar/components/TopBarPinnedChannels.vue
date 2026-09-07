@@ -181,7 +181,6 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
     data-layout-editable-id="topbar-pinned-channels"
     :class="{
       'white-theme': props.forceWhiteIcon,
-      'bew-segment-control--solid': settings.disableFrostedGlass,
     }"
   >
     <div ref="listRef" class="pinned-channels__list">
@@ -283,9 +282,8 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
     }
   }
 
-  &.white-theme:not(.bew-segment-control--solid) {
+  &.white-theme {
     --bew-segment-surface-background: var(--bew-control-background-white);
-    --bew-segment-surface-shadow: none;
     --bew-segment-item-color: white;
     --bew-segment-item-hover-current-color: white;
     --bew-segment-item-hover-current-bg: var(--bew-segment-item-hover-bg-white);

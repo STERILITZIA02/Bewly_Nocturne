@@ -83,9 +83,9 @@ onBeforeUnmount(controller.invalidate)
 <template>
   <section class="moment-vote" :aria-busy="state.loading || state.submitting" @click.stop>
     <strong :id="groupId" class="moment-vote__title">{{ state.info?.title || fallbackTitle }}</strong>
-    <p v-if="state.loading" class="moment-vote__meta" role="status">
-      {{ t('moments.vote_loading') }}
-    </p>
+    <div v-if="state.loading && !state.info" class="moment-vote__options" role="status" :aria-label="t('moments.vote_loading')">
+      <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height-lg)" radius="interactive" />
+    </div>
     <p v-if="state.loadError" class="moment-vote__error" role="alert">
       {{ t('moments.vote_load_failed') }}
       <button type="button" :disabled="state.loading || state.submitting" @click="controller.load">
@@ -177,7 +177,7 @@ onBeforeUnmount(controller.invalidate)
   background: var(--bew-fill-2);
 }
 .moment-vote__option:not(.is-locked):active {
-  background: var(--bew-theme-color-10);
+  background: var(--bew-theme-surface);
 }
 .moment-vote__option.is-selected {
   border-color: var(--bew-theme-color);
@@ -192,7 +192,7 @@ onBeforeUnmount(controller.invalidate)
 .moment-vote__fill {
   position: absolute;
   inset: 0 auto 0 0;
-  background: var(--bew-theme-color-10);
+  background: var(--bew-theme-surface);
   pointer-events: none;
 }
 .moment-vote__image {

@@ -1,5 +1,7 @@
 <script setup lang="ts">
-type SkeletonRadius = 'sm' | 'control' | 'interactive' | 'media' | 'card' | 'panel' | 'full' | 'circle'
+import { computed } from 'vue'
+
+type SkeletonRadius = 'sm' | 'half' | 'control' | 'interactive' | 'media' | 'card' | 'panel' | 'full' | 'circle'
 
 const props = withDefaults(defineProps<{
   width?: string
@@ -20,6 +22,7 @@ const blockStyle = computed(() => ({
 <template>
   <span
     class="bew-skeleton-block"
+    data-bew-skeleton
     :class="`bew-skeleton-block--${radius}`"
     :style="blockStyle"
     aria-hidden="true"
@@ -34,20 +37,14 @@ const blockStyle = computed(() => ({
   max-width: 100%;
   height: var(--bew-skeleton-block-height);
   overflow: hidden;
-  background:
-    linear-gradient(
-      100deg,
-      transparent 20%,
-      color-mix(in oklab, var(--bew-fill-4), transparent 28%) 50%,
-      transparent 80%
-    ),
-    var(--bew-skeleton);
-  background-size: 220% 100%;
-  animation: bew-skeleton-shimmer 1.4s linear infinite;
 }
 
 .bew-skeleton-block--sm {
   border-radius: var(--bew-radius-sm);
+  corner-shape: var(--bew-corner-shape);
+}
+.bew-skeleton-block--half {
+  border-radius: var(--bew-radius-half);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -84,21 +81,5 @@ const blockStyle = computed(() => ({
 .bew-skeleton-block--circle {
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
-}
-
-@keyframes bew-skeleton-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-
-  to {
-    background-position: -120% 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .bew-skeleton-block {
-    animation: none;
-  }
 }
 </style>

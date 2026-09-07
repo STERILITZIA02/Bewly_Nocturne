@@ -43,6 +43,7 @@ export function registerViewLifetimeChecks(check, { Vue, compileComponent, flush
         },
       },
       '~/utils/mediaResources': { releaseIframeMedia: frame => released.push(frame) },
+      '~/utils/main': { isVideoOrBangumiPage: () => false },
     }, { renderTemplate: false, globals: {
       setTimeout: (callback) => {
         timers.set(++nextTimer, callback)

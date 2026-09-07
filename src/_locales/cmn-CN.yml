@@ -299,25 +299,25 @@ settings:
   topbar_display_settings_desc: 调整顶栏在不同页面和交互场景下的显示方式。
   group_navigation: Dock和侧边栏
   group_dock: Dock 栏
-  group_dock_glass: Dock 玻璃材质
-  dock_liquid_glass: 液态玻璃
-  dock_liquid_glass_desc: 使用液态玻璃替代 Dock 及其独立操作按钮的毛玻璃，保留现有布局和收起交互。受全局“关闭毛玻璃与顶栏渐变”设置控制。
-  dock_liquid_glass_paused: 全局毛玻璃已关闭，Dock 当前使用实色表面。
-  dock_glass_mode: 折射风格
-  dock_glass_mode_standard: 标准
-  dock_glass_mode_polar: 圆润
-  dock_glass_mode_prominent: 鲜明
-  dock_glass_refraction: 折射强度
-  dock_glass_blur: 模糊度
-  dock_glass_blur_desc: 独立调节 Dock 玻璃的背景模糊半径，0 px 最清透。
-  dock_glass_tint: 玻璃色调
-  dock_glass_tint_theme: 跟随明暗主题
-  dock_glass_tint_custom: 自定义
-  dock_glass_tint_color: 自定义玻璃颜色
-  dock_glass_tint_opacity: 色调不透明度
-  dock_glass_tint_opacity_desc: 0% 为无色玻璃，100% 为实色色调；着色均匀覆盖整个玻璃轮廓。
-  dock_glass_dispersion: 边缘色散
-  dock_glass_saturation: 色彩饱和度
+  group_liquid_glass: 悬浮表面材质
+  liquid_glass: 液态玻璃
+  liquid_glass_desc: 用于 Dock、播放页底部控制栏、独立搜索框和顶栏浮层。设置窗口、左侧导航和播放页侧栏保留毛玻璃，内部控件保持实色。
+  liquid_glass_paused: 全局毛玻璃已关闭，液态玻璃暂停，悬浮面板使用实色表面。
+  liquid_glass_mode: 折射风格
+  liquid_glass_mode_standard: 标准
+  liquid_glass_mode_polar: 圆润
+  liquid_glass_mode_prominent: 鲜明
+  liquid_glass_refraction: 折射强度
+  liquid_glass_blur: 模糊度
+  liquid_glass_blur_desc: 统一调节液态玻璃的背景模糊半径，0 px 最清透，不影响顶部渐变模糊。
+  liquid_glass_tint: 玻璃色调
+  liquid_glass_tint_theme: 跟随明暗主题
+  liquid_glass_tint_custom: 自定义
+  liquid_glass_tint_color: 自定义玻璃颜色
+  liquid_glass_tint_opacity: 色调强度
+  liquid_glass_tint_opacity_desc: 0% 无着色，100% 为实色。跟随主题时浅色偏白、深色偏黑、OLED 更深；自定义颜色按所选不透明度均匀着色。
+  liquid_glass_dispersion: 边缘色散
+  liquid_glass_saturation: 色彩饱和度
   group_sidebar: 侧边栏
   group_sidebar_desc: 位于主页以外的页面右侧或左侧，通常有亮/暗模式切换按钮和设置按钮。
   group_color: 颜色

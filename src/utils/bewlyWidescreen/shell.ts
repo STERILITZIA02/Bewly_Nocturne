@@ -5,7 +5,7 @@ import { t } from '~/utils/bewlyWidescreen/labels'
 import { getTitleText } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenSidebarLayout, BewlyWidescreenState, BewlyWidescreenTab } from '~/utils/bewlyWidescreen/types'
-import { clampWidescreenSidebarWidth, WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY } from '~/utils/bewlyWidescreenPolicy'
+import { WIDESCREEN_SIDEBAR_EDGE_EXIT_DELAY } from '~/utils/bewlyWidescreenPolicy'
 
 export function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
   if (!session.current)
@@ -16,6 +16,7 @@ export function setActiveTab(nextTab: BewlyWidescreenTab, hydrate = true) {
   for (const [tab, button] of Object.entries(session.current.tabButtons) as Array<[BewlyWidescreenTab, HTMLButtonElement]>) {
     const active = tab === nextTab
     button.classList.toggle('is-active', active)
+    button.dataset.active = String(active)
     button.setAttribute('aria-selected', String(active))
     button.tabIndex = active ? 0 : -1
     session.current.panels[tab].hidden = !active
@@ -134,7 +135,8 @@ function createSidebarToolbar() {
 function createTabButton(tab: BewlyWidescreenTab, label: string) {
   const button = document.createElement('button')
   button.type = 'button'
-  button.className = 'bewly-widescreen-tab'
+  button.className = 'bewly-widescreen-tab bew-segment-control__item bew-segment-control__item--wide'
+  button.setAttribute('data-segment-item', '')
   button.textContent = label
   button.setAttribute('role', 'tab')
   button.addEventListener('click', () => setActiveTab(tab))
@@ -177,13 +179,9 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   const root = document.createElement('div')
   root.id = ROOT_ID
   root.dataset.sidebarPosition = sidebarPosition
-  root.style.setProperty(
-    '--bewly-widescreen-sidebar-user-width',
-    `${clampWidescreenSidebarWidth(
-      settings.value.bewlyWidescreenSidebarWidth,
-      document.documentElement.clientWidth || window.innerWidth,
-    )}px`,
-  )
+  if (settings.value.bewlyWidescreenSidebarWidth > 0) {
+    root.style.setProperty('--bewly-widescreen-sidebar-user-width', `${settings.value.bewlyWidescreenSidebarWidth}px`)
+  }
 
   const stage = document.createElement('div')
   stage.className = 'bewly-widescreen-stage'
@@ -214,10 +212,16 @@ export function createRoot(sidebarPosition: 'left' | 'right' = 'right') {
   descriptionSlot.className = 'bewly-widescreen-description-slot'
   const tagsSlot = document.createElement('div')
   tagsSlot.className = 'bewly-widescreen-tags-slot'
-  sidebarTop.append(toolbar, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot)
+  const authorActions = document.createElement('div')
+  authorActions.className = 'bewly-widescreen-author-actions'
+  authorActions.append(upSlot, toolbarSlot)
+  const descriptionCard = document.createElement('div')
+  descriptionCard.className = 'bewly-widescreen-description-card'
+  descriptionCard.append(descriptionSlot, tagsSlot)
+  sidebarTop.append(toolbar, metadataSlot, authorActions, descriptionCard)
 
   const tablist = document.createElement('div')
-  tablist.className = 'bewly-widescreen-tabs'
+  tablist.className = 'bewly-widescreen-tabs bew-segment-control bew-segment-control--surface bew-segment-control--static'
   tablist.setAttribute('role', 'tablist')
 
   const tabButtons = {

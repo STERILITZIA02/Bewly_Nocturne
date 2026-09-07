@@ -509,7 +509,7 @@ onBeforeUnmount(() => {
     :style="notificationsPageStyle"
   >
     <div v-if="!routeReady" class="notifications-page__route-loading" aria-busy="true">
-      <NotificationsPageSkeleton :label="t('common.loading')" />
+      <NotificationsPageSkeleton :label="t('common.loading')" :view="currentView" />
     </div>
 
     <template v-else>
@@ -555,7 +555,7 @@ onBeforeUnmount(() => {
 @use "../../../styles/breakpoints";
 
 .notifications-page {
-  --notifications-conversation-list-max-width: calc(var(--bew-space-12) * 9);
+  --notifications-conversation-list-max-width: var(--bew-notifications-list-max-width);
   --notifications-conversation-list-width: min(
     var(--notifications-navigation-width, var(--notifications-conversation-list-max-width)),
     var(--notifications-conversation-list-max-width)

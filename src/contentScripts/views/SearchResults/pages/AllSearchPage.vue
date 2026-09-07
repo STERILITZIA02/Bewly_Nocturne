@@ -862,8 +862,8 @@ defineExpose({
   align-self: flex-start;
   padding: 0.25rem 0.5rem;
   border-radius: var(--bew-badge-radius);
-  background: var(--bew-theme-color-20);
-  color: var(--bew-theme-foreground);
+  background: var(--bew-theme-surface-hover);
+  color: var(--bew-on-theme-surface);
   font-size: var(--bew-font-size-control);
 }
 
@@ -1013,8 +1013,8 @@ defineExpose({
   margin-left: 0.5rem;
   padding: 0.1rem 0.5rem;
   border-radius: var(--bew-badge-radius);
-  background: var(--bew-theme-color-20);
-  color: var(--bew-theme-foreground);
+  background: var(--bew-theme-surface-hover);
+  color: var(--bew-on-theme-surface);
   font-size: var(--bew-font-size-control);
 }
 
@@ -1119,7 +1119,7 @@ defineExpose({
     transform 0.3s ease;
 
   &:hover {
-    background: var(--bew-theme-color-10);
+    background: var(--bew-theme-surface);
   }
 }
 

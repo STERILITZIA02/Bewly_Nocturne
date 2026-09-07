@@ -131,7 +131,7 @@ watch(() => props.session.avatar, () => {
 }
 
 .conversation-list-item--selected {
-  background: var(--bew-theme-color-10);
+  background: var(--bew-theme-surface);
 }
 
 .conversation-list-item--compact {

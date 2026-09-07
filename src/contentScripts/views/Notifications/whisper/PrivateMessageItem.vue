@@ -132,10 +132,9 @@ const deliveryLabel = computed(() => {
               :title="deliveryLabel"
             >
               <i v-if="sendState === 'failed'" i-mingcute:warning-line aria-hidden="true" />
-              <i
+              <SkeletonBlock
                 v-else-if="sendState && sendState !== 'sent'"
-                i-svg-spinners-ring-resize
-                aria-hidden="true"
+                width="1em" height="1em" radius="interactive"
               />
               <i v-else i-mingcute:check-line aria-hidden="true" />
             </span>

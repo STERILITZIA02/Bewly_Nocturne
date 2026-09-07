@@ -1,0 +1,46 @@
+.bew-liquid-glass-surface {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  corner-shape: inherit;
+  pointer-events: none;
+}
+
+.bew-liquid-glass-surface__warp,
+.bew-liquid-glass-surface__tint {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
+}
+
+[data-bew-liquid-glass] {
+  isolation: isolate;
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  border-color: transparent !important;
+  box-shadow: var(--bew-liquid-outer-shadow, none) !important;
+}
+
+.bew-liquid-glass-layer {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  corner-shape: inherit;
+  pointer-events: none;
+
+  // The frame is painted after the optics so it cannot refract its own outline.
+  &::after {
+    content: "";
+    position: absolute;
+    inset: var(--bew-liquid-frame-inset, -1px);
+    border: var(--bew-liquid-frame-width, 1px) solid var(--bew-surface-border-color);
+    border-radius: inherit;
+    corner-shape: inherit;
+    box-shadow: var(--bew-liquid-frame-shadow, none);
+    pointer-events: none;
+  }
+}

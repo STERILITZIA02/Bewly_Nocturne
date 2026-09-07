@@ -19,12 +19,7 @@
 
 .bew-segment-control--surface {
   background: var(--bew-segment-surface-background, var(--bew-control-background));
-  box-shadow: var(--bew-segment-surface-shadow, var(--bew-shadow-1), var(--bew-shadow-edge-glow-1));
-  backdrop-filter: var(--bew-segment-surface-filter, var(--bew-filter-glass-1));
-}
-
-.bew-segment-control--solid {
-  backdrop-filter: none;
+  box-shadow: none;
 }
 
 .bew-segment-control__item {

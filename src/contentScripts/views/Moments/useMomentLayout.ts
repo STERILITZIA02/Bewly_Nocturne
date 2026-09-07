@@ -8,7 +8,7 @@ import { settings } from '~/logic'
 import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { createMomentColumnIndex } from '~/utils/momentColumnIndex'
-import { resolveMomentCardWidth, resolveMomentGridColumnCount, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
+import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
 
 interface LayoutHooks {
   onNearBottom: () => void
@@ -33,9 +33,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   const layoutRef = ref<HTMLElement | null>(null)
   const momentsContentRef = ref<HTMLElement | null>(null)
   const gridRef = ref<HTMLElement | null>(null)
-  const CARD_MIN_WIDTH = 360
-  const GRID_GAP = 16
-  const SIDEBAR_WIDTH = 248
+  const { minCardWidth: CARD_MIN_WIDTH, gap: GRID_GAP, sidebarWidth: SIDEBAR_WIDTH } = MOMENT_GRID_DIMENSIONS
   const SIDEBAR_MIN_MAIN_WIDTH = CARD_MIN_WIDTH * 2 + GRID_GAP
   const gridColumnCount = ref(1)
   const gridCardWidth = ref(520)

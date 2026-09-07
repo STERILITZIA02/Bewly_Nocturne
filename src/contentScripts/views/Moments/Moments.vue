@@ -7,6 +7,7 @@ import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
+import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
 import type { DisplayForwardVideo, DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -1043,9 +1044,6 @@ function appendMoments(items: DisplayMoment[]) {
       <header class="moments-filter-header">
         <section
           class="moments-filter-panel bew-segment-control bew-segment-control--surface"
-          :class="{
-            'bew-segment-control--solid': settings.disableFrostedGlass,
-          }"
         >
           <div class="moments-filter-scroll">
             <div class="moments-filter-inside">
@@ -1076,19 +1074,38 @@ function appendMoments(items: DisplayMoment[]) {
         data-layout-editable-id="moments-sidebar"
         :aria-label="t('moments.user_info')"
       >
-        <div v-if="isPortalLoading" class="moments-sidebar-skeleton" aria-hidden="true">
-          <div v-if="settings.momentsSidebarShowUserCard" class="moments-sidebar-skeleton__profile">
-            <span class="moments-sidebar-skeleton__avatar moments-skeleton-block" />
-            <span class="moments-sidebar-skeleton__name moments-skeleton-block" />
-          </div>
-          <div v-if="settings.momentsSidebarShowUserCard" class="moments-sidebar-skeleton__stats">
-            <span v-for="index in 3" :key="index" class="moments-skeleton-block" />
-          </div>
-          <div v-if="settings.momentsSidebarShowPublish" class="moments-sidebar-skeleton__button moments-skeleton-block" />
-          <div v-if="settings.momentsSidebarShowLive" class="moments-sidebar-skeleton__live">
-            <span v-for="index in 3" :key="index" class="moments-skeleton-block" />
-          </div>
-        </div>
+        <template v-if="isPortalLoading">
+          <article v-if="settings.momentsSidebarShowUserCard" class="moments-user-card moments-sidebar-placeholder" aria-hidden="true">
+            <div class="moments-user-card__profile">
+              <SkeletonBlock width="58px" height="58px" radius="circle" />
+              <div class="moments-user-card__identity">
+                <SkeletonBlock width="104px" height="var(--bew-line-height-heading)" />
+                <SkeletonBlock width="72px" height="var(--bew-space-5)" radius="half" />
+              </div>
+            </div>
+            <div class="moments-user-card__stats">
+              <div v-for="index in 3" :key="index" class="moments-sidebar-placeholder__stat">
+                <SkeletonBlock width="60%" height="var(--bew-line-height-heading)" />
+                <SkeletonBlock width="48%" height="var(--bew-line-height-control)" />
+              </div>
+            </div>
+          </article>
+          <div v-if="settings.momentsSidebarShowPublish" class="moments-publish-link" data-bew-skeleton aria-hidden="true" />
+          <section v-if="settings.momentsSidebarShowLive" class="moments-live-card moments-sidebar-placeholder" aria-hidden="true">
+            <header><SkeletonBlock width="96px" height="var(--bew-line-height-title)" /></header>
+            <div class="moments-live-card__list">
+              <div v-for="index in 3" :key="index" class="moments-live-card__skeleton-row">
+                <div class="moments-live-card__avatar">
+                  <SkeletonBlock width="48px" height="48px" radius="circle" />
+                </div>
+                <div class="moments-live-card__info">
+                  <SkeletonBlock width="96px" height="var(--bew-line-height-control)" />
+                  <SkeletonBlock width="72px" height="var(--bew-line-height-control)" />
+                </div>
+              </div>
+            </div>
+          </section>
+        </template>
         <template v-else>
           <article v-if="settings.momentsSidebarShowUserCard && portalUser" class="moments-user-card">
             <a
@@ -1259,8 +1276,8 @@ function appendMoments(items: DisplayMoment[]) {
                   :key="index"
                   class="moments-up-list__item moments-up-list__item--skeleton"
                 >
-                  <span class="moments-up-list__avatar moments-skeleton-block" />
-                  <span class="moments-up-list__name moments-skeleton-block" />
+                  <span class="moments-up-list__avatar moments-skeleton-block" data-bew-skeleton />
+                  <span class="moments-up-list__name moments-skeleton-block" data-bew-skeleton />
                 </div>
               </div>
             </div>
@@ -1365,29 +1382,11 @@ function appendMoments(items: DisplayMoment[]) {
               :key="columnIndex"
               class="moments-skeleton-column"
             >
-              <article
+              <MomentCardSkeleton
                 v-for="itemIndex in 4"
                 :key="itemIndex"
-                class="moments-skeleton-card"
-              >
-                <div class="moments-skeleton-card__header">
-                  <span class="moments-skeleton-card__avatar moments-skeleton-block" />
-                  <span class="moments-skeleton-card__identity">
-                    <span class="moments-skeleton-card__author moments-skeleton-block" />
-                    <span class="moments-skeleton-card__time moments-skeleton-block" />
-                  </span>
-                </div>
-                <div class="moments-skeleton-card__main">
-                  <div class="moments-skeleton-card__cover moments-skeleton-block" />
-                  <div class="moments-skeleton-card__body">
-                    <div class="moments-skeleton-card__title moments-skeleton-block" />
-                    <div v-for="lineIndex in 5" :key="lineIndex" class="moments-skeleton-card__line moments-skeleton-block" :class="{ 'moments-skeleton-card__line--short': lineIndex === 5 }" />
-                  </div>
-                </div>
-                <div class="moments-skeleton-card__footer">
-                  <span v-for="actionIndex in 3" :key="actionIndex" class="moments-skeleton-card__action moments-skeleton-block" />
-                </div>
-              </article>
+                :media="activeMomentFilter !== 'article'"
+              />
             </div>
           </div>
         </div>
@@ -1465,7 +1464,7 @@ function appendMoments(items: DisplayMoment[]) {
           aria-live="polite"
         >
           <template v-if="isLoading">
-            <span i-svg-spinners:ring-resize />
+            <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
             {{ t('moments.loading_more') }}
           </template>
           <template v-else-if="noMoreContent">
@@ -1502,10 +1501,9 @@ function appendMoments(items: DisplayMoment[]) {
           'moment-detail-frame--opus': isOpusDetailMoment,
         }"
       >
-        <div class="moment-detail-frame__loading" aria-hidden="true">
-          <span class="moment-detail-frame__loading-icon" />
-          {{ selectedMoment.isLive ? t('moments.opening_live') : selectedMoment.isVideo ? t('moments.opening_video') : selectedMoment.isForward ? t('moments.opening_forward') : t('moments.loading_detail') }}
-        </div>
+        <Transition name="fade">
+          <Loading v-if="!detailFrameLoaded" class="moment-detail-frame__loading" :kind="selectedMoment.isVideo || selectedMoment.isLive ? 'video' : 'article'" />
+        </Transition>
         <iframe
           :ref="bindDetailIframe"
           :key="detailFrameUrl"
@@ -1769,8 +1767,6 @@ function appendMoments(items: DisplayMoment[]) {
   border: 1px solid var(--bew-surface-border-color);
   color: var(--bew-text-1);
   background: var(--bew-elevated-solid);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
-  backdrop-filter: var(--bew-filter-glass-1);
   box-shadow: var(--bew-shadow-1);
   opacity: 0;
   pointer-events: none;
@@ -1878,8 +1874,8 @@ function appendMoments(items: DisplayMoment[]) {
   border: 0;
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
-  color: var(--bew-theme-foreground);
-  background: var(--bew-theme-color-20);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface-hover);
 }
 .moments-up-list__item--active .moments-up-list__avatar--all,
 .moments-up-list__item--active .moments-up-list__avatar--wanted {
@@ -1941,8 +1937,7 @@ function appendMoments(items: DisplayMoment[]) {
   min-width: 0;
 }
 .moments-user-card,
-.moments-live-card,
-.moments-sidebar-skeleton {
+.moments-live-card {
   box-sizing: border-box;
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
@@ -1987,6 +1982,7 @@ function appendMoments(items: DisplayMoment[]) {
   overflow: hidden;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-heading);
+  line-height: var(--bew-line-height-heading);
   font-weight: var(--bew-font-weight-semibold);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2035,6 +2031,7 @@ function appendMoments(items: DisplayMoment[]) {
   max-width: 100%;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-heading);
+  line-height: var(--bew-line-height-heading);
   font-weight: var(--bew-font-weight-semibold);
   text-overflow: ellipsis;
 }
@@ -2121,7 +2118,8 @@ function appendMoments(items: DisplayMoment[]) {
   overscroll-behavior: contain;
   padding-inline: var(--bew-space-4);
 }
-.moments-live-card__list > a {
+.moments-live-card__list > a,
+.moments-live-card__skeleton-row {
   display: flex;
   align-items: center;
   gap: var(--bew-space-3);
@@ -2204,50 +2202,14 @@ function appendMoments(items: DisplayMoment[]) {
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
 }
-.moments-sidebar-skeleton {
-  padding: var(--bew-space-4);
+.moments-sidebar-placeholder {
+  pointer-events: none;
 }
-.moments-sidebar-skeleton__profile {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-3);
-}
-.moments-sidebar-skeleton__avatar {
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-}
-.moments-sidebar-skeleton__name {
-  width: 104px;
-  height: 17px;
-  border-radius: var(--bew-radius-half);
-}
-.moments-sidebar-skeleton__stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: var(--bew-space-4);
-  margin-top: var(--bew-space-5);
-}
-.moments-sidebar-skeleton__stats > span {
-  height: 34px;
-  border-radius: var(--bew-radius-md);
-}
-.moments-sidebar-skeleton__button {
-  display: block;
-  height: 44px;
-  margin-top: var(--bew-space-4);
-  border-radius: var(--bew-radius-lg);
-}
-.moments-sidebar-skeleton__live {
+.moments-sidebar-placeholder__stat {
   display: flex;
   flex-direction: column;
-  gap: var(--bew-space-2);
-  margin-top: var(--bew-space-4);
-}
-.moments-sidebar-skeleton__live > span {
-  height: 54px;
-  border-radius: var(--bew-radius-lg);
+  align-items: center;
+  gap: var(--bew-space-1);
 }
 @keyframes moments-live-pulse {
   0% {
@@ -2278,102 +2240,6 @@ function appendMoments(items: DisplayMoment[]) {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-}
-.moments-skeleton-card {
-  container-type: inline-size;
-  min-height: 316px;
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
-  background: color-mix(in oklab, var(--bew-elevated), transparent 42%);
-  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--bew-border-color), transparent 72%);
-}
-.moments-skeleton-block {
-  background:
-    linear-gradient(
-      100deg,
-      transparent 20%,
-      color-mix(in oklab, var(--bew-fill-4), transparent 28%) 50%,
-      transparent 80%
-    ),
-    var(--bew-skeleton);
-  background-size: 220% 100%;
-  animation: moment-shimmer 1.4s linear infinite;
-}
-.moments-skeleton-card__header {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-3);
-  padding: var(--bew-space-3) var(--bew-space-4);
-}
-.moments-skeleton-card__identity {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bew-space-2);
-}
-.moments-skeleton-card__main {
-  display: grid;
-  grid-template-columns: minmax(170px, 1fr) minmax(0, 1fr);
-  gap: var(--bew-space-3);
-  min-height: 0;
-  padding: 0 var(--bew-space-4) var(--bew-space-4);
-}
-.moments-skeleton-card__cover {
-  width: 100%;
-  min-height: 0;
-  border-radius: var(--bew-media-radius);
-  aspect-ratio: 16 / 9;
-  opacity: 0.68;
-}
-.moments-skeleton-card__body {
-  padding: var(--bew-space-1) 0 0;
-}
-.moments-skeleton-card__title {
-  width: 72%;
-  height: 16px;
-  border-radius: var(--bew-radius-half);
-}
-.moments-skeleton-card__line {
-  width: 94%;
-  height: 11px;
-  margin-top: var(--bew-space-3);
-  border-radius: var(--bew-radius-sm);
-}
-.moments-skeleton-card__line--short {
-  width: 58%;
-  margin-top: var(--bew-space-2);
-}
-.moments-skeleton-card__footer {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  align-items: center;
-  gap: var(--bew-space-6);
-  height: 42px;
-  padding: 0 34px;
-  border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 72%);
-}
-.moments-skeleton-card__avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-}
-.moments-skeleton-card__author {
-  display: block;
-  width: 92px;
-  height: 12px;
-  border-radius: var(--bew-radius-sm);
-}
-.moments-skeleton-card__time {
-  display: block;
-  width: 58px;
-  height: 8px;
-  border-radius: var(--bew-radius-sm);
-}
-.moments-skeleton-card__action {
-  height: 11px;
-  border-radius: var(--bew-radius-sm);
 }
 .moments-filter-header {
   position: relative;
@@ -2478,20 +2344,6 @@ function appendMoments(items: DisplayMoment[]) {
   pointer-events: none;
 }
 
-@container (max-width: 359px) {
-  .moments-skeleton-card__main {
-    display: block;
-  }
-
-  .moments-skeleton-card__cover {
-    min-height: 0;
-  }
-
-  .moments-skeleton-card__body {
-    padding-top: 16px;
-  }
-}
-
 @media (max-width: 720px) {
   .moments-page {
     padding-right: 8px;
@@ -2585,10 +2437,6 @@ function appendMoments(items: DisplayMoment[]) {
   position: absolute;
   inset: 0;
   z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--bew-space-2);
   color: var(--bew-text-2);
   background: var(--bew-bg);
   font-size: var(--bew-font-size-control);
@@ -2596,35 +2444,10 @@ function appendMoments(items: DisplayMoment[]) {
   opacity: 1;
   transition: opacity 0.18s ease;
 }
-.moment-detail-frame__loading-icon {
-  width: var(--bew-icon-size-lg);
-  height: var(--bew-icon-size-lg);
-  box-sizing: border-box;
-  flex: 0 0 auto;
-  border: 2px solid var(--bew-theme-color-20);
-  border-top-color: var(--bew-theme-color);
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  animation: moment-detail-loading-spin 720ms linear infinite;
-}
-@keyframes moment-detail-loading-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
 @media (prefers-reduced-motion: reduce) {
-  .moments-skeleton-block,
-  .moment-detail-frame__loading-icon {
-    animation: none;
-  }
-
   .moments-up-list__fade,
   .moments-up-list__scroller {
     transition-duration: 0ms;
-  }
-
-  .moment-detail-frame__loading-icon {
-    border-color: var(--bew-theme-color);
   }
 }
 .moment-detail-frame:not(.is-loading) .moment-detail-frame__loading {
@@ -2808,23 +2631,11 @@ function appendMoments(items: DisplayMoment[]) {
 .moments-up-list__item--skeleton .moments-up-list__name,
 .moments-user-card,
 .moments-live-card,
-.moments-sidebar-skeleton,
 .moments-user-card__badges em,
 .moments-user-card__badges i,
 .moments-publish-link,
 .moments-live-card__list > a,
 .moments-live-card__avatar em,
-.moments-sidebar-skeleton__name,
-.moments-sidebar-skeleton__stats > span,
-.moments-sidebar-skeleton__button,
-.moments-sidebar-skeleton__live > span,
-.moments-skeleton-card,
-.moments-skeleton-card__cover,
-.moments-skeleton-card__title,
-.moments-skeleton-card__line,
-.moments-skeleton-card__author,
-.moments-skeleton-card__time,
-.moments-skeleton-card__action,
 .moments-page__empty button,
 .moments-wanted-load-more,
 .moment-detail-frame,
@@ -2855,15 +2666,6 @@ function appendMoments(items: DisplayMoment[]) {
     width: 36px;
     height: 42px;
     transform: none;
-  }
-}
-@keyframes moment-shimmer {
-  from {
-    background-position: 100% 0;
-  }
-
-  to {
-    background-position: -120% 0;
   }
 }
 </style>

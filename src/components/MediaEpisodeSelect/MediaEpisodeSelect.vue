@@ -229,8 +229,8 @@ watch(isOpen, async (open) => {
     padding: var(--bew-space-0-5) var(--bew-space-2);
     border-radius: var(--bew-badge-radius);
     corner-shape: var(--bew-corner-shape-round);
-    background: var(--bew-theme-color-20);
-    color: var(--bew-theme-foreground);
+    background: var(--bew-theme-surface-hover);
+    color: var(--bew-on-theme-surface);
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
   }
