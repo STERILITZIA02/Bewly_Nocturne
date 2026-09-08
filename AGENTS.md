@@ -56,6 +56,9 @@ pnpm typecheck
 ### 加载反馈
 
 - Nocturne 页面、数据组件、预览初始化和操作中的占位统一使用 `SkeletonBlock.vue` 与 `src/styles/skeleton.scss` 的 `[data-bew-skeleton]`；原生 Bilibili 播放器的媒体缓冲提示保持原样，LIVE 状态图标不属于加载动画。
+- 私信会话历史按 2026-09-08 的交互要求例外处理：点击会话先展开透明的右侧容器，展开结束再请求历史并逐条浮现，不使用历史骨架；会话列表及其他消息分类的骨架不变。展开期间刷新不能提前发出历史请求，关闭、切换或卸载须取消待开始的请求。
+- 私信左侧会话列表使用不透明表面，深色/OLED 跟随 `--bew-dark-base-color`；底部输入栏作为独立小表面复用现有液态/毛玻璃选项，消息气泡和表情菜单不新增玻璃。
+- 文本及图片输入入口在开发和打包构建中保持一致。现有 `experimental` 目录名称仅是代码路径，不代表运行时门禁；不得恢复已取消的图片隐藏开关。
 - 骨架复用真实内容的列数、封面比例、字号、行高、按钮尺寸和布局设置。已有数据及提交中的已知标签保持可读，只占位尚未取得的数据；不要用全页骨架遮住可继续使用的旧内容。
 - 加载结束后卸载占位，离屏图片停止骨架动画；请求归属和清理复用现有 generation/lifecycle，reduced-motion 统一由共享骨架样式处理。
 - Bewly 播放栏须在原生控制栏、弹幕栏和 Shadow DOM 中辅助按钮的实际布局稳定后退出初始化骨架；`playing` 事件不能代替控件布局就绪。
@@ -191,7 +194,7 @@ pnpm typecheck
 - Native Feed 的服务端已读成功后只通过 `topBarStore` 的单一权威路径同步未读与跨标签 broker；不得建立第二套 unread Store。System 必须先成功提交当前发布客户端真实的 `update_cursor`，再创建 read commit；没有逐条 unread 证据时不得推导逐条红点。`NotificationsDrawer` 与直接打开的原版页继续保持路由、滚动和状态独立，Whisper 与 System Native Feed 均不得隐式创建原版消息 iframe。
 - 私信 Web IM 固定通过后台 `api.vc.bilibili.com` Web endpoint、显式复用现有 WBI 签名并对已确认的 ID/seqno 字段做窄范围无损解析；消息正文与会话草稿不得持久化。会话历史按 `msg_seqno` 边界分页并以 `msg_key` 去重；ACK 只在当前会话可见且位于最新消息区域时提交，成功后才清除本地未读并通过 `topBarStore.syncUnreadMessageState()` 同步权威角标。会话详情状态按最近访问时间执行页面级 LRU，当前会话与 ACK 请求中的会话不得淘汰；每个会话的消息数组受设置上限约束，裁剪只保留最新消息且必须保留独立历史分页边界。离开 Notifications 必须释放消息数组和失效旧请求，隐藏组件不得保留 visibility listener、Observer 或后台刷新。
 - 私信收件人搜索必须先过滤当前已加载会话；只有用户显式操作才能依次进入关注列表搜索与全站搜索，远端结果按 MID 去重、每页最多 10 条、每个查询最多 3 页且不得自动连续加载。没有权威会话的搜索结果只能作为内存中的 transient recipient，绝不能污染会话分页、游标、未读或服务端排序；首条消息确认后必须刷新会话列表并替换为真实 session。
-- 普通用户与 transient recipient 的会话详情在开发和打包构建中均显示已验证的文本 Composer；官方助手及不支持会话不开放发送。`send_msg` 的 WBI 只签 `w_sender_uid / w_receiver_id / w_dev_id`，`wts / w_rid` 仅进入 URL query，表单 body 不参与签名；同一账号的 UUID v4 `dev_id` 存于 extension local storage 并在 query/body 复用。Chromium 只对精确 `web_im/v1/web_im/send_msg` POST XHR 改写消息站 Origin/Referer。只有 API `code=0` 且服务端历史对账确认后才显示成功；accepted-but-unconfirmed 不得自动重发。2026-08-14 的真实 HTTP `412` 负向 fixture 必须继续作为 `risk-control` 回归样本，但不得再作为永久禁用 DEV 测试入口的 gate。图片 upload/send、optimistic/reconcile 与 Composer 资产继续保留在 experimental 目录；图片入口仍不得暴露，取得真实图片链路成功证据前不得开放。
+- 普通用户与 transient recipient 的会话详情显示文本与图片 Composer；官方助手及不支持会话不开放发送。`send_msg` 的 WBI 只签 `w_sender_uid / w_receiver_id / w_dev_id`，`wts / w_rid` 仅进入 URL query，表单 body 不参与签名；同一账号的 UUID v4 `dev_id` 存于 extension local storage 并在 query/body 复用。Chromium 只对精确 `web_im/v1/web_im/send_msg` POST XHR 改写消息站 Origin/Referer。只有 API `code=0` 且服务端历史对账确认后才显示成功；accepted-but-unconfirmed 不得自动重发。2026-08-14 的真实 HTTP `412` 负向 fixture 必须继续作为 `risk-control` 回归样本，但不得再作为永久禁用 DEV 测试入口的 gate。2026-09-08 用户明确要求开放图片入口：复用现有 upload/send、optimistic/reconcile 与 Composer 资产，选图仅生成本地预览，明确发送后才上传；换号、切会话或卸载后停止未发出的上传/发送步骤并释放对象 URL。表情选择按账号读取原生用户表情目录，不能用历史 `e_infos` 代替用户可用表情包；实站发送验收以本轮维护记录为准。
 
 ### 深色背景、OLED 与主题色
 

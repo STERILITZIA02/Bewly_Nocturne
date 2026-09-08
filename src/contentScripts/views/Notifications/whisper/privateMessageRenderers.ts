@@ -128,6 +128,7 @@ export interface PrivateEmote {
   packageName?: string
   size: number
   type: 'default' | 'user'
+  textOnly?: boolean
 }
 
 export interface PrivateEmotePackage {
@@ -135,6 +136,43 @@ export interface PrivateEmotePackage {
   name: string
   type: PrivateEmote['type']
   emotes: PrivateEmote[]
+  iconUrl?: string
+}
+
+/** Current BiliEmojiPicker uses the reply user panel, including installed/owned packages. */
+export function parsePrivateEmotePanel(value: unknown): PrivateEmotePackage[] {
+  const response = asRecord(value)
+  const data = asRecord(response?.data)
+  if (response?.code !== 0 || !Array.isArray(data?.packages))
+    throw new TypeError('Invalid private emote panel')
+  return data.packages.flatMap((rawPackage) => {
+    const pkg = asRecord(rawPackage)
+    if (!pkg || !Array.isArray(pkg.emote))
+      return []
+    const id = normalizeString(pkg.id)
+    const name = normalizeString(pkg.text)
+    const emotes = pkg.emote.flatMap((rawEmote) => {
+      const emote = asRecord(rawEmote)
+      if (!emote)
+        return []
+      const text = normalizeString(emote.text)
+      const textOnly = emote.type === 4
+      const url = normalizeHttpUrl(emote.webp_url) || normalizeHttpUrl(emote.gif_url) || normalizeHttpUrl(emote.url)
+      if (!text || (!textOnly && !url))
+        return []
+      return [{
+        id: `${id}:${normalizeString(emote.id) || text}`,
+        text,
+        url,
+        size: normalizeDimension(asRecord(emote.meta)?.size),
+        type: 'default' as const,
+        packageId: id,
+        packageName: name,
+        textOnly,
+      }]
+    })
+    return emotes.length ? [{ id, name, type: 'default' as const, iconUrl: normalizeHttpUrl(pkg.url), emotes }] : []
+  })
 }
 
 interface PrivateMessageRendererContext {

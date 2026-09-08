@@ -1,4 +1,4 @@
-import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, ROOT_ID, selectors, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
+import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, ROOT_ID, selectors, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
 import type { BewlyWidescreenState, CommentPrewarmState, MovedNode } from '~/utils/bewlyWidescreen/types'
 import type { WidescreenMutationOrigin } from '~/utils/bewlyWidescreenPolicy'
 import { transferCommentNode } from '~/utils/commentDomTransfer'
@@ -55,7 +55,7 @@ function isWidescreenInternalMutation(record: MutationRecord, currentState: Bewl
       || currentState.tagsSlot?.contains(target))) {
       const nativeChange = !!target.closest(NATIVE_DESCRIPTION_SELECTOR)
         || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
-          .some(node => node instanceof Element && (node.matches(NATIVE_INFO_SELECTOR) || !!node.querySelector(NATIVE_INFO_SELECTOR)))
+          .some(node => node instanceof Element && (node.matches(`${NATIVE_INFO_SELECTOR}, ${NATIVE_MUSIC_ENTRY_SELECTOR}`) || !!node.querySelector(NATIVE_INFO_SELECTOR)))
       return !nativeChange
     }
     return true
@@ -81,6 +81,11 @@ export function classifyWidescreenMutation(
   record: MutationRecord,
   currentState: BewlyWidescreenState,
 ): WidescreenMutationOrigin {
+  const target = record.target instanceof Element ? record.target : record.target.parentElement
+  // Only the entry's creation needs relocation. Music's own list and playback
+  // updates must not restart sidebar hydration.
+  if (target?.closest(NATIVE_MUSIC_ENTRY_SELECTOR))
+    return { insideRoot: true, relevant: false }
   const insideRoot = isWidescreenInternalMutation(record, currentState)
   return {
     insideRoot,
@@ -160,6 +165,10 @@ export function moveNode(
   if (node.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(node) !== true)
     return false
 
+  return transferNativeNode(node, target, movedNodes)
+}
+
+function transferNativeNode(node: HTMLElement, target: HTMLElement, movedNodes: MovedNode[]) {
   const parent = node.parentNode
   if (!parent)
     return false
@@ -172,6 +181,23 @@ export function moveNode(
   transferCommentNode(node, target)
   movedNodes.push({ node, placeholder, originalParent: parent })
   return true
+}
+
+export function moveNativeMusicPanel(movedNodes: MovedNode[]) {
+  const entry = document.querySelector<HTMLElement>(NATIVE_MUSIC_ENTRY_SELECTOR)
+  if (!entry || entry.parentElement === document.body)
+    return false
+  if (entry.closest(`#${ROOT_ID}`)) {
+    const tagsOrigin = movedNodes.find(({ node }) => node.matches(selectors.tags.join(',')))?.placeholder
+    if (!tagsOrigin?.parentNode)
+      return false
+    // If created after VideoTags was moved, its temporary Bewly parent will
+    // disappear on exit. Record an origin beside the native tag placeholder.
+    transferCommentNode(entry, tagsOrigin.parentNode, tagsOrigin)
+  }
+  // Bilibili inserts this separate app next to VideoTags. It needs to escape
+  // both the native sticky stacking context and the scrollable sidebar.
+  return transferNativeNode(entry, document.body, movedNodes)
 }
 
 export function moveMatchingNodes(selectors: string[], target: HTMLElement, movedNodes: MovedNode[], limit = 8) {

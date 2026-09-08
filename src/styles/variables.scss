@@ -380,6 +380,7 @@
 
   // Used as the background color of the Bilibili homepage (www.bilibili.com)
   --bew-homepage-bg: hsl(240 31% 96%);
+  --bew-conversation-list-background: var(--bew-content-solid);
   // #endregion
 
   --bew-content-opacity: 0.68;
@@ -455,6 +456,7 @@
 
   // 深色模式基准颜色（通过 JS 动态设置）
   --bew-dark-base-color: #2a2d32;
+  --bew-conversation-list-background: var(--bew-dark-base-color);
 
   // #region shadow
   --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);

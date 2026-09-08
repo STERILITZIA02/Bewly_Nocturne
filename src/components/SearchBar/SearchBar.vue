@@ -823,7 +823,7 @@ function handleClearKeyword() {
     .focus-character-image {
       position: absolute;
       right: 0;
-      bottom: var(--bew-space-10);
+      bottom: 100%;
       z-index: 0;
       display: block;
       width: 100px;

@@ -313,7 +313,7 @@ function handleToggleHomeTab(tab: any) {
         >
           <Radio v-model="settings.enableFilterByTitle" />
           <template v-if="settings.enableFilterByTitle" #bottom>
-            <i18n-t keypath="settings.filter_by_title_desc" tag="div" text="$bew-text-2 sm" mb-2>
+            <i18n-t keypath="settings.filter_by_title_desc" scope="global" tag="div" text="$bew-text-2 sm" mb-2>
               <template #regex>
                 <code>/abc|\d+/</code>
               </template>
@@ -357,7 +357,7 @@ function handleToggleHomeTab(tab: any) {
         >
           <Radio v-model="settings.enableFilterByUser" />
           <template v-if="settings.enableFilterByUser" #bottom>
-            <i18n-t keypath="settings.filter_by_user_desc" tag="div" text="$bew-text-2 sm" mb-2>
+            <i18n-t keypath="settings.filter_by_user_desc" scope="global" tag="div" text="$bew-text-2 sm" mb-2>
               <template #regex>
                 <code>/abc|\d+/</code>
               </template>

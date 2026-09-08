@@ -306,7 +306,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
         />
         <template v-if="settings.customizeFont === 'custom'" #bottom>
           <Input v-model="settings.fontFamily" @keydown.stop.passive="() => {}" />
-          <i18n-t keypath="settings.customize_font_desc" tag="div" text="sm $bew-text-2" mt-1>
+          <i18n-t keypath="settings.customize_font_desc" scope="global" tag="div" text="sm $bew-text-2" mt-1>
             <template #shanggu>
               <a class="link" href="https://github.com/GuiWonder/Shanggu" target="_blank">Shanggu Fonts (尚古字型)</a>
             </template>

@@ -5,7 +5,7 @@ import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { ensureAnchoredPlayer, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
-import { findCommentRoot, findMovable, isCommentRootUsable, moveCommentRoot, moveMatchingNodes, moveNode, moveOrReplaceNode, movePlaylistControls, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
+import { findCommentRoot, findMovable, isCommentRootUsable, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, placeRecommendAfterPlaylist, syncEpisodeSectionMarker, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { scheduleInitialPanelScrollReset } from '~/utils/bewlyWidescreen/shell'
@@ -79,6 +79,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   syncDescription(currentState)
 
   moveOrReplaceNode(selectors.tags, currentState.tagsSlot, currentState.movedNodes)
+  moveNativeMusicPanel(currentState.movedNodes)
   renderFallbackVideoInfo(currentState)
 
   syncDanmakuInputSource(currentState)

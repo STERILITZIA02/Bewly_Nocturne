@@ -1195,7 +1195,11 @@ notifications:
       emote_packages: Emote package series
       default_emotes: Default
       user_emotes: My emotes
-      default_emotes_empty: Default emotes will appear after they are available in message data
+      default_emotes_empty: No emotes available
+      emotes_load_failed: Could not load emotes. Please try again.
+      image_type_unsupported: Choose a PNG, JPEG or GIF image
+      image_too_large: Images must be 20 MB or smaller
+      gif_too_large: GIF images must be 1 MB or smaller
       user_emotes_empty: No user emote packages are available for this account
       select_image: Choose image
       selected_image_alt: Direct-message image ready to send

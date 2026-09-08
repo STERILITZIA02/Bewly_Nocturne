@@ -184,9 +184,9 @@ verify('notification headers keep only titles and delegate refresh to the Dock c
   assert.doesNotMatch(headerSource, /<Button\b|<ALink\b/)
   assert.doesNotMatch(navigationSource, /descriptionKey/)
   assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,220}box-sizing: border-box/)
-  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,260}width: var\(--bew-space-8\)/)
+  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,260}min-width: var\(--bew-space-4\)/)
   assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,420}white-space: nowrap/)
-  assert.match(navigationSource, /notifications-navigation__badge--empty/)
+  assert.match(navigationSource, /v-if="unreadCount\(section\) > 0"/)
   assert.match(navigationSource, /function revealActiveSection\(\)/)
   assert.match(navigationSource, /scrollTo\(\{ left:[\s\S]{0,120}behavior: 'auto'/)
   assert.match(navigationSource, /\.notifications-navigation__inside \{[\s\S]{0,260}padding-inline: var\(--bew-space-0-5\)/)
@@ -238,7 +238,6 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
     listSkeletonSource,
     conversationDetailSkeletonSource,
     conversationSource,
-    historySkeletonSource,
     timelineSkeletonSource,
   ] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
@@ -251,7 +250,6 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListSkeleton.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationDetailSkeleton.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationHistorySkeleton.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationTimelineSkeleton.vue', import.meta.url), 'utf8'),
   ])
 
@@ -264,15 +262,14 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
   assert.match(workspaceSource, /<ConversationDetailSkeleton[\s\S]{0,180}controller\.state\.loading && !controller\.state\.loaded/)
   assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="loadingMore"/)
   assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="recipientSearch\.state\.loading"/)
-  assert.match(conversationSource, /v-if="state\.loadingInitial && !state\.loaded"[\s\S]{0,520}<ConversationTimelineSkeleton/)
-  assert.match(conversationSource, /<ConversationHistorySkeleton[\s\S]{0,100}:announce="false"/)
-  assert.match(conversationSource, /<ConversationHistorySkeleton[\s\S]{0,120}v-if="historyLoading"/)
+  assert.match(conversationSource, /v-if="entryPhase !== 'ready'"[\s\S]{0,120}role="status"/)
+  assert.doesNotMatch(conversationSource, /<Conversation(?:History|Timeline)Skeleton/)
+  assert.match(conversationSource, /v-if="historyLoading" role="status"/)
   assert.match(feedSkeletonSource, /native-notification-surface bew-shape-smooth-rect/)
   assert.match(feedSkeletonSource, /native-notification-feed-skeleton__reference[\s\S]{0,520}native-notification-feed-skeleton__reference-source/)
   assert.match(feedSkeletonSource, /width="96px"[\s\S]{0,100}height="var\(--bew-line-height-control\)"/)
   assert.match(listSkeletonSource, /conversation-list-skeleton__item/)
   assert.match(conversationDetailSkeletonSource, /<ConversationTimelineSkeleton[\s\S]{0,100}:announce="announce"/)
-  assert.match(historySkeletonSource, /height: var\(--bew-control-height\)/)
   assert.match(timelineSkeletonSource, /conversation-timeline-skeleton__item--self/)
   assert.match(skeletonBlockSource, /data-bew-skeleton/)
   assert.match(await readFile(new URL('../src/styles/skeleton.scss', import.meta.url), 'utf8'), /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)

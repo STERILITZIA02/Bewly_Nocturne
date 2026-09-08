@@ -40,6 +40,7 @@ import {
 import { createSystemNotificationPageFetcher } from './systemNotificationFeed'
 import type { TransientPrivateRecipient } from './whisper/privateRecipientSearch'
 import type { DisplayPrivateSession } from './whisper/privateSession'
+import { usePrivateEmotePanel } from './whisper/usePrivateEmotePanel'
 import { usePrivateMessageWorkspace } from './whisper/usePrivateMessageWorkspace'
 import { usePrivateRecipientSearch } from './whisper/usePrivateRecipientSearch'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
@@ -68,6 +69,7 @@ const transientPrivateRecipient = ref<TransientPrivateRecipient | null>(null)
 const privateConversationRestoreAttempted = ref(false)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
+const privateEmotes = usePrivateEmotePanel(currentMid, () => api.moment.getMomentEmotes({ business: 'reply' }))
 const privateSessions = usePrivateSessions(currentMid, {
   fetchSessions: () => api.privateMessage.getPrivateSessions(),
   fetchOlderSessions: endTs => api.privateMessage.getOlderPrivateSessions({ endTs }),
@@ -446,6 +448,7 @@ function deactivatePage() {
 
   isPageActive.value = false
   privateMessageWorkspace.release()
+  privateEmotes.release()
   clearRefreshHandler()
   clearNotificationViewFromRoute()
 }
@@ -528,6 +531,7 @@ onBeforeUnmount(() => {
             :active="isPageActive"
             :controller="privateSessions"
             :messages-controller="privateMessages"
+            :emote-controller="privateEmotes"
             :recipient-search="privateRecipientSearch"
             :transient-recipient="transientPrivateRecipient"
             :write-controller="privateMessageWrites"

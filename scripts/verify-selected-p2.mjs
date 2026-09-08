@@ -10,6 +10,7 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
+import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
 import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
@@ -19,6 +20,7 @@ import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.
 import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
+import { registerWhisperInteractionChecks } from './verify-whisper-interactions.mjs'
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://www.bilibili.com/', pretendToBeVisual: true })
 const savedGlobals = new Map()
@@ -69,11 +71,62 @@ registerLoadingSkeletonChecks(check, { Vue, compileComponent, flush })
 registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent, flush })
 registerPlaybackContentChecks(check)
 registerAdvertisingRuleChecks(check, { flush })
+registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
+registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
     await Vue.nextTick()
 }
+
+check('i18n: actual settings interpolation templates use global messages without parent-scope warnings', async () => {
+  const { createI18n, useI18n } = await import('vue-i18n')
+  const templates = []
+  for (const file of ['Appearance/Appearance.vue', 'PluginComponentsAndPages/Home/Home.vue']) {
+    const source = await readFile(new URL(`../src/components/Settings/${file}`, import.meta.url), 'utf8')
+    templates.push(...source.match(/<i18n-t\b[\s\S]*?<\/i18n-t>/g))
+  }
+  assert.equal(templates.length, 3)
+  const messages = Object.fromEntries(['en', 'cmn-CN'].map(locale => [locale, {
+    settings: {
+      customize_font_desc: `${locale} fonts {shanggu} / {fanwunhak}`,
+      filter_by_title_desc: `${locale} title {regex} {slash} {lineBreak} {enter} {esc}`,
+      filter_by_user_desc: `${locale} user {regex} {slash} {lineBreak} {enter} {esc}`,
+    },
+  }]))
+  const i18n = createI18n({ legacy: false, locale: 'en', fallbackLocale: 'en', globalInjection: true, messages })
+  const host = document.body.appendChild(document.createElement('div'))
+  const app = Vue.createApp({
+    setup() { useI18n() },
+    render: Vue.compile(`<div>${templates.join('')}</div>`),
+  })
+  app.use(i18n)
+  const warnings = []
+  const originalWarn = console.warn
+  console.warn = (...args) => warnings.push(args.join(' '))
+  try {
+    app.mount(host)
+    assert.match(host.textContent, /en fonts/)
+    assert.match(host.textContent, /en title/)
+    const links = [...host.querySelectorAll('a')]
+    assert.equal(links.length, 2)
+    assert.equal(host.querySelectorAll('kbd').length, 4)
+    assert.equal(host.querySelectorAll('br').length, 2)
+    i18n.global.locale.value = 'cmn-CN'
+    await flush()
+    assert.match(host.textContent, /cmn-CN fonts/)
+    assert.match(host.textContent, /cmn-CN title/)
+    assert.match(host.textContent, /cmn-CN user/)
+    assert.deepEqual([...host.querySelectorAll('a')], links, 'locale changes preserve the actual link nodes')
+    assert.deepEqual(warnings, [])
+  }
+  finally {
+    app.unmount()
+    host.remove()
+    console.warn = originalWarn
+  }
+})
+
 function deferred() {
   let resolve
   const promise = new Promise(done => resolve = done)

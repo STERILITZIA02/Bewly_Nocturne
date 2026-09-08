@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { vLiquidGlass } from '~/utils/liquidGlass'
 
 import type {
   ConversationExpansionAction,
@@ -22,8 +23,6 @@ import {
   reduceConversationExpansion,
   shouldCollapseConversationAtLatest,
 } from './conversationExpansion'
-import ConversationHistorySkeleton from './ConversationHistorySkeleton.vue'
-import ConversationTimelineSkeleton from './ConversationTimelineSkeleton.vue'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
 import type { PrivateMessageWritesController as PrivateMessageWriteController } from './experimental/privateMessageWriteTypes'
@@ -32,11 +31,13 @@ import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
+import type { PrivateEmotePanelController } from './usePrivateEmotePanel'
 import type { PrivateMessagesController } from './usePrivateMessages'
 
 const props = defineProps<{
   active: boolean
   controller: PrivateMessagesController
+  emoteController: PrivateEmotePanelController
   session?: DisplayPrivateSession | null
   recipient?: TransientPrivateRecipient | null
   writeController: PrivateMessageWriteController | null
@@ -69,7 +70,6 @@ const isTextSendEnabled = computed(() => Boolean(props.writeController) && Boole
   props.recipient || props.session?.capabilities.canSend,
 ))
 const writeState = computed(() => props.writeController?.getState(talkerId.value) ?? null)
-const emotePackages = computed(() => props.controller.emotePackages.value)
 const timelineItems = computed<Array<DisplayPrivateMessage | OptimisticPrivateMessage>>(() => {
   const optimisticItems = writeState.value?.items.filter(item => item.localId) ?? []
   return [...state.value.items, ...optimisticItems].sort((left, right) => (
@@ -108,6 +108,10 @@ const isMobileLayout = ref(false)
 const reducedMotion = ref(false)
 const isLayoutTransitioning = ref(false)
 const isAtLatestPosition = ref(true)
+const entryPhase = ref<'opening' | 'loading' | 'ready'>('opening')
+const isRevealingHistory = ref(false)
+const historyRevealDelays = ref<Record<string, number>>({})
+let lastRevealingMessageId = ''
 const expandedGeometry = ref<ConversationExpansionGeometry>({ extraHeight: 0, topLift: 0 })
 const historyLoading = computed(() => state.value.loadingOlder)
 const isAtHistoryStart = computed(() => state.value.noMore)
@@ -139,6 +143,7 @@ let activationGeneration = 0
 let layoutGeneration = 0
 let scrollInteractionGeneration = 0
 let scrollFrameId: number | null = null
+let openingFrameId: number | null = null
 let layoutTransitionTimer: ReturnType<typeof setTimeout> | null = null
 let layoutTransitionTarget: 'compact' | 'expanded' | null = null
 let directScrollGestureEndFrame: number | null = null
@@ -189,6 +194,11 @@ function completeLayoutTransition() {
   layoutTransitionTimer = null
   layoutTransitionTarget = null
   isLayoutTransitioning.value = false
+  if (entryPhase.value === 'opening' && componentMounted && props.active) {
+    entryPhase.value = 'loading'
+    void activateConversation()
+    return
+  }
   const completionLayoutGeneration = layoutGeneration
   const shouldSettleCompact = expansionModel.value.state === 'expanding'
     && expansionModel.value.topExpansionProgress === 0
@@ -253,6 +263,9 @@ function applyExpansionAction(action: ConversationExpansionAction) {
 }
 
 function resetConversationExpansion() {
+  isRevealingHistory.value = false
+  historyRevealDelays.value = {}
+  lastRevealingMessageId = ''
   layoutGeneration++
   scrollInteractionGeneration++
   userHasReadUpward = false
@@ -289,14 +302,18 @@ function processScrollFrame() {
   saveViewportState(metrics, atLatest)
 
   if (atLatest) {
+    const requestedLatest = userRequestedLatest
     userHasReadUpward = false
     userRequestedLatest = false
-    applyExpansionAction({
-      type: 'scroll',
-      atLatest: true,
-      noMore: isAtHistoryStart.value,
-      progress: 0,
-    })
+    // Opening at the latest message must not immediately undo the entry expansion.
+    if (requestedLatest) {
+      applyExpansionAction({
+        type: 'scroll',
+        atLatest: true,
+        noMore: isAtHistoryStart.value,
+        progress: 0,
+      })
+    }
   }
   else if (
     !isMobileLayout.value
@@ -459,6 +476,8 @@ function setupLayoutMediaQueries() {
     const enteredMobileLayout = !isMobileLayout.value && mobileQuery.matches
     isMobileLayout.value = mobileQuery.matches
     reducedMotion.value = motionQuery.matches
+    if (reducedMotion.value)
+      isRevealingHistory.value = false
     if (enteredMobileLayout)
       resetConversationExpansion()
     else if (reducedMotion.value && isLayoutTransitioning.value)
@@ -561,7 +580,7 @@ function scrollToLatest(behavior: ScrollBehavior = 'auto') {
 }
 
 async function acknowledgeIfEligible() {
-  if (!settings.value.autoMarkPrivateMessagesRead)
+  if (!settings.value.autoMarkPrivateMessagesRead || entryPhase.value !== 'ready' || isRevealingHistory.value)
     return
   await nextTick()
   await props.controller.acknowledgeIfEligible(talkerId.value, {
@@ -576,7 +595,7 @@ async function acknowledgeIfEligible() {
 
 async function loadOlderMessages(explicitRetry = false) {
   const viewport = messageScrollRef.value
-  if (!viewport || state.value.loadingOlder || state.value.noMore)
+  if (!viewport || entryPhase.value !== 'ready' || state.value.loadingOlder || state.value.noMore)
     return
 
   const requestTalkerId = talkerId.value
@@ -635,6 +654,9 @@ async function loadOlderMessages(explicitRetry = false) {
 }
 
 async function refreshLatest(options: { forceBottom?: boolean } = {}) {
+  if (!componentMounted || !props.active || entryPhase.value !== 'ready')
+    return
+  const generation = activationGeneration
   const wasAtLatest = isAtLatest()
   const requestScrollGeneration = scrollInteractionGeneration
   const shouldFollow = options.forceBottom
@@ -647,6 +669,8 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
   }
   await props.controller.refreshLatest(talkerId.value)
   await nextTick()
+  if (!componentMounted || !props.active || generation !== activationGeneration)
+    return
   if (shouldFollow && requestScrollGeneration === scrollInteractionGeneration)
     scrollToLatest()
   else
@@ -659,7 +683,11 @@ async function sendDraft() {
   if (!isTextSendEnabled.value || !writer)
     return
   const submittedDraft = draft.value
-  const confirmed = await writer.sendDraft(talkerId.value)
+  const submittedTalkerId = talkerId.value
+  const generation = activationGeneration
+  const confirmed = await writer.sendDraft(submittedTalkerId)
+  if (!componentMounted || generation !== activationGeneration || submittedTalkerId !== talkerId.value)
+    return
   if (!confirmed) {
     if (
       props.recipient
@@ -670,37 +698,41 @@ async function sendDraft() {
     }
     return
   }
-  await nextTick()
-  scrollToLatest()
-  emit('sendConfirmed', talkerId.value)
+  await finishConfirmedWrite(submittedTalkerId, generation)
 }
 
 function selectImage(file: File) {
   props.writeController?.selectImage(talkerId.value, file)
 }
 
-async function finishConfirmedWrite() {
+async function finishConfirmedWrite(submittedTalkerId: string, generation: number) {
   await nextTick()
+  if (!componentMounted || !props.active || generation !== activationGeneration || submittedTalkerId !== talkerId.value)
+    return
   scrollToLatest()
-  emit('sendConfirmed', talkerId.value)
+  emit('sendConfirmed', submittedTalkerId)
 }
 
 async function sendImage() {
   const writer = props.writeController
   if (!writer)
     return
-  const confirmed = await writer.sendImage(talkerId.value)
+  const submittedTalkerId = talkerId.value
+  const generation = activationGeneration
+  const confirmed = await writer.sendImage(submittedTalkerId)
   if (confirmed)
-    await finishConfirmedWrite()
+    await finishConfirmedWrite(submittedTalkerId, generation)
 }
 
 async function retryImage(localId: string) {
   const writer = props.writeController
   if (!writer)
     return
-  const confirmed = await writer.retryImage(talkerId.value, localId)
+  const submittedTalkerId = talkerId.value
+  const generation = activationGeneration
+  const confirmed = await writer.retryImage(submittedTalkerId, localId)
   if (confirmed)
-    await finishConfirmedWrite()
+    await finishConfirmedWrite(submittedTalkerId, generation)
 }
 
 async function retryFailed(localId: string, msgType: number) {
@@ -711,9 +743,11 @@ async function retryFailed(localId: string, msgType: number) {
   const writer = props.writeController
   if (!writer)
     return
-  const confirmed = await writer.retrySend(talkerId.value, localId)
+  const submittedTalkerId = talkerId.value
+  const generation = activationGeneration
+  const confirmed = await writer.retrySend(submittedTalkerId, localId)
   if (confirmed)
-    await finishConfirmedWrite()
+    await finishConfirmedWrite(submittedTalkerId, generation)
 }
 
 function deleteFailed(localId: string, msgType: number) {
@@ -734,7 +768,7 @@ function finishConversationActivation(generation: number) {
 }
 
 async function activateConversation() {
-  if (!props.active || !componentMounted)
+  if (!props.active || !componentMounted || entryPhase.value === 'opening')
     return
   const generation = ++activationGeneration
   conversationActivationPending = true
@@ -744,6 +778,9 @@ async function activateConversation() {
     await props.controller.refreshLatest(talkerId.value)
   else
     await props.controller.loadInitial(talkerId.value, props.session?.ackSeqno ?? '0')
+  if (generation !== activationGeneration || !props.active || !componentMounted)
+    return
+  entryPhase.value = 'ready'
   await nextTick()
   if (
     generation !== activationGeneration
@@ -762,6 +799,7 @@ async function activateConversation() {
   updateConversationGeometry()
   if (!wasLoaded || state.value.atLatest) {
     scrollToLatest()
+    userRequestedLatest = false
   }
   else {
     userHasReadUpward = true
@@ -776,9 +814,52 @@ async function activateConversation() {
       progress: 1,
     })
   }
+  revealVisibleHistory(viewport)
   finishConversationActivation(generation)
   saveViewportState()
   await acknowledgeIfEligible()
+}
+
+function revealVisibleHistory(viewport: HTMLElement) {
+  if (reducedMotion.value)
+    return
+  const bounds = viewport.getBoundingClientRect()
+  const visibleMessages = Array.from(viewport.querySelectorAll<HTMLElement>('[data-message-id]'))
+    .filter((element) => {
+      const rect = element.getBoundingClientRect()
+      return rect.bottom > bounds.top && rect.top < bounds.bottom
+    })
+  // Stagger the actual visible rows, including restored history positions and large fonts.
+  const stagger = Math.min(35, CONVERSATION_EXPANSION_DURATION / Math.max(1, visibleMessages.length - 1))
+  historyRevealDelays.value = Object.fromEntries(visibleMessages.map((element, index) => [element.dataset.messageId!, index * stagger]))
+  lastRevealingMessageId = visibleMessages.at(-1)?.dataset.messageId ?? ''
+  isRevealingHistory.value = visibleMessages.length > 0
+}
+
+function finishHistoryReveal(event: AnimationEvent) {
+  if ((event.target as HTMLElement).dataset.messageId !== lastRevealingMessageId)
+    return
+  isRevealingHistory.value = false
+  void acknowledgeIfEligible()
+}
+
+function openConversation() {
+  entryPhase.value = 'opening'
+  conversationActivationPending = true
+  // Commit the compact geometry once; fetch only after the existing expansion finishes.
+  openingFrameId = requestAnimationFrame(() => {
+    openingFrameId = null
+    if (!componentMounted || !props.active)
+      return
+    updateConversationGeometry()
+    if (isMobileLayout.value || reducedMotion.value) {
+      expansionModel.value = reduceConversationExpansion(expansionModel.value, { type: 'load-end', noMore: false })
+      completeLayoutTransition()
+    }
+    else {
+      applyExpansionAction({ type: 'load-end', noMore: false })
+    }
+  })
 }
 
 function retry() {
@@ -837,11 +918,14 @@ watch(() => props.active, (active) => {
     if (componentMounted) {
       setupLayoutMediaQueries()
       setupConversationMeasurements()
-      void activateConversation()
+      openConversation()
     }
   }
   else {
     activationGeneration++
+    if (openingFrameId !== null)
+      cancelAnimationFrame(openingFrameId)
+    openingFrameId = null
     conversationActivationPending = false
     conversationResizeObserver?.disconnect()
     conversationResizeObserver = null
@@ -856,7 +940,7 @@ onMounted(() => {
   if (props.active) {
     setupLayoutMediaQueries()
     setupConversationMeasurements()
-    void activateConversation()
+    openConversation()
   }
 })
 
@@ -864,6 +948,9 @@ onBeforeUnmount(() => {
   componentMounted = false
   conversationActivationPending = false
   activationGeneration++
+  if (openingFrameId !== null)
+    cancelAnimationFrame(openingFrameId)
+  openingFrameId = null
   saveViewportState()
   layoutMediaController?.abort()
   layoutMediaController = null
@@ -893,17 +980,17 @@ defineExpose({
     }"
     :style="conversationLayoutStyle"
     :data-expansion-state="expansionModel.state"
+    :data-entry-phase="entryPhase"
     :data-at-history-start="isAtHistoryStart ? 'true' : undefined"
     :data-at-latest="isAtLatestPosition ? 'true' : undefined"
     :aria-label="t('notifications.whisper.messages.timeline_aria', { name: displayName })"
-    :aria-busy="state.loadingInitial && !state.loaded || historyLoading"
+    :aria-busy="entryPhase !== 'ready' || historyLoading"
     @keydown.esc="handleEscape"
   >
     <div
       ref="conversationCardRef"
       class="conversation-card"
       :class="{
-        'conversation-card--solid': settings.disableFrostedGlass,
         'conversation-card--history-open': expansionModel.state === 'history-open',
       }"
     >
@@ -924,21 +1011,9 @@ defineExpose({
         @touchstart.passive="markReadingIntent"
         @wheel.passive="markReadingIntent"
       >
-        <div
-          v-if="state.loadingInitial && !state.loaded"
-          class="conversation-view__initial-skeleton"
-        >
-          <div class="conversation-view__history-status conversation-view__history-status--loading">
-            <ConversationHistorySkeleton
-              :announce="false"
-              :label="t('notifications.whisper.messages.loading')"
-            />
-          </div>
-          <ConversationTimelineSkeleton
-            :compact="settings.privateMessageDensity === 'compact'"
-            :label="t('notifications.whisper.messages.loading')"
-          />
-        </div>
+        <span v-if="entryPhase !== 'ready'" class="sr-only" role="status">
+          {{ t('notifications.whisper.messages.loading') }}
+        </span>
 
         <div v-else-if="state.errorKind && !timelineItems.length" class="conversation-view__state">
           <Empty :description="errorMessage">
@@ -953,12 +1028,8 @@ defineExpose({
         <template v-else>
           <div
             class="conversation-view__history-status"
-            :class="{ 'conversation-view__history-status--loading': historyLoading }"
           >
-            <ConversationHistorySkeleton
-              v-if="historyLoading"
-              :label="t('notifications.whisper.messages.loading')"
-            />
+            <span v-if="historyLoading" role="status">{{ t('notifications.whisper.messages.loading') }}</span>
             <span v-else-if="isAtHistoryStart">{{ t('notifications.whisper.messages.history_start') }}</span>
             <button v-else type="button" @click="loadOlderMessages()">
               {{ t('notifications.whisper.messages.load_older') }}
@@ -972,10 +1043,17 @@ defineExpose({
             </button>
           </div>
 
-          <div v-if="timelineItems.length" class="conversation-view__timeline">
+          <div
+            v-if="timelineItems.length"
+            class="conversation-view__timeline"
+            :class="{ 'conversation-view__timeline--reveal': isRevealingHistory }"
+            @animationend="finishHistoryReveal"
+          >
             <PrivateMessageItem
               v-for="message in timelineItems"
               :key="message.msgKey"
+              :class="{ 'conversation-view__message--reveal': isRevealingHistory && message.msgKey in historyRevealDelays }"
+              :style="isRevealingHistory ? { '--conversation-message-delay': `${historyRevealDelays[message.msgKey] ?? 0}ms` } : undefined"
               :message="message"
               :auto-load-images="settings.autoLoadPrivateMessageImages"
               :sender-avatar-url="message.isSelf ? selfAvatarUrl : avatarUrl"
@@ -1019,7 +1097,8 @@ defineExpose({
     </button>
 
     <footer
-      v-if="isTextSendEnabled && writeState"
+      v-if="isTextSendEnabled && writeState && entryPhase !== 'opening'"
+      v-liquid-glass
       class="conversation-view__floating-composer"
     >
       <div class="conversation-view__test-send">
@@ -1027,7 +1106,11 @@ defineExpose({
           v-model="draft"
           :sending="writeState.sending"
           :image-draft="writeState.imageDraft"
-          :emote-packages="emotePackages"
+          :emote-packages="emoteController.packages.value"
+          :emotes-loading="emoteController.loading.value"
+          :emotes-failed="emoteController.failed.value"
+          enable-image
+          @load-emotes="emoteController.load()"
           @remove-image="writeController?.removeImage(talkerId, $event)"
           @retry-image="retryImage"
           @select-image="selectImage"
@@ -1089,20 +1172,17 @@ defineExpose({
   height: calc(100% + var(--conversation-extra-height, 0px));
   min-height: 0;
   overflow: hidden;
-  background: var(--bew-elevated-alt);
-  border: 1px solid var(--bew-surface-border-color);
+  background: transparent;
+  border: 0;
   border-radius: var(--conversation-top-radius, var(--bew-panel-radius))
     var(--conversation-top-radius, var(--bew-panel-radius)) var(--conversation-bottom-radius, var(--bew-panel-radius))
     var(--conversation-bottom-radius, var(--bew-panel-radius));
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
-  backdrop-filter: var(--bew-filter-glass-1);
   transform: translateY(var(--conversation-top-lift, 0px));
   transition:
     height var(--bew-duration-normal) var(--bew-ease-standard),
     transform var(--bew-duration-normal) var(--bew-ease-standard),
     border-radius var(--bew-duration-fast) linear;
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
 }
 
 .conversation-view--layout-transitioning .conversation-card {
@@ -1114,12 +1194,6 @@ defineExpose({
   top: var(--bew-space-3);
   right: var(--bew-space-3);
   z-index: 5;
-}
-
-.conversation-card--solid {
-  background: var(--bew-elevated-alt-solid);
-  backdrop-filter: none;
-  -webkit-backdrop-filter: none;
 }
 
 .conversation-view__messages {
@@ -1148,13 +1222,25 @@ defineExpose({
   outline-offset: calc(0px - var(--bew-space-1));
 }
 
-.conversation-view__initial-skeleton {
-  min-width: 0;
-}
-
 .conversation-view__timeline {
   display: grid;
   gap: var(--bew-space-3);
+}
+
+.conversation-view__timeline--reveal > .conversation-view__message--reveal {
+  animation: conversation-message-reveal var(--bew-duration-moderate) var(--bew-ease-standard) both;
+  animation-delay: var(--conversation-message-delay, 0ms);
+}
+
+@keyframes conversation-message-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(var(--bew-space-2));
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .conversation-view--density-compact .conversation-view__messages {
@@ -1194,10 +1280,6 @@ defineExpose({
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
-}
-
-.conversation-view__history-status--loading {
-  padding: 0;
 }
 
 .conversation-view__inline-error button,
@@ -1285,11 +1367,17 @@ defineExpose({
   left: var(--bew-space-4);
   z-index: 4;
   padding: var(--bew-space-2);
-  background: var(--bew-elevated-alt-solid);
-  border: 1px solid transparent;
+  background: var(--bew-elevated-alt);
+  border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-3);
+  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+}
+
+.conversation-view--solid .conversation-view__floating-composer {
+  background: var(--bew-elevated-alt-solid);
 }
 
 .conversation-view__test-send {
@@ -1358,6 +1446,9 @@ defineExpose({
   .conversation-card__top-edge,
   .conversation-card__bottom-edge {
     transition: none;
+  }
+  .conversation-view__timeline--reveal > .conversation-view__message--reveal {
+    animation: none;
   }
 }
 </style>

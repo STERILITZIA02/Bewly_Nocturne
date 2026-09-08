@@ -64,6 +64,7 @@ function measureNavigationWidth() {
 }
 
 useResizeObserver(insideRef, measureNavigationWidth)
+useResizeObserver(navigationRef, revealActiveSection)
 
 onMounted(() => {
   void nextTick(() => {
@@ -119,10 +120,9 @@ function unreadCount(section: NotificationSectionDefinition): number {
         >
           <span class="notifications-navigation__label">{{ t(section.labelKey) }}</span>
           <span
+            v-if="unreadCount(section) > 0"
             class="notifications-navigation__badge"
-            :class="{ 'notifications-navigation__badge--empty': unreadCount(section) <= 0 }"
-            :aria-hidden="unreadCount(section) <= 0"
-            :aria-label="unreadCount(section) > 0 ? t('notifications.unread_count', { count: unreadCount(section) }) : undefined"
+            :aria-label="t('notifications.unread_count', { count: unreadCount(section) })"
           >
             {{ unreadCount(section) > 99 ? '99+' : Math.max(0, unreadCount(section)) }}
           </span>
@@ -135,7 +135,7 @@ function unreadCount(section: NotificationSectionDefinition): number {
 <style scoped lang="scss">
 .notifications-navigation {
   display: block;
-  width: min(100%, var(--notifications-conversation-list-width));
+  width: max-content;
   max-width: 100%;
   min-width: 0;
   justify-self: start;
@@ -174,7 +174,7 @@ function unreadCount(section: NotificationSectionDefinition): number {
   box-sizing: border-box;
   flex: 0 0 auto;
   place-items: center;
-  width: var(--bew-space-8);
+  min-width: var(--bew-space-4);
   height: var(--bew-space-4);
   padding: 0 var(--bew-space-1);
   color: var(--bew-on-theme-color);
@@ -185,9 +185,5 @@ function unreadCount(section: NotificationSectionDefinition): number {
   background: var(--bew-theme-color);
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
-}
-
-.notifications-navigation__badge--empty {
-  visibility: hidden;
 }
 </style>

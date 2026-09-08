@@ -36,7 +36,8 @@ export function useCardWindow(options: {
   layout: Ref<string>
   canRelease: (key: CardKey) => boolean
   snapshot?: CardWindowSnapshot
-  restoreScroll?: () => void
+  /** Return true when the page explicitly resets position instead of restoring an old card anchor. */
+  restoreScroll?: () => boolean | void
 }) {
   const ranges = shallowRef<CardRange[]>([])
   const measurements = new Map<CardKey, CardMeasurement>(options.snapshot?.measurements)
@@ -92,6 +93,10 @@ export function useCardWindow(options: {
     if (!active || restoring || anchorPending)
       return
     const root = options.root.value
+    // At the page top, a newly measured/replaced grid must not scroll past the
+    // content above it. Anchor preservation is only for a scrolled viewport.
+    if (!root || root.scrollTop === 0)
+      return
     // ResizeObserver runs after CSS reflows. Use the last settled position
     // when the user has not scrolled since, rather than the already-shifted DOM.
     let anchor = root === bookmark?.root && root?.scrollTop === bookmark?.scrollTop
@@ -340,8 +345,8 @@ export function useCardWindow(options: {
     void nextTick(() => {
       if (!active)
         return
-      options.restoreScroll?.()
-      if (restoring)
+      const positionReset = options.restoreScroll?.()
+      if (restoring && !positionReset)
         restoreAnchor(options.snapshot?.anchor)
       restoring = false
       measureMounted()

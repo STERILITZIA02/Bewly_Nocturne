@@ -3,6 +3,43 @@ import assert from 'node:assert/strict'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerPlaybackContentChecks(check) {
+  check('playback music: late native app escapes the sidebar and restores beside the original tags', async () => {
+    const f = await fixture()
+    const { native, state, constants } = f
+    const entry = document.createElement('div')
+    entry.id = 'bgm-entry'
+    const open = document.createElement('button')
+    entry.append(open)
+    let clicks = 0
+    open.addEventListener('click', () => clicks++)
+    try {
+      native.moveOrReplaceNode(constants.selectors.tags, state.tagsSlot, state.movedNodes)
+      const observer = new MutationObserver(() => {})
+      observer.observe(state.root, { childList: true, subtree: true })
+      state.tagsSlot.prepend(entry)
+      const [created] = observer.takeRecords()
+      observer.disconnect()
+      assert.equal(native.classifyWidescreenMutation(created, state).relevant, true)
+      assert.equal(native.moveNativeMusicPanel(state.movedNodes), true)
+      assert.equal(entry.parentElement, document.body)
+      assert.equal(native.moveNativeMusicPanel(state.movedNodes), false)
+      open.click()
+      assert.equal(clicks, 1)
+      observer.observe(entry, { childList: true, subtree: true })
+      entry.appendChild(document.createElement('p'))
+      assert.equal(native.classifyWidescreenMutation(observer.takeRecords()[0], state).relevant, false)
+      observer.disconnect()
+      native.restoreMovedNodes(state.movedNodes)
+      assert.equal(entry.parentElement, f.origin, 'the temporary Bewly tags slot is never used as the restored music host')
+      open.click()
+      assert.equal(clicks, 2)
+    }
+    finally {
+      f.dispose()
+      entry.remove()
+    }
+  })
+
   async function fixture() {
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const ready = new WeakMap()
