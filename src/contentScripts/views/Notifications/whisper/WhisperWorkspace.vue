@@ -15,6 +15,7 @@ import ConversationView from './ConversationView.vue'
 import type { PrivateMessageWritesController as PrivateMessageWriteController } from './experimental/privateMessageWriteTypes'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
+import type { PrivateEmotePanelController } from './usePrivateEmotePanel'
 import { usePrivateMessagePolling } from './usePrivateMessagePolling'
 import type { PrivateMessagesController } from './usePrivateMessages'
 import type { PrivateRecipientSearchController } from './usePrivateRecipientSearch'
@@ -36,6 +37,7 @@ const props = defineProps<{
   active: boolean
   controller: PrivateSessionsController
   messagesController: PrivateMessagesController
+  emoteController: PrivateEmotePanelController
   recipientSearch: PrivateRecipientSearchController
   transientRecipient: TransientPrivateRecipient | null
   writeController: PrivateMessageWriteController | null
@@ -298,6 +300,7 @@ defineExpose({ refresh })
         ref="conversationDetailRef"
         :active="active"
         :controller="messagesController"
+        :emote-controller="emoteController"
         :session="nativeSelectedSession"
         :recipient="transientRecipient"
         :write-controller="writeController"
@@ -338,7 +341,6 @@ defineExpose({ refresh })
   min-height: 0;
 }
 
-.whisper-workspace__sessions,
 .whisper-workspace__detail--fallback-card {
   background: var(--bew-elevated-alt);
   border: 1px solid var(--bew-surface-border-color);
@@ -354,6 +356,10 @@ defineExpose({ refresh })
   height: 100%;
   overflow: hidden;
   flex-direction: column;
+  background: var(--bew-conversation-list-background);
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-panel-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .whisper-workspace__detail {
@@ -366,7 +372,6 @@ defineExpose({ refresh })
   overflow: hidden;
 }
 
-.whisper-workspace--solid .whisper-workspace__sessions,
 .whisper-workspace--solid .whisper-workspace__detail--fallback-card {
   background: var(--bew-elevated-alt-solid);
   backdrop-filter: none;

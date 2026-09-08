@@ -5,18 +5,20 @@ import type { PrivateEmote, PrivateEmotePackage } from './privateMessageRenderer
 
 const props = defineProps<{
   packages: PrivateEmotePackage[]
+  loading?: boolean
+  failed?: boolean
 }>()
 
 const emit = defineEmits<{
   (event: 'close'): void
   (event: 'select', emote: PrivateEmote): void
+  (event: 'retry'): void
 }>()
 
 const { t } = useI18n()
-const activeType = ref<PrivateEmote['type']>('default')
 const activePackageKey = ref('')
 const failedImages = ref<Set<string>>(new Set())
-const visiblePackages = computed(() => props.packages.filter(pkg => pkg.type === activeType.value))
+const visiblePackages = computed(() => props.packages)
 const activePackage = computed(() => (
   visiblePackages.value.find(pkg => getPackageKey(pkg) === activePackageKey.value)
   ?? visiblePackages.value[0]
@@ -40,29 +42,30 @@ function markImageFailed(emoteId: string) {
   failedImages.value = new Set([...failedImages.value, emoteId])
 }
 
-async function handleTabKeydown(event: KeyboardEvent, currentType: PrivateEmote['type']) {
-  const types: PrivateEmote['type'][] = ['default', 'user']
-  const currentIndex = types.indexOf(currentType)
+async function handleTabKeydown(event: KeyboardEvent, currentIndex: number) {
+  const count = visiblePackages.value.length
   let nextIndex = currentIndex
   if (event.key === 'ArrowRight')
-    nextIndex = (currentIndex + 1) % types.length
+    nextIndex = (currentIndex + 1) % count
   else if (event.key === 'ArrowLeft')
-    nextIndex = (currentIndex - 1 + types.length) % types.length
+    nextIndex = (currentIndex - 1 + count) % count
   else if (event.key === 'Home')
     nextIndex = 0
   else if (event.key === 'End')
-    nextIndex = types.length - 1
+    nextIndex = count - 1
   else
     return
 
   event.preventDefault()
-  activeType.value = types[nextIndex]!
+  activePackageKey.value = getPackageKey(visiblePackages.value[nextIndex]!)
   await nextTick()
   const tablist = (event.currentTarget as HTMLElement).parentElement
-  tablist?.querySelector<HTMLElement>(`[data-emote-tab="${activeType.value}"]`)?.focus()
+  const tab = tablist?.querySelectorAll<HTMLElement>('[role="tab"]')[nextIndex]
+  tab?.focus({ preventScroll: true })
+  tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
 }
 
-watch([activeType, () => props.packages], () => {
+watch(() => props.packages, () => {
   const currentExists = visiblePackages.value.some(pkg => getPackageKey(pkg) === activePackageKey.value)
   if (!currentExists)
     activePackageKey.value = activePackage.value ? getPackageKey(activePackage.value) : ''
@@ -79,47 +82,28 @@ watch([activeType, () => props.packages], () => {
     @keydown.esc.stop="emit('close')"
   >
     <div
-      class="private-emote-picker__tabs bew-segment-control bew-segment-control--static"
-      role="tablist"
-      :aria-label="t('notifications.whisper.messages.emote_picker')"
-    >
-      <button
-        v-for="type in (['default', 'user'] as const)"
-        :id="`private-emote-tab-${type}`"
-        :key="type"
-        type="button"
-        class="bew-segment-control__item"
-        role="tab"
-        aria-controls="private-emote-panel"
-        :aria-selected="activeType === type"
-        :data-active="activeType === type ? 'true' : undefined"
-        :data-emote-tab="type"
-        :tabindex="activeType === type ? 0 : -1"
-        @click="activeType = type"
-        @keydown="handleTabKeydown($event, type)"
-      >
-        {{ t(type === 'default'
-          ? 'notifications.whisper.messages.default_emotes'
-          : 'notifications.whisper.messages.user_emotes') }}
-      </button>
-    </div>
-
-    <div
       v-if="visiblePackages.length"
       class="private-emote-picker__packages"
-      role="toolbar"
+      role="tablist"
       :aria-label="t('notifications.whisper.messages.emote_packages')"
     >
       <button
-        v-for="pkg in visiblePackages"
+        v-for="(pkg, index) in visiblePackages"
+        :id="`private-emote-tab-${index}`"
         :key="getPackageKey(pkg)"
         type="button"
         class="private-emote-picker__package-button"
-        :aria-pressed="activePackageKey === getPackageKey(pkg)"
+        role="tab"
+        aria-controls="private-emote-panel"
+        :aria-selected="activePackage === pkg"
+        :tabindex="activePackage === pkg ? 0 : -1"
+        :aria-label="getPackageName(pkg)"
         :title="getPackageName(pkg)"
         @click="activePackageKey = getPackageKey(pkg)"
+        @keydown="handleTabKeydown($event, index)"
       >
-        {{ getPackageName(pkg) }}
+        <img v-if="pkg.iconUrl" :src="pkg.iconUrl" alt="" loading="lazy" decoding="async">
+        <span v-else>{{ getPackageName(pkg) }}</span>
       </button>
     </div>
 
@@ -127,9 +111,19 @@ watch([activeType, () => props.packages], () => {
       id="private-emote-panel"
       class="private-emote-picker__body"
       role="tabpanel"
-      :aria-labelledby="`private-emote-tab-${activeType}`"
+      :aria-label="activePackage ? getPackageName(activePackage) : t('notifications.whisper.messages.emote_picker')"
+      :aria-busy="loading"
     >
-      <div v-if="hasVisibleEmotes && activePackage" class="private-emote-picker__grid">
+      <div v-if="loading" class="private-emote-picker__empty" role="status">
+        {{ t('common.loading') }}
+      </div>
+      <div v-else-if="failed" class="private-emote-picker__empty" role="status">
+        <span>{{ t('notifications.whisper.messages.emotes_load_failed') }}</span>
+        <Button type="tertiary" @click="emit('retry')">
+          {{ t('notifications.actions.retry') }}
+        </Button>
+      </div>
+      <div v-else-if="hasVisibleEmotes && activePackage" class="private-emote-picker__grid">
         <button
           v-for="emote in activePackage.emotes"
           :key="emote.id"
@@ -139,7 +133,7 @@ watch([activeType, () => props.packages], () => {
           :title="emote.text"
           @click="emit('select', emote)"
         >
-          <span v-if="failedImages.has(emote.id)" class="private-emote-picker__fallback">
+          <span v-if="emote.textOnly || failedImages.has(emote.id)" class="private-emote-picker__fallback">
             {{ emote.text }}
           </span>
           <img
@@ -153,9 +147,7 @@ watch([activeType, () => props.packages], () => {
         </button>
       </div>
       <div v-else class="private-emote-picker__empty">
-        {{ t(activeType === 'default'
-          ? 'notifications.whisper.messages.default_emotes_empty'
-          : 'notifications.whisper.messages.user_emotes_empty') }}
+        {{ t('notifications.whisper.messages.default_emotes_empty') }}
       </div>
     </div>
   </section>
@@ -172,14 +164,6 @@ watch([activeType, () => props.packages], () => {
   max-height: min(calc(var(--bew-space-12) * 8), 60vh);
   padding: var(--bew-space-2);
   overflow: hidden;
-}
-
-.private-emote-picker__tabs {
-  width: 100%;
-}
-
-.private-emote-picker__tabs > button {
-  flex: 1 1 0;
 }
 
 .private-emote-picker__body {
@@ -213,12 +197,19 @@ watch([activeType, () => props.packages], () => {
   cursor: pointer;
 }
 
+.private-emote-picker__package-button img {
+  display: block;
+  width: var(--bew-icon-size-lg);
+  height: var(--bew-icon-size-lg);
+  object-fit: contain;
+}
+
 .private-emote-picker__package-button:hover {
   color: var(--bew-text-1);
   background: var(--bew-fill-2);
 }
 
-.private-emote-picker__package-button[aria-pressed="true"] {
+.private-emote-picker__package-button[aria-selected="true"] {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
 }

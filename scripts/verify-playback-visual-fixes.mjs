@@ -113,6 +113,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     const time = clock()
     const changes = []
     const context = await loadSourceFunctions(widescreenFile, [
+      'NATIVE_MUSIC_ENTRY_SELECTOR',
       'NATIVE_ACTION_OVERLAY_SELECTOR',
       'isNativeActionOverlayOpen',
       'scheduleCollapse',

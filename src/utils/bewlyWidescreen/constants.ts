@@ -22,6 +22,8 @@ export const DANMAKU_SURFACE_SELECTOR = `:is(#${ROOT_ID} .bewly-widescreen-danma
 
 export const EPISODE_SECTION_CLASS = 'bewly-widescreen-episode-section'
 
+export const NATIVE_MUSIC_ENTRY_SELECTOR = '#bgm-entry'
+
 export const EPISODE_ITEM_SELECTOR = '.video-pod__item, .multi-page__item, .page-item, .list-item, .episode-item, .section-item, .collect-item'
 
 export const PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR = '.rec-footer'
@@ -134,6 +136,7 @@ export const BOTTOM_CONTROL_POPOVER_SELECTOR = [
 export const NATIVE_ACTION_OVERLAY_SELECTOR = [
   '.bili-dialog-m',
   '.video-share-popover',
+  `${NATIVE_MUSIC_ENTRY_SELECTOR} #musicApp`,
 ].join(',')
 
 export const HIGH_ENERGY_PROGRESS_SELECTOR = '.bpx-player-pbp'
@@ -241,6 +244,7 @@ export const selectors = {
 }
 
 export const SIDEBAR_RELEVANT_SELECTOR = [
+  NATIVE_MUSIC_ENTRY_SELECTOR,
   ...selectors.player,
   ...selectors.title,
   ...selectors.upPanel,

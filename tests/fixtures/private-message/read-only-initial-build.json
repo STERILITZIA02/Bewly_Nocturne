@@ -5,10 +5,11 @@
     "love",
     "system"
   ],
-  "whisperImplementation": "hybrid-native-text",
+  "whisperImplementation": "hybrid-native-text-image",
   "systemImplementation": "native",
   "privateWritesEnabled": [
-    "text"
+    "text",
+    "image"
   ],
   "experimentalEvidence": {
     "status": 412,

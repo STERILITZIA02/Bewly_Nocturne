@@ -7,6 +7,7 @@ import { reactive, watch } from 'vue'
 import type {
   UploadedPrivateImage,
 } from '~/background/privateMessage/types'
+import { validatePrivateMessageImage } from '~/utils/privateMessageImage'
 
 import type { DisplayPrivateMessage as ServerPrivateMessage } from '../privateMessage'
 import { asResponse } from '../privateMessageResponse'
@@ -350,7 +351,7 @@ export function useExperimentalPrivateMessageWrites(
   }
 
   function sendDraft(talkerId: string): Promise<boolean> {
-    if (disposed)
+    if (disposed || imageRequests.has(talkerId))
       return Promise.resolve(false)
     const activeRequest = sendRequests.get(talkerId)
     if (activeRequest)
@@ -508,21 +509,17 @@ export function useExperimentalPrivateMessageWrites(
           if (!optimistic)
             return false
           optimistic.serverMsgKey = extractSentMessageKey(sendResponse) || undefined
-          dependencies.markSessionSent?.(
-            talkerId,
-            dependencies.getImageSummary?.() ?? '[image]',
-            optimistic.timestamp,
-          )
         }
 
         failedKind = 'reconcile-failed'
         updateImageState(state, task, 'reconciling')
-        await dependencies.refreshHistory(talkerId)
+        const confirmed = await pullLatestAfterSend(talkerId, localId, mid, requestAccountGeneration, state)
         if (!isCurrent())
           return false
-        if (state.items.some(item => item.localId === localId))
+        if (!confirmed)
           throw new Error('reconcile failed')
 
+        dependencies.markSessionSent?.(talkerId, dependencies.getImageSummary?.() ?? '[image]', nowSeconds())
         await dependencies.refreshSessions?.().catch(() => {})
         if (!isCurrent())
           return false
@@ -552,8 +549,7 @@ export function useExperimentalPrivateMessageWrites(
       disposed
       || !currentMid.value
       || activeTalkerId.value !== talkerId
-      || !file.type.startsWith('image/')
-      || file.size <= 0
+      || validatePrivateMessageImage(file) !== null
       || imageRequests.has(talkerId)
       || sendRequests.has(talkerId)
       || !dependencies.uploadImage

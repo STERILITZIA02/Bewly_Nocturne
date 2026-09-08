@@ -197,6 +197,54 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     }
   })
 
+  check('Home entry: explicit top reset wins over cached card anchor; ordinary tab restoration retains it', async () => {
+    const { useCardWindow } = await import('../src/composables/useCardWindow')
+    for (const resetPosition of [true, false]) {
+      const root = document.body.appendChild(document.createElement('section'))
+      const card = document.createElement('article')
+      root.append(card)
+      Object.defineProperties(root, { clientHeight: { value: 600 }, scrollHeight: { value: 10000 } })
+      const rect = (top, height) => ({ x: 0, y: top, top, bottom: top + height, left: 0, right: 500, width: 500, height })
+      root.getBoundingClientRect = () => rect(0, 600)
+      card.getBoundingClientRect = () => rect(5000 - root.scrollTop, 100)
+      const mount = root.appendChild(document.createElement('div'))
+      let controller
+      const app = Vue.createApp({
+        setup() {
+          controller = useCardWindow({
+            root: Vue.ref(root),
+            container: Vue.ref(root),
+            keys: Vue.ref(Array.from({ length: 100 }, (_, key) => key)),
+            columns: Vue.ref(1),
+            gap: Vue.ref(0),
+            estimatedHeight: Vue.ref(100),
+            layout: Vue.ref('adaptive'),
+            enabled: Vue.ref(true),
+            canRelease: () => true,
+            snapshot: { measurements: [], renderedKeys: [50], anchor: { key: 50, offset: 17 } },
+            restoreScroll: () => {
+              root.scrollTop = 0
+              return resetPosition
+            },
+          })
+          controller.setElement(50, card)
+          return () => null
+        },
+      })
+      try {
+        app.mount(mount)
+        await flush()
+        assert.equal(root.scrollTop, resetPosition ? 0 : 4983)
+        if (resetPosition)
+          assert.equal(controller.ranges.value[0].start, 0, 'the first rows replace the old offscreen cached window')
+      }
+      finally {
+        app.unmount()
+        root.remove()
+      }
+    }
+  })
+
   check('A09/A12 real height index matches exhaustive geometry beyond 1000 items and after measurement/layout changes', async () => {
     const { createMomentColumnIndex } = await import('../src/utils/momentColumnIndex')
     const columns = Array.from({ length: 3 }, (_, col) => Array.from({ length: 1500 }, (_, row) => ({ id: `${col}:${row}`, height: 100 + (row * 37 % 250) })))

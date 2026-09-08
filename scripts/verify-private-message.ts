@@ -1700,7 +1700,7 @@ verify('session kinds and capabilities keep native reads separate from disabled 
   ), { talkerId: '8', sessionType: 1 })
 })
 
-verify('whisper keeps reads stable while exposing confirmed text Composer paths only', async ({ notificationSections }) => {
+verify('whisper keeps reads stable while exposing text and image Composer transactions', async ({ notificationSections }) => {
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.implementation, 'hybrid')
   assert.equal(notificationSections.NOTIFICATION_SECTION_BY_ID.whisper.layout, 'workspace')
   assert.equal(notificationSections.isHybridNotificationView('whisper'), true)
@@ -1745,7 +1745,7 @@ verify('whisper keeps reads stable while exposing confirmed text Composer paths 
   assert.equal(conversationSource.includes('import.meta.env.DEV'), false)
   assert.equal(conversationSource.includes('props.session?.capabilities.canSend'), true)
   assert.equal(conversationSource.includes('sendDraft'), true)
-  assert.equal(conversationSource.includes('enable-image'), false)
+  assert.equal(conversationSource.includes('enable-image'), true)
   assert.equal(conversationSource.includes(':image-draft="writeState.imageDraft"'), true)
   assert.equal(conversationSource.includes('controller.refreshLatest'), true)
   assert.equal(productionControllerSource.includes('sendDraft'), false)
@@ -1845,11 +1845,12 @@ verify('native message runtime protects cache limits and browser regression gate
   assert.ok(messagesSource.includes('historyBoundarySeqno'))
   assert.ok(messagesSource.includes('ackRequests.has'))
   assert.ok(workspaceSource.includes('usePrivateMessagePolling'))
-  assert.equal(regressionSource.includes('只有用户明确提交文本后才允许出现 `web_im/send_msg`'), true)
+  assert.equal(regressionSource.includes('只有用户明确提交文本或图片后才允许出现 `web_im/send_msg`'), true)
+  assert.equal(regressionSource.includes('选图和粘贴不能上传'), true)
   assert.deepEqual(policyFixture.nativeSections, ['reply', 'at', 'love', 'system'])
-  assert.equal(policyFixture.whisperImplementation, 'hybrid-native-text')
+  assert.equal(policyFixture.whisperImplementation, 'hybrid-native-text-image')
   assert.equal(policyFixture.systemImplementation, 'native')
-  assert.deepEqual(policyFixture.privateWritesEnabled, ['text'])
+  assert.deepEqual(policyFixture.privateWritesEnabled, ['text', 'image'])
   assert.deepEqual(policyFixture.experimentalEvidence, {
     status: 412,
     verifiedCodeZero: false,
@@ -3097,7 +3098,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(navigationSource.includes('useResizeObserver(insideRef, measureNavigationWidth)'))
   assert.ok(navigationSource.includes(`emit('widthChange', width)`))
   assert.ok(pageHeaderSource.includes(`emit('navigationWidthChange', $event)`))
-  assert.ok(navigationSource.includes('width: min(100%, var(--notifications-conversation-list-width))'))
+  assert.ok(navigationSource.includes('width: max-content'))
   assert.ok(workspaceSource.includes('var(--notifications-conversation-list-width)'))
   assert.match(workspaceSource, /\.whisper-workspace__sessions\s*\{[\s\S]{0,180}height:\s*100%/)
   assert.match(workspaceSource, /\.whisper-workspace__detail\s*\{[\s\S]{0,120}height:\s*100%/)
@@ -3167,7 +3168,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.match(conversationSource, /\.conversation-view__messages\s*\{[\s\S]{0,700}var\(--conversation-bottom-expansion, 0px\)/)
   assert.match(conversationSource, /\.conversation-view__messages\s*\{[\s\S]{0,820}overflow-anchor:\s*none/)
   assert.match(conversationSource, /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,160}\.conversation-view__messages/)
-  assert.match(conversationSource, /activateConversation\(\)[\s\S]{0,1200}updateConversationGeometry\(\)/)
+  assert.match(conversationSource, /function openConversation\(\)[\s\S]{0,520}updateConversationGeometry\(\)/)
   assert.match(conversationSource, /\.conversation-view\s*\{[\s\S]{0,240}height:\s*100%/)
   assert.match(conversationSource, /\.conversation-card\s*\{[\s\S]{0,320}height:\s*calc\(100% \+ var\(--conversation-extra-height/)
   assert.ok(notificationsSource.includes('overflow: visible'))
@@ -3200,8 +3201,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.equal(conversationSource.includes('upload_bfs'), false)
   assert.equal(notificationsSource.includes('sendPrivateMessage'), true)
   assert.equal(conversationSource.includes('MessageComposer'), true)
-  assert.equal(conversationSource.includes('v-if="isTextSendEnabled && writeState"'), true)
-  assert.equal(conversationSource.includes('enable-image'), false)
+  assert.equal(conversationSource.includes('v-if="isTextSendEnabled && writeState && entryPhase !== \'opening\'"'), true)
+  assert.equal(conversationSource.includes('enable-image'), true)
   assert.equal(conversationSource.includes('@select-image="selectImage"'), true)
   assert.equal(conversationSource.includes(`t('notifications.whisper.messages.test_send')`), false)
   assert.equal(conversationSource.includes('notifications.whisper.messages.readonly'), false)
@@ -3476,7 +3477,7 @@ verify('Composer emote insertion and inline fallback remain typed and accessible
   assert.ok(composerSource.includes(`emit('update:modelValue', insertion.value)`))
   assert.ok(composerSource.includes('PrivateEmotePicker'))
   assert.ok(composerSource.includes(':aria-expanded="emotePickerOpen"'))
-  assert.ok(composerSource.includes('@keydown.esc.stop="emotePickerOpen = false"'))
+  assert.ok(composerSource.includes('@keydown.esc.stop="closeEmotePicker"'))
   const emoteActionIndex = composerSource.indexOf('class="message-composer__emote-control"')
   const textareaIndex = composerSource.indexOf('<textarea')
   const sendActionIndex = composerSource.indexOf('message-composer__send')
@@ -3485,7 +3486,8 @@ verify('Composer emote insertion and inline fallback remain typed and accessible
   const pickerStyle = pickerSource.slice(pickerSource.indexOf('.private-emote-picker {'))
   assert.match(pickerStyle, /bottom:\s*calc\(100% \+ var\(--bew-space-2\)\);[\s\S]{0,80}left:\s*0;/)
   assert.doesNotMatch(pickerStyle, /right:\s*0;/)
-  assert.ok(pickerSource.includes(`(['default', 'user'] as const)`))
+  assert.ok(pickerSource.includes('props.packages'))
+  assert.ok(pickerSource.includes('role="tablist"'))
   assert.ok(pickerSource.includes(':aria-label="emote.text"'))
   assert.ok(pickerSource.includes('role="tabpanel"'))
   assert.ok(pickerSource.includes('notifications.whisper.messages.emote_packages'))
@@ -4846,12 +4848,13 @@ verify('image reconcile failure retries only history and resource cleanup cancel
     createUploadRequestId: () => 'upload-reconcile',
     fetchMessages: async () => {
       historyRequests++
-      return historyRequests === 1
+      return historyRequests <= 4
         ? createMessagesResponse([])
         : createMessagesResponse([serverImage])
     },
     getCsrf: () => 'csrf-token',
     getImageSummary: () => '[image]',
+    wait: async () => {},
     markSessionRead: () => {},
     markSessionSent: () => {},
     readFileBytes: async () => [1, 2, 3],
@@ -4884,12 +4887,12 @@ verify('image reconcile failure retries only history and resource cleanup cancel
   assert.equal(state.imageDraft?.failureKind, 'reconcile-failed', 'failure stage')
   assert.equal(uploadAttempts, 1, 'initial upload count')
   assert.equal(sendAttempts, 1, 'initial send count')
-  assert.equal(historyRequests, 1, 'initial reconciliation history count')
+  assert.equal(historyRequests, 4, 'bounded history retries must exhaust before offering reconciliation retry')
 
   assert.equal(await controller.retryImage('200', 'image-local-2'), true, 'reconcile retry result')
   assert.equal(uploadAttempts, 1, 'retry must not upload')
   assert.equal(sendAttempts, 1, 'retry must not send')
-  assert.equal(historyRequests, 2, 'retry must only fetch history')
+  assert.equal(historyRequests, 5, 'retry must only fetch history')
   assert.equal(state.imageDraft, null, 'draft clears after reconciliation')
   assert.deepEqual(revoked, ['blob:https://www.bilibili.com/reconcile-preview'], 'object URL cleanup')
 

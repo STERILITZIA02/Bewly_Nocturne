@@ -2,7 +2,7 @@ import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents
 import LIQUID_GLASS_CSS from '~/styles/liquidGlass.scss?inline'
 import SEGMENT_CONTROL_CSS from '~/styles/segmentControl.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
-import { BODY_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
+import { BODY_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_CLASS, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
 import { WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import { injectCSS } from '~/utils/main'
 import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
@@ -59,6 +59,24 @@ export function injectLayoutStyle() {
 
     body.${BODY_CLASS} > :is(${PHOTO_VIEWER_SELECTOR}) {
       z-index: var(--bew-z-hud) !important;
+    }
+
+    body.${BODY_CLASS} > ${NATIVE_MUSIC_ENTRY_SELECTOR} {
+      position: fixed !important;
+      top: calc(var(--bew-top-bar-height) + var(--bew-space-4)) !important;
+      right: var(--bew-space-4) !important;
+      bottom: var(--bew-space-4) !important;
+      left: auto !important;
+      height: auto !important;
+      max-width: calc(100vw - var(--bew-space-4) * 2);
+      z-index: var(--bew-z-hud) !important;
+      pointer-events: none;
+    }
+
+    body.${BODY_CLASS} > ${NATIVE_MUSIC_ENTRY_SELECTOR} #musicApp {
+      height: 100% !important;
+      max-width: 100%;
+      pointer-events: auto;
     }
 
     body.${BODY_CLASS} .bili-header,
@@ -1913,19 +1931,22 @@ export function injectLayoutStyle() {
       margin: 0 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag) {
+    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link {
+      border-radius: var(--bew-badge-radius) !important;
+      corner-shape: var(--bew-corner-shape-round);
       transition:
         background-color var(--bew-duration-fast) var(--bew-ease-standard),
         color var(--bew-duration-fast) var(--bew-ease-standard);
     }
 
-    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag):is(:hover, :focus-within) {
+    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link:is(:hover, :focus-visible) {
       background: var(--bew-theme-surface-hover) !important;
       color: var(--bew-on-theme-surface) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag):is(:hover, :focus-within) .tag-link {
-      color: inherit !important;
+    #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link:active {
+      background: var(--bew-theme-surface) !important;
+      color: var(--bew-on-theme-surface) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-tags-slot .tag-link:focus-visible {
@@ -2969,7 +2990,7 @@ export function injectLayoutStyle() {
       body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-layer::after,
       body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__warp,
       body.${BODY_CLASS} .${DANMAKU_GLASS_CLASS}[data-bew-liquid-glass] .bew-liquid-glass-surface__tint,
-      #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag),
+      #${ROOT_ID} .bewly-widescreen-tags-slot :is(.ordinary-tag, .topic-tag, .bgm-tag) > .tag-link,
       ${DANMAKU_SURFACE_SELECTOR},
       #${ROOT_ID} .bewly-widescreen-sidebar-toggle,
       #${ROOT_ID} .bewly-widescreen-playlist-toggle::after,

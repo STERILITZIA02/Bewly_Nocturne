@@ -2,6 +2,8 @@
 import { onClickOutside } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
+import { PRIVATE_MESSAGE_IMAGE_ACCEPT, validatePrivateMessageImage } from '~/utils/privateMessageImage'
+
 import PrivateEmotePicker from '../PrivateEmotePicker.vue'
 import type { PrivateEmote, PrivateEmotePackage } from '../privateMessageRenderers'
 import { insertPrivateEmoteToken } from '../privateMessageRenderers'
@@ -12,6 +14,8 @@ const props = defineProps<{
   sending: boolean
   imageDraft: PrivateImageDraftState | null
   emotePackages: PrivateEmotePackage[]
+  emotesLoading?: boolean
+  emotesFailed?: boolean
   enableImage?: boolean
 }>()
 
@@ -22,6 +26,7 @@ const emit = defineEmits<{
   (event: 'selectImage', file: File): void
   (event: 'removeImage', localId: string): void
   (event: 'retryImage', localId: string): void
+  (event: 'loadEmotes'): void
 }>()
 
 const { locale, t } = useI18n()
@@ -30,6 +35,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const emoteControlRef = ref<HTMLElement | null>(null)
 const isComposing = ref(false)
 const emotePickerOpen = ref(false)
+const imageValidationError = ref('')
 const canSendText = computed(() => !props.sending && Boolean(props.modelValue.trim()))
 const canSendImage = computed(() => (
   !props.sending && props.imageDraft?.status === 'ready'
@@ -91,7 +97,11 @@ function handleKeydown(event: KeyboardEvent) {
 }
 
 function selectImage(file: File | undefined) {
-  if (file && canSelectImage.value && file.type.startsWith('image/') && file.size > 0)
+  if (!file || !canSelectImage.value)
+    return
+  const error = validatePrivateMessageImage(file)
+  imageValidationError.value = error ? t(`notifications.whisper.messages.${error}`) : ''
+  if (!error)
     emit('selectImage', file)
 }
 
@@ -108,7 +118,7 @@ function handlePaste(event: ClipboardEvent) {
   if (!image || !canSelectImage.value)
     return
   event.preventDefault()
-  emit('selectImage', image)
+  selectImage(image)
 }
 
 function openImagePicker() {
@@ -127,6 +137,19 @@ async function insertEmote(emote: PrivateEmote) {
   textareaRef.value?.setSelectionRange(insertion.cursor, insertion.cursor)
 }
 
+function toggleEmotePicker() {
+  emotePickerOpen.value = !emotePickerOpen.value
+  if (emotePickerOpen.value)
+    emit('loadEmotes')
+}
+
+function closeEmotePicker() {
+  if (!emotePickerOpen.value)
+    return
+  emotePickerOpen.value = false
+  emoteControlRef.value?.querySelector<HTMLButtonElement>('button')?.focus({ preventScroll: true })
+}
+
 onClickOutside(emoteControlRef, () => {
   emotePickerOpen.value = false
 })
@@ -137,9 +160,10 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 <template>
   <form
     class="message-composer"
-    @keydown.esc.stop="emotePickerOpen = false"
+    @keydown.esc.stop="closeEmotePicker"
     @submit.prevent="submitCurrent"
   >
+    <span v-if="imageValidationError" class="message-composer__error" role="status">{{ imageValidationError }}</span>
     <div v-if="imageDraft" class="message-composer__image-preview" role="status">
       <img
         :src="imageDraft.objectUrl"
@@ -179,7 +203,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
             :label="t('notifications.whisper.messages.select_emote')"
             :aria-expanded="emotePickerOpen"
             aria-controls="private-message-emote-picker"
-            @click="emotePickerOpen = !emotePickerOpen"
+            @click="toggleEmotePicker"
           >
             <i i-mingcute:emoji-line aria-hidden="true" />
           </IconButton>
@@ -187,7 +211,10 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         <PrivateEmotePicker
           v-if="emotePickerOpen"
           :packages="emotePackages"
-          @close="emotePickerOpen = false"
+          :loading="emotesLoading"
+          :failed="emotesFailed"
+          @retry="emit('loadEmotes')"
+          @close="closeEmotePicker"
           @select="insertEmote"
         />
       </div>
@@ -197,7 +224,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         ref="fileInputRef"
         class="message-composer__file-input"
         type="file"
-        accept="image/*"
+        :accept="PRIVATE_MESSAGE_IMAGE_ACCEPT"
         tabindex="-1"
         aria-hidden="true"
         @change="handleFileChange"
@@ -264,9 +291,15 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   font: inherit;
   line-height: var(--bew-line-height-body);
   background: var(--bew-content-solid);
-  border: 1px solid var(--bew-border-color);
+  border: 1px solid transparent;
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
+}
+
+.message-composer__error {
+  color: var(--bew-error-color);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
 }
 
 .message-composer__image-preview {

@@ -6,6 +6,7 @@ import type { ErrorData, Events } from 'hls.js'
 
 import Button from '~/components/Button.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { settings } from '~/logic'
 import { calcCurrentTime } from '~/utils/dataFormatter'
@@ -60,7 +61,7 @@ const emit = defineEmits<{
 const streamSession = createPreviewMediaSession()
 const videoRef = ref<HTMLVideoElement | null>(null)
 const isCoverHovered = ref(false)
-const isLoadingStream = ref<boolean>(false)
+const isPreviewLoading = ref<boolean>(false)
 const isPreviewFullscreen = ref<boolean>(false)
 const isScrubbing = ref<boolean>(false)
 const scrubProgress = ref<number>(0)
@@ -352,7 +353,7 @@ function syncPreviewFullscreenState() {
 
 function cleanupPlayers() {
   streamSession.clear()
-  isLoadingStream.value = false
+  isPreviewLoading.value = false
 }
 
 function isPreviewSetupCurrent(generation: number, url: string, videoEl: HTMLVideoElement) {
@@ -376,13 +377,23 @@ function failPreviewSetup(generation: number, url: string, videoEl: HTMLVideoEle
   cleanupPlayers()
   resetPreviewScrub()
   resetVideoElement(videoEl)
-  isLoadingStream.value = false
+  isPreviewLoading.value = false
   emit('previewError')
 }
 
 async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generation: number) {
   if (!isPreviewSetupCurrent(generation, url, videoEl))
     return
+
+  cleanupPlayers()
+  resetVideoElement(videoEl)
+  isPreviewLoading.value = true
+  const onFrameReady = () => {
+    if (isPreviewSetupCurrent(generation, url, videoEl) && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)
+      isPreviewLoading.value = false
+  }
+  videoEl.addEventListener('loadeddata', onFrameReady, { once: true, signal: streamSession.signal })
+  videoEl.addEventListener('canplay', onFrameReady, { once: true, signal: streamSession.signal })
 
   // Check if URL is FLV stream
   if (url.includes('.flv')) {
@@ -393,12 +404,6 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
         return
 
       if (flvjs.isSupported()) {
-        // Cleanup previous players and clear video src
-        cleanupPlayers()
-        resetVideoElement(videoEl)
-
-        isLoadingStream.value = true
-
         const player = flvjs.createPlayer({
           type: 'flv',
           url,
@@ -415,11 +420,6 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
 
         player.attachMediaElement(videoEl)
 
-        player.on(flvjs.Events.LOADING_COMPLETE, () => {
-          if (isFlvPlayerCurrent(player, generation, url, videoEl))
-            isLoadingStream.value = false
-        })
-
         player.on(flvjs.Events.ERROR, () => {
           if (!isFlvPlayerCurrent(player, generation, url, videoEl))
             return
@@ -433,16 +433,9 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
         videoEl.addEventListener('loadeddata', () => {
           if (!isFlvPlayerCurrent(player, generation, url, videoEl))
             return
-          isLoadingStream.value = false
           videoEl.play().catch(() => {
             // Ignore autoplay errors
           })
-        }, { once: true, signal: streamSession.signal })
-
-        videoEl.addEventListener('canplay', () => {
-          if (isFlvPlayerCurrent(player, generation, url, videoEl) && isLoadingStream.value) {
-            isLoadingStream.value = false
-          }
         }, { once: true, signal: streamSession.signal })
 
         player.load()
@@ -463,12 +456,6 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
       if (!isPreviewSetupCurrent(generation, url, videoEl))
         return
       if (Hls.isSupported()) {
-        // Cleanup previous players and clear video src
-        cleanupPlayers()
-        resetVideoElement(videoEl)
-
-        isLoadingStream.value = true
-
         const player = new Hls({
           enableWorker: true,
           lowLatencyMode: true,
@@ -487,7 +474,6 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
         player.on(Hls.Events.MANIFEST_PARSED, () => {
           if (!isHlsPlayerCurrent(player, generation, url, videoEl))
             return
-          isLoadingStream.value = false
           videoEl.play().catch(() => {
             // Ignore autoplay errors
           })
@@ -496,7 +482,6 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
         player.on(Hls.Events.ERROR, (_event: Events.ERROR, data: ErrorData) => {
           if (!isHlsPlayerCurrent(player, generation, url, videoEl) || !data.fatal)
             return
-          isLoadingStream.value = false
           switch (data.type) {
             case Hls.ErrorTypes.MEDIA_ERROR:
               player.recoverMediaError()
@@ -507,26 +492,10 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
               break
           }
         })
-
-        player.on(Hls.Events.BUFFER_APPENDED, () => {
-          if (isHlsPlayerCurrent(player, generation, url, videoEl) && isLoadingStream.value)
-            isLoadingStream.value = false
-        })
       }
       // cSpell:ignore mpegurl
       else if (videoEl.canPlayType('application/vnd.apple.mpegurl')) {
-        cleanupPlayers()
-        resetVideoElement(videoEl)
-        isLoadingStream.value = true
         videoEl.src = url
-
-        const handleCanPlay = () => {
-          if (isPreviewSetupCurrent(generation, url, videoEl))
-            isLoadingStream.value = false
-          videoEl.removeEventListener('canplay', handleCanPlay)
-        }
-
-        videoEl.addEventListener('canplay', handleCanPlay, { once: true, signal: streamSession.signal })
         videoEl.play().catch(() => {
           if (isPreviewSetupCurrent(generation, url, videoEl))
             failPreviewSetup(generation, url, videoEl)
@@ -542,8 +511,6 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
     }
   }
   else {
-    cleanupPlayers()
-    resetVideoElement(videoEl)
     videoEl.src = url
     videoEl.load()
     videoEl.play().catch(() => {
@@ -655,6 +622,7 @@ onBeforeUnmount(() => {
         <div
           v-if="previewVideoUrl && (isHover || isPreviewFullscreen)"
           class="video-card-preview"
+          :aria-busy="isPreviewLoading"
           :class="{ 'video-card-preview--scrubbable': shouldEnableSwipeSeek }"
           pos="absolute top-0 left-0" w-full aspect-video rounded-inherit bg-black
           v-on="previewInteractionEvents"
@@ -663,7 +631,7 @@ onBeforeUnmount(() => {
             ref="videoRef"
             autoplay
             muted
-            :draggable="false" :controls="showVideoControls"
+            :draggable="false" :controls="showVideoControls && !isPreviewLoading"
             w-full
             h-full
             class="video-card-preview__video" @loadedmetadata="restorePreviewPosition"
@@ -684,7 +652,10 @@ onBeforeUnmount(() => {
           <!-- Loading indicator -->
           <Transition name="fade">
             <div
-              v-if="isLoadingStream"
+              v-if="isPreviewLoading"
+              class="video-card-preview__loading"
+              role="status"
+              :aria-label="$t('common.loading')"
               pos="absolute top-0 left-0"
               w-full h-full
               flex="~ items-center justify-center"

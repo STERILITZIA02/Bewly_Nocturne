@@ -25,7 +25,7 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-const { handleBackToTop, handlePageRefresh, mainAppRef } = useBewlyApp()
+const { handleBackToTop, handlePageRefresh, mainAppRef, scrollViewportRef } = useBewlyApp()
 
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
@@ -164,7 +164,6 @@ async function initData() {
     seriesList.value = [...res.data.list].sort((a, b) => (b.number || 0) - (a.number || 0))
     if (seriesList.value.length) {
       activatedSeries.value = seriesList.value[0]
-      handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
       await fetchSeriesOne(generation, seriesList.value[0])
     }
   }
@@ -241,7 +240,10 @@ function selectSeries(item: PopularSeriesItem) {
   activatedSeries.value = item
   showDropdown.value = false
   searchQuery.value = ''
-  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
+  handleBackToTop(Math.min(
+    scrollViewportRef.value?.scrollTop ?? 0,
+    settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0,
+  ))
   void getSeriesOne()
 }
 

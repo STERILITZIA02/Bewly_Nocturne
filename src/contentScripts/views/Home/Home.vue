@@ -42,6 +42,7 @@ const cachedScrollTop = ref(0)
 const showHomeSearchCharacter = computed(() => cachedScrollTop.value < HOME_SEARCH_STICKY_SCROLL_TOP)
 const tabScrollPositions = new Map<string, number>()
 let pendingTabScrollTop: number | null = null
+let resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
 let tabSwitchFrame: number | null = null
 
 // 使用全局的homeActivatedPage状态
@@ -106,7 +107,7 @@ function restorePreservedForYou() {
   tabCache.save(key, saved.snapshot, tabCache.generation)
   tabScrollPositions.set(key, saved.scrollTop)
   if (activatedPage.value === HomeSubPage.ForYou)
-    pendingTabScrollTop = saved.scrollTop
+    pendingTabScrollTop = resetScrollOnEntry ? 0 : saved.scrollTop
 }
 restorePreservedForYou()
 const tabContentLoading = ref<boolean>(false)
@@ -141,25 +142,31 @@ watch(homeAccountScope, (nextScope, previousScope) => {
 
   tabCache.clear()
   tabScrollPositions.clear()
-  pendingTabScrollTop = getInitialTabScrollTop()
+  pendingTabScrollTop = resetScrollOnEntry ? 0 : getInitialTabScrollTop()
   restorePreservedForYou()
   tabContentLoading.value = false
   homeAccountGeneration.value++
 }, { flush: 'sync' })
 
 function getInitialTabScrollTop(): number {
-  return settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
+  return Math.min(
+    scrollViewportRef.value?.scrollTop ?? 0,
+    settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0,
+  )
 }
 
 function restoreTabScrollPosition() {
-  if (pendingTabScrollTop === null)
-    return
-
-  const viewport = scrollViewportRef.value
-  if (viewport)
-    viewport.scrollTop = pendingTabScrollTop
-
-  pendingTabScrollTop = null
+  if (pendingTabScrollTop !== null) {
+    const viewport = scrollViewportRef.value
+    if (viewport) {
+      viewport.scrollTop = pendingTabScrollTop
+      cachedScrollTop.value = pendingTabScrollTop
+      pendingTabScrollTop = null
+    }
+  }
+  // A grid mounts after the parent transition may already have consumed the
+  // pending position. Keep this intent until an actual Home tab switch.
+  return resetScrollOnEntry
 }
 
 function finishTabSwitch() {
@@ -174,6 +181,7 @@ function finishTabSwitch() {
 }
 
 watch(activatedPageCacheKey, (newPage, oldPage) => {
+  resetScrollOnEntry = false
   tabContentLoading.value = false
   const viewport = scrollViewportRef.value
   if (!viewport)
@@ -184,6 +192,14 @@ watch(activatedPageCacheKey, (newPage, oldPage) => {
   pendingTabScrollTop = tabScrollPositions.get(newPage) ?? getInitialTabScrollTop()
   isHomeTabSwitching.value = true
 }, { flush: 'sync' })
+
+watch(() => settings.value.useSearchPageModeOnHomePage, (integrated) => {
+  if (integrated) {
+    resetScrollOnEntry = true
+    pendingTabScrollTop = 0
+    restoreTabScrollPosition()
+  }
+}, { flush: 'post' })
 
 // 使用deep监听
 watch(() => settings.value.homePageTabVisibilityList, () => {
@@ -235,6 +251,11 @@ onMounted(() => {
   emitter.on(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
 
   syncCurrentTabs()
+  resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
+  if (resetScrollOnEntry) {
+    pendingTabScrollTop = 0
+    restoreTabScrollPosition()
+  }
 })
 
 onUnmounted(() => {
@@ -407,7 +428,6 @@ function toggleTabContentLoading(loading: boolean) {
             v-if="homeAccountScope === 'profile-unavailable'"
             content-only
             :grid-layout="homeGridLayout"
-            flex="~ items-center"
           />
           <Component
             :is="pages[activatedPage]"

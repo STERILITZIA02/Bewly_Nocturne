@@ -1144,7 +1144,11 @@ notifications:
       emote_packages: 表情包系列
       default_emotes: 默认
       user_emotes: 我的表情
-      default_emotes_empty: 消息数据提供默认表情后会显示在这里
+      default_emotes_empty: 暂无可用表情
+      emotes_load_failed: 表情加载失败，请重试
+      image_type_unsupported: 请选择 PNG、JPEG 或 GIF 图片
+      image_too_large: 图片不能超过 20 MB
+      gif_too_large: GIF 图片不能超过 1 MB
       user_emotes_empty: 当前账号暂无可用的用户表情包
       select_image: 选择图片
       selected_image_alt: 待发送的私信图片
