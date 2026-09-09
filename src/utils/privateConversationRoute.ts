@@ -12,8 +12,6 @@ export const PRIVATE_CONVERSATION_ROUTE_PARAMS = {
   sessionType: 'notificationSessionType',
 } as const
 
-export const PRIVATE_CONVERSATION_HISTORY_STATE_KEY = 'bewlyPrivateConversation'
-
 const KNOWN_PRIVATE_SESSION_TYPES = new Set<PrivateConversationSessionType>([1, 2])
 const DECIMAL_IDENTIFIER_PATTERN = /^\d+$/
 const PRIVATE_CONVERSATION_BASE_URL = buildBewlyNotificationUrl('whisper')
@@ -84,30 +82,4 @@ export function clearPrivateConversationRoute(url: string | URL): string {
   parsedUrl.searchParams.delete(PRIVATE_CONVERSATION_ROUTE_PARAMS.talkerId)
   parsedUrl.searchParams.delete(PRIVATE_CONVERSATION_ROUTE_PARAMS.sessionType)
   return parsedUrl.toString()
-}
-
-export function createPrivateConversationHistoryState(state: unknown): Record<string, unknown> {
-  const currentState = state && typeof state === 'object'
-    ? state as Record<string, unknown>
-    : {}
-  return {
-    ...currentState,
-    [PRIVATE_CONVERSATION_HISTORY_STATE_KEY]: true,
-  }
-}
-
-export function isPrivateConversationHistoryState(state: unknown): boolean {
-  return Boolean(
-    state
-    && typeof state === 'object'
-    && (state as Record<string, unknown>)[PRIVATE_CONVERSATION_HISTORY_STATE_KEY] === true,
-  )
-}
-
-export function clearPrivateConversationHistoryState(state: unknown): Record<string, unknown> {
-  const currentState = state && typeof state === 'object'
-    ? { ...state as Record<string, unknown> }
-    : {}
-  delete currentState[PRIVATE_CONVERSATION_HISTORY_STATE_KEY]
-  return currentState
 }

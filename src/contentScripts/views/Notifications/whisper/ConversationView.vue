@@ -100,7 +100,8 @@ const isMobileLayout = ref(false)
 const reducedMotion = ref(false)
 const isLayoutTransitioning = ref(false)
 const isAtLatestPosition = ref(true)
-const entryPhase = ref<'opening' | 'loading' | 'ready'>('opening')
+const entryPhase = ref<'opening' | 'switching' | 'loading' | 'ready'>('opening')
+const historyVisible = ref(true)
 const isRevealingHistory = ref(false)
 const historyRevealDelays = ref<Record<string, number>>({})
 let lastRevealingMessageId = ''
@@ -441,14 +442,15 @@ function isAtLatest() {
 function saveViewportState(
   metrics?: ConversationScrollMetrics,
   atLatestOverride?: boolean,
+  savedTalkerId = talkerId.value,
 ) {
-  if (topBarStore.userInfo.mid !== conversationAccountId)
+  if (topBarStore.userInfo.mid !== conversationAccountId || entryPhase.value !== 'ready')
     return
   const viewport = messageScrollRef.value
   if (!viewport)
     return
   const currentMetrics = metrics ?? readScrollMetrics(viewport)
-  props.controller.updateViewport(talkerId.value, {
+  props.controller.updateViewport(savedTalkerId, {
     atLatest: atLatestOverride
       ?? (isAtLatestPosition.value && isMetricsAtLatest(currentMetrics)),
     scrollTop: currentMetrics.scrollTop,
@@ -456,6 +458,8 @@ function saveViewportState(
 }
 
 function scrollToLatest(behavior: ScrollBehavior = 'auto') {
+  if (entryPhase.value !== 'ready')
+    return
   const viewport = messageScrollRef.value
   if (!viewport)
     return
@@ -661,7 +665,7 @@ function finishConversationActivation(generation: number) {
 }
 
 async function activateConversation() {
-  if (!props.active || !componentMounted || entryPhase.value === 'opening')
+  if (!props.active || !componentMounted || entryPhase.value === 'opening' || entryPhase.value === 'switching')
     return
   const generation = ++activationGeneration
   conversationActivationPending = true
@@ -732,6 +736,7 @@ function finishHistoryReveal(event: AnimationEvent) {
 
 function openConversation() {
   resetConversationExpansion()
+  historyVisible.value = true
   entryPhase.value = 'opening'
   conversationActivationPending = true
   // Commit the compact geometry once; fetch only after the existing expansion finishes.
@@ -743,6 +748,24 @@ function openConversation() {
     conversationExpanded.value = true
     beginLayoutTransition()
   })
+}
+
+function finishConversationSwitch() {
+  if (!componentMounted || !props.active || entryPhase.value !== 'switching')
+    return
+  isRevealingHistory.value = false
+  historyRevealDelays.value = {}
+  lastRevealingMessageId = ''
+  isAtLatestPosition.value = true
+  lastProcessedScrollTop = 0
+  historyVisible.value = true
+  entryPhase.value = 'loading'
+  void activateConversation()
+}
+
+function beginHistoryLeave(element: Element) {
+  if (element instanceof HTMLElement)
+    element.inert = true
 }
 
 function retry() {
@@ -776,9 +799,29 @@ function handleEscape() {
     emit('back')
 }
 
-watch(talkerId, () => {
+watch(talkerId, (_, previousTalkerId) => {
+  saveViewportState(undefined, undefined, previousTalkerId)
   previewImage.value = ''
-  resetConversationExpansion()
+  activationGeneration++
+  layoutGeneration++
+  scrollInteractionGeneration++
+  conversationActivationPending = true
+  userHasReadUpward = false
+  userRequestedLatest = false
+  directScrollGestureActive = false
+  directGestureClientY = null
+  if (directScrollGestureEndFrame !== null)
+    cancelAnimationFrame(directScrollGestureEndFrame)
+  directScrollGestureEndFrame = null
+  if (scrollFrameId !== null)
+    cancelAnimationFrame(scrollFrameId)
+  scrollFrameId = null
+  // Keep the shell, composer and their glass attachment alive. An unfinished
+  // first expansion will activate only the latest selection when it completes.
+  if (entryPhase.value !== 'opening') {
+    entryPhase.value = 'switching'
+    historyVisible.value = false
+  }
 })
 watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl) => {
   if (previousUrl && previewImage.value === previousUrl && nextUrl !== previousUrl)
@@ -877,62 +920,66 @@ defineExpose({
         @touchstart.passive="markReadingIntent"
         @wheel.passive="markReadingIntent"
       >
-        <span v-if="entryPhase !== 'ready'" class="sr-only" role="status">
-          {{ t('notifications.whisper.messages.loading') }}
-        </span>
+        <Transition name="conversation-history" @before-leave="beginHistoryLeave" @after-leave="finishConversationSwitch">
+          <div v-if="historyVisible" class="conversation-view__history">
+            <span v-if="entryPhase !== 'ready'" class="sr-only" role="status">
+              {{ t('notifications.whisper.messages.loading') }}
+            </span>
 
-        <div v-else-if="state.errorKind && !timelineItems.length" class="conversation-view__state">
-          <Empty :description="errorMessage">
-            <div class="conversation-view__state-actions">
-              <Button type="tertiary" @click="retry">
-                {{ t('notifications.actions.retry') }}
-              </Button>
+            <div v-else-if="state.errorKind && !timelineItems.length" class="conversation-view__state">
+              <Empty :description="errorMessage">
+                <div class="conversation-view__state-actions">
+                  <Button type="tertiary" @click="retry">
+                    {{ t('notifications.actions.retry') }}
+                  </Button>
+                </div>
+              </Empty>
             </div>
-          </Empty>
-        </div>
 
-        <template v-else>
-          <div
-            class="conversation-view__history-status"
-          >
-            <span v-if="historyLoading" role="status">{{ t('notifications.whisper.messages.loading') }}</span>
-            <span v-else-if="isAtHistoryStart">{{ t('notifications.whisper.messages.history_start') }}</span>
-            <button v-else type="button" @click="loadOlderMessages()">
-              {{ t('notifications.whisper.messages.load_older') }}
-            </button>
-          </div>
+            <template v-else>
+              <div
+                class="conversation-view__history-status"
+              >
+                <span v-if="historyLoading" role="status">{{ t('notifications.whisper.messages.loading') }}</span>
+                <span v-else-if="isAtHistoryStart">{{ t('notifications.whisper.messages.history_start') }}</span>
+                <button v-else type="button" @click="loadOlderMessages()">
+                  {{ t('notifications.whisper.messages.load_older') }}
+                </button>
+              </div>
 
-          <div v-if="state.errorKind" class="conversation-view__inline-error" role="status">
-            <span>{{ errorMessage }}</span>
-            <button type="button" @click="retry">
-              {{ t('notifications.actions.retry') }}
-            </button>
-          </div>
+              <div v-if="state.errorKind" class="conversation-view__inline-error" role="status">
+                <span>{{ errorMessage }}</span>
+                <button type="button" @click="retry">
+                  {{ t('notifications.actions.retry') }}
+                </button>
+              </div>
 
-          <div
-            v-if="timelineItems.length"
-            class="conversation-view__timeline"
-            :class="{ 'conversation-view__timeline--reveal': isRevealingHistory }"
-            @animationend="finishHistoryReveal"
-          >
-            <PrivateMessageItem
-              v-for="message in timelineItems"
-              :key="message.msgKey"
-              :class="{ 'conversation-view__message--reveal': isRevealingHistory && message.msgKey in historyRevealDelays }"
-              :style="isRevealingHistory ? { '--conversation-message-delay': `${historyRevealDelays[message.msgKey] ?? 0}ms` } : undefined"
-              :message="message"
-              :auto-load-images="settings.autoLoadPrivateMessageImages"
-              :sender-avatar-url="message.isSelf ? selfAvatarUrl : avatarUrl"
-              :sender-name="message.isSelf ? selfDisplayName : displayName"
-              @delete-failed="deleteFailed"
-              @preview="previewImage = $event"
-              @retry-failed="retryFailed"
-            />
+              <div
+                v-if="timelineItems.length"
+                class="conversation-view__timeline"
+                :class="{ 'conversation-view__timeline--reveal': isRevealingHistory }"
+                @animationend="finishHistoryReveal"
+              >
+                <PrivateMessageItem
+                  v-for="message in timelineItems"
+                  :key="message.msgKey"
+                  :class="{ 'conversation-view__message--reveal': isRevealingHistory && message.msgKey in historyRevealDelays }"
+                  :style="isRevealingHistory ? { '--conversation-message-delay': `${historyRevealDelays[message.msgKey] ?? 0}ms` } : undefined"
+                  :message="message"
+                  :auto-load-images="settings.autoLoadPrivateMessageImages"
+                  :sender-avatar-url="message.isSelf ? selfAvatarUrl : avatarUrl"
+                  :sender-name="message.isSelf ? selfDisplayName : displayName"
+                  @delete-failed="deleteFailed"
+                  @preview="previewImage = $event"
+                  @retry-failed="retryFailed"
+                />
+              </div>
+              <div v-else class="conversation-view__state">
+                <Empty :description="t('notifications.whisper.messages.empty')" />
+              </div>
+            </template>
           </div>
-          <div v-else class="conversation-view__state">
-            <Empty :description="t('notifications.whisper.messages.empty')" />
-          </div>
-        </template>
+        </Transition>
       </div>
 
       <div
@@ -946,12 +993,6 @@ defineExpose({
         aria-hidden="true"
       />
     </div>
-
-    <CloseButton
-      class="conversation-view__close"
-      :label="t('common.close')"
-      @click="emit('back')"
-    />
 
     <button
       v-if="state.newMessagesAvailable"
@@ -970,6 +1011,7 @@ defineExpose({
       <div class="conversation-view__test-send">
         <MessageComposer
           v-model="draft"
+          :conversation-key="talkerId"
           :sending="writeState.sending"
           :image-draft="writeState.imageDraft"
           :emote-packages="emoteController.packages.value"
@@ -1054,13 +1096,6 @@ defineExpose({
     border-radius var(--bew-duration-fast) linear;
 }
 
-.conversation-view__close {
-  position: absolute;
-  top: var(--bew-space-3);
-  right: var(--bew-space-3);
-  z-index: 5;
-}
-
 .conversation-view__messages {
   position: relative;
   z-index: 1;
@@ -1095,6 +1130,22 @@ defineExpose({
   gap: var(--bew-space-3);
 }
 
+.conversation-view__history {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+
+.conversation-history-enter-active,
+.conversation-history-leave-active {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.conversation-history-enter-from,
+.conversation-history-leave-to {
+  opacity: 0;
+}
+
 .conversation-view__timeline--reveal > .conversation-view__message--reveal {
   animation: conversation-message-reveal var(--bew-duration-moderate) var(--bew-ease-standard) both;
   animation-delay: var(--conversation-message-delay, 0ms);
@@ -1122,6 +1173,7 @@ defineExpose({
 
 .conversation-view__state {
   display: flex;
+  flex: 1 1 auto;
   min-height: 100%;
   flex-direction: column;
   gap: var(--bew-space-3);
@@ -1232,7 +1284,7 @@ defineExpose({
   --bew-liquid-frame-inset: 0px;
   position: absolute;
   right: var(--bew-space-4);
-  bottom: var(--bew-space-4);
+  bottom: 0;
   left: var(--bew-space-4);
   z-index: 4;
   padding: var(--bew-space-2);
@@ -1304,7 +1356,6 @@ defineExpose({
 
   .conversation-view__floating-composer {
     right: var(--bew-space-3);
-    bottom: var(--bew-space-3);
     left: var(--bew-space-3);
   }
 }
@@ -1314,7 +1365,9 @@ defineExpose({
   .conversation-card,
   .conversation-view__messages,
   .conversation-card__top-edge,
-  .conversation-card__bottom-edge {
+  .conversation-card__bottom-edge,
+  .conversation-history-enter-active,
+  .conversation-history-leave-active {
     transition: none;
   }
   .conversation-view__timeline--reveal > .conversation-view__message--reveal {

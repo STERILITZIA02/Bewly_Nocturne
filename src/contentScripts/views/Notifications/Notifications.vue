@@ -13,10 +13,7 @@ import { buildBewlyNotificationUrl, normalizeNotificationRoute } from '~/utils/n
 import type { PrivateConversationRoute } from '~/utils/privateConversationRoute'
 import {
   buildPrivateConversationUrl,
-  clearPrivateConversationHistoryState,
   clearPrivateConversationRoute,
-  createPrivateConversationHistoryState,
-  isPrivateConversationHistoryState,
   isPrivateConversationSessionType,
   parsePrivateConversationRoute,
   PRIVATE_CONVERSATION_ROUTE_PARAMS,
@@ -281,7 +278,7 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
     return
   }
   window.history.pushState(
-    createPrivateConversationHistoryState(window.history.state),
+    window.history.state,
     '',
     buildPrivateConversationUrl(route),
   )
@@ -296,7 +293,7 @@ function selectTransientPrivateRecipient(recipient: TransientPrivateRecipient) {
   resetWorkspacePagePosition()
   const nextUrl = clearPrivateConversationRoute(window.location.href)
   window.history.replaceState(
-    clearPrivateConversationHistoryState(window.history.state),
+    window.history.state,
     '',
     nextUrl,
   )
@@ -319,10 +316,6 @@ function closePrivateConversation() {
   transientPrivateRecipient.value = null
   privateSessions.clearSelectedSession()
   resetWorkspacePagePosition()
-  if (isPrivateConversationHistoryState(window.history.state)) {
-    window.history.back()
-    return
-  }
   replacePrivateConversationUrl(clearPrivateConversationRoute(window.location.href))
 }
 
@@ -358,7 +351,7 @@ function selectView(view: NotificationView) {
     privateSessions.clearSelectedSession()
   }
   window.history.pushState(
-    clearPrivateConversationHistoryState(window.history.state),
+    window.history.state,
     '',
     buildBewlyNotificationUrl(view),
   )

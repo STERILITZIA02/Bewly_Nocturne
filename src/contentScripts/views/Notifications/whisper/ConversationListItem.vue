@@ -53,6 +53,7 @@ watch(() => props.session.avatar, () => {
       'conversation-list-item--selected': selected,
     }"
     :aria-current="selected ? 'true' : undefined"
+    :aria-expanded="selected"
     :aria-label="t('notifications.whisper.select_conversation', { name: displayName })"
     @click="emit('select', session)"
   >

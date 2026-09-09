@@ -10,6 +10,7 @@ import { insertPrivateEmoteToken } from '../privateMessageRenderers'
 import type { PrivateImageDraftState } from './privateMessageWriteTypes'
 
 const props = defineProps<{
+  conversationKey?: string
   modelValue: string
   sending: boolean
   imageDraft: PrivateImageDraftState | null
@@ -36,6 +37,14 @@ const emoteControlRef = ref<HTMLElement | null>(null)
 const isComposing = ref(false)
 const emotePickerOpen = ref(false)
 const imageValidationError = ref('')
+let imagePickerConversationKey = props.conversationKey
+watch(() => props.conversationKey, () => {
+  isComposing.value = false
+  emotePickerOpen.value = false
+  imageValidationError.value = ''
+  if (fileInputRef.value)
+    fileInputRef.value.value = ''
+})
 const canSendText = computed(() => !props.sending && Boolean(props.modelValue.trim()))
 const canSendImage = computed(() => (
   !props.sending && props.imageDraft?.status === 'ready'
@@ -107,7 +116,8 @@ function selectImage(file: File | undefined) {
 
 function handleFileChange(event: Event) {
   const input = event.target as HTMLInputElement
-  selectImage(input.files?.[0])
+  if (imagePickerConversationKey === props.conversationKey)
+    selectImage(input.files?.[0])
   input.value = ''
 }
 
@@ -122,17 +132,22 @@ function handlePaste(event: ClipboardEvent) {
 }
 
 function openImagePicker() {
-  if (canSelectImage.value)
+  if (canSelectImage.value) {
+    imagePickerConversationKey = props.conversationKey
     fileInputRef.value?.click()
+  }
 }
 
 async function insertEmote(emote: PrivateEmote) {
+  const conversationKey = props.conversationKey
   const textarea = textareaRef.value
   const start = textarea?.selectionStart ?? props.modelValue.length
   const end = textarea?.selectionEnd ?? start
   const insertion = insertPrivateEmoteToken(props.modelValue, emote.text, start, end)
   emit('update:modelValue', insertion.value)
   await nextTick()
+  if (conversationKey !== props.conversationKey)
+    return
   textareaRef.value?.focus()
   textareaRef.value?.setSelectionRange(insertion.cursor, insertion.cursor)
 }

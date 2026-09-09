@@ -168,6 +168,7 @@ onBeforeUnmount(invalidateAuthorization)
     max-width="800px"
     append-to-bewly-body
     :show-footer="false"
+    :show-top-blur="false"
     :title="$t('settings.authorize_app')"
     center
     layer="critical-dialog"
