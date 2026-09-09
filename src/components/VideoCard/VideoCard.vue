@@ -3,6 +3,7 @@ import { computed, ref, watch, watchEffect } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { settings } from '~/logic'
 import type { VideoCardLayoutSetting } from '~/logic/storage'
@@ -46,9 +47,20 @@ const layout = computed((): VideoCardLayoutSetting => {
 
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
 const logic = useVideoCardLogic(props, props.persistentState)
-defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
+defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
 const { mainAppRef } = useBewlyApp()
 const { t } = useI18n()
+const { userRelations } = useUserRelations()
+const relationVideo = computed(() => {
+  const video = props.video
+  if (!video?.author)
+    return video
+  const authors = Array.isArray(video.author) ? video.author : [video.author]
+  const resolved = authors.map(author => author.mid && userRelations.value[author.mid]
+    ? { ...author, followed: userRelations.value[author.mid].isFollowing }
+    : author)
+  return { ...video, author: Array.isArray(video.author) ? resolved : resolved[0] }
+})
 
 // 使用共享样式（避免每个卡片重复计算）
 const { titleFontSizeClass, titleStyle, authorFontSizeClass, metaFontSizeClass, metaStyle } = useVideoCardSharedStyles()
@@ -401,6 +413,7 @@ provide('getVideoType', () => props.type!)
             @image-loaded="handleImageLoaded"
             @preview-error="logic.clearPreviewVideoUrl"
             @preview-fullscreen-change="logic.handlePreviewFullscreenChange"
+            @preview-scrub-change="logic.handlePreviewScrubChange"
             @preview-progress="logic.videoCurrentTime.value = $event"
           >
             <template #coverTopLeft>
@@ -415,7 +428,7 @@ provide('getVideoType', () => props.type!)
           ref="infoComponentRef"
           :class="{ 'horizontal-card-info': horizontal }"
           :skeleton="infoSkeleton"
-          :video="props.video"
+          :video="relationVideo"
           :layout="layout"
           :horizontal="horizontal || false"
           :video-url="logic.videoUrl.value"
@@ -446,6 +459,7 @@ provide('getVideoType', () => props.type!)
       <VideoCardContextMenu
         :video="{
           ...props.video,
+          ...relationVideo,
           url: logic.videoUrl.value,
         }"
         :context-menu-styles="logic.videoOptionsFloatingStyles.value"

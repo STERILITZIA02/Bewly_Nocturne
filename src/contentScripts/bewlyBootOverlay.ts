@@ -4,7 +4,6 @@ import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 const BOOT_OVERLAY_ID = 'bewly-boot-overlay'
 const BOOT_OVERLAY_STYLE_ID = 'bewly-boot-overlay-style'
 const BOOT_OVERLAY_FADE_MS = 220
-const BOOT_OVERLAY_FAILSAFE_MS = 10_000
 
 export interface BewlyBootOverlayController {
   remove: (immediate?: boolean) => void
@@ -93,10 +92,8 @@ export function mountBewlyBootOverlay(doc: Document): BewlyBootOverlayController
 
   let removed = false
   let removalTimer: ReturnType<typeof setTimeout> | undefined
-  const failsafeTimer = setTimeout(() => remove(), BOOT_OVERLAY_FAILSAFE_MS)
 
   function clearTimers() {
-    clearTimeout(failsafeTimer)
     if (removalTimer !== undefined)
       clearTimeout(removalTimer)
     removalTimer = undefined

@@ -100,12 +100,8 @@ function resetDockContent() {
   settingsStore.resetDockItemsConfig()
 }
 
-function handleToggleDockItem(dockItem: any) {
-  // Prevent disabling all dock items if there is only one
-  if (settings.value.dockItemsConfig.filter(dockItem => dockItem.visible === true).length > 1)
-    dockItem.visible = !dockItem.visible
-  else
-    dockItem.visible = true
+function handleToggleDockItem(dockItem: DockItem) {
+  settingsStore.toggleDockItemVisibility(dockItem.page)
 }
 
 function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean) {

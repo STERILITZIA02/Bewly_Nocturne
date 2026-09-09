@@ -19,6 +19,14 @@ import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
+import { registerUpstreamCommentChecks } from './verify-upstream-comments.mjs'
+import { registerUpstreamFollowingChecks } from './verify-upstream-following.mjs'
+import { registerUpstreamHomeChecks } from './verify-upstream-home.mjs'
+import { registerUpstreamMenuChecks } from './verify-upstream-menus.mjs'
+import { registerUpstreamMomentChecks } from './verify-upstream-moments.mjs'
+import { registerUpstreamPlayerChecks } from './verify-upstream-player.mjs'
+import { registerPlayerLifecycleChecks } from './verify-upstream-player-lifecycle.mjs'
+import { registerUpstreamTransactionChecks } from './verify-upstream-transactions.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
 import { registerWhisperInteractionChecks } from './verify-whisper-interactions.mjs'
 
@@ -73,6 +81,14 @@ registerPlaybackContentChecks(check)
 registerAdvertisingRuleChecks(check, { flush })
 registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
 registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
+registerUpstreamPlayerChecks(check)
+registerPlayerLifecycleChecks(check)
+registerUpstreamTransactionChecks(check, { Vue, flush, compileComponent })
+registerUpstreamMomentChecks(check, { Vue, flush, compileComponent })
+registerUpstreamCommentChecks(check)
+registerUpstreamFollowingChecks(check, { Vue, flush, compileComponent })
+registerUpstreamHomeChecks(check, { Vue, flush, compileComponent })
+registerUpstreamMenuChecks(check, { Vue, flush, compileComponent })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -359,6 +375,8 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
 let sharedSkeletonComponent
 const glassSurfaceContext = Symbol('fixture-glass-surface')
 async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
+  if (!file.endsWith('/SkeletonBlock.vue'))
+    sharedSkeletonComponent ??= await compileComponent('../src/components/SkeletonBlock.vue')
   const text = await readFile(new URL(file, import.meta.url), 'utf8')
   const { descriptor } = parse(text)
   const source = compileScript(descriptor, { id: file, inlineTemplate: renderTemplate }).content.replaceAll('import.meta.env.DEV', 'true')
@@ -366,6 +384,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const exports = {}
   const modules = {
     'vue': Vue,
+    '~/components/SkeletonBlock.vue': { default: sharedSkeletonComponent },
     '@vueuse/core': VueUse,
     '~/components/formFieldLabel': fieldLabels,
     '~/utils/imageLoadQueue': imageLoadQueue,

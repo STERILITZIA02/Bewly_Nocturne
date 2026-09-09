@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 
 function deferred() {
   let resolve
@@ -484,8 +485,8 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       followGeneration: 0,
       currentAccountId: Vue.ref(1),
       topBarStore: { isLogin: true },
-      getCSRF: () => 'fixture',
-      api: { user: { relationModify: () => request.promise } },
+      getUserID: () => '1',
+      changeUserRelation: () => request.promise,
       emit: (...args) => events.push(args),
       toast: { warning: error => errors.push(error), error: error => errors.push(error) },
       t: key => key,
@@ -498,17 +499,24 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     assert.equal(context.isFollowing.value, true)
     assert.deepEqual(events, [['followStateChanged', 10, true]])
     const relationRequest = deferred()
+    let relationChanged
     const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
-    const relations = await loadSourceFunctions('../src/contentScripts/views/SearchResults/composables/useUserRelations.ts', ['useUserRelations'], {
-      ...Vue,
-      useTopBarStore: () => account,
-      resolveAuthenticatedAccountId: (loggedIn, mid) => loggedIn && mid > 0 ? mid : null,
-      api: { user: { getRelations: () => relationRequest.promise } },
+    const relations = await loadSourceModule('../src/composables/useUserRelations.ts', {
+      'vue': Vue,
+      '@vueuse/core': await import('@vueuse/core'),
+      '~/utils/userRelation': { onUserRelationChange: (listener) => {
+        relationChanged = listener
+        return () => {}
+      } },
+      '~/utils/main': { getUserID: () => String(account.userInfo.mid) },
+      '~/stores/topBarStore': { useTopBarStore: () => account },
+      '~/utils/accountScope': await import('../src/utils/accountScope'),
+      '~/utils/api': { default: { user: { getRelations: () => relationRequest.promise } } },
     })
     const scope = Vue.effectScope()
     const controller = scope.run(relations.useUserRelations)
     const reading = controller.batchQueryUserRelations([10])
-    controller.updateUserRelation(10, true)
+    relationChanged({ accountId: 1, mid: 10, following: true, blocked: false })
     relationRequest.resolve({ code: 0, data: { 10: { attribute: 0 } } })
     await reading
     assert.equal(controller.userRelations.value[10].isFollowing, true)
@@ -538,6 +546,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     }
     const main = await loadSourceFunctions('../src/inject/videoMetadata.ts', ['setupVideoMetadataBridge'], {
       ...bridge,
+      ...await import('../src/inject/movedPgcReact'),
       selectors: (await import('../src/utils/bewlyWidescreen/constants')).selectors,
       window,
       document,

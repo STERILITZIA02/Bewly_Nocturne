@@ -94,15 +94,21 @@ export function syncPlaylistToggleButton(currentState: BewlyWidescreenState) {
   if (!hasEpisodeSection)
     currentState.playlistCollapsed = false
 
-  currentState.playlistToggleButton.hidden = !hasEpisodeSection
+  if (currentState.playlistToggleButton.hidden !== !hasEpisodeSection)
+    currentState.playlistToggleButton.hidden = !hasEpisodeSection
   const expanded = hasEpisodeSection && !currentState.playlistCollapsed
-  currentState.playlistToggleButton.setAttribute('aria-expanded', String(expanded))
+  if (currentState.playlistToggleButton.getAttribute('aria-expanded') !== String(expanded))
+    currentState.playlistToggleButton.setAttribute('aria-expanded', String(expanded))
   const label = t(expanded
     ? 'widescreen.collapse'
     : 'widescreen.expand_more')
-  currentState.playlistToggleButton.textContent = label
-  currentState.playlistToggleButton.setAttribute('aria-label', label)
-  panel.classList.toggle('is-episode-section-collapsed', hasEpisodeSection && currentState.playlistCollapsed)
+  if (currentState.playlistToggleButton.textContent !== label)
+    currentState.playlistToggleButton.textContent = label
+  if (currentState.playlistToggleButton.getAttribute('aria-label') !== label)
+    currentState.playlistToggleButton.setAttribute('aria-label', label)
+  const collapsed = hasEpisodeSection && currentState.playlistCollapsed
+  if (panel.classList.contains('is-episode-section-collapsed') !== collapsed)
+    panel.classList.toggle('is-episode-section-collapsed', collapsed)
 }
 
 export function setupPlaylistToggle(currentState: BewlyWidescreenState) {
@@ -147,12 +153,16 @@ export function setupPlaylistToggle(currentState: BewlyWidescreenState) {
 export function syncEpisodeSectionMarker(currentState: BewlyWidescreenState) {
   const panel = currentState.panels.playlist
   const movedNodes = currentState.movedNodes
-  clearEpisodeSectionMarker(panel, movedNodes)
   ensurePlaylistCoverLayout(panel)
 
   const episodeSection = findEpisodeSectionNode(panel, movedNodes)
+  panel.querySelectorAll(`.${EPISODE_SECTION_CLASS}`).forEach((node) => {
+    if (node !== episodeSection)
+      node.classList.remove(EPISODE_SECTION_CLASS)
+  })
   if (episodeSection) {
-    episodeSection.classList.add(EPISODE_SECTION_CLASS)
+    if (!episodeSection.classList.contains(EPISODE_SECTION_CLASS))
+      episodeSection.classList.add(EPISODE_SECTION_CLASS)
   }
   placePlaylistToggleButton(currentState)
   syncPlaylistToggleButton(currentState)

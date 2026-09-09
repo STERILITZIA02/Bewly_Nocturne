@@ -20,8 +20,8 @@ export function useConfirmDialog(): ConfirmDialogService {
       owner = new AbortController()
   })
   onScopeDispose(() => owner.abort())
-  return { confirm: async (message) => {
-    const { signal } = owner
+  return { confirm: async (message, externalSignal) => {
+    const signal = externalSignal ? AbortSignal.any([owner.signal, externalSignal]) : owner.signal
     return await service.confirm(message, signal) && !signal.aborted
   } }
 }

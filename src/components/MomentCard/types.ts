@@ -8,6 +8,7 @@ export interface DisplayRichTextSegment {
 
 export interface DisplayForwardVideo {
   title: string
+  desc?: string
   cover: string
   duration: string
   play: string
@@ -15,6 +16,8 @@ export interface DisplayForwardVideo {
   url: string
   aid?: number | string
   bvid?: string
+  cid?: number
+  author?: { mid: string, name: string, face: string }
 }
 
 export interface WatchLaterTarget {
@@ -104,6 +107,7 @@ export interface DisplayMoment {
   bvid?: string
   epid?: number
   videoUrl?: string
+  cid?: number
   additional?: DisplayAdditional
   forward?: {
     id: string
@@ -111,6 +115,8 @@ export interface DisplayMoment {
     authorMid: string
     isArticle: boolean
     author: string
+    authorFace?: string
+    authorAction?: string
     title: string
     text: string
     fallback: string

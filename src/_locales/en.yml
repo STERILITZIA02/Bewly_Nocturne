@@ -1,4 +1,5 @@
 common:
+  operation_completed: Done
   dialog: Dialog
   view_all: View ALL
   play_all: Play ALL
@@ -109,6 +110,9 @@ player_screenshot:
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
+  following_sort: Uploader order in the new Following layout
+  following_sort_updated: By update time
+  following_sort_group: By group
   title: Settings
   menu_general: General
   menu_bewly_pages: Bewly Pages
@@ -367,7 +371,7 @@ settings:
   moments_enable_live_preview: Preview live dynamics on hover
   moments_enable_live_preview_desc: Play a live preview when hovering over a live dynamic cover.
   moments_enable_video_preview: Preview video dynamics on hover
-  moments_enable_video_preview_desc: Play a video preview when hovering over a video dynamic cover.
+  moments_enable_video_preview_desc: Preview video posts and forwarded videos on hover, with an optional extra delay, controls, drag seeking, and cover-only triggering.
   moments_grid_columns: Dynamic columns
   moments_grid_columns_desc: Set the preferred column count for the Bewly dynamic feed. Card dimensions adapt to the selected layout; columns automatically reduce when space is limited, while the sidebar and feed remain centered as a group.
   moments_grid_columns_option: '{count} columns'
@@ -715,6 +719,8 @@ settings:
   search_results_pagination_mode: Search results pagination mode
   search_results_pagination_mode_desc: 'Choose how search results are displayed: infinite scroll or page-based navigation'
   recommendation_mode: Recommendation mode
+  show_recommendation_mode_switcher: Show quick recommendation mode switcher
+  show_recommendation_mode_switcher_desc: Show Web, No Cookie and App mode buttons beside the tabs on the For You home page.
   recommendation_mode_desc: >
     Web: normal web recommendation mode. No Cookie: request homepage
     recommendations without cookies. App: mobile recommendation mode, requires
@@ -957,6 +963,7 @@ settings:
   external_watch_later_button: External watch later button
   external_watch_later_button_desc: Show a standalone Watch later button in the video toolbar. It displays the current state and can add or remove the video.
   show_vertical_video_zoom_button: Vertical video zoom button
+  vertical_video_zoom_position: Adjust the vertical video zoom area
   show_vertical_video_zoom_button_desc: Show zoom controls and the visible-area position control for vertical videos
   show_video_screenshot_button: Show player screenshot button
   show_video_screenshot_button_desc: Show a button in the video player controls for capturing the current video frame.
@@ -1477,6 +1484,20 @@ video_card:
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
 home:
+  following_default_group: Default group
+  following_special_group: Special follows
+  following_group_name: 'Group {id}'
+  following_groups_load_failed: Could not load groups. Previously loaded content is still available.
+  following_groups_retry: Retry
+  following_move_group: Move to group
+  following_remove_special: Remove from special follows
+  following_add_special: Add to special follows
+  following_create_group: Create group
+  following_rename_group: Rename group
+  following_delete_group: Delete group
+  following_group_name_label: Group name (1–16 characters)
+  following_group_name_invalid: Enter a group name with 1–16 characters
+  following_delete_group_confirm: 'Delete “{name}”? You will still follow its uploaders. Members with no other regular group will appear in the default group.'
   app_authorization_required: The App mode access token is missing or expired. Re-authorize to continue using personalized recommendations.
   reauthorize_app: Re-authorize
   recommendation_empty: No recommendations are available

@@ -1,30 +1,23 @@
 import type { Ref } from 'vue'
-import { onUnmounted, reactive } from 'vue'
+import { inject, onUnmounted, reactive } from 'vue'
 
 import api from '~/utils/api'
-import { getCSRF, getUserID } from '~/utils/main'
+import { getUserID } from '~/utils/main'
 
 import type { MomentForwardEmotePackage, MomentForwardSubmissionState } from './momentForwardContent'
 import {
-  buildMomentForwardRequest,
-  buildMomentForwardSubmitCheck,
   createMomentForwardSubmissionController,
   getMomentForwardResponseCode,
   getMomentForwardResponseMessage,
   normalizeMomentForwardEmotePackages,
-  serializeMomentForwardContents,
 } from './momentForwardContent'
+import { MOMENT_FORWARD_TRANSACTIONS } from './momentForwardTransactions'
 import type { DisplayMoment } from './types'
 
 let cachedEmoteAccountId = ''
 let cachedMomentEmotes: MomentForwardEmotePackage[] | undefined
 let momentEmotesRequest: Promise<MomentForwardEmotePackage[]> | undefined
 let momentEmotesRequestAccountId = ''
-const MAX_CACHED_MOMENT_FORWARD_DRAFTS = 20
-const momentForwardDraftCache = new Map<string, {
-  tokens: MomentForwardSubmissionState['tokens']
-  selectedTopic: MomentForwardSubmissionState['selectedTopic']
-}>()
 
 export async function loadMomentForwardEmotes(
   accountIdValue: number | string,
@@ -83,13 +76,15 @@ export function useMomentForwardComposer(
   accountId: Ref<number | string>,
   messages: MomentForwardComposerMessages,
 ) {
+  const transactions = inject(MOMENT_FORWARD_TRANSACTIONS)!
   const getIdentity = () => `${accountId.value || 'guest'}:${getUserID() ?? 'guest'}:${moment.value.id}`
-  let draftIdentity = getIdentity()
-  const cachedDraft = momentForwardDraftCache.get(draftIdentity)
+  let draftIdentity = transactions.keyOf(moment.value.id)
+  let disposed = false
+  const cachedDraft = transactions.read(draftIdentity)
   const state = reactive<MomentForwardSubmissionState>({
-    status: cachedDraft ? 'editing' : 'idle',
+    status: cachedDraft?.pending ? 'submitting' : cachedDraft ? 'editing' : 'idle',
     tokens: cachedDraft?.tokens.map(token => ({ ...token })) ?? [],
-    selectedTopic: cachedDraft?.selectedTopic ? { ...cachedDraft.selectedTopic } : null,
+    selectedTopic: cachedDraft?.topic ? { ...cachedDraft.topic } : null,
   })
   const controller = createMomentForwardSubmissionController({
     state,
@@ -100,63 +95,49 @@ export function useMomentForwardComposer(
       const cookieMid = String(getUserID() ?? '')
       if (!storeMid || !cookieMid || storeMid !== cookieMid)
         throw new Error(messages.accountUnavailable)
-      const mid = storeMid
-      const csrf = getCSRF()
-      if (!csrf)
-        throw new Error(messages.csrfUnavailable)
       const momentId = String(moment.value.id || '').trim()
       if (!momentId)
         throw new Error(messages.momentUnavailable)
 
-      if (serializeMomentForwardContents(tokens).length) {
-        const checkPayload = buildMomentForwardSubmitCheck(tokens)
-        const checkResponse = await api.moment.checkMomentCreate({
-          ...checkPayload,
-          platform: 'web',
-          csrf,
-        })
-        if (getMomentForwardResponseCode(checkResponse) !== 0)
-          return checkResponse
-      }
-      if (!context.isCurrent())
-        return { code: -1, message: 'Stale moment forward request' }
-
-      const payload = buildMomentForwardRequest({
-        momentId,
-        mid,
-        tokens,
-        topic,
-      })
-      return api.moment.createMoment({
-        ...payload,
-        platform: 'web',
-        csrf,
-      })
+      const response = await transactions.submit(momentId, tokens, topic, moment.value.forwardCount, context.isCurrent)
+      if (getMomentForwardResponseCode(response) === -111)
+        throw new Error(messages.csrfUnavailable)
+      return response
     },
   })
 
   const persistDraft = () => {
-    const nextIdentity = getIdentity()
-    if (nextIdentity !== draftIdentity)
-      momentForwardDraftCache.delete(draftIdentity)
-    draftIdentity = nextIdentity
-    if (state.tokens.length || state.selectedTopic) {
-      momentForwardDraftCache.delete(draftIdentity)
-      momentForwardDraftCache.set(draftIdentity, {
-        tokens: state.tokens.map(token => ({ ...token })),
-        selectedTopic: state.selectedTopic ? { ...state.selectedTopic } : null,
-      })
-      while (momentForwardDraftCache.size > MAX_CACHED_MOMENT_FORWARD_DRAFTS) {
-        const oldestKey = momentForwardDraftCache.keys().next().value
-        if (typeof oldestKey !== 'string')
-          break
-        momentForwardDraftCache.delete(oldestKey)
-      }
-    }
-    else {
-      momentForwardDraftCache.delete(draftIdentity)
-    }
+    transactions.save(draftIdentity, state.tokens, state.selectedTopic)
   }
+
+  function joinPendingDraft() {
+    const draft = transactions.read(draftIdentity)
+    const pending = draft?.pending
+    if (!pending)
+      return
+    const identity = getIdentity()
+    const key = draftIdentity
+    state.status = 'submitting'
+    transactions.join(moment.value.id, pending, moment.value.forwardCount)
+    void pending.then((response) => {
+      if (disposed || identity !== getIdentity())
+        return
+      const latest = transactions.read(key)
+      state.tokens = latest?.tokens.map(token => ({ ...token })) ?? []
+      state.selectedTopic = latest?.topic ? { ...latest.topic } : null
+      state.status = getMomentForwardResponseCode(response) === 0
+        ? state.tokens.length || state.selectedTopic ? 'editing' : 'success'
+        : 'error'
+      if (state.status === 'error')
+        state.error = getMomentForwardResponseMessage(response) || messages.forwardFailed
+    }).catch((error) => {
+      if (!disposed && identity === getIdentity()) {
+        state.status = 'error'
+        state.error = error instanceof Error ? error.message : messages.forwardFailed
+      }
+    })
+  }
+  joinPendingDraft()
 
   const setTokens = (tokens: MomentForwardSubmissionState['tokens']) => {
     controller.setTokens(tokens)
@@ -170,26 +151,19 @@ export function useMomentForwardComposer(
     controller.clearTopic()
     persistDraft()
   }
-  const submit = async () => {
-    const result = await controller.submit()
-    if (result.applied && result.success)
-      momentForwardDraftCache.delete(draftIdentity)
-    else
-      persistDraft()
-    return result
-  }
   const invalidate = (clearDraft = true) => {
-    momentForwardDraftCache.delete(draftIdentity)
-    controller.invalidate(clearDraft)
-    draftIdentity = getIdentity()
     if (clearDraft)
-      momentForwardDraftCache.delete(draftIdentity)
-    else
-      persistDraft()
+      transactions.save(draftIdentity, [], null)
+    controller.invalidate(clearDraft)
+    draftIdentity = transactions.keyOf(moment.value.id)
+    const draft = transactions.read(draftIdentity)
+    state.tokens = draft?.tokens.map(token => ({ ...token })) ?? []
+    state.selectedTopic = draft?.topic ? { ...draft.topic } : null
+    joinPendingDraft()
   }
 
   onUnmounted(() => {
-    persistDraft()
+    disposed = true
     controller.dispose()
   })
 
@@ -199,7 +173,7 @@ export function useMomentForwardComposer(
     setTokens,
     selectTopic,
     clearTopic,
-    submit,
+    submit: controller.submit,
     invalidate,
   }
 }

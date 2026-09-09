@@ -6,13 +6,13 @@ import Empty from '~/components/Empty.vue'
 import UserCard from '~/components/UserCard/UserCard.vue'
 import UserCardSkeleton from '~/components/UserCard/UserCardSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useUserRelations } from '~/composables/useUserRelations'
 import { settings } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
-import { useUserRelations } from '../composables/useUserRelations'
 import { convertUserCardData } from '../searchTransforms'
 import type { UserSearchFilters } from '../types'
 import { dedupeByKey } from '../utils/searchHelpers'
@@ -42,7 +42,6 @@ const paginationMode = computed(() => settings.value.searchResultsPaginationMode
 const {
   userRelations,
   batchQueryUserRelations,
-  updateUserRelation,
   reset: resetUserRelations,
 } = useUserRelations()
 
@@ -224,10 +223,6 @@ function resetAll() {
   results.value = []
 }
 
-function handleFollowStateChanged(data: { mid: number, isFollowing: boolean }) {
-  updateUserRelation(data.mid, data.isFollowing)
-}
-
 // 暴露给父组件
 defineExpose({
   isLoading,
@@ -239,7 +234,6 @@ defineExpose({
   needsManualLoadMore,
   resumeLoadMore,
   userRelations,
-  updateUserRelation,
   currentPage,
   totalPages,
   refreshCurrentPage,
@@ -270,7 +264,6 @@ defineExpose({
           isFollowed: userRelations[user.mid]?.isFollowing ? 1 : 0,
         }"
         :compact="true"
-        @follow-state-changed="(mid: number, isFollowing: boolean) => handleFollowStateChanged({ mid, isFollowing })"
       />
       <UserCardSkeleton
         v-for="index in (isLoading && results && results.length > 0 ? 3 : 0)"

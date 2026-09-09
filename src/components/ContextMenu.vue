@@ -2,22 +2,30 @@
 import { useEventListener } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { computeAnchoredFloatingMenuPosition } from '~/utils/floatingMenu'
 
-export interface ContextMenuOption {
+interface ContextMenuItem {
   value: string | number
   label: string
   icon: string
   danger?: boolean
+  disabled?: boolean
 }
+export type ContextMenuOption = ContextMenuItem & (
+  | { kind?: 'action', closeOnSelect?: boolean, checked?: never }
+  | { kind: 'toggle' | 'radio', closeOnSelect: boolean, checked: boolean }
+)
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   options: ContextMenuOption[]
   anchor: { x: number, y: number }
   trigger?: HTMLElement | null
-}>()
+  restoreFocus?: boolean
+  loading?: boolean
+}>(), { restoreFocus: true })
 
 const emit = defineEmits<{
   (event: 'select', value: string | number): void
@@ -34,13 +42,17 @@ let focusRestored = false
 let disposed = false
 
 function menuItems() {
-  return Array.from(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])
+  return Array.from(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []).filter(item => !item.disabled)
 }
 
 function focusItem(index: number) {
   const items = menuItems()
-  if (disposed || items.length === 0)
+  if (disposed)
     return
+  if (items.length === 0) {
+    menuRef.value?.focus({ preventScroll: true })
+    return
+  }
   const item = items[(index + items.length) % items.length]
   item.focus({ preventScroll: true })
   item.scrollIntoView({ block: 'nearest' })
@@ -50,7 +62,27 @@ function restoreMenuFocus() {
   if (focusRestored)
     return
   focusRestored = true
+  if (props.restoreFocus === false)
+    return
   restoreOverlayFocus(menuRef.value, previousFocus)
+}
+
+function selectOption(option: ContextMenuOption) {
+  if (option.disabled)
+    return
+  const closes = option.closeOnSelect !== false
+  // Restore before the action opens its next overlay. Unmount must not move
+  // focus back out of a Dialog or Settings that the action has just opened.
+  if (closes)
+    restoreMenuFocus()
+  emit('select', option.value)
+  if (closes)
+    emit('close')
+}
+
+function dismissFromPointer() {
+  focusRestored = true
+  emit('close')
 }
 
 function handleKeydown(event: KeyboardEvent) {
@@ -112,8 +144,11 @@ onMounted(() => {
 })
 watch(() => props.anchor, () => void nextTick(updatePosition))
 watch(() => props.options, async () => {
+  const hadFocus = menuRef.value?.contains(getDeepActiveElement(document))
   await nextTick()
-  if (!disposed && !menuRef.value?.contains(getDeepActiveElement(document)))
+  const active = getDeepActiveElement(document)
+  const focusWasRemoved = !active || active === document.body || active === document.documentElement || active === menuRef.value
+  if (!disposed && hadFocus && focusWasRemoved)
     focusItem(0)
 })
 useEventListener(window, 'resize', updatePosition, { passive: true })
@@ -131,11 +166,17 @@ onBeforeUnmount(() => {
       class="context-menu-container bew-popover-surface"
       :style="[menuStyles, dialogOwner ? { zIndex: 'var(--bew-z-control-menu)' } : undefined]"
       role="menu"
+      tabindex="-1"
+      :aria-busy="loading"
       :data-bewly-dialog-owner="dialogOwner"
       :aria-label="trigger?.getAttribute('aria-label') || undefined"
       @keydown="handleKeydown"
+      @contextmenu.prevent.stop
     >
       <ul role="presentation" flex="~ col gap-1">
+        <li v-if="loading" role="presentation" class="context-menu-loading">
+          <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height-sm)" radius="interactive" />
+        </li>
         <li
           v-for="option in options"
           :key="option.value"
@@ -143,14 +184,17 @@ onBeforeUnmount(() => {
         >
           <button
             type="button"
-            role="menuitem"
+            :role="option.kind === 'radio' ? 'menuitemradio' : option.kind === 'toggle' ? 'menuitemcheckbox' : 'menuitem'"
+            :aria-checked="option.kind === 'radio' || option.kind === 'toggle' ? option.checked : undefined"
+            :disabled="option.disabled"
             tabindex="-1"
             class="context-menu-item"
             :class="{ danger: option.danger }"
-            @click="emit('select', option.value); emit('close')"
+            @click="selectOption(option)"
           >
             <i class="item-icon" :class="option.icon" aria-hidden="true" />
-            {{ option.label }}
+            <span class="item-label">{{ option.label }}</span>
+            <i v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" :class="{ 'i-mingcute:check-line': option.checked }" aria-hidden="true" />
           </button>
         </li>
       </ul>
@@ -161,7 +205,8 @@ onBeforeUnmount(() => {
       pos="fixed top-0 left-0" w-full h-full
       style="z-index: var(--bew-z-context-backdrop);"
       :style="dialogOwner ? { zIndex: 'var(--bew-z-control-backdrop)' } : undefined"
-      @click="emit('close')"
+      @click="dismissFromPointer"
+      @contextmenu.prevent.stop="dismissFromPointer"
     />
   </Teleport>
 </template>
@@ -182,13 +227,22 @@ onBeforeUnmount(() => {
   --uno: "hover:bg-$bew-fill-2 rounded-$bew-interactive-radius cursor-pointer";
   --uno: "flex items-center";
 
-  min-height: 32px;
+  min-height: var(--bew-space-8);
   width: 100%;
   text-align: left;
   padding: var(--bew-space-2);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
+
+  &:active:not(:disabled) {
+    background: var(--bew-fill-3);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
 
   &.danger {
     color: var(--bew-error-color);
@@ -204,6 +258,28 @@ onBeforeUnmount(() => {
 
   width: var(--bew-control-icon-size);
   height: var(--bew-control-icon-size);
+  flex: none;
   margin-right: var(--bew-space-2);
+}
+
+.item-label {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.context-menu-loading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  min-width: var(--bew-layout-sidebar-width);
+}
+
+.item-check {
+  width: var(--bew-control-icon-size);
+  height: var(--bew-control-icon-size);
+  flex: none;
+  margin-left: var(--bew-space-2);
+  color: var(--bew-theme-foreground);
 }
 </style>

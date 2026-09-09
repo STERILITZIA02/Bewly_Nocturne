@@ -7,21 +7,14 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { vLiquidGlass } from '~/utils/liquidGlass'
 
 import type {
-  ConversationExpansionAction,
   ConversationExpansionGeometry,
-  ConversationExpansionModel,
   ConversationScrollMetrics,
 } from './conversationExpansion'
 import {
   calculateConversationExpandedGeometry,
-  calculateConversationTopProgress,
-  COMPACT_CONVERSATION_EXPANSION,
   CONVERSATION_EXPANSION_DURATION,
-  getConversationCornerProgress,
   getConversationExpansionGeometry,
-  getConversationLayoutProgress,
-  reduceConversationExpansion,
-  shouldCollapseConversationAtLatest,
+  isConversationAtLatest,
 } from './conversationExpansion'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
@@ -50,6 +43,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
+const conversationAccountId = topBarStore.userInfo.mid
 const talkerId = computed(() => props.session?.talkerId ?? props.recipient?.mid ?? '')
 const displayName = computed(() => (
   props.session?.name
@@ -62,7 +56,6 @@ const selfDisplayName = computed(() => (
 ))
 const selfAvatarUrl = computed(() => topBarStore.userInfo.face || '')
 const conversationViewRef = ref<HTMLElement | null>(null)
-const conversationCardRef = ref<HTMLElement | null>(null)
 const messageScrollRef = ref<HTMLElement | null>(null)
 const previewImage = ref('')
 const state = computed(() => props.controller.getState(talkerId.value))
@@ -102,8 +95,7 @@ const errorMessage = computed(() => {
     return ''
   return t(`notifications.whisper.errors.${kind}`)
 })
-const expansionModel = ref<ConversationExpansionModel>({ ...COMPACT_CONVERSATION_EXPANSION })
-const baseTopRadius = ref(12)
+const conversationExpanded = ref(false)
 const isMobileLayout = ref(false)
 const reducedMotion = ref(false)
 const isLayoutTransitioning = ref(false)
@@ -115,13 +107,8 @@ let lastRevealingMessageId = ''
 const expandedGeometry = ref<ConversationExpansionGeometry>({ extraHeight: 0, topLift: 0 })
 const historyLoading = computed(() => state.value.loadingOlder)
 const isAtHistoryStart = computed(() => state.value.noMore)
-const layoutProgress = computed(() => getConversationLayoutProgress(expansionModel.value))
-const cornerProgress = computed(() => getConversationCornerProgress(expansionModel.value))
 const expansionGeometry = computed(() => getConversationExpansionGeometry(
-  {
-    bottom: layoutProgress.value,
-    top: layoutProgress.value,
-  },
+  conversationExpanded.value,
   isMobileLayout.value,
   expandedGeometry.value,
 ))
@@ -133,8 +120,7 @@ const conversationLayoutStyle = computed<Record<string, string>>(() => {
     '--conversation-top-expansion': `${topExpansion}px`,
     '--conversation-bottom-expansion': `${bottomExpansion}px`,
     '--conversation-top-lift': `${expansionGeometry.value.topLift}px`,
-    '--conversation-top-radius': `${baseTopRadius.value * cornerProgress.value.top}px`,
-    '--conversation-bottom-radius': `${baseTopRadius.value * cornerProgress.value.bottom}px`,
+    '--conversation-radius': conversationExpanded.value && !isMobileLayout.value ? '0px' : 'var(--bew-panel-radius)',
   }
 })
 
@@ -145,7 +131,6 @@ let scrollInteractionGeneration = 0
 let scrollFrameId: number | null = null
 let openingFrameId: number | null = null
 let layoutTransitionTimer: ReturnType<typeof setTimeout> | null = null
-let layoutTransitionTarget: 'compact' | 'expanded' | null = null
 let directScrollGestureEndFrame: number | null = null
 let conversationResizeObserver: ResizeObserver | null = null
 let layoutMediaController: AbortController | null = null
@@ -184,7 +169,6 @@ function clearLayoutTransition() {
   if (layoutTransitionTimer !== null)
     clearTimeout(layoutTransitionTimer)
   layoutTransitionTimer = null
-  layoutTransitionTarget = null
   isLayoutTransitioning.value = false
 }
 
@@ -192,74 +176,23 @@ function completeLayoutTransition() {
   if (layoutTransitionTimer !== null)
     clearTimeout(layoutTransitionTimer)
   layoutTransitionTimer = null
-  layoutTransitionTarget = null
   isLayoutTransitioning.value = false
   if (entryPhase.value === 'opening' && componentMounted && props.active) {
     entryPhase.value = 'loading'
     void activateConversation()
     return
   }
-  const completionLayoutGeneration = layoutGeneration
-  const shouldSettleCompact = expansionModel.value.state === 'expanding'
-    && expansionModel.value.topExpansionProgress === 0
-  if (shouldSettleCompact)
-    expansionModel.value = reduceConversationExpansion(expansionModel.value, { type: 'settle' })
-
-  void nextTick(() => {
-    if (
-      !componentMounted
-      || !props.active
-      || completionLayoutGeneration !== layoutGeneration
-    ) {
-      return
-    }
-    const viewport = messageScrollRef.value
-    if (viewport && shouldSettleCompact) {
-      if (state.value.newMessagesAvailable) {
-        isAtLatestPosition.value = false
-        saveViewportState(readScrollMetrics(viewport), false)
-      }
-      else {
-        viewport.scrollTop = viewport.scrollHeight
-        lastProcessedScrollTop = Math.max(0, viewport.scrollHeight - viewport.clientHeight)
-        isAtLatestPosition.value = true
-        saveViewportState(readScrollMetrics(viewport), true)
-        void acknowledgeIfEligible()
-      }
-    }
-    scheduleScrollFrame()
-  })
+  scheduleScrollFrame()
 }
 
-function beginLayoutTransition(target: 'compact' | 'expanded') {
+function beginLayoutTransition() {
   clearLayoutTransition()
-  layoutTransitionTarget = target
-  if (reducedMotion.value) {
+  if (reducedMotion.value || isMobileLayout.value) {
     completeLayoutTransition()
     return
   }
   isLayoutTransitioning.value = true
   layoutTransitionTimer = setTimeout(completeLayoutTransition, CONVERSATION_EXPANSION_DURATION)
-}
-
-function applyExpansionAction(action: ConversationExpansionAction) {
-  if (isMobileLayout.value && action.type !== 'reset')
-    return
-
-  const current = expansionModel.value
-  const next = reduceConversationExpansion(current, action)
-  if (
-    next.state === current.state
-    && next.topExpansionProgress === current.topExpansionProgress
-  ) {
-    return
-  }
-  const currentLayoutProgress = getConversationLayoutProgress(current)
-  const nextLayoutProgress = getConversationLayoutProgress(next)
-  expansionModel.value = next
-  if (currentLayoutProgress !== nextLayoutProgress) {
-    beginLayoutTransition(nextLayoutProgress > currentLayoutProgress ? 'expanded' : 'compact')
-  }
 }
 
 function resetConversationExpansion() {
@@ -281,19 +214,19 @@ function resetConversationExpansion() {
   if (scrollFrameId !== null)
     cancelAnimationFrame(scrollFrameId)
   scrollFrameId = null
-  expansionModel.value = reduceConversationExpansion(expansionModel.value, { type: 'reset' })
+  conversationExpanded.value = false
 }
 
 function processScrollFrame() {
   scrollFrameId = null
   const viewport = messageScrollRef.value
-  if (!viewport || !props.active || conversationActivationPending)
+  if (!viewport || !componentMounted || !props.active || conversationActivationPending)
     return
 
   const metrics = readScrollMetrics(viewport)
   const physicalAtLatest = isMetricsAtLatest(metrics)
   lastProcessedScrollTop = metrics.scrollTop
-  const atLatest = shouldCollapseConversationAtLatest({
+  const atLatest = isConversationAtLatest({
     physicalAtLatest,
     requestedLatest: userRequestedLatest,
     userHasReadUpward,
@@ -302,35 +235,8 @@ function processScrollFrame() {
   saveViewportState(metrics, atLatest)
 
   if (atLatest) {
-    const requestedLatest = userRequestedLatest
     userHasReadUpward = false
     userRequestedLatest = false
-    // Opening at the latest message must not immediately undo the entry expansion.
-    if (requestedLatest) {
-      applyExpansionAction({
-        type: 'scroll',
-        atLatest: true,
-        noMore: isAtHistoryStart.value,
-        progress: 0,
-      })
-    }
-  }
-  else if (
-    !isMobileLayout.value
-    && (
-      userHasReadUpward
-      || expansionModel.value.state === 'history-open'
-      || historyLoading.value
-    )
-  ) {
-    applyExpansionAction({
-      type: 'scroll',
-      atLatest: false,
-      noMore: isAtHistoryStart.value,
-      progress: layoutProgress.value > 0
-        ? 1
-        : calculateConversationTopProgress(metrics, { atLatest }),
-    })
   }
 
   if (
@@ -348,7 +254,7 @@ function processScrollFrame() {
 }
 
 function scheduleScrollFrame() {
-  if (scrollFrameId !== null)
+  if (!componentMounted || !props.active || scrollFrameId !== null)
     return
   scrollFrameId = requestAnimationFrame(processScrollFrame)
 }
@@ -356,8 +262,6 @@ function scheduleScrollFrame() {
 function applyReadingDirection(readsUpward: boolean) {
   scrollInteractionGeneration++
   if (readsUpward) {
-    if (layoutTransitionTarget === 'compact')
-      clearLayoutTransition()
     userHasReadUpward = true
     userRequestedLatest = false
   }
@@ -436,14 +340,6 @@ function setupConversationMeasurements() {
     if (!componentMounted || !props.active)
       return
     updateConversationGeometry()
-    const card = conversationCardRef.value
-    if (card && expansionModel.value.state === 'compact') {
-      const radius = Number.parseFloat(
-        getComputedStyle(card).getPropertyValue('--bew-panel-radius'),
-      )
-      if (Number.isFinite(radius) && radius >= 0)
-        baseTopRadius.value = radius
-    }
     scheduleScrollFrame()
   })
   if (conversationViewRef.value)
@@ -459,11 +355,13 @@ function updateConversationGeometry() {
   const visualViewport = window.visualViewport
   const viewportTop = visualViewport?.offsetTop ?? 0
   const viewportHeight = visualViewport?.height ?? window.innerHeight
-  expandedGeometry.value = calculateConversationExpandedGeometry({
+  const geometry = calculateConversationExpandedGeometry({
     bottom: rect.bottom - viewportTop,
     top: rect.top - viewportTop,
     viewportHeight,
   }, isMobileLayout.value)
+  if (geometry.extraHeight !== expandedGeometry.value.extraHeight || geometry.topLift !== expandedGeometry.value.topLift)
+    expandedGeometry.value = geometry
 }
 
 function setupLayoutMediaQueries() {
@@ -473,14 +371,13 @@ function setupLayoutMediaQueries() {
   const mobileQuery = window.matchMedia(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
   const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
   const sync = () => {
-    const enteredMobileLayout = !isMobileLayout.value && mobileQuery.matches
     isMobileLayout.value = mobileQuery.matches
     reducedMotion.value = motionQuery.matches
-    if (reducedMotion.value)
+    if (reducedMotion.value && isRevealingHistory.value) {
       isRevealingHistory.value = false
-    if (enteredMobileLayout)
-      resetConversationExpansion()
-    else if (reducedMotion.value && isLayoutTransitioning.value)
+      void acknowledgeIfEligible()
+    }
+    if ((reducedMotion.value || isMobileLayout.value) && isLayoutTransitioning.value)
       completeLayoutTransition()
     updateConversationGeometry()
   }
@@ -534,7 +431,7 @@ function isAtLatest() {
   if (!viewport)
     return false
   const physicalAtLatest = isMetricsAtLatest(readScrollMetrics(viewport))
-  return shouldCollapseConversationAtLatest({
+  return isConversationAtLatest({
     physicalAtLatest,
     requestedLatest: userRequestedLatest,
     userHasReadUpward,
@@ -545,6 +442,8 @@ function saveViewportState(
   metrics?: ConversationScrollMetrics,
   atLatestOverride?: boolean,
 ) {
+  if (topBarStore.userInfo.mid !== conversationAccountId)
+    return
   const viewport = messageScrollRef.value
   if (!viewport)
     return
@@ -580,9 +479,12 @@ function scrollToLatest(behavior: ScrollBehavior = 'auto') {
 }
 
 async function acknowledgeIfEligible() {
-  if (!settings.value.autoMarkPrivateMessagesRead || entryPhase.value !== 'ready' || isRevealingHistory.value)
+  if (!componentMounted || !props.active || !settings.value.autoMarkPrivateMessagesRead || entryPhase.value !== 'ready' || isRevealingHistory.value)
     return
+  const generation = activationGeneration
   await nextTick()
+  if (!componentMounted || !props.active || generation !== activationGeneration)
+    return
   await props.controller.acknowledgeIfEligible(talkerId.value, {
     atLatest: isAtLatest(),
     canAck: props.session?.capabilities.canAck ?? false,
@@ -608,7 +510,6 @@ async function loadOlderMessages(explicitRetry = false) {
   const oldScrollTop = viewport.scrollTop
   const oldScrollPadding = readVerticalScrollPadding(viewport)
   const anchor = captureVisibleMessageAnchor(viewport)
-  applyExpansionAction({ type: 'load-start', noMore: state.value.noMore })
 
   if (explicitRetry)
     await props.controller.retryLoadOlder(requestTalkerId)
@@ -623,13 +524,6 @@ async function loadOlderMessages(explicitRetry = false) {
     && requestStateGeneration === state.value.generation
     && props.active
   if (!requestContextCurrent) {
-    if (
-      props.active
-      && requestTalkerId === talkerId.value
-      && expansionModel.value.state === 'expanding'
-    ) {
-      applyExpansionAction({ type: 'load-end', noMore: state.value.noMore })
-    }
     scheduleScrollFrame()
     return
   }
@@ -645,7 +539,6 @@ async function loadOlderMessages(explicitRetry = false) {
     }
   }
   lastProcessedScrollTop = viewport.scrollTop
-  applyExpansionAction({ type: 'load-end', noMore: state.value.noMore })
   saveViewportState()
   if (state.value.failedOperation === 'load-older' || state.value.paginationStalled)
     userHasReadUpward = false
@@ -782,11 +675,11 @@ async function activateConversation() {
     return
   entryPhase.value = 'ready'
   await nextTick()
-  if (
-    generation !== activationGeneration
-    || initialScrollGeneration !== scrollInteractionGeneration
-    || !props.active
-  ) {
+  if (generation !== activationGeneration || !props.active || !componentMounted)
+    return
+  if (initialScrollGeneration !== scrollInteractionGeneration) {
+    if (messageScrollRef.value)
+      revealVisibleHistory(messageScrollRef.value)
     finishConversationActivation(generation)
     return
   }
@@ -807,12 +700,6 @@ async function activateConversation() {
     isAtLatestPosition.value = false
     viewport.scrollTop = state.value.scrollTop
     lastProcessedScrollTop = viewport.scrollTop
-    applyExpansionAction({
-      type: 'scroll',
-      atLatest: false,
-      noMore: state.value.noMore,
-      progress: 1,
-    })
   }
   revealVisibleHistory(viewport)
   finishConversationActivation(generation)
@@ -844,6 +731,7 @@ function finishHistoryReveal(event: AnimationEvent) {
 }
 
 function openConversation() {
+  resetConversationExpansion()
   entryPhase.value = 'opening'
   conversationActivationPending = true
   // Commit the compact geometry once; fetch only after the existing expansion finishes.
@@ -852,13 +740,8 @@ function openConversation() {
     if (!componentMounted || !props.active)
       return
     updateConversationGeometry()
-    if (isMobileLayout.value || reducedMotion.value) {
-      expansionModel.value = reduceConversationExpansion(expansionModel.value, { type: 'load-end', noMore: false })
-      completeLayoutTransition()
-    }
-    else {
-      applyExpansionAction({ type: 'load-end', noMore: false })
-    }
+    conversationExpanded.value = true
+    beginLayoutTransition()
   })
 }
 
@@ -900,17 +783,6 @@ watch(talkerId, () => {
 watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl) => {
   if (previousUrl && previewImage.value === previousUrl && nextUrl !== previousUrl)
     previewImage.value = ''
-})
-
-watch(() => state.value.noMore, (noMore) => {
-  if (expansionModel.value.state === 'history-open') {
-    applyExpansionAction({
-      type: 'scroll',
-      atLatest: false,
-      noMore,
-      progress: expansionModel.value.topExpansionProgress,
-    })
-  }
 })
 
 watch(() => props.active, (active) => {
@@ -979,7 +851,7 @@ defineExpose({
       'conversation-view--solid': settings.disableFrostedGlass,
     }"
     :style="conversationLayoutStyle"
-    :data-expansion-state="expansionModel.state"
+    :data-expansion-state="conversationExpanded ? 'expanded' : 'compact'"
     :data-entry-phase="entryPhase"
     :data-at-history-start="isAtHistoryStart ? 'true' : undefined"
     :data-at-latest="isAtLatestPosition ? 'true' : undefined"
@@ -987,13 +859,7 @@ defineExpose({
     :aria-busy="entryPhase !== 'ready' || historyLoading"
     @keydown.esc="handleEscape"
   >
-    <div
-      ref="conversationCardRef"
-      class="conversation-card"
-      :class="{
-        'conversation-card--history-open': expansionModel.state === 'history-open',
-      }"
-    >
+    <div class="conversation-card">
       <div
         ref="messageScrollRef"
         class="conversation-view__messages"
@@ -1071,12 +937,12 @@ defineExpose({
 
       <div
         class="conversation-card__top-edge"
-        :class="{ 'conversation-card__top-edge--visible': layoutProgress > 0 }"
+        :class="{ 'conversation-card__top-edge--visible': conversationExpanded }"
         aria-hidden="true"
       />
       <div
         class="conversation-card__bottom-edge"
-        :class="{ 'conversation-card__bottom-edge--visible': layoutProgress > 0 }"
+        :class="{ 'conversation-card__bottom-edge--visible': conversationExpanded }"
         aria-hidden="true"
       />
     </div>
@@ -1098,7 +964,7 @@ defineExpose({
 
     <footer
       v-if="isTextSendEnabled && writeState && entryPhase !== 'opening'"
-      v-liquid-glass
+      v-liquid-glass="active"
       class="conversation-view__floating-composer"
     >
       <div class="conversation-view__test-send">
@@ -1174,19 +1040,18 @@ defineExpose({
   overflow: hidden;
   background: transparent;
   border: 0;
-  border-radius: var(--conversation-top-radius, var(--bew-panel-radius))
-    var(--conversation-top-radius, var(--bew-panel-radius)) var(--conversation-bottom-radius, var(--bew-panel-radius))
-    var(--conversation-bottom-radius, var(--bew-panel-radius));
+  border-inline: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--conversation-radius, var(--bew-panel-radius));
   corner-shape: var(--bew-corner-shape);
   transform: translateY(var(--conversation-top-lift, 0px));
-  transition:
-    height var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-normal) var(--bew-ease-standard),
-    border-radius var(--bew-duration-fast) linear;
 }
 
 .conversation-view--layout-transitioning .conversation-card {
   will-change: height, transform, border-radius;
+  transition:
+    height var(--bew-duration-normal) var(--bew-ease-standard),
+    transform var(--bew-duration-normal) var(--bew-ease-standard),
+    border-radius var(--bew-duration-fast) linear;
 }
 
 .conversation-view__close {
@@ -1210,11 +1075,14 @@ defineExpose({
   overflow-anchor: none;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
+  background: transparent;
+  outline: none;
+}
+
+.conversation-view--layout-transitioning .conversation-view__messages {
   transition:
     padding-top var(--bew-duration-normal) var(--bew-ease-standard),
     padding-bottom var(--bew-duration-normal) var(--bew-ease-standard);
-  background: transparent;
-  outline: none;
 }
 
 .conversation-view__messages:focus-visible {
@@ -1361,6 +1229,7 @@ defineExpose({
 }
 
 .conversation-view__floating-composer {
+  --bew-liquid-frame-inset: 0px;
   position: absolute;
   right: var(--bew-space-4);
   bottom: var(--bew-space-4);
@@ -1369,11 +1238,12 @@ defineExpose({
   padding: var(--bew-space-2);
   background: var(--bew-elevated-alt);
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-panel-radius);
+  border-radius: var(--bew-modal-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+  box-shadow: var(--bew-shadow-edge-glow-1);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  background-clip: padding-box;
 }
 
 .conversation-view--solid .conversation-view__floating-composer {

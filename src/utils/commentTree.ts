@@ -50,11 +50,15 @@ function wouldCreateCycle(
   parentId: string,
   candidateParentById: Map<string, string | null>,
 ): boolean {
-  const visited = new Set([nodeId])
+  const visited = new Set<string>()
   let currentId: string | null = parentId
   while (currentId) {
-    if (visited.has(currentId))
+    if (currentId === nodeId)
       return true
+    // An ancestor's own edge will break its cycle. Keep valid descendants
+    // attached instead of promoting every reply below that cycle to a root.
+    if (visited.has(currentId))
+      return false
     visited.add(currentId)
     currentId = candidateParentById.get(currentId) ?? null
   }

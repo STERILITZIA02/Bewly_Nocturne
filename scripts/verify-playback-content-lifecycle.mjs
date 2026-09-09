@@ -40,14 +40,15 @@ export function registerPlaybackContentChecks(check) {
     }
   })
 
-  async function fixture() {
+  async function fixture(pgc = false) {
     const constants = await import('../src/utils/bewlyWidescreen/constants')
     const ready = new WeakMap()
     const native = await loadSourceModule('../src/utils/bewlyWidescreen/nativeDom.ts', {
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/commentDomTransfer': await import('../src/utils/commentDomTransfer'),
       '~/utils/player': { getVideoElement: () => null },
-      '~/utils/videoMetadataBridge': { isNativeVideoComponentReady: node => ready.get(node) ?? true },
+      '~/utils/playerMedia': { getPlayerRoot: () => null },
+      '~/utils/videoMetadataBridge': { isNativeVideoComponentReady: node => ready.get(node) ?? true, isPgcPlaybackPage: () => pgc, releaseNativeVideoComponent() {} },
     })
     const description = await loadSourceModule('../src/utils/bewlyWidescreen/description.ts', {
       '~/utils/bewlyWidescreen/constants': constants,
@@ -80,6 +81,41 @@ export function registerPlaybackContentChecks(check) {
       },
     }
   }
+
+  check('PGC content: mounted info/actions and complete paginated directory preserve native controls without BV-only nodes', async () => {
+    const f = await fixture(true)
+    f.origin.className = 'player-left-components'
+    f.origin.innerHTML = '<div class="mediainfo_mediaInfoWrap_fixture"><a>Series</a><button>Follow</button></div><div class="toolbar"><button>Share</button></div><div class="PaginatedEpList_root_fixture"><section><header class="SectionHeader_header_fixture"><button>Sort</button></header><div class="PageTabs_container_fixture"><button>1-50</button></div><div class="EpisodeVirtualList_scroll_fixture"><a href="/bangumi/play/ep123">Episode</a></div></section></div>'
+    const info = f.origin.firstElementChild
+    const toolbar = info.nextElementSibling
+    const playlist = toolbar.nextElementSibling
+    const buttons = [...f.origin.querySelectorAll('button')]
+    const clicks = []
+    buttons.forEach(button => button.addEventListener('click', () => clicks.push(button.textContent)))
+    try {
+      f.ready.set(info, false)
+      assert.equal(f.native.isWidescreenTransferContentReady(), false)
+      f.ready.set(info, true)
+      assert.equal(f.native.isWidescreenTransferContentReady(), true)
+      f.native.moveOrReplaceNode(f.constants.selectors.mediaInfo, f.state.metadataSlot, f.state.movedNodes)
+      f.native.moveOrReplaceNode(f.constants.selectors.toolbar, f.state.toolbarSlot, f.state.movedNodes)
+      f.native.moveOrReplaceNode(f.constants.selectors.playlist, f.state.panels.playlist, f.state.movedNodes)
+      assert.equal(f.state.panels.playlist.firstElementChild, playlist)
+      assert.equal(playlist.querySelectorAll('button').length, 2, 'sort and page tabs stay in the same native event boundary')
+      buttons.forEach(button => button.click())
+      assert.deepEqual(clicks, ['Follow', 'Share', 'Sort', '1-50'])
+      f.native.restoreMovedNodes(f.state.movedNodes)
+      assert.equal(info.parentElement, f.origin)
+      assert.equal(toolbar.parentElement, f.origin)
+      assert.equal(playlist.parentElement, f.origin)
+      f.native.moveOrReplaceNode(f.constants.selectors.playlist, f.state.panels.playlist, f.state.movedNodes)
+      playlist.remove()
+      f.ready.set(playlist, false)
+      f.native.restoreMovedNodes(f.state.movedNodes)
+      assert.equal(playlist.isConnected, false, 'episode navigation never restores an already destroyed React shell')
+    }
+    finally { f.dispose() }
+  })
 
   check('playback content: native transfer retains four listeners and never resurrects discarded component DOM', async () => {
     const f = await fixture()
@@ -212,6 +248,7 @@ export function registerPlaybackContentChecks(check) {
       '~/utils/bewlyWidescreen/shell': { scheduleInitialPanelScrollReset() {} },
       '~/utils/bewlyWidescreen/videoInfo': { syncVideoMetadata: () => true, renderFallbackVideoInfo() {}, syncSidebarTitle() {} },
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
+      '~/utils/videoMetadataBridge': { isNativeVideoComponentReady: () => true },
     }, {
       Date: { now: () => now },
       setTimeout: (run) => {

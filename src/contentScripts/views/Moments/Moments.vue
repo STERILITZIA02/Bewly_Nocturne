@@ -9,6 +9,7 @@ import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
+import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/components/MomentCard/momentForwardTransactions'
 import type { DisplayForwardVideo, DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
@@ -109,7 +110,7 @@ const moments = ref<DisplayMoment[]>([])
 const momentActions = useMomentActions(getMomentActionAccount, applyMomentPatch)
 const { likingMomentIds, reservationLoadingMomentIds, toggleMomentLike, toggleMomentReservation, isWatchLaterAdded, isWatchLaterLoading, toggleMomentWatchLater } = momentActions
 const previews = useMomentPreviews(getCurrentAccountId)
-const { hoveredMediaId, previewUrls, handleMediaEnter, handleMediaLeave, bindPreviewVideo, playPreview, isMomentPreviewEnabled } = previews
+const { hoveredMediaId, previewUrls, previewState, previewGeneration, handleMediaEnter, handleMediaLeave, bindPreviewVideo } = previews
 
 const momentLayout = useMomentLayout(moments, {
   onNearBottom: maybeLoadMoreNearBottom,
@@ -181,6 +182,9 @@ let loadedAccountId: AccountId = getCurrentAccountId()
 const commentAccountIdentity = () => `${topBarStore.userInfo.mid || 'guest'}:${getCurrentAccountId() ?? 'guest'}`
 const commentSessions = createMomentCommentSessionCache(commentAccountIdentity())
 const disclosureCache = createMomentDisclosureCache()
+const forwardTransactions = createMomentForwardTransactions(getMomentActionAccount, handleMomentForwardCountChange)
+provide(MOMENT_FORWARD_TRANSACTIONS, forwardTransactions)
+onScopeDispose(forwardTransactions.dispose)
 provide(MOMENT_DISCLOSURES, disclosureCache)
 watch(commentAccountIdentity, () => disclosureCache.clear(), { flush: 'sync' })
 onScopeDispose(disclosureCache.clear)
@@ -572,8 +576,9 @@ function applyMomentPatch(id: string, patch: Partial<DisplayMoment>) {
     details.updateMoment(updated)
 }
 function handleMomentForwardCountChange(momentId: string, forwardCount: number) {
-  forwardCountOverrides.set(`${getCurrentAccountId()}:${momentId}`, forwardCount)
-  applyMomentPatch(momentId, { forwardCount })
+  const count = Math.max(normalizeForwardCount(moments.value.find(moment => moment.id === momentId)?.forwardCount), forwardCount)
+  forwardCountOverrides.set(`${getCurrentAccountId()}:${momentId}`, count)
+  applyMomentPatch(momentId, { forwardCount: count })
 }
 
 function maybeLoadMoreNearBottom() {
@@ -839,6 +844,7 @@ function refresh() {
 }
 
 function resetMomentsAccountState() {
+  forwardTransactions.invalidate()
   momentActions.reset()
   previews.reset()
   closeMomentDetail()
@@ -1003,20 +1009,6 @@ watch(
     if (await reapplyMomentFiltersFromCache())
       return
     void loadMoments(true)
-  },
-)
-
-watch(
-  [
-    () => settings.value.momentsEnableLivePreview,
-    () => settings.value.momentsEnableVideoPreview,
-  ],
-  () => {
-    const activeMoment = moments.value.find(moment => moment.id === hoveredMediaId.value)
-    if (!activeMoment || isMomentPreviewEnabled(activeMoment))
-      return
-
-    previews.clear()
   },
 )
 
@@ -1407,34 +1399,38 @@ function appendMoments(items: DisplayMoment[]) {
         >
           <div v-for="(column, columnIndex) in virtualColumns" :key="columnIndex" class="moments-grid__column">
             <div v-if="column.topPad" class="moments-grid__spacer" :style="{ height: `${column.topPad}px` }" />
-            <MomentCard
-              v-for="moment in column.items" :key="moment.id"
-              :moment="momentActions.getDisplayMoment(moment)"
-              :card-width="gridCardWidth"
-              :ready="readyCardIds.has(moment.id)"
-              :entering="enteringCardIds.has(moment.id)"
-              :preview-active="Boolean(hoveredMediaId === moment.id && previewUrls[moment.id])"
-              :preview-url="previewUrls[moment.id]"
-              :image-ratio="getMomentImageRatio(moment)"
-              :is-like-loading="likingMomentIds.has(moment.id)"
-              :is-reservation-loading="reservationLoadingMomentIds.has(moment.id)"
-              :is-watch-later-added="isWatchLaterAdded"
-              :is-watch-later-loading="isWatchLaterLoading"
-              @card-element="element => bindCardEl(element, moment)"
-              @open-detail="openMomentDetail"
-              @media-enter="handleMediaEnter"
-              @media-leave="handleMediaLeave"
-              @cover-load="(event, momentId) => handleCoverLoad(event, momentId)"
-              @preview-video="bindPreviewVideo"
-              @preview-canplay="playPreview"
-              @forward-video-click="handleForwardVideoClick"
-              @toggle-watch-later="toggleMomentWatchLater"
-              @toggle-like="toggleMomentLike"
-              @toggle-reservation="toggleMomentReservation"
-              @open-image-preview="openMomentImagePreview"
-              @interactive-resize="handleMomentCardInteractiveResize"
-              @forward-count-change="handleMomentForwardCountChange"
-            />
+            <template v-for="(moment, momentIndex) in column.items" :key="moment.id">
+              <div v-if="column.gaps?.[momentIndex]" class="moments-grid__spacer" :style="{ height: `${column.gaps[momentIndex]}px` }" />
+              <MomentCard
+                :moment="momentActions.getDisplayMoment(moment)"
+                :card-width="gridCardWidth"
+                :ready="readyCardIds.has(moment.id)"
+                :entering="enteringCardIds.has(moment.id)"
+                :preview-active="hoveredMediaId === moment.id && (previewState === 'loading' || previewState === 'ready')"
+                :preview-loading="hoveredMediaId === moment.id && previewState !== 'ready'"
+                :preview-generation="hoveredMediaId === moment.id ? previewGeneration : 0"
+                :preview-url="previewUrls[moment.id]"
+                :image-ratio="getMomentImageRatio(moment)"
+                :is-like-loading="likingMomentIds.has(moment.id)"
+                :is-reservation-loading="reservationLoadingMomentIds.has(moment.id)"
+                :is-forward-loading="forwardTransactions.pending.has(moment.id)"
+                :is-watch-later-added="isWatchLaterAdded"
+                :is-watch-later-loading="isWatchLaterLoading"
+                @card-element="element => bindCardEl(element, moment)"
+                @open-detail="openMomentDetail"
+                @media-enter="handleMediaEnter"
+                @media-leave="handleMediaLeave"
+                @cover-load="(event, momentId) => handleCoverLoad(event, momentId)"
+                @preview-video="bindPreviewVideo"
+                @forward-video-click="handleForwardVideoClick"
+                @toggle-watch-later="toggleMomentWatchLater"
+                @toggle-like="toggleMomentLike"
+                @toggle-reservation="toggleMomentReservation"
+                @open-image-preview="openMomentImagePreview"
+                @interactive-resize="handleMomentCardInteractiveResize"
+                @interaction-change="held => momentLayout.setInteractionHeld(moment.id, held)"
+              />
+            </template>
             <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
           </div>
         </div>

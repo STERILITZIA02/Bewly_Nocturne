@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { DELAYED_MEDIA_PREVIEW_MS } from '~/constants/mediaPreview'
 import { appAuthTokens, settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import type { VideoPreviewResult } from '~/models/video/videoPreview'
@@ -14,6 +15,7 @@ import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { getCSRF, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
+import { onUserRelationChange } from '~/utils/userRelation'
 import { resolveWatchLaterAid } from '~/utils/watchLater'
 
 import type { Video, VideoCardState } from '../types'
@@ -93,6 +95,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   })
   const isHover = ref<boolean>(false)
   const isPreviewFullscreen = ref<boolean>(false)
+  const isPreviewScrubbing = ref(false)
   const mouseEnterTimeOut = ref<number | null>(null)
   const mouseLeaveTimeOut = ref<number | null>(null)
   const previewVideoUrl = ref<string>('')
@@ -101,6 +104,12 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const cardRootRef = ref<HTMLElement | null>(null)
   const isDisposed = ref<boolean>(false) // 跟踪组件是否已卸载
   const previewCacheKey = Symbol('video-preview-cache')
+  const stopRelationChanges = onUserRelationChange((change) => {
+    const author = props.value.video?.author
+    const mid = Array.isArray(author) ? author[0]?.mid : author?.mid
+    if (change.accountId === topBarStore.userInfo.mid && change.mid === mid && change.blocked)
+      removed.value = true
+  })
 
   function clearPreviewVideoUrl() {
     previewVideoUrl.value = ''
@@ -108,6 +117,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
   // 清理函数 - 在组件卸载时调用
   onScopeDispose(() => {
+    stopRelationChanges()
     isDisposed.value = true
     watchLaterResolutionId++
     previewRequestGeneration++
@@ -375,7 +385,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       clearTimeout(mouseEnterTimeOut.value)
     const previewEnabled = props.value.showPreview && settings.value.enableVideoPreview
     const delay = previewEnabled
-      ? (settings.value.hoverVideoCardDelayed ? 1200 : 500)
+      ? (settings.value.hoverVideoCardDelayed ? DELAYED_MEDIA_PREVIEW_MS : 500)
       : 1000
     mouseEnterTimeOut.value = window.setTimeout(() => {
       mouseEnterTimeOut.value = null
@@ -399,7 +409,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
       // Entering native fullscreen moves the video into the browser's top layer,
       // which makes the card receive mouseleave even though the preview is still active.
-      if (isPreviewFullscreen.value)
+      if (isPreviewFullscreen.value || isPreviewScrubbing.value)
         return
 
       contentVisibility.value = 'auto'
@@ -426,6 +436,12 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       contentVisibility.value = 'auto'
       isHover.value = false
     }
+  }
+
+  function handlePreviewScrubChange(scrubbing: boolean) {
+    isPreviewScrubbing.value = scrubbing
+    if (!scrubbing && !cardRootRef.value?.matches(':hover'))
+      handelMouseLeave()
   }
 
   function handleClick(event: MouseEvent) {
@@ -514,6 +530,8 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     isInWatchLater,
     isHover,
     isPreviewFullscreen,
+    isPreviewScrubbing,
+    handlePreviewScrubChange,
     isUpdatingWatchLater,
     isUndoing,
     previewVideoUrl,

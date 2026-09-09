@@ -39,9 +39,11 @@ const props = withDefaults(defineProps<{
   centerFooter?: boolean
   loading?: boolean
   preventCloseWhenLoading?: boolean
+  closeOnConfirm?: boolean
   layer?: 'dialog' | 'layout-editor' | 'critical-dialog'
 }>(), {
   preventCloseWhenLoading: true,
+  closeOnConfirm: true,
   frostedGlass: true,
   showHeader: true,
   showTopBlur: true,
@@ -259,7 +261,7 @@ async function handleConfirm() {
   emit('confirm')
   await nextTick()
   isConfirmPending = false
-  if (!props.loading && showDialog.value && !isClosing)
+  if (props.closeOnConfirm && !props.loading && showDialog.value && !isClosing)
     handleClose()
 }
 </script>

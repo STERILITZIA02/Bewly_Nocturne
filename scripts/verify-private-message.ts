@@ -2726,74 +2726,18 @@ verify('whisper conversation routing reuses route state and never guesses origin
   assert.equal([notificationsSource, workspaceSource, itemSource].some(source => /#\/whisper\//.test(source)), false)
 })
 
-verify('conversation expansion transitions compact, expanding, history-open, and back to compact', ({ conversationExpansion }) => {
-  const compact = { ...conversationExpansion.COMPACT_CONVERSATION_EXPANSION }
-  const progress = conversationExpansion.calculateConversationTopProgress({
-    clientHeight: 600,
-    scrollHeight: 1800,
-    scrollTop: 80,
-  }, {
-    atLatest: false,
-  })
-  assert.equal(progress, 1)
-
-  const expanding = conversationExpansion.reduceConversationExpansion(compact, {
-    type: 'scroll',
-    atLatest: false,
-    noMore: false,
-    progress,
-  })
-  assert.deepEqual(expanding, { state: 'expanding', topExpansionProgress: 1 })
-
-  const loading = conversationExpansion.reduceConversationExpansion(expanding, {
-    type: 'load-start',
-    noMore: false,
-  })
-  assert.deepEqual(loading, { state: 'expanding', topExpansionProgress: 1 })
-
-  const historyOpen = conversationExpansion.reduceConversationExpansion(loading, {
-    type: 'load-end',
-    noMore: false,
-  })
-  assert.deepEqual(historyOpen, { state: 'history-open', topExpansionProgress: 1 })
-  assert.equal(conversationExpansion.getConversationLayoutProgress(historyOpen), 1)
-
-  const atHistoryStart = conversationExpansion.reduceConversationExpansion(historyOpen, {
-    type: 'scroll',
-    atLatest: false,
-    noMore: true,
-    progress: 1,
-  })
-  assert.deepEqual(atHistoryStart, { state: 'history-open', topExpansionProgress: 1 })
-  assert.equal(conversationExpansion.getConversationLayoutProgress(atHistoryStart), 1)
-  assert.deepEqual(conversationExpansion.reduceConversationExpansion(compact, {
-    type: 'scroll',
-    atLatest: false,
-    noMore: true,
-    progress: 1,
-  }), { state: 'history-open', topExpansionProgress: 1 })
-  assert.equal(conversationExpansion.shouldCollapseConversationAtLatest({
+verify('conversation entry geometry stays expanded independently of reading and latest-message intent', ({ conversationExpansion }) => {
+  assert.equal(conversationExpansion.isConversationAtLatest({
     physicalAtLatest: true,
     requestedLatest: false,
     userHasReadUpward: true,
   }), false)
-  assert.equal(conversationExpansion.shouldCollapseConversationAtLatest({
+  assert.equal(conversationExpansion.isConversationAtLatest({
     physicalAtLatest: true,
     requestedLatest: true,
     userHasReadUpward: true,
   }), true)
 
-  const returning = conversationExpansion.reduceConversationExpansion(atHistoryStart, {
-    type: 'scroll',
-    atLatest: true,
-    noMore: true,
-    progress: 0,
-  })
-  assert.deepEqual(returning, { state: 'expanding', topExpansionProgress: 0 })
-  assert.deepEqual(
-    conversationExpansion.reduceConversationExpansion(returning, { type: 'settle' }),
-    compact,
-  )
   const expandedGeometry = conversationExpansion.calculateConversationExpandedGeometry({
     bottom: 740,
     top: 140,
@@ -2803,35 +2747,14 @@ verify('conversation expansion transitions compact, expanding, history-open, and
     extraHeight: 316,
     topLift: -148,
   })
-  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry({
-    bottom: 1,
-    top: 1,
-  }, false, expandedGeometry), expandedGeometry)
-  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry({
-    bottom: 1,
-    top: 0,
-  }, false, expandedGeometry), {
-    extraHeight: 168,
-    topLift: 0,
-  })
-  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry({
-    bottom: 1,
-    top: 1,
-  }, true, expandedGeometry), {
+  assert.equal(conversationExpansion.getConversationExpansionGeometry(true, false, expandedGeometry), expandedGeometry)
+  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry(false, false, expandedGeometry), {
     extraHeight: 0,
     topLift: 0,
   })
-  assert.deepEqual(conversationExpansion.getConversationCornerProgress(compact), {
-    bottom: 1,
-    top: 1,
-  })
-  assert.deepEqual(conversationExpansion.getConversationCornerProgress(historyOpen), {
-    bottom: 0,
-    top: 0,
-  })
-  assert.deepEqual(conversationExpansion.getConversationCornerProgress(atHistoryStart), {
-    bottom: 0,
-    top: 0,
+  assert.deepEqual(conversationExpansion.getConversationExpansionGeometry(true, true, expandedGeometry), {
+    extraHeight: 0,
+    topLift: 0,
   })
 })
 
@@ -3119,7 +3042,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.equal(conversationSource.includes('--bew-elevated-solid'), false)
   assert.ok(fallbackSource.includes('background: transparent'))
   assert.ok(conversationSource.includes(`data-expansion-state`))
-  assert.ok(conversationSource.includes('expansionModel.state'))
+  assert.ok(conversationSource.includes('conversationExpanded ? \'expanded\' : \'compact\''))
   assert.ok(conversationSource.includes('requestAnimationFrame(processScrollFrame)'))
   assert.ok(conversationSource.includes('cancelAnimationFrame(scrollFrameId)'))
   assert.ok(conversationSource.includes('new ResizeObserver'))
@@ -3131,19 +3054,19 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(conversationSource.includes('completeLayoutTransition'))
   assert.equal(conversationSource.includes('compactSettlementTimer'), false)
   assert.ok(conversationSource.includes('directScrollGestureActive'))
-  assert.ok(conversationSource.includes('layoutTransitionTarget'))
-  assert.ok(conversationSource.includes('layoutProgress.value > 0'))
+  assert.equal(conversationSource.includes('layoutTransitionTarget'), false)
+  assert.equal(conversationSource.includes('applyExpansionAction'), false)
   assert.ok(conversationSource.includes('initialScrollGeneration !== scrollInteractionGeneration'))
   assert.ok(conversationSource.includes('conversationActivationPending'))
-  assert.ok(conversationSource.includes('state.value.newMessagesAvailable'))
+  assert.ok(conversationSource.includes('v-if="state.newMessagesAvailable"'))
   assert.match(conversationSource, /function applyReadingDirection\([\s\S]{0,180}scrollInteractionGeneration\+\+/)
   assert.match(conversationSource, /function handleScroll\(\)[\s\S]{0,420}applyReadingDirection/)
   assert.ok(conversationSource.includes('@touchmove.passive="handleDirectGestureMove"'))
   assert.ok(conversationSource.includes(`window.addEventListener('pointerup', endDirectScrollGesture`))
   assert.ok(conversationSource.includes('will-change: height, transform, border-radius'))
   const conversationCardStyle = conversationSource.slice(
-    conversationSource.indexOf('.conversation-card {'),
-    conversationSource.indexOf('.conversation-view--layout-transitioning'),
+    conversationSource.indexOf('.conversation-view--layout-transitioning .conversation-card {'),
+    conversationSource.indexOf('.conversation-view__close {'),
   )
   assert.ok(conversationCardStyle.includes('var(--bew-ease-standard)'))
   assert.equal(conversationCardStyle.includes('var(--bew-ease-emphasized)'), false)
@@ -3159,8 +3082,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(conversationSource.includes('messageContentGrowth'))
   assert.ok(conversationSource.includes('viewport.scrollHeight - oldScrollHeight'))
   assert.ok(conversationSource.includes('lastProcessedScrollTop = viewport.scrollTop'))
-  assert.ok(conversationSource.includes('--conversation-top-radius'))
-  assert.ok(conversationSource.includes('--conversation-bottom-radius'))
+  assert.ok(conversationSource.includes('--conversation-radius'))
+  assert.match(conversationSource, /border-inline: 1px solid var\(--bew-surface-border-color\)/)
   assert.ok(conversationSource.includes('--conversation-extra-height'))
   assert.match(conversationSource, /--conversation-top-expansion/)
   assert.match(conversationSource, /--conversation-bottom-expansion/)
@@ -3186,7 +3109,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.match(conversationSource, /\.conversation-card__top-edge,[\s\S]{0,180}position:\s*absolute/)
   assert.match(conversationSource, /\.conversation-card__top-edge\s*\{[\s\S]{0,180}border-top-left-radius:\s*inherit/)
   assert.match(conversationSource, /\.conversation-card__bottom-edge\s*\{[\s\S]{0,180}border-bottom-right-radius:\s*inherit/)
-  assert.ok(conversationSource.includes('top: layoutProgress.value'))
+  assert.ok(conversationSource.includes('\'conversation-card__top-edge--visible\': conversationExpanded'))
+  assert.ok(conversationSource.includes('\'conversation-card__bottom-edge--visible\': conversationExpanded'))
   assert.equal(conversationSource.includes('MutationObserver'), false)
   assert.equal(pageHeaderSource.includes('<ALink'), false)
   assert.equal(pageHeaderSource.includes('<Button'), false)

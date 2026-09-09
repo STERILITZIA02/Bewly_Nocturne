@@ -49,6 +49,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     })
     const selected = Vue.ref(post)
     const handler = await loadSourceFunctions(MOMENTS_SOURCE_FILES, ['handleMomentForwardCountChange', 'applyMomentPatch'], {
+      normalizeForwardCount: (await import('../src/components/MomentCard/momentForwardContent')).normalizeForwardCount,
       forwardCountOverrides: new Map(),
       getCurrentAccountId: () => 1,
       moments: list,

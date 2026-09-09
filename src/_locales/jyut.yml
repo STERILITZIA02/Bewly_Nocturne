@@ -1,4 +1,5 @@
 common:
+  operation_completed: 操作完成
   dialog: 對話框
   view_all: 睇晒佢哋
   play_all: 播晒佢哋
@@ -109,6 +110,9 @@ player_screenshot:
   failed: 截圖失敗
   video_unavailable: 而家嘅影片畫面用唔到
 settings:
+  following_sort: 新版關注列表排序
+  following_sort_updated: 按更新時間
+  following_sort_group: 按分組
   title: 設定
   menu_general: 一般
   menu_bewly_pages: Bewly 頁面
@@ -392,7 +396,7 @@ settings:
   moments_enable_live_preview: 直播動態懸停預覽
   moments_enable_live_preview_desc: 滑鼠懸停直播動態封面嗰陣播放直播預覽。
   moments_enable_video_preview: 影片動態懸停預覽
-  moments_enable_video_preview_desc: 滑鼠懸停影片動態封面嗰陣播放影片預覽。
+  moments_enable_video_preview_desc: 懸停影片動態或者轉發影片嗰陣播放預覽，可以設定觸發範圍、額外延遲、控制列同拖曳定位。
   moments_grid_columns: 動態欄數
   moments_grid_columns_desc: 設定 Bewly 動態頁想要嘅欄數。卡片尺寸會跟住欄數自動調整；視窗空間唔夠時會自動減少欄數，左邊欄同動態流會成組保持置中。
   moments_grid_columns_option: '{count} 欄'
@@ -678,6 +682,8 @@ settings:
   search_results_pagination_mode: 搜尋結果分頁模式
   search_results_pagination_mode_desc: 揀搜尋結果顯示方式：捲動自動加載或者翻頁
   recommendation_mode: 推介模式
+  show_recommendation_mode_switcher: 顯示推介模式快速切換掣組
+  show_recommendation_mode_switcher_desc: 喺主頁「估你心水」分頁欄旁邊顯示 Web、無 Cookie 同 App 推介模式掣組。
   recommendation_mode_desc: |
     Web：普通網頁版推介模式。無 Cookie：請求首頁推介時唔帶 Cookie。App：手機版推介模式，要先授權 access key。
   recommendation_mode_web_no_cookie: 無 Cookie
@@ -896,6 +902,7 @@ settings:
   external_watch_later_button: 稍後再睇按鈕外置
   external_watch_later_button_desc: 啓用後，影片頁工具欄會顯示獨立嘅陣間至睇按鈕；按鈕會顯示目前影片狀態，可以撳一下加入或者剷走。
   show_vertical_video_zoom_button: 直屏影片放大按鈕
+  vertical_video_zoom_position: 調整直屏影片放大區域
   show_vertical_video_zoom_button_desc: 喺直屏影片播放器顯示放大/縮小按鈕同畫面位置調整控制
   show_video_screenshot_button: 顯示播放器截圖按鈕
   show_video_screenshot_button_desc: 啓用後，喺影片播放器控制欄顯示擷取目前影片畫面嘅按鈕。
@@ -1427,6 +1434,20 @@ video_card:
   watch_later_update_failed: 更新陣間至睇失敗
   feedback_unavailable: 攞唔到意見選項
 home:
+  following_default_group: 預設分組
+  following_special_group: 特別關注
+  following_group_name: '分組 {id}'
+  following_groups_load_failed: 分組載入失敗，已載入嘅內容仍然用得
+  following_groups_retry: 再試
+  following_move_group: 移動分組
+  following_remove_special: 取消特別關注
+  following_add_special: 設為特別關注
+  following_create_group: 新增分組
+  following_rename_group: 改分組名
+  following_delete_group: 刪除分組
+  following_group_name_label: 分組名稱（1–16 個字元）
+  following_group_name_invalid: 請輸入 1–16 個字元嘅分組名稱
+  following_delete_group_confirm: '確定刪除分組「{name}」？唔會取消關注入面嘅 UP 主；冇其他普通分組嘅成員會放返預設分組。'
   app_authorization_required: App 模式嘅 access token 已經遺失或者過期，請重新授權之後再繼續使用個人化推介
   reauthorize_app: 重新授權
   recommendation_empty: 暫時未有推薦內容

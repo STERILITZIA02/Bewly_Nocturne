@@ -93,6 +93,36 @@ const API_USER = {
     afterHandle: AHS.J_D,
   },
   // https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/user/relation.md#查询用户关注明细
+  getFollowingGroups: {
+    url: 'https://api.bilibili.com/x/relation/tags',
+    _fetch: { method: 'get' },
+    afterHandle: AHS.J_D,
+  },
+  createFollowingGroup: {
+    url: 'https://api.bilibili.com/x/relation/tag/create',
+    _fetch: { method: 'post', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: { tag: '', csrf: '' } },
+    afterHandle: AHS.J_D,
+  },
+  renameFollowingGroup: {
+    url: 'https://api.bilibili.com/x/relation/tag/update',
+    _fetch: { method: 'post', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: { tagid: '', name: '', csrf: '' } },
+    afterHandle: AHS.J_D,
+  },
+  deleteFollowingGroup: {
+    url: 'https://api.bilibili.com/x/relation/tag/del',
+    _fetch: { method: 'post', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: { tagid: '', csrf: '' } },
+    afterHandle: AHS.J_D,
+  },
+  copyFollowingUsers: {
+    url: 'https://api.bilibili.com/x/relation/tags/copyUsers',
+    _fetch: { method: 'post', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: { fids: '', tagids: '', csrf: '' } },
+    afterHandle: AHS.J_D,
+  },
+  moveFollowingUsers: {
+    url: 'https://api.bilibili.com/x/relation/tags/moveUsers',
+    _fetch: { method: 'post', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: { fids: '', beforeTagids: '', afterTagids: '', csrf: '' } },
+    afterHandle: AHS.J_D,
+  },
   getUserFollowings: {
     url: 'https://api.bilibili.com/x/relation/followings',
     _fetch: {

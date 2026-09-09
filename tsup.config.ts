@@ -10,6 +10,7 @@ const outDir = isSafari ? 'extension-safari/dist' : 'extension/dist'
 export default defineConfig(() => ({
   entry: {
     'background/index': './src/background/index.ts',
+    'contentScripts/pageLoading': './src/contentScripts/pageLoading.ts',
     ...(isDev ? { mv3client: './scripts/client.ts' } : {}),
   },
   async onSuccess() {

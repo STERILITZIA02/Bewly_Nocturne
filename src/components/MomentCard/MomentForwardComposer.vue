@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, toRef, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -10,7 +10,6 @@ import {
   insertMomentForwardEmoji,
   momentForwardTokensToText,
   parseMomentForwardTokens,
-  resolveForwardCountAfterSuccess,
 } from './momentForwardContent'
 import MomentForwardEmojiPicker from './MomentForwardEmojiPicker.vue'
 import MomentForwardTopicPicker from './MomentForwardTopicPicker.vue'
@@ -20,12 +19,12 @@ import { useMomentForwardComposer } from './useMomentForwardComposer'
 const props = defineProps<{
   moment: DisplayMoment
   active: boolean
-  forwardCount: number
+  autofocus?: boolean
 }>()
 
 const emit = defineEmits<{
   close: []
-  submitted: [forwardCount: number]
+  interactionChange: [held: boolean]
 }>()
 
 const { t } = useI18n()
@@ -57,6 +56,8 @@ const knownEmojiTexts = ref(new Set(
 ))
 const draftText = computed(() => momentForwardTokensToText(state.tokens))
 const submitting = computed(() => state.status === 'submitting')
+watch(() => props.active && (submitting.value || emojiPickerOpen.value || topicPickerOpen.value), held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
+onBeforeUnmount(() => emit('interactionChange', false))
 
 function focusTextarea() {
   void nextTick(() => textareaRef.value?.focus())
@@ -139,18 +140,17 @@ async function handleSubmit() {
     toast.error(result.error || t('moment_card.forward_failed'))
     return
   }
-  const nextForwardCount = resolveForwardCountAfterSuccess(result.response, props.forwardCount)
   toast.success(t('moment_card.forward_success'))
-  emit('submitted', nextForwardCount)
   emit('close')
 }
 
 watch(
-  () => props.active,
-  (active) => {
+  () => [props.active, props.autofocus] as const,
+  ([active, autofocus]) => {
     if (active) {
       beginEditing()
-      focusTextarea()
+      if (autofocus)
+        focusTextarea()
     }
     else {
       emojiPickerOpen.value = false

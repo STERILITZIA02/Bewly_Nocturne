@@ -3,11 +3,15 @@ import type { BewlyWidescreenState, CommentPrewarmState, MovedNode } from '~/uti
 import type { WidescreenMutationOrigin } from '~/utils/bewlyWidescreenPolicy'
 import { transferCommentNode } from '~/utils/commentDomTransfer'
 import { getVideoElement } from '~/utils/player'
-import { isNativeVideoComponentReady } from '~/utils/videoMetadataBridge'
+import { getPlayerRoot } from '~/utils/playerMedia'
+import { isNativeVideoComponentReady, isPgcPlaybackPage, releaseNativeVideoComponent } from '~/utils/videoMetadataBridge'
 
 let commentPrewarmState: CommentPrewarmState | undefined
-const NATIVE_INFO_SELECTOR = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags].join(',')
-const NATIVE_DESCRIPTION_SELECTOR = [...selectors.description, ...selectors.tags].join(',')
+const NATIVE_INFO_SELECTOR = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags, ...selectors.mediaInfo].join(',')
+function requiresNativeComponent(node: HTMLElement) {
+  return node.matches(NATIVE_INFO_SELECTOR) || (isPgcPlaybackPage() && node.matches(selectors.playlist.join(',')))
+}
+const NATIVE_DESCRIPTION_SELECTOR = [...selectors.description, ...selectors.tags, ...selectors.mediaInfo].join(',')
 
 export function leaveMutuallyExclusivePlayerModes() {
   const fullscreenDocument = document as Document & {
@@ -46,16 +50,23 @@ export function exitNativeMiniPlayer(root: ParentNode = document) {
 
 function isWidescreenInternalMutation(record: MutationRecord, currentState: BewlyWidescreenState): boolean {
   if (currentState.root.contains(record.target)) {
+    if ([...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node =>
+      node instanceof Element && node.matches(selectors.playlist.join(',')))) {
+      return false
+    }
     // Native Vue may hydrate or replace these roots after we transfer them.
     // Keep ignoring our decoration and the high-volume comment/danmaku trees.
     const target = record.target instanceof Element ? record.target : record.target.parentElement
     if (target && (currentState.upSlot?.contains(target)
       || currentState.toolbarSlot?.contains(target)
+      || currentState.metadataSlot?.contains(target)
       || currentState.descriptionSlot?.contains(target)
       || currentState.tagsSlot?.contains(target))) {
-      const nativeChange = !!target.closest(NATIVE_DESCRIPTION_SELECTOR)
-        || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
-          .some(node => node instanceof Element && (node.matches(`${NATIVE_INFO_SELECTOR}, ${NATIVE_MUSIC_ENTRY_SELECTOR}`) || !!node.querySelector(NATIVE_INFO_SELECTOR)))
+      const nativeChange = (currentState.root.dataset.pageKind === 'pgc' && target instanceof HTMLElement && target.matches(NATIVE_INFO_SELECTOR)
+        && record.removedNodes.length > 0 && isNativeVideoComponentReady(target) === false)
+      || !!target.closest(NATIVE_DESCRIPTION_SELECTOR)
+      || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)]
+        .some(node => node instanceof Element && (node.matches(`${NATIVE_INFO_SELECTOR}, ${NATIVE_MUSIC_ENTRY_SELECTOR}`) || !!node.querySelector(NATIVE_INFO_SELECTOR)))
       return !nativeChange
     }
     return true
@@ -162,7 +173,7 @@ export function moveNode(
   if (target.contains(node))
     return false
 
-  if (node.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(node) !== true)
+  if (requiresNativeComponent(node) && isNativeVideoComponentReady(node) !== true)
     return false
 
   return transferNativeNode(node, target, movedNodes)
@@ -180,6 +191,8 @@ function transferNativeNode(node: HTMLElement, target: HTMLElement, movedNodes: 
   parent.insertBefore(placeholder, node)
   transferCommentNode(node, target)
   movedNodes.push({ node, placeholder, originalParent: parent })
+  if (isPgcPlaybackPage() && requiresNativeComponent(node))
+    isNativeVideoComponentReady(node)
   return true
 }
 
@@ -221,12 +234,14 @@ export function moveMatchingNodes(selectors: string[], target: HTMLElement, move
 
 export function restoreMovedNodes(movedNodes: MovedNode[]) {
   for (const { node, placeholder, originalParent } of [...movedNodes].reverse()) {
-    if (node.matches(NATIVE_INFO_SELECTOR) && (!node.isConnected || isNativeVideoComponentReady(node) === false)) {
+    if (requiresNativeComponent(node) && (!node.isConnected || isNativeVideoComponentReady(node) === false)) {
+      releaseNativeVideoComponent(node)
       placeholder.remove()
       node.remove()
       continue
     }
     const parent = placeholder.parentNode
+    releaseNativeVideoComponent(node)
     if (parent) {
       transferCommentNode(node, parent, placeholder)
       placeholder.remove()
@@ -241,6 +256,7 @@ export function restoreMovedNodes(movedNodes: MovedNode[]) {
 }
 
 export function removeMovedNode(node: HTMLElement, movedNodes: MovedNode[]) {
+  releaseNativeVideoComponent(node)
   const index = movedNodes.findIndex(movedNode => movedNode.node === node)
   if (index >= 0) {
     const [movedNode] = movedNodes.splice(index, 1)
@@ -252,7 +268,7 @@ export function removeMovedNode(node: HTMLElement, movedNodes: MovedNode[]) {
 
 export function moveOrReplaceNode(selectors: string[], target: HTMLElement, movedNodes: MovedNode[], allowInsideLayout = false) {
   let existing = findFirst(selectors, target)
-  if (existing?.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(existing) === false) {
+  if (existing && requiresNativeComponent(existing) && isNativeVideoComponentReady(existing) === false) {
     removeMovedNode(existing, movedNodes)
     existing = null
   }
@@ -264,7 +280,7 @@ export function moveOrReplaceNode(selectors: string[], target: HTMLElement, move
   // It is not a replacement for the intact inner component already in the slot.
   const existingTransfer = existing && movedNodes.find(entry => entry.node === existing)
   if (existing && next && existing !== next && !next.contains(existingTransfer?.placeholder ?? null)) {
-    if (next.matches(NATIVE_INFO_SELECTOR) && isNativeVideoComponentReady(next) !== true)
+    if (requiresNativeComponent(next) && isNativeVideoComponentReady(next) !== true)
       return { found: true, changed: false }
     removeMovedNode(existing, movedNodes)
     const moved = moveNode(next, target, movedNodes, allowInsideLayout)
@@ -398,7 +414,7 @@ export function disableNativeLightOffMode(playerRoot: ParentNode) {
 }
 
 export function isReadyForLayout() {
-  const player = findMovable(selectors.player)
+  const player = getPlayerRoot()
   if (!player)
     return false
 
@@ -448,6 +464,12 @@ function isVideoMetadataTransferReady() {
 }
 
 export function isWidescreenTransferContentReady(): boolean {
+  if (isPgcPlaybackPage()) {
+    const info = findMovable(selectors.mediaInfo)
+    const toolbar = findMovable(selectors.toolbar)
+    return !!info?.textContent?.trim() && isNativeVideoComponentReady(info) === true
+      && !!toolbar?.childElementCount && isNativeVideoComponentReady(toolbar) === true
+  }
   if (!location.pathname.startsWith('/video/'))
     return true
 

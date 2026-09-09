@@ -8,6 +8,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { getDeepActiveElement } from '~/utils/dialogFocus'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
 import { releaseElementImages } from '~/utils/mediaResources'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
@@ -24,6 +25,7 @@ import {
   normalizeForwardCount,
   toggleMomentDisclosure,
 } from './momentForwardContent'
+import MomentVideoPreview from './MomentVideoPreview.vue'
 import MomentVote from './MomentVote.vue'
 import type { DisplayForwardVideo, DisplayMoment, WatchLaterTarget } from './types'
 import {
@@ -42,9 +44,12 @@ interface Props {
   entering?: boolean
   previewActive?: boolean
   previewUrl?: string
+  previewLoading?: boolean
+  previewGeneration?: number
   imageRatio?: number
   isLikeLoading?: boolean
   isReservationLoading?: boolean
+  isForwardLoading?: boolean
   isWatchLaterAdded: (target: WatchLaterTarget) => boolean
   isWatchLaterLoading: (target: WatchLaterTarget) => boolean
 }
@@ -56,9 +61,12 @@ const {
   entering = false,
   previewActive = false,
   previewUrl = '',
+  previewLoading = false,
+  previewGeneration = 0,
   imageRatio = 1,
   isLikeLoading = false,
   isReservationLoading = false,
+  isForwardLoading = false,
   isWatchLaterAdded,
   isWatchLaterLoading,
 } = defineProps<Props>()
@@ -70,14 +78,13 @@ const emit = defineEmits<{
   mediaLeave: [moment: DisplayMoment]
   coverLoad: [event: Event, momentId: string]
   previewVideo: [element: Element | null, moment: DisplayMoment]
-  previewCanplay: [event: Event]
   forwardVideoClick: [video: DisplayForwardVideo]
   toggleWatchLater: [target: WatchLaterTarget]
   toggleLike: [moment: DisplayMoment]
   toggleReservation: [moment: DisplayMoment]
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
   interactiveResize: []
-  forwardCountChange: [momentId: string, forwardCount: number]
+  interactionChange: [held: boolean]
 }>()
 
 const { t } = useI18n()
@@ -131,6 +138,12 @@ function getMenuVideo(source: {
 }
 
 const menuVideo = computed<Video | null>(() => {
+  const forwarded = moment.forward?.video
+  if (forwarded) {
+    return getMenuVideo({ ...forwarded, author: forwarded.author
+      ? { mid: Number(forwarded.author.mid), name: forwarded.author.name, authorFace: getAvatarThumbnailUrl(forwarded.author.face) }
+      : undefined })
+  }
   if (!moment.isVideo || moment.isLive)
     return null
 
@@ -164,9 +177,25 @@ const disclosureCache = inject(MOMENT_DISCLOSURES, undefined) ?? createMomentDis
 const disclosure = ref<MomentDisclosure>(disclosureCache.get(getDisclosureCacheKey()))
 const displayedDisclosure = ref<MomentDisclosure>(disclosure.value)
 const forwardComposerMounted = ref(disclosure.value === 'forward')
-const displayedForwardCount = ref(normalizeForwardCount(moment.forwardCount))
+const forwardFocusRequested = ref(false)
+const forwardInteracting = ref(false)
+const displayedForwardCount = computed(() => normalizeForwardCount(moment.forwardCount))
 const commentExpanded = computed(() => disclosure.value === 'comments')
 const forwardExpanded = computed(() => disclosure.value === 'forward')
+const cardFocused = ref(false)
+const previewInteracting = ref(false)
+watch(() => {
+  const media = moment.forward?.video ?? moment
+  return `${media.bvid}:${media.cid}:${moment.forward?.video?.url ?? moment.videoUrl}`
+}, () => {
+  if (previewActive)
+    emit('mediaEnter', moment)
+})
+const commentWriting = ref(false)
+const interactionHeld = computed(() => cardFocused.value || showVideoOptions.value || forwardInteracting.value
+  || previewInteracting.value || commentWriting.value || isForwardLoading || isLikeLoading || isReservationLoading
+  || isWatchLaterLoading(moment) || (!!moment.forward?.video && isWatchLaterLoading(moment.forward.video)))
+watch(interactionHeld, held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
 const canExpandComments = computed(() => Boolean(moment.id && !moment.isLive))
 const commentSectionId = computed(() => `moment-comment-section-${moment.id}`)
 const forwardSectionId = computed(() => `moment-forward-section-${moment.id}`)
@@ -303,8 +332,10 @@ function handleForwardOriginKeydown(event: KeyboardEvent) {
 function setDisclosure(target: Exclude<MomentDisclosure, 'none'>) {
   closeVideoOptions()
   const nextDisclosure = toggleMomentDisclosure(disclosure.value, target)
-  if (nextDisclosure === 'forward')
+  if (nextDisclosure === 'forward') {
     forwardComposerMounted.value = true
+    forwardFocusRequested.value = true
+  }
   disclosure.value = nextDisclosure
   emit('interactiveResize')
 }
@@ -396,17 +427,6 @@ function handleDisclosureTransitionEnd(event: TransitionEvent) {
     displayedDisclosure.value = 'none'
 }
 
-function handleForwardSubmitted(nextForwardCount: number) {
-  const normalizedCount = normalizeForwardCount(nextForwardCount)
-  displayedForwardCount.value = normalizedCount
-  emit('forwardCountChange', moment.id, normalizedCount)
-}
-
-watch(
-  () => moment.forwardCount,
-  forwardCount => displayedForwardCount.value = normalizeForwardCount(forwardCount),
-)
-
 watch(disclosure, (value) => {
   disclosureCache.set(getDisclosureCacheKey(), value)
   syncDisplayedDisclosure(value)
@@ -416,9 +436,9 @@ watch(
   [() => moment.id, () => topBarStore.userInfo.mid],
   () => {
     disclosure.value = disclosureCache.get(getDisclosureCacheKey())
+    forwardFocusRequested.value = false
     displayedDisclosure.value = disclosure.value
     forwardComposerMounted.value = disclosure.value === 'forward'
-    displayedForwardCount.value = normalizeForwardCount(moment.forwardCount)
     emit('interactiveResize')
   },
 )
@@ -436,8 +456,16 @@ watch(
 provide('getVideoType', () => 'common')
 
 let cardElement: HTMLElement | null = null
+function onCardFocusOut() {
+  void nextTick(() => {
+    cardFocused.value = !!cardElement?.contains(getDeepActiveElement(document))
+  })
+}
 function handleCardRef(element: Element | ComponentPublicInstance | null) {
-  cardElement = element instanceof HTMLElement ? element : null
+  const next = element instanceof HTMLElement ? element : null
+  if (next === cardElement)
+    return
+  cardElement = next
   emit('cardElement', cardElement)
 }
 
@@ -448,6 +476,18 @@ function handleCoverLoad(event: Event, imageIndex = 0) {
 
 function handlePreviewVideo(element: Element | ComponentPublicInstance | null) {
   emit('previewVideo', element instanceof Element ? element : null, moment)
+}
+
+function onMediaLeave() {
+  if (!previewInteracting.value)
+    emit('mediaLeave', moment)
+}
+
+function activateForwardPreviewLink(event: MouseEvent) {
+  event.stopPropagation()
+  // Reuse the existing link's navigation and visit tracking exactly once.
+  const surface = event.currentTarget as HTMLElement
+  surface.parentElement?.querySelector<HTMLAnchorElement>('.moment-card__forward-video-cover-link')?.click()
 }
 
 function handleForwardVideoClick() {
@@ -481,6 +521,7 @@ function requestNativeUserProfile(event: MouseEvent) {
 }
 
 onBeforeUnmount(() => {
+  emit('interactionChange', false)
   releaseElementImages(cardElement)
   cardElement = null
   descriptionResizeObserver?.disconnect()
@@ -514,6 +555,10 @@ onBeforeUnmount(() => {
     }"
     :style="cardLayoutStyles"
     :data-description-expanded="descriptionExpanded ? 'true' : undefined"
+    @focusin="cardFocused = true"
+    @focusout="onCardFocusOut"
+    @mouseenter="!moment.isLive && !settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment)"
+    @mouseleave="onMediaLeave"
   >
     <button
       type="button"
@@ -572,8 +617,8 @@ onBeforeUnmount(() => {
         <div
           v-if="moment.images.length && (moment.isVideo || moment.isLive)"
           class="moment-card__media moment-card__cover moment-card__cover--media"
-          @mouseenter="emit('mediaEnter', moment)"
-          @mouseleave="emit('mediaLeave', moment)"
+          @mouseenter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment)"
+          @mouseleave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
           @click="openPrimaryDetail"
         >
           <img
@@ -584,15 +629,15 @@ onBeforeUnmount(() => {
             decoding="async"
             @load="handleCoverLoad"
           >
-          <video
-            v-if="previewActive && previewUrl"
-            :ref="handlePreviewVideo"
-            :src="moment.isLive ? undefined : previewUrl"
-            autoplay
-            muted
-            :loop="!moment.isLive"
-            playsinline
-            @canplay="emit('previewCanplay', $event)"
+          <MomentVideoPreview
+            v-if="previewActive"
+            :url="previewUrl"
+            :loading="previewLoading"
+            :generation="previewGeneration"
+            :live="moment.isLive"
+            @video="handlePreviewVideo"
+            @interaction-change="previewInteracting = $event"
+            @leave="onMediaLeave"
           />
           <span
             v-if="moment.isVideo && settings.showVideoCardViewCount && moment.videoPlay"
@@ -727,72 +772,110 @@ onBeforeUnmount(() => {
           </div>
           <div
             v-if="moment.forward?.video"
-            class="moment-card__forward-video"
+            class="moment-card__forward-reference"
           >
-            <span class="moment-card__forward-video-cover">
+            <div class="moment-card__forward-source">
+              <component
+                :is="moment.forward.authorMid ? 'a' : 'span'"
+                :href="moment.forward.authorMid ? `https://space.bilibili.com/${moment.forward.authorMid}` : undefined"
+                target="_blank"
+                rel="noopener noreferrer"
+                @click.stop
+              >
+                <img v-if="moment.forward.authorFace" :src="getAvatarThumbnailUrl(moment.forward.authorFace)" alt="" loading="lazy" decoding="async">
+                <span>{{ moment.forward.author }}</span>
+              </component>
+              <span>{{ moment.forward.authorAction || t('moment_card.video_post') }}</span>
+            </div>
+            <p v-if="moment.forward.text && moment.forward.text !== moment.forward.video.desc" class="moment-card__forward-source-text">
+              {{ moment.forward.text }}
+            </p>
+            <div class="moment-card__forward-video">
+              <span
+                class="moment-card__forward-video-cover"
+                @mouseenter="settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment)"
+                @mouseleave="settings.momentsOnlyCoverVideoPreview && onMediaLeave()"
+              >
+                <a
+                  :href="moment.forward.video.url || undefined"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="moment-card__forward-video-cover-link"
+                  :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
+                  @click.stop="handleForwardVideoClick"
+                >
+                  <img
+                    :src="getMomentThumbnailUrl(moment.forward.video.cover)"
+                    :alt="moment.forward.video.title"
+                    loading="lazy"
+                    decoding="async"
+                  >
+                  <span
+                    v-if="settings.showVideoCardDuration && moment.forward.video.duration"
+                    class="moment-card__video-stats"
+                  >
+                    <span class="moment-card__video-stat-group">
+                      <span>
+                        {{ moment.forward.video.duration }}
+                      </span>
+                    </span>
+                  </span>
+                </a>
+                <MomentVideoPreview
+                  v-if="previewActive"
+                  :url="previewUrl"
+                  :loading="previewLoading"
+                  :generation="previewGeneration"
+                  @video="handlePreviewVideo"
+                  @interaction-change="previewInteracting = $event"
+                  @leave="onMediaLeave"
+                  @activate="activateForwardPreviewLink"
+                />
+                <button
+                  v-if="settings.showVideoCardWatchLater && getWatchLaterStateKey(moment.forward.video)"
+                  type="button"
+                  class="moment-card__watch-later"
+                  :class="{
+                    'is-added': isWatchLaterAdded(moment.forward.video),
+                    'is-disabled': isWatchLaterLoading(moment.forward.video),
+                  }"
+                  :disabled="isWatchLaterLoading(moment.forward.video)"
+                  :aria-disabled="isWatchLaterLoading(moment.forward.video)"
+                  :aria-label="isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
+                  :aria-pressed="isWatchLaterAdded(moment.forward.video)"
+                  :title="isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
+                  @click.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
+                >
+                  <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />
+                  <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-line-md:confirm aria-hidden="true" />
+                  <span v-else i-mingcute:carplay-line aria-hidden="true" />
+                </button>
+              </span>
               <a
                 :href="moment.forward.video.url || undefined"
                 target="_blank"
                 rel="noopener noreferrer"
-                class="moment-card__forward-video-cover-link"
+                class="moment-card__forward-video-info"
                 :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
                 @click.stop="handleForwardVideoClick"
               >
-                <img
-                  :src="getMomentThumbnailUrl(moment.forward.video.cover)"
-                  :alt="moment.forward.video.title"
-                  loading="lazy"
-                  decoding="async"
-                >
-                <span
-                  v-if="settings.showVideoCardViewCount && moment.forward.video.play"
-                  class="moment-card__video-stats"
-                >
-                  <span class="moment-card__video-stat-group">
-                    <span>
-                      <span i-tabler-player-play aria-hidden="true" />
-                      {{ moment.forward.video.play }}
-                    </span>
-                  </span>
-                </span>
+                <strong>
+                  <VideoWatchedTag
+                    :aid="moment.forward.video.aid"
+                    :bvid="moment.forward.video.bvid"
+                  />
+                  {{ moment.forward.video.title || moment.forward.fallback }}
+                </strong>
+                <p v-if="moment.forward.video.desc">{{ moment.forward.video.desc }}</p>
+                <small v-if="moment.forward.video.author && moment.forward.video.author.mid !== moment.forward.authorMid">
+                  <span i-tabler-user aria-hidden="true" />{{ moment.forward.video.author.name }}
+                </small>
+                <small class="moment-card__forward-video-stats">
+                  <span v-if="settings.showVideoCardViewCount && moment.forward.video.play"><span i-tabler-player-play aria-hidden="true" />{{ moment.forward.video.play }}</span>
+                  <span v-if="settings.showVideoCardDanmakuCount && moment.forward.video.danmaku"><span i-mingcute:danmaku-line aria-hidden="true" />{{ moment.forward.video.danmaku }}</span>
+                </small>
               </a>
-              <button
-                v-if="settings.showVideoCardWatchLater && getWatchLaterStateKey(moment.forward.video)"
-                type="button"
-                class="moment-card__watch-later"
-                :class="{
-                  'is-added': isWatchLaterAdded(moment.forward.video),
-                  'is-disabled': isWatchLaterLoading(moment.forward.video),
-                }"
-                :disabled="isWatchLaterLoading(moment.forward.video)"
-                :aria-disabled="isWatchLaterLoading(moment.forward.video)"
-                :aria-label="isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
-                :aria-pressed="isWatchLaterAdded(moment.forward.video)"
-                :title="isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
-                @click.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
-              >
-                <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />
-                <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-line-md:confirm aria-hidden="true" />
-                <span v-else i-mingcute:carplay-line aria-hidden="true" />
-              </button>
-            </span>
-            <a
-              :href="moment.forward.video.url || undefined"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="moment-card__forward-video-info"
-              :aria-label="t('moment_card.open_original_video', { title: moment.forward.video.title })"
-              @click.stop="handleForwardVideoClick"
-            >
-              <strong>
-                <VideoWatchedTag
-                  :aid="moment.forward.video.aid"
-                  :bvid="moment.forward.video.bvid"
-                />
-                {{ moment.forward.video.title || moment.forward.fallback }}
-              </strong>
-              <small><span i-tabler-user aria-hidden="true" />{{ moment.forward.author }}</small>
-            </a>
+            </div>
           </div>
           <div
             v-else-if="moment.forward"
@@ -1031,6 +1114,7 @@ onBeforeUnmount(() => {
           >
             <MomentCommentSection
               :moment="moment"
+              @writing-change="commentWriting = $event"
               @open-image-preview="handleCommentImagePreview"
               @interactive-resize="emit('interactiveResize')"
             />
@@ -1044,9 +1128,9 @@ onBeforeUnmount(() => {
             <MomentForwardComposer
               :moment="moment"
               :active="forwardExpanded"
-              :forward-count="displayedForwardCount"
+              :autofocus="forwardFocusRequested"
+              @interaction-change="forwardInteracting = $event"
               @close="closeForwardComposer"
-              @submitted="handleForwardSubmitted"
             />
           </div>
         </div>
@@ -1943,10 +2027,53 @@ onBeforeUnmount(() => {
   text-decoration: underline;
 }
 
+.moment-card__forward-reference {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-3);
+  margin-top: var(--bew-space-3);
+  padding: var(--bew-space-3);
+  background: var(--bew-fill-1);
+  border-radius: var(--bew-card-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
+.moment-card__forward-source {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bew-space-1) var(--bew-space-2);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+
+  > :first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bew-space-2);
+    min-width: 0;
+    color: var(--bew-text-1);
+    font-weight: var(--bew-font-weight-medium);
+  }
+
+  a:hover {
+    color: var(--bew-theme-foreground);
+  }
+
+  img {
+    width: var(--bew-space-6);
+    height: var(--bew-space-6);
+    flex: none;
+    border-radius: 50%;
+    corner-shape: var(--bew-corner-shape-round);
+    object-fit: cover;
+  }
+}
+
 .moment-card__forward-video {
   display: grid;
-  grid-template-columns: minmax(150px, 44%) minmax(0, 1fr);
-  margin-top: var(--bew-space-3);
+  grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
+  margin-top: 0;
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-card-radius);
@@ -1962,8 +2089,7 @@ onBeforeUnmount(() => {
 .moment-card__forward-video:hover,
 .moment-card__forward-video:focus-within {
   border-color: var(--bew-theme-foreground);
-  background: color-mix(in oklab, var(--bew-theme-color) 7%, var(--bew-fill-1));
-  outline: none;
+  background: var(--bew-content-solid);
 }
 
 .moment-card__forward-video-cover {
@@ -1972,7 +2098,7 @@ onBeforeUnmount(() => {
   min-width: 0;
   overflow: hidden;
   aspect-ratio: 16 / 9;
-  background: #111;
+  background: var(--bew-player-canvas);
 }
 
 .moment-card__forward-video-cover-link {
@@ -2110,6 +2236,29 @@ onBeforeUnmount(() => {
   line-height: var(--bew-line-height-title);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
+}
+
+.moment-card__forward-video-info > p,
+.moment-card__forward-source-text {
+  display: -webkit-box;
+  overflow: hidden;
+  margin: 0;
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.moment-card__forward-video-stats {
+  flex-wrap: wrap;
+  gap: var(--bew-space-1) var(--bew-space-3);
+
+  > span {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--bew-space-1);
+  }
 }
 
 .moment-card__forward-video-info small {

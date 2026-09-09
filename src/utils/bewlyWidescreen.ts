@@ -13,7 +13,7 @@ import { setupSidebarInteractionTracking } from '~/utils/bewlyWidescreen/interac
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { createWidescreenLoading } from '~/utils/bewlyWidescreen/loading'
 import { setupActiveWidescreenControl, setupSidebarToggleAutoHide, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
-import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, findMovable, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
+import { classifyWidescreenMutation, disableNativeLightOffMode, findCommentRoot, isReadyForLayout, isWidescreenTransferContentReady, leaveMutuallyExclusivePlayerModes, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, setupPlaylistToggle, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { clearSidebarEdgeRevealSuppression, createRoot, setActiveTab, setSidebarLayout, syncSidebarToggleButton } from '~/utils/bewlyWidescreen/shell'
@@ -24,8 +24,10 @@ import { loadFallbackVideoInfo, renderFallbackVideoInfo, syncSidebarTitle } from
 import { canCommitWidescreenLayout, resolveWidescreenEngagedState, shouldScheduleWidescreenRefresh } from '~/utils/bewlyWidescreenPolicy'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
+import { getPlayerRoot } from '~/utils/playerMedia'
+import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { initVerticalVideoZoom } from '~/utils/verticalVideoZoom'
-import { parseVideoMetadataEvent, VIDEO_COMPONENT_CHANGED } from '~/utils/videoMetadataBridge'
+import { isPgcPlaybackPage, parseVideoMetadataEvent, VIDEO_COMPONENT_CHANGED } from '~/utils/videoMetadataBridge'
 
 export type { ExitBewlyWidescreenOptions } from './bewlyWidescreen/types'
 
@@ -54,6 +56,7 @@ let readinessStableSince: number | undefined
 let waitingForLoad = false
 
 let pendingSidebarPosition: 'left' | 'right' = 'right'
+let pendingApplication: PlayerModeApplication | undefined
 
 let stopLanguageWatch: (() => void) | undefined
 
@@ -311,14 +314,18 @@ function cleanupState(currentState: BewlyWidescreenState) {
 }
 
 function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
-  const player = findMovable(selectors.player)
+  if (pendingApplication && !pendingApplication.shouldApply())
+    return false
+  const player = getPlayerRoot()
   if (!player)
     return false
 
   const { root, stage, playerSlot, playerFrame, danmakuDock, sidebarEl, sidebarTop, metadataSlot, upSlot, toolbarSlot, descriptionSlot, tagsSlot, panels, tabButtons, playlistToggleButton, sidebarResizer, sidebarToggleButton } = createRoot(sidebarPosition)
   const styleEl = injectLayoutStyle()
+  root.dataset.pageKind = isPgcPlaybackPage() ? 'pgc' : 'video'
   const movedNodes: MovedNode[] = []
 
+  const application = pendingApplication
   const nextState: BewlyWidescreenState = {
     exit: exitBewlyWidescreen,
     refreshSidebar: () => scheduleSidebarRefresh(nextState),
@@ -358,10 +365,13 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
     onInitialLayoutReady: () => {
       loading.alignToCurrentLayout()
       loading.remove()
+      if (session.current === nextState && !nextState.navigationPending)
+        application?.onApplied()
     },
   }
 
   session.current = nextState
+  pendingApplication = undefined
   session.entering = false
   syncNativePlayerControlVisibility(nextState)
   document.body.classList.add(BODY_CLASS)
@@ -465,6 +475,10 @@ function waitForReadyLayout() {
   waitingForLoad = !pageReadyForLayout
 
   const tryCommitLayout = () => {
+    if (pendingApplication && !pendingApplication.shouldApply()) {
+      exitBewlyWidescreen()
+      return true
+    }
     if (session.current) {
       clearReadyWait({ preserveCommentPrewarm: true })
       return true
@@ -497,6 +511,10 @@ function waitForReadyLayout() {
       readyFrame = undefined
       if (session.current) {
         clearReadyWait()
+        return
+      }
+      if (pendingApplication && !pendingApplication.shouldApply()) {
+        exitBewlyWidescreen()
         return
       }
       startCommentPrewarm()
@@ -551,12 +569,16 @@ function waitForReadyLayout() {
 export function applyBewlyWidescreen(
   sidebarPosition: 'left' | 'right' = 'right',
   showLoading = true,
+  application?: PlayerModeApplication,
 ) {
+  if (application && !application.shouldApply())
+    return
   startWidescreenLanguageWatch()
   if (session.current || session.entering || waitingForLoad || readyObserver || readyFrame !== undefined)
     return
 
   session.entering = true
+  pendingApplication = application
   leaveMutuallyExclusivePlayerModes()
   pendingSidebarPosition = sidebarPosition
   if (showLoading)
@@ -605,6 +627,7 @@ export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescre
   clearReadyWait()
   clearPageReadyHandler()
   loading.reset()
+  pendingApplication = undefined
   waitingForLoad = false
   session.entering = false
 
@@ -618,6 +641,14 @@ export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescre
 
 export function isBewlyWidescreenActive() {
   return !!session.current
+}
+
+export function isBewlyPlaybackLayoutReady() {
+  return !!session.current?.controlsLayoutReady && !session.current.navigationPending
+}
+
+export function isBewlyPlaybackNavigationPending() {
+  return session.current?.navigationPending === true
 }
 
 export function isBewlyWidescreenEngaged() {

@@ -11,7 +11,7 @@ import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
-import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
+import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import { useForYouStore } from '~/stores/forYouStore'
 import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
@@ -20,6 +20,7 @@ import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 
+import RecommendationModeSwitcher from './components/RecommendationModeSwitcher.vue'
 import VersionReminder from './components/VersionReminder.vue'
 import type { GridLayoutIcon } from './types'
 import { HomeSubPage } from './types'
@@ -115,7 +116,9 @@ const currentTabs = ref<HomeTab[]>([])
 const tabPageRef = ref()
 const topBarVisibility = ref<boolean>(true)
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
-const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher)
+const recommendationSwitcherEnabled = useLayoutEditSettingValue('page.home.recommendationSwitcher', () => settings.value.showRecommendationModeSwitcher)
+const shouldShowRecommendationModeSwitcher = computed(() => activatedPage.value === HomeSubPage.ForYou && (recommendationSwitcherEnabled.value || isLayoutEditing.value))
+const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher || shouldShowRecommendationModeSwitcher.value)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
   return [
     { icon: 'mingcute:table-3-line', iconActivated: 'mingcute:table-3-fill', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
@@ -350,6 +353,7 @@ function toggleTabContentLoading(loading: boolean) {
         class="home-header"
         :class="{
           'home-header-fixed': settings.fixedHomeTabsOnHomePage,
+          'home-header--recommendation-switcher': shouldShowRecommendationModeSwitcher,
         }"
         w-full z-9
       >
@@ -370,6 +374,7 @@ function toggleTabContentLoading(loading: boolean) {
               />
               <button
                 v-for="tab in currentTabs" :key="tab.page"
+                type="button" :aria-pressed="activatedPage === tab.page"
                 class="home-tab-button bew-segment-control__item bew-segment-control__item--wide"
                 data-segment-item
                 :data-active="activatedPage === tab.page ? 'true' : undefined"
@@ -382,34 +387,37 @@ function toggleTabContentLoading(loading: boolean) {
           </div>
         </section>
 
-        <div
-          v-if="settings.enableGridLayoutSwitcher"
-          v-layout-editable="'home-grid-switcher'"
-          class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
-          data-layout-editable-id="home-grid-switcher"
-          flex="~ shrink-0 items-center"
-          box-border
-        >
-          <LiquidSegmentIndicator
-            ref="gridIndicatorRef"
-            :active-key="homeGridLayout"
-          />
-          <button
-            v-for="icon in gridLayoutIcons" :key="icon.value"
-            type="button"
-            class="home-grid-layout-item bew-segment-control__item bew-segment-control__item--icon"
-            data-segment-item
-            :data-active="homeGridLayout === icon.value ? 'true' : undefined"
-            :aria-pressed="homeGridLayout === icon.value"
-            :title="$t(icon.labelKey)"
-            @click="gridLayout.home = icon.value"
+        <div class="home-header-actions">
+          <RecommendationModeSwitcher v-if="shouldShowRecommendationModeSwitcher" class="home-control-surface" />
+          <div
+            v-if="settings.enableGridLayoutSwitcher"
+            v-layout-editable="'home-grid-switcher'"
+            class="home-control-surface home-grid-layout-switcher bew-segment-control bew-segment-control--surface"
+            data-layout-editable-id="home-grid-switcher"
+            flex="~ shrink-0 items-center"
+            box-border
           >
-            <Icon
-              class="home-grid-layout-item__icon bew-segment-control__icon"
-              :icon="homeGridLayout === icon.value ? icon.iconActivated : icon.icon"
-              aria-hidden="true"
+            <LiquidSegmentIndicator
+              ref="gridIndicatorRef"
+              :active-key="homeGridLayout"
             />
-          </button>
+            <button
+              v-for="icon in gridLayoutIcons" :key="icon.value"
+              type="button"
+              class="home-grid-layout-item bew-segment-control__item bew-segment-control__item--icon"
+              data-segment-item
+              :data-active="homeGridLayout === icon.value ? 'true' : undefined"
+              :aria-pressed="homeGridLayout === icon.value"
+              :title="$t(icon.labelKey)"
+              @click="gridLayout.home = icon.value"
+            >
+              <Icon
+                class="home-grid-layout-item__icon bew-segment-control__icon"
+                :icon="homeGridLayout === icon.value ? icon.iconActivated : icon.icon"
+                aria-hidden="true"
+              />
+            </button>
+          </div>
         </div>
       </header>
 
@@ -532,9 +540,28 @@ function toggleTabContentLoading(loading: boolean) {
   justify-self: start;
 }
 
-.home-grid-layout-switcher {
+.home-header-actions {
   grid-column: 2;
   justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: var(--bew-space-4);
+  max-width: 100%;
+  margin-inline-start: auto;
+  > .bew-segment-control {
+    flex: none;
+  }
+}
+
+.home-header--recommendation-switcher {
+  display: flex;
+  flex-wrap: wrap;
+  .home-tabs-panel {
+    min-width: min(100%, 24rem);
+    flex: 0 1 auto;
+  }
 }
 
 .home-grid-layout-item {

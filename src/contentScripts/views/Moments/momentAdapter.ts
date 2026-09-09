@@ -340,6 +340,7 @@ export function createMomentAdapter(
       duration: archive.duration_text || '',
       aid: archive.aid || undefined,
       bvid: archive.bvid || undefined,
+      cid: Number(archive.cid) || undefined,
       epid: major.pgc?.epid || undefined,
       videoUrl: archive.jump_url ? httpsUrl(archive.jump_url.startsWith('//') ? `https:${archive.jump_url}` : archive.jump_url) : undefined,
       videoPlay: pickText(archive.stat?.play),
@@ -387,11 +388,22 @@ export function createMomentAdapter(
     const isForward = raw.type === 'DYNAMIC_TYPE_FORWARD' && raw.orig
     const contentRaw = isForward ? raw.orig : raw
     const content = getMomentContent(contentRaw)
-    // 转发内嵌视频：archive / 合集订阅 ugc_season 均可作为摘要来源
-    const forwardedMajor = isForward
-      ? contentRaw.modules?.module_dynamic?.major
-      : undefined
+    // Keep the immediate quoted author separate from the video at the end of a
+    // forward chain. Never relabel a re-poster as the video's uploader.
+    let forwardedVideoSource = isForward ? contentRaw : undefined
+    const visitedForwards = new Set()
+    while (forwardedVideoSource?.type === 'DYNAMIC_TYPE_FORWARD') {
+      if (visitedForwards.has(forwardedVideoSource)) {
+        forwardedVideoSource = undefined
+        break
+      }
+      visitedForwards.add(forwardedVideoSource)
+      forwardedVideoSource = forwardedVideoSource.orig
+    }
+    const forwardedMajor = forwardedVideoSource?.modules?.module_dynamic?.major
     const forwardedArchive = forwardedMajor?.archive || forwardedMajor?.ugc_season
+    const forwardedVideoContent = forwardedArchive ? getMomentContent(forwardedVideoSource) : undefined
+    const videoAuthor = forwardedVideoSource?.modules?.module_author
     // 转发时作者侧也可能挂充电角标
     const selfContent = isForward ? getMomentContent(raw) : content
     const forwardedAuthor = contentRaw.modules?.module_author || {}
@@ -494,6 +506,7 @@ export function createMomentAdapter(
       videoDanmaku: content.videoDanmaku,
       aid: content.aid,
       bvid: content.bvid,
+      cid: content.cid,
       videoUrl: content.videoUrl,
       additional,
       forward: isForward
@@ -503,6 +516,8 @@ export function createMomentAdapter(
             authorMid: String(forwardedAuthor.mid || ''),
             isArticle: forwardedIsArticle,
             author: forwardedAuthor.name || t('moments.original_author'),
+            authorFace: httpsUrl(forwardedAuthor.face || ''),
+            authorAction: forwardedAuthor.pub_action || (contentRaw.type === 'DYNAMIC_TYPE_FORWARD' ? t('moments.forwarded_moment') : ''),
             title: content.title,
             text: content.text,
             fallback: content.isChargeExclusive
@@ -523,21 +538,26 @@ export function createMomentAdapter(
             imageRatios: !content.isVideo && !content.isLive && !content.isChargeExclusive
               ? content.imageRatios
               : [],
-            video: forwardedArchive
+            video: forwardedArchive && forwardedVideoContent
               ? {
-                  title: pickText(forwardedArchive.title, content.title),
-                  cover: httpsUrl(forwardedArchive.cover || content.images[0] || ''),
-                  duration: pickText(forwardedArchive.duration_text, content.duration),
-                  play: pickText(forwardedArchive.stat?.play, content.videoPlay),
-                  danmaku: pickText(forwardedArchive.stat?.danmaku, content.videoDanmaku),
-                  url: content.videoUrl
-                    || (content.bvid
-                      ? `https://www.bilibili.com/video/${content.bvid}`
-                      : content.aid
-                        ? `https://www.bilibili.com/video/av${content.aid}`
+                  title: pickText(forwardedArchive.title, forwardedVideoContent.title),
+                  desc: pickText(forwardedArchive.desc),
+                  author: forwardedVideoSource.type === 'DYNAMIC_TYPE_AV' && videoAuthor?.mid
+                    ? { mid: String(videoAuthor.mid), name: videoAuthor.name || '', face: httpsUrl(videoAuthor.face || '') }
+                    : undefined,
+                  cover: httpsUrl(forwardedArchive.cover || forwardedVideoContent.images[0] || ''),
+                  duration: pickText(forwardedArchive.duration_text, forwardedVideoContent.duration),
+                  play: pickText(forwardedArchive.stat?.play, forwardedVideoContent.videoPlay),
+                  danmaku: pickText(forwardedArchive.stat?.danmaku, forwardedVideoContent.videoDanmaku),
+                  url: forwardedVideoContent.videoUrl
+                    || (forwardedVideoContent.bvid
+                      ? `https://www.bilibili.com/video/${forwardedVideoContent.bvid}`
+                      : forwardedVideoContent.aid
+                        ? `https://www.bilibili.com/video/av${forwardedVideoContent.aid}`
                         : ''),
-                  aid: content.aid,
-                  bvid: content.bvid,
+                  aid: forwardedVideoContent.aid,
+                  bvid: forwardedVideoContent.bvid,
+                  cid: forwardedVideoContent.cid,
                 }
               : undefined,
           }

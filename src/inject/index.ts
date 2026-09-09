@@ -1,13 +1,17 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
+import { clearMissingCommentParents, isMissingCommentParentMutationNode, MISSING_COMMENT_PARENT_CSS, MISSING_COMMENT_PARENT_SELECTOR, syncMissingCommentParents } from '~/inject/commentMissingParents'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { patchCommentTransferLifecycle } from '~/utils/commentDomTransfer'
+import type { CommentReplyCachedMeta as CommentReplyTreeCachedMeta } from '~/utils/commentMissingParents'
+import { resolveMissingCommentParents } from '~/utils/commentMissingParents'
+import { buildCommentTree } from '~/utils/commentTree'
 import { buildCommentBranchPath } from '~/utils/commentTreeGeometry'
-import { isElectron } from '~/utils/main'
+import { getUserID, isElectron } from '~/utils/main'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
 
@@ -151,16 +155,6 @@ else if (shouldInitializePageScript) {
   const WIDESCREEN_COMMENT_EMOJI_OPEN_ATTRIBUTE = 'data-bewly-comment-emoji-open'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
 
-  /** 楼中楼已见过的回复关系（跨分页保留，用于父节点不在当前页时回溯挂载） */
-  interface CommentReplyTreeCachedMeta {
-    authorName: string | null
-    ctime: number | null
-    /** 纯文本正文（已去掉「回复 @」前缀），用于离页父评引用 */
-    messageText: string | null
-    parentRpid: string | null
-    rootRpid: string | null
-  }
-
   interface CommentReplyTreeState {
     collapsedNodeKeys: Set<string>
     /** 收起某条评论之后的全部同级评论（及子树） */
@@ -178,7 +172,7 @@ else if (shouldInitializePageScript) {
     enabled: boolean
     nextOriginalOrder: number
     originalOrderByRenderer: WeakMap<HTMLElement, number>
-    observedTargetsKey?: string
+    observedTargets?: Set<HTMLElement>
     resizeObserver?: ResizeObserver
     observedReplyContainer?: HTMLElement
     replyContainerMutationObserver?: MutationObserver
@@ -210,6 +204,7 @@ else if (shouldInitializePageScript) {
     parentRpid: string | null
     rootRpid: string | null
     ctime: number | null
+    sortTime?: number | null
     originalOrder: number
     children: CommentReplyTreeNode[]
     /**
@@ -217,10 +212,6 @@ else if (shouldInitializePageScript) {
      * 为 false 时视觉上挂在最近可见祖先下，需保留「回复 @真实父作者」提示。
      */
     directParentVisible: boolean
-    /** 直接父回复作者（当前页或跨页缓存） */
-    directParentAuthorName: string | null
-    /** 直接父回复正文摘要（跨页缓存） */
-    directParentMessageText: string | null
   }
 
   const COMMENT_REPLY_TREE_GUIDES_CSS = `
@@ -388,6 +379,7 @@ else if (shouldInitializePageScript) {
     'bili-comment-replies-renderer': {
       id: 'bewly-comment-replies-style',
       css: `
+        ${MISSING_COMMENT_PARENT_CSS}
         #spinner {
           position: relative !important;
           inset: auto !important;
@@ -417,7 +409,7 @@ else if (shouldInitializePageScript) {
           flex-direction: column;
         }
 
-        :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer)[data-bewly-comment-reply-depth] {
+        :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer, ${MISSING_COMMENT_PARENT_SELECTOR})[data-bewly-comment-reply-depth] {
           box-sizing: border-box;
           display: block;
           order: var(--bew-comment-reply-order, 0);
@@ -425,7 +417,7 @@ else if (shouldInitializePageScript) {
           width: 100%;
         }
 
-        :host([data-bewly-comment-reply-tree]) #expander-contents > :not(:is(bili-comment-reply-renderer, bili-comment-renderer)) {
+        :host([data-bewly-comment-reply-tree]) #expander-contents > :not(:is(bili-comment-reply-renderer, bili-comment-renderer, ${MISSING_COMMENT_PARENT_SELECTOR})) {
           order: 2147483647;
         }
 
@@ -473,11 +465,11 @@ else if (shouldInitializePageScript) {
           }
         }
 
-        :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer)[data-bewly-comment-reply-hidden] {
+        :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer, ${MISSING_COMMENT_PARENT_SELECTOR})[data-bewly-comment-reply-hidden] {
           display: none !important;
         }
 
-        :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer)[data-bewly-comment-reply-collapsed] {
+        :host([data-bewly-comment-reply-tree]) #expander-contents > :is(bili-comment-reply-renderer, bili-comment-renderer, ${MISSING_COMMENT_PARENT_SELECTOR})[data-bewly-comment-reply-collapsed] {
           box-sizing: border-box;
           height: var(--bew-space-6, 24px) !important;
           min-height: var(--bew-space-6, 24px) !important;
@@ -876,39 +868,6 @@ else if (shouldInitializePageScript) {
     'cmn-CN': { collapse: '收起后续同级评论', expand: '展开后续同级评论' },
   }
 
-  /** 父回复不在本页时的标题文案 */
-  const COMMENT_REPLY_OFFPAGE_PARENT_LABELS: Record<string, (name: string) => string> = {
-    en: name => `Reply to @${name} · not on this page`,
-    'cmn-TW': name => `回覆 @${name} · 不在本頁`,
-    jyut: name => `回覆 @${name} · 唔喺呢一頁`,
-    'cmn-CN': name => `回复 @${name} · 不在本页`,
-  }
-
-  /** 离页父评引用块最大展示字数 */
-  const COMMENT_REPLY_OFFPAGE_PARENT_SNIPPET_MAX = 96
-
-  function getCommentReplyOffpageParentLabel(authorName: string): string {
-    const language = currentSettings?.language || 'cmn-CN'
-    const formatter = COMMENT_REPLY_OFFPAGE_PARENT_LABELS[language]
-      ?? COMMENT_REPLY_OFFPAGE_PARENT_LABELS['cmn-CN']
-    return formatter(authorName)
-  }
-
-  /** 从子回复正文「回复 @xxx」前缀解析被回复者昵称（父评未缓存时的回退） */
-  function getReplyAtAuthorFromMessage(replyItem: any): string | null {
-    const raw = typeof replyItem?.content?.message === 'string'
-      ? replyItem.content.message
-      : typeof replyItem?.message === 'string'
-        ? replyItem.message
-        : null
-    if (!raw)
-      return null
-    // 用单一 \s+ 避免 \s*@?\s* 回溯；@ 可选，捕获昵称
-    const match = raw.match(/^(?:回复|回覆|Reply(?:\s+to)?)\s+@?([^\s:：]+)/iu)
-    const name = match?.[1]?.trim()
-    return name || null
-  }
-
   /** 去掉「回复 @xxx :」前缀并压空白，供缓存与引用展示 */
   function normalizeReplyMessageText(text: string | null | undefined): string | null {
     if (typeof text !== 'string')
@@ -945,15 +904,6 @@ else if (shouldInitializePageScript) {
     if (!b)
       return a
     return b.length > a.length ? b : a
-  }
-
-  function truncateReplyMessageSnippet(
-    text: string,
-    maxLen = COMMENT_REPLY_OFFPAGE_PARENT_SNIPPET_MAX,
-  ): string {
-    if (text.length <= maxLen)
-      return text
-    return `${text.slice(0, maxLen).trimEnd()}…`
   }
 
   function getCommentRendererMessageText(renderer: HTMLElement): string | null {
@@ -1120,7 +1070,7 @@ else if (shouldInitializePageScript) {
       ?? getReplyRpid(data)
       ?? ''
     const oid = component?.oid ?? getReplyOid(data) ?? ''
-    return `${String(oid)}:${String(rootRpid)}`
+    return `${getUserID() ?? 'guest'}:${String(oid)}:${String(rootRpid)}`
   }
 
   function getCommentReplyTreeState(component: any): CommentReplyTreeState {
@@ -1144,29 +1094,24 @@ else if (shouldInitializePageScript) {
       }
       commentReplyTreeStates.set(component, state)
     }
-    else {
-      if (!state.collapsedTailKeys)
-        state.collapsedTailKeys = new Set()
-      if (!state.branchToggleOffsetByKey)
-        state.branchToggleOffsetByKey = new Map()
-      if (!state.tailToggleOffsetByKey)
-        state.tailToggleOffsetByKey = new Map()
-      if (!state.replyMetaByRpid)
-        state.replyMetaByRpid = new Map()
-    }
     return state
   }
 
   function clearCommentReplyTreeState(component: any) {
     commentReplyTreeEpochs.set(component, (commentReplyTreeEpochs.get(component) ?? 0) + 1)
     const state = commentReplyTreeStates.get(component)
-    if (state)
+    if (state) {
       disconnectCommentReplyTreeResizeObserver(state)
+      state.replyMetaByRpid.clear()
+      state.collapsedNodeKeys.clear()
+      state.collapsedTailKeys.clear()
+    }
 
     if (component instanceof HTMLElement) {
       const replyContainer = component.shadowRoot?.querySelector<HTMLElement>('#expander-contents')
       if (replyContainer) {
         removeCommentReplyTreeGuides(component, replyContainer)
+        clearMissingCommentParents(replyContainer)
         Array.from(replyContainer.children)
           .filter(isCommentReplyRenderer)
           .forEach((renderer) => {
@@ -1176,7 +1121,6 @@ else if (shouldInitializePageScript) {
             renderer.style.removeProperty('--bew-comment-reply-indent')
             renderer.style.removeProperty('--bew-comment-reply-order')
             setCommentReplyAtPrefixHidden(renderer, false)
-            clearCommentReplyOffpageParentLabel(renderer)
           })
       }
       getCommentReplyTreeRootRenderer(component)?.removeAttribute('data-bewly-comment-reply-collapsed')
@@ -1226,119 +1170,10 @@ else if (shouldInitializePageScript) {
     return next
   }
 
-  interface CommentReplyTreeParentResolve {
-    /** 用于缩进/引导线的最近可见祖先；undefined 表示挂在楼中楼根下 */
-    visualParent: CommentReplyTreeNode | undefined
-    /** 直接 parent 是否在当前页 */
-    directParentVisible: boolean
-    /** 直接父回复作者（用于跨页时展示「回复了谁」） */
-    directParentAuthorName: string | null
-    /** 直接父回复正文（跨页缓存摘要） */
-    directParentMessageText: string | null
-  }
-
-  /**
-   * 在当前可见节点中解析父节点：直接 parent 不在页内时，
-   * 沿 replyMetaByRpid 向上找最近仍在 DOM 的祖先。
-   * 同时记录真实直接父是否在本页，供 UI 保留「回复 @xxx」。
-   */
-  function resolveCommentReplyTreeParentNode(
-    node: CommentReplyTreeNode,
-    nodeByRpid: Map<string, CommentReplyTreeNode>,
-    metaByRpid: Map<string, CommentReplyTreeCachedMeta>,
-  ): CommentReplyTreeParentResolve {
-    const directParentRpid = node.parentRpid
-    if (!directParentRpid || isCommentReplyTreeRootParent(directParentRpid, node.rootRpid, node.rpid)) {
-      return {
-        visualParent: undefined,
-        directParentVisible: true,
-        directParentAuthorName: null,
-        directParentMessageText: null,
-      }
-    }
-
-    const directInDom = nodeByRpid.get(directParentRpid)
-    const directMeta = metaByRpid.get(directParentRpid)
-    const directParentAuthorName = (
-      directInDom?.authorName
-      ?? directMeta?.authorName
-      ?? null
-    )
-    const directParentMessageText = (
-      directMeta?.messageText
-      ?? null
-    )
-
-    if (directInDom && directInDom !== node) {
-      return {
-        visualParent: directInDom,
-        directParentVisible: true,
-        directParentAuthorName,
-        directParentMessageText,
-      }
-    }
-
-    // 直接父不在本页：沿缓存向上找最近可见祖先
-    let parentRpid: string | null = directMeta?.parentRpid ?? null
-    if (!node.rootRpid && directMeta?.rootRpid)
-      node.rootRpid = directMeta.rootRpid
-
-    const seen = new Set<string>([directParentRpid])
-    if (node.rpid)
-      seen.add(node.rpid)
-
-    while (parentRpid) {
-      if (seen.has(parentRpid))
-        break
-      seen.add(parentRpid)
-
-      if (isCommentReplyTreeRootParent(parentRpid, node.rootRpid, node.rpid)) {
-        return {
-          visualParent: undefined,
-          directParentVisible: false,
-          directParentAuthorName,
-          directParentMessageText,
-        }
-      }
-
-      const parentNode = nodeByRpid.get(parentRpid)
-      if (parentNode && parentNode !== node) {
-        return {
-          visualParent: parentNode,
-          directParentVisible: false,
-          directParentAuthorName,
-          directParentMessageText,
-        }
-      }
-
-      const cachedParent = metaByRpid.get(parentRpid)
-      if (!cachedParent) {
-        return {
-          visualParent: undefined,
-          directParentVisible: false,
-          directParentAuthorName,
-          directParentMessageText,
-        }
-      }
-
-      if (!node.rootRpid && cachedParent.rootRpid)
-        node.rootRpid = cachedParent.rootRpid
-
-      parentRpid = cachedParent.parentRpid
-    }
-
-    return {
-      visualParent: undefined,
-      directParentVisible: false,
-      directParentAuthorName,
-      directParentMessageText,
-    }
-  }
-
   function disconnectCommentReplyTreeResizeObserver(state: CommentReplyTreeState) {
     state.resizeObserver?.disconnect()
     state.resizeObserver = undefined
-    state.observedTargetsKey = undefined
+    state.observedTargets = undefined
     state.replyContainerMutationObserver?.disconnect()
     state.replyContainerMutationObserver = undefined
     state.observedReplyContainer = undefined
@@ -1361,11 +1196,14 @@ else if (shouldInitializePageScript) {
       return
 
     const treeEpoch = commentReplyTreeEpochs.get(component) ?? 0
+    const identity = getCommentReplyTreeIdentity(component)
     pendingCommentReplyTreeLayoutUpdates.add(component)
     requestAnimationFrame(() => {
       pendingCommentReplyTreeLayoutUpdates.delete(component)
-      if (!component?.isConnected || (commentReplyTreeEpochs.get(component) ?? 0) !== treeEpoch)
+      if (!component?.isConnected || (commentReplyTreeEpochs.get(component) ?? 0) !== treeEpoch
+        || identity !== getCommentReplyTreeIdentity(component)) {
         return
+      }
       updateCommentReplyTree(component)
     })
   }
@@ -1387,6 +1225,7 @@ else if (shouldInitializePageScript) {
     addTarget(threadHost)
     addTarget(mainRenderer)
     addTarget(component)
+    replyContainer.querySelectorAll(MISSING_COMMENT_PARENT_SELECTOR).forEach(addTarget)
 
     // 主评论图片和正文可能分别位于多层 shadow root；只观察外层 renderer
     // 在某些布局下无法捕获内部图片高度变化，导致回复坐标仍停留在旧位置。
@@ -1404,11 +1243,10 @@ else if (shouldInitializePageScript) {
       collectNestedLayoutTargets(component.shadowRoot)
 
     const targetList = [...targets]
-    const targetsKey = targetList.map(el => `${el.localName}#${el.id || ''}`).join('|')
-
-    if (state.observedTargetsKey !== targetsKey || !state.resizeObserver) {
+    if (!state.resizeObserver || state.observedTargets?.size !== targets.size
+      || targetList.some(target => !state.observedTargets?.has(target))) {
       disconnectCommentReplyTreeResizeObserver(state)
-      state.observedTargetsKey = targetsKey
+      state.observedTargets = targets
       state.resizeObserver = new ResizeObserver(() => {
         if (!component?.isConnected) {
           disconnectCommentReplyTreeResizeObserver(state)
@@ -1433,10 +1271,12 @@ else if (shouldInitializePageScript) {
         const isTreeGuideNode = (node: Node) => (
           node instanceof Element
           && (node.id === COMMENT_REPLY_TREE_GUIDES_ID
+            || isMissingCommentParentMutationNode(node)
             || Boolean(node.closest(`#${COMMENT_REPLY_TREE_GUIDES_ID}`)))
         )
         const hasExternalChildListMutation = mutations.some(({ target, addedNodes, removedNodes }) => {
           if (target instanceof Element && (target.id === COMMENT_REPLY_TREE_GUIDES_ID
+            || isMissingCommentParentMutationNode(target)
             || target.closest(`#${COMMENT_REPLY_TREE_GUIDES_ID}`))) {
             return false
           }
@@ -1497,16 +1337,6 @@ else if (shouldInitializePageScript) {
 
     const numericCtime = Number(ctime)
     return Number.isFinite(numericCtime) ? numericCtime : null
-  }
-
-  function compareCommentReplyTreeNodes(a: CommentReplyTreeNode, b: CommentReplyTreeNode): number {
-    if (a.ctime !== null && b.ctime !== null && a.ctime !== b.ctime)
-      return a.ctime - b.ctime
-    if (a.ctime !== null && b.ctime === null)
-      return -1
-    if (a.ctime === null && b.ctime !== null)
-      return 1
-    return a.originalOrder - b.originalOrder
   }
 
   function getCommentReplyIndent(depth: number): string {
@@ -1594,6 +1424,7 @@ else if (shouldInitializePageScript) {
   }
 
   const commentReplyPagination = createCommentReplyPaginationController({
+    getAccountId: () => String(getUserID() ?? 'guest'),
     getData: getCommentReplyData,
     getLabels: getCommentReplyPaginationLabels,
     getMode: () => currentSettings?.commentReplyPaginationMode === 'pagination' ? 'pagination' : 'loadMore',
@@ -1646,6 +1477,7 @@ else if (shouldInitializePageScript) {
   ): CommentReplyAvatarAnchor | null {
     const avatar = renderer.shadowRoot?.querySelector<HTMLElement>('#user-avatar')
       ?? renderer.shadowRoot?.querySelector<HTMLElement>('bili-avatar')
+      ?? renderer.querySelector<HTMLElement>('.bewly-comment-missing-parent__avatar')
     const avatarRect = avatar?.getBoundingClientRect()
     const hasValidAvatar = Boolean(avatarRect && avatarRect.width > 0 && avatarRect.height > 0)
 
@@ -2658,271 +2490,28 @@ else if (shouldInitializePageScript) {
       disconnectCommentReplyAtPrefixObserver(renderer)
   }
 
-  const COMMENT_REPLY_OFFPAGE_PARENT_ID = 'bewly-reply-offpage-parent'
-  const COMMENT_REPLY_OFFPAGE_PARENT_STYLE_ID = 'bewly-reply-offpage-parent-style'
-  const COMMENT_REPLY_OFFPAGE_PARENT_CSS = `
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID} {
-      display: block;
-      box-sizing: border-box;
-      margin: 0 0 var(--bew-space-2, 8px);
-      padding: 0;
-      border: none;
-      background: transparent;
-      font-size: var(--bew-font-size-caption, 12px);
-      line-height: var(--bew-line-height-caption, 16px);
-      color: var(--bew-text-3, var(--text3, #9499a0));
-    }
-
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID} .bewly-reply-offpage-parent__head {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: center;
-      gap: var(--bew-space-1, 4px) var(--bew-space-2, 8px);
-      margin: 0;
-      font-weight: var(--bew-font-weight-regular, 400);
-      color: var(--bew-text-3, var(--text3, #9499a0));
-    }
-
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID} .bewly-reply-offpage-parent__reply-word {
-      flex: 0 0 auto;
-    }
-
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID} .bewly-reply-offpage-parent__at {
-      flex: 0 1 auto;
-      color: var(--bew-theme-color, #00a1d6);
-      font-weight: var(--bew-font-weight-medium, 500);
-      word-break: break-all;
-    }
-
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID} .bewly-reply-offpage-parent__badge {
-      flex: 0 0 auto;
-      padding: 0 var(--bew-space-1, 4px);
-      border-radius: var(--bew-badge-radius, 9999px);
-      border: 1px solid var(--bew-text-3, var(--text3, #9499a0));
-      background: transparent;
-      font-size: 11px;
-      line-height: 16px;
-      font-weight: var(--bew-font-weight-regular, 400);
-      color: var(--bew-text-3, var(--text3, #9499a0));
-    }
-
-    /* 有正文缓存：仅文字下方浅色虚线，不拉满整行 */
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID} .bewly-reply-offpage-parent__quote {
-      display: -webkit-box;
-      -webkit-box-orient: vertical;
-      -webkit-line-clamp: 2;
-      margin: var(--bew-space-1, 4px) 0 0;
-      padding: 0;
-      border: none;
-      background: transparent;
-      overflow: hidden;
-      font-weight: var(--bew-font-weight-regular, 400);
-      color: var(--bew-text-3, var(--text3, #9499a0));
-      word-break: break-word;
-      text-decoration: underline;
-      text-decoration-style: dashed;
-      text-decoration-thickness: 1px;
-      text-underline-offset: 3px;
-      text-decoration-color: color-mix(in srgb, var(--bew-text-3, #9499a0) 45%, transparent);
-    }
-
-    #${COMMENT_REPLY_OFFPAGE_PARENT_ID}[data-mode="compact"] .bewly-reply-offpage-parent__quote {
-      display: none;
-    }
-  `
-
-  type CommentReplyOffpageParentMode = 'quote' | 'compact'
-
-  /**
-   * 直接父回复不在本页时的标注：
-   * - 有正文缓存 → quote：带样式引用原正文
-   * - 无正文但有父 rpid → compact：回复 + @昵称 + 不在本页
-   * 父在本页时移除标注。
-   */
-  function updateCommentReplyOffpageParentLabel(
-    renderer: HTMLElement,
-    options: {
-      authorName: string | null
-      messageText: string | null
-      parentRpid: string | null
-      show: boolean
-    },
-  ) {
-    const { authorName, messageText, parentRpid, show } = options
-    const root = renderer.shadowRoot
-    const fullQuote = messageText?.trim() || ''
-    const mode: CommentReplyOffpageParentMode | null = !show
-      ? null
-      : fullQuote
-        ? 'quote'
-        : parentRpid
-          ? 'compact'
-          : null
-
-    if (!root) {
-      if (!mode) {
-        delete renderer.dataset.bewlyParentOffpage
-        delete renderer.dataset.bewlyParentAuthor
-        delete renderer.dataset.bewlyParentRpid
-      }
-      return
-    }
-
-    let label = root.querySelector<HTMLElement>(`#${COMMENT_REPLY_OFFPAGE_PARENT_ID}`)
-
-    if (!mode) {
-      label?.remove()
-      delete renderer.dataset.bewlyParentOffpage
-      delete renderer.dataset.bewlyParentAuthor
-      delete renderer.dataset.bewlyParentRpid
-      return
-    }
-
-    renderer.dataset.bewlyParentOffpage = mode
-    if (authorName)
-      renderer.dataset.bewlyParentAuthor = authorName
-    else
-      delete renderer.dataset.bewlyParentAuthor
-    if (parentRpid)
-      renderer.dataset.bewlyParentRpid = parentRpid
-    else
-      delete renderer.dataset.bewlyParentRpid
-
-    ensureCommentShadowStyle(root, COMMENT_REPLY_OFFPAGE_PARENT_STYLE_ID, COMMENT_REPLY_OFFPAGE_PARENT_CSS)
-
-    if (!label) {
-      label = document.createElement('div')
-      label.id = COMMENT_REPLY_OFFPAGE_PARENT_ID
-      label.innerHTML = [
-        '<div class="bewly-reply-offpage-parent__head">',
-        '<span class="bewly-reply-offpage-parent__reply-word"></span>',
-        '<span class="bewly-reply-offpage-parent__at"></span>',
-        '<span class="bewly-reply-offpage-parent__badge"></span>',
-        '</div>',
-        '<div class="bewly-reply-offpage-parent__quote"></div>',
-      ].join('')
-      const richText = root.querySelector('bili-rich-text')
-      const body = root.querySelector('#body') ?? root.querySelector('#main')
-      if (richText?.parentElement)
-        richText.parentElement.insertBefore(label, richText)
-      else if (body)
-        body.insertAdjacentElement('afterbegin', label)
-      else
-        root.appendChild(label)
-    }
-
-    label.dataset.mode = mode
-
-    const language = currentSettings?.language || 'cmn-CN'
-    const replyWord = language === 'en'
-      ? 'Reply to'
-      : (language === 'cmn-TW' || language === 'jyut')
-          ? '回覆'
-          : '回复'
-    const badgeText = language === 'en'
-      ? 'off-page'
-      : language === 'cmn-TW'
-        ? '不在本頁'
-        : language === 'jyut'
-          ? '唔喺呢頁'
-          : '不在本页'
-    // compact 无昵称时仍展示 @ 占位，避免只剩「回复 / 不在本页」语义不清
-    const atText = authorName ? `@${authorName}` : '@…'
-
-    const replyWordEl = label.querySelector<HTMLElement>('.bewly-reply-offpage-parent__reply-word')
-    const atEl = label.querySelector<HTMLElement>('.bewly-reply-offpage-parent__at')
-    const badgeEl = label.querySelector<HTMLElement>('.bewly-reply-offpage-parent__badge')
-    const quoteEl = label.querySelector<HTMLElement>('.bewly-reply-offpage-parent__quote')
-
-    if (replyWordEl)
-      replyWordEl.textContent = replyWord
-    if (atEl)
-      atEl.textContent = atText
-    if (badgeEl)
-      badgeEl.textContent = badgeText
-
-    if (quoteEl) {
-      if (mode === 'quote') {
-        quoteEl.textContent = truncateReplyMessageSnippet(fullQuote)
-        quoteEl.hidden = false
-      }
-      else {
-        quoteEl.textContent = ''
-        quoteEl.hidden = true
-      }
-    }
-
-    const tooltipHead = authorName
-      ? getCommentReplyOffpageParentLabel(authorName)
-      : `${replyWord} ${atText} · ${badgeText}`
-    label.setAttribute(
-      'title',
-      mode === 'quote' && fullQuote ? `${tooltipHead}\n${fullQuote}` : tooltipHead,
-    )
-  }
-
-  function clearCommentReplyOffpageParentLabel(renderer: HTMLElement) {
-    updateCommentReplyOffpageParentLabel(renderer, {
-      authorName: null,
-      messageText: null,
-      parentRpid: null,
-      show: false,
-    })
-  }
-
   function buildCommentReplyTreeOrder(
     nodes: CommentReplyTreeNode[],
-    metaByRpid: Map<string, CommentReplyTreeCachedMeta> = new Map(),
   ): Array<{
     depth: number
     node: CommentReplyTreeNode
   }> {
-    const nodeByRpid = new Map<string, CommentReplyTreeNode>()
-    nodes.forEach((node) => {
-      if (node.rpid && !nodeByRpid.has(node.rpid))
-        nodeByRpid.set(node.rpid, node)
+    const byKey = new Map(nodes.map(node => [getCommentReplyTreeNodeKey(node), node]))
+    const ordered = buildCommentTree(nodes.map(node => ({
+      id: getCommentReplyTreeNodeKey(node),
+      rootId: node.rootRpid ? `reply:${node.rootRpid}` : '',
+      parentId: node.parentRpid ? `reply:${node.parentRpid}` : '',
+      createdAt: node.ctime ?? node.sortTime ?? 0,
+      originalOrder: node.originalOrder,
+    })))
+    nodes.forEach(node => node.children = [])
+    return ordered.map((item) => {
+      const node = byKey.get(item.id)!
+      node.directParentVisible = item.directParentVisible
+      const parent = item.parentId ? byKey.get(item.parentId) : undefined
+      parent?.children.push(node)
+      return { node, depth: Math.min(item.depth, MAX_COMMENT_REPLY_TREE_DEPTH) }
     })
-
-    const rootNodes: CommentReplyTreeNode[] = []
-    nodes.forEach((node) => {
-      // 当前页没有直接父节点时，沿缓存的 parent 链挂到最近可见祖先
-      const resolved = resolveCommentReplyTreeParentNode(node, nodeByRpid, metaByRpid)
-      node.directParentVisible = resolved.directParentVisible
-      node.directParentAuthorName = resolved.directParentAuthorName
-      node.directParentMessageText = resolved.directParentMessageText
-      // 父评昵称未缓存时，从子评正文「回复 @xxx」回退
-      if (!node.directParentAuthorName && node.parentRpid && !node.directParentVisible) {
-        const replyItem = getCommentReplyData(node.renderer)
-        node.directParentAuthorName = getReplyAtAuthorFromMessage(replyItem)
-      }
-      if (resolved.visualParent)
-        resolved.visualParent.children.push(node)
-      else
-        rootNodes.push(node)
-    })
-
-    rootNodes.sort(compareCommentReplyTreeNodes)
-    nodes.forEach(node => node.children.sort(compareCommentReplyTreeNodes))
-
-    // Keep every branch contiguous: parent first, then its time-ordered children.
-    const orderedNodes: Array<{ depth: number, node: CommentReplyTreeNode }> = []
-    const visitedRenderers = new Set<HTMLElement>()
-    const visitNode = (node: CommentReplyTreeNode, depth: number) => {
-      if (visitedRenderers.has(node.renderer))
-        return
-
-      visitedRenderers.add(node.renderer)
-      orderedNodes.push({ node, depth: Math.min(depth, MAX_COMMENT_REPLY_TREE_DEPTH) })
-      node.children.forEach(child => visitNode(child, depth + 1))
-    }
-
-    rootNodes.forEach(node => visitNode(node, 0))
-    nodes
-      .filter(node => !visitedRenderers.has(node.renderer))
-      .sort(compareCommentReplyTreeNodes)
-      .forEach(node => visitNode(node, 0))
-
-    return orderedNodes
   }
 
   function pruneDisconnectedCommentReplyRenderers() {
@@ -2967,6 +2556,8 @@ else if (shouldInitializePageScript) {
       disconnectCommentReplyTreeResizeObserver(state)
       component.style.removeProperty('--bew-comment-reply-indent-step')
       removeCommentReplyTreeGuides(component, replyContainer)
+      clearMissingCommentParents(replyContainer)
+      state.replyMetaByRpid.clear()
       state.collapsedNodeKeys.clear()
       state.collapsedTailKeys.clear()
       state.branchToggleOffsetByKey.clear()
@@ -2979,7 +2570,6 @@ else if (shouldInitializePageScript) {
         replyRenderer.style.removeProperty('--bew-comment-reply-indent')
         replyRenderer.style.removeProperty('--bew-comment-reply-order')
         setCommentReplyAtPrefixHidden(replyRenderer, false)
-        clearCommentReplyOffpageParentLabel(replyRenderer)
       })
       delete getCommentReplyTreeRootRenderer(component)?.dataset.bewlyCommentReplyCollapsed
       state.enabled = false
@@ -2993,8 +2583,6 @@ else if (shouldInitializePageScript) {
       state.branchToggleOffsetByKey.clear()
       state.tailToggleOffsetByKey.clear()
     }
-
-    observeCommentReplyTreeLayout(component, state, replyContainer)
 
     const nodes: CommentReplyTreeNode[] = replyRenderers.map((replyRenderer) => {
       const replyItem = getCommentReplyData(replyRenderer)
@@ -3015,12 +2603,13 @@ else if (shouldInitializePageScript) {
         originalOrder: getCommentReplyOriginalOrder(state, replyRenderer),
         children: [],
         directParentVisible: true,
-        directParentAuthorName: null,
-        directParentMessageText: null,
       }
     })
 
-    const orderedNodes = buildCommentReplyTreeOrder(nodes, state.replyMetaByRpid)
+    const missing = syncMissingCommentParents(replyContainer, resolveMissingCommentParents(nodes, state.replyMetaByRpid), currentSettings?.language ?? 'cmn-CN')
+    nodes.push(...missing.map(parent => ({ ...parent, children: [], directParentVisible: true })))
+    observeCommentReplyTreeLayout(component, state, replyContainer)
+    const orderedNodes = buildCommentReplyTreeOrder(nodes)
     const rootNodes = orderedNodes
       .filter(({ depth }) => depth === 0)
       .map(({ node }) => node)
@@ -3034,32 +2623,19 @@ else if (shouldInitializePageScript) {
       node.renderer.style.setProperty('--bew-comment-reply-order', String(visualOrder))
     })
     updateCommentReplyTreeVisibility(component, state, orderedNodes, rootNodes, collapseParentBody)
-    // 父节点展示：
-    // - 直接父在本页：引导线/缩进表达层级；线条模式隐藏正文「回复 @xxx」
-    // - 直接父不在本页且有正文缓存：引用卡展示原正文
-    // - 直接父不在本页无正文但有 parent rpid：紧凑「回复 @… + 不在本页」
+    // Missing parents are represented once. If their author is unknown, keep
+    // the child's native reply prefix instead of inventing an author on the placeholder.
+    const missingById = new Map(missing.map(parent => [parent.rpid, parent]))
     orderedNodes.forEach(({ node }) => {
-      const parentOffpage = Boolean(node.parentRpid && !node.directParentVisible)
-      const hasCachedBody = Boolean(node.directParentMessageText?.trim())
-      // 有正文缓存 或 仅有离页父 ID 都展示我们的标注
-      const showOffpageLabel = Boolean(parentOffpage && (hasCachedBody || node.parentRpid))
-      // 展示自有标注时隐藏原生前缀，避免「回复 @」重复
-      const hideNativePrefix = showOffpageLabel
-        ? true
-        : (showGuides && !parentOffpage)
-      setCommentReplyAtPrefixHidden(node.renderer, hideNativePrefix)
-      updateCommentReplyOffpageParentLabel(node.renderer, {
-        authorName: node.directParentAuthorName,
-        messageText: node.directParentMessageText,
-        parentRpid: node.parentRpid,
-        show: showOffpageLabel,
-      })
+      if (node.renderer.matches(MISSING_COMMENT_PARENT_SELECTOR))
+        return
+      const parent = node.parentRpid ? missingById.get(node.parentRpid) : undefined
+      setCommentReplyAtPrefixHidden(node.renderer, showGuides && node.directParentVisible && (!parent || !!parent.authorName))
     })
     // 未进入树序的节点恢复显示
     replyRenderers.forEach((replyRenderer) => {
       if (!orderedNodes.some(({ node }) => node.renderer === replyRenderer)) {
         setCommentReplyAtPrefixHidden(replyRenderer, false)
-        clearCommentReplyOffpageParentLabel(replyRenderer)
       }
     })
     if (showGuides) {
@@ -3599,6 +3175,18 @@ else if (shouldInitializePageScript) {
   // 添加消息监听器
   window.addEventListener('message', (event) => {
     const targetOrigin = getPageBridgeTargetOrigin(window.location.origin)
+    if (targetOrigin && matchesPageBridgeEvent(event, {
+      source: window,
+      origin: targetOrigin,
+      channelId: pageBridgeChannelId,
+      type: PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED,
+    })) {
+      for (const component of [...commentRepliesRenderers]) {
+        commentReplyPagination.dispose(component)
+        clearCommentReplyTreeState(component)
+      }
+      return
+    }
     if (!targetOrigin || !matchesPageBridgeEvent(event, {
       source: window,
       origin: targetOrigin,

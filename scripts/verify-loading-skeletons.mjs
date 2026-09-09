@@ -177,7 +177,8 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     buttons.style.display = 'flex'
     const viewers = source.firstElementChild
     root.getBoundingClientRect = () => rect(0, 0, 1440, 900)
-    player.getBoundingClientRect = () => rect(0, 0, 1100, 860)
+    let playerWidth = 1100
+    player.getBoundingClientRect = () => rect(0, 0, playerWidth, 860)
     controls.getBoundingClientRect = () => rect(0, 700, 1100, 55)
     buttons.getBoundingClientRect = () => rect(0, 720, 1100, 35)
     source.getBoundingClientRect = () => rect(0, 780, 1100, 36)
@@ -209,6 +210,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/utils/bewlyWidescreenPolicy': policy,
       '~/utils/photoViewer': { isPhotoViewerOpen: () => false },
     })
+    let ending = false
     const geometry = await loadSourceModule('../src/utils/bewlyWidescreen/geometry.ts', {
       '~/logic': { settings },
       '~/utils/bewlyWidescreen/actionEffects': { scheduleActionGeometrySync() {} },
@@ -218,7 +220,8 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/utils/bewlyWidescreen/nativeDom': { exitNativeMiniPlayer() {}, findMovable: () => null },
       '~/utils/bewlyWidescreen/session': { session },
       '~/utils/bewlyWidescreenPolicy': policy,
-      '~/utils/player': { getVideoElement: () => null },
+      '~/utils/player': { getVideoElement: () => null, isPlayerShowingEndingRecommendation: () => ending },
+      '~/utils/playerMedia': { getPlayerRoot: () => player },
     }, {
       ...time,
       Event: window.Event,
@@ -231,6 +234,9 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       }),
     })
     let reveals = 0
+    let resizeCount = 0
+    const onResize = () => resizeCount++
+    window.addEventListener('resize', onResize)
     state.onInitialLayoutReady = () => reveals++
     try {
       geometry.schedulePlayerResizeSync(state)
@@ -264,6 +270,27 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(reveals, 0, 'a geometry change restarts the existing stability window')
       time.step(1)
       assert.equal(reveals, 1)
+
+      const beforeRepeatedLayout = resizeCount
+      for (let count = 0; count < 100; count++) {
+        geometry.schedulePlayerResizeSync(state)
+        time.step()
+      }
+      assert.equal(resizeCount, beforeRepeatedLayout, '100 identical layout requests broadcast no resize')
+      console.log('PERF playback fixture: 100 identical layout requests = 0 resize broadcasts')
+      playerWidth = 1000
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      assert.equal(resizeCount, beforeRepeatedLayout + 1)
+      ending = true
+      playerWidth = 900
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      assert.equal(resizeCount, beforeRepeatedLayout + 1, 'ending recommendations are not reset by a resize broadcast')
+      ending = false
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      assert.equal(resizeCount, beforeRepeatedLayout + 2, 'replay resumes the pending geometry update')
       assert.equal(root.dataset.playerControlsReady, 'true')
       assert.equal(root.dataset.playerControlsHidden, 'false')
       assert.equal(time.frames.size, 0, 'settled controls stop animation-frame measurements')
@@ -294,6 +321,14 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(state.controlsLayoutReady, true, 'the regular Dock mode does not wait for auxiliary buttons')
       assert.equal(document.body.style.getPropertyValue('--bewly-widescreen-aux-controls-width'), '0px')
 
+      root.dataset.pageKind = 'pgc'
+      viewers.remove()
+      geometry.resetControlsLayout(state)
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      time.step(constants.READY_STABILITY_DELAY)
+      assert.equal(state.controlsLayoutReady, true, 'PGC sending/control bars are ready without the BV-only online-count node')
+
       geometry.resetControlsLayout(state)
       state.onInitialLayoutReady = () => reveals++
       geometry.schedulePlayerResizeSync(state)
@@ -308,6 +343,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(state.onInitialLayoutReady, undefined)
     }
     finally {
+      window.removeEventListener('resize', onResize)
       geometry.clearPlayerResizeSync(state)
       geometry.clearAuxiliaryControlGeometry()
       document.body.classList.remove(events.BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS)

@@ -5,6 +5,7 @@ import { AppPage } from '~/enums/appEnums'
 import { gridLayout, settings } from '~/logic/storage'
 
 import { createLayoutPreviewController } from './layoutEditPreview'
+import { selectRecommendationMode } from './recommendationMode'
 
 export type LayoutEditSection = 'dock' | 'topBar' | 'sidebar' | 'page'
 export type LayoutEditCategory = 'navigation' | 'page-layout'
@@ -39,6 +40,8 @@ export interface LayoutEditableDescriptor {
   titleKey: string
   scope?: LayoutEditScope
   previewControl?: LayoutEditSelectControl
+  dockPage?: AppPage
+  topBarKey?: string
 }
 
 export interface EditableTarget {
@@ -388,6 +391,8 @@ registerSettingDescriptors([
   { id: 'appearance.theme', category: 'Appearance', page: 'appearance', group: 'theme', titleKey: 'settings.theme', get: () => settings.value.theme, set: value => settings.value.theme = value as typeof settings.value.theme },
   { id: 'page.home.gridLayout', category: 'BewlyPages', page: 'home', group: 'layout', titleKey: 'settings.home_grid_layout', get: () => gridLayout.value.home, set: value => gridLayout.value.home = value as typeof gridLayout.value.home },
   { id: 'page.home.tabs', category: 'BewlyPages', page: 'home', group: 'layout', titleKey: 'settings.home_tabs_adjustment', get: () => settings.value.homePageTabVisibilityList, set: value => settings.value.homePageTabVisibilityList = value as typeof settings.value.homePageTabVisibilityList },
+  { id: 'page.home.recommendationSwitcher', category: 'BewlyPages', page: 'home', group: 'recommendation', titleKey: 'settings.show_recommendation_mode_switcher', get: () => settings.value.showRecommendationModeSwitcher, set: value => settings.value.showRecommendationModeSwitcher = Boolean(value) },
+  { id: 'page.home.recommendationMode', category: 'BewlyPages', page: 'home', group: 'recommendation', titleKey: 'settings.recommendation_mode', get: () => settings.value.recommendationMode, set: value => selectRecommendationMode(value as typeof settings.value.recommendationMode) },
   { id: 'page.moments.gridColumns', category: 'BewlyPages', page: 'moments', group: 'layout', titleKey: 'settings.moments_grid_columns', get: () => settings.value.momentsGridColumns, set: value => settings.value.momentsGridColumns = value as typeof settings.value.momentsGridColumns },
   {
     id: 'page.moments.sidebar',
@@ -488,6 +493,7 @@ registerLayoutEditableDescriptors([
   { id: 'home-tabs', section: 'page', category: 'page-layout', settingId: 'page.home.tabs', titleKey: 'layout_editor.target_home_tabs', scope: 'current-page' },
   { id: 'home-grid-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.gridLayout', titleKey: 'layout_editor.target_home_grid_switcher', scope: 'current-page' },
   { id: 'home-search', section: 'page', category: 'page-layout', settingId: 'search.focus.disable', titleKey: 'layout_editor.target_search_bar', scope: 'current-page' },
+  { id: 'home-recommendation-switcher', section: 'page', category: 'page-layout', settingId: 'page.home.recommendationSwitcher', titleKey: 'settings.show_recommendation_mode_switcher', scope: 'current-page' },
   {
     id: 'moments-grid',
     section: 'page',
@@ -521,19 +527,21 @@ registerLayoutEditableDescriptors([
       ],
     },
   },
-  ...dockItemDescriptors.map(([id, , titleKey]): LayoutEditableDescriptor => ({
+  ...dockItemDescriptors.map(([id, page, titleKey]): LayoutEditableDescriptor => ({
     id,
     section: 'dock',
     category: 'navigation',
     settingId: 'navigation.dock.items',
+    dockPage: page,
     titleKey,
     scope: 'all-pages',
   })),
-  ...topBarItemDescriptors.map(([id, , titleKey]): LayoutEditableDescriptor => ({
+  ...topBarItemDescriptors.map(([id, key, titleKey]): LayoutEditableDescriptor => ({
     id,
     section: 'topBar',
     category: 'navigation',
     settingId: 'navigation.topBar.components',
+    topBarKey: key,
     titleKey,
     scope: 'all-pages',
   })),

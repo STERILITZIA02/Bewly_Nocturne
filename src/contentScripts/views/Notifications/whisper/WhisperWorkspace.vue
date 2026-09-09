@@ -150,8 +150,11 @@ function retry() {
 
 function selectSession(session: DisplayPrivateSession) {
   props.controller.updateScrollTop(conversationListRef.value?.getScrollTop() ?? 0)
+  const selectedAgain = selectedDetailKey.value === session.key
   pendingDetailFocusKey = session.key
   emit('selectSession', session)
+  if (selectedAgain)
+    void focusPendingDetail()
 }
 
 function selectRecipient(recipient: TransientPrivateRecipient) {
@@ -179,19 +182,36 @@ watch(unreadCount, async (next, previous) => {
   }
 })
 
+async function focusPendingDetail() {
+  const detail = conversationDetailRef.value
+  const key = selectedDetailKey.value
+  if (!detail || !key || pendingDetailFocusKey !== key)
+    return
+  await nextTick()
+  if (props.active && detail === conversationDetailRef.value && key === selectedDetailKey.value && key === pendingDetailFocusKey) {
+    pendingDetailFocusKey = ''
+    detail.focusHeading()
+  }
+}
+
+function beginDetailLeave(element: Element) {
+  // Vue retains the outgoing DOM until its fade completes, while its component
+  // is already disposed. Keep that snapshot out of pointer/keyboard interaction.
+  if (element instanceof HTMLElement)
+    element.inert = true
+}
+
+watch(conversationDetailRef, () => void focusPendingDetail(), { flush: 'post' })
 watch(selectedDetailKey, async (nextSessionKey, previousSessionKey) => {
-  const shouldFocusHeading = nextSessionKey !== '' && nextSessionKey === pendingDetailFocusKey
-  pendingDetailFocusKey = ''
+  if (nextSessionKey !== pendingDetailFocusKey)
+    pendingDetailFocusKey = ''
   if (nextSessionKey && !previousSessionKey) {
     props.controller.updateScrollTop(
       conversationListRef.value?.getScrollTop() ?? props.controller.state.scrollTop,
     )
   }
   await nextTick()
-  if (shouldFocusHeading) {
-    conversationDetailRef.value?.focusHeading()
-  }
-  else if (previousSessionKey) {
+  if (!nextSessionKey && previousSessionKey && props.active && selectedDetailKey.value === '') {
     conversationListRef.value?.restoreScrollTop(props.controller.state.scrollTop)
     conversationListRef.value?.focusSession(previousSessionKey)
   }
@@ -281,39 +301,42 @@ defineExpose({ refresh })
 
     <div
       class="whisper-workspace__detail"
-      :class="{
-        'whisper-workspace__detail--fallback-card': selectedSession && !nativeSelectedSession && !transientRecipient,
-      }"
       :aria-busy="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
     >
-      <ConversationDetailSkeleton
-        v-if="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
-        :compact="settings.privateMessageDensity === 'compact'"
-        :label="accountState === 'profile-pending'
-          ? t('notifications.whisper.profile_pending')
-          : t('notifications.whisper.loading')"
-      />
-      <ConversationEmptyState v-else-if="!selectedSession && !transientRecipient" />
-      <ConversationView
-        v-else-if="nativeSelectedSession || transientRecipient"
-        :key="nativeSelectedSession?.talkerId ?? `transient:${transientRecipient?.mid}`"
-        ref="conversationDetailRef"
-        :active="active"
-        :controller="messagesController"
-        :emote-controller="emoteController"
-        :session="nativeSelectedSession"
-        :recipient="transientRecipient"
-        :write-controller="writeController"
-        @back="emit('closeConversation')"
-        @send-confirmed="emit('transientSendConfirmed', $event)"
-      />
-      <ConversationOriginalFallback
-        v-else-if="selectedSession"
-        :key="selectedSession.key"
-        ref="conversationDetailRef"
-        :session="selectedSession"
-        @back="emit('closeConversation')"
-      />
+      <Transition
+        :key="`${topBarStore.userInfo.mid}:${accountState}`" name="whisper-detail" mode="out-in"
+        @before-leave="beginDetailLeave"
+      >
+        <ConversationDetailSkeleton
+          v-if="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
+          :compact="settings.privateMessageDensity === 'compact'"
+          :label="accountState === 'profile-pending'
+            ? t('notifications.whisper.profile_pending')
+            : t('notifications.whisper.loading')"
+        />
+        <ConversationEmptyState v-else-if="!selectedSession && !transientRecipient" />
+        <ConversationView
+          v-else-if="nativeSelectedSession || transientRecipient"
+          :key="nativeSelectedSession?.talkerId ?? transientRecipient?.mid"
+          ref="conversationDetailRef"
+          :active="active"
+          :controller="messagesController"
+          :emote-controller="emoteController"
+          :session="nativeSelectedSession"
+          :recipient="transientRecipient"
+          :write-controller="writeController"
+          @back="emit('closeConversation')"
+          @send-confirmed="emit('transientSendConfirmed', $event)"
+        />
+        <ConversationOriginalFallback
+          v-else-if="selectedSession"
+          :key="selectedSession.key"
+          ref="conversationDetailRef"
+          class="whisper-workspace__fallback"
+          :session="selectedSession"
+          @back="emit('closeConversation')"
+        />
+      </Transition>
     </div>
   </section>
 </template>
@@ -341,7 +364,9 @@ defineExpose({ refresh })
   min-height: 0;
 }
 
-.whisper-workspace__detail--fallback-card {
+.whisper-workspace .whisper-workspace__fallback {
+  box-sizing: border-box;
+  overflow: hidden;
   background: var(--bew-elevated-alt);
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-panel-radius);
@@ -368,14 +393,24 @@ defineExpose({ refresh })
   background: transparent;
 }
 
-.whisper-workspace__detail--fallback-card {
-  overflow: hidden;
-}
-
-.whisper-workspace--solid .whisper-workspace__detail--fallback-card {
+.whisper-workspace--solid .whisper-workspace__fallback {
   background: var(--bew-elevated-alt-solid);
   backdrop-filter: none;
   -webkit-backdrop-filter: none;
+}
+
+.whisper-detail-enter-active,
+.whisper-detail-leave-active {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.whisper-detail-enter-from,
+.whisper-detail-leave-to {
+  opacity: 0;
+}
+
+.whisper-detail-leave-active {
+  pointer-events: none;
 }
 
 .whisper-workspace__state {
@@ -489,7 +524,9 @@ defineExpose({ refresh })
 
 @media (prefers-reduced-motion: reduce) {
   .whisper-workspace__sessions,
-  .whisper-workspace__detail {
+  .whisper-workspace__detail,
+  .whisper-detail-enter-active,
+  .whisper-detail-leave-active {
     transition: none;
   }
 }

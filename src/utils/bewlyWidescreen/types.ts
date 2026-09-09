@@ -58,6 +58,7 @@ export interface BewlyWidescreenState {
   themeObserver?: MutationObserver
   metadataListener?: () => void
   resizeSyncFrame?: number
+  lastPlayerResizeSignature?: string
   actionGeometryFrame?: number
   actionGeometryElements?: Set<HTMLElement>
   layoutEventCleanup?: () => void

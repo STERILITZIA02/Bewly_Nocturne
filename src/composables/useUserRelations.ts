@@ -1,37 +1,42 @@
-import { onScopeDispose, ref, watch } from 'vue'
+import { createSharedComposable } from '@vueuse/core'
+import { onScopeDispose, readonly, ref, watch } from 'vue'
 
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { getUserID } from '~/utils/main'
+import { onUserRelationChange } from '~/utils/userRelation'
 
 export interface UserRelation {
   isFollowing: boolean
-  isLoading: boolean
 }
 
 /**
  * 用户关系管理的 composable
  * 处理批量查询用户关注状态
  */
-export function useUserRelations() {
+// One account-owned set of server relations is shared by search, cards and
+// their menus. VueUse releases its effects/data after the final consumer exits.
+const useSharedUserRelations = createSharedComposable(() => {
   const topBarStore = useTopBarStore()
   const userRelations = ref<Record<number, UserRelation>>({})
   let requestGeneration = 0
   const relationVersions = new Map<string, number>()
 
   function getCurrentAccountId() {
-    return resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+    const account = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+    return account !== null && String(getUserID()) === String(account) ? account : null
   }
 
   /**
    * 批量查询用户关系状态
    * @param mids 用户 mid 数组
    */
-  async function batchQueryUserRelations(mids: number[]) {
+  async function batchQueryUserRelations(mids: number[], isRequestCurrent: () => boolean) {
     const accountId = getCurrentAccountId()
     if (mids.length === 0 || accountId === null)
       return
-    const generation = ++requestGeneration
+    const generation = requestGeneration
 
     // B站API限制最多40个mid
     const chunks: number[][] = []
@@ -40,7 +45,7 @@ export function useUserRelations() {
     }
 
     for (const chunk of chunks) {
-      if (generation !== requestGeneration || accountId !== getCurrentAccountId())
+      if (!isRequestCurrent() || generation !== requestGeneration || accountId !== getCurrentAccountId())
         return
       const versions = new Map(chunk.map(mid => [String(mid), relationVersions.get(String(mid)) ?? 0]))
       try {
@@ -48,7 +53,7 @@ export function useUserRelations() {
           fids: chunk.join(','),
         })
 
-        if (generation !== requestGeneration || accountId !== getCurrentAccountId())
+        if (!isRequestCurrent() || generation !== requestGeneration || accountId !== getCurrentAccountId())
           return
 
         if (response.code === 0 && response.data) {
@@ -61,13 +66,13 @@ export function useUserRelations() {
             const isFollowing = relation.attribute === 2 || relation.attribute === 6
             userRelations.value[mid] = {
               isFollowing,
-              isLoading: false,
             }
           })
         }
       }
       catch (error) {
-        console.error('批量查询用户关系失败:', error)
+        if (isRequestCurrent() && generation === requestGeneration && accountId === getCurrentAccountId())
+          console.error('批量查询用户关系失败:', error)
       }
     }
   }
@@ -85,24 +90,6 @@ export function useUserRelations() {
     else {
       userRelations.value[mid] = {
         isFollowing,
-        isLoading: false,
-      }
-    }
-  }
-
-  /**
-   * 设置用户关系的加载状态
-   * @param mid 用户 mid
-   * @param isLoading 是否加载中
-   */
-  function setUserRelationLoading(mid: number, isLoading: boolean) {
-    if (userRelations.value[mid]) {
-      userRelations.value[mid].isLoading = isLoading
-    }
-    else {
-      userRelations.value[mid] = {
-        isFollowing: false,
-        isLoading,
       }
     }
   }
@@ -117,15 +104,34 @@ export function useUserRelations() {
   }
 
   watch(getCurrentAccountId, reset, { flush: 'sync' })
+  const stopChanges = onUserRelationChange((change) => {
+    if (change.accountId === getCurrentAccountId())
+      updateUserRelation(change.mid, change.following)
+  })
   onScopeDispose(() => {
     requestGeneration++
+    stopChanges()
   })
 
   return {
-    userRelations,
+    userRelations: readonly(userRelations),
     batchQueryUserRelations,
-    updateUserRelation,
-    setUserRelationLoading,
+  }
+})
+
+export function useUserRelations() {
+  const owner = useSharedUserRelations()
+  let queryGeneration = 0
+  function reset() {
+    queryGeneration++
+  }
+  onScopeDispose(reset)
+  return {
+    ...owner,
     reset,
+    batchQueryUserRelations(mids: number[]) {
+      const generation = queryGeneration
+      return owner.batchQueryUserRelations(mids, () => generation === queryGeneration)
+    },
   }
 }

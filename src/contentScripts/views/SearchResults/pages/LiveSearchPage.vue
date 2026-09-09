@@ -7,6 +7,7 @@ import UserCard from '~/components/UserCard/UserCard.vue'
 import UserCardSkeleton from '~/components/UserCard/UserCardSkeleton.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useUserRelations } from '~/composables/useUserRelations'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 
@@ -14,7 +15,6 @@ import Pagination from '../components/Pagination.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
-import { useUserRelations } from '../composables/useUserRelations'
 import { convertLiveRoomData, convertUserCardData, formatNumber } from '../searchTransforms'
 import type { LiveSearchFilters } from '../types'
 import { dedupeByKey } from '../utils/searchHelpers'
@@ -44,7 +44,6 @@ const paginationMode = computed(() => settings.value.searchResultsPaginationMode
 const {
   userRelations,
   batchQueryUserRelations,
-  updateUserRelation,
   reset: resetUserRelations,
 } = useUserRelations()
 
@@ -336,10 +335,6 @@ function resetAll() {
   liveUserTotalResults.value = 0
 }
 
-function handleFollowStateChanged(data: { mid: number, isFollowing: boolean }) {
-  updateUserRelation(data.mid, data.isFollowing)
-}
-
 function handleSwitchToLiveUser() {
   // 切换到主播模式需要由父级筛选器统一实现。
 }
@@ -369,7 +364,6 @@ defineExpose({
   needsManualLoadMore,
   resumeLoadMore,
   userRelations,
-  updateUserRelation,
   currentPage,
   totalPages,
   refreshCurrentPage,
@@ -417,7 +411,6 @@ defineExpose({
                 isFollowed: userRelations[user.mid || user.uid]?.isFollowing ? 1 : 0,
               }"
               :compact="true"
-              @follow-state-changed="(mid: number, isFollowing: boolean) => handleFollowStateChanged({ mid, isFollowing })"
             />
             <UserCardSkeleton
               v-for="index in (isLoading && liveUserList.length > 0 ? 3 : 0)"

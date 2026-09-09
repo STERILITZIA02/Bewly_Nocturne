@@ -12,7 +12,8 @@ import {
   dismissAppAuthorization,
   requestAppAuthorization,
 } from '~/logic/appAuthorizationCoordinator'
-import type { GridLayoutType, RecommendationMode } from '~/logic/storage'
+import { getRecommendationModeOptions, selectRecommendationMode } from '~/logic/recommendationMode'
+import type { GridLayoutType } from '~/logic/storage'
 import { useMainStore } from '~/stores/mainStore'
 import { hasValidAppAuthTokens, revokeAccessKey } from '~/utils/authProvider'
 import { normalizeImportedFilterRules } from '~/utils/filterRules'
@@ -27,15 +28,15 @@ const mainStore = useMainStore()
 const { t } = useI18n()
 const toast = useToast()
 
-const recommendationModeOptions = computed<{ label: string, value: RecommendationMode }[]>(() => [
-  { label: 'Web', value: 'web' },
-  { label: t('settings.recommendation_mode_web_no_cookie'), value: 'webNoCookie' },
-  { label: 'App', value: 'app' },
-])
+const recommendationModeOptions = computed(() => getRecommendationModeOptions(t))
 const homeGridLayoutOptions = computed<{ label: string, value: GridLayoutType }[]>(() => [
   { label: t('layout_editor.layout_adaptive'), value: 'adaptive' },
   { label: t('layout_editor.layout_two_columns'), value: 'twoColumns' },
   { label: t('layout_editor.layout_one_column'), value: 'oneColumn' },
+])
+const followingSortOptions = computed(() => [
+  { label: t('settings.following_sort_updated'), value: 'updated' },
+  { label: t('settings.following_sort_group'), value: 'group' },
 ])
 
 const hasUsableAppAuthorization = computed(() => (
@@ -49,11 +50,6 @@ const showStandaloneSearchPage = computed({
     settings.value.useSearchPageModeOnHomePage = !showStandalone
   },
 })
-
-function handleRecommendationModeChange(mode: RecommendationMode) {
-  if (mode === 'app' && !hasValidAppAuthTokens())
-    requestAppAuthorization(appAuthTokens.value.accessToken)
-}
 
 function handleAuthorize() {
   requestAppAuthorization(appAuthTokens.value.accessToken)
@@ -183,7 +179,7 @@ function handleToggleHomeTab(tab: any) {
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_recommendation_mode')">
-      <SettingsItem :title="$t('settings.recommendation_mode')" right-width="auto">
+      <SettingsItem setting-id="page.home.recommendationMode" :title="$t('settings.recommendation_mode')" right-width="auto">
         <template #desc>
           <p>{{ $t('settings.recommendation_mode_desc') }}</p>
         </template>
@@ -191,8 +187,16 @@ function handleToggleHomeTab(tab: any) {
           v-model="settings.recommendationMode"
           :label="$t('settings.recommendation_mode')"
           :options="recommendationModeOptions"
-          @change="handleRecommendationModeChange"
+          @change="selectRecommendationMode"
         />
+      </SettingsItem>
+
+      <SettingsItem
+        setting-id="page.home.recommendationSwitcher"
+        :title="$t('settings.show_recommendation_mode_switcher')"
+        :desc="$t('settings.show_recommendation_mode_switcher_desc')" right-width="auto"
+      >
+        <Radio v-model="settings.showRecommendationModeSwitcher" />
       </SettingsItem>
 
       <SettingsItem
@@ -453,6 +457,9 @@ function handleToggleHomeTab(tab: any) {
     >
       <SettingsItem :title="$t('settings.use_following_new_layout')" :desc="$t('settings.use_following_new_layout_desc')" right-width="auto">
         <Radio v-model="settings.useFollowingNewLayout" />
+      </SettingsItem>
+      <SettingsItem v-if="settings.useFollowingNewLayout" :title="$t('settings.following_sort')" right-width="auto">
+        <SettingsSegmentedControl v-model="settings.followingUploaderSort" :label="$t('settings.following_sort')" :options="followingSortOptions" />
       </SettingsItem>
       <SettingsItem :title="$t('settings.enable_following_inactive_blacklist')" :desc="$t('settings.enable_following_inactive_blacklist_desc')" right-width="auto">
         <Radio v-model="settings.enableFollowingInactiveBlacklist" />

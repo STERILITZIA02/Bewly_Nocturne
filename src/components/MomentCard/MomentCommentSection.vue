@@ -30,6 +30,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
   interactiveResize: []
+  writingChange: [pending: boolean]
 }>()
 
 interface MomentCommentTreeViewNode {
@@ -73,6 +74,7 @@ const nextPage = ref(1)
 const likedIds = reactive(new Set<string>())
 const likeCounts = reactive<Record<string, number>>({})
 const pendingLikeIds = reactive(new Set<string>())
+watch(() => pendingLikeIds.size > 0, pending => emit('writingChange', pending), { flush: 'sync' })
 const likeRequestTokens = new Map<string, symbol>()
 const pendingLikeSnapshots = new Map<string, { liked: boolean, count: number }>()
 let requestGeneration = 0

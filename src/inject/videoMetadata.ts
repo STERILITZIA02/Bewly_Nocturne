@@ -1,5 +1,7 @@
+import { createMovedPgcReactBridge, getMountedPgcEventRoot } from '~/inject/movedPgcReact'
 import { selectors } from '~/utils/bewlyWidescreen/constants'
 import {
+  isPgcPlaybackPage,
   parseVideoMetadataEvent,
   parseVideoPageIdentity,
   validateVideoPageMetadata,
@@ -42,6 +44,7 @@ export function setupVideoMetadataBridge(channelId: string) {
   let lastSignature = ''
   let refreshQueued = false
   const nativeComponents = new Map<NativeVideoComponent, { node: HTMLElement, destroyed: () => void }>()
+  const movedPgcBridge = createMovedPgcReactBridge()
 
   function getApp() {
     return (document.getElementById('app') as (HTMLElement & { __vue__?: NativeVideoApp }) | null)?.__vue__
@@ -115,19 +118,45 @@ export function setupVideoMetadataBridge(channelId: string) {
       detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, metadata }),
     }))
   }, { signal })
-  const nativeComponentSelector = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags].join(',')
+  const nativeComponentSelector = [...selectors.upPanel, ...selectors.toolbar, ...selectors.description, ...selectors.tags, ...selectors.mediaInfo, ...selectors.playlist].join(',')
   document.addEventListener(VIDEO_COMPONENT_REQUEST, (event) => {
     const request = parseVideoMetadataEvent(event)
     const node = event.target
+    const nativeMedia = node instanceof HTMLElement && node.matches('video, bwp-video')
     if (request?.channelId !== channelId || !Number.isSafeInteger(request.requestId)
-      || request.href !== location.href || !parseVideoPageIdentity(location.href)
-      || !(node instanceof HTMLElement) || !node.isConnected || !node.matches(nativeComponentSelector)) {
+      || request.href !== location.href || (!parseVideoPageIdentity(location.href) && !isPgcPlaybackPage())
+      || !(node instanceof HTMLElement) || !node.isConnected || (!node.matches(nativeComponentSelector) && !nativeMedia)) {
+      return
+    }
+    if (request.release === true) {
+      movedPgcBridge.release(node)
+      return
+    }
+    if (nativeMedia) {
+      const player = (window as Window & { player?: { mediaElement?: () => HTMLElement, getManifest?: () => { episodeId?: number } } }).player
+      const episode = /^\/bangumi\/play\/ep(\d+)/.exec(location.pathname)?.[1]
+      let ready: boolean | undefined
+      try {
+        if (typeof player?.mediaElement === 'function')
+          ready = player.mediaElement() === node && (!episode || String(player?.getManifest?.().episodeId) === episode)
+      }
+      catch { /* The native player can be disposing between navigation and this synchronous probe. */ }
+      node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready }),
+      }))
       return
     }
     const owner = (node as HTMLElement & { __vue__?: NativeVideoComponent }).__vue__
-    const ready = !!owner && owner.$el === node && owner._isMounted === true
-      && !owner._isDestroyed && !owner._isBeingDestroyed
-    if (ready && typeof owner.$once === 'function') {
+    const ready = isPgcPlaybackPage()
+      ? !!getMountedPgcEventRoot(node)
+      : !!owner && owner.$el === node && owner._isMounted === true
+        && !owner._isDestroyed && !owner._isBeingDestroyed
+    if (isPgcPlaybackPage()) {
+      if (ready)
+        movedPgcBridge.bind(node)
+      else movedPgcBridge.release(node)
+    }
+    if (ready && typeof owner?.$once === 'function') {
       const existing = nativeComponents.get(owner)
       if (existing) {
         existing.node = node
@@ -155,6 +184,7 @@ export function setupVideoMetadataBridge(channelId: string) {
     stopWatch?.()
     nativeComponents.forEach((binding, owner) => owner.$off?.('hook:destroyed', binding.destroyed))
     nativeComponents.clear()
+    movedPgcBridge.dispose()
   }, { once: true })
   window.addEventListener('pagehide', (event: PageTransitionEvent) => {
     if (!event.persisted)
