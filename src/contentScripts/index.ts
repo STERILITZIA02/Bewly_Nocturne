@@ -17,7 +17,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { stopAdaptedStyles } from '~/styles/adaptedStyles'
 import RESET_BEWLY_CSS from '~/styles/reset.css?raw'
 import api from '~/utils/api'
-import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyWidescreenActive, isBewlyWidescreenEngaged, prepareBewlyPlaybackPageNavigation, prepareBewlyWidescreenLoading, refreshBewlyPlaybackPageNavigation } from '~/utils/bewlyWidescreen'
+import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, isBewlyPlaybackNavigationPending, isBewlyWidescreenActive, isBewlyWidescreenEngaged, prepareBewlyPlaybackPageNavigation, prepareBewlyWidescreenLoading, refreshBewlyPlaybackPageNavigation } from '~/utils/bewlyWidescreen'
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
 import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
@@ -37,14 +37,16 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept, stopNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
-import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isPlayerShowingEndingRecommendation, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import type { PlayerModeApplication } from '~/utils/playerModeApplication'
+import { createPlayerModeApplication } from '~/utils/playerModeApplication'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, isNativePlaylistEditing, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
 import { getPluginSearchResultsUrl, openSearchResults, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { canStartSettingsDependentBoot, shouldShowBewlyBootOverlay } from '~/utils/settingsBootPolicy'
 import { SVG_ICONS } from '~/utils/svgIcons'
 import { openLinkInBackground } from '~/utils/tabs'
 import { initVerticalVideoZoom, resetVerticalVideoZoom } from '~/utils/verticalVideoZoom'
-import { parseVideoMetadataEvent, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
+import { isNativeVideoComponentReady, isPgcPlaybackPage, parseVideoMetadataEvent, readVideoPageMetadata, validateVideoPageMetadata, VIDEO_METADATA_CHANGED } from '~/utils/videoMetadataBridge'
 import { recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 import { ensureResponsiveViewport } from '~/utils/viewportMeta'
 import { mountWatchLaterButtonWhenToolbarReady, removeWatchLaterButton } from '~/utils/watchLaterButton'
@@ -54,6 +56,7 @@ import { mountBewlyBootOverlay } from './bewlyBootOverlay'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
+import { getPageLoadingGuard } from './pageLoadingGuard'
 import { initTouchPlayerGestures, stopTouchPlayerGestures } from './touchPlayerGestures'
 import { initVideoAspectRatioMemory, stopVideoAspectRatioMemory } from './videoAspectRatioMemory'
 import { initVideoScreenshotControl, stopVideoScreenshotControl } from './videoScreenshotControl'
@@ -285,21 +288,25 @@ if (isElectronEnv) {
 }
 else if (shouldInitializeContentScript) {
   const contentScriptSignal = contentScriptAbortController!.signal
-  const bootOverlay = shouldShowBewlyBootOverlay(location.href, isInIframe())
+  const pageLoading = getPageLoadingGuard()
+  const bootOverlay = pageLoading.active && shouldShowBewlyBootOverlay(location.href, isInIframe())
     ? mountBewlyBootOverlay(document)
     : null
-  if (bootOverlay) {
-    contentScriptDisposers.push(() => bootOverlay.remove(true))
-    contentScriptDisposers.push(watch(settingsInitializationState, (state) => {
-      if (state === 'degraded')
-        bootOverlay.reveal()
-    }, { immediate: true }))
-  }
+  if (bootOverlay)
+    pageLoading.adoptOverlay(immediate => bootOverlay.remove(immediate))
+  contentScriptDisposers.push(() => pageLoading.dispose(true))
+  contentScriptDisposers.push(watch(settingsInitializationState, (state) => {
+    if (state === 'degraded')
+      pageLoading.dispose()
+  }, { immediate: true }))
 
   const detachedTimers = new Set<ReturnType<typeof setTimeout>>()
   const scheduleDetachedTimer = (callback: () => void, delay: number) => {
+    const navigationKey = getVideoNavigationKey(location.href)
     const timer = setTimeout(() => {
       detachedTimers.delete(timer)
+      if (contentScriptSignal.aborted || (navigationKey && (getVideoNavigationKey(location.href) !== navigationKey || isIframeDrawerHost() || document.hidden)))
+        return
       callback()
     }, delay)
     detachedTimers.add(timer)
@@ -367,15 +374,18 @@ else if (shouldInitializeContentScript) {
   ].join(',')
   contentScriptDisposers.push(setupNotificationStateInvalidation())
 
-  let beforeLoadedStyleEl: HTMLStyleElement | undefined
-  let beforeLoadedTransitionStyleEl: HTMLStyleElement | undefined
-  let beforeLoadedStyleFailsafeTimer: ReturnType<typeof setTimeout> | undefined
-  let originalTopBarBootStyleEl: HTMLStyleElement | undefined
   let homePageHiddenStyleEl: HTMLStyleElement | undefined
   let settingsBootLoaded = false
   let lastUrl = location.href
   let lastVideoNavigationKey = getVideoNavigationKey(location.href)
   let lastAppliedPlayerModeNavigationKey: string | undefined
+  let playerModeGeneration = 0
+  let playerModeApplication: PlayerModeApplication | undefined
+  let playerModeApplicationStarted = false
+  let navigationVideo = getVideoElement()
+  let navigationMediaSource = navigationVideo?.currentSrc || navigationVideo?.getAttribute('src') || ''
+  let awaitingNavigationMedia = false
+  let pendingNavigationVideoInfo: Promise<VideoInfo> | undefined
   let userExitedWidescreenNavigationKey: string | undefined
   let playerModeReadyAfter = document.readyState === 'complete'
     ? Date.now() + playerModeLoadSettleDelay
@@ -403,6 +413,10 @@ else if (shouldInitializeContentScript) {
   void settingsReady.then(async () => {
     if (contentScriptSignal.aborted)
       return
+    if (!isSupportedPages() && !isSupportedIframePages())
+      pageLoading.dispose()
+    else if (resolveEffectiveTopBarSource(settings.value.pageMode, settings.value.useOriginalBilibiliTopBar) === 'bilibili-native')
+      pageLoading.revealHeader()
     await ensureInterfaceLanguage()
     if (contentScriptSignal.aborted)
       return
@@ -491,58 +505,6 @@ else if (shouldInitializeContentScript) {
       setupOpusDetailDrawerLayout()
     if (shouldApplyFullStyles && isInIframe())
       setupIframePhotoViewerDetector()
-  }
-
-  // 挂载完成、异常、路由切换与保险丝共用清理，重复调用无副作用。
-  function removeBeforeLoadedStyleEl() {
-    beforeLoadedStyleEl?.remove()
-    beforeLoadedStyleEl = undefined
-    beforeLoadedTransitionStyleEl?.remove()
-    beforeLoadedTransitionStyleEl = undefined
-    if (beforeLoadedStyleFailsafeTimer !== undefined)
-      clearTimeout(beforeLoadedStyleFailsafeTimer)
-    beforeLoadedStyleFailsafeTimer = undefined
-  }
-
-  function installBeforeLoadedStyle() {
-    removeBeforeLoadedStyleEl()
-    if (!settings.value.adaptToOtherPageStyles || !isHomePage() || isInIframe())
-      return
-
-    beforeLoadedStyleEl = injectCSS(`
-      html.bewly-custom-homepage.bewly-design {
-        background-color: var(--bew-bg);
-        transition: background-color 0.2s ease-in;
-      }
-
-      html.bewly-custom-homepage > body {
-        opacity: 0;
-        pointer-events: none;
-      }
-    `)
-    beforeLoadedTransitionStyleEl = injectCSS(`
-      html.bewly-custom-homepage > body {
-        transition: opacity 0.5s;
-      }
-    `)
-    beforeLoadedStyleFailsafeTimer = setTimeout(removeBeforeLoadedStyleEl, 4000)
-  }
-
-  function removeOriginalTopBarBootStyle() {
-    originalTopBarBootStyleEl?.remove()
-    originalTopBarBootStyleEl = undefined
-  }
-
-  function installOriginalTopBarBootStyle() {
-    removeOriginalTopBarBootStyle()
-    originalTopBarBootStyleEl = injectCSS(`
-      .bili-header,
-      #biliMainHeader,
-      .header-channel,
-      .bili-header-channel-panel {
-        visibility: hidden !important;
-      }
-    `)
   }
 
   function removeHomePageHiddenStyle() {
@@ -646,9 +608,7 @@ else if (shouldInitializeContentScript) {
   }
 
   function restoreOriginalPageVisibility() {
-    bootOverlay?.reveal()
-    removeBeforeLoadedStyleEl()
-    removeOriginalTopBarBootStyle()
+    pageLoading.dispose()
     removeHomePageHiddenStyle()
     document.documentElement.classList.remove(
       'bewly-design',
@@ -671,7 +631,6 @@ else if (shouldInitializeContentScript) {
   })
 
   window.addEventListener(BEWLY_MOUNTED, () => {
-    removeBeforeLoadedStyleEl()
     // 根据设置应用默认播放器模式
     if (!isIframeDrawerHost() && isVideoPage())
       applyDefaultPlayerMode()
@@ -680,20 +639,83 @@ else if (shouldInitializeContentScript) {
     if (!isIframeDrawerHost())
       return
     clearPlayerModeRetry()
-    cancelPlayerRetryTasks()
+    invalidatePlayerModeApplication()
     clearPendingWidescreenReloadNavigation()
   }, { signal: contentScriptSignal })
   window.addEventListener(BEWLY_WIDESCREEN_MANUAL_TOGGLE, (event) => {
     const currentNavigationKey = getVideoNavigationKey(location.href)
     const detail = (event as CustomEvent<BewlyWidescreenManualToggleDetail>).detail
     clearPlayerModeRetry()
-    cancelPlayerRetryTasks()
+    invalidatePlayerModeApplication()
     autoContinuationNavigationKey = undefined
-    lastAppliedPlayerModeNavigationKey = currentNavigationKey
     userExitedWidescreenNavigationKey = detail?.action === 'exit'
       ? currentNavigationKey
       : undefined
+    if (detail?.action === 'exit')
+      pageLoading.dispose()
   }, { signal: contentScriptSignal })
+  function invalidatePlayerModeApplication() {
+    playerModeGeneration++
+    playerModeApplication = undefined
+    playerModeApplicationStarted = false
+    cancelPlayerRetryTasks()
+    if (!isBewlyWidescreenActive() && isBewlyWidescreenEngaged())
+      exitBewlyWidescreen()
+  }
+
+  function getCurrentPlayerModeApplication(currentNavigationKey: string) {
+    if (playerModeApplication?.shouldApply())
+      return playerModeApplication
+    const video = getVideoElement()
+    if (!video)
+      return undefined
+    const source = video.currentSrc || video.getAttribute('src') || ''
+    if (awaitingNavigationMedia && video === navigationVideo && source === navigationMediaSource)
+      return undefined
+    if (video.readyState < HTMLMediaElement.HAVE_METADATA)
+      return undefined
+    if (awaitingNavigationMedia && isVideoPage() && !readVideoPageMetadata())
+      return undefined
+    if (isPgcPlaybackPage() && isNativeVideoComponentReady(video) !== true)
+      return undefined
+    awaitingNavigationMedia = false
+    navigationVideo = video
+    navigationMediaSource = source
+    const generation = playerModeGeneration
+    const mode = resolveDefaultVideoPlayerMode()
+    const application = createPlayerModeApplication(
+      () => !contentScriptSignal.aborted && generation === playerModeGeneration
+        && getVideoNavigationKey(location.href) === currentNavigationKey
+        && getVideoElement() === video && (video.currentSrc || video.getAttribute('src') || '') === source
+        && video.readyState >= HTMLMediaElement.HAVE_METADATA
+        && resolveDefaultVideoPlayerMode() === mode
+        && document.visibilityState === 'visible' && !isIframeDrawerHost()
+        && !shouldSuppressWidescreenAutoEntry(currentNavigationKey, userExitedWidescreenNavigationKey)
+        && !isPlayerShowingEndingRecommendation(),
+      () => {
+        lastAppliedPlayerModeNavigationKey = currentNavigationKey
+        pageLoading.dispose()
+        autoContinuationNavigationKey = undefined
+        lastVideoEndedAt = 0
+        applyDefaultDanmakuState(application.shouldApply)
+        applyDefaultCaptionState(application.shouldApply)
+        if (settings.value.showVerticalVideoZoomButton)
+          initVerticalVideoZoom()
+        else
+          resetVerticalVideoZoom()
+        scheduleDetachedTimer(() => {
+          if (!application.shouldApply())
+            return
+          applyAutoPlayByVideoType()
+          startAutoExitFullscreenMonitoring()
+        }, 2000)
+        scheduleAddWatchLaterButton()
+      },
+    )
+    playerModeApplication = application
+    playerModeApplicationStarted = false
+    return application
+  }
   // 应用默认播放器模式
   function isVideoOwnerAvatarReady() {
     return Array.from(document.querySelectorAll<HTMLImageElement>(videoOwnerAvatarSelector)).some((image) => {
@@ -732,46 +754,68 @@ else if (shouldInitializeContentScript) {
     }
 
     const currentNavigationKey = getVideoNavigationKey(location.href)
-    if (isBewlyWidescreenActive()) {
+    if (isPlayerShowingEndingRecommendation()) {
+      pageLoading.dispose()
       clearPlayerModeRetry()
-      cancelPlayerRetryTasks()
-      lastAppliedPlayerModeNavigationKey = currentNavigationKey
+      invalidatePlayerModeApplication()
       return
     }
     if (shouldSuppressWidescreenAutoEntry(currentNavigationKey, userExitedWidescreenNavigationKey)) {
+      pageLoading.dispose()
       clearPlayerModeRetry()
-      lastAppliedPlayerModeNavigationKey = currentNavigationKey
       return
     }
     if (lastAppliedPlayerModeNavigationKey === currentNavigationKey)
       return
-
-    // Reuse the existing page-settle deadline while MAIN's current manuscript
-    // metadata is pending; do not commit a guessed context-specific mode early.
+    // Resolve only when native manuscript metadata can select any per-type
+    // override. The early document mask remains until that decision is known.
     if (settings.value.enableVideoPlayerModeOverrides && isVideoPage()
       && Date.now() < videoOwnerAvatarReadyDeadline && !readVideoPageMetadata()) {
       schedulePlayerModeRetry()
       return
     }
-
     let targetPlayerMode = resolveDefaultVideoPlayerMode()
     if (isFestivalPage() && targetPlayerMode === 'bewlyWidescreen')
       targetPlayerMode = 'widescreen'
-
     const fullscreenDocument = document as Document & { webkitFullscreenElement?: Element | null }
     const isInFullscreen = !!(document.fullscreenElement || fullscreenDocument.webkitFullscreenElement)
     const webFullscreenBtn = document.querySelector('.bpx-player-ctrl-web,.bilibili-player-video-web-fullscreen,.squirtle-video-pagefullscreen') as HTMLElement
     const isInWebFullscreen = !!document.querySelector('[data-screen="web"]')
       || webFullscreenBtn?.classList.contains('bpx-state-entered')
+    if (targetPlayerMode === 'bewlyWidescreen' && !isInFullscreen && !isInWebFullscreen) {
+      if (!isBewlyWidescreenActive())
+        prepareBewlyWidescreenLoading(autoContinuationNavigationKey === currentNavigationKey)
+    }
+    else {
+      pageLoading.dispose()
+    }
+
+    const application = getCurrentPlayerModeApplication(currentNavigationKey)
+    if (!application) {
+      schedulePlayerModeRetry()
+      return
+    }
+    if (isBewlyWidescreenActive()) {
+      if (isBewlyPlaybackNavigationPending()) {
+        refreshBewlyPlaybackPageNavigation(pendingNavigationVideoInfo)
+        pendingNavigationVideoInfo = undefined
+      }
+      if (isBewlyPlaybackLayoutReady()) {
+        clearPlayerModeRetry()
+        application.onApplied()
+      }
+      else {
+        schedulePlayerModeRetry()
+      }
+      return
+    }
 
     if (targetPlayerMode === 'bewlyWidescreen' && !isInFullscreen && !isInWebFullscreen) {
-      prepareBewlyWidescreenLoading(
-        autoContinuationNavigationKey === currentNavigationKey,
-      )
       // DOM、播放器 metadata 与原生侧栏结构并行准备；图片等非结构资源不阻塞提交。
       applyBewlyWidescreen(
         settings.value.bewlyWidescreenSidebarPosition || 'right',
         false,
+        application,
       )
     }
     else if (isBewlyWidescreenEngaged()) {
@@ -802,9 +846,8 @@ else if (shouldInitializeContentScript) {
     if (isInFullscreen || isInWebFullscreen) {
       exitBewlyWidescreen()
       autoContinuationNavigationKey = undefined
-      applyDefaultDanmakuState()
-      applyDefaultCaptionState()
-      lastAppliedPlayerModeNavigationKey = currentNavigationKey
+      if (targetPlayerMode === 'webFullscreen' && isInWebFullscreen)
+        application.onApplied()
       return
     }
 
@@ -815,9 +858,13 @@ else if (shouldInitializeContentScript) {
 
     clearPlayerModeRetry()
 
+    if (playerModeApplicationStarted)
+      return
+    playerModeApplicationStarted = true
+
     if (!targetPlayerMode || targetPlayerMode === 'default') {
     // 默认模式也需要居中显示
-      defaultMode()
+      defaultMode(application)
     }
     else {
       switch (targetPlayerMode) {
@@ -827,41 +874,19 @@ else if (shouldInitializeContentScript) {
               settings.value.bewlyWidescreenSidebarPosition || 'right',
               // 遮罩已在等待阶段挂载，并保持到 Bewly 播放页布局完成。
               false,
+              application,
             )
           }
-          if (!isBewlyWidescreenActive()) {
-            schedulePlayerModeRetry()
-            return
-          }
+          schedulePlayerModeRetry()
           break
         case 'webFullscreen':
-          webFullscreen()
+          webFullscreen(application)
           break
         case 'widescreen':
-          widescreen()
+          widescreen(application)
           break
       }
     }
-    applyDefaultDanmakuState()
-    applyDefaultCaptionState()
-    if (settings.value.showVerticalVideoZoomButton)
-      initVerticalVideoZoom()
-    else
-      resetVerticalVideoZoom()
-    // 应用自动连播设置，延迟更长时间确保播放器完全初始化
-    scheduleDetachedTimer(() => {
-      applyAutoPlayByVideoType()
-    }, 2000)
-    // 启动自动退出全屏监听
-    scheduleDetachedTimer(() => {
-      startAutoExitFullscreenMonitoring()
-    }, 2000)
-    lastAppliedPlayerModeNavigationKey = currentNavigationKey
-    autoContinuationNavigationKey = undefined
-    lastVideoEndedAt = 0
-
-    // 延迟添加稍后再看按钮
-    scheduleAddWatchLaterButton()
   }
 
   function clearPlayerModeRetry() {
@@ -1142,13 +1167,16 @@ else if (shouldInitializeContentScript) {
       const navigationRequestId = ++widescreenCommentReloadRequestId
       const currentVideoNavigationKey = getVideoNavigationKey(location.href)
       const isMeaningfulVideoNavigation = currentVideoNavigationKey !== lastVideoNavigationKey
-      if (isMeaningfulVideoNavigation)
+      if (isMeaningfulVideoNavigation) {
         userExitedWidescreenNavigationKey = undefined
+        awaitingNavigationMedia = navigationVideo !== null
+        invalidatePlayerModeApplication()
+      }
 
       lastUrl = location.href
       lastVideoNavigationKey = currentVideoNavigationKey
       if (isIframeDrawerHost()) {
-        bootOverlay?.reveal()
+        pageLoading.dispose()
         clearPendingWidescreenReloadNavigation()
         clearPlayerModeRetry()
         cancelPlayerRetryTasks()
@@ -1156,7 +1184,7 @@ else if (shouldInitializeContentScript) {
         return
       }
       if (!shouldShowBewlyBootOverlay(lastUrl, isInIframe()))
-        bootOverlay?.reveal()
+        pageLoading.dispose()
       syncHomePageHiddenStyleScope()
       if (!settingsBootLoaded)
         return
@@ -1195,7 +1223,7 @@ else if (shouldInitializeContentScript) {
           : null
         clearPendingWidescreenReloadNavigation()
 
-        if (shouldReloadWidescreenNavigation && !videoCommentIdentifier) {
+        if (shouldReloadWidescreenNavigation && !videoCommentIdentifier && !location.pathname.startsWith('/bangumi/play/')) {
           exitBewlyWidescreen()
           // 评论区无法可靠映射到视频 ID 时保留完整刷新兜底，避免播放页 SPA
           // 切换后继续复用旧评论组件（例如番剧页面或异常 URL）。
@@ -1207,7 +1235,8 @@ else if (shouldInitializeContentScript) {
           ? api.video.getVideoInfo(videoCommentIdentifier) as Promise<VideoInfo>
           : undefined
         const retainedBewlyPlaybackPage = shouldReloadWidescreenNavigation
-          && refreshBewlyPlaybackPageNavigation(navigationVideoInfoRequest)
+          && prepareBewlyPlaybackPageNavigation()
+        pendingNavigationVideoInfo = retainedBewlyPlaybackPage ? navigationVideoInfoRequest : undefined
         resetVerticalVideoZoom()
         removeWatchLaterButton()
         resetAutoPlayUserChangeFlag()
@@ -1218,22 +1247,8 @@ else if (shouldInitializeContentScript) {
 
         if (retainedBewlyPlaybackPage) {
           clearPlayerModeRetry()
-          lastAppliedPlayerModeNavigationKey = currentVideoNavigationKey
           autoContinuationNavigationKey = undefined
-          lastVideoEndedAt = 0
-          scheduleDetachedTimer(() => {
-            if (getVideoNavigationKey(location.href) !== currentVideoNavigationKey
-              || !isBewlyWidescreenActive()) {
-              return
-            }
-            applyDefaultDanmakuState()
-            applyDefaultCaptionState()
-            applyAutoPlayByVideoType()
-            startAutoExitFullscreenMonitoring()
-            if (settings.value.showVerticalVideoZoomButton)
-              initVerticalVideoZoom()
-            scheduleAddWatchLaterButton()
-          }, playerModeLoadSettleDelay)
+          schedulePlayerModeRetry()
         }
         else {
           exitBewlyWidescreen()
@@ -1276,7 +1291,8 @@ else if (shouldInitializeContentScript) {
         return
       }
       applyDefaultPlayerMode()
-      applyAutoPlayByVideoType()
+      if (lastAppliedPlayerModeNavigationKey === getVideoNavigationKey(location.href) && playerModeApplication?.shouldApply())
+        applyAutoPlayByVideoType()
     })
   }, { signal: contentScriptSignal })
 
@@ -1291,9 +1307,27 @@ else if (shouldInitializeContentScript) {
   // 原生侧栏节点；URL 变化后在同一个 Bewly 播放页 shell 内刷新关联数据。
   window.addEventListener('pushstate', prepareVideoNavigationBeforeRouteChange, { capture: true, signal: contentScriptSignal })
   document.addEventListener('ended', (event) => {
-    if (event.target === getVideoElement())
+    if (event.target === getVideoElement()) {
       lastVideoEndedAt = Date.now()
+      applyDefaultPlayerMode()
+    }
   }, { capture: true, signal: contentScriptSignal })
+
+  for (const eventName of ['loadedmetadata', 'loadeddata', 'playing']) {
+    document.addEventListener(eventName, (event) => {
+      if (event.target !== getVideoElement() || !isVideoOrBangumiPage())
+        return
+      const video = getVideoElement()
+      // The confirmed previous media is frozen across a route change. Do not
+      // accidentally relabel a new stream emitted just before pushState as old.
+      if (awaitingNavigationMedia && eventName === 'loadedmetadata' && video
+        && isPgcPlaybackPage() && isNativeVideoComponentReady(video) === true) {
+        awaitingNavigationMedia = false
+      }
+      if (lastAppliedPlayerModeNavigationKey !== getVideoNavigationKey(location.href))
+        schedulePlayerModeRetry()
+    }, { capture: true, signal: contentScriptSignal })
+  }
 
   // 添加页面加载监听
   window.addEventListener('load', () => {
@@ -1474,8 +1508,13 @@ else if (shouldInitializeContentScript) {
 
   window.addEventListener('pageshow', queuePlayerModeResume, { signal: contentScriptSignal })
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible')
+    if (document.visibilityState === 'visible') {
       queuePlayerModeResume()
+    }
+    else {
+      clearPlayerModeRetry()
+      invalidatePlayerModeApplication()
+    }
   }, { signal: contentScriptSignal })
   contentScriptDisposers.push(() => {
     if (playerModeResumeFrame !== undefined) {
@@ -1483,6 +1522,7 @@ else if (shouldInitializeContentScript) {
       playerModeResumeFrame = undefined
     }
     clearPlayerModeRetry()
+    invalidatePlayerModeApplication()
     clearPendingWidescreenReloadNavigation()
     widescreenCommentReloadRequestId++
   })
@@ -1505,15 +1545,10 @@ else if (shouldInitializeContentScript) {
       )
       applyEffectiveTopBarSource(document, initialTopBarSource)
 
-      if (shouldMountApp) {
-        installOriginalTopBarBootStyle()
-      }
-
       if (changeHomePage) {
         ensureResponsiveViewport(document)
         captureOriginalBilibiliTopBar(document)
         ensureHomePageHiddenStyle()
-        installBeforeLoadedStyle()
       }
 
       if (shouldMountApp) {
@@ -1541,10 +1576,8 @@ else if (shouldInitializeContentScript) {
         console.error('[Bewly Nocturne] Failed to bootstrap the content script:', error)
     }
     finally {
-      removeBeforeLoadedStyleEl()
-      removeOriginalTopBarBootStyle()
       if (mountedVueApp === null)
-        bootOverlay?.reveal()
+        pageLoading.dispose()
       if (changeHomePage && mountedVueApp === null)
         removeHomePageHiddenStyle()
     }
@@ -1579,6 +1612,14 @@ else if (shouldInitializeContentScript) {
         resolve()
       })
     })
+  }
+
+  function finishBootAfterAppMount() {
+    // The Vue shell and the player have different readiness boundaries.
+    if (!isVideoOrBangumiPage() || isInIframe()
+      || (!settings.value.enableVideoPlayerModeOverrides && resolveDefaultVideoPlayerMode() !== 'bewlyWidescreen')) {
+      pageLoading.dispose()
+    }
   }
 
   function injectApp() {
@@ -1640,7 +1681,7 @@ else if (shouldInitializeContentScript) {
     const revealContainer = () => {
       container.style.visibility = 'visible'
       activateHomePageAfterStyles()
-      requestAnimationFrame(() => bootOverlay?.reveal())
+      requestAnimationFrame(finishBootAfterAppMount)
     }
 
     // startShadowDOMStyleInjection()
@@ -1705,6 +1746,18 @@ else if (shouldInitializeContentScript) {
   ))
 
   contentScriptDisposers.push(watch(
+    resolveDefaultVideoPlayerMode,
+    () => {
+      // A changed preference cancels pending work; confirmed sessions retain
+      // the existing per-navigation policy instead of being forcibly toggled.
+      if (lastAppliedPlayerModeNavigationKey !== getVideoNavigationKey(location.href)) {
+        invalidatePlayerModeApplication()
+        applyDefaultPlayerMode()
+      }
+    },
+  ))
+
+  contentScriptDisposers.push(watch(
     () => settings.value.showVerticalVideoZoomButton,
     (enabled) => {
       if (enabled && !isIframeDrawerHost() && isVideoOrBangumiPage())
@@ -1716,7 +1769,11 @@ else if (shouldInitializeContentScript) {
 
   contentScriptDisposers.push(watch(
     () => settings.value.language,
-    () => syncRandomPlayUI(),
+    () => {
+      syncRandomPlayUI()
+      if (settings.value.showVerticalVideoZoomButton && !isIframeDrawerHost() && isVideoOrBangumiPage())
+        initVerticalVideoZoom()
+    },
   ))
 
   // 监听设置变化

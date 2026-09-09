@@ -7,11 +7,11 @@ import { useToast } from 'vue-toastification'
 import ALink from '~/components/ALink.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
-import api from '~/utils/api'
 import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
-import { getCSRF } from '~/utils/main'
+import { getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { changeUserRelation } from '~/utils/userRelation'
 
 interface UserCardProps {
   mid: number
@@ -112,21 +112,15 @@ async function handleFollowClick(e: Event) {
   const mid = props.mid
   const targetFollowing = !isFollowing.value
   const generation = ++followGeneration
-  const isCurrent = () => generation === followGeneration && accountId === currentAccountId.value && mid === props.mid
+  const isCurrent = () => generation === followGeneration && accountId === currentAccountId.value
+    && String(getUserID()) === String(accountId) && mid === props.mid
   let committed = false
   try {
     isFollowLoading.value = true
-    const csrf = getCSRF()
-
     // act: 1=关注, 2=取关
     const act = targetFollowing ? 1 : 2
 
-    const response = await api.user.relationModify({
-      fid: String(mid),
-      act,
-      re_src: 11, // 11=搜索结果页
-      csrf,
-    })
+    const response = await changeUserRelation(accountId, mid, act)
 
     if (!isCurrent())
       return

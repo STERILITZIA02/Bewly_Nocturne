@@ -3,6 +3,7 @@ export const PAGE_BRIDGE_PROTOCOL = 'bewly:v1'
 export const PAGE_BRIDGE_MESSAGE = {
   SETTINGS_REQUEST: 'settings:request',
   SETTINGS_UPDATE: 'settings:update',
+  ACCOUNT_CHANGED: 'account:changed',
 } as const
 
 export type PageBridgeMessageType = typeof PAGE_BRIDGE_MESSAGE[keyof typeof PAGE_BRIDGE_MESSAGE]
@@ -72,6 +73,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
 function isPageBridgeMessageType(value: unknown): value is PageBridgeMessageType {
   return value === PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
     || value === PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE
+    || value === PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED
 }
 
 export function isPageBridgeMessage(value: unknown): value is PageBridgeMessage {
@@ -84,9 +86,9 @@ export function isPageBridgeMessage(value: unknown): value is PageBridgeMessage 
     return false
   }
 
-  return value.type === PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
-    ? value.data === undefined
-    : Object.prototype.hasOwnProperty.call(value, 'data')
+  return value.type === PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE
+    ? Object.prototype.hasOwnProperty.call(value, 'data')
+    : value.data === undefined
 }
 
 export function matchesPageBridgeMessage(

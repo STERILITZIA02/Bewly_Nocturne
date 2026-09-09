@@ -173,10 +173,17 @@ export function registerViewLifetimeChecks(check, { Vue, compileComponent, flush
     assert.equal(active.history.redo(restored).videoList[0].id, 'new')
     assert.equal(cache.take(key.value), undefined, 'active snapshot was consumed')
     const oldOwner = active
+    let obsoleteReads = 0
+    const releaseSnapshot = oldOwner.lifetime.capture('expensive', () => {
+      obsoleteReads++
+      return []
+    })
     cache.clear()
+    releaseSnapshot()
     generation.value++
     await flush()
     assert.equal(oldOwner.lifetime.isCurrent(), false)
+    assert.equal(obsoleteReads, 0, 'invalid generations exit before evaluating snapshot getters')
     assert.equal(active.items.value.length, 1)
     app.unmount()
     assert.equal(mounted, 0)

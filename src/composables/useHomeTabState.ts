@@ -68,7 +68,7 @@ export function useHomeTabState() {
   function capture(key: string, getValue: () => unknown) {
     fields.set(key, getValue)
     return () => {
-      if (disposed || fields.get(key) !== getValue)
+      if (disposed || fields.get(key) !== getValue || (context && context.cache.generation !== generation))
         return
       const value = toRaw(getValue())
       fields.set(key, () => value)
@@ -111,7 +111,7 @@ export function useHomeTabState() {
   provide(homeTabStateKey, state)
   onBeforeUnmount(() => {
     disposed = true
-    if (context)
+    if (context && context.cache.generation === generation)
       context.cache.save(ownerKey, Object.fromEntries([...fields].map(([key, getValue]) => [key, toRaw(getValue())])), generation)
     fields.clear()
   })

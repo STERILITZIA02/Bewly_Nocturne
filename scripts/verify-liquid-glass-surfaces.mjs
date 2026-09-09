@@ -298,6 +298,16 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       await flush()
       assert.equal(player.querySelector('filter'), null)
       assert.equal(fixture.mounted, 0)
+      const nano = document.createElement('div')
+      nano.className = 'NanoPlayer_nonoPlayerSendingBar_fixture'
+      nano.innerHTML = '<input value="PGC draft"><button>Send</button>'
+      const playerArea = player.appendChild(document.createElement('video'))
+      state.danmakuSourceHost.remove()
+      player.append(nano)
+      assert.equal(binding.syncDanmakuInputSource(state), true)
+      assert.equal(state.danmakuSourceHost, nano, 'the Nano sending wrapper itself is the bar host')
+      assert.equal(player.classList.contains('bewly-widescreen-danmaku-source-host'), false, 'the common player ancestor never becomes the floating bar')
+      assert.equal(playerArea.parentElement, player)
     }
     finally {
       state.danmakuSemanticsCleanup?.()

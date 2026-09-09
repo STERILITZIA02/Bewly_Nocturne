@@ -9,6 +9,8 @@ interface Props {
   max?: number
   maxlength?: number
   placeholder?: string
+  disabled?: boolean
+  ariaInvalid?: boolean
 }
 const props = withDefaults(defineProps<Props>(), { size: 'medium' })
 
@@ -51,6 +53,7 @@ defineExpose({ focus })
   <div
     class="b-input"
     :class="`b-input--${size}`"
+    :aria-disabled="disabled"
     :style="{ height, padding }"
     focus-within:ring="2px $bew-theme-focus-ring"
     p="x-4"
@@ -73,6 +76,8 @@ defineExpose({ focus })
       :max="max"
       :maxlength="maxlength"
       :placeholder="placeholder"
+      :disabled="disabled"
+      :aria-invalid="ariaInvalid"
       :aria-labelledby="fieldLabelId"
       w-inherit min-w-0 h-inherit
       outline-none flex-1 bg-transparent
@@ -111,5 +116,10 @@ defineExpose({ focus })
 .b-input--small input {
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
+}
+
+.b-input[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: default;
 }
 </style>

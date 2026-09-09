@@ -1,4 +1,5 @@
 common:
+  operation_completed: 操作完成
   dialog: 对话框
   view_all: 查看更多
   play_all: 播放全部
@@ -109,6 +110,9 @@ player_screenshot:
   failed: 截图失败
   video_unavailable: 当前视频画面不可用
 settings:
+  following_sort: 新版关注列表排序
+  following_sort_updated: 按更新时间
+  following_sort_group: 按分组
   title: 设置
   menu_general: 通用
   menu_bewly_pages: Bewly 页面
@@ -364,7 +368,7 @@ settings:
   moments_enable_live_preview: 直播动态悬停预览
   moments_enable_live_preview_desc: 鼠标悬停直播动态封面时播放直播预览。
   moments_enable_video_preview: 视频动态悬停预览
-  moments_enable_video_preview_desc: 鼠标悬停视频动态封面时播放视频预览。
+  moments_enable_video_preview_desc: 悬停视频动态或转发视频时播放预览，可设置触发范围、额外延迟、控制条和拖动定位。
   moments_grid_columns: 动态列数
   moments_grid_columns_desc: 设置 Bewly 动态页的期望列数。卡片尺寸会随列数自适应；窗口空间不足时会自动减少列数，左侧栏与动态流整体保持居中。
   moments_grid_columns_option: '{count} 列'
@@ -530,6 +534,7 @@ settings:
   external_watch_later_button: 稍后再看按钮外置
   external_watch_later_button_desc: 启用后，视频页工具栏会显示独立的稍后再看按钮；按钮会显示当前视频状态，可点击添加或移除。
   show_vertical_video_zoom_button: 竖屏放大按钮
+  vertical_video_zoom_position: 调整竖屏放大区域
   show_vertical_video_zoom_button_desc: 在竖屏视频播放器中显示放大/缩小按钮和画面位置调节控件
   show_video_screenshot_button: 显示播放器截图按钮
   show_video_screenshot_button_desc: 启用后，在视频播放器控制栏中显示截取当前视频画面的按钮。
@@ -779,6 +784,8 @@ settings:
   search_results_pagination_mode: 搜索结果分页模式
   search_results_pagination_mode_desc: 选择搜索结果的展示方式：滚动自动加载或翻页
   recommendation_mode: 推荐模式
+  show_recommendation_mode_switcher: 显示推荐模式快速切换按钮组
+  show_recommendation_mode_switcher_desc: 在首页“个性推荐”的标签栏旁显示 Web、无 Cookie 和 App 推荐模式按钮组。
   recommendation_mode_desc: |
     Web：普通网页端推荐模式。无 Cookie：请求首页推荐时不携带 Cookie。App：移动端推荐模式，需先授权 access key。
   recommendation_mode_web_no_cookie: 无 Cookie
@@ -1426,6 +1433,20 @@ video_card:
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
 home:
+  following_default_group: 默认分组
+  following_special_group: 特别关注
+  following_group_name: '分组 {id}'
+  following_groups_load_failed: 分组加载失败，已加载内容仍可使用
+  following_groups_retry: 重试
+  following_move_group: 移动分组
+  following_remove_special: 取消特别关注
+  following_add_special: 设为特别关注
+  following_create_group: 新建分组
+  following_rename_group: 重命名分组
+  following_delete_group: 删除分组
+  following_group_name_label: 分组名称（1–16 个字符）
+  following_group_name_invalid: 请输入 1–16 个字符的分组名称
+  following_delete_group_confirm: '确定删除分组「{name}」吗？不会取消关注其中的 UP 主；没有其他普通分组的成员将归入默认分组。'
   app_authorization_required: App 模式的 access token 已缺失或过期，请重新授权后继续使用个性推荐
   reauthorize_app: 重新授权
   recommendation_empty: 暂无推荐内容

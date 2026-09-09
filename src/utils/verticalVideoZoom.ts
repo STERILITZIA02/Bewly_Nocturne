@@ -1,7 +1,12 @@
+import { hasPlayerMediaMutation, observePlayerDom } from '~/contentScripts/playerDomLifecycle'
+import { settings } from '~/logic'
+import { i18n } from '~/utils/i18n'
+
 import { injectCSS } from './main'
 import { getVideoElement } from './player'
 
 const PLAYER_HOST_SELECTOR = [
+  '#bilibili-player-wrap',
   '#playerWrap',
   '#bilibili-player',
   '#bilibiliPlayer',
@@ -37,7 +42,11 @@ let metadataListener: (() => void) | null = null
 let refreshTimer: ReturnType<typeof setTimeout> | null = null
 let minimapRenderTimer: ReturnType<typeof setTimeout> | null = null
 let controlsHideTimer: ReturnType<typeof setTimeout> | null = null
+let controlsVisibleUntil = 0
 let hostActivityCleanup: (() => void) | null = null
+let dragCleanup: (() => void) | null = null
+let stopPlayerDomObserver: (() => void) | null = null
+let refreshControlGeometry: (() => void) | null = null
 let refreshAttempts = 0
 let zoomPositionY = DEFAULT_ZOOM_POSITION_Y
 let lastMinimapRenderAt = 0
@@ -49,61 +58,68 @@ function injectStyle() {
   styleEl = injectCSS(`
     .${HOST_CLASS} {
       position: relative !important;
+      --bewly-vertical-video-controls-top: var(--bew-space-12, 48px);
     }
 
     .${BUTTON_CLASS} {
       position: absolute !important;
-      top: 12px !important;
-      left: 12px !important;
-      right: auto !important;
+      top: var(--bewly-vertical-video-controls-top) !important;
+      left: auto !important;
+      right: var(--bew-space-3, 12px) !important;
       z-index: 100 !important;
       display: none;
       align-items: center !important;
       justify-content: center !important;
-      height: 32px !important;
-      min-width: 58px !important;
-      padding: 0 14px !important;
+      height: var(--bew-control-height, 36px) !important;
+      min-width: var(--bew-space-12, 48px) !important;
+      padding: 0 var(--bew-space-3, 12px) !important;
       border: 0 !important;
-      border-radius: 999px !important;
+      border-radius: var(--bew-radius-full) !important;
+      corner-shape: var(--bew-corner-shape-round);
       color: #fff !important;
       background: rgb(0 0 0 / 48%) !important;
-      backdrop-filter: blur(8px) !important;
-      box-shadow: 0 6px 18px rgb(0 0 0 / 22%) !important;
+      backdrop-filter: var(--bew-filter-glass-1) !important;
+      box-shadow: var(--bew-shadow-2) !important;
       filter: none !important;
-      outline: 0 !important;
-      font-size: 13px !important;
-      line-height: 32px !important;
+      font-size: var(--bew-font-size-control, 13px) !important;
+      line-height: var(--bew-line-height-control, 18px) !important;
       cursor: pointer !important;
       user-select: none !important;
     }
 
     .${HOST_CLASS}.${VERTICAL_CLASS}.${ACTIVE_CLASS} > .${BUTTON_CLASS},
+    .${HOST_CLASS}.${VERTICAL_CLASS}:focus-within > .${BUTTON_CLASS},
     .${HOST_CLASS}.${VERTICAL_CLASS}.${ADJUSTING_CLASS} > .${BUTTON_CLASS} {
       display: inline-flex;
     }
 
     .${CONTROL_CLASS} {
       position: absolute !important;
-      top: 92px !important;
-      right: 12px !important;
+      top: var(--bewly-vertical-video-map-top) !important;
+      right: var(--bew-space-3, 12px) !important;
       z-index: 100 !important;
       display: none;
       align-items: center !important;
       justify-content: center !important;
       width: var(--bewly-vertical-video-map-width, 72px) !important;
-      height: ${MAP_HEIGHT}px !important;
+      height: var(--bewly-vertical-video-map-height, ${MAP_HEIGHT}px) !important;
       padding: 0 !important;
       border: 0 !important;
-      border-radius: 4px !important;
+      border-radius: var(--bew-radius-sm) !important;
       background: transparent !important;
       backdrop-filter: none !important;
-      box-shadow: 0 6px 18px rgb(0 0 0 / 22%) !important;
+      box-shadow: var(--bew-shadow-2) !important;
       filter: none !important;
     }
 
     .${HOST_CLASS}.${VERTICAL_CLASS}.${ZOOMED_CLASS}.${ACTIVE_CLASS} > .${CONTROL_CLASS},
+    .${HOST_CLASS}.${VERTICAL_CLASS}.${ZOOMED_CLASS}:focus-within > .${CONTROL_CLASS},
     .${HOST_CLASS}.${VERTICAL_CLASS}.${ZOOMED_CLASS}.${ADJUSTING_CLASS} > .${CONTROL_CLASS} {
       display: inline-flex;
+    }
+
+    .${HOST_CLASS}[data-bewly-zoom-map-available="false"] > .${CONTROL_CLASS} {
+      display: none !important;
     }
 
     .${MAP_CLASS} {
@@ -113,7 +129,7 @@ function injectStyle() {
       margin: 0 !important;
       padding: 0 !important;
       border: 0 !important;
-      border-radius: 4px !important;
+      border-radius: inherit !important;
       background: rgb(0 0 0 / 54%) !important;
       box-shadow: 0 0 0 1px rgb(0 0 0 / 34%) !important;
       cursor: pointer !important;
@@ -121,8 +137,10 @@ function injectStyle() {
       touch-action: none !important;
     }
 
-    .${MAP_CLASS}:focus {
-      outline: none !important;
+    .${MAP_CLASS}:focus-visible,
+    .${BUTTON_CLASS}:focus-visible {
+      outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-foreground) !important;
+      outline-offset: var(--bew-space-0-5, 2px);
     }
 
     .${CANVAS_CLASS} {
@@ -157,36 +175,15 @@ function injectStyle() {
       pointer-events: none !important;
     }
 
-    #bewly-widescreen-root .${HOST_CLASS} > .${BUTTON_CLASS} {
-      border: 0 !important;
-      border-radius: 999px !important;
-      box-shadow: 0 6px 18px rgb(0 0 0 / 22%) !important;
-      filter: none !important;
-    }
-
     .${BUTTON_CLASS}::before,
     .${BUTTON_CLASS}::after {
       display: none !important;
       content: none !important;
     }
 
-    #bewly-widescreen-root .${HOST_CLASS} > .${CONTROL_CLASS} {
-      border: 0 !important;
-      border-radius: 4px !important;
-      box-shadow: 0 6px 18px rgb(0 0 0 / 22%) !important;
-      filter: none !important;
-    }
-
-    #bewly-widescreen-root .${HOST_CLASS} .${VIEWPORT_CLASS} {
-      border: 0 !important;
-      border-radius: 0 !important;
-      filter: none !important;
-    }
-
-    .${BUTTON_CLASS}:hover,
-    #bewly-widescreen-root .${BUTTON_CLASS}:hover {
+    .${BUTTON_CLASS}:hover {
       background: var(--bew-theme-color, #00aeec) !important;
-      color: #fff !important;
+      color: var(--bew-on-theme-color) !important;
     }
 
     .${HOST_CLASS}.${ZOOMED_CLASS} .bpx-player-primary-area,
@@ -224,15 +221,25 @@ function findPlayerHost() {
 }
 
 function showControlsTemporarily(host: HTMLElement) {
-  host.classList.add(ACTIVE_CLASS)
+  if (!host.classList.contains(ACTIVE_CLASS))
+    host.classList.add(ACTIVE_CLASS)
+  scheduleMinimapFrameRender(0)
+  controlsVisibleUntil = Date.now() + CONTROLS_AUTO_HIDE_DELAY
   if (controlsHideTimer)
-    clearTimeout(controlsHideTimer)
-
-  controlsHideTimer = setTimeout(() => {
+    return
+  const hideWhenIdle = () => {
+    if (currentHost !== host)
+      return
     controlsHideTimer = null
-    if (!host.classList.contains(ADJUSTING_CLASS))
+    const remaining = controlsVisibleUntil - Date.now()
+    if (remaining > 0) {
+      controlsHideTimer = setTimeout(hideWhenIdle, remaining)
+      return
+    }
+    if (!host.classList.contains(ADJUSTING_CLASS) && host.classList.contains(ACTIVE_CLASS))
       host.classList.remove(ACTIVE_CLASS)
-  }, CONTROLS_AUTO_HIDE_DELAY)
+  }
+  controlsHideTimer = setTimeout(hideWhenIdle, CONTROLS_AUTO_HIDE_DELAY)
 }
 
 function hideControls(host: HTMLElement) {
@@ -240,12 +247,69 @@ function hideControls(host: HTMLElement) {
     clearTimeout(controlsHideTimer)
     controlsHideTimer = null
   }
-  if (!host.classList.contains(ADJUSTING_CLASS))
+  controlsVisibleUntil = 0
+  if (!host.classList.contains(ADJUSTING_CLASS) && host.classList.contains(ACTIVE_CLASS))
     host.classList.remove(ACTIVE_CLASS)
 }
 
 function bindHostActivity(host: HTMLElement) {
   hostActivityCleanup?.()
+
+  let frame: number | undefined
+  let resize: ResizeObserver
+  let issue: HTMLElement | null = null
+  let nativeControls: HTMLElement | null = null
+  const scheduleGeometry = () => {
+    if (frame !== undefined)
+      return
+    frame = requestAnimationFrame(() => {
+      frame = undefined
+      if (currentHost !== host || !host.isConnected)
+        return
+      const nextIssue = host.querySelector<HTMLElement>('.bpx-player-top-issue')
+      const nextControls = host.querySelector<HTMLElement>('.bpx-player-control-wrap, .bilibili-player-video-control')
+      for (const [previous, next] of [[issue, nextIssue], [nativeControls, nextControls]]) {
+        if (previous === next)
+          continue
+        if (previous)
+          resize.unobserve(previous)
+        if (next)
+          resize.observe(next)
+      }
+      issue = nextIssue
+      nativeControls = nextControls
+      const rect = host.getBoundingClientRect()
+      const scale = host.offsetHeight ? rect.height / host.offsetHeight : 1
+      if (!scale || rect.height <= 0)
+        return
+      const issueRect = issue?.getBoundingClientRect()
+      const issueBottom = issueRect?.height ? (issueRect.bottom - rect.top) / scale : 0
+      const style = getComputedStyle(host)
+      const gap = Number.parseFloat(style.getPropertyValue('--bew-space-3')) || 12
+      const height = Number.parseFloat(style.getPropertyValue('--bew-control-height')) || 36
+      const controlsHeight = (nativeControls?.getBoundingClientRect().height || 0) / scale
+      const availableBottom = rect.height / scale - controlsHeight - gap
+      const top = Math.max(gap, Math.min(Math.max(48, issueBottom + gap), availableBottom - height))
+      const mapTop = top + height + gap
+      const mapHeight = Math.max(0, Math.min(MAP_HEIGHT, availableBottom - mapTop))
+      for (const [key, value] of Object.entries({ 'controls-top': top, 'map-top': mapTop, 'map-height': mapHeight })) {
+        const property = `--bewly-vertical-video-${key}`
+        const next = `${Math.round(value)}px`
+        if (host.style.getPropertyValue(property) !== next)
+          host.style.setProperty(property, next)
+      }
+      const available = String(mapHeight >= 48)
+      if (host.dataset.bewlyZoomMapAvailable !== available)
+        host.dataset.bewlyZoomMapAvailable = available
+      syncMinimapGeometry()
+    })
+  }
+  resize = new ResizeObserver(scheduleGeometry)
+  resize.observe(host)
+  refreshControlGeometry = scheduleGeometry
+  window.addEventListener('resize', scheduleGeometry)
+  document.addEventListener('fullscreenchange', scheduleGeometry)
+  scheduleGeometry()
 
   const onPointerActivity = () => showControlsTemporarily(host)
   const onPointerLeave = () => hideControls(host)
@@ -255,6 +319,15 @@ function bindHostActivity(host: HTMLElement) {
   host.addEventListener('pointerleave', onPointerLeave)
 
   hostActivityCleanup = () => {
+    resize.disconnect()
+    refreshControlGeometry = null
+    window.removeEventListener('resize', scheduleGeometry)
+    document.removeEventListener('fullscreenchange', scheduleGeometry)
+    if (frame !== undefined)
+      cancelAnimationFrame(frame)
+    for (const key of ['controls-top', 'map-top', 'map-height'])
+      host.style.removeProperty(`--bewly-vertical-video-${key}`)
+    delete host.dataset.bewlyZoomMapAvailable
     host.removeEventListener('pointerenter', onPointerActivity)
     host.removeEventListener('pointermove', onPointerActivity)
     host.removeEventListener('pointerdown', onPointerActivity)
@@ -270,22 +343,37 @@ function syncButtonLabel() {
   if (!button || !currentHost)
     return
 
-  button.textContent = currentHost.classList.contains(ZOOMED_CLASS) ? '缩小' : '放大'
+  const zoomed = currentHost.classList.contains(ZOOMED_CLASS)
+  const label = String(i18n.global.t(zoomed ? 'moments.zoom_out' : 'moments.zoom_in', settings.value.language))
+  if (button.textContent !== label)
+    button.textContent = label
+  if (button.getAttribute('aria-pressed') !== String(zoomed))
+    button.setAttribute('aria-pressed', String(zoomed))
+  const positionLabel = String(i18n.global.t('settings.vertical_video_zoom_position', settings.value.language))
+  if (mapElement?.getAttribute('aria-label') !== positionLabel)
+    mapElement?.setAttribute('aria-label', positionLabel)
 }
 
 function syncZoomPosition() {
   if (!currentHost)
     return
 
-  currentHost.style.setProperty('--bewly-vertical-video-zoom-y', `${zoomPositionY}%`)
+  setZoomProperty(currentHost, '--bewly-vertical-video-zoom-y', `${zoomPositionY}%`)
   if (mapElement && viewportElement) {
     syncMinimapGeometry()
     const trackHeight = mapElement.clientHeight || MAP_HEIGHT
     const viewportHeight = viewportElement.offsetHeight || getViewportHeight()
     const top = Math.max(0, (trackHeight - viewportHeight) * (zoomPositionY / 100))
-    mapElement.style.setProperty('--bewly-vertical-video-zoom-window-top', `${top}px`)
-    mapElement.setAttribute('aria-valuenow', String(Math.round(zoomPositionY)))
+    setZoomProperty(mapElement, '--bewly-vertical-video-zoom-window-top', `${top}px`)
+    const value = String(Math.round(zoomPositionY))
+    if (mapElement.getAttribute('aria-valuenow') !== value)
+      mapElement.setAttribute('aria-valuenow', value)
   }
+}
+
+function setZoomProperty(element: HTMLElement, name: string, value: string) {
+  if (element.style.getPropertyValue(name) !== value)
+    element.style.setProperty(name, value)
 }
 
 function resetZoomPosition() {
@@ -311,7 +399,6 @@ function ensureButton(host: HTMLElement) {
         syncZoomPosition()
       }
       syncButtonLabel()
-      button?.blur()
     })
   }
 
@@ -328,7 +415,6 @@ function ensureControl(host: HTMLElement) {
     mapElement.className = MAP_CLASS
     mapElement.tabIndex = 0
     mapElement.setAttribute('role', 'slider')
-    mapElement.setAttribute('aria-label', '调整竖屏放大区域')
     mapElement.setAttribute('aria-valuemin', '0')
     mapElement.setAttribute('aria-valuemax', '100')
 
@@ -340,6 +426,9 @@ function ensureControl(host: HTMLElement) {
     mapElement.appendChild(viewportElement)
 
     mapElement.addEventListener('pointerdown', (event) => {
+      if (event.button !== 0)
+        return
+      dragCleanup?.()
       event.preventDefault()
       mapElement?.setPointerCapture(event.pointerId)
       currentHost?.classList.add(ADJUSTING_CLASS)
@@ -352,10 +441,14 @@ function ensureControl(host: HTMLElement) {
           showControlsTemporarily(currentHost)
         window.removeEventListener('pointermove', onPointerMove)
         window.removeEventListener('pointerup', onPointerUp)
+        window.removeEventListener('pointercancel', onPointerUp)
+        dragCleanup = null
       }
 
       window.addEventListener('pointermove', onPointerMove)
       window.addEventListener('pointerup', onPointerUp, { once: true })
+      window.addEventListener('pointercancel', onPointerUp, { once: true })
+      dragCleanup = onPointerUp
     })
 
     mapElement.addEventListener('keydown', (event) => {
@@ -370,11 +463,11 @@ function ensureControl(host: HTMLElement) {
     control.appendChild(mapElement)
   }
 
-  if (control.parentElement !== host)
+  if (control.parentElement !== host) {
     host.appendChild(control)
-
-  scheduleMinimapFrameRender(0, true)
-  syncZoomPosition()
+    scheduleMinimapFrameRender(0, true)
+    syncZoomPosition()
+  }
 }
 
 function setZoomPositionFromPointer(event: PointerEvent) {
@@ -401,7 +494,8 @@ function getViewportHeight() {
     ? video.videoWidth / video.videoHeight
     : 9 / 16
   const clampedRatio = Math.max(0.1, Math.min(1, visibleRatio))
-  return Math.max(24, Math.min(MAP_HEIGHT, Math.round(MAP_HEIGHT * clampedRatio)))
+  const mapHeight = mapElement?.clientHeight || MAP_HEIGHT
+  return Math.max(24, Math.min(mapHeight, Math.round(mapHeight * clampedRatio)))
 }
 
 function syncMinimapGeometry() {
@@ -412,11 +506,12 @@ function syncMinimapGeometry() {
   const videoAspect = video?.videoWidth && video.videoHeight
     ? video.videoWidth / video.videoHeight
     : 9 / 16
-  const mapWidth = Math.max(48, Math.min(96, Math.round(MAP_HEIGHT * videoAspect)))
+  const mapHeight = mapElement.clientHeight || MAP_HEIGHT
+  const mapWidth = Math.max(48, Math.min(96, Math.round(mapHeight * videoAspect)))
   const viewportHeight = getViewportHeight()
 
-  control.style.setProperty('--bewly-vertical-video-map-width', `${mapWidth}px`)
-  mapElement.style.setProperty('--bewly-vertical-video-zoom-window-height', `${viewportHeight}px`)
+  setZoomProperty(control, '--bewly-vertical-video-map-width', `${mapWidth}px`)
+  setZoomProperty(mapElement, '--bewly-vertical-video-zoom-window-height', `${viewportHeight}px`)
 }
 
 function renderMinimapFrame() {
@@ -497,6 +592,10 @@ function isCanvasFrameEffectivelyBlack(ctx: CanvasRenderingContext2D, width: num
 }
 
 function scheduleMinimapFrameRender(delay = 80, force = false) {
+  if (!currentHost?.classList.contains(VERTICAL_CLASS) || !currentHost.classList.contains(ZOOMED_CLASS)
+    || !(currentHost.classList.contains(ACTIVE_CLASS) || currentHost.classList.contains(ADJUSTING_CLASS) || currentHost.matches(':focus-within'))) {
+    return
+  }
   if (!force && Date.now() - lastMinimapRenderAt < MINIMAP_FRAME_REFRESH_INTERVAL)
     return
 
@@ -515,9 +614,11 @@ function syncVideoState() {
 
   const video = getVideoElement()
   const vertical = !!(video?.videoWidth && video.videoHeight && video.videoWidth < video.videoHeight)
-  currentHost.classList.toggle(VERTICAL_CLASS, vertical)
+  if (currentHost.classList.contains(VERTICAL_CLASS) !== vertical)
+    currentHost.classList.toggle(VERTICAL_CLASS, vertical)
   if (!vertical) {
-    currentHost.classList.remove(ZOOMED_CLASS)
+    if (currentHost.classList.contains(ZOOMED_CLASS))
+      currentHost.classList.remove(ZOOMED_CLASS)
     resetZoomPosition()
   }
 
@@ -583,7 +684,8 @@ function refreshVerticalVideoZoom() {
 
   const hostChanged = currentHost !== host
   currentHost = host
-  currentHost.classList.add(HOST_CLASS)
+  if (!currentHost.classList.contains(HOST_CLASS))
+    currentHost.classList.add(HOST_CLASS)
   if (hostChanged)
     bindHostActivity(currentHost)
   ensureButton(currentHost)
@@ -597,11 +699,20 @@ function refreshVerticalVideoZoom() {
 
 export function initVerticalVideoZoom() {
   injectStyle()
+  stopPlayerDomObserver ??= observePlayerDom((mutations) => {
+    if (hasPlayerMediaMutation(mutations) && (getVideoElement() !== observedVideo || findPlayerHost() !== currentHost))
+      scheduleRefresh(0)
+    else if (mutations?.some(record => [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element && (node.matches('.bpx-player-top-issue, .bpx-player-control-wrap, .bilibili-player-video-control') || node.querySelector('.bpx-player-top-issue, .bpx-player-control-wrap, .bilibili-player-video-control')))))
+      refreshControlGeometry?.()
+  })
   refreshAttempts = 0
   scheduleRefresh(0)
 }
 
 export function resetVerticalVideoZoom() {
+  stopPlayerDomObserver?.()
+  stopPlayerDomObserver = null
+  dragCleanup?.()
   if (refreshTimer) {
     clearTimeout(refreshTimer)
     refreshTimer = null
@@ -629,4 +740,6 @@ export function resetVerticalVideoZoom() {
   canvasElement = null
   viewportElement = null
   refreshAttempts = 0
+  styleEl?.remove()
+  styleEl = null
 }

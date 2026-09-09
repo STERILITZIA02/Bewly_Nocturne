@@ -1,5 +1,5 @@
 import { onRouteChange } from '~/composables/useRouteState'
-import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
+import { hasPlayerMediaMutation, observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { CustomPlayOrderContext, RandomPlayOrder } from '~/logic/storage'
 import { debugLog } from '~/utils/debug'
@@ -878,7 +878,7 @@ export function enableRandomPlay(): void {
 
     // 创建新的随机播放监听器
     const randomPlayListener = () => {
-      if (generation !== videoListenerGeneration || !isRandomPlayEnabled)
+      if (generation !== videoListenerGeneration || !isRandomPlayEnabled || video !== getVideoElement())
         return
 
       // 防止重复触发（ended 和 pause 事件可能都会触发）
@@ -936,11 +936,16 @@ export function enableRandomPlay(): void {
 
   // 监听DOM变化，如果视频元素被替换，重新设置监听器
   stopVideoDomObserver?.()
-  stopVideoDomObserver = observePlayerDom(() => {
+  stopVideoDomObserver = observePlayerDom((mutations) => {
     if (generation !== videoListenerGeneration || !isRandomPlayEnabled)
       return
+    // Recheck identity when media/root nodes change, even if the old video is
+    // still connected. Danmaku and clock updates cannot replace the media.
+    if (listenerVideo?.isConnected && !hasPlayerMediaMutation(mutations)) {
+      return
+    }
     const video = getVideoElement()
-    if (video && !video.hasAttribute('data-bewly-random-play-listener')) {
+    if (video && video !== listenerVideo) {
       videoListenerRetryCount = 0
       setupVideoListener()
     }
@@ -1130,10 +1135,11 @@ export function initRandomPlayOnVideoPage(): void {
     return
 
   const generation = randomPlayLifecycleGeneration
+  const href = location.href
   // 等待页面元素加载
   const checkAndInit = () => {
     initializationTimer = null
-    if (generation !== randomPlayLifecycleGeneration || !isCustomPlayPage() || isRandomPlayInitialized)
+    if (generation !== randomPlayLifecycleGeneration || href !== location.href || !isCustomPlayPage() || isRandomPlayInitialized)
       return
 
     const autoPlayContainer = findPlaylistAutoPlayContainer()
@@ -1183,22 +1189,34 @@ export function observeRandomPlayPageChanges(): void {
     const observerTarget = document.querySelector(episodeRootSelector)?.parentElement ?? document.body
     pageObserverTarget = observerTarget
     pageObserver = new MutationObserver((mutations) => {
-      if (!isCustomPlayPage())
+      if (!isCustomPlayPage() || !settings.value.enableRandomPlay)
         return
 
-      const scopedTarget = document.querySelector(episodeRootSelector)?.parentElement
-      if (pageObserverTarget === document.body && scopedTarget) {
+      if (mutations.every(record => record.target instanceof Element
+        && record.target.closest('.bpx-player-container, .bilibili-player')
+        && ![...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element
+          && (node.matches(episodeRootSelector) || !!node.querySelector(episodeRootSelector))))) {
+        return
+      }
+
+      const scopedTarget = document.querySelector(episodeRootSelector)?.parentElement ?? document.body
+      if (!pageObserverTarget?.isConnected || pageObserverTarget !== scopedTarget) {
         stopRandomPlayPageObserver()
         startPageObserver()
-        return
       }
 
       // 使用防抖避免频繁触发
       if (domChangeTimer !== null)
         clearTimeout(domChangeTimer)
 
+      const generation = randomPlayLifecycleGeneration
+      const href = location.href
+      const isCurrent = () => generation === randomPlayLifecycleGeneration && href === location.href
+        && isCustomPlayPage() && settings.value.enableRandomPlay
       domChangeTimer = window.setTimeout(() => {
         domChangeTimer = null
+        if (!isCurrent())
+          return
         if (customEpisodeOrder.length > 0)
           applyCustomEpisodeVisualOrder()
 
@@ -1216,47 +1234,13 @@ export function observeRandomPlayPageChanges(): void {
 
         // 如果按钮不存在但应该存在（有自动播放容器且启用了功能），则重新创建
         if ((!existingBtn || isMisplacedRandomPlay) && autoPlayContainer && settings.value.enableRandomPlay) {
-          // 检查是否是因为DOM重新渲染导致的
-          let shouldRecreate = false
-
-          for (const mutation of mutations) {
-            if (mutation.type === 'childList') {
-              // 只检查特定的DOM变化，减少误判
-              const removedNodes = Array.from(mutation.removedNodes)
-              const addedNodes = Array.from(mutation.addedNodes)
-
-              // 更精确的检查：只关注直接相关的DOM变化
-              const hasAutoPlayRemoved = removedNodes.some(node =>
-                node.nodeType === Node.ELEMENT_NODE
-                && ((node as Element).classList?.contains('auto-play')
-                  || (node as Element).classList?.contains('continuous-btn')
-                  || (node as Element).classList?.contains('random-play-btn')
-                  || (node as Element).querySelector?.('.auto-play, .continuous-btn') !== null),
-              )
-
-              const hasAutoPlayAdded = addedNodes.some(node =>
-                node.nodeType === Node.ELEMENT_NODE
-                && ((node as Element).classList?.contains('auto-play')
-                  || (node as Element).classList?.contains('continuous-btn')),
-              )
-
-              if (hasAutoPlayRemoved || hasAutoPlayAdded) {
-                shouldRecreate = true
-                break
-              }
-            }
-          }
-
-          if (shouldRecreate) {
-            // 增加延迟，避免与Bilibili的DOM更新冲突
-            if (recreateTimer !== null)
-              clearTimeout(recreateTimer)
+          if (recreateTimer === null) {
             recreateTimer = window.setTimeout(() => {
               recreateTimer = null
+              if (!isCurrent() || !isRandomPlayInitialized)
+                return
               createRandomPlayUI()
-
-              // UI创建函数内部会自动同步状态，这里不需要额外处理
-            }, 500) // 增加延迟到500ms
+            }, 500)
           }
         }
       }, 300) // 300ms防抖延迟
@@ -1266,6 +1250,10 @@ export function observeRandomPlayPageChanges(): void {
       childList: true,
       subtree: true,
     })
+    // Track replacement of the scoped playlist container through the same
+    // observer, without scanning unrelated descendants of the whole page.
+    for (let parent = observerTarget.parentElement; parent; parent = parent.parentElement)
+      pageObserver.observe(parent, { childList: true })
   }
 
   let lastPath = `${location.origin}${location.pathname}${location.search}`
@@ -1285,9 +1273,10 @@ export function observeRandomPlayPageChanges(): void {
     }
 
     startPageObserver()
+    const generation = randomPlayLifecycleGeneration
     routeInitTimer = window.setTimeout(() => {
       routeInitTimer = null
-      if (isCustomPlayPage())
+      if (generation === randomPlayLifecycleGeneration && nextPath === `${location.origin}${location.pathname}${location.search}` && isCustomPlayPage())
         initRandomPlayOnVideoPage()
     }, 1500)
   })

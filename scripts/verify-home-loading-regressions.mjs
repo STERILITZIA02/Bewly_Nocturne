@@ -28,7 +28,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/constants/layout': layout,
       '~/logic': { settings, gridLayout: Vue.ref({ home: 'adaptive' }) },
-      '~/logic/layoutEdit': { useLayoutEditSettingValue: (_key, getter) => Vue.computed(getter), vLayoutEditable: {} },
+      '~/logic/layoutEdit': { isLayoutEditing: Vue.ref(false), useLayoutEditSettingValue: (_key, getter) => Vue.computed(getter), vLayoutEditable: {} },
       '~/stores/forYouStore': { useForYouStore: () => ({ resetState() {}, takeCompleteState: () => null }) },
       '~/stores/mainStore': { useMainStore: () => ({ homeTabs: tabs }) },
       '~/stores/topBarStore': { useTopBarStore: () => topBar },
@@ -36,6 +36,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/utils/homeTabConfig': await import('../src/utils/homeTabConfig'),
       '~/utils/mitt': { default: { on() {}, off() {} } },
       './components/VersionReminder.vue': { default: blank },
+      './components/RecommendationModeSwitcher.vue': { default: blank },
       './types': { HomeSubPage },
     }, { renderTemplate: false })
     const host = viewport.appendChild(document.createElement('div'))
@@ -182,6 +183,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/components/LazyPicture.vue': { default: blank },
       '~/components/SkeletonBlock.vue': { default: await compileComponent('../src/components/SkeletonBlock.vue') },
       '~/components/Tooltip.vue': { default: blank },
+      '~/composables/useVideoPreviewSwipeSeek': await import('../src/composables/useVideoPreviewSwipeSeek'),
       '~/logic': { settings },
       '~/utils/dataFormatter': { calcCurrentTime: () => '' },
       '~/utils/flv': { loadFlvModule: async () => ({ default: {

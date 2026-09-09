@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import type { CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useUserRelations } from '~/composables/useUserRelations'
 import { settings } from '~/logic'
 import type { VideoCardContextMenuKey } from '~/logic/storage'
 import { Type as ThreePointV2Type } from '~/models/video/appForYou'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { cleanBilibiliUrl, getCSRF, openLinkToNewTab } from '~/utils/main'
+import { cleanBilibiliUrl, getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
+import { changeUserRelation } from '~/utils/userRelation'
 
 import type { Video } from '../types'
 import BlockUserConfirmDialog from './components/BlockUserConfirmDialog.vue'
@@ -78,6 +83,8 @@ function focusMenuItem(index: number) {
 }
 
 function handleMenuKeydown(event: KeyboardEvent) {
+  if (event.defaultPrevented || event.isComposing || event.keyCode === 229)
+    return
   const items = getMenuItems()
   if (items.length === 0)
     return
@@ -105,10 +112,7 @@ function handleMenuKeydown(event: KeyboardEvent) {
       break
     case 'Enter':
     case ' ':
-      if (currentIndex >= 0) {
-        event.preventDefault()
-        items[currentIndex]?.click()
-      }
+      event.stopPropagation()
       break
     case 'Escape':
       event.preventDefault()
@@ -120,6 +124,12 @@ function handleMenuKeydown(event: KeyboardEvent) {
 const getVideoType = inject<() => string>('getVideoType')!
 
 const { t } = useI18n()
+const toast = useToast()
+const topBarStore = useTopBarStore()
+const { batchQueryUserRelations } = useUserRelations()
+const currentAccountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
+let relationPending = false
+let disposed = false
 const videoOptions = computed(() => [
   { id: 1, key: 'notInterested' as const, name: t('video_card.operation.not_interested') },
   { id: 2, key: 'notInterestedUploader' as const, name: t('video_card.operation.not_interested_uploader') },
@@ -210,12 +220,12 @@ const commonOptions = computed((): OptionItem[][] => {
 
     if (isFollowed) {
       result.push([
-        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-bold-duotone', color: 'text-orange-500' },
+        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-bold-duotone' },
       ])
     }
     else {
       result.push([
-        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-solar:user-plus-bold-duotone', color: 'text-blue-500' },
+        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-solar:user-plus-bold-duotone' },
       ])
     }
   }
@@ -223,7 +233,7 @@ const commonOptions = computed((): OptionItem[][] => {
   // 添加拉黑用户选项；缺少作者 mid 时隐藏，避免点击后发出无效请求。
   if (authorMid) {
     result.push([
-      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-solar:user-block-bold-duotone', color: 'text-red-500' },
+      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-solar:user-block-bold-duotone', color: 'text-$bew-error-color' },
     ])
   }
 
@@ -235,6 +245,15 @@ const commonOptions = computed((): OptionItem[][] => {
     })
   }
   return result.map(group => group.filter(option => isOptionVisible(option.key))).filter(group => group.length > 0)
+})
+
+const menuGroups = computed(() => {
+  const recommendation = getVideoType() === 'appRcmd'
+    ? (props.video.threePointV2 ?? []).filter(option => option.type === ThreePointV2Type.Dislike && isOptionVisible('notInterested')).filter((option, index, all) => all.findIndex(item => item.type === option.type) === index).map(option => ({ key: `app:${option.type}`, name: t('video_card.operation.not_interested'), icon: 'i-solar:confounded-circle-bold-duotone', color: undefined, run: () => openAppDislikeDialog() }))
+    : getVideoType() === 'rcmd'
+      ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-solar:confounded-circle-bold-duotone', color: undefined, run: () => handleMoreCommand(option.id) }))
+      : []
+  return [recommendation, ...commonOptions.value.map(group => group.map(option => ({ ...option, run: () => handleCommonCommand(option.command) })))].filter(group => group.length)
 })
 
 // 在菜单显示后检查是否需要显示滚动指示器
@@ -250,6 +269,9 @@ watch(() => showContextMenu.value, (newVal) => {
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
+  const mid = getAuthorMid()
+  if (mid)
+    void batchQueryUserRelations([mid])
   window.addEventListener('resize', handleViewportResize)
   observedVisualViewport = window.visualViewport
   observedVisualViewport?.addEventListener('resize', handleViewportResize)
@@ -269,6 +291,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  disposed = true
   window.removeEventListener('resize', handleViewportResize)
   observedVisualViewport?.removeEventListener('resize', handleViewportResize)
   observedVisualViewport = null
@@ -323,16 +346,6 @@ async function submitWebDislike(command: number) {
 function handleMoreCommand(command: number) {
   handleRemoved()
   void submitWebDislike(command)
-}
-
-function handleAppMoreCommand(command: ThreePointV2Type) {
-  switch (command) {
-    case ThreePointV2Type.Feedback:
-      break
-    case ThreePointV2Type.Dislike:
-      openAppDislikeDialog()
-      break
-  }
 }
 
 function handleCommonCommand(command: VideoOption) {
@@ -442,92 +455,39 @@ function handleRemoved(selectedOpt?: { reasonId?: number, feedbackId?: number })
   handleClose()
 }
 
-async function blockUser() {
+async function writeRelation(act: 1 | 2 | 5) {
+  if (relationPending)
+    return
+  const accountId = currentAccountId.value
   const authorMid = getAuthorMid()
-
-  if (!authorMid) {
-    console.error('No author mid available')
+  const videoId = props.video.id
+  if (accountId === null || !authorMid) {
+    toast.warning(t('common.please_log_in_first'))
     return
   }
-
+  relationPending = true
   try {
-    const response = await api.user.relationModify({
-      fid: authorMid.toString(),
-      act: 5, // 5表示拉黑用户
-      re_src: 11,
-      csrf: getCSRF(),
-    })
-
-    if (response.code === 0) {
-      // 拉黑成功
-      handleRemoved()
-    }
-    else {
-      console.error('Block user failed:', response.message)
-    }
-  }
-  catch (error) {
-    console.error('Block user error:', error)
-  }
-}
-
-async function followUser() {
-  const authorMid = getAuthorMid()
-
-  if (!authorMid) {
-    console.error('No author mid available')
-    return
-  }
-
-  try {
-    const response = await api.user.relationModify({
-      fid: authorMid.toString(),
-      act: 1, // 1表示关注用户
-      re_src: 11,
-      csrf: getCSRF(),
-    })
-
-    if (response.code === 0) {
-      // 关注成功
+    const response = await changeUserRelation(accountId, authorMid, act)
+    if (accountId !== currentAccountId.value || String(getUserID()) !== String(accountId))
+      return
+    if (response.code !== 0)
+      throw new Error(response.message || t('common.operation_failed'))
+    toast.success(t('common.operation_completed'))
+    if (!disposed && props.video.id === videoId && getAuthorMid() === authorMid)
       handleClose()
-    }
-    else {
-      console.error('Follow user failed:', response.message)
-    }
   }
   catch (error) {
-    console.error('Follow user error:', error)
+    if (accountId === currentAccountId.value && String(getUserID()) === String(accountId))
+      toast.error(error instanceof Error ? error.message : t('common.operation_failed'))
+  }
+  finally {
+    relationPending = false
   }
 }
 
-async function unfollowUser() {
-  const authorMid = getAuthorMid()
-
-  if (!authorMid) {
-    console.error('No author mid available')
-    return
-  }
-
-  try {
-    const response = await api.user.relationModify({
-      fid: authorMid.toString(),
-      act: 2, // 2表示取消关注用户
-      re_src: 11,
-      csrf: getCSRF(),
-    })
-
-    if (response.code === 0) {
-      // 取消关注成功
-      handleClose()
-    }
-    else {
-      console.error('Unfollow user failed:', response.message)
-    }
-  }
-  catch (error) {
-    console.error('Unfollow user error:', error)
-  }
-}
+const blockUser = () => writeRelation(5)
+const followUser = () => writeRelation(1)
+const unfollowUser = () => writeRelation(2)
 </script>
 
 <template>
@@ -558,54 +518,17 @@ async function unfollowUser() {
           @scroll="handleScroll"
           @keydown="handleMenuKeydown"
         >
-          <!-- 现有内容不变 -->
-          <template v-if="getVideoType() === 'appRcmd'">
-            <template v-for="option in video.threePointV2" :key="option.type">
-              <li
-                v-if="option.type !== ThreePointV2Type.WatchLater
-                  && option.type !== ThreePointV2Type.Feedback
-                  && (option.type !== ThreePointV2Type.Dislike || isOptionVisible('notInterested'))"
-                class="context-menu-item"
-                role="menuitem"
-                tabindex="-1"
-                @click="handleAppMoreCommand(option.type)"
+          <template v-for="(optionGroup, index) in menuGroups" :key="optionGroup[0].key">
+            <li v-if="index" role="separator" class="divider" />
+            <li v-for="option in optionGroup" :key="option.key" role="presentation">
+              <button
+                type="button" class="context-menu-item" :class="option.color" role="menuitem" tabindex="-1"
+                @click="option.run"
               >
-                <i class="item-icon" i-solar:confounded-circle-bold-duotone />
-                <span v-if="option.type === ThreePointV2Type.Dislike">{{ $t('video_card.operation.not_interested') }}</span>
-                <span v-else>{{ option.title }}</span>
-              </li>
-            </template>
-          </template>
-          <template v-else-if="getVideoType() === 'rcmd'">
-            <li
-              v-for="option in videoOptions" :key="option.id"
-              class="context-menu-item"
-              role="menuitem"
-              tabindex="-1"
-              @click="handleMoreCommand(option.id)"
-            >
-              <i class="item-icon" i-solar:confounded-circle-bold-duotone />
-              {{ option.name }}
+                <i class="item-icon" :class="[option.icon, option.color]" aria-hidden="true" />
+                {{ option.name }}
+              </button>
             </li>
-          </template>
-
-          <div v-if="getVideoType() === 'rcmd' && videoOptions.length > 0 && commonOptions.length > 0" class="divider" />
-
-          <template v-for="(optionGroup, index) in commonOptions" :key="index">
-            <li
-              v-for="option in optionGroup"
-              :key="option.command"
-              class="context-menu-item"
-              :class="option.color"
-              role="menuitem"
-              tabindex="-1"
-              @click="handleCommonCommand(option.command)"
-            >
-              <i class="item-icon" :class="[option.icon, option.color]" />
-              {{ option.name }}
-            </li>
-
-            <div v-if="index !== commonOptions.length - 1" class="divider" />
           </template>
         </ul>
 
@@ -678,6 +601,8 @@ async function unfollowUser() {
   --uno: "flex items-center";
 
   box-sizing: border-box;
+  width: 100%;
+  text-align: start;
   min-height: var(--bew-popover-row-min-height);
   padding: var(--bew-space-2) var(--bew-space-3);
   font-size: var(--bew-font-size-control);
@@ -710,6 +635,7 @@ async function unfollowUser() {
 
 .divider {
   --uno: "w-full h-1px px-2px bg-$bew-border-color";
+  flex: none;
 }
 
 .context-menu-container {
@@ -729,6 +655,9 @@ async function unfollowUser() {
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 0;
+  > li {
+    flex: none;
+  }
 
   /* 完全隐藏滚动条 */
   -ms-overflow-style: none; /* IE 和 Edge */

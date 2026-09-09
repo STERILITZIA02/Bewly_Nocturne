@@ -2,16 +2,17 @@ import { scheduleActionGeometrySync, syncActionAnimationTheme } from '~/utils/be
 import { COMMENT_TIME_SELECTOR, DANMAKU_SKELETON_CLASS, EMPTY_CLASS, selectors, SIDEBAR_HYDRATION_FAST_DURATION, SIDEBAR_HYDRATION_FAST_INTERVAL, SIDEBAR_HYDRATION_INTERVAL, SIDEBAR_HYDRATION_TIMEOUT } from '~/utils/bewlyWidescreen/constants'
 import { activateDanmakuTab, clearDanmakuActivation, isDanmakuPanelReady, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
-import { ensureAnchoredPlayer, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
+import { ensureAnchoredPlayer, resetControlsLayout, schedulePlayerResizeSync, syncAuxiliaryControlGeometry, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
-import { findCommentRoot, findMovable, isCommentRootUsable, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
+import { findCommentRoot, findMovable, isCommentRootUsable, moveCommentRoot, moveMatchingNodes, moveNativeMusicPanel, moveNode, moveOrReplaceNode, movePlaylistControls, removeMovedNode, restoreCommentPrewarm, restoreMovedNodes, startCommentPrewarm } from '~/utils/bewlyWidescreen/nativeDom'
 import { clearEpisodeSectionMarker, placeRecommendAfterPlaylist, syncEpisodeSectionMarker, syncPlaylistToggleButton } from '~/utils/bewlyWidescreen/playlist'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { scheduleInitialPanelScrollReset } from '~/utils/bewlyWidescreen/shell'
 import type { BewlyWidescreenState, WidescreenSidebarReadiness } from '~/utils/bewlyWidescreen/types'
 import { renderFallbackVideoInfo, syncSidebarTitle, syncVideoMetadata } from '~/utils/bewlyWidescreen/videoInfo'
 import { shortenCommentDateText, shouldContinueWidescreenSidebarHydration } from '~/utils/bewlyWidescreenPolicy'
+import { isNativeVideoComponentReady } from '~/utils/videoMetadataBridge'
 
 let sidebarRefreshFrame: number | undefined
 
@@ -67,7 +68,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   syncSidebarTitle(currentState)
   const activeTab = currentState.activeTab
 
-  syncVideoMetadata(currentState)
+  const metadataReady = syncVideoMetadata(currentState)
   const toolbarResult = moveOrReplaceNode(selectors.toolbar, currentState.toolbarSlot, currentState.movedNodes)
   scheduleActionGeometrySync(currentState)
 
@@ -143,6 +144,11 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
     currentState.hydratedTabs.add('danmaku')
 
   let existingPlaylist = currentState.panels.playlist.querySelector(selectors.playlist.join(','))
+  if (currentState.root.dataset.pageKind === 'pgc' && existingPlaylist instanceof HTMLElement
+    && isNativeVideoComponentReady(existingPlaylist) === false) {
+    removeMovedNode(existingPlaylist, currentState.movedNodes)
+    existingPlaylist = null
+  }
   let existingRecommend = currentState.panels.playlist.querySelector(selectors.recommend.join(','))
   if (activeTab === 'playlist') {
     movePlaylistControls(currentState.panels.playlist, currentState.movedNodes)
@@ -162,7 +168,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   }
   const hasPlaylist = !!existingPlaylist
   const hasRecommend = !!existingRecommend
-  const playlistLabel = hasPlaylist ? t('widescreen.playlist') : t('widescreen.recommendations')
+  const playlistLabel = hasPlaylist || findMovable(selectors.playlist) ? t('widescreen.playlist') : t('widescreen.recommendations')
   if (currentState.tabButtons.playlist.textContent !== playlistLabel)
     currentState.tabButtons.playlist.textContent = playlistLabel
   if (!hasPlaylist && !hasRecommend) {
@@ -178,7 +184,7 @@ function fillSidebar(currentState: BewlyWidescreenState): WidescreenSidebarReadi
   if (currentState.hydratedTabs.has(activeTab))
     scheduleInitialPanelScrollReset(currentState, activeTab)
 
-  const ownerReady = upResult.found
+  const ownerReady = (currentState.root.dataset.pageKind === 'pgc' && metadataReady) || upResult.found
     || !!currentState.upSlot.querySelector('.bewly-widescreen-fallback-owner')
   const readiness = {
     // API counters are read-only information, never proof that native actions work.
@@ -402,6 +408,7 @@ export function suspendSidebarForVideoNavigation(currentState: BewlyWidescreenSt
   currentState.descriptionExpanded = false
   currentState.playlistCollapsed = false
   currentState.controlsGlassAppliedHeight = undefined
+  resetControlsLayout(currentState)
   currentState.sidebarHydrationWarningShown = false
 
   clearNavigationFallbackContent(currentState)

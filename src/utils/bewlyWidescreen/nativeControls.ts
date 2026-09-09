@@ -115,9 +115,12 @@ export function syncNativePlayerControlVisibility(
     pointerInsidePlayer: currentState.playerPointerInside,
     sidebarExpanded: isWidescreenSidebarExpanded(currentState),
   })
-  currentState.root.dataset.playerControlsReady = String(ready)
-  currentState.root.dataset.playerControlsHidden = String(hidden)
-  document.body.classList.toggle(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, hidden)
+  if (currentState.root.dataset.playerControlsReady !== String(ready))
+    currentState.root.dataset.playerControlsReady = String(ready)
+  if (currentState.root.dataset.playerControlsHidden !== String(hidden))
+    currentState.root.dataset.playerControlsHidden = String(hidden)
+  if (document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS) !== hidden)
+    document.body.classList.toggle(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, hidden)
 }
 
 export function forwardNativePlayerPointerActivity(

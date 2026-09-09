@@ -32,6 +32,7 @@ interface PaginationLabels {
 }
 
 export interface CommentReplyPaginationAdapter {
+  getAccountId: () => string
   getData: (renderer: any) => any | null
   getMode: () => CommentReplyPaginationMode
   getOid: (reply: any) => string | null
@@ -228,7 +229,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     const oid = String(renderer.oid ?? adapter.getOid(data) ?? '')
     const type = String(renderer.type ?? data.type ?? data.business ?? '')
     const root = String(renderer.root ?? adapter.getRpid(data) ?? adapter.getRootRpid(data) ?? '')
-    return `${oid}|${type}|${root}`
+    return `${adapter.getAccountId()}|${oid}|${type}|${root}`
   }
 
   function removeExpandAllButton(renderer: any) {

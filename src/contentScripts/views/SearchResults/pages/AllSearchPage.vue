@@ -3,6 +3,7 @@ import { useResizeObserver } from '@vueuse/core'
 import DOMPurify from 'dompurify'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
@@ -10,11 +11,14 @@ import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSele
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useUserRelations } from '~/composables/useUserRelations'
 import { settings } from '~/logic'
-import api from '~/utils/api'
+import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
-import { getCSRF } from '~/utils/main'
+import { getUserID } from '~/utils/main'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
+import { changeUserRelation } from '~/utils/userRelation'
 
 import AllSearchSkeleton from '../components/AllSearchSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
@@ -22,7 +26,6 @@ import EsportsMatchCard from '../components/renderers/EsportsMatchCard.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
-import { useUserRelations } from '../composables/useUserRelations'
 import { mergeSections } from '../searchSections'
 import {
   convertActivityData,
@@ -50,6 +53,12 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const toast = useToast()
+const relationAccount = useTopBarStore()
+let relationViewActive = true
+onUnmounted(() => {
+  relationViewActive = false
+})
 
 function convertUserSearchHighlight(user: any) {
   return convertUserHighlight(user, index => t('search.user.sample_title', { index }))
@@ -64,9 +73,9 @@ const paginationMode = computed(() => settings.value.searchResultsPaginationMode
 const {
   userRelations,
   batchQueryUserRelations,
-  updateUserRelation,
   reset: resetUserRelations,
 } = useUserRelations()
+const pendingUserFollows = reactive(new Set<string>())
 
 // 搜索请求管理
 const {
@@ -210,39 +219,39 @@ function getLvIcon(level: number): string {
 
 // 关注操作
 async function handleUserFollow(mid: number) {
-  // 如果用户关系状态不存在，先初始化一个默认状态
-  if (!userRelations.value[mid]) {
-    userRelations.value[mid] = {
-      isFollowing: false,
-      isLoading: false,
-    }
-  }
-
-  const state = userRelations.value[mid]
-  if (state.isLoading)
+  const accountId = resolveAuthenticatedAccountId(relationAccount.isLogin, relationAccount.userInfo.mid)
+  if (accountId === null) {
+    toast.warning(t('common.please_log_in_first'))
     return
+  }
+  const operationKey = `${accountId}:${mid}`
+  if (pendingUserFollows.has(operationKey))
+    return
+  const following = !userRelations.value[mid]?.isFollowing
+  const scope = requestScope.value
+  const keyword = props.keyword
+  const isCurrent = () => relationViewActive && requestScope.value === scope && props.keyword === keyword
+    && String(getUserID()) === String(accountId)
 
   try {
-    state.isLoading = true
-    const csrf = getCSRF()
-    const act = state.isFollowing ? 2 : 1
-
-    const response = await api.user.relationModify({
-      fid: String(mid),
-      act,
-      re_src: 11,
-      csrf,
-    })
-
-    if (response.code === 0)
-      updateUserRelation(mid, !state.isFollowing)
+    pendingUserFollows.add(operationKey)
+    const response = await changeUserRelation(accountId, mid, following ? 1 : 2)
+    if (!isCurrent())
+      return
+    if (response.code !== 0)
+      toast.error(response.message || t('common.operation_failed'))
   }
   catch (error) {
-    console.error('关注操作出错:', error)
+    if (isCurrent())
+      toast.error(error instanceof Error ? error.message : t('common.operation_failed'))
   }
   finally {
-    state.isLoading = false
+    pendingUserFollows.delete(operationKey)
   }
+}
+
+function isUserFollowPending(mid: number) {
+  return pendingUserFollows.has(`${resolveAuthenticatedAccountId(relationAccount.isLogin, relationAccount.userInfo.mid)}:${mid}`)
 }
 
 function openExternalLink(url?: string) {
@@ -458,7 +467,6 @@ defineExpose({
   needsManualLoadMore,
   resumeLoadMore,
   userRelations,
-  updateUserRelation,
   reset: resetUserRelations,
   currentPage,
   totalPages,
@@ -701,12 +709,14 @@ defineExpose({
                   </div>
                 </div>
                 <button
+                  type="button"
                   class="user-highlight-follow"
                   :class="{ followed: userRelations[user.mid]?.isFollowing }"
-                  :disabled="userRelations[user.mid]?.isLoading"
+                  :disabled="isUserFollowPending(user.mid)"
+                  :aria-busy="isUserFollowPending(user.mid)"
                   @click.stop="handleUserFollow(user.mid)"
                 >
-                  {{ userRelations[user.mid]?.isLoading ? '...' : userRelations[user.mid]?.isFollowing ? t('search.user.following') : t('search.user.follow') }}
+                  {{ userRelations[user.mid]?.isFollowing ? t('search.user.following') : t('search.user.follow') }}
                 </button>
               </div>
               <div

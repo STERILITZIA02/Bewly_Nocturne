@@ -29,6 +29,8 @@ function updateControlLabel(control = controlContainer) {
     return
 
   const label = translate('player_screenshot.capture')
+  if (control.getAttribute('aria-label') === label && !control.hasAttribute('title'))
+    return
   control.removeAttribute('title')
   control.setAttribute('aria-label', label)
   updatePlayerControlTooltip(control, label)

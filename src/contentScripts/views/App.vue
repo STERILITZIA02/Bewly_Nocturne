@@ -6,6 +6,7 @@ import { useI18n } from 'vue-i18n'
 
 import AppAuthorizationDialog from '~/components/AppAuthorizationDialog.vue'
 import ConfirmDialog from '~/components/ConfirmDialog.vue'
+import ElementSettingsContextMenu from '~/components/ElementSettingsContextMenu.vue'
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
@@ -14,8 +15,10 @@ import { confirmDialogKey } from '~/composables/useConfirmDialog'
 import { useConfirmDialogHost } from '~/composables/useConfirmDialogHost'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
+import { useHomePageRoute } from '~/composables/useHomePageRoute'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
 import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
+import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { appAuthTokens, settings } from '~/logic'
@@ -34,11 +37,11 @@ import { hasValidAppAuthTokens } from '~/utils/authProvider'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
-import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import { getIframeMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
-import { isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
+import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
+import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
@@ -82,43 +85,31 @@ watch(() => [
 const confirmDialogHost = useConfirmDialogHost()
 const { activeRequest: activeConfirmDialog } = confirmDialogHost
 provide(confirmDialogKey, { confirm: confirmDialogHost.confirm })
+let lastNativeCommentAccount = String(getUserID() ?? 'guest')
 watch([
   currentLocationHref,
   () => topBarStore.isLogin,
   () => topBarStore.userInfo.mid,
-], confirmDialogHost.cancelAll, { flush: 'sync' })
-
-// Get the 'page' query parameter from the URL
-function getPageParam(): AppPage | null {
-  const urlParams = new URLSearchParams(window.location.search)
-  const result = urlParams.get('page') as AppPage | null
-  if (result && Object.values(AppPage).includes(result))
-    return result
-  return null
-}
-
-function resolveAvailableAppPage(page: AppPage): AppPage {
-  return settings.value.useSearchPageModeOnHomePage && page === AppPage.Search
-    ? AppPage.Home
-    : page
-}
-
-function replacePageParam(page: AppPage) {
-  const url = new URL(window.location.href)
-  url.searchParams.set('page', page)
-  window.history.replaceState({}, '', url.toString())
-}
+], () => {
+  confirmDialogHost.cancelAll()
+  const account = String(getUserID() ?? 'guest')
+  if (account === lastNativeCommentAccount)
+    return
+  lastNativeCommentAccount = account
+  const channelId = getPageBridgeChannelId()
+  if (channelId)
+    postPageBridgeMessage(window, { protocol: PAGE_BRIDGE_PROTOCOL, channelId, type: PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED })
+}, { flush: 'sync' })
 
 function getDefaultAppPage(): AppPage {
   return settings.value.dockItemsConfig.find(item => item.visible)?.page ?? AppPage.Home
 }
 
-const requestedInitialPage = getPageParam() || getDefaultAppPage()
-const initialPage = resolveAvailableAppPage(requestedInitialPage)
-const activatedPage = ref<AppPage>(initialPage)
-
-if (initialPage !== requestedInitialPage)
-  replacePageParam(initialPage)
+const { activatedPage, homeActivatedPage, homeActivatedPageTouched, resolveAvailableAppPage } = useHomePageRoute(getDefaultAppPage, mainStore.homeTabs.map(tab => ({
+  page: tab.page,
+  visible: tab.page !== HomeSubPage.Precious,
+})))
+const isHomeTabSwitching = ref(false)
 
 const shouldUseOriginalSearchResultsPage = computed(() => {
   return activatedPage.value === AppPage.SearchResults
@@ -136,31 +127,12 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 }, { immediate: true })
 
 // 监听 URL 变化,同步更新 activatedPage
-watch(currentLocationHref, (href) => {
+watch(currentLocationHref, () => {
   exitLayoutEditMode()
-  const pageParam = getPageParam()
-  const requestedPage = pageParam ?? (isHomePage(href) ? getDefaultAppPage() : null)
-  if (!requestedPage)
-    return
-
-  const availablePage = resolveAvailableAppPage(requestedPage)
-  if (pageParam && availablePage !== pageParam)
-    replacePageParam(availablePage)
-
-  if (availablePage !== AppPage.SearchResults) {
+  if (activatedPage.value !== AppPage.SearchResults) {
     topBarStore.searchKeyword = ''
     clearSearchParamsFromUrl()
   }
-
-  if (availablePage !== activatedPage.value)
-    activatedPage.value = availablePage
-})
-
-watch(() => settings.value.useSearchPageModeOnHomePage, (useOnHomePage) => {
-  if (!useOnHomePage || activatedPage.value !== AppPage.Search)
-    return
-
-  activatedPage.value = AppPage.Home
 })
 
 // 清理搜索相关的URL参数（仅在首页生效）
@@ -191,7 +163,7 @@ function clearSearchParamsFromUrl() {
     // 注意：不要删除 'page' 参数，它用于 dock 的页面切换
     const currentUrl = new URL(window.location.href)
     currentUrl.search = urlParams.toString()
-    window.history.replaceState({}, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
+    window.history.replaceState(window.history.state, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
   }
 }
 
@@ -201,39 +173,6 @@ if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.Se
   topBarStore.searchKeyword = ''
 }
 
-const defaultHomeTabConfig = mainStore.homeTabs.map(tab => ({
-  page: tab.page,
-  visible: tab.page !== HomeSubPage.Precious,
-}))
-
-function getDefaultHomeSubPage(tabConfig: { page: HomeSubPage, visible: boolean }[]): HomeSubPage {
-  return normalizeHomeTabConfig(tabConfig, defaultHomeTabConfig)
-    .find(tab => tab.visible)
-    ?.page ?? HomeSubPage.ForYou
-}
-
-// 添加Home页面的子页面状态
-const homeActivatedPage = ref<HomeSubPage>(getDefaultHomeSubPage(settings.value.homePageTabVisibilityList))
-const homeActivatedPageTouched = ref<boolean>(false)
-const isHomeTabSwitching = ref<boolean>(false)
-watch(
-  () => settings.value.homePageTabVisibilityList,
-  (tabConfig) => {
-    const normalizedTabConfig = normalizeHomeTabConfig(tabConfig, defaultHomeTabConfig)
-    if (!isSameHomeTabConfig(tabConfig, normalizedTabConfig)) {
-      settings.value.homePageTabVisibilityList = normalizedTabConfig
-      return
-    }
-
-    if (homeActivatedPageTouched.value)
-      return
-
-    const defaultHomeSubPage = getDefaultHomeSubPage(normalizedTabConfig)
-    if (homeActivatedPage.value !== defaultHomeSubPage)
-      homeActivatedPage.value = defaultHomeSubPage
-  },
-  { deep: true, immediate: true },
-)
 function definePageComponent(loader: AsyncComponentLoader) {
   return defineAsyncComponent({
     loader,
@@ -520,23 +459,14 @@ function focusScrollViewport(options: { force?: boolean } = {}) {
   })
 }
 
-const isFirstTimeActivatedPageChange = ref<boolean>(true)
 watch(
   () => activatedPage.value,
   () => {
     exitLayoutEditMode()
     cancelPendingRefreshScroll()
-    if (!isFirstTimeActivatedPageChange.value) {
-      // Update the URL query parameter when activatedPage changes
-      const url = new URL(window.location.href)
-      url.searchParams.set('page', activatedPage.value)
-      window.history.replaceState({}, '', url.toString())
-    }
-
     scrollViewportRef.value?.scrollTo({ top: 0 })
     focusScrollViewport()
     scheduleLoadMoreSentinelCheck()
-    isFirstTimeActivatedPageChange.value = false
   },
   { immediate: true },
 )
@@ -869,7 +799,7 @@ function cleanUrlParams() {
         cleanupIdleCallback = window.requestIdleCallback(() => {
           cleanupIdleCallback = undefined
           if (settings.value.cleanUrlArgument && window.location.href === currentUrl)
-            history.replaceState(null, '', cleanedUrl)
+            history.replaceState(history.state, '', cleanedUrl)
           isCleaningUrl = false
         })
       }
@@ -877,7 +807,7 @@ function cleanUrlParams() {
         cleanupApplyTimer = setTimeout(() => {
           cleanupApplyTimer = undefined
           if (settings.value.cleanUrlArgument && window.location.href === currentUrl)
-            history.replaceState(null, '', cleanedUrl)
+            history.replaceState(history.state, '', cleanedUrl)
           isCleaningUrl = false
         }, 0)
       }
@@ -941,6 +871,7 @@ onBeforeUnmount(stopUrlCleaner)
     </template>
 
     <LayoutEditorOverlay v-if="!isInIframe()" @open-setting="openLayoutEditorSetting" />
+    <ElementSettingsContextMenu v-if="!isInIframe()" @open-setting="openLayoutEditorSetting" />
 
     <!-- Settings -->
     <Transition name="settings-launch">

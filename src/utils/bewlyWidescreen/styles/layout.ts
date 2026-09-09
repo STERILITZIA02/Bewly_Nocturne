@@ -2,7 +2,7 @@ import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents
 import LIQUID_GLASS_CSS from '~/styles/liquidGlass.scss?inline'
 import SEGMENT_CONTROL_CSS from '~/styles/segmentControl.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
-import { BODY_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_CLASS, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
+import { BODY_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
 import { WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
 import { injectCSS } from '~/utils/main'
 import { PHOTO_VIEWER_SELECTOR } from '~/utils/photoViewer'
@@ -207,6 +207,33 @@ export function injectLayoutStyle() {
       flex: 0 1 auto;
     }
 
+    /* The player stays in its native event tree. Only its actual ancestor
+       chain loses containing blocks/clipping while the anchored shell owns geometry. */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_ANCESTOR_CLASS} {
+      position: static !important;
+      transform: none !important;
+      translate: none !important;
+      scale: none !important;
+      rotate: none !important;
+      perspective: none !important;
+      filter: none !important;
+      backdrop-filter: none !important;
+      contain: none !important;
+      content-visibility: visible !important;
+      overflow: visible !important;
+      clip-path: none !important;
+      isolation: auto !important;
+      z-index: auto !important;
+    }
+
+    /* Unhydrated native right-column modules stay mounted for their own data
+       and event ownership, but never paint through the standalone player shell.
+       A transferred node naturally leaves this scope and becomes visible. */
+    body.${BODY_CLASS} .${NATIVE_PLAYER_ANCESTOR_CLASS} :is(.right-container, .plp-r),
+    body.${BODY_CLASS} .${NATIVE_PLAYER_ANCESTOR_CLASS} :is(.right-container, .plp-r) * {
+      visibility: hidden !important;
+    }
+
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} {
       position: fixed !important;
       top: var(--bewly-widescreen-player-top) !important;
@@ -217,12 +244,20 @@ export function injectLayoutStyle() {
       height: var(--bewly-widescreen-player-height) !important;
       max-height: var(--bewly-widescreen-player-height) !important;
       margin: 0 !important;
+      padding: 0 !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      aspect-ratio: auto !important;
       overflow: hidden !important;
       background: var(--bew-player-canvas) !important;
       clip-path: none !important;
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} > #bilibili-player,
+    body.${BODY_CLASS} #bilibili-player-wrap.${NATIVE_PLAYER_CLASS} :is(
+      [class*="video_playerInner"], #bilibili-player, .big-nano-player,
+      [class*="NanoPlayer_nonoPlayerContainer"], [class*="NanoPlayer_nonoPlayerPrimaryArea"], [class*="NanoPlayer_nanoDocker"]
+    ),
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} > #bilibiliPlayer,
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-docker-major,
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-container,
@@ -240,6 +275,13 @@ export function injectLayoutStyle() {
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .bpx-player-container {
       inset: auto !important;
       transform: none !important;
+    }
+
+    body.${BODY_CLASS} #bilibili-player-wrap.${NATIVE_PLAYER_CLASS} [class*="video_playerInner"] {
+      position: absolute !important;
+      inset: 0 !important;
+      padding: 0 !important;
+      margin: 0 !important;
     }
 
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
@@ -1729,6 +1771,114 @@ export function injectLayoutStyle() {
       display: none;
     }
 
+    #${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-metadata-slot [class*="mediainfo_mediaInfoWrap"] {
+      display: flex !important;
+      align-items: flex-start !important;
+      gap: var(--bew-space-3) !important;
+      width: 100% !important;
+      min-width: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+      padding: var(--bew-space-2) 0 !important;
+      border: 0 !important;
+      overflow: visible !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] [class*="mediainfo_mediaCover"] {
+      flex: 0 0 calc(var(--bew-space-12) * 1.5) !important;
+      width: calc(var(--bew-space-12) * 1.5) !important;
+      height: auto !important;
+      aspect-ratio: 3 / 4;
+      margin: 0 !important;
+      border-radius: var(--bew-media-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      overflow: hidden;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] [class*="mediainfo_mediaRight"] {
+      flex: 1;
+      min-width: 0 !important;
+      height: auto !important;
+      min-height: 0 !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] [class*="mediainfo_mediaCover"] :is(picture, img) {
+      display: block !important;
+      width: 100% !important;
+      height: 100% !important;
+      object-fit: cover !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] [class*="mediainfo_mediaTitle"] {
+      height: auto !important;
+      padding-right: 0 !important;
+      margin-bottom: var(--bew-space-1) !important;
+      color: var(--bew-text-1) !important;
+      font-size: var(--bew-font-size-title) !important;
+      line-height: var(--bew-line-height-title) !important;
+      font-weight: var(--bew-font-weight-semibold) !important;
+      white-space: normal !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] [class*="mediainfo_mediaDesc"] {
+      height: auto !important;
+      margin-bottom: var(--bew-space-1) !important;
+      color: var(--bew-text-2) !important;
+      font-size: var(--bew-font-size-caption) !important;
+      line-height: var(--bew-line-height-caption) !important;
+      overflow-wrap: anywhere;
+    }
+
+    /* Keep the native two-line description/expand geometry and its event root. */
+    #${ROOT_ID}[data-page-kind="pgc"] [class*="mediainfo_media_desc_section"] {
+      margin-bottom: var(--bew-space-1) !important;
+      color: var(--bew-text-2) !important;
+      flex-shrink: 0;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] :is([class*="mediainfo_bottomBar"], [class*="mediainfo_mediaToolbar"]) {
+      display: flex !important;
+      position: static !important;
+      align-items: center !important;
+      flex-wrap: wrap !important;
+      gap: var(--bew-space-2) !important;
+      width: auto !important;
+      margin-top: var(--bew-space-2) !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] :is([class*="follow_followOptions"], [class*="share_shareMenu"]) {
+      color: var(--bew-text-1) !important;
+      background: var(--bew-elevated-solid) !important;
+      border-radius: var(--bew-popover-radius) !important;
+      backdrop-filter: none !important;
+      z-index: 2;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-author-actions {
+      display: block;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-action-slot :is(.toolbar, .toolbar-left, .toolbar-right) {
+      display: flex !important;
+      align-items: center !important;
+      flex-wrap: wrap !important;
+      gap: var(--bew-space-2) !important;
+      width: auto !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-action-slot :is(.toolbar-left, .toolbar-right) > * {
+      min-height: var(--bew-control-height-sm) !important;
+      color: var(--bew-text-2) !important;
+      font-size: var(--bew-font-size-control) !important;
+      line-height: var(--bew-line-height-control) !important;
+    }
+
+    #${ROOT_ID}[data-page-kind="pgc"] .bewly-widescreen-action-slot :is(.toolbar-left, .toolbar-right) > *:hover {
+      color: var(--bew-theme-foreground) !important;
+    }
+
     #${ROOT_ID} .bewly-widescreen-metadata-slot .video-info-meta,
     #${ROOT_ID} .bewly-widescreen-metadata-slot .video-info-detail-list {
       display: flex !important;
@@ -2851,6 +3001,7 @@ export function injectLayoutStyle() {
       overflow: visible !important;
     }
 
+    #${ROOT_ID} .bewly-widescreen-panel [class*="PaginatedEpList_root"],
     #${ROOT_ID} .bewly-widescreen-panel [class*="eplist_ep_list_wrapper"],
     #${ROOT_ID} .bewly-widescreen-panel [class*="recommend_wrap"],
     #${ROOT_ID} .bewly-widescreen-panel #danmukuBox,
@@ -2900,6 +3051,20 @@ export function injectLayoutStyle() {
       overflow: hidden !important;
       pointer-events: none;
       scrollbar-gutter: auto;
+    }
+
+    /* The modern PGC directory owns its virtual scrollports and item metrics.
+       Keep its header, section/page tabs and sort controls together, without
+       introducing a second constrained scrollport around the native lists. */
+    #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="PaginatedEpList_root"].${EPISODE_SECTION_CLASS} {
+      max-height: none !important;
+      overflow: visible !important;
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-playlist.is-episode-section-collapsed [class*="PaginatedEpList_root"].${EPISODE_SECTION_CLASS} {
+      display: none !important;
+    }
+    #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="EpisodeVirtualList_scroll"] {
+      overscroll-behavior: contain;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist .pod-expand-btn,

@@ -292,7 +292,8 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   line-height: var(--bew-line-height-body);
   background: var(--bew-content-solid);
   border: 1px solid transparent;
-  border-radius: var(--bew-interactive-radius);
+  /* Inset by space-2 inside the same modal-radius shell as the playback bar. */
+  border-radius: var(--bew-radius-xl);
   corner-shape: var(--bew-corner-shape);
 }
 

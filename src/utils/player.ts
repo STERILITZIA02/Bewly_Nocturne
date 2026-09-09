@@ -10,7 +10,12 @@ import {
   PLAYBACK_RATE_STEP,
   resolvePlaybackRateChange,
 } from '~/utils/playbackRate'
+import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { readVideoPageMetadata } from '~/utils/videoMetadataBridge'
+
+import { getVideoElement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
+
+export { getVideoElement } from './playerMedia'
 
 const _videoClassTag = {
   danmuBtn:
@@ -34,7 +39,7 @@ const _videoClassTag = {
   fullscreen:
       '.bpx-player-ctrl-full,.bilibili-player-video-btn-fullscreen,.squirtle-video-fullscreen',
   videoArea: '.bilibili-player-video-wrap,.bpx-player-video-area',
-  video: '#bilibiliPlayer video,#bilibili-player video,.bilibili-player video,.player-container video,#bilibiliPlayer bwp-video,#bilibili-player bwp-video,.bilibili-player bwp-video,.player-container bwp-video,#bofqi video,[aria-label="哔哩哔哩播放器"] video',
+  video: PLAYER_MEDIA_SELECTOR,
   player: '#bilibili-player,.bpx-player-container',
   autoPlaySwitchOn: '.auto-play .switch-btn.on',
   autoPlaySwitchOff: '.auto-play .switch-btn:not(.on)',
@@ -56,7 +61,6 @@ const PLAYBACK_RATE_CONTROL_SELECTOR = [
   '.bilibili-player-video-btn-speed-menu-list li',
   '.squirtle-video-speed-item',
 ].join(',')
-const playbackRateEnhancementTimers = new Set<ReturnType<typeof setTimeout>>()
 let playbackRateLifecycleActive = true
 let stopPlaybackRatePlayerObserver: (() => void) | null = null
 let stopPlaybackRateSettingsWatch: (() => void) | null = null
@@ -92,6 +96,7 @@ function monitorCaptionState(closeSwitch: HTMLElement, languageItem: HTMLElement
 }
 
 const activePlayerRetryTasks = new Set<RetryTask>()
+const playerLayoutTimers = new Set<ReturnType<typeof setTimeout>>()
 
 // 重试任务类，用于处理重试逻辑
 export class RetryTask {
@@ -143,6 +148,8 @@ export class RetryTask {
 export function cancelPlayerRetryTasks() {
   for (const task of [...activePlayerRetryTasks])
     task.cancel()
+  playerLayoutTimers.forEach(timer => clearTimeout(timer))
+  playerLayoutTimers.clear()
 }
 
 // 状态显示元素
@@ -161,11 +168,6 @@ let autoExitFullscreenVideo: HTMLVideoElement | null = null
 let autoExitFullscreenEndedListener: (() => void) | null = null
 let autoExitFullscreenEndTimer: ReturnType<typeof setTimeout> | null = null
 let stopAutoExitFullscreenDomObserver: (() => void) | null = null
-
-// 获取视频元素
-export function getVideoElement(): HTMLVideoElement | null {
-  return document.querySelector(_videoClassTag.video)
-}
 
 export function isPlayerDisplayModeReady(mode: DefaultVideoPlayerMode): boolean {
   if (mode === 'bewlyWidescreen') {
@@ -230,53 +232,60 @@ function applyPlayerEnhancements() {
   startPlaybackRateMonitoring()
 }
 
-function schedulePlayerEnhancements(delay: number) {
-  if (!playbackRateLifecycleActive)
-    return
-
-  const timer = setTimeout(() => {
-    playbackRateEnhancementTimers.delete(timer)
-    applyPlayerEnhancements()
-  }, delay)
-  playbackRateEnhancementTimers.add(timer)
-}
-
-export function fullscreen() {
+function applyNativeDisplayMode(mode: 'normal' | 'web' | 'wide', application: PlayerModeApplication) {
+  let clickedButton: HTMLElement | null = null
   new RetryTask(20, 500, () => {
-    const result = fullscreenClick()
-    if (result) {
-      // 在成功进入全屏后应用倍速记忆
-      schedulePlayerEnhancements(1000)
-    }
-    return result
-  }).start()
-}
-
-export function webFullscreen() {
-  new RetryTask(20, 500, () => {
-    // 检查是否已经处于网页全屏状态
-    if (document.querySelector('[data-screen=\'web\']')) {
-      // 即使已经是网页全屏状态，也应用倍速记忆
-      schedulePlayerEnhancements(1000)
+    if (!application.shouldApply() || isPlayerShowingEndingRecommendation())
+      return true
+    const root = getVideoElement()?.closest('.bpx-player-container, .bilibili-player, .squirtle-video-wrap, #bilibili-player, #bilibiliPlayer')
+    const screen = root?.getAttribute('data-screen')
+    const button = root?.querySelector<HTMLElement>(mode === 'web' || (mode === 'normal' && screen === 'web') ? _videoClassTag.pagefullscreen : _videoClassTag.widescreen)
+    const applied = mode === 'normal'
+      ? !!root && !['wide', 'web', 'full', 'mini'].includes(screen ?? '') && !document.fullscreenElement
+      && !button?.classList.contains('bpx-state-entered')
+      : screen === mode || button?.classList.contains('bpx-state-entered')
+    if (applied) {
+      application.onApplied()
+      if (mode !== 'web')
+        scrollPlayerToOptimalPosition(1000, application.shouldApply)
+      schedulePlayerLayoutTask(() => applyPlayerEnhancements(), mode === 'normal' ? 2000 : 1000, application.shouldApply)
       return true
     }
-
-    const result = webFullscreenClick()
-    if (result) {
-      // 在成功进入网页全屏后应用倍速记忆
-      schedulePlayerEnhancements(1000)
+    // A found/clicked button is only a request. Do not toggle it again while
+    // waiting for the native mode state, but allow a replaced control to retry.
+    if (button && button !== clickedButton) {
+      clickedButton = button
+      button.click()
     }
-    return result
+    return false
   }).start()
+}
+
+export function webFullscreen(application: PlayerModeApplication) {
+  applyNativeDisplayMode('web', application)
+}
+
+function schedulePlayerLayoutTask(callback: () => void, delay: number, shouldApply: () => boolean) {
+  const timer = setTimeout(() => {
+    playerLayoutTimers.delete(timer)
+    if (shouldApply() && !isPlayerShowingEndingRecommendation())
+      callback()
+  }, delay)
+  playerLayoutTimers.add(timer)
 }
 
 // 将播放器滚动到合适位置，优先保证弹幕栏可见
-function scrollPlayerToOptimalPosition(delay = 1000) {
+function scrollPlayerToOptimalPosition(delay = 1000, shouldApply?: () => boolean) {
   // 如果设置了不滚动，直接返回
   if (!settings.value.videoPlayerScroll)
     return
 
+  const video = getVideoElement()
+  const href = location.href
+  const isCurrent = shouldApply ?? (() => location.href === href && getVideoElement() === video && !document.hidden)
   const scroll = () => {
+    if (!isCurrent() || isPlayerShowingEndingRecommendation() || document.body.classList.contains('bewly-widescreen-active'))
+      return
     const playerElement = document.querySelector(_videoClassTag.player)
     if (!playerElement)
       return
@@ -301,70 +310,39 @@ function scrollPlayerToOptimalPosition(delay = 1000) {
   }
 
   if (delay > 0) {
-    setTimeout(scroll, delay)
+    schedulePlayerLayoutTask(scroll, delay, isCurrent)
   }
   else {
     scroll()
   }
 }
 
-export function widescreen() {
-  new RetryTask(20, 500, () => {
-    // 检查是否已经处于宽屏状态
-    if (document.querySelector('[data-screen=\'wide\']')) {
-      // 即使已经是宽屏状态，也执行滚动和倍速记忆
-      scrollPlayerToOptimalPosition()
-      schedulePlayerEnhancements(1000)
-      return true
-    }
-
-    const result = widescreenClick()
-    if (result) {
-      scrollPlayerToOptimalPosition()
-      // 在成功进入宽屏后应用倍速记忆
-      schedulePlayerEnhancements(1000)
-    }
-    return result
-  }).start()
-}
-
-export function widescreenClick() {
-  const widescreenBtn = document.querySelector(_videoClassTag.widescreen) as HTMLElement
-  if (widescreenBtn) {
-    widescreenBtn.click()
-    return true
-  }
-  return false
-}
-
-export function fullscreenClick() {
-  const fullscreenBtn = document.querySelector(_videoClassTag.fullscreen) as HTMLElement
-  if (fullscreenBtn) {
-    fullscreenBtn.click()
-    return true
-  }
-  return false
-}
-
-export function webFullscreenClick() {
-  const webFullscreenBtn = document.querySelector(_videoClassTag.pagefullscreen) as HTMLElement
-  if (webFullscreenBtn) {
-    webFullscreenBtn.click()
-    return true
-  }
-  return false
+export function widescreen(application: PlayerModeApplication) {
+  applyNativeDisplayMode('wide', application)
 }
 
 // 默认模式下也执行滚动和倍速记忆
-export function defaultMode() {
-  scrollPlayerToOptimalPosition()
-  // 在默认模式下也应用倍速记忆
-  schedulePlayerEnhancements(2000) // 默认模式延迟稍长一些，确保页面完全加载
-  return true
+export function defaultMode(application: PlayerModeApplication) {
+  applyNativeDisplayMode('normal', application)
+}
+
+export function isPlayerEndingPanelVisible(): boolean {
+  const root = getVideoElement()?.closest('.bpx-player-container, .bilibili-player')
+  return Array.from((root ?? document).querySelectorAll<HTMLElement>('.bpx-player-ending-wrap, .bilibili-player-ending-panel'))
+    .some((panel) => {
+      if (panel.hidden || panel.getAttribute('aria-hidden') === 'true' || panel.classList.contains('bpx-state-hidden') || !panel.getClientRects().length)
+        return false
+      const style = getComputedStyle(panel)
+      return style.display !== 'none' && style.visibility !== 'hidden' && style.visibility !== 'collapse' && style.opacity !== '0'
+    })
+}
+
+export function isPlayerShowingEndingRecommendation(): boolean {
+  return isPlayerEndingPanelVisible() || getVideoElement()?.ended === true
 }
 
 // 根据设置应用默认弹幕状态
-export function applyDefaultDanmakuState() {
+export function applyDefaultDanmakuState(shouldApply: () => boolean) {
   const preference = settings.value.defaultDanmakuState
   if (!preference || preference === 'system')
     return
@@ -373,6 +351,8 @@ export function applyDefaultDanmakuState() {
   const shouldEnable = isRemember ? settings.value.lastDanmakuState : preference === 'on'
 
   new RetryTask(20, 500, () => {
+    if (!shouldApply())
+      return true
     const danmuSwitch = document.querySelector(_videoClassTag.danmuBtn) as HTMLInputElement | null
     if (!danmuSwitch)
       return false
@@ -400,7 +380,7 @@ export function applyDefaultDanmakuState() {
 }
 
 // 根据设置应用默认字幕状态
-export function applyDefaultCaptionState() {
+export function applyDefaultCaptionState(shouldApply: () => boolean) {
   const preference = settings.value.defaultCaptionState
   if (!preference || preference === 'system')
     return
@@ -409,6 +389,8 @@ export function applyDefaultCaptionState() {
   const shouldEnable = isRemember ? settings.value.lastCaptionState : preference === 'on'
 
   new RetryTask(20, 500, () => {
+    if (!shouldApply())
+      return true
     const closeSwitch = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle-close-switch')
     const languageItem = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle-language-item')
 
@@ -1374,8 +1356,6 @@ export function startPlaybackRateMonitoring() {
 
 export function stopPlaybackRateMonitoring() {
   playbackRateLifecycleActive = false
-  playbackRateEnhancementTimers.forEach(timer => clearTimeout(timer))
-  playbackRateEnhancementTimers.clear()
   stopPlaybackRatePlayerObserver?.()
   stopPlaybackRatePlayerObserver = null
   stopPlaybackRateSettingsWatch?.()

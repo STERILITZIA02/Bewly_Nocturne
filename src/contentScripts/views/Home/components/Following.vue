@@ -50,33 +50,24 @@ import { mapMomentItemToVideo } from '~/contentScripts/views/Home/adapters/follo
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import { parseDedeUserID } from '~/logic/loginStatus'
-import {
-  recordUploaderLatestVideoTimes,
-  uploaderLatestVideoTimes,
-  uploaderLatestVideoTimesReady,
-} from '~/logic/uploaderLatestVideoTimes'
+import { recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import type { DataItem as MomentItem, MomentResult } from '~/models/moment/moment'
 import { BadgeText } from '~/models/moment/moment'
 import type { AccountId } from '~/utils/accountScope'
 import { getAccountScopedStorageKey, isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { calcTimeSince } from '~/utils/dataFormatter'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { reportRuntimeFailure } from '~/utils/messaging'
+
+import FollowingSidebar from '../following/FollowingSidebar.vue'
+import type { FollowingUploader as UploaderInfo } from '../following/model'
+import { useFollowingDirectory } from '../following/useFollowingDirectory'
+import { useFollowingGroupWrites } from '../following/useFollowingGroupWrites'
 
 interface Props {
   gridLayout?: GridLayoutType
   topBarVisibility?: boolean
-}
-
-interface UploaderInfo {
-  mid: number
-  name: string
-  face: string
-  hasUpdate: boolean
-  hasPostTime: boolean
-  lastUpdateTime: number
 }
 
 interface VideoElement {
@@ -88,16 +79,6 @@ interface VideoElement {
   displayData?: Video
   isLive?: boolean
 }
-
-type FollowingLoadResult
-  = | { status: 'success' }
-    | { status: 'login-required' }
-    | { status: 'error' }
-
-type CurrentUserLoadResult
-  = | { status: 'success', mid: number }
-    | { status: 'login-required' }
-    | { status: 'error' }
 
 withDefaults(defineProps<Props>(), {
   gridLayout: 'adaptive',
@@ -115,7 +96,6 @@ const { scrollViewportRef, handlePageRefresh, handleReachBottom, canRefreshHomeS
 const tabState = useHomeTabState()
 const hasSettled = tabState.ref('hasSettled', false)
 const videoList = tabState.ref<VideoElement[]>('videoList', [])
-const uploaderList = tabState.ref<UploaderInfo[]>('uploaderList', [])
 const selectedUploader = tabState.ref<number | null>('selectedUploader', null) // null means "All"
 const previousSelectedUploader = tabState.ref<number | null>('previousSelectedUploader', null)
 const selectionToken = ref<number>(0) // 用于防止竞态条件的令牌
@@ -134,11 +114,16 @@ const allViewOffset = tabState.ref<string>('allViewOffset', '')
 const allViewUpdateBaseline = tabState.ref<string>('allViewUpdateBaseline', '')
 const userMomentsOffset = tabState.ref<string>('userMomentsOffset', '')
 
-const currentUserMid = tabState.ref<number>('currentUserMid', 0) // 当前登录用户的mid
 let loadedAccountMid: AccountId = tabState.read('loadedAccountMid', null)
 tabState.capture('loadedAccountMid', () => loadedAccountMid)
-const followingPage = tabState.ref('followingPage', 1)
-const followingListLoaded = tabState.ref('followingListLoaded', false)
+const directory = useFollowingDirectory(tabState, getDirectoryAccount, {
+  viewed: getViewedUploaders,
+  blocked: getBlacklistedUploaders,
+  selected: () => selectedUploader.value,
+})
+const { uploaders: uploaderList } = directory
+const groupWrites = useFollowingGroupWrites(directory, getDirectoryAccount, tabState.isCurrent)
+const expandedGroupIds = tabState.ref<number[]>('followingExpandedGroups', [-10, 0])
 const uploaderScrollRef = ref<HTMLElement | null>(null)
 tabState.capture('uploaderScrollTop', () => uploaderScrollRef.value?.scrollTop ?? 0)
 let followingAccountInitialized = tabState.restored
@@ -156,6 +141,10 @@ const UPLOADER_BLACKLIST_KEY = 'bewlycat_uploader_blacklist'
 
 function getCurrentAccountMid(): AccountId {
   return parseDedeUserID(document.cookie) ?? null
+}
+
+function getDirectoryAccount(): AccountId {
+  return isSameAccount(loadedAccountMid, getCurrentAccountMid()) ? loadedAccountMid : null
 }
 
 function getFollowingStorageKey(baseKey: string): string | undefined {
@@ -183,16 +172,6 @@ function getViewedUploaders(): Record<number, number> {
   }
 }
 
-// 计算UP主是否有更新（需要显示小红点）
-// 规则：有新内容 且 更新时间在3天内
-function calculateHasUpdate(lastUpdateTime: number, viewedTime: number): boolean {
-  const now = Date.now()
-  const THREE_DAYS = 3 * 24 * 60 * 60 * 1000
-
-  // 必须满足两个条件：1. 有新内容（lastUpdateTime > viewedTime） 2. 更新在3天内
-  return lastUpdateTime > viewedTime && (now - lastUpdateTime <= THREE_DAYS)
-}
-
 // 标记UP主为已查看（记录用户看到的最新投稿时间）
 function markUploaderAsViewed(mid: number, updateTime?: number) {
   const viewed = getViewedUploaders()
@@ -206,8 +185,7 @@ function markUploaderAsViewed(mid: number, updateTime?: number) {
     return
   localStorage.setItem(key, JSON.stringify(viewed))
 
-  if (uploader)
-    uploader.hasUpdate = false
+  directory.markViewed(mid)
 }
 
 // 获取黑名单
@@ -293,218 +271,10 @@ function shouldFilterVideo(item: MomentItem): boolean {
   return false
 }
 
-function sortUploaderList(excludeMid: number | null = null) {
-  let excludedUploader: UploaderInfo | undefined
-  let excludedIndex = -1
-
-  if (excludeMid !== null) {
-    excludedIndex = uploaderList.value.findIndex(u => u.mid === excludeMid)
-    if (excludedIndex !== -1) {
-      excludedUploader = uploaderList.value[excludedIndex]
-      uploaderList.value.splice(excludedIndex, 1)
-    }
-  }
-
-  const blacklist = getBlacklistedUploaders()
-
-  uploaderList.value.sort((a, b) => {
-    const aIsBlacklisted = blacklist.has(a.mid)
-    const bIsBlacklisted = blacklist.has(b.mid)
-
-    // 1. 黑名单的UP主排在最后
-    if (aIsBlacklisted !== bIsBlacklisted)
-      return aIsBlacklisted ? 1 : -1
-
-    // 2. 按 lastUpdateTime 降序排序（最新的在前）
-    return b.lastUpdateTime - a.lastUpdateTime
-  })
-
-  if (excludedUploader && excludedIndex !== -1) {
-    uploaderList.value.splice(excludedIndex, 0, excludedUploader)
-  }
-}
-
-function updateUploaderStatus() {
-  const viewed = getViewedUploaders()
-  uploaderList.value = uploaderList.value.map((uploader) => {
-    const viewedTime = viewed[uploader.mid] || 0
-    return {
-      ...uploader,
-      hasUpdate: uploader.hasPostTime
-        ? calculateHasUpdate(uploader.lastUpdateTime, viewedTime)
-        : false,
-    }
-  })
-
-  // 使用统一的排序逻辑
-  sortUploaderList(null)
-}
-
-function applyRecordedUploaderTimes() {
-  let changed = false
-
-  uploaderList.value.forEach((uploader) => {
-    const recorded = uploaderLatestVideoTimes.value[String(uploader.mid)]
-    if (!recorded || (uploader.hasPostTime && uploader.lastUpdateTime >= recorded.time))
-      return
-
-    uploader.lastUpdateTime = recorded.time
-    uploader.hasPostTime = true
-    changed = true
-  })
-
-  if (changed)
-    updateUploaderStatus()
-}
-
-watch(uploaderLatestVideoTimes, applyRecordedUploaderTimes, { deep: true })
-
-const unreadUploadersCount = computed(() => {
-  return uploaderList.value.filter(uploader => uploader.hasUpdate).length
-})
-
 // 搜索关键词
 const searchKeyword = tabState.ref<string>('searchKeyword', '')
 
-// 显示的UP主列表（包含黑名单，但黑名单排在最后，并支持搜索过滤）
-const displayedUploaderList = computed(() => {
-  let list = uploaderList.value
-
-  // 如果有搜索关键词，进行过滤
-  if (searchKeyword.value.trim()) {
-    const keyword = searchKeyword.value.trim().toLowerCase()
-    list = list.filter(uploader => uploader.name.toLowerCase().includes(keyword))
-  }
-
-  return list
-})
-
 const gridKey = computed(() => `following-grid-${selectedUploader.value ?? 'all'}`)
-
-// 获取当前用户信息以获取关注列表
-async function getCurrentUserInfo(requestToken: number, accountMid: number): Promise<CurrentUserLoadResult> {
-  try {
-    const response: any = await api.user.getUserInfo()
-    if (
-      response.code === 0
-      && response.data?.mid === accountMid
-      && requestToken === selectionToken.value
-      && isSameAccount(loadedAccountMid, getCurrentAccountMid())
-      && tabState.isCurrent()
-    ) {
-      currentUserMid.value = response.data.mid
-      return { status: 'success', mid: response.data.mid }
-    }
-    if (response.code === -101)
-      return { status: 'login-required' }
-  }
-  catch (error) {
-    reportRuntimeFailure('Following: failed to get current user info', error)
-  }
-  return { status: 'error' }
-}
-
-// 加载关注列表（独立API）- 渐进式加载所有关注的UP主
-async function loadFollowingList(requestToken: number, accountMid: number): Promise<FollowingLoadResult> {
-  if (!isFollowingRequestCurrent(requestToken))
-    return { status: 'error' }
-  requestFailed.value = false
-  needToLoginFirst.value = false
-  if (!hasSettled.value)
-    noMoreContent.value = false
-
-  if (!currentUserMid.value) {
-    const result = await getCurrentUserInfo(requestToken, accountMid)
-    if (result.status !== 'success') {
-      if (isFollowingRequestCurrent(requestToken)) {
-        needToLoginFirst.value = result.status === 'login-required'
-        requestFailed.value = result.status === 'error'
-      }
-      return result
-    }
-  }
-
-  try {
-    await uploaderLatestVideoTimesReady
-    if (!isFollowingRequestCurrent(requestToken))
-      return { status: 'error' }
-
-    const pageSize = 50
-    let hasMore = true
-    const viewed = getViewedUploaders()
-    const recordedTimes = uploaderLatestVideoTimes.value
-
-    // 持续加载所有关注的UP主，每页加载后立即显示
-    while (hasMore && isFollowingRequestCurrent(requestToken)) {
-      const response: any = await api.user.getUserFollowings({
-        vmid: currentUserMid.value.toString(),
-        ps: pageSize,
-        pn: followingPage.value,
-      })
-
-      if (!isFollowingRequestCurrent(requestToken))
-        return { status: 'error' }
-
-      if (response.code === -101) {
-        needToLoginFirst.value = true
-        requestFailed.value = false
-        noMoreContent.value = false
-        return { status: 'login-required' }
-      }
-
-      if (response.code === 0 && response.data?.list) {
-        const followings = response.data.list
-
-        // 立即处理并追加当前页的UP主到列表
-        const newUploaders = followings.map((user: any) => {
-          const recordedTime = recordedTimes[String(user.mid)]
-          const hasPostTime = Boolean(recordedTime)
-          const followedAt = Number(user.mtime || 0) * 1000
-          const lastUpdateTime = recordedTime?.time ?? followedAt
-          const viewedTime = viewed[user.mid] || 0
-
-          return {
-            mid: user.mid,
-            name: user.uname,
-            face: user.face,
-            hasUpdate: hasPostTime && calculateHasUpdate(lastUpdateTime, viewedTime),
-            hasPostTime,
-            lastUpdateTime,
-          }
-        })
-
-        // 立即追加到列表并排序
-        uploaderList.value = [...uploaderList.value, ...newUploaders]
-        updateUploaderStatus()
-
-        // 检查是否还有更多
-        const total = response.data.total
-        if (uploaderList.value.length >= total || followings.length < pageSize) {
-          hasMore = false
-          followingListLoaded.value = true
-        }
-        else {
-          followingPage.value++
-        }
-      }
-      else {
-        requestFailed.value = true
-        noMoreContent.value = false
-        return { status: 'error' }
-      }
-    }
-
-    return { status: 'success' }
-  }
-  catch (error) {
-    reportRuntimeFailure('Following: failed to load following list', error)
-    if (isFollowingRequestCurrent(requestToken)) {
-      requestFailed.value = true
-      noMoreContent.value = false
-    }
-    return { status: 'error' }
-  }
-}
 
 // 加载关注的直播列表（仅加载正在直播的）
 const OFFLINE_LIVE_TEXT = /未开播|休息|离线|下播|轮播|回放/
@@ -698,8 +468,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
         const knownPostTime = uploader.hasPostTime ? uploader.lastUpdateTime : 0
 
         if (time > knownPostTime) {
-          uploader.lastUpdateTime = time
-          uploader.hasPostTime = true
+          directory.notePublication(mid, time)
           updatedCount++
         }
 
@@ -709,13 +478,9 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
         const lastViewedTime = viewed[mid] || 0
 
         // 如果当前看到的时间等于或晚于已知的最新时间，更新已查看时间
-        if (time >= uploader.lastUpdateTime && time > lastViewedTime) {
+        if (time >= knownPostTime && time > lastViewedTime) {
           markUploaderAsViewed(mid, time)
           markedAsViewedCount++
-        }
-        else {
-          // 即使不标记为已查看，也需要重新计算hasUpdate
-          uploader.hasUpdate = calculateHasUpdate(uploader.lastUpdateTime, lastViewedTime)
         }
 
         // 如果该UP主在黑名单中，说明他们有新活动，从黑名单移除
@@ -728,7 +493,7 @@ async function loadAllViewVideos(maxPages: number = 3, token?: number) {
     })
 
     if (updatedCount > 0 || removedFromBlacklistCount > 0 || markedAsViewedCount > 0) {
-      sortUploaderList(selectedUploader.value)
+      directory.updateStatus()
     }
 
     // 如果一条视频都没加载到，设置 noMoreContent
@@ -879,8 +644,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
         const knownLatestTime = uploader.hasPostTime
           ? Math.max(uploader.lastUpdateTime, latestTime)
           : latestTime
-        uploader.lastUpdateTime = knownLatestTime
-        uploader.hasPostTime = true
+        directory.notePublication(mid, knownLatestTime)
         void recordUploaderLatestVideoTimes(
           [{ mid, time: knownLatestTime }],
           'following-selected',
@@ -893,7 +657,7 @@ async function loadUserMoments(mid: number, maxPages: number = 3, token?: number
           addToBlacklist(mid)
         }
 
-        sortUploaderList(selectedUploader.value)
+        directory.sort(selectedUploader.value)
       }
     }
 
@@ -930,7 +694,7 @@ function selectUploader(mid: number | null) {
   // 即时滚动到顶部（或搜索页面模式下的偏移位置）
   const viewport = scrollViewportRef.value
   if (viewport) {
-    const scrollTarget = settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0
+    const scrollTarget = Math.min(viewport.scrollTop, settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
     viewport.scrollTop = scrollTarget
   }
 
@@ -941,7 +705,7 @@ function selectUploader(mid: number | null) {
   if (mid === null) {
     // 切换到ALL视图
     if (previousSelectedUploader.value !== null) {
-      sortUploaderList(null)
+      directory.sort(null)
     }
 
     selectedUploader.value = null
@@ -967,7 +731,7 @@ function selectUploader(mid: number | null) {
     }
 
     if (previousSelectedUploader.value !== null && previousSelectedUploader.value !== mid) {
-      sortUploaderList(mid)
+      directory.sort(mid)
     }
 
     selectedUploader.value = mid
@@ -1041,44 +805,19 @@ function initData() {
   liveListLoaded.value = false // 重置直播加载标志
 
   if (accountMid === null) {
-    currentUserMid.value = 0
     needToLoginFirst.value = true
     return
   }
-  currentUserMid.value = accountMid
+  void directory.load()
 
   // 如果当前已经选中了某个UP主，刷新该UP主的动态
   if (currentSelectedUploader !== null) {
     loadUserMoments(currentSelectedUploader, 3, currentToken)
   }
   else {
-    // 否则，先加载关注列表，然后加载ALL视图
-    if (!followingListLoaded.value) {
-      // 设置加载状态，避免显示"没有数据"
-      isLoading.value = true
-      emit('beforeLoading')
-
-      loadFollowingList(currentToken, accountMid).then((result) => {
-        if (result.status !== 'success' || !isFollowingRequestCurrent(currentToken)) {
-          if (isFollowingRequestCurrent(currentToken)) {
-            isLoading.value = false
-            emit('afterLoading')
-          }
-          return
-        }
-        selectUploader(null)
-      }).catch((error) => {
-        if (!isFollowingRequestCurrent(currentToken))
-          return
-        reportRuntimeFailure('Following: failed to initialize', error)
-        isLoading.value = false
-        emit('afterLoading')
-      })
-    }
-    else {
-      // 如果关注列表已经加载过，直接刷新ALL视图
-      loadAllViewVideos(3, currentToken)
-    }
+    // The directory and feed own independent requests; late directory loading
+    // must not reset the selected uploader or scroll away from the search hero.
+    loadAllViewVideos(3, currentToken)
   }
 }
 
@@ -1086,11 +825,7 @@ async function resumeFollowingData() {
   if (!tabState.isCurrent() || loadedAccountMid === null || requestFailed.value || needToLoginFirst.value)
     return
   const token = selectionToken.value
-  if (!followingListLoaded.value) {
-    const result = await loadFollowingList(token, loadedAccountMid)
-    if (result.status !== 'success' || !isFollowingRequestCurrent(token))
-      return
-  }
+  void directory.load()
   if (!hasSettled.value) {
     if (selectedUploader.value === null)
       await loadAllViewVideos(3, token)
@@ -1106,13 +841,12 @@ function jumpToLoginPage() {
 function resetFollowingAccountState(accountMid: AccountId) {
   const wasLoading = isLoading.value
   selectionToken.value++
-  followingPage.value = 1
-  followingListLoaded.value = false
-  uploaderList.value = []
+  directory.reset()
+  expandedGroupIds.value = [-10, 0]
+  searchKeyword.value = ''
   selectedUploader.value = null
   previousSelectedUploader.value = null
   videoList.value = []
-  currentUserMid.value = accountMid ?? 0
   allViewOffset.value = ''
   allViewUpdateBaseline.value = ''
   userMomentsOffset.value = ''
@@ -1144,6 +878,8 @@ onMounted(() => {
   const changed = ensureFollowingAccount()
   if (!changed)
     void resumeFollowingData()
+  if (settings.value.followingUploaderSort === 'group')
+    void directory.loadGroups()
   if (uploaderScrollRef.value)
     uploaderScrollRef.value.scrollTop = tabState.read('uploaderScrollTop', 0)
 
@@ -1151,6 +887,11 @@ onMounted(() => {
   nextTick(() => {
     initPageAction()
   })
+})
+
+watch(() => settings.value.followingUploaderSort, (sort) => {
+  if (sort === 'group')
+    void directory.loadGroups()
 })
 
 onUnmounted(() => {
@@ -1178,109 +919,19 @@ defineExpose({ initData })
 </script>
 
 <template>
-  <div flex="~ gap-40px">
-    <!-- Left Panel: Uploader List -->
-    <aside
-      pos="sticky" top="$bew-layout-sidebar-sticky-top" h="[calc(100vh-var(--bew-layout-sidebar-viewport-offset))]" w="$bew-layout-sidebar-width" shrink-0
-      duration-300
-      ease-in-out
-    >
-      <div
-        ref="uploaderScrollRef" h-inherit p="x-20px b-20px t-8px" m--20px of-y-auto
-        of-x-hidden
-      >
-        <!-- Search Box -->
-        <div mb-3>
-          <input
-            v-model="searchKeyword"
-            type="text"
-            :placeholder="$t('common.search')"
-            px-4 py-2 w-full
-            rounded="$bew-radius"
-            bg="$bew-fill-1"
-            border="1 $bew-border-color"
-            text="sm $bew-text-1"
-            outline-none
-            transition="border-color duration-300, background-color duration-300"
-            focus:border="$bew-theme-focus-ring"
-            focus:bg="$bew-fill-2"
-            placeholder:text="$bew-text-3"
-          >
-        </div>
-
-        <TransitionGroup name="list" tag="ul" flex="~ col gap-2">
-          <!-- All Uploaders Option -->
-          <li key="all-uploaders">
-            <a
-              :class="{ active: selectedUploader === null }"
-              px-4 py-2 hover:bg="$bew-fill-2" w-inherit
-              block rounded="$bew-radius" cursor-pointer transition="background-color duration-200, color duration-200, box-shadow duration-200"
-              un-text="$bew-text-1"
-              flex="~ items-center gap-3"
-              @click="selectUploader(null)"
-            >
-              <div
-                class="bew-shape-circle"
-                w-30px h-30px rounded-full
-                bg="$bew-fill-2" flex="~ items-center justify-center"
-                shrink-0
-              >
-                <div i-mingcute:classify-2-fill text-lg />
-              </div>
-              <div flex-1 overflow-hidden>
-                <div font-medium text-sm>
-                  {{ $t('topbar.moments_dropdown.tabs.all') }}
-                </div>
-                <div v-if="unreadUploadersCount > 0" class="secondary-text">
-                  {{ $t('home.uploaders_with_updates', { count: unreadUploadersCount }) }}
-                </div>
-              </div>
-            </a>
-          </li>
-
-          <!-- Individual Uploaders -->
-          <li v-for="uploader in displayedUploaderList" :key="uploader.mid">
-            <a
-              :class="{ active: selectedUploader === uploader.mid }"
-              px-4 py-2 hover:bg="$bew-fill-2" w-inherit
-              block rounded="$bew-radius" cursor-pointer transition="background-color duration-200, color duration-200, box-shadow duration-200"
-              un-text="$bew-text-1"
-              flex="~ items-center gap-3"
-              @click="selectUploader(uploader.mid)"
-            >
-              <div pos="relative" shrink-0>
-                <img
-                  :src="`${uploader.face}@50w_50h`"
-                  class="bew-shape-circle"
-                  w-30px h-30px rounded-full object-cover
-                  loading="lazy"
-                  alt="Avatar"
-                >
-                <!-- Red dot for new updates -->
-                <div
-                  v-if="uploader.hasUpdate"
-                  pos="absolute top-0 right-0"
-                  class="bew-shape-circle"
-                  w-8px h-8px rounded-full
-                  bg="red-500" border="2 $bew-elevated"
-                />
-              </div>
-              <div flex-1 overflow-hidden>
-                <div font-medium truncate text-sm>
-                  {{ uploader.name }}
-                </div>
-                <div class="secondary-text">
-                  {{ calcTimeSince(uploader.lastUpdateTime) }}
-                </div>
-              </div>
-            </a>
-          </li>
-        </TransitionGroup>
-      </div>
-    </aside>
+  <div class="following-layout">
+    <FollowingSidebar
+      v-model:query="searchKeyword" v-model:expanded="expandedGroupIds"
+      :uploaders="uploaderList" :groups="directory.groups.value" :grouped="settings.followingUploaderSort === 'group'"
+      :account-id="loadedAccountMid" :selected="selectedUploader" :loading="directory.loading.value" :failed="directory.failed.value"
+      :groups-loading="directory.groupsLoading.value" :groups-failed="directory.groupsFailed.value" :busy="groupWrites.busy.value"
+      :load-groups="() => directory.loadGroups()" :load-member="directory.refreshMember" :write="groupWrites.submit"
+      @select="selectUploader" @retry="directory.load()" @retry-groups="directory.loadGroups(true)"
+      @scroll-element="uploaderScrollRef = $event"
+    />
 
     <!-- Right Panel: Video Feed -->
-    <div w-full>
+    <div class="following-feed">
       <VideoCardGrid
         :key="gridKey"
         :items="videoList"
@@ -1303,36 +954,13 @@ defineExpose({ initData })
 </template>
 
 <style lang="scss" scoped>
-.secondary-text {
-  --uno: "text-xs text-$bew-text-2";
+.following-layout {
+  display: flex;
+  gap: var(--bew-space-10);
+  min-height: calc(100dvh - var(--bew-space-2));
 }
-
-.active {
-  --uno: "bg-$bew-theme-color-auto text-$bew-text-auto shadow-$bew-shadow-2";
-
-  .secondary-text {
-    --uno: "text-$bew-text-auto opacity-85";
-  }
-}
-
-/* TransitionGroup 列表过渡效果 */
-.list-move,
-.list-enter-active,
-.list-leave-active {
-  transition:
-    background-color 0.3s ease,
-    color 0.3s ease,
-    box-shadow 0.3s ease;
-}
-
-.list-enter-from,
-.list-leave-to {
-  opacity: 0;
-  transform: translateX(-30px);
-}
-
-/* 确保离开的元素从布局流中移除 */
-.list-leave-active {
-  position: absolute;
+.following-feed {
+  flex: 1;
+  min-width: 0;
 }
 </style>

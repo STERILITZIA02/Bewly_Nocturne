@@ -1,4 +1,4 @@
-import { DANMAKU_EMPTY_STATE_SELECTOR, DANMAKU_GLASS_CLASS, DANMAKU_LIST_ITEM_SELECTOR, DANMAKU_LIST_VIEWPORT_SELECTOR, DANMAKU_RESIZE_DELAYS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, selectors } from '~/utils/bewlyWidescreen/constants'
+import { DANMAKU_EMPTY_STATE_SELECTOR, DANMAKU_GLASS_CLASS, DANMAKU_LIST_ITEM_SELECTOR, DANMAKU_LIST_VIEWPORT_SELECTOR, DANMAKU_RESIZE_DELAYS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, NANO_DANMAKU_INPUT_SELECTOR, selectors } from '~/utils/bewlyWidescreen/constants'
 import { resetControlsLayout, schedulePlayerResizeSync, syncControlsGlassGeometry } from '~/utils/bewlyWidescreen/geometry'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { findFirst, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
@@ -195,7 +195,9 @@ function setupDanmakuSettingsClickToggle(source: HTMLElement) {
 export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force = false) {
   const source = findFirst(selectors.danmakuInput, currentState.playerEl)
     || findMovable(selectors.danmakuInput)
-  const host = source?.parentElement
+  // Nano's sending wrapper can be a direct sibling of the primary player area.
+  // Never style their common parent as the floating danmaku bar.
+  const host = source?.matches(NANO_DANMAKU_INPUT_SELECTOR) ? source : source?.parentElement
   if (!source || !host)
     return false
 

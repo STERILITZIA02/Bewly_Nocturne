@@ -59,6 +59,12 @@ export const useSettingsStore = defineStore('settings', () => {
     return settings.value.dockItemsConfig.find(e => e.page === page)
   }
 
+  function toggleDockItemVisibility(page: AppPage): void {
+    const config = getDockItemConfigByPage(page)
+    if (config && (!config.visible || settings.value.dockItemsConfig.filter(item => item.visible).length > 1))
+      config.visible = !config.visible
+  }
+
   function getDockItemCustomUseOriginalBiliPage(page: AppPage): boolean {
     return getDockItemConfigByPage(page)?.useOriginalBiliPage
       ?? getDefaultCustomUseOriginalBiliPage(page)
@@ -133,6 +139,7 @@ export const useSettingsStore = defineStore('settings', () => {
   return {
     ensureDockItemsConfig,
     getDockItemConfigByPage,
+    toggleDockItemVisibility,
     getDockItemCustomUseOriginalBiliPage,
     getDockItemIsUseOriginalBiliPage,
     getEffectiveDockItemByPage,

@@ -1,3 +1,23 @@
+.bpx-player-control-wrap:has(.bewly-video-screenshot-control) {
+  container: bewly-player-controls / inline-size;
+}
+
+@container bewly-player-controls (max-width: 900px) {
+  .bewly-video-screenshot-control {
+    display: none !important;
+  }
+}
+
+@container bewly-player-controls (max-width: 1200px) {
+  .bpx-player-container:is([data-screen="web"], [data-screen="full"]) .bewly-video-screenshot-control {
+    display: none !important;
+  }
+}
+
+.bpx-player-container[data-screen="mini"] .bewly-video-screenshot-control {
+  display: none !important;
+}
+
 .video-toolbar-right-item.bewly-watch-later-btn {
   position: relative;
   display: inline-flex;

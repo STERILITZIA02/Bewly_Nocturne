@@ -2,11 +2,12 @@ import type { VideoInfo } from '~/models/video/videoInfo'
 import api from '~/utils/api'
 import { selectors } from '~/utils/bewlyWidescreen/constants'
 import { t } from '~/utils/bewlyWidescreen/labels'
-import { findFirst, findMovable, getTitleText } from '~/utils/bewlyWidescreen/nativeDom'
+import { findFirst, findMovable, getTitleText, moveOrReplaceNode } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { isPgcPlaybackPage } from '~/utils/videoMetadataBridge'
 
 export function syncSidebarTitle(currentState: BewlyWidescreenState) {
   const titleElement = currentState.sidebarTop.querySelector<HTMLElement>('.bewly-widescreen-title')
@@ -16,6 +17,8 @@ export function syncSidebarTitle(currentState: BewlyWidescreenState) {
 }
 
 export function syncVideoMetadata(currentState: BewlyWidescreenState) {
+  if (isPgcPlaybackPage())
+    return moveOrReplaceNode(selectors.mediaInfo, currentState.metadataSlot, currentState.movedNodes).found
   const source = findMovable(selectors.metadata)
   const existing = currentState.metadataSlot.querySelector<HTMLElement>('.bewly-widescreen-metadata-clone')
   if (!source) {

@@ -7,6 +7,12 @@ export const LOADING_ROOT_ID = 'bewly-widescreen-loading'
 export const BODY_CLASS = 'bewly-widescreen-active'
 
 export const NATIVE_PLAYER_CLASS = 'bewly-widescreen-native-player'
+export const NATIVE_PLAYER_ANCESTOR_CLASS = 'bewly-widescreen-player-ancestor'
+export const PGC_MEDIA_INFO_SELECTOR = '[class*="mediainfo_mediaInfoWrap"]'
+export const PGC_TOOLBAR_SELECTOR = `.player-left-components > .toolbar, #${ROOT_ID} .bewly-widescreen-action-slot > .toolbar`
+export const PGC_REACT_BRIDGE_ATTRIBUTE = 'data-bewly-react-bridge'
+export const PGC_PAGINATED_PLAYLIST_SELECTOR = '[class*="PaginatedEpList_root"]'
+export const NANO_DANMAKU_INPUT_SELECTOR = '[class*="NanoPlayer_nonoPlayerSendingBar"]'
 
 export const EMPTY_CLASS = 'bewly-widescreen-empty'
 
@@ -152,6 +158,7 @@ export const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR = [
 
 export const selectors = {
   player: [
+    '#bilibili-player-wrap',
     '#playerWrap',
     '#bilibili-player',
     '#bilibiliPlayer',
@@ -176,7 +183,9 @@ export const selectors = {
   toolbar: [
     '#arc_toolbar_report',
     '.video-toolbar-container',
+    PGC_TOOLBAR_SELECTOR,
   ],
+  mediaInfo: [PGC_MEDIA_INFO_SELECTOR],
   metadata: [
     '.video-info-meta',
   ],
@@ -192,6 +201,7 @@ export const selectors = {
     '.bpx-player-sending-bar',
     '.bilibili-player-video-sendbar',
     '.bilibili-player-video-inputbar',
+    NANO_DANMAKU_INPUT_SELECTOR,
   ],
   danmakuFocusable: [
     '.danmaku-wrap .bui-collapse-header',
@@ -215,6 +225,7 @@ export const selectors = {
     '.danmaku-wrap',
   ],
   playlist: [
+    PGC_PAGINATED_PLAYLIST_SELECTOR,
     // Watch Later and Favorites use this inner list. Their `.playlist-container`
     // is the page-level layout and must stay outside the widescreen sidebar.
     '.action-list-container',
@@ -248,6 +259,7 @@ export const SIDEBAR_RELEVANT_SELECTOR = [
   ...selectors.player,
   ...selectors.title,
   ...selectors.upPanel,
+  ...selectors.mediaInfo,
   ...selectors.toolbar,
   ...selectors.description,
   ...selectors.tags,

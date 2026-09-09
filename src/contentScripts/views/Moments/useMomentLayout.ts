@@ -1,5 +1,5 @@
 import type { Ref } from 'vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, watch } from 'vue'
 
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { getCardPreviewText, isCompactPlainTextMoment } from '~/components/MomentCard/utils'
@@ -23,6 +23,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     topPad: number
     bottomPad: number
     items: DisplayMoment[]
+    gaps?: number[]
   }
   const momentsGridColumns = useLayoutEditSettingValue(
     'page.moments.gridColumns',
@@ -46,7 +47,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   const cardEnterTimers = new Map<string, ReturnType<typeof setTimeout>>()
   const cardReadyFrames = new Map<string, number>()
   const cardElements = new Map<string, HTMLElement>()
-  const virtualColumns = ref<VirtualColumn[]>([])
+  const virtualColumns = shallowRef<VirtualColumn[]>([])
+  const interactiveCardIds = new Set<string>()
   const coverRatios = reactive<Record<string, number>>({})
   const MIN_SINGLE_IMAGE_RATIO = 1 / 2
   let gridObserver: ResizeObserver | undefined
@@ -59,6 +61,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   let cardGeometryFrame = 0
   let suppressBottomRebalanceUntil = 0
   const settledHeights = new Set<string>()
+  let measurementRevision = 0
   const columnHeightIndex = createMomentColumnIndex<DisplayMoment>(item => item.id, getCardHeight, GRID_GAP)
   const momentsGridStyle = computed(() => ({
     '--moments-columns': String(Math.max(1, gridColumnCount.value)),
@@ -113,8 +116,19 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }
     if (moment.forward?.video) {
       const introLines = Math.min(7, Math.max(1, Math.ceil((moment.text || '').length / 28)))
-      const forwardMediaWidth = Math.max(150, (columnWidth - 32) * 0.44)
-      return 117 + Math.round(forwardMediaWidth * 9 / 16) + introLines * 21 + additionalHeight + interactionHeight
+      // Match the 12px reference inset, 24px source row and 40% media column.
+      const innerWidth = Math.max(1, columnWidth - 32 - 24)
+      const forwardMediaWidth = innerWidth * 0.4
+      const infoWidth = Math.max(1, innerWidth * 0.6 - 24)
+      const titleLines = Math.min(3, Math.max(1, Math.ceil(moment.forward.video.title.length / Math.max(1, infoWidth / 15))))
+      const descriptionLines = moment.forward.video.desc
+        ? Math.min(2, Math.ceil(moment.forward.video.desc.length / Math.max(1, infoWidth / 12)))
+        : 0
+      const infoHeight = titleLines * 22 + descriptionLines * 16 + 16 + 16 + (descriptionLines ? 8 : 0)
+      const quoteHeight = moment.forward.text && moment.forward.text !== moment.forward.video.desc
+        ? Math.min(2, Math.ceil(moment.forward.text.length / Math.max(1, innerWidth / 12))) * 16 + 12
+        : 0
+      return 117 + 24 + 24 + 12 + quoteHeight + Math.round(Math.max(forwardMediaWidth * 9 / 16, infoHeight)) + introLines * 21 + additionalHeight + interactionHeight
     }
     if (moment.isChargeExclusive && !moment.isVideo)
       return 230 + scaledTextBodyExtra + additionalHeight + interactionHeight
@@ -260,6 +274,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   }
 
   function invalidateCardMeasurementsForWidthChange() {
+    measurementRevision++
     Object.keys(cardHeights).forEach(id => delete cardHeights[id])
     settledHeights.clear()
     if (cardGeometryFrame)
@@ -292,12 +307,15 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     })
 
     const preferredColumns = Math.min(3, Math.max(1, Number(momentsGridColumns.value) || 3))
-    const nextCols = resolveMomentGridColumnCount({
+    const desiredCols = resolveMomentGridColumnCount({
       containerWidth: mainRailWidth,
       preferredColumns,
       minCardWidth: CARD_MIN_WIDTH,
       gap: GRID_GAP,
     })
+    // Keep an active editor/focus/fullscreen in its Vue column. Apply the new
+    // column count as soon as the interaction ends; width still follows resize.
+    const nextCols = interactiveCardIds.size && momentColumns.value.length ? gridColumnCount.value : desiredCols
     const gridClientWidth = gridRef.value?.clientWidth || mainRailWidth
     const nextCardWidth = resolveMomentCardWidth({
       gridClientWidth,
@@ -351,6 +369,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         return
       }
       if (momentColumns.value.length < 2 || moments.value.length < 2)
+        return
+      if (interactiveCardIds.size)
         return
       const viewport = scrollViewportRef.value
       if (viewport) {
@@ -423,7 +443,8 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
 
   function updateVirtualColumns() {
     if (!momentColumns.value.length) {
-      virtualColumns.value = []
+      if (virtualColumns.value.length)
+        virtualColumns.value = []
       return
     }
 
@@ -433,8 +454,17 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     const gridOffsetTop = getGridOffsetTop()
     const viewStart = scrollTop - OVERSCAN_PX
     const viewEnd = scrollTop + viewportHeight + OVERSCAN_PX
-    columnHeightIndex.sync(momentColumns.value, gridCardWidth.value)
-    virtualColumns.value = columnHeightIndex.window(viewStart - gridOffsetTop, viewEnd - gridOffsetTop)
+    columnHeightIndex.sync(momentColumns.value, `${gridCardWidth.value}:${measurementRevision}`)
+    const next = columnHeightIndex.window(viewStart - gridOffsetTop, viewEnd - gridOffsetTop, interactiveCardIds)
+    const previous = virtualColumns.value
+    if (next.length !== previous.length || next.some((column, index) => {
+      const old = previous[index]
+      return column.topPad !== old.topPad || column.bottomPad !== old.bottomPad
+        || column.items.length !== old.items.length
+        || column.items.some((item, row) => item !== old.items[row] || (column.gaps?.[row] ?? 0) !== (old.gaps?.[row] ?? 0))
+    })) {
+      virtualColumns.value = next
+    }
 
     hooks.onViewportChange(visibleMomentIds, [])
   }
@@ -489,11 +519,13 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   }
 
   function bindCardEl(el: Element | null, moment: DisplayMoment) {
+    const previous = cardElements.get(moment.id)
+    if (previous === el)
+      return
     const pendingFrame = cardReadyFrames.get(moment.id)
     if (pendingFrame !== undefined)
       cancelAnimationFrame(pendingFrame)
     cardReadyFrames.delete(moment.id)
-    const previous = cardElements.get(moment.id)
     if (!(el instanceof HTMLElement)) {
       if (previous) {
         cardMeasureObserver?.unobserve(previous)
@@ -536,7 +568,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
       cardReadyFrames.set(moment.id, frame)
     }
     else if (!cardHeights[moment.id]) {
-      cardHeights[moment.id] = estimateCardHeight(moment)
+      commitCardHeight(moment.id, estimateCardHeight(moment), { force: true })
     }
   }
 
@@ -579,7 +611,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
           visibleMomentIds.delete(id)
 
         // 离开视口时释放该卡预览资源
-        if (!entry.isIntersecting)
+        if (!entry.isIntersecting && !interactiveCardIds.has(id))
           hidden.push(id)
       })
       hooks.onViewportChange(visibleMomentIds, hidden)
@@ -665,8 +697,19 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     },
   )
   watch(
+    () => settings.value.fontFamily,
+    async () => {
+      await nextTick()
+      if (!active)
+        return
+      invalidateCardMeasurementsForWidthChange()
+      updateVirtualColumns()
+    },
+  )
+  watch(
     momentsGridColumns,
     async () => {
+      measurementRevision++
       Object.keys(cardHeights).forEach(key => delete cardHeights[key])
       settledHeights.clear()
       await nextTick()
@@ -682,6 +725,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     columnHeightIndex.sync([], gridCardWidth.value)
   }
   function reset(nextItems: DisplayMoment[] = []) {
+    interactiveCardIds.clear()
     const ratios = new Map(nextItems.flatMap(item => coverRatios[item.id] ? [[item.id, coverRatios[item.id]] as const] : []))
     clearColumns()
     Object.keys(cardHeights).forEach(key => delete cardHeights[key])
@@ -736,7 +780,19 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     momentColumns.value = momentColumns.value.map(column => column.map(item => item.id === moment.id ? moment : item))
     updateVirtualColumns()
   }
-  return { showMomentsSidebar, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, suspendRebalance(duration: number) {
+  function setInteractionHeld(id: string, held: boolean) {
+    if (interactiveCardIds.has(id) === held)
+      return
+    if (held)
+      interactiveCardIds.add(id)
+    else
+      interactiveCardIds.delete(id)
+    if (!active)
+      return
+    updateGridColumnCount()
+    scheduleVirtualUpdate()
+  }
+  return { showMomentsSidebar, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, setInteractionHeld, suspendRebalance(duration: number) {
     suppressBottomRebalanceUntil = Date.now() + duration
   } }
 }

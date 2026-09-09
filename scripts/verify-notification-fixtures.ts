@@ -1106,7 +1106,8 @@ verify('restored whisper routes do not focus the conversation heading without an
   assert.ok(source.includes('pendingDetailFocusKey'))
   assert.ok(source.includes('pendingDetailFocusKey = session.key'))
   assert.ok(source.includes('pendingDetailFocusKey = `transient:' + '$' + '{recipient.mid}`'))
-  assert.ok(source.includes('nextSessionKey === pendingDetailFocusKey'))
+  assert.ok(source.includes('key === pendingDetailFocusKey'))
+  assert.ok(source.includes('watch(conversationDetailRef'))
   assert.equal(source.includes('if (nextSessionKey) {\n    conversationDetailRef.value?.focusHeading()'), false)
 })
 

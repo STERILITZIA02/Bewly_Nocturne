@@ -1,13 +1,14 @@
 import { settings } from '~/logic'
 import { scheduleActionGeometrySync } from '~/utils/bewlyWidescreen/actionEffects'
-import { HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, READY_STABILITY_DELAY, selectors } from '~/utils/bewlyWidescreen/constants'
+import { HIGH_ENERGY_PROGRESS_PIN_SELECTOR, HIGH_ENERGY_PROGRESS_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, READY_STABILITY_DELAY } from '~/utils/bewlyWidescreen/constants'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { forwardNativePlayerPointerActivity, getNativePlayerContainer, isPointerInBottomControlContainer, setupSidebarToggleAutoHide, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
-import { exitNativeMiniPlayer, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
+import { exitNativeMiniPlayer } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { resolveWidescreenAnchoredPlayerGeometry, resolveWidescreenCenterGeometry, WIDESCREEN_BOTTOM_CONTROL_HOVER_LEAVE_DELAY } from '~/utils/bewlyWidescreenPolicy'
-import { getVideoElement } from '~/utils/player'
+import { getVideoElement, isPlayerShowingEndingRecommendation } from '~/utils/player'
+import { getPlayerRoot } from '~/utils/playerMedia'
 
 const ANCHORED_PLAYER_GEOMETRY_PROPERTIES = [
   '--bewly-widescreen-player-height',
@@ -114,6 +115,7 @@ export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState)
   const viewerInfo = currentState.danmakuSemanticsSource?.querySelector<HTMLElement>('.bpx-player-video-info')
   const dockRect = (currentState.danmakuSourceHost ?? currentState.danmakuDock).getBoundingClientRect()
   const viewerRect = viewerInfo?.getBoundingClientRect()
+    ?? (currentState.root.dataset.pageKind === 'pgc' ? { left: dockRect.left, right: dockRect.left, width: dockRect.width, height: dockRect.height } : undefined)
   const auxiliaryRect = auxiliary?.getBoundingClientRect()
   if (!host || !viewerRect || viewerRect.width <= 0 || viewerRect.height <= 0 || dockRect.width <= 0 || dockRect.height <= 0
     || !auxiliaryRect || auxiliaryRect.width <= 0 || auxiliaryRect.height <= 0) {
@@ -143,6 +145,7 @@ export function syncAuxiliaryControlGeometry(currentState: BewlyWidescreenState)
 export function clearAnchoredPlayerElement(playerEl: HTMLElement) {
   playerEl.classList.remove(NATIVE_PLAYER_CLASS)
   ANCHORED_PLAYER_GEOMETRY_PROPERTIES.forEach(property => playerEl.style.removeProperty(property))
+  document.querySelectorAll(`.${NATIVE_PLAYER_ANCESTOR_CLASS}`).forEach(node => node.classList.remove(NATIVE_PLAYER_ANCESTOR_CLASS))
 }
 
 export function clearAspectObservers(currentState: BewlyWidescreenState) {
@@ -161,7 +164,13 @@ export function syncAnchoredPlayerGeometry(currentState: BewlyWidescreenState) {
   if (!playerEl.isConnected || !playerFrame.isConnected)
     return
 
-  exitNativeMiniPlayer(playerEl)
+  for (let ancestor = playerEl.parentElement; ancestor && ancestor !== document.body; ancestor = ancestor.parentElement) {
+    if (!ancestor.classList.contains(NATIVE_PLAYER_ANCESTOR_CLASS))
+      ancestor.classList.add(NATIVE_PLAYER_ANCESTOR_CLASS)
+  }
+
+  if (!isPlayerShowingEndingRecommendation())
+    exitNativeMiniPlayer(playerEl)
   const frameRect = playerFrame.getBoundingClientRect()
   const sidebarRect = sidebarEl.getBoundingClientRect()
   const sidebarFloatingInset = Number.parseFloat(
@@ -185,8 +194,8 @@ export function syncAnchoredPlayerGeometry(currentState: BewlyWidescreenState) {
 }
 
 export function ensureAnchoredPlayer(currentState: BewlyWidescreenState) {
-  if (!currentState.playerEl.isConnected) {
-    const replacement = findMovable(selectors.player)
+  const replacement = getPlayerRoot()
+  if (!currentState.playerEl.isConnected || (replacement && replacement !== currentState.playerEl)) {
     if (!replacement)
       return false
     const shouldRestoreAspectObservers = !!currentState.resizeObserver
@@ -205,8 +214,10 @@ export function ensureAnchoredPlayer(currentState: BewlyWidescreenState) {
       setupSidebarToggleAutoHide(currentState)
   }
 
-  exitNativeMiniPlayer(currentState.playerEl)
-  currentState.playerEl.classList.add(NATIVE_PLAYER_CLASS)
+  if (!isPlayerShowingEndingRecommendation())
+    exitNativeMiniPlayer(currentState.playerEl)
+  if (!currentState.playerEl.classList.contains(NATIVE_PLAYER_CLASS))
+    currentState.playerEl.classList.add(NATIVE_PLAYER_CLASS)
   syncAnchoredPlayerGeometry(currentState)
   return true
 }
@@ -248,14 +259,13 @@ export function updateSidebarLayoutState(currentState: BewlyWidescreenState | nu
 
   const centered = geometry.enabled
     && currentState.root.dataset.sidebarManuallyClosed !== 'true'
-  currentState.root.dataset.centered = String(centered)
-  currentState.root.dataset.sidebarToggleVisible = 'true'
-  currentState.root.style.setProperty(
-    '--bewly-widescreen-center-offset',
-    `${geometry.offset * direction}px`,
-  )
+  if (currentState.root.dataset.centered !== String(centered))
+    currentState.root.dataset.centered = String(centered)
+  if (currentState.root.dataset.sidebarToggleVisible !== 'true')
+    currentState.root.dataset.sidebarToggleVisible = 'true'
+  setGeometryProperty(currentState.root, '--bewly-widescreen-center-offset', `${geometry.offset * direction}px`)
   setGeometryProperty(currentState.playerEl, '--bewly-widescreen-center-offset', `${geometry.offset * direction}px`)
-  if (centered)
+  if (centered && currentState.root.dataset.sidebarHoverExpanded !== 'false')
     currentState.root.dataset.sidebarHoverExpanded = 'false'
   syncAnchoredPlayerGeometry(currentState)
   syncNativePlayerControlVisibility(currentState)
@@ -272,8 +282,8 @@ export function updateAspectRatio(currentState: BewlyWidescreenState | null = se
     : 16 / 9
   const layoutAspect = Math.min(aspect, 16 / 9)
 
-  currentState.root.style.setProperty('--bewly-widescreen-aspect', String(aspect))
-  currentState.root.style.setProperty('--bewly-widescreen-layout-aspect', String(layoutAspect))
+  setGeometryProperty(currentState.root, '--bewly-widescreen-aspect', String(aspect))
+  setGeometryProperty(currentState.root, '--bewly-widescreen-layout-aspect', String(layoutAspect))
   updateSidebarLayoutState(currentState)
   schedulePlayerResizeSync(currentState)
 }
@@ -310,7 +320,9 @@ function settleControlsLayout(currentState: BewlyWidescreenState) {
     : controls
   const nativeLayoutReady = !controls?.matches('.bpx-player-control-wrap')
     || (nativeButtons && getComputedStyle(nativeButtons).display === 'flex')
-  const elements = [currentState.playerFrame, controls, nativeButtons, currentState.danmakuSourceHost, viewers]
+  const elements = [currentState.playerFrame, controls, nativeButtons, currentState.danmakuSourceHost]
+  if (currentState.root.dataset.pageKind !== 'pgc')
+    elements.push(viewers)
   if (!settings.value.alwaysUseDock) {
     const auxiliary = currentState.auxiliaryControlsElement
     elements.push(auxiliary)
@@ -359,7 +371,12 @@ export function schedulePlayerResizeSync(currentState: BewlyWidescreenState) {
       return
 
     updateSidebarLayoutState(currentState)
-    window.dispatchEvent(new Event('resize'))
+    const rect = currentState.playerEl.getBoundingClientRect()
+    const signature = [rect.width, rect.height].map(value => value.toFixed(1)).join(':')
+    if (!isPlayerShowingEndingRecommendation() && signature !== currentState.lastPlayerResizeSignature) {
+      currentState.lastPlayerResizeSignature = signature
+      window.dispatchEvent(new Event('resize'))
+    }
     settleControlsLayout(currentState)
   })
 }
@@ -371,8 +388,9 @@ export function setupAspectObservers(currentState: BewlyWidescreenState) {
       updateAspectRatio(currentState)
       currentState.refreshSidebar()
     }
-    video.addEventListener('loadedmetadata', onLoadedMetadata)
-    currentState.metadataListener = () => video.removeEventListener('loadedmetadata', onLoadedMetadata)
+    const mediaEvents = ['loadedmetadata', 'loadeddata', 'playing']
+    mediaEvents.forEach(name => video.addEventListener(name, onLoadedMetadata))
+    currentState.metadataListener = () => mediaEvents.forEach(name => video.removeEventListener(name, onLoadedMetadata))
   }
 
   const refreshMeasuredLayout = () => {
