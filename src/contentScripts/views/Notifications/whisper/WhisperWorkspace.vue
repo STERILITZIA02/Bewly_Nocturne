@@ -150,15 +150,22 @@ function retry() {
 
 function selectSession(session: DisplayPrivateSession) {
   props.controller.updateScrollTop(conversationListRef.value?.getScrollTop() ?? 0)
-  const selectedAgain = selectedDetailKey.value === session.key
+  if (selectedDetailKey.value === session.key) {
+    pendingDetailFocusKey = ''
+    emit('closeConversation')
+    return
+  }
   pendingDetailFocusKey = session.key
   emit('selectSession', session)
-  if (selectedAgain)
-    void focusPendingDetail()
 }
 
 function selectRecipient(recipient: TransientPrivateRecipient) {
   props.controller.updateScrollTop(conversationListRef.value?.getScrollTop() ?? 0)
+  if (selectedDetailKey.value === `transient:${recipient.mid}`) {
+    pendingDetailFocusKey = ''
+    emit('closeConversation')
+    return
+  }
   pendingDetailFocusKey = `transient:${recipient.mid}`
   emit('selectRecipient', recipient)
 }
@@ -211,6 +218,8 @@ watch(selectedDetailKey, async (nextSessionKey, previousSessionKey) => {
     )
   }
   await nextTick()
+  if (nextSessionKey)
+    void focusPendingDetail()
   if (!nextSessionKey && previousSessionKey && props.active && selectedDetailKey.value === '') {
     conversationListRef.value?.restoreScrollTop(props.controller.state.scrollTop)
     conversationListRef.value?.focusSession(previousSessionKey)
@@ -317,7 +326,6 @@ defineExpose({ refresh })
         <ConversationEmptyState v-else-if="!selectedSession && !transientRecipient" />
         <ConversationView
           v-else-if="nativeSelectedSession || transientRecipient"
-          :key="nativeSelectedSession?.talkerId ?? transientRecipient?.mid"
           ref="conversationDetailRef"
           :active="active"
           :controller="messagesController"

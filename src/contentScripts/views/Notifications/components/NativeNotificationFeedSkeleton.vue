@@ -21,6 +21,7 @@ withDefaults(defineProps<{
       v-for="index in count"
       :key="index"
       class="native-notification-feed-skeleton__item native-notification-surface bew-shape-smooth-rect"
+      :class="section === 'system' ? 'native-notification-feed-skeleton__item--system' : 'native-notification-interaction-layout'"
       aria-hidden="true"
     >
       <NotificationSkeletonBlock
@@ -49,7 +50,9 @@ withDefaults(defineProps<{
           width="64%"
           height="var(--bew-line-height-body)"
         />
-        <div v-if="section !== 'system' && index % 2 === 1" class="native-notification-feed-skeleton__reference">
+      </div>
+      <div v-if="section !== 'system'" class="native-notification-feed-skeleton__context">
+        <div class="native-notification-feed-skeleton__reference">
           <NotificationSkeletonBlock width="72%" height="var(--bew-line-height-control)" />
           <div class="native-notification-feed-skeleton__reference-source">
             <NotificationSkeletonBlock
@@ -64,7 +67,6 @@ withDefaults(defineProps<{
           </div>
         </div>
         <NotificationSkeletonBlock
-          v-if="section !== 'system'"
           width="96px"
           height="var(--bew-line-height-control)"
           radius="full"
@@ -82,11 +84,14 @@ withDefaults(defineProps<{
 }
 
 .native-notification-feed-skeleton__item {
+  pointer-events: none;
+}
+
+.native-notification-feed-skeleton__item--system {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--bew-space-3);
   padding: var(--bew-space-4);
-  pointer-events: none;
 }
 
 .native-notification-feed-skeleton__content {
@@ -96,22 +101,33 @@ withDefaults(defineProps<{
 }
 
 .native-notification-feed-skeleton__heading {
-  display: flex;
+  display: grid;
   min-width: 0;
-  gap: var(--bew-space-3);
+  gap: var(--bew-space-1);
   align-items: center;
+}
+
+.native-notification-feed-skeleton__item--system .native-notification-feed-skeleton__heading {
+  display: flex;
+  gap: var(--bew-space-3);
   justify-content: space-between;
+}
+
+.native-notification-feed-skeleton__context {
+  display: grid;
+  min-width: 0;
+  gap: var(--bew-space-2);
+  align-content: center;
+  padding: var(--bew-space-3);
+  background: var(--bew-fill-1);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .native-notification-feed-skeleton__reference {
   display: grid;
   min-width: 0;
   gap: var(--bew-space-2);
-  margin-top: var(--bew-space-1);
-  padding: var(--bew-space-3);
-  background: var(--bew-fill-1);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
 }
 
 .native-notification-feed-skeleton__reference-source {

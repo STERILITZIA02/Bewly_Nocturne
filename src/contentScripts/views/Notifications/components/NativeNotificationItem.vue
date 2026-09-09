@@ -54,7 +54,7 @@ function markAvatarFailed(index: number) {
 </script>
 
 <template>
-  <article class="native-notification-item native-notification-surface bew-shape-smooth-rect" :data-notification-id="item.id">
+  <article class="native-notification-item native-notification-interaction-layout native-notification-surface bew-shape-smooth-rect" :data-notification-id="item.id">
     <div
       class="native-notification-item__avatars"
       :class="{ 'native-notification-item__avatars--grouped': item.actorCount > 1 }"
@@ -103,7 +103,9 @@ function markAvatarFailed(index: number) {
       <p v-if="item.body" class="native-notification-item__body">
         {{ item.body }}
       </p>
+    </div>
 
+    <div class="native-notification-item__context">
       <div v-if="item.quote || item.sourceTitle || item.sourceImage" class="native-notification-item__reference">
         <p v-if="item.quote">
           {{ item.quote }}
@@ -133,13 +135,6 @@ function markAvatarFailed(index: number) {
 </template>
 
 <style scoped lang="scss">
-.native-notification-item {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--bew-space-3);
-  padding: var(--bew-space-4);
-}
-
 .native-notification-item__avatars {
   display: flex;
   align-self: start;
@@ -198,10 +193,8 @@ function markAvatarFailed(index: number) {
 }
 
 .native-notification-item__header {
-  display: flex;
-  gap: var(--bew-space-3);
-  align-items: baseline;
-  justify-content: space-between;
+  display: grid;
+  gap: var(--bew-space-1);
 }
 
 .native-notification-item__header p,
@@ -218,6 +211,7 @@ function markAvatarFailed(index: number) {
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-title);
   line-height: var(--bew-line-height-title);
+  overflow-wrap: anywhere;
 }
 
 .native-notification-item__header time {
@@ -256,10 +250,11 @@ function markAvatarFailed(index: number) {
   white-space: pre-wrap;
 }
 
-.native-notification-item__reference {
+.native-notification-item__context {
   display: grid;
+  min-width: 0;
   gap: var(--bew-space-2);
-  margin-top: var(--bew-space-3);
+  align-content: center;
   padding: var(--bew-space-3);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
@@ -267,6 +262,14 @@ function markAvatarFailed(index: number) {
   background: var(--bew-fill-1);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
+}
+
+.native-notification-item__reference {
+  display: grid;
+  min-width: 0;
+  gap: var(--bew-space-2);
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
 }
 
 .native-notification-item__source {
@@ -294,16 +297,17 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__source > span:last-child {
   min-width: 0;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .native-notification-item__open-source {
   display: inline-flex;
   gap: var(--bew-space-1);
   align-items: center;
-  margin-top: var(--bew-space-3);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);

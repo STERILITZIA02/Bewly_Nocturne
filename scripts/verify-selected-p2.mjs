@@ -14,6 +14,7 @@ import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regre
 import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
+import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
@@ -81,6 +82,7 @@ registerPlaybackContentChecks(check)
 registerAdvertisingRuleChecks(check, { flush })
 registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
 registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
+registerNotificationUIChecks(check, { Vue, compileComponent, flush })
 registerUpstreamPlayerChecks(check)
 registerPlayerLifecycleChecks(check)
 registerUpstreamTransactionChecks(check, { Vue, flush, compileComponent })

@@ -185,16 +185,13 @@ verify('private conversation routes only preserve validated session identity', (
     `${listUrl}&notificationTalker=42&notificationSessionType=2`,
   ), { talkerId: '42', sessionType: 2 })
   assert.equal(privateConversationRoute.clearPrivateConversationRoute(conversationUrl), listUrl)
-  const conversationState = privateConversationRoute.createPrivateConversationHistoryState({ preserved: true })
-  assert.deepEqual(conversationState, {
-    preserved: true,
-    bewlyPrivateConversation: true,
-  })
-  assert.equal(privateConversationRoute.isPrivateConversationHistoryState(conversationState), true)
-  assert.deepEqual(privateConversationRoute.clearPrivateConversationHistoryState(conversationState), {
-    preserved: true,
-  })
-  assert.equal(privateConversationRoute.isPrivateConversationHistoryState(null), false)
+  const withContext = new URL(conversationUrl)
+  withContext.searchParams.set('nativeContext', 'preserved')
+  withContext.hash = 'position'
+  const closedUrl = new URL(privateConversationRoute.clearPrivateConversationRoute(withContext))
+  assert.equal(closedUrl.searchParams.get('nativeContext'), 'preserved')
+  assert.equal(closedUrl.hash, '#position')
+  assert.equal(privateConversationRoute.parsePrivateConversationRoute(closedUrl), null)
 })
 
 verify('invalid private conversation route values safely fall back to the list route', ({ privateConversationRoute }) => {
@@ -2709,9 +2706,8 @@ verify('whisper conversation routing reuses route state and never guesses origin
   assert.ok(notificationsSource.includes('privateSessions.selectedSessionKey'))
   assert.ok(notificationsSource.includes(`watch(() => routeState.navigationId`))
   assert.ok(notificationsSource.includes('window.history.pushState'))
-  assert.ok(notificationsSource.includes('window.history.back()'))
-  assert.ok(notificationsSource.includes('createPrivateConversationHistoryState'))
-  assert.ok(notificationsSource.includes('isPrivateConversationHistoryState'))
+  assert.equal(notificationsSource.includes('window.history.back()'), false)
+  assert.ok(notificationsSource.includes('window.history.state'))
   assert.ok(notificationsSource.includes('window.history.replaceState'))
   assert.ok(notificationsSource.includes('watch(currentMid'))
   assert.ok(workspaceSource.includes(`emit('selectSession'`))
@@ -2719,7 +2715,7 @@ verify('whisper conversation routing reuses route state and never guesses origin
   assert.equal(itemSource.includes('buildOriginalNotificationUrl'), false)
   assert.equal(itemSource.includes('<ALink'), false)
   assert.ok(itemSource.includes(`emit('select', session)`))
-  assert.ok(notificationsSource.includes('clearPrivateConversationHistoryState'))
+  assert.ok(notificationsSource.includes('clearPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('sessionType: session.sessionType'))
   assert.equal(notificationsSource.includes(`addEventListener('popstate'`), false)
   assert.equal(workspaceSource.includes(`addEventListener('popstate'`), false)
@@ -2785,9 +2781,11 @@ verify('mobile whisper master-detail preserves scroll and focus with reduced-mot
   assert.ok(listSource.includes('handleListKeydown'))
   assert.ok(listSource.includes('@keydown="handleListKeydown"'))
   assert.ok(itemSource.includes(':data-session-key="session.key"'))
-  assert.ok(conversationSource.includes('<CloseButton'))
-  assert.ok(conversationSource.includes('conversation-view__close'))
-  assert.ok(conversationSource.includes(`:label="t('common.close')"`))
+  assert.equal(conversationSource.includes('<CloseButton'), false)
+  assert.equal(conversationSource.includes('conversation-view__close'), false)
+  assert.ok(workspaceSource.includes('selectedDetailKey.value === session.key'))
+  assert.ok(workspaceSource.includes('emit(\'closeConversation\')'))
+  assert.ok(itemSource.includes(':aria-expanded="selected"'))
   assert.ok(conversationSource.includes('focusHeading'))
   assert.ok(conversationSource.includes('@keydown.esc="handleEscape"'))
   assert.ok(conversationSource.includes('LAYOUT_BREAKPOINTS.mobileMax'))
@@ -2972,7 +2970,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(selectConversationSource.includes('sessionType: session.sessionType'))
   assert.ok(selectConversationSource.includes('window.history.pushState'))
   assert.equal(selectConversationSource.includes('canReadNative'), false)
-  assert.ok(notificationsSource.includes('window.history.back()'))
+  assert.equal(notificationsSource.includes('window.history.back()'), false)
   assert.ok(notificationsSource.includes('clearPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('applyPendingPrivateConversationRoute'))
   assert.equal(notificationsSource.includes('originalView'), false)
@@ -3034,7 +3032,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(conversationSource.includes('background: var(--bew-elevated-alt)'))
   assert.ok(conversationSource.includes('backdrop-filter: var(--bew-filter-glass-1)'))
   assert.ok(conversationSource.includes('conversation-view__floating-composer'))
-  assert.ok(conversationSource.includes('conversation-view__close'))
+  assert.equal(conversationSource.includes('conversation-view__close'), false)
   assert.equal(conversationSource.includes('conversation-view__header'), false)
   assert.ok(conversationSource.includes('conversation-card__top-edge'))
   assert.ok(conversationSource.includes('conversation-card__bottom-edge'))
@@ -3066,7 +3064,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(conversationSource.includes('will-change: height, transform, border-radius'))
   const conversationCardStyle = conversationSource.slice(
     conversationSource.indexOf('.conversation-view--layout-transitioning .conversation-card {'),
-    conversationSource.indexOf('.conversation-view__close {'),
+    conversationSource.indexOf('.conversation-view__messages {'),
   )
   assert.ok(conversationCardStyle.includes('var(--bew-ease-standard)'))
   assert.equal(conversationCardStyle.includes('var(--bew-ease-emphasized)'), false)
@@ -3076,7 +3074,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(conversationSource.includes('requestStateGeneration === state.value.generation'))
   assert.ok(conversationSource.includes(`state.value.failedOperation !== 'load-older'`))
   assert.ok(conversationSource.includes('!state.value.paginationStalled'))
-  assert.match(conversationSource, /watch\(talkerId,[\s\S]{0,100}resetConversationExpansion\(\)/)
+  assert.match(conversationSource, /watch\(talkerId,[\s\S]{0,120}saveViewportState\(undefined, undefined, previousTalkerId\)/)
   assert.ok(conversationSource.includes('restoreVisibleMessageAnchor(viewport, anchor)'))
   assert.ok(conversationSource.includes('readVerticalScrollPadding(viewport)'))
   assert.ok(conversationSource.includes('messageContentGrowth'))

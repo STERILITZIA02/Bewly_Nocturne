@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 
 import { compile } from 'sass'
+import { compileStyleAsync, parse } from 'vue/compiler-sfc'
 
 import { loadSourceModule } from './sourceModuleHarness'
 
@@ -119,6 +121,75 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       get mounted() { return mounted },
     }
   }
+
+  check('search material: the actual search input survives liquid toggles and restores one frosted outer surface', async () => {
+    const fixture = await materialFixture()
+    const file = new URL('../src/components/SearchBar/SearchBar.vue', import.meta.url)
+    const source = await readFile(file, 'utf8')
+    const compiled = await compileStyleAsync({ source: parse(source).descriptor.styles[0].content, filename: fileURLToPath(file), id: 'search-material', preprocessLang: 'scss' })
+    assert.deepEqual(compiled.errors, [])
+    const style = document.head.appendChild(document.createElement('style'))
+    style.textContent = `${compiled.code}\n${compile(fileURLToPath(new URL('../src/styles/liquidGlass.scss', import.meta.url))).css}`
+    const SearchBar = await compileComponent('../src/components/SearchBar/SearchBar.vue', {
+      '@vueuse/core': {
+        ...await import('@vueuse/core'),
+        useElementBounding: () => ({ left: Vue.ref(0), top: Vue.ref(0) }),
+        useMediaQuery: () => Vue.ref(false),
+      },
+      '~/constants/layout': await import('../src/constants/layout'),
+      '~/logic': { settings: fixture.settings },
+      '~/logic/searchExperience': { acquireSearchExperience: () => () => {}, loadSharedHotSearch: async () => {}, useSearchExperience: () => ({ hotSearchList: Vue.ref([]), searchRecommendation: Vue.ref(null), isLoadingHotSearch: Vue.ref(false) }) },
+      '~/utils/api': { default: { search: { getSearchSuggestion: async () => ({ code: 0, result: { tag: [] } }) } } },
+      '~/utils/debug': { debugLog() {} },
+      '~/utils/liquidGlass': fixture.attachment,
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/searchHighlight': { sanitizeSearchHighlight: text => text },
+      '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: () => '' },
+      '../SearchFocusOverlay.vue': { default: { render: () => null } },
+      '../TagRemoveButton.vue': { default: { render: () => Vue.h('button') } },
+      './searchHistoryProvider': { addSearchHistory: async () => [], clearAllSearchHistory: async () => [], getSearchHistory: async () => [], removeSearchHistory: async () => [] },
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp(SearchBar, { modelValue: 'retained keyword' })
+    app.config.globalProperties.$t = key => key
+    app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
+    const backdrop = element => [...style.sheet.cssRules]
+      .filter(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && element.matches(rule.selectorText))
+      .at(-1)
+      ?.style
+      .getPropertyValue('backdrop-filter')
+    try {
+      app.mount(host)
+      await flush()
+      const surface = host.querySelector('.search-bar')
+      const input = surface.querySelector('input')
+      input.focus()
+      await flush()
+      for (const liquid of [false, true, false]) {
+        fixture.settings.value.enableDockLiquidGlass = liquid
+        await flush()
+        assert.equal(host.querySelector('input'), input)
+        assert.equal(input.value, 'retained keyword')
+        assert.equal(document.activeElement, input)
+        assert.equal(backdrop(surface), liquid ? 'none' : 'var(--bew-filter-glass-1)')
+        assert.equal(surface.querySelectorAll('filter').length, liquid ? 1 : 0)
+        assert.equal(fixture.mounted, liquid ? 1 : 0)
+        assert.equal(backdrop(input), undefined, 'the text input never adds a second blur')
+      }
+      fixture.settings.value.enableDockLiquidGlass = true
+      fixture.settings.value.disableFrostedGlass = true
+      await flush()
+      assert.equal(fixture.material.liquidGlassEnabled.value, false)
+      assert.equal(fixture.mounted, 0)
+      assert.equal(surface.hasAttribute('data-bew-liquid-glass'), false)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+      style.remove()
+    }
+    assert.equal(fixture.mounted, 0)
+  })
 
   check('liquid surfaces: native and Shadow DOM hosts retain content, focus and events through theme and material changes', async () => {
     const fixture = await materialFixture()

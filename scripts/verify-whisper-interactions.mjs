@@ -28,7 +28,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
   }
 
-  check('Whisper entry: actual view expands before fetching, reveals history, and cancels unopened/stale conversations', async () => {
+  check('Whisper history: entry gates requests, switching preserves the shell/composer, and late history never crosses conversations', async () => {
     const frames = new Map()
     const timers = new Map()
     let id = 0
@@ -62,6 +62,10 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       timer[1].run()
     }
     const oldMatchMedia = window.matchMedia
+    const oldRequestFrame = globalThis.requestAnimationFrame
+    const oldCancelFrame = globalThis.cancelAnimationFrame
+    globalThis.requestAnimationFrame = clock.requestAnimationFrame
+    globalThis.cancelAnimationFrame = clock.cancelAnimationFrame
     const oldScrollTo = window.HTMLElement.prototype.scrollTo
     const oldRect = window.HTMLElement.prototype.getBoundingClientRect
     window.HTMLElement.prototype.getBoundingClientRect = function () {
@@ -101,26 +105,41 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       './PrivateMessageContent.vue': { default: Content },
       './privateSession': await import(`${path}privateSession`),
     })
+    const Composer = await compileComponent(`${path}experimental/MessageComposer.vue`, {
+      'vue-i18n': i18n,
+      '../PrivateEmotePicker.vue': { default: blank },
+      '../privateMessageRenderers': await import(`${path}privateMessageRenderers`),
+      '~/utils/privateMessageImage': await import('../src/utils/privateMessageImage'),
+    })
+    const writeStates = new Map()
+    const writer = {
+      getState(talkerId) {
+        if (!writeStates.has(talkerId))
+          writeStates.set(talkerId, Vue.reactive({ draft: `draft-${talkerId}`, items: [], sending: false, imageDraft: null }))
+        return writeStates.get(talkerId)
+      },
+      setDraft(talkerId, value) { this.getState(talkerId).draft = value },
+    }
     const View = await compileComponent(`${path}ConversationView.vue`, {
       'vue-i18n': i18n,
       '~/constants/layout': await import('../src/constants/layout'),
       '~/logic': { settings: Vue.ref({ autoMarkPrivateMessagesRead: true, followNewPrivateMessages: true, autoLoadPrivateMessageImages: true }) },
       '~/stores/topBarStore': { useTopBarStore: () => topBar },
       './conversationExpansion': await import(`${path}conversationExpansion`),
-      './experimental/MessageComposer.vue': { default: blank },
+      './experimental/MessageComposer.vue': { default: Composer },
       './PrivateMessageImageViewer.vue': { default: blank },
       './PrivateMessageItem.vue': { default: Item },
     }, { globals: clock })
     const host = document.body.appendChild(document.createElement('div'))
     let exposed
     const app = Vue.createApp({ render: () => Vue.h(View, {
-      key: `${account.value}:${selected.value}`,
+      key: account.value,
       ref: value => exposed = value,
       active: true,
       controller: reader,
-      writeController: null,
+      writeController: writer,
       emoteController: { packages: Vue.ref([]), loading: Vue.ref(false), failed: Vue.ref(false), load() {} },
-      session: { talkerId: selected.value, name: 'Fixture', ackSeqno: '0', maxSeqno: '1', unreadCount: 1, capabilities: { canAck: true } },
+      session: { talkerId: selected.value, name: 'Fixture', ackSeqno: '0', maxSeqno: '1', unreadCount: 1, capabilities: { canAck: true, canSend: true } },
     }) })
     installLeaves(app)
     const response = (text, count = 1, firstSeqno = 1, hasMore = 0) => ({ code: 0, data: { has_more: hasMore, min_seqno: '1', max_seqno: String(firstSeqno + count - 1), e_infos: [], messages: Array.from({ length: count }, (_, index) => ({
@@ -146,8 +165,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.equal(host.querySelector('[data-expansion-state]').dataset.expansionState, 'expanded')
       selected.value = '3'
       await flush()
-      assert.equal(timers.size, 0, 'switching during expansion cancels its request release')
-      stepFrame()
+      assert.equal(timers.size, 1, 'a switch during entry retains the same expansion and releases only the latest selection')
       settleExpansion()
       await flush()
       assert.deepEqual(requests.map(request => request.talkerId), ['3'])
@@ -201,12 +219,43 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.ok(host.textContent.includes('older-history'))
       assert.equal(host.querySelectorAll('[data-message-id]').length, 5)
       assert.equal(host.querySelector('.conversation-view').getAttribute('style'), expandedStyle, 'a late history page and its no-more flag never collapse the container')
+      const shell = host.querySelector('.conversation-card')
+      const composer = host.querySelector('.conversation-view__floating-composer')
+      const textarea = composer.querySelector('textarea')
+      assert.equal(host.querySelector('.conversation-view__close'), null)
+      textarea.value = 'saved draft for 3'
+      textarea.dispatchEvent(new Event('input'))
+      const previousHistory = host.querySelector('.conversation-view__history')
+      Object.assign(previousHistory.style, { transitionDuration: '1s', transitionProperty: 'opacity', transitionDelay: '0s' })
       selected.value = '4'
       await flush()
-      stepFrame()
-      settleExpansion()
-      await flush()
+      assert.equal(previousHistory.inert, true)
+      assert.equal(host.querySelector('.conversation-card'), shell)
+      assert.equal(host.querySelector('.conversation-view__floating-composer'), composer)
+      assert.equal(composer.querySelector('textarea'), textarea)
+      assert.equal(textarea.value, 'draft-4')
+      assert.equal(writer.getState('3').draft, 'saved draft for 3')
+      assert.ok(host.textContent.includes('history-A'), 'outgoing records remain only during their leave animation')
+      await exposed.refresh()
+      assert.equal(requests.length, 2)
       selected.value = '5'
+      await flush()
+      stepFrame()
+      await flush()
+      stepFrame()
+      await flush()
+      previousHistory.dispatchEvent(new Event('transitionend'))
+      await flush()
+      assert.equal(requests[2].talkerId, '5', 'rapid switches skip the intermediate conversation request')
+      assert.equal(host.querySelector('.conversation-card'), shell)
+      assert.equal(host.querySelector('.conversation-view__floating-composer'), composer)
+      assert.equal(host.querySelector('.conversation-view').getAttribute('style'), expandedStyle)
+      assert.equal(textarea.value, 'draft-5')
+      selected.value = '6'
+      await flush()
+      stepFrame()
+      await flush()
+      stepFrame()
       await flush()
       requests[2].resolve(response('stale-B'))
       await flush()
@@ -216,10 +265,12 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       app.unmount()
       await flush()
       stepFrame()
+      await flush()
+      stepFrame()
       assert.equal(reader.states.size, 0, 'outgoing viewport persistence cannot recreate old conversations after account cleanup')
       assert.equal(frames.size, 0)
       assert.equal(timers.size, 0)
-      assert.equal(requests.length, 3, 'unmounting never fetches the unopened selection')
+      assert.deepEqual(requests.map(request => request.talkerId), ['3', '3', '5', '6'])
     }
     finally {
       if (host.firstChild)
@@ -228,12 +279,14 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       scope.stop()
       host.remove()
       window.matchMedia = oldMatchMedia
+      globalThis.requestAnimationFrame = oldRequestFrame
+      globalThis.cancelAnimationFrame = oldCancelFrame
       window.HTMLElement.prototype.scrollTo = oldScrollTo
       window.HTMLElement.prototype.getBoundingClientRect = oldRect
     }
   })
 
-  check('Whisper switching: real workspace fades the disposed view before mounting the latest selection, retains focus intent and clears accounts immediately', async () => {
+  check('Whisper workspace: user switches preserve the detail instance, selected-user toggles close, and account replacement disposes immediately', async () => {
     const frames = new Map()
     let frameId = 0
     const oldRequestFrame = globalThis.requestAnimationFrame
@@ -263,18 +316,16 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const Detail = {
       props: ['session', 'recipient'],
       emits: ['back'],
-      setup(props, { expose, emit }) {
-        const talker = props.session?.talkerId ?? props.recipient.mid
+      setup(props, { expose }) {
+        const talker = Vue.computed(() => props.session?.talkerId ?? props.recipient.mid)
         const element = Vue.ref(null)
-        Vue.onMounted(() => mounts.push(talker))
-        Vue.onBeforeUnmount(() => disposals.push(talker))
+        Vue.onMounted(() => mounts.push(talker.value))
+        Vue.onBeforeUnmount(() => disposals.push(talker.value))
         expose({ focusHeading: () => {
-          focused.push(talker)
+          focused.push(talker.value)
           element.value?.focus({ preventScroll: true })
         } })
-        return () => Vue.h('section', { 'ref': element, 'data-talker': talker, 'tabindex': 0, 'style': transitionStyle }, [
-          Vue.h('button', { 'data-close': '', 'onClick': () => emit('back') }, 'close'),
-        ])
+        return () => Vue.h('section', { 'ref': element, 'data-talker': talker.value, 'tabindex': 0, 'style': transitionStyle })
       },
     }
     const List = {
@@ -359,19 +410,19 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.equal(document.activeElement, first, 'focus waits for the incoming ref rather than being lost during out-in')
       await finishTransition(first)
       await select('1:3')
-      assert.deepEqual(disposals, ['2'], 'outgoing component cleanup starts before its retained DOM fades')
-      assert.equal(first.inert, true)
-      assert.equal(first.classList.contains('whisper-detail-leave-active'), true)
-      assert.equal(host.querySelector('[data-talker="3"]'), null)
+      assert.deepEqual(disposals, [], 'switching users keeps the existing shell alive')
+      assert.notEqual(first.inert, true)
+      assert.equal(first.classList.contains('whisper-detail-leave-active'), false)
+      assert.equal(host.querySelector('[data-talker="3"]'), first)
       await select('1:4')
-      await finishTransition(first)
       const latest = host.querySelector('[data-talker="4"]')
-      assert.deepEqual(mounts, ['2', '4'], 'an intermediate selection never mounts or loads a conversation')
-      assert.deepEqual(focused, ['2', '4'])
+      assert.equal(latest, first)
+      assert.deepEqual(mounts, ['2'])
+      assert.deepEqual(focused, ['2', '3', '4'])
       assert.equal(document.activeElement, latest)
-      await finishTransition(latest)
-      latest.querySelector('[data-close]').click()
-      await flush()
+      await select('1:4')
+      assert.equal(selected.value, '')
+      assert.equal(latest.inert, true)
       assert.equal(document.activeElement, host.querySelector('[data-session="1:4"]'))
       assert.deepEqual(restored, [120])
       await finishTransition(latest)
@@ -380,7 +431,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       await flush()
       await finishTransition(host.querySelector('[data-empty]'))
       const restoredDetail = host.querySelector('[data-talker="3"]')
-      assert.deepEqual(focused, ['2', '4'], 'route restoration does not steal focus from the list')
+      assert.deepEqual(focused, ['2', '3', '4'], 'route restoration does not steal focus from the list')
       await finishTransition(restoredDetail)
       topBar.userInfo.mid = 9
       selected.value = ''
@@ -397,7 +448,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       transient.value = null
       await flush()
       assert.equal(host.querySelector('[data-talker="5"]'), recipient, 'confirmation of a transient recipient preserves its live composer and timeline')
-      assert.deepEqual(mounts, ['2', '4', '3', '5'])
+      assert.deepEqual(mounts, ['2', '3', '5'])
       app.unmount()
       await stepFrame()
       await stepFrame()
@@ -467,6 +518,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       '~/utils/privateMessageImage': await import('../src/utils/privateMessageImage'),
     })
     const value = Vue.ref('before after')
+    const conversationKey = Vue.ref('first')
     const imageDraft = Vue.ref(null)
     const host = document.body.appendChild(document.createElement('div'))
     let loads = 0
@@ -474,6 +526,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const files = []
     const app = Vue.createApp({ render: () => Vue.h(Composer, {
       modelValue: value.value,
+      conversationKey: conversationKey.value,
       sending: false,
       enableImage: true,
       imageDraft: imageDraft.value,
@@ -525,6 +578,25 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
       await flush()
       assert.equal(submits, 1)
+      host.querySelector('[aria-controls="private-message-emote-picker"]').click()
+      await flush()
+      assert.ok(host.querySelector('[role="dialog"]'))
+      conversationKey.value = 'second'
+      value.value = 'second draft'
+      await flush()
+      assert.equal(host.querySelector('textarea'), textarea)
+      assert.equal(textarea.value, 'second draft')
+      assert.equal(host.querySelector('[role="dialog"]'), null)
+      assert.equal(host.querySelector('.message-composer__error'), null)
+      Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+      input.dispatchEvent(new Event('change'))
+      await flush()
+      assert.equal(files.length, 1, 'a file dialog opened for the old user cannot attach its result to the new user')
+      host.querySelector('[aria-label="notifications.whisper.messages.select_image"]').click()
+      input.dispatchEvent(new Event('change'))
+      await flush()
+      assert.equal(files.length, 2, 'a newly opened picker belongs to the current user')
+      assert.equal(submits, 1, 'switching and selecting images never send automatically')
     }
     finally {
       app.unmount()

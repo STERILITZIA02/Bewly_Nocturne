@@ -242,6 +242,14 @@ html.dark.bewly-design {
   box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
 }
 
+// Interaction content and its source use the same columns in live cards and skeletons.
+.native-notification-interaction-layout {
+  display: grid;
+  grid-template-columns: auto minmax(0, 3fr) minmax(0, 2fr);
+  gap: var(--bew-space-4);
+  padding: var(--bew-space-4);
+}
+
 // Warning badges share one visual language across settings headings and items.
 .bew-warning-badge {
   display: inline-flex;
