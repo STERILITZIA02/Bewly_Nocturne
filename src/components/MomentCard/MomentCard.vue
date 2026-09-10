@@ -259,8 +259,10 @@ function handleMoreBtnClick(event: Event) {
 }
 
 function closeVideoOptions() {
+  if (!showVideoOptions.value)
+    return
   showVideoOptions.value = false
-  void nextTick(() => moreBtnRef.value?.focus())
+  void nextTick(() => moreBtnRef.value?.focus({ preventScroll: true }))
 }
 
 function openPrimaryDetail() {

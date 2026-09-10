@@ -785,6 +785,21 @@ defineExpose({
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
   background-clip: padding-box;
+  transition:
+    border-radius var(--bew-duration-normal) var(--bew-ease-standard),
+    corner-shape var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.conversation-view__floating-composer:has(.message-composer[data-expanded="false"]) {
+  // Half the single-line bar height, its outer padding and border: a finite capsule radius.
+  border-radius: calc((var(--bew-control-height) + var(--bew-space-2)) / 2 + var(--bew-space-2) + 1px);
+  corner-shape: var(--bew-corner-shape-round);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .conversation-view__floating-composer {
+    transition: none;
+  }
 }
 
 .conversation-view--solid .conversation-view__floating-composer {

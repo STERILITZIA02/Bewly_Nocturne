@@ -516,15 +516,16 @@
   --bew-bg: var(--bew-dark-page-bg);
   --bew-homepage-bg: var(--bew-dark-page-bg);
 
-  --bew-content: rgb(from color-mix(in oklab, var(--bew-dark-base-color), white 3%) r g b / var(--bew-content-opacity));
+  --bew-dark-glass-base: color-mix(in oklab, var(--bew-dark-base-color), black 35%);
+  --bew-content: rgb(from color-mix(in oklab, var(--bew-dark-glass-base), white 3%) r g b / var(--bew-content-opacity));
   --bew-content-hover: rgb(
-    from color-mix(in oklab, var(--bew-dark-base-color), white 8%) r g b / var(--bew-content-opacity)
+    from color-mix(in oklab, var(--bew-dark-glass-base), white 8%) r g b / var(--bew-content-opacity)
   );
   --bew-content-alt: rgb(
-    from color-mix(in oklab, var(--bew-dark-base-color), white 5%) r g b / var(--bew-content-opacity)
+    from color-mix(in oklab, var(--bew-dark-glass-base), white 5%) r g b / var(--bew-content-opacity)
   );
   --bew-content-alt-hover: rgb(
-    from color-mix(in oklab, var(--bew-dark-base-color), white 10%) r g b / var(--bew-content-opacity)
+    from color-mix(in oklab, var(--bew-dark-glass-base), white 10%) r g b / var(--bew-content-opacity)
   );
 
   --bew-content-solid: color-mix(in oklab, var(--bew-dark-base-color), white 3%);
@@ -533,13 +534,13 @@
   --bew-content-alt-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 10%);
 
   --bew-elevated: rgb(
-    from color-mix(in oklab, var(--bew-dark-base-color), white 6%) r g b / var(--bew-content-opacity)
+    from color-mix(in oklab, var(--bew-dark-glass-base), white 6%) r g b / var(--bew-content-opacity)
   );
   --bew-elevated-hover: rgb(
-    from color-mix(in oklab, var(--bew-dark-base-color), white 11%) r g b / var(--bew-content-opacity)
+    from color-mix(in oklab, var(--bew-dark-glass-base), white 11%) r g b / var(--bew-content-opacity)
   );
-  --bew-elevated-alt: rgb(from color-mix(in oklab, #08090b 82%, var(--bew-dark-base-color) 18%) r g b / 42%);
-  --bew-elevated-alt-hover: rgb(from color-mix(in oklab, #08090b 78%, var(--bew-dark-base-color) 22%) r g b / 52%);
+  --bew-elevated-alt: rgb(from color-mix(in oklab, #08090b 82%, var(--bew-dark-glass-base) 18%) r g b / 60%);
+  --bew-elevated-alt-hover: rgb(from color-mix(in oklab, #08090b 78%, var(--bew-dark-glass-base) 22%) r g b / 68%);
 
   --bew-elevated-solid: color-mix(in oklab, var(--bew-dark-base-color), white 6%);
   --bew-elevated-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 11%);
@@ -607,6 +608,7 @@
 
 :host(.disable-frosted-glass.dark),
 :root.disable-frosted-glass.dark {
+  --bew-dark-glass-base: var(--bew-dark-base-color);
   --bew-fill-alt: var(--bew-fill-1);
 }
 
