@@ -10,6 +10,7 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
+import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
 import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
@@ -27,8 +28,10 @@ import { registerUpstreamMenuChecks } from './verify-upstream-menus.mjs'
 import { registerUpstreamMomentChecks } from './verify-upstream-moments.mjs'
 import { registerUpstreamPlayerChecks } from './verify-upstream-player.mjs'
 import { registerPlayerLifecycleChecks } from './verify-upstream-player-lifecycle.mjs'
+import { registerUpstreamSettingsChecks } from './verify-upstream-settings.mjs'
 import { registerUpstreamTransactionChecks } from './verify-upstream-transactions.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
+import { registerWatchLaterOwnershipChecks } from './verify-watch-later-ownership.mjs'
 import { registerWhisperInteractionChecks } from './verify-whisper-interactions.mjs'
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'https://www.bilibili.com/', pretendToBeVisual: true })
@@ -82,6 +85,8 @@ registerPlaybackContentChecks(check)
 registerAdvertisingRuleChecks(check, { flush })
 registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
 registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
+registerWatchLaterOwnershipChecks(check, { Vue, flush })
+registerFavoriteSourceChecks(check, { Vue, flush, compileComponent })
 registerNotificationUIChecks(check, { Vue, compileComponent, flush })
 registerUpstreamPlayerChecks(check)
 registerPlayerLifecycleChecks(check)
@@ -91,6 +96,7 @@ registerUpstreamCommentChecks(check)
 registerUpstreamFollowingChecks(check, { Vue, flush, compileComponent })
 registerUpstreamHomeChecks(check, { Vue, flush, compileComponent })
 registerUpstreamMenuChecks(check, { Vue, flush, compileComponent })
+registerUpstreamSettingsChecks(check, { Vue, flush, compileComponent })
 function noop() {}
 async function flush() {
   for (let turn = 0; turn < 8; turn++)
@@ -223,6 +229,7 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     pendingAction: r(null),
     haveScrollbar: async () => true,
     getCSRF: () => 'fixture',
+    getUserID: () => '1',
     settleExtensionContextInvalidation: () => false,
     mergeWatchLaterItemsByAid,
     api: { watchlater: {
@@ -236,6 +243,14 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
       },
     } },
   })
+  const { loadSourceModule } = await import('./sourceModuleHarness')
+  const { createAccountLifetime } = await import('../src/utils/accountLifetime')
+  context.actionLifetime = createAccountLifetime(() => context.getCurrentAccountId())
+  context.updateOwnedWatchLater = (await loadSourceModule('../src/utils/watchLater.ts', {
+    '~/utils/api': { default: context.api },
+    '~/utils/main': { getCSRF: () => 'fixture', getUserID: () => '1' },
+    '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
+  })).updateOwnedWatchLater
   await context.getWatchLaterListByPage(0, 1)
   await context.deleteWatchLaterItem(2)
   await context.deleteWatchLaterItem(3)
@@ -253,22 +268,22 @@ async function favoriteContext() {
   const { loadSourceModule } = await import('./sourceModuleHarness')
   const lifetime = await import('../src/utils/accountLifetime')
   const folders = await import('../src/utils/favoriteFolder')
-  const context = { api: { favorite: {} }, haveScrollbar: async () => true, enrichFavoriteSeasonMediaFaces: async items => items }
+  const context = { api: {
+    favorite: { getFavoriteSeasonResources: async () => ({ code: 0, data: { medias: [{ id: 1, bvid: 'BV1xx411c7mD', title: 'A', upper: { mid: 1, name: 'up' }, cnt_info: {}, pubtime: 1 }], info: { media_count: 1 } } }) },
+    user: { getUserCard: async () => ({ code: 0, data: { card: { face: '' } } }) },
+  }, haveScrollbar: async () => true }
   const module = await loadSourceModule('../src/contentScripts/views/Favorites/useFavoritesData.ts', {
     vue: Vue,
     '~/utils/accountLifetime': lifetime,
     '~/utils/favoriteFolder': folders,
-    '~/utils/favoriteSeason': {
-      FAVORITE_SEASON_PAGE_SIZE: 20,
-      fetchFavoriteSeasonPage: async () => ({ ok: true, pageMedias: [{ id: 'A' }], mediaCount: 40, cover: '' }),
-      mergeFavoriteSeasonPage: options => ({ medias: options.pageMedias, hasMore: true }),
-      enrichFavoriteSeasonMediaFaces: items => context.enrichFavoriteSeasonMediaFaces(items),
-    },
-    './favoriteAdapters': { getFavoriteArticleCover: () => 'cover', normalizeSeasonMedia: item => item },
+    '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
+    '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
+    '~/utils/favoriteAvatar': await import('../src/utils/favoriteAvatar'),
+    './favoriteAdapters': { getFavoriteArticleCover: () => 'cover' },
   })
-  Object.assign(context, module.useFavoritesData({ api: context.api.favorite, haveScrollbar: () => context.haveScrollbar(), getAccountId: () => 1, t: key => key }))
+  Object.assign(context, module.useFavoritesData({ api: context.api.favorite, user: context.api.user, haveScrollbar: () => context.haveScrollbar(), getAccountId: () => 1, t: key => key }))
   context.selectedCategory.value = { id: 1 }
-  context.selectedSeason.value = { id: 77 }
+  context.selectedSeason.value = { id: 77, type: 21 }
   return context
 }
 
@@ -326,17 +341,18 @@ check('P2-04 favorites retains the failed page, retries in place, and serializes
 check('P2-05 stale favorite-season enrichment cannot replace a newer collection', async () => {
   const context = await favoriteContext()
   const enrichment = deferred()
-  context.enrichFavoriteSeasonMediaFaces = () => enrichment.promise
+  context.api.user.getUserCard = () => enrichment.promise
   context.favoriteView.value = 'season'
   const pending = context.loadNextPage()
-  await flush()
-  context.contentVersion.value++
-  context.loadedSeasonMedias.value = [{ id: 'B' }]
-  context.favoriteResources.push({ id: 'B' })
-  enrichment.resolve([{ id: 'A' }])
   await pending
-  assert.equal(context.loadedSeasonMedias.value[0].id, 'B')
-  assert.equal(context.favoriteResources[0].id, 'B')
+  assert.equal(context.favoriteResources[0].id, 1, 'the list is readable before optional avatars finish')
+  context.contentVersion.value++
+  context.favoriteResources.splice(0, context.favoriteResources.length, { id: 2, type: 2, upper: { mid: 2, face: 'new-face' } })
+  const current = context.favoriteResources[0]
+  enrichment.resolve({ code: 0, data: { card: { face: 'old-face' } } })
+  await flush()
+  assert.equal(context.favoriteResources[0], current)
+  assert.equal(context.favoriteResources[0].upper.face, 'new-face')
 })
 
 check('P2-07 filtered empty pages pause automation without marking server exhaustion', async () => {
@@ -732,6 +748,7 @@ check('P2-14 custom multipart order excludes collection manuscripts and preserve
   fixture.innerHTML = '<div class="video-pod"><div class="video-pod__list"><div class="simple-base-item" id="collection-a"></div><div class="simple-base-item" id="collection-b"></div></div><div class="video-pod__item" id="part-1"></div><div class="video-pod__item" id="part-2"></div></div>'
   let type = 'multipart'
   const context = await loadSourceFunctions('../src/utils/randomPlay.ts', ['episodeRootSelector', 'queryEpisodeItems', 'getVideoEpisodes'], {
+    ...await import('../src/utils/customPlayControls'),
     document,
     detectVideoType: () => type,
     VideoType: { MULTIPART: 'multipart' },

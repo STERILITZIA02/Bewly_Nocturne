@@ -621,6 +621,7 @@ function dispatchManualWidescreenToggle(action: BewlyWidescreenManualToggleDetai
 }
 
 export function exitBewlyWidescreen({ userInitiated = false }: ExitBewlyWidescreenOptions = {}) {
+  pendingApplication?.cancel()
   if (userInitiated)
     dispatchManualWidescreenToggle('exit')
   stopWidescreenLanguageWatch()

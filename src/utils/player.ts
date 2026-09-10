@@ -4,6 +4,7 @@ import { watch } from 'vue'
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
+import { selectors as playbackSelectors } from '~/utils/bewlyWidescreen/constants'
 import {
   applyConfiguredPlaybackRate,
   clampPlaybackRate,
@@ -13,7 +14,7 @@ import {
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { readVideoPageMetadata } from '~/utils/videoMetadataBridge'
 
-import { getVideoElement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
+import { getPlayerModeContainer, getPlayerModeControl, getPlayerRoot, getVideoElement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
 
 export { getVideoElement } from './playerMedia'
 
@@ -32,15 +33,8 @@ const _videoClassTag = {
       '.video-title,.bilibili-player-video-top-title,#player-title,.season-info .title',
   subtitle:
       '.video-pod__item.active>.title,.simple-base-item.active .title-txt,.multip-list-item.multip-list-item-active',
-  widescreen:
-      '.bpx-player-ctrl-wide,.bilibili-player-video-btn-widescreen,.squirtle-video-widescreen',
-  pagefullscreen:
-      '.bpx-player-ctrl-web,.bilibili-player-video-web-fullscreen,.squirtle-video-pagefullscreen',
-  fullscreen:
-      '.bpx-player-ctrl-full,.bilibili-player-video-btn-fullscreen,.squirtle-video-fullscreen',
   videoArea: '.bilibili-player-video-wrap,.bpx-player-video-area',
   video: PLAYER_MEDIA_SELECTOR,
-  player: '#bilibili-player,.bpx-player-container',
   autoPlaySwitchOn: '.auto-play .switch-btn.on',
   autoPlaySwitchOff: '.auto-play .switch-btn:not(.on)',
   upName: '.up-name,.up-info-name,.upinfo-btn-panel .name,.video-info-detail-list .name',
@@ -97,48 +91,69 @@ function monitorCaptionState(closeSwitch: HTMLElement, languageItem: HTMLElement
 
 const activePlayerRetryTasks = new Set<RetryTask>()
 const playerLayoutTimers = new Set<ReturnType<typeof setTimeout>>()
+let stateElement: HTMLDivElement | null = null
+let stateHideTimer: ReturnType<typeof setTimeout> | null = null
+const PLAYER_STATE_DURATION = 1000
 
 // 重试任务类，用于处理重试逻辑
 export class RetryTask {
   private count = 0
-  private cancelled = false
+  private finished = false
   private timer: ReturnType<typeof setTimeout> | null = null
 
   constructor(
     private max: number,
     private timeout: number,
     private fn: () => boolean,
+    private onFinish?: (outcome: 'succeeded' | 'cancelled' | 'exhausted' | 'failed') => void,
   ) {}
 
   start() {
-    if (this.cancelled || this.timer !== null)
+    if (this.finished || this.timer !== null)
       return
     activePlayerRetryTasks.add(this)
     this.runAttempt()
   }
 
   cancel() {
-    this.cancelled = true
+    this.finish('cancelled')
+  }
+
+  private finish(outcome: 'succeeded' | 'cancelled' | 'exhausted' | 'failed') {
+    if (this.finished)
+      return
+    this.finished = true
     if (this.timer !== null)
       clearTimeout(this.timer)
     this.timer = null
     activePlayerRetryTasks.delete(this)
+    this.onFinish?.(outcome)
   }
 
   private runAttempt = () => {
     this.timer = null
-    if (this.cancelled || this.count >= this.max) {
-      activePlayerRetryTasks.delete(this)
+    if (this.finished)
+      return
+    if (this.count >= this.max) {
+      this.finish('exhausted')
       return
     }
 
     this.count++
-    if (this.fn()) {
-      activePlayerRetryTasks.delete(this)
+    try {
+      if (this.fn()) {
+        this.finish('succeeded')
+        return
+      }
+    }
+    catch (error) {
+      this.finish('failed')
+      if (!this.onFinish)
+        throw error
       return
     }
     if (this.count >= this.max) {
-      activePlayerRetryTasks.delete(this)
+      this.finish('exhausted')
       return
     }
     this.timer = setTimeout(this.runAttempt, this.timeout)
@@ -150,10 +165,14 @@ export function cancelPlayerRetryTasks() {
     task.cancel()
   playerLayoutTimers.forEach(timer => clearTimeout(timer))
   playerLayoutTimers.clear()
+  if (stateHideTimer !== null)
+    clearTimeout(stateHideTimer)
+  stateHideTimer = null
+  stateElement?.remove()
+  stateElement = null
 }
 
 // 状态显示元素
-let stateElement: HTMLDivElement | null = null
 let timeElement: HTMLDivElement | null = null
 let clockElement: HTMLDivElement | null = null
 let titleElement: HTMLDivElement | null = null
@@ -171,18 +190,18 @@ let stopAutoExitFullscreenDomObserver: (() => void) | null = null
 
 export function isPlayerDisplayModeReady(mode: DefaultVideoPlayerMode): boolean {
   if (mode === 'bewlyWidescreen') {
-    return !!(document.querySelector(_videoClassTag.player) || document.querySelector('#playerWrap') || getVideoElement())
+    return !!(getPlayerRoot() || getVideoElement())
   }
 
   if (mode === 'widescreen') {
-    return !!document.querySelector('[data-screen=\'wide\'], .bpx-player-ctrl-wide, .bilibili-player-video-btn-widescreen, .squirtle-video-widescreen')
+    return getPlayerModeContainer()?.getAttribute('data-screen') === 'wide' || !!getPlayerModeControl('wide')
   }
 
   if (mode === 'webFullscreen') {
-    return !!document.querySelector('[data-screen=\'web\'], .bpx-player-ctrl-web, .bilibili-player-video-web-fullscreen, .squirtle-video-pagefullscreen')
+    return getPlayerModeContainer()?.getAttribute('data-screen') === 'web' || !!getPlayerModeControl('web')
   }
 
-  return !!(document.querySelector(_videoClassTag.player) || getVideoElement())
+  return !!getPlayerModeContainer()
 }
 
 // 判断是否为视频页面
@@ -204,24 +223,33 @@ export function formatTime(seconds: number): string {
 
 // 显示状态
 export function showState(text: string) {
+  if (stateHideTimer !== null)
+    clearTimeout(stateHideTimer)
+  stateHideTimer = null
+  const stateContainer = getPlayerModeContainer()?.querySelector(_videoClassTag.state)
+  if (!stateContainer?.parentElement) {
+    stateElement?.remove()
+    stateElement = null
+    return
+  }
   if (!stateElement) {
     stateElement = document.createElement('div')
-    stateElement.style.cssText = 'display: none; position: absolute; z-index: 99; top: 50%; left: 50%; transform: translate(-50%, -50%); padding: 8px 12px; background-color: rgba(8, 8, 8, 0.75); color: white; font-size: 22px; border-radius: 4px;'
+    stateElement.className = 'bewly-player-hud'
+    stateElement.setAttribute('role', 'status')
   }
-
-  const stateContainer = document.querySelector(_videoClassTag.state)
-  if (stateContainer) {
-    if (stateContainer.parentElement !== stateElement.parentElement) {
-      stateContainer.parentElement!.appendChild(stateElement)
-    }
-
+  if (stateContainer.parentElement !== stateElement.parentElement)
+    stateContainer.parentElement.appendChild(stateElement)
+  if (stateElement.textContent !== text)
     stateElement.textContent = text
-    stateElement.style.display = 'block'
-
-    setTimeout(() => {
-      stateElement!.style.display = 'none'
-    }, 1000)
-  }
+  stateElement.hidden = false
+  const hud = stateElement
+  const timer = setTimeout(() => {
+    if (stateHideTimer !== timer)
+      return
+    stateHideTimer = null
+    hud.hidden = true
+  }, PLAYER_STATE_DURATION)
+  stateHideTimer = timer
 }
 
 // 应用播放器辅助功能（倍速记忆等）
@@ -235,11 +263,13 @@ function applyPlayerEnhancements() {
 function applyNativeDisplayMode(mode: 'normal' | 'web' | 'wide', application: PlayerModeApplication) {
   let clickedButton: HTMLElement | null = null
   new RetryTask(20, 500, () => {
-    if (!application.shouldApply() || isPlayerShowingEndingRecommendation())
+    if (!application.shouldApply() || isPlayerShowingEndingRecommendation()) {
+      application.cancel()
       return true
-    const root = getVideoElement()?.closest('.bpx-player-container, .bilibili-player, .squirtle-video-wrap, #bilibili-player, #bilibiliPlayer')
+    }
+    const root = getPlayerModeContainer()
     const screen = root?.getAttribute('data-screen')
-    const button = root?.querySelector<HTMLElement>(mode === 'web' || (mode === 'normal' && screen === 'web') ? _videoClassTag.pagefullscreen : _videoClassTag.widescreen)
+    const button = getPlayerModeControl(mode === 'web' || (mode === 'normal' && screen === 'web') ? 'web' : 'wide', root)
     const applied = mode === 'normal'
       ? !!root && !['wide', 'web', 'full', 'mini'].includes(screen ?? '') && !document.fullscreenElement
       && !button?.classList.contains('bpx-state-entered')
@@ -258,6 +288,11 @@ function applyNativeDisplayMode(mode: 'normal' | 'web' | 'wide', application: Pl
       button.click()
     }
     return false
+  }, (outcome) => {
+    if (outcome === 'cancelled')
+      application.cancel()
+    else if (outcome === 'exhausted' || outcome === 'failed')
+      application.fail()
   }).start()
 }
 
@@ -274,24 +309,30 @@ function schedulePlayerLayoutTask(callback: () => void, delay: number, shouldApp
   playerLayoutTimers.add(timer)
 }
 
-// 将播放器滚动到合适位置，优先保证弹幕栏可见
 function scrollPlayerToOptimalPosition(delay = 1000, shouldApply?: () => boolean) {
-  // 如果设置了不滚动，直接返回
   if (!settings.value.videoPlayerScroll)
     return
 
   const video = getVideoElement()
+  if (!video)
+    return
   const href = location.href
-  const isCurrent = shouldApply ?? (() => location.href === href && getVideoElement() === video && !document.hidden)
+  const source = video.currentSrc || video.getAttribute('src')
+  const isCurrent = () => location.href === href && getVideoElement() === video
+    && (video.currentSrc || video.getAttribute('src')) === source
+    && !document.hidden && (!shouldApply || shouldApply())
   const scroll = () => {
-    if (!isCurrent() || isPlayerShowingEndingRecommendation() || document.body.classList.contains('bewly-widescreen-active'))
+    if (!isCurrent() || !settings.value.videoPlayerScroll || document.fullscreenElement
+      || isPlayerShowingEndingRecommendation() || document.body.classList.contains('bewly-widescreen-active')) {
       return
-    const playerElement = document.querySelector(_videoClassTag.player)
-    if (!playerElement)
+    }
+    const playerElement = getPlayerModeContainer()
+    if (!playerElement || ['web', 'full'].includes(playerElement.getAttribute('data-screen') || ''))
       return
 
-    // 查找弹幕发送栏
-    const sendingBar = document.querySelector('.bpx-player-sending-bar')
+    const sendingBar = settings.value.videoPlayerScrollMode !== 'playerCenter'
+      ? getPlayerRoot()?.querySelector(playbackSelectors.danmakuInput.join(','))
+      : null
     if (sendingBar) {
       // 将弹幕发送栏底部滚动到窗口底部
       const rect = sendingBar.getBoundingClientRect()
@@ -929,7 +970,7 @@ export function playPause(player?: Element) {
   }
 
   // 如果没有player参数或者找不到播放按钮，尝试自动查找播放器
-  const autoPlayer = document.querySelector(_videoClassTag.player)
+  const autoPlayer = getPlayerModeContainer()
   if (autoPlayer) {
     const playBtn = autoPlayer.querySelector(_videoClassTag.playBtn)
     if (playBtn) {
@@ -1840,7 +1881,7 @@ async function handleAutoExitFullscreenVideoEnded(generation: number) {
     }
 
     // 检查是否处于网页全屏状态
-    const webFullscreenBtn = document.querySelector(_videoClassTag.pagefullscreen) as HTMLElement
+    const webFullscreenBtn = getPlayerModeControl('web')
     if (webFullscreenBtn && webFullscreenBtn.classList.contains('bpx-state-entered')) {
       webFullscreenBtn.click()
     }

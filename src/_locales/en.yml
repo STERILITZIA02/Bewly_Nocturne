@@ -110,6 +110,8 @@ player_screenshot:
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
+  enable_sidebar_cover_blur: Sidebar cover background
+  enable_sidebar_cover_blur_desc: Use a blurred cover behind Favorites and Watch Later sidebars. Turn off to use neutral surfaces from the current theme.
   following_sort: Uploader order in the new Following layout
   following_sort_updated: By update time
   following_sort_group: By group
@@ -789,10 +791,10 @@ settings:
   following_filter_dynamic_videos_desc: When enabled, videos marked as dynamic videos will be hidden in the "Following" page
   use_following_new_layout: Use new layout for Following tab
   use_following_new_layout_desc: Display followed UPs list on the left and video feed on the right
-  collected_season_play_all_mode: Collected series Play All start position
-  collected_season_play_all_mode_desc: Controls Play All start position for collected series on Favorites, Top Bar, and the native space page. Defaults to series beginning; falls back to beginning if last watched is not found. Does not change list order or playlist direction.
-  collected_season_play_all_mode_beginning: Series beginning
-  collected_season_play_all_mode_latest: Latest episode
+  collected_season_play_all_mode: Subscribed favorites Play All start position
+  collected_season_play_all_mode_desc: Applies to subscribed public folders and series. Latest means the most recently saved video in public folders and the latest episode in series. Uses the native list entry if history is missing or the list is incomplete. Keeps list order and playback direction.
+  collected_season_play_all_mode_beginning: Beginning
+  collected_season_play_all_mode_latest: Latest saved / episode
   collected_season_play_all_mode_last_watched: Last watched
   enable_version_reminder: New version reminders
   enable_version_reminder_desc: Show unacknowledged version updates on the extension home page; each version is shown only once.
@@ -955,6 +957,9 @@ settings:
   hide_comment_image_scrollbar: Hide page scrollbar in comment image preview
   hide_comment_image_scrollbar_desc: Hide the page scrollbar when opening a comment image preview so it does not appear beside the overlay
   video_player_scroll: Scroll after adjusting the display mode
+  video_player_scroll_position: Player scroll position
+  video_player_scroll_sending_bar: Keep the danmaku bar visible
+  video_player_scroll_center: Center the player
   video_player_scroll_desc: >-
     When enabled, it will automatically scroll to the appropriate position when
     the default mode is widescreen and default.
@@ -1369,6 +1374,9 @@ moments:
   fit_window: Fit to window
   rotate_clockwise: Rotate clockwise
 moment_card:
+  comments_sort: Comment order
+  comments_sort_latest: Newest
+  comments_sort_hot: Top
   video_moment: Video post
   open_detail: Open {author}'s post details
   open_origin_moment: View {name}'s original post
@@ -1563,7 +1571,7 @@ favorites:
   collected_season_prefix: Season
   video_section_title: Favorite videos
   folder_section_title: All folders
-  season_section_title: Collected seasons
+  season_section_title: Subscribed folders and series
   article_section_title: Favorite articles
   video_count: 'Videos: {count}'
   article_count: 'Articles: {count}'
@@ -1592,7 +1600,7 @@ favorites:
     This operation cannot be reversed. Are you sure you want to remove these video(s) from your favorites?
   global_search_hint: Search for all favorites
   global_search_placeholder: Search all favorites
-  season_play_all_fallback: Season list not ready, fell back to the beginning
+  season_play_all_fallback: Start position could not be confirmed; using the native list entry
   sidebar_manage: Manage
   sidebar_manage_exit: Exit manage
   select_all: Select all

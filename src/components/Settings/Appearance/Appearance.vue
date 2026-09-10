@@ -159,6 +159,9 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
     <LiquidGlassSettings />
 
     <SettingsItemGroup :title="$t('settings.group_page_style')">
+      <SettingsItem :title="$t('settings.enable_sidebar_cover_blur')" :desc="$t('settings.enable_sidebar_cover_blur_desc')" right-width="auto">
+        <Radio v-model="settings.enableSidebarCoverBlur" />
+      </SettingsItem>
       <SettingsItem
         :title="$t('settings.adapt_to_other_page_styles')"
         :desc="$t('settings.adapt_to_other_page_styles_desc')"

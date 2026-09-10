@@ -8,15 +8,17 @@ import { appAuthTokens, settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import type { VideoPreviewResult } from '~/models/video/videoPreview'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { createAccountLifetime } from '~/utils/accountLifetime'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
 import { calcCurrentTime, numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
-import { getCSRF, removeHttpFromUrl } from '~/utils/main'
+import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
 import { onUserRelationChange } from '~/utils/userRelation'
-import { resolveWatchLaterAid } from '~/utils/watchLater'
+import { resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
 import type { Video, VideoCardState } from '../types'
 import { createVideoCardState } from '../types'
@@ -60,6 +62,11 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
   // 将传入的 props 转换为 computed，确保响应式
   const props = computed(() => toValue(propsOrGetter))
+  const cardLifetime = createAccountLifetime(() => {
+    const accountId = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+    return String(accountId) === getUserID() ? accountId : null
+  })
+  let watchLaterWriteId: symbol | null = null
 
   // Inject selectedUploader from Following component (if available)
   // This is used to control preview loading for moments feed
@@ -76,6 +83,15 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const videoCurrentTime = toRef(interactionState, 'videoCurrentTime')
   const resolvedWatchLaterAid = toRef(interactionState, 'resolvedWatchLaterAid')
   const isUpdatingWatchLater = ref(false)
+  const watchLaterMediaIdentity = computed(() => {
+    const video = props.value.video
+    return JSON.stringify([video?.aid, video?.bvid, video?.epid, video?.roomid])
+  })
+  watch([watchLaterMediaIdentity, () => topBarStore.userInfo.mid, () => topBarStore.isLogin], () => {
+    cardLifetime.invalidate()
+    watchLaterWriteId = null
+    isUpdatingWatchLater.value = false
+  }, { flush: 'sync' })
   const isUndoing = ref(false)
   let watchLaterResolutionId = 0
   let previewRequestGeneration = 0
@@ -118,6 +134,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   // 清理函数 - 在组件卸载时调用
   onScopeDispose(() => {
     stopRelationChanges()
+    cardLifetime.dispose()
     isDisposed.value = true
     watchLaterResolutionId++
     previewRequestGeneration++
@@ -206,25 +223,27 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
 
   // Watch
   watch([
-    () => props.value.video,
+    watchLaterMediaIdentity,
     () => props.value.showWatchLater,
     () => topBarStore.userInfo.mid,
-  ], async ([video, showWatchLater], [previousVideo]) => {
+  ], async ([identity, showWatchLater], [previousIdentity]) => {
+    const video = props.value.video
     const resolutionId = ++watchLaterResolutionId
-    if (previousVideo && (previousVideo.bvid !== video?.bvid || previousVideo.epid !== video?.epid || previousVideo.aid !== video?.aid))
+    const isCurrentResolution = () => !isDisposed.value && resolutionId === watchLaterResolutionId && identity === watchLaterMediaIdentity.value
+    if (previousIdentity !== undefined && previousIdentity !== identity)
       resolvedWatchLaterAid.value = undefined
     if (!video || !showWatchLater)
       return
 
     await topBarStore.ensureWatchLaterState()
-    if (resolutionId !== watchLaterResolutionId)
+    if (!isCurrentResolution())
       return
     if (watchLaterAid.value)
       return
 
     try {
       const aid = await resolveWatchLaterAid(video)
-      if (resolutionId === watchLaterResolutionId)
+      if (isCurrentResolution())
         resolvedWatchLaterAid.value = aid
     }
     catch (error) {
@@ -240,15 +259,24 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     () => settings.value.enableVideoPreview,
     () => topBarStore.isLogin,
     momentsSelectedUploader,
+    watchLaterMediaIdentity,
+    () => props.value.video?.cid,
+    () => topBarStore.userInfo.mid,
   ], async ([video, hover, showPreview, enableVideoPreview, isLogin]) => {
     const generation = ++previewRequestGeneration
     clearPreviewVideoUrl()
 
     if (!video || !hover || !showPreview || !enableVideoPreview || !isLogin || isDisposed.value)
       return
+    const owner = cardLifetime.capture()
+    const requestedCid = video.cid
+    if (owner.accountId === null || !owner.isCurrent())
+      return
 
     const isCurrentRequest = () => generation === previewRequestGeneration
       && !isDisposed.value
+      && owner.isCurrent()
+      && requestedCid === video.cid
       && isHover.value
       && props.value.video === video
       && props.value.showPreview
@@ -325,54 +353,48 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       return
 
     const video = props.value.video
+    const owner = cardLifetime.capture()
+    const knownAid = watchLaterAid.value
+    const requestId = Symbol('watch-later')
+    watchLaterWriteId = requestId
     isUpdatingWatchLater.value = true
     try {
-      await topBarStore.ensureWatchLaterState()
-      const accountId = topBarStore.userInfo.mid
-      if (!topBarStore.isLogin || !accountId)
+      const result = await updateOwnedWatchLater(video, 'toggle', owner, topBarStore, async target => knownAid ?? resolveWatchLaterAid(target))
+      if (!owner.isCurrent())
         return
-      const aid = watchLaterAid.value ?? await resolveWatchLaterAid(video)
-      if (props.value.video !== video)
-        return
-      if (!aid) {
+      if (result.status === 'unavailable')
         toast.error(t('video_card.watch_later_unavailable'))
-        return
-      }
-      resolvedWatchLaterAid.value = aid
-
-      if (!isInWatchLater.value) {
-        const res = await api.watchlater.saveToWatchLater({
-          ...(video.bvid ? { bvid: video.bvid } : { aid }),
-          csrf: getCSRF(),
-        })
-        if (res.code !== 0) {
-          toast.error(res.message)
-          return
-        }
-        await topBarStore.commitWatchLaterMutation(aid, true, accountId)
-      }
-      else {
-        const res = await api.watchlater.removeFromWatchLater({
-          aid,
-          csrf: getCSRF(),
-        })
-        if (res.code !== 0) {
-          toast.error(res.message)
-          return
-        }
-        await topBarStore.commitWatchLaterMutation(aid, false, accountId)
-      }
+      else if (result.status === 'failed')
+        toast.error(result.message || t('video_card.watch_later_update_failed'))
+      else if (result.status === 'success')
+        resolvedWatchLaterAid.value = result.aid
     }
     catch (error) {
-      console.error('更新稍后再看失败:', error)
-      toast.error(t('video_card.watch_later_update_failed'))
+      if (owner.isCurrent() && !isExtensionContextInvalidatedError(error))
+        toast.error(t('video_card.watch_later_update_failed'))
     }
     finally {
-      isUpdatingWatchLater.value = false
+      if (watchLaterWriteId === requestId) {
+        watchLaterWriteId = null
+        isUpdatingWatchLater.value = false
+      }
     }
   }
 
-  function handleMouseEnter() {
+  function cancelDragPreview() {
+    if (mouseEnterTimeOut.value) {
+      clearTimeout(mouseEnterTimeOut.value)
+      mouseEnterTimeOut.value = null
+    }
+    if (!isPreviewFullscreen.value && !isPreviewScrubbing.value)
+      isHover.value = false
+  }
+
+  function handleMouseEnter(event?: MouseEvent) {
+    if (event?.buttons) {
+      cancelDragPreview()
+      return
+    }
     // Cancel any pending leave timeout
     if (mouseLeaveTimeOut.value) {
       clearTimeout(mouseLeaveTimeOut.value)
@@ -548,6 +570,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     clearPreviewVideoUrl,
     toggleWatchLater,
     handleMouseEnter,
+    cancelDragPreview,
     handelMouseLeave,
     handlePreviewFullscreenChange,
     handleClick,

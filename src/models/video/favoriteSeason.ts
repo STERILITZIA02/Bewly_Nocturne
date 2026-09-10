@@ -37,7 +37,7 @@ export interface CollectedFavoriteSeason {
   is_top: boolean
   recent_fav: null
   play_switch: number
-  type: number
+  type: FavoriteSource['type']
   link: string
   bvid: string
   is_kid_playlist: boolean
@@ -77,6 +77,14 @@ export interface FavoriteSeasonInfo {
 }
 
 export interface FavoriteSeasonMedia {
+  type?: number
+  attr?: number
+  intro?: string
+  page?: number
+  fav_time?: number
+  ctime?: number
+  link?: string
+  bv_id?: string
   id: number
   title: string
   cover: string
@@ -98,4 +106,10 @@ export interface FavoriteSeasonMedia {
   enable_vt: number
   vt_display: string
   is_self_view: boolean
+}
+/** Directory source kind, independent of a resource's media type. */
+export interface FavoriteSource {
+  /** 11: id is media_id; 21: id is season_id. */
+  type: 11 | 21
+  id: number
 }

@@ -49,6 +49,7 @@ export function registerTopBarSyncChecks(check, { Vue, flush }) {
       '~/utils/messaging': messaging,
       '~/utils/momentFeedOrder': {},
       '~/utils/momentKey': {},
+      '~/utils/watchLater': {},
     }, {
       document: { cookie: 'DedeUserID=123' },
       setTimeout: (callback) => {

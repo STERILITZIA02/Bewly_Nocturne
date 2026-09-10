@@ -6,16 +6,6 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { vLiquidGlass } from '~/utils/liquidGlass'
 
-import type {
-  ConversationExpansionGeometry,
-  ConversationScrollMetrics,
-} from './conversationExpansion'
-import {
-  calculateConversationExpandedGeometry,
-  CONVERSATION_EXPANSION_DURATION,
-  getConversationExpansionGeometry,
-  isConversationAtLatest,
-} from './conversationExpansion'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
 import type { PrivateMessageWritesController as PrivateMessageWriteController } from './experimental/privateMessageWriteTypes'
@@ -24,6 +14,8 @@ import PrivateMessageImageViewer from './PrivateMessageImageViewer.vue'
 import PrivateMessageItem from './PrivateMessageItem.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
 import type { DisplayPrivateSession } from './privateSession'
+import { useConversationPresentation } from './useConversationPresentation'
+import { useConversationViewport } from './useConversationViewport'
 import type { PrivateEmotePanelController } from './usePrivateEmotePanel'
 import type { PrivateMessagesController } from './usePrivateMessages'
 
@@ -56,7 +48,7 @@ const selfDisplayName = computed(() => (
 ))
 const selfAvatarUrl = computed(() => topBarStore.userInfo.face || '')
 const conversationViewRef = ref<HTMLElement | null>(null)
-const messageScrollRef = ref<HTMLElement | null>(null)
+
 const previewImage = ref('')
 const state = computed(() => props.controller.getState(talkerId.value))
 const isTextSendEnabled = computed(() => Boolean(props.writeController) && Boolean(
@@ -95,391 +87,43 @@ const errorMessage = computed(() => {
     return ''
   return t(`notifications.whisper.errors.${kind}`)
 })
-const conversationExpanded = ref(false)
-const isMobileLayout = ref(false)
-const reducedMotion = ref(false)
-const isLayoutTransitioning = ref(false)
-const isAtLatestPosition = ref(true)
-const entryPhase = ref<'opening' | 'switching' | 'loading' | 'ready'>('opening')
-const historyVisible = ref(true)
-const isRevealingHistory = ref(false)
-const historyRevealDelays = ref<Record<string, number>>({})
-let lastRevealingMessageId = ''
-const expandedGeometry = ref<ConversationExpansionGeometry>({ extraHeight: 0, topLift: 0 })
+
 const historyLoading = computed(() => state.value.loadingOlder)
 const isAtHistoryStart = computed(() => state.value.noMore)
-const expansionGeometry = computed(() => getConversationExpansionGeometry(
-  conversationExpanded.value,
-  isMobileLayout.value,
-  expandedGeometry.value,
-))
-const conversationLayoutStyle = computed<Record<string, string>>(() => {
-  const topExpansion = Math.max(0, -expansionGeometry.value.topLift)
-  const bottomExpansion = Math.max(0, expansionGeometry.value.extraHeight - topExpansion)
-  return {
-    '--conversation-extra-height': `${expansionGeometry.value.extraHeight}px`,
-    '--conversation-top-expansion': `${topExpansion}px`,
-    '--conversation-bottom-expansion': `${bottomExpansion}px`,
-    '--conversation-top-lift': `${expansionGeometry.value.topLift}px`,
-    '--conversation-radius': conversationExpanded.value && !isMobileLayout.value ? '0px' : 'var(--bew-panel-radius)',
-  }
-})
 
-const SCROLL_EDGE_THRESHOLD = 48
 let activationGeneration = 0
-let layoutGeneration = 0
-let scrollInteractionGeneration = 0
-let scrollFrameId: number | null = null
-let openingFrameId: number | null = null
-let layoutTransitionTimer: ReturnType<typeof setTimeout> | null = null
-let directScrollGestureEndFrame: number | null = null
-let conversationResizeObserver: ResizeObserver | null = null
-let layoutMediaController: AbortController | null = null
+
 let componentMounted = false
 let conversationActivationPending = false
-let userHasReadUpward = false
-let userRequestedLatest = false
-let directScrollGestureActive = false
-let directGestureClientY: number | null = null
-let lastProcessedScrollTop = 0
 
-interface VisibleMessageAnchor {
-  id: string
-  offset: number
-}
-
-function readScrollMetrics(viewport: HTMLElement): ConversationScrollMetrics {
-  return {
-    clientHeight: viewport.clientHeight,
-    scrollHeight: viewport.scrollHeight,
-    scrollTop: viewport.scrollTop,
-  }
-}
-
-function readVerticalScrollPadding(viewport: HTMLElement): number {
-  const style = getComputedStyle(viewport)
-  return (Number.parseFloat(style.paddingTop) || 0)
-    + (Number.parseFloat(style.paddingBottom) || 0)
-}
-
-function isMetricsAtLatest(metrics: ConversationScrollMetrics): boolean {
-  return metrics.scrollHeight - metrics.scrollTop - metrics.clientHeight <= SCROLL_EDGE_THRESHOLD
-}
-
-function clearLayoutTransition() {
-  if (layoutTransitionTimer !== null)
-    clearTimeout(layoutTransitionTimer)
-  layoutTransitionTimer = null
-  isLayoutTransitioning.value = false
-}
-
-function completeLayoutTransition() {
-  if (layoutTransitionTimer !== null)
-    clearTimeout(layoutTransitionTimer)
-  layoutTransitionTimer = null
-  isLayoutTransitioning.value = false
-  if (entryPhase.value === 'opening' && componentMounted && props.active) {
-    entryPhase.value = 'loading'
-    void activateConversation()
-    return
-  }
-  scheduleScrollFrame()
-}
-
-function beginLayoutTransition() {
-  clearLayoutTransition()
-  if (reducedMotion.value || isMobileLayout.value) {
-    completeLayoutTransition()
-    return
-  }
-  isLayoutTransitioning.value = true
-  layoutTransitionTimer = setTimeout(completeLayoutTransition, CONVERSATION_EXPANSION_DURATION)
-}
-
-function resetConversationExpansion() {
-  isRevealingHistory.value = false
-  historyRevealDelays.value = {}
-  lastRevealingMessageId = ''
-  layoutGeneration++
-  scrollInteractionGeneration++
-  userHasReadUpward = false
-  userRequestedLatest = false
-  directScrollGestureActive = false
-  directGestureClientY = null
-  if (directScrollGestureEndFrame !== null)
-    cancelAnimationFrame(directScrollGestureEndFrame)
-  directScrollGestureEndFrame = null
-  isAtLatestPosition.value = true
-  lastProcessedScrollTop = 0
-  clearLayoutTransition()
-  if (scrollFrameId !== null)
-    cancelAnimationFrame(scrollFrameId)
-  scrollFrameId = null
-  conversationExpanded.value = false
-}
-
-function processScrollFrame() {
-  scrollFrameId = null
-  const viewport = messageScrollRef.value
-  if (!viewport || !componentMounted || !props.active || conversationActivationPending)
-    return
-
-  const metrics = readScrollMetrics(viewport)
-  const physicalAtLatest = isMetricsAtLatest(metrics)
-  lastProcessedScrollTop = metrics.scrollTop
-  const atLatest = isConversationAtLatest({
-    physicalAtLatest,
-    requestedLatest: userRequestedLatest,
-    userHasReadUpward,
-  })
-  isAtLatestPosition.value = atLatest
-  saveViewportState(metrics, atLatest)
-
-  if (atLatest) {
-    userHasReadUpward = false
-    userRequestedLatest = false
-  }
-
-  if (
-    userHasReadUpward
-    && metrics.scrollTop <= SCROLL_EDGE_THRESHOLD
-    && !state.value.loadingOlder
-    && !state.value.noMore
-    && state.value.failedOperation !== 'load-older'
-    && !state.value.paginationStalled
-  ) {
-    void loadOlderMessages()
-  }
-  if (atLatest)
-    void acknowledgeIfEligible()
-}
-
-function scheduleScrollFrame() {
-  if (!componentMounted || !props.active || scrollFrameId !== null)
-    return
-  scrollFrameId = requestAnimationFrame(processScrollFrame)
-}
-
-function applyReadingDirection(readsUpward: boolean) {
-  scrollInteractionGeneration++
-  if (readsUpward) {
-    userHasReadUpward = true
-    userRequestedLatest = false
-  }
-  else {
-    userRequestedLatest = true
-  }
-}
-
-function getDirectGestureClientY(event: PointerEvent | TouchEvent): number | null {
-  if (event instanceof PointerEvent)
-    return event.clientY
-  return event.touches[0]?.clientY ?? event.changedTouches[0]?.clientY ?? null
-}
-
-function markReadingIntent(event: Event) {
-  let readsUpward = true
-  if (event instanceof WheelEvent) {
-    readsUpward = event.deltaY < 0
-  }
-  else if (event instanceof KeyboardEvent) {
-    const scrollKeys = ['ArrowDown', 'ArrowUp', 'End', 'Home', 'PageDown', 'PageUp']
-    if (!scrollKeys.includes(event.key))
-      return
-    readsUpward = ['ArrowUp', 'Home', 'PageUp'].includes(event.key)
-  }
-  else if (event instanceof PointerEvent || event instanceof TouchEvent) {
-    if (directScrollGestureEndFrame !== null)
-      cancelAnimationFrame(directScrollGestureEndFrame)
-    directScrollGestureEndFrame = null
-    directScrollGestureActive = true
-    directGestureClientY = getDirectGestureClientY(event)
-    scheduleScrollFrame()
-    return
-  }
-
-  directScrollGestureActive = false
-  directGestureClientY = null
-  applyReadingDirection(readsUpward)
-  scheduleScrollFrame()
-}
-
-function handleDirectGestureMove(event: PointerEvent | TouchEvent) {
-  if (!directScrollGestureActive)
-    return
-  const clientY = getDirectGestureClientY(event)
-  if (clientY === null)
-    return
-  const previousClientY = directGestureClientY
-  directGestureClientY = clientY
-  if (previousClientY === null || Math.abs(clientY - previousClientY) <= 1)
-    return
-  if (event instanceof PointerEvent && event.pointerType === 'mouse')
-    return
-
-  applyReadingDirection(clientY > previousClientY)
-  scheduleScrollFrame()
-}
-
-function endDirectScrollGesture() {
-  if (directScrollGestureEndFrame !== null)
-    return
-  directScrollGestureEndFrame = requestAnimationFrame(() => {
-    directScrollGestureEndFrame = null
-    directScrollGestureActive = false
-    directGestureClientY = null
-  })
-  scheduleScrollFrame()
-}
-
-function setupConversationMeasurements() {
-  conversationResizeObserver?.disconnect()
-  conversationResizeObserver = null
-  if (typeof ResizeObserver === 'undefined')
-    return
-  conversationResizeObserver = new ResizeObserver(() => {
-    if (!componentMounted || !props.active)
-      return
-    updateConversationGeometry()
-    scheduleScrollFrame()
-  })
-  if (conversationViewRef.value)
-    conversationResizeObserver.observe(conversationViewRef.value)
-}
-
-function updateConversationGeometry() {
-  const view = conversationViewRef.value
-  if (!view)
-    return
-
-  const rect = view.getBoundingClientRect()
-  const visualViewport = window.visualViewport
-  const viewportTop = visualViewport?.offsetTop ?? 0
-  const viewportHeight = visualViewport?.height ?? window.innerHeight
-  const geometry = calculateConversationExpandedGeometry({
-    bottom: rect.bottom - viewportTop,
-    top: rect.top - viewportTop,
-    viewportHeight,
-  }, isMobileLayout.value)
-  if (geometry.extraHeight !== expandedGeometry.value.extraHeight || geometry.topLift !== expandedGeometry.value.topLift)
-    expandedGeometry.value = geometry
-}
-
-function setupLayoutMediaQueries() {
-  layoutMediaController?.abort()
-  const controller = new AbortController()
-  layoutMediaController = controller
-  const mobileQuery = window.matchMedia(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
-  const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)')
-  const sync = () => {
-    isMobileLayout.value = mobileQuery.matches
-    reducedMotion.value = motionQuery.matches
-    if (reducedMotion.value && isRevealingHistory.value) {
-      isRevealingHistory.value = false
+const viewport = useConversationViewport({
+  active: () => props.active,
+  ready: isHistoryReady,
+  canProcess: () => !conversationActivationPending,
+  talkerId: () => talkerId.value,
+  save: (id, position) => {
+    if (topBarStore.userInfo.mid === conversationAccountId)
+      props.controller.updateViewport(id, position)
+  },
+  onFrame: (atLatest, shouldLoadOlder) => {
+    if (shouldLoadOlder && !state.value.loadingOlder && !state.value.noMore
+      && state.value.failedOperation !== 'load-older' && !state.value.paginationStalled) {
+      void loadOlderMessages()
+    }
+    if (atLatest)
       void acknowledgeIfEligible()
-    }
-    if ((reducedMotion.value || isMobileLayout.value) && isLayoutTransitioning.value)
-      completeLayoutTransition()
-    updateConversationGeometry()
-  }
-  sync()
-  mobileQuery.addEventListener('change', sync, { signal: controller.signal })
-  motionQuery.addEventListener('change', sync, { signal: controller.signal })
-  window.addEventListener('resize', sync, { signal: controller.signal })
-  window.addEventListener('pointercancel', endDirectScrollGesture, { signal: controller.signal })
-  window.addEventListener('pointerup', endDirectScrollGesture, { signal: controller.signal })
-  window.addEventListener('touchcancel', endDirectScrollGesture, { passive: true, signal: controller.signal })
-  window.addEventListener('touchend', endDirectScrollGesture, { passive: true, signal: controller.signal })
-  window.visualViewport?.addEventListener('resize', sync, { signal: controller.signal })
-  window.visualViewport?.addEventListener('scroll', sync, { signal: controller.signal })
-}
+  },
+})
+const { messageScrollRef, isAtLatestPosition, isAtLatest, saveViewportState, scrollToLatest, scheduleScrollFrame, markReadingIntent, handleDirectGestureMove, endDirectScrollGesture, handleScroll } = viewport
+const presentation = useConversationPresentation(conversationViewRef, () => props.active, {
+  activate: () => void activateConversation(),
+  layoutSettled: scheduleScrollFrame,
+  revealFinished: () => void acknowledgeIfEligible(),
+})
+const { conversationExpanded, reducedMotion, isLayoutTransitioning, entryPhase, historyVisible, isRevealingHistory, historyRevealDelays, conversationLayoutStyle, updateConversationGeometry, finishConversationSwitch, revealVisibleHistory, finishHistoryReveal, beginHistoryLeave } = presentation
 
-function captureVisibleMessageAnchor(viewport: HTMLElement): VisibleMessageAnchor | null {
-  const viewportTop = viewport.getBoundingClientRect().top
-  const messageElements = Array.from(
-    viewport.querySelectorAll<HTMLElement>('[data-message-id]'),
-  )
-  for (const element of messageElements) {
-    const rect = element.getBoundingClientRect()
-    if (rect.bottom > viewportTop) {
-      return {
-        id: element.dataset.messageId ?? '',
-        offset: rect.top - viewportTop,
-      }
-    }
-  }
-  return null
-}
-
-function restoreVisibleMessageAnchor(
-  viewport: HTMLElement,
-  anchor: VisibleMessageAnchor | null,
-): boolean {
-  if (!anchor?.id)
-    return false
-  const target = Array.from(
-    viewport.querySelectorAll<HTMLElement>('[data-message-id]'),
-  ).find(element => element.dataset.messageId === anchor.id)
-  if (!target)
-    return false
-  const nextOffset = target.getBoundingClientRect().top - viewport.getBoundingClientRect().top
-  viewport.scrollTop += nextOffset - anchor.offset
-  return true
-}
-
-function isAtLatest() {
-  const viewport = messageScrollRef.value
-  if (!viewport)
-    return false
-  const physicalAtLatest = isMetricsAtLatest(readScrollMetrics(viewport))
-  return isConversationAtLatest({
-    physicalAtLatest,
-    requestedLatest: userRequestedLatest,
-    userHasReadUpward,
-  })
-}
-
-function saveViewportState(
-  metrics?: ConversationScrollMetrics,
-  atLatestOverride?: boolean,
-  savedTalkerId = talkerId.value,
-) {
-  if (topBarStore.userInfo.mid !== conversationAccountId || entryPhase.value !== 'ready')
-    return
-  const viewport = messageScrollRef.value
-  if (!viewport)
-    return
-  const currentMetrics = metrics ?? readScrollMetrics(viewport)
-  props.controller.updateViewport(savedTalkerId, {
-    atLatest: atLatestOverride
-      ?? (isAtLatestPosition.value && isMetricsAtLatest(currentMetrics)),
-    scrollTop: currentMetrics.scrollTop,
-  })
-}
-
-function scrollToLatest(behavior: ScrollBehavior = 'auto') {
-  if (entryPhase.value !== 'ready')
-    return
-  const viewport = messageScrollRef.value
-  if (!viewport)
-    return
-  scrollInteractionGeneration++
-  directScrollGestureActive = false
-  userHasReadUpward = false
-  userRequestedLatest = true
-  const resolvedBehavior = behavior === 'smooth' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    ? 'auto'
-    : behavior
-  lastProcessedScrollTop = viewport.scrollTop
-  viewport.scrollTo({ top: viewport.scrollHeight, behavior: resolvedBehavior })
-  const metrics = readScrollMetrics(viewport)
-  const atLatest = isMetricsAtLatest(metrics)
-  isAtLatestPosition.value = atLatest
-  props.controller.updateViewport(talkerId.value, {
-    atLatest,
-    scrollTop: metrics.scrollTop,
-  })
-  scheduleScrollFrame()
+function isHistoryReady() {
+  return entryPhase.value === 'ready'
 }
 
 async function acknowledgeIfEligible() {
@@ -500,52 +144,28 @@ async function acknowledgeIfEligible() {
 }
 
 async function loadOlderMessages(explicitRetry = false) {
-  const viewport = messageScrollRef.value
-  if (!viewport || entryPhase.value !== 'ready' || state.value.loadingOlder || state.value.noMore)
+  if (entryPhase.value !== 'ready' || state.value.loadingOlder || state.value.noMore)
     return
-
+  const anchor = viewport.captureReadingAnchor()
+  if (!anchor)
+    return
   const requestTalkerId = talkerId.value
-  const requestLayoutGeneration = layoutGeneration
-  const requestScrollGeneration = scrollInteractionGeneration
-  const requestActivationGeneration = activationGeneration
-  const requestLifecycleEpoch = props.controller.lifecycleEpoch.value
-  const requestStateGeneration = state.value.generation
-  const oldScrollHeight = viewport.scrollHeight
-  const oldScrollTop = viewport.scrollTop
-  const oldScrollPadding = readVerticalScrollPadding(viewport)
-  const anchor = captureVisibleMessageAnchor(viewport)
-
+  const generation = activationGeneration
+  const epoch = props.controller.lifecycleEpoch.value
+  const stateGeneration = state.value.generation
   if (explicitRetry)
     await props.controller.retryLoadOlder(requestTalkerId)
   else
     await props.controller.loadOlder(requestTalkerId)
   await nextTick()
-  const requestContextCurrent = viewport === messageScrollRef.value
-    && requestTalkerId === talkerId.value
-    && requestLayoutGeneration === layoutGeneration
-    && requestActivationGeneration === activationGeneration
-    && requestLifecycleEpoch === props.controller.lifecycleEpoch.value
-    && requestStateGeneration === state.value.generation
-    && props.active
-  if (!requestContextCurrent) {
-    scheduleScrollFrame()
+  if (!componentMounted || !props.active || generation !== activationGeneration
+    || requestTalkerId !== talkerId.value || epoch !== props.controller.lifecycleEpoch.value
+    || stateGeneration !== state.value.generation) {
     return
   }
-
-  if (requestScrollGeneration === scrollInteractionGeneration) {
-    if (!restoreVisibleMessageAnchor(viewport, anchor)) {
-      const scrollPaddingGrowth = readVerticalScrollPadding(viewport) - oldScrollPadding
-      const messageContentGrowth = Math.max(
-        0,
-        viewport.scrollHeight - oldScrollHeight - scrollPaddingGrowth,
-      )
-      viewport.scrollTop = oldScrollTop + messageContentGrowth
-    }
-  }
-  lastProcessedScrollTop = viewport.scrollTop
-  saveViewportState()
+  anchor.restore()
   if (state.value.failedOperation === 'load-older' || state.value.paginationStalled)
-    userHasReadUpward = false
+    viewport.stopAutomaticHistory()
   else
     scheduleScrollFrame()
 }
@@ -555,20 +175,16 @@ async function refreshLatest(options: { forceBottom?: boolean } = {}) {
     return
   const generation = activationGeneration
   const wasAtLatest = isAtLatest()
-  const requestScrollGeneration = scrollInteractionGeneration
-  const shouldFollow = options.forceBottom
-    || (settings.value.followNewPrivateMessages && wasAtLatest)
+  const anchor = viewport.captureReadingAnchor()
+  const shouldFollow = options.forceBottom || (settings.value.followNewPrivateMessages && wasAtLatest)
   if (wasAtLatest && !shouldFollow) {
-    props.controller.updateViewport(talkerId.value, {
-      atLatest: false,
-      scrollTop: messageScrollRef.value?.scrollTop ?? state.value.scrollTop,
-    })
+    props.controller.updateViewport(talkerId.value, { atLatest: false, scrollTop: messageScrollRef.value?.scrollTop ?? state.value.scrollTop })
   }
   await props.controller.refreshLatest(talkerId.value)
   await nextTick()
   if (!componentMounted || !props.active || generation !== activationGeneration)
     return
-  if (shouldFollow && requestScrollGeneration === scrollInteractionGeneration)
+  if (shouldFollow && anchor?.isCurrent())
     scrollToLatest()
   else
     saveViewportState()
@@ -669,7 +285,7 @@ async function activateConversation() {
     return
   const generation = ++activationGeneration
   conversationActivationPending = true
-  const initialScrollGeneration = scrollInteractionGeneration
+  const initialScrollGeneration = viewport.interactionGeneration
   const wasLoaded = state.value.loaded
   if (wasLoaded)
     await props.controller.refreshLatest(talkerId.value)
@@ -677,95 +293,25 @@ async function activateConversation() {
     await props.controller.loadInitial(talkerId.value, props.session?.ackSeqno ?? '0')
   if (generation !== activationGeneration || !props.active || !componentMounted)
     return
-  entryPhase.value = 'ready'
+  presentation.showReadyHistory()
   await nextTick()
   if (generation !== activationGeneration || !props.active || !componentMounted)
     return
-  if (initialScrollGeneration !== scrollInteractionGeneration) {
-    if (messageScrollRef.value)
-      revealVisibleHistory(messageScrollRef.value)
+  const element = messageScrollRef.value
+  if (initialScrollGeneration !== viewport.interactionGeneration) {
+    if (element)
+      revealVisibleHistory(element)
     finishConversationActivation(generation)
     return
   }
-
-  const viewport = messageScrollRef.value
-  if (!viewport) {
-    finishConversationActivation(generation)
-    return
+  if (element) {
+    updateConversationGeometry()
+    viewport.restorePosition(!wasLoaded || state.value.atLatest, state.value.scrollTop)
+    revealVisibleHistory(element)
   }
-  updateConversationGeometry()
-  if (!wasLoaded || state.value.atLatest) {
-    scrollToLatest()
-    userRequestedLatest = false
-  }
-  else {
-    userHasReadUpward = true
-    userRequestedLatest = false
-    isAtLatestPosition.value = false
-    viewport.scrollTop = state.value.scrollTop
-    lastProcessedScrollTop = viewport.scrollTop
-  }
-  revealVisibleHistory(viewport)
   finishConversationActivation(generation)
   saveViewportState()
   await acknowledgeIfEligible()
-}
-
-function revealVisibleHistory(viewport: HTMLElement) {
-  if (reducedMotion.value)
-    return
-  const bounds = viewport.getBoundingClientRect()
-  const visibleMessages = Array.from(viewport.querySelectorAll<HTMLElement>('[data-message-id]'))
-    .filter((element) => {
-      const rect = element.getBoundingClientRect()
-      return rect.bottom > bounds.top && rect.top < bounds.bottom
-    })
-  // Stagger the actual visible rows, including restored history positions and large fonts.
-  const stagger = Math.min(35, CONVERSATION_EXPANSION_DURATION / Math.max(1, visibleMessages.length - 1))
-  historyRevealDelays.value = Object.fromEntries(visibleMessages.map((element, index) => [element.dataset.messageId!, index * stagger]))
-  lastRevealingMessageId = visibleMessages.at(-1)?.dataset.messageId ?? ''
-  isRevealingHistory.value = visibleMessages.length > 0
-}
-
-function finishHistoryReveal(event: AnimationEvent) {
-  if ((event.target as HTMLElement).dataset.messageId !== lastRevealingMessageId)
-    return
-  isRevealingHistory.value = false
-  void acknowledgeIfEligible()
-}
-
-function openConversation() {
-  resetConversationExpansion()
-  historyVisible.value = true
-  entryPhase.value = 'opening'
-  conversationActivationPending = true
-  // Commit the compact geometry once; fetch only after the existing expansion finishes.
-  openingFrameId = requestAnimationFrame(() => {
-    openingFrameId = null
-    if (!componentMounted || !props.active)
-      return
-    updateConversationGeometry()
-    conversationExpanded.value = true
-    beginLayoutTransition()
-  })
-}
-
-function finishConversationSwitch() {
-  if (!componentMounted || !props.active || entryPhase.value !== 'switching')
-    return
-  isRevealingHistory.value = false
-  historyRevealDelays.value = {}
-  lastRevealingMessageId = ''
-  isAtLatestPosition.value = true
-  lastProcessedScrollTop = 0
-  historyVisible.value = true
-  entryPhase.value = 'loading'
-  void activateConversation()
-}
-
-function beginHistoryLeave(element: Element) {
-  if (element instanceof HTMLElement)
-    element.inert = true
 }
 
 function retry() {
@@ -775,19 +321,6 @@ function retry() {
     void refreshLatest()
   else
     void activateConversation()
-}
-
-function handleScroll() {
-  const viewport = messageScrollRef.value
-  if (viewport && directScrollGestureActive) {
-    const scrollTop = viewport.scrollTop
-    if (scrollTop < lastProcessedScrollTop - 1)
-      applyReadingDirection(true)
-    else if (scrollTop > lastProcessedScrollTop + 1)
-      applyReadingDirection(false)
-    lastProcessedScrollTop = scrollTop
-  }
-  scheduleScrollFrame()
 }
 
 function focusHeading() {
@@ -803,25 +336,9 @@ watch(talkerId, (_, previousTalkerId) => {
   saveViewportState(undefined, undefined, previousTalkerId)
   previewImage.value = ''
   activationGeneration++
-  layoutGeneration++
-  scrollInteractionGeneration++
   conversationActivationPending = true
-  userHasReadUpward = false
-  userRequestedLatest = false
-  directScrollGestureActive = false
-  directGestureClientY = null
-  if (directScrollGestureEndFrame !== null)
-    cancelAnimationFrame(directScrollGestureEndFrame)
-  directScrollGestureEndFrame = null
-  if (scrollFrameId !== null)
-    cancelAnimationFrame(scrollFrameId)
-  scrollFrameId = null
-  // Keep the shell, composer and their glass attachment alive. An unfinished
-  // first expansion will activate only the latest selection when it completes.
-  if (entryPhase.value !== 'opening') {
-    entryPhase.value = 'switching'
-    historyVisible.value = false
-  }
+  viewport.resetReading()
+  presentation.switchHistory()
 })
 watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl) => {
   if (previousUrl && previewImage.value === previousUrl && nextUrl !== previousUrl)
@@ -829,49 +346,21 @@ watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl
 })
 
 watch(() => props.active, (active) => {
-  if (active) {
-    if (componentMounted) {
-      setupLayoutMediaQueries()
-      setupConversationMeasurements()
-      openConversation()
-    }
-  }
-  else {
+  if (!active) {
     activationGeneration++
-    if (openingFrameId !== null)
-      cancelAnimationFrame(openingFrameId)
-    openingFrameId = null
     conversationActivationPending = false
-    conversationResizeObserver?.disconnect()
-    conversationResizeObserver = null
-    layoutMediaController?.abort()
-    layoutMediaController = null
-    resetConversationExpansion()
   }
 }, { immediate: true })
 
 onMounted(() => {
   componentMounted = true
-  if (props.active) {
-    setupLayoutMediaQueries()
-    setupConversationMeasurements()
-    openConversation()
-  }
 })
 
 onBeforeUnmount(() => {
+  saveViewportState()
   componentMounted = false
   conversationActivationPending = false
   activationGeneration++
-  if (openingFrameId !== null)
-    cancelAnimationFrame(openingFrameId)
-  openingFrameId = null
-  saveViewportState()
-  layoutMediaController?.abort()
-  layoutMediaController = null
-  conversationResizeObserver?.disconnect()
-  conversationResizeObserver = null
-  resetConversationExpansion()
 })
 
 defineExpose({

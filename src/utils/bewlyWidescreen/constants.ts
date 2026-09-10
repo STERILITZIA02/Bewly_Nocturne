@@ -1,4 +1,5 @@
 import { WIDESCREEN_SIDEBAR_MAX_VIEWPORT_RATIO } from '~/utils/bewlyWidescreenPolicy'
+import { PLAYER_MODE_CONTROL_SELECTORS } from '~/utils/playerMedia'
 
 export const ROOT_ID = 'bewly-widescreen-root'
 
@@ -105,17 +106,7 @@ export const COMMENT_TIME_SELECTOR = [
   'bili-comment-user-info .pubdate',
 ].join(',')
 
-export const HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS = [
-  '.bpx-player-ctrl-wide',
-  '.bilibili-player-video-btn-widescreen',
-  '.squirtle-video-widescreen',
-  '.bpx-player-ctrl-web',
-  '.bilibili-player-video-web-fullscreen',
-  '.squirtle-video-pagefullscreen',
-  '.bpx-player-ctrl-full',
-  '.bilibili-player-video-btn-fullscreen',
-  '.squirtle-video-fullscreen',
-] as const
+export const HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS = Object.values(PLAYER_MODE_CONTROL_SELECTORS).flat()
 
 export const NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR = [
   '.bpx-player-control-wrap',
@@ -149,12 +140,7 @@ export const HIGH_ENERGY_PROGRESS_SELECTOR = '.bpx-player-pbp'
 
 export const HIGH_ENERGY_PROGRESS_PIN_SELECTOR = '.bpx-player-pbp-pin'
 
-export const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR = [
-  ...HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS,
-  '.bpx-player-ctrl-full',
-  '.bilibili-player-video-btn-fullscreen',
-  '.squirtle-video-fullscreen',
-].join(',')
+export const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR = HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS.join(',')
 
 export const selectors = {
   player: [

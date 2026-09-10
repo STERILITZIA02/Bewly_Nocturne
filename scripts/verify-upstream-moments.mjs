@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 
+import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 function clock() {
@@ -32,6 +33,41 @@ function clock() {
 }
 
 export function registerUpstreamMomentChecks(check, { Vue, flush, compileComponent }) {
+  check('Home drag selection: only unmodified empty background is intercepted; titles, links, selection and layout editing remain native', async () => {
+    const editing = Vue.ref(false)
+    const selection = { isCollapsed: true }
+    const home = await loadSourceFunctions('../src/contentScripts/views/Home/Home.vue', ['preventBackgroundSelection'], { isLayoutEditing: editing, window: { getSelection: () => selection }, HTMLElement })
+    const wrapper = document.createElement('main')
+    const grid = wrapper.appendChild(document.createElement('div'))
+    grid.className = 'video-card-grid-container'
+    const title = grid.appendChild(document.createElement('a'))
+    title.textContent = 'Selectable title'
+    const event = target => ({ target, currentTarget: wrapper, button: 0, preventDefault() {
+      this.prevented = true
+    } })
+    const empty = event(grid)
+    home.preventBackgroundSelection(empty)
+    assert.equal(empty.prevented, true)
+    for (const target of [title, document.createElement('input')]) {
+      const text = event(target)
+      home.preventBackgroundSelection(text)
+      assert.equal(text.prevented, undefined)
+    }
+    for (const option of ['shiftKey', 'ctrlKey', 'metaKey', 'altKey']) {
+      const modified = { ...event(grid), [option]: true }
+      home.preventBackgroundSelection(modified)
+      assert.equal(modified.prevented, undefined)
+    }
+    editing.value = true
+    const layout = event(grid)
+    home.preventBackgroundSelection(layout)
+    assert.equal(layout.prevented, undefined)
+    editing.value = false
+    selection.isCollapsed = false
+    const selected = event(grid)
+    home.preventBackgroundSelection(selected)
+    assert.equal(selected.prevented, undefined)
+  })
   check('moment preview: actual media ids, MP4/HLS/FLV first frames, fullscreen retention and stale releases', async () => {
     const settings = Vue.ref({ momentsEnableVideoPreview: true, momentsEnableLivePreview: true, momentsEnableVideoControls: true, momentsEnableVideoPreviewSwipeSeek: false, momentsOnlyCoverVideoPreview: true, momentsVideoPreviewDelayed: false })
     const hlsPlayers = []
@@ -130,6 +166,16 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
     } })
     app.mount(host)
     try {
+      await previews.handleMediaEnter(moment.value, new MouseEvent('mouseenter', { buttons: 1 }))
+      assert.equal(requests.length, 0, 'dragging text or links cannot start a preview')
+      settings.value.momentsVideoPreviewDelayed = true
+      await flush()
+      await previews.handleMediaEnter(moment.value)
+      assert.equal(previews.previewState.value, 'waiting')
+      await previews.handleMediaEnter(moment.value, new MouseEvent('mouseenter', { buttons: 1 }))
+      assert.equal(previews.previewState.value, 'idle', 'dragging cancels an existing delayed preview')
+      settings.value.momentsVideoPreviewDelayed = false
+      await flush()
       await previews.handleMediaEnter(moment.value)
       await flush()
       assert.deepEqual({ ...requests[0] }, { bvid: 'BVrealvideo', cid: 123 })

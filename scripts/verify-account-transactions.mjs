@@ -105,7 +105,9 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       vue: Vue,
       '~/utils/accountLifetime': { createAccountLifetime },
       '~/utils/favoriteFolder': folderModule,
-      '~/utils/favoriteSeason': {},
+      '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
+      '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
+      '~/utils/favoriteAvatar': await import('../src/utils/favoriteAvatar'),
       './favoriteAdapters': adapters,
     })
     const page = await compileComponent('../src/contentScripts/views/Favorites/FavoritesPage.vue', {
@@ -122,7 +124,8 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       '~/utils/accountScope': accountScope,
       '~/utils/api': { default: { favorite: api } },
       '~/utils/favoriteFolder': folderModule,
-      '~/utils/favoriteSeason': { FAVORITE_SEASON_PAGE_SIZE: 20 },
+      '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
+      '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
       '~/utils/main': { getCSRF: () => `csrf-${cookieAccount}`, getUserID: () => String(cookieAccount), removeHttpFromUrl: value => value },
       './favoriteAdapters': adapters,
       './useFavoritesData': dataModule,
@@ -183,7 +186,7 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     assert.equal(state.favoriteCategories[1].attr & 1, 1)
     assert.equal(state.editFolderTitle, 'new draft')
     assert.equal(state.editFolderDialogVisible, true)
-    const batch = state.unfavSeasons([100, 101])
+    const batch = state.unfavSeasons([100, 101].map(id => ({ id, type: 21 })))
     await flush()
     cookieAccount = 2
     calls[3].resolve({ code: 0 })
@@ -191,7 +194,7 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     assert.equal(calls.length, 4, 'cookie changes stop the next write even before topBar reconciliation')
     account.userInfo.mid = 2
     await flush()
-    const disposed = state.unfavSeasons([200, 201])
+    const disposed = state.unfavSeasons([200, 201].map(id => ({ id, type: 21 })))
     await flush()
     app.unmount()
     calls[4].resolve({ code: 0 })
@@ -264,7 +267,9 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       vue: Vue,
       '~/utils/accountLifetime': { createAccountLifetime },
       '~/utils/favoriteFolder': { getFavoriteFolderEditedAttr },
-      '~/utils/favoriteSeason': {},
+      '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
+      '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
+      '~/utils/favoriteAvatar': await import('../src/utils/favoriteAvatar'),
       './favoriteAdapters': adapters,
     })
     let account = 1
@@ -381,7 +386,7 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       },
     }
     const controller = useFavoriteWrites({ api, capture: lifetime.capture, getCSRF: () => `csrf-${account}`, onError: error => errors.push(error) })
-    const batch = controller.execute(controller.prepare({ kind: 'seasons', ids: [10, 11, 12] }))
+    const batch = controller.execute(controller.prepare({ kind: 'seasons', sources: [10, 11, 12].map(id => ({ id, type: 21 })) }))
     account = 2
     lifetime.invalidate()
     controller.reset()
@@ -393,9 +398,9 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     const moving = controller.execute(transaction)
     calls[1].resolve({ code: 0 })
     const result = await moving
-    assert.equal(result.command.sourceId, 3)
+    assert.equal(result.kind, 'move')
     assert.deepEqual(calls[1].params, { src_media_id: 3, tar_media_id: 4, resources: '10:2', mid: '2', csrf: 'csrf-2' })
-    const disposed = controller.execute(controller.prepare({ kind: 'seasons', ids: [20, 21] }))
+    const disposed = controller.execute(controller.prepare({ kind: 'seasons', sources: [20, 21].map(id => ({ id, type: 21 })) }))
     lifetime.dispose()
     calls[2].resolve({ code: 0 })
     assert.equal(await disposed, null)

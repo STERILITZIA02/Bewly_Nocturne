@@ -2,12 +2,14 @@ import { watch } from 'vue'
 
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
-import api from '~/utils/api'
+import { createAccountLifetime } from '~/utils/accountLifetime'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
 import { i18n } from '~/utils/i18n'
 import { getCSRF, getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
-import { resolveWatchLaterAid } from '~/utils/watchLater'
+import type { WatchLaterMutationOwner } from '~/utils/watchLater'
+import { resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
 const BUTTON_CLASS = 'bewly-watch-later-btn'
 const WATCH_LATER_ICON_CLASS = 'i-mingcute:carplay-line'
@@ -28,6 +30,7 @@ export interface VideoIds {
 }
 
 interface WatchLaterButtonState {
+  lifetime: ReturnType<typeof createAccountLifetime>
   aid?: number
   isInWatchLater: boolean
   requestPending: boolean
@@ -181,83 +184,38 @@ async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, s
   }
 }
 
-async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state: WatchLaterButtonState) {
+async function toggleWatchLater(button: HTMLButtonElement, ids: VideoIds, state: WatchLaterButtonState, owner: WatchLaterMutationOwner) {
   if (state.requestPending)
     return
 
   state.requestPending = true
   setButtonBusy(button, true)
-  let previousState = state.isInWatchLater
-  let requestAccepted = false
-  let accountStateValid = true
-
   try {
     const topBarStore = useTopBarStore()
-    if (!await topBarStore.ensureWatchLaterState()) {
-      accountStateValid = false
+    const result = await updateOwnedWatchLater(ids, 'toggle', owner, topBarStore, async () => resolveAid(ids, state))
+    if (!owner.isCurrent())
       return
-    }
-    const accountId = topBarStore.userInfo.mid
-    const csrf = getCSRF()
-    if (
-      !topBarStore.isLogin
-      || !accountId
-      || !csrf
-      || !isWatchLaterAccountCurrent(accountId, csrf)
-    ) {
-      accountStateValid = false
-      return
-    }
-    const aid = await resolveAid(ids, state)
-    if (
-      !button.isConnected
-      || topBarStore.userInfo.mid !== accountId
-      || !isWatchLaterAccountCurrent(accountId, csrf)
-    ) {
-      accountStateValid = false
-      return
-    }
-    if (!aid) {
+    if (result.status === 'unavailable') {
       console.warn('无法获取当前视频的 aid，不能更新稍后再看')
       return
     }
-
-    previousState = topBarStore.isInWatchLater(aid)
-    const nextState = !previousState
-    state.isInWatchLater = nextState
-    updateButtonState(button, nextState)
-
-    const result = previousState
-      ? await api.watchlater.removeFromWatchLater({ aid, csrf })
-      : await api.watchlater.saveToWatchLater({ ...ids, csrf })
-    if (
-      !button.isConnected
-      || topBarStore.userInfo.mid !== accountId
-      || !isWatchLaterAccountCurrent(accountId, csrf)
-    ) {
-      accountStateValid = false
-      return
+    if (result.status === 'failed')
+      throw new Error(result.message || translate('video_card.watch_later_update_failed'))
+    if (result.status === 'success') {
+      state.isInWatchLater = result.added
+      updateButtonState(button, result.added)
+      animateButton(button)
     }
-    if (result.code !== 0)
-      throw new Error(result.message || `Watch later request failed with code ${result.code}`)
-
-    requestAccepted = true
-    await topBarStore.commitWatchLaterMutation(aid, nextState, accountId)
-    animateButton(button)
   }
   catch (error) {
-    if (!requestAccepted && button.isConnected) {
-      state.isInWatchLater = previousState
-      updateButtonState(button, previousState)
-    }
-    if (!isExtensionContextInvalidatedError(error))
+    if (owner.isCurrent() && !isExtensionContextInvalidatedError(error))
       console.error('更新稍后再看状态失败:', error)
   }
   finally {
     state.requestPending = false
     if (button.isConnected) {
       setButtonBusy(button, false)
-      if (!accountStateValid) {
+      if (!owner.isCurrent()) {
         button.disabled = true
         button.setAttribute('aria-disabled', 'true')
       }
@@ -278,6 +236,7 @@ function createButton(ids: VideoIds): HTMLButtonElement {
 }
 
 function teardownMountedWatchLaterButton(button: HTMLButtonElement) {
+  buttonInitializationContexts.get(button)?.state.lifetime.dispose()
   mountedButtons.delete(button)
   buttonInitializationContexts.delete(button)
   buttonMembershipWatchers.get(button)?.()
@@ -300,7 +259,9 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
   if (!moreButton?.parentNode)
     return undefined
 
+  const topBarStore = useTopBarStore()
   const state: WatchLaterButtonState = {
+    lifetime: createAccountLifetime(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)),
     aid: ids.aid,
     isInWatchLater: false,
     requestPending: false,
@@ -318,7 +279,6 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
     void handleButtonClick(mounted)
   })
 
-  const topBarStore = useTopBarStore()
   buttonMembershipWatchers.set(button, watch(
     [
       () => i18n.global.locale.value,
@@ -326,7 +286,16 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
       () => topBarStore.userInfo.mid,
       () => [...topBarStore.addedWatchLaterList],
     ],
-    () => {
+    (next, previous) => {
+      if (next[1] !== previous[1] || next[2] !== previous[2]) {
+        // Give the new account its own read/write lifecycle. The old request
+        // may finish on the server, but its finalizer cannot disable this view.
+        teardownMountedWatchLaterButton(button)
+        const currentIds = extractVideoIds()
+        if (getVideoKey(currentIds))
+          mountWatchLaterButton(currentIds)
+        return
+      }
       if (!button.isConnected || state.requestPending)
         return
       if (!topBarStore.isLogin) {
@@ -365,19 +334,25 @@ async function handleButtonClick(mounted: MountedWatchLaterButton) {
     if (!replacement)
       return
 
-    await replacement.ready
-    if (!replacement.button.isConnected || getVideoKey(extractVideoIds()) !== currentVideoKey)
-      return
-
-    await toggleWatchLater(replacement.button, replacement.ids, replacement.state)
-    return
+    mounted = replacement
   }
 
+  const account = mounted.state.lifetime.capture()
+  const csrf = getCSRF()
+  const owner: WatchLaterMutationOwner = {
+    accountId: account.accountId,
+    isCurrent: () => account.isCurrent() && account.accountId !== null
+      && isWatchLaterAccountCurrent(account.accountId, csrf)
+      && mountedButtons.has(mounted.button) && mounted.button.isConnected
+      && getVideoKey(extractVideoIds()) === currentVideoKey,
+  }
+  if (!owner.isCurrent())
+    return
   await mounted.ready
-  if (!mounted.button.isConnected || getVideoKey(extractVideoIds()) !== currentVideoKey)
+  if (!owner.isCurrent())
     return
 
-  await toggleWatchLater(mounted.button, currentIds, mounted.state)
+  await toggleWatchLater(mounted.button, currentIds, mounted.state, owner)
 }
 
 /**

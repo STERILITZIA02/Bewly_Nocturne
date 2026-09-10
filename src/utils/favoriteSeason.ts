@@ -8,23 +8,26 @@
 import type { CollectedSeasonPlayAllMode } from '~/logic/storage'
 import type { List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
-import type { FavoriteSeasonMedia } from '~/models/video/favoriteSeason'
-import api from '~/utils/api'
+import type { FavoritesResult, Media as FavoriteItem } from '~/models/video/favorite'
+import type { FavoriteSeasonResourcesResult, FavoriteSource } from '~/models/video/favoriteSeason'
+import type api from '~/utils/api'
+import { getFavoriteResourceKey, getFavoriteSourceKey, isPlayableFavoriteVideo, normalizeFavoriteSourceMedia } from '~/utils/favoriteResource'
 
 /** 与 B 站 fav/season/list 默认 ps、以及收藏页「一屏约 40」展示一致 */
 export const FAVORITE_SEASON_PAGE_SIZE = 40
+export const FAVORITE_FOLDER_PAGE_SIZE = 20
+export const FAVORITE_SUBSCRIPTIONS_PAGE_SIZE = 50
 /** 防止异常接口一直返回满页时死循环 */
 const MAX_SEASON_PAGES = 100
 const HISTORY_PAGE_SIZE = 20
 /** 在最近历史中查找合集内上次观看（约 300 条） */
 const MAX_HISTORY_PAGES = 15
-/** mid → face，跨合集复用，避免重复打卡片接口 */
-const userFaceCache = new Map<number, string>()
 
 export type { CollectedSeasonPlayAllMode }
 
 export interface FavoriteSeasonPlayTarget {
-  seasonId: number
+  source: FavoriteSource
+  spaceMid: number
   link?: string
   /** beginning 模式入口补充（无 link 时用） */
   bvid?: string
@@ -32,12 +35,12 @@ export interface FavoriteSeasonPlayTarget {
   /**
    * UI 已通过同一套分页语义加载过的列表。
    * complete=true 时可跳过再次全量请求。
-   * expectedCount 来自合集 media_count，用于 complete 标记未同步时的兜底判定。
+   * 来源身份与完整状态必须同时匹配；累计长度不能替代完整验证。
    */
   preloaded?: {
-    medias: FavoriteSeasonMedia[]
+    sourceKey: string
+    medias: FavoriteItem[]
     complete: boolean
-    expectedCount?: number
   }
 }
 
@@ -45,70 +48,39 @@ export interface FavoriteSeasonPlayAllResult {
   url: string
   /** 是否回退到合集入口（开头 / 数据不完整 / 无历史等） */
   usedFallback: boolean
-  reason: 'beginning' | 'resolved' | 'incomplete' | 'empty' | 'missing-bvid' | 'no-history'
+  reason: 'beginning' | 'resolved' | 'incomplete' | 'empty' | 'missing-bvid' | 'no-history' | 'unverified-order' | 'cancelled'
 }
 
 export interface FavoriteSeasonPageFetchResult {
   ok: boolean
-  pageMedias: FavoriteSeasonMedia[]
+  pageMedias: FavoriteItem[]
   mediaCount?: number
   cover?: string
+  hasMore?: boolean
 }
 
 export interface FavoriteSeasonPageMergeResult {
-  medias: FavoriteSeasonMedia[]
+  medias: FavoriteItem[]
   hasMore: boolean
+  complete: boolean
+  stalled: boolean
+  /** Changes only; callers need not replace or reconvert the accumulated list. */
+  changed: Array<{ index: number, item: FavoriteItem }>
+  replace: boolean
 }
 
 interface FetchAllSeasonMediasResult {
-  medias: FavoriteSeasonMedia[]
+  medias: FavoriteItem[]
   complete: boolean
-}
-
-/**
- * 合集列表接口通常不带 upper.face；按 mid 补全头像（同 UP 只请求一次）
- */
-export async function enrichFavoriteSeasonMediaFaces(
-  medias: FavoriteSeasonMedia[],
-): Promise<FavoriteSeasonMedia[]> {
-  const missingMids = [...new Set(
-    medias
-      .map(item => item.upper?.mid)
-      .filter((mid): mid is number => typeof mid === 'number' && mid > 0 && !userFaceCache.has(mid)),
-  )]
-
-  await Promise.all(missingMids.map(async (mid) => {
-    try {
-      const res = await api.user.getUserCard({ mid: String(mid) })
-      const face = res?.data?.card?.face
-      if (res?.code === 0 && typeof face === 'string' && face.length > 0)
-        userFaceCache.set(mid, face)
-    }
-    catch {
-      // 单个失败不影响其它
-    }
-  }))
-
-  return medias.map((item) => {
-    const mid = item.upper?.mid
-    const cachedFace = typeof mid === 'number' ? userFaceCache.get(mid) : undefined
-    if (!cachedFace || item.upper?.face === cachedFace)
-      return item
-    return {
-      ...item,
-      upper: {
-        ...item.upper,
-        face: cachedFace,
-      },
-    }
-  })
 }
 
 /**
  * 合集入口 URL（B 站默认「从开头播放」）
  * 优先 collected season 的 bilibili://video/{aid} link，否则封面/入口 bvid
  */
-export function buildFavoriteSeasonEntryUrl(seasonId: number, link?: string, bvid?: string): string {
+export function buildFavoriteSeasonEntryUrl(source: FavoriteSource, spaceMid: number, link?: string, bvid?: string): string {
+  if (source.type === 11)
+    return `https://www.bilibili.com/medialist/play/ml${source.id}`
   const matchedVideoLink = link?.match(/^bilibili:\/\/video\/(\d+)(\?.*)?$/)
 
   if (matchedVideoLink)
@@ -117,15 +89,16 @@ export function buildFavoriteSeasonEntryUrl(seasonId: number, link?: string, bvi
   if (bvid)
     return `https://www.bilibili.com/video/${bvid}/`
 
-  // list/season/{id} 对 UGC 订阅合集常 404，仅作无 link/bvid 时的最后兜底
-  return `https://www.bilibili.com/list/season/${seasonId}`
+  return `https://space.bilibili.com/${spaceMid}/favlist?ftype=collect&ctype=${source.type}&fid=${source.id}`
 }
 
 /**
  * 打开合集内指定稿件（普通视频页，仍可带合集侧栏）
  * 实测 /list/season/{id}?bvid= 对订阅合集会 404
  */
-export function buildFavoriteSeasonVideoUrl(bvid: string): string {
+export function buildFavoriteSeasonVideoUrl(bvid: string, source: FavoriteSource): string {
+  if (source.type === 11)
+    return `https://www.bilibili.com/medialist/play/ml${source.id}?bvid=${encodeURIComponent(bvid)}`
   return `https://www.bilibili.com/video/${bvid}/`
 }
 
@@ -134,77 +107,72 @@ export function buildFavoriteSeasonVideoUrl(bvid: string): string {
  * 顶栏滚动加载 / 收藏页列表 / 播放全部全量拉取 共用此语义。
  */
 export function mergeFavoriteSeasonPage(input: {
+  sourceType: FavoriteSource['type']
   pn: number
-  pageMedias: FavoriteSeasonMedia[]
+  pageMedias: FavoriteItem[]
   mediaCount?: number
-  previousMedias: FavoriteSeasonMedia[]
+  hasMore?: boolean
+  previousMedias: FavoriteItem[]
+  /** An explicit retry may already display part of this uncommitted page. */
+  pageStartLength?: number
   pageSize?: number
 }): FavoriteSeasonPageMergeResult {
-  const pageSize = input.pageSize ?? FAVORITE_SEASON_PAGE_SIZE
+  const pageSize = input.pageSize ?? (input.sourceType === 11 ? FAVORITE_FOLDER_PAGE_SIZE : FAVORITE_SEASON_PAGE_SIZE)
   const count = typeof input.mediaCount === 'number' && input.mediaCount >= 0
     ? input.mediaCount
     : undefined
-  const pageMedias = input.pageMedias
-
-  if (pageMedias.length === 0) {
-    return {
-      medias: input.previousMedias,
-      hasMore: false,
-    }
+  const pageMedias = [...new Map(input.pageMedias.map(item => [getFavoriteResourceKey(item), item])).values()]
+  const replace = input.sourceType === 21 && count !== undefined && pageMedias.length === count
+    && input.hasMore !== true
+  const previous = input.previousMedias
+  const previousByKey = new Map(previous.map((item, index) => [getFavoriteResourceKey(item), { item, index }]))
+  const medias = replace || input.pn === 1 ? [] : [...previous]
+  const changed: FavoriteSeasonPageMergeResult['changed'] = []
+  let added = 0
+  for (const item of pageMedias) {
+    const existing = previousByKey.get(getFavoriteResourceKey(item))
+    const candidate = !item.upper?.face && existing?.item.upper?.face
+      ? { ...item, upper: { ...item.upper, face: existing.item.upper.face } }
+      : item
+    const next = existing && JSON.stringify(existing.item) === JSON.stringify(candidate) ? existing.item : candidate
+    const index = replace || input.pn === 1 ? medias.length : existing?.index ?? medias.length
+    medias[index] = next
+    if (!existing || existing.index >= (input.pageStartLength ?? previous.length))
+      added++
+    if (previous[index] !== next)
+      changed.push({ index, item: next })
   }
-
-  // 接口无视 ps、一次返回 ≥ media_count：整表替换，不再翻页
-  if (count !== undefined && pageMedias.length >= count) {
-    return {
-      medias: pageMedias.slice(0, count),
-      hasMore: false,
-    }
-  }
-
-  // 无可靠 count，但首页就超过 pageSize：视为一次性全量（避免狂翻）
-  if (input.pn === 1 && pageMedias.length > pageSize) {
-    return {
-      medias: pageMedias,
-      hasMore: false,
-    }
-  }
-
-  const medias = input.pn === 1
-    ? [...pageMedias]
-    : [...input.previousMedias, ...pageMedias]
-
-  if (count !== undefined && medias.length >= count) {
-    return {
-      medias: medias.slice(0, count),
-      hasMore: false,
-    }
-  }
-
-  return {
-    medias,
-    hasMore: pageMedias.length >= pageSize,
-  }
+  const noProgress = input.pn > 1 && added === 0 && !replace
+  const countMismatch = count !== undefined && medias.length !== count
+  const end = input.hasMore === false || (input.hasMore === undefined
+    && (replace || (count !== undefined && medias.length >= count) || input.pageMedias.length < pageSize))
+  const stalled = (end && countMismatch)
+    || (input.hasMore === true && (noProgress || (count !== undefined && medias.length >= count)))
+    || (!end && (noProgress || input.pageMedias.length === 0))
+    || (count === undefined && input.hasMore === undefined && input.pageMedias.length > pageSize)
+  return { medias, changed, replace, complete: end && !stalled, hasMore: !end && !stalled, stalled }
 }
 
 /** 拉取合集单页原始数据 */
 export async function fetchFavoriteSeasonPage(
-  seasonId: number,
+  source: FavoriteSource,
   pn: number,
-  pageSize: number = FAVORITE_SEASON_PAGE_SIZE,
+  api: typeof import('~/utils/api').default.favorite,
+  pageSize = source.type === 11 ? FAVORITE_FOLDER_PAGE_SIZE : FAVORITE_SEASON_PAGE_SIZE,
 ): Promise<FavoriteSeasonPageFetchResult> {
   try {
-    const res = await api.favorite.getFavoriteSeasonResources({
-      season_id: seasonId,
-      pn,
-      ps: pageSize,
-    })
+    const res: FavoritesResult | FavoriteSeasonResourcesResult | undefined = source.type === 11
+      ? await api.getFavoriteResources({ media_id: source.id, pn, ps: Math.min(FAVORITE_FOLDER_PAGE_SIZE, pageSize), order: 'mtime' })
+      : source.type === 21
+        ? await api.getFavoriteSeasonResources({ season_id: source.id, pn, ps: pageSize })
+        : undefined
 
-    if (res.code !== 0 || !res.data) {
+    if (res?.code !== 0 || !res.data) {
       return { ok: false, pageMedias: [] }
     }
 
     const pageMedias = Array.isArray(res.data.medias)
-      ? res.data.medias.filter((item: FavoriteSeasonMedia | null | undefined): item is FavoriteSeasonMedia => item != null)
+      ? res.data.medias.filter(item => item != null).map(item => normalizeFavoriteSourceMedia(item, source.type))
       : []
 
     const mediaCount = typeof res.data.info?.media_count === 'number' && res.data.info.media_count >= 0
@@ -216,6 +184,7 @@ export async function fetchFavoriteSeasonPage(
       pageMedias,
       mediaCount,
       cover: res.data.info?.cover,
+      hasMore: 'has_more' in res.data && typeof res.data.has_more === 'boolean' ? res.data.has_more : undefined,
     }
   }
   catch {
@@ -227,25 +196,33 @@ export async function fetchFavoriteSeasonPage(
  * 拉取订阅合集全部稿件
  * complete=false 表示中途失败或异常截断，不得把末项当「最新」
  */
-export async function fetchAllFavoriteSeasonMedias(seasonId: number): Promise<FetchAllSeasonMediasResult> {
-  let medias: FavoriteSeasonMedia[] = []
+export async function fetchAllFavoriteSeasonMedias(
+  source: FavoriteSource,
+  api: typeof import('~/utils/api').default.favorite,
+  isCurrent: () => boolean,
+): Promise<FetchAllSeasonMediasResult> {
+  let medias: FavoriteItem[] = []
   let pn = 1
 
   while (pn <= MAX_SEASON_PAGES) {
-    const page = await fetchFavoriteSeasonPage(seasonId, pn)
-    if (!page.ok)
+    if (!isCurrent())
+      return { medias, complete: false }
+    const page = await fetchFavoriteSeasonPage(source, pn, api)
+    if (!isCurrent() || !page.ok)
       return { medias, complete: false }
 
     const merged = mergeFavoriteSeasonPage({
+      sourceType: source.type,
       pn,
       pageMedias: page.pageMedias,
       mediaCount: page.mediaCount,
+      hasMore: page.hasMore,
       previousMedias: medias,
     })
     medias = merged.medias
 
     if (!merged.hasMore)
-      return { medias, complete: true }
+      return { medias, complete: merged.complete }
 
     pn += 1
   }
@@ -254,15 +231,16 @@ export async function fetchAllFavoriteSeasonMedias(seasonId: number): Promise<Fe
 }
 
 function matchSeasonMediaFromHistory(
-  medias: FavoriteSeasonMedia[],
+  medias: FavoriteItem[],
   historyItems: HistoryItem[],
-): FavoriteSeasonMedia | undefined {
+): FavoriteItem | undefined {
+  const playable = medias.filter(isPlayableFavoriteVideo)
   const byBvid = new Map(
-    medias
+    playable
       .filter(item => typeof item.bvid === 'string' && item.bvid.length > 0)
       .map(item => [item.bvid, item]),
   )
-  const byAid = new Map(medias.map(item => [item.id, item]))
+  const byAid = new Map(playable.map(item => [item.id, item]))
 
   for (const item of historyItems) {
     if (item.history?.business && item.history.business !== Business.ARCHIVE)
@@ -284,17 +262,21 @@ function matchSeasonMediaFromHistory(
  * 在最近观看历史中找合集内最近一次看过的稿件（历史按时间倒序）
  */
 export async function findLastWatchedSeasonMedia(
-  medias: FavoriteSeasonMedia[],
-): Promise<FavoriteSeasonMedia | undefined> {
+  medias: FavoriteItem[],
+  fetchHistory: typeof api.history.getHistoryList,
+  isCurrent: () => boolean,
+): Promise<FavoriteItem | undefined> {
   if (medias.length === 0)
     return undefined
 
   let viewAt = 0
 
   for (let page = 0; page < MAX_HISTORY_PAGES; page++) {
-    let res: Awaited<ReturnType<typeof api.history.getHistoryList>>
+    if (!isCurrent())
+      return undefined
+    let res: Awaited<ReturnType<typeof fetchHistory>>
     try {
-      res = await api.history.getHistoryList({
+      res = await fetchHistory({
         type: 'archive',
         view_at: viewAt,
         ps: HISTORY_PAGE_SIZE,
@@ -304,7 +286,7 @@ export async function findLastWatchedSeasonMedia(
       return undefined
     }
 
-    if (res.code !== 0 || !res.data)
+    if (!isCurrent() || res.code !== 0 || !res.data)
       return undefined
 
     const list = Array.isArray(res.data.list) ? res.data.list as HistoryItem[] : []
@@ -324,61 +306,65 @@ export async function findLastWatchedSeasonMedia(
 }
 
 async function resolveSeasonMedias(
-  seasonId: number,
-  preloaded?: FavoriteSeasonPlayTarget['preloaded'],
+  source: FavoriteSource,
+  preloaded: FavoriteSeasonPlayTarget['preloaded'],
+  api: typeof import('~/utils/api').default.favorite,
+  isCurrent: () => boolean,
 ): Promise<FetchAllSeasonMediasResult> {
-  // 已完整加载：直接复用，避免收藏页再打一遍接口
-  if (preloaded?.complete && preloaded.medias.length > 0)
+  if (!isCurrent())
+    return { medias: [], complete: false }
+  if (preloaded?.complete && preloaded.sourceKey === getFavoriteSourceKey(source)
+    && new Set(preloaded.medias.map(getFavoriteResourceKey)).size === preloaded.medias.length) {
     return { medias: preloaded.medias, complete: true }
-
-  // 未标 complete，但条数已达已知总数：也视为完整（避免 flag 与 media_count 不同步）
-  if (
-    preloaded
-    && typeof preloaded.expectedCount === 'number'
-    && preloaded.expectedCount > 0
-    && preloaded.medias.length >= preloaded.expectedCount
-  ) {
-    return {
-      medias: preloaded.medias.slice(0, preloaded.expectedCount),
-      complete: true,
-    }
   }
-
-  return fetchAllFavoriteSeasonMedias(seasonId)
+  return fetchAllFavoriteSeasonMedias(source, api, isCurrent)
 }
 
 /**
  * 解析「播放全部」目标地址
  * - beginning：合集入口
- * - latest：完整列表末项
+ * - latest：UGC 保留完整原生顺序的末项；公开夹为最近收藏的可播放稿件
  * - lastWatched：观看历史中该合集最近一次；找不到则回退入口
  */
 export async function resolveFavoriteSeasonPlayAllUrl(
   target: FavoriteSeasonPlayTarget,
+  context: { api: Pick<typeof api, 'favorite' | 'history'>, isCurrent: () => boolean },
 ): Promise<FavoriteSeasonPlayAllResult> {
-  const { seasonId, link, bvid, mode = 'beginning', preloaded } = target
-  const entryUrl = buildFavoriteSeasonEntryUrl(seasonId, link, bvid)
+  const { source, spaceMid, link, bvid, mode = 'beginning', preloaded } = target
+  const entryUrl = buildFavoriteSeasonEntryUrl(source, spaceMid, link, bvid)
+  if (!context.isCurrent())
+    return { url: entryUrl, usedFallback: true, reason: 'cancelled' }
 
   if (mode === 'beginning') {
     return { url: entryUrl, usedFallback: false, reason: 'beginning' }
   }
 
-  const { medias, complete } = await resolveSeasonMedias(seasonId, preloaded)
+  const { medias, complete } = await resolveSeasonMedias(source, preloaded, context.api.favorite, context.isCurrent)
+  if (!context.isCurrent())
+    return { url: entryUrl, usedFallback: true, reason: 'cancelled' }
   if (!complete)
     return { url: entryUrl, usedFallback: true, reason: 'incomplete' }
   if (medias.length === 0)
     return { url: entryUrl, usedFallback: true, reason: 'empty' }
 
   if (mode === 'latest') {
-    const latest = medias.at(-1)
-    if (!latest?.bvid)
+    let latest = medias.at(-1)
+    if (source.type === 11) {
+      const playable = medias.filter(isPlayableFavoriteVideo)
+      if (playable.some(item => !Number.isFinite(item.fav_time) || item.fav_time <= 0))
+        return { url: entryUrl, usedFallback: true, reason: 'unverified-order' }
+      latest = playable.reduce<FavoriteItem | undefined>((recent, item) => !recent || item.fav_time > recent.fav_time ? item : recent, undefined)
+    }
+    if (!latest || !isPlayableFavoriteVideo(latest))
       return { url: entryUrl, usedFallback: true, reason: 'missing-bvid' }
-    return { url: buildFavoriteSeasonVideoUrl(latest.bvid), usedFallback: false, reason: 'resolved' }
+    return { url: buildFavoriteSeasonVideoUrl(latest.bvid, source), usedFallback: false, reason: 'resolved' }
   }
 
-  const lastWatched = await findLastWatchedSeasonMedia(medias)
+  const lastWatched = await findLastWatchedSeasonMedia(medias, context.api.history.getHistoryList, context.isCurrent)
+  if (!context.isCurrent())
+    return { url: entryUrl, usedFallback: true, reason: 'cancelled' }
   if (!lastWatched?.bvid)
     return { url: entryUrl, usedFallback: true, reason: 'no-history' }
 
-  return { url: buildFavoriteSeasonVideoUrl(lastWatched.bvid), usedFallback: false, reason: 'resolved' }
+  return { url: buildFavoriteSeasonVideoUrl(lastWatched.bvid, source), usedFallback: false, reason: 'resolved' }
 }

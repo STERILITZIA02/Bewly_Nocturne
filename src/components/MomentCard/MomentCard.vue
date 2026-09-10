@@ -74,12 +74,12 @@ const {
 const emit = defineEmits<{
   cardElement: [element: HTMLElement | null]
   openDetail: [moment: DisplayMoment, forceDialog?: boolean]
-  mediaEnter: [moment: DisplayMoment]
+  mediaEnter: [moment: DisplayMoment, event?: MouseEvent]
   mediaLeave: [moment: DisplayMoment]
   coverLoad: [event: Event, momentId: string]
   previewVideo: [element: Element | null, moment: DisplayMoment]
   forwardVideoClick: [video: DisplayForwardVideo]
-  toggleWatchLater: [target: WatchLaterTarget]
+  toggleWatchLater: [target: WatchLaterTarget, isViewCurrent: () => boolean]
   toggleLike: [moment: DisplayMoment]
   toggleReservation: [moment: DisplayMoment]
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
@@ -456,6 +456,14 @@ watch(
 provide('getVideoType', () => 'common')
 
 let cardElement: HTMLElement | null = null
+function toggleCardWatchLater(target: WatchLaterTarget) {
+  const element = cardElement
+  const momentId = moment.id
+  const isForward = target !== moment
+  const key = getWatchLaterStateKey(target)
+  emit('toggleWatchLater', target, () => element !== null && element === cardElement && element.isConnected
+    && moment.id === momentId && getWatchLaterStateKey(isForward ? moment.forward?.video ?? {} : moment) === key)
+}
 function onCardFocusOut() {
   void nextTick(() => {
     cardFocused.value = !!cardElement?.contains(getDeepActiveElement(document))
@@ -557,8 +565,10 @@ onBeforeUnmount(() => {
     :data-description-expanded="descriptionExpanded ? 'true' : undefined"
     @focusin="cardFocused = true"
     @focusout="onCardFocusOut"
-    @mouseenter="!moment.isLive && !settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment)"
+    @mouseenter="!moment.isLive && !settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment, $event)"
     @mouseleave="onMediaLeave"
+    @dragenter="onMediaLeave"
+    @dragstart="onMediaLeave"
   >
     <button
       type="button"
@@ -617,7 +627,7 @@ onBeforeUnmount(() => {
         <div
           v-if="moment.images.length && (moment.isVideo || moment.isLive)"
           class="moment-card__media moment-card__cover moment-card__cover--media"
-          @mouseenter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment)"
+          @mouseenter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment, $event)"
           @mouseleave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
           @click="openPrimaryDetail"
         >
@@ -666,7 +676,7 @@ onBeforeUnmount(() => {
             :aria-label="isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
             :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
-            @click.stop="emit('toggleWatchLater', moment)"
+            @click.stop="toggleCardWatchLater(moment)"
           >
             <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
             <span v-else-if="isWatchLaterAdded(moment)" i-line-md:confirm aria-hidden="true" />
@@ -690,7 +700,7 @@ onBeforeUnmount(() => {
             :aria-label="isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
             :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
-            @click.stop="emit('toggleWatchLater', moment)"
+            @click.stop="toggleCardWatchLater(moment)"
           >
             <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
             <span v-else-if="isWatchLaterAdded(moment)" i-line-md:confirm aria-hidden="true" />
@@ -793,7 +803,7 @@ onBeforeUnmount(() => {
             <div class="moment-card__forward-video">
               <span
                 class="moment-card__forward-video-cover"
-                @mouseenter="settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment)"
+                @mouseenter="settings.momentsOnlyCoverVideoPreview && emit('mediaEnter', moment, $event)"
                 @mouseleave="settings.momentsOnlyCoverVideoPreview && onMediaLeave()"
               >
                 <a
@@ -844,7 +854,7 @@ onBeforeUnmount(() => {
                   :aria-label="isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
                   :aria-pressed="isWatchLaterAdded(moment.forward.video)"
                   :title="isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
-                  @click.stop.prevent="emit('toggleWatchLater', moment.forward.video)"
+                  @click.stop.prevent="toggleCardWatchLater(moment.forward.video)"
                 >
                   <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />
                   <span v-else-if="isWatchLaterAdded(moment.forward.video)" i-line-md:confirm aria-hidden="true" />

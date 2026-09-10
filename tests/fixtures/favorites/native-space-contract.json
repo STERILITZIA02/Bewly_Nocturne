@@ -1,0 +1,29 @@
+{
+  "provenance": {
+    "kind": "native-client-source",
+    "observedAt": "2026-09-10",
+    "url": "https://s1.hdslb.com/bfs/static/shanks/fresh-space/assets/index-5a0f1eb8.js",
+    "note": "Read from script[src] on the live native space page. Describes source contracts, not captured successful write traffic."
+  },
+  "sourceTypes": { "publicFolder": 11, "ugcSeason": 21 },
+  "publicFolder": {
+    "resources": "/x/v3/fav/resource/list",
+    "idParameter": "media_id",
+    "defaultOrder": "mtime",
+    "timeField": "fav_time",
+    "unfav": "/x/v3/fav/folder/unfav",
+    "method": "post",
+    "query": ["media_id", "csrf"],
+    "nativeFunction": "rE",
+    "playEntry": "/medialist/play/ml"
+  },
+  "ugcSeason": {
+    "resources": "/x/space/fav/season/list",
+    "idParameter": "season_id",
+    "unfav": "/x/v3/fav/season/unfav",
+    "method": "post",
+    "query": ["season_id", "platform", "csrf"],
+    "nativeFunction": "bB",
+    "wholeResponseEvidence": "fetchCollectListDetail slices the returned medias using page offset locally"
+  }
+}

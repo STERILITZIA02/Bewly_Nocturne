@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, toRef, watch } from 'vue'
+import { computed, inject, nextTick, onBeforeUnmount, onMounted, reactive, ref, shallowRef, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
@@ -10,7 +10,7 @@ import type { CommentTreeLayoutNode } from '~/utils/commentTree'
 import { buildCommentTree } from '~/utils/commentTree'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
-import { MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
+import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import type { MomentCommentTarget } from '~/utils/momentCommentTarget'
 import { readMomentCommentTarget, resolveMomentCommentTarget } from '~/utils/momentCommentTarget'
 
@@ -57,9 +57,11 @@ const getSourceIdentity = () => `${getAccountIdentity()}:${props.moment.id}:${pr
 const target = ref<MomentCommentTarget | null>(null)
 const commentId = computed(() => target.value?.oid || '')
 const commentType = computed(() => target.value?.type || 0)
-const getCommentIdentity = () => `${getSourceIdentity()}:${commentType.value}:${commentId.value}`
-const sessions = inject(MOMENT_COMMENT_SESSIONS, null)
-let sessionLease: ReturnType<NonNullable<typeof sessions>['open']> = null
+const sort = ref<0 | 1>(0)
+const getCommentIdentity = () => `${getSourceIdentity()}:${commentType.value}:${commentId.value}:${sort.value}`
+const sharedSessions = inject(MOMENT_COMMENT_SESSIONS, null)
+const sessions = sharedSessions ?? createMomentCommentSessionCache(getAccountIdentity())
+const sessionLease = shallowRef<ReturnType<typeof sessions.open>>(null)
 let sessionSource = ''
 let hasLoaded = false
 const listRef = ref<HTMLElement | null>(null)
@@ -73,11 +75,9 @@ const hasMore = ref(false)
 const nextPage = ref(1)
 const likedIds = reactive(new Set<string>())
 const likeCounts = reactive<Record<string, number>>({})
-const pendingLikeIds = reactive(new Set<string>())
-watch(() => pendingLikeIds.size > 0, pending => emit('writingChange', pending), { flush: 'sync' })
-const likeRequestTokens = new Map<string, symbol>()
-const pendingLikeSnapshots = new Map<string, { liked: boolean, count: number }>()
+watch(() => sessions.hasPendingLikes(sessionLease.value), pending => emit('writingChange', pending), { flush: 'sync' })
 let requestGeneration = 0
+let disposed = false
 
 const {
   getThreadState,
@@ -87,27 +87,18 @@ const {
   seedThread,
   snapshotThreads,
   restoreThreads,
-} = useMomentCommentThread(toRef(() => commentId.value), toRef(() => commentType.value))
+} = useMomentCommentThread(toRef(() => commentId.value), toRef(() => commentType.value), sort)
 
 function saveSession() {
-  if (!sessions || !sessionLease || !hasLoaded || sessionSource !== getSourceIdentity())
+  if (!sessionLease.value || !hasLoaded || sessionSource !== getSourceIdentity())
     return
-  const savedLikedIds = new Set(likedIds)
-  const savedLikeCounts = { ...likeCounts }
-  for (const [id, previous] of pendingLikeSnapshots) {
-    if (previous.liked)
-      savedLikedIds.add(id)
-    else
-      savedLikedIds.delete(id)
-    savedLikeCounts[id] = previous.count
-  }
-  sessions.save(sessionLease, {
+  sessions.save(sessionLease.value, {
     comments: comments.value,
     nextPage: nextPage.value,
     hasMore: hasMore.value,
     threads: snapshotThreads(),
-    likedIds: [...savedLikedIds],
-    likeCounts: savedLikeCounts,
+    likedIds: [...likedIds],
+    likeCounts: { ...likeCounts },
     scrollTop: listRef.value?.scrollTop ?? restoredScrollTop,
   })
 }
@@ -119,12 +110,16 @@ async function restoreScroll() {
     listRef.value.scrollTop = restoredScrollTop
 }
 
-async function initializeComments() {
+async function initializeComments(nextSort?: 0 | 1) {
   const generation = ++requestGeneration
   sessionSource = getSourceIdentity()
   const source = sessionSource
-  const isCurrent = () => generation === requestGeneration && source === getSourceIdentity()
-  sessionLease = null
+  const isCurrent = () => !disposed && generation === requestGeneration && source === getSourceIdentity()
+  if (!sharedSessions)
+    sessions.setAccount(getAccountIdentity())
+  if (sessionLease.value)
+    sessions.release(sessionLease.value)
+  sessionLease.value = null
   target.value = null
   hasLoaded = false
   restoredScrollTop = 0
@@ -136,9 +131,6 @@ async function initializeComments() {
   loadError.value = ''
   likedIds.clear()
   Object.keys(likeCounts).forEach(key => delete likeCounts[key])
-  pendingLikeIds.clear()
-  pendingLikeSnapshots.clear()
-  likeRequestTokens.clear()
   resetThreads()
   resolvingTarget.value = true
   try {
@@ -150,8 +142,9 @@ async function initializeComments() {
     if (!resolved)
       throw new Error('Comment target unavailable')
     target.value = resolved
-    sessionLease = sessions?.open(getAccountIdentity(), props.moment.id, resolved) ?? null
-    const snapshot = sessionLease && sessions?.restore(sessionLease)
+    sessionLease.value = sessions.open(getAccountIdentity(), props.moment.id, resolved, nextSort)
+    sort.value = sessionLease.value?.sort ?? nextSort ?? 0
+    const snapshot = sessionLease.value && sessions.restore(sessionLease.value)
     resolvingTarget.value = false
     if (snapshot) {
       comments.value = snapshot.comments
@@ -183,6 +176,21 @@ function refreshComments() {
     void loadComments(true)
   else
     void initializeComments()
+}
+
+function changeSort(value: 0 | 1) {
+  if (sort.value === value)
+    return
+  sort.value = value
+  void initializeComments(value)
+}
+
+function commentLikeState(comment: MomentCommentItem) {
+  return sessions.getLike(sessionLease.value, comment.id) ?? {
+    liked: likedIds.has(comment.id),
+    count: likeCounts[comment.id] ?? comment.likeCount,
+    pending: false,
+  }
 }
 
 const commentCountLabel = computed(() => props.moment.commentCount > 0 ? ` ${props.moment.commentCount}` : '')
@@ -249,15 +257,19 @@ function seedCommentThreads(items: MomentCommentItem[]) {
   items.forEach(seedThread)
 }
 
-function seedCommentLikeState(items: MomentCommentItem[]) {
+function seedCommentLikeState(items: MomentCommentItem[], readVersion: number) {
+  const ids: string[] = []
   const visit = (comment: MomentCommentItem) => {
-    if (!(comment.id in likeCounts))
-      likeCounts[comment.id] = comment.likeCount
+    ids.push(comment.id)
+    likeCounts[comment.id] = comment.likeCount
     if (comment.isLiked)
       likedIds.add(comment.id)
+    else
+      likedIds.delete(comment.id)
     comment.replies.forEach(visit)
   }
   items.forEach(visit)
+  sessions.reconcileLikeReads(sessionLease.value, ids, readVersion)
 }
 
 async function loadComments(reset = false) {
@@ -266,6 +278,7 @@ async function loadComments(reset = false) {
 
   const generation = reset ? ++requestGeneration : requestGeneration
   const requestIdentity = getCommentIdentity()
+  const likeReadVersion = sessions.getLikeReadVersion(sessionLease.value)
   const pageNumber = reset ? 1 : nextPage.value
   if (reset) {
     hasLoaded = false
@@ -276,9 +289,6 @@ async function loadComments(reset = false) {
     hasMore.value = false
     nextPage.value = 1
     likedIds.clear()
-    pendingLikeIds.clear()
-    likeRequestTokens.clear()
-    pendingLikeSnapshots.clear()
     Object.keys(likeCounts).forEach(key => delete likeCounts[key])
     resetThreads()
   }
@@ -293,7 +303,7 @@ async function loadComments(reset = false) {
       type: commentType.value,
       pn: pageNumber,
       ps: 8,
-      sort: 0,
+      sort: sort.value,
       nohot: 0,
     })
     const page = normalizeMomentCommentPage(response, pageNumber, 8)
@@ -309,7 +319,7 @@ async function loadComments(reset = false) {
     hasLoaded = true
     hasMore.value = page.hasMore && madeProgress && pageAdvanced
     nextPage.value = pageAdvanced ? page.nextPage : pageNumber
-    seedCommentLikeState(page.items)
+    seedCommentLikeState(page.items, likeReadVersion)
     seedCommentThreads(page.items)
   }
   catch (error) {
@@ -330,55 +340,34 @@ async function toggleCommentLike(comment: MomentCommentItem) {
     toast.error(t('moment_card.comment_login_required'))
     return
   }
-  if (pendingLikeIds.has(comment.id))
+  if (disposed || userId !== accountId.value || sessionLease.value?.accountId !== getAccountIdentity())
     return
-
   const rpid = comment.rpid || comment.id
-  const mutationGeneration = requestGeneration
-  const mutationIdentity = getCommentIdentity()
-  const requestToken = Symbol(comment.id)
-  const previousLiked = likedIds.has(comment.id)
-  const previousCount = likeCounts[comment.id] ?? comment.likeCount
-  const nextLiked = !previousLiked
-  pendingLikeIds.add(comment.id)
-  likeRequestTokens.set(comment.id, requestToken)
-  pendingLikeSnapshots.set(comment.id, { liked: previousLiked, count: previousCount })
-  if (nextLiked)
-    likedIds.add(comment.id)
-  else
-    likedIds.delete(comment.id)
-  likeCounts[comment.id] = Math.max(0, previousCount + (nextLiked ? 1 : -1))
+  const mutationIdentity = getSourceIdentity()
+  const previous = commentLikeState(comment)
+  const operation = sessions.startLike(sessionLease.value, comment.id, previous.liked, previous.count)
+  if (!operation)
+    return
+  let succeeded = false
 
   try {
     const response = await api.moment.setMomentCommentLike({
       oid: commentId.value,
       type: commentType.value,
       rpid,
-      action: nextLiked ? 1 : 0,
+      action: operation.state.liked ? 1 : 0,
       csrf: getCSRF() || '',
     })
     if (getApiCode(response) !== 0)
       throw new Error(getApiMessage(response) || 'Comment like request failed')
+    succeeded = true
   }
   catch (error) {
-    const requestIsCurrent = likeRequestTokens.get(comment.id) === requestToken
-      && mutationGeneration === requestGeneration
-      && mutationIdentity === getCommentIdentity()
-    if (requestIsCurrent) {
-      if (previousLiked)
-        likedIds.add(comment.id)
-      else
-        likedIds.delete(comment.id)
-      likeCounts[comment.id] = previousCount
+    if (!disposed && mutationIdentity === getSourceIdentity())
       toast.error(error instanceof Error ? error.message : t('moment_card.comment_like_failed'))
-    }
   }
   finally {
-    if (likeRequestTokens.get(comment.id) === requestToken) {
-      likeRequestTokens.delete(comment.id)
-      pendingLikeIds.delete(comment.id)
-      pendingLikeSnapshots.delete(comment.id)
-    }
+    sessions.finishLike(operation, succeeded)
   }
 }
 
@@ -401,6 +390,11 @@ function openCommentImage(images: string[], index: number, trigger: HTMLElement)
 }
 
 async function loadThreadReplies(root: MomentCommentItem) {
+  const before = getThreadState(root)
+  if (before?.loading)
+    return
+  const previousItems = new Set(before?.items ?? [])
+  const likeReadVersion = sessions.getLikeReadVersion(sessionLease.value)
   const generation = requestGeneration
   const identity = getCommentIdentity()
   await loadMoreReplies(root)
@@ -408,7 +402,7 @@ async function loadThreadReplies(root: MomentCommentItem) {
     return
   const state = getThreadState(root)
   if (state)
-    seedCommentLikeState(state.items)
+    seedCommentLikeState(state.items.filter(item => !previousItems.has(item)), likeReadVersion)
 }
 
 watch(getSourceIdentity, () => void initializeComments(), { immediate: true, flush: 'sync' })
@@ -417,10 +411,12 @@ onMounted(() => void restoreScroll())
 
 onBeforeUnmount(() => {
   saveSession()
+  if (sessionLease.value)
+    sessions.release(sessionLease.value)
+  disposed = true
   requestGeneration += 1
-  pendingLikeIds.clear()
-  likeRequestTokens.clear()
-  pendingLikeSnapshots.clear()
+  if (!sharedSessions)
+    sessions.clear()
 })
 </script>
 
@@ -430,6 +426,14 @@ onBeforeUnmount(() => {
       <span class="moment-comments__title">
         {{ t('moment_card.comments') }}{{ commentCountLabel }}
       </span>
+      <div class="bew-segment-control bew-segment-control--static moment-comments__sort" :aria-label="t('moment_card.comments_sort')" role="group">
+        <button
+          v-for="value in ([0, 1] as const)" :key="value" type="button" class="bew-segment-control__item" :data-active="sort === value"
+          :aria-pressed="sort === value" @click="changeSort(value)"
+        >
+          {{ t(value === 0 ? 'moment_card.comments_sort_latest' : 'moment_card.comments_sort_hot') }}
+        </button>
+      </div>
       <button
         type="button"
         class="moment-comments__refresh"
@@ -508,14 +512,14 @@ onBeforeUnmount(() => {
               <button
                 type="button"
                 class="moment-comments__action"
-                :class="{ 'is-active': likedIds.has(node.comment.id) }"
-                :aria-label="likedIds.has(node.comment.id) ? t('moment_card.comment_unlike') : t('moment_card.comment_like')"
-                :aria-pressed="likedIds.has(node.comment.id)"
-                :disabled="pendingLikeIds.has(node.comment.id)"
+                :class="{ 'is-active': commentLikeState(node.comment).liked }"
+                :aria-label="commentLikeState(node.comment).liked ? t('moment_card.comment_unlike') : t('moment_card.comment_like')"
+                :aria-pressed="commentLikeState(node.comment).liked"
+                :disabled="commentLikeState(node.comment).pending"
                 @click="toggleCommentLike(node.comment)"
               >
                 <span i-tabler-thumb-up aria-hidden="true" />
-                <span>{{ likeCounts[node.comment.id] ?? node.comment.likeCount }}</span>
+                <span>{{ commentLikeState(node.comment).count }}</span>
               </button>
               <button
                 type="button"
@@ -593,10 +597,14 @@ onBeforeUnmount(() => {
 }
 .moment-comments__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--bew-space-3);
   min-height: calc(var(--bew-control-height) + var(--bew-space-2));
+}
+.moment-comments__sort {
+  margin-inline-start: auto;
 }
 .moment-comments__title {
   font-size: var(--bew-font-size-control);

@@ -249,7 +249,11 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     return { video, page, source: moment.isLive ? `live:${moment.roomId}` : `${video.bvid}:${video.cid ?? ''}:${page}` }
   }
 
-  async function handleMediaEnter(moment: DisplayMoment) {
+  async function handleMediaEnter(moment: DisplayMoment, event?: MouseEvent) {
+    if (event?.buttons) {
+      handleMediaLeave(moment)
+      return
+    }
     if (disposed || !isMomentPreviewEnabled(moment))
       return
     if (activePreviewVideo?.element.matches(':fullscreen') && activePreviewVideo.id !== moment.id)

@@ -1,28 +1,30 @@
 import type { Ref } from 'vue'
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 import type { FavoriteArticle, FavoriteArticlesResult } from '~/models/article/favorite'
 import type { FavoritesResult, Media as FavoriteItem } from '~/models/video/favorite'
 import type { FavoritesCategoryResult, List as CategoryItem } from '~/models/video/favoriteCategory'
-import type { CollectedFavoriteSeason, CollectedFavoriteSeasonsResult, FavoriteSeasonMedia } from '~/models/video/favoriteSeason'
+import type { CollectedFavoriteSeason, CollectedFavoriteSeasonsResult, FavoriteSource } from '~/models/video/favoriteSeason'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
 import type api from '~/utils/api'
+import { createFavoriteAvatarLoader } from '~/utils/favoriteAvatar'
 import { getFavoriteFolderEditedAttr } from '~/utils/favoriteFolder'
+import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
 import {
-  enrichFavoriteSeasonMediaFaces,
-  FAVORITE_SEASON_PAGE_SIZE,
+  FAVORITE_SUBSCRIPTIONS_PAGE_SIZE,
   fetchFavoriteSeasonPage,
   mergeFavoriteSeasonPage,
 } from '~/utils/favoriteSeason'
 
-import { getFavoriteArticleCover, normalizeSeasonMedia } from './favoriteAdapters'
+import { getFavoriteArticleCover } from './favoriteAdapters'
 import type { FavoriteWrite } from './useFavoriteWrites'
 
 export type FavoriteView = 'video' | 'season' | 'article'
 
 interface FavoritesDataDependencies {
   api: typeof api.favorite
+  user: Pick<typeof api.user, 'getUserCard'>
   getAccountId: () => AccountId
   haveScrollbar: () => Promise<boolean>
   t: (key: string) => string
@@ -34,6 +36,19 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   let viewAccount = dependencies.getAccountId()
   const contentVersion = ref(0)
   let categoriesDirty = false
+  let categoriesVersion = 0
+  let subscriptionsVersion = 0
+  let stalledSubscriptionStart: { page: number, length: number } | undefined
+  let stalledMediaStart: { page: number, length: number } | undefined
+  const categoryState = reactive({ loading: false, failed: false, loaded: false })
+  const subscriptionState = reactive({ loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
+  const resourceIndex = new Map<string, number>()
+  const createAvatars = () => createFavoriteAvatarLoader(async (mid) => {
+    const response = await dependencies.user.getUserCard({ mid: String(mid) })
+    const face = response?.data?.card?.face
+    return response?.code === 0 && typeof face === 'string' && face ? face : undefined
+  })
+  let avatars = createAvatars()
   const FAVORITE_ARTICLE_PAGE_SIZE = 20
   const favoriteCategories = reactive<CategoryItem[]>([])
   const collectedFavoriteSeasons = reactive<CollectedFavoriteSeason[]>([])
@@ -48,10 +63,12 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   const searchScope = ref<'current' | 'all'>('current')
   const isLoading = ref<boolean>(false)
   const isFullPageLoading = ref<boolean>(true)
-  const bootstrapFailed = ref(false)
+  const bootstrapFailed = computed(() => favoriteView.value === 'video'
+    ? categoryState.failed && !favoriteCategories.length
+    : favoriteView.value === 'season' && subscriptionState.failed && !collectedFavoriteSeasons.length)
   const failedContentPage = ref<number | null>(null)
+  const stalledContentPage = ref<number | null>(null)
   const noMoreContent = ref<boolean>(false)
-  const loadedSeasonMedias = ref<FavoriteSeasonMedia[]>([])
   const loadedSeasonComplete = ref<boolean>(false)
   const articleFavoriteCount = ref<number>()
   const articleFavoriteOffset = ref<string>('')
@@ -61,75 +78,128 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       isFullPageLoading.value = false
       return
     }
-    const requestVersion = ++contentVersion.value
+    resetContentState()
+    categoriesVersion++
+    subscriptionsVersion++
+    stalledSubscriptionStart = undefined
+    Object.assign(categoryState, { loading: false, failed: false, loaded: false })
+    Object.assign(subscriptionState, { loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
     favoriteCategories.length = 0
     collectedFavoriteSeasons.length = 0
     selectedCategory.value = undefined
     selectedSeason.value = undefined
-    bootstrapFailed.value = false
     failedContentPage.value = null
     noMoreContent.value = false
     isFullPageLoading.value = true
 
-    const results = await Promise.allSettled([
-      getFavoriteCategories(requestVersion),
-      getCollectedFavoriteSeasons(requestVersion),
+    await Promise.all([
+      getFavoriteCategories(),
+      loadMoreSubscriptions(),
     ])
-    if (!isRequestCurrent(requestVersion))
-      return
-    if (results.some(result => result.status === 'rejected')) {
-      bootstrapFailed.value = true
-      isFullPageLoading.value = false
-      return
-    }
-
-    if (favoriteCategories.length > 0) {
-      selectedCategory.value = favoriteCategories[0]
-      loadSelectedContent()
-    }
-    else {
-      isFullPageLoading.value = false
-      noMoreContent.value = true
-    }
   }
 
   function retryFavoritesBootstrap() {
-    if (!isFullPageLoading.value)
-      void initData()
+    return favoriteView.value === 'season' ? loadMoreSubscriptions(true) : getFavoriteCategories()
   }
 
-  async function getFavoriteCategories(requestVersion: number) {
-    const res: FavoritesCategoryResult = await dependencies.api.getFavoriteCategories({
-      up_mid: String(viewAccount),
-    })
-    if (!isRequestCurrent(requestVersion))
+  async function getFavoriteCategories() {
+    const owner = lifetime.capture()
+    if (!owner.isCurrent())
       return
-    if (res.code !== 0 || !res.data)
-      throw new Error(res.message || t('common.load_failed'))
-    favoriteCategories.push(...(res.data.list || []))
+    const version = ++categoriesVersion
+    categoryState.loading = true
+    categoryState.failed = false
+    const current = () => owner.isCurrent() && version === categoriesVersion
+    try {
+      const res: FavoritesCategoryResult = await dependencies.api.getFavoriteCategories({ up_mid: String(owner.accountId) })
+      if (!current())
+        return
+      if (res.code !== 0 || !res.data)
+        throw res
+      favoriteCategories.splice(0, favoriteCategories.length, ...(res.data.list ?? []))
+      categoryState.loaded = true
+      if (favoriteView.value === 'video' && !selectedCategory.value) {
+        selectedCategory.value = favoriteCategories[0]
+        void loadSelectedContent()
+      }
+    }
+    catch {
+      if (current()) {
+        categoryState.failed = true
+        if (favoriteView.value === 'video' && !selectedCategory.value)
+          isFullPageLoading.value = false
+      }
+    }
+    finally {
+      if (current())
+        categoryState.loading = false
+    }
   }
 
-  async function getCollectedFavoriteSeasons(requestVersion: number) {
-    const res: CollectedFavoriteSeasonsResult = await dependencies.api.getCollectedFavoriteSeasons({
-      up_mid: String(viewAccount),
-    })
-    if (!isRequestCurrent(requestVersion))
+  async function loadMoreSubscriptions(retry = false) {
+    if (subscriptionState.loading || (!retry && (subscriptionState.failed || !subscriptionState.hasMore)))
       return
-    if (res.code !== 0 || !res.data)
-      throw new Error(res.message || t('common.load_failed'))
-    collectedFavoriteSeasons.push(...(res.data.list || []))
+    const owner = lifetime.capture()
+    if (!owner.isCurrent())
+      return
+    const version = ++subscriptionsVersion
+    const pn = subscriptionState.page + 1
+    const pageStartLength = stalledSubscriptionStart?.page === pn ? stalledSubscriptionStart.length : collectedFavoriteSeasons.length
+    subscriptionState.loading = true
+    subscriptionState.failed = false
+    const current = () => owner.isCurrent() && version === subscriptionsVersion
+    try {
+      const res: CollectedFavoriteSeasonsResult = await dependencies.api.getCollectedFavoriteSeasons({ up_mid: String(owner.accountId), pn, ps: FAVORITE_SUBSCRIPTIONS_PAGE_SIZE })
+      if (!current())
+        return
+      if (res.code !== 0 || !res.data)
+        throw res
+      const existing = new Map(collectedFavoriteSeasons.map(item => [getFavoriteSourceKey(item), item]))
+      for (const item of res.data.list ?? []) {
+        if (!existing.has(getFavoriteSourceKey(item))) {
+          collectedFavoriteSeasons.push(item)
+          existing.set(getFavoriteSourceKey(item), item)
+        }
+      }
+      subscriptionState.loaded = true
+      const hasMore = res.data.has_more
+      if ((hasMore && collectedFavoriteSeasons.length <= pageStartLength) || (!hasMore && res.data.count > collectedFavoriteSeasons.length)) {
+        stalledSubscriptionStart = { page: pn, length: pageStartLength }
+        throw new Error('subscription-pagination-stalled')
+      }
+      stalledSubscriptionStart = undefined
+      subscriptionState.page = pn
+      subscriptionState.hasMore = hasMore
+      if (favoriteView.value === 'season' && !selectedSeason.value) {
+        selectedSeason.value = collectedFavoriteSeasons[0]
+        void loadSelectedContent()
+      }
+    }
+    catch {
+      if (current()) {
+        subscriptionState.failed = true
+        if (favoriteView.value === 'season' && !selectedSeason.value)
+          isFullPageLoading.value = false
+      }
+    }
+    finally {
+      if (current())
+        subscriptionState.loading = false
+    }
   }
 
   function resetContentState() {
+    stalledMediaStart = undefined
     contentVersion.value += 1
     currentPageNum.value = 0
     failedContentPage.value = null
+    stalledContentPage.value = null
     favoriteResources.length = 0
+    resourceIndex.clear()
     favoriteArticles.length = 0
     articleFavoriteOffset.value = ''
     if (favoriteView.value === 'article')
       articleFavoriteCount.value = undefined
-    loadedSeasonMedias.value = []
     loadedSeasonComplete.value = false
     activatedCategoryCover.value = favoriteView.value === 'season' ? selectedSeason.value?.cover || '' : ''
     noMoreContent.value = false
@@ -159,7 +229,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   }
 
   async function loadNextPage() {
-    if (isLoading.value || noMoreContent.value || failedContentPage.value !== null)
+    if (isLoading.value || noMoreContent.value || failedContentPage.value !== null || stalledContentPage.value !== null)
       return false
 
     return loadActiveContent(currentPageNum.value + 1, contentVersion.value)
@@ -170,6 +240,8 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       return
     if (failedContentPage.value !== null)
       return loadActiveContent(failedContentPage.value, contentVersion.value)
+    else if (stalledContentPage.value !== null)
+      return loadActiveContent(stalledContentPage.value, contentVersion.value)
     else
       return loadSelectedContent()
   }
@@ -182,9 +254,10 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       isFullPageLoading.value = true
     isLoading.value = true
     failedContentPage.value = null
+    stalledContentPage.value = null
 
     try {
-      if (categoriesDirty) {
+      if (categoriesDirty && favoriteView.value === 'video') {
         const response = await dependencies.api.getFavoriteCategories({ up_mid: String(viewAccount) })
         if (!isRequestCurrent(requestVersion))
           return false
@@ -201,7 +274,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
         await getFavoriteArticles(pn, requestVersion)
       }
       else if (favoriteView.value === 'season') {
-        await getFavoriteSeasonResources(selectedSeason.value!.id, pn, requestVersion)
+        await getFavoriteSeasonResources({ id: selectedSeason.value!.id, type: selectedSeason.value!.type }, pn, requestVersion)
       }
       else {
         const mediaId = searchScope.value === 'all'
@@ -210,6 +283,8 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
         await getFavoriteResources(mediaId, pn, keyword.value, searchScope.value === 'all' ? 1 : 0, requestVersion)
       }
       if (!isRequestCurrent(requestVersion))
+        return false
+      if (stalledContentPage.value !== null)
         return false
       currentPageNum.value = pn
       if (noMoreContent.value)
@@ -261,17 +336,51 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       : []
     if (searchScope.value === 'current')
       activatedCategoryCover.value = res.data.info.cover
-    favoriteResources.push(...pageItems)
-    noMoreContent.value = !res.data.has_more || pageItems.length === 0
+    applyMediaPage({ sourceType: 11, pn, pageMedias: pageItems, previousMedias: favoriteResources, mediaCount: keyword.trim() || type === 1 ? undefined : res.data.info?.media_count, hasMore: res.data.has_more }, requestVersion)
+  }
+
+  function applyMediaPage(input: Parameters<typeof mergeFavoriteSeasonPage>[0], version: number) {
+    const pageStartLength = stalledMediaStart?.page === input.pn ? stalledMediaStart.length : favoriteResources.length
+    const merged = mergeFavoriteSeasonPage({ ...input, pageStartLength })
+    stalledMediaStart = merged.stalled ? { page: input.pn, length: pageStartLength } : undefined
+    for (const { index, item } of merged.changed)
+      favoriteResources[index] = item
+    if (input.pn === 1 || merged.replace) {
+      favoriteResources.length = merged.medias.length
+      resourceIndex.clear()
+      favoriteResources.forEach((item, index) => resourceIndex.set(getFavoriteResourceKey(item), index))
+    }
+    else {
+      for (const { index, item } of merged.changed)
+        resourceIndex.set(getFavoriteResourceKey(item), index)
+    }
+    loadedSeasonComplete.value = merged.complete
+    noMoreContent.value = merged.complete
+    stalledContentPage.value = merged.stalled ? input.pn : null
+    // Text and cards are committed before optional public-avatar enrichment.
+    for (const { item } of merged.changed) {
+      if (item.upper?.face || !item.upper?.mid)
+        continue
+      const mid = item.upper.mid
+      const key = getFavoriteResourceKey(item)
+      void avatars.load(mid).then((face) => {
+        if (!face || !isRequestCurrent(version))
+          return
+        const index = resourceIndex.get(key)
+        const current = index === undefined ? undefined : favoriteResources[index]
+        if (current?.upper.mid === mid && !current.upper.face)
+          favoriteResources[index!] = { ...current, upper: { ...current.upper, face } }
+      })
+    }
   }
 
   async function getFavoriteSeasonResources(
-    seasonId: number,
+    source: FavoriteSource,
     pn: number,
     requestVersion = contentVersion.value,
   ) {
-    const page = await fetchFavoriteSeasonPage(seasonId, pn, FAVORITE_SEASON_PAGE_SIZE)
-    if (!isRequestCurrent(requestVersion))
+    const page = await fetchFavoriteSeasonPage(source, pn, dependencies.api)
+    if (!isRequestCurrent(requestVersion) || !selectedSeason.value || getFavoriteSourceKey(source) !== getFavoriteSourceKey(selectedSeason.value))
       return
 
     if (!page.ok) {
@@ -279,24 +388,15 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
       throw new Error(t('common.load_failed'))
     }
 
-    const merged = mergeFavoriteSeasonPage({
+    applyMediaPage({
+      sourceType: source.type,
       pn,
       pageMedias: page.pageMedias,
       mediaCount: page.mediaCount,
-      previousMedias: loadedSeasonMedias.value,
-      pageSize: FAVORITE_SEASON_PAGE_SIZE,
-    })
-
-    const enrichedMedias = await enrichFavoriteSeasonMediaFaces(merged.medias)
-    if (!isRequestCurrent(requestVersion))
-      return
-    const resources = enrichedMedias.map(normalizeSeasonMedia)
-    loadedSeasonMedias.value = enrichedMedias
-
-    loadedSeasonComplete.value = !merged.hasMore
-    noMoreContent.value = !merged.hasMore
+      hasMore: page.hasMore,
+      previousMedias: favoriteResources,
+    }, requestVersion)
     activatedCategoryCover.value = page.cover || selectedSeason.value?.cover || ''
-    favoriteResources.splice(0, favoriteResources.length, ...resources)
   }
 
   async function getFavoriteArticles(
@@ -343,6 +443,13 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   }
   function resetAccount() {
     lifetime.invalidate()
+    categoriesVersion++
+    subscriptionsVersion++
+    stalledSubscriptionStart = undefined
+    avatars.dispose()
+    avatars = createAvatars()
+    Object.assign(categoryState, { loading: false, failed: false, loaded: false })
+    Object.assign(subscriptionState, { loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
     viewAccount = dependencies.getAccountId()
     resetContentState()
     favoriteCategories.length = 0
@@ -355,15 +462,20 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     categoriesDirty = false
   }
   function applyResourceWrite(command: Extract<FavoriteWrite, { sourceId: number }>, version: number) {
+    stalledMediaStart = undefined
     categoriesDirty = true
+    categoriesVersion++
+    categoryState.loading = false
     if (version !== contentVersion.value)
       return
     const keys = new Set(command.resourceKeys)
     if (command.kind !== 'copy') {
       for (let index = favoriteResources.length - 1; index >= 0; index--) {
-        if (keys.has(`${favoriteResources[index].id}:${favoriteResources[index].type}`))
+        if (keys.has(getFavoriteResourceKey(favoriteResources[index])))
           favoriteResources.splice(index, 1)
       }
+      resourceIndex.clear()
+      favoriteResources.forEach((item, index) => resourceIndex.set(getFavoriteResourceKey(item), index))
       const source = favoriteCategories.find(item => item.id === command.sourceId)
       if (source)
         source.media_count = Math.max(0, source.media_count - keys.size)
@@ -392,12 +504,18 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
         loadSelectedContent()
     }
   }
-  function removeSeasons(ids: readonly number[]) {
+  function removeSeasons(sources: readonly FavoriteSource[]) {
+    stalledSubscriptionStart = undefined
+    const keys = new Set(sources.map(getFavoriteSourceKey))
+    subscriptionsVersion++
+    subscriptionState.loading = false
     for (let index = collectedFavoriteSeasons.length - 1; index >= 0; index--) {
-      if (ids.includes(collectedFavoriteSeasons[index].id))
+      if (keys.has(getFavoriteSourceKey(collectedFavoriteSeasons[index])))
         collectedFavoriteSeasons.splice(index, 1)
     }
-    if (selectedSeason.value && ids.includes(selectedSeason.value.id)) {
+    subscriptionState.page = Math.max(0, Math.ceil(collectedFavoriteSeasons.length / FAVORITE_SUBSCRIPTIONS_PAGE_SIZE) - 1)
+    subscriptionState.hasMore = true
+    if (selectedSeason.value && keys.has(getFavoriteSourceKey(selectedSeason.value))) {
       selectedSeason.value = collectedFavoriteSeasons[0]
       if (favoriteView.value === 'season')
         loadSelectedContent()
@@ -418,9 +536,12 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     isLoading,
     isFullPageLoading,
     bootstrapFailed,
+    categoryState,
+    subscriptionState,
+    loadMoreSubscriptions,
     failedContentPage,
+    stalledContentPage,
     noMoreContent,
-    loadedSeasonMedias,
     loadedSeasonComplete,
     articleFavoriteCount,
     articleFavoriteOffset,
@@ -438,6 +559,7 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
     removeSeasons,
     dispose() {
       contentVersion.value++
+      avatars.dispose()
       lifetime.dispose()
     },
   }

@@ -400,24 +400,23 @@ function jumpToLoginPage() {
     </main>
 
     <aside relative w="full md:40% lg:30% xl:25%" order="1 md:2 lg:2">
-      <div pos="sticky top-120px" flex="~ col gap-4" justify-start my-10 w-full>
+      <CoverSidebarSurface
+        class="history-sidebar-panel" pos="sticky top-120px" flex="~ col gap-4" justify-start my-10
+        w-full
+      >
         <input
           v-model.trim="keyword"
           type="text"
           :placeholder="t('history.search_watch_history')"
           :aria-label="t('history.search_watch_history')"
-          class="history-search-input p-x-14px lh-35px h-35px"
+          class="history-search-input"
           rounded="$bew-radius"
-          bg="$bew-content-solid"
-          shadow="$bew-shadow-1"
           w-full
           @keyup.enter="handleSearch"
         >
         <Button
           block
-          style="
-            --b-button-shadow: var(--bew-shadow-1);
-          "
+          class="bew-cover-sidebar__action"
           :disabled="isClearingHistory"
           @click="handleClearAllWatchHistory"
         >
@@ -429,9 +428,7 @@ function jumpToLoginPage() {
         <Button
           v-if="!historyStatus"
           block
-          style="
-            --b-button-shadow: var(--bew-shadow-1);
-          "
+          class="bew-cover-sidebar__action"
           @click="handlePauseWatchHistory"
         >
           <template #left>
@@ -442,9 +439,7 @@ function jumpToLoginPage() {
         <Button
           v-else
           block
-          style="
-            --b-button-shadow: var(--bew-shadow-1);
-          "
+          class="bew-cover-sidebar__action"
           @click="handleTurnOnWatchHistory"
         >
           <template #left>
@@ -452,7 +447,7 @@ function jumpToLoginPage() {
           </template>
           {{ $t('history.turn_on_watch_history') }}
         </Button>
-      </div>
+      </CoverSidebarSurface>
     </aside>
   </div>
   <Empty v-else mt-6 :description="t('common.please_log_in_first')">
@@ -464,6 +459,18 @@ function jumpToLoginPage() {
 
 <style lang="scss" scoped>
 @use "../../../styles/videoList";
+.history-sidebar-panel {
+  padding: var(--bew-space-6);
+}
+.history-search-input {
+  flex-shrink: 0;
+  min-height: var(--bew-control-height);
+  padding-inline: var(--bew-space-3);
+  color: var(--bew-sidebar-text);
+  background: var(--bew-sidebar-control);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
 .history-list-card {
   position: relative;
 }

@@ -38,6 +38,7 @@ import { initNativeFavoriteSeasonPlayAllIntercept, stopNativeFavoriteSeasonPlayA
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isPlayerShowingEndingRecommendation, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import { getPlayerModeContainer, getPlayerModeControl, getPlayerModeReadiness, PLAYER_MODE_CONTAINER_SELECTOR, PLAYER_MODE_CONTROL_SELECTORS } from '~/utils/playerMedia'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { createPlayerModeApplication } from '~/utils/playerModeApplication'
 import { applyRandomPlayActivationSettings, destroyRandomPlay, initRandomPlay, isCustomPlayPage, isNativePlaylistEditing, resetRandomPlayInitialization, syncRandomPlayOrder, syncRandomPlayUI } from '~/utils/randomPlay'
@@ -57,6 +58,7 @@ import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
 import { getPageLoadingGuard } from './pageLoadingGuard'
+import { observePlayerDom } from './playerDomLifecycle'
 import { initTouchPlayerGestures, stopTouchPlayerGestures } from './touchPlayerGestures'
 import { initVideoAspectRatioMemory, stopVideoAspectRatioMemory } from './videoAspectRatioMemory'
 import { initVideoScreenshotControl, stopVideoScreenshotControl } from './videoScreenshotControl'
@@ -382,6 +384,7 @@ else if (shouldInitializeContentScript) {
   let playerModeGeneration = 0
   let playerModeApplication: PlayerModeApplication | undefined
   let playerModeApplicationStarted = false
+  let failedPlayerModeState: { navigationKey: string, signature: ReturnType<typeof getPlayerModeReadiness> } | undefined
   let navigationVideo = getVideoElement()
   let navigationMediaSource = navigationVideo?.currentSrc || navigationVideo?.getAttribute('src') || ''
   let awaitingNavigationMedia = false
@@ -656,6 +659,7 @@ else if (shouldInitializeContentScript) {
   }, { signal: contentScriptSignal })
   function invalidatePlayerModeApplication() {
     playerModeGeneration++
+    playerModeApplication?.cancel()
     playerModeApplication = undefined
     playerModeApplicationStarted = false
     cancelPlayerRetryTasks()
@@ -663,9 +667,23 @@ else if (shouldInitializeContentScript) {
       exitBewlyWidescreen()
   }
 
-  function getCurrentPlayerModeApplication(currentNavigationKey: string) {
+  function isPlayerModeRetryBlocked(currentNavigationKey: string, mode: ReturnType<typeof resolveDefaultVideoPlayerMode>) {
+    if (failedPlayerModeState?.navigationKey !== currentNavigationKey)
+      return false
+    const signature = getPlayerModeReadiness(mode)
+    return signature.every((value, index) => value === failedPlayerModeState!.signature[index])
+  }
+
+  function resolveApplicablePlayerMode() {
+    const mode = resolveDefaultVideoPlayerMode()
+    return isFestivalPage() && mode === 'bewlyWidescreen' ? 'widescreen' : mode
+  }
+
+  function getCurrentPlayerModeApplication(currentNavigationKey: string, mode = resolveApplicablePlayerMode()) {
     if (playerModeApplication?.shouldApply())
       return playerModeApplication
+    if (isPlayerModeRetryBlocked(currentNavigationKey, mode))
+      return undefined
     const video = getVideoElement()
     if (!video)
       return undefined
@@ -682,13 +700,13 @@ else if (shouldInitializeContentScript) {
     navigationVideo = video
     navigationMediaSource = source
     const generation = playerModeGeneration
-    const mode = resolveDefaultVideoPlayerMode()
+    const preference = resolveDefaultVideoPlayerMode()
     const application = createPlayerModeApplication(
       () => !contentScriptSignal.aborted && generation === playerModeGeneration
         && getVideoNavigationKey(location.href) === currentNavigationKey
         && getVideoElement() === video && (video.currentSrc || video.getAttribute('src') || '') === source
         && video.readyState >= HTMLMediaElement.HAVE_METADATA
-        && resolveDefaultVideoPlayerMode() === mode
+        && resolveDefaultVideoPlayerMode() === preference
         && document.visibilityState === 'visible' && !isIframeDrawerHost()
         && !shouldSuppressWidescreenAutoEntry(currentNavigationKey, userExitedWidescreenNavigationKey)
         && !isPlayerShowingEndingRecommendation(),
@@ -711,7 +729,18 @@ else if (shouldInitializeContentScript) {
         }, 2000)
         scheduleAddWatchLaterButton()
       },
+      (status) => {
+        if (playerModeApplication !== application)
+          return
+        playerModeApplicationStarted = false
+        if (status === 'failed') {
+          failedPlayerModeState = { navigationKey: currentNavigationKey, signature: getPlayerModeReadiness(mode) }
+          clearPlayerModeRetry()
+          pageLoading.dispose()
+        }
+      },
     )
+    failedPlayerModeState = undefined
     playerModeApplication = application
     playerModeApplicationStarted = false
     return application
@@ -774,13 +803,15 @@ else if (shouldInitializeContentScript) {
       schedulePlayerModeRetry()
       return
     }
-    let targetPlayerMode = resolveDefaultVideoPlayerMode()
-    if (isFestivalPage() && targetPlayerMode === 'bewlyWidescreen')
-      targetPlayerMode = 'widescreen'
+    const targetPlayerMode = resolveApplicablePlayerMode()
+    if (isPlayerModeRetryBlocked(currentNavigationKey, targetPlayerMode)) {
+      clearPlayerModeRetry()
+      return
+    }
     const fullscreenDocument = document as Document & { webkitFullscreenElement?: Element | null }
     const isInFullscreen = !!(document.fullscreenElement || fullscreenDocument.webkitFullscreenElement)
-    const webFullscreenBtn = document.querySelector('.bpx-player-ctrl-web,.bilibili-player-video-web-fullscreen,.squirtle-video-pagefullscreen') as HTMLElement
-    const isInWebFullscreen = !!document.querySelector('[data-screen="web"]')
+    const webFullscreenBtn = getPlayerModeControl('web')
+    const isInWebFullscreen = getPlayerModeContainer()?.getAttribute('data-screen') === 'web'
       || webFullscreenBtn?.classList.contains('bpx-state-entered')
     if (targetPlayerMode === 'bewlyWidescreen' && !isInFullscreen && !isInWebFullscreen) {
       if (!isBewlyWidescreenActive())
@@ -790,7 +821,7 @@ else if (shouldInitializeContentScript) {
       pageLoading.dispose()
     }
 
-    const application = getCurrentPlayerModeApplication(currentNavigationKey)
+    const application = getCurrentPlayerModeApplication(currentNavigationKey, targetPlayerMode)
     if (!application) {
       schedulePlayerModeRetry()
       return
@@ -848,6 +879,8 @@ else if (shouldInitializeContentScript) {
       autoContinuationNavigationKey = undefined
       if (targetPlayerMode === 'webFullscreen' && isInWebFullscreen)
         application.onApplied()
+      else
+        application.cancel()
       return
     }
 
@@ -1328,6 +1361,21 @@ else if (shouldInitializeContentScript) {
         schedulePlayerModeRetry()
     }, { capture: true, signal: contentScriptSignal })
   }
+
+  const modeControlSelector = Object.values(PLAYER_MODE_CONTROL_SELECTORS).flat().join(',')
+  contentScriptDisposers.push(observePlayerDom((mutations) => {
+    if (contentScriptSignal.aborted || !playerModeSettingsReady || document.hidden || isIframeDrawerHost()
+      || !isVideoOrBangumiPage() || playerModeApplicationStarted
+      || lastAppliedPlayerModeNavigationKey === getVideoNavigationKey(location.href)) {
+      return
+    }
+    const relevant = !mutations || mutations.some(record => (record.target instanceof Element && !!record.target.closest(modeControlSelector))
+      || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element
+        && (node.matches(`${modeControlSelector},${PLAYER_MODE_CONTAINER_SELECTOR},video,bwp-video`)
+          || !!node.querySelector(modeControlSelector))))
+    if (relevant && !isPlayerModeRetryBlocked(getVideoNavigationKey(location.href), resolveApplicablePlayerMode()))
+      schedulePlayerModeRetry()
+  }))
 
   // 添加页面加载监听
   window.addEventListener('load', () => {
