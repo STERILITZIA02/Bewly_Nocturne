@@ -45,30 +45,31 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     }
   }
 
-  function sort(excludeMid = context.selected()) {
+  function sortedUploaders(items: FollowingUploader[], excludeMid = context.selected()) {
     if (excludeMid !== null)
-      return
+      return items
     const blocked = context.blocked()
-    const next = [...uploaders.value].sort((a, b) => Number(blocked.has(a.mid)) - Number(blocked.has(b.mid)) || b.lastUpdateTime - a.lastUpdateTime)
-    if (next.some((item, index) => item !== uploaders.value[index]))
+    const next = [...items].sort((a, b) => Number(blocked.has(a.mid)) - Number(blocked.has(b.mid)) || b.lastUpdateTime - a.lastUpdateTime)
+    return next.some((item, index) => item !== items[index]) ? next : items
+  }
+  function sort(excludeMid = context.selected()) {
+    const next = sortedUploaders(uploaders.value, excludeMid)
+    if (next !== uploaders.value)
       uploaders.value = next
+  }
+
+  function withUpdateStatus(uploader: FollowingUploader, viewed: Record<number, number>, now: number) {
+    const hasUpdate = uploader.hasPostTime && uploader.lastUpdateTime > (viewed[uploader.mid] ?? 0)
+      && now - uploader.lastUpdateTime <= 3 * 24 * 60 * 60 * 1000
+    return hasUpdate === uploader.hasUpdate ? uploader : { ...uploader, hasUpdate }
   }
 
   function updateStatus() {
     const viewed = context.viewed()
     const now = Date.now()
-    let changed = false
-    const next = uploaders.value.map((uploader) => {
-      const hasUpdate = uploader.hasPostTime && uploader.lastUpdateTime > (viewed[uploader.mid] ?? 0)
-        && now - uploader.lastUpdateTime <= 3 * 24 * 60 * 60 * 1000
-      if (hasUpdate === uploader.hasUpdate)
-        return uploader
-      changed = true
-      return { ...uploader, hasUpdate }
-    })
-    if (changed)
+    const next = sortedUploaders(uploaders.value.map(uploader => withUpdateStatus(uploader, viewed, now)))
+    if (next.some((user, index) => user !== uploaders.value[index]))
       uploaders.value = next
-    sort()
   }
 
   function notePublication(mid: number, time: number) {
@@ -90,13 +91,18 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
     if (!current())
       return
     let changed = false
-    for (const uploader of uploaders.value) {
+    const next = uploaders.value.map((uploader) => {
       const time = uploaderLatestVideoTimes.value[String(uploader.mid)]?.time
-      if (time && notePublication(uploader.mid, time))
-        changed = true
+      if (!time || (uploader.hasPostTime && uploader.lastUpdateTime >= time))
+        return uploader
+      changed = true
+      return { ...uploader, lastUpdateTime: time, hasPostTime: true }
+    })
+    if (changed) {
+      const viewed = context.viewed()
+      const now = Date.now()
+      uploaders.value = sortedUploaders(next.map(uploader => withUpdateStatus(uploader, viewed, now)))
     }
-    if (changed)
-      updateStatus()
   }
   watch(uploaderLatestVideoTimes, applyRecordedTimes, { deep: true })
 
@@ -138,13 +144,16 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
           const users: FollowingRelationUser[] = response.data.list ?? []
           if (users.length && users.every(user => seen.has(user.mid)))
             throw new Error('Following pagination made no progress')
+          // Derived only for this response. Writes during a read keep their
+          // version fence without repeated full-directory lookups per member.
+          const currentMembers = changedMembers.size ? new Map(uploaders.value.map(user => [user.mid, user])) : undefined
           for (const raw of users) {
             if (seen.has(raw.mid))
               continue
             seen.add(raw.mid)
             const newer = (changedMembers.get(raw.mid) ?? 0) > version
             const user = newer
-              ? uploaders.value.find(user => user.mid === raw.mid) ?? (removedMembers.has(raw.mid) ? undefined : mapUploader(raw))
+              ? currentMembers?.get(raw.mid) ?? (removedMembers.has(raw.mid) ? undefined : mapUploader(raw))
               : mapUploader(raw)
             if (user)
               retained.push(user)
@@ -152,7 +161,7 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
           const complete = users.length < 50 || nextPage * 50 >= Number(response.data.total)
           if (!refresh || complete) {
             uploaders.value = retained.map(user => (changedMembers.get(user.mid) ?? 0) > version
-              ? uploaders.value.find(current => current.mid === user.mid) ?? (removedMembers.has(user.mid) ? undefined : user)
+              ? currentMembers?.get(user.mid) ?? (removedMembers.has(user.mid) ? undefined : user)
               : user).filter((user): user is FollowingUploader => !!user)
             updateStatus()
             loadedRevision.value = Math.max(loadedRevision.value, revision)
@@ -256,10 +265,17 @@ export function useFollowingDirectory(state: HomeTabState, getAccountId: () => A
   function removeGroup(id: number) {
     removedGroups.add(id)
     groups.value = groups.value.filter(group => group.tagid !== id)
-    for (const user of uploaders.value) {
-      if (user.groupIds.includes(id))
-        applyMembership(user.mid, user.groupIds.filter(group => group !== id))
-    }
+    const version = ++mutationVersion
+    let changed = false
+    const next = uploaders.value.map((user) => {
+      if (!user.groupIds.includes(id))
+        return user
+      changed = true
+      changedMembers.set(user.mid, version)
+      return { ...user, groupIds: getFollowingGroupIds(user.groupIds.filter(group => group !== id)) }
+    })
+    if (changed)
+      uploaders.value = next
     groupGeneration++
     acknowledgeRevision()
   }

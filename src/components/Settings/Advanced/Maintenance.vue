@@ -8,6 +8,7 @@ import { AppPage } from '~/enums/appEnums'
 import { originalSettings, settings } from '~/logic'
 import type { Settings } from '~/logic/storage'
 import { videoCardContextMenuKeys } from '~/logic/storage'
+import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
@@ -20,6 +21,7 @@ const developmentBuildId = __DEV__ ? __BEWLY_BUILD_ID__ : ''
 
 const blockedPropertyNames = new Set(['__proto__', 'constructor', 'prototype'])
 const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
+  videoPlayerScrollMode: ['sendingBar', 'playerCenter'],
   language: ['', 'en', 'cmn-CN', 'cmn-TW', 'jyut'],
   commentReplyTreeMode: ['lineCollapseMain', 'lineKeepMain', 'indentOnly'],
   commentReplyPaginationMode: ['loadMore', 'pagination'],
@@ -173,9 +175,10 @@ function handleImportFile(event: Event) {
   const reader = new FileReader()
   reader.onload = () => {
     try {
-      const importedSettings = JSON.parse(String(reader.result)) as Record<string, unknown>
+      let importedSettings = JSON.parse(String(reader.result)) as Record<string, unknown>
       if (!importedSettings || Array.isArray(importedSettings) || typeof importedSettings !== 'object')
         throw new TypeError('Invalid settings backup')
+      importedSettings = migrateSidebarCoverSetting(importedSettings)
 
       const validSettings: Partial<Record<keyof Settings, unknown>> = {}
       let importedCount = 0

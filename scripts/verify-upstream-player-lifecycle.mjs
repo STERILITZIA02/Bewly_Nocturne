@@ -22,6 +22,23 @@ function clock() {
 }
 
 export function registerPlayerLifecycleChecks(check) {
+  check('vertical zoom geometry: opposite sidebar, native toolbar clearance, zoomed frame and narrow space share one coordinate system', async () => {
+    const { getVerticalZoomGeometry } = await import('../src/utils/verticalVideoZoomGeometry')
+    const input = { width: 1000, height: 600, aspect: 9 / 16, zoomed: false, side: 'left', gap: 12, buttonWidth: 72, buttonHeight: 36, bottom: 540, toolbarBottom: 80 }
+    const left = getVerticalZoomGeometry(input)
+    assert.equal(left.side, 'left')
+    assert.ok(left.top >= 92)
+    assert.ok(left.left + Math.max(72, left.mapWidth) <= (1000 - 600 * 9 / 16) / 2)
+    const right = getVerticalZoomGeometry({ ...input, side: 'right', zoomed: true })
+    assert.equal(right.side, 'right')
+    assert.ok(right.left >= 800)
+    assert.ok(right.mapTop + right.mapHeight <= input.bottom)
+    const narrow = getVerticalZoomGeometry({ ...input, width: 100, height: 150, bottom: 95, toolbarBottom: 48 })
+    assert.equal(narrow.mapAvailable, false)
+    assert.ok(narrow.top + 36 <= 95)
+    assert.equal(getVerticalZoomGeometry({ ...input, width: 60 }).buttonAvailable, false)
+  })
+
   check('player media: shared observation follows the owned replacement while the old video stays connected', async () => {
     const host = document.body.appendChild(document.createElement('div'))
     host.innerHTML = '<div id="bilibili-player"><div class="bpx-player-container"><div class="bpx-player-video-wrap"><video></video></div></div></div>'
@@ -82,6 +99,7 @@ export function registerPlayerLifecycleChecks(check) {
       '~/contentScripts/playerDomLifecycle': { observePlayerDom: () => () => {}, hasPlayerMediaMutation: () => false },
       '~/logic': { settings: { value: { enableRandomPlay: true, randomPlayMode: 'manual', defaultCustomPlayOrder: 'sequential' } } },
       '~/utils/debug': { debugLog() {} },
+      '~/utils/customPlayControls': await import('../src/utils/customPlayControls'),
       '~/utils/i18n': { i18n: { global: { t: key => key } } },
       '~/utils/randomPlayRetry': await import('../src/utils/randomPlayRetry'),
       './player': { VideoType: { MULTIPART: 'multipart', COLLECTION: 'collection' }, detectVideoType: () => 'multipart', supportsCustomPlaybackForVideoType: () => true, getVideoElement: () => null, setCustomEndPlaybackHandlerActive() {}, applyAutoPlayByVideoType() {} },
@@ -114,6 +132,10 @@ export function registerPlayerLifecycleChecks(check) {
       observer.callback([{ target: host, addedNodes: [next], removedNodes: [old] }])
       assert.equal(observer.targets.size, 0)
       assert.ok(observers.at(-1).targets.has(next))
+      const firstPending = [...time.jobs].find(([, job]) => job.delay === 300)?.[0]
+      for (let i = 0; i < 100; i++)
+        observers.at(-1).callback([{ target: next, addedNodes: [document.createElement('span')], removedNodes: [] }])
+      assert.equal([...time.jobs].find(([, job]) => job.delay === 300)?.[0], firstPending, 'continuous DOM activity cannot postpone the pending update')
       const late = [...time.jobs.values()].map(job => job.callback)
       href.href = 'https://www.bilibili.com/'
       href.pathname = '/'
@@ -127,6 +149,51 @@ export function registerPlayerLifecycleChecks(check) {
       host.remove()
     }
     assert.equal(onRoute, undefined)
+  })
+
+  check('random play: a real modern episode header hosts one control set and remounting preserves manual state', async () => {
+    const time = clock()
+    const settings = { value: { enableRandomPlay: true, defaultCustomPlayOrder: 'sequential', customPlayOrderOverrides: {} } }
+    const host = document.body.appendChild(document.createElement('div'))
+    host.innerHTML = '<div class="video-pod"><div class="video-pod__header"></div><div class="video-pod__list"><div class="simple-base-item" data-bvid="BV1xx411c7mD"></div><div class="simple-base-item" data-bvid="BV2xx411c7mD"></div></div></div>'
+    const module = await loadSourceModule('../src/utils/randomPlay.ts', {
+      '~/composables/useRouteState': { onRouteChange: () => () => {} },
+      '~/contentScripts/playerDomLifecycle': { observePlayerDom: () => () => {}, hasPlayerMediaMutation: () => false },
+      '~/logic': { settings },
+      '~/utils/debug': { debugLog() {} },
+      '~/utils/customPlayControls': await import('../src/utils/customPlayControls'),
+      '~/utils/i18n': { i18n: { global: { t: key => key } } },
+      '~/utils/randomPlayRetry': await import('../src/utils/randomPlayRetry'),
+      './player': { VideoType: { MULTIPART: 'multipart', COLLECTION: 'collection', RECOMMEND: 'recommend' }, detectVideoType: () => 'collection', supportsCustomPlaybackForVideoType: () => true, getVideoElement: () => null, setCustomEndPlaybackHandlerActive() {}, applyAutoPlayByVideoType() {}, disableNativeEndPlaybackBehavior() {} },
+    }, { ...time, location: { href: 'https://www.bilibili.com/video/BV1xx411c7mD/', pathname: '/video/BV1xx411c7mD/' }, window: { setTimeout: time.setTimeout, clearTimeout: time.clearTimeout } })
+    try {
+      const header = host.querySelector('.video-pod__header')
+      const controls = module.createRandomPlayUI()
+      assert.ok(controls, 'a playlist without the withdrawn native auto-play switch still gets controls')
+      assert.equal(controls.parentElement, header)
+      const select = controls.querySelector('select')
+      select.value = 'reverse'
+      select.dispatchEvent(new Event('change'))
+      assert.equal(module.isRandomPlayActive(), true)
+      const nextHeader = document.createElement('div')
+      nextHeader.className = 'video-pod__header'
+      header.replaceWith(nextHeader)
+      host.append(controls)
+      assert.equal(module.createRandomPlayUI(), controls)
+      assert.equal(controls.parentElement, nextHeader)
+      assert.equal(select.value, 'reverse')
+      assert.equal(module.isRandomPlayActive(), true)
+      assert.equal(host.querySelectorAll('.random-play').length, 1)
+      settings.value.enableRandomPlay = false
+      module.destroyRandomPlay()
+      module.initRandomPlayOnVideoPage()
+      assert.equal(host.querySelector('.random-play'), null)
+      assert.equal(time.jobs.size, 0)
+    }
+    finally {
+      module.destroyRandomPlay()
+      host.remove()
+    }
   })
 
   check('vertical zoom: pointer activity avoids layout reads, dimensions coalesce, media replacement and reset release work', async () => {
@@ -151,6 +218,7 @@ export function registerPlayerLifecycleChecks(check) {
     Object.defineProperty(current, 'videoWidth', { value: 1080 })
     Object.defineProperty(current, 'videoHeight', { value: 1920 })
     const module = await loadSourceModule('../src/utils/verticalVideoZoom.ts', {
+      'vue': await import('vue'),
       '~/contentScripts/playerDomLifecycle': { hasPlayerMediaMutation: () => true, observePlayerDom: (callback) => {
         domChange = callback
         return () => domChange = undefined
@@ -162,7 +230,8 @@ export function registerPlayerLifecycleChecks(check) {
         style.textContent = text
         return style
       } },
-      './player': { getVideoElement: () => current },
+      './playerMedia': { getVideoElement: () => current, getPlayerModeContainer: () => current?.closest('.bpx-player-container'), getPlayerRoot: () => host },
+      './verticalVideoZoomGeometry': await import('../src/utils/verticalVideoZoomGeometry'),
     }, {
       ...time,
       ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },

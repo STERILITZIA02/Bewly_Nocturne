@@ -10,7 +10,9 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { removeHttpFromUrl, scrollToTop } from '~/utils/main'
+import { getFavoriteResourceBvid, getFavoriteResourceKey, getFavoriteResourceUrl } from '~/utils/favoriteResource'
+import { mergeFavoriteSeasonPage } from '~/utils/favoriteSeason'
+import { getUserID, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -37,7 +39,8 @@ function isValidFavoriteResource(value: unknown): value is FavoriteResource {
     && Number.isFinite(value.duration)
     && Number.isFinite(value.upper.mid)
     && typeof value.upper.name === 'string'
-    && typeof value.bvid === 'string'
+    && (value.bvid == null || typeof value.bvid === 'string')
+    && (value.bv_id == null || typeof value.bv_id === 'string')
 }
 
 const favoriteCategories = reactive<Array<FavoriteCategory>>([])
@@ -52,6 +55,9 @@ const isLoading = ref<boolean>(false)
 const isRefreshingResources = ref<boolean>(false)
 // when noMoreContent is true, the user can't scroll down to load more content
 const noMoreContent = ref<boolean>(false)
+const paginationStalled = ref(false)
+const resourceRequestFailed = ref(false)
+let stalledPageStart: { page: number, length: number } | undefined
 const favoriteVideosWrap = ref<HTMLElement>() as Ref<HTMLElement>
 const topBarStore = useTopBarStore()
 const { t } = useI18n()
@@ -59,10 +65,17 @@ const toast = useToast()
 const { favoriteStateVersion } = storeToRefs(topBarStore)
 let favoriteDataRequestVersion = 0
 let favoriteResourcesRequestVersion = 0
+onScopeDispose(() => {
+  favoriteDataRequestVersion++
+  favoriteResourcesRequestVersion++
+})
 const currentAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
 ))
+function isFavoriteAccountCurrent(accountId: number | null): accountId is number {
+  return accountId !== null && accountId === currentAccountId.value && getUserID() === String(accountId)
+}
 
 const viewAllUrl = computed((): string => {
   return `//space.bilibili.com/${currentAccountId.value ?? 0}/favlist?fid=${
@@ -77,6 +90,7 @@ const playAllUrl = computed((): string => {
 watch(activatedMediaId, (newId, oldId) => {
   if (newId === oldId)
     return
+  stalledPageStart = undefined
 
   favoriteResources.length = 0
   if (favoriteVideosWrap.value)
@@ -84,6 +98,8 @@ watch(activatedMediaId, (newId, oldId) => {
 
   currentPageNum.value = 1
   noMoreContent.value = false
+  paginationStalled.value = false
+  resourceRequestFailed.value = false
   if (newId)
     void getFavoriteResources(true)
 })
@@ -116,6 +132,7 @@ useOptimizedScroll(
 )
 
 function resetFavoriteState() {
+  stalledPageStart = undefined
   favoriteDataRequestVersion++
   favoriteResourcesRequestVersion++
   favoriteCategories.length = 0
@@ -124,6 +141,8 @@ function resetFavoriteState() {
   activatedFavoriteTitle.value = undefined
   currentPageNum.value = 1
   noMoreContent.value = false
+  paginationStalled.value = false
+  resourceRequestFailed.value = false
   isLoadingCategories.value = false
   isLoading.value = false
   isRefreshingResources.value = false
@@ -135,7 +154,7 @@ async function refreshFavoriteData() {
   const invalidatedResourcesVersion = ++favoriteResourcesRequestVersion
   isLoading.value = false
   isRefreshingResources.value = false
-  if (requestAccountId === null)
+  if (!isFavoriteAccountCurrent(requestAccountId))
     return
 
   const selectedMediaIdAtStart = activatedMediaId.value
@@ -159,6 +178,8 @@ async function refreshFavoriteData() {
     favoriteResourcesRequestVersion++
     isLoading.value = false
     isRefreshingResources.value = false
+    paginationStalled.value = false
+    resourceRequestFailed.value = false
     return
   }
 
@@ -173,11 +194,13 @@ async function refreshFavoriteData() {
 }
 
 async function getFavoriteCategories(requestVersion: number, requestAccountId: number): Promise<boolean> {
+  if (!isFavoriteAccountCurrent(requestAccountId))
+    return false
   try {
     const res = await api.favorite.getFavoriteCategories({
       up_mid: String(requestAccountId),
     })
-    if (requestVersion !== favoriteDataRequestVersion || requestAccountId !== currentAccountId.value)
+    if (requestVersion !== favoriteDataRequestVersion || !isFavoriteAccountCurrent(requestAccountId))
       return false
 
     if (res.code !== 0) {
@@ -211,17 +234,19 @@ async function getFavoriteResources(
   replace = false,
   requestedPage = currentPageNum.value,
 ): Promise<boolean> {
-  if (isLoading.value && !force)
+  if (!force && (isLoading.value || paginationStalled.value || resourceRequestFailed.value))
     return false
 
   const requestVersion = ++favoriteResourcesRequestVersion
   const requestAccountId = currentAccountId.value
-  if (requestAccountId === null)
+  if (!isFavoriteAccountCurrent(requestAccountId))
     return false
   const mediaId = activatedMediaId.value
   const pageNum = requestedPage
   isLoading.value = true
   isRefreshingResources.value = replace
+  paginationStalled.value = false
+  resourceRequestFailed.value = false
 
   try {
     const res = await api.favorite.getFavoriteResources({
@@ -232,7 +257,7 @@ async function getFavoriteResources(
 
     if (
       requestVersion !== favoriteResourcesRequestVersion
-      || requestAccountId !== currentAccountId.value
+      || !isFavoriteAccountCurrent(requestAccountId)
       || mediaId !== activatedMediaId.value
     ) {
       return false
@@ -241,6 +266,7 @@ async function getFavoriteResources(
     const { code, data } = res
     if (code === 0) {
       if (!data || !('medias' in data)) {
+        resourceRequestFailed.value = true
         toast.error(t('common.load_failed'))
         return false
       }
@@ -251,48 +277,43 @@ async function getFavoriteResources(
         && rawMedias.every(isValidFavoriteResource)
         && (rawMedias.length > 0 || data.has_more === false)
       if (typeof data.has_more !== 'boolean' || (!hasValidMediaArray && !isAuthoritativeEmpty)) {
+        resourceRequestFailed.value = true
         toast.error(t('common.load_failed'))
         return false
       }
 
-      const medias: FavoriteResource[] = hasValidMediaArray ? rawMedias : []
-      const seenResponseIds = new Set<string>()
-      const uniqueMedias = medias.filter((item) => {
-        const key = `${item.type}:${item.id}`
-        if (seenResponseIds.has(key))
-          return false
-        seenResponseIds.add(key)
-        return true
-      })
-
+      const medias: FavoriteResource[] = hasValidMediaArray ? rawMedias.map((item: FavoriteResource) => ({ ...item, bvid: getFavoriteResourceBvid(item) })) : []
+      const pageStartLength = !replace && stalledPageStart?.page === pageNum ? stalledPageStart.length : favoriteResources.length
+      const merged = mergeFavoriteSeasonPage({ sourceType: 11, pn: replace ? 1 : pageNum, pageMedias: medias, previousMedias: favoriteResources, pageStartLength, mediaCount: data.info?.media_count, hasMore: data.has_more })
+      stalledPageStart = merged.stalled ? { page: pageNum, length: pageStartLength } : undefined
       if (replace) {
         // Keep existing cards throughout the request, then replace the complete
         // page atomically once all account/version/media guards have passed.
-        favoriteResources.splice(0, favoriteResources.length, ...uniqueMedias)
+        favoriteResources.splice(0, favoriteResources.length, ...merged.medias)
       }
       else {
-        const existingIds = new Set(favoriteResources.map(item => `${item.type}:${item.id}`))
-        favoriteResources.push(...uniqueMedias.filter((item) => {
-          const key = `${item.type}:${item.id}`
-          if (existingIds.has(key))
-            return false
-          existingIds.add(key)
-          return true
-        }))
+        for (const { index, item } of merged.changed)
+          favoriteResources[index] = item
       }
 
-      noMoreContent.value = uniqueMedias.length === 0 || !data.has_more
+      paginationStalled.value = merged.stalled
+      noMoreContent.value = merged.complete
+      if (merged.stalled)
+        return false
       currentPageNum.value = pageNum + 1
       return true
     }
 
+    resourceRequestFailed.value = true
     toast.error(t('common.load_failed'))
     return false
   }
   catch (error) {
-    console.error('Failed to load favorite resources:', error)
-    if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value)
+    if (requestVersion === favoriteResourcesRequestVersion && isFavoriteAccountCurrent(requestAccountId)) {
+      console.error('Failed to load favorite resources:', error)
+      resourceRequestFailed.value = true
       toast.error(t('common.load_failed'))
+    }
     return false
   }
   finally {
@@ -313,10 +334,6 @@ function refreshFavoriteResources() {
 function changeCategory(categoryItem: FavoriteCategory) {
   activatedMediaId.value = categoryItem.id
   activatedFavoriteTitle.value = categoryItem.title
-}
-
-function isMusic(item: FavoriteResource) {
-  return item.link.includes('bilibili://music')
 }
 
 defineExpose({
@@ -387,12 +404,13 @@ defineExpose({
         <TransitionGroup name="list">
           <article
             v-for="item in favoriteResources"
-            :key="`${item.type}:${item.id}`"
+            :key="getFavoriteResourceKey(item)"
             class="group popover-card"
           >
             <ALink
+              v-if="getFavoriteResourceUrl(item)"
               class="popover-card__primary"
-              :href="isMusic(item) ? `https://www.bilibili.com/audio/au${item.id}` : `//www.bilibili.com/video/${item.bvid}`"
+              :href="getFavoriteResourceUrl(item)"
               :aria-label="item.title"
               type="topBar"
             />
@@ -444,6 +462,12 @@ defineExpose({
             </section>
           </article>
         </TransitionGroup>
+        <div v-if="paginationStalled || resourceRequestFailed" class="bew-popover__state" role="status">
+          <span>{{ t('common.load_failed') }}</span>
+          <Button :disabled="isLoading" type="tertiary" @click="getFavoriteResources(true)">
+            {{ t('common.operation.refresh') }}
+          </Button>
+        </div>
 
         <!-- loading -->
         <Transition name="fade">

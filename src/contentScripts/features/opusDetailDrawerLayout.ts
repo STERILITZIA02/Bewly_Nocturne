@@ -929,7 +929,7 @@ function notifyLayoutReady() {
   layoutReadyNotified = true
   hideIframeLoading()
   try {
-    postMessageToParent({ type: LAYOUT_READY_MSG, source: 'bewly-opus' })
+    postMessageToParent({ type: LAYOUT_READY_MSG, source: 'bewly-opus', href: location.href })
   }
   catch {
     // ignore

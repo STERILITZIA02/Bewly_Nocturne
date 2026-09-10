@@ -173,6 +173,8 @@ function handleLinkClick(event: MouseEvent) {
 
 const linkEvents = computed(() => ({
   click: handleLinkClick,
+  dragenter: logic.cancelDragPreview,
+  dragstart: logic.cancelDragPreview,
   ...(hoverPreviewOnCoverOnly.value
     ? {}
     : {

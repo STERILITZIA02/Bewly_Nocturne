@@ -1,12 +1,13 @@
 import { ref } from 'vue'
 
+import type { FavoriteSource } from '~/models/video/favoriteSeason'
 import type { createAccountLifetime } from '~/utils/accountLifetime'
 import type api from '~/utils/api'
 
 export type FavoriteWrite
   = | { kind: 'delete' | 'copy' | 'move', sourceId: number, targetId?: number, resourceKeys: readonly string[] }
     | { kind: 'folders', ids: readonly number[] }
-    | { kind: 'seasons', ids: readonly number[] }
+    | { kind: 'seasons', sources: readonly FavoriteSource[] }
     | { kind: 'edit', folderId: number, title: string, privacy: number }
 
 interface FavoriteWriteDependencies {
@@ -22,7 +23,10 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
   let operation = 0
 
   function prepare(command: FavoriteWrite) {
-    return { command, owner: dependencies.capture(), csrf: dependencies.getCSRF() }
+    const snapshot = command.kind === 'seasons'
+      ? { ...command, sources: command.sources.map(({ id, type }) => ({ id, type })) }
+      : command
+    return { command: snapshot, owner: dependencies.capture(), csrf: dependencies.getCSRF() }
   }
 
   async function execute(transaction: ReturnType<typeof prepare>) {
@@ -31,28 +35,30 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
       return null
     const version = ++operation
     pending.value = true
-    const succeeded: number[] = []
-    const failed: number[] = []
     try {
       if (command.kind === 'seasons') {
-        for (const id of command.ids) {
+        const succeeded: FavoriteSource[] = []
+        const failed: FavoriteSource[] = []
+        for (const source of command.sources) {
           if (!owner.isCurrent())
             return null
           try {
-            const response = await dependencies.api.unfavFavoriteSeason({ season_id: id, csrf })
-            if (response.code !== 0)
+            const response = source.type === 11
+              ? await dependencies.api.unfavCollectedFavoriteFolder({ media_id: source.id, csrf })
+              : source.type === 21 ? await dependencies.api.unfavFavoriteSeason({ season_id: source.id, csrf }) : undefined
+            if (response?.code !== 0)
               throw response
-            succeeded.push(id)
+            succeeded.push(source)
           }
           catch {
-            failed.push(id)
+            failed.push(source)
           }
         }
         if (!owner.isCurrent())
           return null
         if (failed.length)
           dependencies.onError(new Error('partial-failure'))
-        return { command, succeeded, failed }
+        return { kind: 'seasons' as const, succeeded, failed }
       }
       let response
       if (command.kind === 'folders') {
@@ -77,7 +83,7 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
         return null
       if (response.code !== 0)
         throw response
-      return { command, succeeded: command.kind === 'folders' ? [...command.ids] : [], failed }
+      return { kind: command.kind, succeeded: command.kind === 'folders' ? [...command.ids] : [], failed: [] }
     }
     catch (error) {
       if (owner.isCurrent())

@@ -13,7 +13,7 @@ const API_FAVORITE = {
     },
     afterHandle: AHS.J_D,
   },
-  // https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/fav/list.md#%E8%8E%B7%E5%8F%96%E6%94%B6%E8%97%8F%E5%A4%B9%E5%86%85%E5%AE%B9%E6%98%8E%E7%BB%86%E5%88%97%E8%A1%A8
+  // 原站公开收藏夹读取契约：tests/fixtures/favorites/native-space-contract.json。
   getFavoriteResources: {
     url: 'https://api.bilibili.com/x/v3/fav/resource/list',
     _fetch: {
@@ -166,21 +166,18 @@ const API_FAVORITE = {
     params: {},
     afterHandle: AHS.J_D,
   },
-  // 取消收藏合集（他人合集只能整体取消收藏）
+  // 取消订阅公开收藏夹；原站版本与参数依据见 favorites/native-space-contract.json。
+  unfavCollectedFavoriteFolder: {
+    url: 'https://api.bilibili.com/x/v3/fav/folder/unfav',
+    _fetch: { method: 'post' },
+    params: { media_id: 0, csrf: '' },
+    afterHandle: AHS.J_D,
+  },
+  // 原站 bB 与公开夹 rE 均通过 query 提交取消订阅及 CSRF，来源 ID 不可互换。
   unfavFavoriteSeason: {
     url: 'https://api.bilibili.com/x/v3/fav/season/unfav',
-    _fetch: {
-      method: 'post',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: {
-        season_id: 0,
-        platform: 'web',
-        csrf: '',
-      },
-    },
-    params: {},
+    _fetch: { method: 'post' },
+    params: { season_id: 0, platform: 'web', csrf: '' },
     afterHandle: AHS.J_D,
   },
 } satisfies APIMAP

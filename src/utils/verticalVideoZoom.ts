@@ -1,18 +1,12 @@
+import { watch } from 'vue'
+
 import { hasPlayerMediaMutation, observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
 import { i18n } from '~/utils/i18n'
 
 import { injectCSS } from './main'
-import { getVideoElement } from './player'
-
-const PLAYER_HOST_SELECTOR = [
-  '#bilibili-player-wrap',
-  '#playerWrap',
-  '#bilibili-player',
-  '#bilibiliPlayer',
-  '.player-wrap',
-  '.bpx-player-container',
-].join(',')
+import { getPlayerModeContainer, getPlayerRoot, getVideoElement } from './playerMedia'
+import { getVerticalZoomGeometry, VERTICAL_ZOOM_MAP_HEIGHT as MAP_HEIGHT } from './verticalVideoZoomGeometry'
 
 const HOST_CLASS = 'bewly-vertical-video-zoom-host'
 const VERTICAL_CLASS = 'is-bewly-vertical-video'
@@ -26,7 +20,8 @@ const CANVAS_CLASS = 'bewly-vertical-video-zoom-canvas'
 const VIEWPORT_CLASS = 'bewly-vertical-video-zoom-viewport'
 const MAX_REFRESH_ATTEMPTS = 40
 const DEFAULT_ZOOM_POSITION_Y = 50
-const MAP_HEIGHT = 160
+const TOP_CONTROLS_SELECTOR = '.bpx-player-top-issue, .bpx-player-top-left, .bpx-player-top-left > *'
+const BOTTOM_CONTROLS_SELECTOR = '.bpx-player-control-wrap, .bilibili-player-video-control, .squirtle-controller'
 const MINIMAP_FRAME_REFRESH_INTERVAL = 30000
 const CONTROLS_AUTO_HIDE_DELAY = 2500
 
@@ -64,9 +59,9 @@ function injectStyle() {
     .${BUTTON_CLASS} {
       position: absolute !important;
       top: var(--bewly-vertical-video-controls-top) !important;
-      left: auto !important;
-      right: var(--bew-space-3, 12px) !important;
-      z-index: 100 !important;
+      left: var(--bewly-vertical-video-controls-left) !important;
+      right: auto !important;
+      z-index: var(--bew-z-hud) !important;
       display: none;
       align-items: center !important;
       justify-content: center !important;
@@ -96,8 +91,9 @@ function injectStyle() {
     .${CONTROL_CLASS} {
       position: absolute !important;
       top: var(--bewly-vertical-video-map-top) !important;
-      right: var(--bew-space-3, 12px) !important;
-      z-index: 100 !important;
+      left: var(--bewly-vertical-video-controls-left) !important;
+      right: auto !important;
+      z-index: var(--bew-z-hud) !important;
       display: none;
       align-items: center !important;
       justify-content: center !important;
@@ -119,6 +115,9 @@ function injectStyle() {
     }
 
     .${HOST_CLASS}[data-bewly-zoom-map-available="false"] > .${CONTROL_CLASS} {
+      display: none !important;
+    }
+    .${HOST_CLASS}[data-bewly-zoom-button-available="false"] > .${BUTTON_CLASS} {
       display: none !important;
     }
 
@@ -215,9 +214,7 @@ function injectStyle() {
 }
 
 function findPlayerHost() {
-  const video = getVideoElement()
-  return video?.closest<HTMLElement>(PLAYER_HOST_SELECTOR)
-    || document.querySelector<HTMLElement>(PLAYER_HOST_SELECTOR)
+  return getPlayerModeContainer() || getPlayerRoot()
 }
 
 function showControlsTemporarily(host: HTMLElement) {
@@ -257,8 +254,8 @@ function bindHostActivity(host: HTMLElement) {
 
   let frame: number | undefined
   let resize: ResizeObserver
-  let issue: HTMLElement | null = null
-  let nativeControls: HTMLElement | null = null
+  let measuredControls = new Set<HTMLElement>()
+  const reservedTop = { left: 0, right: 0 }
   const scheduleGeometry = () => {
     if (frame !== undefined)
       return
@@ -266,41 +263,57 @@ function bindHostActivity(host: HTMLElement) {
       frame = undefined
       if (currentHost !== host || !host.isConnected)
         return
-      const nextIssue = host.querySelector<HTMLElement>('.bpx-player-top-issue')
-      const nextControls = host.querySelector<HTMLElement>('.bpx-player-control-wrap, .bilibili-player-video-control')
-      for (const [previous, next] of [[issue, nextIssue], [nativeControls, nextControls]]) {
-        if (previous === next)
-          continue
-        if (previous)
+      const nextControls = new Set(Array.from(host.querySelectorAll<HTMLElement>(`${TOP_CONTROLS_SELECTOR}, ${BOTTOM_CONTROLS_SELECTOR}`)))
+      for (const previous of measuredControls) {
+        if (!nextControls.has(previous))
           resize.unobserve(previous)
-        if (next)
+      }
+      for (const next of nextControls) {
+        if (!measuredControls.has(next))
           resize.observe(next)
       }
-      issue = nextIssue
-      nativeControls = nextControls
+      measuredControls = nextControls
       const rect = host.getBoundingClientRect()
       const scale = host.offsetHeight ? rect.height / host.offsetHeight : 1
       if (!scale || rect.height <= 0)
         return
-      const issueRect = issue?.getBoundingClientRect()
-      const issueBottom = issueRect?.height ? (issueRect.bottom - rect.top) / scale : 0
       const style = getComputedStyle(host)
       const gap = Number.parseFloat(style.getPropertyValue('--bew-space-3')) || 12
       const height = Number.parseFloat(style.getPropertyValue('--bew-control-height')) || 36
-      const controlsHeight = (nativeControls?.getBoundingClientRect().height || 0) / scale
-      const availableBottom = rect.height / scale - controlsHeight - gap
-      const top = Math.max(gap, Math.min(Math.max(48, issueBottom + gap), availableBottom - height))
-      const mapTop = top + height + gap
-      const mapHeight = Math.max(0, Math.min(MAP_HEIGHT, availableBottom - mapTop))
-      for (const [key, value] of Object.entries({ 'controls-top': top, 'map-top': mapTop, 'map-height': mapHeight })) {
+      const side = document.body.classList.contains('bewly-widescreen-active') && settings.value.bewlyWidescreenCenterVideo
+        && settings.value.bewlyWidescreenSidebarPosition !== 'left'
+        ? 'left'
+        : 'right'
+      const toolbarSelector = side === 'left' ? '.bpx-player-top-left, .bpx-player-top-left > *' : '.bpx-player-top-issue'
+      const toolbarRects = Array.from(host.querySelectorAll<HTMLElement>(toolbarSelector), node => node.getBoundingClientRect())
+        .filter(box => box.width > 0 && box.height > 0)
+      if (toolbarRects.length)
+        reservedTop[side] = Math.max(...toolbarRects.map(box => (box.bottom - rect.top) / scale))
+      const controlsRect = host.querySelector<HTMLElement>(BOTTOM_CONTROLS_SELECTOR)?.getBoundingClientRect()
+      const availableBottom = controlsRect?.height ? (controlsRect.top - rect.top) / scale - gap : rect.height / scale - gap
+      const video = getVideoElement()
+      const geometry = getVerticalZoomGeometry({
+        width: rect.width / scale,
+        height: rect.height / scale,
+        aspect: video?.videoWidth && video.videoHeight ? video.videoWidth / video.videoHeight : 9 / 16,
+        zoomed: host.classList.contains(ZOOMED_CLASS),
+        side,
+        gap,
+        buttonWidth: (button?.getBoundingClientRect().width || 48 * scale) / scale,
+        buttonHeight: height,
+        bottom: availableBottom,
+        toolbarBottom: reservedTop[side],
+      })
+      for (const [key, value] of Object.entries({ 'controls-top': geometry.top, 'controls-left': geometry.left, 'map-top': geometry.mapTop, 'map-height': geometry.mapHeight, 'map-width': geometry.mapWidth })) {
         const property = `--bewly-vertical-video-${key}`
         const next = `${Math.round(value)}px`
         if (host.style.getPropertyValue(property) !== next)
           host.style.setProperty(property, next)
       }
-      const available = String(mapHeight >= 48)
-      if (host.dataset.bewlyZoomMapAvailable !== available)
-        host.dataset.bewlyZoomMapAvailable = available
+      for (const [key, value] of Object.entries({ bewlyZoomMapAvailable: geometry.mapAvailable, bewlyZoomButtonAvailable: geometry.buttonAvailable })) {
+        if (host.dataset[key] !== String(value))
+          host.dataset[key] = String(value)
+      }
       syncMinimapGeometry()
     })
   }
@@ -309,6 +322,7 @@ function bindHostActivity(host: HTMLElement) {
   refreshControlGeometry = scheduleGeometry
   window.addEventListener('resize', scheduleGeometry)
   document.addEventListener('fullscreenchange', scheduleGeometry)
+  const stopLayoutSettings = watch(() => [settings.value.bewlyWidescreenCenterVideo, settings.value.bewlyWidescreenSidebarPosition], scheduleGeometry)
   scheduleGeometry()
 
   const onPointerActivity = () => showControlsTemporarily(host)
@@ -320,14 +334,16 @@ function bindHostActivity(host: HTMLElement) {
 
   hostActivityCleanup = () => {
     resize.disconnect()
+    stopLayoutSettings()
     refreshControlGeometry = null
     window.removeEventListener('resize', scheduleGeometry)
     document.removeEventListener('fullscreenchange', scheduleGeometry)
     if (frame !== undefined)
       cancelAnimationFrame(frame)
-    for (const key of ['controls-top', 'map-top', 'map-height'])
+    for (const key of ['controls-top', 'controls-left', 'map-top', 'map-height', 'map-width'])
       host.style.removeProperty(`--bewly-vertical-video-${key}`)
     delete host.dataset.bewlyZoomMapAvailable
+    delete host.dataset.bewlyZoomButtonAvailable
     host.removeEventListener('pointerenter', onPointerActivity)
     host.removeEventListener('pointermove', onPointerActivity)
     host.removeEventListener('pointerdown', onPointerActivity)
@@ -399,6 +415,7 @@ function ensureButton(host: HTMLElement) {
         syncZoomPosition()
       }
       syncButtonLabel()
+      refreshControlGeometry?.()
     })
   }
 
@@ -502,15 +519,8 @@ function syncMinimapGeometry() {
   if (!currentHost || !mapElement || !control || !viewportElement)
     return
 
-  const video = getVideoElement()
-  const videoAspect = video?.videoWidth && video.videoHeight
-    ? video.videoWidth / video.videoHeight
-    : 9 / 16
-  const mapHeight = mapElement.clientHeight || MAP_HEIGHT
-  const mapWidth = Math.max(48, Math.min(96, Math.round(mapHeight * videoAspect)))
   const viewportHeight = getViewportHeight()
 
-  setZoomProperty(control, '--bewly-vertical-video-map-width', `${mapWidth}px`)
   setZoomProperty(mapElement, '--bewly-vertical-video-zoom-window-height', `${viewportHeight}px`)
 }
 
@@ -623,6 +633,7 @@ function syncVideoState() {
   }
 
   syncButtonLabel()
+  refreshControlGeometry?.()
 }
 
 function bindVideoMetadata(video: HTMLVideoElement | null) {
@@ -702,7 +713,7 @@ export function initVerticalVideoZoom() {
   stopPlayerDomObserver ??= observePlayerDom((mutations) => {
     if (hasPlayerMediaMutation(mutations) && (getVideoElement() !== observedVideo || findPlayerHost() !== currentHost))
       scheduleRefresh(0)
-    else if (mutations?.some(record => [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element && (node.matches('.bpx-player-top-issue, .bpx-player-control-wrap, .bilibili-player-video-control') || node.querySelector('.bpx-player-top-issue, .bpx-player-control-wrap, .bilibili-player-video-control')))))
+    else if (mutations?.some(record => [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element && (node.matches(`${TOP_CONTROLS_SELECTOR}, ${BOTTOM_CONTROLS_SELECTOR}`) || node.querySelector(`${TOP_CONTROLS_SELECTOR}, ${BOTTOM_CONTROLS_SELECTOR}`)))))
       refreshControlGeometry?.()
   })
   refreshAttempts = 0

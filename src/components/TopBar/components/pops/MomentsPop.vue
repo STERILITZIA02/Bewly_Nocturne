@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
@@ -9,8 +10,11 @@ import Tooltip from '~/components/Tooltip.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
-import api from '~/utils/api'
-import { getCSRF, scrollToTop } from '~/utils/main'
+import { createAccountLifetime } from '~/utils/accountLifetime'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { getUserID, scrollToTop } from '~/utils/main'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { updateOwnedWatchLater } from '~/utils/watchLater'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
@@ -18,6 +22,17 @@ type MomentType = 'video' | 'live' | 'article'
 interface MomentTab { type: MomentType, name: string }
 
 const topBarStore = useTopBarStore()
+const toast = useToast()
+const watchLaterLifetime = createAccountLifetime(() => {
+  const accountId = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+  return String(accountId) === getUserID() ? accountId : null
+})
+const watchLaterWrites = new Map<number, symbol>()
+onScopeDispose(() => watchLaterLifetime.dispose())
+watch(() => topBarStore.userInfo.mid, () => {
+  watchLaterLifetime.invalidate()
+  watchLaterWrites.clear()
+}, { flush: 'sync' })
 
 const { t } = useI18n()
 
@@ -84,28 +99,23 @@ function getData() {
 }
 
 async function toggleWatchLater(aid: number) {
-  const accountId = topBarStore.userInfo.mid
-  if (!topBarStore.isLogin || !accountId)
+  if (watchLaterWrites.has(aid))
     return
-
-  await topBarStore.ensureWatchLaterState()
-  const isInWatchLater = topBarStore.isInWatchLater(aid)
-
-  if (!isInWatchLater) {
-    const res = await api.watchlater.saveToWatchLater({
-      aid,
-      csrf: getCSRF(),
-    })
-    if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId)
-      await topBarStore.commitWatchLaterMutation(aid, true, accountId)
+  const owner = watchLaterLifetime.capture()
+  const requestId = Symbol('watch-later')
+  watchLaterWrites.set(aid, requestId)
+  try {
+    const result = await updateOwnedWatchLater({ aid }, 'toggle', owner, topBarStore)
+    if (owner.isCurrent() && result.status === 'failed')
+      toast.error(result.message || t('video_card.watch_later_update_failed'))
   }
-  else {
-    const res = await api.watchlater.removeFromWatchLater({
-      aid,
-      csrf: getCSRF(),
-    })
-    if (res.code === 0 && topBarStore.isLogin && topBarStore.userInfo.mid === accountId)
-      await topBarStore.commitWatchLaterMutation(aid, false, accountId)
+  catch (error) {
+    if (owner.isCurrent() && !isExtensionContextInvalidatedError(error))
+      toast.error(t('video_card.watch_later_update_failed'))
+  }
+  finally {
+    if (watchLaterWrites.get(aid) === requestId)
+      watchLaterWrites.delete(aid)
   }
 }
 

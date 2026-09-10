@@ -14,9 +14,10 @@ const THREAD_PAGE_SIZE = 20
 export function useMomentCommentThread(
   commentId: Ref<string>,
   commentType: Ref<number>,
+  sort: Ref<0 | 1>,
 ) {
   const revision = ref(0)
-  const getIdentity = () => `${getUserID() ?? 'guest'}:${commentType.value}:${commentId.value}`
+  const getIdentity = () => `${getUserID() ?? 'guest'}:${commentType.value}:${commentId.value}:${sort.value}`
   const controller = createMomentCommentThreadController({
     getIdentity,
     fetchPage: async (rootRpid, pageNumber) => {
@@ -31,7 +32,7 @@ export function useMomentCommentThread(
     },
   })
 
-  watch([commentId, commentType], () => {
+  watch([commentId, commentType, sort], () => {
     controller.invalidate()
     revision.value += 1
   }, { flush: 'sync' })

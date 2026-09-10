@@ -49,6 +49,16 @@ let tabSwitchFrame: number | null = null
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
 const homeGridLayout = useLayoutEditSettingValue('page.home.gridLayout', () => gridLayout.value.home)
+function preventBackgroundSelection(event: MouseEvent) {
+  if (isLayoutEditing.value || event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey
+    || window.getSelection()?.isCollapsed === false || !(event.target instanceof HTMLElement)) {
+    return
+  }
+  // Only the empty layout surfaces opt in. Card text, controls and selection
+  // gestures keep their native behavior, including layout editing and batching.
+  if (event.target === event.currentTarget || event.target.matches('.video-card-grid-root, .video-card-grid-container, .video-card-spacer, [data-layout-editable-id="home-video-grid"]'))
+    event.preventDefault()
+}
 function defineHomePageComponent(loader: AsyncComponentLoader) {
   return defineAsyncComponent({
     loader,
@@ -318,7 +328,7 @@ function toggleTabContentLoading(loading: boolean) {
 
 <template>
   <div pos="relative">
-    <main>
+    <main @mousedown="preventBackgroundSelection">
       <!-- Home search page mode content -->
       <Transition name="content">
         <div v-if="settings.useSearchPageModeOnHomePage" class="home-search-stage">

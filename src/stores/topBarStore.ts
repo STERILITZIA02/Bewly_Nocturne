@@ -45,6 +45,7 @@ import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '~/utils/momentKey'
+import { updateOwnedWatchLater } from '~/utils/watchLater'
 
 export const LOGIN_RECHECK_INTERVAL = 1000 * 60 // 已登录但 userInfo 未填充时重查的间隔
 
@@ -697,9 +698,13 @@ export const useTopBarStore = defineStore('topBar', () => {
     return aid !== undefined && addedWatchLaterList.includes(aid)
   }
 
+  function isCurrentWatchLaterAccount(accountId: number | undefined): accountId is number {
+    return isCurrentAccount(accountId) && getLocalLoginMid() === accountId
+  }
+
   async function ensureWatchLaterState(force = false): Promise<boolean> {
     const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId))
+    if (!isCurrentWatchLaterAccount(accountId))
       return false
     if (force)
       invalidateWatchLaterState()
@@ -708,15 +713,15 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     if (watchLaterStateRequest && watchLaterStateRequestAccountId === accountId) {
       const succeeded = await watchLaterStateRequest
-      if (succeeded && isCurrentAccount(accountId) && watchLaterStateAccountId !== accountId)
+      if (succeeded && isCurrentWatchLaterAccount(accountId) && watchLaterStateAccountId !== accountId)
         return ensureWatchLaterState()
-      return succeeded && isCurrentAccount(accountId)
+      return succeeded && isCurrentWatchLaterAccount(accountId)
     }
 
     const requestGeneration = watchLaterStateGeneration
     const request = runTopBarSharedRefreshRequest('getWatchLaterMembership', async () => {
       const response = await api.watchlater.getAllWatchLaterList()
-      if (!isCurrentAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
+      if (!isCurrentWatchLaterAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
         return 'account-changed'
       if (response.code === -1)
         return 'network'
@@ -811,7 +816,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   async function commitWatchLaterMutation(aid: number, added: boolean, accountId: number) {
-    if (!isCurrentAccount(accountId))
+    if (!isCurrentWatchLaterAccount(accountId))
       return
 
     applyWatchLaterMutation(aid, added)
@@ -820,7 +825,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   async function invalidateWatchLaterMembership(accountId: number) {
-    if (!isCurrentAccount(accountId))
+    if (!isCurrentWatchLaterAccount(accountId))
       return
 
     invalidateWatchLaterState()
@@ -831,7 +836,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   async function commitWatchLaterClear(accountId: number) {
-    if (!isCurrentAccount(accountId))
+    if (!isCurrentWatchLaterAccount(accountId))
       return
 
     addedWatchLaterList.splice(0)
@@ -949,21 +954,22 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   // 删除稍后再看项目
-  async function deleteWatchLaterItem(aid: number): Promise<boolean> {
+  async function deleteWatchLaterItem(aid: number, isViewCurrent: () => boolean = () => true): Promise<boolean> {
     const accountId = userInfo.mid
-    if (!isCurrentAccount(accountId))
+    const generation = loginStateGeneration
+    if (!isCurrentWatchLaterAccount(accountId))
       return false
 
     try {
-      const res = await api.watchlater.removeFromWatchLater({
-        aid,
-        csrf: getCSRF(),
+      const owner = { accountId, isCurrent: () => isCurrentWatchLaterAccount(accountId) && generation === loginStateGeneration && isViewCurrent() }
+      const result = await updateOwnedWatchLater({ aid }, 'remove', owner, {
+        get isLogin() { return isLogin.value },
+        userInfo,
+        ensureWatchLaterState,
+        isInWatchLater,
+        commitWatchLaterMutation,
       })
-      if (res.code === 0 && isCurrentAccount(accountId)) {
-        await commitWatchLaterMutation(aid, false, accountId)
-        return true
-      }
-      return false
+      return result.status === 'success' && owner.isCurrent()
     }
     catch (error) {
       reportRuntimeFailure('Failed to remove Watch Later item', error)

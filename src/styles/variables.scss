@@ -1,3 +1,30 @@
+.bew-cover-sidebar {
+  --bew-sidebar-text: var(--bew-text-1);
+  --bew-sidebar-secondary: var(--bew-text-2);
+  --bew-sidebar-muted: var(--bew-text-3);
+  --bew-sidebar-control: var(--bew-fill-1);
+  --bew-sidebar-control-hover: var(--bew-fill-2);
+  --bew-sidebar-selected: var(--bew-theme-surface);
+  --bew-sidebar-border: var(--bew-surface-border-color);
+  --bew-sidebar-scrollbar: var(--bew-text-3);
+  --bew-sidebar-text-shadow: none;
+  --bew-sidebar-media-shadow: var(--bew-shadow-2);
+  --bew-sidebar-cover-blur: 40px;
+}
+
+.bew-cover-sidebar[data-cover-background="true"] {
+  --bew-sidebar-text: #fff;
+  --bew-sidebar-secondary: rgb(255 255 255 / 82%);
+  --bew-sidebar-muted: rgb(255 255 255 / 72%);
+  --bew-sidebar-control: rgb(255 255 255 / 35%);
+  --bew-sidebar-control-hover: rgb(255 255 255 / 42%);
+  --bew-sidebar-selected: var(--bew-sidebar-control);
+  --bew-sidebar-border: rgb(255 255 255 / 32%);
+  --bew-sidebar-scrollbar: var(--bew-sidebar-muted);
+  --bew-sidebar-text-shadow: 0 0 12px rgb(0 0 0 / 30%);
+  --bew-sidebar-media-shadow: 0 16px 24px -12px rgb(0 0 0 / 36%);
+}
+
 :host,
 :root {
   --bew-page-max-width: 2280px;

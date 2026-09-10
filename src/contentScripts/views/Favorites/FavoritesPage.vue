@@ -13,18 +13,20 @@ import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { settings } from '~/logic'
 import type { Media as FavoriteItem } from '~/models/video/favorite'
 import type { List as CategoryItem } from '~/models/video/favoriteCategory'
-import type { CollectedFavoriteSeason } from '~/models/video/favoriteSeason'
+import type { CollectedFavoriteSeason, FavoriteSource } from '~/models/video/favoriteSeason'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { getFavoriteFolderPrivacy, isFavoriteFolderPrivate } from '~/utils/favoriteFolder'
+import { getFavoriteResourceKey, getFavoriteSourceKey } from '~/utils/favoriteResource'
 import {
+  FAVORITE_FOLDER_PAGE_SIZE,
   FAVORITE_SEASON_PAGE_SIZE,
   resolveFavoriteSeasonPlayAllUrl,
 } from '~/utils/favoriteSeason'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 
-import { getFavoriteArticleCover, getFavoriteResourceKey, transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
+import { getFavoriteArticleCover, transformFavoriteArticle, transformFavoriteItem } from './favoriteAdapters'
 import type { FavoriteView } from './useFavoritesData'
 import { useFavoritesData } from './useFavoritesData'
 import type { FavoriteWrite } from './useFavoriteWrites'
@@ -40,8 +42,8 @@ type SidebarManageSection = 'folder' | 'season'
 const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
-const data = useFavoritesData({ api: api.favorite, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
-const { favoriteCategories, collectedFavoriteSeasons, favoriteResources, favoriteArticles, favoriteView, selectedCategory, selectedSeason, activatedCategoryCover, keyword, searchScope, isLoading, isFullPageLoading, bootstrapFailed, failedContentPage, noMoreContent, loadedSeasonMedias, loadedSeasonComplete, articleFavoriteCount, initData, retryFavoritesBootstrap, loadSelectedContent, loadNextPage, retryFavoriteContent, contentVersion } = data
+const data = useFavoritesData({ api: api.favorite, user: api.user, getAccountId: () => getUserID() === String(accountId.value) ? accountId.value : null, haveScrollbar, t })
+const { favoriteCategories, collectedFavoriteSeasons, favoriteResources, favoriteArticles, favoriteView, selectedCategory, selectedSeason, activatedCategoryCover, keyword, searchScope, isLoading, isFullPageLoading, bootstrapFailed, failedContentPage, stalledContentPage, noMoreContent, loadedSeasonComplete, articleFavoriteCount, initData, retryFavoritesBootstrap, loadSelectedContent, loadNextPage, retryFavoriteContent, contentVersion, categoryState, subscriptionState, loadMoreSubscriptions } = data
 const writes = useFavoriteWrites({ api: api.favorite, capture: data.capture, getCSRF, onError: () => toast.error(t('common.operation_failed')) })
 
 const isResolvingSeasonPlayAll = ref<boolean>(false)
@@ -53,13 +55,14 @@ const batchTransferDialogVisible = ref<boolean>(false)
 const batchTransferAction = ref<BatchTransferAction>('copy')
 const sidebarManageSection = ref<SidebarManageSection | null>(null)
 const selectedFolderIds = ref<number[]>([])
-const selectedSeasonIds = ref<number[]>([])
+const selectedSeasonKeys = ref<string[]>([])
 const isSidebarOperating = computed(() => writes.pending.value)
 const editFolderDialogVisible = ref<boolean>(false)
 const editFolderId = ref<number>()
 const editFolderTitle = ref<string>('')
 const editFolderPublic = ref(true)
-const itemMenuTarget = ref<{ type: SidebarManageSection, id: number } | null>(null)
+type ItemMenuTarget = { type: 'folder', id: number } | { type: 'season', source: FavoriteSource }
+const itemMenuTarget = ref<ItemMenuTarget | null>(null)
 const itemMenuAnchor = ref({ x: 0, y: 0 })
 const itemMenuTrigger = shallowRef<HTMLElement | null>(null)
 
@@ -91,7 +94,12 @@ const selectedContentCount = computed(() => {
   return selectedCategory.value?.media_count ?? 0
 })
 
-const isInitialSidebarLoading = computed(() => isFullPageLoading.value && !selectedCategory.value && !selectedSeason.value && !bootstrapFailed.value)
+const isInitialSidebarLoading = computed(() => favoriteView.value === 'video'
+  ? categoryState.loading && !favoriteCategories.length
+  : favoriteView.value === 'season' && subscriptionState.loading && !collectedFavoriteSeasons.length)
+const favoriteGridStateKey = computed(() => `${accountId.value}:${favoriteView.value === 'season' && selectedSeason.value
+  ? getFavoriteSourceKey(selectedSeason.value)
+  : `folder:${selectedCategory.value?.id ?? ''}`}:${contentVersion.value}`)
 
 const selectedContentCover = computed(() => {
   if (activatedCategoryCover.value)
@@ -142,7 +150,7 @@ const batchTransferDialogDesc = computed(() => {
 const defaultFolderId = computed(() => favoriteCategories[0]?.id)
 const editableFolderIds = computed(() => favoriteCategories.filter(item => item.id !== defaultFolderId.value).map(item => item.id))
 const selectedFolderCount = computed(() => selectedFolderIds.value.length)
-const selectedSeasonCount = computed(() => selectedSeasonIds.value.length)
+const selectedSeasonCount = computed(() => selectedSeasonKeys.value.length)
 const isManagingFolder = computed(() => sidebarManageSection.value === 'folder')
 const isManagingSeason = computed(() => sidebarManageSection.value === 'season')
 const canEditSelectedFolder = computed(() => selectedFolderIds.value.length === 1)
@@ -160,7 +168,7 @@ const isAllFoldersSelected = computed(() => {
 })
 const isAllSeasonsSelected = computed(() => {
   return collectedFavoriteSeasons.length > 0
-    && collectedFavoriteSeasons.every(item => selectedSeasonIds.value.includes(item.id))
+    && collectedFavoriteSeasons.every(item => selectedSeasonKeys.value.includes(getFavoriteSourceKey(item)))
 })
 const itemMenuOptions = computed((): ContextMenuOption[] => {
   if (!itemMenuTarget.value)
@@ -238,7 +246,7 @@ function closeBatchManage() {
 function exitSidebarManage() {
   sidebarManageSection.value = null
   selectedFolderIds.value = []
-  selectedSeasonIds.value = []
+  selectedSeasonKeys.value = []
 }
 
 function toggleSidebarManage(section: SidebarManageSection) {
@@ -271,10 +279,11 @@ function toggleFolderSelection(item: CategoryItem) {
 }
 
 function toggleSeasonSelection(item: CollectedFavoriteSeason) {
-  if (selectedSeasonIds.value.includes(item.id))
-    selectedSeasonIds.value = selectedSeasonIds.value.filter(id => id !== item.id)
+  const key = getFavoriteSourceKey(item)
+  if (selectedSeasonKeys.value.includes(key))
+    selectedSeasonKeys.value = selectedSeasonKeys.value.filter(selected => selected !== key)
   else
-    selectedSeasonIds.value = [...selectedSeasonIds.value, item.id]
+    selectedSeasonKeys.value = [...selectedSeasonKeys.value, key]
 }
 
 function handleCategoryItemClick(item: CategoryItem) {
@@ -298,7 +307,7 @@ function toggleSelectAllFolders() {
 }
 
 function toggleSelectAllSeasons() {
-  selectedSeasonIds.value = isAllSeasonsSelected.value ? [] : collectedFavoriteSeasons.map(item => item.id)
+  selectedSeasonKeys.value = isAllSeasonsSelected.value ? [] : collectedFavoriteSeasons.map(getFavoriteSourceKey)
 }
 
 function openEditFolderDialog() {
@@ -321,9 +330,9 @@ function openSingleEditFolder(folderId: number) {
   editFolderDialogVisible.value = true
 }
 
-function openItemMenu(type: SidebarManageSection, id: number, event: MouseEvent) {
+function openItemMenu(target: ItemMenuTarget, event: MouseEvent) {
   itemMenuTrigger.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  itemMenuTarget.value = { type, id }
+  itemMenuTarget.value = target
   const rect = itemMenuTrigger.value?.getBoundingClientRect()
   itemMenuAnchor.value = event.detail === 0 && rect
     ? { x: rect.right, y: rect.bottom }
@@ -365,7 +374,7 @@ async function deleteFolders(ids: number[]) {
   if (!await showConfirmDialog(t('favorites.delete_folders_confirm', { count: ids.length })))
     return false
   const result = await writes.execute(transaction)
-  if (!result)
+  if (!result || result.kind !== 'folders')
     return false
   data.removeFolders(result.succeeded)
   selectedFolderIds.value = selectedFolderIds.value.filter(id => !result.succeeded.includes(id))
@@ -373,15 +382,16 @@ async function deleteFolders(ids: number[]) {
   return true
 }
 
-async function unfavSeasons(ids: number[]) {
-  const transaction = writes.prepare({ kind: 'seasons', ids: [...ids] })
-  if (!await showConfirmDialog(t('favorites.unfav_seasons_confirm', { count: ids.length })))
+async function unfavSeasons(sources: FavoriteSource[]) {
+  const transaction = writes.prepare({ kind: 'seasons', sources })
+  if (!await showConfirmDialog(t('favorites.unfav_seasons_confirm', { count: sources.length })))
     return
   const result = await writes.execute(transaction)
-  if (!result)
+  if (!result || result.kind !== 'seasons')
     return
   data.removeSeasons(result.succeeded)
-  selectedSeasonIds.value = selectedSeasonIds.value.filter(id => !result.succeeded.includes(id))
+  const succeeded = new Set(result.succeeded.map(getFavoriteSourceKey))
+  selectedSeasonKeys.value = selectedSeasonKeys.value.filter(key => !succeeded.has(key))
   if (result.succeeded.length)
     notifyTopBarFavoritesChanged()
 }
@@ -395,7 +405,8 @@ async function handleBatchDeleteFolders() {
 async function handleBatchUnfavSeasons() {
   if (!selectedSeasonCount.value || writes.pending.value)
     return
-  await unfavSeasons([...selectedSeasonIds.value])
+  await unfavSeasons(collectedFavoriteSeasons.filter(item => selectedSeasonKeys.value.includes(getFavoriteSourceKey(item)))
+    .map(({ id, type }) => ({ id, type })))
 }
 
 async function handleItemMenuSelect(value: string | number) {
@@ -410,7 +421,7 @@ async function handleItemMenuSelect(value: string | number) {
       await deleteFolders([target.id])
   }
   else {
-    await unfavSeasons([target.id])
+    await unfavSeasons([target.source])
   }
 }
 
@@ -557,22 +568,25 @@ async function handlePlayAll() {
 
     const owner = data.capture()
     const version = contentVersion.value
+    const source = { id: selectedSeason.value.id, type: selectedSeason.value.type }
     const isCurrent = () => owner.isCurrent() && version === contentVersion.value
+      && !!selectedSeason.value && getFavoriteSourceKey(selectedSeason.value) === getFavoriteSourceKey(source)
     if (!isCurrent())
       return
     isResolvingSeasonPlayAll.value = true
     try {
       const result = await resolveFavoriteSeasonPlayAllUrl({
-        seasonId: selectedSeason.value.id,
+        source,
+        spaceMid: owner.accountId!,
         link: selectedSeason.value.link,
         bvid: selectedSeason.value.bvid,
         mode: settings.value.collectedSeasonPlayAllMode,
         preloaded: {
-          medias: loadedSeasonMedias.value,
+          sourceKey: getFavoriteSourceKey(source),
+          medias: favoriteResources,
           complete: loadedSeasonComplete.value,
-          expectedCount: selectedSeason.value.media_count,
         },
-      })
+      }, { api, isCurrent })
       if (!isCurrent())
         return
       if (result.usedFallback && result.reason !== 'beginning')
@@ -588,6 +602,14 @@ async function handlePlayAll() {
 
   if (selectedCategory.value)
     openLinkToNewTab(`https://www.bilibili.com/list/ml${selectedCategory.value.id}`)
+}
+
+function handleSubscriptionDirectoryScroll(event: Event) {
+  const element = event.currentTarget
+  if (favoriteView.value === 'season' && element instanceof HTMLElement
+    && element.scrollHeight - element.clientHeight - element.scrollTop < 160) {
+    void loadMoreSubscriptions()
+  }
 }
 
 function jumpToLoginPage() {
@@ -773,18 +795,20 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
         <VideoCardGrid
           v-else
+          :key="favoriteGridStateKey"
+          :state-key="favoriteGridStateKey"
           :items="favoriteResources"
           :transform-item="transformFavoriteItem"
-          :get-item-key="item => item.id"
+          :get-item-key="getFavoriteResourceKey"
           grid-layout="adaptive"
-          :initial-skeleton-count="favoriteView === 'season' ? FAVORITE_SEASON_PAGE_SIZE : 20"
+          :initial-skeleton-count="favoriteView === 'season' && selectedSeason?.type === 21 ? FAVORITE_SEASON_PAGE_SIZE : FAVORITE_FOLDER_PAGE_SIZE"
           disable-content-visibility
           :loading="isLoading || isFullPageLoading"
           :no-more-content="noMoreContent"
-          :request-failed="failedContentPage !== null"
+          :request-failed="failedContentPage !== null || stalledContentPage !== null"
           :empty-description="$t('common.no_more_content')"
           :more-btn="favoriteView === 'video' && !isBatchManaging"
-          :hide-author="favoriteView === 'season'"
+          :hide-author="favoriteView === 'season' && selectedSeason?.type === 21"
           :card-click-handler="isBatchManaging ? handleFavoriteCardClick : undefined"
           :cover-top-left-always-visible="isBatchManaging"
           enable-row-padding
@@ -869,16 +893,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
     </main>
 
     <aside class="favorites-old-sidebar">
-      <div class="favorites-sidebar-panel">
-        <div class="favorites-sidebar-background">
-          <div />
-          <img
-            v-if="selectedContentCover"
-            :src="removeHttpFromUrl(`${selectedContentCover}@480w_270h_1c`)"
-            alt=""
-          >
-        </div>
-
+      <CoverSidebarSurface class="favorites-sidebar-panel" :cover="selectedContentCover ? removeHttpFromUrl(`${selectedContentCover}@480w_270h_1c`) : ''">
         <div class="favorites-sidebar-content">
           <picture class="favorites-sidebar-cover">
             <SkeletonBlock v-if="isInitialSidebarLoading" width="100%" height="100%" radius="media" />
@@ -976,11 +991,9 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
           <Button
             v-else-if="favoriteView !== 'article'"
-            class="favorites-play-all"
-            color="rgba(255,255,255,.35)"
+            class="favorites-play-all bew-cover-sidebar__action"
             block
             size="medium"
-            text-color="white"
             strong
             :disabled="isInitialSidebarLoading || searchScope === 'all' || isResolvingSeasonPlayAll"
             @click="handlePlayAll"
@@ -1009,7 +1022,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 :class="{
                   'row-active': !isManagingFolder && selectedCategory?.id === item.id,
                   'row-selected': isManagingFolder && selectedFolderIds.includes(item.id),
-                  'row-disabled': isFullPageLoading,
+                  'row-disabled': isSidebarOperating,
                 }"
               >
                 <button
@@ -1019,7 +1032,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                     selected: isManagingFolder && selectedFolderIds.includes(item.id),
                     locked: isManagingFolder && item.id === defaultFolderId,
                   }"
-                  :disabled="isFullPageLoading"
+                  :disabled="isSidebarOperating"
                   @click="handleCategoryItemClick(item)"
                 >
                   <span
@@ -1041,11 +1054,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 <button
                   v-if="!isManagingFolder && item.id !== defaultFolderId"
                   class="item-more-btn"
-                  :disabled="isFullPageLoading"
+                  :disabled="isSidebarOperating"
                   :aria-label="t('favorites.sidebar_manage')"
                   aria-haspopup="menu"
                   :aria-expanded="itemMenuTarget?.type === 'folder' && itemMenuTarget.id === item.id"
-                  @click.prevent.stop="openItemMenu('folder', item.id, $event)"
+                  @click.prevent.stop="openItemMenu({ type: 'folder', id: item.id }, $event)"
                 >
                   <span i-mingcute:more-2-line />
                 </button>
@@ -1057,30 +1070,30 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               </li>
             </ul>
 
-            <ul v-else-if="favoriteView === 'season'" class="category-list">
+            <ul v-else-if="favoriteView === 'season'" class="category-list" @scroll.passive="handleSubscriptionDirectoryScroll">
               <li
                 v-for="item in collectedFavoriteSeasons"
-                :key="`season:${item.id}`"
+                :key="getFavoriteSourceKey(item)"
                 class="category-item"
                 :class="{
-                  'row-active': !isManagingSeason && selectedSeason?.id === item.id,
-                  'row-selected': isManagingSeason && selectedSeasonIds.includes(item.id),
-                  'row-disabled': isFullPageLoading,
+                  'row-active': !isManagingSeason && selectedSeason && getFavoriteSourceKey(selectedSeason) === getFavoriteSourceKey(item),
+                  'row-selected': isManagingSeason && selectedSeasonKeys.includes(getFavoriteSourceKey(item)),
+                  'row-disabled': isSidebarOperating,
                 }"
               >
                 <button
                   class="category-nav-item"
                   :class="{
-                    active: !isManagingSeason && selectedSeason?.id === item.id,
-                    selected: isManagingSeason && selectedSeasonIds.includes(item.id),
+                    active: !isManagingSeason && selectedSeason && getFavoriteSourceKey(selectedSeason) === getFavoriteSourceKey(item),
+                    selected: isManagingSeason && selectedSeasonKeys.includes(getFavoriteSourceKey(item)),
                   }"
-                  :disabled="isFullPageLoading"
+                  :disabled="isSidebarOperating"
                   @click="handleSeasonItemClick(item)"
                 >
                   <span
                     v-if="isManagingSeason"
                     class="category-icon"
-                    :class="selectedSeasonIds.includes(item.id) ? 'i-tabler:checkbox' : 'i-tabler:square'"
+                    :class="selectedSeasonKeys.includes(getFavoriteSourceKey(item)) ? 'i-tabler:checkbox' : 'i-tabler:square'"
                   />
                   <span v-else class="category-icon" i-tabler:stack-2 />
                   <span class="category-title">{{ item.title }}</span>
@@ -1089,11 +1102,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
                 <button
                   v-if="!isManagingSeason"
                   class="item-more-btn"
-                  :disabled="isFullPageLoading"
+                  :disabled="isSidebarOperating"
                   :aria-label="t('favorites.sidebar_manage')"
                   aria-haspopup="menu"
-                  :aria-expanded="itemMenuTarget?.type === 'season' && itemMenuTarget.id === item.id"
-                  @click.prevent.stop="openItemMenu('season', item.id, $event)"
+                  :aria-expanded="itemMenuTarget?.type === 'season' && getFavoriteSourceKey(itemMenuTarget.source) === getFavoriteSourceKey(item)"
+                  @click.prevent.stop="openItemMenu({ type: 'season', source: { id: item.id, type: item.type } }, $event)"
                 >
                   <span i-mingcute:more-2-line />
                 </button>
@@ -1104,6 +1117,15 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               <span class="category-icon" i-tabler:article />
               <span class="category-title">{{ t('favorites.article_section_title') }}</span>
               <span class="category-count">{{ selectedContentCount }}</span>
+            </div>
+            <div v-if="favoriteView === 'season' && (subscriptionState.hasMore || subscriptionState.failed)" class="favorites-directory-more">
+              <span v-if="subscriptionState.failed" role="status">{{ t('common.load_failed') }}</span>
+              <Button type="tertiary" class="bew-cover-sidebar__action" :disabled="subscriptionState.loading" @click="loadMoreSubscriptions(subscriptionState.failed)">
+                <SkeletonBlock v-if="subscriptionState.loading" width="4em" height="1em" />
+                <template v-else>
+                  {{ t(subscriptionState.failed ? 'common.operation.refresh' : 'common.load_more') }}
+                </template>
+              </Button>
             </div>
           </nav>
 
@@ -1116,7 +1138,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
             @close="closeItemMenu"
           />
         </div>
-      </div>
+      </CoverSidebarSurface>
     </aside>
   </div>
   <Empty v-else mt-6 :description="t('common.please_log_in_first')">
@@ -1129,29 +1151,6 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 <style lang="scss" scoped>
 @use "../../../styles/breakpoints";
 @use "./favoritesLayout";
-
-.favorites-sidebar-background {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-}
-
-.favorites-sidebar-background div {
-  position: absolute;
-  z-index: 1;
-  background: var(--bew-fill-4);
-  inset: 0;
-}
-
-.favorites-sidebar-background img {
-  position: absolute;
-  z-index: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  filter: blur(40px);
-  transform: scale(1.12);
-}
 
 .favorites-sidebar-content {
   position: absolute;
@@ -1171,11 +1170,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   flex: 0 0 auto;
   width: 100%;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--bew-sidebar-muted);
   background: var(--bew-skeleton);
   border-radius: var(--bew-media-radius);
   corner-shape: var(--bew-corner-shape);
-  box-shadow: 0 16px 24px -12px rgba(0, 0, 0, 0.36);
+  box-shadow: var(--bew-sidebar-media-shadow);
   aspect-ratio: 16 / 9;
 }
 
@@ -1196,8 +1195,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 .favorites-sidebar-title h3,
 .favorites-sidebar-title p {
   margin: 0;
-  color: #fff;
-  text-shadow: 0 0 12px rgba(0, 0, 0, 0.3);
+  color: var(--bew-sidebar-text);
+  text-shadow: var(--bew-sidebar-text-shadow);
 }
 
 .favorites-play-all {
@@ -1205,6 +1204,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
   height: var(--bew-control-height);
   min-height: var(--bew-control-height);
+  flex-shrink: 0;
   padding-block: 0;
   box-sizing: border-box;
 }
@@ -1226,18 +1226,17 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   height: var(--bew-control-height);
   padding: 0 0 0 var(--bew-space-3);
   overflow: hidden;
-  color: #fff;
+  color: var(--bew-sidebar-text);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-control);
-  background: rgba(255, 255, 255, 0.28);
-  border: 1px solid rgba(255, 255, 255, 0.32);
-  backdrop-filter: var(--bew-filter-glass-1);
-  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.24);
+  background: var(--bew-sidebar-control);
+  border: 1px solid var(--bew-sidebar-border);
+  text-shadow: var(--bew-sidebar-text-shadow);
 }
 
 .favorite-view-select :deep(.select-trigger:hover) {
-  background: rgba(255, 255, 255, 0.36);
+  background: var(--bew-sidebar-control-hover);
 }
 
 .favorite-view-select :deep(.select-arrow-slot) {
@@ -1247,7 +1246,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .favorite-view-select :deep(.select-arrow) {
-  border-color: #fff;
+  border-color: var(--bew-sidebar-text);
 }
 
 .sidebar-mode-row {
@@ -1262,14 +1261,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   display: grid;
   place-items: center;
   flex: 0 0 auto;
-  width: 28px;
-  height: 28px;
+  width: var(--bew-control-item-height);
+  height: var(--bew-control-item-height);
   padding: 0;
-  color: #fff;
+  color: var(--bew-sidebar-text);
   border: 0;
   border-radius: var(--bew-interactive-radius);
-  background: rgba(255, 255, 255, 0.35);
-  backdrop-filter: var(--bew-filter-glass-1);
+  background: var(--bew-sidebar-control);
   cursor: pointer;
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
@@ -1285,12 +1283,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 .sidebar-manage-toggle:hover,
 .sidebar-manage-toggle.active,
 .sidebar-manage-action:hover:not(:disabled) {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.42);
+  color: var(--bew-sidebar-text);
+  background: var(--bew-sidebar-control-hover);
 }
 
 .sidebar-manage-action.danger:hover:not(:disabled) {
-  background: var(--bew-error-color);
+  color: var(--bew-error-color);
+  background: var(--bew-sidebar-control-hover);
 }
 
 .sidebar-manage-toggle span,
@@ -1321,7 +1320,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   min-width: 0;
   padding: 0;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--bew-sidebar-secondary);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
@@ -1332,16 +1331,18 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .sidebar-manage-select:hover {
-  color: #fff;
+  color: var(--bew-sidebar-text);
 }
 
 .sidebar-selected-count {
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--bew-sidebar-muted);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
 
 .favorites-old-nav {
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-height: 0;
   overflow: hidden;
@@ -1349,14 +1350,25 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
 .category-list {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: var(--bew-space-1);
-  height: 100%;
   min-height: 0;
   margin: 0;
   padding: 0;
   overflow: auto;
   list-style: none;
+}
+
+.favorites-directory-more {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  padding-top: var(--bew-space-2);
+  color: var(--bew-sidebar-secondary);
+  font-size: var(--bew-font-size-control);
 }
 
 .sidebar-manage-toggle,
@@ -1386,11 +1398,11 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .category-item:hover:not(.row-disabled):not(.row-active) {
-  background: rgba(255, 255, 255, 0.16);
+  background: var(--bew-sidebar-control);
 }
 
 .category-item.row-active {
-  background: rgba(255, 255, 255, 0.35);
+  background: var(--bew-sidebar-selected);
 }
 
 .category-item.row-selected {
@@ -1410,7 +1422,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   place-items: center;
   padding: 0;
   overflow: hidden;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--bew-sidebar-muted);
   border: 0;
   border-radius: var(--bew-interactive-radius);
   background: transparent;
@@ -1421,8 +1433,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .item-more-btn:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.16);
+  color: var(--bew-sidebar-text);
+  background: var(--bew-sidebar-control);
 }
 
 .item-more-btn span {
@@ -1433,13 +1445,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 .category-nav-item,
 .article-nav-item {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) auto;
+  grid-template-columns: var(--bew-icon-size-lg) minmax(0, 1fr) auto;
   gap: var(--bew-space-2);
   align-items: center;
   width: 100%;
   min-height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
-  color: rgba(255, 255, 255, 0.82);
+  color: var(--bew-sidebar-secondary);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
@@ -1456,24 +1468,24 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
     background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
-.category-item:hover .category-nav-item:not(:disabled):not(.active) {
-  color: #fff;
+.category-item:hover .category-nav-item:not(:disabled):not(.active):not(.selected) {
+  color: var(--bew-sidebar-text);
   background: transparent;
 }
 
 .category-nav-item.active {
-  color: #fff;
+  color: var(--bew-sidebar-text);
   background: transparent;
 }
 
 .category-nav-item.selected {
-  color: #fff;
+  color: var(--bew-on-theme-color);
   background: transparent;
 }
 
 .article-nav-item {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.35);
+  color: var(--bew-sidebar-text);
+  background: var(--bew-sidebar-selected);
 }
 
 .category-nav-item.locked {

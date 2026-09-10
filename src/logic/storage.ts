@@ -119,6 +119,7 @@ export type DefaultVideoPlayerMode = 'default' | 'webFullscreen' | 'widescreen' 
 export type BewlyWidescreenSidebarPosition = 'left' | 'right'
 export type BewlyWidescreenLayoutPriority = 'video-first' | 'sidebar-first'
 export type PlayerDefaultState = 'system' | 'remember' | 'on' | 'off'
+export type VideoPlayerScrollMode = 'sendingBar' | 'playerCenter'
 export type VideoAspectRatio = '0:0' | '4:3' | '16:9'
 export type VideoPlayerModeOverride = DefaultVideoPlayerMode | 'inherit'
 export type VideoPlayerModeContext = 'multipart' | 'collection' | 'bangumi' | 'watchLater' | 'playlist'
@@ -470,6 +471,8 @@ export interface Settings {
   autoPlayPlaylist: AutoPlayMode // 收藏列表自动播放模式
 
   videoPlayerScroll: boolean // 添加视频播放器滚动设置
+  videoPlayerScrollMode: VideoPlayerScrollMode
+  enableSidebarCoverBlur: boolean
 
   // 倍速记忆设置
   rememberPlaybackRate: boolean // 启用倍速记忆功能
@@ -764,6 +767,8 @@ export const originalSettings: Settings = {
   autoPlayPlaylist: 'autoPlay', // 收藏列表自动播放模式，默认自动连播
 
   videoPlayerScroll: true, // 默认开启视频播放器滚动
+  videoPlayerScrollMode: 'sendingBar',
+  enableSidebarCoverBlur: true,
 
   // 倍速记忆设置
   rememberPlaybackRate: false, // 启用倍速记忆功能
@@ -1019,6 +1024,10 @@ watch(
     Reflect.deleteProperty(record, 'rememberCaptionState')
 
     const validPlayerDefaultStates: PlayerDefaultState[] = ['system', 'remember', 'on', 'off']
+    if (!['sendingBar', 'playerCenter'].includes(record.videoPlayerScrollMode))
+      record.videoPlayerScrollMode = originalSettings.videoPlayerScrollMode
+    if (typeof record.enableSidebarCoverBlur !== 'boolean')
+      record.enableSidebarCoverBlur = originalSettings.enableSidebarCoverBlur
     if (!validPlayerDefaultStates.includes(record.defaultDanmakuState))
       record.defaultDanmakuState = originalSettings.defaultDanmakuState
     if (!validPlayerDefaultStates.includes(record.defaultCaptionState))

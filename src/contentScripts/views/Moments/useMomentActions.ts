@@ -10,7 +10,7 @@ import type { AccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { getCSRF } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
-import { getDirectWatchLaterAid, resolveWatchLaterAid } from '~/utils/watchLater'
+import { getDirectWatchLaterAid, resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
 export function useMomentActions(getAccountId: () => AccountId, commit: (id: string, patch: Partial<DisplayMoment>) => void) {
   const lifetime = createAccountLifetime(getAccountId)
@@ -166,7 +166,7 @@ export function useMomentActions(getAccountId: () => AccountId, commit: (id: str
     return request
   }
 
-  async function toggleMomentWatchLater(target: WatchLaterTarget) {
+  async function toggleMomentWatchLater(target: WatchLaterTarget, isViewCurrent: () => boolean = () => true) {
     const stateKey = getWatchLaterStateKey(target)
     if (!stateKey || watchLaterRequests.has(stateKey))
       return
@@ -183,37 +183,19 @@ export function useMomentActions(getAccountId: () => AccountId, commit: (id: str
     const requestId = Symbol(stateKey)
     watchLaterRequests.set(stateKey, requestId)
     try {
-      if (!await topBarStore.ensureWatchLaterState())
+      const result = await updateOwnedWatchLater(target, 'toggle', {
+        accountId: owner.accountId,
+        isCurrent: () => owner.isCurrent() && isViewCurrent(),
+      }, topBarStore, resolveMomentWatchLaterAid)
+      if (!owner.isCurrent() || !isViewCurrent())
         return
-      if (!owner.isCurrent())
-        return
-      const accountId = topBarStore.userInfo.mid
-      if (!topBarStore.isLogin || !accountId)
-        return
-      const aid = await resolveMomentWatchLaterAid(target)
-      if (!owner.isCurrent())
-        return
-      if (!aid) {
+      if (result.status === 'unavailable')
         toast.error(t('moments.watch_later_unavailable'))
-        return
-      }
-
-      const isAdded = topBarStore.isInWatchLater(aid)
-      const response = isAdded
-        ? await api.watchlater.removeFromWatchLater({ aid, csrf })
-        : await api.watchlater.saveToWatchLater({ aid, csrf })
-
-      if (!owner.isCurrent())
-        return
-      if (response.code !== 0) {
-        toast.error(response.message)
-        return
-      }
-
-      await topBarStore.commitWatchLaterMutation(aid, !isAdded, accountId)
+      else if (result.status === 'failed')
+        toast.error(result.message || t('moments.watch_later_failed_retry'))
     }
     catch (error) {
-      if (owner.isCurrent()) {
+      if (owner.isCurrent() && isViewCurrent()) {
         reportRuntimeFailure('Watch Later mutation failed', error)
         toast.error(error instanceof Error ? error.message : t('moments.watch_later_failed_retry'))
       }

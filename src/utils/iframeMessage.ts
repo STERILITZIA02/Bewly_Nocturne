@@ -5,9 +5,28 @@ type IframeMessageTarget = Pick<HTMLIFrameElement, 'contentWindow' | 'getAttribu
 interface IframeMessagingReadyState {
   contentWindow: Window
   expectedOrigin: string
+  src: string | null
 }
 
 const iframeMessagingReadyStates = new WeakMap<object, IframeMessagingReadyState>()
+
+function getMomentPageId(value: string, baseUrl?: string): string | undefined {
+  try {
+    const url = new URL(value, baseUrl)
+    if (url.protocol !== 'https:')
+      return undefined
+    if (url.hostname === 'www.bilibili.com')
+      return /^\/opus\/(\d+)\/?$/.exec(url.pathname)?.[1]
+    if (url.hostname === 't.bilibili.com')
+      return /^\/(\d+)\/?$/.exec(url.pathname)?.[1]
+  }
+  catch {}
+}
+
+function getReadyState(iframe: IframeMessageTarget) {
+  const state = iframeMessagingReadyStates.get(iframe)
+  return state?.contentWindow === iframe.contentWindow && state.src === iframe.getAttribute('src') ? state : undefined
+}
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   if (Object.prototype.toString.call(value) !== '[object Object]')
@@ -29,13 +48,13 @@ function getHttpOrigin(value: string, baseUrl?: string): string | undefined {
 }
 
 export function getIframeExpectedOrigin(
-  iframe: Pick<HTMLIFrameElement, 'getAttribute'> | null | undefined,
+  iframe: IframeMessageTarget | null | undefined,
   baseUrl = globalThis.location?.href,
 ): string | undefined {
   const src = iframe?.getAttribute('src')?.trim()
   if (!src || src === 'about:blank')
     return undefined
-  return getHttpOrigin(src, baseUrl)
+  return (iframe && getReadyState(iframe)?.expectedOrigin) || getHttpOrigin(src, baseUrl)
 }
 
 export function markIframeReadyForMessaging(
@@ -45,9 +64,21 @@ export function markIframeReadyForMessaging(
   const expectedOrigin = getIframeExpectedOrigin(iframe, baseUrl)
   if (!iframe?.contentWindow || !expectedOrigin || typeof iframe !== 'object')
     return false
+  // Opus can redirect to t.bilibili.com without changing the iframe src.
+  // A cross-origin load alone cannot establish the recipient's origin.
+  if (getMomentPageId(iframe.getAttribute('src') || '', baseUrl) && !getReadyState(iframe)) {
+    try {
+      if (iframe.contentWindow.location.origin !== expectedOrigin || iframe.contentWindow.location.href === 'about:blank')
+        return false
+    }
+    catch {
+      return false
+    }
+  }
   iframeMessagingReadyStates.set(iframe, {
     contentWindow: iframe.contentWindow,
     expectedOrigin,
+    src: iframe.getAttribute('src'),
   })
   return true
 }
@@ -67,7 +98,7 @@ export function isIframeReadyForMessaging(
   catch {
     if (typeof iframe !== 'object')
       return false
-    const readyState = iframeMessagingReadyStates.get(iframe)
+    const readyState = getReadyState(iframe)
     return readyState?.contentWindow === iframe.contentWindow
       && readyState.expectedOrigin === expectedOrigin
   }
@@ -78,6 +109,20 @@ export function getIframeMessageData(
   iframe: IframeMessageTarget | null | undefined,
   baseUrl = globalThis.location?.href,
 ): Record<string, unknown> | undefined {
+  if (iframe?.contentWindow && iframe.contentWindow === event.source && isPlainObject(event.data)
+    && event.data.type === 'BEWLY_OPUS_LAYOUT_READY' && typeof event.data.href === 'string') {
+    const id = getMomentPageId(iframe.getAttribute('src') || '', baseUrl)
+    if (id && id === getMomentPageId(event.data.href) && getHttpOrigin(event.data.href) === event.origin) {
+      iframeMessagingReadyStates.set(iframe, {
+        contentWindow: iframe.contentWindow,
+        src: iframe.getAttribute('src'),
+        expectedOrigin: event.origin,
+      })
+    }
+    else if (id) {
+      return undefined
+    }
+  }
   const expectedOrigin = getIframeExpectedOrigin(iframe, baseUrl)
   if (!expectedOrigin
     || event.source !== iframe?.contentWindow

@@ -81,6 +81,7 @@ import { normalizeVideoCardCoverRatio } from '../src/utils/videoCardLayout'
 import { CONTRIBUTORS_IMAGE_URL, prepareContributorsImage } from './contributorsCache'
 import { playbackFunctions, readPlaybackSource } from './playbackSource'
 import { FAVORITES_SOURCE_FILES, FOR_YOU_SOURCE_FILES, MOMENTS_SOURCE_FILES, readSourceFiles } from './refactoredSources'
+import { loadSourceFunctions } from './sourceFunctionHarness'
 import { verifyFunctionalAuditFixes } from './verify-functional-audit-fixes'
 import { verifyMomentPlayerPorts } from './verify-moment-player-ports'
 
@@ -1110,6 +1111,35 @@ function verifyIframeBoundary() {
   }
   assert.equal(markIframeReadyForMessaging(mismatchedTarget), true)
   assert.equal(postMessageToIframe(mismatchedTarget, { type: 'test' }), false)
+
+  let src = 'https://www.bilibili.com/opus/123?inDrawer=true'
+  const redirectedOrigins: string[] = []
+  const redirectedWindow = {
+    get location() { throw new DOMException('Cross-origin access', 'SecurityError') },
+    postMessage: (_message: unknown, origin: string) => redirectedOrigins.push(origin),
+  } as unknown as Window
+  const redirectedFrame = { getAttribute: () => src, contentWindow: redirectedWindow }
+  const ready = {
+    source: redirectedWindow,
+    origin: 'https://t.bilibili.com',
+    data: { type: 'BEWLY_OPUS_LAYOUT_READY', href: 'https://t.bilibili.com/123' },
+  }
+  assert.equal(markIframeReadyForMessaging(redirectedFrame), false)
+  assert.equal(postMessageToIframe(redirectedFrame, { type: 'BEWLY_OPUS_VIEWPORT' }), false)
+  assert.deepEqual(redirectedOrigins, [])
+  assert.equal(getIframeMessageData({ ...ready, source: {} as Window }, redirectedFrame), undefined)
+  assert.equal(getIframeMessageData({ ...ready, origin: 'https://evil.example' }, redirectedFrame), undefined)
+  assert.equal(getIframeMessageData({ ...ready, data: { ...ready.data, href: 'https://t.bilibili.com/456' } }, redirectedFrame), undefined)
+  assert.deepEqual(getIframeMessageData(ready, redirectedFrame), ready.data)
+  assert.equal(markIframeReadyForMessaging(redirectedFrame), true)
+  assert.equal(postMessageToIframe(redirectedFrame, { type: 'BEWLY_OPUS_VIEWPORT' }), true)
+  assert.deepEqual(redirectedOrigins, ['https://t.bilibili.com'])
+  assert.deepEqual(getIframeMessageData({ ...ready, data: { type: 'BEWLY_DRAWER_CLOSE_REQUEST' } }, redirectedFrame), { type: 'BEWLY_DRAWER_CLOSE_REQUEST' })
+  src = 'https://www.bilibili.com/opus/456'
+  assert.equal(getIframeMessageData(ready, redirectedFrame), undefined)
+  assert.equal(markIframeReadyForMessaging(redirectedFrame), false)
+  assert.equal(postMessageToIframe(redirectedFrame, { type: 'BEWLY_OPUS_VIEWPORT' }), false)
+  assert.equal(redirectedOrigins.length, 1)
 }
 
 function verifySearchHighlightSanitizer() {
@@ -1754,7 +1784,7 @@ async function verifyComponentContracts() {
   assert.match(commentSection, /onBeforeUnmount\(\(\) =>/)
   assert.match(commentSection, /requestIdentity !== getCommentIdentity\(\)/)
   assert.match(commentSection, /page\.hasMore && madeProgress && pageAdvanced/)
-  assert.match(commentSection, /aria-pressed="likedIds\.has\(node\.comment\.id\)"/)
+  assert.match(commentSection, /aria-pressed="commentLikeState\(node\.comment\)\.liked"/)
   assert.doesNotMatch(commentSection, /replyDraft|replyTarget|replyComposerRootId|<textarea|addMomentCommentReply/)
   assert.match(commentMedia, /pictures: MomentCommentPicture\[\]/)
   assert.match(commentMedia, /moment-comment-media--four/)
@@ -2380,15 +2410,10 @@ async function verifyP2WidescreenControl() {
   assert.match(settingsReadySection, /await ensureInterfaceLanguage\(\)/)
   assert.ok(settingsReadySection.indexOf('await ensureInterfaceLanguage()') < settingsReadySection.indexOf('playerModeSettingsReady = true'))
   assert.match(widescreen, /stopLanguageWatch = watch/)
-  const hiddenNativeControlSelectors = widescreen.slice(
-    widescreen.indexOf('const HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS'),
-    widescreen.indexOf('const MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR'),
-  )
-  assert.match(hiddenNativeControlSelectors, /\.bpx-player-ctrl-wide/)
-  assert.match(hiddenNativeControlSelectors, /\.bpx-player-ctrl-web/)
-  assert.match(hiddenNativeControlSelectors, /\.bpx-player-ctrl-full/)
-  assert.match(hiddenNativeControlSelectors, /\.bilibili-player-video-btn-fullscreen/)
-  assert.match(hiddenNativeControlSelectors, /\.squirtle-video-fullscreen/)
+  const modeControls = await loadSourceFunctions('../src/utils/playerMedia.ts', ['PLAYER_MODE_CONTROL_SELECTORS'], {})
+  const hiddenControls = await loadSourceFunctions('../src/utils/bewlyWidescreen/constants.ts', ['HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS'], modeControls)
+  for (const selector of ['.bpx-player-ctrl-wide', '.bpx-player-ctrl-web', '.bpx-player-ctrl-full', '.bilibili-player-video-btn-fullscreen', '.squirtle-video-fullscreen'])
+    assert.ok(hiddenControls.HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS.includes(selector))
   assert.match(widescreen, /window\.innerHeight - stableDockBottom \+ blockPadding/)
   assert.match(sideBar, /var\(--bewly-widescreen-controls-glass-bottom, var\(--bew-space-8\)\)/)
   assert.match(widescreen, /danmakuSourceHost\?\.isConnected && currentState\.playerEl\.isConnected/)
@@ -3250,7 +3275,7 @@ async function verifyP2WidescreenControl() {
   assert.match(watchLaterScheduleSection, /mountWatchLaterButtonWhenToolbarReady/)
   assert.match(watchLaterButton, /MutationObserver/)
   assert.match(watchLaterButton, /requestPending/)
-  assert.match(watchLaterButton, /state\.isInWatchLater = previousState/)
+  assert.match(watchLaterButton, /result\.status === 'success'[\s\S]{0,80}state\.isInWatchLater = result\.added/)
   assert.match(watchLaterButton, /topBarStore\.userInfo\.mid !== accountId/)
   assert.match(watchLaterButton, /isWatchLaterAccountCurrent\(accountId, csrf\)/)
   assert.match(watchLaterButton, /mountedButtons/)
@@ -3547,7 +3572,9 @@ async function verifyUpstreamReliabilityContracts() {
   const refreshSection = favoritesPop.slice(refreshStart, favoritesPop.indexOf('function changeCategory', refreshStart))
   assert.match(refreshSection, /getFavoriteResources\(true, true, 1\)/)
   assert.doesNotMatch(refreshSection, /favoriteResources\.length = 0/)
-  assert.match(favoritesPop, /favoriteResources\.splice\(0, favoriteResources\.length, \.\.\.uniqueMedias\)/)
+  // Incremental row identity and refresh failure behavior are exercised through
+  // the mounted FavoritesPop in verify-favorite-sources.mjs.
+  assert.match(favoritesPop, /for \(const \{ index, item \} of merged\.changed\)/)
   assert.match(favoritesPop, /isLoadingCategories/)
   assert.match(favoritesPop, /if \(!data \|\| !\('medias' in data\)\)/)
   assert.match(favoritesPop, /rawMedias\.every\(isValidFavoriteResource\)/)

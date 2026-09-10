@@ -11,6 +11,10 @@ import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import SettingsItemSubgroup from '../../components/SettingsItemSubgroup.vue'
 
 const { t } = useI18n()
+const videoPlayerScrollOptions = computed(() => [
+  { label: t('settings.video_player_scroll_sending_bar'), value: 'sendingBar' },
+  { label: t('settings.video_player_scroll_center'), value: 'playerCenter' },
+])
 
 const bewlyWidescreenSidebarPositionOptions = computed(() => [
   {
@@ -107,6 +111,9 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
 
     <SettingsItem :title="t('settings.video_player_scroll')" right-width="auto">
       <Radio v-model="settings.videoPlayerScroll" />
+    </SettingsItem>
+    <SettingsItem v-if="settings.videoPlayerScroll" :title="t('settings.video_player_scroll_position')" right-width="auto">
+      <Select v-model="settings.videoPlayerScrollMode" :options="videoPlayerScrollOptions" w="160px" />
     </SettingsItem>
 
     <SettingsItem

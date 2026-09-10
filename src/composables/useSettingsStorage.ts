@@ -18,6 +18,7 @@ import {
   SETTINGS_STORAGE_PATCH_MESSAGE,
   SETTINGS_STORAGE_READ_MESSAGE,
 } from '~/utils/settingsStorageProtocol'
+import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 
 export type SettingsStorageInitializationState = 'degraded' | 'loaded' | 'loading'
 
@@ -168,9 +169,12 @@ export function useSettingsStorage<T extends object>(
 
     canonicalRevision = normalizedRevision
     canonicalFingerprint = fingerprint
+    const raw = parseStoredSettings(storedValue)
+    const migrated = migrateSidebarCoverSetting(raw)
+    queuedPatch = mergeSettingsStoragePatches(createTopLevelSettingsStoragePatch(raw, migrated), queuedPatch)
     canonicalValue = {
       ...asRecord(cloneValue(defaults)),
-      ...parseStoredSettings(storedValue),
+      ...migrated,
     }
     renderCanonicalValue()
   }

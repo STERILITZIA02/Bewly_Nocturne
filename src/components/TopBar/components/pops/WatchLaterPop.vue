@@ -12,8 +12,10 @@ import { resetTopBarTransientInteraction } from '~/components/TopBar/composables
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { createAccountLifetime } from '~/utils/accountLifetime'
+import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { isHomePage, isInIframe, removeHttpFromUrl } from '~/utils/main'
+import { getUserID, isHomePage, isInIframe, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
 
@@ -31,7 +33,16 @@ const playAllUrl = computed((): string => {
 })
 
 const scrollContainer = ref<HTMLElement>()
-const pendingActions = reactive(new Set<number>())
+const pendingActions = reactive(new Map<number, symbol>())
+const actionLifetime = createAccountLifetime(() => {
+  const accountId = resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid)
+  return getUserID() === String(accountId) ? accountId : null
+})
+onScopeDispose(() => actionLifetime.dispose())
+watch(() => topBarStore.userInfo.mid, () => {
+  actionLifetime.invalidate()
+  pendingActions.clear()
+}, { flush: 'sync' })
 
 // 检查是否还有更多内容
 const hasMoreContent = computed(() => {
@@ -96,20 +107,26 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
   if (pendingActions.has(aid))
     return false
 
-  pendingActions.add(aid)
+  const owner = actionLifetime.capture()
+  const requestId = Symbol('watch-later-remove')
+  pendingActions.set(aid, requestId)
   try {
-    const removed = await topBarStore.deleteWatchLaterItem(aid)
+    const removed = await topBarStore.deleteWatchLaterItem(aid, owner.isCurrent)
+    if (!owner.isCurrent())
+      return false
     if (!removed)
       toast.error(t('moments.watch_later_failed_retry'))
     return removed
   }
   finally {
-    pendingActions.delete(aid)
+    if (pendingActions.get(aid) === requestId)
+      pendingActions.delete(aid)
   }
 }
 
 async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
-  if (await deleteWatchLaterItem(aid))
+  const owner = actionLifetime.capture()
+  if (await deleteWatchLaterItem(aid) && owner.isCurrent())
     openVideoPage(getVideoPageUrl(bvid))
 }
 </script>

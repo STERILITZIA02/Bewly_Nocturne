@@ -21,6 +21,7 @@ async function createFixture(Vue, apiOverrides = {}) {
   const stateModule = await loadSourceModule('../src/composables/useHomeTabState.ts', { vue: Vue })
   const account = Vue.ref(1)
   const revision = Vue.ref(0)
+  const recordedTimes = Vue.ref({})
   const listeners = new Set()
   const api = { user: {
     getUserFollowings: async () => ({ code: 0, data: { list: [member(10)], total: 1 } }),
@@ -42,7 +43,7 @@ async function createFixture(Vue, apiOverrides = {}) {
   const dependencies = { 'vue': Vue, '~/utils/accountLifetime': lifetime, '~/utils/api': { default: api }, '~/utils/userRelation': relations, './model': model }
   const directoryModule = await loadSourceModule('../src/contentScripts/views/Home/following/useFollowingDirectory.ts', {
     ...dependencies,
-    '~/logic/uploaderLatestVideoTimes': { uploaderLatestVideoTimes: Vue.ref({}), uploaderLatestVideoTimesReady: Promise.resolve() },
+    '~/logic/uploaderLatestVideoTimes': { uploaderLatestVideoTimes: recordedTimes, uploaderLatestVideoTimesReady: Promise.resolve() },
   })
   const writesModule = await loadSourceModule('../src/contentScripts/views/Home/following/useFollowingGroupWrites.ts', {
     ...dependencies,
@@ -58,13 +59,58 @@ async function createFixture(Vue, apiOverrides = {}) {
     return () => Vue.h('div')
   } })
   app.mount(host)
-  return { directory, writes, account, revision, api, model, listeners, dispose() {
+  return { directory, writes, account, revision, api, model, listeners, recordedTimes, dispose() {
     app.unmount()
     host.remove()
   } }
 }
 
 export function registerUpstreamFollowingChecks(check, { Vue, flush, compileComponent }) {
+  check('following directory: recorded times and group removal batch once, retain unchanged members and scale linearly', async () => {
+    const size = 1200
+    const fixture = await createFixture(Vue, { getUserFollowings: async ({ pn }) => ({ code: 0, data: { total: size, list: Array.from({ length: 50 }, (_, i) => member((pn - 1) * 50 + i + 1, i % 2 ? [2] : [-10, 1])) } }) })
+    const { directory } = fixture
+    await directory.load()
+    let reads = 0
+    function countMidReads() {
+      for (const user of directory.uploaders.value) {
+        const mid = user.mid
+        Object.defineProperty(Vue.toRaw(user), 'mid', { configurable: true, enumerable: true, get() {
+          reads++
+          return mid
+        } })
+      }
+      reads = 0
+    }
+    countMidReads()
+    const untouched = directory.uploaders.value.find(user => user.mid === 2)
+    const now = Date.now()
+    let commits = 0
+    const stop = Vue.watch(directory.uploaders, () => commits++, { flush: 'sync' })
+    try {
+      reads = 0
+      fixture.recordedTimes.value = Object.fromEntries(Array.from({ length: size / 2 }, (_, index) => [index * 2 + 1, { time: now }]))
+      await flush()
+      const timeReads = reads
+      assert.ok(timeReads < size * 20, `recorded timestamps read MID ${timeReads} times for ${size} members`)
+      assert.equal(commits, 1)
+      assert.equal(directory.uploaders.value.find(user => user.mid === 2), untouched)
+      commits = 0
+      countMidReads()
+      directory.removeGroup(1)
+      const groupReads = reads
+      assert.ok(groupReads < size * 6, `group removal read MID ${groupReads} times for ${size} members`)
+      assert.equal(commits, 1)
+      assert.equal(directory.uploaders.value.find(user => user.mid === 2), untouched)
+      assert.ok(directory.uploaders.value.filter(user => user.mid % 2).every(user => user.groupIds.includes(-10) && !user.groupIds.includes(1)))
+      console.log(`PERF following fixture: ${size} members; recorded times ${timeReads} MID reads / 1 commit; group removal ${groupReads} MID reads / 1 commit`)
+    }
+    finally {
+      stop()
+      fixture.dispose()
+    }
+  })
+
   check('following: reads preserve successful writes and retained lists; account/unmount stop late pagination', async () => {
     const fixture = await createFixture(Vue)
     const { directory, api } = fixture

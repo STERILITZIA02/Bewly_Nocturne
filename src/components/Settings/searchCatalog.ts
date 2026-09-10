@@ -516,6 +516,9 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.video_default_player_mode',
   ], { keywordKeys: playerModeOptionKeys }),
   ...createEntries(playbackPageRoute, [
+    'settings.video_player_scroll_position',
+  ], { keywordKeys: ['settings.video_player_scroll_sending_bar', 'settings.video_player_scroll_center'] }),
+  ...createEntries(playbackPageRoute, [
     'settings.video_player_mode.context_multipart',
     'settings.video_player_mode.context_collection',
     'settings.video_player_mode.context_bangumi',
@@ -601,6 +604,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.frosted_glass_blur_intensity',
     'settings.disable_shadow',
     'settings.group_page_style',
+    'settings.enable_sidebar_cover_blur',
     'settings.adapt_to_other_page_styles',
     'settings.group_color',
     'settings.theme',

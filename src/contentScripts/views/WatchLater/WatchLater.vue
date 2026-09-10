@@ -12,12 +12,14 @@ import { settings } from '~/logic'
 import { useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import type { List as VideoItem, WatchLaterResult } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { createAccountLifetime } from '~/utils/accountLifetime'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { getCSRF, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
+import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
+import { updateOwnedWatchLater } from '~/utils/watchLater'
 import { mergeWatchLaterItemsByAid } from '~/utils/watchLaterList'
 
 import WatchLaterGridCard from './WatchLaterGridCard.vue'
@@ -44,10 +46,11 @@ const { gridClass: watchLaterGridClass, gridCssVars: watchLaterGridCssVars } = u
 let requestGeneration = 0
 let loadedAccountId: number | null = null
 let watchLaterExtensionContextInvalidated = false
+const actionLifetime = createAccountLifetime(getCurrentAccountId)
 
 function getCurrentAccountId(): number | null {
   const mid = Number(topBarStore.userInfo.mid)
-  return topBarStore.isLogin && Number.isFinite(mid) && mid > 0 ? mid : null
+  return topBarStore.isLogin && Number.isFinite(mid) && mid > 0 && getUserID() === String(mid) ? mid : null
 }
 
 function invalidateRequests(): number {
@@ -103,12 +106,14 @@ watch(
     if (accountId === loadedAccountId)
       return
 
+    actionLifetime.invalidate()
     loadedAccountId = accountId
     void initData()
   },
 )
 
 onBeforeUnmount(() => {
+  actionLifetime.dispose()
   invalidateRequests()
   if (handlePageRefresh.value === handleWatchLaterPageRefresh)
     handlePageRefresh.value = undefined
@@ -257,14 +262,15 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
     return false
 
   const action = { accountId, aid }
+  const owner = actionLifetime.capture()
   pendingAction.value = action
   const generation = invalidateRequests()
   try {
-    const res = await api.watchlater.removeFromWatchLater({
-      aid,
-      csrf: getCSRF(),
-    })
-    if (res.code !== 0 || !isCurrentRequest(generation, accountId))
+    const result = await updateOwnedWatchLater({ aid }, 'remove', {
+      accountId: owner.accountId,
+      isCurrent: () => owner.isCurrent() && isCurrentRequest(generation, accountId),
+    }, topBarStore)
+    if (result.status !== 'success' || !owner.isCurrent() || !isCurrentRequest(generation, accountId))
       return false
 
     const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
@@ -276,7 +282,6 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
       pageNum.value = Math.max(1, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
       noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
     }
-    await topBarStore.commitWatchLaterMutation(aid, false, accountId)
     return true
   }
   catch (error) {
@@ -391,8 +396,10 @@ function handleVideoLinkClick(bvid: string) {
 }
 
 async function openVideoPageAndRemove(item: VideoItem) {
-  if (await deleteWatchLaterItem(item.aid))
-    handleVideoLinkClick(item.bvid)
+  const owner = actionLifetime.capture()
+  const { aid, bvid } = item
+  if (await deleteWatchLaterItem(aid) && owner.isCurrent())
+    handleVideoLinkClick(bvid)
 }
 
 function playAndRemove(item: VideoItem) {
@@ -669,30 +676,14 @@ function isItemActionPending(): boolean {
     </main>
 
     <aside relative w="full md:40% lg:30% xl:25%" order="1 md:2 lg:2">
-      <div
+      <CoverSidebarSurface
+        :cover="currentWatchLaterList[0]?.pic ? removeHttpFromUrl(`${currentWatchLaterList[0].pic}@480w_270h_1c`) : ''"
         pos="sticky top-120px"
         w-full h="230px md:[calc(100vh-160px)]"
         my-10
         rounded="$bew-radius"
         overflow-hidden
       >
-        <!-- Frosted Glass Cover -->
-        <div
-          pos="absolute top-0 left-0" w-full h-inherit
-          z--1
-        >
-          <div
-            absolute w-full h-inherit
-            bg="$bew-fill-4"
-          />
-          <img
-            v-if="currentWatchLaterList[0]"
-            :src="removeHttpFromUrl(`${currentWatchLaterList[0].pic}@480w_270h_1c`)"
-            w-full h-full object="cover center" blur-40px
-            relative z--1
-          >
-        </div>
-
         <!-- Content -->
         <main
           pos="absolute top-0 left-0"
@@ -703,7 +694,7 @@ function isItemActionPending(): boolean {
         >
           <picture
             class="hidden md:block"
-            rounded="$bew-radius" style="box-shadow: 0 16px 24px -12px rgba(0, 0, 0, .36)"
+            rounded="$bew-radius" style="box-shadow: var(--bew-sidebar-media-shadow)"
             aspect-video mb-4 bg="$bew-skeleton"
           >
             <img
@@ -712,12 +703,12 @@ function isItemActionPending(): boolean {
             >
           </picture>
 
-          <h3 class="bew-page-heading" text="white" style="text-shadow: 0 0 12px rgba(0,0,0,.3)">
+          <h3 class="bew-page-heading" style="color: var(--bew-sidebar-text); text-shadow: var(--bew-sidebar-text-shadow)">
             {{ t('watch_later.title') }} ({{ watchLaterCount }})
           </h3>
           <div v-if="watchLaterCount > 0" flex="~ col" gap-2 w-full>
             <Button
-              color="rgba(255,255,255,.35)" block text-color="white" strong
+              class="bew-cover-sidebar__action" block strong
               @click="handlePlayAll"
             >
               <template #left>
@@ -726,7 +717,7 @@ function isItemActionPending(): boolean {
               {{ t('common.play_all') }}
             </Button>
             <Button
-              color="rgba(255,255,255,.35)" block text-color="white" strong
+              class="bew-cover-sidebar__action" block strong
               @click="handleClearAllWatchLater"
             >
               <template #left>
@@ -735,7 +726,7 @@ function isItemActionPending(): boolean {
               {{ t('watch_later.clear_all') }}
             </Button>
             <Button
-              color="rgba(255,255,255,.35)" block text-color="white" strong
+              class="bew-cover-sidebar__action" block strong
               @click="handleRemoveWatchedVideos"
             >
               <template #left>
@@ -745,7 +736,7 @@ function isItemActionPending(): boolean {
             </Button>
           </div>
         </main>
-      </div>
+      </CoverSidebarSurface>
     </aside>
   </div>
   <Empty v-else mt-6 :description="t('common.please_log_in_first')">

@@ -264,8 +264,10 @@ async function verifyCommentSessions() {
   const target = { oid: '123', type: 17 }
   const lease = cache.open('account-a', 'moment-a', target)!
   cache.save(lease, { comments: [root], nextPage: 3, hasMore: true, threads: thread.snapshot(), likedIds: ['101'], likeCounts: { 101: 9 }, scrollTop: 144 })
+  cache.release(lease)
   thread.dispose()
-  const restored = cache.restore(cache.open('account-a', 'moment-a', target)!)!
+  const restoredLease = cache.open('account-a', 'moment-a', target)!
+  const restored = cache.restore(restoredLease)!
   const remounted = makeThread()
   remounted.restore(restored.threads)
   assert.equal(restored.comments[0].id, '100')
@@ -280,8 +282,9 @@ async function verifyCommentSessions() {
   assert.equal(remounted.getState('100')?.loading, false)
   assert.equal(remounted.getState('100')?.error, undefined)
   assert.deepEqual(cache.getTarget('account-a', 'moment-a'), target)
+  cache.release(restoredLease)
   for (let index = 0; index < 16; index++)
-    cache.open('account-a', `next-${index}`, target)
+    cache.release(cache.open('account-a', `next-${index}`, target)!)
   assert.equal(cache.restore(lease), null, '17th entry evicts least recently used')
   const nextLease = cache.open('account-a', 'moment-a', target)!
   cache.save(nextLease, restored)
@@ -295,6 +298,36 @@ async function verifyCommentSessions() {
   cache.clear()
   cache.save(bLease, restored)
   assert.equal(cache.restore(bLease), null, 'feed reset invalidates active leases')
+  const latestLease = cache.open('account-b', 'sort-test', target, 0)!
+  cache.save(latestLease, restored)
+  const hotLease = cache.open('account-b', 'sort-test', target, 1)!
+  assert.equal(cache.restore(hotLease), null)
+  cache.save(hotLease, restored)
+  assert.equal(cache.open('account-b', 'sort-test', target)!.sort, 1, 'reopen remembers only the last sort')
+  cache.save(latestLease, { ...restored, nextPage: 99 })
+  assert.equal(cache.restore(hotLease)!.nextPage, 3, 'an old sort lease cannot overwrite the new snapshot')
+  const isolated = cache.restore(hotLease)!
+  isolated.comments[0].message = 'changed by the active view'
+  assert.notEqual(cache.restore(hotLease)!.comments[0].message, isolated.comments[0].message)
+  const huge = { ...restored, comments: [{ ...root, message: 'x'.repeat(3 * 1024 * 1024) }] }
+  cache.save(hotLease, huge)
+  assert.equal(cache.restore(hotLease), null, 'oversized snapshots are skipped without trimming current readable comments')
+  assert.equal(huge.comments[0].message.length, 3 * 1024 * 1024)
+  for (let index = 0; index < 16; index++) {
+    const bounded = cache.open('account-b', `budget-${index}`, target)!
+    cache.save(bounded, { ...restored, comments: [{ ...root, message: 'x'.repeat(512 * 1024) }] })
+  }
+  assert.ok(cache.cachedBytes <= 8 * 1024 * 1024)
+  const writingCache = createMomentCommentSessionCache('account-b', 1)
+  const writingA = writingCache.open('account-b', 'A', target)!
+  const likeA = writingCache.startLike(writingA, '100', false, 0)!
+  writingCache.release(writingA)
+  const writingB = writingCache.open('account-b', 'B', target)!
+  const likeB = writingCache.startLike(writingB, '101', false, 0)!
+  writingCache.finishLike(likeA, true)
+  assert.equal(writingCache.getTarget('account-b', 'A'), null, 'completed writes promptly release their temporary cache retention')
+  assert.ok(writingCache.getLike(writingB, '101')?.pending)
+  writingCache.finishLike(likeB, true)
   remounted.dispose()
 }
 
@@ -395,6 +428,8 @@ async function verifyPlayerAndTiming() {
     'schedulePlayerModeRetry',
     'waitForPlayerModePageSettle',
     'applyDefaultPlayerMode',
+    'resolveApplicablePlayerMode',
+    'isPlayerModeRetryBlocked',
   ], {
     Date: { now: () => now },
     Number,
@@ -402,6 +437,10 @@ async function verifyPlayerAndTiming() {
     playerModeReadyAfter: Infinity,
     videoOwnerAvatarReadyDeadline: Infinity,
     playerModeSettingsReady: true,
+    failedPlayerModeState: undefined,
+    getPlayerModeReadiness: () => [],
+    getPlayerModeControl: () => null,
+    getPlayerModeContainer: () => null,
     userExitedWidescreenNavigationKey: undefined,
     lastAppliedPlayerModeNavigationKey: undefined,
     autoContinuationNavigationKey: undefined,

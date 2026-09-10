@@ -110,6 +110,8 @@ player_screenshot:
   failed: 截圖失敗
   video_unavailable: 而家嘅影片畫面用唔到
 settings:
+  enable_sidebar_cover_blur: 側欄封面背景
+  enable_sidebar_cover_blur_desc: 收藏同稍後再睇嘅側欄用模糊封面做背景；關閉後用目前主題嘅中性表面。
   following_sort: 新版關注列表排序
   following_sort_updated: 按更新時間
   following_sort_group: 按分組
@@ -741,10 +743,10 @@ settings:
   following_filter_dynamic_videos_desc: 啟用後，喺「跟緊啲人」頁面入邊會隱藏標記為動態影片嘅內容
   use_following_new_layout: 用跟緊啲人新版面
   use_following_new_layout_desc: 左邊顯示關注嘅UP主名單，右邊顯示影片流
-  collected_season_play_all_mode: 訂閱合集「播放全部」起播位置
-  collected_season_play_all_mode_desc: 控制收藏頁、頂欄同空間頁訂閱合集「播放全部」嘅起播位置。預設係合集開頭；搵唔到上次觀看就退回開頭。唔會改列表次序同連播方向。
-  collected_season_play_all_mode_beginning: 合集開頭
-  collected_season_play_all_mode_latest: 最新一期
+  collected_season_play_all_mode: 訂閱收藏「播放全部」起播位置
+  collected_season_play_all_mode_desc: 適用於訂閱嘅公開收藏夾同合集。預設由頭播放；「最新」喺公開夾指最近收藏嘅影片，合集就保留最新一期嘅意思。搵唔到上次觀看或者列表唔完整時用原生入口，唔改列表次序同連播方向。
+  collected_season_play_all_mode_beginning: 由頭播放
+  collected_season_play_all_mode_latest: 最新收藏 / 最新一期
   collected_season_play_all_mode_last_watched: 上次觀看
   enable_version_reminder: 新版本提醒
   enable_version_reminder_desc: 喺外掛主頁提醒未確認嘅新版本；每個版本只會提醒一次。
@@ -896,6 +898,9 @@ settings:
   hide_comment_image_scrollbar: 留言圖片預覽時隱藏頁面滾動條
   hide_comment_image_scrollbar_desc: 開啟留言區圖片預覽時隱藏頁面右側滾動條，避免滾動條顯示喺遮罩右側
   video_player_scroll: 校好顯示模式後自動轆到合適嘅位置
+  video_player_scroll_position: 播放器捲動位置
+  video_player_scroll_sending_bar: 優先顯示彈幕發送欄
+  video_player_scroll_center: 播放器置中
   video_player_scroll_desc: 啓用後，若果顯示模式係闊螢幕或預設嗰陣，會自動轆到合適嘅位置。
   enlarge_favorite_dialog: 放大收藏彈窗
   enlarge_favorite_dialog_desc: 啓用後，影片頁收藏彈窗會用更大嘅尺寸顯示，方便睇同管理收藏夾。
@@ -1319,6 +1324,9 @@ moments:
   fit_window: 配合視窗
   rotate_clockwise: 順時針旋轉
 moment_card:
+  comments_sort: 留言排序
+  comments_sort_latest: 最新
+  comments_sort_hot: 最熱
   video_moment: 影片動態
   open_detail: 開啟 {author} 嘅動態詳情
   open_origin_moment: 睇 {name} 嘅原動態
@@ -1512,7 +1520,7 @@ favorites:
   collected_season_prefix: 合集
   video_section_title: 收藏嘅影片
   folder_section_title: 所有收藏夾
-  season_section_title: 收藏嘅合集
+  season_section_title: 訂閱嘅收藏夾同合集
   article_section_title: 收藏嘅圖文
   video_count: 影片數：{count}
   article_count: 圖文數：{count}
@@ -1539,7 +1547,7 @@ favorites:
     噉做冇得返轉頭噃，你確定要剷走呢啲片？
   global_search_hint: 輸入關鍵字搜尋所有收藏
   global_search_placeholder: 搜尋所有收藏
-  season_play_all_fallback: 合集列表未就緒，已退回合集開頭
+  season_play_all_fallback: 未能確認起播位置，改用原生列表入口
   sidebar_manage: 管理
   sidebar_manage_exit: 退出管理
   select_all: 全選

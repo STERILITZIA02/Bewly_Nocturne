@@ -4,6 +4,64 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerUpstreamPlayerChecks(check) {
+  check('player scroll: sending bar remains default; center mode and every delayed media/layout boundary are respected', async () => {
+    const video = document.createElement('video')
+    video.src = 'https://example.com/current.mp4'
+    let currentVideo = video
+    let href = 'https://www.bilibili.com/video/BV1/'
+    let current = true
+    let ended = false
+    let screen = 'wide'
+    const calls = []
+    const jobs = []
+    const preferences = { videoPlayerScroll: true, videoPlayerScrollMode: 'sendingBar' }
+    const page = { hidden: false, fullscreenElement: null, body: { classList: { contains: () => false } } }
+    const root = { querySelector: () => ({ getBoundingClientRect: () => ({ bottom: 900 }) }) }
+    const container = { getAttribute: () => screen, scrollIntoView: value => calls.push(['center', value]) }
+    const state = await loadSourceFunctions('../src/utils/player.ts', ['scrollPlayerToOptimalPosition'], {
+      settings: { value: preferences },
+      getVideoElement: () => currentVideo,
+      location: { get href() { return href } },
+      document: page,
+      window: { innerHeight: 800, scrollBy: value => calls.push(['bar', value]) },
+      getPlayerModeContainer: () => container,
+      getPlayerRoot: () => root,
+      playbackSelectors: { danmakuInput: ['.sending'] },
+      isPlayerShowingEndingRecommendation: () => ended,
+      schedulePlayerLayoutTask: callback => jobs.push(callback),
+    })
+    state.scrollPlayerToOptimalPosition(0)
+    assert.equal(calls[0][0], 'bar')
+    preferences.videoPlayerScrollMode = 'playerCenter'
+    state.scrollPlayerToOptimalPosition(0)
+    assert.equal(calls[1][0], 'center')
+    for (const invalidate of [
+      () => { current = false },
+      () => { currentVideo = document.createElement('video') },
+      () => { href += '?p=2' },
+      () => { video.src += '?new=1' },
+      () => { page.hidden = true },
+      () => { ended = true },
+      () => { screen = 'web' },
+      () => { page.fullscreenElement = container },
+      () => { preferences.videoPlayerScroll = false },
+      () => { page.body.classList.contains = () => true },
+    ]) {
+      state.scrollPlayerToOptimalPosition(1000, () => current)
+      invalidate()
+      jobs.splice(0).forEach(run => run())
+      assert.equal(calls.length, 2, 'a delayed scroll cannot affect an invalidated media or fixed layout')
+      current = true
+      currentVideo = video
+      page.hidden = false
+      ended = false
+      screen = 'wide'
+      page.fullscreenElement = null
+      preferences.videoPlayerScroll = true
+      page.body.classList.contains = () => false
+    }
+  })
+
   check('player navigation: old URL/media overlap, manual exit, Drawer and background cannot confirm a new navigation', async () => {
     const { createPlayerModeApplication } = await import('../src/utils/playerModeApplication')
     const oldVideo = document.createElement('video')
@@ -17,12 +75,16 @@ export function registerUpstreamPlayerChecks(check) {
     let drawer = false
     let ended = false
     const timers = []
+    let readiness = {}
     let companions = 0
     const pageDocument = { visibilityState: 'visible' }
-    const state = await loadSourceFunctions('../src/contentScripts/index.ts', ['getCurrentPlayerModeApplication', 'invalidatePlayerModeApplication'], {
+    const state = await loadSourceFunctions('../src/contentScripts/index.ts', ['getCurrentPlayerModeApplication', 'invalidatePlayerModeApplication', 'isPlayerModeRetryBlocked', 'resolveApplicablePlayerMode'], {
       createPlayerModeApplication,
       playerModeApplication: undefined,
       playerModeApplicationStarted: false,
+      failedPlayerModeState: undefined,
+      getPlayerModeReadiness: () => [video, readiness],
+      clearPlayerModeRetry() {},
       playerModeGeneration: 0,
       navigationVideo: oldVideo,
       navigationMediaSource: 'old.mp4',
@@ -35,6 +97,7 @@ export function registerUpstreamPlayerChecks(check) {
       getVideoNavigationKey: () => key,
       isIframeDrawerHost: () => drawer,
       isPgcPlaybackPage: () => false,
+      isFestivalPage: () => false,
       isVideoPage: () => true,
       readVideoPageMetadata: () => ({ bvid: key }),
       resolveDefaultVideoPlayerMode: () => 'widescreen',
@@ -87,6 +150,20 @@ export function registerUpstreamPlayerChecks(check) {
     key = 'BV2:p3'
     timers.forEach(run => run())
     assert.equal(companions, 1, 'old companion timers also belong to the submitted media/navigation')
+    const failed = state.getCurrentPlayerModeApplication(key)
+    state.playerModeApplicationStarted = true
+    failed.fail()
+    assert.equal(state.playerModeApplicationStarted, false)
+    assert.equal(state.getCurrentPlayerModeApplication(key), undefined, 'unchanged failed readiness never immediately restarts')
+    readiness = {}
+    const retry = state.getCurrentPlayerModeApplication(key)
+    assert.ok(retry, 'a real control replacement allows a new application')
+    state.playerModeApplicationStarted = true
+    failed.cancel()
+    assert.equal(state.playerModeApplicationStarted, true, 'an old terminal callback cannot clear a new application')
+    retry.onApplied()
+    assert.equal(state.playerModeApplicationStarted, false)
+    assert.equal(companions, 2)
   })
 
   check('player mode: click is pending; actual native state confirms once and stale tasks stop', async () => {
@@ -99,6 +176,7 @@ export function registerUpstreamPlayerChecks(check) {
       '~/logic': { settings: { value: { videoPlayerScroll: false, rememberPlaybackRate: false } } },
       '~/utils/playbackRate': {},
       '~/utils/videoMetadataBridge': { readVideoPageMetadata: () => null },
+      '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
       './playerMedia': await loadSourceModule('../src/utils/playerMedia.ts', { './videoMetadataBridge': { isNativeVideoComponentReady: () => undefined } }),
     }, {
       location: window.location,
@@ -152,6 +230,30 @@ export function registerUpstreamPlayerChecks(check) {
       player.defaultMode(createPlayerModeApplication(() => active, () => completed++))
       assert.equal(completed, 2, 'hiding the ending screen permits replay without a sticky ended flag')
       player.cancelPlayerRetryTasks()
+      assert.equal(jobs.size, 0)
+      root.dataset.screen = 'normal'
+      const outcomes = []
+      const failed = createPlayerModeApplication(() => active, () => completed++, outcome => outcomes.push(outcome))
+      player.widescreen(failed)
+      for (let attempt = 0; attempt < 20; attempt++)
+        tick()
+      assert.equal(failed.status, 'failed', 'exhausted mode work reaches a terminal state')
+      assert.deepEqual(outcomes, ['failed'])
+      root.dataset.screen = 'wide'
+      failed.onApplied()
+      assert.equal(completed, 2, 'late native mode state cannot revive an exhausted application')
+      const stateAnchor = root.appendChild(document.createElement('div'))
+      stateAnchor.className = 'bpx-player-state-wrap'
+      player.showState('first')
+      const oldHide = [...jobs.values()][0]
+      player.showState('second')
+      assert.equal(jobs.size, 1, 'a new HUD replaces its previous hide timer')
+      const hud = [...root.children].find(element => element.textContent === 'second')
+      assert.ok(hud)
+      oldHide()
+      assert.notEqual(getComputedStyle(hud).display, 'none', 'an already queued old hide callback cannot hide the new prompt')
+      player.cancelPlayerRetryTasks()
+      assert.equal(hud.isConnected, false)
       assert.equal(jobs.size, 0)
     }
     finally {

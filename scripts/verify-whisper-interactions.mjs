@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict'
 
+import { loadSourceModule } from './sourceModuleHarness'
+
 export function registerWhisperInteractionChecks(check, { Vue, compileComponent, flush }) {
   const path = '../src/contentScripts/views/Notifications/whisper/'
   const deferred = () => {
@@ -27,6 +29,64 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     app.component('Empty', { props: ['description'], setup: props => () => Vue.h('p', props.description) })
     app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
   }
+
+  check('Whisper reading anchor: prepends preserve the visible message; newer reading intent and replaced viewports reject restoration', async () => {
+    const frames = new Map()
+    let id = 0
+    const module = await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, {
+      AbortController,
+      WheelEvent: window.WheelEvent,
+      KeyboardEvent: window.KeyboardEvent,
+      PointerEvent: window.PointerEvent ?? class extends window.MouseEvent {},
+      TouchEvent: window.TouchEvent,
+      requestAnimationFrame: (callback) => {
+        frames.set(++id, callback)
+        return id
+      },
+      cancelAnimationFrame: key => frames.delete(key),
+    })
+    let reading
+    const saved = []
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup() {
+      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, talkerId: () => 'A', save: (...args) => saved.push(args), onFrame() {} })
+      return () => Vue.h('div', { ref: reading.messageScrollRef }, [Vue.h('div', { 'data-message-id': 'first' }), Vue.h('div', { 'data-message-id': 'anchor' })])
+    } })
+    app.mount(host)
+    const viewport = reading.messageScrollRef.value
+    viewport.getBoundingClientRect = () => ({ top: 100 })
+    let growth = 0
+    Object.defineProperties(viewport, { scrollHeight: { get: () => 1000 + growth }, clientHeight: { value: 400 } })
+    viewport.scrollTop = 200
+    for (const [index, row] of [...viewport.children].entries()) {
+      row.getBoundingClientRect = () => {
+        const top = 100 + (index ? 230 : 100) + growth - viewport.scrollTop
+        return { top, bottom: top + 40 }
+      }
+    }
+    try {
+      const anchor = reading.captureReadingAnchor()
+      growth = 120
+      anchor.restore()
+      assert.equal(viewport.scrollTop, 320)
+      assert.equal(saved.at(-1)[0], 'A')
+      const beforeInteraction = reading.captureReadingAnchor()
+      reading.markReadingIntent(new window.WheelEvent('wheel', { deltaY: -1 }))
+      viewport.scrollTop = 100
+      growth = 200
+      beforeInteraction.restore()
+      assert.equal(viewport.scrollTop, 100, 'new reading intent wins over pagination restoration')
+      const oldViewport = reading.captureReadingAnchor()
+      reading.messageScrollRef.value = document.createElement('div')
+      oldViewport.restore()
+      assert.equal(reading.messageScrollRef.value.scrollTop, 0)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+    assert.equal(frames.size, 0)
+  })
 
   check('Whisper history: entry gates requests, switching preserves the shell/composer, and late history never crosses conversations', async () => {
     const frames = new Map()
@@ -80,6 +140,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const account = Vue.ref('1')
     const topBar = Vue.reactive({ userInfo: { mid: 1 } })
     const selected = Vue.ref('2')
+    const active = Vue.ref(true)
     const requests = []
     let ackCount = 0
     const reader = scope.run(() => usePrivateMessages(account, selected, {
@@ -126,6 +187,8 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       '~/logic': { settings: Vue.ref({ autoMarkPrivateMessagesRead: true, followNewPrivateMessages: true, autoLoadPrivateMessageImages: true }) },
       '~/stores/topBarStore': { useTopBarStore: () => topBar },
       './conversationExpansion': await import(`${path}conversationExpansion`),
+      './useConversationViewport': await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
+      './useConversationPresentation': await loadSourceModule(`${path}useConversationPresentation.ts`, { vue: Vue, '~/constants/layout': await import('../src/constants/layout'), './conversationExpansion': await import(`${path}conversationExpansion`) }, clock),
       './experimental/MessageComposer.vue': { default: Composer },
       './PrivateMessageImageViewer.vue': { default: blank },
       './PrivateMessageItem.vue': { default: Item },
@@ -135,7 +198,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const app = Vue.createApp({ render: () => Vue.h(View, {
       key: account.value,
       ref: value => exposed = value,
-      active: true,
+      active: active.value,
       controller: reader,
       writeController: writer,
       emoteController: { packages: Vue.ref([]), loading: Vue.ref(false), failed: Vue.ref(false), load() {} },
@@ -260,6 +323,25 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       requests[2].resolve(response('stale-B'))
       await flush()
       assert.equal(host.textContent.includes('stale-B'), false)
+      const beforeHiddenAck = ackCount
+      active.value = false
+      await flush()
+      requests[3].resolve(response('hidden-C'))
+      await flush()
+      stepFrame()
+      assert.equal(ackCount, beforeHiddenAck, 'hidden history cannot become eligible for ACK')
+      assert.equal(timers.size, 0, 'hiding cancels presentation timers')
+      active.value = true
+      await flush()
+      stepFrame()
+      await flush()
+      settleExpansion()
+      await flush()
+      assert.equal(requests[4].talkerId, '6')
+      requests[4].resolve(response('restored-C'))
+      await flush()
+      assert.equal(host.querySelector('.conversation-card'), shell, 'hide/reopen also keeps the outer shell')
+      assert.equal(writer.getState('3').draft, 'saved draft for 3')
       topBar.userInfo.mid = 9
       account.value = '9'
       app.unmount()
@@ -270,7 +352,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.equal(reader.states.size, 0, 'outgoing viewport persistence cannot recreate old conversations after account cleanup')
       assert.equal(frames.size, 0)
       assert.equal(timers.size, 0)
-      assert.deepEqual(requests.map(request => request.talkerId), ['3', '3', '5', '6'])
+      assert.deepEqual(requests.map(request => request.talkerId), ['3', '3', '5', '6', '6'])
     }
     finally {
       if (host.firstChild)

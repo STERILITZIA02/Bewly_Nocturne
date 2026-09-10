@@ -1,4 +1,6 @@
 // https://github.com/SocialSisterYi/bilibili-API-collect/blob/e379d904c2753fa30e9083f59016f07e89d19467/docs/login/login_info.md#%E5%AF%BC%E8%88%AA%E6%A0%8F%E7%94%A8%E6%88%B7%E4%BF%A1%E6%81%AF
+import type { Media as FavoriteMedia } from '~/models/video/favorite'
+
 export interface UserInfo {
   face: string // avatar
   level_info: {
@@ -66,34 +68,8 @@ export interface FavoriteCategory {
   media_count: number
 }
 
-// https://github.com/SocialSisterYi/bilibili-API-collect/blob/master/docs/fav/list.md#%E8%8E%B7%E5%8F%96%E6%94%B6%E8%97%8F%E5%A4%B9%E5%86%85%E5%AE%B9%E6%98%8E%E7%BB%86%E5%88%97%E8%A1%A8
-export interface FavoriteResource {
-  id: number
-  type: number // 2：视频稿件 12：音频 21：视频合集
-  title: string
-  cover: string
-  intro: string
-  page: number // 视频分P数
-  duration: number // 音频/视频时长
-  /** UP主信息 */
-  upper: {
-    mid: number
-    name: string
-    face: string
-  }
-  /** 状态数 */
-  cnt_info: {
-    collect: number // 收藏数
-    play: number // 播放数
-    danmaku: number // 弹幕数
-  }
-  link: string
-  ctime: number // 投稿时间
-  pubtime: number // 发布时间
-  fav_time: number // 收藏时间
-  bv_id: string
-  bvid: string
-}
+// Both views consume the same resource/list DTO, including attr and original media type.
+export type FavoriteResource = FavoriteMedia
 
 export interface PopupVisibleState {
   channels: boolean

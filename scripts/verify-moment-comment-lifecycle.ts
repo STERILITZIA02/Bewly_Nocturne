@@ -79,20 +79,28 @@ export async function verifyMomentCommentLifecycle() {
   let replyRequests = 0
   let resolveLike: ((value: unknown) => void) | null = null
   let delayedLike = false
+  let likeRequests = 0
+  const delayedPages: Array<{ sort: number, resolve: (value: unknown) => void }> = []
+  let delayPages = false
   const momentApi = {
     getMomentDetail: async () => {
       detailRequests += 1
       return { code: 0, data: { item: { basic: { comment_id_str: '999', comment_type: 17 } } } }
     },
-    getMomentComments: async ({ pn }: { pn: number }) => {
+    getMomentComments: async ({ pn, sort }: { pn: number, sort: number }) => {
       rootRequests += 1
+      if (delayPages)
+        return new Promise(resolve => delayedPages.push({ sort, resolve }))
       return { code: 0, data: { page: { num: pn, count: 40, size: 8 }, replies: [fixtureComment(pn === 1 ? '100' : '200')] } }
     },
     getMomentCommentReplies: async () => {
       replyRequests += 1
       return { code: 0, data: { page: { num: 1, size: 20, count: 30 }, replies: [fixtureComment('101', '100')] } }
     },
-    setMomentCommentLike: async () => delayedLike ? new Promise(resolve => resolveLike = resolve) : { code: 0 },
+    setMomentCommentLike: async () => {
+      likeRequests++
+      return delayedLike ? new Promise(resolve => resolveLike = resolve) : { code: 0 }
+    },
   }
   const store = vue.reactive({ userInfo: { mid: 1 } })
   const mockModules: Record<string, unknown> = {
@@ -169,6 +177,60 @@ export async function verifyMomentCommentLifecycle() {
   assert.ok(resolveLike)
   ;(resolveLike as (value: unknown) => void)({ code: 0 })
   await pendingUnlike
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['aria-label'] === 'moment_card.comment_like'), 'submitted unlike reconciles the remounted view')
+  delayPages = true
+  await clickText('comments_sort_hot')
+  await flush()
+  await clickText('comments_sort_latest')
+  await flush()
+  assert.deepEqual(delayedPages.map(page => page.sort), [1, 0])
+  delayedPages[1].resolve({ code: 0, data: { replies: [fixtureComment('300')] } })
+  await flush()
+  delayedPages[0].resolve({ code: 0, data: { replies: [fixtureComment('400')] } })
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['data-comment-id'] === '300'))
+  assert.ok(!descendants(host).some(item => item.props['data-comment-id'] === '400'))
+  await clickText('comments_sort_hot')
+  await flush()
+  delayedPages[2].resolve({ code: 0, data: { replies: [fixtureComment('300')] } })
+  await flush()
+  const inFlightLike = descendants(host).find(item => item.props['aria-label'] === 'moment_card.comment_like')!.props.onClick()
+  await clickText('comments_sort_latest')
+  await flush()
+  delayedPages[3].resolve({ code: 0, data: { replies: [fixtureComment('300')] } })
+  await flush()
+  const pendingLikeButton = descendants(host).find(item => item.props['aria-label'] === 'moment_card.comment_like')!
+  assert.equal(pendingLikeButton.props.disabled, true, 'sorting restores the confirmed value but cannot resubmit an in-flight like')
+  const beforeDuplicate = likeRequests
+  await pendingLikeButton.props.onClick()
+  assert.equal(likeRequests, beforeDuplicate)
+  ;(resolveLike as unknown as (value: unknown) => void)({ code: 0 })
+  await inFlightLike
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['aria-label'] === 'moment_card.comment_unlike'), 'a read started before the write settled cannot overwrite its result')
+  await clickText('comments_sort_hot')
+  await flush()
+  delayedPages[4].resolve({ code: 0, data: { replies: [fixtureComment('300')] } })
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['aria-label'] === 'moment_card.comment_like'), 'a new authoritative read after settlement replaces the local override')
+  findClass('moment-comments__list').scrollTop = 80
+  app.unmount()
+  const requestsBeforeRestore = rootRequests
+  app = mount()
+  await flush()
+  assert.equal(rootRequests, requestsBeforeRestore)
+  assert.equal(findClass('moment-comments__list').scrollTop, 80)
+  assert.ok(descendants(host).some(item => item.props['aria-pressed'] === true && textOf(item).includes('comments_sort_hot')))
+  await clickText('comments_sort_latest')
+  await flush()
+  store.userInfo.mid = 2
+  cache.setAccount('2:2')
+  await flush()
+  delayedPages[5].resolve({ code: 0, data: { replies: [fixtureComment('old-account')] } })
+  await flush()
+  assert.ok(!descendants(host).some(item => item.props['data-comment-id'] === 'old-account'))
+  delayPages = false
   moment.value = { ...moment.value, id: '456', commentId: undefined, commentType: undefined }
   await flush()
   assert.equal(detailRequests, 1, 'missing target resolves through detail before loading comments')
