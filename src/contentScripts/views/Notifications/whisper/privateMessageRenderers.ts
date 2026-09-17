@@ -1,4 +1,5 @@
 import type { PrivateMessage } from '~/background/privateMessage/types'
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 
 export type ParsedPrivateMessageContent
   = | PrivateMessageTextContent
@@ -219,7 +220,7 @@ function normalizeHttpUrl(value: unknown): string {
   try {
     const normalized = value.startsWith('//') ? `https:${value}` : value
     const url = new URL(normalized)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+    return url.protocol === 'http:' || url.protocol === 'https:' ? normalizeBilibiliImageUrl(url.href) : ''
   }
   catch {
     return ''

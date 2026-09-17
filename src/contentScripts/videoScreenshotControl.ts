@@ -4,7 +4,7 @@ import { useRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { i18n } from '~/utils/i18n'
 import { isVideoPlaybackPage } from '~/utils/main'
-import { showState } from '~/utils/player'
+import { captureVideoScreenshot, handleVideoScreenshotShortcut, videoScreenshotBusy } from '~/utils/videoScreenshot'
 
 import { createPlayerControlTooltip, updatePlayerControlTooltip } from './playerControlTooltip'
 import { observePlayerDom } from './playerDomLifecycle'
@@ -16,7 +16,6 @@ const screenshotIcon = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 88 
 
 let controlContainer: HTMLElement | null = null
 let hasInitialized = false
-let isCapturing = false
 let stopPlayerObserver: (() => void) | null = null
 let stopLifecycleWatch: (() => void) | null = null
 
@@ -40,111 +39,6 @@ function findPlayerControlBar(): HTMLElement | null {
   return document.querySelector<HTMLElement>('.bpx-player-control-bottom-right')
 }
 
-function findCurrentVideo(trigger: HTMLElement): HTMLVideoElement | null {
-  const player = trigger.closest('.bpx-player-container, #bilibili-player, .bilibili-player')
-  const videos = Array.from((player || document).querySelectorAll<HTMLVideoElement>('video'))
-    .filter(video => video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0)
-
-  return videos.find(video => !video.paused && !video.ended)
-    || videos.find(video => video.getClientRects().length > 0)
-    || videos[0]
-    || null
-}
-
-function getVideoTitle(): string {
-  const titleElement = document.querySelector<HTMLElement>('h1.video-title, .video-title, #player-title, .season-info .title')
-  const title = titleElement?.getAttribute('title')
-    || titleElement?.textContent
-    || document.querySelector<HTMLMetaElement>('meta[itemprop="name"], meta[property="og:title"]')?.content
-    || document.title
-  const titleWithoutControlCharacters = Array.from(title, character => character.charCodeAt(0) < 32 ? '_' : character).join('')
-
-  return titleWithoutControlCharacters
-    .replace(/_哔哩哔哩_bilibili$/, '')
-    .replace(/[<>:"/\\|?*]/g, '_')
-    .replace(/\s+/g, ' ')
-    .replace(/[.\s]+$/g, '')
-    .slice(0, 120)
-    || 'bilibili-video'
-}
-
-function formatFrameTime(currentTime: number): string {
-  const totalMilliseconds = Number.isFinite(currentTime)
-    ? Math.max(0, Math.floor(currentTime * 1000))
-    : 0
-  const milliseconds = totalMilliseconds % 1000
-  const totalSeconds = Math.floor(totalMilliseconds / 1000)
-  const seconds = totalSeconds % 60
-  const totalMinutes = Math.floor(totalSeconds / 60)
-  const minutes = totalMinutes % 60
-  const hours = Math.floor(totalMinutes / 60)
-
-  return [hours, minutes, seconds]
-    .map(value => String(value).padStart(2, '0'))
-    .join('-')
-    .concat(`-${String(milliseconds).padStart(3, '0')}`)
-}
-
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob)
-        resolve(blob)
-      else
-        reject(new Error('Canvas conversion returned an empty image'))
-    }, 'image/png')
-  })
-}
-
-async function captureCurrentFrame(trigger: HTMLElement) {
-  if (isCapturing)
-    return
-
-  const video = findCurrentVideo(trigger)
-  if (!video) {
-    showState(translate('player_screenshot.video_unavailable'))
-    return
-  }
-
-  isCapturing = true
-  trigger.setAttribute('aria-busy', 'true')
-  trigger.style.opacity = '0.5'
-
-  try {
-    const capturedTime = video.currentTime
-    const canvas = document.createElement('canvas')
-    canvas.width = video.videoWidth
-    canvas.height = video.videoHeight
-
-    const context = canvas.getContext('2d')
-    if (!context)
-      throw new Error('Canvas 2D context is unavailable')
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height)
-    const blob = await canvasToBlob(canvas)
-    const objectUrl = URL.createObjectURL(blob)
-    const link = document.createElement('a')
-    link.href = objectUrl
-    link.download = `${getVideoTitle()}_${formatFrameTime(capturedTime)}.png`
-    link.style.display = 'none'
-    document.body.appendChild(link)
-    link.click()
-    link.remove()
-    setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
-
-    showState(translate('player_screenshot.saved'))
-  }
-  catch (error) {
-    console.error('[Bewly Nocturne] 视频帧截图失败', error)
-    showState(translate('player_screenshot.failed'))
-  }
-  finally {
-    isCapturing = false
-    trigger.removeAttribute('aria-busy')
-    trigger.style.removeProperty('opacity')
-  }
-}
-
 function createControlContainer(): HTMLElement {
   const container = document.createElement('div')
   const label = translate('player_screenshot.capture')
@@ -163,14 +57,14 @@ function createControlContainer(): HTMLElement {
   container.append(icon, createPlayerControlTooltip(label))
 
   container.addEventListener('click', () => {
-    void captureCurrentFrame(container)
+    void captureVideoScreenshot()
   })
   container.addEventListener('keydown', (event) => {
-    if (event.key !== 'Enter' && event.key !== ' ')
+    if (event.repeat || event.isComposing || (event.key !== 'Enter' && event.key !== ' '))
       return
 
     event.preventDefault()
-    void captureCurrentFrame(container)
+    void captureVideoScreenshot()
   })
 
   return container
@@ -202,6 +96,7 @@ function injectControl() {
 }
 
 function releaseScreenshotControlResources() {
+  document.removeEventListener('keydown', handleVideoScreenshotShortcut)
   stopPlayerObserver?.()
   stopPlayerObserver = null
   controlContainer?.remove()
@@ -224,13 +119,23 @@ export function initVideoScreenshotControl() {
   const routeState = useRouteState()
   const updateLifecycle = () => {
     releaseScreenshotControlResources()
-    if (settings.value.showVideoScreenshotButton && isVideoPlaybackPage(routeState.href))
-      stopPlayerObserver = observePlayerDom(injectControl)
+    if (isVideoPlaybackPage(routeState.href)) {
+      if (settings.value.videoScreenshotShortcut)
+        document.addEventListener('keydown', handleVideoScreenshotShortcut)
+      if (settings.value.showVideoScreenshotButton)
+        stopPlayerObserver = observePlayerDom(injectControl)
+    }
   }
-
-  stopLifecycleWatch = watch(
-    [() => settings.value.showVideoScreenshotButton, () => settings.value.language, () => routeState.navigationId],
+  const stopBusyWatch = watch(videoScreenshotBusy, (busy) => {
+    controlContainer?.setAttribute('aria-busy', String(busy))
+  })
+  const stopWatch = watch(
+    [() => settings.value.showVideoScreenshotButton, () => settings.value.videoScreenshotShortcut, () => settings.value.language, () => routeState.navigationId],
     updateLifecycle,
     { immediate: true },
   )
+  stopLifecycleWatch = () => {
+    stopWatch()
+    stopBusyWatch()
+  }
 }

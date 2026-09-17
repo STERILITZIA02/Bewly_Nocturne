@@ -159,6 +159,7 @@ const aboutRoute: SearchRoute = { menu: MenuType.About }
 const linkOpeningOptionKeys = [
   'settings.link_opening_behavior_opt.current_tab',
   'settings.link_opening_behavior_opt.current_tab_if_not_homepage',
+  'settings.link_opening_behavior_opt.current_tab_if_homepage',
   'settings.link_opening_behavior_opt.background',
   'settings.link_opening_behavior_opt.new_tab',
 ]
@@ -281,7 +282,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     keywords: ['Web', 'App'],
   }),
   ...createEntries(homeRoute, ['settings.following_sort'], {
-    keywordKeys: ['settings.following_sort_group', 'settings.following_sort_updated', 'home.following_special_group'],
+    keywordKeys: ['settings.following_sort_group', 'settings.following_sort_updated', 'home.following_special_group', 'home.following_display_flat', 'home.following_display_grouped'],
     targetTitleKey: 'settings.group_following',
   }),
   ...createEntries(momentsRoute, [
@@ -499,6 +500,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.external_watch_later_button',
     'settings.show_vertical_video_zoom_button',
     'settings.show_video_screenshot_button',
+    'settings.video_screenshot_shortcut',
   ]),
   ...createEntries(playbackPageRoute, [
     'settings.group_player_display_mode',
@@ -539,6 +541,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.group_random_play_settings',
     'settings.min_videos_for_random',
     'settings.group_playback_end_behavior',
+    'settings.auto_remove_watch_later_on_end',
     'settings.use_bilibili_default_auto_play',
     'settings.group_video_type_end_behavior',
     'settings.group_playlist_start_behavior',

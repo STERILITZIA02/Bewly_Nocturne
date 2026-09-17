@@ -107,6 +107,17 @@ function handleToggleDockItem(dockItem: DockItem) {
 function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean) {
   settingsStore.setDockItemCustomUseOriginalBiliPage(dockItem.page, useOriginalBiliPage)
 }
+
+function moveDockItem(dockItem: DockItem, direction: -1 | 1) {
+  const items = [...settings.value.dockItemsConfig]
+  const index = items.findIndex(item => item.page === dockItem.page)
+  const target = index + direction
+  if (index < 0 || target < 0 || target >= items.length)
+    return
+  const [item] = items.splice(index, 1)
+  items.splice(target, 0, item)
+  settings.value.dockItemsConfig = items
+}
 </script>
 
 <template>
@@ -167,6 +178,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
             <Select
               v-model="topBarMode"
               :options="topBarModeOptions"
+              :accessible-label="$t('settings.topbar_mode')"
               :disabled="topBarModeDisabled"
               w="160px"
             />
@@ -179,7 +191,7 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
             v-model="settings.dockItemsConfig"
             data-setting-id="navigation.dock.items"
             item-key="page"
-            :component-data="{ style: 'display: flex; gap: 0.5rem; flex-wrap: wrap; flex-direction: column;' }"
+            :component-data="{ style: 'display: flex; gap: var(--bew-space-2); flex-wrap: wrap; flex-direction: column;' }"
           >
             <template #item="{ element }">
               <div
@@ -192,12 +204,22 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
                 }"
                 @click="handleToggleDockItem(element)"
               >
-                <div flex="~ gap-2 items-center">
+                <button
+                  type="button"
+                  flex="~ gap-2 items-center" min-h-28px rounded="$bew-interactive-radius"
+                  :aria-pressed="element.visible"
+                  :aria-label="`${pageOptions.find(option => option.value === element.page)?.label} · ${$t('settings.visibility')}`"
+                  :title="$t('settings.reorder_keyboard_hint')"
+                  aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                  @click.stop="handleToggleDockItem(element)"
+                  @keydown.alt.up.prevent="moveDockItem(element, -1)"
+                  @keydown.alt.down.prevent="moveDockItem(element, 1)"
+                >
                   <div :class="pageOptions.find((page:any) => (page.value === element.page))?.icon as string" />
                   <div w-80px text-ellipsis>
                     {{ pageOptions.find(option => option.value === element.page)?.label }}
                   </div>
-                </div>
+                </button>
                 <div flex="~ gap-4 items-center justify-between wrap" @click.stop>
                   <div
                     flex="~ items-center"
@@ -205,13 +227,17 @@ function updateDockItemPageMode(dockItem: DockItem, useOriginalBiliPage: boolean
                     {{ $t('settings.dock_item_use_original_bili_web_page') }}
                     <Radio
                       :model-value="element.useOriginalBiliPage"
+                      :accessible-label="`${pageOptions.find(option => option.value === element.page)?.label} · ${$t('settings.dock_item_use_original_bili_web_page')}`"
                       :disabled="settings.pageMode !== 'custom'"
                       @update:model-value="updateDockItemPageMode(element, $event as boolean)"
                     />
                   </div>
                   <div flex="~ items-center">
                     {{ $t('settings.dock_item_open_in_new_tab') }}
-                    <Radio v-model="element.openInNewTab" />
+                    <Radio
+                      v-model="element.openInNewTab"
+                      :accessible-label="`${pageOptions.find(option => option.value === element.page)?.label} · ${$t('settings.dock_item_open_in_new_tab')}`"
+                    />
                   </div>
                 </div>
               </div>

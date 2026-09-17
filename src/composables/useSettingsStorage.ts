@@ -23,6 +23,7 @@ import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 export type SettingsStorageInitializationState = 'degraded' | 'loaded' | 'loading'
 
 interface UseSettingsStorageOptions<T> {
+  normalize?: (value: T) => void
   onError?: (error: unknown) => void
   onLoaded?: (value: T) => void
   onReady?: (value: T) => void
@@ -58,6 +59,32 @@ function cloneValue<T>(value: T): T {
 
 function asRecord(value: object): Record<string, unknown> {
   return value as Record<string, unknown>
+}
+
+/** Reconcile JSON settings in place so unchanged subtrees keep their consumers. */
+function reconcileSettingsValue(current: unknown, next: unknown): unknown {
+  if (Object.is(current, next))
+    return current
+  if (!current || !next || typeof current !== 'object' || typeof next !== 'object'
+    || Array.isArray(current) !== Array.isArray(next)) {
+    return cloneValue(next)
+  }
+  const target = asRecord(current)
+  const source = asRecord(next)
+  for (const key of Object.keys(target)) {
+    if (!Object.hasOwn(source, key))
+      Reflect.deleteProperty(target, key)
+  }
+  for (const key of Object.keys(source)) {
+    if (['__proto__', 'constructor', 'prototype'].includes(key))
+      continue
+    const value = reconcileSettingsValue(target[key], source[key])
+    if (!Object.is(value, target[key]))
+      target[key] = value
+  }
+  if (Array.isArray(current) && Array.isArray(next) && current.length !== next.length)
+    current.length = next.length
+  return current
 }
 
 function storedValueFingerprint(value: unknown) {
@@ -147,10 +174,16 @@ export function useSettingsStorage<T extends object>(
       nextValue = applySettingsStoragePatch(nextValue, inFlightPatch)
     nextValue = applySettingsStoragePatch(nextValue, queuedPatch)
     const renderedValue = asRecord(cloneValue(nextValue))
+    const normalized = cloneValue(renderedValue) as T
+    options.normalize?.(normalized)
 
     applyingCanonicalValue = true
-    data.value = cloneValue(renderedValue) as T
-    applyingCanonicalValue = false
+    try {
+      reconcileSettingsValue(data.value, normalized)
+    }
+    finally {
+      applyingCanonicalValue = false
+    }
 
     const actualValue = asRecord(cloneValue(data.value))
     const derivedPatch = createTopLevelSettingsStoragePatch(renderedValue, actualValue)
@@ -163,9 +196,9 @@ export function useSettingsStorage<T extends object>(
     const normalizedRevision = Number.isSafeInteger(revision) && revision >= 0 ? revision : 0
     const fingerprint = storedValueFingerprint(storedValue)
     if (!force && normalizedRevision < canonicalRevision)
-      return
+      return false
     if (!force && normalizedRevision === canonicalRevision && fingerprint === canonicalFingerprint)
-      return
+      return false
 
     canonicalRevision = normalizedRevision
     canonicalFingerprint = fingerprint
@@ -177,9 +210,10 @@ export function useSettingsStorage<T extends object>(
       ...migrated,
     }
     renderCanonicalValue()
+    return true
   }
 
-  const resetStorageGeneration = (epoch: string) => {
+  const resetStorageGeneration = (epoch: string, renderDefaults = true) => {
     storageGeneration++
     currentEpoch = epoch
     canonicalRevision = 0
@@ -188,7 +222,8 @@ export function useSettingsStorage<T extends object>(
     queuedPatch = createEmptySettingsStoragePatch()
     inFlightPatch = null
     persistenceReady = epoch.length > 0
-    renderCanonicalValue()
+    if (renderDefaults)
+      renderCanonicalValue()
   }
 
   const sendWithRetry = async <R>(type: string, payload: unknown, generation: number): Promise<R> => {
@@ -250,19 +285,18 @@ export function useSettingsStorage<T extends object>(
         // Preserve edits queued while this request was in flight. Applying the
         // in-flight patch first keeps the later queued values authoritative.
         const pendingPatch = mergeSettingsStoragePatches(patch, queuedPatch)
-        resetStorageGeneration(response.epoch)
+        resetStorageGeneration(response.epoch, false)
         persistenceReady = true
-        applyCanonicalValue(response.storedValue, response.revision, true)
         queuedPatch = pendingPatch
-        renderCanonicalValue()
+        applyCanonicalValue(response.storedValue, response.revision, true)
         void flushQueuedPatch()
         resolveFlushWaitersIfIdle()
         return
       }
 
-      applyCanonicalValue(response.storedValue, response.revision)
       inFlightPatch = null
-      renderCanonicalValue()
+      if (!applyCanonicalValue(response.storedValue, response.revision))
+        renderCanonicalValue()
       void flushQueuedPatch()
       resolveFlushWaitersIfIdle()
     }
@@ -355,7 +389,7 @@ export function useSettingsStorage<T extends object>(
 
       const epochChanged = currentEpoch.length > 0 && response.epoch !== currentEpoch
       if (epochChanged)
-        resetStorageGeneration(response.epoch)
+        resetStorageGeneration(response.epoch, false)
       else
         currentEpoch = response.epoch
 
@@ -410,7 +444,7 @@ export function useSettingsStorage<T extends object>(
     const meta = metaChange ? normalizeSettingsStorageWriteMeta(metaChange.newValue) : null
     const epochChanged = Boolean(meta?.epoch && currentEpoch && meta.epoch !== currentEpoch)
     if (epochChanged)
-      resetStorageGeneration(meta!.epoch)
+      resetStorageGeneration(meta!.epoch, !settingsChange)
     else if (meta?.epoch && !currentEpoch)
       currentEpoch = meta.epoch
 

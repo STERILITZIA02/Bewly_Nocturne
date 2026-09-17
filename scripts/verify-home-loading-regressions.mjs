@@ -8,6 +8,9 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     const tabs = [HomeSubPage.ForYou, HomeSubPage.Weekly].map(page => ({ page, visible: true, i18nKey: page }))
     const settings = Vue.ref({ useSearchPageModeOnHomePage: true, preserveForYouState: true, recommendationMode: 'web', homePageTabVisibilityList: tabs })
     const viewport = document.body.appendChild(document.createElement('div'))
+    viewport.scrollTo = ({ top }) => {
+      viewport.scrollTop = top
+    }
     viewport.scrollTop = 1200
     const provider = {
       handleBackToTop: value => viewport.scrollTop = value,
@@ -35,6 +38,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/utils/accountScope': await import('../src/utils/accountScope'),
       '~/utils/homeTabConfig': await import('../src/utils/homeTabConfig'),
       '~/utils/mitt': { default: { on() {}, off() {} } },
+      '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
       './components/VersionReminder.vue': { default: blank },
       './components/RecommendationModeSwitcher.vue': { default: blank },
       './types': { HomeSubPage },
@@ -94,6 +98,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       },
     }
     const Weekly = await compileComponent('../src/contentScripts/views/Home/components/Weekly.vue', {
+      '~/composables/useFloatingMenuPosition': { useFloatingMenuPosition: () => ({ position: Vue.ref({}), start() {}, stop() {}, scheduleUpdate() {} }) },
       '~/components/VideoCardGrid.vue': { default: { render: () => null } },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useHomeTabState': await import('../src/composables/useHomeTabState'),

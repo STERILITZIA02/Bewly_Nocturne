@@ -6,7 +6,7 @@ import { createApp } from 'vue'
 
 import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
-import { CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
+import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
@@ -20,7 +20,7 @@ import api from '~/utils/api'
 import { applyBewlyWidescreen, exitBewlyWidescreen, isBewlyPlaybackLayoutReady, isBewlyPlaybackNavigationPending, isBewlyWidescreenActive, isBewlyWidescreenEngaged, prepareBewlyPlaybackPageNavigation, prepareBewlyWidescreenLoading, refreshBewlyPlaybackPageNavigation } from '~/utils/bewlyWidescreen'
 import { shouldSuppressWidescreenAutoEntry } from '~/utils/bewlyWidescreenPolicy'
 import { cleanupBilibiliScripts } from '~/utils/bilibiliScriptCleanup'
-import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars, setupLoginButtonClickHandlers } from '~/utils/bilibiliTopBar'
+import { captureOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, restoreOriginalBilibiliTopBarParent, restorePreparedOriginalBilibiliTopBars } from '~/utils/bilibiliTopBar'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveIframeEscapeAction } from '~/utils/drawerEscape'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, EFFECTIVE_TOP_BAR_SOURCE_ATTRIBUTE, resolveEffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
@@ -68,6 +68,7 @@ const CONTENT_SCRIPT_DISPOSE_EVENT = 'bewly:content-script-dispose'
 const contentScriptGlobal = globalThis as typeof globalThis & {
   __BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__?: string
   __BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__?: boolean
+  __BEWLY_NOCTURNE_RUNTIME_HEALTH__?: { checkedAt: number, version: string, runtimeUrl: string }
 }
 const bundledShadowStyleText = contentScriptGlobal.__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__
 const shouldInitializeContentScript = !contentScriptGlobal.__BEWLY_NOCTURNE_CONTENT_SCRIPT_INITIALIZED__
@@ -140,6 +141,15 @@ function disposeContentScriptRuntime() {
   unmountInjectedApp()
 }
 
+let contentScriptReady = false
+function markContentScriptHealthy() {
+  const version = browser.runtime.getManifest().version
+  const runtimeUrl = browser.runtime.getURL('')
+  contentScriptGlobal.__BEWLY_NOCTURNE_RUNTIME_HEALTH__ = { checkedAt: Date.now(), version, runtimeUrl }
+  const prompt = document.getElementById('bewlycat-refresh-required')
+  if (prompt?.dataset.promptVersion === version && prompt.dataset.runtimeUrl === runtimeUrl)
+    prompt.remove()
+}
 if (shouldInitializeContentScript) {
   // A newly created extension world asks any stale world to release its Vue root
   // before mounting. Re-evaluation in the same world is still blocked by the flag.
@@ -165,11 +175,22 @@ if (shouldInitializeContentScript) {
   const handleRuntimeMessage = (message: unknown) => {
     if (typeof message === 'object' && message !== null && 'type' in message && message.type === CONTENT_SCRIPT_PING) {
       const manifest = browser.runtime.getManifest()
+      const runtimeUrl = browser.runtime.getURL('')
+      const expected = 'expectedIdentity' in message ? message.expectedIdentity : undefined
+      if (contentScriptReady && expected && typeof expected === 'object'
+        && 'name' in expected && expected.name === manifest.name
+        && 'version' in expected && expected.version === manifest.version
+        && 'runtimeUrl' in expected && expected.runtimeUrl === runtimeUrl) {
+        markContentScriptHealthy()
+      }
       return Promise.resolve({
         type: CONTENT_SCRIPT_PONG,
         name: manifest.name,
         version: manifest.version,
-        runtimeUrl: browser.runtime.getURL(''),
+        runtimeUrl,
+        commit: CONTENT_SCRIPT_COMMIT,
+        phase: contentScriptReady ? 'ready' : 'starting',
+        documentStartedAt: performance.timeOrigin,
       })
     }
 
@@ -402,16 +423,6 @@ else if (shouldInitializeContentScript) {
   let pendingWidescreenReloadTimer: ReturnType<typeof setTimeout> | undefined
   let autoContinuationNavigationKey: string | undefined
   let lastVideoEndedAt = 0
-  let stopLoginButtonClickHandlers: (() => void) | null = null
-
-  function ensureLoginButtonClickHandlers() {
-    stopLoginButtonClickHandlers ??= setupLoginButtonClickHandlers(document)
-  }
-
-  contentScriptDisposers.push(() => {
-    stopLoginButtonClickHandlers?.()
-    stopLoginButtonClickHandlers = null
-  })
 
   void settingsReady.then(async () => {
     if (contentScriptSignal.aborted)
@@ -1617,6 +1628,8 @@ else if (shouldInitializeContentScript) {
       initTouchPlayerGestures()
       syncFavoriteDialogLifecycle()
       initNativeFavoriteSeasonPlayAllIntercept()
+      contentScriptReady = true
+      markContentScriptHealthy()
     }
     catch (error) {
       restoreOriginalPageVisibility()
@@ -1724,7 +1737,6 @@ else if (shouldInitializeContentScript) {
       )
       if (topBarSource === 'bilibili-native')
         ensureOriginalBilibiliTopBarAppended(document)
-      ensureLoginButtonClickHandlers()
     }
     const revealContainer = () => {
       container.style.visibility = 'visible'
@@ -1824,47 +1836,35 @@ else if (shouldInitializeContentScript) {
     },
   ))
 
-  // 监听设置变化
-  contentScriptDisposers.push(watch(settings, (newSettings, oldSettings) => {
-    sendSettingsToPage(newSettings)
-
-    // 监听自动播放设置变化
+  // Vue batches the same-turn changes; unrelated local fields never reach MAIN.
+  contentScriptDisposers.push(watch(
+    () => JSON.stringify(createPageSettingsPayload(settings.value)),
+    () => sendSettingsToPage(settings.value),
+  ))
+  contentScriptDisposers.push(watch([
+    () => settings.value.useBilibiliDefaultAutoPlay,
+    () => settings.value.enableRandomPlay,
+    () => settings.value.autoPlayMultipart,
+    () => settings.value.autoPlayCollection,
+    () => settings.value.autoPlayRecommend,
+    () => settings.value.autoPlayWatchLater,
+    () => settings.value.autoPlayPlaylist,
+  ], () => {
     if (isCustomPlayPage()) {
-    // 检查自动播放相关设置是否发生变化
-      const autoPlaySettingsChanged = oldSettings && (
-        newSettings.useBilibiliDefaultAutoPlay !== oldSettings.useBilibiliDefaultAutoPlay
-        || newSettings.enableRandomPlay !== oldSettings.enableRandomPlay
-        || newSettings.autoPlayMultipart !== oldSettings.autoPlayMultipart
-        || newSettings.autoPlayCollection !== oldSettings.autoPlayCollection
-        || newSettings.autoPlayRecommend !== oldSettings.autoPlayRecommend
-        || newSettings.autoPlayWatchLater !== oldSettings.autoPlayWatchLater
-        || newSettings.autoPlayPlaylist !== oldSettings.autoPlayPlaylist
-      )
-
-      if (autoPlaySettingsChanged) {
-      // 自动播放设置发生变化，同步更新页面上的自动播放开关
-      // 延迟时间增加，确保页面元素已经渲染
-        scheduleDetachedTimer(() => {
-          applyAutoPlayByVideoType()
-          applyRandomPlayActivationSettings()
-        }, 1000)
-      }
+      scheduleDetachedTimer(() => {
+        applyAutoPlayByVideoType()
+        applyRandomPlayActivationSettings()
+      }, 1000)
     }
-
-    // 监听稍后再看按钮外置设置变化
-    if (!isIframeDrawerHost() && isVideoOrBangumiPage() && oldSettings) {
-      if (newSettings.externalWatchLaterButton !== oldSettings.externalWatchLaterButton) {
-        if (newSettings.externalWatchLaterButton) {
-        // 启用稍后再看按钮
-          scheduleAddWatchLaterButton()
-        }
-        else {
-        // 移除稍后再看按钮
-          removeWatchLaterButton()
-        }
-      }
-    }
-  }, { deep: true }))
+  }))
+  contentScriptDisposers.push(watch(() => settings.value.externalWatchLaterButton, (enabled) => {
+    if (isIframeDrawerHost() || !isVideoOrBangumiPage())
+      return
+    if (enabled)
+      scheduleAddWatchLaterButton()
+    else
+      removeWatchLaterButton()
+  }))
 
   // 监听来自父页面的黑暗模式切换消息（用于iframe跨域场景）
   window.addEventListener('message', (event) => {
@@ -1926,8 +1926,6 @@ else if (shouldInitializeContentScript) {
       document.documentElement.classList.toggle('remove-top-bar', source === 'bewly')
       if (source === 'bilibili-native') {
         resetBilibiliTopBarInlineStyles(document)
-        // Setup login button click handlers when switching to original top bar
-        ensureLoginButtonClickHandlers()
       }
     }
   }, { passive: true, signal: contentScriptSignal })

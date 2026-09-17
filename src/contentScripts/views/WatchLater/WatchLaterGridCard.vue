@@ -7,6 +7,7 @@ import type { List as VideoItem } from '~/models/video/watchLater'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
+import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
 const props = withDefaults(defineProps<{
   item: VideoItem
@@ -21,9 +22,10 @@ const emit = defineEmits<{
   (event: 'remove', item: VideoItem): void
 }>()
 
-const videoUrl = computed(() => `https://www.bilibili.com/video/${props.item.bvid}/`)
-const ownerUrl = computed(() => `https://space.bilibili.com/${props.item.owner.mid}`)
-const coverUrl = computed(() => removeHttpFromUrl(`${props.item.pic}@672w_378h_1c`))
+const videoUrl = computed(() => getWatchLaterPlaybackUrl(props.item))
+const author = computed(() => getWatchLaterAuthor(props.item))
+const ownerUrl = computed(() => author.value.authorUrl)
+const coverUrl = computed(() => props.item.pic ? removeHttpFromUrl(`${props.item.pic}@672w_378h_1c`) : '')
 const progressText = computed(() => calcCurrentTime(
   props.item.progress === -1 ? props.item.duration : props.item.progress,
 ))
@@ -38,9 +40,12 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
         class="watch-later-grid-card__cover-link"
         :href="videoUrl"
         :aria-label="item.title"
+        :aria-disabled="!videoUrl"
+        :tabindex="videoUrl ? undefined : -1"
         type="videoCard"
       >
         <img
+          v-if="coverUrl"
           class="watch-later-grid-card__cover"
           :src="coverUrl"
           :alt="item.title"
@@ -58,7 +63,7 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.play_video')"
-            :disabled="disabled"
+            :disabled="disabled || !videoUrl"
             @click="emit('playAndRemove', item)"
           >
             <Icon icon="tabler:player-play" aria-hidden="true" />
@@ -68,7 +73,7 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.play_in_watch_later')"
-            :disabled="disabled"
+            :disabled="disabled || !videoUrl"
             @click="emit('playInWatchLater', item)"
           >
             <Icon icon="tabler:list-check" aria-hidden="true" />
@@ -106,8 +111,8 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
         target="_blank"
         rel="noopener noreferrer"
       >
-        <img :src="removeHttpFromUrl(`${item.owner.face}@40w_40h_1c`)" alt="" loading="lazy" decoding="async">
-        <span>{{ item.owner.name }}</span>
+        <img v-if="author.authorFace" :src="removeHttpFromUrl(`${author.authorFace}@40w_40h_1c`)" alt="" loading="lazy" decoding="async">
+        <span>{{ author.name }}</span>
       </a>
     </div>
   </article>

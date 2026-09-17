@@ -288,9 +288,9 @@ function jumpToLoginPage() {
                   :title="historyItem.show_title ? historyItem.show_title : historyItem.title"
                 >
                   <h3
-                    class="keep-two-lines"
+                    class="keep-two-lines history-list-card__title"
                     overflow="hidden"
-                    text="lg overflow-ellipsis"
+                    text="overflow-ellipsis"
                   >
                     {{ historyItem.show_title ? historyItem.show_title : historyItem.title }}
                   </h3>
@@ -339,8 +339,8 @@ function jumpToLoginPage() {
                   </span>
                 </a>
                 <div
-                  display="xl:none"
-                  flex items-center
+                  class="flex xl:hidden"
+                  items-center
                   text="$bew-text-3 sm"
                   mt-auto
                 >
@@ -473,6 +473,12 @@ function jumpToLoginPage() {
 }
 .history-list-card {
   position: relative;
+}
+
+.history-list-card__title {
+  font-size: var(--bew-font-size-title);
+  line-height: var(--bew-line-height-title);
+  font-weight: var(--bew-font-weight-semibold);
 }
 
 .history-list-card__overlay {

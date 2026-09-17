@@ -22,20 +22,26 @@ let feedCardObserver: MutationObserver | null = null
 let observeRoot: Element | null = null
 let flushFrame: number | null = null
 const pendingRoots = new Set<Element>()
+const MAX_PENDING_ROOTS = 100
+let fullScanPending = false
 
 interface UselessFeedCardBlockerContext {
   blockAds: boolean
   homePage: boolean
   searchPage?: boolean
   inIframe: boolean
+  nativeHome?: boolean
+  active?: boolean
 }
 
 export function shouldEnableUselessFeedCardBlocker({
   blockAds,
   homePage,
   searchPage = false,
+  nativeHome = true,
+  active = true,
 }: UselessFeedCardBlockerContext) {
-  return blockAds && (homePage || searchPage)
+  return blockAds && active && ((homePage && nativeHome) || searchPage)
 }
 
 function getObserveRoot(): Element {
@@ -45,7 +51,7 @@ function getObserveRoot(): Element {
 }
 
 function ensureObserveRoot() {
-  if (!feedCardObserver)
+  if (!feedCardObserver || document.hidden)
     return
 
   const preferred = getObserveRoot()
@@ -55,6 +61,9 @@ function ensureObserveRoot() {
   try {
     feedCardObserver.disconnect()
     feedCardObserver.observe(preferred, OBSERVER_OPTIONS)
+    // Watch only direct children of ancestors so replacing the entire feed is discoverable.
+    for (let ancestor = preferred.parentElement; ancestor; ancestor = ancestor.parentElement)
+      feedCardObserver.observe(ancestor, { childList: true })
     observeRoot = preferred
   }
   catch {
@@ -97,14 +106,61 @@ function scanForRcmdCards(root: ParentNode) {
 
 function flushPending() {
   flushFrame = null
-
-  for (const root of pendingRoots)
-    scanForRcmdCards(root)
+  if (!feedCardObserver)
+    return
+  if (document.hidden) {
+    deferFullScan()
+    return
+  }
+  if (fullScanPending) {
+    scanForRcmdCards(document)
+  }
+  else {
+    for (const root of pendingRoots) {
+      if (root.isConnected)
+        scanForRcmdCards(root)
+    }
+  }
+  fullScanPending = false
 
   pendingRoots.clear()
 
   // If we started early (before feed cards existed), retarget the observer to the feed container.
   ensureObserveRoot()
+}
+
+function deferFullScan() {
+  if (flushFrame !== null)
+    cancelAnimationFrame(flushFrame)
+  flushFrame = null
+  pendingRoots.clear()
+  fullScanPending = true
+}
+
+function queueRoot(root: Element) {
+  if (!root.isConnected || fullScanPending)
+    return
+  for (const queued of pendingRoots) {
+    if (queued.contains(root))
+      return
+    if (root.contains(queued))
+      pendingRoots.delete(queued)
+  }
+  if (pendingRoots.size >= MAX_PENDING_ROOTS)
+    deferFullScan()
+  else
+    pendingRoots.add(root)
+}
+
+function handleVisibilityChange() {
+  if (document.hidden) {
+    deferFullScan()
+    feedCardObserver?.disconnect()
+    observeRoot = null
+  }
+  else if (fullScanPending || pendingRoots.size) {
+    scheduleFlushPending()
+  }
 }
 
 function scheduleFlushPending() {
@@ -121,9 +177,18 @@ function start() {
   }
 
   // Initial scan (covers already-rendered cards)
-  scanForRcmdCards(document)
+  if (document.hidden)
+    fullScanPending = true
+  else
+    scanForRcmdCards(document)
 
   feedCardObserver = new MutationObserver((mutations) => {
+    if (document.hidden) {
+      handleVisibilityChange()
+      return
+    }
+    if (!observeRoot?.isConnected)
+      deferFullScan()
     for (const mutation of mutations) {
       if (mutation.type === 'attributes') {
         const target = mutation.target
@@ -136,7 +201,7 @@ function start() {
         // Bilibili attaches recommendation classes asynchronously during hydration.
         if (target instanceof Element && (target.closest(`.${VIDEO_CARD_CLASS}`)
           || target.matches(AD_CONTENT_SELECTOR) || wasVideoCard || wasAdMarker || wasAdLink)) {
-          pendingRoots.add(target)
+          queueRoot(target)
         }
 
         continue
@@ -144,22 +209,22 @@ function start() {
 
       // If the matching child is removed, resync its existing feed-card parent.
       if (mutation.removedNodes.length > 0 && mutation.target instanceof Element)
-        pendingRoots.add(mutation.target)
+        queueRoot(mutation.target)
 
       for (let index = 0; index < mutation.addedNodes.length; index++) {
         const node = mutation.addedNodes[index]
         if (node.nodeType !== Node.ELEMENT_NODE)
           continue
-        pendingRoots.add(node as Element)
+        queueRoot(node as Element)
       }
     }
 
-    if (pendingRoots.size > 0)
+    if (fullScanPending || pendingRoots.size > 0)
       scheduleFlushPending()
   })
 
-  observeRoot = getObserveRoot()
-  feedCardObserver.observe(observeRoot, OBSERVER_OPTIONS)
+  ensureObserveRoot()
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 }
 
 function stop() {
@@ -171,6 +236,8 @@ function stop() {
   observeRoot = null
 
   pendingRoots.clear()
+  fullScanPending = false
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
   if (flushFrame !== null) {
     cancelAnimationFrame(flushFrame)
     flushFrame = null

@@ -11,20 +11,23 @@ import {
   normalizeMomentTopics,
 } from './momentForwardContent'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   content: string
   searchPlaceholder: string
   emptyLabel: string
   retryLabel: string
   errorLabel: string
-}>()
+  kind?: 'mention' | 'topic'
+  initialQuery?: string
+  autofocus?: boolean
+}>(), { autofocus: true })
 
 const emit = defineEmits<{
   select: [topic: SelectedMomentTopic]
   close: []
 }>()
 
-const query = ref('')
+const query = ref(props.initialQuery ?? '')
 const searchInputRef = ref<HTMLInputElement | null>(null)
 const searchState = reactive<MomentTopicSearchState>({
   results: [],
@@ -33,6 +36,19 @@ const searchState = reactive<MomentTopicSearchState>({
 const searchController = createMomentTopicSearchController({
   state: searchState,
   search: async (keywords, content) => {
+    if (props.kind === 'mention') {
+      const response = await api.moment.searchMomentMentions({ keyword: keywords })
+      if (getMomentForwardResponseCode(response) !== 0 || !Array.isArray(response.data?.groups))
+        throw new Error(props.errorLabel)
+      const seen = new Set<string>()
+      return response.data.groups.flatMap((group: { items?: { uid: string | number, name: string }[] }) => (group.items ?? []).flatMap((item) => {
+        const id = String(item.uid)
+        if (!/^[1-9]\d*$/.test(id) || typeof item.name !== 'string' || !item.name.trim() || seen.has(id))
+          return []
+        seen.add(id)
+        return [{ id, name: item.name }]
+      }))
+    }
     const response = await api.moment.searchMomentTopics({
       keywords,
       content,
@@ -68,9 +84,16 @@ function scheduleSearch() {
   }, 280)
 }
 
-watch([query, () => props.content], scheduleSearch)
+watch([query, () => props.content, () => props.kind], scheduleSearch)
 
-onMounted(() => searchInputRef.value?.focus())
+watch(() => props.initialQuery, (value) => {
+  query.value = value ?? ''
+})
+onMounted(() => {
+  if (props.autofocus !== false)
+    searchInputRef.value?.focus({ preventScroll: true })
+  scheduleSearch()
+})
 onBeforeUnmount(() => {
   searchController.invalidate()
   clearSearchTimer()
@@ -110,9 +133,10 @@ onBeforeUnmount(() => {
         v-for="topic in searchState.results"
         :key="String(topic.id)"
         type="button"
+        data-completion-result
         @click="emit('select', topic)"
       >
-        <span>#{{ topic.name }}</span>
+        <span>{{ kind === 'mention' ? '@' : '#' }}{{ topic.name }}</span>
       </button>
     </div>
   </section>

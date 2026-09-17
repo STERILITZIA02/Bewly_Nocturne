@@ -33,7 +33,7 @@ withDefaults(defineProps<{
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
   box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
-  backdrop-filter: var(--bew-filter-glass-1);
+  backdrop-filter: none;
   &:hover {
     color: var(--bew-theme-foreground);
     background: var(--bew-elevated-solid-hover);

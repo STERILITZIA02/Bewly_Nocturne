@@ -4,11 +4,14 @@ import { storeToRefs } from 'pinia'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { addSearchHistory } from '~/components/SearchBar/searchHistoryProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
+import { syncRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { reportRuntimeFailure } from '~/utils/messaging'
 
 import SearchCategoryTabs from './components/SearchCategoryTabs.vue'
 import SearchLiveFilters from './components/SearchLiveFilters.vue'
@@ -64,6 +67,7 @@ function updateUrlParams(params: Record<string, string | number | undefined | nu
 
   const newUrl = buildSearchResultsUrl(window.location.pathname, urlParams, window.location.hash)
   window.history.pushState({}, '', newUrl)
+  syncRouteState()
 }
 
 const currentCategory = ref<SearchCategory>(getFiltersFromUrl().category)
@@ -213,6 +217,7 @@ async function handleUrlChange() {
         else
           params.set('pn', String(fallbackPage))
         history.replaceState({}, '', buildSearchResultsUrl(location.pathname, params, location.hash))
+        syncRouteState()
       }
     }
   }
@@ -227,6 +232,11 @@ watch(currentLocationHref, () => void handleUrlChange())
 // 同步搜索关键词到 topBar
 watch(normalizedKeyword, (value) => {
   topBarSearchKeyword.value = value
+  if (value && settings.value.enableSearchHistory) {
+    void addSearchHistory({ value, timestamp: Date.now() }).catch(error =>
+      reportRuntimeFailure('Failed to save search history', error),
+    )
+  }
 }, { immediate: true })
 
 // 监听用户筛选条件变化
@@ -287,6 +297,7 @@ function switchCategory(category: SearchCategory) {
 
   const newUrl = buildSearchResultsUrl(window.location.pathname, params, window.location.hash)
   window.history.pushState({}, '', newUrl)
+  syncRouteState()
 }
 
 function handlePageUpdate(page: number) {

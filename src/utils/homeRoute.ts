@@ -3,6 +3,10 @@ import { AppPage } from '~/enums/appEnums'
 
 import type { HomeTabConfigItem } from './homeTabConfig'
 
+export function resolveDefaultAppPage(config: readonly { page: AppPage, visible: boolean }[]): AppPage {
+  return config.find(item => item.visible)?.page ?? AppPage.Home
+}
+
 export function readHomeRoute(href: string) {
   const url = new URL(href)
   if (!['bilibili.com', 'www.bilibili.com'].includes(url.hostname) || !['/', '/index.html'].includes(url.pathname))

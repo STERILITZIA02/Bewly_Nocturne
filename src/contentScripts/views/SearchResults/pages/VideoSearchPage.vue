@@ -5,6 +5,7 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import type { GridLayoutType } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
+import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertLiveRoomData, convertVideoData, isAdVideo } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
@@ -105,7 +106,11 @@ defineExpose({
         enable-row-padding
         show-preview
         @load-more="handleLoadMore"
-      />
+      >
+        <template #empty>
+          <SearchEmptyState :keyword="keyword" category="video" />
+        </template>
+      </VideoCardGrid>
     </template>
 
     <!-- 翻页模式 -->

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 
 import type { MomentForwardEmote } from './momentForwardContent'
 import { loadMomentForwardEmotes } from './useMomentForwardComposer'
@@ -22,27 +22,46 @@ const loading = ref(true)
 const error = ref('')
 const failedImages = ref(new Set<string>())
 const activePackage = computed(() => packages.value[activePackageIndex.value])
+const gridRef = ref<HTMLElement>()
+let generation = 0
+watch(activePackageIndex, () => {
+  if (gridRef.value)
+    gridRef.value.scrollTop = 0
+}, { flush: 'post' })
+onBeforeUnmount(() => generation++)
 
 function markImageFailed(url: string) {
   failedImages.value = new Set(failedImages.value).add(url)
 }
 
 async function loadEmotes() {
+  const version = ++generation
+  const account = props.accountId
   loading.value = true
   error.value = ''
   try {
-    packages.value = await loadMomentForwardEmotes(props.accountId, props.errorLabel)
+    const result = await loadMomentForwardEmotes(account, props.errorLabel)
+    if (version !== generation || account !== props.accountId)
+      return
+    packages.value = result
     activePackageIndex.value = 0
   }
   catch (loadError) {
-    error.value = loadError instanceof Error ? loadError.message : String(loadError)
+    if (version === generation)
+      error.value = loadError instanceof Error ? loadError.message : String(loadError)
   }
   finally {
-    loading.value = false
+    if (version === generation)
+      loading.value = false
   }
 }
 
 onMounted(loadEmotes)
+watch(() => props.accountId, () => {
+  packages.value = []
+  failedImages.value.clear()
+  void loadEmotes()
+}, { flush: 'sync' })
 </script>
 
 <template>
@@ -83,7 +102,7 @@ onMounted(loadEmotes)
           <span v-else>{{ emotePackage.name.slice(0, 1) }}</span>
         </button>
       </div>
-      <div class="moment-forward-emoji-picker__grid" role="tabpanel">
+      <div ref="gridRef" class="moment-forward-emoji-picker__grid" :class="{ 'is-text': activePackage?.emotes.some(emote => emote.type === 4) }" role="tabpanel">
         <button
           v-for="emote in activePackage?.emotes || []"
           :key="String(emote.id)"
@@ -93,7 +112,7 @@ onMounted(loadEmotes)
           @click="emit('select', emote)"
         >
           <img
-            v-if="!failedImages.has(emote.url)"
+            v-if="emote.type !== 4 && emote.url && !failedImages.has(emote.url)"
             :src="emote.url"
             alt=""
             loading="lazy"
@@ -108,6 +127,12 @@ onMounted(loadEmotes)
 </template>
 
 <style scoped lang="scss">
+.moment-forward-emoji-picker__grid.is-text {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, calc(var(--bew-space-12) * 2)), 1fr));
+  button {
+    overflow-wrap: anywhere;
+  }
+}
 .moment-forward-emoji-picker__placeholder {
   display: grid;
   min-height: var(--bew-control-height-lg);

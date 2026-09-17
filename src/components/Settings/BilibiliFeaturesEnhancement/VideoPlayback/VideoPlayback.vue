@@ -5,6 +5,7 @@ import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
 import type { PlayerDefaultState } from '~/logic/storage'
+import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut, screenshotKey } from '~/utils/videoScreenshotShortcut'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
@@ -12,6 +13,17 @@ import SettingsItemSubgroup from '../../components/SettingsItemSubgroup.vue'
 import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
 
 const { t } = useI18n()
+const shortcutError = ref(false)
+function recordScreenshotKey(event: KeyboardEvent) {
+  if (event.isComposing || event.repeat || ['Tab', 'Escape', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key))
+    return
+  event.preventDefault()
+  event.stopPropagation()
+  const key = event.key === 'Backspace' || event.key === 'Delete' ? '' : screenshotKey(event)
+  shortcutError.value = !isValidScreenshotShortcut(key)
+  if (!shortcutError.value)
+    settings.value.videoScreenshotShortcut = key
+}
 
 type ToggleSetting
   = | 'rememberPlaybackRate'
@@ -112,12 +124,39 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         >
           <Radio v-model="settings.showVideoScreenshotButton" />
         </SettingsItem>
+        <SettingsItem :title="t('settings.video_screenshot_shortcut')" :desc="t('settings.video_screenshot_shortcut_desc')" right-width="auto">
+          <div class="screenshot-shortcut">
+            <input :value="settings.videoScreenshotShortcut" :aria-label="t('settings.video_screenshot_shortcut')" readonly @keydown="recordScreenshotKey">
+            <Button type="tertiary" @click="settings.videoScreenshotShortcut = DEFAULT_SCREENSHOT_SHORTCUT; shortcutError = false">
+              {{ t('common.operation.reset') }}
+            </Button>
+            <span v-if="shortcutError" role="status">{{ t('settings.video_screenshot_shortcut_conflict') }}</span>
+          </div>
+        </SettingsItem>
       </SettingsItemSubgroup>
     </SettingsItemGroup>
   </div>
 </template>
 
 <style lang="scss" scoped>
+.screenshot-shortcut {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--bew-space-2);
+  input {
+    width: calc(var(--bew-space-12) * 3);
+    min-height: var(--bew-control-height);
+    padding-inline: var(--bew-space-3);
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-interactive-radius);
+    color: var(--bew-text-1);
+    font: inherit;
+  }
+  [role="status"] {
+    color: var(--bew-error-color);
+  }
+}
 .video-setting-tags {
   display: flex;
   flex-wrap: wrap;

@@ -34,7 +34,10 @@ function scheduleFallback() {
   }, 4000)
 }
 
-function syncRouteState() {
+// Extension-owned history writes run in ISOLATED world and do not pass through
+// the site's MAIN-world history wrapper. Their callers commit this same route
+// source immediately instead of waiting for the 4-second external fallback.
+export function syncRouteState() {
   if (typeof window === 'undefined' || routeState.href === window.location.href)
     return
 

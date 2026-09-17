@@ -1,6 +1,5 @@
 import browser from 'webextension-polyfill'
 
-import { onMessage } from '~/utils/messaging'
 import type {
   SettingsCloudSyncAvailability,
   SettingsCloudSyncEnableRequest,
@@ -28,6 +27,8 @@ import {
 } from '~/utils/settingsCloudSyncProtocol'
 import { normalizeSettingsStorageWriteMeta, SETTINGS_STORAGE_META_KEY } from '~/utils/settingsStorageProtocol'
 
+import { createSettingsCloudSyncWrites } from './settingsCloudSyncWrites'
+import { onSettingsMessage } from './settingsContextRelay'
 import {
   applySettingsCloudSyncChanges,
   collectSettingsCloudSyncEntries,
@@ -36,6 +37,10 @@ import {
 
 const CLOUD_UPLOAD_DELAY = 1_500
 const CLOUD_SYNC_ITEM_COUNT_LIMIT = 480
+const CLOUD_UPLOAD_ALARM = 'bewly:settings-cloud-upload'
+const LONG_UPLOAD_DELAY_MS = 30_000
+const cloudWrites = createSettingsCloudSyncWrites(browser.storage.local)
+let uploadAlarmAt = 0
 
 let initialized = false
 let enabled = false
@@ -120,6 +125,7 @@ function publishCloudSyncStatus() {
   const counts = {
     ...DEFAULT_SETTINGS_CLOUD_SYNC_STATUS,
     lastError,
+    retryAt: pendingUploads.size > 0 ? cloudWrites.retryAt() : 0,
   }
   for (const state of uploadStates.values()) {
     if (state === 'pending')
@@ -158,23 +164,46 @@ function blockUpload(field: string, entry: SettingsCloudSyncEntry, reason: 'over
 }
 
 function scheduleFlush(delay = CLOUD_UPLOAD_DELAY) {
-  if (pendingUploads.size === 0 || flushTimer != null || retryTimer != null || flushInProgress)
+  if (pendingUploads.size === 0 || flushTimer != null || retryTimer != null || uploadAlarmAt || flushInProgress)
     return
 
+  delay = Math.max(delay, cloudWrites.delay())
+  if (delay >= LONG_UPLOAD_DELAY_MS) {
+    void scheduleUploadAlarm(delay)
+    return
+  }
   flushTimer = setTimeout(() => {
     flushTimer = undefined
     void flushUploads()
   }, delay)
 }
 
+async function scheduleUploadAlarm(delay: number) {
+  uploadAlarmAt = Date.now() + delay
+  try {
+    await browser.alarms.create(CLOUD_UPLOAD_ALARM, { when: uploadAlarmAt })
+  }
+  catch (error) {
+    uploadAlarmAt = 0
+    lastError = formatError(error)
+    publishCloudSyncStatus()
+    logCloudSyncError('Failed to schedule settings cloud sync:', error)
+  }
+}
+
 function scheduleRetry() {
-  if (retryTimer != null || !enabled || !ready || pendingUploads.size === 0)
+  if (retryTimer != null || uploadAlarmAt || !enabled || !ready || pendingUploads.size === 0)
     return
 
+  const delay = Math.max(getSettingsCloudSyncRetryDelay(retryAttempt++), cloudWrites.delay())
+  if (delay >= LONG_UPLOAD_DELAY_MS) {
+    void scheduleUploadAlarm(delay)
+    return
+  }
   retryTimer = setTimeout(() => {
     retryTimer = undefined
     void flushUploads()
-  }, getSettingsCloudSyncRetryDelay(retryAttempt++))
+  }, delay)
 }
 
 function scheduleInitializationRetry(delay?: number) {
@@ -230,7 +259,7 @@ function queueUploads(uploads: Record<string, SettingsCloudSyncEntry>) {
     if (!pending || compareSettingsCloudSyncVersions(pending.version, entry.version) <= 0) {
       blockedUploads.delete(field)
       pendingUploads.set(field, entry)
-      setUploadState(field, 'pending')
+      setUploadState(field, cloudWrites.retryAt() ? 'blockedByQuota' : 'pending')
     }
   }
 
@@ -345,6 +374,8 @@ async function flushUploads() {
     if (Object.keys(items).length === 0)
       return
 
+    if (!await cloudWrites.reserveCycle() || flushGeneration !== generation || !enabled)
+      return
     await browser.storage.sync.set(items)
     const restoredKeys = await restoreUnreadableCloudItems(items)
     if (flushGeneration !== generation)
@@ -378,13 +409,26 @@ async function flushUploads() {
   catch (error) {
     if (flushGeneration !== generation)
       return
-    for (const [field, entry] of batchEntries) {
-      if (pendingUploads.get(field) === entry)
-        setUploadState(field, 'failed')
+    const quotaLimited = await cloudWrites.handleQuota(error).catch((stateError) => {
+      logCloudSyncError('Failed to preserve settings cloud sync cooldown:', stateError)
+      return cloudWrites.retryAt() > 0
+    })
+    if (flushGeneration !== generation)
+      return
+    if (quotaLimited) {
+      for (const field of pendingUploads.keys())
+        setUploadState(field, 'blockedByQuota')
+    }
+    else {
+      for (const [field, entry] of batchEntries) {
+        if (pendingUploads.get(field) === entry)
+          setUploadState(field, 'failed')
+      }
     }
     lastError = formatError(error)
     publishCloudSyncStatus()
-    logCloudSyncError('Failed to upload settings to browser sync storage:', error)
+    if (!quotaLimited)
+      logCloudSyncError('Failed to upload settings to browser sync storage:', error)
     scheduleRetry()
   }
   finally {
@@ -427,6 +471,7 @@ function startCloudSync(
 
   const run = (async (): Promise<SettingsCloudSyncStartResult> => {
     try {
+      await cloudWrites.load()
       while (true) {
         restartAfterInitialization = false
         const cloudItems = await browser.storage.sync.get(null)
@@ -504,6 +549,8 @@ function stopCloudSync() {
   initializationPromise = undefined
   clearFlushTimer()
   clearRetryTimer()
+  uploadAlarmAt = 0
+  void browser.alarms.clear(CLOUD_UPLOAD_ALARM)
   pendingUploads.clear()
   blockedUploads.clear()
   uploadStates.clear()
@@ -808,12 +855,21 @@ export function setupSettingsCloudSync() {
     return
 
   initialized = true
+  onSettingsMessage(SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE, () => readSettingsCloudSyncAvailability())
+  onSettingsMessage(SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE, value => handleEnableSettingsCloudSync(value))
+  if (browser.extension?.inIncognitoContext)
+    return
+  browser.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== CLOUD_UPLOAD_ALARM)
+      return
+    uploadAlarmAt = 0
+    if (enabled && ready)
+      void flushUploads()
+  })
   browser.storage.onChanged.addListener(handleLocalChanges)
   browser.storage.onChanged.addListener(handleSyncChanges)
   browser.tabs.onActivated.addListener(retryInitializationOnBrowserActivity)
   browser.windows.onFocusChanged.addListener(retryInitializationOnBrowserActivity)
-  onMessage(SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE, () => readSettingsCloudSyncAvailability())
-  onMessage(SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE, value => handleEnableSettingsCloudSync(value))
 
   void readInitialCloudSyncPreference()
 }

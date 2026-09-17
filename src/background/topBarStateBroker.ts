@@ -25,6 +25,7 @@ interface TopBarStateEntry {
 }
 
 export interface TopBarStateBrokerBrowser {
+  extension?: Pick<Browser.Extension.Static, 'inIncognitoContext'>
   storage?: {
     session?: Pick<Browser.Storage.StorageAreaWithUsage, 'get' | 'set'>
   }
@@ -117,6 +118,7 @@ export function createTopBarStateBroker(
 ): TopBarStateBroker {
   const stateByContext = new Map<string, TopBarStateEntry>()
   const sessionStorage = extensionApi.storage?.session
+  const storageKey = extensionApi.extension?.inIncognitoContext ? `${TOP_BAR_STATE_STORAGE_KEY}:private` : TOP_BAR_STATE_STORAGE_KEY
   let stateLoadPromise: Promise<void> | undefined
   let operationQueue: Promise<void> = Promise.resolve()
 
@@ -131,8 +133,8 @@ export function createTopBarStateBroker(
       return
 
     try {
-      const stored = await sessionStorage.get(TOP_BAR_STATE_STORAGE_KEY)
-      const persistedState = stored[TOP_BAR_STATE_STORAGE_KEY]
+      const stored = await sessionStorage.get(storageKey)
+      const persistedState = stored[storageKey]
 
       if (!isPersistedTopBarState(persistedState))
         return
@@ -162,7 +164,7 @@ export function createTopBarStateBroker(
 
     try {
       await sessionStorage.set({
-        [TOP_BAR_STATE_STORAGE_KEY]: persistedState,
+        [storageKey]: persistedState,
       })
     }
     catch {
@@ -389,4 +391,5 @@ export function setupTopBarStateBroker() {
     TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATE,
     (data, sender) => broker.invalidateWatchLater(data, sender),
   )
+  return broker
 }

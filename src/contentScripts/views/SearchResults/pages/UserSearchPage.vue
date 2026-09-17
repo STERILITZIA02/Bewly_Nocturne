@@ -10,6 +10,7 @@ import { useUserRelations } from '~/composables/useUserRelations'
 import { settings } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
+import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
@@ -248,7 +249,7 @@ defineExpose({
     </div>
 
     <div v-else-if="!isLoading && (!results || results.length === 0)" class="empty-state">
-      <Empty :description="t('common.no_data')" />
+      <SearchEmptyState :keyword="keyword" category="user" />
     </div>
 
     <div v-else class="user-grid">

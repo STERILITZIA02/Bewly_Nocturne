@@ -29,6 +29,7 @@ let authorizationGeneration = 0
 let authorizationDeadline = 0
 let authorizationSucceeded = false
 let authorizationClosing = false
+let authorizationController: AbortController | undefined
 
 function clearAuthorizationTimer() {
   if (authorizationTimer != null)
@@ -38,6 +39,8 @@ function clearAuthorizationTimer() {
 
 function invalidateAuthorization() {
   authorizationGeneration++
+  authorizationController?.abort()
+  authorizationController = undefined
   clearAuthorizationTimer()
 }
 
@@ -62,7 +65,7 @@ function scheduleAuthorizationPoll(generation: number, expectedAuthCode: string)
       return
 
     try {
-      const response = await pollTVLoginQRCode(expectedAuthCode)
+      const response = await pollTVLoginQRCode(expectedAuthCode, authorizationController?.signal)
       if (generation !== authorizationGeneration || expectedAuthCode !== authCode.value)
         return
 
@@ -94,6 +97,7 @@ async function startAuthorization() {
     return
 
   invalidateAuthorization()
+  authorizationController = new AbortController()
   const generation = authorizationGeneration
   beginAppAuthorization(appAuthTokens.value.accessToken)
   authorizationSucceeded = false
@@ -103,7 +107,7 @@ async function startAuthorization() {
   authorizationDeadline = Date.now() + AUTHORIZATION_DEADLINE
 
   try {
-    const response = await getTVLoginQRCode()
+    const response = await getTVLoginQRCode(authorizationController.signal)
     if (generation !== authorizationGeneration)
       return
     if (response?.code !== 0 || !response.data?.url || !response.data?.auth_code) {

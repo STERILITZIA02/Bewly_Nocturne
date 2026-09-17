@@ -1,3 +1,5 @@
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
+
 import type { DisplayPrivateSession } from './privateSession'
 
 export type PrivateRecipientSource = 'following' | 'global'
@@ -43,7 +45,7 @@ function normalizeHttpUrl(value: unknown): string {
   try {
     const candidate = value.startsWith('//') ? `https:${value}` : value
     const url = new URL(candidate)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+    return url.protocol === 'http:' || url.protocol === 'https:' ? normalizeBilibiliImageUrl(url.href) : ''
   }
   catch {
     return ''

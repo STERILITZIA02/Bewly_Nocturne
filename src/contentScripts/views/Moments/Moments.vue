@@ -10,7 +10,7 @@ import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
 import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/components/MomentCard/momentForwardTransactions'
-import type { DisplayForwardVideo, DisplayMoment } from '~/components/MomentCard/types'
+import type { DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
@@ -27,7 +27,6 @@ import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/util
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
 import { normalizeMomentRemoteUrl } from '~/utils/momentUrl'
-import { recordVideoVisit } from '~/utils/videoVisitHistory'
 
 import { createMomentAdapter } from './momentAdapter'
 import { createMomentFeedReader } from './momentFeedReader'
@@ -601,10 +600,6 @@ function maybeLoadMoreNearBottom() {
 }
 
 /** 卡片仅在第一次完成测量时播放入场动画，虚拟列表重新挂载不重复播放 */
-
-function handleForwardVideoClick(video: DisplayForwardVideo) {
-  recordVideoVisit(video)
-}
 
 function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
   momentActions.reset()
@@ -1422,7 +1417,7 @@ function appendMoments(items: DisplayMoment[]) {
                 @media-leave="handleMediaLeave"
                 @cover-load="(event, momentId) => handleCoverLoad(event, momentId)"
                 @preview-video="bindPreviewVideo"
-                @forward-video-click="handleForwardVideoClick"
+                @open-video-link="details.openVideoLink"
                 @toggle-watch-later="toggleMomentWatchLater"
                 @toggle-like="toggleMomentLike"
                 @toggle-reservation="toggleMomentReservation"

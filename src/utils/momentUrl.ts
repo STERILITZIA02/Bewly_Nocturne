@@ -14,3 +14,13 @@ export function normalizeMomentRemoteUrl(value: unknown, baseUrl = 'https://www.
     return ''
   }
 }
+
+export function isMomentVideoUrl(value: string) {
+  try {
+    const url = new URL(normalizeMomentRemoteUrl(value))
+    return url.hostname === 'www.bilibili.com' && /^\/(?:video\/(?:BV[\da-z]+|av\d+)|(?:bangumi|cheese)\/play\/(?:ep|ss)\d+)(?:[/?#]|$)/i.test(url.pathname)
+  }
+  catch {
+    return false
+  }
+}

@@ -4,6 +4,8 @@ import { FORM_FIELD_LABEL_ID } from '~/components/formFieldLabel'
 defineProps<{
   modelValue: boolean
   label?: string
+  accessibleLabel?: string
+  disabled?: boolean
 }>()
 
 const fieldLabelId = inject(FORM_FIELD_LABEL_ID, undefined)
@@ -14,7 +16,12 @@ const model = defineModel()
 <template>
   <label cursor="pointer" pointer="auto" flex items-center gap-3>
     <span>{{ label }}</span>
-    <input v-model="model" type="checkbox" class="radio-input" :aria-labelledby="label ? undefined : fieldLabelId">
+    <input
+      v-model="model" type="checkbox" class="radio-input"
+      :disabled="disabled"
+      :aria-label="accessibleLabel"
+      :aria-labelledby="label || accessibleLabel ? undefined : fieldLabelId"
+    >
     <span class="radio-switch" aria-hidden="true" />
   </label>
 </template>
@@ -75,6 +82,13 @@ label {
 }
 
 input[type="checkbox"] {
+  &:disabled {
+    cursor: not-allowed;
+  }
+
+  &:disabled + .radio-switch {
+    opacity: 0.5;
+  }
   &:focus-visible + .radio-switch {
     outline: 2px solid var(--bew-theme-focus-ring);
     outline-offset: var(--bew-space-0-5);
@@ -116,6 +130,19 @@ input[type="checkbox"] {
     --b-switch-thumb-offset: calc(
       var(--b-switch-width) - var(--b-switch-thumb-size) - var(--b-switch-edge-inset) - var(--b-switch-edge-inset)
     );
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  input[type="checkbox"] {
+    & + .radio-switch,
+    & + .radio-switch::after {
+      transition-property: background-color, border-color, box-shadow;
+    }
+
+    &:active + .radio-switch::after {
+      --b-switch-thumb-scale: 1;
+    }
   }
 }
 </style>

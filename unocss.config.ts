@@ -1,6 +1,18 @@
 import { defineConfig, presetAttributify, presetIcons, presetTypography, presetWind3, transformerDirectives } from 'unocss'
 
 const remRE = /(-?[.\d]+)rem/g
+const spacingTokens: Record<number, string> = {
+  0.125: '0-5',
+  0.25: '1',
+  0.5: '2',
+  0.75: '3',
+  1: '4',
+  1.25: '5',
+  1.5: '6',
+  2: '8',
+  2.5: '10',
+  3: '12',
+}
 const radiusPropertyRE = /^border(?:-.+)?-radius$/
 const zeroRadiusRE = /^0(?:px|rem|em|%)?$/
 const circleRadiusRE = /^50%$/
@@ -71,14 +83,22 @@ export default defineConfig({
     presetTypography(),
 
     {
-      name: 'text-size-transformer',
+      name: 'semantic-rem-transformer',
       postprocess: (util) => {
         util.entries.forEach((i) => {
           const value = i[1]
 
-          if (typeof value === 'string' && remRE.test(value)) {
-            i[1] = value.replace(remRE, (_, num: number) => {
-              return `calc(var(--bew-base-font-size) * ${num})`
+          if (typeof value === 'string') {
+            i[1] = value.replace(remRE, (_, raw: string) => {
+              const num = Number(raw)
+              // Typography follows the 15px body base; layout retains Uno's
+              // 16px rem grid and shares the same spacing as component SCSS.
+              if (i[0] === 'font-size' || i[0] === 'line-height')
+                return `calc(var(--bew-base-font-size) * ${num})`
+              const token = spacingTokens[Math.abs(num)]
+              if (token)
+                return num < 0 ? `calc(var(--bew-space-${token}) * -1)` : `var(--bew-space-${token})`
+              return `${num * 16}px`
             })
           }
         })

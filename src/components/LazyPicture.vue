@@ -1,5 +1,6 @@
 <script lang="ts">
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import type { ImageLoadQueueHandle } from '~/utils/imageLoadQueue'
 import { enqueueImageLoad, getImageLoadPriority, subscribeImageLoadRoot } from '~/utils/imageLoadQueue'
 
@@ -185,6 +186,8 @@ const emit = defineEmits<{
   loaded: []
 }>()
 
+const sourceUrl = computed(() => normalizeBilibiliImageUrl(props.src))
+
 const bewlyApp = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
 const imgRef = ref<HTMLElement>()
 const imageElRef = ref<HTMLImageElement | null>(null)
@@ -193,7 +196,7 @@ const isVisible = ref(props.loading === 'eager')
 const isLoaded = ref(false)
 const imageFailed = ref(!props.src)
 const usePreferredSources = ref(true)
-const actualSrc = ref(props.loading === 'eager' ? props.src : '')
+const actualSrc = ref(props.loading === 'eager' ? sourceUrl.value : '')
 const imageKey = computed(() => `${actualSrc.value}:${usePreferredSources.value}`)
 const skipRevealTransition = ref(false)
 
@@ -245,11 +248,11 @@ function getObserverRootMargin(): string {
 function startLoad() {
   if (!active || imageFailed.value || queueHandle || actualSrc.value)
     return
-  const loadedBefore = hasLoadedPicture(props.src)
+  const loadedBefore = hasLoadedPicture(sourceUrl.value)
   skipRevealTransition.value = loadedBefore
   // 重新挂载解码资源时仍走短暂占位，避免空白闪断过长
   isLoaded.value = false
-  const source = props.src
+  const source = sourceUrl.value
   const version = ++loadVersion
   if (props.loading === 'eager') {
     isVisible.value = true
@@ -314,7 +317,7 @@ function releaseImage() {
   actualSrc.value = ''
   isVisible.value = false
   isLoaded.value = false
-  skipRevealTransition.value = hasLoadedPicture(props.src)
+  skipRevealTransition.value = hasLoadedPicture(sourceUrl.value)
 }
 
 function cancelScheduledRelease() {
@@ -443,7 +446,7 @@ function handleImageError(event: Event) {
   settleLoad = undefined
 }
 
-watch(() => props.src, (newSrc, oldSrc) => {
+watch(sourceUrl, (newSrc, oldSrc) => {
   cancelLoad()
   detachImageElement()
   actualSrc.value = ''

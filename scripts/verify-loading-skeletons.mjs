@@ -452,6 +452,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
         return query.promise
       } } } },
       '~/utils/debug': { debugLog() {} },
+      '~/utils/linkNavigation': await import('../src/utils/linkNavigation'),
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/searchHighlight': { sanitizeSearchHighlight: value => value },
       '~/utils/searchNavigation': { openSearchResults() {}, resolveSearchNavigationTarget: value => value },

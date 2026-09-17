@@ -1,4 +1,5 @@
 common:
+  retry: 重试
   operation_completed: 操作完成
   dialog: 对话框
   view_all: 查看更多
@@ -110,6 +111,14 @@ player_screenshot:
   failed: 截图失败
   video_unavailable: 当前视频画面不可用
 settings:
+  no_search_character: 不显示搜索人物
+  reorder_keyboard_hint: 按住 Alt 并按方向键调整顺序
+  auto_remove_watch_later_on_end: 播完自动移出稍后再看
+  auto_remove_watch_later_on_end_desc: 默认关闭。仅在稍后再看播放页，确认完整稿件最后一 P 播完后移除；试看、广告及无法确认身份的播放不会移除。
+  current_tab_if_homepage_desc: “仅首页使用当前标签”表示：仅在原生首页或 Bewly 首页中使用当前标签；搜索结果、历史、收藏等内部页面使用新标签。
+  video_screenshot_shortcut: 截图快捷键
+  video_screenshot_shortcut_desc: 点击输入框后按组合键；退格键清除。默认 Shift+S，隐藏截图按钮后仍可使用。
+  video_screenshot_shortcut_conflict: 该组合键无效或与浏览器常用快捷键冲突。
   enable_sidebar_cover_blur: 侧栏封面背景
   enable_sidebar_cover_blur_desc: 收藏与稍后再看的侧栏使用模糊封面背景；关闭后使用当前主题的中性表面。
   following_sort: 新版关注列表排序
@@ -477,6 +486,7 @@ settings:
   frosted_glass_blur_intensity: 毛玻璃模糊强度
   disable_shadow: 禁用阴影
   link_opening_behavior_opt:
+    current_tab_if_homepage: 仅首页使用当前标签
     current_tab: 当前标签页
     current_tab_if_not_homepage: 首页外当前页
     background: 后台打开
@@ -636,6 +646,7 @@ settings:
   enable_settings_sync_desc: 开启后同时保存到本地和浏览器云端；设备播放状态不会同步（需要登录浏览器账号）
   settings_sync_unsynced_count: '未同步字段：{count}'
   settings_sync_quota_blocked_count: '受云端配额限制：{count}'
+  settings_sync_retry_at: '已保留本地修改，将在 {time} 后自动重试云同步。'
   settings_sync_last_error: '最近同步错误：{error}'
   sync_cloud_conflict_title: 检测到云端设置备份
   sync_cloud_conflict_desc: 云端已有一份设置备份。两侧都存在的设置将以你所选的一侧为准。
@@ -1323,6 +1334,9 @@ moments:
   fit_window: 适应窗口
   rotate_clockwise: 顺时针旋转
 moment_card:
+  comments_expand_thread: 展开此评论的回复
+  comments_collapse_thread: 收起此评论的回复
+  forward_search_mention: 搜索要提及的用户
   comments_sort: 评论排序
   comments_sort_latest: 最新
   comments_sort_hot: 最热
@@ -1441,6 +1455,11 @@ video_card:
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
 home:
+  following_search_videos: '搜索 {name} 的视频投稿'
+  following_clear_video_search: 清空投稿搜索
+  following_no_search_results: 未找到匹配的视频投稿
+  following_display_flat: 不分组
+  following_display_grouped: 按分组
   following_default_group: 默认分组
   following_special_group: 特别关注
   following_group_name: '分组 {id}'
@@ -1473,6 +1492,8 @@ home:
   subscribed_series: 订阅剧集
   weekly: 每周必看
   weekly_search_placeholder: 搜索期号...
+  weekly_choose_series: 选择期号
+  weekly_no_matching_series: 未找到匹配的期号
   precious: 入站必刷
   live: 直播
   moments: 动态
@@ -1583,6 +1604,37 @@ version_reminder:
   acknowledge: 已知晓，本版本不再提示
   settings_hint: 可在“设置 → 关于”中关闭“新版本提醒”。
 watch_later:
+  auto_remove_failed: 自动移出稍后再看失败，请稍后手动重试。
+  open_tabs:
+    title: 添加播放标签页
+    scope: 范围：当前扩展可访问、同一普通/无痕会话的所有窗口中打开的 B 站播放标签。不会关闭或跳转原标签。确认后按此快照添加；重复稿件和已在队列中的项目会跳过。关闭此窗口不会停止后台任务，可从此入口重新查看。
+    failed_request: 读取任务失败或账号已变化，请重试。
+    state_ready: 请确认下面的候选标签页
+    state_running: 正在添加
+    state_stopped: 已停止后续添加
+    state_complete: 本次任务已结束
+    stop_user: 停止只影响尚未发出的请求。
+    stop_accountChanged: 账号或登录凭据已变化，未发送项已停止。
+    stop_interrupted: 后台已重启，未处理项已停止；结果未知项不会自动重发。
+    stop_readFailed: 无法读取权威成员列表或保存任务状态，已停止后续添加。
+    counts: '候选 {total} · 已添加 {added} · 已跳过 {skipped} · 失败/未知 {failed} · 未处理 {unprocessed}'
+    stop: 停止后续添加
+    confirm: 确认添加
+    retry: 重试明确失败项
+    prepare: 重新读取标签
+    pending: 待处理
+    resolving: 解析中
+    sending: 已发送，等待结果
+    added: 已添加
+    skipped: 已跳过
+    failed: 失败
+    unknown: 结果未知，不重发
+    duplicate: 重复稿件
+    existing: 已在队列中
+    sourceChanged: 原标签已关闭或跳转
+    unresolved: 无法确认稿件/当前分集
+    readFailed: 解析失败，可重试
+    writeFailed: 服务器拒绝，可重试
   title: 稍后再看
   layout_list: 列表
   layout_grid: 网格
@@ -1644,6 +1696,10 @@ search_page:
   view_all_esports: 查看全部赛事
 
 search:
+  empty_results: '在{category}中未找到“{keyword}”的结果'
+  empty_hint: 试试缩短关键词，或查看综合结果。
+  edit_keyword: 修改关键词
+  back_to_all: 查看综合结果
   page_title: 搜索 - 哔哩哔哩
   results_page_title: '{keyword} - 搜索 - 哔哩哔哩'
   result_count: 共找到{count}个结果

@@ -9,6 +9,7 @@ import { originalSettings, settings } from '~/logic'
 import type { Settings } from '~/logic/storage'
 import { videoCardContextMenuKeys } from '~/logic/storage'
 import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
+import { isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
@@ -28,8 +29,8 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   drawerEscapeBehavior: ['immediate', 'secondPress'],
   customizeFont: ['default', 'recommend', 'custom'],
   videoCardLinkOpenMode: ['drawer', 'newTab', 'currentTab', 'background'],
-  topBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'newTab', 'background'],
-  searchBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'newTab', 'background'],
+  topBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'currentTabIfHomepage', 'newTab', 'background'],
+  searchBarLinkOpenMode: ['currentTab', 'currentTabIfNotHomepage', 'currentTabIfHomepage', 'newTab', 'background'],
   videoPageTopBarConfig: ['alwaysShow', 'alwaysHide', 'showOnMouse', 'showOnScroll'],
   topBarLogoStyle: ['icon', 'brand'],
   momentsGridColumns: ['1', '2', '3'],
@@ -113,6 +114,7 @@ const videoPlayerModeOverrideValues = new Set(['default', 'webFullscreen', 'wide
 const customPlayOrderOverrideValues = new Set(['sequential', 'reverse', 'random', 'inherit'])
 
 const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) => boolean>> = {
+  videoScreenshotShortcut: isValidScreenshotShortcut,
   videoCardContextMenuConfig: value => Array.isArray(value) && value.every(item =>
     isPlainObject(item)
     && hasExactProperties(item, ['key', 'visible'])

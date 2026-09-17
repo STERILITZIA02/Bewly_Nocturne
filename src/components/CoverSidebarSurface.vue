@@ -45,7 +45,7 @@ function markCoverFailed(event: Event) {
     position: absolute;
     inset: 0;
     content: "";
-    background: var(--bew-fill-4);
+    background: var(--bew-sidebar-cover-scrim);
   }
 
   img {
@@ -56,7 +56,7 @@ function markCoverFailed(event: Event) {
     transform: scale(1.12);
   }
 }
-.bew-cover-sidebar :deep(.bew-cover-sidebar__action) {
+.bew-cover-sidebar :deep(.bew-cover-sidebar__action:not(.b-button--type-primary)) {
   flex-shrink: 0;
   color: var(--bew-sidebar-text);
   background: var(--bew-sidebar-control);

@@ -64,6 +64,7 @@ import FollowingSidebar from '../following/FollowingSidebar.vue'
 import type { FollowingUploader as UploaderInfo } from '../following/model'
 import { useFollowingDirectory } from '../following/useFollowingDirectory'
 import { useFollowingGroupWrites } from '../following/useFollowingGroupWrites'
+import { useFollowingVideoSearch } from '../following/useFollowingVideoSearch'
 
 interface Props {
   gridLayout?: GridLayoutType
@@ -90,7 +91,7 @@ const emit = defineEmits<{
   (e: 'afterLoading'): void
 }>()
 
-useI18n()
+const { t } = useI18n()
 
 const { scrollViewportRef, handlePageRefresh, handleReachBottom, canRefreshHomeSubPage } = useBewlyApp()
 const tabState = useHomeTabState()
@@ -122,6 +123,23 @@ const directory = useFollowingDirectory(tabState, getDirectoryAccount, {
   selected: () => selectedUploader.value,
 })
 const { uploaders: uploaderList } = directory
+const submissionSearch = useFollowingVideoSearch(tabState, getDirectoryAccount, () => selectedUploader.value, mid => uploaderList.value.find(user => user.mid === mid))
+const searchPlaceholder = computed(() => t('home.following_search_videos', { name: uploaderList.value.find(user => user.mid === selectedUploader.value)?.name ?? '' }))
+const displayedVideos = computed<VideoElement[]>(() => submissionSearch.active.value
+  ? submissionSearch.items.value.map(displayData => ({ uniqueId: `submission:${displayData.id}`, bvid: displayData.bvid, displayData }))
+  : videoList.value)
+function searchSubmissions() {
+  selectionToken.value++
+  isLoading.value = false
+  emit('afterLoading')
+  void submissionSearch.submit()
+  if (!submissionSearch.active.value)
+    initData()
+}
+function clearSubmissionSearch() {
+  submissionSearch.clear()
+  initData()
+}
 const groupWrites = useFollowingGroupWrites(directory, getDirectoryAccount, tabState.isCurrent)
 const expandedGroupIds = tabState.ref<number[]>('followingExpandedGroups', [-10, 0])
 const uploaderScrollRef = ref<HTMLElement | null>(null)
@@ -770,6 +788,11 @@ function transformVideoItem(item: VideoElement): Video | undefined {
 
 // 加载更多
 async function handleLoadMore() {
+  if (submissionSearch.active.value) {
+    if (!submissionSearch.failed.value)
+      await submissionSearch.load()
+    return
+  }
   if (isLoading.value || noMoreContent.value)
     return
 
@@ -787,6 +810,10 @@ async function handleLoadMore() {
 function initData() {
   if (!tabState.isCurrent())
     return
+  if (submissionSearch.active.value) {
+    void submissionSearch.submit()
+    return
+  }
   hasSettled.value = false
   // 生成新的令牌，确保旧的加载请求被取消
   const currentToken = ++selectionToken.value
@@ -822,6 +849,11 @@ function initData() {
 }
 
 async function resumeFollowingData() {
+  if (submissionSearch.active.value) {
+    if (!submissionSearch.items.value.length)
+      await submissionSearch.load()
+    return
+  }
   if (!tabState.isCurrent() || loadedAccountMid === null || requestFailed.value || needToLoginFirst.value)
     return
   const token = selectionToken.value
@@ -928,18 +960,29 @@ defineExpose({ initData })
       :load-groups="() => directory.loadGroups()" :load-member="directory.refreshMember" :write="groupWrites.submit"
       @select="selectUploader" @retry="directory.load()" @retry-groups="directory.loadGroups(true)"
       @scroll-element="uploaderScrollRef = $event"
+      @update:grouped="settings.followingUploaderSort = $event ? 'group' : 'updated'"
     />
 
     <!-- Right Panel: Video Feed -->
     <div class="following-feed">
+      <form v-if="selectedUploader !== null" class="following-video-search" role="search" @submit.prevent="searchSubmissions">
+        <input v-model="submissionSearch.draft.value" :placeholder="searchPlaceholder" :aria-label="searchPlaceholder" @keydown.enter="($event.isComposing || $event.keyCode === 229) && $event.preventDefault()">
+        <IconButton v-if="submissionSearch.draft.value || submissionSearch.active.value" :label="t('home.following_clear_video_search')" @click="clearSubmissionSearch">
+          <span i-mingcute-close-line aria-hidden="true" />
+        </IconButton>
+        <Button native-type="submit" type="secondary">
+          {{ t('common.search') }}
+        </Button>
+      </form>
       <VideoCardGrid
-        :key="gridKey"
-        :items="videoList"
+        :key="`${gridKey}:${submissionSearch.keyword.value}`"
+        :items="displayedVideos"
         :grid-layout="gridLayout"
-        :loading="isLoading"
-        :no-more-content="noMoreContent"
+        :loading="submissionSearch.active.value ? submissionSearch.loading.value : isLoading"
+        :no-more-content="submissionSearch.active.value ? submissionSearch.ended.value : noMoreContent"
         :need-to-login-first="needToLoginFirst"
-        :request-failed="requestFailed"
+        :request-failed="submissionSearch.active.value ? submissionSearch.failed.value : requestFailed"
+        :empty-description="submissionSearch.active.value ? t('home.following_no_search_results') : undefined"
         :transform-item="transformVideoItem"
         :get-item-key="(item: VideoElement) => item.uniqueId"
         :show-watch-later="false"
@@ -949,11 +992,31 @@ defineExpose({ initData })
         @login="jumpToLoginPage"
         @load-more="handleLoadMore"
       />
+      <Button v-if="submissionSearch.active.value && submissionSearch.failed.value && submissionSearch.items.value.length" type="secondary" @click="submissionSearch.load()">
+        {{ t('common.retry') }}
+      </Button>
     </div>
   </div>
 </template>
 
 <style lang="scss" scoped>
+.following-video-search {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  margin-bottom: var(--bew-space-4);
+  > input {
+    flex: 1;
+    min-width: 0;
+    height: var(--bew-control-height);
+    padding-inline: var(--bew-space-3);
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-interactive-radius);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
+  }
+}
 .following-layout {
   display: flex;
   gap: var(--bew-space-10);

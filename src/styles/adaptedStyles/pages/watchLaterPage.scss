@@ -10,6 +10,11 @@
     background-color: transparent;
   }
 
+  .list-header-filter .list-header-filter__btn.active {
+    color: var(--bew-on-theme-surface);
+    background: var(--bew-theme-surface);
+  }
+
   // #endregion
 
   // #region old watch later page

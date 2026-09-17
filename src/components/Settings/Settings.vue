@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useEventListener } from '@vueuse/core'
+import { useEventListener, usePreferredReducedMotion } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -25,6 +25,7 @@ const props = defineProps<{
 const emit = defineEmits(['close'])
 
 const { t, tm, rt } = useI18n()
+const reducedMotion = usePreferredReducedMotion()
 provide(GLASS_SURFACE_CONTEXT, computed(() => !settings.value.disableFrostedGlass))
 const breadcrumbDetail = ref<string>()
 const searchQuery = ref('')
@@ -494,7 +495,7 @@ function revealSearchTarget(target: HTMLElement, navigationId: number) {
       settingNavigationFrame = undefined
       if (!settingsModalActive || navigationId !== searchNavigationId || !target.isConnected)
         return
-      target.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      target.scrollIntoView({ behavior: reducedMotion.value === 'reduce' ? 'auto' : 'smooth', block: 'center' })
       highlightSearchTarget(target)
     })
   })
@@ -617,8 +618,8 @@ function changeMenuItem(menuItem: MenuType) {
       <aside
         class="settings-primary-navigation group"
         :data-expanded="isPrimaryNavigationExpanded"
-        shrink-0 p="x-4"
-        pos="absolute xl:left--84px left--44px" z-2
+        shrink-0
+        pos="absolute" z-2
         @mouseenter="isPrimaryNavigationExpanded = true"
         @mouseleave="isPrimaryNavigationExpanded = false"
       >
@@ -815,14 +816,13 @@ function changeMenuItem(menuItem: MenuType) {
 </template>
 
 <style lang="scss" scoped>
-@use "../../styles/breakpoints";
-
 .menu-item-activated {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
 }
 
-.settings-primary-navigation__list {
+.settings-primary-navigation {
+  right: calc(100% + var(--bew-space-3));
   --settings-primary-nav-inset: var(--bew-space-2);
   --settings-primary-nav-item-size: 40px;
   --settings-primary-nav-expanded-item-width: 190px;
@@ -830,7 +830,9 @@ function changeMenuItem(menuItem: MenuType) {
     var(--settings-primary-nav-item-size) + var(--settings-primary-nav-inset) + var(--settings-primary-nav-inset)
   );
   --settings-primary-nav-collapsed-radius: calc(var(--settings-primary-nav-collapsed-width) / 2);
+}
 
+.settings-primary-navigation__list {
   display: flex;
   isolation: isolate;
   box-sizing: border-box;
@@ -879,6 +881,8 @@ function changeMenuItem(menuItem: MenuType) {
   width: 100%;
   height: var(--settings-primary-nav-item-size);
   align-items: center;
+  font-size: var(--bew-font-size-body);
+  font-weight: var(--bew-font-weight-medium);
   overflow-x: hidden;
   border-radius: calc(var(--settings-primary-nav-item-size) / 2);
   corner-shape: round;
@@ -897,7 +901,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 }
 
-.settings-primary-navigation[data-expanded="true"] {
+.settings-primary-navigation:is([data-expanded="true"], :has(:focus-visible)) {
   .settings-primary-navigation__list {
     width: calc(
       var(--settings-primary-nav-expanded-item-width) + var(--settings-primary-nav-inset) +
@@ -905,7 +909,6 @@ function changeMenuItem(menuItem: MenuType) {
     );
     border-radius: var(--bew-modal-radius);
     corner-shape: var(--bew-corner-shape);
-    transform: scale(1.05);
   }
 
   .settings-primary-navigation__item {
@@ -1221,7 +1224,8 @@ function changeMenuItem(menuItem: MenuType) {
   }
 }
 
-@media (max-width: breakpoints.$compact-max) {
+// 1000px panel plus the expanded navigation, gap and an 8px viewport gutter.
+@media (max-width: 1456px) {
   #settings-window {
     /* 侧栏进入布局后先维持 1000px 内容宽度，空间不足时再连续收缩。 */
     width: min(calc(1000px + 72px), calc(100% - var(--bew-space-6)));
@@ -1230,12 +1234,17 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   .settings-primary-navigation {
-    /* xl 以下外侧空间不足：让折叠导航占据布局宽度，展开时仍可覆盖 content。 */
+    /* 外侧不足以容纳展开导航时，使用同一个导航占位，让内容随宽度避让。 */
     position: relative;
-    left: auto !important;
-    width: 72px;
+    right: auto;
+    width: calc(var(--settings-primary-nav-collapsed-width) + var(--bew-space-4));
     box-sizing: border-box;
     padding-inline: var(--bew-space-2);
+    transition: width var(--bew-duration-moderate) var(--bew-ease-standard);
+
+    &:is([data-expanded="true"], :has(:focus-visible)) {
+      width: calc(var(--settings-primary-nav-expanded-item-width) + var(--settings-primary-nav-inset) * 4);
+    }
   }
 }
 
@@ -1265,7 +1274,8 @@ function changeMenuItem(menuItem: MenuType) {
       flex: 0 0 40px;
     }
 
-    &[data-expanded="true"] {
+    &:is([data-expanded="true"], :has(:focus-visible)) {
+      width: calc(var(--settings-primary-nav-collapsed-width) + var(--bew-space-4));
       .settings-primary-navigation__list {
         width: var(--settings-primary-nav-collapsed-width);
         border-radius: var(--settings-primary-nav-collapsed-radius);
@@ -1382,6 +1392,28 @@ function changeMenuItem(menuItem: MenuType) {
     opacity: 0;
     transform: translate(-50%, -50%) translate3d(var(--bew-settings-leave-x), var(--bew-settings-leave-y), 0)
       scale(0.98);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-primary-navigation,
+  .settings-primary-navigation__list,
+  .settings-primary-navigation__item,
+  .settings-search {
+    transition-property: color, background-color, border-color, box-shadow;
+  }
+
+  .settings-search-popover-enter-active,
+  .settings-search-popover-leave-active {
+    transition-property: opacity;
+    transform: none;
+  }
+
+  .settings-launch-enter-active #settings-window,
+  .settings-launch-leave-active #settings-window,
+  :deep(.settings-search-target::before),
+  :deep(.settings-search-target::after) {
+    animation: none;
   }
 }
 </style>

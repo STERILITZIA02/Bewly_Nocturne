@@ -10,7 +10,7 @@ const emptyImg = getExtensionAssetUrl('/assets/empty.png')
 
 <template>
   <div flex="~ col gap-4" justify="center" items="center">
-    <img v-if="emptyImg" :src="emptyImg" w="200px" h="auto">
+    <img v-if="emptyImg" :src="emptyImg" alt="" w="200px" h="auto">
     <span v-if="props.description" text="$bew-text-3">{{ props.description }}</span>
     <slot />
   </div>

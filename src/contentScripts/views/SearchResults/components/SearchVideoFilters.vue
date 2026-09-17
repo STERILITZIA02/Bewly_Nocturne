@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import DatePicker from './DatePicker.vue'
@@ -22,6 +22,7 @@ const { t } = useI18n()
 
 // 更多筛选的展开状态
 const isMoreFiltersExpanded = ref(false)
+const moreFiltersId = useId()
 
 // 监听父组件的日期变化，同步到本地输入
 watch([customStartDate, customEndDate], ([start, end]) => {
@@ -73,12 +74,16 @@ const maxDate = computed(() => formatDate(new Date()))
     <!-- 排序 + 更多筛选按钮 -->
     <div flex items-center gap-2>
       <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.order') }}</span>
-      <div flex items-center gap-2 flex-wrap flex-1>
+      <div
+        flex items-center gap-2 flex-wrap flex-1
+        role="group" :aria-label="t('search.filters.order')"
+      >
         <button
           v-for="option in props.orderOptions"
           :key="option.value"
           class="filter-btn"
           :class="{ active: videoOrder === option.value }"
+          :aria-pressed="videoOrder === option.value"
           type="button"
           @click="videoOrder = option.value"
         >
@@ -87,6 +92,8 @@ const maxDate = computed(() => formatDate(new Date()))
       </div>
       <button
         class="more-filters-btn"
+        :aria-expanded="isMoreFiltersExpanded"
+        :aria-controls="moreFiltersId"
         flex items-center gap-1
         type="button"
         @click="isMoreFiltersExpanded = !isMoreFiltersExpanded"
@@ -99,16 +106,20 @@ const maxDate = computed(() => formatDate(new Date()))
     </div>
 
     <!-- 更多筛选内容 -->
-    <div v-show="isMoreFiltersExpanded" flex="~ col" gap-3>
+    <div v-show="isMoreFiltersExpanded" :id="moreFiltersId" flex="~ col" gap-3>
       <!-- 时长 -->
       <div flex items-center gap-2>
         <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.duration') }}</span>
-        <div flex items-center gap-2 flex-wrap>
+        <div
+          flex items-center gap-2 flex-wrap role="group"
+          :aria-label="t('search.filters.duration')"
+        >
           <button
             v-for="option in props.durationOptions"
             :key="option.value"
             class="filter-btn"
             :class="{ active: duration === option.value }"
+            :aria-pressed="duration === option.value"
             type="button"
             @click="duration = option.value"
           >
@@ -120,12 +131,16 @@ const maxDate = computed(() => formatDate(new Date()))
       <!-- 日期 -->
       <div flex items-center gap-2>
         <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.date') }}</span>
-        <div flex items-center gap-2 flex-wrap>
+        <div
+          flex items-center gap-2 flex-wrap role="group"
+          :aria-label="t('search.filters.date')"
+        >
           <button
             v-for="option in props.timeRangeOptions"
             :key="option.value"
             class="filter-btn"
             :class="{ active: timeRange === option.value }"
+            :aria-pressed="timeRange === option.value"
             type="button"
             @click="handleTimeRangeSelect(option.value)"
           >
@@ -151,12 +166,15 @@ const maxDate = computed(() => formatDate(new Date()))
 <style scoped lang="scss">
 .filter-btn {
   box-sizing: border-box;
-  padding: 0.35rem 0.75rem;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-1) var(--bew-space-3);
   border-radius: var(--bew-radius-half);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-fill-1);
   color: var(--bew-text-2);
-  font-size: var(--bew-base-font-size);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
   border: 1px solid var(--bew-surface-border-color);
   cursor: pointer;
   transition:
@@ -184,10 +202,13 @@ const maxDate = computed(() => formatDate(new Date()))
 }
 
 .more-filters-btn {
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 0.35rem 0.75rem;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-1) var(--bew-space-3);
   user-select: none;
   white-space: nowrap;
   transition:
@@ -212,6 +233,18 @@ const maxDate = computed(() => formatDate(new Date()))
 
   &.expanded {
     transform: rotate(180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filter-btn,
+  .more-filters-btn,
+  .toggle-icon {
+    transition-property: color, background-color, border-color, box-shadow;
+  }
+
+  .filter-btn:active {
+    transform: none;
   }
 }
 </style>

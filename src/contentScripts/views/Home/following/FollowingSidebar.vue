@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 
 import Input from '~/components/Input.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
+import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { calcTimeSince } from '~/utils/dataFormatter'
 
 import FollowingGroupActions from './FollowingGroupActions.vue'
@@ -26,11 +27,12 @@ const props = defineProps<{
   loadMember: (mid: number) => Promise<FollowingUploader | undefined>
   write: (operation: FollowingGroupMutation) => Promise<FollowingGroupWriteResult>
 }>()
-const emit = defineEmits<{ select: [mid: number | null], retry: [], retryGroups: [], scrollElement: [element: HTMLElement | null] }>()
+const emit = defineEmits<{ select: [mid: number | null], retry: [], retryGroups: [], scrollElement: [element: HTMLElement | null], 'update:grouped': [grouped: boolean] }>()
 const query = defineModel<string>('query', { required: true })
 const expanded = defineModel<number[]>('expanded', { required: true })
 const { t } = useI18n()
 const scroller = ref<HTMLElement | null>(null)
+const listRef = ref<HTMLElement | null>(null)
 const actions = ref<InstanceType<typeof FollowingGroupActions>>()
 const unread = computed(() => props.uploaders.filter(user => user.hasUpdate).length)
 const keyword = computed(() => query.value.trim().toLocaleLowerCase())
@@ -60,6 +62,21 @@ function toggleGroup(id: number) {
     return
   expanded.value = expanded.value.includes(id) ? expanded.value.filter(value => value !== id) : [...expanded.value, id]
 }
+const allRows = computed<(Row | { type: 'all', key: string })[]>(() => [{ type: 'all', key: 'all' }, ...rows.value])
+const rowWindow = useCardWindow({
+  root: scroller,
+  container: listRef,
+  keys: computed(() => allRows.value.map(row => row.key)),
+  columns: ref(1),
+  gap: ref(8),
+  estimatedHeight: ref(52),
+  layout: ref('following-directory'),
+  enabled: computed(() => allRows.value.length > CARD_WINDOW_THRESHOLD),
+  canRelease: () => !props.busy && !actions.value?.interactionActive,
+})
+const visibleRows = computed(() => rowWindow.ranges.value.flatMap<{ key: string, height?: number, rows: typeof allRows.value }>(range => range.height !== undefined
+  ? [{ key: `spacer:${range.start}`, height: range.height, rows: [] }]
+  : allRows.value.slice(range.start, range.end).map(row => ({ key: row.key, rows: [row] }))))
 function keyboardMenu(event: KeyboardEvent, row: Row) {
   if (event.isComposing || event.ctrlKey || event.altKey || event.metaKey
     || !(event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey))) {
@@ -92,24 +109,62 @@ onMounted(() => emit('scrollElement', scroller.value))
 
 <template>
   <aside class="following-sidebar">
-    <div ref="scroller" class="following-sidebar__scroll" tabindex="-1">
+    <div class="following-sidebar__controls">
+      <div class="bew-segment-control bew-segment-control--static" role="group" :aria-label="t('settings.following_sort')">
+        <button
+          v-for="mode in [false, true]" :key="String(mode)" type="button" class="bew-segment-control__item" :data-active="grouped === mode"
+          :aria-pressed="grouped === mode" @click="emit('update:grouped', mode)"
+        >
+          {{ t(mode ? 'home.following_display_grouped' : 'home.following_display_flat') }}
+        </button>
+      </div>
       <Input v-model="query" :placeholder="$t('common.search')" class="following-sidebar__search" />
+    </div>
+    <div ref="scroller" class="following-sidebar__scroll" tabindex="-1">
       <div v-if="failed || groupsFailed" class="following-sidebar__status" role="status">
         <span>{{ $t(groupsFailed ? 'home.following_groups_load_failed' : 'common.load_failed') }}</span>
         <button type="button" class="following-sidebar__group" @click="groupsFailed ? emit('retryGroups') : emit('retry')">
           {{ $t('home.following_groups_retry') }}
         </button>
       </div>
-      <ul class="following-sidebar__list">
-        <li>
-          <button type="button" class="following-sidebar__uploader" :class="{ active: selected === null }" :aria-pressed="selected === null" @click="emit('select', null)">
-            <span class="following-sidebar__avatar following-sidebar__all"><span i-mingcute-classify-2-fill aria-hidden="true" /></span>
-            <span class="following-sidebar__labels">
-              <span>{{ $t('topbar.moments_dropdown.tabs.all') }}</span>
-              <small v-if="unread">{{ $t('home.uploaders_with_updates', { count: unread }) }}</small>
-            </span>
-          </button>
-        </li>
+      <ul ref="listRef" class="following-sidebar__list">
+        <template v-for="windowRow in visibleRows" :key="windowRow.key">
+          <li v-if="windowRow.height !== undefined" :style="{ height: `${windowRow.height}px` }" aria-hidden="true" />
+          <li v-for="row in windowRow.rows" :key="row.key" :ref="element => rowWindow.setElement(row.key, element)">
+            <button
+              v-if="row.type === 'all'" type="button" class="following-sidebar__uploader" :class="{ active: selected === null }" :aria-pressed="selected === null"
+              @click="emit('select', null)"
+            >
+              <span class="following-sidebar__avatar following-sidebar__all"><span i-mingcute-classify-2-fill aria-hidden="true" /></span>
+              <span class="following-sidebar__labels">
+                <span>{{ $t('topbar.moments_dropdown.tabs.all') }}</span>
+                <small v-if="unread">{{ $t('home.uploaders_with_updates', { count: unread }) }}</small>
+              </span>
+            </button>
+            <button
+              v-if="row.type === 'group'" type="button" class="following-sidebar__group"
+              :aria-expanded="row.expanded" aria-haspopup="menu"
+              @click="toggleGroup(row.group.tagid)" @keydown="keyboardMenu($event, row)"
+              @contextmenu.prevent.stop="actions?.openGroup($event, row.group)"
+            >
+              <span :class="row.expanded ? 'i-mingcute:down-line' : 'i-mingcute:right-line'" aria-hidden="true" />
+              <span class="following-sidebar__group-name">{{ row.group.name }}</span><span>{{ row.count }}</span>
+            </button>
+            <button
+              v-else-if="row.type === 'uploader'" type="button" class="following-sidebar__uploader" :class="{ active: selected === row.uploader.mid }"
+              :data-uploader-mid="row.uploader.mid" :data-uploader-group="row.groupId"
+              :aria-pressed="selected === row.uploader.mid" aria-haspopup="menu"
+              @click="emit('select', row.uploader.mid)" @keydown="keyboardMenu($event, row)"
+              @contextmenu.prevent.stop="actions?.openUploader($event, row.uploader)"
+            >
+              <span class="following-sidebar__avatar">
+                <img :src="`${row.uploader.face}@50w_50h`" alt="" loading="lazy" decoding="async">
+                <span v-if="row.uploader.hasUpdate" class="following-sidebar__unread" />
+              </span>
+              <span class="following-sidebar__labels"><span>{{ row.uploader.name }}</span><small>{{ calcTimeSince(row.uploader.lastUpdateTime) }}</small></span>
+            </button>
+          </li>
+        </template>
         <template v-if="loading && !uploaders.length">
           <li v-for="index in 6" :key="`loading:${index}`" aria-hidden="true">
             <div class="following-sidebar__uploader">
@@ -121,30 +176,6 @@ onMounted(() => emit('scrollElement', scroller.value))
             </div>
           </li>
         </template>
-        <li v-for="row in rows" :key="row.key">
-          <button
-            v-if="row.type === 'group'" type="button" class="following-sidebar__group"
-            :aria-expanded="row.expanded" aria-haspopup="menu"
-            @click="toggleGroup(row.group.tagid)" @keydown="keyboardMenu($event, row)"
-            @contextmenu.prevent.stop="actions?.openGroup($event, row.group)"
-          >
-            <span :class="row.expanded ? 'i-mingcute:down-line' : 'i-mingcute:right-line'" aria-hidden="true" />
-            <span class="following-sidebar__group-name">{{ row.group.name }}</span><span>{{ row.count }}</span>
-          </button>
-          <button
-            v-else type="button" class="following-sidebar__uploader" :class="{ active: selected === row.uploader.mid }"
-            :data-uploader-mid="row.uploader.mid" :data-uploader-group="row.groupId"
-            :aria-pressed="selected === row.uploader.mid" aria-haspopup="menu"
-            @click="emit('select', row.uploader.mid)" @keydown="keyboardMenu($event, row)"
-            @contextmenu.prevent.stop="actions?.openUploader($event, row.uploader)"
-          >
-            <span class="following-sidebar__avatar">
-              <img :src="`${row.uploader.face}@50w_50h`" alt="" loading="lazy" decoding="async">
-              <span v-if="row.uploader.hasUpdate" class="following-sidebar__unread" />
-            </span>
-            <span class="following-sidebar__labels"><span>{{ row.uploader.name }}</span><small>{{ calcTimeSince(row.uploader.lastUpdateTime) }}</small></span>
-          </button>
-        </li>
       </ul>
       <SkeletonBlock v-if="grouped && groupsLoading && !groups.length" height="var(--bew-control-height)" />
       <button type="button" class="following-sidebar__group" :disabled="accountId === null || busy" @click="actions?.create()">
@@ -163,6 +194,8 @@ onMounted(() => emit('scrollElement', scroller.value))
 
 <style scoped lang="scss">
 .following-sidebar {
+  display: flex;
+  flex-direction: column;
   position: sticky;
   top: var(--bew-layout-sidebar-sticky-top);
   align-self: flex-start;
@@ -171,12 +204,20 @@ onMounted(() => emit('scrollElement', scroller.value))
   flex: none;
 }
 .following-sidebar__scroll {
-  height: inherit;
-  padding: var(--bew-space-2) var(--bew-space-5) var(--bew-space-5);
-  margin: calc(var(--bew-space-5) * -1);
+  flex: 1;
+  min-height: 0;
+  padding: var(--bew-space-1);
   overflow: hidden auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
+}
+.following-sidebar__controls {
+  flex: none;
+  display: grid;
+  gap: var(--bew-space-3);
+  .bew-segment-control__item {
+    flex: 1;
+  }
 }
 .following-sidebar__search {
   margin-bottom: var(--bew-space-3);
@@ -185,6 +226,9 @@ onMounted(() => emit('scrollElement', scroller.value))
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-2);
+}
+.following-sidebar__list > li {
+  flex: none;
 }
 .following-sidebar__uploader,
 .following-sidebar__group {

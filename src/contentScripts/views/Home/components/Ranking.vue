@@ -303,13 +303,18 @@ defineExpose({ initData })
       <div h-inherit p-20px m--20px of-y-auto of-x-hidden>
         <ul flex="~ col gap-2">
           <li v-for="rankingType in rankingTypes" :key="rankingType.id">
-            <a
+            <button
+              type="button"
+              :aria-pressed="activatedRankingType.id === rankingType.id"
               :class="{ active: activatedRankingType.id === rankingType.id }"
-              px-4 lh-30px h-30px hover:bg="$bew-fill-2" w-inherit
+              px-4 lh-36px h-36px hover:bg="$bew-fill-2" w-full
+              text-left
               block rounded="$bew-radius" cursor-pointer transition="background-color duration-200, color duration-200, box-shadow duration-200, transform duration-200"
               un-text="$bew-text-1"
               @click="activatedRankingType = rankingType"
-            >{{ rankingType.name }}</a>
+            >
+              {{ rankingType.name }}
+            </button>
           </li>
         </ul>
       </div>
@@ -384,7 +389,8 @@ defineExpose({ initData })
 
 <style lang="scss" scoped>
 .active {
-  --uno: "scale-105 bg-$bew-theme-color-auto text-$bew-text-auto shadow-$bew-shadow-2";
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
 }
 
 .hide {

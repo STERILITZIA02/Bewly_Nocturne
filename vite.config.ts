@@ -8,7 +8,7 @@ import AutoImport from 'unplugin-auto-import/vite'
 import type { UserConfig } from 'vite'
 import { defineConfig } from 'vite'
 
-import { isDev, isSafari, port, r } from './scripts/utils'
+import { buildCommit, isDev, isSafari, port, r } from './scripts/utils'
 // import { MV3Hmr } from './vite-mv3-hmr'
 
 const buildId = process.env.BEWLY_BUILD_ID || (isDev ? Date.now().toString(36) : '')
@@ -48,6 +48,7 @@ export const sharedConfig: UserConfig = {
 
     replace({
       '__DEV__': JSON.stringify(isDev),
+      '__BUILD_COMMIT__': JSON.stringify(buildCommit),
       '__BEWLY_BUILD_ID__': JSON.stringify(buildId),
       'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
       '__VUE_OPTIONS_API__': JSON.stringify(true),

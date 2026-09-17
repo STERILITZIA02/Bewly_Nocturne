@@ -1249,6 +1249,17 @@ export function injectLayoutStyle() {
       padding-bottom: var(--bew-space-2, 8px) !important;
     }
 
+    /* Native BUI keeps both pages in one translated row. Only the active page
+       contributes height; bottom alignment otherwise leaves a blank header on
+       the shorter advanced page. Widths and native navigation stay untouched. */
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box .bui-panel-move {
+      align-items: flex-start !important;
+    }
+
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box .bui-panel-item:not(.bui-panel-item-active) {
+      height: 0 !important;
+    }
+
     /* Bpx 的 bui-dark 子控件会在亮色主题继续硬编码白色。只覆盖图标与
        滑杆几何，保留颜色选择器本身的真实色样。 */
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box :is(
@@ -1285,6 +1296,8 @@ export function injectLayoutStyle() {
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box .bui-progress-bar {
       background: var(--bew-theme-color) !important;
+      /* Let the thumb's native z-index sit above the sibling tick layer. */
+      z-index: auto !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box .bui-progress-dot {
@@ -3065,6 +3078,11 @@ export function injectLayoutStyle() {
     }
     #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="EpisodeVirtualList_scroll"] {
       overscroll-behavior: contain;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-panel-playlist [class*="EpisodeVirtualList_gridRow"] {
+      justify-content: start !important;
+      column-gap: var(--bew-space-3, 12px) !important;
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-playlist .pod-expand-btn,

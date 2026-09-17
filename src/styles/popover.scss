@@ -162,7 +162,20 @@
   transition:
     opacity var(--bew-duration-normal) var(--bew-ease-standard),
     transform var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.slide-in-leave-active {
   pointer-events: none;
+}
+
+.slide-in-enter-active[data-instant="true"],
+.slide-in-leave-active[data-instant="true"] {
+  transition: none;
+}
+
+.slide-in-enter-from[data-instant="true"] {
+  opacity: 1;
+  transform: none;
 }
 
 .slide-in-enter-from,

@@ -24,6 +24,10 @@ const openModeOptions = computed(() => {
       value: 'currentTabIfNotHomepage',
     },
     {
+      label: t('settings.link_opening_behavior_opt.current_tab_if_homepage'),
+      value: 'currentTabIfHomepage',
+    },
+    {
       label: t('settings.link_opening_behavior_opt.background'),
       value: 'background',
     },
@@ -61,7 +65,7 @@ const videoCardOpenModeOptions = computed(() => {
     <SettingsItem
       v-if="props.scope === 'topBar'"
       :title="$t('settings.top_bar_link_opening_behavior')"
-      :desc="$t('settings.link_opening_behavior_desc')"
+      :desc="`${$t('settings.link_opening_behavior_desc')} ${$t('settings.current_tab_if_homepage_desc')}`"
       right-width="auto"
     >
       <Select v-model="settings.topBarLinkOpenMode" :options="openModeOptions" w="160px" />
@@ -81,7 +85,7 @@ const videoCardOpenModeOptions = computed(() => {
     <SettingsItem
       v-if="props.scope === 'topBar'"
       :title="$t('settings.search_bar_link_opening_behavior')"
-      :desc="$t('settings.link_opening_behavior_desc')"
+      :desc="`${$t('settings.link_opening_behavior_desc')} ${$t('settings.current_tab_if_homepage_desc')}`"
       right-width="auto"
     >
       <Select

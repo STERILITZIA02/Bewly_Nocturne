@@ -3,6 +3,7 @@ import { useWindowFocus } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 
 import ALink from '~/components/ALink.vue'
+import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
 import { settings } from '~/logic'
 import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -25,6 +26,11 @@ import WatchLaterPop from './pops/WatchLaterPop.vue'
 const emit = defineEmits(['notificationsClick'])
 
 const topBarStore = useTopBarStore()
+const showOpenTabsDialog = ref(false)
+function openTabsDialog() {
+  resetTopBarTransientInteraction()
+  showOpenTabsDialog.value = true
+}
 // 使用 store 中的必要状态
 const {
   isLogin,
@@ -364,6 +370,7 @@ const shouldShowDivider = computed(() => {
                 ref="watchLaterPopRef"
                 v-liquid-glass
                 class="bew-popover"
+                @add-open-tabs="openTabsDialog"
                 @click.stop="() => {}"
               />
             </Transition>
@@ -569,6 +576,7 @@ const shouldShowDivider = computed(() => {
         </Transition>
       </div>
     </div>
+    <OpenTabsDialog v-if="showOpenTabsDialog" @close="showOpenTabsDialog = false" />
   </div>
 </template>
 

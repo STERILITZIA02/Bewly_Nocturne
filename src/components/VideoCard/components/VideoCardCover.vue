@@ -62,7 +62,6 @@ const emit = defineEmits<{
 }>()
 const streamSession = createPreviewMediaSession()
 const videoRef = ref<HTMLVideoElement | null>(null)
-const isCoverHovered = ref(false)
 const isPreviewLoading = ref<boolean>(false)
 const isPreviewFullscreen = ref<boolean>(false)
 const shouldEnableVideoControls = computed(() => settings.value.enableVideoCtrlBarOnVideoCard && !props.video?.roomid)
@@ -376,8 +375,6 @@ onBeforeUnmount(() => {
     cursor-pointer
     group-hover:z-2
     style="aspect-ratio: 16 / 9; contain: layout style; will-change: auto;"
-    @mouseenter="isCoverHovered = true"
-    @mouseleave="isCoverHovered = false"
   >
     <!-- Skeleton mode -->
     <div
@@ -550,9 +547,9 @@ onBeforeUnmount(() => {
           {{ video?.badge?.text }}
         </div>
 
-        <!-- Track cover hover separately so delayed preview playback does not delay this action. -->
+        <!-- Keep the action focusable independently of hover/preview playback. -->
         <button
-          v-if="showWatchLater && isCoverHovered"
+          v-if="showWatchLater"
           type="button"
           :aria-label="isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"
           pos="absolute top-0 right-0" z="2"
@@ -560,8 +557,7 @@ onBeforeUnmount(() => {
           rounded="$bew-radius"
           text="xl"
           bg="black opacity-60"
-          class="video-card-watch-later video-card-overlay-transform-transition opacity-0 group-hover/cover:opacity-100"
-          transform="scale-70 group-hover/cover:scale-100"
+          class="video-card-watch-later"
           @click.prevent.stop="emit('toggleWatchLater')"
           @keydown.enter.prevent.stop="emit('toggleWatchLater')"
           @keydown.space.prevent.stop="emit('toggleWatchLater')"
@@ -637,12 +633,29 @@ onBeforeUnmount(() => {
   line-height: 1;
   border: 0;
   cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transform: scale(0.95);
   transition:
     opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
     transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
     color var(--bew-duration-fast) var(--bew-ease-standard),
     background-color var(--bew-duration-fast) var(--bew-ease-standard),
     box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.video-card-cover:hover .video-card-watch-later,
+.video-card-watch-later:focus-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .video-card-watch-later {
+    transform: none;
+    transition-property: opacity, color, background-color, box-shadow;
+  }
 }
 
 .video-card-watch-later:hover,

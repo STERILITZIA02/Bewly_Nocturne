@@ -1,5 +1,5 @@
 import type { InjectionKey, Ref } from 'vue'
-import { inject, onActivated, onBeforeUnmount, onDeactivated, provide, reactive, ref, toRaw } from 'vue'
+import { inject, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, provide, reactive, ref, toRaw } from 'vue'
 
 export type HomeTabSnapshot = Record<string, unknown>
 // Eight tabs, two Following layouts and three recommendation modes fit without eviction.
@@ -51,7 +51,7 @@ export function useHomeTabState() {
   const context = inject(homeTabCacheKey, undefined)
   const ownerKey = context?.activeKey() ?? ''
   const generation = context?.cache.generation ?? 0
-  const snapshot = context?.cache.take(ownerKey)
+  let snapshot = context?.cache.take(ownerKey)
   const fields = new Map<string, () => unknown>()
   let disposed = false
   let active = true
@@ -64,6 +64,12 @@ export function useHomeTabState() {
 
   function read<T>(key: string, initial: T): T {
     return snapshot && Object.hasOwn(snapshot, key) ? snapshot[key] as T : initial
+  }
+  function take<T>(key: string, initial: T): T {
+    const value = read(key, initial)
+    if (snapshot)
+      delete snapshot[key]
+    return value
   }
   function capture(key: string, getValue: () => unknown) {
     fields.set(key, getValue)
@@ -84,22 +90,17 @@ export function useHomeTabState() {
     enabled: !!context,
     restored: !!snapshot,
     read,
-    take<T>(key: string, initial: T): T {
-      const value = read(key, initial)
-      if (snapshot)
-        delete snapshot[key]
-      return value
-    },
+    take,
     capture,
     isCurrent,
     isActiveTab,
     ref<T>(key: string, initial: T): Ref<T> {
-      const value = ref(read(key, initial)) as Ref<T>
+      const value = ref(take(key, initial)) as Ref<T>
       capture(key, () => value.value)
       return value
     },
     reactive<T extends object>(key: string, initial: T): T {
-      const value = reactive(read(key, initial)) as T
+      const value = reactive(take(key, initial)) as T
       capture(key, () => value)
       return value
     },
@@ -109,11 +110,18 @@ export function useHomeTabState() {
     },
   }
   provide(homeTabStateKey, state)
+  // Descendants and mounted hooks finish restoring before dropping unused fields.
+  onMounted(() => {
+    void nextTick(() => {
+      snapshot = undefined
+    })
+  })
   onBeforeUnmount(() => {
     disposed = true
     if (context && context.cache.generation === generation)
       context.cache.save(ownerKey, Object.fromEntries([...fields].map(([key, getValue]) => [key, toRaw(getValue())])), generation)
     fields.clear()
+    snapshot = undefined
   })
   return state
 }

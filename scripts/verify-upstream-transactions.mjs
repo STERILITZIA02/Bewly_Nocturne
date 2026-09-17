@@ -39,6 +39,7 @@ export function registerUpstreamTransactionChecks(check, { Vue, flush, compileCo
       '~/utils/mitt': { default: { on: (_event, fn) => listeners.add(fn), off: (_event, fn) => listeners.delete(fn), emit: (_event, value) => listeners.forEach(fn => fn(value)) } },
     })
     const module = await loadSourceModule('../src/composables/useUserRelations.ts', {
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '@vueuse/core': VueUse,
       'vue': Vue,
       '~/stores/topBarStore': { useTopBarStore: () => account },
@@ -65,6 +66,18 @@ export function registerUpstreamTransactionChecks(check, { Vue, flush, compileCo
       await Promise.all([before, another])
       assert.equal(first.userRelations.value[10].isFollowing, true)
       assert.equal(first.userRelations.value[20].isFollowing, true, 'independent relation queries do not cancel each other')
+      const empty = first.batchQueryUserRelations([30, 30])
+      const shared = second.batchQueryUserRelations([30, 40])
+      assert.equal(reads.length, 4, 'overlapping in-flight MID is requested only once')
+      assert.equal(reads[2].params.fids, '30')
+      assert.equal(reads[3].params.fids, '40')
+      reads[2].resolve({ code: 0, data: null })
+      reads[3].resolve({ code: 0, data: {} })
+      await Promise.all([empty, shared])
+      assert.equal(first.userRelations.value[30].isFollowing, false, 'successful null is authoritative empty')
+      assert.equal(first.userRelations.value[40].isFollowing, false, 'missing requested MID is not following')
+      await first.batchQueryUserRelations([30, 40])
+      assert.equal(reads.length, 4, 'fresh results are reused')
       first.reset()
       assert.equal(second.userRelations.value[10].isFollowing, true, 'resetting one search query cannot erase the shared confirmed relationship')
       const failure = relation.changeUserRelation(1, 10, 2)

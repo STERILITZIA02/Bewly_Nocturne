@@ -283,7 +283,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       && settings.value.enableVideoPreview
       && topBarStore.isLogin
 
-    if (momentsSelectedUploader.value !== null) {
+    if (momentsSelectedUploader.value !== null && props.value.video?.sourceUploaderMid !== momentsSelectedUploader.value) {
       const authorMids = getAuthorMids(video)
       if (!authorMids.includes(momentsSelectedUploader.value))
         return

@@ -19,6 +19,7 @@ import { useHomePageRoute } from '~/composables/useHomePageRoute'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
 import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
 import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
+import { setupWatchLaterAutoRemove } from '~/contentScripts/features/watchLaterAutoRemove'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { appAuthTokens, settings } from '~/logic'
@@ -37,12 +38,14 @@ import { hasValidAppAuthTokens } from '~/utils/authProvider'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
+import { resolveDefaultAppPage } from '~/utils/homeRoute'
 import { getIframeMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
 import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
+import { cancelScrollIntent } from '~/utils/scrollIntent'
 
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 
@@ -83,6 +86,7 @@ watch(() => [
 }, { immediate: true })
 
 const confirmDialogHost = useConfirmDialogHost()
+onScopeDispose(setupWatchLaterAutoRemove())
 const { activeRequest: activeConfirmDialog } = confirmDialogHost
 provide(confirmDialogKey, { confirm: confirmDialogHost.confirm })
 let lastNativeCommentAccount = String(getUserID() ?? 'guest')
@@ -102,7 +106,7 @@ watch([
 }, { flush: 'sync' })
 
 function getDefaultAppPage(): AppPage {
-  return settings.value.dockItemsConfig.find(item => item.visible)?.page ?? AppPage.Home
+  return resolveDefaultAppPage(settings.value.dockItemsConfig)
 }
 
 const { activatedPage, homeActivatedPage, homeActivatedPageTouched, resolveAvailableAppPage } = useHomePageRoute(getDefaultAppPage, mainStore.homeTabs.map(tab => ({
@@ -173,18 +177,18 @@ if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.Se
   topBarStore.searchKeyword = ''
 }
 
-function definePageComponent(loader: AsyncComponentLoader) {
+function definePageComponent(loader: AsyncComponentLoader, delay = 120) {
   return defineAsyncComponent({
     loader,
     loadingComponent: PageAsyncLoading,
-    delay: 120,
+    delay,
   })
 }
 
 const pages = {
   [AppPage.Home]: definePageComponent(() => import('./Home/Home.vue')),
   [AppPage.Search]: definePageComponent(() => import('./Search/Search.vue')),
-  [AppPage.SearchResults]: definePageComponent(() => import('./SearchResults/SearchResults.vue')),
+  [AppPage.SearchResults]: definePageComponent(() => import('./SearchResults/SearchResults.vue'), 0),
   [AppPage.Anime]: definePageComponent(() => import('./Anime/Anime.vue')),
   [AppPage.History]: definePageComponent(() => import('./History/History.vue')),
   [AppPage.WatchLater]: definePageComponent(() => import('./WatchLater/WatchLater.vue')),
@@ -657,6 +661,8 @@ function handleNativeScroll(event: Event) {
 
 onBeforeUnmount(() => {
   stopLoadMoreObserver()
+  if (scrollViewportRef.value)
+    cancelScrollIntent(scrollViewportRef.value)
   document.removeEventListener('scroll', handleDocumentScroll)
   loadMoreCheckGeneration++
   if (loadMoreCheckRafId !== null) {
@@ -957,7 +963,7 @@ onBeforeUnmount(stopUrlCleaner)
                   ? { paddingTop: 'calc(var(--bew-top-bar-height) + 120px)' }
                   : undefined"
               >
-                <Transition name="page-fade" @after-enter="scheduleLoadMoreSentinelCheck">
+                <Transition name="page-fade" :css="activatedPage !== AppPage.SearchResults" @after-enter="scheduleLoadMoreSentinelCheck">
                   <Component :is="pages[activatedPage]" :key="activatedPage" />
                 </Transition>
 

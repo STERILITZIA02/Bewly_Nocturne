@@ -8,6 +8,7 @@ import { useToast } from 'vue-toastification'
 import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
+import UserAvatarLink from '~/components/UserCard/UserAvatarLink.vue'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -23,6 +24,7 @@ import { changeUserRelation } from '~/utils/userRelation'
 import AllSearchSkeleton from '../components/AllSearchSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
 import EsportsMatchCard from '../components/renderers/EsportsMatchCard.vue'
+import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
@@ -252,12 +254,6 @@ async function handleUserFollow(mid: number) {
 
 function isUserFollowPending(mid: number) {
   return pendingUserFollows.has(`${resolveAuthenticatedAccountId(relationAccount.isLogin, relationAccount.userInfo.mid)}:${mid}`)
-}
-
-function openExternalLink(url?: string) {
-  if (!url)
-    return
-  window.open(url, '_blank', 'noopener')
 }
 
 // 获取当前结果长度
@@ -673,12 +669,9 @@ defineExpose({
               class="user-highlight-card"
             >
               <div class="user-highlight-header" flex items-center gap-3>
-                <img
-                  :src="user.face"
-                  :alt="user.name"
-                  class="user-highlight-avatar"
-                  @click="openExternalLink(user.url)"
-                >
+                <UserAvatarLink :mid="user.mid" :name="user.name" :live-status="user.liveStatus" :roomid="user.roomid">
+                  <img :src="user.face" :alt="user.name" class="user-highlight-avatar">
+                </UserAvatarLink>
                 <div class="user-highlight-info" flex="~ col" gap-1 flex-1>
                   <div
                     class="user-highlight-name" text="base $bew-text-1" font-medium flex items-center
@@ -789,7 +782,11 @@ defineExpose({
           :show-load-more-indicator="false"
           enable-row-padding
           @load-more="handleLoadMore"
-        />
+        >
+          <template #empty>
+            <SearchEmptyState :keyword="keyword" category="video" />
+          </template>
+        </VideoCardGrid>
       </div>
     </div>
 

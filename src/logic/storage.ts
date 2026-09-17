@@ -18,6 +18,7 @@ import {
 import type { PageMode } from '~/utils/pageMode'
 import { clampRangeValue } from '~/utils/range'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
+import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
 export type { AppAuthTokens } from './appAuthStorage'
 export { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from './appAuthStorage'
@@ -56,50 +57,6 @@ export const momentsPinnedUsers = useStorageLocal<MomentsWantedUser[]>(
 
 export const FROSTED_GLASS_BLUR_MIN_PX = 1
 export const FROSTED_GLASS_BLUR_MAX_PX = 20
-
-// 快捷键基础配置接口
-export interface BaseShortcutSetting {
-  key: string
-  enabled: boolean
-}
-
-// 快捷键配置集合接口
-export interface ShortcutsSettings {
-  [key: string]: BaseShortcutSetting | undefined
-  // 扩展快捷键
-  danmuStatus?: BaseShortcutSetting
-  webFullscreen?: BaseShortcutSetting
-  widescreen?: BaseShortcutSetting
-  shortStepBackward?: BaseShortcutSetting // J
-  longStepBackward?: BaseShortcutSetting // Shift+J
-  playPause?: BaseShortcutSetting // K
-  shortStepForward?: BaseShortcutSetting // L
-  longStepForward?: BaseShortcutSetting // Shift+L
-  nextVideoExtended?: BaseShortcutSetting // N (官方使用 ] or ⏩)
-  pip?: BaseShortcutSetting // P
-  turnOffLight?: BaseShortcutSetting // I
-  caption?: BaseShortcutSetting // C
-  increasePlaybackRate?: BaseShortcutSetting // +
-  decreasePlaybackRate?: BaseShortcutSetting // -
-  resetPlaybackRate?: BaseShortcutSetting // 0
-  previousFrame?: BaseShortcutSetting // ,
-  nextFrame?: BaseShortcutSetting // .
-  replay?: BaseShortcutSetting // Shift+Backspace
-
-  // 首页快捷键
-  homeRefresh?: BaseShortcutSetting // R
-
-  // 全屏模式下快捷键
-  increaseVideoSize?: BaseShortcutSetting // Shift++
-  decreaseVideoSize?: BaseShortcutSetting // Shift+-
-  resetVideoSize?: BaseShortcutSetting // Shift+0
-  videoTitle?: BaseShortcutSetting // B
-  videoTime?: BaseShortcutSetting // G
-  clockTime?: BaseShortcutSetting // H
-
-  // 视频页快捷键
-  toggleFollow?: BaseShortcutSetting // Shift+F (默认禁用)
-}
 
 export type DrawerEscapeBehavior = 'immediate' | 'secondPress'
 
@@ -245,8 +202,8 @@ export interface Settings {
 
   // Link Opening Behavior
   videoCardLinkOpenMode: 'drawer' | 'newTab' | 'currentTab' | 'background'
-  topBarLinkOpenMode: 'currentTab' | 'currentTabIfNotHomepage' | 'newTab' | 'background'
-  searchBarLinkOpenMode: 'currentTab' | 'currentTabIfNotHomepage' | 'newTab' | 'background'
+  topBarLinkOpenMode: 'currentTab' | 'currentTabIfNotHomepage' | 'currentTabIfHomepage' | 'newTab' | 'background'
+  searchBarLinkOpenMode: 'currentTab' | 'currentTabIfNotHomepage' | 'currentTabIfHomepage' | 'newTab' | 'background'
   drawerEscapeBehavior: DrawerEscapeBehavior
 
   blockAds: boolean
@@ -459,9 +416,11 @@ export interface Settings {
   autoExitFullscreenExcludeAutoPlay: boolean // 全屏自动退出时排除自动连播
   showVerticalVideoZoomButton: boolean // 显示竖屏视频放大按钮
   showVideoScreenshotButton: boolean // 显示播放器截图按钮
+  videoScreenshotShortcut: string
 
   // 自动连播总开关
   useBilibiliDefaultAutoPlay: boolean // 使用B站默认自动播放行为（总开关）
+  autoRemoveWatchLaterOnEnd: boolean
 
   // 分类型自动连播设置
   autoPlayMultipart: AutoPlayMode // 分P视频自动播放模式
@@ -755,9 +714,11 @@ export const originalSettings: Settings = {
   autoExitFullscreenExcludeAutoPlay: false, // 全屏自动退出时排除自动连播，默认关闭
   showVerticalVideoZoomButton: true, // 默认显示竖屏视频放大按钮
   showVideoScreenshotButton: true, // 默认显示播放器截图按钮
+  videoScreenshotShortcut: DEFAULT_SCREENSHOT_SHORTCUT,
 
   // 自动连播总开关
   useBilibiliDefaultAutoPlay: true, // 使用B站默认自动播放行为（总开关），默认开启
+  autoRemoveWatchLaterOnEnd: false,
 
   // 分类型自动连播设置（总开关关闭时生效）
   autoPlayMultipart: 'autoPlay', // 分P视频自动播放模式，默认自动连播
@@ -801,11 +762,263 @@ export const settingsReady = new Promise<Settings>((resolve) => {
   resolveSettingsReady = resolve
 })
 
-export const settings = useSettingsStorage(originalSettings)
+export const settings = useSettingsStorage(originalSettings, { normalize: normalizeSettings })
 export const settingsInitializationState = settings.initializationState
 
 function asUnknownRecord(value: object): Record<string, unknown> {
   return value as Record<string, unknown>
+}
+
+function normalizeSettings(value: Settings) {
+  if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')
+    value.autoRemoveWatchLaterOnEnd = false
+  for (const key of ['topBarLinkOpenMode', 'searchBarLinkOpenMode'] as const) {
+    if (!['currentTab', 'currentTabIfNotHomepage', 'currentTabIfHomepage', 'newTab', 'background'].includes(value[key]))
+      value[key] = originalSettings[key]
+  }
+  if (!isValidScreenshotShortcut(value.videoScreenshotShortcut))
+    value.videoScreenshotShortcut = ''
+  const record = value as Settings & Record<string, unknown>
+  const legacyRecord = asUnknownRecord(value)
+
+  Reflect.deleteProperty(record, 'detectCommentShadowBan')
+  Reflect.deleteProperty(record, 'homeTabsPosition')
+  Reflect.deleteProperty(record, 'enableHomeGridVirtualization')
+  Reflect.deleteProperty(record, 'releaseOffscreenVideoCardImages')
+  Reflect.deleteProperty(record, 'showBewlyOrBiliTopBarSwitcher')
+  Reflect.deleteProperty(record, 'enableFrostedGlass')
+  Reflect.deleteProperty(record, 'alwaysUseTransparentTopBar')
+  Reflect.deleteProperty(record, 'enableTopBarGradient')
+  Reflect.deleteProperty(record, 'showTopBarThemeColorGradient')
+  Reflect.deleteProperty(record, 'useOriginalBilibiliHomepage')
+  Reflect.deleteProperty(record, 'searchPageDarkenOnSearchFocus')
+  Reflect.deleteProperty(record, 'searchPageBlurredOnSearchFocus')
+
+  // 清理已移除的音量均衡功能设置。
+  for (const field of ['enableVolumeNormalization', 'targetVolume', 'normalizationStrength', 'adaptiveGainSpeed', 'voiceGateDb', 'volumeNormalizationDebug'])
+    Reflect.deleteProperty(record, field)
+
+  // 旧布尔开关 → 评论回复树展示模式
+  const validCommentReplyTreeModes: CommentReplyTreeMode[] = [
+    'lineCollapseMain',
+    'lineKeepMain',
+    'indentOnly',
+  ]
+  if (typeof record.enableCommentReplyTree === 'boolean') {
+    // 旧版开启对应可收起主评论；关闭则回落到新默认（引导线、不收起主评论）
+    record.commentReplyTreeMode = record.enableCommentReplyTree
+      ? 'lineCollapseMain'
+      : 'lineKeepMain'
+    Reflect.deleteProperty(record, 'enableCommentReplyTree')
+  }
+  if (!validCommentReplyTreeModes.includes(record.commentReplyTreeMode))
+    record.commentReplyTreeMode = originalSettings.commentReplyTreeMode
+
+  const validCommentReplyPaginationModes: CommentReplyPaginationMode[] = ['loadMore', 'pagination']
+  if (!validCommentReplyPaginationModes.includes(record.commentReplyPaginationMode))
+    record.commentReplyPaginationMode = originalSettings.commentReplyPaginationMode
+
+  const validTopBarLogoStyles: TopBarLogoStyle[] = ['icon', 'brand']
+  if (!validTopBarLogoStyles.includes(record.topBarLogoStyle))
+    record.topBarLogoStyle = originalSettings.topBarLogoStyle
+
+  const unsupportedBadgeKeys = new Set(['favorites', 'history'])
+  if (Array.isArray(record.topBarComponentsConfig)) {
+    const hasUnsupportedBadge = record.topBarComponentsConfig.some((component) => {
+      return unsupportedBadgeKeys.has(component.key) && component.badgeType !== 'none'
+    })
+    if (hasUnsupportedBadge) {
+      record.topBarComponentsConfig = record.topBarComponentsConfig.map(component => ({
+        ...component,
+        badgeType: unsupportedBadgeKeys.has(component.key) ? 'none' : component.badgeType,
+      }))
+    }
+  }
+
+  if (!Number.isFinite(record.frostedGlassBlurIntensity))
+    record.frostedGlassBlurIntensity = originalSettings.frostedGlassBlurIntensity
+
+  if ('reduceFrostedGlassBlur' in record) {
+    if (record.reduceFrostedGlassBlur === true && record.frostedGlassBlurIntensity === originalSettings.frostedGlassBlurIntensity)
+      record.frostedGlassBlurIntensity = 10
+
+    Reflect.deleteProperty(record, 'reduceFrostedGlassBlur')
+  }
+
+  if (record.frostedGlassBlurIntensity < FROSTED_GLASS_BLUR_MIN_PX)
+    record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MIN_PX
+
+  if (record.frostedGlassBlurIntensity > FROSTED_GLASS_BLUR_MAX_PX)
+    record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MAX_PX
+
+  if (!LIQUID_GLASS_MODES.includes(record.dockLiquidGlassMode))
+    record.dockLiquidGlassMode = originalSettings.dockLiquidGlassMode
+  Reflect.deleteProperty(record, 'dockLiquidGlassFrost')
+  if (!LIQUID_GLASS_TINT_SOURCES.includes(record.dockLiquidGlassTintSource))
+    record.dockLiquidGlassTintSource = originalSettings.dockLiquidGlassTintSource
+  if (!/^#[\da-f]{6}$/i.test(record.dockLiquidGlassTintColor))
+    record.dockLiquidGlassTintColor = originalSettings.dockLiquidGlassTintColor
+  for (const [key, parameter] of [
+    ['dockLiquidGlassRefraction', LIQUID_GLASS_PARAMETERS.refraction],
+    ['dockLiquidGlassBlur', LIQUID_GLASS_PARAMETERS.blur],
+    ['dockLiquidGlassTintOpacity', LIQUID_GLASS_PARAMETERS.tintOpacity],
+    ['dockLiquidGlassDispersion', LIQUID_GLASS_PARAMETERS.dispersion],
+    ['dockLiquidGlassSaturation', LIQUID_GLASS_PARAMETERS.saturation],
+  ] as const) {
+    record[key] = clampRangeValue(Number.isFinite(record[key]) ? record[key] : parameter.default, parameter.min, parameter.max)
+  }
+
+  // Normalize the user-configurable two-column list breakpoint. Older
+  // versions used a fixed 640px threshold and do not have this field.
+  record.autoSwitchListLayoutBreakpoint = normalizeListLayoutBreakpoint(record.autoSwitchListLayoutBreakpoint)
+  record.videoCardCoverRatioOneColumn = normalizeVideoCardCoverRatio(
+    record.videoCardCoverRatioOneColumn,
+    originalSettings.videoCardCoverRatioOneColumn,
+  )
+  record.videoCardCoverRatioTwoColumns = normalizeVideoCardCoverRatio(
+    record.videoCardCoverRatioTwoColumns,
+    originalSettings.videoCardCoverRatioTwoColumns,
+  )
+
+  // 迁移旧的布尔类型自动播放设置到新的 AutoPlayMode 类型
+  const autoPlayFields = ['autoPlayMultipart', 'autoPlayCollection', 'autoPlayRecommend', 'autoPlayWatchLater', 'autoPlayPlaylist'] as const
+
+  // 检查是否存在旧的布尔设置需要迁移
+  const needsMigration = autoPlayFields.some(field => typeof record[field] === 'boolean')
+
+  if (needsMigration) {
+    for (const field of autoPlayFields) {
+      // 只对布尔类型进行迁移，其他类型（包括 'default'）保持不变
+      if (typeof record[field] === 'boolean') {
+        // true -> 'autoPlay', false -> 'pauseAtEnd'
+        record[field] = record[field] ? 'autoPlay' : 'pauseAtEnd'
+      }
+    }
+  }
+
+  // 确保 useBilibiliDefaultAutoPlay 存在（新用户或旧版本升级）
+  if (typeof legacyRecord.useBilibiliDefaultAutoPlay !== 'boolean')
+    record.useBilibiliDefaultAutoPlay = true
+
+  Reflect.deleteProperty(record, 'enableIndependentAutoPlay')
+  Reflect.deleteProperty(record, 'independentAutoPlayStates')
+
+  const legacyRandomPlayOrder = record.randomPlayOrder
+  if (
+    record.customPlayDefaultEnabled === true
+    && (legacyRandomPlayOrder === 'sequential' || legacyRandomPlayOrder === 'reverse' || legacyRandomPlayOrder === 'random')
+  ) {
+    record.defaultCustomPlayOrder = legacyRandomPlayOrder
+  }
+
+  const validDefaultCustomPlayOrders: DefaultCustomPlayOrder[] = ['sequential', 'reverse', 'random']
+  if (!validDefaultCustomPlayOrders.includes(record.defaultCustomPlayOrder))
+    record.defaultCustomPlayOrder = 'random'
+
+  const customPlayOrderContexts: CustomPlayOrderContext[] = ['multipart', 'collection', 'watchLater', 'playlist']
+  const validCustomPlayOrderOverrides: CustomPlayOrderOverride[] = ['inherit', ...validDefaultCustomPlayOrders]
+  const storedCustomPlayOrderOverrides = record.customPlayOrderOverrides
+  const needsCustomPlayOrderOverrideNormalization = !storedCustomPlayOrderOverrides
+    || typeof storedCustomPlayOrderOverrides !== 'object'
+    || customPlayOrderContexts.some(context => !validCustomPlayOrderOverrides.includes(storedCustomPlayOrderOverrides[context]))
+
+  if (needsCustomPlayOrderOverrideNormalization) {
+    record.customPlayOrderOverrides = Object.fromEntries(
+      customPlayOrderContexts.map((context) => {
+        const storedValue = storedCustomPlayOrderOverrides?.[context]
+        return [context, validCustomPlayOrderOverrides.includes(storedValue) ? storedValue : 'inherit']
+      }),
+    ) as CustomPlayOrderOverrides
+  }
+
+  if (typeof record.enableCustomPlayOrderOverrides !== 'boolean')
+    record.enableCustomPlayOrderOverrides = false
+
+  const legacyCustomAutoPlayFields: Array<[keyof Pick<Settings, 'autoPlayMultipart' | 'autoPlayCollection' | 'autoPlayWatchLater' | 'autoPlayPlaylist'>, CustomPlayOrderContext]> = [
+    ['autoPlayMultipart', 'multipart'],
+    ['autoPlayCollection', 'collection'],
+    ['autoPlayWatchLater', 'watchLater'],
+    ['autoPlayPlaylist', 'playlist'],
+  ]
+  let migratedLegacyCustomAutoPlay = false
+
+  for (const [field, context] of legacyCustomAutoPlayFields) {
+    const legacyMode = legacyRecord[field]
+    const migratedOrder = legacyMode === 'customSequential'
+      ? 'sequential'
+      : legacyMode === 'customReverse'
+        ? 'reverse'
+        : legacyMode === 'customRandom'
+          ? 'random'
+          : null
+
+    if (!migratedOrder)
+      continue
+
+    record.customPlayOrderOverrides[context] = migratedOrder
+    record[field] = 'pauseAtEnd'
+    migratedLegacyCustomAutoPlay = true
+  }
+
+  if (migratedLegacyCustomAutoPlay)
+    record.enableCustomPlayOrderOverrides = true
+
+  const validAutoPlayModes: AutoPlayMode[] = ['default', 'autoPlay', 'autoPlayWithRecommend', 'pauseAtEnd', 'loop']
+  for (const field of autoPlayFields) {
+    if (!validAutoPlayModes.includes(record[field]))
+      record[field] = 'pauseAtEnd'
+  }
+
+  Reflect.deleteProperty(record, 'customPlayDefaultEnabled')
+  Reflect.deleteProperty(record, 'randomPlayOrder')
+
+  // 紧凑布局已由卡片元素显示设置替代
+  if (legacyRecord.videoCardLayout === 'compact')
+    record.videoCardLayout = 'modern'
+
+  if (record.rememberDanmakuState === true)
+    record.defaultDanmakuState = 'remember'
+  if (record.rememberCaptionState === true)
+    record.defaultCaptionState = 'remember'
+  Reflect.deleteProperty(record, 'rememberDanmakuState')
+  Reflect.deleteProperty(record, 'rememberCaptionState')
+
+  const validPlayerDefaultStates: PlayerDefaultState[] = ['system', 'remember', 'on', 'off']
+  if (!['sendingBar', 'playerCenter'].includes(record.videoPlayerScrollMode))
+    record.videoPlayerScrollMode = originalSettings.videoPlayerScrollMode
+  if (typeof record.enableSidebarCoverBlur !== 'boolean')
+    record.enableSidebarCoverBlur = originalSettings.enableSidebarCoverBlur
+  if (!validPlayerDefaultStates.includes(record.defaultDanmakuState))
+    record.defaultDanmakuState = originalSettings.defaultDanmakuState
+  if (!validPlayerDefaultStates.includes(record.defaultCaptionState))
+    record.defaultCaptionState = originalSettings.defaultCaptionState
+
+  record.bewlyWidescreenSidebarWidth = normalizeWidescreenSidebarStoredWidth(
+    record.bewlyWidescreenSidebarWidth,
+  )
+
+  // 旧开关与新的按场景覆盖语义不同，直接清理并让用户重新设置。
+  Reflect.deleteProperty(record, 'keepCollectionVideoDefaultMode')
+  Reflect.deleteProperty(record, 'keepWatchLaterVideoDefaultMode')
+
+  const modeOverrideContexts: VideoPlayerModeContext[] = ['multipart', 'collection', 'bangumi', 'watchLater', 'playlist']
+  const validModeOverrides: VideoPlayerModeOverride[] = ['inherit', 'default', 'webFullscreen', 'widescreen', 'bewlyWidescreen']
+  const storedModeOverrides = record.videoPlayerModeOverrides
+  const needsModeOverrideNormalization = !storedModeOverrides
+    || typeof storedModeOverrides !== 'object'
+    || modeOverrideContexts.some(context => !validModeOverrides.includes(storedModeOverrides[context]))
+
+  if (needsModeOverrideNormalization) {
+    record.videoPlayerModeOverrides = Object.fromEntries(
+      modeOverrideContexts.map((context) => {
+        const storedValue = storedModeOverrides?.[context]
+        return [context, validModeOverrides.includes(storedValue) ? storedValue : 'inherit']
+      }),
+    ) as VideoPlayerModeOverrides
+  }
+
+  // 清理已移除的 NVIDIA RTX 视频增强兼容设置
+  Reflect.deleteProperty(record, 'nvidiaRtxVideoEnhancementCompatibility')
 }
 
 watch(
@@ -813,252 +1026,15 @@ watch(
     () => settings.value,
     () => settings.initializationState.value,
     () => localSettings.initializationState.value,
+    () => asUnknownRecord(settings.value).customizeCSS,
+    () => asUnknownRecord(settings.value).customizeCSSContent,
   ] as const,
   ([value, settingsState, localSettingsState]) => {
     if (settingsState !== 'loaded')
       return
-
+    normalizeSettings(value)
     const record = value as Settings & Record<string, unknown>
     const legacyRecord = asUnknownRecord(value)
-
-    Reflect.deleteProperty(record, 'detectCommentShadowBan')
-    Reflect.deleteProperty(record, 'homeTabsPosition')
-    Reflect.deleteProperty(record, 'enableHomeGridVirtualization')
-    Reflect.deleteProperty(record, 'releaseOffscreenVideoCardImages')
-    Reflect.deleteProperty(record, 'showBewlyOrBiliTopBarSwitcher')
-    Reflect.deleteProperty(record, 'enableFrostedGlass')
-    Reflect.deleteProperty(record, 'alwaysUseTransparentTopBar')
-    Reflect.deleteProperty(record, 'enableTopBarGradient')
-    Reflect.deleteProperty(record, 'showTopBarThemeColorGradient')
-    Reflect.deleteProperty(record, 'useOriginalBilibiliHomepage')
-    Reflect.deleteProperty(record, 'searchPageDarkenOnSearchFocus')
-    Reflect.deleteProperty(record, 'searchPageBlurredOnSearchFocus')
-
-    // 清理已移除的音量均衡功能设置。
-    for (const field of ['enableVolumeNormalization', 'targetVolume', 'normalizationStrength', 'adaptiveGainSpeed', 'voiceGateDb', 'volumeNormalizationDebug'])
-      Reflect.deleteProperty(record, field)
-
-    // 旧布尔开关 → 评论回复树展示模式
-    const validCommentReplyTreeModes: CommentReplyTreeMode[] = [
-      'lineCollapseMain',
-      'lineKeepMain',
-      'indentOnly',
-    ]
-    if (typeof record.enableCommentReplyTree === 'boolean') {
-      // 旧版开启对应可收起主评论；关闭则回落到新默认（引导线、不收起主评论）
-      record.commentReplyTreeMode = record.enableCommentReplyTree
-        ? 'lineCollapseMain'
-        : 'lineKeepMain'
-      Reflect.deleteProperty(record, 'enableCommentReplyTree')
-    }
-    if (!validCommentReplyTreeModes.includes(record.commentReplyTreeMode))
-      record.commentReplyTreeMode = originalSettings.commentReplyTreeMode
-
-    const validCommentReplyPaginationModes: CommentReplyPaginationMode[] = ['loadMore', 'pagination']
-    if (!validCommentReplyPaginationModes.includes(record.commentReplyPaginationMode))
-      record.commentReplyPaginationMode = originalSettings.commentReplyPaginationMode
-
-    const validTopBarLogoStyles: TopBarLogoStyle[] = ['icon', 'brand']
-    if (!validTopBarLogoStyles.includes(record.topBarLogoStyle))
-      record.topBarLogoStyle = originalSettings.topBarLogoStyle
-
-    const unsupportedBadgeKeys = new Set(['favorites', 'history'])
-    if (Array.isArray(record.topBarComponentsConfig)) {
-      const hasUnsupportedBadge = record.topBarComponentsConfig.some((component) => {
-        return unsupportedBadgeKeys.has(component.key) && component.badgeType !== 'none'
-      })
-      if (hasUnsupportedBadge) {
-        record.topBarComponentsConfig = record.topBarComponentsConfig.map(component => ({
-          ...component,
-          badgeType: unsupportedBadgeKeys.has(component.key) ? 'none' : component.badgeType,
-        }))
-      }
-    }
-
-    if (!Number.isFinite(record.frostedGlassBlurIntensity))
-      record.frostedGlassBlurIntensity = originalSettings.frostedGlassBlurIntensity
-
-    if ('reduceFrostedGlassBlur' in record) {
-      if (record.reduceFrostedGlassBlur === true && record.frostedGlassBlurIntensity === originalSettings.frostedGlassBlurIntensity)
-        record.frostedGlassBlurIntensity = 10
-
-      Reflect.deleteProperty(record, 'reduceFrostedGlassBlur')
-    }
-
-    if (record.frostedGlassBlurIntensity < FROSTED_GLASS_BLUR_MIN_PX)
-      record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MIN_PX
-
-    if (record.frostedGlassBlurIntensity > FROSTED_GLASS_BLUR_MAX_PX)
-      record.frostedGlassBlurIntensity = FROSTED_GLASS_BLUR_MAX_PX
-
-    if (!LIQUID_GLASS_MODES.includes(record.dockLiquidGlassMode))
-      record.dockLiquidGlassMode = originalSettings.dockLiquidGlassMode
-    Reflect.deleteProperty(record, 'dockLiquidGlassFrost')
-    if (!LIQUID_GLASS_TINT_SOURCES.includes(record.dockLiquidGlassTintSource))
-      record.dockLiquidGlassTintSource = originalSettings.dockLiquidGlassTintSource
-    if (!/^#[\da-f]{6}$/i.test(record.dockLiquidGlassTintColor))
-      record.dockLiquidGlassTintColor = originalSettings.dockLiquidGlassTintColor
-    for (const [key, parameter] of [
-      ['dockLiquidGlassRefraction', LIQUID_GLASS_PARAMETERS.refraction],
-      ['dockLiquidGlassBlur', LIQUID_GLASS_PARAMETERS.blur],
-      ['dockLiquidGlassTintOpacity', LIQUID_GLASS_PARAMETERS.tintOpacity],
-      ['dockLiquidGlassDispersion', LIQUID_GLASS_PARAMETERS.dispersion],
-      ['dockLiquidGlassSaturation', LIQUID_GLASS_PARAMETERS.saturation],
-    ] as const) {
-      record[key] = clampRangeValue(Number.isFinite(record[key]) ? record[key] : parameter.default, parameter.min, parameter.max)
-    }
-
-    // Normalize the user-configurable two-column list breakpoint. Older
-    // versions used a fixed 640px threshold and do not have this field.
-    record.autoSwitchListLayoutBreakpoint = normalizeListLayoutBreakpoint(record.autoSwitchListLayoutBreakpoint)
-    record.videoCardCoverRatioOneColumn = normalizeVideoCardCoverRatio(
-      record.videoCardCoverRatioOneColumn,
-      originalSettings.videoCardCoverRatioOneColumn,
-    )
-    record.videoCardCoverRatioTwoColumns = normalizeVideoCardCoverRatio(
-      record.videoCardCoverRatioTwoColumns,
-      originalSettings.videoCardCoverRatioTwoColumns,
-    )
-
-    // 迁移旧的布尔类型自动播放设置到新的 AutoPlayMode 类型
-    const autoPlayFields = ['autoPlayMultipart', 'autoPlayCollection', 'autoPlayRecommend', 'autoPlayWatchLater', 'autoPlayPlaylist'] as const
-
-    // 检查是否存在旧的布尔设置需要迁移
-    const needsMigration = autoPlayFields.some(field => typeof record[field] === 'boolean')
-
-    if (needsMigration) {
-      for (const field of autoPlayFields) {
-        // 只对布尔类型进行迁移，其他类型（包括 'default'）保持不变
-        if (typeof record[field] === 'boolean') {
-          // true -> 'autoPlay', false -> 'pauseAtEnd'
-          record[field] = record[field] ? 'autoPlay' : 'pauseAtEnd'
-        }
-      }
-    }
-
-    // 确保 useBilibiliDefaultAutoPlay 存在（新用户或旧版本升级）
-    if (typeof legacyRecord.useBilibiliDefaultAutoPlay !== 'boolean')
-      record.useBilibiliDefaultAutoPlay = true
-
-    Reflect.deleteProperty(record, 'enableIndependentAutoPlay')
-    Reflect.deleteProperty(record, 'independentAutoPlayStates')
-
-    const legacyRandomPlayOrder = record.randomPlayOrder
-    if (
-      record.customPlayDefaultEnabled === true
-      && (legacyRandomPlayOrder === 'sequential' || legacyRandomPlayOrder === 'reverse' || legacyRandomPlayOrder === 'random')
-    ) {
-      record.defaultCustomPlayOrder = legacyRandomPlayOrder
-    }
-
-    const validDefaultCustomPlayOrders: DefaultCustomPlayOrder[] = ['sequential', 'reverse', 'random']
-    if (!validDefaultCustomPlayOrders.includes(record.defaultCustomPlayOrder))
-      record.defaultCustomPlayOrder = 'random'
-
-    const customPlayOrderContexts: CustomPlayOrderContext[] = ['multipart', 'collection', 'watchLater', 'playlist']
-    const validCustomPlayOrderOverrides: CustomPlayOrderOverride[] = ['inherit', ...validDefaultCustomPlayOrders]
-    const storedCustomPlayOrderOverrides = record.customPlayOrderOverrides
-    const needsCustomPlayOrderOverrideNormalization = !storedCustomPlayOrderOverrides
-      || typeof storedCustomPlayOrderOverrides !== 'object'
-      || customPlayOrderContexts.some(context => !validCustomPlayOrderOverrides.includes(storedCustomPlayOrderOverrides[context]))
-
-    if (needsCustomPlayOrderOverrideNormalization) {
-      record.customPlayOrderOverrides = Object.fromEntries(
-        customPlayOrderContexts.map((context) => {
-          const storedValue = storedCustomPlayOrderOverrides?.[context]
-          return [context, validCustomPlayOrderOverrides.includes(storedValue) ? storedValue : 'inherit']
-        }),
-      ) as CustomPlayOrderOverrides
-    }
-
-    if (typeof record.enableCustomPlayOrderOverrides !== 'boolean')
-      record.enableCustomPlayOrderOverrides = false
-
-    const legacyCustomAutoPlayFields: Array<[keyof Pick<Settings, 'autoPlayMultipart' | 'autoPlayCollection' | 'autoPlayWatchLater' | 'autoPlayPlaylist'>, CustomPlayOrderContext]> = [
-      ['autoPlayMultipart', 'multipart'],
-      ['autoPlayCollection', 'collection'],
-      ['autoPlayWatchLater', 'watchLater'],
-      ['autoPlayPlaylist', 'playlist'],
-    ]
-    let migratedLegacyCustomAutoPlay = false
-
-    for (const [field, context] of legacyCustomAutoPlayFields) {
-      const legacyMode = legacyRecord[field]
-      const migratedOrder = legacyMode === 'customSequential'
-        ? 'sequential'
-        : legacyMode === 'customReverse'
-          ? 'reverse'
-          : legacyMode === 'customRandom'
-            ? 'random'
-            : null
-
-      if (!migratedOrder)
-        continue
-
-      record.customPlayOrderOverrides[context] = migratedOrder
-      record[field] = 'pauseAtEnd'
-      migratedLegacyCustomAutoPlay = true
-    }
-
-    if (migratedLegacyCustomAutoPlay)
-      record.enableCustomPlayOrderOverrides = true
-
-    const validAutoPlayModes: AutoPlayMode[] = ['default', 'autoPlay', 'autoPlayWithRecommend', 'pauseAtEnd', 'loop']
-    for (const field of autoPlayFields) {
-      if (!validAutoPlayModes.includes(record[field]))
-        record[field] = 'pauseAtEnd'
-    }
-
-    Reflect.deleteProperty(record, 'customPlayDefaultEnabled')
-    Reflect.deleteProperty(record, 'randomPlayOrder')
-
-    // 紧凑布局已由卡片元素显示设置替代
-    if (legacyRecord.videoCardLayout === 'compact')
-      record.videoCardLayout = 'modern'
-
-    if (record.rememberDanmakuState === true)
-      record.defaultDanmakuState = 'remember'
-    if (record.rememberCaptionState === true)
-      record.defaultCaptionState = 'remember'
-    Reflect.deleteProperty(record, 'rememberDanmakuState')
-    Reflect.deleteProperty(record, 'rememberCaptionState')
-
-    const validPlayerDefaultStates: PlayerDefaultState[] = ['system', 'remember', 'on', 'off']
-    if (!['sendingBar', 'playerCenter'].includes(record.videoPlayerScrollMode))
-      record.videoPlayerScrollMode = originalSettings.videoPlayerScrollMode
-    if (typeof record.enableSidebarCoverBlur !== 'boolean')
-      record.enableSidebarCoverBlur = originalSettings.enableSidebarCoverBlur
-    if (!validPlayerDefaultStates.includes(record.defaultDanmakuState))
-      record.defaultDanmakuState = originalSettings.defaultDanmakuState
-    if (!validPlayerDefaultStates.includes(record.defaultCaptionState))
-      record.defaultCaptionState = originalSettings.defaultCaptionState
-
-    record.bewlyWidescreenSidebarWidth = normalizeWidescreenSidebarStoredWidth(
-      record.bewlyWidescreenSidebarWidth,
-    )
-
-    // 旧开关与新的按场景覆盖语义不同，直接清理并让用户重新设置。
-    Reflect.deleteProperty(record, 'keepCollectionVideoDefaultMode')
-    Reflect.deleteProperty(record, 'keepWatchLaterVideoDefaultMode')
-
-    const modeOverrideContexts: VideoPlayerModeContext[] = ['multipart', 'collection', 'bangumi', 'watchLater', 'playlist']
-    const validModeOverrides: VideoPlayerModeOverride[] = ['inherit', 'default', 'webFullscreen', 'widescreen', 'bewlyWidescreen']
-    const storedModeOverrides = record.videoPlayerModeOverrides
-    const needsModeOverrideNormalization = !storedModeOverrides
-      || typeof storedModeOverrides !== 'object'
-      || modeOverrideContexts.some(context => !validModeOverrides.includes(storedModeOverrides[context]))
-
-    if (needsModeOverrideNormalization) {
-      record.videoPlayerModeOverrides = Object.fromEntries(
-        modeOverrideContexts.map((context) => {
-          const storedValue = storedModeOverrides?.[context]
-          return [context, validModeOverrides.includes(storedValue) ? storedValue : 'inherit']
-        }),
-      ) as VideoPlayerModeOverrides
-    }
-
-    // 清理已移除的 NVIDIA RTX 视频增强兼容设置
-    Reflect.deleteProperty(record, 'nvidiaRtxVideoEnhancementCompatibility')
 
     // 迁移旧的 customizeCSS/customizeCSSContent 到 localSettings。
     // 两个存储均真实加载后才允许移动字段，避免默认 localSettings 覆盖已有值。

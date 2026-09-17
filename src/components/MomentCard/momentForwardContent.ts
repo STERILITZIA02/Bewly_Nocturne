@@ -6,6 +6,7 @@ export type MomentForwardState = 'idle' | 'editing' | 'submitting' | 'success' |
 export type MomentForwardToken
   = | { type: 'text', text: string }
     | { type: 'emoji', text: string }
+    | { type: 'mention', text: string, mid: string }
 
 export interface SelectedMomentTopic {
   id: number | string
@@ -13,6 +14,7 @@ export interface SelectedMomentTopic {
 }
 
 export interface MomentForwardEmote {
+  type?: number
   id: number | string
   text: string
   url: string
@@ -27,8 +29,8 @@ export interface MomentForwardEmotePackage {
 
 export interface MomentForwardContentNode {
   raw_text: string
-  type: 1 | 9
-  biz_id: ''
+  type: 1 | 2 | 9
+  biz_id: string
 }
 
 export interface MomentForwardRequestPayload {
@@ -172,10 +174,45 @@ export function momentForwardTokensToText(tokens: MomentForwardToken[]): string 
   return tokens.map(token => token.text).join('')
 }
 
+export function findMomentForwardCompletion(text: string, caret: number) {
+  if (caret < text.length && !/\s/.test(text[caret]))
+    return null
+  const match = /(?:^|\s)([@#])([^\s@#]*)$/.exec(text.slice(0, caret))
+  return match ? { kind: match[1] === '@' ? 'mention' as const : 'topic' as const, query: match[2], start: caret - match[2].length - 1, end: caret } : null
+}
+
 export function parseMomentForwardTokens(
   value: string,
   knownEmojiTexts: Iterable<string>,
+  mentions: readonly Extract<MomentForwardToken, { type: 'mention' }>[] = [],
 ): MomentForwardToken[] {
+  if (mentions.length) {
+    const matches = mentions.filter(token => token.text && /^[1-9]\d*$/.test(token.mid)).sort((a, b) => b.text.length - a.text.length)
+    const findMention = (text: string, start: number) => {
+      let index = value.indexOf(text, start)
+      while (index >= 0) {
+        const end = index + text.length
+        if ((index === 0 || /\s/.test(value[index - 1])) && (end === value.length || /\s/.test(value[end])))
+          return index
+        index = value.indexOf(text, index + text.length)
+      }
+      return -1
+    }
+    const result: MomentForwardToken[] = []
+    let offset = 0
+    while (offset < value.length) {
+      const next = matches.map(token => ({ token, index: findMention(token.text, offset) }))
+        .filter(match => match.index >= 0)
+        .sort((a, b) => a.index - b.index)[0]
+      if (!next) {
+        result.push(...parseMomentForwardTokens(value.slice(offset), knownEmojiTexts))
+        break
+      }
+      result.push(...parseMomentForwardTokens(value.slice(offset, next.index), knownEmojiTexts), { ...next.token })
+      offset = next.index + next.token.text.length
+    }
+    return result
+  }
   const emojiTexts = Array.from(new Set(knownEmojiTexts))
     .filter(Boolean)
     .sort((left, right) => right.length - left.length)
@@ -221,7 +258,7 @@ export function insertMomentForwardEmoji(
   const nextValue = `${value.slice(0, start)}${emojiText}${value.slice(end)}`
   return {
     value: nextValue,
-    tokens: parseMomentForwardTokens(nextValue, [...knownEmojiTexts, emojiText]),
+    tokens: parseMomentForwardTokens(nextValue, [...knownEmojiTexts, emojiText], tokens.filter((token): token is Extract<MomentForwardToken, { type: 'mention' }> => token.type === 'mention')),
     caret: start + emojiText.length,
   }
 }
@@ -232,9 +269,9 @@ export function serializeMomentForwardContents(tokens: MomentForwardToken[]): Mo
       return []
     return [{
       raw_text: token.text,
-      type: token.type === 'emoji' ? 9 as const : 1 as const,
+      type: token.type === 'emoji' ? 9 as const : token.type === 'mention' ? 2 as const : 1 as const,
       // Verified against the current Web dynamic repost request: emoji nodes use an empty biz_id.
-      biz_id: '' as const,
+      biz_id: token.type === 'mention' ? token.mid : '',
     }]
   })
 }
@@ -332,8 +369,9 @@ export function normalizeMomentForwardEmotePackages(response: unknown): MomentFo
           const rawEmote = asRecord(emoteValue)
           const text = typeof rawEmote.text === 'string' ? rawEmote.text.trim() : ''
           const url = normalizeHttpsUrl(rawEmote.webp_url || rawEmote.gif_url || rawEmote.url)
-          return text && url
-            ? [{ id: rawEmote.id as number | string, text, url }]
+          const type = Number(rawEmote.type ?? rawPackage.type)
+          return text && (url || type === 4)
+            ? [{ id: rawEmote.id as number | string, text, url, ...(type === 4 ? { type } : {}) }]
             : []
         })
       : []

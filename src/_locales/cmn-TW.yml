@@ -1,4 +1,5 @@
 common:
+  retry: 重試
   operation_completed: 操作完成
   dialog: 對話框
   view_all: 檢視所有
@@ -110,6 +111,14 @@ player_screenshot:
   failed: 截圖失敗
   video_unavailable: 目前影片畫面無法使用
 settings:
+  no_search_character: 不顯示搜尋人物
+  reorder_keyboard_hint: 按住 Alt 並按方向鍵調整順序
+  auto_remove_watch_later_on_end: 播完自動移出稍後觀看
+  auto_remove_watch_later_on_end_desc: 預設關閉。僅在稍後觀看播放頁，確認完整稿件最後一 P 播完後移除；試看、廣告及無法確認身分的播放不會移除。
+  current_tab_if_homepage_desc: 「僅首頁使用目前分頁」表示：僅在原生首頁或 Bewly 首頁使用目前分頁；搜尋結果、歷史、收藏等內部頁面使用新分頁。
+  video_screenshot_shortcut: 截圖快捷鍵
+  video_screenshot_shortcut_desc: 點擊輸入框後按組合鍵；退格鍵清除。預設 Shift+S，隱藏截圖按鈕後仍可使用。
+  video_screenshot_shortcut_conflict: 此組合鍵無效或與瀏覽器常用快捷鍵衝突。
   enable_sidebar_cover_blur: 側欄封面背景
   enable_sidebar_cover_blur_desc: 收藏與稍後再看的側欄使用模糊封面背景；關閉後使用目前主題的中性表面。
   following_sort: 新版關注列表排序
@@ -475,6 +484,7 @@ settings:
   frosted_glass_blur_intensity: 毛玻璃模糊強度
   disable_shadow: 停用陰影
   link_opening_behavior_opt:
+    current_tab_if_homepage: 僅首頁使用目前分頁
     current_tab: 目前索引標籤
     current_tab_if_not_homepage: 首頁外目前分頁
     background: 背景打開
@@ -779,6 +789,7 @@ settings:
   enable_settings_sync_desc: 開啟後同時儲存到本機與瀏覽器雲端；裝置播放狀態不會同步（需要登入瀏覽器帳號）
   settings_sync_unsynced_count: '未同步欄位：{count}'
   settings_sync_quota_blocked_count: '受雲端配額限制：{count}'
+  settings_sync_retry_at: '已保留本機修改，將在 {time} 後自動重試雲端同步。'
   settings_sync_last_error: '最近同步錯誤：{error}'
   sync_cloud_conflict_title: 偵測到雲端設定備份
   sync_cloud_conflict_desc: 雲端已有一份設定備份。兩側都存在的設定將以你所選的一側為準。
@@ -1324,6 +1335,9 @@ moments:
   fit_window: 適應視窗
   rotate_clockwise: 順時針旋轉
 moment_card:
+  comments_expand_thread: 展開此留言的回覆
+  comments_collapse_thread: 收起此留言的回覆
+  forward_search_mention: 搜尋要提及的使用者
   comments_sort: 評論排序
   comments_sort_latest: 最新
   comments_sort_hot: 最熱
@@ -1442,6 +1456,11 @@ video_card:
   watch_later_update_failed: 更新稍後觀看失敗
   feedback_unavailable: 無法取得意見回饋選項
 home:
+  following_search_videos: '搜尋 {name} 的影片投稿'
+  following_clear_video_search: 清空投稿搜尋
+  following_no_search_results: 找不到符合的影片投稿
+  following_display_flat: 不分組
+  following_display_grouped: 按分組
   following_default_group: 預設分組
   following_special_group: 特別關注
   following_group_name: '分組 {id}'
@@ -1474,6 +1493,8 @@ home:
   subscribed_series: 訂閱劇集
   weekly: 每週必看
   weekly_search_placeholder: 搜尋期號...
+  weekly_choose_series: 選擇期號
+  weekly_no_matching_series: 找不到相符的期號
   precious: 入站必刷
   live: 直播
   moments: 動態
@@ -1584,6 +1605,37 @@ version_reminder:
   acknowledge: 已知曉，此版本不再提示
   settings_hint: 可在「設定 → 關於」中關閉「新版本提醒」。
 watch_later:
+  auto_remove_failed: 自動移出稍後觀看失敗，請稍後手動重試。
+  open_tabs:
+    title: 加入播放分頁
+    scope: 範圍：擴充功能可存取、同一一般/無痕工作階段的所有視窗中開啟的 B 站播放分頁。不會關閉或跳轉原分頁。確認後依此快照加入；重複稿件與已在佇列的項目會略過。關閉此視窗不會停止背景工作，可從此入口重新查看。
+    failed_request: 讀取工作失敗或帳號已變更，請重試。
+    state_ready: 請確認下方候選分頁
+    state_running: 正在加入
+    state_stopped: 已停止後續加入
+    state_complete: 本次工作已結束
+    stop_user: 停止僅影響尚未發出的請求。
+    stop_accountChanged: 帳號或登入憑證已變更，未發送項已停止。
+    stop_interrupted: 背景已重啟，未處理項已停止；結果未知項不會自動重送。
+    stop_readFailed: 無法讀取權威成員清單或儲存工作狀態，已停止後續加入。
+    counts: '候選 {total} · 已加入 {added} · 略過 {skipped} · 失敗/未知 {failed} · 未處理 {unprocessed}'
+    stop: 停止後續加入
+    confirm: 確認加入
+    retry: 重試明確失敗項
+    prepare: 重新讀取分頁
+    pending: 待處理
+    resolving: 解析中
+    sending: 已送出，等待結果
+    added: 已加入
+    skipped: 已略過
+    failed: 失敗
+    unknown: 結果未知，不重送
+    duplicate: 重複稿件
+    existing: 已在佇列
+    sourceChanged: 原分頁已關閉或跳轉
+    unresolved: 無法確認稿件/目前集數
+    readFailed: 解析失敗，可重試
+    writeFailed: 伺服器拒絕，可重試
   title: 稍後觀看
   layout_list: 清單
   layout_grid: 網格
@@ -1645,6 +1697,10 @@ search_page:
   view_all_esports: 檢視全部賽事
 
 search:
+  empty_results: '在{category}中找不到「{keyword}」的結果'
+  empty_hint: 試試縮短關鍵字，或查看綜合結果。
+  edit_keyword: 修改關鍵字
+  back_to_all: 查看綜合結果
   page_title: 搜尋 - 嗶哩嗶哩
   results_page_title: '{keyword} - 搜尋 - 嗶哩嗶哩'
   result_count: 共找到 {count} 個結果

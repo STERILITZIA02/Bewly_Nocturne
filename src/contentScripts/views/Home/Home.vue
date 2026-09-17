@@ -19,6 +19,7 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
+import { scrollToPosition } from '~/utils/scrollIntent'
 
 import RecommendationModeSwitcher from './components/RecommendationModeSwitcher.vue'
 import VersionReminder from './components/VersionReminder.vue'
@@ -172,7 +173,7 @@ function restoreTabScrollPosition() {
   if (pendingTabScrollTop !== null) {
     const viewport = scrollViewportRef.value
     if (viewport) {
-      viewport.scrollTop = pendingTabScrollTop
+      scrollToPosition(viewport, pendingTabScrollTop)
       cachedScrollTop.value = pendingTabScrollTop
       pendingTabScrollTop = null
     }

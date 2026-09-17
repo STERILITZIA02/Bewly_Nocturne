@@ -8,6 +8,7 @@ import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSele
 
 import MediaHighlightSkeleton from '../components/MediaHighlightSkeleton.vue'
 import Pagination from '../components/Pagination.vue'
+import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertBangumiHighlight, convertMediaFtHighlight, isMediaFtItem } from '../searchTransforms'
 
@@ -63,7 +64,7 @@ defineExpose({
     </div>
 
     <div v-else-if="!isLoading && (!results || results.length === 0)" class="empty-state">
-      <Empty :description="t('common.no_data')" />
+      <SearchEmptyState :keyword="keyword" category="bangumi" />
     </div>
 
     <div v-else class="bangumi-results" space-y-6>

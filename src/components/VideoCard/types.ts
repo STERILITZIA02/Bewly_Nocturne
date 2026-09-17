@@ -13,6 +13,8 @@ export function createVideoCardState(): VideoCardState {
 }
 
 export interface Video {
+  /** Query scope for collaborative submissions, distinct from the actual author. */
+  sourceUploaderMid?: number
   id: number
   duration?: number
   durationStr?: string

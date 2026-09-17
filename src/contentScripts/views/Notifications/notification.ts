@@ -1,3 +1,4 @@
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
 import type { NativeNotificationSection } from './notificationSections'
@@ -83,7 +84,7 @@ export function sanitizeNotificationUrl(value: unknown): string {
   try {
     const normalized = value.startsWith('//') ? `https:${value}` : value
     const url = new URL(normalized, 'https://www.bilibili.com/')
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+    return url.protocol === 'http:' || url.protocol === 'https:' ? normalizeBilibiliImageUrl(url.href) : ''
   }
   catch {
     return ''

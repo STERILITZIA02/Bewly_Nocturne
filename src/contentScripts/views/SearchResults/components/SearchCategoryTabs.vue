@@ -17,13 +17,14 @@ function handleSelect(category: SearchCategory) {
 
 <template>
   <div class="search-categories" mb-4>
-    <div class="search-category-control bew-segment-control bew-segment-control--surface bew-segment-control--static">
+    <div class="search-category-control bew-segment-control bew-segment-control--surface bew-segment-control--static" role="group" :aria-label="$t('search.page_title')">
       <button
         v-for="category in props.categories"
         :key="category.value"
         class="category-tab bew-segment-control__item bew-segment-control__item--wide"
         :class="{ active: props.currentCategory === category.value }"
         :data-active="props.currentCategory === category.value ? 'true' : undefined"
+        :aria-pressed="props.currentCategory === category.value"
         type="button"
         @click="handleSelect(category.value)"
       >

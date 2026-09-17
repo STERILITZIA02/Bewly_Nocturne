@@ -6,6 +6,7 @@ import { findFirst, findMovable, getTitleText, moveOrReplaceNode } from '~/utils
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { isPgcPlaybackPage } from '~/utils/videoMetadataBridge'
 
@@ -31,6 +32,14 @@ export function syncVideoMetadata(currentState: BewlyWidescreenState) {
     return true
 
   const clone = source.cloneNode(true) as HTMLElement
+  // Cloning native metadata recreates its image requests. Normalize the copied
+  // resource before insertion, without changing Vue-owned original nodes.
+  clone.querySelectorAll<HTMLImageElement>('img[src]').forEach((image) => {
+    const src = image.getAttribute('src')!
+    const normalized = normalizeBilibiliImageUrl(src)
+    if (normalized !== src)
+      image.setAttribute('src', normalized)
+  })
   clone.removeAttribute('id')
   clone.classList.add('bewly-widescreen-metadata-clone')
   clone.dataset.sourceSignature = signature
@@ -107,7 +116,8 @@ export function renderFallbackVideoInfo(currentState: BewlyWidescreenState) {
     fallbackOwner?.remove()
   }
   else {
-    const ownerSignature = `${data.owner.mid}:${data.owner.name}:${data.owner.face}`
+    const avatarUrl = normalizeBilibiliImageUrl(data.owner.face)
+    const ownerSignature = `${data.owner.mid}:${data.owner.name}:${avatarUrl}`
     if (fallbackOwner?.dataset.sourceSignature !== ownerSignature) {
       const owner = document.createElement('div')
       owner.className = 'bewly-widescreen-fallback-owner'
@@ -122,7 +132,7 @@ export function renderFallbackVideoInfo(currentState: BewlyWidescreenState) {
 
       const avatar = document.createElement('img')
       avatar.className = 'bewly-widescreen-fallback-owner-avatar'
-      avatar.src = data.owner.face
+      avatar.src = avatarUrl
       avatar.alt = data.owner.name
       avatar.loading = 'eager'
       avatar.decoding = 'async'

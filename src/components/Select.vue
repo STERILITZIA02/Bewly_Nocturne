@@ -19,6 +19,7 @@ const props = withDefaults(defineProps<{
   modelValue: SelectValue
   disabled?: boolean
   loading?: boolean
+  accessibleLabel?: string
 }>(), {
   disabled: false,
   loading: false,
@@ -42,6 +43,7 @@ const valueLabelId = `${listboxId}-value`
 const label = computed(() => props.options.find(item => Object.is(item.value, props.modelValue))?.label ?? '')
 const unavailable = computed(() => props.disabled || props.loading)
 const showOptions = ref<boolean>(false)
+const keyboardOpened = ref(false)
 const activeOptionIndex = ref(-1)
 const triggerRef = ref<HTMLButtonElement | null>(null)
 const containerRef = ref<HTMLElement | null>(null)
@@ -85,7 +87,8 @@ function closeOptions(restoreFocus = false) {
     void nextTick(() => triggerRef.value?.focus())
 }
 
-function toggleOptions() {
+function toggleOptions(event: MouseEvent) {
+  keyboardOpened.value = event.detail === 0
   if (unavailable.value)
     return
 
@@ -105,6 +108,7 @@ function selectOption(option: OptionType) {
 }
 
 function handleTriggerKeyDown(event: KeyboardEvent) {
+  keyboardOpened.value = true
   switch (event.key) {
     case 'ArrowDown':
       event.preventDefault()
@@ -200,7 +204,8 @@ watch(unavailable, (disabled) => {
       aria-haspopup="listbox"
       :aria-expanded="showOptions"
       :aria-controls="listboxId"
-      :aria-labelledby="fieldLabelId ? `${fieldLabelId} ${valueLabelId}` : undefined"
+      :aria-label="accessibleLabel ? `${accessibleLabel}: ${label}` : undefined"
+      :aria-labelledby="!accessibleLabel && fieldLabelId ? `${fieldLabelId} ${valueLabelId}` : undefined"
       p="x-4 y-2"
       bg="$bew-fill-1"
       rounded="$bew-interactive-radius"
@@ -245,7 +250,7 @@ watch(unavailable, (disabled) => {
     </button>
 
     <Teleport :to="mainAppRef">
-      <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'">
+      <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'" :css="!keyboardOpened">
         <div
           v-if="showOptions"
           :id="listboxId"
@@ -254,11 +259,12 @@ watch(unavailable, (disabled) => {
           role="listbox"
           :data-bewly-dialog-owner="dialogOwner"
           :style="{
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
-            maxHeight: `${dropdownPosition.maxHeight}px`,
-            transform: dropdownPosition.openUp ? 'translateY(-100%)' : undefined,
+            'top': `${dropdownPosition.top}px`,
+            'left': `${dropdownPosition.left}px`,
+            'width': `${dropdownPosition.width}px`,
+            'maxHeight': `${dropdownPosition.maxHeight}px`,
+            'transform': dropdownPosition.openUp ? 'translateY(-100%)' : undefined,
+            '--bew-dropdown-origin': dropdownPosition.openUp ? 'bottom center' : 'top center',
           }"
           pos="fixed" p="2"
           z="$bew-z-control-menu" flex="~ col gap-1"
@@ -269,6 +275,7 @@ watch(unavailable, (disabled) => {
             :key="createSelectOptionKey(option.value, index)"
             :data-option-index="index"
             role="option"
+            class="select-option"
             :aria-selected="Object.is(option.value, modelValue)"
             :tabindex="activeOptionIndex === index ? 0 : -1"
             p="x-2 y-2"
@@ -282,6 +289,7 @@ watch(unavailable, (disabled) => {
             @click="selectOption(option)"
           >
             <span v-text="option.label" />
+            <i v-if="Object.is(option.value, modelValue)" i-mingcute:check-line aria-hidden="true" />
           </div>
         </div>
       </Transition>
@@ -324,21 +332,25 @@ watch(unavailable, (disabled) => {
   background-color: var(--bew-fill-1);
 }
 
-// 向上弹出时的过渡：方向与全局 .dropdown（向下开）相反
-// 使用独立的 translate 属性而非 transform，避免覆盖定位用的 inline transform
-// 不要 transition: all，否则二次校正坐标时会带动 top/left 飞入
-.dropdown-up-enter-active,
-.dropdown-up-leave-active {
-  transition:
-    opacity 300ms ease,
-    translate 300ms ease,
-    filter 300ms ease;
+.select-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bew-space-3);
+
+  &[aria-selected="true"] {
+    color: var(--bew-on-theme-surface);
+    background: var(--bew-theme-surface);
+  }
+
+  i {
+    flex: 0 0 var(--bew-icon-size-sm);
+  }
 }
 
-.dropdown-up-enter-from,
-.dropdown-up-leave-to {
-  opacity: 0;
-  translate: 0 12px;
-  filter: blur(4px);
+@media (prefers-reduced-motion: reduce) {
+  .select-arrow {
+    transition: none;
+  }
 }
 </style>
