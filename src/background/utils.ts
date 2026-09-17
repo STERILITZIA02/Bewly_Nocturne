@@ -59,6 +59,7 @@ interface Message {
 }
 
 interface _FETCH {
+  querySerializer?: (params: URLSearchParams) => string
   method: string
   headers?: Record<string, string>
   body?: Record<string, unknown>
@@ -103,7 +104,7 @@ async function doRequest(message: Message, api: API) {
     const { contentScriptQuery: _contentScriptQuery, ...rest } = message
 
     let { _fetch, url, params = {}, afterHandle } = api
-    const { method, headers = {}, body, bodySerializer, credentials = 'include' } = _fetch as _FETCH
+    const { method, headers = {}, body, bodySerializer, querySerializer, credentials = 'include' } = _fetch as _FETCH
     const isGET = method.toLocaleLowerCase() === 'get'
     // merge params and body
     const targetParams: Record<string, unknown> = { ...params }
@@ -162,7 +163,7 @@ async function doRequest(message: Message, api: API) {
             urlParams.append(key, String(value))
           }
         }
-        requestUrl += `?${urlParams.toString()}`
+        requestUrl += `?${querySerializer ? querySerializer(urlParams) : urlParams.toString()}`
       }
 
       // generate body

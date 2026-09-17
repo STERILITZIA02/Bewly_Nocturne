@@ -47,6 +47,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
     const watchLater = await loadSourceModule('../src/utils/watchLater.ts', {
       '~/utils/api': { default: api },
       '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
+      '~/utils/watchLaterWrite': await import('../src/utils/watchLaterWrite'),
       '~/utils/main': main,
     })
     const logic = await loadSourceModule('../src/components/VideoCard/composables/useVideoCardLogic.ts', {
@@ -252,6 +253,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
         '~/utils/api': { default: api },
         '~/utils/main': main,
         '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
+        '~/utils/watchLaterWrite': await import('../src/utils/watchLaterWrite'),
       })
       const native = await loadSourceModule('../src/utils/watchLaterButton.ts', {
         'vue': Vue,

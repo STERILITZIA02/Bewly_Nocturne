@@ -3,8 +3,9 @@ import { resetTopBarTransientInteraction } from '~/components/TopBar/composables
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { settings } from '~/logic'
-import { executeResolvedLinkAction, getLinkTarget, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
-import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
+import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
+import { executeResolvedLinkAction, getLinkTarget, hasNavigationModifier } from '~/utils/linkNavigation'
+import { openLinkToNewTab } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
 
 const props = defineProps<{
@@ -23,7 +24,7 @@ const emit = defineEmits<{
   (e: 'click', value: MouseEvent): void
 }>()
 
-const { openIframeDrawer } = useBewlyApp()
+const { openIframeDrawer, activatedPage } = useBewlyApp()
 const currentLocationHref = useCurrentLocationHref()
 
 const processedHref = computed(() => {
@@ -46,18 +47,23 @@ const openMode = computed(() => {
 // Since BewlyBewly sometimes uses an iframe to open the original Bilibili page in the current tab
 // please set the target to `_top` instead of `_self`
 const target = computed(() => {
-  return getLinkTarget(resolveLinkOpenAction(openMode.value, {
-    isHomepage: isHomePage(currentLocationHref.value),
-    inIframe: isInIframe(),
-  }))
+  return getLinkTarget(resolveConfiguredLinkAction(openMode.value, currentLocationHref.value, activatedPage.value))
 })
 
+function syncTarget(event: Event) {
+  // Covers keyboard, middle click and context menus during the route bridge microtask.
+  (event.currentTarget as HTMLAnchorElement).target = getLinkTarget(resolveConfiguredLinkAction(openMode.value, location.href, activatedPage.value))
+}
+
 function handleClick(event: MouseEvent) {
+  syncTarget(event)
   if (props.stopPropagation) {
     event.stopPropagation()
   }
 
   if (props.customClickEvent) {
+    if (event.button !== 0)
+      return
     if (!props.customClickEventIncludesModifiers && (event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)) {
       if (props.type === 'topBar')
         resetTopBarTransientInteraction()
@@ -92,10 +98,7 @@ function handleClick(event: MouseEvent) {
     }
   }
 
-  const action = resolveLinkOpenAction(openMode.value, {
-    isHomepage: isHomePage(currentLocationHref.value),
-    inIframe: isInIframe(),
-  })
+  const action = resolveConfiguredLinkAction(openMode.value, location.href, activatedPage.value)
   if (props.type === 'topBar' && (action === 'newTab' || action === 'background'))
     resetTopBarTransientInteraction()
   if (action === 'drawer' || action === 'background') {
@@ -121,6 +124,10 @@ function handleClick(event: MouseEvent) {
     :rel="rel"
     :draggable="disableDragging ? false : undefined"
     @click="handleClick"
+    @pointerdown="syncTarget"
+    @keydown="syncTarget"
+    @auxclick="syncTarget"
+    @contextmenu="syncTarget"
   >
     <slot />
   </a>

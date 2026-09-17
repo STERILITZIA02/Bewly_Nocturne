@@ -2,6 +2,7 @@
  * Private-message optimistic write transactions shared by the packaged Composer and fixture verification.
  */
 import type { PrivateMessage } from '~/background/privateMessage/types'
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 
 import type { DisplayPrivateMessage as ServerPrivateMessage } from '../privateMessage'
 import { classifyPrivateMessageSource, comparePrivateMessageSeqno } from '../privateMessage'
@@ -178,7 +179,7 @@ export function reconcileOptimisticPrivateMessages(
       return Boolean(
         optimistic.serverMediaUrl
         && item.content.type === 'image'
-        && item.content.src === optimistic.serverMediaUrl,
+        && normalizeBilibiliImageUrl(item.content.src) === normalizeBilibiliImageUrl(optimistic.serverMediaUrl),
       )
     }
     if (optimistic.msgType !== 1)

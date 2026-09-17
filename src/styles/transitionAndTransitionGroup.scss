@@ -54,16 +54,37 @@
 }
 
 .dropdown-enter-active,
-.dropdown-leave-active {
+.dropdown-leave-active,
+.dropdown-up-enter-active,
+.dropdown-up-leave-active {
   // 仅过渡视觉属性，避免 top/left/width 被 all 带着从 0 飞到真实坐标
   transition:
-    opacity var(--bew-duration-moderate, 300ms) ease,
-    transform var(--bew-duration-moderate, 300ms) ease,
-    filter var(--bew-duration-moderate, 300ms) ease;
+    opacity var(--bew-duration-fast) var(--bew-ease-standard),
+    translate var(--bew-duration-fast) var(--bew-ease-standard),
+    scale var(--bew-duration-fast) var(--bew-ease-standard);
+  transform-origin: var(--bew-dropdown-origin, top center);
 }
 .dropdown-enter-from,
-.dropdown-leave-to {
+.dropdown-leave-to,
+.dropdown-up-enter-from,
+.dropdown-up-leave-to {
   opacity: 0;
-  transform: scale(0.96) translateY(-0.5rem);
-  filter: blur(2px);
+  translate: 0 calc(-1 * var(--bew-space-2));
+  scale: 0.98;
+}
+
+.dropdown-up-enter-from,
+.dropdown-up-leave-to {
+  translate: 0 var(--bew-space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dropdown-enter-active,
+  .dropdown-leave-active,
+  .dropdown-up-enter-active,
+  .dropdown-up-leave-active {
+    transition-property: opacity;
+    translate: none;
+    scale: none;
+  }
 }

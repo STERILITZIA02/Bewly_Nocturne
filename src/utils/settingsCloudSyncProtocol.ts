@@ -39,6 +39,7 @@ export interface SettingsCloudSyncStatus {
   failedCount: number
   syncedCount: number
   lastError: string
+  retryAt: number
 }
 
 export const DEFAULT_SETTINGS_CLOUD_SYNC_STATUS: SettingsCloudSyncStatus = {
@@ -47,6 +48,7 @@ export const DEFAULT_SETTINGS_CLOUD_SYNC_STATUS: SettingsCloudSyncStatus = {
   failedCount: 0,
   syncedCount: 0,
   lastError: '',
+  retryAt: 0,
 }
 
 export function getSettingsCloudSyncRetryDelay(attempt: number) {

@@ -5,6 +5,7 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import ALink from '~/components/ALink.vue'
+import UserAvatarLink from '~/components/UserCard/UserAvatarLink.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { numFormatter } from '~/utils/dataFormatter'
@@ -170,7 +171,10 @@ async function handleFollowClick(e: Event) {
       />
       <div flex items-center gap-5 w-full>
         <!-- 左侧：头像（带角标） -->
-        <div class="avatar-wrapper-compact" relative flex-shrink-0>
+        <UserAvatarLink
+          :mid="mid" :name="name" :live-status="liveStatus" :roomid="roomid" class="avatar-wrapper-compact"
+          relative flex-shrink-0
+        >
           <img
             :src="face"
             :alt="name"
@@ -188,7 +192,7 @@ async function handleFollowClick(e: Event) {
             v-else-if="isVerified && verifyInfo"
             class="bili-avatar-icon bili-avatar-right-icon bili-avatar-icon-personal bili-avatar-size-86"
           />
-        </div>
+        </UserAvatarLink>
 
         <!-- 右侧：用户信息 + 简介 + 关注按钮 -->
         <div flex="~ col gap-2" flex-1 min-w-0>
@@ -285,7 +289,10 @@ async function handleFollowClick(e: Event) {
         :aria-label="name"
       />
       <!-- 头像 -->
-      <div class="avatar-wrapper" flex-shrink-0>
+      <UserAvatarLink
+        :mid="mid" :name="name" :live-status="liveStatus" :roomid="roomid" class="avatar-wrapper"
+        flex-shrink-0
+      >
         <img
           :src="face"
           :alt="name"
@@ -293,7 +300,7 @@ async function handleFollowClick(e: Event) {
           :class="horizontal ? 'w-12 h-12' : 'w-16 h-16'"
           rounded-full object-cover
         >
-      </div>
+      </UserAvatarLink>
 
       <!-- 用户信息 -->
       <div class="user-info" flex-1 min-w-0>

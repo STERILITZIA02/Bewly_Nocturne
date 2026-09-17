@@ -278,6 +278,9 @@ function handleContributorImageError() {
           <div v-if="settingsCloudSyncPreference" class="cloud-sync-status">
             <p>{{ $t('settings.settings_sync_unsynced_count', { count: unsyncedCloudFieldCount }) }}</p>
             <p>{{ $t('settings.settings_sync_quota_blocked_count', { count: settingsCloudSyncStatus.blockedByQuotaCount }) }}</p>
+            <p v-if="settingsCloudSyncStatus.retryAt">
+              {{ $t('settings.settings_sync_retry_at', { time: new Date(settingsCloudSyncStatus.retryAt).toLocaleString() }) }}
+            </p>
             <p v-if="settingsCloudSyncStatus.lastError">
               {{ $t('settings.settings_sync_last_error', { error: settingsCloudSyncStatus.lastError }) }}
             </p>

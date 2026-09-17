@@ -1,4 +1,5 @@
 import { AppPage } from '~/enums/appEnums'
+import { scrollToPosition } from '~/utils/scrollIntent'
 
 /**
  * Get cookie by name
@@ -138,14 +139,7 @@ export function hexToHSL(hex: string, alpha: number | null = null): string {
  * Smooth scroll to the top of the html element
  */
 export function scrollToTop(element: HTMLElement, targetScrollTop = 0 as number) {
-  // cancel if already on top
-  if (element.scrollTop === targetScrollTop)
-    return
-
-  element.scrollTo({
-    top: targetScrollTop,
-    behavior: 'smooth',
-  })
+  scrollToPosition(element, targetScrollTop, 'smooth')
 }
 
 export function injectCSS(css: string, element: HTMLElement | ShadowRoot = document.documentElement): HTMLStyleElement {

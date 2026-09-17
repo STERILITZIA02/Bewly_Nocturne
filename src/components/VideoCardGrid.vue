@@ -5,9 +5,10 @@ import type { Video, VideoCardState } from '~/components/VideoCard/types'
 import { createVideoCardState } from '~/components/VideoCard/types'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import type { CardWindowSnapshot } from '~/composables/useCardWindow'
-import { useCardWindow } from '~/composables/useCardWindow'
+import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { useHomeTabViewState } from '~/composables/useHomeTabState'
+import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardShadowStyle } from '~/composables/useVideoCardShadowStyle'
 import { OVERLAY_SCROLL_BAR_SCROLL } from '~/constants/globalEvents'
 import type { GridLayoutType } from '~/logic'
@@ -218,7 +219,7 @@ interface GridSnapshot {
   cardStates: [string | number, VideoCardState][]
 }
 const gridStateKey = `grid:${props.stateKey || 'default'}`
-const restoredGrid = tabState?.take<GridSnapshot | undefined>(gridStateKey, undefined)
+let restoredGrid = tabState?.take<GridSnapshot | undefined>(gridStateKey, undefined)
 let detachGridSnapshot: (() => void) | undefined
 onBeforeUnmount(() => detachGridSnapshot?.())
 const mountedCards = new Map<string | number, { canRecycle?: boolean }>()
@@ -889,7 +890,7 @@ const cardWindowRoot = computed(() => {
   void bewlyApp?.scrollViewportRef.value
   return findScrollElement() ?? document.scrollingElement as HTMLElement | null
 })
-const recycleCards = computed(() => Boolean(tabState?.enabled) || props.items.length > 80)
+const recycleCards = computed(() => Boolean(tabState?.enabled) || props.items.length > CARD_WINDOW_THRESHOLD)
 const cardColumns = computed(() => getCurrentColumnCount(props.gridLayout, gridContainerWidth.value || window.innerWidth))
 const cardGap = computed(() => {
   void gridContainerWidth.value
@@ -931,6 +932,24 @@ const cardWindow = useCardWindow({
   snapshot: restoredGrid?.window,
   restoreScroll: tabState?.restoreScroll,
 })
+restoredGrid = undefined
+const gridRelations = useUserRelations()
+watch(() => {
+  if (!props.moreBtn || props.isFollowingPage
+    || settings.value.videoCardContextMenuConfig?.find(item => item.key === 'followUser')?.visible === false
+    || bewlyApp?.isHomeTabSwitching.value || (tabState && !tabState.isCurrent())) {
+    return []
+  }
+  const { start, end } = cardWindow.loadingRange.value
+  const mids = new Set<number>()
+  for (let index = start; index < end; index++) {
+    const card = createRenderItem(displayItems.value[index], index)
+    const author = Array.isArray(card.video?.author) ? card.video.author[0] : card.video?.author
+    if (!card.skeleton && card.type !== 'bangumi' && author?.mid && author.followed === undefined)
+      mids.add(author.mid)
+  }
+  return [...mids]
+}, (mids) => { void gridRelations.batchQueryUserRelations(mids) }, { immediate: true, flush: 'post' })
 detachGridSnapshot = tabState?.capture(gridStateKey, (): GridSnapshot => ({
   window: cardWindow.captureSnapshot(),
   cardStates: [...cardStates],
@@ -1072,15 +1091,15 @@ function getUniqueKey(item: T, index: number): string | number {
     </Empty>
 
     <!-- 空列表 -->
-    <Empty
-      v-else-if="showEmptyState"
-      mt-6
-      :description="emptyDescription || $t('common.no_more_content')"
-    >
-      <Button type="primary" @click="handleRefresh">
-        {{ refreshButtonText || $t('common.operation.refresh') }}
-      </Button>
-    </Empty>
+    <template v-else-if="showEmptyState">
+      <slot name="empty">
+        <Empty mt-6 :description="emptyDescription || $t('common.no_more_content')">
+          <Button type="primary" @click="handleRefresh">
+            {{ refreshButtonText || $t('common.operation.refresh') }}
+          </Button>
+        </Empty>
+      </slot>
+    </template>
 
     <!-- 统一的 Grid 容器 - 保持 ref 稳定 -->
     <div

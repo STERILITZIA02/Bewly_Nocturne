@@ -6,6 +6,7 @@ import { settings } from '~/logic'
 
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
+import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
 
 function changeSearchBarFocusCharacter(url: string) {
   settings.value.searchPageSearchBarFocusCharacter = url
@@ -20,32 +21,14 @@ async function clearSearchHistory() {
   <div>
     <SettingsItemGroup :title="$t('settings.group_logo')">
       <SettingsItem :title="$t('settings.logo_color')" right-width="auto">
-        <div w="220px" flex rounded="$bew-radius" bg="$bew-fill-1" p-1>
-          <div
-            class="search-page-choice-option"
-            flex="1 ~" items-center justify-center py-1 cursor-pointer
-            text-center rounded="$bew-radius"
-            :style="{
-              background: settings.searchPageLogoColor === 'themeColor' || !settings.searchPageLogoColor ? 'var(--bew-theme-color)' : '',
-              color: settings.searchPageLogoColor === 'themeColor' || !settings.searchPageLogoColor ? 'var(--bew-on-theme-color)' : '',
-            }"
-            @click="settings.searchPageLogoColor = 'themeColor'"
-          >
-            {{ $t('settings.logo_color_opt.theme_color') }}
-          </div>
-          <div
-            class="search-page-choice-option"
-            flex="1 ~" items-center justify-center py-1 cursor-pointer
-            text-center rounded="$bew-radius"
-            :style="{
-              background: settings.searchPageLogoColor === 'white' ? 'var(--bew-theme-color)' : '',
-              color: settings.searchPageLogoColor === 'white' ? 'var(--bew-on-theme-color)' : '',
-            }"
-            @click="settings.searchPageLogoColor = 'white'"
-          >
-            {{ $t('settings.logo_color_opt.white') }}
-          </div>
-        </div>
+        <SettingsSegmentedControl
+          v-model="settings.searchPageLogoColor"
+          :label="$t('settings.logo_color')"
+          :options="[
+            { value: 'themeColor', label: $t('settings.logo_color_opt.theme_color') },
+            { value: 'white', label: $t('settings.logo_color_opt.white') },
+          ]"
+        />
       </SettingsItem>
 
       <SettingsItem :title="$t('settings.enable_logo_glowing_effect')" right-width="auto">
@@ -79,7 +62,10 @@ async function clearSearchHistory() {
       <SettingsItem :title="$t('settings.choose_search_bar_focused_character')">
         <template #bottom>
           <div grid="~ xl:cols-8 lg:cols-6 cols-5 gap-4">
-            <picture
+            <button
+              type="button"
+              :aria-label="$t('settings.no_search_character')"
+              :aria-pressed="settings.searchPageSearchBarFocusCharacter === ''"
               class="bew-settings-option--lift"
               aspect-square bg="$bew-fill-1" rounded="$bew-radius" overflow-hidden
               un-border="4 transparent" cursor-pointer
@@ -88,9 +74,12 @@ async function clearSearchHistory() {
               @click="changeSearchBarFocusCharacter('')"
             >
               <div i-tabler:photo-off text="size-$bew-icon-size-xl $bew-text-3" />
-            </picture>
+            </button>
             <Tooltip v-for="item in SEARCH_BAR_CHARACTERS" :key="item.url" placement="top" :content="item.name" aspect-square>
-              <picture
+              <button
+                type="button"
+                :aria-label="item.name"
+                :aria-pressed="settings.searchPageSearchBarFocusCharacter === item.url"
                 class="bew-settings-option--lift"
                 aspect-square bg="$bew-fill-1" rounded="$bew-radius" overflow-hidden
                 un-border="4 transparent" w-full
@@ -101,7 +90,7 @@ async function clearSearchHistory() {
                   :src="item.url" alt="" loading="lazy"
                   w-full h-full object-contain
                 >
-              </picture>
+              </button>
             </Tooltip>
           </div>
         </template>
@@ -136,49 +125,20 @@ async function clearSearchHistory() {
         <template #desc>
           <span>{{ $t('settings.search_results_pagination_mode_desc') }}</span>
         </template>
-        <div w="220px" flex rounded="$bew-radius" bg="$bew-fill-1" p-1>
-          <div
-            class="search-page-choice-option"
-            flex="1 ~" items-center justify-center py-1 cursor-pointer
-            text-center rounded="$bew-radius"
-            :style="{
-              background: settings.searchResultsPaginationMode === 'scroll' ? 'var(--bew-theme-color)' : '',
-              color: settings.searchResultsPaginationMode === 'scroll' ? 'var(--bew-on-theme-color)' : '',
-            }"
-            @click="settings.searchResultsPaginationMode = 'scroll'"
-          >
-            {{ $t('settings.search_results_pagination_mode_opt.scroll') }}
-          </div>
-          <div
-            class="search-page-choice-option"
-            flex="1 ~" items-center justify-center py-1 cursor-pointer
-            text-center rounded="$bew-radius"
-            :style="{
-              background: settings.searchResultsPaginationMode === 'pagination' ? 'var(--bew-theme-color)' : '',
-              color: settings.searchResultsPaginationMode === 'pagination' ? 'var(--bew-on-theme-color)' : '',
-            }"
-            @click="settings.searchResultsPaginationMode = 'pagination'"
-          >
-            {{ $t('settings.search_results_pagination_mode_opt.pagination') }}
-          </div>
-        </div>
+        <SettingsSegmentedControl
+          v-model="settings.searchResultsPaginationMode"
+          :label="$t('settings.search_results_pagination_mode')"
+          :options="[
+            { value: 'scroll', label: $t('settings.search_results_pagination_mode_opt.scroll') },
+            { value: 'pagination', label: $t('settings.search_results_pagination_mode_opt.pagination') },
+          ]"
+        />
       </SettingsItem>
     </SettingsItemGroup>
   </div>
 </template>
 
 <style scoped lang="scss">
-.search-page-choice-option {
-  transition:
-    filter var(--bew-duration-normal) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-normal) var(--bew-ease-standard);
-}
-
-.search-page-choice-option:hover {
-  filter: brightness(1.08);
-  box-shadow: inset 0 0 0 1px var(--bew-border-color);
-}
-
 .selected-character {
   --uno: "border-$bew-theme-foreground";
 }

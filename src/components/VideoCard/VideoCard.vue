@@ -50,7 +50,11 @@ const logic = useVideoCardLogic(props, props.persistentState)
 defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
 const { mainAppRef } = useBewlyApp()
 const { t } = useI18n()
-const { userRelations } = useUserRelations()
+const { userRelations, retainUserRelations } = useUserRelations()
+watch(() => {
+  const authors = props.video?.author
+  return (Array.isArray(authors) ? authors : [authors]).flatMap(author => author?.mid ? [author.mid] : [])
+}, retainUserRelations, { immediate: true })
 const relationVideo = computed(() => {
   const video = props.video
   if (!video?.author)
@@ -474,6 +478,13 @@ provide('getVideoType', () => props.type!)
 </template>
 
 <style lang="scss" scoped>
+.video-card:focus-within :deep(.video-card-watch-later) {
+  opacity: 1;
+  pointer-events: auto;
+  transform: none;
+  transition: none;
+}
+
 /* ✅ 性能优化：移除Container Query，减少11,206个容器的查询计算开销 */
 .video-card-container {
   /* ❌ 移除 container-type 和 container-name，避免大规模容器查询计算 */

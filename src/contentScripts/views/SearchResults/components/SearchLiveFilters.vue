@@ -32,12 +32,16 @@ function handleSubCategoryChange(value: LiveSubCategory) {
 <template>
   <div class="search-live-filters" mb-4>
     <!-- 子分类切换 -->
-    <div flex items-center gap-2 flex-wrap>
+    <div
+      flex items-center gap-2 flex-wrap role="group"
+      :aria-label="t('search.categories.live')"
+    >
       <button
         v-for="category in subCategories"
         :key="category.value"
         class="sub-category-tab"
         :class="{ active: props.subCategory === category.value }"
+        :aria-pressed="props.subCategory === category.value"
         px-4 py-2 rounded="$bew-radius-half"
         transition-colors duration-200
         hover:bg="$bew-fill-1"

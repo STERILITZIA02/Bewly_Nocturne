@@ -12,6 +12,7 @@ export async function getManifest() {
   // can also be conditional based on your need
   const manifest: Manifest.WebExtensionManifest = {
     manifest_version: 3,
+    incognito: 'split',
     name: `${pkg.displayName || pkg.name}${isDev ? ' Dev' : ''}`,
     version: pkg.version,
     description: pkg.description,
@@ -27,6 +28,7 @@ export async function getManifest() {
     },
     permissions: [
       'storage',
+      'alarms',
       'declarativeNetRequest',
       'cookies',
       ...(!isSafari ? ['scripting'] : []),

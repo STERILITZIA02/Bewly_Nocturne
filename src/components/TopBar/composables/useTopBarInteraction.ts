@@ -1,7 +1,7 @@
 import type { MaybeElement } from '@vueuse/core'
 import { unrefElement } from '@vueuse/core'
 import type { Ref } from 'vue'
-import { computed, onScopeDispose, ref, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 
 import {
   ACCOUNT_URL,
@@ -17,7 +17,8 @@ import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
-import { isHomePage } from '~/utils/main'
+import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
+import { isHomePage, isInIframe } from '~/utils/main'
 import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
@@ -43,6 +44,9 @@ const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, AppPage>> = {
 interface TopBarHoverController {
   triggerHovered: boolean
   popupHovered: boolean
+  keyboardOpen: boolean
+  instantOpen: boolean
+  popupElement?: HTMLElement
   enterTimer?: ReturnType<typeof setTimeout>
   leaveTimer?: ReturnType<typeof setTimeout>
 }
@@ -64,6 +68,8 @@ export function resetTopBarTransientInteraction() {
     clearControllerTimers(controller)
     controller.triggerHovered = false
     controller.popupHovered = false
+    controller.keyboardOpen = false
+    controller.instantOpen = false
   })
   transientResetters.forEach(reset => reset())
 }
@@ -148,6 +154,8 @@ export function useTopBarInteraction() {
     const controller: TopBarHoverController = {
       triggerHovered: false,
       popupHovered: false,
+      keyboardOpen: false,
+      instantOpen: false,
       enterTimer: undefined,
       leaveTimer: undefined,
     }
@@ -168,15 +176,19 @@ export function useTopBarInteraction() {
 
     function handleTriggerEnter() {
       controller.triggerHovered = true
+      if (controller.keyboardOpen)
+        return
       clearOtherHoverTimers(key)
       clearLeaveTimer()
       clearEnterTimer()
+      const browsingPopups = Object.values(topBarStore.popupVisible).some(Boolean)
+      controller.instantOpen = browsingPopups
       closeAllPopups(key)
       controller.enterTimer = setTimeout(() => {
         controller.enterTimer = undefined
         if (controller.triggerHovered)
           topBarStore.popupVisible[key] = true
-      }, 320)
+      }, browsingPopups ? 0 : 320)
     }
 
     function scheduleClose() {
@@ -184,7 +196,7 @@ export function useTopBarInteraction() {
       clearLeaveTimer()
       controller.leaveTimer = setTimeout(() => {
         controller.leaveTimer = undefined
-        if (!controller.triggerHovered && !controller.popupHovered)
+        if (!controller.triggerHovered && !controller.popupHovered && !controller.keyboardOpen)
           topBarStore.popupVisible[key] = false
       }, 320)
     }
@@ -194,8 +206,73 @@ export function useTopBarInteraction() {
       scheduleClose()
     }
 
+    function getTrigger(): HTMLElement | null {
+      return unrefElement(element)?.querySelector<HTMLElement>('.top-bar-trigger, .logo') ?? null
+    }
+
+    function focusPopup() {
+      if (!controller.keyboardOpen || !topBarStore.popupVisible[key])
+        return
+      const popup = controller.popupElement
+      const firstControl = popup?.querySelector<HTMLElement>('a[href], button:not([disabled]), input:not([disabled]), [tabindex="0"]')
+      ;(firstControl ?? popup)?.focus({ preventScroll: true })
+    }
+
+    function handleKeydown(event: Event) {
+      const keyboardEvent = event as KeyboardEvent
+      if (keyboardEvent.defaultPrevented)
+        return
+      if (keyboardEvent.key === 'Escape' && topBarStore.popupVisible[key]) {
+        keyboardEvent.preventDefault()
+        keyboardEvent.stopPropagation()
+        clearControllerTimers(controller)
+        controller.keyboardOpen = false
+        topBarStore.popupVisible[key] = false
+        getTrigger()?.focus({ preventScroll: true })
+      }
+      else if (keyboardEvent.target === getTrigger() && (
+        keyboardEvent.key === 'ArrowDown'
+        || keyboardEvent.key === 'ArrowUp'
+        || (key === 'more' && ['Enter', ' '].includes(keyboardEvent.key))
+      )) {
+        keyboardEvent.preventDefault()
+        keyboardEvent.stopPropagation()
+        clearOtherHoverTimers()
+        clearControllerTimers(controller)
+        closeAllPopups(key)
+        controller.keyboardOpen = true
+        controller.instantOpen = true
+        topBarStore.popupVisible[key] = true
+        void nextTick(focusPopup)
+      }
+    }
+
+    function handleFocusOut(event: Event) {
+      const nextTarget = (event as FocusEvent).relatedTarget
+      if (nextTarget instanceof Node && unrefElement(element)?.contains(nextTarget))
+        return
+      if (controller.keyboardOpen) {
+        controller.keyboardOpen = false
+        topBarStore.popupVisible[key] = false
+      }
+    }
+
+    watch(() => topBarStore.popupVisible[key], (visible) => {
+      getTrigger()?.setAttribute('aria-expanded', String(visible))
+      if (!visible)
+        controller.keyboardOpen = false
+      if (controller.popupElement)
+        controller.popupElement.dataset.instant = String(controller.instantOpen)
+    }, { flush: 'sync' })
+
     watch([element, () => settings.value.touchScreenOptimization], ([target, touchOptimized], _, onCleanup) => {
       const triggerElement = unrefElement(target)
+      const trigger = getTrigger()
+      trigger?.setAttribute('aria-expanded', String(Boolean(topBarStore.popupVisible[key])))
+      trigger?.setAttribute('aria-controls', `bew-topbar-popup-${key}`)
+      trigger?.setAttribute('aria-keyshortcuts', 'ArrowDown ArrowUp')
+      triggerElement?.addEventListener('keydown', handleKeydown)
+      triggerElement?.addEventListener('focusout', handleFocusOut)
       if (!triggerElement)
         topBarStore.popupVisible[key] = false
       if (triggerElement && !touchOptimized) {
@@ -205,8 +282,11 @@ export function useTopBarInteraction() {
       onCleanup(() => {
         triggerElement?.removeEventListener('mouseenter', handleTriggerEnter)
         triggerElement?.removeEventListener('mouseleave', handleTriggerLeave)
+        triggerElement?.removeEventListener('keydown', handleKeydown)
+        triggerElement?.removeEventListener('focusout', handleFocusOut)
         controller.triggerHovered = false
         controller.popupHovered = false
+        controller.keyboardOpen = false
         clearEnterTimer()
         clearLeaveTimer()
         topBarStore.popupVisible[key] = false
@@ -249,13 +329,19 @@ export function useTopBarInteraction() {
       clearLeaveTimer()
       activeController.leaveTimer = setTimeout(() => {
         activeController.leaveTimer = undefined
-        if (!activeController.triggerHovered && !activeController.popupHovered)
+        if (!activeController.triggerHovered && !activeController.popupHovered && !activeController.keyboardOpen)
           topBarStore.popupVisible[key] = false
       }, 320)
     }
 
     watch([popupRef, () => settings.value.touchScreenOptimization], ([target, touchOptimized], _, onCleanup) => {
       const popupElement = unrefElement(target)
+      if (popupElement instanceof HTMLElement) {
+        activeController.popupElement = popupElement
+        popupElement.id = `bew-topbar-popup-${key}`
+        popupElement.tabIndex = -1
+        popupElement.dataset.instant = String(activeController.instantOpen)
+      }
       if (popupElement && !touchOptimized) {
         popupElement.addEventListener('mouseenter', handlePopupEnter)
         popupElement.addEventListener('mouseleave', handlePopupLeave)
@@ -263,6 +349,7 @@ export function useTopBarInteraction() {
       onCleanup(() => {
         popupElement?.removeEventListener('mouseenter', handlePopupEnter)
         popupElement?.removeEventListener('mouseleave', handlePopupLeave)
+        activeController.popupElement = undefined
         const hadPopupInteraction = activeController.popupHovered
         activeController.popupHovered = false
         clearLeaveTimer()
@@ -282,7 +369,7 @@ export function useTopBarInteraction() {
   // 处理顶栏项点击
   function openConfiguredPageFromTopBar(page: AppPage) {
     const pageUrl = `https://www.bilibili.com/?page=${page}`
-    const openMode = settings.value.topBarLinkOpenMode
+    const openMode = resolveConfiguredLinkAction(settings.value.topBarLinkOpenMode, location.href, activatedPage.value)
 
     if (openMode === 'background') {
       resetTopBarTransientInteraction()
@@ -290,12 +377,16 @@ export function useTopBarInteraction() {
       return
     }
 
-    if (openMode === 'newTab' || (openMode === 'currentTabIfNotHomepage' && isHomePage())) {
+    if (openMode === 'newTab') {
       resetTopBarTransientInteraction()
       window.open(pageUrl, '_blank')
       return
     }
 
+    if (isInIframe()) {
+      window.open(pageUrl, '_top')
+      return
+    }
     if (isHomePage()) {
       // activatedPage 会读取同一项 Dock 配置，决定显示 Bewly 页面还是原版 Bilibili 页面。
       activatedPage.value = page

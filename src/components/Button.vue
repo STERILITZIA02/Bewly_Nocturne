@@ -155,4 +155,14 @@ function handleClick(evt: MouseEvent) {
     --b-button-font-weight: var(--bew-font-weight-bold);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .b-button {
+    transition-property: color, background-color, border-color, box-shadow, opacity;
+
+    &:active {
+      transform: none;
+    }
+  }
+}
 </style>

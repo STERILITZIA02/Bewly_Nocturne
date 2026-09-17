@@ -29,8 +29,16 @@ function node(type: string, text = ''): HostNode {
 // Vue's real setup/watch/unmount lifecycle, with an in-memory renderer. This
 // verifies state retention without claiming browser layout or visual coverage.
 export async function verifyMomentCommentLifecycle() {
+  let measureCommentList = false
   const renderer = vue.createRenderer<HostNode, HostNode>({
-    createElement: type => node(type),
+    createElement: (type) => {
+      const element = node(type)
+      Object.defineProperties(element, {
+        clientHeight: { get: () => measureCommentList && element.props.class === 'moment-comments__list' ? 500 : 0 },
+        scrollHeight: { get: () => 200 },
+      })
+      return element
+    },
     createText: text => node('#text', text),
     createComment: text => node('#comment', text),
     setText: (element, text) => element.text = text,
@@ -82,6 +90,7 @@ export async function verifyMomentCommentLifecycle() {
   let likeRequests = 0
   const delayedPages: Array<{ sort: number, resolve: (value: unknown) => void }> = []
   let delayPages = false
+  const requestedPages: number[] = []
   const momentApi = {
     getMomentDetail: async () => {
       detailRequests += 1
@@ -89,6 +98,7 @@ export async function verifyMomentCommentLifecycle() {
     },
     getMomentComments: async ({ pn, sort }: { pn: number, sort: number }) => {
       rootRequests += 1
+      requestedPages.push(pn)
       if (delayPages)
         return new Promise(resolve => delayedPages.push({ sort, resolve }))
       return { code: 0, data: { page: { num: pn, count: 40, size: 8 }, replies: [fixtureComment(pn === 1 ? '100' : '200')] } }
@@ -117,6 +127,7 @@ export async function verifyMomentCommentLifecycle() {
     '~/utils/momentCommentTarget': targets,
     '~/utils/momentCommentThread': threads,
     './commentUtils': commentUtils,
+    './commentThreadLayout': await import('../src/components/MomentCard/commentThreadLayout'),
     './utils': { getAvatarThumbnailUrl: (url: string) => url },
     './MomentCommentMedia.vue': { default: { render: () => vue.h('span') } },
     './MomentCommentRichText.vue': { default: { render: () => vue.h('span') } },
@@ -125,7 +136,7 @@ export async function verifyMomentCommentLifecycle() {
   const evaluate = (source: string) => {
     const exports: Record<string, any> = {}
     const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
-    vm.runInNewContext(code, { exports, Error, require: (name: string) => {
+    vm.runInNewContext(code, { exports, Error, document: { hidden: false }, require: (name: string) => {
       assert.ok(name in mockModules, `Unexpected module: ${name}`)
       return mockModules[name]
     } })
@@ -142,6 +153,7 @@ export async function verifyMomentCommentLifecycle() {
   const mount = () => {
     const app = renderer.createApp({ setup: () => () => vue.h(component, { moment: moment.value }) })
     app.component('SkeletonBlock', SkeletonBlock)
+    app.component('IconButton', vue.defineComponent({ setup: (_props, { attrs, slots }) => () => vue.h('button', attrs, slots.default?.()) }))
     app.provide(sessions.MOMENT_COMMENT_SESSIONS, cache)
     app.mount(host)
     return app
@@ -234,5 +246,21 @@ export async function verifyMomentCommentLifecycle() {
   moment.value = { ...moment.value, id: '456', commentId: undefined, commentType: undefined }
   await flush()
   assert.equal(detailRequests, 1, 'missing target resolves through detail before loading comments')
+  measureCommentList = true
+  const beforeFill = rootRequests
+  moment.value = { ...moment.value, id: '789', commentId: '1000', commentType: 17 }
+  await flush()
+  await flush()
+  for (let turn = 0; turn < 10 && !findClass('moment-comments__pagination-error'); turn++)
+    await flush()
+  assert.equal(rootRequests - beforeFill, 3, 'short first page fills the viewport, but the duplicate third page stops automatic loading')
+  assert.ok(findClass('moment-comments__pagination-error'))
+  await findClass('moment-comments__list').props.onScrollPassive()
+  await flush()
+  assert.equal(rootRequests - beforeFill, 3, 'a stalled cursor is not retried by scrolling')
+  measureCommentList = false
+  await findClass('moment-comments__pagination-error').children.find(child => child.type === 'button')!.props.onClick()
+  await flush()
+  assert.equal(requestedPages.at(-1), 3, 'manual retry uses the stalled page, not a skipped page')
   app.unmount()
 }

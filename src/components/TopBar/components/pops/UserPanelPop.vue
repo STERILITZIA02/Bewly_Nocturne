@@ -8,9 +8,11 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
+import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON, LV6_LIGHTNING_ICON } from '~/utils/lvIcons'
-import { getCSRF, isHomePage } from '~/utils/main'
+import { getCSRF } from '~/utils/main'
+import { openLinkInBackground } from '~/utils/tabs'
 
 import type { UserInfo, UserStat } from '../../types'
 
@@ -193,22 +195,14 @@ function getLvIcon(level: number, isSigma: boolean = false): string {
 }
 
 function handleClickChannel() {
-  if (settings.value.topBarLinkOpenMode === 'newTab') {
+  const url = `https://space.bilibili.com/${mid.value}`
+  const action = resolveConfiguredLinkAction(settings.value.topBarLinkOpenMode, location.href)
+  if (action === 'newTab' || action === 'background')
     resetTopBarTransientInteraction()
-    window.open(`https://space.bilibili.com/${mid.value}`, '_blank')
-  }
-  else if (settings.value.topBarLinkOpenMode === 'currentTabIfNotHomepage') {
-    if (isHomePage()) {
-      resetTopBarTransientInteraction()
-      window.open(`https://space.bilibili.com/${mid.value}`, '_blank')
-    }
-    else {
-      window.open(`https://space.bilibili.com/${mid.value}`, '_self')
-    }
-  }
-  else {
-    window.open(`https://space.bilibili.com/${mid.value}`, '_self')
-  }
+  if (action === 'background')
+    void openLinkInBackground(url)
+  else
+    window.open(url, action === 'newTab' ? '_blank' : '_top')
 }
 </script>
 

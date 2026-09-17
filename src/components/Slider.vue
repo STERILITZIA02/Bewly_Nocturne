@@ -8,6 +8,7 @@ interface Props {
   step?: number | string
   modelValue: number
   label: string
+  accessibleLabel?: string
 }
 const props = withDefaults(defineProps<Props>(), {
   min: 0,
@@ -38,7 +39,8 @@ const sliderStyle = computed(() => ({
       :min="min"
       :max="max"
       :step="step"
-      :aria-labelledby="fieldLabelId"
+      :aria-label="accessibleLabel"
+      :aria-labelledby="accessibleLabel ? undefined : fieldLabelId"
       :style="sliderStyle"
       class="slider"
       appearance-none outline-none rounded="$b-slider-height"
@@ -58,7 +60,12 @@ label {
 }
 
 .slider {
-  background: linear-gradient(
+  // The gradient uses the padding box. Repeating it into the border box paints
+  // a second strip of theme color at the far end of the otherwise empty track.
+  background-repeat: no-repeat;
+  background-clip: padding-box;
+  corner-shape: var(--bew-corner-shape-round);
+  background-image: linear-gradient(
     to right,
     var(--bew-theme-color) 0,
     var(--bew-theme-color) var(--slider-progress),

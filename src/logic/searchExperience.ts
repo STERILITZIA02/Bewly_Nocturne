@@ -1,8 +1,10 @@
 import type { MaybeRefOrGetter } from 'vue'
 import { readonly, ref, shallowRef, toValue, watch } from 'vue'
 
+import type { SearchRecommendationItem } from '~/models/search/defaultRecommendation'
 import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
+import { getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 export interface HotSearchItem {
@@ -11,16 +13,7 @@ export interface HotSearchItem {
   icon: string
 }
 
-export interface SearchRecommendationItem {
-  seid: string
-  id: number
-  type: number
-  show_name: string
-  name: string
-  goto_type: number
-  goto_value: string
-  url: string
-}
+export type { SearchRecommendationItem } from '~/models/search/defaultRecommendation'
 
 interface SearchExperienceInterest {
   hotSearch: MaybeRefOrGetter<boolean>
@@ -43,13 +36,16 @@ let refreshTimer: ReturnType<typeof setTimeout> | undefined
 let hotSearchConsumerCount = 0
 let recommendationConsumerCount = 0
 let extensionContextInvalidated = false
+let recommendationGeneration = 0
+let hotSearchGeneration = 0
+let recommendationAccount: string | undefined
 
 function hasConsumers() {
   return hotSearchConsumerCount > 0 || recommendationConsumerCount > 0
 }
 
 export async function loadSharedHotSearch(force = false): Promise<void> {
-  if (extensionContextInvalidated || hotSearchConsumerCount === 0)
+  if (extensionContextInvalidated || hotSearchConsumerCount === 0 || document.hidden)
     return
   if (!force && hotSearchList.value.length > 0 && Date.now() - hotSearchUpdatedAt < CACHE_TTL_MS)
     return
@@ -57,9 +53,10 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
     return hotSearchRequest
 
   isLoadingHotSearch.value = true
+  const generation = hotSearchGeneration
   hotSearchRequest = api.search.getHotSearchList({ limit: 10 })
     .then((response) => {
-      if (response?.code === 0 && Array.isArray(response.data?.trending?.list)) {
+      if (generation === hotSearchGeneration && hotSearchConsumerCount > 0 && response?.code === 0 && Array.isArray(response.data?.trending?.list)) {
         hotSearchList.value = response.data.trending.list.slice(0, 10)
         hotSearchUpdatedAt = Date.now()
       }
@@ -68,22 +65,31 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
     .finally(() => {
       hotSearchRequest = null
       isLoadingHotSearch.value = false
+      if (generation !== hotSearchGeneration && hotSearchConsumerCount > 0)
+        void loadSharedHotSearch()
     })
   return hotSearchRequest
 }
 
 export async function loadSharedSearchRecommendation(force = false): Promise<void> {
-  if (extensionContextInvalidated || recommendationConsumerCount === 0)
+  if (extensionContextInvalidated || recommendationConsumerCount === 0 || document.hidden)
     return
+  const account = getUserID()
+  if (account !== recommendationAccount) {
+    recommendationAccount = account
+    recommendationUpdatedAt = 0
+    searchRecommendation.value = null
+  }
   if (!force && searchRecommendation.value && Date.now() - recommendationUpdatedAt < CACHE_TTL_MS)
     return
   if (recommendationRequest)
     return recommendationRequest
 
   isLoadingSearchRecommendation.value = true
+  const generation = recommendationGeneration
   recommendationRequest = api.search.getDefaultSearchRecommendation()
     .then((response) => {
-      if (response?.code === 0 && response.data) {
+      if (generation === recommendationGeneration && account === getUserID() && recommendationConsumerCount > 0 && response?.code === 0 && response.data) {
         searchRecommendation.value = response.data
         recommendationUpdatedAt = Date.now()
       }
@@ -92,6 +98,8 @@ export async function loadSharedSearchRecommendation(force = false): Promise<voi
     .finally(() => {
       recommendationRequest = null
       isLoadingSearchRecommendation.value = false
+      if ((generation !== recommendationGeneration || account !== getUserID()) && recommendationConsumerCount > 0)
+        void loadSharedSearchRecommendation()
     })
   return recommendationRequest
 }
@@ -131,15 +139,23 @@ function scheduleRefresh() {
 }
 
 function handleVisibilityChange() {
-  if (document.hidden)
+  if (document.hidden) {
     clearRefreshTimer()
-  else
+  }
+  else {
+    void loadSharedHotSearch()
+    void loadSharedSearchRecommendation()
     scheduleRefresh()
+  }
 }
 
 function updateConsumerCounts(previous: { hotSearch: boolean, recommendation: boolean }, next: typeof previous) {
   hotSearchConsumerCount += Number(next.hotSearch) - Number(previous.hotSearch)
   recommendationConsumerCount += Number(next.recommendation) - Number(previous.recommendation)
+  if (hotSearchConsumerCount === 0)
+    hotSearchGeneration++
+  if (recommendationConsumerCount === 0)
+    recommendationGeneration++
 
   if (!previous.hotSearch && next.hotSearch)
     void loadSharedHotSearch()

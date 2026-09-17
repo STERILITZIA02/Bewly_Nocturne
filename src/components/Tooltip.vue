@@ -1,3 +1,7 @@
+<script lang="ts">
+let tooltipWarmUntil = 0
+</script>
+
 <script lang="ts" setup>
 defineProps<{
   content: string
@@ -5,23 +9,52 @@ defineProps<{
   type?: 'default' | 'dark' | 'white'
 }>()
 
-const tooltipPos = ref({ left: 0, top: 0 })
-const tooltipRef = ref(null)
+const wrapperRef = ref<HTMLElement>()
+const visible = ref(false)
+const instant = ref(false)
+let enterTimer: ReturnType<typeof setTimeout> | undefined
+
+function showTooltip(keyboard = false) {
+  clearTimeout(enterTimer)
+  instant.value = keyboard || Date.now() < tooltipWarmUntil
+  if (instant.value) {
+    visible.value = true
+    return
+  }
+  enterTimer = setTimeout(() => {
+    enterTimer = undefined
+    visible.value = true
+  }, 320)
+}
+
+function hideTooltip() {
+  if (wrapperRef.value?.matches(':focus-within'))
+    return
+  clearTimeout(enterTimer)
+  enterTimer = undefined
+  if (visible.value)
+    tooltipWarmUntil = Date.now() + 500
+  visible.value = false
+}
+
+onBeforeUnmount(() => clearTimeout(enterTimer))
 </script>
 
 <template>
   <span
+    ref="wrapperRef"
     class="b-tooltip-wrapper"
-    :style="{
-      top: `${tooltipPos.top}px`,
-      left: `${tooltipPos.left}px`,
-    }"
+    @mouseenter="showTooltip()"
+    @mouseleave="hideTooltip"
+    @focusin="showTooltip(true)"
+    @focusout="hideTooltip"
   >
     <div
       v-if="content"
-      ref="tooltipRef"
       class="b-tooltip"
-      :class="[`b-tooltip--placement-${placement ?? 'top'}`, `b-tooltip--type-${type ?? 'default'}`]"
+      role="tooltip"
+      :aria-hidden="!visible"
+      :class="[`b-tooltip--placement-${placement ?? 'top'}`, `b-tooltip--type-${type ?? 'default'}`, { 'is-visible': visible, 'is-instant': instant }]"
     >
       {{ content }}
     </div>
@@ -34,7 +67,12 @@ const tooltipRef = ref(null)
   --uno: "flex items-center relative";
 
   .b-tooltip {
-    --uno: "absolute px-2 rounded-$bew-radius-half pointer-events-none opacity-0 duration-300 shadow-$bew-shadow-2 whitespace-nowrap";
+    --uno: "absolute px-2 rounded-$bew-radius-half pointer-events-none opacity-0 shadow-$bew-shadow-2 whitespace-nowrap";
+    transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+
+    &.is-instant {
+      transition: none;
+    }
 
     z-index: var(--bew-z-popover);
     padding-block: var(--bew-space-1);
@@ -81,8 +119,7 @@ const tooltipRef = ref(null)
     }
   }
 
-  &:hover .b-tooltip,
-  &:focus-within .b-tooltip {
+  .b-tooltip.is-visible {
     --uno: "opacity-100";
   }
 }

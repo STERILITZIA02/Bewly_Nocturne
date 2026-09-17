@@ -1,7 +1,7 @@
 import type { ComponentPublicInstance } from 'vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReadonly, shallowRef } from 'vue'
 
-import type { DisplayMoment } from '~/components/MomentCard/types'
+import type { DisplayMoment, WatchLaterTarget } from '~/components/MomentCard/types'
 import { getMomentOriginalImageUrl } from '~/components/MomentCard/utils'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
@@ -9,14 +9,16 @@ import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
 import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { executeResolvedLinkAction, resolveLinkOpenAction } from '~/utils/linkNavigation'
+import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
 import { releaseIframeMedia } from '~/utils/mediaResources'
-import { normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
+import { isMomentVideoUrl, normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
 import { openLinkInBackground } from '~/utils/tabs'
-import { recordVideoVisit } from '~/utils/videoVisitHistory'
+import { recordVideoVisit, recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 
 /** Owns the detail frame, gallery, focus and navigation lifecycle. */
 export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number, beforeOpen: () => void) {
-  const { mainAppRef } = useBewlyApp()
+  const { mainAppRef, openIframeDrawer } = useBewlyApp()
   let disposed = false
   const selectedMoment = ref<DisplayMoment | null>(null)
   const detailFrameUrl = ref('')
@@ -508,12 +510,27 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     }
   }
 
+  function openVideoLink(url: string, media?: WatchLaterTarget) {
+    if (disposed || !isMomentVideoUrl(url))
+      return
+    if (media)
+      recordVideoVisit(media)
+    else
+      recordVideoVisitFromUrl(url)
+    beforeOpen()
+    executeResolvedLinkAction(resolveLinkOpenAction(settings.value.videoCardLinkOpenMode, { isHomepage: isHomePage(), inIframe: isInIframe() }), url, {
+      currentTab: target => window.location.assign(target),
+      newTab: openLinkToNewTab,
+      background: target => void openLinkInBackground(target),
+      drawer: openIframeDrawer,
+    })
+  }
+
   function openMomentDetail(moment: DisplayMoment, forceDialog = false) {
     if (disposed)
       return
     if (moment.isVideo && !moment.isLive) {
-      recordVideoVisit(moment)
-      openMomentInNewTab(moment)
+      openVideoLink(resolveVideoUrl(moment), moment)
       return
     }
 
@@ -706,6 +723,7 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     handleDetailImageViewerKeydown,
     openDetailFrameInNewTab,
     openMomentDetail,
+    openVideoLink,
     handleDetailIframeLoad,
     closeMomentDetail,
     updateMoment(moment: DisplayMoment) { selectedMoment.value = moment },

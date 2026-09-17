@@ -377,11 +377,16 @@ defineExpose({
           <li
             v-for="item in favoriteCategories"
             :key="item.id"
-            :class="activatedMediaId === item.id ? 'activated-category' : ''"
-            class="favorites-pop__category"
-            @click="changeCategory(item)"
           >
-            {{ item.title }}
+            <button
+              type="button"
+              :class="{ 'activated-category': activatedMediaId === item.id }"
+              class="favorites-pop__category"
+              :aria-pressed="activatedMediaId === item.id"
+              @click="changeCategory(item)"
+            >
+              {{ item.title }}
+            </button>
           </li>
         </ul>
       </aside>
@@ -494,6 +499,8 @@ defineExpose({
 }
 
 .favorites-pop__category {
+  width: 100%;
+  text-align: left;
   min-height: var(--bew-control-height);
   padding: var(--bew-space-2) var(--bew-space-3);
   overflow: hidden;

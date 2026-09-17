@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onClickOutside } from '@vueuse/core'
+import { onClickOutside, useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import { PRIVATE_MESSAGE_IMAGE_ACCEPT, validatePrivateMessageImage } from '~/utils/privateMessageImage'
@@ -32,6 +32,16 @@ const emit = defineEmits<{
 
 const { locale, t } = useI18n()
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
+const multiline = ref(false)
+useResizeObserver(textareaRef, () => {
+  const input = textareaRef.value
+  if (!input)
+    return
+  const style = getComputedStyle(input)
+  const singleLineHeight = Number.parseFloat(style.lineHeight)
+    + Number.parseFloat(style.paddingTop) + Number.parseFloat(style.paddingBottom)
+  multiline.value = input.clientHeight > singleLineHeight + 1
+})
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const emoteControlRef = ref<HTMLElement | null>(null)
 const isComposing = ref(false)
@@ -175,6 +185,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 <template>
   <form
     class="message-composer"
+    :data-expanded="multiline || Boolean(imageDraft) || Boolean(imageValidationError)"
     @keydown.esc.stop="closeEmotePicker"
     @submit.prevent="submitCurrent"
   >
@@ -256,32 +267,33 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         </IconButton>
       </Tooltip>
 
-      <textarea
-        ref="textareaRef"
-        class="message-composer__input"
-        :value="modelValue"
-        :placeholder="t('notifications.whisper.messages.composer_placeholder')"
-        :aria-label="t('notifications.whisper.messages.composer_aria')"
-        rows="2"
-        @input="updateValue"
-        @keydown="handleKeydown"
-        @compositionstart="isComposing = true"
-        @compositionend="isComposing = false"
-        @paste="handlePaste"
-      />
+      <div class="message-composer__inputbar" :class="{ 'is-multiline': multiline }">
+        <textarea
+          ref="textareaRef"
+          class="message-composer__input"
+          :value="modelValue"
+          :placeholder="t('notifications.whisper.messages.composer_placeholder')"
+          :aria-label="t('notifications.whisper.messages.composer_aria')"
+          rows="1"
+          @input="updateValue"
+          @keydown="handleKeydown"
+          @compositionstart="isComposing = true"
+          @compositionend="isComposing = false"
+          @paste="handlePaste"
+        />
 
-      <Tooltip :content="t('notifications.whisper.messages.send')" placement="top">
-        <IconButton
-          class="message-composer__action message-composer__send"
-          shape="circle"
-          :label="t('notifications.whisper.messages.send')"
+        <Button
+          class="message-composer__send"
+          type="primary"
+          round
           :disabled="!canSubmit"
+          :aria-busy="sending"
           @click="submitCurrent"
         >
           <SkeletonBlock v-if="sending" width="1em" height="1em" radius="interactive" />
-          <i v-else i-mingcute:send-plane-line aria-hidden="true" />
-        </IconButton>
-      </Tooltip>
+          {{ t('notifications.whisper.messages.send') }}
+        </Button>
+      </div>
     </div>
   </form>
 </template>
@@ -299,17 +311,21 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   flex: 1 1 auto;
   width: 100%;
   min-width: 0;
+  height: auto;
+  min-height: var(--bew-control-height);
   max-height: calc(var(--bew-space-12) * 2);
-  padding: var(--bew-space-2) var(--bew-space-3);
+  padding: calc((var(--bew-control-height) - var(--bew-line-height-control)) / 2) var(--bew-space-2);
+  field-sizing: content;
   resize: none;
   color: var(--bew-text-1);
-  font: inherit;
-  line-height: var(--bew-line-height-body);
-  background: var(--bew-content-solid);
-  border: 1px solid transparent;
-  /* Inset by space-2 inside the same modal-radius shell as the playback bar. */
-  border-radius: var(--bew-radius-xl);
-  corner-shape: var(--bew-corner-shape);
+  font-family: var(--bew-font-family);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-control);
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
 }
 
 .message-composer__error {
@@ -374,8 +390,44 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 }
 
 .message-composer__input:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
-  outline-offset: var(--bew-space-0-5);
+  /* The whole input bar provides the shared focus ring. */
+  outline: none;
+}
+
+.message-composer__inputbar {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  min-width: 0;
+  min-height: calc(var(--bew-control-height) + var(--bew-space-2));
+  padding: var(--bew-space-1);
+  gap: var(--bew-space-1);
+  box-sizing: border-box;
+  background: var(--bew-elevated-alt-solid);
+  border-radius: calc((var(--bew-control-height) + var(--bew-space-2)) / 2);
+  corner-shape: var(--bew-corner-shape-round);
+  transition:
+    border-radius var(--bew-duration-normal) var(--bew-ease-standard),
+    corner-shape var(--bew-duration-normal) var(--bew-ease-standard),
+    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.message-composer__inputbar.is-multiline {
+  border-radius: var(--bew-radius-xl);
+  corner-shape: var(--bew-corner-shape);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-composer__inputbar {
+    transition: none;
+  }
+}
+
+.message-composer__inputbar:focus-within {
+  box-shadow:
+    0 0 0 var(--bew-space-0-5) var(--bew-theme-focus-ring),
+    var(--bew-shadow-2),
+    var(--bew-shadow-edge-glow-1);
 }
 
 .message-composer__actions {
@@ -391,6 +443,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 }
 
 .message-composer__action {
+  flex: 0 0 auto;
   width: var(--bew-control-height);
   height: var(--bew-control-height);
   color: var(--bew-text-2);
@@ -407,6 +460,10 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 }
 
 .message-composer__send {
+  flex: 0 0 auto;
+  min-width: var(--bew-space-12);
+  height: var(--bew-control-height);
+  padding: 0 var(--bew-space-3);
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
 }

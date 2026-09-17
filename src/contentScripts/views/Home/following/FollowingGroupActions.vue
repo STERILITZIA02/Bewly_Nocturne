@@ -234,7 +234,7 @@ watch(() => props.accountId, () => {
   target.value = undefined
 })
 onBeforeUnmount(() => contextAbort.abort())
-defineExpose({ openUploader, openGroup, create })
+defineExpose({ openUploader, openGroup, create, interactionActive: computed(() => Boolean(menu.value || form.value || confirmPending.value)) })
 </script>
 
 <template>

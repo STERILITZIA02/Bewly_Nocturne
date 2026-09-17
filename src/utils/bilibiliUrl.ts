@@ -34,6 +34,19 @@ const COMMON_TRACKING_PARAMS = new Set([
   'visit_id',
 ])
 
+/** Bilibili's image CDN supports HTTPS; normalize before assigning a resource URL. */
+export function normalizeBilibiliImageUrl(value: string): string {
+  if (!/^(?:http:)?\/\//i.test(value))
+    return value
+  try {
+    const url = new URL(value.startsWith('//') ? `https:${value}` : value)
+    if (url.hostname === 'hdslb.com' || url.hostname.endsWith('.hdslb.com'))
+      return value.startsWith('//') ? `https:${value}` : value.replace(/^http:/i, 'https:')
+  }
+  catch { /* Keep the caller's existing failure/fallback path for malformed URLs. */ }
+  return value
+}
+
 const VIDEO_TRACKING_PARAMS = new Set([
   'buvid',
   'mid',

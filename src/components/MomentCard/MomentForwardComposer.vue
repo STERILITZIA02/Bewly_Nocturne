@@ -5,8 +5,9 @@ import { useToast } from 'vue-toastification'
 
 import { useTopBarStore } from '~/stores/topBarStore'
 
-import type { MomentForwardEmote, SelectedMomentTopic } from './momentForwardContent'
+import type { MomentForwardEmote, MomentForwardToken, SelectedMomentTopic } from './momentForwardContent'
 import {
+  findMomentForwardCompletion,
   insertMomentForwardEmoji,
   momentForwardTokensToText,
   parseMomentForwardTokens,
@@ -35,6 +36,8 @@ const accountId = computed(() => topBarStore.isLogin ? topBarStore.userInfo.mid 
 const textareaRef = ref<HTMLTextAreaElement | null>(null)
 const emojiPickerOpen = ref(false)
 const topicPickerOpen = ref(false)
+const completion = ref<ReturnType<typeof findMomentForwardCompletion>>(null)
+const completionPickerRef = ref<InstanceType<typeof MomentForwardTopicPicker>>()
 
 const {
   state,
@@ -54,25 +57,60 @@ const {
 const knownEmojiTexts = ref(new Set(
   state.tokens.filter(token => token.type === 'emoji').map(token => token.text),
 ))
+const mentions = () => state.tokens.filter((token): token is Extract<MomentForwardToken, { type: 'mention' }> => token.type === 'mention')
 const draftText = computed(() => momentForwardTokensToText(state.tokens))
 const submitting = computed(() => state.status === 'submitting')
-watch(() => props.active && (submitting.value || emojiPickerOpen.value || topicPickerOpen.value), held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
+watch(() => props.active && (submitting.value || emojiPickerOpen.value || topicPickerOpen.value || Boolean(completion.value)), held => emit('interactionChange', held), { immediate: true, flush: 'sync' })
 onBeforeUnmount(() => emit('interactionChange', false))
 
 function focusTextarea() {
-  void nextTick(() => textareaRef.value?.focus())
+  void nextTick(() => textareaRef.value?.focus({ preventScroll: true }))
 }
 
 function handleInput(event: Event) {
   if (!(event.target instanceof HTMLTextAreaElement))
     return
-  setTokens(parseMomentForwardTokens(event.target.value, knownEmojiTexts.value))
+  setTokens(parseMomentForwardTokens(event.target.value, knownEmojiTexts.value, mentions()))
+  if (!(event as InputEvent).isComposing)
+    updateCompletion()
+}
+
+function updateCompletion() {
+  const input = textareaRef.value
+  completion.value = input && input.selectionStart === input.selectionEnd && props.active && !submitting.value
+    ? findMomentForwardCompletion(input.value, input.selectionStart)
+    : null
+}
+
+function handleKeyup(event: KeyboardEvent) {
+  if (!event.isComposing && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key))
+    updateCompletion()
+}
+
+function selectCompletion(choice: SelectedMomentTopic) {
+  const range = completion.value
+  if (!range)
+    return
+  const text = range.kind === 'mention' ? `@${choice.name}` : `#${choice.name}#`
+  const known = mentions()
+  if (range.kind === 'mention')
+    known.push({ type: 'mention', text, mid: String(choice.id) })
+  else
+    selectTopic(choice)
+  const value = `${draftText.value.slice(0, range.start)}${text} ${draftText.value.slice(range.end)}`
+  setTokens(parseMomentForwardTokens(value, knownEmojiTexts.value, known))
+  completion.value = null
+  void nextTick(() => {
+    textareaRef.value?.focus({ preventScroll: true })
+    textareaRef.value?.setSelectionRange(range.start + text.length + 1, range.start + text.length + 1)
+  })
 }
 
 function toggleEmojiPicker() {
   if (submitting.value)
     return
   emojiPickerOpen.value = !emojiPickerOpen.value
+  completion.value = null
   topicPickerOpen.value = false
 }
 
@@ -80,6 +118,7 @@ function toggleTopicPicker() {
   if (submitting.value)
     return
   topicPickerOpen.value = !topicPickerOpen.value
+  completion.value = null
   emojiPickerOpen.value = false
 }
 
@@ -87,6 +126,16 @@ function handleEmojiSelect(emote: MomentForwardEmote) {
   const textarea = textareaRef.value
   const selectionStart = textarea?.selectionStart ?? draftText.value.length
   const selectionEnd = textarea?.selectionEnd ?? selectionStart
+  if (emote.type === 4) {
+    const value = `${draftText.value.slice(0, selectionStart)}${emote.text}${draftText.value.slice(selectionEnd)}`
+    setTokens(parseMomentForwardTokens(value, knownEmojiTexts.value, mentions()))
+    emojiPickerOpen.value = false
+    void nextTick(() => {
+      textareaRef.value?.focus({ preventScroll: true })
+      textareaRef.value?.setSelectionRange(selectionStart + emote.text.length, selectionStart + emote.text.length)
+    })
+    return
+  }
   knownEmojiTexts.value = new Set(knownEmojiTexts.value).add(emote.text)
   const insertion = insertMomentForwardEmoji(
     state.tokens,
@@ -98,7 +147,7 @@ function handleEmojiSelect(emote: MomentForwardEmote) {
   setTokens(insertion.tokens)
   emojiPickerOpen.value = false
   void nextTick(() => {
-    textareaRef.value?.focus()
+    textareaRef.value?.focus({ preventScroll: true })
     textareaRef.value?.setSelectionRange(insertion.caret, insertion.caret)
   })
 }
@@ -110,9 +159,12 @@ function handleTopicSelect(topic: SelectedMomentTopic) {
 }
 
 function handleEscape(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229)
+    return
   event.preventDefault()
   event.stopPropagation()
-  if (emojiPickerOpen.value || topicPickerOpen.value) {
+  if (emojiPickerOpen.value || topicPickerOpen.value || completion.value) {
+    completion.value = null
     emojiPickerOpen.value = false
     topicPickerOpen.value = false
     focusTextarea()
@@ -122,6 +174,13 @@ function handleEscape(event: KeyboardEvent) {
 }
 
 function handleSubmitShortcut(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229)
+    return
+  if (event.key === 'ArrowDown' && completion.value) {
+    event.preventDefault()
+    completionPickerRef.value?.$el?.querySelector('[data-completion-result]')?.focus()
+    return
+  }
   if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
     event.preventDefault()
     void handleSubmit()
@@ -133,6 +192,7 @@ async function handleSubmit() {
     return
   emojiPickerOpen.value = false
   topicPickerOpen.value = false
+  completion.value = null
   const result = await submit()
   if (!result.applied)
     return
@@ -153,6 +213,7 @@ watch(
         focusTextarea()
     }
     else {
+      completion.value = null
       emojiPickerOpen.value = false
       topicPickerOpen.value = false
     }
@@ -165,6 +226,7 @@ watch(
   () => {
     invalidate(true)
     knownEmojiTexts.value = new Set()
+    completion.value = null
     emojiPickerOpen.value = false
     topicPickerOpen.value = false
   },
@@ -175,6 +237,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
     return
   invalidate(true)
   knownEmojiTexts.value = new Set()
+  completion.value = null
+  emojiPickerOpen.value = topicPickerOpen.value = false
   emit('close')
 })
 </script>
@@ -193,6 +257,14 @@ watch(accountId, (nextAccountId, previousAccountId) => {
       :disabled="submitting"
       rows="2"
       @input="handleInput"
+      @keyup="handleKeyup"
+      @compositionend="updateCompletion"
+    />
+    <MomentForwardTopicPicker
+      v-if="completion" ref="completionPickerRef" :kind="completion.kind" :initial-query="completion.query" :autofocus="false"
+      :content="draftText" :search-placeholder="t(completion.kind === 'mention' ? 'moment_card.forward_search_mention' : 'moment_card.forward_search_topic')"
+      :empty-label="t('moment_card.forward_topic_empty')" :retry-label="t('common.retry')" :error-label="t('moment_card.forward_topic_search_failed')"
+      @select="selectCompletion" @close="completion = null; focusTextarea()"
     />
 
     <div v-if="state.selectedTopic" class="moment-forward-composer__topic">
@@ -251,7 +323,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
       :retry-label="t('moment_card.comments_retry')"
       :error-label="t('moment_card.forward_emote_failed')"
       @select="handleEmojiSelect"
-      @close="emojiPickerOpen = false"
+      @close="emojiPickerOpen = false; focusTextarea()"
     />
     <MomentForwardTopicPicker
       v-if="topicPickerOpen"
@@ -261,7 +333,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
       :retry-label="t('moment_card.comments_retry')"
       :error-label="t('moment_card.forward_topic_search_failed')"
       @select="handleTopicSelect"
-      @close="topicPickerOpen = false"
+      @close="topicPickerOpen = false; focusTextarea()"
     />
   </section>
 </template>

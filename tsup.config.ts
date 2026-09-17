@@ -3,7 +3,7 @@
 // import fs from 'fs-extra'
 import { defineConfig } from 'tsup'
 
-import { isDev, isSafari } from './scripts/utils'
+import { buildCommit, isDev, isSafari } from './scripts/utils'
 
 const outDir = isSafari ? 'extension-safari/dist' : 'extension/dist'
 
@@ -25,6 +25,7 @@ export default defineConfig(() => ({
   sourcemap: false, // https://github.com/vitejs/vite-plugin-vue/issues/35
   define: {
     '__DEV__': JSON.stringify(isDev),
+    '__BUILD_COMMIT__': JSON.stringify(buildCommit),
     'process.env.NODE_ENV': JSON.stringify(isDev ? 'development' : 'production'),
     'process.env.SAFARI': isSafari ? 'true' : 'false',
   },

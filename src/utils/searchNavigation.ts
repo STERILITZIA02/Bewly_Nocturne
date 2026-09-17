@@ -1,5 +1,7 @@
+import { syncRouteState } from '~/composables/useRouteState'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { getLinkFallbackPage } from '~/utils/configuredLinkNavigation'
 import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
 import { getDefaultCustomUseOriginalBiliPage, resolvePluginSearchResultsUsage } from '~/utils/pageMode'
 import { resolveSearchOpenAction } from '~/utils/searchNavigationCore'
@@ -51,12 +53,13 @@ function isPluginSearchResultsDestination(destination: string): boolean {
 function openSearchResultsInCurrentTab(destination: string): void {
   if (isPluginSearchResultsDestination(destination) && isHomePage() && !isInIframe()) {
     const target = new URL(destination)
-    window.history.pushState({}, '', `${target.pathname}${target.search}${target.hash}`)
+    window.history.pushState(window.history.state, '', `${target.pathname}${target.search}${target.hash}`)
+    syncRouteState()
     return
   }
 
-  if (isInIframe() && window.top) {
-    window.top.location.assign(destination)
+  if (isInIframe()) {
+    window.open(destination, '_top')
     return
   }
 
@@ -65,6 +68,7 @@ function openSearchResultsInCurrentTab(destination: string): void {
 
 export interface SearchNavigationOptions {
   persistHistory?: () => Promise<void>
+  fromSearchResultsTopBar?: boolean
 }
 
 function persistSearchHistory(options?: SearchNavigationOptions): Promise<void> {
@@ -76,17 +80,24 @@ function persistSearchHistory(options?: SearchNavigationOptions): Promise<void> 
  * 当前页、首页外当前页、新标签页和后台标签页都在这里统一决策。
  */
 export function openSearchResults(destination: string, options?: SearchNavigationOptions): void {
-  const action = resolveSearchOpenAction(
-    settings.value.searchBarLinkOpenMode,
-    window.location.href,
-    isInIframe(),
-  )
+  const initialUrl = window.location.href
+  const inPlace = options?.fromSearchResultsTopBar && isPluginSearchResultsDestination(initialUrl)
+    && isPluginSearchResultsDestination(destination) && !isInIframe()
+  const action = inPlace
+    ? 'currentTab'
+    : resolveSearchOpenAction(
+        settings.value.searchBarLinkOpenMode,
+        window.location.href,
+        isInIframe(),
+        getLinkFallbackPage(),
+      )
 
   if (action === 'currentTab') {
-    // 当前标签页跳转可能卸载 content script，必须先持久化历史。
-    void persistSearchHistory(options)
-      .catch(() => undefined)
-      .then(() => openSearchResultsInCurrentTab(destination))
+    // Commit navigation in the activation task. History must never keep the old
+    // page visible or perform a second, stale navigation after its async write.
+    // Plugin result pages persist their keyword in the destination document.
+    void persistSearchHistory(options).catch(() => undefined)
+    openSearchResultsInCurrentTab(destination)
   }
   else if (action === 'background') {
     void openLinkInBackground(destination)

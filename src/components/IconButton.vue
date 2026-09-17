@@ -53,4 +53,14 @@ withDefaults(defineProps<{
     color: currentColor;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .bew-icon-button {
+    transition-property: color, background-color;
+
+    &:active:not(:disabled) {
+      transform: none;
+    }
+  }
+}
 </style>

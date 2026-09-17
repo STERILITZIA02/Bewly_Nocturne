@@ -49,7 +49,34 @@ const APP_TOKEN_REFRESH_ENDPOINTS = [
   'https://passport.bilibili.com/api/v2/oauth2/refresh_token',
 ]
 
-let ensureFreshAppAccessTokenPromise: Promise<boolean> | null = null
+const AUTH_REQUEST_TIMEOUT_MS = 15_000
+
+async function requestAuthJson<T>(url: string, init: RequestInit, signal?: AbortSignal): Promise<T> {
+  const controller = new AbortController()
+  const abort = () => controller.abort(signal?.reason)
+  if (signal?.aborted)
+    abort()
+  else
+    signal?.addEventListener('abort', abort, { once: true })
+  const timer = setTimeout(() => controller.abort(new DOMException('Authorization request timed out', 'TimeoutError')), AUTH_REQUEST_TIMEOUT_MS)
+  try {
+    const response = await fetch(url, { ...init, signal: controller.signal })
+    if (!response.ok)
+      throw new Error(`Authorization HTTP ${response.status}`)
+    return await response.json() as T
+  }
+  finally {
+    clearTimeout(timer)
+    signal?.removeEventListener('abort', abort)
+  }
+}
+
+interface QRCodeResponse<T> {
+  code: number
+  message?: string
+  data?: T
+}
+
 const runAppAccessTokenRefreshSingleFlight = createBooleanSingleFlight()
 
 export function saveAppAuthTokens(payload: PollLoginTokenPayload) {
@@ -124,7 +151,7 @@ export async function refreshAppAccessToken(): Promise<boolean> {
         sign,
       })
 
-      const response = await fetch(endpoint, {
+      const data = await requestAuthJson<RefreshTokenResponse>(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -132,10 +159,6 @@ export async function refreshAppAccessToken(): Promise<boolean> {
         body,
       })
 
-      if (!response.ok)
-        continue
-
-      const data = await response.json() as RefreshTokenResponse
       if (data.code !== 0 || !data.data)
         continue
 
@@ -174,15 +197,7 @@ export async function refreshAppAccessToken(): Promise<boolean> {
 }
 
 function refreshAppAccessTokenSingleFlight(): Promise<boolean> {
-  if (ensureFreshAppAccessTokenPromise)
-    return ensureFreshAppAccessTokenPromise
-
-  const refreshPromise = runAppAccessTokenRefreshSingleFlight(refreshAppAccessToken).finally(() => {
-    if (ensureFreshAppAccessTokenPromise === refreshPromise)
-      ensureFreshAppAccessTokenPromise = null
-  })
-  ensureFreshAppAccessTokenPromise = refreshPromise
-  return refreshPromise
+  return runAppAccessTokenRefreshSingleFlight(refreshAppAccessToken)
 }
 
 export async function ensureFreshAppAccessToken(
@@ -246,45 +261,35 @@ export function clearAppAuthTokens() {
   appAuthTokens.value = { ...defaultAppAuthTokens }
 }
 
-export function pollTVLoginQRCode(authCode: string): Promise<any> {
+export function pollTVLoginQRCode(authCode: string, signal?: AbortSignal): Promise<QRCodeResponse<PollLoginTokenPayload>> {
   const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/poll'
 
-  return new Promise<void>((resolve, reject) => {
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      },
-      body: tvSignSearchParams({
-        appkey: TVAppKey.appkey,
-        auth_code: authCode,
-        local_id: '0',
-        ts: '0',
-      }),
-    })
-      .then(response => response.json())
-      .then(data => resolve(data))
-      .catch(error => reject(error))
-  })
+  return requestAuthJson(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+    },
+    body: tvSignSearchParams({
+      appkey: TVAppKey.appkey,
+      auth_code: authCode,
+      local_id: '0',
+      ts: '0',
+    }),
+  }, signal)
 }
 
-export function getTVLoginQRCode(): Promise<any> {
+export function getTVLoginQRCode(signal?: AbortSignal): Promise<QRCodeResponse<{ url: string, auth_code: string }>> {
   const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
 
-  return new Promise<void>((resolve, reject) => {
-    fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-      },
-      body: tvSignSearchParams({
-        appkey: TVAppKey.appkey,
-        local_id: '0',
-        ts: '0',
-      }),
-    })
-      .then(response => response.json())
-      .then(data => resolve(data))
-      .catch(error => reject(error))
-  })
+  return requestAuthJson(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+    },
+    body: tvSignSearchParams({
+      appkey: TVAppKey.appkey,
+      local_id: '0',
+      ts: '0',
+    }),
+  }, signal)
 }

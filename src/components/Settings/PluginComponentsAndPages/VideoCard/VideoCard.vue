@@ -176,6 +176,7 @@ function cancelListLayoutBreakpointEditing() {
           <div class="cover-ratio-controls">
             <Slider
               v-model="settings.videoCardCoverRatioOneColumn"
+              :accessible-label="`${$t('settings.video_card_cover_ratio_one_column')} · ${$t('settings.video_card_cover_ratio')}`"
               :min="VIDEO_CARD_COVER_RATIO_MIN"
               :max="VIDEO_CARD_COVER_RATIO_MAX"
               :step="VIDEO_CARD_COVER_RATIO_STEP"
@@ -183,6 +184,7 @@ function cancelListLayoutBreakpointEditing() {
             />
             <Slider
               v-model="settings.videoCardCoverRatioTwoColumns"
+              :accessible-label="`${$t('settings.video_card_cover_ratio_two_columns')} · ${$t('settings.video_card_cover_ratio')}`"
               :min="VIDEO_CARD_COVER_RATIO_MIN"
               :max="VIDEO_CARD_COVER_RATIO_MAX"
               :step="VIDEO_CARD_COVER_RATIO_STEP"

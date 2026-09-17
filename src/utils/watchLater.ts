@@ -3,6 +3,7 @@ import type { createAccountLifetime } from '~/utils/accountLifetime'
 import api from '~/utils/api'
 import { getCSRF, getUserID } from '~/utils/main'
 import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
+import { sendOwnedWatchLaterWrite } from '~/utils/watchLaterWrite'
 
 export interface WatchLaterIdentity {
   aid?: number | string
@@ -26,10 +27,12 @@ type WatchLaterMutationResult
     | { status: 'failed', message?: string }
     | { status: 'success', aid: number, added: boolean }
 
+const pendingRemovals = new Map<string, Promise<WatchLaterMutationResult>>()
+
 /** One submitted operation; only the store owns membership and successful reconciliation. */
 export async function updateOwnedWatchLater(
   target: WatchLaterIdentity,
-  action: 'toggle' | 'remove',
+  action: 'toggle' | 'remove' | 'removeIfPresent',
   owner: WatchLaterMutationOwner,
   membership: WatchLaterMembership,
   resolveAid: (target: WatchLaterIdentity) => Promise<number | undefined> = resolveWatchLaterAid,
@@ -54,27 +57,43 @@ export async function updateOwnedWatchLater(
   if (!aid)
     return { status: 'unavailable' }
 
-  if (action === 'toggle') {
+  if (action === 'toggle' || action === 'removeIfPresent') {
     const loaded = await membership.ensureWatchLaterState()
     if (!canSubmit())
       return { status: 'cancelled' }
     if (!loaded)
       return { status: 'failed' }
+    if (action === 'removeIfPresent' && !membership.isInWatchLater(aid))
+      return { status: 'cancelled' }
   }
   const added = action === 'toggle' && !membership.isInWatchLater(aid)
   if (!canSubmit())
     return { status: 'cancelled' }
-  const response = added
-    ? await api.watchlater.saveToWatchLater({ aid, csrf })
-    : await api.watchlater.removeFromWatchLater({ aid, csrf })
-  if (response.code !== 0)
-    return { status: 'failed', message: response.message }
-
-  // Leaving the initiating view does not undo a sent request. Reconcile its
-  // original aid for the same account, without writing any view-local state.
-  if (accountId !== null && isSameAccount())
-    await membership.commitWatchLaterMutation(aid, added, accountId)
-  return { status: 'success', aid, added }
+  const key = `${accountId}:${csrf}:${aid}`
+  if (!added && pendingRemovals.has(key))
+    return pendingRemovals.get(key)!
+  const write = (async (): Promise<WatchLaterMutationResult> => {
+    const response = await sendOwnedWatchLaterWrite(canSubmit, () => added
+      ? api.watchlater.saveToWatchLater({ aid, csrf })
+      : api.watchlater.removeFromWatchLater({ aid, csrf }))
+    if (!response)
+      return { status: 'cancelled' }
+    if (response.code !== 0)
+      return { status: 'failed', message: response.message }
+    // A disposed view does not cancel a sent server write.
+    if (accountId !== null && isSameAccount())
+      await membership.commitWatchLaterMutation(aid, added, accountId)
+    return { status: 'success', aid, added }
+  })()
+  if (!added)
+    pendingRemovals.set(key, write)
+  try {
+    return await write
+  }
+  finally {
+    if (pendingRemovals.get(key) === write)
+      pendingRemovals.delete(key)
+  }
 }
 
 export function getDirectWatchLaterAid(target: WatchLaterIdentity): number | undefined {

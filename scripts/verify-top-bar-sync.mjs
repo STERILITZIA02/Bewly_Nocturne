@@ -31,6 +31,7 @@ export function registerTopBarSyncChecks(check, { Vue, flush }) {
     const timers = new Map()
     let nextTimer = 0
     const module = await loadSourceModule('../src/stores/topBarStore.ts', {
+      '~/utils/watchLaterList': await import('../src/utils/watchLaterList'),
       'pinia': { defineStore },
       'vue': Vue,
       'vue-toastification': { useToast: () => ({}) },

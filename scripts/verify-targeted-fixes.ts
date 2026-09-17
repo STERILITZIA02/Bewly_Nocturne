@@ -1494,6 +1494,7 @@ async function verifyMomentForwardContracts() {
     { raw_text: 'world', type: 1, biz_id: '' },
   ])
   assert.deepEqual(serializeMomentForwardContents([]), [])
+  assert.deepEqual(serializeMomentForwardContents([{ type: 'mention', text: '@UP', mid: '42' }]), [{ raw_text: '@UP', type: 2, biz_id: '42' }])
   const insertion = insertMomentForwardEmoji(
     [{ type: 'text', text: 'hello world' }],
     '[doge]',
@@ -1774,7 +1775,7 @@ async function verifyComponentContracts() {
   assert.match(watchLater, /handlePageRefresh\.value === handleWatchLaterPageRefresh/)
   assert.match(gridCard, /:disabled="disabled"/)
 
-  assert.match(commentSection, /buildCommentTree/)
+  assert.match(commentSection, /buildMomentCommentThread/)
   assert.match(commentSection, /MomentCommentRichText/)
   assert.match(commentSection, /MomentCommentMedia/)
   assert.match(commentSection, /comments_reply_new_tab/)
@@ -1783,7 +1784,8 @@ async function verifyComponentContracts() {
   assert.match(commentSection, /MomentCommentTreeGuides/)
   assert.match(commentSection, /onBeforeUnmount\(\(\) =>/)
   assert.match(commentSection, /requestIdentity !== getCommentIdentity\(\)/)
-  assert.match(commentSection, /page\.hasMore && madeProgress && pageAdvanced/)
+  assert.match(commentSection, /const stalled = page\.hasMore && \(!madeProgress \|\| !pageAdvanced\)/)
+  assert.match(commentSection, /if \(stalled\)[\s\S]{0,90}loadError\.value =/)
   assert.match(commentSection, /aria-pressed="commentLikeState\(node\.comment\)\.liked"/)
   assert.doesNotMatch(commentSection, /replyDraft|replyTarget|replyComposerRootId|<textarea|addMomentCommentReply/)
   assert.match(commentMedia, /pictures: MomentCommentPicture\[\]/)
@@ -1828,7 +1830,7 @@ async function verifyComponentContracts() {
   assert.doesNotMatch(topicPicker, /backdrop-filter/)
   assert.match(forwardContent, /scene: 4/)
   assert.match(forwardContent, /web_repost_src/)
-  assert.match(forwardContent, /type: token\.type === 'emoji' \? 9 as const : 1 as const/)
+  assert.match(forwardContent, /type: token\.type === 'emoji' \? 9 as const : token\.type === 'mention' \? 2 as const : 1 as const/)
   assert.match(forwardComposable, /business: 'dynamic'/)
   assert.match(forwardComposable, /momentEmotesRequest/)
   assert.match(forwardTransactions, /const drafts = new Map<string, ForwardDraft>/)
@@ -1846,8 +1848,8 @@ async function verifyComponentContracts() {
     momentsPage.indexOf('function openMomentDetail'),
     momentsPage.indexOf('function handleDetailIframeLoad'),
   )
-  assert.match(openMomentDetailSection, /if \(moment\.isVideo && !moment\.isLive\) \{[\s\S]{0,160}openMomentInNewTab\(moment\)[\s\S]{0,40}return/)
-  assert.ok(openMomentDetailSection.indexOf('openMomentInNewTab(moment)') < openMomentDetailSection.indexOf('selectedMoment.value = moment'))
+  assert.match(openMomentDetailSection, /openVideoLink\(resolveVideoUrl\(moment\), moment\)/)
+  assert.ok(openMomentDetailSection.indexOf('openVideoLink') < openMomentDetailSection.indexOf('selectedMoment.value = moment'))
   const loadMomentsSection = momentsPage.slice(
     momentsPage.indexOf('async function loadMoments'),
     momentsPage.indexOf('function clearMomentsPortalState'),
@@ -2123,12 +2125,14 @@ async function verifyP1Contracts() {
   assert.match(player, /private timer: ReturnType<typeof setTimeout> \| null = null/)
   assert.match(player, /generation !== autoExitFullscreenGeneration/)
 
-  assert.match(authProvider, /let ensureFreshAppAccessTokenPromise: Promise<boolean> \| null = null/)
+  assert.match(authProvider, /const runAppAccessTokenRefreshSingleFlight = createBooleanSingleFlight\(\)/)
   assert.match(authProvider, /function refreshAppAccessTokenSingleFlight/)
-  assert.match(authProvider, /finally\(\(\) =>/)
+  assert.match(authProvider, /return runAppAccessTokenRefreshSingleFlight\(refreshAppAccessToken\)/)
   assert.match(authProvider, /appAuthTokens\.value\.refreshToken !== refreshToken/)
   assert.doesNotMatch(background, /setupAppAuthScheduler/)
-  assert.doesNotMatch(manifest, /['"]alarms['"]/)
+  // Cloud-quota recovery now needs a one-shot MV3 wakeup; App auth remains on demand.
+  assert.match(manifest, /['"]alarms['"]/)
+  assert.doesNotMatch(authProvider, /browser\.alarms|setInterval\(/)
   for (const source of [forYou, dislikeDialog, videoCardLogic]) {
     assert.match(source, /ensureFreshAppAccessToken/)
     assert.match(source, /refreshInvalidAppAccessToken/)
@@ -3508,7 +3512,7 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(app, /isSentinelWithinLoadThreshold/)
   assert.match(watchLater, /handleReachBottom\.value === handleWatchLaterReachBottom/)
   assert.match(watchLater, /async function handleWatchLaterReachBottom\(\): Promise<boolean>[\s\S]{0,420}return getData\(\)/)
-  assert.match(watchLater, /payload\.list\.every\(isValidWatchLaterItem\)/)
+  assert.match(watchLater, /payload\.list\.map\(normalizeWatchLaterItem\)/)
   assert.match(watchLater, /mergedList\.length >= payload\.count[\s\S]{0,80}!madeProgress/)
   assert.match(watchLater, /let watchLaterExtensionContextInvalidated = false/)
   assert.match(watchLater, /function settleExtensionContextInvalidation\(error: unknown\): boolean/)
@@ -3529,11 +3533,13 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(comments, /&\.bewly-hide-comment-image-scrollbar/)
   assert.match(comments, /color: var\(--bew-on-theme-color\) !important;/)
   assert.match(searchBar, /function navigateToSearchResultPage\(rawKeyword: string\)/)
-  assert.match(searchBar, /openSearchResults\(buildKeywordHref\(normalized\), \{ persistHistory \}\)/)
+  assert.match(searchBar, /openSearchResults\(buildKeywordHref\(normalized\), \{[\s\S]*?fromSearchResultsTopBar: props\.topBarMode/)
   assert.match(searchHistoryProvider, /let searchHistoryMutationQueue: Promise<void> = Promise\.resolve\(\)/)
   assert.match(searchHistoryProvider, /enqueueSearchHistoryMutation/)
   assert.match(searchHistoryProvider, /const confirmation = await this\.operate\('COLS_GET'\)[\s\S]{0,100}confirmation\?\.value !== value/)
-  assert.match(searchNavigation, /if \(action === 'currentTab'\)[\s\S]{0,220}persistSearchHistory\(options\)[\s\S]{0,160}openSearchResultsInCurrentTab\(destination\)/)
+  assert.match(searchNavigation, /persistSearchHistory\(options\)/)
+  assert.doesNotMatch(searchNavigation, /\.then\([\s\S]*?openSearchResultsInCurrentTab/)
+  assert.match(searchResults, /watch\(normalizedKeyword,[\s\S]*?addSearchHistory\(\{ value, timestamp: Date\.now\(\) \}\)/)
   assert.match(searchResults, /const needsPageRestore = filters\.page > 1/)
   const searchListPage = await readFile(`${root}/src/contentScripts/views/SearchResults/composables/useSearchListPage.ts`, 'utf8')
   for (const searchResultPage of searchResultPageSources) {
@@ -4036,7 +4042,8 @@ async function verifyIncrementalCorrectnessContracts() {
 
   assert.match(contentScriptConstants, /interface ContentScriptPong/)
   assert.match(refreshPrompt, /isCurrentContentScriptPong/)
-  assert.match(contentScript, /runtimeUrl: browser\.runtime\.getURL\(''\)/)
+  assert.match(contentScript, /const runtimeUrl = browser\.runtime\.getURL\(''\)/)
+  assert.match(contentScript, /type: CONTENT_SCRIPT_PONG,[\s\S]{0,200}runtimeUrl,/)
   assert.doesNotMatch(contentScript, /createElement\('link'\)[\s\S]{0,180}dist\/contentScripts\/style\.css/)
   assert.match(contentScript, /__BEWLY_NOCTURNE_BUNDLED_STYLE_TEXT__/)
   assert.match(contentScript, /querySelectorAll\('#bewly'\)\.forEach\(host => host\.remove\(\)\)/)

@@ -12,6 +12,7 @@ import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
+import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
 import { usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
@@ -379,7 +380,7 @@ defineExpose({
 
     <div v-else class="live-results" space-y-6>
       <!-- 空状态（live_user 或 all 子分类下两个列表都为空） -->
-      <Empty v-if="showEmptyState" :description="t('common.no_data')" />
+      <SearchEmptyState v-if="showEmptyState" :keyword="keyword" category="live" />
 
       <template v-else>
         <!-- 主播 (上面) -->
@@ -461,7 +462,11 @@ defineExpose({
             enable-row-padding
             show-preview
             @load-more="handleLoadMore"
-          />
+          >
+            <template #empty>
+              <SearchEmptyState :keyword="keyword" category="live" />
+            </template>
+          </VideoCardGrid>
         </div>
       </template>
 

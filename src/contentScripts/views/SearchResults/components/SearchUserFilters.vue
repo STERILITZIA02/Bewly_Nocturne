@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref } from 'vue'
+import { ref, useId } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 interface UserFilterOption {
@@ -22,6 +22,7 @@ const userType = defineModel<number>('userType', { default: 0 })
 
 // 更多筛选的展开状态
 const isMoreFiltersExpanded = ref(false)
+const moreFiltersId = useId()
 const { t } = useI18n()
 
 function handleOrderChange(value: string) {
@@ -40,12 +41,16 @@ function handleUserTypeSelect(value: number) {
     <!-- 排序 + 更多筛选按钮 -->
     <div flex items-center gap-2>
       <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.order') }}</span>
-      <div flex items-center gap-2 flex-wrap flex-1>
+      <div
+        flex items-center gap-2 flex-wrap flex-1
+        role="group" :aria-label="t('search.filters.order')"
+      >
         <button
           v-for="option in props.orderOptions"
           :key="option.value"
           class="filter-btn"
           :class="{ active: userOrder === option.value }"
+          :aria-pressed="userOrder === option.value"
           type="button"
           @click="handleOrderChange(option.value as string)"
         >
@@ -54,6 +59,8 @@ function handleUserTypeSelect(value: number) {
       </div>
       <button
         class="more-filters-btn"
+        :aria-expanded="isMoreFiltersExpanded"
+        :aria-controls="moreFiltersId"
         flex items-center gap-1
         type="button"
         @click="isMoreFiltersExpanded = !isMoreFiltersExpanded"
@@ -66,16 +73,20 @@ function handleUserTypeSelect(value: number) {
     </div>
 
     <!-- 更多筛选内容 -->
-    <div v-show="isMoreFiltersExpanded" flex="~ col" gap-3>
+    <div v-show="isMoreFiltersExpanded" :id="moreFiltersId" flex="~ col" gap-3>
       <!-- 用户类型 -->
       <div flex items-center gap-2>
         <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.user_type') }}</span>
-        <div flex items-center gap-2 flex-wrap>
+        <div
+          flex items-center gap-2 flex-wrap role="group"
+          :aria-label="t('search.filters.user_type')"
+        >
           <button
             v-for="option in props.userTypeOptions"
             :key="option.value"
             class="filter-btn"
             :class="{ active: userType === option.value }"
+            :aria-pressed="userType === option.value"
             type="button"
             @click="handleUserTypeSelect(option.value as number)"
           >
@@ -90,12 +101,15 @@ function handleUserTypeSelect(value: number) {
 <style scoped lang="scss">
 .filter-btn {
   box-sizing: border-box;
-  padding: 0.35rem 0.75rem;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-1) var(--bew-space-3);
   border-radius: var(--bew-radius-half);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-fill-1);
   color: var(--bew-text-2);
-  font-size: var(--bew-base-font-size);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
   border: 1px solid var(--bew-surface-border-color);
   cursor: pointer;
   transition:
@@ -123,10 +137,13 @@ function handleUserTypeSelect(value: number) {
 }
 
 .more-filters-btn {
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 0.35rem 0.75rem;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-1) var(--bew-space-3);
   user-select: none;
   white-space: nowrap;
   transition:
@@ -151,6 +168,18 @@ function handleUserTypeSelect(value: number) {
 
   &.expanded {
     transform: rotate(180deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .filter-btn,
+  .more-filters-btn,
+  .toggle-icon {
+    transition-property: color, background-color, border-color, box-shadow;
+  }
+
+  .filter-btn:active {
+    transform: none;
   }
 }
 </style>

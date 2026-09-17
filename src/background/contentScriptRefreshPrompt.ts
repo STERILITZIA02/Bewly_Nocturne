@@ -1,12 +1,19 @@
 import type { Scripting, Tabs } from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_PING, isContentScriptTargetUrl, isCurrentContentScriptPong } from '~/constants/contentScript'
+import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG, isContentScriptTargetUrl, isCurrentContentScriptPong } from '~/constants/contentScript'
+import { getRefreshTabsCopy } from '~/constants/refreshTabs'
 import { LanguageType } from '~/enums/appEnums'
 
-const CONTENT_SCRIPT_STARTUP_GRACE_PERIOD_MS = 100
+const CONTENT_SCRIPT_STARTUP_RETRY_DELAYS = [500, 1500]
+const CONTENT_SCRIPT_PING_TIMEOUT_MS = 2_000
+type RefreshReason = 'starting' | 'unreachable' | 'version-mismatch' | 'identity-mismatch'
 
-interface RefreshPromptCopy {
+type RefreshPromptCopy = Partial<ReturnType<typeof getRefreshTabsCopy>> & {
+  reason?: RefreshReason
+  reasonDescription?: string
+  diagnostic?: string
+  runtimeUrl?: string
   currentVersion: string
   refresh: string
   later: string
@@ -24,6 +31,10 @@ export interface ContentScriptRefreshBrowser {
 export type ContentScriptRefreshResult = 'ineligible' | 'already-injected' | 'refresh-prompted'
 
 function getRefreshPromptCopy(locale: string, currentVersion: string): RefreshPromptCopy {
+  return { ...getBaseRefreshPromptCopy(locale, currentVersion), ...getRefreshTabsCopy(locale) }
+}
+
+function getBaseRefreshPromptCopy(locale: string, currentVersion: string): RefreshPromptCopy {
   const normalizedLocale = locale.toLowerCase()
 
   if (
@@ -120,14 +131,113 @@ async function getRefreshPromptLocale(): Promise<string> {
 }
 
 function showRefreshPrompt(...args: unknown[]): void {
-  const [copy] = args as [RefreshPromptCopy]
+  // Keep constants inside the function serialized into the isolated page world.
+  const MESSAGE_TIMEOUT_MS = 5_000
+  const TASK_WAIT_TIMEOUT_MS = 30_000
+  const STATUS_CHECK_INTERVAL_MS = 400
+  const [copy, expectedUrl, checkStartedAt] = args as [RefreshPromptCopy, string?, number?]
+  if ((expectedUrl && location.href !== expectedUrl) || (checkStartedAt && performance.timeOrigin > checkStartedAt))
+    return
+  const health = (globalThis as typeof globalThis & { __BEWLY_NOCTURNE_RUNTIME_HEALTH__?: { checkedAt: number, version: string, runtimeUrl: string } }).__BEWLY_NOCTURNE_RUNTIME_HEALTH__
+  if (health && checkStartedAt && health.checkedAt >= checkStartedAt
+    && health.version === copy.currentVersion && health.runtimeUrl === copy.runtimeUrl) {
+    return
+  }
   const promptId = 'bewlycat-refresh-required'
   const existingPrompt = document.getElementById(promptId)
+
+  const bindRefreshAll = (host: HTMLElement) => {
+    const shadow = host.shadowRoot
+    const actions = shadow?.querySelector('.actions')
+    if (!actions || !copy.refreshAllMessage)
+      return
+    const button = actions.querySelector<HTMLButtonElement>('[data-refresh-all]') ?? document.createElement('button')
+    button.type = 'button'
+    button.dataset.refreshAll = ''
+    if (!button.disabled)
+      button.textContent = button.dataset.retry ? copy.refreshAllRetry! : copy.refreshAll!
+    button.title = copy.refreshAllWarning!
+    if (!button.isConnected)
+      actions.prepend(button)
+    const status = shadow!.querySelector<HTMLElement>('[data-refresh-status]') ?? document.createElement('p')
+    status.dataset.refreshStatus = ''
+    status.className = 'description'
+    status.setAttribute('role', 'status')
+    if (!status.isConnected)
+      actions.after(status)
+    button.onclick = async (event) => {
+      if (!event.isTrusted || button.disabled || !window.confirm(copy.refreshAllWarning))
+        return
+      const initialHref = location.href
+      const current = () => host.isConnected && !host.hidden && location.href === initialHref
+      button.disabled = true
+      button.textContent = copy.refreshAllBusy!
+      const runtime = (globalThis as typeof globalThis & { chrome?: typeof browser, browser?: typeof browser }).browser?.runtime
+        ?? (globalThis as typeof globalThis & { chrome?: typeof browser }).chrome?.runtime
+      const send = (action: string): Promise<import('./refreshTabsTask').RefreshTabsTask> => new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error('Refresh request timed out')), MESSAGE_TIMEOUT_MS)
+        Promise.resolve().then(() => {
+          if (!runtime)
+            throw new Error('Runtime unavailable')
+          return runtime.sendMessage({ type: copy.refreshAllMessage, data: { action, taskId: button.dataset.taskId } })
+        }).then(value => resolve(value as import('./refreshTabsTask').RefreshTabsTask), reject).finally(() => clearTimeout(timeout))
+      })
+      try {
+        let result = await send(button.dataset.taskId ? 'retry' : 'start')
+        const deadline = Date.now() + TASK_WAIT_TIMEOUT_MS
+        while (result?.running && current() && Date.now() < deadline) {
+          await new Promise(resolve => setTimeout(resolve, STATUS_CHECK_INTERVAL_MS))
+          result = await send('status')
+        }
+        if (!current())
+          return
+        if (!result?.id || !Array.isArray(result.items) || result.running)
+          throw new Error('Refresh incomplete')
+        button.dataset.taskId = result.id
+        const render = (value: typeof result) => {
+          const counts = { pending: 0, success: 0, skipped: 0, failed: 0 }
+          value.items.forEach(item => counts[item.status]++)
+          status.textContent = copy.refreshAllResult!.replace(/\{(pending|success|skipped|failed)\}/g, (_, key: keyof typeof counts) => String(counts[key]))
+          button.dataset.retry = counts.failed ? 'true' : ''
+          return counts
+        }
+        if (!render(result).failed) {
+          // The result is now visible. Only this ACK allows the background to refresh us last.
+          await send('finish')
+          await new Promise(resolve => setTimeout(resolve, STATUS_CHECK_INTERVAL_MS))
+          if (current())
+            render(await send('status'))
+        }
+      }
+      catch {
+        if (current())
+          status.textContent = copy.refreshAllFailed!
+      }
+      finally {
+        button.disabled = false
+        button.textContent = button.dataset.retry ? copy.refreshAllRetry! : copy.refreshAll!
+      }
+    }
+  }
 
   if (existingPrompt) {
     if (existingPrompt.dataset.dismissedVersion === copy.currentVersion)
       return
-    existingPrompt.remove()
+    const shadow = existingPrompt.shadowRoot
+    const description = shadow?.querySelector('.description')
+    if (description)
+      description.textContent = copy.reasonDescription ?? copy.missingDescription
+    existingPrompt.dataset.reason = copy.reason ?? 'unreachable'
+    existingPrompt.dataset.promptVersion = copy.currentVersion
+    existingPrompt.dataset.runtimeUrl = copy.runtimeUrl ?? ''
+    const title = shadow?.querySelector('.title')
+    if (title)
+      title.textContent = copy.reason === 'version-mismatch' ? copy.updatedTitle : copy.missingTitle
+    existingPrompt.hidden = false
+    existingPrompt.style.setProperty('display', 'block', 'important')
+    existingPrompt.title = copy.diagnostic ?? ''
+    bindRefreshAll(existingPrompt)
+    return
   }
 
   const bewlyContainer = document.querySelector<HTMLElement>('#bewly')
@@ -143,6 +253,10 @@ function showRefreshPrompt(...args: unknown[]): void {
   const host = document.createElement('div')
   host.id = promptId
   host.dataset.theme = theme
+  host.dataset.reason = copy.reason ?? 'unreachable'
+  host.dataset.promptVersion = copy.currentVersion
+  host.dataset.runtimeUrl = copy.runtimeUrl ?? ''
+  host.title = copy.diagnostic ?? ''
   host.style.setProperty('all', 'initial', 'important')
   host.style.setProperty('position', 'fixed', 'important')
   host.style.setProperty('left', edgeOffset, 'important')
@@ -248,6 +362,7 @@ function showRefreshPrompt(...args: unknown[]): void {
     }
     .actions {
       display: flex;
+      flex-wrap: wrap;
       justify-content: flex-end;
       gap: var(--bew-space-2, 8px);
       margin-top: var(--bew-space-3, 12px);
@@ -284,6 +399,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       outline: 2px solid var(--bew-theme-focus-ring, #00aeec);
       outline-offset: 2px;
     }
+    button:disabled { opacity: 0.6; cursor: wait; }
     .primary {
       color: var(--bew-on-theme-color, white);
       background: var(--bew-theme-color, #00aeec);
@@ -351,7 +467,7 @@ function showRefreshPrompt(...args: unknown[]): void {
 
   const description = document.createElement('p')
   description.className = 'description'
-  description.textContent = (versionChanged ? copy.updatedDescription : copy.missingDescription)
+  description.textContent = (copy.reasonDescription ?? (versionChanged ? copy.updatedDescription : copy.missingDescription))
     .replace('{version}', copy.currentVersion)
 
   const actions = document.createElement('div')
@@ -361,7 +477,7 @@ function showRefreshPrompt(...args: unknown[]): void {
   laterButton.type = 'button'
   laterButton.textContent = copy.later
   laterButton.addEventListener('click', () => {
-    host.dataset.dismissedVersion = copy.currentVersion
+    host.dataset.dismissedVersion = host.dataset.promptVersion
     host.hidden = true
     host.style.setProperty('display', 'none', 'important')
   })
@@ -378,66 +494,105 @@ function showRefreshPrompt(...args: unknown[]): void {
   prompt.append(header, actions)
   shadow.append(style, prompt)
   document.documentElement.appendChild(host)
+  bindRefreshAll(host)
 }
 
-async function isEligibleActiveTab(tabId: number, extensionApi: ContentScriptRefreshBrowser): Promise<boolean> {
+async function getEligibleActiveTab(tabId: number, extensionApi: ContentScriptRefreshBrowser): Promise<Tabs.Tab | undefined> {
   try {
     const tab = await extensionApi.tabs.get(tabId)
-    return tab.active === true
+    if (tab.active === true
       && tab.status === 'complete'
       && tab.discarded !== true
-      && isContentScriptTargetUrl(tab.url)
+      && isContentScriptTargetUrl(tab.url)) {
+      return tab
+    }
   }
   catch {
-    return false
+    return undefined
   }
 }
 
-async function pingContentScript(tabId: number, extensionApi: ContentScriptRefreshBrowser): Promise<boolean> {
+async function pingContentScript(tabId: number, extensionApi: ContentScriptRefreshBrowser) {
+  let timer: ReturnType<typeof setTimeout> | undefined
   try {
-    const response = await extensionApi.tabs.sendMessage(
-      tabId,
-      { type: CONTENT_SCRIPT_PING },
-      { frameId: 0 },
-    )
     const manifest = browser.runtime.getManifest()
-    return isCurrentContentScriptPong(response, {
+    const expected = {
+      commit: CONTENT_SCRIPT_COMMIT,
       name: manifest.name,
       version: manifest.version,
       runtimeUrl: browser.runtime.getURL(''),
-    })
+    }
+    const response = await Promise.race([
+      extensionApi.tabs.sendMessage(tabId, { type: CONTENT_SCRIPT_PING, expectedIdentity: expected }, { frameId: 0 }),
+      new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('Content script ping timeout')), CONTENT_SCRIPT_PING_TIMEOUT_MS) }),
+    ])
+    if (isCurrentContentScriptPong(response, expected)) {
+      const starting = 'phase' in response && response.phase === 'starting'
+      return { reason: starting ? 'starting' as const : null, diagnostic: JSON.stringify({ expected, received: response }) }
+    }
+    if (response && typeof response === 'object' && 'type' in response && response.type === CONTENT_SCRIPT_PONG
+      && 'name' in response && typeof response.name === 'string'
+      && 'runtimeUrl' in response && typeof response.runtimeUrl === 'string'
+      && 'version' in response && typeof response.version === 'string') {
+      return { reason: response.name !== expected.name || response.runtimeUrl !== expected.runtimeUrl ? 'identity-mismatch' as const : 'version-mismatch' as const, diagnostic: JSON.stringify({ expected, received: response }) }
+    }
+    return { reason: 'unreachable' as const, diagnostic: 'Invalid content script response' }
   }
-  catch {
-    // A missing receiver is expected after the extension or browser is reloaded.
-    return false
+  catch (error) {
+    return { reason: 'unreachable' as const, diagnostic: error instanceof Error ? error.message : String(error) }
+  }
+  finally {
+    clearTimeout(timer)
   }
 }
 
 export async function promptContentScriptRefresh(
   tabId: number,
   extensionApi: ContentScriptRefreshBrowser = browser,
+  isCurrentCheck: () => boolean = () => true,
 ): Promise<ContentScriptRefreshResult> {
-  if (!await isEligibleActiveTab(tabId, extensionApi))
+  const checkStartedAt = Date.now()
+  const initialTab = await getEligibleActiveTab(tabId, extensionApi)
+  if (!initialTab || !isCurrentCheck())
     return 'ineligible'
-
-  if (await pingContentScript(tabId, extensionApi))
+  const initialUrl = initialTab.url
+  const isCurrent = async () => {
+    if (!isCurrentCheck())
+      return false
+    const tab = await getEligibleActiveTab(tabId, extensionApi)
+    return isCurrentCheck() && Boolean(tab) && tab?.url === initialUrl
+  }
+  let result = await pingContentScript(tabId, extensionApi)
+  for (const delay of CONTENT_SCRIPT_STARTUP_RETRY_DELAYS) {
+    if (result.reason !== 'starting' && result.reason !== 'unreachable')
+      break
+    await new Promise(resolve => setTimeout(resolve, delay))
+    if (!await isCurrent())
+      return 'ineligible'
+    result = await pingContentScript(tabId, extensionApi)
+  }
+  if (!await isCurrent())
+    return 'ineligible'
+  if (!result.reason)
     return 'already-injected'
 
-  await new Promise(resolve => setTimeout(resolve, CONTENT_SCRIPT_STARTUP_GRACE_PERIOD_MS))
-
-  // A normal manifest injection may still be starting, or the tab may have
-  // navigated while the first ping and grace period were in flight.
-  if (!await isEligibleActiveTab(tabId, extensionApi))
+  const locale = await getRefreshPromptLocale()
+  const copy = getRefreshPromptCopy(locale, browser.runtime.getManifest().version)
+  const descriptions = locale === LanguageType.Mandarin_CN || locale.startsWith('zh-CN')
+    ? { starting: '页面脚本仍在初始化，请稍候或刷新重试。', unreachable: '暂时无法连接页面脚本，请稍后重试或刷新。', 'version-mismatch': '页面脚本版本与当前扩展不同，请刷新以更新。', 'identity-mismatch': '页面脚本与当前扩展安装身份不符，请刷新页面。' }
+    : locale === LanguageType.Mandarin_TW || locale === LanguageType.Cantonese || locale.startsWith('zh')
+      ? { starting: '頁面腳本仍在初始化，請稍候或重新整理。', unreachable: '暫時無法連接頁面腳本，請稍後重試或重新整理。', 'version-mismatch': '頁面腳本版本與目前擴充功能不同，請重新整理。', 'identity-mismatch': '頁面腳本與目前擴充功能的安裝身分不同，請重新整理。' }
+      : { starting: 'The page script is still starting. Wait or refresh to retry.', unreachable: 'The page script is temporarily unreachable. Try later or refresh.', 'version-mismatch': 'The page script version differs from the extension. Refresh to update.', 'identity-mismatch': 'The page script belongs to a different extension installation. Refresh this page.' }
+  copy.reason = result.reason
+  copy.reasonDescription = descriptions[result.reason]
+  copy.diagnostic = result.diagnostic
+  copy.runtimeUrl = browser.runtime.getURL('')
+  if (!await isCurrent())
     return 'ineligible'
-
-  if (await pingContentScript(tabId, extensionApi))
-    return 'already-injected'
-
-  const copy = getRefreshPromptCopy(await getRefreshPromptLocale(), browser.runtime.getManifest().version)
   await extensionApi.scripting.executeScript({
     target: { tabId, frameIds: [0] },
     func: showRefreshPrompt,
-    args: [copy],
+    args: [copy, initialUrl, checkStartedAt],
     world: 'ISOLATED',
     injectImmediately: true,
   })
@@ -445,13 +600,22 @@ export async function promptContentScriptRefresh(
   return 'refresh-prompted'
 }
 
-const pendingPrompts = new Map<number, Promise<void>>()
+const pendingPrompts = new Map<number, { cancelled: boolean }>()
+
+function cancelRefreshCheck(tabId: number) {
+  const check = pendingPrompts.get(tabId)
+  if (check)
+    check.cancelled = true
+  pendingPrompts.delete(tabId)
+}
 
 function queueContentScriptRefreshPrompt(tabId: number): void {
   if (pendingPrompts.has(tabId))
     return
 
-  const prompt = promptContentScriptRefresh(tabId)
+  const check = { cancelled: false }
+  pendingPrompts.set(tabId, check)
+  void promptContentScriptRefresh(tabId, browser, () => !check.cancelled)
     .then((result) => {
       if (result === 'refresh-prompted')
         console.log(`[Bewly Nocturne] Asked tab ${tabId} to refresh after its content script became unavailable.`)
@@ -460,11 +624,9 @@ function queueContentScriptRefreshPrompt(tabId: number): void {
       console.warn(`[Bewly Nocturne] Failed to show the refresh prompt in tab ${tabId}.`, error)
     })
     .finally(() => {
-      if (pendingPrompts.get(tabId) === prompt)
+      if (pendingPrompts.get(tabId) === check)
         pendingPrompts.delete(tabId)
     })
-
-  pendingPrompts.set(tabId, prompt)
 }
 
 async function queueActiveTabs(): Promise<void> {
@@ -489,9 +651,12 @@ export function setupContentScriptRefreshPrompt(): void {
   })
 
   browser.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
+    if (changeInfo.status === 'loading' || changeInfo.url)
+      cancelRefreshCheck(tabId)
     if (changeInfo.status === 'complete' && tab.active)
       queueContentScriptRefreshPrompt(tabId)
   })
+  browser.tabs.onRemoved.addListener(cancelRefreshCheck)
 
   browser.runtime.onStartup.addListener(() => {
     void queueActiveTabs().catch((error) => {

@@ -4,6 +4,25 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   z-index: var(--bew-z-native-overlay);
 }
 
+// The modern virtual directory's title has its own foreground. Pair it with
+// the selected surface in both the native page and the transplanted sidebar.
+:is(.bewly-design.animePlaybackAndMoviePage, #bewly-widescreen-root[data-page-kind="pgc"]) {
+  [class*="EpisodeVirtualList_activeNumber"],
+  [class*="numberListItem_number_list_item"][class*="numberListItem_select"] {
+    color: var(--bew-on-theme-color) !important;
+    background: var(--bew-theme-color) !important;
+
+    > :is([class*="EpisodeVirtualList_numberTitle"], [class*="numberListItem_title"]) {
+      color: var(--bew-on-theme-color) !important;
+    }
+  }
+
+  [class*="SectionSelector_sectionItem"][class*="SectionSelector_active"] {
+    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-theme-surface) !important;
+  }
+}
+
 .bewly-design.animePlaybackAndMoviePage {
   .bpx-player-contextmenu > li {
     box-sizing: unset;

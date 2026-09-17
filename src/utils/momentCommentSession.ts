@@ -13,6 +13,7 @@ export interface MomentCommentSessionSnapshot {
   likedIds: string[]
   likeCounts: Record<string, number>
   scrollTop: number
+  collapsedIds?: string[]
 }
 
 interface SessionLease {

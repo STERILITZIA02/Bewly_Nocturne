@@ -1,4 +1,5 @@
 import type { PrivateSession } from '~/background/privateMessage/types'
+import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import { normalizeIntlLocale } from '~/utils/locale'
 
 export type RawSessionReference = Readonly<PrivateSession>
@@ -78,7 +79,7 @@ function normalizeHttpUrl(value: unknown): string {
     return ''
   try {
     const url = new URL(value)
-    return url.protocol === 'http:' || url.protocol === 'https:' ? url.href : ''
+    return url.protocol === 'http:' || url.protocol === 'https:' ? normalizeBilibiliImageUrl(url.href) : ''
   }
   catch {
     return ''

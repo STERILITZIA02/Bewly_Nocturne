@@ -8,10 +8,11 @@ import { settings } from '~/logic'
 import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
+import { hasNavigationModifier } from '~/utils/linkNavigation'
 import { vLiquidGlass } from '~/utils/liquidGlass'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
-import { openSearchResults, resolveSearchNavigationTarget } from '~/utils/searchNavigation'
+import { openSearchResults, resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 
 import SearchFocusOverlay from '../SearchFocusOverlay.vue'
 import TagRemoveButton from '../TagRemoveButton.vue'
@@ -333,13 +334,19 @@ function navigateToSearchResultPage(rawKeyword: string) {
     return
   }
 
-  openSearchResults(buildKeywordHref(normalized), { persistHistory })
+  openSearchResults(buildKeywordHref(normalized), {
+    // The destination owns plugin-search history, including a full navigation
+    // from video pages. Native search retains its own search-history handling.
+    persistHistory: shouldUsePluginSearchResultsPage() ? undefined : persistHistory,
+    fromSearchResultsTopBar: props.topBarMode,
+  })
   isFocus.value = false
   resetKeyboardSelection()
 }
 
 function handleKeywordLinkClick(value: string, event: MouseEvent) {
-  // 始终阻止默认行为，使用 navigateToSearchResultPage 来处理所有情况
+  if (event.button !== 0 || hasNavigationModifier(event))
+    return
   event.preventDefault()
   event.stopPropagation()
   void navigateToSearchResultPage(value)
@@ -779,7 +786,7 @@ function handleClearKeyword() {
     inset: 0;
     z-index: 1;
     border-radius: var(--b-search-bar-current-radius);
-    corner-shape: var(--bew-corner-shape);
+    corner-shape: var(--b-search-bar-current-corner);
     pointer-events: none;
     transition:
       opacity var(--bew-duration-normal) var(--bew-ease-standard),
@@ -807,6 +814,7 @@ function handleClearKeyword() {
   }
 
   .search-bar {
+    --b-search-bar-current-corner: var(--bew-corner-shape-round);
     --bew-liquid-frame-width: 0px;
     --bew-liquid-frame-inset: 0px;
     background: var(--b-search-bar-normal-color);
@@ -814,7 +822,7 @@ function handleClearKeyword() {
     -webkit-backdrop-filter: var(--bew-filter-glass-1);
     transition: background-color var(--bew-duration-normal) var(--bew-ease-standard);
     border-radius: var(--b-search-bar-current-radius);
-    corner-shape: var(--bew-corner-shape);
+    corner-shape: var(--b-search-bar-current-corner);
     --b-search-bar-current-radius: var(
       --b-search-bar-radius,
       calc(var(--b-search-bar-height, var(--bew-top-bar-primary-control-height, 46px)) / 2)
@@ -822,6 +830,7 @@ function handleClearKeyword() {
 
     &.focus {
       --b-search-bar-current-radius: var(--bew-radius);
+      --b-search-bar-current-corner: var(--bew-corner-shape);
       background: var(--b-search-bar-focus-color);
     }
 
@@ -849,7 +858,7 @@ function handleClearKeyword() {
       position: relative;
       z-index: 0;
       border-radius: var(--b-search-bar-current-radius);
-      corner-shape: var(--bew-corner-shape);
+      corner-shape: var(--b-search-bar-current-corner);
       transition:
         background-color var(--bew-duration-normal) var(--bew-ease-standard),
         color var(--bew-duration-normal) var(--bew-ease-standard),

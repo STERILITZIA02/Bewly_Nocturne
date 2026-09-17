@@ -10,9 +10,11 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getDeepActiveElement } from '~/utils/dialogFocus'
 import { computeFloatingMenuPosition } from '~/utils/floatingMenu'
+import { createPointerNavigationGuard, hasNavigationModifier } from '~/utils/linkNavigation'
 import { releaseElementImages } from '~/utils/mediaResources'
 import { supportsWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { isMomentDescriptionOverflowing } from '~/utils/momentDescription'
+import { isMomentVideoUrl } from '~/utils/momentUrl'
 
 import type { Author, Video } from '../VideoCard/types'
 import VideoCardContextMenu from '../VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue'
@@ -78,7 +80,7 @@ const emit = defineEmits<{
   mediaLeave: [moment: DisplayMoment]
   coverLoad: [event: Event, momentId: string]
   previewVideo: [element: Element | null, moment: DisplayMoment]
-  forwardVideoClick: [video: DisplayForwardVideo]
+  openVideoLink: [url: string, video?: DisplayForwardVideo]
   toggleWatchLater: [target: WatchLaterTarget, isViewCurrent: () => boolean]
   toggleLike: [moment: DisplayMoment]
   toggleReservation: [moment: DisplayMoment]
@@ -90,6 +92,8 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const { mainAppRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
+let cardElement: HTMLElement | null = null
+const navigationGuard = createPointerNavigationGuard(() => cardElement)
 
 const cardLayoutStyles = computed<CSSProperties>(() => {
   const scale = Math.max(1, cardWidth / 520)
@@ -259,11 +263,16 @@ function handleMoreBtnClick(event: Event) {
 }
 
 function closeVideoOptions() {
+  if (!showVideoOptions.value)
+    return
   showVideoOptions.value = false
-  void nextTick(() => moreBtnRef.value?.focus())
+  void nextTick(() => moreBtnRef.value?.focus({ preventScroll: true }))
 }
 
-function openPrimaryDetail() {
+function openPrimaryDetail(event?: MouseEvent) {
+  if (event && (event.defaultPrevented || event.button !== 0 || hasNavigationModifier(event) || navigationGuard.prevent(event)))
+    return
+  event?.preventDefault()
   emit('openDetail', moment)
 }
 
@@ -317,6 +326,8 @@ function getForwardOriginMoment(): DisplayMoment | null {
 }
 
 function handleForwardOriginClick(event: MouseEvent) {
+  if (event.button !== 0 || hasNavigationModifier(event) || navigationGuard.prevent(event))
+    return
   event.stopPropagation()
   emit('openDetail', getForwardOriginMoment() || moment)
 }
@@ -455,7 +466,18 @@ watch(
 // VideoCardContextMenu uses this injection to select its common option set.
 provide('getVideoType', () => 'common')
 
-let cardElement: HTMLElement | null = null
+const primaryHref = computed(() => moment.isVideo && !moment.isForward
+  ? moment.videoUrl || (moment.bvid ? `https://www.bilibili.com/video/${moment.bvid}` : moment.url)
+  : moment.isLive && moment.roomId ? `https://live.bilibili.com/${moment.roomId}` : moment.url)
+function guardLinkClick(event: MouseEvent) {
+  if ((event.target as Element)?.closest('a, .moment-card__primary-action'))
+    navigationGuard.prevent(event)
+}
+function handleSurfaceClick(event: MouseEvent) {
+  if ((event.target as Element)?.closest('a, button, input, textarea, video, [role="button"]'))
+    return
+  openPrimaryDetail(event)
+}
 function toggleCardWatchLater(target: WatchLaterTarget) {
   const element = cardElement
   const momentId = moment.id
@@ -498,9 +520,18 @@ function activateForwardPreviewLink(event: MouseEvent) {
   surface.parentElement?.querySelector<HTMLAnchorElement>('.moment-card__forward-video-cover-link')?.click()
 }
 
-function handleForwardVideoClick() {
-  if (moment.forward?.video)
-    emit('forwardVideoClick', moment.forward.video)
+function handleForwardVideoClick(event: MouseEvent) {
+  if (!moment.forward?.video?.url || event.button !== 0 || hasNavigationModifier(event) || navigationGuard.prevent(event))
+    return
+  event.preventDefault()
+  emit('openVideoLink', moment.forward.video.url, moment.forward.video)
+}
+
+function handleRichLinkClick(event: MouseEvent, url: string) {
+  if (!isMomentVideoUrl(url) || event.button !== 0 || hasNavigationModifier(event) || navigationGuard.prevent(event))
+    return
+  event.preventDefault()
+  emit('openVideoLink', url)
 }
 
 function handleImagePreview(images: string[], index: number, event: MouseEvent) {
@@ -569,14 +600,19 @@ onBeforeUnmount(() => {
     @mouseleave="onMediaLeave"
     @dragenter="onMediaLeave"
     @dragstart="onMediaLeave"
+    @pointerdown.capture="navigationGuard.down"
+    @pointermove.capture="navigationGuard.move"
+    @pointerup.capture="navigationGuard.end"
+    @pointercancel.capture="navigationGuard.end"
+    @click.capture="guardLinkClick"
   >
-    <button
-      type="button"
+    <a
+      :href="primaryHref" target="_blank" rel="noopener noreferrer" draggable="false"
       class="moment-card__primary-action"
       :aria-label="primaryActionLabel"
       @click="openPrimaryDetail"
     />
-    <div class="moment-card__surface">
+    <div class="moment-card__surface" @click="handleSurfaceClick">
       <header class="moment-card__header">
         <a
           ref="authorAvatarLinkRef"
@@ -629,8 +665,11 @@ onBeforeUnmount(() => {
           class="moment-card__media moment-card__cover moment-card__cover--media"
           @mouseenter="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && emit('mediaEnter', moment, $event)"
           @mouseleave="(moment.isLive || settings.momentsOnlyCoverVideoPreview) && onMediaLeave()"
-          @click="openPrimaryDetail"
         >
+          <a
+            :href="primaryHref" class="moment-card__cover-link" target="_blank" rel="noopener noreferrer" draggable="false"
+            :aria-label="primaryActionLabel" @click="openPrimaryDetail"
+          />
           <img
             :src="getMomentThumbnailUrl(moment.images[0])"
             :alt="moment.title"
@@ -686,8 +725,11 @@ onBeforeUnmount(() => {
         <div
           v-else-if="(moment.isVideo || moment.isLive) && (!moment.isChargeExclusive || moment.isVideo)"
           class="moment-card__media moment-card__cover moment-card__text-cover moment-card__text-cover--video"
-          @click="openPrimaryDetail"
         >
+          <a
+            :href="primaryHref" class="moment-card__cover-link" target="_blank" rel="noopener noreferrer" draggable="false"
+            :aria-label="primaryActionLabel" @click="openPrimaryDetail"
+          />
           <span v-if="moment.isLive" i-tabler-live-photo class="moment-card__text-cover-icon" />
           <span v-else i-tabler-player-play-filled class="moment-card__text-cover-icon" />
           <span>{{ moment.isLive ? t('moment_card.live_moment') : t('moment_card.video_moment') }}</span>
@@ -756,7 +798,7 @@ onBeforeUnmount(() => {
                     target="_blank"
                     rel="noopener noreferrer"
                     class="moment-card__rich-link"
-                    @click.stop
+                    @click.stop="handleRichLinkClick($event, segment.url)"
                   >
                     {{ segment.text }}
                   </a>
@@ -1124,6 +1166,7 @@ onBeforeUnmount(() => {
           >
             <MomentCommentSection
               :moment="moment"
+              :active="commentExpanded"
               @writing-change="commentWriting = $event"
               @open-image-preview="handleCommentImagePreview"
               @interactive-resize="emit('interactiveResize')"
@@ -1193,7 +1236,15 @@ onBeforeUnmount(() => {
   border-radius: inherit;
   corner-shape: inherit;
   background: var(--bew-elevated);
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.moment-card__cover-link {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  corner-shape: inherit;
 }
 
 .moment-card__surface :is(a, button, [role="button"]),

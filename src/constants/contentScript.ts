@@ -19,8 +19,11 @@ export const CONTENT_SCRIPT_EXCLUDE_MATCHES = [
 
 export const CONTENT_SCRIPT_PING = 'bewly-cat:content-script:ping'
 export const CONTENT_SCRIPT_PONG = 'bewly-cat:content-script:ready'
+export const CONTENT_SCRIPT_COMMIT = typeof __BUILD_COMMIT__ === 'undefined' ? undefined : (__BUILD_COMMIT__ || undefined)
 
 export interface ContentScriptIdentity {
+  /** Diagnostic only: independently compiled scripts may have different Git SHAs. */
+  commit?: string
   name: string
   runtimeUrl: string
   version: string

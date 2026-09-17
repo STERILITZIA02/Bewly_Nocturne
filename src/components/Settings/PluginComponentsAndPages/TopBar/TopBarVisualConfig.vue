@@ -300,6 +300,7 @@ function toggleChannel(value: string) {
               type="button"
               class="channel-grid__item"
               :class="{ selected: pinnedChannelKeys.includes(option.value) }"
+              :aria-pressed="pinnedChannelKeys.includes(option.value)"
               @click="toggleChannel(option.value)"
             >
               <div v-if="option.icon.startsWith('#')" class="channel-grid__icon">
@@ -346,6 +347,7 @@ function toggleChannel(value: string) {
             <Select
               :model-value="getComponentConfig(component.key)?.badgeType ?? 'number'"
               :options="badgeOptions"
+              :accessible-label="`${$t(component.i18nKey)} · ${$t('settings.badge_type')}`"
               :disabled="!getComponentConfig(component.key)?.visible"
               w="160px"
               @update:model-value="setComponentBadgeType(component.key, $event as BadgeType)"
@@ -355,6 +357,7 @@ function toggleChannel(value: string) {
             <Radio
               :model-value="getComponentConfig(component.key)?.visible ?? true"
               :label="$t('settings.visibility')"
+              :accessible-label="`${$t(component.i18nKey)} · ${$t('settings.visibility')}`"
               @update:model-value="setComponentVisibility(component.key, $event)"
             />
           </div>

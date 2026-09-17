@@ -225,13 +225,15 @@ export interface BangumiEpisode {
 }
 
 export function convertUserCardData(user: any, sampleTitle: (index: number) => string) {
+  user = user && typeof user === 'object' ? user : {}
+  const roomid = Number(user.roomid || user.room_id)
   const verifyInfo = user.official_verify?.desc || user.verify_info || ''
   // 兼容live_user数据结构：uid->mid, uface->face
   const mid = user.mid || user.uid
   const face = user.upic || user.face || user.uface || ''
   return {
     mid,
-    name: removeHighlight(user.uname),
+    name: removeHighlight(user.uname || user.name || ''),
     face,
     sign: removeHighlight(user.usign || user.sign),
     fans: user.fans || user.attentions,
@@ -243,8 +245,8 @@ export function convertUserCardData(user: any, sampleTitle: (index: number) => s
     samples: convertUserSamples(user, 7, sampleTitle),
     isFollowed: user.is_follow || 0,
     showFollowButton: true,
-    liveStatus: user.live_status,
-    roomid: user.roomid || user.room_id,
+    liveStatus: Number(user.is_live ?? user.live_status ?? 0) === 1 ? 1 : 0,
+    roomid: Number.isSafeInteger(roomid) && roomid > 0 ? roomid : undefined,
   }
 }
 
@@ -252,16 +254,9 @@ export function convertUserHighlight(user: any, sampleTitle: (index: number) => 
   const base = convertUserCardData(user, sampleTitle)
   return {
     ...base,
-    face: base.face,
-    name: base.name,
-    fans: user.fans,
-    videos: user.videos,
-    desc: removeHighlight(user.usign || user.sign || ''),
-    level: user.level,
-    gender: user.gender, // 0:保密, 1:男, 2:女
-    officialVerify: removeHighlight(user.official_verify?.title || user.official_verify?.desc || ''),
-    url: `https://space.bilibili.com/${user.mid}`,
-    samples: convertUserSamples(user, 7, sampleTitle),
+    desc: base.sign,
+    officialVerify: removeHighlight(user?.official_verify?.title || user?.official_verify?.desc || ''),
+    url: base.mid ? `https://space.bilibili.com/${base.mid}` : '',
   }
 }
 

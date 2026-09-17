@@ -2,10 +2,11 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
+import { AppPage } from '~/enums/appEnums'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
-import { ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
+import { detachOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanClipboardSelectionHtml, getClipboardSelection } from '~/utils/clipboardSelection'
 import type { EffectiveTopBarSource } from '~/utils/effectiveTopBarSource'
 import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
@@ -210,9 +211,15 @@ export function setupNecessarySettingsWatchers() {
         homePage: isHomePage(),
         searchPage: location.hostname === 'search.bilibili.com',
         inIframe: isInIframe(),
+        nativeHome: isInIframe() || settingsStore.getDockItemIsUseOriginalBiliPage(AppPage.Home),
+        active: isInIframe() || !iframePageActive.value,
       }),
     )
   }
+  onScopeDispose(() => {
+    setUselessFeedCardBlockerEnabled(false)
+    detachOriginalBilibiliTopBar(document)
+  })
 
   watch(() => settings.value.blockAds, () => {
     // 不要在类名中使用 "ads"，否则可能被 AdGuard、AdBlock 等扩展误删。
@@ -246,7 +253,7 @@ export function setupNecessarySettingsWatchers() {
   )
 
   // iframe 内的原版页面同样可能通过 SPA 导航离开或返回首页。
-  watch(currentLocationHref, refreshUselessFeedCardBlocker)
+  watch([currentLocationHref, iframePageActive, () => settingsStore.getDockItemIsUseOriginalBiliPage(AppPage.Home)], refreshUselessFeedCardBlocker)
 
   /**
    * 搜尋結果的上方的廣告，但有時是年末總結、年度報告這些
@@ -472,6 +479,8 @@ export function setupNecessarySettingsWatchers() {
       // 切回 Bewly 顶栏时用 remove-top-bar 隐藏即可，避免重新点亮原站首页 Vue 树。
       if (useNativeBilibiliTopBar && !outerTopBarsSuppressed)
         ensureOriginalBilibiliTopBarAppended(document)
+      else
+        detachOriginalBilibiliTopBar(document)
 
       const shouldApplyRemoveTopBar = effectiveTopBarSource === 'bewly' || outerTopBarsSuppressed
       document.documentElement.classList.toggle('remove-top-bar', shouldApplyRemoveTopBar)
@@ -488,6 +497,7 @@ export function setupNecessarySettingsWatchers() {
       }
     }
     else {
+      detachOriginalBilibiliTopBar(document)
       // Handle non-homepage pages
       document.documentElement.classList.toggle('remove-top-bar', effectiveTopBarSource === 'bewly')
 

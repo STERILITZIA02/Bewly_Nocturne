@@ -46,6 +46,7 @@ import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, se
 import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '~/utils/momentKey'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
+import { normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
 export const LOGIN_RECHECK_INTERVAL = 1000 * 60 // 已登录但 userInfo 未填充时重查的间隔
 
@@ -694,6 +695,8 @@ export const useTopBarStore = defineStore('topBar', () => {
     watchLaterStateAccountId = undefined
   }
 
+  const watchLaterInvalidationVersion = ref(0)
+
   function isInWatchLater(aid: number | undefined): boolean {
     return aid !== undefined && addedWatchLaterList.includes(aid)
   }
@@ -872,8 +875,8 @@ export const useTopBarStore = defineStore('topBar', () => {
   // 获取稍后再看列表
   function dedupeWatchLaterItems(items: VideoItem[]): VideoItem[] {
     const seen = new Set<number>()
-    return items.filter((item) => {
-      if (!Number.isFinite(item.aid) || seen.has(item.aid))
+    return items.map(normalizeWatchLaterItem).filter((item): item is VideoItem => {
+      if (!item || seen.has(item.aid))
         return false
       seen.add(item.aid)
       return true
@@ -1353,6 +1356,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       watchLaterListGeneration++
       isLoadingWatchLater.value = false
       scheduleWatchLaterAuthoritativeSync()
+      watchLaterInvalidationVersion.value++
     },
   )
 
@@ -1655,6 +1659,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     syncMomentsState,
     syncWatchLaterState,
     ensureWatchLaterState,
+    watchLaterInvalidationVersion,
     isInWatchLater,
     commitWatchLaterMutation,
     commitWatchLaterClear,

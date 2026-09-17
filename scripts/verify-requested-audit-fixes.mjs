@@ -502,6 +502,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     let relationChanged
     const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
     const relations = await loadSourceModule('../src/composables/useUserRelations.ts', {
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       'vue': Vue,
       '@vueuse/core': await import('@vueuse/core'),
       '~/utils/userRelation': { onUserRelationChange: (listener) => {
@@ -630,7 +631,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     }
   })
 
-  check('audit 25: UnoCSS emits semantic size and line-height pairs without changing spacing conversion', async () => {
+  check('audit 25: UnoCSS emits semantic typography and uses the independent spacing grid', async () => {
     const { createGenerator } = await import('unocss')
     const { default: config } = await import('../unocss.config')
     const generator = await createGenerator(config)
@@ -639,7 +640,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       assert.ok(css.includes(`font-size:var(--bew-font-size-${role})`))
       assert.ok(css.includes(`line-height:var(--bew-line-height-${role})`))
     }
-    assert.match(css, /padding:calc\(var\(--bew-base-font-size\) \* 1\)/)
+    assert.match(css, /padding:var\(--bew-space-4\)/)
     assert.ok(css.includes('font-weight:var(--bew-font-weight-semibold)'))
   })
 }

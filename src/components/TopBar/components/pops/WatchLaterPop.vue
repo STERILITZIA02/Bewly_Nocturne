@@ -11,16 +11,20 @@ import Tooltip from '~/components/Tooltip.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
+import type { List as WatchLaterItem } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { getUserID, isHomePage, isInIframe, removeHttpFromUrl } from '~/utils/main'
+import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
+import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
+const emit = defineEmits<{ addOpenTabs: [] }>()
 const topBarStore = useTopBarStore()
 const { t } = useI18n()
 const toast = useToast()
@@ -67,34 +71,15 @@ onMounted(async () => {
   await topBarStore.syncWatchLaterState(true)
 })
 
-function getVideoPageUrl(bvid: string): string {
-  return `https://www.bilibili.com/video/${bvid}/`
-}
-
-function getWatchLaterVideoUrl(bvid: string): string {
-  return `https://www.bilibili.com/list/watchlater?bvid=${bvid}`
-}
-
 function openVideoPage(url: string) {
-  if (settings.value.topBarLinkOpenMode === 'background') {
+  const action = resolveConfiguredLinkAction(settings.value.topBarLinkOpenMode, location.href)
+  if (action === 'background') {
     resetTopBarTransientInteraction()
     void openLinkInBackground(url)
     return
   }
 
-  if (settings.value.topBarLinkOpenMode === 'currentTabIfNotHomepage') {
-    // Keep the behavior consistent with ALink's target logic.
-    if (isInIframe() || isHomePage()) {
-      resetTopBarTransientInteraction()
-      window.open(url, '_blank')
-    }
-    else {
-      window.open(url, '_top')
-    }
-    return
-  }
-
-  if (settings.value.topBarLinkOpenMode === 'newTab') {
+  if (action === 'newTab') {
     resetTopBarTransientInteraction()
     window.open(url, '_blank')
     return
@@ -124,10 +109,11 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
   }
 }
 
-async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
+async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
   const owner = actionLifetime.capture()
-  if (await deleteWatchLaterItem(aid) && owner.isCurrent())
-    openVideoPage(getVideoPageUrl(bvid))
+  const url = getWatchLaterPlaybackUrl(item)
+  if (url && await deleteWatchLaterItem(item.aid) && owner.isCurrent())
+    openVideoPage(url)
 }
 </script>
 
@@ -142,6 +128,9 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
       </h3>
 
       <div class="bew-popover__actions">
+        <button type="button" class="bew-popover__action" @click.stop="emit('addOpenTabs')">
+          {{ $t('watch_later.open_tabs.title') }}
+        </button>
         <ALink
           :href="playAllUrl"
           type="topBar"
@@ -181,7 +170,7 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
         >
           <ALink
             class="popover-card__primary"
-            :href="getWatchLaterVideoUrl(item.bvid)"
+            :href="getWatchLaterPlaybackUrl(item, true)"
             :aria-label="item.title"
             type="topBar"
           />
@@ -201,8 +190,8 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                   <IconButton
                     class="popover-card__interactive popover-card__overlay-action"
                     :label="$t('watch_later.open_video_page')"
-                    :disabled="pendingActions.has(item.aid)"
-                    @click.stop.prevent="openVideoPage(getVideoPageUrl(item.bvid))"
+                    :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
+                    @click.stop.prevent="openVideoPage(getWatchLaterPlaybackUrl(item))"
                   >
                     <i i-tabler:external-link />
                   </IconButton>
@@ -213,8 +202,8 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
                   <IconButton
                     class="popover-card__interactive popover-card__overlay-action"
                     :label="$t('watch_later.play_video')"
-                    :disabled="pendingActions.has(item.aid)"
-                    @click.stop.prevent="handleOpenVideoPageAndRemove(item.aid, item.bvid)"
+                    :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
+                    @click.stop.prevent="handleOpenVideoPageAndRemove(item)"
                   >
                     <i i-tabler:player-play />
                   </IconButton>
@@ -281,11 +270,11 @@ async function handleOpenVideoPageAndRemove(aid: number, bvid: string) {
               </h3>
               <div class="popover-card__meta" flex="~" align="items-center">
                 <ALink
-                  :href="`https://space.bilibili.com/${item.owner.mid}`"
+                  :href="getWatchLaterAuthor(item).authorUrl"
                   type="topBar"
                   class="popover-card__interactive"
                 >
-                  {{ item.owner.name }}
+                  {{ getWatchLaterAuthor(item).name }}
                 </ALink>
               </div>
             </div>

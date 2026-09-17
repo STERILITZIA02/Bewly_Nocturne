@@ -1,8 +1,10 @@
 import { defineStore } from 'pinia'
+import { watch } from 'vue'
 
 import type { VideoCardDisplayData } from '~/components/VideoCard/types'
 import type { HomeTabSnapshot } from '~/composables/useHomeTabState'
 import type { RecommendationMode } from '~/logic'
+import { settings } from '~/logic/storage'
 import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import type { Item as VideoItem } from '~/models/video/forYou'
 import type { AccountId } from '~/utils/accountScope'
@@ -42,6 +44,10 @@ export const useForYouStore = defineStore('forYou', () => {
   const resetState = () => {
     state.value = null
   }
+  watch(() => settings.value.preserveForYouState, (preserve) => {
+    if (!preserve)
+      resetState()
+  }, { flush: 'sync' })
 
   return {
     state: readonly(state),

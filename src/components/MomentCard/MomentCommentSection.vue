@@ -7,13 +7,14 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { buildMomentCommentPermalink } from '~/utils/commentPermalink'
 import type { CommentTreeLayoutNode } from '~/utils/commentTree'
-import { buildCommentTree } from '~/utils/commentTree'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import type { MomentCommentTarget } from '~/utils/momentCommentTarget'
 import { readMomentCommentTarget, resolveMomentCommentTarget } from '~/utils/momentCommentTarget'
 
+import type { MomentCommentViewNode } from './commentThreadLayout'
+import { buildMomentCommentThread } from './commentThreadLayout'
 import type { MomentCommentItem } from './commentUtils'
 import { flattenMomentCommentReplies, mergeMomentComments, normalizeMomentCommentPage } from './commentUtils'
 import MomentCommentMedia from './MomentCommentMedia.vue'
@@ -23,9 +24,10 @@ import type { DisplayMoment } from './types'
 import { useMomentCommentThread } from './useMomentCommentThread'
 import { getAvatarThumbnailUrl } from './utils'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   moment: DisplayMoment
-}>()
+  active?: boolean
+}>(), { active: true })
 
 const emit = defineEmits<{
   openImagePreview: [images: string[], index: number, trigger: HTMLElement]
@@ -33,15 +35,10 @@ const emit = defineEmits<{
   writingChange: [pending: boolean]
 }>()
 
-interface MomentCommentTreeViewNode {
-  comment: MomentCommentItem
-  layout: CommentTreeLayoutNode
-}
-
 interface MomentCommentThreadView {
   root: MomentCommentItem
   revision: number
-  nodes: MomentCommentTreeViewNode[]
+  nodes: MomentCommentViewNode[]
   hasMoreReplies: boolean
   repliesLoading: boolean
   repliesError?: string
@@ -75,6 +72,7 @@ const hasMore = ref(false)
 const nextPage = ref(1)
 const likedIds = reactive(new Set<string>())
 const likeCounts = reactive<Record<string, number>>({})
+const collapsedIds = reactive(new Set<string>())
 watch(() => sessions.hasPendingLikes(sessionLease.value), pending => emit('writingChange', pending), { flush: 'sync' })
 let requestGeneration = 0
 let disposed = false
@@ -100,6 +98,7 @@ function saveSession() {
     likedIds: [...likedIds],
     likeCounts: { ...likeCounts },
     scrollTop: listRef.value?.scrollTop ?? restoredScrollTop,
+    collapsedIds: [...collapsedIds],
   })
 }
 
@@ -130,8 +129,13 @@ async function initializeComments(nextSort?: 0 | 1) {
   nextPage.value = 1
   loadError.value = ''
   likedIds.clear()
+  collapsedIds.clear()
   Object.keys(likeCounts).forEach(key => delete likeCounts[key])
   resetThreads()
+  if (props.active === false) {
+    resolvingTarget.value = false
+    return
+  }
   resolvingTarget.value = true
   try {
     const resolved = readMomentCommentTarget(props.moment.commentId, props.moment.commentType)
@@ -154,6 +158,7 @@ async function initializeComments(nextSort?: 0 | 1) {
       Object.assign(likeCounts, snapshot.likeCounts)
       restoreThreads(snapshot.threads)
       restoredScrollTop = snapshot.scrollTop
+      snapshot.collapsedIds?.forEach(id => collapsedIds.add(id))
       hasLoaded = true
       void restoreScroll()
     }
@@ -197,28 +202,20 @@ const commentCountLabel = computed(() => props.moment.commentCount > 0 ? ` ${pro
 const threadViews = computed<MomentCommentThreadView[]>(() => comments.value.map((root) => {
   const state = getThreadState(root)
   const replies = flattenMomentCommentReplies(state?.items ?? root.replies)
-  const allItems = mergeMomentComments([], [root, ...replies])
-  const itemById = new Map(allItems.map(item => [item.id, item]))
-  const rootId = root.rpid || root.id
-  const layout = buildCommentTree(allItems.map((comment, originalOrder) => ({
-    id: comment.id,
-    rootId,
-    parentId: comment.id === root.id
-      ? ''
-      : comment.parentRpid && comment.parentRpid !== comment.id
-        ? comment.parentRpid
-        : rootId,
-    createdAt: comment.createdAt,
-    originalOrder,
-  })), 6)
+  const hidden = new Set<string>()
+  const nodes = buildMomentCommentThread(root, replies, root.replies).filter((node) => {
+    const parent = node.layout.parentId
+    if (parent && (collapsedIds.has(parent) || hidden.has(parent))) {
+      hidden.add(node.layout.id)
+      return false
+    }
+    return true
+  })
 
   return {
     root,
     revision: threadRevision.value,
-    nodes: layout.flatMap((node) => {
-      const comment = itemById.get(node.id)
-      return comment ? [{ comment, layout: node }] : []
-    }),
+    nodes,
     hasMoreReplies: state?.hasMore ?? root.replyCount > replies.length,
     repliesLoading: state?.loading ?? false,
     repliesError: state?.error,
@@ -273,7 +270,7 @@ function seedCommentLikeState(items: MomentCommentItem[], readVersion: number) {
 }
 
 async function loadComments(reset = false) {
-  if (!commentId.value || !commentType.value || loading.value || loadingMore.value)
+  if (disposed || props.active === false || !commentId.value || !commentType.value || loading.value || loadingMore.value)
     return
 
   const generation = reset ? ++requestGeneration : requestGeneration
@@ -313,12 +310,15 @@ async function loadComments(reset = false) {
     }
     const previousItemCount = comments.value.length
     const mergedItems = reset ? page.items : mergeMomentComments(comments.value, page.items)
-    const madeProgress = reset || mergedItems.length > previousItemCount
+    const madeProgress = reset ? page.items.length > 0 : mergedItems.length > previousItemCount
     const pageAdvanced = page.nextPage > pageNumber
     comments.value = mergedItems
     hasLoaded = true
-    hasMore.value = page.hasMore && madeProgress && pageAdvanced
-    nextPage.value = pageAdvanced ? page.nextPage : pageNumber
+    hasMore.value = page.hasMore
+    const stalled = page.hasMore && (!madeProgress || !pageAdvanced)
+    nextPage.value = !stalled && pageAdvanced ? page.nextPage : pageNumber
+    if (stalled)
+      loadError.value = t('moment_card.comments_load_failed')
     seedCommentLikeState(page.items, likeReadVersion)
     seedCommentThreads(page.items)
   }
@@ -377,6 +377,14 @@ function getTreeNodeStyle(node: CommentTreeLayoutNode) {
   }
 }
 
+function toggleCommentBranch(id: string) {
+  if (collapsedIds.has(id))
+    collapsedIds.delete(id)
+  else
+    collapsedIds.add(id)
+  emit('interactiveResize')
+}
+
 function openCommentInNewTab(comment: MomentCommentItem) {
   openLinkToNewTab(buildMomentCommentPermalink({
     ...props.moment,
@@ -405,6 +413,20 @@ async function loadThreadReplies(root: MomentCommentItem) {
     seedCommentLikeState(state.items.filter(item => !previousItems.has(item)), likeReadVersion)
 }
 
+function loadMoreIfNearEnd() {
+  const list = listRef.value
+  if (props.active === false || disposed || document.hidden || loadError.value || !hasMore.value || !list?.clientHeight)
+    return
+  if (list.scrollHeight - list.scrollTop - list.clientHeight <= list.clientHeight / 4)
+    void loadComments(false)
+}
+watch([loading, loadingMore, listRef, () => props.active], () => {
+  void nextTick(loadMoreIfNearEnd)
+}, { flush: 'post' })
+watch(() => props.active, (active) => {
+  if (active && !hasLoaded && !resolvingTarget.value && !loading.value)
+    void initializeComments()
+})
 watch(getSourceIdentity, () => void initializeComments(), { immediate: true, flush: 'sync' })
 watch(() => [comments.value, loading.value, loadingMore.value, resolvingTarget.value, loadError.value, threadRevision.value], () => emit('interactiveResize'), { flush: 'sync' })
 onMounted(() => void restoreScroll())
@@ -469,7 +491,10 @@ onBeforeUnmount(() => {
       <span>{{ t('moment_card.comments_empty') }}</span>
     </div>
 
-    <div v-else ref="listRef" class="moment-comments__list" tabindex="0" :aria-label="t('moment_card.comments')">
+    <div
+      v-else ref="listRef" class="moment-comments__list" tabindex="0" :aria-label="t('moment_card.comments')"
+      @scroll.passive="loadMoreIfNearEnd"
+    >
       <section
         v-for="thread in threadViews"
         :key="thread.root.id"
@@ -478,59 +503,77 @@ onBeforeUnmount(() => {
         <MomentCommentTreeGuides :nodes="thread.nodes.map(node => node.layout)" />
         <article
           v-for="node in thread.nodes"
-          :key="node.comment.id"
+          :key="node.layout.id"
           class="moment-comments__item"
-          :data-comment-id="node.comment.id"
+          :data-comment-id="node.layout.id"
           :style="getTreeNodeStyle(node.layout)"
         >
-          <img
-            class="moment-comments__avatar"
-            :src="getAvatarThumbnailUrl(node.comment.author.avatar)"
-            alt=""
-            loading="lazy"
+          <IconButton
+            v-if="node.layout.hasChildren" class="moment-comments__branch-toggle" shape="circle"
+            :label="t(collapsedIds.has(node.layout.id) ? 'moment_card.comments_expand_thread' : 'moment_card.comments_collapse_thread')"
+            :aria-expanded="!collapsedIds.has(node.layout.id)" @click="toggleCommentBranch(node.layout.id)"
           >
-          <div class="moment-comments__body">
-            <div class="moment-comments__meta">
-              <span class="moment-comments__author">{{ node.comment.author.name }}</span>
-              <span v-if="formatCommentTime(node.comment.createdAt)" class="moment-comments__time">
-                {{ formatCommentTime(node.comment.createdAt) }}
-              </span>
+            <span :class="collapsedIds.has(node.layout.id) ? 'i-tabler-plus' : 'i-tabler-minus'" aria-hidden="true" />
+          </IconButton>
+          <template v-if="node.missing">
+            <span class="moment-comments__avatar moment-comments__missing-avatar" aria-hidden="true">?</span>
+            <div class="moment-comments__body moment-comments__missing-parent">
+              <span v-if="node.missing.authorName">{{ node.missing.authorName }} · </span>{{ t('moment_card.comments_missing_parent') }}
+              <p v-if="node.missing.messageText">
+                {{ node.missing.messageText }}
+              </p>
             </div>
-            <MomentCommentRichText
-              v-if="node.comment.segments.length"
-              :segments="node.comment.segments"
-            />
-            <MomentCommentMedia
-              v-if="node.comment.pictures.length"
-              :pictures="node.comment.pictures"
-              @open-image-preview="openCommentImage"
-            />
-            <p v-if="!node.layout.directParentVisible" class="moment-comments__missing-parent">
-              {{ t('moment_card.comments_missing_parent') }}
-            </p>
-            <div class="moment-comments__actions">
-              <button
-                type="button"
-                class="moment-comments__action"
-                :class="{ 'is-active': commentLikeState(node.comment).liked }"
-                :aria-label="commentLikeState(node.comment).liked ? t('moment_card.comment_unlike') : t('moment_card.comment_like')"
-                :aria-pressed="commentLikeState(node.comment).liked"
-                :disabled="commentLikeState(node.comment).pending"
-                @click="toggleCommentLike(node.comment)"
-              >
-                <span i-tabler-thumb-up aria-hidden="true" />
-                <span>{{ commentLikeState(node.comment).count }}</span>
-              </button>
-              <button
-                type="button"
-                class="moment-comments__action moment-comments__action--permalink"
-                @click="openCommentInNewTab(node.comment)"
-              >
-                <span i-tabler-external-link aria-hidden="true" />
-                {{ t('moment_card.comments_reply_new_tab') }}
-              </button>
+          </template>
+          <template v-else-if="node.comment">
+            <img
+              class="moment-comments__avatar"
+              :src="getAvatarThumbnailUrl(node.comment.author.avatar)"
+              alt=""
+              loading="lazy"
+            >
+            <div class="moment-comments__body">
+              <div class="moment-comments__meta">
+                <span class="moment-comments__author">{{ node.comment.author.name }}</span>
+                <span v-if="formatCommentTime(node.comment.createdAt)" class="moment-comments__time">
+                  {{ formatCommentTime(node.comment.createdAt) }}
+                </span>
+              </div>
+              <MomentCommentRichText
+                v-if="node.comment.segments.length"
+                :segments="node.comment.segments"
+              />
+              <MomentCommentMedia
+                v-if="node.comment.pictures.length"
+                :pictures="node.comment.pictures"
+                @open-image-preview="openCommentImage"
+              />
+              <p v-if="!node.layout.directParentVisible" class="moment-comments__missing-parent">
+                {{ t('moment_card.comments_missing_parent') }}
+              </p>
+              <div class="moment-comments__actions">
+                <button
+                  type="button"
+                  class="moment-comments__action"
+                  :class="{ 'is-active': commentLikeState(node.comment).liked }"
+                  :aria-label="commentLikeState(node.comment).liked ? t('moment_card.comment_unlike') : t('moment_card.comment_like')"
+                  :aria-pressed="commentLikeState(node.comment).liked"
+                  :disabled="commentLikeState(node.comment).pending"
+                  @click="toggleCommentLike(node.comment)"
+                >
+                  <span i-tabler-thumb-up aria-hidden="true" />
+                  <span>{{ commentLikeState(node.comment).count }}</span>
+                </button>
+                <button
+                  type="button"
+                  class="moment-comments__action moment-comments__action--permalink"
+                  @click="openCommentInNewTab(node.comment)"
+                >
+                  <span i-tabler-external-link aria-hidden="true" />
+                  {{ t('moment_card.comments_reply_new_tab') }}
+                </button>
+              </div>
             </div>
-          </div>
+          </template>
         </article>
 
         <div
@@ -577,6 +620,12 @@ onBeforeUnmount(() => {
   display: grid;
   gap: var(--bew-space-4);
   padding-block: var(--bew-space-3);
+}
+.moment-comments__missing-avatar {
+  display: grid;
+  place-items: center;
+  background: var(--bew-content-solid);
+  color: var(--bew-text-2);
 }
 .moment-comments__skeleton-row {
   display: flex;
@@ -699,6 +748,15 @@ onBeforeUnmount(() => {
   border-radius: 50%;
   object-fit: cover;
   corner-shape: var(--bew-corner-shape-round);
+}
+.moment-comments__branch-toggle {
+  position: absolute;
+  top: calc(var(--bew-comment-avatar-size) - var(--bew-space-3));
+  left: calc((var(--bew-comment-avatar-size) - var(--bew-space-6)) / 2);
+  width: var(--bew-space-6);
+  height: var(--bew-space-6);
+  background: var(--bew-elevated-solid);
+  z-index: 1;
 }
 .moment-comments__body {
   min-width: 0;

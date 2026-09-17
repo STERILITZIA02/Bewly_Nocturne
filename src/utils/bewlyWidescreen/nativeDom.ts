@@ -146,19 +146,26 @@ function isLikelyCommentRoot(candidate: HTMLElement) {
 }
 
 export function findCommentRoot(root: ParentNode = document, excludeWidescreenRoot = false): HTMLElement | null {
-  const candidates: HTMLElement[] = []
+  const candidates = new Set<HTMLElement>()
 
   for (const selector of selectors.comment) {
     for (const candidate of Array.from(root.querySelectorAll<HTMLElement>(selector))) {
+      if (candidates.has(candidate))
+        continue
       if (excludeWidescreenRoot && candidate.closest(`#${ROOT_ID}`))
         continue
       if (!isLikelyCommentRoot(candidate))
         continue
-      candidates.push(candidate)
+      candidates.add(candidate)
     }
   }
 
-  return candidates.find(candidate => candidate.offsetParent !== null) ?? candidates[0] ?? null
+  const roots = [...candidates]
+  // Most pages have one root matching several selectors. Its visibility cannot
+  // affect the choice, so do not force a document-wide layout/resource flush.
+  if (roots.length < 2)
+    return roots[0] ?? null
+  return roots.find(candidate => candidate.offsetParent !== null) ?? roots[0] ?? null
 }
 
 export function moveNode(

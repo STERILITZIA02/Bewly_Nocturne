@@ -86,12 +86,14 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const gridPolicy = await import('../src/utils/gridLayout')
     const coverPolicy = await import('../src/utils/videoCardLayout')
     const events = await import('../src/constants/globalEvents')
-    const settings = Vue.ref({ gridColumns: { base: 4, sm: 4, md: 4, lg: 4, xl: 4, xxl: 4 }, autoSwitchListLayout: false, videoCardLayout: 'modern', videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50 })
+    const settings = Vue.ref({ gridColumns: { base: 4, sm: 4, md: 4, lg: 4, xl: 4, xxl: 4 }, autoSwitchListLayout: false, videoCardLayout: 'modern', videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50, videoCardContextMenuConfig: [{ key: 'followUser', visible: true }] })
+    const relationWindows = []
     const editing = Vue.ref(false)
     const mode = Vue.ref('adaptive')
     const pins = Vue.reactive(new Set())
     const gridLayout = await loadSourceModule('../src/composables/useGridLayout.ts', { vue: Vue, '~/logic': { settings } })
     const grid = await compileComponent('../src/components/VideoCardGrid.vue', {
+      '~/composables/useUserRelations': { useUserRelations: () => ({ batchQueryUserRelations: async mids => relationWindows.push(mids) }) },
       '~/components/VideoCard/types': cardTypes,
       '~/composables/useCardWindow': cardWindow,
       '~/composables/useGridLayout': gridLayout,
@@ -146,7 +148,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
         return () => Vue.h('div', { 'data-video-id': props.video.id }, [Vue.h('button', { onClick: () => props.persistentState.videoCurrentTime = 17 }, String(props.persistentState.videoCurrentTime))])
       },
     }
-    const items = Array.from({ length: 5000 }, (_, id) => ({ id: id + 1 }))
+    const items = Array.from({ length: 5000 }, (_, id) => ({ id: id + 1, author: { mid: id + 10001 } }))
     const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items, gridLayout: mode.value, noMoreContent: true, transformItem: item => item, getItemKey: item => item.id }) })
     app.component('VideoCard', card).component('Empty', { render: () => null }).component('Button', { render: () => null })
     app.config.globalProperties.$t = key => key
@@ -159,6 +161,8 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       app.mount(root)
       await settle()
       assert.ok(mounted > 0 && mounted < 250)
+      assert.ok(relationWindows.some(mids => mids.includes(10001)), 'visible unknown relationships are read')
+      assert.ok(relationWindows.every(mids => mids.length < 400), 'relation requests cover the loading window, not the entire list')
       const first = root.querySelector('[data-video-id="1"] button')
       first.click()
       first.focus()
@@ -184,6 +188,9 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       await settle()
       assert.ok(mounted > 0 && mounted < 350)
       assert.equal(root.querySelectorAll('.video-card-slot').length, mounted)
+      settings.value.videoCardContextMenuConfig[0].visible = false
+      await settle()
+      assert.equal(relationWindows.at(-1).length, 0, 'hidden relation controls release their query interest')
       outside.remove()
     }
     finally {

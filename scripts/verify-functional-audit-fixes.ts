@@ -17,6 +17,7 @@ async function verifySettingsRevealLifecycle() {
     'deactivateSettingsModal',
   ], {
     settingsModalActive: true,
+    reducedMotion: { value: 'no-preference' },
     searchNavigationId: 1,
     settingNavigationTimer: undefined,
     settingNavigationFrame: undefined,

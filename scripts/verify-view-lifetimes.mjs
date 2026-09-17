@@ -166,6 +166,7 @@ export function registerViewLifetimeChecks(check, { Vue, compileComponent, flush
     key.value = 'forYou:web'
     await flush()
     assert.equal(Vue.toRaw(active.items.value), data)
+    assert.equal(active.lifetime.read('items', undefined), undefined, 'restored refs consume their snapshot field')
     assert.equal(active.history.canUndo.value, true)
     const restored = active.history.undo({ videoList: [{ id: 'new' }], appVideoList: [], webShowlistGroups: [] })
     assert.equal(restored.videoList.length, 2000)

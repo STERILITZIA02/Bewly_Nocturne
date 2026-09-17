@@ -1,4 +1,5 @@
 common:
+  retry: Retry
   operation_completed: Done
   dialog: Dialog
   view_all: View ALL
@@ -110,6 +111,14 @@ player_screenshot:
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
+  no_search_character: Hide search character
+  reorder_keyboard_hint: Hold Alt and press an arrow key to reorder
+  auto_remove_watch_later_on_end: Remove completed Watch Later videos
+  auto_remove_watch_later_on_end_desc: 'Off by default. Remove only after the full final part finishes on the Watch Later player. Previews, ads and unverified media are excluded.'
+  current_tab_if_homepage_desc: '“Current tab on home only” uses the current tab on native or Bewly Home. Search results, History, Favorites and other internal pages use a new tab.'
+  video_screenshot_shortcut: Screenshot shortcut
+  video_screenshot_shortcut_desc: Focus the field and press a key combination; Backspace clears it. Default Shift+S works even when the screenshot button is hidden.
+  video_screenshot_shortcut_conflict: Invalid combination or a conflict with a common browser shortcut.
   enable_sidebar_cover_blur: Sidebar cover background
   enable_sidebar_cover_blur_desc: Use a blurred cover behind Favorites and Watch Later sidebars. Turn off to use neutral surfaces from the current theme.
   following_sort: Uploader order in the new Following layout
@@ -489,6 +498,7 @@ settings:
   frosted_glass_blur_intensity: Frosted glass blur intensity
   disable_shadow: Disable shadow
   link_opening_behavior_opt:
+    current_tab_if_homepage: Current tab on home only
     current_tab: Current tab
     current_tab_if_not_homepage: Current outside home
     background: Background tab
@@ -835,6 +845,7 @@ settings:
     state is not synced (requires signing in to the browser account).
   settings_sync_unsynced_count: 'Unsynced fields: {count}'
   settings_sync_quota_blocked_count: 'Blocked by cloud quota: {count}'
+  settings_sync_retry_at: 'Local changes are saved. Cloud sync will retry automatically after {time}.'
   settings_sync_last_error: 'Last sync error: {error}'
   sync_cloud_conflict_title: Cloud settings backup found
   sync_cloud_conflict_desc: A settings backup already exists in cloud storage. Settings present on both sides will follow the side you choose.
@@ -1374,6 +1385,9 @@ moments:
   fit_window: Fit to window
   rotate_clockwise: Rotate clockwise
 moment_card:
+  comments_expand_thread: Expand replies to this comment
+  comments_collapse_thread: Collapse replies to this comment
+  forward_search_mention: Search users to mention
   comments_sort: Comment order
   comments_sort_latest: Newest
   comments_sort_hot: Top
@@ -1492,6 +1506,11 @@ video_card:
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
 home:
+  following_search_videos: 'Search videos by {name}'
+  following_clear_video_search: Clear video search
+  following_no_search_results: No matching video submissions
+  following_display_flat: List
+  following_display_grouped: Groups
   following_default_group: Default group
   following_special_group: Special follows
   following_group_name: 'Group {id}'
@@ -1525,6 +1544,8 @@ home:
   subscribed_series: Subscribed Series
   weekly: Weekly
   weekly_search_placeholder: Search editions...
+  weekly_choose_series: Choose an edition
+  weekly_no_matching_series: No matching editions
   precious: Must Watch
   live: Live
   moments: Moments
@@ -1637,6 +1658,37 @@ version_reminder:
   acknowledge: Got it, don't show this version again
   settings_hint: You can turn off “New version reminders” under Settings → About.
 watch_later:
+  auto_remove_failed: Could not remove the completed video from Watch Later. Retry manually later.
+  open_tabs:
+    title: Add playback tabs
+    scope: 'Includes accessible Bilibili playback tabs in every window of the same normal/private context. Original tabs stay open and unchanged. Confirm to add this snapshot, skipping duplicate manuscripts and existing members. Closing this dialog does not stop the background task; reopen here to view progress.'
+    failed_request: 'Could not read the task, or the account changed. Retry.'
+    state_ready: Confirm the candidate tabs below
+    state_running: Adding tabs
+    state_stopped: Further additions stopped
+    state_complete: Task finished
+    stop_user: Stopping affects only requests not yet sent.
+    stop_accountChanged: Account or login credentials changed. Unsent items were stopped.
+    stop_interrupted: Background restarted. Pending items stopped; unknown writes will not be resent.
+    stop_readFailed: Could not read authoritative membership or save task state. Further additions stopped.
+    counts: 'Candidates {total} · Added {added} · Skipped {skipped} · Failed/unknown {failed} · Unprocessed {unprocessed}'
+    stop: Stop further additions
+    confirm: Confirm addition
+    retry: Retry confirmed failures
+    prepare: Read tabs again
+    pending: Pending
+    resolving: Resolving
+    sending: Sent; awaiting result
+    added: Added
+    skipped: Skipped
+    failed: Failed
+    unknown: Unknown; not resent
+    duplicate: Duplicate manuscript
+    existing: Already in queue
+    sourceChanged: Source closed or navigated
+    unresolved: Unknown manuscript/current episode
+    readFailed: Read failed; retryable
+    writeFailed: Server rejected; retryable
   title: Watch Later
   layout_list: List
   layout_grid: Grid
@@ -1702,6 +1754,10 @@ search_page:
   view_all_esports: View All Esports
 
 search:
+  empty_results: 'No {category} results for “{keyword}”'
+  empty_hint: Try a shorter keyword or check all results.
+  edit_keyword: Edit keyword
+  back_to_all: View all results
   page_title: Search - Bilibili
   results_page_title: '{keyword} - Search - Bilibili'
   result_count: '{count} results found'

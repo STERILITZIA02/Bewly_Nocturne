@@ -6,6 +6,7 @@ import ArticleCardSkeleton from '~/components/ArticleCard/ArticleCardSkeleton.vu
 import Empty from '~/components/Empty.vue'
 
 import Pagination from '../components/Pagination.vue'
+import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertArticleCardData } from '../searchTransforms'
 
@@ -52,7 +53,7 @@ defineExpose({
     </div>
 
     <div v-else-if="!isLoading && (!results || results.length === 0)" class="empty-state">
-      <Empty :description="t('common.no_data')" />
+      <SearchEmptyState :keyword="keyword" category="article" />
     </div>
 
     <div v-else class="article-grid">

@@ -55,6 +55,17 @@ function handleAuthorize() {
   requestAppAuthorization(appAuthTokens.value.accessToken)
 }
 
+function moveHomeTab(page: HomeSubPage, direction: -1 | 1) {
+  const items = [...settings.value.homePageTabVisibilityList]
+  const index = items.findIndex(item => item.page === page)
+  const target = index + direction
+  if (index < 0 || target < 0 || target >= items.length)
+    return
+  const [item] = items.splice(index, 1)
+  items.splice(target, 0, item)
+  settings.value.homePageTabVisibilityList = items
+}
+
 function handleRevoke() {
   revokeAccessKey()
   dismissAppAuthorization('')
@@ -425,10 +436,14 @@ function handleToggleHomeTab(tab: any) {
           <draggable
             v-model="settings.homePageTabVisibilityList"
             item-key="page"
-            :component-data="{ style: 'display: flex; gap: 0.5rem; flex-wrap: wrap;' }"
+            :component-data="{ style: 'display: flex; gap: var(--bew-space-2); flex-wrap: wrap;' }"
           >
             <template #item="{ element }">
-              <div
+              <button
+                type="button"
+                :aria-pressed="element.visible"
+                :title="$t('settings.reorder_keyboard_hint')"
+                aria-keyshortcuts="Alt+ArrowLeft Alt+ArrowRight"
                 class="bew-settings-option--lift"
                 flex="~ gap-2 items-center" p="x-4 y-2" bg="$bew-fill-1" rounded="$bew-radius" cursor-all-scroll
                 duration-300
@@ -437,9 +452,11 @@ function handleToggleHomeTab(tab: any) {
                   color: element.visible ? 'var(--bew-on-theme-surface)' : 'var(--bew-text-1)',
                 }"
                 @click="handleToggleHomeTab(element)"
+                @keydown.alt.left.prevent="moveHomeTab(element.page, -1)"
+                @keydown.alt.right.prevent="moveHomeTab(element.page, 1)"
               >
                 {{ $t(mainStore.homeTabs.find(tab => tab.page === element.page)?.i18nKey ?? '') }}
-              </div>
+              </button>
             </template>
           </draggable>
         </template>

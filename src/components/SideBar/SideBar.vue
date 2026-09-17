@@ -299,6 +299,13 @@ function openPlayerFeedback() {
   --uno: "translate-x-100% opacity-0 pointer-events-none";
 }
 
+:is(.left-side, .right-side):focus-within .sidebar-content {
+  transform: none;
+  opacity: 1;
+  pointer-events: auto;
+  transition: none;
+}
+
 .widescreen-docked {
   top: auto !important;
   right: auto !important;

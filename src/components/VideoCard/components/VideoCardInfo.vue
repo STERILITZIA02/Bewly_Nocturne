@@ -5,6 +5,7 @@ import { settings } from '~/logic'
 import { calcTimeSince, numFormatter } from '~/utils/dataFormatter'
 
 import VideoWatchedTag from '../../VideoWatchedTag.vue'
+import { vWholeMeta } from '../directives/wholeMeta'
 import { normalizeVideoCardTags, selectVisibleVideoCardTags } from '../tagPolicy'
 import type { Video } from '../types'
 import { getTagSearchUrl } from '../utils'
@@ -29,10 +30,11 @@ interface Props {
 }
 
 const props = defineProps<Props>()
-
 const emit = defineEmits<{
   moreBtnClick: [event: MouseEvent]
 }>()
+
+const metaMetricsKey = computed(() => JSON.stringify([props.metaFontSizeClass, props.metaStyle, settings.value.customizeFont, settings.value.fontFamily]))
 
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
 
@@ -310,10 +312,17 @@ const content = computed(() => {
         <!-- Modern layout with hideAuthor: Tags directly under title -->
         <div
           v-if="layout === 'modern' && !content.showAuthorAvatar && !content.showAuthorName && content.hasVisibleMeta"
+          v-whole-meta="metaMetricsKey"
           class="video-card-meta-row"
           flex="~ items-center gap-2 wrap"
           :class="metaFontSizeClass"
         >
+          <span
+            v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" lh-6
+            rounded="$bew-radius" text="$bew-text-3"
+          >
+            {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
+          </span>
           <component
             :is="tag.searchable ? 'a' : 'span'"
             v-for="tag in content.visibleLeadingTags"
@@ -345,18 +354,6 @@ const content = computed(() => {
             bg="$bew-theme-surface"
           >
             {{ extraTag }}
-          </span>
-
-          <span
-            v-if="content.showPublishTime"
-            class="video-card-meta__chip"
-            bg="$bew-fill-1"
-            p="x-2"
-            lh-6
-            rounded="$bew-radius"
-            text="$bew-text-3"
-          >
-            {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
           </span>
 
           <span
@@ -395,10 +392,17 @@ const content = computed(() => {
 
             <div
               v-if="content.hasVisibleMeta"
+              v-whole-meta="metaMetricsKey"
               class="video-card-meta-row"
               flex="~ items-center gap-2 wrap"
               :class="metaFontSizeClass"
             >
+              <span
+                v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" lh-6
+                rounded="$bew-radius" text="$bew-text-3"
+              >
+                {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
+              </span>
               <component
                 :is="tag.searchable ? 'a' : 'span'"
                 v-for="tag in content.visibleLeadingTags"
@@ -433,18 +437,6 @@ const content = computed(() => {
               </span>
 
               <span
-                v-if="content.showPublishTime"
-                class="video-card-meta__chip"
-                bg="$bew-fill-1"
-                p="x-2"
-                lh-6
-                rounded="$bew-radius"
-                text="$bew-text-3"
-              >
-                {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
-              </span>
-
-              <span
                 v-if="content.showVideoType"
                 text="$bew-text-2"
                 grid="~ place-items-center"
@@ -461,12 +453,19 @@ const content = computed(() => {
           <!-- Old layout with hideAuthor: Only tags -->
           <div
             v-if="hideAuthor && content.hasVisibleMeta"
+            v-whole-meta="metaMetricsKey"
             class="video-card-meta-row"
             mt-2
             flex="~ gap-1 wrap"
             :class="metaFontSizeClass"
           >
             <!-- Tag -->
+            <span
+              v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" rounded="$bew-radius"
+              text="$bew-text-3" lh-6
+            >
+              {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
+            </span>
             <component
               :is="tag.searchable ? 'a' : 'span'"
               v-for="tag in content.visibleLeadingTags"
@@ -493,13 +492,6 @@ const content = computed(() => {
               bg="$bew-theme-surface"
             >
               {{ extraTag }}
-            </span>
-            <span
-              v-if="content.showPublishTime"
-              bg="$bew-fill-1" p="x-2" rounded="$bew-radius" text="$bew-text-3" lh-6
-              mr-1
-            >
-              {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
             </span>
             <!-- Video type -->
             <span v-if="content.showVideoType" text="$bew-text-2" grid="~ place-items-center">
@@ -558,12 +550,19 @@ const content = computed(() => {
 
             <div
               v-if="content.hasVisibleMeta"
+              v-whole-meta="metaMetricsKey"
               class="video-card-meta-row"
               mt-2
               flex="~ gap-1 wrap"
               :class="metaFontSizeClass"
             >
               <!-- Tag -->
+              <span
+                v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" rounded="$bew-radius"
+                text="$bew-text-3" lh-6
+              >
+                {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
+              </span>
               <component
                 :is="tag.searchable ? 'a' : 'span'"
                 v-for="tag in content.visibleLeadingTags"
@@ -590,13 +589,6 @@ const content = computed(() => {
                 bg="$bew-theme-surface"
               >
                 {{ extraTag }}
-              </span>
-              <span
-                v-if="content.showPublishTime"
-                bg="$bew-fill-1" p="x-2" rounded="$bew-radius" text="$bew-text-3" lh-6
-                mr-1
-              >
-                {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
               </span>
               <!-- Video type -->
               <span v-if="content.showVideoType" text="$bew-text-2" grid="~ place-items-center">
@@ -674,17 +666,26 @@ const content = computed(() => {
 }
 
 .video-card-meta > div:last-child > div:last-child {
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   overflow: hidden;
   max-width: 100%;
 }
 
 .video-card-meta-row {
-  flex-wrap: nowrap;
+  width: 100%;
+  flex-wrap: wrap;
+  align-content: flex-start;
   overflow: hidden;
   max-width: 100%;
   min-height: var(--bew-video-card-meta-row-height);
   max-height: var(--bew-video-card-meta-row-height);
+}
+.video-card-meta-row > * {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.group\/desc {
+  min-width: 0;
 }
 
 .video-card-meta-row > a,

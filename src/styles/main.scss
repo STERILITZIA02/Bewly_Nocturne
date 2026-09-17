@@ -94,6 +94,7 @@ html.dark.bewly-design {
 }
 
 .bewly-wrapper {
+  font-size: var(--bew-font-size-body);
   line-height: var(--bew-line-height-body);
   font-weight: var(--bew-font-weight-regular);
 
@@ -103,7 +104,6 @@ html.dark.bewly-design {
   }
 
   .bew-page-heading {
-    margin: 0;
     font-size: var(--bew-font-size-heading);
     font-weight: var(--bew-font-weight-bold);
     line-height: var(--bew-line-height-heading);
@@ -189,6 +189,11 @@ html.dark.bewly-design {
       color: var(--bew-theme-foreground);
     }
   }
+}
+
+// Reset heading defaults without overriding a page's explicit layout spacing.
+:where(.bewly-wrapper .bew-page-heading) {
+  margin: 0;
 }
 
 // Note: View Transition styles for theme toggle are injected dynamically via JS in useDark.ts

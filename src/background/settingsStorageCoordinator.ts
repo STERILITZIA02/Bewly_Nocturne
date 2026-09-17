@@ -1,6 +1,5 @@
 import browser from 'webextension-polyfill'
 
-import { onMessage } from '~/utils/messaging'
 import type { SettingsCloudSyncEntry, SettingsCloudSyncMode, SettingsCloudSyncVersion } from '~/utils/settingsCloudSyncProtocol'
 import {
   compareSettingsCloudSyncVersions,
@@ -24,6 +23,8 @@ import {
   SETTINGS_STORAGE_READ_MESSAGE,
   SETTINGS_STORAGE_RECENT_OPERATION_LIMIT,
 } from '~/utils/settingsStorageProtocol'
+
+import { onSettingsMessage } from './settingsContextRelay'
 
 export interface SettingsCloudSyncReconcileResult {
   uploads: Record<string, SettingsCloudSyncEntry>
@@ -456,7 +457,8 @@ export function setupSettingsStorageCoordinator() {
     return
 
   initialized = true
-  browser.storage.onChanged.addListener(handleStorageReset)
-  onMessage(SETTINGS_STORAGE_READ_MESSAGE, () => enqueueSettingsWrite(readSettings))
-  onMessage(SETTINGS_STORAGE_PATCH_MESSAGE, value => enqueueSettingsWrite(() => applyPatch(value)))
+  if (!browser.extension?.inIncognitoContext)
+    browser.storage.onChanged.addListener(handleStorageReset)
+  onSettingsMessage(SETTINGS_STORAGE_READ_MESSAGE, () => enqueueSettingsWrite(readSettings))
+  onSettingsMessage(SETTINGS_STORAGE_PATCH_MESSAGE, value => enqueueSettingsWrite(() => applyPatch(value)))
 }

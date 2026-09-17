@@ -6,6 +6,8 @@ import { setupContentScriptRefreshPrompt } from './contentScriptRefreshPrompt'
 import { setupLoginStateWatcher } from './loginStateWatcher'
 import { setupApiMsgListeners } from './messageListeners/api'
 import { setupTabMsgListeners } from './messageListeners/tabs'
+import { setupOpenTabsWatchLater } from './openTabsWatchLater'
+import { setupRefreshTabs } from './refreshTabs'
 import { setupSettingsCloudSync } from './settingsCloudSync'
 import { setupSettingsStorageCoordinator } from './settingsStorageCoordinator'
 import { setupTopBarStateBroker } from './topBarStateBroker'
@@ -76,6 +78,8 @@ setupSettingsStorageCoordinator()
 setupSettingsCloudSync()
 setupApiMsgListeners()
 setupTabMsgListeners()
-setupTopBarStateBroker()
+const topBarBroker = setupTopBarStateBroker()
+setupOpenTabsWatchLater((accountId, incognito) => topBarBroker.invalidateWatchLater({ accountId }, { tab: { incognito } as browser.Tabs.Tab }))
 setupContentScriptRefreshPrompt()
+setupRefreshTabs()
 setupLoginStateWatcher()

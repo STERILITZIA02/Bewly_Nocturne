@@ -11,6 +11,7 @@ import { registerAccountTransactionChecks } from './verify-account-transactions.
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
 import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
+import { registerFourFeatureChecks } from './verify-four-features.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
 import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
@@ -19,8 +20,11 @@ import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
+import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
+import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
 import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
+import { registerUIAuditFixChecks } from './verify-ui-audit-fixes.mjs'
 import { registerUpstreamCommentChecks } from './verify-upstream-comments.mjs'
 import { registerUpstreamFollowingChecks } from './verify-upstream-following.mjs'
 import { registerUpstreamHomeChecks } from './verify-upstream-home.mjs'
@@ -64,7 +68,7 @@ const focus = await import('../src/utils/dialogFocus')
 const { tabbable } = await import('tabbable')
 const keyboard = await import('../src/utils/dialogKeyboard')
 const { computeAnchoredFloatingMenuPosition } = await import('../src/utils/floatingMenu')
-const { mergeWatchLaterItemsByAid } = await import('../src/utils/watchLaterList')
+const { mergeWatchLaterItemsByAid, normalizeWatchLaterItem } = await import('../src/utils/watchLaterList')
 const { createSelectOptionKey } = await import('../src/utils/selectOptionKey')
 const fieldLabels = await import('../src/components/formFieldLabel')
 const imageLoadQueue = await import('../src/utils/imageLoadQueue')
@@ -73,6 +77,10 @@ const r = value => ({ value })
 const checks = []
 const check = (name, run) => checks.push({ name, run })
 registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
+registerSeptemberAdaptationChecks(check, { Vue, compileComponent, flush })
+registerFourFeatureChecks(check, { Vue, compileComponent, flush })
+registerRuntimeErrorChecks(check, { Vue, compileComponent, flush })
+registerUIAuditFixChecks(check, { Vue, compileComponent, flush })
 registerAccountTransactionChecks(check, { Vue, compileComponent, flush })
 registerLongListResourceChecks(check, { Vue, compileComponent, flush })
 registerViewLifetimeChecks(check, { Vue, compileComponent, flush })
@@ -211,8 +219,6 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     'getCurrentAccountId',
     'invalidateRequests',
     'isCurrentRequest',
-    'isRecord',
-    'isValidWatchLaterItem',
     'getWatchLaterListByPage',
     'deleteWatchLaterItem',
   ], {
@@ -232,6 +238,7 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     getUserID: () => '1',
     settleExtensionContextInvalidation: () => false,
     mergeWatchLaterItemsByAid,
+    normalizeWatchLaterItem,
     api: { watchlater: {
       getWatchLaterListByPage: async ({ pn, ps }) => {
         requestedPages.push(pn)
@@ -250,6 +257,7 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     '~/utils/api': { default: context.api },
     '~/utils/main': { getCSRF: () => 'fixture', getUserID: () => '1' },
     '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
+    '~/utils/watchLaterWrite': await import('../src/utils/watchLaterWrite'),
   })).updateOwnedWatchLater
   await context.getWatchLaterListByPage(0, 1)
   await context.deleteWatchLaterItem(2)
@@ -406,6 +414,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '@vueuse/core': VueUse,
     '~/components/formFieldLabel': fieldLabels,
     '~/utils/imageLoadQueue': imageLoadQueue,
+    '~/utils/bilibiliUrl': await import('../src/utils/bilibiliUrl'),
     // Non-material checks keep their existing leaf boundary. Material checks
     // replace these dependencies with the real production modules.
     '~/utils/liquidGlass': { vLiquidGlass: {} },
@@ -416,6 +425,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     ...Vue,
     exports,
     window,
+    AbortController,
     document,
     HTMLElement,
     HTMLImageElement: window.HTMLImageElement,

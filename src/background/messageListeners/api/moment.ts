@@ -150,6 +150,12 @@ const API_MOMENT = {
     },
     afterHandle: AHS.J_D,
   },
+  searchMomentMentions: {
+    url: 'https://api.bilibili.com/x/polymer/web-dynamic/v1/mention/search',
+    _fetch: { method: 'get' },
+    params: { keyword: '' },
+    afterHandle: AHS.J_D,
+  },
   // Current Web publishing traffic uses CSRF + JSON and x-bili-device-req-json here.
   // It does not send x-bili-web-req-json or require client-side WBI signing.
   checkMomentCreate: {

@@ -51,9 +51,13 @@ const API_USER = {
     url: 'https://api.bilibili.com/x/relation/relations',
     _fetch: {
       method: 'get',
+      querySerializer: (params: URLSearchParams) => [...params].map(([key, value]) => {
+        const encoded = new URLSearchParams({ [key]: value }).toString()
+        return key === 'fids' ? encoded.replace(/%2C/gi, ',') : encoded
+      }).join('&'),
     },
     params: {
-      fids: '', // 用户mid列表，用逗号分隔，最多40个
+      fids: '', // 用户 MID 列表；客户端按 URL 预算分批
     },
     afterHandle: AHS.J_D,
   },
@@ -161,6 +165,7 @@ const API_USER = {
       pn: 1, // 页码
       order: 'pubdate', // 排序方式：pubdate最新发布，click最多播放
       tid: 0, // 不筛选分区
+      keyword: '',
     },
     afterHandle: AHS.J_D,
   },
