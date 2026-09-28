@@ -15,6 +15,13 @@ export function isSameAccount(cachedAccountId: AccountId, currentAccountId: Acco
   return cachedAccountId === currentAccountId
 }
 
+/** undefined means the profile is stale; null is an agreed logged-out scope. */
+export function resolveCookieMatchedAccountId(mid: number | string | undefined, cookieMid: string | undefined): AccountId | undefined {
+  const profileId = resolveAuthenticatedAccountId(true, mid)
+  const cookieId = resolveAuthenticatedAccountId(true, cookieMid)
+  return profileId === cookieId ? profileId : undefined
+}
+
 export function isAccountRequestCurrent(
   requestAccountId: number,
   requestGeneration: number,

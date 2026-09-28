@@ -20,9 +20,11 @@ const props = withDefaults(defineProps<{
   disabled?: boolean
   loading?: boolean
   accessibleLabel?: string
+  size?: 'default' | 'compact'
 }>(), {
   disabled: false,
   loading: false,
+  size: 'default',
 })
 
 const emit = defineEmits<{
@@ -198,7 +200,7 @@ watch(unavailable, (disabled) => {
       ref="triggerRef"
       type="button"
       class="select-trigger"
-      :class="{ 'is-disabled': unavailable }"
+      :class="{ 'is-disabled': unavailable, 'select-trigger--compact': size === 'compact' }"
       :disabled="unavailable"
       :aria-busy="loading"
       aria-haspopup="listbox"
@@ -256,6 +258,7 @@ watch(unavailable, (disabled) => {
           :id="listboxId"
           ref="dropdownRef"
           class="bew-popover-surface"
+          :class="{ 'select-options--compact': size === 'compact' }"
           role="listbox"
           :data-bewly-dialog-owner="dialogOwner"
           :style="{
@@ -321,6 +324,21 @@ watch(unavailable, (disabled) => {
 
 .select-trigger:hover {
   background-color: var(--bew-fill-2);
+}
+
+.select-trigger--compact {
+  height: var(--bew-control-height);
+  padding: 0 var(--bew-space-3);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+}
+
+.select-options--compact .select-option {
+  min-height: var(--bew-control-height-sm);
+  padding-block: var(--bew-space-1);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
 }
 
 .select-trigger.is-disabled {

@@ -280,6 +280,7 @@ export function setupNecessarySettingsWatchers() {
       targets.forEach((element) => {
         element.style.setProperty('--bew-theme-color', themeTokens.theme)
         element.style.setProperty('--bew-on-theme-color', themeTokens.onTheme)
+        element.style.setProperty('--bew-switch-thumb-active', themeTokens.switchThumb)
         element.style.setProperty('--bew-theme-foreground', themeTokens.foreground)
         element.style.setProperty('--bew-theme-focus-ring', themeTokens.focusRing)
       })

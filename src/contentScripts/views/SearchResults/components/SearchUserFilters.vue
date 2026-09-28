@@ -1,5 +1,7 @@
 <script lang="ts" setup>
-import { ref, useId } from 'vue'
+import './searchFilters.scss'
+
+import { computed, nextTick, ref, useId, useTemplateRef } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 interface UserFilterOption {
@@ -12,11 +14,6 @@ const props = defineProps<{
   userTypeOptions: ReadonlyArray<UserFilterOption>
 }>()
 
-const emit = defineEmits<{
-  'update:order': [value: string]
-  'update:userType': [value: number]
-}>()
-
 const userOrder = defineModel<string>('order', { default: '' })
 const userType = defineModel<number>('userType', { default: 0 })
 
@@ -24,32 +21,43 @@ const userType = defineModel<number>('userType', { default: 0 })
 const isMoreFiltersExpanded = ref(false)
 const moreFiltersId = useId()
 const { t } = useI18n()
+const activeSummary = computed(() => [
+  userOrder.value ? props.orderOptions.find(option => option.value === userOrder.value)?.label : undefined,
+  userType.value ? props.userTypeOptions.find(option => option.value === userType.value)?.label : undefined,
+].filter((label): label is string => !!label))
+
+const filtersRoot = useTemplateRef<HTMLElement>('filtersRoot')
+
+function clearFilters() {
+  userOrder.value = ''
+  userType.value = 0
+  // The clear button unmounts with the summary; hand focus to the reset choice.
+  nextTick(() => filtersRoot.value?.querySelector<HTMLElement>('[aria-pressed="true"]')?.focus())
+}
 
 function handleOrderChange(value: string) {
   userOrder.value = value
-  emit('update:order', value)
 }
 
 function handleUserTypeSelect(value: number) {
   userType.value = value
-  emit('update:userType', value)
 }
 </script>
 
 <template>
-  <div class="filter-bar" mb-4 flex="~ col" gap-3>
+  <div ref="filtersRoot" class="bew-search-filters">
     <!-- 排序 + 更多筛选按钮 -->
-    <div flex items-center gap-2>
-      <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.order') }}</span>
+    <div class="bew-search-filter-row">
+      <span class="bew-search-filter-label">{{ t('search.filters.order') }}</span>
       <div
-        flex items-center gap-2 flex-wrap flex-1
+        class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
         role="group" :aria-label="t('search.filters.order')"
       >
         <button
           v-for="option in props.orderOptions"
           :key="option.value"
-          class="filter-btn"
-          :class="{ active: userOrder === option.value }"
+          class="bew-segment-control__item"
+          :data-active="userOrder === option.value ? 'true' : undefined"
           :aria-pressed="userOrder === option.value"
           type="button"
           @click="handleOrderChange(option.value as string)"
@@ -58,34 +66,32 @@ function handleUserTypeSelect(value: number) {
         </button>
       </div>
       <button
-        class="more-filters-btn"
+        class="bew-search-filter-more"
         :aria-expanded="isMoreFiltersExpanded"
         :aria-controls="moreFiltersId"
-        flex items-center gap-1
         type="button"
         @click="isMoreFiltersExpanded = !isMoreFiltersExpanded"
       >
-        <span text="sm $bew-text-2">{{ t('search.filters.more') }}</span>
-        <div class="toggle-icon" :class="{ expanded: isMoreFiltersExpanded }">
-          <div class="i-tabler:chevron-down" text="sm $bew-text-3" />
-        </div>
+        <span>{{ t('search.filters.more') }}</span>
+        <i class="i-tabler:chevron-down" aria-hidden="true" />
       </button>
     </div>
 
     <!-- 更多筛选内容 -->
     <div v-show="isMoreFiltersExpanded" :id="moreFiltersId" flex="~ col" gap-3>
       <!-- 用户类型 -->
-      <div flex items-center gap-2>
-        <span text="sm $bew-text-2" min-w-12>{{ t('search.filters.user_type') }}</span>
+      <div class="bew-search-filter-row">
+        <span class="bew-search-filter-label">{{ t('search.filters.user_type') }}</span>
         <div
-          flex items-center gap-2 flex-wrap role="group"
+          class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+          role="group"
           :aria-label="t('search.filters.user_type')"
         >
           <button
             v-for="option in props.userTypeOptions"
             :key="option.value"
-            class="filter-btn"
-            :class="{ active: userType === option.value }"
+            class="bew-segment-control__item"
+            :data-active="userType === option.value ? 'true' : undefined"
             :aria-pressed="userType === option.value"
             type="button"
             @click="handleUserTypeSelect(option.value as number)"
@@ -95,91 +101,11 @@ function handleUserTypeSelect(value: number) {
         </div>
       </div>
     </div>
+    <div v-if="activeSummary.length" class="bew-search-filter-summary">
+      <span>{{ t('search.filters.applied', { filters: activeSummary.join(' · ') }) }}</span>
+      <button type="button" class="bew-search-filter-clear" @click="clearFilters">
+        {{ t('search.filters.clear') }}
+      </button>
+    </div>
   </div>
 </template>
-
-<style scoped lang="scss">
-.filter-btn {
-  box-sizing: border-box;
-  min-height: var(--bew-control-height);
-  padding: var(--bew-space-1) var(--bew-space-3);
-  border-radius: var(--bew-radius-half);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-fill-1);
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-medium);
-  line-height: var(--bew-line-height-control);
-  border: 1px solid var(--bew-surface-border-color);
-  cursor: pointer;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
-  white-space: nowrap;
-  user-select: none;
-
-  &:hover {
-    background: var(--bew-fill-2);
-  }
-
-  &.active {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
-  }
-
-  &:active {
-    transform: scale(0.98);
-  }
-}
-
-.more-filters-btn {
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  min-height: var(--bew-control-height);
-  padding: var(--bew-space-1) var(--bew-space-3);
-  user-select: none;
-  white-space: nowrap;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease,
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    transform 0.2s ease;
-
-  &:hover {
-    span {
-      color: var(--bew-text-1);
-    }
-  }
-}
-
-.toggle-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.2s ease;
-
-  &.expanded {
-    transform: rotate(180deg);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .filter-btn,
-  .more-filters-btn,
-  .toggle-icon {
-    transition-property: color, background-color, border-color, box-shadow;
-  }
-
-  .filter-btn:active {
-    transform: none;
-  }
-}
-</style>

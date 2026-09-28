@@ -1,10 +1,12 @@
 <script setup lang="ts">
+import './mediaResults.scss'
+
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 </script>
 
 <template>
-  <article class="media-highlight-skeleton" aria-hidden="true">
-    <SkeletonBlock class="media-highlight-skeleton__cover" width="160px" height="auto" radius="media" />
+  <article class="media-highlight-skeleton bew-media-result-card" aria-hidden="true">
+    <SkeletonBlock class="media-highlight-skeleton__cover" width="var(--bew-media-result-cover-width)" height="auto" radius="media" />
     <div class="media-highlight-skeleton__info">
       <SkeletonBlock width="64%" height="var(--bew-line-height-heading)" />
       <div class="media-highlight-skeleton__meta">
@@ -17,7 +19,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
         <SkeletonBlock width="76%" height="var(--bew-line-height-body)" />
       </div>
       <div class="media-highlight-skeleton__episodes">
-        <SkeletonBlock height="var(--bew-control-height-lg)" radius="interactive" />
+        <SkeletonBlock width="min(100%, var(--bew-media-episode-control-width))" height="var(--bew-control-height)" radius="interactive" />
       </div>
       <SkeletonBlock class="media-highlight-skeleton__action" width="96px" height="var(--bew-control-height)" radius="interactive" />
     </div>
@@ -25,21 +27,9 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 </template>
 
 <style scoped lang="scss">
-.media-highlight-skeleton {
-  display: flex;
-  box-sizing: border-box;
-  gap: var(--bew-space-4);
-  min-width: 0;
-  padding: var(--bew-space-4);
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
-  corner-shape: var(--bew-corner-shape);
-  background: var(--bew-elevated);
-}
-
 .media-highlight-skeleton__cover {
   aspect-ratio: 3 / 4;
-  flex: 0 0 160px;
+  flex: 0 0 var(--bew-media-result-cover-width);
 }
 
 .media-highlight-skeleton__info {

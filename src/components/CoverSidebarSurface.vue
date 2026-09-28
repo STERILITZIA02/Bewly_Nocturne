@@ -34,19 +34,15 @@ function markCoverFailed(event: Event) {
 }
 .bew-cover-sidebar__background {
   position: absolute;
-  inset: 0;
+  inset: 0 0 auto;
+  height: var(--bew-sidebar-cover-height);
   z-index: -1;
   pointer-events: none;
   border-radius: inherit;
   corner-shape: inherit;
   overflow: hidden;
-
-  &::after {
-    position: absolute;
-    inset: 0;
-    content: "";
-    background: var(--bew-sidebar-cover-scrim);
-  }
+  opacity: 0.28;
+  mask-image: linear-gradient(#000, #000 50%, transparent);
 
   img {
     width: 100%;

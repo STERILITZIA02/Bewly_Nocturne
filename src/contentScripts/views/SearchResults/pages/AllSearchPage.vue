@@ -1,4 +1,6 @@
 <script lang="ts" setup>
+import '../components/mediaResults.scss'
+
 import { useResizeObserver } from '@vueuse/core'
 import DOMPurify from 'dompurify'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -26,7 +28,7 @@ import Pagination from '../components/Pagination.vue'
 import EsportsMatchCard from '../components/renderers/EsportsMatchCard.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
-import { usePagination } from '../composables/usePagination'
+import { refreshSearchPage, usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
 import { mergeSections } from '../searchSections'
 import {
@@ -422,9 +424,7 @@ function handlePageChange(page: number, updateUrl = true, scrollToTop = true): P
 }
 
 function refreshCurrentPage() {
-  return paginationMode.value === 'pagination'
-    ? handlePageChange(currentPage.value, false, false)
-    : performSearch(false)
+  return refreshSearchPage(paginationMode.value, currentPage.value, (page, updateUrl) => runAllSearch(page, false, updateUrl), resetLoadMore)
 }
 async function restorePage(page: number): Promise<boolean> {
   if (page === currentPage.value)
@@ -530,26 +530,26 @@ defineExpose({
             <div
               v-for="item in section.data.slice(0, 2)"
               :key="item.season_id || item.media_id || item.id"
-              class="media-ft-highlight-card"
+              class="bew-media-result-card"
             >
-              <a
-                class="media-ft-highlight-cover"
+              <ALink
+                class="bew-media-result-cover"
                 :href="item.goto_url || item.url || `https://www.bilibili.com/bangumi/media/md${item.media_id}`"
-                target="_blank"
+                type="videoCard"
+                tabindex="-1"
+                aria-hidden="true"
               >
                 <img :src="item.cover" :alt="removeHighlight(item.title)">
-                <div v-if="item.badges && item.badges.length" class="media-ft-highlight-badge">
+                <div v-if="item.badges && item.badges.length" class="bew-media-result-badge">
                   {{ item.badges[0].text }}
                 </div>
-              </a>
-              <div class="media-ft-highlight-info">
+              </ALink>
+              <div class="bew-media-result-info">
                 <div
-                  class="media-ft-highlight-title"
-                  text="lg $bew-text-1"
-                  font-medium
+                  class="bew-media-result-title bew-search-highlight"
                   v-html="sanitizeSearchHighlight(item.title)"
                 />
-                <div class="media-ft-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
+                <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
                   <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-bold>
                     {{ t('search.media.score', { score: item.media_score.score.toFixed(1) }) }}
                   </span>
@@ -557,7 +557,7 @@ defineExpose({
                   <span v-if="item.styles">{{ item.styles }}</span>
                   <span v-if="item.index_show">{{ item.index_show }}</span>
                 </div>
-                <div v-if="item.desc" class="media-ft-highlight-desc">
+                <div v-if="item.desc" class="bew-media-result-desc">
                   {{ removeHighlight(item.desc) }}
                 </div>
                 <MediaEpisodeSelect
@@ -569,16 +569,16 @@ defineExpose({
                     cover: ep.cover,
                     badge: ep.badges?.[0]?.text,
                   }))"
-                  :fallback-url="item.goto_url || item.url"
                 />
-                <div class="media-ft-highlight-actions" flex items-center gap-3>
-                  <a
-                    class="media-ft-highlight-button"
+                <div class="bew-media-result-actions" flex items-center gap-3>
+                  <ALink
+                    class="bew-media-result-button"
                     :href="item.goto_url || item.url || `https://www.bilibili.com/bangumi/media/md${item.media_id}`"
-                    target="_blank"
+                    type="videoCard"
+                    :aria-label="`${t('search.media.watch_now')}：${removeHighlight(item.title)}`"
                   >
                     {{ t('search.media.watch_now') }}
-                  </a>
+                  </ALink>
                 </div>
               </div>
             </div>
@@ -588,19 +588,19 @@ defineExpose({
             <div
               v-for="bangumi in section.data.slice(0, 2).map(convertBangumiHighlight)"
               :key="bangumi.id || bangumi.title"
-              class="bangumi-highlight-card"
+              class="bew-media-result-card"
             >
-              <a class="bangumi-highlight-cover" :href="bangumi.url" target="_blank">
+              <ALink class="bew-media-result-cover" :href="bangumi.url" type="videoCard" tabindex="-1" aria-hidden="true">
                 <img :src="bangumi.cover" :alt="bangumi.title">
-                <div v-if="bangumi.badge?.text || bangumi.capsuleText" class="bangumi-highlight-badge">
+                <div v-if="bangumi.badge?.text || bangumi.capsuleText" class="bew-media-result-badge">
                   {{ bangumi.badge?.text || bangumi.capsuleText }}
                 </div>
-              </a>
-              <div class="bangumi-highlight-info">
-                <div class="bangumi-highlight-title" text="lg $bew-text-1" font-medium>
+              </ALink>
+              <div class="bew-media-result-info">
+                <div class="bew-media-result-title">
                   {{ bangumi.title }}
                 </div>
-                <div class="bangumi-highlight-meta" text="sm $bew-text-3" flex items-center gap-2>
+                <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
                   <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
                     {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
                   </span>
@@ -608,22 +608,20 @@ defineExpose({
                   <span v-if="bangumi.episodeCount">{{ t('search.media.episode_count', { count: bangumi.episodeCount }) }}</span>
                   <span v-if="bangumi.publishDateFormatted">{{ t('search.media.premiere', { date: bangumi.publishDateFormatted }) }}</span>
                 </div>
-                <div v-if="bangumi.desc" class="bangumi-highlight-desc">
+                <div v-if="bangumi.desc" class="bew-media-result-desc">
                   {{ bangumi.desc }}
                 </div>
-                <div v-if="bangumi.tags?.length" class="bangumi-highlight-tags">
+                <div v-if="bangumi.tags?.length" class="bew-media-result-tags">
                   <span v-for="tag in bangumi.tags" :key="tag">{{ tag }}</span>
                 </div>
                 <BangumiEpisodeList
-                  v-if="(bangumi.episodes && bangumi.episodes.length) || bangumi.episodeCount"
+                  v-if="bangumi.episodes?.length"
                   :episodes="bangumi.episodes ?? []"
-                  :total-episodes="bangumi.episodeCount"
-                  :fallback-url="bangumi.url"
                 />
-                <div class="bangumi-highlight-actions" flex items-center gap-3>
-                  <a class="bangumi-highlight-button" :href="bangumi.url" target="_blank">
+                <div class="bew-media-result-actions" flex items-center gap-3>
+                  <ALink class="bew-media-result-button" :href="bangumi.url" type="videoCard" :aria-label="`${bangumi.buttonText || t('search.media.watch_now')}：${bangumi.title}`">
                     {{ bangumi.buttonText || t('search.media.watch_now') }}
-                  </a>
+                  </ALink>
                 </div>
               </div>
             </div>
@@ -885,112 +883,6 @@ defineExpose({
   }
 }
 
-.bangumi-highlight-card,
-.media-ft-highlight-card {
-  box-sizing: border-box;
-  display: flex;
-  gap: 1rem;
-  padding: 1rem;
-  background: var(--bew-elevated);
-  border-radius: var(--bew-card-radius);
-  border: 1px solid var(--bew-surface-border-color);
-}
-
-.bangumi-highlight-cover,
-.media-ft-highlight-cover {
-  display: block;
-  width: 160px;
-  min-width: 160px;
-  aspect-ratio: 3 / 4;
-  border-radius: var(--bew-media-radius);
-  border: 1px solid var(--bew-surface-border-color);
-  overflow: hidden;
-  position: relative;
-
-  img {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    border-radius: inherit;
-    corner-shape: inherit;
-  }
-}
-
-.bangumi-highlight-badge,
-.media-ft-highlight-badge {
-  position: absolute;
-  top: 0.75rem;
-  left: 0.75rem;
-  padding: 0.25rem 0.5rem;
-  border-radius: var(--bew-badge-radius);
-  background: rgba(0, 0, 0, 0.65);
-  color: #fff;
-  font-size: var(--bew-font-size-control);
-}
-
-.bangumi-highlight-info,
-.media-ft-highlight-info {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  flex: 1;
-}
-
-.bangumi-highlight-desc,
-.media-ft-highlight-desc {
-  font-size: var(--bew-font-size-body);
-  color: var(--bew-text-2);
-  line-height: var(--bew-line-height-body);
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.bangumi-highlight-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-
-  span {
-    padding: 0.25rem 0.5rem;
-    border-radius: var(--bew-badge-radius);
-    background: var(--bew-fill-1);
-    color: var(--bew-text-3);
-    font-size: var(--bew-font-size-control);
-  }
-}
-
-.bangumi-highlight-actions,
-.media-ft-highlight-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.bangumi-highlight-button,
-.media-ft-highlight-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.5rem 1.25rem;
-  min-height: var(--bew-control-height);
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
-  text-decoration: none;
-  transition: background-color 0.2s ease;
-
-  &:hover {
-    filter: brightness(0.9);
-  }
-}
-
 .user-highlight-grid {
   display: grid;
   gap: 1rem;
@@ -1137,15 +1029,15 @@ defineExpose({
 .activity-card,
 .activity-cover,
 .activity-badge,
-.bangumi-highlight-card,
-.media-ft-highlight-card,
-.bangumi-highlight-cover,
-.media-ft-highlight-cover,
-.bangumi-highlight-badge,
-.media-ft-highlight-badge,
-.bangumi-highlight-tags span,
-.bangumi-highlight-button,
-.media-ft-highlight-button,
+.bew-media-result-card,
+.bew-media-result-card,
+.bew-media-result-cover,
+.bew-media-result-cover,
+.bew-media-result-badge,
+.bew-media-result-badge,
+.bew-media-result-tags span,
+.bew-media-result-button,
+.bew-media-result-button,
 .user-highlight-card,
 .user-highlight-verify,
 .user-highlight-follow,

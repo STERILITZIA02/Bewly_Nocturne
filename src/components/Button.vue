@@ -60,7 +60,7 @@ function handleClick(evt: MouseEvent) {
   --b-button-radius: var(--bew-interactive-radius);
   --b-button-padding: var(--bew-space-3);
   --b-button-font-size: var(--bew-font-size-control);
-  --b-button-font-weight: var(--bew-font-weight-semibold);
+  --b-button-font-weight: var(--bew-font-weight-medium);
   --b-button-line-height: var(--bew-line-height-control);
   --b-button-icon-size: var(--bew-control-icon-size);
   --b-button-width: fit-content;
@@ -72,7 +72,7 @@ function handleClick(evt: MouseEvent) {
   --b-button-shadow-active: var(--b-button-shadow);
 
   --uno: "bg-$b-button-color hover:bg-$b-button-color-hover box-border";
-  --uno: "rounded-$b-button-radius p-x-$b-button-padding active:scale-95";
+  --uno: "rounded-$b-button-radius p-x-$b-button-padding";
   --uno: "flex items-center gap-$bew-space-2 text-size-$b-button-font-size";
   --uno: "text-$b-button-text-color lh-$b-button-line-height h-$b-button-height";
   --uno: "border-solid border-width-$b-button-border-width border-$b-button-border-color";
@@ -87,7 +87,11 @@ function handleClick(evt: MouseEvent) {
     border-color var(--bew-duration-fast) var(--bew-ease-standard),
     box-shadow var(--bew-duration-fast) var(--bew-ease-standard),
     opacity var(--bew-duration-fast) var(--bew-ease-standard),
-    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
+    transform var(--bew-duration-fast) var(--bew-ease-standard);
+
+  &:active:not(:disabled) {
+    transform: scale(var(--bew-control-press-scale));
+  }
 
   &:focus-visible {
     outline: 2px solid var(--bew-theme-focus-ring);
@@ -97,19 +101,20 @@ function handleClick(evt: MouseEvent) {
   &:disabled {
     cursor: not-allowed;
     opacity: 0.5;
+    background: var(--b-button-color);
+    box-shadow: var(--b-button-shadow);
+    transform: none;
   }
 
   & svg {
     --uno: "text-size-$b-button-icon-size";
   }
 
-  // &--type-default {
-  // }
-
   &--type-primary {
     --b-button-color: var(--bew-theme-color);
     --b-button-color-hover: var(--bew-theme-color);
     --b-button-text-color: var(--bew-on-theme-color);
+    --b-button-shadow-hover: inset 0 0 0 1px color-mix(in srgb, var(--bew-on-theme-color) 30%, transparent);
   }
 
   &--type-secondary {
@@ -147,7 +152,7 @@ function handleClick(evt: MouseEvent) {
     --b-button-height: var(--bew-control-height-lg);
   }
 
-  &--custom-color {
+  &--custom-color:not(:disabled) {
     --uno: "hover:opacity-70";
   }
 

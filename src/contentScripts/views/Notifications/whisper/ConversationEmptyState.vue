@@ -2,7 +2,6 @@
 import { useI18n } from 'vue-i18n'
 
 const { t } = useI18n()
-const tips = ['emote', 'image', 'history', 'shortcut'] as const
 </script>
 
 <template>
@@ -15,15 +14,6 @@ const tips = ['emote', 'image', 'history', 'shortcut'] as const
         <h2>{{ t('notifications.whisper.select_conversation_empty') }}</h2>
         <p>{{ t('notifications.whisper.select_conversation_hint') }}</p>
       </div>
-      <ul class="conversation-empty-state__tips">
-        <li v-for="tip in tips" :key="tip">
-          <i v-if="tip === 'emote'" i-mingcute:emoji-line aria-hidden="true" />
-          <i v-else-if="tip === 'image'" i-mingcute:pic-line aria-hidden="true" />
-          <i v-else-if="tip === 'history'" i-mingcute:arrow-up-line aria-hidden="true" />
-          <i v-else i-mingcute:keyboard-line aria-hidden="true" />
-          <span>{{ t(`notifications.whisper.empty_tips.${tip}`) }}</span>
-        </li>
-      </ul>
     </div>
   </section>
 </template>
@@ -46,8 +36,9 @@ const tips = ['emote', 'image', 'history', 'shortcut'] as const
   display: grid;
   width: min(100%, calc(var(--bew-space-12) * 8));
   gap: var(--bew-space-4);
-  justify-items: start;
+  justify-items: center;
   color: var(--bew-text-2);
+  text-align: center;
 }
 
 .conversation-empty-state__symbol {
@@ -55,10 +46,7 @@ const tips = ['emote', 'image', 'history', 'shortcut'] as const
   width: var(--bew-control-height-lg);
   height: var(--bew-control-height-lg);
   place-items: center;
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
+  color: var(--bew-text-3);
 }
 
 .conversation-empty-state__symbol i {
@@ -82,30 +70,9 @@ const tips = ['emote', 'image', 'history', 'shortcut'] as const
   line-height: var(--bew-line-height-heading);
 }
 
-.conversation-empty-state__heading p,
-.conversation-empty-state__tips {
+.conversation-empty-state__heading p {
   font-size: var(--bew-font-size-body);
   line-height: var(--bew-line-height-body);
-}
-
-.conversation-empty-state__tips {
-  display: grid;
-  gap: var(--bew-space-2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.conversation-empty-state__tips li {
-  display: flex;
-  gap: var(--bew-space-2);
-  align-items: center;
-}
-
-.conversation-empty-state__tips i {
-  flex: 0 0 auto;
-  color: var(--bew-text-3);
-  font-size: var(--bew-icon-size-md);
 }
 
 @media (max-width: breakpoints.$mobile-max) {

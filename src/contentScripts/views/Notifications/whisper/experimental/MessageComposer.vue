@@ -222,7 +222,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 
     <div class="message-composer__actions">
       <div ref="emoteControlRef" class="message-composer__emote-control">
-        <Tooltip :content="t('notifications.whisper.messages.select_emote')" placement="top">
+        <Tooltip :content="emotePickerOpen ? '' : t('notifications.whisper.messages.select_emote')" placement="top">
           <IconButton
             class="message-composer__action"
             shape="circle"
@@ -342,7 +342,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   min-width: 0;
   padding: var(--bew-space-2);
   background: var(--bew-fill-1);
-  border-radius: var(--bew-interactive-radius);
+  border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -350,7 +350,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   width: var(--bew-control-height-lg);
   height: var(--bew-control-height-lg);
   object-fit: cover;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-radius-sm);
   corner-shape: var(--bew-corner-shape);
 }
 

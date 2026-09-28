@@ -30,6 +30,10 @@ export function writeHomeRoute(href: string, page: AppPage, tab: HomeSubPage): s
     return href
   const url = new URL(href)
   url.searchParams.set('page', page)
+  if (page !== AppPage.SearchResults) {
+    for (const key of ['keyword', 'category', 'user_order', 'user_type', 'search_type', 'live_room_order', 'live_user_order', 'pn'])
+      url.searchParams.delete(key)
+  }
   if (page === AppPage.Home)
     url.searchParams.set('tab', tab)
   else

@@ -255,7 +255,7 @@ const highlightTags = computed(() => {
   }
 
   if (durationTag)
-    tags.push(durationTag)
+    tags.unshift(durationTag)
 
   // 百万播放标签 - 只有在外部tag没有播放字眼时显示，且优先级最后
   if (viewCount >= 1_000_000) {
@@ -264,18 +264,7 @@ const highlightTags = computed(() => {
       tags.push(t('video_card.highlight_million_views'))
   }
 
-  // 如果传入了2个或更多Tag，则不显示推荐tag
-  if (primaryTags.value.length >= 2) {
-    return []
-  }
-  else if (primaryTags.value.length > 0) {
-    // tags只返回一个
-    return tags.slice(0, 1)
-  }
-  else {
-    // 最多返回2个，避免越界
-    return tags.slice(0, 2)
-  }
+  return primaryTags.value.length >= 2 ? [] : tags.slice(0, 1)
 })
 
 function getDurationHighlight(video: Video) {
@@ -502,11 +491,6 @@ provide('getVideoType', () => props.type!)
   content-visibility: auto;
   contain-intrinsic-size: 360px 260px;
 
-  /* 防止字体加载导致的layout shift */
-  text-rendering: optimizeSpeed;
-  /* 防止字体度量变化 */
-  -webkit-font-smoothing: antialiased;
-
   /* 防止骨架屏和真实内容切换时的布局偏移：
      确保容器在加载过程中保持稳定的最小高度 */
   min-height: fit-content;
@@ -523,28 +507,26 @@ provide('getVideoType', () => props.type!)
   contain-intrinsic-size: none;
 }
 
-/* hover/active 效果全部在最外层容器，background-color + box-shadow 同一元素同步动画，无时序差 */
+/* One restrained surface response, without painting into the neighboring gap. */
 .video-card-container--interactive {
   position: relative;
-  /* 零值初始状态，确保 box-shadow 能正确插值过渡 */
   background-color: transparent;
-  box-shadow: 0 0 0 0 transparent;
-  transition:
-    background-color 0.2s ease,
-    box-shadow 0.2s ease;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
 /* 只在支持 hover 的设备上启用 hover 效果（避免触屏设备的性能损失） */
 @media (hover: hover) and (pointer: fine) {
   .video-card-container--interactive:hover {
-    background-color: var(--bew-fill-2);
-    box-shadow: 0 0 0 6px var(--bew-fill-2);
+    background-color: var(--bew-fill-1);
   }
 }
 
+.video-card-container--interactive:focus-within {
+  background-color: var(--bew-fill-1);
+}
+
 .video-card-container--interactive:active {
-  background-color: var(--bew-fill-3);
-  box-shadow: 0 0 0 6px var(--bew-fill-3);
+  background-color: var(--bew-fill-2);
 }
 
 .horizontal-card-cover {

@@ -1,9 +1,9 @@
 <script setup lang="ts">
+import { onClickOutside } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { MEDIA_EPISODE_MENU_MAX_HEIGHT } from '~/constants/layout'
 
@@ -17,14 +17,15 @@ interface Episode {
 
 const props = defineProps<{
   episodes: Episode[]
-  fallbackUrl?: string
 }>()
 
 const { mainAppRef } = useBewlyApp()
-const currentLocationHref = useCurrentLocationHref()
 const { t } = useI18n()
 
 const isOpen = ref(false)
+const keyboardOpened = ref(false)
+const triggerRef = ref<HTMLButtonElement | null>(null)
+const dropdownId = `bew-episode-menu-${getCurrentInstance()?.uid ?? 0}`
 const containerRef = ref<HTMLElement | null>(null)
 const dropdownRef = ref<HTMLElement | null>(null)
 const {
@@ -35,62 +36,78 @@ const {
 } = useFloatingMenuPosition(containerRef, dropdownRef, MEDIA_EPISODE_MENU_MAX_HEIGHT)
 
 const normalizedEpisodes = computed(() => {
-  return Array.isArray(props.episodes) ? props.episodes : []
+  return Array.isArray(props.episodes) ? props.episodes.filter(episode => episode.url) : []
 })
 
 const hasEpisodes = computed(() => normalizedEpisodes.value.length > 0)
 
-const defaultLabel = computed(() => {
-  const currentUrl = new URL(currentLocationHref.value)
-  const currentEpisode = normalizedEpisodes.value.find((episode) => {
-    if (!episode.url)
-      return false
-    const episodeUrl = new URL(episode.url, currentUrl)
-    return episodeUrl.pathname === currentUrl.pathname
-      && episodeUrl.searchParams.get('p') === currentUrl.searchParams.get('p')
-  })
-  if (currentEpisode)
-    return currentEpisode.title
-  if (normalizedEpisodes.value.length > 0)
-    return normalizedEpisodes.value[0].title
-  return t('search.media.select_episode')
-})
-
-function toggleDropdown() {
+function toggleDropdown(event: MouseEvent) {
+  keyboardOpened.value = event.detail === 0
   if (isOpen.value) {
     isOpen.value = false
     return
   }
   startPositionTracking()
   isOpen.value = true
+  if (event.detail === 0)
+    void focusEpisode(0)
 }
 
-function closeDropdown() {
+function closeDropdown(restoreFocus = false) {
   isOpen.value = false
+  if (restoreFocus)
+    void nextTick(() => triggerRef.value?.focus({ preventScroll: true }))
 }
 
 function handleEpisodeClick() {
-  closeDropdown()
+  closeDropdown(true)
 }
 
-/** when you click on it outside, the selection option will be turned off  */
-function onMouseLeave() {
-  window.addEventListener('click', closeDropdown)
+async function focusEpisode(index: number) {
+  await nextTick()
+  if (!isOpen.value)
+    return
+  const links = dropdownRef.value?.querySelectorAll<HTMLAnchorElement>('a[href]')
+  if (links?.length)
+    links[(index + links.length) % links.length]?.focus({ preventScroll: true })
 }
 
-function onMouseEnter() {
-  window.removeEventListener('click', closeDropdown)
+function handleKeydown(event: KeyboardEvent) {
+  if (event.isComposing)
+    return
+  if (event.key === 'Escape' && isOpen.value) {
+    event.preventDefault()
+    event.stopPropagation()
+    closeDropdown(true)
+  }
+  else if (event.key === 'ArrowDown' || event.key === 'ArrowUp' || event.key === 'Home' || event.key === 'End') {
+    event.preventDefault()
+    keyboardOpened.value = true
+    if (!isOpen.value) {
+      startPositionTracking()
+      isOpen.value = true
+    }
+    const links = Array.from(dropdownRef.value?.querySelectorAll<HTMLAnchorElement>('a[href]') ?? [])
+    const index = links.indexOf(event.target as HTMLAnchorElement)
+    void focusEpisode(event.key === 'Home' ? 0 : event.key === 'End' ? -1 : index < 0 ? (event.key === 'ArrowUp' ? -1 : 0) : index + (event.key === 'ArrowDown' ? 1 : -1))
+  }
 }
 
-onBeforeUnmount(() => window.removeEventListener('click', closeDropdown))
+function handleFocusOut(event: FocusEvent) {
+  const next = event.relatedTarget as Node | null
+  if (!containerRef.value?.contains(next) && !dropdownRef.value?.contains(next))
+    closeDropdown()
+}
 
-watch(isOpen, async (open) => {
+watch(isOpen, async (open, _previous, onCleanup) => {
   if (!open) {
     stopPositionTracking()
     return
   }
+  onCleanup(onClickOutside(dropdownRef, () => closeDropdown(), { ignore: [containerRef] }))
   await nextTick()
-  schedulePositionUpdate()
+  if (isOpen.value)
+    schedulePositionUpdate()
 }, { flush: 'post' })
 </script>
 
@@ -100,12 +117,17 @@ watch(isOpen, async (open) => {
     ref="containerRef"
     class="media-episode-select"
     pos="relative"
-    @mouseleave="onMouseLeave"
-    @mouseenter="onMouseEnter"
+    @keydown="handleKeydown"
+    @focusout="handleFocusOut"
   >
     <button
+      ref="triggerRef"
+      type="button"
+      :aria-expanded="isOpen"
+      :aria-controls="isOpen ? dropdownId : undefined"
       class="select-button"
-      p="x-4 y-2"
+      :class="{ 'is-open': isOpen }"
+      p="x-3 y-2"
       bg="$bew-fill-1"
       rounded="$bew-interactive-radius"
       text="$bew-text-1"
@@ -114,36 +136,30 @@ watch(isOpen, async (open) => {
       justify="between"
       items="center"
       w="full"
-      :ring="isOpen ? '2px $bew-theme-color' : ''"
-      duration-300
       @click.stop="toggleDropdown"
     >
-      <span truncate>{{ defaultLabel }}</span>
+      <span truncate>{{ t('search.media.select_episode') }}</span>
 
       <!-- arrow -->
-      <div
-        border="~ solid t-0 l-0 r-2 b-2"
-        :border-color="isOpen ? '$bew-theme-color' : '$bew-fill-4'"
-        p="3px"
-        m="l-2"
-        display="inline-block"
-        :transform="`~ ${!isOpen ? 'rotate-45 -translate-y-1/4' : 'rotate-225 translate-y-1/4'} `"
-        transition="background-color duration-200, color duration-200, box-shadow duration-200"
-      />
+      <i i-mingcute:down-line class="select-arrow" aria-hidden="true" />
     </button>
 
     <Teleport :to="mainAppRef">
-      <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'">
+      <Transition :name="dropdownPosition.openUp ? 'dropdown-up' : 'dropdown'" :css="!keyboardOpened">
         <div
           v-if="isOpen"
+          :id="dropdownId"
           ref="dropdownRef"
           class="bew-popover-surface"
+          role="region"
+          :aria-label="t('search.media.select_episode')"
           :style="{
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
-            maxHeight: `${dropdownPosition.maxHeight}px`,
-            transform: dropdownPosition.openUp ? 'translateY(-100%)' : undefined,
+            'top': `${dropdownPosition.top}px`,
+            'left': `${dropdownPosition.left}px`,
+            'width': `${dropdownPosition.width}px`,
+            'maxHeight': `${dropdownPosition.maxHeight}px`,
+            'transform': dropdownPosition.openUp ? 'translateY(-100%)' : undefined,
+            '--bew-dropdown-origin': dropdownPosition.openUp ? 'bottom center' : 'top center',
           }"
           pos="fixed"
           p="2"
@@ -153,13 +169,16 @@ watch(isOpen, async (open) => {
           overflow-y-overlay
           will-change-transform
           @click.stop
+          @keydown="handleKeydown"
+          @focusout="handleFocusOut"
         >
-          <a
+          <ALink
             v-for="(episode, index) in normalizedEpisodes"
             :key="episode.id || index"
-            :href="episode.url || fallbackUrl"
-            target="_blank"
+            :href="episode.url"
+            type="videoCard"
             rel="noopener"
+            stop-propagation
             class="dropdown-item"
             p="x-2 y-2"
             rounded="$bew-interactive-radius"
@@ -168,11 +187,11 @@ watch(isOpen, async (open) => {
             transition="background-color duration-200, color duration-200, box-shadow duration-200"
             cursor="pointer"
             :title="episode.longTitle || episode.title"
-            @click.stop="handleEpisodeClick"
+            @click.capture="handleEpisodeClick"
           >
             <span class="episode-title">{{ episode.title }}</span>
             <span v-if="episode.badge" class="episode-badge">{{ episode.badge }}</span>
-          </a>
+          </ALink>
         </div>
       </Transition>
 
@@ -183,6 +202,7 @@ watch(isOpen, async (open) => {
         w-full
         h-full
         z="$bew-z-control-backdrop"
+        @click.stop="closeDropdown()"
       />
     </Teleport>
   </div>
@@ -191,6 +211,7 @@ watch(isOpen, async (open) => {
 <style scoped lang="scss">
 .media-episode-select {
   display: inline-block;
+  width: min(100%, var(--bew-media-episode-control-width));
   margin-top: var(--bew-space-3);
 }
 
@@ -201,10 +222,23 @@ watch(isOpen, async (open) => {
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-control);
   user-select: none;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
 
   &:hover {
     background: var(--bew-fill-2);
   }
+  &.is-open {
+    background: var(--bew-control-selected-background);
+  }
+}
+
+.select-arrow {
+  flex: 0 0 auto;
+  font-size: var(--bew-control-icon-size);
+  transition: transform var(--bew-duration-fast) var(--bew-ease-standard);
+}
+.is-open .select-arrow {
+  transform: rotate(180deg);
 }
 
 .dropdown-item {
@@ -214,8 +248,9 @@ watch(isOpen, async (open) => {
   gap: var(--bew-space-3);
   color: var(--bew-text-1);
   text-decoration: none;
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
+  min-height: var(--bew-control-height);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
 
   .episode-title {
     flex: 1;
@@ -236,18 +271,10 @@ watch(isOpen, async (open) => {
   }
 }
 
-.dropdown-up-enter-active,
-.dropdown-up-leave-active {
-  transition:
-    opacity 300ms ease,
-    translate 300ms ease,
-    filter 300ms ease;
-}
-
-.dropdown-up-enter-from,
-.dropdown-up-leave-to {
-  opacity: 0;
-  translate: 0 12px;
-  filter: blur(4px);
+@media (prefers-reduced-motion: reduce) {
+  .select-button,
+  .select-arrow {
+    transition: none;
+  }
 }
 </style>

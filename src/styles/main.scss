@@ -116,6 +116,7 @@ html.dark.bewly-design {
     a,
     input,
     select,
+    summary,
     textarea,
     [role="button"],
     [role="tab"],
@@ -135,7 +136,8 @@ html.dark.bewly-design {
     overflow: hidden;
     text-overflow: ellipsis;
     display: -webkit-box;
-    line-break: anywhere;
+    line-break: auto;
+    overflow-wrap: anywhere;
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
@@ -225,26 +227,21 @@ html.dark.bewly-design {
   border: 1px solid var(--bew-surface-border-color);
 }
 
+.bew-search-highlight em {
+  color: var(--bew-theme-foreground);
+  font-style: normal;
+  font-weight: inherit;
+}
+
 // Native notification entries and their loading placeholders share one
 // feed-card surface so loading never changes the page geometry.
 .native-notification-surface {
   box-sizing: border-box;
   isolation: isolate;
-  background: var(--bew-elevated-alt);
-  border: 1px solid var(--bew-surface-border-color);
+  background: var(--bew-content-solid);
+  border: 0;
   border-radius: var(--bew-card-radius);
-  box-shadow: var(--bew-shadow-1), var(--bew-shadow-edge-glow-1);
-  backdrop-filter: var(--bew-filter-glass-1);
-  -webkit-backdrop-filter: var(--bew-filter-glass-1);
-  transition:
-    background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    border-color var(--bew-duration-fast) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-.native-notification-surface:hover {
-  background: var(--bew-elevated-alt-hover);
-  box-shadow: var(--bew-shadow-2), var(--bew-shadow-edge-glow-1);
+  box-shadow: none;
 }
 
 // Interaction content and its source use the same columns in live cards and skeletons.

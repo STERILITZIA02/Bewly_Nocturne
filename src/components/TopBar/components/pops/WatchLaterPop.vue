@@ -3,6 +3,7 @@ import { storeToRefs } from 'pinia'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import Button from '~/components/Button.vue'
 import Empty from '~/components/Empty.vue'
 import IconButton from '~/components/IconButton.vue'
 import Picture from '~/components/Picture.vue'
@@ -186,7 +187,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                 m="1"
               >
                 <!-- Open in regular video page button -->
-                <Tooltip :content="$t('watch_later.open_video_page')" placement="top">
+                <Tooltip :content="$t('watch_later.open_video_page')" placement="top" teleport>
                   <IconButton
                     class="popover-card__interactive popover-card__overlay-action"
                     :label="$t('watch_later.open_video_page')"
@@ -194,18 +195,6 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                     @click.stop.prevent="openVideoPage(getWatchLaterPlaybackUrl(item))"
                   >
                     <i i-tabler:external-link />
-                  </IconButton>
-                </Tooltip>
-
-                <!-- Open in video page and remove button -->
-                <Tooltip :content="$t('watch_later.play_video')" placement="top">
-                  <IconButton
-                    class="popover-card__interactive popover-card__overlay-action"
-                    :label="$t('watch_later.play_video')"
-                    :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
-                    @click.stop.prevent="handleOpenVideoPageAndRemove(item)"
-                  >
-                    <i i-tabler:player-play />
                   </IconButton>
                 </Tooltip>
               </div>
@@ -277,6 +266,17 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                   {{ getWatchLaterAuthor(item).name }}
                 </ALink>
               </div>
+              <Button
+                size="small"
+                type="secondary"
+                class="popover-card__interactive watch-later-pop__play-remove"
+                :aria-label="$t('watch_later.play_video')"
+                :disabled="pendingActions.has(item.aid) || !getWatchLaterPlaybackUrl(item)"
+                @click.stop.prevent="handleOpenVideoPageAndRemove(item)"
+              >
+                <i i-tabler:player-play aria-hidden="true" />
+                {{ $t('watch_later.play_and_remove') }}
+              </Button>
             </div>
           </section>
         </article>
@@ -309,6 +309,10 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
 
 .watch-later-pop__scroll {
   position: relative;
+}
+
+.watch-later-pop__play-remove {
+  margin-top: var(--bew-space-2);
 }
 
 .watch-later-pop__media {

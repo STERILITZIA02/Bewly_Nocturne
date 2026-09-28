@@ -47,6 +47,23 @@ export function getMomentThumbnailUrl(url = '', width = 560) {
   }
 }
 
+export function getMomentThumbnailSrcset(url: string) {
+  const original = getMomentOriginalImageUrl(httpsUrl(url))
+  try {
+    const parsed = new URL(original)
+    if (!isBilibiliImageHost(parsed.hostname.toLowerCase()))
+      return undefined
+    const pathname = parsed.pathname
+    return [360, 720, 1080, 1440].map((width) => {
+      parsed.pathname = `${pathname}@${width}w.webp`
+      return `${parsed.toString()} ${width}w`
+    }).join(', ')
+  }
+  catch {
+    return undefined
+  }
+}
+
 export function getAvatarThumbnailUrl(url = '') {
   const normalized = httpsUrl(url).replace(/@[^/]*$/, '')
   if (!normalized || !/hdslb\.com|biliimg\.com|bilibili\.com/.test(normalized))

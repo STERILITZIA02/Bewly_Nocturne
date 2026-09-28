@@ -5,10 +5,11 @@ import { useDark } from '~/composables/useDark'
 import { useBangumiCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { numFormatter } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
+import { getContrastingForeground } from '~/utils/themeColor'
 
 import BangumiCardSkeleton from './BangumiCardSkeleton.vue'
 
-defineProps<{
+const props = defineProps<{
   skeleton?: boolean
   bangumi: Bangumi
   horizontal?: boolean
@@ -64,6 +65,11 @@ interface Bangumi {
 }
 
 const { isDark } = useDark()
+const badgeStyle = computed(() => {
+  const color = (isDark.value ? props.bangumi.badge?.bgColorDark : props.bangumi.badge?.bgColor) ?? ''
+  const backgroundColor = /^#(?:[\da-f]{3}|[\da-f]{6})$/i.test(color) ? color : isDark.value ? '#181a1e' : '#ffffff'
+  return { backgroundColor, color: getContrastingForeground(backgroundColor) }
+})
 const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 </script>
 
@@ -72,13 +78,12 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
     <div
       v-if="!skeleton && bangumi"
       ref="cardRootRef"
-      class="bangumi-card group"
+      class="bangumi-card"
       :style="{
         display: horizontal ? 'flex' : 'block',
       }"
-      gap-4 hover:bg="$bew-fill-2" hover:ring="8 $bew-fill-2"
+      gap-4
       content-visibility-auto intrinsic-size-400px
-      transition="background-color duration-300, box-shadow duration-300"
       rounded="$bew-card-radius" h-fit
     >
       <ALink
@@ -99,13 +104,11 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
           <!-- badge -->
           <div
             v-if="bangumi.badge && bangumi.badge.text"
-            :style="{
-              backgroundColor: isDark ? bangumi.badge.bgColorDark : bangumi.badge.bgColor,
-            }"
+            class="bangumi-card__badge"
+            :style="badgeStyle"
             pos="absolute top-0 right-0"
             p="x-2 y-1" m-1 rounded="$bew-badge-radius"
-            opacity-100 group-hover:opacity-0 duration-300
-            text="sm white" z-1
+            text="sm" z-1
           >
             {{ bangumi.badge.text }}
           </div>
@@ -134,11 +137,9 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
             <!-- anime genres -->
             <div
               v-if="bangumi.evaluate || (Array.isArray(bangumi.tags) && bangumi.tags?.length > 0)"
+              class="bangumi-card__details"
               pos="absolute bottom-0" w-full h-full p-2
               flex="~ col justify-end"
-              opacity-0 group-hover:opacity-100
-              transform="~ translate-y-4 group-hover:translate-y-0"
-              transition="opacity duration-300, transform duration-300"
               z-1
               style="
                 background: linear-gradient(
@@ -147,7 +148,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
                 );
               "
             >
-              <div mb-4 text="white group-hover:shadow-[0_0_4px_rgba(0,0,0,1)]">
+              <div mb-4 text="white">
                 {{ bangumi.evaluate }}
               </div>
               <template v-if="Array.isArray(bangumi.tags) && bangumi.tags?.length > 0">
@@ -176,20 +177,17 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
             <!-- image after hovering -->
             <div
               v-if="bangumi.coverHover"
+              class="bangumi-card__hover-cover"
               w-full
               rounded-inherit
               aspect="12/16"
-              transform="~ scale-110 group-hover:scale-100"
-              transition="opacity duration-300, transform duration-300"
               bg="cover center"
               pos="absolute top-0 left-0"
-              opacity-0 group-hover:opacity-100
               :style="{
                 backgroundImage: `url(${removeHttpFromUrl(
                   bangumi.coverHover || bangumi.cover,
                 )}@672w_378h_1c.webp)`,
               }"
-              style="transition-timing-function: cubic-bezier(0.22, 0.61, 0.36, 1);"
             />
           </div>
         </div>
@@ -201,13 +199,12 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
         }"
       >
         <p un-text="lg" mb-2 :class="bangumiTitleClass" :style="bangumiTitleStyle">
-          <a
-            :href="bangumi.url" target="_blank"
-            class="bangumi-card__title-link keep-two-lines"
+          <span
+            class="bangumi-card__title keep-two-lines"
             :title="bangumi.title"
           >
             {{ bangumi.title }}
-          </a>
+          </span>
         </p>
         <p v-if="bangumi.view || bangumi.follow" text="sm $bew-text-2" mb-2>
           <span v-if="bangumi.view" mr-4>{{ $t('common.view', { count: numFormatter(bangumi.view) }, bangumi.view) }}</span>
@@ -217,8 +214,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
           <div
             v-if="bangumi.capsuleText && bangumi.capsuleText.trim()"
             class="bangumi-capsule"
-            text="$bew-on-theme-surface" bg="$bew-theme-surface"
-            p="x-2" rounded="$bew-badge-radius"
+            text="$bew-text-3"
           >
             {{ bangumi.capsuleText }}
           </div>
@@ -239,17 +235,54 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 
 .bangumi-card {
   position: relative;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+
+  &:is(:hover, :focus-within) {
+    background: var(--bew-fill-1);
+  }
 }
 
 .bangumi-card__overlay {
   position: absolute;
   z-index: 1;
   inset: 0;
+  border-radius: inherit;
+  corner-shape: inherit;
 }
 
-.bangumi-card__title-link {
-  position: relative;
-  z-index: 2;
+.bangumi-card__cover {
+  z-index: 0;
+}
+
+.bangumi-card__badge,
+.bangumi-card__details,
+.bangumi-card__hover-cover {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.bangumi-card__details,
+.bangumi-card__hover-cover {
+  opacity: 0;
+}
+
+.bangumi-card:is(:hover, :focus-within) {
+  .bangumi-card__badge {
+    opacity: 0;
+  }
+
+  .bangumi-card__details,
+  .bangumi-card__hover-cover {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bangumi-card,
+  .bangumi-card__badge,
+  .bangumi-card__details,
+  .bangumi-card__hover-cover {
+    transition: none;
+  }
 }
 
 .bangumi-capsule {

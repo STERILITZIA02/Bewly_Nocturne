@@ -98,7 +98,7 @@ export function useTopBarInteraction() {
   }
 
   // 获取 App Provider
-  const { activatedPage, getDockPageHref, navigateToDockPage } = useBewlyApp()
+  const { activatedPage, getDockPageHref, navigateToDockPage, navigateToPage } = useBewlyApp()
 
   const currentLocationHref = useCurrentLocationHref()
 
@@ -389,7 +389,7 @@ export function useTopBarInteraction() {
     }
     if (isHomePage()) {
       // activatedPage 会读取同一项 Dock 配置，决定显示 Bewly 页面还是原版 Bilibili 页面。
-      activatedPage.value = page
+      navigateToPage(page)
       return
     }
 

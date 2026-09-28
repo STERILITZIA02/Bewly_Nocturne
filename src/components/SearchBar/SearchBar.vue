@@ -718,7 +718,7 @@ function handleClearKeyword() {
             tabindex="-1"
             @click="navigateToSearchResultPage(item.value)"
           >
-            <span v-html="sanitizeSearchHighlight(item.name)" />
+            <span class="bew-search-highlight" v-html="sanitizeSearchHighlight(item.name)" />
           </div>
         </div>
       </div>
@@ -733,10 +733,6 @@ function handleClearKeyword() {
   display: grid;
   gap: var(--bew-space-1);
   padding: var(--bew-space-2);
-}
-
-::v-deep(.suggest_high_light) {
-  --uno: "text-$bew-theme-foreground not-italic";
 }
 
 .focus-character-enter-active,

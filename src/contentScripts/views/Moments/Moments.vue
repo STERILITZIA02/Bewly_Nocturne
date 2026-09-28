@@ -124,6 +124,7 @@ const momentLayout = useMomentLayout(moments, {
 })
 const { showMomentsSidebar, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad } = momentLayout
 const details = useMomentDetail(getMomentImageRatio, () => previews.clear())
+const detailDialogRef = ref<InstanceType<typeof Dialog> | null>(null)
 const { selectedMoment, detailFrameUrl, detailFrameLoaded, detailImageViewerRef, detailImageViewerOpen, detailImageViewerUrls, detailImageViewerIndex, detailImageViewerScale, detailImageViewerRotation, detailImageViewerDragging, isOpusDetailMoment, detailDialogHeight, detailDialogWidth, detailContentHeight, detailImageViewerUrl, detailImageViewerTransform, clearDetailFocusRetry, bindDetailIframe, resetDetailImageViewerTransform, setDetailImageViewerScale, showDetailImageViewerImage, openMomentImagePreview, closeDetailImageViewer, handleDetailImageViewerWheel, handleDetailImageViewerPointerDown, handleDetailImageViewerPointerMove, handleDetailImageViewerPointerEnd, handleDetailImageViewerDoubleClick, handleDetailImageViewerKeydown, openDetailFrameInNewTab, openMomentDetail, handleDetailIframeLoad, closeMomentDetail } = details
 const momentFilters = computed<Array<{ value: MomentFilter, label: string }>>(() => [
   { value: 'all', label: t('moments.filter_all') },
@@ -1467,6 +1468,7 @@ function appendMoments(items: DisplayMoment[]) {
 
     <Dialog
       v-if="selectedMoment && detailFrameUrl"
+      ref="detailDialogRef"
       append-to-bewly-body
       content-flush
       transition-name="moments-dialog"
@@ -1492,6 +1494,12 @@ function appendMoments(items: DisplayMoment[]) {
           'moment-detail-frame--opus': isOpusDetailMoment,
         }"
       >
+        <CloseButton
+          class="moment-detail-frame__close"
+          data-dialog-initial-focus
+          :label="t('common.close')"
+          @click="detailDialogRef?.close()"
+        />
         <Transition name="fade">
           <Loading v-if="!detailFrameLoaded" class="moment-detail-frame__loading" :kind="selectedMoment.isVideo || selectedMoment.isLive ? 'video' : 'article'" />
         </Transition>
@@ -2456,8 +2464,8 @@ function appendMoments(items: DisplayMoment[]) {
 }
 .moment-detail-frame__open {
   position: absolute;
-  right: 12px;
-  bottom: 12px;
+  right: var(--bew-space-3);
+  bottom: var(--bew-space-3);
   z-index: 4;
   display: inline-flex;
   align-items: center;
@@ -2480,6 +2488,12 @@ function appendMoments(items: DisplayMoment[]) {
   transition:
     opacity 0.2s ease,
     transform 0.2s ease;
+}
+.moment-detail-frame__close {
+  position: absolute;
+  top: var(--bew-space-3);
+  right: var(--bew-space-3);
+  z-index: 4;
 }
 .moment-detail-frame__open:hover {
   opacity: 1;

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { normalizeIntlLocale } from '~/utils/locale'
+
 import type { SystemNotification } from '../notification'
 
 const props = defineProps<{
@@ -14,7 +16,7 @@ const formattedTime = computed(() => {
   if (!props.item.timestamp)
     return ''
   try {
-    return new Intl.DateTimeFormat(locale.value, {
+    return new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(props.item.timestamp * 1000)
@@ -177,6 +179,7 @@ watch(() => props.item.id, () => {
 }
 
 .native-system-notification__body {
+  max-width: var(--bew-reading-line-length);
   margin: var(--bew-space-2) 0 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
@@ -191,14 +194,14 @@ watch(() => props.item.id, () => {
 }
 
 .native-system-notification__inline-link {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   text-decoration: none;
 }
 
 .native-system-notification__fallback-link {
   display: inline-flex;
   margin-top: var(--bew-space-2);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);

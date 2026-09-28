@@ -1102,13 +1102,8 @@ notifications:
     user_fallback: '用户 {talkerId}'
     summary_unavailable: 暂无消息摘要
     select_conversation: 选择与{name}的会话
-    select_conversation_empty: 选择一个会话开始聊天
-    select_conversation_hint: 消息会在独立阅读卡片中保持清晰聚焦
-    empty_tips:
-      emote: 可从输入区插入 Bilibili 表情
-      image: 可先预览图片，再直接发送
-      history: 向上滚动可加载并阅读更早消息
-      shortcut: Enter 发送，Shift+Enter 换行
+    select_conversation_empty: 选择一个会话
+    select_conversation_hint: 从列表中阅读消息，或使用会话搜索查找联系人。
     fallback_aria: '{name}的原版私信入口'
     fallback_description: 此类型会话暂时需要在原版私信中查看
     session_kinds:
@@ -1151,6 +1146,7 @@ notifications:
       edit_failed: 编辑
       delete_failed: 删除本地失败项
       new_messages: 有新消息
+      return_latest: 回到最新消息
       recalled: 消息已撤回
       unsupported: 当前版本暂未支持此消息
       preview_image: 预览图片
@@ -1224,6 +1220,9 @@ notifications:
       invalid-response: 当前通知暂时无法读取
       api-error: 加载失败，请重试
 dock:
+  unread_messages: '消息，{count} 条未读'
+  new_moments: '动态，{count} 条新动态'
+  pending_videos: '稍后再看，{count} 个待看视频'
   search: 搜索
   home: 首页
   anime: 番剧
@@ -1455,6 +1454,9 @@ video_card:
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
 home:
+  series:
+    open: 进入剧集
+    more_updates: '其它更新（{count}）'
   following_search_videos: '搜索 {name} 的视频投稿'
   following_clear_video_search: 清空投稿搜索
   following_no_search_results: 未找到匹配的视频投稿
@@ -1503,6 +1505,7 @@ ranking:
   original_content: 原创内容
   debut_work: 新人作品
 anime:
+  watched_until: '观看至 {time}'
   total_episodes: 全 {ep} 话
   update_to_n_episodes: 更新至 {ep} 话
   your_watch_list: 正在追
@@ -1511,6 +1514,9 @@ anime:
   popular_anime: 番剧热播榜
   follow: '{num}追番'
   anime_timetable:
+    today: 今天
+    previous_day: 更早一天
+    next_day: 更晚一天
     title: 新番时间表
     days_of_week:
       mon: 周一
@@ -1521,6 +1527,9 @@ anime:
       sat: 周六
       sun: 周日
 history:
+  media: 剧集 / 影视
+  continue_watching: 继续观看
+  unknown_date: 日期未知
   clear_failed: 清空历史记录失败，请重试
   clear_all_watch_history: 清除所有观看历史
   clear_all_watch_history_confirm: |-
@@ -1607,9 +1616,12 @@ watch_later:
   auto_remove_failed: 自动移出稍后再看失败，请稍后手动重试。
   open_tabs:
     title: 添加播放标签页
-    scope: 范围：当前扩展可访问、同一普通/无痕会话的所有窗口中打开的 B 站播放标签。不会关闭或跳转原标签。确认后按此快照添加；重复稿件和已在队列中的项目会跳过。关闭此窗口不会停止后台任务，可从此入口重新查看。
+    scope: 仅处理下方列出的播放页；重复或已在列表中的视频会跳过，原标签保持打开。
+    windows_normal: 普通窗口
+    windows_private: 无痕窗口
+    background_hint: 关闭窗口后仍会继续，可再次打开查看进度。
     failed_request: 读取任务失败或账号已变化，请重试。
-    state_ready: 请确认下面的候选标签页
+    state_ready: '从所有{windows}找到 {count} 个播放标签页'
     state_running: 正在添加
     state_stopped: 已停止后续添加
     state_complete: 本次任务已结束
@@ -1648,6 +1660,7 @@ watch_later:
     该操作无法撤销，你确定要清除已观看的视频吗？
   open_video_page: 在普通视频页打开
   play_video: 移除并进入视频页
+  play_and_remove: 播放并移除
   play_in_watch_later: 列表播放
   remove_from_watch_later: 移除
 widescreen:
@@ -1714,6 +1727,8 @@ search:
   filters:
     order: 排序
     more: 更多筛选
+    applied: '已选：{filters}'
+    clear: 清除筛选
     duration: 时长
     date: 日期
     start_date: 开始日期
@@ -1772,6 +1787,7 @@ search:
   live:
     all: 全部
     rooms: 直播间
+    no_rooms: 没有找到匹配的直播间
     streamers: 主播
     more_streamers: 查看更多主播（{count}+）
   media:

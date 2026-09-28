@@ -9,7 +9,7 @@ import { buildMomentCommentPermalink } from '~/utils/commentPermalink'
 import type { CommentTreeLayoutNode } from '~/utils/commentTree'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
-import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
+import { createMomentCommentSessionCache, DEFAULT_MOMENT_COMMENT_SORT, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import type { MomentCommentTarget } from '~/utils/momentCommentTarget'
 import { readMomentCommentTarget, resolveMomentCommentTarget } from '~/utils/momentCommentTarget'
 
@@ -54,7 +54,7 @@ const getSourceIdentity = () => `${getAccountIdentity()}:${props.moment.id}:${pr
 const target = ref<MomentCommentTarget | null>(null)
 const commentId = computed(() => target.value?.oid || '')
 const commentType = computed(() => target.value?.type || 0)
-const sort = ref<0 | 1>(0)
+const sort = ref<0 | 1>(DEFAULT_MOMENT_COMMENT_SORT)
 const getCommentIdentity = () => `${getSourceIdentity()}:${commentType.value}:${commentId.value}:${sort.value}`
 const sharedSessions = inject(MOMENT_COMMENT_SESSIONS, null)
 const sessions = sharedSessions ?? createMomentCommentSessionCache(getAccountIdentity())
@@ -147,7 +147,7 @@ async function initializeComments(nextSort?: 0 | 1) {
       throw new Error('Comment target unavailable')
     target.value = resolved
     sessionLease.value = sessions.open(getAccountIdentity(), props.moment.id, resolved, nextSort)
-    sort.value = sessionLease.value?.sort ?? nextSort ?? 0
+    sort.value = sessionLease.value?.sort ?? nextSort ?? DEFAULT_MOMENT_COMMENT_SORT
     const snapshot = sessionLease.value && sessions.restore(sessionLease.value)
     resolvingTarget.value = false
     if (snapshot) {

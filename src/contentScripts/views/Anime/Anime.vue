@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { useI18n } from 'vue-i18n'
+
 import { useBewlyApp } from '~/composables/useAppProvider'
 import type { List as PopularAnimeItem, PopularAnimeResult } from '~/models/anime/popular'
 import type { ItemSubItem as RecommendationItem, RecommendationResult } from '~/models/anime/recommendation'
 import type { List as WatchListItem, WatchListResult } from '~/models/anime/watchList'
+import { SeasonVersion } from '~/models/anime/watchList'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { resolveCookieMatchedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { numFormatter } from '~/utils/dataFormatter'
 import { getUserID, openLinkToNewTab } from '~/utils/main'
@@ -12,6 +16,16 @@ import { reportRuntimeFailure } from '~/utils/messaging'
 import AnimeTimeTable from './components/AnimeTimeTable.vue'
 
 const animeWatchList = reactive<WatchListItem[]>([])
+const { t } = useI18n()
+
+function getWatchProgressLabel(item: WatchListItem) {
+  // Movie episode titles can be a release year. Only the explicit one-film
+  // contract permits dropping that label; arbitrary series progress stays raw.
+  const time = item.season_version === SeasonVersion.Movie && item.total_count === 1
+    ? item.progress?.match(/(?:^|\s)(\d{1,3}:[0-5]\d(?::[0-5]\d)?)$/)?.[1]
+    : undefined
+  return time ? t('anime.watched_until', { time }) : item.progress || t('anime.havent_seen')
+}
 const recommendAnimeList = reactive<RecommendationItem[]>([])
 const popularAnimeList = reactive<PopularAnimeItem[]>([])
 const cursor = ref<number>(0)
@@ -21,7 +35,6 @@ const isLoadingRecommendAnime = ref<boolean>()
 const recommendRequestFailed = ref(false)
 const popularRequestFailed = ref(false)
 const watchListRequestFailed = ref(false)
-const activatedSeasonId = ref<number>()
 const noMoreContent = ref<boolean>()
 const animeTimeTableRef = ref()
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
@@ -54,11 +67,12 @@ watch(() => topBarStore.userInfo.mid, () => {
 })
 
 function getAnimeAccountId() {
-  return String(topBarStore.userInfo.mid || getUserID() || 0)
+  return resolveCookieMatchedAccountId(topBarStore.userInfo.mid, getUserID())
 }
 
-function isAnimeRequestCurrent(generation: number, requestAccountId: string) {
+function isAnimeRequestCurrent(generation: number, requestAccountId: ReturnType<typeof getAnimeAccountId>) {
   return animeMounted
+    && requestAccountId !== undefined
     && generation === requestGeneration
     && requestAccountId === getAnimeAccountId()
 }
@@ -101,13 +115,13 @@ function initPageAction() {
 }
 
 async function getAnimeWatchList(generation = requestGeneration, requestAccountId = getAnimeAccountId()) {
-  if (isLoadingAnimeWatchList.value)
+  if (!isAnimeRequestCurrent(generation, requestAccountId) || requestAccountId === null || isLoadingAnimeWatchList.value)
     return
   isLoadingAnimeWatchList.value = true
   watchListRequestFailed.value = false
   try {
     const response: WatchListResult = await api.anime.getAnimeWatchList({
-      vmid: requestAccountId,
+      vmid: String(requestAccountId),
       pn: 1,
       follow_status: 2,
       ps: 30,
@@ -125,7 +139,7 @@ async function getAnimeWatchList(generation = requestGeneration, requestAccountI
       watchListRequestFailed.value = true
   }
   finally {
-    if (isAnimeRequestCurrent(generation, requestAccountId))
+    if (animeMounted && generation === requestGeneration)
       isLoadingAnimeWatchList.value = false
   }
 }
@@ -134,7 +148,7 @@ async function getRecommendAnimeList(
   generation = requestGeneration,
   requestAccountId = getAnimeAccountId(),
 ): Promise<boolean> {
-  if (isLoadingRecommendAnime.value)
+  if (!isAnimeRequestCurrent(generation, requestAccountId) || isLoadingRecommendAnime.value)
     return false
   recommendRequestFailed.value = false
   isLoadingRecommendAnime.value = true
@@ -164,12 +178,14 @@ async function getRecommendAnimeList(
     return true
   }
   finally {
-    if (isAnimeRequestCurrent(generation, requestAccountId))
+    if (animeMounted && generation === requestGeneration)
       isLoadingRecommendAnime.value = false
   }
 }
 
 async function getPopularAnimeList(generation = requestGeneration, requestAccountId = getAnimeAccountId()) {
+  if (!isAnimeRequestCurrent(generation, requestAccountId))
+    return
   isLoadingPopularAnime.value = true
   popularRequestFailed.value = false
   try {
@@ -187,7 +203,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
     }
   }
   finally {
-    if (isAnimeRequestCurrent(generation, requestAccountId))
+    if (animeMounted && generation === requestGeneration)
       isLoadingPopularAnime.value = false
   }
 }
@@ -240,7 +256,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
                 cover: item.cover,
                 coverHover: item?.horizontal_cover_16_9,
                 title: item.title,
-                desc: item.progress !== '' ? item.progress : $t('anime.havent_seen'),
+                desc: getWatchProgressLabel(item),
                 evaluate: item.evaluate,
                 tags: item.styles,
                 capsuleText: item.is_finish && item.total_count
@@ -358,8 +374,6 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
               evaluate: item.evaluate,
               capsuleText: item.rating,
             }"
-            @mouseenter="activatedSeasonId = item.season_id"
-            @mouseleave="activatedSeasonId = 0"
           />
 
           <template v-if="isLoadingRecommendAnime">

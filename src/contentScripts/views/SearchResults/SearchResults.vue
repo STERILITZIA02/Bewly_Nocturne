@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="search-results-container">
+  <div class="search-results-container" :class="{ 'search-results-container--media': currentCategory === 'bangumi' || currentCategory === 'media_ft' }">
     <SearchCategoryTabs
       :categories="categories"
       :current-category="currentCategory"
@@ -393,5 +393,9 @@ onBeforeUnmount(() => {
 <style scoped lang="scss">
 .search-results-container {
   padding: 0;
+}
+.search-results-container--media {
+  width: min(100%, var(--bew-media-search-max-width));
+  margin-inline: auto;
 }
 </style>

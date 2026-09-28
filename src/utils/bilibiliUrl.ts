@@ -47,6 +47,16 @@ export function normalizeBilibiliImageUrl(value: string): string {
   return value
 }
 
+/** CDN host shards and display formats do not create additional gallery items. */
+export function getBilibiliImageResourceKey(value: string): string {
+  const path = normalizeBilibiliImageUrl(value.trim())
+    .replace(/@[^/?#]*(?=[?#]|$)/, '')
+    .split(/[?#]/, 1)[0]
+    .replace(/^https:\/\/i\d+\.hdslb\.com(?=\/bfs\/)/i, 'hdslb:')
+  const isGif = /\.gif$/i.test(path)
+  return `${path.replace(/\.(?:avif|webp|gif|jpe?g|png)$/i, '').toLowerCase()}|${isGif ? 'gif' : 'static'}`
+}
+
 const VIDEO_TRACKING_PARAMS = new Set([
   'buvid',
   'mid',

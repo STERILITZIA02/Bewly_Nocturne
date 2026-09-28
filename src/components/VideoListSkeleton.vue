@@ -13,24 +13,22 @@ withDefaults(defineProps<{
 
 <template>
   <div class="video-list-skeleton" :class="{ 'video-list-skeleton--history': history }" aria-hidden="true">
+    <SkeletonBlock v-if="history" width="112px" height="var(--bew-line-height-title)" />
     <article v-for="index in count" :key="index" class="video-list-skeleton__row">
-      <div v-if="history" class="bew-history-time-slot">
-        <span class="bew-history-time-chip video-list-skeleton__time" data-bew-skeleton>0000-00-00 00:00:00</span>
-      </div>
-      <div class="video-list-skeleton__item">
+      <div :class="history ? 'bew-history-row' : 'video-list-skeleton__item'">
         <SkeletonBlock class="video-list-skeleton__cover" height="auto" radius="media" />
         <div class="video-list-skeleton__content">
           <div class="video-list-skeleton__title">
-            <SkeletonBlock width="88%" height="var(--bew-font-size-heading)" />
-            <SkeletonBlock width="68%" height="var(--bew-font-size-heading)" />
+            <SkeletonBlock width="88%" :height="history ? 'var(--bew-font-size-title)' : 'var(--bew-font-size-heading)'" />
+            <SkeletonBlock width="68%" :height="history ? 'var(--bew-font-size-title)' : 'var(--bew-font-size-heading)'" />
           </div>
           <div class="video-list-skeleton__author">
-            <SkeletonBlock width="30px" height="30px" radius="circle" />
+            <SkeletonBlock :width="history ? '24px' : '30px'" :height="history ? '24px' : '30px'" radius="circle" />
             <SkeletonBlock width="112px" height="var(--bew-line-height-control)" />
           </div>
           <SkeletonBlock class="video-list-skeleton__meta" width="136px" height="var(--bew-line-height-control)" />
         </div>
-        <div class="video-list-skeleton__actions">
+        <div v-if="!history" class="video-list-skeleton__actions">
           <SkeletonBlock
             v-for="action in actionCount"
             :key="action"
@@ -55,12 +53,6 @@ withDefaults(defineProps<{
   display: flex;
   width: 100%;
 }
-.video-list-skeleton__time {
-  color: transparent;
-}
-.video-list-skeleton__row > .bew-history-time-slot {
-  border-left: var(--bew-space-0-5) solid transparent;
-}
 .video-list-skeleton__title {
   display: grid;
   grid-template-rows: repeat(2, var(--bew-line-height-heading));
@@ -68,9 +60,23 @@ withDefaults(defineProps<{
 .video-list-skeleton__meta {
   --uno: "mt-2";
 }
-@media (min-width: breakpoints.$grid-xl) {
-  .video-list-skeleton--history .video-list-skeleton__meta {
-    display: none;
+.video-list-skeleton--history {
+  gap: var(--bew-space-2);
+
+  > .skeleton-block {
+    margin-bottom: var(--bew-space-1);
+  }
+
+  .video-list-skeleton__cover {
+    width: 100% !important;
+  }
+
+  .video-list-skeleton__title {
+    grid-template-rows: repeat(2, var(--bew-line-height-title));
+  }
+
+  .video-list-skeleton__author {
+    margin-top: var(--bew-space-2);
   }
 }
 

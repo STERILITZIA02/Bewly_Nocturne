@@ -213,6 +213,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     ], {
       topBarStore: { userInfo: { mid: 1 } },
       getUserID: () => '1',
+      ...await import('../src/utils/accountScope'),
       animeMounted: true,
       requestGeneration: 1,
       isLoadingAnimeWatchList: Vue.ref(false),
@@ -266,20 +267,21 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       },
     })
     const controller = scope.run(() => core.useSearchRequest(kind))
-    const { usePagination } = await import('../src/contentScripts/views/SearchResults/composables/usePagination')
+    const { refreshSearchPage, usePagination } = await import('../src/contentScripts/views/SearchResults/composables/usePagination')
     const { dedupeByKey } = await import('../src/contentScripts/views/SearchResults/utils/searchHelpers')
     const pagination = usePagination()
     const exhausted = Vue.ref(false)
     const hasMore = Vue.ref(true)
     const props = { keyword: 'old', filters: kind === 'user' ? { order: '', userType: 0 } : { subCategory: 'all', roomOrder: '', userOrder: '' } }
     const context = await loadSourceFunctions(`../src/contentScripts/views/SearchResults/pages/${kind === 'user' ? 'User' : kind === 'all' ? 'All' : 'Live'}SearchPage.vue`, kind === 'user'
-      ? ['userOrderMap', 'runUserSearch', 'handlePageChange']
+      ? ['userOrderMap', 'runUserSearch', 'handlePageChange', 'refreshCurrentPage']
       : kind === 'all'
-        ? ['runAllSearch', 'getCurrentResultLength', 'handlePageChange']
-        : ['getIncomingLiveResults', 'runLiveSearch', 'refreshLiveRoomsOnly', 'getCurrentResultLength', 'handlePageChange'], {
+        ? ['runAllSearch', 'getCurrentResultLength', 'handlePageChange', 'refreshCurrentPage']
+        : ['getIncomingLiveResults', 'runLiveSearch', 'refreshLiveRoomsOnly', 'getCurrentResultLength', 'handlePageChange', 'refreshCurrentPage'], {
       props,
       ...controller,
       ...pagination,
+      refreshSearchPage,
       paginationHasMore: pagination.hasMore,
       paginationMode: Vue.computed(() => settings.value.searchResultsPaginationMode),
       exhausted,
@@ -347,6 +349,38 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
   })
 
   for (const kind of ['user', 'live', 'all']) {
+    check(`C01: ${kind} scroll refresh requests page one; numbered paging retains its page`, async () => {
+      const fixture = await searchFixture(kind, 'scroll')
+      const { context, requests, relations, emitted, scope, settings } = fixture
+      const data = kind === 'user'
+        ? { result: [{ mid: 1 }], numResults: 300, pagesize: 30 }
+        : kind === 'all'
+          ? { result: [{ result_type: 'video', data: [{ id: 1 }] }, { result_type: 'bili_user', data: [{ mid: 1 }] }], numResults: 300, pagesize: 30 }
+          : { result: { live_room: [{ roomid: 1 }], live_user: [{ mid: 1 }] }, pageinfo: { live_room: { total: 300 }, live_user: { total: 1 } } }
+      context.currentPage.value = 2
+      const refresh = context.refreshCurrentPage()
+      assert.equal(requests[0].request.page, 1)
+      if (kind === 'all')
+        assert.equal(requests[0].request.context, '')
+      requests[0].resolve({ code: 0, data })
+      await flush()
+      relations[0]?.resolve()
+      assert.equal(await refresh, true)
+      assert.equal(context.currentPage.value, 1)
+      assert.deepEqual(emitted, [['updatePage', 1]])
+      settings.value.searchResultsPaginationMode = 'pagination'
+      context.currentPage.value = 4
+      const numbered = context.refreshCurrentPage()
+      assert.equal(requests[1].request.page, 4)
+      requests[1].resolve({ code: 0, data })
+      await flush()
+      relations[1]?.resolve()
+      assert.equal(await numbered, true)
+      assert.equal(context.currentPage.value, 4)
+      assert.equal(emitted.length, 1)
+      scope.stop()
+    })
+
     check(`audit 05: ${kind} query owns enrichment, pagination, URL and loading until completion`, async () => {
       const fixture = await searchFixture(kind)
       const { context, requests, relations, controller, props, emitted, scope } = fixture
@@ -386,7 +420,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
 
   check('refactor: list search keeps filtered counts, deduplication, pagination and account ownership', async () => {
     const fixture = await searchFixture('user')
-    const { usePagination } = await import('../src/contentScripts/views/SearchResults/composables/usePagination')
+    const { refreshSearchPage, usePagination } = await import('../src/contentScripts/views/SearchResults/composables/usePagination')
     const { dedupeByKey } = await import('../src/contentScripts/views/SearchResults/utils/searchHelpers')
     const query = Vue.ref('list')
     const module = await loadSourceFunctions('../src/contentScripts/views/SearchResults/composables/useSearchListPage.ts', ['useSearchListPage'], {
@@ -395,6 +429,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       useBewlyApp: () => ({ haveScrollbar: async () => true, handleBackToTop: () => {} }),
       useSearchRequest: () => fixture.controller,
       usePagination,
+      refreshSearchPage,
       useLoadMore: () => ({
         hasMore: fixture.hasMore,
         exhausted: fixture.exhausted,
@@ -441,6 +476,19 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     fixture.requests[4].resolve({ code: 0, data: { result: [{ id: 5 }] } })
     await flush()
     assert.deepEqual(list.results.value.map(item => item.id), [5])
+    list.currentPage.value = 2
+    const refreshing = list.refreshCurrentPage()
+    assert.equal(fixture.requests[5].request.page, 1)
+    assert.deepEqual(list.results.value.map(item => item.id), [5], 'known content remains until refresh succeeds')
+    fixture.requests[5].resolve({ code: 0, data: { result: [{ id: 6 }], numResults: 120, pagesize: 30 } })
+    assert.equal(await refreshing, true)
+    assert.deepEqual(list.results.value.map(item => item.id), [6])
+    assert.equal(list.currentPage.value, 1)
+    const appended = list.performSearch(true)
+    assert.equal(fixture.requests[6].request.page, 2)
+    fixture.requests[6].resolve({ code: 0, data: { result: [{ id: 7 }], numResults: 120, pagesize: 30 } })
+    assert.equal(await appended, true)
+    assert.deepEqual(list.results.value.map(item => item.id), [6, 7])
     fixture.scope.stop()
   })
 

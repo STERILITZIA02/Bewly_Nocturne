@@ -45,7 +45,7 @@ import type { Author, Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabState } from '~/composables/useHomeTabState'
-import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
+import { HOME_TASK_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import { mapMomentItemToVideo } from '~/contentScripts/views/Home/adapters/followingVideo'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
@@ -712,7 +712,7 @@ function selectUploader(mid: number | null) {
   // 即时滚动到顶部（或搜索页面模式下的偏移位置）
   const viewport = scrollViewportRef.value
   if (viewport) {
-    const scrollTarget = Math.min(viewport.scrollTop, settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
+    const scrollTarget = Math.min(viewport.scrollTop, settings.value.useSearchPageModeOnHomePage ? HOME_TASK_SEARCH_STAGE_HEIGHT : 0)
     viewport.scrollTop = scrollTarget
   }
 

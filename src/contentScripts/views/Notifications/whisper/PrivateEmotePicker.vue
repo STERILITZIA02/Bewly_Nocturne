@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
+
 import type { PrivateEmote, PrivateEmotePackage } from './privateMessageRenderers'
 
 const props = defineProps<{
@@ -17,6 +19,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const activePackageKey = ref('')
+const bodyRef = ref<HTMLElement | null>(null)
 const failedImages = ref<Set<string>>(new Set())
 const visiblePackages = computed(() => props.packages)
 const activePackage = computed(() => (
@@ -44,6 +47,9 @@ function markImageFailed(emoteId: string) {
 
 async function handleTabKeydown(event: KeyboardEvent, currentIndex: number) {
   const count = visiblePackages.value.length
+  if (!count || event.isComposing)
+    return
+  const tablist = (event.currentTarget as HTMLElement).parentElement
   let nextIndex = currentIndex
   if (event.key === 'ArrowRight')
     nextIndex = (currentIndex + 1) % count
@@ -59,7 +65,6 @@ async function handleTabKeydown(event: KeyboardEvent, currentIndex: number) {
   event.preventDefault()
   activePackageKey.value = getPackageKey(visiblePackages.value[nextIndex]!)
   await nextTick()
-  const tablist = (event.currentTarget as HTMLElement).parentElement
   const tab = tablist?.querySelectorAll<HTMLElement>('[role="tab"]')[nextIndex]
   tab?.focus({ preventScroll: true })
   tab?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
@@ -71,6 +76,11 @@ watch(() => props.packages, () => {
     activePackageKey.value = activePackage.value ? getPackageKey(activePackage.value) : ''
   failedImages.value = new Set()
 }, { immediate: true })
+
+watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () => {
+  if (bodyRef.value)
+    bodyRef.value.scrollTop = 0
+}, { flush: 'post' })
 </script>
 
 <template>
@@ -107,17 +117,24 @@ watch(() => props.packages, () => {
       </button>
     </div>
 
+    <div v-else-if="loading" class="private-emote-picker__packages" aria-hidden="true">
+      <SkeletonBlock v-for="index in 7" :key="index" class="private-emote-picker__package-skeleton" height="var(--bew-control-height-sm)" width="var(--bew-control-height-lg)" />
+    </div>
+
     <div
       id="private-emote-panel"
+      ref="bodyRef"
       class="private-emote-picker__body"
       role="tabpanel"
       :aria-label="activePackage ? getPackageName(activePackage) : t('notifications.whisper.messages.emote_picker')"
       :aria-busy="loading"
     >
-      <div v-if="loading" class="private-emote-picker__empty" role="status">
-        {{ t('common.loading') }}
+      <div v-if="loading && !hasVisibleEmotes" class="private-emote-picker__grid" role="status" :aria-label="t('common.loading')">
+        <div v-for="index in 56" :key="index" class="private-emote-picker__item private-emote-picker__skeleton" aria-hidden="true">
+          <SkeletonBlock width="var(--bew-icon-size-xl)" height="var(--bew-icon-size-xl)" />
+        </div>
       </div>
-      <div v-else-if="failed" class="private-emote-picker__empty" role="status">
+      <div v-else-if="failed && !hasVisibleEmotes" class="private-emote-picker__empty" role="status">
         <span>{{ t('notifications.whisper.messages.emotes_load_failed') }}</span>
         <Button type="tertiary" @click="emit('retry')">
           {{ t('notifications.actions.retry') }}
@@ -159,7 +176,8 @@ watch(() => props.packages, () => {
   bottom: calc(100% + var(--bew-space-2));
   left: 0;
   z-index: var(--bew-z-control-menu);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   width: min(calc(var(--bew-space-12) * 7), calc(100vw - var(--bew-space-4)));
   max-height: min(calc(var(--bew-space-12) * 8), 60vh);
   padding: var(--bew-space-2);
@@ -167,7 +185,8 @@ watch(() => props.packages, () => {
 }
 
 .private-emote-picker__body {
-  min-height: calc(var(--bew-space-12) * 3);
+  flex: 1 1 auto;
+  min-height: 0;
   padding: var(--bew-space-2) 0 0;
   overflow-y: auto;
   overscroll-behavior: contain;
@@ -175,6 +194,7 @@ watch(() => props.packages, () => {
 
 .private-emote-picker__packages {
   display: flex;
+  flex: 0 0 auto;
   gap: var(--bew-space-1);
   padding-top: var(--bew-space-2);
   overflow-x: auto;
@@ -223,6 +243,14 @@ watch(() => props.packages, () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(var(--bew-control-height-lg), 1fr));
   gap: var(--bew-space-1);
+}
+
+.private-emote-picker__package-skeleton {
+  flex: 0 0 auto;
+}
+
+.private-emote-picker__skeleton {
+  pointer-events: none;
 }
 
 .private-emote-picker__item {
@@ -281,5 +309,13 @@ watch(() => props.packages, () => {
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .private-emote-picker__item,
+  .private-emote-picker__item:active {
+    transition: none;
+    transform: none;
+  }
 }
 </style>

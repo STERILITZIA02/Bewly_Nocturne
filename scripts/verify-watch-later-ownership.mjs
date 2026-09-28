@@ -5,11 +5,15 @@ import { loadSourceModule } from './sourceModuleHarness'
 export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
   const deferred = () => {
     let resolve
-    const promise = new Promise(done => resolve = done)
-    return { promise, resolve }
+    let reject
+    const promise = new Promise((done, fail) => {
+      resolve = done
+      reject = fail
+    })
+    return { promise, resolve, reject }
   }
 
-  async function cardFixture({ pendingMember = false, pendingAid = false, pendingWrite = false, preview = false } = {}) {
+  async function cardFixture({ pendingMember = false, pendingAid = false, pendingWrite = false, preview = false, mounted = false } = {}) {
     const member = deferred()
     const aid = deferred()
     const write = deferred()
@@ -18,6 +22,8 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
     const sends = []
     const commits = []
     const errors = []
+    const watcherErrors = []
+    const diagnostics = []
     const previewRequests = []
     const hoverTimers = new Map()
     let hoverTimerId = 0
@@ -64,28 +70,49 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       '~/utils/dataFormatter': { parseStatNumber: value => value },
       '~/utils/floatingMenu': {},
       '~/utils/main': main,
-      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/messaging': await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} } }),
       '~/utils/tabs': {},
       '~/utils/userRelation': { onUserRelationChange: () => () => {} },
       '~/utils/watchLater': watchLater,
       '../types': await import('../src/components/VideoCard/types'),
       '../utils': {},
       './videoPreviewCache': { releaseVideoPreviewCacheEntry() {}, retainVideoPreviewCacheEntry() {} },
-    }, { ...Vue, inject: (_key, fallback) => fallback, window: { setTimeout: (callback) => {
+    }, { ...Vue, console: { ...console, error: (...args) => diagnostics.push(args) }, inject: (_key, fallback) => fallback, window: { setTimeout: (callback) => {
       hoverTimers.set(++hoverTimerId, callback)
       return hoverTimerId
     } }, clearTimeout: id => hoverTimers.delete(id) })
     const props = Vue.ref({ video: { aid: pendingAid ? undefined : 101, bvid: 'BV1xx411c7mD', cid: 91 }, showWatchLater: false, showPreview: preview })
     const scope = Vue.effectScope()
-    const card = scope.run(() => logic.useVideoCardLogic(props))
+    let card
+    let app
+    let host
+    if (mounted) {
+      host = document.body.appendChild(document.createElement('div'))
+      app = Vue.createApp({ name: 'VideoCard', setup() {
+        card = scope.run(() => logic.useVideoCardLogic(props))
+        return () => null
+      } })
+      app.config.errorHandler = (error, _instance, info) => watcherErrors.push({ error, info })
+      app.mount(host)
+    }
+    else {
+      card = scope.run(() => logic.useVideoCardLogic(props))
+    }
     return {
       card,
       props,
-      scope,
+      scope: { stop() {
+        app?.unmount()
+        app = undefined
+        scope.stop()
+        host?.remove()
+      } },
       store,
       sends,
       commits,
       errors,
+      watcherErrors,
+      diagnostics,
       previewRequests,
       hoverTimers,
       member,
@@ -95,6 +122,29 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       setCsrf(value) { csrf = value },
     }
   }
+
+  check('watch later: card membership watcher owns context invalidation, regular failures and late disposed rejections', async () => {
+    for (const failure of ['invalidated', 'regular', 'disposed']) {
+      const fixture = await cardFixture({ pendingMember: true, mounted: true })
+      try {
+        fixture.props.value.showWatchLater = true
+        await flush()
+        if (failure === 'disposed')
+          fixture.scope.stop()
+        const error = new Error(failure === 'regular' ? 'Membership unavailable' : 'Extension context invalidated.')
+        fixture.member.reject(error)
+        await flush()
+        assert.deepEqual(fixture.watcherErrors, [], 'membership failures cannot escape into the Vue watcher callback error path')
+        assert.equal(fixture.diagnostics.length, failure === 'regular' ? 1 : 0, 'ordinary errors remain diagnostic; a dead extension context is terminal')
+        if (failure === 'regular')
+          assert.equal(fixture.diagnostics[0][1], error)
+        assert.equal(fixture.card.isInWatchLater.value, false)
+        assert.equal(fixture.sends.length, 0)
+        assert.equal(fixture.commits.length, 0)
+      }
+      finally { fixture.scope.stop() }
+    }
+  })
 
   check('video preview: in-place BV/CID changes, account changes and disposal invalidate actual pending fetches', async () => {
     const fixture = await cardFixture({ preview: true })

@@ -3,6 +3,7 @@ import { createVNode, render } from 'vue'
 
 import { GRID_BREAKPOINTS } from '~/constants/layout'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
+import { getBilibiliImageResourceKey } from '~/utils/bilibiliUrl'
 import { i18n } from '~/utils/i18n'
 import { getParentMessageData, postMessageToParent } from '~/utils/iframeMessage'
 import { isInIframe } from '~/utils/main'
@@ -700,7 +701,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer__nav {
   z-index: 4 !important;
   width: 44px !important;
   height: 56px !important;
-  border-radius: 10px !important;
+  border-radius: var(--bew-interactive-radius, 8px) !important;
   transform: translateY(-50%) !important;
   font-size: 32px !important;
 }
@@ -817,6 +818,15 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel .bili-dyn-gal
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__panel .opus-pic-view {
   display: none !important;
 }
+@media (prefers-reduced-motion: reduce) {
+  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-iframe-loading,
+  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery [class*="bewly-opus-gallery__"],
+  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer,
+  html.momentsPage.drawer.bewly-opus-layout .bewly-opus-viewer [class*="bewly-opus-viewer__"] {
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}
 @media (max-width: 860px) {
   html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split {
     grid-template-columns: minmax(0, 1fr) !important;
@@ -884,6 +894,8 @@ function ensureStyles() {
 }
 
 function showIframeLoading(text = i18n.global.t('common.loading')) {
+  if (layoutReadyNotified)
+    return
   if (loadingHideTimer !== undefined)
     clearTimeout(loadingHideTimer)
   loadingHideTimer = undefined
@@ -909,7 +921,7 @@ function showIframeLoading(text = i18n.global.t('common.loading')) {
 }
 
 function hideIframeLoading() {
-  if (!loadingEl)
+  if (!loadingEl || loadingEl.classList.contains('is-hide'))
     return
   loadingEl.classList.add('is-hide')
   const target = loadingEl
@@ -924,10 +936,10 @@ function hideIframeLoading() {
 }
 
 function notifyLayoutReady() {
+  hideIframeLoading()
   if (layoutReadyNotified)
     return
   layoutReadyNotified = true
-  hideIframeLoading()
   try {
     postMessageToParent({ type: LAYOUT_READY_MSG, source: 'bewly-opus', href: location.href })
   }
@@ -974,21 +986,6 @@ function isRootReady(root: HTMLElement): boolean {
     root.dataset[READY_FLAG] = '1'
   return ready
 }
-
-const CATALOG_SELECTORS = [
-  '.catalog',
-  '.catalog-panel',
-  '.opus-toc',
-  '.opus-toc__panel',
-  '.opus-catalog',
-  '.opus-directory',
-  '.article-catalog',
-  '[class*="catalog"]',
-  '[class*="Catalog"]',
-  '[class*="directory"]',
-  '[class*="Directory"]',
-  '[class*="目录"]',
-].join(',')
 
 /** 转发动态：不做图片左置分栏（由 Moments 列表通过 query 标记） */
 function isPlainOpusRequested(): boolean {
@@ -1088,25 +1085,8 @@ function isColumnArticleOpus(root?: HTMLElement | null): boolean {
   if (/\/read\/cv\d+/i.test(location.pathname + location.search))
     return true
 
-  try {
-    const state = (window as any).__INITIAL_STATE__
-    const detail = state?.detail || state?.item
-    const type = detail?.type ?? detail?.item?.type
-    if (type === 'DYNAMIC_TYPE_ARTICLE' || type === 'MAJOR_TYPE_ARTICLE')
-      return true
-    // 专栏 comment_type=12；article_type>0 也视为专栏
-    const basic = detail?.basic || detail?.item?.basic || {}
-    if (Number(basic.comment_type) === 12)
-      return true
-    if (Number(basic.article_type) > 0)
-      return true
-  }
-  catch {
-    // ignore
-  }
-
   const scope = root || document
-  // 专栏专属壳层（目录只作为专栏的辅助特征，不单独判定）
+  // The parent supplies the article hint; ISOLATED only inspects native DOM.
   const articleChrome = scope.querySelector([
     '.article-container',
     '.article-content',
@@ -1117,23 +1097,7 @@ function isColumnArticleOpus(root?: HTMLElement | null): boolean {
     '.article-up-info',
     '[class*="article-container"]',
   ].join(','))
-  if (!(articleChrome instanceof HTMLElement))
-    return false
-
-  // 有专栏壳 + 目录，才按专栏收窄（保留目录）
-  try {
-    const catalog = document.querySelector(CATALOG_SELECTORS)
-    if (catalog instanceof HTMLElement
-      && !catalog.closest('.bili-comment-container, .reply-list, .sub-reply-list')) {
-      return true
-    }
-  }
-  catch {
-    // ignore
-  }
-
-  // 仅有专栏壳也按专栏处理
-  return true
+  return articleChrome instanceof HTMLElement
 }
 
 function isExcludedMediaNode(node: Element): boolean {
@@ -1250,12 +1214,6 @@ function isLikelyContentImage(img: HTMLImageElement): boolean {
   return false
 }
 
-function getImageUrlKey(url: string) {
-  const path = url.split(/[?#]/, 1)[0]
-  const isGif = /\.gif$/i.test(path)
-  return `${path.replace(/\.(?:avif|webp|gif|jpe?g|png)$/i, '').toLowerCase()}|${isGif ? 'gif' : 'static'}`
-}
-
 function isOriginalImageUrl(url: string) {
   return /\.(?:gif|jpe?g|png)$/i.test(url.split(/[?#]/, 1)[0])
 }
@@ -1267,7 +1225,7 @@ function extractImageUrls(albumNodes: HTMLElement[]): string[] {
     const url = normalizeImageUrl(raw || '')
     if (!url)
       return
-    const key = getImageUrlKey(url)
+    const key = getBilibiliImageResourceKey(url)
     const existingIndex = urlIndexes.get(key)
     if (existingIndex !== undefined) {
       // GIF 原图优先于同一资源的 webp/jpg 缩略图，避免详情查看器出现两页相同动图。
@@ -1339,6 +1297,7 @@ function unmountGalleryIcons() {
 }
 
 function createImageGallery(rawUrls: string[]): HTMLElement {
+  const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)')
   const urls = rawUrls
     .map(url => normalizeImageUrl(url))
     .filter((url): url is string => Boolean(url))
@@ -1683,7 +1642,7 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
       thumb.classList.toggle('is-active', i === index)
     })
     const activeThumb = thumbs.querySelector<HTMLElement>('.bewly-opus-gallery__thumb.is-active')
-    activeThumb?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+    activeThumb?.scrollIntoView({ behavior: reducedMotion.matches ? 'auto' : 'smooth', block: 'nearest', inline: 'center' })
   }
 
   /**
@@ -1705,9 +1664,9 @@ function createImageGallery(rawUrls: string[]): HTMLElement {
       moveDir = forward <= backward ? 1 : -1
     }
 
-    // 单图无需动画
-    if (urls.length === 1) {
+    if (reducedMotion.matches) {
       index = target
+      wheelAccum = 0
       fillWindow()
       syncChrome()
       return
@@ -2146,8 +2105,13 @@ function teardownSplit(root: HTMLElement, permanent = false) {
 }
 
 function verifySplitOrRollback(root: HTMLElement, split: HTMLElement, panelPane: HTMLElement, mediaPane: HTMLElement) {
+  const owner = styleEl
   requestAnimationFrame(() => {
+    if (!owner?.isConnected || styleEl !== owner)
+      return
     requestAnimationFrame(() => {
+      if (!owner.isConnected || styleEl !== owner || !split.isConnected || !root.contains(split))
+        return
       const ok = isLayoutVisible(split)
         && (hasMeaningfulContent(panelPane) || hasMeaningfulContent(mediaPane))
         && (panelPane.getBoundingClientRect().height > 40 || mediaPane.getBoundingClientRect().height > 40)
@@ -2471,6 +2435,15 @@ export function setupOpusDetailDrawerLayout() {
   }
   clearDeferredSetup()
 
+  // Settings/style synchronization may invoke setup again in the same frame.
+  // Keep the existing layout, observer and completion identity until dispose.
+  if (styleEl?.isConnected) {
+    ensureBaseClasses()
+    syncOpusCommentColumnWidth()
+    if (layoutReadyNotified)
+      hideIframeLoading()
+    return
+  }
   layoutReadyNotified = false
   ensureBaseClasses()
   ensureStyles()

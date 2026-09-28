@@ -91,6 +91,7 @@ export async function verifyMomentCommentLifecycle() {
   const delayedPages: Array<{ sort: number, resolve: (value: unknown) => void }> = []
   let delayPages = false
   const requestedPages: number[] = []
+  const requestedSorts: number[] = []
   const momentApi = {
     getMomentDetail: async () => {
       detailRequests += 1
@@ -99,6 +100,7 @@ export async function verifyMomentCommentLifecycle() {
     getMomentComments: async ({ pn, sort }: { pn: number, sort: number }) => {
       rootRequests += 1
       requestedPages.push(pn)
+      requestedSorts.push(sort)
       if (delayPages)
         return new Promise(resolve => delayedPages.push({ sort, resolve }))
       return { code: 0, data: { page: { num: pn, count: 40, size: 8 }, replies: [fixtureComment(pn === 1 ? '100' : '200')] } }
@@ -162,6 +164,8 @@ export async function verifyMomentCommentLifecycle() {
   await flush()
   assert.equal(detailRequests, 0)
   assert.equal(rootRequests, 1)
+  assert.equal(requestedSorts[0], 1, 'first opening requests the hottest comments')
+  assert.ok(descendants(host).some(item => item.props['aria-pressed'] === true && textOf(item).includes('comments_sort_hot')))
   await clickText('comments_expand_replies')
   await findClass('moment-comments__load-more').props.onClick()
   await flush()
@@ -191,6 +195,15 @@ export async function verifyMomentCommentLifecycle() {
   await pendingUnlike
   await flush()
   assert.ok(descendants(host).some(item => item.props['aria-label'] === 'moment_card.comment_like'), 'submitted unlike reconciles the remounted view')
+  await clickText('comments_sort_latest')
+  await flush()
+  assert.equal(requestedSorts.at(-1), 0)
+  const beforeLatestRestore = rootRequests
+  app.unmount()
+  app = mount()
+  await flush()
+  assert.equal(rootRequests, beforeLatestRestore, 'reopening preserves an explicitly chosen latest sort and its loaded data')
+  assert.ok(descendants(host).some(item => item.props['aria-pressed'] === true && textOf(item).includes('comments_sort_latest')))
   delayPages = true
   await clickText('comments_sort_hot')
   await flush()
@@ -246,6 +259,7 @@ export async function verifyMomentCommentLifecycle() {
   moment.value = { ...moment.value, id: '456', commentId: undefined, commentType: undefined }
   await flush()
   assert.equal(detailRequests, 1, 'missing target resolves through detail before loading comments')
+  assert.equal(requestedSorts.at(-1), 1, 'a different dynamic starts with hottest comments independently of the previous choice')
   measureCommentList = true
   const beforeFill = rootRequests
   moment.value = { ...moment.value, id: '789', commentId: '1000', commentType: 17 }

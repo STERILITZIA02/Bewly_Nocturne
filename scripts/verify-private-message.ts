@@ -1609,7 +1609,7 @@ verify('private-session UI keeps type filters while moving participant identity 
   }
 })
 
-verify('confirmed outgoing text uses a theme bubble and a compact delivery check', async () => {
+verify('confirmed outgoing text uses an opaque secondary theme bubble and a compact delivery check', async () => {
   const [conversationSource, itemSource, contentSource] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageItem.vue', import.meta.url), 'utf8'),
@@ -1618,8 +1618,8 @@ verify('confirmed outgoing text uses a theme bubble and a compact delivery check
 
   assert.match(itemSource, /<PrivateMessageContent[\s\S]{0,240}:is-self="message\.isSelf"/)
   assert.match(contentSource, /'private-message-content__bubble--self':\s*isSelf/)
-  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,160}background:\s*var\(--bew-theme-color\)/)
-  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,240}color:\s*var\(--bew-on-theme-color\)/)
+  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,160}background:\s*var\(--bew-theme-surface\)/)
+  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,240}color:\s*var\(--bew-on-theme-surface\)/)
   assert.match(contentSource, /\.private-message-content__media-placeholder\s*\{[\s\S]{0,220}width:\s*min\(100%/)
   assert.match(itemSource, /\.private-message-item__failed-actions\s*\{[\s\S]{0,120}max-width:\s*100%/)
   assert.doesNotMatch(contentSource, /:global\(\.private-message-item--self\)/)
@@ -3027,7 +3027,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(workspaceSource.includes('background: var(--bew-elevated-alt)'))
   assert.ok(workspaceSource.includes('overflow: hidden'))
   assert.equal(workspaceSource.includes('--bew-homepage-bg'), false)
-  assert.ok(emptySource.includes('conversation-empty-state__tips'))
+  assert.equal(emptySource.includes('conversation-empty-state__tips'), false, 'empty state keeps only the task title and actionable guidance')
+  assert.ok(emptySource.includes('notifications.whisper.select_conversation_hint'))
   assert.ok(emptySource.includes('background: transparent'))
   assert.ok(conversationSource.includes('class="conversation-card"'))
   assert.ok(conversationSource.includes('background: var(--bew-elevated-alt)'))
@@ -3058,7 +3059,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.equal(conversationSource.includes('applyExpansionAction'), false)
   assert.ok(conversationSource.includes('initialScrollGeneration !== viewport.interactionGeneration'))
   assert.ok(conversationSource.includes('conversationActivationPending'))
-  assert.ok(conversationSource.includes('v-if="state.newMessagesAvailable"'))
+  assert.ok(conversationSource.includes('v-if="showLatestButton"'))
+  assert.ok(conversationSource.includes('!isAtLatestPosition.value || state.value.newMessagesAvailable'))
   assert.match(viewportSource, /function applyReadingDirection\([\s\S]{0,180}generation\+\+/)
   assert.match(viewportSource, /function handleScroll\(\)[\s\S]{0,420}applyReadingDirection/)
   assert.ok(conversationSource.includes('@touchmove.passive="handleDirectGestureMove"'))

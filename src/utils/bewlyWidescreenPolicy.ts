@@ -51,6 +51,8 @@ export function canCommitWidescreenLayout({
 }
 
 export interface WidescreenControlSurfaceStateInput {
+  bottomControlsFocused: boolean
+  textEditingActive: boolean
   bottomControlsHovered: boolean
   danmakuControlsReady: boolean
   nativeControlsHidden: boolean
@@ -60,6 +62,8 @@ export interface WidescreenControlSurfaceStateInput {
 }
 
 export function resolveWidescreenControlSurfaceState({
+  bottomControlsFocused,
+  textEditingActive,
   bottomControlsHovered,
   danmakuControlsReady,
   nativeControlsHidden,
@@ -69,11 +73,11 @@ export function resolveWidescreenControlSurfaceState({
 }: WidescreenControlSurfaceStateInput) {
   const ready = danmakuControlsReady && nativeControlsReady
   return {
-    // 指针离开播放器且不悬停底部控制区时统一隐藏；不再冻结上一帧结果，
-    // 否则移出页面/窗口后卡面会永久残留
+    // 页面任意文字编辑或底部控件持有焦点时，暂停原生闲置隐藏。
+    // 失焦后重新采用原生空闲/指针状态，不冻结上一帧结果。
     hidden: !ready
       || sidebarExpanded
-      || (!bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : true)),
+      || (!textEditingActive && !bottomControlsFocused && !bottomControlsHovered && (pointerInsidePlayer ? nativeControlsHidden : true)),
     ready,
   }
 }
@@ -240,24 +244,19 @@ export function clampWidescreenSidebarWidth(width: number, viewportWidth: number
 
 export interface WidescreenSidebarResizeInput {
   position: 'left' | 'right'
-  pointerX: number
-  viewportStart: number
-  viewportEnd: number
+  deltaX: number
+  startWidth: number
+  viewportWidth: number
 }
 
 export function resolveWidescreenSidebarResizeWidth({
   position,
-  pointerX,
-  viewportStart,
-  viewportEnd,
+  deltaX,
+  startWidth,
+  viewportWidth,
 }: WidescreenSidebarResizeInput): number {
-  const safeViewportStart = Math.min(viewportStart, viewportEnd)
-  const safeViewportEnd = Math.max(viewportStart, viewportEnd)
-  const viewportWidth = safeViewportEnd - safeViewportStart
-  const width = position === 'right'
-    ? safeViewportEnd - pointerX
-    : pointerX - safeViewportStart
-  return clampWidescreenSidebarWidth(width, viewportWidth)
+  const width = startWidth + (position === 'right' ? -deltaX : deltaX)
+  return clampWidescreenSidebarWidth(Math.max(width, WIDESCREEN_SIDEBAR_MIN_WIDTH), viewportWidth)
 }
 
 export interface WidescreenCenterGeometryInput {

@@ -370,6 +370,10 @@ export function schedulePlayerResizeSync(currentState: BewlyWidescreenState) {
     if (!session.current || session.current !== currentState)
       return
 
+    // Native description measurement temporarily removes its clamp. Keep that
+    // read/write cycle out of live dragging and settle it once on release.
+    if (currentState.root.dataset.sidebarResizing !== 'true')
+      syncDescription(currentState)
     updateSidebarLayoutState(currentState)
     const rect = currentState.playerEl.getBoundingClientRect()
     const signature = [rect.width, rect.height].map(value => value.toFixed(1)).join(':')
@@ -396,10 +400,10 @@ export function setupAspectObservers(currentState: BewlyWidescreenState) {
   const refreshMeasuredLayout = () => {
     if (!session.current || session.current !== currentState)
       return
-    updateAspectRatio(currentState)
-    syncDescription(currentState)
-    scheduleActionGeometrySync(currentState)
-    syncControlsGlassGeometry(currentState)
+    // Sidebar, description and native control observers can fire together.
+    // Measure through the existing frame owner, rather than synchronously
+    // reflowing the same native subtrees from every observer callback.
+    schedulePlayerResizeSync(currentState)
   }
 
   currentState.resizeObserver = new ResizeObserver(refreshMeasuredLayout)

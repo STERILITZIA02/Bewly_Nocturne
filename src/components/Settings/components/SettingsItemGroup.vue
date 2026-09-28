@@ -55,10 +55,7 @@ const collapsed = ref(props.defaultCollapsed)
 
     <main
       v-show="!collapsed"
-      style="box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-1);"
-      mt-2 px-4 mx--4 rounded="$bew-radius"
-      bg="$bew-fill-alt"
-      shadow="$bew-shadow-edge-glow-1"
+      class="group-panel"
     >
       <slot />
     </main>
@@ -68,6 +65,14 @@ const collapsed = ref(props.defaultCollapsed)
 <style lang="scss" scoped>
 .b-settings-item-group + .b-settings-item-group {
   --uno: "mt-6";
+}
+
+.group-panel {
+  margin: var(--bew-space-2) calc(0px - var(--bew-space-4)) 0;
+  padding-inline: var(--bew-space-4);
+  background: var(--bew-content-solid);
+  border-radius: var(--bew-panel-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .group-heading {

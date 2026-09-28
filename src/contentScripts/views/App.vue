@@ -109,7 +109,7 @@ function getDefaultAppPage(): AppPage {
   return resolveDefaultAppPage(settings.value.dockItemsConfig)
 }
 
-const { activatedPage, homeActivatedPage, homeActivatedPageTouched, resolveAvailableAppPage } = useHomePageRoute(getDefaultAppPage, mainStore.homeTabs.map(tab => ({
+const { activatedPage, homeActivatedPage, homeActivatedPageTouched, navigateToPage, navigateToHomeTab, resolveAvailableAppPage } = useHomePageRoute(getDefaultAppPage, mainStore.homeTabs.map(tab => ({
   page: tab.page,
   visible: tab.page !== HomeSubPage.Precious,
 })))
@@ -133,49 +133,13 @@ watch(shouldUseOriginalSearchResultsPage, (useOriginalBiliPage) => {
 // 监听 URL 变化,同步更新 activatedPage
 watch(currentLocationHref, () => {
   exitLayoutEditMode()
-  if (activatedPage.value !== AppPage.SearchResults) {
+  if (activatedPage.value !== AppPage.SearchResults)
     topBarStore.searchKeyword = ''
-    clearSearchParamsFromUrl()
-  }
 })
 
-// 清理搜索相关的URL参数（仅在首页生效）
-function clearSearchParamsFromUrl() {
-  // 只清理 Bilibili 首页 shell 的参数，不触碰原生搜索结果页。
-  if (!isHomePage())
-    return
-
-  const urlParams = new URLSearchParams(window.location.search)
-  const hasSearchParams = urlParams.has('keyword')
-    || urlParams.has('category')
-    || urlParams.has('user_order')
-    || urlParams.has('user_type')
-    || urlParams.has('search_type')
-    || urlParams.has('live_room_order')
-    || urlParams.has('live_user_order')
-    || urlParams.has('pn')
-
-  if (hasSearchParams) {
-    urlParams.delete('keyword')
-    urlParams.delete('category')
-    urlParams.delete('user_order')
-    urlParams.delete('user_type')
-    urlParams.delete('search_type')
-    urlParams.delete('live_room_order')
-    urlParams.delete('live_user_order')
-    urlParams.delete('pn')
-    // 注意：不要删除 'page' 参数，它用于 dock 的页面切换
-    const currentUrl = new URL(window.location.href)
-    currentUrl.search = urlParams.toString()
-    window.history.replaceState(window.history.state, '', `${currentUrl.pathname}${currentUrl.search}${currentUrl.hash}`)
-  }
-}
-
-// 页面加载时，如果不是Search或SearchResults页面且在首页则清理搜索参数
-if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.SearchResults && isHomePage()) {
-  clearSearchParamsFromUrl()
+// URL normalization belongs to useHomePageRoute; the shell only owns the field.
+if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.SearchResults && isHomePage())
   topBarStore.searchKeyword = ''
-}
 
 function definePageComponent(loader: AsyncComponentLoader, delay = 120) {
   return defineAsyncComponent({
@@ -531,37 +495,17 @@ onMounted(() => {
 })
 
 function handleDockItemClick(dockItem: DockItem) {
-  // Opening in a new tab while still on the current tab doesn't require changing the `activatedPage`
   if (dockItem.openInNewTab) {
     openLinkToNewTab(settingsStore.resolveDockPageHref(dockItem.page))
+    return
   }
-  else {
-    if (dockItem.useOriginalBiliPage) {
-      // It seem like the `activatedPage` watcher above will handle this, so no need to set iframePageURL.value here
-      // iframePageURL.value = dockItem.url
-      if (!isHomePage()) {
-        location.href = settingsStore.resolveDockPageHref(dockItem.page)
-      }
-    }
-    else {
-      if (isHomePage()) {
-        changeActivatePage(dockItem.page)
-      }
-      else {
-        location.href = `https://www.bilibili.com/?page=${dockItem.page}`
-      }
-    }
-
-    // When not opened in a new tab, change the `activatedPage`
-    activatedPage.value = dockItem.page
-
-    // Search state belongs only to the SearchResults destination. Clear it
-    // even when the current URL is still a SearchResults route.
-    if (isHomePage() && dockItem.page !== AppPage.SearchResults) {
-      topBarStore.searchKeyword = ''
-      clearSearchParamsFromUrl()
-    }
+  if (!isHomePage()) {
+    location.href = settingsStore.resolveDockPageHref(dockItem.page)
+    return
   }
+  changeActivatePage(dockItem.page)
+  if (dockItem.page !== AppPage.SearchResults)
+    topBarStore.searchKeyword = ''
 }
 
 function getDockPageHref(page: AppPage): string {
@@ -587,7 +531,7 @@ function changeActivatePage(pageName: AppPage) {
     }
     return
   }
-  activatedPage.value = targetPage
+  navigateToPage(targetPage)
 }
 
 function handleBackToTop(targetScrollTop = 0 as number) {
@@ -750,6 +694,8 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   activatedPage,
   homeActivatedPage,
   homeActivatedPageTouched,
+  navigateToPage,
+  navigateToHomeTab,
   isHomeTabSwitching,
   mainAppRef,
   scrollViewportRef,

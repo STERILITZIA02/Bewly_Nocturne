@@ -47,6 +47,7 @@ interface SessionEntry {
 
 const MAX_SNAPSHOT_BYTES = 4 * 1024 * 1024
 const CACHE_BYTE_BUDGET = 8 * 1024 * 1024
+export const DEFAULT_MOMENT_COMMENT_SORT = 1
 
 export function createMomentCommentSessionCache(initialAccountId: string, limit = 16) {
   const entries = new Map<string, SessionEntry>()
@@ -120,7 +121,7 @@ export function createMomentCommentSessionCache(initialAccountId: string, limit 
         if (entry.momentId === momentId && oldKey !== key)
           entries.delete(oldKey)
       }
-      const entry = entries.get(key) ?? { momentId, target: { ...target }, sort: sort ?? 0, revision: 0, likeVersion: 0, likes: shallowReactive(new Map<string, CommentLikeState>()), readers: new Set<SessionLease>() }
+      const entry = entries.get(key) ?? { momentId, target: { ...target }, sort: sort ?? DEFAULT_MOMENT_COMMENT_SORT, revision: 0, likeVersion: 0, likes: shallowReactive(new Map<string, CommentLikeState>()), readers: new Set<SessionLease>() }
       if (sort !== undefined && sort !== entry.sort) {
         entry.sort = sort
         entry.revision += 1

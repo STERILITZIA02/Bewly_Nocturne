@@ -13,8 +13,6 @@ interface Episode {
 
 const props = defineProps<{
   episodes: Episode[]
-  totalEpisodes?: number
-  fallbackUrl?: string
 }>()
 
 interface EpisodeEntry {
@@ -23,8 +21,7 @@ interface EpisodeEntry {
   number: number
   title: string
   longTitle?: string
-  url?: string
-  disabled: boolean
+  url: string
 }
 
 interface EllipsisEntry {
@@ -52,23 +49,13 @@ const normalizedEpisodes = computed(() => Array.isArray(props.episodes) ? props.
 const episodeMap = computed(() => {
   const map = new Map<number, Episode>()
   normalizedEpisodes.value.forEach((episode, index) => {
+    if (!episode.url)
+      return
     const resolvedNumber = resolveEpisodeNumber(episode, index)
     if (resolvedNumber && !map.has(resolvedNumber))
       map.set(resolvedNumber, episode)
   })
   return map
-})
-
-const totalEpisodes = computed(() => {
-  const provided = Number(props.totalEpisodes)
-  if (Number.isFinite(provided) && provided > 0)
-    return provided
-
-  const numbers = [...episodeMap.value.keys()]
-  if (numbers.length > 0)
-    return Math.max(...numbers)
-
-  return normalizedEpisodes.value.length
 })
 
 const maxVisibleButtons = computed(() => {
@@ -81,30 +68,15 @@ const maxVisibleButtons = computed(() => {
 })
 
 const entries = computed<Entry[]>(() => {
-  const total = totalEpisodes.value
-  if (!Number.isFinite(total) || total <= 0)
-    return []
-
+  const numbers = [...episodeMap.value.keys()].sort((a, b) => a - b)
   const limit = Math.max(maxVisibleButtons.value, MIN_BUTTONS)
-  const result: Entry[] = []
-
-  if (total <= limit) {
-    for (let number = 1; number <= total; number += 1)
-      result.push(createEpisodeEntry(number))
-    return result
-  }
-
-  const leadingCount = Math.min(total - 1, limit - 2)
-  for (let number = 1; number <= leadingCount; number += 1)
-    result.push(createEpisodeEntry(number))
-
-  result.push({
-    type: 'ellipsis',
-    key: 'ellipsis',
-  })
-
-  result.push(createEpisodeEntry(total))
-  return result
+  if (numbers.length <= limit)
+    return numbers.map(createEpisodeEntry)
+  return [
+    ...numbers.slice(0, limit - 2).map(createEpisodeEntry),
+    { type: 'ellipsis', key: 'ellipsis' },
+    createEpisodeEntry(numbers[numbers.length - 1]),
+  ]
 })
 
 function resolveEpisodeNumber(episode: Episode, index: number): number | undefined {
@@ -122,16 +94,14 @@ function resolveEpisodeNumber(episode: Episode, index: number): number | undefin
 }
 
 function createEpisodeEntry(number: number): EpisodeEntry {
-  const episode = episodeMap.value.get(number)
-  const url = episode?.url || props.fallbackUrl
+  const episode = episodeMap.value.get(number)!
   return {
     type: 'episode',
     key: `episode-${number}`,
     number,
-    title: episode?.title || `第${number}话`,
-    longTitle: episode?.longTitle,
-    url,
-    disabled: !url,
+    title: episode.title,
+    longTitle: episode.longTitle,
+    url: episode.url!,
   }
 }
 </script>
@@ -143,24 +113,17 @@ function createEpisodeEntry(number: number): EpisodeEntry {
     class="bangumi-episode-buttons"
   >
     <template v-for="entry in entries" :key="entry.key">
-      <a
-        v-if="entry.type === 'episode' && !entry.disabled"
+      <ALink
+        v-if="entry.type === 'episode'"
         :href="entry.url"
-        target="_blank"
+        type="videoCard"
         rel="noopener"
+        stop-propagation
         class="episode-button"
         :title="entry.longTitle || entry.title"
-        @click.stop
       >
         {{ entry.number }}
-      </a>
-      <span
-        v-else-if="entry.type === 'episode'"
-        class="episode-button disabled"
-        :title="entry.longTitle || entry.title"
-      >
-        {{ entry.number }}
-      </span>
+      </ALink>
       <span
         v-else
         class="episode-ellipsis"
@@ -185,7 +148,7 @@ function createEpisodeEntry(number: number): EpisodeEntry {
   align-items: center;
   justify-content: center;
   min-width: 44px;
-  height: 32px;
+  height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
@@ -204,19 +167,14 @@ function createEpisodeEntry(number: number): EpisodeEntry {
   &:hover {
     background: var(--bew-fill-2);
   }
-
-  &.disabled {
-    cursor: default;
-    color: var(--bew-text-3);
-  }
 }
 
 .episode-ellipsis {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: var(--bew-control-height);
+  height: var(--bew-control-height);
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-title);
 }

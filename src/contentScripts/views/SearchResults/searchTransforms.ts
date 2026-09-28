@@ -435,10 +435,11 @@ export function convertLiveRoomData(live: any): Video {
 }
 
 export function isMediaFtItem(item: any): boolean {
+  // The same PGC season contract is used by Ranking: 1/4 are anime/Guochuang;
+  // 2/3/5/7 are film, documentary, TV and variety. Do not treat all PGC as film.
   return item?.type === 'media_ft'
     || item?.result_type === 'media_ft'
-    || item?.season_type === 4
-    || item?.media_type === 2
+    || [2, 3, 5, 7].includes(Number(item?.season_type))
 }
 
 function extractBangumiEpisodes(item: any): BangumiEpisode[] {
@@ -448,7 +449,8 @@ function extractBangumiEpisodes(item: any): BangumiEpisode[] {
   const pushEpisode = (episode: any) => {
     if (!episode)
       return
-    const url = episode.url || episode.link || (episode.id ? `https://www.bilibili.com/bangumi/play/ep${episode.id}` : '')
+    const episodeId = episode.id || episode.ep_id
+    const url = episode.url || episode.link || (episodeId ? `https://www.bilibili.com/bangumi/play/ep${episodeId}` : '')
     const title = removeHighlight(episode.title || episode.index_title || episode.long_title || episode.name || '')
     if (!title)
       return
@@ -495,6 +497,7 @@ function extractBangumiEpisodes(item: any): BangumiEpisode[] {
   }
 
   const candidates = [
+    item?.eps,
     item?.episodes,
     item?.ep_list,
     item?.module_info?.episodes,

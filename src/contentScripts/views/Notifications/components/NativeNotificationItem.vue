@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { normalizeIntlLocale } from '~/utils/locale'
+
 import type { DisplayNotificationActor, InteractionNotification } from '../notification'
 
 const props = defineProps<{
@@ -27,7 +29,7 @@ const formattedTime = computed(() => {
     return ''
 
   try {
-    return new Intl.DateTimeFormat(locale.value, {
+    return new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(props.item.timestamp * 1000)
@@ -229,7 +231,7 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__actor:hover,
 .native-notification-item__open-source:hover {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
 }
 
 .native-notification-item__unread {
@@ -255,13 +257,11 @@ function markAvatarFailed(index: number) {
   min-width: 0;
   gap: var(--bew-space-2);
   align-content: center;
-  padding: var(--bew-space-3);
+  padding: 0 0 0 var(--bew-space-4);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  background: var(--bew-fill-1);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
+  border-left: var(--bew-space-0-5) solid var(--bew-border-color);
 }
 
 .native-notification-item__reference {

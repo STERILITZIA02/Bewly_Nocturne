@@ -219,7 +219,8 @@ function getObserverRoot(): Element | null {
   if (typeof window === 'undefined')
     return null
   const viewport = bewlyApp?.scrollViewportRef?.value
-  return viewport?.isConnected ? viewport : null
+  // Teleported popovers belong to the viewport, not the page's scroll owner.
+  return viewport?.isConnected && imgRef.value && viewport.contains(imgRef.value) ? viewport : null
 }
 
 function getViewportHeight(): number {
@@ -546,10 +547,25 @@ watch(
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   text-align: center;
+  /* Size containment is safe here: the overlay is always inset to the picture box. */
+  container-type: size;
 }
 
 .lazy-picture-error i {
+  flex: none;
   font-size: var(--bew-icon-size-lg);
+}
+
+/* Avatars and thumbnails are too small for the caption; the role=img label keeps
+   the failure announced while the icon alone stays inside the clip outline. */
+@container (max-width: 96px) or (max-height: 64px) {
+  .lazy-picture-error span {
+    display: none;
+  }
+
+  .lazy-picture-error i {
+    font-size: var(--bew-icon-size-sm);
+  }
 }
 
 .image-transition {

@@ -200,7 +200,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
           </IconButton>
         </Tooltip>
       </div>
-      <div class="bew-segment-control bew-segment-control--static conversation-list__filters">
+      <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary conversation-list__filters">
         <button
           v-for="filterId in filters"
           :key="filterId"
@@ -334,6 +334,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   flex: 0 0 auto;
   gap: var(--bew-space-2);
   padding: var(--bew-space-3);
+  border-bottom: 1px solid var(--bew-border-color);
 }
 
 .conversation-list__search {
@@ -344,6 +345,8 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   height: var(--bew-control-height);
   padding: 0 var(--bew-space-3);
   color: var(--bew-text-3);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
   background: var(--bew-fill-1);
   border: 1px solid transparent;
   border-radius: var(--bew-interactive-radius);
@@ -419,7 +422,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
 }
 
 .conversation-list__type-select select:focus-visible {
-  border-color: var(--bew-theme-focus-ring);
   outline: 2px solid var(--bew-theme-focus-ring);
   outline-offset: var(--bew-space-0-5);
 }

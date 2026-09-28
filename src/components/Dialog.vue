@@ -197,8 +197,10 @@ onMounted(() => {
     if (isClosing || !dialog || getTopDialog(dialog.getRootNode() as ParentNode) !== dialog)
       return
     // A detail iframe may already have acquired focus through its load owner.
-    if (!dialog.contains(getDeepActiveElement(document)))
-      panelRef.value?.focus({ preventScroll: true })
+    if (!dialog.contains(getDeepActiveElement(document))) {
+      const target = panelRef.value?.querySelector<HTMLElement>('[data-dialog-initial-focus]') ?? panelRef.value
+      target?.focus({ preventScroll: true })
+    }
   })
 })
 

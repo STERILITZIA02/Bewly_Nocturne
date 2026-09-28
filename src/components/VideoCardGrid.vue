@@ -1140,6 +1140,7 @@ function getUniqueKey(item: T, index: number): string | number {
             <slot :name="name" :item="renderItem.card.item" />
           </template>
         </VideoCard>
+        <slot v-if="renderItem.card && !renderItem.card.skeleton" name="afterCard" :item="renderItem.card.item" />
       </div>
 
       <div ref="loadMoreSentinelRef" class="load-more-sentinel" aria-hidden="true" />

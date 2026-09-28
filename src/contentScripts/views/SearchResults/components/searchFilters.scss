@@ -1,0 +1,94 @@
+.bew-search-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-3);
+  margin-bottom: var(--bew-space-4);
+}
+
+.bew-search-filter-row,
+.bew-search-filter-choices,
+.bew-search-filter-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bew-space-2);
+  min-width: 0;
+}
+
+.bew-search-filter-label {
+  flex: 0 0 calc(var(--bew-space-12) + var(--bew-space-4));
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
+
+.bew-search-filter-choices {
+  flex: 1;
+}
+
+.bew-search-filter-options {
+  align-self: flex-start;
+  max-width: 100%;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bew-search-filter-options::-webkit-scrollbar {
+  display: none;
+}
+
+.bew-search-filter-more,
+.bew-search-filter-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-1);
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-1) var(--bew-space-3);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  background: transparent;
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+
+  &:hover {
+    color: var(--bew-text-1);
+    background: var(--bew-fill-1);
+  }
+}
+
+.bew-search-filter-more {
+  margin-left: auto;
+
+  i {
+    font-size: var(--bew-control-icon-size);
+    transition: transform var(--bew-duration-fast) var(--bew-ease-standard);
+  }
+
+  &[aria-expanded="true"] i {
+    transform: rotate(180deg);
+  }
+}
+
+.bew-search-filter-summary {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+}
+
+.bew-search-filter-clear {
+  color: var(--bew-theme-foreground);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bew-search-filter-more,
+  .bew-search-filter-more i,
+  .bew-search-filter-clear {
+    transition: none;
+  }
+}
