@@ -18,12 +18,20 @@ function isMetricsAtLatest(metrics: ConversationScrollMetrics) {
 }
 function captureVisibleMessageAnchor(viewport: HTMLElement): VisibleMessageAnchor | null {
   const top = viewport.getBoundingClientRect().top
-  for (const element of Array.from(viewport.querySelectorAll<HTMLElement>('[data-message-id]'))) {
-    const rect = element.getBoundingClientRect()
-    if (rect.bottom > top)
-      return { id: element.dataset.messageId ?? '', offset: rect.top - top }
+  const messages = viewport.querySelectorAll<HTMLElement>('[data-message-id]')
+  // Timeline order matches vertical layout. Avoid measuring every historical
+  // message on each scroll frame just to retain the first visible anchor.
+  let start = 0
+  let end = messages.length
+  while (start < end) {
+    const middle = (start + end) >>> 1
+    if (messages[middle].getBoundingClientRect().bottom <= top)
+      start = middle + 1
+    else
+      end = middle
   }
-  return null
+  const element = messages[start]
+  return element ? { id: element.dataset.messageId ?? '', offset: element.getBoundingClientRect().top - top } : null
 }
 function restoreVisibleMessageAnchor(viewport: HTMLElement, anchor: VisibleMessageAnchor | null) {
   if (!anchor?.id)
@@ -41,11 +49,13 @@ export function useConversationViewport(options: {
   active: () => boolean
   ready: () => boolean
   canProcess: () => boolean
+  followContentGrowth: () => boolean
   talkerId: () => string
   save: (talkerId: string, position: { atLatest: boolean, scrollTop: number }) => void
   onFrame: (atLatest: boolean, shouldLoadOlder: boolean) => void
 }) {
   const messageScrollRef = ref<HTMLElement | null>(null)
+  const messageContentRef = ref<HTMLElement | null>(null)
   const isAtLatestPosition = ref(true)
   let mounted = false
   let generation = 0
@@ -57,6 +67,8 @@ export function useConversationViewport(options: {
   let directGesture = false
   let gestureY: number | null = null
   let lastScrollTop = 0
+  let readingAnchor: VisibleMessageAnchor | null = null
+  let contentSizeChanged = false
 
   function isAtLatest() {
     const viewport = messageScrollRef.value
@@ -78,10 +90,20 @@ export function useConversationViewport(options: {
     const viewport = messageScrollRef.value
     if (!viewport || !mounted || !options.active() || !options.ready() || !options.canProcess())
       return
+    if (contentSizeChanged) {
+      contentSizeChanged = false
+      if (!directGesture) {
+        if (isAtLatestPosition.value && !userHasReadUpward && options.followContentGrowth())
+          viewport.scrollTop = viewport.scrollHeight
+        else
+          restoreVisibleMessageAnchor(viewport, readingAnchor)
+      }
+    }
     const metrics = readScrollMetrics(viewport)
     lastScrollTop = metrics.scrollTop
     const atLatest = isAtLatest()
     isAtLatestPosition.value = atLatest
+    readingAnchor = captureVisibleMessageAnchor(viewport)
     saveViewportState(metrics, atLatest)
     if (atLatest) {
       userHasReadUpward = false
@@ -92,6 +114,10 @@ export function useConversationViewport(options: {
   function scheduleScrollFrame() {
     if (mounted && options.active() && frame === null)
       frame = requestAnimationFrame(processScrollFrame)
+  }
+  function handleContentResize() {
+    contentSizeChanged = true
+    scheduleScrollFrame()
   }
   function applyReadingDirection(upward: boolean) {
     generation++
@@ -221,6 +247,8 @@ export function useConversationViewport(options: {
     userHasReadUpward = userRequestedLatest = directGesture = false
     gestureY = null
     lastScrollTop = 0
+    readingAnchor = null
+    contentSizeChanged = false
     isAtLatestPosition.value = true
   }
   watch(options.active, (active) => {
@@ -244,12 +272,14 @@ export function useConversationViewport(options: {
   })
   return {
     messageScrollRef,
+    messageContentRef,
     isAtLatestPosition: readonly(isAtLatestPosition),
     get interactionGeneration() { return generation },
     isAtLatest,
     saveViewportState,
     scrollToLatest,
     scheduleScrollFrame,
+    handleContentResize,
     markReadingIntent,
     handleDirectGestureMove,
     endDirectScrollGesture,

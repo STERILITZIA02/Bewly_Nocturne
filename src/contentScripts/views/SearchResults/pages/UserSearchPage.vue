@@ -12,7 +12,7 @@ import { settings } from '~/logic'
 import Pagination from '../components/Pagination.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
-import { usePagination } from '../composables/usePagination'
+import { refreshSearchPage, usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
 import { convertUserCardData } from '../searchTransforms'
 import type { UserSearchFilters } from '../types'
@@ -202,9 +202,7 @@ function handlePageChange(page: number, updateUrl = true, scrollToTop = true): P
 }
 
 function refreshCurrentPage() {
-  return paginationMode.value === 'pagination'
-    ? handlePageChange(currentPage.value, false, false)
-    : performSearch(false)
+  return refreshSearchPage(paginationMode.value, currentPage.value, (page, updateUrl) => runUserSearch(page, false, updateUrl), resetLoadMore)
 }
 async function restorePage(page: number): Promise<boolean> {
   if (page === currentPage.value)

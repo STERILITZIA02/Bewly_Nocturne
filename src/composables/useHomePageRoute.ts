@@ -1,6 +1,8 @@
 import { ref, watch } from 'vue'
 
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
+import { syncRouteState } from '~/composables/useRouteState'
+import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { readHomeRoute, resolveHomeTab, writeHomeRoute } from '~/utils/homeRoute'
@@ -19,14 +21,30 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
   let applyingRoute = false
   let writtenHref: string | undefined
 
-  function syncUrl() {
+  function syncUrl(mode: 'push' | 'replace' = 'replace') {
     if (applyingRoute)
       return
     const next = writeHomeRoute(window.location.href, activatedPage.value, homeActivatedPage.value)
     if (next !== window.location.href) {
       writtenHref = next
-      window.history.replaceState(window.history.state, '', next)
+      window.history[mode === 'push' ? 'pushState' : 'replaceState'](window.history.state, '', next)
+      syncRouteState()
     }
+  }
+
+  function navigateToPage(page: AppPage) {
+    applyingRoute = true
+    activatedPage.value = availablePage(page)
+    applyingRoute = false
+    syncUrl('push')
+  }
+
+  function navigateToHomeTab(tab: HomeSubPage) {
+    applyingRoute = true
+    homeActivatedPageTouched.value = true
+    homeActivatedPage.value = resolveHomeTab(tab, tabConfig())
+    applyingRoute = false
+    syncUrl('push')
   }
   watch(href, (value) => {
     if (value === writtenHref) {
@@ -56,7 +74,7 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
     }
     homeActivatedPage.value = resolveHomeTab(homeActivatedPageTouched.value ? homeActivatedPage.value : null, config)
   }, { deep: true, immediate: true })
-  watch([activatedPage, homeActivatedPage], syncUrl, { flush: 'sync' })
+  watch([activatedPage, homeActivatedPage], () => syncUrl(), { flush: 'sync' })
   syncUrl()
-  return { activatedPage, homeActivatedPage, homeActivatedPageTouched, resolveAvailableAppPage: availablePage }
+  return { activatedPage, homeActivatedPage, homeActivatedPageTouched, navigateToPage, navigateToHomeTab, resolveAvailableAppPage: availablePage }
 }

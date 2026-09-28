@@ -59,7 +59,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const saved = []
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ setup() {
-      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, talkerId: () => 'A', save: (...args) => saved.push(args), onFrame() {} })
+      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, followContentGrowth: () => true, talkerId: () => 'A', save: (...args) => saved.push(args), onFrame() {} })
       return () => Vue.h('div', { ref: reading.messageScrollRef }, [Vue.h('div', { 'data-message-id': 'first' }), Vue.h('div', { 'data-message-id': 'anchor' })])
     } })
     app.mount(host)
@@ -98,6 +98,105 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     assert.equal(frames.size, 0)
   })
 
+  check('Whisper content resize: media follows the latest edge, older reading retains its anchor, and new-message follow remains optional', async () => {
+    const frames = new Map()
+    let frameId = 0
+    let follow = true
+    let growthAbove = 0
+    let appendedHeight = 0
+    let rowMeasurements = 0
+    const saved = []
+    const module = await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, {
+      AbortController,
+      WheelEvent: window.WheelEvent,
+      KeyboardEvent: window.KeyboardEvent,
+      PointerEvent: window.PointerEvent ?? class extends window.MouseEvent {},
+      TouchEvent: window.TouchEvent,
+      requestAnimationFrame: (callback) => {
+        frames.set(++frameId, callback)
+        return frameId
+      },
+      cancelAnimationFrame: key => frames.delete(key),
+    })
+    const step = () => {
+      const batch = [...frames.values()]
+      frames.clear()
+      batch.forEach(run => run())
+    }
+    let reading
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup() {
+      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, followContentGrowth: () => follow, talkerId: () => 'A', save: (_id, value) => saved.push(value), onFrame() {} })
+      return () => Vue.h('div', { ref: reading.messageScrollRef }, Array.from({ length: 1000 }, (_, i) => Vue.h('div', { 'data-message-id': `message-${i}` })))
+    } })
+    app.mount(host)
+    const element = reading.messageScrollRef.value
+    let scrollTop = 0
+    element.getBoundingClientRect = () => ({ top: 0 })
+    Object.defineProperties(element, {
+      clientHeight: { value: 400 },
+      scrollHeight: { get: () => 30000 + growthAbove + appendedHeight },
+      scrollTop: { get: () => scrollTop, set: value => scrollTop = Math.min(Math.max(value, 0), element.scrollHeight - 400) },
+    })
+    element.scrollTo = ({ top }) => element.scrollTop = top
+    for (const [i, row] of [...element.children].entries()) {
+      row.getBoundingClientRect = () => {
+        rowMeasurements++
+        const top = i * 30 + growthAbove - scrollTop
+        return { top, bottom: top + 30 }
+      }
+    }
+    try {
+      reading.restorePosition(true, 0)
+      step()
+      assert.equal(scrollTop, 29600)
+      growthAbove = 384
+      reading.handleContentResize()
+      reading.handleContentResize()
+      assert.equal(frames.size, 1, 'view and content observations join one frame')
+      rowMeasurements = 0
+      step()
+      assert.equal(scrollTop, 29984)
+      assert.equal(reading.isAtLatestPosition.value, true)
+      assert.ok(rowMeasurements <= 12, 'retaining an anchor in a 1000-message history uses bounded layout reads')
+
+      reading.markReadingIntent(new window.WheelEvent('wheel', { deltaY: -1 }))
+      element.scrollTop = 12000
+      reading.handleScroll()
+      step()
+      growthAbove += 200
+      reading.handleContentResize()
+      step()
+      assert.equal(scrollTop, 12200, 'an image growing above the reader preserves the same message and offset')
+      assert.equal(reading.isAtLatestPosition.value, false)
+
+      reading.scrollToLatest()
+      step()
+      follow = false
+      const beforeAppend = scrollTop
+      appendedHeight += 240
+      reading.handleContentResize()
+      step()
+      assert.equal(scrollTop, beforeAppend, 'the reader controls whether a newly appended message follows')
+      assert.equal(saved.at(-1).atLatest, false)
+
+      reading.handleContentResize()
+      reading.resetReading()
+      element.scrollTop = 0
+      step()
+      assert.equal(scrollTop, 0, 'conversation reset cancels the old resize and its anchor')
+      reading.handleContentResize()
+      app.unmount()
+      step()
+      assert.equal(frames.size, 0)
+    }
+    finally {
+      if (host.firstChild)
+        app.unmount()
+      host.remove()
+    }
+  })
+
   check('Whisper history: entry gates requests, switching preserves the shell/composer, and late history never crosses conversations', async () => {
     const frames = new Map()
     const timers = new Map()
@@ -118,7 +217,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
         return id
       },
       clearTimeout: id => timers.delete(id),
-      ResizeObserver: class { observe() {} disconnect() {} },
+      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
     }
     const stepFrame = () => {
       const batch = [...frames.values()]

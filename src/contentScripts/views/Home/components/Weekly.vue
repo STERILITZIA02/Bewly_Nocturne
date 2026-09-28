@@ -6,7 +6,7 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { useHomeTabState } from '~/composables/useHomeTabState'
-import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
+import { HOME_TASK_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import type { PopularSeriesItem, PopularSeriesListResult, PopularSeriesOneResult, PopularSeriesVideoItem } from '~/models/video/popularSeries'
@@ -251,7 +251,7 @@ function selectSeries(item: PopularSeriesItem) {
   closeDropdown(true)
   handleBackToTop(Math.min(
     scrollViewportRef.value?.scrollTop ?? 0,
-    settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0,
+    settings.value.useSearchPageModeOnHomePage ? HOME_TASK_SEARCH_STAGE_HEIGHT : 0,
   ))
   void getSeriesOne()
 }
@@ -340,11 +340,7 @@ defineExpose({ initData })
                 type="text"
                 :placeholder="$t('home.weekly_search_placeholder')"
                 :aria-label="$t('home.weekly_search_placeholder')"
-                w-full px-3 py-2 rounded="$bew-radius"
-                bg="$bew-fill-2" border="1px solid transparent"
-                text="$bew-text-1" outline-none
-                transition="background-color duration-200, color duration-200, border-color duration-200, box-shadow duration-200"
-                focus:border="$bew-theme-focus-ring"
+                class="weekly-series-search"
               >
             </div>
 
@@ -407,6 +403,18 @@ defineExpose({ initData })
 </template>
 
 <style lang="scss" scoped>
+.weekly-series-search {
+  width: 100%;
+  height: var(--bew-control-height);
+  padding-inline: var(--bew-space-3);
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  background: var(--bew-content-alt-solid);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+}
+
 .series-item.active {
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);

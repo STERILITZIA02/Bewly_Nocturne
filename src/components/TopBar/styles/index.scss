@@ -23,14 +23,13 @@
   --uno: "transform important:-translate-y-4 opacity-0";
 }
 
-.fade-enter-active,
-.fade-leave-active {
-  --uno: "transition-opacity duration-300";
-}
-
-.fade-leave-to,
-.fade-enter-from {
-  --uno: "opacity-0";
+@media (prefers-reduced-motion: reduce) {
+  .top-bar-enter-active,
+  .top-bar-leave-active,
+  .slide-out-enter-active,
+  .slide-out-leave-active {
+    transition: none;
+  }
 }
 
 .hide {
@@ -104,12 +103,10 @@
   }
 
   .unread-num-dot {
-    // The controls grew from 34px to 36px; keep the badge on the same visual edge.
-    --uno: "absolute top--2px right--2px";
-    --uno: "important:px-1 rounded-full";
-    --uno: "text-xs leading-none z-6 min-w-14px h-14px";
-    --uno: "grid place-items-center";
-    --uno: "bg-$bew-theme-color text-$bew-on-theme-color shadow-$bew-shadow-1";
+    position: absolute;
+    top: calc(-1 * var(--bew-space-0-5));
+    right: calc(-1 * var(--bew-space-0-5));
+    z-index: 6;
   }
 
   .unread-dot {

@@ -32,10 +32,10 @@ withDefaults(defineProps<{
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
     background-color var(--bew-duration-fast) var(--bew-ease-standard),
-    transform var(--bew-duration-fast) var(--bew-ease-emphasized);
+    transform var(--bew-duration-fast) var(--bew-ease-standard);
 
   &:active:not(:disabled) {
-    transform: scale(0.92);
+    transform: scale(var(--bew-control-press-scale));
   }
 
   &:disabled {

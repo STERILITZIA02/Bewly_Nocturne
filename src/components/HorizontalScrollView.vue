@@ -28,6 +28,8 @@ function handleMouseScroll(event: WheelEvent) {
   event.preventDefault()
   element.scrollLeft += event.deltaY
 }
+
+defineExpose({ getScrollElement: () => scrollListWrap.value })
 </script>
 
 <template>

@@ -44,6 +44,7 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       'vue': Vue,
       '~/constants/layout': await import('../src/constants/layout'),
       '~/styles/skeleton.scss?inline': { default: '[data-bew-skeleton] {}' },
+      '~/utils/bilibiliUrl': await import('../src/utils/bilibiliUrl'),
       '~/utils/i18n': { i18n: { global: { t: key => key } } },
       '~/utils/iframeMessage': { getParentMessageData: () => undefined, postMessageToParent: () => true },
       '~/utils/main': { isInIframe: () => true },
@@ -79,9 +80,9 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       deadline[1].run()
       assert.ok(first.classList.contains('is-hide'))
       module.setupOpusDetailDrawerLayout()
-      assert.equal(first.classList.contains('is-hide'), false)
+      assert.equal(first.classList.contains('is-hide'), true, 'settings synchronization cannot resurrect a completed frame loading mask')
       assert.equal(document.querySelectorAll('.bewly-opus-iframe-loading').length, 1)
-      assert.equal([...timers.values()].some(timer => timer.delay === 200), false, 'reopen cancels the old fade removal')
+      assert.equal([...timers.values()].filter(timer => timer.delay === 200).length, 1, 'repeated setup preserves the pending removal')
       module.disposeOpusDetailDrawerLayout()
       assert.equal(timers.size, 0)
       assert.equal(listeners.size, 0)
@@ -208,14 +209,16 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreen/session': { isWidescreenSidebarExpanded: () => false },
       '~/utils/bewlyWidescreenPolicy': policy,
+      '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
       '~/utils/photoViewer': { isPhotoViewerOpen: () => false },
     })
     let ending = false
+    let descriptionMeasurements = 0
     const geometry = await loadSourceModule('../src/utils/bewlyWidescreen/geometry.ts', {
       '~/logic': { settings },
       '~/utils/bewlyWidescreen/actionEffects': { scheduleActionGeometrySync() {} },
       '~/utils/bewlyWidescreen/constants': constants,
-      '~/utils/bewlyWidescreen/description': { syncDescription() {} },
+      '~/utils/bewlyWidescreen/description': { syncDescription() { descriptionMeasurements++ } },
       '~/utils/bewlyWidescreen/nativeControls': native,
       '~/utils/bewlyWidescreen/nativeDom': { exitNativeMiniPlayer() {}, findMovable: () => null },
       '~/utils/bewlyWidescreen/session': { session },
@@ -270,6 +273,16 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
       assert.equal(reveals, 0, 'a geometry change restarts the existing stability window')
       time.step(1)
       assert.equal(reveals, 1)
+      root.dataset.sidebarResizing = 'true'
+      const beforeDragMeasurements = descriptionMeasurements
+      for (let i = 0; i < 100; i++)
+        geometry.schedulePlayerResizeSync(state)
+      time.step()
+      assert.equal(descriptionMeasurements, beforeDragMeasurements, 'live dragging does not repeatedly remove the native description clamp')
+      delete root.dataset.sidebarResizing
+      geometry.schedulePlayerResizeSync(state)
+      time.step()
+      assert.equal(descriptionMeasurements, beforeDragMeasurements + 1, 'release settles the description exactly once through the existing frame owner')
 
       const beforeRepeatedLayout = resizeCount
       for (let count = 0; count < 100; count++) {
@@ -407,12 +420,12 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
     const app = Vue.createApp({ setup: () => () => Vue.h(List, props) })
     try {
       app.mount(host)
-      assert.equal(host.querySelectorAll('.bew-history-time-slot').length, 3)
-      assert.equal(host.querySelectorAll('.video-list-skeleton__actions [data-bew-skeleton]').length, 3)
+      assert.equal(host.querySelectorAll('.bew-history-row').length, 3)
+      assert.equal(host.querySelectorAll('.video-list-skeleton__actions [data-bew-skeleton]').length, 0)
       props.history = false
       props.actionCount = 3
       await flush()
-      assert.equal(host.querySelectorAll('.bew-history-time-slot').length, 0)
+      assert.equal(host.querySelectorAll('.bew-history-row').length, 0)
       assert.equal(host.querySelectorAll('.video-list-skeleton__actions [data-bew-skeleton]').length, 9)
       app.unmount()
       assert.equal(host.querySelectorAll('[data-bew-skeleton]').length, 0)

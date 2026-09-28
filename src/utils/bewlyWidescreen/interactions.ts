@@ -1,7 +1,7 @@
 import { settings } from '~/logic'
-import { SIDEBAR_RESIZE_KEYBOARD_STEP } from '~/utils/bewlyWidescreen/constants'
+import { SIDEBAR_RESIZE_DRAG_THRESHOLD, SIDEBAR_RESIZE_KEYBOARD_STEP } from '~/utils/bewlyWidescreen/constants'
 import { schedulePlayerResizeSync } from '~/utils/bewlyWidescreen/geometry'
-import { forwardNativePlayerPointerActivity, isBottomControlPopoverOpen, isNativeActionOverlayOpen, isPointerInBottomControlContainer, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
+import { forwardNativePlayerPointerActivity, isBottomControlPopoverOpen, isNativeActionOverlayOpen, isPointerInBottomControlContainer, isWidescreenBottomControlFocused, isWidescreenTextEditing, syncNativePlayerControlVisibility } from '~/utils/bewlyWidescreen/nativeControls'
 import { session } from '~/utils/bewlyWidescreen/session'
 import { clearSidebarEdgeRevealSuppression } from '~/utils/bewlyWidescreen/shell'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
@@ -14,7 +14,7 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
   let pointerTrackingFrame: number | undefined
   let pendingPointerPosition: { x: number, y: number, type: string } | undefined
   let pendingSidebarWidth: number | undefined
-  let resizingPointerId: number | undefined
+  let resizeGesture: { pointerId: number, pointerType: string, startX: number, startWidth: number, viewportWidth: number, active: boolean } | undefined
   let lastPointerX: number | undefined
   let lastPointerY: number | undefined
   let lastPointerEvent: PointerEvent | undefined
@@ -52,19 +52,24 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
     setHoverExpanded(false)
   }
 
+  function hasFocusedInteraction() {
+    return isWidescreenTextEditing() || sidebar.contains(document.activeElement)
+  }
+
   function scheduleCollapse() {
     if (
       collapseTimer
-      || resizingPointerId !== undefined
+      || resizeGesture
       || !canTemporarilyExpand()
       || sidebarResizer.matches(':focus-visible')
+      || hasFocusedInteraction()
     ) {
       return
     }
 
     collapseTimer = setTimeout(() => {
       collapseTimer = undefined
-      if (resizingPointerId !== undefined || sidebarResizer.matches(':focus-visible') || isNativeActionOverlayOpen())
+      if (resizeGesture || sidebarResizer.matches(':focus-visible') || hasFocusedInteraction() || isNativeActionOverlayOpen())
         return
 
       const playerRect = currentState.playerEl.getBoundingClientRect()
@@ -107,6 +112,8 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
   function applySidebarWidth(width: number) {
     const rootRect = root.getBoundingClientRect()
     const nextWidth = clampWidescreenSidebarWidth(width, rootRect.width)
+    if (nextWidth === appliedSidebarWidth)
+      return nextWidth
     appliedSidebarWidth = nextWidth
     root.style.setProperty('--bewly-widescreen-sidebar-user-width', `${nextWidth}px`)
     syncSidebarResizerValue(nextWidth, rootRect.width)
@@ -146,19 +153,27 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
   }
 
   function resizeFromPointer(pointerX: number) {
-    const rootRect = root.getBoundingClientRect()
+    if (!resizeGesture)
+      return
+    const deltaX = pointerX - resizeGesture.startX
+    if (!resizeGesture.active) {
+      if (Math.abs(deltaX) < SIDEBAR_RESIZE_DRAG_THRESHOLD)
+        return
+      resizeGesture.active = true
+      root.dataset.sidebarResizing = 'true'
+    }
     scheduleSidebarWidth(resolveWidescreenSidebarResizeWidth({
       position: currentState.sidebarPosition,
-      pointerX,
-      viewportStart: rootRect.left,
-      viewportEnd: rootRect.right,
+      deltaX,
+      startWidth: resizeGesture.startWidth,
+      viewportWidth: resizeGesture.viewportWidth,
     }))
   }
 
   function handlePointerPosition(pointerX: number, pointerY: number, pointerType: string) {
     lastPointerX = pointerX
     lastPointerY = pointerY
-    if (resizingPointerId !== undefined)
+    if (resizeGesture)
       return
     if (pointerType === 'touch' || !canTemporarilyExpand()) {
       collapseSidebar()
@@ -241,46 +256,68 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
     if (pointerTrackingFrame !== undefined)
       cancelAnimationFrame(pointerTrackingFrame)
     pointerTrackingFrame = undefined
-    if (resizingPointerId === undefined && root.dataset.sidebarHoverExpanded === 'true')
+    if (!resizeGesture && root.dataset.sidebarHoverExpanded === 'true')
       scheduleCollapse()
   }
 
   function handleResizePointerDown(event: PointerEvent) {
-    if (event.pointerType === 'mouse' && event.button !== 0)
+    if (event.button !== 0 || resizeGesture)
       return
     event.preventDefault()
     clearCollapseTimer()
-    resizingPointerId = event.pointerId
+    // Anchor to the rendered width, not the pointer's absolute position. The
+    // floating inset and the 24px hit area must not become a width jump on press.
+    resizeGesture = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      startX: event.clientX,
+      startWidth: sidebar.getBoundingClientRect().width,
+      viewportWidth: root.getBoundingClientRect().width,
+      active: false,
+    }
     lastPointerX = event.clientX
     lastPointerY = event.clientY
-    root.dataset.sidebarResizing = 'true'
     if (canTemporarilyExpand())
       setHoverExpanded(true)
+    sidebarResizer.focus({ preventScroll: true })
     sidebarResizer.setPointerCapture(event.pointerId)
-    resizeFromPointer(event.clientX)
   }
 
   function handleResizePointerMove(event: PointerEvent) {
-    if (resizingPointerId !== event.pointerId)
+    if (resizeGesture?.pointerId !== event.pointerId)
       return
     lastPointerX = event.clientX
     lastPointerY = event.clientY
     resizeFromPointer(event.clientX)
   }
 
-  function finishResize(event: PointerEvent) {
-    if (resizingPointerId !== event.pointerId)
+  function finishResize(event?: PointerEvent) {
+    const gesture = resizeGesture
+    if (!gesture || (event && gesture.pointerId !== event.pointerId))
       return
-    lastPointerX = event.clientX
-    lastPointerY = event.clientY
+    if (event?.type === 'pointerup' && gesture.active) {
+      lastPointerX = event.clientX
+      lastPointerY = event.clientY
+      resizeFromPointer(event.clientX)
+    }
     flushPendingSidebarWidth()
-    if (sidebarResizer.hasPointerCapture(event.pointerId))
-      sidebarResizer.releasePointerCapture(event.pointerId)
-    resizingPointerId = undefined
+    // Release may synchronously emit lostpointercapture. Clear ownership first.
+    resizeGesture = undefined
+    if (sidebarResizer.hasPointerCapture(gesture.pointerId))
+      sidebarResizer.releasePointerCapture(gesture.pointerId)
     delete root.dataset.sidebarResizing
-    persistSidebarWidth()
-    schedulePlayerResizeSync(currentState)
-    handlePointerPosition(event.clientX, event.clientY, event.pointerType)
+    if (gesture.active) {
+      if (appliedSidebarWidth !== gesture.startWidth)
+        persistSidebarWidth()
+      schedulePlayerResizeSync(currentState)
+    }
+    if (lastPointerX !== undefined && lastPointerY !== undefined)
+      handlePointerPosition(lastPointerX, lastPointerY, gesture.pointerType)
+  }
+
+  function handleWindowBlur() {
+    finishResize()
+    handlePointerLeave()
   }
 
   function handleResizeKeydown(event: KeyboardEvent) {
@@ -325,21 +362,44 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
       handlePointerPosition(lastPointerX, lastPointerY, 'mouse')
   }
 
+  function syncInteractionFocus() {
+    // An explicit move to the bottom editor hands over the active surface;
+    // idle protection must not trap its input behind a hover-expanded sidebar.
+    if (canTemporarilyExpand() && root.dataset.sidebarHoverExpanded === 'true' && isWidescreenBottomControlFocused(currentState)) {
+      collapseSidebar()
+      return
+    }
+    if (hasFocusedInteraction()) {
+      clearCollapseTimer()
+      return
+    }
+    if (root.dataset.sidebarHoverExpanded !== 'true')
+      return
+    if (lastPointerX !== undefined && lastPointerY !== undefined)
+      handlePointerPosition(lastPointerX, lastPointerY, 'mouse')
+    else
+      scheduleCollapse()
+  }
+
   syncSidebarResizerValue()
   window.addEventListener('pointermove', handlePointerMove, { passive: true })
-  window.addEventListener('blur', handlePointerLeave)
+  window.addEventListener('blur', handleWindowBlur)
   document.documentElement.addEventListener('pointerenter', handlePointerMove, { passive: true })
   document.documentElement.addEventListener('pointerleave', handlePointerLeave)
   sidebarResizer.addEventListener('pointerdown', handleResizePointerDown)
   sidebarResizer.addEventListener('pointermove', handleResizePointerMove)
   sidebarResizer.addEventListener('pointerup', finishResize)
   sidebarResizer.addEventListener('pointercancel', finishResize)
+  sidebarResizer.addEventListener('lostpointercapture', finishResize)
   sidebarResizer.addEventListener('keydown', handleResizeKeydown)
   sidebarResizer.addEventListener('focus', handleResizeFocus)
   sidebarResizer.addEventListener('blur', handleResizeBlur)
+  currentState.sidebarInteractionFocusSync = syncInteractionFocus
+  syncInteractionFocus()
 
   currentState.sidebarInteractionCleanup = () => {
     clearCollapseTimer()
+    currentState.sidebarInteractionFocusSync = undefined
     if (resizeFrame !== undefined)
       cancelAnimationFrame(resizeFrame)
     resizeFrame = undefined
@@ -349,17 +409,19 @@ export function setupSidebarInteractionTracking(currentState: BewlyWidescreenSta
     pendingPointerPosition = undefined
     pendingSidebarWidth = undefined
     lastPointerEvent = undefined
-    if (resizingPointerId !== undefined && sidebarResizer.hasPointerCapture(resizingPointerId))
-      sidebarResizer.releasePointerCapture(resizingPointerId)
-    resizingPointerId = undefined
+    const pointerId = resizeGesture?.pointerId
+    resizeGesture = undefined
+    if (pointerId !== undefined && sidebarResizer.hasPointerCapture(pointerId))
+      sidebarResizer.releasePointerCapture(pointerId)
     window.removeEventListener('pointermove', handlePointerMove)
-    window.removeEventListener('blur', handlePointerLeave)
+    window.removeEventListener('blur', handleWindowBlur)
     document.documentElement.removeEventListener('pointerenter', handlePointerMove)
     document.documentElement.removeEventListener('pointerleave', handlePointerLeave)
     sidebarResizer.removeEventListener('pointerdown', handleResizePointerDown)
     sidebarResizer.removeEventListener('pointermove', handleResizePointerMove)
     sidebarResizer.removeEventListener('pointerup', finishResize)
     sidebarResizer.removeEventListener('pointercancel', finishResize)
+    sidebarResizer.removeEventListener('lostpointercapture', finishResize)
     sidebarResizer.removeEventListener('keydown', handleResizeKeydown)
     sidebarResizer.removeEventListener('focus', handleResizeFocus)
     sidebarResizer.removeEventListener('blur', handleResizeBlur)

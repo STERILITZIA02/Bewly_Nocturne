@@ -118,10 +118,8 @@ withDefaults(defineProps<{
   min-width: 0;
   gap: var(--bew-space-2);
   align-content: center;
-  padding: var(--bew-space-3);
-  background: var(--bew-fill-1);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
+  padding: 0 0 0 var(--bew-space-4);
+  border-left: var(--bew-space-0-5) solid var(--bew-border-color);
 }
 
 .native-notification-feed-skeleton__reference {

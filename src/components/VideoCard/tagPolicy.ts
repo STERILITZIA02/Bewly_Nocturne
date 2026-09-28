@@ -41,7 +41,7 @@ export function selectVisibleVideoCardTags(
   return {
     leading,
     highlights: showHighlights && remaining > 0
-      ? highlightTags.slice(0, remaining)
+      ? highlightTags.slice(0, Math.min(remaining, 1))
       : [],
   }
 }

@@ -2,28 +2,15 @@
   --bew-sidebar-text: var(--bew-text-1);
   --bew-sidebar-secondary: var(--bew-text-2);
   --bew-sidebar-muted: var(--bew-text-3);
-  --bew-sidebar-control: var(--bew-fill-1);
-  --bew-sidebar-control-hover: var(--bew-fill-2);
+  --bew-sidebar-control: var(--bew-content-alt-solid);
+  --bew-sidebar-control-hover: var(--bew-theme-surface-hover);
   --bew-sidebar-selected: var(--bew-theme-surface);
   --bew-sidebar-border: var(--bew-surface-border-color);
   --bew-sidebar-scrollbar: var(--bew-text-3);
   --bew-sidebar-text-shadow: none;
   --bew-sidebar-media-shadow: var(--bew-shadow-2);
   --bew-sidebar-cover-blur: 40px;
-}
-
-.bew-cover-sidebar[data-cover-background="true"] {
-  --bew-sidebar-text: #fff;
-  --bew-sidebar-secondary: rgb(255 255 255 / 82%);
-  --bew-sidebar-muted: rgb(255 255 255 / 72%);
-  --bew-sidebar-cover-scrim: rgb(0 0 0 / 68%);
-  --bew-sidebar-control: #30343b;
-  --bew-sidebar-control-hover: #41464f;
-  --bew-sidebar-selected: var(--bew-sidebar-control);
-  --bew-sidebar-border: rgb(255 255 255 / 32%);
-  --bew-sidebar-scrollbar: var(--bew-sidebar-muted);
-  --bew-sidebar-text-shadow: 0 0 12px rgb(0 0 0 / 30%);
-  --bew-sidebar-media-shadow: 0 16px 24px -12px rgb(0 0 0 / 36%);
+  --bew-sidebar-cover-height: calc(var(--bew-space-12) * 5);
 }
 
 :host,
@@ -52,6 +39,7 @@
   --bew-font-weight-medium: 500;
   --bew-font-weight-semibold: 600;
   --bew-font-weight-bold: 700;
+  --bew-control-press-scale: 0.97;
   --bew-base-font-size: var(--bew-font-size-body);
   // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
   --bew-media-pop-title-font-size: var(--bew-font-size-title);
@@ -107,7 +95,9 @@
   // #region Layout
   --bew-layout-content-gap: var(--bew-space-5);
   --bew-layout-sidebar-width: 200px;
-  --bew-notifications-list-max-width: calc(var(--bew-space-12) * 9);
+  --bew-notifications-list-max-width: 360px;
+  --bew-notifications-feed-max-width: 1120px;
+  --bew-reading-line-length: 76ch;
   --bew-layout-sidebar-sticky-top: 150px;
   --bew-layout-sidebar-viewport-offset: 140px;
   --bew-layout-dialog-width: 420px;
@@ -127,8 +117,12 @@
   --bew-moment-forward-textarea-max-height: 180px;
   --bew-moment-forward-picker-state-min-height: 112px;
   --bew-widescreen-episode-max-height: 560px;
-  --bew-layout-home-search-stage-lead-height: 156px;
-  --bew-layout-home-search-stage-tail-height: 116px;
+  --bew-history-cover-width: clamp(144px, 18vw, 200px);
+  --bew-media-search-max-width: 1920px;
+  --bew-media-result-cover-width: 160px;
+  --bew-media-episode-control-width: 240px;
+  --bew-layout-home-search-stage-lead-height: 128px;
+  --bew-layout-home-search-stage-tail-height: 64px;
   --bew-layout-home-search-stage-height: calc(
     var(--bew-layout-home-search-stage-lead-height) + var(--bew-top-bar-primary-control-height) +
       var(--bew-layout-home-search-stage-tail-height)
@@ -192,6 +186,7 @@
   --bew-control-label-weight: var(--bew-font-weight-semibold);
   --bew-control-brand-label-weight: var(--bew-font-weight-bold);
   --bew-control-background: var(--bew-elevated-solid);
+  --bew-control-selected-background: color-mix(in srgb, var(--bew-text-1) 9%, var(--bew-content-solid));
   --bew-control-background-white: var(--bew-top-bar-solid-background-force-white);
   --bew-control-border-color: transparent;
   --bew-floating-control-size: 40px;
@@ -318,6 +313,7 @@
 
   --bew-bili-blue: hsl(195 100% 42%);
   --bew-bili-pink: hsl(343 94% 72%);
+  --bew-vip-foreground: #b53662;
 
   // In light mode use the black; in dark mode use white
   --bew-theme-color-auto: var(--bew-text-1);
@@ -472,6 +468,7 @@
 
   // 开关背景色
   --bew-switch-bg: rgb(227, 229, 231);
+  --bew-switch-thumb-active: var(--bew-on-theme-color);
 
   // IP标签背景色
   --bew-ip-tag-bg: #f1f2f3;
@@ -502,6 +499,7 @@
   // #endregion
 
   --bew-logo-color: var(--bew-text-1);
+  --bew-vip-foreground: #fb7299;
 
   --bew-theme-color-auto: var(--bew-text-1);
 

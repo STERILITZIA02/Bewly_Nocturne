@@ -15,7 +15,7 @@ const model = defineModel()
 
 <template>
   <label cursor="pointer" pointer="auto" flex items-center gap-3>
-    <span>{{ label }}</span>
+    <span v-if="label">{{ label }}</span>
     <input
       v-model="model" type="checkbox" class="radio-input"
       :disabled="disabled"
@@ -116,16 +116,16 @@ input[type="checkbox"] {
   & + .radio-switch,
   & + .radio-switch::after {
     transition:
-      transform 0.25s var(--bew-ease-emphasized, cubic-bezier(0.34, 1.3, 0.64, 1)),
-      background-color 0.25s ease,
-      border-color 0.25s ease,
-      box-shadow 0.25s ease;
+      transform var(--bew-duration-normal) var(--bew-ease-standard),
+      background-color var(--bew-duration-normal) var(--bew-ease-standard),
+      border-color var(--bew-duration-normal) var(--bew-ease-standard),
+      box-shadow var(--bew-duration-normal) var(--bew-ease-standard);
   }
 
   &:checked + .radio-switch::after {
-    // Solid theme track needs the adaptive on-theme thumb to keep contrast at
-    // extreme (near-white / near-black) theme colors.
-    background: var(--bew-on-theme-color);
+    // This is a non-text shape: retain the white thumb when it has 3:1 contrast,
+    // switching only for pale tracks instead of borrowing the text foreground.
+    background: var(--bew-switch-thumb-active);
     // Track width minus the thumb and equal outer-edge inset on both sides.
     --b-switch-thumb-offset: calc(
       var(--b-switch-width) - var(--b-switch-thumb-size) - var(--b-switch-edge-inset) - var(--b-switch-edge-inset)

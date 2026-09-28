@@ -7,6 +7,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
+import { getBilibiliImageResourceKey } from '~/utils/bilibiliUrl'
 import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
 import { executeResolvedLinkAction, resolveLinkOpenAction } from '~/utils/linkNavigation'
@@ -78,14 +79,6 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
   const detailImageViewerTransform = computed(() => {
     return `translate3d(${detailImageViewerPanX.value}px, ${detailImageViewerPanY.value}px, 0) scale(${detailImageViewerScale.value}) rotate(${detailImageViewerRotation.value}deg)`
   })
-  function getDetailImageUrlKey(url: string) {
-    const path = httpsUrl(url.trim())
-      .replace(/@[^/?#]*(?=[?#]|$)/, '')
-      .split(/[?#]/, 1)[0]
-    const isGif = /\.gif$/i.test(path)
-    return `${path.replace(/\.(?:avif|webp|gif|jpe?g|png)$/i, '').toLowerCase()}|${isGif ? 'gif' : 'static'}`
-  }
-
   function isOriginalDetailImageUrl(url: string) {
     return /\.(?:gif|jpe?g|png)$/i.test(url.split(/[?#]/, 1)[0])
   }
@@ -99,7 +92,7 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
         if (typeof rawUrl !== 'string' || !rawUrl.trim())
           return
         const url = httpsUrl(rawUrl.trim())
-        const key = getDetailImageUrlKey(url)
+        const key = getBilibiliImageResourceKey(url)
         const existingIndex = urlIndexes.get(key)
         if (existingIndex !== undefined) {
           sourceIndexes[sourceIndex] = existingIndex

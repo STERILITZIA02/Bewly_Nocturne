@@ -293,6 +293,7 @@ async function verifyCommentSessions() {
   cache.save(nextLease, restored)
   assert.equal(cache.restore(nextLease), null, 'late unmount cannot resurrect old account')
   const bLease = cache.open('account-b', 'moment-a', target)!
+  assert.equal(bLease.sort, 1, 'a new account session defaults to hottest comments')
   cache.save(bLease, restored)
   assert.equal(cache.restore(cache.open('account-b', 'moment-a', { oid: '999', type: 1 })!), null)
   cache.clear()

@@ -33,6 +33,8 @@ export interface BewlyAppProvider {
   // 添加Home页面的子页面状态
   homeActivatedPage: Ref<HomeSubPage>
   homeActivatedPageTouched: Ref<boolean>
+  navigateToPage: (page: AppPage) => void
+  navigateToHomeTab: (tab: HomeSubPage) => void
   isHomeTabSwitching: Ref<boolean>
   scrollViewportRef: Ref<HTMLElement | null>
   reachTop: Ref<boolean>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { formatLocalCalendarDate, parseLocalCalendarDate, toLocalDate } from '../utils/localDate'
@@ -17,7 +17,10 @@ const emit = defineEmits<{
 const { t } = useI18n()
 
 const showPicker = ref(false)
+const keyboardOpened = ref(false)
 const pickerRef = ref<HTMLElement>()
+const triggerRef = ref<HTMLButtonElement>()
+const pickerId = useId()
 const inputValue = ref('')
 const isInputMode = ref(false)
 
@@ -35,7 +38,7 @@ const maxDate = computed(() => {
 // 格式化显示的日期
 const displayValue = computed(() => {
   if (!props.modelValue)
-    return props.placeholder || t('search.date_picker.start_date')
+    return ''
   return props.modelValue.replace(/-/g, '/')
 })
 
@@ -153,7 +156,7 @@ function selectDate(day: typeof calendarDays.value[0]) {
 
   const date = day.date
   emit('update:modelValue', formatDate(date))
-  showPicker.value = false
+  closePicker(true)
 }
 
 // 上个月
@@ -193,19 +196,40 @@ function selectToday() {
   const today = new Date()
   if (!isDateDisabled(today)) {
     emit('update:modelValue', formatDate(today))
-    showPicker.value = false
+    closePicker(true)
   }
 }
 
 // 清除
 function clearDate() {
   emit('update:modelValue', '')
-  showPicker.value = false
+  closePicker(true)
   inputValue.value = ''
 }
 
+function closePicker(restoreFocus = false) {
+  showPicker.value = false
+  if (restoreFocus)
+    void nextTick(() => triggerRef.value?.focus({ preventScroll: true }))
+}
+
+function handlePickerKeydown(event: KeyboardEvent) {
+  if (event.isComposing || event.key !== 'Escape' || !showPicker.value)
+    return
+  event.preventDefault()
+  event.stopPropagation()
+  keyboardOpened.value = true
+  closePicker(true)
+}
+
+function handlePickerFocusOut(event: FocusEvent) {
+  if (!pickerRef.value?.contains(event.relatedTarget as Node | null))
+    closePicker()
+}
+
 // 打开选择器时，初始化到当前选中的日期或今天
-function openPicker() {
+function openPicker(event?: MouseEvent) {
+  keyboardOpened.value = event?.detail === 0
   if (props.modelValue) {
     const date = parseLocalCalendarDate(props.modelValue)
     if (date) {
@@ -262,6 +286,8 @@ function handleInputBlur() {
 
 // 处理输入框的键盘事件
 function handleInputKeydown(event: KeyboardEvent) {
+  if (event.isComposing || event.keyCode === 229)
+    return
   if (event.key === 'Enter') {
     ;(event.target as HTMLInputElement).blur()
   }
@@ -272,9 +298,7 @@ function handleInputKeydown(event: KeyboardEvent) {
 }
 
 // 点击外部关闭
-onClickOutside(pickerRef, () => {
-  showPicker.value = false
-})
+onClickOutside(pickerRef, () => closePicker())
 
 // 月份名称
 const monthNames = computed(() => Array.from({ length: 12 }, (_, index) =>
@@ -291,7 +315,7 @@ const weekDays = computed(() => [
 </script>
 
 <template>
-  <div ref="pickerRef" class="date-picker" pos="relative">
+  <div ref="pickerRef" class="date-picker" pos="relative" @keydown="handlePickerKeydown" @focusout="handlePickerFocusOut">
     <!-- 输入框显示 -->
     <div class="date-picker-input-wrapper">
       <input
@@ -306,9 +330,13 @@ const weekDays = computed(() => [
         @keydown="handleInputKeydown"
       >
       <button
+        ref="triggerRef"
         type="button"
         class="calendar-icon"
         :aria-label="$t('search.date_picker.open_calendar')"
+        aria-haspopup="dialog"
+        :aria-expanded="showPicker"
+        :aria-controls="showPicker ? pickerId : undefined"
         @click="openPicker"
       >
         <div class="i-tabler:calendar" w-4 h-4 />
@@ -316,8 +344,8 @@ const weekDays = computed(() => [
     </div>
 
     <!-- 日历弹出框 -->
-    <Transition name="picker-fade">
-      <div v-if="showPicker" class="date-picker-panel bew-popover-surface">
+    <Transition name="dropdown" :css="!keyboardOpened">
+      <div v-if="showPicker" :id="pickerId" role="dialog" :aria-label="placeholder || $t('search.date_picker.start_date')" class="date-picker-panel bew-popover-surface">
         <!-- 头部：年月选择 -->
         <div class="picker-header">
           <div class="year-controls">
@@ -401,8 +429,8 @@ const weekDays = computed(() => [
 .date-picker-input {
   flex: 1;
   width: 100%;
-  min-height: var(--bew-control-height-sm);
-  padding: 0 var(--bew-space-6) 0 var(--bew-space-2);
+  min-height: var(--bew-control-height);
+  padding: 0 var(--bew-space-8) 0 var(--bew-space-2);
   background: var(--bew-fill-1);
   box-sizing: border-box;
   border: 1px solid var(--bew-surface-border-color);
@@ -441,11 +469,14 @@ const weekDays = computed(() => [
 
 .calendar-icon {
   position: absolute;
-  right: 0.25rem;
+  right: var(--bew-space-1);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 0.2rem;
+  width: var(--bew-control-height-sm);
+  height: var(--bew-control-height-sm);
+  padding: 0;
+  border-radius: var(--bew-interactive-radius);
   background: transparent;
   border: none;
   color: var(--bew-text-3);
@@ -654,24 +685,12 @@ const weekDays = computed(() => [
   }
 }
 
-// 过渡动画
-.picker-fade-enter-active,
-.picker-fade-leave-active {
-  transition:
-    background-color var(--bew-duration-normal) var(--bew-ease-out),
-    color var(--bew-duration-normal) var(--bew-ease-out),
-    border-color var(--bew-duration-normal) var(--bew-ease-out),
-    box-shadow var(--bew-duration-normal) var(--bew-ease-out),
-    transform var(--bew-duration-normal) var(--bew-ease-out);
-}
-
-.picker-fade-enter-from {
-  opacity: 0;
-  transform: translateY(-8px);
-}
-
-.picker-fade-leave-to {
-  opacity: 0;
-  transform: translateY(-8px);
+@media (prefers-reduced-motion: reduce) {
+  .date-picker button,
+  .date-picker button:active,
+  .date-picker-input {
+    transition: none;
+    transform: none;
+  }
 }
 </style>

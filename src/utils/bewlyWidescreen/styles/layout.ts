@@ -107,7 +107,7 @@ export function injectLayoutStyle() {
       font-family: var(--bew-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
       pointer-events: none;
       --bewly-widescreen-sidebar-bg: transparent;
-      --bewly-widescreen-surface-bg: transparent;
+      --bewly-widescreen-surface-bg: var(--bew-content-solid);
       --bewly-widescreen-text-primary: var(--bew-text-1, #18191c);
       --bewly-widescreen-text-secondary: var(--bew-text-2, #61666d);
       --bewly-widescreen-text-muted: var(--bew-text-3, #9499a0);
@@ -1186,6 +1186,12 @@ export function injectLayoutStyle() {
       background: var(--bew-theme-color) !important;
     }
 
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send :is(.bui-area, span) {
+      color: inherit !important;
+      font: inherit !important;
+      background: transparent !important;
+    }
+
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-wrap {
       display: none !important;
       position: absolute !important;
@@ -1464,6 +1470,8 @@ export function injectLayoutStyle() {
       width: var(--bewly-widescreen-sidebar-panel-width);
       height: calc(100dvh - var(--bewly-widescreen-sidebar-floating-inset) * 2);
       margin: var(--bewly-widescreen-sidebar-floating-inset);
+      padding: var(--bew-space-3);
+      gap: var(--bew-space-3);
       min-width: 0;
       min-height: 0;
       isolation: isolate;
@@ -1537,9 +1545,9 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID}[data-sidebar-resizing="true"] .bewly-widescreen-sidebar {
-      border-color: var(--bewly-widescreen-sidebar-resize-accent);
-      border-width: var(--bew-space-0-5, 2px);
+      /* Outer paint only: the content box and native controls keep their size. */
       box-shadow:
+        0 0 0 var(--bew-space-0-5, 2px) var(--bewly-widescreen-sidebar-resize-accent),
         0 0 var(--bew-space-6, 24px) color-mix(in oklab, var(--bewly-widescreen-sidebar-resize-accent) 42%, transparent),
         var(--bew-shadow-3),
         var(--bew-shadow-edge-glow-1);
@@ -1702,8 +1710,10 @@ export function injectLayoutStyle() {
       overflow-y: auto;
       overscroll-behavior: contain;
       scrollbar-gutter: stable;
-      padding: var(--bew-space-4);
+      padding: var(--bew-space-3);
       background: var(--bewly-widescreen-surface-bg);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
     }
 
     #${ROOT_ID} .bewly-widescreen-toolbar {
@@ -2585,7 +2595,7 @@ export function injectLayoutStyle() {
       z-index: 1;
       display: flex;
       flex: 0 0 auto;
-      margin: 0 var(--bew-space-4) var(--bew-space-3);
+      margin: 0;
     }
 
     #${ROOT_ID} .bewly-widescreen-tab {
@@ -2599,7 +2609,9 @@ export function injectLayoutStyle() {
       flex: 1 1 0;
       min-height: 0;
       overflow: hidden;
-      background: var(--bewly-widescreen-sidebar-bg);
+      background: var(--bew-content-solid);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
     }
 
     #${ROOT_ID} .bewly-widescreen-panel {
@@ -2608,7 +2620,7 @@ export function injectLayoutStyle() {
       height: 100%;
       overflow: auto;
       overscroll-behavior: contain;
-      padding: 0 var(--bew-space-4) var(--bew-space-4);
+      padding: var(--bew-space-3);
     }
 
     #${ROOT_ID} .bewly-widescreen-empty.bewly-widescreen-panel-error {
@@ -3159,6 +3171,16 @@ export function injectLayoutStyle() {
       min-height: 25%;
       color: var(--bewly-widescreen-text-muted);
       font-size: var(--bew-font-size-body);
+    }
+
+    @media (max-height: 800px) and (min-width: ${MOBILE_BREAKPOINT + 1}px) {
+      #${ROOT_ID} .bewly-widescreen-sidebar-top {
+        max-height: 42%;
+      }
+      #${ROOT_ID} .bewly-widescreen-title {
+        font-size: var(--bew-font-size-title);
+        line-height: var(--bew-line-height-title);
+      }
     }
 
     @media (prefers-reduced-motion: reduce) {

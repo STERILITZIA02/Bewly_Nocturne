@@ -301,18 +301,19 @@ watch(() => props.content, () => {
 }
 
 .private-message-content__bubble--self {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-on-theme-surface);
+  background: var(--bew-theme-surface);
   border-color: transparent;
 }
 
 .private-message-content__bubble--self .private-message-content__inline-link {
-  color: var(--bew-on-theme-color);
+  color: inherit;
+  text-decoration: underline;
 }
 
 .private-message-content__inline-link,
 .private-message-content__unknown a {
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   text-decoration: none;
 }
 
@@ -498,7 +499,7 @@ a.private-message-content__card:hover {
 
 .private-message-content__actions a {
   padding: var(--bew-space-1) var(--bew-space-2);
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-control);

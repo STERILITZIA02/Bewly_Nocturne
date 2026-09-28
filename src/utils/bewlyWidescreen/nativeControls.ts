@@ -1,9 +1,33 @@
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
 import { BOTTOM_CONTROL_POPOVER_SELECTOR, MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR, NATIVE_ACTION_OVERLAY_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, SIDEBAR_TOGGLE_IDLE_DELAY } from '~/utils/bewlyWidescreen/constants'
-import { isWidescreenSidebarExpanded } from '~/utils/bewlyWidescreen/session'
+import { isWidescreenSidebarExpanded, session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { hasWidescreenControlPopoverArea, isWidescreenBottomControlHoverRegion, isWidescreenPlayerControlHoverRegion, resolveWidescreenControlSurfaceState } from '~/utils/bewlyWidescreenPolicy'
+import { getDeepActiveElement } from '~/utils/dialogFocus'
 import { isPhotoViewerOpen } from '~/utils/photoViewer'
+
+const NON_TEXT_INPUT_TYPES = new Set(['button', 'checkbox', 'color', 'file', 'hidden', 'image', 'radio', 'range', 'reset', 'submit'])
+
+export function isWidescreenTextEditing() {
+  const active = getDeepActiveElement(document)
+  if (!(active instanceof HTMLElement))
+    return false
+  // An embedded editor may be cross-origin; its focused frame is the only
+  // observable focus owner. Keep that interaction without reading its document.
+  if (active.tagName === 'IFRAME')
+    return true
+  if (active.matches('input, textarea')) {
+    const input = active as HTMLInputElement | HTMLTextAreaElement
+    return !input.disabled && !input.readOnly
+      && (input.tagName !== 'INPUT' || !NON_TEXT_INPUT_TYPES.has((input as HTMLInputElement).type))
+  }
+  const editable = active.closest('[contenteditable]')
+  return active.isContentEditable
+    || (!!editable && ['', 'true', 'plaintext-only'].includes(editable.getAttribute('contenteditable') ?? ''))
+    || (active.getAttribute('role') === 'textbox'
+      && active.getAttribute('aria-readonly') !== 'true'
+      && active.getAttribute('aria-disabled') !== 'true')
+}
 
 export function getNativePlayerContainer(
   currentState: BewlyWidescreenState,
@@ -92,6 +116,19 @@ export function isPointerInBottomControlContainer(
   })
 }
 
+export function isWidescreenBottomControlFocused(
+  currentState: BewlyWidescreenState,
+  nativeControls: Element | null | undefined = getNativePlayerContainer(currentState)?.querySelector(NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR),
+) {
+  return [nativeControls, currentState.danmakuSemanticsSource, currentState.danmakuDock, currentState.auxiliaryControlsElement]
+    .some((control) => {
+      if (!control?.isConnected)
+        return false
+      const root = control.getRootNode() as Document | ShadowRoot
+      return control.contains(root.activeElement)
+    })
+}
+
 export function syncNativePlayerControlVisibility(
   currentState: BewlyWidescreenState,
   playerHost: HTMLElement = currentState.playerEl,
@@ -104,6 +141,8 @@ export function syncNativePlayerControlVisibility(
     currentState.controlsLayoutStableSince = undefined
   }
   const { hidden, ready } = resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: isWidescreenBottomControlFocused(currentState, nativeControls),
+    textEditingActive: isWidescreenTextEditing(),
     bottomControlsHovered: currentState.bottomControlsHovered,
     danmakuControlsReady: currentState.danmakuSemanticsSource?.isConnected === true,
     nativeControlsHidden: (
@@ -174,14 +213,58 @@ export function forwardNativePlayerPointerActivity(
 }
 
 export function setupActiveWidescreenControl(currentState: BewlyWidescreenState) {
+  let disposed = false
+  const focusRoots = new Set<Document | ShadowRoot>()
+  const syncControlFocus = () => {
+    if (disposed || session.current !== currentState)
+      return
+
+    // Focus transfers inside one Shadow host do not necessarily reach document.
+    // Follow only the active focus path, including native comment editors.
+    const nextRoots = new Set<Document | ShadowRoot>([document])
+    let active = document.activeElement
+    while (active?.shadowRoot) {
+      nextRoots.add(active.shadowRoot)
+      active = active.shadowRoot.activeElement
+    }
+    for (const root of focusRoots) {
+      if (nextRoots.has(root))
+        continue
+      root.removeEventListener('focusin', syncControlFocus, true)
+      root.removeEventListener('focusout', handleControlFocusOut, true)
+      focusRoots.delete(root)
+    }
+    for (const root of nextRoots) {
+      if (focusRoots.has(root))
+        continue
+      root.addEventListener('focusin', syncControlFocus, true)
+      root.addEventListener('focusout', handleControlFocusOut, true)
+      focusRoots.add(root)
+    }
+    syncNativePlayerControlVisibility(currentState)
+    currentState.sidebarInteractionFocusSync?.()
+    currentState.sidebarToggleFocusSync?.()
+  }
+  // focusout occurs before activeElement moves to the next control. Re-read the
+  // DOM after the focus transfer rather than retaining a second focus state.
+  function handleControlFocusOut() {
+    queueMicrotask(syncControlFocus)
+  }
   const handleControlClick = (event: Event) => {
     const eventElements = event.composedPath().filter((node): node is Element => node instanceof Element)
     if (eventElements.some(element => element.closest(MUTUALLY_EXCLUSIVE_PLAYER_CONTROL_SELECTOR)))
       currentState.exit({ userInitiated: true })
   }
   document.addEventListener('click', handleControlClick, true)
+  syncControlFocus()
   currentState.activeControlCleanup = () => {
+    disposed = true
     document.removeEventListener('click', handleControlClick, true)
+    for (const root of focusRoots) {
+      root.removeEventListener('focusin', syncControlFocus, true)
+      root.removeEventListener('focusout', handleControlFocusOut, true)
+    }
+    focusRoots.clear()
   }
 }
 
@@ -198,14 +281,16 @@ export function setupSidebarToggleAutoHide(currentState: BewlyWidescreenState) {
   }
 
   function hideToggle() {
+    if (isWidescreenTextEditing())
+      return
     root.dataset.pointerActive = 'false'
   }
 
   function showToggle() {
     root.dataset.pointerActive = 'true'
     clearIdleTimer()
-    // 鼠标停在按钮上时保持显示，避免误隐藏
-    if (!hoveringToggle)
+    // Text editing anywhere on the page pauses the same idle timer.
+    if (!hoveringToggle && !isWidescreenTextEditing())
       idleTimer = setTimeout(hideToggle, SIDEBAR_TOGGLE_IDLE_DELAY)
   }
 
@@ -231,9 +316,13 @@ export function setupSidebarToggleAutoHide(currentState: BewlyWidescreenState) {
   document.documentElement.addEventListener('pointerleave', onPointerLeave)
   sidebarToggleButton.addEventListener('pointerenter', onToggleEnter)
   sidebarToggleButton.addEventListener('pointerleave', onToggleLeave)
+  currentState.sidebarToggleFocusSync = showToggle
+  if (isWidescreenTextEditing())
+    showToggle()
 
   currentState.sidebarToggleAutoHideCleanup = () => {
     clearIdleTimer()
+    currentState.sidebarToggleFocusSync = undefined
     playerEl.removeEventListener('pointermove', showToggle)
     playerEl.removeEventListener('pointerleave', showToggle)
     window.removeEventListener('blur', onPointerLeave)

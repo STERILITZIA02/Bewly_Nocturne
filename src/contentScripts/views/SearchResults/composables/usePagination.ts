@@ -2,6 +2,19 @@ import { computed, ref } from 'vue'
 
 const PAGE_SIZE = 30
 
+/** Scroll refresh replaces the list from page one; numbered paging retains its page. */
+export function refreshSearchPage(
+  mode: 'scroll' | 'pagination',
+  currentPage: number,
+  runPage: (page: number, updateUrl: boolean) => Promise<boolean>,
+  resetLoadMore: () => void,
+): Promise<boolean> {
+  if (mode === 'pagination')
+    return runPage(currentPage || 1, false)
+  resetLoadMore()
+  return runPage(1, true)
+}
+
 export interface PaginationInfo {
   total?: number
   numResults?: number

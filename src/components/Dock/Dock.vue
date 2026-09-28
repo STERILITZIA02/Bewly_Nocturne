@@ -3,6 +3,7 @@ import { Icon } from '@iconify/vue'
 import { useElementSize, usePreferredReducedMotion, useWindowSize } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 
 import { UndoForwardState, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
@@ -28,9 +29,11 @@ import {
 } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
+import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveActiveDockItemPage } from '~/utils/dockActiveItem'
 import { isHomePage, openLinkToNewTab } from '~/utils/main'
 
+import CountBadge from '../CountBadge.vue'
 import IconButton from '../IconButton.vue'
 import LiquidGlassSurface from '../LiquidGlassSurface.vue'
 import LiquidSegmentIndicator from '../LiquidSegmentIndicator.vue'
@@ -54,6 +57,27 @@ const emit = defineEmits<{
 }>()
 
 const settingsStore = useSettingsStore()
+const topBarStore = useTopBarStore()
+const { t } = useI18n()
+// Read the same account-scoped authority as TopBar; Dock never starts polling
+// or acknowledges messages merely because its badge is visible.
+const dockBadges = computed<Partial<Record<AppPage, { count: number, label: string }>>>(() => {
+  if (!topBarStore.isLogin)
+    return {}
+  const result: Partial<Record<AppPage, { count: number, label: string }>> = {}
+  const sources = [
+    [AppPage.Notifications, topBarStore.unReadMessageCount, 'dock.unread_messages'],
+    [AppPage.Moments, topBarStore.newMomentsCount, 'dock.new_moments'],
+    [AppPage.WatchLater, topBarStore.watchLaterCount, 'dock.pending_videos'],
+  ] as const
+  for (const [page, value, key] of sources) {
+    if (Number.isFinite(value) && value > 0) {
+      const count = Math.floor(value)
+      result[page] = { count, label: t(key, { count }) }
+    }
+  }
+  return result
+})
 const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
 const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
@@ -737,7 +761,7 @@ onUnmounted(() => {
             <LiquidSegmentIndicator ref="dockIndicatorRef" class="dock-page-navigation__indicator bew-shape-circle" :active-key="activeDockItemPage" white />
 
             <template v-for="dockItem in currentDockItems" :key="dockItem.page">
-              <Tooltip :content="$t(dockItem.i18nKey)" :placement="tooltipPlacement">
+              <Tooltip :content="dockBadges[dockItem.page]?.label || $t(dockItem.i18nKey)" :placement="tooltipPlacement">
                 <button
                   v-layout-editable="getDockItemLayoutEditableId(dockItem.page)"
                   type="button"
@@ -745,7 +769,7 @@ onUnmounted(() => {
                   :class="{ inactive: hoveringDockItem.themeMode && isDark }"
                   data-segment-item
                   :data-active="isDockItemActivated(dockItem) ? 'true' : undefined"
-                  :aria-label="$t(dockItem.i18nKey)"
+                  :aria-label="dockBadges[dockItem.page]?.label || $t(dockItem.i18nKey)"
                   :aria-current="isDockItemActivated(dockItem) ? 'page' : undefined"
                   @click="handleDockItemClick($event, dockItem)"
                   @click.middle="openDockItemInNewTab(dockItem)"
@@ -755,6 +779,7 @@ onUnmounted(() => {
                     :class="isDockItemActivated(dockItem) ? dockItem.iconActivated : dockItem.icon"
                     aria-hidden="true"
                   />
+                  <CountBadge v-if="dockBadges[dockItem.page]" :count="dockBadges[dockItem.page]!.count" class="dock-count-badge" aria-hidden="true" />
                 </button>
               </Tooltip>
             </template>
@@ -1154,6 +1179,8 @@ onUnmounted(() => {
   }
 
   .dock-page-navigation__item {
+    position: relative;
+    overflow: visible;
     width: var(--bew-dock-control-size);
     height: var(--bew-dock-control-size);
     color: var(--bew-text-1);
@@ -1192,6 +1219,15 @@ onUnmounted(() => {
 
   .dock-page-navigation__indicator {
     corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .dock-count-badge {
+    // Optical overlap clears the icon while staying within the shell's padding.
+    position: absolute;
+    top: calc(-1 * var(--bew-space-0-5));
+    right: calc(-1 * var(--bew-space-1));
+    z-index: 2;
+    box-shadow: 0 0 0 1px var(--bew-content-solid);
   }
 
   .dock-page-navigation:not(.disable-glowing-effect) {

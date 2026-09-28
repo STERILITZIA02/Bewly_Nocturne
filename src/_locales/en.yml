@@ -1153,13 +1153,8 @@ notifications:
     user_fallback: 'User {talkerId}'
     summary_unavailable: No message preview
     select_conversation: Select conversation with {name}
-    select_conversation_empty: Select a conversation to start chatting
-    select_conversation_hint: Messages stay in their own focused reading card
-    empty_tips:
-      emote: Insert Bilibili emotes from the Composer
-      image: Preview and send images without leaving the conversation
-      history: Scroll upward to load and read earlier messages
-      shortcut: Enter sends; Shift+Enter starts a new line
+    select_conversation_empty: Select a conversation
+    select_conversation_hint: Read messages from the list, or use conversation search to find a contact.
     fallback_aria: Original direct-message entry for {name}
     fallback_description: This conversation type currently needs to be viewed in original Bilibili direct messages
     session_kinds:
@@ -1202,6 +1197,7 @@ notifications:
       edit_failed: Edit
       delete_failed: Delete local failed message
       new_messages: New messages
+      return_latest: Back to latest messages
       recalled: Message recalled
       unsupported: This message type is not supported yet
       preview_image: Preview image
@@ -1275,6 +1271,9 @@ notifications:
       invalid-response: These notifications are temporarily unavailable
       api-error: Failed to load. Try again
 dock:
+  unread_messages: 'Messages, {count} unread'
+  new_moments: 'Moments, {count} new updates'
+  pending_videos: 'Watch Later, {count} videos remaining'
   search: Search
   home: Home
   anime: Anime
@@ -1506,6 +1505,9 @@ video_card:
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
 home:
+  series:
+    open: Open series
+    more_updates: 'More updates ({count})'
   following_search_videos: 'Search videos by {name}'
   following_clear_video_search: Clear video search
   following_no_search_results: No matching video submissions
@@ -1555,6 +1557,7 @@ ranking:
   original_content: Original Content
   debut_work: Debut Work
 anime:
+  watched_until: 'Watched to {time}'
   total_episodes: EP {ep}
   update_to_n_episodes: Update to EP {ep}
   your_watch_list: Your Watchlist
@@ -1563,6 +1566,9 @@ anime:
   popular_anime: Popular Anime
   follow: '{num} follow'
   anime_timetable:
+    today: Today
+    previous_day: Previous day
+    next_day: Next day
     title: Anime Timetable
     days_of_week:
       mon: MON
@@ -1573,6 +1579,9 @@ anime:
       sat: SAT
       sun: SUN
 history:
+  media: Series / Films
+  continue_watching: Continue watching
+  unknown_date: Unknown date
   clear_failed: Could not clear watch history. Please retry.
   title: Watch History
   search_watch_history: Search watch history
@@ -1661,9 +1670,12 @@ watch_later:
   auto_remove_failed: Could not remove the completed video from Watch Later. Retry manually later.
   open_tabs:
     title: Add playback tabs
-    scope: 'Includes accessible Bilibili playback tabs in every window of the same normal/private context. Original tabs stay open and unchanged. Confirm to add this snapshot, skipping duplicate manuscripts and existing members. Closing this dialog does not stop the background task; reopen here to view progress.'
+    scope: Only the listed playback pages will be processed. Duplicates and videos already in Watch Later are skipped. Original tabs stay open.
+    windows_normal: normal windows
+    windows_private: private windows
+    background_hint: Adding continues after you close this dialog. Reopen it to check progress.
     failed_request: 'Could not read the task, or the account changed. Retry.'
-    state_ready: Confirm the candidate tabs below
+    state_ready: 'Found {count} playback tabs across all {windows}'
     state_running: Adding tabs
     state_stopped: Further additions stopped
     state_complete: Task finished
@@ -1706,6 +1718,7 @@ watch_later:
     videos?
   open_video_page: Open regular video page
   play_video: Remove and open video page
+  play_and_remove: Play & remove
   play_in_watch_later: Playlist
   remove_from_watch_later: Remove
 widescreen:
@@ -1772,6 +1785,8 @@ search:
   filters:
     order: Sort
     more: More filters
+    applied: 'Applied: {filters}'
+    clear: Clear filters
     duration: Duration
     date: Date
     start_date: Start date
@@ -1830,6 +1845,7 @@ search:
   live:
     all: All
     rooms: Live rooms
+    no_rooms: No matching live rooms
     streamers: Streamers
     more_streamers: View more streamers ({count}+)
   media:

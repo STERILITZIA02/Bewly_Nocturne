@@ -69,7 +69,9 @@ export interface BewlyWidescreenState {
   sidebarReadyCleanup?: () => void
   sidebarEdgeRevealSuppressionTimer?: ReturnType<typeof setTimeout>
   sidebarInteractionCleanup?: () => void
+  sidebarInteractionFocusSync?: () => void
   sidebarToggleAutoHideCleanup?: () => void
+  sidebarToggleFocusSync?: () => void
   activeControlCleanup?: () => void
   descriptionCleanup?: () => void
   playlistToggleCleanup?: () => void

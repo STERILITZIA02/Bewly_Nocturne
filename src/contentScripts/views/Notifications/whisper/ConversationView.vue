@@ -100,6 +100,7 @@ const viewport = useConversationViewport({
   active: () => props.active,
   ready: isHistoryReady,
   canProcess: () => !conversationActivationPending,
+  followContentGrowth: () => state.value.atLatest,
   talkerId: () => talkerId.value,
   save: (id, position) => {
     if (topBarStore.userInfo.mid === conversationAccountId)
@@ -114,13 +115,16 @@ const viewport = useConversationViewport({
       void acknowledgeIfEligible()
   },
 })
-const { messageScrollRef, isAtLatestPosition, isAtLatest, saveViewportState, scrollToLatest, scheduleScrollFrame, markReadingIntent, handleDirectGestureMove, endDirectScrollGesture, handleScroll } = viewport
+const { messageScrollRef, messageContentRef, isAtLatestPosition, isAtLatest, saveViewportState, scrollToLatest, scheduleScrollFrame, handleContentResize, markReadingIntent, handleDirectGestureMove, endDirectScrollGesture, handleScroll } = viewport
 const presentation = useConversationPresentation(conversationViewRef, () => props.active, {
   activate: () => void activateConversation(),
-  layoutSettled: scheduleScrollFrame,
+  layoutSettled: handleContentResize,
+  contentResized: handleContentResize,
   revealFinished: () => void acknowledgeIfEligible(),
-})
+}, messageContentRef)
 const { conversationExpanded, reducedMotion, isLayoutTransitioning, entryPhase, historyVisible, isRevealingHistory, historyRevealDelays, conversationLayoutStyle, updateConversationGeometry, finishConversationSwitch, revealVisibleHistory, finishHistoryReveal, beginHistoryLeave } = presentation
+const showLatestButton = computed(() => entryPhase.value === 'ready' && timelineItems.value.length > 0
+  && (!isAtLatestPosition.value || state.value.newMessagesAvailable))
 
 function isHistoryReady() {
   return entryPhase.value === 'ready'
@@ -377,7 +381,7 @@ defineExpose({
       'conversation-view--density-compact': settings.privateMessageDensity === 'compact',
       'conversation-view--has-composer': isTextSendEnabled && writeState,
       'conversation-view--has-image-draft': writeState?.imageDraft,
-      'conversation-view--has-new-messages': state.newMessagesAvailable,
+      'conversation-view--has-new-messages': showLatestButton,
       'conversation-view--layout-transitioning': isLayoutTransitioning,
       'conversation-view--reduced-motion': reducedMotion,
       'conversation-view--solid': settings.disableFrostedGlass,
@@ -410,7 +414,7 @@ defineExpose({
         @wheel.passive="markReadingIntent"
       >
         <Transition name="conversation-history" @before-leave="beginHistoryLeave" @after-leave="finishConversationSwitch">
-          <div v-if="historyVisible" class="conversation-view__history">
+          <div v-if="historyVisible" ref="messageContentRef" class="conversation-view__history">
             <span v-if="entryPhase !== 'ready'" class="sr-only" role="status">
               {{ t('notifications.whisper.messages.loading') }}
             </span>
@@ -484,12 +488,12 @@ defineExpose({
     </div>
 
     <button
-      v-if="state.newMessagesAvailable"
+      v-if="showLatestButton"
       type="button"
       class="conversation-view__new-messages"
       @click="scrollToLatest('smooth'); acknowledgeIfEligible()"
     >
-      {{ t('notifications.whisper.messages.new_messages') }}
+      {{ t(state.newMessagesAvailable ? 'notifications.whisper.messages.new_messages' : 'notifications.whisper.messages.return_latest') }}
     </button>
 
     <footer
@@ -694,7 +698,7 @@ defineExpose({
 .conversation-view__inline-error button,
 .conversation-view__history-status button {
   padding: 0;
-  color: var(--bew-theme-color);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-control);

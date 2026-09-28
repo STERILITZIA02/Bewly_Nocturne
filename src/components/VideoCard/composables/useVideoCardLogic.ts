@@ -235,13 +235,12 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     if (!video || !showWatchLater)
       return
 
-    await topBarStore.ensureWatchLaterState()
-    if (!isCurrentResolution())
-      return
-    if (watchLaterAid.value)
-      return
-
     try {
+      // Membership refresh can reject when a reload terminates this runtime,
+      // just like identity resolution. Both awaits belong to this watcher.
+      await topBarStore.ensureWatchLaterState()
+      if (!isCurrentResolution() || watchLaterAid.value)
+        return
       const aid = await resolveWatchLaterAid(video)
       if (isCurrentResolution())
         resolvedWatchLaterAid.value = aid

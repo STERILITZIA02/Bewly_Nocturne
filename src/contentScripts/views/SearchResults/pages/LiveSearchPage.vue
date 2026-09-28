@@ -14,7 +14,7 @@ import { settings } from '~/logic'
 import Pagination from '../components/Pagination.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useLoadMore } from '../composables/useLoadMore'
-import { usePagination } from '../composables/usePagination'
+import { refreshSearchPage, usePagination } from '../composables/usePagination'
 import { useSearchRequest } from '../composables/useSearchRequest'
 import { convertLiveRoomData, convertUserCardData, formatNumber } from '../searchTransforms'
 import type { LiveSearchFilters } from '../types'
@@ -306,9 +306,7 @@ function handlePageChange(page: number, updateUrl = true, scrollToTop = true): P
 }
 
 function refreshCurrentPage() {
-  return paginationMode.value === 'pagination'
-    ? handlePageChange(currentPage.value, false, false)
-    : performSearch(false)
+  return refreshSearchPage(paginationMode.value, currentPage.value, (page, updateUrl) => runLiveSearch(page, false, false, updateUrl), resetLoadMore)
 }
 
 async function restorePage(page: number): Promise<boolean> {
@@ -464,7 +462,10 @@ defineExpose({
             @load-more="handleLoadMore"
           >
             <template #empty>
-              <SearchEmptyState :keyword="keyword" category="live" />
+              <p v-if="filters.subCategory === 'all' && liveUserList.length" role="status" text="$bew-text-2" py-4>
+                {{ t('search.live.no_rooms') }}
+              </p>
+              <SearchEmptyState v-else :keyword="keyword" category="live" />
             </template>
           </VideoCardGrid>
         </div>

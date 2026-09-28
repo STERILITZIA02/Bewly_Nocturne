@@ -699,12 +699,23 @@ const content = computed(() => {
   background: var(--bew-theme-surface-hover);
 }
 
+span.video-card-meta__chip {
+  padding-inline: 0;
+  color: var(--bew-text-3);
+  background: transparent;
+  border-radius: 0;
+}
+
+.video-card-meta__chip--searchable {
+  min-height: var(--bew-icon-button-size-sm);
+}
+
 .video-card-meta__chip {
   display: inline-flex;
   align-items: center;
   font-size: inherit;
   line-height: inherit;
-  padding-block: calc(var(--bew-base-font-size) * 0.12);
+  padding-block: 0;
   flex: 0 0 auto;
   max-width: 100%;
   min-width: 0;

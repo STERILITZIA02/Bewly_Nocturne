@@ -151,6 +151,21 @@ function createSidebarToggleButton() {
     const nextLayout = session.current?.sidebarLayout === 'compact' ? 'expanded' : 'compact'
     setSidebarLayout(nextLayout, session.current, nextLayout === 'compact')
   })
+  button.addEventListener('keydown', (event) => {
+    if (event.isComposing || event.altKey || event.ctrlKey || event.metaKey || !['Enter', ' '].includes(event.key))
+      return
+    // Keep this button's native activation ahead of Bpx's document shortcuts.
+    event.preventDefault()
+    event.stopPropagation()
+    if (!event.repeat)
+      button.click()
+  })
+  button.addEventListener('keyup', (event) => {
+    if (event.isComposing || !['Enter', ' '].includes(event.key))
+      return
+    event.preventDefault()
+    event.stopPropagation()
+  })
   return button
 }
 

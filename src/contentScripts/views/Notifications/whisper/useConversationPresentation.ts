@@ -10,8 +10,9 @@ import { calculateConversationExpandedGeometry, CONVERSATION_EXPANSION_DURATION,
 export function useConversationPresentation(view: Ref<HTMLElement | null>, active: () => boolean, events: {
   activate: () => void
   layoutSettled: () => void
+  contentResized: () => void
   revealFinished: () => void
-}) {
+}, content: Ref<HTMLElement | null>) {
   const conversationExpanded = ref(false)
   const isMobileLayout = ref(false)
   const reducedMotion = ref(false)
@@ -106,14 +107,20 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
     window.visualViewport?.addEventListener('resize', sync, { signal: media.signal })
     window.visualViewport?.addEventListener('scroll', sync, { signal: media.signal })
     if (typeof ResizeObserver !== 'undefined') {
-      resize = new ResizeObserver(() => {
+      resize = new ResizeObserver((entries) => {
         if (mounted && active()) {
-          updateConversationGeometry()
-          events.layoutSettled()
+          if (entries.some(entry => entry.target === view.value)) {
+            updateConversationGeometry()
+            events.layoutSettled()
+          }
+          if (entries.some(entry => entry.target === content.value))
+            events.contentResized()
         }
       })
       if (view.value)
         resize.observe(view.value)
+      if (content.value)
+        resize.observe(content.value)
     }
     // Commit compact geometry once. Only the completed expansion releases data.
     openingFrame = requestAnimationFrame(() => {
@@ -174,6 +181,12 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
       conversationExpanded.value = false
     }
   })
+  watch(content, (next, previous) => {
+    if (previous)
+      resize?.unobserve(previous)
+    if (next)
+      resize?.observe(next)
+  }, { flush: 'post' })
   onMounted(() => {
     mounted = true
     if (active())

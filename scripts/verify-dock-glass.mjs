@@ -187,8 +187,12 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const activeItem = await import('../src/utils/dockActiveItem')
     const undoState = Vue.ref(0)
     const item = { page: AppPage.Home, visible: true, icon: '', iconActivated: '', i18nKey: 'Home' }
+    const items = [item, ...[AppPage.Notifications, AppPage.Moments, AppPage.WatchLater].map(page => ({ ...item, page, i18nKey: page }))]
+    const topBarStore = Vue.reactive({ isLogin: true, unReadMessageCount: 120, newMomentsCount: 3, watchLaterCount: 12 })
     const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', dockItemsConfig: [item], pageMode: 'bewly', useSearchPageModeOnHomePage: true, showBewlyOrBiliPageSwitcher: true, enableDockLiquidGlass: false, disableFrostedGlass: false, dockLiquidGlassMode: 'standard', dockLiquidGlassRefraction: 35, dockLiquidGlassBlur: 6, dockLiquidGlassTintSource: 'theme', dockLiquidGlassTintColor: '#ffffff', dockLiquidGlassTintOpacity: 30, dockLiquidGlassDispersion: 1.5, dockLiquidGlassSaturation: 140, frostedGlassBlurIntensity: 20 })
     const passthrough = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
+    settings.value.dockItemsConfig = items
+    const Badge = await compileComponent('../src/components/CountBadge.vue')
     const Surface = { props: ['blur', 'tintColor', 'tintOpacity'], setup: props => () => Vue.h('span', { 'class': 'optical-test-surface', 'data-blur': props.blur, 'data-tint': props.tintColor, 'data-opacity': props.tintOpacity }) }
     const material = await loadSourceModule('../src/composables/useLiquidGlass.ts', {
       'vue': Vue,
@@ -197,6 +201,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false), isOledDark: Vue.ref(false) }) },
     })
     const Dock = await compileComponent('../src/components/Dock/Dock.vue', {
+      'vue-i18n': { useI18n: () => ({ t: (key, params) => `${key}:${params.count}` }) },
       '@iconify/vue': { Icon: { render: () => Vue.h('svg') } },
       '@vueuse/core': { useElementSize: () => ({ width: Vue.ref(600), height: Vue.ref(60) }), useWindowSize: () => ({ width: Vue.ref(1280), height: Vue.ref(900) }), usePreferredReducedMotion: () => Vue.ref('reduce') },
       '~/composables/useAppProvider': { UndoForwardState: { ShowUndo: 1, ShowForward: 2 }, useBewlyApp: () => ({ reachTop: Vue.ref(true), homeActivatedPage: Vue.ref(HomeSubPage.ForYou), undoForwardState: undoState, canRefreshHomeSubPage: Vue.ref(true), getDockPageHref: () => '/' }) },
@@ -209,10 +214,12 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       '~/enums/appEnums': { AppPage },
       '~/logic': { settings },
       '~/logic/layoutEdit': { isLayoutEditing: Vue.ref(false), useLayoutEditableRoot: () => {}, useLayoutEditSettingValue: (_key, getValue) => Vue.computed(getValue), getDockItemLayoutEditableId: () => 'home', vLayoutEditable: {} },
-      '~/stores/settingsStore': { useSettingsStore: () => ({ getDockItemIsUseOriginalBiliPage: () => false, ensureDockItemsConfig: () => settings.value.dockItemsConfig, getEffectiveDockItemByPage: () => item }) },
+      '~/stores/settingsStore': { useSettingsStore: () => ({ getDockItemIsUseOriginalBiliPage: () => false, ensureDockItemsConfig: () => settings.value.dockItemsConfig, getEffectiveDockItemByPage: page => items.find(item => item.page === page) }) },
+      '~/stores/topBarStore': { useTopBarStore: () => topBarStore },
       '~/utils/dockActiveItem': activeItem,
       '~/utils/main': { isHomePage: () => true, openLinkToNewTab: () => {} },
       '../IconButton.vue': { default: { setup: (_props, { slots, attrs }) => () => Vue.h('button', attrs, slots.default?.()) } },
+      '../CountBadge.vue': { default: Badge },
       '../LiquidGlassSurface.vue': { default: Surface },
       '../LiquidSegmentIndicator.vue': { default: { setup: (_props, { expose }) => {
         expose({ updateIndicator: () => {} })
@@ -233,6 +240,19 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     app.mount(host)
     await flush()
     const shell = host.querySelector('.dock-shell-surface')
+    assert.deepEqual([...host.querySelectorAll('.dock-count-badge')].map(badge => badge.textContent), ['99+', '3', '12'])
+    assert.equal(host.querySelector('.dock-count-badge').closest('button').getAttribute('aria-label'), 'dock.unread_messages:120')
+    topBarStore.unReadMessageCount = 0
+    topBarStore.newMomentsCount = Number.NaN
+    await flush()
+    assert.deepEqual([...host.querySelectorAll('.dock-count-badge')].map(badge => badge.textContent), ['12'])
+    topBarStore.isLogin = false
+    await flush()
+    assert.equal(host.querySelectorAll('.dock-count-badge').length, 0, 'sign-out hides account counts without a new Dock request')
+    topBarStore.isLogin = true
+    topBarStore.watchLaterCount = 2
+    await flush()
+    assert.equal(host.querySelector('.dock-count-badge').textContent, '2', 'authoritative store updates reach the same Dock shell')
     const frostedShadow = getComputedStyle(shell).boxShadow
     assert.notEqual(frostedShadow, 'none')
     const buttons = host.querySelectorAll('button').length

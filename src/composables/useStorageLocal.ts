@@ -2,6 +2,7 @@ import type { MaybeRef, Ref, WatchOptions } from 'vue'
 import { getCurrentScope, isProxy, onScopeDispose, readonly, ref, shallowRef, toRaw, toValue, watch } from 'vue'
 import browser from 'webextension-polyfill'
 
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { shouldWriteStorageDefault } from '~/utils/storageInitialization'
 
 type Awaitable<T> = T | Promise<T>
@@ -41,7 +42,7 @@ export interface UseStorageLocalOptions<T> {
   writeDefaults?: boolean
 }
 
-export type StorageInitializationState = 'degraded' | 'loaded' | 'loading'
+export type StorageInitializationState = 'degraded' | 'loaded' | 'loading' | 'invalidated'
 
 export type StorageRef<T> = Omit<Ref<T>, 'value'> & {
   get value(): T
@@ -231,6 +232,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   let recoveryTimer: ReturnType<typeof setTimeout> | undefined
   let stopSyncWatch: (() => void) | undefined
   let removeStorageListener: (() => void) | undefined
+  let initializationChange: browser.Storage.StorageChange | undefined
   const pendingOwnStorageChanges: unknown[] = []
 
   const normalizePendingStorageValue = (value: unknown) => value ?? null
@@ -252,6 +254,18 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
   }
 
   const isOwnerActive = () => !disposed && (!ownerScope || ownerScope.active)
+
+  const stopForInvalidatedContext = (error: unknown) => {
+    if (!isExtensionContextInvalidatedError(error))
+      return false
+    initializationState.value = 'invalidated'
+    dispose()
+    return true
+  }
+  const reportError = (error: unknown) => {
+    if (!stopForInvalidatedContext(error))
+      onError(error)
+  }
 
   const stopDirtyWatch = watch(
     data,
@@ -351,49 +365,12 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
 
           runWithFilter(eventFilter, persistValue, (error) => {
             if (isOwnerActive())
-              onError(error)
+              reportError(error)
           })
         },
         { flush, deep },
       )
 
-      if (listenToStorageChanges) {
-        const onChanged = async (changes: Record<string, browser.Storage.StorageChange>, areaName: string) => {
-          if (!isOwnerActive() || areaName !== 'local' || !(key in changes))
-            return
-
-          const change = changes[key]
-          const generation = ++storageChangeGeneration
-
-          try {
-            if (consumePendingOwnStorageChange(change.newValue))
-              return
-
-            const nextValue = change.newValue == null
-              ? createInitialValue(initialValue) as T
-              : cloneValue(mergeStoredValue(
-                  await deserializeStoredValue(change.newValue, serializer),
-                  createInitialValue(initialValue),
-                  mergeDefaults,
-                ))
-            if (!isOwnerActive() || generation !== storageChangeGeneration)
-              return
-            assignStorageValue(nextValue)
-            initialReadSucceeded = true
-            degraded = false
-            initializationState.value = 'loaded'
-            hasDegradedEdits = false
-            clearRecoveryTimer()
-          }
-          catch (error) {
-            suppressedWriteRevision = null
-            if (isOwnerActive())
-              onError(error)
-          }
-        }
-
-        removeStorageListener = runtime.subscribe(onChanged)
-      }
       registered = true
     }
 
@@ -402,6 +379,56 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     else
       register()
     syncStarted = registered
+  }
+
+  const startStorageListener = () => {
+    if (!listenToStorageChanges || !isOwnerActive())
+      return
+    const onChanged = async (changes: Record<string, browser.Storage.StorageChange>, areaName: string) => {
+      if (!isOwnerActive() || areaName !== 'local' || !(key in changes))
+        return
+
+      const change = changes[key]
+      const generation = ++storageChangeGeneration
+      // Subscribe before get(): an event received while the initial snapshot
+      // or serializer is pending is newer than that snapshot, including deletion.
+      if (!ready) {
+        initializationChange = change
+        return
+      }
+
+      try {
+        if (consumePendingOwnStorageChange(change.newValue))
+          return
+
+        const nextValue = change.newValue == null
+          ? createInitialValue(initialValue) as T
+          : cloneValue(mergeStoredValue(
+              await deserializeStoredValue(change.newValue, serializer),
+              createInitialValue(initialValue),
+              mergeDefaults,
+            ))
+        if (!isOwnerActive() || generation !== storageChangeGeneration)
+          return
+        assignStorageValue(nextValue)
+        initialReadSucceeded = true
+        degraded = false
+        initializationState.value = 'loaded'
+        hasDegradedEdits = false
+        clearRecoveryTimer()
+      }
+      catch (error) {
+        suppressedWriteRevision = null
+        if (isOwnerActive())
+          reportError(error)
+      }
+    }
+    try {
+      removeStorageListener = runtime.subscribe(onChanged)
+    }
+    catch (error) {
+      reportError(error)
+    }
   }
 
   const scheduleRecoveryRead = () => {
@@ -462,13 +489,13 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
         if (!isOwnerActive())
           return
         suppressedWriteRevision = null
-        onError(error)
+        reportError(error)
         scheduleRecoveryRead()
       }
     }, 15_000)
   }
 
-  const dispose = () => {
+  function dispose() {
     if (disposed)
       return
     disposed = true
@@ -477,10 +504,13 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     stopDirtyWatch?.()
     stopSyncWatch?.()
     removeStorageListener?.()
+    initializationChange = undefined
+    pendingOwnStorageChanges.length = 0
   }
   if (ownerScope)
     onScopeDispose(dispose)
 
+  startStorageListener()
   void (async () => {
     let result: Record<string, unknown> | undefined
     let lastReadError: unknown
@@ -497,7 +527,11 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
       catch (error) {
         if (!isOwnerActive())
           return
+        if (stopForInvalidatedContext(error))
+          return
         lastReadError = error
+        if (initializationChange)
+          break
         if (attempt < 2) {
           await runtime.sleep(100 * 2 ** attempt)
           if (!isOwnerActive())
@@ -507,22 +541,32 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     }
 
     try {
+      if (initializationChange)
+        initialReadSucceeded = true
       if (!initialReadSucceeded) {
-        onError(lastReadError)
+        reportError(lastReadError)
         degraded = true
       }
       else {
-        const rawStoredValue = result![key]
-        hasStoredValue = rawStoredValue != null
-
-        if (rawStoredValue == null) {
-          if (!dirtyBeforeReady)
-            assignStorageValue(cloneValue(initial))
-        }
-        else if (!dirtyBeforeReady) {
-          const storedValue = await deserializeStoredValue(rawStoredValue, serializer)
+        while (isOwnerActive()) {
+          const readGeneration = storageChangeGeneration
+          const rawStoredValue = initializationChange ? initializationChange.newValue : result?.[key]
+          hasStoredValue = rawStoredValue != null
+          if (dirtyBeforeReady)
+            break
+          let storedValue: T
+          try {
+            storedValue = rawStoredValue == null ? cloneValue(initial) : await deserializeStoredValue(rawStoredValue, serializer)
+          }
+          catch (error) {
+            if (readGeneration !== storageChangeGeneration && !isExtensionContextInvalidatedError(error))
+              continue
+            throw error
+          }
           if (!isOwnerActive())
             return
+          if (readGeneration !== storageChangeGeneration)
+            continue
           if (!dirtyBeforeReady) {
             assignStorageValue(cloneValue(mergeStoredValue(
               storedValue,
@@ -530,19 +574,21 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
               mergeDefaults,
             )))
           }
+          break
         }
       }
     }
     catch (error) {
       if (!isOwnerActive())
         return
-      onError(error)
+      reportError(error)
       initialReadSucceeded = false
       degraded = true
     }
 
     if (!isOwnerActive())
       return
+    initializationChange = undefined
     ready = true
     initializationState.value = initialReadSucceeded ? 'loaded' : 'degraded'
     startSync()
@@ -563,7 +609,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
         catch (error) {
           if (!isOwnerActive())
             return
-          onError(error)
+          reportError(error)
         }
       }
       scheduleRecoveryRead()
@@ -580,7 +626,7 @@ export function useStorageLocal<T>(key: string, initialValue: MaybeRef<T>, optio
     catch (error) {
       if (!isOwnerActive())
         return
-      onError(error)
+      reportError(error)
     }
 
     if (isOwnerActive())

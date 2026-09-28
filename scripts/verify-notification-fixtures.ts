@@ -209,7 +209,7 @@ verify('Native Feed retry, account pending, and scroll anchor wiring are explici
   assert.match(itemSource, /data-notification-id/)
 })
 
-verify('all Native Feed items share the smooth glass card surface and top-align identities', async () => {
+verify('all Native Feed items share an opaque reading surface without per-row glass and top-align identities', async () => {
   const [mainStyles, interactionItemSource, systemItemSource] = await Promise.all([
     readFile(new URL('../src/styles/main.scss', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationItem.vue', import.meta.url), 'utf8'),
@@ -219,9 +219,11 @@ verify('all Native Feed items share the smooth glass card surface and top-align 
   for (const source of [interactionItemSource, systemItemSource]) {
     assert.match(source, /native-notification-surface bew-shape-smooth-rect/)
   }
-  assert.match(mainStyles, /\.native-notification-surface \{[\s\S]{0,420}background: var\(--bew-elevated-alt\)/)
+  assert.match(mainStyles, /\.native-notification-surface \{[\s\S]{0,420}background: var\(--bew-content-solid\)/)
   assert.match(mainStyles, /border-radius: var\(--bew-card-radius\)/)
-  assert.match(mainStyles, /backdrop-filter: var\(--bew-filter-glass-1\)/)
+  const surface = mainStyles.slice(mainStyles.indexOf('.native-notification-surface {'), mainStyles.indexOf('// Interaction content'))
+  assert.doesNotMatch(surface, /backdrop-filter/)
+  assert.match(surface, /box-shadow: none/)
   assert.match(interactionItemSource, /\.native-notification-item__avatars \{[\s\S]{0,120}align-self: start;[\s\S]{0,80}align-items: flex-start;/)
   assert.match(systemItemSource, /\.native-system-notification__icon \{[\s\S]{0,100}align-self: start;/)
 })

@@ -5,7 +5,7 @@ import type { Video } from '~/components/VideoCard/types'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useHomeTabState } from '~/composables/useHomeTabState'
-import { HOME_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
+import { HOME_TASK_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
 import { settings } from '~/logic'
 import type { List as RankingVideoItem, RankingResult } from '~/models/video/ranking'
@@ -166,7 +166,7 @@ function transformRankingVideo(item: RankingVideoItem, rank: number): Video {
 }
 
 watch(() => activatedRankingType.value.id, () => {
-  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
+  handleBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_TASK_SEARCH_STAGE_HEIGHT : 0)
 
   void initData()
 })

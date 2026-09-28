@@ -315,7 +315,32 @@ else if (shouldInitializePageScript) {
     }
   `
 
+  const WIDESCREEN_COMMENT_USER_CSS = `
+    :host-context(#bewly-widescreen-root) #user-name a {
+      color: var(--bew-text-1) !important;
+    }
+    :host-context(#bewly-widescreen-root) #user-name a[style*="#fb7299" i] {
+      color: var(--bew-vip-foreground) !important;
+    }
+    :host-context(#bewly-widescreen-root) #user-name a:hover {
+      color: var(--bew-theme-foreground) !important;
+    }
+  `
+
   const COMMENT_SHADOW_STYLE_PATCHES: Record<string, { id: string, css: string }> = {
+    'bili-comment-action-buttons-renderer': {
+      id: 'bewly-widescreen-comment-action-style',
+      css: `
+        :host-context(#bewly-widescreen-root) {
+          --text3: var(--bew-text-1);
+        }
+        :host-context(#bewly-widescreen-root) #pubdate {
+          color: var(--bew-text-1) !important;
+          font-size: var(--bew-font-size-caption) !important;
+          line-height: var(--bew-line-height-caption) !important;
+        }
+      `,
+    },
     'bili-comments-header-renderer': {
       id: 'bewly-widescreen-comment-header-style',
       css: `
@@ -355,6 +380,9 @@ else if (shouldInitializePageScript) {
         :host-context(#bewly-widescreen-root) #contents {
           font-size: var(--bew-font-size-body) !important;
           line-height: var(--bew-line-height-body) !important;
+        }
+        :host-context(#bewly-widescreen-root) #contents a {
+          color: var(--bew-theme-foreground) !important;
         }
       `,
     },
@@ -2983,20 +3011,12 @@ else if (shouldInitializePageScript) {
       if (name === 'bili-comment-replies-renderer')
         commentReplyPagination.patchPrototype(classConstructor)
 
-      if (name === 'bili-comment-action-buttons-renderer') {
-        try {
-          patchCommentComponentUpdate(name, classConstructor, recordCommentReplyInteraction)
-        }
-        catch (error) {
-          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
-        }
-        return
-      }
-
       const shadowStylePatch = COMMENT_SHADOW_STYLE_PATCHES[name]
       if (shadowStylePatch) {
         try {
           patchCommentComponentUpdate(name, classConstructor, (component) => {
+            if (name === 'bili-comment-action-buttons-renderer')
+              recordCommentReplyInteraction(component)
             const root = component.shadowRoot
             if (!root)
               return
@@ -3099,6 +3119,8 @@ else if (shouldInitializePageScript) {
             const userNameEl = root.querySelector('#user-name')
             if (!userNameEl)
               return
+
+            ensureCommentShadowStyle(root, 'bewly-widescreen-comment-user-style', WIDESCREEN_COMMENT_USER_CSS)
 
             cacheRootReplyAuthor(component.data)
 

@@ -13,17 +13,22 @@ export const LAYOUT_BREAKPOINTS = {
 } as const
 
 /** Keep aligned with the home search stage tokens in variables.scss. */
-export const HOME_SEARCH_STAGE_LEAD_HEIGHT = 156
-export const HOME_SEARCH_STAGE_TAIL_HEIGHT = 116
+const HOME_SEARCH_STAGE_LEAD_HEIGHT = 128
+const HOME_SEARCH_STAGE_TAIL_HEIGHT = 64
 export const TOP_BAR_PRIMARY_CONTROL_HEIGHT = 46
-export const HOME_SEARCH_STAGE_HEIGHT = HOME_SEARCH_STAGE_LEAD_HEIGHT
-  + TOP_BAR_PRIMARY_CONTROL_HEIGHT
-  + HOME_SEARCH_STAGE_TAIL_HEIGHT
+export const HOME_TASK_SEARCH_STAGE_HEIGHT = 16 + TOP_BAR_PRIMARY_CONTROL_HEIGHT + 24
 /** Keep aligned with --bew-top-bar-height. */
 export const TOP_BAR_HEIGHT = 64
-/** The centered home SearchBar reaches the TopBar midpoint at this scroll position. */
-export const HOME_SEARCH_STICKY_SCROLL_TOP = HOME_SEARCH_STAGE_LEAD_HEIGHT
-  - (TOP_BAR_HEIGHT - TOP_BAR_PRIMARY_CONTROL_HEIGHT) / 2
+export function resolveHomeSearchStage(discovery: boolean, shortViewport: boolean) {
+  const lead = discovery ? shortViewport ? 96 : HOME_SEARCH_STAGE_LEAD_HEIGHT : 16
+  const tail = discovery ? shortViewport ? 32 : HOME_SEARCH_STAGE_TAIL_HEIGHT : 24
+  return {
+    lead,
+    tail,
+    height: lead + TOP_BAR_PRIMARY_CONTROL_HEIGHT + tail,
+    stickyScrollTop: Math.max(0, lead - (TOP_BAR_HEIGHT - TOP_BAR_PRIMARY_CONTROL_HEIGHT) / 2),
+  }
+}
 
 /** Keep aligned with --bew-dock-control-size, --bew-dock-control-size-lg and --bew-space-4. */
 export const DOCK_LAYOUT = {

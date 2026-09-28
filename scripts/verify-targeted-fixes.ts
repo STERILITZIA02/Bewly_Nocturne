@@ -328,7 +328,7 @@ function verifyIncrementalCorrectnessPolicies() {
     highlights: [],
   })
   assert.equal(selectVisibleVideoCardTags(normalizedTags.slice(0, 1), ['高赞', '长视频'], true, true).highlights.length, 1)
-  assert.equal(selectVisibleVideoCardTags([], ['高赞', '长视频', '百万播放'], true, true).highlights.length, 2)
+  assert.deepEqual(selectVisibleVideoCardTags([], ['高赞', '长视频', '百万播放'], true, true).highlights, ['高赞'])
 
   assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 1 } } }, '42'), 'followed')
   assert.equal(resolveMomentHostFollowState({ code: 0, data: { 42: { attribute: 2 } } }, '42'), 'followed')
@@ -383,6 +383,8 @@ function verifyWidescreenEngagementPolicy() {
   assert.equal(canCommitWidescreenLayout({ pageReady: true, playerReady: true, contentReady: false }), false)
   assert.equal(canCommitWidescreenLayout({ pageReady: true, playerReady: true, contentReady: true }), true)
   assert.deepEqual(resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: false,
+    textEditingActive: false,
     bottomControlsHovered: false,
     danmakuControlsReady: false,
     nativeControlsHidden: false,
@@ -391,6 +393,8 @@ function verifyWidescreenEngagementPolicy() {
     sidebarExpanded: false,
   }), { hidden: true, ready: false })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: false,
+    textEditingActive: false,
     bottomControlsHovered: false,
     danmakuControlsReady: true,
     nativeControlsHidden: false,
@@ -399,6 +403,8 @@ function verifyWidescreenEngagementPolicy() {
     sidebarExpanded: false,
   }), { hidden: false, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: false,
+    textEditingActive: false,
     bottomControlsHovered: false,
     danmakuControlsReady: true,
     nativeControlsHidden: true,
@@ -407,6 +413,8 @@ function verifyWidescreenEngagementPolicy() {
     sidebarExpanded: false,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: false,
+    textEditingActive: false,
     bottomControlsHovered: false,
     danmakuControlsReady: true,
     nativeControlsHidden: true,
@@ -415,6 +423,8 @@ function verifyWidescreenEngagementPolicy() {
     sidebarExpanded: false,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: false,
+    textEditingActive: false,
     bottomControlsHovered: false,
     danmakuControlsReady: true,
     nativeControlsHidden: false,
@@ -423,6 +433,8 @@ function verifyWidescreenEngagementPolicy() {
     sidebarExpanded: true,
   }), { hidden: true, ready: true })
   assert.deepEqual(resolveWidescreenControlSurfaceState({
+    bottomControlsFocused: false,
+    textEditingActive: false,
     bottomControlsHovered: true,
     danmakuControlsReady: true,
     nativeControlsHidden: true,
@@ -523,33 +535,33 @@ function verifyWidescreenSidebarRevealPolicy() {
 
   assert.equal(resolveWidescreenSidebarResizeWidth({
     position: 'right',
-    pointerX: 1400,
-    viewportStart: 0,
-    viewportEnd: 1920,
+    startWidth: 520,
+    deltaX: 0,
+    viewportWidth: 1920,
   }), 520)
   assert.equal(resolveWidescreenSidebarResizeWidth({
     position: 'right',
-    pointerX: 1000,
-    viewportStart: 0,
-    viewportEnd: 1920,
+    startWidth: 520,
+    deltaX: -400,
+    viewportWidth: 1920,
   }), 920)
   assert.equal(resolveWidescreenSidebarResizeWidth({
     position: 'right',
-    pointerX: 0,
-    viewportStart: 0,
-    viewportEnd: 1920,
+    startWidth: 520,
+    deltaX: -1400,
+    viewportWidth: 1920,
   }), 1632)
   assert.equal(resolveWidescreenSidebarResizeWidth({
     position: 'right',
-    pointerX: 1800,
-    viewportStart: 0,
-    viewportEnd: 1920,
+    startWidth: 520,
+    deltaX: 520,
+    viewportWidth: 1920,
   }), 360)
   assert.equal(resolveWidescreenSidebarResizeWidth({
     position: 'left',
-    pointerX: 520,
-    viewportStart: 0,
-    viewportEnd: 1920,
+    startWidth: 400,
+    deltaX: 120,
+    viewportWidth: 1920,
   }), 520)
   assert.equal(clampWidescreenSidebarWidth(800, 1000), 800)
   assert.equal(clampWidescreenSidebarWidth(1000, 1000), 850)
@@ -1731,7 +1743,7 @@ async function verifyComponentContracts() {
 
   assert.match(dock, /ref="dockIndicatorRef"/)
   assert.match(dock, /updateIndicator\(false\)/)
-  assert.match(dock, /:aria-label="\$t\(dockItem\.i18nKey\)"/)
+  assert.match(dock, /:aria-label="dockBadges\[dockItem\.page\]\?\.label \|\| \$t\(dockItem\.i18nKey\)"/)
   assert.match(dock, /dock-theme-toggle/)
   assert.match(dock, /dock-collapse-toggle/)
   assert.match(dock, /dock-refresh-back-to-top-action/)
@@ -2063,7 +2075,7 @@ async function verifyLoadingContracts() {
   assert.match(watchLater, /<VideoListSkeleton[\s\S]{0,180}:action-count="3"/)
   assert.match(favorites, /<ArticleCardSkeleton/)
   assert.match(anime, /<BangumiCardSkeleton/)
-  assert.match(animeTimetable, /<AnimeTimeTableSkeleton v-if="isLoading"/)
+  assert.match(animeTimetable, /<AnimeTimeTableSkeleton v-if="isLoading && !animeTimeTable\.length"/)
   assert.match(articleSearch, /<ArticleCardSkeleton/)
   assert.match(userSearch, /<UserCardSkeleton/)
   assert.match(mediaSearch, /<MediaHighlightSkeleton/)
@@ -2226,7 +2238,7 @@ async function verifyP2AccessibilityAndLocales() {
   for (const key of ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape'])
     assert.match(contextMenu, new RegExp(`case '${key}'`))
 
-  assert.match(history, /:aria-label="\$t\('common\.operation\.delete'\)"/)
+  assert.match(history, /<IconButton[\s\S]{0,160}:label="\$t\('common\.operation\.delete'\)"/)
   assert.doesNotMatch(history, /common\.remove/)
 
   const localeKeySets = [en, cn, tw, yue].map(collectLocaleKeys)
@@ -2455,7 +2467,7 @@ async function verifyP2WidescreenControl() {
   assert.match(sidebarSurfaceStyles, /backface-visibility: hidden/)
   assert.doesNotMatch(widescreen, /\.bewly-widescreen-sidebar::before/)
   assert.match(widescreen, /--bewly-widescreen-sidebar-bg: transparent/)
-  assert.match(widescreen, /--bewly-widescreen-surface-bg: transparent/)
+  assert.match(widescreen, /--bewly-widescreen-surface-bg: var\(--bew-content-solid\)/)
   assert.match(sidebarSurfaceStyles, /--bewly-widescreen-sidebar-offset: var\(--bewly-widescreen-sidebar-reserved-width\)/)
   assert.doesNotMatch(sidebarSurfaceStyles, /-12px 0 28px|12px 0 28px/)
   assert.match(widescreen, /data-centered="true"\] \.bewly-widescreen-player-frame > \*[\s\S]{0,220}100vw - var\(--bewly-widescreen-sidebar-reserved-width\)/)
@@ -2711,9 +2723,13 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /--bewly-widescreen-sidebar-resize-accent: var\(--bew-text-1, #fff\)/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-sidebar-resize-accent: var\(--Wh0/)
   assert.match(widescreen, /html:not\(\.dark\) #\$\{ROOT_ID\}[\s\S]{0,100}--bewly-widescreen-sidebar-resize-accent: var\(--bew-theme-color/)
-  assert.match(widescreen, /data-sidebar-resizing="true"\] \.bewly-widescreen-sidebar[\s\S]{0,100}border-color: var\(--bewly-widescreen-sidebar-resize-accent\)/)
-  assert.match(widescreen, /data-sidebar-resizing="true"\] \.bewly-widescreen-sidebar[\s\S]{0,180}border-width: var\(--bew-space-0-5, 2px\)/)
-  assert.match(widescreen, /data-sidebar-resizing="true"\] \.bewly-widescreen-sidebar[\s\S]{0,320}color-mix\(in oklab, var\(--bewly-widescreen-sidebar-resize-accent\) 42%, transparent\)/)
+  const resizeFeedback = widescreen.slice(
+    widescreen.indexOf('[data-sidebar-resizing="true"] .bewly-widescreen-sidebar {'),
+    widescreen.indexOf('[data-sidebar-resizing="true"] .bewly-widescreen-sidebar-resizer::before'),
+  )
+  assert.match(resizeFeedback, /0 0 0 var\(--bew-space-0-5, 2px\) var\(--bewly-widescreen-sidebar-resize-accent\)/)
+  assert.doesNotMatch(resizeFeedback, /border-(?:color|width):|\binset\b/)
+  assert.match(resizeFeedback, /color-mix\(in oklab, var\(--bewly-widescreen-sidebar-resize-accent\) 42%, transparent\)/)
   const sidebarInteractionSection = playbackFunctions(widescreen, 'setupSidebarInteractionTracking')
   assert.match(sidebarInteractionSection, /root\.dataset\.sidebarHoverExpanded !== nextValue/)
   assert.match(sidebarInteractionSection, /window\.addEventListener\('pointermove', handlePointerMove/)
@@ -3508,7 +3524,7 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(app, /handleThrottledLoadMoreGeometryCheck\(\)/)
   assert.match(app, /const requestStarted = await handler\(\)[\s\S]{0,100}requestStarted === true[\s\S]{0,80}scheduleLoadMoreSentinelCheck\(\)/)
   assert.match(app, /useHomePageRoute\(getDefaultAppPage,/)
-  assert.match(app, /activatedPage\.value !== AppPage\.SearchResults[\s\S]{0,140}clearSearchParamsFromUrl\(\)/)
+  assert.match(app, /activatedPage\.value !== AppPage\.SearchResults[\s\S]{0,140}topBarStore\.searchKeyword = ''/)
   assert.match(app, /isSentinelWithinLoadThreshold/)
   assert.match(watchLater, /handleReachBottom\.value === handleWatchLaterReachBottom/)
   assert.match(watchLater, /async function handleWatchLaterReachBottom\(\): Promise<boolean>[\s\S]{0,420}return getData\(\)/)

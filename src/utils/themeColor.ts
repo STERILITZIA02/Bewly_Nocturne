@@ -72,15 +72,17 @@ function ensureContrast(color: string, background: string, targetColor: string, 
   return toHex(mix(source, target, high))
 }
 
+export function getContrastingForeground(background: string): string {
+  return relativeContrast('#000000', background) >= relativeContrast('#ffffff', background) ? '#000000' : '#ffffff'
+}
+
 export function getThemeColorTokens(themeColor: string, isDark: boolean) {
   const surface = isDark ? '#181a1e' : '#ffffff'
   const direction = isDark ? '#ffffff' : '#000000'
-  const blackContrast = relativeContrast('#000000', themeColor)
-  const whiteContrast = relativeContrast('#ffffff', themeColor)
-
   return {
     theme: themeColor,
-    onTheme: blackContrast >= whiteContrast ? '#000000' : '#ffffff',
+    onTheme: getContrastingForeground(themeColor),
+    switchThumb: relativeContrast('#ffffff', themeColor) >= 3 ? '#ffffff' : '#000000',
     foreground: ensureContrast(themeColor, surface, direction, 4.5),
     focusRing: ensureContrast(themeColor, surface, direction, 3),
   }

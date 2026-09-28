@@ -7,7 +7,7 @@ import { settings } from '~/logic'
 import type { SearchCategory } from '../types'
 import { dedupeByKey } from '../utils/searchHelpers'
 import { useLoadMore } from './useLoadMore'
-import { usePagination } from './usePagination'
+import { refreshSearchPage, usePagination } from './usePagination'
 import { useSearchRequest } from './useSearchRequest'
 
 interface SearchListRequestContext {
@@ -46,7 +46,7 @@ export function useSearchListPage<T>(options: SearchListPageOptions<T>) {
     if (!keyword)
       return Promise.resolve(false)
     const previousLength = results.value?.length ?? 0
-    return request.search(options.buildRequest({ keyword, page, loadMore: append, context: pagination.context.value }), (response) => {
+    return request.search(options.buildRequest({ keyword, page, loadMore: append, context: append ? pagination.context.value : '' }), (response) => {
       const rawData = response.data
       if (!rawData)
         return false
@@ -90,9 +90,7 @@ export function useSearchListPage<T>(options: SearchListPageOptions<T>) {
   }
 
   function refreshCurrentPage() {
-    return paginationMode.value === 'pagination'
-      ? handlePageChange(currentPage.value, false, false)
-      : performSearch(false)
+    return refreshSearchPage(paginationMode.value, currentPage.value, (page, updateUrl) => runSearch(page, false, updateUrl), loadMore.reset)
   }
 
   function restorePage(page: number): Promise<boolean> {

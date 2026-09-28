@@ -9,6 +9,7 @@ import { compileScript, parse } from 'vue/compiler-sfc'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
+import { registerDesignImplementationChecks } from './verify-design-implementation.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
 import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
 import { registerFourFeatureChecks } from './verify-four-features.mjs'
@@ -22,6 +23,7 @@ import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
+import { registerSixAuditFixChecks } from './verify-six-audit-fixes.mjs'
 import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
 import { registerUIAuditFixChecks } from './verify-ui-audit-fixes.mjs'
@@ -35,6 +37,7 @@ import { registerPlayerLifecycleChecks } from './verify-upstream-player-lifecycl
 import { registerUpstreamSettingsChecks } from './verify-upstream-settings.mjs'
 import { registerUpstreamTransactionChecks } from './verify-upstream-transactions.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
+import { registerVisualConsistencyChecks } from './verify-visual-consistency.mjs'
 import { registerWatchLaterOwnershipChecks } from './verify-watch-later-ownership.mjs'
 import { registerWhisperInteractionChecks } from './verify-whisper-interactions.mjs'
 
@@ -78,12 +81,15 @@ const checks = []
 const check = (name, run) => checks.push({ name, run })
 registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
 registerSeptemberAdaptationChecks(check, { Vue, compileComponent, flush })
+registerSixAuditFixChecks(check, { Vue, compileComponent, flush })
 registerFourFeatureChecks(check, { Vue, compileComponent, flush })
 registerRuntimeErrorChecks(check, { Vue, compileComponent, flush })
 registerUIAuditFixChecks(check, { Vue, compileComponent, flush })
 registerAccountTransactionChecks(check, { Vue, compileComponent, flush })
 registerLongListResourceChecks(check, { Vue, compileComponent, flush })
 registerViewLifetimeChecks(check, { Vue, compileComponent, flush })
+registerVisualConsistencyChecks(check, { Vue, compileComponent, flush })
+registerDesignImplementationChecks(check, { Vue, compileComponent, flush })
 registerDockGlassChecks(check, { Vue, compileComponent, flush })
 registerTopBarSyncChecks(check, { Vue, flush })
 registerSurfaceMaterialChecks(check, { Vue, compileComponent, flush })
@@ -415,6 +421,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/components/formFieldLabel': fieldLabels,
     '~/utils/imageLoadQueue': imageLoadQueue,
     '~/utils/bilibiliUrl': await import('../src/utils/bilibiliUrl'),
+    '../components/mediaResults.scss': {},
+    './mediaResults.scss': {},
+    './searchFilters.scss': {},
     // Non-material checks keep their existing leaf boundary. Material checks
     // replace these dependencies with the real production modules.
     '~/utils/liquidGlass': { vLiquidGlass: {} },
@@ -691,7 +700,7 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
     seriesList: r([]),
     activatedSeries: r(null),
     settings: { value: {} },
-    HOME_SEARCH_STAGE_HEIGHT: 336,
+    HOME_TASK_SEARCH_STAGE_HEIGHT: 86,
     emit: noop,
     handleBackToTop: noop,
     reportRuntimeFailure: noop,
@@ -735,6 +744,7 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
   assert.equal(ranking.requestFailed.value, true)
   assert.equal(ranking.isLoading.value, false)
   const anime = await loadSourceFunctions('../src/contentScripts/views/Anime/Anime.vue', ['getPopularAnimeList'], {
+    animeMounted: true,
     requestGeneration: 1,
     isLoadingPopularAnime: r(false),
     popularRequestFailed: r(false),

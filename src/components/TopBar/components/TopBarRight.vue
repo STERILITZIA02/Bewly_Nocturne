@@ -3,6 +3,7 @@ import { useWindowFocus } from '@vueuse/core'
 import { storeToRefs } from 'pinia'
 
 import ALink from '~/components/ALink.vue'
+import CountBadge from '~/components/CountBadge.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
 import { settings } from '~/logic'
 import { getTopBarItemLayoutEditableId, vLayoutEditable } from '~/logic/layoutEdit'
@@ -230,12 +231,11 @@ const shouldShowDivider = computed(() => {
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'moments')"
           >
             <template v-if="newMomentsCount > 0 && shouldShowBadge('moments')">
-              <div
+              <CountBadge
                 v-if="shouldShowNumberBadge('moments')"
                 class="unread-num-dot"
-              >
-                {{ newMomentsCount > 99 ? '99+' : newMomentsCount }}
-              </div>
+                :count="newMomentsCount"
+              />
               <div
                 v-else-if="shouldShowDotBadge('moments')"
                 class="unread-dot"
@@ -341,12 +341,11 @@ const shouldShowDivider = computed(() => {
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
           >
             <template v-if="watchLaterCount > 0 && shouldShowBadge('watchLater')">
-              <div
+              <CountBadge
                 v-if="shouldShowNumberBadge('watchLater')"
                 class="unread-num-dot"
-              >
-                {{ watchLaterCount > 99 ? '99+' : watchLaterCount }}
-              </div>
+                :count="watchLaterCount"
+              />
               <div
                 v-else-if="shouldShowDotBadge('watchLater')"
                 class="unread-dot"
@@ -479,12 +478,11 @@ const shouldShowDivider = computed(() => {
             @click="(event: MouseEvent) => handleClickTopBarItem(event, 'notifications')"
           >
             <template v-if="unReadMessageCount > 0 && shouldShowBadge('notifications')">
-              <div
+              <CountBadge
                 v-if="shouldShowNumberBadge('notifications')"
                 class="unread-num-dot"
-              >
-                {{ unReadMessageCount > 99 ? '99+' : unReadMessageCount }}
-              </div>
+                :count="unReadMessageCount"
+              />
               <div
                 v-else-if="shouldShowDotBadge('notifications')"
                 class="unread-dot"

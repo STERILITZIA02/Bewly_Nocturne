@@ -17,9 +17,17 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     }
   }
 
-  [class*="SectionSelector_sectionItem"][class*="SectionSelector_active"] {
+  [class*="SectionSelector_sectionItem"][class*="SectionSelector_active"],
+  [class*="SectionTabs_tab"][class*="SectionTabs_active"] {
     color: var(--bew-on-theme-surface) !important;
     background: var(--bew-theme-surface) !important;
+  }
+
+  [class*="SectionTabs_tab"] {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+    font-size: var(--bew-font-size-control);
+    font-weight: var(--bew-font-weight-semibold);
   }
 }
 

@@ -34,6 +34,7 @@ import {
   formatCount,
   getAvatarThumbnailUrl,
   getCardPreviewText,
+  getMomentThumbnailSrcset,
   getMomentThumbnailUrl,
   getWatchLaterStateKey,
   isCompactPlainTextMoment,
@@ -958,7 +959,9 @@ onBeforeUnmount(() => {
                 @click.stop="handleImagePreview(moment.forward.images || [], imageIndex, $event)"
               >
                 <img
-                  :src="getMomentThumbnailUrl(image, 360)"
+                  :src="getMomentThumbnailUrl(image)"
+                  :srcset="getMomentThumbnailSrcset(image)"
+                  sizes="auto"
                   :alt="t('moment_card.moment_image_alt', { author: moment.forward.author, index: imageIndex + 1 })"
                   loading="lazy"
                   decoding="async"
@@ -983,7 +986,9 @@ onBeforeUnmount(() => {
             @click.stop="handleImagePreview(moment.images, imageIndex, $event)"
           >
             <img
-              :src="getMomentThumbnailUrl(image, 360)"
+              :src="getMomentThumbnailUrl(image)"
+              :srcset="getMomentThumbnailSrcset(image)"
+              sizes="auto"
               :alt="t('moment_card.moment_image_alt', { author: moment.author.name, index: imageIndex + 1 })"
               loading="lazy"
               decoding="async"

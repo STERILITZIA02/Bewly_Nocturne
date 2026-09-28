@@ -614,6 +614,8 @@ onBeforeUnmount(() => {
 }
 
 .notifications-page--document .notifications-page__workspace {
+  width: min(100%, var(--bew-notifications-feed-max-width));
+  margin-inline: auto;
   grid-template-rows: auto auto;
 }
 
@@ -639,7 +641,7 @@ onBeforeUnmount(() => {
 
 @media (min-width: breakpoints.$grid-md) and (max-width: breakpoints.$compact-max) {
   .notifications-page {
-    --notifications-conversation-list-max-width: calc(var(--bew-space-12) * 8);
+    --notifications-conversation-list-max-width: calc(var(--bew-space-10) * 8);
   }
 }
 

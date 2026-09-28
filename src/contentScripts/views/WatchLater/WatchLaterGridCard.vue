@@ -2,6 +2,7 @@
 import { Icon } from '@iconify/vue'
 
 import ALink from '~/components/ALink.vue'
+import Button from '~/components/Button.vue'
 import IconButton from '~/components/IconButton.vue'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { calcCurrentTime } from '~/utils/dataFormatter'
@@ -59,17 +60,17 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
       </ALink>
 
       <div class="watch-later-grid-card__actions">
-        <Tooltip :content="$t('watch_later.play_video')" placement="top">
-          <IconButton
-            class="watch-later-grid-card__action"
-            :label="$t('watch_later.play_video')"
-            :disabled="disabled || !videoUrl"
-            @click="emit('playAndRemove', item)"
-          >
-            <Icon icon="tabler:player-play" aria-hidden="true" />
-          </IconButton>
-        </Tooltip>
-        <Tooltip :content="$t('watch_later.play_in_watch_later')" placement="top">
+        <Button
+          size="small"
+          class="watch-later-grid-card__action watch-later-grid-card__play-remove"
+          :aria-label="$t('watch_later.play_video')"
+          :disabled="disabled || !videoUrl"
+          @click="emit('playAndRemove', item)"
+        >
+          <Icon icon="tabler:player-play" aria-hidden="true" />
+          {{ $t('watch_later.play_and_remove') }}
+        </Button>
+        <Tooltip :content="$t('watch_later.play_in_watch_later')" placement="top" teleport>
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.play_in_watch_later')"
@@ -79,7 +80,7 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
             <Icon icon="tabler:list-check" aria-hidden="true" />
           </IconButton>
         </Tooltip>
-        <Tooltip :content="$t('watch_later.remove_from_watch_later')" placement="top">
+        <Tooltip :content="$t('watch_later.remove_from_watch_later')" placement="top" teleport>
           <IconButton
             class="watch-later-grid-card__action"
             :label="$t('watch_later.remove_from_watch_later')"
@@ -207,19 +208,26 @@ const progressPercentage = computed(() => normalizePlaybackProgress(props.item.p
 .watch-later-grid-card__action {
   width: var(--bew-space-8);
   height: var(--bew-space-8);
-  color: white;
-  background: rgb(0 0 0 / 54%);
-  backdrop-filter: var(--bew-filter-glass-1);
+  color: var(--bew-on-overlay-color);
+  background: var(--bew-overlay-background);
 
   &:hover,
   &:focus-visible {
-    background: rgb(0 0 0 / 72%);
+    background: var(--bew-overlay-background-hover);
   }
 
   svg {
     width: var(--bew-icon-size-md);
     height: var(--bew-icon-size-md);
   }
+}
+
+.watch-later-grid-card__play-remove {
+  width: auto;
+  --b-button-color: var(--bew-overlay-background);
+  --b-button-color-hover: var(--bew-overlay-background-hover);
+  --b-button-text-color: var(--bew-on-overlay-color);
+  --b-button-border-width: 0;
 }
 
 .watch-later-grid-card__progress {

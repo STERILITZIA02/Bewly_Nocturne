@@ -11,7 +11,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
 
   check('notification cards: actual reply/at/love cards separate interaction and source, preserve links/fallbacks and share skeleton columns', async () => {
     const root = '../src/contentScripts/views/Notifications/components/'
-    const Card = await compileComponent(`${root}NativeNotificationItem.vue`, { 'vue-i18n': i18n })
+    const Card = await compileComponent(`${root}NativeNotificationItem.vue`, { 'vue-i18n': i18n, '~/utils/locale': await import('../src/utils/locale') })
     const Skeleton = await compileComponent(`${root}NativeNotificationFeedSkeleton.vue`)
     const styles = []
     for (const file of [`${root}NativeNotificationItem.vue`, `${root}NativeNotificationFeedSkeleton.vue`, '../src/styles/main.scss']) {

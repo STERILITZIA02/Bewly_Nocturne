@@ -160,7 +160,7 @@ async function handleFollowClick(e: Event) {
       gap-3
       p-3
       bg="$bew-elevated"
-      rounded="$bew-radius"
+      rounded="$bew-card-radius"
       cursor="pointer"
     >
       <ALink
@@ -199,7 +199,7 @@ async function handleFollowClick(e: Event) {
           <!-- 用户名 + 等级 + 性别 -->
           <div flex items-center gap-2>
             <div
-              class="username" text="base $bew-text-1" font-medium truncate
+              class="username" text="base $bew-text-1" font-semibold truncate
             >
               {{ name }}
             </div>
@@ -278,7 +278,7 @@ async function handleFollowClick(e: Event) {
       gap-3
       p-3
       bg="$bew-elevated hover:$bew-elevated-hover"
-      rounded="$bew-radius"
+      rounded="$bew-card-radius"
       cursor="pointer"
     >
       <a
@@ -306,7 +306,7 @@ async function handleFollowClick(e: Event) {
       <div class="user-info" flex-1 min-w-0>
         <!-- 用户名和认证 -->
         <div flex items-center gap-2 mb-1>
-          <div class="username" text="base $bew-text-1" font-medium truncate>
+          <div class="username" text="base $bew-text-1" font-semibold truncate>
             {{ name }}
           </div>
           <div

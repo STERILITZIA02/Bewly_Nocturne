@@ -712,7 +712,7 @@ function isItemActionPending(): boolean {
         pos="sticky top-120px"
         w-full h="230px md:[calc(100vh-160px)]"
         my-10
-        rounded="$bew-radius"
+        rounded="$bew-panel-radius"
         overflow-hidden
       >
         <!-- Content -->
@@ -725,12 +725,12 @@ function isItemActionPending(): boolean {
         >
           <picture
             class="hidden md:block"
-            rounded="$bew-radius" style="box-shadow: var(--bew-sidebar-media-shadow)"
+            rounded="$bew-media-radius" overflow-hidden style="box-shadow: var(--bew-sidebar-media-shadow)"
             aspect-video mb-4 bg="$bew-skeleton"
           >
             <img
               v-if="currentWatchLaterList[0]" :src="removeHttpFromUrl(`${currentWatchLaterList[0].pic}@480w_270h_1c`)"
-              rounded="$bew-radius" aspect-video w-full
+              rounded-inherit aspect-video w-full
             >
           </picture>
 

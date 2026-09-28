@@ -16,13 +16,17 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       handleBackToTop: value => viewport.scrollTop = value,
       homeActivatedPage: Vue.ref(HomeSubPage.ForYou),
       homeActivatedPageTouched: Vue.ref(false),
+      navigateToHomeTab(page) {
+        provider.homeActivatedPageTouched.value = true
+        provider.homeActivatedPage.value = page
+      },
       isHomeTabSwitching: Vue.ref(false),
       scrollViewportRef: Vue.ref(viewport),
     }
     const blank = { render: () => null }
     const Home = await compileComponent('../src/contentScripts/views/Home/Home.vue', {
       '@iconify/vue': { Icon: blank },
-      '@vueuse/core': { useThrottleFn: fn => fn },
+      '@vueuse/core': { useThrottleFn: fn => fn, useMediaQuery: () => Vue.ref(false) },
       '~/components/LiquidSegmentIndicator.vue': { default: blank },
       '~/components/PageAsyncLoading.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
@@ -65,15 +69,16 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       await flush()
       state.restoreTabScrollPosition()
       assert.equal(viewport.scrollTop, 0, 'account updates after switching tabs must also retain the visible search hero')
-      viewport.scrollTop = layout.HOME_SEARCH_STAGE_HEIGHT + 500
+      const discoveryHeight = layout.resolveHomeSearchStage(true, false).height
+      viewport.scrollTop = discoveryHeight + 500
       state.handleChangeTab(tabs[0])
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, layout.HOME_SEARCH_STAGE_HEIGHT, 'an uncached tab entered from the list starts at the video section')
+      assert.equal(viewport.scrollTop, discoveryHeight, 'an uncached tab entered from the list starts at the video section')
       state.handleChangeTab(tabs[1])
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, layout.HOME_SEARCH_STAGE_HEIGHT + 500, 'returning to a visited tab preserves its remembered list position')
+      assert.equal(viewport.scrollTop, discoveryHeight + 500, 'returning to a visited tab preserves its remembered list position')
     }
     finally {
       app.unmount()
@@ -82,7 +87,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
   })
 
   check('Weekly: delayed initialization and refresh preserve the hero; edition changes never scroll it out of view', async () => {
-    const { HOME_SEARCH_STAGE_HEIGHT } = await import('../src/constants/layout')
+    const { HOME_TASK_SEARCH_STAGE_HEIGHT } = await import('../src/constants/layout')
     const viewport = document.body.appendChild(document.createElement('div'))
     const settings = Vue.ref({ useSearchPageModeOnHomePage: true })
     const scrolls = []
@@ -102,7 +107,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/components/VideoCardGrid.vue': { default: { render: () => null } },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useHomeTabState': await import('../src/composables/useHomeTabState'),
-      '~/constants/layout': { HOME_SEARCH_STAGE_HEIGHT },
+      '~/constants/layout': { HOME_TASK_SEARCH_STAGE_HEIGHT },
       '~/logic': { settings },
       '~/utils/api': { default: { ranking: {
         getPopularSeriesList: () => new Promise(resolve => lists.push(resolve)),
@@ -138,10 +143,10 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       assert.equal(videos.at(-1).number, 41)
       videos.at(-1).resolve({ code: 0, data: { list: [] } })
       await flush()
-      viewport.scrollTop = HOME_SEARCH_STAGE_HEIGHT + 700
+      viewport.scrollTop = HOME_TASK_SEARCH_STAGE_HEIGHT + 700
       state.selectSeries(editions[0])
       await flush()
-      assert.equal(scrolls.at(-1), HOME_SEARCH_STAGE_HEIGHT, 'a user already in the list still returns to its beginning')
+      assert.equal(scrolls.at(-1), HOME_TASK_SEARCH_STAGE_HEIGHT, 'a user already in the list still returns to its beginning')
       videos.at(-1).resolve({ code: 0, data: { list: [] } })
       await flush()
       settings.value.useSearchPageModeOnHomePage = false

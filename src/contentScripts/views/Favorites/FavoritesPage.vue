@@ -677,7 +677,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
         class="favorites-toolbar"
       >
         <div class="toolbar-search-group">
-          <Select v-model="searchScope" class="search-scope-select" :options="searchScopeOptions" @change="handleSearchScopeChange" />
+          <Select v-model="searchScope" size="compact" class="search-scope-select" :options="searchScopeOptions" @change="handleSearchScopeChange" />
           <Input
             v-model="keyword"
             class="favorites-search-input"

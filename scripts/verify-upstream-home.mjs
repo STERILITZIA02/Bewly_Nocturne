@@ -22,6 +22,7 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
     const module = await loadSourceModule('../src/composables/useHomePageRoute.ts', {
       'vue': Vue,
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => href },
+      '~/composables/useRouteState': { syncRouteState: () => href.value = window.location.href },
       '~/enums/appEnums': enums,
       '~/logic': { settings },
       '~/utils/homeRoute': homeRoute,

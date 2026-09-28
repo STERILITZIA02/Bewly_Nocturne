@@ -13,6 +13,7 @@ const dialog = ref<InstanceType<typeof Dialog>>()
 const { task, busy, failed, command } = useOpenTabsWatchLater()
 const counts = computed(() => task.value ? countOpenTabsTask(task.value) : null)
 const running = computed(() => task.value?.status === 'running')
+const ready = computed(() => task.value?.status === 'ready')
 const retryable = computed(() => task.value?.items.some(item => item.status === 'failed'))
 </script>
 
@@ -22,29 +23,37 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
     :show-footer="false" :show-top-blur="false" @close="emit('close')"
   >
     <div class="open-tabs-dialog">
-      <p>{{ $t('watch_later.open_tabs.scope') }}</p>
       <SkeletonBlock v-if="!task && busy" width="100%" height="var(--bew-control-height)" />
       <p v-if="failed" role="alert">
         {{ $t('watch_later.open_tabs.failed_request') }}
       </p>
       <template v-if="task && counts">
-        <p role="status" aria-live="polite">
-          {{ $t(`watch_later.open_tabs.state_${task.status}`) }}
+        <p class="open-tabs-dialog__lead" role="status" aria-live="polite">
+          {{ $t(`watch_later.open_tabs.state_${task.status}`, { count: counts.total, windows: $t(`watch_later.open_tabs.windows_${task.incognito ? 'private' : 'normal'}`) }) }}
+        </p>
+        <p class="open-tabs-dialog__hint">
+          {{ $t('watch_later.open_tabs.scope') }}
+        </p>
+        <p v-if="running" class="open-tabs-dialog__hint">
+          {{ $t('watch_later.open_tabs.background_hint') }}
         </p>
         <p v-if="task.stopReason">
           {{ $t(`watch_later.open_tabs.stop_${task.stopReason}`) }}
         </p>
         <div
+          v-if="!ready && counts.total"
           class="open-tabs-dialog__track" role="progressbar" :aria-valuemin="0" :aria-valuemax="counts.total || 1" :aria-valuenow="counts.total - counts.unprocessed"
           :aria-label="$t('watch_later.open_tabs.title')"
         >
           <Progress :percentage="counts.total ? (counts.total - counts.unprocessed) / counts.total * 100 : 0" height="100%" />
         </div>
-        <p>{{ $t('watch_later.open_tabs.counts', counts) }}</p>
+        <p v-if="!ready">
+          {{ $t('watch_later.open_tabs.counts', counts) }}
+        </p>
         <ul class="open-tabs-dialog__items">
           <li v-for="item in task.items" :key="item.tabId">
             <span>{{ item.title }}</span>
-            <span class="open-tabs-dialog__result">{{ $t(`watch_later.open_tabs.${item.reason || item.status}`) }}{{ item.message ? `: ${item.message}` : '' }}</span>
+            <span v-if="!ready || item.reason" class="open-tabs-dialog__result">{{ $t(`watch_later.open_tabs.${item.reason || item.status}`) }}{{ item.message ? `: ${item.message}` : '' }}</span>
           </li>
         </ul>
       </template>
@@ -54,6 +63,9 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
         </Button>
         <Button v-if="failed" type="secondary" :disabled="busy" @click="command('get')">
           {{ $t('common.operation.refresh') }}
+        </Button>
+        <Button v-if="ready && !failed" type="tertiary" :disabled="busy" @click="command('prepare')">
+          {{ $t('watch_later.open_tabs.prepare') }}
         </Button>
         <Button v-if="running" type="primary" :disabled="busy" @click="command('stop')">
           {{ $t('watch_later.open_tabs.stop') }}
@@ -79,8 +91,21 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
   display: flex;
   flex-direction: column;
   gap: var(--bew-space-4);
+  font-size: var(--bew-font-size-body);
+  line-height: var(--bew-line-height-body);
   p {
     margin: 0;
+  }
+  &__lead {
+    color: var(--bew-text-1);
+    font-size: var(--bew-font-size-title);
+    font-weight: var(--bew-font-weight-semibold);
+    line-height: var(--bew-line-height-title);
+  }
+  &__hint {
+    color: var(--bew-text-2);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
   }
   &__track {
     height: var(--bew-space-2);
@@ -90,11 +115,13 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
   }
   &__items {
     margin: 0;
-    padding: 0;
+    padding: var(--bew-space-3);
     list-style: none;
     max-height: 35vh;
     overflow: auto;
     overscroll-behavior: contain;
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-card-radius);
   }
   li {
     display: flex;
@@ -110,6 +137,9 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
     color: var(--bew-text-2);
     flex-shrink: 0;
     max-width: 45%;
+    font-size: var(--bew-font-size-caption);
+    line-height: var(--bew-line-height-caption);
+    text-align: right;
   }
   &__actions {
     display: flex;

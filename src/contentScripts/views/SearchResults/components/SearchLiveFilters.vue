@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import './searchFilters.scss'
+
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 
@@ -30,34 +32,24 @@ function handleSubCategoryChange(value: LiveSubCategory) {
 </script>
 
 <template>
-  <div class="search-live-filters" mb-4>
+  <div class="bew-search-filters">
     <!-- 子分类切换 -->
     <div
-      flex items-center gap-2 flex-wrap role="group"
+      class="bew-search-filter-options bew-segment-control bew-segment-control--surface bew-segment-control--static bew-segment-control--secondary"
+      role="group"
       :aria-label="t('search.categories.live')"
     >
       <button
         v-for="category in subCategories"
         :key="category.value"
-        class="sub-category-tab"
-        :class="{ active: props.subCategory === category.value }"
+        class="bew-segment-control__item"
+        :data-active="props.subCategory === category.value ? 'true' : undefined"
         :aria-pressed="props.subCategory === category.value"
-        px-4 py-2 rounded="$bew-radius-half"
-        transition-colors duration-200
-        hover:bg="$bew-fill-1"
         type="button"
         @click="handleSubCategoryChange(category.value)"
       >
-        <span text-sm font-medium>{{ category.label }}</span>
+        <span>{{ category.label }}</span>
       </button>
     </div>
   </div>
 </template>
-
-<style scoped lang="scss">
-.sub-category-tab {
-  &.active {
-    --uno: "bg-$bew-theme-color text-$bew-on-theme-color";
-  }
-}
-</style>

@@ -1103,13 +1103,8 @@ notifications:
     user_fallback: '用戶 {talkerId}'
     summary_unavailable: 暫時未有訊息摘要
     select_conversation: 揀同{name}嘅會話
-    select_conversation_empty: 揀一個會話開始傾偈
-    select_conversation_hint: 訊息會喺獨立閱讀卡片入面保持清晰聚焦
-    empty_tips:
-      emote: 可以喺輸入區插入 Bilibili 表情
-      image: 可以先預覽圖片，再直接傳送
-      history: 向上捲動可以載入同閱讀更早訊息
-      shortcut: Enter 傳送，Shift+Enter 換行
+    select_conversation_empty: 揀一個會話
+    select_conversation_hint: 喺列表睇訊息，或者用會話搜尋搵聯絡人。
     fallback_aria: '{name}嘅原版私訊入口'
     fallback_description: 呢類會話暫時需要喋原版私訊查看
     session_kinds:
@@ -1152,6 +1147,7 @@ notifications:
       edit_failed: 編輯
       delete_failed: 刪除本機失敗項目
       new_messages: 有新訊息
+      return_latest: 返回最新訊息
       recalled: 訊息已經收回
       unsupported: 而家個版本暫時未支援呢種訊息
       preview_image: 預覽圖片
@@ -1225,6 +1221,9 @@ notifications:
       invalid-response: 暫時讀唔到而家嘅通知
       api-error: 載入失敗，請再試
 dock:
+  unread_messages: '訊息，{count} 則未讀'
+  new_moments: '動態，{count} 則新動態'
+  pending_videos: '陣間至睇，{count} 條未睇影片'
   search: 搵嘢
   home: 主頁
   anime: 動畫
@@ -1456,6 +1455,9 @@ video_card:
   watch_later_update_failed: 更新陣間至睇失敗
   feedback_unavailable: 攞唔到意見選項
 home:
+  series:
+    open: 開啟劇集
+    more_updates: '其他更新（{count}）'
   following_search_videos: '搜尋 {name} 嘅影片投稿'
   following_clear_video_search: 清空投稿搜尋
   following_no_search_results: 搵唔到符合嘅影片投稿
@@ -1504,6 +1506,7 @@ ranking:
   original_content: 原創內容
   debut_work: 新人作品
 anime:
+  watched_until: '睇到 {time}'
   total_episodes: 共 {ep} 集
   update_to_n_episodes: 更新到 {ep} 集
   your_watch_list: 追緊
@@ -1512,6 +1515,9 @@ anime:
   popular_anime: 時下至 Hit
   follow: '{num}人追緊'
   anime_timetable:
+    today: 今日
+    previous_day: 前一日
+    next_day: 後一日
     title: 動畫日程表
     days_of_week:
       mon: 週一
@@ -1522,6 +1528,9 @@ anime:
       sat: 週六
       sun: 週日
 history:
+  media: 劇集 / 影視
+  continue_watching: 繼續睇
+  unknown_date: 日期不明
   clear_failed: 清空歷史記錄失敗，請再試
   title: 收睇記錄
   turn_on_watch_history: 開返收睇記錄
@@ -1608,9 +1617,12 @@ watch_later:
   auto_remove_failed: 自動移出陣間至睇失敗，請稍後手動重試。
   open_tabs:
     title: 加入播放分頁
-    scope: 範圍：擴充功能可以存取、同一普通/無痕工作階段所有視窗入面開咗嘅 B 站播放分頁。唔會關閉或跳轉原分頁。確認之後按呢份快照加入；重複稿件同已喺隊列嘅項目會跳過。關閉呢個視窗唔會停止背景工作，可以喺呢度重新查看。
+    scope: 只處理下面列出嘅播放頁；重複或者已喺列表嘅影片會跳過，原分頁保持開住。
+    windows_normal: 普通視窗
+    windows_private: 無痕視窗
+    background_hint: 關閉視窗之後都會繼續，可以再開返睇進度。
     failed_request: 讀取工作失敗或帳號變咗，請重試。
-    state_ready: 請確認下面嘅候選分頁
+    state_ready: '喺所有{windows}搵到 {count} 個播放分頁'
     state_running: 加入緊
     state_stopped: 已停止後續加入
     state_complete: 今次工作已結束
@@ -1649,6 +1661,7 @@ watch_later:
     噉做冇得返轉頭噃，你確定要剷走你睇過啲片？
   open_video_page: 喺一般影片頁開啓
   play_video: 剷走兼入去影片頁
+  play_and_remove: 播放兼移除
   play_in_watch_later: 清單播
   remove_from_watch_later: 剷走
 widescreen:
@@ -1715,6 +1728,8 @@ search:
   filters:
     order: 排序
     more: 更多篩選
+    applied: '已揀：{filters}'
+    clear: 清除篩選
     duration: 時長
     date: 日期
     start_date: 開始日期
@@ -1773,6 +1788,7 @@ search:
   live:
     all: 全部
     rooms: 直播間
+    no_rooms: 搵唔到相符嘅直播間
     streamers: 主播
     more_streamers: 睇更多主播（{count}+）
   media:

@@ -105,7 +105,7 @@ const API_MOMENT = {
     params: {
       type: 1,
       oid: '' as string | number,
-      sort: 0,
+      sort: 1,
       nohot: 0,
       pn: 1,
       ps: 8,

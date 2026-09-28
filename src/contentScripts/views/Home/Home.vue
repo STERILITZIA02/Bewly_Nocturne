@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { useThrottleFn } from '@vueuse/core'
+import { useMediaQuery, useThrottleFn } from '@vueuse/core'
 import type { AsyncComponentLoader } from 'vue'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
@@ -9,7 +9,7 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { provideHomeTabCache } from '~/composables/useHomeTabState'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
-import { HOME_SEARCH_STAGE_HEIGHT, HOME_SEARCH_STICKY_SCROLL_TOP } from '~/constants/layout'
+import { resolveHomeSearchStage } from '~/constants/layout'
 import { gridLayout, settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import { useForYouStore } from '~/stores/forYouStore'
@@ -34,6 +34,7 @@ const {
   handleBackToTop,
   homeActivatedPage,
   homeActivatedPageTouched,
+  navigateToHomeTab,
   isHomeTabSwitching,
   scrollViewportRef,
 } = useBewlyApp()
@@ -41,7 +42,14 @@ const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => 
 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
 const cachedScrollTop = ref(0)
-const showHomeSearchCharacter = computed(() => cachedScrollTop.value < HOME_SEARCH_STICKY_SCROLL_TOP)
+const shortViewport = useMediaQuery('(max-height: 800px)')
+const isDiscoveryPage = computed(() => homeActivatedPage.value === HomeSubPage.ForYou)
+const searchStage = computed(() => resolveHomeSearchStage(isDiscoveryPage.value, shortViewport.value))
+const searchStageStyle = computed(() => ({
+  '--bew-layout-home-search-stage-lead-height': `${searchStage.value.lead}px`,
+  '--bew-layout-home-search-stage-tail-height': `${searchStage.value.tail}px`,
+}))
+const showHomeSearchCharacter = computed(() => isDiscoveryPage.value && cachedScrollTop.value < searchStage.value.stickyScrollTop)
 const tabScrollPositions = new Map<string, number>()
 let pendingTabScrollTop: number | null = null
 let resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
@@ -165,7 +173,7 @@ watch(homeAccountScope, (nextScope, previousScope) => {
 function getInitialTabScrollTop(): number {
   return Math.min(
     scrollViewportRef.value?.scrollTop ?? 0,
-    settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0,
+    settings.value.useSearchPageModeOnHomePage ? searchStage.value.height : 0,
   )
 }
 
@@ -254,7 +262,6 @@ function syncCurrentTabs() {
 
   const fallbackPage = nextTabs[0]?.page || mainStore.homeTabs[0].page
   if (!nextTabs.some(tab => tab.page === activatedPage.value)) {
-    activatedPage.value = fallbackPage
     homeActivatedPage.value = fallbackPage
   }
 }
@@ -303,8 +310,8 @@ function handleChangeTab(tab: HomeTab) {
   if (activatedPage.value === tab.page) {
     const scrollTop = scrollViewportRef.value?.scrollTop ?? cachedScrollTop.value
 
-    if ((!settings.value.useSearchPageModeOnHomePage && scrollTop > 0) || (settings.value.useSearchPageModeOnHomePage && scrollTop > HOME_SEARCH_STAGE_HEIGHT)) {
-      handleThrottledBackToTop(settings.value.useSearchPageModeOnHomePage ? HOME_SEARCH_STAGE_HEIGHT : 0)
+    if ((!settings.value.useSearchPageModeOnHomePage && scrollTop > 0) || (settings.value.useSearchPageModeOnHomePage && scrollTop > searchStage.value.height)) {
+      handleThrottledBackToTop(settings.value.useSearchPageModeOnHomePage ? searchStage.value.height : 0)
     }
     else {
       if (tabContentLoading.value)
@@ -317,9 +324,7 @@ function handleChangeTab(tab: HomeTab) {
   if (tabContentLoading.value)
     toggleTabContentLoading(false)
 
-  activatedPage.value = tab.page
-  // Update global home activated page state
-  homeActivatedPage.value = tab.page
+  navigateToHomeTab(tab.page)
 }
 
 function toggleTabContentLoading(loading: boolean) {
@@ -328,16 +333,16 @@ function toggleTabContentLoading(loading: boolean) {
 </script>
 
 <template>
-  <div pos="relative">
+  <div pos="relative" :style="searchStageStyle">
     <main @mousedown="preventBackgroundSelection">
       <!-- Home search page mode content -->
       <Transition name="content">
         <div v-if="settings.useSearchPageModeOnHomePage" class="home-search-stage">
           <div class="home-search-stage__lead">
             <Logo
-              v-if="settings.searchPageShowLogo"
+              v-if="isDiscoveryPage && settings.searchPageShowLogo"
               class="home-search-stage__logo"
-              :size="180"
+              :size="shortViewport ? 144 : 180"
               :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
               :glow="settings.searchPageLogoGlow"
             />
@@ -488,7 +493,7 @@ function toggleTabContentLoading(loading: boolean) {
 
 .home-search-stage__logo {
   z-index: 1;
-  margin-bottom: var(--bew-space-12);
+  margin-bottom: var(--bew-space-6);
 }
 
 .home-search-stage__sticky-search {
@@ -600,6 +605,8 @@ function toggleTabContentLoading(loading: boolean) {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .content-enter-active,
+  .content-leave-active,
   .home-tab-enter-active,
   .home-tab-leave-active {
     transition: opacity 1ms linear;
