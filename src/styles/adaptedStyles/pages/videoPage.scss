@@ -5,6 +5,65 @@
     display: none;
   }
 
+  &:not(.bewly-video-dark-only) {
+    .upinfo-btn-panel :is(.follow-btn, .new-charge-btn, .not-follow-charge-btn, .following-charge-btn),
+    .video-share-popover .copy-link,
+    .bpx-player-sending-bar .bpx-player-dm-btn-send > .bui-button-blue {
+      border-radius: var(--bew-interactive-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .upinfo-btn-panel .follow-btn.not-follow,
+    .video-share-popover .copy-link,
+    .bpx-player-sending-bar .bpx-player-dm-btn-send:not(.bui-disabled) > .bui-button-blue {
+      background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color) !important;
+    }
+
+    .upinfo-btn-panel .follow-btn.not-follow .follow-btn-inner {
+      color: inherit !important;
+    }
+
+    .video-share:is(:hover, :focus-visible) {
+      color: var(--bew-theme-foreground) !important;
+
+      :is(.video-share-icon, .video-share-info) {
+        color: inherit !important;
+      }
+    }
+
+    .video-pod .simple-base-item:hover .title-txt {
+      color: var(--bew-theme-foreground) !important;
+    }
+
+    .video-pod .simple-base-item.active {
+      background-color: var(--bew-theme-surface) !important;
+      color: var(--bew-on-theme-surface) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      :is(.title, .title-txt, .stats) {
+        color: inherit !important;
+      }
+    }
+
+    .upinfo-btn-panel :is(.new-charge-btn, .not-follow-charge-btn) {
+      color: var(--bew-theme-foreground) !important;
+      border-color: var(--bew-theme-foreground) !important;
+    }
+
+    // Preserve the native monochrome bitmap and derive its visible alpha colour.
+    .upinfo-btn-panel .new-charge-btn .charge-btn-icon {
+      overflow: hidden;
+
+      img {
+        position: relative;
+        left: calc(-1 * var(--bew-space-12));
+        filter: drop-shadow(var(--bew-space-12) 0 var(--bew-theme-foreground)) !important;
+      }
+    }
+  }
+
   // ai 小助手
   [class^="_VideoAssistant"] {
     --app_bg: #f1f6fc;
@@ -23,19 +82,45 @@
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`
   :not(foobar) {
+    .video-custom-interactive-layer-entry {
+      .video-custom-interactive-layer-card {
+        background: var(--bew-theme-surface) !important;
+        border-color: var(--bew-surface-border-color) !important;
+        color: var(--bew-on-theme-surface) !important;
+      }
+
+      :is(.video-custom-interactive-layer-text, .video-custom-interactive-layer-link-icon) {
+        color: var(--bew-theme-foreground) !important;
+      }
+
+      .video-custom-interactive-layer-link-icon path {
+        fill: currentColor !important;
+      }
+
+      &:is(:hover, :focus-visible, :active) .video-custom-interactive-layer-card {
+        background: var(--bew-theme-surface-hover) !important;
+      }
+
+      &:focus-visible {
+        outline: var(--bew-space-0-5) solid var(--bew-theme-foreground);
+        outline-offset: var(--bew-space-0-5);
+      }
+    }
     .content .group-list li input[type="checkbox"] + i {
-      border-radius: 5px;
+      border-radius: var(--bew-radius-sm);
+      corner-shape: var(--bew-corner-shape);
       border: 1px solid var(--bew-border-color);
     }
 
     .coin-operated-m-exp .like-checkbox input[type="checkbox"]:checked + i {
-      border-radius: 3px;
+      border-radius: var(--bew-radius-sm);
+      corner-shape: var(--bew-corner-shape);
     }
 
     .content .group-list li input[type="checkbox"]:checked + i,
     .content .group-list li input[type="checkbox"]:checked:hover + i {
       background-color: var(--bew-theme-color) !important;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 7.2 5.7 10 11 4.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") !important;
+      background-image: var(--bew-theme-checkmark-image) !important;
       background-repeat: no-repeat !important;
       background-position: 50% !important;
       background-size: 12px !important;
@@ -50,8 +135,7 @@
       .bar-left
       > label
       #check-timestamp:checked::after {
-      background: var(--bew-theme-color) url(//s1.hdslb.com/bfs/static/jinkela/note-list/assets/ic_check.svg) no-repeat
-        50% / 9px;
+      background: var(--bew-theme-color) var(--bew-theme-checkmark-image) no-repeat 50% / 9px;
     }
 
     .content .group-list li input[type="checkbox"] + i,
@@ -64,24 +148,26 @@
     .simple-base-item.active .title,
     .normal-base-item:hover .info .title,
     .normal-base-item.active .info .title {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .note-list .list-note-operation,
     .note-up .up-desc-container .desc-top .attention-btn-container:not(.is-attention),
     .up-detail .up-detail-top .live-status:hover {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .note-pc .note-container .note-header .note-operation {
       background-color: transparent;
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .user-card-m-exp .user-info-wrapper .info .user .user-label,
     #pub button,
     .editor-innter div:last-child div {
       background-color: var(--bew-theme-color) !important;
+      color: var(--bew-on-theme-color);
     }
 
     .note-list .list-note-operation:hover,
@@ -100,6 +186,7 @@
     .collection-m-exp .bottom .btn:not(.disable):hover,
     .upinfo-btn-panel .following-charge-btn:hover {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .note-pc .note-container .note-header .note-operation:hover {
@@ -412,7 +499,7 @@
 
     .video-sections-v1 .video-sections-head_first-line .first-line-left .first-line-title:hover,
     .note-detail .note-operation .tab-action-item.is-active .tab-icon {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .membersinfo-upcard .staff-info .staff-name.is-vip,
@@ -435,7 +522,7 @@
     .up-detail .up-detail-top .up-name[style*="color: rgb(251, 114, 153)"],
     .up-detail .up-detail-top .up-name[style*="color:#FB7299;"],
     .user-card-m-exp .user-info-wrapper .info .user .name[style*="color: rgb(251, 114, 153)"] {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .upinfo-btn-panel .not-follow-charge-btn:hover {
@@ -761,4 +848,33 @@
       background-color: var(--Ga3);
     }
   }
+}
+// Capacity comes from the current native dialog owner; label.disable alone
+// reflects a hard-coded native threshold and is not a reliable capacity test.
+.bewly-design .collection-m-exp .group-list label.bewly-full-disabled {
+  color: var(--bew-text-3) !important;
+  cursor: not-allowed;
+}
+
+.bewly-design .collection-m-exp .group-list label.bewly-full-restorable {
+  color: var(--bew-text-1) !important;
+  cursor: pointer;
+}
+
+.bewly-design .collection-m-exp .group-list label.bewly-full-restorable input:not(:checked) + i {
+  background: transparent !important;
+  border-color: var(--bew-border-color) !important;
+}
+
+.bewly-design .bewly-favorite-full-message {
+  z-index: var(--bew-z-hud) !important;
+  padding: var(--bew-space-2) var(--bew-space-3) !important;
+  color: var(--bew-text-1) !important;
+  background: var(--bew-elevated-alt-solid) !important;
+  border: 1px solid var(--bew-surface-border-color) !important;
+  border-radius: var(--bew-popover-radius) !important;
+  corner-shape: var(--bew-corner-shape);
+  font-size: var(--bew-font-size-control) !important;
+  line-height: var(--bew-line-height-control) !important;
+  pointer-events: none;
 }

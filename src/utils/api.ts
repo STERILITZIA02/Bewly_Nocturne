@@ -1,14 +1,26 @@
 import type { API_COLLECTION } from '~/background/messageListeners/api'
-import { sendMessage } from '~/utils/messaging'
+import type { CANCELLABLE_API_FUNCTIONS } from '~/constants/apiRequest'
+import { sendAbortableApiMessage, sendMessage } from '~/utils/messaging'
+
+export interface ApiRequestOptions { signal?: AbortSignal }
 
 type CamelCase<S extends string> = S extends `${infer P1}_${infer P2}${infer P3}`
   ? `${Lowercase<P1>}${Uppercase<P2>}${CamelCase<P3>}`
   : Lowercase<S>
 
+type APIParams<T> = T extends { params: infer Params } ? Params : unknown
+type APIBody<T> = T extends { body: infer Body } ? Body : unknown
+type ClientMethod<T, Name> = T extends (...args: infer Args) => infer Result
+  ? Name extends typeof CANCELLABLE_API_FUNCTIONS[number] ? (options?: Args[0], request?: ApiRequestOptions) => Result : T
+  : T extends { _fetch: infer Fetch }
+    ? Fetch extends { method: infer Method extends string }
+      ? Lowercase<Method> extends 'get' ? (options?: Partial<APIParams<T>>, request?: ApiRequestOptions) => Promise<any> : (options?: Partial<APIParams<T> & APIBody<Fetch>>) => Promise<any>
+      : never
+    : never
+
 type APIFunction<T = typeof API_COLLECTION> = {
   [K in keyof T as CamelCase<string & K>]: {
-    // @ts-expect-error allow params
-    [P in keyof T[K]]: T[K][P] extends (...args: any[]) => any ? T[K][P] : Lowercase<T[K][P]['_fetch']['method']> extends 'get' ? (options?: Partial<T[K][P]['params']>) => Promise<any> : (options?: Partial<T[K][P]['params'] & T[K][P]['_fetch']['body']>) => Promise<any>
+    [P in keyof T[K]]: ClientMethod<T[K][P], P>
   }
 }
 
@@ -31,13 +43,15 @@ export class APIClient {
         else {
           const api = new Proxy({}, {
             get(_, p) {
-              return (options?: object) => {
+              return (options?: object, request?: ApiRequestOptions) => {
                 const message: Record<string, any> = {
-                  contentScriptQuery: p as string,
                   ...options,
+                  contentScriptQuery: p as string,
                 }
 
-                return sendMessage(p as string, message)
+                return request?.signal
+                  ? sendAbortableApiMessage(p as string, message, request.signal)
+                  : sendMessage(p as string, message)
               }
             },
           })

@@ -515,7 +515,7 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
       currentTab: target => window.location.assign(target),
       newTab: openLinkToNewTab,
       background: target => void openLinkInBackground(target),
-      drawer: openIframeDrawer,
+      drawer: target => openIframeDrawer(target, { playbackContext: 'momentsDialog' }),
     })
   }
 

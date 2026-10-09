@@ -143,7 +143,7 @@ async function resolveAid(ids: VideoIds, state: WatchLaterButtonState): Promise<
 }
 
 async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, state: WatchLaterButtonState) {
-  if (state.initializationPending)
+  if (document.hidden || state.initializationPending)
     return
   state.initializationPending = true
   let initialized = false
@@ -166,7 +166,10 @@ async function initializeButtonState(button: HTMLButtonElement, ids: VideoIds, s
       return
     }
 
-    state.isInWatchLater = topBarStore.isInWatchLater(aid)
+    const membership = topBarStore.isInWatchLater(aid)
+    if (membership === undefined)
+      return
+    state.isInWatchLater = membership
     updateButtonState(button, state.isInWatchLater)
     initialized = true
   }
@@ -284,7 +287,7 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
       () => i18n.global.locale.value,
       () => topBarStore.isLogin,
       () => topBarStore.userInfo.mid,
-      () => [...topBarStore.addedWatchLaterList],
+      () => topBarStore.watchLaterInvalidationVersion,
     ],
     (next, previous) => {
       if (next[1] !== previous[1] || next[2] !== previous[2]) {
@@ -309,7 +312,13 @@ function mountWatchLaterButton(ids: VideoIds): MountedWatchLaterButton | undefin
         void initializeButtonState(button, ids, state)
         return
       }
-      state.isInWatchLater = topBarStore.isInWatchLater(state.aid)
+      const membership = topBarStore.isInWatchLater(state.aid)
+      if (membership === undefined) {
+        button.disabled = true
+        button.setAttribute('aria-disabled', 'true')
+        return
+      }
+      state.isInWatchLater = membership
       updateButtonState(button, state.isInWatchLater)
     },
   ))

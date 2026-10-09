@@ -41,7 +41,7 @@ export async function loadMomentForwardEmotes(
       if (getMomentForwardResponseCode(response) !== 0)
         throw new Error(getMomentForwardResponseMessage(response) || fallbackError)
       const packages = normalizeMomentForwardEmotePackages(response)
-      if (cachedEmoteAccountId === accountId) {
+      if (cachedEmoteAccountId === accountId && momentEmotesRequest === request) {
         cachedEmoteAccountId = accountId
         cachedMomentEmotes = packages
       }
@@ -55,13 +55,6 @@ export async function loadMomentForwardEmotes(
     })
   momentEmotesRequest = request
   return request
-}
-
-export function resetMomentForwardEmoteCache() {
-  cachedEmoteAccountId = ''
-  cachedMomentEmotes = undefined
-  momentEmotesRequest = undefined
-  momentEmotesRequestAccountId = ''
 }
 
 interface MomentForwardComposerMessages {

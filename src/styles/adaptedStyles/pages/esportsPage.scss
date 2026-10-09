@@ -1,0 +1,249 @@
+// The new match app and the legacy schedule keep their own navigation and media.
+html.bewly-design:is(.esportsPage, [data-bewly-native-site="esports"]) {
+  .game-next,
+  .game-next > .main,
+  .bili-game-local {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .game-next .schedule .card,
+  .game-next .game-list-tag,
+  .game-next .zone .con-img,
+  .bili-game-local .schedule-filter,
+  .bili-game-local .schedule-list > .list-item {
+    background-color: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-next :is(.season-content, .more-game-content, .user-popper),
+  .bili-game-local :is(.datepicker-popup, .modal) {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-next .search-input,
+  .bili-game-local :is(.filter-top, .time-all, .schedule-time, .time-direction, .hasDatepicker) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-next .search-input input {
+    color: var(--bew-text-1);
+    background: transparent;
+  }
+
+  .game-next .search-input .search-icon path {
+    fill: var(--bew-text-1);
+  }
+
+  .game-next :is(.game-img, .video-card-cover, .lazy-image.card-cover) {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-next .video-card-cover > .v-inline-player {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .game-next .schedule :is(.title, .another-title, .score, .vs, .line-ellipsis),
+  .game-next :is(.season-title, .team-text, .team-name, .video-card .title),
+  .bili-game-local :is(.time-ymd, .time-hours, .name-title, .ranks-name, .score-state, .content-name) {
+    color: var(--bew-text-1);
+  }
+
+  .game-next .schedule .des,
+  .game-next :is(.season-time, .bottom-text),
+  .bili-game-local :is(.time-contain .date, .modal-wrap-text) {
+    color: var(--bew-text-2);
+  }
+
+  .game-next .schedule .btn,
+  .game-next .schedule > .title .right,
+  .game-next .game-link,
+  .bili-game-local .default-btn {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-color: var(--bew-theme-foreground);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-next .schedule .btn:hover,
+  .bili-game-local .default-btn:hover {
+    background: var(--bew-theme-surface-hover);
+  }
+
+  .bili-game-local .content-all > .active,
+  .bili-game-local .time-contain .data.active,
+  .bili-game-local .match-operate.live {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-game-local .time-contain .data.active :is(.week, .date) {
+    color: inherit;
+  }
+
+  .game-next .season-item.active .season-item-title,
+  .game-next .season-content-item-active .season-content-item-title {
+    color: var(--bew-theme-foreground);
+  }
+
+  @media (max-width: 1335px) {
+    .game-next {
+      --bew-native-game-header-height: calc(var(--bew-control-height) + var(--bew-space-10) + var(--bew-space-6));
+    }
+
+    // Preserve every native navigation entry by wrapping the two existing rows.
+    // Popovers keep their native anchor/positioning owner and are not clipped.
+    .game-next .game-header {
+      min-height: var(--bew-native-game-header-height);
+    }
+
+    .game-next .topbar {
+      // Native shadowInView is based on the hero, so its transparent state
+      // outlives the hero behind our two-row navigation while scrolling.
+      --header_text: var(--bew-text-1);
+
+      background: var(--bew-elevated-solid);
+      min-width: 0;
+      height: var(--bew-native-game-header-height);
+      box-sizing: border-box;
+      padding: var(--bew-space-2) var(--bew-space-4);
+      flex-wrap: wrap;
+      align-content: flex-start;
+      row-gap: var(--bew-space-2);
+    }
+
+    .game-next .topbar .search-input {
+      opacity: 1;
+    }
+
+    .game-next .topbar > .left {
+      flex: 0 0 100%;
+      height: var(--bew-control-height);
+    }
+
+    .game-next .topbar > .right {
+      flex: 0 0 100%;
+      height: var(--bew-space-10);
+      justify-content: flex-end;
+    }
+
+    .game-next .header-shadow {
+      min-width: 0;
+    }
+
+    .game-next .game-tab-header {
+      height: auto;
+      flex-wrap: wrap;
+      padding-inline: var(--bew-space-4);
+      box-sizing: border-box;
+    }
+
+    .game-next :is(.zone, .recomment, .zone-loading, .recomment-loading, .schedule-loading) {
+      max-width: calc(100% - var(--bew-space-8));
+      box-sizing: border-box;
+    }
+
+    .game-next .zone {
+      flex-wrap: wrap;
+      gap: var(--bew-space-4);
+    }
+
+    .game-next .zone .right::before {
+      display: none;
+    }
+
+    // Native schedules step by 308px and video pages by 1220px. Keep the
+    // complete native carousel viewport; narrow screens can pan the module.
+    // 40px side space retains its existing 35/36px-outset arrow controls.
+    .game-next :is(.schedule, .video-list, .game-team, .stage-container) {
+      max-width: calc(100% - var(--bew-space-8));
+      box-sizing: border-box;
+      padding-inline: var(--bew-space-10);
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+
+    .game-next .video-list .video-wrap {
+      width: 1220px;
+    }
+
+    .game-next .recomment > .recommend-card {
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+
+    .game-next .recommend-card-content {
+      min-width: 1217px;
+    }
+
+    .game-next .schedule > .title,
+    .game-next .video-list > .video-topbar,
+    .game-next .game-team > .team-text,
+    .game-next .recommend-card > .recommend-card-topbar {
+      position: sticky;
+      left: 0;
+    }
+
+    .game-next .game-team > .team-text {
+      padding-inline: 0;
+    }
+  }
+
+  @media (max-width: 1142px) {
+    .bili-game-local.small .game-content {
+      display: flex;
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .bili-game-local.small .schedule-filter-contain {
+      flex: 0 0 260px;
+    }
+
+    .bili-game-local.small .schedule-contain {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .bili-game-local.small .schedule-contain :is(.contain-top, .schedule-list) {
+      width: 100%;
+    }
+
+    .bili-game-local.small .contain-top,
+    .bili-game-local.small .schedule-time {
+      display: flex;
+    }
+
+    .bili-game-local.small .contain-top > :is(.time-all, .hasDatepicker) {
+      flex-shrink: 0;
+    }
+
+    .bili-game-local.small :is(.schedule-time, .time-contain) {
+      flex: 1 1 0;
+      width: auto;
+      min-width: 0;
+    }
+
+    .bili-game-local.small .schedule-time > .time {
+      flex: 0 0 var(--bew-space-6);
+    }
+  }
+}

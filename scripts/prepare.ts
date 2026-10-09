@@ -33,7 +33,12 @@ async function prepare() {
   writeManifest()
 
   if (isDev) {
-    chokidar.watch([r('src/manifest.ts'), r('package.json')])
+    chokidar.watch([
+      r('src/manifest.ts'),
+      r('src/constants/contentScript.ts'),
+      r('src/constants/nativeSites.ts'),
+      r('package.json'),
+    ])
       .on('change', () => {
         writeManifest()
       })

@@ -2,7 +2,7 @@ import type { Runtime } from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
 import type { OpenTabsCommand, OpenTabsTask } from '~/constants/openTabsWatchLater'
-import { OPEN_TABS_WATCH_LATER, OPEN_TABS_WATCH_LATER_UPDATED } from '~/constants/openTabsWatchLater'
+import { OPEN_TABS_WATCH_LATER, OPEN_TABS_WATCH_LATER_UPDATED, selectOpenTabsTaskItems } from '~/constants/openTabsWatchLater'
 import { onMessage } from '~/utils/messaging'
 import { findPgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { parsePlaybackTabUrl } from '~/utils/playbackTab'
@@ -20,7 +20,7 @@ const request = apiListenerFactory({ ...API_ANIME, ...API_VIDEO, ...API_WATCHLAT
 const STORAGE_PREFIX = 'watchLater:open-tabs:'
 
 /** Background ownership survives popup/page disposal; session snapshots never contain credentials. */
-export function setupOpenTabsWatchLater(reconcile: (accountId: number, incognito: boolean) => Promise<void>) {
+export function setupOpenTabsWatchLater() {
   const tasks = new Map<boolean, OpenTabsTask>()
   const runners = new Map<boolean, ReturnType<typeof createOpenTabsWatchLaterTask>>()
   const taskCookieStores = new Map<boolean, string>()
@@ -120,6 +120,8 @@ export function setupOpenTabsWatchLater(reconcile: (accountId: number, incognito
       || !['start', 'retry'].includes(command.action) || (command.action === 'start' && task.status !== 'ready')) {
       throw new Error('Task expired; confirm a new snapshot')
     }
+    if (command.action === 'start' && command.selectedTabIds !== undefined)
+      task.items = selectOpenTabsTaskItems(task, command.selectedTabIds)
     const snapshot = task
     const runner = createOpenTabsWatchLaterTask(snapshot, {
       async accountCurrent() {
@@ -132,10 +134,10 @@ export function setupOpenTabsWatchLater(reconcile: (accountId: number, incognito
         return Boolean(source && sameTabContext(source, incognito) && (source.pendingUrl ?? source.url) === item.url)
       },
       async readMembership() {
-        const response = await request({ contentScriptQuery: 'getAllWatchLaterList' }, sender) as { code: number, data?: { list?: { aid: number }[] } }
-        if (response.code !== 0 || !response.data || (response.data.list !== undefined && !Array.isArray(response.data.list)))
+        const response = await request({ contentScriptQuery: 'getWatchLaterState', accountId: account.accountId, force: true }, sender) as { code: number, data?: { complete: boolean, entries: { aid: number }[] } }
+        if (response.code !== 0 || !response.data?.complete)
           throw new Error('Membership unavailable')
-        return (response.data.list ?? []).map(item => item.aid)
+        return response.data.entries.map(item => item.aid)
       },
       async resolveAid(item) {
         const target = item.target
@@ -154,9 +156,16 @@ export function setupOpenTabsWatchLater(reconcile: (accountId: number, incognito
           throw new Error('Video unavailable')
         return response.data?.bvid === target.bvid && Number.isSafeInteger(response.data.aid) && response.data.aid > 0 ? response.data.aid : undefined
       },
-      add: aid => request({ contentScriptQuery: 'saveToWatchLater', aid, csrf: account.csrf }, sender) as Promise<WatchLaterWriteResponse>,
+      add: (aid, item) => request({
+        contentScriptQuery: 'saveToWatchLater',
+        aid,
+        csrf: account.csrf,
+        accountId: account.accountId,
+        bvid: 'bvid' in item.target ? item.target.bvid : undefined,
+        epid: 'epid' in item.target ? item.target.epid : undefined,
+      }, sender) as Promise<WatchLaterWriteResponse>,
       changed: () => publish(snapshot),
-      reconcile: () => reconcile(account.accountId, incognito),
+      reconcile: async () => { await request({ contentScriptQuery: 'getWatchLaterState', accountId: account.accountId }, sender) },
     })
     runners.set(incognito, runner)
     taskCookieStores.set(incognito, account.storeId)

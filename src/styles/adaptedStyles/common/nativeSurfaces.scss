@@ -1,0 +1,285 @@
+// Native business components keep their DOM, sizing and event ownership. Only
+// known surfaces are mapped; media, avatars and player internals are not reset.
+html.bewly-design:not(.bewly-video-dark-only) {
+  color-scheme: light;
+  accent-color: var(--bew-theme-color);
+
+  &.dark {
+    color-scheme: dark;
+  }
+
+  &:not(.bewly-custom-homepage),
+  &:not(.bewly-custom-homepage) > body {
+    background-color: var(--bew-bg) !important;
+  }
+
+  // Campaigns and authored wiki skins can carry content in their root artwork.
+  // Only confirmed decorative wrappers in those templates are cleared locally.
+  &:not(.bewly-custom-homepage, [data-bewly-native-site="campaign"], [data-bewly-native-site="game-wiki-community"]),
+  &:not(.bewly-custom-homepage, [data-bewly-native-site="campaign"], [data-bewly-native-site="game-wiki-community"])
+    > body {
+    background-image: none !important;
+  }
+
+  :where(a, button, input, textarea, select, summary, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
+    outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+    outline-offset: var(--bew-space-0-5);
+  }
+
+  // These containers already own clipping. Keep previews and cover overlays on
+  // the same contour without introducing overflow on menus or business panels.
+  :is(
+    .bili-video-card__cover,
+    .bili-live-card__cover,
+    .bili-cover-card,
+    .video-page-card-small .pic,
+    .history-list .cover-contain
+  ) {
+    border-radius: var(--bew-media-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.bili-video-card__cover, .bili-live-card__cover, .bili-cover-card)
+    > :is(picture, img, video, .bili-cover-card__thumbnail) {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  :is(.be-dropdown-menu, .van-popover, .bili-popover, .bili-dialog .con) {
+    background-color: var(--bew-elevated-solid);
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.be-pager-item, .be-pager-next, .be-pager-prev, .btn.primary, .btn.default) {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  &.nativeFeedPage {
+    .feedchannel,
+    .popular-container {
+      background-color: var(--bew-bg);
+    }
+
+    .channel-link,
+    .channel-entry-more__link {
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    // Native image sampling can produce a pale caption panel with white text.
+    // Keep the banner artwork and its transitions; pair only the reading surface.
+    .channel-carousel .banner-carousel__footer > .mask {
+      background-color: var(--bew-content-solid) !important;
+    }
+
+    .channel-carousel .footer-top .title,
+    .channel-carousel .switcher-btns {
+      color: var(--bew-text-1);
+    }
+
+    .channel-carousel .switcher-btns > :is(.prev, .next) {
+      background-color: var(--bew-content-solid-hover);
+      color: var(--bew-text-1);
+    }
+
+    .channel-carousel .switcher-dots .before {
+      background-color: var(--bew-fill-3);
+    }
+
+    .channel-carousel .switcher-dots .after {
+      background-color: var(--bew-theme-color);
+    }
+  }
+
+  &:is(.momentsPage, .topicPage) {
+    :is(
+      .bili-dyn-item,
+      .bili-dyn-publishing,
+      .bili-dyn-my-info,
+      .bili-dyn-live-users,
+      .bili-dyn-up-list,
+      .bili-dyn-list-tabs,
+      .topic-panel,
+      .opus-detail
+    ) {
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    // Native video tiles already own clipping. Preserve the adjoining cover /
+    // metadata structure while using one semantic contour for the whole tile.
+    .bili-dyn-card-video {
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .bili-dyn-card-video__cover,
+    .bili-dyn-card-video__cover__mask {
+      border-radius: var(--bew-card-radius) 0 0 var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .bili-dyn-card-video__body {
+      border-radius: 0 var(--bew-card-radius) var(--bew-card-radius) 0;
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .bili-dyn-card-video__cover-shadow {
+      border-radius: 0 0 0 var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .side-toolbar__box {
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .bili-album__preview__picture {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  &.userSpacePage {
+    .space-theme-bg {
+      background: none !important;
+    }
+
+    :is(
+      .col-full,
+      #page-index .col-1,
+      #page-index .col-2 .section,
+      #page-dynamic .col-2 .section,
+      .home-aside-section > div
+    ) {
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  &.articlesPage {
+    :is(.article-holder, .article-list-holder, .right-side-bar, .article-item .cover, .article-item .cover-img) {
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .article-item__cover {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .article-item__cover :is(.b-img, .b-img__inner, img) {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+  }
+
+  // Native season indexes share this wrapper across anime and film categories.
+  .bangumi-index-wrapper {
+    color: var(--bew-text-1);
+    background: var(--bew-bg);
+
+    .cover-wrapper {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .cover-wrapper > .common-lazy-img {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+
+    .bangumi-title,
+    .filter-title,
+    .filter-item,
+    .sort-item {
+      color: var(--bew-text-1);
+    }
+
+    .pub-info,
+    .filter-name,
+    .custom-right {
+      color: var(--bew-text-2);
+    }
+
+    .filter-item,
+    .sort-item {
+      min-height: var(--bew-space-6);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .filter-item.on,
+    .sort-item.on,
+    .bangumi-index-crumb .on {
+      color: var(--bew-theme-foreground);
+    }
+
+    .sort-item .active {
+      border-top-color: var(--bew-theme-foreground);
+      border-bottom-color: var(--bew-theme-foreground);
+    }
+
+    .pagelistbox .p,
+    .custompage input {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .pagelistbox .p.active {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+  }
+
+  &.topicPage {
+    :is(.active-card, .topic-detail__content, .topic-detail__sidebar) {
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  // Music uses CSS Modules. Match the observed semantic stems, not build hashes.
+  &.musicPage {
+    [class^="_nav_"] > [class^="_item_"] {
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    [class^="_newMusic_"] a > [class^="_inlineVideoSquare_"],
+    [class^="_newMusic_"] a > [class^="_imgContainer_"] {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    [class^="_newMusic_"] a > [class^="_inlineVideoSquare_"] > :is(img, picture, video),
+    [class^="_newMusic_"] a > [class^="_imgContainer_"] > :is(img, picture, video) {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+
+    #app > [class^="_bottom_"] {
+      background-color: var(--bew-bg);
+    }
+
+    // Native sections use width:100% but impose a 1114px minimum. Their
+    // carousel translations are percentages, so retain them and release only
+    // this minimum on narrow desktops, including the banner's inner overlays.
+    @media (max-width: 1114px) {
+      #app > :is([class^="_bannerTop_"], [class^="_nav_"], [class^="_newMusic_"], [class^="_hotRank_"]),
+      #app > :is([class^="_musician_"], [class^="_originalMusic_"], [class^="_reviews_"], [class^="_moreMusic_"]),
+      [class^="_bannerTop_"] [class^="_smallPic_"] > [class^="_content_"],
+      [class^="_bannerTop_"] [class^="_coverBar_"] > span {
+        min-width: 0;
+      }
+    }
+  }
+}

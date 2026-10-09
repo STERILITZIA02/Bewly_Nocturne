@@ -73,6 +73,8 @@ const BLOCKED_FIELDS = new Set(['__proto__', 'constructor', 'prototype'])
 const LOCAL_ONLY_SETTINGS_FIELDS = new Set([
   'customizeCSS',
   'customizeCSSContent',
+  // A device must opt into this experimental media-source takeover itself.
+  'localLoudnessEnabled',
 ])
 
 // These values describe transient playback state on one device. Syncing them
@@ -82,6 +84,7 @@ const LOCAL_ONLY_RUNTIME_FIELDS = new Set([
   'lastCaptionState',
   'savedPlaybackRate',
   'savedVideoAspectRatio',
+  'savedVideoQuality',
   'lastAcknowledgedVersion',
   // Removed volume-normalization field; keep it local while legacy storage is cleaned up.
   'targetVolume',

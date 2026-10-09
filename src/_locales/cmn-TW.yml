@@ -1,4 +1,41 @@
+library_tools:
+  queue_actions_scope: 下方操作會套用至整個稍後再看清單。
+  selected_tabs: '已選 {count} / {total} 個分頁'
+  search_results: '「{query}」的搜尋結果'
+  load_more_matches: 繼續尋找更早紀錄
+  no_matches: 沒有符合的內容
+  date: 選擇日期
+  all_dates: 所有日期
+  content_type: 內容類型
+  type_all: 全部內容
+  type_archive: 影片
+  type_pgc: 動畫與影視
+  type_live: 直播
+  type_article: 專欄
+  clear_search: 清除搜尋
+  watch_later_search: 搜尋標題或 UP 主
+  playback_state: 觀看狀態
+  state_all: 全部進度
+  state_unstarted: 尚未開始
+  state_watching: 觀看中
+  state_completed: 已看完
+  state_unknown: 進度未知
+  duration: 影片長度
+  duration_all: 全部長度
+  duration_short: 10 分鐘以內
+  duration_medium: 10–30 分鐘
+  duration_long: 30 分鐘以上
+  matched_count: '符合 {count} 項 · 已載入 {total} 項'
+  find_messages: 尋找此對話已載入的訊息
+  previous_match: 上一個符合項目
+  next_match: 下一個符合項目
+  original_size: 原始尺寸
+  image_navigation: 圖片檢視區域，可捲動查看，放大後可拖曳
+  load_more_videos: 繼續載入影片
 common:
+  advertisement: 廣告
+  clear_selection: 清空已選
+  favorite_folder_full: 此收藏夾已滿，無法新增目前影片
   retry: 重試
   operation_completed: 操作完成
   dialog: 對話框
@@ -28,6 +65,7 @@ common:
   please_log_in_first: 請先登入
   login: 登入
   save_to_watch_later: 稍後觀看
+  watch_later_status_unknown: 稍後觀看狀態待確認
   add_to_watch_later: 加入稍後觀看
   added_to_watch_later: 已加入稍後觀看
   remove_from_watch_later: 從稍後觀看中移除
@@ -105,12 +143,38 @@ iframe_drawer:
   open_in_new_tab: 在新索引標籤開啟連結
   close: 關閉
   press_esc_again_to_close: 再次按下 Esc 關閉
+local_loudness:
+  title: 本機響度均衡 · 實驗
+  enable: 啟用本機響度均衡
+  description: 預設關閉，僅在本裝置啟用。對目前音訊進行局部自動增益，減輕響度起伏；啟用後可從播放器波形按鈕調整。
+  target: 目標響度
+  strength: 調整強度
+  curve: 最近 60 次增益取樣
+  limits: 基於短時響度的局部調整，並非完整節目級 EBU R128 正規化；取樣峰值限制不保證真峰值。關閉後保留原聲旁路；若要改用原生音效，請關閉本實驗並重新整理播放頁。
+  state:
+    off: 已關閉 · 原聲播放
+    waiting: 等待有效主媒體播放
+    gesture: 請點選頁面或播放按鈕，允許瀏覽器啟動音訊處理
+    active: 正在調整目前音訊
+    paused: 暫停、靜音或跳轉中 · 暫停增益測量
+    native-on: 原生響度均衡已開啟，請先在原生播放器設定中關閉
+    native-unknown: 無法確認原生音效狀態，保留原聲播放
+    source-in-use: 媒體已由原生音效或其他擴充功能接管，保留現有音訊路徑。若剛關閉原生音效，請重新整理播放頁後再試。
+    unsupported: 目前媒體或瀏覽器無法安全接入，保留原聲播放
+    error: 處理失敗，已退回原聲旁路；重新啟用可重試
+    reload-required: 音源發生衝突或相容條件改變，需要重新初始化。請關閉本實驗並重新整理播放頁，再繼續播放或使用原生音效。
 player_screenshot:
   capture: 擷取目前影片畫面
   saved: 截圖已儲存
   failed: 截圖失敗
   video_unavailable: 目前影片畫面無法使用
 settings:
+  comment_reply_batch_pages: 每次載入的回覆頁數
+  comment_reply_batch_pages_desc: 只在點擊載入下一批時請求；首次展開與直接選頁各請求一頁，不自動載入整個樓層。
+  enable_comment_reply_tree_container: 獨立回覆閱讀區域
+  enable_comment_reply_tree_container_desc: 只讓回覆區域內部捲動，主留言保留在外；捲到底後可繼續捲動外層頁面。
+  comment_reply_tree_container_height: 回覆閱讀區域最大高度
+  comment_reply_tree_container_height_desc: 短內容自然收縮，高度也會限制在目前視窗的可用範圍內。
   no_search_character: 不顯示搜尋人物
   reorder_keyboard_hint: 按住 Alt 並按方向鍵調整順序
   auto_remove_watch_later_on_end: 播完自動移出稍後觀看
@@ -291,7 +355,7 @@ settings:
   group_player_display_mode: 播放模式
   group_player_display_mode_desc: 設定基礎顯示模式，並依需要覆寫特定播放情境。
   group_playback_memory: 播放狀態記憶
-  group_playback_memory_desc: 選擇是否記住倍速和影片比例。
+  group_playback_memory_desc: 選擇是否記住倍速、影片比例和畫質。
   group_video_page_actions: 影片頁功能
   group_video_page_actions_desc: 標籤僅用於切換影片頁和播放器控制列中相關按鈕的顯示。
   group_playback_behavior: 播放行為
@@ -499,6 +563,7 @@ settings:
   drawer_escape_immediate: 按一次立即關閉
   drawer_escape_second_press: 再按一次後關閉
   block_ads: 封鎖廣告
+  block_ads_desc: 在 Bewly 和已適配的 Bilibili 原生頁面隱藏有明確廣告標記的內容。關閉後恢復顯示；一般推薦、商品及活動不會僅因標題被封鎖。搜尋頂部活動區由下方選項獨立控制。
   block_top_search_page_ads: 封鎖 Bilibili 搜尋頁上方的廣告
 
   # Video Card Grid Settings
@@ -570,6 +635,8 @@ settings:
     context_bangumi: 番劇 / 影視
     context_watch_later: 稍後觀看
     context_playlist: 收藏 / 播放列表
+    context_moments_dialog: 動態影片彈窗
+    context_moments_dialog_desc: 繼承時繼續依影片所屬的多 P、合集等情境解析；僅影響從動態開啟的站內彈窗。
     bewly_widescreen_sidebar_position: Bewly播放頁側邊欄位置
     bewly_widescreen_sidebar_position_desc: 選擇 Bewly 播放頁側邊欄的顯示位置
     bewly_widescreen_sidebar_position_left: 左側
@@ -769,8 +836,8 @@ settings:
   home_tabs_adjustment: 標籤列調整
   home_tabs_adjustment_desc: 第一個啟用的標籤項目調整頁面將是起始頁面。
   fixed_home_tabs_on_home_page: 固定首頁標籤列
-  adapt_to_other_page_styles: 適應其他頁面風格
-  adapt_to_other_page_styles_desc: 適應一些常見頁面，以配合 BewlyBewly 主題。
+  adapt_to_other_page_styles: 適配更多頁面
+  adapt_to_other_page_styles_desc: 讓已支援的 Bilibili 原生頁面、直播、漫畫、會員購等子站跟隨主題、配色與圓角。關閉時停用這些外觀調整，Bewly 頁面不變；廣告另由廣告屏蔽選項控制。
   prevent_mobile_redirect: 防止跳轉至行動版
   prevent_mobile_redirect_desc: 啟用後，僅在造訪 www.bilibili.com 時使用桌面版 UA，避免被跳轉至 m.bilibili.com；直接造訪行動版不受影響。
   links: 連結
@@ -807,6 +874,23 @@ settings:
   remember_playback_rate: 記住倍速
   remember_playback_rate_desc: 啟用後，播放器會記住你上次設定的倍速，並在下次打開影片時自動套用
   remember_video_aspect_ratio: 記住影片比例
+  remember_video_quality: 記住畫質
+  player_extra_controls_hint: 空間不足時，收起的操作仍可在播放器右鍵選單中使用。
+  remember_video_quality_desc: 首次啟用沿用目前畫質，之後只記住已生效的手動選擇。自動降級和試看不會覆寫偏好。
+  show_widescreen_idle_progress: 控制項隱藏時顯示細進度條
+  show_widescreen_idle_progress_desc: 僅顯示主影片播放進度，不改變控制列顯隱或提供拖曳操作。
+  original_moments_use_bewly_filters: 原生動態使用現有過濾規則
+  original_moments_use_bewly_filters_desc: 僅過濾原生動態資訊流，沿用下方規則；關閉後恢復本功能隱藏的內容。
+  history_layout: 觀看記錄版面
+  history_layout_list: 日期分組列表
+  history_layout_grid: 日期分組網格
+  notification_badge_categories: 通知角標類別
+  notification_badge_categories_desc: 僅影響頂欄、Dock 和通知選單的數字顯示，不提交已讀或改變訊息未讀狀態。
+  show_reply_notification_reminder: 顯示回覆提醒
+  show_at_notification_reminder: "顯示 {'@'} 提醒"
+  show_system_notification_reminder: 顯示系統通知提醒
+  show_followed_private_message_unread_count: 顯示已關注私訊未讀數
+  show_unfollowed_private_message_unread_count: 顯示未關注私訊未讀數
   remember_video_aspect_ratio_desc: 啟用後，播放器會記住你上次選擇的影片比例，並在下次打開影片時自動套用
   auto_exit_fullscreen_on_end: 全螢幕/網頁全螢幕播放完畢後自動退出
   auto_exit_fullscreen_on_end_desc: 啟用後，當影片播放結束且沒有單集循環、隨機播放、自動連播等後續播放行為時，會自動退出全螢幕模式
@@ -1308,6 +1392,7 @@ moments:
   initial_loading: 正在準備動態和圖片…
   empty_wanted: 近期無更新
   no_wanted_users: 請先在設定中加入想看的 UP 主
+  configure_wanted: 設定想看分組
   empty: 暫時沒有可顯示的動態
   loading: 正在載入…
   load_more: 載入更多
@@ -1445,6 +1530,10 @@ video_card:
   group_contribution: '{firstAuthor} 等 {num} 人共同創作'
   video_removed: 影片已移除
   watched: 已觀看
+  browsed: 已瀏覽
+  played: 已播放
+  completed: 已看完
+  played_progress: '已看到 {time}'
   visited_recently: 近一個月內瀏覽過
   highlight_high_like: 高讚
   highlight_high_engagement: 高互動
@@ -1617,7 +1706,7 @@ watch_later:
   auto_remove_failed: 自動移出稍後觀看失敗，請稍後手動重試。
   open_tabs:
     title: 加入播放分頁
-    scope: 僅處理下方列出的播放頁；重複或已在列表中的影片會略過，原分頁保持開啟。
+    scope: 僅處理下方選取的播放頁；重複或已在列表中的影片會略過，原分頁保持開啟。
     windows_normal: 一般視窗
     windows_private: 無痕視窗
     background_hint: 關閉視窗後仍會繼續，可再次開啟查看進度。
@@ -1695,6 +1784,7 @@ widescreen:
   show_full_sidebar: 顯示完整側欄
   show_compact_sidebar: 收合側欄
 search_bar:
+  history_unavailable: 暫時無法讀取或確認搜尋紀錄，請重新讀取。
   input_label: 搜尋
   clear_keyword: 清空搜尋內容
   submit: 搜尋
@@ -1762,6 +1852,8 @@ search:
   errors:
     failed: 搜尋失敗，請稍後重試
     exception: 搜尋時發生錯誤，請稍後重試
+    timeout: 搜尋逾時，請重試
+    risk_control: B站暫時限制了搜尋請求，請稍後重試
   pagination:
     previous: 上一頁
     next: 下一頁

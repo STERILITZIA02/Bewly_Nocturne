@@ -2,12 +2,15 @@
 export const SEARCH_PAGE_URL = /^https?:\/\/search\.bilibili\.com(?:\/|$).*/
 
 // 视频相关页面
-export const VIDEO_PAGE_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/video.*/
 export const VIDEO_LIST_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:video|list)\/.*/
 export const BANGUMI_PLAY_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/bangumi\/play\/.*/
 
 // 频道页面
 export const CHANNEL_PAGE_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:c|v(?!\/topic)|anime|guochuang|tv|movie|variety|mooc).*/
+
+// Header artwork is narrower than the set of pages which support the TopBar.
+// Course players, category indexes and the legacy schedule have plain surfaces.
+export const HEADER_ARTWORK_PAGE_URL = /^https?:\/\/(?:www\.)?bilibili\.com\/(?:c(?:\/[^?#]*)?|v\/(?!topic(?:[/?#]|$)|game\/match(?:[/?#]|$)|popular(?:[/?#]|$))[^?#]*|(?:anime|guochuang|tv|movie|variety|documentary|mooc|cheese)\/?)(?:[?#]|$)/
 
 // 用户相关页面
 export const SPACE_URL = /^https?:\/\/space\.bilibili\.com(?:\/|$).*/

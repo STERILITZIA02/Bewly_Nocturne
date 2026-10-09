@@ -54,7 +54,7 @@ export async function ensureInterfaceLanguage(): Promise<LanguageType> {
     const language = supportedLanguages.has(currentLanguage)
       ? currentLanguage as LanguageType
       : detectedLanguage
-    if (!supportedLanguages.has(currentLanguage))
+    if (!supportedLanguages.has(currentLanguage) && settings.initializationState.value === 'loaded')
       settings.value.language = language
     applyInterfaceLanguage(language)
     return language

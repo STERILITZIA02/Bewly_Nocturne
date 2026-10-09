@@ -37,8 +37,6 @@ export type MessageServerSettingField
     | 'set_like'
     | 'show_unfollowed_msg'
 
-export type MessageServerSettingValue = number
-
 export type MessageServerSettingsValues = Record<MessageServerSettingField, number>
 
 export interface MessageBlockWordsData {

@@ -22,7 +22,7 @@ export function setupNotificationStateInvalidation() {
 
       sendMessage<TopBarStateInvalidate>(
         TOP_BAR_STATE_MESSAGE.INVALIDATE,
-        { accountId },
+        { accountId, resource: 'unread' },
       ).catch(() => {})
     }, INVALIDATION_DELAY)
   }

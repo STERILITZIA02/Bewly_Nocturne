@@ -6,6 +6,7 @@ import { i18n } from '~/utils/i18n'
 import { isVideoPlaybackPage } from '~/utils/main'
 import { captureVideoScreenshot, handleVideoScreenshotShortcut, videoScreenshotBusy } from '~/utils/videoScreenshot'
 
+import { registerPlayerControlFit } from './playerControlFit'
 import { createPlayerControlTooltip, updatePlayerControlTooltip } from './playerControlTooltip'
 import { observePlayerDom } from './playerDomLifecycle'
 
@@ -18,6 +19,7 @@ let controlContainer: HTMLElement | null = null
 let hasInitialized = false
 let stopPlayerObserver: (() => void) | null = null
 let stopLifecycleWatch: (() => void) | null = null
+let fitControl: ReturnType<typeof registerPlayerControlFit> | undefined
 
 function translate(key: string): string {
   return String(i18n.global.t(key, settings.value.language))
@@ -33,6 +35,7 @@ function updateControlLabel(control = controlContainer) {
   control.removeAttribute('title')
   control.setAttribute('aria-label', label)
   updatePlayerControlTooltip(control, label)
+  fitControl?.refresh()
 }
 
 function findPlayerControlBar(): HTMLElement | null {
@@ -75,6 +78,8 @@ function injectControl() {
     updateControlLabel()
     return
   }
+  fitControl?.dispose()
+  fitControl = undefined
 
   const controlBar = findPlayerControlBar()
   if (!controlBar)
@@ -84,6 +89,7 @@ function injectControl() {
   if (existingControl) {
     controlContainer = existingControl
     updateControlLabel()
+    fitControl = registerControl(controlContainer)
     return
   }
 
@@ -93,9 +99,21 @@ function injectControl() {
 
   controlContainer = createControlContainer()
   anchor.insertAdjacentElement('afterend', controlContainer)
+  fitControl = registerControl(controlContainer)
+}
+
+function registerControl(control: HTMLElement) {
+  return registerPlayerControlFit(control, {
+    priority: 20,
+    label: () => translate('player_screenshot.capture'),
+    disabled: () => videoScreenshotBusy.value,
+    activate: () => { void captureVideoScreenshot() },
+  })
 }
 
 function releaseScreenshotControlResources() {
+  fitControl?.dispose()
+  fitControl = undefined
   document.removeEventListener('keydown', handleVideoScreenshotShortcut)
   stopPlayerObserver?.()
   stopPlayerObserver = null
@@ -128,6 +146,7 @@ export function initVideoScreenshotControl() {
   }
   const stopBusyWatch = watch(videoScreenshotBusy, (busy) => {
     controlContainer?.setAttribute('aria-busy', String(busy))
+    fitControl?.refresh()
   })
   const stopWatch = watch(
     [() => settings.value.showVideoScreenshotButton, () => settings.value.videoScreenshotShortcut, () => settings.value.language, () => routeState.navigationId],

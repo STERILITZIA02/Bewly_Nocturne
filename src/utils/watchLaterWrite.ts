@@ -1,4 +1,6 @@
-export interface WatchLaterWriteResponse { code: number, message?: string }
+import type { WatchLaterUpdate } from '~/constants/watchLaterState'
+
+export interface WatchLaterWriteResponse { code: number, message?: string, watchLaterUpdate?: WatchLaterUpdate }
 
 /** Shared sending boundary. The caller owns identity and the post-send reconciliation. */
 export async function sendOwnedWatchLaterWrite(

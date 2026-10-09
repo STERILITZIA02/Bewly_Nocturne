@@ -1,0 +1,119 @@
+html.bewly-design[data-bewly-native-site="season-media"] {
+  .media-info-wrp,
+  .media-tab-nav,
+  .media-tab-content {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  // The poster is still displayed in .media-preview. This duplicate is solely
+  // the full-width blurred decoration, not a programme banner or content image.
+  .bangumi-info-blurbg {
+    background-image: none !important;
+    filter: none;
+  }
+
+  .bangumi-info-blurbg-wrapper::before {
+    background: none;
+  }
+
+  .media-preview {
+    border-color: var(--bew-surface-border-color) !important;
+    border-radius: var(--bew-media-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .media-preview > .common-lazy-img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .media-info-title-t,
+  .media-info-count-item em,
+  .media-info-time,
+  .media-info-intro-text,
+  .media-tab-nav li,
+  .media-tab-module-title,
+  .mic-title,
+  .mic-evaluate,
+  .long-title,
+  .review-content {
+    color: var(--bew-text-1) !important;
+  }
+
+  .media-tag,
+  .media-info-label,
+  .media-info-review-times,
+  .review-author-name:not([style]),
+  .review-author-time,
+  .pub-time,
+  .misl-ep-title {
+    color: var(--bew-text-2) !important;
+    border-color: var(--bew-border-color) !important;
+  }
+
+  .media-tab-detail-l,
+  .media-info-card {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .misl-ep-item,
+  .btn-follow.active,
+  .btn-pay-wrapper.is-vip,
+  .show-sponsor-rank {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .misl-ep-img {
+    border-radius: var(--bew-interactive-radius) 0 0 var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .misl-ep-index,
+  .btn-pay-wrapper.is-vip .pay-btn {
+    color: var(--bew-text-1);
+  }
+
+  .btn-follow:not(.active) {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
+    border-color: var(--bew-theme-color) !important;
+    border-radius: var(--bew-interactive-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .btn-follow:not(.active) > i {
+    // Reuse the original heart asset as a mask so near-white accent colours
+    // receive the same contrasting foreground as the native button label.
+    background: var(--bew-on-theme-color) !important;
+    mask: url("https://s1.hdslb.com/bfs/static/review/media/assets/heart-bangumi.svg") center / contain no-repeat;
+  }
+
+  .media-tab-nav .on,
+  .sl-ep-nav-item.on,
+  .to-review-btn,
+  .media-tab-module-write,
+  .media-tab-module-more {
+    color: var(--bew-theme-foreground);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .media-tab-module-write {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .weixin-share-modal {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}

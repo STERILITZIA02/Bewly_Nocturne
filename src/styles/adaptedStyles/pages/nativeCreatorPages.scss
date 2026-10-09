@@ -1,0 +1,1918 @@
+html.bewly-design[data-bewly-native-site="academy"] {
+  :is(.bca-app-content-container, .bca-app-body-container, .bca-app-body-content) {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  :is(.bca-c-header-box, .bca-c-sidebar-box, .bca-v-hul-box, .overview-block) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  :is(.bca-v-hul-box, .overview-block, .bca-c-series-card-box) {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.g-ct0, .g-ct1, .bca-c-header-site, .bca-chl-text, .page-title, .record-num) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.g-ct2, .g-ct3, .bca-csbbul-li, .bca-cf-li, .general-item, .study-record, .collect-record) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.bca-csbbul-li, .bca-cf-li, .general-item) {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+      color: var(--bew-text-1);
+    }
+
+    &:is(.selected, .active) {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  :is(.bca-c-header-search-box, .bca-chs-top) {
+    background: var(--bew-content-alt-solid);
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bca-chs-wrap {
+    width: 100%;
+  }
+
+  .bca-c-header-search-input {
+    color: var(--bew-text-1);
+    background: transparent;
+  }
+
+  &.dark .bca-c-header-search-icon > svg {
+    // The original search symbol has an explicit monochrome #212121 path.
+    filter: brightness(0) invert(1);
+  }
+
+  .bca-vhult-learn {
+    color: var(--bew-text-2);
+
+    span {
+      color: inherit;
+    }
+
+    .split {
+      background: var(--bew-border-color);
+    }
+  }
+
+  // Verified empty gradient decorations. Keep the banner/cover images and the
+  // native reading containers, without bright discs painting over their text.
+  :is(.bca-vhul-circle-top, .bca-vhul-circle-bottom, .bca-csc-circle) {
+    display: none;
+  }
+
+  .bca-c-more-box {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bca-v-hs-box > :is(.left-button, .right-button) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .bca-c-header-upload {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.bca-csc-left, .bca-cac-img, .bca-v-hb-box, .bca-vhb-pic-li) {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.bca-csc-left, .bca-cac-img, .bca-vhb-pic-li) > img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  :is(.toLearnCenter, .bca-c-more-box, .bca-cscrd-count) {
+    color: var(--bew-theme-foreground);
+  }
+
+  :is(.h-separator, .v-separator, .bottom-bar) {
+    background: var(--bew-border-color);
+  }
+
+  .general-item.active .bottom-bar {
+    background: var(--bew-theme-color);
+  }
+
+  @media (max-width: 1400px) {
+    .bca-c-header-box {
+      min-width: 0;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .bca-c-header-search-box {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+      margin-inline: var(--bew-space-6);
+    }
+
+    .bca-app-body-container,
+    .bca-app-body-content {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .bca-app-body-content {
+      width: calc(100% - var(--bew-space-8));
+      max-width: 1070px; // Retain the native wide-desktop reading cap.
+      margin-inline: auto;
+    }
+
+    .bca-vh-bl {
+      display: flex;
+      gap: var(--bew-space-6);
+    }
+
+    .bca-v-hb-box {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .bca-v-hul-box {
+      flex: 0 1 32%;
+      min-width: 0;
+    }
+
+    .bca-vhult-learn {
+      flex-wrap: wrap;
+      gap: var(--bew-space-1) var(--bew-space-2);
+
+      > span {
+        white-space: nowrap;
+      }
+
+      .split {
+        display: none;
+      }
+    }
+
+    .bca-v-hs-box > .right-button:not(.left) {
+      right: var(--bew-space-3);
+    }
+
+    .bca-v-hs-box > :is(.left-button, .right-button.left) {
+      left: var(--bew-space-3);
+      right: auto;
+    }
+
+    :is(.bca-vhs-cards-box, .bca-vsl-cards, .bca-vsds-cards) {
+      flex-wrap: wrap;
+    }
+
+    :is(.bca-v-hr-box, .bca-v-hc-box, .bca-vhr-cards-box, .bca-vhc-cards-box) {
+      height: auto;
+    }
+
+    :is(.bca-vhr-cards-box, .bca-vhc-cards-box) > .cards {
+      // These are six ordinary course cards, without carousel controls. The
+      // separate featured-series track keeps its native clipping and movement.
+      flex-wrap: wrap;
+      gap: var(--bew-space-6) var(--bew-space-2);
+
+      > .card {
+        margin: 0;
+      }
+    }
+
+    .bca-c-series-card-box.long {
+      max-width: 100%;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="materials"] {
+  // The public landing page is a separate native shell from /square and /manage.
+  .layout-wrapper {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+
+    .footer-wrapper,
+    :is(.video-card-wrapper, .image-card-wrapper, .up-card-wrapper) {
+      background: var(--bew-content-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+    }
+
+    :is(.video-card-wrapper, .image-card-wrapper, .up-card-wrapper, .right-card-wrapper) {
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    :is(.video-card-wrapper, .image-card-wrapper) .info > .title,
+    .avatar-card-wrapper > div,
+    .up-card-wrapper .name,
+    .up-card-wrapper .info .stat .counter,
+    .footer-wrapper :is(.black, .right .title) {
+      color: var(--bew-text-1);
+    }
+
+    :is(.video-card-wrapper, .image-card-wrapper) .info > :is(.usage, .cat),
+    .up-card-wrapper .info :is(.stat .label, .tags .tag),
+    .footer-wrapper .gray {
+      color: var(--bew-text-2);
+      border-color: var(--bew-border-color);
+    }
+
+    .footer-wrapper :is(.separator, .separator-black) {
+      border-color: var(--bew-border-color) !important;
+    }
+
+    .image-card-wrapper .cover {
+      // Preserve the light preview mat for transparent sticker artwork.
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+      overflow: hidden;
+    }
+
+    .up-card-wrapper .material .list .item {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .up-card-wrapper .material .more .dot {
+      border-color: var(--bew-text-2);
+    }
+
+    .button-wrapper,
+    .rights-wrapper .right-card .btn {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        background: var(--bew-theme-color);
+      }
+    }
+
+    .title-line-wrapper {
+      // Repeating diagonal strokes are separate from the original text nodes.
+      background-image: none;
+
+      :is(.title, .subtitle) {
+        background: var(--bew-content-solid);
+        color: var(--bew-text-1);
+        border-color: var(--bew-border-color);
+        border-radius: var(--bew-interactive-radius);
+        corner-shape: var(--bew-corner-shape);
+
+        &::after {
+          background-image: none;
+        }
+      }
+
+      .subtitle,
+      .more {
+        color: var(--bew-text-2);
+      }
+
+      .material-total {
+        color: var(--bew-theme-foreground);
+      }
+    }
+
+    .rights-wrapper .right-card-wrapper {
+      // This light artwork contains the original benefits label and numbering.
+      // Keep that artwork; use dark ink over its fixed light reading area.
+      background-color: white;
+      overflow: hidden;
+
+      .content > .title {
+        color: black !important;
+      }
+
+      .content > .subtitle {
+        color: rgb(0 0 0 / 75%);
+      }
+
+      .btn {
+        box-sizing: border-box;
+        min-height: var(--bew-control-height);
+        border-color: var(--bew-theme-color);
+      }
+
+      .btn-bg {
+        background: var(--bew-content-alt-solid);
+        border-color: var(--bew-border-color);
+        border-radius: var(--bew-interactive-radius);
+        corner-shape: var(--bew-corner-shape);
+      }
+    }
+
+    .banner-wrapper .mission-wrapper {
+      background: var(--bew-content-solid);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      > .bg {
+        display: none;
+      }
+
+      .title {
+        color: var(--bew-text-1);
+      }
+
+      .task-card-wrapper {
+        background: var(--bew-content-alt-solid);
+        border-radius: var(--bew-card-radius);
+        corner-shape: var(--bew-corner-shape);
+
+        .header {
+          border-radius: var(--bew-media-radius);
+          corner-shape: var(--bew-corner-shape);
+        }
+
+        .subtitle {
+          color: var(--bew-text-2);
+        }
+
+        .tags .tag {
+          color: var(--bew-on-theme-surface);
+          background: var(--bew-theme-surface);
+          border-color: var(--bew-border-color);
+          border-radius: var(--bew-badge-radius);
+          corner-shape: var(--bew-corner-shape-round);
+        }
+      }
+    }
+  }
+
+  :is(.navbar-wrapper, .manage-nav, .bmc-manage-wrapper-main) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  :is(.bmc-square-page, .bmc-manage-wrapper) {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .bmc-manage-wrapper .bmc-manage-wrapper-main {
+    // The native manager's nested scoped rule otherwise restores a white panel
+    // after the shared entry loads, leaving themed labels white on white.
+    background: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+  }
+
+  .bmc-manage-wrapper .manage-view {
+    background: transparent;
+  }
+
+  :is(.video-title, .up-name, .manage-title, .card-group-item .title, .card-group-item .count, .bmc-tab-button .name) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.tab-text, .usage, .category .item, .manage-tips, .card-group-item .text, .bcc-state__tip, .sub-text) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.manage-nav, .bmc-manage-wrapper-main, .card-group-item) {
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .card-group-item {
+    background: var(--bew-content-alt-solid);
+  }
+
+  :is(.base-video-card, .base-video-card-player, .base-video-card .lazy-img) {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.tab.active .tab-text, .u-head-item-active, .category .item.active, .manage-nav-item-sub-item.active) {
+    color: var(--bew-theme-foreground);
+  }
+
+  :is(.manage-nav-item-main, .manage-nav-item-sub-item, .bmc-tab-button) {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .manage-nav-item-main:not(.disabled):hover,
+  .manage-nav-item-sub-item:hover {
+    background: var(--bew-content-solid-hover);
+  }
+
+  .manage-nav :is(.manage-nav-item-main, .manage-nav-item-sub-item, .sub-text) {
+    color: var(--bew-text-2) !important;
+  }
+
+  .manage-nav .manage-nav-item-sub-item .sub-text {
+    color: inherit !important;
+  }
+
+  .manage-nav .manage-nav-item-main.active {
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .manage-nav .manage-nav-item-main.disabled {
+    color: var(--bew-text-3) !important;
+  }
+
+  .manage-nav .manage-nav-item-sub-item.active,
+  .manage-nav .router-link-exact-active > .manage-nav-item-sub-item {
+    background: var(--bew-theme-surface) !important;
+    color: var(--bew-on-theme-surface) !important;
+
+    .sub-text {
+      color: inherit !important;
+    }
+  }
+
+  .manage-head .u-head-item {
+    background: var(--bew-content-alt-solid) !important;
+    color: var(--bew-text-2) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.u-head-item-active {
+      background: var(--bew-theme-surface) !important;
+      color: var(--bew-on-theme-surface) !important;
+    }
+  }
+
+  .bcc-table__wrap {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+  }
+
+  .bcc-table__wrap :is(th, td) {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+  }
+
+  .bcc-table__wrap th {
+    color: var(--bew-text-2);
+    background: var(--bew-content-alt-solid);
+  }
+
+  // Virtual-avatar management uses its own cards and filter nodes instead of
+  // the shared card-group / manage-head template used by the other media types.
+  .virtual-idol-manage {
+    :is(.audit-overview-text, .audit-detail, .virual-idol-top) {
+      color: var(--bew-text-1);
+    }
+
+    .audit-explain {
+      color: var(--bew-text-2);
+    }
+
+    .bmc-virtual-idol-audit-card {
+      background: var(--bew-content-alt-solid);
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      :is(.title, .num) {
+        color: var(--bew-text-1);
+      }
+    }
+
+    .works-overview {
+      background: transparent;
+    }
+
+    .bmc-virtual-idol-works-card {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-2);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover:not(.active) {
+        background: var(--bew-content-solid-hover);
+        color: var(--bew-text-1);
+      }
+
+      &.active {
+        background: var(--bew-theme-surface);
+        color: var(--bew-on-theme-surface);
+      }
+
+      > :is(.title, .num) {
+        color: inherit;
+      }
+    }
+  }
+
+  .upload-wrapper .upload-content {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bmc-square-page .square-tab {
+    background: var(--bew-bg);
+  }
+
+  .bmc-square-page .square-tab-button {
+    min-height: var(--bew-control-height);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .name,
+    .icon-box {
+      color: inherit;
+    }
+
+    .icon-box svg {
+      // The native monochrome sprite writes white/orange ink inline.
+      color: inherit !important;
+    }
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    &.active {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+  }
+
+  .category-list-wrapper .category .item {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+      color: var(--bew-text-1);
+    }
+
+    &.active {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .category-list-wrapper > .operation {
+    box-sizing: border-box;
+    min-height: var(--bew-control-height);
+    height: auto;
+    width: auto;
+    gap: var(--bew-space-1);
+    white-space: nowrap;
+    // Center the 36px target within the native 40px category row.
+    margin-block: var(--bew-space-0-5);
+    padding: var(--bew-space-1) var(--bew-space-3);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    > img {
+      flex-shrink: 0;
+      filter: brightness(0);
+    }
+  }
+
+  &.dark .category-list-wrapper > .operation > img {
+    filter: brightness(0) invert(1);
+  }
+
+  .base-video-card > .base-video-card-player {
+    // This existing media host contains only its image, video and duration.
+    // Keep native preview playback; clip both media types to the same contour.
+    overflow: hidden;
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .bmc-sticker-card .sticker-title {
+    color: var(--bew-text-1);
+  }
+
+  .bmc-sticker-card .sticker-preview {
+    // Keep the native preview mat for transparent sticker artwork, including
+    // black outlines. Only its existing clipping contour follows the theme.
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bmc-manage-wrapper-main > .space {
+    :is(.name-space-card-item, .detail-space-card-item) {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    :is(.user-info, .detail-space-card-item .v),
+    > :is(.name-space-card, .detail-space-card) > header {
+      color: var(--bew-text-1);
+    }
+
+    .detail-space-card-item .t {
+      color: var(--bew-text-2);
+    }
+
+    // Native scoped selectors set black on the actual text below the themed
+    // user-info container, and separately on each statistic value.
+    .name-space-card .name-space-card-item .card-item-info {
+      .user-info > span,
+      .user-data .user-data-item .data-v {
+        color: var(--bew-text-1);
+      }
+
+      .user-data .user-data-item {
+        color: var(--bew-text-2);
+
+        > :not(.data-v) {
+          color: inherit;
+        }
+      }
+    }
+
+    .detail-space-card-item .v > a {
+      color: var(--bew-theme-foreground);
+    }
+
+    .card-item-avatar {
+      background: var(--bew-content-solid);
+      border-radius: var(--bew-radius-full);
+      corner-shape: var(--bew-corner-shape-round);
+    }
+
+    .logout-btn {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  .allowance-normal .empty-card .card-title {
+    color: var(--bew-text-2);
+  }
+
+  .bmc-manage-wrapper .allowance-normal > h3 {
+    color: var(--bew-text-1);
+  }
+
+  @media (max-width: 1312px) {
+    // The original shell is 1280px wide; include the shared 16px side gutters.
+    .layout-wrapper {
+      min-width: 0;
+
+      :is(.router-wrapper, .footer-content) {
+        width: calc(100% - var(--bew-space-8));
+        min-width: 0;
+        box-sizing: border-box;
+      }
+
+      .banner-wrapper {
+        // Keep native DOM order when both the task cards and hero no longer fit.
+        flex-direction: column;
+        height: auto;
+        gap: var(--bew-space-4);
+
+        > img.bg {
+          position: static;
+          min-width: 0;
+          width: 100%;
+          height: auto;
+          aspect-ratio: 1280 / 396; // Preserve the native central hero crop.
+          border-radius: var(--bew-media-radius);
+          corner-shape: var(--bew-corner-shape);
+        }
+
+        .mission-wrapper.task {
+          width: 100%;
+          height: auto;
+          padding: var(--bew-space-4);
+
+          > :not(.bg) {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: var(--bew-space-4);
+
+            > .title {
+              grid-column: 1 / -1;
+              margin-bottom: 0;
+            }
+          }
+
+          .card + .card {
+            margin-top: 0;
+          }
+        }
+      }
+
+      .rights-wrapper {
+        flex-wrap: wrap;
+        gap: var(--bew-space-4);
+
+        .right-card-wrapper + .right-card-wrapper {
+          margin-left: 0;
+        }
+      }
+
+      .video-wrapper > ul.list-wrapper {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: var(--bew-space-4);
+
+        > li {
+          width: auto;
+          min-width: 0;
+          margin: 0;
+        }
+      }
+
+      .up-card-wrapper {
+        flex-wrap: wrap;
+        gap: var(--bew-space-4);
+      }
+    }
+
+    #app.wrapper > div:has(> .bmc-manage-wrapper, > .bmc-square-page) {
+      // The unnamed native route host imposes 1280px even when its visible
+      // child has min-width:0; release that owner before sizing its children.
+      min-width: 0 !important; // The native route writes this minimum inline.
+    }
+
+    .navbar-wrapper,
+    .bmc-manage-wrapper {
+      min-width: 0;
+      width: 100%;
+    }
+
+    :is(.navbar-content, .bmc-square-page, .bmc-manage-wrapper-container) {
+      box-sizing: border-box;
+      max-width: calc(100% - var(--bew-space-8));
+      min-width: 0;
+      margin-inline: auto;
+    }
+
+    .bmc-manage-wrapper-main {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .virtual-idol-manage {
+      // This inner template has its own 1100px minimum, inside the sidebar's
+      // remaining content column. Keep its native card widths and table layout.
+      min-width: 0;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="music-portal"] {
+  [class*="_navBar_"] {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    backdrop-filter: none;
+  }
+
+  [class*="_navItem_"] {
+    color: var(--bew-text-2);
+
+    &[class*="_active_"],
+    &:hover {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  &:not(.dark) [class*="_navBar_"] svg path[fill="#fff"] {
+    // Only the observed monochrome header wordmarks, not the branded hero art.
+    fill: currentColor;
+  }
+
+  [class*="_section_"] [class*="_linkBtn_"] {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  :is(.NavBar, .help-center, .main-view) {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .NavBar {
+    background: var(--bew-content-solid);
+  }
+
+  .NavBar :is(.menu-item-group, .menu-item).active {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface) !important;
+
+    > span {
+      color: inherit;
+    }
+  }
+
+  :is(.menu-item-group, .menu-item) {
+    color: var(--bew-text-2);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.active {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .help-center :is(.title, .description, .description-weight, .guidelines),
+  .NotJoin .join-title {
+    color: var(--bew-text-1);
+  }
+
+  .help-center .warning-description {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .help-center > .container {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .NotJoin {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > .text-base {
+      color: var(--bew-text-2);
+    }
+  }
+
+  :is(.release-btn, .main-btn) {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // The landing video's branding remains intact; the following feature cards
+  // are ordinary reading surfaces, separate from the full-screen hero artwork.
+  :is([class*="_secCards_"], [class*="_secJoin_"], [class*="_secCollab_"]) {
+    // These sections use a separate decorative texture behind ordinary text.
+    // The first section's brand video and all actual role artwork stay native.
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+
+    > [class*="_title_"],
+    > [class*="_bizTitle_"] {
+      color: var(--bew-text-1);
+    }
+  }
+
+  [class*="_secCards_"] [class*="_card_"] {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    [class*="_title_"] {
+      color: var(--bew-text-1);
+    }
+
+    [class*="_desc_"] {
+      color: var(--bew-text-2);
+    }
+  }
+
+  [class*="_secJoin_"] [class*="_card_"] {
+    // All three observed role illustrations have a fixed light-blue reading
+    // area. Dark ink keeps their original image colors readable in every theme.
+    color: black;
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    :is([class*="_title_"], p, [class*="_detail_"], mark) {
+      color: inherit;
+    }
+
+    [class*="_bar_"] {
+      background-color: currentColor;
+    }
+  }
+
+  @media (max-width: 1200px) {
+    [class*="_section_"] {
+      min-width: 0;
+      width: 100%;
+    }
+
+    // Only resize the carousel viewport. Its absolutely positioned cards,
+    // transforms and native animation ownership remain untouched.
+    [class*="_secCards_"] > [class*="_wrapper_"] {
+      min-width: 0;
+      width: 100%;
+    }
+
+    [class*="_secJoin_"] > .flex {
+      width: calc(100% - var(--bew-space-8));
+      max-width: 100%;
+      min-width: 0;
+      gap: var(--bew-space-4);
+
+      > [class*="_card_"] {
+        flex: 1 1 0;
+        min-width: 0;
+        margin-inline: 0;
+      }
+    }
+
+    [class*="_secCollab_"] > .relative {
+      max-width: calc(100% - var(--bew-space-8));
+    }
+
+    :is(.main-view, .main-content) {
+      min-width: 0;
+    }
+
+    .help-center .el-image {
+      max-width: 100%;
+    }
+
+    .help-center {
+      box-sizing: border-box;
+      min-width: 0;
+      width: 100%;
+      padding: var(--bew-space-4) var(--bew-space-6);
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="music-rank"] {
+  [class*="_tabsHeader_"] > [class*="_tabHeaderItem_"],
+  [class*="_detailArea_"] .periodShow {
+    display: inline-flex;
+    align-items: center;
+    box-sizing: border-box;
+    min-height: var(--bew-control-height);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  [class*="_detailArea_"] .periodShow {
+    color: var(--bew-text-1);
+
+    // The native label and monochrome arrow each set white independently.
+    > :is(span, svg) {
+      color: inherit;
+    }
+  }
+
+  [class*="_PcRankPeriodPop_"] {
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // The application also writes a cover-derived solid colour inline on this
+  // host. It is a page decoration, separate from the actual cover/video nodes.
+  #root > div {
+    background-color: var(--bew-bg) !important;
+  }
+
+  // Observed as an empty, absolutely positioned background stack. The actual
+  // chart cover, song thumbnails and native player are separate siblings.
+  [class*="_pcBackground_"] {
+    display: none;
+  }
+
+  :is([class*="_detailArea_"], [class*="_appContent_"], [class*="_cardList_"]) {
+    color: var(--bew-text-1);
+  }
+
+  :is([class*="_title_"], [class*="_album_"], [class*="_musicInfo_"]) {
+    color: var(--bew-text-1);
+  }
+
+  :is([class*="_otherInfo_"], [class*="_heat_"], [class*="_tabHeaderItem_"]) {
+    color: var(--bew-text-2);
+  }
+
+  [class*="_tabHeaderItemSelect_"] {
+    color: var(--bew-theme-foreground);
+  }
+
+  [class*="_tabsHeaderAnchor_"] {
+    background: var(--bew-theme-color);
+  }
+
+  [class*="_card_"] {
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  [class*="_card_"]:hover {
+    background: var(--bew-content-solid-hover);
+  }
+
+  :is([class*="_cover_"], [class*="_coverImg_"]) {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is([class*="_cover_"], [class*="_coverImg_"]) > img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  [class*="_btn_"] {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  [class*="_playAll_"] {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+  }
+
+  [class*="_btn_"] path[fill="white"] {
+    fill: currentColor;
+  }
+
+  // This native PNG is the monochrome chart wordmark. Song/album artwork is
+  // deliberately outside this selector and keeps its original colours.
+  &:not(.dark) [class*="_titleImg_"] img {
+    filter: brightness(0);
+  }
+
+  @media (max-width: 1200px) {
+    :is([class*="_detailArea_"], [class*="_appContent_"]) {
+      max-width: calc(100% - var(--bew-space-8));
+      min-width: 0;
+      margin-inline: auto;
+    }
+
+    [class*="_detailArea_"] [class*="_left_"] {
+      min-width: 0;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-data"] {
+  .data-center {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .data-center > .content {
+    // The child application keeps a 1097px reading column even when its iframe
+    // is only 900px wide. Keep its native desktop cap and release the overflow.
+    min-width: 0;
+    max-width: calc(100% - var(--bew-space-8));
+    margin-inline: auto;
+  }
+
+  :is(.core-data, .income, .header-nav) {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.title, .name, .value, .label, .num, .legend-item),
+  .chart .left,
+  .title-line .left {
+    // These native scoped labels load after the appearance entry.
+    color: var(--bew-text-1) !important;
+  }
+
+  .header-nav .item {
+    color: var(--bew-text-2) !important;
+  }
+
+  :is(.title-line, .subblock, .info) {
+    border-color: var(--bew-border-color);
+  }
+
+  :is(.header-nav .item.selected, .export) {
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .page-link {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .left {
+      color: inherit !important;
+    }
+  }
+
+  :is(.cell, .item-cell, .select) {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .cell.active,
+  .cell.active .cell-bg {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+  }
+
+  .select {
+    min-height: var(--bew-control-height-sm);
+    padding-inline: var(--bew-space-2);
+
+    .text {
+      color: inherit !important;
+    }
+  }
+
+  .core-data,
+  .income,
+  .income .subblock {
+    box-sizing: border-box;
+    width: 100%;
+    min-width: 0;
+  }
+
+  .income .subblock {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    // The native canvas owns its axis/data colours. Keep a neutral chart paper
+    // inside the themed reading card, without filtering or redrawing the plot.
+    > .wrapper {
+      background: white;
+      max-width: 100%;
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    canvas {
+      display: block;
+      max-width: 100%;
+      height: auto !important;
+    }
+  }
+
+  :is(.pop-menu, .data-card-popper) {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-charge"] {
+  .custom-charge {
+    min-width: 0;
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .custom-charge > div:has(> .charge-participate) {
+    background: var(--bew-content-solid) !important;
+    box-sizing: border-box;
+    max-width: calc(100% - var(--bew-space-8));
+    border-radius: var(--bew-panel-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .charge-participate {
+    box-sizing: border-box;
+    width: 100%;
+    background: transparent;
+    color: var(--bew-text-1);
+
+    > h1 {
+      color: var(--bew-theme-foreground) !important;
+    }
+  }
+
+  .benefit-item {
+    background-color: var(--bew-content-alt-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .benefit-title {
+    color: var(--bew-text-1) !important;
+  }
+
+  :is(.benefit-desc, .check-read) {
+    color: var(--bew-text-2) !important;
+  }
+
+  .read-protocol,
+  .more {
+    color: var(--bew-theme-foreground);
+  }
+
+  .part-btn {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:is(.disabled, [disabled], [aria-disabled="true"]) {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-3);
+    }
+  }
+
+  @media (max-width: 1132px) {
+    .charge-participate {
+      padding-inline: var(--bew-space-6);
+    }
+
+    .benefit-list {
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: var(--bew-space-6);
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-quests"] {
+  :is(.regist-wrap, .new-applye-view) {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  :is(.condition-block, .benifits-block, .shop-ways-block, .ups-block, .question-block) {
+    // The three section PNGs were inspected: they contain only gradients.
+    // Title PNGs, the benefits illustration and product/creator pictures remain.
+    background: var(--bew-content-solid) !important;
+    flex-shrink: 0;
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .new-applye-view {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bew-space-4);
+    box-sizing: border-box;
+    padding: var(--bew-space-4);
+  }
+
+  :is(.contion-detail, .ups-item) {
+    background: var(--bew-content-alt-solid) !important;
+    border-radius: var(--bew-card-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .contion-detail .divider {
+    background: var(--bew-border-color);
+  }
+
+  .contion-item-value .reach {
+    color: var(--bew-text-1);
+  }
+
+  .ups-tag {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-radius: var(--bew-badge-radius);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .question-item {
+    background: var(--bew-content-alt-solid) !important;
+    border-radius: var(--bew-badge-radius);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .ups-block,
+  .ups-list {
+    height: auto;
+  }
+
+  .ups-list {
+    max-width: calc(100% - var(--bew-space-8));
+  }
+
+  &.dark :is(.condition-tip, .benifits-tip, .shop-ways-tip, .ups-tip, .question-tip) {
+    // These are transparent text-only images, not content illustrations.
+    filter: brightness(0) invert(1);
+  }
+
+  :is(.condition-tip, .benifits-tip, .shop-ways-tip, .ups-tip, .question-tip, .question-title, .ups-name) {
+    color: var(--bew-text-1) !important;
+  }
+
+  :is(.contion-item-label, .protocal, .tips, .ups-desc) {
+    color: var(--bew-text-2) !important;
+  }
+
+  :is(.button-item, .not-reach-btn) {
+    background: var(--bew-content-alt-solid) !important;
+    color: var(--bew-text-1) !important;
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .button-item.active {
+    background: var(--bew-theme-surface) !important;
+    color: var(--bew-on-theme-surface) !important;
+  }
+
+  .shop-ways-block .button-item {
+    border-radius: var(--bew-badge-radius) !important;
+    corner-shape: var(--bew-corner-shape-round);
+
+    .button-name {
+      color: inherit !important;
+    }
+  }
+
+  &:not(.dark) .button-item.active .button-icon {
+    filter: brightness(0);
+  }
+
+  .apply-button {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .apply-button-text {
+      color: inherit;
+    }
+
+    &.disabled {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-3);
+    }
+  }
+
+  .protocal .link {
+    color: var(--bew-theme-foreground);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-report"] {
+  .web:has(> .web-background > .web-content > .qrcode-canvas) {
+    // Keep the native 1920x1080 poster and its QR coordinates together. Only
+    // bound this fixed composition's painting, not the document's scroll owner.
+    position: fixed;
+    inset: 0;
+    width: auto;
+    height: auto;
+    overflow: clip;
+  }
+
+  .color-background {
+    background-color: var(--bew-bg);
+  }
+
+  .qrcode-canvas {
+    background-color: white;
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-tasks"] {
+  --el-bg-color: var(--bew-content-solid);
+  --el-bg-color-page: var(--bew-bg);
+  --el-bg-color-overlay: var(--bew-elevated-solid);
+  --el-text-color-primary: var(--bew-text-1);
+  --el-text-color-regular: var(--bew-text-2);
+  --el-text-color-secondary: var(--bew-text-2);
+  --el-border-color: var(--bew-border-color);
+
+  .clue-page {
+    min-width: 0;
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  :is(.el-empty__description, .c-text3) {
+    color: var(--bew-text-2);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-promotion"] {
+  // Reuse the native component library's observed variables. Custom business
+  // cards below still need their own mapping where the site hardcodes colours.
+  --bd-color-primary: var(--bew-theme-color);
+  --bd-bg-color: var(--bew-content-solid);
+  --bd-bg-color-overlay: var(--bew-elevated-solid);
+  --bd-fill-color-blank: var(--bew-content-alt-solid);
+  --bd-fill-color: var(--bew-content-alt-solid);
+  --bd-fill-color-light: var(--bew-content-solid-hover);
+  --bd-fill-color-lighter: var(--bew-content-alt-solid);
+  --bd-fill-color-extra-light: var(--bew-content-alt-solid);
+  --bd-text-color-primary: var(--bew-text-1);
+  --bd-text-color-regular: var(--bew-text-2);
+  --bd-text-color-secondary: var(--bew-text-2);
+  --bd-text-color-placeholder: var(--bew-text-3);
+  --bd-text-color-disabled: var(--bew-text-3);
+  --bd-disabled-text-color: var(--bew-text-3);
+  --bd-disabled-bg-color: var(--bew-content-alt-solid);
+  --bd-border-color: var(--bew-border-color);
+  --bd-border-color-light: var(--bew-border-color);
+  --bd-border-color-lighter: var(--bew-border-color);
+  --bd-border-radius-base: var(--bew-interactive-radius);
+
+  :is(.pc-wrapper, .home-wrap) {
+    min-width: 0;
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .fly-pc-navigation {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .fly-pc-navigation .nav-item {
+    color: var(--bew-text-2);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.nav-item-active {
+      color: var(--bew-theme-foreground);
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  .b-card {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .b-card.sub-card {
+    background: var(--bew-content-alt-solid);
+  }
+
+  :is(.b-title, .target-title) {
+    color: var(--bew-text-1);
+  }
+
+  .target-tip {
+    color: var(--bew-text-2);
+  }
+
+  .account-info .name,
+  .b-title .title,
+  .combo :is(.name, .num, .num .din),
+  .home-wrap > .footer :is(.estimated, .count, .label, .num-wrap, .prefix, .num) {
+    color: var(--bew-text-1) !important;
+  }
+
+  .account-info .mid,
+  .video-wrap .bottom .left,
+  .yellow-tips :is(.text, .interval),
+  .combo :is(.desc, .time, .price, .cus),
+  .home-wrap > .footer .protocol {
+    color: var(--bew-text-2) !important;
+  }
+
+  .account-info > .right,
+  .video-empty,
+  .combo {
+    background: var(--bew-content-alt-solid) !important;
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .combo.is-selected {
+    background: var(--bew-theme-surface) !important;
+    border-color: var(--bew-theme-foreground);
+
+    :is(.name, .price) {
+      color: var(--bew-on-theme-surface) !important;
+    }
+  }
+
+  .yellow-tips {
+    background: var(--bew-content-alt-solid);
+  }
+
+  .split-line {
+    background: var(--bew-border-color);
+  }
+
+  .home-wrap > .footer {
+    background: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .pay-btn {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &.disabled {
+        background: var(--bew-content-alt-solid);
+        color: var(--bew-text-3);
+      }
+    }
+  }
+
+  .target {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.selected {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  :is(.button-select-popover-content, .bd-radio-button__inner) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bd-radio-button.is-active:not(.is-disabled) .bd-radio-button__inner {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+
+    .radio-item {
+      color: inherit;
+    }
+  }
+
+  :is(.management, .data, .mine-card, .mine .user-info) {
+    background: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.management .sticky-top, .data .data-top) {
+    background: var(--bew-content-solid);
+  }
+
+  .mine :is(.nickname, .card-title, .title, .count),
+  .data-content .select-item .price,
+  .bd-date-range-picker__header,
+  .bd-date-table td,
+  .bd-input__inner,
+  .bd-range-input,
+  .bd-select-dropdown__item {
+    color: var(--bew-text-1) !important;
+  }
+
+  .mine :is(.mid, .right-desc, .desc, .link-detail),
+  .data-content .select-item :is(.name, .header),
+  .bd-empty__description,
+  .bd-empty__bottom .sub-title,
+  .bd-tabs__item {
+    color: var(--bew-text-2) !important;
+  }
+
+  .bd-tabs__item.is-active {
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .bd-tabs__active-bar {
+    background: var(--bew-theme-color);
+  }
+
+  :is(.data-content .tabs, .data-content .select-item, .user-profile .empty-wrap, .bd-input__wrapper) {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .data-content .tabs-bg,
+  .data-content .select-item.selected {
+    background: var(--bew-theme-surface);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .data-content .tab-item {
+    color: var(--bew-text-2);
+
+    &.selected {
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .bd-button {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:not(:disabled, .is-disabled):hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    &.bd-button--primary:not(:disabled, .is-disabled) {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+
+    &:is(:disabled, .is-disabled) {
+      color: var(--bew-text-3);
+    }
+  }
+
+  .bd-popper.is-pure,
+  .bd-picker-panel {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bd-select-dropdown__item.is-hovering,
+  .bd-select-dropdown__item.is-selected,
+  .bd-date-table td.in-range .bd-date-table-cell {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface) !important;
+  }
+
+  .bd-date-table :is(td.start-date, td.end-date) span {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color) !important;
+  }
+
+  .bd-date-table td.disabled span {
+    color: var(--bew-text-3) !important;
+  }
+
+  .bd-picker-panel__shortcut,
+  .bd-picker-panel__icon-btn:not(:disabled) {
+    color: var(--bew-text-1);
+  }
+
+  .mine .course-info-wrap .cover {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .qualification-entry-btn,
+  .mine .go-btn {
+    border-radius: var(--bew-badge-radius);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  @media (max-width: 1072px) {
+    .pc-wrapper {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .home-wrap,
+    .fly-pc-navigation,
+    .management,
+    .data,
+    .mine,
+    .home-wrap > .footer.static {
+      width: 100%;
+    }
+
+    .home-wrap > .new-couple {
+      // Preserve the original coupon artwork/text as one horizontally readable
+      // strip instead of cropping its final coupon outside the iframe.
+      max-width: 100%;
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
+
+    .home-wrap > .footer:not(.static) {
+      left: var(--bew-space-4);
+      right: var(--bew-space-4);
+      width: auto;
+      height: auto;
+      gap: var(--bew-space-4);
+
+      .f-left {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .f-right {
+        margin-left: 0;
+      }
+    }
+
+    .management .sticky-top > .flex,
+    .management .sticky-top .opts,
+    .data-top .select {
+      max-width: 100%;
+      flex-wrap: wrap;
+      height: auto;
+      gap: var(--bew-space-2);
+    }
+
+    .mine {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 300px;
+      gap: var(--bew-space-4);
+    }
+
+    .mine-left,
+    .mine-right,
+    .mine .course-list {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .mine .course-list {
+      height: auto;
+      flex-wrap: wrap;
+      gap: var(--bew-space-3);
+
+      .course-item {
+        margin-inline: 0;
+      }
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="creator-cooperation"] {
+  .layout {
+    background: var(--bew-bg);
+  }
+
+  .upper-settle-layout {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .upper-settle-layout-header {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.settle-inner, .settle-about-comp, .right-item) {
+    background-color: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.module-title, .settle-condition-description, .settle-phone, .ivu-checkbox-wrapper) {
+    color: var(--bew-text-1) !important;
+  }
+
+  :is(.settle-condition-extra, .settle-condition-tips, .right-item-desc) {
+    color: var(--bew-text-2) !important;
+  }
+
+  .text-btn {
+    color: var(--bew-theme-foreground);
+  }
+
+  .divide-line {
+    background-color: var(--bew-border-color);
+  }
+
+  .bd-button {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.bd-button--primary:not(.is-disabled, :disabled) {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+
+    &:is(.is-disabled, :disabled) {
+      color: var(--bew-text-3);
+    }
+  }
+
+  .ivu-checkbox-inner {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-radius-sm);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .ivu-checkbox-checked .ivu-checkbox-inner {
+    background: var(--bew-theme-color);
+    border-color: var(--bew-theme-color);
+
+    &::after {
+      border-color: var(--bew-on-theme-color);
+    }
+  }
+
+  @media (max-width: 1112px) {
+    .upper-settle-layout {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .upper-settle-layout-header {
+      display: block;
+      width: 100%;
+      height: auto;
+    }
+
+    .upper-settle-layoutbody,
+    .settle-inner,
+    .settle-module-title {
+      width: 100%;
+      min-width: 0;
+    }
+
+    .settle-inner > .flex-center,
+    .settle-about-comp {
+      max-width: calc(100% - var(--bew-space-8));
+    }
+
+    .settle-inner > .flex-center > div {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .settle-about-comp .video-box {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+
+      .video-box-iframe {
+        width: 100%;
+        height: 100%;
+      }
+    }
+
+    .rights-box {
+      width: 100%;
+      height: auto;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: var(--bew-space-4);
+    }
+  }
+}

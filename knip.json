@@ -12,9 +12,11 @@
     "src/components/*.vue",
     "src/components/*/*.vue",
     "src/contentScripts/index.ts",
+    "src/contentScripts/nativeAppearance.ts",
     "src/inject/index.ts",
     "vite.config.content.ts",
-    "vite.config.inject.ts"
+    "vite.config.inject.ts",
+    "vite.config.native.ts"
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [

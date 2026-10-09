@@ -18,7 +18,7 @@
 
       &:focus,
       &:hover {
-        color: var(--bew-theme-color) !important;
+        color: var(--bew-theme-foreground) !important;
         background-color: unset !important;
         border-color: var(--bew-theme-color) !important;
       }
@@ -28,11 +28,11 @@
     .be-pager-next,
     .be-pager-prev {
       &:hover {
-        color: var(--bew-theme-color) !important;
+        color: var(--bew-theme-foreground) !important;
         border-color: var(--bew-theme-color);
 
         a {
-          color: var(--bew-theme-color) !important;
+          color: var(--bew-theme-foreground) !important;
         }
       }
     }

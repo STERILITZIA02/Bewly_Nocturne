@@ -33,6 +33,19 @@
     background-color: var(--bew-elevated);
     backdrop-filter: var(--bew-filter-glass-1);
   }
+
+  // The current space UI uses native white text even after brand colours are
+  // projected from Nocturne. Pair only the observed solid accent controls.
+  .vui_button.vui_button--blue,
+  .vui_button.vui_button--active-blue,
+  .vui_button.action-btn.blue,
+  .vui_sidebar-item--active,
+  .radio-filter__item--active,
+  .side-nav__item.active,
+  .side-nav__item.active .side-nav__item__main,
+  .side-nav__item.active .side-nav__item__sub {
+    color: var(--bew-on-theme-color);
+  }
   // #endregion
 
   // #region old user space page
@@ -53,7 +66,7 @@
 
   .favInfo-box .favInfo-details .fav-options .fav-play:hover,
   .favInfo-box .collection-details .collection-btn:hover {
-    color: white !important;
+    color: var(--bew-on-theme-color) !important;
   }
 
   .large-item .cover {
@@ -131,7 +144,7 @@
     .i-live:hover .i-live-title,
     #page-article .row .breadcrumb .item.cur,
     .bili-dyn-topic__card {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     #navigator-fixed a:active,
@@ -153,7 +166,7 @@
     .dynamic-link-hover-bg,
     .im-popup .bp-popup-panel .title-ctnr .popup-title,
     .paly-all-btn:hover .video-commonplayer_play {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .i-live .i-live-fo-btn:hover,
@@ -276,6 +289,19 @@
       background-color: var(--bew-theme-color) !important;
     }
 
+    .game-card__btn,
+    .favInfo-box .favInfo-details .fav-options .fav-play,
+    .favInfo-box .collection-details .collection-btn,
+    #page-series-index .channel-option.no-channel .create-channel,
+    .channel-option .modify-channel,
+    .bl-button--primary,
+    .bl-button--ghost:hover,
+    .follow-dialog-wrap .follow-dialog-window .bottom .btn,
+    .comment-bilibili-con .btn .btn-submit,
+    .btn-subscribe:not(.btn-cancel) {
+      color: var(--bew-on-theme-color);
+    }
+
     .h .h-guest-hint {
       background-color: var(--bew-theme-color);
     }
@@ -288,6 +314,7 @@
     .bangumi-pagelistbox .p:hover,
     .bangumi-pagelistbox .p.active {
       background-color: var(--bew-theme-color) !important;
+      color: var(--bew-on-theme-color);
     }
 
     .i-m-title .icon-i-title,
@@ -315,24 +342,24 @@
     .bangumi-pagelistbox .p:hover,
     .bangumi-pagelistbox .p.active,
     .comment-bilibili-con .btn .btn-submit:hover {
-      color: white !important;
+      color: var(--bew-on-theme-color) !important;
     }
 
     .content .group-list li input[type="checkbox"] + i {
-      background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAMZJREFUOBFjZACCY8cuSP/4+6ebkYHB4T8DgyRIjFgA1PMcqOcABzNLqZWVwVNGkGE///45w8DANIGZ898iOxOT58QaBlJ36MwZyb/fmeIYGP4VsDOzmDDuO3xmGSMD00VHW6NOUgxCV7v/8Lny/wz/9JlA3gS5DF0BqXyQGSCzGIAuBAYBdQDILCbqGIUwZdRARFiQyxoNQ3JDDqFvCIQhqDwDFUEIR5PHApkBMosJVDhCyjPyDILpApkBMov6BSzIBmpWAQCEVFxRmF8CTgAAAABJRU5ErkJggg==);
+      background: none;
       border-width: 1px;
-      border-radius: 5px;
-      border-color: #bec3cc;
+      border-radius: var(--bew-radius-sm);
+      corner-shape: var(--bew-corner-shape);
+      border-color: var(--bew-border-color);
     }
 
     .content .group-list li input[type="checkbox"]:hover + i {
-      background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAAXNSR0IArs4c6QAAAMZJREFUOBFjZACCY8cuSP/4+6ebkYHB4T8DgyRIjFgA1PMcqOcABzNLqZWVwVNGkGE///45w8DANIGZ898iOxOT58QaBlJ36MwZyb/fmeIYGP4VsDOzmDDuO3xmGSMD00VHW6NOUgxCV7v/8Lny/wz/9JlA3gS5DF0BqXyQGSCzGIAuBAYBdQDILCbqGIUwZdRARFiQyxoNQ3JDDqFvCIQhqDwDFUEIR5PHApkBMosJVDhCyjPyDILpApkBMov6BSzIBmpWAQCEVFxRmF8CTgAAAABJRU5ErkJggg==);
+      background: none;
     }
 
     .content .group-list li input[type="checkbox"]:checked + i,
     .content .group-list li input[type="checkbox"]:checked:hover + i {
-      background: var(--bew-theme-color) url(//s1.hdslb.com/bfs/static/jinkela/note-list/assets/ic_check.svg) no-repeat
-        50% / 9px;
+      background: var(--bew-theme-color) var(--bew-theme-checkmark-image) no-repeat 50% / 9px;
     }
 
     // 處理性別圖標背景顔色

@@ -10,6 +10,13 @@
     background-color: var(--bew-elevated);
     backdrop-filter: var(--bew-filter-glass-1);
   }
+
+  .bili-cover-card__tag {
+    background-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-radius-sm);
+    corner-shape: var(--bew-corner-shape);
+  }
   // #endregion
 
   // #region old history page
@@ -19,19 +26,22 @@
     .history-list .r-info .w-info .username:hover,
     .history-wrap a.btn,
     .history-dlg .hsbtn .cancel:hover {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .history-wrap .warn .btn,
     .history-wrap .time-label.active,
-    .history-wrap a.btn:hover {
-      color: white;
+    .history-wrap a.btn:hover,
+    .history-wrap .history-btn .btn:hover,
+    .nodata-btn,
+    .history-dlg .hsbtn .sure {
+      color: var(--bew-on-theme-color);
     }
 
     .history-wrap a.btn,
     .history-wrap .time-label,
     .history-list .r-info .title:hover {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .history-wrap .active,
@@ -47,6 +57,7 @@
 
     .go-top-m .go-top:hover {
       background-color: var(--bew-theme-color) !important;
+      color: var(--bew-on-theme-color);
     }
 
     .history-wrap .active:before,

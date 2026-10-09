@@ -53,7 +53,7 @@ interface Props {
   isLikeLoading?: boolean
   isReservationLoading?: boolean
   isForwardLoading?: boolean
-  isWatchLaterAdded: (target: WatchLaterTarget) => boolean
+  isWatchLaterAdded: (target: WatchLaterTarget) => boolean | undefined
   isWatchLaterLoading: (target: WatchLaterTarget) => boolean
 }
 
@@ -713,9 +713,9 @@ onBeforeUnmount(() => {
             class="moment-card__watch-later"
             :class="{ 'is-added': isWatchLaterAdded(moment) }"
             :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
+            :aria-label="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
+            :title="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="toggleCardWatchLater(moment)"
           >
             <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
@@ -740,9 +740,9 @@ onBeforeUnmount(() => {
             class="moment-card__watch-later"
             :class="{ 'is-added': isWatchLaterAdded(moment) }"
             :disabled="isWatchLaterLoading(moment)"
-            :aria-label="isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
+            :aria-label="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
             :aria-pressed="isWatchLaterAdded(moment)"
-            :title="isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
+            :title="isWatchLaterAdded(moment) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment) ? t('moment_card.added') : t('moment_card.watch_later')"
             @click.stop="toggleCardWatchLater(moment)"
           >
             <SkeletonBlock v-if="isWatchLaterLoading(moment)" width="1em" height="1em" radius="interactive" />
@@ -894,9 +894,9 @@ onBeforeUnmount(() => {
                   }"
                   :disabled="isWatchLaterLoading(moment.forward.video)"
                   :aria-disabled="isWatchLaterLoading(moment.forward.video)"
-                  :aria-label="isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
+                  :aria-label="isWatchLaterAdded(moment.forward.video) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment.forward.video) ? t('moment_card.watch_later_added') : t('moment_card.add_watch_later')"
                   :aria-pressed="isWatchLaterAdded(moment.forward.video)"
-                  :title="isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
+                  :title="isWatchLaterAdded(moment.forward.video) === undefined ? t('common.watch_later_status_unknown') : isWatchLaterAdded(moment.forward.video) ? t('moment_card.added') : t('moment_card.watch_later')"
                   @click.stop.prevent="toggleCardWatchLater(moment.forward.video)"
                 >
                   <SkeletonBlock v-if="isWatchLaterLoading(moment.forward.video)" width="1em" height="1em" radius="interactive" />

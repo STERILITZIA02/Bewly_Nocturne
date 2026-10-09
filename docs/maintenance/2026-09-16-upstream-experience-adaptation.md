@@ -621,3 +621,1701 @@ U23 的番剧海报 20px 展示层级与 U25 的用户卡片断点属于原审�
 - 用户明确要求 push 所有修改。本次沿用 `message_feature`，推送目标仅为 `origin/message_feature`；提交前远端仍为 `5c978c56063b24273a3f2ac858b1fd1cda684151`，没有远端分叉。包含现有源码、回归脚本与维护文档，保留原 stash，不改版本，不创建 PR，不生成或提交打包产物。
 - 本次重新完整执行 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm knip`，退出码均为 0；测试为 **397 条 PASS**，Knip 保留 49/4/5 项提示。首次测试因沙箱拒绝 tsx 的本地 IPC 管道而未启动，获所需执行权限后完整重跑通过。日志为 `/tmp/bewly-push-0929-{lint,typecheck,test,knip}.log`。
 - 提交与推送不代表完成新脚本的实站视觉验收；上一节记录的扩展重载、黑白主题及桌面比例验收仍待继续。本轮没有发送消息或执行真实账号批量操作。
+
+## 2026-09-29 请求、存储、跨页数据与历史目标
+
+用户要求实施八项指定行为。本轮开始完整读取 AGENTS、package.json 和本记录，核对 status、remote、branch、HEAD 与 stash。实际基线是干净的 `message_feature@7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6`，跟踪 `origin/message_feature`；请求中的审查 SHA `3d0fe168addfb51f07823cfe98f8ee48fcf1e8df` 不在当前对象库中，没有回退工作区。原 stash `7a6ef9155ccd8e5ce92768702da03b5ae8d7184b` 保留。
+
+只读取上游 `4c1e1241e025eee39ec0cf4f6b6c5132ad21a6a7..bb0df6265fdd2da012b7e4e7bda170b7595c52f8` 的净差异，按本地现有 owner 补齐行为，没有 merge、cherry-pick 或覆盖上游整文件。该范围的其他功能不属于本次批准范围，不推进整个上游同步游标。本轮不提交、推送、改项目版本、生产构建、打包或 clear。
+
+| 项 | 上游定位 | 本地实施与保留边界 | 状态 |
+| --- | --- | --- | --- |
+| 1. 读取取消与总期限 | `3da018935c2886f02b2fced8c41cef983c633149`、`0b16aafaeb8892bacfe5c726e1a1be2dc95780fb` | `utils/abort.ts`、`messaging.ts`、后台 API listener/utils、`searchRequest` 与 `useSearchRequest`。普通与函数式匿名搜索使用只读 Port；断开会取消实际 fetch，20 秒预算覆盖 Cookie/WBI 等待、fetch、body 和签名重试。共享 nav/WBI 由自己的任务管理期限，退出一个等待者不取消其他消费者。匿名请求仍重建类型化白名单并 omit 凭据，WBI 保持匿名/账号分区；迟到账号密钥不能清除新账号缓存。取消、超时、风控和业务失败分开处理，旧 finally 不清除新 loading。写操作不接入取消 Port，不因网络/超时自动重发。 | 已实施；现有参数与账号检查保留；待实站 |
+| 2. 授权刷新归属 | `6ad90a93d1a8122686f448e16ff1ff670dfc0197` | 原持久化 refreshToken/lastUpdatedAt 检查已有，保留。补齐固定授权对象/版本、持久化 await 后再次核对、旧授权取消和按身份/版本合并 single-flight；两个刷新 endpoint 共用 15 秒预算。只有明确否定响应才能尝试备用 endpoint，传输结果未知不重发令牌轮换。 | 已有等价 + 补差额；待实站 |
+| 3. 设置首读 | `15ad5d14bce39b0888b6684bc3f1cac63fbaee99`、`eb86988a7a7b5833a0a4f9ff9452590de4aae773` | `settingsStorageCoordinator` 对完整设置/元数据做只读快照，不排在无关慢写之后；生成 epoch/deviceId、重置和导入仍串行。前台 1.5 秒后读取本地快照，本地等待也有界；有效快照可供 UI 显示，`settingsDisplayReady` 与权威 `settingsReady` 分开。降级不能持久化默认值/自动归一化，恢复后按 epoch/revision 对账。保留 `onSettingsMessage`、普通/无痕 relay 与云同步字段版本。 | 已实施；已有协调器继续唯一写入；待实站 |
+| 4. 设置变更合并 | `ab824e97f2685e9f2163e3d1892d6a12940a2903` | 深层变化按 Vue 同轮合并；应用 ACK/广播前捕获未入队编辑，维持 canonical → inFlight → queued，嵌套对象原位对账。导入/重置通过现有协调器轮换 epoch；旧 ACK、旧事件和旧未入队编辑失效。丢失 ACK 后重用原 operationId，不能把已提交旧操作作为新操作覆盖远端新编辑。正常卸载排空已捕获编辑；扩展失效终止监听与重试。 | 已实施；现有迁移与 flush 语义保留；待实站 |
+| 5. 顶栏与跨页 nav | `371c1a13d6b9dc9838690165a872e0fa1f5d54a0`、`b8ecc15037fa415696836ebe7e3d28dbcabb0dac`、`b45e1b2b24894ad2c82c057facd14607a67e1671` | `TopBar` 复用 document 可见性与现有 iframe 宿主状态，暂停 UI 读取/周期 timer；恢复先核对 Cookie。暂停资料读取不改变账号写事务代次。nav 资料按账号/隐私上下文合并，短缓存只接受身份一致的成功资料；瞬态错误不登出。broker 按 unread/moments/rewards 管理租约、版本和各自更新时间，force 不越过租约；在途失效后合并再读，局部发布只含所属字段。后台启动不再无需求预取 WBI。 | 已实施；有效写入与后台播放保留；待实站 |
+| 6. 稍后再看成员 | `fbd0d4f47197f91fca1b9efd8116be6fabd88d46`、`6d0e9573f9aed598f9795c59042f8590e4b505b5` | `background/watchLaterStateBroker.ts` 为唯一扩展侧成员写入者，`logic/watchLaterState.ts` 只持有版本化投影和 aid/BV/EP 索引。数量读短列表，完整紧凑快照按需共享；只读十项的顶栏入口改为 `getWatchLaterPreview`。卡片、动态/转发、顶栏、原生按钮、页面、批量任务和播完移除沿原操作 owner 迁移；`updateOwnedWatchLater`、Cookie/CSRF/账号和批量任务结果保留。已确认写入发带 operationId 的增量，以 epoch/revision 拒绝乱序和重复交付；缺少别名或失败保持未知，卡片文案明确“状态待确认”。服务器分页也向同一 owner 提供正向成员证据，但部分列表不能证明不存在；删除已知成员直接修正数量。旧分页有界重读，仍冲突则对账并保留原分页游标，不以删短一页伪造末页；预览和页面均回读删除后移动的分页边界。未知发送结果只读取对账；worker 重启不自动重发，不保活。删除旧成员数组、已确认操作的 800ms 全量重读广播链和旧失效通道；原生外部未知操作的既有去抖保留。 | 已实施；服务端为最终依据；待实站 |
+| 7. 浏览、播放和进度 | `dc161fd1b4aa903bccdf6a673006bf1f839ef9b4` | `videoVisitRecord` 为共享纯模型，后台 `videoVisitHistoryCoordinator` 单写，原生 `videoVisitHistoryDatabase` 使用记录级事务。旧时间戳只迁移为浏览证据；新进度区分稿件/CID/分 P/EP，BV payload 保持大小写，不把展示 id 当 aid。主媒体事件跟随现有播放器/路由 owner，排除预览、广告、seek 和旧源残帧；实际播放不等于看完，完成还需真实覆盖与完整时长。timeupdate 仅更新会话，按周期/暂停/结束提交变化记录；pagehide 仅尽力收尾。清除轮换 epoch，单条删除用 revision 阻止旧待写编辑复活；容量仍为 10000。卡片共用查询，服务端有效明确进度（含真实 0、-1）优先；缺失进度不再归一化为 0，稍后再看时间文字和进度条共同使用有效本地补充。 | 已实施；无法确认的媒体不编造进度；待实站 |
+| 8. 历史目标/续播 | `8b868a497f2459f58a1e3012f7f4bd6588243e45` | `utils/historyTarget.ts` 统一 History、HistoryPop 和续播。ARCHIVE 的同身份 URI 缺 p 时合并有效 history.page，不依赖 videos；保留其他参数/hash、处理协议相对地址。只有身份和分 P 匹配、进度有效的 ARCHIVE/PGC 生成 t；不同视频、未知外站或无法确认的季入口不拼接历史 p/t。live/article 保留各自目标语义。未重写历史视图/分页/查询/账号 owner，只在成功删除后同步本地证据。 | 已实施；原历史 controller 保留；待实站 |
+
+### 隐私、迁移与性能边界
+
+- Chromium 的 `SessionStorageManager` 明确把无痕 context 重定向到 original context；因此历史没有采用仅加后缀的 `chrome.storage.session`。普通/无痕由各自 split worker 的原生 IndexedDB 上下文及独立库名隔离，保留 worker 休眠恢复，不增加权限或心跳。依据：[Chromium session storage 实现](https://github.com/chromium/chromium/blob/main/extensions/browser/api/storage/session_storage_manager.cc)、[Chrome split context 说明](https://developer.chrome.com/docs/extensions/reference/manifest/incognito)。真实关闭最后一个无痕窗口的环境验收仍待执行。
+- 旧站点与旧扩展历史按最新时间合并，持久化确认后才清理旧 key；无痕不导入普通扩展历史。迁移/清除的站点标记区分在途状态，避免两个启动页面互相误判为清除；没有存活页面时清除站点数据，也能在下次打开识别。清除后不重新导入旧记录。只处理插件自己的历史 key。
+- 新增 `fake-indexeddb@6.2.5` 仅为开发测试依赖，生产运行时使用原生 API；pnpm 自动带出的无关 peer 重解析已撤回，lockfile 仅增加该依赖的三处记录。项目仍为 0.1.1、pnpm 11.17.0。
+- 上游区间内的视觉、音量/清晰度、评论容器、全局快捷键、Firefox 和已撤回顶栏变更不适用于本任务，没有移植。私信界面、发送协议、原生节点移交和既有视觉 token 未重写。
+
+### 回归与实测记录
+
+新增 `scripts/verify-data-consistency.mjs` 接入原测试入口，调用实际请求链、Vue/Pinia store、协调器、客户端、数据库适配器与主媒体记录器；只替换网络、浏览器存储和可控时钟等外部边界。已有组件/协议测试按新接口更新依赖，未用新增源码字符串匹配代替行为回归。
+
+已通过的定向回归包括普通/匿名 fetch 与 body 挂起取消、共享 waiter、WBI 重试总期限与账号竞态、旧授权、设置首读/降级/ACK/导入/清除/卸载、三标签租约和在途再失效、隐藏恢复/换号及写事务保留、成员乱序/重复/未知写/worker 恢复、预览删除/旧分页/数量对账、双页面记录/删除/清除/迁移、主媒体事件模型与 URI/续播。
+
+本轮最终完整命令结果：
+
+| 命令 | 实际退出码 | 结果与日志 |
+| --- | --- | --- |
+| `pnpm lint` | 0 | `/tmp/bewly-data-29-final-lint.log` |
+| `pnpm typecheck` | 0 | `/tmp/bewly-data-29-final-typecheck.log` |
+| `pnpm test` | 0 | **423 条 PASS**，并完成 targeted-fixes、private-message、notifications 入口；`/tmp/bewly-data-29-final-test.log` |
+| `pnpm knip` | 0 | 保留基线 49 个 unused exports、4 个 exported types、5 个 enum members 提示，无新增；`/tmp/bewly-data-29-final-knip.log` |
+| `git diff --check` | 0 | 无空白错误 |
+
+完整回归仍输出既有 4 次 JSDOM 不支持完整页面 navigation 的诊断；不是实站结果，没有屏蔽或清除这些输出。过程中测试捕获了“缺失进度补 0”的旧断言和新进度查询的组件 mock 缺项，修正对应断言/依赖后重新完整执行至上述结果；没有跳过失败测试。
+
+仅报告隔离回归中实际计数：100 次同轮设置修改发送 1 个 patch；三个同时读取成员的消费者共用 1 次完整读取；三个已确认增量没有新增全量成员读取；只加载预览后删除已知项，没有新增完整成员/数量网络读取；三个真实 TopBar store 在首次读取期间再次失效，总共执行 2 次对应资源读取；隐藏宿主的 UI 周期 timer 为 0；160 次媒体 timeupdate 产生 4 次周期/收尾提交；1000 条数据库记录中的一次更新/删除，只执行 1 次记录 put 和 1 次 delete。没有测量或宣称实站 FPS、CPU、内存或百分比提升。
+
+开发 watch 起初已停止，补启与 `pnpm dev` 相同的 content/inject/background 开发任务，跳过 clear；产物只由 watch 生成。收尾时发现 i18n watch 未纳入新增文案，正常终止本轮进程并重启相同开发任务，确认旧子编译器退出后才重启。最终三项开发编译成功，日志 `/tmp/bewly-data-29-dev-final.log`；实际生成脚本已检出新增中英文状态文案，不以同一 watch 的标记代替源码验证。开发 watch 保持运行。
+
+浏览器本轮尚未确认重新加载新协议和迁移代码，没有执行真实账号发送、删除、收藏/稍后再看增删、批量任务或无痕会话操作。待实站项为：扩展重载后普通/匿名搜索切换及取消；真实慢存储恢复和跨标签设置冲突；三标签显示/隐藏与换号；稍后再看批量/自动移除及后台休眠后的服务端对账；BV/分 P/PGC、试看、广告和后台播放进度；关闭最后一个无痕窗口后的数据清除。自动回归不能代替这些浏览器/API 条件。本节代码与自动回归已完成，未提交、未推送；HEAD、分支、remote 和原 stash 保持不变。
+
+## 2026-09-29 播放器、历史与原生页面维护（十五项）
+
+接续上一阶段八项实现，重新读取当前 AGENTS、package.json、维护记录并核对工作区。继续在 `message_feature@7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6` 上工作，跟踪 `origin/message_feature`；origin/upstream/contrib 关系未变，上一阶段未提交成果与 stash `7a6ef9155ccd8e5ce92768702da03b5ae8d7184b` 均保留。本节不代表整个上游范围已同步，不推进同步游标。
+
+本轮逐项阅读用户指定提交的最终行为，复用既有请求取消、设置协调、成员状态、进度模型和历史目标解析，没有 merge、cherry-pick、覆盖整文件或导入上游单体播放器。使用 emil-design-eng 复核新增控件和局部样式，保留 Nocturne 的侧栏阅读层、50%/85% 宽度策略、已保存像素宽度、拖动与焦点保护、顶部模糊、OLED、材质参数和原生节点恢复。没有引入全局快捷键、Firefox、音量均衡或被撤回的顶栏设计。
+
+| 编号 / 参考 | 实际修改、等价保留与关键文件 | 回归及状态 |
+| --- | --- | --- |
+| 1 清晰度记忆：`2cc8a84`、`12e925e` | 新增默认关闭的 `rememberVideoQuality`；`savedVideoQuality=null` 首次从确认生效的当前档位初始化。`contentScripts/videoQualityMemory.ts` 复用路由、主媒体身份和 `playerDomLifecycle`；MAIN `videoMetadata` 桥只传当前媒体的 quality/realQuality/试看状态。可信用户选择需媒体确认，菜单先切换不代表生效；自动降档、程序恢复和试看不写偏好。不可用项不点击，同稿件内每档恢复至多尝试一次，菜单重建不重置尝试；待确认监听、有限超时和观察器对称释放。 | 已实施；真实模块覆盖晚挂载/替换、选择确认、自动变化、试看、跨页偏好、切稿和清理。真实账号清晰度权限及 PGC 不同播放器版本待实站。 |
+| 2 多 P / 合集：`1ca4250` | `utils/player.ts` 保留 MAIN 元数据优先级，删除把通用合集项或全局 `.view-mode` 当作多 P 的兜底；只有明确多 P 控件或当前稿件 pageCount 才使用 multipart 规则。通用、场景覆盖和既有手动选择优先级保留。 | 已有元数据路径 + 条件修复；实际模块覆盖单稿多 P、合集与混合 DOM，不因视频合集内含单条视频误分类。 |
+| 3 退出宽屏后切稿：`a9fbce5`、`787d031`、`f0dc902` | `contentScripts/index.ts` 判断目标即将应用的 Bewly 模式，不只判断切换前是否宽屏；`videoCommentNavigation.ts` 管理既有评论修复读取与有界等待，使用上一阶段 API 取消。MAIN 确认目标 aid 后，只选择当前有效布局中的评论；忽略空占位、隐藏旧树和有歧义的多棵旧树。旧导航取消读取/延迟任务，不恢复已销毁节点。 | 已实施；真实模块覆盖迟到资料、原生/宽屏布局、空根、隐藏根和取消。完整“默认宽屏→退出→原生推荐切稿”的实站链路待验收。 |
+| 4 动态弹窗模式：`db91328`、`b3c8261` | 增加 `momentsDialog` 覆盖，默认 inherit，仍由既有场景覆盖入口管理。`useMomentDetail`、`useAppProvider`、`IframeDrawer` 与 `iframePageState` 通过同一有来源校验的协议传递 context；父弹窗宽度和子模式共用 `resolveMomentsDialogPlayerModeOverride`。documentId/sessionId/generation/requestId/href 拒绝旧 iframe。继承继续采用多 P/合集等原规则，普通页不受影响；当前导航手动选择/退出保留。`App` 通过共享 DOM 生命周期跟踪原生模式按钮重建，退出网页全屏正确恢复原生宽屏。 | 已实施；真实 Drawer、协议和播放器模块覆盖旧文档/旧导航/旧会话消息、父宽度、继承与控件替换；真实 iframe SPA 切集待验收。 |
+| 5 比例与侧栏：`0d786bb`、`1500752`、`94fba9c` | `geometry.ts` 删除真实源宽高比的 16:9 上限；容器继续限尺寸。现有侧栏边缘展开、标签容器、原生关注按钮、窄窗排布及手动宽度已有本地实现，未用上游布局覆盖阅读层。 | 比例差额已实施，其他等价保留；实际 geometry 覆盖超宽、16:9、4:3、竖屏。深浅/OLED、窄窗和字体缩放实站待验收。 |
+| 6 按实际空间避让：`fb1a3c5`、`47ffdcd` | `playerControlFit.ts` 共享一次 ResizeObserver/合帧测量，按控制栏、原生左右项、弹幕区和当前字体计算余量；只按优先级收起注入项。截图接入同一注册/清理路径，收起项通过原生播放器上下文菜单及既有截图快捷方式保留入口。失去空间的已聚焦按钮把焦点交还原生控件。移除单纯按窗口断点隐藏截图的规则；未新增音量均衡功能。 | 已实施；真实模块覆盖输入字体变化、优先级、忙状态、键盘/IME、焦点和卸载。菜单在真实播放器中的可发现性待验收。 |
+| 7 长按三连：`36f0b6c` | `bewlyWidescreen/styles/layout.ts` 的动画层选择器排除原生业务图标，即使带 shake/anim 类也不绝对定位。既有 `actionEffects` 几何归属和原生动画节点保留；没有克隆按钮或发送自建三连请求。 | 条件修复已实施；隔离 DOM/CSS 和既有原生事件桥回归覆盖图标/动画层与长按事件归属。真实账号短按/长按未执行。 |
+| 8 原生边框/盒模型：`c2186f6` | layout 外框规则仅作用于本功能拥有的 shell/外层；移除后代 blanket box-sizing、border 和圆角重置，恢复视频内引导，SVG 保留 fill/stroke 的 none 语义。原生音效、下拉、进度与结束面板的内部结构不重建。 | 条件修复已实施；隔离真实样式检验内部盒模型/边框/引导，既有材质回归通过。原生音效与结束充电面板实站待验收。 |
+| 9 细进度条：`c6ecffb` | `idleProgress.ts` 默认关闭，仅在当前宽屏会话的主媒体播放且控制栏隐藏时展示；使用既有进度归一化与隐藏状态，timeupdate 等媒体事件更新比例。无额外记录器、轮询或常驻 RAF；暂停、结束、换源/导航和退出清理。pointer-events:none，减少动态效果时关闭过渡。 | 已实施；真实主媒体事件 fixture 验证暂停/结束/导航、零 timer/RAF 以及清理。实站待验收。 |
+| 10 历史网格/长列表：`b464c6e`、`c71476e`、`9cf00ea` | 默认日期分组列表不变，新增可选网格和已有布局切换控件。`History.vue`、`historyWindow.ts` 将日期标题、完整/不足一行的卡片纳入同一个 `useCardWindow` 几何模型，保留同一 DOM/链接/请求/删除逻辑；`useCardWindow` 只补每键估高入口。封面和头像复用 LazyPicture/图片队列，进度沿媒体裁切；不增加“已观看”重复标签。搜索刷新重置位置，布局改变保留锚点/焦点，删除后聚焦相邻操作。列表/网格骨架匹配标题、头像、封面及 footer，结束后卸载。 | 已实施；实际 History + timeline + window 覆盖 1,000 条记录、一个控制器、两布局、列数变化、焦点、删除、IME/搜索、账号与加载占位。长列表实际滚动与返回位置待实站。 |
+| 11 原生动态过滤：`7fc5a79`、`abeaf85`、`862ed88`、`b729818` | 默认关闭；`momentFilter.ts`/`logic/momentFilters.ts` 在规则变化时统一预处理关键词，Bewly 和原生 feed 共用策略。`originalMomentsFilter.ts` 仅对原生有效 feed 提取可确认字段，预约/直播适用转发原内容，普通视频等类型不据转发内部类型误杀外层；未知结构保留。只观察 feed 和必要浅层父链，隐藏/详情路由/关闭释放 DOM 队列与观察器，移除行/替换根/停用恢复自身隐藏标记。没有恢复撤回顶栏。 | 已实施；实际策略和原生 DOM fixture 覆盖转发、未知锁定结构、关键词、根替换、详情、隐藏和关闭。公开原生动态页请求返回验证页面，未尝试绕过；真实列表结构待验收。 |
+| 12 满收藏夹：`1812beb`、`e8ccb0f` | 仅扩展 `favoriteDialog.ts`。MAIN 读取当前 Vue owner 的稿件、文件夹 ID、打开时 favoured 和可靠 media_count/max_count；未知容量保留原生处理，不硬编码 1000。满且原来未收藏禁止新增；原来在满夹内仍可取消并重新勾选。正确区分 input 预激活与 label/键盘；复用行、稿件、关闭/停用清理标记、消息定时器、按钮和监听。“清空已选”补齐四语言，仍触发原生 checkbox 事件。 | 已实施；MAIN 桥与实际 dialog 隔离测试覆盖直接 input/label/键盘、未知容量、原始成员、复用/清理。未对真实账号修改收藏。 |
+| 13 分类角标：`e1186fd`、`e4733db` | 六类展示设置覆盖 reply/@/like/system/已关注私信/未关注私信；新增项默认 true 延续提醒，原点赞偏好保留。`notificationBadge.ts` 为 TopBar/Dock/通知浮层共用纯计算，拒绝非有限/负数计数，like/recv_like 取同义值，私信 follow/unfollow 不再加 chat；只有缺失分类计数且两类均显示时才使用 chat 兜底。不改 unread 真值、刷新协调或发送 read/ACK。 | 已实施；实际纯函数与 store 回归覆盖异常计数、同义字段及私信迁移；真实账号类别角标待验收。 |
+| 14 想看/设置定位：`8391ae1`、`6c4637a` | 想看空名单使用现有 Button 和类型化 settings target 直达想看分组。`navigateToSetting.ts` 等待真实异步挂载、展开与 Vue/祖先动画结束，再测量设置内部 viewport/顶栏遮挡；只滚设置容器。新搜索、分类切换、关闭和 KeepAlive 停用取消旧定位/高亮，无固定延时猜挂载，不恢复快捷键页。 | 已实施；真实 Settings 组件覆盖折叠异步目标、新查询和停用，模块覆盖动画、遮挡、内部滚动与取消。实站待验收。 |
+| 15 局部收敛：指定七项样式提交及 `6c4637a` 定位部分 | 直播骨架按真实五行上限和 body 行高补齐，头像/行尺寸已有等价实现；Toast 复用实色 popover token，不增加玻璃。新玩法入口补实色状态/焦点；原生顶栏颜色使用语义前景，裁切规则缩小到自己的容器，保留现有原生与 Bewly 顶部模糊。确认原生历史 iframe 滚动此前只上报 reachTop，现通过既有 frame generation 与宿主协议转发滚动，且仅 Bewly 顶栏接收。设置标题、图片优先级、非 BMP 解码、历史 owner 与 dark 作用域已有等价实现，不重复修改；保留详情入口、头像补齐与直播状态，不添加持续波纹。 | 差额已实施 / 等价保留；现有图片、骨架、顶栏来源、材质和生命周期回归通过。原生历史页滚动、主题和浮层裁切实站待验收。 |
+
+### 设置与协议完整性
+
+新设置已补类型、默认值、规范化、原设置入口、设置搜索和四语言；导入支持旧五类播放器覆盖，补出的 momentsDialog 为 inherit，不重置原分类值。非法布尔/布局/清晰度被拒绝或按原归一化处理；导出保留新值。真实 Maintenance 组件回归验证导入/导出及旧备份迁移。`savedVideoQuality` 与已有倍速/比例记忆一样仅保留本地，避免跨设备争写运行时档位；其他用户偏好沿现有协调器和云同步字段版本。MAIN 只需窄范围媒体/收藏元数据桥，不另建设置状态或第二套 window.name 协议。
+
+原生协议字段对照使用本轮读取的官方发布脚本：[播放器公开 getQuality/getManifest/getDuration 接口](https://s1.hdslb.com/bfs/static/player/main/core.ba67b466.js)、[原生视频页收藏弹窗模型](https://s1.hdslb.com/bfs/static/jinkela/video/video.05af4e80b6081ba56c1b5b943d4c8e621df3f875.js)、[消息客户端的 follow/unfollow 计数](https://s1.hdslb.com/bfs/static/2233-monorepo/message-pc/static/js/index.f2b7bca0.js)。这些是静态发布代码证据，不替代当前登录页功能验收。
+
+### 验证记录与边界
+
+新增 `verify-player-maintenance.mjs`、`verify-maintenance-integration.mjs`，通过实际完整模块和编译后的 Vue 组件测试；只替换网络/DOM 布局/浏览器存储/时钟边界。旧分类、History 骨架及 SVG blanket 着色断言已按新的实际行为替换，未复制源码片段作为新增功能回归。保留上一阶段数据一致性与私信/通知测试。
+
+| 命令 | 实际结果 | 日志 |
+| --- | --- | --- |
+| `pnpm lint` | 0 | `/tmp/bewly-maintenance30-final-lint.log` |
+| `pnpm typecheck` | 0 | `/tmp/bewly-maintenance30-final-typecheck.log` |
+| `pnpm test` | 0，443 条 PASS；targeted/private-message/notifications 均完成 | `/tmp/bewly-maintenance30-final-test.log` |
+| `pnpm knip` | 0，既有 49 / 4 / 5 提示未增加 | `/tmp/bewly-maintenance30-final-knip.log` |
+| `git diff --check` | 0 | 无空白错误 |
+
+测试运行器的 tsx 本机临时 IPC 在沙盒内报 EPERM 后，使用已获批准的相同测试命令运行；没有更改测试逻辑规避权限。完整测试仍有既有 4 次 JSDOM navigation 诊断，未屏蔽。开发 watch 复用上一阶段进程，没有 clear 或生产构建。新增“@ 提醒”文案最初缺少 vue-i18n literal 转义，被开发编译器拒绝；修正四语言对应文本后触发既有 i18n 依赖重编译，内容脚本成功编译 59 个变更模块。原始编译错误与后续成功记录均保留在 `/tmp/bewly-data-29-dev-final.log`，不以未变的 watch 标记声称页面已更新。
+
+仅报告隔离测试的实际计数：历史 1,000 条记录只有 1 个窗口控制器，列表挂载节点少于 150、网格少于 250，并保留聚焦行；30 次控件尺寸通知合并为 1 个待执行 RAF，全部控件共用 1 个 ResizeObserver；关键词策略构造时只读取/预处理 1 次规则，后续 100 轮卡片判断不重复拆分；细进度投影未创建 timer/RAF，原生动态关闭/隐藏后观察器和待处理 frame 均为 0。没有测量或宣称实站帧率、CPU、内存或百分比提升。
+
+实站验收尚待用户重载本项目开发扩展并核对新脚本。已发出一次重载请求；浏览器工具此前禁止访问 `chrome://extensions`，未尝试绕过。未执行真实账号收藏、三连、删除、发送、批量标签任务或服务端已读变更。后续实站结论集中追加在本节，不将 fixture、静态脚本、源码存在或截图数量解释为已完成全部验收。当前不 commit/push，不改版本，不处理 stash。
+
+### 实站增量验收与纠错（同日）
+
+- 第一次重载后，用户报告 Dock/TopBar 渲染 `Cannot read properties of undefined (reading 'count')`。独立实站页复现，定位为上一阶段 `watchLaterCount` 的空快照路径：`snapshot?.accountId === userInfo.mid` 在两边均 undefined 时为 true，随后访问不存在快照。改为先确认快照存在，再比对账号，保留未就绪显示 0、成员查询未知的区分。新增真实 WatchLater 客户端、Pinia store 和 CountBadge 的冷启动/快照先返回/换号/登出回归。第二次重载后，实站首页、Dock 展开、顶栏与 192 项稍后再看计数恢复；该新页面 Bewly warn/error 查询为空，没有清除此前错误记录。
+- 已确认开发扩展 runtime 为 `gofcngcklkfbighknbpknpnaenoenlfc`，页面 `data-dev=true`、版本 0.1.1，watch 标记仍为 `mum6ch81`；同时通过新设置及真实行为确认代码，不只看标记。清晰度、细进度搜索命中并跳到正确设置分类，默认关闭；临时展开场景覆盖后确认 momentsDialog 为 inherit，再恢复开关 false。播放页截图开关原值 true，诊断时关闭/开启后已恢复。
+- 真实历史页默认列表、网格、日期组、续播 `p/t`、进度裁切及深浅/OLED 已检查；1024×768 桌面视口中 document.scrollWidth=1024，没有横向溢出。持续分页观察到挂载数量 20→40→60→80，跨阈值后为 84 张当前卡片并出现 2766.16px 窗口占位，不把 84 当作全部已加载记录。没有执行历史删除或清除。截图 `/tmp/bewly-maintenance30-history-dark.png`、`/tmp/bewly-maintenance30-history-light.png`。历史布局恢复 list；主题原值为“设备”，临时浅色后已恢复，OLED true 保留；浏览器 viewport override 已 reset。
+- BV 实站 `BV1fYes6xEmq` 为 3840×2160，布局变量为 1.7777777777777777。手动退出 Bewly 播放页后，原生推荐/评论节点恢复；点击原生推荐进入 `BV1dpBoB7EMV` 时重新进入宽屏，但稳定后评论仍保留旧 `data-params`。进一步确认净化 URL 移除追踪参数也调用了 cancel，且同稿件分支不重启。现改为 `cancelIfChanged(semanticKey)`，同稿件清理参数保留任务，切稿和卸载仍真实取消。实际 owner 回归补上此分支。该修正待下一次增量重载后复验。
+- 同一 BV 实站截图设置为 true，但注入控件未出现，临时开关和页面刷新也未恢复。新增真实 `videoScreenshotControl` → `playerDomLifecycle` → `playerControlFit` 集成测试，晚挂载、启停和路由变动均通过；实站根因仍在追踪，未据 fixture 宣称修复。开发模式增加宿主 mounting/ready 标记，直接反映既有启动阶段，方便检查 App 挂载后增强是否完成；没有另建生命周期或保活机制。
+- 上述增量源码的完整回归为 **445 条 PASS**，`pnpm lint` / `pnpm typecheck` / `git diff --check` 均退出 0，日志 `/tmp/bewly-maintenance30-runtime-test.log`、`/tmp/bewly-maintenance30-runtime-lint.log`、`/tmp/bewly-maintenance30-runtime-typecheck.log`。待这轮增量重载继续核验评论与截图入口，再记录最终结论。播放页日志中的 `ecpppfmdhkopohdmplcafmbfoggijcpe/scr/api.js` JSON 警告来自其他扩展；首页 hydration 警告来自原站脚本，未修改或清除它们。
+
+## 2026-09-29 评论阅读与实验性本地响度（两个独立能力包）
+
+收尾回归与资源归属检查延续至 2026-09-30；暂停恢复时旧处理器的迟到错误/遥测也按处理器 owner 失效，不能停掉同一媒体上的新节点。Chrome 离线测试完成后已关闭临时 localhost 服务器，项目开发 watch 保留运行。
+
+重新核对并继续 `message_feature@7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6`，跟踪 `origin/message_feature`。三个 remote 未变；保留前两阶段所有未提交修改及 `stash@{0}=7a6ef9155ccd8e5ce92768702da03b5ae8d7184b`。完整读取当前 AGENTS、package、既有维护记录和相关调用链；用户提供的审查 SHA 仅作定位，没有回退、merge、cherry-pick、改版本、commit 或 push。本节不推进整体上游同步游标。
+
+按指定参考提交与 `bb0df6265fdd2da012b7e4e7bda170b7595c52f8` 的最终代码核对两项行为。评论参考 [PR #1235](https://github.com/keleus/BewlyCat/pull/1235)、[PR #1247](https://github.com/keleus/BewlyCat/pull/1247)；原生 renderer/点赞契约来自实站已加载的 [bili-comments.d05f470bdf.js](https://s1.hdslb.com/bfs/seed/jinkela/commentpc/bili-comments.d05f470bdf.js)。音频阅读了上游 `docs/local-loudness.md`、controller、processor 和面板，仅以最终 DSP 为起点，没有移植其每秒协调、全页扫描或原生图状态改写。
+
+| 编号 | 实施、保留与关键接口 | 回归 / 验收状态 |
+| --- | --- | --- |
+| 1 有界分页与缓存 | `commentReplyPagination` 保留单一原生分页 owner，新增数字页码输入；目标页替换和下一批追加分开。默认只读取当前页，一次批次 1–5 页、默认 5；首次展开请求计入本批预算。没有邻页自动预取，也没有补父链触发的整层读取。`commentReplyPageCache` 以文档/隐私边界、账号、oid/type、root、sort、pageSize/page 分区，最多 16 个缓存线程、每线程 12 页/240 条；关闭楼层释放 renderer 的页投影，保留有界 LRU。共享读取只在最后一个消费者离开时 abort。MAIN `commentReplyReader` → typed `commentReplyApiBridge` → 既有 API 真实取消和总期限；MAIN 不导入 polyfill。 | 已实施；100,000 页 fixture 初始只发 1 次读取，一个追加动作最多 5 次。覆盖缓存复用、共享消费者取消、快速跳页、换账号、真实 SPA 取消、同稿件追踪参数清理不误取消、终止上下文、协议白名单和总期限。无界预取不适用并明确不移植。实站待重载。 |
+| 2 阅读锚点、折叠与写归属 | 页码/footer 由 `commentReplyControls` 负责，读取/错误/重试不替换原生 spinner。`commentReadingAnchor` 使用既有 scrollIntent 和短期手势监听，两个布局帧后恢复；用户后续滚动、按键或深链导航优先。复用既有父链纯函数与未知占位，真实父节点到达替换同一父占位，不移动原生回复。`commentReplyInteraction` 只包裹原生已确认的 handleLike/handleHate 完成结果，跨页与迟到读取保留确认状态；移除把普通 renderer 更新也当作写入确认的旧采集路径。 | 已实施 / 父链等价保留；实际模块和原生契约夹具覆盖重复回复、迟到父节点、在途点赞、关闭/重开、旧页响应、IME、键盘与焦点、内外锚点。点赞等写请求全部隔离，无真实账号写入。 |
+| 3 独立回复阅读容器 | `commentReplyReading` 默认关闭，最大高度默认 480px、可调 240–960px，并受 60dvh 约束；采用 max-height，短回复自然收缩。仅给既有 Lit `#expander-contents` 加滚动样式，主评论和原生 `#expander-footer`/收起按钮在外；不移动或克隆 Lit 回复。树线几何拆到 `commentReplyGeometry`，在内容坐标内随滚动移动，不逐 scroll 重测；不绘制越过容器边界的根分支。保存/恢复根折叠状态，退出去除自身属性、样式和监听；键盘边界转交外层，滚轮使用正常滚动链。 | 已实施；DOM 夹具检查原生子节点身份、短期锚点取消、键盘边界、IME、折叠状态恢复以及 scroll 时几何读取增量为 0。真实触控板边界、深链、窄窗/字体缩放和深浅/OLED 待实站。 |
+| 动态卡片回复差额 | 保留现有预览布局、`momentCommentSession` 和确认点赞事务，不另建私信/评论写状态。预览仍每次显式加载一页；`momentCommentThread` 增加真实 AbortSignal、16 线程/240 条预算和取消语义，首层/目标解析也使用既有 API 取消。关闭、隐藏、切换排序/账号和卸载取消读取；已确认点赞与现有会话快照继续保留。追加回复复用阅读锚点和本地 SkeletonBlock。 | 已有交互保留 + 资源差额已实施；既有真实 Vue 生命周期回归及新增取消检查通过。直接选页和可选独立回复容器适用于原生楼层，不把动态卡片已有的整个评论预览重建为第二种原生布局。 |
+| 4 本地响度与面板 | 新增 `localLoudnessEnabled=false`、目标 -18 LUFS（-24…-14）、强度 75%（40…100）。`audio/localLoudnessProcessor.js` 以最终上游 K 加权、400ms/3s 窗口、100ms 控制步长、+6/-18dB 增益上限、8/1.5dB/s 下降/上升、5ms 前视和 -1dBFS 采样峰值限幅为起点。`LocalLoudnessPanel`/`Preferences` 复用 Dialog、Radio、Slider、设置行及实色 token；曲线最多 60 个样本，无 RAF，关闭/隐藏停止遥测和曲线更新。暂停、静音、seek/结束释放闲置 DSP，恢复时重建处理节点并复用同一音源；有效后台/PiP 播放不受 document.hidden 停音策略影响。 | 已实施；实际 processor 离线算法检查六组采样率/声道、静音、幅度阶跃、峰值、用户音量比例和固定数组；另有 Chrome 实际 OfflineAudioContext 六组通过。只描述局部自动增益，不声称节目级 EBU R128 或真峰值保证。实站听感及媒体兼容仍待验收。 |
+| 5 所有权、互斥与旁路 | `mediaSourceOwnership` 在 MAIN document_start 仅对媒体音源工厂/构造器记录弱引用，不建音频上下文或发现轮询；音频 controller 首次启用才创建。已由原生/其他扩展占用的音源保留原图，不尝试重接。原生响度状态必须可确认且关闭；解码帧使用浏览器 origin-clean 检查，未知/受限媒体不接管。Worklet 加载及 ready、运行中的自有 context 均确认后才创建唯一 source。关闭/错误先接通自身 dry bypass，再释放 Worklet/port；不关闭原生 context、不改原站存储或私有播放器。模块、Blob URL 和媒体/配置任务按代次清理；关闭即撤销 URL，不等待挂起的 addModule。退役输出断开，有效 PiP 保留路径，BFCache 保留可恢复自有 source；只撤销仍归自己拥有的补丁。 | 已实施；真实 controller/bridge + WebAudio 边界夹具覆盖未启用零 context/source、首启 lazy、重复启停单 source、加载中关闭、失败旁路、旧 token/href、暂停/换稿输出释放、后台遥测停止、PiP 与 BFCache、原生开启/未知、外部 source 冲突和后续补丁归属。fixture 不代表真实浏览器音源接管已全部兼容。 |
+| 6 集成与资源边界 | 新偏好完整接入类型、默认值、归一化、导入导出、设置搜索、四语言及现有 MAIN page-settings 协议。启用开关仅本设备保存，不经云同步在另一设备自动接管音频；目标/强度与评论偏好沿现有字段版本同步。运行态/曲线仅为内存 refs。音频按钮复用 `playerDomLifecycle` 与 `playerControlFit`，优先级 40，截图 20；不足空间进入既有替代入口，不建额外尺寸观察器。不支持的媒体仍保留面板入口与原因。音频异常边界与评论更新相互独立。 | 已实施；设置迁移/导入导出、严格协议、共享避让注册、关闭零发现订阅、键盘/IME 和不支持媒体入口回归通过。默认页面、Nocturne 材质/阅读层/圆角/顶部模糊及原生节点归属保留。 |
+
+### 实际验证与剩余限制
+
+- 最终 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm knip` 均退出 **0**。完整测试 **460 条 PASS**，含 targeted、实际组件/模块、private-message、notifications；日志 `/tmp/bewly-maintenance31-delivery-{typecheck,test,knip}.log`、`/tmp/bewly-maintenance31-delivery-lint-corrected.log`；最后一个缩进错误的原日志仍保留为 `/tmp/bewly-maintenance31-delivery-lint.log`。Knip 保持既有 **49 个导出 / 4 个类型 / 5 个枚举成员**提示，没有新增项。`git diff --check` 为 0。仍保留既有 JSDOM navigation 诊断，没有清理历史错误来制造通过。
+- 新行为回归集中于 `scripts/verify-comment-reading.mjs`、`scripts/verify-local-loudness.mjs`；既有设置、动态评论、原生评论和几何回归随接口更新。用实际模块、编译后的组件与真实 processor 验证；移除了已被这些行为回归替代的旧分页源码字符串断言，没有复制实现片段作为新回归。
+- Chrome 独立 localhost 页面加载仓库实际 processor，通过 **44.1/48/96 kHz × 单/双声道共 6 组** OfflineAudioContext 渲染。每组 2 秒，加入静音、正弦与 128 帧突发峰值，输出峰值均为 **0.89125091**，样本均有限；只离线渲染，没有扬声器输出。证据 `/tmp/bewly-maintenance31-audio-offline.png`，临时验收源码 `/tmp/bewly31-audio-browser.html`、server `/tmp/bewly31-audio-browser-server.mjs`。这是实际浏览器 DSP 证据，**不是 BV/PGC/MSE 实站音源兼容证据**。
+- 性能只记录实测计数：100,000 页可用时初始 1 个回复请求；一次追加最多 5 个请求；一个共享消费者取消不终止另一个；同页重开使用缓存不新增请求。容器滚动 fixture 的额外整树几何测量为 0。音频 5 次启用循环及暂停恢复只创建 1 个媒体音源；100 条遥测仅保留 60 条，面板关闭后的工作线程 telemetry 增量为 0。未测量或宣称真实 CPU、内存、FPS 或百分比提升。
+- 复用 `/tmp/bewly-data-29-dev-final.log` 的既有 content/inject/background 开发 watch，最新增量均成功，没有生产 build/打包/clear，也没有直接编辑 extension 产物。watch 标记仍为 `mum6ch81`，不能单凭标记确认最新脚本。检查原 B 站验收页时宿主 phase 为 ready，但设置页尚无本轮新增音频分组，故保留为旧脚本证据；已请求用户重载扩展。浏览器工具仍不允许操作 `chrome://extensions`，未绕过。
+- 当前独立 BV 验收页的原生响度 input 为 `value=2` 选中、关闭项 `value=0` 未选中；**没有修改该偏好或启用实验**。已单独请求是否允许临时关闭原生响度后测试并恢复。待实站项：新脚本的原生回复页选择/批次/深链/滚轮边界、动态评论关闭重开；BV/PGC、Blob/MSE/可验证跨域、原生音效关闭后刷新、切清晰度/倍速/静音、后台/PiP、BFCache、重复启停、处理故障，以及窄窗/字体缩放/深浅/OLED/减少动态效果。上阶段截图入口和退出宽屏后切稿评论身份也继续保留待复验状态。
+- WebAudio 媒体音源接管本身不可撤销，因此本版明确保留关闭后的必要旁路；若**同一已接管元素后来换成不再可验证的跨域/DRM 来源**，仅旁路不能保证恢复浏览器原始路径，界面明确要求关闭实验并刷新，不伪称已恢复原声。此限制与未知原生/其他扩展音源拒绝策略共同保持实验定位，默认关闭。依据为 [Web Audio MediaElementAudioSourceNode 生命周期与安全约束](https://www.w3.org/TR/webaudio-1.1/#MediaElementAudioSourceNode) 和 [浏览器 origin-clean 限制](https://developer.mozilla.org/en-US/docs/Web/HTML/How_to/CORS_enabled_image)。未执行任何真实账号点赞、收藏、发送、删除、批量标签操作或已读提交。
+
+## 2026-09-30 全项目主链路循环审查与基础清理
+
+在前述两个能力包之后，按用户追加要求完成三轮定向审查、修复和行为回归，并对修复再次检查资源归属、并发、异常收尾与可见反馈。完整读取当前 AGENTS/package、上一阶段维护记录和实际接口后开展工作；继续 `message_feature@7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6`，跟踪关系和三个 remote 均未变。`stash@{0}=7a6ef9155ccd8e5ce92768702da03b5ae8d7184b` 保留。应用 karpathy-guidelines 的最小完整修改原则，没有另建请求、账号、设置或播放器状态框架，没有 commit/push/改版本/生产构建/打包/clear。
+
+### 本轮确认并修复
+
+| 路径 | 已确认的问题与实际修改 | 行为证据 |
+| --- | --- | --- |
+| 播放器发现与截图入口 | `playerDomLifecycle.ts` 在 document_start 无 body 时原来没有启动发现；后续订阅者也不能补救。现在观察 documentElement/document，发现播放器后停止全页子树观察，改为播放器子树和祖先 childList 的浅观察；播放器移动、祖先替换重新绑定。`contentScripts/index.ts` 的模式订阅只在有效播放路由存在。 | 修改前真实截图消费者冷启动 fixture 为 0 个入口、预期 1；修改后入口出现，移动/替换后恢复，释放最后一个消费者后无存活观察器。没有据此宣称实站截图所有路径已通过。 |
+| 播放器消费者隔离 | 共享观察器逐个捕获消费者同步异常，一项功能失败不阻断其他功能，也不留下抛错后的半注册状态。保留错误日志供诊断。 | 一个异常消费者和一个正常消费者同时订阅，正常消费者继续收到更新，双方均可正常释放。 |
+| 搜索历史数据完整性 | `searchHistoryProvider.ts` 不再把加载失败、超时、损坏 JSON 或原生 storage 异常解释成空历史；写入前必须成功读取。GET 按 iframe/source/origin/id/key 匹配；RM 只清除搜索历史自己的 key；写后用 GET 回读确认，不能信任原生异常情况下也返回的写 ACK。重复关键词重新按时间排序，界面键值使用关键词而非可能重复的 timestamp。 | 真实 provider 配原生 COLS 协议边界：读取失败不发 SET、清空不使用前缀级 CLR、不影响相邻 key、迟到响应不完成新请求；缺失 key 的 null 与异常 undefined 分开。协议核对来自原生 [cols/iframe.html](https://s1.hdslb.com/bfs/seed/jinkela/short/cols/iframe.html)。 |
+| 搜索历史跨页与失败反馈 | 原有队列同时串行读取和修改；扩展的同源标签使用 Web Locks 协作，等待锁最多 5 秒。锁只约束等待时间，不在已授予后中断写入。来源变化的 iframe 不继续承接历史。SearchBar 的删除/清空失败保留旧条目，给出四语言错误与读取重试；写操作接管刷新中的 loading，旧读取不能清除新反馈。 | 两个独立 provider 实例的同时编辑均保留，最大持锁数 1；锁等待超时无越锁写；实际 Vue 组件覆盖刷新/删除交错、失败保留、重试、重复 timestamp。历史没有在实站被清空或改写。 |
+| 搜索建议与 IME | SearchBar 使用既有 API AbortSignal，改词、外部路由值、失焦、卸载、隐藏顶栏及非活动宿主取消旧建议；IME 组合期间不请求。沿用现有 iframe 活动状态，由 TopBar → Header → Search 传递活动性；草稿保持。所有可选 active prop 显式默认 true，避免 Vue Boolean 缺省 false。 | 实际 SearchBar 组件覆盖 IME、迟到响应、取消只影响旧 loading、排队 debounce 在卸载后不启动、隐藏后零新增请求、恢复草稿。 |
+| 热搜与默认词共享读取 | `searchExperience.ts` 以现有消费者计数取消最后一个读取，隐藏清理 UI 刷新定时器；旧 finally 不能清除新任务。通过既有账号消息清理个性化默认词；空热搜也按有效缓存处理，焦点/消费者变化不重置刷新时钟。后台 default recommendation 复用共享 owner、有限总期限和账号/无痕缓存；初次 session cache 读取最多 1.5 秒，缓存落盘不阻塞显示。取消函数白名单只加显式只读 endpoint，未扩展到写操作。 | 实际前后台模块覆盖一个消费者取消保留另一个、最后一个取消 abort、缓存慢写不阻塞、账号变化与旧 finally、新旧活动任务、有效空结果。`api.ts` 按对象 GET/函数白名单保留类型化调用，不为写入增加自动重试。 |
+| 关注搜索与头像 | `useFollowingVideoSearch.ts` 取消旧查询、换号/换 UP/卸载的读取；`favoriteAvatar.ts` 释放时中止最多四个活动请求并结清排队等待者。头像补齐现在修改列表里的响应式对象；从首页缓存恢复时，只补尚未取得的头像，不重拉投稿列表。Favorites 原有按索引回填方式已正确，予以保留。 | 修改前实际 Vue 渲染仍为 `|`，没有显示已返回的头像；修改后及时显示，切走取消第二个头像，重开仅补该头像，旧返回不能覆盖。既有 300 个头像请求用例仍为并发 4、缓存上限 256。 |
+| 主题动画与调度 | `useDark.ts` 的 View Transition ready/finished/animation 全部有收尾；连续切换、失败和卸载清理本次临时 style，旧任务不能清除新任务。移除无收益的全后代 `will-change: background`，保留圆形过渡与 reduced-motion；键盘激活从触发控件中心展开。定时主题在隐藏标签不保留 30 秒唤醒，回来按当前时间立即校准。 | 实际完整模块覆盖连续打断、ready/动画失败、缺少 wrapper、reduced-motion、键盘起点与 scope 释放；临时样式归零，隐藏计时器为 0，恢复 21:00 后立即得到当前主题。 |
+| 顶栏与动态表情的迟到任务 | TopBar 下一 tick 初始化先核对既有 mounted owner，卸载后不能重新激活 Store。动态转发表情缓存除了账号还校验当前 Promise owner，A → B → A 时旧 A 结果不能覆盖新 A。 | 顶栏修复前实际组件卸载后仍出现 setUiActive(true)，修复后不出现；表情真实模块覆盖三次迟到顺序并保留新缓存。 |
+| 无消费者代码与结构 | 核对生产调用、测试入口和自动导入范围后，删除 `player.ts` 28 个旧快捷键/音量/时钟/UP 资料等无消费者函数及对应状态，另清理废弃图片压缩、LazyValue、重复授权清除别名、桥接等待器、重复类型和无效布局 section 状态。移除已撤回会话标题区域的 profile URL helper 与无消费者设置 URL 别名，保留共享原版 URL 解析；真实收件人点击接上已有选择纯函数，删除组件内重复查找。保留仍在使用的原生按钮、倍率记忆、截图、作者读取和既有布局编辑 registry/controller。Settings 的快速编辑与上下文入口统一调用原有有效 targetId。 | Typecheck、Knip 和全套测试；设置快速编辑从旧源码正则断言改为实际 Settings + KeepAlive 的关闭/下一帧交接回归。没有通过隐藏提示、添加 ignore 或复制源码片段制造通过。 |
+
+### 审查覆盖与保留项
+
+| 主链路 | 本轮结论 |
+| --- | --- |
+| 请求、WBI、授权刷新、设置协调 | 复用前阶段取消/期限/single-flight/版本归属；普通与匿名搜索、挂起 body、共享等待者、旧授权结果、ACK 先于本地编辑、clear/import/epoch 和上下文终止回归保持通过。没有把只读取消套给发送/收藏等写操作。 |
+| 顶栏、跨页未读、稍后再看 | 三标签租约、再次失效合并、局部字段时间、换号、成员增量/乱序/重复广播、批量写与后台重启等回归保持通过；不新增并行真值或保活心跳。 |
+| 本地历史、进度与窗口列表 | 并发记录/清除、旧时间戳迁移、广告/seek/分 P、服务端进度优先、URI 缺 p/续播等回归通过；History 的真实组件 1000 条分组数据窗口测试保留，不因长列表建立逐日期控制器。 |
+| 评论、原生播放器、音频 | 前阶段真实模块/renderer/DSP 回归持续通过；分页预算、父占位、确认点赞、阅读锚点、原生节点身份、媒体 source 与旁路归属均保留。截图冷启动补差额已在本轮修复。音频仍默认关闭，实站兼容性没有因离线通过而升级结论。 |
+| 私信、动态、设置、布局编辑 | 保留账号/Cookie、发送事务、消息草稿与表情协议；本轮仅修复表情读取缓存 owner。完整消息/通知 suites、设置定位/关闭/KeepAlive/键盘与编辑交接回归通过，没有发送、点赞、删除或提交真实已读。 |
+| 视觉、交互与资源 | 保留语义 token、四语言、OLED、顶部渐进模糊、阅读层和圆角体系；新增历史错误区使用既有实色表面/文字 token，不增加玻璃。检查取消后的反馈、焦点/IME、关闭重开、图片队列、失效任务和 native ownership；仍需实站覆盖的主题/比例/原生 DOM 项明确列在下方。 |
+
+### 实际验证
+
+- `pnpm test` 最新完整结果 **480 条 PASS，退出 0**：`/tmp/bewly-review32-complete-test.log`。相对前阶段 460 条，新增实际模块/组件场景，并替换受影响的旧提取函数/源码字符串断言；总数变化不是覆盖率百分比。最后输出无 Vue warning/未处理 Promise，原有 **4 条 JSDOM 不支持完整页面导航**诊断保留。
+- `pnpm lint` / `pnpm typecheck` / `pnpm knip` 最新完整运行均退出 **0**：`/tmp/bewly-review32-complete-lint.log`、`/tmp/bewly-review32-complete-typecheck.log`、`/tmp/bewly-review32-complete-knip.log`。Knip 提示从 **49 exports / 4 types / 5 enum members** 降到 **10 / 0 / 5**；10 个具名 API 同时通过默认 API 分发对象和契约回归使用，5 个成员属于保留的协议枚举，不等同于 15 段死逻辑。未改 Knip 的规则或忽略配置。
+- lint 的中间失败为新增 fixture 格式规则，旧 test 失败包含已替换行为断言的源码字符串门禁；所有原日志保留，最终完整运行通过后才记为通过。`git diff --check` 退出 0。
+- 性能只报告计数：绑定播放器后对 **100 次无关子树变化，播放器共享观察器回调增量 0**；两个历史 provider 同时修改最大持锁数 **1**；头像最多 **4** 个活动请求，释放后 **0** 个排队请求启动；隐藏定时主题 **0** 个周期计时器。既有评论批次、列表窗口与 DSP 数组预算回归保持通过。未测量或宣称真实 CPU、内存、帧率与百分比改善。
+- 复用 session 65950 的开发 watch；最新 content/background 增量成功，未启动第二个 watch、未生产构建或 clear。原日志含不可作文本读取的字节，仅另存保留完整内容的诊断副本 `/tmp/bewly-review32-dev-readable.log`，没有清空原日志。watch buildId 仍不能证明浏览器用了最新脚本。
+- 已再次请求手动重载扩展，并独立请求临时关闭原生音效后验收音频并恢复；截至记录时尚无回复。Chrome 工具禁止扩展管理页，未绕过。保留独立验收页待继续；本轮未更改真实搜索历史、消息、收藏、原生音效或实验开关。
+
+### 仍不完整、可继续优化与验收边界
+
+| 项目 | 当前事实与后续工作 |
+| --- | --- |
+| 新脚本的整站验收矩阵 | 本轮源码/夹具通过不能代替实站。重载后仍需检查 BV/PGC、多 P/合集、退出宽屏再切稿、截图入口、动态弹窗、回复跨页/深链/边界滚动；再覆盖深浅/OLED、窄窗/字体缩放、键盘/IME、减少动态效果。未把旧脚本截图当作这轮验收。 |
+| 音频实验的操作解释与兼容 | 原生音源已经建立时，单纯关掉原生音效并不释放该 source，通常还需要刷新；建议后续把互斥原因、准备步骤、有效状态和恢复方式表达为更连续的引导。真实 BV/PGC/Blob/MSE/跨域、PiP/BFCache、切源及听感未完成，继续默认关闭。 |
+| 搜索历史的跨来源并发 | Web Locks 仅协调本扩展的同源标签；原生 COLS 存储没有 CAS/事务协议，无法保证不同 origin 或不参与锁的原站客户端同时写入也保留全部修改。已修复本轮可证实的误清空与同源覆盖，不能把它描述成全站原子存储。 |
+| 部分旧读取仅失效响应 | Favorites 分类/订阅等既有读取保留正确账号/代次校验，但尚未全部接上新 AbortSignal；关闭后不会污染视图，个别底层读取仍会完成。后续可按实际退出成本逐入口迁移，写操作继续单独对待。 |
+| 搜索分类数量 | `SearchResults.vue` 明确等待可靠的分类聚合协议，目前不展示虚构数量。取得权威接口后补数据与布局，不为填满界面扩大读取范围。 |
+| 评论能力的可发现性 | 原生楼层具备直接选页和可选阅读容器，动态卡片保留轻量的一页预览/追加。两者职责不同；后续可统一“当前页/已加载/继续阅读”的文案与入口解释，而非强制重建为同一 DOM 或共享不适当的业务组件。 |
+| 主题快捷切换 | 现有快捷入口在显式主题、系统自动与定时主题之间的规则保持原样；从定时模式点击快捷入口可能退出定时规则。适合后续明确“临时切换”与“修改偏好”的产品反馈，本轮没有擅自改变历史语义。 |
+| 模块与测试基础 | `inject/index.ts` 仍集中原生样式/renderer 接入/启动协调，`player.ts` 虽已删除大量死代码仍承载多个职责；后续按实际 owner 边界继续拆分，避免为拆文件传递整页 refs。历史 suites 仍存在源码匹配/片段提取测试，本轮受影响路径已改为真实模块，剩余可逐步替换。API client 的部分响应类型仍较宽，适合按 endpoint 增加窄 DTO/验证器，不能一次引入与需求无关的框架。 |
+| 私信的支持边界 | 群聊/不支持会话仍走显式 Native fallback，官方助手不开放发送；这是当前产品边界。可继续完善进入 fallback 前的能力解释、返回位置和反馈，不能宣称完整原生私信客户端已经实现。 |
+| 云同步与真实性能 | 真实小时配额恢复及此前剩余未同步字段本轮未重测，不宣称云同步全部完成。长时间多标签、大列表、字体缩放、低性能设备的实站资源曲线也尚未测得；后续应记录实际请求/唤醒/长任务/内存数据，而不是从删行数或单次截图推断性能提升。 |
+
+这轮结论是已覆盖主链路中的确定性缺陷得到修复并通过自动回归；并非全代码形式化证明、全部浏览器交互已验收或所有未来上游 DOM 变化都兼容。
+
+## 2026-09-30 首页模块切换保持统一框架
+
+- 用户明确要求：首页在个性推荐、正在关注及其他模块之间切换时，顶部搜索区与下方内容区的布局保持一致。重新读取 AGENTS/package/最近维护记录并执行 status/remotes/branches；仍在 `message_feature@7ee0ddc9`，保留既有全部未提交内容，没有切分支、commit、push 或处理 stash。
+- **实站复现**：Chrome 独立首页、1744 × 1027 视口、scrollTop=0。个性推荐的搜索区为 `128 + 46 + 64 = 238px`，搜索框 y=202，导航 y=312，内容区 y=364；正在关注则为 `16 + 46 + 24 = 86px`，搜索框 y=90，导航 y=160，内容区 y=212。模块切换使内容起点上移 **152px**。证据 `/tmp/bewly-home33-before-foryou.png`、`/tmp/bewly-home33-before-following.png`；这些是修复前脚本，不能作为修复后验收。
+- **已实施**：`resolveHomeSearchStage` 移除按模块身份压缩的分支，只随窗口高度选择共同的 238px / 174px 搜索区。`Home.vue` 所有模块复用同一个 SearchBar、Logo 和人物显隐规则；Logo 仍服从现有设置，人物仍在搜索框吸顶后隐藏。推荐模式切换器启用时在其他模块隐藏但保留几何占位，并设为 inert/aria-hidden，避免导航栏切换 grid/flex、换行或产生不可见的键盘入口；没有给其他模块增加可操作的推荐设置。
+- **统一滚动偏移**：移除旧 `HOME_TASK_SEARCH_STAGE_HEIGHT=86`。沿既有 `useHomeTabState` 上下文提供由 Home 拥有的 `getContentScrollTop`，关注 UP 切换、排行分类和每周必看期号均读取当前框架偏移，适配短视口和关闭整合搜索的模式。保留逐模块数据缓存、账号边界和原有网格布局；首页模块间的滚动策略按下面的用户追加要求修正。
+- **回归**：扩展现有真实 Home 组件测试，覆盖全部八个首页模块、两个视口高度、搜索区样式相等、SearchBar/Logo DOM 身份、推荐控件占位与键盘属性、迟到账号和滚动恢复。Weekly 实际组件在窗口高度改变后使用新的父级偏移，独立搜索模式仍返回 0。不是复制源码片段或只匹配字符串。
+- **用户追加：取消切换时自动回顶**。Home 切换模块/推荐源不再应用默认内容区偏移，也不恢复目标模块以前的滚动位置；当前标签再次点击同样不触发隐式回顶或刷新。既有回调明确让 `useCardWindow` 保留共享视口，不重放缓存网格的旧卡片锚点；用户切换之后的滚动和迟到账号对账不被覆盖。切换时仅测一次旧内容高度，在 out-in/异步加载空档临时保留布局空间，内容就绪后释放，避免浏览器因中间空节点收缩而把 scrollTop 钳回顶部。监听和合帧复用原有作用域、loading 和 tabSwitchFrame，不新增 observer/轮询，不锁死最终列表高度。离开首页时的推荐数据保留功能继续存在。
+- **用户追加：头像被个人面板遮挡**。收到截图后核对实站节点：放大头像与 `.userPanel-pop` 同父，旧头像 z-index=1、面板=9999，放大尺寸约 70.2px，确属同一局部上下文内的错误顺序。`TopBar/styles/index.scss` 限定 `.avatar` 内：悬停连接区=0、个人面板=1、头像=2、VIP=3、提醒点=4；去除 VIP 模板旧 z-1。保留既有位移/缩放、材质和悬停桥，不改全局浮层层级或其他 Pop，不克隆头像。旧脚本证据 `/tmp/bewly-home33-avatar-before.png`；使用局部 ArrowDown 打开同一面板并 Escape 关闭，没有点击资料链接或账号操作。
+- **最终命令（含两项追加）**：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm knip` 全部退出 **0**；完整测试 **480 条 PASS**。日志 `/tmp/bewly-home33-final-lint.log`、`/tmp/bewly-home33-final-typecheck.log`、`/tmp/bewly-home33-final-test.log`、`/tmp/bewly-home33-final-knip.log`；局部回归 `/tmp/bewly-home33-home-dom2.log`、`/tmp/bewly-home33-weekly-test.log`、`/tmp/bewly-home33-scroll-test2.log`。新增滚动用例检查新/旧模块均保留当前位置、点击当前模块无副作用、迟到数据/账号不覆盖后续用户滚动、临时高度在加载后释放。Knip 保持 **10 / 0 / 5** 提示，未新增。复用 session 65950 开发 watch，最后增量成功，未生产构建/打包/clear。
+- **待实站验收**：第一次开发编译后刷新独立首页，正在关注的 lead 仍为 16px，确认该验收页仍执行旧扩展脚本；不是仅凭不变的 buildId 判断。用户随后检查并追加取消回顶和头像修复，这两项新代码已编译，再次请求一次合并重载。浏览器工具禁止扩展管理页，没有绕过。收到重载确认后复验新代码的实际坐标、窄窗、来回切换滚动位置和头像遮挡；本轮没有修改真实账号数据、显示偏好或原生音效。
+
+## 2026-09-30 个人面板读取在扩展失效后终止
+
+- 用户报告 `Failed to load user statistics` 和 `Failed to load recent login information`，均为 `Extension context invalidated.`。核对 `UserPanelPop.vue` 两条读取链：原来仅按账号/代次丢弃旧响应，并直接 console.error，未接入 TopBar 已有终止状态。Git 分支、追踪和 remote 未变；继续保护全部未提交修改和 stash。
+- **已实施**：个人面板复用 `topBarStore` 现有 `sharedStateMessagingUnavailable`，暴露活动读取检查和失效终止入口，不建立第二套终止状态。任一端点发现 context invalidated、端口关闭或接收端缺失，停止顶栏刷新、使在途登录资料请求失效，并取消面板自己的两个只读请求；关闭重开仍沿同一 Store 短路，不在旧脚本世界重试。
+- 两个 GET 接入现有 API AbortSignal/总期限；换号、改变登录记录显示设置、关闭和卸载取消旧请求。响应同时校验 Store MID、当前 Cookie 与既有 generation，Cookie 已切换但 Store 尚未对账时也不能写入。失效检查先于旧账号检查，使旧任务发现的上下文失效仍可终止当前旧脚本世界。普通网络失败继续通过统一 reportRuntimeFailure 报告，重开可重试；未改注销或其他写操作的取消/重试语义。
+- 未加载/读取失败的关注、粉丝、动态统计显示 `—`，不再伪装成 0；服务端确认的 0 仍正常显示，title 不再出现 `undefined`。没有清空 Chrome 历史错误记录。
+- **回归**：`verify-top-bar-sync.mjs` 新增 3 组真实 UserPanel 组件 + 实际 Pinia TopBar Store 测试，覆盖两端点 × 三类终止错误、定时器归零、并行读取取消、迟到响应、关闭重开不再发送、Cookie 提前变化、账号切换、隐藏登录记录、卸载，以及普通错误诊断和恢复读取。写操作边界使用禁止执行的隔离 stub，没有真实账号写入。
+- **最终验证**：`pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm knip` 均退出 **0**，完整测试 **483 条 PASS**；日志 `/tmp/bewly-panel34-lint.log`、`/tmp/bewly-panel34-typecheck.log`、`/tmp/bewly-panel34-full-test.log`、`/tmp/bewly-panel34-knip.log`。Knip 保持 **10 / 0 / 5** 提示。`git diff --check` 为 0，复用既有 watch 的增量已成功；没有生产 build、打包、clear、commit 或 push。
+- **实站边界**：没有通过再次重载扩展刻意制造真实账号页面错误。新代码需重载扩展并刷新已打开的 Bilibili 页面后生效；扩展重载后旧页面的 runtime 本身无法恢复，历史日志也不会因修复被自动删除。此前首页滚动/头像增量的实站复验仍未冒充完成。
+
+## 2026-09-30 历史、稍后再看与私信浏览工具
+
+- **范围**：根据用户批准的产品建议实施 7 项补充，聚焦实际使用，不扩大为安全专项检查。继续 `message_feature@7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6`，remote/追踪关系符合当前约定，保留既有未提交成果与 `stash@{0}`。
+- **历史搜索与筛选（已实施）**：清空搜索输入即可退出已提交查询，增加明确查询状态和清除按钮；新增日期与稿件/番剧影视/直播/专栏筛选。共用 `useHistoryTimeline`、现有历史目标解析及列表/网格窗口；换查询取消原读取，稀疏筛选每次动作最多读取 3 页，再由明确的“加载更多”继续。日期使用本地日界线，普通时间线行为不变。关键文件：`History.vue`、`useHistoryTimeline.ts`、`historyFilters.ts`。
+- **稍后再看（已实施）**：在页内复用既有布局设置提供列表/网格切换，增加标题/UP 主搜索、观看状态与时长筛选；服务端明确进度继续优先，未知进度不当成未看，位于视频末尾不推断为看完。筛选首次需要完整数据时读取现有全量端点，后续查询复用已加载列表，仍只挂载窗口内卡片；筛选下的刷新和跨页失效直接读完整列表，避免额外读取无用首批及退回局部筛选。全队列操作附作用范围说明。复用同一后台成员状态和读取期限，不新增成员真值。关键文件：`WatchLater.vue`、`watchLaterFilters.ts`、`background/messageListeners/api/watchLater.ts`、`watchLaterStateBroker.ts`。
+- **播放标签选择（已实施）**：预览提供逐项勾选、全选/取消全选和已选数量；无选中项时禁用确认，后台在原快照内校验并仅执行选中项。保留原有任务、账号与 Cookie 归属、进度、停止及失败项重试；新增普通失败诊断经统一 `reportRuntimeFailure` 报告。关键文件：`OpenTabsDialog.vue`、`useOpenTabsWatchLater.ts`、`constants/openTabsWatchLater.ts`、`background/openTabsWatchLater.ts`。
+- **会话内查找（已实施，位置补正待再次实站验收）**：查找当前已加载消息中的文本/链接，显示匹配数，上一条/下一条及 Enter/Shift+Enter 定位；IME 不触发定位，Escape 关闭并回收焦点。只使用现有消息和滚动 owner，不发远端搜索请求，也不触发自动读取更早消息。实站发现原会话展开的上移会把入口带出可见区，已把工具定位到可见会话外壳并按工具底边留出定位间距，保持原容器展开与边缘模糊。关键文件：`ConversationFind.vue`、`privateMessageSearch.ts`、`ConversationView.vue`、`useConversationViewport.ts`。
+- **私信图片查看（已实施，工具栏层级补正待再次实站验收）**：加入适应窗口/原始尺寸、缩放、原生滚动与拖动、同会话图片前后切换、加载失败重试。只显示当前图片；旧图片事件不更新新图片，聊天数组裁剪时保留正查看的图片。沿用 Dialog 焦点和表面；实站发现工具栏被顶部模糊尾部遮盖，已在局部提升工具栏，不改变共享顶部模糊。新增图标按钮通过 `IconButton` 的显式尺寸变体统一 36px 命中区域，不改变旧使用者。
+- **迁移与文案**：新增临时搜索/筛选/缩放状态不持久化；布局切换沿用现有设置键，无新设置迁移和第二套状态系统。`library_tools` 及选中标签提示补齐简中、繁中、粤语、英文。
+- **真实组件回归**：新增 `verify-library-tools.mjs` 的 6 组行为检查，并扩充真实 History、WatchLater、会话 viewport 及后台批量 runner 回归。覆盖搜索清空/过期取消、日期边界、3 页预算、查询复用、筛选刷新和跨页失效、已选项提交、实际输入与 IME、滚动归属、图片尺寸/拖动/切换/失败/迟到事件/聊天裁剪；未把源码字符串存在当作功能验证。
+- **本轮已完成实站验收**：用户重载后，在开发标记 `muneqpq0` 页面实际验证历史搜索结果 5 条清空后恢复 20 条、日期 2026-09-29/稿件筛选及清除；稍后再看 192 条完整队列的标题/UP 主查找、未开始且 10 分钟内筛出 134 条、列表/网格切换，并恢复原 grid 与清空筛选。批量预览初次失败，后续重载后同账号读取成功，显示 1 个真实播放标签；全选/取消全选及确认禁用正常，未触发真实添加。图片原始尺寸实测 1080×1080，适应比例 61%，原图与拖动正常；实际会话只有 1 张图片，多图切换为隔离组件验证。截图：`/tmp/bewly-library35-history.png`、`/tmp/bewly-library35-watchlater-list.png`、`/tmp/bewly-library35-batch-preview.png`。
+- **尚未验收**：当前 Chrome 内容脚本仍缺少查找入口位置、36px 图标及图片工具栏层级的最后增量（直接测得旧入口高度 18px、y=-6），已请求用户再次重载后继续验收。不能因 watch 标记相同就宣称加载最新增量。没有发送私信、删除记录或执行真实批量写入；仅沿已授权范围读取会话及已读标记。
+- **开发编译**：恢复工作时旧 watch 已不存在，启动 `NODE_ENV=development run-p dev:js dev:inject dev:bg` 持续开发编译，未调用会清理产物的 `pnpm dev` 外壳；content/inject/background 已成功，日志 `/tmp/bewly-library35-dev.log`。没有生产构建、打包、clear、commit 或 push。
+- **最终自动验证**：本轮最后修改后 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm knip` 均退出 **0**；完整 **489 条 PASS**，Knip 保持 **10 / 0 / 5** 提示，`git diff --check` 为 0。日志为 `/tmp/bewly-library35-complete-{lint,typecheck,test,knip}.log`。实测夹具：500 条稍后再看仅挂载 15 张初始列表卡；首次完整筛选读取 1 次，后续编辑查询不增加读取，筛选刷新仅增加 1 次完整读取、额外首批读取 0 次。实站另核对 1100×800 桌面视口筛选控件与侧栏未越界，已恢复 1744×1027 原尺寸，截图 `/tmp/bewly-library35-watchlater-1100.png`。未将夹具计数等同于真实网络性能百分比。
+
+### 接手核对：2026-10-01（Pacific/Auckland）
+
+- 完整读取根 AGENTS、package、本记录及 upstream-workflow；重新执行 status、remote、branch、HEAD、stash list 和 stash SHA 查询。仍为 `message_feature` 跟踪 `origin/message_feature`，HEAD 与原 stash 完整 SHA 均与交接一致；三个远端符合用户当前约定。upstream-workflow 中仍使用旧名 BewlyMac，本轮遵循用户明确的 Bewly_Nocturne 远端和继续当前分支指令，未改远端或分支。未找到 src/scripts/docs 下补充 AGENTS。
+- 用户明确确认已经重载 Dev。随后刷新原私信验收页，并创建全新同会话文档进行独立核对：两者仍显示旧查找按钮，class 缺少 `bew-icon-button--control`，实测宽高 18×18px、y=-6；宿主为 0.1.1、dev=true、phase=ready，buildId 为 muneqpq0，runtime ID 为 gofcngcklkfbighknbpknpnaenoenlfc。不能把用户重载确认或相同 buildId 单独解释为最终增量已加载。
+- 本机同一开发进程组的 content/inject/background watch 均仍存活；原日志最后一次内容脚本增量显示成功。当前磁盘 index.global.js 已包含查找按钮的 36px 变体，源码也包含可见位置及图片工具栏层级补正。因此当前确认的是磁盘产物与页面运行行为不一致，尚未确定是加载目录还是扩展缓存/实例重载问题；未重启 watch、未直接编辑产物、未重复修改业务源码。
+- 最后五项增量仍未取得新脚本实站通过证据；筛选刷新/跨页更新与聊天裁剪保留为上一轮隔离回归结果。本轮未重新执行 lint/typecheck/test/Knip，489 PASS 和 10/0/5 提示仍属于上一轮记录。仅补充此接手记录，不 commit/push、改版本或处理 stash。未访问扩展管理页，未发送私信或执行真实批量写入。
+
+### 页面一致性与广告设置：中途交接（2026-10-01）
+
+- 用户要求审查从 Bewly 可达的各类页面，统一底层背景、语义圆角与配色；原生页面只需轻量适配，明确广告统一服从现有设置。用户随后明确将直播、漫画、会员购、游戏中心、公益等独立子站纳入轻量适配。之后要求停止本线程实施，提供 Goal 提示词；本节为中间状态，不是完成或验收记录。
+- 源码已确认：`adaptedStyles/index.ts` 没有 `/c/*` 专门分类；`channelPage.scss` 有固定黑底及 `#111319` 渐变；`momentsPage.scss` 主动注入深色背景图；原生消息旧版选择器还会生成背景图伪元素；多个原生页面没有共享圆角。现有 contentScript 主机列表不含 live/game/show/manga/love，多数独立子站尚无注入，尚未修改 manifest 或给这些子站接入外观。
+- 初步实站读取了科技分区、原生动态、番剧、个人空间、原生消息、专栏与直播主页。科技原生封面和动态卡片实测仍是 6px 普通圆角；动态背景图实际存在。电影入口两次等待仍无 body，不计为通过。截图在本机 `native-pages-audit` 目录；早期动态/番剧截图出现半幅渲染，应复拍，不用于完整页面几何结论。已清除遗留视口覆写；原生窗口读取曾异常耗时，不把工具故障归因为扩展缺陷。独立子站当前外观可能同时受其他扩展影响，不能归功于 Nocturne。
+- **已写但未验证的中间代码**：新增 `src/utils/advertising.ts`，修改 `SearchResults/searchTransforms.ts`、`SearchResults/pages/AllSearchPage.vue`、`SearchResults/pages/VideoSearchPage.vue`、`SearchResults/utils/searchHelpers.ts`、`Home/useForYouRecommendations.ts`、`features/blockUselessFeedCards.ts`、`views/necessarySettingsWatchers.ts` 和 `styles/blockAds.scss`。意图为明确 API 标记识别、搜索/推荐服从 blockAds、活动区服从原独立开关、关闭后恢复已取得卡片，以及原生分区/空间/视频推荐沿原 observer 识别。下一轮必须检查广告数据是否可被现有卡片正确渲染、目标链接/标识是否保留、分页与缓存、迟到数据和开关恢复，不能仅凭这些修改认定完整实现。
+- 本阶段尚未执行 lint/typecheck/test/Knip，也未完成这批修改的开发增量与实站确认；前述 489 PASS 不涵盖此阶段。未实施新的背景/圆角/配色修复，未新建子站设置状态、修改版本、提交、推送或处理 stash。按用户要求关闭本轮审查标签，原有标签和开发 watch 保留，后续在 Goal 工作中继续。
+
+## Goal 进行中：可达页面外观与广告设置（2026-10-01）
+
+本目标覆盖 Bewly 页面、直接导航及内容入口可达的原生页面类型，并包含用户明确批准的直播、漫画、会员购、游戏中心和公益子站。页面类型覆盖不等同于遍历每条视频、每个账号或每个商品；登录、支付及真实账号写入不通过自动提交来验收。当前仍为 message_feature，HEAD、remote、追踪和 stash 已重新核对，全部前阶段修改保留。以下是持续记录，**不是 Goal 完成声明**。
+
+2026-10-04更新后的执行规则：先对照真实导航确定本目标全部缺失模板，再集中完成浅色/深色/OLED及适配开关的差额；已有Bewly页面保留，不继续扩展其原生对应页的业务实现。所有新增原生外观统一受现有adaptToOtherPageStyles控制，设置名称统一为“适配更多页面”；广告仍由独立广告设置控制。源码与检查完成后统一报告修改结果、已知问题和请求整批重载，不再把每批少量新增页当成完整范围而反复请求重载。随后逐页验证所有改动模板的排版、圆角、布局、色调、可读性、重叠及错位，包含浅色/深色/OLED和窄桌面。视频加载及已实现功能作为保护项，不为外观任务猜改播放链路。
+
+2026-10-06第七十九批阶段收口：当前清单中已取得真实结构的模板，其本轮源码差额已集中落实，现统一进入新增产物装载与完整实站矩阵门槛。这个阶段结论不等于Goal完成；既有Bewly页面、主站和独立子站的原完整范围不缩减，额外改色/广告隐藏层、资格后及未登录条件、独立经营后台的待答范围和播放/4004边界仍分别保留。重载后继续按实际新行为与页面结果验收，发现差额再集中修正，不把源码存在或隔离样本当作全站通过。
+
+2026-10-06第八十批范围更新：用户明确收敛到常用入口、稳定页面类型和主要交互，不再继续适配过细枝节、一次性或特殊活动，并允许适当回退此前不合适的适配。后续验收按这一最新范围执行；一次性活动与作者自定义Wiki页面恢复由原站管理外观，只保留既有广告设置，不再把这些特殊模板的三主题穷尽检查列为完成门槛。常用目录、通用原生页面及用户指定的独立子站仍需完成主要视觉/交互验收，历史记录和其他维护成果保留。
+
+### 页面覆盖矩阵（持续补齐）
+
+| 页面类型 / 来源 | 当前依据及实施 | 条件性待验收与证据边界 |
+| --- | --- | --- |
+| Bewly 首页各模块、番剧、历史、稍后再看、收藏、动态、消息、搜索、设置 | 前批主界面/搜索日历/通知矩阵保留；第三十五批用户搜索统计完整项换行三主题1100通过；第四十三批私信页顶栏热搜/历史的鼠标与键盘跳转实站通过 | 其他弹窗、未操作的写入/错误态及部分结果类型主题仍按实际证据限定，不扩大为全部分页/业务状态 |
+| 原生首页、新版 /c/* 分区、/v/popular | 第五批科技页媒体/三主题已有证据；第九批c/tech轮播底板已确认浅色白/黑字、深色/OLED语义深色面/浅字，内容海报保留 | 不把科技模板结果扩大为全部频道内容/轮播状态；其他同模板入口按具体证据限定 |
+| 原生搜索综合及用户结果 | 第四十一批确认综合页主按钮theme/on-theme及8px平滑轮廓；第四十二批排序选中前景亮/暗/OLED通过；用户结果统计换行已有第三十五批证据 | Watch Later消息失败分支为实际模块隔离回归，新文档正常读取无同类警告；原两次请求的原始异常不可还原 |
+| BV / 列表播放、PGC、番剧/国创、电影/电视剧/综艺/纪录片 | 保留原生播放及侧栏owner；第二十批电影频道三主题和1100布局、第五十三批原生按钮前景证据保留；第八十四批新4K轨迹确认完整侧栏刷新由旧26.1秒97次变为新35.4秒1次，真实侧栏内容及简介展开/收起正常；第八十六批新动态页已实读顶栏限制后的过渡属性 | 渲染总成本、更多视频/列表/PGC状态及历史4004因果仍未关闭；顶栏完整悬停行为仍以隔离检查为依据，不从属性生效推导播放性能提升。第五十三批其他按钮状态按原证据保留，不将单一样本推及全部播放路径 |
+| 原生动态、Opus、个人空间与各子页 | 第九/十批已有三主题与空间投稿/收藏SPA证据；第三十二批补动态/空间/Opus/目录1100边界、真实圆角及适配关闭/恢复，个人横幅/正文媒体保留 | 不把主页及已检查子页推及全部空间设置/业务状态；旧cv已重定向，证据属于Opus |
+| 原生消息、历史、稍后再看、专栏、话题、笔记、404 | 第十批基础矩阵及后续细项保留；第三十五批笔记封面及内层实际12px，优先级修复已命中 | 未进入笔记编辑、发布、删除等写入阶段，按已验证范围保留 |
+| 创作中心、账号设置、大会员 | 既有主体、认证与只读模板成果保留；第九十七批临时排除账号域Dark Reader后，硬币记录、卡券、挂件及记录、积分记录各六组合确认累计样式；硬币焦点回收及72px留距、真实TR分隔、邀请只读字段和资料分隔线已核实，未读取邀请码值。临时排除已恢复 | 旧勋章本次原CSS与sea.js遭ERR_BLOCKED_BY_ORB，关闭适配仍无样式；六组失效资源样本不算通过，旧勋章精确前景/旧顶栏隐藏继续待原生资源可用后复验。未保存资料、换头像/挂件、领取、购买或操作资产，大会员等额外配色层边界保留 |
+| 创作互动、粉丝与公约微应用 | 第九十七批评论、勋章、日历、公约正文各六组合及原键盘/取消行为保留；第九十八批收到重载确认后，粉丝菜单六组合DR0，选中项已分别使用浅色rgb(144,37,56)与深色/OLED的rgb(249,142,160)，12px轮廓生效，关闭上一批选中前景装载门槛 | 未关注/取关、管理用户、改过滤设置、申请版权服务或提交反馈；不把只读菜单结果扩大为这些写入状态 |
+| 创作激励、任务、动画/短剧与周报 | 第九十七批任务、规则、激励、动画引导、短剧及统计的矩阵与键盘证据保留；第九十八批任务历史最终六组合DR0，原growing-up外圈已跟随白色、语义深色和OLED黑色，关闭重要背景装载门槛。周报与互动投稿保留第九十三批证据 | 任务历史早期六组有Dark Reader及一组视口不符，均排除，使用后续settled结果；账单/管理空态及资格后的业务状态保留边界，未投稿、选择身份、申请、关注、领取、扫码、导出或操作资金 |
+| 新歌热榜 | 原三主题及媒体圆角已有取证；第二十五批完整加载后musician/originalMusic/reviews/moreMusic均1100px、min-width 0，文档无横向溢出 | 保留歌曲/活动横幅与原轮播；未把离屏轮播项误判为文档溢出 |
+| 课堂、常用活动目录、登录等辅助入口 | 既有社区/课堂、国际版footer和活动目录证据保留；第九十八批个人课程已购、券包、兑换各六组合DR0，12px面板、8px控件与三主题前景已生效，原生三个入口往返正常；一次性直播活动页已确认不挂bewly-design/字体投影，广告class独立保留 | 个人课程当前已购/券包为空，兑换未输入或提交，不能把视觉灰态称为真正disabled；登录仍自动回首页，持续未登录视觉/键盘缺证据，未退出账号；特殊活动不再深入适配 |
+| 赛事首页/专区、旧版赛程 | 第二十批公共footer居中及赛程ArrowRight/Left局部滚动通过；第二十五批新顶栏滚动后实色、旧赛程1100文档通过 | 不扩大为所有日期/赛程状态；未订阅、预测、购票 |
+| 番剧索引、资料页 | 索引三主题/1100已有证据，第三十一批Enter完结/Space全部后hash更新且焦点稳定；第二十批原时间表末端移交焦点通过；资料长短评切换已有实站 | 资料新增细项前景和其他同模板类别仍按具体证据限定，不把键盘成功当作全部视觉状态已验证 |
+| 直播 | 既有首页、房间、分区矩阵及115项零交叠证据保留；第九十八批/lol更多菜单1100px三主题DR0，实读12px、语义表面/前景和无模糊，1744时原生隐藏更多并展示全部链接。第一百批重载后，侧栏关注1100三主题DR0，标题、三条简介及更多文字已实际使用foreground/text-2/text-1，关闭重要声明装载门槛；原单一表面、轮廓和位置保留 | 六组进出动画中采样仍排除；顶栏关注和未出现的空/有数据状态按各自证据限定，不能从侧栏结果扩大。公会/帮助等原边界保留，帮玩验证码未完成；没有关注/取关操作 |
+| 漫画 | 既有主体、账户中心、分类键盘和关闭恢复证据保留；第九十八批分类六组合DR0，18个已加载封面内层保留原行内0px且实际均继承父层12px，导航线色随语义前景变化，关闭最后内层规则装载门槛 | 本次首页早期分类点击未导航，改从页面显示的准确href进入分类；不将该次直接访问记为点击成功。账户等条件差额按原证据保留，未领取、购买或改阅读参数 |
+| 游戏中心、公益 | 游戏个人页、客服、监护、旧榜单与公益既有证据保留；96批三主题普通分类前景、98批现代首页1100顶栏1068px@16及搜索min-width0均已确认。119批另外补齐发现页浅/深/OLED×1744/1100，全部DR0，标题/名称/分类/评分可读，文档宽度等于视口；关闭适配恢复1160px原宽和原色，开启恢复1068px内容与对应前景 | 98批带Dark Reader的记录仍只作为其几何证据，不改写历史为独立配色通过。发现页滚动会追加原目录内容，不强制追到末端；原栏目、应用图标和内容海报保留，未下载、预约、捐款、点击反馈或进入交易流程 |
+| 游戏配套站点 | 作者社区Wiki退出适配和礼包空列表既有证据保留。116批充值/礼包/协议及117批WIKI正文/快捷栏/断点成果保持。118批用户重载后，“我的消息”六组合DR0实读text-2，OLED真实悬停和Tab聚焦均为text-1，2px焦点环保留，移出恢复弱化；关闭适配恢复原黑字、开启恢复语义色，原href/计数不变。关闭117批最后新增装载门槛 | 当前消息计数为0，没有点击消息弹层或制造未读；不扩大为未观察的通知业务状态。119批用户明确长期保留指定五域的Dark Reader排除，环境收尾已解决；作者自定义页及资格/资产/付款/领取边界保留 |
+| 会员购 | 既有订单/票务/活动详情及商城证据保留；第九十六批票务目录三主题×1744/1100均DR0，内层project-list已实读1068px，两列完整容纳，关闭此前这处装载门槛；原海报、标题、日期及不可售状态保留 | 其他改色或条件页面仍按各自原记录限定，不把目录结果推及所有订单/购买状态；未下单、预订或提交个人资料 |
+| 钱包、直播中心、工房 | 原钱包、直播中心及下载页证据保留。116批帮助首屏/页脚、目录键盘和50张原图证据保持；117批法律LI六组合DR0全部实读text-2，浅色rgba(50,59,73,.8)、深色/OLED rgba(212,215,222,.9)，联系标签继续使用配对前景，宽窄文档无横向溢出。关闭恢复#999、开启恢复语义色，关闭116批该差额装载门槛 | link.bilibili.com按119批用户决定长期保持Dark Reader排除。历史缩放/媒体未完整绘制/页脚定位异常图保留，不扩大通过范围；钱包空记录、下载页缺失DCL间歇条件及资格后状态边界保持，交易、认证与提交不自动测试 |
+| 学院 | 第九十八批六组合DR0，九组共54张课程卡在1100px完整换行、裁切0；第一百批1100三主题DR0，搜索实例浅色filter:none、深色/OLED亮化规则已实际生效，图标可见，关闭累计装载门槛；搜索表面无重复模糊，原课程、图片与导航保留 | 未报名、播放课程或操作收藏；不将搜索实例结果扩大为全部SVG图标 |
+| 素材平台与八类管理入口 | 第九十九/一百批管理模板及键盘证据保留。第一百零一批首页、视频目录、贴纸目录各六组合DR0，首页任务卡/卡片/页脚、原内容横幅及权益图、目录三层媒体12px轮廓与窄窗最小宽度均实际确认；分类Enter展开/Space收起，Enter进入贴纸和Space返回视频有效，关闭首页与目录累计装载门槛 | 管理列表/收益为空，不扩大为有数据/错误态；宽屏部分卡片仅作几何/样式采样，按实际首屏与窄窗滚动截图限定视觉结论。未上传、下载素材、删除、兑换、退出登录或操作资产 |
+| 音乐门户、控制台与独立榜单 | 第九十八批角色/服务、帮助、未入驻控制台和独立榜单各六组合DR0、原键盘证据保留；第一百批期数1100三主题DR0，SPAN/SVG均跟随text-1，浅色已不再白色；Enter展开、Escape后实际periodList为0、aria-expanded为false且焦点归还，关闭继承前景装载门槛 | 原有媒体与轮播保留，未播放全部、订阅、入驻或授权；不将首屏结果扩大为全部期数内容 |
+| 帮助、客服、介绍、协议、下载及常用目录 | 第一百批公共阅读页与指定只读交互证据保留。第一百零一批协议汇总和准确topic_list.html六组合DR0、1100布局/统一阅读面/完整封面与键盘及关闭恢复已确认。第一百零九批下载更新面板1068px/12px、正文与日期、114×36分类选中态已命中。第一百一十一批用户重载后，联系区三主题×1744/1100实读主/次前景，窄窗第五组正常换行；关闭还原旧色、开启恢复语义色，Enter切PC/Space回安卓及on-theme黑字均保留，关闭联系区装载门槛 | 样本仍DR6，不扩大为无其他扩展的独立对照。下载页本次滚动时版本列表高度增长，footer宿主高度0且无可读子节点；停止追底，没有把空宿主当作本轮页脚通过。未下载、同意协议、购买或进入单个活动 |
+| IR 与其他企业公共入口 | 原企业公共页及第七十二批IR交互证据保留。第一百一十二批确认最新IR业务说明/数字、季度背景/字形、新闻平面列表/12px照片及实色顶栏箭头，在浅/深/OLED×1744/1100均实际生效；关闭适配恢复水纹、原20px轮廓及原前景，四个资料链接不变。安全首页介绍h3与原流程图白色画布同样六组合可读，原500×471.95尺寸、src和色彩保留；关闭后恢复透明画布。关闭第一百一十一批全部新增装载门槛 | 这些样本仍DR6，仅据实际配色、几何、截图和开关行为验收，不宣称六域已独立排除或所有其他扩展组合兼容；未修改其他扩展、经营后台或Euroland外部框架 |
+| 招聘公共目录与校园介绍 | 第一百零二批社招目录481条职位、1100px文档、原详情新标签与校园/B-UP问答键盘证据保留。第一百零三/四批校园指定背景/标题命中，连接线窄窗1068@16、实色说明图不滤色。第一百零六批B-UP介绍卡六组合background-image:none、12px及主次文字继承，空sticky和原高度保留。第一百零七批B-STAR底图、九组文字图、窄窗三卡及视频卡连续12px、校园分类标题和九类内容图已确认。第一百零八批两模板各六组合页脚层级0实际生效；校园全部三点命中、B-STAR宽窗三点命中，两页点击返回顶部均到0，关闭内联覆盖装载门槛 | 招聘样本仍DR6，不宣称独立纯主题通过。B-STAR在1100px时顶部/中心命中被BTR的悬浮入口覆盖，底部仍命中原按钮；这是已识别的第三方覆盖，不在Nocturne中增加适配或改动其他扩展。顶部没有back-top节点时页脚恢复1002符合选择器设计，不再据此误判补丁未加载。未投递、改简历、登录或选择候选人 |
+| 广告开关及广告结果 | 实际模块/组件回归及跨站开关同步保留；第八十二批在同一批3张cm明确链接卡上重新确认Nocturne标记随开关3/0/3变化；DevTools与AdGuard当前标签过滤日志共同确认残余display:none来自AdGuard中文过滤器；有内容activity-game-list独立开关实站显示/隐藏通过 | Nocturne释放自身隐藏标记已实站确认，当前其他过滤器仍开启，不把三张卡的最终可见性记为通过，也不在Nocturne中强行覆盖AdGuard。brand_ad仍缺真实投放样本，复合创意仅按隔离证据，不按标题推断广告 |
+
+### 第一批已实施及边界
+
+- **原生基础表面**：`common/nativeSurfaces.scss` 只映射已知媒体裁切容器、面板和控件，提供 focus-visible 与根 color-scheme，不对全部图片/元素 blanket 圆角或 overflow。普通圆角沿 `--bew-corner-shape`，正圆/胶囊原有语义保留。自定义首页原站 body 与 forceDark 单独避让；没有改顶部模糊、材质参数、原生业务节点或播放器布局。
+- **背景与颜色**：取消动态底图、旧消息伪元素底图；频道索引区、原生页脚和页面底层使用已有背景 token。原生中性表面/文本变量补齐浅色映射。22 个自有适配文件中的 47 个独立 `color: var(--bew-theme-color)` 声明改为 foreground token；第三方扩展适配未动。明确的历史/待看/动态/空间/话题/搜索徽标按钮补 on-theme 前景。仍需实际命中和所有状态验收。
+- **独立子站入口**：`nativeSites.ts`、`nativeAppearance.ts`、`nativeSiteAppearance.ts`、`nativeSites.scss` 与 `vite.config.native.ts`。复用现有 settings/displayReady/失效状态与 `useDark`，新增可选 observeRoute=false，不建立第二套设置、账号或主题时钟。禁用外观恢复原类和 CSS 变量，广告开关独立；pagehide/替换释放 scope，DOMContentLoaded 前离场不会迟到挂载。不注入主站 App/Dock/顶栏、MAIN、页面遮罩或子 frame；现有 host_permissions 已覆盖这些站点，没有增加权限种类。开发脚本约 217KB、CSS 约 42KB 是编译日志大小，不是运行内存收益。
+- **广告完整链路**：明确标记由 `advertising.ts` 识别，普通标题和包含 ad 字母的未知类型不作为证据。搜索/推荐保留已接受原始条目，显示投影服从 blockAds，综合分页不再无条件丢弃广告。推广项经 `toAdvertisementCard` 和 `AdvertisementCard` 显式显示标签、图片与原始 http(s) 目标；不伪造视频 ID、启动 VideoCard 预览/关系/稍后再看动作，不发送额外曝光请求。缺少安全网页目标时显示非交互内容。原生广告 observer 支持已确认的分区/空间/视频推荐，关闭清除自身标记、保留原 DOM；多列表与晚到广告由同一个 observer 处理。搜索顶部活动仍沿原单独开关，四语言补充现有广告选项说明。
+- **开发运行**：保留原 content/inject/background watch；仅新增 dev:native watch（session 16981，启动后已再次确认运行），日志 `/tmp/bewly-native36-dev.log`。manifest 由 development 环境的既有 `scripts/manifest.ts` 生成，没有手改产物。package 的开发/未来构建任务同步新增入口，但本轮没有运行生产 build、打包、clear 或 Safari 验收。
+
+### 第一批实际检查
+
+- 当前完整 `pnpm test` 退出 0，**494 条 PASS**：`/tmp/bewly-native36-stage1-test.log`。新增真实广告识别/分页、observer、原生设置投影、实际主题 owner 无路由订阅、生成 manifest 入口隔离、搜索开关与广告卡组件行为检查。受影响的旧推荐转换片段回归改为执行真实模块；既有四条 JSDOM 页面导航诊断保留。
+- `pnpm typecheck`、`pnpm knip` 均退出 0：`/tmp/bewly-native36-stage1-typecheck.log`、`/tmp/bewly-native36-stage1-knip.log`。Knip 为 **10 / 0 / 5**；仅注册真实新增构建/运行入口，没有新增 ignore。
+- `pnpm lint` 在修正两处测试格式后完整退出 0：`/tmp/bewly-native36-stage1-lint-final.log`；此前失败日志保留。`git diff --check` 退出 0。这些结果证明当前自动回归，不证明原生网站全部适配完成。
+- 本 Goal 实站截图继续存于 `/Users/young/.codex/visualizations/2026/09/30/01a0f48c-1c3e-7710-a783-25acebdfbffb/native-pages-audit/`，09/11/12/13/14/15 分别为漫画首页、游戏中心、公益、漫画分类、新歌热榜、课堂的**修改前**画面；10 为会员购空页面，不计通过。部分子站曾出现 Dark Reader 动态改色样式，其具体来源未核实，不把当前深色截图自动归功于 Nocturne。
+- 已就本轮新增 manifest 发出一次手动重载请求，尚未收到回复；继续代码检查，不重复索取确认，也未绕过扩展管理页限制。**后续优先补课堂/音乐/辅助原生入口与未覆盖子模板，并在重载后完成新脚本的实站矩阵。Goal 保持 active。**
+
+### 第二批补齐与当前验证（2026-10-01）
+
+- **主站入口与原生表面**：课堂保留完整主站内容脚本的既有播放器/截图 owner，只补样式启用路径；没有另建课堂播放器。新歌热榜按观察到的 CSS Modules 前缀接入语义媒体圆角。账号设置与创作中心取消整页 invert 及补偿媒体反色，已观察到的导航、面板、文本、输入框改用现有 token；大会员装饰 mask 取消，内容海报与横幅保留，原单层玻璃跟随统一材质参数。未据源码覆盖声明全部原生子页已验收。
+- **独立入口与恢复**：新增 pay/link/gf/passport 及三个已确认的主站活动/社区精确路径。主站脚本排除这些精确独立路径，独立入口不启动主站 App、MAIN 或播放器增强；现有健康 ping 和刷新全部页面的目标识别纳入独立页面。字体复用现有 customizeFont/fontFamily，只通过继承应用，不覆盖原生 icon font。主题同步关闭原站主题 Cookie 写入，停用/卸载恢复原有主题类及内联变量。
+- **键盘行为**：账号、活动目录、钱包导航及直播中心已观察到的 click-only 导航由局部 nativePageKeyboard 补 role/Tab/Enter/Space，调用原节点 click，不复制业务逻辑。已有原生链接/按钮不二次接管，迟到链接出现后归还属性，折叠直播分组不进入 Tab 顺序。Space 在释放时激活，按住不滚动，焦点离开取消；清理恢复原属性并移除 observer/listener。
+- **广告精度**：推荐实际 owner 的回归确认普通视频不会与广告条目误去重，开关改变可恢复已接受条目。原生卡片 observer 只隐藏确定广告及对应单卡容器；多卡父容器、晚到正常卡片和 data-target-url 更新均有行为回归。游戏推荐卡不再无条件隐藏，关闭设置清除自身标记并恢复 DOM。
+- **本次新增登录/会员购样式**：登录实站短暂显示现行 login__main 表单，随后被原站按已有登录状态转回首页；复用 loginPage.scss，取消旧 420px 强制布局，补背景、表单、普通控件与弹窗语义表面，保留二维码及说明图。会员购已取得 orderlist 空状态、platform/home.html 目录和通过真实卡片打开的活动详情；只映射这些模板的表面、海报轮廓、导航/筛选文字及原生选项状态。价格、独家标签和活动横幅没有作为广告移除；未触发购票、想去、评论或个人资料提交。
+
+验证证据与尚未满足的条件：
+
+- `pnpm test` 完整退出 **0，499 条 PASS**（`/tmp/bewly-native38-test.log`），`pnpm typecheck` 与 `pnpm knip` 均完整退出 **0**（同前缀 typecheck/knip 日志），Knip 保持 **10 / 0 / 5**。原生外观定向 9 项检查退出 0（`/tmp/bewly-native38-focused.log`），涵盖真正模块、主题 owner、生成 manifest、推荐 owner 和 Vue 广告卡/搜索组件；不冒充实站验收。
+- `pnpm lint` 初次发现键盘条件大括号及 Sass 引号格式，修正后完整退出 **0**（`/tmp/bewly-native38-lint-final.log`）。随后仅新增会员购 CSS，针对该文件的 ESLint 退出 **0**（`/tmp/bewly-native38-show-lint.log`）；`git diff --check` 退出 0。旧失败日志保留。
+- `NODE_ENV=development esno scripts/manifest.ts` 退出 **0**（`/tmp/bewly-native38-manifest.log`），只生成开发 manifest。原 native watch PID 16645/session 16981 虽活着，但其 stdout 句柄核实正确、源码及入口 touch 均未触发增量，产物仍停在首次编译。明确终止这一失效 watcher 后确认 session 退出 1，再以不 clear 的 `pnpm exec cross-env NODE_ENV=development pnpm dev:native` 启动 session 51282；新日志 `/tmp/bewly-native38-dev.log` 确认最新 56 个模块开发编译成功（CSS 70.56 kB、JS 226.01 kB，仅日志体积）。主站 content/inject watch 保留；没有生产构建、打包或清理产物。
+- **增量监听进一步核实**：session 51282 首次编译成功后仍不响应 CSS/入口 touch；核实后终止该单独 watcher 并确认退出 1，以宿主权限运行同一无 clear 命令（session **50284**，`/tmp/bewly-native38-host-dev.log`）。首次编译后再次 touch 入口，日志出现第二次 `build started` 和 `built in 323ms`，证实增量通知恢复。两次 sandbox watcher 日志均保留；没有为页面新增轮询，也没有仅因进程存在就宣称监听可用。
+- 浏览器再次打开科技分区仍无 nativeFeedPage 类、封面计算圆角仍为 **6px / superellipse(1)**；会员购仍无 data-bewly-native-site。它们不能算新代码验收通过。Dark Reader 等其他扩展对颜色的影响未被关闭或混作 Nocturne 成果。26/27/28/29 截图分别为登录、会员购订单空状态、目录、活动详情的修改前取证，保存在同一 native-pages-audit 目录。
+- 尚待用户完成本轮产物重载后的真实矩阵：独立入口实际加载、深浅/OLED/主题色、外观与广告开关恢复、桌面窄窗、SPA/键盘，以及未覆盖的各业务子模板。Goal 保持 active，不将以上局部证据扩大为完整覆盖。
+
+### 第三批：赛事、番剧辅助页及直播/漫画子模板（2026-10-01）
+
+- **赛事两套模板**：实际从顶栏进入 /match/home，经页面导航进入 /match/game?gid=2 和 /v/game/match/schedule。新版两个端点使用独立轻量入口，覆盖无/有末尾斜杠及 query；不将 /match/gameplay 或任意子路径扩成新入口。旧版仍保留既有主站/顶栏 owner，仅增加 esportsPage 分类与样式。赛事横幅、队标、直播预览保留，卡片、筛选、日历、下拉与比分文字使用现有 token。未执行订阅、预测、购票。
+- **原生番剧索引**：从番剧首页实际打开 /anime/index/，封面计算圆角为 4px，筛选/排序是无 role/tabindex 的 li。补统一媒体轮廓、文字/分页前景与局部键盘支持；现有 necessarySettingsWatchers 的同一个路由/设置 watcher 同时管理账号和索引键盘 owner。增加真实模块行为回归：Enter 触发原生更新、保持焦点、筛选和排序选中语义独立、停止后恢复属性；不改查询/分页网络逻辑。
+- **番剧资料页**：通过播放页真实链接进入 /bangumi/media/md835。观察到独立 media-detail-wrp 模板及复制封面的 blur(40px) 背景层；新增 /bangumi/media/* 的轻量入口并排除主站/MAIN 重复注入，/bangumi/play/* 保持原播放器路径。仅取消该装饰层及其遮罩，保留 media-preview 封面、评分/星星和章节图像；资料、评论、章节与侧栏表面用语义 token。资料分类和集数分组复用局部键盘适配，原生追番/付费/评论操作未触发。
+- **漫画详情/阅读**：从首页实际进入 mc28201 详情及“开始阅读 第 1 话”。确认旧 Vue 详情与独立 reader-layout；详情章节按钮、推荐面板及阅读器工具栏、设置/目录/评论面板、外围底色接入语义表面和圆角，正圆与胶囊保持 round。正文 image-container、图像滤镜/缩放、双页几何、弹幕与翻页逻辑保持原生。只关闭实际阻挡浏览的原生关注推广提示，没有领取赠券、关注、购买或解锁章节；该提示没有被据“赠券”文案自动加入广告规则。
+- **直播间**：从真实首页链接进入一个直播间，核实 room-bg-ctnr 下只有两种格式的装饰背景节点，按该结构清除壁纸；实际播放器/竖屏补边、活动横幅、礼物和勋章均保留。头部与聊天输入面板采用相邻拼接圆角，聊天阅读面使用实色，输入与发送按钮使用既有前景配对；发送按钮的禁用外观仍由原生状态决定。未输入/发送弹幕、关注、参与抽奖或打赏。
+
+实际检查：
+
+- `pnpm test` 完整 **500 PASS，退出 0**（`/tmp/bewly-native39-test.log`）；`pnpm typecheck`、`pnpm lint`、`pnpm knip` 完整退出 **0**（同前缀对应日志），Knip **10 / 0 / 5**。新增真实 manifest 检查覆盖精确赛事路径、末尾斜杠、资料目录与保持原播放入口，原生索引键盘行为通过。此后仅增补漫画/直播 CSS，定向 ESLint 结果另记；不将 JSDOM 等同实站。
+- development manifest 生成退出 **0**（`/tmp/bewly-native39-manifest.log`），未手改产物。原 native watch session 50284 实际响应这批修改并多次增量编译成功（`/tmp/bewly-native38-host-dev.log`），没有新增另一套 watch 或重新 clear。
+- 漫画/直播 CSS 最后增量定向 ESLint 退出 **0**（`/tmp/bewly-native39-native-css-final-lint.log`）；最终 `git diff --check` 退出 **0**。
+- 本轮 30/31/32/33/34/35/36 截图依次记录赛事首页、旧赛程、番剧索引、番剧资料、漫画详情、漫画阅读器、直播间的修改前模板；均在既有 native-pages-audit 目录。漫画详情的首张截图含原站关注推广提示；阅读器截图只用于核对图像/工具栏边界，不代表新样式验收。
+- **仍缺新运行态证据**：本轮新增路径与样式尚待扩展重载后的实际生效、深浅/OLED、设置恢复、桌面窄窗和各交互矩阵。电影等频道的加载问题、更多原生子模板仍按覆盖表继续。Goal 保持 active，完整目标尚未达成。
+
+### 第四批：电影广告槽、官方游戏详情与公益详情（2026-10-01）
+
+- **电影模板与广告**：此次 /movie/ 正常加载，确认已有 channelPage 规则的主要类名仍适用；补 `.section-title .main-title` 的固定白字、次要说明文字及封面 picture/img 继承轮廓。实际 DOM 出现 `.gg-floor-module > .ad-item > .ad-a` 明确广告槽，目前是无可见广告内容的空槽；只将该精确结构放入既有 block-useless-contents 开关规则，不隐藏 promotion-c 或内容横幅。新增回归直接用 Sass 编译实际 blockAds.scss 后在 DOM 检查 display、动态加入、关闭恢复及节点身份；普通横幅与其他模板同名 ad-item 保持可见。没有据空槽声称实际拦截了投放广告。
+- **官方游戏详情域名**：从 game.bilibili.com 的普通游戏卡片实际进入 `https://www.biligame.com/detail/?id=121001`。仅新增 `www.biligame.com` 的轻量入口和精确 host permission，不增加 `*.biligame.com` 通配权限；测试确认 pkg.biligame.com 下载域仍不是内容脚本目标。详情导航、下载区、信息文字、控件和媒体轮廓接入统一 token；品牌横幅保留，仅令其原渐变覆盖层融入统一底色。嵌入预览按原生播放/暂停按钮暂停并核实 paused=true，没有下载、推送至手机、预约或打开厂商安装包。
+- **公益详情**：从真实项目入口进入 detail 页面，核实 info-detail、donator-list、原生 Element 表单和内容编辑器输出；补阅读面板、标题、选项/输入框及选中前景配对。保留项目素材、视频、筹款进度和原生表单语义，没有改变金额、勾选协议、匿名设置或提交捐款。内容中的项目描述与金额仅作为模板数据，不用于本任务的业务判断。
+
+检查结果：
+
+- 完整 `pnpm test` **501 PASS，退出 0**（`/tmp/bewly-native40-test.log`）；完整 lint/typecheck/Knip 均退出 **0**（`/tmp/bewly-native40-complete-lint.log`、`/tmp/bewly-native40-typecheck.log`、`/tmp/bewly-native40-knip.log`），Knip 保持 **10 / 0 / 5**。随后仅追加公益 CSS，定向 ESLint 退出 **0**（`/tmp/bewly-native40-love-lint.log`）；`git diff --check` 退出 0。
+- 最新开发 manifest 生成退出 **0**（`/tmp/bewly-native40-manifest.log`）。当前 native 开发产物为 226839 字节 JS、94530 字节 CSS，文件修改时间为 `2026-10-01T02:30:10Z`；manifest 为 `02:30:15Z`。这是磁盘生成证据，不证明浏览器已加载。未生产 build、打包、clear、提交或推送；HEAD 和 stash SHA 仍保持接手值。
+- 37/38/39 截图依次为电影频道、官方游戏详情、公益详情的旧运行态取证，保存于既有 native-pages-audit 目录。所有本轮临时审查标签在取证后关闭。
+
+当前实站阻塞：手动重载请求后连续多轮没有收到本轮产物已重载的回复，且最新实际检查并非仅凭回复推断：公益详情 `document.readyState=complete`，但 `data-bewly-native-site=null`、bewly-design=false；该入口的 site 标记即使外观设置关闭也应存在。之前主站科技页也仍缺新增分类、保持 6px 封面。新产物生效与深浅/OLED、关闭恢复、窄窗和交互矩阵因此尚不能验收。已继续完成上述独立代码/模板工作；后续需要先加载本轮产物再据真实差额推进，不能继续用旧运行态截图证明新规则或无依据叠加样式。完整范围和覆盖表中的待验项目保留，未缩减目标。
+
+同一加载阻塞已跨至少三次连续 Goal 轮次复现，当前 Goal 已记录为 **blocked**，不是 complete 或用户暂停；待本轮开发扩展重载后恢复原目标，首先验证真实入口及行为，然后继续覆盖表中剩余验收与修复。
+
+恢复后首次核对：Goal 当前重新为 active。重新枚举后连接 Chrome「用户1」，新开公益首页；在 document.readyState=complete 且 charity-header 已出现后，html 仍无 data-bewly-native-site，亦无 bewly-design，本次捕获的页面 error 日志为空。因此暂不能确认本轮独立入口已运行，也不能据此将新样式验收升级为通过。重新核对 message_feature、origin/message_feature、三个 remote、HEAD 与 stash，均保持接手值。本轮只记录实际核对，没有追加业务/样式修改或重复执行既已通过的全套测试。恢复后的相同加载阻塞按首次计，暂不再次设置 blocked。
+
+### 新运行态实站验收与第五批差额（2026-10-01）
+
+用户明确回复“重载了，继续你的工作”，并进一步要求分别确保明亮、普通深色和 OLED。实际页面也确认变化：公益页出现 `data-bewly-native-site=love`，加载 `--bew-page-max-width:2280px` 与 `--bew-media-radius:12px`；科技页出现 nativeFeedPage，封面计算值为 12px / superellipse(1.7)。之前的首次入口加载阻塞已解除，Goal 继续 active，不沿用旧运行态结论。
+
+- **真实主题同步与关闭恢复**：通过 Nocturne 设置界面切换主题，公益页跨标签同步移除/增加 dark/oled-dark。明亮底层为白色；普通深色为 `oklch(0.22 0.008 169.795)`；OLED 为 `rgb(0,0,0)`，面板仍保留独立表面。关闭“适应其他页面样式”后原卡片恢复 4px，html 只保留广告开关类与独立 site 标记；重新开启恢复 12px 平滑圆角。没有改动广告偏好或原生账号数据。
+- **科技分区**：实际检查明亮、普通深色、OLED 的底层、文字及 12px 平滑封面。普通深色截图以状态稳定后的 06 图为准，05 图是在原生主题切换过程中取得，不作为稳定态结论。发现轮播原生采样浅色底板仍搭配白字，另补底板/标题/切换按钮/指示点语义配对；内容横幅和轮播节点保留。这一新增修复仍需最新增量生效后复验。
+- **历史页**：在 1100×800、现有“日期分组网格”偏好下检查三种主题，文档宽度为 1100，无横向溢出；明亮 wrapper 为 `rgb(242,242,248)`，普通深色为上述 OKLCH，OLED 为纯黑。搜索框 Tab 后落在搜索按钮，计算焦点环为 2px solid。没有删除、暂停记录或切换历史布局。这是该视口/布局的界面验收，不代表全部历史状态或其他页面均通过。
+- **公益差额**：新入口下确认筹款标签仍沿原生深色文字、右侧专栏与搜索框保留亮色背景，另补这些已观察到的表面、进度文字/条及封面子图继承圆角。本次仅改 nativeSites.scss 和 nativeSurfaces.scss，沿现有 token，无新设置或监听器。
+- **Dark Reader 说明修正**：用户说明已将 Bilibili 加入白名单，因此保留其设置不动。公益页首次观察确为 0 个 Dark Reader style；随后刷新出现 17 个 style.darkreader，并有 html `data-darkreader-mode=dynamic`、`data-darkreader-scheme=dark` 标记。主站科技页同轮为 0。公益明亮截图存在局部黑底，属于混合运行态，不计 Nocturne 纯主题视觉通过；不推断用户没有配置白名单，也没有擅自停用其他扩展。
+- **开发与检查**：ps 实际确认所有原开发 watcher 都已退出，才使用宿主权限启动无 clear 的 `pnpm exec cross-env NODE_ENV=development run-p dev:js dev:inject dev:bg dev:native`（session 64263，`/tmp/bewly-native41-dev.log`）。content/inject/native 首次及之后 CSS 增量均编译成功，没有生产构建。两份修改后的 SCSS 定向 ESLint 退出 0（`/tmp/bewly-native41-style-lint.log`），git diff --check 退出 0；未无理由重跑此前 501 PASS 的完整行为检查。
+- **恢复与证据**：原偏好为主题“设备”、OLED 开启、“适应其他页面样式”开启，以上临时修改均已恢复，viewport override 已 reset。截图存于 `/tmp/bewly-native41-acceptance/`：01/02 公益当前及明亮混合态；03/04/06 科技 OLED/明亮/稳定普通深色；07/08/09 历史窄桌面 OLED/明亮/普通深色。
+
+已针对本轮实站发现的两处 CSS 增量发出一次新的重载请求，明确它发生在用户刚确认的重载之后；此前首次注入确认不再重复索取。继续其他可独立进行的验收，完整目标与覆盖表中的待验范围保持不变。
+
+同轮继续验收：
+
+- 稍后再看在原网格偏好、已加载 192 条的状态下检查 OLED/明亮/普通深色，主页面与侧栏表面、筛选和卡片文字正常分层，无横向溢出。卡片普通操作按钮计算为 8px/superellipse(1.7)，圆形操作仍为 50%/round。没有播放并移除、清空或批量添加；截图 10/11/12。
+- 默认收藏夹在已加载 67 条状态下检查 OLED/明亮/普通深色；保留侧栏封面背景、失效视频占位和布局，没有执行任何收藏写入。选中目录使用的 --bew-sidebar-selected 经源码核实为不透明 --bew-theme-surface，等价保留，没有仅凭看起来像浅色混合就改成另一种选中方式。截图 13/14/15。
+- 收藏实站可访问树显示搜索和取消收藏图标按钮无名称。沿 Button 的原生 button 根节点及原搜索/收藏调用链，仅补 aria-label；批量选择图标补现有四语言标签和 aria-pressed，不改变读写行为。定向 ESLint 退出 0（`/tmp/bewly-native41-favorites-lint.log`），`pnpm typecheck` 退出 0（`/tmp/bewly-native41-typecheck.log`），git diff --check 退出 0。未为纯属性补充编写镜像测试；新增名称仍待实际新脚本复验。
+- 主站及独立入口的开发 watch 对上述修改均再次增量编译成功。所有主题临时切换最后恢复为“设备”+OLED 开启，外观适配仍开启，视口已恢复默认；Dark Reader 设置未改动。Goal 继续 active，尚未作完整验收通过声明。
+
+### 第六批：更多 Bewly 页面实站与共享链接前景（2026-10-01）
+
+- **番剧**：检查正在追、热播榜在明亮/普通深色/OLED 下的表面和媒体轮廓，另查看新番时间表。时间表导航实测“今天”52×36、前后日各36×36，均有可访问名称。标题使用既有 homeAdaptiveTitleAutoSize/homeAdaptiveTitleFontSize 共享路径，保持用户自适应设置，不另建字号状态。截图 16/17/18 为三主题，19 为 OLED 时间表，沿用 `/tmp/bewly-native41-acceptance/`。
+- **动态与站内导航**：实际使用 Dock 从番剧进入动态、再进入消息，URL 在同一标签切换为 Moments/Notifications。动态三主题截图 20/21/22；卡片和用户面板实测 12px/superellipse(1.7)，无文档横向溢出，保留原玻璃和内容节点。未发布、点赞、转发或关注。
+- **消息**：私信未选会话状态的三主题截图为 23/24/25，未挂载私信 iframe。回复通知三主题为 26/27/28；@ 与点赞分别取得 OLED 截图29/30，确认和回复使用同一 interaction-layout/surface 类及12px普通卡片轮廓；不将两张 OLED 截图冒充这两个分类逐项完成全部主题验收。系统通知独立文本模板为31。消息分类切换仅沿用先前授权的已读流程，未发送、删除或提交其他内容；系统/交互通知均无 iframe。
+- **实站发现并修复的共享问题**：系统通知卡片背景为 `oklab(0.320558 -0.00748444 0.00134818)`，链接和 --bew-theme-foreground 仍为原始 `#f43f5e`。旧 getThemeColorTokens 只用固定 #181a1e/#ffffff 计算，未覆盖当前较亮的实色卡片。新增 readThemeContrastSurfaces 读取既有 CSS 的页面、content、content-alt-hover 和 elevated-hover token，由一个不挂载 DOM 的1×1 sRGB Canvas解析颜色，调用完成/失败都释放像素缓冲，不复制 SCSS 的混色参数或新增主题状态。Canvas 接受 CSS color 的依据见 [MDN fillStyle](https://developer.mozilla.org/en-US/docs/Web/API/CanvasRenderingContext2D/fillStyle)。
+- 主站必要设置 watcher 和独立子站 owner 均将这些实际表面交给同一前景/焦点环计算，增加深色基准色、OLED 输入，并在既有主题类应用后计算。原始 themeColor、onTheme 主按钮前景与 Switch 拇指颜色逻辑保留。修改只影响派生前景，不改存储协议、不新增轮询或每卡采样。极端相互冲突的自定义表面无法沿同一方向达到目标时，不主动降低原色的最差对比度；不能据此声称任意自定义 CSS 背景都被保证。
+- 新增真实 utility 模块回归覆盖页面/抬高表面上的文本≥4.5、焦点环≥3、主题色保持、CSS token读取及Canvas失败清理；扩展既有子站测试确认改变深色基准色会更新前景。首次定向测试在跨 VM 数组原型比较处失败，改为宿主 Array.from 比较同一返回值，原失败日志保留，没有放宽颜色或资源断言。
+- **最新完整检查**：`pnpm test` **503 PASS，退出0**（`/tmp/bewly-native42-test.log`）；lint/typecheck/Knip 均退出0（同前缀对应日志），Knip 仍为10/0/5；git diff --check退出0。共享对比修复仍需最新脚本加载后的真实浏览器色值复验，不能以模拟Canvas边界的回归代替。
+- 新开完整加载的收藏页再检查：只有顶栏原有的一个“搜索”标签，取消收藏按钮仍无新 aria-label，--bew-theme-foreground 仍为 #f43f5e。这表明浏览器仍在用上一批脚本，不仅是公益某个 CSS 选择器未命中；此前本轮增量重载请求继续有效，不再重复索取旧重载确认。原显示偏好保持“设备”+OLED开启，未改 Dark Reader 配置。Goal 继续 active，待验范围保持完整。
+
+### 第七批：搜索实站与日期弹层边界（2026-10-01）
+
+- 通过源码中的 SearchResults/keyword 路由进入 Vue3 查询，检查综合及视频结果的 OLED/明亮/普通深色、筛选行、圆角和页面底层。未提交新视频操作；截图 32/33/37/38 保存在既有 `/tmp/bewly-native41-acceptance/`。分类切换使用实际界面，最终 URL 为 page=SearchResults、keyword=Vue3、category=video。
+- **广告开关联动**：从设置搜索进入现有 Bilibili→兼容性，确认两个广告选项原本都开启。只临时关闭“屏蔽广告”，搜索页和公益子站同步移除 block-useless-contents，重开后同步恢复；顶部活动选项始终保持开启。普通结果标题节点保持41，推广卡在开关两态都为0，因此只确认跨页设置联动和普通内容未误隐藏，不声称拿到了有广告投放的实站恢复样本，也不从DOM数量推断网络请求数量。
+- 日期弹层在默认窗口中实测 backdrop-filter=none、圆角12px。发现可选的上月日期与禁用日期共用 --bew-text-4，已将 other-month 改为 --bew-text-2；禁用日期仍保留原禁用样式和行为。
+- **短窗口真实问题**：第一次视口覆盖实际作用于最早的公益标签，搜索标签仍为1744×1083，35图不算1100×600验收。随后将实际1100×600的标签导航到同一搜索路由，打开日历；稳定后的 bottom=621，超过 viewportHeight=600。36图为该次取证，几何结论以读取到的实际CSS视口/矩形为依据。原实现 Escape 关闭后焦点回到“打开日历”，没有提交日期。
+- 日期弹层改为复用既有 useAnchoredPopoverPosition：固定定位、视口内翻转/钳制，限定宽高并在弹层内部滚动；不另建定位算法、全局常驻监听或业务状态。保留原 picker 容器、日期解析、IME、点击外部关闭及焦点回收。检查了当前搜索页的弹层祖先，无 transform/filter/backdrop/contain 引入的固定定位容器干扰。
+- **回归**：运行实际 DatePicker 组件、实际共享定位器及实际几何模块；短视口回归覆盖280×359弹层位于1100×600内、关闭时释放ResizeObserver/监听器/待执行RAF，并保留原Escape/IME用例。定向回归退出0（`/tmp/bewly-native43-calendar.log`）。首次lint发现测试单行双语句和模板属性换行，修正后完整检查通过；失败日志保留。
+- 最新完整 `pnpm test` **504 PASS，退出0**（`/tmp/bewly-native43-test.log`）；lint/typecheck/Knip均退出0（`/tmp/bewly-native43-complete-lint.log`、`/tmp/bewly-native43-typecheck.log`、`/tmp/bewly-native43-knip.log`），Knip提示数量未扩大。新增日期定位与文字色仍待最新产物实站确认，不将模拟布局回归冒充浏览器通过。
+- 广告开关、独立顶部活动选项、主题“设备”、OLED开启及外观适配均恢复原值，viewport已reset。之前发出的增量重载请求继续有效，未擅自操作扩展管理页或Dark Reader设置。Goal保持active，未缩减剩余页面和模式范围。
+
+### 第八批：原生动态页三主题与新版内嵌卡片（2026-10-01）
+
+- 重新访问公益页后，稳定态 html 无 data-darkreader-mode，style.darkreader 数量为0。读取页面公开脚本URL并下载三个公益主chunk至 `/tmp/bewly-native44-charity-{9,3,main}.js`，未发现相关字串；这一范围不覆盖全部动态依赖，因此仍不能确认此前同名样式来自浏览器扩展还是原站集成。不能仅凭同名节点推断用户白名单配置错误。用户的 Dark Reader 设置始终未被修改。
+- 原生 t.bilibili.com 动态页在当前运行态完成 OLED、明亮、普通深色取证（`/tmp/bewly-native41-acceptance/39-native-moments-oled.png`、40-light、41-dark）。`#app .bg` 的 background-image 均为 none；底层依次为纯黑、`rgb(242,242,248)`、`oklch(0.22 0.008 169.795)`。动态外卡、发布区及个人卡实测为12px/superellipse(1.7)，社区中心内容横幅与帖子图片仍保留。三态均未发现 Dark Reader 活动标记。
+- 实站另发现新版 `.bili-dyn-card-video` 内嵌视频块仍为6px，封面、遮罩、正文区和底部阴影各自保留旧拼接值。只将这些已确认节点统一到同一个语义卡片圆角，保留相邻拼接直角和原本就存在的 overflow/clipping，没有新增裁切、节点迁移或业务实现。
+- 新版预约按钮实际为 `.bili-dyn-card-reserve__action button.uncheck`，旧适配只覆盖 `.dyn-reserve__action`。补该未禁用状态的 theme/on-theme 配对及交互圆角；已预约/禁用状态和原生点击逻辑保留。未点击预约、发布、点赞、转发或关注。
+- 本批仅修改两份 SCSS，定向 ESLint 退出0（`/tmp/bewly-native44-lint.log`），git diff --check退出0；没有为纯样式改动增加字符串测试或无故重复完整504项回归。本批内嵌视频/预约按钮新样式仍待最新增量实站复验。
+- 明亮/普通深色切换结束后恢复“设备”主题和OLED开启；未改账号、广告开关、原生动态可见性选项或Dark Reader。Goal继续active，前述增量重载请求仍待完成，不把已验证的外层样式扩大为整个目标完成。
+
+### 最新增量加载关口（2026-10-01）
+
+重新打开收藏页并等到 readyState=complete、收藏搜索工具栏实际出现后，Shadow DOM 仍只有顶栏原有的1个“搜索”按钮标签，0个新“取消收藏”标签，派生前景仍为 #f43f5e。磁盘 content script 的修改时间为 `2026-10-01T05:50:52Z`，native JS/CSS 为 `05:50:44Z`，并可在主脚本中找到新 readThemeContrastSurfaces 和取消收藏 aria-label；没有仅凭 build ID 判定版本。当前阻塞是最新编译内容尚未进入实际页面。
+
+本次增量重载请求后，已继续完成多轮可独立的界面检查、共享配色修复、日期弹层修复及原生动态补差额；同一加载阻塞跨至少三轮持续存在。下一步须先在同一最新运行态复验这些修改，再继续覆盖表中尚未验收的原生页面/子模板。共享前景色影响各页面的配色判断，继续把旧运行态当成新代码叠加选择器不能提供可靠差额。完整目标没有达成，也没有缩减为已检查页面；仍待明亮/普通深色/OLED、窄窗、原生节点与广告行为的剩余证据。
+
+当前请求将 Goal 记为 blocked，等待用户完成此前已发出的最新增量重载动作。此关口不修改业务代码、不重跑未变化的检查、不操作扩展管理页；显示偏好保持原值，已有修改和维护证据全部保留。
+
+### 第九批：重载后实站复验与原生子站差额（2026-10-01）
+
+- 用户确认重载后恢复 Goal。重新检查 branch/remotes/HEAD/stash，仍为 message_feature → origin/message_feature、7ee0ddc9；已有修改和 stash 保留。开发 watch 仍在运行，复用原 `/tmp/bewly-native41-dev.log`，未重启、clear 或生产构建。
+- **最新运行态已确认**：收藏页实际出现2个“搜索”按钮标签、40个“取消收藏”标签，派生前景由旧 #f43f5e 变为 #f98ea0；不再沿用上轮加载阻塞结论。用户随后再次完成本批样式重载，并明确提醒刷新；已刷新/重新导航相关验收页面。
+- **日历已实站复验**：实际1100×600视口，固定弹层280×359、bottom=591.18，内部overflow-y:auto，不再越过窗口底部。Escape从实际可聚焦日历按钮触发后，焦点回到“打开日历”。对不可聚焦dialog容器直接press的工具操作失败不算产品故障。未选择/提交日期。
+- **共享前景已复验**：系统通知普通深色与OLED卡片为 oklab(0.320558 -0.00748444 0.00134818)，链接为rgb(249,142,160)，由实际计算样式按sRGB亮度换算对比度约5.65:1；浅色白卡片链接为rgb(144,37,56)。三态应用Shadow DOM内iframe数量均0（原站document另有iframe，不将其混算为通知组件挂载）。仅沿用既有已读授权。
+- **原生动态/分区**：t.bilibili.com内嵌视频根12px/superellipse(1.7)，封面12px/0/0/12px、正文0/12px/12px/0；预约按钮为theme/on-theme，没有点击预约。c/tech轮播标题底板实测浅色白/黑字、深色与OLED语义深色面/浅字，海报保留。公益上一批搜索/概览/公告/筹款文字改动生效；新增顶栏.bili-home中性文字及hover主题前景，重载后普通深色文字为rgb(241,242,244)。
+- **个人空间**：首页浅/深/OLED及投稿、收藏SPA子页已查看；默认桌面宽度1744无文档横向溢出。新版vui_button、vui_sidebar-item、radio-filter和side-nav选中项仍硬编码白字，已窄范围映射on-theme。重载后投稿主按钮rgb(244,63,94)/黑字、侧栏选中项黑字生效；未置顶、上传、修改资料或操作收藏。
+- **Dark Reader边界**：新漫画页检测到19个style.darkreader，会员购15个；用户分别明确单独排除这两个子域，随后刷新实测两页均0个节点且无data-darkreader-mode。没有由Agent操作Dark Reader。排除前截图不作为无干扰主题验收。
+- **漫画新版SSR首页**：排除外部配色后确认标题黑字、顶栏文案/搜索底板、右侧白色导航、固定深色分类条与推荐阅读面残留。仅映射实际中性utility和现有容器至token；删除推荐前景封面的绝对定位重复装饰图，保留可点击大封面、缩略图和轮播。重载后浅/普通深/OLED的标题、推荐面和侧栏均生效，未购买、追漫或进入付费章节。窄窗及详情/阅读器仍需继续验收。
+- **游戏中心**：原榜单保留inline rgb(36,38,40)背景，浅色时形成黑字深底；补.rank-card头部/列表语义表面及12px相邻拼接圆角，标题用中性前景，分类图标与原有内容横幅保留。重载后浅色榜单白底/深字，普通深色和OLED为content层。未下载或预约。
+- **直播首页**：原生内层.link-navbar固定暗色，原适配只作用于外壳；补实际内层、导航文字、搜索框和已确认单色图标，推荐分类内联深蓝文字改中性前景。重载后顶栏三态和分类文字生效；浅色搜索外壳仍被原生优先级压过，已对该精确背景补important，最新补丁尚待实站。保留有标题、活动内容和点击目的的创作者激励横幅；不因商业内容推断广告。直播分区已打开查看，未发送、关注或支付。
+- **会员购**：排除Dark Reader后查看浅色、普通深色与OLED目录，卡片实测12px/superellipse(1.7)，文档默认宽度无横向溢出。保留票务价格/状态和活动海报。目录稳定加载截图有效，刚刷新空壳截图仅是加载中记录。详情/订单及窄窗仍须继续。
+- **账号信息页**：原外壳三态跟随，输入框4px普通圆角、蓝色保存和单选项仍未接token；补控件表面、语义8px平滑圆角和on-theme。重载后输入轮廓/前景生效，但公开原生async/773样式对保存背景、选中单选背景/边框和5px圆角使用!important，已补相同精确优先级并保留禁用状态；此最后补丁待验证。全程未改字段、提交保存或打开身份认证。
+- **电影分区布局**：默认1744宽浅/深/OLED均已查看，底色与文字跟随。实际1100×800检查发现document.scrollWidth=1244；公开原生CSS确认.inner-c最小1244、14列fr网格及固定宽海报。补1276px以下的容器安全宽度、筛选换行、网格minmax(0,1fr)，海报行保留原生尺寸/hover并在行内横向滚动；不裁掉内容、不重建播放器。本补丁待最新增量实站。第一次viewport覆盖作用于另一标签，42图仍为1744宽，不能作为窄窗证据；43图对应实际1100宽。viewport已reset。
+- **检查与证据**：本批全为SCSS修改，完整pnpm lint退出0（`/tmp/bewly-native45-complete-lint.log`，在后续优先级/窄窗补丁前）；定向lint与git diff --check已运行，最终补丁检查继续在本节追记。既有504项通过结果仍属于native43，不虚称本批重新跑过。开发watch已记录主入口与native入口增量成功。截图集中 `/tmp/bewly-native45-acceptance/`，01日历、02–15公益/动态/分区/空间、16–32子站修复前及无干扰基线、33–43电影/账号/通知与窄窗证据、44–57本批重载后复验。个人账号及消息截图仅作本地验收证据，不作为公开展示素材。
+- 已恢复“设备”主题、OLED开启、外观适配开启；广告开关未改。完整Goal继续active，新增要求中的全站排版/重叠/错位验收仍在推进，不能将上述代表页面扩展为全部页面已完成。
+- 最后补丁检查：四份本批SCSS的定向ESLint退出0（`/tmp/bewly-native45-final-lint.log`），git diff --check退出0；watch日志298/310/322/336/340行确认账号、电影窄窗和直播搜索背景增量成功。没有重复运行未改动的业务测试。当前待新运行态确认的是账号原生!important覆盖、直播搜索外壳!important与电影窄窗补丁；用户最近已完成的重载及其成功验收不作废，也不要求重复确认旧动作。
+
+### 第十批：原生内容、笔记、历史、消息与创作中心（2026-10-01）
+
+- 上一Goal轮次为有效进展。本轮重新确认message_feature、origin追踪、remote与现有工作区，未操作分支/提交/stash。继续复用已有开发watch。
+- **专栏及正文**：从read/home真实链接进入cv53147170，原站实际重定向到opus/1251179515891154981，因此证据属于新版opus正文，不能声称旧cv详情模板已验收。目录/正文浅色、普通深色、OLED均查看，正文阅读面、原文留白及图片保留；1100×800下文档scrollWidth=1100，正文left=196/right=904，操作栏left=916/right=974，无边界重叠。目录实际封面为.article-item__cover及b-img包装，原规则未覆盖；补12px媒体轮廓与嵌套inherit。opus操作栏.side-toolbar__box从原6px普通圆角映射语义面板圆角。
+- **话题**：通过t.bilibili.com实际“国产galgame”话题卡进入topic_id=1149863。三主题已查看，1100宽时头部及文档宽均1100；.join-button__btn仍为主题底/白字，补on-theme与8px控件轮廓。话题使用与动态相同的bili-dyn-item和bili-album__preview__picture，因此共享原生卡片/媒体圆角规则扩展到topicPage。未参与话题、点赞、收藏或关注。
+- **笔记**：实际/v/note-list加载已有3条私有笔记及原生只读预览；只切换“公开笔记”空状态后恢复“我的笔记”，未进入编辑、写入、删除或发布。三主题已查看；1100宽下列表left=0/right=670、预览left=670/right=1100，文档无横向溢出。补header/tabs面板圆角、封面继承轮廓、编辑器上边轮廓、操作按钮/分页的语义圆角和主题前景。
+- **笔记顶栏修复**：useTopBarInteraction的SPACE_URL把无个人空间横幅的笔记列表也当作白色图标页面，导致浅色笔记页仍显示强制白字/深色渐变。仅排除/v/note-list及其slash/query/hash边界；真实个人空间、投稿子页与电影横幅仍保持旧行为，不修改渐进模糊参数。扩展既有实际composable测试，使用真实URL常量与响应式href逐项验证，无复制实现或字符串断言。
+- **原生历史/待看**：直接/history和/watchlater/list加载原生页面，非Bewly页面替代。浅色/深色/OLED均已查看，实际bili-video-card__cover/bili-cover-card为12px/superellipse(1.7)。1100窗口文档均1100；待看4列封面宽243、间隔16，最右工具按钮right=1060。未切记录开关、清除、删除、批量管理或播放全部。历史“专栏”类型徽标仍为主题底白字，补on-theme及小型语义轮廓。
+- **原生消息**：/#/reply独立原生页三主题已查看，其原生header_sync/cols iframe不是Bewly通知组件创建。当前新版为.message-aside/.message-main/.message-header，旧.space-left样式未覆盖；补限定非embedded、非drawer的语义实色面板/标题栏圆角并移除原标题栏装饰阴影，保留所有原生feed和导航。未发送、删除或点赞；仍仅沿用已有已读授权。分类/会话其余模板和最新样式仍待复验。
+- **404**：直接访问已由源码路由确认的/404，三主题下背景跟随；保留原生错误说明和漫画内容，没有为截图伪造网络失败。尚未把原生“返回上一页”generic节点提升为键盘按钮，本项在交互覆盖中继续检查。
+- **创作中心首页**：/platform/home实际无Dark Reader节点。三主题检查发现cc-body固定rgb(250,250,250)、data-wrp白底、data-card-detail半透明原生底色，活动/粉丝/素材标题仍深色；不能把之前源码存在的适配当作已完成。修正这些已知节点的级联优先级、标题与辅助文字、数据/素材选中标签和查询入口；活动项实际是.item-left > p，保留标签图片和原生链接。未打开投稿表单、查询收益、发布或修改管理数据。最新样式待重载复验，其他管理微应用仍待覆盖。
+- **本轮完整检查**：pnpm test退出0，精确统计504条^PASS，包含新增的真实顶栏路由断言；pnpm lint/typecheck/knip均退出0。日志`/tmp/bewly-native46-{test,lint,typecheck,knip}.log`；Knip实读10个export、0个type、5个enum member提示。随后历史/创作中心/消息的纯SCSS增量通过定向lint（`/tmp/bewly-native46-final-style-lint.log`）与git diff --check；watch日志确认主脚本及适用native入口增量完成。未生产构建、打包或clear。
+- **证据与剩余**：截图`/tmp/bewly-native46-acceptance/01–34`按文件名记录上述模板；笔记、消息及账号信息仅作为本地验收证据，不公开展示。viewport截图存在缩放至左上区域的工具表现，窄窗尺寸/边界结论依据实际innerWidth与DOM矩形，不把缩放截图误判成页面布局缺陷。已恢复设备主题、OLED开启，viewport reset。已发出一次新的合并增量重载请求，包含上轮最后三处补丁与本轮内容页修复；此前用户确认的重载已完成且有效。完整Goal保持active，继续其余页面及当前补丁的真实运行态验收。
+
+#### 第十批后续：404键盘与创作中心窄窗
+
+- 404返回入口实际为.error-panel内无href的a.rollback-btn；复用setupNativePageKeyboard，限定error404路径和.error-container根节点，原生href链接、已有role/tabindex和其他页面锚点不接管。Enter/Space仍触发原点击；清理时恢复属性并移除监听。主入口沿用既有route/settings watcher，无新全局监听或轮询。新增实际模块回归验证激活、Space按下/松开、原生链接保留及释放后不响应，尚待重载后键盘实站。
+- 最新完整检查重新运行：`/tmp/bewly-native46-final-{test,lint,typecheck,knip}.log`均退出0，**505 PASS**；Knip仍10/0/5。本结果覆盖顶栏笔记路由及404控制器，不用旧504条结果替代。
+- 1100×800下原生消息message-layout为left60/right1040，侧栏left60/right200、正文left200/right1040；404主面板left60/right1040，两者文档scrollWidth1100。截图35、36为对应证据。
+- 同一窄窗下创作中心文档scrollWidth=1324：.cc-body min-width1124加200px导航，首页right1252。新增仅在1324px以下且cc-body直接包含.home-wrap时的min-width释放，以及首页容器32px总安全留白；保留原生flex卡片，不扩展到其他管理微应用。截图37为修复前证据。该最后纯SCSS增量定向lint退出0（`/tmp/bewly-native46-creator-narrow-lint.log`），git diff --check退出0，待实站确认。
+
+### 第十一批：直播内嵌文档、漫画阅读器与商品详情（2026-10-01）
+
+- 上轮仍为有效进展。分支、remote、追踪、现有工作区再次核对一致；继续保留全部未提交文件与stash，不切分支、不提交。合并增量重载请求尚待用户响应，本轮继续实际未覆盖模板，不把旧运行态当新补丁通过。
+- **直播特殊房间**：从此前分区真实链接访问live.bilibili.com/22908869，顶层赛事壳不含.live-room-app；真正的播放器/聊天区在`/blanc/22908869?liteVersion=true` iframe内，html无Nocturne标记，故旧all_frames:false入口不适配该内容。新增仅匹配`*://live.bilibili.com/blanc/*`的appearance-only frame入口，顶层通用入口排除此路径，避免直接打开blanc时重复启动。没有向5eplay统计iframe、about:blank或任意子站iframe注入主站UI/MAIN/播放器增强，也未增加host permission。
+- 直接打开上述blanc文档，确认现有.live-room-app样式可用；浅/普通深/OLED检查发现礼物栏原生dark-mode背景覆盖既有token映射，补精确面板背景优先级。聊天正文已使用现有中性前景，直播视频及画面内赞助内容不因图像/商业关键词被判广告。没有发送弹幕、送礼、关注或充值。内嵌入口仍待新manifest重载后实站验证，不能用直接打开blanc代替iframe验收。
+- **漫画旧版详情**：从首页真实链接访问mc28201，已确认无Dark Reader。浅/深/OLED下，旧详情的标题/推荐栏/章节分组优先级不同于新版SSR首页；实际书名与章节标题深色不可读、推荐面仍白、分组选中仍为透明蓝。补已确认节点的语义表面/前景优先级、已读章节前景、封面子图继承，以及旧manga-navbar品牌/搜索底板；不改章节锁定、购买和追漫状态。
+- **漫画阅读器**：仅点击无锁的第1话进入mc28201/463667，查看原生“显示工具栏”和“阅读设置”，未修改阅读方式、页数、翻页方向、降噪、弹幕或购买设置。阅读器保留独立theme-dark，Nocturne切浅色后原生面包屑白字、设置内层黑底与底部页码栏仍残留；补read-nav、设置block/标题、zoomer/page-slider表面、文字和已确认单色缩放图标，滑块沿用现有几何。保留reader-body在工具栏/菜单打开时原生brightness(0.6)遮罩和原始漫画像素，不添加图像滤镜。
+- **会员购票务详情**：从show目录实际卡片进入detail.html?id=1006478。浅/深/OLED基线查看，未选择场次/票价/数量，未购票、想去、发评论或扫码。补buyticket/whole-detail-info-wrapper统一底层；内层guest/activity/comment及右侧merchant/tips使用语义表面。发现.detail-content宽850而其直接ticket-system-container子项仍宽1160，新增局部100%边界，使表面不延伸到说明侧栏下面；保留正文图片/海报内容。
+- **周边目录**：实际“B站周边”入口导航到show.bilibili.com/platform/mallhome.html，属于现有show入口。商品卡原2px轮廓、筛选/价格未复用语义表面，补卡片/上方媒体拼接轮廓、筛选中性表面和主题前景。促销字样、商品海报不是广告识别依据，全部正常商品保留。
+- **桌面商品详情新增精确范围**：实际商品卡跳到mall.bilibili.com/neul-next/detailuniversal/detail.html，并嵌入同域/detailPc桌面文档；不是重写移动客户端。仅这两条精确路径（含query）加入nativeSites；/detailPc允许appearance-only iframe，通用入口排除同路径，其他mall路径不注入。isContentScriptTargetUrl沿用同一getNativeSite归属，checkout及detailPc-unrelated均返回false，避免对未注入页面发刷新请求。既有*.bilibili.com权限已覆盖，没有增加主机权限。详情只映射layout/detail、标题、服务面、规格表和缩略图状态；原生二维码canvas保留白色底，不扫描、不重绘码、不提交订单。
+- mall子域仍检测到外部Dark Reader样式（顶层13、桌面iframe14），已单独请求用户排除；尚未收到确认。该页颜色截图不作为无干扰主题验收，但实际DOM、路径与几何结构仍作为适配依据。之前manga/show的排除确认保持有效，未由Agent改动Dark Reader。
+- **窄窗差额**：商品详情iframe在1100宽时detail宽1180；票务页稳定后的文档宽1180（初始未完成布局时曾1160），nav/正文基线1160、breadcrumb额外padding。补对应窄桌面断点下外壳安全宽度、可收缩内容列和商品详情左右flex列；票务海报/右说明栏保留尺寸，正文图片max-width并保留比例。周边目录保持4列并复用24px间距。均待新运行态实站，不能以CSS编译成功宣称无溢出。
+- **验证**：两次按源码生成Chrome开发manifest均退出0（`/tmp/bewly-native47-{manifest,final-manifest}.log`），未直接编辑产物、未执行生产build/打包/clear。最终`/tmp/bewly-native47-final-{test,lint,typecheck,knip}.log`均退出0，**505 PASS**，Knip实读10/0/5。真实manifest测试覆盖入口唯一性、精确frame匹配、无MAIN/about:blank扩展及未知商城路径不匹配。之后最后布局SCSS定向lint退出0（`/tmp/bewly-native47-layout-lint.log`）、git diff --check退出0，开发watch记录native与主入口增量完成。
+- **证据**：`/tmp/bewly-native47-acceptance/01–18`为本批实际模板及修复前证据；商品详情带跟踪参数的完整URL不作公开报告素材。已恢复设备主题、OLED开启和原视口。Goal继续active；本批仍待重载后的实际iframe/详情/窄窗验证，前述完整页面范围未缩减。
+
+### 第十二批：钱包、工房、番剧资料与配色来源核实（2026-10-01）
+
+- 上轮为有效进展。本轮再次核对message_feature/remote/追踪及全部已有修改；继续保护工作区与stash，未提交。入口来自当前TopBar UserPanel的实际URL以及此前通过播放页确认的md835。
+- **钱包**：pay根目录实际跳转pay-v2-web/bcoin_index，三主题实站无Dark Reader标记。主体表面已映射，但nav-user-top-name、账户数字span、pay-bcoin-txt仍保留原生深色，外层pay-bcoin-index-wp仍4px圆角和旧边框；补精确中性前景、外壳/标题相邻12px轮廓及分隔边框。1100窗口下原生pay-cneter-con为1140px，右面板900px加边框造成document.scrollWidth=1142；仅在包含pay-bcoin-index-wp的账户模板释放列宽并保留安全留白。没有打开充值、提现、交易记录或进行任何资金操作；报告不记录余额。
+- **工房**：gf入口实际重定向newCertificate，当前是扫码入驻引导页。#app>.wrapper底层已跟随，但wrapper__body>.container仍为浅灰，newCertificate__main白底；补局部底层、正文面、原横幅上边轮廓及辅助文字。原二维码CSS背景图片保持原像素，独立白底不改码；只对已确认的单色header.logo在深色反转，其他图片不反转。1100×800下document.scrollWidth=1100，主面板left200/right900、宽700，保留原有响应式布局，不为已适配尺寸另加规则。未扫码、认证或开店。
+- **额外配色层**：直播中心link页检测到107个style.darkreader和dynamic/dark标记，大会员account/big页18个。同属account的设置页此前没有标记，故不能仅据同名DOM断言用户白名单错误。源码/src、scripts、package、lockfile检索无Dark Reader；只读下载大会员已加载的4个公开主chunk至/tmp/bewly-native48-premium-*.js，也无对应字串。这不能排除其他依赖/脚本来源。已补充请求用户按域排除link及account；之前manga/show排除确认保留，mall请求仍待响应。
+- 查阅[Dark Reader API源码](https://raw.githubusercontent.com/darkreader/darkreader/main/src/api/index.ts)和[动态主题模块](https://raw.githubusercontent.com/darkreader/darkreader/main/src/inject/dynamic-theme/index.ts)：API使用同一动态主题实现，因此style/meta标记本身不足以证明注入来自浏览器扩展还是网页库。没有插入darkreader-lock、移除外部样式、改动其他扩展配置或建立对抗观察器；来源与无干扰颜色验证继续作为未验证项，不据受影响画面叠加Nocturne颜色规则。
+- **番剧资料md835**：独立season-media入口实际生效、无Dark Reader；重复封面bangumi-info-blurbg的background-image与filter均none，原海报保留。普通深色、浅色、OLED已查看，浅色实站发现media-info-title-t、media-info-time、media-tag仍原生白字，海报4px白边/8px轮廓与追番按钮原生白字覆盖原映射；补已知读取节点的优先级、语义前景与轮廓。追番心形仍使用原生heart-bangumi.svg，仅转为CSS mask着色来跟随on-theme，不克隆或重建按钮。只读HEAD请求确认该原生SVG HTTP200、Content-Type=image/svg+xml、Access-Control-Allow-Origin:*，浏览器实际图标仍待重载验收。
+- 资料页实际通过Enter将“作品详情”切换为“长评”，aria-pressed随原生状态更新，随后恢复“作品详情”；没有追番、评分、写点评、承包或开通会员。1100窗口下document.scrollWidth=1100，左列right740、右列left750/right1100，未见列重叠，保留原布局。OLED底色为rgb(0,0,0)。
+- **验证与证据**：本批只改两份SCSS，定向ESLint退出0（/tmp/bewly-native48-final-lint.log），git diff --check退出0；/tmp/bewly-native41-dev.log记录两入口增量成功至705行。没有无故重复未变化的505条业务回归，最新完整结果仍为native47-final的505 PASS及lint/typecheck/Knip退出0。截图/tmp/bewly-native48-acceptance/01–13区分三主题、窄窗和修复前证据；钱包截图仅本地取证，不公开展示。已恢复设备主题、OLED开启和viewport。Goal保持active，当前样式及此前合并增量仍待用户重载后的实站确认。
+
+### 第十三批：赛事、课堂、音乐与横幅归属（2026-10-01）
+
+- 上轮为有效进展。本轮继续未覆盖模板，并再次完成Git状态/remote/追踪检查。新开/404等待到readyState=complete且Bewly顶栏实际存在，rollback-btn仍无role/tabindex，证明此前键盘增量尚未载入；没有使用编译日志或build ID代替运行态，也未重复请求用户确认已经完成的旧重载。
+- **赛事矩阵**：/match/home三主题、实际点击“英雄联盟”进入/match/game?gid=2（随后原站加sid=813）、再经“全部赛程”进入/v/game/match/schedule。专区、旧赛程均补齐浅/深/OLED；默认1744宽无文档横向溢出。专区曾呈现400px空白，随后确认.lazy-image.card-cover迟到更新了真实赛事横幅，保留原生内容，没有误删该区域。未订阅、预测、评分或购票。
+- **旧赛程键盘**：日期li.data和赛事筛选li/div没有可聚焦语义。复用setupNativePageKeyboard，新增只覆盖/schedule路径的esports-schedule分支与.bili-game-local根；作用于读取型日期/筛选及“全部”，不接管.default-btn等订阅/预测操作。跟随原active class维护各组独立aria-pressed，保留原点击与清理。新增实际模块回归验证Enter/Space、组间状态独立及释放。
+- **赛事图标**：实际SVG搜索图标path固定fill=#18191C，在深色输入面上不清楚；仅该已确认图标fill映射中性前景。
+- **课堂首页**：三主题已查看，1100窗口文档宽1100。封面外壳.block-list-item-img已12px，但实际common-lazy-img/img未继承；补同轮廓继承与58px高下半部渐变遮罩的下边圆角，不增加裁切或改媒体节点。横幅.mine原有独立blur(40px)和浅色渐变造成阅读前景不一致，改为语义实色面板，内部info-block用普通控件面，不增加材质状态；课程内容横幅保留。
+- **课程播放页**：从真实首页横幅href进入/cheese/play/ep2977412，原站提供免费宣导试看；只查看播放器/目录/课程信息，未点击购买、领券、群入口、收藏或发送。浅/深/OLED下既有12px右面板、8px目录项及主按钮配对生效。1100窗口下左列65%=715px、右列min405px，布局总宽1120且左右各超10px，稳定文档scrollWidth1129；公开Season.1da4395e.css确认原生规则及player-box width100%。仅在1160px以下释放左列min-width:auto，交由原flex布局收缩，不改播放器/控件DOM或新建播放器观察器；待重载后实测。
+- **顶栏横幅归属**：原CHANNEL_PAGE_URL以/c或/v前缀匹配，误把课程播放页等当横幅页，浅色显示强制白图标。新增单独HEADER_ARTWORK_PAGE_URL供forceWhiteIcon使用；TopBar Store的原可用页面判断保留。保留/c及旧/v频道、电影等首页和课堂首页，排除课程子页、分类索引、热门与旧赛事子页；之前笔记例外保留。实际composable回归覆盖上述URL；仅移除本轮变成无引用的VIDEO_PAGE_URL，不清理其他既有Knip提示。
+- **音乐中心**：浅/深/OLED已查看，新歌区域实际媒体轮廓12px；原海报与分类装饰保留。1100时四个根区块原min-width1114造成scrollWidth1114；原生CSS确认width100%，实际轮播transform为translateX百分比。补窄桌面下这些根区块及横幅内标题/缩略图层的min-width释放，保留百分比翻页；分类卡原14px改语义卡片轮廓。待新运行态验证。
+- **仍待处理的赛事窄窗**：实测1100时新版首页文档宽1280、zone宽1213、schedule宽1220；旧赛程文档宽1110。已下载已加载的公开CSS/JS至/tmp/bewly-native49-match.{css,js}：顶栏固定min1335，header-shadow min1280，赛程轨道每步308px、视频分页每页1220px。因此不能只缩卡片或隐藏溢出来声明完成，后续需要保留原生翻页语义的完整窄窗处理与验收。本项明确未完成，未缩减目标。
+- **检查**：最终相关完整pnpm test 506 PASS（/tmp/bewly-native49-complete-test.log）、lint/typecheck/Knip均退出0。首次Knip因本轮VIDEO_PAGE_URL孤立变11/0/5，确认全src/scripts仅剩定义后删除；最新/tmp/bewly-native49-final-knip.log恢复10/0/5，删除后typecheck及定向lint退出0。最后CSS差额定向lint退出0（/tmp/bewly-native49-layout-lint.log），git diff --check退出0；保留所有中间日志。未生产build/打包/clear/提交。
+- **证据**：/tmp/bewly-native49-acceptance/01–24为本批矩阵、迟到横幅和窄窗证据，课程页面截图包含原站水印，仅本地取证。公开布局CSS另保存在/tmp/bewly-native49-course.css、music.css。已恢复设备主题、OLED开启与viewport；合并增量重载及额外配色层排除请求仍待响应。Goal继续active，当前新增代码不算实站通过。
+
+### 第十四批：运行态交叉核对与赛事窄窗实施（2026-10-01）
+
+- 上轮有新代码和验证证据，属于有效进展。再次核对Git状态/remote/追踪一致，保护全部已有修改与stash。
+- **运行态核对补强**：404键盘标记单独缺失也可能与原生根挂载时序有关，不能只凭该标记断定脚本版本。本轮另开账号设置页，等保存按钮可见：背景仍rgb(0,161,214)，而其--bew-theme-color为#f43f5e；音乐页readyState=complete且实际1100宽，四个根区块仍min-width1114、文档宽1114。两页Dark Reader节点均0。磁盘真实style.css已包含账号背景!important以及音乐对应根区块min-width:0，两处不依赖键盘挂载的效果也尚未出现。因此此前增量仍不能记为已在运行态验收，没有新增标记机制或仅凭build ID判断。
+- **新版赛事完整窄窗处理**：依据已加载公开CSS/JS及本轮DOM，原顶栏left约802px、right482px、固定min1335，赛程轨道步长308px、视频分页1220px。1335以下把原有两个导航区排为两行，并令原占位高度与导航高度使用同一局部派生变量；保留全部原生入口和弹层定位owner，不裁切弹层。赛事分类行及赛季标签允许换行，header-shadow取消原1280px最小宽度，横幅内容保留。
+- 赛程、视频、战队和阶段模块只限制外层到视口安全宽度，保留完整原生轨道，模块内横向浏览；40px内侧空间容纳原35/36px外置箭头。视频video-wrap仍1220px。推荐区实际每个recommend-card为一个独立区块，其content原左右479/726加间距共1217；按单区块滚动保留内容尺寸，并使标题/动作栏横向保持可见。没有修改native activeIndex、transform、订阅/预测/购票行为，也未克隆节点或添加全局监听。
+- **旧赛程窄窗处理**：稳定1100宽下.game-content仍1110、右列830、左列260加20px间距；日期条原是浮动布局，日期无inline transform且按相对宽度分布。仅在1142以下对.small模板采用现有节点的flex布局，外层保留32px总安全留白，右列可收缩，日期条保留两侧控件并允许中段收缩。日期方向命中区至少24px，未接管其原点击事件。这里未采用新版的像素轨道缩放方案。
+- **验证与边界**：本批只改esportsPage.scss，/tmp/bewly-native50-final-lint.log退出0，git diff --check退出0；既有watch日志至887行确认native与主入口增量完成。未无故重跑未变化的业务测试；最新完整业务验证仍native49的506 PASS及lint/typecheck/Knip通过。当前浏览器未出现此前两项确定性CSS修正，故本批所有窄窗新布局、箭头/弹层/键盘可达性仍待最新产物实站验证，不能宣称赛事窄窗已验收。Goal保持active，完整范围未缩减。
+
+### 第十五批：活动列表、社区信息图与索引焦点（2026-10-01）
+
+- **实站覆盖**：刷新有奖活动列表、社区中心、番剧索引，查看浅色、深色、OLED；三页Dark Reader样式节点均0，默认1744宽无文档横向溢出。番剧索引等待40个实际播放链接加载完成后，在1100×800下文档宽1100，内容四列与右侧筛选保持分离。初始化截图10尚在加载，不作为稳定布局证据；截图11为稳定状态。证据集中于/tmp/bewly-native51-acceptance/01–12。
+- **新版活动列表**：实测.list-view仍白色，既有activity-title已随深色变浅，造成白底浅字。补语义content实色、panel圆角及tab-header共享上缘轮廓；activity-date补次级文字色。“活动列表”标题实际为橙旗与黑字PNG，给图片保留白色底衬，不滤镜反转或用CSS生成另一份标题。Enter“我参与的”、Space恢复“全部”实际触发原生查询并同步aria-pressed；没有参加、投稿或其他写入。
+- **旧版活动列表**：从索引页实际页脚href打开/blackboard/activity-list.html，加载15条。实测.act-list li白底、h2浅字、标题子节点.b-active-t固定#222；补卡片表面/圆角、子标题/日期/说明/进行中状态前景，并限制.active-main为视口减32px的安全宽度。旧internationalHeader与新bili-header不是同一模板，只针对其mini-header、搜索框、可见导航name与投稿入口补普通实色和语义配色；不替换原生顶栏或浮层业务节点。
+- **社区中心内容保护**：平台规则、公告和部分分区标题是透明PNG与绝对定位链接热点组合，原DiyBox坐标画布1280px，最大图片按现有高度绘制约1375px宽。不能将.t-background-image一概当装饰背景删除。仅对带背景图的DiyBox区块补白色内容画布，最大1440px、居中与语义panel轮廓；保留原生最小宽度、高度、图片和热点坐标。整页外围仍随主题，真实蓝色Image横幅、空白间隔和VideoList播放器不进入这条规则。窄窗由.tpl-wrap局部横向浏览原坐标平面；热点焦点环按浅色画布使用Canvas/CanvasText。此为有意义图片的可读性例外，不声明图片像素已随深色重绘。
+- **番剧索引焦点修复**：实站Enter“完结”与Space恢复“全部”都更新了原生hash/选中态，但焦点落到BODY。完整调用链确认necessarySettingsWatchers原按完整href停止并重新建立setupNativePageKeyboard，移除tabindex导致焦点丢失。现只以origin+pathname作为该owner的路由键；同页hash/query筛选继续由既有MutationObserver更新选中态，设置关闭、离开页面与scope卸载仍清理。新增完整生产模块回归（外部依赖stub，真实Vue watch和真实keyboard模块），验证hash不移除/重加tabindex、焦点保留、设置关开和离页释放，不复制实现片段。
+- **检查**：/tmp/bewly-native51-complete-{test,lint,typecheck,knip}.log对应四命令均退出0，测试507 PASS，Knip仍10 exports/0 types/5 enum members。lint为0 error、1条themeColor.ts:84的JSDoc格式warning，未顺带修改无关文件。最后旧活动CSS补丁另跑/tmp/bewly-native51-final-style-lint.log退出0，git diff --check退出0；既有无clear开发watch日志至954行确认native/main最终增量成功。本轮未运行生产build、打包、clear或提交。
+- **验收边界**：以上实际浏览结果是发现问题及既有功能的证据，最新社区画布、两版活动样式和索引焦点修复尚未通过扩展重载后的实站验收。社区实时节点仍1744宽透明背景，与新增1440白色画布不同，不能将源码/增量成功写成运行态成功。此前合并增量重载请求仍待响应，不重复索取已确认的旧批次重载。已恢复设备主题、OLED开启与viewport，关闭本轮临时页；Goal继续active。
+
+### 第十六批：游戏/公益详情可读性与迟到页脚（2026-10-02）
+
+- 上一轮有实际修改和回归，属于有效进展。再次读取Git状态、remote与追踪，仍为message_feature→origin/message_feature，既有修改全部保留。用户补充“避免可读性问题以及冲突的不和谐配色”，本轮按实际文字/背景组合继续补差额。
+- **游戏详情**：复访此前真实卡片目标www.biligame.com/detail/?id=121001，root为game-detail、Dark Reader节点0。明亮/普通深色/OLED根背景正常跨标签同步；正文开发者说明实际仍#666，视频推荐标题#333，推荐游戏标题#18191c；tabs真实结构为.tab-head > div > a，旧直接子选择器未命中。修正tabs选择器并补这些内层文字、下载量和二维码说明，搜索提示/图标及推荐按钮使用语义前景/表面；展开控件原白色渐变改为透明到页面底色。媒体缩略图及原生iframe沿media圆角，不修改iframe业务DOM。原生播放/暂停按钮操作后读取iframe video.paused=true；未下载、推送安装、预约、评价或发送。
+- **游戏窄窗**：实际1100窗口下.bui-gc min-width1160，左744、右396另有20间距及inline-block空隙，scrollWidth1164；顶部导航bar也min1160。公开已加载CSS保存/tmp/bewly-native52-game.css验证这些原生尺寸。1192以下解除根和导航bar最小宽度，外层改为原节点两列flex与24px gap/16px两侧留白；右列396保留二维码/下载区，左侧阅读与iframe按原745/420比例收缩，logo从固定负583px改安全左边距。只改布局，不改原播放器发现、播放状态或原生按钮。
+- **公益详情**：从首页真实链接进入/detail?uuid=64bf8c6f82，三主题DR节点0；info-detail/donator-list实际12px和superellipse(1.7)。外层已适配，但项目标题的span、正文段标题、捐赠说明、tab子span、滚动记录子span仍保留原生深灰。对实际文本层补对应前景；Element选中radio已有原生更高优先级，局部样式补明确语义选中面/前景/边框。项目编辑器正文内联着色及原始图片保留；未改变金额、匿名、协议或发起捐款。
+- **迟到页脚**：公益详情1100窗口初始文档1100，稳定后变1422。DOM确认正文overview988/阅读733/侧栏237都未超出，实际原因是稍后挂载的.bili-footer min-width1422、b-footer-wrap1310及text-con1040。common/footer.scss按新版.b-footer-wrap结构在1422以下取消min-width、容器保留32px总留白、链接组与其他信息换行、正文flex收缩并允许长链接折行；不以隐藏横向溢出掩盖内容。所有使用该实际公共模板的已适配页面复用修复，旧页脚模板不进入该规则。该修复仍需新运行态确认稳定挂载后宽度和所有链接可达性。
+- **登录限制**：重新打开passport登录页，初始实际看到了账号/密码表单，随后自动回主站首页，.login__main归零。未退出用户账号或填写登录信息；不能把短暂快照记为登录三主题和键盘完整通过。覆盖矩阵更新了活动、索引、游戏/公益与登录证据边界。
+- **验证**：本批只改两份SCSS及维护记录。/tmp/bewly-native52-final-style-lint.log退出0，git diff --check退出0；复用原有无clear开发watch。最新完整业务验证仍第十五批507 PASS与lint/typecheck/Knip通过，本轮未虚称重新执行。新样式均待扩展重载后的实站复验；截图/tmp/bewly-native52-acceptance/01–08为当前运行态/问题证据，07已回首页不算登录验收。恢复设备主题、OLED开启和viewport；无生产build、打包、clear、提交或推送。
+
+### 第十七批：时间表、长短评与直播分区目录（2026-10-02）
+
+- 上轮有源码和实站证据进展；本轮Git预检仍符合message_feature/remote/追踪要求。实际打开/anime/timeline/、/bangumi/media/md835/，从直播首页导航进入/p/eden/area-tags?parentAreaId=6&areaId=0。时间表首次goto超时后同一handle确认URL正确且内容已加载，没有重启浏览器。
+- **偏好与主题证据**：本轮设置UI实际为“暗色、OLED关闭”，与上一轮收尾不同；以当前值为准，未解释为错误或擅自恢复历史偏好。时间表、短评、直播分区均检查浅色/普通深色/OLED，DR节点0；先拍的01/02已命名initial-dark，不误算OLED。结束恢复本轮起始暗色/OLED关闭。截图集中/tmp/bewly-native53-acceptance/01–13。
+- **时间表**：是.timeline-container旧模板，并非首页.home-v3-app-container。实际封面72px直角，补媒体轮廓；日期、集数和当前时间提示补语义文字色。原日历单色sprite在浅色背景上过淡，只对.day-of-week按深浅应用黑/白单色，不处理媒体图片。左右箭头原14×26px、absolute/overflow visible且无role/tabindex；复用setupNativePageKeyboard新增anime-timeline路径分支，保留原click，补中文原生页面语境的可读名称与Enter/Space，原有aria-label保留，关闭/离页释放。伪元素扩展8px命中边界，不改变sprite裁切。新增实际模块回归验证原生点击次数、按键阶段、焦点及标签释放。
+- 时间表实际1100×800下文档1100、header980；48个条目加载后，原生向右移动轨道translateX从-1650到-2640，向左恢复-1650。未改原生日期宽度/轨道算法。最新键盘补丁仍待重载后实测，原鼠标翻页可用不等于新键盘已验收。
+- **资料长短评**：长评点击和短评Enter实际切换hash、列表与aria-pressed，焦点留在短评按钮且有可见焦点环。既有正文和阅读面生效；补.review-author-time、无自定义色的普通作者名及.media-tab-module-write（实际“去写短评”不是.to-review-btn）的语义前景/圆角。原站带内联自定义色/VIP作者名、评分星级保留，不将内容品牌色全部强制同色。未点评、点赞、追番或承包。
+- **底部背景**：OLED时间表主体纯黑但.bili-footer根仍固定深灰；此前规则只覆盖其footer-wrp子模板。补公共.bili-footer根背景为bew-bg，保留链接和页脚布局；上一批新版footer窄窗规则继续保留。
+- **直播分区**：实际React/CSS Modules模板，筛选button高度20.398px、选中主题背景配固定白字。按真实index_tags-box_/index_tag_语义前缀补36px最小命中区、普通实色、interactive圆角与theme/on-theme配对；测量副本同步使用同一规则，让原生展开计算继续工作。实站原展开/收起已有aria-expanded并可切换，未重做这一控制器。实际Item_cover-wrap_/Item_cover_使用共享media轮廓，直播内容与活动横幅保留。
+- **直播窄窗不能仅凭scrollWidth判定**：实测ready complete、29张卡片、文档1100，但.all__card-list-ctnr及顶部app_wrap实际1140，5列每列228导致末列被裁切；固定原侧栏宽64px位于x1036。已读取实际公开CSS到/tmp/bewly-native53-live-{app,area}.css：卡片内容absolute，hover放大110%，封面16:9。1200以下让原目录/头部容器保留左16px、右80px（侧栏64+16安全区），原flex项目改四列；卡片占位高度按16:9封面加64px元信息计算，内层同步百分比宽度，保留hover增长并统一封面比例。没有用overflow:hidden掩盖末列，也未接管原生预览/加载事件。最终新布局、hover及筛选测量副本仍待重载复验。
+- **验证**：/tmp/bewly-native53-complete-{test,lint,typecheck,knip}.log四命令退出0，508 PASS；lint 0 error/1条既有themeColor.ts:84 JSDoc warning，Knip10/0/5。追加窄窗CSS后的定向lint首次因长calc格式退出1，已按提示局部修复，日志保留，复跑/tmp/bewly-native53-final-style-lint-recheck.log；既有watch持续增量，未生产build/打包/clear/提交。viewport已reset，临时标签已关闭。Goal保持active，本批新增代码不记为最终实站通过。
+- 最终补核：上述定向lint复跑退出0，git diff --check退出0；/tmp/bewly-native41-dev.log至1223行确认native/main最后增量成功。
+
+### 第十八批：累计产物对账与验收阻塞（2026-10-02）
+
+- 上轮属于实际进展。本轮再次核对Git状态、remote和分支追踪，仍符合既定关系；只读进程检查确认27460/27461的无clear开发watch及27613(native)、27663(main)、27688(inject)持续运行约6小时56分钟，没有重启或清理产物。
+- **运行态不是全部停在同一旧批次**：新开并显式刷新活动列表，ready complete、DR0，.list-view已经是oklab(0.320558 -0.00748444 0.00134818)、12px，activity-title为rgb(241,242,244)。这条最新实测取代此前“活动列表仍白底”的状态；不能再以旧截图重复修该背景。
+- **最新增量仍缺实际效果**：同轮新开并刷新直播分区，ready complete、DR0、native-site=live，真实筛选button高20.398px、min-height0，--bew-control-height已36px，选中前景仍白色而--bew-on-theme-color为黑色。磁盘nativeAppearance/style.css的1868–1885附近确有新36px/选中配对规则。独立打开时间表，ready complete且48条内容已加载，两个箭头仍无role/tabindex/aria-label；该项单独可能受挂载时序影响，因此与不依赖键盘挂载的直播CSS效果共同记录，不能仅凭编译日志、build ID或缺失某一个标记推断验收成功。
+- **本轮交付边界**：未增加功能补丁，保留现有实现并记录可复现的运行态差异。截图/tmp/bewly-native54-acceptance/01-live-current.png、02-activities-current.png。未改显示偏好或viewport，临时标签已关闭。最新完整检查仍第十七批508 PASS、lint/typecheck/Knip退出0（lint1条已记录warning、Knip10/0/5）；本轮未声称重跑。
+- **待恢复后的顺序**：用户重载当前Bewly Nocturne Dev后，先刷新并核实直播36px按钮和时间表键盘效果；再验收累计的赛事/直播/游戏/电影/课程/页脚窄窗、活动/社区/详情阅读对比和索引焦点；随后完成剩余模板及开关恢复/广告显示的覆盖对账。登录持续状态仍受现有登录自动跳转限制；mall/link/account此前额外颜色层干扰的场景另按实际结果处理。所有待验证项继续保留，未缩减Goal范围。
+- 合并增量重载这一条件已在第十五、十六、十七批及本批连续存在；独立源码补差额已推进到需要整体实站反馈的阶段。当前进入等待用户重载的阻塞状态，不标记目标完成，也不继续用旧运行态叠加猜测性修复。用户先前已确认的旧批次重载仍被承认；需要的是之后累计增量的加载。
+
+### 第十九批：用户重载后的累计复验与剩余差额（2026-10-02）
+
+- 用户明确说明“重载了一次，请继续”，并要求未及时重载时先继续完成引入和代码修复。已恢复实际工作，完整读取Git status/remote/branch/HEAD/stash，分支/追踪/HEAD均未变化，stash保留。新开后再次显式刷新页面，不沿用第十八批的旧运行态判定。
+- **重载确认**：直播分区实际button高36px/min-height36px，选中背景rgb(244,63,94)配黑色前景，DR0；时间表出现“更早的日期/更晚的日期”两个可聚焦按钮。新行为证明本次重载生效，无需用户重复确认同一次操作。
+- **直播窄窗**：1100×800下实际四列，每列251px，x=16/267/518/769，最后一列结束1020；原侧栏x1036，安全距离16px，文档宽1100。展开/收起正常。初次DOM溢出计数包含aria-hidden测量层，进一步确认这些副本visibility:hidden/tabindex=-1；未把测量副本计为真实内容越界。筛选测量副本继续由原站负责，没有另建折叠逻辑。
+- **时间表复验与新焦点差额**：Enter向后移动-1400→-2520，Space可恢复-1400，媒体12px/superellipse(1.7)，浅色日期图标清楚，OLED页脚实际rgb(0,0,0)。到达最后一段时原站直接移除.arrow-right，当前焦点落到BODY；这不是旧补丁未加载。新增局部activate后单次microtask，在原生Vue DOM更新后仅当目标已被移除、root仍连接、owner未释放且焦点仍为BODY时移交另一箭头；不抢走其他控件焦点。真实模块新增边界删除、用户主动移焦、释放后不得回收三场景。普通翻页实站通过，本轮新增边界回收仍待下一次增量重载复验。
+- **游戏与社区累计样式已生效**：游戏简介/推荐视频文字实际rgb(241,242,244)，二维码说明使用次级前景，活动tab用主题foreground，展开渐变终点为页面深色token；浅色亦查看，媒体原图与iframe保留。社区四块信息图内容画布实际1440px/白色/12px，浅色与OLED均查看，外围随主题，原有信息图黑字恢复可读。白色属于包含文字的原始内容图画布，并非恢复整页装饰底图。
+- **关闭恢复实测**：临时关闭“适应其他页面样式”，直播、时间表、游戏、社区均移除bewly-design；时间表role/tabindex释放，社区画布恢复透明。重新开启恢复适配，并补浅色/普通深色/OLED检查。各页DR0，未改变其他扩展设置。结束恢复本轮原始“暗色、OLED关闭、适配开启”与viewport。
+- **游戏窄窗余项**：左右主列已变648/396，iframe实际648×365.3125，主内容未越界；待页脚加载后文档又变1160，原因是.bili-game-footer-content固定1160。补游戏中心/游戏详情公共footer content最大视口减32px并居中。原生固定反馈图实测x1041–1100、y357–443，二维码x896–1068、y426.5–598.5，确有27×16.5px覆盖；将窄窗正文右侧留白补为80px，保留59px反馈图及安全空间，不隐藏反馈或二维码。新页脚/避让差额待后续实站。
+- **赛事窄窗复验**：1100下topbar实际100px两行，原内容横幅保留；模块沿既有局部横向容器保留原始步进尺寸。文档仍1124，实际原因是公共.b-footer-wrap缩为1068但仍从x56开始。common/footer.scss补margin-inline:auto；不裁切赛程/推荐轨道来掩盖页脚偏移。该新增余项尚待重载验证，赛事完整键盘/横向操作验收仍保留。
+- **验证**：/tmp/bewly-native55-complete-{test,lint,typecheck,knip}.log四命令退出0，509 PASS。后续只补页脚和反馈避让CSS，最终定向检查日志/tmp/bewly-native55-final2-lint.log；git diff --check退出0。截图/tmp/bewly-native55-acceptance/01–12分别记录键盘、直播窄窗、主题矩阵、游戏及赛事窄窗。刷新普通页面后确认本轮刚新增的边界回收和游戏footer规则尚未体现，因此与已生效的累计修复明确区分。未生产build、打包、clear、提交或推送，全部临时验收标签已关闭。
+- 最终定向lint退出0；完整lint仍0 error/1条themeColor.ts:84既有格式warning，Knip10/0/5。既有watch日志至1278行确认最后native/main增量完成。
+
+### 第二十批：重载后边界修复验收与后续模板补差额（2026-10-02）
+
+- 用户再次确认已重载，Goal实际状态恢复active。按要求刷新页面，Git状态/remote/追踪仍符合既定关系，未移动分支或处理stash。
+- **时间表边界已实站通过**：Enter移至-2520后当前右箭头被原站删除，焦点现在确实落到“更早的日期”；Space返回-1400仍保持该按钮焦点。第十九批新回收行为已在当前运行态确认，不再列为待重载项。
+- **游戏页脚与二维码避让已通过**：1100×800且ready complete、DR0时，文档宽1100，footer content1068。二维码右边1004，反馈浮钮左边1041，间隔37px，无交叠；第十九批的1160宽和27×16.5遮挡均已消失。未点击下载、安装、推送或评价。
+- **公共页脚已通过**：赛事页1100下b-footer-wrap宽1068、x16，文档宽1100，原x56造成的1124溢出消失。赛程容器原生可聚焦，ArrowRight实际使自身scrollLeft前进，ArrowLeft稳定后回0；完整原生轨道仍在局部滚动容器内，未订阅或预测。
+- **赛事导航新差额**：浅色下聚焦赛程会将页面滚到内容区，但原shadowInView依据整幅hero判断，仍保留透明导航；新增两行顶栏的第二行因此叠到分类按钮。核对已加载原站CSS/JS确认game-header-opacity由shadowInView与homePage共同控制。1335以下仅令既有topbar使用elevated-solid、header_text中性前景及搜索opacity1；保留原节点、菜单、hero及既有阴影层，不加observer或改原站滚动状态。此新样式待后续实站。
+- **音乐页补齐迟到区块**：首屏banner/nav/newMusic/hotRank已缩到1100，但加载完整后musician/originalMusic/reviews/moreMusic仍min1114，撑开文档。四块均透明背景、正确主题文字，没有额外颜色问题；只把实际观察到的四个CSS Modules语义前缀加入现有窄窗min-width释放规则，不改轮播。该补充尚待新产物验收。
+- **电影频道**：实际1100窄窗，浅色、普通深色、OLED均检查，ready complete文档宽1100，主体布局与封面未见横向裁切，内容横幅保留。没有把黑色原生播放器待播放画面当背景错误。截图03赛事浅色处于颜色切换过渡，04为稳定态；过渡帧不用于判定最终色彩。
+- **课程页**：主列修复已生效，左695/右405，原生播放器与目录按视口排布；浅色/OLED查看。文档仍1129，检查全部越界节点后确认均是visibility:hidden的原生.bili-header__bar菜单，真实栏宽1100而子项右边1129。只在现有.remove-top-bar下给实际隐藏栏体overflow:clip，保留占位高度及挂载业务节点；切回原生顶栏时规则自动退出，不裁切可见正文或播放器来掩盖问题。该新规则待复验。未购买、领券、发弹幕、点赞或编辑笔记。
+- **检查与收尾**：本批只修改三份SCSS，/tmp/bewly-native56-final2-style-lint.log退出0，git diff --check退出0；原watch日志至1326行确认native/main开发增量成功。未无故重跑未变化的业务测试，最近完整验证仍第十九批509 PASS及lint/typecheck/Knip退出0。证据/tmp/bewly-native56-acceptance/01–11。原始暗色/OLED关闭/适配开启与viewport均已恢复，临时页关闭。新增三处样式待验收，Goal继续active，未宣称全站完成。
+
+### 第二十一批：广告完整链路与品牌搜索区块（2026-10-02）
+
+- 上轮有修复和实站进展。本轮读取广告分类、卡片、推荐owner、综合/视频搜索、原生observer、独立站设置投影及现有回归，并再次完成Git状态/remote/追踪预检。保留现有账号/请求scope、缓存和设置owner，没有新账号状态或网络入口。
+- **等价保留**：普通视频广告仅按is_ad/goto/card_type/cm等明确字段识别；标题含“广告”、普通游戏推荐、缺少菜单均不作为证据。原生observer只标记槽位，不删除原节点；开关关闭后清除标记，CSS广告槽也只在block-useless-contents下隐藏。独立站blockAds投影与adaptToOtherPageStyles分离，外观关闭不撤销广告偏好。活动card_type=2的过滤在当前原站公开脚本中同样存在，保留原生展示规则，没有凭数字类型新增广告判断。
+- **实际遗漏与修复**：综合搜索收到的brand_ad section一直保留在results，但AllSearchPage没有渲染分支，关闭blockAds也无法显示该区块。已增加仅首屏、blockAds关闭时的品牌广告展示，复用AdvertisementCard和现有响应数据；不改搜索请求、分页或账号归属。blockTopSearchPageAds仍只控制既有活动/游戏区块，与品牌广告的一般广告开关分开。
+- **来源和映射**：读取当前原生搜索页document脚本入口，公开发布脚本为[laputa-search index-9c8665e7.js](https://s1.hdslb.com/bfs/static/shanks/laputa-search/assets/index-9c8665e7.js)，副本/tmp/bewly-native57-search.js。原BrandAdverCard使用card.covers、card.videos、bili_user.res及button_list的跳转目标；新增toSearchBrandAdvertisementCards对这些明确布局105/106/107及品牌图片入口映射普通广告链接卡，保留各创意独立key。未知布局保留广告主/原按钮提供的入口，不猜测其他payload字段；视频文件URL不当作落地页，也不自动播放。所有URL复用已有webUrl约束。广告仍不伪造视频ID、稍后再看、关注或收藏动作。
+- **回归**：新增实际解析模块与完整AllSearchPage SFC挂载两组测试，后者执行真实广告卡片组件，仅替换外部transport/无关子组件。验证多创意key、图片/视频/稿件目标、仅按钮入口、非法目标回退，开启/关闭/再次恢复、后续分页不显示首屏模块、读取保持一次、关系读取0及accepted results保留。首次测试因searchTransforms直引构建期i18n依赖失败，改为完整生产模块harness并隔离无关formatter/i18n依赖；不是修改业务逻辑绕过测试。首次新增代码格式错误已局部修复，全部失败日志保留。
+- **实站边界**：原生搜索“哔哩哔哩”ready complete，brand-ad-list存在但子卡0，明确广告标记0，普通视频卡50。设置中两个广告选项原均开启；只临时关闭一般“屏蔽广告”，原生搜索与公益子站同步撤销屏蔽根class，重新开启同步恢复，50张普通卡不变，搜索顶部选项始终保持开启。不能因此宣称有内容品牌广告已实站通过；品牌复合变体同样保留待实际样本核验。设置已恢复，截图/tmp/bewly-native57-acceptance/01-settings-restored.png，临时标签已关闭，没有点击广告或执行任何账号写操作。
+- **最终命令**：/tmp/bewly-native57-last-test.log为全量511 PASS、退出0；/tmp/bewly-native57-final-lint.log完整lint退出0（0 error/1条既有JSDoc warning），最后仅按钮URL补充后/tmp/bewly-native57-last-lint.log定向lint退出0；/tmp/bewly-native57-last-typecheck.log退出0；/tmp/bewly-native57-complete-knip.log退出0且10/0/5。git diff --check退出0，既有watch日志至1369行确认main最终增量成功。未生产build、打包、clear、提交、推送或处理stash。Goal继续active，新增广告区块仅隔离回归通过，整体实站验收未完成。
+
+### 第二十二批：账号设置、直播中心与周边目录（2026-10-02）
+
+- 上轮有品牌广告修复与511项回归，本轮继续剩余模板。Git状态/remote/追踪重新核对一致，保留全部工作区与stash。
+- **账号设置**：/account/setting只有一个空的style.darkreader--sync（0字符），没有data-darkreader-mode；切换浅/深/OLED后仍无有效额外样式，不再把空节点误判为颜色干扰。保存按钮实际主题背景rgb(244,63,94)/黑字，浅色左右面板为content-alt/content实色，拼接圆角12px；OLED根背景#000而阅读面保留层级。1100×800稳定文档1100，左栏150@x60、右栏830@x210，无越界。未编辑字段或保存；私有资料截图仅本地取证，不作公开展示。
+- **直播中心导航**：当前活动Dark Reader样式仍在（107节点，dynamic）。仅验证导航语义与行为：Enter“我的直播间”后用户中心aria-expanded=false、子项tabindex=-1；直播间组true、子项0，焦点留在组按钮。Enter返回用户中心恢复原页面。当前选中组重复激活不会自行关闭，实际点击其箭头同样如此，按原站路由展开行为保留，未误当键盘失败另建控制器。没有开播、提交设置、认证或付费操作；纯Nocturne颜色仍未确认。
+- **会员购目录**：show.bilibili.com无额外改色节点，通过原“B站周边”入口进入mallhome，查看浅/深/OLED，商品图片和卡片表面正常；点击销量后选中类与foreground生效，再恢复综合排序。价格父容器已用theme-foreground，但实际金额子节点仍rgb(212,78,125)，与父级#f98ea0不同；为单位和值两个真实子节点补color:inherit，不改金额、字号或业务状态。
+- **周边目录窄窗余项**：1100时商品四列已各249px，x16/289/562/835，卡片无裁切。但nav-header-wrapper及mallhome__selector原min1160仍生效，筛选行固定1161、内容列1070，使文档1163。补这两个根min-width:0，筛选行改原节点flex/100% border-box，保留原90px标签宽度，内容列flex收缩、min-width0/width auto；不隐藏分类或替换排序逻辑。新增价格和筛选样式待后续实站复验。
+- **商品详情实际入口**：从商品卡进入mall/neul-next/detailuniversal/detail.html及其/detailPc iframe，外层与内层均已有merchandise-detail标记，证明精确双层入口已运行；两层分别13/14个动态改色样式节点，纯主题结论仍受干扰。另复访account/big，稳定后26个相关节点（6个非空）和dynamic模式；这与/setting的空节点情况不同。未擅自修改Dark Reader，也不据此判断用户白名单设置错误或推断代码来源。
+- **检查与收尾**：只改nativeSites.scss，/tmp/bewly-native58-final-style-lint.log退出0；git diff --check退出0；既有watch日志至1405行确认native/main最后增量成功。未无故重复业务测试，最近完整验证仍第二十一批511 PASS及lint/typecheck/Knip退出0。证据/tmp/bewly-native58-acceptance/01–07，其中account图片仅私有本地取证。已恢复暗色、OLED关闭、原排序与viewport，临时页全部关闭。未提交、推送、清理产物或处理stash；Goal继续active。
+
+### 第二十三批：创作中心投稿与稿件管理微应用（2026-10-02）
+
+- 上轮完成账号/目录验收与修复，属于有效进展。本轮Git预检一致；从创作中心实际“内容管理→稿件管理”进入/platform/upload-manager/article（原站名称“视频管理”），并查看已知投稿入口/platform/upload/video/frame。两页DR0；原生消息导航iframe保留，没有创建新iframe或启动额外客户端。
+- **原生微应用差额**：#cc-body已跟随页面深色，但投稿微应用#video-up背景rgb(250,250,250)，#video-up-app背景白色，upload-wrp为浅色半透明面；稿件管理.upload-manage也是白底，已有部分继承浅色前景导致空状态提示难读。补对应页面/阅读面、说明卡/上传区/工具入口、原生提示面、筛选菜单及空状态文字的语义色与圆角。保留原插画、原始文件input、拖放节点和业务监听；未选择文件或提交。
+- **共用侧栏与顶栏**：实际.nav-upload-btn.newApp的原规则覆盖了既有主题背景，补局部优先级及前后景配对。原侧栏is-active的外层内容面仍亮灰，与内层主题字不一致；补强选中表面及继承前景，原router_wrap活动组文字/图标沿foreground。顶栏tips-calendar_wrap补次级前景，AI工具胶囊改普通实色和对应前景；保留原工具图标与天数强调，不新增玻璃或控制器。相关原生服务推荐没有明确广告标记，未按标题或商业性质屏蔽。
+- **实测窄窗约束**：1100×800下投稿/管理均使文档1324。#cc-body min1124且x200；投稿app宽1100/min1000，内部content/上传区/工具入口960；此外body本身min1220。这些都已实际读取，不能仅释放一个内层就声称解决。
+- 在1324以下，仅对实际检查过的home-wrap、upload-manage、video-up存在时解除body及对应cc-body最小宽度；阅读容器使用左右32px总留白。投稿内部content缩宽，上传区/服务入口沿100%，原上传说明卡保持原节点flex并允许换行，240px基础宽度、16px间距，去掉换行后不适用的装饰分隔线；不改上传规则、进度、草稿、协议或提交状态。新布局及悬浮提示仍待重载后的实站确认。
+- **验证边界**：只查看上传入口和无稿件列表，没有上传文件、接受投稿协议、编辑、删除、申诉或执行收益操作，因此有稿件行和已选择文件后的编辑阶段没有实站证据，未宣称覆盖这些状态。/tmp/bewly-native59-acceptance/01–03为白底问题和窄窗修改前取证，不作为新样式通过证据。
+- **检查**：只改creativeCenterPage.scss；/tmp/bewly-native59-final3-style-lint.log退出0，git diff --check退出0；原开发watch日志至1465行确认最终main增量成功。最新完整业务验证仍第二十一批511 PASS与lint/typecheck/Knip退出0，本轮未重复执行或虚称全量测试。viewport已reset，临时页关闭，未改显示偏好。未生产build、打包、clear、提交、推送或处理stash，Goal继续active。
+
+### 第二十四批：漫画详情级联、分类键盘与阅读器（2026-10-02）
+
+- 上轮有创作中心实际差额修复。本轮Git预检一致；从漫画首页真实链接打开/classify及/detail/mc28201，再经原“续看第1话”进入/mc28201/463667。均无Dark Reader样式。只阅读原免费章节和界面，未点击追漫、购券、批量购买、评论或修改阅读方式/降噪等原站偏好。
+- **详情级联核实**：详情头部仍#333方形底，续看按钮实际蓝底rgb(67,124,181)/蓝字rgb(30,63,97)，theme token已#f43f5e；章节选中组仍透明蓝。已读取当前公开[detail.0c6a9d8e93.css](https://s1.hdslb.com/bfs/manga-static/manga-pc/static/css/detail.0c6a9d8e93.css)，副本/tmp/bewly-native60-manga-detail.css，确认原站长选择器及!important导致旧规则未赢得级联，而不是再次将所有差异归为未重载。
+- 在实际.manga-detail内补头部页面背景、作者/简介次级文字的优先级；增强章节普通/selected/last-read状态的选择器，子title/short-title继承已确定的前景，普通hover使用实色表面。续看primary仅非disabled时使用theme/on-theme配对，保留原disabled背景、active缩放及点击所有权；未克隆业务节点或覆盖媒体图。
+- **详情窄窗**：1100窗口下外层size-ruler和manga-detail实际1160；章节栏880、右侧268，原章节按钮198固定四列。只对直接承载.manga-detail的外层size-ruler缩到视口减32px，章节栏flex收缩/右栏保留，章节list-data使用四列minmax网格和16px gap，原按钮按可用宽度布局，保留顺序、锁定、已读和点击逻辑；manga-styles限制到父级可用宽度。新增布局待重载实测。
+- **阅读器已验证部分**：原生工具栏/阅读设置可打开；浅色面板白色、内部block实色浅灰，OLED reader-body纯黑，原theme-dark保留。切换Nocturne主题前后，同一两张image-container内部DOM、容器filter/transform匹配，未对图像节点或原生翻页参数写入；这是DOM/CSS一致性核对，不是逐像素测量。原生菜单在切换标签页后会自动收起，首次截图因此无可用矩形，重新按原流程打开后正常取证，未误修为生命周期错误。截图03/04只裁出设置界面，避免公开展示漫画正文。
+- 浅色设置中的图片降噪开关仍由原生theme-dark白描边/白滑块绘制，在浅灰面上不清楚。读取当前公开[reader.e2cc74de44.css](https://s1.hdslb.com/bfs/manga-static/manga-pc/static/css/reader.e2cc74de44.css)确认image-opt及slider各自active类，只补开关背景/边框/滑块语义颜色和round轮廓，保留30×52尺寸、22px滑块、原20px位移与原开关值；新外观待复验。
+- **分类键盘真实缺口**：日本筛选是可见div[role=button]但无tabindex，实际Enter操作不能聚焦。公开[classify.9885fd4eae.js](https://s1.hdslb.com/bfs/manga-static/manga-pc/static/js/classify.9885fd4eae.js)确认该模板只有click处理。复用setupNativePageKeyboard增加manga-classify，例外仅允许这类明确DIV角色节点补焦点与Enter/Space、selected→aria-pressed；原生button和已拥有tabindex的节点继续避让。由nativeSiteAppearance现有scope在精确/classify路径的#main-stage挂载，阅读器不挂载，没有路由轮询或第二个全局键盘系统。
+- 新增真实模块两组回归，覆盖点击次数/选中语义/焦点/原角色恢复，以及实际外观owner在classify开关启停、reader路径不启动。/tmp/bewly-native60-complete-{test,lint,typecheck,knip}.log均退出0，513 PASS；lint0 error/1条既有JSDoc warning，Knip10/0/5。最后仅调整已读边框优先级后/tmp/bewly-native60-last-style-lint.log退出0，git diff --check退出0，原watch日志至1556行确认最终增量成功。
+- 证据/tmp/bewly-native60-acceptance/01–05；详情新优先级/窄窗、分类新键盘和降噪开关新增样式仍待实站。显示偏好恢复暗色/OLED关闭，viewport reset，临时页关闭，图像比较临时数据释放。已合并发出最新增量重载提示；等待期间按用户要求继续独立代码工作。未生产build、打包、clear、提交、推送或处理stash，Goal继续active。
+
+### 第二十五批：累计重载复验与微应用内层差额（2026-10-02）
+
+- 用户明确确认“已重载这批最新增量”，本批刷新/新开页面验证，不再次索取该次确认。Git预检仍为message_feature→origin/message_feature，三个remote正确，既有工作树保留。
+- **漫画实站**：分类“日本”已具有tabindex=0、aria-pressed，Enter实际更新原站areas=2且焦点仍在原按钮；同一地区分组“全部”用Space恢复areas=-1。关闭适配后新增tabindex/aria-pressed移除、原role保留；开启后恢复增强。详情在深浅/OLED下续看按钮使用theme/on-theme、章节选中/已读与内部标题正确继承；1100×800时外层1068@16、章节788、右栏268，文档scrollWidth=1100，原四列与原业务按钮保留。OLED头部为#000，章节内容面仍分层。
+- **阅读器实站**：通过原“显示工具栏→阅读设置”查看浅色图片降噪开关，轨道rgb(227,229,231)、滑块rgb(21,24,30)，完整round轮廓，当前未开启状态未被改变。仅截取设置区域；没有改降噪、翻页、缩放、追漫、购券或章节购买。正文图像一致性仍引用上一批实际DOM/CSS比较，不声称本批做逐像素比较。
+- **创作中心实站与补差**：投稿的cc-body/#video-up-app/upload-wrp深色与OLED分层已生效；1100窗口下主列900、app868、内部836，文档1100。仍见原微应用.entrance-card单独白底和固定64px高度，已补透明底与min-height/auto让说明换行；侧栏父层主题色已生效，但实际链接#nav_upload_btn仍蓝底，主题表面/圆角延伸到原a节点。AI胶囊原scoped规则仍胜出，补局部颜色优先级；工具入口enter-btn改实色theme-surface及成对前景/hover。
+- 从真实“内容管理→稿件管理”进入原视频管理空状态。主阅读面/空提示/主标签前景已生效，内层.new-link-top-container仍白底、secondTabs和搜索占位仍深灰，已针对这些实际节点补表面/文字；顶部notify-tips原内联980px从x200撑到1180，新增max-width:100%和border-box，不删除通知、不干预原marquee。当前商业服务通知没有明确广告标记，未据文案屏蔽。没有选择文件、提交、编辑、删除或申诉；有稿件列表和文件已选后的编辑态仍无实站证据。
+- **会员购实站与补差**：商城目录DR0，深浅/OLED截图齐备，四列商品及筛选区1068宽在1100内，价格value/unit已继承主题前景rgb(249,142,160)。导航wrapper仍min-width1160导致文档1160，其他可见块没有超出；在既有窄窗规则中补min-width局部!important。漫画推荐标题仍原灰色、更新/日期SVG是内嵌黑色单色路径，分别补语义标题前景、仅暗色元信息图标brightness/invert；不作用于漫画正文或封面。
+- **其他累计修复实站**：音乐完整加载后musician/originalMusic/reviews/moreMusic四根均width1100/min-width0，文档1100；原轮播离屏项仍由原容器裁切，不被误判为文档溢出。课堂试看与旧赛程1100文档宽度均1100；新版赛事1100两行顶栏高100，PageDown后scrollY1914仍为不透明elevated-solid，导航文字可读。未点击购买、领券、订阅、预测或发送。
+- **验证与边界**：本批仅改creativeCenterPage.scss、nativeSites.scss及本记录；定向/tmp/bewly-native61-style-lint.log和完整/tmp/bewly-native61-complete-lint.log均退出0，完整lint为0错误/1条既有JSDoc警告；git diff --check退出0。原开发watch日志至1615行确认最终main增量成功，native样式增量在1599行成功。最新完整业务回归仍上一批513 PASS、typecheck/Knip退出0（10/0/5）；本批没有重复执行并虚报新的全量结果。
+- 证据集中于/tmp/bewly-native61-acceptance，截图中的创作中心/会员购残留问题是补丁前状态；漫画详情、分类行为和阅读器开关为已重载增量的证据。普通页面刷新仍取得旧卡片白底/原链接蓝底，已合并请求下一次重载以验证本批新增样式；不把编译成功当作实站完成。显示偏好已恢复暗色、OLED关闭、适配开启，地区筛选已恢复全部；不修改原站阅读/账号设置。未生产build、打包、clear、提交、推送或处理stash，Goal继续active。
+
+### 第二十六批：漫画账户列表与新版更新/排行模板（2026-10-02）
+
+- 前轮完成真实复验及样式修复，属于进展。当前Git预检仍一致；没有新的重载确认，不重复发问。在等待期间从已经观察过的阅读器“历史”地址进入/account-center/read-history，再用真实“我的追漫”“更新”“排行榜”链接访问其他模板。更新和排行原生target打开新标签，实际排行落在/ranking/1；没有推测旧/rank路径。
+- **账户旧模板**：DR0，根没有#main-stage；实际.app-layout>.page-content内含220px绝对侧栏及margin-left220的940px router-view。阅读面#333、侧栏#151515、低对比灰字和蓝色活动项均独立于Nocturne token。封面.manga-cover仅2px圆角，内部.cover-image有inline border-radius:0。新增仅在含直接.app-sidebar的账户shell内映射阅读面/侧栏、标题/辅助文字/原生导航选中指示、排序/编辑文字；父媒体裁切沿media-radius，内部图片继承轮廓，未删除任何封面background-image。仅单色导航SVG随深浅转换，不反色作品图。
+- 阅读历史/追漫在1100时原page-content1160、文档1160。窄窗规则仅对这两个已观察router-view缩外框至视口减32px、保留原220px侧栏及offset、阅读区用24px左右padding；原150px卡片沿原inline列表自然换行，保留原列表scroller和编辑节点。其他账户交易/券/自动购买页没有被纳入新宽度规则；没有进入编辑、删除、全选或改变排序。
+- **SSR更新目录**：通过原“更新”链接进入/updates?from=manga_person，虽然根已dark且DR0，但直接承载_sizeRuler_/_scheduleList_的无类DIV有inline #fafafa；标题/作品名黑色，日期未选中及更新状态为低透明黑色。补实际结构的页面背景、标题/辅助前景、原生dateItem active及其已确认::after指示器、scheduleImg媒体轮廓。日期保留原button及原生加载，不新增键盘控制器。该页_updateFooter_外围原#212121及white/70文字改页面/次级token；品牌文字是单独span、68px品牌图及社交图标/二维码原样保留。
+- **SSR排行榜**：实际/ranking/1在1100时文档1194；原_mainContainer_1160，_dataListContainer_1081加margin-left113，三列rank-item各332。黑色标题/简介落在深色根上不可读；_rank-item-wrapper_的重复SVG只绘制每隔一行的#fafafa条纹，并非内容图。只移除这张装饰条纹，给真实卡片语义表面/圆角、标题/元信息/导航活动态现有前景；排行数字和升降箭头独立节点保留。1226以下保留113px原导航占位，榜单内容按剩余宽度、原三列minmax网格与16px gap布局，作品信息列可收缩，原102px封面与排行编号不重建。
+- **本批证据与检查**：/tmp/bewly-native62-acceptance/01–04均为差额发现时的修改前取证，其中账户列表含私人阅读信息，仅保存在本机，不公开展示。只改nativeSites.scss与本记录；/tmp/bewly-native62-style-lint.log退出0、git diff --check退出0；原watch日志至1683/1687行分别确认最终native/main增量成功。上一批完整lint及更早513 PASS/typecheck/Knip结果不被冒充为本批重新执行。没有改TS/业务协议或另写与CSS实现重复的测试。
+- 新账户/更新/榜单规则仍需重载后的深浅/OLED、1100宽度、原日期/导航和停用恢复实站，不把本轮截图当作修复后效果。既有合并重载请求继续待答，不要求重复确认；原显示偏好未改变，viewport reset且三张临时标签已关闭。未生产build、打包、clear、提交、推送或处理stash，Goal保持active。
+
+### 第二十七批：Bewly 首页、动态和消息阅读面实站（2026-10-02）
+
+- 上轮有漫画模板实际差额修复，本轮转向无需等待该CSS重载的现有Bewly界面。Git预检仍为message_feature→origin/message_feature及既定三个remote；没有修改应用源码。通过首页真实Dock进入消息页，再使用原分类按钮切换回复/私信，不发送或修改任何消息。
+- **动态**：1100×800双列正常，900px内容区无横向溢出；实测article宽442、border-radius12px、corner-shape superellipse(1.7)、backdrop-filter none。转发视频内嵌卡、普通文字/视频卡和作者栏在深浅/OLED下均检查截图，没有新发现的叠层或排版问题；保留当前动态阅读表面，不为与通知卡完全同色而强行重写。
+- **消息**：私信未选会话时列表/空状态在1100内正常，分类项实际高度28px，外侧分段容器符合现有规格。首次viewport操作实际仍得到1744画面，未以此冒充窄窗；新建同一真实路由后读到innerWidth1100并重新取证。回复通知的双栏阅读卡、文本引用和分类选中态分别做深浅/OLED截图，未见横向溢出或遮挡。仅阅读可能沿既有已读契约ACK，未发送/删除/点赞等操作；这不覆盖其他消息分类及会话展开/Composer全部状态。
+- **首页**：1100个性推荐三列、标题/作者信息/封面和页面标签在亮色下取证，Enter能激活“正在关注”，OLED下保持同一三列结构和可读前景；随后恢复个性推荐。两组可见主标签/布局分段外层均高36px、round胶囊且backdrop-filter none。没有在本批重测非零scrollTop切标签，因此不新增“滚动保持已验收”的声明。
+- OLED时三个独立页面的Shadow Host --bew-bg均#000，文档宽1100；动态和通知卡仍保留各自语义阅读层。原设置实际为暗色/OLED关闭/适配开启，检查后已准确恢复；消息路由恢复私信、首页恢复个性推荐，viewport reset，四张临时标签关闭。
+- 本批证据/tmp/bewly-native63-acceptance；消息截图涉及私人内容，仅本地取证，最终展示只裁取恢复后的首页控件。仅更新维护文档，git diff --check退出0；没有为纯验收重复跑未变源码的lint/typecheck/test/Knip。既有原生子页补丁仍待重载，完整Goal未完成，保持active；未build、clear、提交或推送。
+
+### 第二十八批：首页其余模块与 Bewly 番剧（2026-10-02）
+
+- 前轮是有效实站进展。本轮仍未收到新重载确认；只读新开漫画/updates探测，ready complete、dark/bewly-design已存在，但已补容器仍rgb(250,250,250)，证明第二十六批新样式尚未实际加载；未用同一watch不变的build ID代替此判断。探测页随后关闭，未重复请求重载。
+- **首页模块**：通过真实标签依次检查订阅剧集、热门视频、每周必看、排行、直播，在1100×800补齐深色/亮色/OLED稳定截图。普通模块三列、排行保留原左导航与两列内容；每周期数选择器与编号、直播标题/作者、订阅标题与封面均没有新发现的重叠/越界。没有为了统一外观取消排行自己的业务布局，也没有点击稍后再看、关注、直播房间或其他账号写入。
+- 快速连续切换的首组亮色截图拍到淡入与图片未绘制状态，保留这些中间证据但不计为最终稳定验收；随后逐项复拍为*-light-stable-1100.png（直播首张已稳定）。OLED每周期数按钮曾在过渡帧中显得偏暗，独立回查后前景rgb(241,242,244)、opacity1且父链均1，稳定截图可读，未将瞬态误判为持久配色缺陷。
+- **Bewly番剧**：经Dock实际进入/?page=Anime，首屏“正在追/番剧热播榜”完成深浅/OLED取证；原海报横向列表与边缘遮罩保留，文档及Shadow主容器宽1100，未变成全页横向溢出。卡片标题实测20/28px；进一步完整读取BangumiCard、title.scss、useBangumiCardSharedStyles与Skeleton，确认这是既有homeAdaptiveTitleAutoSize及共享heading token路径，手动字号和骨架共用同一计算。保留当前用户选择，未仅凭与小视频卡不同就强行缩字或另建样式状态。
+- 时间表下半页检查亮/深截图，当前日的实色语义表面及文字可读。Enter激活“更晚一天”后焦点留在原按钮，实际时间表scrollLeft从739变成924（同一scrollWidth2442、clientWidth1004），随后点击“今天”恢复；没有以焦点变化冒充业务动作。首屏OLED证据不扩展为下半页全部OLED状态、所有日期/内容或分页已验收。
+- 本批没有改应用源码，仅更新本记录；Git三项预检仍一致，git diff --check退出0。没有重复执行未变源码的全量检查；最新513项业务回归等前批结果继续按原范围保留。证据/tmp/bewly-native64-acceptance，稳定截图与过渡截图明确区分。首页标签恢复个性推荐，主题恢复暗色/OLED关闭/适配开启，viewport reset、临时标签关闭。未build、clear、提交、推送或处理stash，Goal继续active。
+
+### 第二十九批：搜索筛选日历与用户卡片窄列（2026-10-02）
+
+- 前轮完成有效矩阵验收；本轮从Bewly首页搜索框输入此前已用的“哔哩哔哩”，按Enter后原设置在新标签打开实际SearchResults路由，随后绑定该新标签验收，没有误将原首页当结果页。1100下综合用户/视频区、视频筛选、用户卡、影视与专栏结果均取得实际内容；影视加载初期出现“没有更多内容”不代表空结果，最终实际有跨年晚会等条目，截图已按results命名。
+- **筛选/日期弹层**：更多筛选是页内展开，排序/时长/日期行在1100内完整显示。开始日期弹层实际280×359，x385.30/y266，12px/superellipse(1.7)、backdrop-filter none，边界在视口内；完成暗色、亮色、OLED截图，日期的未来禁用状态保留。对弹层内“今天”按钮按Escape后dialog卸载，焦点回到原“打开日历”，两个日期输入仍为空；没有误提交日期筛选。
+- **用户卡片实际缺陷与修复**：用户结果三列窄窗中，正在直播用户同时显示直播/投稿/粉丝三项，原不换行的flex统计行把“直播中”挤成竖排，投稿/粉丝文字也零散换行。完整阅读UserSearchPage→UserCard→UserAvatarLink与UserCardSkeleton；保留三个事实和头像直播入口，仅给紧凑统计行命名class并允许按完整信息项换行，项本身flex不压缩/white-space nowrap，行间距4px沿token。骨架统计行同步wrap与4/12px gap，没有更改查询、关注、账号归属或直播状态判定，不删除冗余信息来掩盖布局问题。
+- 其他本批观察范围：综合搜索暗色、用户/影视亮色、专栏暗色、视频筛选/日历三主题正常呈现；不是所有结果类型所有主题和所有分页的完整声明。发现用户卡差额后本轮优先完成修复，剩余通知分类仍留在覆盖表待后续验收；没有因最初计划提及就记录成已完成。
+- **检查**：Git三项预检一致；/tmp/bewly-native65-card-lint.log退出0、/tmp/bewly-native65-typecheck.log退出0、git diff --check退出0；原watch至1700行确认最终开发增量成功。只涉及组件class/SCSS与骨架样式，无业务逻辑修改；未为样式编写字符串式测试，也没有冒称本轮重跑513项测试或Knip。新卡片布局待扩展重载后的实站复验，截图05为修复前问题证据。
+- 证据/tmp/bewly-native65-acceptance/01–08；暂时显示偏好已恢复暗色/OLED关闭/适配开启，日期未选、更多筛选收起，viewport reset、搜索页和原入口页关闭。未点击关注、稍后再看、观看或进入文章，未发送/删除/点赞；未build、clear、提交、推送或处理stash。既有合并重载请求继续待答，新组件样式已进入同一开发产物，Goal继续active。
+
+### 第三十批：通知分类与会话阅读工具实站（2026-10-02）
+
+- 前轮完成搜索修复，本轮完成不依赖该样式更新的消息验收。At/Love/System三分类均取得真实条目，分别检查1100×800下深色、亮色、OLED；聚合头像/人数、引用内容、系统长文本及链接无新发现的重叠或不可读问题。OLED根--bew-bg为#000，内容阅读卡继续分层，文档宽1100。不是空状态或fixture替代实站。
+- 沿原生界面读取会话列表，打开一个既有普通会话，仅查看历史。会话展开后的透明容器、左右细线和独立底部输入栏按当前设计保留，输入框始终为空、发送按钮disabled。原列表与输入栏在1100内保持底部对齐；会话整体展开导致部分旧内容处于视口上方属于既定设计，没有重写会话客户端或强行收缩容器。
+- **前批会话查找增量实站确认**：入口实际36×36、x948/y125，在展开后仍可见；查找框高36、y138。输入只进入独立searchbox，查询已加载的“测试”得到8项，点击下一个后状态1/8且对应消息滚动定位/轮廓可见；关闭工具栏后入口恢复，点击回到最新消息返回底部。没有向Composer输入内容或触发发送。
+- **图片查看器**：仅打开这段已加载历史中的现有图片。工具栏在顶部模糊层前可见，上一张/下一张/缩小/放大为36×36，文字按钮高36；共享Dialog关闭按钮沿原32px规格，不为“新增按钮36px”误改全部关闭按钮。“适应窗口”47%切“原尺寸”后100%实际显示；仅一张样本，前后按钮disabled，不宣称多图切换/裁剪保留已实站。按Escape关闭后先观察到关闭过渡，后续最终dialog数0、焦点回到原“预览图片”，未将过渡中的残留DOM当故障。
+- 证据/tmp/bewly-native66-acceptance/01–13包含私人通知和会话，仅本地取证；对外只裁取不含内容的分类导航。未打开系统通知外链、发送/删除消息、点赞或执行其他账号动作；通知/会话阅读可能按用户已允许的既有ACK路径更新已读。
+- 本轮没有修改应用源码，Git预检一致，仅补维护记录，git diff --check退出0；不重复运行未变源码全量检查。显示偏好已恢复暗色/OLED关闭/适配开启，已点击当前会话关闭并关闭临时页、viewport reset。前批原生样式与用户卡补丁仍待重载后的实站；未build、clear、提交、推送或处理stash，Goal继续active。
+
+### 第三十一批：累计完整回归、索引焦点与国际版页脚（2026-10-02）
+
+- 前轮完成消息实站，本轮重新执行累计完整lint/typecheck/test/Knip，并读取第十五至二十二批证据核对覆盖表。纠正其中仍把游戏footer/二维码避让、公共footer居中、电影三主题、时间表边界焦点、社区画布及课程窄窗列为待验收的旧摘要；仅用后续实际记录更新，不删除历史问题或扩大当时覆盖范围。
+- **最新完整检查**：/tmp/bewly-native67-complete-lint.log退出0（0错误/1条既有themeColor.ts:84 JSDoc警告），typecheck日志同前缀退出0，Knip退出0、10 exports/0 types/5 enum members。沙箱内首次pnpm test因esno创建本地IPC管道EPERM、未进入用例而退出1，日志保留；沿此前许可的宿主运行方式重跑/tmp/bewly-native67-complete-test-host.log，退出0、实际513行PASS。没有将启动失败改写为代码失败或隐去失败日志。
+- **索引焦点最终实站补核**：新开/anime/index/，1100×800。Enter“完结”后真实hash is_finish=1、aria-pressed=true，后续再次读取焦点仍在完结；同一filter-item-wrapper内Space“全部”恢复is_finish=-1且焦点仍在全部。第十五批路由键修复不再列为待重载项。未改其他筛选值或点击播放。
+- **旧活动页新差额**：/blackboard/activity-list.html在DR0下卡片背景为content-solid、980px、12px/superellipse(1.7)，标题/说明可读，先前样式已生效；稳定后文档仍1200。实际越界来自international-footer内link-box/partner两个b-footer-wrap固定1200/min999，右侧社交链接与text-con随之越界。它与已修复bili-footer具有同样flex链接组/partner结构，但根class不同，原规则没有覆盖。将现有窄窗规则扩到这一个已观察根，并释放wrapper min-width，复用margin居中、组换行与text-con收缩；保留全部原链接、图标、二维码与节点，不用隐藏横向溢出掩盖问题。
+- 后续仅改common/footer.scss，/tmp/bewly-native67-final-style-lint.log退出0、git diff --check退出0；原watch日志1714/1718确认最终native/main增量成功。该页脚新补丁仍待重载后的实站，不因完整业务回归已通过就声称布局已通过。
+- 证据/tmp/bewly-native67-acceptance/01–03，活动footer截图为修改前状态；原站索引筛选已恢复全部，本轮未改显示偏好，viewport reset、两张临时页关闭。Git预检仍符合message_feature/三个remote/追踪规则；未build、clear、提交、推送或处理stash。仍有最新样式加载和其他记录中的具体覆盖缺口，Goal保持active。
+
+### 第三十二批：原生内容圆角、404与关闭恢复（2026-10-02）
+
+- 前轮完整回归与页脚修复属于进展。本轮读取第八至十批相关证据，补查其具体细项，未在旧运行态盲目重复写CSS。更新覆盖表中c/tech轮播底板等已有第九批明确通过记录的旧待办。
+- **404实际键盘返回**：在本轮新建标签先打开Bewly首页再进入/404，真实.rollback-btn已有role=button/tabindex0。Enter后第一即时URL仍404，后续同一handle确认回到原/?page=Home&tab=ForYou；没有把异步导航瞬间误当失败，也没有调用工具back代替测试原点击。
+- **正文与目录**：直接访问第十批实际Opus目标1251179515891154981和read/home。1100×800、ready complete，文档均1100；Opus阅读面708px、工具栏均12px/superellipse(1.7)，内容/媒体保留，工具栏与正文无重叠。目录article-item__cover及内部b-img均12px，之前仅父层规则未覆盖的问题现已实站确认。原cv自动转Opus的历史边界仍保留，不声称旧cv正文模板已验证。
+- **原生动态与空间**：t.bilibili.com真实feed在1100文档1100，bili-dyn-item为content-solid和12px平滑轮廓，body background-image none。唯一style.darkreader为空（0字符），根无dynamic标记，不能把空节点误判为主题干扰。当前个人空间DR0、1100无文档溢出，首页导航与双栏未挤压；保留用户个人横幅作为有意义内容，未删除原图片、修改资料、置顶或发布。
+- **退出/恢复**：实际临时关闭适应其他页面样式，Opus、专栏目录、动态、空间四页都退出bewly-design；Opus阅读面/工具栏恢复原6px，目录封面恢复4px。重新开启后四页恢复class，Opus实际重回12px；不是只看设置checkbox就推定跨标签恢复。原主题暗色/OLED关闭未改变，适配开启已恢复，viewport reset，五张临时页关闭。
+- 本轮未改应用源码，仅更新维护文档；Git预检一致，git diff --check退出0，不重复跑上一批已完整通过的未变源码测试。证据/tmp/bewly-native68-acceptance/01–04及restored-opus-toolbar；空间/动态带用户信息截图仅本地使用。最新页脚及之前若干样式仍待重载，其他细项继续按覆盖表保留；未build、clear、提交、推送或处理stash，Goal保持active。
+
+### 第三十三批：话题/历史前景与笔记封面级联（2026-10-02）
+
+- 前轮完成原生内容实际验收。本轮读取现行notePage/topicPage/historyPage完整样式，按源码路由与既有真实入口打开space.bilibili.com/v/note-list、/v/topic/detail?topic_id=1149863、/history，三个页面均ready complete且1100文档宽1100。
+- **已完成细项**：话题join-button实际主题色rgb(244,63,94)/黑字、8px平滑轮廓；历史bili-cover-card__tag同一成对配色、4px小型状态轮廓。分别在深色、亮色、OLED读取计算样式，结果一致，OLED页面token#000；保留话题原有头部装饰渐变。没有点击参与话题、点赞、关注、历史清空或记录开关。
+- **笔记局部确认与差额**：note-header/note-tabs为12px平滑面，原只读阅读区上缘8/8/0/0已命中。note-item__cover及其card-image-card/image仍4px，尽管--bew-media-radius=12px且无inline style，说明原生作用域规则压过已有映射；不是再次猜测全部旧产物。仅给既有封面border-radius token及内层inherit添加局部!important，未改封面、正文或原节点结构。未进入编辑/发布/删除流程，私人笔记只作本地截图。
+- 笔记贴边设置按钮的自动指针点击没有打开Dialog，实际矩形x1080–1120位于1100视口边缘；进一步确认无disabled/相关错误日志，Enter可正常打开。只改用现有键盘入口完成主题验收，没有据自动化的边缘点击失败重写原悬停工具栏。
+- **检查**：Git预检一致；本轮只改notePage.scss和本记录，/tmp/bewly-native69-style-lint.log退出0、git diff --check退出0；原watch日志1730行确认最终main开发增量成功。最新全量仍第三十一批513 PASS及lint/typecheck/Knip通过，不冒称本轮再次全跑。
+- 证据/tmp/bewly-native69-acceptance，笔记/历史截图不公开，话题画面为已命中的原有修复。新增封面优先级仍待重载实站，其他既有重载请求不重复询问。主题恢复暗色/OLED关闭/适配开启，viewport reset、三张临时页关闭；未build、clear、提交、推送或处理stash，Goal继续active。
+
+### 第三十四批：累计增量加载审计与等待重载（2026-10-02）
+
+- 前轮有实际笔记修复。本轮没有继续叠加样式，专门核对下一阶段的运行态前提：新开并显式刷新漫画/updates与主站笔记页，两页最终ready complete。漫画根native-site=manga、DR0，新规则的完整结构选择器实际匹配1个节点，但背景仍rgb(250,250,250)；其bew-bg已是当前受约束深色token。笔记封面仍4px而media token12px。
+- 磁盘生成CSS只读核实：contentScripts/style.css第13733行和nativeAppearance/style.css第2469行均已有该漫画容器background:var(--bew-bg)!important；主站CSS第16180行有笔记封面12px token !important与内层inherit !important。以上行号仅对应本次产物，不作为未来固定锚点。源码/产物、真实结构和计算样式分别对账，不凭build ID或单个缺失键盘标记推断。
+- 第二十五批已合并请求重载，此后持续完成漫画新模板、主界面/搜索/通知实站、用户卡/页脚/笔记修复与完整回归；加载条件仍未改变。当前下一阶段必须在同一最新运行态复验累计变更，再判断剩余差额。该条件已连续多轮存在，进入等待用户重载的blocked状态；目标未完成，完整范围及其他未验证项均保留。
+- **重载后优先清单**：创作中心投稿卡/导航子层/稿件通知条；漫画账户历史/追漫、更新/排行、详情元信息及页脚；会员购导航最小宽度；用户搜索统计完整项换行；国际版公共footer；笔记封面12px。逐项验证真实命中、深浅/OLED、1100布局及必要开关恢复，再继续覆盖表其余明确缺口。有内容品牌广告样本、额外配色层影响与持续未登录场景的证据边界不因重载自动消失。
+- 本轮仅补记录，Git预检仍符合当前分支/remote/追踪，git diff --check退出0。最新完整回归仍第三十一批513 PASS、lint/typecheck/Knip退出0，后续SCSS定向检查及增量成功各有记录；未重新执行或改写结果。未改显示偏好/视口，两个探测页已关闭；没有访问扩展管理页、生产build、clear、提交、推送或处理stash。
+
+### 第三十五批：用户全部重载后的整批复验（2026-10-02）
+
+- 用户明确“已全部重载”，Goal实际恢复active，新的blocked审计从本次恢复重新计数。已承认这次重载，不重复要求确认。新开页面中漫画更新根由#fafafa变为bew-bg，笔记封面/内层均12px，证明主站与独立入口同时加载了累计增量。Git status/remote/branch/HEAD/stash list重新核对，仍message_feature→origin/message_feature、HEAD 7ee0ddc9、既有stash保留。
+- **创作中心通过部分**：投稿#nav_upload_btn为theme/黑字/8px；entrance-card透明底、原固定64px改为内容高度72.09px，说明正常换行；AI胶囊和服务入口使用普通语义面。1100文档1100。原生“内容管理→稿件管理”SPA后，new-link-top-container不再白底，secondTabs为次级前景，notify-tips从x200延伸900px，文档仍1100。投稿/管理亮色与OLED亦取证；没有选择文件、提交、编辑、删除或申诉。
+- **用户卡通过**：用户搜索真实直播样本的统计行flex-wrap为wrap，直播/投稿/粉丝三项各高16px、white-space nowrap，正常按完整项排列；深浅/OLED1100截图无之前的竖排问题，没有点击关注或直播头像。原生会员购目录nav-header-wrapper min-width0，文档1100、四列完整；三主题及价格前景正常，DR0。
+- **漫画通过部分**：排行榜原白色SVG条纹background-image none，内容宽955、三列各约307.66、卡片12px，1100文档1100；主标题/作者/分类前景生效。账户阅读历史外框1068、右栏848、150px封面自然四列，内外轮廓12px；点击我的追漫后原SPA列表、选中导航和排序保持，随后回阅读历史。深浅/OLED均取证，外围纯黑与内容层分开；未追漫、删除、编辑或购券。更新目录OLED根#000、1100无溢出，亮色原日期“昨天”Enter生效且焦点保留，随后今天恢复；空结果由原站返回，不据此推断加载失败。详情推荐标题rgb(241,242,244)、三个元信息单色图标brightness/invert已命中，不改变原封面或正文。
+- **页脚通过**：旧活动international-footer的两个b-footer-wrap均1068px、x16，原1200文档溢出消失，完整链接/社交图标/备案文字在亮色截图可达，没有隐藏链接或裁切正文来掩盖问题。
+- **本轮新增五处真实配色差额**：排行show-status-text链接显式rgba(0,0,0,.34)，未继承已修复父前景，补text-2；创作notify-tips保留浅黄底/浅黄字，补content-alt-solid、次级普通文字与highlight主题foreground；旧漫画manga-navbar-submission-portal仍蓝底/白字，补theme/on-theme/interactive轮廓，其18px白色内嵌SVG沿既有账户侧栏的alpha drop-shadow方式使用成对前景，不克隆按钮或图标；追漫pivot enabled::after仍蓝色，补theme；旧活动pagelist/flip-left的span active仍蓝色，补正常/hover/选中实色与语义圆角。保留原生节点、点击、导航及分页业务，不将已识别为商业推荐的通知按文案误屏蔽。
+- 最后普通刷新排行榜仍得到旧rgba(0,0,0,.34)，说明这五处刚新增SCSS尚待再重载。已合并发出小批复验请求，不把这次用户已确认的大批重载说成没完成。其他品牌广告有内容样本/额外配色层/持续未登录等边界仍保留，整体Goal不宣称完成。
+- **检查**：只改nativeSites.scss和creativeCenterPage.scss；/tmp/bewly-native71-style-lint.log及完整/tmp/bewly-native71-complete-lint.log退出0，完整lint仍0错误/1条既有JSDoc warning，git diff --check退出0。原watch1792/1796行确认最终native/main开发增量成功。业务回归最近仍第三十一批513 PASS、typecheck/Knip退出0（10/0/5），本轮未虚报重跑。
+- 证据/tmp/bewly-native71-acceptance；账户/笔记/管理含私人信息只本地保存。原主题暗色/OLED关闭/适配开启已恢复，更新日期与账户入口已恢复，viewport reset且全部临时标签关闭。未build、clear、提交、推送或处理stash，Goal保持active。
+
+### 第三十六批：额外改色层复核与直播中心窄窗（2026-10-02）
+
+- 上轮有整批验收及局部修复，本轮继续不依赖其重载的检查。受审查src、package.json、vite与scripts中没有darkreader/DarkReader引用；实际account/big仍有dynamic标记与非空user-agent/text/invert/inline/variables/override样式，含通用站点覆盖，未发现暴露在DOM中的扩展源URL。仅据此确认有效改色层存在，不能从节点名称断言来源或用户白名单错误；未修改/移除样式、其他扩展或其偏好。
+- link.bilibili.com/p/center/index第一次goto等待超时，继续读取同一handle后ready complete、native-site=live-center，实际落到#/user-center/my-info/operation，非空改色样式6个。没有因超时重建浏览器或判定原站失败。纯Nocturne三主题验收边界继续保留，但几何可独立核实。
+- **直播中心真实溢出**：1100×800下app-ctnr min1180、app-body1160、正文main938，侧栏198及24px间距，文档1180，右侧内容确实推出视口。顶栏内部另有同名main-ctnr（515px），因此新规则明确限定.app-body > .main-ctnr。1192以下只释放根min、body改视口减32并居中，正文按100%减原198px侧栏和24px间距计算；保留原float布局、导航节点和路由所有权，不动表单/开播/收益业务，也不增加observer或轮询。
+- **大会员等价保留**：1100文档1100。DOM中横跨x1100/2200的banner-item-img是原轮播离屏项，父banner-content-main-container为overflow:hidden，实际截图没有全页溢出，未再写宽度补丁。当前图像/配色受额外层影响，不能据截图归功于Nocturne；未续费、赠送、兑换、充值、认证或点击开播。
+- 本轮只改nativeSites.scss与记录；Git预检一致，/tmp/bewly-native72-style-lint.log和git diff --check退出0，原watch1810/1814行确认最终native/main开发增量成功。新宽度尚待重载实站，不能以计算公式替代真实结果；此前合并配色重载请求保持待答，此补丁进入同一开发产物，不再次逐项催询。
+- 证据/tmp/bewly-native72-acceptance/01–02为现状/问题取证，含账号信息仅本地使用。本轮未切显示偏好，viewport reset、临时页关闭。最近完整回归及后续定向检查按原批次保留，无生产build、clear、提交、推送或stash操作，Goal继续active。
+
+### 第三十七批：小批增量加载阻塞确认（2026-10-02）
+
+- 用户“已全部重载”已在第三十五批被确认生效，大批通过结果保持不变。本轮针对其后五处配色和直播中心宽度的小批增量，新开并显式刷新漫画排行及创作中心稿件页；ready complete后，更新状态链接仍rgba(0,0,0,.34)，而text-2为当前亮灰；notify-tips仍rgb(255,251,240)/rgb(250,171,75)。没有把同一次旧重载重新判定为未完成。
+- 只读生成CSS确认：两入口都有show-status-text→text-2规则，主站已有notify-tips→content-alt-solid的!important规则；这些实际节点存在，旧计算样式在刷新后保持。没有仅凭源码或build ID宣称最新小补丁已加载。
+- 第三十五批提出合并小批重载，第三十六批继续独立排查并加入直播中心窄窗修复，第三十七批仍确认同一加载条件存在。该恢复后的阻塞审计已达到三轮，当前进入blocked等待重载。下一步先验证五处配色及直播中心正文宽度，再处理覆盖表中的剩余外部样本/额外改色层等证据边界；目标未完成，未缩减范围，也不继续对旧运行态叠加补丁。
+- 本轮仅补记录，Git预检一致，git diff --check退出0；没有重跑未变化的检查或伪造新结果。未改显示偏好/视口，两个探测标签关闭；全部未提交内容及stash保留，未build、clear、commit/push或访问扩展管理页。
+
+### 第三十八批：小批重载通过与剩余配色隔离（2026-10-02）
+
+- 用户明确“重载了请继续”，再次按真实页面核对，不重复索取该次确认。漫画排行show-status-text从半透明黑色变为text-2，创作通知条从浅黄底/浅黄字变为content-alt-solid与次级前景；旧漫画投稿按钮为theme/on-theme，原SVG投影图标实际可见且配对，追漫排序线跟随theme。完成相关亮色/暗色/OLED计算样式和截图，1100布局未回退。
+- **宽度实站通过**：直播中心app-ctnr1100、app-body1068@16、原侧栏198@16、正文846@238，右边1084且文档1100，原80px推出视口的问题消失。其额外改色层仍存在，因此本条只证明几何与原节点布局，不扩大为纯Nocturne颜色通过。
+- **分页通过与完整子项差额**：旧活动主分页span已经8px、正常语义表面、选中theme/黑字，深浅/OLED均可读；本轮读取整个pagelist DOM后确认省略号是独立strong、跳页输入在flip-right，二者仍固定白底/4px。补ellipsis为无底色的次级文字、页数说明text-2、input为content-alt-solid/text-1/interactive轮廓，保留原页码/点击/输入事件。该唯一新补丁尚待新产物实站，主分页已通过结果保持。
+- **额外层来源排查边界**：从live页面真实script地址只读下载原站vendors.be92a009b85d000ac064.js、app.1798ec0bcd4d3bc123e0.js及navbar-v3.js到/tmp/bewly-native74-live-{vendors,app,navbar}.js，三个curl均退出0；搜索darkreader/DarkReader未命中。三份主要包没有直接标记不能排除其他异步脚本或外部注入，未据此断言用户白名单错误。页面仍有6份非空动态改色样式。已合并询问用户临时停用Dark Reader或确认全部Bilibili子域排除，以继续单独三主题验收；未自行改动其他扩展，之前只授权Nocturne显示偏好这一边界继续遵守。
+- **检查**：Git预检一致，仅改nativeSites.scss和本记录；/tmp/bewly-native74-style-lint.log及git diff --check退出0，原watch1828/1832行确认native/main最终开发增量成功。业务逻辑未变，最近完整回归513 PASS、typecheck/Knip与后续完整lint按各自原批次保留，不虚称本轮全跑。
+- 证据/tmp/bewly-native74-acceptance；账号页面截图只本地保留。原偏好暗色/OLED关闭/适配开启已恢复，viewport reset、全部临时标签关闭，没有输入页码、提交、开播、充值、关注或账号写入。Goal继续active，分页子项与额外层隔离仍有明确未完成项；未build、clear、commit/push或处理stash。
+
+### 第三十九批：真实广告卡识别与搜索主按钮（2026-10-02）
+
+- 前轮有小批复验与分页修复。本轮只做一次公开原生搜索样本“原神”，没有连续猜测广告关键词、点击广告/下载/关注。稳定原生页面实际50个bili-video-card，其中3张有cm.bilibili.com/cm/api/fees/pc/sync/v2链接及ad-feedback-entry，47张未被本模块标记；不是按标题或商业性质识别。口头更新中曾把50称为普通卡片数，随后立即更正为总数，以下计数以实际DOM为准。
+- 两个设置原均开启。关闭一般blockAds后，block-useless-contents根开关及三个bewly-blocked-feed-card标记全部撤销，50张卡内容仍在，但三张广告slot的computed display仍none。其自身无inline style/hidden属性、父class仅原生列类；读取可访问CSSOM没有找到命中的display规则，不能据此断言确切来源，也不强制display:block去压过未知规则。关闭后的可见恢复本轮**不记通过**；源码stop路径、节点保留/恢复的隔离回归证据仍独立保留。
+- **顶部独立开关实站通过**：activity-game-list本次含真实活动/游戏模块（子节点1、文本89字符），在blockTopSearchPageAds开启时display none；关闭后专用style移除、模块display block，普通卡总数50/标记0不变。先恢复顶部开关，模块重新none而一般根开关仍false；再恢复一般屏蔽，根class恢复、标记3，总卡50。两个设置在UI及DOM对账后均恢复原开启值。brand-ad-list只有空容器，无本轮可见品牌创意证据。
+- **显示模块暴露的配色差额**：原生搜索、活动详情、游戏下载和关注共用vui_button vui_button--blue，背景已theme但文字仍白；搜索/详情/关注圆角8px，游戏下载6px，均普通corner-shape。完整读searchPage.scss与common/btn.scss，并确认用户空间已是独立配对规则；仅在searchPage给这类主按钮统一interactive平滑轮廓及非disabled的on-theme前景，保留原生disabled、点击与请求路径，不移动或重建控件。
+- **检查**：Git预检一致，只改searchPage.scss及记录；/tmp/bewly-native75-style-lint.log、git diff --check退出0，原watch1844行确认最终main增量成功。广告识别/状态业务代码未改，不用样式修复虚增测试数，最新完整回归按原513 PASS及各命令记录保留。新按钮配色尚待重载后的实站。
+- 证据/tmp/bewly-native75-acceptance/01–03分别为一般开关关闭但仍受隐藏影响、两个开关关闭后顶部模块可见、最终设置恢复；不得将01作为三张广告已显示的证据。未改变主题/视口，临时页关闭；额外改色/隐藏规则来源与新样式加载仍是验收边界，未改其他扩展或其设置。无build、clear、commit/push或stash操作，Goal保持active。
+
+### 第四十批：最新完整回归与环境隔离阻塞（2026-10-02）
+
+- 前轮有真实广告样本和搜索样式修复，本轮重新完成当前源码的完整检查。/tmp/bewly-native76-complete-{lint,typecheck,test,knip}.log四命令均退出0，实际513行PASS；lint0错误/1条既有themeColor.ts:84 JSDoc警告，Knip10 exports/0 types/5 enum members。test沿已确认的宿主执行方式运行，没有再次触发已知IPC沙箱问题，也未运行生产build或清理。
+- 新开原生搜索页ready complete，search-button仍白色前景、corner-shape superellipse(1)，新配对/平滑规则尚未加载。新开account/big ready complete，data-darkreader-mode=dynamic且6份非空相关样式仍在。第三十九批三张广告在一般开关关闭后仍隐藏的来源尚未解决，本轮没有重复切广告偏好或擅自覆盖display规则。
+- 第三十八批已请求排除额外改色层并继续独立工作，第三十九批增加广告隐藏层证据及完成搜索按钮补丁，第四十批仍确认环境前提未变。该恢复后的阻塞审计达到三轮；当前进入blocked，等待最新产物重载和可独立验收的页面环境。它不是目标完成，也不把已经通过的五处配色/直播几何或其他历史验收结果撤回。
+- 待恢复后的具体顺序：验证分页ellipsis/跳页输入与原生搜索主按钮；在额外改色层不介入时完成大会员、直播中心、商品详情的主题边界；复验一般广告关闭后的真实可见恢复，并继续保留无投放品牌创意/未登录等样本限制。未确认来源前不修改其他扩展、删除原站样式或扩大Nocturne屏蔽规则。
+- 本轮只更新记录，Git预检仍符合message_feature/三个remote/追踪关系，git diff --check退出0；没有修改显示偏好/视口，两个探测标签关闭。全部未提交修改与stash保留，未commit/push、处理历史或访问扩展管理页。
+
+### 第四十一批：稍后再看消息异常、HTTPS 导航与重载后复验（2026-10-02）
+
+- 用户报告搜索页两条相同的 `Failed to read Watch Later state: A runtime.onMessage listener's promise rejected without an Error`，并要求同时排查 Win11 Chrome 的 HTTP 地址和 HTTPS 下“不安全连接”。两个日志属于同一调用链；完整读取页面共享投影、API proxy、消息监听器、后台 Watch Later owner 与请求期限实现，保留原有账号/隐私分区、single-flight 和写事务。Git 当前仍为 message_feature→origin/message_feature，HEAD及三个remote一致，未处理stash或前阶段修改。
+- **消息传输修复**：既有期限/取消会产生 DOMException；Chromium 原生 Promise 消息边界要求 V8 native Error，否则会丢失原因并替换为上述通用文字。参照[Chrome 消息文档](https://developer.chrome.com/docs/extensions/develop/concepts/messaging)及[Chromium 实现](https://chromium.googlesource.com/chromium/src/+/88dd1a4768756277299d5f876e5d7b0c8208a082/extensions/renderer/api/messaging/one_time_message_handler.cc)，在现有 onMessage 边界将非原生 Error（包括 DOMException）规范为带原 name/message 的 Error；正常 Error 保留实例，不匹配消息仍同步返回false，成功响应合同保留。真实网络失败继续报告具体原因，不新增写操作重试。没有取得用户当时被传输层丢失的原始异常，因此不能断言那两次一定是超时。
+- **旧失败归属修复**：Watch Later catch 补齐与成功路径一致的 generation、账号和投影失效检查。旧账号/旧投影失败不能给当前账号写入5秒冷却或警告；有效读取失败保留原快照，后续显式读取仍可恢复。使用实际 messaging、APIClient、后台 owner 和前端投影模块回归：原代码在 native Error 断言失败，修复后 DOMException/非Error/同步throw、共享读取失败、成员集合保留及跨账号迟到失败用例通过。初次跨账号fixture因没有等待旧请求实际开始而失败，补started握手后通过，失败日志保留。
+- **HTTP 导航修复**：在既有 assets/rules.json 追加一个 upgradeScheme 规则，限定普通端口的 bilibili.com及其子域、现有授权的www.biligame.com、main_frame GET。由浏览器在请求阶段升级HTTPS，保留目标路径/参数/片段；不扩大权限、不改API POST、媒体/资源、外部域或非标准端口。依据[Chrome DNR文档](https://developer.chrome.com/docs/extensions/reference/api/declarativeNetRequest)，直接读取实际JSON规则验证目标与反例，未写第二套导航监听器。已有hdslb图片HTTPS归一化及LazyPicture/表情/播放元数据回归等价保留；开发mv3client文件虽生成但未接入当前manifest或页面调用链，未把无引用文件当作HTTPS告警原因。
+- **HTTPS 实站边界**：本机Chrome新开用户提供的HTTPS搜索URL与HTTPS首页，均加载Nocturne ready宿主，初始buildId=mup1ab13；页面及Shadow DOM检查没有HTTP资源属性，捕获日志只见原站shanks hydration消息，未见本次Watch Later或混合内容告警。Chrome网站信息UI明确显示“连接是安全的”，证据/tmp/bewly-runtime77-home-connection.png。此结果属于macOS当前页面，不能冒充Win11复现或证书修复。自动审批拒绝直接用当前登录会话访问HTTP首页，理由是升级前可能发送明文会话信息；没有绕过，也没有更改浏览器安全、证书、代理或其他扩展。
+- **已有补丁实站通过**：用户前次重载已生效，搜索/活动详情/游戏下载/关注按钮计算值均theme背景rgb(244,63,94)、on-theme黑字、8px/superellipse(1.7)。搜索和旧活动页均DR0，完成亮色/暗色/OLED截图；活动ellipsis无底色、次级文字，跳页输入为content-alt-solid/text-1、8px/superellipse(1.7)，Shift+Tab聚焦后2px焦点环可见，未输入页码或触发业务写入。OLED两页底层均rgb(0,0,0)，控件阅读面保留。证据/tmp/bewly-runtime77-{search,activity}-{light,dark,oled}.png。
+- **继续发现并补齐的差额**：搜索排序选中项实际仍为原生brand_blue文字rgb(244,63,94)，在当前实色选中背景上对比度约3.16:1。仅在searchPage中将原生tab按钮接入interactive平滑轮廓，并为非disabled选中项配对theme-surface/on-theme-surface及hover表面；保留点击、排序、focus与禁用行为。这项最后CSS增量待新产物实站，不与上一条已通过主按钮混算。
+- **自动验证及产物**：新增4项检查后完整pnpm test退出0、实际517行PASS（/tmp/bewly-runtime77-complete-test.log）；typecheck、Knip退出0（同前缀对应日志），Knip仍10 exports/0 types/5 enum members。首次lint发现新增fixture的7处格式错误，局部修正后完整lint退出0（/tmp/bewly-runtime77-complete-lint-final.log），保留既有themeColor.ts:84单条JSDoc警告；最后纯样式增量另跑ESLint退出0（/tmp/bewly-runtime77-final-style-lint.log）。旧watch经进程检查已不存在，按无clear方式启动 `pnpm exec cross-env NODE_ENV=development run-p dev:prepare dev:js dev:inject dev:bg dev:native`；现有prepare生成manifest与assets规则，内容/MAIN/后台/native开发编译均成功，最终日志/tmp/bewly-runtime77-dev.log:96。未手改生成产物、运行生产build或打包。
+- 原显示偏好暗色/OLED关闭/适配开启已恢复，本轮没有视口覆写。浏览器原生工具栏另显示AdGuard“保护已启用”，只作为其他过滤层存在的证据，尚未将此前每条隐藏规则归因于它，也未修改其设置。本轮已对新消息修复/网络规则发出一次增量重载请求；这些新增代码及最后排序配色仍需加载后验收，Win11实际不安全提示仍缺现场错误码。原Goal保持active，继续保留大会员/直播中心/商品详情额外配色层、真实广告恢复及其他具体样本边界，不把本轮检查称为全站完成。
+- 最终页面刷新仍为mup1ab13，排序选中前景仍rgb(244,63,94)/普通corner-shape，新增代码尚未进入该文档，不计本次修复实站通过。最终完整lint退出0（/tmp/bewly-runtime77-delivery-lint.log，仍仅既有1条warning），git diff --check退出0；stash@{0}仍为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。
+
+### 第四十二批：消息页热搜/历史跳转与 HTTPS 排查结论修正（2026-10-02）
+
+- 用户确认“不安全连接”是自身环境问题，并确认上一批已重载，随后报告消息页点击热搜或搜索历史无法跳转。按该最新结论撤回第四十一批新增的HTTP强制升级规则及对应规则回归，assets/rules.json相对原基线无净改动；既有图片HTTPS处理和消息异常修复保留。通过一次临时、无clear的现有dev:prepare重新生成assets/manifest，完成后仅停止该临时prepare进程，原开发watch继续；日志/tmp/bewly-routing78-prepare.log。连接问题不再列为扩展待修复项。
+- **真实复现**：刷新后宿主buildId变为muqhz5nt，说明用户上一批重载有效。进入 `?page=Notifications&notificationView=whisper`，点开顶栏搜索并选择当时真实热搜“章鱼哥 快乐去哪了”；其href本来是带keyword的SearchResults地址，点击后页面标题先变为搜索，URL却回到 `?page=Notifications`，随后恢复私信。没有发送消息、删除历史或执行其他账号写入。
+- **定位与修复**：完整读取SearchBar→ALink→searchNavigation→useRouteState/useHomePageRoute→Notifications调用链。Notifications离场期间仍可能收到新路由，其syncViewFromRoute先调用normalizeNotificationRoute，再检查归属；新SearchResults地址没有notificationView，被归一为默认私信，因此后置检查总会通过并覆写新URL。将归属检查移至原始地址、消息默认值处理之前。继续复用单一route source与既有离场清理，不更改搜索开页偏好、IME、链接修饰键或消息数据请求契约。
+- **实际组件回归**：在verify-notification-ui.mjs挂载真实Notifications组件，结合实际搜索导航、共享路由和首页路由模块，保持离场实例存活以验证晚到监听。私信/回复/@/点赞/系统五类均验证热搜和历史目标的page、keyword、history.state保留及随后路由观察不反跳；旧notificationView=settings仍只打开一次全局消息设置，未知消息分类仍回到whisper。首个fixture缺少设置数组时失败，补齐依赖后原代码准确失败在“SearchResults被改回Notifications”；修复后通过，相关/tmp/bewly-routing78-before.log、before-regression.log及focused.log保留。
+- **完整检查**：/tmp/bewly-routing78-complete-{lint,typecheck,test,knip}.log四命令均退出0，实际517行PASS，包含私信与通知fixture门禁。总数对应移除1项HTTPS规则回归并新增1项消息离场路由回归；lint仍0错误/1条既有JSDoc warning，Knip仍10/0/5。git diff --check退出0。原watch在/tmp/bewly-runtime77-dev.log:108确认最后Notifications开发增量完成；没有生产build、打包、clear、提交或推送。
+- **重载边界**：上一批新排序选中配色已在搜索页普通深色实测为rgb(241,242,244)前景与superellipse(1.7)，新文档未捕获Bewly运行警告。刚完成的Notifications增量仅普通页面刷新仍复现旧反跳，已发出一次针对本修复的手动重载请求；不能用同一watch的muqhz5nt标记或上一批重载确认替代本次行为复验。最终热搜/历史鼠标与键盘跳转仍待新代码加载，Goal保持active。
+- **等待期间完成的独立验收**：原生搜索排序选中项在亮色为rgb(21,24,30)前景，暗色/OLED为rgb(241,242,244)，三态均为实色语义选中面、8px/superellipse(1.7)，OLED页面底色为纯黑；截图/tmp/bewly-routing78-search-{light,dark,oled}.png。显示偏好恢复暗色/OLED关闭/适配开启，无视口覆写；设置已关闭，搜索与消息测试页保留用于新路由实站复验，已完成活动页和空白测试页关闭。
+
+### 第四十三批：消息搜索重载后实站通过与剩余环境边界（2026-10-02）
+
+- 用户明确确认已重载消息页修复，随后刷新既有测试页，不重复索取确认。实际从 `?page=Notifications&notificationView=whisper` 选择当时真实热搜“章鱼哥 快乐去哪了”，正确进入保留keyword的SearchResults地址，标题、顶栏关键词及真实结果网格一致；结果加载与后续路由观察后地址保持，没有再被消息页覆写。
+- **四种实际操作通过**：热搜鼠标点击、返回私信后搜索历史鼠标点击、Tab经搜索按钮到达热搜链接后Enter、返回私信后搜索输入ArrowDown选中该历史词再Enter。每次均保留搜索地址与关键词，浏览器返回恢复私信页；历史使用本轮真实搜索生成的条目，没有删除或伪造用户历史。证据/tmp/bewly-routing79-hot-click.png、/tmp/bewly-routing79-history-keyboard.png。此实站覆盖私信outlet，其他四个消息分类继续以第四十二批实际组件/路由回归为依据，不扩大为所有分类均手动点击过。
+- 本次重载后的上述流程没有捕获新的Bewly warn/error日志；没有人为使后台请求失败，故稍后再看异常原因透传及跨账号迟到失败仍以第四十一批隔离回归为依据。未发送消息、点赞、收藏、删除、购买或批量写入，也未清理历史错误日志。
+- **原Goal继续检查**：从现有TopBar实际目标重新打开account.bilibili.com/big，ready complete且Nocturne宿主ready；仍有data-darkreader-mode=dynamic、26个同名style节点，其中6份非空。只读打开Dark Reader状态弹窗后关闭，没有改动设置；Chrome工具栏明确显示AdGuard“保护已启用”。这些事实表明当前仍有额外过滤层，尚未把每条样式/广告隐藏规则归因于某个扩展，不能据此反推用户此前白名单操作无效。
+- 为完成大会员/直播中心/商品详情三主题及搜索广告关闭后的独立验收，已合并请求用户允许仅对验收站点临时关闭Dark Reader/AdGuard过滤并恢复，或明确接受并记录该验证限制。此前授权仅涵盖Nocturne显示偏好，因此在收到选择前保持其他扩展设置原样。消息页跳转不再列为待重载项，连接问题继续按用户已澄清的自身环境问题处理；整体Goal尚未完成。
+- 本轮仅补实站和维护记录，无新增代码/产物变更，未重复运行完整517项检查；最近完整lint/typecheck/test/Knip仍为第四十二批全部退出0。Git预检确认message_feature→origin/message_feature、HEAD 7ee0ddc9及三个remote一致，全部已有修改与stash保留，无commit/push、生产build、打包或clear。
+
+### 第四十四批：直播旧首页与房间装饰层差额（2026-10-02）
+
+- 前轮完成消息搜索实站，属于有效进展。其他扩展隔离尚未获确认，本轮保持其设置原样，继续独立直播模板。Git status/remote/branch/HEAD/stash预检一致，保留所有既有修改。
+- **实站来源**：从真实直播首页进入当时在播的22632424房间；两页均data-bewly-native-site=live、Dark Reader节点0。当前房间直接承载live-room-app而非之前样本的blanc iframe，因此本轮证据单列。没有发送弹幕、送礼、关注、开播或购买；输入框仅空白聚焦，value长度0，焦点环2px，原输入表面/前景/8px轮廓在亮暗模式均生效。
+- **首页圆角与顶栏**：旧首页预览播放器外壳、选台缩略图、覆盖层及描边仍为4px普通轮廓；在nativeSites.scss按实际原生节点映射媒体圆角，描边/遮罩继承同一轮廓，标题底板保留上方拼接直角。开播入口实际为原生rgb(255,102,153)/白字、6px普通圆角，映射theme/on-theme及interactive轮廓；白色CSS图标沿既有漫画上传图标的alpha投影方式配对，未复制图标或按钮，下载菜单是按钮外的原生兄弟节点。亮色下“首页”内层span与“更多”仍浅字，补两个确切文字节点，不改原生蓝色品牌图形。
+- **房间底层**：壁纸本体background-image已经none，但.room-bg::after仍绘制rgba(28,32,34,.85)灰色遮罩；亮色与OLED的body/room token已分别白/黑，画面仍被该遮罩覆盖。移除的仅是这层壁纸附属背景绘制。头部、观众榜、礼物栏、聊天控制区还在各自根节点绘制空的蓝色皮肤纹理，补background-image:none，保留其子节点里的主播徽章、礼物图和独立内容横幅；聊天底角仍被原生规则改回10px，增强已有语义12px拼接圆角的优先级。没有改播放器内部、移动业务DOM或增加Observer。
+- **桌面窄窗**：在实际innerWidth=1100、innerHeight=800的稳定房间中，文档1094，播放器左列688@47、右列300@747，输入仍可聚焦。独立旧首页样本加载完成后body min-width1180、文档1180，导致横向溢出和右侧工具栏侵入选台区。仅在含player-area-ctnr的旧首页、现有1200断点下解除body最小宽度；预览使用原两个节点的5:1列与16:9媒体比例、原选台项弹性分配高度，内容区给原生侧边工具栏保留80px范围。带实际活动内容和目标链接的背景横幅保留，没有按商业文案判广告。
+- **证据与边界**：/tmp/bewly-native80-room-light-before.png及/tmp/bewly-native80-live-home-narrow-light-before.png均为修改前画面；OLED的未清除遮罩以实际计算样式为依据，相关截图存在视口捕获不完整，不用于完整布局通过结论。多次视口工具调用后仍读到1744时未计为窄窗，窄窗结论来自明确1100的独立加载样本。新样式尚待本批重载，不能将旧房间几何/输入通过扩大为新皮肤或旧首页收缩布局已通过。
+- **验证及恢复**：只改nativeSites.scss和本记录；定向ESLint最终日志/tmp/bewly-native80-final-style-lint.log与完整pnpm lint日志/tmp/bewly-native80-complete-lint.log均退出0，git diff --check退出0。实际开发watch句柄仍存活，/tmp/bewly-runtime77-dev.log:158/162确认native/main最终增量编译成功。纯样式本轮没有重跑业务测试，最近517项、typecheck/Knip仍按第四十二批记录保留。暗色/OLED关闭/适配开启已恢复；关闭带临时视口的房间和设置承载测试页，保留页均再次确认1744×1027默认视口。没有生产build、打包、clear、commit/push或stash操作。
+- 已发出一次本批直播样式重载请求，其他扩展隔离选择仍待用户决定。Goal保持active，继续以加载后实站结果判断本批完成，未把缺少新运行态当作页面已经适配成功。
+
+### 第四十五批：直播重载复验与内层样式补齐（2026-10-02）
+
+- 用户确认已重载直播样式后刷新页面。预览播放器/缩略图均12px/superellipse(1.7)，开播入口为rgb(244,63,94)背景、黑色文字与原生图标投影、8px轮廓；亮色“首页”和“更多”文字已跟随。房间外层四个面板background-image均none，底部聊天轮廓已12px；壁纸附属灰色遮罩透明，亮色页面/房间底层白色，OLED页面/房间底层纯黑。这些属于本轮实际加载验证，不依赖同一watch的build ID推断。
+- **首页窄窗部分通过与余项**：新1100×800文档中body min-width0，主预览830×466.875@16、选台列166×466.875@854，右边1020；主预览正确保持16:9。但文档仍1160，确切来源为.link-footer-ctnr .footer-content固定1160及左列940/右列220；新闻/榜单三栏原居中后的右边1049.5仍侵入侧边工具栏范围。补该首页断点下三栏弹性宽度/16px间距与统一左右避让，页脚保留原左右业务节点、链接和原DOM顺序，用row-reverse布局保持社交列在右，左列弹性收缩；没有隐藏正文或横向裁切掩盖溢出。
+- **房间亮色真实失败与修复**：继续检查确认先前清除的是外层纹理。观众栏.rank-list-ctnr子层仍重复绘制纹理，三个bg-bright-filter::before仍叠加灰底；主播名、礼物名和观众标签在亮色下仍白字。只读读取当页skin-css，确认原站 `.live-skin-coloration-area .live-skin-normal-text/normal-a-text` 使用white!important，原Nocturne规则未赢得级联。为既有中性文字映射提高优先级，链接hover/focus沿theme-foreground；子层背景/轮廓与所属面板一致，移除上述装饰伪层。三个实际单色控制SVG使用硬编码#FFFFFF fill/stroke，改为在其精确控件容器内按currentColor绘制，保留原路径、非白色状态和主发送按钮on-theme前景。
+- 首页榜单标签同样实测选中为原始theme-color文字、未选中为较暗灰色；在精确tab-ctnr/tab-item内映射次级文字，选中/hover使用theme-foreground，保留原生榜单查询与状态。本批仍只修改nativeSites.scss，没有增加监听器、请求、设置或账号写入。
+- **验证**：完整pnpm lint退出0（/tmp/bewly-native81-complete-lint.log，0错误/1条既有themeColor.ts:84警告）；最后链接hover/focus增量定向ESLint退出0（/tmp/bewly-native81-final-style-lint.log），git diff --check退出0。原watch日志/tmp/bewly-runtime77-dev.log:230/234确认native/main最终开发增量完成。纯样式未重复跑业务门禁，最近完整517项、typecheck与Knip结果仍属于第四十二批，不冒充本批布局实站结果。
+- 证据/tmp/bewly-native81-home-light.png记录已加载的基础首页样式；room-light.png及home-narrow-intermediate.png记录暴露内层问题的中间状态，不能当作最新补正通过。显示偏好恢复暗色/OLED关闭/适配开启，设置已关闭；带临时视口的房间与窄窗样本已关闭，保留控制页和直播页均核实1744×1027。没有更改Dark Reader/AdGuard，也没有生产build、打包、clear、commit/push或处理stash。
+- 本批新页脚/三栏、内层皮肤与文字/SVG补正仍待累计增量重载后集中复验，已发出一次针对这些新差额的请求；此前重载及通过项保持有效。其他扩展隔离选择仍待用户确认，Goal保持active。
+
+### 第四十六批：公益目录、机构模板与累计回归（2026-10-02）
+
+- 前轮有直播代码与实站进展，本轮先验证加载边界：刷新直播首页后榜单选中文字仍rgb(244,63,94)，而theme-foreground为#f98ea0，最新内层补丁尚未进入该文档。现有重载和其他扩展隔离请求保持有效，没有重复索取确认，也没有修改Dark Reader/AdGuard。随后继续未依赖这些条件的公益模板；Git五项预检保持message_feature/remote/HEAD/追踪/stash一致。
+- **实际入口与问题**：由love首页“查看全部项目”进入新标签目录，再通过实际项目标题进入详情；按页面提供的机构链接读取unit-space及unit-info。目录、详情、机构空间与完整机构资料均Dark Reader节点0。目录筛选仍白色底板、蓝色选中项，项目标题rgb(33,33,33)在深色页不可读；机构空间重复使用同一个card-a项目行，机构摘要仍浅底、标题黑字；完整资料content-layout白底配继承浅字。补精确表面/前景/轮廓，card-a标题、摘要、媒体及结束状态次要入口作为公益站内共享样式，不另建组件或改变业务布局；机构标识和资质图片保留。
+- **状态与内容保护**：目录原生“已结束”实际改变project_state为500，返回“全部状态”后为-1；结束项目为angle-mark.end和“查看详情”，结束详情没有捐款控件。沿这些真实标记分别使用中性结束标签与主题配对的募款中标签，不改变状态或恢复捐款入口。详情“项目进度”可读取原生更新列表，之后恢复“项目详情”；选中线实际仍原生蓝色，补现有前景规则优先级。无内联颜色的富文本段落继承阅读前景，保留作者显式色彩、内容图片及外部原链接；未访问外部机构HTTP网站。
+- **只读键盘导航**：目录筛选和详情两个阅读标签均为无tabindex的li。将其接入现有nativePageKeyboard和nativeSiteAppearance生命周期，仍调用原生click并读取原selected/clicked类；选中语义独立，Enter/Space/IME保护沿既有逻辑，关闭适配或移除路由节点时恢复属性和释放监听。范围明确排除项目建议入口、捐款、协议和金额控件，没有新增全局快捷键、轮询或第二套状态。实际模块集成回归覆盖迟到目录、两组独立筛选、原生子按钮不被接管、详情切换、外观开关恢复和节点释放；新键盘行为尚待实站加载，不把fixture当作实站。
+- **窄窗补核**：稳定1100×800目录已有10行，page-width为988@56、右边1044；详情主体同样在1044内，但两页文档宽1422。确切来源是原生.bili-footer的min-width1422，已有b-footer-wrap已按Nocturne规则变为父宽减32，说明共享规则已加载但最小宽度未赢级联。仅增强common/footer.scss中既有、限定b-footer-wrap结构的窄窗min-width优先级，继续使用原来的换行和内容宽度规则，没有裁切或隐藏链接。最终页脚无溢出仍待重载复验。
+- **检查**：公益修改前累计完整检查517 PASS、四命令退出0，日志/tmp/bewly-native82-complete-*.log。新增只读导航后再次完整lint/typecheck/test/Knip均退出0，实际518行PASS（/tmp/bewly-native82-complete-final-*.log）；lint0错误/1条既有JSDoc warning，Knip仍10/0/5。之后机构共享样式及页脚纯CSS增量分别定向ESLint退出0（/tmp/bewly-native82-institution-style-lint.log、final-style-lint.log），git diff --check退出0。原watch继续运行，/tmp/bewly-runtime77-dev.log:324/328确认最后native/main开发增量成功，无生产build、打包或clear。
+- **证据及收尾**：/tmp/bewly-native82-charity-list-dark-before.png、charity-unit-dark-before.png为适配前问题；charity-detail-dark.png仅证明已观察的既有阅读面，不代表本批新规则通过。目录与详情切换状态已恢复，全程未选金额、勾选协议、提交捐款、发送反馈、登录登出或改账号资料。本轮未改Nocturne显示偏好，窄窗样本已reset并实测恢复1744×1027，多余公益测试页已关闭；只保留后续复验需要的页面。没有commit/push或处理stash。
+- 本批已合并至现有待重载增量；新公益颜色/圆角/键盘与页脚、最新直播内层样式均等待实际加载。其他扩展隔离选择仍待用户决定。当前仍有明确验收前提，Goal保持active；本轮有实际代码和检查进展，不以重复状态汇报代替后续加载验证。
+
+### 第四十七批：累计补丁实站复验与公益首次挂载修复（2026-10-02）
+
+- 用户告知已刷新后，本轮再次刷新测试页。公益详情选中线已变为theme-foreground对应rgb(249,142,160)，目录标题、筛选配对和窄窗footer补丁均已实际生效，确认这批视觉代码加载。Git五项预检仍为message_feature跟踪origin/message_feature、原HEAD及三个remote，stash保留。前轮若仅凭宽桌面footer的block/1160px推断旧代码，证据不足：该规则仅在max-width1200生效；本轮在实际1100视口验证了flex/1004px，不再将正常宽屏值作为缺少重载的证据。
+- **公益启动问题及修复**：初次刷新后详情li仍无role/tabindex；通过已有设置关闭再开启适配，两个阅读标签立即获得role=button/tabindex=0，排除新JS未加载。原实现仅捕获首次#app，公益异步Vue挂载替换该节点后观察器留在旧根。改为在love站点将同一个nativePageKeyboard观察器绑定稳定body，仍只匹配现有公益只读导航选择器，依然随appearanceScope释放，不增加轮询或第二个观察器。实际模块集成fixture补充初始化后替换整个#app的场景，继续验证迟到路由、原生click、独立选中状态、IME和卸载恢复。首次刷新生效仍待本次新增JS重载后验收。
+- **公益已实站**：1100×800目录在深色/浅色/OLED下文档宽均1100，footer min-width0；标题分别使用浅色前景/深色前景，选中项主题底配黑色文字；媒体12px轮廓保留，内容图、募款状态和原生捐款入口未移除。OLED body实际rgb(0,0,0)，筛选面仍保留层次。详情在重新开启适配后Enter进入项目进度、Space返回项目详情，aria-pressed和2px焦点环正确；这证明现有激活链，不替代首次挂载修复验收。
+- **直播已实站**：首页实际1100×800、文档1100，三栏x/right为16/407、423/736、752/1020；footer flex宽1004，x16/right1020，保留右侧工具栏避让。房间13339029的rank-list-ctnr无背景纹理，浅色白底配rgb(21,24,30)，深色配rgb(241,242,244)，OLED底层纯黑、观众栏保留表面层次，三种主题均实测且Dark Reader为0。又发现同三枚工具图标在无皮肤状态使用#46494D而非白色，因此将此前精确白色fill/stroke映射补充该原生深灰变体，仍限定这三个单色工具图标；这处最后CSS增量待加载复验。
+- **隔离边界**：新开的unit-space机构页本轮出现17个style.darkreader节点及inline改色标记，浅色下元数据/等级出现浅字；目录和详情均为0。未将该效果误归因于Nocturne或继续扩大CSS优先级，机构纯主题验收仍等待已有的其他扩展隔离选择；没有修改Dark Reader/AdGuard。未操作捐款、协议、金额、聊天发送、关注或其他业务写入。
+- **检查**：初次定向测试受本地tsx IPC沙箱EPERM中断，日志保留/tmp/bewly-native83-keyboard-test.log；随后允许的完整pnpm test退出0，518条PASS。pnpm lint/typecheck/knip均退出0，日志/tmp/bewly-native83-{lint,typecheck,test,knip}.log；lint仅既有1条JSDoc warning，Knip10/0/5。最后图标纯CSS增量定向lint退出0（native83-final-style-lint.log），git diff --check退出0。沿用原watch，runtime77-dev.log:340确认JS增量，354/358确认最后native/main样式编译，无生产build、clear或打包。
+- **证据及恢复**：/tmp/bewly-native83-charity-{dark,light,oled}.png记录目录实际效果，room-light.png及room-oled.png记录房间表面；图标最后增量不包含在这些截图中。恢复主题暗色、OLED关闭、适配开启，关闭设置；临时窄窗恢复并关闭多余测试页。新增生命周期修复已单独请求一次重载，后续图标规则并入同一累计产物，不重复要求确认上一批。Goal保持active，未commit/push或处理stash。
+
+### 第四十八批：首次挂载与图标验收、机构样式补正（2026-10-03）
+
+- 用户确认已重载后再次刷新。Git五项预检保持message_feature、origin追踪、原HEAD/remote和stash，未处理历史修改。公益详情首次加载直接出现两个role=button/tabindex=0的阅读标签；未借助切换适配设置。Enter进入项目进度，Space返回详情，aria-pressed与2px焦点环正确。全新目录的迟到筛选项也直接获得键盘入口，Enter选已结束时URL为project_type=-1/project_state=500；Space选教育助学后为1/500，两组aria-pressed分别保留，实际加载结束项目和中性“查看详情”入口。测试后恢复全部类型/全部状态，不触碰捐款、协议、金额或反馈。
+- **直播图标通过**：房间13339029三枚单色工具图标的fill/stroke实际跟随父前景，暗色及OLED均rgb(241,242,244)，浅色rgb(21,24,30)，不再保留#46494D；原来fill=none的线框路径仍为none。三主题均DR0，OLED body为纯黑。证据/tmp/bewly-native84-room-light.png、room-oled.png；/tmp/bewly-native84-charity-keyboard.png显示双组筛选和焦点环。这些结果完成上一批对应待验收项。
+- **机构页面差额**：本轮全新unit-space及unit-info均DR0，可以区分原生样式。机构标题、项目卡和资料正文已跟随主题，但等级标签仍rgba(0,174,236,.1)/10px，网站和相关项目标题仍原蓝色；“查看完整信息”具有内联rgb(97,102,109)，暗色可读性不足。为既有机构块增加精确#app父级优先级，复用原有配色/圆角token；只有确切内联链接使用important，并配套hover/focus前景。完整资料页的.form-layout仍rgb(241,242,243)，覆盖已经正确的html/body/app暗色底层；仅在#app>.unit-info下令该装饰容器使用--bew-bg，保留内容面板和资质照片。普通页面刷新仍读到旧级联，不能把源码/编译成功当作效果通过，已发出一次本批重载请求。
+- **剩余隔离边界**：本轮只读复核account.bilibili.com/big仍26个Dark Reader节点，link个人信息页107个、mode均dynamic。未改其他扩展，原有临时隔离选择仍待用户答复；不从机构站本轮DR0推断其他域也已排除。广告关闭后的真实可见性恢复门槛保留，未擅自修改AdGuard。
+- **验证与恢复**：本轮仅CSS补正，定向ESLint及完整pnpm lint退出0（/tmp/bewly-native84-style-lint.log、native84-lint.log），完整lint仅既有JSDoc警告；git diff --check退出0。此前运行逻辑未再修改，518 PASS/typecheck/Knip结果沿第四十七批，不重复计为本轮新测试。原watch日志runtime77-dev.log:390/394确认最终native/main增量成功，无生产build或clear。恢复暗色、OLED关闭、适配开启，关闭设置和已完成测试页，仅保留机构待验收页、现有设置页和广告样本；无commit/push。
+
+### 第四十九批：机构三主题复验与剩余工作核对（2026-10-03）
+
+- 用户确认重载并要求说明剩余工作。重新读取覆盖表及Git五项，分支/追踪、HEAD、remotes、stash保持原值。刷新机构两模板后，等级标签已为语义实色面/前景和完整胶囊，网站链接使用theme-foreground；内联“查看完整信息”已被正确映射，Tab进入该链接后焦点环2px，过渡结束颜色为rgb(249,142,160)。资料.form-layout在浅色为白、深色为受限深色、OLED为rgb(0,0,0)，正文面板保留content层级，两页既有宽桌面样本均DR0。证据/tmp/bewly-native85-unit-dark.png、unit-light.png、unit-info-oled.png。
+- **最后两处差额**：相关项目标题仍原生蓝色，DOM确认在#app>.charity-unit-space内；将该精确active类颜色与链接规则分开，使用theme-foreground的important覆盖，不扩大为全站强制文字色。实际1100窄窗中，机构主页文档1100，资料页文档1422、主内容988px但x217/right1205；根#app>.unit-info的原生min-width为1422px（无Dark Reader的宽桌面样本也同样确认），其余body/app为0。仅给此根min-width0以沿既有988px居中布局，不裁切、不重建内容。新开窄窗出现17个Dark Reader节点，因此仅据真实几何和DR0原生min-width交叉确认布局来源，不将该窄窗颜色作为纯主题证据。
+- **验证**：本批标题补正后完整pnpm lint退出0，最后宽度补正定向ESLint退出0（/tmp/bewly-native85-lint.log、native85-final-style-lint.log），git diff --check退出0；日志runtime77-dev.log:426/430为最终native/main开发编译成功。此次纯CSS变化未重复运行typecheck/test/Knip，最近完整结果仍518 PASS及四命令退出0。已发出一次两处累计样式重载请求，上次机构重载及已通过项不作废。恢复暗色/OLED关闭/适配开启，reset视口并关闭新增窄窗，保留待验收页；无生产build、clear、commit/push或stash操作。
+- **当前5项收尾清单**：①公益机构两模板最后颜色/窄窗补正的实际加载验收；②大会员、直播中心、商品详情3类页面的纯主题验收（既有额外改色隔离选择待答复）；③广告开关关闭后真实标记卡的恢复可见性验证（不能把Nocturne标记清除等同于已可见）；④未登录页面视觉/键盘（当前登录入口自动回首页，未退出用户账号，需未登录环境）；⑤在上述证据齐全后完成覆盖表复核、适用的最终完整检查和交付。其余表中未执行的发送/购买/发布等业务写入保留授权边界，不当作本轮必须实际提交的任务，也不将模板通过扩大为所有内容或错误态通过。此清单是验收门槛计数，不是完成百分比；复验发现的实际缺陷仍须修复，Goal未完成。
+
+### 第五十批：集中完成当前实施差额与完整代码检查（2026-10-03）
+
+- 用户明确要求先将所有已识别实施集中落实、统一检查，再提出整批重载，并在提出时汇报修改结果及已知问题。本轮遵循此顺序，未在途中逐处索取重载。Git五项预检仍为原分支、HEAD、追踪和remote，全部前阶段修改及stash保留。结合覆盖表再次核对主站路由样式入口、独立子站入口、共有表面、广告识别/原生observer/搜索推荐显示投影与主题派生链；已有等价实现保留，没有重新实现账号、设置、播放器或广告状态。
+- **机构收尾通过**：本次刷新后相关项目标题实际rgb(249,142,160)，与theme-foreground一致；资料根min-width实际0。1100×800新文档宽1100、内容988px位于x56/right1044、Dark Reader为0；截图/tmp/bewly-native86-institution-1100.png。这完成第四十九批两处待加载项，未为同一问题重复改代码。
+- **原生勾选控件统一**：集中静态审查确认视频页/空间页的勾选图像仍固定白色，且含5px/3px独立圆角、空间未选中态的旧位图和硬编码边框。复用getThemeColorTokens已有onTheme对比度判断，新增派生的--bew-theme-checkmark-image，沿既有document/Shadow Host及子站投影同步，停用子站适配时恢复原值；默认值集中在variables.scss，无新持久化设置或协议。替换原生分组、投币勾选和分享时间戳已有背景图引用，保留原input/i及点击、提交所有权，不添加节点或观察器；小圆角改用radius-sm，空间边框复用border token。
+- **登录弹窗收齐**：原生两种登录弹窗的模态轮廓、输入/按钮和QR容器接入现有modal/interactive/media radius及superellipse token；主按钮增加on-theme前景，禁用按钮使用中性表面与次级文字。白色二维码画布和身份验证结构继续保留。未触发登录、验证码或账号切换。此处只补现有样式，不引入另一个登录客户端。
+- **实际模块回归**：扩展现有theme测试，针对3组真实表面/5种主题色调用实际getThemeColorTokens，解析其生成SVG并验证笔画与onTheme一致；原生投影测试验证主题变化后图像更新、关闭适配还原原值。首次运行的格式错误已修复；首次测试额外尝试校验custom property的important回读，独立最小JSDOM用例确认环境不支持该行为，移除与本次改动无关的优先级断言，保留实际值更新/还原断言，生产恢复逻辑未放宽。失败日志native86-lint.log、native86-test.log保留。
+- **隔离渲染**：用真实extension/dist/contentScripts/style.css和实际themeColor模块，在127.0.0.1提供6个本地样本，覆盖视频/空间勾选的浅色近白、深色近黑、OLED主题及登录主/禁用按钮。实测近白勾选笔画#000000、近黑#ffffff、圆角4px，登录主按钮黑白前景正确，模态24px/superellipse(1.7)；实际勾选样本会更新图像。截图/tmp/bewly-native86-isolated-controls.png。本地页面按[Dark Reader官方作者文档](https://github.com/darkreader/darkreader/blob/main/CONTRIBUTING.md#disabling-dark-reader-on-your-site)声明darkreader-lock，6样本均DR0；该声明仅存在于/tmp测试页，未加入项目/原站，未修改任何扩展设置，不能据此宣称受其他扩展影响的B站实站已隔离。临时服务器已停止，标签已关闭，原开发watch保留。
+- **统一检查完成**：完整pnpm test退出0，518 PASS（/tmp/bewly-native86-test-final.log）；pnpm typecheck退出0（native86-typecheck.log），pnpm knip退出0且10/0/5提示保持（native86-knip.log）；最终完整pnpm lint退出0、0错误0警告（native86-lint-complete.log），修正了本次触及themeColor中的既有JSDoc格式。git diff --check退出0。原watch日志runtime77-dev.log:491/520分别确认最终native运行模块与主站样式编译成功；最后追加只有登录轮廓CSS，已包含最终lint及隔离刷新检查，未重复无关行为测试。没有生产build、打包、clear或Safari扩展工作。
+- **当前剩余及已知限制**：覆盖表内当前已识别的代码实施差额均已写入；不能以此声称所有URL/业务状态无bug。机构实站门槛已关闭；本批原生勾选与登录控件仍需整批加载后的实站验收；大会员/直播中心/商品详情纯主题和广告真实恢复仍受未获授权隔离的其他扩展影响；未登录页仍缺未登录环境。518项回归和本地渲染不代替这些实站证据。本轮未改变Nocturne显示偏好，临时视口已reset并关闭窄窗，无业务写入、commit/push或stash操作。
+
+### 第五十一批：整批加载确认、原生勾选实站与实底按钮前景补齐（2026-10-03）
+
+- 用户确认整批重载，并将集中实施/检查后再统一重载的要求写入Goal；本轮继续沿该顺序。浏览器工具会话重置后仅重新绑定原Chrome 3及已知验收标签，没有访问扩展管理页。主站document、Shadow Host与公益子站均实际出现新--bew-theme-checkmark-image投影，确认第五十批JS已加载；不再要求确认同一次重载。Git五项预检保持原分支、HEAD、remote/追踪与stash。
+- **勾选实站**：由当前首页真实卡片进入BV168ew6FEQ4，展开Bewly侧栏内仍由原站持有的分享入口。只打开浮层并临时勾选“从00:00开始分享”，未点击获取链接、动态、聊天、收藏、投币或关注。实际#check-timestamp::after在#fafafa主题下为黑色勾选图像，在#09090a下为白色图像；深浅主题及OLED跨标签投影均更新，子站OLED body为纯黑。证据/tmp/bewly-native87-share-light.png、share-oled.png。结束后恢复该本地选项为未选中、主题色#f43f5e、暗色/OLED关闭，关闭设置；此结果只覆盖分享时间戳与真实投影，分组/投币勾选和登录流程不扩大为已实站。
+- **本轮统一补正**：近白主题实站发现获取分享链接和未关注按钮为#fafafa底/白字，充电入口为透明底/原始主题色，文字不可读。videoPage中精确配对分享/未关注按钮的on-theme前景及原生子span，描边充电入口使用theme-foreground，单色图标沿已有alpha/drop-shadow方式着色；新规则避开bewly-video-dark-only，保留该模式原生品牌色规则。继续检查已存在的主题实底组，将笔记/原生编辑按钮、空间创建/订阅/播放入口、历史确认/空状态、专栏主操作及用户卡既有主题实底的文字补上on-theme；不对未知元素或媒体统一反色，不改状态、账号或业务处理。所有发现合并一次处理，没有途中索取重载。
+- **watch恢复**：本轮隔离页首次显示旧背景，读取runtime77-dev.log确认没有新编译记录；旧exec句柄84072已不存在，提权只读pgrep确认Vite/tsup/run-p均未运行，仅本轮临时渲染服务存在。由此确认原watch已停止，而非把观察超时当退出。使用无clear命令pnpm exec cross-env NODE_ENV=development run-p dev:prepare dev:js dev:inject dev:bg dev:native恢复，句柄92599、日志/tmp/bewly-native87-dev.log；background/inject/native/main均development成功，主站完成于79行。auto-imports.d.ts/components.d.ts无diff。没有清理或手改产物，也没有生产构建。
+- **整批检查**：pnpm lint/typecheck/test/knip均退出0（/tmp/bewly-native87-{lint,typecheck,test,knip}.log），lint0错误0警告，实际518 PASS，Knip10/0/5保持。git diff --check退出0。运行代码未再改动，本轮CSS补正用最终开发产物增加隔离样本：实际主题模块+实际CSS中，视频分享/关注、空间操作、历史和专栏主操作在近白底为黑字、近黑底为白字；OLED玫红主操作为黑字，描边充电为对比前景且保留透明底。样本均DR0，截图/tmp/bewly-native87-controls-isolated.png；隔离样本不替代这些新CSS的实站效果。临时服务已停止，仅保留开发watch。
+- **当前状态**：本轮已识别差额全部集中写入并检查，下一次如需重载只针对本批累计前景样式及恢复watch生成的完整开发产物。仍需实站关闭这些新差额；其他扩展隔离选择和未登录环境的证据限制保持。未修改其他扩展，没有实际发送/分享/收藏/投币/关注/支付等写入，没有commit/push或处理stash。
+
+### 第五十二批：原生 4004 调查、播放启动等待与动态资源释放（2026-10-04）
+
+- **范围与基线**：用户报告多个视频启动慢、持续加载，随后提供原生4004、音视频节点均为upos-sz-mirrorali，并要求检查动态加载及空转/过度轮询。优先处理该功能问题；继续message_feature、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6及原remote/追踪，五项Git预检无差异，未触碰原有修改、stash或版本。已确认的上一批重载不重复索取；本批修复和检查集中完成后再统一请求加载。
+- **实站诊断证据**：自有样本BV168ew6FEQ4一度从readyState=1进入原生4004（b95e531013f2617f6316f9187b2d4d82，音视频均mirrorali），退出Bewly布局后错误仍在原生播放器中；这只能证明不是骨架假报错，不能据此排除扩展的间接影响。用户原页BV1xUaS6vEoo也实读到完全相同的4004标识3a06ca05c050afecb5eb75f706a27295；媒体曾前进0.5秒后重置，后来错误出现于23.418764秒，均不算持续播放验收通过。错误DOM含隐藏的本地网络权限通用文案，但innerText/截图只显示4004、CDN和刷新按钮，未据此修改权限或判定权限故障。
+- **传输边界和对照**：检查静态DNR、后台动态规则、MAIN注入及播放器源码，没有Nocturne针对bilivideo/upos媒体分片的拦截或地址替换；兼容性UA规则只匹配www主文档，脚本清理只在首页路径调用，不在播放页清空原生playinfo。临时关闭/恢复“防止跳转移动端”做A/B/A：关闭时样本实际播放至36.325秒，恢复开启后也播放至91.013333秒，因此没有把UA当成已证实原因，未修改UA实现；原选项已恢复开启。截图/tmp/bewly-playback88-native-ua-playing.png仅证明该次可播，/tmp/bewly-playback88-user-page-{after-refresh,playing}.png不证明用户视频恢复。主题色#f43f5e、暗色基准#2a2f2d、主题为深色且OLED关闭、分享时间戳未勾选及设置关闭状态均按原值保留。
+- **播放启动修复**：实站旧document-start guard曾对#app/#playerWrap等祖先设置visibility:hidden，同时入口等待媒体metadata。pageLoadingGuard改用扩展自己拥有的固定底色遮罩，不隐藏或移动原生播放器；新增revealContent将视觉遮罩交给已有Bewly加载层，晚到DOM不重新遮盖，dispose对称移除。本批未改原生媒体缓冲提示、业务节点所有权或播放器实例。共享playerMedia新增精确可见原生错误判断：必须在当前播放器内、有明确错误码且具有可见尺寸；空、隐藏、离站面板不算错误。初始化中遇到真实原生错误即停止本次模式等待并露出原生重试入口；原生恢复仍由已有媒体/DOM事件重新处理，不自动刷新媒体、不重发写操作。
+- **停止无变化的播放等待**：入口原200ms无限重试改为初始5秒有界检查，成功/隐藏/退出继续清理；已有媒体事件、共享播放器结构观察和MAIN组件生命周期事件可发起单次新检查，保留迟到加载及换集恢复。Bewly布局原100ms/500ms永久兜底也改成初始5秒检查，之后等真实媒体/结构变化，再执行原160ms稳定期；过滤时钟文本、弹幕文字和加载装饰变化，不为它们扫描全页。复用原timer/observer与application生命周期，没有增加另一套发现器或轮询；原生侧栏、评论预热、退出恢复继续保留。
+- **动态读取与隐藏预览**：实际Moments组件的分页失败现在保留旧卡片和提交过的游标，后续滚动、尺寸及哨兵回调停止自动重试，已有“重试”文案/按钮手动重试当前游标；不误标为服务器尾页。隐藏标签页不继续自动补屏。momentFeedReader及侧栏portal GET沿既有可取消后台端口读取，换筛选/刷新/换号/卸载取消旧读取，保留原generation/MID/缓冲归属；多页扫描取消后不再启动下一页。悬停视频/直播预览在标签页隐藏时用现有clear释放媒体、HLS/FLV与待开始计时器；恢复可见本身不会重启旧悬停，新的可见悬停仍正常。点赞/发送/预约等写操作没有套用读取取消。
+- **保留的等价实现**：动态常规分页已有并发门禁、停滞游标停止、过滤最多两页、补屏预算及虚拟列窗口，未另建请求/缓存状态；顶栏角标同步仍是可见页面5分钟间隔，隐藏时暂停且沿用后台共享协调，并非每张动态卡轮询。媒体截图/清晰度/辅助按钮继续共用playerDomLifecycle和playerControlFit。未因4004删除历史错误日志或改动其他扩展、代理、DNS和浏览器网络权限。
+- **行为和计数回归**：实际guard测试确认原生节点从启动起可见、遮罩交接且不重挂；实际共享播放器观察测试覆盖明确错误、隐藏/空面板和原生重试移除。入口真实函数60秒停滞样本26次检查，接下来60秒为0；完整Bewly布局模块60秒停滞样本51次检查，再60秒加100次时钟文本变化为0，并验证迟到媒体再次进入稳定/提交尝试和退出释放。实际挂载Moments与真实reader组合：分页失败后100次滚动/几何回调0请求，隐藏自动补载0请求，卸载中止feed/portal两路GET；旧请求迟到不污染替代读取，取消的两页批次不发第二页。扩展实际预览组件测试覆盖隐藏时销毁HLS、卸载video、拒绝隐藏悬停以及重新悬停恢复。这些是隔离计数，不是实站耗时、CPU占用或CWV录制；当前无可调用Chrome DevTools性能接口，按仓库指令未安装或绕过工具限制。
+- **完整检查与开发产物**：最终pnpm lint、pnpm typecheck、pnpm test、pnpm knip均退出0，523条PASS；lint零错误/警告，Knip保持10个exports、0个types、5个enum提示。日志/tmp/bewly-playback89-final-{lint,typecheck,test,knip}.log，定向挂载测试playback89-moments.log；git diff --check退出0。保留playback88及89初次失败日志（测试夹具缺依赖/等待、旧源码正则断言、格式及null类型问题均已修正；新增核心验证运行实际模块/组件）。测试首次被沙箱拦截tsx本地IPC管道，随后获准使用同一本地测试命令，未改测试门槛。继续复用无clear开发watch；/tmp/bewly-native87-dev.log:150–163记录最终4个模块增量成功。没有生产build、打包或clear。
+- **待实站及已知问题**：本批运行代码仍需扩展整批重载和页面刷新后的实站复验，现存旧页的4004还没有解决证据；不能宣称媒体CDN链路已修复或所有视频都可播。后续优先确认新guard、迟到启动、播放错误恢复及动态分页/预览，再回到原全站外观目标中尚未关闭的验收项。其他扩展隔离、广告真实恢复和未登录环境的先前证据边界不变，本轮没有扩大权限或账号写入授权。
+
+### 第五十三批：等待整批加载期间的原生播放配色复验（2026-10-04）
+
+- 上轮完成实际源码修复、523项回归和集中重载请求，属于有效进展；本轮尚未收到该请求的回复，没有重复索取重载。重新核对覆盖矩阵及Git五项，分支/HEAD/远端/追踪/stash保持。只刷新自有BV168ew6FEQ4样本，发现先前被接管的用户标签已自行导航到其他视频，因此没有继续控制该用户标签或将其新内容当成旧故障样本。
+- **前批配色实站补齐**：退出自有样本的Bewly布局，保留原生播放器及业务节点，打开原生分享浮层而未点击获取链接/分享目的地。关注和获取链接按钮在亮色+#fafafa实际为近白底/黑字；深色+#09090a为近黑底/白字；OLED+#f43f5e为主题底/黑字，页面底色纯黑、Dark Reader节点0。充电仍是透明描边，三态均使用可读foreground。截图/tmp/bewly-native90-video-{light-white,dark-black,oled-rose}.png只证明这些配色和暴露的剩余问题，不算媒体播放或本轮新增样式通过。
+- **同组截图发现并集中补正**：原生关注/充电/分享仍6px普通圆角；近白/近黑主题下原生当前集数的title-txt未继承父层foreground，分享悬停直接使用原始主题色，弹幕发送按钮仍固定白字。只修改videoPage.scss，在非bewly-video-dark-only适配范围内将已确认的原生矩形入口映射interactive radius/corner token；关注状态变体共用轮廓，保留原尺寸和原事件。当前simple-base-item使用theme-surface/on-theme-surface及继承的标题/统计文字；分享悬停/焦点使用foreground；非禁用弹幕发送使用theme/on-theme。没有点击关注、充电、发送或切换合集条目，未重建控件。
+- **广告恢复边界重新验证**：新开原生“原神”搜索页存在3张由cm链接明确识别的广告；Nocturne广告开关开启时外层有bewly-blocked-feed-card。临时关闭后本扩展标记全部移除，但外层display仍为none、尺寸0。检查38份页面样式表中可读取的部分未找到匹配的display:none规则；6份跨源原站CSS不可由页面CSSOM读取，不能由此断定具体注入方或完全排除原站样式。未移除规则、放宽匹配或改动AdGuard/Dark Reader；广告开关恢复开启并实读到3个原标记，搜索顶部活动开关始终开启。此项仍未取得真实恢复可见证据。
+- **新增CSS验证**：实际最新extension/style.css和真实getThemeColorTokens在本地三主题iframe样本中渲染；关注、充电、分享及发送入口为8px/superellipse(1.7)，原30px高度保留；选中集数正文为中性可读前景；分享键盘焦点为2px且子文字继承foreground。三个样本均DR0；darkreader-lock仅在临时127.0.0.1测试HTML内，不加入B站或扩展。截图/tmp/bewly-native90-controls-isolated.png是隔离证明。原生页普通刷新后仍测得分享按钮6px且未观察到本批圆角规则生效，因此新增样式继续列为待整批实站，不根据页面刷新推断扩展已重载。
+- **检查/清理**：最终定向ESLint退出0（/tmp/bewly-native90-complete-style-lint.log），git diff --check退出0；无clear watch日志native87-dev.log:176–187确认最终两模块增量成功。本轮只有SCSS业务差额，未增加字符串测试或重复未改变的523项完整行为回归；最新完整lint/typecheck/test/Knip仍为第五十二批的全0结果。临时服务器已停止，渲染/广告标签已关闭；主题恢复深色、#f43f5e、OLED关闭，暗色基准和其他选项保留，设置关闭。原生4004与本批运行逻辑仍待加载后复验；前一条整批重载请求继续有效，此CSS补正并入同一产物，无新增单独重载请求、生产build、commit/push或stash操作。
+
+### 第五十四批：原生日志定位与整批加载阻塞复核（2026-10-04）
+
+- 第五十三批有样式修改、真实配色证据及隔离渲染，属于有效进展；本轮继续检查尚未完成的装载门槛。无clear开发watch句柄92599实际轮询仍运行，没有把5秒无输出当作退出或重启。Git五项仍与保护基线一致。仅刷新自有播放样本，未操作已被用户导航到其他内容的用户标签。
+- **新增诊断线索**：读到原站video脚本的style TypeError、原生Player.disconnect中断、原生顶栏重复挂载警告及StorageCache提示，原样保存在/tmp/bewly-playback91-native-diagnostics.json，未清空浏览器日志。它们来自原站脚本，不能仅凭日志名称归因于Nocturne，也不能把StorageCache提示当成本插件性能测量。
+- **定位结果**：只读下载错误堆栈所指[原站视频脚本](https://s1.hdslb.com/bfs/static/jinkela/video/video.05af4e80b6081ba56c1b5b943d4c8e621df3f875.js)到/tmp/bewly-playback91-native-video.js。150:77756位于handleShowMoreBtn的标题/统计项宽度裁剪，访问列表索引p的style前存在p减一分支；该函数没有媒体请求操作。当前DOM标题宽1221，原生统计项宽57/40/137，不能从当前尺寸复现此前越界。另一份797px统计栏确认为既有bewly-widescreen-metadata-clone，源码syncVideoMetadata沿用只读投影；没有将它误判为业务组件重复或据此改节点归属。Player.disconnect与4004的触发关系仍无充分证据，未猜改播放器、原站组件或网络设置。
+- **加载边界仍未关闭**：稳定运行态分享按钮仍6px/superellipse(1)，而最新实际开发CSS隔离样本为8px/superellipse(1.7)；普通刷新不足以确认本批运行代码和样式全部加载。不能仅凭host出现、media readyState=1、保留播放位置或同一build ID关闭启动/空转修复的实站门槛。第五十二批发出的单一整批重载请求仍未收到答复，第五十三批补正已纳入同一开发产物，没有追加重载问题。
+- 本轮未再改应用源码，只补调查记录；git diff --check退出0，未重复运行未变行为的523项检查。显示偏好/广告开关保持第五十三批恢复值。剩余验收还包括此前未获确认的其他过滤层隔离及未登录环境，不能用纯主题fixture替代，也未绕过扩展管理页限制。
+- 同一装载阻塞跨第五十二、五十三、五十四批连续存在；期间可独立完成的功能修复、样式补正、回归、隔离渲染及本轮原生日志定位均已落实。下一步需要外部状态改变后才能判断新运行态差额，Goal进入blocked等待，不是complete或用户暂停。恢复后先刷新相关页面，复验本批播放/动态与原生样式，再继续完整覆盖矩阵。
+
+### 第五十五批：按更新后的目标确定增补模板与统一适配开关（2026-10-04）
+
+- **更新与恢复边界**：用户明确改为先确认所有增补模板、集中实现三主题、避免过度适配已有Bewly页面，并保护视频加载。Goal恢复后Git五项保持原基线，未处理任何已有修改或stash。刷新播放样本已实读到第五十三批8px/superellipse(1.7)，此前那批样式的装载条件已变化，不再重复请求同一次重载。前台短时播放样本从91秒推进至111.553156秒后主动暂停；保留原muted=false。该结果不证明4004根因消除，先前readyState=0的背景/初始化采样也不再作为持续播放失败的充分判断。原生DevTools网络观察没有取得有效媒体失败链路，不使用其空结果作网络结论；临时筛选已清空，DevTools已关闭，未改网络权限、缓存/限速选项或其他扩展。
+- **完整入口对照后再实施**：重新检查TopBar频道表、用户菜单、投稿菜单、CONTENT_SCRIPT/NATIVE_SITE匹配、setupStyles以及主题/键盘控制的完整启停链。主站以bewly-design限定外观，子站沿setupNativeSiteAppearance的同一设置/生命周期；视频独立常暗模式原有例外保留。广告blockAds与外观开关保持独立，没有另建设置/主题/账号状态。现有设置标题从“适应其他页面样式”统一为“适配更多页面”，四语言说明明确支持的原生页/子站与广告独立控制；存储键、默认值、导入导出/同步协议不变，设置搜索沿原title/desc键自动更新。
+
+| 本轮确认的入口 | 实际模板与差额 | 集中实施 |
+| --- | --- | --- |
+| account/big/myPackage | 原生卡券包，title-package-name仍#222、coupon-content白底/4px、可领按钮蓝底白字，另有coupon-btn-disable状态 | 卡券阅读面/前景、12px卡片与8px按钮；原券图、领取条件、禁用类和事件保留 |
+| account/coin | coin-inner白底、未选导航/说明#222、表头#f5f5f5配既有深色浅字 | 原导航强调、阅读文字、表格表面/分隔线、二级入口及圆形标点；不改账目或交互逻辑 |
+| cheese/mine/list、coupon、exchange | 独立cheese-mine模板；青色选中/提交、空状态文字和4px外框未映射；1100下文档1100、正文990、券包导航788，布局本身可用 | 只补外框、导航、说明、输入和提交/禁用表面，不修改现有响应式列宽或兑换流程 |
+| platform/upload/text/apply → platform/upload/text/new-article | 实际承载member.bilibili.com/york/read-draft? iframe；子文档没有外观root类，存在原生指南/客服、新创作按钮、标题搜索和空草稿列表 | 只给精确/york/read-draft及其query接入现有nativeAppearance轻量入口及相应样式，不扩展到编辑器/发布接口 |
+| platform/upload/audio/frame、platform/upload/sticker、platform/upload-manager/article | 前两者在当前账号/客户端重定向platform/home；第三者仍是已适配的upload-manage，无新业务iframe | 等价保留，不为未出现的独立模板增加规则；未据当前重定向断言入口永久失效 |
+
+- **实际取证范围**：卡券、硬币、课程和图文管理/草稿均只读打开；没有点击领取、兑换提交、新的创作、上传、保存、发布或删除。卡券页仅一个空Dark Reader style且无dynamic标记，课程/草稿为0，未将空样式当成有效改色层。截图/tmp/bewly-native93-{package-before,course-owned-before,course-coupon-1100-before}.png为修复前记录；涉及账号资产的实站图仅本地使用。原课程插图和券图保持，未按商业内容推断广告。1100视口已reset。
+- **精确iframe边界**：nativeSites定义article-drafts；同一路径进入NATIVE_SITE_MATCHES与all_frames白名单，并从主站ISOLATED/MAIN两入口排除，避免给阅读iframe挂主App、播放器发现和MAIN桥。宿主member/platform及BV/PGC播放路径保持原入口；没有新增host permission。实际模块回归验证关闭适配不启动主题owner、开启投影、再次关闭清除类、原输入内容/节点身份/按钮回调不变，且不附加键盘业务处理。
+- **开发产物一致性补正**：scripts/prepare原watch只看manifest/package，会漏掉两个注入范围常量文件。补contentScript.ts/nativeSites.ts依赖；实际prepare模块测试验证两种变化都沿原命令重新生成。已有watch保持运行，没有因空输出重启；该watch进程仍使用旧监听集合，因此本批额外通过pnpm exec cross-env NODE_ENV=development esno scripts/manifest.ts生成一次开发清单（native93-manifest.log退出0），已读取生成清单确认新iframe只有一个轻量入口，主站两入口均排除它。没有手改manifest产物、clear或生产构建。
+- **完整验证**：pnpm lint/typecheck/test/knip均退出0，525条PASS，Knip10/0/5保持，日志/tmp/bewly-native93-{lint,typecheck,test,knip}.log。新增manifest实际匹配回归覆盖带/不带query的草稿URL、普通BV/PGC/创作中心原入口以及无关编辑器路径不进入轻量分支；原有播放、设置、广告与生命周期回归均运行。原无clear watch日志native87-dev.log:188–212确认最终native/main/background开发增量，git diff --check退出0。
+- **三主题与停用的隔离渲染**：四种实际模板标记使用最新main/native CSS，并在浏览器调用真实getThemeColorTokens/readThemeContrastSurfaces进行颜色投影，共12个浅/深/OLED样本。卡券/阅读框12px、控件8px/superellipse(1.7)，近白主题主按钮黑字、近黑白字、OLED底层纯黑；禁用/选中和说明保持分层可读。关闭bewly-design的四类对照恢复原生样本的白卡、蓝/青色和原圆角。截图/tmp/bewly-native93-{package,coin,course,drafts}-isolated.png；这些只证明实际CSS和令牌效果，不能替代原站级联、iframe首次注入和开关的实站复验。临时服务器已停止，未将darkreader-lock写入原站或项目。
+- **下一门槛**：本轮所有已识别增补已集中实施并检查，随后只请求一次包含新manifest的整批重载，再复验四模板的三主题、窄桌面、输入焦点和“适配更多页面”启停。前批4004因果、外部过滤层对纯主题/广告恢复的影响及未登录环境仍保持真实证据边界；不扩大为全站完成。本轮没有改视频加载业务模块、账号写操作、版本、commit/push或stash。
+
+### 第五十六批：新iframe入口的连续装载复核（2026-10-04）
+
+- 第五十五批完成源码、525项回归、隔离渲染和一次整批重载请求；随后两次Goal续行分别新开和刷新图文草稿宿主。两次都等到真实.read-draft应用挂载、document.readyState=complete、Document.URL为https://member.bilibili.com/york/read-draft?后再读取，未把新建iframe的about:blank状态当作结论。
+- 父文档creativeCenterPage/bewly-design正常，子文档却仍无data-bewly-native-site、class为空，新创作按钮仍rgb(0,174,236)配白字及superellipse(1)。已排除宿主外观关闭、等待原生DOM尚未完成以及子页发生未预期重定向这三种误判；没有据旧运行态继续扩大匹配或叠加CSS。
+- 原开发watch句柄92599实际确认仍运行；未重启、clear或重复运行未变源码的完整回归。当前仅补维护记录，Git分支/remote/追踪保持保护基线，git diff --check退出0；输入、账号和显示偏好没有新增操作。
+- 同一装载条件已跨本批实现及两次连续续行存在，整批重载请求尚未收到新的完成回复，可独立完成的实施与验证均已完成。Goal标记为blocked等待外部状态改变；完整覆盖范围与未验证项保留，不标记complete。保留草稿宿主用于加载后直接复验，不再追加重复重载请求。
+
+### 第五十七批：按全目标整理入口与模板清单（2026-10-04，进行中）
+
+- 用户再次更新Goal，强调先找齐整个目标的增补范围，再集中实施和请求重载；最后逐页检查全部改动模板的布局、圆角、配色与可读性。重新读取当前Goal确认active，旧草稿iframe重载门槛不再妨碍独立的范围整理。本轮重新执行Git五项，仍为message_feature跟踪origin/message_feature、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6，三个remote与stash保持；没有新建Goal或变更分支。
+- **清单依据**：重新对照TopBar频道/用户/投稿/更多菜单、Dock路由、VideoCard和搜索/历史/通知的内容目标，以及实站各子站主导航、账号菜单和公共页脚。以下按实际模板或入口族记录，不按每个视频、账号、活动ID重复计数；菜单条目存在不等于当前账号能够进入其完整业务界面，也不等于已完成三主题适配。旧覆盖矩阵保留此前已取得的证据，不能用新增入口表覆盖其未验证边界。
+- **本轮只整理范围**：保留第五十五批现有补丁，没有新增样式、播放器逻辑或请求轮询，也没有请求新的重载。最新525项检查仍属于第五十五批，未当成本轮新跑的结果。原生4004根因、其他扩展改色/隐藏层及未登录环境仍按前批证据限定。
+
+| 入口族及来源 | 本轮确认的路由/实际落点 | 整理结果与下一步 |
+| --- | --- | --- |
+| Bewly自有页、原生主站内容目标 | Dock八类页面及首页整合搜索；BV/AV、PGC ep/ss/md、列表播放、space、动态/Opus/cv、话题、笔记、分区/热门、频道/索引/赛程 | 沿原覆盖矩阵保留已有实现，不为外观目标重建对应业务；最终复验需要保护播放启动、侧栏与动态加载 |
+| 账号中心 | account/home、account/big/myPackage、account/coin、account/record?type=exp；本轮进入setting、face/vip、points、blacklist、record、invitation、notice | 卡券/硬币补丁保留；新确认记录未选标签#222、选中标签原蓝色、标题/说明仍硬编码灰色；邀请空态#222；积分、头像、通知开关另有组件选择器需补齐。表单、开关均未更改 |
+| 账号旧入口与安全链接 | 成就勋章实际/account-old/nameplate.html；粉丝勋章链接live/p/html/live-fansmedal-wall/#/view-medal本次最终回直播首页；passport/account/security#/home、bindmail、bindphone；account/official入口 | 旧勋章侧栏.security-list是含a的UL，不能沿新版逐项DIV选择器把整列设成hover项；安全首页实际.security-home-wp/.home-card-wp，不能与登录表单混同。不输入身份/凭证、不提交认证 |
+| 创作中心主框架 | platform/home、upload-manager/article与现有视频管理；upload/audio/frame和upload/sticker当前重定向home；upload/text/apply最终承载/york/read-draft? | 主框架和图文管理保留；精确草稿iframe沿第五十五批补丁，不为当前未出现的音频/贴纸模板猜加规则 |
+| 创作中心新增辅助入口 | academy首页、seriesList、seriesDetail、learnCenter共用bca框架；周报实际跳/york/up-report-weekly；playlet、upanimation/dashboard、video/interactive、data-up/video | 学院为独立侧栏/卡片；周报为二维码/内容画面；短剧为playlet-entry资格介绍，UP动画为creator-dashboard引导；互动视频复用video-up上传框架；数据页实际独立iframe/york/data-center-web，稳定子路由/dataCenter/video，需精确轻量注入 |
+| 创作中心菜单中的其他业务组 | upload-manager/appeal和audience-zimu共用upload-manage；comment/article、inter-active/danmu、allowance/incomeCenter/pc、allowance/excitation/pc、growingUp/taskManage/main、my-rights/create-protect、fans/manage与medal、setting | 评论、弹幕、收益/激励、任务、版权、粉丝、设置的真实内容根已记录。充电iframe为member/mall/upower-manage/custom-charge；带货iframe为cm/quests/#/task，当前资格落点#/regist。不得把主框架适配当成子文档已适配，不触发开启计划、领取、关注、协议、提交或发布 |
+| 素材平台 | cool.bilibili.com/square/video、detail/video、upload-video、upload-virtual-idol、space、space/video-manage、space/allowance-manage、creator-detail；管理页还列sticker/virtual-idol/music/ttv/image-manage和user-info | 公共目录实际#app.wrapper/.bmc-square-page；素材管理为.bmc-manage-wrapper、.manage-nav和bcc表格，区别于目录。保留原生视频、canvas、上传组件和权限/禁用状态，不上传文件 |
+| 音乐人服务 | music.bilibili.com/、/pc/rank、/help、/console及入驻入口 | 首页为聚光分屏品牌画面；help为.NavBar/.help-center；console当前为.NotJoin资格介绍。/pc/rank实际#root及_pcBackground/_detailArea/_cardList等CSS Modules，确属另一种全站音乐榜，不是已有music-center热榜别名；保留原海报、视频和入驻边界 |
+| 课堂个人入口 | cheese/mine/list、coupon、exchange | 三种入口共用cheese-mine；第五十五批样式保留，原1100布局已可用；不因新清单重复实现 |
+| 直播目录/房间与附属入口 | live首页、/all、/p/eden/area-tags、数字房间、/p/html/play-together-area/index.html、/lol、/galaxy、/p/html/live-app-help/index.html#/live-protocol | 首页/目录/房间保留；帮我玩实际.app_root/.guide-content，LOL专区为index_wrapper等模块；公会实际__app内.galaxy-login介绍/申请卡片；直播协议为.live-protocol-container/.act-rich-render-content。四类均需独立表面差额，不操作帮玩/入驻 |
+| 直播中心 | link/p/center/index下用户、直播间、数据等原生分组；实读#/my-room/room-info、room-admin-setting及#/live-data/overview | room-info当前为.open-live-room-ctnr资格提示；房管为.link-input/bl-button/原生table；数据为.card-wrapper/data-card/chart及排行。已归并提示、表单/表格、数据三类；不打开直播间、不填输入、不修改设置，图表canvas不重绘或反色 |
+| 直播帮助/客户端 | link/p/eden/download实际#/web；/p/help/index及其contact/tools-tutorial等hash；相关说明链接 | 下载为#app-ctnr内linkdown/page-container/平台卡片；帮助为#app内navbar-left/main-content/menu。不能由#live-center-app规则代替；内容插图、下载说明、QR及品牌画面保留 |
+| 漫画公共与阅读页 | 首页、/classify、/updates、/ranking及子排行、/detail/mc…、/mc…/…；旧链接字面包含/classify&from=…、/rank&from=…、/eden/list&from=… | 现有公共/详情/阅读适配保留；旧链接需确认实际点击跳转，不能擅自把路径中的&当查询或生成另一套模板 |
+| 漫画账号中心 | /account-center/account-info、my-universal-cards、my-coupon、my-limited-free-coupons、my-discount-cards、my-free-gold、purchased-comic、my-favourite、read-history、auto-purchase、feedback | 11入口归并为账号信息、通用券/卡券、漫画列表、自动购买列表和反馈表单，共用.page-content>.app-sidebar与.router-view。新增项说明/输入/按钮仍有原色，现窄窗规则只覆盖历史/追漫；需补同壳子页。空券/空列表证据不扩大为已有资产数据态；不领取、购买、续费、改自动购买或提交反馈 |
+| 漫画其他入口 | /app-download、/blackboard/activity-iBweXQ5Pum.html及已观测eden券包协议 | 下载实际.app-download/.movie-bg和.download-widgets平台链接，保留有内容意义的视频/QR，控件单独适配；资质和协议沿只读文本族处理 |
+| 会员购与商品 | show/platform/home.html、既有订单/票务/活动详情；mall/neul-next/detailuniversal/detail.html及/detailPc；show/platform/agreement-hyg.html | 已有模板保留；首页若为JS导航，不能只抓a[href]就当清单完整；购买指南为只读信息模板，不执行订单/购票 |
+| 商城旧页脚入口 | bmall.bilibili.com实际跳转mall.bilibili.com/#noReffer=true；show“B站周边”实际/platform/mallhome.html | mall根完整加载后为商品双列、franky-scroll-view、goods-container和bottom-main，确实不是空白页；当前注入遗漏此根，需补轻量主题/轮廓且保留原滚动所有权。show入口复用已处理商城模板，不重复建立 |
+| 游戏中心与详情 | game/platform#/、ranks、discover；mine实际/platform/mine/home，另有games/comments/collections/wiki；/kf/、/jiazhang/；www.biligame.com/detail/?id=… | 个人为mine-header/mine-content模块，存在1160px最小宽度、6/14px局部轮廓和原生色；kf为service-container/FAQ/联系卡；监护为jz-left/jz-right/box-content。三个新增模板已记录，目录/详情已有实现保留，不下载、预约、绑定账号或提交 |
+| 公益 | love首页、/list、/detail、/unit-space、/unit-info | 已有机构/项目模板及验收保留；官方认证和客服入口另列条件范围，不为公益内容加入广告推断 |
+| 钱包 | pay根跳/pay-v2-web/bcoin_index；bcoin_recharge、bcoin_record及旧/paywallet-fe/bb_balance.html | bcoin_record确认为.pay-bcoin-record-content、.pay-tab-item、Element日期输入/表格，原仅余额面板的规则不足；共用左侧导航保留，补记录/控件表面，不导出账目或发起支付 |
+| 工房 | gf根当前落/newCertificate；导航item/list、order/list、after/sale/list、coupon/list、freight/list、cm、mcn/shops、payment/item、order/confirm、withdraw | 当前资格落点与导航已观察；无权进入的经营模板不能声称已实站；不提交认证、订单确认或提现 |
+| 大会员权益说明 | big.bilibili.com/pc/privilege | 实际为.big-explain-wrapper及.explain-item-content卡片，区别于account/big；当前存在有效Dark Reader标记，结构可记，纯主题结论暂不作出 |
+| 客户端下载中心 | app.bilibili.com/ | 实际.header-wrap/.main-wrap及公共header/footer，独立于主站应用；不下载/安装客户端，插图与产品截图保留 |
+| 新活动/专题目录 | activity.bilibili.com跳www/blackboard/x/act_list/，#app.active-list>.topic-main；另有旧topic_list/event及topic/activity…链接族 | 完整加载后.nav-tab/.act-list/.act-info/.pagelist，原标题#222、选中蓝色；补精确目录与局部键盘入口。专题海报/活动内容与广告仍分开，不按类别名称“广告”或标题过滤 |
+| 关于/联系/招聘与旧别名 | blackboard/aboutUs.html的ARTICLE#app.tpl-wrap；contact.html为.wrapper；html/aboutUs.html仍独立旧.wrapper/.article；html/join.html仍保留原URL | html/contact实际跳blackboard/contact，html/help跳blackboard/help，html/copyright跳/v/copyright/intro；blackboard/friends-links本次回首页。旧关于页另有z_top/footer；两版介绍及招聘有意义banner保留，别名不重复建立业务实现 |
+| 帮助与协议阅读 | blackboard/help.html#/?qid=…、privacy-pc.html、protocal/licence.html、topic/activity-cn8bxPLzz.html及其明确政策子链接；show/platform/agreement-hyg.html | help稳定为MenuBox/Element菜单与折叠问答；隐私#app、协议#app-box均为.txt/.act-rich-render-content文本；会员购协议为.H5RichTextShop。普通文字、链接、阅读面和控件按模板补齐，保留合同文本；未接受/注销或执行诊断 |
+| 公共服务与企业页脚外连 | www/v/customer-service、v/copyright/intro、basc；jobs/social实际/social/positions；security、ir、e、b、mcn/studio/mcn/entry | 客服为自助/问答/联系卡片，版权为.intro-containter；basc是旧专车号介绍。招聘为职位筛选/列表，security为公告/礼品介绍，IR为品牌/公开信息且有外部行情iframe；e营销介绍/咨询表单，b品牌介绍，MCN资格卡片。均已取得DOM模板，外部行情不注入，客服不发送、求职/合作/认证不提交。独立企业业务后台范围问题已单独提出，未答复，不据公开入口推定其后台已覆盖 |
+
+- **整理中的遗漏修正**：协议相对链接须以实际Document.URL或显式base解析；先前只抓绝对https会漏掉账号记录入口，使用不可用的document.baseURI也会漏漫画相对菜单。已改为实际URL解析并纳入非a导航记录；只保留路由族和查询键，不在维护记录保存账号余额、个人ID或完整会话内容。根节点检查包括ARTICLE，避免将关于页误判为未渲染。
+- **清单尚未封版**：需要继续核对表中的JS导航、旧别名、条件性入口和新增公共模板，然后一次性确定实施集合。不能将本表称为所有模板均已检查，也不能把源码存在、525项隔离回归、某个主机已注入或用户此前重载确认当成最终逐页验收。收齐范围和集中实施期间不追加逐页重载请求。
+
+本轮进一步核对的原始证据保存在`/tmp/bewly-native98-template-inventory.json`，共86份结构/路由观察记录，包含重复、初始未挂载和后续替代项，**不是86个已验收页面**。`provisional`不作为内容模板证据，`superseded`项由后续稳定记录取代；实现必须按实际URL和稳定DOM取样。记录只含结构、样式、路由族与查询键，不包含表单值、账号资产明细或交易正文。
+
+当前可直接进入集中实施的差额已具体到：①账号各子页及旧勋章/安全中心；②漫画同壳账号页；③直播附属目录/帮助/协议/公会与中心表单/数据面；④游戏个人/客服/监护；⑤钱包记录和旧商城根；⑥学院/素材/聚光及创作中心微应用、精确iframe；⑦公共介绍/客服/协议/专题目录/下载；⑧公共企业入口。已有Bewly与已通过模板继续保留。企业官网中的独立广告/经营后台、资格门槛后业务状态以及真实提交操作不凭导航名称推定可验收；范围问题待用户补充时仍可继续上述明确工作。
+
+结束本轮只读整理前再次执行Git五项，分支、remote、HEAD、追踪与stash保持原基线；原开发watch句柄92599仍实际运行，5秒无新输出没有被当成停止或重启理由。尚未新增应用源码、重新跑完整测试或请求重载，下一阶段按完整清单集中写入，再统一检查和请求整批加载。所有三主题/窄窗实站门槛仍保持，4004未被声明为已消除。
+
+### 第五十八批：全清单集中实施、入口隔离与三主题回归（2026-10-04）
+
+- **工作方式与基线**：按更新后的Goal将上述清单作为同一批实施，不在每个模板写完后请求重载。写入前及本轮检查中执行Git五项，仍为message_feature跟踪origin/message_feature、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6；remote、全部既有改动与stash保持。没有commit/push、改版本、生产build、打包、clear或Safari工作，也没有使用子代理。
+- **入口与职责**：沿nativeSites/nativeAppearance既有设置投影新增学院、素材、聚光与全站音乐榜、下载/权益、公共介绍/帮助/协议/专题目录及企业公共入口。共享host上的已确认独立应用采用精确路径或其实际应用子目录；原生资料/活动模板仍保留原实现。主站ISOLATED/MAIN排除轻量入口及精确iframe白名单，避免同时启动主App、遮罩和MAIN桥。BV/PGC、课堂、创作主框架与原music-center保持原入口，未修改媒体请求、播放器发现或加载业务。匹配语法参照[Chrome官方说明](https://developer.chrome.com/docs/extensions/develop/concepts/match-patterns)，实际getManifest回归覆盖query/hash、近似路径不命中、共享host互斥及播放路径保留。
+- **独立创作子文档收齐**：数据中心/york/data-center-web及其实际/dataCenter/video子路由、充电/mall/upower-manage/custom-charge、带货cm/quests、任务广场cm/clue-up、必火cm/fly-pc、作者合作cm/pickup-web均进入同一轻量all_frames入口；原图文草稿精确入口保留。任务广场当前为空态，作者合作当前为资格介绍，推广当前有原生优惠券弹窗；只读取结构，未领取优惠券、接受协议、开通计划、创建推广、提交订单或导出业务数据。三类cm文档检查到的.ad-report/.adcard/.brand-ad-list数量为0，未按商业内容将其隐藏。
+- **最后的导航对照**：模板激励实际为platform/allowance/template-incentive内的home-payload/card微应用；收益菜单UP动画为platform/allowance/upanimation/data-center的Ant统计/表格，区别于上传入口creator-dashboard；社区公约为web-home-page阅读微应用，均补入当前主框架样式。花生和updream实际打开www.huasheng.cn与www.updream.cn，属于独立外站；保留原跳转，未新增这些域名权限或注入。企业官网进一步通向的独立经营后台范围问题仍待答复，不将公共入口样式冒充其后台已覆盖。
+
+| 集中实施组 | 具体修改与保留 |
+| --- | --- |
+| 账号、旧勋章、安全中心 | 记录/积分/头像/通知的阅读文字、表头、导航、普通控件和状态色；旧勋章UL不再被当成一个hover项，改为逐链接表面。passport安全首页使用独立卡片/标题/说明选择器；凭证、认证与原生状态图保留 |
+| 漫画同壳子页 | 账号信息、卡券、已购/自动购买列表及反馈表单复用同一侧栏和router-view；补普通表面、说明、输入/按钮及窄窗约束，续费胶囊继续round。漫画正文、封面、下载页视频/QR与业务动作保持 |
+| 直播、游戏、钱包与商城 | 直播帮助/协议、帮玩目录、公会介绍、中心表单/表格/数据面；游戏个人/帮助/监护的已观察表面与轮廓；钱包记录与原生日期/表格；旧mall根的列表/搜索/底栏。没有改直播/视频播放器、canvas、原生滚动容器或账号数据 |
+| 创作与独立工具 | 创作中心评论/弹幕/粉丝/设置、收益/激励、任务/版权、短剧/动画入口及统计；学院、素材、聚光与已确认iframe。新增nativeCreatorPages.scss，复用原生组件，只映射已观察的文字、卡片、输入、按钮与原生状态 |
+| 信息、下载与公共入口 | 新增nativeInformationPages.scss、nativeUtilityPages.scss、nativePublicPortals.scss；覆盖已确认的帮助/文本/介绍/版权/客服/专题、下载/权益与公共企业模板。政策文本和链接、内容横幅、品牌视频、产品/招聘图片与外部行情iframe保持；没有将所有图片统一反色/裁切 |
+| 背景、开关与广告 | 每条新样式均受bewly-design及对应site/page限定，沿原adaptToOtherPageStyles投影与释放；不新增设置或主题状态。聚光榜单背景实读为空文字、无媒体子节点的绝对定位层，仅移除该层，保留实际封面与播放器。活动模板的未知根画面不按装饰猜删。广告仍由blockAds独立控制 |
+
+- **广告规则补正**：旧blockAds.scss同时隐藏desktop-download-tip和adblock-tips，这两者没有明确广告标记，与本轮说明不符，已从广告选择器中移除并保留原站显隐/关闭行为。明确广告槽、已识别卡片与其他既有广告规则保留。新增回归编译实际SCSS后在真实DOM样本检查：明确广告隐藏、普通通知/商业标题保留、关闭后同一个原节点恢复可见且原click回调仍在；不把此隔离结果当成受其他过滤器影响的实站恢复已通过。
+- **键盘与观察范围**：扩展既有nativePageKeyboard，只处理已观察的阅读导航/筛选，保留原click、IME、焦点环与Space取消。创作导航发现沿稳定body的childList；class/style只观察实际cc-nav-wrp，替换时由同一个observer重新绑定，旧节点恢复属性且不再观察。没有新增轮询、计时器、RAF或另一套状态。实际模块回归确认100次导航外图表style变更带来0次回调，旧导航style与替换同批发生也不会重新管理脱落节点；包含晚到根、关闭适配、原生按钮/链接不二次接管的回归。
+- **真实窄窗取证及集中补正**：1100×800前台样本中，创作设置/收益body最小1220、cc-body最小1124使文档达到1324；学院内容最小1200加200侧栏达到1400，头部最小1375；素材列容器1280与营销容器1310虽然外层文档1100，仍有右侧裁切；下载body1160且1280的focus-us延伸至1220；MCN正文1200，品牌号根最小1260。按这些具体约束补尺寸与布局，保留侧栏、原生列/图片/动画节点；下载预览改在自身列内按原比例约束。聚光分屏最小1280，动画卡片是绝对定位并由原站持续变换，只缩外层视窗，未改动画卡片/transform；带内容背景的入驻卡片保留原图文配对。会员权益原980px内容、237px卡片在1100已完整显示，撤掉初稿中不必要的重排；安全公告原1024主体及招聘、IR外层1100保留原布局，不把原生轮播轨道的内部scrollWidth算作文档越界。
+- **取证边界**：窄窗记录是新补丁整批加载前的原站状态，不能称为修复后通过；部分域有Dark Reader动态样式，只取几何而不作纯主题结论。首次收益微应用在后台标签未挂载，切到前台后正常出现，没有将后台延迟或一次工具超时解释为插件加载故障。一次隐私页只读到了版本选择，未将其未挂载正文算作通过。结构和几何记录在/tmp/bewly-native99-implementation-dom.json、native99-widths-before.json。
+- **完整检查**：最终pnpm typecheck、pnpm test、pnpm knip均退出0；实际529条PASS，Knip仍10个exports/0个types/5个enum提示。日志/tmp/bewly-native99-batch-{typecheck,test,knip}.log。最后一条SCSS格式提示已修复，最终完整pnpm lint退出0（native99-batch-lint-final.log）。git diff --check退出0。保留首次IPC沙盒EPERM、显式iframe排除项断言及格式失败日志；IPC获准后执行原测试命令，未放宽测试条件或清除历史诊断。最终manifest由development环境的原scripts/manifest.ts生成（native99-batch-manifest.log），没有手改产物。
+- **实际CSS隔离渲染**：读取当前开发CSS和真实themeColor模块，43个模板分别执行浅色近白、深色近黑、OLED玫红，共129个开启样本，并有对应129个关闭对照。采样普通文字均不低于4.5:1，主按钮theme/on-theme配对、语义圆角、OLED纯黑底与关闭后的原色/原圆角恢复均通过；无零尺寸采样项。初稿夹具把原生div标签误写成button并给透明表格外框加了白底，造成伪低对比度，已按实站结构修正夹具，未为此改产品样式。原结果native99-isolated-first.json保留。完整结果native99-isolated-metrics.json，截图native99-creator-isolated.png和native99-creator-data-isolated.png。测试页的darkreader-lock仅在本机隔离HTML，未放入项目或原站；这些样本不证明原站布局、媒体或全部数据状态已验收。
+- **开发与清理**：继续复用watch 92599，当前仍运行；native87-dev.log:657–687确认最后native/main开发增量成功。临时隔离服务器已停止，测试视口在正确目标上reset并实读恢复1744×1027，原用户动态标签焦点恢复。保留学院作为整批重载后的首个验收目标；当前该页native-site仍为null，并检测到Dark Reader dynamic及6个非空样式节点，因此最新manifest尚未在此页生效，纯主题也未隔离。
+- **下一门槛与已知问题**：本轮明确清单中的实施已集中写入并完成代码/隔离检查，现在统一请求包含新manifest的整批重载，之后刷新并逐页验收三主题、窄桌面、焦点/键盘、原生媒体与开关恢复。需继续区分额外改色层、广告关闭后其他隐藏规则与未登录环境；权限/资格后状态及真实发布/支付等写操作不作自动提交。原生4004根因仍未证明消除，播放与动态的实站回归保留。Goal保持active，不将源码存在、529项或隔离图声明为全站完成。
+
+### 第五十九批：集中补丁后的装载阻塞复核（2026-10-04）
+
+- 第五十八批已完成集中实施、529项回归、43模板三主题/关闭对照并请求一次整批重载。其后两次Goal续行均刷新保留的学院页，等真实学院头部挂载且document.readyState为complete后确认：native-site仍为null，原生头部最小宽度仍1375px；页面仍有Dark Reader dynamic及6个非空样式节点。没有将初始interactive状态或未挂载节点当成失败证据，也没有据旧运行态重复改源码。
+- 读取实际extension/manifest.json确认学院及新增cm子文档匹配已写入，并由轻量入口承载；原watch 92599在两次续行中均实际确认运行，没有重启或clear。页面未报告新的启动错误，但不能以此代替新脚本已加载的证据。本轮Git五项仍与保护基线一致，未改变任何应用源码、版本、分支或stash，未重复运行未变源码的全量回归。
+- 同一整批装载条件已连续跨三个Goal轮次存在。可独立完成的当前实施及检查已落实，后续实站结论需要用户完成本批扩展重载，并明确额外改色层的验收条件。此次将Goal置为blocked等待外部状态改变，不是complete或用户暂停；原重载请求继续有效，不再追加重复问题。保留学院验收页与开发watch；恢复后先刷新确认新入口，再继续完整视觉/交互及播放回归。
+
+### 第六十批：新入口实站复验与原生层叠补差（2026-10-04）
+
+- **装载与目标**：Goal恢复active后，学院实际出现`data-bewly-native-site="academy"`、`bewly-design`及主题class，且无Dark Reader节点；第五十九批的旧入口阻塞已解除，不再重复索取该批重载确认。用户提示目标更新后已重新读取：继续先整理全部类型、集中实施三主题，再统一请求重载并报告修改和已知问题；不逐页追加请求，不破坏播放、动态或已有Bewly页面。本批新增样式仍待后续整批装载和复验。
+- **学院**：实际1100px下头部、900px主体和868px阅读区已响应，但右侧轮播按钮使文档达到1104px；深色截图还显示搜索外壳白条、学习统计黑字、空白渐变圆盘盖住内容及白色查看更多按钮。`nativeCreatorPages.scss`补齐真实搜索外壳/内层宽度、统计继承色、按钮语义表面、轮播按钮内移及既有横幅裁切容器的媒体圆角；仅隐藏已确认无子节点和文字的三个装饰圆盘。原生带tabindex的“精选专题”已可用Enter导航到`/academy/seriesList`，等价保留，没有重复增加键盘接管。该列表OLED底层为纯黑、卡片为语义内容面且圆角12px/superellipse(1.7)。新增补差尚未实站验证。
+- **素材平台**：`cool.bilibili.com/space/video-manage`无Dark Reader。实际管理面板仍被原生嵌套样式盖成白色，1100px窗口的导航及主壳仍宽1280px；上传入口与侧栏选中项的真实父子关系也和初始适配选择器不同。补齐管理主面板层叠优先级，内部统计区改用无滤镜透明层，修正上传内容节点、路由选中子项、普通/禁用菜单与顶部选项配色，并约束真实宽度拥有者。实站关闭“适配更多页面”后适配class和圆角退出，开启后恢复；广告class始终独立保留。没有触发上传或任何账号写操作。此次新配色/宽度修复待整批复验。
+- **账号与音乐榜**：账号记录页Enter切换经验记录、选中状态和焦点正常，实际1100px文档无横向溢出；音乐榜发现封面派生色由应用直接写在根子容器inline background，已补统一底色，同时仅处理已确认白色单色榜单字标和按钮SVG白色path。两页均仍有Dark Reader dynamic及6个非空样式节点，纯主题配色不记为通过；未擅自调整其他扩展，也未用额外强制文字规则掩盖其干扰。
+- **证据**：`/tmp/bewly-native100-live-results.json`保留本轮观察；早期标为1100但实际仍1744px的记录已标provisional，不计为窄窗验收。已检查截图`bewly-native100-academy-dark-1100.png`、`bewly-native100-academy-light-wide.png`、`bewly-native100-materials-oled-wide.png`及`bewly-native100-rank-light.png`（均在`/tmp`）。素材平台与账号记录后来已在实际1100px重新取样。
+- **检查与清理**：本批只改上述SCSS，定向`pnpm exec eslint src/styles/adaptedStyles/pages/nativeCreatorPages.scss`退出0（`/tmp/bewly-native100-targeted-lint.log`），`git diff --check`退出0；不将上一批529项测试称为本批重新运行。继续复用watch 92599，`/tmp/bewly-native87-dev.log:749–759`确认最新native/main开发增量成功。显示偏好已恢复暗色、主题色`#f43f5e`、深色基准`#2a2f2d`、OLED关闭及适配更多页面开启，设置关闭、Dock收起；视口reset后实读1744×1027。Git五项仍符合原分支/远端/HEAD/stash基线。未commit、push、clear或运行生产构建。
+- **未完成**：继续按总页面类型清单累计其他实站补差，之后一起复验当前新样式；额外改色层、其他广告过滤层、未登录及资格后页面仍分别记录限制。原生4004根因与播放/动态连续运行验证仍保留，未以此次视觉结果声明解决。Goal保持active，本批不新增重载请求。
+
+### 第六十一批：创作模板实站补差与播放回归（2026-10-05）
+
+- **基线与范围**：继续当前Goal和message_feature，写入前Git五项仍符合原远端/追踪/HEAD/stash基线。本轮检查创作首页、内嵌数据中心、创作设置、收益、充电介绍、带货资格、任务广场限制态、花火资格，以及必火首页/投放管理/数据中心/我的；这些是实际进入的不同模板，不是全部通过的数量。所检查的创作主框架和子文档均无有效Dark Reader样式，精确iframe入口已加载。第五十七批总清单和其他页面未验收项继续有效，没有逐页请求重载。
+- **数据、设置与收益**：实际1100px宿主有900px可用宽度，但数据子文档仍保持1097px阅读列；设置外壳已缩小，内部860px设置行仍使文档达到1172px。约束真实列/行拥有者，保留原生表单、图表和节点。补数据页晚到scoped文字、日期触发器、选中状态与内层表面；原生canvas轴线/数据色不反色或重绘，仅保留图表自身的中性纸面。收益面板原wrapper-content和income-main继续画白底，原数字与标题覆盖语义文字，改为在真实内容卡片映射表面并统一数字、选项和按钮。创作首页晚到data-wrp等圆角一并补齐。数据导航复用nativePageKeyboard及同一适配生命周期，新增实际模块的Enter、IME、重复键、Space失焦取消和清理回归样本；无新轮询、计时器或全局快捷键。
+- **充电与花火资格**：充电根最小1100px、匿名父面板白底和10px圆角，花火内层1080px及880px内容在900px iframe中被裁切；按真实父子关系限制宽度，统一阅读文字与表面，保留充电说明插画、花火完整品牌横幅和原生视频iframe。花火视频仅由原容器按16:9约束宽度，不移动、替换或接管播放器；权益卡片在窄窗换行。原生资格、禁用按钮、协议和认证流程均保持，未点击参加、申请或协议复选框。
+- **带货背景分类**：已实际查看三张区块PNG，确认均仅含渐变装饰，移除这些区块底图及问答装饰渐变；另三张实际图片是透明标题文字，保留并在深色下单独转换为可读前景。福利说明的图文合成图、案例头像、商品示意和内容图片不参与清理。补条件表面、普通/选中胶囊、案例卡片、说明及问答文字，窄窗案例列表允许原卡片换行。素材清单在`/var/folders/tw/46fkhbbs74x_8v_6c58jppd40000gn/T/browser-use/assets/ba70e3ae-1ef1-4e11-ae15-44acc7b81862/manifest.json`；素材工具单次耗时约6756秒，属于工具观察延迟，未当作页面/扩展性能证据。
+- **推广完整导航族**：首页之外新复核投放列表、统计和账户模板，均存在独立白底及1040px宽度；列表筛选、统计指标、空态、账户卡片、日期/下拉浮层分别取得真实class和配色。沿已存在的原生`--bd-*`变量映射语义颜色，补业务硬编码表面、状态和圆角，并约束主列、筛选行、账户两列、课程列表及固定操作栏。保留优惠券内容图和原生商业案例；窄窗券条可在自身内横向阅读。推广导航Enter实际完成跳转且aria-current同步；筛选Escape关闭，日期浮层本次以原生点击空白关闭，没有选择日期或改筛选。原生调查提示只点关闭，没有领取、支付、导出、认证、充值、接受协议、改变业务设置或启动AI助手。
+- **真实播放/动态**：前台Bewly播放页两例均readyState=4、媒体error为空，且Nocturne警告/错误记录为空。`BV1yxa269Eg7`原生4K从0.695468s连续到43.496125s，缓冲从19.999999s增至104.999999s；`BV1eAhB6CEyZ`原生1080P从0.417889s连续到91.916023s，缓冲增至160.63331s，均未显示4004并在结束后暂停。随后切到Bewly动态页，实际加载10个article（其中1个用户信息卡）、21张图，可见骨架为0，原页面video节点为0。这证明本次样本可用，不证明历史4004因果已消除，也不把DOM数量当成全站请求/CPU性能测量。本轮没有改播放或动态业务源码。
+- **检查**：pnpm typecheck、pnpm test、pnpm knip均退出0，529条PASS，Knip10/0/5保持；完整pnpm lint首次只报一处SCSS格式，修正后退出0，随后最终圆角/标题小改再跑该SCSS定向lint也退出0。日志`/tmp/bewly-native101-{typecheck,test,knip,lint,lint-final,style-final}.log`，保留首次失败。git diff --check退出0；继续复用原watch 92599，`/tmp/bewly-native87-dev.log:900–910`确认最后native/main开发增量成功，不执行生产构建、打包、clear或manifest改写。
+- **证据与待验收**：本轮结构/配色记录及播放数据汇总到`/tmp/bewly-native101-live-results.json`，截图以`/tmp/bewly-native101-`为前缀。关闭临时素材/问答标签后工具的视口目标发生变化，一次标注1100的花火样本实际仍1544px，已标provisional；随后新验收标签实读宿主1100、子文档900重新取证，不计错误样本为窄窗结果。显示偏好已恢复暗色、主题色#f43f5e、基准色#2a2f2d、OLED关闭、适配开启，设置关闭；视口reset实读1744×1027。当前新增样式和数据导航仍待整批装载后的三主题/宽窄窗复验，不能以529项或源码已写入宣布全站完成。继续补齐余下页面组后再统一请求重载；Goal保持active，未commit/push。
+
+### 第六十二批：公共阅读与服务页面补差（2026-10-05）
+
+- **范围与基线**：按既有总清单继续进入下载中心、帮助、客服、新旧关于页、联系、用户协议、隐私、版权介绍及专题目录。Git五项仍为原message_feature/追踪/HEAD/remote/stash，没有新建分支、commit/push、版本变更或处理stash。本批继续集中补差，没有逐页追加重载请求。
+- **下载中心**：1100px实读html仍有1160px最小宽度，旧规则只释放了body。另确认header-wrap的粉色底图、head-img的白色云层与真正的产品截图、标题图、二维码分别属于不同节点；head-img本身还承载“关注我们”，不能删除。补html/body的窄窗约束，清除两层装饰绘制，并用现有节点的正常文档流承接联系区；下载按钮实际是`#download-link`内的绝对定位节点，改为保留原视觉顺序的网格，截图列使用剩余宽度。产品图、二维码和有文字的下载徽章保留，浅色只调整已确认的tittle.png白色字标。版本标签“PC客户端”的Enter切换实站有效；没有下载或安装客户端。该域仍有Dark Reader dynamic与6个非空样式节点，纯主题颜色不记通过。
+- **帮助页**：修正Element UI直接写入的选中蓝色、阅读标题4px圆角及窄窗客服提示覆盖正文。首次补丁的12px标题、语义选中颜色和relative位置已在实站出现，但截图进一步发现旧bottom:210px仍使提示上移；最终改为static，保留原链接和插画。原900px阅读容器会裁切超过1500px的问答内容，沿该容器启用纵向滚动，不改原问答节点。原生Enter展开问答有效；深/浅/OLED底色与正文取样正常。最终static/滚动修复仍需新产物实站复验，未把首次补丁的局部装载当成整批完成。
+- **客服入口**：三主题下正文、图标和现有分类选中颜色可以沿用，1100px没有横向溢出。将原生分组标题外的整节实色底收回为透明分组，实际内容卡片保持语义表面，并使用统一heading字号。问答分类和标题原来是无键盘语义的点击节点，现复用nativePageKeyboard和适配开关生命周期；展开状态读取原生answer的像素高度，不建立业务状态。仍使用一个Observer，style观察仅限问答容器，外部轮播只保留原有class/子节点发现范围。
+- **介绍、联系与旧顶栏**：新关于页的空白尾段带有inline 1280px最小宽度，标题图片容器也超出阅读列；按真实容器约束最大宽度，保留有文字的标题图及品牌横幅。联系卡片的白块实际来自abu_oth.png空底图，而不是颜色token失效，改为完整背景映射。补`#internationalHeader.international-header`这类旧官方mini-header的表面、文字、搜索与投稿按钮，限定轻量入口，未改Bewly顶栏。旧html/aboutUs模板加载完成后仍将链接竖排，沿其z_header/原菜单节点补紧凑布局和hover/focus-within菜单；原生inline显隐和URL保留，没有推断账号状态。该页原生脚本报告loadLoginStatus未定义，本批未声称修复其登录逻辑，也未清理错误日志。
+- **协议与隐私**：已等到完整正文，确认并非只有版本选择器或iframe空壳。隐私原生版本由2026.02.12切到2025.04.30，正文日期确实更新，再恢复2026.02.12并核对正文；没有接受协议。深/浅/OLED正文及链接可读，宽桌面的原生750px阅读列保留。唯一新增控件差额是选择器实际仅17px高，已补36px语义点击区域；新尺寸尚待装载验证，未改合同文字或替换版本读取逻辑。
+- **版权与专题**：版权页原生1000px三列在宽屏和1100px均可用，布局等价保留；修正暗色卡片内仍为rgb(97,102,109)的段落/列表文字，以及约20px高的语言触发器和菜单表面，不进入申诉或工单。专题目录真实结构是act-list > ul > li，标题h2也是act-info的兄弟；修正失配选择器，映射卡片/标题/时间/完整海报轮廓，并用flow-root包含原浮动封面。开启屏蔽广告时，通过Enter切到“广告”类别仍加载13条专题；查询.ad-report/.adcard/[data-is-ad=true]为0，未按类别词误删，最后恢复“全部”。这不替代明确广告在关闭设置后的实站恢复验收。
+- **自动验证**：pnpm typecheck/test/knip均退出0，530条PASS，Knip10/0/5保持。新增实际模块回归验证问答晚到挂载、原生展开/收起、IME、类别状态、100次外部轮播style变更无新增回调、替换后旧问答不再被观察，以及退出时归还属性；原创作导航的同类回归继续通过。完整pnpm lint最初只报三处分支花括号，修正后退出0；下载SCSS的八处格式也已修正，最后字标选择器收窄后的定向lint退出0。日志`/tmp/bewly-native102-{lint,lint-final,typecheck,test,knip,style-initial,style-final}.log`保留各次结果。git diff --check退出0，watch 92599持续运行，native87-dev.log:1111–1121确认最终native/main开发增量；没有生产构建、打包、clear或manifest改写。
+- **证据与后续**：`/tmp/bewly-native102-live-results.json`保存23次模式/尺寸观察及限制；初次旧介绍页interactive记录已标provisional。截图以`/tmp/bewly-native102-`为前缀。联系页普通刷新仍显示旧卡片底图和旧顶栏色，最终修复不能记为已生效；其他新尺寸/布局/问答键盘也保留整批验收门槛。显示偏好恢复暗色、#f43f5e、#2a2f2d、OLED关闭及适配开启，隐私版本/专题类别恢复，视口reset实读1744×1027。继续其余公共子站等页面组后统一请求装载，Goal保持active；历史4004因果仍沿上一批边界，不扩大播放结论。
+
+### 第六十三批：营销公共页面族补齐及更新后的 Goal 对照（2026-10-05）
+
+- **目标与基线**：收到“目标已经更新，请再查看一次”后重新调用get_goal，确认仍为active；以先整理全页面类型、集中落实浅/深/OLED、统一请求重载的最新流程继续。适配绑定现有adaptToOtherPageStyles，广告仍独立使用blockAds，保留播放加载和原生节点；本轮没有逐页请求重载。写入前重新执行Git五项，当前分支、追踪、HEAD、三个remote与stash均符合保护基线，全部既有未提交内容保持。
+- **营销官网真实导航族**：除根首页外，实站确认/product.html、/case/、旧案例别名/case/lays.html等、实际案例落点/bfs/static/e-fe/case/kangshifu.html、/main/observe及文章子路由、/main/collaborator和公开查询/main/agent。新页面此前native-site为空，不能用首页已注入代表整个页面族覆盖；现由nativeSites精确路径接入既有轻量入口。静态案例目录仅匹配HTML文档，PNG、JS、CSS资源不注入；共享主机仍保持主入口与轻量入口互斥，未增加host权限或iframe范围。
+- **营销样式差额**：统一案例/资讯卡片、标签、目录/阅读文字、普通阅读页与滚动后顶栏、伙伴目录、查询输入和说明面板。首页介绍卡片及咨询表单增加语义内边距和间隔；窄窗案例/资讯/伙伴列表使用原卡片网格。产品介绍原固定侧栏在1100px实际x=-121，现预留侧栏列，产品演示与说明在剩余列上下排布；保留原手机演示的内部坐标、播放器及媒体节点。伙伴介绍原730px阅读列已能容纳，等价保留，只加最大宽度；正文长图/拼接信息图不逐片裁圆角、反色或当广告删除。所有新规则均受bewly-design与marketing-public限定，未新增主题或设置状态。
+- **品牌号与MCN**：品牌号介绍现有适配已实际加载，1100px下卡片为12px/superellipse(1.7)，无Dark Reader；保留手机预览原白色画面和250px几何，仅将标题装饰线映射主题前景。“年度优秀品牌号”真实跳到已有campaign入口，article当时未取得内容，未计为专题正文验收。MCN主体已在1100px内完整排布，但资格/权益卡片仍有原渐变及4px/2px圆角覆盖，补真实body下的层叠、完整背景、说明文字与流程圆形数字，说明浮层使用普通实色表面；原申请/认证业务不动。只点击只读“查看所需资料”展开说明；“了解更多”打开官方链接的腾讯文档，未编辑或提交，临时文档标签已关闭。
+- **外部改色与实站边界**：营销域与MCN域实读Dark Reader dynamic及6个非空样式节点；营销域还只读查看了Dark Reader弹窗，确认当前域勾选且显示开启，未修改任何其他扩展设置，随后关闭弹窗。截图/tmp/bewly-native103-darkreader-marketing.png、bewly-native103-marketing-*.png、bewly-native103-brand-narrow.png及bewly-native103-mcn-details.png保留原始证据。本批新营销路径、最终MCN修正和前批累计补差仍未完成整批加载后的三主题/宽窄窗验收；不把几何观察或自动回归算作实站通过。
+- **招聘观察及工具限制**：两次招聘导航期间浏览器工具超时并重置，后来用原生Chrome可访问性确认最终已到/social/positions且职位列表正常可见，保存bewly-native103-jobs-observed.png；没有把超时归因于扩展或页面，也没有获取新的招聘DOM/主题验收结论。失去调试连接后按Chrome实际选中标签逐个关闭本轮招聘及主题辅助页，最终会话标签列表为空；关闭这些临时标签结束其视口覆盖。本轮未改Nocturne显示偏好。内存中的观察数组未在工具重置前完整落盘，不虚构native103-live-results.json；已取得的数值/导航见本节及原工具记录。招聘详情、校园招聘、安全/IR公共子页和其他未完成矩阵继续待核对。
+- **检查与开发产物**：完整pnpm lint、pnpm typecheck、pnpm test、pnpm knip均退出0，实际530条PASS，Knip仍10/0/5；日志/tmp/bewly-native103-{lint,typecheck,test,knip}.log。实际getManifest测试新增营销query/hash、HTML案例、文章子路由、近似路径和资源排除样本，原视频/PGC/创作入口保留断言继续通过。原watch 92599保持运行，native87-dev.log:1189–1199确认最后native/main开发增量；development环境执行原scripts/manifest.ts退出0，生成文件已包含本批路径，日志native103-manifest.log。未手改产物、生产build、打包、clear、commit或push。
+- **下一步**：先完成余下明确公共页面类型与累计补差，再统一报告修改及已知问题、请求整批重载；独立经营后台范围仍沿既有待答问题，不凭公共介绍推定其后台已覆盖。广告开关恢复仍需排除其他隐藏层影响，历史4004原因仍未证明消除。本批未改变播放器、媒体请求、动态请求或轮询逻辑，Goal保持active。
+
+### 第六十四批：安全中心与招聘公共页面族补差（2026-10-05）
+
+- **进展与基线**：上一轮已落地营销路径、样式和530项回归，按实际进展继续本Goal。本轮写入前Git五项仍符合message_feature、origin/message_feature、原HEAD、remote与stash基线；没有分支、提交、推送、版本、生产构建、打包、clear或其他扩展设置变更。新增修改仍累计到统一装载批次，不追加逐页重载请求。
+- **安全中心完整公共导航**：实读首页、公告目录/announcement/、公告详情/announcement/31/、贡献榜/thanks/、礼品目录/gift/及详情/gift/609/，打开并关闭原生“关于我们”说明弹窗。原公告和首页内容横幅保留；礼品图片、原生悬浮说明、库存/价格及购买入口不替换、不提交。已确认的.ad-report/.adcard/[data-is-ad=true]数量为0，没有按礼品或商业标题做广告推断。贡献榜的公开profile链接实际返回原站错误页，补/profile目录轻量入口并复用既有error404Page样式和返回按钮键盘控制；不把错误页适配说成恢复了资料内容。
+- **安全样式**：原首页泛用.gift/.info还会匹配礼品卡片内部同名节点，已将页面底层映射限于实际顶层容器；补公告/贡献表格、筛选与分页、文章文字、礼品说明、图片轮廓和原生说明弹窗。弹窗关闭按钮原12.7×21px，改为36px圆形命中区域。礼品原说明在.pic中以bottom:-120px隐藏并由原生hover滑出，新增focus-within只提供同等可见信息，不接管点击。顶部复合彩色盾牌/黑字logo保留原图，使用明亮图像底面保持黑字可读，不对品牌图做全图反色。1100px下原1024px页头/阅读列、300px图片与660px详情列可容纳，等价保留宽度，没有重排原礼品业务。
+- **招聘范围遗漏修正**：通过真实导航确认社会职位目录/social/positions、只读职位详情/social/positions/30531、校园首页/campus、应届目录/campus/positions?type=3、B-UP介绍/campus/bup、B-STAR实际落点/bstar，以及“bilibili星球”实际根路径/。后两者原先直接导航后适配class为空，现补精确根与/bstar入口；不扩大到未观察的应聘后台。社招/校招目录共用现有列表样式；真实1100px校园目录主列1068px、筛选286px、卡片742px，无文档横向溢出。职位详情原800px阅读列在1100px内可用，继续保留。
+- **招聘外观补齐**：补普通蓝色导航变体、职位详情文字/操作按钮、企业介绍普通卡片/搜索、校园资讯卡片/问答、公共视频卡片及B-UP阅读层。原品牌视频、播放器、标题/流程内容图、研究图标、员工/人才插画、轮播与翻面节点继续归原站所有；不改GSAP pin-spacer、媒体坐标或原滚动所有权。企业介绍两个已确认无子节点/文字的绝对定位椭圆仅清除绘制；B-UP空的sticky星空层只清背景，不删除节点或改变高度，装饰卡片框改为语义表面；浅色只处理专用白字标题图，不过滤照片、正文媒体或英雄视频。B-STAR原翻面卡片行宽1140px使1100px文档溢出，补可用宽度和原正反两面的比例约束；校园同层卡片/问答列也加窄窗约束。最终新样式尚待整批实际装载验证。
+- **原生键盘补差**：实际职位卡片与顶部导航为无href/role/tabindex的A节点；接入既有nativePageKeyboard，角色为link，Enter转发一次原click，Space保留页面滚动。校园FAQ及B-UP FAQ沿原生父节点active class同步aria-expanded；B-UP实站点开后确认bup-pc-faq-item active，点回后恢复原class。本批新增的是局部语义/键盘投影，不建立职位、问答或账号业务状态，不改搜索输入、原生href链接、按钮或含原生操作的卡片；退出时还原属性与监听。既有单Observer只观察class/子节点，没有新增style观察、轮询或RAF。
+- **验证**：完整pnpm lint、typecheck、test、knip均退出0，531条PASS，Knip维持10/0/5。新增实际模块回归覆盖无href链接、原生链接/内嵌按钮保留、IME/重复键、Space语义、搜索输入、原生展开状态、失焦取消、列表节点替换和清理；真实getManifest测试增加招聘根/B-STAR/B-UP、公开profile和相似路径排除，原BV/PGC入口断言仍通过。首次定向lint的5处缩进/换行已修正，保留日志/tmp/bewly-native104-targeted-lint.log；完整结果在native104-{lint,typecheck,test,knip}.log。开发manifest由原development脚本生成退出0（native104-manifest.log），原watch 92599实查仍运行，native87-dev.log:1289–1299为最后native/main成功增量。
+- **实站证据边界**：结构/尺寸记录逐次落盘/tmp/bewly-native104-live-results.json；两个名称含narrow但实际仍1744px的记录已明确标provisional，之后真正1100px样本单独记录，loading/interactive取样也标provisional。图片以bewly-native104-为前缀；早期jobs-list截图实际是地址输入错误后的Google页，仅保留诊断，不计为招聘验收。浏览器自动导航/文档读取多次超时及上下文重置，之后用现有浏览器入口恢复，未据工具耗时归因于插件网络或性能。安全与招聘均有Dark Reader dynamic及6个非空样式节点，纯主题结果不计通过；本轮未调整Dark Reader。B-UP新键盘role/aria在实站仍未加载，原生展开class确认只证明接入依据，不证明新键盘已验收。
+- **清理和后续**：说明弹窗、校园/B-UP问答恢复关闭，本轮没有投递简历、申请、购买、兑换、提交漏洞、登录、发送消息或更改账号数据；Nocturne偏好未变。临时视口reset实读1744×1083，所有本轮临时标签关闭，最终工具会话标签列表为空。投资者关系公共子页及其余未完成矩阵仍待核对，然后统一汇报累计修改与已知问题、请求整批重载。广告恢复、全部三主题/宽窄窗和视频/动态回归仍保留各自门槛；本批没有修改媒体请求、播放器或动态加载代码，历史4004因果未被宣称消除。Goal保持active。
+
+### 第六十五批：投资者关系模板收齐与本轮集中实施检查（2026-10-05）
+
+- **范围与基线**：继续当前Goal，写入前重新执行Git五项，分支、追踪、HEAD与remote保持原基线；末尾再次确认stash@{0}仍为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。没有commit/push、生产构建、打包、clear、版本变更或新分支。本批集中处理IR公共模板，并对第六十三至六十五批的新增表面做三主题隔离渲染；仍不将源码/本地检查等同于全站验收完成。
+- **IR页面类型**：实读首页、公司简介、治理表格/文件、管理层卡片及原生资料弹窗、董事展开正文；行情与历史价格宿主；新闻目录、活动日历、演示资料、股东会议文件；财务披露宿主、季度与年度报告、分析师目录；ESG介绍及报告子页；投资者FAQ、资料请求表单、邮件提醒宿主和公开联系区。简中ESG确认同一模板和轻量入口；繁中取得相同结构时document仍为interactive，标provisional，未算完整实站通过，最后恢复英文入口。已有/en、/cn、/hk目录匹配足够，本批未再扩大manifest或host权限。
+- **外部拥有者保留**：行情、披露、日历、提醒等实际由Euroland iframe承载，新闻正文也跳到其外站；不注入外部文档、不重绘行情、不增加域权限。只读取宿主与公开模板；未输入或提交资料、订阅邮件、下载财报、发送联系邮件或执行金融操作。管理层弹窗本次只确认头部/关闭按钮与容器，异步正文未完整取得，不扩大为所有资料状态已验收。
+- **IR配色与轮廓**：补普通正文、简介/问答/董事段落的低透明度字色，治理/分析师表头与单元格、人物卡片、文件/会议/报告卡片、原生弹窗、搜索/表单、年份与分页的语义配色和圆角。修正原粉色按钮内仍被链接规则改成粉色字的组合，使用theme/on-theme配对。年度与FAQ原胶囊保持round；季度年份列是相邻表格结构，内部直角保留，只由外缘形成卡片轮廓。原生轮播按钮已经有role、tabindex及aria-disabled，等价保留其键盘与禁用状态，只扩大点击面；没有重建轮播或文档加载。
+- **有意义画面与装饰**：实际查看ESG首屏内容照片和荣誉区办公楼照片，保留图片及原生白色图上文字；公司照片、报告封面、奖项图标不清除或反色。页脚wave为空节点、无文字/子节点且只运行wave装饰动画，适配开启时停止并隐藏该绘制层，ocean及其内容容器使用统一页面底色；关闭适配恢复原站CSS。没有扩大到未知背景图或普通商业内容。
+- **1100px布局**：实际宿主文档宽1100，阅读容器1000/内列970，原联系/阅读列可用，等价保留。窄窗原生页头隐藏六个桌面链接，菜单按钮及内部label两次点击均未展开，未见控制台错误；不推断其根因。沿原六个链接在1024–1280px排成第二行，保留原URL与业务节点，不建立菜单状态或克隆链接。最终新排布仍待整批产物装载后的实站复验。
+- **局部键盘与观察范围**：新闻条目实际为无href/role/tabindex的A节点，年份、年度子标签、FAQ类别、简介/问答展开入口为原生点击节点。复用nativePageKeyboard，保留原click、Enter/Space语义及父item.active状态；原生href链接、输入、按钮和已经可用的轮播控件不接管。IR是服务端文档，控制器只挂在稳定的tabcontent-container，排除页头、hero、计数器与外部iframe。实际模块回归中，工作区外100次计数器class/文本更新带来0次回调，关闭适配后属性/监听还原且原生展开状态保留；没有新轮询、RAF或平行业务状态。
+- **自动检查**：完整pnpm lint/typecheck/test/knip均退出0，532条PASS，Knip10/0/5；git diff --check退出0。新增实际模块测试覆盖IR限定作用域、无href新闻链接、原生链接保留、年份/年度子标签、问答/董事展开与关闭适配释放。首次定向lint的5处花括号要求已修正，初始日志保留在/tmp/bewly-native105-targeted-lint.log；完整日志native105-{lint,typecheck,test,knip}.log。开发watch 92599末尾仍实际运行，native87-dev.log:1344–1366确认最后CSS/main及native增量成功。
+- **累计三主题隔离渲染**：临时本机页面直接读取extension/dist/nativeAppearance/style.css，并转译实际src/utils/themeColor.ts；不是复制样式实现或以源码字符串匹配代替行为。12组营销/MCN/招聘/B-UP/安全/IR组件夹具分别运行浅色近白主题色、深色近黑主题色和OLED玫红；36组成对场景包括开启及同节点关闭恢复，共294个开启采样项，颜色/圆角/装饰退出/同节点恢复均无失败，最低采样对比度5.5745。darkreader-lock只放在本机夹具，不加入项目或原站。初始测试页面有一处换行转义错误，修正的是临时测试脚本，错误记录native105-isolated-first-errors.json保留；没有据此修改产品。结果在/tmp/bewly-native105-isolated-metrics.json，面板图native105-isolated-complete.png。这些结果不证明原站层叠、媒体、真实数据态或全站排版已经通过。
+- **实站装载门槛**：本轮结构/尺寸记录逐次保存到/tmp/bewly-native105-live-results.json，图片以bewly-native105-为前缀。完整编译后刷新实际IR页面，readyState为complete，但wave仍display:block/animation:wave，按钮仍是原组合，说明最新累计CSS尚未实际装载，不能用原build ID或已注入标记宣称成功。IR仍检测到Dark Reader dynamic及6个非空样式节点；连同此前实际观测的营销、MCN、招聘、安全等子域，纯主题验收需要先隔离额外改色。没有改Dark Reader或其他扩展设置。
+- **整批复验下一步**：第五十七批清单内已能取得真实模板的本轮实施已集中写入，连同第六十至六十五批补差进入统一重载门槛；现在统一请求加载这批产物并说明修改/已知问题，不逐页追加请求。随后按原完整矩阵验证所有已改页面的浅/深/OLED、宽桌面/1100px、普通/关闭适配、明确广告开启/关闭恢复，以及播放与动态回归。独立经营后台的既有待确认范围、资格后状态和外部文档继续明确列为未验证，不据公共模板推定已覆盖；原生4004原因仍未证明消除。本批没有修改媒体请求、播放器或动态加载代码，Goal保持active。
+- **收尾**：临时隔离页关闭，本机测试服务80359已停止（退出130），开发watch保持；未改Nocturne显示偏好，IR语言恢复英文，视口reset。保留实际IR页作为整批重载后的复验入口，其余本轮临时外站/隔离标签已关闭。
+
+### 第六十六批：整批验收等待条件复核（2026-10-05）
+
+- 第六十五批集中实施和532项回归后已提出一次整批重载请求，并单独询问Dark Reader临时隔离许可；截至本次复核尚未收到这两项的新答复。后续两个Goal续行均刷新实际IR页面，不能仅凭历史重载确认、开发标记或模板源码认定新批次生效。
+- 本次明确等到document.readyState=complete，轻量入口标记investor-public和tabcontent-container均存在，但前两个FAQ标题的role/tabindex/aria-expanded仍全部为空；前次同样完整挂载后，待移除的波纹仍display:block/animation:wave。Dark Reader仍为dynamic，存在6个非空样式节点。新代码尚未取得实站生效证据，纯主题隔离条件也未改变。
+- 开发watch 92599在两个续行中均通过原句柄确认仍运行，未因无新输出或观察超时重启。新增键盘范围、释放路径、独立广告开关已完成只读复查，没有发现需要继续改动的确定问题；本轮未重复执行未变更源码的完整测试，最新532项及其他成功命令仍属于第六十五批。
+- 同一装载/隔离条件自整批请求轮次起已连续跨三个Goal轮次存在。当前可独立落实的本轮实施、代码检查和隔离渲染已经完成，后续完整实站验收需要用户重载这批扩展并明确改色隔离方式。本次据此将Goal设为blocked等待外部操作，不是complete或用户暂停；原请求继续有效，不追加重复问题。保留开发watch和IR复验标签，恢复后先确认新交互/样式真实生效，再继续原完整矩阵。
+- 本次写入前Git五项仍符合原分支、追踪、HEAD、remote及stash保护基线；只追加本节维护状态，没有修改应用源码、偏好、分支、版本或生成产物，未commit/push。
+
+### 第六十七批：新批次实站生效、首页三主题与原生补差（2026-10-05）
+
+- **恢复与装载证据**：Goal恢复active后重新刷新IR页，完整挂载的FAQ已出现role=button、tabindex=0及aria-expanded=false；随后新开的jobs.bilibili.com根路径也出现jobs-public标记，导航实际获得link语义和36px高度，确认此前新增的manifest入口已生效。旧装载阻塞已解除，没有重复向用户索取这次已由实际行为确认的装载信息。写入前Git五项仍符合原message_feature/追踪/HEAD/remote/stash基线。
+- **IR实站交互**：FAQ Enter展开、Space收起，展开正文稳定后高度64px；六个窄桌面导航最终均为13px字号、36px高、8px圆角，最右边界1035px，位于1100px视口内，Enter确实进入财务页。季度轮播保留原生role/tabindex/aria-disabled，Enter将2026切到2025且原前一页按钮解除禁用，随后恢复2026；年度目录HKEX通过Enter切换并出现18个真实文档链接，再恢复NASDAQ。人物卡片Enter打开原生弹窗、原生关闭按钮Enter关闭并回收至触发卡片；没有打开或下载文档、填写/提交表单。
+- **IR确定差额**：标签栏蓝线实际由::before绘制，原border-color映射覆盖不到，已补同一主题前景；季度表头/文件文字、年度日期和人物弹窗头部的原生深层样式仍压过映射，按真实选择器收紧优先级，并补原生导航箭头的中性前景和控制尺寸。年度/FAQ胶囊最小高度统一40px，保留原布局和原生状态。季度控制按钮补最小36px命中范围，不接管Swiper键盘逻辑。以上本轮增量尚未实站重新装载，不能当成新修正已验收。
+- **弹窗焦点**：稳定打开后原生modal根没有tabindex，焦点仍停在触发卡片；关闭后的原生焦点回收原本可用。参考[Bootstrap modal文档](https://getbootstrap.com/docs/4.6/components/modal/)及[MDN tabindex说明](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Global_attributes/tabindex)，只为已存在且缺少该属性的management-modal补tabindex=-1，让原生focus()/焦点约束可工作，不新增焦点陷阱、全局键盘或弹窗状态。复用外观scope释放；退出时归还缺省属性，已有tabindex及原生期间改写的值保留。实际模块新增断言验证原生focus调用能进入同一根、原生关闭可回收焦点、关闭适配后属性恢复；这属于隔离回归，完整原站焦点进入仍待新增量装载验证。
+- **学院实站与修正**：当前1100px下头部1100、主体900、阅读列868，文档无横向溢出；装饰圆盘实际隐藏，专题导航Enter可用。原生前一页按钮真实class是right-button left：此前窄窗right规则同时命中两侧，导致下一页后显示的前一页按钮仍在x=1052。与宽屏原生left=-20px的定位对照后，已改为分别处理非left的下一页与left修饰的前一页，保留原点击、显隐和翻页逻辑。实色搜索外壳仍带原生blur(15px)，补backdrop-filter:none；没有更改页面横幅或媒体。学院此次也检测到Dark Reader dynamic及6个非空样式节点，配色保留未隔离边界，不沿用早期无改色层的历史结论。
+- **首页三主题实站**：主站无Dark Reader标记/样式，实际完成亮色、暗色、OLED在1744×1027与1100×800的六种组合；逐张检查截图，未见本次样本的横向溢出、控件重叠或标题错位。亮色viewport为rgb(242,242,248)，暗色为既有受约束OKLCH底色，OLED实际为rgb(0,0,0)；封面保持12px/superellipse(1.7)，页面标签与布局切换器均为36px实色、无重复背景模糊，原顶栏渐进模糊、品牌与Dock形态保留。本轮没有修改Bewly首页源码，也未据这一页的通过扩大为其他页面已验收。
+- **开关边界与恢复**：通过现有设置关闭“适配更多页面”，IR新加角色/tabindex退出，学院恢复原4px轮廓，两个原生页的广告class均继续保留。Bewly文档虽退出原生适配class，实际Shadow UI的页面底色、12px封面和36px标签表面均保持，证明原生外观开关与Bewly页面及广告设置没有混为一个开关；随后恢复开启。主题、OLED、适配开关最终经UI确认恢复暗色/OLED关闭/适配开启，主题色#f43f5e、基准#2a2f2d未改；设置关闭、Dock收起、默认视口恢复。一次OLED自动点击未改变状态，确认仍为false后通过原生Space完成切换，未据单次工具点击结果判定产品故障。
+- **完整检查与证据**：pnpm lint/typecheck/test/knip均退出0，532条PASS，Knip10/0/5保持；git diff --check退出0。日志/tmp/bewly-native106-{lint,typecheck,test,knip}.log；两次定向lint最初的SCSS换行问题已修正，原日志保留。watch 92599仍运行，native87-dev.log:1446–1456确认最后native/main开发增量。20次原始观察在native106-live-results.json，动画开启/缩放中间态已注明，不作为最终几何；截图、原始及恢复偏好以/tmp/bewly-native106-为前缀。已关闭本轮临时标签，最终会话列表为空，并恢复验收前用户动态标签的焦点。
+- **继续范围**：这轮只完成上述实站组合与行为，不代表全站矩阵已通过；IR、学院及招聘等仍受Dark Reader影响，原隔离确认请求继续有效且没有自动修改其他扩展。新修正先累计，继续其余页面后再集中安排复验，不逐页追加重载请求。广告真实恢复、其余页面三主题/宽窄窗、资格后状态与播放/动态回归仍按原边界继续；历史4004原因未宣称消除。本轮没有改变媒体请求、播放器或动态加载实现，未commit/push、生产build、打包、clear、改版本或处理stash。Goal保持active。
+
+### 第六十八批：目标复读、漫画账户差额与旧商城入口（2026-10-05）
+
+- **最新目标**：重新读取当前active Goal，继续按完整入口清单集中实施、集中验收；原生外观绑定“适配更多页面”，明确广告独立服从现有开关，三主题与宽窄桌面均需真实证据。新增强调“不破坏原有视频加载等已实现功能”纳入验收边界；本批没有更改媒体请求、播放器发现、播放布局、动态数据加载或任何轮询。写入前后Git基线仍为message_feature跟踪origin/message_feature、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6，三个remote与既有stash保留。
+- **漫画实际入口**：在当前已登录会话只读进入account-info、my-universal-cards、my-coupon、my-limited-free-coupons、my-discount-cards、my-free-gold、purchased-comic、auto-purchase、feedback九个子页。完整挂载后无Dark Reader标记且非空样式数0；初始登录/注册占位不作为退出登录证据。1100×800共壳宽1068、侧栏220、内容848，文档宽1100；逐张检查截图，表单、空状态、侧栏未见该样本的横向溢出或控件重叠。账户记录标签末端x=871、日期控件始端x=884，保持13px间隔，没有因缺口猜测而重排原生记录页。已有追漫/历史模板不重复实施；券与自动购买空态不扩大为有资产/管理状态已验证。
+- **账户修正**：畅读卡内嵌SVG经检查只有浅色矩形与装饰箭头，没有文本或业务图片；只移除这层装饰底图，保留单独卡片标识、状态与原生操作。可见首行前景单独映射，不把样式扩大到隐藏支付弹窗；原生单色“更多”箭头跟随深浅前景。充值按钮原20px补最小28px、通用券页可见按钮原20.5px补36px、续费按钮补36px。记录标签原蓝色/灰色与日期、反馈类型菜单改用既有文本、主题前景、表面和圆角token。
+- **已购列表修正**：实际卡片为purchased-comic-item，与历史/追漫的manga-card不同；标题原rgba(0,0,0,.87)、说明原rgba(0,0,0,.34)在暗面上不可读，已分别补text-1/text-2，封面改用12px媒体轮廓。两个白方块经伪元素取证确认是multi-line-text::after用于遮住原生省略号的背景，保留其裁切机制，仅改为同一阅读面颜色，没有误当成选择框或广告删除。
+- **局部键盘与释放**：九个账户路由共用既有nativePageKeyboard owner，只新增真实记录标签、日期/反馈类型菜单选择器。Enter/Space继续触发原生click；按原生selected/is-open同步状态，Escape关闭已展开菜单并回收焦点，选择后的微任务只在焦点仍属于刚隐藏选项时返回触发器。复用appearance scope，关闭适配/卸载时还原属性并释放；没有增加计时器、路由轮询、支付操作接管或阅读器监听。实际模块回归覆盖IME/长按、原生选择、焦点主动移走、菜单关闭、释放后不再响应，以及分类/账户/阅读路径的精确启动边界。
+- **旧商城根**：mall.bilibili.com/#noReffer=true完整挂载后出现merchandise-catalog标记，1744×1027与1100×800文档均无横向溢出，商品卡实际12px平滑轮廓，原生双列、滚动owner、图片及试听/试读内容保留。搜索组件把浅灰底、前景、30px高度/圆角直接写在style，普通规则未能覆盖；补精确!important使其跟随统一实色表面、8px轮廓及36px高度。该页面当前仍为Dark Reader dynamic、6个非空样式，不能将叠加改色后的截图当纯主题通过；没有修改该扩展、重新询问同一个隔离许可或按商品内容推断广告。
+- **验证**：pnpm lint、typecheck、test、knip均退出0，最新完整回归533条PASS，Knip仍10/0/5；最后商城CSS补差后再次运行完整lint和test，均退出0。日志/tmp/bewly-native107-{lint-final,typecheck,test-final,knip}.log，早先完整日志保留；git diff --check退出0。开发watch 92599持续运行，native87-dev.log:1513–1523记录最终native/main开发增量成功，未重启或clear。结构/样式观察保存在native107-live-results.json，截图使用native107-前缀；账户截图只留本地，不把账号资产或明细复制到仓库文档。
+- **验收边界与恢复**：本轮实际观察的是当时已加载版本，以上新样式和新键盘行为尚未经过扩展重新装载后的三主题实站验收，533项属于自动回归，不能替代实站。没有改动主题/OLED/适配/广告偏好，没有购买、续费、领取、改自动购买、反馈提交或其他账号写入；已恢复默认视口并关闭本轮临时标签，Chrome回到原有动态页。保留第六十七批新增修正，一并继续最终矩阵后集中安排复验；本轮不追加重载请求。全站目标、其他改色/广告隔离和历史4004实站边界仍未完成；未commit/push、改版本、生产build、打包或处理stash。Goal保持active。
+
+### 第六十九批：游戏与直播辅助模板补差、集中三主题隔离验证（2026-10-05）
+
+- **范围与进展**：上一轮有实际代码、回归与新增实站证据，按进展继续原完整Goal。写入前Git五项仍符合message_feature、origin/message_feature、原HEAD及三个remote；收尾复核HEAD与stash@{0}仍分别为7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6和7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。已有Bewly及已通过模板继续保留；新增问题集中补差，没有逐页请求重载。
+- **游戏个人页面族**：实际进入home/games/comments/collections/wiki，均无Dark Reader。1100px下原html仍有1160px最小宽度，且个人导航自身固定1010px，文档达到1172px；补真实根约束及导航可用宽度，保留既有两列与原生头像/统计。补游戏筛选的36px命中面、主题前景、换行，WIKI统计说明的低透明度字色和6px轮廓，以及仍可操作的“已关注”状态前景；没有点击关注、绑定、预约或任何写操作。顶部游戏插画、Steam品牌内容卡及正文游戏图有内容意义，均保留。空游戏/收藏结果不作为有数据卡片全状态证据。
+- **游戏客服与监护**：客服Enter展开/Space收起原问答实站有效；原分类按钮仍被原生浅色背景、蓝色子文字和56px轮廓覆盖，已补精确层叠、真实round胶囊、文字/按钮尺寸与语义分隔线。问答展开状态沿原生icon-arrow-up class同步，不观察整页style。监护四个导航原来只有位图、没有名称；沿原节点补“工程介绍/申请流程/进度查询/常见问题”语义，并在适配开启时以同名文本绘制，保留原click与cur状态，关闭后还原属性及原位图。阅读框的内层白色直角边框改为同一面板轮廓与边框，正文复用body字号/行高。进度页实际是联系说明，未出现查询表单；其后方纯人物水印移除，头部品牌横幅、正文插画与原流程图保留，只有已确认单色的流程图在深浅背景上使用对应中性前景。未下载材料、输入身份、发邮件或提交申请。
+- **公会页面回归修复**：实际1100px时galaxy-login和carousel-wrap最小1200px，旧.width-1200通用margin-inline:auto又覆盖了原login-box的负边距居中，导致登录卡片x=1408、文档1768px。这是确定的本地样式回归：现分别约束原容器、将窄窗绝对定位卡片的原点明确设为16px，并让四个原生权益卡在可用列宽内分配。修正原radius-10工具类覆盖、more-title内h3/p仍为黑字及固定帮助浮层白底；轮播品牌内容图、资格状态与原申请/登录按钮保持，没有申请入驻或登录其他账号。
+- **直播帮助与协议**：协议当前无Dark Reader，完整正文、链接及36px原生版本框已实际挂载，1100px截图没有文字/版本框相互覆盖。帮助页原正文1000px两列可用，横向溢出来自1160px固定页脚；补页脚可用宽度，保留右侧220px两列图标组。读取原生nav-item1/2-title的expand及nav-warp1/2显隐后，补第二/第三级导航与章节目录键盘入口、嵌套折叠时的Tab退出和当前页语义；沿同一个Observer的class变更刷新，不增加style观察、计时器或全局快捷键。原第一层Enter收起/展开已实站验证并恢复；新增子导航仍待整批装载。
+- **已生效部分与装载疑点**：客户端下载中心原装饰背景确实退出，产品图、二维码、下载徽章保留；1744宽屏和1100窄窗截图未见横向溢出或入口重叠，PC版本信息Enter切换成功并恢复安卓版。下载中心和link帮助域仍有Dark Reader dynamic/6个非空样式，纯主题不记通过。link/p/eden/download#/web在一次导航超时后实际已complete，随后正常刷新也仍没有native-site/bewly-design标记，而同域help页正常；当前本地manifest已匹配该路径，CSS变量可见，但不能据此证明脚本已装载。只读检查公开HTML、主脚本和依赖脚本尚未定位可确认根因，没有猜测性地增加启动轮询、强行重挂或改其他扩展；该页继续列为未验收，不把工具导航超时当成页面性能数据。
+- **完整自动检查**：pnpm typecheck/test/knip均退出0，536条PASS，Knip10/0/5保持。完整lint首次仅报新增分支缺花括号，修正后再次完整pnpm lint退出0；原失败日志保留。日志/tmp/bewly-native108-{lint,lint-final,typecheck,test,knip}.log；git diff --check退出0。新实际模块回归覆盖游戏个人路径边界、原生选中/IME/重复键、客服箭头状态与原名称保留、帮助多层折叠后Tab退出/展开恢复、原生章节动作及释放。watch 92599实际仍运行，native87-dev.log:1631–1639记录最后native/main开发增量。
+- **三主题隔离渲染**：临时本机页面直接读取当前开发CSS，并转译实际themeColor与nativePageKeyboard模块，未复制应用实现。游戏个人/客服/监护、公会、直播帮助、漫画及旧商城七组结构分别运行浅色近白、深色近黑、OLED玫红，共21组开启/同节点关闭对照；138个样式采样含135个可见文字采样，最低文字对比度5.3445，全部场景文档宽1100、关键卡片留在视口内，圆角、装饰退出与原节点恢复无失败。首次把漫画畅读卡父容器的保留字色当作可见文字，产生三条伪低对比度；改为采样实际首行文字，同时保留父容器表面/圆角检查，没有为此修改产品。初始结果native108-isolated-first.json保留，最终native108-isolated-metrics.json和汇总截图native108-isolated-summary.png均在/tmp；这仍不证明原站完整样式层叠、媒体或三主题实站通过。
+- **证据与恢复**：16份结构/样式观察在native108-live-results.json，不按16个已验收页面计数；最初个人页选择器修正前的根采样、WIKI未匹配面板采样均标明限制，以后续稳定记录为准。实站截图为native108-前缀，账号页面截图仅留本地。临时渲染服务97180已停止（退出130），Nocturne偏好未改，默认视口已恢复，临时标签全部关闭且Chrome回到原动态页。本批没有改媒体请求、播放器、动态加载或广告识别逻辑，也没有commit/push、生产build、打包、clear或处理stash。仍需继续余下页面族、集中补差装载后的完整矩阵及原有广告/改色隔离边界；历史4004原因不据本批外观回归宣称消除，Goal保持active。
+
+### 第七十批：直播附属、钱包与账号模板补差（2026-10-05）
+
+- **范围与基线**：上一轮的代码和回归构成实际进展，继续完整Goal，未另建目标或缩小范围。写入前Git五项仍符合message_feature、origin/message_feature、三个remote和既有工作区保护要求；收尾HEAD与stash@{0}分别仍为7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6、7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。保留全部既有修改，没有提交、推送、版本、分支或stash操作，继续累计补差而非逐页请求重载。
+- **直播附属与漫画下载**：帮玩目录出现原站验证码，挂载外壳及已有圆角可以观察，但列表数据未取得；未解验证码、绕过校验或反复请求，不将空态记为通过。LOL实际封面已为12px平滑轮廓；1100px时文档虽无横向滚动，横幅仍最小1200px，内部标题容器延伸到1170px，不能只凭scrollWidth判断无遮挡。已限定真实wrapper/flip-view组合补最小宽度和内边距，核对原绝对定位为left:0后保留定位关系；横幅内容图和原房间链接不动。漫画下载页DR0，1744宽屏与1100窄窗面板、四个原生按钮和QR均完整显示，窄窗按钮实际40px；媒体节点readyState=4、muted=true、paused=false、error为空，保留原宣传视频及绘制，不把此样本当成BV播放/4004根因证明。
+- **钱包记录**：实读消费、购买、B币券三个原生分类和日期浮层，未更改日期、充值、购买、导出或使用资产，最后恢复消费明细。顶部内容1140px导致1100窗口横向溢出，补其真实宽度约束；顶层底图实看为2×86像素的蓝色装饰PNG，单独移除该绘制，保留分开的品牌字标与人物图。选中标签的SVG只绘蓝色气泡，改为现有theme/on-theme表面；表头内层.cell、表格底线、日历星期/禁用日期背景及小箭头补语义配色和尺寸。真实稳定日历为324×343，首次41px高度属入场动画，未作为最终几何；Escape完成离场后可见浮层为0，没有据瞬时退出动画判断关闭失败。
+- **钱包键盘生命周期**：当前运行态的记录标签未获得role/tabindex，而入口只在初始化时取得一次#app；当前#app存在不能证明初始化时所绑定节点始终存活。改用稳定body承载原来的单个键盘controller，仍只匹配钱包导航与记录分类，不建立账号/交易状态或新的轮询。实际setupNativeSiteAppearance模块回归覆盖迟到#app、同id根替换、旧节点属性还原、新标签一次原生点击、原支付按钮不接管、关闭适配后的释放和广告class独立；新增行为尚待累计产物实站装载，未宣称原历史挂载时序已被还原。
+- **账号资料、积分与黑名单**：资料表单在1100px下的982px外壳和原控件布局可用，保留其业务与布局。积分首页的余额标签/数值确认是独立span，空白绶带和人物仅是背景绘制，改为普通语义阅读面，真实数值节点不重建；补兑换说明、挂件标题、积分记录标题与表头、预览卡片及导航按钮。积分记录Enter切换与焦点实站有效，并恢复首页；没有兑换积分或领取挂件。黑名单实际姓名#222、时间#6d757a在暗面上不可读，补文字、分隔线和按钮轮廓；不改原解除逻辑，也未移除任何条目。
+- **头像、旧勋章与通知**：头像页三个只读分类均实际进入；补小于24px的链接命中范围、选中线、两个真实圆形工具表面、挂件LI外壳及到期说明，未给内部图片区重复加卡片；原hover动作显隐、头像/挂件像素和佩戴动作保留。旧勋章的白色空网格/框来自#mp-mine-header背景，真实头像、用户名、等级和状态节点独立，已只替换背景及更换入口；补黑字、分类及bg-blue旧侧栏选中态。旧图标复用既有alpha投影方式，并仅在原链接内裁切原位图，未克隆按钮、过滤勋章内容图或改变进度宽度。通知开关的active蓝色经element.style确认来自原生内联值，补精确优先级和thumb前景；只扩大原开关命中外壳，保留20px视觉轨道、disabled状态、role和原事件，没有切换通知偏好。
+- **邀请页与隐私边界**：最初interactive阶段的no-level是临时资格占位，完整加载后由真实邀请说明/记录替换；两次早期采样已标限制，不作为资格或空态结论。最终修正标题/说明、原生购买入口、invtable表头/单元格和已使用样式；只读字段保持readOnly，codedone保持原有淡化状态。仅读取样式、结构和只读属性，没有读取input.value、执行复制或购买，也没有把邀请码、资产明细或私人名单写入仓库记录。原生邀请说明图、头像、挂件、徽章和有文字的品牌横幅保持。
+- **检查与开发**：pnpm lint/typecheck/test/knip均退出0，537条PASS，Knip仍10/0/5；最后只读历史字段前景使用text-2后，accountSettingsPage.scss定向lint也退出0。日志/tmp/bewly-native109-{lint,typecheck,test,knip,style-final}.log；git diff --check退出0。watch 92599经原句柄确认持续运行，native87-dev.log:1681–1688记录最后轻量CSS增量、1828–1832记录最终主入口增量；没有重启watch、生产build、打包或clear。
+- **集中三主题隔离验证**：沿前批本机测试方法，分别读取实际contentScripts/style.css和nativeAppearance/style.css，转译实际主题与键盘模块，使用明确的虚构数据；新覆盖LOL、钱包、积分、管理/通知/邀请、旧勋章及头像，并回归前两批样本。共13组模板×3主题=39组成对开启/同节点关闭场景，309个样式采样含279个文字采样，最低文字对比度5.3445；命中范围、开关thumb前景、圆角、背景退出和原节点恢复均通过，所有场景文档宽1100。首次钱包夹具漏了左右栏及记录外框，又误加20px外边距，产生1120px伪溢出；按实站层级修正夹具，未为此改产品。初始native109-isolated-first.json保留，最终native109-isolated-metrics.json及汇总截图均在/tmp；这些结果不替代真实页面完整层叠与三主题验收。
+- **恢复与剩余范围**：20份观察在native109-live-results.json，不当作20个已验收页面；验证码外壳、早期邀请状态和带原生关注悬浮层的LOL宽屏截图均注明限制。实站截图只留本地，含账号信息的图不作为公开交付。临时渲染服务51892已停止（退出130），默认视口恢复，临时标签全部关闭并返回原动态页；本轮未操作Nocturne显示偏好、其他扩展设置或账号写入。新补差继续累计，余下安全/条件模板、累计产物的全站矩阵、额外改色/广告恢复、直播姬装载疑点及原播放回归边界仍保留。本批未改媒体请求、播放器发现、动态加载或广告推断，未据外观检查宣称历史4004已消除；Goal保持active，未追加重载请求。
+
+### 第七十一批：目标复核、安全与下载入口收尾及集中复验准备（2026-10-05）
+
+- **目标与保护基线**：收到用户再次更新提示后实际读取active Goal，继续以完整入口清单集中实施浅色/深色/OLED、统一请求重载和最后全站视觉检查为准；外观受“适配更多页面”控制，广告独立服从blockAds，不破坏播放等既有功能。重新执行Git五项，仍为message_feature跟踪origin/message_feature、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6及三个预期remote；stash@{0}再核为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。没有改分支、版本、处理stash、commit/push、生产build、打包或clear。
+- **安全首页实读与修正**：passport/account/security完整加载后DR0，1100px时外壳1068px、内容600px，原卡片87px高且已有12px轮廓，保留布局。初始默认状态不作为账号安全结论；只修正实际内联绿色情况说明、嵌套深色span和30px按钮命中面。固定浅绿色高等级盾牌上的原分数/说明使用黑色前景，仅限定该已观察图片，不猜测其他等级颜色或更改状态。卡片组外壳改透明，单独卡片保留语义阅读面；没有进入凭证输入、绑定、密码或验证码流程。
+- **认证公开入口**：account/official/home实际为独立official-home-warapper，没有security-right；当前DR dynamic/6个非空样式，配色不记纯主题通过。1100px时正文固定1450px，个人/机构卡片和权益行另有固定宽度、原生间隔。保留原组数、原文字及图标节点，约束真实内容宽度并让原卡片分配可用空间；空黄/蓝纹理改普通语义卡片，独立的单色图标按主题可读，标题/说明使用text-1/text-2。品牌头图、类别闪电及权益插画保留；未进入或提交认证申请。
+- **直播姬启动取证**：先前无标记状态下，原生Chrome DevTools的Content scripts中实际存在Bewly Nocturne Dev的dist/nativeAppearance/index.global.js。在既有健康PING处理行暂停，旧上下文已通过失效/aborted检查，started实际为false；暂停前同一文档已complete。证据说明脚本装载与启动不是一回事，但未确定DOMContentLoaded回调为何未完成，不能把原站尝试唤起未安装livehime协议的日志直接归为根因。只保留脱敏证据native110-bootstrap-observation.json，不记录协议查询中的跟踪标识，没有清除错误日志、修改原站脚本或读取原站Vue expando。调试结束已移除本次断点/Watch表达式、恢复断点启用并确认Not paused，关闭DevTools；没有访问扩展管理页。
+- **事件式启动补偿**：nativeAppearance沿原DOMContentLoaded启动，增加document完成状态事件及既有健康检查中的一次性补偿；参考[MDN readyState](https://developer.mozilla.org/en-US/docs/Web/API/Document/readyState)和[DOMContentLoaded](https://developer.mozilla.org/en-US/docs/Web/API/Document/DOMContentLoaded_event)。独立attempt标记限制初始化一次，完整启动后移除等待监听；失败尝试不重放，已释放或失效上下文不复活，没有新增计时器、轮询、路由owner或播放器挂载。实际入口回归覆盖缺失DCL、interactive不提前启动、complete事件/健康PING恢复、重复触发一次、失败不假报ready、离场/失效不重启，并以禁止计时器的夹具检查无轮询路径。这仍不是原站间歇时序的修复后验收。
+- **下载页完整差额**：后续正常导航已出现live-center/bewly-design，DR0，故不继续声称该页始终不注入。实际首屏的girl背景包含完整软件界面预览和人物，保留；moon/land/planet/stardust及page-container渐变确为独立风景装饰，适配开启时退出。1100px实际文档达1200px，配置区固定宽高、列内黑色标题、位图字标和蓝色下载按钮另有遗漏。补配置阅读面、可用宽度/自适应高度、列间距、深层文字、按钮及页脚链接36px命中面；仅调整已确认的单色位图字标，保留平台图标、QR、产品图与说明插图。窄窗产品图限制在右侧可用区域，不遮挡左下载列。
+- **下载键盘与边界**：沿既有nativePageKeyboard的live-center选择器，为真实下载页click-only下载/体验节点提供Tab及Enter/Space，仍调用原节点原生click；已有按钮、链接和不相关同名节点不二次接管。该精确路径使用稳定body承接迟到根，复用原scope释放，不新增另一套监听或业务动作。实际模块回归检查迟到挂载、IME/长按、Space松开一次激活、关闭适配清理、重新开启不重复、广告开关独立。实站没有点击下载、体验、安装、开播、协议或任何账号写入；按钮动作只在隔离夹具计数验证。
+- **完整检查**：pnpm lint、typecheck、test、knip最终均退出0，最新539条PASS，Knip10/0/5保持；git diff --check退出0。日志为/tmp/bewly-native110-lint-complete.log、typecheck-complete.log、test-final.log、knip-complete.log。test-complete.log保留首次在esno/tsx创建IPC时被沙箱EPERM阻止的结果，该次没有执行测试；获准后重跑原pnpm test并成功，没有放宽断言。较早新增入口测试的格式修正及538项结果仍保留原日志。watch 92599持续运行，native87-dev.log:1896–1905记录最后native/main增量成功，未重启或清理产物。
+- **隔离渲染**：本机服务直接读取当前实际两份开发CSS及转译真实themeColor模块，安全、认证、下载三个模板分别在浅色近白/深色近黑/OLED玫红下执行开启/同节点关闭对照，共9组、294个样式采样、207个文字采样，最低文字对比度5.5745；文档宽度均1100，关键轮廓、装饰退出、内容保留、命中尺寸与样式恢复无失败。初版安全夹具误写security-home-card而非实站home-card-wp，导致7条失败；按本轮原始DOM记录修正夹具后通过，未为此修改产品。首次结果native110-isolated-first.json保留，最终native110-isolated-metrics.json与汇总截图均在/tmp；位图未复制进夹具，不能把这些计算当成原站完整配色、图片或实际层叠通过。临时服务初次被本机监听沙箱限制，获准后启动；脚本换行转义错误已修正，旧浏览器诊断保留。
+- **集中装载门槛**：第六十七至七十一批确定的补差已累计写入并完成检查，本次统一请求一次重载。普通刷新后的下载页虽然complete且有轻量标记，仍为旧1200px配置宽度、5px圆角、蓝色按钮且无新role/tabindex，证明最新下载补丁未装载，不能以watch或旧标记代替生效证据。后续按同一总清单完成三主题、宽窄桌面、开关/键盘/原生媒体复验；Dark Reader临时隔离原问题仍待答复，广告关闭后的其他隐藏层、资格后状态、未登录和历史4004原因仍各自保留，不宣称全站完成。
+- **恢复**：结构取证存native110-live-results.json，账号截图仅本地保留，下载页修改前及隔离汇总截图使用native110前缀。本轮未更改Nocturne偏好或其他扩展设置；临时服务91433已停止（退出130），隔离标签关闭，默认视口实际恢复1744×1083，Chrome原用户Home标签仍处于选中状态。只保留一个直播姬标签作为整批装载后的复验入口；Goal保持active，未结束为complete。
+
+整批重载后同轮复验补记：
+
+- 用户明确回复“已重载这批累计补丁”，随后刷新直播姬页，实际取得page-container背景none、装饰display:none、配置面板12px、按钮theme/on-theme及role=button/tabindex=0，确认本次装载有效，不再索取该批确认。DR0的原标签完成深色1744px以及浅色/深色/OLED的1100px检查；窄窗文档1100、配置区1068@16、三个配置列各约323px、产品图638px且右边1084、四个平台卡各249px，按钮40px高/8px轮廓，未见这些内容重叠或裁切，OLED底层实际纯黑。下载及体验动作未触发。另一新标签在同URL出现Dark Reader dynamic/6个样式，其浅色宽屏截图不作为纯主题通过。
+- 安全首页完整加载后DR0，浅/深/OLED在1744px和1100px均已查看；窄窗外壳1068@16、卡片600px、按钮36px，说明和标题可读，原状态图/分数及账号业务节点未改变。关闭“适配更多页面”后实际退出外观class、卡片回8px、按钮回30px，block-useless-contents仍在；开启后恢复12px/36px。只测试这一外观偏好，未输入凭证、修改绑定或操作任何安全功能。两个视口操作最初落在其他测试标签，实际尺寸与文件标签不符的记录已标明限制，未计作宽窄验收，最终窄窗以带verified的记录为准。
+- 认证公开入口此次完成加载后DR0，深/浅宽屏的五张卡片、文字、独立图标及原品牌横幅已确认；浅色1100时主壳1068px、三/二列卡片和五个权益项都在视口内，但底部professional-wrapper仍宽1100px，文档达到1116px，且原opacity=.7叠加说明灰字。现仅将这块公共阅读链接面板约束到原父列，补语义背景/圆角/文字并取消整块装饰淡化，保留原链接，没有进入申请。最后这处SCSS补差尚未实站新装载；不因此追加单页重载请求，后续继续按累计矩阵收拢复验。
+- 最后补差后，accountSettingsPage.scss定向lint及再次完整pnpm lint均退出0（native110-certification-lint.log、native110-lint-last.log）。增加职业资质面板真实固定宽度/淡化约束到本机夹具，9组三主题再次全部通过，共303个样式/213个文字采样，最低对比度5.5745，文档全部1100；结果native110-isolated-with-panel.json，截图native110-final-check-summary.png。前述539项、typecheck、Knip属于同轮最后SCSS补差之前的完整检查，未冒称重新执行；新增样式由实际编译CSS渲染验证。native87-dev.log:1913–1917确认该最后主入口开发增量成功。
+- 测试后通过设置UI确认恢复暗色、OLED关闭、主题色#f43f5e、基准#2a2f2d、适配开启；设置关闭，其他扩展偏好始终未改。最后本机服务98943退出130，所有本轮测试标签已关闭，会话列表为空，临时视口已reset。上述实站进展没有结束全站Goal；其余累计页面、广告真实恢复、额外改色层与历史4004边界继续保留，无需用户为已经确认装载的这批重复操作。
+
+### 第七十二批：累计补丁复验与学院静态课程行裁切修复（2026-10-06）
+
+- **推进与基线**：上一Goal轮次已有代码、回归及实站证据，本轮继续完整范围，不重建目标或重复索取已确认的整批重载。写入前Git五项仍符合message_feature跟踪origin/message_feature、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6、三个预期remote和既有stash；所有先前修改保留。watch 92599经原句柄确认仍运行，无新输出未被当成停止理由。
+- **IR布局及新焦点补丁**：实际进入资源、公司信息、季度结果和年度目录。1100px文档无横向溢出，FAQ/年度胶囊实际40px高、季度控制按钮36px、选中下划线已命中新主题前景。人物卡片Enter打开原生弹窗，过渡完成后原modal实际tabindex=-1并取得焦点，Tab进入原关闭按钮；关闭完成且body退出modal-open后焦点返回原person卡片。首次读取发生在原生过渡中，未将中间body焦点或短暂无modal解释为产品故障。未下载文件、填写表单、订阅邮件或点击外部行情业务。IR仍为Dark Reader dynamic/6个非空样式，只确认当前布局、控件尺寸和交互，不作纯主题颜色通过结论，也未变更其他扩展。
+- **学院已有补丁确认**：完整挂载后DR0，搜索内外两层的backdrop-filter均为none。专题轮播向后翻页后，真实right-button.left稳定为x=228、opacity=1，下一页按钮为x=1052；恢复前一页后原显示/位移仍正常，证实第六十七批左箭头修正已生效。浅色、深色、OLED的1100px阅读文字/导航/搜索及表面已查看，OLED底层纯黑；这些颜色结果不掩盖下面发现的内容裁切。
+- **静态课程行确定差额**：普通推荐/分类区每行实际6张卡片，分别位于bca-vhr-cards-box或bca-vhc-cards-box的.cards中，没有专题轮播按钮。可用列868px，但六卡206px加后续10px左外边距形成1286px内容；外层bca-v-hr-box/bca-v-hc-box为286px高并overflow:hidden，虽然文档scrollWidth为1100，末尾内容仍被裁切。仅在原1400px桌面适配断点内，让这两种静态列表的内层.cards换行、用统一gap替代子项左margin，并释放相关静态区块固定高度。原专题bca-vhs轨道、原卡片节点/封面/链接/操作和原生滚动逻辑不改；没有把轮播内部超宽当成静态列表缺陷，也没有删除后两张卡片。
+- **钱包最终模板复验**：初次interactive阶段的Dark Reader标记不作为最终环境，完整加载后为DR0。三类记录实际获得role/button及tabindex=0，Enter切购买记录、空格切B币券，aria-pressed及焦点正确，最后恢复消费明细。主页面浅/深/OLED在1744×1027及1100×800六组合均已查看，顶栏横幅、共壳、记录表头、分类、日期输入和品牌字标均保持可读及完整布局，未见这些样本的横向溢出或重叠；当前表格为空记录，不扩大为非空交易行。日历稳定后位于视口内，星期/日期/禁用日及选中配色可区分，原生箭头命中尺寸已更新，Escape结束离场后关闭。没有选日期、改变筛选范围、导出记录、充值、提现或发起交易，账号截图仅留本地。
+- **学院隔离几何检查**：本机页面读取当前实际nativeAppearance/style.css，夹具仅复现已观察的六卡尺寸、边距、固定高度和独立专题轨道，无原站账号/媒体请求。在1100、1280、1744px分别执行浅/深/OLED，共9组、108次卡片几何检查；1100/1280静态卡片为2行，1744仍为1行，所有卡片均在所属区块和视口内，后续区块不重叠，文档宽等于视口。专题轨道始终1401px宽、原-331px位移保持；关闭适配后原几何及同一节点恢复，全部无失败。结果/tmp/bewly-native111-academy-layout-metrics.json、汇总截图同前缀；这是隔离渲染，新换行尚未实站装载，继续与上一批职业资质面板差额累计，不追加单页重载请求。
+- **完整自动检查**：pnpm lint、typecheck、test、knip均退出0，539条PASS，Knip仍10/0/5；学院SCSS定向lint和git diff --check也退出0。日志/tmp/bewly-native111-{lint,typecheck,test,knip}.log及native111-academy-lint.log。本轮仅新增上述SCSS规则，没有新增测试计数或改动播放器、动态、媒体请求、广告规则、设置字段、监听器及轮询。native87-dev.log:1922–1929确认native/main最后开发增量成功，无生产build、打包、clear或产物手改。
+- **记录、恢复与剩余**：结构/状态观察保存在native111-live-results.json，截图以native111为前缀，钱包私密图不作公开交付。显示偏好通过UI恢复暗色、OLED关闭、#f43f5e、#2a2f2d和适配开启；设置关闭、临时视口reset，所有本轮测试标签已关闭，会话列表为空，原用户Home标签确认仍选中。本机服务83054退出130，开发watch保留。其余累计页面完整矩阵、外部改色/广告恢复、条件状态及播放/动态最终回归继续；不据本轮声明历史4004原因已消除。未commit/push、改版本、处理stash或使用子代理，Goal保持active。
+
+### 第七十三批：漫画账户完整矩阵与原生样式覆盖补正（2026-10-06）
+
+- **范围与基线**：上一轮已有实站和代码进展，继续原Goal。写入前重新执行Git五项，message_feature、origin/message_feature、原HEAD与三个remote仍正确；收尾stash@{0}再核仍为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。保护全部原有修改，复用仍在运行的watch 92599，没有新分支、版本、commit/push、stash、生产build、打包或clear操作。
+- **账户矩阵**：根据实站侧栏的11个真实链接，逐项查看账户信息、通用券、漫读券、限免卡、打折卡、抵扣卡、已购漫画、追漫、阅读历史、自动购买管理、反馈。浅色、深色、OLED分别检查1744×1027及1100×800，按菜单入口归并共66个组合；账户信息的实际recharge-history子路由保留原始URL，不能误计为第12种独立模板。文档宽度均等于视口，当前样本未见内容/控件的横向溢出或重叠，所有这些记录均为DR0。这里是包含已知差额的现状矩阵，不是新补丁66组全部通过；卡券/自动购买为空态，不推定有资产列表或管理状态已验证。
+- **已生效及等价保留**：已购、追漫、历史实际显示内容，标题、说明、媒体轮廓和省略遮罩已命中新规则；封面及原生纵向列表保持。追漫排序、编辑入口本身是26px高的原生button，等价保留，没有重复接管。账户记录Enter切漫币消费、空格返回充值记录，aria-pressed正确；日期与反馈类型菜单Enter打开，从可见选项Escape关闭并回收至原current。年份菜单会主动隐藏当前年份，首次定位到这个隐藏选项的工具失败不是产品故障，改用真实可见选项后完成验证。未选日期、填写/提交反馈、进入编辑、领取、充值、续费、购买、改变自动购买或阅读参数。
+- **畅读卡与深色箭头**：实站monthly-card仍有淡黄底图，确认它由原Vue写入普通内联background-image，覆盖了此前的背景简写；增加该精确装饰属性的优先级，继续使用content-alt-solid。底图仅含浅色矩形/斜纹，独立标识、状态、内容和按钮保留。more箭头的浅色规则位于更具体的page-content范围，压过了原较弱的dark规则；把深色选择器补齐同一范围，修正实际仍为brightness(0)的黑箭头，不给整个卡片或图片列表加反色。
+- **侧栏分隔线**：实站nav-line为32px高的留白容器，真正的1px细线由::before绘制。此前通用背景映射把整个留白涂成了灰条；现容器保持透明，仅将原伪元素映射到border-color token，保留32px间距和原节点，不重排侧栏。
+- **帮助图标和提示层**：原question-icon是16px的固定黑色、34%透明度SVG，暗面上难以辨认；复用同一矢量轮廓，以text-2绘制独立伪元素，并把原触发区域补到24px。使用[mask-image](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/mask-image)和明确的[alpha模式](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/mask-mode)，不对带原生子提示层的父节点加滤镜。进一步实开原说明浮层后确认：浅色模式文字已为text-1，但更深的原生规则仍画rgb(29,29,29)背景及黑箭头，导致黑字落在黑底。现沿真实router-view/subtitle/question-icon路径强化面板背景、轮廓及三角箭头配色，使用同一elevated-solid；原提示内容、位置和鼠标行为保持，没有新增业务组件、监听器或交互状态。
+- **前台与加载边界**：70份原始观察在/tmp/bewly-native112-live-results.json，去重的66组合在native112-matrix.json。一次已购浅色窄窗截图尾部仍显示载入中，后以前台稳定结果补齐；一次限免卡OLED宽屏在后台标签未绘制空态，切到实际标签前台后正常呈现，未归因或改动数据加载逻辑。两条早期记录保留并标注限制，不冒充稳定完成状态；后续宽屏检查保持前台，等待实际过渡/加载反馈。截图以native112为前缀，包含账户和阅读信息的图仅本地留存，不复制具体资产、书名、UID或表单值到维护记录。当前漫画样本的Nocturne警告/错误查询为空，不扩大为其他页面无错误。
+- **隔离渲染及恢复**：本机夹具只含虚构内容，读取实际开发CSS及转译真实themeColor模块，覆盖内联背景、32px留白/1px伪元素、原生叶子箭头、强优先级黑色提示面及其三角。账户/说明两组结构分别跑浅色近白、深色近黑、OLED玫红，共6组成对启用/关闭检查，无失败；15处文字采样最低对比度10.3364，图标/提示层无整层滤镜，提示层边界、24px触发区域和原节点/原样式恢复均通过。实际查看OLED及浅色图像，问号蒙版可见，浅色提示层为白面黑字且箭头一致。独立场景首次截图发生在测试脚本切换完成前，以后续bewly-design生效及实际计算色确认后的图为准；没有据初始原生黑面断言修复失败。结果native112-isolated-metrics.json、汇总图native112-isolated-summary.png及浅色图均在/tmp；这仍不是累计修正重新装载后的原站验收。
+- **完整检查与开发**：pnpm lint、typecheck、test、knip最终均退出0，539条PASS，Knip10/0/5不变，git diff --check退出0。日志/tmp/bewly-native112-{lint,typecheck,test,knip}.log。最初定向lint仅报长mask声明换行，修正后完整lint通过，native112-style-lint.log保留原失败。watch原句柄持续运行，native87-dev.log:2048–2055确认最终native/main开发增量，没有直接改产物。应用修改仅在nativeSites.scss，不改媒体请求、播放器发现、动态加载、广告识别、设置字段或后台协调。
+- **恢复及下一步**：通过设置UI确认恢复暗色、OLED关闭、主题色#f43f5e、基准#2a2f2d和适配开启；设置关闭、临时视口reset，全部本轮标签已关闭且会话为空，原用户Home标签重新选中。临时服务器19091退出130，开发watch保留。当前未装载的新差额累计为认证底部面板、学院静态课程换行及本批漫画细项；继续其余页面后集中复验，不追加单页重载请求。全站目标、其他域的改色/广告恢复与历史4004因果边界保持，Goal继续active。
+
+### 第七十四批：游戏个人页矩阵与官方配套站点入口（2026-10-06）
+
+- **基线与范围**：本轮开始重新执行Git五项，分支、跟踪与三个remote符合现有message_feature约定；收尾HEAD仍为7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6，stash@{0}仍为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。保留全部既有修改，复用watch 92599；没有分支切换、commit/push、stash、版本、生产build、打包或clear操作。
+- **游戏个人中心实站**：主页、游戏、评价、收藏、WIKI分别检查浅色、深色、OLED及1744×1027/1100×800，33份观察归并30个组合，文档均未横向溢出，记录时DR0。原生品牌横幅、Steam内容、头像和业务入口保留。Enter进入游戏、空格切评价、当前页aria-current有效；一次严格URL等待因原生自动附加跟踪query超时，以实际pathname及当前导航状态确认成功，不算路由故障。原生评价加载中、主页数据未到的早期记录保留限制，并补稳定观察；没有绑定、评价、关注、删除或改变游戏账户数据。证据/tmp/bewly-native113-live-results.json、native113-game-matrix.json和同前缀图片，个人内容仅本地留存。
+- **可见问题与补正**：窄窗个人页右栏曾贴近原生59px反馈挂件；在现有mine-content上按1160px内容上限增加有界右内距，1100px为64px、宽屏回到0，保留原挂件及网格。实站确认右栏结束约1020px、挂件起点1041px，具有21px间隔。共享游戏页脚备案文字映射text-2，实际已出现新颜色；另把列表结束文字与标题计数映射到文字/边框/小圆角token，这两项仍需新产物实站复验。原生页脚本身使用--bg1，稳定后已与--bew-bg相同，等价保留，不重复覆盖。搜索占位原有颜色在本轮浅色样本可读，没有为它追加改动。
+- **遗漏入口与实现**：从实际游戏顶栏/页脚确认wiki.biligame.com、b-gift.biligame.com、pay.biligame.com、yhxy.biligame.com。增加四个精确域权限，通过现有NATIVE_AUXILIARY_ROUTES接入独立appearance入口，只匹配已观察的首页、WIKI平台/wiki目录、我的礼包list_my.html及协议首页；不扩大为*.biligame.com、不注入付款SDK/未知cashier文档或全部iframe。设置、主题和广告仍由原有owner投影；关闭“适配更多页面”恢复原生样式，blockAds独立。新nativeGameCompanionPages.scss映射公共顶栏/页脚、WIKI面板/卡片/检索表面、礼包记录/空态/原有详情阅读面、充值游戏目录与协议阅读面；窄窗给WIKI原生70px快捷栏留空间，目录长标题允许内容撑开，协议原生版本选择与正文对齐且不重叠。未把有内容意义的礼包横幅、游戏图片或目录当广告移除。
+- **原生交互与边界**：仅将“我的礼包”入口和充值目录的原生game-body纳入现有nativePageKeyboard，保留click所有权、IME及对称恢复，没有新轮询或键盘框架；没有把领取、复制兑换码、提交、充值按钮纳入接管。新增隔离行为用例验证Enter/空格触发原生回调、输入不被截获、相邻业务按钮不触发、卸载后属性恢复且鼠标回调仍存活。WIKI平台卡片链接到的社区作者自定义游戏WIKI已观察到独立导航、内容主题和欢迎层；这类不按平台壳强行覆盖，尚未纳入统一外观验收，不推定平台样式适用于所有作者模板。
+- **只读协议检查与真实加载边界**：首次访问yhxy.biligame.com被自动审批以缺少协议页访问授权拒绝，未绕过；随后用户明确“允许只读检查”，同一URL正常打开。实际页为正文与一个版本select，没有接受按钮；没有选择版本、接受、注册或提交。WIKI平台、礼包、充值、协议均仍受Dark Reader改色且没有新Nocturne标记，不能算新增主题实站通过。充值目录先空白、稍后实际加载20个游戏；未激活任何游戏或金额。礼包首页目录仍显示原生加载，个人礼包显示空态，未宣称有资产/详情/领取状态通过；原生礼包CSS通过当前页已观察资源工具读取，只用于局部样式映射。
+- **隔离渲染**：临时页面使用实际开发CSS、真实themeColor模块、实站结构和已加载的原生礼包CSS；个人页、WIKI、礼包记录、充值目录、协议五类结构×三主题×双视口，共30组最终全部通过，文字样本最低对比度5.7192，验证边界、反馈/快捷栏间距、长标题、36px版本入口、明确广告开关及原节点/样式恢复。内容均为虚构。初轮9项失败保存在native113-isolated-first.json：个人页夹具曾错误硬编码白色/1280px页脚，与实站--bg1和无最小宽度的规则不符；礼包按钮在原生200ms背景过渡结束前被采样。按实际规则修正夹具并等待有限动画完成后通过；没有为这些测试误差更改媒体或数据逻辑。随后按协议实站choose与page-content为兄弟的结构复核并统一对齐，再跑30组通过。最终/tmp/bewly-native113-isolated-complete.json及native113-isolated-summary.png，早期与中间结果均保留；这不是新增域重载后的实站验收。
+- **检查与开发产物**：最终完整lint、typecheck、test、Knip均退出0，540条PASS，Knip10/0/5不变，git diff --check退出0。完整日志为/tmp/bewly-native113-lint-complete.log、native113-typecheck.log、native113-test.log、native113-knip.log；最初仅有新SCSS的换行/缩进格式错误，targeted-lint、lint和lint-final各阶段日志保留。watch已重新生成manifest，native87-dev.log:2221–2228确认最终native/main开发增量。没有直接修改产物，没有改视频网络、播放器发现、媒体加载或动态请求。
+- **恢复与后续**：已恢复暗色、OLED关闭、主题色#f43f5e、基准#2a2f2d，设置关闭；临时视口reset，全部本轮标签关闭并确认会话为空，原用户首页重新选中。三个临时夹具进程93005/71972/14104均正常停止（退出130），开发watch保留。本轮未追加单页重载请求；新增域和累计细项待后续统一重载，继续其余游戏帮助/直播页面及最终播放、动态回归。Dark Reader/AdGuard隔离边界、广告关闭后的真实恢复和历史4004因果仍未完成，Goal继续active。
+
+### 第七十五批：游戏帮助与直播目录的布局、选中态和键盘补正（2026-10-06）
+
+- **基线与Goal更新**：上一批有实际实现和实站进展，本轮继续完整目标。写入前重新执行Git五项，分支/跟踪/remote正常；收尾HEAD和stash@{0}仍为原SHA。watch 92599在本轮开始和实施后均通过原句柄确认运行。用户新增要求每批汇报大致完成比例与剩余工作，已重新读取当前Goal；下述比例只估算工作量，不用测试数量代替实站完成率。
+- **游戏客服**：完成三主题×两视口六组现状取样，DR0；七个FAQ分类依次呈现7/2/5/2/2/2/2条问题，Enter切分类、展开问题和aria-expanded有效。实际原生规则带#service-app，压过旧类选择器，使分类变成content-box且实际49px、问题仍flex-start。修正锚定该原生ID，分类使用36px/13px字级，问题和答案使用正文token；阅读面及联系区补内距，问题编号、换行正文和箭头按同一行居中；原生联系卡保留，按钮36px。旧footer-public内固定rgb(125,125,125)文字补text-2。未联系人工客服、输入资料或改变账号。
+- **家长监护**：工程介绍、申请流程、进度查询、常见问题四个原生分类完成三主题宽窄24组现状取样，DR0，原切换和pressed语义有效；未下载申请书、发邮件或提交任何材料。阅读面实际被UA的UL左40px/上12px留白推移，原37px padding及2px白边又压过旧规则；因此仅沿#page/#mainly加强原有样式、清除该面板切换列表的默认留白，保持152px导航与885px阅读列，并补16px窗口边距。实测808×140的原生流程图此前超出内部阅读宽度，现按原比例在可用宽度内完整呈现；保留原图和既有单色滤镜，不重绘流程、文本或业务节点。
+- **直播公会**：确认此前登录卡片窄窗定位修复已实际生效，插图完成加载后正常。实站滚动时80px固定帮助栏与最后一张权益卡片/页脚链接相交，补权益标题/四卡行与1200px页脚各自的有界右侧留白；保留原生卡片尺寸、媒体和登录/入驻操作。标题与卡片仍共同居中，宽屏留白回到0。窄窗页脚允许换行并去掉单独占130px外边距的装饰分隔条，其他分隔使用border token；初始登录中性按钮补普通表面，未退出、登录或入驻。首次截图处于原生会话/插图初始化阶段，后续加载结果单独确认，不据早期图像判断业务组件丢失。
+- **LOL/全部直播目录**：实站确认已有封面12px/superellipse(1.7)轮廓和1100px正文1020/侧栏起点1036的16px间隔，等价保留。原分类实际23px、封面切换约19px，且选中为红字红底；补同一组36px普通控件表面与theme/on-theme配对。读到原生html[lab-style*="dark"]的选中背景!important规则，按同一明确状态补必要优先级，保留原生lab-style/Cookie。原分区弹层在1100px下宽1140、右边1156，被页面裁切；现随原header宽度、限制视口内高度并在弹层内滚动。标题和切换入口使用无滤镜阅读表面，SVG原箭头沿currentColor；原生侧边栏保留贴右侧的拼接形式，用panel圆角并补可读标签。流媒体海报、直播封面和有内容横幅均保留，未根据主播或标题推断广告。
+- **目录键盘所有权**：只在实际/all、/lol两条目录路径的稳定#app上使用现有nativePageKeyboard；数字房间和blanc子文档不注册这份控制器，也不观察原生顶栏、聊天和充值浮层。补分类/封面状态、原生分区触发器的expanded、无href导航A的link/current语义；Enter仍调用原节点click，Space不激活链接，Escape关闭原弹层并回收焦点，原生移除选项后的焦点回收有dispose/归属检查。关闭外观恢复属性和监听器，没有新轮询、全局快捷键或业务状态。实际模块新用例覆盖上述键盘/焦点及仅目录#app注册、禁用释放、房间不注册的路径。
+- **直播教程**：link帮助域本次仍有Dark Reader dynamic/6个非空样式，只记结构证据。图片稳定后具有真实自然尺寸，未更改、反色或裁切；早期局部绘制不作图片故障。目录的原LI固定28px，但现有.menu已36px，吃掉原行距；仅将.anchor下的实际目录改为两列自然高度网格，取消无用float/clearfix生成项，保留原章节点击及正文。未执行教程中的开播、下载或设置动作。另辨识现场BTR入口属于“线程撕裂者设置”，未改动其他扩展或将其界面当作Nocturne实现。
+- **回归与隔离渲染**：完整lint、typecheck、test、Knip最终均退出0，542条PASS，Knip10/0/5不变，git diff --check退出0。日志/tmp/bewly-native114-lint-verified.log、native114-typecheck.log、native114-test-complete.log、native114-knip.log；早期仅有嵌套三元缩进和测试单行语句格式错误，阶段日志保留。五类实际开发CSS场景跑三主题/1100与1744，公会另覆盖1280/1392，共36组最终全部通过，文字样本最低对比度5.5745。检查包含FAQ父项/箭头、阅读面与流程图、公会滚动栏横向避让、目录弹层边界和原生!important选中态、教程目录行距以及同节点/样式关闭恢复；全部内容为虚构，不能代替装载后的原站验收。结果native114-isolated-complete.json及同前缀图在/tmp。
+- **证据校正**：首轮两项失败是夹具把直播侧栏背景写成固定深色；通过/all实站浅色确认它实际由--bg1_float映射到白色，并读到原生!important规则，校正基线后再补真实lab-style选中条件复跑。native114-isolated-first.json、surface-baseline.json和最终结果均保留。一次原生CSS资源工具提取耗时约31分钟，结果只作样式依据，不作为页面、视频或动态加载性能数据，也未据此重启watch。普通刷新后FAQ仍为49px/旧padding，证明这批新规则尚未载入，未将源码或开发编译当实站成功。
+- **开发及恢复**：native87-dev.log:2373–2380确认最终native/main增量；没有生产build、打包、clear、版本修改或手改产物。本轮只改两个适配SCSS、局部键盘控制器/挂载选择和行为回归，不改视频请求、播放器发现、媒体加载或动态网络。已恢复暗色/OLED关闭、主题色#f43f5e和基准#2a2f2d，关闭设置，重置临时视口；所有本轮标签已关闭，会话为空，原用户首页恢复选中。临时服务器按本轮句柄停止，开发watch保留。未commit/push。
+- **完成度估算与剩余工作**：按当前已确认页面族、已落地源码和未通过的实站门槛，整体工作量暂估约80%，剩余约20%；代码实施约九成落地，完成度不等于已验证页面/URL/测试占比，后续新增模板会修正估算。剩余三组工作为：①剩余创作工具、企业公共页和社区WIKI的覆盖对账及必要补差；②累计补丁统一加载后的三主题、宽窄、键盘与开关恢复复验；③广告关闭后的真实展示恢复及播放/动态回归，保留4004尚未确认因果的边界。Dark Reader/其他隐藏层、帮玩验证码及权限/空态条件仍须区分。当前不追加单页重载请求，Goal继续active。
+
+### 第七十六批：社区 WIKI 的公共外壳、作者组件与主题恢复（2026-10-06）
+
+- **基线**：本轮重新执行Git五项，message_feature、origin/message_feature、原HEAD与三remote正确；收尾HEAD和stash@{0}仍为原SHA，全部旧改动保留。watch 92599通过原句柄确认仍运行，没有新分支、commit/push、版本、生产build、打包或clear操作。上一轮属于实际进展，继续完整Goal。
+- **真实模板依据**：沿游戏WIKI平台的真实链接查看/nrc/首页与/blhx/首页。前者稳定后以nrc-site-navigation、原生搜索/通知/提示层和nrc-home接管外壳；后者保留wiki-header、标准菜单、快捷栏与作者内容面板。页面及组件的公开原生CSS从可读CSSOM取得并存于/tmp/bewly-native115-{nrc,classic}-original.css，未重新进行长时间资源打包。两页均有Dark Reader且没有本批Nocturne标记，当前只作结构/原样式依据，不算新增主题实站通过。没有关闭作者提示、操作通知、登录、发送、编辑或提交WIKI内容。
+- **入口与生命周期**：wiki.biligame.com既有精确host权限不变，平台/wiki路径继续使用原配置，其他社区页面进入game-wiki-community；只在真实body.mediawiki文档启动主题投影，资源/API外壳不启动此owner。不挂主站App、MAIN或播放器，不新增键盘控制器、账号状态、轮询或观察器，保留社区自身的导航/搜索/通知/提示生命周期。新增实际模块用例验证文档门槛、单一主题owner、关闭恢复、原按钮/输入身份及原回调保留；manifest回归确认社区路由只有独立入口，外部近似域不匹配。
+- **标准外壳及内容边界**：复用原WIKI导航、搜索和公共页脚规则，经典模板继续用既有窄窗快捷栏留白；现代导航ready后不套经典布局尺寸。新nativeWikiCommunity.scss映射已观察的普通阅读面与卡片，取消实色阅读片后无收益的整片背景采样。仅移除归档索引的装饰水印；活动轮播、带标题的品牌图、图标、正文图片、暗色媒体卡及资料中的语义颜色保留。社区作者可能把有意义的图像放到根背景，因此没有对未知作者根图像进行统一清空，按与专题内容相同的规则保护；已观察页面底层仍沿已有bg token。
+- **现代作者组件**：导航、菜单、账号面板、搜索、通知与只读提示使用语义表面/前景/边框和圆角，内部控件不加玻璃；保留hidden/is-open、过渡、层级、焦点和原事件。首页复用作者现有ink/muted/line/accent/gold/surface变量，补中性卡片及交互状态，原海报内容不改。搜索/关闭图标使用实际OOUI矢量轮廓作为alpha蒙版，以currentColor配合theme/on-theme，避免固定白图标落在近白主按钮上；没有复制业务节点。原轮播小圆点为22×34，补最小24px命中宽度，其他原生按钮已有足够区域。
+- **真实差额与目视复核**：原品牌备用文字使用!important固定浅色，补同一精确前景优先级。计算色检查通过后，目视仍发现导航上方有独立深色纹理图片覆盖浅色底；将该已确认装饰绘制层清除，独立logo/海报保留，并去掉固定金色选中阴影，使其服从语义选中表面。该条件补入最终渲染回归，原导航问题图native115-navigation-light-isolated.png与修正后navigation-light-verified.png均保留。
+- **检查结果**：完整lint、typecheck、test、Knip最终均退出0，543条PASS，Knip10/0/5不变，git diff --check退出0。日志/tmp/bewly-native115-lint-verified.log、native115-typecheck.log、native115-test.log、native115-knip.log。初次两处SCSS换行问题已修正，targeted-lint日志保留。标准外壳、导航、搜索、提示、通知和首页六类场景×三主题×两视口，共36组最终全部通过，文字样本最低对比度5.1853；验证可视边界、实色面无重复采样、图标轮廓、原媒体/语义状态、原节点及禁用恢复。内容均为虚构；早期五项失败中三项为校验错误地比较了正常布局位移，另两项为真实备用品牌文字问题，first.json与阶段结果保留。最终证据/tmp/bewly-native115-isolated-verified.json/png，不能替代新入口实站验收。
+- **开发产物核对**：新增SCSS写入期间watch曾记录暂时缺少导入文件，未删除日志；文件完成后native87-dev.log:2460–2467确认最终native/main成功增量。进一步发现开发manifest仍只有/wiki原范围，不能用watch存在或源码回归代替产物检查；仅运行既有development环境的scripts/manifest.ts生成器，退出0，native115-manifest.log保留，随后确认生成manifest的原生matches及两个主入口excludes均包含wiki精确域的完整匹配。没有手改产物或重启整套watch；一次受限ps读取被沙箱拒绝，未据此判断watch停止。
+- **恢复与进度**：本轮未改变用户主题，收尾再次确认暗色、OLED未启用、主题色#f43f5e与基准#2a2f2d；临时视口恢复1744×1027，所有本轮标签关闭、会话为空，原用户首页恢复选中。临时服务器24648/1798/28309均停止（退出130），开发watch保留。本批完成后整体工作量粗估约82%，剩余约18%；这是基于当前清单的工作量估算，实站覆盖按矩阵记录。后续仍需剩余创作工具/企业公共模板核对、累计补丁统一加载后的完整矩阵、广告真实恢复和播放/动态回归；Dark Reader、验证码与权限/空态等条件边界仍在。暂不追加单页重载请求，Goal继续active。
+
+### 第七十七批：素材库、聚光门户和音乐榜单的阅读与操作差额（2026-10-06）
+
+- **基线与范围**：继续原Goal和message_feature，写入前已核对Git五项；收尾再核HEAD仍为7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6、stash@{0}仍为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b，remote/跟踪正确，保留全部既有修改。复用watch 92599，没有新分支、commit/push、版本、生产build、打包、clear或子代理。游戏用户协议的只读授权及检查已经记入第七十四批，不重复请求或执行接受动作。
+- **素材目录和管理页**：实读视频/贴纸目录及视频、贴纸、虚拟形象、音乐、文字转视频、图片、收益、个人资料八个管理入口，记录时DR0；管理列表当前为空态，不能推定有资产/编辑状态通过。发现目录固定白色条带、低对比分类与展开入口、贴纸黑色标题、个人资料白色卡片及固定黑色数值，改用现有背景/实色面/前景/圆角token。分类与展开控件保留原尺寸和原click，视频预览由原父容器统一裁切IMG/VIDEO，贴纸透明素材仍保留原有浅色预览底，避免黑色贴纸失去可见性；不改媒体src或播放方法。1100窗口下，文档scrollWidth虽为1100，但#app内未命名路由宿主仍min-width1280，导致管理内容右侧到1264被裁切；只在实际包含目录/管理根的直接宿主释放该最小宽度，复用原网格和侧栏。
+- **局部键盘与展开**：素材筛选补aria-pressed，原展开入口补aria-expanded，管理分类加入既有nativePageKeyboard。键盘焦点进入被原collapse容器裁切的分类时，通过原operation.click展开；已有可见分类不展开，不另建尺寸观察器。focusin监听与原owner同步释放，分类class变化复用既有MutationObserver。退出登录、上传和其他业务按钮不纳入接管。实际模块回归覆盖可见/被裁切分类、原生回调、展开状态与卸载后属性及监听恢复。
+- **聚光门户与帮助**：music.bilibili.com首页的品牌主视觉视频、角色卡图片及有意义的合作图形保留；仅清除下方三个内容区的独立装饰底图，使底层跟随统一背景。角色卡使用固定浅蓝画面，文字改为匹配原图的深色阅读前景，不反色或重画图片；已观察的单色导航白色字标在浅色中跟随currentColor。入口按钮使用theme/on-theme与完整胶囊。帮助页原白色阅读面和控制台NotJoin资格面板出现白底白字，补实色阅读层及说明前景；帮助页原min-width1020加240px侧栏撑到1260，窄窗释放最小宽度并保留内部24px阅读边距。未入驻、申请资格、联系合作、上传或提交。
+- **独立音乐榜单**：/pc/rank实站的既有背景、封面、卡片轮廓和1100布局等价保留；分类原为25px无语义SPAN，期数入口22.5px且不能键盘使用，统一到36px并补局部button/pressed/expanded语义。Enter/Space仍调用原节点click，Escape通过原触发器关闭期数层并回收焦点；选择项被原生移除后以有dispose/归属/活动焦点检查的microtask回收。仅该路由在稳定#root挂载现有键盘owner，没有新轮询、全局键盘或业务状态。原期数层已有适当实色及箭头，颜色保留，只统一语义圆角。新增实际模块回归覆盖分类、期数层、移除后的焦点回收和输入不被截获；订阅、收藏、播放全部均未操作。
+- **实站证据边界**：/tmp/bewly-native116-live-results.json及同前缀截图保留现状与问题依据。初次管理入口采样在SPA尚未完成时仍指向旧视频路径，已明确标记限制，并使用精确URL及原生当前导航等待后重新采样，不能把旧路由截图当新模板验收。收益页只观察到空态，资料不记录字段值；首个管理容器选择器不匹配的观察不算内容验收。榜单隐藏装饰根的visible等待超时后改为真实内容就绪条件，不将有意隐藏的背景当加载故障。目录当时100个原生video、0个正在播放只是一时计数，不是性能提升或4004因果证据；门户品牌视频保持原muted播放行为。
+- **检查与隔离渲染**：最后完整lint、typecheck、test、Knip均退出0，545条PASS，Knip保持10项未用导出/0项未用导出类型/5项枚举成员提示。日志/tmp/bewly-native116-lint-verified.log、native116-typecheck-final.log、native116-test-final.log、native116-knip-final.log。七类实际开发CSS场景（目录/管理/资料/音乐首页/帮助/控制台/榜单）×三主题×1100与1744，共42组最终无失败，文字样本最低对比度5.5745，覆盖宿主边界、阅读面、媒体身份和裁切、浅色贴纸底、36px目标及关闭恢复。首轮头像corner-shape检查未接受Chrome的superellipse(1)归一表示、榜单期数夹具保留固定黑字，分别修正断言及明确前景后复跑；first.json与最终native116-isolated-complete.json均保留。虚构角色图片中的测试文字重叠不作为产品缺陷，安全阅读示例为native116-help-dark-isolated.png；这些夹具不是重载后的原站验收。
+- **开发、恢复与进度**：native87-dev.log:2596–2606确认最终native/main开发增量；本批源码只涉及nativeCreatorPages.scss、nativePageKeyboard.ts、nativeSiteAppearance.ts及回归，不改视频网络、播放器发现或动态请求。本轮未改显示偏好，收尾确认暗色、OLED关闭、#f43f5e/#2a2f2d、适配开启且设置关闭；临时视口reset，全部本轮标签已关闭且会话为空，原用户首页恢复前台。临时服务器83792/87031均停止（退出130），开发watch保留。整体工作量粗估约84%，剩余约16%，不是实站验收比例；仍需其余创作微应用/企业公共模板覆盖对账、累计新产物三主题宽窄复验、广告真实恢复和播放/动态回归。Dark Reader、验证码、权限/空态及历史4004因果边界仍保留，本轮不追加单页重载请求，Goal继续active。
+
+### 第七十八批：创作互动、粉丝管理与社区公约内部模板补齐（2026-10-06）
+
+- **范围与保护**：上一批有代码和验收进展，本轮继续完整Goal，先核对Git五项及运行中的watch 92599。分支、跟踪、三个remote、HEAD与stash保持原基线；收尾HEAD/stash再次核实未变。只改creativeCenterPage.scss、既有nativePageKeyboard和其行为回归，保留全部既有未提交文件；未commit/push、改版本、处理stash、生产build、打包、clear或调用子代理。本批继续累计实施，没有逐页请求重载。
+- **互动管理实读与修正**：评论管理的外壳已跟随主题，但类型链接仍为#505050、排序选中仍原蓝色，排序项只有18px高；补实际commet_header/title_wrap与operate_right的前景、选中表面、36px目标及换行。弹幕列表和反馈表头仍被深层原色压回#757575，过滤设置内强调文字/黑名单说明/输入仍#212121，添加按钮原蓝色2px圆角，逐项接入已有token。顶部分页栏补与父面板相接的顶部语义圆角；反馈的button_wrap同时用于容器和按钮，原普通按钮表面收窄到真实default控件，避免整组外壳被涂成按钮。未选全选、删除、举报、保护、转移、添加过滤词或改变弹幕设置。
+- **粉丝与勋章**：明确点击粉丝列表后取得空态，不把父导航自动打开的勋章页当列表证据。勋章内层原980px白面与按钮留白造成1100窗口下文档1487px，统一阅读表面并约束内层和两个原列表列宽；资格说明保留文字，以中性说明前景呈现，不改资格。骑士团980px外框导致文档1252px，空态容器白底白字、工具栏和添加入口越界；补内层表面/轮廓/输入前景，并用现有标题、搜索和日期节点换行排布。没有添加、删除或管理用户，未填写UID、改勋章名称或开通功能。
+- **日期浮层**：只打开骑士团现有日历并用原“取消”关闭，日期保持原值。实际完整浮层属于ui-calendar > main-wrap，不能只修flatpickr-calendar内层；已将它与触发输入右侧对齐，统一普通/选中/范围日期、星期、月份、快捷项及确认/取消前景和表面，沿原生日历维持圆形日期。短窗口在该浮层内部滚动，使用现有popover阴影与语义轮廓；没有替换日历、接管选择或加入定位轮询。原日期控件的32px尺寸和原事件保持。
+- **版权微应用**：已观察的copyright-protect实际使用scoped CSS，白色applyPage-container与灰色分隔仍在；938px内部阅读列和3个固定300px卡片使1100文档达到1127，第一卡还越过侧栏边界。现在原有卡片按可用列宽分配，说明自然换行；背景、说明、入口按钮和轮廓使用现有token。原标题PNG保留，只约束最大宽度；三张40px内联PNG实际查看为透明单色线图，仅在深色调整其前景，不反色内容图片。只读资格介绍及掩码统计，不申请保护、发起申诉或下载材料。
+- **公约独立正文模板**：从实站目录进入/platform/convention/content，确认它是同一convention微应用内的content-page/catalogue-bar，不是已有web-home-page。原1040px app-web、1124px主框架最小宽度及878px内部列使1100文档达到1324；精确复用该微应用入口解除约束，保留正文与目录各自滚动及原生路由。目录页实际的1756×938图片是空白电视形状的粉彩背景，没有正文或业务信息，已只停止该bg与mask绘制；介绍、三张价值卡片、分类图标及原生目录动作保留。普通卡片去除无收益的2px/10px内部模糊，正文、标题、链接、当前章节与圆角统一。使用现有#app-web限定优先级，覆盖后到的原生组件样式，而非全局强制改所有文本。
+- **局部键盘与观察验证**：评论排序、公约目录/附则及章节入口纳入原creator controller；Enter/Space仍转发原click，pressed/current直接读取原active/anchor，不建立第二套状态。沿同一个MutationObserver额外只观察排序行和目录栏的class；迟到挂载/替换时重新绑定，移除旧作用域后不再接收其更新。新增实际模块回归覆盖原生选择、IME、Space失焦取消、迟到目录、移除/禁用后的属性与监听释放，并确认100次外部图表class和style变化产生0次回调；删除和反馈提交按钮不被接管。未改播放器、媒体请求、动态加载或新增轮询。
+- **自动与渲染检查**：完整lint、typecheck、test、Knip均退出0，546条PASS，Knip10/0/5保持，git diff --check退出0。日志/tmp/bewly-native117-lint-complete.log、native117-typecheck.log、native117-test-final.log、native117-knip.log；中间完整lint只发现删除代码后多余空行，修正后通过，旧日志保留。七组虚构结构使用实际开发CSS，公约/版权还加载从实站DOM读取的原生CSS，并将原生样式放在扩展样式之后；三主题×1100/1744宽度、同一800px短桌面高度，共42组最终无失败，文字样本最低对比度5.3445。原节点、输入值、媒体src和关闭后样式恢复通过。首轮7项失败来自日历短窗口和目录标题；进一步模拟真实迟到层叠后14项失败暴露正文/目录/附则前景覆盖，已精确修正，first/cascade/complete三个JSON均保留。最后浮层阴影补齐另作浅色窄窗复验，无边界失败；不会把这些夹具称为原站三主题通过。
+- **实站边界、恢复和进度**：现状取证在/tmp/bewly-native117-live-results.json及同前缀截图，采样时均无有效Dark Reader改色。反馈原生路径自动补/report，精确URL等待失败不算导航故障；父导航自动转到默认子页，按最终路径修正观察标签。版权节点等待超时后实际已可见，继续读取同一页，没有重启或反复导航来归因性能。全部真实业务列表当前为空态，条件后的数据/表单不推定已验收。本轮未改显示偏好，收尾确认为暗色/OLED关闭、#f43f5e/#2a2f2d和适配开启；视口reset实读1744×1027，本轮标签全部关闭、会话为空，恢复用户原有动态标签前台。临时服务器76246/33129/82969均停止，watch保留，native87-dev.log:2692–2696确认最终增量。整体工作量粗估约86%，剩余约14%，不是已通过实站页面的比例；其余创作/公共模板对账、累计产物的完整实站矩阵、其他改色/广告恢复以及播放/动态和历史4004边界继续，Goal保持active。
+
+### 第七十九批：剩余创作计划模板补差与集中装载门槛（2026-10-06）
+
+- **进展与基线**：上一批有实际实现与证据，本轮继续原完整Goal。开始执行Git五项并通过原句柄核实watch 92599运行；收尾HEAD仍为7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6、stash@{0}仍为7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。message_feature、追踪及三个remote正确，保护全部旧改动。没有commit/push、改版本、分支、stash、生产build、打包、clear或子代理。
+- **模板激励**：等待实际示例/作者/视频卡完整加载后确认，micro-app的#app仍固定1040px，1100文档达到1240；左列inline 610px/16px边距、右列inline min-width413px不能只靠外壳缩小。沿原左右列改为可收缩网格，精确释放这两项inline约束，保留原卡片内部横向滚动；解锁入口仍归原相对定位父节点，只加可用宽度上限。示例卡片原白底与重复2px模糊、解锁说明黑字、状态标签的半尺寸transform及主题色透明底改为语义阅读面/前景。完整“模板群星”标题与权益横幅保留原图和1040:315比例，不按商业文案推断广告；卡片封面、作者和视频内容不删改。初始未完整加载的宽屏记录仅作外壳证据，不计完整内容验收。
+- **任务与创作激励**：任务中心的bg-taskcenter SVG已实际查看，仅是渐变与空电视图形，清除该底图并恢复统一背景；沿原任务节点补标题、进度、奖励标签、主按钮和历史空态/分类配色。普通主按钮保持禁用例外，不点击任务、关注、投稿、领取或设置。规则只读打开并使用原X关闭，原正文/滚动容器保留，补实色阅读面、模态轮廓与关闭命中面。allowance-excitation的Signment/Flow仍被迟到scoped CSS盖成白色，精确映射这些表面、资格说明、标签线、关注介绍和轮播进度；原有轮播步进、推荐媒体、资格、禁用和关注事件保持。
+- **动画与短剧**：动画统计当前1100布局、主要卡片和数据表文字可用，等价保留，仅补说明字号、帮助图标和原生分隔线。独立账单标签另有bill-table-card白面、黑色标题、搜索和表格，不能由统计首页推定通过；新增映射阅读面、表头/单元格、36px搜索及单一2px外层焦点环。原始空态仅读结构/样式，未记录具体资产值、输入查询、导出或操作资金，最后回到原统计标签。响应式和顶栏样式改绑定稳定的upanimation-data-center微应用名，不再依赖可被卸载的dc-stats-section子标签。动画创作引导补背景、标题、步骤前景和五列等宽约束，保留图示、视频封面与原生上传入口；短剧入口补标题、资格说明、绑定提示和按钮轮廓，没有选择身份、绑定机构或上传文件。
+- **周报保留与几何**：完整品牌图有手机画面、文案和扫码说明，保留整张图、原canvas及白色扫码底面，不读取二维码载荷。实际1100×800下1920×1080画布按原0.8缩放，背景超出文档使scrollWidth1318，但二维码149.6×149.6仍在视口内。仅在web直接包含原poster/content/canvas结构时，令该展示容器固定覆盖视口并裁切超出画布的绘制；不改变原图尺寸、transform或二维码坐标，也不重写body滚动。原生CSS资源直接读取被浏览器以ERR_BLOCKED_BY_CLIENT阻止，未改用其他通道绕过；该项布局依据来自实际DOM计算值和原图观察，不将资源工具失败解释为页面性能或插件网络故障。
+- **键盘与焦点**：沿现有creator controller补无href投稿导航的link语义（Enter原click、Space仍按链接语义）、激励分类与历史分类的原生选中状态，以及规则/历史入口。规则浮层的原X和关闭说明按钮仍调用原事件；键盘打开后在实际节点加入时将焦点放到X，Escape或关闭后回到原规则入口。用户已移焦或owner已释放时不抢回焦点。只扩展现有窄范围class观察作用域，使用既有单一MutationObserver和有界microtask，不新增轮询、计时器、RAF、业务状态或全局键盘系统；申请、关注、上传、领取等业务按钮不纳入接管。新增真实模块回归覆盖上述状态、迟到挂载、失焦/释放及原生回调保留。
+- **自动检查与开发**：完整pnpm lint/typecheck/test/knip均退出0，547条PASS，Knip维持10/0/5，git diff --check退出0。日志/tmp/bewly-native118-lint-verified.log、native118-typecheck.log、native118-test-final.log、native118-knip.log；各阶段日志保留。最后焦点环CSS补正后完整lint重新通过。watch持续运行，native87-dev.log:2740–2750确认周报native/main增量，2806–2810为本批最终主入口CSS/JS增量；没有手改产物或变更媒体请求、播放器发现、动态加载及广告识别逻辑。
+- **隔离渲染与证据校正**：十类结构使用实际开发CSS，其中模板/激励/动画/短剧也读入实站原生CSS，并放在扩展CSS之后模拟迟到层叠；内容与统计字段均为虚构。三主题×1100/1744宽度、800px高，共60组最终无失败，普通文字采样最低对比度5.3445；内容画面、原节点和关闭后的样式恢复通过，周报二维码前后坐标完全相同且在视口内。首轮23项失败主要是夹具漏了任务历史72px留白、动画统计宿主侧距及短剧video-up-app阅读面；回到实站核对后只改夹具，54组通过。补账单后6项失败则暴露了独立账单结构不再包含数据首页时的响应式条件缺口，改为稳定微应用匹配后60组通过。first/structure/bill-first/complete四份JSON均在/tmp，未删除失败记录。最后目视发现账单输入内外双焦点，保留外层2px等价反馈并移除内层重复环，浅色窄窗单项复验无失败，搜索框36px、文档1100。上述仍是隔离回归，不算新产物实站验收。
+- **恢复及统一请求**：实站结构记录native118-live-results.json和截图均本地保存，账户/二维码图不作为公开交付。整个本轮未改Nocturne偏好、其他扩展设置或账号数据；确认仍为暗色、OLED关闭、#f43f5e/#2a2f2d和适配开启。临时视口均reset并实读1744×1027；本机服务67905/44824/27239/89794均停止，开发watch保留。已关闭夹具/装饰图/失败资源标签，仅保留任务中心作为整批装载验收入口，原用户动态页恢复前台。当前已确认可读取模板的本轮源码差额已集中落实，统一请求用户重载上次确认之后的累计产物；扩展管理页仍由用户操作，没有访问或绕过限制。收到确认后先刷新任务中心，检查底图退出、主题按钮和规则键盘真实生效，再继续原完整矩阵。整体工作量粗估约88%，剩余约12%，不是实站通过比例；额外改色/广告恢复、条件范围与播放/4004仍未关闭，Goal继续active。
+
+### 第八十批：按更新范围回退特殊模板外观，保留独立广告设置（2026-10-06）
+
+- **用户范围更新**：本轮两次收到Goal编辑，均重新读取实际目标。最新要求明确不再深入细枝末节、一次性或特殊活动，允许适当回退此前不合适的页面适配。因而停止扩展特殊模板，优先常用入口和稳定页型的主要状态；没有把新的范围解释为已完成原站验收，也没有回退其他功能维护成果。
+- **基线与已有装载证据**：开始Git五项及watch 92599实际状态均符合现有message_feature保护基线。刷新保留的任务中心后，document完整加载、规则/历史入口已有role=button/tabindex=0、按钮36px且theme/on-theme配对、列宽已更新，证明上一批这部分实现已生效，不再将旧背景直接归为“用户尚未重载”。背景仍在的具体原因是原Vue给task-manage写入inline background-image；只补该精确装饰属性的优先级，没有改变任务、奖励或业务节点。最后这条CSS增量仍需新运行态确认。
+- **一次性活动回退**：campaign类型不再启动主题/字体/键盘投影，保留页面本来的背景、配色、文字和控件。既有轻量入口继续承接blockAds，避免退回主站App/MAIN入口而再次接管特殊页面。主站已明确的常用活动目录、公开帮助和协议仍优先匹配原有稳定类型；已注入子站的blackboard activity/era/topic路径按相同活动边界处理，涵盖此前实际见到的直播活动链接。没有新增域权限、扩大iframe范围或关闭广告功能。
+- **作者Wiki回退**：game-wiki-community恢复原生主题和作者组件，不创建Nocturne的useDark或局部键盘owner；MediaWiki文档门槛保留，普通资源/API文档仍不启动。nativeWikiCommunity.scss退出运行时导入，社区类型退出游戏公共外壳样式集合；为保护之前未提交的内容，该专用源文件保留并标注已退役，没有删除或整文件覆盖。WIKI平台首页与/wiki目录继续使用原轻量适配。字体及主题类不写入作者页面，广告class仍由原设置watch独立控制，不增加轮询或平行设置状态。
+- **真实模块验证**：更新社区回归以验证新的产品要求：本来存在的原生dark class和自定义属性保持，主题启动/释放调用均为0，按钮/输入身份、状态与原click保留，适配开关关闭不会关闭广告。新增主站activity/era与直播era的实际owner+编译后的真实广告CSS回归：明确广告随blockAds隐藏/同节点恢复，普通商业标题不隐藏，原图节点、原生颜色和19px自定义圆角不被接管。manifest/路由回归同时确认常用目录与明确协议仍匹配原类型、直播普通目录保持live，主App与轻量入口仍互斥。
+- **命令与产物**：最终完整lint、typecheck、test、Knip均退出0，548条PASS，Knip既有10/0/5提示保持，git diff --check退出0。日志/tmp/bewly-native119-lint-final.log、native119-typecheck.log、native119-test.log、native119-knip.log；首次lint仅报测试内字符串拼接格式，修正后完整通过，失败日志保留。复用原watch，native87-dev.log:2823–2842记录回退后的native/main增量成功；没有生产build、打包、clear、手改产物、版本、commit/push或stash操作。
+- **实站边界**：仅打开一张已知直播活动和一张作者Wiki核对运行标记，没有继续检查其专题细节。完整加载后直播仍标为live、两页仍有bewly-design/字体投影，说明这次范围回退尚未装载；不将行为回归通过当作实站已经恢复原样。证据/tmp/bewly-native119-scope-runtime.json保留，专题核对标签随后关闭。已发出的整批重载请求继续有效，没有重复询问旧批次或访问扩展管理页。播放/动态检查因用户这次范围变更优先转为回退实施，本轮没有新增播放性能测量，不复用旧数据冒充本轮结果。
+- **进度**：本轮主要收敛范围并完成回退，整体仍粗估约88%、剩余约12%，没有把移出范围的特殊页算作新增验收通过。接下来只继续常用页面的主要三主题/桌面布局、广告真实恢复和播放/动态回归；历史4004原因仍未确认。Goal保持active。
+- **收尾**：本轮未改变显示偏好、其他扩展设置或账号数据，也未新设视口覆盖。临时首页及范围核对页均关闭，仅保留任务中心作累计产物的装载入口；原用户动态标签恢复前台。开发watch保留，HEAD和stash@{0}收尾复核仍为原SHA；没有新建分支或删除源文件。
+
+### 第八十一批：实测播放侧栏重复刷新并收窄更新范围（2026-10-07）
+
+- **范围与基线**：继续最新Goal，聚焦常用页面及播放/动态问题，不再扩展特殊活动模板。Git五项重新核实，message_feature、origin/message_feature、HEAD与三个remote符合原基线；保留全部既有修改和stash。沿用watch 92599，不新开分支、不commit/push、不改版本、不生产build/打包/clear。游戏用户协议的只读授权和检查已在第七十四批记录，没有重复接受或提交动作。
+- **真实播放轨迹**：通过Chrome原生DevTools Performance界面记录BV1yxa269Eg7的4K播放段，未改变CPU/网络限速或其他扩展设置。实际轨迹范围26,124ms，其中Rendering 22,565ms；UpdateLayoutTree共1,515次、22,550.600ms。Nocturne的scheduleSidebarRefresh回调97次、包含子工作共9,381.734ms；syncDescription与syncControlsGlassGeometry分别触发97次样式计算、4,186.339ms与4,185.693ms，findVisibleAnchor另有74次、1,892.619ms。回调的inclusive耗时包含其子事件，不能把这些数值再次相加，也不是纯JavaScript自耗时或修复后的提升比例。原站播放器也有明显样式计算，不能将轨迹全部成本归给本扩展。
+- **证据保存与限制**：完整轨迹保存在/private/tmp/bewly-native120-steady-4k.json.gz（33,326,942字节，361,941个事件），汇总在/tmp/bewly-native120-steady-analysis.json；轨迹含截图和网络元数据，仅留本地，不公开签名资源地址。原生布局的第二次录制没有得到独立完成的轨迹，明确排除出A/B比较，不使用旧26.12秒结果冒充另一组数据。浏览器工具没有可用的Performance DOM API或DevTools MCP，未通过终端/CDP绕过浏览器控制限制，未访问扩展管理页。
+- **具体原因与修复**：原生播放器按设计留在Bewly侧栏根之外，但旧mutation分类通过closest匹配所有播放器后代，时间文字/弹幕的普通childList变化因此进入完整侧栏刷新。现在在既有classifier内区分播放器内部绘制和真实布局来源：普通时钟、弹幕、预览变化不重跑侧栏，视频/控制根替换、播放器替换、迟到简介及PGC原生操作根移除仍会被处理。只复用现有MutationObserver、RAF、session和原生组件所有权，不新增轮询、观察器、保活或平行状态。
+- **减少重复样式写入**：简介不再在每次同步时先移除两行裁切、测量后再加回；现场Chrome已确认该简介在clientHeight36px时仍有scrollHeight72px，改用保留裁切的完整滚动高度判断展开。空内容、字幕、迟到文字和原展开按钮生命周期继续保留。操作动画主题滤镜与锚点位置仅在值变化时写入，避免稳定几何重复使样式失效；没有改变媒体地址、清晰度、播放请求、播放器节点、玻璃参数或侧栏视觉。
+- **实际模块回归**：新增3项行为检查，覆盖100轮时间文字/弹幕变化产生0次侧栏刷新决定、媒体/控制器/播放器替换和迟到内容仍触发更新；稳定简介的折叠/展开同步无DOM写入并保留原按钮；稳定操作几何/主题无样式写入，变化仍更新，RAF合并、旧session和释放有效。使用实际模块及MutationObserver；几何数据在隔离环境模拟，不将其称为实站性能结果。
+- **命令与开发产物**：最后完整pnpm lint/typecheck/test/knip均退出0，551条PASS，Knip维持10项未用导出、0项未用导出类型、5项枚举成员提示，git diff --check退出0。日志/tmp/bewly-native120-lint-final.log、native120-typecheck.log、native120-test.log、native120-knip.log；第一次lint只报测试回调的单行格式，修正后完整通过，失败日志保留。原watch句柄确认仍运行，native87-dev.log:2843–2862记录四个源模块及最终主入口的开发增量成功；一次沙箱ps读取被拒绝，未因此重启watch或判定其停止。
+- **播放与动态实站边界**：本次视频样本readyState=4、3840×2160、media.error=null，播放时间和缓冲区确有前进，未复现4004；长时间诊断中包含暂停、布局切换及回绕，不能拼接成一次连续播放证明。最终恢复Bewly播放布局并暂停，截图native120-playback-restored.png及media-observations.json保留。随后动态页实际加载7张moment-card和1张用户卡、两列、可见骨架0、正在播放的视频0，1744px视口下文档宽1744px，未读到本标签捕获的Bewly警告/错误；首屏目视没有重叠。native120-moments-observation.json/png只证明该次内容/布局状态，不是加载耗时、请求次数或空闲CPU测量。历史4004原因及动态慢加载的性能归因仍未确认。
+- **装载门槛与进度**：本轮性能修复是在此前重载之后写入；源码回归和开发编译通过不代表运行中的旧内容脚本已更新。并入已发出的累计补丁统一重载请求，不追加单页重载问题；下一次装载后先复测侧栏刷新轨迹、简介/控制器与视频切换，再继续常用页面三主题/桌面宽窄和广告开关真实恢复。整体工作量仍粗估约88%、剩余约12%，不按测试数或移出范围的页面虚增完成度。Goal保持active，4004与其他扩展影响没有宣称已消除。
+- **收尾恢复**：DevTools已关闭，临时播放/动态标签已关闭，原用户动态标签恢复前台；仅保留既有任务中心入口供累计补丁验收。未改Nocturne主题、视口覆盖、其他扩展设置或账号写入权限。最后git diff --check仍退出0，HEAD与stash@{0}分别核实为原7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6和7a6ef9155ccd8e5ce92768702da03b5ae8d7184b，开发watch保留。
+
+### 第八十二批：确认广告残余隐藏归属，补齐直播目录排序控件（2026-10-07）
+
+- **继续依据**：上一轮为实际修复与性能取证，本轮继续原Goal。写入前Git五项、HEAD及stash的完整SHA均重新核对正确，原watch 92599通过句柄确认仍运行。继续message_feature，不扩大特殊活动范围，不改分支、版本、stash或其他扩展设置，没有commit/push、生产build、打包、clear或子代理。
+- **累计样式装载证据**：刷新任务中心，真实节点匹配.bewly-design.creativeCenterPage #growing-up .task-manage，原Vue仍写入普通inline background-image。进一步通过DevTools匹配规则确认运行态只存在background:var(--bew-bg)，缺少磁盘源码已有的background-image:none!important，故这处最新修正尚未装载；不是仅凭build ID或一次计算色推断。没有再修改已正确的选择器或反复叠加优先级。native121-task-background-runtime.txt/png保存该直接证据。
+- **广告归属终于确认**：公开原生“原神”搜索页再次取得50张卡，其中3张同时有cm链接和ad-feedback-entry。临时关闭Nocturne一般广告设置，三张外层的bewly-blocked-feed-card全部移除，但display仍none。DevTools显示命中独立user agent stylesheet规则：`.video-list > div:has(> .bili-video-card > .bili-video-card__wrap > .bili-video-card__info > .bili-video-card__info--right > .ad-feedback-entry)`，其值为display:none!important。只读打开AdGuard当前搜索标签的过滤日志并刷新该页，得到三条同结构记录，均明确归属“AdGuard 中文过滤器”；这次是直接规则和日志证据，不再仅由工具栏保护状态猜测来源。未关闭过滤器、创建例外、删除日志或点击广告。证据/tmp/bewly-native121-adguard-source.txt/png及ad-observations.json保留，刷新前后的文档分别记录，不混作同节点比较。
+- **广告恢复边界**：Nocturne开启/关闭时自身标记的3/0变化以及重新开启后的3个标记已实站确认；搜索顶部活动开关一直保持开启，普通内容未按标题屏蔽。最终广告可见性仍受用户启用的AdGuard影响，不宣称本环境下三张广告已恢复可见，也不以强制display样式覆盖其选择。此次无需修改Nocturne广告分类或增加兼容状态，其他广告创意的真实投放边界保持。
+- **直播常用排序差额**：/all完整内容加载后DR0，实际推荐/人气/最新开播三个tabs__normal-item位于tab__bar-wrap > .tabs内，现有实现只覆盖该处的tabs__tag-item以及cover-tabs-wrap内的normal项，导致本组三项仍约18.8px高、没有role/tabindex。只为这一已观察容器补充现有CSS和nativePageKeyboard的匹配，直接复用36px命中区、13/18文字、8px平滑语义圆角、实色选中配色、焦点环与原生click；保持目录原有排序、内容及现有单一owner/observer。没有新监听器、轮询、播放器逻辑或业务状态。原CSSOM有4份跨源样式不可读，空提取文件不作为原生CSS证据；这次结构依据为实际DOM/计算值和截图native121-live-before.png。
+- **检查与隔离渲染**：扩充既有直播目录实际模块用例，覆盖两种normal项容器、Enter/Space触发原生排序、aria-pressed更新和禁用后的语义/键盘释放。最后完整pnpm lint/typecheck/test/knip均退出0，551条PASS，Knip保持10/0/5，git diff --check退出0；日志/tmp/bewly-native121-{lint,typecheck,test,knip}.log。实际开发CSS和实际键盘/主题模块的三主题×1100/1744共6组、330个断言全部通过，最低文字采样对比度5.7193，验证36px/圆角/无内部玻璃、焦点、节点及输入保留和关闭恢复；浏览器真实Space操作另确认人气排序选中与焦点。原生基线是按已观察结构和尺寸构造的虚构场景，并非重新取得全部跨源CSS，结果不替代原站装载验收。native121-sort-isolated-first.json与complete.json、sort-light-1100.png保留。
+- **开发、恢复与进度**：native87-dev.log:2863–2881确认最终native/main JS及CSS增量成功，产物没有直接编辑。临时服务26897已停止（退出130），诊断日志窗口、DevTools及本轮搜索/直播/隔离标签已关闭；仅保留任务中心作为累计产物入口，原用户动态页恢复前台。Nocturne恢复暗色/OLED关闭、#f43f5e/#2a2f2d、适配及两项广告设置开启、设置面板关闭，临时视口reset后实读1744×1027。整体工作量粗估约89%、剩余约11%；主要剩余累计补丁加载后的常用页面三主题/宽窄与播放性能复测，以及真实投放/未登录等条件证据。既有统一重载请求包含本次排序补差，不再逐页追加请求；Goal保持active，历史4004未宣称解决。
+
+### 第八十三批：漫画新版首页与会员购票务目录的常用布局补差（2026-10-07）
+
+- **基线与范围**：上一轮为广告归属确认及直播排序修复，本轮继续常用入口，未扩展一次性活动页。Git五项与原HEAD/stash完整SHA重新核对正确，watch 92599由原句柄确认仍运行。本批产品源码只修改nativeSites.scss，仍绑定既有适配开关/主题投影；没有新增JS、设置、观察器、轮询、媒体请求或业务状态，没有commit/push、改版本、分支、stash、生产build、打包或clear。
+- **实站依据**：从既有顶栏目标打开manga.bilibili.com首页和show.bilibili.com/platform/home.html票务目录；两站本次均DR0。分别检查浅色/深色/OLED及1744/1100桌面宽度，宽屏内容可读但发现明确差额。会员购1100文档为1168px，筛选/列表仍1160px、卡片560px，搜索输入保留319px固定左距，右侧订单与更多城市越界。DevTools进一步确认日期的原生四class规则使用var(--Ga5)并覆盖现有Nocturne映射，不将低对比归给已不存在的Dark Reader。native122-live-results.json、各主题截图及store-time-rule.txt保存取证；这些是修复前状态，不是新补丁验收。
+- **票务阅读与宽度**：日期、地点及不可售/起售/即将停售状态使用text-2，价格数字、货币及原标签使用theme-foreground；精确提高卡片内部作用域以盖过原Ga5/Pi5，不更改全站灰阶或价格/可售含义。窄窗使筛选外层、列表外层沿已有32px总留白，保留原双列及原海报175×232、223px文字起点与原竖向间隔；文字列和搜索父项可收缩。原搜索框自身是inline-block INPUT，取消固定319px左距后使用block/auto保持右对齐，原输入尺寸与20px内边距保留。未点击票务条目、预订、提交订单或改变账号资料。
+- **漫画首页与搜索**：新版SSR根具有min-w-[1300px]，1100窗口文档仍1300px；内容区还包含1160px列、固定推荐文字/图片和135px目录区域。仅在该已确认根及1300px以下，释放外壳/横向列表的固定最小宽度，为原目录保留空间，将推荐文字与原562:316媒体并排、原缩略图置于其下，右侧轮播箭头收进内容边界；图片、picture、链接和轮播节点原样保留，横幅及原生横向列表不删除、不缩放整页文字。新布局限定于同时具有该根结构和#content-container的页面，未全局放开漫画页的固定宽度。搜索轮换提示实际是独立text-[#aaa]节点，不是input placeholder；改用现有text-2。原搜索图标为固定34%透明的单色SVG，使用同一轮廓、16px token和主题前景绘制，原按钮与图像留在DOM；mask不支持时保留原图，不新建搜索客户端或材质。
+- **证据校正**：视口能力只改变当前受控标签，首个漫画窄窗尝试实读仍1744，已排除窄窗证据；随后复用同一受控标签并核实实际1100后补齐检查，JSON保留重复的真实宽度。第一次漫画OLED窄窗截取时账号导航尚在迟到加载，只用于外壳问题，不认作未登录功能验收。隔离页最初将会员购INPUT误包成额外div，目视后回到实站确认真实结构并只修夹具；真实输入原本可读，没有据夹具的灰字改动输入配色。后续确认INPUT的inline-block性质后补正确右对齐，实测新框右边与父项右边差0。
+- **自动与隔离结果**：最后完整pnpm lint/typecheck/test/knip均退出0，551条PASS，Knip保持10/0/5；git diff --check退出0。日志/tmp/bewly-native122-lint-scoped-final.log、native122-typecheck.log、native122-test.log、native122-knip.log。首次lint仅报长mask声明格式，拆分等价属性后通过，旧日志保留。两个按已观察结构/尺寸构造的虚构模板使用实际开发CSS与实际themeColor模块，原生基线放在扩展CSS后模拟覆盖；三主题×1100/1744共12组、525项检查最终全部通过，最低文字采样对比度5.6719。包括卡片/目录/右箭头边界、媒体比例和原海报尺寸、语义圆角、文字对比、原节点/图片src/输入值及关闭后恢复。首轮4项失败暴露深色/OLED搜索提示text-3在导航面仅4.147:1，改text-2后通过；first/complete/verified/final/scoped-final JSON均保留，不删除失败记录。最终示例图native122-store-dark-final.png及manga-light-isolated.png仅为隔离渲染，完整实站交互仍待新产物装载。
+- **开发与恢复**：native87-dev.log:3008–3025确认最后限定作用域后的native/main开发增量完成。两次本轮临时服务31360/64553均停止（退出130），开发watch保留；所有本轮漫画/会员购/隔离标签及DevTools关闭，仅保留既有任务中心累计装载入口，原用户动态标签已恢复前台。显示偏好恢复暗色、OLED关闭、#f43f5e/#2a2f2d、适配及广告开启、设置关闭，临时视口reset并确认1744×1027。HEAD与stash@{0}收尾仍为原SHA，没有改变其他扩展配置或账号写入授权。
+- **进度与剩余**：整体工作量粗估约90%，剩余约10%，不等于90%的URL或状态已验收。本批加入已有统一重载批次，不逐页追加请求；接下来优先常用页面新布局的真实三主题/窄窗与主要交互、上一批播放性能补丁的轨迹复测，以及仍缺实站条件的样本。历史4004没有宣称已解决，Goal保持active。
+
+### 第八十四批：实站确认侧栏刷新修复，限制顶栏无效颜色过渡（2026-10-07）
+
+- **基线与装载门槛**：本轮重新执行Git五项并核对原HEAD/stash完整SHA、三个remote及message_feature追踪关系，全部一致；watch 92599由原句柄确认仍运行。刷新任务中心后，readyState=complete，原Vue的inline背景URL仍存在，但计算background-image已为none，确认第八十批这处修正实际载入，不再将其笼统列为“尚未重载”。游戏中心/platform本次有46个标题、DR0，深色宽屏可见内容与1736/1744文档/视口宽度已观察；load等待超时且文档仍interactive，不把它当全部资源完成或完整主题验收。因取得新运行态证据，优先复测用户关心的播放性能，游戏/公益完整矩阵继续保留。
+- **有效播放样本**：仍用BV1yxa269Eg7，原生媒体3840×2160。初始导航工具超时后实际已落在正确URL，没有重复导航；metadata就绪后缓冲区和时间持续前进，进入Bewly布局。使用Chrome原生DevTools界面，保持CPU/网络No throttling、截图开启、Memory关闭；没有清空日志或改变其他扩展。三个新录制段的页面视口均1189×1027，播放位置不同，不能当严格同帧A/B测试。未观察到4004，HTMLMediaElement.error均为null；原生对照末尾曾短暂readyState=1且缓冲为空，暂停后恢复readyState=4与新缓冲范围，原因未归属。
+
+| 场景 | 实际录制范围 | DevTools Rendering | 完整侧栏刷新回调 |
+| --- | ---: | ---: | --- |
+| 第八十一批旧Bewly样本 | 26,124ms | 22,565ms | 97次，inclusive 9,381.734ms |
+| 本批Bewly布局、适配开启 | 35,426ms | 21,500ms | 1次，inclusive 3.724ms |
+| 本批原生布局、适配开启 | 33,013ms | 20,755ms | 不适用，侧栏已退出 |
+| 本批原生布局、适配关闭 | 33,768ms | 13,304ms | 不适用，仅保留UI摘要 |
+
+- **轨迹解析边界**：前两段有效新轨迹分别保存为/private/tmp/bewly-native123-steady-4k.json.gz（27,656,162字节）与native-playing-4k.json.gz（30,818,831字节），导出不含资源正文和source map。第三段导出控件未产生选项框，重绑原生窗口输入后仍无响应，故只保留appearance-off-summary.png/txt及trace-cases.json，不虚构完整事件分析；摘要截图拍摄时页面已恢复Bewly布局，不代表录制时的布局状态。另一次原生尝试始终暂停，已明确排除出播放对照，native-paused-summary.png保留。脚本按目标视频frame和renderer主线程统计，只计带dur的完整X事件，排除录制末尾未闭合的B事件；旧、新Bewly及原生开启适配的UpdateLayoutTree分别1515/6365/5511次、22,550.600/21,076.056/20,081.267ms。完整事件口径的baseline/steady/native-playing-complete.json/log保留。函数inclusive包含子工作，与样式耗时重叠，不能相加；触发调用栈不等于CSS规则归属，现有对照不能将剩余开销归责给原站、某一扩展或推导固定提升率。
+- **侧栏功能实站**：恢复适配与Bewly布局后，媒体暂停在626.08754秒、readyState=4；展开原侧栏，top/comment/content就绪标记均true，原生作者/操作区、简介、标签和评论可见。简介真实展开前后高度58→94px、aria-expanded false→true，随后收回为false；侧栏也恢复关闭，没有拖动宽度或执行点赞、收藏、关注、发送等业务写入。native123-description-check.json、sidebar-restored.png及media-observations.json记录结果。初始用.video-title及h标签查找侧栏标题没有命中，目视确认标题是既有自有标题节点，不能据选择器未命中认定标题缺失。捕获日志中未检出本扩展标记或其runtime URL归属的警告/错误，不扩大为全部原站/其他扩展无错误。
+- **新定位的可控开销**：在有效新轨迹中关联Animation事件ID，发现33条不支持合成的scrollbar-color动画，其中包含普通顶栏链接、投稿入口、头像与头像阴影，也有原生弹幕及未单独归属的svg节点。实读顶栏computed transition-property=all、duration=0.3s；源SCSS仅声明duration-300，未指定属性。读完TopBarRight/TopBar样式引入及ALink原行为后，仅在现有TopBar/styles/index.scss补两个属性清单：普通按钮保留color/background-color/filter，头像与阴影保留opacity/transform。持续300ms、原放大/位移/阴影淡入、顶栏材质、渐进模糊及原生链接/焦点处理不变，没有引入顶栏新设计。未修改原生弹幕动画、全局滚动条或猜改剩余渲染成本。
+- **检查与真实CSS回归**：最后完整pnpm lint/typecheck/test/knip均退出0，551条PASS，Knip10/0/5保持，git diff --check退出0；日志/tmp/bewly-native123-{lint,typecheck,test,knip}.log。使用实际开发CSS及逐节点核实的TopBarRight作用域data-v-96b8d653运行本机回归：同一批5个节点重现旧all时产生5个滚动条颜色过渡，回到新CSS后为0；原选中/悬停背景、头像transform、阴影opacity/transform继续产生预期动画，头像终态矩阵仍为matrix(1.95,0,0,1.95,-36,50)，链接、节点和原尺寸保留。10项检查均通过，topbar-motion-exact-scope.json与topbar-motion-final.png等证据在/tmp。它是实际样式的隔离行为检查，不是实站CPU收益。新开首页仍计算为all，且无inline过渡覆盖；精确作用域在磁盘CSS已含新声明，最新过渡约束尚未取得实站生效证据，纳入下一次统一装载，不单独追加重载请求。
+- **恢复与进度**：native87-dev.log:3026–3037确认最终开发增量，未生产build、打包、clear或手改产物。临时服务18346/94755均停止（退出130），全部本轮及之前保留的任务中心验收标签已关闭，DevTools随任务页关闭，浏览器会话为空，原用户动态页恢复前台。Nocturne恢复暗色/OLED关闭、适配和广告开启、#f43f5e/#2a2f2d、设置关闭；本轮未设视口覆盖，播放器仅作播放/暂停及临时布局对照，其他扩展原值保留。HEAD/stash收尾仍为原SHA，未commit/push或新建分支。整体仍粗估约90%、剩余约10%；本轮关闭了侧栏修复的实站门槛，但渲染成本及完整页面矩阵仍有未完成项，4004原因未宣称解决，Goal保持active。
+
+### 第八十五批：游戏常用模板补差与公益首页完整实站复验（2026-10-07）
+
+- **基线与范围**：Git五项、HEAD和stash完整SHA再次核对一致，继续message_feature及原追踪关系；watch 92599保持运行。只继续游戏首页、榜单、发现和公益常用入口，没有扩展到专题、单个游戏活动或交易状态。此前游戏用户协议只读授权及检查已记入第七十四批，不重复请求，也不执行接受或提交。
+- **游戏实站差额**：/platform在DR0下观察三主题与1744/1100宽度。1100px文档实际1296px，定位到共享页脚内部logo/record仍为1280/1274px；外层已收缩，保留等价实现，只补两层内部max-width与border-box。一次宽屏切换中间态曾出现2380px，随后稳定宽屏为1736/1744，不把中间读数认定为持续缺陷。普通卡片原网格已经响应式，未重建。首页搜索输入仍为浅色半透明底、暗色提示却继承浅前景；普通game-meta/description/notice低对比，预览大卡仍用inline深灰面。首页滚动会追加原生内容，未为到达无限列表末端强制持续加载。
+- **最小样式修改**：nativeSites.scss的既有game作用域内，搜索输入和提示/图标使用现有不透明表面与文字token；普通theme-light卡片、榜单标签及发现元信息映射阅读前景，theme-dark内容横幅的原生对比和图片保留。预览大卡将inline装饰色映射为content-solid，媒体子层继承同一语义轮廓；实色榜单标题移除原blur(12px)，不触碰保留的顶部渐进模糊。原榜单white.game_button仅在非disabled状态配对主题前景，禁用状态保留。
+- **游戏布局与交互证据**：真实顶部入口成功进入/platform/ranks/hot和/platform/discover；中间/platform#/及一次内容等待超时均随后正常完成，不重复导航或当成路由故障。榜单原html min-width=1160，1100文档1160；在原body左侧120px留白、150px图标、400×225横幅结构中收缩文本列，保留原有浮动和业务节点。list_content自身已经通过170px padding扣除图标位置，未再次扣减。发现页只解除固定外壳最小宽度、约束内容和原目录项间距；不改图片内容或详情入口。真实站点发现与榜单本轮只取得当前OLED结构/窄窗证据，未声称它们的新增CSS已经三主题实站通过。
+- **实际CSS隔离回归**：本机临时服务读取真实开发nativeAppearance/style.css及themeColor模块，依实读DOM/尺寸构造虚构内容。首页/榜单/发现×浅/深/OLED×1100/1744共18场景、618项检查通过，涵盖文字/提示对比、页脚和内容界限、原媒体尺寸/来源、节点/输入值保留、禁用状态及关闭适配恢复；检查文字最低对比5.5745。首轮的2个浅色搜索图标失败源于检查器仅沿祖先取底色，遗漏绝对定位图标下的兄弟input；补输入框覆盖几何检查及实际表面合成后通过，没有为此改产品颜色。首轮和终轮JSON均保留。窄窗首页、榜单和发现已目视查看隔离结果，不能代替真实站点的新产物验收。
+- **公益实站通过并等价保留**：love.bilibili.com首页待真实项目与统计加载后，浅/深/OLED×1744/1100共6组合均检查背景层级、文字、内容图、圆角和宽度；文档等于视口，无观察到的横向溢出/重叠，DR0。原生蓝色品牌横幅和内容图片/留白保留，未新增公益代码。首页“查看全部项目”正常打开新标签；1100px暗色目录用Enter选择教育助学，URL与aria-pressed同步，再以Space恢复全部类型。未点捐款、协议接受或其他写入。证据/tmp/bewly-native124-love-results.json、love-{light,dark,oled}-{1744,1100}.png及love-list-dark-1100.png。
+- **检查与恢复**：完整pnpm lint/typecheck/test/knip均退出0，551条PASS、Knip10/0/5保持；日志/tmp/bewly-native124-{lint,typecheck,test,knip}.log。最终开发增量见native87-dev.log:3056–3073，git diff --check退出0。隔离首轮/终轮及目视图在/tmp/bewly-native124-*；两个先后启动的临时服务25135/18873均已停止（退出130）。临时视口reset，本轮自建标签全部关闭、浏览器会话为空，原用户动态页恢复前台；其他既有标签未清理。Nocturne暗色/OLED关闭、原主题与基准颜色、适配/广告原值保留，设置关闭。没有生产build/打包/clear、commit/push、版本或stash操作。
+- **进度与剩余**：整体工作量粗估约91%，剩余约9%，不是页面覆盖率。游戏新差额和前几批漫画/会员购/顶栏等修正归入统一装载复验，不逐页追加重载请求；继续常用模板的剩余实站核对、动态加载与残余播放渲染开销。历史4004仍未建立因果或证明消除，Goal保持active。
+
+### 第八十六批：动态加载与空闲实测，确认顶栏新属性并集中请求原生样式装载（2026-10-07）
+
+- **基线与实施判断**：上一批有源码与实站进展，本轮继续Goal。Git五项与原SHA均一致，302个状态条目没有新增/丢失，watch 92599由原句柄确认仍运行。本批只记录核验结果，没有改业务源码。按当前Moments.vue→momentFeedReader→API client/abortable port→后台GET/fetch/deadline，以及cache/layout/previews/App outlet完整相关链路核对：动态流无定时轮询，普通自动补屏最多3次，过滤原始页每批最多2页，分页有游标/代次/账号检查，退出释放reader、Observer、RAF、计时器与预览；后台GET总期限20秒，写操作不套取消和读重试。没有因为存在Observer或4秒共享URL兜底就新增另一套调度。
+- **工具与录制范围**：当前无可调用Chrome DevTools MCP，按仓库指令使用原生Chrome DevTools界面；没有新增调试服务或改变其他扩展。专用新动态页，1189×1027（DevTools右侧停靠），CPU/网络No throttling，cache未禁用，截图开启、Memory关闭。最初原生焦点仍在原用户动态页，发现后立即关闭刚打开的DevTools，切到专用标签再录制；原用户页未刷新或改数据。只读导出gzip轨迹，不含资源正文/source map，不清除旧日志。
+- **首次加载证据**：8,441ms录制选区，DevTools Scripting 2,001ms、Rendering 498ms，扩展归属表Nocturne主线程695.411ms。主文档DCL在导航后1,714.474ms，FCP 1,784.844ms，最后LCP候选IMG 2,826.506ms，load 3,044.878ms；指标候选不直接等同全部动态就绪。实看片段截图：2,002.86ms仍为骨架，3,001.713ms已经显示动态正文与封面；随后DOM初始骨架退出、10张卡片、无详情iframe/预览video。当前样本没有持续加载，不能推断所有网络条件的速度。
+- **空闲证据及口径**：原始空闲轨迹35,557.345ms（metadata.initialBreadcrumb），DevTools当时选择0–30,007ms，选区Scripting117ms、Rendering52ms、Painting135ms、System1,238ms，归属表Nocturne34.452ms。不能把选区数据标成整份35.56秒总量。完整原始记录按目标renderer+frame解析：UpdateLayoutTree10,877条、合计44.236ms；主frame的共享路由4秒fallback回调9次、inclusive0.609ms，未见动态布局/分页回调在空闲段持续触发。另一个同进程原生消息同步iframe也含扩展调用，已从主frame统计中排除。FunctionCall含子工作且不覆盖所有异步CPU采样，不能与样式或DevTools归属时间相加。页面frame记录没有ResourceSendRequest；API由MV3后台执行，因此这不证明后台网络请求为零。
+- **后台对照未通过有效性门槛**：另录46,564ms尝试切至新about:blank，原生AX确认该标签选中，但DOM仍报告visibilityState=visible，trace也没有visibilitychange分派；不能据此声明隐藏暂停已实站通过。该样本单独保存，不混入空闲结论。返回后工具指针落在视频卡片触发了正常悬停预览（媒体readyState4、持续播放）；移开到分类栏后video数恢复0，验证释放，不当成后台泄漏。没有猜改可见性逻辑来适配调试环境。
+- **动态基本交互与顶栏装载**：实站依次选择视频投稿、追番追剧、专栏、全部，初始骨架均退出、各分类有内容且无错误态，最后恢复全部；观察挂载卡片8/8/6/9，虚拟窗口数量不等于整批数据总数。各次无残留详情iframe/preview video。新文档顶栏真实计算transition-property已为color/background-color/filter、duration0.3s，关闭第八十四批这处“未装载”门槛；不从此推导CPU提升或替代头像悬停的隔离行为证据。捕获日志无本扩展前缀warn/error，未宣称原站或其他扩展无报错。
+- **统一装载请求及已知问题**：新开game.bilibili.com/platform已complete且DR0，但搜索框仍为rgba(255,255,255,.8)、#212121，footer内层max-width仍none，榜单标题仍blur(12px)，确认独立原生样式仍旧。已通过异步问题集中请求用户加载当前累计产物，列明漫画/会员购/游戏/直播/顶栏成果、551项回归和4004/其他扩展边界；不是重复否定前几次已确认重载，也没有访问扩展管理页。现有代码差额均已编译，不以旧渲染继续叠加补丁。
+- **证据与验证**：/tmp/bewly-native125-moments-{load,idle,visibility}.json.gz分别8,639,003、18,545,785、19,331,243字节；对应analysis.json/log、primary-frame-calls.json、UI摘要、加载filmstrip及dynamic-filters.json均只留本机。解析脚本只读这些轨迹并输出无请求query/正文的摘要。本批业务源码未变，未重复运行上一批已全通过的Lint/Typecheck/551测试/Knip；收尾执行git diff --check。没有build/打包/clear、commit/push、版本或stash操作。
+- **进度**：整体工作量粗估约92%、剩余约8%，不是实站覆盖率。动态首屏/空闲与分类取得新实测证据；尚需累计原生新样式装载后的常用模板复验、剩余播放渲染核对和有条件样本。历史4004仍未确认因果，目标保持active。
+
+### 第八十七批：重载后四类常用模板复验，补齐真实父层与迟到控件边界（2026-10-07）
+
+- **本次重载确认有效**：用户明确“已完成重载”，中断后又要求继续，没有重复索取确认。工具环境已重建，旧浏览器ID与JS绑定失效；重新列出实际可用浏览器后选择当前Chrome（ID3），未访问扩展管理页。原watch句柄92599不存在，受限ps首次被系统拒绝；经只读权限运行定向进程查询确认没有Bewly编译watch，才恢复开发命令。Git五项、HEAD/stash均正确，开始/收尾状态条目仍302且完全相同。
+- **已加载的真实行为**：新游戏页搜索输入已为深色语义面/前景与text-2提示、footer内层max-width100%、实色rank header的backdrop-filter为none，证明第八十五批这几处已生效。首页和榜单各完成浅/深/OLED×1744/1100实读及截图，均DR0；普通卡片网格、内容横幅、封面和榜单原媒体尺寸保留。首页缩窗瞬间doc1135随后稳定1100，不将瞬态当持续缺陷；但真实client1092、header min-width1100造成8px横向余量，旧榜单nav min-width1160则持续造成文档1160、头像越界。
+- **游戏差额与修复**：首页game-meta父层已映射，但category/category-separator子节点仍显式#9499a0；补inherit，仅限theme-light普通卡片，内容横幅theme-dark不变。game作用域的现有1192px分支补现代gc-header和旧nav/main的实际可用宽度，未裁切来掩盖问题。旧顶栏活动链接使用theme-foreground；榜单item-slide保留原位置/移动，只改语义实色选中面、8px平滑轮廓，active文字配对on-theme-surface。真实榜单分类为没有role/tabindex的LI，已按/ranks路径接入既有nativePageKeyboard，root限定原#app、选择器限定aside内anchor_item，Enter/Space仍调用原点击；不增加全局快捷键或另设轮询，下载/预约等业务按钮不接管。
+- **发现页额外改色边界**：从原生链接正常进入/platform/discover后，浅色1100出现21个Dark Reader样式、data-darkreader-mode=dynamic与scheme=dark，部分有效样式非空，标题计算为浅前景；没有把它记作纯主题通过，也没有改其他扩展。页面现有目录布局的结构证据保留，剩余1160px溢出来自同一旧顶栏。来源不能仅由样式标记归责；不会用强制覆盖第三方颜色来假装隔离成功。
+- **漫画实站与迟到控件**：首页六组合均complete、DR0，1100文档1100，推荐两列/缩略图和右侧目录不再互相挤占。原生内容轮播继续工作；窄窗通过原“排行榜”目录定位，再对“排行榜下一页”按Enter，可见内容由前五项移到后一组，原节点/图片保留。随后出现的“排行榜上一页”left=-21、width74，右箭头在875–949；上一页Enter成功恢复首组。只补同一媒体分支中-left-[37px]/left-[-37px]的left:0，不重写轮播。既有首页修正已实站确认，这处本轮左箭头差额仍待最终装载。
+- **会员购实站与裁切根因**：票务目录六组合均complete、DR0，时间/地址/不可售与价格新前景已生效，搜索和外层文档宽度也已收缩。1100下外层project-list-wrapper1068px@16、overflow:hidden，内层project-list仍1160px，实际grid568+24+568；两卡右边584/1176，右列被裁。补内层width/max-width100%及去除右侧额外外边距；原175×232海报、223px文字偏移、237px卡片高度和纵向留白保留，没有因doc宽度正常就误判卡片可读。最后新开同一页仍list1160/max-width none，故不把本轮最后规则记为实站通过。
+- **编译和行为回归**：在确认watch消失后执行pnpm exec cross-env NODE_ENV=development run-p dev:js dev:inject dev:bg dev:native，未运行clear/dev:prepare/生产构建/打包，没有手改产物或manifest；新持续编译句柄15786，日志/tmp/bewly-native126-dev.log:19–79显示四路开发输出完成。扩充既有真实模块检查的游戏榜单数据行与路径矩阵，覆盖选中态、IME/repeat、Space焦点取消、原生点击、适配关闭/恢复、相邻非榜单路径和业务按钮不接管，没有复制实现代替行为。完整pnpm lint/typecheck/test/knip各退出0，551条PASS、Knip10/0/5不变，日志native126-{lint,typecheck,test,knip}.log；git diff --check退出0。
+- **实际CSS边界回归**：本机临时页加载真正开发CSS和themeColor模块，保留实站观察的现代/旧顶栏固定宽度、分类子颜色、独立移动选中层、会员购内层1160px/裁切父层及轮播左右原生37px外偏移。四模板×三主题×1100/1744共24场景、456项检查通过，最低检查文字对比5.1854，关闭适配恢复原几何/颜色且媒体/输入/节点保留。首轮3个榜单溢出来自fixture把40px头像错误写成Account长文字（scrollWidth63），改为同占位的图形后通过，首轮JSON保留，未因此修改业务源码。修正后会员购两列宽522、右边538/1084；漫画箭头边界16–90和875–949。早期直接导航截图落在关闭恢复检查的中间态，已标为非最终证据；增加fixture完成标记后取得fixed-stable截图，没有删除前图。
+- **恢复与进度**：实际观察与全部截图在/tmp/bewly-native126-*，live-results.json不是“全部通过”清单，含上述明确失败/干扰状态。显示偏好恢复暗色/OLED关闭、#f43f5e/#2a2f2d、适配与广告开启，设置已关；临时视口reset，临时服务36975/97181/6815均退出130，开发watch15786保留。未执行账号业务写入、commit/push、版本或stash操作。整体工作量粗估约93%、剩余约7%；继续其余已装载的常用模板核对，最后集中处理本轮新差额的实站装载，不逐个补丁追加重载请求。播放4004因果及额外改色等原边界保留，Goal保持active。
+
+### 第八十八批：直播目录和创作评论的实站复验与阅读边界补正（2026-10-07）
+
+- **基线与进展**：上一批属于实际实现与验证进展，本轮继续完整Goal。重新核对Git五项、HEAD/stash完整SHA及302条状态，均与上一批一致；watch15786开始/收尾均由原句柄确认运行。只修改nativeSites.scss和creativeCenterPage.scss，复用既有主题、语义表面、响应式和键盘owner，没有新增JavaScript监听/观察/轮询。没有commit/push、分支、版本、stash、生产build、打包或clear。
+- **全部直播实站**：/all浅/深/OLED×1744/1100六组合均DR0。三项排序已实际36px、role/button/tabindex0、pressed跟随原active，主题选中为theme/on-theme配对；Enter选人气直播、Space选最新开播，最后回推荐。普通列表首次挂载30张原生卡片，不能据此推断全部服务端数量。窄窗普通列表1004px@16、侧栏x1036已正确；但上方all__area-top-ctnr和all__special-area-recommend-list-ctnr仍1140px，文档虽然1100，右侧推荐/刷新区域被外层裁掉。真实DOM确认其index_item、Item_card-item/ctnr/cover与下方列表同结构，仅将两层外壳和推荐卡加入现有窄窗宽度/四列/媒体比例规则，保留原生封面、悬停增长和刷新入口。
+- **更多菜单差额**：1100下more-label-text在Nocturne浅色仍计算为rgb(231,233,235)，其父已为rgb(21,24,30)，html原lab-style仍adaptive,dark；展开后原more-tab-content仍rgb(23,24,26)。加强现有标签优先级，只给此实际菜单映射popover语义背景/边框/轮廓和文本，不对抗其他扩展。原down-arrow的CSS背景已读取为11×6的单色SVG、stroke=#E7E9EB，复用现有header单色图标brightness/invert规则，不换图、不改原几何或点击。
+- **分区弹层及键盘**：/lol菜单完成三主题×两宽度六组，DR0；1100下边界16–1084、top136/bottom644，高508且max-height648，宽屏边界182–1562、高376。Enter打开、expanded=true，Escape关闭、expanded=false并把焦点留在原切换器；等待原生关闭后节点隐藏，不将瞬时仍存在的DOM计为关闭失败。新发现整层opacity固定0.8，即使background已为不透明token，内容图仍透进正文，因此仅补opacity1。原生显隐继续归原组件。封面/关键帧Space切换与pressed变化有效；首次紧接恢复键后的截图仍为切换中间态，未据文件名stable认定恢复。随后重新访问实读封面pressed=true、关键帧false，最终恢复证据记录在interactions.json。
+- **浏览器证据边界**：关闭更多菜单的定位点击派生了一个电台目录标签，无业务写入；该新标签改变视口工具的内部目标，宽屏断言发现目标页仍1100并立即排除样本。关闭派生页后，getTab和原生标签激活并未改变该工具的内部selected值，故改用新建并实读1744×1027的同一路径样本完成宽屏三主题，不将错误尺寸图冒充宽屏。主题切换中的一张宽屏图短暂出现白色侧栏；后续稳定计算已回语义深色面，没有据瞬态叠加样式。工具问题不计为扩展性能/布局缺陷。
+- **创作评论实站与修复**：/platform/comment/article当前面板为空评论，六组合均complete、DR0、doc等于视口；既有类型前景、阅读面及排序键盘规则已加载。Enter切点赞最多、Space恢复最近发布，pressed与原class一致；全选、举报、删除及服务端设置均未操作。实际operate_right宽265px、右margin=-16px，后两项还各有16px左margin，Nocturne原padding与gap使每项被压至75px；四个13px中文字符可用内宽仅51px，折成两行，实际高度44px。释放组与项的固定宽度/旧外边距，保留既有gap4、padding4/12和min-height36，项不收缩且white-space:nowrap；未改排序、账号或请求逻辑。
+- **验证结果**：最后完整pnpm lint退出0（native127-lint-final.log），typecheck/test/knip各退出0，551条PASS、Knip10/0/5；早期lint仅两处长选择器换行错误，修正后重新完整运行，失败日志保留。开发最后增量在/tmp/bewly-native126-dev.log:118–134，未手改产物。实际main/native开发CSS加themeColor模块的三类结构×三主题×1100/1744共18场景、291项检查通过，采样文字最低对比6.1534；覆盖原native重要颜色、0.8透明度、1140px外壳、265px排序组/中文换行、同节点/媒体/输入保留及关闭恢复。修正后排序三项实际76×36px，推荐区4列避让64px侧栏+16px空隙，菜单完全遮住下层条纹。隔离截图均等fixtureComplete后获取，不替代本轮新规则的实站装载。
+- **记录与恢复**：/tmp/bewly-native127-live-results.json、interactions.json、isolated-first/complete.json及对应截图保存真实通过、发现的问题和排除样本，未删除旧记录。暗色/OLED关闭、原主题色/基准色/适配和广告值保留，设置关闭后等待确认count0；视口reset、所有本轮标签关闭且会话为空，原用户动态页恢复前台。临时服务84797退出130，watch15786保留；收尾git diff --check退出0，HEAD/stash仍原SHA。
+- **进度**：整体工作量粗估约94%、剩余约6%，不是页面覆盖率。直播排序/弹层键盘和创作评论的既有装载门槛已关闭，本批最后样式与上一批四类差额继续归入最终统一复验；粉丝、公约及其他已列常用模板继续核对，不扩展特殊活动。历史4004因果、额外改色和条件性业务状态边界保留，Goal仍active，未逐页追加重载请求。
+
+### 第八十九批：粉丝实际列表、公约正文与日期弹层补差（2026-10-07）
+
+- **基线及范围**：继续当前Goal和message_feature，Git五项及完整HEAD/stash均符合约定，开始和收尾302条状态完全一致；复用watch15786。仅修改creativeCenterPage.scss，沿既有creativeCenterPage/bewly-design作用域和语义token，没有新增脚本、请求、Observer或轮询，不扩展一次性活动。
+- **粉丝与勋章实站**：/platform/fans/manage本次有真实列表，浅/深/OLED×1744/1100六组合均DR0、文档宽度等于视口。发现原.bili-btn.followed仍为#e5e9ef/#505050，原筛选入口子文字为#99a2aa、展开态#00a1d6，dropdown-menu仍白底；补已关注普通表面及hover、筛选前景继承、打开态theme-foreground、菜单实色popover与选中/hover前景。只展开/收起筛选，仍保留全部粉丝，没有点击关注、取关或用户操作菜单。勋章页六组合中主体及两列已容纳，保留说明和原图；只把part内content原4px/#e5e9ef轮廓改为12px语义卡片/边框，未激活或填名称。含账号内容的证据仅保留本机，不公开贴出。
+- **骑士团日期控件**：/platform/fans/assist宽屏基线及日历六组合共七组，均DR0；记录为空，未输入UID或添加成员。readonly日期input是可操作的原生触发器，并非disabled，原#999文字/#e7e7e7边框/4px轮廓改用text-1、语义边框与8px交互圆角。旧日历窄窗top443/bottom803，确实超出800px视口；祖先在宽窄均无transform/filter/contain定位边界。现有滚动弹层增加受@supports保护的CSS anchor定位，以输入框为锚点、8px间距、可用下方空间限高，保留432px上限及原滚动；不支持时沿用原绝对定位并把45vh上限收为40vh。未引入定位循环或polyfill。当前Chrome隔离验证支持此语法，未验收旧版浏览器；依据为[Chrome Anchor Positioning](https://developer.chrome.com/docs/css-ui/anchor-positioning-api)及[MDN position-area](https://developer.mozilla.org/en-US/docs/Web/CSS/Reference/Properties/position-area)。实站对取消按Enter后弹层隐藏且日期值不变；焦点落在BODY属当前原生行为，不声称回到输入框。
+- **公约正文真实缺陷**：公约首页六组合的背景装饰、内容图标、目录布局已正确；Enter进入违规行为判断后，正文页六组合均无横向溢出，但深色/OLED段落近乎不可读。父content-text已为#f1f2f4及15/24px，真实.text-block p仍显式#333及13/26px；只对这些正文段落继承现有正文颜色、字号、行高，保留章节DOM、目录和滚动。Space切违规行为处置可更新标题及aria-current，Enter已恢复首章节。未因空白观感误判成加载失败，原正文实际存在且有布局尺寸。
+- **自动和隔离验证**：完整pnpm lint/typecheck/test/knip均退出0，551条PASS、Knip10/0/5，日志/tmp/bewly-native128-{lint,typecheck,test,knip}.log；开发最终增量见native126-dev.log:147–158，git diff --check退出0。真实开发CSS+themeColor模块、观察到的原生结构与虚构内容构成三模板×三主题×两视口18场景，252项检查通过，最低采样文字对比5.1854；覆盖颜色/字号/轮廓、原节点/图片保留、关闭适配恢复及日历随页面滚动定位。1100正常弹层边界421.125–729、top451/bottom792；极低触发位置下弹层限制在744–792，取消按钮可以在内部滚动至完整可见。首轮六处失败源于测试强制scrollTop=scrollHeight，底部18px留白让32px按钮在48px视口顶部裁掉2px；记录实际几何后改用scrollIntoView nearest验证可达性（scrollTop366→364）即通过，没有因此修改业务源码。首轮JSON保留，后续完整结果和fixtureComplete后的截图另存。
+- **证据边界与恢复**：/tmp/bewly-native128-live-results.json记录31组实际观察，包含上述缺陷；interactions.json记录原生行为；isolated-first/complete.json和三张fixed截图为隔离渲染，不代替新代码实站。所有新差额继续归最终统一重载复验，本批没有再索取逐项重载。偏好恢复暗色/OLED关闭、原主题色#f43f5e/基准色#2a2f2d，适配/广告保持原值，设置关闭确认count0，视口reset、临时标签全部释放、原用户动态页回前台；临时服务43717/67510均退出130，watch15786保留。未执行账号业务写入、commit/push、版本/stash、生产build/打包/clear。
+- **进度**：整体工作量粗估约95%、剩余约5%，不是实站覆盖率。剩余为已列常用创作/账号等模板复验、最后累计差额装载、播放渲染及条件性场景的证据收尾；历史4004因果和其他扩展改色/隐藏的边界仍未关闭，不扩大为全部页面或全部业务状态通过，Goal保持active。
+
+### 第九十批：创作计划完整内容、任务阅读层和动画账单实站核对（2026-10-07）
+
+- **基线与范围**：上一轮完成了真实修复与证据核对，本轮继续Goal。Git五项、remote/分支/追踪、完整HEAD/stash和302条状态均正确，收尾状态清单与开始完全相同；watch15786由原句柄确认存活。只改creativeCenterPage.scss，复用原主题、适配开关、语义token及现有原生组件，不新增JavaScript、请求、监听、计时器或轮询。没有commit/push、分支、版本、stash、生产build/打包/clear或子代理。
+- **模板激励和共用壳**：等待实际示例、作者与视频内容完整后，/platform/allowance/template-incentive浅/深/OLED×1744/1100六组合均DR0，文档等于视口，原内容横幅和卡片内部横向滚动保留，主体前批补差已加载。共享.cc-nav-wrp实际border-right和nav-cut-off-line仍#f4f4f4，反馈side-utils内feedback-container仍白底、2px左角及#757575文字；只将这些明确节点接入语义边框、普通实色popover与文字，反馈右侧继续与视口边缘拼接。原帮助图标读取确认为单色#757575 SVG，只在深色使用已有单色图标处理，不反色内容图或其他扩展控件。
+- **创作激励底层缺口**：资格与推荐主体六组合已有正确阅读面和媒体轮廓，Enter选素材激励、Space回视频激励，pressed同步原选中态。实际下方露白来自micro-app[name=allowance-excitation]内部micro-app-body的#f6f7f8，外层cc-body已经正确为深色/OLED；仅给该微应用内层同步bew-bg，未覆盖全站body或改动推荐/资格/关注行为。禁用加入入口保留原禁用状态，未加入或关注。
+- **任务、规则和历史**：三类各六组合，均DR0且宽度不越界；装饰图计算已none，任务按钮36px及主色配对正确。实际.task-item .left已映射，但其.title仍#000；规则/历史入口父层已映射而.text仍#18191c；奖励数值和说明分别仍#333/#61666d。补精确子节点前景，novice-task-module的白色外发光改为既有shadow-1。历史任务根.growing-up.cc-content-body仍#f1f4f9，内部task-manage在history状态为透明，因此只补这个内容根（不误中导航内同名ID），同时将filter和原生select的#e7e7e7边框归一。规则弹窗阅读正文/轮廓已生效，但.head内.title被更具体的原scoped样式覆盖，改为显式标题选择器。Enter打开后焦点在原关闭X，Escape关闭并回规则入口；历史分类Enter选创作任务、Space回新手任务均有效，没有提交任务、分享、投稿、领取或改设置。
+- **SVG实例验证修正**：规则与历史的两个原symbol已实际读取为全部path显式fill=black，原use上的currentColor不能覆盖。早期尝试在symbol定义的path映射currentColor/语义fill，隔离读取定义节点的计算值看似正确，但截图中引用实例仍黑；因此未将那两次456项零失败当最终视觉通过。最终撤下定义路径覆盖，保留原symbol/业务DOM，在深色对这两个已确认单色的可见SVG实例使用brightness(0) invert(1)，与帮助图标共用窄范围规则。更新断言检查实例处理和原路径fill保留，目视确认实际图形由黑变白；不增加图标副本或脚本。
+- **动画统计与账单**：两类各六组合，DR0，1744和1100均无文档溢出；前批统计卡、表头、空态、账单阅读面及输入规则已命中，搜索外壳36px/8px，输入和placeholder语义值正确。仅补stats-card-subtext原#00b5e5链接为theme-foreground。原标签可正常切换，最终回收益数据，未输入查询、导出或操作资金。当前为空统计/账单，不推定有资产状态通过。两张早期名称带stable的补图实际仍有未完成统计/原Ant表格加载层，已在verification-notes.json中排除；后续实读统计无--占位且月份已就绪、两页spin/blur均为0后保存settled图，没有用加载遮罩的短暂灰白推断持久配色故障。
+- **最终检查与隔离证据**：最后源码的完整pnpm lint/typecheck/test/knip均退出0，551条PASS、Knip10/0/5，日志/tmp/bewly-native129-verified-{lint,typecheck,test,knip}.log。watch最后增量在native126-dev.log:195–206，git diff --check退出0。实际开发CSS+themeColor模块的五组观察结构/虚构内容×三主题×两视口，共30场景462项通过，采样文字最低对比4.7575，覆盖底层背景、文字/边框/阴影/图标、无新增模糊、原节点/媒体保留及关闭适配恢复。首轮六个窄窗失败来自夹具错误地给growing-up增加24px padding及content-box，实站为padding0/border-box；仅改夹具。first/complete/final三个早期JSON及旧截图均保留，最终依据为isolated-verified.json和*-verified-*截图，不以文件名或仅定义节点样式认定渲染成功。
+- **恢复与进度**：42组基本观察及额外取证在/tmp/bewly-native129-live-results.json、interactions.json、verification-notes.json与对应本机截图；其中包含上述真实缺陷，不是42组全部通过。暗色/OLED关闭、#f43f5e/#2a2f2d、适配开启均由设置UI确认，广告未改；设置关闭确认count0，视口reset，所有临时标签关闭、会话为空，用户原动态页恢复前台。临时服务65870/20208/85393/75957均退出130，开发watch保留。整体工作量粗估约96%、剩余约4%，不是页面覆盖率；剩余已列常用账号/创作辅助入口与累计新差额的最终装载复验继续，不扩展特殊活动。历史4004及额外改色/广告隐藏等条件边界保留，本轮未再次请求小批重载，Goal保持active。
+
+### 第九十一批：账号资料、积分、挂件和通知的实站收尾（2026-10-07）
+
+- **基线与范围**：上一轮完成实际修复和验证，本轮继续同一Goal。Git五项、三个remote、message_feature追踪关系、完整HEAD/stash均符合原基线，开始/收尾302条状态清单完全一致；watch15786由原句柄确认持续运行。只改accountSettingsPage.scss，保留既有业务、账号、设置和播放器链路，未新增JS或轮询。没有commit/push、版本、分支、stash、生产build/打包/clear和子代理。
+- **实际观察与改色边界**：从项目UserPanelPop真实account/home链接进入账号中心，完成资料、会员积分首页/记录、黑名单、通知及头像大会员/我的挂件/激活记录八类×浅/深/OLED×1744/1100共48组有效观察，文档宽度均等于视口。每次均无data-darkreader-mode/scheme；存在一个textContent为空的darkreader--sync节点，工具未暴露其CSSOM，记录为空节点及无动态标记，不把节点数1直接等同于正在改色，也不宣称已隔离所有其他扩展。含账号资料、资产与名单的截图只留本机，仓库不记录字段值、名单或邀请码。
+- **资料、积分和名单**：982px资料壳及表单布局在1100仍可容纳，输入/保存/选中项的语义表面和前景已生效；未输入、保存或改变资料。积分首页原装饰已退、余额与兑换/挂件内容保持原节点，记录表头/空态三主题可读；Enter进入积分记录、Space返回首页及焦点反馈正常，没有兑换。黑名单当前有20个原条目，姓名、时间及36px按钮已为前批新样式；不读取/复制名单到记录，不点击移除。发现security-ul底线仍#e1e2e5，points-record-warp和资料padding-dom仍#e5e9ef，只把这些实际分隔线接到现有border token，不改尺寸或表单提交。
+- **顶部独立装饰**：实站top-header使用2×86的重复data PNG，直接查看像素确认仅蓝色色条；top-img另用完整rl_top品牌/人物/云朵图。只移除外层重复色条并使用bew-bg，内层原图及其布局保留，补媒体语义圆角。原内容图内自带的白云和白色留边继续属于保留图像，没有通过裁图、滤色或重建品牌来强行统一每个像素；未恢复壁纸功能。
+- **头像三个分类**：大会员挂件目录的原图、12px卡片与圆形头像工具在六组合已正常；我的挂件有6张原生卡，但LI中的无class div又绘制白底/4px角，形成深色下白底浅字。让此直接内层透明并继承外层轮廓，保留原hover动作显隐与全部图片；真实.pendant-expire仍#999，btn-box内pendant-btn仍#00a1d6/白字/4px，用更具体的既有选择器补语义前景和交互轮廓。激活记录当前是原生空态，图片保留，其face-container .no-data p改为text-2。Enter沿三个原生链接切换有效，最后回大会员挂件；未上传、领取、佩戴或卸下挂件，也未进入更换头像文件流程。
+- **通知和滚动证据**：四个原生开关实际命中高度36px，checked前后完全一致，三主题轨道/文字已命中。第一次六组截图继承了原生路由滚动位置，只能作页尾观察；补回顶部后另存notice-top六组，四项控件均完整可见。对body发送组合键未达到页首，不据此改产品；改在实际导航项使用Home并确认最终画面。SPA切换短暂保留两套旧/新导航，严格定位曾拒绝含糊目标；后续按aria-current=page定位或等旧内容离场，不误把过渡期重复节点计为常驻泄漏。原截图均保留，不拿文件名代替可见范围检查。
+- **验证与开发**：完整pnpm lint/typecheck/test/knip各退出0，551条PASS、Knip10/0/5不变，日志/tmp/bewly-native130-{lint,typecheck,test,knip}.log；git diff --check退出0。开发功能增量在native126-dev.log:207–218，最后仅调整一行解释性注释。临时页面读取真实开发CSS和themeColor模块，使用观察结构及虚构字段/图片，三主题×两宽度6组、144项通过，最低采样文字对比5.5745；包括内层透明/共享轮廓、装饰退出但品牌src不变、操作原隐藏状态、边框、无内层模糊、只读属性、节点/图片保留及关闭适配恢复。三主题最终截图经过fixtureComplete后目视检查；仍不能替代这批最后规则的重载实站或真实佩戴操作。
+- **记录与恢复**：/tmp/bewly-native130-live-results.json含54组（48组有效矩阵加6组原通知页尾观察），verification-notes.json明确排除与权限边界，isolated-first/complete.json均为本轮隔离结果，实际资料值未写入这些JSON或仓库。暗色/OLED关闭、适配开启已由设置UI确认，原主题色/基准色和广告值未改；设置关闭、视口reset、所有本轮临时标签释放且会话为空，原用户动态页恢复。临时服务58283退出130，watch15786保留。整体工作量粗估约97%、剩余约3%，不是实站覆盖率；剩余清单常用辅助模板、最后累计规则装载和既有播放/4004及其他扩展条件边界继续，Goal保持active，本批未追加零散重载请求。
+
+### 第九十二批：账号剩余模板、旧顶栏与硬币记录键盘补差（2026-10-07）
+
+- **基线与范围**：继续message_feature及现有Goal，Git五项、三个remote、追踪关系和完整HEAD/stash均符合原基线，工作区302条状态保持。本批只补accountSettingsPage.scss、removeTopBar.scss、nativePageKeyboard.ts及其真实模块回归；使用原适配开关、主题token和键盘owner，未新增请求、Observer、计时器或轮询，没有改动账号资产、播放器、发送或广告判断逻辑。没有commit/push、分支、版本、stash、生产build/打包/clear或子代理。
+- **Dark Reader授权与恢复**：最初硬币六组和旧勋章两组存在dynamic标记及非空改色样式，不记纯主题通过。用户明确允许临时排除整个account.bilibili.com后，通过其原生工具栏弹窗将该域从启用切为排除，刷新后再验收；全局自动/系统模式及其他域保持原值。收尾已将该域恢复原启用状态，前/排除/恢复三张截图及darkreader-state.json保留。未访问扩展管理页，也未更改AdGuard。卡券与邀请前期已无动态标记，仅有空样式节点；合计50组观察中保留上述8组干扰样本，其余42组是七类模板/视图的三主题宽窄观察，包含真实缺陷，不等于42组全部通过。
+- **认证与只读页面**：认证首页六组合均DR0，完整滚动截图确认专业认证底部面板宽1020、高98、max-width100%、opacity1、12px轮廓，在1744与1100内均完整可见；关闭此前该面板最后补差的装载门槛。卡券11个原生内容面板及禁用领取状态保留，没有领取；发现外层重复浅色Logo装饰、规则文字和虚线分隔仍沿旧配色，补原作用域下的语义表面/前景。邀请页只读取readonly属性与几何/样式，截图止于邀请码字段上方，未读取或复制字段值；原inputdone仍#99a2aa，补现有text-2优先级及标题分隔线。
+- **旧版勋章模板**：全部勋章及已解锁页各完成六组合，均DR0，原链接Enter往返有效。实读确认旧ID选择器压过现有class规则，导致深色标题/说明仍#222、媒体边框#e5e9ef及4px轮廓、选中胶囊仍#00a1d6；补同一已观察ID范围，沿既有文字、媒体和选中token，不改原inline内容图。旧top_bg重复蓝色条退出，子top品牌图保留并使用媒体轮廓；侧栏底部first-level文字同步语义前景。已解锁当前为空，不推定有勋章资产状态通过，也未佩戴/卸下。
+- **重叠顶栏根因**：已解锁页实际原生顶栏为#bili-header-m，relative、高42px，根已是Bewly顶栏模式却仍显示，与Bewly栏重叠。仅将该原生ID补进已有外层抑制、remove-top-bar占位和无占位三组规则；Bewly模式保持64px占位，原生模式恢复同一个42px节点。没有第三种顶栏，也未扩大播放器闲置隐藏规则。当前这一新样式仍待实站最终装载，实际CSS隔离已覆盖显示/隐藏/占位/恢复。
+- **硬币键盘与焦点**：原两项coin-nav DIV和get-coin-more段落没有role/tabindex，接入现有account局部选择器，pressed沿原on类。Enter/Space仍只触发原节点click，更多入口因原生切换而隐藏或移除后，在同一微任务边界将焦点移交当前记录标签；用户已移焦或owner已清理时不抢焦点。真实新文档确认角色、Enter进入记录、Space回首页和焦点回收生效。最初preventScroll使焦点留在屏外，已改为原生focus滚动；实站复验标签top62、bottom113，随后补72px scroll-margin避免64px顶栏遮挡。最后普通刷新仍读到margin0，因此这条最终边距及行分隔线不记实站通过。表格浅色线实为TR的1px #ddd，补TR语义边框而非重复修改TD；没有拦截记录请求或操作硬币。
+- **自动与隔离验证**：完整pnpm typecheck/test/knip均退出0，552条PASS、Knip10/0/5；最后CSS补差后完整pnpm lint再次退出0，日志/tmp/bewly-native131-{typecheck,test,knip}.log及native131-lint-final.log。定向verify:selected-p2也退出0。新增真实模块检查覆盖隐藏/移除/仍可见/用户移焦/已释放五种焦点归属，IME、Space取消与属性恢复；未复制实现代替测试。临时Chrome页面加载实际开发CSS、themeColor、nativePageKeyboard及effectiveTopBarSource模块，两类场景×三主题×两宽度共12场景192项通过，最低采样文字对比5.5745；验证焦点完整位于固定栏下方、旧顶栏各模式、原节点/图像/只读字段保留及关闭适配恢复。首轮即零失败，结果保留为isolated-first/complete.json；其本地截图不是实站证据。
+- **记录、恢复与进度**：本轮证据在/tmp/bewly-native131-live-results.json、verification-notes.json及对应截图；文件名coin-isolated/legacy-medal-isolated指排除Dark Reader后的真实账号页，localhost的isolated-complete才是隔离夹具。原显示偏好恢复暗色/OLED关闭，设置已关，视口reset；临时页面关闭，临时服务91147退出130，开发watch15786保留且最后增量见native126-dev.log:352–363。整体工作量仍粗估约97%、剩余约3%，不按观察数量虚增完成率；剩余为已列常用辅助入口、最后累计规则的统一装载复验，以及播放4004和其他扩展等已知证据边界。Goal保持active，本批没有追加零散重载请求。
+
+### 第九十三批：创作入口实站收尾与累计差额统一装载（2026-10-07）
+
+- **基线与范围**：上一轮完成真实修复，本轮继续同一Goal。Git五项、remote/分支/追踪及HEAD仍符合原基线，302条工作区状态保持；原watch15786确认存活。只在creativeCenterPage.scss补三处实际差额，沿既有适配开关、微应用作用域、1324px媒体分支及语义token，没有新增JavaScript、轮询或修改播放/账号/广告链路。未commit/push、改分支、版本、stash，未执行生产build/打包/clear。
+- **真实路由与加载**：直接使用缺少upload一段的动画地址被原站重定向home，未把目标等待超时当加载缺陷，也未继续猜地址。通过原生投稿导航确认实际/platform/upload/upanimation/dashboard，再等待步骤、五个案例及全部图片complete后取证。投稿路由过渡中旧外层链接和新微应用链接短时同时存在，严格定位拒绝含糊点击后改用当前#video-up-app作用域，没有触发上传。四类模板/展示页×三主题×1744×1027及1100×800共24组观察，稳定时均无Dark Reader；周报interactive阶段短暂存在dynamic，load后标记与样式节点均归零，未为瞬态改动其他扩展。
+- **动画引导与窄窗缺陷**：既有主体/上传面、步骤前景、五列案例和媒体轮廓已实读生效。1100下步骤行宽612px，四个步骤与三条连接线都flex:1，连接线另有左右各16px留白，导致每个步骤仅73.71px，四字标题高28px、line-height14px，说明挤成多行。仅在既有窄窗分支令连接线flex:0 1 16px、移除其水平外边距，并由父行统一gap8；原四步骤顺序、宽屏分配及内容不变。公告原链接仍#00a1d6、高21px，补theme-foreground和36px命中面/交互轮廓，保留原href及键盘反馈。原淡色云朵示意、业务图片、上传入口和案例链接均保留。
+- **短剧与互动视频**：短剧身份介绍六组合内，标题/资格说明、绑定提示和三个原按钮的既有配色正确，窄窗可容纳；实际playlet-entry仍2px dashed #ccc与0px角，补语义边框和12px平滑面板轮廓，保留虚线类型、原布局和资格逻辑。未选择身份、绑定机构或打开资格申请。Enter从原投稿分类进入互动视频，六组合的说明列、上传面、流程入口及条款排版均未越界；已有窄窗规则能隐藏无用的列间分隔并容纳三列，未因此另加布局。没有选文件、上传或接受协议。
+- **周报装载门槛关闭**：/york/up-report-weekly真实web现为fixed/inset0/overflow:clip，1100下文档宽1100，不再因1536px海报绘制撑至1318；1744下文档同样等于视口。保留原0.8海报transform和原canvas，窄窗二维码149.6px、x742/y550.39，宽屏x1064/y663.89，六组合均完整位于视口；白色扫码底面与原图不滤色。外围背景按浅/深/OLED切换。截图仅保存海报上半区，几何检查不读取canvas内容或二维码载荷，不把品牌图当装饰背景删除。
+- **完整检查与隔离渲染**：完整pnpm lint/typecheck/test/knip均退出0，552条PASS、Knip10/0/5，日志/tmp/bewly-native132-{lint,typecheck,test,knip}.log；开发增量在native126-dev.log:365–375。临时页面加载实际开发CSS、themeColor模块及从真实DOM取得的原生CSS（后置模拟迟到层叠），两个模板×三主题×两宽度12场景、300项通过，采样文字最低对比5.3445；覆盖四字标题保持单行、同排边界、链接命中/焦点、虚线与平滑轮廓、原节点/图片/href保留和适配关闭恢复。首轮30项失败来自夹具遗漏empty-guide-banner-main及cc-content-body祖先作用域，回到真实DOM核对后只修夹具，未据此增加业务源码。首轮和最终JSON均保留。最终窄窗步骤各129px、连接线16px、标题高14px，三主题截图已目视检查；它们仍是隔离证据。
+- **最后装载与恢复**：开发编译后新开实际动画地址仍读到连接线flex:1/73.72px、标题28px及公告21px/#00a1d6，故本轮最终三处规则不记实站通过。24组记录及排除/修正说明存于/tmp/bewly-native132-live-results.json、verification-notes.json；暗色/OLED关闭与设置关闭已确认，临时视口reset，临时服务15890/28296均退出130，开发watch保留。仅保留动画引导标签作为统一装载后的验收入口，其余临时页面关闭。
+- **统一请求与进度**：目前清单中已取得真实结构的常用模板，其本轮发现差额已集中落实并检查，进入最后累计产物装载复验；待验范围包括游戏/漫画/会员购的窄窗边界、直播菜单与推荐区、创作中心阅读面/日历/步骤，以及账号配色/旧顶栏/键盘焦点。整批请求一次用户重载当前Bewly Nocturne Dev，收到确认后由Agent刷新页面并按实际新行为验收，不将此前已确认的重载视为此次最后增量已加载。整体工作量粗估约98%、剩余约2%，不是页面覆盖率。历史4004因果、其他扩展改色/隐藏及未触发的条件业务状态仍按各自证据保留，Goal保持active。
+
+### 第九十四批：等待整批装载期间补验漫画真实导航，修正旧分类层叠与溢出（2026-10-07）
+
+- **基线与独立工作**：上一轮为实际实现进展，整批重载尚未收到新的确认，本轮未重复索取。Git五项、完整HEAD/stash、三个remote及message_feature追踪正确，302条状态清单保持；原watch15786开始/收尾均确认运行。重新阅读nativeAppearance/nativeSiteAppearance及主站适配开关、键盘释放路径，并核对现有真实模块测试，外观与广告仍独立，特殊活动和作者Wiki保持原生设计，未为等待状态新增轮询或改动生命周期。
+- **真实导航与交互**：从漫画首页点击主导航“分类”，实读target=_blank，打开独立新文档；这条路径不需要新增SPA路由监听。分类控件已有role/button、tabindex0和pressed，Enter选择“完结”有效，Space恢复“全部”后四组筛选均恢复原值，内容列表重新出现；DR标记与样式节点均为0。第一次恢复定位误把整个style-section当成单行，被严格定位拒绝，随后依据实际status属性对应的第三个“全部”恢复，没有点击错误业务入口。最初截图仍有原生加载文字，另存settled图，不将加载中截图作为内容完成证据。
+- **层叠结论更正**：早期把分类选中蓝色与动画旧公告样式一起视为可能未装载，随后在已加载页面的原生DevTools Elements中确认：Nocturne规则确实存在，但原站.style-section .tag-block .tag-containers .style-tag.selected[data-v-1072f421]的#32aaff!important优先级更高；普通深色选项又有#999!important，不能靠重复重载解决。原生标题的theme-dark/card/text-info/scoped选择器压过浅层映射，更新说明实为#777；封面原规则为2px圆角，真正绘制图片的子节点是DIV.cover-image且未继承轮廓。直接访问原CSS资源被浏览器以ERR_BLOCKED_BY_CLIENT拒绝后没有换通道获取；以上依据来自已渲染页面的样式面板，没有修改实时CSS或其他扩展。
+- **精确修复**：仅修改nativeSites.scss的manga作用域，分类选中/hover补已观察#main-stage根下的选择器，普通选项使用限定范围的重要前景，保留原pressed、点击和焦点反馈。标题与更新说明补实际manga-card-vertical/text-info-section层级，分类组标题使用text-2；封面父层补实际卡片选择器，DIV.cover-image与已有img一同继承媒体轮廓。没有改封面背景/内容图、链接、请求、业务节点或阅读器的图像滤镜/布局。
+- **窄窗缺陷与修复**：1100×800时app-layout、顶栏和页脚均宽1100，只有直接size-ruler/分类与列表正文固定1160，右侧封面被裁。扩展既有1192px媒体分支，仅让包含style-section的这层正文变为可用宽度并保留16px边距；原筛选行改为可收缩/换行的flex，类别标题不收缩，选项保持完整文字与原高度。真实卡片原180px、横间距16/纵间距24，末列右间距0；沿六列改为minmax网格，保留原133.3333%封面padding比例及全部原节点，不通过文档裁切掩盖溢出。没有新增JS、观察器或计时器。
+- **自动与隔离结果**：最后完整pnpm lint/typecheck/test/knip均退出0，552条PASS、Knip10/0/5不变，日志/tmp/bewly-native133-{lint,typecheck,test,knip}.log。native/main开发增量均成功，最后见native126-dev.log:394–411。临时Chrome页面使用实际native开发CSS、themeColor/nativePageKeyboard模块、DevTools确认的选中/标题/封面层叠规则和实测原布局约束；虚构内容下三主题×两宽度六场景480项首轮即通过，最低采样文字对比6.1534。覆盖重要声明、普通与选中状态、键盘单次原生激活、焦点环、六列完整边界、父子12px轮廓、原封面比例、节点/链接/图片保留及关闭恢复。1100下每列约164.67px，末列右边1084；浅/深/OLED截图已目视检查，仍是隔离结果而非最后源码实站通过。
+- **证据与恢复**：/tmp/bewly-native133-manga-*-cascade.txt保存只读样式来源，verification-notes.json明确上述更正及证据边界；navigation-settled和narrow-before是实站现状，manga-fixed-*与isolated-first/complete是隔离修正结果。DevTools筛选/搜索清空并关闭，临时视口reset，本轮未改主题偏好、Dark Reader或AdGuard，漫画临时页和夹具已关闭；仅继续保留前批动画引导标签用于统一重载后复验。临时服务64894退出130，开发watch保留；未commit/push、改分支/版本/stash，未build/打包/clear。
+- **进度与下一门槛**：整体工作量仍粗估98%、剩余2%，本轮关闭了真实导航行为的证据缺口，并修复新证实的旧分类问题，不把隔离结果扩大为最终视觉通过。新增差额已并入前一条整批重载请求对应的累计产物，没有追加重载问题；后续必须用选中前景、父子圆角及1100正文/末列边界验证实际装载，不能只看构建标记或源码存在。Goal保持active，其他累计视觉门槛和历史4004边界继续保留。
+
+### 第九十五批：最终装载门槛复核，等待既有整批重载请求（2026-10-07）
+
+- **状态核对**：上一轮完成实际漫画修复，本轮没有新增源码实施或重复运行已通过的检查。Git五项、remote/分支/追踪、完整HEAD/stash仍符合基线，302条状态与上一轮完全相同；watch15786通过原句柄确认仍在运行。最后完整检查仍为第九十四批的lint/typecheck/test/knip退出0、552条PASS及480项实际CSS/模块隔离通过，不把这些结果称为最后实站验收。
+- **新文档装载实读**：刷新保留的动画引导页面并新开漫画分类，均等到document complete后核对。创作页公告仍高21px（新规则最小36px）；漫画当前foreground为#f98ea0，但选中项仍rgb(50,170,255)，封面外层2px、内层0px（新规则应同为12px），且无Dark Reader动态标记。这些明确行为尚未体现累计修正；沿上一批已确认的原生层叠根因，不重新把问题都归责于重载，也不继续针对旧运行状态叠加代码。宽屏连接线原flex:1本来保留，本轮只将其作原始状态记录，不把它单独用作新旧产物判据。
+- **证据与恢复**：/tmp/bewly-native134-load-check.json、final-gate.json和current-load.png保存本次实际装载值。临时漫画页关闭，只保留动画引导作为收到确认后的继续入口；未改任何显示或其他扩展设置，没有新建服务，开发watch保留。没有访问扩展管理页、commit/push、分支/版本/stash操作，也没有生产build/打包/clear。
+- **等待门槛与Goal状态**：第九十三至九十五批（Goal连续三轮）同一整批扩展重载门槛仍未满足；期间已完成可独立进行的漫画诊断和修正。当前必要下一步是用户按既有请求重载当前Bewly Nocturne Dev，随后由Agent刷新并完成累计实际视觉/交互矩阵。按用户明确的浏览器约束不能代为进入扩展管理页，也没有等价的获授权重载途径；将Goal标为blocked等待此外部状态变化，而非complete或用户暂停。整体工作量粗估仍98%、剩余2%，原范围、待验矩阵、其他扩展影响和历史4004边界均保留，未重复发送重载问题。
+
+### 第九十六批：恢复后的累计实站验收与原生迟到样式补差（2026-10-08）
+
+- **装载状态确已变化**：Goal恢复为active后，刷新创作页实读公告链接36px及主题前景，漫画新文档的选中项与外层12px也生效，以真实新行为关闭此前装载等待，没有重复索取重载确认。Git五项、三个remote、message_feature追踪、完整HEAD/stash和302条状态均符合基线；本批只改nativeSites.scss，保留原组件、媒体、主题/广告开关、键盘owner与播放链路，未新增JS、监听、计时器、RAF或轮询，未commit/push、改版本/分支/stash、生产build/打包/clear。
+- **实站观察范围**：漫画分类、游戏首页、旧榜单、会员购票务、直播全部目录和分区弹层各完成浅/深/OLED×1744/1100，共36组，稳定后均无Dark Reader动态标记及非空样式。记录中包含本批新发现的差额，不能记为36组全通过。头像、游戏浏览记录或其他账号区域的截图仅保留本机，仓库及JSON不复制相应字段值。新开首页时Dock已收起，设置按钮尚未存在；按真实“展开Dock”操作后正常打开，未将一次错误等待计为初始化故障。
+- **漫画已验收与最后内层修复**：分类选中/正文层级、组标题、1100筛选换行与六列实站生效；关闭适配后原生2px/蓝色恢复、tabindex移除，广告class保持开启，重开后属性与样式恢复。首页下一页出现的上一页箭头left0、x16/right90，原前后翻页和首组恢复有效。实站发现图片加载后原生组件向DIV.cover-image写入行内border-radius:0px，父层虽12px仍无法约束其绘制；仅对该直接内层使用inherit!important，保留原行内值与图片，未另建监听。原活动导航下划线仍蓝色且无行内背景，映射到同一theme-foreground。此两处新规则尚未实站复验。
+- **游戏和票务已验收部分**：游戏普通分类文字在三主题均与game-meta计算值一致；旧榜单六组合无横向溢出，选中面与文字配对，Enter进入预约榜、Space回热度榜在等待原class/路由完成后确认，未点预约或下载。现代首页窄窗仍doc1133：header实宽932/x80，left-entry542.32、搜索275及左右各20px、right-entry196，右入口伸至1133。DevTools确认原站强制width:calc(100% - 160px)!important，本地普通声明被盖住；补限定窄窗的重要宽度及搜索min-width0，保留所有入口。会员购六组合的project-list已1068px，两列完整可见，原175×232海报及内容位置保留，关闭这处最后装载门槛。
+- **直播已验收与层叠修复**：/all推荐区窄窗四列、视口宽度及既有排序样式生效；/lol弹层六组合opacity1、12px，1100边界16–1084/top136–bottom644，宽屏182–1562/top136–bottom512，Enter开、Escape关并保持触发器状态。更多文字仍受原站html[lab-style*='dark']加link-navbar-more/showmore-link/more-tab-animation的重要前景覆盖，菜单背景的原规则还多一层slot-ctnr；据已加载规则补相应精确层级，避免浅色黑字深底。关注侧栏原内层#242628与外层白面冲突，顶栏同类原面也仍暗色；补统一独立表面、父子轮廓、标题/空态/条目前景和更多入口，侧栏内层透明，原指向三角跟随外壳色，无重复背景采样。实站关注内容当前为空；有条目配色以原生CSS及虚构数据隔离检查，不推定真实非空账号状态通过。
+- **避免无依据改动**：截图一度看似分区工具栏盖住选项，进一步等工具栏完整挂载后实读115项命中矩形，交叠数0，最近右边1014.85，工具栏从1036开始；更正早期判断并保留现有分区几何，没有为背景相交加入无需求留位或层级。工具读数超时后在同一文档续验，没有据此重启watch。DevTools搜索曾命中同名CSS文本，改用精确元素XPath；窄视口下检查焦点不明确曾打开两个只读充值目录标签，均关闭且未发生任何交易，随后恢复默认视口并通过实际检查面包屑取证。上述工具偏差不作为产品缺陷。
+- **检查与隔离结果**：最终完整pnpm lint/typecheck/test/knip均退出0，552条PASS、Knip10/0/5；日志/tmp/bewly-native135-final-{lint,typecheck,test,knip}.log，早期检查日志保留。实际开发CSS、themeColor/nativePageKeyboard模块及原生规则输入的漫画六场景492项通过，覆盖迟到写入0px后仍实际继承12px、原值保留和导航线色。游戏1024/1100/1744及直播浮层两宽度共15场景216项通过，含真实重要声明、搜索收缩、空/有数据样本、单一表面、指向三角、原节点/href/查询保留和关闭恢复；两组共21场景708项，最低采样文字对比5.1854。浮层首轮六个溢出来自夹具把定位父层设为static，使原::after指向视口；恢复定位上下文后通过，未据此改产品布局。初始失败与最终JSON均保留。
+- **证据与恢复**：实站结果、源规则、排除项和截图在/tmp/bewly-native135-*，verification-notes.json区分加载成功与本批仍待装载的规则。部分截图被捕获工具缩小，保留原图并以明确裁切/稳定视口另存verified证据，不将缩放偏差判为页面布局。显示偏好恢复原暗色/OLED关闭、适配开启、原主题色与基准色，设置关闭，未改Dark Reader/AdGuard或账号数据；临时视口reset，所有本轮与前批保留的临时验收页已关闭。临时服务15389/41402/28461/73389均退出130，开发watch15786保留，最后native/main增量见native126-dev.log:574–591，未手改产物。
+- **进度与剩余**：整体工作量仍粗估98%、剩余2%，不是实站覆盖率。此前整批装载等待已解除，后续继续剩余创作/账号等常用模板的最新矩阵，并统一复验本轮新增原生冲突修正；不立即追加零散重载请求。历史4004因果、其他扩展影响及未授权的业务写入状态仍按原证据保留，Goal保持active。
+
+### 第九十七批：创作与账号累计矩阵收尾，修正两处真实层叠差额（2026-10-08）
+
+- **基线与范围**：上一轮有源码与实站进展，本轮继续同一Goal。Git五项、三个remote、message_feature追踪、HEAD与stash完整SHA均符合原基线，开始302条状态清单与上一批一致；原watch15786通过原句柄确认运行。只改creativeCenterPage.scss及本维护记录，未新增JS、请求、监听、Observer、计时器或轮询，未改播放器/账号/广告业务，没有commit/push、分支/版本/stash、生产build/打包/clear或子代理。
+- **矩阵及证据边界**：/tmp/bewly-native136-live-results.json记录19类视图×浅/深/OLED×1744/1100，共114组观察。其中旧勋章6组缺原生资源，不算视觉通过；邀请6组仅采样只读属性/几何/前景，截图截在邀请码字段前，不读字段值。这份记录还包含下述粉丝选中与任务历史缺陷，不能称114组全通过。正常模板均无Dark Reader动态标记及非空样式；部分带原生颜色过渡的第一次计算值仍在过渡中，后续稳定图形/终态另看，不据瞬态添加补丁。账号内容截图只保留本机，仓库及JSON不复制资产、名单、资料字段或邀请码。
+- **创作已装载成果**：评论三项排序实测78×36px、nowrap，Enter切点赞最多、Space回最近发布且pressed跟随；粉丝已关注表面、菜单12px与普通项前景已正确。勋章内卡12px、公约正文15/24px及三主题前景生效，目录Space/Enter切换有效。骑士团窄窗日历fixed、x421.125/right729、top451/bottom792，clientHeight341/scrollHeight414，可在原内部滚动至取消并按Enter关闭；未选日期或添加成员。任务正文和原单色SVG实例、激励micro-app-body底色、反馈实色面及分隔、规则标题/24px轮廓、动画窄窗连接线16px与四标题单行、公告36px、短剧12px语义虚线框、动画统计链接均实际加载。规则Escape关闭并回原入口，历史分类Enter/Space往返有效；未投稿、分享、关注、加入、领取或操作资金。
+- **两处精确补差**：原生DevTools只读确认粉丝已选span无行内值，原manage-wrap/fans-header/type或order/含scoped属性的选择器压过现有普通规则；把选中态限定到实际manage-wrap→fans-header→dropdown层级，提高必要优先级，普通项/原菜单/业务操作不变。任务历史内容根的原.growing-up[data-v-30a0c2c7]使用background-color:#f1f4f9!important，旧普通背景已加载但无法覆盖；仅在原#growing-up.cc-content-body补background的重要声明，继续使用bew-bg，未修改布局或全局body。没有通过重复重载或新观察器掩盖层叠原因。源规则分别存于fans-cascade-full.txt和history-cascade-full.txt。
+- **账号已装载成果**：复用用户对account.bilibili.com临时排除Dark Reader的明确授权，域名从启用改为排除后刷新，完成硬币记录、卡券、我的挂件、激活记录和积分记录六组合。硬币“查看更多”Enter后焦点回记录标签，scroll-margin-top72px，标签完整在顶栏下；初次采样误用不存在的coin-table，随后以真实coin-content/table-normal补验三主题的18个TR（含原隐藏首页表），均匹配语义边框，未把选择器未命中当产品缺陷。卡券重复装饰退出、11个原内容面与禁用状态保留；六张挂件内层透明且父子12px，期限文字与8px原操作表面生效，原hover显隐不变；激活空态、积分和资料分隔正确。邀请仅核对readonly/8px/文字与边框，未复制或使用邀请码。资料导航的初次3秒等待超时后真实内容完成，没有重复导航或猜改加载逻辑。
+- **旧勋章外部资源门槛**：nameplate.html和原链接mynameplates.html?type=nameplate均complete，但两份原生base.css/style.min.css的sheet仍不存在，原sea.js及基础脚本也未就绪，日志有seajs/$未定义。原生Network面板记录这些请求为ERR_BLOCKED_BY_ORB；关闭“适配更多页面”仍保持同一无样式页面，恢复开关后普通刷新仍如此。本批不重建原站CSS/脚本、不绕过浏览器阻止、不归责为Nocturne，也不把内容缺失的六组当旧顶栏或勋章配色通过。legacy-native-off.json/png、legacy-network-full.txt及原错误日志保留。
+- **检查与隔离验证**：最终完整pnpm lint/typecheck/test/knip各退出0，552条PASS、Knip保持10/0/5，git diff --check退出0。日志native136-lint.log、typecheck.log、test-complete.log、knip.log均在/tmp；首次test在执行测试前被沙盒拒绝tsx本机IPC管道，原test.log保留，经获准环境重跑后完整通过。两模板加载实际开发CSS与实际themeColor模块，后置本次观察到的原生选中选择器及重要背景，三主题×两宽度12场景120项首轮通过，最低采样文字对比5.1854；覆盖原蓝/浅色基线、主题映射、关闭恢复、原节点、关闭的业务菜单及无新增模糊。三主题隔离图已目视检查，isolated-results.json不替代最后实站。
+- **装载与恢复**：开发watch的本次main增量见native126-dev.log:592–603；没有手改产物。最后新文档任务历史已complete、DR0，背景仍rgb(241,244,249)，本轮最后两处CSS尚未实站通过，纳入同一累计装载。账号域名Dark Reader已恢复启用，自动/系统模式及其他域不变，前/排除/恢复图片保留；恢复后的页面未一定重新出现动态标记，不以此再次改动开关，原生弹窗勾选状态为恢复依据。Nocturne恢复暗色/OLED关闭、适配开启、原主题/基准颜色，广告未改；设置关闭、临时视口reset、原生DevTools关闭。临时服务14742已退出130，开发watch保留。没有清除历史错误或其他扩展日志。
+- **进度与下一步**：整体工作量仍粗估98%、剩余2%，不按观察数量虚增完成率。创作/账号主要累计门槛已收尾，剩余是总清单中其他常用辅助模板的最后复验、漫画/游戏/直播与本批两处累计修正的统一实站，以及旧勋章资源、历史4004和其他扩展影响等各自证据边界。继续优先可独立完成的工作，不因两处CSS再逐项催重载，Goal保持active。
+- **收尾确认**：本轮所有临时页面已关闭，浏览器任务标签清单为空，原用户标签未删除；未清理在用开发产物。结束时302条Git状态清单与开始完全一致，HEAD/stash完整SHA仍为原值，watch15786继续运行。部分滚动后按文档坐标裁切的截图不用于判断固定顶栏位置；各字段/控件结论以实际DOM采样和对应可见内容为依据，排除说明保存于native136-verification-notes.json。
+
+### 第九十八批：常用辅助页收尾、素材独立首页补齐与累计重载复验（2026-10-08）
+
+- **基线及修改范围**：继续message_feature及原origin追踪；Git五项、三个remote、完整HEAD和stash均符合原基线，302条状态清单与开始一致。只补nativeCreatorPages.scss、nativeSites.scss与本维护记录，继续现有主题/适配开关，没有新增JS、请求、监听、观察器、RAF、计时器或轮询，没有改播放与账号写入路径。原watch15786持续使用，不执行生产build、打包、clear、commit/push、分支/版本/stash操作或子代理。
+- **本次重载确已生效**：收到用户“已重载”后刷新复验，粉丝筛选六组合DR0，选中前景已为浅色rgb(144,37,56)、深色/OLED的rgb(249,142,160)；任务历史最后六组合DR0，外圈已为白色、语义深色及OLED黑色，内层12px。此前一组视口错误和六组Dark Reader样本排除，使用creator-history-settled结果关闭第九十七批两处装载门槛。没有把此次确认当成本轮之后新增代码也已经装载。
+- **范围回退与课堂/学院保留**：社区Wiki实际文档及一次性直播活动页均complete，无bewly-design、字体投影和主题属性，广告class仍保留，关闭旧回退装载门槛。个人课程已购/券包/兑换三视图各六组合DR0，12px面板、8px交互项及语义前景正常；保留原空态和三个导航，未兑换，未将空输入时视觉灰色误记为disabled。学院六组合DR0，九组共54张静态课程卡在1100px换行为两行，裁切数0；搜索表面无额外模糊。发现原搜索symbol的path明确填充#212121，只给实际单色SVG实例在深色下使用既有图形滤镜，原symbol及功能保留，新图标修正待实站。
+- **素材首页是真实独立模板差额**：cool首页根为.layout-wrapper，区别于/square的#app.wrapper；其固定#f8f8f8底色、1280px最小宽度及白色footer在OLED和1100px仍存在，不能从目录适配推定首页已覆盖。补首页/页脚、原视频/贴纸/创作者卡片、任务面、文字层级和语义圆角；移除标题行的重复斜线装饰。保留3000×396原英雄图、素材内容、创作者预览以及带“创作者权益”字样和数字的原浅色权益画面，权益文字以深色墨色配合原图，不重绘图片。窄窗按原DOM顺序将任务与英雄图分开、保留原中央裁切比例，卡片网格换行，权益卡保留416px阅读宽度并自然换行。
+- **素材目录的真实几何修复**：视频与贴纸目录各六组合已读到既有配色，但1100px下原路由父层仍行内min-width:1280px，子页1200px加左右40px的content-box使内容实际1280px；展开控件原65px宽在图标/padding后只剩15px文字宽、变为50px高。只释放该实际owner的重要最小宽度，保留行内原值，统一相关内容盒模型，展开控件改为自适应宽度/不换行/图标不缩小。首页与目录窄窗断点覆盖1280px加32px安全边距，未动下载、上传、预览媒体或业务DOM。最后新文档首页仍实读旧浅底及最小宽度，此批新代码尚未实站通过。
+- **音乐矩阵与期数入口**：音乐角色、服务卡、帮助、未入驻控制台及独立热歌榜各六组合DR0；语义背景、12px卡片、8px控件及1100px主体已生效，原角色插图和服务轮播保留。帮助目录Enter到常见问题，在原滚动完成后aria-current=page、目标y103.906；Space回入驻流程后y104且焦点保留。榜单Enter切二创、Space回热歌，期数Enter/Space展开、Escape关闭并保留触发器焦点，225个原期数入口未改。实际浅色期数容器已深色，但直接SPAN/SVG仍各自白色，入口不可见；补两类直接子元素继承现有前景，保留原currentcolor箭头与弹层，不从父容器计算色误判可读性。未播放全部、收藏、订阅、入驻、上传或授权。
+- **漫画/游戏/直播累计复验**：漫画分类六组合DR0，18个已加载封面原行内0px保留，父子实际均12px，导航线色随语义前景，关闭第九十六批最后圆角门槛。本次首页早期分类点击未跳转，分类验收从实际显示的href进入，不将直接导航记为点击成功。游戏1100px顶栏实测1068px、x16/right1084，右入口right1084、搜索min-width0、文档1100；本次有Dark Reader，结论限于几何。直播更多菜单1100px三主题DR0，12px、语义前景/表面、无模糊均生效；1744px原生隐藏更多并展开全部导航，不强行展开不存在的宽屏菜单。
+- **直播关注的最后层叠修正**：排除六组进出动画/交替关闭中的采样后，窄窗三个稳定样本opacity1、外层唯一表面、内层透明、父子12px，范围x774/right1020/bottom652，真实三条记录可见。只存几何/样式/计数，不把名单写入JSON或仓库。读取实际CSSOM，原.side-bar-popup-cntr .section-title使用brand_blue!important，简介及更多文字使用text3!important；普通语义声明确实被盖住。按已有具体选择器给标题、简介及更多继承补必要重要声明，未改名称、链接、弹层行为或请求。加入真实原生重要规则后先复现12项失败，再完成15场景234项通过；新文字修正仍待累计产物实站，顶栏关注及其他账号状态不扩大结论。
+- **自动检查与隔离边界**：最终完整pnpm lint/typecheck/test/knip均退出0，552条PASS、Knip10/0/5，git diff --check退出0；最终日志/tmp/bewly-native137-delivery-{lint,typecheck,test,knip}.log，早期日志保留。素材/学院/期数24场景1173项、游戏/直播15场景234项，共39场景1407项通过，最低采样文字对比5.185389。均运行实际开发CSS与themeColor模块；素材首页使用实际原生CSS及脱离实站的DOM，目录夹具只重现已测几何约束，学院图标以简化单色symbol验证实例滤镜，期数夹具重现已测白色子元素，不能当完整实站或实际后端回归。素材首轮创作者计数前景失败、夹具权益按钮未匹配scoped显示规则导致的高度失败均保留；前者修产品具体作用域，后者只修夹具，不混淆来源。最终JSON为isolated-complete.json与live-isolated-complete.json，不引用早期失败文件为通过证据。
+- **证据、工具偏差与性能边界**：native137-live-results.json含107组观察，包含素材/期数/直播缺陷、7组历史排除项、6组浮层动画排除项及1组游戏仅几何样本，不能称107组全通过；另有三个follow-settled样本。浏览器资产导出一次异常耗时9277秒，只作为工具延迟记录，不归因为扩展性能，之后未重试该导出路径。本批没有新的播放轨迹或4004因果结论，不把CSS修正或编译耗时写成视频性能提升。所有原日志保留，不清空错误。
+- **恢复、装载及余项**：Nocturne恢复暗色/OLED关闭、适配开启、主题色#f43f5e、基准色#2a2f2d；广告设置及其他扩展未改，账号域此前临时排除已由上一批恢复，本批无额外恢复义务。设置已关闭，临时视口reset；所有临时回归服务均退出，原watch保留，最后native/main增量见native126-dev.log:712–729，未手改产物。素材管理等少量清单内常用模板继续核对，本轮素材/学院/期数/关注文字统一进入下一次累计实站，不逐项再催重载。工作量粗估仍98%、剩余2%，不是URL覆盖率；旧勋章资源受阻、其他改色器、历史4004及未授权业务写入的证据边界保留，Goal保持active。
+
+### 第九十九批：素材管理八入口复验与独立虚拟形象模板补差（2026-10-08）
+
+- **基线与进展分类**：上一批有源码修改、通过的回归及新的实站证据，属于进展。本轮先重新执行Git五项，仍为message_feature跟踪origin/message_feature，三个remote、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6和stash@{0} 7a6ef9155ccd8e5ce92768702da03b5ae8d7184b均符合原基线；302条状态与上一批结束相同。原watch15786通过原句柄确认运行，没有据静默输出重启。改动限于nativeCreatorPages.scss、nativePageKeyboard.ts、verify-native-appearance.mjs及本记录，无commit/push、分支/版本/stash、生产build/打包/clear或子代理。
+- **八入口实站观察**：沿素材管理真实导航依次打开视频、贴纸、虚拟形象、音乐、视频素材创享计划、图片素材创享计划、收益管理和账号资料。每个入口均等待准确URL/当前原生导航后读取浅色、深色、OLED及1744/1100，共48组状态/样式观察，截图逐次保存；同模板部分组合只作状态/样式采样及代表性截图目视，不能把48组说成全部视觉通过。全部无Dark Reader动态标记及非空样式；管理与收益当前为空态，资料只记录结构/几何/样式，字段值不复制进JSON或仓库。未上传、下载素材、删除、修改资料、退出登录或操作资产。
+- **等价保留与已有门槛**：共享管理主面板已12px/superellipse(1.7)，导航选中项与审核分类8px，视频/贴纸/音乐/两种创享计划的主文字和表面已跟随三主题；空态插画、收益流程内容图、表格与原生搜索保留。视频管理Enter选进行中、Space回全部作品，aria-pressed同步；贴纸原生链接Enter后URL实际切换。窄窗仍实读原宿主行内min-width1280，主面板right1264；这是第九十八批重要声明尚未装载的同一问题，保留已有修复，没有重复叠加容器规则。
+- **虚拟形象独立模板**：该入口不是card-group/manage-head模板，实际使用virtual-idol-manage、bmc-virtual-idol-audit-card、bmc-virtual-idol-works-card及原拼写virual-idol-top。实站概览卡仍#fafcff/4px、数字蓝色，审核标题/表头黑字、筛选白色条带，深色不可读。补既有content-alt、text-1/text-2、theme-surface/on-theme-surface及12px/8px轮廓；保留原28px筛选高度、四个原节点、140/98px概览布局和表格列。原生DevTools确认内层virtual-idol-manage另有min-width1100，独立于外层旧1280问题；仅在现有窄窗断点释放该内层最小宽度，保持原四卡宽度、20px间隔及居中布局，未额外重排业务内容。
+- **收益与资料叶节点**：收益说明实际是allowance-normal直接H3，仍固定#212121，补对应语义前景，流程图保持原色。资料卡表面与12px已正确，但两个直接HEADER、姓名SPAN、三个data-v统计仍是固定黑色，公开主页链接仍原蓝色。DevTools实际命中.space .name-space-card .name-space-card-item .card-item-info .user-data>div.user-data-item .data-v[data-v-52fd6cbc]，原普通适配被更深的scoped规则压过。按真实层级修正标题、姓名/数值叶节点、说明标签和公开链接前景，不修改内容、头像、UID或链接目的地，也未用全局!important盖住整页。
+- **既有键盘owner复用**：实站先用原生鼠标回调确认虚拟形象待审核/全部作品会切换active，恢复全部；原四项确无role/tabindex。只将.virtual-idol-manage .bmc-virtual-idol-works-card加入既有materials选择器，直接沿active→aria-pressed、Enter/Space→原click及现有归还机制。未新增监听器、Observer、计时器、RAF、路由或平行状态。新增实际模块测试从owner建立后的迟到挂载开始，验证选择状态、IME避让、Space松开、输入不拦截、同名非目标/原生按钮不接管、节点保留和卸载后键盘释放/原鼠标仍可用。
+- **检查及隔离渲染**：完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5，git diff --check退出0；日志/tmp/bewly-native138-{lint,typecheck,test,knip}.log。18个虚拟形象/资料/收益场景、600项检查首轮通过，最低采样文字对比5.344527；使用实际开发CSS、实际themeColor及nativePageKeyboard模块。覆盖三主题/两宽度、真实内容列边界（不只看文档scrollWidth）、内层最小宽度、四卡与表头、实际强scoped黑字规则、语义选中及同节点关闭恢复。夹具根据已观察DOM和原生约束构造，资料与媒体为虚构，不是完整原站CSS或后端状态；九张1100px三主题隔离图已目视，未将占位导航/图片当产品最终画面。结果native138-isolated-first.json与isolated-complete.json均为本次通过结果。
+- **装载与工具证据边界**：最终新文档虚拟形象页已complete、DR0，仍#fafcff、内层min-width1100且role/tabindex为空，load-gate.json明确本批新代码尚未实际加载，不以编译、标记或当前分支推定通过。直接打开页面已有CDN样式URL被客户端阻止后立即关闭，未改保护或改用网络工具绕过；只在原文档的Elements Styles中读取已加载规则。DOM搜索最初高亮目标而Styles仍显示body，显式点选目标行后才保存真实card/statistic层叠。早期Dock tooltip定位发生在展开未稳定时，待实际aria-label设置按钮可见后正常进入，没有据工具定位失败改Dock。证据均在/tmp/bewly-native138-*，原日志不清空。
+- **恢复与下一步**：Nocturne恢复暗色/OLED关闭、适配开启、#f43f5e与#2a2f2d，设置关闭、DevTools关闭、临时视口reset；广告和其他扩展偏好未改。临时本机服务8286已退出130，开发watch保留，最后native/main增量见native126-dev.log:730–748。素材八入口的本轮核对已完成，最新修正加入同一累计实站队列；余项按原总清单继续公共帮助/介绍/协议/下载，以及营销/品牌/MCN/招聘/安全/IR公开模板的最后复验，不扩展独立经营后台或一次性页面。工作量仍粗估98%、剩余2%，不把隔离场景数当覆盖率。没有新的播放或动态性能测量，历史4004因果、外部改色及原站资源不可用边界保留，Goal保持active，不追加逐页重载请求。
+
+### 第一百批：公共帮助与阅读页复验、专题准确入口补齐（2026-10-08）
+
+- **基线及本次重载**：重新核对Git五项，仍为message_feature跟踪origin/message_feature，三个remote及HEAD符合保护基线；302条状态、stash保留。原开发watch15786仍运行，未重启清理产物。用户在本轮关于页/旧顶栏修改后明确回复“已重载”，随即刷新控制页和验收文档，以图片实际比例、管理卡片/键盘和具体前景核实装载，不重复索取这次确认。无commit/push、版本/分支/stash操作、生产build、打包、clear或子代理。
+- **公共页实际观察**：帮助、联系、新旧介绍、隐私、用户协议、版权目录、客服各进行三主题与宽窄观察；原FAQ、正文、协议版本、海报、带文字图片与业务链接保留，主站样本均DR0。帮助阅读区实测scrollTop788.5/max789时外层仍0；原FAQ可以折叠再展开，客服问题Enter展开、Space关闭，分类按键往返及原左右目录箭头恢复。隐私从2026.02.12切到2025.04.30后核对正文日期，再恢复原版本；版权语言菜单Enter/ArrowDown/Escape及焦点回收确认，未切换语言或提交申诉。上述均为只读操作，未同意协议或点击下载/购买/投稿。
+- **本批已重载修复**：nativeInformationPages.scss让旧z_top及其header随48px投稿链接自然取高，实测从42px外壳变64px，按钮保留8px与原节点/菜单。common/topBar.scss为这套旧官方header复用现有搜索表面，国际版搜索内部button继承父级前景；1744新文档实测可见20px图标及rgba(212,215,222,.9)，不把1100时原生隐藏form的零矩形当可见验收。新关于页原1286×92的含字位图在850px列保留92px高度并cover，造成左右字样裁切；改按原图比例contain，实测850×60.8047、12px/superellipse，两端文字完整。关闭更多页面恢复92px/cover，再开启恢复60.8047/contain，广告class全程保留。
+- **累计补丁装载收尾**：虚拟形象六组合及资料/收益窄窗三主题已命中上一批样式，独立内层min-width1100只在窄窗释放，原四卡与表格保留；真实Enter/Space筛选及aria-pressed同步通过。视频管理共享宿主行内1280保留而实际minimum为0、主列right1080；这项末次截图被尺寸校验拒收，只记录DOM几何，其他虚拟形象完整截图提供独立证据。学院搜索svg、音乐期数SPAN/SVG、直播侧栏标题/三条简介/更多文字的窄窗三主题均DR0并命中语义前景，关闭这些累计装载门槛。期数Escape后的即时属性一度仍true，待原DOM提交后确认列表已卸载、expanded=false和焦点返回，不将即时采样误作失败。
+- **准确专题入口补差**：真实页脚跳向/blackboard/topic_list.html，而既有nativeSites仅登记/blackboard/x/act_list；新文档有15条专题与14类原点击项，却没有appearance owner或键盘属性。只在NATIVE_MAIN_PATHS增加准确HTML地址，复用现有topics样式/控制器及关闭归还；生成manifest的独立入口和主运行时排除同步更新。实际getManifest/getNativeSite测试新增原地址、带query及不相关子路径，验证单一owner；不扩大到专题中的一次性页面，不新增轮询、监听器或设置。
+- **协议汇总差额**：旧状态1100窗口实测文档1296px，空pc-nav及多处40pxspacer由行内min-width1280撑宽；只在public-document的原section宿主覆盖minimum，不遮裁整页。实际分别打开三个原位图：750×40为纯白留白，750×500和750×800仅为空底板/虚线边框，均没有正文；按准确文件名取消留白图、将两种阅读底板替换为750px原阅读列内的content-solid/语义边框/12px，保留section高度、正文/链接和内容横幅。公告一条日期left430+width616在740px行内留下大幅空白外伸；只对原pc-rich-text2定位文本框保留left并约束至right0，不重建公告或改文字位置。
+- **新差额隔离与边界**：/tmp/bewly-native139-public-regression.mjs使用真实开发CSS、实际nativePageKeyboard和观察到的公共DOM，在三主题×1100/1744的12场景完成642项检查：section边界、六张留白图、两块阅读底板、原固定高度、完整竖版封面、分类键盘、相同节点/href、关闭恢复。首轮630项发现日期外伸，同时“全部section高度不变”的夹具断言误包含自适应标题；修正真实文本框后将断言限定为原行内固定高度，原失败JSON保留。隔离媒体为本机占位、CSS只复现已测约束，不是全量远端样式或实站。此两项新增代码发生在用户本次重载之后，仍待后续累计产物实站，未声称已装载。
+- **其他入口与截图边界**：活动目录保留15条内容，三主题宽窄的首屏可读且无文档溢出；大会员公开介绍当前无Dark Reader，六组合背景/卡片/说明通过，未点击开通。其两份早期文件名带confounded，仅是命名失误，实际JSON均DR0，不能据文件名认定有干扰。下载域仍dynamic/6份非空Dark Reader样式，本轮只确认宽窄几何与Enter切PC、Space回安卓，没有改动该扩展。全部104条记录存live-results.json，其中含修改前问题、受干扰和未逐张目视样本，不是104条通过；早期宽屏截图实际1412×1027等与请求值不符者排除指定尺寸声明。后续读取图像头校验尺寸，两次视口目标落到控制页和末次1100×648截图被拒收，不据工具视口问题改产品；新宽文档的1744×1027图标截图有效。
+- **最终检查与恢复**：最后一次完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5；日志/tmp/bewly-native139-{lint,typecheck,test,knip}-final.log。最初manifest和test在沙箱创建esno IPC时EPERM，保留失败日志；对同一本机操作获工具批准后重跑通过，开发manifest由原scripts/manifest.ts生成，不手改产物。watch已增量编译当前CSS/脚本；临时8287服务停止，设置关闭、暗色/OLED关、更多页面开、原主题/基准颜色保留，viewport已reset，广告和其他扩展设置未改。没有新的播放/动态性能实验，历史4004因果仍按原边界。工作量粗估约99%、剩余约1%，并非URL覆盖率；Goal保持active，接下来只完成企业公共模板/素材首页目录的既有差额及本批新增项最后复验，不追加逐页重载请求。
+
+### 第一百零一批：素材与品牌公共页收尾及最新三处补丁实站确认（2026-10-08）
+
+- **基线与进展**：上一轮有实际代码、完整回归和实站证据，分类为进展。本轮Git五项及stash SHA再次符合message_feature/origin/message_feature、三个remote和原HEAD基线；302条状态与上一轮末尾一致。原watch15786通过原句柄确认仍运行。本轮产品代码只修改nativePublicPortals.scss内brand-public的滚动顶栏，另更新本记录；无提交、推送、分支/版本/stash操作、生产build/打包/clear或子代理。
+- **素材首页与目录**：首页、视频目录、贴纸目录各三主题×1744/1100，DR0；首页窄窗宿主min-width为0，任务两卡和原横幅上下排布，原含字权益图保持浅色画面及黑字。继续滚动检查视频、贴纸、创作者和页脚三主题，卡片12px、文字层级、透明贴纸素材与原预览底色保留。视频目录base-video-card/player/lazy-img均实际12px/superellipse，player只裁切媒体；分类原40px行、展开控件和选中表面正常。Enter展开、Space收起；Enter切贴纸后URL确为/square/sticker，Space返回/square/video且pressed=true，没有下载、上传或进入资产操作。部分宽屏为几何/样式及代表性截图，不扩大为全部分页视觉通过。
+- **品牌号顶栏真实问题与修复**：主体介绍/流程可读、DR0；滚动后原header-wrap固定1260，窄窗认证x1040/right1140、登录right1260，按钮32px，顶栏始终白色。仅在既有brand-public作用域将该wrap改为有16px边距且保留1260上限的flex布局，保留66px原栏高、浮动子容器的原节点及原生事件；表面/首页下划线/认证按钮复用语义token，按钮最小36px、8px轮廓。原SVG为蓝色图形和黑色品牌字组合，用局部浅底维持识别，不滤色/替换图像，不改首屏品牌画面或认证/登录流程。
+- **隔离与完整检查**：实际开发CSS、实际themeColor及已观察header DOM/几何的6个场景、132项检查首轮通过，涵盖宽度、相邻元素不交叠、按钮前景/轮廓/焦点、图像及节点保留和关闭还原。跨域原CSS的CSSOM不可读，夹具只重现已测原生约束，不能替代完整原层叠；随后实站结果见下一项。完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5；日志/tmp/bewly-native140-{lint,typecheck,test,knip}.log，定向lint亦0。临时8288服务已停止130，dev日志native126-dev.log:805–822确认本次成功增量，原watch保持。
+- **本轮用户重载后的三处验收**：收到新的“已重载”后立即刷新控制页和目标文档。首个品牌采样发生在模板未就绪时，只得到display:none，不作通过；等待实际owner与second-screen后重试。控制页一次设置窗口已关闭，按当前Dock状态重开，没有据该次工具状态改产品。品牌滚动顶栏六组合DR0：1100时wrap1068@16、认证right964/登录right1084，1744时原上限1260；按钮36px、8px和三主题语义前景实际命中。协议汇总六组合DR0，文档1100、留白位图background-image:none；第二阅读底板三主题实测750×800/12px，原公告日期left430保留且实际宽310/right925，正文与内容横幅保留。准确topic_list入口六组合DR0，14类原节点具role/button及36px目标、列表12px和整张竖版封面；Enter科技pressed=true、Space回全部。更多页面关闭时键盘项0、开启后14且全部pressed=true，广告class全程保留。上述三处累计装载门槛关闭，无需为这批再次请求重载。
+- **企业公共页当前边界**：营销、MCN、安全、IR实读dynamic和6份非空Dark Reader样式；下载域上一轮同样有改色，招聘本轮导航超时后实际落点为原站ERR_TIMED_OUT，不据工具超时归因插件。营销产品页几何已确认导航x16/right176、内容right1084，MCN主体1068@16、资格与权益卡12px；这些仅为带外部改色情况下的几何观察。MCN申请按钮实际仍蓝色且theme为玫红，其真实类名已匹配现有选择器，保留未隔离证据，待移除额外改色后区分层叠原因，不盲加覆盖。已用一次问题集中请求临时排除e/mcn/security/ir/app/jobs六个子域并逐一恢复；用户随后只确认扩展重载，未给此项授权，因此其他扩展完全未改，纯主题门槛仍保留。
+- **证据与恢复**：61条观察逐次保存/tmp/bewly-native140-live-results.json，另有overlays.json、brand-isolated-first.json、topics-switch.json和mcn-button-unisolated.json。样本含修改前问题及带改色几何，不是61项全部通过。品牌页DOM的innerWidth为1100/1744，clientWidth为1095/1739，浏览器返回1095×796/1739×1024图像；记录DOM和实际图像尺寸，按近似同比例的可视证据使用，不声称逐像素尺寸相等；明显非等比尺寸仍拒收。临时Nocturne显示偏好已恢复暗色/OLED关闭、更多页面开启，原颜色保留，设置关闭并viewport reset；品牌/资料按钮、申请、登录、协议接受均未操作。工作量仍粗估约99%、剩余约1%，主要为上述公共子域纯主题与不可达招聘复验；Goal保持active。本轮没有修改媒体/动态请求或轮询，历史4004因果边界不变。
+
+### 第一百零二批：招聘公共页恢复检查及行内背景、流程图差额（2026-10-08）
+
+- **基线与进展**：上一轮完成代码与实际重载验收，分类为进展。本轮Git五项、HEAD、三个remote及stash SHA再次符合保护基线，302条状态保留；原watch15786通过原句柄确认仍运行。产品修改仅在nativePublicPortals.scss的jobs-public既有作用域，另更新本记录；未提交/推送、改分支/版本/stash、执行生产build/打包/clear或使用子代理。
+- **招聘实际恢复与交互**：初次页面导航及后续读取超时，浏览器工具发生两次内存会话重置；恢复后同一招聘标签实际取得complete的社招目录，页面显示481条职位、文档1100，不能把最初工具超时当作持续不可达。Enter第一条职位在新标签打开/social/positions/30531，原阅读模板（正文实测768px）及投递按钮保留，只读后关闭；原顶栏Enter进入校园，再进入B-UP，校园和B-UP问答Enter后expanded=true，Space关闭，结束时校园active问答为0。没有投递、注册、登录、修改简历或提交信息。截图及六次观察保存于/tmp/bewly-native141-live-results.json与同前缀图像，均仍有Dark Reader dynamic/6份非空样式，不作为纯主题通过。
+- **B-STAR与工具边界**：B-STAR导航后的DOM工具读取连续超时，原生Chrome可访问性明确显示实际地址/bstar?isTrusted=false及ERR_TIMED_OUT，截图bstar-network-error.jpg保留。随后用浏览器原生返回恢复B-UP，文档检查重新可用；未改URL的isTrusted值、网络设置或其他扩展，不从该错误推断Nocturne因果。没有因为观察超时重启开发watch；重置前的每次成功观察已落盘，没有虚构丢失的内存结果。
+- **B-UP行内背景**：实站.bup-pc-body-bg为空DIV，原position:sticky、height800且行内background-image仍为body-bg.51e6fcf9.png；既有普通background:none不能覆盖它。只将已有声明改为重要级，继续保留节点、sticky、原高度和相邻标题/媒体，不再增加选择器层级、观察器或轮询。原绘制证据保存在bup-inline.json。
+- **校园空底图与流程溢出**：1100窗口的文档实读1144，超宽节点有被原英雄容器正常裁切的视频及流程中1188×98的连接线；只后者把文档撑宽。连接线位于1068px过程区，静态居中得到left=-60，整体right1144；在已有窄窗断点限制原图片max-width100%并以height:auto覆盖行内高度，保留原比率和整个图像，不裁切文档或改播放器。独立查看pc-background-main-fall2026图确认只有空白星点纹理，标题、岗位分类内容插画和流程文字为另外的节点。以.campus-pc-main内直接拥有.activity-module的唯一DIV为目标，只替换其行内背景为bew-bg，保留min-height3708、padding、位置与子节点。
+- **文字图片的限定处理**：空底图退出后，三个已查看的透明底黑字标题图在深色/OLED使用单色亮字；范围仅pc-title-recruitment-process、pc-subtitle-faq及.news-title直接图像。初始较宽的pc-subtitle规则在隔离目视中把带实色底板的招聘对象说明图变成白块，已立即从该处理范围排除，原失败图保留；没有保留仅凭自动检查通过的错误视觉实现。正文说明图、流程卡片背景中的文字、内容插画和英雄视频保持原图；没有滤色照片或删除含信息的背景图片。
+- **隔离回归与真实限制**：临时夹具使用实际开发CSS、实际themeColor、已观察公共DOM和原行内约束，共三主题×1100/1744、校园/B-UP两类，最终12场景132项检查通过。覆盖行内背景优先级、宿主高度/定位、连接线完整范围和比率、透明标题与实色正文图区分、节点/来源保留、关闭适配恢复。首轮三项比率失败来自连接线在本机夹具naturalWidth/Height均0；原图在独立浏览器可读，原因未进一步归因。连接线、资讯标题和四个插画仅在夹具用明确的已知尺寸占位，未改产品src；其余已解码标题/说明/流程图使用原公共图像。按实站computed样式补齐夹具原24px间隔与cover绘制，避免把缺失的夹具样式当产品问题。isolated-first/complete/final.json和早期/修正后三主题图分别保留；隔离场景不是完整原站CSS或新补丁实站验收。
+- **最终检查与恢复**：最后完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5，git diff --check退出0；日志/tmp/bewly-native141-{lint,typecheck,test,knip}-final.log。native126-dev.log:877–894确认最后增量成功；临时8289服务已停止130，浏览器临时视口reset、测试/资产/招聘标签关闭，原开发watch保留。本轮未修改Nocturne持久偏好，Dark Reader临时排除六域的上一项请求仍未获授权，未改任何其他扩展设置。新招聘差额仍在累计实站队列；工作量继续粗估99%/剩余1%，并非覆盖率，Goal保持active，不新增逐页重载请求。媒体/动态请求、播放器所有权及轮询逻辑未改，历史4004结论不扩大。
+
+### 第一百零三批：营销公共阅读模板补差及校园补丁重载复验（2026-10-08）
+
+- **基线与范围**：上一轮有实际代码、回归及页面观察，分类为进展。本轮Git五项与stash SHA符合保护基线，结束时302条状态与开始时逐行相同；这仅是状态条目比较，不代表文件内容无变化。产品修改仅nativePublicPortals.scss的marketing-public局部，另更新本记录。原watch15786仍运行，无提交/推送、分支/版本/stash操作、生产build/打包/clear或子代理。
+- **营销阅读页实际检查**：成功案例目录1100窗口三列15张卡片，卡片12px、封面相邻拼接角；从完整加载的原生目录进入康师傅案例，正文710px、三张内容长图保持原比例及未裁切轮廓。动态观察目录12张卡片与实际文章在1100窗口检查三主题，阅读区710@195、外层1068@16；该文档当次三主题均DR0，正文和图片正常。早期浅色截图面包屑仍处于颜色过渡，补读稳定值rgb(144,37,56)并保留light-settled图，不据过渡帧修改产品。商业案例内容不是广告证据，没有新增屏蔽规则。
+- **案例内部溢出及差额**：原.case-detail仍有1310px最小宽度，虽然document.scrollWidth为1100，实际#app横向滚动容器被撑宽。先在既有1310断点的页面根组增加min-width:0。收到本轮新的“已重载”后刷新并由实际目录再进入详情，确认新min-width为0、主体1068@16、正文710@195；但#app.scrollWidth仍为1172。继续定位到标题横幅中两个无文字的侧边装饰IMG，总宽超过容器；只对.case-detail-banner直接.banner层增加overflow:hidden，标题/统计为其兄弟节点、正文及媒体不裁切。这一最后差额在用户本次重载之后写入，尚未实站加载确认。
+- **合作入口卡片**：三张原生.block-item均以行内渐变和drop-shadow绘制，覆盖已有普通语义background；其SVG的fill实际跟随currentColor，而color行内固定白色。局部提高已有卡片背景优先级、移除装饰投影，并把图标前景映射到bew-text-1；保留SVG、标签、事件及原生导航。合作伙伴查询仅进入公开目录，未填写公司查询、点击入驻、登录或联系入口。页面当次DR dynamic/6份非空样式，仅据明确行内层叠和实际图标继承修复，不宣称纯主题通过；最后补丁亦等待累计实站确认。
+- **校园上一批实际生效**：本轮用户重载后，校园1100窗口的document.scrollWidth为1100（上一批修改前1144）；流程连接图原始1188×98、实际1068×88.09375，left16/right1084，内容完整。唯一空背景层background-image为none；三主题底色分别白、受约束深色、黑色。透明标题图在深色/OLED命中brightness(0) invert(1)，实色招聘对象说明图filter:none、natural1800×200，原流程文字卡和插画保留。滚动后的三主题目视记录均仍有Dark Reader dynamic/6，因此关闭了该批代码装载、几何和指定图像处理门槛，未关闭纯主题隔离门槛。最初图片点击一次因三个匹配、一次因滚动动画超时，随后使用页面原生PageDown查看实际内容；不把工具操作失败当产品故障。
+- **隔离及完整验证**：本轮完整pnpm lint/typecheck/test/knip均退出0，553条PASS，Knip仍10/0/5；日志/tmp/bewly-native142-{lint,typecheck,test,knip}.log。实际开发CSS和实际themeColor配合已测固定宽度、行内样式约束，三主题×1100/1744六场景、126项隔离检查全部通过：实际滚动owner不溢出、正文/标题保留、语义表面/前景/12px、关闭适配恢复原约束、原节点和src保留。夹具使用明确的合成装饰图和图标，不是原站完整CSS或实站截图；浅色隔离截图已目视检查，深色/OLED仅自动渲染断言完成。源码/tmp/bewly-native142-marketing-regression.mjs，结果isolated-results.json及isolated-light.jpg；临时8290服务已停止130。native126-dev.log:931–948确认最后增量成功，git diff --check退出0。
+- **浏览器限制与证据纠正**：共27条观察保存在/tmp/bewly-native142-live-results.json；其中三个旧wide命名样本实际仍为1100，原因是REPL函数持有旧标签绑定，已原位保留并加validationNote，不计宽屏证据。修正为显式传入标签后，真正1744的三主题样本均有DR6；原窄窗案例和观察文章曾DR0，新刷新案例又DR6，各文档分别记录，未推断整个域已排除。直接新开静态案例地址一度原站错误页，完整目录经原生点击后成功，错误图保留且未归因。校园进入B-UP时页面与浏览器读取超时，原生Chrome仍显示/campus且内容区无响应；关闭该临时标签后新控制页恢复，最后新的B-UP尝试停在空白页。宽屏校园与B-UP背景差额本轮未完成复验，不将导航尝试当通过。其他测试标签随后也出现浏览器调试连接失败；无重启Chrome、网络/其他扩展修改或删除错误日志，不据卡顿推断插件因果。
+- **恢复与余项**：新控制页已实读暗色、OLED未勾选、更多页面已勾选，原#f43f5e/#2a2f2d保留，设置已关闭；prefs-restored.json保存根节点结果。viewport reset成功，全部本轮临时标签按原生标签组逐一关闭，用户标签保留。六公共子域的Dark Reader临时排除请求仍未收到明确答复，未更改该扩展；剩余纯主题、招聘局部及最新营销两处差额的实站门槛继续保留，不重复逐页催重载。工作量粗估仍99%/剩余1%，不是URL覆盖率，Goal保持active。本轮未改视频/动态请求、播放器或轮询，历史4004因果边界不变。
+
+### 第一百零四批：招聘公共模板最后差额与累计验证（2026-10-08）
+
+- **基线和实际进展**：上一轮有源码修复及实站/隔离证据，分类为进展。Git五项和stash SHA符合message_feature保护基线，302条状态与上一轮末尾及本轮开始相同；原watch15786通过原句柄确认仍运行。源码变更限于nativePublicPortals.scss既有jobs-public作用域，另更新本记录及覆盖矩阵，无提交/推送、版本/分支/stash操作、生产build/打包/clear或子代理。
+- **B-UP装载与新差额**：恢复读取后，空.bup-pc-body-bg在1100/1744三主题均实际background-image:none，保留sticky及800/1027高度，文档宽度稳定后与窗口一致。另发现介绍卡行内intro-card.a255c83d.png仍覆盖语义底色，独立查看2200×1088原图确认仅星点与边框，标题与全部正文是独立节点；只清除该卡background-image。浅色下实际两个.strong仍白色、两个.label仍旧浅色而父层已为深色，增加局部inherit，保留600强调字重及正文/次要文字层级。新差额尚未实站装载确认。
+- **校园分类标题**：真实1744文档三主题确认上一批背景规则和流程图片范围；本次截图滚动到了职位分类，发现唯一直接子标题IMG为透明底黑字，在深色/OLED不可读。将.recruitment-classification直接img.animate加入已有透明标题处理，不涉及其九张分类内容图、图标或实色招聘对象说明图；没有使用泛化的全部img滤色。
+- **B-STAR恢复及完整局部修复**：沿此前准确地址/bstar?isTrusted=false本轮取得complete，原hero、介绍步骤、照片轮播、正反人物卡片和三张视频卡实际存在，关闭持续不可达判断。原第二层行内长底图独立查看1920×3310图确认只有浅色星点/水印装饰，改由bew-bg绘制，保留3400px宿主和独立350px品牌hero。九个已定位的透明文字图槽位在深色/OLED亮化，明确排除彩色步骤图、照片、人物卡片、封面和播放图标。1100实读.card-list仍有1140px min-width、文档1140，原宽度覆盖不够；在既有断点增加min-width:0、左右16px安全范围及居中，保留原flex、正反图节点、变换和比例。视频封面及标题根有行内10px圆角、蓝色/浅蓝底，给已有语义圆角/前景/表面声明补优先级，不重建业务控件。
+- **实际CSS隔离与修正证据**：使用实际B-UP介绍卡DOM、实际B-STAR公共DOM及已测原生约束，加载真实开发CSS和themeColor。B-UP/校园标题六场景90项、B-STAR六场景最终492项均通过，检查行内绘制、文字继承、内容图保留、窄窗真实滚动范围、卡片比例、视频相邻拼接角及关闭还原。B-STAR首轮12项失败来自夹具误设固定520px行高且遗漏正反图left/top；回实站确认行高自适应、图片left/top0，修正夹具后通过，没有据夹具缺失改产品。初始嵌入图未解码，夹具声明no-referrer后九个文字图和步骤图均实际解码；三主题标题与B-UP卡片、深色全文和OLED视频区已目视。保留首次失败和缺图截图；完整轮播脚本/原站CSS不在夹具内，不能据夹具照片区域断言原站媒体布局/播放已验收。脚本/tmp/bewly-native143-{bup,bstar}-regression.mjs，结果isolated-final.json及bstar-isolated-{first,final,complete}.json。
+- **真实命令与产物**：本轮pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5；完整日志/tmp/bewly-native143-{lint,typecheck,test,knip}-complete.log。末尾三条CSS重要级调整后再次完整lint退出0，日志lint-complete-final.log，并执行上述最终实际CSS矩阵；未改TypeScript。native126-dev.log:1021–1038确认最后开发增量完成。git diff --check退出0；临时8291/8292服务均通过原句柄停止130，原开发watch保留。
+- **工具、尺寸与改色边界**：14条实站记录逐次保存/tmp/bewly-native143-live-results.json，包含三个wide命名但实际仍1100的样本，均加validationNote排除宽屏结论。原因是viewport能力当时作用于设置标签；以后以selected句柄和实际innerWidth核实，另有真实1744的B-UP与校园三主题样本。部分工具导航超时后新建B-UP最终为网络错误，另一明确地址文档正常，分别保留，不扩大归因。一次原生地址输入丢失冒号后误到Google搜索，自动审批拒绝读取；已关闭无关标签，改用明确B-UP地址成功，没有访问受限扩展页或绕过拒绝。新合作入口文档初读DR6、稍后complete为DR0，但仍旧行内渐变和投影，证明最新营销补丁尚未加载，不能只依赖开发标记。招聘六主题/尺寸样本仍DR6；六域临时排除请求未获答复，其他扩展未改。
+- **恢复与累计门槛**：已恢复并实读暗色/OLED关闭、更多页面开启、#f43f5e/#2a2f2d，设置关闭，prefs-restored.json保留。viewport reset成功，本轮全部临时标签按专属标签组关闭，用户标签保留。营销两处与本轮招聘差额已完成源码及必要隔离验证，统一进入下一次扩展重载后的实站门槛；不把这批标为实站通过。公共子域纯主题、广告受其他过滤器影响的最终可见性等原边界继续保留，Goal仍未完成；工作量粗估约99%/剩余1%，不是页面覆盖率。本轮没有新增请求、观察器、计时器或轮询，也未改媒体/动态链路，历史4004因果边界不变。
+
+### 第一百零五批：公共域当前状态、MCN按钮层叠与阻塞核查（2026-10-08）
+
+- **基线**：上一轮为实际进展。本轮Git五项、HEAD、remote、跟踪及stash SHA符合保护基线，302条状态与开始时相同；原watch15786再次通过原句柄确认运行。产品最终只保留nativePublicPortals.scss内MCN公共入口按钮的局部优先级差额，另更新本记录。无提交/推送、版本/分支/stash操作、生产build/打包/clear或子代理。
+- **公共域重新核实**：MCN、安全中心、IR英文首页、客户端下载中心分别在完整加载后仍实读Dark Reader dynamic及6份非空style.darkreader，均为当前数据，不能据旧的整站白名单推断已隔离。安全中心第一次为interactive，后续load等待一度超时；没有重复导航来伪造就绪，继续独立工作后原文档实际complete，另存settled记录。5份状态记录保存于/tmp/bewly-native144-gates.json，初次安全样本加注释，不当作完整加载结果。没有触发申请、登录、漏洞提交、下载或其他业务写入。
+- **MCN确定层叠差额**：原主按钮实际为bcc-button apply-btn bcc-button--primary max-large，theme为#f43f5e、文字已用on-theme，背景仍rgb(0,141,201)。只读CSSOM能读到改色规则所保留的#app .bcc-button--primary选择器，跨域原CSS仍不可读；这是优先级依据，不是无Dark Reader最终配色证据。将既有.bcc-button规则限定到同一#app owner，使背景与前景一起取得优先级。次按钮DOM直接提供旧color行内声明，仅对启用的default类型补语义文字重要级，disabled/is-disabled条件保留；没有改变按钮节点、原生事件或表单。
+- **隔离验证与失败保留**：实际两颗公共按钮DOM、原生SVG symbol和已观察ID规则配合真实开发CSS/themeColor，最终三主题×1100/1744共96项检查通过，覆盖主背景/成对前景、次表面/文字、disabled、键盘焦点、8px圆角、文本/图标位于按钮内及关闭还原。首版夹具缺少原生18px SVG尺寸，浏览器默认大SVG把标签挤出按钮；回实站核实207×56按钮、18px图标和对齐后补齐夹具，没有据此修改产品布局。初期图和首版84项结果均保留，最终结果isolated-complete.json、预览buttons-final-detail.jpg，脚本/tmp/bewly-native144-mcn-regression.mjs。
+- **原生图标处理边界**：原symbol包含固定白/灰fill。尝试currentColor、普通继承和[MDN所述context-fill](https://developer.mozilla.org/en-US/docs/Web/SVG/Reference/Attribute/fill#context-fill_example)后，当前use结构的实际绘制未得到正确结果，全部试验规则已撤回，未保留无效果或隐藏图标的声明。最终新夹具文档实读原path为#fff/#C9CCD0，放大截图确认原图标恢复；不宣称它们已改为跟随on-theme，也未克隆或替换原生图标。源码及实际开发CSS中已无新增icon-ic/context-fill规则。
+- **检查与清理**：完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5，日志/tmp/bewly-native144-{lint,typecheck,test,knip}.log；撤回图标试验后再次完整lint退出0，日志lint-complete.log，最终实际CSS矩阵再次通过。native126-dev.log:1111–1128确认最终开发产物，git diff --check退出0。临时8293服务通过原句柄停止130，全部本轮临时标签已关闭，用户标签保留；本轮没有改变Nocturne持久偏好、浏览器视口或其他扩展。原开发watch继续保留。
+- **阻塞审查及下一步**：从第一百零一批起，六公共子域临时排除Dark Reader的同一请求连续多轮未获明确答复；本轮对四域的complete文档再次证实额外改色仍在。第一百零四批统一重载请求亦未答复，最新营销/招聘及本轮MCN补丁不能宣称实站已验收。当前可独立完成的确定代码差额与隔离检查已收口，剩余所需纯主题实站证据依赖用户重载及对e/mcn/security/ir/app/jobs.bilibili.com临时排除并恢复的明确答复；不自行扩大此前仅account域的授权，不重复发送确认问题。满足连续阻塞审查后，本轮将Goal设为blocked，等待外部操作/授权变化；完整目标不缩减、不标记完成。工作量继续粗估99%/剩余1%，不是覆盖率；既有广告其他过滤器可见性、条件页面和历史4004边界仍按原记录保留。
+
+### 第一百零六批：恢复开发运行、累计补丁实装与MCN阅读层差额（2026-10-09）
+
+- **恢复与保护基线**：Goal恢复为active，按新的阻塞审查周期处理；上一轮有代码及检查进展。Git五项、HEAD、remote/跟踪和stash SHA符合保护基线，当前302条状态完整阅读并保存；旧functions内存基线已不存在，初次sameAs144=false不能解释为工作区发生变化。本轮末尾与本轮开始的状态逐行相同。无提交/推送、版本/分支/stash操作、生产build/打包/clear或子代理。
+- **watch确实恢复**：旧句柄15786返回Unknown process id。普通ps受沙箱限制，获准只读检查后没有匹配的项目编译进程，才按已授权方式启动pnpm exec cross-env NODE_ENV=development run-p dev:js dev:inject dev:bg dev:native。新句柄57313、日志/tmp/bewly-native145-dev.log；1–73行确认四路初始开发编译，110–127行确认最后样式增量。旧产物和native126日志保留，没有因单次观察超时重启进程。
+- **MCN已装载部分与新问题**：新文档直接实读主按钮rgb(244,63,94)、黑字、8px，次按钮语义前景亦生效；三主题×1100/1744六组合及键盘Tab焦点记录完成。适配更多页面关闭后主按钮回到原蓝色，开启后恢复主题色，block-useless-contents全程保留。按钮的装载门槛关闭，不重复索取这项重载确认。整页浅色截图另发现三个h2的内部p、五个流程title、权益title/sub-title仍沿用较浅前景，.mcn-entry-page外层仍为近黑，而内部阅读面已白；这六条MCN记录加validationNote，不当作全页视觉通过。
+- **MCN最小完整差额**：将MCN规则统一放在已观察的#app owner下，避免深层原生scoped选择器压过现有语义前景；原按钮生成的作用域保持等价。补外层.mcn-entry-page背景，h2中文标题继承对应前景、相邻英文p使用text-2，说明浮层p继承阅读面前景。现场确认.header.is-entry透明且白色品牌标志覆盖在原品牌画面上，移除原未生效且不适合强化的header背景映射，保留原生透明关系；没有改品牌媒体、业务节点或图标实现。产品代码只改nativePublicPortals.scss的MCN局部，另更新本记录。
+- **颜色隔离与项目检查**：实际MCN公共DOM、已观察到的8条竞争选择器与真实开发CSS/themeColor组合，三主题×1100/1744共246项检查通过，覆盖外层背景、标题/次要文案层级、透明顶栏、原节点及媒体src保留、关闭还原。夹具只提供阅读面观察所需的简化布局，不能把其按钮/媒体排版当作实站结果。脚本/tmp/bewly-native145-mcn-surface-regression.mjs，结果isolated-results.json；原始DOM/竞争CSS及修改前实站全页图保留。完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5，日志/tmp/bewly-native145-{lint,typecheck,test,knip}.log；git diff --check退出0，临时8294服务已通过句柄停止130。
+- **营销累计差额实站关闭**：合作入口稳定六组合均DR0，三个入口卡的普通表面、匹配前景、12px及移除渐变/drop-shadow实际命中；原信息横幅与下方业务介绍保留。OLED窄窗图记录到原轮播过渡帧，不据此判定轮播错位或宣称全部轮播状态已验收。经已complete的原目录点击康师傅案例，三主题×两宽度中#app的clientWidth/scrollWidth分别为1100/1100与1744/1744；窄窗min-width:0、装饰层overflow:hidden、兄弟标题层overflow:visible，710px正文保留。三张正文图实际解码、自然比例及filter:none，另有正文滚动视图。案例样本DR6，关闭装载和几何门槛，不推导无额外改色的对照结果。
+- **B-UP已装载与B-STAR边界**：B-UP六组合实际介绍卡background-image:none、12px，两个strong和两个label前景分别与其正文/次要文字父层一致；sticky背景仍none，800/1027高度和原标题图保留。窄窗resize后的瞬时document宽度曾仍为1744，随后六组合稳定记录均与窗口一致，不把过渡读数当持续溢出。B-UP仍DR6。跳转B-STAR时工具Page.navigate超时，随后该标签AX读取也超时并导致工具内存会话重置，未取得本轮B-STAR实际内容，不将其当作新验收或归因Nocturne。
+- **证据、恢复与余项**：25条观察逐次保存/tmp/bewly-native145-live-results.json，另有case-bounds.json、mcn-switch.json与prefs-restored.json。工具恢复后Chrome服务ID由3变为1，同一extensionInstanceId和配置文件保持；新控制页恢复并实读暗色、OLED关闭、更多页面开启、原#f43f5e/#2a2f2d，viewport reset成功。失去调试句柄的临时页先按精确ID清理，最终用原生标签栏仅关闭本轮剩余标签，专属组已清空，用户标签保留。新watch57313继续运行。新MCN阅读层差额、校园分类标题及B-STAR累计修复仍需实站；六域Dark Reader临时排除问题仍待明确答复，未更改其他扩展。Goal保持active，已以实际行为关闭的装载项不再重复请求确认；工作量仍粗估99%/剩余1%，不是覆盖率。媒体/动态、账号、广告真值及轮询链路未改，历史4004因果边界不变。
+
+### 第一百零七批：招聘与MCN累计差额实站、页脚内联层级修正（2026-10-09）
+
+- **保护与范围**：Git五项、HEAD、remote/跟踪及stash SHA再次核对一致；302条状态与本轮起点相同。继续message_feature，未提交/推送、切分支、改版本、操作stash或执行生产build/打包/clear。产品改动仅nativePublicPortals.scss的MCN顶栏与招聘页脚，记录仍集中在本文件；没有媒体请求、动态、账号、广告真值或轮询逻辑改动。
+- **B-STAR累计修复已命中**：取得真实complete文档后，浅色/深色/OLED和1100/1744宽度记录确认3400px空白装饰层background-image:none、原350px品牌头图保留。窄窗三卡行1068px、x16，单卡340×505.14保持350/520比例；宽窗保留1140px原行宽。九组透明文字图按主题切换滤镜，时间线彩色图、照片、翻面卡片和视频封面filter:none。三张视频卡封面/图/标题拼接12px、superellipse(1.7)，标题使用text-1与内容表面。入场动画最初一帧看似重叠，稳定后标题与封面间隔40.5px，未据过渡帧误修；实际悬停翻面到背面并移出恢复，保留原两面图片与处理器。
+- **MCN阅读面与校园分类验收**：MCN三主题×两宽度确认外层/内部阅读底色分别为浅色、约束深色和OLED黑色，三组h2主/次标题及所有已加载流程title、权益sub-title使用对应前景；窄窗正文1068px@16、宽窗1200px@272。校园分类六组合确认标题图浅色无滤镜、深色/OLED白色，九类内容图无滤镜，宽窗分类网格1101px、窄窗1068px@16，文档没有持续横向溢出。上述样本均有六份非空Dark Reader样式，只关闭具体规则装载与几何/可读性门槛，不宣称无额外改色的独立对照通过；未操作入驻、投递或任何账户写入。
+- **两处最小差额**：MCN原生顶栏滚动后从.header.is-entry变为#app直接子.header；仅后者映射elevated-solid/text-1及主站入口主题前景，保留首屏透明品牌顶栏和嵌套宣传头部。招聘B-STAR与校园共享.back-top.ant-back-top，原控件层级500，而页脚内联1002遮挡全部或下半部；关闭外观仍复现，属于原站层级关系。受jobs-public与现有控件限定，将普通页脚降为0；用户确认重载后再次读出内联z-index:1002，补为!important以覆盖该确定来源，未抬高按钮穿过Dialog，也未移动/克隆原节点。
+- **重载后的实际边界**：本次用户已确认重载，随后刷新校园页并重新打开MCN页。重要声明补丁前校园选择器命中；补丁后普通刷新实读1002，但未在同次采样确认back-top仍已挂载，不能据此判定新规则未加载，第一百零八批已补齐滚动态验证。MCN当时浅色滚动顶栏选择器命中、无内联样式，却仍近黑且有Dark Reader竞争规则。两项不能据源文件/编译成功记为实站通过，也不能仅凭CSSOM未显示扩展样式就断言缓存或其他扩展是唯一原因；本段当时的待验收状态已由第一百零八批具体结果更新。
+- **检查与开发运行**：完整pnpm lint/typecheck/test/knip全部退出0，当前553条PASS、Knip10/0/5；日志/tmp/bewly-native146-{lint,typecheck,test,knip}-final.log。最后CSS选择器/内联覆盖差额后又完整pnpm lint退出0，日志/tmp/bewly-native146-lint-complete.log；git diff --check退出0。既有无clear开发watch57313仍运行，/tmp/bewly-native145-dev.log的182–199行确认最后SCSS变更后后台、native和content开发增量成功。未为此低影响CSS改动新增复制实现的测试。
+- **证据与恢复**：30条观察保存在/tmp/bewly-native146-live-results.json，另有flip-card-complete、media-corners、image-scope、campus-backtop-hit-points、post-reload等JSON与实际截图；第一张B-STAR底部过渡帧已有validationNote，以settled截图判定稳定排版。临时设置已实读恢复为暗色/OLED关闭/更多页面开启/原#f43f5e与#2a2f2d，记录prefs-restored.json；viewport reset至1744×1027，只关闭本轮两个临时标签。没有更改其他扩展。Goal保持active，累计代码基本完成，余项为最后两处样式实装及既有六域额外改色/第三方广告过滤对照；工作量仍粗估99%/剩余1%，不是URL覆盖率。真实brand_ad样本及历史4004因果边界仍按原记录保留。
+
+### 第一百零八批：最终状态实站核对与共享页脚浅色前景（2026-10-09）
+
+- **进展与保护**：上一goal轮有实站证据和产品差额，本轮继续依据新文档验证。Git五项及302条状态与上轮一致；保持message_feature、既有HEAD和stash，无提交/推送、版本/分支/stash操作、生产build/打包/clear。开发watch57313用原句柄确认仍活跃，未重启。产品仅修改common/footer.scss，未改媒体、消息、动态、广告识别和轮询路径。
+- **纠正装载判断**：新校园文档在顶部没有.back-top.ant-back-top，:has条件为false，页脚1002正常；滚动后控件挂载，计算层级实际变为0。第一百零七批补丁后刷新读数未同步检查条件节点，不能代表补丁未装载；原日志保留，补充/tmp/bewly-native147-load-correction.json并更正上段描述。校园和B-STAR分别完成三主题×1100/1744六组合，页脚层级均0、背景跟随主题。校园全部上/中/下三点命中原按钮，B-STAR宽窗同样；两模板实际点击均回到scrollY=0、原控件卸载、页脚恢复1002。外观关闭/开启时页脚1002/0，内联值始终1002、广告class始终保留。
+- **明确的第三方边界**：B-STAR窄窗三主题的按钮上/中点实际命中__bilibili_thread_ripper_launcher__，下点仍命中原IMG；页脚覆盖已解除，但不能宣称该环境下按钮整个区域无遮挡。未改BTR、未强行穿透点击、未为第三方入口增加Nocturne兼容规则。样本仍有六份非空Dark Reader样式，不把具体命中等价成关闭其他扩展后的独立对照。
+- **MCN顶栏实站关闭**：新文档三主题×两宽度实际使用统一顶栏表面/前景；浅色稳定白底、rgb(21,24,30)，深色/OLED保留elevated表面与rgb(241,242,244)，主站入口跟随主题前景。顶栏60px，品牌、入口和右侧信息在1100/1744均容纳；Home后原is-entry恢复rgba(0,0,0,0)与白色品牌图，未改原业务节点。外观关闭移除bewly-design并恢复原前景，开启恢复白底/语义前景；关闭背景样本仍在颜色过渡中，未作为稳定原生值。两张后台OLED截图有顶部裁切，DOM几何无越界；前台完整绘制与1100×800、scale1一并记录，原截图加说明保留，不据此修改产品。
+- **共享页脚差额**：当前MCN浅色国际页脚的主链接为rgb(165,156,140)、下载标签为rgb(228,223,217)，对白底对比度约2.72/1.32。CSSOM确认原站对应前景原为#212121，实际低对比来自Dark Reader同步样式；Nocturne原映射仅在.dark生效。为使已采用Nocturne阅读背景的轻适配子站保持配套前景，在同一规则组新增[data-bewly-native-site]分支，复用text-1/text-2/text-3与边框token，保留原暗色选择器优先级、主站浅色行为、Hover、原链接/媒体及布局。编译后普通刷新仍读旧前景，此新增差额尚未实站确认；没有为未证实的优先级问题盲加!important。
+- **检查与证据**：完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5，日志/tmp/bewly-native147-{lint,typecheck,test,knip}.log。原watch日志/tmp/bewly-native145-dev.log的200–217行确认共享页脚最终增量成功。19条记录及对应截图在/tmp/bewly-native147-live-results.json，另有footer-switch、return-actions、mcn-switch、mcn-hero、footer-before和prefs-restored记录；没有新增复制实现的测试。
+- **恢复与待验收**：暗色、OLED关闭、更多页面开启、原#f43f5e/#2a2f2d均已实读恢复，viewport reset完成，仅清理本轮临时标签，watch保留。旧招聘层级和MCN顶栏装载门槛已关闭，后续不再为这两项索取重载。当前仅有新增共享页脚前景待实际加载；既有六域Dark Reader排除授权与第三方广告过滤对照仍未完成，未重复提问或擅自修改其他扩展。恢复后的连续三轮都保留这些人工环境条件，当前可独立完成的代码、检查和既有补丁复验已处理，目标未达到可声明完成的证据标准。工作量仍粗估99%/剩余1%，不代表全部URL或第三方组合覆盖。
+
+### 第一百零九批：共享页脚实装与三个公共入口的最后层叠差额（2026-10-09）
+
+- **恢复及基线**：目标已恢复active，按新的阻塞审查周期处理；上一轮有代码与实站进展。本轮Git五项仍符合message_feature/origin/message_feature、三个remote与原HEAD，302条状态与上轮一致。原开发watch57313经句柄确认活跃，未重启。产品仅改nativePublicPortals.scss与nativeUtilityPages.scss，未改设置、广告识别、账号、播放器/媒体请求、动态加载、轮询或入口生命周期；无提交/推送、分支/版本/stash操作、生产build/打包/clear或子代理。
+- **共享页脚真正生效**：新MCN文档已实际使用上批新前景，三主题×1744/1100六组合确认链接/下载标签浅色rgb(21,24,30)、深色/OLED rgb(241,242,244)，法律文字分别text-3，浅色主链接对白底17.78、法律文字6.58。35条原链接、3张已解码图片与filter:none保持，窄窗内容1068px@16、文档1100。关闭适配恢复原站/额外改色前景，开启恢复语义颜色，广告class始终保留；Tab从关于我们进入联系我们并出现2px焦点环。样本DR6，不宣称已隔离，但这批实际颜色、布局与开关行为的装载门槛已关闭，无需为共享页脚再重复索取重载。
+- **安全公共首页**：初次document仍interactive的记录只作为观察，之后同一文档已确认complete。流程正文p的实际前景rgb(174,164,150)覆盖了父级text-2，介绍p同样沿用低对比旧色；只扩充既有text-2规则到这些实际段落。礼品目录SHOW MORE为原a.button、120×36、20px胶囊，实际黑底配深色主题前景；将它纳入现有普通按钮表面/文字/hover规则，单独保留完整round胶囊token。礼品数量/价格、页脚文字与原更多介绍按钮本已符合语义前景，等价保留；宣传图、商品图和流程图不滤色、不替换，不进入提交/兑换流程。
+- **IR普通宿主层叠**：首页.inner-content已白底，但.homepage-layout及业务数据、季度资料、新闻、快捷入口自身另有近黑背景；补这些已观察普通层的页面底色，不清除ESG内容照片或首屏媒体。新闻由本页#hp-recent-news渲染为.title内a及.published-date div，旧p规则未覆盖它们；补宿主ID内的主/次前景及hover/focus前景，不触碰原window.open处理器。两个ticker为Euroland外部iframe，继续保留外部拥有者，没有扩大注入范围或下载/提交金融资料。
+- **IR快捷入口与空动画**：现有ql__title映射被原五类选择器压过，按真实ql__link父级提高已有规则的优先级，并补对应hover/focus；最终只保留一份映射，不另建平行实现。真实.wave节点为<div class="wave">换行和四个空格</div>，零子元素、trim后空、:empty为false，但仍执行7秒无限wave动画。改为在准确装饰作用域取消background/animation，保留节点及潜在后续内容，避免用隐藏节点处理空白文本差异。只报告当前观测到的循环和已写入规则；未实测最新动画已停止，不推导播放4004原因或虚构性能百分比。
+- **客户端下载实际结构**：1100px更新说明、日期、面板12px和分类选中态已命中，Enter切PC/Space回安卓正常，选中项114×36、玫红背景/黑字。联系区.grp实际是5张图标img，不能包含.title/.text；原两个后代选择器因此不匹配。仅把它们改成.focus-us .title/.text，保持:is组的最高class优先级，避免压过分类active的on-theme前景。真实竞争规则也正是.focus-us .title/.text，没有!important；未改下载徽章图片、QR、手机预览或原下载链接。最终编译后普通刷新仍为旧rgb(165,156,140)，不能宣称这项新代码已实装。
+- **统一检查与产物**：上述已知差额集中写完后，完整pnpm lint/typecheck/test/knip全部退出0，553条PASS、Knip10/0/5，日志/tmp/bewly-native148-{lint,typecheck,test,knip}.log；git diff --check退出0。原watch日志/tmp/bewly-native145-dev.log的218–289行记录本批开发增量，272–289确认最终utility变更已编译；未手改产物，也未为这些低影响CSS新增复制实现的测试。
+- **证据、恢复与余项**：11条观察在/tmp/bewly-native148-live-results.json，包含6条共享页脚组合和修复前问题样本，不是11项全通过；security最初interactive及IR滚动未改变位置的样本已标注。另有footer-load/focus/switch、security-before、ir-before、app-before/after-refresh/switch及prefs-restored；截图保留。显示偏好已与开头快照逐字段相同（暗色、OLED关、更多页面开、原颜色），更新分类恢复安卓、viewport reset、仅清理本轮临时标签。Goal保持active；当前新增三个公共入口待统一加载后按原三主题/宽窄范围复验，六域额外改色与第三方广告过滤的独立对照仍未完成，未重复提问或擅自改动其他扩展。工作量粗估仍约99%/余1%，不是URL覆盖率；历史4004因果边界不变。
+
+### 第一百一十批：最新公共样式装载条件复核（2026-10-09）
+
+- 上一轮有实际代码与实站进展；本轮只做等待条件复核，不把追加记录或闲置watch算作产品进展。Git五项和302条状态与上一轮一致，开发watch57313经原句柄确认运行，没有重启或清理产物。
+- 新开的IR文档已complete，investor-public与bewly-design均存在，新闻四条已加载；波纹仍为wave动画，快捷文字仍rgb(235,231,225)，普通首页底层仍rgb(3,6,7)。准确的新选择器均匹配；原生波纹规则仅.hp__quicklinks .wave、无!important，节点无内联样式，不能用条件节点缺失解释。当前未观察到最终补丁生效，不因源码或已通过检查宣称通过，也没有盲目追加覆盖。
+- 证据保存在/tmp/bewly-native149-load.json与priority.json。此次没有改变Nocturne显示偏好或视口，没有操作其他扩展；两个临时标签已关闭。产品源码未变，因此不重复运行上一轮已经完整通过的553项及lint/typecheck/Knip。
+- 这是上次blocked恢复后的第二轮，统一重载及既有隔离条件仍待外部操作，原请求继续有效，不重复提问；Goal保持active，范围与约99%/余1%的工作估计不变。未commit/push、改版本/分支、处理stash或执行生产build/打包/clear。
+- **第三次复核与阻塞处置**：恢复后的第150轮再次取得complete的IR新文档、四条新闻与匹配的新选择器，仍实读wave动画、快捷文字rgb(235,231,225)和底层rgb(3,6,7)，记录/tmp/bewly-native150-load.json。与恢复后的148、149轮为同一装载/人工隔离条件；当前已无不依赖这些外部条件的必要代码工作，按连续三轮门槛将Goal设为blocked等待操作，未标记完成或用户暂停。原watch57313确认仍运行并保留，本轮没有产品代码/偏好/视口变化，单个临时标签已关闭；原检查结果不重复执行，原重载与隔离请求不重复发送。
+
+### 第一百一十一批：重载后三站实站与特殊图文配对收尾（2026-10-09）
+
+- **此次重载与基线**：用户明确确认已重载，随后使用新文档核验IR的wave=none、普通背景为Nocturne派生值、快捷文字为text-1，确认此次重载有效，不重复索取旧批次确认。Git五项、HEAD、remote/跟踪及302条状态符合保护基线，原watch57313保持运行。工具会话变量已失效，按同一Chrome extensionInstanceId恢复浏览器1；没有把工具变量丢失当作插件故障。产品代码仅nativePublicPortals.scss，另更新本记录；无提交/推送、版本/分支/stash操作、生产build/打包/clear。
+- **IR已加载部分**：新闻和页尾分别完成三主题×1744/1100实际图文观察。四条新闻的标题/日期、hover前景及普通底色符合已有token，六个快捷入口可读、原内容图片及链接保留。关闭外观实读7s/infinite/wave，恢复后0s/1/none，广告class始终保留。工具只读DOM不支持Element.getAnimations，失败属于验收脚本能力边界，未报告动画对象数量或性能百分比。原生body/html按键定位曾失败或停在别处，改用受支持的滚轮操作；首张误名footer的业务区截图、一次窄窗尚未滚到入口的截图保留并加注，不计为页尾通过。
+- **IR本轮确定差额**：业务说明的content-count已有正确父级色，但子p仍被原色覆盖；补继承，并将数字/单位按真实box-count层级配对theme-foreground。季度资料的quarterly-background仍有行内水纹，画面确认仅为装饰，文字和四个文档图标是独立DOM；用统一底色覆盖行内背景，年份/标签配text-1，仅浅色将这四个白色PNG字形变为黑色，保留原src、链接、圈形和业务结构。新闻照片原20px改媒体token；首页新闻保留原无内边距的平面列表，局部条目背景透明，不另加卡片壳或裁切焦点。实色顶栏的一级箭头i原规则固定白色，补入现有滚动态和窄窗文字映射，首屏透明头部保持原生规则。
+- **安全中心已加载与新差额**：正文/更多入口三主题×两宽度，介绍正文另做窄窗三主题截图，均实际使用主次语义色；SHOW MORE为120×36、round、中心命中原a且href仍/gift/。完整深色画面显示原info.png的黑色连线位于透明像素上，补准确图片的static-white背景，不反色、不改尺寸或裁切；原白色图形节点和礼品图标保留。浅色介绍标题的title父级已正确，但子h3仍固定白色，补color:inherit。两处新差额仍待加载，不据正文通过声称整页已完成。
+- **客户端下载收口**：联系区六组合实读标题text-1、文字text-2，五组联系信息和原图标保留，1100时第五组换行且文档1100，宽窗1744。Enter切PC、Space恢复安卓，选中背景rgb(244,63,94)/黑字未被新选择器覆盖。关闭外观回到原灰色，开启恢复Nocturne前景，广告class保留；关闭本批联系区装载门槛。尝试检查旧页脚时宿主高度0、无可读子节点，版本列表高度随滚动增长；停止继续追底，不据此修改加载机制或声称页脚已验收，也没有点击下载入口。
+- **最终源代码检查**：本轮所有新增差额完成后，完整pnpm lint/typecheck/test/knip均退出0，553条PASS、Knip10/0/5，日志/tmp/bewly-native151-{lint,typecheck,test,knip}-verification.log；git diff --check退出0。原开发日志/tmp/bewly-native145-dev.log的290–397行覆盖本轮增量，380–397为最后安全标题继承后的成功编译。未新增复制实现的测试；媒体、私信、账号、广告真值、设置协议及轮询代码未改，历史4004因果结论不变。
+- **证据和未验证范围**：29条观察逐次保存/tmp/bewly-native151-live-results.json，含前述定位异常及修复前差额，不能计作29项全通过。另有load、ir-wave-switch、app-keyboard、app-appearance-switch、app-footer-boundary、new-differences及final-probe。最后新开IR完整文档仍显示季度水纹URL、旧业务子p色和旧新闻条目底色，证明本轮新写的差额尚未取得实站生效证据；它们发生在用户此次重载之后。其他扩展仍未修改，DR6及原BTR/AdGuard边界保留，不把标记本身当作所有样式失败，也不推导独立隔离结果。
+- **恢复与下一步**：显示偏好已与开头快照逐字段相同：暗色、OLED关闭、更多页面开启、原#f43f5e/#2a2f2d；安卓分类恢复、viewport reset、仅清理本轮两个临时标签。初始/恢复快照与截图均保留，开发watch不停止。此次重载确认已消费，后续只需统一加载本轮新增IR/安全中心差额并集中复验，不再重做已确认的下载联系区与旧装载项；目标尚未达到完整完成标准，工作量粗估约99%/余1%，不是URL或第三方组合覆盖率。
+
+### 第一百一十二批：IR/安全中心最终差额实装、直播帮助收尾及加载回归（2026-10-09）
+
+- **本次刷新与范围**：用户确认已刷新后，直接取得最新IR文档，业务子p已用text-1、季度background-image:none、新闻条目透明且照片12px；随后安全中心h3继承和流程图白色背景也实际命中，不重复请求上一批重载。继续message_feature，Git五项、HEAD、remote/跟踪及stash符合既有保护基线。产品只修改nativeSites.scss中已存在的直播帮助作用域和原生顶栏包裹映射，另更新本记录；没有修改媒体/动态/私信/账号/广告请求、设置协议或轮询。
+- **IR最后一批实站关闭**：业务数据、季度资料、新闻区完成三主题×1744/1100，窄窗另补三主题照片画面。四组说明浅色rgb(21,24,30)、深色/OLED rgb(241,242,244)，数字/单位分别配套rgb(144,37,56)/rgb(249,142,160)。季度统一白/约束深色/纯黑底，四个原PNG字形仅浅色brightness(0)，原资料href保持；窄窗五枚可见一级箭头实际跟随文字，宽窗原生隐藏箭头保留。新闻列表透明、照片12px/superellipse(1.7)，无新增横向溢出。首张仍在原生数字计数/入场动画中，已注记排除，稳定画面另外保留。关闭适配后水纹URL、旧说明色和20px照片轮廓恢复，开启后恢复Nocturne，广告class全程保留。
+- **安全图文配对关闭**：流程图和介绍区完成三主题×两宽度。流程图实际natural624×589、显示500×471.953125，准确原src的背景为static-white且filter:none，黑色连线/标签和原彩色礼物均可见；没有裁切或改变比例。关于我们子h3与对应父色一致，浅色不再白字。关闭适配恢复透明图底和原标题色，恢复开启后重新配对；未登录、提交漏洞、兑换或操作任何资产。IR与安全仍各有6份非空Dark Reader样式，以上是当前真实绘制/开关结果，不推导独立排除结论。
+- **直播帮助已生效与新差额**：旧目录补丁已实读两列356px、gap8px、五项父LI与按钮均36px，六组合无横向溢出；Enter定位OBS章节、Space回下载安装章节，原焦点和原生滚动保留，50张教程图全部解码且未滤色。完整浅色截图另见二/三级导航保留原灰底改色后的深底、顶栏实际使用link-navbar-wrap而非旧ctnr、旧link-footer仍深底、两个下载链接仍原蓝字；不把目录通过扩大为整页通过。本批补相应顶栏容器到原共享表面组，以真实#app owner限定帮助阅读规则，给导航默认态/页脚配套背景，下载链接配普通表面与8px轮廓；浅色仅处理22px原导航sprite槽和箭头，不处理教程/品牌图。主题链接范围限定正文和页脚，不借助提高owner优先级改写顶栏全部链接。原hover/active/focus与键盘controller保留，没有新监听或状态系统。
+- **直播客户端下载余项**：同域/p/eden/download#/web的宽屏浅色/OLED首屏、配置阅读面、四个平台入口、三张功能卡及页脚分别完成实站；所有样本DR0，文档1744，面板12px/按钮8px，主按钮玫红配黑字，原标题图按既有规则处理、产品截图/人物/QR保留。关闭此前两种宽屏主题的证据缺口，不为已适配模板追加代码；未点击下载、体验或扫码，间歇性缺失DCL场景不因这次正常加载宣称消除。
+- **播放与动态抽查**：两个来自当前首页的4K样本BV1WDYJ61ETE、BV1MreN6JEvK均实际readyState4、media.error为空，播放分别从0.6968推进到17.501607秒、从0.715496推进到18.694987秒，加载层最终退出、原工具栏一份。第二样本曾媒体就绪而原生控件迟到，随后文档complete/控件到位；没有将初始interactive快照当失败或虚构启动耗时。一次顶栏动态点击未完成导航且第二视频随后恢复至44.739128秒，原操作不记为导航通过，改用已观察的准确URL检查动态。动态文档complete、9个article、可见骨架0、原页及Shadow内video和详情iframe均0。此为功能抽查，不是新CPU/请求计数或4004因果结论；原站style、Player.disconnect、DVRWindow及顶栏挂载日志保留，不能仅凭日志来源排除扩展间接影响。
+- **本轮检查及开发产物**：完整pnpm lint/typecheck/knip退出0，Knip保持10个exports/0个types/5个enum提示。pnpm test首次因沙箱拒绝tsx临时IPC管道而退出1；获准按同一命令重跑后退出0、553条PASS，原失败日志保留。最后只收窄CSS链接作用域后，再次完整lint退出0，git diff --check亦0。日志/tmp/bewly-native152-{lint,typecheck,knip}.log、test.log、test-verified.log、lint-final.log。原无clear watch57313保持；native145-dev.log:417–434确认最后native与content开发增量成功，未生产build/打包/clear，未新增复制实现的测试。
+- **证据、恢复与下一步**：47条视觉观察逐次存于/tmp/bewly-native152-live-results.json，包含第一张入场动画及帮助新问题样本，不能当47项全通过。ir-switch、security-switch、help-contrast/behavior/final-probe、runtime-smoke、moments-smoke和原始播放器日志分别保存。最终新帮助文档complete仍实读导航深底rgb(13,17,18)、顶栏rgb(3,6,7)、页脚rgb(9,12,13)，说明这项本轮刚写的差额仍待实装，不继续猜加规则。已逐字段恢复暗色/OLED关闭/更多页面开启/原#f43f5e与#2a2f2d，并reset视口、关闭临时页面；其他扩展未改。工作量仍粗估约99%，目前新增代码复验只余这一套帮助模板及顶栏包裹；原其他扩展独立对照、真实brand_ad投放、条件页面和历史4004边界保留，Goal保持active。无commit/push、版本/分支/stash操作。
+
+### 第一百一十三批：游戏配套公共页覆盖对账与集中补差（2026-10-09）
+
+- **进展与基线**：上一轮有真实代码与验收进展。本轮没有重复等待或催问帮助页重载，而是补核矩阵仍未闭合的WIKI平台、礼包公共目录、充值游戏目录与协议。Git五项仍符合message_feature/origin/message_feature及三个remote基线，302条状态与上一轮末尾相同；原watch57313经句柄确认活跃。产品改动限nativeGameCompanionPages.scss及既有nativePageKeyboard/nativeSiteAppearance的WIKI平台分支，验证扩充既有verify-native-appearance.mjs。未改权限/manifest、视频/动态/媒体网络、广告识别或账户写入路径。
+- **WIKI真实差额**：平台首页已加载game-wiki及既有主体/卡片圆角，但浅色导航仍黑底、#simpleSearch1 #searchInput原双ID规则压过旧类规则；分类LI前景已正确而子tab-panel仍浅字，字母导航亦低对比。页面body被原站固定为一屏高，滚到下方时html原深色画布露出；普通说明中的行内span、旧font、入驻组链接和日期也未配套。补准确搜索ID与36px成对控件、分类子文字/原字母导航、普通内联阅读前景及圆角，文档画布跟随bew-bg；保留图片上的白字、原轮播、800px内部目录滚动和各作者页面。三个空54px圆形底板、四个已确认单色图标槽按原几何配套处理，不滤色游戏封面/组徽/品牌横幅。实际选择器确认3个圆盘、1个目录owner、1个搜索输入及对应普通文字；没有按图片或标题猜广告。
+- **平台分类键盘**：实际“已上线WIKI/建设中WIKI”为两项无role/tabindex的LI。将它们接入现有局部controller，aria-pressed只读取原active类，Enter/Space仍触发原生click；owner只取静态.resp-tabs，不观察英雄轮播、统计和普通作者文档，不新增全局键盘、URL轮询或业务状态。新增真实setupNativeSiteAppearance与真实controller组合回归，覆盖原生内容切换、IME避让、输入/原搜索按钮不被接管、关闭还原、重新开启不重复激活及卸载后原鼠标行为保留；作者社区退出适配的原回归继续通过。此新键盘行为尚未实站加载。
+- **礼包公共页**：本轮首页稳定后实际取得8张推荐卡和9张全部礼包卡，不再沿旧“只有加载图”的证据判断。原推荐卡4px/深底，全部卡普通态为白底浅字且悬停仍原蓝面；按真实.gift-recommend/.gift-all限定补成对表面、主次文字、价格语义前景、12px卡片/媒体与原hover/领取显示关系。独立查看depict-bg.png确认只有蓝色渐变，才用实色替代，标题/描述仍为原节点；不替换内容横幅、商品图或空态插画。Enter“我的礼包”实际进入list_my.html，三主题×1744/1100六组合的当前空态、原插画、面包屑与主体可读，等价保留；未领取、打开礼包详情、复制码或更改资产，不扩大为空列表以外的业务验收。
+- **充值目录与协议**：充值目录20个原游戏项在三主题/宽窄均保持四列、长标题自然换行、12px媒体/卡片及实际role/button，未选择游戏、金额或进入付款。另发现该页用独立.top-warp，旧公共顶栏选择器无匹配；页脚七条导航与三个社交标签也不在原externalLinks正文容器内，按实际类补表面/前景与分隔线，原品牌图/图标和信息横幅保留。用户协议从实际链接打开，沿此前明确只读授权检查，六个有效组合中宽屏阅读列1280、版本选择36px/8px，无横向溢出；关闭外观恢复24px和原色，开启后恢复，文本长度19789及当前版次5始终相同，未选择版本或接受任何协议。
+- **工具证据纠正**：36条观察逐次保存/tmp/bewly-native153-live-results.json，含问题样本和排除项，不能当36项全通过。一次WIKI滚轮落在内部目录而未到页脚，该图已注记，之后在外侧画布滚到真实页脚。协议最初六次函数仍持有旧充值标签，site均game-payment且选择器全空；全部保留并明确排除，随后改为显式传目标标签、无模板即报错，重新取得六组game-agreement真实画面。没有据工具绑定错误改产品。game-payment首次DOM检查误假定#app而报错，改读实际body下无ID根；该错误不当作站点故障。所有配套样本有6份非空Dark Reader样式，具体绘制和布局仍分别记录，不宣称独立排除已完成。
+- **检查和装载边界**：完整pnpm lint/typecheck/test/knip均退出0，本轮554条PASS，Knip保持10/0/5；最后统一搜索输入/按钮36px盒模型后再次完整lint退出0，git diff --check亦0。测试沿用已获准的本地命令以支持tsx临时IPC，没有新CSS字符串测试或复制实现。日志/tmp/bewly-native153-{lint,typecheck,test,knip}.log、lint-final.log。native145-dev.log:455–472确认最终native/content开发增量，原watch不停止。最后刷新WIKI的complete文档仍是分类role=null、旧根/导航深色和旧搜索前景，新增JS/CSS均未记为实装通过；这些补差并入同一累计包，前一条重载请求继续有效，不追加逐页请求。
+- **恢复与剩余**：原暗色/OLED关闭/更多页面开启/#f43f5e/#2a2f2d已逐字段恢复，版本未变、临时视口reset、仅清理本轮临时标签，其他扩展未改。证据另有wiki-before/text-scope/selectors、gifts-before、agreement-switch、final-probe及prefs-restored；原错误/过渡样本保留。工作量仍粗估约99%、余约1%，不是覆盖率；剩余主要是帮助和本轮三套公共页差额的累计实站，原其他扩展独立对照、真实brand_ad样本、条件业务态及历史4004因果仍按既有边界保留。Goal保持active，未commit/push、改版本/分支、处理stash或执行生产build/打包/clear。
+
+### 第一百一十四批：累计装载条件复核与等待重载（2026-10-09）
+
+- 上一轮为代码与验收进展。本轮只核对装载/收尾条件，没有新增产品代码，也没有把记录更新或闲置watch当作产品进展。Git五项及302条状态与上一轮末尾一致；原watch57313通过原句柄确认仍运行，没有因无输出重启。
+- 两个新文档均完成加载：帮助页实际owner选择器匹配1个，但导航、顶栏和页脚仍分别rgb(13,17,18)、rgb(3,6,7)、rgb(9,12,13)；WIKI平台game-wiki/bewly-design与目录根均存在，两项分类role仍为null，导航仍原深底。早期interactive取样与最终complete取样分开保存在/tmp/bewly-native154-load-gates.json，不因节点存在或watch成功而认定新增补丁已生效。
+- 复核此前游戏/帮助隔离脚本后，确认它们只覆盖旧简化结构，不能替代本轮实际ID层叠、主页卡片、内联文字和新键盘的完整实站；没有用重复跑旧夹具制造新增通过记录。最新完整自动结果仍是第一百一十三批的554项与lint/typecheck/Knip全0，产品源码未变，不重复运行。当前独立可完成的已知实施和自动检查已结束，后续实站必须先取得新产物。
+- 同一累计重载条件自第152轮请求、153轮继续补差至本轮154连续存在；期间实施已集中完成且请求未获新的完成回复。按连续三轮门槛将Goal记为blocked等待外部重载，目标未完成、完整范围不缩减，前一条请求继续有效，不重复提问或访问受限扩展管理页。原其他扩展独立对照、广告真实样本、条件状态及4004边界继续保留；工作量仍粗估99%/余1%，不是URL覆盖率。
+- 本轮未改变显示偏好或视口，单个临时标签已关闭，watch保留；无commit/push、版本/分支/stash操作、生产build/打包/clear。
+
+### 第一百一十五批：累计补丁实装、原生层叠差额与五域主题隔离交接（2026-10-09）
+
+- **恢复与保护**：Goal已恢复active，本轮取得实际新行为和最小CSS差额，不沿用114批的旧阻塞判断。Git五项与302条状态仍符合message_feature/origin/message_feature、三个remote、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6及stash 7a6ef9155ccd8e5ce92768702da03b5ae8d7184b。产品仅改nativeGameCompanionPages.scss/nativeSites.scss，未改媒体/动态加载、账号、广告识别、设置协议、轮询或生命周期；无commit/push、版本/分支/stash操作、生产build/打包/clear及子代理。
+- **前批真正加载**：新WIKI完整文档已有button角色、tabindex与aria-pressed；Enter切建设中、Space回已上线，原内容显隐与焦点同步，搜索实际36px/8px。普通标题、内联说明与原单色图标槽已使用113批映射；礼包首页实际8张推荐和11张全部礼包卡，两类表面/前景及12px轮廓生效；充值独立.top-warp也已跟随主题。直播帮助112批导航默认面、顶栏包裹、页脚外层和下载链接均已命中。以上关闭各自旧装载门槛，不再为这些旧代码请求重载，也不将局部成功扩大为整页通过。
+- **WIKI最小收尾**：实站1100px滚动态.wiki-nav-celling仍宽1280、x=-90/right1190，菜单到1130；在既有1328px断点保留原一六分之一logo列、177px搜索占位与浮动DOM，只收窄根/内部行/菜单，安全边距使用现有token。普通导航补成对表面；侧边五个SVG按实际单色fill继承前景，文字子div继承，黑色客服普通图仅深色亮化，彩色hover图保持；社区表头原黑底补普通内嵌表面/圆角和分隔线。外链原站important颜色已确认，仅准确.section-wrap链接继承对应父色。未覆盖Dark Reader的invert规则、未增加meta锁或清除其他扩展样式；原轮播、内容图、内部目录滚动和作者社区退出边界保持。
+- **礼包与页脚收尾**：A/B/A测得全部礼包卡底631.484，原生悬停按钮底639.203，适配后36px按钮底643.203；h5/p自身上margin分别26.72/12px导致累计超出。只在既有两类卡片.info内清零这两处上margin，保留底部间距、卡片几何、原hover与领取处理器，不裁切卡片或实际领取。充值DR0完整文档仍见7条页脚导航及3个社交标签固定rgb(24,25,28)，原六class选择器压过新增普通映射；以实有#biliGameFooter提高准确规则优先级，不加全局important。直播帮助页脚子LI/联系文字/图标原固定色覆盖父色，补继承和语义边框；正文图片、QR和原入口不变。
+- **Dark Reader批准、限制和实际状态**：用户授权临时排除并恢复wiki/b-gift/pay/yhxy.biligame.com及link.bilibili.com。曾仅尝试一次WIKI站点开关，刷新后反色仍在，配置实际状态不确定；随后扩展内部页访问被浏览器URL安全策略拒绝，已停止且未通过原生应用、其他接口或页面代码绕过。改交用户手动处理，用户回复已排除此前打开的页面并要求其余单独可见。现五域各保留一个独立标签于“🌓 主题隔离验收”，均标记交接；最终complete文档充值DR0，其余四页仍各6份非空样式和dynamic标记。充值刷新初期interactive曾出现17份样式，complete后消失，不能把初期数值当稳定排除失败。临时配置的最终恢复仍须人工完成，不能记为已恢复。
+- **证据质量**：观察逐次存/tmp/bewly-native155-live-results.json，另有load-gate、wiki-keyboard/priority/remaining/paint/sticky、gift-geometry、darkreader-after-handoff/final-state、初始及恢复偏好等文件。WIKI原invert(1) hue-rotate(180deg)来自Dark Reader的明确important规则；原生外链important颜色另行取证，未混为同一来源。帮助两张1100图出现约694×505内容与空余画布的工具缩放异常，不能据此判断产品布局或记为窄窗通过；reset后1744截图正常。新文档WIKI偶发原站onLoginInfoLoaded/preferences错误原样保留，未凭它改写原业务或认定Nocturne因果。所有早期/异常/修复前截图保留，不当全通过计数。
+- **检查和产物**：完整pnpm lint/typecheck/test/knip均退出0，554条PASS、Knip10个exports/0个types/5个enum提示，日志/tmp/bewly-native155-{lint,typecheck,test,knip}.log。最后追加准确页脚owner后再次完整pnpm lint退出0，日志lint-final.log；git diff --check退出0。低影响CSS没有新增复制实现的测试。原无clear watch57313继续运行；native145-dev.log:526–543确认最后native/content/background开发增量成功，未重启或清理产物。最新充值刷新后的complete/DR0文档仍实读旧页脚rgb(24,25,28)，故115批新增CSS尚未实站通过。
+- **恢复与余项**：Nocturne偏好实读与初始逐项相同：暗色、OLED关闭、更多页面开启、#f43f5e/#2a2f2d；viewport reset至1744×1027，临时设置页关闭，五个用户要求可见的公共页保留。当前代码已知差额已集中完成，余项为这批新CSS统一加载后的WIKI/礼包/充值/帮助复验，以及协议与同批五域的三主题宽窄独立对照；旧其他扩展、AdGuard最终可见性、真实brand_ad投放、条件业务态和历史4004因果边界继续保留。工作量仍粗估约99%/余1%，不是URL覆盖率。Goal保持active，未声称完成。
+- **第156轮装载复核**：上一轮是实际实施/验收进展；本轮只验证等待条件，不把记录或闲置watch计为产品进展。五个保留标签均complete，充值DR0而其余四域DR6，礼包h5仍原26.72px上margin。随后刷新充值并等待load，最终complete/DR0仍实读7条导航rgb(24,25,28)，与根text-2不符；刷新初期改色的interactive读数继续排除。记录/tmp/bewly-native156-live-state.json与load-gate.json。Git五项、HEAD、stash及302条状态与155轮一致，watch57313通过原句柄确认活跃；未改产品或偏好、未重跑无变化的554项检查，五个标签重新标记交接并保留。155轮统一重载/临时排除请求仍待完成，未重复发送；当前为同一条件的第二轮，Goal保持active，范围和余项不缩减。
+- **第157轮阻塞审查**：再次刷新充值并等待load，早期rgb(25,26,29)色彩过渡后稳定为rgb(24,25,28)，完整文档DR0，与text-2目标仍不符；另四个完整文档继续各DR6。证据/tmp/bewly-native157-load-gates.json及load-settled.json。Git五项、302条状态、HEAD/stash不变，watch57313按原句柄确认活跃并保留；本轮未改产品、偏好、视口或其他扩展，五个公开标签重新标记交接。155、156、157连续三轮为同一新增补丁加载/人工隔离条件，当前已知独立实施和自动检查均已完成，没有可替代真实装载复验的必要工作；按门槛将Goal设为blocked等待外部操作，不声明目标完成或缩小范围。原请求继续有效，不重复发送，不访问受限扩展页面；工作量粗估99%及其非覆盖率边界不变。
+
+### 第一百一十六批：五域隔离后的累计实站与三个确定差额（2026-10-09）
+
+- **恢复与本次装载**：Goal实际已恢复active。原五个独立标签均取得complete/DR0，用户手动排除已生效；充值刷新后7条页脚链接成为text-2，礼包h5上margin为0，确认115批补丁已经加载，关闭上一阻塞条件。Git五项与157轮完全一致：message_feature/origin/message_feature、原HEAD及stash、302条状态均保留，原开发watch57313按句柄确认存活。产品修改限两个既有子站SCSS，没有更改媒体/动态/网络、设置协议、账号或广告识别路径，无commit/push、版本/分支/stash操作、生产build/打包/clear及子代理。
+- **充值与礼包实站**：充值目录/页脚完成浅色、深色、OLED×1744/1100，全部DR0；7条链接与3个社交标签分别使用text-2，浅色rgba(50,59,73,.8)、深色/OLED rgba(212,215,222,.9)，页面底色分别白/约束深色/黑。20张原游戏图、文字与四列布局保留，窄窗文档1100、卡片255px/12px且长标题自然换行。礼包稳定后8张推荐、11张目录卡均保留；目录悬停六个有效组合中原302px卡内92×36按钮距底17px，前景/表面/12px轮廓正确，不再溢出。推荐区额外只读悬停确认实色浮层和36px原按钮，保留原扩展几何/处理器，未领取、选择充值游戏或操作资产。
+- **WIKI已实装部分**：窄窗三主题确认旧115批悬浮导航1068px、x16/right1084、高56，七个菜单及177px搜索完整容纳；字母目录不再受到整块invert，分类、普通阅读文字、表头/日期/分隔线、五个侧边SVG及黑色客服图均按当前规则绘制。原内容海报、图标和800px内部列表保留。Enter建设中、Space回已上线，原active/aria-pressed/焦点相应变化；一个初始宽屏文档没有原快捷栏，后续在同一正常挂载文档切宽度取得了完整宽屏样本，不以缺失原节点掩盖问题或新增轮询。
+- **WIKI两处新差额**：无Dark Reader后，介绍段落两条链接实际仍为rgb(51,102,187)和rgb(6,69,173)，在深色内容面上偏暗。已查看screen规则，无important；print的inherit!important与此无关。只给.gy > p > a映射theme-foreground，嵌套操作表面继续保留自己的前景。另在1744宽度，原快捷栏带行内margin-left:1070px，实际x1362–1432，盖住1200px内容行和右侧正文；关闭/开启适配几何相同，广告class始终保留。把既有栏的left:auto/right:16px规则移到全部平台宽度，响应式边界从1328改为1408，为1200px内容行、70px栏及安全留距预留空间；保留原节点、inline margin和点击处理器，不加观察器、不克隆或移动业务DOM。此新增边缘定位与段落链接尚未实站加载。
+- **协议与帮助检查**：协议三主题×两宽度DR0，长文19789字符和当前版次5始终不变，宽屏1280阅读列、窄窗24px内边距和36px/8px版本控件保留，没有切版或接受协议。帮助教程三主题宽窄首屏/页脚均记录DR0，旧顶栏包裹、导航与正文表面、下载链接和联系文字/图标已实装；50张原图全部解码且filter:none，五个目录项为两列356px、gap8、36px，Enter定位OBS到y约0、Space回下载安装到y0且保留焦点。没有下载、提交或修改账户。用户在交接期间把原帮助标签切到anchor-fleet，本轮使用临时标签检查tools-tutorial，保留用户原URL。
+- **帮助法律文字差额**：115批LI继承确实生效，但实际中间UL.list-none仍固定rgb(153,153,153)，浅色列表没有取得父级text-2；不能把inherit存在当配色已完成。在同一#app帮助owner下，将.footer-content li明确映射text-2，联系标签/图标继续继承自己的链接前景；不扩大到普通正文或原教程图片，没有新增!important。该差额与上述两项一并完成后才执行完整回归。
+- **开关与证据质量**：五域共同完成适配开/关/恢复，bewly-design依次true/false/true，广告class始终true；充值链接恢复原rgb(24,25,28)，礼包上margin恢复26.72px，WIKI分类role移除/重挂，协议版本控件36→21→36px，原帮助阅读面12→0→12px。证据/tmp/bewly-native158-appearance-switch.json、wiki-rail-switch.json。53条观察保存live-results.json及原图，不等于53项通过；三张礼包窄图有694px缩放或首帧漏绘、一个帮助页脚未完整定位、一个页脚上方教程媒体首帧漏绘，均注记保留，以reset后的稳定新截图及实际媒体状态为准。viewport能力实际作用于最近创建的测试标签，最初作用到了临时设置页；发现后先reset，再用独立测试标签，未把工具目标/绘制异常当产品问题。帮助/WIKI一次load等待超时后同句柄读到complete，未重开页面或据此认定加载失败。
+- **统一验证与最后装载**：完整pnpm lint/typecheck/test/knip均退出0，554条PASS，Knip10/0/5，日志/tmp/bewly-native158-{lint,typecheck,test,knip}.log；原无clear开发日志native145-dev.log:580–598确认最后两个SCSS开发增量成功。没有为这些低影响CSS新增复制实现的测试。最后刷新原WIKI与帮助标签，均complete/DR0，但正文链接仍原蓝色、法律LI仍#999，证明本轮三个新修正尚未取得生效证据，不能宣称整页最终通过；不再重复要求已经生效的旧批次重载或五域排除。
+- **恢复与待续**：偏好实读与初始逐项完全相同：暗色、OLED关、更多页面开、#f43f5e/#2a2f2d。所有临时viewport override已reset，两个本轮临时标签关闭，五个用户要求保留的公开标签重新标记交接且DR0；原标签正常宽度1744，高度随浏览器信息栏为1027/1083。其他扩展本轮未操作，五域临时排除最终恢复仍按既有安全限制交由用户，当前保留到最终复验。Goal保持active；代码已知差额已集中完成，新增实装余项收敛为WIKI两项和帮助法律文字一项。粗估工作量仍约99%，不是URL覆盖率；旧其他扩展组合、AdGuard最终可见性、真实brand_ad、条件业务态和历史4004因果边界继续保留，不以这批配色结果推导播放性能改善。
+- **第159轮装载复核**：上一轮为实施与验收进展，本轮仅复核新装载条件。刷新帮助后的complete/DR0文档仍实读法律文字#999；WIKI一次load等待超时后先为interactive，随后同句柄实读complete/DR0，两个段落链接仍原蓝色，与当前theme-foreground #f98ea0不符。证据/tmp/bewly-native159-load-gates.json和wiki-final-state.json；没有将早期interactive取样当最终失败。Git五项、HEAD、stash与302条状态完全一致，watch57313按原句柄确认活跃。产品、偏好、视口及其他扩展未变，因此未重复跑已完整通过的554项检查；五个标签重新标记交接，158轮统一重载请求继续有效，不再请求已成功的五域排除。当前为该新增装载条件的第二轮，Goal保持active，范围与既有边界不缩减。
+- **第160轮阻塞审查**：刷新帮助并等待load后，complete/DR0的法律文字仍为rgb(153,153,153)，与当前text-2不符；保留的WIKI文档也为complete/DR0且链接仍原蓝色。证据/tmp/bewly-native160-load-gates.json。Git五项和302条状态继续一致，watch57313通过原句柄确认活跃，没有重启；五个标签已重新标记交接，产品、偏好、视口和其他扩展均未改变。158、159、160连续三轮为同一新CSS装载条件，全部已知独立实施与自动检查已完成，无法用追加代码或重复检查替代实际加载；据此将Goal设为blocked，等待已有统一重载请求完成，不缩减目标或声明完成。工作量仍粗估99%，其余条件边界保持。
+
+### 第一百一十七批：最后三处实站关闭与WIKI消息文字修正（2026-10-09）
+
+- **恢复及保护**：Goal实际恢复active；Git五项、302条状态、原HEAD和stash与160轮完全一致，原无clear watch57313继续运行。本轮新文档帮助法律文字已用text-2，WIKI段落链接已用theme-foreground，栏已贴视口右侧，确认116批三项真正加载，关闭上一装载阻塞。产品只新增nativeGameCompanionPages.scss内消息入口的窄范围文字映射；没有改媒体/动态、账户/设置协议、广告识别、轮询或原生业务处理器，无commit/push、分支/版本/stash操作、生产build/打包/clear或子代理。
+- **WIKI三主题与断点**：浅色、深色、OLED×1744/1100均取得正文和栏的样本，DR0；段落链接分别rgb(144,37,56)与rgb(249,142,160)，三块嵌套动作面继续使用text-1，不被段落规则染色。宽屏70px栏x1658/right1728，窄窗x1014/right1084，均留16px视口边距，原图片、链接、分类和焦点仍在。OLED额外检查1408px单列内容右1288、栏左1322，间距34；1409px原1200px内容行右1304.5、栏左1323，间距18.5，文档宽度均等于视口。没有按断点估算冒充这些实际几何结果。
+- **帮助法律文字关闭**：原tools-tutorial页面六组合DR0，所有11个footer LI实际使用text-2，联系人标签/图标仍为原配对主题前景，背景白/约束深色/OLED黑，窗口1744×1027与1100×800均没有横向溢出；50张原教程图仍全部解码。通过真实链接Tab移焦定位页脚，没有点击下载或联系入口。原用户保留的anchor-fleet标签继续保留原URL；新文字也在该原标签上实际加载。
+- **关闭恢复**：对这三项执行适配开/关/恢复。WIKI文字恢复原蓝系、栏在1100时恢复x1135/right1205的原生位置，开启后回到语义前景及x1014/right1084；帮助法律文字恢复#999、开启后恢复text-2。两页广告class始终true，未把外观开关与广告状态合并。记录/tmp/bewly-native161-appearance-switch.json和wiki-breakpoint.json。
+- **最后新发现及准确修正**：WIKI顶部原“我的消息”入口在当前无未读状态下实际color:rgba(0,0,0,.35)、aria-disabled为空，OLED下几乎不可见。现有.personal-notification a映射被原站规则压过。CSSOM因跨域不能读取该样式，Web读取不可用，普通网络命令DNS受限；随后获准只读下载本页已加载的公开staticwiki样式，styles.css:3390–3392明确是#pt-notifications-alert a的important黑字。最初只提高选择器优先级的草稿随即修正为匹配该明确important来源：限定#p-personal #pt-notifications-alert直接子a，普通text-1、all-read用text-2，hover/focus-visible回text-1。保留原类、红点、计数、href及事件，不触发消息读取/提交，不扩展通知浮层或作者社区。原CSS副本保存在/tmp/bewly-native161-wiki-{vector,styles,pluginsCommon-buddle}.css，未执行这些外部文件或访问扩展内部设置。
+- **检查与开发输出**：完整pnpm lint/typecheck/test/knip均退出0，554条PASS、Knip10/0/5，日志/tmp/bewly-native161-{lint,typecheck,test,knip}.log。取得原important规则并补齐后，再次完整lint退出0，日志lint-final.log；native145-dev.log:617–634确认最终native/content/background开发增量成功。没有新增复制实现的CSS测试；类型、导出和业务代码不变。最后普通刷新WIKI，早期interactive后同句柄读到complete/DR0，准确新增选择器匹配1个，但入口仍是rgba(0,0,0,.35)，故这项本轮新增CSS尚未取得实际生效证据。
+- **证据、恢复与余项**：16条观察及原截图存/tmp/bewly-native161-live-results.json；两张宽屏画面未绘出栏但DOM盒非零，已加说明，分别用同主题其他实际可见画面判断，不把DOM存在单独当作可见。控制页最初Dock折叠导致设置按钮不可见，展开后正常，不当作产品初始化错误；WIKI临时页首次缺原栏、一次load超时后经同句柄和后续完整文档取得原栏，没有增加补救轮询。初始/恢复偏好逐字段相同：暗色、OLED关、更多页面开、#f43f5e/#2a2f2d，viewport reset、两个临时标签关闭，五个公开标签重新标记交接。五域临时排除仍有效，最终恢复按既有工具限制交由用户。Goal保持active；当前新增实施待验收缩为WIKI消息文字一项，先前116批三项不再请求重复重载。工作量仍粗估99%，不是覆盖率；历史第三方组合、真实brand_ad、条件业务态与4004因果边界保持。
+- **第162轮装载复核**：上一轮为实际实施与验收进展。本轮刷新WIKI后取得complete/DR0文档，准确owner选择器匹配1个，“我的消息”仍是rgba(0,0,0,.35)，尚未使用当前text-2；记录/tmp/bewly-native162-load-gate.json。Git五项、HEAD/stash与302条状态不变，原watch57313按句柄确认活跃，五个标签重新标记交接。未改产品、偏好、视口或其他扩展，未重复跑无变化的554项检查；161轮单项重载请求继续有效，不重复发送。当前为新装载条件的第二轮，Goal保持active，范围及既有边界保持。
+- **第163轮阻塞审查**：刷新WIKI后一次load观察超时，随后同文档已complete、game-wiki、DR0，入口依旧rgba(0,0,0,.35)。生成的nativeAppearance/style.css:6409–6416已包含准确的普通/已读/hover/focus important规则，只证明开发产物存在，不替代实际生效。证据/tmp/bewly-native163-load-gate.json及load-settled.json。Git五项、302条状态及HEAD/stash一致，watch57313通过原句柄确认活跃，五个标签重新标记交接；产品、偏好、视口和其他扩展均未变，git diff --check退出0。161、162、163连续三轮为同一新增文字装载条件，已知独立实施和检查已完成，按门槛将Goal设为blocked等待已有重载请求，不重复发送或缩减目标。原完整检查、约99%工作估计与证据边界保持。
+
+### 第一百一十八批：消息入口最后增量实站及临时环境收尾（2026-10-09）
+
+- **本次重载已生效**：用户明确确认已重载，刷新WIKI取得complete/DR0，消息入口实际成为text-2；按行为关闭上一装载阻塞，不再请求重载。Git五项、HEAD/stash和302条状态与163轮一致，原watch57313按句柄确认运行。本轮没有新增产品代码，不重复运行源码未变的测试；最新完整结果仍为117批的554项、lint/typecheck/Knip全0及最后important修正后的完整lint，开发产物边界保持。
+- **三主题与宽窄窗口**：浅色、深色、OLED×1744/1100六组合均complete/DR0，入口分别为rgba(50,59,73,.8)与rgba(212,215,222,.9)，原100×19文字链接框、href与计数0保留，页面文档宽度等于视口。截图仅裁取原页面上方300px以完整保留品牌、导航和该入口上下文，不加工颜色或隐藏问题；六张实际图及结构记录在/tmp/bewly-native164-live-results.json和同前缀PNG。
+- **真实交互与恢复**：通过Shift+Tab到前一个原链接、Tab进入“我的消息”，实读focus-visible=true、2px solid焦点环、前景rgb(241,242,244)；再Tab离开后回text-2。鼠标移入使用真实页面指针输入，hover=true/text-1，移出恢复hover=false/text-2；全程未点击入口、未打开消息面板，计数保持0，没有制造未读或执行写入。再关闭/开启“适配更多页面”，原黑字rgba(0,0,0,.35)与text-2按开关恢复，广告class始终true，href不变；记录appearance-switch.json。
+- **检查与记录**：本轮只更新本维护记录，git diff --check退出0；已验收的正文、快捷栏、帮助法律文字及其他页面类型按矩阵保留，不用这一个入口结果扩大整站条件状态覆盖。此前原生资源不可用、第三方最终可见性、真实brand_ad样本、未授权写入/资格状态和历史4004因果边界不因这次成功而抹除。
+- **偏好与人工收尾**：初始及恢复快照逐字段相同：暗色、OLED关、更多页面开、#f43f5e/#2a2f2d；临时viewport reset，两个临时控制/复验标签关闭，用户要求保留的五个公开标签继续交接，开发watch保留。五域Dark Reader排除仍有效；因既有浏览器安全策略禁止工具访问该扩展内部设置，已请用户按原“临时排除并恢复”的约定恢复原配置，或明确选择长期保留，不擅自解释其偏好。当前无新增待装载的代码差额，Goal保持active等待人工环境收尾；实现与本轮验收已收口，总工作量仍粗估约99%，不是URL/业务状态/第三方组合覆盖率。无commit/push、版本/分支/stash操作、生产build/打包/clear。
+- **第165/166轮人工收尾审查**：两轮只读取既有公开页面，五域均complete且没有Dark Reader标记/非空样式，仍处于排除状态；没有新的恢复完成或长期保留的明确回复。记录/tmp/bewly-native165-cleanup-state.json与native166-cleanup-state.json。Git五项、HEAD/stash及302条状态保持，原watch57313均按句柄确认活跃，未重启或把闲置watch当产品进展；没有产品、偏好、视口或其他扩展变更，不重复跑已通过检查，五个标签重新标记交接。164轮提出收尾请求至165/166连续三轮为同一人工配置条件；工具禁止代为访问内部设置，当前已无独立必要实施，按门槛将Goal设为blocked等待用户恢复或明确保留，未宣称全部目标完成。代码不再需要重载，原收尾问题继续有效，不重复提问或绕过限制。
+
+### 第一百一十九批：长期排除确认、发现页证据补齐与最终交付（2026-10-09）
+
+- **用户决定与环境收尾**：用户明确要求“长期保留这五域排除”，即wiki.biligame.com、b-gift.biligame.com、pay.biligame.com、yhxy.biligame.com、link.bilibili.com。本条取代115–118批临时排除后恢复的计划，后续不再把这五域恢复作为本任务的待办。五个现存公开页均complete、无Dark Reader标记及非空样式，记录/tmp/bewly-native167-final-environment.json；未自动修改其他扩展，也未扩大到其他域的长期配置。此前用户要求打开的五个标签作为交付页面保留。
+- **最终对账补足而非沿用摘要**：重新读取当前路由目录、manifest入口、nativeAppearance/setupNativeSiteAppearance和广告识别模块，核对覆盖矩阵及实际测试条目。矩阵旧摘要中的发现页仍只有OLED结构/窄窗及额外改色记录，不能直接把“仅余环境收尾”视作全范围完成。本轮实际打开原/platform/discover补齐浅色、深色、OLED×1744/1100检查，全部DR0；没有因此增加功能、扩大一次性活动/作者社区适配，或改动产品源码。
+- **发现页实站结果**：正常加载后11组可见栏目标题分别使用text-1，游戏名称保持原生配对前景，类型/评分使用text-2；浅色标题rgb(21,24,30)、名称rgba(24,25,28,.9)，深色/OLED标题rgb(241,242,244)、名称rgba(231,233,235,.9)，更多链接分别rgba(24,25,28,.65)与rgba(231,233,235,.65)。页面底色为白/约束深色/黑，宽窄文档无横向溢出，1100内容1068px；保留应用图标、原栏目、内容海报及原轮播。实际Tab焦点环保留，未激活预约、下载、反馈或交易入口。关闭适配恢复1160px原宽及原前景，开启后回到1068px内容和当前主题；广告class始终true。记录discover-switch.json与discover-results.json。
+- **采样边界保留**：发现页会随滚动继续追加原目录内容。一次定位中部使用了document clip y=0，得到的仍是顶部画面；一个最后页脚空链接不可见，后续读取显示页脚因原内容追加下移。均不记为相应区域通过，不为追到末端连续加载，也没有据工具定位或原追加时序改写页面。早期未完整绘制的宽屏截图保留，六个组合以最终完整画面及对应实际样式/几何核对；本轮没有改写旧带Dark Reader、早期帧或失败样本为通过。
+- **完成审查依据**：注入范围仍来自已观察的页面目录与有限frame清单，主站业务/播放器和独立外观入口各保留原owner；一次性活动与作者自定义WIKI继续退出外观投影。外观只沿现有adaptToOtherPageStyles/displayReady/useDark投影，关闭恢复原类、变量和局部键盘属性；blockAds独立。广告模块只依赖明确API标志、类型段和广告载荷，不依据标题或商业内容，原生同节点释放与3/0/3真实标记对照及对应模块回归保留。三主题、桌面宽窄、焦点/IME/节点所有权与释放的实现及实站证据逐项对应上方矩阵。将末列标题明确为“条件性待验收与证据边界”，保留其中所有未观察的业务/错误/第三方状态，未把它们改写为通过。
+- **检查和保护**：当前源码/脚本/配置最近修改仍是161轮的CSS修正，晚于它的完整lint及后续实站已通过；本轮没有产品源码变更，不重复跑既有554项及typecheck/Knip。最新完整lint/typecheck/test/Knip均0，最终CSS重要优先级修正后另一次完整lint为0，Knip仍10/0/5，日志保持native161前缀。Git五项、HEAD 7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6、stash 7a6ef9155ccd8e5ce92768702da03b5ae8d7184b及302条状态继续一致；git diff --check通过。保留开发watch57313，无commit/push、版本/分支/stash操作、生产build/打包/clear或子代理。
+- **交付与明确限制**：本轮临时主题/视口逐项恢复为暗色、OLED关、更多页面开、#f43f5e/#2a2f2d，三个补核临时标签关闭，用户指定的五域排除保持。常用稳定页面类型的已知代码差额及最后新增装载门槛均已关闭，用户选择也解除了环境收尾条件，按用户收窄后的页面类型范围交付并完成Goal。原站资源失效的旧勋章、未登录/资格后状态、未经授权的交易/写入、AdGuard等第三方最终可见性、缺真实投放的brand_ad及历史4004因果仍作为明确验证边界保留；本记录不承诺每个URL、每种账户状态或所有扩展组合都已验证，也不宣称所有bug已消除。
+
+### 第一百二十批：累计修改提交前验证（2026-10-10）
+
+- 用户明确要求“push所有修改吧”，授权将当前累计源码、回归脚本及维护记录提交并推送到原有 `origin/message_feature`；不创建 PR、不变更版本、不操作 stash。
+- 提交前重新核对分支、追踪关系及三个 remote；远端 `message_feature` 与本地提交前 HEAD 同为 `7ee0ddc967d4ccae136ae070a0bd5fb64700f3e6`。工作流文档旧品牌名不替代用户本轮明确指定的 Nocturne origin。
+- 重新完整执行 `pnpm lint`、`pnpm typecheck`、`pnpm test`、`pnpm knip`，四项退出码均为 0；测试 554 项 PASS，Knip 保持 10 个导出、0 个类型、5 个枚举成员提示。日志为 `/tmp/bewly-publish-20261010-{lint,typecheck,test,knip}.log`，`git diff --check` 通过。
+- 本轮为提交验证，没有新增实站验收；保留上文所有已验证范围与已知限制。未执行生产 build、打包或 clear，继续保留现有开发产物及 watch。

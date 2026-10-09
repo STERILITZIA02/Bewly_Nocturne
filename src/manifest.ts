@@ -4,6 +4,7 @@ import type { Manifest } from 'webextension-polyfill'
 import type PkgType from '../package.json'
 import { isDev, isSafari, port, r } from '../scripts/utils'
 import { CONTENT_SCRIPT_EXCLUDE_MATCHES, CONTENT_SCRIPT_MATCHES } from './constants/contentScript'
+import { NATIVE_SITE_FRAME_MATCHES, NATIVE_SITE_MATCHES } from './constants/nativeSites'
 
 export async function getManifest() {
   const pkg = await fs.readJSON(r('package.json')) as typeof PkgType
@@ -36,8 +37,30 @@ export async function getManifest() {
     host_permissions: [
       '*://*.bilibili.com/*',
       '*://*.hdslb.com/*',
+      // Official game-detail destination linked directly from game.bilibili.com.
+      '*://www.biligame.com/*',
+      // Public companion pages linked by the official game-center navigation.
+      '*://wiki.biligame.com/*',
+      '*://b-gift.biligame.com/*',
+      '*://pay.biligame.com/*',
+      '*://yhxy.biligame.com/*',
     ],
     content_scripts: [
+      {
+        matches: NATIVE_SITE_MATCHES,
+        exclude_matches: NATIVE_SITE_FRAME_MATCHES,
+        js: ['./dist/nativeAppearance/index.global.js'],
+        css: ['./dist/nativeAppearance/style.css'],
+        run_at: 'document_start',
+        all_frames: false,
+      },
+      {
+        matches: NATIVE_SITE_FRAME_MATCHES,
+        js: ['./dist/nativeAppearance/index.global.js'],
+        css: ['./dist/nativeAppearance/style.css'],
+        run_at: 'document_start',
+        all_frames: true,
+      },
       {
         matches: [...CONTENT_SCRIPT_MATCHES],
         exclude_matches: [...CONTENT_SCRIPT_EXCLUDE_MATCHES],

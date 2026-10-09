@@ -22,6 +22,17 @@ export interface OpenTabsCommand {
   action: 'get' | 'prepare' | 'start' | 'stop' | 'retry' | 'unsubscribe'
   taskId?: string
   accountId: number
+  selectedTabIds?: number[]
+}
+
+/** Apply a confirmed selection once, before the existing runner owns the task. */
+export function selectOpenTabsTaskItems(task: OpenTabsTask, selectedTabIds: number[]) {
+  const selected = new Set(selectedTabIds)
+  if (!selected.size || selected.size !== selectedTabIds.length
+    || selectedTabIds.some(id => !Number.isSafeInteger(id) || !task.items.some(item => item.tabId === id))) {
+    throw new TypeError('Select items from the current preview')
+  }
+  return task.items.filter(item => selected.has(item.tabId))
 }
 
 export function countOpenTabsTask(task: OpenTabsTask) {

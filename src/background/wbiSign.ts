@@ -1,5 +1,7 @@
 import md5 from 'md5'
 
+import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
+
 // WBI签名重排映射表
 const MIXIN_KEY_ENC_TAB = [46, 47, 18, 2, 53, 8, 23, 32, 15, 50, 10, 31, 58, 3, 45, 35, 27, 43, 5, 49, 33, 9, 42, 19, 29, 28, 14, 39, 12, 38, 41, 13, 37, 48, 7, 16, 24, 55, 40, 61, 26, 17, 0, 1, 60, 51, 30, 4, 22, 25, 54, 21, 56, 59, 6, 63, 57, 62, 11, 36, 20, 34, 44, 52]
 
@@ -75,10 +77,7 @@ const invalidatedPersistentScopes = new Set<WbiKeyScope>()
 const persistentClearRequests = new Map<WbiKeyScope, Promise<void>>()
 
 // 正在获取密钥的Promise，用于避免并发重复获取
-let fetchingKeysPromise: Promise<boolean> | null = null
-let fetchingNoCookieKeysPromise: Promise<boolean> | null = null
-let fetchingKeysForceRefresh = false
-let fetchingNoCookieKeysForceRefresh = false
+const fetchingKeys = new Map<string, { promise: Promise<boolean>, force: boolean }>()
 
 async function getDefaultBrowserStorage(): Promise<WbiStorageArea> {
   const browser = await import('webextension-polyfill').then(module => module.default)
@@ -259,7 +258,8 @@ export function getWbiKeys(options: WbiKeyOptions = {}, now = Date.now()): WbiKe
   const keys = getMemoryWbiKeys(scope)
   if (keys && isWbiKeysValid(keys, options, now))
     return keys
-  setMemoryWbiKeys(scope, null)
+  if (keys && now - keys.timestamp > WBI_KEYS_TTL_MS)
+    setMemoryWbiKeys(scope, null)
   return null
 }
 
@@ -268,6 +268,9 @@ export function getWbiKeys(options: WbiKeyOptions = {}, now = Date.now()): WbiKe
  */
 export function clearWbiKeys(options: WbiKeyOptions = {}): void {
   const scope = getWbiScope(options)
+  const keys = getMemoryWbiKeys(scope)
+  if (scope === 'authenticated' && options.mid !== undefined && keys && keys.mid !== options.mid)
+    return
   setMemoryWbiKeys(scope, null)
   invalidatedPersistentScopes.add(scope)
   void clearPersistedWbiKeys(scope, DEFAULT_WBI_RUNTIME)
@@ -348,115 +351,104 @@ export async function initWbiKeys(
 ): Promise<boolean> {
   const noCookie = options.noCookie === true
   const scope = getWbiScope(options)
+  const key = `${scope}:${noCookie ? '' : options.mid ?? ''}`
 
   // 先使用当前 worker 内存中的有效密钥。
-  if (!options.forceRefresh && getWbiKeys(options, runtime.now())) {
+  if (!options.forceRefresh && (noCookie || options.mid !== undefined) && getWbiKeys(options, runtime.now())) {
     return true
   }
 
   // 如果正在获取中，等待当前获取完成
-  if (noCookie) {
-    if (fetchingNoCookieKeysPromise) {
-      if (options.forceRefresh && !fetchingNoCookieKeysForceRefresh) {
-        await fetchingNoCookieKeysPromise
-        return await initWbiKeys(options, runtime)
-      }
-      return await fetchingNoCookieKeysPromise
-    }
-  }
-  else if (fetchingKeysPromise) {
-    if (options.forceRefresh && !fetchingKeysForceRefresh) {
-      await fetchingKeysPromise
+  const pending = fetchingKeys.get(key)
+  if (pending) {
+    if (options.forceRefresh && !pending.force) {
+      await pending.promise
       return await initWbiKeys(options, runtime)
     }
-    return await fetchingKeysPromise
+    return await pending.promise
   }
 
   // 开始新的获取流程
   const fetchPromise = (async () => {
     try {
-      await persistentClearRequests.get(scope)
-      if (options.forceRefresh) {
-        setMemoryWbiKeys(scope, null)
-        invalidatedPersistentScopes.add(scope)
-        await runtime.storage.remove(WBI_KEYS_STORAGE_KEYS[scope]).catch(() => {})
-      }
-
-      const cookies = noCookie ? [] : await runtime.getCookies().catch(() => [])
-      const mid = noCookie
-        ? ''
-        : options.mid?.trim()
-          ?? cookies.find(cookie => cookie.name === 'DedeUserID')?.value.trim()
-          ?? ''
-
-      // Service Worker 冷启动时先恢复持久缓存，MID 不匹配时不得复用 authenticated slot。
-      if (!options.forceRefresh && !invalidatedPersistentScopes.has(scope)) {
-        const stored = await runtime.storage.get(WBI_KEYS_STORAGE_KEYS[scope]).catch((): Record<string, unknown> => ({}))
-        const persisted = parsePersistedWbiKeys(stored[WBI_KEYS_STORAGE_KEYS[scope]])
-        if (persisted && isWbiKeysValid(persisted, { ...options, mid }, runtime.now())) {
-          setMemoryWbiKeys(scope, persisted)
+      return await withRequestDeadline(async (signal) => {
+        await waitWithSignal(persistentClearRequests.get(scope) ?? Promise.resolve(), signal)
+        const cookies = noCookie ? [] : await waitWithSignal(runtime.getCookies().catch(() => []), signal)
+        const cookieMid = cookies.find(cookie => cookie.name === 'DedeUserID')?.value.trim() ?? ''
+        if (!noCookie && options.mid !== undefined && options.mid !== cookieMid)
+          return false
+        const mid = noCookie ? '' : cookieMid
+        if (!options.forceRefresh && getWbiKeys({ ...options, mid }, runtime.now()))
           return true
+        if (options.forceRefresh) {
+          setMemoryWbiKeys(scope, null)
+          invalidatedPersistentScopes.add(scope)
+          await waitWithSignal(runtime.storage.remove(WBI_KEYS_STORAGE_KEYS[scope]).catch(() => {}), signal)
         }
-        if (persisted && runtime.now() - persisted.timestamp > WBI_KEYS_TTL_MS)
-          await runtime.storage.remove(WBI_KEYS_STORAGE_KEYS[scope]).catch(() => {})
-      }
 
-      const cookieStr = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
+        // Service Worker 冷启动时先恢复持久缓存，MID 不匹配时不得复用 authenticated slot。
+        if (!options.forceRefresh && !invalidatedPersistentScopes.has(scope)) {
+          const stored = await waitWithSignal(runtime.storage.get(WBI_KEYS_STORAGE_KEYS[scope]).catch((): Record<string, unknown> => ({})), signal)
+          signal.throwIfAborted()
+          const persisted = parsePersistedWbiKeys(stored[WBI_KEYS_STORAGE_KEYS[scope]])
+          if (persisted && isWbiKeysValid(persisted, { ...options, mid }, runtime.now())) {
+            setMemoryWbiKeys(scope, persisted)
+            return true
+          }
+          if (persisted && runtime.now() - persisted.timestamp > WBI_KEYS_TTL_MS)
+            await waitWithSignal(runtime.storage.remove(WBI_KEYS_STORAGE_KEYS[scope]).catch(() => {}), signal)
+        }
 
-      const headers: HeadersInit = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Referer': 'https://www.bilibili.com/',
-      }
+        const cookieStr = cookies.map(cookie => `${cookie.name}=${cookie.value}`).join('; ')
 
-      // 如果有cookie，添加到请求头
-      if (cookieStr) {
-        headers.Cookie = cookieStr
-      }
+        const headers: HeadersInit = {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://www.bilibili.com/',
+        }
 
-      const navResponse = await runtime.fetch('https://api.bilibili.com/x/web-interface/nav', {
-        method: 'GET',
-        headers,
-        credentials: noCookie ? 'omit' : 'include',
+        // 如果有cookie，添加到请求头
+        if (cookieStr) {
+          headers.Cookie = cookieStr
+        }
+
+        signal.throwIfAborted()
+        const navResponse = await waitWithSignal(runtime.fetch('https://api.bilibili.com/x/web-interface/nav', {
+          method: 'GET',
+          headers,
+          credentials: noCookie ? 'omit' : 'include',
+          signal,
+        }), signal)
+        const navData = JSON.parse(await waitWithSignal(navResponse.text(), signal)) as {
+          code?: unknown
+          data?: { wbi_img?: { img_url?: unknown, sub_url?: unknown } }
+        }
+        signal.throwIfAborted()
+
+        if (!noCookie) {
+          const currentCookies = await waitWithSignal(runtime.getCookies(), signal)
+          if ((currentCookies.find(cookie => cookie.name === 'DedeUserID')?.value.trim() ?? '') !== mid)
+            return false
+        }
+
+        // 无论是否登录，nav接口都应该返回wbi_img
+        if ((navData.code === 0 || navData.code === -101) && navData.data?.wbi_img) {
+          const { img_url, sub_url } = navData.data.wbi_img
+          if (typeof img_url === 'string' && typeof sub_url === 'string')
+            return await storeResolvedWbiKeys(img_url, sub_url, options, mid, runtime)
+        }
+        return false
       })
-      const navData = JSON.parse(await navResponse.text()) as {
-        code?: unknown
-        data?: { wbi_img?: { img_url?: unknown, sub_url?: unknown } }
-      }
-
-      // 无论是否登录，nav接口都应该返回wbi_img
-      if ((navData.code === 0 || navData.code === -101) && navData.data?.wbi_img) {
-        const { img_url, sub_url } = navData.data.wbi_img
-        if (typeof img_url === 'string' && typeof sub_url === 'string')
-          return await storeResolvedWbiKeys(img_url, sub_url, options, mid, runtime)
-      }
-      return false
     }
     catch {
       return false
     }
-    finally {
-      // 清除获取中的Promise标志
-      if (noCookie)
-        fetchingNoCookieKeysPromise = null
-      else
-        fetchingKeysPromise = null
-      if (noCookie)
-        fetchingNoCookieKeysForceRefresh = false
-      else
-        fetchingKeysForceRefresh = false
-    }
   })()
-
-  if (noCookie) {
-    fetchingNoCookieKeysPromise = fetchPromise
-    fetchingNoCookieKeysForceRefresh = options.forceRefresh === true
-  }
-  else {
-    fetchingKeysPromise = fetchPromise
-    fetchingKeysForceRefresh = options.forceRefresh === true
-  }
-
-  return await fetchPromise
+  const request = fetchPromise.finally(() => {
+    if (fetchingKeys.get(key)?.promise === request)
+      fetchingKeys.delete(key)
+  })
+  fetchingKeys.set(key, { promise: request, force: options.forceRefresh === true })
+  return await request
 }
 
 /**

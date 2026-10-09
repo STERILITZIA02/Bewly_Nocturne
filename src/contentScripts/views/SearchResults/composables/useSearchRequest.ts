@@ -5,7 +5,9 @@ import { useI18n } from 'vue-i18n'
 import type { SearchRequest } from '~/constants/searchApi'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { waitWithSignal } from '~/utils/abort'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { getUserID } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { requestSearch } from '~/utils/searchRequest'
 
@@ -25,8 +27,15 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
 
   // 请求令牌，用于取消过期的请求
   let activeRequestToken: symbol | null = null
+  let activeController: AbortController | null = null
   let disposed = false
   let contextInvalidated = false
+
+  function cancelActiveRequest() {
+    activeRequestToken = null
+    activeController?.abort()
+    activeController = null
+  }
 
   function getRequestScope(): string {
     const accountId = resolveAuthenticatedAccountId(
@@ -36,7 +45,7 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     const account = accountId === null
       ? (topBarStore.isLogin ? 'profile-unavailable' : 'logged-out')
       : `account:${accountId}`
-    return `${settings.value.depersonalizeSearchResults ? 'anonymous' : 'personalized'}:${account}`
+    return `${settings.value.depersonalizeSearchResults ? 'anonymous' : 'personalized'}:${account}:cookie:${getUserID() ?? 'guest'}`
   }
   const requestScope = computed(getRequestScope)
 
@@ -52,8 +61,8 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     if (disposed || contextInvalidated)
       return false
 
+    cancelActiveRequest()
     if (!request.keyword.trim()) {
-      activeRequestToken = null
       isLoading.value = false
       error.value = ''
       results.value = null
@@ -64,43 +73,52 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     error.value = ''
 
     const requestToken = Symbol('search-request')
+    const controller = new AbortController()
+    activeController = controller
     const scope = getRequestScope()
     activeRequestToken = requestToken
     const isCurrent = () => !disposed && activeRequestToken === requestToken && getRequestScope() === scope
 
     try {
-      const response = await requestSearch(request)
+      const response = await requestSearch(request, controller.signal)
 
       // 检查请求是否已过期
       if (!isCurrent())
         return false
 
       if (!response || response.code !== 0) {
-        error.value = t('search.errors.failed')
+        error.value = t(response?.code === -412 ? 'search.errors.risk_control' : 'search.errors.failed')
         return false
       }
 
-      const processed = await processResponse(response, isCurrent)
+      const processed = await waitWithSignal(Promise.resolve(processResponse(response, isCurrent)), controller.signal)
       return processed && isCurrent()
     }
     catch (err) {
       // Even a superseded request can prove that this entire extension world is stale.
       if (isExtensionContextInvalidatedError(err)) {
         contextInvalidated = true
-        activeRequestToken = null
+        cancelActiveRequest()
         isLoading.value = false
         error.value = ''
         return false
       }
       if (!isCurrent())
         return false
+      const failure = (err && typeof err === 'object' ? err : {}) as { name?: string, isRiskControl?: boolean }
+      if (controller.signal.aborted || failure.name === 'AbortError')
+        return false
       console.error(`Search error for ${category}:`, err)
-      error.value = t('search.errors.exception')
+      error.value = t(failure.name === 'TimeoutError'
+        ? 'search.errors.timeout'
+        : failure.isRiskControl ? 'search.errors.risk_control' : 'search.errors.exception')
       return false
     }
     finally {
-      if (activeRequestToken === requestToken)
+      if (activeRequestToken === requestToken) {
         isLoading.value = false
+        activeController = null
+      }
     }
   }
 
@@ -111,12 +129,13 @@ export function useSearchRequest<T = any>(category: SearchCategory) {
     isLoading.value = false
     results.value = null
     error.value = ''
-    activeRequestToken = null
+    cancelActiveRequest()
   }
 
   onScopeDispose(() => {
     disposed = true
-    activeRequestToken = null
+    cancelActiveRequest()
+    isLoading.value = false
   })
 
   return {

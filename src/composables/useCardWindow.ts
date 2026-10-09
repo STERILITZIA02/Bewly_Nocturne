@@ -35,10 +35,12 @@ export function useCardWindow(options: {
   gap: Ref<number>
   enabled: Ref<boolean>
   estimatedHeight: Ref<number>
+  /** Mixed full-width headings and media rows can supply their own estimate. */
+  estimateHeight?: (key: CardKey) => number
   layout: Ref<string>
   canRelease: (key: CardKey) => boolean
   snapshot?: CardWindowSnapshot
-  /** Return true when the page explicitly resets position instead of restoring an old card anchor. */
+  /** Return true when the page owns the viewport position and cached card anchors must not override it. */
   restoreScroll?: () => boolean | void
 }) {
   const ranges = shallowRef<CardRange[]>([])
@@ -252,9 +254,10 @@ export function useCardWindow(options: {
 
   function measuredHeight(key: CardKey) {
     const measurement = measurements.get(key)
+    const estimatedHeight = options.estimateHeight?.(key) ?? options.estimatedHeight.value
     return measurement?.layout === options.layout.value
-      ? Math.max(1, measurement.height + options.estimatedHeight.value - measurement.estimatedHeight)
-      : options.estimatedHeight.value
+      ? Math.max(1, measurement.height + estimatedHeight - measurement.estimatedHeight)
+      : estimatedHeight
   }
 
   function rebuildRows() {
@@ -299,7 +302,7 @@ export function useCardWindow(options: {
     // Capture the visible position before changing spacer heights above it.
     keepScrollAnchor()
     for (const [key, height] of pending)
-      measurements.set(key, { height, layout: options.layout.value, estimatedHeight: options.estimatedHeight.value })
+      measurements.set(key, { height, layout: options.layout.value, estimatedHeight: options.estimateHeight?.(key) ?? options.estimatedHeight.value })
     let changed = false
     for (const [row, height] of heights)
       changed = metrics.set(row, height + options.gap.value) || changed

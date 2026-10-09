@@ -1,4 +1,3 @@
-import { AppPage } from '~/enums/appEnums'
 import { scrollToPosition } from '~/utils/scrollIntent'
 
 /**
@@ -151,16 +150,6 @@ export function injectCSS(css: string, element: HTMLElement | ShadowRoot = docum
 }
 
 /**
- * delay
- * @param ms milliseconds delay time
- */
-export function delay(ms: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, ms)
-  })
-}
-
-/**
  * Check if the current page is the home page
  * @param url the url to check
  * @returns true if the current page is the home page
@@ -275,24 +264,6 @@ export function isNotificationPage(url: string = location.href): boolean {
 }
 
 /**
- * Check if the current page is a search results page
- * @param url the url to check
- * @returns true if the current page is a search results page
- */
-export function isSearchResultsPage(url: string = location.href): boolean {
-  // 检查是否是 B站原生搜索结果页
-  if (/https?:\/\/search\.bilibili\.com\/.*/.test(url)) {
-    return true
-  }
-  // 检查是否是插件搜索结果页。
-  const urlObj = new URL(url)
-  if (urlObj.searchParams.get('page') === AppPage.SearchResults) {
-    return true
-  }
-  return false
-}
-
-/**
  * Check if the current page is a user space page
  * @param url the url to check
  * @returns true if the current page is a user space page
@@ -304,141 +275,6 @@ export function isUserSpacePage(url: string = location.href): boolean {
     return true
   }
   return false
-}
-
-export function calculateContainedImageSize(
-  width: number,
-  height: number,
-  maxWidth: number,
-  maxHeight: number,
-) {
-  if (![width, height, maxWidth, maxHeight].every(value => Number.isFinite(value) && value > 0))
-    throw new RangeError('Image dimensions must be positive finite numbers')
-
-  const scale = Math.min(1, maxWidth / width, maxHeight / height)
-  return {
-    width: Math.max(1, Math.round(width * scale)),
-    height: Math.max(1, Math.round(height * scale)),
-  }
-}
-
-/**
- * Compresses and resizes an image file.
- *
- * @param file - The image file to compress and resize.
- * @param maxWidth - The maximum width of the resized image.
- * @param maxHeight - The maximum height of the resized image.
- * @param quality - The quality of the compressed image (0-1).
- * @param callback - The callback function to execute with the compressed file.
- * @param onError - The callback invoked when reading, decoding, or encoding fails.
- */
-export function compressAndResizeImage(
-  file: File,
-  maxWidth: number,
-  maxHeight: number,
-  quality: number,
-  callback: (compressedFile: File) => void,
-  onError: (error: Error) => void = error => console.error('compressAndResizeImage failed', error),
-) {
-  const fail = (error: unknown) => {
-    onError(error instanceof Error ? error : new Error(String(error)))
-  }
-
-  if (!Number.isFinite(quality) || quality < 0 || quality > 1) {
-    fail(new RangeError('Image quality must be between 0 and 1'))
-    return
-  }
-
-  const img = new Image()
-  const reader = new FileReader()
-
-  reader.onerror = () => fail(reader.error ?? new Error('Failed to read image file'))
-  reader.onabort = () => fail(new Error('Image file reading was aborted'))
-  img.onerror = () => fail(new Error('Failed to decode image file'))
-
-  reader.onload = (event) => {
-    const result = event.target?.result
-    if (typeof result !== 'string') {
-      fail(new Error('Image file did not produce a data URL'))
-      return
-    }
-    img.src = result
-  }
-
-  img.onload = () => {
-    try {
-      const size = calculateContainedImageSize(
-        img.naturalWidth || img.width,
-        img.naturalHeight || img.height,
-        maxWidth,
-        maxHeight,
-      )
-      const canvas = document.createElement('canvas')
-      const ctx = canvas.getContext('2d')
-      if (!ctx) {
-        fail(new Error('Unable to create image canvas context'))
-        return
-      }
-
-      canvas.width = size.width
-      canvas.height = size.height
-      ctx.drawImage(img, 0, 0, size.width, size.height)
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          fail(new Error('Image encoding returned an empty blob'))
-          return
-        }
-        let compressedFile: File
-        try {
-          compressedFile = new File([blob], file.name, {
-            type: 'image/jpeg',
-            lastModified: Date.now(),
-          })
-        }
-        catch (error) {
-          fail(error)
-          return
-        }
-        callback(compressedFile)
-      }, 'image/jpeg', quality)
-    }
-    catch (error) {
-      fail(error)
-    }
-  }
-
-  try {
-    reader.readAsDataURL(file)
-  }
-  catch (error) {
-    fail(error)
-  }
-}
-
-/**
- * Compare two versions
- * @param version1
- * @param version2
- * @returns 1 if version1 is greater than version2, -1 if version1 is less than version2, 0 if version1 is equal to version2
- */
-export function compareVersions(version1: string, version2: string): number {
-  const v1Parts = version1.split('.').map(Number)
-  const v2Parts = version2.split('.').map(Number)
-
-  // Determine the longer length for iteration
-  const maxLength = Math.max(v1Parts.length, v2Parts.length)
-
-  for (let i = 0; i < maxLength; i++) {
-    const num1 = v1Parts[i] || 0 // Defaults to 0 if undefined
-    const num2 = v2Parts[i] || 0 // Defaults to 0 if undefined
-
-    if (num1 > num2)
-      return 1
-    if (num1 < num2)
-      return -1
-  }
-
-  return 0 // Versions are equal
 }
 
 export function queryDomUntilFound(

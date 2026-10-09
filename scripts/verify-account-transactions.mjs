@@ -42,20 +42,29 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       },
     }
     const page = await compileComponent('../src/contentScripts/views/History/History.vue', {
+      '@vueuse/core': { useResizeObserver: () => ({ stop() {} }) },
       'vue-i18n': { useI18n: () => ({ t: key => key, locale: Vue.ref('cmn-CN') }) },
       'vue-toastification': { useToast: () => ({ error: () => {} }) },
       '~/components/VideoListSkeleton.vue': { default: {} },
-      '~/composables/useAppProvider': { useBewlyApp: () => ({ handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true }) },
+      '~/components/LazyPicture.vue': { default: {} },
+      '~/components/Settings/components/SettingsSegmentedControl.vue': { default: {} },
+      '~/composables/useCardWindow': await import('../src/composables/useCardWindow'),
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true, scrollViewportRef: Vue.ref() }) },
       '~/composables/useConfirmDialog': { useConfirmDialog: () => ({ confirm: () => confirmation.promise }) },
+      '~/logic': { settings: Vue.ref({ historyLayout: 'list', gridColumns: {} }) },
       '~/models/history/history': await import('../src/models/history/history'),
       '~/stores/topBarStore': { useTopBarStore: () => account },
       '~/utils/accountScope': accountScope,
       '~/utils/api': { default: { history: api } },
       '~/utils/dataFormatter': formatter,
+      '~/utils/gridLayout': await import('../src/utils/gridLayout'),
       '~/utils/locale': await import('../src/utils/locale'),
       '~/utils/main': { getCSRF: () => `csrf-${cookie}`, getUserID: () => String(cookie), removeHttpFromUrl: value => value },
       '~/utils/playbackProgress': playbackProgress,
+      '~/utils/historyTarget': await import('../src/utils/historyTarget'),
+      '~/utils/videoVisitHistory': { getVideoProgressPercentage: (_identity, progress, duration) => playbackProgress.normalizePlaybackProgress(progress, duration), clearVideoVisitHistory() {}, removeVideoVisitHistory() {} },
       './useHistoryTimeline': timelineModule,
+      './historyWindow': await import('../src/contentScripts/views/History/historyWindow'),
     }, { renderTemplate: false })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp(page)
@@ -65,9 +74,9 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     account.userInfo.mid = 2
     confirmation.resolve(true)
     await paused
-    reads[0].resolve({ code: 0, data: { list: [{ title: 'old' }] } })
+    reads[0].resolve({ code: 0, data: { list: [{ title: 'old', view_at: 1, history: { oid: 1, business: 'archive' } }] } })
     statuses[0].resolve({ code: 0, data: true })
-    reads[1].resolve({ code: 0, data: { list: [{ title: 'new' }] } })
+    reads[1].resolve({ code: 0, data: { list: [{ title: 'new', view_at: 2, history: { oid: 2, business: 'archive' } }] } })
     statuses[1].resolve({ code: 0, data: false })
     await flush()
     assert.equal(state.historyList[0].title, 'new')

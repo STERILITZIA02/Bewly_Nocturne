@@ -1,13 +1,23 @@
 .bewly-design.channelPage {
   .banner-wrapper {
-    background-color: black;
+    background-color: var(--bew-bg);
     margin-bottom: 0 !important;
-    padding-bottom: 20px !important;
+    padding-bottom: var(--bew-space-5) !important;
   }
 
   .index-module {
-    padding-bottom: 20px;
-    background: linear-gradient(0deg, #111319 40px, rgba(17, 19, 25, 0.8) 60.12%, rgba(20, 20, 20, 0.0001));
+    padding-bottom: var(--bew-space-5);
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .index-module :is(.all, .arrow-all, .sub-m, .title) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.promotion-c, .season-cover, .hover-c, .link-c .link, .section-title .subTitle) {
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
   }
 
   .promotion-c,
@@ -18,18 +28,60 @@
 
   .hover-c .title,
   :not(.index-module) > .inner-c .title,
+  .section-title .main-title,
   .link-c .link,
   .section-title .subTitle {
     color: var(--bew-text-1);
   }
 
-  .banner-wrapper .side-list .side-item .title,
-  .section-title .subTitle.highlight {
+  .hot-desc .desc,
+  .promotion-c .text .desc {
+    color: var(--bew-text-2);
+  }
+
+  .season-cover > picture,
+  .season-cover > picture > img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .banner-wrapper .side-list .side-item .title {
     color: white;
   }
 
   .link-c .link {
     border-color: var(--bew-border-color);
+  }
+
+  // Native desktop content has a 1244px minimum layout. Below that width plus
+  // the two 16px gutters, retain its cards/player and scroll poster rows locally.
+  @media (max-width: 1276px) {
+    #app .inner-c {
+      max-width: calc(100% - var(--bew-space-8));
+    }
+
+    .index-module .inner-c {
+      flex-wrap: wrap;
+      gap: var(--bew-space-6);
+    }
+
+    .index-module .index-item {
+      margin-right: 0;
+      max-width: 100%;
+    }
+
+    .hot-module.grid-col-14 {
+      grid-template-columns: repeat(14, minmax(0, 1fr));
+
+      > * {
+        min-width: 0;
+      }
+    }
+
+    .module-imgv .list-c {
+      overflow-x: auto;
+      overscroll-behavior-x: contain;
+    }
   }
 
   // #region theme color adaption part
@@ -40,12 +92,14 @@
     .switch-c.checked,
     .section-title .subTitle.highlight {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .inner-c .play-icon.button,
     .hover-c .play-icon.button,
     .hot-module .left .goto:hover {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .index-module .all-a:hover .all,
@@ -55,7 +109,7 @@
     .promotion-c:hover .title,
     .hover-c:hover .title,
     .switch-c .round {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
   }
   // #endregion

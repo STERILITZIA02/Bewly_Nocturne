@@ -7,7 +7,7 @@ import IconButton from '~/components/IconButton.vue'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
-import { normalizePlaybackProgress } from '~/utils/playbackProgress'
+import { getVideoPlaybackProgress, getVideoProgressPercentage } from '~/utils/videoVisitHistory'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
 const props = withDefaults(defineProps<{
@@ -28,10 +28,10 @@ const author = computed(() => getWatchLaterAuthor(props.item))
 const ownerUrl = computed(() => author.value.authorUrl)
 const coverUrl = computed(() => props.item.pic ? removeHttpFromUrl(`${props.item.pic}@672w_378h_1c`) : '')
 const progressText = computed(() => calcCurrentTime(
-  props.item.progress === -1 ? props.item.duration : props.item.progress,
+  props.item.progress === -1 ? props.item.duration : getVideoPlaybackProgress({ aid: props.item.aid, bvid: props.item.bvid, cid: props.item.cid, epid: props.item.bangumi?.ep_id }, props.item.progress, props.item.duration)?.progress ?? 0,
 ))
 const durationText = computed(() => calcCurrentTime(props.item.duration))
-const progressPercentage = computed(() => normalizePlaybackProgress(props.item.progress, props.item.duration))
+const progressPercentage = computed(() => getVideoProgressPercentage({ aid: props.item.aid, bvid: props.item.bvid, cid: props.item.cid, epid: props.item.bangumi?.ep_id }, props.item.progress, props.item.duration))
 </script>
 
 <template>

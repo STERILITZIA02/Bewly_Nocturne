@@ -72,6 +72,76 @@ export function parseVideoMetadataEvent(event: Event): Record<string, unknown> |
 
 let requestId = 0
 
+interface NativeFavoriteFolder { id: string, original: boolean, count?: number, capacity?: number }
+interface NativeFavoriteDialog { aid: number, folders: NativeFavoriteFolder[] }
+type NativeQualityState = { ready: false } | { ready: true, quality: number, actualQuality: number, preview: boolean }
+
+function readComponentSnapshot(node: HTMLElement, operation: 'favorite' | 'quality') {
+  const channelId = getPageBridgeChannelId()
+  const href = location.href
+  if (!channelId || !node.isConnected)
+    return
+  const id = ++requestId
+  let response: Record<string, unknown> | undefined
+  const receive = (event: Event) => {
+    const message = parseVideoMetadataEvent(event)
+    if (event.target === node && message?.channelId === channelId && message.requestId === id
+      && message.href === href && location.href === href) {
+      response = message
+    }
+  }
+  node.addEventListener(VIDEO_COMPONENT_RESPONSE, receive)
+  try {
+    node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_REQUEST, { bubbles: true, detail: JSON.stringify({ channelId, requestId: id, href, [operation]: true }) }))
+  }
+  finally { node.removeEventListener(VIDEO_COMPONENT_RESPONSE, receive) }
+  return response
+}
+
+export function readNativeQualityState(video: HTMLElement): NativeQualityState | undefined {
+  const value = readComponentSnapshot(video, 'quality')?.qualityState as NativeQualityState | undefined
+  if (value?.ready === false)
+    return value
+  if (value?.ready === true && Number.isSafeInteger(value.quality) && value.quality >= 0
+    && Number.isSafeInteger(value.actualQuality) && value.actualQuality >= 0 && typeof value.preview === 'boolean') {
+    return value
+  }
+}
+
+export function readNativeFavoriteDialog(dialog: HTMLElement): NativeFavoriteDialog | undefined {
+  const value = readComponentSnapshot(dialog, 'favorite')?.favorite as NativeFavoriteDialog | undefined
+  if (value && Number.isSafeInteger(value.aid) && value.aid > 0 && Array.isArray(value.folders)
+    && value.folders.every(folder => typeof folder.id === 'string' && /^[1-9]\d*$/.test(folder.id) && typeof folder.original === 'boolean'
+      && (folder.count === undefined || (Number.isSafeInteger(folder.count) && folder.count >= 0))
+      && (folder.capacity === undefined || (Number.isSafeInteger(folder.capacity) && folder.capacity > 0)))) {
+    return value
+  }
+}
+
+/** Read only the native player's verified current episode through the existing bridge. */
+export function readNativePlaybackEpisodeId(video: HTMLVideoElement): number | undefined {
+  const channelId = getPageBridgeChannelId()
+  const href = location.href
+  if (!channelId || !isPgcPlaybackPage(href) || !video.isConnected)
+    return
+  const id = ++requestId
+  let episodeId: number | undefined
+  const receive = (event: Event) => {
+    const message = parseVideoMetadataEvent(event)
+    if (event.target === video && message?.channelId === channelId && message.requestId === id
+      && message.href === href && location.href === href && message.ready === true
+      && Number.isSafeInteger(message.episodeId) && Number(message.episodeId) > 0) {
+      episodeId = Number(message.episodeId)
+    }
+  }
+  video.addEventListener(VIDEO_COMPONENT_RESPONSE, receive)
+  try {
+    video.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_REQUEST, { bubbles: true, detail: JSON.stringify({ channelId, requestId: id, href }) }))
+  }
+  finally { video.removeEventListener(VIDEO_COMPONENT_RESPONSE, receive) }
+  return episodeId
+}
+
 /** Vue's component expando is only readable in MAIN, not the content script. */
 export function isNativeVideoComponentReady(node: HTMLElement): boolean | undefined {
   const href = location.href

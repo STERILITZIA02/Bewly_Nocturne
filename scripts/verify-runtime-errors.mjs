@@ -1,9 +1,181 @@
 import assert from 'node:assert/strict'
+import { types } from 'node:util'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent }) {
+  async function runtimeFixture() {
+    const listeners = new Set()
+    const warnings = []
+    const runtime = {
+      onMessage: { addListener: listener => listeners.add(listener) },
+      async sendMessage(message) {
+        for (const listener of listeners) {
+          const result = listener(message, {})
+          if (result !== false && result !== undefined) {
+            try {
+              return structuredClone(await result)
+            }
+            catch (reason) {
+              // Match Chromium's native rejection boundary, including
+              // DOMException values which are not V8 native Error objects.
+              throw new Error(types.isNativeError(reason)
+                ? reason.message
+                : 'A runtime.onMessage listener\'s promise rejected without an Error')
+            }
+          }
+        }
+      },
+    }
+    const messaging = await loadSourceModule('../src/utils/messaging.ts', {
+      'webextension-polyfill': { default: { runtime } },
+      '~/utils/abort': await import('../src/utils/abort'),
+      '~/constants/apiRequest': await import('../src/constants/apiRequest'),
+    }, { Error, DOMException, console: { warn: (...args) => warnings.push(args) } })
+    return { listeners, warnings, messaging }
+  }
+
+  check('runtime transport: native Promise rejections preserve DOMException details and unmatched messages stay silent', async () => {
+    const { listeners, messaging } = await runtimeFixture()
+    let result
+    let failure
+    let synchronous = false
+    let calls = 0
+    messaging.onMessage('fixture', () => {
+      calls++
+      if (synchronous)
+        throw failure
+      return failure === undefined ? result : Promise.reject(failure)
+    })
+    const listener = [...listeners][0]
+    assert.equal(listener({ type: 'unrelated' }, {}), false)
+    assert.equal(calls, 0)
+    result = 42
+    assert.equal(listener({ type: 'fixture' }, {}), 42, 'synchronous handlers retain their response contract')
+    result = Promise.resolve({ value: 1 })
+    assert.deepEqual(await messaging.sendMessage('fixture'), { value: 1 })
+    for (const reason of [
+      new DOMException('Request timed out', 'TimeoutError'),
+      new DOMException('Request account changed', 'AbortError'),
+      { name: 'RemoteReadError', message: 'Upstream unavailable' },
+      'Storage temporarily unavailable',
+      null,
+    ]) {
+      failure = reason
+      for (synchronous of [false, true]) {
+        await assert.rejects(async () => listener({ type: 'fixture' }, {}), (error) => {
+          assert.equal(types.isNativeError(error), true)
+          if (reason?.message)
+            assert.equal(error.message, reason.message)
+          if (reason?.name)
+            assert.equal(error.name, reason.name)
+          return true
+        })
+      }
+    }
+    const original = new Error('Network unavailable')
+    failure = original
+    synchronous = false
+    await assert.rejects(listener({ type: 'fixture' }, {}), error => error === original)
+  })
+
+  async function watchLaterRuntimeFixture() {
+    const transport = await runtimeFixture()
+    const model = await import('../src/utils/watchLaterSnapshot')
+    const protocol = await import('../src/constants/watchLaterState')
+    const ownerModule = await loadSourceModule('../src/background/watchLaterStateBroker.ts', {
+      '~/utils/abort': await import('../src/utils/abort'),
+      '~/utils/watchLaterSnapshot': model,
+    }, { crypto: globalThis.crypto })
+    const document = { cookie: 'DedeUserID=100', hidden: false }
+    let mid = 100
+    let nextRead
+    let reads = 0
+    const owner = ownerModule.createWatchLaterStateBroker({
+      storageKey: 'runtime-watch-later',
+      storage: { get: async () => ({}), set: async () => {} },
+      account: async () => ({ accountId: mid, csrf: `csrf-${mid}` }),
+      read: async () => {
+        reads++
+        if (nextRead) {
+          const run = nextRead
+          nextRead = undefined
+          return run()
+        }
+        return { code: 0, data: { count: 1, list: [{ aid: mid }] } }
+      },
+      broadcast: async () => {},
+    })
+    transport.messaging.onMessage('getWatchLaterState', async options => ({ code: 0, data: await owner.readMembership(options.accountId, options.force) }))
+    transport.messaging.onMessage('getWatchLaterCount', async options => ({ code: 0, data: await owner.readCount(options.accountId, options.force) }))
+    const api = await loadSourceModule('../src/utils/api.ts', { '~/utils/messaging': transport.messaging })
+    const client = await loadSourceModule('../src/logic/watchLaterState.ts', {
+      'vue': Vue,
+      '~/constants/watchLaterState': protocol,
+      '~/constants/topBarState': await import('../src/constants/topBarState'),
+      '~/logic/loginStatus': await import('../src/logic/loginStatus'),
+      '~/utils/watchLaterSnapshot': model,
+      '~/utils/messaging': transport.messaging,
+      '~/utils/api': api,
+    }, { document })
+    return {
+      ...transport,
+      client,
+      reads: () => reads,
+      failNext: (reason) => { nextRead = () => Promise.reject(reason) },
+      deferNext() {
+        let reject
+        let markStarted
+        const promise = new Promise((_resolve, fail) => {
+          reject = fail
+        })
+        const started = new Promise((resolve) => {
+          markStarted = resolve
+        })
+        nextRead = () => {
+          markStarted()
+          return promise
+        }
+        return { reject, started }
+      },
+      account(value) {
+        mid = value
+        document.cookie = `DedeUserID=${value}`
+      },
+    }
+  }
+
+  check('runtime transport: real Watch Later owner/client retain membership after a shared timeout and recover on demand', async () => {
+    const fixture = await watchLaterRuntimeFixture()
+    assert.equal(await fixture.client.ensureWatchLaterState(), true)
+    fixture.failNext(new DOMException('Request timed out', 'TimeoutError'))
+    const result = await Promise.all([fixture.client.ensureWatchLaterState(true), fixture.client.ensureWatchLaterState(true)])
+    assert.deepEqual(result, [false, false])
+    assert.equal(fixture.reads(), 2, 'joined card readers share the failed owner read')
+    assert.equal(fixture.client.isInWatchLater({ aid: 100 }), true)
+    assert.equal(fixture.warnings.length, 1)
+    assert.match(fixture.warnings[0][0], /Request timed out/)
+    assert.doesNotMatch(fixture.warnings[0][0], /without an Error/)
+    assert.equal(await fixture.client.ensureWatchLaterState(true), true, 'a later explicit demand can recover without replaying writes')
+    assert.equal(fixture.reads(), 3)
+  })
+
+  check('runtime transport: an old-account Watch Later rejection cannot cool down or report against the new account', async () => {
+    const fixture = await watchLaterRuntimeFixture()
+    assert.equal(await fixture.client.ensureWatchLaterState(), true)
+    const deferred = fixture.deferNext()
+    const previous = fixture.client.ensureWatchLaterState(true)
+    await deferred.started
+    fixture.account(200)
+    assert.equal(await fixture.client.ensureWatchLaterCount(true), true)
+    deferred.reject(new DOMException('Request account changed', 'AbortError'))
+    assert.equal(await previous, false)
+    assert.equal(fixture.warnings.length, 0)
+    assert.equal(await fixture.client.ensureWatchLaterState(), true, 'stale failure must not suppress the current membership demand')
+    assert.equal(fixture.client.isInWatchLater({ aid: 200 }), true)
+  })
+
   async function relationsFixture() {
     const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
     let cookie = '1'
@@ -13,6 +185,8 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
     const listeners = new Set()
     const scopes = []
     const messaging = await loadSourceModule('../src/utils/messaging.ts', {
+      '~/utils/abort': await import('../src/utils/abort'),
+      '~/constants/apiRequest': await import('../src/constants/apiRequest'),
       'webextension-polyfill': { default: { runtime: { sendMessage: (message) => {
         let resolve, reject
         const promise = new Promise((done, fail) => {

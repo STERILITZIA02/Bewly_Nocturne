@@ -89,6 +89,10 @@ watch(() => settings.value.language, (newValue) => {
         <Radio v-model="settings.enableGridLayoutSwitcher" />
       </SettingsItem>
 
+      <SettingsItem :title="$t('settings.history_layout')" right-width="auto">
+        <Select v-model="settings.historyLayout" :options="[{ label: t('settings.history_layout_list'), value: 'list' }, { label: t('settings.history_layout_grid'), value: 'grid' }]" w="180px" />
+      </SettingsItem>
+
       <SettingsItem :title="$t('settings.enable_horizontal_scrolling')" :desc="$t('settings.enable_horizontal_scrolling_desc')" right-width="auto">
         <Radio v-model="settings.enableHorizontalScrolling" />
       </SettingsItem>

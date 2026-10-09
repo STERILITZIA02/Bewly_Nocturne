@@ -1,15 +1,17 @@
 <script setup lang="ts">
-import { onClickOutside, useDebounceFn, useElementBounding, useMediaQuery } from '@vueuse/core'
+import { onClickOutside, useDebounceFn, useDocumentVisibility, useElementBounding, useMediaQuery } from '@vueuse/core'
 import type { CSSProperties } from 'vue'
 import { computed, getCurrentInstance, nextTick, reactive, ref, shallowRef, watch } from 'vue'
 
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
+import { useIframePageActive } from '~/logic/iframePageState'
 import { acquireSearchExperience, loadSharedHotSearch, useSearchExperience } from '~/logic/searchExperience'
 import api from '~/utils/api'
 import { debugLog } from '~/utils/debug'
 import { hasNavigationModifier } from '~/utils/linkNavigation'
 import { vLiquidGlass } from '~/utils/liquidGlass'
+import { isInIframe } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
 import { openSearchResults, resolveSearchNavigationTarget, shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
@@ -26,7 +28,8 @@ import {
 
 type KeyboardSelectionMode = 'none' | 'suggestions' | 'history'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  active?: boolean
   darkenOnFocus?: boolean
   blurredOnFocus?: boolean
   focusedCharacter?: string
@@ -36,7 +39,7 @@ const props = defineProps<{
   topBarMode?: boolean
   topBarAppearance?: boolean
   forceLightText?: boolean
-}>()
+}>(), { active: true })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
@@ -60,8 +63,17 @@ const originalKeywordBeforeKeyboardSelection = ref<string>(keyword.value)
 const searchHistory = shallowRef<HistoryItem[]>([])
 const { hotSearchList, searchRecommendation, isLoadingHotSearch } = useSearchExperience()
 const historyLoading = ref(false)
+const historyChanging = ref(false)
+const historyError = ref(false)
 const suggestionsLoading = ref(false)
+let searchBarDisposed = false
+let focusRequestId = 0
+let suggestionRequestId = 0
+let suggestionController: AbortController | undefined
 const isNarrowLayout = useMediaQuery(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`)
+const documentVisibility = useDocumentVisibility()
+const iframePageActive = useIframePageActive()
+const uiActive = computed(() => props.active !== false && documentVisibility.value === 'visible' && (isInIframe() || !iframePageActive.value))
 
 function reportSearchBarFailure(endpointName: string, error: unknown) {
   if (isExtensionContextInvalidatedError(error))
@@ -122,7 +134,7 @@ const shouldShowSearchDropdown = computed(() => {
     return false
 
   const hasHotSearch = (props.showHotSearch ?? settings.value.showHotSearchInTopBar) && (hotSearchList.value.length > 0 || isLoadingHotSearch.value)
-  const hasSearchHistory = searchHistory.value.length !== 0 || historyLoading.value
+  const hasSearchHistory = searchHistory.value.length !== 0 || historyLoading.value || historyError.value
   if (!hasHotSearch && !hasSearchHistory)
     return false
 
@@ -150,6 +162,10 @@ watch(() => props.modelValue, (value) => {
   const next = value ?? ''
   if (next !== keyword.value) {
     resetKeyboardSelection()
+    suggestionRequestId++
+    cancelSuggestion()
+    suggestions.length = 0
+    suggestionsLoading.value = false
     keyword.value = next
   }
 })
@@ -162,9 +178,34 @@ watch(keyword, (value) => {
     emit('update:modelValue', value)
 })
 
-let searchBarDisposed = false
-let focusRequestId = 0
-let suggestionRequestId = 0
+function cancelSuggestion() {
+  suggestionController?.abort()
+  suggestionController = undefined
+}
+
+async function loadHistory(requestId = ++focusRequestId) {
+  if (!uiActive.value)
+    return
+  historyLoading.value = settings.value.enableSearchHistory
+  try {
+    const nextHistory = settings.value.enableSearchHistory
+      ? await getSearchHistory()
+      : []
+    if (!searchBarDisposed && isFocus.value && requestId === focusRequestId) {
+      searchHistory.value = nextHistory
+      historyError.value = false
+    }
+  }
+  catch (error) {
+    reportSearchBarFailure('search-history', error)
+    if (!searchBarDisposed && isFocus.value && requestId === focusRequestId)
+      historyError.value = true
+  }
+  finally {
+    if (!searchBarDisposed && requestId === focusRequestId)
+      historyLoading.value = false
+  }
+}
 
 watch(isFocus, async (focus) => {
   const requestId = ++focusRequestId
@@ -172,29 +213,13 @@ watch(isFocus, async (focus) => {
 
   if (!focus) {
     suggestionRequestId++
+    cancelSuggestion()
     historyLoading.value = false
     suggestionsLoading.value = false
     return
   }
 
-  // 延后加载搜索历史
-  historyLoading.value = settings.value.enableSearchHistory && !searchHistory.value.length
-  try {
-    const nextHistory = settings.value.enableSearchHistory
-      ? await getSearchHistory()
-      : []
-    if (!searchBarDisposed && isFocus.value && requestId === focusRequestId)
-      searchHistory.value = nextHistory
-  }
-  catch (error) {
-    reportSearchBarFailure('search-history', error)
-    if (!searchBarDisposed && isFocus.value && requestId === focusRequestId)
-      searchHistory.value = []
-  }
-  finally {
-    if (!searchBarDisposed && requestId === focusRequestId)
-      historyLoading.value = false
-  }
+  await loadHistory(requestId)
 
   // 加载热搜数据
   if (searchBarDisposed || !isFocus.value || requestId !== focusRequestId)
@@ -213,14 +238,29 @@ watch(isFocus, async (focus) => {
 onClickOutside(searchWrapRef, () => closeSearch())
 
 const releaseSearchExperience = acquireSearchExperience({
-  hotSearch: computed(() => isFocus.value && (props.showHotSearch ?? settings.value.showHotSearchInTopBar)),
-  recommendation: computed(() => settings.value.showSearchRecommendation),
+  hotSearch: computed(() => uiActive.value && isFocus.value && (props.showHotSearch ?? settings.value.showHotSearchInTopBar)),
+  recommendation: computed(() => uiActive.value && settings.value.showSearchRecommendation),
+})
+watch(uiActive, (active) => {
+  if (!active) {
+    closeSearch(props.active === false)
+    suggestionRequestId++
+    cancelSuggestion()
+    suggestionsLoading.value = false
+  }
+  else if (keywordRef.value?.matches(':focus')) {
+    isFocus.value = true
+  }
 })
 
 // 监听搜索历史设置变化
 watch(() => settings.value.enableSearchHistory, (enabled) => {
-  if (!enabled)
+  if (!enabled) {
+    focusRequestId++
     searchHistory.value = []
+    historyError.value = false
+    historyLoading.value = false
+  }
 })
 
 // 组件卸载时清理定时器
@@ -228,15 +268,18 @@ onBeforeUnmount(() => {
   searchBarDisposed = true
   focusRequestId++
   suggestionRequestId++
+  cancelSuggestion()
   emit('focusChange', false)
   releaseSearchExperience()
 })
 
 const handleKeywordInput = useDebounceFn(async (term: string, requestId: number) => {
-  if (searchBarDisposed || requestId !== suggestionRequestId)
+  if (searchBarDisposed || !uiActive.value || requestId !== suggestionRequestId)
     return
+  const controller = new AbortController()
+  suggestionController = controller
   try {
-    const res: SuggestionResponse = await api.search.getSearchSuggestion({ term })
+    const res: SuggestionResponse = await api.search.getSearchSuggestion({ term }, { signal: controller.signal })
     if (searchBarDisposed || requestId !== suggestionRequestId)
       return
 
@@ -255,22 +298,26 @@ const handleKeywordInput = useDebounceFn(async (term: string, requestId: number)
   catch (error) {
     if (!searchBarDisposed && requestId === suggestionRequestId)
       suggestions.length = 0
-    reportSearchBarFailure('search-suggestion', error)
+    if (!controller.signal.aborted)
+      reportSearchBarFailure('search-suggestion', error)
   }
   finally {
     if (!searchBarDisposed && requestId === suggestionRequestId)
       suggestionsLoading.value = false
+    if (suggestionController === controller)
+      suggestionController = undefined
   }
 }, 200)
 
 function handleNativeInput(event: Event) {
+  cancelSuggestion()
   const value = (event.target as HTMLInputElement).value
   resetKeyboardSelection()
   keyword.value = value
   suggestions.length = 0
   const requestId = ++suggestionRequestId
-  suggestionsLoading.value = Boolean(value.trim())
-  if (value.trim())
+  suggestionsLoading.value = uiActive.value && Boolean(value.trim()) && !(event as InputEvent).isComposing
+  if (suggestionsLoading.value)
     handleKeywordInput(value, requestId)
 }
 
@@ -352,8 +399,32 @@ function handleKeywordLinkClick(value: string, event: MouseEvent) {
   void navigateToSearchResultPage(value)
 }
 
-async function handleDelete(value: string) {
-  searchHistory.value = await removeSearchHistory(value)
+async function changeHistory(operation: () => Promise<HistoryItem[]>) {
+  if (historyChanging.value || !settings.value.enableSearchHistory)
+    return
+  const requestId = ++focusRequestId
+  historyLoading.value = false
+  historyChanging.value = true
+  historyError.value = false
+  try {
+    const next = await operation()
+    if (!searchBarDisposed && requestId === focusRequestId) {
+      searchHistory.value = next
+      resetKeyboardSelection()
+    }
+  }
+  catch (error) {
+    reportSearchBarFailure('search-history-write', error)
+    if (!searchBarDisposed && requestId === focusRequestId)
+      historyError.value = true
+  }
+  finally {
+    historyChanging.value = false
+  }
+}
+
+function handleDelete(value: string) {
+  return changeHistory(() => removeSearchHistory(value))
 }
 
 function getKeyboardSelectionItems(mode: KeyboardSelectionMode) {
@@ -460,9 +531,8 @@ function handleComboboxKeyDown(event: KeyboardEvent) {
   }
 }
 
-async function handleClearSearchHistory() {
-  await clearAllSearchHistory()
-  searchHistory.value = []
+function handleClearSearchHistory() {
+  return changeHistory(clearAllSearchHistory)
 }
 
 function handleFocusOut(event: FocusEvent) {
@@ -477,6 +547,7 @@ function handleFocusOut(event: FocusEvent) {
 function handleClearKeyword() {
   resetKeyboardSelection()
   suggestionRequestId++
+  cancelSuggestion()
   keyword.value = ''
   suggestions.length = 0
   void nextTick(() => keywordRef.value?.focus())
@@ -544,6 +615,7 @@ function handleClearKeyword() {
         un-border="1 solid $bew-surface-border-color"
         @focus="isFocus = true"
         @input="handleNativeInput"
+        @compositionend="handleNativeInput"
         @keydown.stop="handleComboboxKeyDown"
       >
       <button
@@ -639,16 +711,26 @@ function handleClearKeyword() {
 
           <!-- 搜索历史区块 -->
           <div
-            v-if="searchHistory.length !== 0 || historyLoading"
+            v-if="searchHistory.length !== 0 || historyLoading || historyError"
             class="history-section"
+            :aria-busy="historyChanging"
           >
             <div class="title p-2 pb-0 flex justify-between">
               <span>{{ $t('search_bar.history_title') }}</span>
-              <button type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" @click="handleClearSearchHistory">
+              <button
+                type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" :disabled="historyChanging || historyLoading"
+                @click="handleClearSearchHistory"
+              >
                 {{ $t('search_bar.clear_history') }}
               </button>
             </div>
-            <div v-if="historyLoading" class="search-history-skeleton" aria-hidden="true">
+            <div v-if="historyError" class="history-error" role="alert">
+              <span>{{ $t('search_bar.history_unavailable') }}</span>
+              <button type="button" :disabled="historyLoading || historyChanging" @click="loadHistory()">
+                {{ $t('common.retry') }}
+              </button>
+            </div>
+            <div v-if="historyLoading && !searchHistory.length" class="search-history-skeleton" aria-hidden="true">
               <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height)" radius="interactive" />
             </div>
 
@@ -661,7 +743,7 @@ function handleClearKeyword() {
               <div
                 v-for="(item, index) in searchHistory"
                 :id="getSearchOptionId('history', item.value)"
-                :key="item.timestamp"
+                :key="item.value"
                 class="history-item group"
                 :class="{ active: keyboardSelectionMode === 'history' && selectedIndex === index }"
                 role="listitem"
@@ -680,6 +762,7 @@ function handleClearKeyword() {
                 <TagRemoveButton
                   class="history-item__remove"
                   :label="$t('common.operation.remove')"
+                  :disabled="historyChanging"
                   @mousedown.prevent
                   @click.stop.prevent="handleDelete(item.value)"
                 />
@@ -733,6 +816,39 @@ function handleClearKeyword() {
   display: grid;
   gap: var(--bew-space-1);
   padding: var(--bew-space-2);
+}
+.history-error {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  color: var(--bew-text-2);
+
+  button {
+    flex-shrink: 0;
+    min-height: var(--bew-control-height-sm);
+    padding-inline: var(--bew-space-2);
+    border-radius: var(--bew-interactive-radius);
+    color: var(--bew-theme-foreground);
+    background: var(--bew-content-solid);
+    cursor: pointer;
+
+    &:hover:not(:disabled) {
+      color: var(--bew-on-theme-surface);
+      background: var(--bew-theme-surface);
+    }
+
+    &:active:not(:disabled) {
+      background: var(--bew-theme-surface-hover);
+    }
+
+    &:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+  }
 }
 
 .focus-character-enter-active,

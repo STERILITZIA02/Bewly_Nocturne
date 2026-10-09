@@ -436,6 +436,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       useSearchPageModeOnHomePage: true,
       homePageTabVisibilityList: [{ page: 'ForYou', visible: true }],
     })
+    settings.initializationState = Vue.ref('loaded')
     const enums = await import('../src/enums/appEnums')
     const homeModule = await loadSourceModule('../src/composables/useHomePageRoute.ts', {
       'vue': Vue,
@@ -491,6 +492,7 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
 
   check('UI audit: TopBar keyboard opens the existing popup, survives pointer leave, restores focus and cleans up', async () => {
     const timers = new Map()
+    const currentHref = Vue.ref('https://space.bilibili.com/123')
     let timerId = 0
     const popupVisible = Vue.reactive({ history: false, favorites: false })
     const store = { popupVisible, closeAllPopups: except => Object.keys(popupVisible).forEach((key) => {
@@ -500,10 +502,10 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     const module = await loadSourceModule('../src/components/TopBar/composables/useTopBarInteraction.ts', {
       'vue': Vue,
       '@vueuse/core': { unrefElement: target => Vue.unref(target) },
-      '~/components/TopBar/constants/urls': {},
+      '~/components/TopBar/constants/urls': await import('../src/components/TopBar/constants/urls'),
       '~/composables/useAnchoredPopoverPosition': { useAnchoredPopoverPosition() {} },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ activatedPage: Vue.ref('Home') }) },
-      '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.ref(window.location.href) },
+      '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => currentHref },
       '~/enums/appEnums': await import('../src/enums/appEnums'),
       '~/logic': { settings: Vue.ref({ touchScreenOptimization: false }) },
       '~/stores/settingsStore': { useSettingsStore: () => ({}) },
@@ -521,8 +523,9 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     })
     const host = document.body.appendChild(document.createElement('div'))
     const outside = document.body.appendChild(document.createElement('button'))
+    let interaction
     const app = Vue.createApp({ setup() {
-      const interaction = module.useTopBarInteraction()
+      interaction = module.useTopBarInteraction()
       const refs = Object.fromEntries(Object.keys(popupVisible).map((key) => {
         const trigger = interaction.setupTopBarItemHoverEvent(key)
         const popup = Vue.ref()
@@ -542,6 +545,25 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     try {
       app.mount(host)
       await flush()
+      for (const [url, forceWhite] of [
+        ['https://space.bilibili.com/123', true],
+        ['https://space.bilibili.com/123/upload', true],
+        ['https://space.bilibili.com/v/note-list', false],
+        ['https://space.bilibili.com/v/note-list/?from=space#notes', false],
+        ['https://www.bilibili.com/movie/', true],
+        ['https://www.bilibili.com/c/tech/', true],
+        ['https://www.bilibili.com/v/music/', true],
+        ['https://www.bilibili.com/cheese/?from=nav', true],
+        ['https://www.bilibili.com/cheese/play/ep123', false],
+        ['https://www.bilibili.com/cheese/mine/list', false],
+        ['https://www.bilibili.com/anime/index/', false],
+        ['https://www.bilibili.com/v/game/match/schedule', false],
+        ['https://www.bilibili.com/v/popular/all', false],
+        ['https://www.bilibili.com/video/BV123', false],
+      ]) {
+        currentHref.value = url
+        assert.equal(interaction.forceWhiteIcon.value, forceWhite, `header artwork ownership: ${url}`)
+      }
       const trigger = host.querySelector('[data-key="history"] a')
       trigger.focus()
       trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))

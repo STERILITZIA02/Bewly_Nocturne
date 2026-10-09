@@ -160,6 +160,7 @@ export function syncNativePlayerControlVisibility(
     currentState.root.dataset.playerControlsHidden = String(hidden)
   if (document.body.classList.contains(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS) !== hidden)
     document.body.classList.toggle(BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, hidden)
+  currentState.updateIdleProgress?.()
 }
 
 export function forwardNativePlayerPointerActivity(

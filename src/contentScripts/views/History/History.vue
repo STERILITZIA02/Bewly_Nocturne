@@ -1,27 +1,38 @@
 <script setup lang="ts">
+import { useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import IconButton from '~/components/IconButton.vue'
+import LazyPicture from '~/components/LazyPicture.vue'
+import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { settings } from '~/logic'
 import type { List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
+import { getAdaptiveGridColumnCount } from '~/utils/gridLayout'
+import { getHistoryResumeUrl, getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
-import { normalizePlaybackProgress } from '~/utils/playbackProgress'
+import { clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
+import type { HistoryDayGroup, HistoryWindowCell } from './historyWindow'
+import { createHistoryWindow, historyItemKey } from './historyWindow'
 import { useHistoryTimeline } from './useHistoryTimeline'
 
 const { t, locale } = useI18n()
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
-const { handlePageRefresh, handleReachBottom, haveScrollbar } = useBewlyApp()
+const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 const timeline = useHistoryTimeline({
@@ -30,13 +41,16 @@ const timeline = useHistoryTimeline({
   getCSRF,
   haveScrollbar,
   onWriteError: () => toast.error(t('common.operation_failed')),
+  onDeleted: (item) => { void removeVideoVisitHistory(getHistoryVideoIdentity(item)) },
+  onCleared: () => { void clearVideoVisitHistory() },
 })
-const { isLoading, requestFailed, noMoreContent, historyList, keyword, isClearingHistory, historyStatus, deleteHistoryItem, setHistoryPauseStatus, clearAllHistory, handleSearch } = timeline
+const { isLoading, requestFailed, noMoreContent, historyList, keyword, submittedKeyword, date: selectedDate, contentType, filtersActive, isClearingHistory, historyStatus, setHistoryPauseStatus, clearAllHistory } = timeline
+const contentTypes = ['all', 'archive', 'pgc', 'live', 'article'] as const
 const HistoryBusiness = computed(() => Business)
 const dateFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { dateStyle: 'medium' }))
 const timeFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }))
 const historyGroups = computed(() => {
-  const groups = new Map<string, { key: string, label: string, items: HistoryItem[] }>()
+  const groups = new Map<string, HistoryDayGroup>()
   for (const item of historyList) {
     const date = new Date(item.view_at * 1000)
     const valid = Number.isFinite(date.getTime())
@@ -51,6 +65,87 @@ const historyGroups = computed(() => {
   return [...groups.values()]
 })
 
+const historyContainer = ref<HTMLElement | null>(null)
+const containerWidth = ref(0)
+const rowGap = ref(8)
+const columns = computed(() => settings.value.historyLayout === 'grid' ? getAdaptiveGridColumnCount(containerWidth.value, settings.value.gridColumns) : 1)
+const windowCells = computed(() => createHistoryWindow(historyGroups.value, columns.value))
+const cellByKey = computed(() => new Map(windowCells.value.map(cell => [cell.key, cell])))
+const windowEnabled = computed(() => historyList.length > CARD_WINDOW_THRESHOLD)
+const estimatedCardHeight = computed(() => settings.value.historyLayout === 'grid'
+  ? Math.max(0, (containerWidth.value - rowGap.value * (columns.value - 1)) / columns.value - 24) * 9 / 16 + 152
+  : 140)
+const cardWindow = useCardWindow({
+  root: scrollViewportRef,
+  container: historyContainer,
+  keys: computed(() => windowCells.value.map(cell => cell.key)),
+  columns,
+  gap: rowGap,
+  enabled: windowEnabled,
+  estimatedHeight: estimatedCardHeight,
+  estimateHeight: (key) => {
+    const cell = cellByKey.value.get(String(key))
+    return cell?.kind === 'padding' ? 0 : cell?.kind === 'heading' ? 22 + (cell.first ? 0 : 24 - rowGap.value) + (settings.value.historyLayout === 'grid' ? 0 : 4) : estimatedCardHeight.value
+  },
+  layout: computed(() => `${settings.value.historyLayout}:${columns.value}:${Math.round(containerWidth.value)}`),
+  canRelease: (key) => {
+    const cell = cellByKey.value.get(String(key))
+    return cell?.kind !== 'item' || !timeline.deleting.has(`${cell.item.history.business}_${cell.item.history.oid}`)
+  },
+})
+type RenderedHistoryCell = Exclude<HistoryWindowCell, { kind: 'padding' }> | { kind: 'spacer', key: string, height: number }
+const renderedCells = computed(() => cardWindow.ranges.value.flatMap<RenderedHistoryCell>(range => range.height !== undefined
+  ? [{ kind: 'spacer' as const, key: `spacer:${range.start}`, height: range.height }]
+  : windowCells.value.slice(range.start, range.end).filter(cell => cell.kind !== 'padding')))
+function measureHistoryLayout(width = historyContainer.value?.clientWidth) {
+  if (width && width !== containerWidth.value)
+    containerWidth.value = width
+  const grid = historyContainer.value?.querySelector<HTMLElement>('.history-window')
+  if (grid)
+    rowGap.value = Number.parseFloat(getComputedStyle(grid).rowGap) || (settings.value.historyLayout === 'grid' ? 16 : 8)
+}
+useResizeObserver(historyContainer, entries => measureHistoryLayout(entries[0]?.contentRect.width))
+watch(() => settings.value.historyLayout, () => nextTick(() => measureHistoryLayout()))
+const layoutOptions = computed(() => [
+  { label: t('settings.history_layout_list'), value: 'list' as const },
+  { label: t('settings.history_layout_grid'), value: 'grid' as const },
+])
+
+function resetHistoryPosition() {
+  if (scrollViewportRef.value)
+    scrollViewportRef.value.scrollTop = 0
+}
+function handleSearch(event?: KeyboardEvent) {
+  if (event?.isComposing)
+    return
+  resetHistoryPosition()
+  timeline.handleSearch()
+}
+function clearSearch() {
+  resetHistoryPosition()
+  timeline.clearSearch()
+}
+watch(keyword, (value) => {
+  if (!value.trim() && submittedKeyword.value)
+    clearSearch()
+})
+async function deleteHistoryItem(item: HistoryItem) {
+  const owner = timeline.capture()
+  const container = historyContainer.value
+  const root = container?.getRootNode() as Document | ShadowRoot | undefined
+  const focused = root?.activeElement
+  const activeCard = focused?.closest<HTMLElement>('[data-history-key]')
+  const index = historyList.indexOf(item)
+  const neighbor = historyList[index + 1] ?? historyList[index - 1]
+  const wasFocused = activeCard?.dataset.historyKey === historyItemKey(item)
+  await timeline.deleteHistoryItem(item)
+  await nextTick()
+  if (!owner.isCurrent() || historyList.includes(item) || !wasFocused || !neighbor || (root?.activeElement && root.activeElement !== document.body && root.activeElement !== focused))
+    return
+  const nextCard = Array.from(container?.querySelectorAll<HTMLElement>('[data-history-key]') ?? []).find(element => element.dataset.historyKey === historyItemKey(neighbor))
+  nextCard?.querySelector<HTMLButtonElement>('.history-list-card__delete')?.focus({ preventScroll: true })
+}
+
 function formatHistoryTime(item: HistoryItem) {
   const date = new Date(item.view_at * 1000)
   return Number.isFinite(date.getTime()) ? timeFormatter.value.format(date) : '—'
@@ -63,8 +158,10 @@ onMounted(() => {
   handlePageRefresh.value = handleHistoryPageRefresh
 })
 watch(accountId, () => {
-  if (mounted)
+  if (mounted) {
+    resetHistoryPosition()
     timeline.activate()
+  }
 }, { flush: 'sync' })
 onScopeDispose(() => {
   timeline.dispose()
@@ -74,61 +171,14 @@ onScopeDispose(() => {
     handlePageRefresh.value = undefined
 })
 function handleHistoryReachBottom() {
-  return requestFailed.value ? Promise.resolve(false) : timeline.load()
+  return requestFailed.value || filtersActive.value ? Promise.resolve(false) : timeline.load()
 }
 function handleHistoryPageRefresh() {
+  resetHistoryPosition()
   timeline.reloadCurrentMode()
 }
 function retryHistoryRequest() {
   void timeline.load()
-}
-
-/**
- * Return the URL of the history item
- * @param item history item
- * @return {string} url
- */
-function getHistoryUrl(item: HistoryItem): string {
-  if (item.uri)
-    return item.uri
-
-  // Video
-  if (item.history.business === Business.ARCHIVE) {
-    if (item?.videos && item.videos > 0)
-      return `https://www.bilibili.com/video/${item.history.bvid}?p=${item.history.page}`
-    return `https://www.bilibili.com/video/${item.history.bvid}`
-  }
-  // Live
-  else if (item.history.business === Business.LIVE) {
-    return `https://live.bilibili.com/${item.history.oid}`
-  }
-  // Article
-  else if (item.history.business === Business.ARTICLE || item.history.business === Business.ARTICLE_LIST) {
-    if (item.history.cid === 0)
-      return `https://www.bilibili.com/read/cv${item.history.oid}`
-    else
-      return `https://www.bilibili.com/read/cv${item.history.cid}`
-  }
-  return ''
-}
-
-function getHistoryResumeUrl(item: HistoryItem): string | undefined {
-  if (![Business.ARCHIVE, Business.PGC].includes(item.history.business as Business)
-    || !Number.isFinite(item.progress) || item.progress <= 0 || item.progress >= item.duration) {
-    return undefined
-  }
-  try {
-    const url = new URL(getHistoryUrl(item))
-    if (url.hostname !== 'www.bilibili.com' || !/^https?:$/.test(url.protocol)
-      || !/^\/(?:video|bangumi\/play)\//.test(url.pathname)) {
-      return undefined
-    }
-    url.searchParams.set('t', String(Math.floor(item.progress)))
-    return url.toString()
-  }
-  catch {
-    return undefined
-  }
 }
 
 function getHistoryItemCover(item: HistoryItem) {
@@ -175,41 +225,51 @@ function jumpToLoginPage() {
 <template>
   <div v-if="getCSRF()" flex="~ col md:row lg:row" gap-4>
     <main class="history-content" w="full md:60% lg:70% xl:75%" order="2 md:1 lg:1" mb-6>
-      <h3 class="bew-page-heading" text="$bew-text-1" mb-6>
-        {{ $t('history.title') }}
-      </h3>
+      <header class="history-toolbar">
+        <h3 class="bew-page-heading" text="$bew-text-1">
+          {{ $t('history.title') }}
+        </h3>
+        <SettingsSegmentedControl v-if="settings.enableGridLayoutSwitcher" v-model="settings.historyLayout" :options="layoutOptions" :label="t('settings.history_layout')" />
+      </header>
+      <p v-if="submittedKeyword" class="history-query-summary" role="status">
+        {{ t('library_tools.search_results', { query: submittedKeyword }) }}
+      </p>
       <Empty v-if="requestFailed && !isLoading && historyList.length === 0" :description="$t('common.load_failed')">
         <Button type="primary" @click="retryHistoryRequest">
           {{ $t('common.operation.refresh') }}
         </Button>
       </Empty>
-      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0" :count="5" history />
+      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0 && settings.historyLayout === 'list'" :count="5" history />
 
       <!-- historyList -->
-      <div v-else class="history-groups">
-        <section v-for="group in historyGroups" :key="group.key" class="history-day-group">
-          <h4 class="history-day-heading">
-            {{ group.label }}
-          </h4>
-          <TransitionGroup name="list" tag="div" class="history-day-list">
+      <div v-else ref="historyContainer" class="history-groups">
+        <TransitionGroup name="list" tag="div" class="history-window" :css="!windowEnabled" :style="{ '--history-columns': columns, '--history-gap': settings.historyLayout === 'grid' ? 'var(--bew-space-4)' : 'var(--bew-space-2)' }">
+          <template v-for="entry in renderedCells" :key="entry.key">
+            <div v-if="entry.kind === 'spacer'" :style="{ height: `${entry.height}px`, gridColumn: '1 / -1' }" aria-hidden="true" />
+            <h4 v-else-if="entry.kind === 'heading'" :ref="element => cardWindow.setElement(entry.key, element)" class="history-day-heading" :class="{ 'history-day-heading--first': entry.first, 'history-day-heading--grid': settings.historyLayout === 'grid' }">
+              {{ entry.label }}
+            </h4>
             <div
-              v-for="historyItem in group.items"
-              :key="historyItem.kid"
+              v-else-if="entry.kind === 'item'"
+              :ref="element => cardWindow.setElement(entry.key, element)"
+              :data-history-key="historyItemKey(entry.item)"
+              :aria-label="entry.date"
               class="history-list-card group"
-              content-visibility-auto
+              :class="{ 'history-list-card--grid': settings.historyLayout === 'grid' }"
               cursor-pointer
             >
               <ALink
                 class="history-list-card__overlay"
                 type="videoCard"
-                :href="getHistoryUrl(historyItem)"
-                :aria-label="historyItem.show_title || historyItem.title"
+                :href="getHistoryUrl(entry.item)"
+                :aria-label="entry.item.show_title || entry.item.title"
               />
               <section
                 class="history-list-card__content bew-history-row"
               >
                 <!-- Cover -->
                 <div
+                  class="history-list-card__media"
                   pos="relative"
                   bg="$bew-skeleton"
                   w-full
@@ -217,16 +277,16 @@ function jumpToLoginPage() {
                   overflow-hidden
                   aspect-video
                 >
-                  <img
+                  <LazyPicture
                     w="full"
                     aspect-video
-                    :src="`${getHistoryItemCover(historyItem)}@480w_270h_1c`"
-                    :alt="historyItem.title"
+                    :src="`${getHistoryItemCover(entry.item)}@480w_270h_1c`"
+                    :alt="entry.item.title"
                     object-cover
-                  >
+                  />
 
                   <span
-                    v-if="historyItem.history.business === HistoryBusiness.LIVE || historyItem.history.business === HistoryBusiness.PGC"
+                    v-if="entry.item.history.business === HistoryBusiness.LIVE || entry.item.history.business === HistoryBusiness.PGC"
                     pos="absolute right-0 top-0"
                     bg="$bew-theme-color"
                     text="xs $bew-on-theme-color"
@@ -235,12 +295,12 @@ function jumpToLoginPage() {
                     rounded="$bew-radius-half"
                   >
                     <template
-                      v-if="historyItem.history.business === HistoryBusiness.LIVE"
+                      v-if="entry.item.history.business === HistoryBusiness.LIVE"
                     >
                       {{ t('search.categories.live') }}
                     </template>
                     <template
-                      v-else-if="historyItem.history.business === HistoryBusiness.PGC"
+                      v-else-if="entry.item.history.business === HistoryBusiness.PGC"
                     >
                       {{ t('history.media') }}
                     </template>
@@ -248,8 +308,8 @@ function jumpToLoginPage() {
 
                   <div
                     v-if="
-                      historyItem.history.business === HistoryBusiness.ARCHIVE
-                        || historyItem.history.business === HistoryBusiness.PGC
+                      entry.item.history.business === HistoryBusiness.ARCHIVE
+                        || entry.item.history.business === HistoryBusiness.PGC
                     "
                     pos="absolute bottom-0 right-0"
                     bg="black opacity-60"
@@ -261,21 +321,21 @@ function jumpToLoginPage() {
                     <!--  When progress = -1 means that the user watched the full video -->
                     {{
                       `${
-                        historyItem.progress === -1
-                          ? calcCurrentTime(historyItem.duration)
-                          : calcCurrentTime(historyItem.progress)
+                        entry.item.progress === -1
+                          ? calcCurrentTime(entry.item.duration)
+                          : calcCurrentTime(entry.item.progress)
                       } /
-                      ${calcCurrentTime(historyItem.duration)}`
+                      ${calcCurrentTime(entry.item.duration)}`
                     }}
                   </div>
                   <div w-full pos="absolute bottom-0" bg="white opacity-60">
                     <Progress
                       v-if="
-                        historyItem.history.business === HistoryBusiness.ARCHIVE
-                          || historyItem.history.business === HistoryBusiness.PGC
+                        entry.item.history.business === HistoryBusiness.ARCHIVE
+                          || entry.item.history.business === HistoryBusiness.PGC
                       "
                       :percentage="
-                        normalizePlaybackProgress(historyItem.progress, historyItem.duration)
+                        getVideoProgressPercentage(getHistoryVideoIdentity(entry.item), entry.item.progress, entry.item.duration)
                       "
                     />
                   </div>
@@ -285,14 +345,14 @@ function jumpToLoginPage() {
                 <div flex justify-between w-full h-full>
                   <div flex="~ col">
                     <div
-                      :title="historyItem.show_title ? historyItem.show_title : historyItem.title"
+                      :title="entry.item.show_title ? entry.item.show_title : entry.item.title"
                     >
                       <h3
                         class="keep-two-lines history-list-card__title"
                         overflow="hidden"
                         text="overflow-ellipsis"
                       >
-                        {{ historyItem.show_title ? historyItem.show_title : historyItem.title }}
+                        {{ entry.item.show_title ? entry.item.show_title : entry.item.title }}
                       </h3>
                     </div>
                     <a
@@ -307,28 +367,23 @@ function jumpToLoginPage() {
                       hover:bg="$bew-theme-surface"
                       duration-300
                       pr-2
-                      :href="historyItem.author_mid ? `https://space.bilibili.com/${historyItem.author_mid}` : historyItem.uri" target="_blank"
+                      :href="entry.item.author_mid ? `https://space.bilibili.com/${entry.item.author_mid}` : entry.item.uri" target="_blank"
                     >
-                      <img
-                        :src="
-                          removeHttpFromUrl(`${historyItem.author_face
-                            ? historyItem.author_face
-                            : historyItem.cover}@40w_40h_1c`)
-                        "
-                        w-6 h-6
-                        aspect-square
-                        class="bew-shape-circle"
-                        object-cover
-                        alt=""
-                        mr-2
-                      >
+                      <span class="history-author-avatar bew-shape-circle">
+                        <LazyPicture
+                          :src="removeHttpFromUrl(`${entry.item.author_face || entry.item.cover}@40w_40h_1c`)"
+                          aspect-ratio="1 / 1"
+                          :show-skeleton="false"
+                          alt=""
+                        />
+                      </span>
                       {{
-                        historyItem.author_name
-                          ? historyItem.author_name
-                          : historyItem.title
+                        entry.item.author_name
+                          ? entry.item.author_name
+                          : entry.item.title
                       }}
                       <span
-                        v-if="historyItem.live_status === 1"
+                        v-if="entry.item.live_status === 1"
                         text="$bew-theme-foreground"
                         flex
                         items-center
@@ -346,21 +401,21 @@ function jumpToLoginPage() {
                     >
                       <span text="$bew-icon-size-sm" mr-2 lh-0>
                         <i
-                          v-if="historyItem.history.dt === 1 || historyItem.history.dt === 3 || historyItem.history.dt === 5 || historyItem.history.dt === 7"
+                          v-if="entry.item.history.dt === 1 || entry.item.history.dt === 3 || entry.item.history.dt === 5 || entry.item.history.dt === 7"
                           i-mingcute:cellphone-line
                         />
-                        <i v-if="historyItem.history.dt === 2" i-mingcute:tv-1-line />
+                        <i v-if="entry.item.history.dt === 2" i-mingcute:tv-1-line />
                         <i
-                          v-if="historyItem.history.dt === 4 || historyItem.history.dt === 6" i-mingcute:pad-line
+                          v-if="entry.item.history.dt === 4 || entry.item.history.dt === 6" i-mingcute:pad-line
                         />
-                        <i v-if="historyItem.history.dt === 33" i-mingcute:tv-2-line />
+                        <i v-if="entry.item.history.dt === 33" i-mingcute:tv-2-line />
                       </span>
                       <span>
-                        {{ formatHistoryTime(historyItem) }}
+                        {{ formatHistoryTime(entry.item) }}
                       </span>
                       <ALink
-                        v-if="getHistoryResumeUrl(historyItem)"
-                        :href="getHistoryResumeUrl(historyItem)"
+                        v-if="getHistoryResumeUrl(entry.item)"
+                        :href="getHistoryResumeUrl(entry.item)"
                         type="videoCard"
                         class="history-list-card__action history-resume-link"
                       >
@@ -372,15 +427,35 @@ function jumpToLoginPage() {
                   <IconButton
                     class="history-list-card__action history-list-card__delete"
                     :label="$t('common.operation.delete')"
-                    @click.prevent.stop="deleteHistoryItem(historyItem)"
+                    :disabled="timeline.deleting.has(`${entry.item.history.business}_${entry.item.history.oid}`)"
+                    @click.prevent.stop="deleteHistoryItem(entry.item)"
                   >
                     <div i-tabler:trash />
                   </IconButton>
                 </div>
               </section>
             </div>
-          </TransitionGroup>
-        </section>
+          </template>
+          <div v-if="isLoading && !historyList.length && settings.historyLayout === 'grid'" key="loading:date" class="history-day-heading history-day-heading--first history-day-heading--grid" aria-hidden="true">
+            <SkeletonBlock width="112px" height="var(--bew-line-height-title)" />
+          </div>
+          <article v-for="index in (isLoading && settings.historyLayout === 'grid' ? (historyList.length ? columns : columns * 2) : 0)" :key="`loading:${index}`" class="history-grid-skeleton" aria-hidden="true">
+            <SkeletonBlock class="history-grid-skeleton__cover" height="auto" radius="media" />
+            <div class="history-grid-skeleton__details">
+              <div class="history-grid-skeleton__title">
+                <SkeletonBlock width="88%" height="var(--bew-font-size-title)" />
+                <SkeletonBlock width="68%" height="var(--bew-font-size-title)" />
+              </div>
+              <div class="history-grid-skeleton__author">
+                <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-space-6)" radius="circle" />
+                <SkeletonBlock width="45%" height="var(--bew-line-height-control)" />
+              </div>
+              <div class="history-grid-skeleton__time">
+                <SkeletonBlock width="60%" height="var(--bew-line-height-control)" />
+              </div>
+            </div>
+          </article>
+        </TransitionGroup>
       </div>
 
       <div v-if="requestFailed && !isLoading && historyList.length > 0" class="history-load-more-error">
@@ -390,11 +465,18 @@ function jumpToLoginPage() {
         </Button>
       </div>
 
+      <Button v-if="filtersActive && !noMoreContent && !isLoading && !requestFailed" type="secondary" @click="timeline.load()">
+        {{ t('library_tools.load_more_matches') }}
+      </Button>
+      <p v-if="filtersActive && !isLoading && !historyList.length && !requestFailed" role="status">
+        {{ t('library_tools.no_matches') }}
+      </p>
+
       <!-- no more content -->
-      <Empty v-if="noMoreContent" class="py-4" :description="$t('common.no_more_content')" />
+      <Empty v-if="noMoreContent && (!filtersActive || historyList.length)" class="py-4" :description="$t('common.no_more_content')" />
 
       <VideoListSkeleton
-        v-if="isLoading && historyList.length !== 0 && !noMoreContent"
+        v-if="isLoading && historyList.length !== 0 && !noMoreContent && settings.historyLayout === 'list'"
         :count="2"
         history
       />
@@ -405,16 +487,40 @@ function jumpToLoginPage() {
         class="history-sidebar-panel" pos="sticky top-120px" flex="~ col gap-4" justify-start my-10
         w-full
       >
-        <input
-          v-model.trim="keyword"
-          type="text"
-          :placeholder="t('history.search_watch_history')"
-          :aria-label="t('history.search_watch_history')"
-          class="history-search-input"
-          rounded="$bew-radius"
-          w-full
-          @keyup.enter="handleSearch"
-        >
+        <div class="history-search-row">
+          <input
+            v-model.trim="keyword"
+            type="text"
+            :placeholder="t('history.search_watch_history')"
+            :aria-label="t('history.search_watch_history')"
+            class="history-search-input"
+            rounded="$bew-radius"
+            w-full
+            @keyup.enter="handleSearch"
+          >
+          <IconButton v-if="keyword || submittedKeyword" class="bew-icon-button--control" :label="t('library_tools.clear_search')" @click="clearSearch">
+            <i i-mingcute:close-line />
+          </IconButton>
+          <IconButton class="bew-icon-button--control" :label="t('common.search')" @click="handleSearch()">
+            <i i-mingcute:search-line />
+          </IconButton>
+        </div>
+        <label class="history-filter-field">
+          <span>{{ t('library_tools.date') }}</span>
+          <input v-model="selectedDate" type="date" @change="handleSearch()">
+        </label>
+        <Button v-if="selectedDate" type="tertiary" @click="selectedDate = ''; handleSearch()">
+          {{ t('library_tools.all_dates') }}
+        </Button>
+        <label class="history-filter-field">
+          <span>{{ t('library_tools.content_type') }}</span>
+          <select v-model="contentType" @change="handleSearch()">
+            <option v-for="value in contentTypes" :key="value" :value="value">{{ t(`library_tools.type_${value}`) }}</option>
+          </select>
+        </label>
+        <Button v-if="filtersActive" type="tertiary" @click="keyword = ''; selectedDate = ''; contentType = 'all'; handleSearch()">
+          {{ t('search.filters.clear') }}
+        </Button>
         <Button
           block
           class="bew-cover-sidebar__action"
@@ -460,6 +566,37 @@ function jumpToLoginPage() {
 
 <style lang="scss" scoped>
 @use "../../../styles/videoList";
+.history-search-row {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-1);
+}
+.history-search-row input {
+  min-width: 0;
+  flex: 1;
+}
+.history-filter-field {
+  display: grid;
+  gap: var(--bew-space-2);
+  font-size: var(--bew-font-size-control);
+}
+.history-filter-field input,
+.history-filter-field select {
+  min-width: 0;
+  width: 100%;
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-2);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  background: var(--bew-content-alt-solid);
+  color: var(--bew-text-1);
+  font: inherit;
+  color-scheme: inherit;
+}
+.history-query-summary {
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+}
 .history-content,
 .history-groups {
   display: flex;
@@ -469,16 +606,80 @@ function jumpToLoginPage() {
 }
 
 .history-day-heading {
-  margin: 0 0 var(--bew-space-3);
+  grid-column: 1 / -1;
+  margin: 0;
+  padding-top: calc(var(--bew-space-6) - var(--history-gap));
+  padding-bottom: var(--bew-space-1);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-title);
 }
 
-.history-day-list {
+.history-day-heading--first {
+  padding-top: 0;
+}
+.history-day-heading--grid {
+  padding-bottom: 0;
+}
+.history-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bew-space-4);
+}
+.history-window {
+  position: relative;
   display: grid;
+  grid-template-columns: repeat(var(--history-columns), minmax(0, 1fr));
+  gap: var(--history-gap);
+}
+.history-list-card--grid .history-list-card__content {
+  height: 100%;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--bew-space-3);
+}
+.history-list-card--grid .history-list-card__title {
+  min-height: calc(var(--bew-line-height-title) * 2);
+}
+.history-list-card__content > div:last-child > div {
+  min-width: 0;
+  flex: 1;
+}
+.history-author-avatar {
+  flex: none;
+  width: var(--bew-space-6);
+  height: var(--bew-space-6);
+  margin-right: var(--bew-space-2);
+  overflow: hidden;
+}
+.history-grid-skeleton {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-3);
+  padding: var(--bew-space-3);
+  border-radius: var(--bew-card-radius);
+}
+.history-grid-skeleton__cover {
+  width: 100% !important;
+  aspect-ratio: 16 / 9;
+}
+.history-grid-skeleton__title {
+  display: grid;
+  grid-template-rows: repeat(2, var(--bew-line-height-title));
+  align-items: center;
+}
+.history-grid-skeleton__author {
+  display: flex;
+  align-items: center;
   gap: var(--bew-space-2);
+  margin-block: var(--bew-space-2);
+}
+.history-grid-skeleton__time {
+  display: flex;
+  align-items: center;
+  min-height: var(--bew-control-height-sm);
 }
 
 .history-sidebar-panel {
@@ -497,7 +698,6 @@ function jumpToLoginPage() {
   position: relative;
   border-radius: var(--bew-card-radius);
   corner-shape: var(--bew-corner-shape);
-  contain-intrinsic-size: auto 136px;
 
   &:is(:hover, :focus-within) .history-list-card__content {
     background: var(--bew-fill-1);

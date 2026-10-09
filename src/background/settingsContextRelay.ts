@@ -2,9 +2,9 @@ import browser from 'webextension-polyfill'
 
 import { onMessage } from '~/utils/messaging'
 import type { SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE, SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE } from '~/utils/settingsCloudSyncProtocol'
-import type { SETTINGS_STORAGE_PATCH_MESSAGE, SETTINGS_STORAGE_READ_MESSAGE } from '~/utils/settingsStorageProtocol'
+import type { SETTINGS_STORAGE_IMPORT_MESSAGE, SETTINGS_STORAGE_PATCH_MESSAGE, SETTINGS_STORAGE_READ_MESSAGE } from '~/utils/settingsStorageProtocol'
 
-type SettingsMessage = typeof SETTINGS_STORAGE_PATCH_MESSAGE | typeof SETTINGS_STORAGE_READ_MESSAGE
+type SettingsMessage = typeof SETTINGS_STORAGE_PATCH_MESSAGE | typeof SETTINGS_STORAGE_READ_MESSAGE | typeof SETTINGS_STORAGE_IMPORT_MESSAGE
   | typeof SETTINGS_CLOUD_SYNC_AVAILABILITY_MESSAGE | typeof SETTINGS_CLOUD_SYNC_ENABLE_MESSAGE
 type Handler = (value: unknown) => unknown | Promise<unknown>
 const RELAY_PREFIX = 'bewly:private-settings:'

@@ -17,6 +17,7 @@ import {
   normalizeSettingsStoragePatchRequest,
   normalizeSettingsStorageWriteMeta,
   parseStoredSettings,
+  SETTINGS_STORAGE_IMPORT_MESSAGE,
   SETTINGS_STORAGE_KEY,
   SETTINGS_STORAGE_META_KEY,
   SETTINGS_STORAGE_PATCH_MESSAGE,
@@ -32,6 +33,8 @@ export interface SettingsCloudSyncReconcileResult {
 
 let initialized = false
 let writeQueue: Promise<void> = Promise.resolve()
+let pendingResets = 0
+let resetGeneration = 0
 
 function createStorageId() {
   if (typeof crypto.randomUUID === 'function')
@@ -102,7 +105,7 @@ function createUpload(
     uploads[field] = createSettingsCloudSyncEntry(settings, field, version)
 }
 
-async function applyPatch(value: unknown): Promise<SettingsStoragePatchResponse> {
+async function applyPatch(value: unknown, importing = false): Promise<SettingsStoragePatchResponse> {
   const request = normalizeSettingsStoragePatchRequest(value)
   if (!request)
     throw new TypeError('Invalid settings storage patch')
@@ -117,7 +120,8 @@ async function applyPatch(value: unknown): Promise<SettingsStoragePatchResponse>
   if (metaWasCompleted)
     await browser.storage.local.set({ [SETTINGS_STORAGE_META_KEY]: currentMeta })
 
-  if (request.epoch !== currentMeta.epoch) {
+  const operationKey = `${request.clientId}:${request.operationId}`
+  if (request.epoch !== currentMeta.epoch && !(importing && currentMeta.recentOperationIds.includes(operationKey))) {
     return {
       accepted: false,
       epoch: currentMeta.epoch,
@@ -126,7 +130,6 @@ async function applyPatch(value: unknown): Promise<SettingsStoragePatchResponse>
     }
   }
 
-  const operationKey = `${request.clientId}:${request.operationId}`
   if (currentMeta.recentOperationIds.includes(operationKey)) {
     return {
       accepted: true,
@@ -140,6 +143,13 @@ async function applyPatch(value: unknown): Promise<SettingsStoragePatchResponse>
   const serializedValue = JSON.stringify(nextValue)
   const actualPatch = createTopLevelSettingsStoragePatch(currentValue, nextValue)
   const settingsChanged = !isSettingsStoragePatchEmpty(actualPatch)
+
+  // Import is an explicit edit boundary. Delayed patches from any old document
+  // keep their old epoch and cannot reintroduce edits after this serialized write.
+  if (importing) {
+    currentMeta.epoch = createStorageId()
+    currentMeta.recentOperationIds = []
+  }
 
   if (settingsChanged) {
     incrementRevision(currentMeta)
@@ -193,6 +203,22 @@ async function readSettings(): Promise<SettingsStoragePatchResponse> {
       : stored[SETTINGS_STORAGE_KEY] == null
         ? undefined
         : JSON.stringify(parseStoredSettings(stored[SETTINGS_STORAGE_KEY])),
+  }
+}
+
+async function readSettingsSnapshot(): Promise<SettingsStoragePatchResponse> {
+  const generation = resetGeneration
+  const stored = await browser.storage.local.get([SETTINGS_STORAGE_KEY, SETTINGS_STORAGE_META_KEY])
+  const meta = normalizeSettingsStorageWriteMeta(stored[SETTINGS_STORAGE_META_KEY])
+  if (pendingResets || generation !== resetGeneration || !meta.epoch || !meta.deviceId || stored[SETTINGS_STORAGE_KEY] == null)
+    return enqueueSettingsWrite(readSettings)
+  return {
+    accepted: true,
+    epoch: meta.epoch,
+    revision: meta.revision,
+    storedValue: typeof stored[SETTINGS_STORAGE_KEY] === 'string'
+      ? stored[SETTINGS_STORAGE_KEY]
+      : JSON.stringify(parseStoredSettings(stored[SETTINGS_STORAGE_KEY])),
   }
 }
 
@@ -441,6 +467,8 @@ function handleStorageReset(
   const settingsWereRemoved = changes[SETTINGS_STORAGE_KEY]?.newValue == null
     && SETTINGS_STORAGE_KEY in changes
 
+  resetGeneration++
+  pendingResets++
   void enqueueSettingsWrite(async () => {
     // Run after any write that raced with clear, so an old in-flight patch cannot
     // recreate the cleared settings or its epoch.
@@ -449,7 +477,7 @@ function handleStorageReset(
 
     const { meta } = completeStorageMeta(undefined)
     await browser.storage.local.set({ [SETTINGS_STORAGE_META_KEY]: meta })
-  }).catch(error => console.error('[Bewly Nocturne] Failed to rotate settings storage epoch:', error))
+  }).catch(error => console.error('[Bewly Nocturne] Failed to rotate settings storage epoch:', error)).finally(() => { pendingResets-- })
 }
 
 export function setupSettingsStorageCoordinator() {
@@ -459,6 +487,7 @@ export function setupSettingsStorageCoordinator() {
   initialized = true
   if (!browser.extension?.inIncognitoContext)
     browser.storage.onChanged.addListener(handleStorageReset)
-  onSettingsMessage(SETTINGS_STORAGE_READ_MESSAGE, () => enqueueSettingsWrite(readSettings))
+  onSettingsMessage(SETTINGS_STORAGE_READ_MESSAGE, readSettingsSnapshot)
   onSettingsMessage(SETTINGS_STORAGE_PATCH_MESSAGE, value => enqueueSettingsWrite(() => applyPatch(value)))
+  onSettingsMessage(SETTINGS_STORAGE_IMPORT_MESSAGE, value => enqueueSettingsWrite(() => applyPatch(value, true)))
 }

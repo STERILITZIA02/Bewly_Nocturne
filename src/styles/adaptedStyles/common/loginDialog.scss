@@ -1,4 +1,24 @@
 .bewly-design {
+  .bili-mini,
+  .bili-mini-mask .bili-mini-content-wp {
+    border-radius: var(--bew-modal-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.bili-mini, .bili-mini-mask) {
+    :is(.btn_primary, .btn_other, .tab__form, .area-code-select),
+    .bili-mini-login-register-wrapper :is(.login-btn, .register-btn),
+    :is(.bili-mini-account, .bili-mini-password, .bili-mini-tel, .bili-mini-code) {
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  .bili-mini-content-wp .login-client-qr-code {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`
   :not(foobar) {
@@ -24,20 +44,22 @@
       .bili-mini-tel .bili-mini-tel_right .text,
       .bili-mini-agreement-wrapper a,
       .bili-mini-login-register-wrapper .register-btn:hover {
-        color: var(--bew-theme-color);
+        color: var(--bew-theme-foreground);
       }
 
       .el-select-dropdown__item.selected {
-        color: var(--bew-theme-color) !important;
+        color: var(--bew-theme-foreground) !important;
       }
 
       .btn_primary,
       .bili-mini-login-register-wrapper .login-btn {
         background-color: var(--bew-theme-color);
+        color: var(--bew-on-theme-color);
       }
 
       .btn_primary.disabled {
-        background-color: var(--bew-theme-color) !important;
+        background-color: var(--bew-content-alt-solid) !important;
+        color: var(--bew-text-3);
       }
 
       .bili-mini-login-register-wrapper .login-btn:hover {
@@ -162,10 +184,6 @@
       .bili-mini-content-wp .login-client-qr-code img,
       .bili-mini-scan-download {
         box-shadow: 0 0 0 5px white;
-      }
-
-      .bili-mini-content-wp .login-client-qr-code {
-        border-radius: 10px;
       }
 
       // 弹窗窗口关闭按钮

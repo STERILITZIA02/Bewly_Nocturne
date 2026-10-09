@@ -149,7 +149,7 @@ export function registerViewLifetimeChecks(check, { Vue, compileComponent, flush
       },
     }
     const app = Vue.createApp({ setup() {
-      cache = provideHomeTabCache(() => key.value, () => {})
+      cache = provideHomeTabCache(() => key.value, () => {}, () => 0)
       return () => Vue.h(tab, { key: `${generation.value}:${key.value}` })
     } })
     const host = document.body.appendChild(document.createElement('div'))

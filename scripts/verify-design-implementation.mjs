@@ -1,8 +1,76 @@
 import assert from 'node:assert/strict'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerDesignImplementationChecks(check, { Vue, compileComponent, flush }) {
+  check('design: theme foregrounds cover actual raised surfaces without changing the selected brand colour', async () => {
+    const { getThemeColorTokens, relativeContrast } = await import('../src/utils/themeColor')
+    const palettes = [
+      { dark: true, surfaces: ['#000000', '#303533', '#3e4341'] },
+      { dark: true, surfaces: ['#181a1e', '#39323b', '#49414b'] },
+      { dark: false, surfaces: ['#ffffff', '#f2f2f8', '#e3e3ec'] },
+    ]
+    for (const { dark, surfaces } of palettes) {
+      for (const theme of ['#f43f5e', '#f8f8fa', '#09090a', '#00a1d6', '#777777']) {
+        const tokens = getThemeColorTokens(theme, dark, surfaces)
+        assert.equal(tokens.theme, theme)
+        assert.ok(relativeContrast(tokens.onTheme, theme) >= 4.5)
+        const imageUrl = tokens.checkmarkImage.slice(5, -2)
+        const svg = new window.DOMParser().parseFromString(decodeURIComponent(imageUrl.slice(imageUrl.indexOf(',') + 1)), 'image/svg+xml')
+        assert.equal(svg.querySelector('parsererror'), null)
+        assert.equal(svg.querySelector('path').getAttribute('stroke'), tokens.onTheme)
+        for (const surface of surfaces) {
+          assert.ok(relativeContrast(tokens.foreground, surface) >= 4.5, `${theme} text against ${surface}`)
+          assert.ok(relativeContrast(tokens.focusRing, surface) >= 3, `${theme} focus against ${surface}`)
+        }
+      }
+    }
+    assert.ok(relativeContrast('#f43f5e', '#303533') < 4.5, 'the observed rose-on-raised-panel regression is represented')
+  })
+
+  check('design: theme surface sampling uses CSS tokens and releases its detached canvas on failure', async () => {
+    const palette = new Map([
+      ['#000000', [0, 0, 0, 255]],
+      ['color-mix(in oklab, #2a2f2d, white 3%)', [48, 53, 51, 255]],
+      ['color-mix(in oklab, #2a2f2d, white 10%)', [61, 66, 64, 255]],
+      ['color-mix(in oklab, #2a2f2d, white 11%)', [62, 67, 65, 255]],
+    ])
+    const values = Object.fromEntries(['--bew-bg', '--bew-content-solid', '--bew-content-alt-solid-hover', '--bew-elevated-solid-hover'].map((key, index) => [key, [...palette.keys()][index]]))
+    const canvases = []
+    let failRead = false
+    const root = { ownerDocument: {
+      defaultView: { getComputedStyle: () => ({ getPropertyValue: key => values[key] ?? '' }) },
+      createElement(name) {
+        assert.equal(name, 'canvas')
+        const context = {
+          fillStyle: '',
+          clearRect() {},
+          fillRect() {},
+          getImageData() {
+            if (failRead)
+              throw new Error('Unavailable colour readback')
+            return { data: palette.get(this.fillStyle) }
+          },
+        }
+        const canvas = { width: 0, height: 0, getContext: () => context }
+        canvases.push(canvas)
+        return canvas
+      },
+    } }
+    const { readThemeContrastSurfaces } = await loadSourceModule('../src/utils/themeColor.ts', {}, {
+      CSS: { supports: (_property, value) => palette.has(value) },
+    })
+    assert.deepEqual(Array.from(readThemeContrastSurfaces(root)), ['#000000', '#303533', '#3d4240', '#3e4341'])
+    assert.equal(canvases.length, 1)
+    assert.equal(canvases[0].width, 0)
+    assert.equal(canvases[0].height, 0)
+    failRead = true
+    assert.deepEqual(Array.from(readThemeContrastSurfaces(root)), [])
+    assert.equal(canvases[1].width, 0)
+    assert.equal(canvases[1].height, 0)
+  })
+
   check('design: filter summaries clear every applied constraint and each user choice emits once', async () => {
     for (const kind of ['Video', 'User']) {
       const Filters = await compileComponent(`../src/contentScripts/views/SearchResults/components/Search${kind}Filters.vue`, {
@@ -119,8 +187,8 @@ export function registerDesignImplementationChecks(check, { Vue, compileComponen
 
   check('design: history continuation preserves the source part and hash and never invents progress for completed or non-video entries', async () => {
     const { Business } = await import('../src/models/history/history')
-    const module = await loadSourceFunctions('../src/contentScripts/views/History/History.vue', ['getHistoryUrl', 'getHistoryResumeUrl'], { Business, URL })
-    const item = { uri: 'https://www.bilibili.com/video/BV1fixture/?p=3#comments', history: { business: Business.ARCHIVE }, progress: 42.9, duration: 600 }
+    const module = await import('../src/utils/historyTarget')
+    const item = { uri: 'https://www.bilibili.com/video/BV1NyeA6zESV/?p=3#comments', history: { business: Business.ARCHIVE, bvid: 'BV1NyeA6zESV', page: 3 }, progress: 42.9, duration: 600 }
     const target = new URL(module.getHistoryResumeUrl(item))
     assert.equal(target.searchParams.get('p'), '3')
     assert.equal(target.searchParams.get('t'), '42')

@@ -1,4 +1,41 @@
+library_tools:
+  queue_actions_scope: 下方操作作用于整个稍后再看列表。
+  selected_tabs: '已选 {count} / {total} 个标签页'
+  search_results: '“{query}”的搜索结果'
+  load_more_matches: 继续查找更早记录
+  no_matches: 没有匹配的内容
+  date: 选择日期
+  all_dates: 所有日期
+  content_type: 内容类型
+  type_all: 全部内容
+  type_archive: 视频
+  type_pgc: 番剧与影视
+  type_live: 直播
+  type_article: 专栏
+  clear_search: 清除搜索
+  watch_later_search: 搜索标题或 UP 主
+  playback_state: 观看状态
+  state_all: 全部进度
+  state_unstarted: 未开始
+  state_watching: 观看中
+  state_completed: 已看完
+  state_unknown: 进度未知
+  duration: 视频时长
+  duration_all: 全部时长
+  duration_short: 10 分钟以内
+  duration_medium: 10–30 分钟
+  duration_long: 30 分钟以上
+  matched_count: '匹配 {count} 项 · 已载入 {total} 项'
+  find_messages: 查找本会话已加载的消息
+  previous_match: 上一个匹配
+  next_match: 下一个匹配
+  original_size: 原尺寸
+  image_navigation: 图片查看区域，可滚动查看，放大后可拖动
+  load_more_videos: 继续加载视频
 common:
+  advertisement: 广告
+  clear_selection: 清空已选
+  favorite_folder_full: 此收藏夹已满，无法新增当前视频
   retry: 重试
   operation_completed: 操作完成
   dialog: 对话框
@@ -28,6 +65,7 @@ common:
   please_log_in_first: 请先登录
   login: 登录
   save_to_watch_later: 稍后再看
+  watch_later_status_unknown: 稍后再看状态待确认
   add_to_watch_later: 添加到稍后再看
   added_to_watch_later: 已添加到稍后再看
   remove_from_watch_later: 从稍后再看中移除
@@ -105,12 +143,38 @@ iframe_drawer:
   open_in_new_tab: 在新标签页打开
   close: 关闭
   press_esc_again_to_close: 再次按下 Esc 关闭
+local_loudness:
+  title: 本地响度均衡 · 实验
+  enable: 启用本地响度均衡
+  description: 默认关闭，仅在本设备启用。对当前音频进行局部自动增益，减轻响度起伏；启用后可从播放器波形按钮调整。
+  target: 目标响度
+  strength: 调整强度
+  curve: 最近 60 次增益采样
+  limits: 基于短时响度的局部调整，不是完整节目级 EBU R128 归一化；采样峰值限制不保证真峰值。关闭后保留原声旁路；若要改用原生音效，请关闭本实验并刷新播放页。
+  state:
+    off: 已关闭 · 原声播放
+    waiting: 等待有效主媒体播放
+    gesture: 请点击页面或播放按钮，允许浏览器启动音频处理
+    active: 正在调整当前音频
+    paused: 暂停、静音或跳转中 · 暂停增益测量
+    native-on: 原生响度均衡已开启，请先在原生播放器设置中关闭
+    native-unknown: 无法确认原生音效状态，保持原声播放
+    source-in-use: 媒体已由原生音效或其他扩展接管，保持其现有音频路径。若刚关闭原生音效，请刷新播放页后重试。
+    unsupported: 当前媒体或浏览器无法安全接入，保持原声播放
+    error: 处理失败，已退回原声旁路；重新启用可重试
+    reload-required: 音源发生冲突或兼容条件改变，需要重新初始化。请关闭本实验并刷新播放页，再继续播放或使用原生音效。
 player_screenshot:
   capture: 截取当前视频帧
   saved: 截图已保存
   failed: 截图失败
   video_unavailable: 当前视频画面不可用
 settings:
+  comment_reply_batch_pages: 每次加载的回复页数
+  comment_reply_batch_pages_desc: 只在点击加载下一批时请求；首次展开和直接选页各请求一页，不自动加载整个楼层。
+  enable_comment_reply_tree_container: 独立回复阅读区域
+  enable_comment_reply_tree_container_desc: 只让回复区域内部滚动，主评论保持在外；滚到底后可继续滚动外层页面。
+  comment_reply_tree_container_height: 回复阅读区域最大高度
+  comment_reply_tree_container_height_desc: 短内容自然收缩，高度也会限制在当前视口的可用范围内。
   no_search_character: 不显示搜索人物
   reorder_keyboard_hint: 按住 Alt 并按方向键调整顺序
   auto_remove_watch_later_on_end: 播完自动移出稍后再看
@@ -291,7 +355,7 @@ settings:
   group_player_display_mode: 播放模式
   group_player_display_mode_desc: 设置基础显示模式，并按需覆盖特定播放场景。
   group_playback_memory: 播放状态记忆
-  group_playback_memory_desc: 选择是否记住倍速和视频比例。
+  group_playback_memory_desc: 选择是否记住倍速、视频比例和清晰度。
   group_video_page_actions: 视频页功能
   group_video_page_actions_desc: 标签仅用于切换视频页和播放器控制栏中相关按钮的显示。
   group_playback_behavior: 播放行为
@@ -501,6 +565,7 @@ settings:
   drawer_escape_immediate: 按一次立即关闭
   drawer_escape_second_press: 再按一次后关闭
   block_ads: 屏蔽广告
+  block_ads_desc: 在 Bewly 和已适配的 Bilibili 原生页面隐藏有明确广告标记的内容。关闭后恢复展示；普通推荐、商品及活动不会仅因标题被屏蔽。搜索顶部活动区由下方选项单独控制。
   block_top_search_page_ads: 屏蔽 Bilibili 搜索页上方的广告
   block_top_search_page_ads_desc: |
     有时候，搜索结果上方的广告实际上是年末总结或年度报告。 如果你不想这些内容被误删除，请禁用此选项。
@@ -529,6 +594,8 @@ settings:
     context_bangumi: 番剧 / 影视
     context_watch_later: 稍后再看
     context_playlist: 收藏 / 播放列表
+    context_moments_dialog: 动态视频弹窗
+    context_moments_dialog_desc: 继承时继续按视频所属的多 P、合集等场景解析；仅影响从动态打开的站内弹窗。
     bewly_widescreen_sidebar_position: Bewly播放页侧边栏位置
     bewly_widescreen_sidebar_position_desc: 选择 Bewly 播放页侧边栏的显示位置
     bewly_widescreen_sidebar_position_left: 左侧
@@ -562,6 +629,23 @@ settings:
   remember_playback_rate: 记住倍速
   remember_playback_rate_desc: 启用后，播放器会记住您上次设置的倍速，并在下次打开视频时自动应用
   remember_video_aspect_ratio: 记住视频比例
+  remember_video_quality: 记住清晰度
+  player_extra_controls_hint: 空间不足时，收起的操作仍可在播放器右键菜单中使用。
+  remember_video_quality_desc: 首次启用沿用当前档位，之后只记住已生效的手动选择。自动降档和试看不会覆盖偏好。
+  show_widescreen_idle_progress: 控件隐藏时显示细进度条
+  show_widescreen_idle_progress_desc: 仅显示主视频播放进度，不改变控制栏显隐或提供拖动操作。
+  original_moments_use_bewly_filters: 原生动态使用现有过滤规则
+  original_moments_use_bewly_filters_desc: 仅过滤原生动态信息流，沿用下方规则；关闭后恢复本功能隐藏的内容。
+  history_layout: 历史记录布局
+  history_layout_list: 日期分组列表
+  history_layout_grid: 日期分组网格
+  notification_badge_categories: 通知角标类别
+  notification_badge_categories_desc: 仅影响顶栏、Dock 和通知菜单的数字展示，不提交已读或改变消息未读状态。
+  show_reply_notification_reminder: 显示回复提醒
+  show_at_notification_reminder: "显示 {'@'} 提醒"
+  show_system_notification_reminder: 显示系统通知提醒
+  show_followed_private_message_unread_count: 显示已关注私信未读数
+  show_unfollowed_private_message_unread_count: 显示未关注私信未读数
   remember_video_aspect_ratio_desc: 启用后，播放器会记住您上次选择的视频比例，并在下次打开视频时自动应用
   auto_exit_fullscreen_on_end: 全屏/网页全屏播放完毕后自动退出
   auto_exit_fullscreen_on_end_desc: 启用后，当视频播放结束且没有单集循环、随机播放、自动连播等后续播放行为时，会自动退出全屏模式
@@ -876,8 +960,8 @@ settings:
   home_tabs_adjustment: 标签栏调整
   home_tabs_adjustment_desc: 第一个激活的标签项是默认界面
   fixed_home_tabs_on_home_page: 固定首页标签栏
-  adapt_to_other_page_styles: 适应其他页面样式
-  adapt_to_other_page_styles_desc: 适应一些常见页面，以与 Bewly Nocturne 主题相匹配。
+  adapt_to_other_page_styles: 适配更多页面
+  adapt_to_other_page_styles_desc: 让已支持的 Bilibili 原生页面、直播、漫画、会员购等子站跟随主题、配色与圆角。关闭时停用这些外观调整，Bewly 页面保持不变；广告由广告屏蔽选项单独控制。
   prevent_mobile_redirect: 防止跳转移动端
   prevent_mobile_redirect_desc: 开启后，仅在访问 www.bilibili.com 时使用桌面端 UA，避免被跳转到 m.bilibili.com；直接访问移动端不受影响。
   links: 链接
@@ -1307,6 +1391,7 @@ moments:
   initial_loading: 正在准备动态和图片…
   empty_wanted: 近期无更新
   no_wanted_users: 请先在设置中添加想看的 UP 主
+  configure_wanted: 设置想看分组
   empty: 暂时没有可展示的动态
   loading: 正在加载…
   load_more: 加载更多
@@ -1444,6 +1529,10 @@ video_card:
   group_contribution: '{firstAuthor} 等 {num} 人联合创作'
   video_removed: 视频已移除
   watched: 已观看
+  browsed: 已浏览
+  played: 已播放
+  completed: 已看完
+  played_progress: '已看到 {time}'
   visited_recently: 近一个月内浏览过
   highlight_high_like: 高赞
   highlight_high_engagement: 高互动
@@ -1616,7 +1705,7 @@ watch_later:
   auto_remove_failed: 自动移出稍后再看失败，请稍后手动重试。
   open_tabs:
     title: 添加播放标签页
-    scope: 仅处理下方列出的播放页；重复或已在列表中的视频会跳过，原标签保持打开。
+    scope: 仅处理下方选中的播放页；重复或已在列表中的视频会跳过，原标签保持打开。
     windows_normal: 普通窗口
     windows_private: 无痕窗口
     background_hint: 关闭窗口后仍会继续，可再次打开查看进度。
@@ -1694,6 +1783,7 @@ widescreen:
   show_full_sidebar: 显示完整侧栏
   show_compact_sidebar: 收起侧栏
 search_bar:
+  history_unavailable: 暂时无法读取或确认搜索历史，请重新读取。
   input_label: 搜索
   clear_keyword: 清空搜索内容
   submit: 搜索
@@ -1761,6 +1851,8 @@ search:
   errors:
     failed: 搜索失败，请稍后重试
     exception: 搜索出错，请稍后重试
+    timeout: 搜索超时，请重试
+    risk_control: B站暂时限制了搜索请求，请稍后重试
   pagination:
     previous: 上一页
     next: 下一页

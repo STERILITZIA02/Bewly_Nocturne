@@ -4,6 +4,17 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerVisualConsistencyChecks(check, { Vue, compileComponent, flush }) {
+  async function calendarPositioning(globals = {}) {
+    return loadSourceModule('../src/composables/useAnchoredPopoverPosition.ts', {
+      '@vueuse/core': await import('@vueuse/core'),
+      '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),
+    }, {
+      ...Vue,
+      ResizeObserver: class { observe() {} disconnect() {} },
+      ...globals,
+    })
+  }
+
   check('V26 navigation: user visits survive back/forward while normalization replaces and search state is preserved', async () => {
     const enums = await import('../src/enums/appEnums')
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
@@ -11,6 +22,7 @@ export function registerVisualConsistencyChecks(check, { Vue, compileComponent, 
     window.history.replaceState({ native: 'retained' }, '', '/?page=SearchResults&keyword=fixture&pn=3')
     const route = await loadSourceModule('../src/composables/useRouteState.ts', { vue: Vue })
     const settings = Vue.ref({ homePageTabVisibilityList: config, useSearchPageModeOnHomePage: true })
+    settings.initializationState = Vue.ref('loaded')
     const module = await loadSourceModule('../src/composables/useHomePageRoute.ts', {
       'vue': Vue,
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.computed(() => route.useRouteState().href) },
@@ -174,6 +186,7 @@ export function registerVisualConsistencyChecks(check, { Vue, compileComponent, 
     const DatePicker = await compileComponent('../src/contentScripts/views/SearchResults/components/DatePicker.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       '../utils/localDate': await import('../src/contentScripts/views/SearchResults/utils/localDate'),
+      '~/composables/useAnchoredPopoverPosition': await calendarPositioning(),
     })
     const host = document.body.appendChild(document.createElement('div'))
     const outside = document.body.appendChild(document.createElement('button'))
@@ -214,6 +227,69 @@ export function registerVisualConsistencyChecks(check, { Vue, compileComponent, 
       app.unmount()
       host.remove()
       outside.remove()
+    }
+  })
+
+  check('V26 calendar: shared positioning contains a short-window popup and releases observers and queued frames', async () => {
+    const listeners = new Map()
+    const frames = new Map()
+    const observers = []
+    let frameId = 0
+    const positioning = await calendarPositioning({
+      window: { innerWidth: 1100, innerHeight: 600, addEventListener: (name, fn) => listeners.set(name, fn), removeEventListener: (name, fn) => {
+        if (listeners.get(name) === fn)
+          listeners.delete(name)
+      } },
+      ResizeObserver: class {
+        active = true
+        constructor() { observers.push(this) }
+        observe() {}
+        disconnect() { this.active = false }
+      },
+      requestAnimationFrame(fn) {
+        frames.set(++frameId, fn)
+        return frameId
+      },
+      cancelAnimationFrame(id) { frames.delete(id) },
+    })
+    const DatePicker = await compileComponent('../src/contentScripts/views/SearchResults/components/DatePicker.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '../utils/localDate': await import('../src/contentScripts/views/SearchResults/utils/localDate'),
+      '~/composables/useAnchoredPopoverPosition': positioning,
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp(DatePicker, { modelValue: '2026-09-17' })
+    app.config.globalProperties.$t = key => key
+    app.mount(host)
+    const trigger = host.querySelector('.calendar-icon')
+    host.querySelector('.date-picker').getBoundingClientRect = () => ({ left: 465, right: 593, top: 222, bottom: 258, width: 128 })
+    try {
+      trigger.click()
+      await flush()
+      const popup = host.querySelector('[role="dialog"]')
+      popup.getBoundingClientRect = () => ({ width: 280, height: 359 })
+      listeners.get('resize')()
+      for (const [id, fn] of frames) {
+        frames.delete(id)
+        fn()
+      }
+      assert.ok(Number.parseFloat(popup.style.top) >= 16)
+      assert.ok(Number.parseFloat(popup.style.top) + 359 <= 584, 'the previously clipped footer fits the 600px viewport')
+      assert.ok(Number.parseFloat(popup.style.left) >= 16)
+      assert.ok(Number.parseFloat(popup.style.left) + 280 <= 1084)
+      listeners.get('scroll')()
+      assert.equal(frames.size, 1)
+      trigger.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(host.querySelector('[role="dialog"]'), null)
+      assert.equal(frames.size, 0)
+      assert.equal(listeners.size, 0)
+      assert.ok(observers.every(observer => !observer.active))
+      assert.equal(document.activeElement, trigger)
+    }
+    finally {
+      app.unmount()
+      host.remove()
     }
   })
 

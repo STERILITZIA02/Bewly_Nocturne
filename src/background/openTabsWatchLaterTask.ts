@@ -7,7 +7,7 @@ interface Dependencies {
   sourceCurrent: (item: OpenTabsItem) => Promise<boolean>
   readMembership: () => Promise<readonly number[]>
   resolveAid: (item: OpenTabsItem) => Promise<number | undefined>
-  add: (aid: number) => Promise<WatchLaterWriteResponse>
+  add: (aid: number, item: OpenTabsItem) => Promise<WatchLaterWriteResponse>
   changed: () => Promise<void>
   reconcile: () => Promise<void>
 }
@@ -91,7 +91,7 @@ export function createOpenTabsWatchLaterTask(task: OpenTabsTask, dependencies: D
             attempted.add(aid)
             sent = true
             writeSent = true
-            return dependencies.add(aid)
+            return dependencies.add(aid, item)
           })
           if (!result) {
             if (item.reason === 'sourceChanged')

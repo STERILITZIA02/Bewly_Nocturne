@@ -39,18 +39,52 @@ export function useFollowingVideoSearch(state: HomeTabState, account: () => numb
   const active = computed(() => uploader() !== null && Boolean(keyword.value))
   let generation = 0
   let disposed = false
-  const faces = createFavoriteAvatarLoader(async (mid) => {
-    const result = await api.user.getUserCard({ mid: String(mid) })
+  let readController: AbortController | undefined
+  const createFaces = () => createFavoriteAvatarLoader(async (mid, signal) => {
+    const result = await api.user.getUserCard({ mid: String(mid) }, { signal })
     return result?.code === 0 && Number(result.data?.card?.mid) === mid ? result.data.card.face : undefined
   })
+  let faces = createFaces()
+  function cancelReads() {
+    readController?.abort()
+    readController = undefined
+    loading.value = false
+    faces.dispose()
+    faces = createFaces()
+  }
   function clear() {
     generation++
+    cancelReads()
     draft.value = keyword.value = ''
     items.value = []
     page.value = 1
     ended.value = failed.value = loading.value = false
   }
   watch([account, uploader], clear, { flush: 'sync' })
+  function enrichAuthors(entries: Video[]) {
+    const version = generation
+    const accountId = account()
+    const mid = uploader()
+    const query = keyword.value
+    if (!active.value || accountId === null || !state.isCurrent())
+      return
+    for (const item of entries) {
+      const author = Array.isArray(item.author) ? item.author[0] : item.author
+      if (!author?.mid || author.authorFace)
+        continue
+      const knownFace = findUploader(author.mid)?.face
+      if (knownFace) {
+        author.authorFace = knownFace
+        continue
+      }
+      void faces.load(author.mid).then((face) => {
+        if (face && !disposed && version === generation && state.isCurrent()
+          && accountId === account() && mid === uploader() && query === keyword.value) {
+          author.authorFace = face
+        }
+      })
+    }
+  }
   async function load() {
     const mid = uploader()
     const accountId = account()
@@ -60,10 +94,12 @@ export function useFollowingVideoSearch(state: HomeTabState, account: () => numb
     const query = keyword.value
     const pn = page.value
     const current = () => !disposed && version === generation && state.isCurrent() && accountId === account() && mid === uploader() && query === keyword.value
+    const controller = new AbortController()
+    readController = controller
     loading.value = true
     failed.value = false
     try {
-      const response = await api.user.getUserVideos({ mid: String(mid), keyword: query, pn, ps: SUBMISSIONS_PAGE_SIZE, order: 'pubdate' })
+      const response = await api.user.getUserVideos({ mid: String(mid), keyword: query, pn, ps: SUBMISSIONS_PAGE_SIZE, order: 'pubdate' }, { signal: controller.signal })
       if (!current())
         return
       const data = response?.data
@@ -100,36 +136,37 @@ export function useFollowingVideoSearch(state: HomeTabState, account: () => numb
       if (noProgress && !ended.value)
         throw new Error('Uploader submission pagination made no progress')
       page.value = pn + 1
-      for (const item of added) {
-        const author = Array.isArray(item.author) ? item.author[0] : item.author
-        if (author?.mid && !author.authorFace) {
-          void faces.load(author.mid).then((face) => {
-            if (face && current())
-              author.authorFace = face
-          })
-        }
-      }
+      // Read through the reactive list; mutating the raw inserted objects would
+      // leave mounted cards unchanged until some unrelated render.
+      if (added.length)
+        enrichAuthors(items.value.slice(-added.length))
     }
     catch {
-      if (current())
+      if (current() && !controller.signal.aborted)
         failed.value = true
     }
     finally {
       if (current())
         loading.value = false
+      if (readController === controller)
+        readController = undefined
     }
   }
   function submit() {
     generation++
+    cancelReads()
     keyword.value = draft.value.trim()
     items.value = []
     page.value = 1
     ended.value = failed.value = loading.value = false
     return load()
   }
+  if (state.restored)
+    enrichAuthors(items.value)
   onScopeDispose(() => {
     disposed = true
     generation++
+    readController?.abort()
     faces.dispose()
   })
   return { draft, keyword, items, active, ended, failed, loading, submit, load, clear }

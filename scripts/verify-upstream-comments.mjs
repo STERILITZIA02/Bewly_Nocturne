@@ -100,6 +100,7 @@ export function registerUpstreamCommentChecks(check) {
       pendingCommentReplyTreeLayoutUpdates: new WeakSet(),
       disconnectCommentReplyTreeResizeObserver() {},
       removeCommentReplyTreeGuides() {},
+      commentReplyReading: { clear() {} },
       isCommentReplyRenderer: () => false,
       getCommentReplyTreeRootRenderer: () => null,
       requestAnimationFrame: fn => frames.push(fn),
@@ -134,7 +135,14 @@ export function registerUpstreamCommentChecks(check) {
     let resolve
     const response = new Promise(done => resolve = done)
     let account = '1'
-    const module = await loadSourceModule('../src/inject/commentReplyPagination.ts', {})
+    const module = await loadSourceModule('../src/inject/commentReplyPagination.ts', {
+      '~/constants/commentReading': await import('../src/constants/commentReading'),
+      '~/constants/globalEvents': await import('../src/constants/globalEvents'),
+      '~/utils/commentReadingAnchor': await import('../src/utils/commentReadingAnchor'),
+      '~/utils/commentReplyPageCache': await import('../src/utils/commentReplyPageCache'),
+      '~/utils/iframeDrawerHost': { isIframeDrawerHost: () => false },
+      './commentReplyControls': await import('../src/inject/commentReplyControls'),
+    })
     const controller = module.createCommentReplyPaginationController({
       getAccountId: () => account,
       getData: () => ({}),

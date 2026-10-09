@@ -91,35 +91,6 @@ export function buildVideoSearchParams(options: {
 }
 
 /**
- * 过滤视频广告
- */
-export function applyVideoTimeFilter(list: any[]): any[] {
-  if (!Array.isArray(list))
-    return []
-  return list.filter(item => !isVideoAd(item))
-}
-
-/**
- * 判断是否为视频广告
- */
-function isVideoAd(item: any): boolean {
-  if (!item || typeof item !== 'object')
-    return false
-  if (item.is_ad === true || item.is_ad_loc === true)
-    return true
-  if (item.cm || item.cm_info || item.cm_mark)
-    return true
-  if (item.ad_info || item.ad_extra || item.ad_index)
-    return true
-  if (typeof item.card_type === 'string' && item.card_type.toLowerCase().includes('ad'))
-    return true
-  // 检查 type 字段是否包含 "ad"
-  if (typeof item.type === 'string' && item.type.toLowerCase().includes('ad'))
-    return true
-  return false
-}
-
-/**
  * 去重辅助函数
  */
 export function dedupeByKey<T>(items: T[], keyGetter: (item: T) => string): T[] {

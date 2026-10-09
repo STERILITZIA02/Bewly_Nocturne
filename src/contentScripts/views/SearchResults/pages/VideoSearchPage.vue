@@ -3,13 +3,14 @@ import { computed, watch } from 'vue'
 
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import type { GridLayoutType } from '~/logic'
+import { settings } from '~/logic'
 
 import Pagination from '../components/Pagination.vue'
 import SearchEmptyState from '../components/SearchEmptyState.vue'
 import { useSearchListPage } from '../composables/useSearchListPage'
 import { convertLiveRoomData, convertVideoData, isAdVideo } from '../searchTransforms'
 import type { VideoSearchFilters } from '../types'
-import { applyVideoTimeFilter, buildVideoSearchParams } from '../utils/searchHelpers'
+import { buildVideoSearchParams } from '../utils/searchHelpers'
 
 const props = defineProps<{
   keyword: string
@@ -33,11 +34,18 @@ const { paginationMode, isLoading, error, results, totalResults, hasMore, reques
     pageSize: 30,
     ...buildVideoSearchParams({ loadMore, context, filters: props.filters }),
   }),
-  transformItems: items => applyVideoTimeFilter(items.filter(item => !isAdVideo(item)))
-    .map(item => item.type === 'live_room' ? convertLiveRoomData(item) : convertVideoData(item)),
-  itemKey: item => String(item.aid ?? item.bvid ?? item.id ?? item.roomid),
+  transformItems: items => items.map(item => ({
+    ...(item.type === 'live_room' ? convertLiveRoomData(item) : convertVideoData(item)),
+    isAdvertisement: isAdVideo(item),
+  })),
+  itemKey: item => item.advertisementKey ?? String(item.aid ?? item.bvid ?? item.id ?? item.roomid),
   onPageChange: page => emit('updatePage', page),
 })
+
+// Keep accepted results so toggling the shared setting restores cards without another request.
+const visibleResults = computed(() => settings.value.blockAds
+  ? results.value?.filter(item => !item.isAdvertisement)
+  : results.value)
 
 // 监听筛选条件变化
 watch(() => props.filters, () => {
@@ -72,7 +80,7 @@ function transformVideo(video: any) {
 defineExpose({
   isLoading,
   error,
-  results,
+  results: visibleResults,
   totalResults,
   hasMore,
   requestLoadMore,
@@ -93,13 +101,13 @@ defineExpose({
 
     <template v-else>
       <VideoCardGrid
-        :items="results || []"
+        :items="visibleResults || []"
         :grid-layout="gridLayout"
         :loading="isLoading"
         :no-more-content="paginationMode === 'scroll' && !hasMore"
         :request-failed="!!error"
         :transform-item="transformVideo"
-        :get-item-key="(video: any) => video.aid || video.id"
+        :get-item-key="(video: any) => video.advertisementKey || video.aid || video.id"
         :empty-description="$t('common.no_data')"
         :show-loading-more-skeleton="true"
         :show-load-more-indicator="false"

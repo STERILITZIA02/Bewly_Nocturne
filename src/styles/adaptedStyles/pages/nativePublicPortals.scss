@@ -1,0 +1,1934 @@
+// Public introductions/listings only. Brand video, QR codes, product artwork,
+// CV/application workflows and external financial widgets retain native owners.
+html.bewly-design[data-bewly-native-site="marketing-public"] {
+  .home-body {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  :is(.home-content-item, .home-form) {
+    background-color: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .home-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--bew-space-6);
+  }
+
+  .home-content-item {
+    padding-inline: var(--bew-space-6);
+  }
+
+  .picture-container img {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .home-form {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--bew-space-4);
+    padding: var(--bew-space-6);
+
+    .home-form-group {
+      width: auto;
+      min-width: 0;
+      margin: 0;
+    }
+
+    .industry-group,
+    .textarea,
+    .submit-btn {
+      grid-column: 1 / -1;
+    }
+
+    .submit-btn {
+      justify-self: center;
+    }
+  }
+
+  :is(.home-title, .home-content-item-title, .home-form h2, .home-form-group label) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.home-desc, .home-content-item-desc, .home-form p) {
+    color: var(--bew-text-2);
+  }
+
+  .home-form :is(input, textarea, .el-input__inner) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.home-content-btn, .submit-btn, .login-btn) {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .body-content,
+  .theme-container > .page {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  // The transparent hero header keeps its native video contrast. Its scrolled
+  // and ordinary reading-page variant is the site's own theme-light state.
+  .vul-navigation.theme-light {
+    color: var(--bew-text-1);
+    background: var(--bew-elevated-solid) !important;
+
+    .nav-item-name {
+      color: var(--bew-text-1);
+    }
+
+    .nav-item.active .nav-item-name {
+      color: var(--bew-theme-foreground);
+    }
+
+    .subnav {
+      color: var(--bew-text-1);
+      background: var(--bew-elevated-solid);
+      border-radius: var(--bew-popover-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  :is(.case-card, .observe-card) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.case-title, .observe-title, .case-data .num, .case-data .unit) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.case-desc, .observe-desc, .case-data .tip) {
+    color: var(--bew-text-2);
+  }
+
+  .case-tags .tag {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-radius-sm);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .case-header > img,
+  .observe-header img {
+    border-radius: var(--bew-card-radius) var(--bew-card-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.case-detail-body, .observe-detail-body) {
+    color: var(--bew-text-1);
+
+    :is(p, h1, h2, h3, li, strong, em) {
+      color: inherit;
+    }
+
+    a {
+      color: var(--bew-theme-foreground);
+    }
+
+    // Authored infographics may consist of adjoining image slices. Keep their
+    // original geometry and colours instead of rounding/filtering each slice.
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+
+  :is(.case-detail-breadcrumb, .observe-detail-breadcrumb, .container-footer, .el-breadcrumb__inner) {
+    color: var(--bew-text-2);
+  }
+
+  .product-nav {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .product-nav-item {
+    color: var(--bew-text-2);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.active {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .product-content-title,
+  .product-content .content-item-title {
+    color: var(--bew-text-1);
+  }
+
+  .product-content-item-desc,
+  .product-content .content-item-desc {
+    color: var(--bew-text-2);
+  }
+
+  .product-content a {
+    color: var(--bew-theme-foreground);
+  }
+
+  .content-btn,
+  .el-button--primary:not(:disabled, .is-disabled) {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .agent-container .card-item,
+  .body-content .block-item {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .body-content .block-item {
+    // These navigation cards paint their pink gradient and shadow inline.
+    // Their currentColor SVGs also need to follow the ordinary card surface.
+    background: var(--bew-content-solid) !important;
+    filter: none !important;
+
+    .svg-icon {
+      color: var(--bew-text-1) !important;
+    }
+  }
+
+  .agent-container .card-header .title,
+  .body-content .block-item .name,
+  .body-content :is(.tab-name, .tip-title),
+  .tab-wrap .list-wrap .name {
+    color: var(--bew-text-1);
+  }
+
+  .agent-container .card-item :is(.content, .label),
+  .body-content :is(.tab-desc, .tip-desc),
+  .tab-wrap .list-wrap .desc {
+    color: var(--bew-text-2);
+  }
+
+  .body-content .footer-tips {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .body-content .carousel-wrapper {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .agent-container .card-item .split {
+    background: var(--bew-border-color);
+  }
+
+  .agent-container .card-header {
+    gap: var(--bew-space-3);
+
+    .title {
+      flex: 1;
+      min-width: 0;
+      width: auto;
+    }
+
+    .logo {
+      flex-shrink: 0;
+      corner-shape: var(--bew-corner-shape-round);
+    }
+  }
+
+  .agent-container :is(.biz-input__wrapper, .biz-input__inner) {
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  @media (max-width: 1310px) {
+    #container {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .home-body {
+      width: calc(100% - var(--bew-space-12));
+      max-width: 1070px; // Preserve the native reading width on wider desktops.
+      margin-inline: auto;
+    }
+
+    .home-content-item {
+      gap: var(--bew-space-6);
+    }
+
+    .home-content-item > :is(.text-container, .picture-container) {
+      flex: 1 1 0;
+      min-width: 0;
+      margin-inline: 0;
+    }
+
+    .picture-container img {
+      max-width: 100%;
+      height: auto;
+    }
+
+    .home-form {
+      max-width: 100%;
+    }
+
+    .case-list,
+    .case-detail,
+    .observe-list-container,
+    .observe-detail,
+    .agent-container {
+      box-sizing: border-box;
+      width: calc(100% - var(--bew-space-8));
+      min-width: 0;
+      max-width: 100%;
+      margin-inline: auto;
+      padding-inline: 0;
+    }
+
+    .body-content > .container {
+      // The partner introduction already fits in its native 730px reading lane.
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .case-list-container,
+    .observe-list-container,
+    .agent-container .cards-list {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--bew-space-6);
+    }
+
+    .case-list-container,
+    .agent-container .cards-list {
+      width: 100%;
+    }
+
+    .case-card,
+    .observe-card,
+    .agent-container .card-item {
+      min-width: 0;
+      width: 100%;
+      height: auto;
+      margin: 0;
+    }
+
+    .case-header,
+    .observe-header {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 16 / 9;
+
+      img,
+      .b-image-wrapper {
+        max-width: 100%;
+      }
+    }
+
+    .case-header > img,
+    .observe-header .b-image-wrapper,
+    .observe-header .b-image-wrapper > picture,
+    .observe-header img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .observe-detail-body {
+      max-width: 100%;
+    }
+
+    .case-detail-body,
+    .case-detail-body .container-body,
+    .case-detail-content {
+      box-sizing: border-box;
+      max-width: 100%;
+    }
+
+    .case-detail-banner > .banner {
+      // Only the two decorative side images extend beyond the narrowed hero.
+      // Contain their paint without clipping the sibling title or statistics.
+      overflow: hidden;
+    }
+
+    .agent-container > .content,
+    .agent-container > .content > .b-image-wrapper.bg,
+    .agent-container .search-wrap {
+      width: 100%;
+    }
+
+    .agent-container .search-wrapper {
+      max-width: calc(100% - var(--bew-space-8));
+    }
+
+    #container.product-container {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    #container.product-container > .product-nav {
+      // The native sidebar is positioned left of the whole reading column and
+      // reaches x=-121 at 1100px. Reserve an explicit desktop navigation lane.
+      left: var(--bew-space-4);
+      right: auto;
+      width: 160px;
+      min-width: 0;
+      margin-right: 0;
+    }
+
+    #container.product-container > .product-content {
+      width: calc(100% - 160px - var(--bew-space-6));
+      margin-left: calc(160px + var(--bew-space-6));
+      margin-right: 0;
+    }
+
+    .product-content .content-item {
+      flex-direction: column;
+      gap: var(--bew-space-6);
+
+      // Preserve the phone/mock-player coordinate plane at its native size.
+      // Stack the explanation instead of scaling or moving its media nodes.
+      .video-container {
+        max-width: 100%;
+      }
+
+      .text-container {
+        width: 100%;
+        min-width: 0;
+      }
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="brand-public"] {
+  .header {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+
+    .header-wrap {
+      // Keep the native wide header cap without putting its account buttons
+      // beyond a narrow desktop's right edge (the original width is 1260px).
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--bew-space-6);
+      width: calc(100% - var(--bew-space-8));
+      max-width: 1260px;
+      margin-inline: auto;
+    }
+
+    .header-logo,
+    .header-option-wrap {
+      float: none;
+      width: auto;
+    }
+
+    .header-option-wrap {
+      flex-shrink: 0;
+    }
+
+    .header-logo-bg {
+      // The original composite logo contains black brand lettering. Retain
+      // the SVG colours on a small light backing instead of filtering it.
+      padding: var(--bew-space-1) var(--bew-space-2);
+      background: white;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .tab-menu-item {
+      color: var(--bew-text-2);
+
+      &:first-child,
+      &:hover {
+        color: var(--bew-theme-foreground);
+        border-bottom-color: var(--bew-theme-foreground);
+      }
+    }
+
+    .screen-button {
+      min-height: var(--bew-control-height);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .screen-button.ivu-btn-ghost {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+
+      &:hover {
+        background: var(--bew-content-solid-hover);
+      }
+    }
+  }
+
+  :is(.second-screen, .third-screen, .home-footer) {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  :is(.second-screen, .third-screen) :is(.title, .item-title, .flow-title) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.sub-title, .item-sub, .flow-sub, .footer-item-font, .footer-intro) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.select-item, .flow-list-item) {
+    background-color: var(--bew-content-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .select-item-hover {
+    background-color: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+  }
+
+  .title-line {
+    background: var(--bew-theme-foreground);
+  }
+
+  .ivu-btn-info:not(:disabled) {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  @media (max-width: 1292px) {
+    .enterprise-login {
+      min-width: 0;
+      width: 100%;
+    }
+
+    .fact-margin {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .second-screen-content {
+      width: 100%;
+    }
+
+    .content-left,
+    .content-right {
+      // Keep the native 250px phone preview and its absolute centering.
+      width: calc((100% - 250px) / 2 - var(--bew-space-6));
+      min-width: 0;
+    }
+
+    .select-item {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .flow-list-wrap {
+      width: 100%;
+      gap: var(--bew-space-6);
+    }
+
+    .flow-list-item {
+      flex: 1 1 0;
+      min-width: 0;
+      width: auto;
+      margin-inline: 0;
+    }
+
+    img.flow-img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="mcn-public"] #app {
+  // The entry header overlays the authored hero with white branding/actions.
+  // Keep that native transparent header while theming the reading canvas.
+  .mcn-entry-page,
+  .mcn-entry-page > .body {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  > .header:not(.is-entry) {
+    // Scrolling replaces the transparent hero header with this native state.
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+
+    .icon-master {
+      color: var(--bew-theme-foreground);
+    }
+
+    :is(.right-container, .message-box, .name, .btn) {
+      color: var(--bew-text-1);
+    }
+  }
+
+  .mcn-entry-page > .body :is(.condition-box, .apply-step-box, .equity-box) {
+    // Native scoped rules set gradients and different corner sizes per section.
+    // Map the entire background while keeping the separate benefit illustrations.
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .mcn-entry-page > .body .title,
+  .mcn-entry-page > .body .condition-box p {
+    color: var(--bew-text-1);
+  }
+
+  .mcn-entry-page > .body .sub-title {
+    color: var(--bew-text-2);
+  }
+
+  .mcn-entry-page > .body h2 > p,
+  .mcn-entry-page > .body .explain-popup p {
+    color: inherit;
+  }
+
+  .mcn-entry-page > .body h2 > p + p {
+    color: var(--bew-text-2);
+  }
+
+  .mcn-entry-page > .body .apply-steps-box {
+    background: transparent;
+  }
+
+  .mcn-entry-page > .body .number-icon {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .mcn-entry-page > .body .explain-popup {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bcc-button {
+    // The native palette is scoped to #app; keep this override in the same
+    // owner so the theme background and its paired foreground win together.
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.bcc-button--primary:not(:disabled, .is-disabled) {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+
+    &.bcc-button--default:not(:disabled, .is-disabled) {
+      // This public entry's secondary action specifies its old colour inline.
+      color: var(--bew-text-1) !important;
+    }
+  }
+
+  @media (max-width: 1232px) {
+    .mcn-entry-page > .body {
+      width: calc(100% - var(--bew-space-8));
+      padding-inline: var(--bew-space-6);
+      margin-inline: auto;
+      box-sizing: border-box;
+    }
+
+    .condition-box {
+      flex: 1 1 0;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    :is(.flex-style, .apply-steps-box, .equity-box) {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .equity-box img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="jobs-public"] {
+  :is(.position-list, .wrapper-content, .bili-footer) {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  #app:has(.back-top.ant-back-top) .bili-footer {
+    // B-STAR and campus share this native control at 500 below an inline 1002 footer.
+    // Keep this ordinary reading layer below floating controls and dialogs.
+    z-index: 0 !important;
+  }
+
+  .bili-banner-container.blue {
+    background: var(--bew-elevated-solid);
+
+    .bili-banner-right-routes,
+    .bili-banner-right-user :is(span, i) {
+      color: var(--bew-text-1);
+    }
+
+    .bili-banner-right-routes.active {
+      color: var(--bew-theme-foreground);
+    }
+
+    .bili-banner-right-dividing-line {
+      background: var(--bew-border-color);
+    }
+  }
+
+  .bili-banner-right-routes {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--bew-control-height);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .position-detail :is(.position-title, .position-sub-title, .position-desc) {
+    color: var(--bew-text-1);
+  }
+
+  .position-detail .operator-footer .ant-btn:not(:disabled, .ant-btn-disabled) {
+    color: var(--bew-on-theme-color);
+    background: var(--bew-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+
+    > span {
+      color: inherit;
+    }
+  }
+
+  :is(.campus-pc-main, .bstar-pc-main, .social-home .content-container, .social-home .content-bg) {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .campus-pc-main div:has(> .activity-module) {
+    // Replace only the observed empty star/dot backing painted inline here.
+    // The section headings, recruitment cards and hero are separate images.
+    background: var(--bew-bg) !important;
+  }
+
+  .bstar-pc-main > div:has(> .main-container) {
+    // The full-height inline image is only a pale star-field. Keep the separate
+    // branded hero, illustrated timeline, photographs and flip-card artwork.
+    background: var(--bew-bg) !important;
+  }
+
+  &.dark .bstar-pc {
+    .main-container > div > img.animate:not([src$="/bstar-intro-steps.png"]),
+    .highlight-container > div > div:first-child > img.animate,
+    .highlight-container div:has(> .animate > .normal-font) > img.animate {
+      // These observed slots contain transparent text graphics. The timeline
+      // icons, swiper photos, video covers and card faces stay unfiltered.
+      filter: brightness(0) invert(1);
+    }
+  }
+
+  &.dark .campus-pc .activity-module {
+    // These dedicated title graphics contain black lettering. Keep their
+    // alpha and geometry while making the ink readable on the themed canvas.
+    img[src*="/pc-title-recruitment-process-"],
+    img[src*="/pc-subtitle-faq-"],
+    .recruitment-classification > img.animate,
+    .news-title > img.animate {
+      filter: brightness(0) invert(1);
+    }
+  }
+
+  // These two empty, absolutely positioned ellipses only draw the old page
+  // backing. Keep their geometry and all neighbouring title/media nodes.
+  .social-home .content-container > div:first-child:empty,
+  .social-home .bg-tv:empty {
+    background: transparent;
+  }
+
+  .social-home .deliver-card,
+  .social-home .card,
+  .campus-pc :is(.news-banner-item, .news-column-item, .faq-item),
+  .bili-cover-container {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .social-home .deliver-card :is(.title, .content),
+  .social-home .card__content,
+  .campus-pc :is(.news .title, .faq-q-text),
+  .bstar-pc .medium-font {
+    color: var(--bew-text-1);
+  }
+
+  :is(.social-home, .bstar-pc) .normal-font,
+  .campus-pc :is(.news .sub-title, .news .date, .faq-a) {
+    color: var(--bew-text-2);
+  }
+
+  .campus-pc .faq-item.active {
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .campus-pc .faq-plus::before,
+  .campus-pc .faq-plus::after {
+    background: var(--bew-text-1);
+  }
+
+  .campus-pc .news-banner-item > .img {
+    border-radius: var(--bew-card-radius) var(--bew-card-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-cover-container :is(.video-cover, .cover-img) {
+    // The native media owner also specifies its joined corners inline.
+    border-radius: var(--bew-card-radius) var(--bew-card-radius) 0 0 !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .campus-pc .news-column-item .left > .img {
+    border-radius: var(--bew-card-radius) 0 0 var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-cover-container .video-title {
+    color: var(--bew-text-1) !important;
+    background: var(--bew-content-solid) !important;
+    border-radius: 0 0 var(--bew-card-radius) var(--bew-card-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .social-home .overlay-content .ant-input-affix-wrapper {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .social-home .overlay-content .ant-input {
+    color: var(--bew-text-1);
+    background: transparent;
+  }
+
+  .bup-pc,
+  .bup-pc-body {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .bup-pc-body-bg {
+    // This sticky empty layer participates in the native scroll scene. Clear
+    // only its inline star-field paint, never its height, position or connection.
+    background: none !important;
+  }
+
+  :is(.bup-pc-intro-card, .bup-pc-dir-cell, .bup-pc-talent, .bup-pc-hl, .bup-pc-faq-item) {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bup-pc-intro-card {
+    // The observed inline image is an empty decorative frame. Its title and
+    // body are separate nodes; let the shared surface provide their backing.
+    background-image: none !important;
+  }
+
+  .bup-pc-dir-frame,
+  .bup-pc-talent-frame {
+    // These separate images are decorative card frames, not the adjacent
+    // research icons, talent illustrations or native hero video.
+    visibility: hidden;
+  }
+
+  .bup-pc-dir-cell:is(:hover, :focus-visible),
+  .bup-pc-hl.active {
+    background: var(--bew-theme-surface);
+  }
+
+  :is(.bup-pc-intro-p, .bup-pc-dir-txt .cn, .bup-pc-step-label, .bup-pc-faq-q-text) {
+    color: var(--bew-text-1);
+  }
+
+  .bup-pc-intro-p .strong,
+  .bup-pc-intro-targets .label {
+    color: inherit;
+  }
+
+  :is(
+    .bup-pc-intro-targets,
+    .bup-pc-dir-txt .en,
+    .bup-pc-talent-desc,
+    .bup-pc-hl-desc,
+    .bup-pc-process-tip,
+    .bup-pc-faq-a
+  ) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.bup-pc-talent-title-word, .bup-pc-hl-title, .bup-pc-step-no) {
+    background: none;
+    color: var(--bew-text-1);
+    -webkit-text-fill-color: currentcolor;
+  }
+
+  .bup-pc-hl-no,
+  .bup-pc-tag {
+    color: var(--bew-on-theme-surface);
+    background: var(--bew-theme-surface);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bup-pc-tag {
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .bup-pc-faq-plus::before,
+  .bup-pc-faq-plus::after {
+    background: var(--bew-text-1);
+  }
+
+  .bup-pc-faq a {
+    color: var(--bew-theme-foreground);
+  }
+
+  &:not(.dark) :is(.bup-pc-title, .bup-pc-intro-title) {
+    // Dedicated raster heading/wordmark images use white lettering. Photos,
+    // research icons, presentation slides and the hero remain unfiltered.
+    filter: brightness(0);
+  }
+
+  :is(.position-filter-web, .bili-item-card) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.filter-web-header, .bili-checkboxs-header, .item-title, .position-header, .ant-checkbox-wrapper) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.bili-infotags, .checkbox-item-tips, .bili-footer-left, .bili-footer-right-label1) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.clear-btn, .open-btn, .bili-checkbox-tip) {
+    color: var(--bew-theme-foreground);
+  }
+
+  .bili-search {
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-search-input {
+    background: transparent;
+    color: var(--bew-text-1);
+  }
+
+  .bili-search-btn {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.ant-checkbox-inner, .ant-pagination-item, .ant-pagination-item-link) {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .ant-checkbox-inner {
+    border-radius: var(--bew-radius-sm);
+  }
+
+  .ant-pagination-item a,
+  .ant-pagination-item-link {
+    color: var(--bew-text-1);
+  }
+
+  .ant-pagination-item-active,
+  .ant-checkbox-checked:not(.ant-checkbox-disabled) .ant-checkbox-inner {
+    background: var(--bew-theme-color);
+    border-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+  }
+
+  .ant-pagination-item-active a {
+    color: inherit;
+  }
+
+  .ant-checkbox-checked:not(.ant-checkbox-disabled) .ant-checkbox-inner::after {
+    border-color: var(--bew-on-theme-color);
+  }
+
+  .ant-pagination-disabled .ant-pagination-item-link {
+    color: var(--bew-text-3);
+  }
+
+  @media (max-width: 1200px) {
+    :is(.wrapper-content, .wrapper-search) {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .bstar-pc .card-list {
+      // The native 1140px flip-card row overflows a 1100px desktop. Preserve
+      // each front/back pair and its transform; scale the row's available space.
+      width: calc(100% - var(--bew-space-8));
+      min-width: 0;
+      margin-inline: auto;
+      gap: var(--bew-space-6);
+    }
+
+    .bstar-pc .card-list .card {
+      flex: 1 1 0;
+      min-width: 0;
+      margin-inline: 0;
+      height: auto;
+      aspect-ratio: 350 / 520;
+    }
+
+    .bstar-pc .card :is(.face, .back) {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+
+    .campus-pc :is(.process, .recruitment-classification, .news, .faq-section) {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .campus-pc .process > img.animate {
+      // The 1188x98 connecting line is centred inside this narrower section.
+      // Fit the original image instead of clipping the whole document.
+      max-width: 100%;
+      height: auto !important;
+    }
+
+    .campus-pc :is(.faq, .faq-list) {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .campus-pc
+      :is(.process-list, .recruitment-classification-portals, .news-banner-wrapper, .news-column-wrapper, .faq-item) {
+      max-width: 100%;
+      box-sizing: border-box;
+    }
+
+    .campus-pc .recruitment-classification-portals {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .campus-pc .recruitment-classification-card {
+      width: auto;
+      min-width: 0;
+    }
+
+    .campus-pc .news-banner-item {
+      flex: 1 1 0;
+      min-width: 0;
+
+      > .img {
+        width: 100%;
+        height: auto;
+      }
+    }
+
+    .campus-pc .faq-a-wrap,
+    .campus-pc .faq-a {
+      max-width: 100%;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="security-public"] {
+  :is(body > .top3, body > .gift, body > .info, body > .about, .gift_list, .mastfoot) {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  body > header {
+    background: var(--bew-elevated-solid);
+
+    .nav-link {
+      color: var(--bew-text-1);
+    }
+
+    .nav-link:is(.active, :hover) {
+      color: var(--bew-theme-foreground);
+      border-bottom-color: var(--bew-theme-foreground);
+    }
+
+    // This raster lockup combines a coloured shield and black lettering. Keep
+    // its original colours on a light image canvas instead of filtering it.
+    img.logo[src="/static/images/logo.png"] {
+      box-sizing: border-box;
+      padding: var(--bew-space-1);
+      background: var(--bew-static-white);
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  :is(.pic, .info-detail) {
+    background-color: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.top3, .gift, .info, .about) .title {
+    color: var(--bew-text-1);
+  }
+
+  body > .about .title h3 {
+    color: inherit;
+  }
+
+  :is(.info-detail .detail, .mastfoot),
+  .info-detail .detail p,
+  body > .about p {
+    color: var(--bew-text-2);
+  }
+
+  .info-detail .image img[src="/static/images/info.png"] {
+    // The authored flowchart has black connectors on transparent pixels.
+    // Preserve its colours and geometry on the white canvas it was drawn for.
+    background-color: var(--bew-static-white);
+  }
+
+  .am-article {
+    color: var(--bew-text-1);
+
+    :is(h1, h2, h3, p, li, strong) {
+      color: inherit;
+    }
+
+    .am-article-title p,
+    .am-article-title span {
+      color: var(--bew-text-2);
+    }
+
+    hr {
+      border-color: var(--bew-border-color);
+    }
+  }
+
+  :is(.content, .thanks_content) .table {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    :is(th, td) {
+      color: inherit;
+      border-color: var(--bew-border-color);
+    }
+
+    thead {
+      background: var(--bew-content-alt-solid);
+    }
+  }
+
+  :is(.content, .thanks_content, .am-article) a:not(.medals) {
+    color: var(--bew-theme-foreground);
+  }
+
+  .filter {
+    height: auto;
+    padding-block: var(--bew-space-3);
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+
+    .center {
+      display: flex;
+      align-items: center;
+      gap: var(--bew-space-4);
+      height: auto;
+    }
+
+    ul {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--bew-space-1);
+      margin: 0;
+      padding: 0;
+    }
+
+    a {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--bew-control-item-height);
+      padding-inline: var(--bew-space-3);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    a:hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    .archive a {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .select select,
+  .pagination a {
+    min-height: var(--bew-control-height);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .pagination a {
+    display: inline-flex;
+    align-items: center;
+
+    &:hover {
+      background: var(--bew-content-alt-solid-hover);
+    }
+  }
+
+  .pic {
+    .pic-image {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+
+    .info {
+      background: var(--bew-content-solid);
+      color: var(--bew-text-1);
+    }
+  }
+
+  // The native overlay slides up from bottom:-120px on pointer hover. Give
+  // focused gift links the same information without handling their clicks.
+  .gift:focus-within .pic .info {
+    bottom: 0;
+  }
+
+  .gift_info {
+    .image img {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .info {
+      background: transparent;
+      color: var(--bew-text-1);
+    }
+
+    .detail label {
+      color: var(--bew-text-2);
+    }
+
+    .detail a:not(.btn) {
+      color: var(--bew-theme-foreground);
+      overflow-wrap: anywhere;
+    }
+  }
+
+  #aboutUS .modal-content {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-surface-border-color);
+    border-radius: var(--bew-modal-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  #aboutUS :is(.modal-header, .modal-body) {
+    padding: var(--bew-space-4);
+    border-color: var(--bew-border-color);
+  }
+
+  #aboutUS .close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bew-control-height);
+    height: var(--bew-control-height);
+    opacity: 1;
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  :is(.top3, .gift, .info, .about, .mastfoot) a {
+    color: var(--bew-theme-foreground);
+  }
+
+  .btn,
+  body > .gift .button,
+  .about > .button {
+    min-height: var(--bew-control-height);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-alt-solid-hover);
+    }
+  }
+
+  body > .gift .button {
+    // This native catalogue link is a complete pill, unlike ordinary buttons.
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="investor-public"] {
+  .inner-content,
+  .homepage-layout,
+  .hp__business-highlights,
+  .hp__quarterly-results,
+  .hp__recent-news,
+  .hp__quicklinks,
+  .site-footer {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .inner-content :is(.title, .content-count, .unit-count, .q1-info) {
+    color: var(--bew-text-1);
+  }
+
+  .inner-content :is(.note-type, .note-business) {
+    color: var(--bew-text-2);
+  }
+
+  .hp__business-highlights .content-count p {
+    color: inherit;
+  }
+
+  .hp__business-highlights .box-count :is(.number-count, .unit-count) {
+    color: var(--bew-theme-foreground);
+  }
+
+  .hp__quarterly-results .quarterly-background {
+    // The inline water texture is decorative; labels and links are separate DOM.
+    background: var(--bew-bg) !important;
+  }
+
+  .hp__quarterly-results .q1-info p,
+  .hp__quarterly-results .list-quarterly-results .text-title {
+    color: var(--bew-text-1);
+  }
+
+  &:not(.dark) .hp__quarterly-results .inside-circle img.icon {
+    // Only the four white document/navigation glyphs, never report artwork.
+    filter: brightness(0);
+  }
+
+  .site-header .header.headroom--not-top,
+  .site-header .menu-item > .ul-menu {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+
+    .menu,
+    .open-sub i,
+    .lang-list a {
+      color: var(--bew-text-1);
+    }
+  }
+
+  .site-header .menu-item > .ul-menu {
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .inner-content .tab-head .nav-link {
+    color: var(--bew-text-1);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.active {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  .inner-content .tab-head .nav-link.active::before {
+    background: var(--bew-theme-foreground);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .faqs-container .arrow img,
+  .board-of-directors-container .arrow img,
+  .quarterly-results-swiper-prev img,
+  .quarterly-results-swiper-next img {
+    // These are the native monochrome disclosure/navigation arrows, not media.
+    filter: brightness(0);
+  }
+
+  &.dark
+    :is(
+      .faqs-container .arrow,
+      .board-of-directors-container .arrow,
+      .quarterly-results-swiper-prev,
+      .quarterly-results-swiper-next
+    )
+    img {
+    filter: brightness(0) invert(1);
+  }
+
+  .faqs-container .tab-header,
+  .annual-interim-reports-container .child-head .nav-link {
+    box-sizing: border-box;
+    min-height: var(--bew-control-height-lg);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+
+    &.active {
+      color: var(--bew-on-theme-color);
+      background: var(--bew-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+
+    .title-tab {
+      color: inherit;
+    }
+  }
+
+  .company-profile-container .content,
+  .board-of-directors-container .desc,
+  .management-modal .modal-body,
+  .faqs-container .desc {
+    color: var(--bew-text-1);
+
+    :is(p, span, li) {
+      color: inherit;
+    }
+  }
+
+  :is(.page-desc, .documents-group, .information-request-container, .ir-contact-container) {
+    color: var(--bew-text-1);
+
+    :is(p, label, .group-title, .location-name, .person-name) {
+      color: inherit;
+    }
+  }
+
+  :is(.table-title, .box-title, .analyst-info, .information-request-container .text-font-size-14) {
+    color: var(--bew-text-2);
+
+    :is(p, span) {
+      color: inherit;
+    }
+  }
+
+  .document-list .item,
+  .annual-interim-reports-container .item,
+  .board-of-directors-container .item,
+  .management-container .person,
+  .shareholder-info,
+  .faqs-container .item {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .document-list .title,
+  .annual-interim-reports-container .title p,
+  .board-of-directors-container :is(.name, .position),
+  .management-container :is(.name, .position),
+  .shareholder-link p,
+  .shareholder-item .title p,
+  .faqs-container .question {
+    color: var(--bew-text-1);
+  }
+
+  .annual-interim-reports-container .title .date,
+  .shareholder-item .date p,
+  .management-container .position {
+    color: var(--bew-text-2);
+  }
+
+  .annual-interim-reports-container .title p {
+    color: var(--bew-text-1) !important;
+  }
+
+  .annual-interim-reports-container .title .date {
+    color: var(--bew-text-2) !important;
+  }
+
+  .faqs-container .head-info {
+    background: transparent;
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .management-modal .modal-content {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-surface-border-color);
+    border-radius: var(--bew-modal-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .management-modal .modal-header {
+    background: transparent !important;
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-modal-radius) var(--bew-modal-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+
+    .name,
+    .position {
+      color: var(--bew-text-1) !important;
+    }
+  }
+
+  .management-modal .close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bew-control-height);
+    height: var(--bew-control-height);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    opacity: 1;
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .box-table table {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-collapse: separate;
+    border-spacing: 0;
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    :is(th, td) {
+      color: inherit;
+      border-color: var(--bew-border-color);
+    }
+
+    thead,
+    thead tr {
+      color: var(--bew-text-1);
+      background: var(--bew-content-alt-solid);
+    }
+  }
+
+  .news-header,
+  .esg-reports-container .title-report,
+  .ir-contact-container .location {
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    p {
+      color: inherit;
+    }
+  }
+
+  .news-item {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+
+    .title p,
+    .date p {
+      color: var(--bew-text-1);
+    }
+  }
+
+  #hp-recent-news {
+    // This homepage list is rendered into the host document, outside the
+    // external ticker frames, and uses links and date divs rather than p tags.
+    .news-item {
+      // Preserve the native flush-aligned reading list without a card shell.
+      background: transparent;
+    }
+
+    .title a {
+      color: var(--bew-text-1);
+
+      &:is(:hover, :focus-visible) {
+        color: var(--bew-theme-foreground);
+      }
+    }
+
+    .published-date {
+      color: var(--bew-text-2);
+    }
+  }
+
+  .news-release-wrapper,
+  .year-select,
+  .year-list {
+    height: auto;
+  }
+
+  .year-list {
+    flex-wrap: wrap;
+    gap: var(--bew-space-1);
+
+    .year-item {
+      min-height: var(--bew-control-height-sm);
+      margin: 0;
+      padding: var(--bew-space-1) var(--bew-space-2);
+      color: var(--bew-text-1);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &.active {
+        color: var(--bew-on-theme-surface);
+        background: var(--bew-theme-surface);
+        border-color: var(--bew-theme-foreground);
+      }
+    }
+  }
+
+  .pagination.fy {
+    background: transparent;
+    gap: var(--bew-space-1);
+
+    a {
+      color: var(--bew-text-1);
+      background: var(--bew-content-alt-solid);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    a.active {
+      color: var(--bew-on-theme-color);
+      background: var(--bew-theme-color);
+    }
+  }
+
+  .reports-table {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .swiper-slide.item {
+      // Adjacent year columns form one table, not independent rounded cards.
+      border-radius: 0;
+    }
+
+    :is(.type, .year, .right-sec) {
+      // The native quarterly template has deeper scoped header rules.
+      color: var(--bew-text-1) !important;
+      background: var(--bew-content-alt-solid) !important;
+      border-color: var(--bew-border-color);
+    }
+
+    .row-data-content {
+      border-color: var(--bew-border-color);
+    }
+
+    .cell.file-avaliable a {
+      color: var(--bew-theme-foreground) !important;
+    }
+
+    .cell:not(.file-avaliable) a {
+      color: var(--bew-text-3) !important;
+    }
+  }
+
+  .reports-table .left-title .type:first-child {
+    border-top-left-radius: var(--bew-card-radius);
+  }
+
+  .reports-table .left-title .type:last-child {
+    border-bottom-left-radius: var(--bew-card-radius);
+  }
+
+  .reports-table .last-right .right-sec {
+    border-top-right-radius: var(--bew-card-radius);
+  }
+
+  .quarterly-results-container
+    .reports-table
+    .right-content
+    :is(.quarterly-results-swiper-prev, .quarterly-results-swiper-next) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bew-control-height);
+    height: var(--bew-control-height);
+    min-width: var(--bew-control-height);
+    min-height: var(--bew-control-height);
+    top: var(--bew-space-3);
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .quarterly-results-container .reports-table .right-content .quarterly-results-swiper-prev {
+    left: calc(-1 * var(--bew-control-height));
+  }
+
+  .quarterly-results-container .reports-table .right-content .quarterly-results-swiper-next {
+    right: calc(-1 * var(--bew-control-height));
+  }
+
+  .search-box,
+  .information-request-container .field-reset {
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .information-request-container .reset {
+    color: var(--bew-theme-foreground);
+    min-height: var(--bew-control-height);
+  }
+
+  .hp__recent-news .photo img,
+  .company-profile-container .photo img,
+  .esg-reports-container .photo img,
+  .esg-reports__photo img {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .esg-reports-container .esg-report-title a {
+    color: var(--bew-text-1);
+  }
+
+  .esg-reports__content p,
+  .esg-ratings__intro,
+  .esg-ratings__intro :is(p, em) {
+    color: var(--bew-text-2);
+  }
+
+  .esg-ratings__title-intro,
+  .esg-ratings__title-intro p {
+    color: var(--bew-text-1);
+  }
+
+  .bilibili-public-welfare-container {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+
+    :is(.bpw__content, .bpw__content p, .number-count, .bpw__date) {
+      color: inherit;
+    }
+  }
+
+  // The ESG banner is a content photograph with a native dark overlay, unlike
+  // the ordinary reading panels. Keep its authored white caption in all themes.
+  .esg-banner :is(.title, .title p, .esg__content p, .esg__sign p) {
+    color: var(--bew-on-overlay-color);
+  }
+
+  .esg__honors-and-awards :is(.title, .esg-haa__item-title p, .esg-haa__item-sign p) {
+    color: var(--bew-on-overlay-color);
+  }
+
+  .hp__quicklinks .ocean,
+  .hp__quicklinks .ocean > .container {
+    background: var(--bew-bg);
+  }
+
+  .hp__quicklinks .wave {
+    // Native whitespace prevents :empty from matching this decoration. Remove
+    // its paint and animation without hiding any future content inside it.
+    background: none;
+    animation: none;
+  }
+
+  .hp__quicklinks .ql__link .ql__title {
+    // Match the native five-class rule without changing the linked artwork.
+    color: var(--bew-text-1);
+  }
+
+  .hp__quicklinks .ql__link:is(:hover, :focus-visible) .ql__title {
+    color: var(--bew-theme-foreground);
+  }
+
+  .inner-content a,
+  .site-footer a {
+    color: var(--bew-theme-foreground);
+  }
+
+  .inner-content :is(.item, .box-quaterly-details) {
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .site-content .button,
+  .site-content .submit-btn {
+    color: var(--bew-on-theme-color);
+    background: var(--bew-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  @media (min-width: 1024px) and (max-width: 1280px) {
+    // The observed native 1100px menu did not expand. Keep the same six native
+    // desktop links visible in a second row, without owning its toggle state.
+    .site-header .header {
+      height: auto;
+      background: var(--bew-elevated-solid);
+      color: var(--bew-text-1);
+    }
+
+    .site-header .header > .container,
+    .site-header .row-top {
+      height: auto;
+    }
+
+    .site-header .row-top {
+      flex-wrap: wrap;
+      gap: var(--bew-space-2);
+      padding-block: var(--bew-space-3);
+    }
+
+    .site-header .wrap-right {
+      order: 1;
+      height: auto;
+      margin-left: auto;
+    }
+
+    .site-header .menu-header {
+      display: block;
+      order: 2;
+      width: 100%;
+      height: auto;
+    }
+
+    .site-header .menu-header > .ul-menu {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      gap: var(--bew-space-1);
+      height: auto;
+
+      > .menu-item {
+        height: auto;
+        padding: 0;
+      }
+
+      > .menu-item > .menu {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--bew-control-height);
+        padding: var(--bew-space-2) var(--bew-space-3);
+        color: var(--bew-text-1);
+        font-size: var(--bew-font-size-control);
+        line-height: var(--bew-line-height-control);
+        border-radius: var(--bew-interactive-radius);
+        corner-shape: var(--bew-corner-shape);
+      }
+    }
+
+    .site-header .lang-list a,
+    .site-header .menu-item > .open-sub i {
+      color: var(--bew-text-1);
+    }
+
+    .site-header .off-canvas,
+    .site-header .menu-mobile {
+      display: none;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="public-brand"] {
+  // Recruitment artwork stays native. These selectors belong to the separate
+  // legacy BASC introduction, including its read-only FAQ/about hash routes.
+  :is(.main-header, .layout-body, .main-footer) {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .home-index .block-content {
+    background-color: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .block-content .title {
+    color: var(--bew-text-1);
+  }
+
+  .block-content .sub-title,
+  .layout-footer a {
+    color: var(--bew-text-2);
+  }
+}

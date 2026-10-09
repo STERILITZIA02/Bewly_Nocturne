@@ -3,9 +3,11 @@ import { useEventListener } from '@vueuse/core'
 
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_IFRAME_DRAWER_HOST_CLASS, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_IFRAME_DRAWER_HOST_CLASS, IFRAME_DARK_MODE_CHANGE, IFRAME_PLAYER_CONTEXT } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
+import type { IframePlaybackContext } from '~/logic/iframePageState'
+import type { DefaultVideoPlayerMode } from '~/logic/storage'
 import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
@@ -14,10 +16,12 @@ import { isHomePage, isInIframe } from '~/utils/main'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
+import { resolveMomentsDialogPlayerModeOverride } from '~/utils/player'
 
 const props = defineProps<{
   url: string
   title?: string
+  playbackContext?: IframePlaybackContext
 }>()
 
 const emit = defineEmits<{
@@ -57,6 +61,25 @@ let iframeEscapeHandledGeneration = 0
 let iframeDrawerHostClaimed = false
 const escapeArbitrationTimers = new Set<number>()
 const disposers: Array<() => void> = []
+let playerContextSessionId = crypto.randomUUID()
+let playerContextRequest: { documentId: string, requestId: number, href: string } | undefined
+const reportedPlayerMode = ref<DefaultVideoPlayerMode>()
+const playerMode = computed(() => reportedPlayerMode.value ?? resolveMomentsDialogPlayerModeOverride(props.playbackContext))
+const containerStyle = computed(() => props.playbackContext === 'momentsDialog'
+  && resolveMomentsDialogPlayerModeOverride(props.playbackContext) !== undefined && playerMode.value === 'default' && !isPageFullscreen.value
+  ? { maxWidth: 'var(--bew-page-max-width)', marginInline: 'auto', right: '0' }
+  : undefined)
+
+function requestPlayerContext() {
+  postMessageToIframe(iframeRef.value, { type: IFRAME_PLAYER_CONTEXT, phase: 'request', sessionId: playerContextSessionId, generation: iframeGeneration })
+}
+watch(() => props.playbackContext, () => {
+  iframeGeneration++
+  playerContextSessionId = crypto.randomUUID()
+  playerContextRequest = undefined
+  reportedPlayerMode.value = undefined
+  requestPlayerContext()
+})
 
 // 计算iframe容器的样式
 const iframeContainerClasses = computed(() => {
@@ -283,6 +306,10 @@ function handleIframeLoad(event: Event) {
   }
 
   markIframeReadyForMessaging(iframe)
+  iframeGeneration++
+  playerContextSessionId = crypto.randomUUID()
+  playerContextRequest = undefined
+  requestPlayerContext()
   const iframeWindow = iframe.contentWindow
   if (!iframeWindow) {
     reportRuntimeFailure('Iframe lifecycle', 'contentWindow is unavailable after load')
@@ -408,6 +435,9 @@ async function handleClose() {
 
 async function releaseIframeResources() {
   iframeGeneration++
+  playerContextSessionId = crypto.randomUUID()
+  playerContextRequest = undefined
+  reportedPlayerMode.value = undefined
   clearFocusRetryTimer()
   clearInitialThemeTimer()
   cleanupIframeWindowListeners()
@@ -483,7 +513,7 @@ onMounted(() => {
 })
 
 function handleIframeMessage(event: MessageEvent) {
-  if (isInIframe())
+  if (isInIframe() || disposed || closing || !show.value)
     return
 
   const message = getIframeMessageData(event, iframeRef.value)
@@ -491,17 +521,40 @@ function handleIframeMessage(event: MessageEvent) {
     return
 
   switch (message.type) {
-    case DRAWER_VIDEO_ENTER_PAGE_FULL:
-      clearEscapeConfirmation()
-      headerShow.value = false
-      disableEscPress.value = true
-      isPageFullscreen.value = true
+    case IFRAME_PLAYER_CONTEXT: {
+      // Drawer URLs are same-origin. Check the actual document URL as well as
+      // Window identity, since an iframe WindowProxy survives SPA navigation.
+      try {
+        if (message.href !== iframeRef.value?.contentWindow?.location.href)
+          return
+      }
+      catch { return }
+      if (message.phase === 'ready' && typeof message.documentId === 'string' && message.documentId
+        && Number.isSafeInteger(message.requestId) && Number(message.requestId) > 0) {
+        if (message.sessionId !== playerContextSessionId || message.generation !== iframeGeneration) {
+          requestPlayerContext()
+          return
+        }
+        if (playerContextRequest?.documentId === message.documentId && Number(message.requestId) <= playerContextRequest.requestId)
+          return
+        playerContextRequest = { documentId: message.documentId, requestId: Number(message.requestId), href: String(message.href) }
+        reportedPlayerMode.value = undefined
+        postMessageToIframe(iframeRef.value, { type: IFRAME_PLAYER_CONTEXT, phase: 'context', ...playerContextRequest, sessionId: playerContextSessionId, generation: iframeGeneration, context: props.playbackContext })
+      }
+      else if (message.phase === 'mode' && playerContextRequest && message.sessionId === playerContextSessionId
+        && message.generation === iframeGeneration
+        && message.documentId === playerContextRequest.documentId && message.requestId === playerContextRequest.requestId
+        && message.href === playerContextRequest.href && typeof message.mode === 'string'
+        && ['default', 'webFullscreen', 'widescreen', 'bewlyWidescreen'].includes(message.mode)) {
+        reportedPlayerMode.value = message.mode as DefaultVideoPlayerMode
+        const fullscreen = message.mode === 'webFullscreen'
+        clearEscapeConfirmation()
+        headerShow.value = !fullscreen
+        disableEscPress.value = fullscreen
+        isPageFullscreen.value = fullscreen
+      }
       break
-    case DRAWER_VIDEO_EXIT_PAGE_FULL:
-      headerShow.value = true
-      disableEscPress.value = false
-      isPageFullscreen.value = false
-      break
+    }
     case BEWLY_DRAWER_ESCAPE_HANDLED:
       if (message.source === 'iframe') {
         iframeEscapeHandledGeneration += 1
@@ -591,6 +644,7 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
       <div
         v-if="show"
         :class="iframeContainerClasses"
+        :style="containerStyle"
       >
         <Transition name="fade">
           <iframe

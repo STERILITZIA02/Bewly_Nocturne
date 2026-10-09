@@ -11,7 +11,7 @@ import { setupRefreshTabs } from './refreshTabs'
 import { setupSettingsCloudSync } from './settingsCloudSync'
 import { setupSettingsStorageCoordinator } from './settingsStorageCoordinator'
 import { setupTopBarStateBroker } from './topBarStateBroker'
-import { initWbiKeys } from './wbiSign'
+import { setupVideoVisitHistoryCoordinator } from './videoVisitHistoryCoordinator'
 
 const PREVENT_MOBILE_REDIRECT_RULE_ID = 1001
 const preventMobileRedirectRule: browser.DeclarativeNetRequest.Rule = {
@@ -68,18 +68,16 @@ browser.storage.onChanged.addListener((changes, areaName) => {
     void syncPreventMobileRedirectRule(enabled)
 })
 
-// 扩展启动时初始化 WBI 密钥
-initWbiKeys().catch((error) => {
-  console.error('[Bewly Nocturne] WBI keys initialization error:', error)
-})
-
+// Signed transports restore/fetch their WBI keys on demand. Waking this worker
+// for storage or a hidden tab does not itself start a profile/network request.
 // Setup all message listeners
 setupSettingsStorageCoordinator()
+setupVideoVisitHistoryCoordinator()
 setupSettingsCloudSync()
 setupApiMsgListeners()
 setupTabMsgListeners()
-const topBarBroker = setupTopBarStateBroker()
-setupOpenTabsWatchLater((accountId, incognito) => topBarBroker.invalidateWatchLater({ accountId }, { tab: { incognito } as browser.Tabs.Tab }))
+setupTopBarStateBroker()
+setupOpenTabsWatchLater()
 setupContentScriptRefreshPrompt()
 setupRefreshTabs()
 setupLoginStateWatcher()

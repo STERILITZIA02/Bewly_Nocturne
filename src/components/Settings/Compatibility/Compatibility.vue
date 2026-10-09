@@ -19,7 +19,7 @@ import SettingsItemGroup from '../components/SettingsItemGroup.vue'
     </SettingsItemGroup>
 
     <SettingsItemGroup :title="$t('settings.group_ad_blocking')">
-      <SettingsItem :title="$t('settings.block_ads')" right-width="auto">
+      <SettingsItem :title="$t('settings.block_ads')" :desc="$t('settings.block_ads_desc')" right-width="auto">
         <Radio v-model="settings.blockAds" />
       </SettingsItem>
       <SettingsItem :title="$t('settings.block_top_search_page_ads')" :desc="$t('settings.block_top_search_page_ads_desc')" right-width="auto">

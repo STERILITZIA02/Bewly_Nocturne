@@ -4,88 +4,10 @@ import { computed, effectScope, nextTick, ref, watch } from 'vue'
 
 import { decodeHtmlEntities } from '../src/utils/htmlDecode'
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 
-async function verifySettingsRevealLifecycle() {
-  const frames = new Map<number, () => void>()
-  let nextFrame = 0
-  let reveals = 0
-  let highlights = 0
-  const target = { isConnected: true, scrollIntoView: () => reveals++ }
-  const context = await loadSourceFunctions('../src/components/Settings/Settings.vue', [
-    'cancelSettingNavigation',
-    'revealSearchTarget',
-    'deactivateSettingsModal',
-  ], {
-    settingsModalActive: true,
-    reducedMotion: { value: 'no-preference' },
-    searchNavigationId: 1,
-    settingNavigationTimer: undefined,
-    settingNavigationFrame: undefined,
-    inertSiblingStates: new Map(),
-    previouslyFocusedElement: null,
-    nextTick,
-    clearTimeout: () => {},
-    clearSearchTargetHighlight: () => {},
-    expandSearchTarget: () => {},
-    highlightSearchTarget: () => highlights++,
-    cancelAnimationFrame: (id: number) => frames.delete(id),
-    window: { requestAnimationFrame: (callback: () => void) => {
-      const id = ++nextFrame
-      frames.set(id, callback)
-      return id
-    } },
-  })
-  const flushFrames = () => {
-    for (const [id, callback] of [...frames]) {
-      frames.delete(id)
-      callback()
-    }
-  }
-  context.revealSearchTarget(target, 1)
-  await nextTick()
-  flushFrames()
-  assert.equal(reveals, 1)
-  assert.equal(highlights, 1)
-
-  context.revealSearchTarget(target, 1)
-  context.cancelSettingNavigation()
-  await nextTick()
-  assert.equal(frames.size, 0, 'a superseded nextTick cannot register a new RAF')
-  context.revealSearchTarget(target, 2)
-  await nextTick()
-  assert.equal(frames.size, 1)
-  context.deactivateSettingsModal()
-  assert.equal(frames.size, 0, 'KeepAlive deactivation cancels the pending frame')
-  flushFrames()
-  assert.equal(reveals, 1)
-  assert.equal(highlights, 1)
-}
-
-async function verifySearchSuggestionLifecycle() {
-  let requests = 0
-  const suggestions: unknown[] = []
-  const context = await loadSourceFunctions('../src/components/SearchBar/SearchBar.vue', ['handleKeywordInput'], {
-    useDebounceFn: (callback: unknown) => callback,
-    searchBarDisposed: false,
-    suggestionRequestId: 2,
-    suggestions,
-    suggestionsLoading: ref(true),
-    reportSearchBarFailure: () => {},
-    api: { search: { getSearchSuggestion: async () => {
-      requests++
-      return { code: 0, result: { tag: [{ value: 'current' }, { value: 'current' }] } }
-    } } },
-  })
-  await context.handleKeywordInput('old', 1)
-  assert.equal(requests, 0)
-  await context.handleKeywordInput('current', 2)
-  assert.equal(requests, 1)
-  assert.equal(suggestions.length, 1)
-  assert.equal(context.suggestionsLoading.value, false)
-  context.searchBarDisposed = true
-  await context.handleKeywordInput('closed', 2)
-  assert.equal(requests, 1, 'unmounted debounce callback does not send a new API request')
-}
+// Settings reveal/KeepAlive coverage now mounts the actual Settings component
+// and navigation module in verify-maintenance-integration.mjs.
 
 async function verifySelectOptionChanges() {
   const selections: string[] = []
@@ -247,6 +169,7 @@ async function verifyVideoIdentityReuse() {
       return { code: 0, data: { aid: 123 } }
     } } },
     resolvePgcEpisodeVideoIds: async () => ({ aid: 456 }),
+    findWatchLaterEntry: () => undefined,
   })
   const fixture = {
     aid: 123,
@@ -267,12 +190,13 @@ async function verifyVideoIdentityReuse() {
     ['Precious', 'transformPreciousVideo'],
     ['ForYou', 'transformAppVideo'],
   ]) {
-    const context = await loadSourceFunctions(file === 'ForYou'
-      ? '../src/contentScripts/views/Home/adapters/recommendationVideo.ts'
-      : `../src/contentScripts/views/Home/components/${file}.vue`, [name], {
-      decodeHtmlEntities,
-      isVerticalVideo: () => false,
-    })
+    const context = file === 'ForYou'
+      ? await loadSourceModule('../src/contentScripts/views/Home/adapters/recommendationVideo.ts', {
+          '~/utils/advertising': await import('../src/utils/advertising'),
+          '~/utils/htmlDecode': await import('../src/utils/htmlDecode'),
+          '~/utils/uriParse': await import('../src/utils/uriParse'),
+        })
+      : await loadSourceFunctions(`../src/contentScripts/views/Home/components/${file}.vue`, [name], { decodeHtmlEntities })
     const video = context[name](file === 'Trending' ? { item: fixture } : fixture, 1)
     assert.equal(await resolver.resolveWatchLaterAid(video), 123, `${file} preserves the authoritative aid`)
   }
@@ -323,8 +247,7 @@ async function verifyHorizontalWheelBoundary() {
 }
 
 export async function verifyFunctionalAuditFixes() {
-  await verifySettingsRevealLifecycle()
-  await verifySearchSuggestionLifecycle()
+  // Search suggestions now mount the real component in verify-maintenance-review.mjs.
   await verifySelectOptionChanges()
   await verifyRankingLoadingEvents()
   await verifyScrollOwnerCleanup()

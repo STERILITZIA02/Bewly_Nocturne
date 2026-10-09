@@ -5,10 +5,9 @@ import { computed, nextTick, onScopeDispose, ref, watch } from 'vue'
 
 import {
   ACCOUNT_URL,
-  CHANNEL_PAGE_URL,
+  HEADER_ARTWORK_PAGE_URL,
   SEARCH_PAGE_URL,
   SPACE_URL,
-  VIDEO_PAGE_URL,
 } from '~/components/TopBar/constants/urls'
 import { useAnchoredPopoverPosition } from '~/composables/useAnchoredPopoverPosition'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -109,8 +108,9 @@ export function useTopBarInteraction() {
       return false
 
     if (
-      (CHANNEL_PAGE_URL.test(currentUrl) && !VIDEO_PAGE_URL.test(currentUrl))
-      || SPACE_URL.test(currentUrl)
+      HEADER_ARTWORK_PAGE_URL.test(currentUrl)
+      // The standalone notebook shares the space host but has no profile banner.
+      || (SPACE_URL.test(currentUrl) && !/^https?:\/\/space\.bilibili\.com\/v\/note-list(?:[/?#]|$)/.test(currentUrl))
       || ACCOUNT_URL.test(currentUrl)
     ) {
       return true

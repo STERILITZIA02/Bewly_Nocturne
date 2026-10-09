@@ -1,24 +1,23 @@
-.large-header {
+.bewly-design .bili-header.large-header {
   background-color: transparent !important;
 }
 
 .bewly-design {
   // 对齐 1.6.8：原版顶栏 slide-down / mini-header 用毛玻璃 elevated，避免 solid 发黑发闷
   // 自定义首页首屏白底由 removeTopBar.scss 的 #fff / rgb(36 38 40) 覆盖
-  .bili-header .slide-down,
-  .bili-header .mini-header {
+  .bili-header > .bili-header__bar:is(.slide-down, .mini-header) {
     background-color: var(--bew-elevated) !important;
     backdrop-filter: var(--bew-filter-glass-1);
   }
 
   // 自定义首页 portal 顶栏：优先原生白底观感（与 1.6.8 capture 后 slide-down 一致）
   &.homePage.bewly-custom-homepage:not(.remove-top-bar) .bili-header > .bili-header__bar.slide-down {
-    background-color: #fff !important;
+    background-color: var(--bew-elevated-solid) !important;
     backdrop-filter: none;
   }
 
   &.dark.homePage.bewly-custom-homepage:not(.remove-top-bar) .bili-header > .bili-header__bar.slide-down {
-    background-color: rgb(36 38 40) !important;
+    background-color: var(--bew-elevated-solid) !important;
     backdrop-filter: none;
   }
 
@@ -39,4 +38,51 @@
   // &.dark {
   // }
   // #endregion
+}
+
+// Older official Bilibili headers are still used by the contact/download
+// templates. Keep their native navigation and popover owners in the lite entry.
+html.bewly-design[data-bewly-native-site] #internationalHeader.international-header,
+html.bewly-design[data-bewly-native-site="public-contact"] .z_top {
+  > .mini-header {
+    background: var(--bew-elevated-solid) !important;
+    backdrop-filter: none;
+  }
+
+  .nav-link .link,
+  .user-con.signin .name,
+  .user-con.search-icon .bilifont {
+    color: var(--bew-text-1);
+  }
+
+  #nav_searchform {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .nav-search-keyword {
+    color: var(--bew-text-1);
+    background: transparent;
+  }
+
+  .nav-search-btn {
+    color: var(--bew-text-2);
+    background: var(--bew-content-solid-hover);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .nav-search-submit {
+    // The official header sets ink on the inner button independently.
+    color: inherit;
+  }
+
+  .mini-upload {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
 }

@@ -228,6 +228,7 @@ async function handleFollowClick(e: Event) {
           <!-- 统计信息行 -->
           <div
             v-if="fans || videos || liveStatus === 1"
+            class="user-card__compact-stats"
             flex items-center gap-3
             text="xs $bew-text-3"
           >
@@ -650,6 +651,17 @@ async function handleFollowClick(e: Event) {
 .live-status-badge {
   color: var(--bew-theme-foreground);
   font-weight: var(--bew-font-weight-medium);
+}
+
+.user-card__compact-stats {
+  flex-wrap: wrap;
+  row-gap: var(--bew-space-1);
+
+  > div {
+    // Wrap complete facts instead of squeezing live labels into vertical text.
+    flex: 0 0 auto;
+    white-space: nowrap;
+  }
 }
 
 .follow-button-compact {

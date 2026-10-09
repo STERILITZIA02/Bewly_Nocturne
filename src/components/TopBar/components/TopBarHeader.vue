@@ -13,10 +13,11 @@ import TopBarLogo from './TopBarLogo.vue'
 import TopBarRight from './TopBarRight.vue'
 import TopBarSearch from './TopBarSearch.vue'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
+  active?: boolean
   reachTop: boolean
   isDark: boolean
-}>()
+}>(), { active: true })
 
 const { forceWhiteIcon, handleNotificationsItemClick, showSearchBar } = useTopBarInteraction()
 const searchFocusEffect = useSearchFocusEffect()
@@ -252,7 +253,7 @@ function refreshSearchContent() {
           v-if="showSearchBar"
           class="top-bar-header__search-control"
         >
-          <TopBarSearch @focus-change="topBarSearchFocused = $event" />
+          <TopBarSearch :active="active" @focus-change="topBarSearchFocused = $event" />
         </div>
       </div>
     </div>

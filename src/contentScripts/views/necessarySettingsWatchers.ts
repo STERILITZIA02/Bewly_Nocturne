@@ -2,6 +2,7 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
+import { setupNativePageKeyboard } from '~/contentScripts/features/nativePageKeyboard'
 import { AppPage } from '~/enums/appEnums'
 import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
@@ -13,7 +14,7 @@ import { applyEffectiveTopBarSource, showNativeBilibiliTopBar } from '~/utils/ef
 import { postMessageToIframe } from '~/utils/iframeMessage'
 import { ensureInterfaceLanguage } from '~/utils/interfaceLanguage'
 import { cleanBilibiliShareText, injectCSS, isHomePage, isInIframe, isVideoPlaybackPage } from '~/utils/main'
-import { getThemeColorTokens } from '~/utils/themeColor'
+import { getThemeColorTokens, readThemeContrastSurfaces } from '~/utils/themeColor'
 
 function isFestivalPage(): boolean {
   return /https?:\/\/(?:www\.)?bilibili\.com\/festival\/.*/.test(location.href)
@@ -25,6 +26,44 @@ export function setupNecessarySettingsWatchers() {
   const iframePageActive = useIframePageActive()
   const { isDark } = useDark()
   let effectiveTopBarSource: EffectiveTopBarSource = 'bewly'
+
+  let stopNativeKeyboard: (() => void) | undefined
+  const nativeKeyboardPageUrl = computed(() => {
+    const url = new URL(currentLocationHref.value)
+    // Native index filters update the hash. Keep tabindex and focus on their
+    // existing nodes; the keyboard controller observes selection/DOM changes.
+    return `${url.origin}${url.pathname}`
+  })
+  watch([nativeKeyboardPageUrl, () => settings.value.adaptToOtherPageStyles], ([href, enabled]) => {
+    stopNativeKeyboard?.()
+    stopNativeKeyboard = undefined
+    if (!enabled)
+      return
+    const url = new URL(href)
+    const page = url.hostname === 'account.bilibili.com' && !url.pathname.startsWith('/big')
+      ? 'account'
+      : url.hostname === 'member.bilibili.com' && /^\/platform(?:\/|$)/.test(url.pathname)
+        ? 'creator'
+        : url.hostname === 'www.bilibili.com' && /^\/(?:anime|guochuang|movie|tv|variety|documentary)\/index\/?$/.test(url.pathname)
+          ? 'anime-index'
+          : url.hostname === 'www.bilibili.com' && /^\/(?:anime|guochuang)\/timeline\/?$/.test(url.pathname)
+            ? 'anime-timeline'
+            : url.hostname === 'www.bilibili.com' && /^\/404(?:\.html)?\/?$/.test(url.pathname)
+              ? 'error404'
+              : url.hostname === 'www.bilibili.com' && /^\/v\/game\/match\/schedule\/?$/.test(url.pathname)
+                ? 'esports-schedule'
+                : undefined
+    const root = page === 'creator'
+      ? document.body
+      : page === 'error404'
+        ? document.querySelector<HTMLElement>('.error-container')
+        : page === 'esports-schedule'
+          ? document.querySelector<HTMLElement>('.bili-game-local')
+          : page && document.getElementById('app')
+    if (root && page)
+      stopNativeKeyboard = setupNativePageKeyboard(root, page)
+  }, { immediate: true })
+  onScopeDispose(() => stopNativeKeyboard?.())
 
   const DEFAULT_FROSTED_GLASS_BLUR_PX = originalSettings.frostedGlassBlurIntensity
   const FROSTED_GLASS_DIALOG_OFFSET_PX = 10
@@ -96,11 +135,11 @@ export function setupNecessarySettingsWatchers() {
     () => {
       const bewlyHost = document.getElementById('bewly')
 
-      if (typeof settings.value.customizeFont === 'boolean')
+      if (settings.initializationState.value === 'loaded' && typeof settings.value.customizeFont === 'boolean')
         settings.value.customizeFont = 'recommend'
 
       // Set the default font family
-      if (!settings.value.fontFamily && settings.value.customizeFont !== 'custom') {
+      if (settings.initializationState.value === 'loaded' && !settings.value.fontFamily && settings.value.customizeFont !== 'custom') {
         /* Do not wrap following line */
         settings.value.fontFamily = `CJKEmDash, Numbers, Onest, ShangguSansSCVF, -apple-system, BlinkMacSystemFont, InterVariable, Inter, "Segoe UI", Cantarell, "Noto Sans", "Roboto Flex", Roboto, sans-serif, ui-sans-serif, system-ui, "Apple Color Emoji", "Twemoji Mozilla", "Noto Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", emoji`
       }
@@ -177,7 +216,7 @@ export function setupNecessarySettingsWatchers() {
     (value) => {
       const clamped = clampFrostedGlassBlur(value)
 
-      if (clamped !== value) {
+      if (clamped !== value && settings.initializationState.value === 'loaded') {
         settings.value.frostedGlassBlurIntensity = clamped
         return
       }
@@ -210,6 +249,9 @@ export function setupNecessarySettingsWatchers() {
         blockAds: settings.value.blockAds,
         homePage: isHomePage(),
         searchPage: location.hostname === 'search.bilibili.com',
+        nativeFeedPage: location.hostname === 'space.bilibili.com'
+          || location.hostname === 't.bilibili.com'
+          || (location.hostname === 'www.bilibili.com' && /^\/(?:c\/|v\/popular(?:\/|$)|video\/)/.test(location.pathname)),
         inIframe: isInIframe(),
         nativeHome: isInIframe() || settingsStore.getDockItemIsUseOriginalBiliPage(AppPage.Home),
         active: isInIframe() || !iframePageActive.value,
@@ -271,21 +313,23 @@ export function setupNecessarySettingsWatchers() {
   }, { immediate: true })
 
   watch(
-    [() => settings.value.themeColor, isDark],
+    [() => settings.value.themeColor, isDark, () => settings.value.darkModeBaseColor, () => settings.value.enableOledDarkMode],
     () => {
       const bewlyElement = document.querySelector('#bewly') as HTMLElement | null
-      const themeTokens = getThemeColorTokens(settings.value.themeColor, isDark.value)
+      const surfaces = readThemeContrastSurfaces(bewlyElement ?? document.documentElement)
+      const themeTokens = getThemeColorTokens(settings.value.themeColor, isDark.value, surfaces)
       const targets = [document.documentElement, bewlyElement].filter((element): element is HTMLElement => Boolean(element))
 
       targets.forEach((element) => {
         element.style.setProperty('--bew-theme-color', themeTokens.theme)
         element.style.setProperty('--bew-on-theme-color', themeTokens.onTheme)
+        element.style.setProperty('--bew-theme-checkmark-image', themeTokens.checkmarkImage)
         element.style.setProperty('--bew-switch-thumb-active', themeTokens.switchThumb)
         element.style.setProperty('--bew-theme-foreground', themeTokens.foreground)
         element.style.setProperty('--bew-theme-focus-ring', themeTokens.focusRing)
       })
     },
-    { immediate: true },
+    { immediate: true, flush: 'post' },
   )
 
   let styleEL: HTMLStyleElement | null = null

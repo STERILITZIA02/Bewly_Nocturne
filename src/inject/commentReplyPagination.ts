@@ -1,3 +1,12 @@
+import { COMMENT_REPLY_BATCH_DEFAULT, normalizeCommentReplyBatch } from '~/constants/commentReading'
+import { BEWLY_IFRAME_DRAWER_HOST_CHANGE } from '~/constants/globalEvents'
+import { captureCommentReadingAnchor } from '~/utils/commentReadingAnchor'
+import type { CommentReplyPage, CommentReplyPageIdentity } from '~/utils/commentReplyPageCache'
+import { COMMENT_REPLY_CACHE_LIMITS, commentReplyPageKey, commentReplyWriteKey, createCommentReplyPageCache } from '~/utils/commentReplyPageCache'
+import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
+
+import { COMMENT_REPLY_PAGE_CONTROL_CLASS as PAGE_CONTROL_CLASS, removeCommentReplyPageControl, updateCommentReplyPageControl } from './commentReplyControls'
+
 export type CommentReplyPaginationMode = 'loadMore' | 'pagination'
 
 export interface CommentReplyInteractionState {
@@ -29,10 +38,17 @@ interface PaginationLabels {
   loadMore: string
   loading: string
   noMore: string
+  page?: string
+  go?: string
+  failed?: string
+  retry?: string
 }
 
 export interface CommentReplyPaginationAdapter {
   getAccountId: () => string
+  getContextId?: () => string
+  getBatchPages?: () => number
+  readPage?: (identity: CommentReplyPageIdentity, page: number, signal: AbortSignal) => Promise<CommentReplyPage<any>>
   getData: (renderer: any) => any | null
   getMode: () => CommentReplyPaginationMode
   getOid: (reply: any) => string | null
@@ -60,6 +76,13 @@ interface PaginationState {
   expandAllOperation?: symbol
   expandAllPromise?: Promise<void>
   identity: string
+  readIdentity?: CommentReplyPageIdentity
+  mode: CommentReplyPaginationMode
+  replaceRequested?: boolean
+  error?: string
+  failedPage?: number
+  failedReplace?: boolean
+  anchor?: ReturnType<typeof captureCommentReadingAnchor>
   initialList: any[]
   interactionByRpid: Map<string, CommentReplyInteractionState>
   loading?: Promise<unknown>
@@ -71,6 +94,9 @@ interface PaginationState {
     beforeList: any[]
     layoutReservation?: LayoutReservation
     page: number
+    controller: AbortController
+    replace: boolean
+    anchor?: ReturnType<typeof captureCommentReadingAnchor>
   }
 }
 
@@ -79,12 +105,13 @@ export interface SequentialCommentReplyPageLoader {
   getTotalPage: () => number
   isValid: () => boolean
   loadNextPage: (currentPage: number) => Promise<unknown>
+  maxPages?: number
 }
 
 export interface SequentialCommentReplyPageResult {
   completed: boolean
   lastPage: number
-  reason: 'completed' | 'invalid' | 'no-progress'
+  reason: 'completed' | 'invalid' | 'no-progress' | 'budget'
 }
 
 export async function loadCommentReplyPagesSequentially({
@@ -92,6 +119,7 @@ export async function loadCommentReplyPagesSequentially({
   getTotalPage,
   isValid,
   loadNextPage,
+  maxPages = COMMENT_REPLY_BATCH_DEFAULT,
 }: SequentialCommentReplyPageLoader): Promise<SequentialCommentReplyPageResult> {
   let currentPage = getCurrentPage()
   let totalPage = getTotalPage()
@@ -99,11 +127,13 @@ export async function loadCommentReplyPagesSequentially({
     return { completed: false, lastPage: currentPage, reason: 'invalid' }
   }
 
-  while (currentPage < totalPage) {
+  let requested = 0
+  while (currentPage < totalPage && requested < maxPages) {
     if (!isValid())
       return { completed: false, lastPage: currentPage, reason: 'invalid' }
 
     const previousPage = currentPage
+    requested++
     await loadNextPage(previousPage)
     if (!isValid())
       return { completed: false, lastPage: previousPage, reason: 'invalid' }
@@ -116,7 +146,7 @@ export async function loadCommentReplyPagesSequentially({
       return { completed: false, lastPage: currentPage, reason: 'invalid' }
   }
 
-  return { completed: true, lastPage: currentPage, reason: 'completed' }
+  return { completed: currentPage >= totalPage, lastPage: currentPage, reason: currentPage >= totalPage ? 'completed' : 'budget' }
 }
 
 export function mergeCommentReplyLists<T>(
@@ -163,8 +193,75 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
   const enabledStates = new WeakMap<object, boolean>()
   const expandAllTasks = new WeakMap<object, Promise<void>>()
   const activeLayoutReservations = new WeakMap<HTMLElement, LayoutReservation>()
+  const pageCache = createCommentReplyPageCache<any>()
+  const activeRenderers = new Set<any>()
+  let scopeGeneration = 0
+  const readingRenderers = new Set<any>()
+  let readRoute = ''
+  const routeEvents = ['pushstate', 'replacestate', 'popstate', 'hashchange'] as const
 
-  const isEnabled = () => adapter.isTreeEnabled() && adapter.getMode() === 'loadMore'
+  const isEnabled = () => adapter.isTreeEnabled()
+  const canHandle = (renderer: any) => isEnabled() && (!adapter.readPage || getReadIdentity(renderer) !== undefined)
+  const batchPages = () => normalizeCommentReplyBatch(adapter.getBatchPages?.())
+
+  function stopInactiveReads() {
+    if (!document.hidden && !isIframeDrawerHost())
+      return
+    for (const renderer of [...readingRenderers])
+      invalidateLoading(renderer)
+  }
+  function suspendReads() {
+    for (const renderer of [...readingRenderers])
+      invalidateLoading(renderer)
+  }
+  function routeIdentity() {
+    const url = new URL(window.location.href)
+    return JSON.stringify([url.origin, url.pathname, url.searchParams.get('p'), url.searchParams.get('page')])
+  }
+  function checkReadRoute() {
+    // The existing MAIN history bridge notifies before history has committed.
+    // Tracking-parameter cleanup is not a new reading context.
+    queueMicrotask(() => {
+      if (readingRenderers.size && routeIdentity() !== readRoute)
+        suspendReads()
+    })
+  }
+  function beginRead(renderer: any) {
+    if (readingRenderers.size === 0) {
+      readRoute = routeIdentity()
+      document.addEventListener('visibilitychange', stopInactiveReads)
+      window.addEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, stopInactiveReads)
+      window.addEventListener('pagehide', suspendReads)
+      routeEvents.forEach(name => window.addEventListener(name, checkReadRoute))
+    }
+    readingRenderers.add(renderer)
+  }
+  function endRead(renderer: any) {
+    const state = states.get(renderer)
+    if (state?.pending || state?.loading)
+      return
+    readingRenderers.delete(renderer)
+    if (readingRenderers.size === 0) {
+      document.removeEventListener('visibilitychange', stopInactiveReads)
+      window.removeEventListener(BEWLY_IFRAME_DRAWER_HOST_CHANGE, stopInactiveReads)
+      window.removeEventListener('pagehide', suspendReads)
+      routeEvents.forEach(name => window.removeEventListener(name, checkReadRoute))
+    }
+  }
+
+  function getReadIdentity(renderer: any): CommentReplyPageIdentity | undefined {
+    const data = adapter.getData(renderer) ?? {}
+    const oid = String(renderer.oid ?? adapter.getOid(data) ?? '')
+    const root = String(renderer.root ?? adapter.getRpid(data) ?? adapter.getRootRpid(data) ?? '')
+    const type = Number(renderer.type ?? data.type)
+    const sort = Number(renderer.mode ?? data.mode ?? 0)
+    const pageSize = Number(renderer.pageSize)
+    if (!/^[1-9]\d*$/.test(oid) || !/^[1-9]\d*$/.test(root) || !Number.isSafeInteger(type) || type < 1 || type > 99
+      || !Number.isSafeInteger(sort) || sort < 0 || sort > 3 || !Number.isSafeInteger(pageSize) || pageSize < 1 || pageSize > 100) {
+      return
+    }
+    return { account: adapter.getAccountId(), context: adapter.getContextId?.() ?? 'document', oid, root, type, sort, pageSize }
+  }
 
   function getInvisibleRpids(renderer: any): Set<string> {
     if (!renderer.invisibleID || typeof renderer.invisibleID !== 'object')
@@ -221,20 +318,27 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       releaseLayoutReservation(reservation)
       throw error
     }
+    if (!reservation)
+      return
     requestAnimationFrame(() => requestAnimationFrame(() => releaseLayoutReservation(reservation)))
   }
 
   function getIdentity(renderer: any): string {
+    const readIdentity = getReadIdentity(renderer)
+    if (readIdentity)
+      return `${scopeGeneration}|${commentReplyPageKey(readIdentity)}`
     const data = adapter.getData(renderer) ?? {}
     const oid = String(renderer.oid ?? adapter.getOid(data) ?? '')
     const type = String(renderer.type ?? data.type ?? data.business ?? '')
     const root = String(renderer.root ?? adapter.getRpid(data) ?? adapter.getRootRpid(data) ?? '')
-    return `${adapter.getAccountId()}|${oid}|${type}|${root}`
+    return `${scopeGeneration}|${adapter.getAccountId()}|${oid}|${type}|${root}`
   }
 
   function removeExpandAllButton(renderer: any) {
     const root = renderer?.shadowRoot as ShadowRoot | null | undefined
     root?.querySelector<HTMLElement>(`.${EXPAND_ALL_BUTTON_CLASS}`)?.remove()
+    if (renderer instanceof HTMLElement)
+      removeCommentReplyPageControl(renderer)
   }
 
   function clear(renderer: any, restoreCurrentPage: boolean) {
@@ -247,6 +351,10 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     state.expandAllOperation = undefined
     state.expandAllLoading = false
     state.expandAllPromise = undefined
+    state.pending?.controller.abort()
+    state.pending?.anchor?.cancel()
+    state.anchor?.cancel()
+    state.anchor = undefined
     expandAllTasks.delete(renderer)
     const currentPage = state.pages.get(state.currentPage)
     if (restoreCurrentPage && state.mergedList && renderer.list === state.mergedList && currentPage) {
@@ -260,6 +368,8 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     state.pages.clear()
     state.interactionByRpid.clear()
     states.delete(renderer)
+    activeRenderers.delete(renderer)
+    endRead(renderer)
     removeExpandAllButton(renderer)
     renderer.requestUpdate?.()
   }
@@ -268,12 +378,67 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     return mergeCommentReplyLists(lists, adapter.getRpid)
   }
 
+  function trimVisiblePages(state: PaginationState) {
+    let size = [...state.pages.values()].reduce((sum, page) => sum + page.length, 0)
+    while (state.pages.size > COMMENT_REPLY_CACHE_LIMITS.pages || size > COMMENT_REPLY_CACHE_LIMITS.items) {
+      const oldest = state.pages.entries().next().value
+      if (!oldest)
+        break
+      size -= oldest[1].length
+      state.pages.delete(oldest[0])
+    }
+    const retained = new Set([...state.pages.values()].flatMap(page => page.map(adapter.getRpid)).filter(Boolean))
+    for (const key of state.interactionByRpid.keys()) {
+      if (!retained.has(key))
+        state.interactionByRpid.delete(key)
+    }
+  }
+
+  function requestPage(renderer: any, page: number, replace = true) {
+    if (!canHandle(renderer) || renderer.isConnected === false || !Number.isSafeInteger(page) || page < 1 || page > Number(renderer.totalPage))
+      return Promise.resolve()
+    invalidateLoading(renderer)
+    const state = getState(renderer)
+    state.replaceRequested = replace
+    renderer.currentPage = page
+    return Promise.resolve(renderer.getList())
+  }
+
+  function updatePageControl(renderer: any) {
+    if (!(renderer instanceof HTMLElement))
+      return
+    if (!canHandle(renderer) || (renderer as any).showPagination !== true || !renderer.isConnected) {
+      removeCommentReplyPageControl(renderer)
+      return
+    }
+    const state = getState(renderer)
+    updateCommentReplyPageControl(renderer, {
+      enabled: canHandle(renderer) && (renderer as any).showPagination === true,
+      page: state.pending?.page ?? state.currentPage,
+      total: Number((renderer as any).totalPage),
+      pages: [...state.pages.keys()],
+      loading: !!state.loading,
+      failed: !!state.error,
+      labels: adapter.getLabels(),
+      navigate: page => void requestPage(renderer, page),
+      retry: () => {
+        const state = states.get(renderer)
+        if (state?.failedPage)
+          void requestPage(renderer, state.failedPage, state.failedReplace)
+      },
+    })
+  }
+
   function invalidateLoading(renderer: any) {
     const state = states.get(renderer)
     if (!state)
       return
 
     state.expandAllOperation = undefined
+    state.pending?.controller.abort()
+    state.pending?.anchor?.cancel()
+    state.anchor?.cancel()
+    state.anchor = undefined
     if (!state.expandAllPromise)
       state.expandAllLoading = false
     if (!state.pending && !state.loading) {
@@ -288,6 +453,9 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       renderer.list = state.mergedList
     state.pending = undefined
     state.loading = undefined
+    renderer.currentPage = state.currentPage
+    renderer.showSpinner = false
+    endRead(renderer)
     renderer.requestUpdate?.()
     updateExpandAllButton(renderer)
   }
@@ -300,13 +468,22 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     if (captureCollapsedList && Array.isArray(renderer.list))
       state.collapsedList = renderer.list.slice()
     invalidateLoading(renderer)
+    // Visited pages belong to the bounded shared cache, not every collapsed
+    // renderer that the native feed may retain in its DOM.
+    state.pages.clear()
+    state.mergedList = undefined
+    state.interactionByRpid.clear()
+    activeRenderers.delete(renderer)
   }
 
   function getState(renderer: any): PaginationState {
     const identity = getIdentity(renderer)
     const existing = states.get(renderer)
-    if (existing?.identity === identity)
+    if (existing?.identity === identity) {
+      if (renderer.showPagination === true || renderer.showViewMore === false)
+        activeRenderers.add(renderer)
       return existing
+    }
     if (existing)
       clear(renderer, false)
 
@@ -315,16 +492,21 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       currentPage: Number(renderer.currentPage) || 1,
       expandAllLoading: false,
       identity,
+      readIdentity: getReadIdentity(renderer),
+      mode: adapter.getMode(),
       initialList: Array.isArray(renderer.list) ? renderer.list.slice() : [],
       interactionByRpid: new Map(),
       pages: new Map(),
     }
     states.set(renderer, state)
+    if (renderer.showPagination === true || renderer.showViewMore === false)
+      activeRenderers.add(renderer)
     return state
   }
 
   function isExpandAllOperationValid(renderer: any, state: PaginationState, operation: symbol) {
-    return isEnabled()
+    return canHandle(renderer)
+      && !document.hidden && !isIframeDrawerHost()
       && renderer?.isConnected !== false
       && states.get(renderer) === state
       && state.identity === getIdentity(renderer)
@@ -337,14 +519,14 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       return
 
     const existing = root.querySelector<HTMLButtonElement>(`.${EXPAND_ALL_BUTTON_CLASS}`)
-    if (!isEnabled() || adapter.shouldShowExpandAll?.(renderer) === false) {
+    if (!canHandle(renderer) || renderer.isConnected === false || adapter.getMode() !== 'loadMore' || adapter.shouldShowExpandAll?.(renderer) === false) {
       existing?.remove()
       return
     }
 
     const state = getState(renderer)
     const totalPage = Number(renderer.totalPage) || 0
-    state.allRepliesExpanded = hasLoadedEveryPage(state, totalPage)
+    state.allRepliesExpanded = state.currentPage >= totalPage
     const shouldShow = renderer.isConnected !== false && totalPage > 1 && !state.allRepliesExpanded
     if (!shouldShow) {
       existing?.remove()
@@ -377,6 +559,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     if (state.expandAllPromise)
       return state.expandAllPromise
 
+    const openedPreview = renderer.showPagination !== true
     const operation = Symbol('bewly-comment-expand-all-operation')
     const identity = state.identity
     const layoutReservation = reserveLayoutHeight(renderer)
@@ -420,9 +603,6 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
           await state.loading
         await Promise.resolve(renderer.updateComplete)
       }
-      const currentPage = Number(renderer.currentPage) || 1
-      if (currentPage > 1 && !hasLoadedEveryPage(state, currentPage))
-        await loadPage(0)
       if (!isExpandAllOperationValid(renderer, state, operation))
         return
 
@@ -431,6 +611,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
         getTotalPage: () => Number(renderer.totalPage) || 0,
         isValid: () => isExpandAllOperationValid(renderer, state, operation),
         loadNextPage: loadPage,
+        maxPages: Math.max(0, batchPages() - (openedPreview ? 1 : 0)),
       })
 
       if (isExpandAllOperationValid(renderer, state, operation))
@@ -441,7 +622,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       if (expandAllTasks.get(renderer) === request)
         expandAllTasks.delete(renderer)
       if (states.get(renderer) !== state || state.identity !== identity || state.expandAllOperation !== operation) {
-        if (states.get(renderer) === state) {
+        if (states.get(renderer) === state && state.expandAllPromise === request) {
           state.expandAllLoading = false
           state.expandAllPromise = undefined
           updateExpandAllButton(renderer)
@@ -494,48 +675,44 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     }
     if (nextInteraction.action === undefined && nextInteraction.like === undefined)
       return
+    const previous = state.interactionByRpid.get(rpid)
+    if (previous?.action === nextInteraction.action && previous?.like === nextInteraction.like)
+      return
 
     state.interactionByRpid.set(rpid, nextInteraction)
-    applyInteractionOverrides(state, renderer.list)
-    applyInteractionOverrides(state, state.initialList)
-    applyInteractionOverrides(state, state.mergedList)
-    applyInteractionOverrides(state, state.collapsedList)
-    applyInteractionOverrides(state, state.pending?.beforeList)
-    state.pages.forEach(replies => applyInteractionOverrides(state, replies))
-    renderer.requestUpdate?.()
-  }
-
-  function hasLoadedEveryPage(state: PaginationState, totalPage: number) {
-    if (!Number.isFinite(totalPage) || totalPage < 1)
-      return false
-    for (let page = 1; page <= totalPage; page += 1) {
-      if (!state.pages.has(page))
-        return false
-    }
-    return true
-  }
-
-  function getNewPage(beforeList: any[], loadedList: any[]): any[] {
-    const existingRpids = new Set(beforeList.map(adapter.getRpid).filter(Boolean) as string[])
-    const existingReplies = new Set(beforeList)
-    const newRpids = new Set<string>()
-    return loadedList.filter((reply) => {
-      const rpid = adapter.getRpid(reply)
-      if (!rpid)
-        return !existingReplies.has(reply)
-      if (existingRpids.has(rpid) || newRpids.has(rpid))
-        return false
-      newRpids.add(rpid)
-      return true
+    if (state.readIdentity)
+      pageCache.update(state.readIdentity, rpid, reply => adapter.getRpid(reply) === rpid ? { ...reply, ...nextInteraction } : reply)
+    const updateList = (list: any[] | undefined) => list?.map((reply) => {
+      if (adapter.getRpid(reply) !== rpid || Object.entries(nextInteraction).every(([key, value]) => reply[key] === value))
+        return reply
+      return { ...reply, ...nextInteraction }
     })
+    renderer.list = updateList(renderer.list)
+    if (Array.isArray(renderer.cacheList))
+      renderer.cacheList = updateList(renderer.cacheList)
+    if (Array.isArray(renderer.newItems))
+      renderer.newItems = updateList(renderer.newItems)
+    state.initialList = updateList(state.initialList)!
+    state.mergedList = updateList(state.mergedList)
+    state.collapsedList = updateList(state.collapsedList)
+    if (state.pending)
+      state.pending.beforeList = updateList(state.pending.beforeList)!
+    state.pages.forEach((replies, page) => state.pages.set(page, updateList(replies)!))
+    renderer.requestUpdate?.()
   }
 
   function patchPrototype(classConstructor: unknown) {
     if (typeof classConstructor !== 'function')
       return
     const prototype = classConstructor.prototype as Record<PropertyKey, unknown> | undefined
-    if (!prototype || prototype[PAGINATION_PATCHED])
+    if (!prototype || prototype[PAGINATION_PATCHED] || !Object.isExtensible(prototype))
       return
+    if (['getList', 'handleChangePage', 'paginationItems'].some((key) => {
+      const descriptor = Object.getOwnPropertyDescriptor(prototype, key)
+      return descriptor && !descriptor.configurable
+    })) {
+      return
+    }
 
     const originalGetList = findPropertyDescriptor(prototype, 'getList')?.value
     const originalChangePage = findPropertyDescriptor(prototype, 'handleChangePage')?.value
@@ -554,17 +731,28 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       configurable: true,
       writable: true,
       value(this: any, ...args: any[]) {
-        if (!isEnabled()) {
+        if (!canHandle(this)) {
           clear(this, true)
           return Reflect.apply(originalGetList, this, args)
         }
+        if (document.hidden || isIframeDrawerHost()) {
+          invalidateLoading(this)
+          return Promise.resolve()
+        }
 
         const state = getState(this)
-        if (state.loading)
+        if (state.loading && state.pending?.page === Number(this.currentPage) && !state.replaceRequested)
           return state.loading
+        if (state.loading) {
+          const requestedPage = this.currentPage
+          invalidateLoading(this)
+          this.currentPage = requestedPage
+        }
 
         state.suppressInvalidatedResultRestore = false
         state.collapsedList = undefined
+        state.error = undefined
+        state.failedPage = undefined
         const invisibleRpids = getInvisibleRpids(this)
         if (invisibleRpids.size > 0) {
           state.pages.forEach((replies, page) => {
@@ -581,18 +769,51 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
           beforeList: mergeLists(state.mergedList ?? [], currentList),
           layoutReservation: state.expandAllLoading ? undefined : reserveLayoutHeight(this),
           page: Number(this.currentPage) || 1,
+          controller: new AbortController(),
+          replace: state.replaceRequested === true || adapter.getMode() === 'pagination' || state.pages.size === 0,
+          anchor: undefined as ReturnType<typeof captureCommentReadingAnchor> | undefined,
+        }
+        state.replaceRequested = false
+        // The native first expansion/deep link still owns its initial scroll.
+        if (this instanceof HTMLElement && state.pages.size > 0) {
+          state.anchor?.cancel()
+          const anchor = pending.replace ? this.shadowRoot?.querySelector<HTMLElement>(`.${PAGE_CONTROL_CLASS}, #pagination-head`) ?? this : this
+          const inner = this.shadowRoot?.querySelector<HTMLElement>('[data-bewly-reply-reading-scroll]') ?? undefined
+          pending.anchor = captureCommentReadingAnchor(anchor, inner, pending.controller.signal)
+          state.anchor = pending.anchor
         }
         state.mergedList = pending.beforeList
         state.pending = pending
+        beginRead(this)
 
         let result: unknown
         try {
-          result = Reflect.apply(originalGetList, this, args)
+          if (adapter.readPage && state.readIdentity) {
+            this.showSpinner = true
+            const identity = state.readIdentity
+            result = pageCache.read(identity, pending.page, signal => adapter.readPage!(identity, pending.page, signal), pending.controller.signal).then((page) => {
+              if (state.pending !== pending || states.get(this) !== state || state.identity !== getIdentity(this) || pending.controller.signal.aborted)
+                return
+              if (page.page > Math.max(1, page.totalPages))
+                throw new Error('Comment page is no longer available')
+              this.list = page.items
+              this.count = page.count
+              this.totalPage = page.totalPages
+              const received = new Set(page.items.map(adapter.getRpid))
+              if (Array.isArray(this.newItems))
+                this.newItems = this.newItems.filter((item: unknown) => !received.has(adapter.getRpid(item)))
+            })
+          }
+          else {
+            result = Reflect.apply(originalGetList, this, args)
+          }
         }
         catch (error) {
           if (state.pending === pending) {
             releaseLayoutReservation(pending.layoutReservation)
             state.pending = undefined
+            pending.anchor?.cancel()
+            endRead(this)
           }
           throw error
         }
@@ -604,6 +825,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
               releaseLayoutReservation(pending.layoutReservation)
               state.pending = undefined
               state.loading = undefined
+              endRead(this)
             }
             if (currentState?.identity === getIdentity(this)) {
               this.list = currentState.mergedList
@@ -625,20 +847,20 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
               && state.identity === getIdentity(this)
               && Array.isArray(this.list)) {
               const latestInvisibleRpids = getInvisibleRpids(this)
-              const retainedBeforeList = pending.beforeList
-                .filter((reply: unknown) => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
               const loadedList = this.list
                 .filter((reply: unknown) => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? ''))
-              applyInteractionOverrides(state, retainedBeforeList)
               applyInteractionOverrides(state, loadedList)
-              const newPage = getNewPage(retainedBeforeList, loadedList)
               state.pages.forEach((replies, page) => {
                 state.pages.set(page, replies.filter(reply => !latestInvisibleRpids.has(adapter.getRpid(reply) ?? '')))
               })
+              if (pending.replace)
+                state.pages.clear()
+              state.pages.delete(pending.page)
               state.pages.set(pending.page, loadedList)
+              trimVisiblePages(state)
               state.currentPage = pending.page
-              state.allRepliesExpanded = hasLoadedEveryPage(state, Number(this.totalPage) || 0)
-              state.mergedList = mergeLists(retainedBeforeList, newPage)
+              state.allRepliesExpanded = state.currentPage >= Number(this.totalPage)
+              state.mergedList = mergePages(state)
               this.list = state.mergedList
               if (state.expandAllLoading) {
                 releaseLayoutReservation(pending.layoutReservation)
@@ -663,18 +885,38 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
             }
           }
           updateExpandAllButton(this)
+          if (!state.pending)
+            this.showSpinner = false
+          updatePageControl(this)
+          endRead(this)
+          void pending.anchor?.restore(() => states.get(this) === state && state.identity === getIdentity(this) && !state.pending && state.anchor === pending.anchor)
+            .finally(() => {
+              if (state.anchor === pending.anchor)
+                state.anchor = undefined
+            })
           return value
         }, (error) => {
           if (state.pending === pending) {
             releaseLayoutReservation(pending.layoutReservation)
             state.pending = undefined
             state.loading = undefined
+            this.showSpinner = false
+            this.currentPage = state.currentPage
+            if (!pending.controller.signal.aborted) {
+              state.error = error instanceof Error ? error.message : 'failed'
+              state.failedPage = pending.page
+              state.failedReplace = pending.replace
+            }
           }
+          pending.anchor?.cancel()
           updateExpandAllButton(this)
-          throw error
+          updatePageControl(this)
+          this.requestUpdate?.()
+          endRead(this)
         })
         state.loading = request
         updateExpandAllButton(this)
+        updatePageControl(this)
         return request
       },
     })
@@ -683,11 +925,13 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       configurable: true,
       writable: true,
       value(this: any, ...args: any[]) {
-        if (!isEnabled())
+        if (!canHandle(this))
           return Reflect.apply(originalChangePage, this, args)
         const state = getState(this)
+        if (adapter.getMode() === 'loadMore' && !state.expandAllLoading && !state.replaceRequested)
+          return expandAllReplies(this)
         if (state.loading)
-          return state.loading
+          invalidateLoading(this)
 
         const currentPage = Number(this.currentPage) || 1
         if (!state.pages.has(currentPage) && Array.isArray(this.list) && this.list !== state.mergedList) {
@@ -704,7 +948,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       configurable: true,
       get(this: any) {
         const items = Reflect.apply(paginationItems, this, [])
-        if (!isEnabled() || this.showPagination !== true || !Array.isArray(items))
+        if (!canHandle(this) || adapter.getMode() !== 'loadMore' || this.showPagination !== true || !Array.isArray(items))
           return items
 
         const state = getState(this)
@@ -756,7 +1000,7 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
   }
 
   function sync(renderer: any) {
-    const enabled = isEnabled()
+    const enabled = canHandle(renderer)
     if (enabledStates.get(renderer) !== enabled) {
       enabledStates.set(renderer, enabled)
       renderer.requestUpdate?.()
@@ -765,8 +1009,20 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
       clear(renderer, true)
     }
     else {
-      getState(renderer)
+      const state = getState(renderer)
+      if (state.mode !== adapter.getMode()) {
+        invalidateLoading(renderer)
+        state.mode = adapter.getMode()
+        const currentPage = state.pages.get(state.currentPage)
+        state.pages.clear()
+        if (currentPage) {
+          state.pages.set(state.currentPage, currentPage)
+          state.mergedList = currentPage
+          renderer.list = currentPage
+        }
+      }
       updateExpandAllButton(renderer)
+      updatePageControl(renderer)
     }
   }
 
@@ -778,8 +1034,46 @@ export function createCommentReplyPaginationController(adapter: CommentReplyPagi
     },
     invalidateLoading,
     patchPrototype,
-    recordInteraction,
     suspendForNativeCollapse,
     sync,
+    requestPage,
+    getKnownReplies(renderer: any) {
+      const identity = getReadIdentity(renderer)
+      return identity ? pageCache.knownItems(identity) : []
+    },
+    getKnownRevision(renderer: any) {
+      const identity = getReadIdentity(renderer)
+      return identity ? pageCache.revision(identity) : 0
+    },
+    reset() {
+      scopeGeneration++
+      for (const renderer of [...activeRenderers])
+        clear(renderer, false)
+      pageCache.clear()
+    },
+    captureInteraction(renderer: any, rpid: string) {
+      if (!canHandle(renderer))
+        return
+      const state = getState(renderer)
+      const identity = state.readIdentity
+      if (!identity || !rpid)
+        return
+      const generation = scopeGeneration
+      const key = commentReplyWriteKey(identity)
+      return (interaction: CommentReplyInteractionState) => {
+        if (scopeGeneration !== generation || adapter.getAccountId() !== identity.account)
+          return
+        pageCache.update(identity, rpid, reply => adapter.getRpid(reply) === rpid ? { ...reply, ...interaction } : reply)
+        if (states.get(renderer)?.readIdentity && commentReplyWriteKey(states.get(renderer)!.readIdentity!) === key)
+          recordInteraction(renderer, rpid, interaction)
+        for (const target of activeRenderers) {
+          if (target === renderer)
+            continue
+          const current = states.get(target)
+          if (current?.readIdentity && commentReplyWriteKey(current.readIdentity) === key)
+            recordInteraction(target, rpid, interaction)
+        }
+      }
+    },
   }
 }

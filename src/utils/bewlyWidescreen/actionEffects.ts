@@ -72,10 +72,9 @@ export function syncActionAnimationTheme(currentState: BewlyWidescreenState) {
   const hueRotate = Math.round(hue - BILIBILI_ACTION_ANIMATION_HUE)
   const saturationRatio = Math.max(0.8, Math.min(2.4, saturation / 0.85))
   const brightnessRatio = Math.max(0.75, Math.min(1.35, lightness / 0.46))
-  currentState.root.style.setProperty(
-    '--bewly-widescreen-action-canvas-filter',
-    `hue-rotate(${hueRotate}deg) saturate(${saturationRatio.toFixed(2)}) brightness(${brightnessRatio.toFixed(2)})`,
-  )
+  const filter = `hue-rotate(${hueRotate}deg) saturate(${saturationRatio.toFixed(2)}) brightness(${brightnessRatio.toFixed(2)})`
+  if (currentState.root.style.getPropertyValue('--bewly-widescreen-action-canvas-filter') !== filter)
+    currentState.root.style.setProperty('--bewly-widescreen-action-canvas-filter', filter)
 }
 
 export function clearActionGeometry(currentState: BewlyWidescreenState) {
@@ -149,8 +148,10 @@ function syncActionEffectGeometry(currentState: BewlyWidescreenState) {
     element.style.removeProperty('--bewly-action-anchor-y')
   })
   measurements.forEach(({ element, x, y }) => {
-    element.style.setProperty('--bewly-action-anchor-x', `${x}px`)
-    element.style.setProperty('--bewly-action-anchor-y', `${y}px`)
+    if (element.style.getPropertyValue('--bewly-action-anchor-x') !== `${x}px`)
+      element.style.setProperty('--bewly-action-anchor-x', `${x}px`)
+    if (element.style.getPropertyValue('--bewly-action-anchor-y') !== `${y}px`)
+      element.style.setProperty('--bewly-action-anchor-y', `${y}px`)
   })
   currentState.actionGeometryElements = nextElements
 }

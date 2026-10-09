@@ -161,18 +161,3 @@ export function useOptimizedScroll(
     checkScroll,
   }
 }
-
-/**
- * 简化版：仅用于检测是否到达底部（用于无限滚动）
- */
-export function useScrollToBottom(
-  scrollElement: Ref<HTMLElement | undefined>,
-  onReachBottom: () => void | Promise<void>,
-  options: { threshold?: number } = {},
-) {
-  return useOptimizedScroll(
-    scrollElement,
-    { onReachBottom },
-    { bottomThreshold: options.threshold ?? 300 },
-  )
-}

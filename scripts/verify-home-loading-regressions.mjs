@@ -5,15 +5,16 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
     const layout = await import('../src/constants/layout')
     const topBar = Vue.reactive({ isLogin: false, userInfo: { mid: 0 } })
-    const tabs = [HomeSubPage.ForYou, HomeSubPage.Weekly].map(page => ({ page, visible: true, i18nKey: page }))
-    const settings = Vue.ref({ useSearchPageModeOnHomePage: true, preserveForYouState: true, recommendationMode: 'web', homePageTabVisibilityList: tabs })
+    const tabs = [HomeSubPage.ForYou, HomeSubPage.Weekly, ...Object.values(HomeSubPage).filter(page => page !== HomeSubPage.ForYou && page !== HomeSubPage.Weekly)].map(page => ({ page, visible: true, i18nKey: page }))
+    const settings = Vue.ref({ useSearchPageModeOnHomePage: true, preserveForYouState: true, recommendationMode: 'web', homePageTabVisibilityList: tabs, searchPageShowLogo: true, searchPageSearchBarFocusCharacter: 'focus-character', showRecommendationModeSwitcher: true, enableGridLayoutSwitcher: true })
+    const shortViewport = Vue.ref(false)
     const viewport = document.body.appendChild(document.createElement('div'))
     viewport.scrollTo = ({ top }) => {
       viewport.scrollTop = top
     }
     viewport.scrollTop = 1200
     const provider = {
-      handleBackToTop: value => viewport.scrollTop = value,
+      handleBackToTop: () => assert.fail('Home tab buttons must not implicitly scroll or refresh'),
       homeActivatedPage: Vue.ref(HomeSubPage.ForYou),
       homeActivatedPageTouched: Vue.ref(false),
       navigateToHomeTab(page) {
@@ -24,9 +25,9 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       scrollViewportRef: Vue.ref(viewport),
     }
     const blank = { render: () => null }
-    const Home = await compileComponent('../src/contentScripts/views/Home/Home.vue', {
+    const homeDependencies = {
       '@iconify/vue': { Icon: blank },
-      '@vueuse/core': { useThrottleFn: fn => fn, useMediaQuery: () => Vue.ref(false) },
+      '@vueuse/core': { useThrottleFn: fn => fn, useMediaQuery: () => shortViewport },
       '~/components/LiquidSegmentIndicator.vue': { default: blank },
       '~/components/PageAsyncLoading.vue': { default: blank },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
@@ -44,16 +45,39 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/utils/mitt': { default: { on() {}, off() {} } },
       '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
       './components/VersionReminder.vue': { default: blank },
-      './components/RecommendationModeSwitcher.vue': { default: blank },
+      './components/RecommendationModeSwitcher.vue': { default: { render: () => Vue.h('div', { 'data-mode-switcher': '' }, Vue.h('button', 'mode')) } },
       './types': { HomeSubPage },
-    }, { renderTemplate: false })
+    }
+    const Home = await compileComponent('../src/contentScripts/views/Home/Home.vue', homeDependencies, { renderTemplate: false })
     const host = viewport.appendChild(document.createElement('div'))
     let state
-    const app = Vue.createApp({ render: () => Vue.h(Home, { ref: value => state = value?.$?.setupState }) })
+    let app = Vue.createApp({ render: () => Vue.h(Home, { ref: value => state = value?.$?.setupState }) })
+    app.config.globalProperties.$t = key => key
+    app.component('Logo', { render: () => Vue.h('span', 'Logo') })
+    app.component('SearchBar', { props: ['focusedCharacter'], setup: props => () => Vue.h('input', { 'data-search': '', 'data-character': props.focusedCharacter }) })
     try {
       app.mount(host)
       await flush()
       assert.equal(viewport.scrollTop, 0)
+      const stageStyle = { ...state.searchStageStyle }
+      for (const tab of tabs) {
+        state.handleChangeTab(tab)
+        await flush()
+        state.restoreTabScrollPosition()
+        assert.deepEqual({ ...state.searchStageStyle }, stageStyle, 'tab identity cannot change the search stage geometry')
+        assert.equal(state.showHomeSearchCharacter, true)
+        assert.equal(state.reserveRecommendationModeSwitcher, true, 'toolbar geometry cannot switch by tab')
+        assert.equal(state.shouldShowRecommendationModeSwitcher, tab.page === HomeSubPage.ForYou)
+        assert.equal(state.getContentScrollTop(), 238)
+      }
+      shortViewport.value = true
+      await flush()
+      assert.equal(state.getContentScrollTop(), 174, 'only viewport height controls the compact stage')
+      state.handleChangeTab(tabs[0])
+      await flush()
+      assert.equal(state.getContentScrollTop(), 174)
+      shortViewport.value = false
+      await flush()
       topBar.isLogin = true
       await flush()
       topBar.userInfo.mid = 42
@@ -69,16 +93,69 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       await flush()
       state.restoreTabScrollPosition()
       assert.equal(viewport.scrollTop, 0, 'account updates after switching tabs must also retain the visible search hero')
-      const discoveryHeight = layout.resolveHomeSearchStage(true, false).height
+      const discoveryHeight = layout.resolveHomeSearchStage(false).height
+      const content = viewport.appendChild(document.createElement('section'))
+      content.getBoundingClientRect = () => ({ height: 1600 })
+      state.tabContentRef = content
       viewport.scrollTop = discoveryHeight + 500
       state.handleChangeTab(tabs[0])
       await flush()
+      assert.equal(state.tabContentMinHeight, 1600, 'the outgoing space protects the viewport during the out-in gap')
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, discoveryHeight, 'an uncached tab entered from the list starts at the video section')
+      assert.equal(viewport.scrollTop, discoveryHeight + 500, 'an uncached tab keeps the shared reading position')
+      assert.equal(state.restoreTabScrollPosition(), true, 'a cached grid cannot replay its own previous anchor')
+      viewport.scrollTop = discoveryHeight + 900
       state.handleChangeTab(tabs[1])
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, discoveryHeight + 500, 'returning to a visited tab preserves its remembered list position')
+      assert.equal(viewport.scrollTop, discoveryHeight + 900, 'returning to a visited tab does not restore its old position')
+      state.handleChangeTab(tabs[1])
+      await flush()
+      assert.equal(viewport.scrollTop, discoveryHeight + 900, 'clicking the selected tab does not scroll either')
+      state.toggleTabContentLoading(true)
+      state.finishTabSwitch()
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      assert.equal(state.tabContentMinHeight, 1600, 'network loading keeps the temporary space')
+      viewport.scrollTop = discoveryHeight + 1000
+      state.toggleTabContentLoading(false)
+      await flush()
+      await new Promise(resolve => requestAnimationFrame(resolve))
+      assert.equal(state.tabContentMinHeight, undefined, 'settled content releases the temporary height')
+      assert.equal(viewport.scrollTop, discoveryHeight + 1000, 'late content cannot override a subsequent user scroll')
+      topBar.userInfo.mid = 44
+      await flush()
+      state.restoreTabScrollPosition()
+      assert.equal(viewport.scrollTop, discoveryHeight + 1000, 'late account reconciliation cannot rewind a user who already switched tabs')
+      app.unmount()
+      provider.homeActivatedPage.value = HomeSubPage.ForYou
+      const renderedHome = await compileComponent('../src/contentScripts/views/Home/Home.vue', homeDependencies, { globals: {
+        defineAsyncComponent: () => ({ setup(_props, { expose }) {
+          expose({ initData() {} })
+          return () => Vue.h('section', 'content')
+        } }),
+      } })
+      app = Vue.createApp(renderedHome)
+      app.config.globalProperties.$t = key => key
+      app.component('Logo', { render: () => Vue.h('span', 'Logo') })
+      app.component('SearchBar', { props: ['focusedCharacter'], setup: props => () => Vue.h('input', { 'data-search': '', 'data-character': props.focusedCharacter }) })
+      app.mount(host)
+      await flush()
+      const search = host.querySelector('[data-search]')
+      const logo = host.querySelector('.home-search-stage__logo')
+      const headerClass = host.querySelector('.home-header').className
+      const shellStyle = host.firstElementChild.getAttribute('style')
+      for (const tab of tabs) {
+        Array.from(host.querySelectorAll('.home-tab-button')).find(button => button.textContent.trim() === tab.page).click()
+        await flush()
+        assert.equal(host.querySelector('[data-search]'), search)
+        assert.equal(host.querySelector('.home-search-stage__logo'), logo)
+        assert.equal(search.dataset.character, 'focus-character')
+        assert.equal(host.firstElementChild.getAttribute('style'), shellStyle)
+        assert.equal(host.querySelector('.home-header').className, headerClass)
+        const modes = host.querySelector('[data-mode-switcher]')
+        assert.equal(modes.hasAttribute('inert'), tab.page !== HomeSubPage.ForYou)
+        assert.equal(modes.getAttribute('aria-hidden'), tab.page !== HomeSubPage.ForYou ? 'true' : null)
+      }
     }
     finally {
       app.unmount()
@@ -87,7 +164,9 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
   })
 
   check('Weekly: delayed initialization and refresh preserve the hero; edition changes never scroll it out of view', async () => {
-    const { HOME_TASK_SEARCH_STAGE_HEIGHT } = await import('../src/constants/layout')
+    const { resolveHomeSearchStage } = await import('../src/constants/layout')
+    const homeTabs = await import('../src/composables/useHomeTabState')
+    const shortViewport = Vue.ref(false)
     const viewport = document.body.appendChild(document.createElement('div'))
     const settings = Vue.ref({ useSearchPageModeOnHomePage: true })
     const scrolls = []
@@ -106,8 +185,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/composables/useFloatingMenuPosition': { useFloatingMenuPosition: () => ({ position: Vue.ref({}), start() {}, stop() {}, scheduleUpdate() {} }) },
       '~/components/VideoCardGrid.vue': { default: { render: () => null } },
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
-      '~/composables/useHomeTabState': await import('../src/composables/useHomeTabState'),
-      '~/constants/layout': { HOME_TASK_SEARCH_STAGE_HEIGHT },
+      '~/composables/useHomeTabState': homeTabs,
       '~/logic': { settings },
       '~/utils/api': { default: { ranking: {
         getPopularSeriesList: () => new Promise(resolve => lists.push(resolve)),
@@ -118,7 +196,10 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
     }, { renderTemplate: false })
     const host = viewport.appendChild(document.createElement('div'))
     let state
-    const app = Vue.createApp({ render: () => Vue.h(Weekly, { gridLayout: 'adaptive', topBarVisibility: true, ref: value => state = value?.$?.setupState }) })
+    const app = Vue.createApp({ setup() {
+      homeTabs.provideHomeTabCache(() => 'Weekly', () => {}, () => settings.value.useSearchPageModeOnHomePage ? resolveHomeSearchStage(shortViewport.value).height : 0)
+      return () => Vue.h(Weekly, { gridLayout: 'adaptive', topBarVisibility: true, ref: value => state = value?.$?.setupState })
+    } })
     const editions = [{ number: 42, name: '42' }, { number: 41, name: '41' }]
     const settleList = async () => {
       lists.shift()({ code: 0, data: { list: editions } })
@@ -143,10 +224,12 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       assert.equal(videos.at(-1).number, 41)
       videos.at(-1).resolve({ code: 0, data: { list: [] } })
       await flush()
-      viewport.scrollTop = HOME_TASK_SEARCH_STAGE_HEIGHT + 700
+      shortViewport.value = true
+      const stageHeight = resolveHomeSearchStage(true).height
+      viewport.scrollTop = stageHeight + 700
       state.selectSeries(editions[0])
       await flush()
-      assert.equal(scrolls.at(-1), HOME_TASK_SEARCH_STAGE_HEIGHT, 'a user already in the list still returns to its beginning')
+      assert.equal(scrolls.at(-1), stageHeight, 'a user already in the list returns to the current shell offset after a viewport change')
       videos.at(-1).resolve({ code: 0, data: { list: [] } })
       await flush()
       settings.value.useSearchPageModeOnHomePage = false

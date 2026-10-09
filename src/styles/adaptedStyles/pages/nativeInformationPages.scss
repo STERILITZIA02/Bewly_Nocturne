@@ -1,0 +1,581 @@
+// Reading pages keep native text, links, disclosure widgets and artwork.
+// This file is loaded only by the appearance entry and scoped by its owner.
+html.bewly-design[data-bewly-native-site="public-document"],
+html.bewly-design[data-bewly-native-site="live"] .live-protocol-container,
+html.bewly-design[data-bewly-native-site="show"] #app:has(.H5RichTextShop) {
+  color: var(--bew-text-1);
+
+  :is(.txt, .content, .act-rich-render-content, .H5RichTextShop) {
+    color: var(--bew-text-1);
+    font-size: var(--bew-font-size-body);
+    line-height: var(--bew-line-height-body);
+    overflow-wrap: anywhere;
+  }
+
+  :is(.act-rich-render-content, .H5RichTextShop) {
+    :is(p, li, span, strong, em, b, h1, h2, h3, h4) {
+      color: inherit !important;
+    }
+
+    a,
+    a :is(span, strong) {
+      color: var(--bew-theme-foreground) !important;
+    }
+
+    :is(th, td) {
+      border-color: var(--bew-border-color);
+    }
+  }
+
+  :is(.protocol-title, .select-version, .edition) {
+    color: var(--bew-text-2);
+  }
+
+  select {
+    min-height: var(--bew-control-height);
+    padding: var(--bew-space-1) var(--bew-space-2);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(#app, #app-box, .txt, .container-wrapper, .t-space-container, .plat-section-inner-box) {
+    max-width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+}
+
+html.bewly-design[data-bewly-native-site="public-document"] {
+  :is(#app, #app-box) {
+    max-width: calc(100% - var(--bew-space-8));
+    margin-inline: auto;
+  }
+
+  .tpl-wrap > .container-wrapper {
+    // The protocol directory's empty navigation and spacers retain inline
+    // 1280px minima. Its existing content widths remain capped by this shell.
+    min-width: 0 !important;
+  }
+
+  .t-background-image[style*="/JfLTxqLSD_w750_h40.png"] {
+    // Verified blank white spacer bitmap, not the banner or protocol artwork.
+    // Preserve its native 40px section and all document/link positions.
+    background-image: none !important;
+  }
+
+  .t-background-image:is([style*="/9mAcyujer_w750_h500.png"], [style*="/ay8CvZbNBN_w750_h800.png"]) {
+    // Both verified assets are empty reading backings with a dashed border.
+    // Keep the native 750px text canvas, without the fixed white bitmap.
+    inset-inline: 0;
+    width: min(100%, 750px);
+    margin-inline: auto;
+    box-sizing: border-box;
+    background-image: none !important;
+    background-color: var(--bew-content-solid);
+    border: 1px solid var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .plat-position-outter-box:has(> [data-module="pc-rich-text2"]) {
+    // The announcement date has left:430px plus width:616px in a 740px row.
+    // Retain the authored left edge and fit its text box to the row's end.
+    right: 0;
+    width: auto !important;
+  }
+}
+
+html.bewly-design[data-bewly-native-site="public-help"] {
+  .home {
+    color: var(--bew-text-1);
+  }
+
+  .home .container {
+    // Native FAQ answers can exceed the fixed 900px reading pane. Keep this
+    // existing container scrollable instead of clipping the remainder.
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .home .container > header {
+    color: var(--bew-text-1);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.MenuBox, .el-menu, .el-menu-item, .el-submenu__title, .el-collapse-item__header, .el-collapse-item__wrap) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  :is(.MenuBox, .el-collapse-item) {
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .el-collapse-item__header,
+  .el-collapse-item__wrap {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .el-collapse-item__content,
+  .questionTitle {
+    color: var(--bew-text-1);
+  }
+
+  :is(.titleNumber, .el-collapse-item__arrow, .el-submenu__icon-arrow) {
+    color: var(--bew-text-2);
+  }
+
+  .el-menu-item,
+  .el-submenu__title {
+    background: transparent !important;
+    color: var(--bew-text-1) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.el-menu-item, .el-submenu__title):hover {
+    background: var(--bew-content-solid-hover) !important;
+  }
+
+  .el-menu-item.is-active {
+    // Element UI writes the original selected blue directly on each menu item.
+    color: var(--bew-on-theme-surface) !important;
+    background: var(--bew-theme-surface) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .context a {
+    color: var(--bew-theme-foreground);
+  }
+
+  .el-collapse {
+    border-color: var(--bew-border-color);
+  }
+
+  .fixed-service-word {
+    color: var(--bew-text-2);
+  }
+
+  @media (max-width: 1400px) {
+    .fixed-service-bg {
+      // Its native fixed placement covers the FAQ text at 1100px. The existing
+      // node follows <main>, so normal flow preserves both links and artwork.
+      position: static;
+      top: auto;
+      right: auto;
+      margin: var(--bew-space-6) auto;
+    }
+  }
+
+  @media (max-width: 1192px) {
+    .home .container {
+      min-width: 0;
+      max-width: calc(100vw - 222px - var(--bew-space-12));
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="public-contact"] {
+  .wrapper > .container {
+    color: var(--bew-text-1);
+    max-width: calc(100% - var(--bew-space-8));
+  }
+
+  :is(.subtitle-new, .article, .article .bt) {
+    color: var(--bew-text-1);
+  }
+
+  .subtitle-new {
+    border-color: var(--bew-border-color);
+  }
+
+  .inner-box {
+    // abu_oth.png is the native empty white card backing, beneath real text.
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .inner-box-title {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .container a,
+  .color-alert {
+    color: var(--bew-theme-foreground);
+  }
+
+  // The older introduction retains its own header, not the modern bili-header.
+  .z_top {
+    height: auto;
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+  }
+
+  .z_top .i-link,
+  .z_top .i-link:hover {
+    color: var(--bew-text-1);
+  }
+
+  .z_top .z_header {
+    display: flex;
+    height: auto;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bew-space-3);
+    max-width: calc(100% - var(--bew-space-8));
+    margin-inline: auto;
+    padding-block: var(--bew-space-2);
+  }
+
+  .z_top .uns_box .menu .b-post {
+    // Let the existing submission link determine the menu's lower edge.
+    height: auto;
+
+    > .i-link {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  .z_top_nav > ul,
+  .uns_box > .menu {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--bew-space-1);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    > li {
+      position: relative;
+    }
+  }
+
+  .z_top .i-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--bew-control-height);
+    min-width: var(--bew-control-height-sm);
+    padding-inline: var(--bew-space-2);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+  }
+
+  // Keep the old official menu nodes and native login visibility intact. Only
+  // their existing nested menus collapse; no account state is inferred here.
+  .z_header li > :is(.i_menu, .i_div, .s-menu) {
+    display: none;
+    position: absolute;
+    inset-block-start: 100%;
+    inset-inline-end: 0;
+    z-index: 10;
+    min-width: max-content;
+    max-width: calc(100vw - var(--bew-space-8));
+    max-height: calc(100vh - var(--bew-control-height) - var(--bew-space-12));
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: var(--bew-space-2);
+    margin: 0;
+    color: var(--bew-text-1);
+    background: var(--bew-elevated-solid);
+    border: 1px solid var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+    list-style: none;
+
+    ul {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+
+    a {
+      display: block;
+      padding: var(--bew-space-2) var(--bew-space-3);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        background: var(--bew-content-solid-hover);
+      }
+    }
+  }
+
+  .z_header .z_top_nav li > .i_div {
+    inset-inline-start: 0;
+    inset-inline-end: auto;
+  }
+
+  .z_header li:is(:hover, :focus-within) > :is(.i_menu, .i_div, .s-menu) {
+    display: block;
+  }
+}
+
+html.bewly-design[data-bewly-native-site="public-about"] {
+  .act-rich-render-content {
+    color: var(--bew-text-1);
+  }
+
+  .tpl-wrap > .container-wrapper {
+    // The final empty spacer carries an inline 1280px minimum. It must not
+    // enlarge the page; the authored introduction and banner keep their caps.
+    min-width: 0 !important;
+  }
+
+  :is(.plat-section-inner-box, .t-space-container, .plat-position-outter-box, .plat-position-inner-box) {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+
+  .plat-position-outter-box {
+    // The opaque "about us" title is an image containing text, not an empty
+    // page background. Its native 1286x92 ratio must follow the capped width;
+    // retaining the inline 92px height with cover clips both ends of the image.
+    height: auto !important;
+    aspect-ratio: 1286 / 92;
+    background-size: contain;
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="customer-service"] {
+  .customer-service {
+    color: var(--bew-text-1);
+    max-width: calc(100% - var(--bew-space-8));
+  }
+
+  :is(.self-panel, .guess-panel, .contact-panel, .other-panel) {
+    // Native section headings sit outside their individual content cards.
+    background: transparent;
+    color: var(--bew-text-1);
+  }
+
+  .customer-card {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .panel-title,
+  .panel-header .title {
+    font-size: var(--bew-font-size-heading);
+    line-height: var(--bew-line-height-heading);
+    font-weight: var(--bew-font-weight-semibold);
+  }
+
+  :is(.panel-title, .panel-header .title, .card-header .name, .question-container, .detail-text) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.card-content, .tag-item, .panel-header .more) {
+    color: var(--bew-text-2);
+  }
+
+  .tag-item {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.tag-item__active {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .customer-service a {
+    color: var(--bew-theme-foreground);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="copyright-intro"] {
+  .intro-containter {
+    max-width: calc(100% - var(--bew-space-8));
+    color: var(--bew-text-1);
+  }
+
+  .intro-containter .card {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+  }
+
+  .intro-containter :is(.title, .content) {
+    color: var(--bew-text-1);
+  }
+
+  .intro-containter .content-gary {
+    color: var(--bew-text-2);
+  }
+
+  .intro-containter .content p:not(.content-gary),
+  .intro-containter .content li {
+    color: inherit;
+  }
+
+  .el-dropdown-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--bew-control-height);
+    padding-inline: var(--bew-space-2);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .el-dropdown-menu {
+    color: var(--bew-text-1);
+    background: var(--bew-elevated-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .el-dropdown-menu__item {
+      color: inherit;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:not(.is-disabled):is(:hover, :focus) {
+        background: var(--bew-theme-surface);
+        color: var(--bew-on-theme-surface);
+      }
+    }
+
+    &[x-placement^="bottom"] .popper__arrow {
+      border-bottom-color: var(--bew-border-color);
+
+      &::after {
+        border-bottom-color: var(--bew-elevated-solid);
+      }
+    }
+  }
+
+  .intro-containter a {
+    color: var(--bew-theme-foreground);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="topics"] {
+  .topic-main {
+    max-width: calc(100% - var(--bew-space-8));
+  }
+
+  .b-topic-t,
+  .act-list > ul > li > h2 > a {
+    color: var(--bew-text-1);
+  }
+
+  .act-list > ul > li :is(.act-info, .found-time),
+  .pagelist {
+    color: var(--bew-text-2);
+  }
+
+  .act-list > ul > li {
+    // The native list contains an extra <ul>; each cover is floated inside its
+    // own row. Contain that float while keeping the full portrait poster.
+    display: flow-root;
+    box-sizing: border-box;
+    height: auto;
+    padding: var(--bew-space-4);
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .act-list > ul > li > a > img {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .nav-tab {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--bew-space-2);
+    height: auto;
+    border-color: var(--bew-border-color);
+
+    > li {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      float: none;
+      min-height: var(--bew-control-height);
+      margin: 0;
+      padding: var(--bew-space-1) var(--bew-space-3);
+      box-sizing: border-box;
+      color: var(--bew-text-2);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &.on {
+        background: var(--bew-theme-surface);
+        color: var(--bew-on-theme-surface);
+        border-color: var(--bew-theme-foreground);
+      }
+
+      &:hover {
+        color: var(--bew-theme-foreground);
+      }
+    }
+  }
+
+  .pagelist :is(.first-page, .last-page, .prev-page, .next-page) {
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.active {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+  }
+
+  .pagelist input {
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}

@@ -19,8 +19,8 @@ import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
-import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
+import { getVideoPlaybackProgress, getVideoProgressPercentage } from '~/utils/videoVisitHistory'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -233,7 +233,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                     `${
                       item.progress === -1
                         ? calcCurrentTime(item.duration)
-                        : calcCurrentTime(item.progress)
+                        : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)
                     } /
                     ${calcCurrentTime(item.duration)}`
                   }}
@@ -242,7 +242,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
               <Progress
                 class="watch-later-pop__progress"
                 :percentage="
-                  normalizePlaybackProgress(item.progress, item.duration)
+                  getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)
                 "
               />
             </div>

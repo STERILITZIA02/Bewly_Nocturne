@@ -61,11 +61,20 @@
     &:hover::after,
     &.hover::after {
       --uno: "content-empty absolute right-0 top-20px w-110px h-120px";
+      z-index: 0;
+    }
+
+    // The avatar and its panel share this local stacking context. Keep the
+    // hover bridge below the panel and the enlarged portrait above its glass.
+    > .bew-popover {
+      z-index: 1;
     }
 
     .avatar-img,
     .avatar-shadow {
       --uno: "shrink-0 duration-300 bg-cover bg-center";
+      // The portrait only moves/fades; inherited scrollbar colours must not animate.
+      transition-property: opacity, transform;
       width: var(--bew-control-height);
       height: var(--bew-control-height);
       border-radius: var(--bew-control-radius);
@@ -76,7 +85,8 @@
     }
 
     .avatar-img {
-      --uno: "z-1";
+      position: relative;
+      z-index: 2;
     }
 
     .avatar-shadow {
@@ -88,13 +98,15 @@
     }
 
     .vip-img {
+      z-index: 3;
       &.hover {
         --uno: "transform scale-180 translate-y-86px translate-x--12px";
       }
     }
 
     .avatar-dot {
-      --uno: "top-0 right-0 z-10";
+      --uno: "top-0 right-0";
+      z-index: 4;
 
       &.hover {
         --uno: "transform scale-180 translate-y-35px translate-x--20px";
@@ -119,6 +131,8 @@
 
     &:not(.avatar) > .top-bar-trigger {
       --uno: "grid place-items-center duration-300 relative z-5";
+      // A duration alone defaults to `all`, including non-composited scrollbar-color.
+      transition-property: color, background-color, filter;
       width: var(--bew-control-height);
       height: var(--bew-control-height);
       border-radius: var(--bew-control-radius);

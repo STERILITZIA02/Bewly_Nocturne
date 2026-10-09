@@ -456,6 +456,7 @@ verify('WBI keys survive worker cold starts with scope and MID isolation', async
   const storage = new Map<string, unknown>()
   let now = 1_000_000
   let navRequests = 0
+  let cookieMid = '100'
   const runtime = {
     now: () => now,
     fetch: async () => {
@@ -470,7 +471,7 @@ verify('WBI keys survive worker cold starts with scope and MID isolation', async
         },
       }))
     },
-    getCookies: async () => [],
+    getCookies: async () => [{ name: 'DedeUserID', value: cookieMid }],
     storage: {
       get: async (key: string) => ({ [key]: storage.get(key) }),
       set: async (values: Record<string, unknown>) => {
@@ -504,6 +505,7 @@ verify('WBI keys survive worker cold starts with scope and MID isolation', async
       },
     }))
   }
+  cookieMid = '200'
   assert.equal(await wbi.initWbiKeys({ mid: '200' }, runtime), true)
   assert.equal(navRequests, 2, 'a different MID cannot restore the authenticated slot')
 
@@ -1467,7 +1469,6 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
   }
 
   const [user, upAssistant, customerService, unfollowed, intercepted, ...fallbackItems] = items
-  assert.equal(privateSession.getPrivateSessionProfileUrl(user!), 'https://space.bilibili.com/1000000000000001')
   assert.equal(user?.capabilities.canReadNative, true)
   assert.equal(user?.capabilities.canAck, true)
   assert.equal(user?.capabilities.canOpenProfile, true)
@@ -1499,14 +1500,12 @@ verify('session-kind fixtures enforce classification, capabilities, profiles, an
     assert.equal(assistant?.capabilities.canAck, true)
     assert.equal(assistant?.capabilities.canSend, false)
     assert.equal(assistant?.capabilities.canOpenProfile, false)
-    assert.equal(privateSession.getPrivateSessionProfileUrl(assistant!), '')
   }
 
   for (const item of [unfollowed, intercepted]) {
     assert.equal(item?.capabilities.canReadNative, true)
     assert.equal(item?.capabilities.canAck, true)
     assert.equal(item?.capabilities.canOpenProfile, true)
-    assert.equal(item ? privateSession.getPrivateSessionProfileUrl(item).startsWith('https://space.bilibili.com/') : false, true)
   }
   assert.equal(unfollowed?.capabilities.canSend, true)
   assert.equal(intercepted?.capabilities.canSend, false)
@@ -2828,7 +2827,6 @@ verify('message settings live in the global Bewly settings page and the old sect
     navigationSource,
     notificationsSource,
     sectionsSource,
-    routeSource,
     searchSource,
     storageSource,
     appProviderSource,
@@ -2842,7 +2840,6 @@ verify('message settings live in the global Bewly settings page and the old sect
     readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsNavigation.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/notificationSections.ts', import.meta.url), 'utf8'),
-    readFile(new URL('../src/utils/notificationRoute.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/components/Settings/searchCatalog.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/logic/storage.ts', import.meta.url), 'utf8'),
     readFile(new URL('../src/composables/useAppProvider.ts', import.meta.url), 'utf8'),
@@ -2857,8 +2854,8 @@ verify('message settings live in the global Bewly settings page and the old sect
 
   assert.equal(sectionsSource.includes(`| 'settings'`), false)
   assert.equal(sectionsSource.includes(`id: 'settings'`), false)
-  assert.ok(routeSource.includes(`buildOriginalNotificationUrl('settings')`))
-  assert.ok(routeSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'))
+  const { buildOriginalNotificationUrl } = await import('../src/utils/notificationRoute')
+  assert.equal(buildOriginalNotificationUrl('settings'), 'https://message.bilibili.com/#/config')
   assert.ok(notificationsSource.includes('normalizeNotificationRoute'))
   assert.ok(notificationsSource.includes('routeReady'))
   assert.ok(notificationsSource.includes('openSettingsAt'))

@@ -13,12 +13,11 @@ export interface BewlyWidescreenManualToggleDetail {
   userInitiated: true
 }
 export const BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS = 'bewly-widescreen-controls-hidden'
-export const DRAWER_VIDEO_ENTER_PAGE_FULL = 'drawerVideoEnterPageFull'
-export const DRAWER_VIDEO_EXIT_PAGE_FULL = 'drawerVideoExitPageFull'
 export const BEWLY_DRAWER_ESCAPE_HANDLED = 'BEWLY_DRAWER_ESCAPE_HANDLED'
 export const BEWLY_DRAWER_CLOSE_REQUEST = 'BEWLY_DRAWER_CLOSE_REQUEST'
 export const IFRAME_DARK_MODE_CHANGE = 'iframeDarkModeChange'
 export const IFRAME_TOP_BAR_CHANGE = 'iframeTopBarChange'
 export const IFRAME_NAVIGATION_REQUEST = 'bewlyIframeNavigationRequest'
 export const IFRAME_NAVIGATION_ACK = 'bewlyIframeNavigationAck'
+export const IFRAME_PLAYER_CONTEXT = 'bewlyIframePlayerContext'
 export const DARK_MODE_BASE_COLOR_CHANGE = 'darkModeBaseColorChange'

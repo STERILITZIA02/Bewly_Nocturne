@@ -43,8 +43,8 @@ export function useFavoritesData(dependencies: FavoritesDataDependencies) {
   const categoryState = reactive({ loading: false, failed: false, loaded: false })
   const subscriptionState = reactive({ loading: false, failed: false, loaded: false, hasMore: true, page: 0 })
   const resourceIndex = new Map<string, number>()
-  const createAvatars = () => createFavoriteAvatarLoader(async (mid) => {
-    const response = await dependencies.user.getUserCard({ mid: String(mid) })
+  const createAvatars = () => createFavoriteAvatarLoader(async (mid, signal) => {
+    const response = await dependencies.user.getUserCard({ mid: String(mid) }, { signal })
     const face = response?.data?.card?.face
     return response?.code === 0 && typeof face === 'string' && face ? face : undefined
   })

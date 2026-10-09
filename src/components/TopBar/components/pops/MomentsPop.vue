@@ -270,11 +270,11 @@ defineExpose({
                 >
                 <IconButton
                   v-if="moment.watchLaterAid"
-                  :label="topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
+                  :label="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : topBarStore.isInWatchLater(moment.watchLaterAid) ? $t('common.remove_from_watch_later') : $t('common.save_to_watch_later')"
                   class="popover-card__interactive popover-card-action popover-card__overlay-action"
                   @click.stop.prevent="toggleWatchLater(moment.watchLaterAid)"
                 >
-                  <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="$t('common.save_to_watch_later')" placement="bottom" type="dark">
+                  <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : $t('common.save_to_watch_later')" placement="bottom" type="dark">
                     <div i-mingcute:carplay-line />
                   </Tooltip>
                   <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">

@@ -59,15 +59,15 @@ export function resolveAppAuthorizationState(
 }
 
 export function createBooleanSingleFlight() {
-  let activePromise: Promise<boolean> | null = null
-  return (task: () => Promise<boolean>): Promise<boolean> => {
-    if (activePromise)
-      return activePromise
+  let active: { key: unknown, version: unknown, promise: Promise<boolean> } | null = null
+  return (task: () => Promise<boolean>, key?: unknown, version?: unknown): Promise<boolean> => {
+    if (active && active.key === key && active.version === version)
+      return active.promise
     const promise = task().finally(() => {
-      if (activePromise === promise)
-        activePromise = null
+      if (active?.promise === promise)
+        active = null
     })
-    activePromise = promise
+    active = { key, version, promise }
     return promise
   }
 }

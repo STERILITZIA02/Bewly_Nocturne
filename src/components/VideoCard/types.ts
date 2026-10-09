@@ -13,6 +13,9 @@ export function createVideoCardState(): VideoCardState {
 }
 
 export interface Video {
+  /** Advertisements render as link cards without video APIs or actions. */
+  isAdvertisement?: boolean
+  advertisementKey?: string
   /** Query scope for collaborative submissions, distinct from the actual author. */
   sourceUploaderMid?: number
   id: number

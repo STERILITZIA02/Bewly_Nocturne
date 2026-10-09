@@ -3,12 +3,11 @@ import { watch } from 'vue'
 
 import { observePlayerDom } from '~/contentScripts/playerDomLifecycle'
 import { settings } from '~/logic'
+import { useIframePlaybackContext } from '~/logic/iframePageState'
 import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, VideoPlayerModeOverride } from '~/logic/storage'
 import { selectors as playbackSelectors } from '~/utils/bewlyWidescreen/constants'
 import {
   applyConfiguredPlaybackRate,
-  clampPlaybackRate,
-  PLAYBACK_RATE_STEP,
   resolvePlaybackRateChange,
 } from '~/utils/playbackRate'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
@@ -21,24 +20,10 @@ export { getVideoElement } from './playerMedia'
 const _videoClassTag = {
   danmuBtn:
       '.bilibili-player-video-danmaku-switch > input[type=checkbox],.bpx-player-dm-switch input[type=checkbox]',
-  playBtn:
-      '.bpx-player-ctrl-play,.bilibili-player-video-btn-start,.squirtle-video-start',
-  nextBtn:
-      '.bpx-player-ctrl-next,.bilibili-player-video-btn-next,.squirtle-video-next',
-  muteBtn:
-      '.bpx-player-ctrl-volume,.bilibili-player-video-btn-volume,.squirtle-volume-icon',
   state:
       '.bilibili-player-video-state,.bpx-player-state-wrap,.bpx-player-video-state',
-  title:
-      '.video-title,.bilibili-player-video-top-title,#player-title,.season-info .title',
-  subtitle:
-      '.video-pod__item.active>.title,.simple-base-item.active .title-txt,.multip-list-item.multip-list-item-active',
-  videoArea: '.bilibili-player-video-wrap,.bpx-player-video-area',
   video: PLAYER_MEDIA_SELECTOR,
   autoPlaySwitchOn: '.auto-play .switch-btn.on',
-  autoPlaySwitchOff: '.auto-play .switch-btn:not(.on)',
-  upName: '.up-name,.up-info-name,.upinfo-btn-panel .name,.video-info-detail-list .name',
-  upLink: 'a[href*="space.bilibili.com"],.up-name[href*="space.bilibili.com"],.upinfo-btn-panel .name[href*="space.bilibili.com"]',
 }
 
 const monitoredDanmakuSwitches = new WeakSet<HTMLInputElement>()
@@ -171,13 +156,6 @@ export function cancelPlayerRetryTasks() {
   stateElement?.remove()
   stateElement = null
 }
-
-// 状态显示元素
-let timeElement: HTMLDivElement | null = null
-let clockElement: HTMLDivElement | null = null
-let titleElement: HTMLDivElement | null = null
-let timeInterval: number | null = null
-let clockInterval: number | null = null
 export const AUTO_EXIT_FULLSCREEN_RETRY_MAX = 20
 
 let autoExitFullscreenRetryTimer: ReturnType<typeof setTimeout> | null = null
@@ -212,13 +190,6 @@ export function isVideoPage() {
 // 判断是否为稍后再看播放页
 export function isWatchLaterVideo(): boolean {
   return location.pathname === '/list/watchlater' || location.pathname === '/list/watchlater/'
-}
-
-// 格式化时间
-export function formatTime(seconds: number): string {
-  const minutes = Math.floor(seconds / 60)
-  seconds = Math.floor(seconds % 60)
-  return `${minutes < 10 ? `0${minutes}` : minutes}:${seconds < 10 ? `0${seconds}` : seconds}`
 }
 
 // 显示状态
@@ -543,19 +514,20 @@ export function detectVideoType(): VideoType {
     return metadata.isCollection ? VideoType.COLLECTION : VideoType.RECOMMEND
   }
 
-  // 页面数据尚未可读时，分别检查分 P 和合集结构。
-  const hasViewMode = !!document.querySelector('.view-mode')
-  const hasMultipartItems = !!document.querySelector(
-    '.video-pod__item, .multi-page__item, .page-item',
-  )
-  const hasCollectionItems = !!document.querySelector('.video-pod__list .simple-base-item')
-
-  if (hasViewMode || (hasMultipartItems && hasCollectionItems))
+  // A collection item may itself wrap a video-pod__item. Only manuscript-part
+  // containers are evidence of multiple parts while MAIN metadata is pending.
+  if (document.querySelector([
+    '.multi-page .cur-list li',
+    '.multi-page-v1 .cur-list li',
+    '.multi-page .multi-page__item',
+    '.multi-page .page-item',
+    '.video-pod .multip-list-item',
+    '.video-pod .view-mode',
+    '.multi-page .view-mode',
+    '.multi-page-v1 .view-mode',
+  ].join(', '))) {
     return VideoType.MULTIPART
-  if (hasCollectionItems)
-    return VideoType.COLLECTION
-  if (hasMultipartItems)
-    return VideoType.MULTIPART
+  }
 
   // 如果以上都不是，检测是否为合集视频（通过DOM）
   if (isCollectionVideo()) {
@@ -593,7 +565,18 @@ function isVideoPlayerModeOverride(value: unknown): value is VideoPlayerModeOver
     || value === 'bewlyWidescreen'
 }
 
+export function resolveMomentsDialogPlayerModeOverride(context?: string): DefaultVideoPlayerMode | undefined {
+  const mode = settings.value.videoPlayerModeOverrides?.momentsDialog
+  return context === 'momentsDialog' && settings.value.enableVideoPlayerModeOverrides
+    && isVideoPlayerModeOverride(mode) && mode !== 'inherit'
+    ? mode
+    : undefined
+}
+
 export function resolveDefaultVideoPlayerMode(): DefaultVideoPlayerMode {
+  const embeddedMode = resolveMomentsDialogPlayerModeOverride(useIframePlaybackContext().value)
+  if (embeddedMode)
+    return embeddedMode
   if (!settings.value.enableVideoPlayerModeOverrides)
     return settings.value.defaultVideoPlayerMode
 
@@ -958,203 +941,6 @@ export function applyAutoPlayByVideoType() {
   }
 }
 
-// 播放/暂停
-export function playPause(player?: Element) {
-  // 如果提供了player参数，优先使用
-  if (player) {
-    const playBtn = player.querySelector(_videoClassTag.playBtn)
-    if (playBtn) {
-      (playBtn as HTMLElement).click()
-      return
-    }
-  }
-
-  // 如果没有player参数或者找不到播放按钮，尝试自动查找播放器
-  const autoPlayer = getPlayerModeContainer()
-  if (autoPlayer) {
-    const playBtn = autoPlayer.querySelector(_videoClassTag.playBtn)
-    if (playBtn) {
-      (playBtn as HTMLElement).click()
-      return
-    }
-  }
-
-  // 最后备用方案：直接操作视频元素
-  const video = getVideoElement()
-  if (video) {
-    if (video.paused)
-      video.play()
-    else
-      video.pause()
-  }
-}
-
-// 步进/步退
-export function stepSeek(forward: boolean, seconds: number) {
-  const video = getVideoElement()
-  if (!video || video.readyState === 0 || !Number.isFinite(video.duration) || (seconds < 1 && !video.paused))
-    return
-
-  if (forward) {
-    video.currentTime = Math.min(video.currentTime + seconds, video.duration - 1)
-  }
-  else {
-    if (video.duration === video.currentTime) {
-      // 如果在视频末尾，使用左箭头事件
-      simulateArrowKey(false)
-    }
-    else {
-      video.currentTime = Math.max(video.currentTime - seconds, 0)
-    }
-  }
-}
-
-// 模拟箭头键
-export function simulateArrowKey(isRight: boolean) {
-  const videoArea = document.querySelector(_videoClassTag.videoArea)
-  if (videoArea) {
-    (videoArea as HTMLElement).click()
-  }
-
-  const keyOptions = {
-    bubbles: true,
-    cancelable: true,
-    key: isRight ? 'ArrowRight' : 'ArrowLeft',
-    code: isRight ? 'ArrowRight' : 'ArrowLeft',
-    keyCode: isRight ? 39 : 37,
-  }
-
-  const keydownEvent = new KeyboardEvent('keydown', keyOptions)
-  const keyupEvent = new KeyboardEvent('keyup', keyOptions)
-
-  document.body.dispatchEvent(keydownEvent)
-  document.body.dispatchEvent(keyupEvent)
-}
-
-// 百分比跳转
-export function seekToPercent(percent: number) {
-  const video = getVideoElement()
-  if (video && video.readyState !== 0 && Number.isFinite(video.duration)) {
-    video.currentTime = video.duration / 10 * percent
-  }
-}
-
-// 切换静音
-export function toggleMute(player: Element) {
-  const muteBtn = player.querySelector(_videoClassTag.muteBtn)
-  if (muteBtn) {
-    const firstChild = muteBtn.firstElementChild
-    if (firstChild) {
-      (firstChild as HTMLElement).click()
-    }
-
-    const video = getVideoElement()
-    if (video) {
-      const volumeNumber = document.querySelector('.bpx-player-ctrl-volume-number')
-      const isMuted = volumeNumber ? volumeNumber.textContent === '0' : video.muted
-      showState(isMuted ? '已静音' : '已取消静音')
-    }
-  }
-}
-
-// 切换画中画
-export async function togglePictureInPicture() {
-  const video = getVideoElement()
-  if (video && document.pictureInPictureEnabled && !video.disablePictureInPicture && video.readyState !== 0) {
-    if (document.fullscreenElement) {
-      await document.exitFullscreen()
-    }
-
-    if (document.pictureInPictureElement) {
-      document.exitPictureInPicture()
-    }
-    else {
-      video.requestPictureInPicture()
-    }
-  }
-}
-
-// 切换关灯
-export function toggleLight() {
-  const lightBtn = document.querySelector('.bpx-player-ctrl-setting-lightoff input[type=checkbox], .bilibili-player-video-btn-setting-right-others-content-lightoff input[type=checkbox], .squirtle-lightoff')
-  if (lightBtn) {
-    (lightBtn as HTMLElement).click()
-    return
-  }
-
-  const settingBtn = document.querySelector('.bilibili-player-video-btn-setting')
-  if (settingBtn) {
-    settingBtn.addEventListener('mouseover', () => {
-      setTimeout(() => {
-        settingBtn.dispatchEvent(new MouseEvent('mouseout'))
-        setTimeout(() => {
-          const lightBtn = document.querySelector('.bpx-player-ctrl-setting-lightoff input[type=checkbox], .bilibili-player-video-btn-setting-right-others-content-lightoff input[type=checkbox], .squirtle-lightoff')
-          if (lightBtn) {
-            (lightBtn as HTMLElement).click()
-          }
-        }, 100)
-      }, 150)
-    }, { once: true })
-
-    settingBtn.dispatchEvent(new MouseEvent('mouseover'))
-  }
-}
-
-// 切换字幕
-export function toggleCaption() {
-  const closeSwitch = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle-close-switch')
-  const languageItem = document.querySelector<HTMLElement>('.bpx-player-ctrl-subtitle-language-item')
-
-  if (closeSwitch && languageItem) {
-    const isClosed = closeSwitch.classList.contains('bpx-state-active')
-    if (isClosed) {
-      languageItem.click()
-    }
-    else {
-      closeSwitch.click()
-    }
-    if (settings.value.defaultCaptionState === 'remember')
-      saveCaptionState(isClosed)
-    return
-  }
-
-  let captionBtn = document.querySelector('.bilibili-player-iconfont-subtitle')
-  if (captionBtn) {
-    if (captionBtn.nextElementSibling) {
-      (captionBtn as HTMLElement).click()
-    }
-    else {
-      const parent = captionBtn.parentElement
-      if (parent) {
-        parent.addEventListener('mouseover', () => {
-          setTimeout(() => {
-            parent.dispatchEvent(new MouseEvent('mouseout'))
-            setTimeout(() => (captionBtn as HTMLElement).click(), 500)
-          }, 150)
-        }, { once: true })
-
-        parent.dispatchEvent(new MouseEvent('mouseover'))
-      }
-    }
-    return
-  }
-
-  captionBtn = document.querySelector('.bpx-player-ctrl-subtitle span')
-  if (captionBtn) {
-    (captionBtn as HTMLElement).click()
-    return
-  }
-
-  const subtitleWrap = document.querySelector('.squirtle-subtitle-wrap')
-  if (subtitleWrap && subtitleWrap.firstElementChild) {
-    (subtitleWrap.firstElementChild as HTMLElement).click()
-    return
-  }
-
-  // 如果没有找到任何字幕相关元素，显示提示
-  showState('当前视频无字幕')
-}
-
 function markPlaybackRateUserIntent(video: HTMLVideoElement) {
   playbackRateUserIntentUntil.set(video, Date.now() + PLAYBACK_RATE_USER_INTENT_DURATION_MS)
 }
@@ -1163,36 +949,6 @@ function consumePlaybackRateUserIntent(video: HTMLVideoElement): boolean {
   const intentUntil = playbackRateUserIntentUntil.get(video) ?? 0
   playbackRateUserIntentUntil.delete(video)
   return intentUntil >= Date.now()
-}
-
-// 改变播放速度
-export function changePlaybackRate(increase: boolean) {
-  const video = getVideoElement()
-  if (!video)
-    return
-
-  const direction = increase ? 1 : -1
-  const nextRate = Number.parseFloat(clampPlaybackRate(
-    video.playbackRate + direction * PLAYBACK_RATE_STEP,
-  ).toFixed(2))
-  if (nextRate !== video.playbackRate) {
-    markPlaybackRateUserIntent(video)
-    video.playbackRate = nextRate
-  }
-
-  showState(`倍速 ${video.playbackRate}`)
-}
-
-// 重置播放速度
-export function resetPlaybackRate() {
-  const video = getVideoElement()
-  if (video) {
-    markPlaybackRateUserIntent(video)
-    settings.value.savedPlaybackRate = 1
-    video.defaultPlaybackRate = 1
-    video.playbackRate = 1
-    showState('倍速 1')
-  }
 }
 
 function applyRememberedPlaybackRateToVideo(video: HTMLVideoElement): boolean {
@@ -1413,342 +1169,9 @@ export function stopPlaybackRateMonitoring() {
   playbackRateCorrectionFrameIds.clear()
 }
 
-// 重播
-export function replay() {
-  const video = getVideoElement()
-  if (video) {
-    video.currentTime = 0
-    if (video.paused)
-      video.play()
-  }
-}
-
-// 调整视频大小
-export function adjustVideoSize(direction: number) {
-  const video = getVideoElement()
-  if (!video)
-    return
-
-  let width = video.style.width
-  if (width === '') {
-    width = '100%'
-  }
-
-  if (direction > 0) {
-    // 增大
-    video.style.width = width === '50%' ? '75%' : '100%'
-  }
-  else if (direction < 0) {
-    // 减小
-    video.style.width = width === '100%' ? '75%' : '50%'
-  }
-  else {
-    // 重置
-    video.style.width = '100%'
-  }
-
-  video.style.margin = 'auto'
-}
-
-// 显示弹幕状态
-export function showDanmuState() {
-  const danmuBtn = document.querySelector(_videoClassTag.danmuBtn)
-  if (danmuBtn) {
-    showState(`弹幕 ${(danmuBtn as HTMLInputElement).checked ? 'On' : 'Off'}`)
-  }
-}
-
-// 切换视频标题显示
-export function toggleVideoTitle() {
-  if (!titleElement) {
-    titleElement = document.createElement('div')
-    titleElement.style.cssText = 'display: none; position: absolute; z-index: 99; top: 0px; left: 50%; transform: translateX(-50%); padding: 4px 8px; background-color: rgba(8, 8, 8, 0.75); color: white; font-size: 22px;'
-  }
-
-  const stateContainer = document.querySelector(_videoClassTag.state)
-  const titleElement2 = document.querySelector(_videoClassTag.title)
-  const subtitleElement = document.querySelector(_videoClassTag.subtitle)
-
-  if (stateContainer && titleElement2 && titleElement2.textContent) {
-    if (stateContainer.parentElement !== titleElement.parentElement) {
-      stateContainer.parentElement!.appendChild(titleElement)
-      titleElement.style.display = 'none'
-    }
-
-    if (titleElement.style.display === 'none') {
-      if (subtitleElement && subtitleElement.getAttribute('title'))
-        titleElement.textContent = `${titleElement2.textContent} - ${subtitleElement.getAttribute('title')}`
-      else
-        titleElement.textContent = titleElement2.textContent
-      titleElement.style.display = 'block'
-    }
-    else {
-      titleElement.style.display = 'none'
-    }
-  }
-  else {
-    titleElement.style.display = 'none'
-  }
-}
-
-// 切换视频时间显示
-export function toggleVideoTime() {
-  if (!timeElement) {
-    timeElement = document.createElement('div')
-    timeElement.style.cssText = 'display: none; position: absolute; z-index: 99; bottom: 55px; right: 20px; padding: 4px 8px; background-color: rgba(8, 8, 8, 0.75); color: white; font-size: 16px; border-radius: 4px;'
-  }
-
-  if (timeElement.style.display === 'none') {
-    showVideoTime(true)
-  }
-  else {
-    timeElement.style.display = 'none'
-    if (timeInterval) {
-      clearTimeout(timeInterval)
-      timeInterval = null
-    }
-  }
-}
-
-// 显示视频时间
-export function showVideoTime(firstShow = false) {
-  const video = getVideoElement()
-  const stateContainer = document.querySelector(_videoClassTag.state)
-
-  if (stateContainer && video && video.readyState !== 0 && Number.isFinite(video.duration)) {
-    const currentTime = Math.round(video.currentTime)
-    const duration = Math.round(video.duration)
-    const remainingTime = duration - currentTime
-
-    const timeText = `${formatTime(currentTime)} / ${formatTime(duration)} [-${formatTime(remainingTime)}]`
-
-    if (firstShow) {
-      timeElement!.style.display = 'block'
-    }
-
-    if (stateContainer.parentElement !== timeElement!.parentElement) {
-      stateContainer.parentElement!.appendChild(timeElement!)
-    }
-
-    timeElement!.textContent = timeText
-    timeInterval = window.setTimeout(showVideoTime, 1000)
-  }
-  else {
-    timeInterval = null
-    if (timeElement) {
-      timeElement.style.display = 'none'
-    }
-  }
-}
-
-// 切换时钟时间显示
-export function toggleClockTime() {
-  if (!clockElement) {
-    clockElement = document.createElement('div')
-    clockElement.style.cssText = 'display: none; position: absolute; z-index: 99; top: 10px; right: 20px; padding: 4px 8px; background-color: rgba(8, 8, 8, 0.75); color: white; font-size: 16px; border-radius: 4px;'
-  }
-
-  if (clockElement.style.display === 'none') {
-    showClockTime(true)
-  }
-  else {
-    clockElement.style.display = 'none'
-    if (clockInterval) {
-      clearInterval(clockInterval)
-      clockInterval = null
-    }
-  }
-}
-
-// 显示时钟时间
-export function showClockTime(firstShow = false) {
-  const stateContainer = document.querySelector(_videoClassTag.state)
-
-  if (stateContainer) {
-    const now = new Date()
-    // 始终使用24小时制
-    const hours = now.getHours().toString().padStart(2, '0')
-    const minutes = now.getMinutes().toString().padStart(2, '0')
-    const seconds = now.getSeconds().toString().padStart(2, '0')
-    const timeText = `${hours}:${minutes}:${seconds}`
-
-    if (firstShow) {
-      clockElement!.style.display = 'block'
-    }
-
-    if (stateContainer.parentElement !== clockElement!.parentElement) {
-      stateContainer.parentElement!.appendChild(clockElement!)
-    }
-
-    clockElement!.textContent = timeText
-
-    if (!clockInterval) {
-      clockInterval = window.setInterval(showClockTime, 1000)
-    }
-  }
-  else {
-    if (clockInterval)
-      clearInterval(clockInterval)
-    clockInterval = null
-    if (clockElement) {
-      clockElement.style.display = 'none'
-    }
-  }
-}
-
 // 添加视频页面内部跳转后的滚动处理
 export function handleVideoPageNavigation() {
   scrollPlayerToOptimalPosition(3000) // 延迟3秒执行滚动
-}
-
-// 查找UP主元素，优先查找 up-panel-container 容器，适配单UP和联合投稿
-function findUpElement(): HTMLAnchorElement | null {
-  // 首先查找 up-panel-container 容器
-  const upPanelContainer = document.querySelector('.up-panel-container')
-  if (upPanelContainer) {
-    // 在容器内查找 .up-name[href*="space.bilibili.com"] 链接
-    const upLinkElement = upPanelContainer.querySelector('.up-name[href*="space.bilibili.com"]') as HTMLAnchorElement
-    if (upLinkElement && upLinkElement.href) {
-      return upLinkElement
-    }
-
-    // 查找带有 info-tag 为 "UP主" 的 staff-info 结构
-    const staffInfos = upPanelContainer.querySelectorAll('.staff-info')
-    for (let i = 0; i < staffInfos.length; i++) {
-      const staffInfo = staffInfos[i]
-      const infoTag = staffInfo.querySelector('.info-tag')
-      if (infoTag && infoTag.textContent?.trim() === 'UP主') {
-        const staffLink = staffInfo.querySelector('a[href*="space.bilibili.com"]') as HTMLAnchorElement
-        if (staffLink && staffLink.href) {
-          return staffLink
-        }
-      }
-    }
-  }
-
-  // 如果在 up-panel-container 中没找到，查找 video-staffs-container 容器
-  const videoStaffsContainer = document.querySelector('.video-staffs-container')
-  if (videoStaffsContainer) {
-    // 查找带有 info-title 为 "UP主" 的 video-staffs-info 结构
-    const staffInfos = videoStaffsContainer.querySelectorAll('.video-staffs-info[href*="space.bilibili.com"]')
-    for (let i = 0; i < staffInfos.length; i++) {
-      const staffInfo = staffInfos[i] as HTMLAnchorElement
-      const infoTitle = staffInfo.querySelector('.info-title')
-      if (infoTitle && infoTitle.textContent?.trim() === 'UP主') {
-        return staffInfo
-      }
-    }
-  }
-
-  // 如果都没找到，回退到原来的查找方式
-  const upLinkElement = document.querySelector('.up-name[href*="space.bilibili.com"]') as HTMLAnchorElement
-  if (upLinkElement && upLinkElement.href) {
-    return upLinkElement
-  }
-
-  return null
-}
-
-// 从链接中提取UID
-function extractUidFromHref(href: string): string | null {
-  const uidMatch = href.match(/space\.bilibili\.com\/(\d+)/)
-  return uidMatch ? uidMatch[1] : null
-}
-
-// 从元素中提取名称
-function extractNameFromElement(element: HTMLElement): string | null {
-  // 优先查找 .info-name 元素（适用于 video-staffs-info 结构）
-  const infoNameElement = element.querySelector('.info-name')
-  if (infoNameElement && infoNameElement.textContent) {
-    return infoNameElement.textContent.trim() || null
-  }
-
-  // 如果没有 .info-name，使用原有逻辑
-  if (!element.textContent) {
-    return null
-  }
-
-  let name = element.textContent.trim()
-
-  // 如果存在mask元素，需要去除它的影响
-  const maskElement = element.querySelector('.mask')
-  if (maskElement && maskElement.textContent) {
-    name = name.replace(maskElement.textContent.trim(), '').trim()
-  }
-
-  return name || null
-}
-
-// 获取UP主的uid
-export function getUpUid(): string | null {
-  const upElement = findUpElement()
-  return upElement ? extractUidFromHref(upElement.href) : null
-}
-
-// 获取UP主的名字
-export function getUpName(): string | null {
-  const upElement = findUpElement()
-  return upElement ? extractNameFromElement(upElement) : null
-}
-
-// 获取UP主完整信息
-export function getUpInfo(): { uid: string | null, name: string | null } {
-  const upElement = findUpElement()
-  if (upElement) {
-    return {
-      uid: extractUidFromHref(upElement.href),
-      name: extractNameFromElement(upElement),
-    }
-  }
-
-  return {
-    uid: null,
-    name: null,
-  }
-}
-
-// 获取当前音量 (0-100)
-export function getCurrentVolume(): number {
-  const video = getVideoElement()
-  if (!video) {
-    return 0
-  }
-
-  // 将0-1范围映射到0-100
-  return Math.round(video.volume * 100)
-}
-
-// 设置音量 (0-100)
-export function setVolume(volume: number, showStatus = false): boolean {
-  const video = getVideoElement()
-  if (!video) {
-    return false
-  }
-
-  // 确保音量在有效范围内
-  const clampedVolume = Math.max(0, Math.min(100, volume))
-
-  // 将0-100范围映射到0-1
-  video.volume = clampedVolume / 100
-
-  // 如果设置的音量大于0，取消静音状态
-  if (clampedVolume > 0 && video.muted) {
-    video.muted = false
-  }
-
-  // 根据参数决定是否显示音量状态
-  if (showStatus) {
-    showState(`音量 ${clampedVolume}%`)
-  }
-
-  return true
-}
-
-// 调整音量 (增加或减少指定数值)
-export function adjustVolume(delta: number): boolean {
-  const currentVolume = getCurrentVolume()
-  const newVolume = currentVolume + delta
-  return setVolume(newVolume, true)
 }
 
 // 检查是否为互动视频
@@ -1965,15 +1388,4 @@ export function stopAutoExitFullscreenMonitoring() {
   }
   autoExitFullscreenEndedListener = null
   autoExitFullscreenVideo = null
-}
-
-// 为Window接口添加自定义属性
-declare global {
-  interface Window {
-    _bewlyScreenshotLink?: HTMLAnchorElement
-    _bewlyScreenshotCanvas?: HTMLCanvasElement
-    bewlyPlayer: {
-      adjustVolume: (delta: number) => boolean
-    }
-  }
 }

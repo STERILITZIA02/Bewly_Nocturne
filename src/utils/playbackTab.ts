@@ -39,3 +39,12 @@ export function parsePlaybackTabUrl(value: string): PlaybackTabTarget | undefine
   }
   catch {}
 }
+
+/** Shared manuscript/part key. Quality changes do not alter this identity. */
+export function getPlaybackNavigationKey(value: string): string {
+  const target = parsePlaybackTabUrl(value)
+  if (!target)
+    return ''
+  const url = new URL(value)
+  return JSON.stringify([target, url.searchParams.get('p') || '1', url.searchParams.get('cid') || ''])
+}

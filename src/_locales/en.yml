@@ -1,4 +1,41 @@
+library_tools:
+  queue_actions_scope: The actions below apply to the entire Watch Later queue.
+  selected_tabs: '{count} of {total} tabs selected'
+  search_results: 'Results for “{query}”'
+  load_more_matches: Find more earlier records
+  no_matches: No matching content
+  date: Choose a date
+  all_dates: All dates
+  content_type: Content type
+  type_all: All content
+  type_archive: Videos
+  type_pgc: Series and films
+  type_live: Live streams
+  type_article: Articles
+  clear_search: Clear search
+  watch_later_search: Search titles or creators
+  playback_state: Watch status
+  state_all: All progress
+  state_unstarted: Not started
+  state_watching: In progress
+  state_completed: Completed
+  state_unknown: Progress unknown
+  duration: Video duration
+  duration_all: Any duration
+  duration_short: Up to 10 minutes
+  duration_medium: 10–30 minutes
+  duration_long: Over 30 minutes
+  matched_count: '{count} matches · {total} items loaded'
+  find_messages: Find in loaded conversation messages
+  previous_match: Previous match
+  next_match: Next match
+  original_size: Original size
+  image_navigation: Image viewer. Scroll to explore or drag when zoomed in.
+  load_more_videos: Load more videos
 common:
+  advertisement: Advertisement
+  clear_selection: Clear selection
+  favorite_folder_full: This folder is full and cannot accept the current video
   retry: Retry
   operation_completed: Done
   dialog: Dialog
@@ -28,6 +65,7 @@ common:
   please_log_in_first: Please log in first
   login: Login
   save_to_watch_later: Save to Watch later
+  watch_later_status_unknown: Watch later status not yet confirmed
   add_to_watch_later: Add to Watch later
   added_to_watch_later: Added to Watch later
   remove_from_watch_later: Remove from Watch later
@@ -105,12 +143,38 @@ iframe_drawer:
   open_in_new_tab: Open in new tab
   close: Close
   press_esc_again_to_close: Press Esc again to close
+local_loudness:
+  title: Local loudness · Experimental
+  enable: Enable local loudness levelling
+  description: "Off by default and enabled on this device only. Local automatic gain reduces short-term loudness swings. When enabled, use the player's waveform button to adjust it."
+  target: Target loudness
+  strength: Adjustment strength
+  curve: Last 60 gain samples
+  limits: 'Short-term local gain adjustment, not whole-programme EBU R128 normalization. The sample-peak limiter does not guarantee true peaks. Disabling retains an original-audio bypass. To use native audio effects, disable this experiment and reload the player page.'
+  state:
+    off: Off · Original audio
+    waiting: Waiting for the active main media to play
+    gesture: Click the page or Play to let the browser start audio processing
+    active: Adjusting the current audio
+    paused: 'Paused, muted or seeking · Measurement paused'
+    native-on: Native loudness is enabled. Turn it off in the native player settings first.
+    native-unknown: Native audio-effect state is unknown. Original audio is preserved.
+    source-in-use: Native effects or another extension already owns this source. Its routing is preserved. If you just disabled native effects, reload the player page and retry.
+    unsupported: This media or browser cannot be connected safely. Original audio is preserved.
+    error: Processing failed. Original-audio bypass is active; toggle off and on to retry.
+    reload-required: The source has a conflict or its compatibility has changed. Disable this experiment and reload the player page before continuing playback or using native effects.
 player_screenshot:
   capture: Capture current video frame
   saved: Screenshot saved
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
+  comment_reply_batch_pages: Reply pages per batch
+  comment_reply_batch_pages_desc: Only Load next batch requests several pages. Initial expansion and direct page selection request one page; the rest of the thread is never fetched automatically.
+  enable_comment_reply_tree_container: Separate reply reading area
+  enable_comment_reply_tree_container_desc: Scroll replies within their own area while keeping the main comment outside. At either edge, scrolling can continue in the outer page.
+  comment_reply_tree_container_height: Maximum reply reading height
+  comment_reply_tree_container_height_desc: Short content shrinks naturally. The area also stays within the available viewport height.
   no_search_character: Hide search character
   reorder_keyboard_hint: Hold Alt and press an arrow key to reorder
   auto_remove_watch_later_on_end: Remove completed Watch Later videos
@@ -291,7 +355,7 @@ settings:
   group_player_display_mode: Display Mode
   group_player_display_mode_desc: Set a base display mode and override it for specific playback contexts when needed.
   group_playback_memory: Playback Memory
-  group_playback_memory_desc: Choose whether to remember playback rate and video aspect ratio.
+  group_playback_memory_desc: Choose whether to remember playback rate, video aspect ratio and quality.
   group_video_page_actions: Video Page Features
   group_video_page_actions_desc: Tags only toggle the visibility of related controls on the video page and player toolbar.
   group_playback_behavior: Playback Behavior
@@ -513,6 +577,7 @@ settings:
   drawer_escape_immediate: Close immediately
   drawer_escape_second_press: Close on the second press
   block_ads: Block ads
+  block_ads_desc: Hide explicitly marked ads in Bewly and supported native Bilibili pages. Turning this off restores them. Ordinary recommendations, products, and activities are not blocked by title alone. The search activity area has its own option below.
   block_top_search_page_ads: Block Bilibili top search page ads
   block_top_search_page_ads_desc: >
     Sometimes, the ads above search results are actually year-end summaries or
@@ -543,6 +608,8 @@ settings:
     context_bangumi: Series / Movies
     context_watch_later: Watch Later
     context_playlist: Favorites / Playlists
+    context_moments_dialog: Video opened from Moments
+    context_moments_dialog_desc: Inherit keeps the video's multipart, collection or other context rules. This only affects in-page drawers opened from Moments.
     bewly_widescreen_sidebar_position: Bewly Playback Page Sidebar Position
     bewly_widescreen_sidebar_position_desc: Choose where the sidebar appears on the Bewly Playback Page
     bewly_widescreen_sidebar_position_left: Left
@@ -819,8 +886,8 @@ settings:
   home_tabs_adjustment: Tabs adjustment
   home_tabs_adjustment_desc: The first activated tab is the default page.
   fixed_home_tabs_on_home_page: Fix home tabs to the top
-  adapt_to_other_page_styles: Adapt to other page styles
-  adapt_to_other_page_styles_desc: Adapt to some common pages to match with the BewlyBewly theme.
+  adapt_to_other_page_styles: Adapt more pages
+  adapt_to_other_page_styles_desc: Apply the current theme, colors, and corner styles to supported native Bilibili pages and subsites, including Live, Manga, and Mall. Turning this off leaves Bewly pages unchanged. Ad blocking is controlled separately.
   prevent_mobile_redirect: Prevent mobile redirect
   prevent_mobile_redirect_desc: When enabled, a desktop UA is used only for www.bilibili.com to prevent redirects to m.bilibili.com. Direct visits to the mobile site are unaffected.
   links: Links
@@ -869,6 +936,23 @@ settings:
     When enabled, the player will remember your last set playback rate and
     automatically apply it when opening videos
   remember_video_aspect_ratio: Remember video aspect ratio
+  remember_video_quality: Remember video quality
+  player_extra_controls_hint: When space is limited, collapsed actions remain available in the player context menu.
+  remember_video_quality_desc: Start with the current quality, then remember confirmed manual choices. Automatic downgrades and trials never replace this preference.
+  show_widescreen_idle_progress: Show a thin progress bar when controls are hidden
+  show_widescreen_idle_progress_desc: Display main-video progress without revealing the controls or adding a seek action.
+  original_moments_use_bewly_filters: Apply existing filters to the native Moments feed
+  original_moments_use_bewly_filters_desc: Use the rules below only in the native feed. Turning this off restores content hidden by this feature.
+  history_layout: History layout
+  history_layout_list: List grouped by date
+  history_layout_grid: Grid grouped by date
+  notification_badge_categories: Notification badge categories
+  notification_badge_categories_desc: Affect counts in the top bar, Dock and notification menu only. These controls never mark messages read.
+  show_reply_notification_reminder: Show reply notifications
+  show_at_notification_reminder: Show mention notifications
+  show_system_notification_reminder: Show system notifications
+  show_followed_private_message_unread_count: Show unread messages from followed users
+  show_unfollowed_private_message_unread_count: Show unread messages from other users
   remember_video_aspect_ratio_desc: >
     When enabled, the player will remember your last selected video aspect ratio
     and automatically apply it when opening videos
@@ -1358,6 +1442,7 @@ moments:
   initial_loading: Preparing posts and images…
   empty_wanted: No recent updates
   no_wanted_users: Add wanted creators in Settings first
+  configure_wanted: Configure watchlist
   empty: No posts to show
   loading: Loading…
   load_more: Load more
@@ -1495,6 +1580,10 @@ video_card:
   group_contribution: '{firstAuthor} and {num} others contributed'
   video_removed: Video removed
   watched: Watched
+  browsed: Opened
+  played: Played
+  completed: Completed
+  played_progress: 'Played to {time}'
   visited_recently: Visited within the past month
   highlight_high_like: Highly liked
   highlight_high_engagement: High engagement
@@ -1670,7 +1759,7 @@ watch_later:
   auto_remove_failed: Could not remove the completed video from Watch Later. Retry manually later.
   open_tabs:
     title: Add playback tabs
-    scope: Only the listed playback pages will be processed. Duplicates and videos already in Watch Later are skipped. Original tabs stay open.
+    scope: Only the selected playback pages will be processed. Duplicates and videos already in Watch Later are skipped. Original tabs stay open.
     windows_normal: normal windows
     windows_private: private windows
     background_hint: Adding continues after you close this dialog. Reopen it to check progress.
@@ -1752,6 +1841,7 @@ widescreen:
   show_full_sidebar: Show full sidebar
   show_compact_sidebar: Collapse sidebar
 search_bar:
+  history_unavailable: Search history could not be read or confirmed. Please reload it.
   input_label: Search
   clear_keyword: Clear search query
   submit: Search
@@ -1819,6 +1909,8 @@ search:
   errors:
     failed: Search failed. Please try again later.
     exception: An error occurred while searching. Please try again later.
+    timeout: Search timed out. Please try again.
+    risk_control: Bilibili has temporarily restricted search requests. Please try again later.
   pagination:
     previous: Previous page
     next: Next page

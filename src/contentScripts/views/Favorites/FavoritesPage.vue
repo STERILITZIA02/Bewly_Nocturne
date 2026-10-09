@@ -686,6 +686,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
           />
           <Button
             type="primary"
+            :aria-label="t('common.search')"
             :disabled="searchScope === 'all' && !keyword.trim()"
             @click="handleSearch"
           >
@@ -820,13 +821,15 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
               v-if="isBatchManaging"
               class="favorite-card-action"
               :class="{ selected: isSelectedFavoriteResource(item) }"
+              :aria-label="t('favorites.batch_select_item')"
+              :aria-pressed="isSelectedFavoriteResource(item)"
               @click.prevent.stop="toggleFavoriteResourceSelection(item)"
             >
               <Tooltip :content="$t('favorites.batch_select_item')" placement="bottom-left" type="dark">
                 <div :class="isSelectedFavoriteResource(item) ? 'i-tabler:checkbox' : 'i-tabler:square'" />
               </Tooltip>
             </button>
-            <button v-else class="favorite-card-action danger" @click.prevent.stop="handleUnfavorite(item)">
+            <button v-else class="favorite-card-action danger" :aria-label="t('favorites.unfavorite')" @click.prevent.stop="handleUnfavorite(item)">
               <Tooltip :content="$t('favorites.unfavorite')" placement="bottom-left" type="dark">
                 <div i-ic-baseline-clear />
               </Tooltip>

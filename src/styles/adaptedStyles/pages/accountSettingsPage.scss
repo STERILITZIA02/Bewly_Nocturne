@@ -1,4 +1,906 @@
 .bewly-design.accountSettingsPage {
+  .top-header,
+  .top_bg {
+    // The repeated blue strips are separate from the original branded header art.
+    background-image: none;
+    background-color: var(--bew-bg);
+  }
+
+  .top-img,
+  .top_bg > .top {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // Use semantic surfaces instead of inverting the entire account workspace.
+  // Avatars, status artwork, QR codes and native business controls retain their colours.
+  .security_content,
+  .security-right {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .security-left {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-panel-radius) 0 0 var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .security-right {
+    border-radius: 0 var(--bew-panel-radius) var(--bew-panel-radius) 0;
+  }
+
+  .security-title,
+  .security-left .security-ul,
+  .security-right-title,
+  .index-info,
+  .security-list-jump,
+  .points-record-warp,
+  .invitation-top-warp,
+  .class-coupon,
+  .coupon-content-con,
+  .security_content .el-form .padding-dom {
+    border-color: var(--bew-border-color);
+  }
+
+  .security-right-title-text {
+    color: var(--bew-theme-foreground);
+  }
+
+  .security-right-title-icon {
+    background-color: var(--bew-theme-color);
+  }
+
+  .security_content .el-button,
+  .security_content .el-radio-button__inner {
+    border-radius: var(--bew-interactive-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .security_content .el-radio-button:not(.is-disabled) .el-radio-button__inner {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  .security_content .el-button--primary:not(.is-disabled),
+  .security_content .el-radio-button.is-active:not(.is-disabled) .el-radio-button__inner {
+    // The native account form marks its blue backgrounds and borders important.
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color) !important;
+    box-shadow: none;
+  }
+
+  .security-nav-name,
+  .security-list-link-jump,
+  .now-num,
+  .home-level-tips,
+  .common-title,
+  .invition-txt,
+  .home-top-msg-name,
+  .curren-b-num,
+  .home-dialy-task-title,
+  .re-exp-info,
+  .h-reward-info,
+  .h-list-name,
+  .h-safe-title {
+    color: var(--bew-text-1);
+  }
+
+  .security-title,
+  .home-top-level-number,
+  .home-to-update,
+  .home-to-space,
+  .common-subtitle,
+  .home-userstatus,
+  .home-dialy-task-tips,
+  .re-exp-none,
+  .h-mp-space,
+  .h-none-info,
+  .h-none-msg,
+  .h-list-desc,
+  .go-secuirty,
+  .h-safe-desc {
+    color: var(--bew-text-2);
+  }
+
+  .security-list:not(ul):hover,
+  .security-list-jump:hover {
+    background: var(--bew-fill-2);
+  }
+
+  .security-list:not(ul) {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .security-list:focus-visible {
+    outline-offset: calc(-1 * var(--bew-space-0-5));
+  }
+
+  .security-left .on {
+    background: var(--bew-theme-color) !important;
+  }
+
+  .security-left .on .security-nav-name {
+    color: var(--bew-on-theme-color);
+  }
+
+  // Reuse the native sprite's alpha mask and existing clipped sidebar, including
+  // its own drop-shadow pattern for notice/shortcut icons, without changing icons.
+  .security-left .security-icon {
+    position: relative;
+    left: -50px;
+    filter: drop-shadow(50px 0 var(--bew-text-2));
+  }
+
+  .security-left .on .security-icon {
+    filter: drop-shadow(50px 0 var(--bew-on-theme-color));
+  }
+
+  .home-top-level-mask-warp,
+  .common-dialog-content {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .home-to-update,
+  .home-to-space,
+  .h-mp-space,
+  .go-secuirty {
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .close-btn,
+  .close-btn:hover,
+  .h-none-btn,
+  .h-none-btn:hover,
+  .h-safe-btn,
+  .h-safe-btn:hover,
+  .btn-ok,
+  .btn-ok:hover {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .h-safe-a,
+  .h-safe-a:hover,
+  .home-top-level-mask-warp a,
+  .home-to-update:hover,
+  .home-to-space:hover,
+  .h-mp-space:hover,
+  .go-secuirty:hover {
+    color: var(--bew-theme-foreground);
+  }
+
+  .home-user-spec {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-radius: var(--bew-badge-radius);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .security_content
+    :is(
+      input:not([type]),
+      input[type="text"],
+      input[type="search"],
+      input[type="email"],
+      input[type="password"],
+      input[type="tel"],
+      input[type="url"],
+      input[type="number"],
+      input[type="date"],
+      textarea,
+      select
+    ) {
+    background-color: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  #app :is(input, textarea)::placeholder {
+    color: var(--bew-text-3) !important;
+  }
+
+  // The legacy medal page uses one UL for the entire navigation. Keep the
+  // per-link surface here instead of highlighting the whole sidebar on hover.
+  .security-left ul.security-list .child-list a {
+    overflow: hidden;
+    color: var(--bew-text-2);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+      color: var(--bew-text-1);
+    }
+  }
+
+  .security-left ul.security-list .child-list a i {
+    position: relative;
+    left: -50px;
+    filter: drop-shadow(50px 0 var(--bew-text-2));
+  }
+
+  .security-left .first-level {
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+
+    &:hover {
+      color: var(--bew-text-1);
+      background: var(--bew-content-solid-hover);
+    }
+  }
+
+  .security-left ul.security-list a.bg-blue {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color);
+
+    span {
+      color: inherit;
+    }
+
+    i {
+      filter: drop-shadow(50px 0 var(--bew-on-theme-color));
+    }
+  }
+
+  :is(.record-nav-item, .tabs-nav-item, .coin-nav-item, .tab-mk2, .face-g-tab a, .face-nav a) {
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:is(.on, .active, :hover) {
+      color: var(--bew-theme-foreground);
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  :is(.sr-t, .face-nav, .record-nav, .tabs-nav, .notice-item, .points-faq-line) {
+    border-color: var(--bew-border-color);
+  }
+
+  .face-nav > div {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--bew-control-height);
+
+    &.active {
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  .face-nav a {
+    display: inline-flex;
+    align-items: center;
+    min-height: var(--bew-control-height);
+    padding-inline: var(--bew-space-3);
+  }
+
+  .face-g-tab > li,
+  #face-g-tab > li {
+    min-height: var(--bew-control-height);
+    color: var(--bew-text-2);
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+
+    > a {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--bew-control-height);
+      padding-inline: var(--bew-space-3);
+      color: inherit;
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+
+    &.current {
+      background: var(--bew-theme-color);
+
+      > a,
+      > a:hover {
+        color: var(--bew-on-theme-color);
+      }
+    }
+  }
+
+  #mp-mine-header {
+    // The native image only draws the empty grid/frame behind these real nodes.
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .mp-mine-takedown {
+      box-sizing: border-box;
+      min-height: var(--bew-control-height);
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  .sr-t .tit-b {
+    background-color: var(--bew-theme-color);
+  }
+
+  :is(.face-g-block-title, .mp-title, .mp-block .title),
+  #face-g-list :is(.mp-title, .mp-block .title) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.mp-descr, .mp-block .tips, .mp-block .reach-tips),
+  #face-g-list :is(.mp-descr, .mp-block .tips, .mp-block .reach-tips) {
+    color: var(--bew-text-2);
+  }
+
+  .mp-img,
+  #face-g-list .mp-block .mp-img {
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .tool-container {
+    border-color: var(--bew-border-color);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .tool-change-face {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .tool-uninstall-pendant {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  :is(.tool-change-face, .tool-uninstall-pendant) > span {
+    color: inherit;
+  }
+
+  .pendant-list > li {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      border-color: var(--bew-theme-focus-ring);
+    }
+
+    // Owned pendants paint a second white surface in this inner wrapper.
+    // Keep one card surface and the same outline without clipping hover actions.
+    > div {
+      background: transparent;
+      border-color: var(--bew-border-color);
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+  }
+
+  .pendant-expire,
+  .pendant-list .pendant-expire {
+    color: var(--bew-text-2);
+  }
+
+  .pendant-btn,
+  .pendant-list .btn-box .pendant-btn {
+    // Keep the native hover visibility and wear/unwear action unchanged.
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .face-container .no-data p {
+    color: var(--bew-text-2);
+  }
+
+  :is(
+    .sr-t .acc-sec,
+    .u-name,
+    .no-level-text,
+    .notice-item .title,
+    .points-exchange-title,
+    .points-pendant-title,
+    .points-how-title,
+    .points-faq-item,
+    .points-text,
+    .pendant-name,
+    .userinfo-descript
+  ) {
+    color: var(--bew-text-1);
+  }
+
+  :is(
+    .secuirty-rught-title-sub,
+    .no-data-txt,
+    .notice-item .detail,
+    .main-content-title .t,
+    .main-content-title .i,
+    .record-group,
+    .points-faq-info,
+    .points-faq-info-list,
+    .vip-description,
+    .tool-uninstall-pendant,
+    .uname-enable-hint
+  ) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.record-content .noHover-link, .points-info .points-num, .go-movie, .bottom-help a, .mp-mine-takedown) {
+    color: var(--bew-theme-foreground);
+  }
+
+  .record-content .table-wrapper {
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .record-content .table-normal :is(th, td) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  .record-content .table-normal th {
+    background: var(--bew-content-alt-solid);
+  }
+
+  .points-box {
+    background-color: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .points-header-warp {
+    // The balance and its label are native spans; the empty ribbon/mascots are
+    // only their decorative backdrop. Keep the data nodes and surrounding links.
+    height: auto;
+    background: none;
+  }
+
+  .points-header-box {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--bew-space-4);
+    height: auto;
+    padding: var(--bew-space-6);
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > span {
+      color: var(--bew-text-1);
+    }
+
+    > .points-num {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  .points-info > p,
+  .points-pendant-title > p,
+  .points-record-title {
+    color: var(--bew-text-1);
+  }
+
+  .points-record .viptable {
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+
+    th,
+    td {
+      color: var(--bew-text-1);
+      background: var(--bew-content-solid);
+      border-color: var(--bew-border-color);
+    }
+
+    th {
+      background: var(--bew-content-alt-solid);
+    }
+  }
+
+  .points-no-data {
+    color: var(--bew-text-2);
+  }
+
+  .points-pendant-item {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+  }
+
+  :is(.points-pendant-warp, .points-how-warp, .points-index .bottom-help) {
+    border-color: var(--bew-border-color);
+  }
+
+  .go-movie {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--bew-control-height);
+    padding: var(--bew-space-1) var(--bew-space-3);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .points-btn {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:is(.disabled, .is-disabled) {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-3);
+      border-color: var(--bew-border-color);
+    }
+  }
+
+  .black-name {
+    color: var(--bew-text-1);
+  }
+
+  .black-time {
+    color: var(--bew-text-2);
+  }
+
+  .black-list {
+    border-color: var(--bew-border-color);
+  }
+
+  .black-btn {
+    box-sizing: border-box;
+    min-height: var(--bew-control-height);
+    color: var(--bew-text-1);
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      color: var(--bew-on-theme-surface);
+      background: var(--bew-theme-surface-hover);
+    }
+  }
+
+  .invitation-info-title,
+  .inv-record-title {
+    color: var(--bew-text-1);
+  }
+
+  .invitation-normal {
+    color: var(--bew-text-2);
+  }
+
+  .invitation-btn {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:not(.disabled, .is-disabled) {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+  }
+
+  .invtable {
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+
+    th,
+    td {
+      color: var(--bew-text-1);
+      background: var(--bew-content-solid);
+      border-color: var(--bew-border-color);
+    }
+
+    th {
+      color: var(--bew-text-2);
+      background: var(--bew-content-alt-solid);
+    }
+
+    input {
+      min-height: var(--bew-control-height-sm);
+      color: var(--bew-text-1);
+    }
+
+    .inputdone {
+      color: var(--bew-text-2) !important;
+    }
+
+    .copybtn {
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:not(.codedone) {
+        background: var(--bew-theme-color);
+        color: var(--bew-on-theme-color);
+      }
+
+      &.codedone {
+        background: var(--bew-fill-2);
+        color: var(--bew-text-3);
+      }
+    }
+  }
+
+  .official-home-warapper {
+    .official-title,
+    .title-module,
+    .ava-name {
+      color: var(--bew-text-1);
+    }
+
+    .official-link {
+      color: var(--bew-theme-foreground);
+    }
+
+    .ava-text {
+      color: var(--bew-text-2);
+    }
+
+    .professional-wrapper {
+      box-sizing: border-box;
+      max-width: 100%;
+      background: var(--bew-content-solid);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+      // This public reading/link panel has no disabled state. Its native
+      // whole-panel fade also fades the small description below the link.
+      opacity: 1;
+
+      .title {
+        color: var(--bew-text-1);
+      }
+
+      .desc {
+        color: var(--bew-text-2);
+      }
+    }
+
+    .module-list {
+      // The separate glyph and text remain native; these images only paint
+      // the yellow/blue card texture and lightning watermark underneath them.
+      background: var(--bew-content-solid) !important;
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        background: var(--bew-content-solid-hover) !important;
+      }
+
+      .card-name {
+        color: var(--bew-text-1);
+      }
+
+      .card-info {
+        color: var(--bew-text-2);
+      }
+
+      :is(.card-img, .arrow-icon) {
+        filter: brightness(0);
+      }
+    }
+
+    @media (max-width: 1482px) {
+      .official-home-content {
+        max-width: calc(100% - var(--bew-space-8));
+        margin-inline: auto;
+      }
+
+      :is(.personal-module, .organization-module) {
+        max-width: 100%;
+      }
+
+      .official-home-part-one .module-list {
+        flex: 1 1 0;
+        min-width: 0;
+      }
+
+      .official-home-part-two .module-out {
+        width: 100%;
+        min-width: 0;
+        gap: var(--bew-space-6);
+      }
+
+      .ava-list {
+        min-width: 0;
+        margin-inline: 0;
+      }
+    }
+  }
+
+  &.dark .official-home-warapper .module-list :is(.card-img, .arrow-icon) {
+    filter: brightness(0) invert(1);
+  }
+
+  .notice-item .el-switch__core {
+    background: var(--bew-fill-3);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+
+    &::after {
+      corner-shape: var(--bew-corner-shape-round);
+    }
+  }
+
+  .notice-item .el-switch {
+    // Enlarge the native hit area without changing the 20px visual track.
+    min-height: var(--bew-control-height);
+  }
+
+  .notice-item .el-switch.is-checked:not(.is-disabled) .el-switch__core {
+    // The account component writes its active blue directly to element.style.
+    background: var(--bew-theme-color) !important;
+    border-color: var(--bew-theme-color) !important;
+
+    &::after {
+      background: var(--bew-switch-thumb-active) !important;
+    }
+  }
+
+  .notice-item .switch-text {
+    color: var(--bew-text-2);
+  }
+
+  // Native account assets and coin history are reading surfaces. Preserve the
+  // voucher artwork, claim/disabled states and original account operations.
+  .title-package-name,
+  .coin-nav-item,
+  .coin-rest-p,
+  .coin-index-right-title,
+  .coin-title {
+    color: var(--bew-text-1);
+  }
+
+  .coupon-desc-tip,
+  .coupon-rule,
+  .title-right-link,
+  .coin-rest-info,
+  .coin-text-p,
+  .coin-title-info {
+    color: var(--bew-text-2);
+  }
+
+  .coupon-wrapper {
+    // Repeated pale logos are only decoration; each voucher has its own image.
+    background: none;
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .coupon-content {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .coupon-money,
+  .coupon-money-unit,
+  .coin-num,
+  .coin-content .out-link,
+  .title-right-link:hover {
+    color: var(--bew-theme-foreground);
+  }
+
+  .coupon-btn {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:not(.coupon-btn-disable) {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+
+    &.coupon-btn-disable {
+      background: var(--bew-fill-1) !important;
+      color: var(--bew-text-3) !important;
+    }
+  }
+
+  .coin-inner {
+    background: var(--bew-content-solid);
+  }
+
+  .coin-nav {
+    border-color: var(--bew-border-color);
+
+    .coin-nav-item {
+      scroll-margin-top: calc(var(--bew-top-bar-height) + var(--bew-space-2));
+    }
+  }
+
+  .coin-nav-item.on,
+  .coin-nav-item:hover {
+    color: var(--bew-theme-foreground);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .coin-content .table-wrapper {
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+    overflow: hidden;
+  }
+
+  .coin-content .table-normal :is(th, td) {
+    border-color: var(--bew-border-color);
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+  }
+
+  .coin-content .table-normal tr {
+    border-color: var(--bew-border-color) !important;
+  }
+
+  .coin-content .table-normal th {
+    background: var(--bew-content-alt-solid);
+  }
+
+  .get-coin-more {
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: var(--bew-control-height);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-theme-surface-hover);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .coin-i {
+    background: var(--bew-theme-foreground);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`
   :not(foobar) {
@@ -8,35 +910,15 @@
 
   // #region dark mode adaption part
   &.dark {
-    .top-img,
-    .top_bg {
-      filter: invert(1) hue-rotate(180deg);
-    }
-
-    .security_content {
-      filter: invert(0.98) hue-rotate(180deg) brightness(1.1);
-
-      img,
-      video,
-      iframe,
-      [style*="background-image: url"],
-      [style*="background: url"],
-      .invitation-img,
-      .no-level-img,
-      .points-header-warp {
-        filter: invert(0.98) hue-rotate(180deg) brightness(1.1);
-      }
-    }
-
     .mp-img {
-      background-color: black;
+      background-color: var(--bew-content-alt-solid);
     }
 
     .xts,
     .table-normal *,
     .record-login-descript,
     .black-btn:not(:hover) {
-      color: black;
+      color: var(--bew-text-1);
     }
 
     .official-title,

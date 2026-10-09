@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, readonly, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { useToast } from 'vue-toastification'
 
 import {
@@ -18,19 +18,22 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import type {
   TopBarFavoritesChanged,
   TopBarRefreshClaim,
+  TopBarSharedResource,
   TopBarSharedState,
   TopBarStateClaim,
   TopBarStateInvalidate,
   TopBarStatePublish,
   TopBarStateRelease,
-  WatchLaterInvalidation,
 } from '~/constants/topBarState'
 import {
+  TOP_BAR_RESOURCE_FIELDS,
   TOP_BAR_STATE_MESSAGE,
 } from '~/constants/topBarState'
+import type { WatchLaterUpdate } from '~/constants/watchLaterState'
 import { settings } from '~/logic'
 import { checkLoginStatus, LoginStatus, parseDedeUserID } from '~/logic/loginStatus'
 import { parseTopBarPublicationTime, recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
+import { applyWatchLaterUpdate, ensureWatchLaterCount, ensureWatchLaterState as ensureMembership, isInWatchLater as queryWatchLater, watchLaterState, watchLaterUpdate } from '~/logic/watchLaterState'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { useSettingsStore } from '~/stores/settingsStore'
 import {
@@ -38,6 +41,7 @@ import {
   runSharedRefreshRequest,
   settleSharedRefreshTasks,
 } from '~/stores/topBarSharedRefresh'
+import { waitForDelay, withRequestDeadline } from '~/utils/abort'
 import api from '~/utils/api'
 import { showBewlyTopBar } from '~/utils/effectiveTopBarSource'
 import { i18n } from '~/utils/i18n'
@@ -45,6 +49,7 @@ import { getCSRF, isHomePage } from '~/utils/main'
 import { isExtensionContextInvalidatedError, onMessage, reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 import { countVisibleNewMomentItems } from '~/utils/momentFeedOrder'
 import { resolveStableMomentKey } from '~/utils/momentKey'
+import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 import { normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
@@ -87,6 +92,15 @@ export const useTopBarStore = defineStore('topBar', () => {
   const toast = useToast()
   const { t } = i18n.global
   const currentLocationHref = useCurrentLocationHref()
+  let sharedStateMessagingUnavailable = false
+  let uiActive = !document.hidden
+  const canRefreshUi = () => uiActive && !document.hidden && !sharedStateMessagingUnavailable
+  const resourceVersions: Record<TopBarSharedResource, number> = { unread: 0, moments: 0, rewards: 0 }
+  const resourceRefreshIds: Record<TopBarSharedResource, number> = { unread: -1, moments: -1, rewards: -1 }
+  const dirtyResources = new Set<TopBarSharedResource>()
+  const pendingResources = new Map<TopBarSharedResource, Promise<void>>()
+  const followupResources = new Set<TopBarSharedResource>()
+  let loginReadController: AbortController | undefined
   // 登录态是本地事实而非网络推导：初始值取 DedeUserID 存在性（同步、零请求），
   // 之后只有 -101 或本地 Cookie 清除才能翻转为未登录，瞬态失败永不翻转。
   // 否则刷新时的一次风控窗口会把已登录用户误判为未登录（见 issue #921）。
@@ -96,43 +110,15 @@ export const useTopBarStore = defineStore('topBar', () => {
   const unReadMessage = reactive<UnReadMessage>({} as UnReadMessage)
   const unReadDm = reactive<UnReadDm>({} as UnReadDm)
 
-  const MESSAGE_KEYS_TO_COUNT: Array<keyof UnReadMessage> = ['reply', 'at', 'chat', 'sys_msg']
-
-  function getLikeUnreadCount(): number {
-    const likeCount = typeof unReadMessage.like === 'number' ? unReadMessage.like : 0
-    const recvLike = (unReadMessage as UnReadMessage & { recv_like?: number }).recv_like
-    const recvLikeCount = typeof recvLike === 'number' ? recvLike : 0
-
-    return Math.max(likeCount, recvLikeCount)
-  }
-
-  const unReadMessageCount = computed((): number => {
-    let result = 0
-
-    // 统计顶栏默认展示的消息类型
-    MESSAGE_KEYS_TO_COUNT.forEach((key) => {
-      const value = unReadMessage[key]
-      if (typeof value === 'number')
-        result += value
-    })
-
-    // 可选地将点赞提醒计入顶栏通知角标
-    if (settings.value.showLikeNotificationReminder)
-      result += getLikeUnreadCount()
-
-    // 计算 unReadDm 中的未读消息
-    if (typeof unReadDm.follow_unread === 'number')
-      result += unReadDm.follow_unread
-    if (typeof unReadDm.unfollow_unread === 'number')
-      result += unReadDm.unfollow_unread
-
-    return result
-  })
+  const unReadMessageCount = computed(() => getNotificationBadgeCounts(settings.value, unReadMessage, unReadDm).total)
 
   // Moments State
   const newMomentsCount = ref<number>(0)
   // 添加稍后再看计数
-  const watchLaterCount = ref<number>(0)
+  const watchLaterCount = computed(() => {
+    const snapshot = watchLaterState.value
+    return snapshot && snapshot.accountId === userInfo.mid ? snapshot.count ?? 0 : 0
+  })
   // 添加稍后再看列表
   const watchLaterList = reactive<VideoItem[]>([])
   const favoriteStateVersion = ref(0)
@@ -141,13 +127,6 @@ export const useTopBarStore = defineStore('topBar', () => {
   let watchLaterListGeneration = 0
   // 添加 Moments 相关状态
   const moments = reactive<any[]>([])
-  const addedWatchLaterList = reactive<number[]>([])
-  let watchLaterStateAccountId: number | undefined
-  let watchLaterStateRequest: Promise<boolean> | null = null
-  let watchLaterStateRequestAccountId: number | undefined
-  let watchLaterStateGeneration = 0
-  let watchLaterAuthoritativeSyncTimer: ReturnType<typeof setTimeout> | null = null
-  let sharedStateMessagingUnavailable = false
   const isLoadingMoments = ref<boolean>(false)
   const isLoadingMomentsCount = ref<boolean>(false)
   const noMoreMomentsContent = ref<boolean>(false)
@@ -244,6 +223,13 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function resetAccountScopedState() {
+    for (const resource of Object.keys(resourceVersions) as TopBarSharedResource[]) {
+      resourceVersions[resource] = 0
+      resourceRefreshIds[resource] = -1
+    }
+    dirtyResources.clear()
+    pendingResources.clear()
+    followupResources.clear()
     closeAccountScopedSurfaces()
     Object.keys(unReadMessage).forEach((key) => {
       unReadMessage[key as keyof UnReadMessage] = 0
@@ -253,19 +239,9 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
 
     newMomentsCount.value = 0
-    watchLaterCount.value = 0
     watchLaterList.splice(0)
     nextWatchLaterPage = 1
     watchLaterListGeneration++
-    addedWatchLaterList.splice(0)
-    watchLaterStateAccountId = undefined
-    watchLaterStateRequest = null
-    watchLaterStateRequestAccountId = undefined
-    watchLaterStateGeneration++
-    if (watchLaterAuthoritativeSyncTimer) {
-      clearTimeout(watchLaterAuthoritativeSyncTimer)
-      watchLaterAuthoritativeSyncTimer = null
-    }
     moments.splice(0)
     momentsRequestGeneration++
     momentsCountRequestGeneration++
@@ -287,7 +263,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function isCurrentAccount(accountId: number | undefined): accountId is number {
-    return accountId !== undefined && isLogin.value && userInfo.mid === accountId
+    return accountId !== undefined && isLogin.value && userInfo.mid === accountId && getLocalLoginMid() === accountId
   }
 
   function clearUserInfo() {
@@ -299,8 +275,9 @@ export const useTopBarStore = defineStore('topBar', () => {
     retryCount = 0,
     requestGeneration = loginStateGeneration,
     requestLocalMid = getLocalLoginMid(),
+    signal?: AbortSignal,
   ): Promise<LoginStatus> {
-    if (requestGeneration !== loginStateGeneration)
+    if (!canRefreshUi() || signal?.aborted || requestGeneration !== loginStateGeneration)
       return LoginStatus.TransientError
 
     // 本地无会话 Cookie 且已知未登录时，nav 只会返回 -101，跳过无意义的请求
@@ -315,9 +292,9 @@ export const useTopBarStore = defineStore('topBar', () => {
     const maxRetries = 2 // 最多重试2次
     const retryDelay = (retryCount + 1) * 1000 // 递增延迟: 1s, 2s
 
-    const result = await checkLoginStatus<UserInfo>(() => api.user.getUserInfo())
+    const result = await checkLoginStatus<UserInfo>(() => api.user.getUserInfo(undefined, { signal }))
 
-    if (requestGeneration !== loginStateGeneration || getLocalLoginMid() !== requestLocalMid)
+    if (signal?.aborted || !canRefreshUi() || requestGeneration !== loginStateGeneration || getLocalLoginMid() !== requestLocalMid)
       return LoginStatus.TransientError
 
     if (result.status === LoginStatus.LoggedIn) {
@@ -345,8 +322,8 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     // 瞬态失败（风控/限流/网络错误）：不切换登录态，稍后重试
     if (retryCount < maxRetries) {
-      await new Promise(resolve => setTimeout(resolve, retryDelay))
-      return getUserInfo(retryCount + 1, requestGeneration, requestLocalMid)
+      await waitForDelay(retryDelay, signal)
+      return getUserInfo(retryCount + 1, requestGeneration, requestLocalMid, signal)
     }
     return result.status
   }
@@ -357,6 +334,8 @@ export const useTopBarStore = defineStore('topBar', () => {
   let fetchUserInfoGeneration = -1
   let fetchUserInfoLocalMid: number | undefined
   function fetchUserInfoOnce(): Promise<LoginStatus> {
+    if (!canRefreshUi())
+      return Promise.resolve(LoginStatus.TransientError)
     const requestGeneration = loginStateGeneration
     const requestLocalMid = getLocalLoginMid()
     if (
@@ -371,13 +350,16 @@ export const useTopBarStore = defineStore('topBar', () => {
       invalidateLoginStateRequests()
 
     const currentGeneration = loginStateGeneration
-    const request = getUserInfo(0, currentGeneration, requestLocalMid)
+    const controller = new AbortController()
+    loginReadController = controller
+    const request = withRequestDeadline(signal => getUserInfo(0, currentGeneration, requestLocalMid, signal), { signal: controller.signal })
       .catch(() => LoginStatus.TransientError)
       .finally(() => {
         if (fetchUserInfoPromise === request) {
           fetchUserInfoPromise = null
           fetchUserInfoGeneration = -1
           fetchUserInfoLocalMid = undefined
+          loginReadController = undefined
         }
       })
     fetchUserInfoPromise = request
@@ -388,6 +370,12 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   function invalidateLoginStateRequests() {
     loginStateGeneration++
+    cancelLoginRead()
+  }
+
+  function cancelLoginRead() {
+    loginReadController?.abort()
+    loginReadController = undefined
     fetchUserInfoPromise = null
     fetchUserInfoGeneration = -1
     fetchUserInfoLocalMid = undefined
@@ -399,7 +387,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     if (status === LoginStatus.LoggedIn) {
       startUpdateTimer()
-      void syncSharedData({ force: true }).catch((error) => {
+      void syncSharedData().catch((error) => {
         reportRuntimeFailure('Failed to sync TopBar state after login change', error)
       })
     }
@@ -429,6 +417,16 @@ export const useTopBarStore = defineStore('topBar', () => {
       clearUserInfo()
       resetAccountScopedState()
     }
+
+    if (localMid === undefined && isLogin.value) {
+      isLogin.value = false
+      invalidateLoginStateRequests()
+      clearUserInfo()
+      resetAccountScopedState()
+      stopUpdateTimer()
+    }
+    if (!canRefreshUi())
+      return
 
     const fetchAndHandleLoginStatus = () => {
       const request = fetchUserInfoOnce()
@@ -462,13 +460,15 @@ export const useTopBarStore = defineStore('topBar', () => {
   // Notification Methods
   async function getUnreadMessageCount(): Promise<boolean> {
     const accountId = userInfo.mid
+    const version = resourceVersions.unread
+    const current = () => isCurrentAccount(accountId) && resourceVersions.unread === version
     if (!isCurrentAccount(accountId))
       return false
 
     return settleTopBarSharedRefreshTasks([
       () => runTopBarSharedRefreshRequest('getUnreadMsg', async () => {
         const response = await api.notification.getUnreadMsg()
-        if (!isCurrentAccount(accountId))
+        if (!current())
           return 'account-changed'
         if (response.code === -1)
           return 'network'
@@ -481,7 +481,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       }),
       () => runTopBarSharedRefreshRequest('getUnreadDm', async () => {
         const response = await api.notification.getUnreadDm()
-        if (!isCurrentAccount(accountId))
+        if (!current())
           return 'account-changed'
         if (response.code === -1)
           return 'network'
@@ -498,6 +498,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   // B币和大会员经验领取状态检查
   async function refreshVipRewardStatus(): Promise<boolean> {
     const accountId = userInfo.mid
+    const version = resourceVersions.rewards
     const shouldCheckBCoin = settings.value.showBCoinReceiveReminder
     const shouldCheckVipExp = settings.value.autoReceiveVipExp
     if (!isCurrentAccount(accountId))
@@ -514,7 +515,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     return runTopBarSharedRefreshRequest('refreshVipRewardStatus', async () => {
       const response = await api.user.getPrivilegeInfo()
-      if (!isCurrentAccount(accountId))
+      if (!isCurrentAccount(accountId) || resourceVersions.rewards !== version)
         return 'account-changed'
       if (response.code === -1)
         return 'network'
@@ -585,7 +586,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   // 自动领取B币
   async function autoReceiveBCoin(accountId = userInfo.mid, nextReceiveAt: number | null = null) {
-    if (!isCurrentAccount(accountId) || !hasBCoinToReceive.value) {
+    if (settings.initializationState.value !== 'loaded' || !isCurrentAccount(accountId) || !hasBCoinToReceive.value) {
       return
     }
 
@@ -621,7 +622,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
   // 自动领取大会员经验
   async function autoReceiveVipExp(accountId = userInfo.mid, nextReceiveAt: number | null = null) {
-    if (!isCurrentAccount(accountId) || userInfo.vip?.status !== 1 || !settings.value.autoReceiveVipExp) {
+    if (settings.initializationState.value !== 'loaded' || !isCurrentAccount(accountId) || userInfo.vip?.status !== 1 || !settings.value.autoReceiveVipExp) {
       return
     }
 
@@ -661,6 +662,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   // Moments Methods
   async function getTopBarNewMomentsCount(selectedType: string = 'video'): Promise<boolean> {
     const accountId = userInfo.mid
+    const version = resourceVersions.moments
     if (!isCurrentAccount(accountId) || isLoadingMomentsCount.value)
       return false
 
@@ -672,7 +674,7 @@ export const useTopBarStore = defineStore('topBar', () => {
           type: selectedType,
           update_baseline: '0',
         })
-        if (!isCurrentAccount(accountId) || requestGeneration !== momentsCountRequestGeneration)
+        if (!isCurrentAccount(accountId) || requestGeneration !== momentsCountRequestGeneration || resourceVersions.moments !== version)
           return 'account-changed'
         if (response.code === -1)
           return 'network'
@@ -685,20 +687,17 @@ export const useTopBarStore = defineStore('topBar', () => {
       })
     }
     finally {
-      if (isCurrentAccount(accountId) && requestGeneration === momentsCountRequestGeneration)
+      if (requestGeneration === momentsCountRequestGeneration)
         isLoadingMomentsCount.value = false
     }
   }
 
-  function invalidateWatchLaterState() {
-    watchLaterStateGeneration++
-    watchLaterStateAccountId = undefined
-  }
+  const watchLaterInvalidationVersion = computed(() => watchLaterState.value?.revision ?? 0)
 
-  const watchLaterInvalidationVersion = ref(0)
-
-  function isInWatchLater(aid: number | undefined): boolean {
-    return aid !== undefined && addedWatchLaterList.includes(aid)
+  function isInWatchLater(target: number | undefined | { aid?: number | string, bvid?: string, epid?: number }): boolean | undefined {
+    if (!isLogin.value || watchLaterState.value?.accountId !== userInfo.mid)
+      return undefined
+    return queryWatchLater(typeof target === 'object' ? target : { aid: target })
   }
 
   function isCurrentWatchLaterAccount(accountId: number | undefined): accountId is number {
@@ -709,143 +708,25 @@ export const useTopBarStore = defineStore('topBar', () => {
     const accountId = userInfo.mid
     if (!isCurrentWatchLaterAccount(accountId))
       return false
-    if (force)
-      invalidateWatchLaterState()
-    else if (watchLaterStateAccountId === accountId)
-      return true
-
-    if (watchLaterStateRequest && watchLaterStateRequestAccountId === accountId) {
-      const succeeded = await watchLaterStateRequest
-      if (succeeded && isCurrentWatchLaterAccount(accountId) && watchLaterStateAccountId !== accountId)
-        return ensureWatchLaterState()
-      return succeeded && isCurrentWatchLaterAccount(accountId)
-    }
-
-    const requestGeneration = watchLaterStateGeneration
-    const request = runTopBarSharedRefreshRequest('getWatchLaterMembership', async () => {
-      const response = await api.watchlater.getAllWatchLaterList()
-      if (!isCurrentWatchLaterAccount(accountId) || requestGeneration !== watchLaterStateGeneration)
-        return 'account-changed'
-      if (response.code === -1)
-        return 'network'
-      if (response.code !== 0)
-        return 'api-error'
-      if (!response.data || (response.data.list !== undefined && !Array.isArray(response.data.list)))
-        return 'invalid-response'
-
-      const list = Array.isArray(response.data.list) ? response.data.list as VideoItem[] : []
-      const aids = [...new Set(list.map(item => item.aid).filter(aid => Number.isFinite(aid) && aid > 0))]
-      addedWatchLaterList.splice(0, addedWatchLaterList.length, ...aids)
-      watchLaterCount.value = Number.isFinite(response.data.count) ? response.data.count : aids.length
-      watchLaterStateAccountId = accountId
-      return true
-    })
-
-    watchLaterStateRequest = request
-    watchLaterStateRequestAccountId = accountId
-    try {
-      return await request
-    }
-    finally {
-      if (watchLaterStateRequest === request) {
-        watchLaterStateRequest = null
-        watchLaterStateRequestAccountId = undefined
-      }
-    }
+    return await ensureMembership(force) && isCurrentWatchLaterAccount(accountId)
   }
 
-  async function refreshWatchLaterAuthoritativeState(): Promise<boolean> {
-    return settleTopBarSharedRefreshTasks([
-      () => getAllWatchLaterList(),
-      () => ensureWatchLaterState(true),
-    ])
-  }
-
-  function scheduleWatchLaterAuthoritativeSync() {
-    if (watchLaterAuthoritativeSyncTimer)
-      clearTimeout(watchLaterAuthoritativeSyncTimer)
-
-    const accountId = userInfo.mid
-    watchLaterAuthoritativeSyncTimer = setTimeout(() => {
-      watchLaterAuthoritativeSyncTimer = null
-      if (!isCurrentAccount(accountId))
-        return
-
-      void syncWatchLaterState(true).catch((error) => {
-        reportRuntimeFailure('Failed to refresh authoritative Watch Later state', error)
-      })
-    }, 800)
-  }
-
-  function applyWatchLaterMutation(aid: number, added: boolean) {
-    const hadAid = isInWatchLater(aid)
-    const hadCompleteMembership = watchLaterStateAccountId === userInfo.mid
-    invalidateWatchLaterState()
-    watchLaterListGeneration++
-    isLoadingWatchLater.value = false
-
-    if (added && !hadAid)
-      addedWatchLaterList.push(aid)
-    else if (!added && hadAid)
-      addedWatchLaterList.splice(addedWatchLaterList.indexOf(aid), 1)
-
-    if (!added) {
-      const listIndex = watchLaterList.findIndex(item => item.aid === aid)
-      if (listIndex !== -1)
-        watchLaterList.splice(listIndex, 1)
-    }
-
-    watchLaterCount.value = hadCompleteMembership
-      ? addedWatchLaterList.length
-      : Math.max(0, watchLaterCount.value + (added && !hadAid ? 1 : !added && hadAid ? -1 : 0))
-  }
-
-  async function broadcastWatchLaterInvalidation(accountId: number) {
-    if (sharedStateMessagingUnavailable)
-      return
-
-    try {
-      await sendMessage<WatchLaterInvalidation>(
-        TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATE,
-        { accountId },
-      )
-    }
-    catch (error) {
-      if (isExtensionContextInvalidatedError(error))
-        disableSharedStateMessaging()
-      else
-        reportRuntimeFailure('Failed to broadcast Watch Later invalidation', error)
-    }
-  }
-
-  async function commitWatchLaterMutation(aid: number, added: boolean, accountId: number) {
+  async function commitWatchLaterMutation(_aid: number, _added: boolean, accountId: number, update?: WatchLaterUpdate) {
     if (!isCurrentWatchLaterAccount(accountId))
       return
-
-    applyWatchLaterMutation(aid, added)
-    scheduleWatchLaterAuthoritativeSync()
-    await broadcastWatchLaterInvalidation(accountId)
+    if (update)
+      applyWatchLaterUpdate(update)
+    else
+      await ensureMembership(true)
   }
 
   async function invalidateWatchLaterMembership(accountId: number) {
     if (!isCurrentWatchLaterAccount(accountId))
       return
 
-    invalidateWatchLaterState()
-    watchLaterListGeneration++
-    isLoadingWatchLater.value = false
-    scheduleWatchLaterAuthoritativeSync()
-    await broadcastWatchLaterInvalidation(accountId)
-  }
-
-  async function commitWatchLaterClear(accountId: number) {
-    if (!isCurrentWatchLaterAccount(accountId))
-      return
-
-    addedWatchLaterList.splice(0)
-    watchLaterList.splice(0)
-    watchLaterCount.value = 0
-    await invalidateWatchLaterMembership(accountId)
+    const response = await api.watchlater.invalidateWatchLaterState({ accountId })
+    if (isCurrentWatchLaterAccount(accountId))
+      applyWatchLaterUpdate(response.data)
   }
 
   // 获取稍后再看列表数量
@@ -854,22 +735,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     if (!isCurrentAccount(accountId))
       return false
 
-    return runTopBarSharedRefreshRequest('getWatchLaterCount', async () => {
-      const response = await api.watchlater.getWatchLaterListByPage({
-        pn: 1,
-        ps: 10,
-      })
-      if (!isCurrentAccount(accountId))
-        return 'account-changed'
-      if (response.code === -1)
-        return 'network'
-      if (response.code !== 0)
-        return 'api-error'
-      if (!response.data || typeof response.data.count !== 'number')
-        return 'invalid-response'
-      watchLaterCount.value = response.data.count
-      return true
-    })
+    return await ensureWatchLaterCount() && isCurrentAccount(accountId)
   }
 
   // 获取稍后再看列表
@@ -883,7 +749,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     })
   }
 
-  async function getAllWatchLaterList(): Promise<boolean> {
+  async function getWatchLaterPreview(): Promise<boolean> {
     const accountId = userInfo.mid
     if (!isCurrentAccount(accountId))
       return false
@@ -907,17 +773,39 @@ export const useTopBarStore = defineStore('topBar', () => {
         if (!response.data || !Array.isArray(response.data.list) || typeof response.data.count !== 'number')
           return 'invalid-response'
         const list = dedupeWatchLaterItems(response.data.list)
-        watchLaterCount.value = response.data.count
         watchLaterList.splice(0, watchLaterList.length, ...list)
         nextWatchLaterPage = 2
         return true
       })
     }
     finally {
-      if (isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration)
+      if (requestGeneration === watchLaterListGeneration)
         isLoadingWatchLater.value = false
     }
   }
+
+  watch(watchLaterUpdate, (update) => {
+    if (!update || update.type !== 'change' || update.accountId !== userInfo.mid)
+      return
+    const change = update.change
+    watchLaterListGeneration++
+    isLoadingWatchLater.value = false
+    if (change.type === 'clear') {
+      watchLaterList.splice(0)
+      nextWatchLaterPage = 1
+    }
+    else if (change.type === 'remove') {
+      const index = watchLaterList.findIndex(item => item.aid === change.entry.aid)
+      if (index !== -1)
+        watchLaterList.splice(index, 1)
+      nextWatchLaterPage = Math.max(1, Math.ceil(watchLaterList.length / 10))
+    }
+    // Preview media is a view, not membership. Only an open preview needs its
+    // first page filled after an addition; other tabs keep the compact delta.
+    else if (popupVisible.watchLater && !document.hidden) {
+      void getWatchLaterPreview()
+    }
+  })
 
   // 加载更多稍后再看列表
   async function loadMoreWatchLaterList() {
@@ -951,7 +839,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       reportRuntimeFailure('Failed to load Watch Later page', error)
     }
     finally {
-      if (isCurrentAccount(accountId) && requestGeneration === watchLaterListGeneration)
+      if (requestGeneration === watchLaterListGeneration)
         isLoadingWatchLater.value = false
     }
   }
@@ -1129,7 +1017,7 @@ export const useTopBarStore = defineStore('topBar', () => {
       })
       .catch(error => reportRuntimeFailure('Failed to load TopBar moments', error))
       .finally(() => {
-        if (isCurrentAccount(accountId) && requestGeneration === momentsRequestGeneration)
+        if (requestGeneration === momentsRequestGeneration)
           isLoadingMoments.value = false
       })
   }
@@ -1261,7 +1149,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         }
       })
       .finally(() => {
-        if (isCurrentAccount(accountId) && requestGeneration === momentsRequestGeneration)
+        if (requestGeneration === momentsRequestGeneration)
           isLoadingMoments.value = false
       })
   }
@@ -1288,7 +1176,10 @@ export const useTopBarStore = defineStore('topBar', () => {
   let updateTimerGeneration = 0
 
   function disableSharedStateMessaging() {
+    if (sharedStateMessagingUnavailable)
+      return
     sharedStateMessagingUnavailable = true
+    invalidateLoginStateRequests()
     stopUpdateTimer()
   }
 
@@ -1297,7 +1188,6 @@ export const useTopBarStore = defineStore('topBar', () => {
       unReadMessage: { ...unReadMessage },
       unReadDm: { ...unReadDm },
       newMomentsCount: newMomentsCount.value,
-      watchLaterCount: watchLaterCount.value,
       hasBCoinToReceive: hasBCoinToReceive.value,
       bCoinAlreadyReceived: bCoinAlreadyReceived.value,
       vipExpAlreadyReceived: vipExpAlreadyReceived.value,
@@ -1306,33 +1196,53 @@ export const useTopBarStore = defineStore('topBar', () => {
     }
   }
 
-  function applySharedState(snapshot: TopBarSharedState) {
-    Object.assign(unReadMessage, snapshot.unReadMessage)
-    Object.assign(unReadDm, snapshot.unReadDm)
-    newMomentsCount.value = snapshot.newMomentsCount
-    watchLaterCount.value = snapshot.watchLaterCount
-    hasBCoinToReceive.value = snapshot.hasBCoinToReceive
-    bCoinAlreadyReceived.value = snapshot.bCoinAlreadyReceived
-    vipExpAlreadyReceived.value = snapshot.vipExpAlreadyReceived
-    bCoinNextReceiveAt.value = snapshot.bCoinNextReceiveAt ?? null
-    vipExpNextReceiveAt.value = snapshot.vipExpNextReceiveAt ?? null
+  function applySharedState(snapshot: Partial<TopBarSharedState>, resource: TopBarSharedResource) {
+    if (resource === 'unread') {
+      Object.assign(unReadMessage, snapshot.unReadMessage)
+      Object.assign(unReadDm, snapshot.unReadDm)
+    }
+    else if (resource === 'moments' && snapshot.newMomentsCount !== undefined) {
+      newMomentsCount.value = snapshot.newMomentsCount
+    }
+    else if (resource === 'rewards') {
+      if (snapshot.hasBCoinToReceive !== undefined)
+        hasBCoinToReceive.value = snapshot.hasBCoinToReceive
+      if (snapshot.bCoinAlreadyReceived !== undefined)
+        bCoinAlreadyReceived.value = snapshot.bCoinAlreadyReceived
+      if (snapshot.vipExpAlreadyReceived !== undefined)
+        vipExpAlreadyReceived.value = snapshot.vipExpAlreadyReceived
+      bCoinNextReceiveAt.value = snapshot.bCoinNextReceiveAt ?? null
+      vipExpNextReceiveAt.value = snapshot.vipExpNextReceiveAt ?? null
+    }
   }
 
   onMessage<TopBarStatePublish>(
     TOP_BAR_STATE_MESSAGE.UPDATED,
-    ({ accountId, snapshot }) => {
-      if (accountId === userInfo.mid)
-        applySharedState(snapshot)
+    ({ accountId, snapshot, resource, version, refreshId }) => {
+      if (!isCurrentAccount(accountId) || !Object.hasOwn(resourceVersions, resource)
+        || version < resourceVersions[resource] || (version === resourceVersions[resource] && refreshId <= resourceRefreshIds[resource])) {
+        return
+      }
+      resourceVersions[resource] = version
+      resourceRefreshIds[resource] = refreshId
+      dirtyResources.delete(resource)
+      applySharedState(snapshot, resource)
     },
   )
 
   onMessage<TopBarStateInvalidate>(
     TOP_BAR_STATE_MESSAGE.INVALIDATED,
-    ({ accountId }) => {
-      if (accountId !== userInfo.mid)
+    ({ accountId, resource, version }) => {
+      if (!isCurrentAccount(accountId) || !Object.hasOwn(resourceVersions, resource)
+        || version === undefined || version < resourceVersions[resource]) {
         return
+      }
 
-      syncSharedData({ force: true, refresh: getUnreadMessageCount }).catch((error) => {
+      resourceVersions[resource] = version
+      dirtyResources.add(resource)
+      if (!canRefreshUi())
+        return
+      syncSharedData({ resource }).catch((error) => {
         reportRuntimeFailure('Failed to refresh invalidated unread-message state', error)
       })
     },
@@ -1346,44 +1256,23 @@ export const useTopBarStore = defineStore('topBar', () => {
     },
   )
 
-  onMessage<WatchLaterInvalidation>(
-    TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATED,
-    ({ accountId }) => {
-      if (accountId !== getLocalLoginMid())
-        return
-
-      invalidateWatchLaterState()
-      watchLaterListGeneration++
-      isLoadingWatchLater.value = false
-      scheduleWatchLaterAuthoritativeSync()
-      watchLaterInvalidationVersion.value++
-    },
-  )
-
   // 他处登录/登出/会话过期导致会话 Cookie 变化时，后台广播此消息（见 issue #921）
   onMessage(TOP_BAR_STATE_MESSAGE.LOGIN_STATE_CHANGED, reconcileLocalLoginState)
 
-  async function refreshSharedData(): Promise<boolean> {
-    return settleTopBarSharedRefreshTasks([
-      () => getUnreadMessageCount(),
-      () => getTopBarNewMomentsCount(),
-      () => getWatchLaterCount(),
-      () => refreshVipRewardStatus(),
-    ])
-  }
-
   interface SyncSharedDataOptions {
     force?: boolean
+    resource?: TopBarSharedResource
     refresh?: () => Promise<boolean>
   }
 
-  async function syncSharedDataFromBroker(options: SyncSharedDataOptions) {
-    if (!isLogin.value)
+  async function syncSharedDataFromBroker(options: SyncSharedDataOptions, resource: TopBarSharedResource) {
+    if (!canRefreshUi() || !isLogin.value)
       return
 
     const accountId = userInfo.mid
-    if (!accountId)
+    if (!isCurrentAccount(accountId))
       return
+    const generation = loginStateGeneration
 
     const claim = await sendMessage<TopBarStateClaim, TopBarRefreshClaim | null | undefined>(
       TOP_BAR_STATE_MESSAGE.CLAIM_REFRESH,
@@ -1391,6 +1280,7 @@ export const useTopBarStore = defineStore('topBar', () => {
         accountId,
         maxAge: UPDATE_INTERVAL,
         force: options.force,
+        resource,
       },
     )
 
@@ -1403,8 +1293,16 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     // 主动刷新必须使用当前操作的 API 结果，不能先用 broker 中可能过期的
     // snapshot 覆盖本地状态；普通定时同步仍复用 snapshot。
-    if (claim.snapshot && !options.force && isCurrentAccount(accountId))
-      applySharedState(claim.snapshot)
+    if (!isCurrentAccount(accountId) || generation !== loginStateGeneration || claim.version < resourceVersions[resource]) {
+      if (claim.shouldRefresh && claim.refreshId !== undefined)
+        await sendMessage<TopBarStateRelease>(TOP_BAR_STATE_MESSAGE.RELEASE_REFRESH, { accountId, resource, refreshId: claim.refreshId })
+      return
+    }
+    resourceVersions[resource] = claim.version
+    if (claim.snapshot && !options.force) {
+      applySharedState(claim.snapshot, resource)
+      dirtyResources.delete(resource)
+    }
 
     if (!claim.shouldRefresh)
       return
@@ -1413,38 +1311,68 @@ export const useTopBarStore = defineStore('topBar', () => {
       return
 
     const refreshId = claim.refreshId
+    const version = claim.version
+    dirtyResources.delete(resource)
 
     const release = () => sendMessage<TopBarStateRelease>(
       TOP_BAR_STATE_MESSAGE.RELEASE_REFRESH,
       {
         accountId,
         refreshId,
+        resource,
       },
     )
 
-    await completeSharedRefreshLease({
-      refresh: () => isCurrentAccount(accountId)
-        ? (options.refresh?.() ?? refreshSharedData())
-        : Promise.resolve(false),
-      isCurrent: () => isCurrentAccount(accountId),
-      release,
-      publish: () => sendMessage<TopBarStatePublish>(
-        TOP_BAR_STATE_MESSAGE.PUBLISH,
-        {
-          accountId,
-          snapshot: createSharedStateSnapshot(),
-          refreshId,
-        },
-      ),
-    })
+    try {
+      await completeSharedRefreshLease({
+        refresh: () => isCurrentAccount(accountId) && canRefreshUi()
+          ? (options.refresh?.() ?? (resource === 'unread' ? getUnreadMessageCount() : resource === 'moments' ? getTopBarNewMomentsCount() : refreshVipRewardStatus()))
+          : Promise.resolve(false),
+        isCurrent: () => isCurrentAccount(accountId) && generation === loginStateGeneration && resourceVersions[resource] === version,
+        release,
+        publish: () => sendMessage<TopBarStatePublish>(
+          TOP_BAR_STATE_MESSAGE.PUBLISH,
+          {
+            accountId,
+            snapshot: Object.fromEntries(TOP_BAR_RESOURCE_FIELDS[resource].map(field => [field, createSharedStateSnapshot()[field]])),
+            refreshId,
+            resource,
+            version,
+          },
+        ),
+      })
+    }
+    finally {
+      // Invalidation during this lease is one follow-up demand. A peer can win
+      // the next lease; all participants still converge without bypassing it.
+      if (isCurrentAccount(accountId) && generation === loginStateGeneration && dirtyResources.has(resource) && canRefreshUi()) {
+        followupResources.add(resource)
+      }
+    }
   }
 
   async function syncSharedData(options: SyncSharedDataOptions = {}) {
-    if (sharedStateMessagingUnavailable)
+    if (!canRefreshUi())
       return
 
     try {
-      await syncSharedDataFromBroker(options)
+      const resources: TopBarSharedResource[] = options.resource ? [options.resource] : ['unread', 'moments', 'rewards']
+      await Promise.all(resources.map((resource) => {
+        const existing = pendingResources.get(resource)
+        if (existing)
+          return existing
+        const request = syncSharedDataFromBroker(options, resource).finally(() => {
+          if (pendingResources.get(resource) === request) {
+            pendingResources.delete(resource)
+            if (followupResources.delete(resource) && canRefreshUi())
+              void syncSharedData({ resource }).catch(error => reportRuntimeFailure('Failed to reconcile TopBar invalidation', error))
+          }
+        })
+        pendingResources.set(resource, request)
+        return request
+      }))
+      if (!options.resource && canRefreshUi())
+        await getWatchLaterCount()
     }
     catch (error) {
       if (!isExtensionContextInvalidatedError(error))
@@ -1457,26 +1385,19 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function syncUnreadMessageState() {
-    return syncSharedData({
-      force: true,
-      refresh: getUnreadMessageCount,
-    })
+    return invalidateUnreadMessageState()
   }
 
   function syncMomentsState(selectedType: string = 'video') {
     return syncSharedData({
       force: true,
+      resource: 'moments',
       refresh: () => getTopBarNewMomentsCount(selectedType),
     })
   }
 
   function syncWatchLaterState(includeList = false) {
-    return syncSharedData({
-      force: true,
-      refresh: includeList
-        ? refreshWatchLaterAuthoritativeState
-        : getWatchLaterCount,
-    })
+    return includeList ? getWatchLaterPreview() : getWatchLaterCount()
   }
 
   function invalidateUnreadMessageState() {
@@ -1486,7 +1407,7 @@ export const useTopBarStore = defineStore('topBar', () => {
 
     return sendMessage<TopBarStateInvalidate>(
       TOP_BAR_STATE_MESSAGE.INVALIDATE,
-      { accountId },
+      { accountId, resource: 'unread' },
     ).catch((error) => {
       if (!isExtensionContextInvalidatedError(error))
         throw error
@@ -1512,17 +1433,20 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   async function initData() {
+    if (!canRefreshUi())
+      return
+    reconcileLocalLoginState()
     const requestGeneration = loginStateGeneration
     await fetchUserInfoOnce()
 
-    if (requestGeneration !== loginStateGeneration || !isLogin.value)
+    if (!canRefreshUi() || requestGeneration !== loginStateGeneration || !isLogin.value)
       return
 
     await syncSharedData()
   }
 
   function startUpdateTimer() {
-    if (updateTimer)
+    if (updateTimer || !canRefreshUi())
       return
 
     const timerGeneration = updateTimerGeneration
@@ -1538,7 +1462,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     let recheckInterval = LOGIN_RECHECK_INTERVAL
     const needsRecheck = () => isLogin.value && !userInfo.mid
     const scheduleNext = (delay: number) => {
-      if (timerGeneration !== updateTimerGeneration || sharedStateMessagingUnavailable)
+      if (timerGeneration !== updateTimerGeneration || !canRefreshUi())
         return
 
       updateTimer = setTimeout(() => {
@@ -1546,7 +1470,7 @@ export const useTopBarStore = defineStore('topBar', () => {
           return
 
         // 扩展重载后旧 content script 的 runtime 已失效：停止轮询，等待刷新
-        if (sharedStateMessagingUnavailable) {
+        if (!canRefreshUi()) {
           updateTimer = null
           return
         }
@@ -1608,6 +1532,7 @@ export const useTopBarStore = defineStore('topBar', () => {
   }
 
   function cleanup() {
+    uiActive = false
     stopUpdateTimer()
     invalidateLoginStateRequests()
 
@@ -1622,12 +1547,27 @@ export const useTopBarStore = defineStore('topBar', () => {
     drawerVisible.notifications = false
   }
 
+  async function setUiActive(active: boolean) {
+    uiActive = active
+    if (!canRefreshUi()) {
+      stopUpdateTimer()
+      cancelLoginRead()
+      return
+    }
+    // Cookie reconciliation precedes any reuse of account-scoped snapshots.
+    await initData()
+    if (canRefreshUi())
+      startUpdateTimer()
+  }
+
   // 设置TopBar可见状态
   function setTopBarVisible(visible: boolean) {
     topBarVisible.value = visible
   }
 
   return {
+    canReadUi: canRefreshUi,
+    invalidateExtensionContext: disableSharedStateMessaging,
     isLogin,
     userInfo,
     unReadMessage,
@@ -1653,6 +1593,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     handleNotificationsItemClick,
     closeAllPopups,
     initData,
+    setUiActive,
     cleanup,
     syncSharedData,
     syncUnreadMessageState,
@@ -1662,7 +1603,6 @@ export const useTopBarStore = defineStore('topBar', () => {
     watchLaterInvalidationVersion,
     isInWatchLater,
     commitWatchLaterMutation,
-    commitWatchLaterClear,
     invalidateWatchLaterMembership,
     invalidateUnreadMessageState,
     notifyFavoritesChanged,
@@ -1670,7 +1610,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     stopUpdateTimer,
 
     moments,
-    addedWatchLaterList: readonly(addedWatchLaterList),
+    watchLaterUpdate,
     isLoadingMoments,
     noMoreMomentsContent,
     livePage,
@@ -1682,7 +1622,7 @@ export const useTopBarStore = defineStore('topBar', () => {
     getMomentsData,
     isNewMoment,
     getWatchLaterCount,
-    getAllWatchLaterList,
+    getWatchLaterPreview,
     loadMoreWatchLaterList,
     deleteWatchLaterItem,
 

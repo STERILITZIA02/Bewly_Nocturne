@@ -320,11 +320,14 @@ function closePrivateConversation() {
 }
 
 function syncViewFromRoute(href: string) {
-  const normalizedRoute = normalizeNotificationRoute(href || window.location.href)
-  const url = new URL(normalizedRoute.normalizedUrl)
-  if (url.searchParams.get('page') !== AppPage.Notifications)
+  const sourceUrl = new URL(href || window.location.href)
+  // The outgoing page can still observe navigation during its leave transition.
+  // Only normalize routes that belong to Notifications, before applying defaults.
+  if (sourceUrl.searchParams.get('page') !== AppPage.Notifications)
     return
 
+  const normalizedRoute = normalizeNotificationRoute(sourceUrl)
+  const url = new URL(normalizedRoute.normalizedUrl)
   if (window.location.href !== normalizedRoute.normalizedUrl)
     replacePrivateConversationUrl(normalizedRoute.normalizedUrl)
 

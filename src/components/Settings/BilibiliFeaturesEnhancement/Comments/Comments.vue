@@ -3,6 +3,8 @@ import { useI18n } from 'vue-i18n'
 
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
+import Slider from '~/components/Slider.vue'
+import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
 import { settings } from '~/logic'
 import type { CommentReplyPaginationMode, CommentReplyTreeMode } from '~/logic/storage'
 
@@ -90,6 +92,21 @@ const commentReplyPaginationModeOptions = computed<{ label: string, value: Comme
         :options="commentReplyPaginationModeOptions"
         w="220px"
       />
+    </SettingsItem>
+
+    <SettingsItem
+      v-if="settings.enableCommentReplyTreeDisplay && settings.commentReplyPaginationMode === 'loadMore'"
+      :title="t('settings.comment_reply_batch_pages')"
+      :desc="t('settings.comment_reply_batch_pages_desc')"
+    >
+      <Slider v-model="settings.commentReplyBatchPages" :min="1" :max="COMMENT_REPLY_BATCH_MAX" :step="1" :label="String(settings.commentReplyBatchPages)" />
+    </SettingsItem>
+
+    <SettingsItem :title="t('settings.enable_comment_reply_tree_container')" :desc="t('settings.enable_comment_reply_tree_container_desc')" right-width="auto">
+      <Radio v-model="settings.enableCommentReplyTreeContainer" />
+    </SettingsItem>
+    <SettingsItem v-if="settings.enableCommentReplyTreeContainer" :title="t('settings.comment_reply_tree_container_height')" :desc="t('settings.comment_reply_tree_container_height_desc')">
+      <Slider v-model="settings.commentReplyTreeContainerHeight" :min="COMMENT_REPLY_CONTAINER_HEIGHT.min" :max="COMMENT_REPLY_CONTAINER_HEIGHT.max" :step="20" :label="`${settings.commentReplyTreeContainerHeight}px`" />
     </SettingsItem>
 
     <SettingsItem

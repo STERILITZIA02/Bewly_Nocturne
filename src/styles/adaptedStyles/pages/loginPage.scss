@@ -1,18 +1,33 @@
-.bewly-design.loginPage {
-  .login-pwd,
-  .tab-sms {
-    .tab__form,
-    .btn_wp {
-      width: 420px;
-    }
+html.bewly-design:is(.loginPage, [data-bewly-native-site="login"]) {
+  // Preserve the native form geometry, artwork and authentication flow.
+  .login_wp,
+  .login__main {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
   }
 
-  .tab-sms {
-    .btn_wp {
-      .btn_primary {
-        width: 420px !important;
-      }
-    }
+  .tab__form,
+  .btn_primary,
+  .btn_other,
+  .area-code-select {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .form__item input {
+    background: transparent;
+    color: var(--bew-text-1);
+  }
+
+  .form__item input::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  .dialog__outline {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-modal-radius);
+    corner-shape: var(--bew-corner-shape);
   }
 
   // #region theme color adaption part
@@ -20,29 +35,31 @@
   :not(foobar) {
     .clickable,
     .area-code-select .checked {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .tabs_wp .tab_active {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .btn_primary {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .btn_primary.disabled {
-      background-color: var(--bew-theme-color) !important;
+      background-color: var(--bew-content-alt-solid) !important;
+      color: var(--bew-text-3);
     }
 
     .eye-btn:hover svg path {
-      fill: var(--bew-theme-color) !important;
+      fill: var(--bew-theme-foreground) !important;
     }
   }
   // #endregion
 
-  // #region dark mode adaption part
-  &.dark {
+  // Shared surfaces apply in light, dark and OLED; QR image contrast stays native.
+  :not(foobar) {
     #app {
       background-color: var(--bew-bg);
     }

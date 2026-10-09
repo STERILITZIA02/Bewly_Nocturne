@@ -1,3 +1,5 @@
+import { getNativeSite, NATIVE_SITE_FRAME_MATCHES, NATIVE_SITE_MATCHES } from './nativeSites'
+
 export const CONTENT_SCRIPT_HOSTS = [
   'www.bilibili.com',
   'search.bilibili.com',
@@ -11,8 +13,10 @@ export const CONTENT_SCRIPT_HOSTS = [
 ] as const
 
 export const CONTENT_SCRIPT_MATCHES = CONTENT_SCRIPT_HOSTS.map(host => `*://${host}/*`)
+export const CONTENT_SCRIPT_TARGET_MATCHES = [...CONTENT_SCRIPT_MATCHES, ...NATIVE_SITE_MATCHES]
 
 export const CONTENT_SCRIPT_EXCLUDE_MATCHES = [
+  ...new Set([...NATIVE_SITE_MATCHES, ...NATIVE_SITE_FRAME_MATCHES]),
   '*://www.bilibili.com/match/game*',
   '*://www.bilibili.com/toy*',
 ]
@@ -57,6 +61,9 @@ export function isContentScriptTargetUrl(value?: string): boolean {
     const url = new URL(value)
     if (url.protocol !== 'http:' && url.protocol !== 'https:')
       return false
+
+    if (getNativeSite(url.hostname, url.pathname))
+      return true
 
     if (!CONTENT_SCRIPT_HOST_SET.has(url.hostname))
       return false

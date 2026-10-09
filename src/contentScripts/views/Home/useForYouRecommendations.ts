@@ -18,6 +18,7 @@ import type { forYouResult, Item as VideoItem } from '~/models/video/forYou'
 import type { AppVideoElement, VideoElement } from '~/stores/forYouStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
+import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
 import api from '~/utils/api'
 import { ensureFreshAppAccessToken, getTvSign, isAppAccessTokenInvalidResponse, refreshInvalidAppAccessToken, TVAppKey } from '~/utils/authProvider'
 import { isBilibiliRiskControl } from '~/utils/bilibiliApiError'
@@ -112,9 +113,10 @@ export function useForYouRecommendations(emit: {
   }
 
   // 当前使用的视频列表（根据推荐模式）
-  const currentVideoList = computed(() =>
-    isWebRecommendationMode.value ? videoList.value : appVideoList.value,
-  )
+  const currentVideoList = computed(() => {
+    const items = isWebRecommendationMode.value ? videoList.value : appVideoList.value
+    return settings.value.blockAds ? items.filter(video => !isBilibiliAdvertisement(video.item)) : items
+  })
 
   const isLoading = ref<boolean>(true)
   const recommendationDataState = tabState.ref<RecommendationDataState>('recommendationDataState', 'idle')
@@ -264,6 +266,8 @@ export function useForYouRecommendations(emit: {
   // 数据转换函数：将原始数据转换为 VideoCard 所需的显示格式
   // 这样可以避免在模板中进行大量计算，提高渲染性能
   function getWebVideoKey(item: VideoItem): string {
+    if (isBilibiliAdvertisement(item))
+      return toAdvertisementCard(item).advertisementKey!
     const bvid = item.bvid?.trim()
     if (bvid)
       return bvid
@@ -474,7 +478,7 @@ export function useForYouRecommendations(emit: {
     // 滚动加载时，APP模式记录开始长度，触发持续加载
     if (settings.value.recommendationMode === 'app') {
       APP_LOAD_BATCHES.value = 1
-      scrollLoadStartLength.value = appVideoList.value.length
+      scrollLoadStartLength.value = currentVideoList.value.length
     }
 
     void getData('loadMore')
@@ -566,7 +570,7 @@ export function useForYouRecommendations(emit: {
         return
       }
 
-      const beforeLoadCount = videoList.value.length
+      const beforeLoadCount = currentVideoList.value.length
 
       // 使用当前的 refreshIdx，只在成功时才递增
       const isLoadMoreRequest = requestType === 'loadMore'
@@ -708,12 +712,9 @@ export function useForYouRecommendations(emit: {
         })
 
         response.data.item.forEach((item: VideoItem) => {
-        // 过滤掉广告卡片
-          if (item.goto === 'ad')
-            return
-
+          const advertisement = isBilibiliAdvertisement(item)
           // 过滤掉缺少必要字段的数据（owner 或 stat 为 null）
-          if (!item.owner || !item.stat)
+          if (!advertisement && (!item.owner || !item.stat))
             return
 
           const itemKey = getWebVideoKey(item)
@@ -721,20 +722,22 @@ export function useForYouRecommendations(emit: {
             return
 
           existingIds.add(itemKey)
-          if (activeWebFilter)
+          if (activeWebFilter && !advertisement)
             filteredCandidateCount++
 
-          if (activeWebFilter && !activeWebFilter(item))
+          if (activeWebFilter && !advertisement && !activeWebFilter(item))
             return
 
-          if (activeWebFilter)
+          if (activeWebFilter && !advertisement)
             filteredKeptCount++
           resData.push(item)
         })
 
         recordFilteredFeedBatch(filteredCandidateCount, filteredKeptCount)
 
-        const showlistGroup = buildLastShowlistGroup(resData)
+        const showlistGroup = buildLastShowlistGroup(settings.value.blockAds
+          ? resData.filter(item => !isBilibiliAdvertisement(item))
+          : resData)
         if (showlistGroup)
           webShowlistGroups.value.push(showlistGroup)
 
@@ -751,7 +754,7 @@ export function useForYouRecommendations(emit: {
         )
 
         // 检查是否成功添加了新内容
-        const afterLoadCount = videoList.value.length
+        const afterLoadCount = currentVideoList.value.length
         applyRecommendationSuccessState({
           apiItemCount: response.data.item.length,
           displayedItemCount: afterLoadCount,
@@ -788,7 +791,7 @@ export function useForYouRecommendations(emit: {
     }
     finally {
       if (canFillViewport && isCurrentWebRequest(version, recommendationMode, accountId)) {
-        const filledItems = videoList.value
+        const filledItems = currentVideoList.value
 
         if (!needToLoginFirst.value && !noMoreContent.value) {
           await nextTick()
@@ -848,10 +851,10 @@ export function useForYouRecommendations(emit: {
     }
 
     const batchesToLoad = APP_LOAD_BATCHES.value
-    const beforeLoadCount = appVideoList.value.length
+    const beforeLoadCount = currentVideoList.value.length
     const seenCandidateIds = new Set(
       appVideoList.value
-        .flatMap(video => video.item ? getAppVideoKeys(video.item) : []),
+        .flatMap(video => video.item && !isBilibiliAdvertisement(video.item) ? getAppVideoKeys(video.item) : []),
     )
 
     // 加载多个批次
@@ -919,8 +922,16 @@ export function useForYouRecommendations(emit: {
           let filteredKeptCount = 0
 
           response.data.items.forEach((item: AppVideoItem) => {
-          // Remove banner & ad cards
-            if (item.card_type.includes('banner') || item.card_type === 'cm_v1')
+            const advertisement = isBilibiliAdvertisement(item)
+            if (advertisement) {
+              const displayData = toAdvertisementCard(item)
+              const uniqueId = displayData.advertisementKey!
+              if (!appVideoList.value.some(video => video.uniqueId === uniqueId))
+                appVideoList.value.push({ uniqueId, item, displayData })
+              return
+            }
+            // Non-video banner layouts cannot be represented by a VideoCard.
+            if (item.card_type.includes('banner'))
               return
 
             // 过滤掉没有有效 ID 的视频（既没有 aid 也没有 bvid）
@@ -944,7 +955,8 @@ export function useForYouRecommendations(emit: {
             else {
             // Keep the unfiltered recommendation path's existing duplicate semantics.
               const isDuplicate = appVideoList.value.some(video =>
-                video.item && (video.item.args?.aid === item.args?.aid || video.item.bvid === item.bvid),
+                video.item && !isBilibiliAdvertisement(video.item)
+                && (video.item.args?.aid === item.args?.aid || video.item.bvid === item.bvid),
               )
               if (isDuplicate)
                 return
@@ -960,7 +972,7 @@ export function useForYouRecommendations(emit: {
           recordFilteredFeedBatch(filteredCandidateCount, filteredKeptCount)
           applyRecommendationSuccessState({
             apiItemCount: response.data.items.length,
-            displayedItemCount: appVideoList.value.length,
+            displayedItemCount: currentVideoList.value.length,
             filterCandidateCount: filteredCandidateCount,
             filterKeptCount: filteredKeptCount,
             filtersActive: Boolean(activeAppFilter),
@@ -996,7 +1008,7 @@ export function useForYouRecommendations(emit: {
     if (!isCurrentWebRequest(version, recommendationMode, accountId))
       return
 
-    const afterLoadCount = appVideoList.value.length
+    const afterLoadCount = currentVideoList.value.length
     if (afterLoadCount > beforeLoadCount) {
     // 成功加载了新内容，重置空加载计数器
       appConsecutiveEmptyLoads.value = 0
@@ -1012,11 +1024,11 @@ export function useForYouRecommendations(emit: {
       let shouldContinue = false
       const hasScrollbar = await haveScrollbar()
 
-      if (!hasScrollbar || appVideoList.value.length < PAGE_SIZE) {
+      if (!hasScrollbar || currentVideoList.value.length < PAGE_SIZE) {
         shouldContinue = true
       }
       else if (scrollLoadStartLength.value > 0) {
-        const loadedCount = appVideoList.value.length - scrollLoadStartLength.value
+        const loadedCount = currentVideoList.value.length - scrollLoadStartLength.value
         if (loadedCount < PAGE_SIZE) {
           shouldContinue = true
         }

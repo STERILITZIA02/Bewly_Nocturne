@@ -60,8 +60,6 @@ export const READY_POLL_INTERVAL = 100
 
 export const READY_POLL_FAST_DURATION = 5000
 
-export const READY_POLL_SLOW_INTERVAL = 500
-
 export const READY_STABILITY_DELAY = 160
 
 export const TRANSFER_SETTLE_DELAY = 1200
@@ -241,9 +239,8 @@ export const selectors = {
   ],
 }
 
-export const SIDEBAR_RELEVANT_SELECTOR = [
+export const SIDEBAR_CONTENT_SELECTOR = [
   NATIVE_MUSIC_ENTRY_SELECTOR,
-  ...selectors.player,
   ...selectors.title,
   ...selectors.upPanel,
   ...selectors.mediaInfo,
@@ -257,3 +254,5 @@ export const SIDEBAR_RELEVANT_SELECTOR = [
   ...selectors.playlistControls,
   ...selectors.recommend,
 ].join(',')
+
+export const SIDEBAR_RELEVANT_SELECTOR = [...selectors.player, SIDEBAR_CONTENT_SELECTOR].join(',')

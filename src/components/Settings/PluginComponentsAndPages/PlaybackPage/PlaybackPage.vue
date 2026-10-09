@@ -71,6 +71,7 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
   { label: t('settings.video_player_mode.context_bangumi'), value: 'bangumi' },
   { label: t('settings.video_player_mode.context_watch_later'), value: 'watchLater' },
   { label: t('settings.video_player_mode.context_playlist'), value: 'playlist' },
+  { label: t('settings.video_player_mode.context_moments_dialog'), value: 'momentsDialog' },
 ])
 </script>
 
@@ -84,6 +85,9 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
     </SettingsItem>
 
     <SettingsItemSubgroup :title="t('settings.video_player_mode.bewly_widescreen')">
+      <SettingsItem :title="t('settings.show_widescreen_idle_progress')" :desc="t('settings.show_widescreen_idle_progress_desc')" right-width="auto">
+        <Radio v-model="settings.showWidescreenIdleProgress" />
+      </SettingsItem>
       <SettingsItem
         :title="t('settings.video_player_mode.bewly_widescreen_center_video')"
         :desc="t('settings.video_player_mode.bewly_widescreen_center_video_desc')"
@@ -141,6 +145,7 @@ const videoPlayerModeContextOptions = computed<{ label: string, value: VideoPlay
         v-for="context in videoPlayerModeContextOptions"
         :key="context.value"
         :title="context.label"
+        :desc="context.value === 'momentsDialog' ? t('settings.video_player_mode.context_moments_dialog_desc') : undefined"
         right-width="auto"
       >
         <Select

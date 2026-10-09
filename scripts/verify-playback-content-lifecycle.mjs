@@ -57,8 +57,10 @@ export function registerPlaybackContentChecks(check) {
     })
     const root = document.body.appendChild(document.createElement('div'))
     root.id = constants.ROOT_ID
+    const playerEl = document.body.appendChild(document.createElement('div'))
+    playerEl.id = 'bilibili-player'
     const sidebarTop = root.appendChild(document.createElement('header'))
-    const state = { root, sidebarTop, movedNodes: [], descriptionExpanded: false, activeTab: 'comment', controlsLayoutReady: true, hydratedTabs: new Set() }
+    const state = { root, playerEl, sidebarTop, movedNodes: [], descriptionExpanded: false, activeTab: 'comment', controlsLayoutReady: true, hydratedTabs: new Set() }
     for (const name of ['upSlot', 'toolbarSlot', 'descriptionSlot', 'tagsSlot', 'metadataSlot'])
       state[name] = sidebarTop.appendChild(document.createElement('div'))
     state.panels = Object.fromEntries(['comment', 'danmaku', 'playlist'].map(name => [name, root.appendChild(document.createElement('section'))]))
@@ -77,10 +79,189 @@ export function registerPlaybackContentChecks(check) {
         state.descriptionCleanup?.()
         native.restoreMovedNodes(state.movedNodes)
         root.remove()
+        playerEl.remove()
         origin.remove()
       },
     }
   }
+
+  check('playback content: native clock and danmaku updates do not rehydrate the sidebar, while structural changes still do', async () => {
+    const f = await fixture()
+    const { state, native } = f
+    const { shouldScheduleWidescreenRefresh } = await import('../src/utils/bewlyWidescreenPolicy')
+    state.playerEl.innerHTML = '<div class="bpx-player-container"><div class="bpx-player-video-wrap"><video></video></div><div class="bpx-player-control-wrap"><div class="bpx-player-control-bottom"><span class="bpx-player-ctrl-time-current">00:00</span></div></div><div class="bili-danmaku-x"></div></div>'
+    const clock = state.playerEl.querySelector('.bpx-player-ctrl-time-current')
+    const danmaku = state.playerEl.querySelector('.bili-danmaku-x')
+    let refreshes = 0
+    let replacement
+    const observer = new MutationObserver((records) => {
+      if (shouldScheduleWidescreenRefresh(records.map(record => native.classifyWidescreenMutation(record, state))))
+        refreshes++
+    })
+    const flush = () => new Promise(resolve => queueMicrotask(resolve))
+    observer.observe(document.body, { childList: true, subtree: true })
+    try {
+      for (let i = 0; i < 100; i++) {
+        clock.textContent = `00:${i}`
+        const row = document.createElement('div')
+        row.className = 'bili-danmaku-x-dm'
+        danmaku.replaceChildren(row)
+        await flush()
+      }
+      assert.equal(refreshes, 0, 'routine player rendering never enters full sidebar hydration')
+      state.playerEl.querySelector('video').replaceWith(document.createElement('video'))
+      await flush()
+      assert.equal(refreshes, 1, 'native media replacement remains observable')
+      const control = document.createElement('div')
+      control.className = 'bpx-player-control-wrap'
+      state.playerEl.querySelector('.bpx-player-control-wrap').replaceWith(control)
+      await flush()
+      assert.equal(refreshes, 2, 'native control replacement still resumes layout discovery')
+      const description = document.createElement('div')
+      description.className = 'video-desc-container'
+      state.playerEl.firstElementChild.append(description)
+      await flush()
+      description.textContent = 'Late native description'
+      await flush()
+      assert.equal(refreshes, 4, 'late native info creation and content remain relevant')
+      const pgc = state.playerEl.appendChild(document.createElement('div'))
+      pgc.className = 'player-left-components'
+      const toolbar = pgc.appendChild(document.createElement('div'))
+      toolbar.className = 'toolbar'
+      await flush()
+      const beforeRemoval = refreshes
+      toolbar.remove()
+      await flush()
+      assert.equal(refreshes, beforeRemoval + 1, 'detached PGC toolbar keeps its parent-sensitive ownership signal')
+      replacement = document.createElement('div')
+      replacement.id = 'bilibili-player'
+      state.playerEl.replaceWith(replacement)
+      await flush()
+      assert.equal(refreshes, beforeRemoval + 2, 'replacing the anchored player itself is never ignored')
+    }
+    finally {
+      observer.disconnect()
+      replacement?.remove()
+      f.dispose()
+    }
+  })
+
+  check('playback content: repeated description sync preserves its clamp without DOM writes and still handles resize and late text', async () => {
+    const f = await fixture()
+    const { state, native, constants, description } = f
+    const basic = f.origin.querySelector('.basic-desc-info')
+    basic.textContent = 'A native description that exceeds two lines'
+    basic.style.lineHeight = '18px'
+    let fullHeight = 72
+    Object.defineProperty(basic, 'scrollHeight', { get: () => fullHeight })
+    native.moveOrReplaceNode(constants.selectors.description, state.descriptionSlot, state.movedNodes)
+    const observer = new MutationObserver(() => {})
+    try {
+      description.syncDescription(state)
+      const toggle = state.descriptionSlot.querySelector('button')
+      assert.equal(state.descriptionSlot.classList.contains('is-collapsed'), true)
+      observer.observe(state.descriptionSlot, { childList: true, subtree: true, attributes: true })
+      for (let i = 0; i < 20; i++)
+        description.syncDescription(state)
+      assert.equal(observer.takeRecords().length, 0, 'a stable collapsed description never removes and restores its clamp')
+      toggle.click()
+      assert.equal(state.descriptionExpanded, true)
+      assert.equal(state.descriptionSlot.classList.contains('is-expanded'), true)
+      observer.takeRecords()
+      description.syncDescription(state)
+      assert.equal(observer.takeRecords().length, 0)
+      fullHeight = 36
+      description.syncDescription(state)
+      assert.equal(toggle.hidden, true)
+      assert.equal(state.descriptionExpanded, false)
+      basic.textContent = ''
+      description.syncDescription(state)
+      assert.equal(state.descriptionSlot.classList.contains('is-empty'), true)
+      basic.textContent = 'A later, longer native description'
+      fullHeight = 90
+      description.syncDescription(state)
+      assert.equal(state.descriptionSlot.classList.contains('is-empty'), false)
+      assert.equal(state.descriptionSlot.classList.contains('is-collapsed'), true)
+      assert.equal(toggle.hidden, false)
+      assert.equal(state.descriptionSlot.querySelector('button'), toggle)
+    }
+    finally {
+      observer.disconnect()
+      f.dispose()
+    }
+  })
+
+  check('playback effects: unchanged action geometry and theme do not invalidate style and pending work releases', async () => {
+    const f = await fixture()
+    const { state } = f
+    const rootStyle = document.documentElement.getAttribute('style')
+    document.documentElement.style.setProperty('--bew-theme-color', '#f43f5e')
+    state.toolbarSlot.innerHTML = '<div class="video-toolbar-left"><div class="toolbar-left-item-wrap"><div class="video-toolbar-left-item"><i class="video-like-icon"></i></div></div></div>'
+    const toolbar = state.toolbarSlot.firstElementChild
+    const wrap = toolbar.firstElementChild
+    const button = wrap.firstElementChild
+    const icon = button.firstElementChild
+    let anchorX = 20
+    const rect = (left, width) => ({ left, top: 0, width, height: 36, right: left + width, bottom: 36 })
+    toolbar.getBoundingClientRect = () => rect(0, 200)
+    wrap.getBoundingClientRect = () => rect(0, 100)
+    button.getBoundingClientRect = () => rect(10, 80)
+    icon.getBoundingClientRect = () => rect(anchorX, 20)
+    const frames = new Map()
+    let nextFrame = 0
+    const session = { current: state }
+    const actions = await loadSourceModule('../src/utils/bewlyWidescreen/actionEffects.ts', {
+      '~/utils/bewlyWidescreen/constants': f.constants,
+      '~/utils/bewlyWidescreen/session': { session },
+    }, {
+      requestAnimationFrame: (run) => {
+        frames.set(++nextFrame, run)
+        return nextFrame
+      },
+      cancelAnimationFrame: id => frames.delete(id),
+    })
+    const flushFrame = () => {
+      const callbacks = [...frames.values()]
+      frames.clear()
+      callbacks.forEach(run => run())
+    }
+    const observer = new MutationObserver(() => {})
+    try {
+      actions.syncActionAnimationTheme(state)
+      actions.scheduleActionGeometrySync(state)
+      flushFrame()
+      assert.equal(button.style.getPropertyValue('--bewly-action-anchor-x'), '20px')
+      observer.observe(state.root, { attributes: true, subtree: true, attributeFilter: ['style'] })
+      actions.syncActionAnimationTheme(state)
+      actions.scheduleActionGeometrySync(state)
+      actions.scheduleActionGeometrySync(state)
+      assert.equal(frames.size, 1)
+      flushFrame()
+      assert.equal(observer.takeRecords().length, 0)
+      anchorX = 24
+      actions.scheduleActionGeometrySync(state)
+      flushFrame()
+      assert.equal(button.style.getPropertyValue('--bewly-action-anchor-x'), '24px')
+      assert.ok(observer.takeRecords().length > 0)
+      actions.scheduleActionGeometrySync(state)
+      session.current = null
+      flushFrame()
+      assert.equal(observer.takeRecords().length, 0, 'an old session cannot mutate native action anchors')
+      session.current = state
+      actions.scheduleActionGeometrySync(state)
+      actions.clearActionGeometry(state)
+      assert.equal(frames.size, 0)
+      assert.equal(button.style.getPropertyValue('--bewly-action-anchor-x'), '')
+    }
+    finally {
+      observer.disconnect()
+      actions.clearActionGeometry(state)
+      f.dispose()
+      if (rootStyle === null)
+        document.documentElement.removeAttribute('style')
+      else document.documentElement.setAttribute('style', rootStyle)
+    }
+  })
 
   check('PGC content: mounted info/actions and complete paginated directory preserve native controls without BV-only nodes', async () => {
     const f = await fixture(true)

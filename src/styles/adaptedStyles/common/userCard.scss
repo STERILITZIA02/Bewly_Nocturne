@@ -4,9 +4,7 @@
   // #region theme color adaption part
   .bili-user-profile-view__info__button.follow:hover {
     background-color: var(--bew-theme-color);
-  }
-
-  .bili-user-profile-view__info__button.follow:hover {
+    color: var(--bew-on-theme-color);
     border-color: var(--bew-theme-foreground);
   }
   // #endregion
@@ -20,7 +18,7 @@
 
       .idc-uname[style*="color"],
       .idc-uname:hover {
-        color: var(--bew-theme-color) !important;
+        color: var(--bew-theme-foreground) !important;
       }
 
       .btn.ghost,
@@ -42,7 +40,7 @@
 
         &:hover {
           background-color: unset;
-          color: var(--bew-theme-color);
+          color: var(--bew-theme-foreground);
           border-color: var(--bew-theme-color);
         }
       }
@@ -50,6 +48,7 @@
       .btn.primary {
         background-color: var(--bew-theme-color);
         border-color: var(--bew-theme-color);
+        color: var(--bew-on-theme-color);
 
         &:hover {
           background-color: var(--bew-theme-color);

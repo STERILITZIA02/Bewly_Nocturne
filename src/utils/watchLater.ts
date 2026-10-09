@@ -1,3 +1,5 @@
+import type { WatchLaterUpdate } from '~/constants/watchLaterState'
+import { findWatchLaterEntry } from '~/logic/watchLaterState'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import type { createAccountLifetime } from '~/utils/accountLifetime'
 import api from '~/utils/api'
@@ -18,8 +20,8 @@ interface WatchLaterMembership {
   isLogin: boolean
   userInfo: { mid?: number }
   ensureWatchLaterState: () => Promise<boolean>
-  isInWatchLater: (aid: number) => boolean
-  commitWatchLaterMutation: (aid: number, added: boolean, accountId: number) => Promise<unknown>
+  isInWatchLater: (aid: number) => boolean | undefined
+  commitWatchLaterMutation: (aid: number, added: boolean, accountId: number, update?: WatchLaterUpdate) => Promise<unknown>
 }
 
 type WatchLaterMutationResult
@@ -61,7 +63,7 @@ export async function updateOwnedWatchLater(
     const loaded = await membership.ensureWatchLaterState()
     if (!canSubmit())
       return { status: 'cancelled' }
-    if (!loaded)
+    if (!loaded || membership.isInWatchLater(aid) === undefined)
       return { status: 'failed' }
     if (action === 'removeIfPresent' && !membership.isInWatchLater(aid))
       return { status: 'cancelled' }
@@ -74,15 +76,15 @@ export async function updateOwnedWatchLater(
     return pendingRemovals.get(key)!
   const write = (async (): Promise<WatchLaterMutationResult> => {
     const response = await sendOwnedWatchLaterWrite(canSubmit, () => added
-      ? api.watchlater.saveToWatchLater({ aid, csrf })
-      : api.watchlater.removeFromWatchLater({ aid, csrf }))
+      ? api.watchlater.saveToWatchLater({ aid, ...(bvid ? { bvid } : {}), ...(epid ? { epid } : {}), csrf, accountId: accountId! })
+      : api.watchlater.removeFromWatchLater({ aid, csrf, accountId: accountId! }))
     if (!response)
       return { status: 'cancelled' }
     if (response.code !== 0)
       return { status: 'failed', message: response.message }
     // A disposed view does not cancel a sent server write.
     if (accountId !== null && isSameAccount())
-      await membership.commitWatchLaterMutation(aid, added, accountId)
+      await membership.commitWatchLaterMutation(aid, added, accountId, response.watchLaterUpdate)
     return { status: 'success', aid, added }
   })()
   if (!added)
@@ -105,7 +107,9 @@ export function getDirectWatchLaterAid(target: WatchLaterIdentity): number | und
 }
 
 export async function resolveWatchLaterAid(target: WatchLaterIdentity): Promise<number | undefined> {
-  const directAid = getDirectWatchLaterAid(target)
+  if (target.roomid)
+    return undefined
+  const directAid = getDirectWatchLaterAid(target) ?? findWatchLaterEntry(target)?.aid
   if (directAid)
     return directAid
   if (target.epid) {

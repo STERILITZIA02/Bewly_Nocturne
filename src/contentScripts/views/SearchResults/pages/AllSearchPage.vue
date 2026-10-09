@@ -11,6 +11,7 @@ import ArticleCard from '~/components/ArticleCard/ArticleCard.vue'
 import BangumiEpisodeList from '~/components/BangumiEpisodeList/BangumiEpisodeList.vue'
 import MediaEpisodeSelect from '~/components/MediaEpisodeSelect/MediaEpisodeSelect.vue'
 import UserAvatarLink from '~/components/UserCard/UserAvatarLink.vue'
+import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import VideoCard from '~/components/VideoCard/VideoCard.vue'
 import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
@@ -18,6 +19,7 @@ import { useUserRelations } from '~/composables/useUserRelations'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { toAdvertisementCard, toSearchBrandAdvertisementCards } from '~/utils/advertising'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON } from '~/utils/lvIcons'
 import { getUserID } from '~/utils/main'
 import { sanitizeSearchHighlight } from '~/utils/searchHighlight'
@@ -190,7 +192,7 @@ function getUserSamplesWithPlaceholders(samples: any[]) {
 
 // 合并活动和游戏数据
 const activityAndGameItems = computed(() => {
-  if (!results.value?.result)
+  if (settings.value.blockTopSearchPageAds || !results.value?.result)
     return []
 
   const items: any[] = []
@@ -198,14 +200,14 @@ const activityAndGameItems = computed(() => {
 
   sections.forEach((section: any) => {
     if (section?.result_type === 'activity' && Array.isArray(section.data)) {
-      const filtered = section.data.filter(removeUnusedActivityCard)
+      const filtered = section.data.filter((item: any) => removeUnusedActivityCard(item) && (!settings.value.blockAds || !isAdVideo(item)))
       items.push(...filtered.map((item: any) => ({
         ...convertActivityData(item),
         _type: 'activity',
       })))
     }
     else if (section?.result_type === 'web_game' && Array.isArray(section.data)) {
-      items.push(...section.data.map((item: any) => ({
+      items.push(...section.data.filter((item: any) => !settings.value.blockAds || !isAdVideo(item)).map((item: any) => ({
         ...convertWebGameData(item),
         _type: 'web_game',
       })))
@@ -277,7 +279,7 @@ const videoList = computed(() => {
   const videoSection = results.value.result.find((s: any) => s?.result_type === 'video')
   if (!videoSection || !Array.isArray(videoSection.data))
     return []
-  return videoSection.data.filter((v: any) => !isAdVideo(v))
+  return settings.value.blockAds ? videoSection.data.filter((v: any) => !isAdVideo(v)) : videoSection.data
 })
 
 onMounted(() => {
@@ -516,6 +518,19 @@ defineExpose({
       <template v-for="(section, index) in results?.result" :key="`${section?.result_type ?? 'unknown'}-${index}`">
         <!-- 跳过视频（将在最后渲染） -->
         <template v-if="section?.result_type === 'video'" />
+
+        <!-- Native brand advertising is an independent accepted-result section. -->
+        <div
+          v-else-if="!isInPaginationNonFirstPage && !settings.blockAds && section?.result_type === 'brand_ad' && Array.isArray(section.data) && section.data.length"
+          class="brand-advertisement-results"
+          grid="~ cols-1 md:cols-2 lg:cols-3 gap-4"
+        >
+          <AdvertisementCard
+            v-for="advertisement in section.data.flatMap(toSearchBrandAdvertisementCards)"
+            :key="advertisement.advertisementKey"
+            :video="advertisement"
+          />
+        </div>
 
         <!-- 番剧/影视 -->
         <div
@@ -768,7 +783,7 @@ defineExpose({
         <VideoCardGrid
           :items="videoList"
           :transform-item="(item: any) => item.type === 'live_room' ? convertLiveRoomData(item) : convertVideoData(item)"
-          :get-item-key="(item: any) => item.aid || item.id || item.roomid"
+          :get-item-key="(item: any) => isAdVideo(item) ? toAdvertisementCard(item).advertisementKey! : item.aid || item.id || item.roomid"
           grid-layout="adaptive"
           :loading="isLoading"
           :no-more-content="!hasMore"

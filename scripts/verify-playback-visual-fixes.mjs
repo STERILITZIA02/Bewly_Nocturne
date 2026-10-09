@@ -358,7 +358,7 @@ export function registerPlaybackVisualFixChecks(check, { Vue, compileComponent, 
     const children = [{ centerX: 48, centerY: 112, bottom: 128, left: 32 }, { centerX: 48, centerY: 216, bottom: 232, left: 32 }]
     const path = geometry.buildCommentBranchPath(parent, children, 12)
     assert.equal(path, 'M 16 32 V 204 M 16 100 A 12 12 0 0 0 28 112 H 32 M 16 204 A 12 12 0 0 0 28 216 H 32')
-    const native = await loadSourceFunctions('../src/inject/index.ts', ['getCommentReplyBranchPath', 'formatCommentReplyGuideCoordinate'], { ...geometry })
+    const native = await import('../src/inject/commentReplyGeometry')
     assert.equal(native.getCommentReplyBranchPath({ parentAnchor: parent, childAnchors: children }, 12, 12), path)
     assert.equal(native.getCommentReplyBranchPath({ parentAnchor: parent, childAnchors: [], collapsed: true, collapseParentBody: true }, 12, 12), 'M 16 16')
   })

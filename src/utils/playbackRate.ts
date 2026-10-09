@@ -1,6 +1,5 @@
 export const MIN_PLAYBACK_RATE = 0.25
 export const MAX_PLAYBACK_RATE = 5
-export const PLAYBACK_RATE_STEP = 0.25
 
 export interface PlaybackRateTarget {
   defaultPlaybackRate: number
@@ -9,10 +8,6 @@ export interface PlaybackRateTarget {
 
 export function isValidPlaybackRate(rate: number): boolean {
   return Number.isFinite(rate) && rate >= MIN_PLAYBACK_RATE && rate <= MAX_PLAYBACK_RATE
-}
-
-export function clampPlaybackRate(rate: number): number {
-  return Math.min(MAX_PLAYBACK_RATE, Math.max(MIN_PLAYBACK_RATE, rate))
 }
 
 export function applyConfiguredPlaybackRate(
@@ -47,12 +42,4 @@ export function resolvePlaybackRateChange(
     return { type: 'save', rate: currentRate }
 
   return { type: 'ignore' }
-}
-
-export function shouldRestoreConfiguredPlaybackRate(
-  currentRate: number,
-  configuredRate: number,
-  hasUserIntent: boolean,
-): boolean {
-  return resolvePlaybackRateChange(currentRate, configuredRate, hasUserIntent).type === 'restore'
 }

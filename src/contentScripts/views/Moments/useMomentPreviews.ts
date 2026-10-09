@@ -254,7 +254,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
       handleMediaLeave(moment)
       return
     }
-    if (disposed || !isMomentPreviewEnabled(moment))
+    if (disposed || document.hidden || !isMomentPreviewEnabled(moment))
       return
     if (activePreviewVideo?.element.matches(':fullscreen') && activePreviewVideo.id !== moment.id)
       return
@@ -285,7 +285,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
   }
 
   async function loadMomentPreview(moment: DisplayMoment, generation: number, accountId: AccountId, source: string) {
-    const isCurrent = () => !disposed && generation === previewGeneration.value && accountId === getAccountId()
+    const isCurrent = () => !disposed && !document.hidden && generation === previewGeneration.value && accountId === getAccountId()
       && hoveredMediaId.value === moment.id && hoveredSource === source && mediaIdentity(moment).source === source && isMomentPreviewEnabled(moment)
     if (!isCurrent())
       return
@@ -401,8 +401,14 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     videoCidCache.clear()
     videoCidRequests.clear()
   }
+  const handleVisibilityChange = () => {
+    if (document.hidden)
+      clear()
+  }
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   onScopeDispose(() => {
     disposed = true
+    document.removeEventListener('visibilitychange', handleVisibilityChange)
     reset()
   })
   watch(() => [settings.value.momentsEnableLivePreview, settings.value.momentsEnableVideoPreview, settings.value.momentsVideoPreviewDelayed, settings.value.momentsOnlyCoverVideoPreview], clear)

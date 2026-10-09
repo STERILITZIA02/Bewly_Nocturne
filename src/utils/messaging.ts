@@ -1,5 +1,9 @@
 import browser from 'webextension-polyfill'
 
+import type { ApiPortResponse } from '~/constants/apiRequest'
+import { API_REQUEST_PORT } from '~/constants/apiRequest'
+import { READ_REQUEST_TIMEOUT_MS, withRequestDeadline } from '~/utils/abort'
+
 export interface Message<T = any> {
   type: string
   data: T
@@ -34,6 +38,20 @@ function formatRuntimeError(error: unknown): string {
   catch {
     return String(error)
   }
+}
+
+function toRuntimeListenerError(error: unknown): Error {
+  // Chromium's native message transport requires a native Error rejection.
+  // DOMException does not qualify, even where it inherits Error.prototype.
+  if (error instanceof Error && !(typeof DOMException !== 'undefined' && error instanceof DOMException))
+    return error
+  const details = error && typeof error === 'object' ? error as { message?: unknown, name?: unknown } : undefined
+  const normalized = new Error(typeof details?.message === 'string'
+    ? details.message
+    : typeof error === 'string' ? error : 'Runtime message handler failed')
+  if (typeof details?.name === 'string' && details.name)
+    normalized.name = details.name
+  return normalized
 }
 
 export function reportRuntimeFailure(context: string, error: unknown): boolean {
@@ -84,6 +102,70 @@ export async function sendMessage<T = any, R = any>(type: string, data?: T): Pro
   }
 }
 
+/** A read owns one port; abort/unload disconnects it and aborts the background fetch. */
+export async function sendAbortableApiMessage(type: string, data: unknown, signal?: AbortSignal): Promise<any> {
+  const deadline = Date.now() + READ_REQUEST_TIMEOUT_MS
+  try {
+    return await withRequestDeadline(requestSignal => new Promise((resolve, reject) => {
+      const runtime = getRuntime()
+      if (!runtime?.connect)
+        throw new Error(EXTENSION_CONTEXT_INVALIDATED_MESSAGE)
+      const port = runtime.connect({ name: API_REQUEST_PORT })
+      let settled = false
+      function finish(error?: unknown, value?: unknown) {
+        if (settled)
+          return
+        settled = true
+        requestSignal.removeEventListener('abort', abort)
+        port.onMessage.removeListener(respond)
+        port.onDisconnect.removeListener(disconnect)
+        try {
+          port.disconnect()
+        }
+        catch { /* An invalidated port still has to settle its consumer. */ }
+        if (error)
+          reject(error)
+        else
+          resolve(value)
+      }
+      function abort() {
+        finish(requestSignal.reason)
+      }
+      function disconnect() {
+        finish(new Error(port.error?.message || runtime?.lastError?.message || 'Extension message port closed before a response was received'))
+      }
+      function respond(value: unknown) {
+        const response = value as ApiPortResponse
+        if (!response || typeof response.ok !== 'boolean' || (!response.ok && typeof response.error?.message !== 'string')) {
+          finish(new TypeError('Invalid API read response'))
+          return
+        }
+        if (response.ok)
+          finish(undefined, response.data)
+        else
+          finish(Object.assign(new Error(response.error.message), response.error))
+      }
+      port.onMessage.addListener(respond)
+      port.onDisconnect.addListener(disconnect)
+      requestSignal.addEventListener('abort', abort, { once: true })
+      if (requestSignal.aborted) {
+        abort()
+      }
+      else {
+        try {
+          port.postMessage({ type, data, deadline })
+        }
+        catch (error) { finish(error) }
+      }
+    }), { signal, deadline })
+  }
+  catch (error) {
+    if (isExtensionContextInvalidatedError(error))
+      throw new Error(EXTENSION_CONTEXT_INVALIDATED_MESSAGE)
+    throw error
+  }
+}
+
 /**
  * 在 background 中监听来自 content script 的消息
  */
@@ -97,7 +179,18 @@ export function onMessage<T = any, R = any>(
 
   runtime.onMessage.addListener((message: any, sender: browser.Runtime.MessageSender) => {
     if (message?.type === type) {
-      return handler(message.data, sender)
+      try {
+        const response = handler(message.data, sender)
+        if (response && typeof (response as PromiseLike<R>).then === 'function') {
+          return Promise.resolve(response).catch((error: unknown) => {
+            throw toRuntimeListenerError(error)
+          })
+        }
+        return response
+      }
+      catch (error) {
+        throw toRuntimeListenerError(error)
+      }
     }
     // 返回 false 或 undefined 表示不处理此消息
     return false

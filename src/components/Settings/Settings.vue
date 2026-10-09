@@ -13,6 +13,7 @@ import type { SettingDescriptor } from '~/logic/layoutEdit'
 import { enterLayoutEditMode, subscribeSettingNavigation } from '~/logic/layoutEdit'
 import { getTopDialog } from '~/utils/dialogFocus'
 
+import { navigateToSetting } from './navigateToSetting'
 import type { SettingsSearchEntry } from './searchCatalog'
 import { settingsSearchEntries } from './searchCatalog'
 import type { MenuItem } from './types'
@@ -33,8 +34,7 @@ const settingsContentKey = ref(0)
 const settingsContentReady = ref(false)
 const settingsLayerRef = ref<HTMLElement | null>(null)
 let settingsContentFrame: number | undefined
-let settingNavigationTimer: number | undefined
-let settingNavigationFrame: number | undefined
+let settingNavigationController: AbortController | undefined
 let quickLayoutEditFrame: number | undefined
 let settingsModalActive = false
 let previouslyFocusedElement: HTMLElement | null = null
@@ -263,6 +263,7 @@ useEventListener(() => scrollViewportRef.value, 'scroll', () => {
 }, { capture: true })
 
 provide('scrollSettingsContentToTop', () => {
+  cancelSettingNavigation()
   scrollViewportRef.value?.scrollTo({ top: 0 })
 })
 
@@ -384,10 +385,11 @@ const activeSearchResultIndex = ref(-1)
 const searchResultsRef = ref<HTMLElement>()
 
 watch(searchQuery, (query) => {
+  cancelSettingNavigation()
   activeSearchResultIndex.value = -1
   if (query)
     nextTick(updateSearchPopoverBounds)
-})
+}, { flush: 'sync' })
 
 function moveSearchResultSelection(event: KeyboardEvent, direction: 1 | -1) {
   if (event.isComposing)
@@ -405,7 +407,16 @@ function moveSearchResultSelection(event: KeyboardEvent, direction: 1 | -1) {
 
   // 键盘导航时让选中项滚动到可视区内
   nextTick(() => {
-    searchResultsRef.value?.children[activeSearchResultIndex.value]?.scrollIntoView({ block: 'nearest' })
+    const list = searchResultsRef.value
+    const item = list?.children[activeSearchResultIndex.value]
+    if (!list || !item)
+      return
+    const rect = list.getBoundingClientRect()
+    const target = item.getBoundingClientRect()
+    if (target.top < rect.top)
+      list.scrollTop += target.top - rect.top
+    else if (target.bottom > rect.bottom)
+      list.scrollTop += target.bottom - rect.bottom
   })
 }
 
@@ -416,7 +427,7 @@ function activateSearchResult(event: KeyboardEvent) {
   const entry = searchResults.value[activeSearchResultIndex.value] ?? searchResults.value[0]
   if (entry) {
     event.preventDefault()
-    navigateToSearchResult(entry)
+    navigateToSearchResult(entry, true)
   }
 }
 
@@ -451,103 +462,50 @@ function highlightSearchTarget(target: HTMLElement) {
   searchTargetHighlightTimer = window.setTimeout(clearSearchTargetHighlight, 2400)
 }
 
-function expandSearchTarget(target: HTMLElement) {
-  const collapsedControls: HTMLElement[] = []
-
-  if (target.matches('[aria-expanded="false"]'))
-    collapsedControls.push(target)
-
-  let ancestor: HTMLElement | null = target
-  while (ancestor && ancestor !== settingsWindow.value) {
-    const control = ancestor.matches('.b-settings-item-group')
-      ? ancestor.querySelector<HTMLElement>(':scope > .group-heading[aria-expanded="false"]')
-      : ancestor.matches('section')
-        ? ancestor.querySelector<HTMLElement>(':scope > .settings-section-heading[aria-expanded="false"]')
-        : undefined
-
-    if (control)
-      collapsedControls.push(control)
-
-    ancestor = ancestor.parentElement
-  }
-
-  Array.from(new Set(collapsedControls)).reverse().forEach(control => control.click())
-}
-
 function cancelSettingNavigation() {
   searchNavigationId++
-  if (settingNavigationTimer !== undefined)
-    clearTimeout(settingNavigationTimer)
-  if (settingNavigationFrame !== undefined)
-    cancelAnimationFrame(settingNavigationFrame)
-  settingNavigationTimer = undefined
-  settingNavigationFrame = undefined
+  settingNavigationController?.abort()
+  settingNavigationController = undefined
   clearSearchTargetHighlight()
   return searchNavigationId
 }
 
-function revealSearchTarget(target: HTMLElement, navigationId: number) {
-  expandSearchTarget(target)
-  void nextTick(() => {
-    if (!settingsModalActive || navigationId !== searchNavigationId)
-      return
-    settingNavigationFrame = window.requestAnimationFrame(() => {
-      settingNavigationFrame = undefined
-      if (!settingsModalActive || navigationId !== searchNavigationId || !target.isConnected)
-        return
-      target.scrollIntoView({ behavior: reducedMotion.value === 'reduce' ? 'auto' : 'smooth', block: 'center' })
-      highlightSearchTarget(target)
-    })
-  })
-}
-
-function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: number, attempts = 0) {
-  if (!expectedTitle || navigationId !== searchNavigationId || attempts > 30)
+async function locateSetting(find: () => HTMLElement | undefined, navigationId: number, keyboard = false) {
+  if (!settingsModalActive || navigationId !== searchNavigationId || !settingsWindow.value || !scrollViewportRef.value)
     return
-
-  const target = Array.from(settingsWindow.value?.querySelectorAll<HTMLElement>('[data-settings-title]') ?? [])
-    .find(element =>
-      element.dataset.settingsTitle === expectedTitle
-      && !element.closest('.page-fade-leave-active'),
-    )
-
-  if (target) {
-    revealSearchTarget(target, navigationId)
-    return
+  const owner = new AbortController()
+  settingNavigationController = owner
+  const target = await navigateToSetting({ root: settingsWindow.value, viewport: scrollViewportRef.value, find, signal: owner.signal, behavior: keyboard || reducedMotion.value === 'reduce' ? 'auto' : 'smooth' })
+  if (target && !owner.signal.aborted && settingsModalActive && navigationId === searchNavigationId) {
+    highlightSearchTarget(target)
+    if (keyboard)
+      target.querySelector<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled])')?.focus({ preventScroll: true })
   }
-
-  settingNavigationTimer = window.setTimeout(
-    () => scrollToSearchTarget(expectedTitle, navigationId, attempts + 1),
-    100,
-  )
+  if (settingNavigationController === owner)
+    settingNavigationController = undefined
 }
 
-function navigateToSearchResult(entry: SettingsSearchEntry) {
+function scrollToSearchTarget(expectedTitle: string | undefined, navigationId: number, keyboard = false) {
+  if (expectedTitle)
+    void locateSetting(() => Array.from(settingsWindow.value?.querySelectorAll<HTMLElement>('[data-settings-title]') ?? []).find(element => element.dataset.settingsTitle === expectedTitle && !element.closest('.page-fade-leave-active')), navigationId, keyboard)
+}
+
+function navigateToSearchResult(entry: SettingsSearchEntry, keyboard = false) {
+  searchQuery.value = ''
   const navigationId = cancelSettingNavigation()
   entry.storageValues?.forEach(({ key, value }) => sessionStorage.setItem(key, value))
 
   activatedMenuItem.value = entry.menu
   if (entry.storageValues?.length)
     settingsContentKey.value++
-  searchQuery.value = ''
   const targetTitle = entry.targetTitleKey
     ? t(entry.targetTitleKey)
     : entry.targetTitle ?? getSearchEntryTitle(entry)
-  nextTick(() => scrollToSearchTarget(targetTitle, navigationId))
+  nextTick(() => scrollToSearchTarget(targetTitle, navigationId, keyboard))
 }
 
-function scrollToSettingId(settingId: string, navigationId: number, attempts = 0) {
-  if (navigationId !== searchNavigationId || attempts > 30)
-    return
-  const target = settingsWindow.value?.querySelector<HTMLElement>(`[data-setting-id="${CSS.escape(settingId)}"]`)
-  if (!target) {
-    settingNavigationTimer = window.setTimeout(
-      () => scrollToSettingId(settingId, navigationId, attempts + 1),
-      100,
-    )
-    return
-  }
-  revealSearchTarget(target, navigationId)
+function scrollToSettingId(settingId: string, navigationId: number) {
+  void locateSetting(() => settingsWindow.value?.querySelector<HTMLElement>(`[data-setting-id="${CSS.escape(settingId)}"]`) ?? undefined, navigationId)
 }
 
 function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
@@ -566,6 +524,14 @@ function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
 }
 
 const unsubscribeSettingNavigation = subscribeSettingNavigation(navigateToSettingDescriptor)
+
+watch(() => props.navigationRequest?.id, () => {
+  const target = props.navigationRequest?.target
+  if (target?.page !== 'moments' || target.section !== 'wanted-users')
+    return
+  const navigationId = cancelSettingNavigation()
+  nextTick(() => scrollToSearchTarget(t('settings.moments_wanted_users'), navigationId))
+}, { immediate: true, flush: 'post' })
 
 onBeforeUnmount(() => {
   deactivateSettingsModal()
@@ -586,11 +552,12 @@ function startQuickLayoutEdit() {
     cancelAnimationFrame(quickLayoutEditFrame)
   quickLayoutEditFrame = requestAnimationFrame(() => {
     quickLayoutEditFrame = undefined
-    enterLayoutEditMode('page')
+    enterLayoutEditMode()
   })
 }
 
 function changeMenuItem(menuItem: MenuType) {
+  cancelSettingNavigation()
   activatedMenuItem.value = menuItem
 }
 </script>

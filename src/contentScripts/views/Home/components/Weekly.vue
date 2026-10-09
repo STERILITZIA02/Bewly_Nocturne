@@ -6,9 +6,7 @@ import VideoCardGrid from '~/components/VideoCardGrid.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useFloatingMenuPosition } from '~/composables/useFloatingMenuPosition'
 import { useHomeTabState } from '~/composables/useHomeTabState'
-import { HOME_TASK_SEARCH_STAGE_HEIGHT } from '~/constants/layout'
 import type { GridLayoutType } from '~/logic'
-import { settings } from '~/logic'
 import type { PopularSeriesItem, PopularSeriesListResult, PopularSeriesOneResult, PopularSeriesVideoItem } from '~/models/video/popularSeries'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
@@ -251,7 +249,7 @@ function selectSeries(item: PopularSeriesItem) {
   closeDropdown(true)
   handleBackToTop(Math.min(
     scrollViewportRef.value?.scrollTop ?? 0,
-    settings.value.useSearchPageModeOnHomePage ? HOME_TASK_SEARCH_STAGE_HEIGHT : 0,
+    tabState.getContentScrollTop(),
   ))
   void getSeriesOne()
 }

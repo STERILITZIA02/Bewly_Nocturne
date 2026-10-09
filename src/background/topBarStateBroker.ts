@@ -5,23 +5,27 @@ import { CONTENT_SCRIPT_MATCHES } from '~/constants/contentScript'
 import type {
   TopBarFavoritesChanged,
   TopBarRefreshClaim,
+  TopBarSharedResource,
   TopBarSharedState,
   TopBarStateClaim,
   TopBarStateInvalidate,
   TopBarStatePublish,
   TopBarStateRelease,
-  WatchLaterInvalidation,
 } from '~/constants/topBarState'
 import {
+  TOP_BAR_RESOURCE_FIELDS,
   TOP_BAR_STATE_MESSAGE,
 } from '~/constants/topBarState'
 import { onMessage } from '~/utils/messaging'
 
 interface TopBarStateEntry {
-  snapshot?: TopBarSharedState
+  snapshot?: Partial<TopBarSharedState>
   updatedAt: number
   refreshStartedAt: number
   refreshId: number
+  version: number
+  refreshVersion: number
+  snapshotVersion?: number
 }
 
 export interface TopBarStateBrokerBrowser {
@@ -53,15 +57,11 @@ export interface TopBarStateBroker {
     data: TopBarFavoritesChanged,
     sender?: Browser.Runtime.MessageSender,
   ) => Promise<void>
-  invalidateWatchLater: (
-    data: WatchLaterInvalidation,
-    sender?: Browser.Runtime.MessageSender,
-  ) => Promise<void>
 }
 
 const REFRESH_LEASE_TIMEOUT = 30_000
-const TOP_BAR_STATE_STORAGE_KEY = 'topBarStateBroker:v2'
-const TOP_BAR_STATE_STORAGE_VERSION = 2
+const TOP_BAR_STATE_STORAGE_KEY = 'topBarStateBroker:v3'
+const TOP_BAR_STATE_STORAGE_VERSION = 3
 
 interface PersistedTopBarState {
   version: typeof TOP_BAR_STATE_STORAGE_VERSION
@@ -76,15 +76,14 @@ function isOptionalTimestamp(value: unknown): value is number | null | undefined
   return value === undefined || value === null || (typeof value === 'number' && Number.isFinite(value))
 }
 
-function isTopBarSharedState(value: unknown): value is TopBarSharedState {
+function isTopBarSharedState(value: unknown): value is Partial<TopBarSharedState> {
   return isRecord(value)
-    && isRecord(value.unReadMessage)
-    && isRecord(value.unReadDm)
-    && typeof value.newMomentsCount === 'number'
-    && typeof value.watchLaterCount === 'number'
-    && typeof value.hasBCoinToReceive === 'boolean'
-    && typeof value.bCoinAlreadyReceived === 'boolean'
-    && typeof value.vipExpAlreadyReceived === 'boolean'
+    && (value.unReadMessage === undefined || isRecord(value.unReadMessage))
+    && (value.unReadDm === undefined || isRecord(value.unReadDm))
+    && (value.newMomentsCount === undefined || typeof value.newMomentsCount === 'number')
+    && (value.hasBCoinToReceive === undefined || typeof value.hasBCoinToReceive === 'boolean')
+    && (value.bCoinAlreadyReceived === undefined || typeof value.bCoinAlreadyReceived === 'boolean')
+    && (value.vipExpAlreadyReceived === undefined || typeof value.vipExpAlreadyReceived === 'boolean')
     && isOptionalTimestamp(value.bCoinNextReceiveAt)
     && isOptionalTimestamp(value.vipExpNextReceiveAt)
 }
@@ -94,6 +93,8 @@ function isTopBarStateEntry(value: unknown): value is TopBarStateEntry {
     && typeof value.updatedAt === 'number'
     && typeof value.refreshStartedAt === 'number'
     && typeof value.refreshId === 'number'
+    && Number.isSafeInteger(value.version)
+    && Number.isSafeInteger(value.refreshVersion)
     && (value.snapshot === undefined || isTopBarSharedState(value.snapshot))
 }
 
@@ -109,8 +110,8 @@ function getBrowserContextKey(tab?: Browser.Tabs.Tab) {
   return `${privacyContext}:default`
 }
 
-function getStateKey(tab: Browser.Tabs.Tab | undefined, accountId: number) {
-  return `${getBrowserContextKey(tab)}:${accountId}`
+function getStateKey(tab: Browser.Tabs.Tab | undefined, accountId: number, resource: TopBarSharedResource) {
+  return `${getBrowserContextKey(tab)}:${accountId}:${resource}`
 }
 
 export function createTopBarStateBroker(
@@ -172,8 +173,10 @@ export function createTopBarStateBroker(
     }
   }
 
-  function getEntry(accountId: number, sender?: Browser.Runtime.MessageSender) {
-    const key = getStateKey(sender?.tab, accountId)
+  function getEntry(accountId: number, resource: TopBarSharedResource, sender?: Browser.Runtime.MessageSender) {
+    if (!Number.isSafeInteger(accountId) || accountId <= 0 || !Object.hasOwn(TOP_BAR_RESOURCE_FIELDS, resource))
+      throw new TypeError('Invalid TopBar resource')
+    const key = getStateKey(sender?.tab, accountId, resource)
     let entry = stateByContext.get(key)
 
     if (!entry) {
@@ -181,6 +184,8 @@ export function createTopBarStateBroker(
         updatedAt: 0,
         refreshStartedAt: 0,
         refreshId: 0,
+        version: 0,
+        refreshVersion: 0,
       }
       stateByContext.set(key, entry)
     }
@@ -263,99 +268,99 @@ export function createTopBarStateBroker(
   }
 
   return {
-    claimRefresh({ accountId, maxAge, force = false }, sender) {
+    claimRefresh({ accountId, maxAge, force = false, resource }, sender) {
       return runExclusive(async () => {
         await ensureStateLoaded()
 
-        const entry = getEntry(accountId, sender)
+        const entry = getEntry(accountId, resource, sender)
         const now = Date.now()
-        const snapshotFresh = entry.snapshot !== undefined && now - entry.updatedAt < maxAge
+        const snapshotFresh = entry.snapshot !== undefined && entry.snapshotVersion === entry.version && now - entry.updatedAt < maxAge
         const refreshInProgress = entry.refreshStartedAt > 0
           && now - entry.refreshStartedAt < REFRESH_LEASE_TIMEOUT
-        // 定时同步必须共享 refresh lease，避免多个标签页重复请求；force
-        // 表示用户主动操作或登录态变化，不能被其它标签页的定时请求阻塞。
-        const shouldRefresh = force || (!snapshotFresh && !refreshInProgress)
+        // Force requests freshness, never permission to bypass a shared lease.
+        const shouldRefresh = !refreshInProgress && (force || !snapshotFresh)
 
         if (shouldRefresh) {
           entry.refreshStartedAt = now
           entry.refreshId += 1
+          entry.refreshVersion = entry.version
           await persistState()
         }
 
         return {
           shouldRefresh,
-          snapshot: entry.snapshot,
+          snapshot: snapshotFresh ? entry.snapshot : undefined,
+          version: entry.version,
           ...(shouldRefresh ? { refreshId: entry.refreshId } : {}),
         }
       })
     },
 
     async publish(data, sender) {
-      const { accountId, snapshot, refreshId } = data
+      const { accountId, snapshot, refreshId, resource, version } = data
       const published = await runExclusive(async () => {
         await ensureStateLoaded()
 
-        const entry = getEntry(accountId, sender)
-        if (entry.refreshId !== refreshId)
-          return false
+        const entry = getEntry(accountId, resource, sender)
+        if (entry.refreshId !== refreshId || !entry.refreshStartedAt || entry.refreshVersion !== version)
+          return undefined
 
-        entry.snapshot = snapshot
-        entry.updatedAt = Date.now()
         entry.refreshStartedAt = 0
+        if (entry.version !== version) {
+          await persistState()
+          return { invalidated: true, version: entry.version }
+        }
+        const fields = TOP_BAR_RESOURCE_FIELDS[resource]
+        const selected = Object.fromEntries(fields.filter(field => field in snapshot).map(field => [field, snapshot[field]]))
+        if (!isTopBarSharedState(selected) || fields.some(field => !field.endsWith('At') && !(field in selected))) {
+          await persistState()
+          return undefined
+        }
+        entry.snapshot = selected
+        entry.snapshotVersion = version
+        entry.updatedAt = Date.now()
         await persistState()
-        return true
+        return { invalidated: false, version, snapshot: selected }
       })
 
-      if (published)
-        await broadcastSnapshot(data, sender)
+      if (published?.invalidated)
+        await broadcastInvalidation({ accountId, resource, version: published.version }, sender)
+      else if (published?.snapshot)
+        await broadcastSnapshot({ ...data, snapshot: published.snapshot }, sender)
     },
 
-    releaseRefresh({ accountId, refreshId }, sender) {
-      return runExclusive(async () => {
+    async releaseRefresh({ accountId, refreshId, resource }, sender) {
+      const dirty = await runExclusive(async () => {
         await ensureStateLoaded()
-        const entry = getEntry(accountId, sender)
+        const entry = getEntry(accountId, resource, sender)
         if (entry.refreshId !== refreshId)
           return
 
         entry.refreshStartedAt = 0
         await persistState()
+        return entry.version !== entry.refreshVersion ? entry.version : undefined
       })
+      if (dirty !== undefined)
+        await broadcastInvalidation({ accountId, resource, version: dirty }, sender)
     },
 
     async invalidate(data, sender) {
-      await runExclusive(async () => {
+      const version = await runExclusive(async () => {
         await ensureStateLoaded()
-        const entry = getEntry(data.accountId, sender)
+        const entry = getEntry(data.accountId, data.resource, sender)
         entry.updatedAt = 0
-        entry.refreshStartedAt = 0
-        entry.refreshId += 1
+        entry.version++
         await persistState()
+        return entry.version
       })
 
-      await broadcastInvalidation(data, sender)
+      await broadcastInvalidation({ ...data, version }, sender)
     },
 
     notifyFavoritesChanged(data, sender) {
       return broadcastFavoritesChanged(data, sender)
     },
 
-    async invalidateWatchLater(data, sender) {
-      await runExclusive(async () => {
-        await ensureStateLoaded()
-        const entry = getEntry(data.accountId, sender)
-        entry.updatedAt = 0
-        entry.refreshStartedAt = 0
-        entry.refreshId += 1
-        await persistState()
-      })
-
-      await broadcastInvalidation(
-        data,
-        sender,
-        TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATED,
-        true,
-      )
-    },
   }
 }
 
@@ -387,9 +392,5 @@ export function setupTopBarStateBroker() {
     (data, sender) => broker.notifyFavoritesChanged(data, sender),
   )
 
-  onMessage<WatchLaterInvalidation>(
-    TOP_BAR_STATE_MESSAGE.WATCH_LATER_INVALIDATE,
-    (data, sender) => broker.invalidateWatchLater(data, sender),
-  )
   return broker
 }
