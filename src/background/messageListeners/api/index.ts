@@ -1,3 +1,7 @@
+import browser from 'webextension-polyfill'
+
+import type { ApiPortResponse } from '~/constants/apiRequest'
+import { API_REQUEST_PORT, CANCELLABLE_API_FUNCTIONS } from '~/constants/apiRequest'
 import { onMessage } from '~/utils/messaging'
 
 import API_MESSAGE_SERVER_SETTINGS from '../../messageServerSettings'
@@ -41,10 +45,57 @@ export const API_COLLECTION = {
 const FullAPI = Object.assign({}, ...API_COLLECTION)
 // Create a message listener for each API
 const handleMessage = apiListenerFactory(FullAPI)
+const cancellableFunctions = new Set<string>(CANCELLABLE_API_FUNCTIONS)
 
 export function setupApiMsgListeners() {
   // 为每个API设置webext-bridge消息监听器
   Object.keys(FullAPI).forEach((apiName) => {
     onMessage(apiName, handleMessage)
+  })
+
+  browser.runtime.onConnect.addListener((port) => {
+    if (port.name !== API_REQUEST_PORT)
+      return
+    const controller = new AbortController()
+    let connected = true
+    const disconnect = () => {
+      connected = false
+      controller.abort()
+      port.onMessage.removeListener(onRequest)
+      port.onDisconnect.removeListener(disconnect)
+    }
+    const respond = (response: ApiPortResponse) => {
+      if (!connected)
+        return
+      try {
+        port.postMessage(response)
+      }
+      catch { disconnect() }
+    }
+    function onRequest(value: unknown) {
+      const message = value as { type?: string, data?: { contentScriptQuery?: string }, deadline?: number }
+      port.onMessage.removeListener(onRequest)
+      const definition = Object.hasOwn(FullAPI, message?.type ?? '') ? FullAPI[message.type!] : undefined
+      // Only explicit reads may be cancelled. The anonymous function rebuilds its
+      // endpoint/parameter allowlist internally and always omits credentials.
+      const readable = definition && (typeof definition === 'function'
+        ? cancellableFunctions.has(message.type ?? '')
+        : definition._fetch.method.toLowerCase() === 'get')
+      if (!readable || message.data?.contentScriptQuery !== message.type) {
+        respond({ ok: false, error: { name: 'TypeError', message: 'Invalid cancellable API read' } })
+        return
+      }
+      void handleMessage(message.data, port.sender, { signal: controller.signal, deadline: message.deadline }).then(
+        data => respond({ ok: true, data }),
+        error => respond({ ok: false, error: {
+          name: error?.name || 'Error',
+          message: error?.message || String(error),
+          code: error?.code,
+          isRiskControl: error?.isRiskControl,
+        } }),
+      )
+    }
+    port.onDisconnect.addListener(disconnect)
+    port.onMessage.addListener(onRequest)
   })
 }

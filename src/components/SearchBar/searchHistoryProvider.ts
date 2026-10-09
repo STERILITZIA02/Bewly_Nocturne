@@ -3,6 +3,7 @@ import { getIframeMessageData, isIframeReadyForMessaging, markIframeReadyForMess
 const SEARCH_HISTORY_LIMIT = 20
 const SEARCH_HISTORY_RESPONSE_TIMEOUT_MS = 1200
 const SEARCH_HISTORY_IFRAME_LOAD_TIMEOUT_MS = 1500
+const SEARCH_HISTORY_LOCK_WAIT_MS = 5000
 
 export interface HistoryItem {
   value: string
@@ -35,7 +36,7 @@ export interface BilibiliStorageEvent {
   type: 'COLS_RES'
   id?: string
   key: string
-  value: string
+  value: string | null
 }
 
 class BilibiliStorageProvider {
@@ -44,6 +45,7 @@ class BilibiliStorageProvider {
 
   private iframe?: HTMLIFrameElement
   private iframeLoadPromise?: Promise<HTMLIFrameElement | undefined>
+  private requestId = 0
 
   private async waitForBody() {
     if (document.body)
@@ -110,8 +112,10 @@ class BilibiliStorageProvider {
   }
 
   private async getIframe() {
-    if (this.iframe?.isConnected && this.iframe.dataset.bewlyColsReady === 'true')
+    if (this.iframe?.isConnected && this.iframe.dataset.bewlyColsReady === 'true'
+      && this.iframe.getAttribute('src') === BilibiliStorageProvider.BILIBILI_COLS_IFRAME_URL) {
       return this.iframe
+    }
 
     if (!this.iframeLoadPromise)
       this.iframeLoadPromise = this.createIframe()
@@ -127,20 +131,22 @@ class BilibiliStorageProvider {
     }
   }
 
-  private async operate(type: 'COLS_GET'): Promise<BilibiliStorageEvent | undefined>
+  private async operate(type: 'COLS_GET'): Promise<BilibiliStorageEvent>
   private async operate(type: 'COLS_SET', value: string): Promise<void>
-  private async operate(type: 'COLS_CLR'): Promise<void>
+  private async operate(type: 'COLS_RM'): Promise<void>
   private async operate(
-    type: 'COLS_GET' | 'COLS_CLR' | 'COLS_SET',
+    type: 'COLS_GET' | 'COLS_RM' | 'COLS_SET',
     value?: string,
-  ): Promise<BilibiliStorageEvent | undefined | void> {
+  ): Promise<BilibiliStorageEvent | void> {
     const iframe = await this.getIframe()
     if (!iframe)
-      return undefined
+      throw new Error('Search history storage is unavailable')
+    const id = String(++this.requestId)
+    const key = BilibiliStorageProvider.BILIBILI_HISTORY_KEY
 
     switch (type) {
       case 'COLS_GET':
-        return new Promise<BilibiliStorageEvent | undefined>((resolve) => {
+        return new Promise<BilibiliStorageEvent>((resolve, reject) => {
           let timer: number
           let handleMessage: (e: MessageEvent<BilibiliStorageEvent>) => void
           const cleanup = () => {
@@ -148,48 +154,52 @@ class BilibiliStorageProvider {
             window.removeEventListener('message', handleMessage)
           }
           handleMessage = (event: MessageEvent<BilibiliStorageEvent>) => {
+            if (iframe.getAttribute('src') !== BilibiliStorageProvider.BILIBILI_COLS_IFRAME_URL) {
+              cleanup()
+              reject(new Error('Search history storage frame changed'))
+              return
+            }
             const data = getIframeMessageData(event, iframe)
             if (data?.type === 'COLS_RES'
-              && data.key === BilibiliStorageProvider.BILIBILI_HISTORY_KEY
-              && typeof data.value === 'string') {
+              && data.id === id && data.key === key) {
               cleanup()
-              resolve({
-                type: 'COLS_RES',
-                id: typeof data.id === 'string' ? data.id : undefined,
-                key: data.key,
-                value: data.value,
-              })
+              // The native iframe returns null only for a missing key; a
+              // storage exception instead returns undefined. Never conflate it.
+              if (data.value === null || typeof data.value === 'string')
+                resolve({ type: 'COLS_RES', id, key, value: data.value })
+              else reject(new Error('Search history storage read failed'))
             }
           }
           timer = window.setTimeout(() => {
             cleanup()
-            resolve(undefined)
+            reject(new Error('Search history storage read timed out'))
           }, SEARCH_HISTORY_RESPONSE_TIMEOUT_MS)
 
           window.addEventListener('message', handleMessage)
           if (!postMessageToIframe(iframe, {
             type: 'COLS_GET',
-            key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY,
+            key,
+            id,
           })) {
             cleanup()
-            resolve(undefined)
+            reject(new Error('Failed to request search history'))
           }
         })
-      case 'COLS_CLR':
-        postMessageToIframe(iframe, { type: 'COLS_CLR', key: 'search_history' })
-        return
+      case 'COLS_RM':
       case 'COLS_SET': {
         const sent = postMessageToIframe(iframe, {
-          type: 'COLS_SET',
-          key: BilibiliStorageProvider.BILIBILI_HISTORY_KEY,
+          type,
+          key,
+          id,
           value,
         })
         if (!sent)
           throw new Error('Failed to send the search history write.')
 
-        // COLS_SET 没有独立 ACK；同源 iframe 会按消息顺序处理，随后回读即为写入确认。
+        // Native write ACKs also occur on storage exceptions, so confirm the
+        // actual value with a separately correlated read before reporting success.
         const confirmation = await this.operate('COLS_GET')
-        if (confirmation?.value !== value)
+        if (confirmation.value !== (type === 'COLS_RM' ? null : value))
           throw new Error('Failed to confirm the search history write.')
       }
     }
@@ -200,7 +210,7 @@ class BilibiliStorageProvider {
   }
 
   clearSearchHistory() {
-    return this.operate('COLS_CLR')
+    return this.operate('COLS_RM')
   }
 
   addSearchHistory(value: string) {
@@ -217,28 +227,49 @@ let searchHistoryMutationQueue: Promise<void> = Promise.resolve()
 
 async function readSearchHistory(): Promise<HistoryItem[]> {
   const e = await provider.getSearchHistory()
-
-  if (!e)
+  if (e.value === null)
     return []
-
+  let history: unknown
   try {
-    const history = JSON.parse(e.value)
-    return historySort(history)
+    history = JSON.parse(e.value)
   }
   catch {
-    return []
+    throw new Error('Invalid search history data')
   }
+  if (!Array.isArray(history) || history.some(item => !item || typeof item.value !== 'string' || typeof item.timestamp !== 'number' || !Number.isFinite(item.timestamp)))
+    throw new Error('Invalid search history data')
+  const seen = new Set<string>()
+  return historySort(history).filter((item) => {
+    if (seen.has(item.value))
+      return false
+    seen.add(item.value)
+    return true
+  })
 }
 
 function enqueueSearchHistoryMutation<T>(mutation: () => Promise<T>): Promise<T> {
-  const result = searchHistoryMutationQueue.then(mutation, mutation)
+  // All our same-origin tabs cooperate without creating another history store.
+  // Native clients on other origins still retain their own storage contract.
+  const run = async () => {
+    if (!globalThis.navigator?.locks)
+      return mutation()
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(new DOMException('Search history lock timed out', 'TimeoutError')), SEARCH_HISTORY_LOCK_WAIT_MS)
+    try {
+      return await navigator.locks.request('bewly:search-history', { signal: controller.signal }, () => {
+        clearTimeout(timer)
+        return mutation()
+      })
+    }
+    finally { clearTimeout(timer) }
+  }
+  const result = searchHistoryMutationQueue.then(run, run)
   searchHistoryMutationQueue = result.then(() => undefined, () => undefined)
   return result
 }
 
 export async function getSearchHistory(): Promise<HistoryItem[]> {
-  await searchHistoryMutationQueue
-  return readSearchHistory()
+  return enqueueSearchHistoryMutation(readSearchHistory)
 }
 
 export function addSearchHistory(historyItem: HistoryItem): Promise<HistoryItem[]> {
@@ -255,7 +286,7 @@ export function addSearchHistory(historyItem: HistoryItem): Promise<HistoryItem[
     if (!hasSameValue)
       history.unshift(historyItem)
 
-    history = history.slice(0, SEARCH_HISTORY_LIMIT)
+    history = historySort(history).slice(0, SEARCH_HISTORY_LIMIT)
     await provider.addSearchHistory(JSON.stringify(history))
     return history
   })
@@ -269,6 +300,9 @@ export function removeSearchHistory(value: string): Promise<HistoryItem[]> {
   })
 }
 
-export function clearAllSearchHistory(): Promise<unknown> {
-  return enqueueSearchHistoryMutation(() => provider.clearSearchHistory())
+export function clearAllSearchHistory(): Promise<HistoryItem[]> {
+  return enqueueSearchHistoryMutation(async () => {
+    await provider.clearSearchHistory()
+    return []
+  })
 }

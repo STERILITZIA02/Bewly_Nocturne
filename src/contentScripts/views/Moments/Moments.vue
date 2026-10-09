@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
@@ -16,6 +17,7 @@ import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 import { parseDedeUserID } from '~/logic/loginStatus'
+import { momentFilterPolicy } from '~/logic/momentFilters'
 import { momentsPinnedUsers, momentsWantedUsers } from '~/logic/storage'
 import { recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -165,7 +167,7 @@ const offset = ref('')
 const updateBaseline = ref('')
 /** 按 UP 主筛选时 feed/all 的 page，从 1 递增 */
 const momentsFeedPage = ref(1)
-const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
+const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef, openSettingsAt } = useBewlyApp()
 
 const MAX_POST_LOAD_AUTOFILL_PAGES = 3
 /** 开启过滤时，每次初始加载、刷新或手动加载最多请求的原始动态页数。 */
@@ -176,6 +178,7 @@ const LOAD_MORE_AHEAD_PX = 640
 
 let feedRequestToken = 0
 let portalRequestToken = 0
+let portalRequestController: AbortController | undefined
 let momentsMounted = false
 let momentsExtensionContextInvalidated = false
 let loadedAccountId: AccountId = getCurrentAccountId()
@@ -439,23 +442,8 @@ function loadMoreFilteredMoments() {
   void loadMoments(false, 0, true)
 }
 
-const normalizedMomentBlockedKeywords = computed(() => {
-  if (!settings.value.momentsEnableKeywordFilter)
-    return []
-
-  return Array.from(new Set(
-    settings.value.momentsBlockedKeywords
-      .split(/[\n,，;；]+/)
-      .map(keyword => keyword.trim().toLocaleLowerCase())
-      .filter(Boolean),
-  ))
-})
-
-function isMomentBlockedByKeyword(moment: DisplayMoment) {
-  if (normalizedMomentBlockedKeywords.value.length === 0)
-    return false
-
-  const searchableText = [
+function getMomentFilterText(moment: DisplayMoment) {
+  return [
     moment.author.name,
     moment.title,
     moment.text,
@@ -465,58 +453,21 @@ function isMomentBlockedByKeyword(moment: DisplayMoment) {
     moment.forward?.author,
     moment.forward?.title,
     moment.forward?.text,
-  ].filter(Boolean).join('\n').toLocaleLowerCase()
-
-  return normalizedMomentBlockedKeywords.value.some(keyword => searchableText.includes(keyword))
+  ].filter(Boolean).join('\n')
 }
 
 /** 任一有效过滤开启时，后续分页只由“加载更多”触发。 */
 function hasActiveMomentFilters() {
-  return normalizedMomentBlockedKeywords.value.length > 0
-    || settings.value.momentsFilterUpRecommendation
-    || settings.value.momentsHideChargeExclusive
-    || settings.value.momentsHideVideoReservation
-    || settings.value.momentsHideLiveReservation
-    || settings.value.momentsHideLiveDynamics
-    || settings.value.momentsHideVideoDynamics
-    || settings.value.momentsHideDrawDynamics
-    || settings.value.momentsHideUgcSeasonDynamics
-    || settings.value.momentsHideForwardDynamics
-    || settings.value.momentsHidePgcDynamics
-    || settings.value.momentsHideArticleDynamics
+  return momentFilterPolicy.value.active
 }
 
 function requiresManualMomentPaging() {
-  return activeMomentGroup.value === 'wanted' || hasActiveMomentFilters()
+  return feedRequestFailed.value || activeMomentGroup.value === 'wanted' || hasActiveMomentFilters()
 }
 
 function passesMomentSettings(moment: DisplayMoment) {
-  if (isMomentBlockedByKeyword(moment))
-    return false
-  if (settings.value.momentsFilterUpRecommendation && moment.isUpRecommendation)
-    return false
-  if (settings.value.momentsHideChargeExclusive && moment.isChargeExclusive)
-    return false
-  if (settings.value.momentsHideVideoReservation && moment.isVideoReservation)
-    return false
-  if (settings.value.momentsHideLiveReservation && moment.isLiveReservation)
-    return false
-  if (settings.value.momentsHideLiveDynamics && moment.isLive)
-    return false
-  // 番剧单独过滤；视频过滤不含 PGC
-  if (settings.value.momentsHideVideoDynamics && moment.isRegularVideo && !moment.isPgc)
-    return false
-  if (settings.value.momentsHideDrawDynamics && moment.isDraw)
-    return false
-  if (settings.value.momentsHideUgcSeasonDynamics && moment.isUgcSeason)
-    return false
-  if (settings.value.momentsHideForwardDynamics && moment.isForward)
-    return false
-  if (settings.value.momentsHidePgcDynamics && moment.isPgc && !moment.isForward)
-    return false
-  if (settings.value.momentsHideArticleDynamics && moment.isArticle && !moment.isForward)
-    return false
-  return true
+  const policy = momentFilterPolicy.value
+  return policy.passes(moment, policy.keywords.length ? getMomentFilterText(moment) : '')
 }
 
 async function reapplyMomentFiltersFromCache() {
@@ -585,6 +536,7 @@ function maybeLoadMoreNearBottom() {
   const viewport = scrollViewportRef.value
   if (
     !viewport
+    || document.hidden
     || isInitialLoading.value
     || isLoading.value
     || noMoreContent.value
@@ -614,10 +566,14 @@ function clearMomentPresentationForRefresh(nextItems: DisplayMoment[]) {
 async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = false) {
   if (momentsExtensionContextInvalidated)
     return
+  if (!reset && !manualPaging && document.hidden)
+    return
 
   const requestedGeneration = reset ? ++feedRequestToken : feedRequestToken
   await momentsFeedCacheReady
   if (momentsExtensionContextInvalidated || !momentsMounted || requestedGeneration !== feedRequestToken)
+    return
+  if (!reset && !manualPaging && document.hidden)
     return
   if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
     return
@@ -737,7 +693,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     }
 
     if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
-      feedRequestFailed.value = reset || moments.value.length === 0
+      feedRequestFailed.value = true
       if (!pageApplied && previousPagination) {
         offset.value = previousPagination.offset
         updateBaseline.value = previousPagination.updateBaseline
@@ -772,6 +728,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 
   if (
     !pageApplied
+    || document.hidden
     || noMoreContent.value
     || requiresManualMomentPaging()
     || autoFillDepth >= MAX_POST_LOAD_AUTOFILL_PAGES
@@ -806,10 +763,13 @@ async function loadMomentsPortal() {
     return
 
   const requestToken = ++portalRequestToken
+  portalRequestController?.abort()
+  const controller = new AbortController()
+  portalRequestController = controller
   const accountId = loadedAccountId
   isPortalLoading.value = true
   try {
-    const response = await api.moment.getMomentsPortal() as MomentsPortalResult
+    const response = await api.moment.getMomentsPortal(undefined, { signal: controller.signal }) as MomentsPortalResult
     if (requestToken !== portalRequestToken || !isSameAccount(accountId, getCurrentAccountId()))
       return
 
@@ -828,6 +788,8 @@ async function loadMomentsPortal() {
       clearMomentsPortalState()
   }
   finally {
+    if (portalRequestController === controller)
+      portalRequestController = undefined
     if (requestToken === portalRequestToken && isSameAccount(accountId, getCurrentAccountId()))
       isPortalLoading.value = false
   }
@@ -848,6 +810,8 @@ function resetMomentsAccountState() {
   commentSessions.clear()
   feedRequestToken++
   portalRequestToken++
+  portalRequestController?.abort()
+  portalRequestController = undefined
   moments.value = []
   momentLayout.clearColumns()
   selectedHostMid.value = ''
@@ -877,7 +841,7 @@ async function ensureMomentsAccount(): Promise<boolean> {
 }
 
 function handleMomentsReachBottom() {
-  if (requiresManualMomentPaging() || isLoading.value || noMoreContent.value)
+  if (document.hidden || requiresManualMomentPaging() || isLoading.value || noMoreContent.value)
     return false
   void loadMoments()
   return true
@@ -914,6 +878,8 @@ onBeforeUnmount(() => {
   commentSessions.clear()
   feedRequestToken += 1
   portalRequestToken += 1
+  portalRequestController?.abort()
+  portalRequestController = undefined
   upListResizeObserver?.disconnect()
   upListResizeObserver = undefined
   if (upListStateFrame !== undefined) {
@@ -986,21 +952,7 @@ watch(
 )
 
 watch(
-  [
-    () => settings.value.momentsFilterUpRecommendation,
-    () => settings.value.momentsHideChargeExclusive,
-    () => settings.value.momentsHideVideoReservation,
-    () => settings.value.momentsHideLiveReservation,
-    () => settings.value.momentsHideLiveDynamics,
-    () => settings.value.momentsHideVideoDynamics,
-    () => settings.value.momentsHideDrawDynamics,
-    () => settings.value.momentsHideUgcSeasonDynamics,
-    () => settings.value.momentsHideForwardDynamics,
-    () => settings.value.momentsHidePgcDynamics,
-    () => settings.value.momentsHideArticleDynamics,
-    () => settings.value.momentsEnableKeywordFilter,
-    () => settings.value.momentsBlockedKeywords,
-  ],
+  momentFilterPolicy,
   async () => {
     if (await reapplyMomentFiltersFromCache())
       return
@@ -1082,12 +1034,12 @@ function appendMoments(items: DisplayMoment[]) {
           <section v-if="settings.momentsSidebarShowLive" class="moments-live-card moments-sidebar-placeholder" aria-hidden="true">
             <header><SkeletonBlock width="96px" height="var(--bew-line-height-title)" /></header>
             <div class="moments-live-card__list">
-              <div v-for="index in 3" :key="index" class="moments-live-card__skeleton-row">
+              <div v-for="index in 5" :key="index" class="moments-live-card__skeleton-row">
                 <div class="moments-live-card__avatar">
                   <SkeletonBlock width="48px" height="48px" radius="circle" />
                 </div>
                 <div class="moments-live-card__info">
-                  <SkeletonBlock width="96px" height="var(--bew-line-height-control)" />
+                  <SkeletonBlock width="96px" height="var(--bew-line-height-body)" />
                   <SkeletonBlock width="72px" height="var(--bew-line-height-control)" />
                 </div>
               </div>
@@ -1378,7 +1330,7 @@ function appendMoments(items: DisplayMoment[]) {
             </div>
           </div>
         </div>
-        <div v-else-if="feedRequestFailed" class="moments-page__empty moments-page__error" role="status">
+        <div v-else-if="feedRequestFailed && !moments.length" class="moments-page__empty moments-page__error" role="status">
           <span i-tabler-alert-circle text="size-$bew-icon-size-xl" />
           <p>{{ t('common.load_failed') }}</p>
           <button type="button" :disabled="isLoading" @click="refresh">
@@ -1431,7 +1383,12 @@ function appendMoments(items: DisplayMoment[]) {
           </div>
         </div>
         <div v-else-if="!isInitialLoading && (!requiresManualMomentPaging() || noMoreContent)" class="moments-page__empty">
-          <span i-tabler-windmill text="size-$bew-icon-size-xl" /><p>{{ activeMomentGroup === 'wanted' ? (momentsWantedUsers.length ? t('moments.empty_wanted') : t('moments.no_wanted_users')) : t('moments.empty') }}</p><button
+          <span i-tabler-windmill text="size-$bew-icon-size-xl" />
+          <p>{{ activeMomentGroup === 'wanted' ? (momentsWantedUsers.length ? t('moments.empty_wanted') : t('moments.no_wanted_users')) : t('moments.empty') }}</p>
+          <Button v-if="activeMomentGroup === 'wanted' && !momentsWantedUsers.length" type="secondary" @click="openSettingsAt({ category: 'bewly-pages', page: 'moments', section: 'wanted-users' })">
+            {{ t('moments.configure_wanted') }}
+          </Button>
+          <button
             v-if="activeMomentGroup !== 'wanted' || momentsWantedUsers.length"
             :disabled="isLoading"
             @click="requiresManualMomentPaging() && !noMoreContent ? (activeMomentGroup === 'wanted' ? loadMoreWantedMoments() : loadMoreFilteredMoments()) : refresh()"
@@ -1440,13 +1397,13 @@ function appendMoments(items: DisplayMoment[]) {
           </button>
         </div>
         <button
-          v-if="requiresManualMomentPaging() && !isLoading && !noMoreContent"
+          v-if="requiresManualMomentPaging() && !isLoading && !noMoreContent && (!feedRequestFailed || moments.length)"
           type="button"
           class="moments-wanted-load-more"
           @click="activeMomentGroup === 'wanted' ? loadMoreWantedMoments() : loadMoreFilteredMoments()"
         >
           <span i-tabler-arrow-down />
-          {{ t('moments.load_more') }}
+          {{ feedRequestFailed ? t('moments.retry') : t('moments.load_more') }}
         </button>
         <p
           v-if="!isInitialLoading && moments.length"
@@ -2287,7 +2244,7 @@ function appendMoments(items: DisplayMoment[]) {
     grid-template-columns: minmax(0, 1fr);
   }
 }
-.moments-page__empty button {
+.moments-page__empty button:not(.b-button) {
   border: 1px solid var(--bew-surface-border-color);
   min-height: var(--bew-control-height);
   border-radius: var(--bew-interactive-radius);
@@ -2307,12 +2264,12 @@ function appendMoments(items: DisplayMoment[]) {
     border-color var(--bew-duration-normal) var(--bew-ease-standard),
     opacity var(--bew-duration-normal) var(--bew-ease-standard);
 }
-.moments-page__empty button:hover {
+.moments-page__empty button:not(.b-button):hover {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
   border-color: var(--bew-theme-color);
 }
-.moments-page__empty button:disabled {
+.moments-page__empty button:not(.b-button):disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }
@@ -2641,7 +2598,7 @@ function appendMoments(items: DisplayMoment[]) {
 .moments-publish-link,
 .moments-live-card__list > a,
 .moments-live-card__avatar em,
-.moments-page__empty button,
+.moments-page__empty button:not(.b-button),
 .moments-wanted-load-more,
 .moment-detail-frame,
 .moment-detail-frame__open,

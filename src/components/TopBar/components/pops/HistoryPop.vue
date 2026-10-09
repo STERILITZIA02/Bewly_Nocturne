@@ -15,9 +15,10 @@ import { useTopBarStore } from '~/stores/topBarStore'
 import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
+import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
-import { normalizePlaybackProgress } from '~/utils/playbackProgress'
+import { getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
@@ -134,35 +135,6 @@ function onClickTab(tabId: number) {
 }
 
 /**
- * Return the URL of the history item
- * @param item history item
- * @return {string} url
- */
-function getHistoryUrl(item: HistoryItem) {
-  if (item.uri)
-    return item.uri
-
-  // Video
-  if (item.history.business === Business.ARCHIVE) {
-    if (item?.videos && item.videos > 0)
-      return `//www.bilibili.com/video/${item.history.bvid}?p=${item.history.page}`
-    return `//www.bilibili.com/video/${item.history.bvid}`
-  }
-  // Live
-  else if (item.history.business === Business.LIVE) {
-    return `//live.bilibili.com/${item.history.oid}`
-  }
-  // Article
-  else if (item.history.business === Business.ARTICLE || item.history.business === Business.ARTICLE_LIST) {
-    if (item.history.cid === 0)
-      return `//www.bilibili.com/read/cv${item.history.oid}`
-    else
-      return `//www.bilibili.com/read/cv${item.history.cid}`
-  }
-  return ''
-}
-
-/**
  * Get history list
  * @param type
  * @param view_at Last viewed timestamp
@@ -251,6 +223,7 @@ async function deleteHistoryItem(historyItem: HistoryItem) {
       return
     }
 
+    void removeVideoVisitHistory(getHistoryVideoIdentity(historyItem))
     const currentIndex = historys.findIndex(item => getHistoryItemKey(item) === itemKey)
     if (currentIndex >= 0)
       historys.splice(currentIndex, 1)
@@ -388,7 +361,7 @@ defineExpose({
                 <Progress
                   class="history-pop__progress"
                   :percentage="
-                    normalizePlaybackProgress(historyItem.progress, historyItem.duration)
+                    getVideoProgressPercentage(getHistoryVideoIdentity(historyItem), historyItem.progress, historyItem.duration)
                   "
                 />
               </template>

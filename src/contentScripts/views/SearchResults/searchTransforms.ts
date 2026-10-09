@@ -1,4 +1,5 @@
 import type { Video } from '~/components/VideoCard/types'
+import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
 import { numFormatter, parseStatNumber } from '~/utils/dataFormatter'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 
@@ -18,10 +19,7 @@ export function removeHighlight(text?: string): string {
  * 检查视频是否是广告
  */
 export function isAdVideo(video: any): boolean {
-  if (!video)
-    return false
-  const type = video.type || ''
-  return typeof type === 'string' && type.toLowerCase().includes('ad')
+  return isBilibiliAdvertisement(video)
 }
 
 function splitTagValue(value: string): string[] {
@@ -41,6 +39,10 @@ function formatDuration(totalSeconds: number): string {
 }
 
 export function convertVideoData(video: any): Video {
+  if (isBilibiliAdvertisement(video)) {
+    const card = toAdvertisementCard(video)
+    return { ...card, title: removeHighlight(card.title) }
+  }
   const cover = video.pic || video.cover
   const normalizedCover = typeof cover === 'string' && cover.startsWith('//')
     ? `https:${cover}`
@@ -291,50 +293,6 @@ export function convertArticleCardData(article: any) {
     reply: article.reply,
     publishTime: article.pub_time || article.publish_time || article.ctime,
     categoryName: removeHighlight(article.category_name),
-    tags,
-  }
-}
-
-export function convertMediaFtData(item: any) {
-  const cover = item.cover || item.square_cover || item.vertical_cover || item.horizontal_cover
-  const url = item.url
-    || (item.season_id ? `https://www.bilibili.com/bangumi/play/ss${item.season_id}` : undefined)
-    || (item.media_id ? `https://www.bilibili.com/bangumi/media/md${item.media_id}` : undefined)
-    || ''
-
-  const rawYear = item.release_date || item.pubtime || item.year
-  const year = typeof rawYear === 'string'
-    ? rawYear.slice(0, 4)
-    : rawYear
-
-  const areaSource = item.areas
-  const area = Array.isArray(areaSource)
-    ? areaSource.map((n: any) => removeHighlight(typeof n === 'string' ? n : n?.name)).filter(Boolean).join(' / ')
-    : removeHighlight(areaSource || '')
-
-  const stylesSource = Array.isArray(item.styles) ? item.styles : Array.isArray(item.style) ? item.style : []
-  const tags = stylesSource
-    .map((style: any) => {
-      if (typeof style === 'string')
-        return removeHighlight(style)
-      if (typeof style?.style_name === 'string')
-        return removeHighlight(style.style_name)
-      if (typeof style?.name === 'string')
-        return removeHighlight(style.name)
-      return null
-    })
-    .filter(Boolean) as string[]
-
-  return {
-    id: item.season_id || item.media_id || item.id,
-    title: removeHighlight(item.title),
-    url,
-    cover,
-    typeName: removeHighlight(item.media_type_name || item.season_type_name || item.badge || ''),
-    area,
-    year,
-    score: typeof item.media_score?.score === 'number' ? item.media_score.score : Number(item.media_score?.score) || undefined,
-    desc: removeHighlight(item.evaluate || item.desc || ''),
     tags,
   }
 }

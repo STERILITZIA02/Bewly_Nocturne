@@ -6,6 +6,7 @@ import { TOP_BAR_NOTIFICATION_SECTIONS } from '~/contentScripts/views/Notificati
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
+import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
 import { resolveNotificationNavigationUrl } from '~/utils/notificationRoute'
 
 interface NotificationPopItem {
@@ -26,19 +27,20 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
+const badgeCounts = computed(() => getNotificationBadgeCounts(settings.value, props.unReadMessage, props.unReadDm))
 
 function unreadCount(section: NotificationSectionDefinition): number {
   switch (section.unreadSource) {
     case 'dm':
-      return (props.unReadDm?.follow_unread || 0) + (props.unReadDm?.unfollow_unread || 0)
+      return badgeCounts.value.privateMessages
     case 'reply':
-      return props.unReadMessage?.reply || 0
+      return badgeCounts.value.reply
     case 'at':
-      return props.unReadMessage?.at || 0
+      return badgeCounts.value.at
     case 'like':
-      return Math.max(props.unReadMessage?.like || 0, props.unReadMessage?.recv_like || 0)
+      return badgeCounts.value.like
     case 'system':
-      return props.unReadMessage?.sys_msg || 0
+      return badgeCounts.value.system
     default:
       return 0
   }

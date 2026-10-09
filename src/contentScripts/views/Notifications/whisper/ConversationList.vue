@@ -4,7 +4,7 @@ import { useI18n } from 'vue-i18n'
 import ConversationListItem from './ConversationListItem.vue'
 import ConversationListSkeleton from './ConversationListSkeleton.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
-import { canSearchPrivateRecipients, normalizePrivateRecipientQuery } from './privateRecipientSearch'
+import { canSearchPrivateRecipients, normalizePrivateRecipientQuery, resolvePrivateRecipientSelection } from './privateRecipientSearch'
 import PrivateRecipientSearchResultItem from './PrivateRecipientSearchResultItem.vue'
 import type {
   DisplayPrivateSession,
@@ -159,14 +159,10 @@ onBeforeUnmount(disconnectObserver)
 
 watch(query, value => props.recipientSearch.setQuery(value), { immediate: true })
 
-function findServerSession(talkerId: string): DisplayPrivateSession | undefined {
-  return props.items.find(item => item.sessionType === 1 && item.talkerId === talkerId)
-}
-
 function selectSearchResult(recipient: TransientPrivateRecipient) {
-  const session = findServerSession(recipient.mid)
-  if (session)
-    emit('select', session)
+  const selection = resolvePrivateRecipientSelection(recipient, props.items)
+  if ('session' in selection)
+    emit('select', selection.session)
   else
     emit('selectRecipient', recipient)
 }

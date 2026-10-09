@@ -1,6 +1,7 @@
 <script setup lang="ts" generic="T = any">
 import { useDebounceFn } from '@vueuse/core'
 
+import AdvertisementCard from '~/components/VideoCard/AdvertisementCard.vue'
 import type { Video, VideoCardState } from '~/components/VideoCard/types'
 import { createVideoCardState } from '~/components/VideoCard/types'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
@@ -945,7 +946,7 @@ watch(() => {
   for (let index = start; index < end; index++) {
     const card = createRenderItem(displayItems.value[index], index)
     const author = Array.isArray(card.video?.author) ? card.video.author[0] : card.video?.author
-    if (!card.skeleton && card.type !== 'bangumi' && author?.mid && author.followed === undefined)
+    if (!card.skeleton && !card.video?.isAdvertisement && card.type !== 'bangumi' && author?.mid && author.followed === undefined)
       mids.add(author.mid)
   }
   return [...mids]
@@ -1118,8 +1119,13 @@ function getUniqueKey(item: T, index: number): string | number {
         :style="renderItem.card ? undefined : { height: `${String(renderItem.height)}px` }"
         :aria-hidden="renderItem.card ? undefined : true"
       >
+        <AdvertisementCard
+          v-if="renderItem.card?.video?.isAdvertisement"
+          :video="renderItem.card.video"
+          :horizontal="isHorizontal"
+        />
         <VideoCard
-          v-if="renderItem.card"
+          v-else-if="renderItem.card"
           :ref="(component: unknown) => setMountedCard(renderItem.card!.key, component)"
           :persistent-state="getCardState(renderItem.card.key)"
           :data-index="renderItem.card.index"

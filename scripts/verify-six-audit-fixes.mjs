@@ -128,7 +128,7 @@ export function registerSixAuditFixChecks(check, { Vue, compileComponent, flush 
   })
 
   async function storageModule() {
-    const messaging = await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} } })
+    const messaging = await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} }, '~/utils/abort': await import('../src/utils/abort'), '~/constants/apiRequest': await import('../src/constants/apiRequest') })
     return loadSourceModule('../src/composables/useStorageLocal.ts', {
       'vue': Vue,
       'webextension-polyfill': { default: {} },

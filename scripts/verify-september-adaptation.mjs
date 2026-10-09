@@ -28,13 +28,15 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
         ...policy,
         document,
         settingsReady: ready.promise,
+        settingsDisplayReady: ready.promise,
         settingsInitializationState: { value: 'loaded' },
         contentScriptSignal: { aborted: scenario === 'cancelled' },
         contentScriptReady: false,
         settingsBootLoaded: false,
         mountedVueApp: null,
+        mountedVueContainer: null,
         contentScriptGlobal: {},
-        settings: { value: {} },
+        settings: { value: {}, displayReady: { value: true } },
         isInIframe: () => false,
         isHomePage: () => true,
         isSupportedPages: () => scenario !== 'native',
@@ -72,6 +74,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     const writes = []
     let stored = { mode: 1, nested: { stable: ['a'], changed: 1 }, extra: true }
     const module = await loadSourceModule('../src/composables/useSettingsStorage.ts', {
+      '~/utils/abort': await import('../src/utils/abort'),
       'vue': Vue,
       'webextension-polyfill': { default: { storage: { onChanged: { addListener: fn => listeners.add(fn), removeListener: fn => listeners.delete(fn) } } } },
       '~/utils/sidebarCoverSettings': await import('../src/utils/sidebarCoverSettings'),
@@ -94,6 +97,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       let notifications = 0
       scope.run(() => Vue.watch(() => settings.value.nested.stable, () => notifications++, { flush: 'sync' }))
       settings.value.mode = 2
+      await flush()
       settings.value.mode = 3
       stored = { mode: 2, nested: { stable: ['a'], changed: 2 } }
       writes[0].resolve({ accepted: true, epoch: 'a', revision: 1, storedValue: JSON.stringify(stored) })
@@ -118,7 +122,17 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     const timers = new Map()
     let timerId = 0
     const tokens = Vue.ref({ accessToken: 'old', refreshToken: 'refresh', lastUpdatedAt: 1, accessTokenExpiresAt: 0 })
+    const abort = await loadSourceModule('../src/utils/abort.ts', {}, {
+      DOMException: window.DOMException,
+      setTimeout: (callback) => {
+        timers.set(++timerId, callback)
+        return timerId
+      },
+      clearTimeout: id => timers.delete(id),
+    })
     const module = await loadSourceModule('../src/utils/authProvider.ts', {
+      'vue': Vue,
+      './abort': abort,
       'webextension-polyfill': { default: { storage: { local: { get: async () => ({ appAuthTokens: { ...tokens.value } }) } } } },
       '~/logic/appAuthStorage': { appAuthTokens: tokens, defaultAppAuthTokens: {}, resetAppAuthTokens() {} },
       './appAuthTokenPolicy': await import('../src/utils/appAuthTokenPolicy'),
@@ -188,7 +202,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     const { normalizeWatchLaterItem, getWatchLaterAuthor, getWatchLaterPlaybackUrl } = await import('../src/utils/watchLaterList')
     const item = normalizeWatchLaterItem({ aid: 1, is_pgc: true, bangumi: { ep_id: 123, cover: 'cover', season: { title: 'Season' } } })
     assert.equal(item.title, 'Season')
-    assert.equal(item.progress, 0)
+    assert.equal(item.progress, undefined, 'missing server progress stays unknown so local progress can supplement it')
     assert.equal(getWatchLaterAuthor(item).name, 'Season')
     assert.equal(getWatchLaterAuthor(item).authorFace, 'cover')
     assert.equal(getWatchLaterPlaybackUrl(item), 'https://www.bilibili.com/bangumi/play/ep123')
@@ -225,9 +239,9 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       'vue': Vue,
       '~/logic': { settings },
       '~/utils/api': { default: { user: {
-        getUserVideos: (params) => {
+        getUserVideos: (params, options) => {
           const request = deferred()
-          requests.push({ ...request, params })
+          requests.push({ ...request, params, options })
           return request.promise
         },
         getUserCard: async () => { assert.fail('known author face should be reused') },
@@ -245,6 +259,8 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       const old = search.submit()
       search.draft.value = 'new'
       const latest = search.submit()
+      assert.equal(requests[0].options.signal.aborted, true)
+      assert.equal(requests[1].options.signal.aborted, false)
       requests[1].resolve(response(2))
       await latest
       requests[0].resolve(response(1))
@@ -257,12 +273,14 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       assert.equal(requests[2].params.keyword, 'new')
       assert.equal(requests[2].params.pn, 2)
       uploader.value = 11
+      assert.equal(requests[2].options.signal.aborted, true)
       requests[2].resolve(response(3))
       await more
       assert.equal(search.items.value.length, 0)
       search.draft.value = 'last'
       const stale = search.submit()
       account.value = 2
+      assert.equal(requests[3].options.signal.aborted, true)
       requests[3].resolve(response(4))
       await stale
       assert.equal(search.items.value.length, 0)
@@ -591,6 +609,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     let stored = {}
     const dependencies = {
       '~/constants/searchApi': await import('../src/constants/searchApi'),
+      '~/utils/abort': await import('../src/utils/abort'),
       'webextension-polyfill': { default: {
         cookies: { get: async () => ({ value: mid }) },
         storage: { session: { get: async () => stored, set: async (value) => { stored = structuredClone(value) } } },
@@ -605,6 +624,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     const load = module.default.getDefaultSearchRecommendation
     const first = load()
     const second = load()
+    await flush()
     await flush()
     assert.equal(requests.length, 1)
     requests[0].resolve({ code: 0, data: { name: 'A', show_name: 'A', url: 'https://search.bilibili.com/all?keyword=A' } })
@@ -837,6 +857,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
 
   check('September live avatar: normalized status, valid room links, fallback and visible-only animation', async () => {
     const transforms = await loadSourceModule('../src/contentScripts/views/SearchResults/searchTransforms.ts', {
+      '~/utils/advertising': await import('../src/utils/advertising'),
       '~/utils/dataFormatter': { numFormatter: String, parseStatNumber: Number },
       '~/utils/htmlDecode': { decodeHtmlEntities: value => value },
     })
@@ -958,14 +979,23 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
   check('September WatchLater: dedicated cards stay bounded and retain focused/pending items', async () => {
     const root = document.body.appendChild(document.createElement('section'))
     Object.defineProperties(root, { clientHeight: { value: 700 }, scrollHeight: { value: 100000 } })
-    const settings = Vue.ref({ watchLaterLayoutMode: 'list', videoCardLinkOpenMode: 'drawer', enableSidebarCoverBlur: false })
+    const settings = Vue.ref({ watchLaterLayoutMode: 'list', videoCardLinkOpenMode: 'drawer', enableSidebarCoverBlur: false, enableGridLayoutSwitcher: true })
     const pending = deferred()
     const raw = Array.from({ length: 500 }, (_, index) => ({ aid: index + 1, bvid: 'BV1ab411c7mD', title: `Video ${index + 1}`, duration: 1, add_at: 1 }))
     let writeRequests = 0
+    let libraryReads = 0
+    let pageReads = 0
     const provider = { openIframeDrawer() {}, handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true, scrollViewportRef: Vue.ref(root) }
     const blank = { render: () => null }
-    const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
+    const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 }, watchLaterCount: 500 })
+    const { normalizePlaybackProgress } = await import('../src/utils/playbackProgress')
     const Component = await compileComponent('../src/contentScripts/views/WatchLater/WatchLater.vue', {
+      '~/logic/watchLaterState': { applyWatchLaterUpdate() {} },
+      '~/utils/videoVisitHistory': {
+        getVideoWatchState: () => undefined,
+        getVideoProgressPercentage: (_identity, progress, duration) => normalizePlaybackProgress(progress, duration),
+        getVideoPlaybackProgress: (_identity, progress, duration) => ({ progress, duration }),
+      },
       '~/components/WatchLater/OpenTabsDialog.vue': { default: blank },
       '@vueuse/core': { useDateFormat: () => Vue.ref('date'), useResizeObserver() {} },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
@@ -980,7 +1010,16 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       '~/logic/layoutEdit': { isLayoutEditing: Vue.ref(false), useLayoutEditSettingValue: (_key, get) => Vue.computed(get), vLayoutEditable: {} },
       '~/stores/topBarStore': { useTopBarStore: () => account },
       '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
-      '~/utils/api': { default: { watchlater: { getWatchLaterListByPage: async () => ({ code: 0, data: { count: raw.length, list: raw } }) } } },
+      '~/utils/api': { default: { watchlater: {
+        getWatchLaterListByPage: async () => {
+          pageReads++
+          return { code: 0, data: { count: raw.length, list: raw.slice(0, 20) } }
+        },
+        getWatchLaterLibrary: async () => {
+          libraryReads++
+          return { code: 0, data: { count: raw.length, list: raw } }
+        },
+      } } },
       '~/utils/dataFormatter': { calcCurrentTime: String },
       '~/utils/main': { getCSRF: () => account.isLogin ? 'csrf' : '', getUserID: () => String(account.userInfo.mid), openLinkToNewTab() {}, removeHttpFromUrl: value => value ?? '' },
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
@@ -1011,7 +1050,8 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     app.config.warnHandler = message => warnings.push(message)
     const pass = { setup: (_props, { slots }) => () => Vue.h('div', slots.default?.()) }
     app.component('ALink', { setup: (_props, { attrs, slots }) => () => Vue.h('a', { href: attrs.href }, slots.default?.()) })
-    for (const name of ['Button', 'Tooltip', 'CoverSidebarSurface']) app.component(name, pass)
+    for (const name of ['Tooltip', 'CoverSidebarSurface']) app.component(name, pass)
+    app.component('Button', { setup: (_props, { slots }) => () => Vue.h('button', slots.default?.()) })
     for (const name of ['Progress', 'Checkbox', 'Select', 'LiquidSegmentIndicator']) app.component(name, blank)
     app.component('Empty', await compileComponent('../src/components/Empty.vue', { '~/utils/messaging': { getExtensionAssetUrl: () => '' } }))
     app.config.globalProperties.$t = key => key
@@ -1023,6 +1063,30 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       app.mount(root)
       await settle()
       assert.ok(root.querySelector('.bew-page-heading').textContent.includes('500'), 'missing optional display fields do not reject the page')
+      const search = root.querySelector('.watch-later-search input')
+      search.value = 'Video 500'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      await settle()
+      assert.equal(libraryReads, 1)
+      assert.equal(root.querySelectorAll('.watch-later-list-card').length, 1, 'search includes a video beyond the initial page')
+      search.value = 'Video 499'
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      await settle()
+      assert.equal(libraryReads, 1, 'editing a query reuses the loaded library')
+      const initialPageReads = pageReads
+      await provider.handlePageRefresh.value()
+      await settle()
+      assert.equal(libraryReads, 2, 'refresh preserves the full filtered library')
+      assert.equal(pageReads, initialPageReads, 'filtered refresh does not first fetch an unused preview page')
+      account.watchLaterUpdate = { type: 'change', accountId: 1, change: { type: 'invalidate' } }
+      await new Promise(resolve => setTimeout(resolve, 850))
+      await settle()
+      assert.equal(libraryReads, 3, 'cross-page invalidation retains the active full-library filter')
+      assert.equal(root.querySelectorAll('.watch-later-list-card').length, 1)
+      assert.match(root.querySelector('.watch-later-list-card').textContent, /Video 499/)
+      search.value = ''
+      search.dispatchEvent(new Event('input', { bubbles: true }))
+      await settle()
       const mounted = root.querySelectorAll('.watch-later-list-card').length
       assert.ok(mounted > 0 && mounted < 80)
       const first = root.querySelector('.watch-later-list-card')
@@ -1041,7 +1105,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       root.dispatchEvent(new Event('scroll'))
       await settle()
       assert.equal(first.isConnected, false)
-      settings.value.watchLaterLayoutMode = 'grid'
+      Array.from(root.querySelectorAll('[role="radio"]')).find(button => button.textContent.trim() === 'watch_later.layout_grid').click()
       root.scrollTop = 0
       await settle()
       assert.ok(root.querySelectorAll('[data-grid-aid]').length > 0)
@@ -1050,7 +1114,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       root.dispatchEvent(new Event('scroll'))
       await settle()
       assert.ok(root.querySelector('[data-grid-aid="500"]'), 'the last resource remains reachable')
-      root.querySelector('.bew-page-heading').nextElementSibling.click()
+      Array.from(root.querySelectorAll('header button')).find(button => button.textContent.trim() === 'watch_later.open_tabs.title').click()
       await settle()
       account.isLogin = false
       account.userInfo.mid = 0

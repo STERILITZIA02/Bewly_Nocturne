@@ -21,6 +21,7 @@ export function shouldShowBewlyBootOverlay(rawUrl: string, inIframe: boolean): b
 export function canStartSettingsDependentBoot(
   state: SettingsStorageInitializationState,
   aborted: boolean,
+  hasLocalSnapshot = false,
 ): boolean {
-  return state === 'loaded' && !aborted
+  return !aborted && (state === 'loaded' || (state === 'degraded' && hasLocalSnapshot))
 }

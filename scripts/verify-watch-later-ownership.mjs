@@ -51,6 +51,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
     }
     const main = { getUserID: () => cookieMid, getCSRF: () => csrf, removeHttpFromUrl: value => value }
     const watchLater = await loadSourceModule('../src/utils/watchLater.ts', {
+      '~/logic/watchLaterState': { findWatchLaterEntry: () => undefined },
       '~/utils/api': { default: api },
       '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
       '~/utils/watchLaterWrite': await import('../src/utils/watchLaterWrite'),
@@ -70,7 +71,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       '~/utils/dataFormatter': { parseStatNumber: value => value },
       '~/utils/floatingMenu': {},
       '~/utils/main': main,
-      '~/utils/messaging': await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} } }),
+      '~/utils/messaging': await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} }, '~/utils/abort': await import('../src/utils/abort'), '~/constants/apiRequest': await import('../src/constants/apiRequest') }),
       '~/utils/tabs': {},
       '~/utils/userRelation': { onUserRelationChange: () => () => {} },
       '~/utils/watchLater': watchLater,
@@ -300,6 +301,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       } }
       const main = { getCSRF: () => 'csrf-1', getUserID: () => cookieMid }
       const watchLater = await loadSourceModule('../src/utils/watchLater.ts', {
+        '~/logic/watchLaterState': { findWatchLaterEntry: () => undefined },
         '~/utils/api': { default: api },
         '~/utils/main': main,
         '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
@@ -346,10 +348,10 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
         aid.resolve({ code: 0, data: { aid: 202 } })
         await flush()
         if (invalidation === 'after-send') {
-          assert.deepEqual(sends.map(params => ({ ...params })), [{ aid: 101, csrf: 'csrf-1' }])
+          assert.deepEqual(sends.map(params => ({ ...params })), [{ aid: 101, csrf: 'csrf-1', accountId: 1 }])
           write.resolve({ code: 0 })
           await flush()
-          assert.deepEqual(commits, [[101, true, 1]], 'the account store still reconciles an accepted old-view write')
+          assert.deepEqual(commits, [[101, true, 1, undefined]], 'the account store still reconciles an accepted old-view write')
         }
         else if (invalidation === 'account-after-send') {
           const replacement = toolbar.querySelector('.bewly-watch-later-btn')

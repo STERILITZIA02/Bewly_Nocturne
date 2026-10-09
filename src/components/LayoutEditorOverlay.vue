@@ -536,7 +536,7 @@ function editContextTarget() {
   if (!descriptor)
     return
   contextTargetId.value = null
-  enterLayoutEditMode(descriptor.section, descriptor.id)
+  enterLayoutEditMode(descriptor.id)
   refreshTrackedElements()
   scheduleGeometryUpdate()
 }

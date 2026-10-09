@@ -3,8 +3,9 @@ import { getCurrentScope, isProxy, onScopeDispose, readonly, ref, toRaw, toValue
 import browser from 'webextension-polyfill'
 
 import type { StorageRef } from '~/composables/useStorageLocal'
+import { waitForDelay, waitWithSignal, withRequestDeadline } from '~/utils/abort'
 import { isExtensionContextInvalidatedError, sendMessage } from '~/utils/messaging'
-import type { SettingsStoragePatch, SettingsStoragePatchResponse } from '~/utils/settingsStorageProtocol'
+import type { SettingsStoragePatch, SettingsStoragePatchRequest, SettingsStoragePatchResponse } from '~/utils/settingsStorageProtocol'
 import {
   applySettingsStoragePatch,
   createEmptySettingsStoragePatch,
@@ -13,6 +14,7 @@ import {
   mergeSettingsStoragePatches,
   normalizeSettingsStorageWriteMeta,
   parseStoredSettings,
+  SETTINGS_STORAGE_IMPORT_MESSAGE,
   SETTINGS_STORAGE_KEY,
   SETTINGS_STORAGE_META_KEY,
   SETTINGS_STORAGE_PATCH_MESSAGE,
@@ -20,7 +22,7 @@ import {
 } from '~/utils/settingsStorageProtocol'
 import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 
-export type SettingsStorageInitializationState = 'degraded' | 'loaded' | 'loading'
+export type SettingsStorageInitializationState = 'degraded' | 'invalidated' | 'loaded' | 'loading'
 
 interface UseSettingsStorageOptions<T> {
   normalize?: (value: T) => void
@@ -31,7 +33,9 @@ interface UseSettingsStorageOptions<T> {
 
 export interface SettingsStorageRef<T extends object> extends StorageRef<T> {
   flush: () => Promise<void>
+  import: (values: Partial<T>) => Promise<void>
   initializationState: Readonly<Ref<SettingsStorageInitializationState>>
+  displayReady: Readonly<Ref<boolean>>
 }
 
 interface SettingsStorageFlushWaiter {
@@ -40,6 +44,7 @@ interface SettingsStorageFlushWaiter {
 }
 
 const MAX_MESSAGE_ATTEMPTS = 5
+const INITIAL_READ_FALLBACK_DELAY = 1_500
 const RECOVERY_READ_DELAYS = [2_000, 5_000, 15_000] as const
 
 class StaleStorageGenerationError extends Error {}
@@ -107,10 +112,6 @@ function isPatchResponse(value: unknown): value is SettingsStoragePatchResponse 
     && (response.storedValue === undefined || typeof response.storedValue === 'string')
 }
 
-function waitForRetry(delay: number) {
-  return new Promise<void>(resolve => setTimeout(resolve, delay))
-}
-
 function createClientId() {
   if (typeof crypto.randomUUID === 'function')
     return crypto.randomUUID()
@@ -133,22 +134,37 @@ export function useSettingsStorage<T extends object>(
   let applyingCanonicalValue = false
   let canonicalValue = asRecord(cloneValue(defaults))
   let currentEpoch = ''
+  const retiredEpochs = new Set<string>()
   let canonicalRevision = 0
   let canonicalFingerprint: string | null = null
   let observedValue = asRecord(cloneValue(data.value))
   let queuedPatch = createEmptySettingsStoragePatch()
   let inFlightPatch: SettingsStoragePatch | null = null
+  let failedPatchRequest: SettingsStoragePatchRequest | null = null
   const clientId = createClientId()
   let nextOperationId = 1
   let ready = false
   let persistenceReady = false
   let disposed = false
+  let contextInvalidated = false
+  let importingOperation: number | null = null
   let storageGeneration = 0
   let readInFlightGeneration: number | null = null
   const initializationState = ref<SettingsStorageInitializationState>('loading')
+  const displayReady = ref(false)
   let recoveryReadAttempt = 0
   let recoveryReadTimer: ReturnType<typeof setTimeout> | null = null
   const flushWaiters = new Set<SettingsStorageFlushWaiter>()
+
+  function captureLocalChanges() {
+    if (disposed || contextInvalidated || applyingCanonicalValue)
+      return
+    const next = asRecord(cloneValue(data.value))
+    const patch = createTopLevelSettingsStoragePatch(observedValue, next)
+    observedValue = next
+    if (!isSettingsStoragePatchEmpty(patch))
+      queuedPatch = mergeSettingsStoragePatches(queuedPatch, patch)
+  }
 
   const storageIsIdle = () => ready
     && persistenceReady
@@ -169,6 +185,7 @@ export function useSettingsStorage<T extends object>(
   }
 
   const renderCanonicalValue = () => {
+    captureLocalChanges()
     let nextValue = canonicalValue
     if (inFlightPatch)
       nextValue = applySettingsStoragePatch(nextValue, inFlightPatch)
@@ -188,7 +205,7 @@ export function useSettingsStorage<T extends object>(
     const actualValue = asRecord(cloneValue(data.value))
     const derivedPatch = createTopLevelSettingsStoragePatch(renderedValue, actualValue)
     observedValue = actualValue
-    if (!isSettingsStoragePatchEmpty(derivedPatch))
+    if (persistenceReady && !isSettingsStoragePatchEmpty(derivedPatch))
       queuedPatch = mergeSettingsStoragePatches(queuedPatch, derivedPatch)
   }
 
@@ -204,7 +221,8 @@ export function useSettingsStorage<T extends object>(
     canonicalFingerprint = fingerprint
     const raw = parseStoredSettings(storedValue)
     const migrated = migrateSidebarCoverSetting(raw)
-    queuedPatch = mergeSettingsStoragePatches(createTopLevelSettingsStoragePatch(raw, migrated), queuedPatch)
+    if (persistenceReady)
+      queuedPatch = mergeSettingsStoragePatches(createTopLevelSettingsStoragePatch(raw, migrated), queuedPatch)
     canonicalValue = {
       ...asRecord(cloneValue(defaults)),
       ...migrated,
@@ -214,6 +232,9 @@ export function useSettingsStorage<T extends object>(
   }
 
   const resetStorageGeneration = (epoch: string, renderDefaults = true) => {
+    rejectFlushWaiters(new StaleStorageGenerationError('Settings storage authority changed'))
+    if (currentEpoch && epoch !== currentEpoch)
+      retiredEpochs.add(currentEpoch)
     storageGeneration++
     currentEpoch = epoch
     canonicalRevision = 0
@@ -221,59 +242,72 @@ export function useSettingsStorage<T extends object>(
     canonicalValue = asRecord(cloneValue(defaults))
     queuedPatch = createEmptySettingsStoragePatch()
     inFlightPatch = null
-    persistenceReady = epoch.length > 0
+    failedPatchRequest = null
+    // Discard even edits that Vue has not delivered to the batched watcher yet.
+    observedValue = asRecord(cloneValue(data.value))
+    persistenceReady = false
+    initializationState.value = 'loading'
     if (renderDefaults)
       renderCanonicalValue()
   }
 
   const sendWithRetry = async <R>(type: string, payload: unknown, generation: number): Promise<R> => {
-    let lastError: unknown
+    const run = async (signal?: AbortSignal): Promise<R> => {
+      let lastError: unknown
 
-    for (let attempt = 0; attempt < MAX_MESSAGE_ATTEMPTS; attempt++) {
-      if (generation !== storageGeneration)
-        throw new StaleStorageGenerationError()
-
-      try {
-        const response = await sendMessage(type, payload) as R
-        if (generation !== storageGeneration)
+      for (let attempt = 0; attempt < MAX_MESSAGE_ATTEMPTS; attempt++) {
+        if (contextInvalidated || generation !== storageGeneration)
           throw new StaleStorageGenerationError()
-        return response
-      }
-      catch (error) {
-        if (error instanceof StaleStorageGenerationError)
-          throw error
 
-        lastError = error
-        if (isExtensionContextInvalidatedError(error) || attempt === MAX_MESSAGE_ATTEMPTS - 1)
-          break
-        await waitForRetry(100 * 2 ** attempt)
+        try {
+          signal?.throwIfAborted()
+          const response = await waitWithSignal(sendMessage(type, payload) as Promise<R>, signal)
+          if (generation !== storageGeneration)
+            throw new StaleStorageGenerationError()
+          return response
+        }
+        catch (error) {
+          signal?.throwIfAborted()
+          if (error instanceof StaleStorageGenerationError)
+            throw error
+
+          lastError = error
+          if (isExtensionContextInvalidatedError(error) || attempt === MAX_MESSAGE_ATTEMPTS - 1)
+            break
+          await waitForDelay(100 * 2 ** attempt, signal)
+        }
       }
+
+      throw lastError
     }
-
-    throw lastError
+    return type === SETTINGS_STORAGE_READ_MESSAGE
+      ? withRequestDeadline(run, {}, 10_000)
+      : run()
   }
 
   const flushQueuedPatch = async () => {
-    if (disposed) {
-      rejectFlushWaiters(new Error('Settings storage was disposed before pending writes were flushed'))
+    if (contextInvalidated) {
       return
     }
 
-    if (!ready || !persistenceReady || inFlightPatch || isSettingsStoragePatchEmpty(queuedPatch)) {
+    if (!ready || !persistenceReady || (inFlightPatch && !failedPatchRequest)
+      || (!failedPatchRequest && isSettingsStoragePatchEmpty(queuedPatch))) {
       resolveFlushWaitersIfIdle()
       return
     }
 
-    const patch = queuedPatch
+    const patch = failedPatchRequest?.patch ?? queuedPatch
     const generation = storageGeneration
-    queuedPatch = createEmptySettingsStoragePatch()
+    if (!failedPatchRequest)
+      queuedPatch = createEmptySettingsStoragePatch()
     inFlightPatch = patch
-    const request = {
+    const request = failedPatchRequest ?? {
       clientId,
       epoch: currentEpoch,
       operationId: nextOperationId++,
       patch,
     }
+    failedPatchRequest = null
 
     try {
       const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_PATCH_MESSAGE, request, generation)
@@ -282,12 +316,9 @@ export function useSettingsStorage<T extends object>(
       if (generation !== storageGeneration)
         return
       if (!response.accepted || response.epoch !== currentEpoch) {
-        // Preserve edits queued while this request was in flight. Applying the
-        // in-flight patch first keeps the later queued values authoritative.
-        const pendingPatch = mergeSettingsStoragePatches(patch, queuedPatch)
+        // Clear/import rotates the authority; never replay old-epoch edits.
         resetStorageGeneration(response.epoch, false)
         persistenceReady = true
-        queuedPatch = pendingPatch
         applyCanonicalValue(response.storedValue, response.revision, true)
         void flushQueuedPatch()
         resolveFlushWaitersIfIdle()
@@ -304,12 +335,12 @@ export function useSettingsStorage<T extends object>(
       if (error instanceof StaleStorageGenerationError || generation !== storageGeneration)
         return
 
-      queuedPatch = mergeSettingsStoragePatches(patch, queuedPatch)
-      inFlightPatch = null
+      // Keep the original operation identity after an unknown acknowledgement.
+      // Retrying it cannot overwrite a newer remote edit if it already committed.
+      failedPatchRequest = request
       renderCanonicalValue()
       if (isExtensionContextInvalidatedError(error)) {
-        disposed = true
-        rejectFlushWaiters(error)
+        invalidateContext(error)
         return
       }
       onError(error)
@@ -318,9 +349,12 @@ export function useSettingsStorage<T extends object>(
   }
 
   const flushPendingWrites = (): Promise<void> => {
-    if (disposed)
+    if (contextInvalidated)
       return Promise.reject(new Error('Settings storage was disposed before pending writes were flushed'))
 
+    captureLocalChanges()
+    if (!persistenceReady && readInFlightGeneration !== storageGeneration)
+      void refreshCanonicalValue()
     void flushQueuedPatch()
     if (storageIsIdle())
       return Promise.resolve()
@@ -330,22 +364,15 @@ export function useSettingsStorage<T extends object>(
     })
   }
 
-  watch(
+  const stopWatch = watch(
     data,
     () => {
-      if (applyingCanonicalValue)
+      if (disposed || contextInvalidated || applyingCanonicalValue)
         return
-
-      const nextValue = asRecord(cloneValue(data.value))
-      const patch = createTopLevelSettingsStoragePatch(observedValue, nextValue)
-      observedValue = nextValue
-      if (isSettingsStoragePatchEmpty(patch))
-        return
-
-      queuedPatch = mergeSettingsStoragePatches(queuedPatch, patch)
+      captureLocalChanges()
       void flushQueuedPatch()
     },
-    { deep: true, flush: 'sync' },
+    { deep: true, flush: 'pre' },
   )
 
   const markReady = () => {
@@ -353,7 +380,8 @@ export function useSettingsStorage<T extends object>(
       return
 
     ready = true
-    options.onReady?.(data.value)
+    if (!disposed)
+      options.onReady?.(data.value)
     void flushQueuedPatch()
   }
 
@@ -361,6 +389,55 @@ export function useSettingsStorage<T extends object>(
     if (recoveryReadTimer != null)
       clearTimeout(recoveryReadTimer)
     recoveryReadTimer = null
+  }
+
+  function invalidateContext(error: unknown) {
+    contextInvalidated = true
+    failedPatchRequest = null
+    disposed = true
+    storageGeneration++
+    initializationState.value = 'invalidated'
+    stopWatch()
+    clearRecoveryReadTimer()
+    browser.storage.onChanged.removeListener(onStorageChanged)
+    rejectFlushWaiters(error)
+  }
+
+  async function applyLocalSnapshot(generation: number) {
+    if (ready || disposed || generation !== storageGeneration)
+      return
+    try {
+      const stored = await withRequestDeadline(() => browser.storage.local.get([SETTINGS_STORAGE_KEY, SETTINGS_STORAGE_META_KEY]), {}, INITIAL_READ_FALLBACK_DELAY)
+      if (ready || disposed || generation !== storageGeneration)
+        return
+      const meta = normalizeSettingsStorageWriteMeta(stored[SETTINGS_STORAGE_META_KEY])
+      if (retiredEpochs.has(meta.epoch))
+        return
+      if (!currentEpoch || currentEpoch === meta.epoch) {
+        currentEpoch = meta.epoch
+        if (stored[SETTINGS_STORAGE_KEY] != null) {
+          const raw = typeof stored[SETTINGS_STORAGE_KEY] === 'string' ? JSON.parse(stored[SETTINGS_STORAGE_KEY]) : stored[SETTINGS_STORAGE_KEY]
+          if (!raw || typeof raw !== 'object' || Array.isArray(raw))
+            throw new TypeError('Invalid local settings snapshot')
+          applyCanonicalValue(stored[SETTINGS_STORAGE_KEY], meta.revision)
+          displayReady.value = true
+        }
+      }
+    }
+    catch (error) {
+      if (isExtensionContextInvalidatedError(error))
+        invalidateContext(error)
+      else if (!disposed && generation === storageGeneration)
+        onError(error)
+    }
+    finally {
+      if (!disposed && generation === storageGeneration && initializationState.value !== 'loaded') {
+        // Local/default display is usable, but no patch can be sent until an
+        // authoritative coordinator snapshot has established this epoch.
+        initializationState.value = 'degraded'
+        markReady()
+      }
+    }
   }
 
   function scheduleRecoveryRead() {
@@ -380,11 +457,17 @@ export function useSettingsStorage<T extends object>(
       return
 
     readInFlightGeneration = generation
+    const fallbackTimer = markReadyWhenFinished
+      ? setTimeout(() => void applyLocalSnapshot(generation), INITIAL_READ_FALLBACK_DELAY)
+      : undefined
     try {
       const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_READ_MESSAGE, undefined, generation)
       if (!isPatchResponse(response))
         throw new TypeError('Invalid settings storage response')
       if (generation !== storageGeneration)
+        return
+
+      if (retiredEpochs.has(response.epoch))
         return
 
       const epochChanged = currentEpoch.length > 0 && response.epoch !== currentEpoch
@@ -399,54 +482,71 @@ export function useSettingsStorage<T extends object>(
       applyCanonicalValue(response.storedValue, response.revision, epochChanged)
       const wasLoaded = initializationState.value === 'loaded'
       initializationState.value = 'loaded'
-      if (!wasLoaded)
+      displayReady.value = true
+      if (!wasLoaded && !disposed)
         options.onLoaded?.(data.value)
       void flushQueuedPatch()
     }
     catch (error) {
-      if (error instanceof StaleStorageGenerationError)
+      if (error instanceof StaleStorageGenerationError || generation !== storageGeneration)
         return
 
       initializationState.value = 'degraded'
       if (isExtensionContextInvalidatedError(error)) {
-        disposed = true
+        invalidateContext(error)
       }
       else {
         onError(error)
+        if (markReadyWhenFinished)
+          await applyLocalSnapshot(generation)
         scheduleRecoveryRead()
       }
       rejectFlushWaiters(error)
     }
     finally {
+      clearTimeout(fallbackTimer)
       if (readInFlightGeneration === generation)
         readInFlightGeneration = null
-      if (markReadyWhenFinished)
+      if (markReadyWhenFinished && !contextInvalidated && generation === storageGeneration)
         markReady()
     }
   }
 
-  const onStorageChanged = (
+  function onStorageChanged(
     changes: Record<string, browser.Storage.StorageChange>,
     areaName: string,
-  ) => {
-    if (areaName !== 'local')
+  ) {
+    if (contextInvalidated || areaName !== 'local')
       return
 
     const settingsChange = changes[SETTINGS_STORAGE_KEY]
     const metaChange = changes[SETTINGS_STORAGE_META_KEY]
     const metaWasRemoved = metaChange?.oldValue != null && metaChange.newValue == null
     if (metaWasRemoved) {
+      importingOperation = null
       resetStorageGeneration('')
       void refreshCanonicalValue()
       return
     }
 
     const meta = metaChange ? normalizeSettingsStorageWriteMeta(metaChange.newValue) : null
+    if (meta?.epoch && retiredEpochs.has(meta.epoch))
+      return
     const epochChanged = Boolean(meta?.epoch && currentEpoch && meta.epoch !== currentEpoch)
-    if (epochChanged)
+    const ownImport = importingOperation != null && meta?.recentOperationIds.includes(`${clientId}:${importingOperation}`)
+    if (epochChanged && ownImport) {
+      retiredEpochs.add(currentEpoch)
+      currentEpoch = meta!.epoch
+      canonicalRevision = 0
+      canonicalFingerprint = null
+    }
+    else if (epochChanged) {
+      importingOperation = null
       resetStorageGeneration(meta!.epoch, !settingsChange)
-    else if (meta?.epoch && !currentEpoch)
+    }
+    else if (meta?.epoch && !currentEpoch) {
       currentEpoch = meta.epoch
+    }
 
     if (!settingsChange) {
       if (meta?.epoch && (epochChanged || !canonicalFingerprint))
@@ -454,24 +554,81 @@ export function useSettingsStorage<T extends object>(
       return
     }
 
-    persistenceReady = true
+    if (!meta?.epoch) {
+      persistenceReady = false
+      void refreshCanonicalValue()
+      return
+    }
+
+    persistenceReady = Boolean(currentEpoch && meta?.epoch)
     recoveryReadAttempt = 0
     clearRecoveryReadTimer()
     applyCanonicalValue(settingsChange.newValue, meta?.revision ?? canonicalRevision, epochChanged)
     const wasLoaded = initializationState.value === 'loaded'
     initializationState.value = 'loaded'
+    displayReady.value = true
     if (!wasLoaded)
       options.onLoaded?.(data.value)
     void flushQueuedPatch()
   }
 
+  async function importSettings(values: Partial<T>) {
+    if (!persistenceReady || disposed || contextInvalidated)
+      throw new Error('Settings authority is not ready')
+    const operationId = nextOperationId++
+    const previousCanonicalValue = canonicalValue
+    resetStorageGeneration(currentEpoch, false)
+    canonicalValue = previousCanonicalValue
+    importingOperation = operationId
+    persistenceReady = false
+    const importPatch: SettingsStoragePatch = { set: cloneValue(values) as Record<string, unknown>, remove: [] }
+    inFlightPatch = importPatch
+    renderCanonicalValue()
+    const generation = storageGeneration
+    try {
+      const response = await sendWithRetry<SettingsStoragePatchResponse>(SETTINGS_STORAGE_IMPORT_MESSAGE, {
+        clientId,
+        epoch: currentEpoch,
+        operationId,
+        patch: importPatch,
+      }, generation)
+      if (!isPatchResponse(response) || !response.accepted)
+        throw new Error('Settings import was superseded')
+      currentEpoch = response.epoch
+      persistenceReady = true
+      inFlightPatch = null
+      applyCanonicalValue(response.storedValue, response.revision, true)
+      void flushQueuedPatch()
+    }
+    catch (error) {
+      if (isExtensionContextInvalidatedError(error)) {
+        invalidateContext(error)
+      }
+      else if (generation === storageGeneration) {
+        inFlightPatch = null
+        void refreshCanonicalValue()
+      }
+      throw error
+    }
+    finally {
+      if (importingOperation === operationId)
+        importingOperation = null
+    }
+  }
+
   browser.storage.onChanged.addListener(onStorageChanged)
   if (getCurrentScope()) {
     onScopeDispose(() => {
+      captureLocalChanges()
       disposed = true
+      stopWatch()
       clearRecoveryReadTimer()
       browser.storage.onChanged.removeListener(onStorageChanged)
-      rejectFlushWaiters(new Error('Settings storage was disposed before pending writes were flushed'))
+      // Ordinary scope teardown drains the captured edits; an invalid runtime
+      // instead terminates immediately through invalidateContext.
+      if (!contextInvalidated && !persistenceReady && (!isSettingsStoragePatchEmpty(queuedPatch) || inFlightPatch))
+        void refreshCanonicalValue()
+      void flushQueuedPatch()
     })
   }
 
@@ -481,9 +638,11 @@ export function useSettingsStorage<T extends object>(
     flush: {
       value: flushPendingWrites,
     },
+    import: { value: importSettings },
     initializationState: {
       value: readonly(initializationState),
     },
+    displayReady: { value: readonly(displayReady) },
   })
 
   return data as SettingsStorageRef<T>

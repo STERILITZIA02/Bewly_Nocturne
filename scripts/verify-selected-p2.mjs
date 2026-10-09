@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
+import process from 'node:process'
 import vm from 'node:vm'
 
 import { JSDOM } from 'jsdom'
@@ -9,17 +10,25 @@ import { compileScript, parse } from 'vue/compiler-sfc'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
+import { registerCommentReadingChecks } from './verify-comment-reading.mjs'
+import { registerDataConsistencyChecks } from './verify-data-consistency.mjs'
 import { registerDesignImplementationChecks } from './verify-design-implementation.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
 import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
 import { registerFourFeatureChecks } from './verify-four-features.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
+import { registerLibraryToolChecks } from './verify-library-tools.mjs'
 import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
+import { registerLocalLoudnessChecks } from './verify-local-loudness.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
+import { registerMaintenanceIntegrationChecks } from './verify-maintenance-integration.mjs'
+import { registerMaintenanceReviewChecks } from './verify-maintenance-review.mjs'
+import { registerNativeAppearanceChecks } from './verify-native-appearance.mjs'
 import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
+import { registerPlayerMaintenanceChecks } from './verify-player-maintenance.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
@@ -79,6 +88,14 @@ const { useLoadMore } = await import('../src/contentScripts/views/SearchResults/
 const r = value => ({ value })
 const checks = []
 const check = (name, run) => checks.push({ name, run })
+registerDataConsistencyChecks(check, { Vue, flush })
+registerCommentReadingChecks(check, { Vue, compileComponent, flush })
+registerLocalLoudnessChecks(check, { Vue, compileComponent, flush })
+registerPlayerMaintenanceChecks(check, { Vue, compileComponent, flush })
+registerMaintenanceIntegrationChecks(check, { Vue, compileComponent, flush })
+registerMaintenanceReviewChecks(check, { Vue, compileComponent, flush })
+registerNativeAppearanceChecks(check, { Vue, compileComponent, flush })
+registerLibraryToolChecks(check, { Vue, compileComponent, flush })
 registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
 registerSeptemberAdaptationChecks(check, { Vue, compileComponent, flush })
 registerSixAuditFixChecks(check, { Vue, compileComponent, flush })
@@ -91,12 +108,12 @@ registerViewLifetimeChecks(check, { Vue, compileComponent, flush })
 registerVisualConsistencyChecks(check, { Vue, compileComponent, flush })
 registerDesignImplementationChecks(check, { Vue, compileComponent, flush })
 registerDockGlassChecks(check, { Vue, compileComponent, flush })
-registerTopBarSyncChecks(check, { Vue, flush })
+registerTopBarSyncChecks(check, { Vue, flush, compileComponent })
 registerSurfaceMaterialChecks(check, { Vue, compileComponent, flush })
 registerLoadingSkeletonChecks(check, { Vue, compileComponent, flush })
 registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent, flush })
 registerPlaybackContentChecks(check)
-registerAdvertisingRuleChecks(check, { flush })
+registerAdvertisingRuleChecks(check, { Vue, compileComponent, flush })
 registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
 registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
 registerWatchLaterOwnershipChecks(check, { Vue, flush })
@@ -182,7 +199,7 @@ check('P2-01/02 history clear invalidates old reads; submitted query owns pagina
     clearAllHistory: () => cleared.promise,
     searchHistoryList: async (options) => {
       searches.push(options)
-      return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ view_at: i })) } }
+      return { code: 0, data: { list: Array.from({ length: 20 }, (_, i) => ({ view_at: i, history: { business: 'archive', oid: options.pn * 20 + i } })) } }
     },
   }
   const timeline = useHistoryTimeline({ api, getAccountId: () => 1, getCSRF: () => 'fixture', haveScrollbar: async () => true, onWriteError: error => errors.push(error) })
@@ -196,7 +213,7 @@ check('P2-01/02 history clear invalidates old reads; submitted query owns pagina
   assert.equal(timeline.noMoreContent.value, true)
   assert.equal(timeline.isClearingHistory.value, false)
   timeline.noMoreContent.value = false
-  timeline.historyList.push({ view_at: 50 })
+  timeline.historyList.push({ view_at: 50, history: { business: 'archive', oid: 100 } })
   api.clearAllHistory = async () => ({ code: -1, message: 'rejected' })
   await timeline.clearAllHistory()
   assert.equal(timeline.historyList.length, 1, 'failed clear retains the list')
@@ -230,13 +247,17 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
   ], {
     topBarStore: { isLogin: true, userInfo: { mid: 1 }, commitWatchLaterMutation: async () => {} },
     watchLaterExtensionContextInvalidated: false,
+    AbortController,
+    readController: undefined,
+    loadingLibrary: false,
+    filtersActive: r(false),
     requestGeneration: 0,
     isLoading: r(false),
     requestFailed: r(false),
     noMoreContent: r(false),
     pageNum: r(1),
     pageSize: r(20),
-    watchLaterCount: r(0),
+    watchLaterCount: { get value() { return server.length } },
     currentWatchLaterList: r([]),
     pendingAction: r(null),
     haveScrollbar: async () => true,
@@ -260,6 +281,7 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
   const { createAccountLifetime } = await import('../src/utils/accountLifetime')
   context.actionLifetime = createAccountLifetime(() => context.getCurrentAccountId())
   context.updateOwnedWatchLater = (await loadSourceModule('../src/utils/watchLater.ts', {
+    '~/logic/watchLaterState': { findWatchLaterEntry: () => undefined },
     '~/utils/api': { default: context.api },
     '~/utils/main': { getCSRF: () => 'fixture', getUserID: () => '1' },
     '~/utils/pgcEpisode': { resolvePgcEpisodeVideoIds: async () => null },
@@ -405,11 +427,20 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
 })
 
 let sharedSkeletonComponent
+let sharedIconButton
+let sharedAdvertisementCard
 const glassSurfaceContext = Symbol('fixture-glass-surface')
 async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
   if (!file.endsWith('/SkeletonBlock.vue'))
     sharedSkeletonComponent ??= await compileComponent('../src/components/SkeletonBlock.vue')
   const text = await readFile(new URL(file, import.meta.url), 'utf8')
+  if (text.includes('\'~/components/IconButton.vue\''))
+    sharedIconButton ??= await compileComponent('../src/components/IconButton.vue')
+  if (text.includes('\'~/components/VideoCard/AdvertisementCard.vue\'')) {
+    sharedAdvertisementCard ??= await compileComponent('../src/components/VideoCard/AdvertisementCard.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+    })
+  }
   const { descriptor } = parse(text)
   const source = compileScript(descriptor, { id: file, inlineTemplate: renderTemplate }).content.replaceAll('import.meta.env.DEV', 'true')
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
@@ -417,6 +448,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const modules = {
     'vue': Vue,
     '~/components/SkeletonBlock.vue': { default: sharedSkeletonComponent },
+    '~/components/IconButton.vue': { default: sharedIconButton },
+    '~/components/VideoCard/AdvertisementCard.vue': { default: sharedAdvertisementCard },
+    '~/utils/advertising': await import('../src/utils/advertising'),
     '@vueuse/core': VueUse,
     '~/components/formFieldLabel': fieldLabels,
     '~/utils/imageLoadQueue': imageLoadQueue,
@@ -430,11 +464,25 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/useLiquidGlass': { GLASS_SURFACE_CONTEXT: glassSurfaceContext, liquidGlassEnabled: Vue.ref(false) },
     ...mocks,
   }
+  if (text.includes('\'./watchLaterFilters\'') && !modules['./watchLaterFilters'])
+    modules['./watchLaterFilters'] = await import('../src/contentScripts/views/WatchLater/watchLaterFilters')
+  if (text.includes('\'~/components/Settings/components/SettingsSegmentedControl.vue\'') && !modules['~/components/Settings/components/SettingsSegmentedControl.vue']) {
+    modules['~/components/Settings/components/SettingsSegmentedControl.vue'] = { default: await compileComponent('../src/components/Settings/components/SettingsSegmentedControl.vue', {
+      '~/components/LiquidSegmentIndicator.vue': { default: { render: () => null } },
+    }) }
+  }
+  if (text.includes('\'./ConversationFind.vue\'') && !modules['./ConversationFind.vue']) {
+    modules['./ConversationFind.vue'] = { default: await compileComponent('../src/contentScripts/views/Notifications/whisper/ConversationFind.vue', {
+      'vue-i18n': modules['vue-i18n'],
+      './privateMessageSearch': await import('../src/contentScripts/views/Notifications/whisper/privateMessageSearch'),
+    }) }
+  }
   vm.runInNewContext(code, {
     ...Vue,
     exports,
     window,
     AbortController,
+    crypto,
     document,
     HTMLElement,
     HTMLImageElement: window.HTMLImageElement,
@@ -700,7 +748,6 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
     seriesList: r([]),
     activatedSeries: r(null),
     settings: { value: {} },
-    HOME_TASK_SEARCH_STAGE_HEIGHT: 86,
     emit: noop,
     handleBackToTop: noop,
     reportRuntimeFailure: noop,
@@ -787,7 +834,9 @@ check('P2-14 custom multipart order excludes collection manuscripts and preserve
 registerPlaybackVisualFixChecks(check, { Vue, compileComponent, flush })
 
 try {
-  for (const { name, run } of checks) {
+  const selected = process.argv[2] ? checks.filter(check => check.name.includes(process.argv[2])) : checks
+  assert.ok(selected.length, 'No checks matched the requested filter')
+  for (const { name, run } of selected) {
     await run()
     console.log(`PASS ${name}`)
   }

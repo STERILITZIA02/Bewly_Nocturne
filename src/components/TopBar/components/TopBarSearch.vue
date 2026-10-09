@@ -8,10 +8,10 @@ import { useTopBarStore } from '~/stores/topBarStore'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 
+withDefaults(defineProps<{ active?: boolean }>(), { active: true })
 const emit = defineEmits<{
   focusChange: [focused: boolean]
 }>()
-
 const { showSearchBar, forceWhiteIcon } = useTopBarInteraction()
 const topBarStore = useTopBarStore()
 const { searchKeyword } = storeToRefs(topBarStore)
@@ -26,6 +26,7 @@ const useLightText = computed(() => forceWhiteIcon.value && !settings.value.disa
       <SearchBar
         v-if="showSearchBar"
         v-model="searchKeyword"
+        :active="active"
         class="search-bar"
         :darken-on-focus="searchFocusEffect.darkened"
         :blurred-on-focus="searchFocusEffect.blurred"

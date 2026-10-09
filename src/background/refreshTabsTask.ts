@@ -1,6 +1,6 @@
 import type { Tabs } from 'webextension-polyfill'
 
-import { CONTENT_SCRIPT_MATCHES, isContentScriptTargetUrl } from '~/constants/contentScript'
+import { CONTENT_SCRIPT_TARGET_MATCHES, isContentScriptTargetUrl } from '~/constants/contentScript'
 
 export interface RefreshTabItem {
   tabId: number
@@ -40,7 +40,7 @@ export function createRefreshTabsTask(tabs: Pick<Tabs.Static, 'query' | 'get' | 
     task.running = true
     try {
       if (!retry) {
-        const candidates = await tabs.query({ url: [...CONTENT_SCRIPT_MATCHES] })
+        const candidates = await tabs.query({ url: [...CONTENT_SCRIPT_TARGET_MATCHES] })
         task.items = candidates.filter(tab => tab.id !== undefined && Boolean(tab.incognito) === task.incognito && isContentScriptTargetUrl(tab.pendingUrl ?? tab.url))
           .map(tab => ({ tabId: tab.id!, url: (tab.pendingUrl ?? tab.url)!, status: tab.discarded ? 'skipped' : 'pending' }))
       }

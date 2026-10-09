@@ -106,6 +106,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     let appendedHeight = 0
     let rowMeasurements = 0
     const saved = []
+    const automaticHistory = []
     const module = await loadSourceModule(`${path}useConversationViewport.ts`, { vue: Vue, './conversationExpansion': await import(`${path}conversationExpansion`) }, {
       AbortController,
       WheelEvent: window.WheelEvent,
@@ -126,7 +127,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     let reading
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ setup() {
-      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, followContentGrowth: () => follow, talkerId: () => 'A', save: (_id, value) => saved.push(value), onFrame() {} })
+      reading = module.useConversationViewport({ active: () => true, ready: () => true, canProcess: () => true, followContentGrowth: () => follow, talkerId: () => 'A', save: (_id, value) => saved.push(value), onFrame: (_atLatest, loadOlder) => automaticHistory.push(loadOlder) })
       return () => Vue.h('div', { ref: reading.messageScrollRef }, Array.from({ length: 1000 }, (_, i) => Vue.h('div', { 'data-message-id': `message-${i}` })))
     } })
     app.mount(host)
@@ -179,6 +180,20 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       step()
       assert.equal(scrollTop, beforeAppend, 'the reader controls whether a newly appended message follows')
       assert.equal(saved.at(-1).atLatest, false)
+
+      reading.markReadingIntent(new window.WheelEvent('wheel', { deltaY: -1 }))
+      const pendingAnchor = reading.captureReadingAnchor()
+      growthAbove = 0
+      reading.scrollToMessage('message-0')
+      step()
+      assert.equal(scrollTop, 0)
+      assert.equal(automaticHistory.at(-1), false, 'finding an already-loaded message does not request more history')
+      pendingAnchor.restore()
+      assert.equal(scrollTop, 0, 'an earlier read cannot undo message navigation')
+      reading.scrollToMessage('message-100')
+      step()
+      assert.equal(scrollTop, 2984)
+      assert.equal(reading.isAtLatestPosition.value, false)
 
       reading.handleContentResize()
       reading.resetReading()

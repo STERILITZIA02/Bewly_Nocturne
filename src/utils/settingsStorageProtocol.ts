@@ -5,6 +5,7 @@ export const SETTINGS_STORAGE_KEY = 'settings'
 export const SETTINGS_STORAGE_META_KEY = 'settingsWriteMeta:v1'
 export const SETTINGS_STORAGE_READ_MESSAGE = 'readSettingsStorage'
 export const SETTINGS_STORAGE_PATCH_MESSAGE = 'patchSettingsStorage'
+export const SETTINGS_STORAGE_IMPORT_MESSAGE = 'importSettingsStorage'
 export const SETTINGS_STORAGE_RECENT_OPERATION_LIMIT = 256
 
 export interface SettingsStoragePatchRequest {

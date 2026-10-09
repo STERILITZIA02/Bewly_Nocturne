@@ -1,4 +1,7 @@
+import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
 import type { CommentReplyPaginationMode, CommentReplyTreeMode } from '~/logic/storage'
+
+import { LOCAL_LOUDNESS_RANGE } from './localLoudnessProtocol'
 
 const PAGE_SETTINGS_LANGUAGES = ['en', 'cmn-CN', 'cmn-TW', 'jyut'] as const
 const COMMENT_REPLY_TREE_MODES = ['lineCollapseMain', 'lineKeepMain', 'indentOnly'] as const
@@ -12,6 +15,12 @@ export interface PageSettingsPayload {
   cleanShareLinkRemoveTrackingParams: boolean
   commentReplyPaginationMode: CommentReplyPaginationMode
   commentReplyTreeMode: CommentReplyTreeMode
+  commentReplyBatchPages: number
+  enableCommentReplyTreeContainer: boolean
+  commentReplyTreeContainerHeight: number
+  localLoudnessEnabled: boolean
+  localLoudnessTarget: number
+  localLoudnessStrength: number
   enableCleanShareLink: boolean
   enableCommentReplyTreeDisplay: boolean
   language: PageSettingsLanguage
@@ -41,6 +50,8 @@ export function createPageSettingsPayload(value: unknown): PageSettingsPayload |
     || typeof value.cleanShareLinkRemoveTrackingParams !== 'boolean'
     || typeof value.enableCleanShareLink !== 'boolean'
     || typeof value.enableCommentReplyTreeDisplay !== 'boolean'
+    || typeof value.enableCommentReplyTreeContainer !== 'boolean'
+    || typeof value.localLoudnessEnabled !== 'boolean'
     || typeof value.preventMobileRedirect !== 'boolean'
     || typeof value.showCommentHostTag !== 'boolean'
     || typeof value.showIPLocation !== 'boolean'
@@ -53,6 +64,14 @@ export function createPageSettingsPayload(value: unknown): PageSettingsPayload |
     return null
   if (!isOneOf(value.language, PAGE_SETTINGS_LANGUAGES))
     return null
+  for (const [field, range] of [['localLoudnessTarget', LOCAL_LOUDNESS_RANGE.target], ['localLoudnessStrength', LOCAL_LOUDNESS_RANGE.strength]] as const) {
+    if (!Number.isSafeInteger(value[field]) || Number(value[field]) < range.min || Number(value[field]) > range.max)
+      return null
+  }
+  if (!Number.isSafeInteger(value.commentReplyBatchPages) || Number(value.commentReplyBatchPages) < 1 || Number(value.commentReplyBatchPages) > COMMENT_REPLY_BATCH_MAX
+    || !Number.isSafeInteger(value.commentReplyTreeContainerHeight) || Number(value.commentReplyTreeContainerHeight) < COMMENT_REPLY_CONTAINER_HEIGHT.min || Number(value.commentReplyTreeContainerHeight) > COMMENT_REPLY_CONTAINER_HEIGHT.max) {
+    return null
+  }
 
   return {
     adjustCommentImageHeight: value.adjustCommentImageHeight,
@@ -60,6 +79,12 @@ export function createPageSettingsPayload(value: unknown): PageSettingsPayload |
     cleanShareLinkRemoveTrackingParams: value.cleanShareLinkRemoveTrackingParams,
     commentReplyPaginationMode: value.commentReplyPaginationMode,
     commentReplyTreeMode: value.commentReplyTreeMode,
+    commentReplyBatchPages: Number(value.commentReplyBatchPages),
+    enableCommentReplyTreeContainer: value.enableCommentReplyTreeContainer,
+    commentReplyTreeContainerHeight: Number(value.commentReplyTreeContainerHeight),
+    localLoudnessEnabled: value.localLoudnessEnabled,
+    localLoudnessTarget: Number(value.localLoudnessTarget),
+    localLoudnessStrength: Number(value.localLoudnessStrength),
     enableCleanShareLink: value.enableCleanShareLink,
     enableCommentReplyTreeDisplay: value.enableCommentReplyTreeDisplay,
     language: value.language,

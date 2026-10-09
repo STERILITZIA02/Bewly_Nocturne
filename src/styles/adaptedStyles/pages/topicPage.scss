@@ -11,11 +11,19 @@ html.topicPage.remove-top-bar:not(.remove-top-bar-without-placeholder) {
 }
 
 .bewly-design.topicPage {
+  .join-button__btn {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`
   :not(foobar) {
     .topic-nav button {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .bili-topic-selector__bulletin__clear {
@@ -28,7 +36,7 @@ html.topicPage.remove-top-bar:not(.remove-top-bar-without-placeholder) {
 
     .launch-user__name:hover,
     .bili-dyn-interaction__item__desc .bili-rich-text-module:hover {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .topic-nav span:before {

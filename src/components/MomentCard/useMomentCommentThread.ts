@@ -20,14 +20,14 @@ export function useMomentCommentThread(
   const getIdentity = () => `${getUserID() ?? 'guest'}:${commentType.value}:${commentId.value}:${sort.value}`
   const controller = createMomentCommentThreadController({
     getIdentity,
-    fetchPage: async (rootRpid, pageNumber) => {
+    fetchPage: async (rootRpid, pageNumber, signal) => {
       const response = await api.moment.getMomentCommentReplies({
         oid: commentId.value,
         type: commentType.value,
         root: rootRpid,
         pn: pageNumber,
         ps: THREAD_PAGE_SIZE,
-      })
+      }, { signal })
       return normalizeMomentCommentRepliesPage(response, pageNumber, THREAD_PAGE_SIZE)
     },
   })
@@ -54,6 +54,8 @@ export function useMomentCommentThread(
   }
 
   async function loadMoreReplies(root: MomentCommentItem) {
+    if (!controller.getState(root.rpid || root.id))
+      seedThread(root)
     revision.value += 1
     try {
       await controller.loadMore(root.rpid || root.id)
@@ -72,6 +74,10 @@ export function useMomentCommentThread(
     getThreadState,
     loadMoreReplies,
     resetThreads,
+    cancelReads: () => {
+      controller.cancelReads()
+      revision.value += 1
+    },
     snapshotThreads: controller.snapshot,
     restoreThreads: (snapshots: MomentCommentThreadSnapshot[]) => {
       controller.restore(snapshots)

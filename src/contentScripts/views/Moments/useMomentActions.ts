@@ -118,16 +118,8 @@ export function useMomentActions(getAccountId: () => AccountId, commit: (id: str
   }
 
   function isWatchLaterAdded(target: WatchLaterTarget) {
-    const stateKey = getWatchLaterStateKey(target)
-    if (!stateKey)
-      return false
-
-    const aid = getDirectWatchLaterAid(target) ?? watchLaterAidByTarget.get(stateKey)
-    if (!aid) {
-      void resolveMomentWatchLaterAid(target)
-      return false
-    }
-    return topBarStore.isInWatchLater(aid)
+    const key = getWatchLaterStateKey(target)
+    return topBarStore.isInWatchLater({ ...target, aid: getDirectWatchLaterAid(target) ?? (key ? watchLaterAidByTarget.get(key) : undefined) })
   }
 
   function isWatchLaterLoading(target: WatchLaterTarget) {

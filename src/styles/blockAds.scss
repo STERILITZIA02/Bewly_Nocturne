@@ -7,21 +7,23 @@
   .bili-feed-card.bewly-blocked-feed-card,
   .floor-single-card.bewly-blocked-feed-card,
   .video-list > .bewly-blocked-feed-card,
+  .bili-video-card.bewly-blocked-feed-card,
+  .video-page-card-small.bewly-blocked-feed-card,
+  .video-page-game-card-small.bewly-blocked-feed-card,
   .ad-report,
   .brand-ad-list,
-  // 视频页游戏卡片
-  .video-page-game-card-small,
   // 视频页面的侧栏
   .slide-ad-exp,
   .video-card-ad-small,
+  // 电影/剧集频道明确的楼层广告槽；不匹配普通 promotion 或活动横幅。
+  .gg-floor-module > .ad-item,
   // 动态页的广告
   .bili-dyn-ads {
     display: none !important;
   }
-  // 主頁右下廣告卡片
-  .adcard,
-  // 主頁下載桌面版提示
-  .desktop-download-tip {
+  // Explicit native advertisement card. Download and blocker notices are not
+  // advertisement evidence; their native visibility/close behaviour is retained.
+  .adcard {
     display: none !important;
   }
 
@@ -30,9 +32,4 @@
     margin-top: 0px !important;
     margin-bottom: 24px;
   }
-}
-
-// 检测到您的页面展示可能受到浏览器插件影响，建议您将当前页面加入插件白名单，以保障您的浏览体验～
-.adblock-tips {
-  display: none !important;
 }

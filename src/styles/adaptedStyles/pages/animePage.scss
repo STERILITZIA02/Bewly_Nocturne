@@ -1,4 +1,44 @@
 .bewly-design.animePage {
+  .timeline-container {
+    .timeline-header :is(.arrow-left, .arrow-right)::before {
+      // Keep the native 14px sprite clipping while expanding its pointer target.
+      content: "";
+      position: absolute;
+      inset: calc(-1 * var(--bew-space-2));
+    }
+
+    .day-of-week {
+      // Native monochrome calendar artwork is too pale on a light canvas.
+      filter: brightness(0);
+    }
+
+    .season-item > a,
+    .season-item > a > img {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .season-title,
+    .tl-day.today {
+      color: var(--bew-text-1);
+    }
+
+    .season-desc,
+    .group-time,
+    .tl-day {
+      color: var(--bew-text-2);
+    }
+
+    .season-desc.published,
+    .season-timer.today :is(.current-timer, .season-label) {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  &.dark .timeline-container .day-of-week {
+    filter: brightness(0) invert(1);
+  }
+
   :not(fjjdsl) .home-v3-app-container {
     .home-banner-wrapper
       .banner-hover-group
@@ -21,7 +61,7 @@
       .inner-content-item-index:not(:last-child)
       .index-categary-head:hover,
     .with-up-space:hover {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     #home_v3_mod_index.home-index-wrapper.inner-content-wrapper

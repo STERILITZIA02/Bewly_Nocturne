@@ -3,6 +3,7 @@ import browser from 'webextension-polyfill'
 
 import { useSettingsStorage } from '~/composables/useSettingsStorage'
 import { useStorageLocal } from '~/composables/useStorageLocal'
+import { COMMENT_REPLY_BATCH_DEFAULT, COMMENT_REPLY_CONTAINER_HEIGHT, normalizeCommentReplyBatch, normalizeCommentReplyContainerHeight } from '~/constants/commentReading'
 import type { DockCollapseMode } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import type { LiquidGlassMode, LiquidGlassTintSource } from '~/constants/liquidGlass'
@@ -15,6 +16,7 @@ import {
   MOBILE_LIST_LAYOUT_BREAKPOINT,
   normalizeListLayoutBreakpoint,
 } from '~/utils/gridLayout'
+import { LOCAL_LOUDNESS_DEFAULTS, normalizeLocalLoudnessValue } from '~/utils/localLoudnessProtocol'
 import type { PageMode } from '~/utils/pageMode'
 import { clampRangeValue } from '~/utils/range'
 import { normalizeVideoCardCoverRatio } from '~/utils/videoCardLayout'
@@ -79,7 +81,7 @@ export type PlayerDefaultState = 'system' | 'remember' | 'on' | 'off'
 export type VideoPlayerScrollMode = 'sendingBar' | 'playerCenter'
 export type VideoAspectRatio = '0:0' | '4:3' | '16:9'
 export type VideoPlayerModeOverride = DefaultVideoPlayerMode | 'inherit'
-export type VideoPlayerModeContext = 'multipart' | 'collection' | 'bangumi' | 'watchLater' | 'playlist'
+export type VideoPlayerModeContext = 'multipart' | 'collection' | 'bangumi' | 'watchLater' | 'playlist' | 'momentsDialog'
 export type VideoPlayerModeOverrides = Record<VideoPlayerModeContext, VideoPlayerModeOverride>
 export type RecommendationMode = 'web' | 'app' | 'webNoCookie'
 /**
@@ -174,6 +176,9 @@ export interface Settings {
   enableCommentReplyTreeDisplay: boolean // 启用评论回复树展示
   commentReplyTreeMode: CommentReplyTreeMode // 评论回复树展示模式
   commentReplyPaginationMode: CommentReplyPaginationMode // 评论回复分页模式
+  commentReplyBatchPages: number
+  enableCommentReplyTreeContainer: boolean
+  commentReplyTreeContainerHeight: number
   adjustCommentImageHeight: boolean // 调整评论区图片高度以匹配实际比例
   hideCommentImageScrollbar: boolean // 评论区图片预览时隐藏页面滚动条
   enlargeFavoriteDialog: boolean // 视频页收藏夹放大样式增强
@@ -241,6 +246,11 @@ export interface Settings {
   topBarPinnedChannels: string[]
   openNotificationsPageAsDrawer: boolean
   showLikeNotificationReminder: boolean
+  showReplyNotificationReminder: boolean
+  showAtNotificationReminder: boolean
+  showSystemNotificationReminder: boolean
+  showFollowedPrivateMessageUnreadCount: boolean
+  showUnfollowedPrivateMessageUnreadCount: boolean
   autoMarkPrivateMessagesRead: boolean
   followNewPrivateMessages: boolean
   autoLoadPrivateMessageImages: boolean
@@ -255,6 +265,8 @@ export interface Settings {
   autoReceiveVipExp: boolean
   filterArticlesInMoments: boolean
   originalMomentsShowUserCard: boolean
+  originalMomentsUseBewlyFilters: boolean
+  historyLayout: 'list' | 'grid'
   originalMomentsShowLiveList: boolean
   originalMomentsShowCommunityCenter: boolean
   originalMomentsShowHotSearch: boolean
@@ -405,6 +417,7 @@ export interface Settings {
   bewlyWidescreenSidebarPosition: BewlyWidescreenSidebarPosition
   bewlyWidescreenLayoutPriority: BewlyWidescreenLayoutPriority
   bewlyWidescreenCenterVideo: boolean
+  showWidescreenIdleProgress: boolean
   bewlyWidescreenSidebarWidth: number
   defaultDanmakuState: PlayerDefaultState
   defaultCaptionState: PlayerDefaultState
@@ -416,6 +429,9 @@ export interface Settings {
   showVerticalVideoZoomButton: boolean // 显示竖屏视频放大按钮
   showVideoScreenshotButton: boolean // 显示播放器截图按钮
   videoScreenshotShortcut: string
+  localLoudnessEnabled: boolean
+  localLoudnessTarget: number
+  localLoudnessStrength: number
 
   // 自动连播总开关
   useBilibiliDefaultAutoPlay: boolean // 使用B站默认自动播放行为（总开关）
@@ -439,6 +455,8 @@ export interface Settings {
   // 视频比例记忆设置
   rememberVideoAspectRatio: boolean // 启用视频比例记忆功能
   savedVideoAspectRatio: VideoAspectRatio | null // 记住的视频比例；首次启用时沿用播放器当前值
+  rememberVideoQuality: boolean
+  savedVideoQuality: number | null
 
   // 自定义播放设置
   enableRandomPlay: boolean // 启用视频合集自定义播放功能
@@ -468,6 +486,9 @@ export const originalSettings: Settings = {
   enableCommentReplyTreeDisplay: true, // 默认启用评论回复树展示
   commentReplyTreeMode: 'lineKeepMain', // 默认：线条树状，收起时保留父节点正文
   commentReplyPaginationMode: 'loadMore', // 默认：逐页加载并合并回复
+  commentReplyBatchPages: COMMENT_REPLY_BATCH_DEFAULT,
+  enableCommentReplyTreeContainer: false,
+  commentReplyTreeContainerHeight: COMMENT_REPLY_CONTAINER_HEIGHT.default,
   adjustCommentImageHeight: true, // 默认启用评论图片高度调整
   hideCommentImageScrollbar: false, // 默认不隐藏评论图片预览时的页面滚动条
   enlargeFavoriteDialog: false, // 默认关闭收藏夹放大样式
@@ -542,6 +563,11 @@ export const originalSettings: Settings = {
   topBarPinnedChannels: [],
   openNotificationsPageAsDrawer: true,
   showLikeNotificationReminder: false,
+  showReplyNotificationReminder: true,
+  showAtNotificationReminder: true,
+  showSystemNotificationReminder: true,
+  showFollowedPrivateMessageUnreadCount: true,
+  showUnfollowedPrivateMessageUnreadCount: true,
   autoMarkPrivateMessagesRead: true,
   followNewPrivateMessages: true,
   autoLoadPrivateMessageImages: true,
@@ -556,6 +582,8 @@ export const originalSettings: Settings = {
   autoReceiveVipExp: false,
   filterArticlesInMoments: true,
   originalMomentsShowUserCard: true,
+  originalMomentsUseBewlyFilters: false,
+  historyLayout: 'list',
   originalMomentsShowLiveList: true,
   originalMomentsShowCommunityCenter: true,
   originalMomentsShowHotSearch: true,
@@ -696,6 +724,7 @@ export const originalSettings: Settings = {
   bewlyWidescreenSidebarPosition: 'right',
   bewlyWidescreenLayoutPriority: 'video-first',
   bewlyWidescreenCenterVideo: false,
+  showWidescreenIdleProgress: false,
   bewlyWidescreenSidebarWidth: WIDESCREEN_SIDEBAR_DEFAULT_WIDTH,
   defaultDanmakuState: 'system',
   defaultCaptionState: 'system',
@@ -708,11 +737,15 @@ export const originalSettings: Settings = {
     bangumi: 'inherit',
     watchLater: 'inherit',
     playlist: 'inherit',
+    momentsDialog: 'inherit',
   },
   autoExitFullscreenOnEnd: false, // 全屏播放完毕后自动退出，默认关闭
   showVerticalVideoZoomButton: true, // 默认显示竖屏视频放大按钮
   showVideoScreenshotButton: true, // 默认显示播放器截图按钮
   videoScreenshotShortcut: DEFAULT_SCREENSHOT_SHORTCUT,
+  localLoudnessEnabled: LOCAL_LOUDNESS_DEFAULTS.enabled,
+  localLoudnessTarget: LOCAL_LOUDNESS_DEFAULTS.target,
+  localLoudnessStrength: LOCAL_LOUDNESS_DEFAULTS.strength,
 
   // 自动连播总开关
   useBilibiliDefaultAutoPlay: true, // 使用B站默认自动播放行为（总开关），默认开启
@@ -736,6 +769,8 @@ export const originalSettings: Settings = {
   // 视频比例记忆设置
   rememberVideoAspectRatio: false, // 启用视频比例记忆功能
   savedVideoAspectRatio: null, // 首次启用时记住播放器当前比例
+  rememberVideoQuality: false,
+  savedVideoQuality: null,
 
   // 自定义播放设置
   enableRandomPlay: false, // 启用视频合集自定义播放功能
@@ -756,8 +791,14 @@ export const localSettings = useStorageLocal('localSettings', originalLocalSetti
 
 let resolveSettingsReady: (value: Settings) => void = () => {}
 let settingsReadyResolved = false
+let resolveSettingsDisplayReady: (value: Settings) => void = () => {}
+let settingsDisplayReadyResolved = false
+let legacyGridSettingsRemoved = false
 export const settingsReady = new Promise<Settings>((resolve) => {
   resolveSettingsReady = resolve
+})
+export const settingsDisplayReady = new Promise<Settings>((resolve) => {
+  resolveSettingsDisplayReady = resolve
 })
 
 export const settings = useSettingsStorage(originalSettings, { normalize: normalizeSettings })
@@ -778,6 +819,21 @@ function normalizeSettings(value: Settings) {
     value.videoScreenshotShortcut = ''
   const record = value as Settings & Record<string, unknown>
   const legacyRecord = asUnknownRecord(value)
+  if (typeof value.localLoudnessEnabled !== 'boolean')
+    value.localLoudnessEnabled = false
+  value.localLoudnessTarget = normalizeLocalLoudnessValue(value.localLoudnessTarget, 'target')
+  value.localLoudnessStrength = normalizeLocalLoudnessValue(value.localLoudnessStrength, 'strength')
+
+  // Missing category switches preserve Nocturne's existing reminders. They
+  // change badge presentation only, never the server's read/unread state.
+  for (const field of ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount', 'rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters'] as const) {
+    if (typeof record[field] !== 'boolean')
+      record[field] = originalSettings[field]
+  }
+  if (record.savedVideoQuality !== null && (!Number.isSafeInteger(record.savedVideoQuality) || record.savedVideoQuality < 0))
+    record.savedVideoQuality = null
+  if (record.historyLayout !== 'list' && record.historyLayout !== 'grid')
+    record.historyLayout = 'list'
 
   Reflect.deleteProperty(record, 'detectCommentShadowBan')
   Reflect.deleteProperty(record, 'homeTabsPosition')
@@ -815,6 +871,10 @@ function normalizeSettings(value: Settings) {
   const validCommentReplyPaginationModes: CommentReplyPaginationMode[] = ['loadMore', 'pagination']
   if (!validCommentReplyPaginationModes.includes(record.commentReplyPaginationMode))
     record.commentReplyPaginationMode = originalSettings.commentReplyPaginationMode
+  record.commentReplyBatchPages = normalizeCommentReplyBatch(record.commentReplyBatchPages)
+  record.commentReplyTreeContainerHeight = normalizeCommentReplyContainerHeight(record.commentReplyTreeContainerHeight)
+  if (typeof record.enableCommentReplyTreeContainer !== 'boolean')
+    record.enableCommentReplyTreeContainer = false
 
   const validTopBarLogoStyles: TopBarLogoStyle[] = ['icon', 'brand']
   if (!validTopBarLogoStyles.includes(record.topBarLogoStyle))
@@ -999,7 +1059,7 @@ function normalizeSettings(value: Settings) {
   Reflect.deleteProperty(record, 'keepCollectionVideoDefaultMode')
   Reflect.deleteProperty(record, 'keepWatchLaterVideoDefaultMode')
 
-  const modeOverrideContexts: VideoPlayerModeContext[] = ['multipart', 'collection', 'bangumi', 'watchLater', 'playlist']
+  const modeOverrideContexts: VideoPlayerModeContext[] = ['multipart', 'collection', 'bangumi', 'watchLater', 'playlist', 'momentsDialog']
   const validModeOverrides: VideoPlayerModeOverride[] = ['inherit', 'default', 'webFullscreen', 'widescreen', 'bewlyWidescreen']
   const storedModeOverrides = record.videoPlayerModeOverrides
   const needsModeOverrideNormalization = !storedModeOverrides
@@ -1024,10 +1084,15 @@ watch(
     () => settings.value,
     () => settings.initializationState.value,
     () => localSettings.initializationState.value,
+    () => settings.displayReady.value,
     () => asUnknownRecord(settings.value).customizeCSS,
     () => asUnknownRecord(settings.value).customizeCSSContent,
   ] as const,
   ([value, settingsState, localSettingsState]) => {
+    if (!settingsDisplayReadyResolved && settings.displayReady.value) {
+      settingsDisplayReadyResolved = true
+      resolveSettingsDisplayReady(value)
+    }
     if (settingsState !== 'loaded')
       return
     normalizeSettings(value)
@@ -1055,13 +1120,13 @@ watch(
       settingsReadyResolved = true
       resolveSettingsReady(value)
     }
+    if (!legacyGridSettingsRemoved && localSettingsState === 'loaded') {
+      legacyGridSettingsRemoved = true
+      void browser.storage.local.remove(['gridBreakpoints', 'gridColumns']).catch(() => {})
+    }
   },
   { immediate: true },
 )
-
-void settingsReady
-  .then(() => browser.storage.local.remove(['gridBreakpoints', 'gridColumns']))
-  .catch(() => {})
 
 export type GridLayoutType = 'adaptive' | 'twoColumns' | 'oneColumn'
 

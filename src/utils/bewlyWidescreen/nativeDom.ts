@@ -1,4 +1,4 @@
-import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, ROOT_ID, selectors, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
+import { COMMENT_CONTENT_MARKER_SELECTOR, COMMENT_NESTED_UI_SELECTOR, COMMENT_ROOT_ID_SELECTOR, COMMENT_SHADOW_HOST_SELECTOR, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR, ROOT_ID, selectors, SIDEBAR_CONTENT_SELECTOR, SIDEBAR_RELEVANT_SELECTOR } from '~/utils/bewlyWidescreen/constants'
 import type { BewlyWidescreenState, CommentPrewarmState, MovedNode } from '~/utils/bewlyWidescreen/types'
 import type { WidescreenMutationOrigin } from '~/utils/bewlyWidescreenPolicy'
 import { transferCommentNode } from '~/utils/commentDomTransfer'
@@ -12,6 +12,7 @@ function requiresNativeComponent(node: HTMLElement) {
   return node.matches(NATIVE_INFO_SELECTOR) || (isPgcPlaybackPage() && node.matches(selectors.playlist.join(',')))
 }
 const NATIVE_DESCRIPTION_SELECTOR = [...selectors.description, ...selectors.tags, ...selectors.mediaInfo].join(',')
+const PLAYER_LAYOUT_SOURCE_SELECTOR = `${SIDEBAR_RELEVANT_SELECTOR},${NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR},.bpx-player-control-bottom,video,bwp-video`
 
 export function leaveMutuallyExclusivePlayerModes() {
   const fullscreenDocument = document as Document & {
@@ -97,6 +98,17 @@ export function classifyWidescreenMutation(
   // updates must not restart sidebar hydration.
   if (target?.closest(NATIVE_MUSIC_ENTRY_SELECTOR))
     return { insideRoot: true, relevant: false }
+  // The player remains at its native DOM origin, outside our sidebar root.
+  // Clock/danmaku/preview updates belong to the player lifecycle, not sidebar
+  // hydration. Still discover replaced media/control roots and late native info.
+  if (target && currentState.playerEl.contains(target)
+    && target !== currentState.playerEl
+    && !target.matches(`${NATIVE_PLAYER_CONTROL_SURFACE_SELECTOR},.bpx-player-control-bottom,.player-left-components`)
+    && !target.closest(SIDEBAR_CONTENT_SELECTOR)
+    && ![...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element
+      && (node.matches(PLAYER_LAYOUT_SOURCE_SELECTOR) || !!node.querySelector(PLAYER_LAYOUT_SOURCE_SELECTOR)))) {
+    return { insideRoot: false, relevant: false }
+  }
   const insideRoot = isWidescreenInternalMutation(record, currentState)
   return {
     insideRoot,

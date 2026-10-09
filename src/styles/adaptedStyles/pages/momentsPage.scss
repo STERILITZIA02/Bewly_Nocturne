@@ -46,11 +46,10 @@
   //   // margin-top: 10px;
   // }
 
-  #app .bg {
-    z-index: unset;
-    background-size: cover;
-    opacity: 0.4;
-    height: 100%;
+  #app .bg,
+  .fixed-bg {
+    background: none !important;
+    pointer-events: none;
   }
 
   // #region new moments page
@@ -124,13 +123,13 @@
     .bili-topic-new__default__create__text,
     .opus-module-topic,
     .side-toolbar__action.is-active {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .side-toolbar__action:not(.is-disabled):hover,
     .side-toolbar__action:not(.is-disabled):hover svg,
     .bili-dyn-title__text.normal-vip-color {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .bili-topic-new__default__create__icon:after,
@@ -164,11 +163,6 @@
   }
 
   &.dark {
-    #app div.bg {
-      background-image: url("https://i0.hdslb.com/bfs/static/jinkela/long/images/dynamic/bg_dark.png") !important;
-      opacity: 0.15;
-    }
-
     .opus-collection__item.active {
       background-color: var(--bew-theme-surface) !important;
     }
@@ -269,13 +263,13 @@
   .bili-dyn-card-medialist:hover .bili-dyn-card-medialist__title,
   .bili-dyn-card-pgc:hover .bili-dyn-card-pgc__title,
   .dyn-topic__text {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 
   .dynamic-link-hover-bg,
   .expand-btn,
   .up-info .up-info-name {
-    color: var(--bew-theme-color) !important;
+    color: var(--bew-theme-foreground) !important;
   }
 
   .expand-btn:hover {
@@ -287,6 +281,7 @@
   .bili-dyn-card-medialist__badge,
   .bili-dyn-title__label {
     background-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
   }
 
   .bili-dyn-action:not(.disabled).active i,
@@ -310,13 +305,20 @@
   .bili-dyn-publishing__action.launcher,
   .dyn-goods__one__action button,
   .dyn-reserve__action button,
+  .bili-dyn-card-reserve__action button.uncheck:not(:disabled),
   .dyn-additional-common__action button {
     background-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+  }
+
+  .bili-dyn-card-reserve__action button {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
   }
 
   .dyn-orig-author__following {
     border-color: var(--bew-theme-color);
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 
   .bili-dyn-up-list__item.active .bili-dyn-up-list__item__face {

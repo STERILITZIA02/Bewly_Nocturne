@@ -15,6 +15,7 @@ import { releaseIframeMedia } from '~/utils/mediaResources'
 const props = defineProps<{
   url: string
 }>()
+const emit = defineEmits<{ scroll: [scrollTop: number] }>()
 const { reachTop } = useBewlyApp()
 const { t } = useI18n()
 const toast = useToast()
@@ -56,6 +57,7 @@ function updateReachTopFromIframe() {
     const scrollElement = doc?.scrollingElement ?? doc?.documentElement ?? doc?.body
     const scrollTop = scrollElement?.scrollTop ?? iframeWindow.scrollY ?? 0
     reachTop.value = scrollTop <= 0
+    emit('scroll', scrollTop)
   }
   catch (error) {
     if (!iframeScrollSyncFailed.value) {
@@ -84,7 +86,11 @@ function setupIframeScrollSync() {
 
   updateReachTopFromIframe()
 
-  const handleScroll = () => updateReachTopFromIframe()
+  const generation = iframeGeneration
+  const handleScroll = () => {
+    if (generation === iframeGeneration && iframeRef.value?.contentWindow === iframeWindow)
+      updateReachTopFromIframe()
+  }
   iframeWindow.addEventListener('scroll', handleScroll, { passive: true })
   iframeScrollCleanupFns.value.push(() => iframeWindow.removeEventListener('scroll', handleScroll))
 

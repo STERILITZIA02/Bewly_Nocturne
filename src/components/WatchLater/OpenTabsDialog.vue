@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 import Button from '~/components/Button.vue'
 import Dialog from '~/components/Dialog.vue'
@@ -15,6 +15,14 @@ const counts = computed(() => task.value ? countOpenTabsTask(task.value) : null)
 const running = computed(() => task.value?.status === 'running')
 const ready = computed(() => task.value?.status === 'ready')
 const retryable = computed(() => task.value?.items.some(item => item.status === 'failed'))
+const selectedTabIds = ref<number[]>([])
+watch(() => task.value?.id, () => {
+  selectedTabIds.value = task.value?.status === 'ready' ? task.value.items.map(item => item.tabId) : []
+}, { immediate: true })
+const allSelected = computed(() => Boolean(task.value?.items.length) && selectedTabIds.value.length === task.value?.items.length)
+function toggleAll() {
+  selectedTabIds.value = allSelected.value ? [] : task.value?.items.map(item => item.tabId) ?? []
+}
 </script>
 
 <template>
@@ -50,9 +58,19 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
         <p v-if="!ready">
           {{ $t('watch_later.open_tabs.counts', counts) }}
         </p>
+        <div v-if="ready" class="open-tabs-dialog__selection">
+          <Button type="tertiary" :disabled="busy" @click="toggleAll">
+            {{ $t(allSelected ? 'favorites.unselect_all' : 'favorites.select_all') }}
+          </Button>
+          <span role="status">{{ $t('library_tools.selected_tabs', { count: selectedTabIds.length, total: counts.total }) }}</span>
+        </div>
         <ul class="open-tabs-dialog__items">
           <li v-for="item in task.items" :key="item.tabId">
-            <span>{{ item.title }}</span>
+            <label v-if="ready" class="open-tabs-dialog__choice">
+              <input v-model="selectedTabIds" type="checkbox" :value="item.tabId" :disabled="busy">
+              <span>{{ item.title }}</span>
+            </label>
+            <span v-else>{{ item.title }}</span>
             <span v-if="!ready || item.reason" class="open-tabs-dialog__result">{{ $t(`watch_later.open_tabs.${item.reason || item.status}`) }}{{ item.message ? `: ${item.message}` : '' }}</span>
           </li>
         </ul>
@@ -70,7 +88,7 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
         <Button v-if="running" type="primary" :disabled="busy" @click="command('stop')">
           {{ $t('watch_later.open_tabs.stop') }}
         </Button>
-        <Button v-else-if="task?.status === 'ready'" type="primary" :disabled="busy || !counts?.total" @click="command('start')">
+        <Button v-else-if="task?.status === 'ready'" type="primary" :disabled="busy || !selectedTabIds.length" @click="command('start', selectedTabIds)">
           {{ $t('watch_later.open_tabs.confirm') }}
         </Button>
         <template v-else-if="task">
@@ -95,6 +113,29 @@ const retryable = computed(() => task.value?.items.some(item => item.status === 
   line-height: var(--bew-line-height-body);
   p {
     margin: 0;
+  }
+  &__selection,
+  &__choice {
+    display: flex;
+    align-items: center;
+    gap: var(--bew-space-2);
+  }
+  &__selection {
+    justify-content: space-between;
+  }
+  &__choice {
+    width: 100%;
+    min-width: 0;
+    min-height: var(--bew-control-height);
+    cursor: pointer;
+    span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+    input {
+      accent-color: var(--bew-theme-color);
+      flex: none;
+    }
   }
   &__lead {
     color: var(--bew-text-1);

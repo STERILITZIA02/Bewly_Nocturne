@@ -59,6 +59,7 @@ export function registerUpstreamSettingsChecks(check, { Vue, flush, compileCompo
       let revision = 0
       const listeners = new Set()
       const storage = await loadSourceModule('../src/composables/useSettingsStorage.ts', {
+        '~/utils/abort': await import('../src/utils/abort'),
         'vue': Vue,
         'webextension-polyfill': { default: { storage: { onChanged: { addListener: fn => listeners.add(fn), removeListener: fn => listeners.delete(fn) } } } },
         '~/utils/sidebarCoverSettings': migration,
@@ -82,6 +83,9 @@ export function registerUpstreamSettingsChecks(check, { Vue, flush, compileCompo
       assert.equal(listeners.size, 0)
 
       const imported = { value: { enableSidebarCoverBlur: true, videoPlayerScrollMode: 'sendingBar' } }
+      imported.import = async (values) => {
+        Object.assign(imported.value, values)
+      }
       const maintenance = await loadSourceFunctions('../src/components/Settings/Advanced/Maintenance.vue', ['handleImportFile', 'matchesSettingType', 'hasBlockedProperty', 'isPlainObject', 'blockedPropertyNames', 'settingEnumValues'], {
         ...migration,
         settings: imported,

@@ -30,10 +30,16 @@ export function createMomentFeedReader(
   let wantedFeedBuffer: MomentsFeedCacheEntry | undefined
   let loadedItems: DisplayMoment[] = []
   let loadedQuery = ''
+  let pendingRead: AbortController | undefined
   const queryKey = (type: MomentFilter, group: string, hostMid: string) => `${type}:${group}:${hostMid}`
-  async function read(request: MomentFeedRead, isCurrent: () => boolean) {
-    if (!isCurrent())
+  async function read(request: MomentFeedRead, isRequestCurrent: () => boolean) {
+    if (!isRequestCurrent())
       return
+    pendingRead?.abort()
+    const controller = new AbortController()
+    pendingRead = controller
+    const readOptions = { signal: controller.signal }
+    const isCurrent = () => !controller.signal.aborted && isRequestCurrent()
     const previousBuffer = wantedFeedBuffer
     if (request.reset)
       wantedFeedBuffer = undefined
@@ -48,7 +54,7 @@ export function createMomentFeedReader(
     let nextOffset = ''
     let nextUpdateBaseline = ''
     const hostFollowStatePromise = request.reset && requestHostMid
-      ? api.user.getRelations({ fids: requestHostMid })
+      ? api.user.getRelations({ fids: requestHostMid }, readOptions)
           .then(response => ({ state: resolveMomentHostFollowState(response, requestHostMid) }))
           .catch(error => isExtensionContextInvalidatedError(error) ? { error } : { state: 'unknown' })
       : null
@@ -90,7 +96,7 @@ export function createMomentFeedReader(
               platform: 'web',
               features: MOMENT_FEED_FEATURES,
               web_location: '333.1365',
-            }) as MomentResult
+            }, readOptions) as MomentResult
             if (!await keepSelectedHostFilter())
               return { hostUnfollowed: true as const }
             if (!accept(response))
@@ -121,7 +127,7 @@ export function createMomentFeedReader(
             platform: 'web',
             features: MOMENT_FEED_FEATURES,
             web_location: '333.1365',
-          }) as MomentResult
+          }, readOptions) as MomentResult
           if (!await keepSelectedHostFilter())
             return { hostUnfollowed: true as const }
           if (!accept(response))
@@ -174,7 +180,7 @@ export function createMomentFeedReader(
                 offset: scanOffset || undefined,
                 update_baseline: scanUpdateBaseline || undefined,
                 features: MOMENT_FEED_FEATURES,
-              }) as MomentResult
+              }, readOptions) as MomentResult
               if (!accept(response))
                 return
 
@@ -223,7 +229,7 @@ export function createMomentFeedReader(
               offset: cacheEntry.offset || undefined,
               update_baseline: cacheEntry.updateBaseline || undefined,
               features: MOMENT_FEED_FEATURES,
-            }) as MomentResult
+            }, readOptions) as MomentResult
             if (!accept(response))
               return
 
@@ -286,7 +292,7 @@ export function createMomentFeedReader(
             offset: scanOffset || undefined,
             update_baseline: scanUpdateBaseline || undefined,
             features: MOMENT_FEED_FEATURES,
-          }) as MomentResult
+          }, readOptions) as MomentResult
           if (!accept(response))
             return
 
@@ -311,7 +317,7 @@ export function createMomentFeedReader(
           offset: request.offset || undefined,
           update_baseline: request.updateBaseline || undefined,
           features: MOMENT_FEED_FEATURES,
-        }) as MomentResult
+        }, readOptions) as MomentResult
         if (!accept(response))
           return
         rawItems = response.data?.items || []
@@ -335,6 +341,10 @@ export function createMomentFeedReader(
         wantedFeedBuffer = previousBuffer
       throw error
     }
+    finally {
+      if (pendingRead === controller)
+        pendingRead = undefined
+    }
   }
   return {
     read,
@@ -348,6 +358,8 @@ export function createMomentFeedReader(
       return updated
     },
     reset: () => {
+      pendingRead?.abort()
+      pendingRead = undefined
       wantedFeedBuffer = undefined
       loadedItems = []
       loadedQuery = ''

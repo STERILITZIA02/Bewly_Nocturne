@@ -71,6 +71,8 @@ export interface BewlyWidescreenState {
   sidebarInteractionCleanup?: () => void
   sidebarInteractionFocusSync?: () => void
   sidebarToggleAutoHideCleanup?: () => void
+  idleProgressCleanup?: () => void
+  updateIdleProgress?: () => void
   sidebarToggleFocusSync?: () => void
   activeControlCleanup?: () => void
   descriptionCleanup?: () => void

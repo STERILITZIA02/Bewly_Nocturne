@@ -5,9 +5,119 @@ import { fileURLToPath } from 'node:url'
 import { compileStyleAsync, parse } from 'vue/compiler-sfc'
 
 import { loadSourceFunctions } from './sourceFunctionHarness'
+import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerNotificationUIChecks(check, { Vue, compileComponent, flush }) {
   const i18n = { useI18n: () => ({ t: key => key, locale: Vue.ref('cmn-CN') }) }
+
+  check('notification routing: departing page preserves hot/history search destinations and legacy message settings still normalize', async () => {
+    const previousUrl = window.location.href
+    const previousState = window.history.state
+    const previousTitle = document.title
+    const enums = await import('../src/enums/appEnums')
+    const notificationRoute = await import('../src/utils/notificationRoute')
+    window.history.replaceState({ nativeData: 'retained' }, '', notificationRoute.buildBewlyNotificationUrl('whisper'))
+    const settings = Vue.ref({ dockPosition: 'bottom', pageMode: 'bewly', usePluginSearchResultsPage: true, dockItemsConfig: [], homePageTabVisibilityList: [], searchBarLinkOpenMode: 'currentTab', useSearchPageModeOnHomePage: true })
+    settings.initializationState = Vue.ref('loaded')
+    const route = await loadSourceModule('../src/composables/useRouteState.ts', { vue: Vue })
+    const href = await loadSourceModule('../src/composables/useCurrentLocationHref.ts', { 'vue': Vue, './useRouteState': route })
+    const home = await loadSourceModule('../src/composables/useHomePageRoute.ts', {
+      'vue': Vue,
+      '~/composables/useCurrentLocationHref': href,
+      '~/composables/useRouteState': route,
+      '~/enums/appEnums': enums,
+      '~/logic': { settings },
+      '~/utils/homeRoute': await import('../src/utils/homeRoute'),
+      '~/utils/homeTabConfig': await import('../src/utils/homeTabConfig'),
+    })
+    const scope = Vue.effectScope()
+    const shell = scope.run(() => home.useHomePageRoute(() => 'Home', [{ page: 'ForYou', visible: true }]))
+    const openedSettings = []
+    const provider = { ...shell, handlePageRefresh: Vue.ref(), scrollViewportRef: Vue.ref(), openSettingsAt: target => openedSettings.push(target) }
+    const blank = { render: () => null }
+    const sessions = { state: Vue.reactive({ items: [], loaded: false }), selectedTalkerId: Vue.ref(''), selectedSessionKey: Vue.ref(''), clearSelectedSession() {} }
+    const component = await compileComponent('../src/contentScripts/views/Notifications/Notifications.vue', {
+      'vue-i18n': i18n,
+      '~/composables/useAppProvider': { useBewlyApp: () => provider },
+      '~/composables/useRouteState': route,
+      '~/constants/layout': await import('../src/constants/layout'),
+      '~/enums/appEnums': enums,
+      '~/logic': { settings, localSettings: Vue.ref({}) },
+      '~/stores/topBarStore': { useTopBarStore: () => ({ userInfo: { mid: 0 }, isLogin: false }) },
+      '~/utils/api': { default: {} },
+      '~/utils/main': { getCSRF: () => '' },
+      '~/utils/notificationRoute': notificationRoute,
+      '~/utils/privateConversationRoute': await import('../src/utils/privateConversationRoute'),
+      './components/NativeNotificationFeed.vue': { default: blank },
+      './components/NotificationsPageHeader.vue': { default: blank },
+      './components/NotificationsPageSkeleton.vue': { default: blank },
+      './composables/useNotificationFeeds': { useNotificationFeeds: () => ({}) },
+      './notificationFeedPolicy': await import('../src/contentScripts/views/Notifications/notificationFeedPolicy'),
+      './notificationSections': await import('../src/contentScripts/views/Notifications/notificationSections'),
+      './systemNotificationFeed': { createSystemNotificationPageFetcher: () => () => assert.fail('route changes must not fetch feeds in this fixture') },
+      './whisper/usePrivateEmotePanel': { usePrivateEmotePanel: () => ({ release() {} }) },
+      './whisper/usePrivateMessageWorkspace': { usePrivateMessageWorkspace: () => ({ messages: {}, writes: {}, release() {}, dispose() {} }) },
+      './whisper/usePrivateRecipientSearch': { usePrivateRecipientSearch: () => ({ reset() {} }) },
+      './whisper/usePrivateSessions': { usePrivateSessions: () => sessions },
+      './whisper/WhisperWorkspace.vue': { default: blank },
+    }, { renderTemplate: false, globals: { URL } })
+    const navigation = await loadSourceModule('../src/utils/searchNavigation.ts', {
+      '~/composables/useRouteState': route,
+      '~/enums/appEnums': enums,
+      '~/logic': { settings },
+      '~/utils/configuredLinkNavigation': { getLinkFallbackPage: () => 'Home' },
+      '~/utils/main': { isHomePage: (url = window.location.href) => new URL(url).pathname === '/', isInIframe: () => false, openLinkToNewTab: () => assert.fail('current-tab search must stay in this document') },
+      '~/utils/pageMode': await import('../src/utils/pageMode'),
+      '~/utils/searchNavigationCore': await import('../src/utils/searchNavigationCore'),
+      './searchNavigationCore': await import('../src/utils/searchNavigationCore'),
+      './searchUrl': await import('../src/utils/searchUrl'),
+      '~/utils/tabs': { openLinkInBackground: () => assert.fail('current-tab search must stay in this document') },
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    let page
+    const app = Vue.createApp({ render: () => Vue.h(component, { ref: value => page = value?.$?.setupState }) })
+    try {
+      app.mount(host)
+      await flush()
+      // Keep the real page mounted during route changes, as it can be while its
+      // leave transition runs. Its route watcher must respect the new owner.
+      for (const section of ['whisper', 'reply', 'at', 'love', 'system']) {
+        for (const keyword of ['热搜 fixture', '历史 fixture']) {
+          window.history.replaceState(window.history.state, '', notificationRoute.buildBewlyNotificationUrl(section))
+          route.syncRouteState()
+          await flush()
+          assert.equal(page.currentView, section)
+          const destination = navigation.resolveSearchNavigationTarget(keyword)
+          navigation.openSearchResults(destination, { fromSearchResultsTopBar: true })
+          await flush()
+          assert.equal(window.location.href, destination, `${section}: departing Notifications cannot replace the search URL`)
+          assert.equal(shell.activatedPage.value, 'SearchResults')
+          route.syncRouteState()
+          await flush()
+          assert.equal(window.location.href, destination, 'a later route observation cannot bounce back to messages')
+          assert.deepEqual(window.history.state, { nativeData: 'retained' })
+        }
+      }
+      assert.equal(openedSettings.length, 0)
+      for (const view of ['settings', 'unknown']) {
+        window.history.replaceState(window.history.state, '', `/?page=Notifications&notificationView=${view}`)
+        route.syncRouteState()
+        await flush()
+        assert.equal(window.location.href, notificationRoute.buildBewlyNotificationUrl('whisper'))
+        assert.equal(page.currentView, 'whisper')
+      }
+      assert.equal(openedSettings.length, 1)
+      assert.equal(openedSettings[0].page, 'messages')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+      scope.stop()
+      route.stopRouteObserver()
+      window.history.replaceState(previousState, '', previousUrl)
+      document.title = previousTitle
+    }
+  })
 
   check('notification cards: actual reply/at/love cards separate interaction and source, preserve links/fallbacks and share skeleton columns', async () => {
     const root = '../src/contentScripts/views/Notifications/components/'

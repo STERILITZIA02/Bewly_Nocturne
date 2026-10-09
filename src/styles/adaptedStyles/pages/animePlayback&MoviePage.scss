@@ -100,7 +100,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     .squirtle-side-setting
     .squirtle-single-side-setting
     .squirtle-single-setting-other-choice:hover {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 
   [class*="RecommendItem_wrap"] [class*="RecommendItem_right_wrap"] [class*="RecommendItem_title"]:hover,
@@ -113,7 +113,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     [class*="rankList_sp_right"]
     [class*="rankList_sp_user"]
     [class*="rankList_sp_name"][style*="color"] {
-    color: var(--bew-theme-color) !important;
+    color: var(--bew-theme-foreground) !important;
   }
 
   [class*="mediainfo_mediaToolbar"] [class*="mediainfo_btnHome"] svg path,
@@ -268,7 +268,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   .section-ep-wrapper .ep-item i,
   .up-info .btn-follow-up,
   .main-container .media-info .media-right .media-desc i {
-    color: var(--bew-theme-color);
+    color: var(--bew-theme-foreground);
   }
 
   .main-container .review-module .review-list .review-item .review-header #review-author-nick-name.review-author.is-vip,
@@ -277,7 +277,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   .main-container .review-module .module-title .more-link:hover,
   .sponsor-rank-item.pos-rank-module .sp-right .sp-user.vip .sp-name,
   .main-container .sponsor-module .sponsor-info .btn-show-rank:hover {
-    color: var(--bew-theme-color) !important;
+    color: var(--bew-theme-foreground) !important;
   }
 
   .main-container .pay-bar .vip .btn-pay,

@@ -2,15 +2,17 @@ import browser from 'webextension-polyfill'
 
 import { buildSearchApiRequest, parseAnonymousSearchRequest, SEARCH_API_DEFINITIONS } from '~/constants/searchApi'
 import type { SearchRecommendationResponse } from '~/models/search/defaultRecommendation'
+import type { ReadRequestOptions } from '~/utils/abort'
+import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
 
-import type { APIMAP } from '../../utils'
+import type { API, APIMAP } from '../../utils'
 import { AHS, doRequest } from '../../utils'
 
 const DEFAULT_SEARCH_TTL_MS = 10 * 60_000
 const DEFAULT_SEARCH_CACHE_LIMIT = 16
 const DEFAULT_SEARCH_STORAGE_KEY = `defaultSearchRecommendation:v1${browser.extension?.inIncognitoContext ? ':private' : ''}`
 const defaultSearchCache = new Map<string, { value: SearchRecommendationResponse, expires: number }>()
-const defaultSearchRequests = new Map<string, Promise<SearchRecommendationResponse>>()
+const defaultSearchRequests = new Map<string, { promise: Promise<SearchRecommendationResponse>, controller: AbortController, consumers: number, settled: boolean }>()
 let cacheLoaded: Promise<void> | undefined
 let cachePersisted = Promise.resolve()
 const defaultSearchApi = {
@@ -18,7 +20,7 @@ const defaultSearchApi = {
   _fetch: { method: 'get' },
   params: {},
   afterHandle: AHS.J_D,
-}
+} satisfies API
 
 function isDefaultSearchResponse(value: unknown): value is SearchRecommendationResponse {
   const response = value as SearchRecommendationResponse | undefined
@@ -27,7 +29,7 @@ function isDefaultSearchResponse(value: unknown): value is SearchRecommendationR
 
 async function restoreDefaultSearchCache() {
   try {
-    const stored = (await browser.storage?.session?.get(DEFAULT_SEARCH_STORAGE_KEY))?.[DEFAULT_SEARCH_STORAGE_KEY]
+    const stored = (await withRequestDeadline(signal => waitWithSignal(browser.storage?.session?.get(DEFAULT_SEARCH_STORAGE_KEY) ?? Promise.resolve({}), signal), {}, 1500))?.[DEFAULT_SEARCH_STORAGE_KEY]
     if (!stored || typeof stored !== 'object')
       return
     for (const [key, entry] of Object.entries(stored).slice(-DEFAULT_SEARCH_CACHE_LIMIT)) {
@@ -46,15 +48,23 @@ function persistDefaultSearchCache() {
   return cachePersisted
 }
 
-async function getDefaultSearchRecommendation(_message: Record<string, unknown> = {}, sender?: browser.Runtime.MessageSender) {
-  const request = async () => await doRequest({ contentScriptQuery: 'getDefaultSearchRecommendation' }, defaultSearchApi) as SearchRecommendationResponse
+async function getDefaultSearchRecommendation(_message: Record<string, unknown> = {}, sender?: browser.Runtime.MessageSender, options?: ReadRequestOptions) {
+  return withRequestDeadline(signal => readDefaultSearchRecommendation(sender, signal), options)
+}
+
+async function readDefaultSearchRecommendation(sender: browser.Runtime.MessageSender | undefined, signal: AbortSignal) {
+  const request = async (signal: AbortSignal) => await doRequest({ contentScriptQuery: 'getDefaultSearchRecommendation' }, defaultSearchApi, { signal }) as SearchRecommendationResponse
   // This endpoint is requested with credentials; do not share its result across accounts/private windows.
   let mid: string
   try {
-    mid = (await browser.cookies.get({ url: defaultSearchApi.url, name: 'DedeUserID' }))?.value ?? ''
+    mid = (await waitWithSignal(browser.cookies.get({ url: defaultSearchApi.url, name: 'DedeUserID' }), signal))?.value ?? ''
   }
-  catch { return request() }
-  await (cacheLoaded ??= restoreDefaultSearchCache())
+  catch {
+    signal.throwIfAborted()
+    return request(signal)
+  }
+  await waitWithSignal(cacheLoaded ??= restoreDefaultSearchCache(), signal)
+  signal.throwIfAborted()
   const key = JSON.stringify([sender?.tab?.incognito ?? false, mid])
   const now = Date.now()
   for (const [id, cached] of defaultSearchCache) {
@@ -64,28 +74,48 @@ async function getDefaultSearchRecommendation(_message: Record<string, unknown> 
   const cached = defaultSearchCache.get(key)
   if (cached)
     return cached.value
-  const pending = defaultSearchRequests.get(key)
-  if (pending)
-    return pending
-  const result = request().then(async (value) => {
-    let currentMid: string | undefined
-    try {
-      currentMid = (await browser.cookies.get({ url: defaultSearchApi.url, name: 'DedeUserID' }))?.value ?? ''
+  let pending = defaultSearchRequests.get(key)
+  if (!pending) {
+    const controller = new AbortController()
+    const entry = { controller, consumers: 0, settled: false, promise: undefined! as Promise<SearchRecommendationResponse> }
+    entry.promise = withRequestDeadline(async (ownerSignal) => {
+      const value = await request(ownerSignal)
+      let currentMid: string | undefined
+      try {
+        currentMid = (await waitWithSignal(browser.cookies.get({ url: defaultSearchApi.url, name: 'DedeUserID' }), ownerSignal))?.value ?? ''
+      }
+      catch { /* Do not cache a response whose account can no longer be confirmed. */ }
+      ownerSignal.throwIfAborted()
+      if (currentMid === mid && isDefaultSearchResponse(value)) {
+        defaultSearchCache.set(key, { value, expires: Date.now() + DEFAULT_SEARCH_TTL_MS })
+        while (defaultSearchCache.size > DEFAULT_SEARCH_CACHE_LIMIT)
+          defaultSearchCache.delete(defaultSearchCache.keys().next().value!)
+        void persistDefaultSearchCache()
+      }
+      return value
+    }, { signal: controller.signal }).finally(() => {
+      entry.settled = true
+      if (defaultSearchRequests.get(key) === entry)
+        defaultSearchRequests.delete(key)
+    })
+    pending = entry
+    defaultSearchRequests.set(key, pending)
+  }
+  pending.consumers++
+  try {
+    return await waitWithSignal(pending.promise, signal)
+  }
+  finally {
+    pending.consumers--
+    if (!pending.consumers && !pending.settled) {
+      pending.controller.abort()
+      if (defaultSearchRequests.get(key) === pending)
+        defaultSearchRequests.delete(key)
     }
-    catch { /* Do not cache a response whose account can no longer be confirmed. */ }
-    if (currentMid === mid && isDefaultSearchResponse(value)) {
-      defaultSearchCache.set(key, { value, expires: Date.now() + DEFAULT_SEARCH_TTL_MS })
-      while (defaultSearchCache.size > DEFAULT_SEARCH_CACHE_LIMIT)
-        defaultSearchCache.delete(defaultSearchCache.keys().next().value!)
-      await persistDefaultSearchCache()
-    }
-    return value
-  }).finally(() => defaultSearchRequests.delete(key))
-  defaultSearchRequests.set(key, result)
-  return result
+  }
 }
 
-async function requestAnonymousSearch(message: Record<string, unknown>) {
+async function requestAnonymousSearch(message: Record<string, unknown>, _sender?: browser.Runtime.MessageSender, options?: ReadRequestOptions) {
   const request = parseAnonymousSearchRequest(message.request)
   const builtRequest = buildSearchApiRequest(request)
 
@@ -101,6 +131,7 @@ async function requestAnonymousSearch(message: Record<string, unknown>) {
       params: builtRequest.params,
       afterHandle: AHS.J_D,
     },
+    options,
   )
 }
 

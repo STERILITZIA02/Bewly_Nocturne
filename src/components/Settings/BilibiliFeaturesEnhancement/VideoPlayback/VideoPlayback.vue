@@ -1,6 +1,7 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n'
 
+import LocalLoudnessPreferences from '~/components/LocalLoudnessPreferences.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
@@ -28,16 +29,19 @@ function recordScreenshotKey(event: KeyboardEvent) {
 type ToggleSetting
   = | 'rememberPlaybackRate'
     | 'rememberVideoAspectRatio'
+    | 'rememberVideoQuality'
 
 interface ToggleTagOption {
   setting: ToggleSetting
   label: string
+  description?: string
   icon: string
 }
 
 const playbackMemoryOptions = computed<ToggleTagOption[]>(() => [
   { setting: 'rememberPlaybackRate', label: t('settings.remember_playback_rate'), icon: 'i-tabler-gauge' },
   { setting: 'rememberVideoAspectRatio', label: t('settings.remember_video_aspect_ratio'), icon: 'i-tabler-aspect-ratio' },
+  { setting: 'rememberVideoQuality', label: t('settings.remember_video_quality'), description: t('settings.remember_video_quality_desc'), icon: 'i-tabler-badge-hd' },
 ])
 
 const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefaultState }[]>(() => [
@@ -50,6 +54,9 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
 <template>
   <div>
+    <SettingsItemGroup :title="t('local_loudness.title')">
+      <LocalLoudnessPreferences />
+    </SettingsItemGroup>
     <SettingsItemGroup :title="t('settings.group_player_components')">
       <SettingsItem
         :title="t('settings.video_danmaku_default_state')"
@@ -83,6 +90,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
             :key="option.setting"
             v-model="settings[option.setting]"
             :label="option.label"
+            :description="option.description"
             :icon="option.icon"
             :show-state-icon="false"
           />
@@ -119,7 +127,7 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 
         <SettingsItem
           :title="t('settings.show_video_screenshot_button')"
-          :desc="t('settings.show_video_screenshot_button_desc')"
+          :desc="`${t('settings.show_video_screenshot_button_desc')} ${t('settings.player_extra_controls_hint')}`"
           right-width="auto"
         >
           <Radio v-model="settings.showVideoScreenshotButton" />

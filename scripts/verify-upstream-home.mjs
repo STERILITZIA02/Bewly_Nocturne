@@ -6,12 +6,65 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent }) {
+  check('playback boot: owned cover keeps native media visible and hands off without completing the guard or covering late content again', async () => {
+    const page = new JSDOM('<!doctype html><html><body><div class="bili-header">Header</div><div id="app"><div id="playerWrap"><video></video></div></div><div id="bewly-widescreen-loading">Skeleton</div></body></html>', { url: 'https://www.bilibili.com/video/BVfixture/' })
+    const timers = new Map()
+    let nextTimer = 0
+    const module = await loadSourceModule('../src/contentScripts/pageLoadingGuard.ts', {}, {
+      MutationObserver: page.window.MutationObserver,
+      setTimeout: (callback) => {
+        timers.set(++nextTimer, callback)
+        return nextTimer
+      },
+      clearTimeout: id => timers.delete(id),
+    })
+    const doc = page.window.document
+    const guard = module.createPageLoadingGuard(doc, false)
+    let late
+    const removed = []
+    guard.adoptOverlay(immediate => removed.push(immediate))
+    try {
+      const player = doc.getElementById('playerWrap')
+      const media = player.firstElementChild
+      assert.equal(page.window.getComputedStyle(player).visibility, 'visible')
+      const cover = doc.querySelector('[data-bewly-page-loading-cover]')
+      assert.equal(page.window.getComputedStyle(cover).position, 'fixed')
+      assert.equal(cover.getAttribute('aria-hidden'), 'true')
+      guard.revealContent()
+      assert.equal(cover.isConnected, false)
+      assert.equal(page.window.getComputedStyle(player).visibility, 'visible')
+      assert.equal(player.firstElementChild, media, 'the native media node is never replaced')
+      assert.equal(guard.active, true)
+      assert.equal(page.window.getComputedStyle(doc.querySelector('.bili-header')).visibility, 'hidden')
+      assert.ok(doc.getElementById('bewly-widescreen-loading'))
+      assert.deepEqual(removed, [], 'revealing native readiness does not dismiss the opaque handoff overlay')
+      guard.dispose(true)
+      assert.deepEqual(removed, [true])
+      assert.equal(timers.size, 0)
+      const root = doc.documentElement
+      root.remove()
+      late = module.createPageLoadingGuard(doc, false)
+      late.revealContent()
+      doc.append(root)
+      await flush()
+      assert.equal(doc.querySelector('[data-bewly-page-loading]'), null)
+      assert.equal(doc.querySelector('[data-bewly-page-loading-cover]'), null)
+      assert.equal(page.window.getComputedStyle(player).visibility, 'visible')
+    }
+    finally {
+      guard.dispose(true)
+      late?.dispose(true)
+      page.window.close()
+    }
+  })
+
   check('home route: explicit/hidden tabs, back-forward, integrated search and history state share one source', async () => {
     const enums = await import('../src/enums/appEnums')
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
     const homeRoute = await loadSourceModule('../src/utils/homeRoute.ts', { '~/contentScripts/views/Home/types': { HomeSubPage }, '~/enums/appEnums': enums })
     const config = [HomeSubPage.ForYou, HomeSubPage.Weekly, HomeSubPage.Following].map(page => ({ page, visible: true }))
     const settings = Vue.ref({ homePageTabVisibilityList: config, useSearchPageModeOnHomePage: true })
+    settings.initializationState = Vue.ref('loaded')
     window.history.replaceState({ native: { key: 'preserved' } }, '', '/?page=Home&tab=Weekly&hcfrom=share')
     const href = Vue.ref(window.location.href)
     const original = window.history.replaceState
@@ -191,18 +244,20 @@ export function registerUpstreamHomeChecks(check, { Vue, flush, compileComponent
       pageLoading: guard,
     })
     try {
-      assert.equal(nativeStyle(), 'hidden')
+      assert.equal(nativeStyle(), 'visible', 'native startup must never see a hidden player ancestor')
+      assert.ok(page.window.document.querySelector('[data-bewly-page-loading-cover]'))
       assert.notEqual(page.window.getComputedStyle(app).display, 'none', 'native layout measurements remain possible')
       assert.equal(page.window.getComputedStyle(page.window.document.getElementById('bewly-widescreen-loading')).visibility, 'visible')
       lifecycle.finishBootAfterAppMount()
-      assert.equal(nativeStyle(), 'hidden', 'Vue-mounted alone is not the playback handoff')
+      assert.ok(page.window.document.querySelector('[data-bewly-page-loading-cover]'), 'Vue-mounted alone is not the playback handoff')
       mode = 'default'
       settings.value.enableVideoPlayerModeOverrides = true
       lifecycle.finishBootAfterAppMount()
-      assert.equal(nativeStyle(), 'hidden', 'unknown per-type overrides still use the existing player decision')
+      assert.ok(page.window.document.querySelector('[data-bewly-page-loading-cover]'), 'unknown per-type overrides still use the existing player decision')
       settings.value.enableVideoPlayerModeOverrides = false
       lifecycle.finishBootAfterAppMount()
       assert.equal(nativeStyle(), 'visible')
+      assert.equal(page.window.document.querySelector('[data-bewly-page-loading-cover]'), null)
       const iframeGuard = module.createPageLoadingGuard(page.window.document, true)
       lifecycle.pageLoading = iframeGuard
       mode = 'bewlyWidescreen'

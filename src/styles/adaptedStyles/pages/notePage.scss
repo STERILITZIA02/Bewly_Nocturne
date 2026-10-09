@@ -1,4 +1,32 @@
 .bewly-design.notePage {
+  .note-header,
+  .note-tabs {
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .note-item__cover {
+    // Native scoped list rules otherwise restore their fixed 4px contour.
+    border-radius: var(--bew-media-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .note-item__cover :is(.card-image-card, .card-image-card__image, img) {
+    border-radius: inherit !important;
+    corner-shape: inherit;
+  }
+
+  .manage-note--header .edit-btn,
+  .el-pagination.is-background .el-pager li {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .editor-innter.ql-container {
+    border-radius: var(--bew-interactive-radius) var(--bew-interactive-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in `:not()`
   :not(foobar) {
@@ -21,12 +49,12 @@
     .ql-snow.ql-toolbar button:hover,
     .ql-snow .ql-toolbar button:hover,
     .dialog-note-content a {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .van-tabs-bar .van-tabs-tab.van-tabs-tab-active,
     .dialog-note-footer .btn-cancel {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .manage-note--header .tools-btns .edit-btn--ghost,
@@ -47,6 +75,7 @@
     .dialog-note-footer .btn-confirm,
     .checkbox .box.checked {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .note-tabs .van-tabs_active-bar,
@@ -117,7 +146,7 @@
     }
 
     .note-single-item a.go-video-btn:hover {
-      color: white !important;
+      color: var(--bew-on-theme-color) !important;
     }
   }
   // #endregion

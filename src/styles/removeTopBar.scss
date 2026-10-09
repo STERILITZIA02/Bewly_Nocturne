@@ -1,5 +1,6 @@
 html.bewly-outer-top-bars-suppressed {
   .bili-header,
+  #bili-header-m,
   #internationalHeader,
   .link-navbar,
   #home_nav,
@@ -37,15 +38,26 @@ html.bewly-outer-top-bars-suppressed {
   display: flex !important;
   visibility: visible !important;
   opacity: 1 !important;
-  background-color: #fff !important;
+  background-color: var(--bew-elevated-solid) !important;
+  color: var(--bew-text-1);
   backdrop-filter: none;
+
+  > .left-entry > :is(li, .left-entry__item) > :is(a, .default-entry, .entry-title, .left-entry__item-trigger),
+  > .right-entry > :is(.right-entry-item, .right-entry__item) > :is(.right-entry__outside, .right-entry__item-trigger) {
+    color: var(--bew-text-1) !important;
+  }
+
+  .left-entry__item-trigger > .trigger-icon,
+  .right-entry__item-trigger > .trigger-icon {
+    color: inherit !important;
+  }
 }
 
 .dark.homePage.bewly-custom-homepage:not(.remove-top-bar) .bili-header > .bili-header__bar,
 .dark.homePage.bewly-custom-homepage:not(.remove-top-bar)
   .bili-header.bewly-original-top-bar-scrolled
   > .bili-header__bar {
-  background-color: rgb(36 38 40) !important;
+  background-color: var(--bew-elevated-solid) !important;
 }
 
 // 自定义首页原版顶栏：首屏与滚动后都显示 B 站自己的宽 Logo（与插件 Logo 设置无关）
@@ -278,6 +290,7 @@ html.bewly-outer-top-bars-suppressed {
 .remove-top-bar {
   // 隐藏原版第一行顶栏，并保留与 Bewly Nocturne 顶栏一致的页面占位
   .bili-header .bili-header__bar,
+  #bili-header-m,
   #internationalHeader,
   .link-navbar,
   #home_nav,
@@ -285,6 +298,12 @@ html.bewly-outer-top-bars-suppressed {
   #bili-header-container {
     visibility: hidden !important;
     height: var(--bew-top-bar-height) !important;
+  }
+
+  // Hidden native menu items can retain a wider desktop layout. Keep the
+  // placeholder and mounted business nodes, but exclude their invisible spill.
+  .bili-header .bili-header__bar {
+    overflow: clip !important;
   }
 
   // Bewly Nocturne 顶栏下保留首屏频道行，仅隐藏滚动后出现的原版顶栏第二行。
@@ -310,6 +329,7 @@ html.bewly-outer-top-bars-suppressed {
 .remove-top-bar-without-placeholder {
   // 隐藏所有可能的顶栏元素
   #biliMainHeader,
+  #bili-header-m,
   .bili-header,
   .bili-header__bar,
   .header-channel,

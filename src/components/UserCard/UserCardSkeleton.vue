@@ -41,7 +41,8 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 
 .user-card-skeleton__stats {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--bew-space-3);
+  gap: var(--bew-space-1) var(--bew-space-3);
 }
 </style>

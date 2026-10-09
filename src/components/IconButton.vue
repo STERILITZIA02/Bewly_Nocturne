@@ -52,6 +52,21 @@ withDefaults(defineProps<{
     display: block;
     color: currentColor;
   }
+
+  &.bew-icon-button--control {
+    box-sizing: border-box;
+    width: var(--bew-control-height);
+    height: var(--bew-control-height);
+    background: var(--bew-content-alt-solid);
+
+    &:hover:not(:disabled) {
+      background: var(--bew-fill-2);
+    }
+    :deep(i) {
+      width: var(--bew-control-icon-size);
+      height: var(--bew-control-icon-size);
+    }
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

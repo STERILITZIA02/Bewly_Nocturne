@@ -51,8 +51,6 @@ export function buildOriginalNotificationUrl(target: OriginalNotificationTarget)
   return `${ORIGINAL_NOTIFICATION_ORIGIN}#/${ORIGINAL_NOTIFICATION_HASH[target]}`
 }
 
-export const ORIGINAL_MESSAGE_SETTINGS_URL = buildOriginalNotificationUrl('settings')
-
 export function normalizeNotificationRoute(url: string | URL): NormalizedNotificationRoute {
   const parsedUrl = toUrl(url)
   if (!parsedUrl) {

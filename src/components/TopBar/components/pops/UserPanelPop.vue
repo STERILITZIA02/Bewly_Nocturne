@@ -6,12 +6,13 @@ import { useI18n } from 'vue-i18n'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
-import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { isAccountRequestCurrent, resolveAuthenticatedAccountId, resolveCookieMatchedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { numFormatter } from '~/utils/dataFormatter'
 import { LV0_ICON, LV1_ICON, LV2_ICON, LV3_ICON, LV4_ICON, LV5_ICON, LV6_ICON, LV6_LIGHTNING_ICON } from '~/utils/lvIcons'
-import { getCSRF } from '~/utils/main'
+import { getCSRF, getUserID } from '~/utils/main'
+import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
 
 import type { UserInfo, UserStat } from '../../types'
@@ -99,7 +100,7 @@ const levelProgressBarWidth = computed(() => {
   return `${percentage.toFixed(2)}%`
 })
 
-const userStat = reactive<UserStat>({} as UserStat)
+const userStat = reactive<Partial<UserStat>>({})
 const loginLog = reactive<Partial<LoginLogItem>>({})
 
 const showLv6LastLoginInfo = computed(() => {
@@ -109,54 +110,78 @@ const shouldLoadLoginLog = computed(() => Boolean(
   props.userInfo?.level_info?.current_level >= 6 && showLv6LastLoginInfo.value,
 ))
 let requestGeneration = 0
+let readController: AbortController | undefined
+
+function cancelPanelReads() {
+  requestGeneration++
+  readController?.abort()
+  readController = undefined
+}
+
+function isPanelReadCurrent(accountId: number, generation: number) {
+  return topBarStore.canReadUi()
+    && isAccountRequestCurrent(accountId, generation, currentAccountId.value, requestGeneration)
+    && resolveCookieMatchedAccountId(accountId, getUserID()) === accountId
+}
+
+function handlePanelReadFailure(context: string, error: unknown, accountId: number, generation: number, signal: AbortSignal) {
+  // A stale account can still discover that this whole content-script world is
+  // invalid. Reuse the TopBar's terminal state so reopening cannot retry it.
+  if (isExtensionContextInvalidatedError(error)) {
+    topBarStore.invalidateExtensionContext()
+    cancelPanelReads()
+    return
+  }
+  if (!signal.aborted && isPanelReadCurrent(accountId, generation))
+    reportRuntimeFailure(context, error)
+}
 
 function clearAccountData() {
   Object.keys(userStat).forEach(key => Reflect.deleteProperty(userStat, key))
   Object.keys(loginLog).forEach(key => Reflect.deleteProperty(loginLog, key))
 }
 
-async function loadUserStat(requestAccountId: number, generation: number) {
+async function loadUserStat(requestAccountId: number, generation: number, signal: AbortSignal) {
   try {
-    const res = await api.user.getUserStat()
-    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+    const res = await api.user.getUserStat({}, { signal })
+    if (!isPanelReadCurrent(requestAccountId, generation))
       return
     if (res.code === 0)
       Object.assign(userStat, res.data)
   }
   catch (error) {
-    if (isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
-      console.error('Failed to load user statistics:', error)
+    handlePanelReadFailure('Failed to load user statistics', error, requestAccountId, generation, signal)
   }
 }
 
-async function loadLoginLog(requestAccountId: number, generation: number) {
+async function loadLoginLog(requestAccountId: number, generation: number, signal: AbortSignal) {
   try {
-    const res = await api.user.getLoginLog()
-    if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
+    const res = await api.user.getLoginLog({}, { signal })
+    if (!isPanelReadCurrent(requestAccountId, generation))
       return
     if (res.code === 0 && res.data?.list?.length > 0)
       Object.assign(loginLog, res.data.list[0])
   }
   catch (error) {
-    if (isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
-      console.error('Failed to load recent login information:', error)
+    handlePanelReadFailure('Failed to load recent login information', error, requestAccountId, generation, signal)
   }
 }
 
 watch([currentAccountId, shouldLoadLoginLog], ([accountId, shouldLoadLogin]) => {
-  const generation = ++requestGeneration
+  cancelPanelReads()
+  const generation = requestGeneration
   clearAccountData()
-  if (accountId === null)
+  if (accountId === null || !isPanelReadCurrent(accountId, generation))
     return
 
-  void loadUserStat(accountId, generation)
+  const controller = new AbortController()
+  readController = controller
+  void loadUserStat(accountId, generation, controller.signal)
   if (shouldLoadLogin)
-    void loadLoginLog(accountId, generation)
-}, { immediate: true })
+    void loadLoginLog(accountId, generation, controller.signal)
+}, { immediate: true, flush: 'sync' })
 
-onBeforeUnmount(() => {
-  requestGeneration++
-})
+onBeforeUnmount(cancelPanelReads)
 
 async function logout() {
   // Web session logout is independent from optional App recommendation auth.
@@ -319,34 +344,34 @@ function handleClickChannel() {
         <ALink
           class="channel-info-item"
           :href="`https://space.bilibili.com/${mid}/fans/follow`"
-          :title="`${userStat.following}`"
+          :title="userStat.following === undefined ? undefined : String(userStat.following)"
           type="topBar"
         >
           <div class="num">
-            {{ userStat.following ? numFormatter(userStat.following) : '0' }}
+            {{ userStat.following === undefined ? '—' : numFormatter(userStat.following) }}
           </div>
           <div>{{ $t('topbar.user_dropdown.following') }}</div>
         </ALink>
         <ALink
           class="channel-info-item"
           :href="`https://space.bilibili.com/${mid}/fans/fans`"
-          :title="`${userStat.follower}`"
+          :title="userStat.follower === undefined ? undefined : String(userStat.follower)"
           type="topBar"
         >
           <div class="num">
-            {{ userStat.follower ? numFormatter(userStat.follower) : '0' }}
+            {{ userStat.follower === undefined ? '—' : numFormatter(userStat.follower) }}
           </div>
           <div>{{ $t('topbar.user_dropdown.followers') }}</div>
         </ALink>
         <ALink
           class="channel-info-item"
           :href="`https://space.bilibili.com/${mid}/dynamic`"
-          :title="`${userStat.dynamic_count}`"
+          :title="userStat.dynamic_count === undefined ? undefined : String(userStat.dynamic_count)"
           type="topBar"
         >
           <div class="num">
             {{
-              userStat.dynamic_count ? numFormatter(userStat.dynamic_count) : '0'
+              userStat.dynamic_count === undefined ? '—' : numFormatter(userStat.dynamic_count)
             }}
           </div>
           <div>{{ $t('topbar.user_dropdown.posts') }}</div>

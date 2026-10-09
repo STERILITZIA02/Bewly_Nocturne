@@ -1,18 +1,30 @@
 <script setup lang="ts">
 import { settings } from '~/logic'
+import { calcCurrentTime } from '~/utils/dataFormatter'
 import type { VideoIdentity } from '~/utils/videoVisitHistory'
-import { wasVideoVisited } from '~/utils/videoVisitHistory'
+import { getVideoWatchState } from '~/utils/videoVisitHistory'
+import type { VideoWatchState } from '~/utils/videoVisitRecord'
 
 const props = defineProps<VideoIdentity>()
 
-const visible = computed(() =>
-  settings.value.showVideoWatchedBadge && wasVideoVisited(props),
-)
+const state = computed<VideoWatchState | undefined>((previous) => {
+  const next = settings.value.showVideoWatchedBadge ? getVideoWatchState(props) : undefined
+  if (previous?.status === 'browsed' && next?.status === 'browsed')
+    return previous
+  if (previous?.status === 'played' && next?.status === 'played'
+    && previous.progress === next.progress && previous.duration === next.duration && previous.completed === next.completed) {
+    return previous
+  }
+  return next
+})
 </script>
 
 <template>
-  <span v-if="visible" class="video-watched-tag">
-    {{ $t('video_card.watched') }}
+  <span v-if="state" class="video-watched-tag">
+    {{ state.status === 'browsed' ? $t('video_card.browsed')
+      : state.completed ? $t('video_card.completed')
+        : state.progress !== undefined ? $t('video_card.played_progress', { time: calcCurrentTime(state.progress) })
+          : $t('video_card.played') }}
   </span>
 </template>
 

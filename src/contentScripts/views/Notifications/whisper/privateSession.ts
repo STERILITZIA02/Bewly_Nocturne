@@ -308,12 +308,6 @@ export function filterPrivateSessions(
   })
 }
 
-export function getPrivateSessionProfileUrl(session: DisplayPrivateSession): string {
-  if (!session.capabilities.canOpenProfile || !/^\d+$/.test(session.talkerId))
-    return ''
-  return `https://space.bilibili.com/${session.talkerId}`
-}
-
 export function isNativePrivateSession(session: DisplayPrivateSession): boolean {
   return session.capabilities.canReadNative
 }

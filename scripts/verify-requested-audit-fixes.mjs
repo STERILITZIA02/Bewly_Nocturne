@@ -254,10 +254,13 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     const messaging = await loadSourceFunctions('../src/utils/messaging.ts', ['isExtensionContextInvalidatedError'], {})
     const core = await loadSourceFunctions('../src/contentScripts/views/SearchResults/composables/useSearchRequest.ts', ['useSearchRequest'], {
       ...Vue,
+      AbortController,
+      ...(await import('../src/utils/abort')),
       isExtensionContextInvalidatedError: messaging.isExtensionContextInvalidatedError,
       console: { error: (...args) => errors.push(args) },
       useI18n: () => ({ t: key => key }),
       useTopBarStore: () => account,
+      getUserID: () => account.isLogin ? String(account.userInfo.mid) : undefined,
       settings,
       resolveAuthenticatedAccountId: (loggedIn, mid) => loggedIn && mid > 0 ? mid : null,
       requestSearch: (request) => {

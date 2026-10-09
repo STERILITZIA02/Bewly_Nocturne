@@ -36,6 +36,17 @@ interface NativeVideoComponent {
   $off?: (event: string, handler: () => void) => void
 }
 
+interface NativePlayer {
+  mediaElement?: () => HTMLElement
+  getManifest?: () => { aid?: number, bvid?: string, cid?: number, p?: number, episodeId?: number, seasonId?: number }
+  getQuality?: () => { nowQ?: number, realQ?: number }
+  getDuration?: (includePreview?: boolean) => number
+}
+
+export function getNativePlayer() {
+  return (window as Window & { player?: NativePlayer }).player
+}
+
 export function setupVideoMetadataBridge(channelId: string) {
   const controller = new AbortController()
   const { signal } = controller
@@ -123,9 +134,38 @@ export function setupVideoMetadataBridge(channelId: string) {
     const request = parseVideoMetadataEvent(event)
     const node = event.target
     const nativeMedia = node instanceof HTMLElement && node.matches('video, bwp-video')
+    const favoriteDialog = node instanceof HTMLElement && node.matches('.collection-m-exp') && request?.favorite === true
     if (request?.channelId !== channelId || !Number.isSafeInteger(request.requestId)
       || request.href !== location.href || (!parseVideoPageIdentity(location.href) && !isPgcPlaybackPage())
-      || !(node instanceof HTMLElement) || !node.isConnected || (!node.matches(nativeComponentSelector) && !nativeMedia)) {
+      || !(node instanceof HTMLElement) || !node.isConnected || (!node.matches(nativeComponentSelector) && !nativeMedia && !favoriteDialog)) {
+      return
+    }
+    if (favoriteDialog) {
+      // The published native dialog renders rows with index keys and no folder
+      // IDs in the DOM. Read its live owner in MAIN, not an ISOLATED expando.
+      const owner = (node as HTMLElement & { __vue__?: NativeVideoComponent & { aid?: number, list?: Array<{ id?: number | string, favoured?: boolean, media_count?: number, max_count?: number }> } }).__vue__
+      let favorite
+      try {
+        const manifest = getNativePlayer()?.getManifest?.()
+        const route = parseVideoPageIdentity(location.href)
+        const episode = /^\/bangumi\/play\/(ep|ss)(\d+)/.exec(location.pathname)
+        const currentAid = route ? readMetadata()?.aid : episode && Number(manifest?.[episode[1] === 'ep' ? 'episodeId' : 'seasonId']) === Number(episode[2]) ? manifest?.aid : undefined
+        if (owner?.$el === node && owner._isMounted && !owner._isDestroyed && !owner._isBeingDestroyed
+          && Number.isSafeInteger(currentAid) && currentAid === Number(owner.aid) && Array.isArray(owner.list)) {
+          const folders = owner.list.map(item => ({
+            id: typeof item.id === 'string' || Number.isSafeInteger(item.id) ? String(item.id) : '',
+            original: item.favoured,
+            count: Number.isSafeInteger(item.media_count) && item.media_count! >= 0 ? item.media_count : undefined,
+            capacity: Number.isSafeInteger(item.max_count) && item.max_count! > 0 ? item.max_count : undefined,
+          }))
+          if (folders.every(folder => /^[1-9]\d*$/.test(folder.id) && typeof folder.original === 'boolean'))
+            favorite = { aid: currentAid, folders }
+        }
+      }
+      catch { /* An unavailable native owner/capacity leaves native behavior intact. */ }
+      node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
+        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, favorite }),
+      }))
       return
     }
     if (request.release === true) {
@@ -133,16 +173,54 @@ export function setupVideoMetadataBridge(channelId: string) {
       return
     }
     if (nativeMedia) {
-      const player = (window as Window & { player?: { mediaElement?: () => HTMLElement, getManifest?: () => { episodeId?: number } } }).player
+      const player = getNativePlayer()
       const episode = /^\/bangumi\/play\/ep(\d+)/.exec(location.pathname)?.[1]
       let ready: boolean | undefined
+      let episodeId: number | undefined
+      let qualityState
       try {
-        if (typeof player?.mediaElement === 'function')
-          ready = player.mediaElement() === node && (!episode || String(player?.getManifest?.().episodeId) === episode)
+        if (typeof player?.mediaElement === 'function') {
+          ready = player.mediaElement() === node
+          if (ready && isPgcPlaybackPage()) {
+            try {
+              episodeId = player?.getManifest?.().episodeId
+              if (episode)
+                ready = String(episodeId) === episode
+            }
+            catch {
+              // Preserve the existing readiness contract: an optional SS
+              // identity probe must not change native node ownership.
+              if (episode)
+                ready = undefined
+            }
+          }
+        }
       }
       catch { /* The native player can be disposing between navigation and this synchronous probe. */ }
+      if (request.quality === true) {
+        try {
+          const manifest = player?.getManifest?.()
+          const identity = parseVideoPageIdentity(location.href)
+          const url = new URL(location.href)
+          const page = Number(url.searchParams.get('p') || 1)
+          const cid = Number(url.searchParams.get('cid'))
+          const matches = !identity || ((identity.aid ? identity.aid === manifest?.aid : identity.bvid === manifest?.bvid)
+            && (!Number.isSafeInteger(manifest?.p) || manifest?.p === page) && (!cid || manifest?.cid === cid))
+          if (ready === false || !matches) {
+            qualityState = { ready: false }
+          }
+          else if (ready === true && player?.getQuality && player.getDuration) {
+            const quality = player.getQuality()
+            const duration = player.getDuration()
+            const fullDuration = player.getDuration(true)
+            if (Number.isFinite(duration) && Number.isFinite(fullDuration))
+              qualityState = { ready: true, quality: quality.nowQ, actualQuality: quality.realQ, preview: fullDuration > duration + 2 }
+          }
+        }
+        catch { /* Optional native APIs cannot change the component-ready contract. */ }
+      }
       node.dispatchEvent(new CustomEvent(VIDEO_COMPONENT_RESPONSE, {
-        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready }),
+        detail: JSON.stringify({ channelId, requestId: request.requestId, href: location.href, ready, episodeId, qualityState }),
       }))
       return
     }

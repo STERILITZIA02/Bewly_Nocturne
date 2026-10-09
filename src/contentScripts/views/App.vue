@@ -8,6 +8,7 @@ import AppAuthorizationDialog from '~/components/AppAuthorizationDialog.vue'
 import ConfirmDialog from '~/components/ConfirmDialog.vue'
 import ElementSettingsContextMenu from '~/components/ElementSettingsContextMenu.vue'
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
+import LocalLoudnessPanel from '~/components/LocalLoudnessPanel.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
@@ -16,10 +17,12 @@ import { useConfirmDialogHost } from '~/composables/useConfirmDialogHost'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { useHomePageRoute } from '~/composables/useHomePageRoute'
+import { localLoudnessPanelOpen } from '~/composables/useLocalLoudness'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
-import { BEWLY_MOUNTED, DRAWER_VIDEO_ENTER_PAGE_FULL, DRAWER_VIDEO_EXIT_PAGE_FULL, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_MOUNTED, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
 import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupWatchLaterAutoRemove } from '~/contentScripts/features/watchLaterAutoRemove'
+import { observePlayerMode } from '~/contentScripts/playerDomLifecycle'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { appAuthTokens, settings } from '~/logic'
@@ -28,20 +31,22 @@ import {
   completeExternalAppAuthorization,
   synchronizeValidAppAuthorization,
 } from '~/logic/appAuthorizationCoordinator'
-import { setIframePageActive } from '~/logic/iframePageState'
+import type { IframePlaybackContext } from '~/logic/iframePageState'
+import { reportIframePlayerMode, setIframePageActive } from '~/logic/iframePageState'
 import { exitLayoutEditMode } from '~/logic/layoutEdit'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { hasValidAppAuthTokens } from '~/utils/authProvider'
+import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
 import { cleanBilibiliUrl } from '~/utils/bilibiliUrl'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { resolveDefaultAppPage } from '~/utils/homeRoute'
-import { getIframeMessageData, postMessageToParent } from '~/utils/iframeMessage'
+import { getIframeMessageData } from '~/utils/iframeMessage'
 import { isSentinelWithinLoadThreshold } from '~/utils/loadMoreSentinel'
-import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, queryDomUntilFound, scrollToTop } from '~/utils/main'
+import { getUserID, isHomePage, isInIframe, isNotificationPage, isVideoOrBangumiPage, openLinkToNewTab, scrollToTop } from '~/utils/main'
 import emitter from '~/utils/mitt'
 import { getPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { resolvePageModeNavigationUrl, resolvePageModeTarget } from '~/utils/pageMode'
@@ -292,6 +297,7 @@ watch(isHomeTabSwitching, (switching) => {
 })
 
 const iframeDrawerURL = ref<string>('')
+const iframeDrawerContext = ref<IframePlaybackContext>()
 const showIframeDrawer = ref<boolean>(false)
 
 // 添加活跃抽屉状态管理
@@ -627,7 +633,7 @@ onBeforeUnmount(() => {
   }
 })
 
-function openIframeDrawer(url: string) {
+function openIframeDrawer(url: string, options?: { playbackContext?: IframePlaybackContext }) {
   const isSameOrigin = (origin: URL, destination: URL) =>
     origin.protocol === destination.protocol && origin.host === destination.host && origin.port === destination.port
 
@@ -640,6 +646,7 @@ function openIframeDrawer(url: string) {
     }
 
     setActiveDrawer(DrawerType.IframeDrawer)
+    iframeDrawerContext.value = options?.playbackContext
     iframeDrawerURL.value = destination.href
     showIframeDrawer.value = true
   }
@@ -661,33 +668,10 @@ async function haveScrollbar() {
   return viewport.scrollHeight > viewport.clientHeight
 }
 
-// In drawer video, watch btn className changed and post message to parent
-watchEffect(async (onCleanUp) => {
-  if (!isInIframe())
-    return null
-
-  const observer = new MutationObserver(([{ target: el }]) => {
-    if (!(el instanceof HTMLElement))
-      return null
-    if (el.classList.contains('bpx-state-entered')) {
-      postMessageToParent({ type: DRAWER_VIDEO_ENTER_PAGE_FULL })
-    }
-    else {
-      postMessageToParent({ type: DRAWER_VIDEO_EXIT_PAGE_FULL })
-    }
-  })
-
-  const abort = new AbortController()
-  queryDomUntilFound('.bpx-player-ctrl-btn.bpx-player-ctrl-web', 500, abort).then((openVideo2WebFullBtn) => {
-    if (!openVideo2WebFullBtn)
-      return
-    observer.observe(openVideo2WebFullBtn, { attributes: true })
-  })
-
-  onCleanUp(() => {
-    observer.disconnect()
-    abort.abort()
-  })
+watchEffect((onCleanup) => {
+  if (!isInIframe() || !isVideoOrBangumiPage(currentLocationHref.value))
+    return
+  onCleanup(observePlayerMode(mode => reportIframePlayerMode(isBewlyWidescreenActive() ? 'bewlyWidescreen' : mode)))
 })
 
 provide<BewlyAppProvider>('BEWLY_APP', {
@@ -880,6 +864,7 @@ onBeforeUnmount(stopUrlCleaner)
       }"
     >
       <TopBar
+        ref="topBarRef"
         class="top-bar-layer"
         pos="top-0 left-0" w-full
       />
@@ -926,17 +911,19 @@ onBeforeUnmount(stopUrlCleaner)
       </Transition>
 
       <Transition v-if="!showBewlyPage && iframePageURL && !isInIframe()" name="fade">
-        <IframePage ref="iframePageRef" :url="iframePageURL" />
+        <IframePage ref="iframePageRef" :url="iframePageURL" @scroll="!useOriginalBilibiliTopBar && topBarRef?.handleScroll($event)" />
       </Transition>
     </div>
 
     <IframeDrawer
       v-if="showIframeDrawer"
       :url="iframeDrawerURL"
+      :playback-context="iframeDrawerContext"
       @close="showIframeDrawer = false"
     />
 
     <AppAuthorizationDialog v-if="showAppAuthorizationDialog" />
+    <LocalLoudnessPanel v-if="localLoudnessPanelOpen" />
 
     <!-- Keep the static overlay removal before resolving a caller's request. -->
     <ConfirmDialog
@@ -955,13 +942,6 @@ onBeforeUnmount(stopUrlCleaner)
 
 .settings-layer {
   z-index: var(--bew-z-dialog);
-}
-
-.bewly-wrapper {
-  // To fix the filter used in `.bewly-wrapper` that cause the positions of elements become discorded.
-  > * > * {
-    filter: var(--bew-filter-force-dark);
-  }
 }
 
 .bewly-wrapper--viewport {

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onKeyStroke, useMediaQuery, useMouseInElement } from '@vueuse/core'
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
@@ -8,12 +8,13 @@ import { useDark } from '~/composables/useDark'
 import { BEWLY_IFRAME_DRAWER_HOST_CHANGE, OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCROLL_VISIBILITY_CHANGE, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
+import { useIframePageActive } from '~/logic/iframePageState'
 import { isLayoutEditing, useLayoutEditableRoot } from '~/logic/layoutEdit'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { isIframeDrawerHost } from '~/utils/iframeDrawerHost'
-import { isHomePage, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
+import { isHomePage, isInIframe, isUserSpacePage, isVideoOrBangumiPage } from '~/utils/main'
 import { reportRuntimeFailure } from '~/utils/messaging'
 import emitter from '~/utils/mitt'
 
@@ -47,6 +48,8 @@ const currentLocationHref = useCurrentLocationHref()
 const effectiveTopBarSource = computed(() => settingsStore.getEffectiveTopBarSource())
 const usesNativeTopBar = computed(() => effectiveTopBarSource.value === 'bilibili-native')
 const iframeDrawerHost = ref(isIframeDrawerHost())
+const iframePageActive = useIframePageActive()
+const hostAllowsUiReads = computed(() => !iframeDrawerHost.value && (isInIframe() || !iframePageActive.value))
 const isCurrentVideoPage = computed(() => !iframeDrawerHost.value && isVideoOrBangumiPage(currentLocationHref.value))
 const coarsePointer = useMediaQuery('(pointer: coarse)')
 const lastPointerType = ref<'mouse' | 'touch' | 'pen'>(coarsePointer.value ? 'touch' : 'mouse')
@@ -178,6 +181,7 @@ watch(effectiveTopBarSource, () => {
   clearHideTimer()
   setupScrollListeners()
 }, { flush: 'post' })
+watch(() => settings.value.autoHideTopBar, setupScrollListeners)
 
 // 滚动处理
 const scrollTop = ref<number>(0)
@@ -311,6 +315,8 @@ function emitTopBarScrollVisibilityChange(visible: boolean, scrollDelta: number)
 
 function setupScrollListeners() {
   cleanupScrollListeners()
+  oldScrollTop.value = scrollTop.value
+  topBarVisibilityAnchorScrollTop.value = scrollTop.value
   if (iframeDrawerHost.value) {
     clearHideTimer()
     clearOriginalVideoTopBarVisibility()
@@ -574,28 +580,36 @@ onMounted(() => {
   window.addEventListener('pointerdown', handlePointerDown, { passive: true })
 
   nextTick(async () => {
+    if (!topBarMounted)
+      return
     // 初始化数据和更新定时器
     try {
-      await topBarStore.initData()
+      await topBarStore.setUiActive(!document.hidden && hostAllowsUiReads.value)
     }
     catch (error) {
       reportRuntimeFailure('Failed to initialize TopBar data', error)
     }
-    if (!topBarMounted)
-      return
-    // 启动定时器：已登录时同步角标/补填 userInfo；未登录时不启动轮询，
-    // 登录态由本地 Cookie 事实与事件驱动维护（见 issue #921）
-    topBarStore.startUpdateTimer()
   })
 })
 
 function handleVisibilityChange() {
+  void topBarStore.setUiActive(topBarMounted && !document.hidden && hostAllowsUiReads.value).catch(error => reportRuntimeFailure('Failed to resume TopBar data', error))
   if (document.hidden) {
     resetTopBarTransientInteraction()
-    return
   }
-  topBarStore.reconcileLocalLoginState()
 }
+
+onDeactivated(() => {
+  void topBarStore.setUiActive(false)
+})
+onActivated(() => {
+  if (topBarMounted)
+    handleVisibilityChange()
+})
+watch(hostAllowsUiReads, () => {
+  if (topBarMounted)
+    handleVisibilityChange()
+})
 
 function handlePointerDown(event: PointerEvent) {
   lastPointerType.value = event.pointerType === 'pen' || event.pointerType === 'touch' ? event.pointerType : 'mouse'
@@ -662,6 +676,7 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
         :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon }"
       >
         <TopBarHeader
+          :active="hostAllowsUiReads && !hideTopBar && !usesNativeTopBar"
           :force-white-icon="forceWhiteIcon"
           :reach-top="reachTop"
           :is-dark="isDark"

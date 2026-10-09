@@ -10,6 +10,10 @@ import { isHomePage, isInIframe, isTopicPage, isWatchLaterListPage } from '~/uti
 
 const PAGE_STYLE_CLASSES = [
   'homePage',
+  'nativeFeedPage',
+  'esportsPage',
+  'musicPage',
+  'cheesePage',
   'notificationsPage',
   'momentsPage',
   'historyPage',
@@ -24,7 +28,6 @@ const PAGE_STYLE_CLASSES = [
   'articlesPage',
   'topicPage',
   'error404Page',
-  'forceDark',
   'creativeCenterPage',
   'accountSettingsPage',
   'premiumPage',
@@ -82,6 +85,25 @@ async function setupStyles(currentUrl: string) {
   if (isHomePage(currentUrl)) {
     await import('./pages/homePage.scss')
     activatePage('homePage')
+  }
+
+  // Current category feeds and popular lists share native video cards.
+  else if (/^https?:\/\/www\.bilibili\.com\/(?:c\/|v\/popular(?:[/?#]|$))/.test(currentUrl)) {
+    activatePage('nativeFeedPage')
+  }
+
+  else if (/^https?:\/\/music\.bilibili\.com\/pc\/music-center(?:[/?#]|$)/.test(currentUrl)) {
+    activatePage('musicPage')
+  }
+
+  else if (/^https?:\/\/www\.bilibili\.com\/v\/game\/match(?:[/?#]|$)/.test(currentUrl)) {
+    await import('./pages/esportsPage.scss')
+    activatePage('esportsPage')
+  }
+
+  else if (/^https?:\/\/www\.bilibili\.com\/cheese(?:[/?#]|$)/.test(currentUrl)) {
+    await import('./pages/nativeSites.scss')
+    activatePage('cheesePage')
   }
 
   // notifications page 消息页
@@ -273,9 +295,6 @@ async function setupStyles(currentUrl: string) {
 
   // creative center page 创作中心页
   else if (/^https?:\/\/member\.bilibili\.com\/platform.*$/.test(currentUrl)) {
-    await import('./forceDark.scss')
-    if (!activatePage('forceDark'))
-      return
     await import('./pages/creativeCenterPage.scss')
     activatePage('creativeCenterPage')
   }

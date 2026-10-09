@@ -12,8 +12,17 @@ import { settings } from '~/logic'
 import { allChannelConfigs } from '../../../TopBar/constants/channels'
 import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
+import SettingsItemSubgroup from '../../components/SettingsItemSubgroup.vue'
 
 const { t } = useI18n()
+const notificationCategories = [
+  ['showReplyNotificationReminder', 'settings.show_reply_notification_reminder'],
+  ['showAtNotificationReminder', 'settings.show_at_notification_reminder'],
+  ['showLikeNotificationReminder', 'settings.show_like_notification_reminder'],
+  ['showSystemNotificationReminder', 'settings.show_system_notification_reminder'],
+  ['showFollowedPrivateMessageUnreadCount', 'settings.show_followed_private_message_unread_count'],
+  ['showUnfollowedPrivateMessageUnreadCount', 'settings.show_unfollowed_private_message_unread_count'],
+] as const
 
 type BadgeType = 'number' | 'dot' | 'none'
 
@@ -364,13 +373,11 @@ function toggleChannel(value: string) {
         </div>
       </SettingsItem>
 
-      <SettingsItem
-        :title="$t('settings.show_like_notification_reminder')"
-        :desc="$t('settings.show_like_notification_reminder_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.showLikeNotificationReminder" />
-      </SettingsItem>
+      <SettingsItemSubgroup :title="$t('settings.notification_badge_categories')" :desc="$t('settings.notification_badge_categories_desc')">
+        <SettingsItem v-for="[key, label] in notificationCategories" :key="key" :title="$t(label)" right-width="auto">
+          <Radio v-model="settings[key]" />
+        </SettingsItem>
+      </SettingsItemSubgroup>
       <SettingsItem
         :title="$t('settings.filter_articles_in_moments')"
         :desc="$t('settings.filter_articles_in_moments_desc')"

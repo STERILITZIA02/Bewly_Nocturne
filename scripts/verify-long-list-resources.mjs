@@ -11,6 +11,181 @@ function deferred() {
 }
 
 export function registerLongListResourceChecks(check, { Vue, compileComponent, flush }) {
+  check('mounted Moments: failed pagination keeps rows/cursor, blocks repeated automatic loads, and cancels feed/portal reads on exit', async () => {
+    const calls = []
+    const pending = []
+    const errors = []
+    let fail = false
+    let stall = false
+    let hidden = false
+    const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
+    const noop = () => {}
+    const viewport = { scrollHeight: 4000, clientHeight: 800, scrollTop: 0 }
+    const appState = { scrollViewportRef: Vue.ref(viewport), handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref() }
+    const data = id => ({ id, publishedAt: 1, isVideo: false, author: { mid: '1' } })
+    const api = { moment: {
+      getMoments: async (params, options) => {
+        calls.push({ params, ...options })
+        if (stall) {
+          const wait = deferred()
+          pending.push({ ...wait, signal: options.signal })
+          return wait.promise
+        }
+        if (fail)
+          throw new Error('pagination fixture')
+        return { code: 0, data: { items: [data(String(calls.length))], offset: `cursor-${calls.length}`, has_more: true } }
+      },
+      getMomentsPortal: async (_params, { signal }) => {
+        if (stall) {
+          const wait = deferred()
+          pending.push({ ...wait, signal })
+          return wait.promise
+        }
+        return { code: 0, data: {} }
+      },
+    } }
+    const cache = { ready: Promise.resolve(), ensureMomentsCacheAccount: noop, cacheRegularMomentPage: noop }
+    const readerModule = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
+      '~/utils/api': { default: api },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': {},
+      './useMomentsFeedCache': { mergeCachedMoments: (a, b) => [...a, ...b] },
+    })
+    const componentStubs = Object.fromEntries(['Button.vue', 'CloseButton.vue', 'Dialog.vue', 'LiquidSegmentIndicator.vue', 'MomentCard/MomentCard.vue', 'MomentCard/MomentCardSkeleton.vue'].map(name => [`~/components/${name}`, { default: { render: () => null } }]))
+    const component = await compileComponent('../src/contentScripts/views/Moments/Moments.vue', {
+      ...componentStubs,
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      'vue-toastification': { useToast: () => ({ error: noop }) },
+      '~/components/MomentCard/momentForwardContent': { createMomentDisclosureCache: () => ({ clear: noop }), MOMENT_DISCLOSURES: Symbol('disclosures') },
+      '~/components/MomentCard/momentForwardTransactions': { createMomentForwardTransactions: () => ({ dispose: noop, invalidate: noop }), MOMENT_FORWARD_TRANSACTIONS: Symbol('transactions') },
+      '~/composables/useAppProvider': { useBewlyApp: () => appState },
+      '~/constants/layout': {},
+      '~/logic': { settings: Vue.ref({}) },
+      '~/logic/layoutEdit': { vLayoutEditable: {} },
+      '~/logic/loginStatus': { parseDedeUserID: () => 1 },
+      '~/logic/momentFilters': { momentFilterPolicy: Vue.ref({ active: false, keywords: [], passes: () => true }) },
+      '~/logic/storage': { momentsPinnedUsers: Vue.ref([]), momentsWantedUsers: Vue.ref([]) },
+      '~/logic/uploaderLatestVideoTimes': { recordUploaderLatestVideoTimes: noop },
+      '~/stores/topBarStore': { useTopBarStore: () => ({ userInfo: { mid: 1 }, isLogin: true, ensureWatchLaterState: noop }) },
+      '~/utils/accountScope': await import('../src/utils/accountScope'),
+      '~/utils/api': { default: api },
+      '~/utils/dataFormatter': {},
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false, reportRuntimeFailure: (_message, error) => errors.push(error) },
+      '~/utils/momentCommentSession': { createMomentCommentSessionCache: () => ({ clear: noop, setAccount: noop }), MOMENT_COMMENT_SESSIONS: Symbol('comments') },
+      '~/utils/momentsLayout': {},
+      '~/utils/momentUrl': {},
+      './momentAdapter': { createMomentAdapter: () => ({ mapMoment: item => item, collectVideoPublicationTimes: () => [] }) },
+      './momentFeedReader': readerModule,
+      './useMomentActions': { useMomentActions: () => ({ reset: noop }) },
+      './useMomentDetail': { useMomentDetail: () => ({ selectedMoment: Vue.ref(null), closeMomentDetail: noop }) },
+      './useMomentLayout': { useMomentLayout: () => ({ reset: noop, append: noop, clearColumns: noop, suspendRebalance: noop, updateVirtualColumns: noop, updateGridColumnCount: noop }) },
+      './useMomentPreviews': { useMomentPreviews: () => ({ clear: noop, reset: noop }) },
+      './useMomentsFeedCache': { useMomentsFeedCache: () => cache },
+    }, { renderTemplate: false, globals: { requestAnimationFrame: (callback) => {
+      queueMicrotask(callback)
+      return 1
+    } } })
+    let state
+    const root = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup: () => () => Vue.h(component, { ref: (value) => {
+      if (value)
+        state = value.$.setupState
+    } }) })
+    let mounted = true
+    app.mount(root)
+    try {
+      await flush()
+      await flush()
+      assert.deepEqual(errors, [])
+      assert.equal(calls.length, 1)
+      assert.equal(state.moments.length, 1)
+      const firstCursor = state.offset
+      fail = true
+      await state.loadMoments()
+      assert.equal(calls.length, 2)
+      assert.equal(state.offset, firstCursor)
+      assert.equal(state.moments.length, 1)
+      assert.equal(state.feedRequestFailed, true)
+      viewport.scrollTop = 3200
+      for (let i = 0; i < 100; i++) {
+        state.maybeLoadMoreNearBottom()
+        assert.equal(appState.handleReachBottom.value(), false)
+      }
+      await flush()
+      assert.equal(calls.length, 2, '100 repeated scroll/geometry callbacks cannot retry a failed page')
+      viewport.scrollTop = 0
+      fail = false
+      await state.loadMoments(false, 0, true)
+      assert.equal(calls.length, 3)
+      assert.equal(calls[2].params.offset, firstCursor, 'manual retry consumes the unchanged cursor')
+      assert.equal(state.moments.length, 2)
+      assert.equal(state.feedRequestFailed, false)
+      hidden = true
+      viewport.scrollTop = 3200
+      state.maybeLoadMoreNearBottom()
+      assert.equal(appState.handleReachBottom.value(), false)
+      await state.loadMoments()
+      assert.equal(calls.length, 3, 'a hidden page cannot prefetch from stale geometry')
+      hidden = false
+      stall = true
+      state.refresh()
+      await flush()
+      assert.equal(pending.length, 2)
+      app.unmount()
+      mounted = false
+      assert.ok(pending.every(request => request.signal.aborted), 'both real feed and portal GET owners are cancelled')
+      pending.forEach(request => request.resolve({ code: 0, data: { items: [data('late')], has_more: true, offset: 'late' } }))
+      await flush()
+      assert.equal(appState.handleReachBottom.value, undefined)
+      console.log('PERF Moments fixture: 100 repeated callbacks after pagination failure = 0 requests; hidden automatic load = 0 requests; exit aborts 2 GETs')
+    }
+    finally {
+      if (mounted)
+        app.unmount()
+      root.remove()
+      if (originalHidden)
+        Object.defineProperty(document, 'hidden', originalHidden)
+      else
+        delete document.hidden
+    }
+  })
+
+  check('moment reader: replacing or disposing a read aborts only its own GET transport and never commits the cancelled batch', async () => {
+    const requests = []
+    const calls = []
+    const module = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
+      '~/utils/api': { default: { moment: { getMoments: (params, { signal }) => {
+        const pending = deferred()
+        requests.push({ ...pending, params, signal })
+        return pending.promise
+      } } } },
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': {},
+      './useMomentsFeedCache': { mergeCachedMoments: (a, b) => [...a, ...b] },
+    })
+    const reader = module.createMomentFeedReader({ cacheRegularMomentPage: (...args) => calls.push(args) }, item => item)
+    const query = { reset: true, type: 'all', group: 'all', hostMid: '', offset: '', page: 1, filtered: true }
+    const old = reader.read(query, () => true)
+    reader.reset()
+    assert.equal(requests[0].signal.aborted, true)
+    const current = reader.read({ ...query, type: 'video' }, () => true)
+    requests[0].resolve({ code: 0, data: { items: [{ id: 'old' }], offset: 'next', has_more: true } })
+    assert.equal(await old, undefined)
+    assert.equal(requests.length, 2, 'an aborted multi-page scan never starts its second request')
+    assert.equal(calls.length, 0)
+    assert.equal(requests[1].signal.aborted, false, 'late old completion does not abort the replacement owner')
+    requests[1].resolve({ code: 0, data: { items: [{ id: 'current' }], offset: '', has_more: false } })
+    assert.equal((await current).normalizedItems[0].id, 'current')
+    assert.equal(calls.length, 1)
+    const abandoned = reader.read(query, () => true)
+    reader.reset()
+    assert.equal(requests[2].signal.aborted, true)
+    requests[2].resolve({ code: 0, data: { items: [{ id: 'abandoned' }], has_more: false } })
+    assert.equal(await abandoned, undefined)
+    assert.equal(reader.getLoaded('all', 'all', ''), undefined)
+  })
+
   check('A17/A19 actual forward patches share canonical rows while pending likes never enter persisted snapshots', async () => {
     const account = await import('../src/utils/accountScope')
     const { createAccountLifetime } = await import('../src/utils/accountLifetime')
@@ -292,7 +467,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
     const account = await import('../src/utils/accountScope')
     const follow = await import('../src/utils/momentHostFollowState')
-    const messaging = await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} } })
+    const messaging = await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} }, '~/utils/abort': await import('../src/utils/abort'), '~/constants/apiRequest': await import('../src/constants/apiRequest') })
     let stored
     const cacheModule = await loadSourceModule('../src/contentScripts/views/Moments/useMomentsFeedCache.ts', {
       '~/composables/useStorageLocal': { useStorageLocal: (_key, initial, options) => {

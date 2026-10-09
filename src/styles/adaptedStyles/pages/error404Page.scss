@@ -1,9 +1,10 @@
-.bewly-design.error404Page {
+.bewly-design:is(.error404Page, [data-bewly-native-site="security-public"]:has(> body > .error-container)) {
   .error-manga img {
     background-color: white;
     border-top: 20px solid white;
     border-bottom: 20px solid white;
-    border-radius: 4px;
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
   }
 
   body {
@@ -16,6 +17,7 @@
     .error-panel .rollback-btn,
     .error-manga .change-img-btn {
       background-color: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
     }
 
     .error-panel .rollback-btn:hover,

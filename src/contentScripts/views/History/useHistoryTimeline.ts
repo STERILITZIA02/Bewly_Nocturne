@@ -1,4 +1,4 @@
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
 import type { HistorySearchResult } from '~/models/video/historySearch'
@@ -6,12 +6,17 @@ import { createAccountLifetime } from '~/utils/accountLifetime'
 import type { AccountId } from '~/utils/accountScope'
 import type api from '~/utils/api'
 
+import type { HistoryContentFilter } from './historyFilters'
+import { historyDateBounds, matchesHistoryFilters } from './historyFilters'
+
 interface HistoryDependencies {
   api: typeof api.history
   getAccountId: () => AccountId
   getCSRF: () => string
   haveScrollbar: () => Promise<boolean>
   onWriteError: (error: unknown) => void
+  onDeleted?: (item: HistoryItem) => void
+  onCleared?: () => void
 }
 
 /** Owns the timeline, paging cursor and writes for one mounted account view. */
@@ -23,6 +28,9 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
   const historyList = reactive<HistoryItem[]>([])
   const keyword = ref('')
   const submittedKeyword = ref('')
+  const date = ref('')
+  const contentType = ref<HistoryContentFilter>('all')
+  const filtersActive = computed(() => Boolean(submittedKeyword.value || date.value || contentType.value !== 'all'))
   const isClearingHistory = ref(false)
   const historyStatus = ref<boolean>()
   const isUpdatingStatus = ref(false)
@@ -31,11 +39,14 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
   let page = 1
   let generation = 0
   let statusRevision = 0
+  let readController: AbortController | undefined
 
   function resetListState() {
     generation++
+    readController?.abort()
+    readController = undefined
     historyList.length = 0
-    cursor = 0
+    cursor = historyDateBounds(date.value)?.end ?? 0
     page = 1
     noMoreContent.value = false
     requestFailed.value = false
@@ -48,7 +59,12 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       return false
     const version = generation
     const query = submittedKeyword.value
+    const bounds = historyDateBounds(date.value)
+    const type = contentType.value
     const isCurrent = () => owner.isCurrent() && version === generation
+    const controller = new AbortController()
+    readController = controller
+    let pagesRead = 0
     isLoading.value = true
     requestFailed.value = false
     try {
@@ -56,22 +72,36 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
         if (!isCurrent())
           return false
         const response: HistoryResult | HistorySearchResult = query
-          ? await dependencies.api.searchHistoryList({ pn: page, keyword: query })
-          : await dependencies.api.getHistoryList({ type: 'all', view_at: cursor })
+          ? await dependencies.api.searchHistoryList({ pn: page, keyword: query }, { signal: controller.signal })
+          : await dependencies.api.getHistoryList({ type: 'all', view_at: cursor }, { signal: controller.signal })
         if (!isCurrent())
           return false
         if (response.code !== 0)
           throw response
         const items = Array.isArray(response.data?.list) ? response.data.list : []
-        historyList.push(...items)
+        const seen = new Set(historyList.map(item => `${item.history.business}:${item.history.oid}:${item.view_at}`))
+        historyList.push(...items.filter((item) => {
+          const key = `${item.history.business}:${item.history.oid}:${item.view_at}`
+          if (!matchesHistoryFilters(item, type, bounds) || seen.has(key))
+            return false
+          seen.add(key)
+          return true
+        }))
+        pagesRead++
         if (query) {
           page++
           noMoreContent.value = items.length < 20
-          return true
+          if (!bounds && type === 'all')
+            return true
         }
-        const nextCursor = items.at(-1)?.view_at ?? cursor
-        noMoreContent.value = items.length < 20 || nextCursor === cursor
-        cursor = nextCursor
+        else {
+          const nextCursor = items.at(-1)?.view_at ?? cursor
+          noMoreContent.value = items.length < 20 || nextCursor === cursor || Boolean(bounds && nextCursor < bounds.start)
+          cursor = nextCursor
+        }
+        // Explicit filtered browsing consumes at most three pages per action.
+        if (filtersActive.value && pagesRead >= 3)
+          break
       } while (!noMoreContent.value && !await dependencies.haveScrollbar())
       return isCurrent()
     }
@@ -83,6 +113,8 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     finally {
       if (isCurrent())
         isLoading.value = false
+      if (readController === controller)
+        readController = undefined
     }
   }
 
@@ -106,6 +138,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
         return
       if (response.code !== 0)
         throw response
+      dependencies.onDeleted?.(item)
       if (version === generation) {
         const index = historyList.findIndex(entry => `${entry.history.business}_${entry.history.oid}` === kid)
         if (index >= 0)
@@ -172,6 +205,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     if (!owner.isCurrent() || isClearingHistory.value)
       return
     const version = ++generation
+    readController?.abort()
     isClearingHistory.value = true
     isLoading.value = false
     try {
@@ -181,6 +215,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       if (response.code !== 0)
         throw response
       resetListState()
+      dependencies.onCleared?.()
       noMoreContent.value = true
     }
     catch (error) {
@@ -195,6 +230,8 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
 
   function resetAccount() {
     lifetime.invalidate()
+    date.value = ''
+    contentType.value = 'all'
     resetListState()
     statusRevision++
     keyword.value = ''
@@ -218,6 +255,9 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     historyList,
     keyword,
     submittedKeyword,
+    date,
+    contentType,
+    filtersActive,
     isClearingHistory,
     historyStatus,
     isUpdatingStatus,
@@ -230,9 +270,20 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     activate,
     resetAccount,
     capture: lifetime.capture,
-    dispose: lifetime.dispose,
+    dispose() {
+      lifetime.dispose()
+      readController?.abort()
+      generation++
+    },
+    clearSearch() {
+      keyword.value = ''
+      if (submittedKeyword.value) {
+        submittedKeyword.value = ''
+        reloadCurrentMode()
+      }
+    },
     handleSearch() {
-      if (isClearingHistory.value)
+      if (isClearingHistory.value || (date.value && !historyDateBounds(date.value)))
         return
       submittedKeyword.value = keyword.value.trim()
       reloadCurrentMode()

@@ -13,11 +13,11 @@
   :not(foobar) {
     .bili-header .bili-header__channel .channel-entry-more__link--current,
     .bili-header .bili-header__channel .channel-link--current {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
 
     .brand_blue {
-      color: var(--bew-theme-color) !important;
+      color: var(--bew-theme-foreground) !important;
     }
 
     .login-tip {

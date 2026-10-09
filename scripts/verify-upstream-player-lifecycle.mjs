@@ -65,15 +65,16 @@ export function registerPlayerLifecycleChecks(check) {
       next.id = 'bilibili-player-wrap'
       next.innerHTML = '<div id="bilibili-player"><div class="bpx-player-container"><div class="bpx-player-video-wrap"><video></video></div></div></div>'
       current = next.querySelector('video')
-      const bootstrap = observers.find(observer => observer.targets.get(document.body)?.subtree)
-      bootstrap.callback([{ target: host, addedNodes: [next], removedNodes: [] }])
+      const ancestry = observers.find(observer => observer.targets.get(host)?.childList && !observer.targets.get(host)?.subtree)
+      ancestry.callback([{ target: host, addedNodes: [next], removedNodes: [] }])
       assert.equal(old.isConnected, true)
       assert.equal(seen.at(-1), current)
       assert.equal(media.getPlayerRoot(), next)
       assert.ok(observers.some(observer => observer.targets.get(next)?.subtree), 'the observer actually binds the new root')
       const count = seen.length
       const clockNode = document.createElement('span')
-      bootstrap.callback([{ target: next, addedNodes: [clockNode], removedNodes: [] }])
+      const currentAncestry = observers.find(observer => observer.targets.get(host)?.childList && !observer.targets.get(host)?.subtree)
+      currentAncestry.callback([{ target: host, addedNodes: [clockNode], removedNodes: [] }])
       assert.equal(seen.length, count)
       assert.equal(lifecycle.hasPlayerMediaMutation([{ addedNodes: [clockNode], removedNodes: [] }]), false)
     }

@@ -29,7 +29,7 @@ interface Props {
   previewVideoUrl: string
   videoElement: HTMLVideoElement | null
   previewCurrentTime?: number | null
-  isInWatchLater: boolean
+  isInWatchLater: boolean | undefined
   showWatchLater: boolean
   coverTopLeftAlwaysVisible?: boolean
   coverImageUrl: string
@@ -551,7 +551,7 @@ onBeforeUnmount(() => {
         <button
           v-if="showWatchLater"
           type="button"
-          :aria-label="isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"
+          :aria-label="isInWatchLater === undefined ? $t('common.watch_later_status_unknown') : isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"
           pos="absolute top-0 right-0" z="2"
           p="x-2 y-1" m="1"
           rounded="$bew-radius"
@@ -562,7 +562,7 @@ onBeforeUnmount(() => {
           @keydown.enter.prevent.stop="emit('toggleWatchLater')"
           @keydown.space.prevent.stop="emit('toggleWatchLater')"
         >
-          <Tooltip v-if="!isInWatchLater" :content="$t('common.save_to_watch_later')" placement="bottom-right" type="dark">
+          <Tooltip v-if="!isInWatchLater" :content="isInWatchLater === undefined ? $t('common.watch_later_status_unknown') : $t('common.save_to_watch_later')" placement="bottom-right" type="dark">
             <div i-mingcute:carplay-line />
           </Tooltip>
           <Tooltip v-else :content="$t('common.added')" placement="bottom-right" type="dark">

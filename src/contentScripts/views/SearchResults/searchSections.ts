@@ -1,4 +1,6 @@
-import { applyVideoTimeFilter, dedupeByKey } from './utils/searchHelpers'
+import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
+
+import { dedupeByKey } from './utils/searchHelpers'
 
 export function mergeSections(previous: any, incoming: any, options: { appendVideoOnly?: boolean } = {}) {
   const prevSections = Array.isArray(previous?.result) ? previous.result : []
@@ -34,14 +36,8 @@ export function mergeSections(previous: any, incoming: any, options: { appendVid
     }
   })
 
-  const resultSections = Array.from(sectionMap.values()).map((section: any) => {
-    if (section?.result_type === 'video' && Array.isArray(section.data)) {
-      return { ...section, data: applyVideoTimeFilter(section.data) }
-    }
-    return section
-  })
-
-  return { ...previous, ...incoming, result: resultSections }
+  // Retain accepted data; the view projects the current advertisement preference.
+  return { ...previous, ...incoming, result: Array.from(sectionMap.values()) }
 }
 
 function dedupeSectionItems(type: string, items: any[]): any[] {
@@ -51,6 +47,8 @@ function dedupeSectionItems(type: string, items: any[]): any[] {
 function getSectionItemKey(type: string, item: any): string {
   switch (type) {
     case 'video':
+      if (isBilibiliAdvertisement(item))
+        return toAdvertisementCard(item).advertisementKey!
       return String(item?.aid ?? item?.id ?? item?.bvid ?? JSON.stringify(item))
     case 'media_bangumi':
     case 'media_ft':

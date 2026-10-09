@@ -1,6 +1,9 @@
 import type { MomentCommentItem } from '~/components/MomentCard/commentUtils'
 import { mergeMomentComments } from '~/components/MomentCard/commentUtils'
 
+import { waitWithSignal } from './abort'
+import { COMMENT_REPLY_CACHE_LIMITS } from './commentReplyPageCache'
+
 export interface MomentCommentRepliesPage {
   items: MomentCommentItem[]
   hasMore: boolean
@@ -26,7 +29,7 @@ export interface MomentCommentThreadSnapshot {
 
 interface MomentCommentThreadControllerOptions {
   getIdentity: () => string
-  fetchPage: (rootRpid: string, pageNumber: number) => Promise<MomentCommentRepliesPage>
+  fetchPage: (rootRpid: string, pageNumber: number, signal: AbortSignal) => Promise<MomentCommentRepliesPage>
 }
 
 export interface MomentCommentThreadController {
@@ -35,6 +38,7 @@ export interface MomentCommentThreadController {
   seed: (rootRpid: string, previewItems: MomentCommentItem[], replyCount: number) => MomentCommentThreadState
   loadMore: (rootRpid: string) => Promise<MomentCommentThreadState>
   invalidate: () => void
+  cancelReads: () => void
   snapshot: () => MomentCommentThreadSnapshot[]
   restore: (snapshots: MomentCommentThreadSnapshot[]) => void
   dispose: () => void
@@ -59,9 +63,28 @@ export function createMomentCommentThreadController(
 ): MomentCommentThreadController {
   const states = new Map<string, MomentCommentThreadState>()
   const pendingTasks = new Map<string, Promise<MomentCommentThreadState>>()
+  const controllers = new Map<string, AbortController>()
   let identity = options.getIdentity()
   let generation = 0
   let disposed = false
+
+  const cancelReads = () => {
+    controllers.forEach(controller => controller.abort())
+    controllers.clear()
+    pendingTasks.clear()
+    states.forEach(state => state.loading = false)
+  }
+  const retain = (rootRpid: string, state: MomentCommentThreadState) => {
+    states.delete(rootRpid)
+    states.set(rootRpid, state)
+    while (states.size > COMMENT_REPLY_CACHE_LIMITS.threads) {
+      const oldest = [...states.keys()].find(key => !controllers.has(key) && key !== rootRpid)
+        ?? (!controllers.has(rootRpid) ? rootRpid : undefined)
+      if (!oldest)
+        break
+      states.delete(oldest)
+    }
+  }
 
   const ensureIdentity = () => {
     const nextIdentity = options.getIdentity()
@@ -69,6 +92,7 @@ export function createMomentCommentThreadController(
       return
     identity = nextIdentity
     generation += 1
+    cancelReads()
     states.clear()
     pendingTasks.clear()
   }
@@ -83,14 +107,13 @@ export function createMomentCommentThreadController(
     const state = states.get(rootRpid) ?? createThreadState()
     if (disposed)
       return state
-    state.items = mergeMomentComments(state.items, previewItems)
+    state.items = mergeMomentComments(state.items, previewItems).slice(-COMMENT_REPLY_CACHE_LIMITS.items)
     const normalizedReplyCount = Number.isFinite(replyCount) ? Math.max(0, replyCount) : 0
     if (!state.loaded)
       state.hasMore = normalizedReplyCount > state.items.length
     else if (normalizedReplyCount > state.items.length)
       state.hasMore = true
-    if (!states.has(rootRpid))
-      states.set(rootRpid, state)
+    retain(rootRpid, state)
     return state
   }
 
@@ -103,7 +126,7 @@ export function createMomentCommentThreadController(
     const state = states.get(rootRpid) ?? createThreadState()
     if (!states.has(rootRpid))
       states.set(rootRpid, state)
-    if (disposed || !state.hasMore)
+    if (disposed || !state.hasMore || controllers.size >= COMMENT_REPLY_CACHE_LIMITS.threads)
       return Promise.resolve(state)
 
     const requestGeneration = generation
@@ -111,23 +134,27 @@ export function createMomentCommentThreadController(
     const pageNumber = state.nextPage
     state.loading = true
     state.error = undefined
-
-    const task = options.fetchPage(rootRpid, pageNumber)
+    const controller = new AbortController()
+    controllers.set(rootRpid, controller)
+    retain(rootRpid, state)
+    const task = waitWithSignal(options.fetchPage(rootRpid, pageNumber, controller.signal), controller.signal)
       .then((page) => {
-        if (disposed || requestGeneration !== generation || requestIdentity !== identity || options.getIdentity() !== identity)
+        if (disposed || controller.signal.aborted || requestGeneration !== generation || requestIdentity !== identity || options.getIdentity() !== identity)
           return state
         const previousItemCount = state.items.length
         const mergedItems = mergeMomentComments(state.items, page.items)
         const madeProgress = mergedItems.length > previousItemCount
         const pageAdvanced = page.nextPage > pageNumber
-        state.items = mergedItems
+        state.items = mergedItems.slice(-COMMENT_REPLY_CACHE_LIMITS.items)
         state.loaded = true
         state.hasMore = page.hasMore && pageAdvanced && (madeProgress || page.items.length > 0)
         state.nextPage = pageAdvanced ? page.nextPage : pageNumber
         return state
       })
       .catch((error: unknown) => {
-        if (!disposed
+        if (controller.signal.aborted)
+          return state
+        if (!disposed && !controller.signal.aborted
           && requestGeneration === generation
           && requestIdentity === identity
           && options.getIdentity() === identity) {
@@ -136,7 +163,7 @@ export function createMomentCommentThreadController(
         throw error
       })
       .finally(() => {
-        if (!disposed
+        if (!disposed && controllers.get(rootRpid) === controller
           && requestGeneration === generation
           && requestIdentity === identity
           && options.getIdentity() === identity) {
@@ -144,6 +171,8 @@ export function createMomentCommentThreadController(
         }
         if (pendingTasks.get(rootRpid) === task)
           pendingTasks.delete(rootRpid)
+        if (controllers.get(rootRpid) === controller)
+          controllers.delete(rootRpid)
       })
 
     pendingTasks.set(rootRpid, task)
@@ -152,6 +181,7 @@ export function createMomentCommentThreadController(
 
   const invalidate = () => {
     generation += 1
+    cancelReads()
     identity = options.getIdentity()
     states.clear()
     pendingTasks.clear()
@@ -160,6 +190,7 @@ export function createMomentCommentThreadController(
   const dispose = () => {
     disposed = true
     generation += 1
+    cancelReads()
     states.clear()
     pendingTasks.clear()
   }
@@ -170,6 +201,7 @@ export function createMomentCommentThreadController(
     seed,
     loadMore,
     invalidate,
+    cancelReads,
     snapshot: () => [...states].map(([rootRpid, state]) => ({
       rootRpid,
       items: state.items,
@@ -179,8 +211,8 @@ export function createMomentCommentThreadController(
     })),
     restore: (snapshots) => {
       invalidate()
-      for (const { rootRpid, ...state } of snapshots)
-        states.set(rootRpid, { ...state, loading: false })
+      for (const { rootRpid, ...state } of snapshots.slice(-COMMENT_REPLY_CACHE_LIMITS.threads))
+        states.set(rootRpid, { ...state, items: state.items.slice(-COMMENT_REPLY_CACHE_LIMITS.items), loading: false })
     },
     dispose,
   }

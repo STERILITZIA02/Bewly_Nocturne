@@ -1,7 +1,10 @@
+import { watch } from 'vue'
 import browser from 'webextension-polyfill'
 
-import { appAuthTokens, defaultAppAuthTokens, resetAppAuthTokens } from '~/logic/appAuthStorage'
+import type { AppAuthTokens } from '~/logic/appAuthStorage'
+import { appAuthTokens, resetAppAuthTokens } from '~/logic/appAuthStorage'
 
+import { waitWithSignal, withRequestDeadline } from './abort'
 import { createBooleanSingleFlight, resolveAppAccessTokenFreshness } from './appAuthTokenPolicy'
 import { appSign } from './appSign'
 
@@ -52,23 +55,13 @@ const APP_TOKEN_REFRESH_ENDPOINTS = [
 const AUTH_REQUEST_TIMEOUT_MS = 15_000
 
 async function requestAuthJson<T>(url: string, init: RequestInit, signal?: AbortSignal): Promise<T> {
-  const controller = new AbortController()
-  const abort = () => controller.abort(signal?.reason)
-  if (signal?.aborted)
-    abort()
-  else
-    signal?.addEventListener('abort', abort, { once: true })
-  const timer = setTimeout(() => controller.abort(new DOMException('Authorization request timed out', 'TimeoutError')), AUTH_REQUEST_TIMEOUT_MS)
-  try {
-    const response = await fetch(url, { ...init, signal: controller.signal })
+  const read = async (requestSignal: AbortSignal) => {
+    const response = await waitWithSignal(fetch(url, { ...init, signal: requestSignal }), requestSignal)
     if (!response.ok)
       throw new Error(`Authorization HTTP ${response.status}`)
-    return await response.json() as T
+    return await waitWithSignal(response.json(), requestSignal) as T
   }
-  finally {
-    clearTimeout(timer)
-    signal?.removeEventListener('abort', abort)
-  }
+  return signal ? read(signal) : withRequestDeadline(read, {}, AUTH_REQUEST_TIMEOUT_MS)
 }
 
 interface QRCodeResponse<T> {
@@ -129,80 +122,109 @@ interface RefreshTokenResponse {
   }
 }
 
-export async function refreshAppAccessToken(): Promise<boolean> {
-  const { accessToken, refreshToken, lastUpdatedAt } = appAuthTokens.value
+async function refreshAppTokens(source: AppAuthTokens): Promise<boolean> {
+  const tokens = { ...source }
+  const { accessToken, refreshToken, lastUpdatedAt } = tokens
   if (!accessToken || !refreshToken)
     return false
+  const isCurrent = () => appAuthTokens.value === source
+    && Object.entries(tokens).every(([key, value]) => appAuthTokens.value[key as keyof AppAuthTokens] === value)
+  const controller = new AbortController()
+  const stop = watch(appAuthTokens, () => {
+    if (!isCurrent())
+      controller.abort()
+  }, { deep: true, flush: 'sync' })
 
-  const ts = Math.floor(Date.now() / 1000)
-  const basePayload = {
-    access_token: accessToken,
-    refresh_token: refreshToken,
-    ts: ts.toString(),
+  try {
+    return await withRequestDeadline(async (signal) => {
+      const ts = Math.floor(Date.now() / 1000)
+      const basePayload = {
+        access_token: accessToken,
+        refresh_token: refreshToken,
+        ts: ts.toString(),
+      }
+
+      for (const endpoint of APP_TOKEN_REFRESH_ENDPOINTS) {
+        try {
+          signal.throwIfAborted()
+          if (!isCurrent())
+            return false
+          const payload = { ...basePayload }
+          const sign = appSign({ ...payload }, TVAppKey.appkey, TVAppKey.appsec)
+          const body = new URLSearchParams({
+            ...payload,
+            appkey: TVAppKey.appkey,
+            sign,
+          })
+
+          const data = await requestAuthJson<RefreshTokenResponse>(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+            },
+            body,
+          }, signal)
+
+          if (data.code !== 0 || !data.data)
+            continue
+
+          const tokenInfo = data.data.token_info || {}
+          const refreshInfo = data.data.refresh_token_info || {}
+
+          if (
+            !isCurrent()
+            || !await waitWithSignal(isPersistedRefreshSourceCurrent(refreshToken, lastUpdatedAt), signal)
+            || !isCurrent()
+          ) {
+            return false
+          }
+
+          signal.throwIfAborted()
+          const nextAccessToken = tokenInfo.access_token || tokens.accessToken
+          const nextRefreshToken = tokenInfo.refresh_token || tokens.refreshToken
+          const expiresIn = tokenInfo.expires_in ?? null
+          const refreshExpiresIn = refreshInfo.expires_in ?? null
+
+          stop()
+          appAuthTokens.value = {
+            accessToken: nextAccessToken,
+            refreshToken: nextRefreshToken,
+            accessTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1000 : null,
+            refreshTokenExpiresAt: refreshExpiresIn ? Date.now() + refreshExpiresIn * 1000 : tokens.refreshTokenExpiresAt,
+            mid: tokenInfo.mid ?? tokens.mid,
+            lastUpdatedAt: Date.now(),
+          }
+          return true
+        }
+        catch (error) {
+          signal.throwIfAborted()
+          console.error('刷新 APP access_token 失败:', error)
+          // A transport/body failure can follow a committed token rotation.
+          // Only an explicit negative response may try the alternate endpoint.
+          return false
+        }
+      }
+
+      return false
+    }, { signal: controller.signal }, AUTH_REQUEST_TIMEOUT_MS)
   }
-
-  for (const endpoint of APP_TOKEN_REFRESH_ENDPOINTS) {
-    try {
-      const payload = { ...basePayload }
-      const sign = appSign({ ...payload }, TVAppKey.appkey, TVAppKey.appsec)
-      const body = new URLSearchParams({
-        ...payload,
-        appkey: TVAppKey.appkey,
-        sign,
-      })
-
-      const data = await requestAuthJson<RefreshTokenResponse>(endpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
-        },
-        body,
-      })
-
-      if (data.code !== 0 || !data.data)
-        continue
-
-      const tokenInfo = data.data.token_info || {}
-      const refreshInfo = data.data.refresh_token_info || {}
-
-      if (
-        appAuthTokens.value.accessToken !== accessToken
-        || appAuthTokens.value.refreshToken !== refreshToken
-        || !await isPersistedRefreshSourceCurrent(refreshToken, lastUpdatedAt)
-      ) {
-        return false
-      }
-
-      const nextAccessToken = tokenInfo.access_token || appAuthTokens.value.accessToken
-      const nextRefreshToken = tokenInfo.refresh_token || appAuthTokens.value.refreshToken
-      const expiresIn = tokenInfo.expires_in ?? null
-      const refreshExpiresIn = refreshInfo.expires_in ?? null
-
-      appAuthTokens.value = {
-        accessToken: nextAccessToken,
-        refreshToken: nextRefreshToken,
-        accessTokenExpiresAt: expiresIn ? Date.now() + expiresIn * 1000 : null,
-        refreshTokenExpiresAt: refreshExpiresIn ? Date.now() + refreshExpiresIn * 1000 : appAuthTokens.value.refreshTokenExpiresAt,
-        mid: tokenInfo.mid ?? appAuthTokens.value.mid,
-        lastUpdatedAt: Date.now(),
-      }
-      return true
-    }
-    catch (error) {
+  catch (error) {
+    if (!controller.signal.aborted)
       console.error('刷新 APP access_token 失败:', error)
-    }
+    return false
   }
-
-  return false
+  finally { stop() }
 }
 
-function refreshAppAccessTokenSingleFlight(): Promise<boolean> {
-  return runAppAccessTokenRefreshSingleFlight(refreshAppAccessToken)
+export function refreshAppAccessToken(): Promise<boolean> {
+  const source = appAuthTokens.value
+  return runAppAccessTokenRefreshSingleFlight(() => refreshAppTokens(source), source, source.lastUpdatedAt)
 }
 
 export async function ensureFreshAppAccessToken(
   bufferMs = 10 * 60 * 1000,
 ): Promise<boolean> {
+  const tokens = appAuthTokens.value
   const freshness = resolveAppAccessTokenFreshness(
     appAuthTokens.value,
     Date.now(),
@@ -217,14 +239,14 @@ export async function ensureFreshAppAccessToken(
   if (freshness === 'valid')
     return true
 
-  const refreshed = await refreshAppAccessTokenSingleFlight()
+  const refreshed = await refreshAppAccessToken()
   if (refreshed)
     return true
   // A proactive refresh can fail because of a transient network/backend error.
   // Keep using an access token that is still valid instead of forcing the user
   // into authorization before the actual expiry boundary.
-  const accessTokenExpiresAt = appAuthTokens.value.accessTokenExpiresAt
-  return Boolean(appAuthTokens.value.accessToken)
+  const accessTokenExpiresAt = tokens.accessTokenExpiresAt
+  return appAuthTokens.value === tokens && Boolean(tokens.accessToken)
     && (!accessTokenExpiresAt || accessTokenExpiresAt > Date.now())
 }
 
@@ -236,7 +258,7 @@ export async function refreshInvalidAppAccessToken(): Promise<boolean> {
     resetAppAuthTokens()
     return false
   }
-  return refreshAppAccessTokenSingleFlight()
+  return refreshAppAccessToken()
 }
 
 export function isAppAccessTokenInvalidResponse(value: unknown): boolean {
@@ -257,14 +279,10 @@ export function hasValidAppAuthTokens(bufferMs = 5 * 60 * 1000) {
   return true
 }
 
-export function clearAppAuthTokens() {
-  appAuthTokens.value = { ...defaultAppAuthTokens }
-}
-
 export function pollTVLoginQRCode(authCode: string, signal?: AbortSignal): Promise<QRCodeResponse<PollLoginTokenPayload>> {
   const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/poll'
 
-  return requestAuthJson(url, {
+  return withRequestDeadline(requestSignal => requestAuthJson(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -275,13 +293,13 @@ export function pollTVLoginQRCode(authCode: string, signal?: AbortSignal): Promi
       local_id: '0',
       ts: '0',
     }),
-  }, signal)
+  }, requestSignal), { signal }, AUTH_REQUEST_TIMEOUT_MS)
 }
 
 export function getTVLoginQRCode(signal?: AbortSignal): Promise<QRCodeResponse<{ url: string, auth_code: string }>> {
   const url = 'https://passport.bilibili.com/x/passport-tv-login/qrcode/auth_code'
 
-  return requestAuthJson(url, {
+  return withRequestDeadline(requestSignal => requestAuthJson(url, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
@@ -291,5 +309,5 @@ export function getTVLoginQRCode(signal?: AbortSignal): Promise<QRCodeResponse<{
       local_id: '0',
       ts: '0',
     }),
-  }, signal)
+  }, requestSignal), { signal }, AUTH_REQUEST_TIMEOUT_MS)
 }

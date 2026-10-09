@@ -44,21 +44,12 @@ export interface LayoutEditableDescriptor {
   topBarKey?: string
 }
 
-export interface EditableTarget {
-  descriptor: LayoutEditableDescriptor
-  element: HTMLElement
-  id: string
-  section: LayoutEditSection
-  settingId: string
-}
-
 const settingDescriptorMap = new Map<string, SettingDescriptor>()
 const editableDescriptorMap = new Map<string, LayoutEditableDescriptor>()
 const editableElements = new Map<string, Set<HTMLElement>>()
 const editableElementGenerations = new Map<string, number>()
 const navigationListeners = new Set<(descriptor: SettingDescriptor) => void>()
 
-const activeSectionState = ref<LayoutEditSection | null>(null)
 const activeTargetIdState = ref<string | null>(null)
 const isLayoutEditingState = ref(false)
 const activePreviewSettingIdState = ref<string | null>(null)
@@ -76,7 +67,6 @@ const previewController = createLayoutPreviewController((settingId) => {
     : undefined
 })
 
-export const activeLayoutEditSection = readonly(activeSectionState)
 export const activeLayoutEditTargetId = readonly(activeTargetIdState)
 export const activeLayoutEditPreviewSettingId = readonly(activePreviewSettingIdState)
 export const activeLayoutEditPreviewValue = readonly(activePreviewValueState)
@@ -169,10 +159,6 @@ export function registerLayoutEditableElement(id: string, element: HTMLElement) 
   }
 }
 
-export function registerEditableTarget(target: Omit<EditableTarget, 'descriptor'>) {
-  return registerLayoutEditableElement(target.id, target.element)
-}
-
 const rootEditableIds: Record<Exclude<LayoutEditSection, 'page'>, string> = {
   dock: 'dock',
   topBar: 'topbar',
@@ -198,27 +184,6 @@ export function getRegisteredLayoutEditableElement(id: string): HTMLElement | un
   if (!elements)
     return undefined
   return Array.from(elements).find(element => element.isConnected)
-}
-
-export function getEditableTargets(section: LayoutEditSection): ReadonlySet<EditableTarget> {
-  const targets = new Set<EditableTarget>()
-  editableElements.forEach((elements, id) => {
-    const descriptor = editableDescriptorMap.get(id)
-    if (!descriptor || descriptor.section !== section)
-      return
-    elements.forEach((element) => {
-      if (element.isConnected) {
-        targets.add({
-          descriptor,
-          element,
-          id,
-          section,
-          settingId: descriptor.settingId,
-        })
-      }
-    })
-  })
-  return targets
 }
 
 interface LayoutEditableDirectiveState {
@@ -297,13 +262,11 @@ export function setActiveLayoutEditTarget(id: string | null): boolean {
   if (!descriptor || !getRegisteredLayoutEditableElement(id))
     return false
   activeTargetIdState.value = id
-  activeSectionState.value = descriptor.section
   return true
 }
 
-export function enterLayoutEditMode(section: LayoutEditSection, targetId?: string) {
+export function enterLayoutEditMode(targetId?: string) {
   isLayoutEditingState.value = true
-  activeSectionState.value = section
   if (targetId)
     setActiveLayoutEditTarget(targetId)
 }
@@ -311,29 +274,13 @@ export function enterLayoutEditMode(section: LayoutEditSection, targetId?: strin
 export function completeLayoutEditMode() {
   commitLayoutEditSettingPreview()
   isLayoutEditingState.value = false
-  activeSectionState.value = null
   activeTargetIdState.value = null
 }
 
 export function exitLayoutEditMode() {
   cancelLayoutEditSettingPreview()
   isLayoutEditingState.value = false
-  activeSectionState.value = null
   activeTargetIdState.value = null
-}
-
-export function useLayoutEditState() {
-  return {
-    activeSection: activeLayoutEditSection,
-    activeTargetId: activeLayoutEditTargetId,
-    activePreviewSettingId: activeLayoutEditPreviewSettingId,
-    activePreviewValue: activeLayoutEditPreviewValue,
-    isLayoutEditing,
-    enterLayoutEditMode,
-    completeLayoutEditMode,
-    exitLayoutEditMode,
-    setActiveLayoutEditTarget,
-  }
 }
 
 const dockItemDescriptors = [

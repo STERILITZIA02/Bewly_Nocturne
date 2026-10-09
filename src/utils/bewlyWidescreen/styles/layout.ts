@@ -153,7 +153,10 @@ export function injectLayoutStyle() {
       --bewly-widescreen-progress-glow: 0 0 4px rgb(255 255 255 / 85%), 0 0 8px rgb(255 255 255 / 45%);
     }
 
-    #${ROOT_ID} * {
+    /* Only our shell owns this box model. Native controls, guides and ending
+       panels retain the dimensions expected by their original components. */
+    #${ROOT_ID},
+    #${ROOT_ID} :where([class^="bewly-widescreen-"], [class*=" bewly-widescreen-"]) {
       box-sizing: border-box;
     }
 
@@ -197,7 +200,7 @@ export function injectLayoutStyle() {
       pointer-events: none;
     }
 
-    #${ROOT_ID} .bewly-widescreen-player-frame > * {
+    #${ROOT_ID} .bewly-widescreen-player-frame > :not(.bewly-widescreen-idle-progress) {
       width: 100% !important;
       max-width: 100% !important;
       height: 100% !important;
@@ -455,14 +458,23 @@ export function injectLayoutStyle() {
       --bpx-aux-content-bg: var(--bew-elevated-alt-solid);
     }
 
-    /* 控制栏全部图标统一为文字前景色，覆盖未知填充（三角播放/音量/小窗/截图/设置等） */
+    /* Preserve fill="none" and stroke="none"; painting every SVG descendant
+       changes native outlined icons and the sound-settings switch geometry. */
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
       .bpx-player-control-wrap,
       .bilibili-player-video-control-wrap,
       .bilibili-player-video-control,
       .squirtle-controller
-    ) :is(svg, svg *) {
+    ) :is(svg:not([fill="none"]), svg [fill]:not([fill="none"])) {
       fill: currentColor !important;
+    }
+
+    body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} :is(
+      .bpx-player-control-wrap,
+      .bilibili-player-video-control-wrap,
+      .bilibili-player-video-control,
+      .squirtle-controller
+    ) svg [stroke]:not([stroke="none"]) {
       stroke: currentColor !important;
     }
 
@@ -1028,11 +1040,32 @@ export function injectLayoutStyle() {
       display: none !important;
     }
 
-    /* 控制栏收起时的底部细进度条：Bewly 播放页中永远禁用 */
+    /* The optional Bewly indicator follows the shared controls owner; native
+       shadow-progress must not create a second indicator beneath it. */
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} [class*="shadow-progress"],
     body.${BODY_CLASS} .${NATIVE_PLAYER_CLASS} .befilter-progress-area {
       display: none !important;
       content: none !important;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-idle-progress {
+      position: absolute;
+      inset: auto 0 0;
+      height: var(--bew-space-0-5);
+      z-index: 1;
+      pointer-events: none;
+      background: var(--bew-fill-2);
+    }
+
+    #${ROOT_ID} .bewly-widescreen-idle-progress[hidden] {
+      display: none;
+    }
+
+    #${ROOT_ID} .bewly-widescreen-idle-progress > div {
+      height: 100%;
+      background: var(--bew-theme-color);
+      transform: scaleX(0);
+      transform-origin: left;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar::before {
@@ -1390,8 +1423,7 @@ export function injectLayoutStyle() {
       filter: none !important;
     }
 
-    #${ROOT_ID} .player-wrap *:not(.bili-danmaku-x-guide, .bili-danmaku-x-guide *),
-    #${ROOT_ID} .bpx-player-container *:not(.bili-danmaku-x-guide, .bili-danmaku-x-guide *),
+    #${ROOT_ID} #bilibili-player-placeholder,
     #${ROOT_ID} .bpx-player-primary-area,
     #${ROOT_ID} .bpx-player-video-area,
     #${ROOT_ID} .bpx-player-video-wrap,
@@ -1430,16 +1462,16 @@ export function injectLayoutStyle() {
       background: color-mix(in srgb, var(--bew-theme-color, #00aeec) 82%, white) !important;
     }
 
-    #${ROOT_ID} .bili-danmaku-x-guide-three {
-      display: none !important;
+    #${ROOT_ID} .bili-danmaku-x-guide-three > span.bili-danmaku-x-active svg {
+      fill: var(--bew-theme-color) !important;
     }
 
     #${ROOT_ID} .bili-danmaku-x-guide-cyc > span {
       filter: var(--bewly-widescreen-action-canvas-filter, none) !important;
     }
 
-    #${ROOT_ID} .player-wrap > *,
-    #${ROOT_ID} .bpx-player-container > * {
+    #${ROOT_ID} .player-wrap > .bpx-player-container,
+    #${ROOT_ID} .bpx-player-container > .bpx-player-primary-area {
       border-radius: 0 !important;
     }
 
@@ -2322,8 +2354,8 @@ export function injectLayoutStyle() {
       flex: 0 1 auto !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"],
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"],
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon),
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon),
     #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item > canvas,
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > canvas,
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > .svga-center,
@@ -2353,8 +2385,8 @@ export function injectLayoutStyle() {
       opacity: 0.96 !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"] svg,
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"] svg,
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) svg,
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) svg,
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="anim"] svg,
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="Anim"] svg {
       width: 100% !important;
@@ -2362,15 +2394,15 @@ export function injectLayoutStyle() {
       color: var(--bew-theme-color, #00aeec) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"] [stroke],
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"] [stroke],
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [stroke],
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [stroke],
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="anim"] [stroke],
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="Anim"] [stroke] {
       stroke: var(--bew-theme-color, #00aeec) !important;
     }
 
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"] [fill]:not([fill="none"]),
-    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"] [fill]:not([fill="none"]),
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [fill]:not([fill="none"]),
+    #${ROOT_ID} .bewly-widescreen-action-slot .video-toolbar-left-item [class*="Anim"]:not(.video-toolbar-item-icon, .video-like-icon, .video-share-icon) [fill]:not([fill="none"]),
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="anim"] [fill]:not([fill="none"]),
     #${ROOT_ID} .bewly-widescreen-action-slot .toolbar-left-item-wrap > [class*="Anim"] [fill]:not([fill="none"]) {
       fill: var(--bew-theme-color, #00aeec) !important;

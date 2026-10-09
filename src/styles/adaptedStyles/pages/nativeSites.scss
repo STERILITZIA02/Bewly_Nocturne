@@ -1,0 +1,3848 @@
+@use "./loginPage";
+@use "./error404Page";
+@use "./esportsPage";
+@use "./seasonMediaPage";
+@use "./nativeInformationPages";
+@use "./nativeCreatorPages";
+@use "./nativeUtilityPages";
+@use "./nativePublicPortals";
+@use "./nativeGameCompanionPages";
+
+// Site-specific mappings are deliberately limited to native page surfaces.
+// Never filter/recolour product images, manga pages, video or canvas content.
+html.bewly-design[data-bewly-native-site] {
+  // Text inherits the chosen family, while native icon fonts and media retain
+  // their own declarations. Do not apply the main site's blanket font selector.
+  &.bewly-native-fonts > body {
+    font-family: var(--bew-native-font-family);
+  }
+
+  body {
+    color: var(--bew-text-1);
+  }
+
+  &:not([data-bewly-native-site="campaign"]) {
+    body > #app,
+    body > #root {
+      background-color: var(--bew-bg) !important;
+    }
+  }
+
+  :is(input, textarea, select) {
+    accent-color: var(--bew-theme-color);
+  }
+
+  :is(input, textarea)::placeholder {
+    color: var(--bew-text-3);
+    opacity: 1;
+  }
+
+  .bili-header:not(.large-header) > .bili-header__bar,
+  .bili-header > .bili-header__bar:is(.slide-down, .mini-header) {
+    background: var(--bew-elevated-solid) !important;
+    backdrop-filter: none;
+  }
+}
+
+html.bewly-design:is([data-bewly-native-site="live"], [data-bewly-native-site="live-center"]) {
+  .link-navbar-ctnr,
+  .link-navbar-ctnr .link-navbar,
+  .link-navbar-wrap .link-navbar {
+    background-color: var(--bew-elevated-solid) !important;
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+  }
+
+  .link-navbar :is(.entry-title, .nav-item > .label, .text-label) {
+    color: var(--bew-text-1);
+  }
+
+  .link-navbar .entry-title .nav-logo > span {
+    color: var(--bew-text-1);
+  }
+
+  .link-navbar .showmore-link .more-tab-animation .more-label-text {
+    // Native lab-style can remain dark while Nocturne uses a light surface.
+    color: var(--bew-text-1) !important;
+  }
+
+  .link-navbar .showmore-link .more-tab-animation .slot-ctnr .more-tab-content {
+    background: var(--bew-elevated-solid) !important;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    :is(a, a > span) {
+      color: var(--bew-text-1) !important;
+    }
+  }
+
+  .link-navbar .follow-panel-set .follow-cntr,
+  .side-bar-popup-cntr:has(> .follow-cntr) {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .side-bar-popup-cntr > .follow-cntr {
+    // The outer popup paints the sole surface; keep its native scrolling list.
+    background: transparent;
+    color: var(--bew-text-1);
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .side-bar-popup-cntr:has(> .follow-cntr)::after {
+    border-left-color: var(--bew-elevated-solid);
+  }
+
+  .link-navbar .follow-panel-set .follow-cntr .follow-text {
+    color: var(--bew-theme-foreground);
+  }
+
+  .side-bar-popup-cntr .follow-header .section-title {
+    // The native sidebar assigns brand_blue with !important, including plain text.
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .link-navbar .follow-panel-set .follow-cntr .more-follows span,
+  .link-navbar .follow-panel-set .follow-cntr .follow-empty-text,
+  .side-bar-popup-cntr .follow-cntr .follow-empty-text {
+    color: var(--bew-text-2);
+  }
+
+  .side-bar-popup-cntr .follow-cntr .user-info-room-name {
+    // The native sidebar also forces its lower-contrast text3 token here.
+    color: var(--bew-text-2) !important;
+  }
+
+  .side-bar-popup-cntr .follow-cntr .user-row {
+    color: var(--bew-text-1);
+  }
+
+  .side-bar-popup-cntr .follow-cntr .user-info-name.active {
+    color: var(--bew-theme-foreground);
+  }
+
+  .link-navbar .follow-panel-set .follow-cntr .more-follows:hover span {
+    color: var(--bew-theme-foreground);
+  }
+
+  .link-navbar .follow-panel-set .follow-cntr .anchor-list .anchor-name p {
+    color: var(--bew-text-1);
+  }
+
+  .link-navbar .follow-panel-set .follow-cntr .one-anchor:hover .anchor-name p {
+    color: var(--bew-theme-foreground);
+  }
+
+  .side-bar-popup-cntr .follow-cntr .more-btn-cntr {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    .more-btn-text {
+      color: inherit !important;
+    }
+  }
+
+  .link-navbar .search-bar {
+    background: var(--bew-content-alt-solid) !important;
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .link-navbar .nav-search-content {
+    background: transparent;
+    color: var(--bew-text-1);
+  }
+
+  .link-navbar .nav-search-content::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  .link-navbar .startlive-btn {
+    overflow: hidden;
+    background-color: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > span {
+      color: inherit !important;
+    }
+
+    // Recolour the native white CSS icon through its alpha, as for the manga
+    // upload icon; the separate native download menu is outside this button.
+    .video-icon {
+      position: relative;
+      left: calc(-1 * var(--bew-space-12));
+      filter: drop-shadow(var(--bew-space-12) 0 var(--bew-on-theme-color));
+    }
+  }
+
+  // These native monochrome CSS images were authored for a dark-only header.
+  .link-navbar :is(.item-icon, .search-icon, .down-arrow) {
+    filter: brightness(0);
+  }
+
+  &.dark .link-navbar :is(.item-icon, .search-icon, .down-arrow) {
+    filter: brightness(0) invert(1);
+  }
+
+  .highlight-areas-ctnr .area-detail > .area-name {
+    // Native category colours are inline and include dark blue on dark panels.
+    color: var(--bew-text-1) !important;
+  }
+
+  .grid-area-ctnr,
+  .area-detail-ctnr {
+    background-color: var(--bew-bg);
+  }
+
+  .player-area-ctnr > .bg-image {
+    background: none !important;
+  }
+
+  .focus-content-ctnr,
+  .hab-ctnr,
+  .rank-ctnr {
+    background-color: var(--bew-content-solid) !important;
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="live"] {
+  .all__card-list-ctnr {
+    .tab__bar-wrap {
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: var(--bew-space-2);
+      height: auto;
+      min-height: var(--bew-control-height);
+      padding-inline: var(--bew-space-3);
+    }
+
+    .tabs {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--bew-space-2);
+      width: auto;
+      height: auto;
+      min-width: 0;
+    }
+
+    .cover-tabs-wrap {
+      width: auto;
+      height: auto;
+    }
+
+    :is(.tabs__tag-item, .tab__bar-wrap .tabs__normal-item, .cover-tabs-wrap .tabs__normal-item) {
+      display: inline-flex;
+      box-sizing: border-box;
+      align-items: center;
+      justify-content: center;
+      gap: var(--bew-space-1);
+      min-height: var(--bew-control-height);
+      margin: 0;
+      padding: var(--bew-space-1) var(--bew-space-3);
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border: 0;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+      font-weight: var(--bew-font-weight-semibold);
+
+      .title {
+        color: inherit;
+        font: inherit;
+      }
+
+      &:hover {
+        background: var(--bew-content-solid-hover);
+      }
+
+      &.active {
+        // Native lab-style dark pages force their selected background with
+        // !important, independently of the user's Nocturne theme preference.
+        background: var(--bew-theme-color) !important;
+        color: var(--bew-on-theme-color) !important;
+      }
+    }
+  }
+
+  [class*="index_flip-view_"] [class*="index_header_"] {
+    > [class*="index_title_"] {
+      display: inline-flex;
+      align-items: center;
+      min-height: var(--bew-control-height);
+      padding-inline: var(--bew-space-3);
+      background: var(--bew-elevated-solid);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      font-size: var(--bew-font-size-heading);
+      line-height: var(--bew-line-height-heading);
+    }
+
+    > [class*="index_switch_area_"] {
+      box-sizing: border-box;
+      width: auto;
+      min-height: var(--bew-control-height);
+      gap: var(--bew-space-1);
+      padding: var(--bew-space-1) var(--bew-space-3);
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+      font-weight: var(--bew-font-weight-semibold);
+
+      > svg > g {
+        // Keep the original switching arrows; their fixed white stroke was
+        // authored for a dark-only banner control.
+        stroke: currentColor;
+      }
+
+      &:hover {
+        background: var(--bew-content-solid-hover);
+      }
+    }
+
+    > [class*="index_tags-box_"] {
+      display: flex;
+      flex-wrap: wrap;
+      box-sizing: border-box;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      gap: var(--bew-space-2);
+      padding: var(--bew-space-4);
+      max-height: calc(100vh - var(--bew-space-12) * 3 - var(--bew-space-2));
+      overflow: auto;
+      overscroll-behavior: contain;
+      background: var(--bew-elevated-solid);
+      opacity: 1;
+      color: var(--bew-text-1);
+      border-radius: var(--bew-popover-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      > [class*="index_tag-item_"] {
+        display: inline-flex;
+        align-items: center;
+        min-height: var(--bew-control-height);
+        margin: 0;
+        padding: var(--bew-space-1) var(--bew-space-3);
+        box-sizing: border-box;
+        color: var(--bew-text-1);
+        border-radius: var(--bew-interactive-radius);
+        corner-shape: var(--bew-corner-shape);
+        font-size: var(--bew-font-size-control);
+        line-height: var(--bew-line-height-control);
+
+        &:hover {
+          background: var(--bew-content-solid-hover);
+        }
+
+        &[class*="index_active_"] {
+          background: var(--bew-theme-color);
+          color: var(--bew-on-theme-color);
+        }
+      }
+    }
+  }
+
+  .live-sidebar-ctnr {
+    border-radius: var(--bew-panel-radius) 0 0 var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    .sidebar-btn .label-ctnr {
+      color: var(--bew-text-1);
+    }
+  }
+
+  .grid-area-ctnr .tab-ctnr .tab-item {
+    color: var(--bew-text-2);
+
+    &.activated,
+    &:hover {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  .player-area-ctnr > .player-ctnr,
+  .player-area-ctnr .aside-item {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .player-area-ctnr .aside-item {
+    &::before,
+    > .item-border {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+
+    > .aside-item-tips {
+      border-radius: 0 0 var(--bew-media-radius) var(--bew-media-radius);
+      corner-shape: inherit;
+    }
+
+    &.active > .item-border {
+      border-color: var(--bew-theme-color);
+    }
+  }
+
+  // The current area directory uses CSS Modules; target its semantic class
+  // prefixes, including the native measurement copies used for collapsing.
+  [class*="index_tags-box_"] button[class*="index_tag_"] {
+    min-height: var(--bew-control-height);
+    padding: var(--bew-space-1) var(--bew-space-3);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    &[class*="index_current_"] {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+  }
+
+  [class*="Item_cover-wrap_"] {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  [class*="Item_cover-wrap_"] > [class*="Item_cover_"] {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  @media (max-width: 1200px) {
+    &:has(.player-area-ctnr) {
+      body {
+        min-width: 0;
+      }
+
+      // The legacy live home keeps a 1180px body and fixed preview sizes.
+      // Retain its player/selector nodes and leave the native toolbar its gutter.
+      .player-area-ctnr {
+        display: grid;
+        grid-template-columns: minmax(0, 5fr) minmax(0, 1fr);
+        gap: var(--bew-space-2);
+        padding-inline: var(--bew-space-4) calc(var(--bew-space-10) * 2);
+
+        > a {
+          position: absolute;
+          inset: 0;
+        }
+
+        > .player-ctnr {
+          width: 100%;
+          height: auto;
+          aspect-ratio: 16 / 9;
+        }
+
+        > .player-aside {
+          display: flex;
+          flex-direction: column;
+          gap: var(--bew-space-2);
+          width: 100%;
+          height: auto;
+          min-height: 0;
+          margin: 0;
+
+          > .aside-item {
+            flex: 1;
+            height: auto;
+            min-height: 0;
+            margin: 0;
+          }
+        }
+      }
+
+      .area-detail-ctnr {
+        width: calc(100% - var(--bew-space-12) * 2);
+        margin-inline: var(--bew-space-4) calc(var(--bew-space-10) * 2);
+      }
+
+      .grid-area-ctnr {
+        display: flex;
+        gap: var(--bew-space-4);
+        box-sizing: border-box;
+        padding-inline: var(--bew-space-4) calc(var(--bew-space-10) * 2);
+
+        > .grid-col {
+          flex: 1 1 auto;
+          min-width: 0;
+          margin: 0;
+        }
+      }
+
+      .link-footer-ctnr .footer-content {
+        display: flex;
+        flex-direction: row-reverse;
+        gap: var(--bew-space-4);
+        width: calc(100% - var(--bew-space-12) * 2);
+        margin-inline: var(--bew-space-4) calc(var(--bew-space-10) * 2);
+
+        > .footer-left {
+          flex: 1;
+          min-width: 0;
+          width: auto;
+        }
+
+        > .footer-right {
+          flex-shrink: 0;
+        }
+      }
+    }
+
+    // Reserve 64px for the native side toolbar plus 16px clearance; retain
+    // native flex items and their preview hover growth.
+    #area-tags > [class*="app_wrap_"],
+    .all__card-list-ctnr,
+    .all__area-top-ctnr,
+    .all__special-area-recommend-list-ctnr {
+      width: calc(100% - var(--bew-space-12) * 2);
+      margin-left: var(--bew-space-4);
+      margin-right: calc(var(--bew-space-10) * 2);
+    }
+
+    #area-tags [class*="app_header_"] {
+      width: 100%;
+      margin-inline: 0;
+      box-sizing: border-box;
+    }
+
+    :is(.all__card-list-ctnr, .all__special-area-recommend-list-ctnr)
+      [class*="index_room-card-list_"]
+      > [class*="index_item_"] {
+      width: 25%;
+      min-width: 0;
+    }
+
+    :is(.all__card-list-ctnr, .all__special-area-recommend-list-ctnr) [class*="Item_card-item_"] {
+      width: 100%;
+      height: calc(
+        (100vw - var(--bew-space-12) * 2) / 4 * 9 / 16 - var(--bew-space-5) * 9 / 16 + var(--bew-space-12) +
+          var(--bew-space-4)
+      );
+    }
+
+    :is(.all__card-list-ctnr, .all__special-area-recommend-list-ctnr) [class*="Item_card-item-ctnr_"] {
+      width: 100%;
+
+      &:hover {
+        width: 110%;
+        left: -5%;
+      }
+    }
+
+    :is(.all__card-list-ctnr, .all__special-area-recommend-list-ctnr)
+      [class*="Item_card-item-ctnr_"]
+      [class*="Item_cover-wrap_"] {
+      width: calc(100% - var(--bew-space-5));
+      height: auto;
+      aspect-ratio: 16 / 9;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="live"] .live-room-app {
+  background: var(--bew-bg);
+  color: var(--bew-text-1);
+
+  // Room wallpaper has its own empty background nodes. The actual stream,
+  // player backfill, banners, gifts and broadcaster artwork remain untouched.
+  .room-bg-ctnr > .room-bg {
+    background-image: none !important;
+
+    &::after {
+      // The native dimmer belongs to the removed wallpaper, not the page theme.
+      background: none !important;
+    }
+  }
+
+  // Native room skins also paint empty textures on these reading surfaces.
+  // Keep broadcaster badges, content banners and gift artwork in their children.
+  .head-info-section,
+  .rank-list-section,
+  .rank-list-section > .rank-list-ctnr,
+  .chat-control-panel,
+  .gift-control-panel {
+    background-image: none !important;
+
+    &.bg-bright-filter::before {
+      background: none !important;
+    }
+  }
+
+  .head-info-section,
+  .rank-list-section,
+  .rank-list-section > .rank-list-ctnr,
+  .chat-control-panel,
+  .gift-control-panel,
+  .room-info-cntr {
+    background-color: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  .head-info-section,
+  .rank-list-section {
+    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .rank-list-section > .rank-list-ctnr {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .chat-history-panel {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+  }
+
+  .chat-control-panel,
+  .gift-control-panel {
+    border-radius: 0 0 var(--bew-panel-radius) var(--bew-panel-radius) !important;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .chat-control-panel .control-panel-ctnr {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .room-info-cntr {
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .live-skin-normal-text,
+  .live-skin-normal-a-text,
+  .room-owner-username {
+    color: var(--bew-text-1) !important;
+  }
+
+  .live-skin-normal-a-text:is(:hover, :focus-visible) {
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .chat-control-panel :is(.danmaku-pref-icon-root, .block-effect-icon-root, .block-setting-icon-root) {
+    svg :is([fill="#ffffff" i], [fill="#46494d" i]) {
+      fill: currentColor;
+    }
+
+    svg :is([stroke="#ffffff" i], [stroke="#46494d" i]) {
+      stroke: currentColor;
+    }
+  }
+
+  .chat-control-panel textarea.chat-input {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .chat-control-panel textarea.chat-input::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  .chat-control-panel .send-btn {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .chat-control-panel .send-btn:not(:disabled):not([aria-disabled="true"]) {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+  }
+
+  .chat-control-panel .send-btn:not(:disabled):not([aria-disabled="true"]) .txt {
+    color: inherit;
+  }
+}
+
+// Verified ticket directory, activity detail and order-empty templates. Posters,
+// event banners, prices and ticket availability keep their native meaning.
+html.bewly-design[data-bewly-native-site="show"] {
+  .buyticket,
+  .whole-detail-info-wrapper {
+    background: var(--bew-bg);
+  }
+
+  .ticket-system-container > :is(.guest-wrapper, .activity-info, .comment) {
+    background: var(--bew-content-solid);
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  // Native inner wrappers retain the full 1160px page width inside the 850px
+  // content column. Keep their new surfaces out of the neighbouring tips column.
+  .detail-content > .ticket-system-container {
+    width: 100%;
+  }
+
+  .detail-content > .ticket-system-container > :is(.guest-wrapper, .activity-info, .comment) {
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .detail-content .info-content {
+    overflow-wrap: anywhere;
+
+    img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+
+  .ticket-tips-wrapper :is(.merchant-section, .ticket-tips) {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .info-header {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .mallhome__selector,
+  .mallhome__list__card {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .mallhome__list__card__img {
+    border-radius: var(--bew-card-radius) var(--bew-card-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .mallhome__selector__line__label {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+  }
+
+  .mallhome__list__card__price,
+  .mallhome__selector__line__container__text--selected {
+    color: var(--bew-theme-foreground);
+  }
+
+  .mallhome__list__card__price :is(.mallhome__list__card__price__unit, .mallhome__list__card__price__value) {
+    color: inherit;
+  }
+
+  .nav-header-wrapper,
+  .nav-header,
+  .showhome__switch__container,
+  .selector-wrapper,
+  .selector-wrapper > .wrapper,
+  .order-list-wrapper,
+  .footer-wrp {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .project-list-item,
+  .ticket-system-container,
+  .header .user-wrapper .detail {
+    background-color: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .project-list-item-img,
+  .detail-img-icon {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .nav-header-search-bar,
+  .comment-input-form,
+  .selectable-option,
+  .err-jump-btn,
+  .ticket-count {
+    background-color: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .nav-header-search-bar {
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .project-list-item-title,
+  .product-info-name,
+  .product-info-time,
+  .vuene-name,
+  .activity-info-header,
+  .info-header,
+  .info-content {
+    color: var(--bew-text-1);
+  }
+
+  .project-list-item-time,
+  .project-list-item-address,
+  .address-name,
+  .err-tips,
+  .login-show-wrapper > ul > li,
+  .footer-wrp .tips {
+    color: var(--bew-text-2);
+  }
+
+  .project-list-item .project-list-item-detail {
+    // The native directory's four-class selectors otherwise win over the
+    // shared site mapping and retain low-contrast Ga5/Pi5 colours.
+    .project-list-item-time,
+    .project-list-item-address,
+    .project-list-item-price :is(.can-not-sale, .start, .list-end) {
+      color: var(--bew-text-2);
+    }
+
+    .project-list-item-price,
+    .project-list-item-price :is(.not-free, .price-symbol, .price, .promo-item) {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  .selectable-option.active,
+  .calendar .days .selected {
+    background-color: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .showhome__switch__button--select,
+  .selector-wrapper .active,
+  .tabs-item.active,
+  .check-map {
+    color: var(--bew-theme-foreground);
+  }
+
+  .product-buy {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .product-buy.enable {
+    background-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+  }
+
+  @media (max-width: 1192px) {
+    .nav-header-wrapper,
+    .mallhome__selector {
+      min-width: 0 !important;
+    }
+
+    .mallhome__selector__line {
+      display: flex;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .mallhome__selector__line__label {
+      flex-shrink: 0;
+    }
+
+    .mallhome__selector__line__container {
+      flex: 1;
+      min-width: 0;
+      width: auto;
+    }
+
+    .nav-header,
+    .selector-wrapper > .wrapper,
+    .project-list-wrapper,
+    .bread-wrapper,
+    .whole-detail-info-wrapper,
+    .tabs-wrapper.ticket-system-container,
+    .detail-content-wrapper,
+    .mallhome__selector,
+    .mallhome__list,
+    .footer-cnt {
+      width: calc(100% - var(--bew-space-8));
+      box-sizing: border-box;
+      margin-inline: auto;
+    }
+
+    .nav-header-search-bar-wrapper,
+    .selector-wrapper .selector-content {
+      min-width: 0;
+    }
+
+    .nav-header-search-bar {
+      // Retain the native field width and 20px inset, but release its fixed
+      // 319px left margin so the account and order controls remain reachable.
+      display: block;
+      max-width: calc(100% - var(--bew-space-5));
+      margin-left: auto;
+    }
+
+    .project-list {
+      display: grid;
+      width: 100%;
+      max-width: 100%;
+      margin-right: 0;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      column-gap: var(--bew-space-6);
+    }
+
+    .project-list .project-list-item {
+      width: auto;
+      min-width: 0;
+      margin-right: 0;
+    }
+
+    .project-list .project-list-item .project-list-item-detail {
+      // The original poster and its 223px text offset stay in place.
+      flex: 1;
+      min-width: 0;
+      width: auto;
+      margin-right: var(--bew-space-6);
+    }
+
+    .tabs-wrapper .tabs,
+    .footer-cnt :is(.boston-postcards, .partner) {
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    .detail-info-wrapper,
+    .detail-content {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .detail-img-icon {
+      flex-shrink: 0;
+    }
+
+    .recommend-wrapper {
+      flex-shrink: 0;
+    }
+
+    .mallhome__list {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--bew-space-6);
+    }
+
+    .mallhome__list__card {
+      width: auto;
+      min-width: 0;
+      margin: 0 !important;
+    }
+
+    .mallhome__list__card__img {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+    }
+  }
+}
+
+// The desktop merchandise document is read-only and links purchases to the app.
+// Its QR canvas and product media keep their original pixels and behaviour.
+html.bewly-design[data-bewly-native-site="merchandise-detail"] {
+  .layout {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .detail {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .layout-header,
+  .info-title,
+  .shop-info-title,
+  .detail-info-title {
+    color: var(--bew-text-1);
+  }
+
+  .cell,
+  .specification-item-value,
+  .detail-info-buy-notice,
+  .mobile-desc {
+    color: var(--bew-text-2);
+  }
+
+  .info-card,
+  .specification-item-label {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+  }
+
+  .info-card {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .info-price,
+  .info-qrcode-text {
+    color: var(--bew-theme-foreground);
+  }
+
+  .specification,
+  .specification-item,
+  .specification-item-label {
+    border-color: var(--bew-border-color);
+  }
+
+  .image-view.default,
+  .image-container {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .item__thumbnail__cont {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .item__thumbnail__cont.active {
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .info-qrcode-img {
+    background: white;
+  }
+
+  @media (max-width: 1212px) {
+    .layout-header,
+    .detail {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+      box-sizing: border-box;
+    }
+
+    .detail {
+      padding: var(--bew-space-6);
+    }
+
+    .detail-top-left,
+    .detail-top-right {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .specification-item {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .mobile-desc img {
+      max-width: 100%;
+      height: auto;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="wallet"] {
+  .pay-bcoin-index-wp,
+  .pay-bcoin-record-wp {
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .pay-bcoin-index-box {
+    border-bottom-color: var(--bew-border-color);
+  }
+
+  .pay-center-wrapper {
+    background: var(--bew-bg);
+  }
+
+  .pay-center-top-img {
+    // The native 2×86 PNG is only a blue decorative strip. Its logo and
+    // character illustration remain on their separate native elements.
+    background: var(--bew-content-alt-solid);
+  }
+
+  .pay-center-top-content-left {
+    filter: brightness(0);
+  }
+
+  &.dark .pay-center-top-content-left {
+    filter: brightness(0) invert(1);
+  }
+
+  .nav-user-info-wp,
+  .left-nav-wp,
+  .pay-bcoin-index-content,
+  .pay-bcoin-record-content {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .pay-bcoin-index-title,
+  .left-nav-title {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  .pay-bcoin-index-title {
+    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .left-nav-title {
+    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .pay-bcoin-txt,
+  .nav-user-top-name,
+  .nav-user-pay-bcoin span,
+  .nav-user-pay-shell span {
+    color: var(--bew-text-1);
+  }
+
+  .nav-user-pay-bcoin,
+  .nav-user-pay-shell {
+    color: var(--bew-text-2);
+  }
+
+  .pay-bcoin-index-content {
+    border-radius: 0 0 var(--bew-panel-radius) var(--bew-panel-radius);
+  }
+
+  .left-nav-link-item,
+  .pay-bcoin-index-name,
+  .pay-bcoin-two-title {
+    color: var(--bew-text-1);
+  }
+
+  .left-nav-link-item.on {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .left-nav-link-item:focus-visible {
+    outline-offset: calc(-1 * var(--bew-space-0-5));
+  }
+
+  .pay-bcoin-num {
+    color: var(--bew-theme-foreground);
+  }
+
+  .pay-bcoin-btn {
+    color: var(--bew-on-theme-color);
+    background: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .pay-tab-item {
+    min-height: var(--bew-control-height);
+    color: var(--bew-text-2);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .pay-tab-item:hover {
+    color: var(--bew-theme-foreground);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .pay-tab-item-selected,
+  .pay-tab-item-selected:hover {
+    // The native speech-bubble SVG encodes blue in its pixels.
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+  }
+
+  :is(.part-title, .pay-bcoin-help-txt, .lineto, .el-table__empty-text) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.el-input__inner, .el-picker-panel, .el-table, .el-table tr, .el-table td) {
+    background-color: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  .el-input__inner {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .el-picker-panel {
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .el-table th {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+  }
+
+  .pay-bcoin-record-content {
+    .el-table .cell {
+      color: inherit;
+    }
+
+    .el-table::before {
+      background-color: var(--bew-border-color);
+    }
+
+    .el-input__inner {
+      height: var(--bew-control-height);
+    }
+
+    .el-input__icon {
+      line-height: var(--bew-control-height);
+    }
+  }
+
+  .el-table--enable-row-hover .el-table__body tr:hover > td {
+    background: var(--bew-content-solid-hover);
+  }
+
+  .el-date-table td :is(div, span) {
+    color: inherit;
+  }
+
+  .el-date-table th {
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+  }
+
+  .el-date-table td.disabled {
+    color: var(--bew-text-3);
+
+    div {
+      background: var(--bew-content-alt-solid);
+      color: inherit;
+    }
+  }
+
+  .el-date-table td.current:not(.disabled) span {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+  }
+
+  .el-picker-panel :is(.el-date-picker__header-label, .el-picker-panel__icon-btn) {
+    color: var(--bew-text-1);
+  }
+
+  .el-date-picker__header {
+    min-height: var(--bew-control-height);
+    line-height: var(--bew-control-height);
+  }
+
+  .el-picker-panel__icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--bew-control-height);
+    height: var(--bew-control-height);
+    margin: 0;
+    padding: 0;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  @media (max-width: 1174px) {
+    .pay-center-top-content {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .pay-cneter-con:has(.pay-bcoin-index-wp, .pay-bcoin-record-wp) {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .pay-center-right:has(> .pay-bcoin-index-wp, > .pay-bcoin-record-wp) {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    .pay-bcoin-index-wp,
+    .pay-bcoin-record-wp,
+    .pay-bcoin-index-title,
+    .pay-bcoin-index-content,
+    .pay-bcoin-record-content {
+      width: 100%;
+      box-sizing: border-box;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="live-center"] {
+  #live-center-app,
+  .main-ctnr {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .side-bar,
+  .section-block,
+  .tabnav,
+  .loading-error-ctnr {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .page-title,
+  .section-block .user-name,
+  .side-bar .nav-item,
+  .side-bar .sub-pages-item {
+    color: var(--bew-text-1);
+  }
+
+  .tabnav {
+    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+  }
+
+  .section-block.with-bottom-radius {
+    border-radius: 0 0 var(--bew-panel-radius) var(--bew-panel-radius);
+  }
+
+  .loading-error-ctnr {
+    border-radius: inherit;
+  }
+
+  .side-bar .sub-pages-item.active,
+  .tabnav-item.current {
+    color: var(--bew-theme-foreground);
+  }
+
+  .section-block .uid {
+    color: var(--bew-on-theme-surface);
+    background: var(--bew-theme-surface);
+  }
+
+  .side-bar :is(.nav-item, .sub-pages-item):focus-visible {
+    outline-offset: calc(-1 * var(--bew-space-0-5));
+  }
+
+  :is(.tip-no-open-text, .admin-list-title, .radio-item, .card-wrapper .title, .data-card .name, .data-card .value) {
+    color: var(--bew-text-1);
+  }
+
+  :is(.live-guide-link, .end-tips, .data-card .unit, .legend-item .desc, .rank-title, .no-data) {
+    color: var(--bew-text-2);
+  }
+
+  .link-input {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.bl-button, .open-btn, .selector) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  :is(.bl-button--primary, .open-btn):not(:disabled, .disabled, .is-disabled) {
+    background: var(--bew-theme-color);
+    border-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+
+    > :is(span, .txt) {
+      color: inherit;
+    }
+  }
+
+  .bl-button:is(:disabled, .disabled, .is-disabled) {
+    color: var(--bew-text-3);
+  }
+
+  .section-block .list {
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+
+    :is(th, td) {
+      background: var(--bew-content-solid);
+      border-color: var(--bew-border-color);
+    }
+
+    .list-head > :is(th, td) {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-2);
+    }
+  }
+
+  .report-wrap .card-wrapper {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .report-wrap .data-card {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &.active {
+      background: var(--bew-theme-surface);
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  .report-wrap :is(.tab-item.active, .show-more, a) {
+    color: var(--bew-theme-foreground);
+  }
+
+  // The help application shares the host, but has a separate stable app root.
+  #app .app-ctnr:has(.navbar-left) {
+    :is(.navbar-left, .main-content) {
+      background: var(--bew-content-solid);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .nav-item1-title {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    :is(.nav-warp1, .nav-warp2) {
+      background: transparent;
+    }
+
+    :is(.nav-item2-title, .nav-item3) {
+      background: transparent;
+      color: var(--bew-text-2);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        color: var(--bew-text-1);
+        background: var(--bew-content-solid-hover);
+      }
+
+      &.active {
+        color: var(--bew-on-theme-surface);
+        background: var(--bew-theme-surface);
+        border-color: var(--bew-theme-foreground);
+      }
+    }
+
+    .main-content .anchor > ul:has(> li > .menu) {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: var(--bew-space-2);
+      margin: 0;
+      padding: 0;
+      list-style: none;
+
+      // The native float clearfix would otherwise become an empty grid item.
+      &::before,
+      &::after {
+        content: none;
+        display: none;
+      }
+
+      > li {
+        float: none;
+        width: auto;
+        height: auto;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+      }
+    }
+
+    .main-content .menu {
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      width: 100%;
+      height: auto;
+      min-height: var(--bew-control-height);
+      padding: var(--bew-space-2) var(--bew-space-3);
+      color: var(--bew-text-1);
+      background: var(--bew-content-alt-solid);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+    }
+
+    .menu-title {
+      border-color: var(--bew-theme-foreground);
+    }
+
+    :is(.menu-title, .menu-txt, .conf-detail, .conf-list .t, .conf-list .normal, .conf-list .small) {
+      color: var(--bew-text-1);
+    }
+
+    .main-content :is(a, .t-text),
+    .link-footer a {
+      color: var(--bew-theme-foreground);
+    }
+
+    .menu-txt .download .down-item a {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        background: var(--bew-content-solid-hover);
+        color: var(--bew-text-1);
+      }
+    }
+
+    .link-footer {
+      background: var(--bew-bg);
+      color: var(--bew-text-2);
+
+      .footer-content {
+        color: inherit;
+
+        li {
+          // Native legal-list parents keep #999, so pair leaf text explicitly.
+          color: var(--bew-text-2);
+        }
+
+        :is(.footer-img-text, .footer-img-item) {
+          color: inherit;
+        }
+      }
+
+      .footer-img-item {
+        border-color: var(--bew-border-color);
+      }
+    }
+  }
+
+  &:not(.dark) #app .app-ctnr:has(.navbar-left) {
+    // These small native sprite slots contain only navigation glyphs. Keep the
+    // tutorial screenshots and the illustrated help banner in their own colours.
+    .nav-item1-title > i,
+    :is(.nav-item1-title, .nav-item2-title).arrow::after {
+      filter: brightness(0);
+    }
+  }
+
+  @media (max-width: 1192px) {
+    .app-ctnr:has(.navbar-left) .footer-content {
+      display: flex;
+      flex-direction: row-reverse;
+      gap: var(--bew-space-6);
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+
+      > .footer-left {
+        flex: 1;
+        width: auto;
+        min-width: 0;
+      }
+
+      > .footer-right {
+        flex: 0 0 220px; // Preserve the native two-column link/icon group.
+      }
+    }
+
+    .app-ctnr {
+      min-width: 0;
+    }
+
+    .app-body {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    .app-body > .main-ctnr {
+      // Retain the native 198px sidebar and 24px gutter. The navbar also has a
+      // main-ctnr, so only resize the direct body column, never the header.
+      width: calc(100% - 198px - var(--bew-space-6));
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="workshop"] {
+  #app > .header {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+  }
+
+  #app > .wrapper {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .wrapper__body > .container {
+    background: var(--bew-bg);
+  }
+
+  .newCertificate__main {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .newCertificate__main__banner {
+    border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .newCertificate__code__text {
+    color: var(--bew-text-2);
+  }
+
+  .newCertificate__code__qrcode {
+    background-color: white;
+  }
+
+  // The native workshop wordmark is a monochrome bitmap; other images, the
+  // introductory banner and QR code retain their original colours.
+  &.dark .header .logo {
+    filter: invert(1);
+  }
+
+  --el-color-primary: var(--bew-theme-color);
+  --el-bg-color: var(--bew-content-solid);
+  --el-bg-color-page: var(--bew-bg);
+  --el-bg-color-overlay: var(--bew-elevated-solid);
+  --el-text-color-primary: var(--bew-text-1);
+  --el-text-color-regular: var(--bew-text-2);
+  --el-border-color: var(--bew-border-color);
+}
+
+html.bewly-design[data-bewly-native-site="manga"] {
+  nav,
+  .manga-navbar {
+    background-color: var(--bew-elevated-solid) !important;
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+  }
+
+  nav .app-button {
+    color: var(--bew-text-1) !important;
+  }
+
+  .manga-navbar-manga-logo,
+  .manga-navbar .search-input {
+    color: var(--bew-text-1) !important;
+  }
+
+  .manga-navbar .search-bar-bg {
+    background: var(--bew-content-alt-solid) !important;
+  }
+
+  .manga-navbar .search-input::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  .manga-navbar-submission-portal {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+    overflow: hidden;
+
+    .submission-icon {
+      // Recolour the native monochrome SVG through its alpha, retaining the
+      // original node and geometry (the same pattern as the account sidebar).
+      position: relative;
+      left: calc(-1 * var(--bew-space-12));
+      filter: drop-shadow(var(--bew-space-12) 0 var(--bew-on-theme-color));
+    }
+  }
+
+  // New SSR update/ranking pages coexist with the older account/detail UI.
+  div:has(> [class*="_sizeRuler_"] > [class*="_scheduleList_"]) {
+    background: var(--bew-bg) !important;
+  }
+
+  [class*="_updateFooter_"] > [class~="bg-[#212121]"] {
+    background: var(--bew-bg);
+    color: var(--bew-text-2);
+
+    [class~="text-white/70"] {
+      color: var(--bew-text-2);
+    }
+
+    a:hover {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  [class*="_scheduleList_"] :is([class*="_sectionTitle_"], [class*="_titleText_"]),
+  [class*="_rank-title_"],
+  [class*="_rank-item_"] [class*="_manga-title_"] {
+    color: var(--bew-text-1);
+  }
+
+  [class*="_scheduleList_"] :is([class*="_dateItem_"], [class*="_statusText_"]),
+  [class*="_rank-hint_"],
+  [class*="_no-more-ctnr_"],
+  [class*="_rank-item_"] [class*="_manga-info-ctnr_"],
+  [class*="_rank-item_"] [class*="_show-status-text_"],
+  [class*="_sidebarCtnr_"] [class*="_sidebarItem_"] {
+    color: var(--bew-text-2);
+  }
+
+  [class*="_scheduleList_"] [class*="_dateItem_"]:is([class*="_active_"], :hover),
+  [class*="_sidebarCtnr_"] [class*="_sidebarItem_"]:is([class*="_activated_"], :hover) {
+    color: var(--bew-theme-foreground);
+  }
+
+  [class*="_scheduleList_"] [class*="_dateItem_"][class*="_active_"]::after {
+    background: var(--bew-theme-color);
+  }
+
+  [class*="_scheduleImg_"],
+  [class*="_rank-item_"] [class*="_manga-cover_"] {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+    overflow: hidden;
+  }
+
+  [class*="_scheduleImg_"] img,
+  [class*="_rank-item_"] [class*="_manga-cover_"] img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  [class*="_rank-item-wrapper_"] {
+    // The repeating SVG only paints alternating white strips; rank digits and
+    // movement arrows belong to separate native nodes and remain untouched.
+    background-image: none;
+  }
+
+  [class*="_rank-item_"] {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  @media (max-width: 1226px) {
+    [class*="_mainContainer_"]:has(> [class*="_dataListContainer_"]) {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    [class*="_dataListContainer_"]:has([class*="_rank-item-wrapper_"]) {
+      width: calc(100% - 113px); // Native ranking navigation occupies 113px.
+    }
+
+    [class*="_rank-item-wrapper_"] {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: var(--bew-space-4);
+      margin-bottom: 0;
+    }
+
+    [class*="_rank-item_"] {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+    }
+
+    [class*="_rank-item-content_"] {
+      display: flex;
+      min-width: 0;
+    }
+
+    [class*="_rank-item-content_"] > a {
+      flex-shrink: 0;
+    }
+
+    [class*="_rank-item_"] [class*="_manga-info-ctnr_"] {
+      flex: 1;
+      min-width: 0;
+      width: auto;
+    }
+  }
+
+  // The current SSR homepage uses utility classes rather than the older manga
+  // components below. Map observed neutral UI colours without touching artwork.
+  [class~="text-[#1c1c1f]"],
+  [class~="text-[#1F2329]"],
+  nav button[class~="text-[rgba(0,0,0,0.8)]"],
+  nav button[class~="text-[rgba(0,0,0,0.87)]"],
+  nav #keyword-search {
+    color: var(--bew-text-1);
+  }
+
+  [class~="text-[#90929b]"] {
+    color: var(--bew-text-2);
+  }
+
+  nav [class~="bg-[#f4f4f4]"] {
+    background: var(--bew-content-alt-solid);
+  }
+
+  nav #keyword-search::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  nav form:has(#keyword-search) {
+    // The SSR header rotates separate hint nodes rather than using placeholder.
+    [class~="text-[#aaa]"] {
+      color: var(--bew-text-2);
+    }
+
+    button[type="submit"] {
+      position: relative;
+      color: var(--bew-text-2);
+
+      @supports (mask-image: url("")) {
+        // Preserve the original button/image and their hit area. The inspected
+        // monochrome glyph has fixed 34% alpha, so use its same solid silhouette.
+        > img {
+          visibility: hidden;
+        }
+
+        &::after {
+          content: "";
+          position: absolute;
+          inset: 50% auto auto 50%;
+          width: var(--bew-icon-size-sm);
+          height: var(--bew-icon-size-sm);
+          background: currentColor;
+          mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='m17.89 16.48 3.32 3.31a1 1 0 0 1-1.42 1.42l-3.31-3.32a8.79 8.79 0 1 1 1.41-1.41ZM11 18.2A7.2 7.2 0 1 0 3.8 11a7.2 7.2 0 0 0 7.2 7.2Z'/%3E%3C/svg%3E");
+          mask-position: center;
+          mask-repeat: no-repeat;
+          mask-size: contain;
+          transform: translate(-50%, -50%);
+          pointer-events: none;
+        }
+      }
+    }
+  }
+
+  nav button[class~="bg-[#32aaff]"] {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  nav .item-underline {
+    background: var(--bew-theme-color);
+  }
+
+  div:has(> button[class*="_back-to-top_"]) {
+    background: var(--bew-elevated-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > button {
+      color: var(--bew-text-2);
+    }
+
+    > button:hover {
+      background: var(--bew-content-solid-hover);
+      color: var(--bew-text-1);
+    }
+
+    > button[class~="bg-[#6fc3ff]"] {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+  }
+
+  .content-container {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > h3 {
+      color: var(--bew-text-1);
+    }
+
+    > p {
+      color: var(--bew-text-2);
+    }
+  }
+
+  // The absolute sibling duplicates the recommendation's foreground cover as
+  // decoration. Keep the actual linked cover and thumbnail list intact.
+  .absolute:has(+ .content-container) {
+    display: none;
+  }
+
+  @media (max-width: 1300px) {
+    #root > [class~="min-w-[1300px]"]:has(#content-container) {
+      min-width: 0;
+    }
+
+    #root > [class~="min-w-[1300px]"] #content-container {
+      box-sizing: border-box;
+      // Keep the original 135px section-navigation rail outside the reading area.
+      padding-left: var(--bew-space-4);
+      padding-right: calc(135px + var(--bew-space-4));
+
+      [class~="w-[1160px]"] {
+        width: 100%;
+      }
+
+      [class~="min-w-[1160px]"] {
+        min-width: 0;
+      }
+
+      button:is([class~="-right-[37px]"], [class~="right-[-37px]"]) {
+        right: 0;
+      }
+
+      button:is([class~="-left-[37px]"], [class~="left-[-37px]"]) {
+        left: 0;
+      }
+
+      .content-container {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--bew-space-3) var(--bew-space-6);
+        box-sizing: border-box;
+        min-height: 0;
+        padding: var(--bew-space-6);
+
+        > :not(a) {
+          grid-column: 1;
+          min-width: 0;
+          width: auto;
+          margin: 0;
+        }
+
+        > [class~="w-[520px]"] {
+          grid-column: 1 / -1;
+          max-width: 100%;
+        }
+
+        > a {
+          grid-column: 2;
+          grid-row: 1 / span 4;
+          position: relative;
+          inset: auto;
+          align-self: start;
+          width: 100%;
+          height: auto;
+          aspect-ratio: 562 / 316;
+
+          > picture,
+          > picture > img {
+            display: block;
+            width: 100%;
+            height: 100%;
+            border-radius: inherit;
+            corner-shape: inherit;
+          }
+        }
+      }
+    }
+  }
+
+  [class~="bg-[#212121]"]:has(> div > a[href*="/classify?"]) {
+    background: var(--bew-content-solid);
+
+    a {
+      color: var(--bew-text-1);
+    }
+
+    a:hover {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  nav .app-button:hover,
+  nav .app-button[class~="!text-[#32aaff]"],
+  .manga-navbar .app-button.active,
+  .style-tag.selected,
+  .style-tag:hover,
+  #main-stage .style-section .style-tag.selected,
+  #main-stage .style-section .style-tag:hover {
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .manga-navbar .app-button.active .item-underline {
+    background-color: var(--bew-theme-foreground);
+  }
+
+  .big-card,
+  .top-banner,
+  .bottom-banner,
+  .manga-cover,
+  .manga-card-vertical .manga-cover {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .manga-cover > img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .manga-cover > .cover-image {
+    // Native lazy covers write an inline zero radius after their image loads.
+    border-radius: inherit !important;
+    corner-shape: inherit;
+  }
+
+  // The account centre is an older shell shared by history and favourites.
+  // Keep its native links, list scroller and editor; map only the reading UI.
+  .page-content:has(> .app-sidebar) {
+    background: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > .app-sidebar {
+      background: var(--bew-content-alt-solid) !important;
+      border-radius: var(--bew-panel-radius) 0 0 var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      .nav-line {
+        // Native spacing belongs to this 32px wrapper; only ::before is a line.
+        background: transparent;
+
+        &::before {
+          background: var(--bew-border-color);
+        }
+      }
+    }
+
+    .nav-item {
+      color: var(--bew-text-2) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        color: var(--bew-text-1) !important;
+        background: var(--bew-content-solid-hover);
+      }
+
+      &[aria-current="page"] {
+        color: var(--bew-on-theme-surface) !important;
+      }
+    }
+
+    .nav-item-indicator {
+      background: var(--bew-theme-surface) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .page-title,
+    :is(.manga-card, .purchased-comic-item) .manga-title {
+      color: var(--bew-text-1) !important;
+    }
+
+    .manga-card .supporting-text,
+    .purchased-comic-item .eq-desc,
+    .status-controls,
+    .pivot-button {
+      color: var(--bew-text-2) !important;
+    }
+
+    .pivot-button:is(.enabled, :hover),
+    .edit-button {
+      color: var(--bew-theme-foreground) !important;
+    }
+
+    .pivot-button.enabled::after {
+      background: var(--bew-theme-color);
+    }
+
+    .manga-cover {
+      border-radius: var(--bew-media-radius) !important;
+      corner-shape: var(--bew-corner-shape);
+      overflow: hidden;
+    }
+
+    .manga-cover .cover-image {
+      border-radius: inherit !important;
+      corner-shape: inherit;
+    }
+
+    .purchased-comic-item {
+      color: var(--bew-text-1);
+
+      .list-cover {
+        border-radius: var(--bew-media-radius);
+        corner-shape: var(--bew-corner-shape);
+        overflow: hidden;
+      }
+
+      .list-cover-img {
+        border-radius: inherit;
+        corner-shape: inherit;
+      }
+
+      // This square masks the native multiline ellipsis, not a selection control.
+      .multi-line-text::after {
+        background: var(--bew-content-solid);
+      }
+    }
+
+    > .router-view {
+      color: var(--bew-text-1);
+    }
+
+    > .router-view > .subtitle > .question-icon {
+      width: var(--bew-space-6);
+      height: var(--bew-space-6);
+      vertical-align: middle;
+      background: none;
+
+      > .hover-tab {
+        // Native nested rules keep a black panel even when our theme is light.
+        background: var(--bew-elevated-solid) !important;
+        color: var(--bew-text-1);
+        border-color: var(--bew-border-color);
+        border-radius: var(--bew-popover-radius) !important;
+        corner-shape: var(--bew-corner-shape);
+
+        &::before {
+          border-bottom-color: var(--bew-elevated-solid) !important;
+        }
+      }
+
+      &::before {
+        // Reuse the native question glyph without its fixed black/34% fill.
+        // Paint only the symbol so its native child tooltip is never filtered.
+        content: "";
+        position: absolute;
+        inset: var(--bew-space-1);
+        background: var(--bew-text-2);
+        mask: url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%2016%2016'%3E%3Cpath%20d%3D'M8%2014.5A6.5%206.5%200%201%201%2014.5%208%206.5%206.5%200%200%201%208%2014.5m0-1A5.5%205.5%200%201%200%202.5%208%205.5%205.5%200%200%200%208%2013.5m-1.4-7a.6.6%200%200%201-1.2%200A2.59%202.59%200%200%201%208%203.9a2.66%202.66%200%200%201%201.27.32%202.25%202.25%200%200%201%20.94%203%202.14%202.14%200%200%201-.59.78l-.46.37A1.46%201.46%200%200%200%208.6%209.5a.6.6%200%200%201-1.2%200%202.67%202.67%200%200%201%201-2.09L8.88%207a1.1%201.1%200%200%200%20.27-.33%201.06%201.06%200%200%200-.44-1.42A1.5%201.5%200%200%200%208%205.1a1.4%201.4%200%200%200-1.4%201.4m.7%204.75a.7.7%200%201%201%201.4%200v.25a.7.7%200%201%201-1.4%200Z'%2F%3E%3C%2Fsvg%3E")
+          center / contain no-repeat;
+        mask-mode: alpha;
+      }
+    }
+
+    :is(.subtitle, .page-sub-title, .supporting-text, .input-label, .length-hinter, .extral-info, .uid) {
+      color: var(--bew-text-2);
+    }
+
+    :is(.nickname, .coin-info, .monthly-card .detail, .hover-title, .hover-text, .tab-text) {
+      color: var(--bew-text-1);
+    }
+
+    :is(.coupon-number, .coin-remain-count, .monthly-card .num) {
+      color: var(--bew-theme-foreground);
+    }
+
+    :is(.hover-tab, .dropbox-component .data-list) {
+      background: var(--bew-elevated-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-popover-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .pivot-header-item {
+      color: var(--bew-text-2);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        color: var(--bew-text-1);
+        background: var(--bew-content-solid-hover);
+      }
+
+      &.selected {
+        color: var(--bew-theme-foreground);
+      }
+    }
+
+    :is(.date-selector, .feedback-type) .dropbox-component {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      .current {
+        background: transparent;
+        color: inherit;
+        border-radius: inherit;
+        corner-shape: inherit;
+      }
+
+      .data-list > li {
+        color: var(--bew-text-1);
+
+        &:hover {
+          background: var(--bew-content-solid-hover);
+        }
+      }
+    }
+
+    :is(.monthly-card, .detail-card) {
+      background-color: var(--bew-content-alt-solid);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .monthly-card {
+      // The native embedded SVG is only a light rectangle and decorative
+      // chevrons. Its separate card emblem and business content stay native.
+      background: var(--bew-content-alt-solid);
+      background-image: none !important; // Native Vue writes this decoration inline.
+
+      > .dp-flex:first-child {
+        color: var(--bew-text-1);
+      }
+    }
+
+    .monthly-card-detail .more {
+      filter: brightness(0);
+    }
+
+    .coin-info,
+    .recharge-btn {
+      min-height: var(--bew-control-height-sm);
+    }
+
+    .my-universal-card > .t-center > .button {
+      min-height: var(--bew-control-height);
+      padding-inline: var(--bew-space-4);
+    }
+
+    :is(.a-divider, .divider) {
+      background-color: var(--bew-border-color);
+    }
+
+    .feedback-page :is(.manga-textbox, .feedback-content-input) {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .feedback-page :is(input, textarea) {
+      background: transparent;
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+
+      &::placeholder {
+        color: var(--bew-text-3);
+      }
+    }
+
+    :is(.recharge-btn, .my-universal-card .button, .feedback-page .manga-button.primary) {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:is(:disabled, .disabled) {
+        background: var(--bew-content-alt-solid);
+        color: var(--bew-text-3);
+        border-color: var(--bew-border-color);
+      }
+    }
+
+    .renewal-btn {
+      min-height: var(--bew-control-height);
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-radius-full);
+      corner-shape: var(--bew-corner-shape-round);
+    }
+
+    .renewal-btn:hover {
+      background: var(--bew-theme-surface-hover);
+    }
+
+    .error-hinter .manga-button {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  .app-sidebar .nav-item-icon {
+    // Native navigation SVGs are monochrome, including their selected blue.
+    filter: brightness(0);
+  }
+
+  &.dark .app-sidebar .nav-item-icon {
+    filter: brightness(0) invert(1);
+  }
+
+  &.dark .page-content:has(> .app-sidebar) .monthly-card-detail .more {
+    filter: brightness(0) invert(1);
+  }
+
+  @media (max-width: 1192px) {
+    .page-content:has(> .app-sidebar):has(> .router-view) {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+
+      > .router-view {
+        width: calc(100% - 220px); // Preserve the native sidebar width/offset.
+        padding-inline: var(--bew-space-6);
+        min-width: 0;
+      }
+    }
+  }
+
+  .manga-footer,
+  #main-stage,
+  .app-layout {
+    background-color: var(--bew-bg) !important;
+  }
+
+  .style-tag,
+  .manga-title,
+  .manga-card-vertical .text-info-section .manga-title {
+    color: var(--bew-text-1);
+  }
+
+  .manga-card-vertical .text-info-section .supporting-text {
+    color: var(--bew-text-2);
+  }
+
+  #main-stage .style-section .block-title {
+    color: var(--bew-text-2) !important;
+  }
+
+  #main-stage .style-section .style-tag:not(.selected, :hover) {
+    // The legacy component forces its dark foreground with !important.
+    color: var(--bew-text-1) !important;
+  }
+
+  .style-tag,
+  #main-stage .style-section .style-tag {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .manga-detail .header-info {
+    background: var(--bew-bg) !important;
+    color: var(--bew-text-1);
+  }
+
+  .header-info :is(.author-name, .supporting-text, .introduction-text),
+  .comic-info-panel :is(.comic-author, .comic-category, .comic-update-info) {
+    color: var(--bew-text-2) !important;
+  }
+
+  // These metadata SVGs contain black monochrome paths, unlike manga artwork.
+  &.dark .header-info .supporting-text img.label-icon {
+    filter: brightness(0) invert(1);
+  }
+
+  .section-list,
+  .recommendation {
+    background: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .header-info .manga-title,
+  .section-title,
+  .recommendation .header-content .title,
+  .comic-title {
+    color: var(--bew-text-1) !important;
+  }
+
+  .manga-detail .episode-list-component :is(.header-item, .list-item),
+  .header-info .manga-button.ghost {
+    background: var(--bew-content-alt-solid) !important;
+    color: var(--bew-text-1) !important;
+    border-color: var(--bew-border-color) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .manga-detail .episode-list-component :is(.header-item, .list-item):hover {
+    background: var(--bew-content-solid-hover) !important;
+  }
+
+  .manga-detail .episode-list-component .header-item.selected {
+    background: var(--bew-theme-surface) !important;
+    color: var(--bew-on-theme-surface) !important;
+  }
+
+  .manga-detail .episode-list-component .list-item.last-read {
+    color: var(--bew-theme-foreground) !important;
+    border-color: var(--bew-theme-foreground) !important;
+  }
+
+  .episode-list-component .list-item :is(.title, .short-title) {
+    color: inherit !important;
+  }
+
+  .header-info .manga-button.primary:not(:disabled) {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .header-info .manga-button.primary:not(:disabled):hover {
+    border-color: var(--bew-theme-foreground);
+  }
+
+  @media (max-width: 1192px) {
+    .app-layout > .size-ruler:has(> .manga-detail, > .style-section) {
+      width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    #main-stage .style-section {
+      .tag-block {
+        display: flex;
+        align-items: flex-start;
+        gap: var(--bew-space-3);
+        white-space: normal;
+      }
+
+      .block-title {
+        flex: 0 0 auto;
+        margin-inline: 0;
+      }
+
+      .tag-containers {
+        display: flex;
+        flex: 1 1 0;
+        flex-wrap: wrap;
+        gap: var(--bew-space-1);
+        min-width: 0;
+        width: auto;
+      }
+
+      .style-tag {
+        flex: 0 0 auto;
+        margin-inline: 0;
+        padding-inline: var(--bew-space-3);
+      }
+    }
+
+    #main-stage .list-section .data-list:has(> .manga-card-vertical) {
+      display: grid;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: var(--bew-space-6) var(--bew-space-4);
+
+      > .manga-card-vertical {
+        width: auto;
+        min-width: 0;
+        margin: 0;
+      }
+    }
+
+    .manga-detail .section {
+      gap: var(--bew-space-3);
+    }
+
+    .manga-detail .section > .section-list {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .manga-detail .section > .right-side {
+      flex-shrink: 0;
+    }
+
+    .manga-detail .manga-styles {
+      max-width: 100%;
+      white-space: normal;
+    }
+
+    .manga-detail .episode-list-component .list-data {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: var(--bew-space-4);
+    }
+
+    .manga-detail .episode-list-component .list-data > .list-item {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+    }
+  }
+
+  .comic-info-panel .comic-bg {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // The reader owns image filters, page geometry and transitions. Only its
+  // surrounding canvas and actual interface surfaces follow Nocturne.
+  .reader-layout .reader-body {
+    background: var(--bew-bg);
+  }
+
+  .reader-layout .read-nav {
+    :is(a, .episode, .next-icon) {
+      color: var(--bew-text-1) !important;
+    }
+
+    a:hover {
+      color: var(--bew-theme-foreground) !important;
+    }
+  }
+
+  .reader-layout .reader-setting {
+    .header .text,
+    .section-title {
+      color: var(--bew-text-1) !important;
+    }
+
+    .block {
+      background: var(--bew-content-alt-solid) !important;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .border-bt {
+      border-color: var(--bew-border-color);
+    }
+
+    .image-opt {
+      background: var(--bew-switch-bg);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-radius-full);
+      corner-shape: var(--bew-corner-shape-round);
+    }
+
+    .image-opt.active {
+      background: var(--bew-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+
+    .image-opt .image-opt-slider {
+      background: var(--bew-text-1);
+      border-color: transparent;
+      corner-shape: var(--bew-corner-shape-round);
+    }
+
+    .image-opt .image-opt-slider.active {
+      background: var(--bew-switch-thumb-active);
+      border-color: transparent;
+    }
+  }
+
+  .reader-layout .action-bar-bottom :is(.zoomer, .page-slider) {
+    background: var(--bew-elevated-solid) !important;
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .reader-layout :is(.zoom-display, .progress-indicator) {
+    color: var(--bew-text-2) !important;
+  }
+
+  .reader-layout .zoom-btn {
+    filter: brightness(0);
+  }
+
+  &.dark .reader-layout .zoom-btn {
+    filter: brightness(0) invert(1);
+  }
+
+  .reader-layout .page-slider .range-input::-webkit-slider-runnable-track {
+    background: var(--bew-fill-3);
+  }
+
+  .reader-layout .page-slider .range-input::-webkit-slider-thumb {
+    background: var(--bew-theme-foreground);
+  }
+
+  .reader-layout :is(.reader-setting, .episode-list, .episode-comment, .shortcuts-info) {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .reader-layout :is(.action-bar-bottom, .floating-button) {
+    background: var(--bew-elevated-solid) !important;
+    color: var(--bew-text-1) !important;
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-radius-full);
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  .reader-layout .floating-button.circle {
+    border-radius: 50%;
+  }
+
+  .reader-layout :is(.action-button, .reader-setting .app-button, .episode-list .list-item) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .reader-layout :is(.reader-setting .app-button.selected, .episode-list .list-item.selected) {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="game"] {
+  .gc-header .nav-search input {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .gc-header .nav-search input::placeholder,
+  .gc-header .nav-search-button .iconic_pc_search,
+  .bili-game-header-nav-search input::placeholder,
+  .bili-game-header-nav-search .iconic_pc_search {
+    color: var(--bew-text-2);
+  }
+
+  // The native dark variant belongs to the content hero and keeps its artwork
+  // contrast. Ordinary cards and catalogue descriptions use semantic reading text.
+  .game-card.theme-light .game-meta,
+  .feed-card > .description,
+  .feed-card .notice,
+  .list_footer .tagGroup .tag,
+  [class*="game-item-footer-type_"],
+  [class*="game-item-footer-score_"] {
+    color: var(--bew-text-2);
+  }
+
+  .game-card.theme-light .rating-text {
+    color: var(--bew-theme-foreground);
+  }
+
+  .game-card.theme-light .game-meta :is(.category, .category-separator) {
+    color: inherit;
+  }
+
+  .bili-game-header-nav-wrap a.bili-game-header-menu-active {
+    color: var(--bew-theme-foreground) !important;
+  }
+
+  .aside-wrap .anchor_item.active .text {
+    color: var(--bew-on-theme-surface);
+  }
+
+  .aside-wrap > .item-slide {
+    background: var(--bew-theme-surface);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .scroll-container > .card:has(> .game > .feed-card) {
+    // Native previews write a decorative colour inline. Keep the media and
+    // preview lifecycle, while the adjacent reading surface follows the theme.
+    background-color: var(--bew-content-solid) !important;
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > .video {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
+  }
+
+  .rank-card > .header {
+    background: var(--bew-content-alt-solid);
+    backdrop-filter: none;
+    border-radius: var(--bew-card-radius) var(--bew-card-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .rank-card > .header .title {
+    color: var(--bew-text-1);
+  }
+
+  .rank-card > .header .more {
+    color: var(--bew-text-2);
+  }
+
+  .rank-card > .rank-list {
+    // The native list retains an inline dark background across theme changes.
+    background: var(--bew-content-solid) !important;
+    border-radius: 0 0 var(--bew-card-radius) var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .grid-item .cover {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .grid-item .cover .b-img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .main-btn.btn-primary,
+  .main-btn.btn-hover,
+  .main-btn.white.game_button:not(:disabled, .disabled) {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .quick-entry-guide-bar {
+    background: var(--bew-elevated-solid) !important;
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+  }
+
+  @media (max-width: 1192px) {
+    .gc-header {
+      // Native CSS forces a 160px total gutter even after its minimum is released.
+      width: calc(100% - var(--bew-space-8)) !important;
+      min-width: 0;
+      margin-inline: auto;
+    }
+
+    .gc-header .nav-search {
+      min-width: 0;
+    }
+
+    .bili-game-header-nav-bar {
+      min-width: 0;
+    }
+
+    .bili-game-header-nav-main {
+      width: calc(100% - var(--bew-space-8));
+      min-width: 0;
+      margin-inline: auto;
+    }
+
+    &:has(#discover, #app > .wrap > .body > main.content) {
+      min-width: 0;
+    }
+
+    #app > .wrap:has(> .body > main.content) {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+
+      > .body,
+      > .body > main.content {
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      .list_body {
+        width: auto;
+      }
+
+      .list_content,
+      .content_wrap {
+        // Native list_content already reserves 150px + 20px through padding.
+        // Let its content width shrink without subtracting that space twice.
+        width: auto;
+      }
+
+      .content_wrap {
+        max-width: 100%;
+      }
+
+      .list_footer {
+        width: 100%;
+        max-width: 100%;
+        height: auto;
+        min-height: var(--bew-control-height);
+        flex-wrap: wrap;
+        gap: var(--bew-space-1);
+      }
+    }
+
+    #discover > [class*="discover_"] {
+      max-width: 100%;
+    }
+
+    #discover [class*="flex-wrap_"] {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+
+    #discover [class*="collection-wrap_"] {
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: var(--bew-space-6) var(--bew-space-4);
+
+      > [class*="collection-item_"] {
+        margin-right: 0;
+      }
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="game-detail"] {
+  .bui-gc,
+  .main-bar {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .bili-game-header-nav-bar,
+  .detail-download-area,
+  .bili-game-header-user-popper {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+  }
+
+  .detail-download-area {
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-game-header-user-popper {
+    border-radius: 0 0 var(--bew-popover-radius) var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // Preserve the game's header artwork, blending its existing overlay into
+  // the selected page background rather than a fixed white/black endpoint.
+  .header-bar .cover {
+    background: linear-gradient(color-mix(in srgb, var(--bew-bg) 10%, transparent), var(--bew-bg));
+  }
+
+  .introduce-name,
+  .introduce-description,
+  .bui-mod,
+  .bui-mod h3,
+  .tab-head a,
+  .bili-game-header-nav-wrap a,
+  .bili-game-header-user-item {
+    color: var(--bew-text-1);
+  }
+
+  .introduce-count,
+  .detail-download-area .game-introduce .introduce-count .count-text,
+  .bui-tool-text,
+  .information-container,
+  .detail-download-area .game-download .download-qrcode .qrcode-text {
+    color: var(--bew-text-2);
+  }
+
+  .tab-head a.active,
+  .bui-expander-switch {
+    color: var(--bew-theme-foreground);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .bui-gc .dev-words .multi-line-text,
+  .bui-related-videos a.video-title,
+  .game-list .game-information .game-introduce p {
+    color: var(--bew-text-1);
+  }
+
+  .bui-expander-switch {
+    background-image: linear-gradient(transparent, var(--bew-bg));
+  }
+
+  .bui-related-videos .video-pic,
+  .bui-related-videos .video-pic > img,
+  .game-information > img {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-list .game-button {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-game-header-nav-search input::placeholder,
+  .bili-game-header-nav-search .iconic_pc_search {
+    color: var(--bew-text-2);
+  }
+
+  .introduce-logo,
+  .screenshots a > img,
+  .header-bar .video-player {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-game-header-nav-search input {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-download :is(.bui-btn, .btn) {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  @media (max-width: 1192px) {
+    .bui-gc,
+    .bili-game-header-nav-bar {
+      min-width: 0;
+    }
+
+    .bili-game-header-nav-main {
+      width: calc(100% - var(--bew-space-8));
+    }
+
+    .bui-gc > :is(.header-bar, .main-bar) {
+      display: flex;
+      gap: var(--bew-space-6);
+      padding-inline: var(--bew-space-4);
+      // The native fixed feedback artwork is 59px wide; keep it off the QR code.
+      padding-inline-end: calc(var(--bew-space-10) * 2);
+      box-sizing: border-box;
+      white-space: normal;
+    }
+
+    .bui-gc :is(.header-bar, .main-bar) > .left-panel {
+      flex: 1;
+      min-width: 0;
+    }
+
+    .bui-gc :is(.header-bar, .main-bar) > .right-panel {
+      // Preserve the native download/QR layout; the reading column can shrink.
+      flex: 0 0 396px;
+      margin-left: 0;
+    }
+
+    .bui-gc .header-bar .video-player {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 745 / 420;
+    }
+
+    .bui-gc .header-bar .logo {
+      left: var(--bew-space-4);
+      margin-left: 0;
+    }
+  }
+}
+
+html.bewly-design:is(
+    [data-bewly-native-site="game"],
+    [data-bewly-native-site="game-detail"],
+    [data-bewly-native-site="game-wiki"],
+    [data-bewly-native-site="game-gifts"],
+    [data-bewly-native-site="game-payment"]
+  ) {
+  .bili-game-footer-content {
+    max-width: calc(100% - var(--bew-space-8));
+    margin-inline: auto;
+  }
+
+  .bili-game-footer-content-record {
+    max-width: 100%;
+    box-sizing: border-box;
+    color: var(--bew-text-2) !important;
+
+    :is(.bili-game-footer-content-record-tip, .bili-game-footer-content-record-addr, p, a, span) {
+      color: inherit !important;
+    }
+  }
+
+  .bili-game-footer-content-logo {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+}
+
+html.bewly-design[data-bewly-native-site="love"] {
+  .charity-header {
+    background: var(--bew-elevated-solid) !important;
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+  }
+
+  .charity-header .search-input,
+  .view-more-btn {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .charity-header .search-input input {
+    background: transparent;
+    color: var(--bew-text-1);
+  }
+
+  .charity-header .search-input input::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  .charity-header .bili-home {
+    color: var(--bew-text-1);
+  }
+
+  .charity-header .bili-home:hover {
+    color: var(--bew-theme-foreground);
+  }
+
+  .charity-home .wrap,
+  .bulletin-board .list {
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bulletin-board .list li {
+    background: var(--bew-content-solid);
+  }
+
+  .bulletin-board .list li:nth-child(even) {
+    background: var(--bew-content-alt-solid);
+  }
+
+  .bulletin-board .list a,
+  .charity-home .wrap .detail,
+  .funding-progress-number > span:first-child {
+    color: var(--bew-text-2);
+  }
+
+  .funding-progress-number > span:last-child,
+  .view-more-btn:hover,
+  .bulletin-board .list a:hover {
+    color: var(--bew-theme-foreground);
+  }
+
+  .funding-progress-bar {
+    background: var(--bew-fill-2);
+  }
+
+  .funding-progress-bar > span {
+    background: var(--bew-theme-color);
+  }
+
+  .number-show,
+  .carousel-show {
+    background-color: var(--bew-content-solid) !important;
+    backdrop-filter: none;
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .number-show p {
+    color: var(--bew-text-1);
+  }
+
+  .card-c .pic {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .card-c .pic > img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .card-c .title {
+    color: var(--bew-text-1);
+  }
+
+  .card-c .sub-title {
+    color: var(--bew-text-2);
+  }
+
+  .charity-button {
+    background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .card-a .angle-mark,
+  .charity-detail .overview .angle-mark {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-badge-radius);
+    corner-shape: var(--bew-corner-shape-round);
+
+    &.end {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-2);
+    }
+  }
+
+  // The directory and public institution space share the same project-row component.
+  .card-a {
+    .info-text > .title {
+      color: var(--bew-text-1);
+
+      &:is(:hover, :focus-visible) {
+        color: var(--bew-theme-foreground);
+      }
+    }
+
+    .sub-title,
+    .item .t1 {
+      color: var(--bew-text-2);
+    }
+
+    .pic {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      > img {
+        border-radius: inherit;
+        corner-shape: inherit;
+      }
+    }
+
+    .charity-button.hollow-white {
+      background: var(--bew-content-alt-solid) !important;
+      color: var(--bew-text-1) !important;
+      border-color: var(--bew-border-color);
+
+      &:hover {
+        background: var(--bew-content-solid-hover) !important;
+      }
+    }
+  }
+
+  .charity-list {
+    .filter-tab {
+      background: var(--bew-content-solid);
+    }
+
+    .filter-tab .tab-type {
+      align-items: center;
+
+      > span {
+        color: var(--bew-text-2);
+      }
+    }
+
+    .filter-tab li {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-sizing: border-box;
+      min-height: var(--bew-control-height);
+      padding: var(--bew-space-2) var(--bew-space-3);
+      color: var(--bew-text-1);
+      background: transparent;
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+      font-weight: var(--bew-font-weight-semibold);
+
+      &:hover {
+        background: var(--bew-theme-surface);
+        color: var(--bew-on-theme-surface);
+      }
+
+      &.selected {
+        background: var(--bew-theme-color);
+        color: var(--bew-on-theme-color);
+      }
+    }
+
+    .charity-list-box-title {
+      color: var(--bew-text-1);
+    }
+  }
+
+  #app > .charity-unit-space {
+    .unit-title > span,
+    .unit-text-header > div > a {
+      color: var(--bew-text-1);
+    }
+
+    .unit-info-content {
+      background: var(--bew-content-solid);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .unit-logo img {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .unit-text-header .level {
+      background: var(--bew-theme-surface);
+      color: var(--bew-on-theme-surface);
+      border-radius: var(--bew-badge-radius);
+      corner-shape: var(--bew-corner-shape-round);
+    }
+
+    .unit-text-header > a {
+      // The native template sets this secondary link's color inline.
+      color: var(--bew-text-2) !important;
+
+      &:is(:hover, :focus-visible) {
+        color: var(--bew-theme-foreground) !important;
+      }
+    }
+
+    .unit-text-item li > span:first-child {
+      color: var(--bew-text-2);
+    }
+
+    .unit-text-item li > span + span {
+      color: var(--bew-text-1);
+    }
+
+    .unit-text-item a,
+    .unit-text-header a:is(:hover, :focus-visible) {
+      color: var(--bew-theme-foreground);
+      border-color: var(--bew-theme-foreground);
+    }
+
+    .charity-list-box-title--active {
+      color: var(--bew-theme-foreground) !important;
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  #app > .unit-info {
+    min-width: 0;
+
+    .form-layout {
+      background: var(--bew-bg);
+    }
+
+    .form-layout-content > header,
+    .render-text > .text {
+      color: var(--bew-text-1);
+    }
+
+    .content-layout {
+      background: var(--bew-content-solid);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .render-text > .label {
+      color: var(--bew-text-2);
+    }
+  }
+
+  .charity-detail {
+    color: var(--bew-text-1);
+
+    .overview .title,
+    .overview .title > span,
+    .detail-info .title,
+    .donation-box .title-name,
+    .detail-header li > span,
+    .detail-info .text,
+    .ql-editor,
+    .el-checkbox__label,
+    .el-radio__label {
+      color: var(--bew-text-1);
+    }
+
+    .sub-title,
+    .project-info,
+    .donator-list .scroll-list {
+      color: var(--bew-text-2);
+    }
+
+    .donator-list .scroll-list li > span {
+      color: var(--bew-text-2);
+    }
+
+    .ql-editor p:not([style*="color"]) {
+      color: inherit;
+    }
+
+    .info-detail,
+    .donator-list {
+      background: var(--bew-content-solid);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .detail-header,
+    .donator-list .list-header {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-panel-radius) var(--bew-panel-radius) 0 0;
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .overview .video-cover {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .el-radio.is-bordered,
+    .el-input__inner {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .el-radio.is-checked,
+    .el-radio.is-checked .el-radio__label {
+      background: var(--bew-theme-surface) !important;
+      color: var(--bew-on-theme-surface) !important;
+      border-color: var(--bew-theme-foreground) !important;
+    }
+
+    .detail-header .clicked,
+    .detail-header .clicked > span,
+    .donation-box .blue,
+    .check-btn a {
+      color: var(--bew-theme-foreground);
+      border-color: var(--bew-theme-foreground);
+    }
+
+    .detail-header li.clicked {
+      border-color: var(--bew-theme-foreground) !important;
+    }
+  }
+}
+
+html.bewly-design.cheesePage {
+  // Personal course pages keep the native responsive columns, routing and
+  // redemption form. Only their known surfaces and reading states are mapped.
+  .cheese-mine .wrap {
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .cheese-mine .left {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-start-start-radius: inherit;
+    border-end-start-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .cheese-mine .tabbar .tab_item {
+    color: var(--bew-text-2);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-alt-solid-hover);
+      color: var(--bew-text-1);
+    }
+
+    &.router-link-active {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+  }
+
+  .cheese-mine :is(.title, .rule_title) {
+    color: var(--bew-text-1);
+  }
+
+  .cheese-mine :is(.invalid_word, .rule_desc) {
+    color: var(--bew-text-2);
+  }
+
+  .cheese-mine .tickets .nav {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .cheese-mine .tickets .navtab {
+    color: var(--bew-text-2);
+  }
+
+  .cheese-mine .tickets :is(.navtab_active, .navtab:hover) {
+    color: var(--bew-theme-foreground);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .cheese-mine .exchange .code {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &::placeholder {
+      color: var(--bew-text-3);
+    }
+
+    &:focus {
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  .cheese-mine .exchange .submit {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:disabled {
+      background: var(--bew-fill-1);
+      color: var(--bew-text-3);
+    }
+  }
+
+  .classroom-wrapper,
+  .classroom-innerWrapper {
+    background-color: var(--bew-bg);
+  }
+
+  .classroom-wrapper > .nav .item,
+  .classroom-wrapper .search__bar {
+    background: var(--bew-content-solid);
+    backdrop-filter: none;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .classroom-wrapper .search-input {
+    color: var(--bew-text-1);
+    background: transparent;
+  }
+
+  .classroom-wrapper .search-input::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  .classroom-wrapper .mine {
+    background: var(--bew-elevated-solid) !important;
+    backdrop-filter: none !important;
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .classroom-wrapper .mine .info-block {
+    background: var(--bew-content-alt-solid) !important;
+    color: var(--bew-text-1);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .classroom-wrapper .mine .info-block:hover {
+    background: var(--bew-content-alt-solid-hover) !important;
+  }
+
+  .classroom-wrapper .mine :is(.label, .empty-num, .title) {
+    color: var(--bew-text-1) !important;
+  }
+
+  .classroom-wrapper .mine .empty-tip {
+    color: var(--bew-text-2) !important;
+  }
+
+  .classroom-wrapper .block-title,
+  .classroom-wrapper .block-list-item-title {
+    color: var(--bew-text-1);
+  }
+
+  .classroom-wrapper .block-list-item-desc {
+    color: var(--bew-text-3);
+  }
+
+  .classroom-wrapper .block-list-item-price {
+    color: var(--bew-theme-foreground);
+  }
+
+  .classroom-wrapper .block-list-item-img {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .classroom-wrapper .block-list-item-img > img,
+  .classroom-wrapper .block-list-item-img > .common-lazy-img,
+  .classroom-wrapper .block-list-item-img > .common-lazy-img > img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .classroom-wrapper .block-list-item-info-mask {
+    border-radius: 0 0 var(--bew-media-radius) var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // Course playback keeps the original player and catalogue nodes in place.
+  .edu-play-main-container {
+    color: var(--bew-text-1);
+    background: var(--bew-bg);
+  }
+
+  // Native 65% left-column sizing plus the 405px catalogue minimum exceeds
+  // narrow desktop widths. Let the existing flex layout shrink its left item.
+  @media (max-width: 1160px) {
+    .edu-play-main-container .edu-play-left {
+      min-width: 0;
+    }
+  }
+
+  .edu-play-main-container :is(.right-box-rect, .discount-activity-package-card) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+    backdrop-filter: none;
+  }
+
+  .edu-play-main-container :is(.archive-title-box, .rect-title, .publishers-head, .season-title),
+  .season-catalogue .section-item :is(.title, .season-title-ellipsis) {
+    color: var(--bew-text-1);
+  }
+
+  .edu-play-main-container
+    :is(.archive-play-info-box, .archive-introduction-box, .publisher-description, .season-subtitle, .season-play-info),
+  .season-catalogue .section-item .info {
+    color: var(--bew-text-2);
+  }
+
+  .season-catalogue .section-item {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .season-catalogue .section-item.active {
+    background: var(--bew-theme-surface);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .season-catalogue .section-item.active :is(.title, .season-title-ellipsis-active, .info, .season-info-active) {
+    color: var(--bew-on-theme-surface);
+  }
+
+  .main-pay-wrapper .main-pay {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="article-drafts"] {
+  .read-draft,
+  .read-draft > .content,
+  .draft-list {
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .draft-list_header-title {
+    color: var(--bew-text-1);
+  }
+
+  .draft-list_header-counter,
+  .empty-tip,
+  .action-button {
+    color: var(--bew-text-2);
+  }
+
+  .action-button {
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-theme-surface-hover);
+      color: var(--bew-on-theme-surface);
+    }
+  }
+
+  .new-creation_button {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .draft-list_header-input .vui_input-wrapper {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .draft-list_header-input .vui_input__input {
+    background: transparent;
+    color: var(--bew-text-1);
+
+    &::placeholder {
+      color: var(--bew-text-3);
+    }
+  }
+
+  .tooltip_content {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="activities"] {
+  #internationalHeader {
+    .mini-header {
+      background: var(--bew-elevated-solid);
+    }
+
+    .nav-link-item .link,
+    .nav-user-center .name {
+      color: var(--bew-text-1);
+    }
+
+    #nav_searchform {
+      background: var(--bew-content-alt-solid);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .nav-search-keyword,
+    .nav-search-btn,
+    .nav-search-submit {
+      background: transparent;
+      color: var(--bew-text-1);
+    }
+
+    .mini-upload {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-radius: var(--bew-interactive-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  .active-main {
+    max-width: calc(100% - var(--bew-space-8));
+  }
+
+  .act-list .pagelist .flip-left > span {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-theme-surface-hover);
+      color: var(--bew-on-theme-surface);
+    }
+
+    &.active {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+      border-color: var(--bew-theme-color);
+    }
+  }
+
+  .act-list .pagelist .ellipsis {
+    background: transparent;
+    color: var(--bew-text-2);
+    border-color: transparent;
+    font-weight: var(--bew-font-weight-regular);
+  }
+
+  .act-list .pagelist .flip-right > span {
+    color: var(--bew-text-2);
+  }
+
+  .act-list .pagelist .flip-right > input {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .active-title .b-active-t {
+    color: var(--bew-text-1);
+  }
+
+  .list-view {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  // The native title is an orange/black image, not themeable text.
+  .title-prefix {
+    background: #fff;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .active-title,
+  .act-list h2 a,
+  .list-view .activity-title {
+    color: var(--bew-text-1);
+  }
+
+  .act-list li {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-2);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .act-list :is(.event_status, .act-info) {
+    color: var(--bew-text-2);
+  }
+
+  .act-list .status-ing {
+    color: var(--bew-theme-foreground);
+  }
+
+  .list-view .tab-header {
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-start-start-radius: inherit;
+    border-start-end-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  .list-view .tab-item {
+    color: var(--bew-text-2);
+  }
+
+  .list-view .activity-date {
+    color: var(--bew-text-2);
+  }
+
+  .list-view .tab-item.active {
+    color: var(--bew-theme-foreground);
+  }
+
+  .list-view .activity-tags .tag {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-2);
+    border-radius: var(--bew-radius-sm);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .act-list li > a:has(img),
+  .act-list li > a > img,
+  .list-view .activity-cover {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .back-top {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
+html.bewly-design[data-bewly-native-site="community"] {
+  .tpl-wrap {
+    // Preserve the native 1280px hotspot coordinate plane on narrow desktops.
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .tpl-wrap > .container-wrapper:has(> .t-background-image):has([data-module="DiyBox"]) {
+    // These transparent infographics contain labels and link targets. The
+    // largest artwork is about 1375px wide; retain its light content canvas.
+    max-width: 1440px;
+    margin-inline: auto;
+    background: #fff;
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+    color-scheme: light;
+
+    .act-button-a:focus-visible {
+      outline: var(--bew-space-0-5) solid CanvasText;
+      outline-offset: var(--bew-space-0-5);
+      box-shadow: 0 0 0 var(--bew-space-1) Canvas;
+    }
+  }
+}

@@ -451,9 +451,12 @@ export function registerLoadingSkeletonChecks(check, { Vue, compileComponent, fl
         useDebounceFn: run => run,
         useElementBounding: () => ({ left: Vue.ref(0), top: Vue.ref(0) }),
         useMediaQuery: () => Vue.ref(false),
+        useDocumentVisibility: () => Vue.ref('visible'),
       },
       '~/constants/layout': await import('../src/constants/layout'),
       '~/logic': { settings: Vue.ref({ enableSearchHistory: true, showHotSearchInTopBar: true }) },
+      '~/logic/iframePageState': { useIframePageActive: () => Vue.ref(false) },
+      '~/utils/main': { isInIframe: () => false },
       '~/logic/searchExperience': {
         acquireSearchExperience: () => () => releases++,
         useSearchExperience: () => ({ hotSearchList: Vue.ref([]), searchRecommendation: Vue.ref(null), isLoadingHotSearch: Vue.ref(false) }),

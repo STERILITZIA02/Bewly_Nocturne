@@ -320,6 +320,7 @@
 
   --bew-theme-color: hsl(195 100% 42%);
   --bew-on-theme-color: white;
+  --bew-theme-checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 7.2 5.7 10 11 4.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --bew-theme-foreground: hsl(195 100% 32%);
   --bew-theme-focus-ring: hsl(195 100% 36%);
   // Opaque secondary emphasis: consistent on glass, media and solid panels.
@@ -587,11 +588,6 @@
   --bew-liquid-glass-color: #000;
 }
 
-:root.dark.bewly-design.forceDark,
-:host(.dark.bewly-design.forceDark) {
-  --bew-filter-force-dark: invert(0.98) hue-rotate(180deg) brightness(1.1);
-}
-
 :host(.disable-frosted-glass),
 :root.disable-frosted-glass {
   --bew-content-opacity: 1;
@@ -620,6 +616,20 @@
 }
 :root.bewly-design,
 :root.bewly-design * {
+  // Native light and dark pages use the same semantic surface/foreground roles.
+  --bg1: var(--bew-bg);
+  --bg2: var(--bew-content-solid);
+  --bg3: var(--bew-content-alt-solid);
+  --bg1_float: var(--bew-elevated-solid);
+  --bg2_float: var(--bew-elevated-solid);
+  --text1: var(--bew-text-1);
+  --text2: var(--bew-text-2);
+  --text3: var(--bew-text-3);
+  --text4: var(--bew-text-4);
+  --line_light: var(--bew-fill-1);
+  --line_regular: var(--bew-fill-2);
+  --line_bold: var(--bew-fill-3);
+
   --brand_pink: var(--bew-theme-color);
   --brand_pink_thin: var(--bew-theme-surface);
   --brand_blue: var(--bew-theme-color);

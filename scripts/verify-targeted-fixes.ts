@@ -51,7 +51,7 @@ import { shouldContinueIframeFocusRetry } from '../src/utils/iframeFocusRetryPol
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '../src/utils/iframeMessage'
 import { resolveInterfaceLanguage } from '../src/utils/interfaceLanguagePolicy'
 import { isSentinelWithinLoadThreshold } from '../src/utils/loadMoreSentinel'
-import { calculateContainedImageSize, isTopicPage, queryDomUntilFound } from '../src/utils/main'
+import { isTopicPage, queryDomUntilFound } from '../src/utils/main'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '../src/utils/momentAdditionalPolicy'
 import { shouldUseWideMomentCardLayout, supportsWideMomentCardLayout } from '../src/utils/momentCardLayout'
 import { createMomentCommentThreadController } from '../src/utils/momentCommentThread'
@@ -814,13 +814,6 @@ async function verifyImmediateDomQuery() {
   assert.equal(await pending, null)
 }
 
-function verifyContainedImageSize() {
-  assert.deepEqual(calculateContainedImageSize(2000, 1500, 1000, 500), { width: 667, height: 500 })
-  assert.deepEqual(calculateContainedImageSize(900, 1000, 800, 1200), { width: 800, height: 889 })
-  assert.deepEqual(calculateContainedImageSize(400, 300, 1000, 500), { width: 400, height: 300 })
-  assert.throws(() => calculateContainedImageSize(0, 100, 100, 100), RangeError)
-}
-
 async function verifyStorageScopeLifecycle() {
   ;(globalThis as typeof globalThis & { chrome?: unknown }).chrome ??= { runtime: { id: 'targeted-test' } }
   const { useStorageLocal } = await import('../src/composables/useStorageLocal')
@@ -989,7 +982,9 @@ function verifyDockReorderPolicy() {
 }
 
 function verifyPageSettingsPayload() {
+  const readingAndAudio = { commentReplyBatchPages: 5, enableCommentReplyTreeContainer: false, commentReplyTreeContainerHeight: 480, localLoudnessEnabled: false, localLoudnessTarget: -18, localLoudnessStrength: 75 }
   const value = {
+    ...readingAndAudio,
     adjustCommentImageHeight: true,
     cleanShareLinkIncludeTitle: false,
     cleanShareLinkRemoveTrackingParams: true,
@@ -1006,6 +1001,7 @@ function verifyPageSettingsPayload() {
     showSex: true,
   }
   assert.deepEqual(createPageSettingsPayload(value), {
+    ...readingAndAudio,
     adjustCommentImageHeight: true,
     cleanShareLinkIncludeTitle: false,
     cleanShareLinkRemoveTrackingParams: true,
@@ -1022,6 +1018,8 @@ function verifyPageSettingsPayload() {
   assert.equal(createPageSettingsPayload({ ...value, commentReplyTreeMode: 'invalid' }), null)
   assert.equal(createPageSettingsPayload({ ...value, language: 'invalid' }), null)
   assert.equal(createPageSettingsPayload({ ...value, showSex: 'true' }), null)
+  for (const field of ['commentReplyBatchPages', 'commentReplyTreeContainerHeight', 'localLoudnessTarget', 'localLoudnessStrength'])
+    assert.equal(createPageSettingsPayload({ ...value, [field]: Number.POSITIVE_INFINITY }), null)
   assert.equal(createPageSettingsPayload([]), null)
 }
 
@@ -1372,10 +1370,12 @@ async function verifyMomentCommentTreeAndThread() {
   assert.equal(failedController.getState('root')?.items.length, 0)
 
   let identity = 'account-a:1:102'
+  let staleSignal: AbortSignal | undefined
   let resolveStalePage!: (page: { items: MomentCommentItem[], hasMore: boolean, nextPage: number }) => void
   const staleController = createMomentCommentThreadController({
     getIdentity: () => identity,
-    fetchPage: () => new Promise((resolve) => {
+    fetchPage: (_root, _page, signal) => new Promise((resolve) => {
+      staleSignal = signal
       resolveStalePage = resolve
     }),
   })
@@ -1383,6 +1383,7 @@ async function verifyMomentCommentTreeAndThread() {
   const staleLoad = staleController.loadMore('root')
   identity = 'account-b:1:102'
   assert.equal(staleController.getState('root'), undefined)
+  assert.equal(staleSignal?.aborted, true)
   resolveStalePage({ items: [loaded], hasMore: false, nextPage: 2 })
   await staleLoad
   assert.equal(staleController.getState('root'), undefined)
@@ -1400,7 +1401,7 @@ async function verifyMomentCommentTreeAndThread() {
   failingIdentity = 'account-b:1:103'
   assert.equal(staleFailureController.getState('root'), undefined)
   rejectStalePage(new Error('stale failure'))
-  await assert.rejects(staleFailure, /stale failure/)
+  await staleFailure
   assert.equal(staleFailureController.getState('root'), undefined)
 
   const normalizedReplies = normalizeMomentCommentRepliesPage({
@@ -1698,7 +1699,6 @@ async function verifyComponentContracts() {
     conversationView,
     bootOverlay,
     skeletonBlock,
-    historyPage,
     layoutEdit,
     generalSettings,
     settingsShell,
@@ -1729,7 +1729,6 @@ async function verifyComponentContracts() {
     readFile(`${root}/src/contentScripts/views/Notifications/whisper/ConversationView.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/bewlyBootOverlay.ts`, 'utf8'),
     readFile(`${root}/src/components/SkeletonBlock.vue`, 'utf8'),
-    readFile(`${root}/src/contentScripts/views/History/History.vue`, 'utf8'),
     readFile(`${root}/src/logic/layoutEdit.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/PluginComponentsAndPages/General/General.vue`, 'utf8'),
     readFile(`${root}/src/components/Settings/Settings.vue`, 'utf8'),
@@ -1771,7 +1770,6 @@ async function verifyComponentContracts() {
   assert.match(generalSettings, /layout_editor\.start_quick_edit/)
   assert.match(generalSettings, /inject<\(\) => void>\('startQuickLayoutEdit'\)/)
   assert.match(settingsShell, /provide\('startQuickLayoutEdit', startQuickLayoutEdit\)/)
-  assert.match(settingsShell, /enterLayoutEditMode\('page'\)/)
   assert.match(searchCatalog, /layout_editor\.quick_edit/)
 
   assert.doesNotMatch(slider, /ref\(props\.modelValue\)/)
@@ -1894,7 +1892,7 @@ async function verifyComponentContracts() {
   assert.match(bootOverlay, /data-bew-skeleton/)
   assert.match(skeletonBlock, /data-bew-skeleton/)
   assert.match(await readFile(`${root}/src/styles/skeleton.scss`, 'utf8'), /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
-  assert.match(historyPage, /<VideoListSkeleton v-else-if="isLoading && historyList\.length === 0"/)
+  // History loading branches are exercised by the real component in verify-maintenance-integration.mjs.
 
   assert.match(historyPop, /watch\(currentAccountId/)
   assert.match(historyPop, /async function deleteHistoryItem[\s\S]*isAccountRequestCurrent/)
@@ -2138,9 +2136,9 @@ async function verifyP1Contracts() {
   assert.match(player, /generation !== autoExitFullscreenGeneration/)
 
   assert.match(authProvider, /const runAppAccessTokenRefreshSingleFlight = createBooleanSingleFlight\(\)/)
-  assert.match(authProvider, /function refreshAppAccessTokenSingleFlight/)
-  assert.match(authProvider, /return runAppAccessTokenRefreshSingleFlight\(refreshAppAccessToken\)/)
-  assert.match(authProvider, /appAuthTokens\.value\.refreshToken !== refreshToken/)
+  assert.match(authProvider, /function refreshAppAccessToken\(/)
+  assert.match(authProvider, /runAppAccessTokenRefreshSingleFlight\(\(\) => refreshAppTokens\(source\), source, source\.lastUpdatedAt\)/)
+  assert.match(authProvider, /isPersistedRefreshSourceCurrent\(refreshToken, lastUpdatedAt\)/)
   assert.doesNotMatch(background, /setupAppAuthScheduler/)
   // Cloud-quota recovery now needs a one-shot MV3 wakeup; App auth remains on demand.
   assert.match(manifest, /['"]alarms['"]/)
@@ -2499,7 +2497,6 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /const PAGE_READY_FALLBACK_DELAY = 3000/)
   assert.match(widescreen, /function hasWidescreenTransferSettleElapsed/)
   assert.doesNotMatch(widescreen, /READY_WAIT_TIMEOUT|BEWLY_WIDESCREEN_FAILED/)
-  assert.match(widescreen, /const READY_POLL_SLOW_INTERVAL = 500/)
   assert.match(widescreen, /if \(session\.entering\)\s*return[\s\S]{0,180}loadingSuppressedUntilExit = true/)
   assert.doesNotMatch(contentScript, /BEWLY_WIDESCREEN_FAILED/)
   assert.match(widescreen, /selectors\.metadata/)
@@ -2594,8 +2591,8 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(retainPlaybackNavigationSection, /lastAppliedPlayerModeNavigationKey = currentVideoNavigationKey/)
   assert.match(retainPlaybackNavigationSection, /else \{[\s\S]{0,160}exitBewlyWidescreen\(\)/)
   assert.match(contentScript, /refreshBewlyPlaybackPageNavigation\(pendingNavigationVideoInfo\)/)
-  assert.match(contentScript, /reloadCommentsForWidescreenNavigation\([\s\S]{0,160}navigationVideoInfoRequest/)
-  assert.match(contentScript, /commentRoots\.find\(root => !!root\.closest\('#bewly-widescreen-root'\)\)/)
+  // Current comment identity, layout selection and cancellation are exercised
+  // through the production module in verify-player-maintenance.mjs.
   const playbackNavigationLifecycleSection = playbackFunctions(widescreen, 'suspendSidebarForVideoNavigation')
   assert.match(playbackNavigationLifecycleSection, /navigationPending = true/)
   assert.match(playbackNavigationLifecycleSection, /restoreMovedNodes\(currentState\.movedNodes\)/)
@@ -2878,7 +2875,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /--bpx-tooltip-color: var\(--bew-text-1\)/)
   assert.match(widescreen, /--bpx-aux-content-bg: var\(--bew-elevated-alt-solid\)/)
   assert.match(widescreen, /\.bpx-player-progress,[\s\S]{0,160}background: var\(--bewly-widescreen-progress-track\) !important/)
-  assert.match(widescreen, /:is\(svg, svg \*\) \{\s*fill: currentColor !important;\s*stroke: currentColor !important/)
+  // Native SVG fill/stroke semantics are covered with matched DOM/CSS in verify-player-maintenance.mjs.
   const playerTooltipStyles = widescreen.slice(
     widescreen.indexOf('/* 只让最外层提示承担表面'),
     widescreen.indexOf(`${danmakuSurfaceMarker}:empty`),
@@ -3464,13 +3461,12 @@ function verifyUpstreamReliabilityPolicies() {
 
 async function verifyUpstreamReliabilityContracts() {
   const root = process.cwd()
-  const [app, watchLater, input, comments, searchBar, searchHistoryProvider, searchNavigation, searchResults, contentScript, momentsPage, momentsPop, favoritesPop, videoCardGrid, videoCard, videoCardCover, videoCardSkeleton, topBarStyles, storage] = await Promise.all([
+  const [app, watchLater, input, comments, searchBar, searchNavigation, searchResults, contentScript, momentsPage, momentsPop, favoritesPop, videoCardGrid, videoCard, videoCardCover, videoCardSkeleton, topBarStyles, storage] = await Promise.all([
     readFile(`${root}/src/contentScripts/views/App.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/WatchLater/WatchLater.vue`, 'utf8'),
     readFile(`${root}/src/components/Input.vue`, 'utf8'),
     readFile(`${root}/src/styles/adaptedStyles/common/comments.scss`, 'utf8'),
     readFile(`${root}/src/components/SearchBar/SearchBar.vue`, 'utf8'),
-    readFile(`${root}/src/components/SearchBar/searchHistoryProvider.ts`, 'utf8'),
     readFile(`${root}/src/utils/searchNavigation.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/views/SearchResults/SearchResults.vue`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
@@ -3542,7 +3538,7 @@ async function verifyUpstreamReliabilityContracts() {
     watchLaterLoadSection.indexOf('if (settleExtensionContextInvalidation(error))')
     < watchLaterLoadSection.indexOf('console.error(\'[WatchLater] Failed to load list:\''),
   )
-  assert.equal((watchLater.match(/if \(!settleExtensionContextInvalidation\(error\)\)/g) ?? []).length, 3)
+  assert.equal((watchLater.match(/if \(!settleExtensionContextInvalidation\(error\)\)/g) ?? []).length, 4)
   assert.match(input, /w-inherit min-w-0 h-inherit/)
   assert.match(input, /\.prefix,[\s\S]{0,120}flex: 0 0 auto;[\s\S]{0,80}white-space: nowrap;/)
   assert.match(comments, /^\.bewly-design \{/)
@@ -3550,9 +3546,8 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(comments, /color: var\(--bew-on-theme-color\) !important;/)
   assert.match(searchBar, /function navigateToSearchResultPage\(rawKeyword: string\)/)
   assert.match(searchBar, /openSearchResults\(buildKeywordHref\(normalized\), \{[\s\S]*?fromSearchResultsTopBar: props\.topBarMode/)
-  assert.match(searchHistoryProvider, /let searchHistoryMutationQueue: Promise<void> = Promise\.resolve\(\)/)
-  assert.match(searchHistoryProvider, /enqueueSearchHistoryMutation/)
-  assert.match(searchHistoryProvider, /const confirmation = await this\.operate\('COLS_GET'\)[\s\S]{0,100}confirmation\?\.value !== value/)
+  // Native history read/write/confirmation and concurrency are covered by the
+  // complete provider in verify-maintenance-review.mjs.
   assert.match(searchNavigation, /persistSearchHistory\(options\)/)
   assert.doesNotMatch(searchNavigation, /\.then\([\s\S]*?openSearchResultsInCurrentTab/)
   assert.match(searchResults, /watch\(normalizedKeyword,[\s\S]*?addSearchHistory\(\{ value, timestamp: Date\.now\(\) \}\)/)
@@ -3643,7 +3638,7 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(topBar, /settings\.value\.videoPageTopBarConfig !== VideoPageTopBarConfig\.ShowOnMouse/)
   assert.match(topBar, /clearOriginalVideoTopBarVisibility\(\)/)
   const topBarMountSection = topBar.slice(topBar.indexOf('onMounted(() =>'), topBar.indexOf('function handleVisibilityChange'))
-  assert.ok(topBarMountSection.indexOf('setupScrollListeners()') < topBarMountSection.indexOf('await topBarStore.initData()'))
+  assert.ok(topBarMountSection.indexOf('setupScrollListeners()') < topBarMountSection.indexOf('await topBarStore.setUiActive('))
   assert.match(removeTopBarStyles, /\.bewly-original-video-top-bar-controlled[\s\S]{0,500}\.bewly-original-video-top-bar-hidden/)
   assert.doesNotMatch(removeTopBarStyles, /body > \.bili-header ~ #app \.bili-header/)
   assert.match(bilibiliTopBar, /const header = getNativeDocumentTopBar\(doc\)/)
@@ -3717,7 +3712,6 @@ async function verifyUpstreamReliabilityContracts() {
 async function verifyIncrementalInteractionContracts() {
   const root = process.cwd()
   const [
-    commentPagination,
     injectScript,
     contextMenu,
     videoCardLogic,
@@ -3729,7 +3723,6 @@ async function verifyIncrementalInteractionContracts() {
     pageModeSwitcher,
     contentScript,
   ] = await Promise.all([
-    readFile(`${root}/src/inject/commentReplyPagination.ts`, 'utf8'),
     readFile(`${root}/src/inject/index.ts`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue`, 'utf8'),
     readFile(`${root}/src/components/VideoCard/composables/useVideoCardLogic.ts`, 'utf8'),
@@ -3747,30 +3740,8 @@ async function verifyIncrementalInteractionContracts() {
   assert.match(injectScript, /display: flex;[\s\S]{0,80}flex-direction: column;/)
   assert.match(injectScript, /order: var\(--bew-comment-reply-order, 0\)/)
   assert.match(injectScript, /--bew-comment-reply-order', String\(visualOrder\)/)
-  assert.match(commentPagination, /if \(state\.expandAllPromise\)[\s\S]{0,80}return state\.expandAllPromise/)
-  assert.match(commentPagination, /const expandAllTasks = new WeakMap/)
-  assert.match(commentPagination, /expandAllTasks\.delete\(renderer\)/)
-  assert.match(commentPagination, /if \(runningTask\)[\s\S]{0,40}return runningTask/)
-  assert.match(commentPagination, /loadCommentReplyPagesSequentially/)
-  assert.match(commentPagination, /idx: pageIndex/)
-  assert.match(commentPagination, /state\.allRepliesExpanded = result\.completed/)
-  assert.match(commentPagination, /state\.expandAllLoading \|\| state\.allRepliesExpanded\)[\s\S]{0,40}return \[\]/)
-  assert.match(commentPagination, /shouldShowExpandAll\?:/)
-  assert.match(commentPagination, /adapter\.shouldShowExpandAll\?\.\(renderer\) === false/)
-  assert.match(commentPagination, /interactionByRpid: Map<string, CommentReplyInteractionState>/)
-  assert.match(commentPagination, /state\.interactionByRpid\.set\(rpid, nextInteraction\)/)
-  assert.match(commentPagination, /applyInteractionOverrides\(state, state\.mergedList\)/)
-  assert.match(commentPagination, /applyInteractionOverrides\(state, state\.collapsedList\)/)
-  assert.match(commentPagination, /applyInteractionOverrides\(state, state\.pending\?\.beforeList\)/)
-  assert.match(commentPagination, /state\.pages\.forEach\(replies => applyInteractionOverrides\(state, replies\)\)/)
-  assert.match(injectScript, /bili-comment-action-buttons-renderer/)
-  assert.match(injectScript, /isLike \? 1 : isDislike \? 2 : 0/)
-  assert.match(injectScript, /commentReplyPagination\.recordInteraction\(repliesRenderer, rpid, \{ action, like \}\)/)
-  assert.match(injectScript, /function isInsideBewlyWidescreen/)
-  assert.match(injectScript, /shouldShowExpandAll: renderer => !isInsideBewlyWidescreen\(renderer\)/)
-  assert.match(injectScript, /expandAll: '展开全部回复'/)
-  assert.match(injectScript, /expandAll: '展開全部回覆'/)
-  assert.match(injectScript, /expandAll: 'Expand all replies'/)
+  // Pagination budgets, cancellation and confirmed native writes are exercised
+  // against the actual renderer adapter in verify-comment-reading.mjs.
   assert.doesNotMatch(injectScript, /bewly-comment-replies-skeleton|bew-comment-replies-mask-bg|bew-comment-replies-loading-animation/)
   assert.match(injectScript, /#spinner \{[\s\S]{0,420}position: relative !important;[\s\S]{0,420}display: grid;[\s\S]{0,420}min-height: var\(--bew-comment-replies-loading-height, var\(--bew-space-12, 48px\)\) !important;[\s\S]{0,420}background-color: transparent !important;/)
   assert.match(injectScript, /beforeUpdate\?: \(component: any\) => void/)
@@ -4093,10 +4064,10 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.match(momentCard, /@mouseenter="requestNativeUserProfile"/)
   assert.match(momentCard, /BEWLY_NATIVE_USER_PROFILE_RELEASE/)
   assert.match(moments, /const hostFollowStatePromise = request\.reset && requestHostMid/)
-  assert.match(moments, /api\.user\.getRelations\(\{ fids: requestHostMid \}\)/)
+  assert.match(moments, /api\.user\.getRelations\(\{ fids: requestHostMid \}, readOptions\)/)
   assert.match(moments, /return result\.state !== 'unfollowed'/)
   assert.match(moments, /if \('hostUnfollowed' in response\) \{\s+handleUpFilterChange\(''\)/)
-  assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid })') < moments.indexOf('api.moment.getMomentsByUp({'))
+  assert.ok(moments.indexOf('api.user.getRelations({ fids: requestHostMid }, readOptions)') < moments.indexOf('api.moment.getMomentsByUp({'))
   assert.match(widescreen, /\.usercard-wrap,[\s\S]{0,120}bili-user-profile,[\s\S]{0,120}\.van-popover\.van-followed,[\s\S]{0,120}\.bili-dialog-m,[\s\S]{0,120}\.video-share-popover[\s\S]{0,160}z-index: var\(--bew-z-hud\)/)
   assert.match(widescreen, /const NATIVE_ACTION_OVERLAY_SELECTOR = \[[\s\S]{0,120}'\.bili-dialog-m',[\s\S]{0,80}'\.video-share-popover'/)
   assert.match(widescreen, /function isNativeActionOverlayOpen\(\)[\s\S]{0,700}rect\.width > 0 && rect\.height > 0/)
@@ -4149,7 +4120,6 @@ async function verifyAuditRemediationContracts() {
   assert.match(moments, /const feedRequestFailed = ref\(false\)/)
   assert.match(moments, /clearMomentPresentationForRefresh\(\[\]\)/)
   assert.match(moments, /moments-page__error/)
-  assert.match(moments, /feedRequestFailed\.value = reset \|\| moments\.value\.length === 0/)
 
   assert.match(settingsComponent, /role="dialog"/)
   assert.match(settingsComponent, /aria-modal="true"/)
@@ -4328,7 +4298,6 @@ async function verify() {
   verifySettingsBootPolicy()
   verifySelectOptionKeys()
   await verifyImmediateDomQuery()
-  verifyContainedImageSize()
   await verifyStorageScopeLifecycle()
   await verifyStorageDegradedRecoveryState()
   await verifyStorageSuppressionRecovery()

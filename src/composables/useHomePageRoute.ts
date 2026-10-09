@@ -66,9 +66,9 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
   watch(() => settings.value.useSearchPageModeOnHomePage, () => {
     activatedPage.value = availablePage(activatedPage.value)
   }, { flush: 'sync' })
-  watch(() => settings.value.homePageTabVisibilityList, (value) => {
+  watch([() => settings.value.homePageTabVisibilityList, () => settings.initializationState.value], ([value, state]) => {
     const config = tabConfig()
-    if (!isSameHomeTabConfig(value, config)) {
+    if (!isSameHomeTabConfig(value, config) && state === 'loaded') {
       settings.value.homePageTabVisibilityList = config
       return
     }

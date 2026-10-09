@@ -4,6 +4,9 @@ export const PAGE_BRIDGE_MESSAGE = {
   SETTINGS_REQUEST: 'settings:request',
   SETTINGS_UPDATE: 'settings:update',
   ACCOUNT_CHANGED: 'account:changed',
+  COMMENT_REPLY_REQUEST: 'comment-reply:request',
+  COMMENT_REPLY_CANCEL: 'comment-reply:cancel',
+  COMMENT_REPLY_RESPONSE: 'comment-reply:response',
 } as const
 
 export type PageBridgeMessageType = typeof PAGE_BRIDGE_MESSAGE[keyof typeof PAGE_BRIDGE_MESSAGE]
@@ -74,6 +77,9 @@ function isPageBridgeMessageType(value: unknown): value is PageBridgeMessageType
   return value === PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST
     || value === PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE
     || value === PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED
+    || value === PAGE_BRIDGE_MESSAGE.COMMENT_REPLY_REQUEST
+    || value === PAGE_BRIDGE_MESSAGE.COMMENT_REPLY_CANCEL
+    || value === PAGE_BRIDGE_MESSAGE.COMMENT_REPLY_RESPONSE
 }
 
 export function isPageBridgeMessage(value: unknown): value is PageBridgeMessage {
@@ -86,7 +92,7 @@ export function isPageBridgeMessage(value: unknown): value is PageBridgeMessage 
     return false
   }
 
-  return value.type === PAGE_BRIDGE_MESSAGE.SETTINGS_UPDATE
+  return value.type !== PAGE_BRIDGE_MESSAGE.SETTINGS_REQUEST && value.type !== PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED
     ? Object.prototype.hasOwnProperty.call(value, 'data')
     : value.data === undefined
 }

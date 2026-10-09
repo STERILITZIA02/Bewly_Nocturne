@@ -5,6 +5,9 @@
 import type Browser from 'webextension-polyfill'
 import browser from 'webextension-polyfill'
 
+import type { ReadRequestOptions } from '~/utils/abort'
+import { waitWithSignal, withRequestDeadline } from '~/utils/abort'
+
 import type { WbiKeyOptions } from './wbiSign'
 import { addWbiSign, clearWbiKeys, getWbiKeys, initWbiKeys, isBilibiliNavUrl, needsWbiSign, storeWbiKeys } from './wbiSign'
 
@@ -29,18 +32,22 @@ async function toJsonHandler(data: unknown): Promise<unknown> {
     throw new ApiRiskControlError()
   }
 
-  const textResponse = data.clone()
+  const text = await data.text()
   try {
-    return await data.json()
+    return JSON.parse(text)
   }
   catch (error) {
     // 如果JSON解析失败，可能也是风控页面
-    const text = await textResponse.text()
     if (text.trim().startsWith('<!DOCTYPE') || text.trim().startsWith('<html')) {
       throw new ApiRiskControlError()
     }
     throw error
   }
+}
+
+function isTerminatedRead(error: unknown) {
+  const name = error && typeof error === 'object' && 'name' in error ? error.name : undefined
+  return name === 'AbortError' || name === 'TimeoutError'
 }
 function toData(data: unknown): unknown {
   return data
@@ -60,7 +67,7 @@ interface Message {
 
 interface _FETCH {
   querySerializer?: (params: URLSearchParams) => string
-  method: string
+  method: 'get' | 'post'
   headers?: Record<string, string>
   body?: Record<string, unknown>
   bodySerializer?: (body: Record<string, unknown>) => BodyInit
@@ -75,31 +82,75 @@ interface API {
   afterHandle: FetchAfterHandler[]
 }
 // 重载API 可以为函数
-type APIFunction = (message: Message, sender?: Browser.Runtime.MessageSender) => unknown | Promise<unknown>
+type APIFunction = (message: Message, sender?: Browser.Runtime.MessageSender, request?: ReadRequestOptions) => unknown | Promise<unknown>
 export type APIType = API | APIFunction
 interface APIMAP {
   [key: string]: APIType
 }
+
+const navReads = new Map<string, { promise: Promise<unknown>, expires: number }>()
+
+function readSharedNav(message: Message, api: API, sender?: Browser.Runtime.MessageSender, options?: ReadRequestOptions) {
+  return withRequestDeadline(async (signal) => {
+    const cookie = await waitWithSignal(browser.cookies.get({ url: api.url, name: 'DedeUserID' }), signal)
+    const mid = cookie?.value ?? ''
+    const key = `${Boolean(sender?.tab?.incognito ?? browser.extension?.inIncognitoContext)}:${mid}`
+    let entry = navReads.get(key)
+    if (!entry || (entry.expires > 0 && entry.expires <= Date.now())) {
+      const next = { promise: Promise.resolve<unknown>(undefined), expires: 0 }
+      next.promise = withRequestDeadline(async (ownerSignal) => {
+        const value = await doRequest(message, api, { signal: ownerSignal })
+        const response = value as { code?: number, data?: { mid?: number, isLogin?: boolean } }
+        const current = await waitWithSignal(browser.cookies.get({ url: api.url, name: 'DedeUserID' }), ownerSignal)
+        ownerSignal.throwIfAborted()
+        if (response.code === 0 && response.data?.isLogin && String(response.data.mid) === mid && current?.value === mid)
+          next.expires = Date.now() + 5_000
+        else if (navReads.get(key) === next)
+          navReads.delete(key)
+        return value
+      }).catch((error) => {
+        if (navReads.get(key) === next)
+          navReads.delete(key)
+        throw error
+      })
+      navReads.set(key, next)
+      entry = next
+      for (const [id, cached] of navReads) {
+        if (cached.expires && cached.expires <= Date.now())
+          navReads.delete(id)
+      }
+    }
+    return waitWithSignal(entry.promise, signal)
+  }, options)
+}
 // 工厂函数API_LISTENER_FACTORY
 function apiListenerFactory(API_MAP: APIMAP) {
-  return async (data: unknown, sender?: Browser.Runtime.MessageSender) => {
+  return async (data: unknown, sender?: Browser.Runtime.MessageSender, request?: ReadRequestOptions) => {
     if (!data || typeof data !== 'object' || Array.isArray(data))
       return console.error('Invalid API message')
     const typedMessage = data as Message
     const contentScriptQuery = typedMessage.contentScriptQuery
     // 检测是否有contentScriptQuery
-    if (!contentScriptQuery || !API_MAP[contentScriptQuery])
+    if (!contentScriptQuery || !Object.hasOwn(API_MAP, contentScriptQuery))
       return console.error(`Cannot find this contentScriptQuery: ${contentScriptQuery}`)
     if (typeof API_MAP[contentScriptQuery] === 'function')
-      return (API_MAP[contentScriptQuery] as APIFunction)(typedMessage, sender)
+      return (API_MAP[contentScriptQuery] as APIFunction)(typedMessage, sender, request)
 
     const api = API_MAP[contentScriptQuery] as API
 
-    return await doRequest(typedMessage, api)
+    if (isBilibiliNavUrl(api.url) && api._fetch.method === 'get')
+      return readSharedNav(typedMessage, api, sender, request)
+    return await doRequest(typedMessage, api, request)
   }
 }
 
-async function doRequest(message: Message, api: API) {
+function doRequest(message: Message, api: API, request?: ReadRequestOptions) {
+  if (api._fetch.method.toLowerCase() === 'get')
+    return withRequestDeadline(signal => performApiRequest(message, api, signal), request)
+  return performApiRequest(message, api)
+}
+
+async function performApiRequest(message: Message, api: API, signal?: AbortSignal) {
   try {
     const { contentScriptQuery: _contentScriptQuery, ...rest } = message
 
@@ -122,11 +173,15 @@ async function doRequest(message: Message, api: API) {
     const captureAuthenticatedMid = async () => {
       if (wbiKeyOptions.noCookie)
         return ''
-      const cookie = await browser.cookies.get({
+      const cookie = await waitWithSignal(browser.cookies.get({
         url: 'https://www.bilibili.com/',
         name: 'DedeUserID',
-      }).catch(() => null)
-      wbiKeyOptions.mid = cookie?.value.trim() ?? ''
+      }).catch(() => null), signal)
+      signal?.throwIfAborted()
+      const mid = cookie?.value.trim() ?? ''
+      if (wbiKeyOptions.mid !== undefined && wbiKeyOptions.mid !== mid)
+        throw new DOMException('Request account changed', 'AbortError')
+      wbiKeyOptions.mid = mid
       return wbiKeyOptions.mid
     }
     if (needsWbi || isBilibiliNavUrl(baseUrl))
@@ -135,16 +190,23 @@ async function doRequest(message: Message, api: API) {
     // 如果需要WBI签名但没有密钥，主动获取密钥
     if (needsWbi && !getWbiKeys(wbiKeyOptions)) {
       try {
-        await initWbiKeys(wbiKeyOptions)
+        await waitWithSignal(initWbiKeys(wbiKeyOptions), signal)
       }
       catch (error) {
+        signal?.throwIfAborted()
+        if (isTerminatedRead(error))
+          throw error
         // 获取密钥失败，继续执行（降级到无签名请求）
         console.error('[doRequest] Failed to fetch WBI keys:', error)
       }
     }
 
     // 内部函数：执行实际请求
-    const performRequest = (useWbi: boolean) => {
+    const performRequest = async (useWbi: boolean) => {
+      signal?.throwIfAborted()
+      if (needsWbi)
+        await captureAuthenticatedMid()
+      signal?.throwIfAborted()
       let requestUrl = baseUrl
       let requestParams: Record<string, unknown> = { ...targetParams }
 
@@ -202,6 +264,7 @@ async function doRequest(message: Message, api: API) {
         method,
         headers: requestHeaders,
         credentials,
+        signal,
       }
       if (!isGET)
         fetchOpt.body = requestBody
@@ -225,13 +288,14 @@ async function doRequest(message: Message, api: API) {
     // 执行完整请求流程的函数（包括响应处理）
     const executeFullRequest = async (useWbi: boolean) => {
       const response = await performRequest(useWbi)
+      signal?.throwIfAborted()
 
       // 如果是获取用户信息的API，在响应后存储WBI密钥
       if (isBilibiliNavUrl(baseUrl)) {
         const clonedResponse = response.clone()
 
         try {
-          const data = await clonedResponse.json() as {
+          const data = await waitWithSignal(clonedResponse.json(), signal) as {
             code?: number
             data?: { wbi_img?: { img_url?: string, sub_url?: string } }
           }
@@ -246,7 +310,10 @@ async function doRequest(message: Message, api: API) {
             }
           }
         }
-        catch {
+        catch (error) {
+          signal?.throwIfAborted()
+          if (isTerminatedRead(error))
+            throw error
           // 忽略错误
         }
       }
@@ -255,7 +322,8 @@ async function doRequest(message: Message, api: API) {
       let handledResponse: unknown = response
       for (const func of afterHandle) {
         const invoke = func as (data: unknown) => unknown | Promise<unknown>
-        handledResponse = await invoke(handledResponse)
+        handledResponse = await waitWithSignal(Promise.resolve(invoke(handledResponse)), signal)
+        signal?.throwIfAborted()
       }
 
       return handledResponse
@@ -269,11 +337,11 @@ async function doRequest(message: Message, api: API) {
 
         // WBI 密钥可能在缓存有效期内被服务端轮换。收到 -403 时强制刷新一次，
         // 避免把签名失效误判成业务侧的访问权限不足。
-        if (needsWbi && !hasRefreshedWbiKeys && isWbiSignatureRejected(response)) {
+        if (isGET && needsWbi && !hasRefreshedWbiKeys && isWbiSignatureRejected(response)) {
           hasRefreshedWbiKeys = true
-          clearWbiKeys(wbiKeyOptions)
           await captureAuthenticatedMid()
-          const refreshed = await initWbiKeys(wbiKeyOptions)
+          clearWbiKeys(wbiKeyOptions)
+          const refreshed = await waitWithSignal(initWbiKeys(wbiKeyOptions), signal)
           if (refreshed)
             response = await executeFullRequest(true)
         }
@@ -281,8 +349,11 @@ async function doRequest(message: Message, api: API) {
         return response
       }
       catch (error) {
+        signal?.throwIfAborted()
+        if (isTerminatedRead(error))
+          throw error
         // 如果使用了 WBI 签名且失败，尝试不带 WBI 签名重试
-        if (needsWbi && !hasTriedWithoutWbi) {
+        if (isGET && needsWbi && !(error instanceof ApiRiskControlError) && !hasTriedWithoutWbi) {
           hasTriedWithoutWbi = true
           return await executeFullRequest(false)
         }
@@ -294,6 +365,9 @@ async function doRequest(message: Message, api: API) {
 
     // 执行请求并进行统一错误处理
     return executeRequestWithRetry().catch((error) => {
+      signal?.throwIfAborted()
+      if (isTerminatedRead(error))
+        throw error
       if (error instanceof ApiRiskControlError) {
         // 返回统一的风控错误格式
         const riskError = new Error(error.message)
@@ -313,6 +387,9 @@ async function doRequest(message: Message, api: API) {
     })
   }
   catch (e) {
+    signal?.throwIfAborted()
+    if (isTerminatedRead(e))
+      throw e
     if (e instanceof Error && (e as Error & { isRiskControl?: boolean }).isRiskControl)
       return Promise.reject(e)
 

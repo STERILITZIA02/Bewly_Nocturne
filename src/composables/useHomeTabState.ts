@@ -35,14 +35,15 @@ interface HomeTabCacheContext {
   cache: ReturnType<typeof createHomeTabCache>
   activeKey: () => string
   restoreScroll: () => boolean | void
+  getContentScrollTop: () => number
 }
 
 const homeTabCacheKey: InjectionKey<HomeTabCacheContext> = Symbol('home-tab-data-cache')
 const homeTabStateKey: InjectionKey<HomeTabState> = Symbol('home-tab-state')
 
-export function provideHomeTabCache(activeKey: () => string, restoreScroll: () => boolean | void) {
+export function provideHomeTabCache(activeKey: () => string, restoreScroll: () => boolean | void, getContentScrollTop: () => number) {
   const cache = createHomeTabCache()
-  provide(homeTabCacheKey, { cache, activeKey, restoreScroll })
+  provide(homeTabCacheKey, { cache, activeKey, restoreScroll, getContentScrollTop })
   return cache
 }
 
@@ -94,6 +95,7 @@ export function useHomeTabState() {
     capture,
     isCurrent,
     isActiveTab,
+    getContentScrollTop: () => context?.getContentScrollTop() ?? 0,
     ref<T>(key: string, initial: T): Ref<T> {
       const value = ref(take(key, initial)) as Ref<T>
       capture(key, () => value.value)

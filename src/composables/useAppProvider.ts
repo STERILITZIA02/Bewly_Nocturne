@@ -3,6 +3,7 @@ import { inject } from 'vue'
 
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
+import type { IframePlaybackContext } from '~/logic/iframePageState'
 
 // 定义撤销/前进按钮的状态枚举
 export enum UndoForwardState {
@@ -18,10 +19,9 @@ export enum DrawerType {
   NotificationsDrawer = 'notifications',
 }
 
-export interface SettingsNavigationTarget {
-  category: 'bewly-pages'
-  page: 'messages'
-}
+export type SettingsNavigationTarget
+  = | { category: 'bewly-pages', page: 'messages' }
+    | { category: 'bewly-pages', page: 'moments', section: 'wanted-users' }
 
 export interface SettingsNavigationRequest {
   id: number
@@ -49,7 +49,7 @@ export interface BewlyAppProvider {
   undoForwardState: Ref<UndoForwardState>
   handleBackToTop: (targetScrollTop?: number) => void
   haveScrollbar: () => Promise<boolean>
-  openIframeDrawer: (url: string) => void
+  openIframeDrawer: (url: string, options?: { playbackContext?: IframePlaybackContext }) => void
   // 添加活跃抽屉状态
   activeDrawer: Ref<DrawerType>
   setActiveDrawer: (drawer: DrawerType) => void

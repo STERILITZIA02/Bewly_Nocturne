@@ -405,9 +405,9 @@ async function verifyPlayerAndTiming() {
   assert.equal(player.detectVideoType(), 'collection')
   metadata = null
   selectors = new Set(['.view-mode', '.video-pod__item'])
-  assert.equal(player.detectVideoType(), 'multipart')
+  assert.equal(player.detectVideoType(), 'collection')
   selectors = new Set(['.video-pod__item', '.video-pod__list .simple-base-item'])
-  assert.equal(player.detectVideoType(), 'multipart', 'mixed DOM without view-mode')
+  assert.equal(player.detectVideoType(), 'collection', 'collection rows do not prove that one manuscript has multiple parts')
   pathname = '/list/watchlater'
   assert.equal(player.detectVideoType(), 'watchLater')
   pathname = '/list/123'
@@ -419,11 +419,16 @@ async function verifyPlayerAndTiming() {
   let nextId = 0
   let appliedAt = -1
   let drawer = false
+  let nativeError = false
+  let mediaReady = true
+  let readinessChecks = 0
+  const errorCleanup: string[] = []
   const timers = new Map<number, { at: number, fn: () => void }>()
   const noop = () => {}
   const timing = await loadSourceFunctions('../src/contentScripts/index.ts', [
     'playerModeLoadSettleDelay',
     'playerModeReadinessRetryInterval',
+    'playerModeReadinessRetryWindow',
     'videoOwnerAvatarReadyTimeout',
     'clearPlayerModeRetry',
     'schedulePlayerModeRetry',
@@ -435,6 +440,7 @@ async function verifyPlayerAndTiming() {
     Date: { now: () => now },
     Number,
     playerModeRetryTimer: undefined,
+    playerModeRetryDeadline: 5000,
     playerModeReadyAfter: Infinity,
     videoOwnerAvatarReadyDeadline: Infinity,
     playerModeSettingsReady: true,
@@ -448,7 +454,7 @@ async function verifyPlayerAndTiming() {
     lastVideoEndedAt: 0,
     location: { href: 'https://www.bilibili.com/video/BVfixture' },
     settings: { value: {} },
-    pageLoading: { dispose: noop },
+    pageLoading: { dispose: () => errorCleanup.push('reveal') },
     document: { readyState: 'complete', visibilityState: 'visible', querySelector: () => null },
     isIframeDrawerHost: () => drawer,
     isVideoOrBangumiPage: () => true,
@@ -457,7 +463,11 @@ async function verifyPlayerAndTiming() {
     isBewlyWidescreenActive: () => false,
     isBewlyWidescreenEngaged: () => false,
     isPlayerShowingEndingRecommendation: () => false,
-    getCurrentPlayerModeApplication: () => ({ shouldApply: () => true, onApplied: noop }),
+    hasNativePlayerError: () => nativeError,
+    getCurrentPlayerModeApplication: () => {
+      readinessChecks++
+      return mediaReady ? { shouldApply: () => true, onApplied: noop } : undefined
+    },
     playerModeApplicationStarted: false,
     shouldSuppressWidescreenAutoEntry,
     resolveDefaultVideoPlayerMode: () => 'widescreen',
@@ -465,7 +475,8 @@ async function verifyPlayerAndTiming() {
     isVideoOwnerAvatarReady: () => now >= 300,
     isPlayerDisplayModeReady: () => true,
     widescreen: () => { appliedAt = now },
-    exitBewlyWidescreen: noop,
+    exitBewlyWidescreen: () => errorCleanup.push('exit'),
+    invalidatePlayerModeApplication: () => errorCleanup.push('cancel'),
     cancelPlayerRetryTasks: noop,
     applyDefaultDanmakuState: noop,
     applyDefaultCaptionState: noop,
@@ -508,6 +519,46 @@ async function verifyPlayerAndTiming() {
   timing.userExitedWidescreenNavigationKey = 'BVfixture'
   timing.applyDefaultPlayerMode()
   assert.equal(appliedAt, -1, 'user exit suppresses retry re-entry')
+  timing.userExitedWidescreenNavigationKey = undefined
+  nativeError = true
+  errorCleanup.length = 0
+  timing.schedulePlayerModeRetry()
+  timing.applyDefaultPlayerMode()
+  assert.equal(timers.size, 0, 'a native failure stops readiness polling')
+  assert.deepEqual(errorCleanup, ['cancel', 'exit', 'reveal'])
+  assert.equal(appliedAt, -1, 'a native error never masquerades as applied playback mode')
+  nativeError = false
+  now = 1800
+  timing.playerModeApplicationStarted = false
+  timing.applyDefaultPlayerMode()
+  assert.equal(appliedAt, 1800, 'native retry recovery can apply the configured mode again')
+  mediaReady = false
+  readinessChecks = 0
+  timing.playerModeApplicationStarted = false
+  timing.waitForPlayerModePageSettle()
+  timing.applyDefaultPlayerMode()
+  const advance = (end: number) => {
+    for (let step = 0; step < 500; step++) {
+      const next = [...timers].sort((a, b) => a[1].at - b[1].at)[0]
+      if (!next || next[1].at > end)
+        break
+      now = next[1].at
+      timers.delete(next[0])
+      next[1].fn()
+    }
+    now = end
+  }
+  advance(61_800)
+  assert.equal(readinessChecks, 26, 'stalled metadata gets 26 checks in the initial five seconds, not a permanent 200ms loop')
+  assert.equal(timers.size, 0)
+  const stalledChecks = readinessChecks
+  advance(121_800)
+  assert.equal(readinessChecks, stalledChecks, 'another idle minute does no readiness work')
+  mediaReady = true
+  timing.schedulePlayerModeRetry(timing.playerModeReadinessRetryInterval)
+  advance(122_000)
+  assert.equal(appliedAt, 122_000, 'a late native event still applies the mode after idle polling has stopped')
+  console.log(`PERF player mode fixture: ${stalledChecks} readiness checks / 60s stall; 0 additional checks / next 60s`)
 }
 
 export async function verifyMomentPlayerPorts() {

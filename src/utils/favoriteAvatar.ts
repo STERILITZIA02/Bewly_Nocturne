@@ -1,12 +1,14 @@
+import { waitWithSignal } from './abort'
+
 const FAVORITE_AVATAR_CONCURRENCY = 4
 const FAVORITE_AVATAR_CACHE_LIMIT = 256
 const FAVORITE_AVATAR_TTL = 10 * 60_000
 const FAVORITE_AVATAR_FAILURE_TTL = 60_000
 
 /** Public avatar lookup cache owned by the Favorites reader, shared across its sources. */
-export function createFavoriteAvatarLoader(fetchFace: (mid: number) => Promise<string | undefined>, now = Date.now) {
+export function createFavoriteAvatarLoader(fetchFace: (mid: number, signal: AbortSignal) => Promise<string | undefined>, now = Date.now) {
   const cache = new Map<number, { face: string | undefined, expiresAt: number }>()
-  const requests = new Map<number, { promise: Promise<string | undefined>, resolve: (face?: string) => void }>()
+  const requests = new Map<number, { promise: Promise<string | undefined>, resolve: (face?: string) => void, controller?: AbortController }>()
   const queue: number[] = []
   let active = 0
   let disposed = false
@@ -18,7 +20,10 @@ export function createFavoriteAvatarLoader(fetchFace: (mid: number) => Promise<s
       const mid = queue.shift()!
       const request = requests.get(mid)!
       active++
-      void fetchFace(mid).catch(() => undefined).then((face) => {
+      const controller = new AbortController()
+      request.controller = controller
+      const fetch = async () => fetchFace(mid, controller.signal)
+      void waitWithSignal(fetch(), controller.signal).catch(() => undefined).then((face) => {
         if (!disposed) {
           cache.delete(mid)
           cache.set(mid, { face, expiresAt: now() + (face ? FAVORITE_AVATAR_TTL : FAVORITE_AVATAR_FAILURE_TTL) })
@@ -63,8 +68,10 @@ export function createFavoriteAvatarLoader(fetchFace: (mid: number) => Promise<s
       disposed = true
       queue.length = 0
       cache.clear()
-      for (const request of requests.values())
+      for (const request of requests.values()) {
+        request.controller?.abort()
         request.resolve()
+      }
       requests.clear()
     },
   }

@@ -131,6 +131,9 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       '~/components/SkeletonBlock.vue': { default: await compileComponent('../src/components/SkeletonBlock.vue') },
     })
     const media = window.HTMLMediaElement.prototype
+    const originalHidden = Object.getOwnPropertyDescriptor(document, 'hidden')
+    let hidden = false
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden })
     const originals = Object.fromEntries(['load', 'play', 'pause'].map(name => [name, media[name]]))
     media.load = () => {}
     media.pause = () => {}
@@ -248,11 +251,35 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       host.querySelector('video').dispatchEvent(new Event('error'))
       await flush()
       assert.equal(previews.hoveredMediaId.value, '', 'a later MP4 error restores the cover instead of keeping an endless skeleton')
+      url = 'https://example.com/hidden.m3u8'
+      await previews.handleMediaEnter(moment.value)
+      await flush()
+      const hiddenPlayer = hlsPlayers.at(-1)
+      assert.notEqual(hiddenPlayer.destroyed, true)
+      hidden = true
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flush()
+      assert.equal(hiddenPlayer.destroyed, true, 'hiding the tab destroys the active preview transport')
+      assert.equal(host.querySelector('video'), null)
+      const beforeHidden = requests.length
+      await previews.handleMediaEnter(moment.value)
+      assert.equal(requests.length, beforeHidden, 'hidden hover callbacks cannot fetch more media')
+      hidden = false
+      document.dispatchEvent(new Event('visibilitychange'))
+      await flush()
+      assert.equal(requests.length, beforeHidden, 'visibility alone does not restart the old hover')
+      await previews.handleMediaEnter(moment.value)
+      await flush()
+      assert.equal(requests.length, beforeHidden + 1, 'a fresh visible hover can start normally')
     }
     finally {
       app.unmount()
       host.remove()
       Object.assign(media, originals)
+      if (originalHidden)
+        Object.defineProperty(document, 'hidden', originalHidden)
+      else
+        delete document.hidden
     }
   })
 

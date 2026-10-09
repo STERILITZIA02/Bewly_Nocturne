@@ -3,6 +3,8 @@ import { onClickOutside } from '@vueuse/core'
 import { computed, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import { useAnchoredPopoverPosition } from '~/composables/useAnchoredPopoverPosition'
+
 import { formatLocalCalendarDate, parseLocalCalendarDate, toLocalDate } from '../utils/localDate'
 
 const props = defineProps<{
@@ -19,7 +21,9 @@ const { t } = useI18n()
 const showPicker = ref(false)
 const keyboardOpened = ref(false)
 const pickerRef = ref<HTMLElement>()
+const panelRef = ref<HTMLElement>()
 const triggerRef = ref<HTMLButtonElement>()
+useAnchoredPopoverPosition(pickerRef, panelRef, showPicker)
 const pickerId = useId()
 const inputValue = ref('')
 const isInputMode = ref(false)
@@ -345,7 +349,11 @@ const weekDays = computed(() => [
 
     <!-- 日历弹出框 -->
     <Transition name="dropdown" :css="!keyboardOpened">
-      <div v-if="showPicker" :id="pickerId" role="dialog" :aria-label="placeholder || $t('search.date_picker.start_date')" class="date-picker-panel bew-popover-surface">
+      <div
+        v-if="showPicker" :id="pickerId" ref="panelRef" role="dialog"
+        :aria-label="placeholder || $t('search.date_picker.start_date')"
+        class="date-picker-panel bew-popover-surface"
+      >
         <!-- 头部：年月选择 -->
         <div class="picker-header">
           <div class="year-controls">
@@ -498,11 +506,15 @@ const weekDays = computed(() => [
 }
 
 .date-picker-panel {
-  position: absolute;
-  top: calc(100% + var(--bew-popover-gap));
+  position: fixed;
+  top: 0;
   left: 0;
   z-index: var(--bew-z-base-overlay);
-  width: var(--bew-date-picker-panel-width);
+  width: min(var(--bew-date-picker-panel-width), calc(100vw - var(--bew-space-8)));
+  max-height: calc(100dvh - var(--bew-space-8));
+  box-sizing: border-box;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: var(--bew-space-3);
 }
 
@@ -609,7 +621,7 @@ const weekDays = computed(() => [
   }
 
   &.other-month {
-    color: var(--bew-text-4);
+    color: var(--bew-text-2);
   }
 
   &.disabled {

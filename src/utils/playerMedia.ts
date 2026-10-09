@@ -7,6 +7,7 @@ const PLAYER_ROOT_SELECTORS = ['#bilibili-player-wrap', '#playerWrap', '#bilibil
 export const PLAYER_ROOT_SELECTOR = PLAYER_ROOT_SELECTORS.join(',')
 // The native mode state belongs to this inner container, not the outer layout anchor.
 export const PLAYER_MODE_CONTAINER_SELECTOR = '.bpx-player-container,.bilibili-player,.squirtle-video-wrap,#bilibili-player,#bilibiliPlayer'
+export const PLAYER_ERROR_SELECTOR = '.bpx-player-error-sign'
 export const PLAYER_MODE_CONTROL_SELECTORS = {
   wide: ['.bpx-player-ctrl-wide', '.bilibili-player-video-btn-widescreen', '.squirtle-video-widescreen'],
   web: ['.bpx-player-ctrl-web', '.bilibili-player-video-web-fullscreen', '.squirtle-video-pagefullscreen'],
@@ -43,6 +44,21 @@ export function getPlayerRoot(): HTMLElement | null {
       return root
   }
   return null
+}
+
+/** Keep a confirmed native media failure available for its own retry action. */
+export function hasNativePlayerError(): boolean {
+  const panel = getPlayerRoot()?.querySelector<HTMLElement>(PLAYER_ERROR_SELECTOR)
+  if (!panel?.isConnected || !panel.querySelector('.bpx-player-error-sign-code')?.textContent?.trim())
+    return false
+  const style = getComputedStyle(panel)
+  if (style.display === 'none' || style.visibility === 'hidden') {
+    return false
+  }
+  // Ignore retained/closed native error panels rather than treating their old
+  // text as a current media failure.
+  const rect = panel.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
 }
 
 /** One media identity resolver for playback work and the shared DOM observer. */

@@ -7,6 +7,7 @@ const API_USER = {
     url: 'https://api.bilibili.com/x/web-interface/nav',
     _fetch: {
       method: 'get',
+      strictParams: true,
     },
     afterHandle: AHS.J_D,
   },

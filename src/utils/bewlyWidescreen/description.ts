@@ -39,20 +39,20 @@ export function syncDescription(currentState: BewlyWidescreenState) {
   if (toggleButton !== descriptionSlot.lastElementChild)
     descriptionSlot.appendChild(toggleButton)
 
-  descriptionSlot.classList.remove('is-collapsed', 'is-expanded')
-  const lineHeight = Number.parseFloat(getComputedStyle(basicDescription).lineHeight) || 20
   const subtitleList = description.querySelector<HTMLElement>('.subtitle-maker-list')
   const descriptionText = basicDescription.textContent?.replace(/\s+/g, ' ').trim() || ''
   const hasDescription = !!descriptionText && !/^[-–—]+$/.test(descriptionText)
   const hasSubtitle = !!subtitleList?.childElementCount
   const hasContent = hasDescription || hasSubtitle
-  const canExpand = hasContent && (basicDescription.scrollHeight > lineHeight * 2 + 1
-    || hasSubtitle)
+  descriptionSlot.classList.toggle('is-empty', !hasContent)
+  // scrollHeight retains overflowing text under the two-line clamp. Do not
+  // remove/reapply the clamp on every refresh, which forces two full style passes.
+  const lineHeight = hasContent && !hasSubtitle ? Number.parseFloat(getComputedStyle(basicDescription).lineHeight) || 20 : 0
+  const canExpand = hasContent && (hasSubtitle || basicDescription.scrollHeight > lineHeight * 2 + 1)
 
   if (!hasContent || !canExpand)
     currentState.descriptionExpanded = false
 
-  descriptionSlot.classList.toggle('is-empty', !hasContent)
   const shouldHideToggle = !hasContent || !canExpand
   if (toggleButton.hidden !== shouldHideToggle)
     toggleButton.hidden = shouldHideToggle

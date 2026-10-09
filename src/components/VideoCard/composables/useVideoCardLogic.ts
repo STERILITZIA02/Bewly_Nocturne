@@ -106,8 +106,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     return undefined
   })
   const isInWatchLater = computed(() => {
-    return watchLaterAid.value !== undefined
-      && topBarStore.isInWatchLater(watchLaterAid.value)
+    return topBarStore.isInWatchLater({ ...props.value.video, aid: watchLaterAid.value })
   })
   const isHover = ref<boolean>(false)
   const isPreviewFullscreen = ref<boolean>(false)
@@ -238,8 +237,9 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     try {
       // Membership refresh can reject when a reload terminates this runtime,
       // just like identity resolution. Both awaits belong to this watcher.
-      await topBarStore.ensureWatchLaterState()
-      if (!isCurrentResolution() || watchLaterAid.value)
+      if (!await topBarStore.ensureWatchLaterState())
+        return
+      if (!isCurrentResolution() || watchLaterAid.value || topBarStore.isInWatchLater(video) !== undefined)
         return
       const aid = await resolveWatchLaterAid(video)
       if (isCurrentResolution())

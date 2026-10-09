@@ -3,11 +3,13 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { originalSettings, settings } from '~/logic'
 import type { Settings } from '~/logic/storage'
 import { videoCardContextMenuKeys } from '~/logic/storage'
+import { LOCAL_LOUDNESS_RANGE } from '~/utils/localLoudnessProtocol'
 import { migrateSidebarCoverSetting } from '~/utils/sidebarCoverSettings'
 import { isValidScreenshotShortcut } from '~/utils/videoScreenshotShortcut'
 
@@ -34,6 +36,7 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   videoPageTopBarConfig: ['alwaysShow', 'alwaysHide', 'showOnMouse', 'showOnScroll'],
   topBarLogoStyle: ['icon', 'brand'],
   momentsGridColumns: ['1', '2', '3'],
+  historyLayout: ['list', 'grid'],
   momentsCardOpenMode: ['dialog', 'newTab', 'background'],
   dockCollapseMode: ['button', 'hidden', 'automatic'],
   dockPosition: ['left', 'right', 'bottom'],
@@ -114,6 +117,11 @@ const videoPlayerModeOverrideValues = new Set(['default', 'webFullscreen', 'wide
 const customPlayOrderOverrideValues = new Set(['sequential', 'reverse', 'random', 'inherit'])
 
 const settingValueValidators: Partial<Record<keyof Settings, (value: unknown) => boolean>> = {
+  localLoudnessTarget: value => Number.isSafeInteger(value) && Number(value) >= LOCAL_LOUDNESS_RANGE.target.min && Number(value) <= LOCAL_LOUDNESS_RANGE.target.max,
+  localLoudnessStrength: value => Number.isSafeInteger(value) && Number(value) >= LOCAL_LOUDNESS_RANGE.strength.min && Number(value) <= LOCAL_LOUDNESS_RANGE.strength.max,
+  commentReplyBatchPages: value => Number.isSafeInteger(value) && Number(value) >= 1 && Number(value) <= COMMENT_REPLY_BATCH_MAX,
+  commentReplyTreeContainerHeight: value => Number.isSafeInteger(value) && Number(value) >= COMMENT_REPLY_CONTAINER_HEIGHT.min && Number(value) <= COMMENT_REPLY_CONTAINER_HEIGHT.max,
+  savedVideoQuality: value => value === null || (typeof value === 'number' && Number.isSafeInteger(value) && value >= 0),
   videoScreenshotShortcut: isValidScreenshotShortcut,
   videoCardContextMenuConfig: value => Array.isArray(value) && value.every(item =>
     isPlainObject(item)
@@ -175,7 +183,7 @@ function handleImportFile(event: Event) {
     return
 
   const reader = new FileReader()
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       let importedSettings = JSON.parse(String(reader.result)) as Record<string, unknown>
       if (!importedSettings || Array.isArray(importedSettings) || typeof importedSettings !== 'object')
@@ -196,7 +204,12 @@ function handleImportFile(event: Event) {
         const value = importedSettings[key]
         const enumValues = settingEnumValues[settingKey]
         const valueValidator = settingValueValidators[settingKey]
-        if (!matchesSettingType(value, originalSettings[settingKey])
+        const validType = settingKey === 'savedVideoQuality'
+          ? valueValidator?.(value)
+          : settingKey === 'videoPlayerModeOverrides'
+            ? isPlainObject(value) && Object.keys(value).every(key => Object.hasOwn(originalSettings.videoPlayerModeOverrides, key))
+            : matchesSettingType(value, originalSettings[settingKey])
+        if (!validType
           || (enumValues && !enumValues.includes(value))
           || (valueValidator && !valueValidator(value))) {
           ignoredCount++
@@ -212,7 +225,7 @@ function handleImportFile(event: Event) {
         return
       }
 
-      settings.value = { ...settings.value, ...validSettings } as Settings
+      await settings.import(validSettings as Partial<Settings>)
 
       toast.success(t('settings.maintenance.import_success', {
         imported: importedCount,
@@ -246,7 +259,7 @@ async function handleResetSettings() {
   // 重置时保留用户当前使用的语言
   const resetSettings = structuredClone(originalSettings)
   resetSettings.language = settings.value.language
-  settings.value = resetSettings
+  await settings.import(resetSettings)
 }
 </script>
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Icon } from '@iconify/vue'
-import { useMediaQuery, useThrottleFn } from '@vueuse/core'
+import { useMediaQuery } from '@vueuse/core'
 import type { AsyncComponentLoader } from 'vue'
 
 import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
@@ -31,25 +31,22 @@ const topBarStore = useTopBarStore()
 const forYouStore = useForYouStore()
 const searchFocusEffect = useSearchFocusEffect()
 const {
-  handleBackToTop,
   homeActivatedPage,
   homeActivatedPageTouched,
   navigateToHomeTab,
   isHomeTabSwitching,
   scrollViewportRef,
 } = useBewlyApp()
-const handleThrottledBackToTop = useThrottleFn((targetScrollTop: number = 0) => handleBackToTop(targetScrollTop), 1000)
 
 // ✅ 性能优化：缓存 scrollTop 值，避免重复 DOM 读取
 const cachedScrollTop = ref(0)
 const shortViewport = useMediaQuery('(max-height: 800px)')
-const isDiscoveryPage = computed(() => homeActivatedPage.value === HomeSubPage.ForYou)
-const searchStage = computed(() => resolveHomeSearchStage(isDiscoveryPage.value, shortViewport.value))
+const searchStage = computed(() => resolveHomeSearchStage(shortViewport.value))
 const searchStageStyle = computed(() => ({
   '--bew-layout-home-search-stage-lead-height': `${searchStage.value.lead}px`,
   '--bew-layout-home-search-stage-tail-height': `${searchStage.value.tail}px`,
 }))
-const showHomeSearchCharacter = computed(() => isDiscoveryPage.value && cachedScrollTop.value < searchStage.value.stickyScrollTop)
+const showHomeSearchCharacter = computed(() => cachedScrollTop.value < searchStage.value.stickyScrollTop)
 const tabScrollPositions = new Map<string, number>()
 let pendingTabScrollTop: number | null = null
 let resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
@@ -113,9 +110,10 @@ const homeAccountScope = computed(() => {
   return topBarStore.isLogin ? 'profile-unavailable' : 'logged-out'
 })
 const homeAccountGeneration = ref(0)
-const tabCache = provideHomeTabCache(() => activatedPageCacheKey.value, restoreTabScrollPosition)
+const getContentScrollTop = () => settings.value.useSearchPageModeOnHomePage ? searchStage.value.height : 0
+const tabCache = provideHomeTabCache(() => activatedPageCacheKey.value, restoreTabScrollPosition, getContentScrollTop)
 
-function restorePreservedForYou() {
+function restorePreservedForYou(restorePosition = true) {
   if (!settings.value.preserveForYouState) {
     forYouStore.resetState()
     return
@@ -126,18 +124,20 @@ function restorePreservedForYou() {
   const key = `${HomeSubPage.ForYou}:${saved.recommendationMode}`
   tabCache.save(key, saved.snapshot, tabCache.generation)
   tabScrollPositions.set(key, saved.scrollTop)
-  if (activatedPage.value === HomeSubPage.ForYou)
+  if (restorePosition && activatedPage.value === HomeSubPage.ForYou)
     pendingTabScrollTop = resetScrollOnEntry ? 0 : saved.scrollTop
 }
 restorePreservedForYou()
 const tabContentLoading = ref<boolean>(false)
 const currentTabs = ref<HomeTab[]>([])
-const tabPageRef = ref()
+const tabContentRef = ref<HTMLElement>()
+const tabContentMinHeight = ref<number>()
 const topBarVisibility = ref<boolean>(true)
 const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const recommendationSwitcherEnabled = useLayoutEditSettingValue('page.home.recommendationSwitcher', () => settings.value.showRecommendationModeSwitcher)
-const shouldShowRecommendationModeSwitcher = computed(() => activatedPage.value === HomeSubPage.ForYou && (recommendationSwitcherEnabled.value || isLayoutEditing.value))
-const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher || shouldShowRecommendationModeSwitcher.value)
+const reserveRecommendationModeSwitcher = computed(() => recommendationSwitcherEnabled.value || isLayoutEditing.value)
+const shouldShowRecommendationModeSwitcher = computed(() => activatedPage.value === HomeSubPage.ForYou && reserveRecommendationModeSwitcher.value)
+const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher || reserveRecommendationModeSwitcher.value)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
   return [
     { icon: 'mingcute:table-3-line', iconActivated: 'mingcute:table-3-fill', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
@@ -164,8 +164,8 @@ watch(homeAccountScope, (nextScope, previousScope) => {
 
   tabCache.clear()
   tabScrollPositions.clear()
-  pendingTabScrollTop = resetScrollOnEntry ? 0 : getInitialTabScrollTop()
-  restorePreservedForYou()
+  pendingTabScrollTop = resetScrollOnEntry ? 0 : null
+  restorePreservedForYou(resetScrollOnEntry)
   tabContentLoading.value = false
   homeAccountGeneration.value++
 }, { flush: 'sync' })
@@ -173,7 +173,7 @@ watch(homeAccountScope, (nextScope, previousScope) => {
 function getInitialTabScrollTop(): number {
   return Math.min(
     scrollViewportRef.value?.scrollTop ?? 0,
-    settings.value.useSearchPageModeOnHomePage ? searchStage.value.height : 0,
+    getContentScrollTop(),
   )
 }
 
@@ -186,9 +186,9 @@ function restoreTabScrollPosition() {
       pendingTabScrollTop = null
     }
   }
-  // A grid mounts after the parent transition may already have consumed the
-  // pending position. Keep this intent until an actual Home tab switch.
-  return resetScrollOnEntry
+  // Home owns one continuous viewport. Cached grids may restore their data and
+  // measurements, but must never replay another tab's old scroll anchor.
+  return true
 }
 
 function finishTabSwitch() {
@@ -199,10 +199,12 @@ function finishTabSwitch() {
   tabSwitchFrame = requestAnimationFrame(() => {
     tabSwitchFrame = null
     isHomeTabSwitching.value = false
+    if (!tabContentLoading.value && !tabContentRef.value?.querySelector('.bew-page-async-loading'))
+      tabContentMinHeight.value = undefined
   })
 }
 
-watch(activatedPageCacheKey, (newPage, oldPage) => {
+watch(activatedPageCacheKey, (_newPage, oldPage) => {
   resetScrollOnEntry = false
   tabContentLoading.value = false
   const viewport = scrollViewportRef.value
@@ -211,7 +213,14 @@ watch(activatedPageCacheKey, (newPage, oldPage) => {
 
   if (pendingTabScrollTop === null)
     tabScrollPositions.set(oldPage, viewport.scrollTop)
-  pendingTabScrollTop = tabScrollPositions.get(newPage) ?? getInitialTabScrollTop()
+  pendingTabScrollTop = null
+  // Keep the outgoing space through the out-in/async-loading gap so the
+  // browser itself cannot clamp the shared viewport back to the top.
+  tabContentMinHeight.value = tabContentRef.value?.getBoundingClientRect().height
+  if (tabSwitchFrame !== null) {
+    cancelAnimationFrame(tabSwitchFrame)
+    tabSwitchFrame = null
+  }
   isHomeTabSwitching.value = true
 }, { flush: 'sync' })
 
@@ -301,26 +310,13 @@ onUnmounted(() => {
   }
   pendingTabScrollTop = null
   tabScrollPositions.clear()
-  tabPageRef.value = null
 })
 
 function handleChangeTab(tab: HomeTab) {
   homeActivatedPageTouched.value = true
 
-  if (activatedPage.value === tab.page) {
-    const scrollTop = scrollViewportRef.value?.scrollTop ?? cachedScrollTop.value
-
-    if ((!settings.value.useSearchPageModeOnHomePage && scrollTop > 0) || (settings.value.useSearchPageModeOnHomePage && scrollTop > searchStage.value.height)) {
-      handleThrottledBackToTop(settings.value.useSearchPageModeOnHomePage ? searchStage.value.height : 0)
-    }
-    else {
-      if (tabContentLoading.value)
-        return
-      if (tabPageRef.value)
-        tabPageRef.value.initData()
-    }
+  if (activatedPage.value === tab.page)
     return
-  }
   if (tabContentLoading.value)
     toggleTabContentLoading(false)
 
@@ -330,6 +326,11 @@ function handleChangeTab(tab: HomeTab) {
 function toggleTabContentLoading(loading: boolean) {
   tabContentLoading.value = loading
 }
+
+watch(tabContentLoading, (loading) => {
+  if (!loading && !isHomeTabSwitching.value && tabContentMinHeight.value !== undefined)
+    finishTabSwitch()
+}, { flush: 'post' })
 </script>
 
 <template>
@@ -340,7 +341,7 @@ function toggleTabContentLoading(loading: boolean) {
         <div v-if="settings.useSearchPageModeOnHomePage" class="home-search-stage">
           <div class="home-search-stage__lead">
             <Logo
-              v-if="isDiscoveryPage && settings.searchPageShowLogo"
+              v-if="settings.searchPageShowLogo"
               class="home-search-stage__logo"
               :size="shortViewport ? 144 : 180"
               :color="settings.searchPageLogoColor === 'white' ? 'white' : 'var(--bew-theme-color)'"
@@ -369,7 +370,7 @@ function toggleTabContentLoading(loading: boolean) {
         class="home-header"
         :class="{
           'home-header-fixed': settings.fixedHomeTabsOnHomePage,
-          'home-header--recommendation-switcher': shouldShowRecommendationModeSwitcher,
+          'home-header--recommendation-switcher': reserveRecommendationModeSwitcher,
         }"
         w-full z-9
       >
@@ -404,7 +405,13 @@ function toggleTabContentLoading(loading: boolean) {
         </section>
 
         <div class="home-header-actions">
-          <RecommendationModeSwitcher v-if="shouldShowRecommendationModeSwitcher" class="home-control-surface" />
+          <RecommendationModeSwitcher
+            v-if="reserveRecommendationModeSwitcher"
+            class="home-control-surface"
+            :class="{ 'home-control-surface--inactive': !shouldShowRecommendationModeSwitcher }"
+            :inert="!shouldShowRecommendationModeSwitcher || undefined"
+            :aria-hidden="!shouldShowRecommendationModeSwitcher || undefined"
+          />
           <div
             v-if="settings.enableGridLayoutSwitcher"
             v-layout-editable="'home-grid-switcher'"
@@ -438,8 +445,10 @@ function toggleTabContentLoading(loading: boolean) {
       </header>
 
       <div
+        ref="tabContentRef"
         v-layout-editable="'home-video-grid'"
         data-layout-editable-id="home-video-grid"
+        :style="tabContentMinHeight === undefined ? undefined : { minHeight: `${tabContentMinHeight}px` }"
         min-w-0
       >
         <Transition
@@ -456,7 +465,6 @@ function toggleTabContentLoading(loading: boolean) {
           <Component
             :is="pages[activatedPage]"
             v-else :key="`${activatedPageCacheKey}:${homeAccountGeneration}`"
-            ref="tabPageRef"
             :grid-layout="homeGridLayout"
             :top-bar-visibility="topBarVisibility"
             @before-loading="toggleTabContentLoading(true)"
@@ -540,6 +548,13 @@ function toggleTabContentLoading(loading: boolean) {
   contain: paint layout;
   /* 创建独立堆叠上下文，减少合成压力 */
   isolation: isolate;
+}
+
+// Reserve the same toolbar geometry without exposing unrelated actions or
+// keyboard targets on another Home tab.
+.home-control-surface--inactive {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .home-header {

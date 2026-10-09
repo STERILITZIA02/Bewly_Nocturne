@@ -5,7 +5,7 @@ import type { OpenTabsCommand, OpenTabsTask } from '~/constants/openTabsWatchLat
 import { OPEN_TABS_WATCH_LATER, OPEN_TABS_WATCH_LATER_UPDATED } from '~/constants/openTabsWatchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { getUserID } from '~/utils/main'
-import { sendMessage } from '~/utils/messaging'
+import { reportRuntimeFailure, sendMessage } from '~/utils/messaging'
 
 /** A disposable projection; the background owns execution, stop and persistence. */
 export function useOpenTabsWatchLater() {
@@ -16,7 +16,7 @@ export function useOpenTabsWatchLater() {
   let generation = 0
   let disposed = false
   const accountId = () => account.isLogin && String(account.userInfo.mid) === getUserID() ? Number(account.userInfo.mid) : 0
-  async function command(action: OpenTabsCommand['action']) {
+  async function command(action: OpenTabsCommand['action'], selectedTabIds?: number[]) {
     const version = ++generation
     const mid = accountId()
     failed.value = false
@@ -24,7 +24,7 @@ export function useOpenTabsWatchLater() {
     try {
       if (!mid)
         throw new Error('Login required')
-      const result = await sendMessage<OpenTabsCommand, OpenTabsTask | null>(OPEN_TABS_WATCH_LATER, { action, accountId: mid, taskId: task.value?.id })
+      const result = await sendMessage<OpenTabsCommand, OpenTabsTask | null>(OPEN_TABS_WATCH_LATER, { action, accountId: mid, taskId: task.value?.id, selectedTabIds })
       if (disposed || version !== generation || mid !== accountId())
         return
       if (result && result.accountId !== mid)
@@ -33,9 +33,11 @@ export function useOpenTabsWatchLater() {
       if (action === 'get' && (!result || result.status === 'ready'))
         await command('prepare')
     }
-    catch {
-      if (!disposed && version === generation)
+    catch (error) {
+      if (!disposed && version === generation) {
         failed.value = true
+        reportRuntimeFailure(`Failed to ${action} playback-tab task`, error)
+      }
     }
     finally {
       if (!disposed && version === generation)

@@ -1,16 +1,21 @@
 // 由于是浏览器环境，所以引入的ts不能使用webextension-polyfill相关api，包含获取本地Storage，获取的是网页的localStorage
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
 import { createPageBridgeChannelId, getPageBridgeTargetOrigin, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
+import { setupLocalLoudnessBridge } from '~/inject/audio/localLoudnessBridge'
 import { clearMissingCommentParents, isMissingCommentParentMutationNode, MISSING_COMMENT_PARENT_CSS, MISSING_COMMENT_PARENT_SELECTOR, syncMissingCommentParents } from '~/inject/commentMissingParents'
+import { getCommentReplyBranchPath, getCommentReplyBranchToggleY } from '~/inject/commentReplyGeometry'
+import { patchCommentReplyInteraction } from '~/inject/commentReplyInteraction'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
+import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
+import { createCommentReplyReadingController, getCommentReplyGuideCoordinates, isCommentReplyReadingScroll } from '~/inject/commentReplyReading'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { patchCommentTransferLifecycle } from '~/utils/commentDomTransfer'
 import type { CommentReplyCachedMeta as CommentReplyTreeCachedMeta } from '~/utils/commentMissingParents'
 import { resolveMissingCommentParents } from '~/utils/commentMissingParents'
+import { COMMENT_REPLY_CACHE_LIMITS } from '~/utils/commentReplyPageCache'
 import { buildCommentTree } from '~/utils/commentTree'
-import { buildCommentBranchPath } from '~/utils/commentTreeGeometry'
 import { getUserID, isElectron } from '~/utils/main'
 import type { PageSettingsPayload } from '~/utils/pageSettingsProtocol'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
@@ -47,6 +52,12 @@ if (isElectronEnv) {
 }
 else if (shouldInitializePageScript) {
   setupVideoMetadataBridge(pageBridgeChannelId)
+  // Audio is independent of comment renderers and remains dormant until opted in.
+  let loudness: ReturnType<typeof setupLocalLoudnessBridge> | undefined
+  try {
+    loudness = setupLocalLoudnessBridge(pageBridgeChannelId)
+  }
+  catch { /* Optional experimental audio must never block page/comment startup. */ }
   // 根据兼容性设置动态返回桌面 UA，默认保持浏览器原始值。
   if (isBilibiliWwwUrl(location.href)) {
     const originalNavigatorValues = {
@@ -154,20 +165,23 @@ else if (shouldInitializePageScript) {
   const COMMENT_REPLY_TREE_ROOT_KEY = 'thread-root'
   const WIDESCREEN_COMMENT_EMOJI_OPEN_ATTRIBUTE = 'data-bewly-comment-emoji-open'
   const SVG_NAMESPACE = 'http://www.w3.org/2000/svg'
+  const commentReplyReader = createNativeCommentReplyReader(pageBridgeChannelId)
+  const commentReplyReading = createCommentReplyReadingController(() => ({
+    enabled: currentSettings?.enableCommentReplyTreeContainer === true,
+    maxHeight: currentSettings?.commentReplyTreeContainerHeight ?? 480,
+    label: getCommentReplyPaginationLabels().reading,
+  }), COMMENT_REPLY_TREE_ROOT_KEY)
 
   interface CommentReplyTreeState {
     collapsedNodeKeys: Set<string>
     /** 收起某条评论之后的全部同级评论（及子树） */
     collapsedTailKeys: Set<string>
-    /** 展开时缓存的分支收起按钮相对父节点偏移 */
-    branchToggleOffsetByKey: Map<string, number>
-    /** 展开时缓存的平级收起按钮相对父节点偏移 */
-    tailToggleOffsetByKey: Map<string, number>
     /**
      * 按 rpid 缓存回复的 parent/root 等关系。
      * 楼中楼翻页后父评论可能不在当前 DOM，仍需靠此结构挂到最近可见祖先。
      */
     replyMetaByRpid: Map<string, CommentReplyTreeCachedMeta>
+    cachedPageRevision?: number
     identity: string
     enabled: boolean
     nextOriginalOrder: number
@@ -1098,7 +1112,7 @@ else if (shouldInitializePageScript) {
       ?? getReplyRpid(data)
       ?? ''
     const oid = component?.oid ?? getReplyOid(data) ?? ''
-    return `${getUserID() ?? 'guest'}:${String(oid)}:${String(rootRpid)}`
+    return `${getUserID() ?? 'guest'}:${String(oid)}:${String(component?.type ?? data?.type ?? '')}:${String(rootRpid)}:${String(component?.mode ?? '')}`
   }
 
   function getCommentReplyTreeState(component: any): CommentReplyTreeState {
@@ -1112,8 +1126,6 @@ else if (shouldInitializePageScript) {
       state = {
         collapsedNodeKeys: new Set(),
         collapsedTailKeys: new Set(),
-        branchToggleOffsetByKey: new Map(),
-        tailToggleOffsetByKey: new Map(),
         replyMetaByRpid: new Map(),
         identity,
         enabled: false,
@@ -1126,6 +1138,8 @@ else if (shouldInitializePageScript) {
   }
 
   function clearCommentReplyTreeState(component: any) {
+    if (component instanceof HTMLElement)
+      commentReplyReading.clear(component)
     commentReplyTreeEpochs.set(component, (commentReplyTreeEpochs.get(component) ?? 0) + 1)
     const state = commentReplyTreeStates.get(component)
     if (state) {
@@ -1195,6 +1209,8 @@ else if (shouldInitializePageScript) {
       rootRpid: getReplyRootRpid(replyItem) ?? previous?.rootRpid ?? null,
     }
     state.replyMetaByRpid.set(rpid, next)
+    if (state.replyMetaByRpid.size > COMMENT_REPLY_CACHE_LIMITS.items)
+      state.replyMetaByRpid.delete(state.replyMetaByRpid.keys().next().value!)
     return next
   }
 
@@ -1436,10 +1452,10 @@ else if (shouldInitializePageScript) {
   }
 
   const commentReplyPaginationLabels = {
-    'cmn-CN': { expandAll: '展开全部回复', expandingAll: '正在展开…', loadMore: '加载更多', loading: '加载中…', noMore: '没有更多回复' },
-    'cmn-TW': { expandAll: '展開全部回覆', expandingAll: '正在展開…', loadMore: '載入更多', loading: '載入中…', noMore: '沒有更多回覆' },
-    en: { expandAll: 'Expand all replies', expandingAll: 'Expanding…', loadMore: 'Load more', loading: 'Loading…', noMore: 'No more replies' },
-    jyut: { expandAll: '展開全部回覆', expandingAll: '展開緊…', loadMore: '載入更多', loading: '載入中…', noMore: '冇更多回覆' },
+    'cmn-CN': { expandAll: '分批加载回复', expandingAll: '正在加载…', loadMore: '加载下一批', loading: '加载中…', noMore: '已到最后一页', page: '回复页码', go: '跳转', failed: '回复加载失败', retry: '重试', reading: '回复阅读区域' },
+    'cmn-TW': { expandAll: '分批載入回覆', expandingAll: '正在載入…', loadMore: '載入下一批', loading: '載入中…', noMore: '已到最後一頁', page: '回覆頁碼', go: '跳轉', failed: '回覆載入失敗', retry: '重試', reading: '回覆閱讀區域' },
+    en: { expandAll: 'Load replies in batches', expandingAll: 'Loading…', loadMore: 'Load next batch', loading: 'Loading…', noMore: 'Last page reached', page: 'Reply page', go: 'Go', failed: 'Could not load replies', retry: 'Retry', reading: 'Reply reading area' },
+    jyut: { expandAll: '分批載入回覆', expandingAll: '載入緊…', loadMore: '載入下一批', loading: '載入中…', noMore: '已到最後一頁', page: '回覆頁碼', go: '跳轉', failed: '回覆載入失敗', retry: '再試', reading: '回覆閱讀區域' },
   } as const
 
   function getCommentReplyPaginationLabels() {
@@ -1453,13 +1469,16 @@ else if (shouldInitializePageScript) {
 
   const commentReplyPagination = createCommentReplyPaginationController({
     getAccountId: () => String(getUserID() ?? 'guest'),
+    getContextId: () => pageBridgeChannelId,
+    getBatchPages: () => currentSettings?.commentReplyBatchPages ?? 5,
+    readPage: commentReplyReader,
     getData: getCommentReplyData,
     getLabels: getCommentReplyPaginationLabels,
     getMode: () => currentSettings?.commentReplyPaginationMode === 'pagination' ? 'pagination' : 'loadMore',
     getOid: getReplyOid,
     getRootRpid: getReplyRootRpid,
     getRpid: getReplyRpid,
-    isTreeEnabled: () => getCommentReplyTreeMode() !== null,
+    isTreeEnabled: () => getCommentReplyTreeMode() !== null || currentSettings?.enableCommentReplyTreeContainer === true,
     shouldShowExpandAll: renderer => !isInsideBewlyWidescreen(renderer),
     onNativeCollapse: clearCommentReplyTreeState,
     scheduleTreeUpdate: (renderer) => {
@@ -1476,28 +1495,6 @@ else if (shouldInitializePageScript) {
       }))
     },
   })
-
-  function recordCommentReplyInteraction(actionRenderer: HTMLElement & Record<string, any>) {
-    const replyRenderer = findCommentReplyRendererHost(actionRenderer)
-    const repliesRenderer = findCommentRepliesRendererHost(replyRenderer)
-    const reply = getCommentReplyData(replyRenderer)
-    const rpid = getReplyRpid(reply)
-    if (!repliesRenderer || !rpid)
-      return
-
-    const isLike = actionRenderer.isLike ?? actionRenderer.data?.isLike
-    const isDislike = actionRenderer.isDislike ?? actionRenderer.data?.isDislike
-    const hasActionRendererState = typeof isLike === 'boolean' || typeof isDislike === 'boolean'
-    const fallbackAction = Number(reply?.action)
-    const action = hasActionRendererState
-      ? (isLike ? 1 : isDislike ? 2 : 0)
-      : (Number.isFinite(fallbackAction) ? fallbackAction : undefined)
-    const rendererLikeCount = actionRenderer.likeCount ?? actionRenderer.data?.likeCount
-    const parsedLikeCount = Number(rendererLikeCount ?? reply?.like)
-    const like = Number.isFinite(parsedLikeCount) ? parsedLikeCount : undefined
-
-    commentReplyPagination.recordInteraction(repliesRenderer, rpid, { action, like })
-  }
 
   function getCommentReplyAvatarAnchor(
     renderer: HTMLElement,
@@ -1656,76 +1653,6 @@ else if (shouldInitializePageScript) {
     })
   }
 
-  function getCommentReplyBranchExpandedToggleY(
-    parentAnchor: CommentReplyAvatarAnchor,
-    childAnchors: CommentReplyAvatarAnchor[],
-    toggleHitRadius: number,
-  ): number {
-    if (childAnchors.length === 0)
-      return Math.max(parentAnchor.bottom + toggleHitRadius, parentAnchor.toggleY)
-
-    const branchEndY = childAnchors[childAnchors.length - 1].centerY
-    const minimumY = parentAnchor.bottom + toggleHitRadius
-    const maximumY = branchEndY - toggleHitRadius
-    if (maximumY <= minimumY)
-      return parentAnchor.bottom + (branchEndY - parentAnchor.bottom) / 2
-
-    return Math.min(Math.max(parentAnchor.toggleY, minimumY), maximumY)
-  }
-
-  function getCommentReplyBranchPath(
-    branch: CommentReplyTreeBranch,
-    branchRadius: number,
-    toggleHitRadius: number,
-    cachedToggleY?: number,
-  ): string | null {
-    const coordinate = formatCommentReplyGuideCoordinate
-    const { childAnchors, collapsed, collapseParentBody, parentAnchor, trunkExtendY } = branch
-    const x = parentAnchor.centerX
-
-    if (collapsed) {
-      if (collapseParentBody)
-        return `M ${coordinate(x)} ${coordinate(parentAnchor.centerY)}`
-
-      // 保留父节点正文：引导线与 + 留在收起前的位置，不缩短到父评论脚部
-      const toggleY = cachedToggleY !== undefined
-        ? Math.max(parentAnchor.bottom + toggleHitRadius, cachedToggleY)
-        : Math.max(parentAnchor.bottom + toggleHitRadius, parentAnchor.toggleY)
-      const startY = parentAnchor.bottom
-      const endY = Math.max(toggleY + toggleHitRadius, parentAnchor.bottom + toggleHitRadius * 2)
-      return [
-        `M ${coordinate(x)} ${coordinate(startY)}`,
-        `V ${coordinate(endY)}`,
-      ].join(' ')
-    }
-
-    return buildCommentBranchPath(parentAnchor, childAnchors, branchRadius, trunkExtendY)
-  }
-
-  function getCommentReplyBranchToggleY(
-    branch: CommentReplyTreeBranch,
-    toggleHitRadius: number,
-    cachedToggleY?: number,
-  ): number {
-    const { childAnchors, collapsed, collapseParentBody, parentAnchor, trunkExtendY } = branch
-    if (collapsed) {
-      if (collapseParentBody)
-        return parentAnchor.centerY
-
-      // 「不收起主评论」：使用展开时缓存的位置，避免 + 缩到父评论下方
-      if (cachedToggleY !== undefined)
-        return Math.max(parentAnchor.bottom + toggleHitRadius, cachedToggleY)
-
-      return Math.max(parentAnchor.bottom + toggleHitRadius, parentAnchor.toggleY)
-    }
-
-    // 平级收起后子锚点变少，父级 − 仍用展开时缓存，避免一起上缩
-    if (trunkExtendY !== undefined && cachedToggleY !== undefined)
-      return Math.max(parentAnchor.bottom + toggleHitRadius, cachedToggleY)
-
-    return getCommentReplyBranchExpandedToggleY(parentAnchor, childAnchors, toggleHitRadius)
-  }
-
   function toggleCommentReplyTreeBranch(
     component: HTMLElement,
     state: CommentReplyTreeState,
@@ -1738,6 +1665,8 @@ else if (shouldInitializePageScript) {
     else {
       commentReplyPagination.invalidateLoading(component)
       state.collapsedNodeKeys.add(branchKey)
+      if (state.collapsedNodeKeys.size > COMMENT_REPLY_CACHE_LIMITS.items * 2)
+        state.collapsedNodeKeys.delete(state.collapsedNodeKeys.values().next().value!)
     }
     updateCommentReplyTree(component)
     animateCommentReplyMotion(component)
@@ -1755,6 +1684,8 @@ else if (shouldInitializePageScript) {
     else {
       commentReplyPagination.invalidateLoading(component)
       state.collapsedTailKeys.add(tailKey)
+      if (state.collapsedTailKeys.size > COMMENT_REPLY_CACHE_LIMITS.items * 2)
+        state.collapsedTailKeys.delete(state.collapsedTailKeys.values().next().value!)
     }
     updateCommentReplyTree(component)
     animateCommentReplyMotion(component)
@@ -1775,6 +1706,7 @@ else if (shouldInitializePageScript) {
     tailGroup.setAttribute('tabindex', '0')
     tailGroup.setAttribute('aria-expanded', String(!tail.collapsed))
     tailGroup.setAttribute('aria-label', getCommentReplyTailLabel(tail.collapsed))
+    tailGroup.setAttribute('data-bewly-reply-guide-key', tail.key)
 
     const nodeHitArea = document.createElementNS(SVG_NAMESPACE, 'circle')
     nodeHitArea.classList.add('bewly-comment-reply-tail__node-hit')
@@ -1815,6 +1747,8 @@ else if (shouldInitializePageScript) {
         return
       event.preventDefault()
       event.stopPropagation()
+      if (event.isComposing || event.repeat)
+        return
       toggleTail()
     })
 
@@ -1843,21 +1777,13 @@ else if (shouldInitializePageScript) {
 
     const tails: CommentReplyTreeTailCollapse[] = []
 
-    // 已收起后续：+ 使用展开时缓存的位置，避免随布局上缩后断线
+    // Folded controls follow the current visible parent, never an old gap.
     if (firstHiddenIndex < siblings.length) {
       const afterSibling = siblings[firstHiddenIndex - 1]
       const afterAnchor = avatarAnchorByNode.get(afterSibling)
       if (afterAnchor) {
         const key = getCommentReplyTailCollapseKey(parentKey, getCommentReplyTreeNodeKey(afterSibling))
-        const cachedOffset = state.tailToggleOffsetByKey.get(key)
-        const cachedY = cachedOffset === undefined
-          ? undefined
-          : parentAnchor.centerY + cachedOffset
-        const fallbackY = afterAnchor.bottom + toggleHitRadius + 4
-        // 缓存优先；至少略低于最后可见评论中心，保证仍落在主干上
-        const y = cachedY !== undefined
-          ? Math.max(afterAnchor.centerY + toggleHitRadius, cachedY)
-          : fallbackY
+        const y = Math.max(afterAnchor.bottom + toggleHitRadius, afterAnchor.toggleY)
         tails.push({
           collapsed: true,
           hiddenCount: siblings.length - firstHiddenIndex,
@@ -1884,7 +1810,6 @@ else if (shouldInitializePageScript) {
 
       const key = getCommentReplyTailCollapseKey(parentKey, getCommentReplyTreeNodeKey(current))
       const y = currentAnchor.centerY + gap / 2
-      state.tailToggleOffsetByKey.set(key, y - parentAnchor.centerY)
       tails.push({
         collapsed: false,
         hiddenCount: siblings.length - index - 1,
@@ -1914,6 +1839,7 @@ else if (shouldInitializePageScript) {
     branchGroup.setAttribute('tabindex', '0')
     branchGroup.setAttribute('aria-expanded', String(!branch.collapsed))
     branchGroup.setAttribute('aria-label', getCommentReplyBranchLabel(branch.collapsed))
+    branchGroup.setAttribute('data-bewly-reply-guide-key', branch.key)
 
     const visiblePath = document.createElementNS(SVG_NAMESPACE, 'path')
     visiblePath.classList.add('bewly-comment-reply-branch__line')
@@ -1975,6 +1901,8 @@ else if (shouldInitializePageScript) {
         return
       event.preventDefault()
       event.stopPropagation()
+      if (event.isComposing || event.repeat)
+        return
       toggleBranch()
     })
 
@@ -1994,10 +1922,9 @@ else if (shouldInitializePageScript) {
     collapseParentBody: boolean,
   ) {
     const threadRoot = getCommentReplyTreeThreadRoot(component)
-    const guideContainer: HTMLElement | ShadowRoot = threadRoot ?? replyContainer
-    const coordinateRect = threadRoot
-      ? threadRoot.host.getBoundingClientRect()
-      : replyContainer.getBoundingClientRect()
+    const coordinates = getCommentReplyGuideCoordinates(component, replyContainer, threadRoot, COMMENT_REPLY_TREE_GUIDES_ID)
+    const guideContainer = coordinates.parent
+    const coordinateRect = coordinates.rect
     // 布局未就绪（宽度为 0 或高度异常小）时不画线，避免未展开/图片未加载时的错位
     if (coordinateRect.width <= 0 || coordinateRect.height <= 0)
       return
@@ -2031,7 +1958,7 @@ else if (shouldInitializePageScript) {
     }
 
     // 主评论锚点同样需要有效，否则根分支线会整体错位
-    if (threadRoot) {
+    if (threadRoot && coordinates.includeRoot) {
       const mainRenderer = getCommentReplyTreeRootRenderer(component)
       if (mainRenderer && !getCommentReplyAvatarAnchor(mainRenderer, coordinateRect)) {
         retryLayout()
@@ -2054,7 +1981,7 @@ else if (shouldInitializePageScript) {
     const visibleRootNodes = rootNodes.filter(isCommentReplyTreeNodeVisible)
     const threadRootRenderer = getCommentReplyTreeRootRenderer(component)
     const rootBranchCollapsed = state.collapsedNodeKeys.has(COMMENT_REPLY_TREE_ROOT_KEY)
-    const threadRootAnchor = threadRootRenderer
+    const threadRootAnchor = coordinates.includeRoot && threadRootRenderer
       ? getCommentReplyAvatarAnchor(threadRootRenderer, coordinateRect)
       : null
     // 分支收起后即使子回复全隐藏，也保留控件以便展开
@@ -2137,34 +2064,15 @@ else if (shouldInitializePageScript) {
 
     const renderedBranches = branches
       .map((branch) => {
-        // 展开且无平级收起时刷新父分支 + 缓存；
-        // 平级收起后子节点变少，勿覆盖缓存，否则父级 − 也会上缩
-        if (!branch.collapsed && branch.trunkExtendY === undefined) {
-          const expandedToggleY = getCommentReplyBranchExpandedToggleY(
-            branch.parentAnchor,
-            branch.childAnchors,
-            toggleHitRadius,
-          )
-          state.branchToggleOffsetByKey.set(
-            branch.key,
-            expandedToggleY - branch.parentAnchor.bottom,
-          )
-        }
-
-        const cachedToggleOffset = state.branchToggleOffsetByKey.get(branch.key)
-        const cachedToggleY = cachedToggleOffset === undefined
-          ? undefined
-          : branch.parentAnchor.bottom + cachedToggleOffset
         const pathData = getCommentReplyBranchPath(
           branch,
           branchRadius,
           toggleHitRadius,
-          cachedToggleY,
         )
         if (!pathData)
           return null
 
-        const toggleY = getCommentReplyBranchToggleY(branch, toggleHitRadius, cachedToggleY)
+        const toggleY = getCommentReplyBranchToggleY(branch, toggleHitRadius)
         return { branch, pathData, toggleY }
       })
       .filter((entry): entry is {
@@ -2240,9 +2148,17 @@ else if (shouldInitializePageScript) {
         toggleNodeRadius,
       ))
     })
+    const focusKey = [threadRoot?.activeElement, component.shadowRoot?.activeElement]
+      .find(element => element?.hasAttribute('data-bewly-reply-guide-key'))
+      ?.getAttribute('data-bewly-reply-guide-key')
     // 只有新图层已完整创建后才替换旧图层；中途布局失败时旧线条仍可保留。
     removeCommentReplyTreeGuides(component, replyContainer)
     guideContainer.appendChild(guideLayer)
+    if (focusKey) {
+      const target = Array.from(guideLayer.querySelectorAll('[data-bewly-reply-guide-key]'))
+        .find(element => element.getAttribute('data-bewly-reply-guide-key') === focusKey) as HTMLElement | undefined
+      ;(target ?? replyContainer).focus({ preventScroll: true })
+    }
     if (missingVisibleAvatar)
       retryLayout()
   }
@@ -2560,6 +2476,15 @@ else if (shouldInitializePageScript) {
     commentReplyPagination.sync(component)
     const treeMode = getCommentReplyTreeMode()
     const state = getCommentReplyTreeState(component)
+    if (component instanceof HTMLElement)
+      commentReplyReading.sync(component, state.collapsedNodeKeys, state.collapsedTailKeys)
+    const cachedRevision = commentReplyPagination.getKnownRevision(component)
+    if (cachedRevision && state.cachedPageRevision !== cachedRevision) {
+      state.cachedPageRevision = cachedRevision
+      state.replyMetaByRpid.clear()
+      for (const reply of commentReplyPagination.getKnownReplies(component))
+        cacheCommentReplyTreeMeta(state, reply)
+    }
     commentRepliesRenderers.add(component)
     if (treeMode === null && !state.enabled) {
       component.removeAttribute('data-bewly-comment-reply-tree')
@@ -2588,8 +2513,6 @@ else if (shouldInitializePageScript) {
       state.replyMetaByRpid.clear()
       state.collapsedNodeKeys.clear()
       state.collapsedTailKeys.clear()
-      state.branchToggleOffsetByKey.clear()
-      state.tailToggleOffsetByKey.clear()
 
       replyRenderers.forEach((replyRenderer) => {
         delete replyRenderer.dataset.bewlyCommentReplyDepth
@@ -2608,8 +2531,6 @@ else if (shouldInitializePageScript) {
     if (!showGuides) {
       state.collapsedNodeKeys.clear()
       state.collapsedTailKeys.clear()
-      state.branchToggleOffsetByKey.clear()
-      state.tailToggleOffsetByKey.clear()
     }
 
     const nodes: CommentReplyTreeNode[] = replyRenderers.map((replyRenderer) => {
@@ -2748,7 +2669,9 @@ else if (shouldInitializePageScript) {
     })
   }
 
-  function onCommentReplyDeepLinkScrollOrResize() {
+  function onCommentReplyDeepLinkScrollOrResize(event?: Event) {
+    if (isCommentReplyReadingScroll(event))
+      return
     if (
       Date.now() > commentReplyDeepLinkScrollUntil
       || !getCommentReplyDeepLinkId()
@@ -3010,13 +2933,19 @@ else if (shouldInitializePageScript) {
 
       if (name === 'bili-comment-replies-renderer')
         commentReplyPagination.patchPrototype(classConstructor)
+      if (name === 'bili-comment-action-buttons-renderer') {
+        patchCommentReplyInteraction(classConstructor, (actionRenderer) => {
+          const replyRenderer = findCommentReplyRendererHost(actionRenderer)
+          const repliesRenderer = findCommentRepliesRendererHost(replyRenderer)
+          const rpid = getReplyRpid(getCommentReplyData(replyRenderer))
+          return repliesRenderer && rpid ? commentReplyPagination.captureInteraction(repliesRenderer, rpid) : undefined
+        })
+      }
 
       const shadowStylePatch = COMMENT_SHADOW_STYLE_PATCHES[name]
       if (shadowStylePatch) {
         try {
           patchCommentComponentUpdate(name, classConstructor, (component) => {
-            if (name === 'bili-comment-action-buttons-renderer')
-              recordCommentReplyInteraction(component)
             const root = component.shadowRoot
             if (!root)
               return
@@ -3203,6 +3132,7 @@ else if (shouldInitializePageScript) {
       channelId: pageBridgeChannelId,
       type: PAGE_BRIDGE_MESSAGE.ACCOUNT_CHANGED,
     })) {
+      commentReplyPagination.reset()
       for (const component of [...commentRepliesRenderers]) {
         commentReplyPagination.dispose(component)
         clearCommentReplyTreeState(component)
@@ -3224,6 +3154,10 @@ else if (shouldInitializePageScript) {
 
     const isFirstTime = !settingsReady
     currentSettings = payload
+    try {
+      loudness?.update(payload)
+    }
+    catch { /* An optional audio failure must not stop settings/comment updates. */ }
     preventMobileRedirectEnabled = currentSettings.preventMobileRedirect
     settingsReady = true
     stopSettingsRequests()

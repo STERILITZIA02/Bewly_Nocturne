@@ -72,24 +72,3 @@ declare function cancelIdleCallback(handle: number): void;
     }
   }
 })()
-
-/**
- * Lazily memoize the first successful executor result. Executor errors remain
- * visible to the caller and are retried on the next access.
- */
-export class LazyValue<T> {
-  private _value: T | undefined
-  private _didRun = false
-
-  constructor(
-    private executor: () => T,
-  ) {}
-
-  get value(): T {
-    if (!this._didRun) {
-      this._value = this.executor()
-      this._didRun = true
-    }
-    return this._value!
-  }
-}

@@ -1,10 +1,13 @@
 import type { VideoCardDisplayData } from '~/components/VideoCard/types'
 import type { Item as AppVideoItem } from '~/models/video/appForYou'
 import type { Item as VideoItem } from '~/models/video/forYou'
+import { isBilibiliAdvertisement, toAdvertisementCard } from '~/utils/advertising'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
 import { isVerticalVideo } from '~/utils/uriParse'
 
 export function transformWebVideo(item: VideoItem): VideoCardDisplayData {
+  if (isBilibiliAdvertisement(item))
+    return toAdvertisementCard(item)
   return {
     id: item.id,
     duration: item.duration,
@@ -30,6 +33,8 @@ export function transformWebVideo(item: VideoItem): VideoCardDisplayData {
 }
 
 export function transformAppVideo(item: AppVideoItem): VideoCardDisplayData {
+  if (isBilibiliAdvertisement(item))
+    return toAdvertisementCard(item)
   // 预先计算 followed 状态，避免多次 trim 和比较
   const bottomReason = item?.bottom_rcmd_reason?.trim()
   const followed = bottomReason === '已关注' || bottomReason === '已關注'

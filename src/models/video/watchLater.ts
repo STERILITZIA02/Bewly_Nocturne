@@ -38,7 +38,7 @@ export interface List {
   page?: Page
   count?: number
   cid: number
-  progress: number
+  progress?: number
   add_at: number
   bvid: string
   uri: string

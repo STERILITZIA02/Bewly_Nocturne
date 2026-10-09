@@ -215,6 +215,21 @@ export function useConversationViewport(options: {
     }
     userRequestedLatest = false
   }
+  function scrollToMessage(id: string, topInset = 16) {
+    const viewport = messageScrollRef.value
+    const target = Array.from(viewport?.querySelectorAll<HTMLElement>('[data-message-id]') ?? []).find(element => element.dataset.messageId === id)
+    if (!viewport || !target || !options.active() || !options.ready())
+      return
+    generation++
+    userHasReadUpward = userRequestedLatest = directGesture = false
+    contentSizeChanged = false
+    viewport.scrollTop += target.getBoundingClientRect().top - viewport.getBoundingClientRect().top - topInset
+    lastScrollTop = viewport.scrollTop
+    readingAnchor = captureVisibleMessageAnchor(viewport)
+    isAtLatestPosition.value = false
+    saveViewportState(undefined, false)
+    scheduleScrollFrame()
+  }
   function captureReadingAnchor() {
     const viewport = messageScrollRef.value
     if (!viewport)
@@ -278,6 +293,7 @@ export function useConversationViewport(options: {
     isAtLatest,
     saveViewportState,
     scrollToLatest,
+    scrollToMessage,
     scheduleScrollFrame,
     handleContentResize,
     markReadingIntent,

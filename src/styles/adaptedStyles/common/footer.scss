@@ -1,4 +1,9 @@
 .bewly-design {
+  .bili-footer,
+  .bili-footer .footer-wrp,
+  .international-footer {
+    background: var(--bew-bg) !important;
+  }
   // #region theme color adaption part
   // Increase the priority of the style inside by writing a non-existent selector in :not()
   :not(foobar) {
@@ -6,13 +11,15 @@
     .international-footer a:hover,
     .international-footer .partner a:hover,
     .international-footer .link-box .link-item.link-c a:hover p {
-      color: var(--bew-theme-color);
+      color: var(--bew-theme-foreground);
     }
   }
   // #endregion
 
-  // #region dark mode adaption part
-  &.dark {
+  // Standalone native pages share a themed reading canvas in both modes.
+  // Keep the existing main-site dark mapping and its selector specificity.
+  &.dark,
+  &[data-bewly-native-site] {
     .bili-footer a,
     .international-footer a,
     .international-footer .link-box .link-item.link-c p {
@@ -29,15 +36,35 @@
       color: var(--bew-text-3);
     }
 
-    .bili-footer .footer-wrp,
-    .international-footer {
-      background-color: var(--bew-content-solid);
-    }
-
     .bili-footer .boston-postcards li,
     .international-footer .link-box .link-item {
       border-color: var(--bew-border-color);
     }
   }
-  // #endregion
+  @media (max-width: 1422px) {
+    // Both current footer shells share these link/partner groups, but their
+    // late-mounted wrappers retain different fixed widths. Keep every link.
+    .bili-footer:has(.b-footer-wrap),
+    .international-footer:has(.b-footer-wrap) {
+      min-width: 0 !important;
+
+      .b-footer-wrap {
+        width: calc(100% - var(--bew-space-8));
+        min-width: 0;
+        margin-inline: auto;
+      }
+
+      .link-box,
+      .other-link {
+        flex-wrap: wrap;
+        gap: var(--bew-space-6);
+      }
+
+      .text-con {
+        flex: 1;
+        min-width: 0;
+        overflow-wrap: anywhere;
+      }
+    }
+  }
 }

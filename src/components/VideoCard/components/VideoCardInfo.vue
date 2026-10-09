@@ -281,8 +281,10 @@ const content = computed(() => {
             <a :href="videoUrl" target="_blank">
               <VideoWatchedTag
                 v-if="content.showWatchedBadge"
-                :aid="video.aid ?? video.id"
+                :aid="video.aid"
                 :bvid="video.bvid"
+                :epid="video.epid"
+                :roomid="video.roomid"
               />
               {{ video.title }}
             </a>

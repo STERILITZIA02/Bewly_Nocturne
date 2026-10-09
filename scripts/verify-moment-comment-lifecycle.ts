@@ -123,6 +123,8 @@ export async function verifyMomentCommentLifecycle() {
     '~/utils/api': { default: { moment: momentApi } },
     '~/utils/main': { getUserID: () => String(store.userInfo.mid), getCSRF: () => 'fixture' },
     '~/utils/commentPermalink': {},
+    // This in-memory renderer has no layout. Geometry has its own DOM module test.
+    '~/utils/commentReadingAnchor': { captureCommentReadingAnchor: () => ({ cancel() {}, restore: async () => {} }) },
     '~/utils/commentTree': commentTree,
     '~/utils/locale': { normalizeIntlLocale: (locale: string) => locale },
     '~/utils/momentCommentSession': sessions,
@@ -138,7 +140,7 @@ export async function verifyMomentCommentLifecycle() {
   const evaluate = (source: string) => {
     const exports: Record<string, any> = {}
     const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText
-    vm.runInNewContext(code, { exports, Error, document: { hidden: false }, require: (name: string) => {
+    vm.runInNewContext(code, { exports, Error, AbortController, document: { hidden: false, addEventListener() {}, removeEventListener() {} }, require: (name: string) => {
       assert.ok(name in mockModules, `Unexpected module: ${name}`)
       return mockModules[name]
     } })

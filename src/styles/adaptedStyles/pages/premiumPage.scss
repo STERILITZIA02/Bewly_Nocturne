@@ -4,27 +4,74 @@
   }
 
   &.bewly-design {
-    --brand_pink: var(--Pi5);
+    .big-wrapper {
+      background: var(--bew-bg) !important;
+    }
+
+    .vip-info-inner-wrapper {
+      background: var(--bew-elevated);
+      backdrop-filter: var(--bew-filter-glass-1);
+      border-radius: var(--bew-panel-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .vip-info-inner-wrapper .wrapper-mask {
+      background: none;
+    }
+
+    .vip-info-inner-wrapper :is(.function .count, .divider .text) {
+      color: var(--bew-text-1);
+    }
+
+    .vip-info-inner-wrapper .function .desc {
+      color: var(--bew-text-2);
+    }
+
+    .big-vip-btn,
+    .big-vip-btn:hover {
+      background: var(--bew-theme-color);
+      color: var(--bew-on-theme-color);
+    }
+
+    .big-vip-btn .text {
+      color: inherit;
+    }
+
+    .big-gift-btn {
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+    }
+
+    .inner-content-wrapper .season-cover.b-img {
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+
+    .inner-content-wrapper .season-cover.b-img > .b-img__inner {
+      border-radius: inherit;
+      corner-shape: inherit;
+    }
 
     .home-banner-wrapper .banner-hover-group {
       background: linear-gradient(
         180deg,
-        rgba(var(--bg1_rgb), 0),
-        rgba(var(--bg1_rgb), 0.07) 11.79%,
-        rgba(var(--bg1_rgb), 0.08) 21.38%,
-        rgba(var(--bg1_rgb), 0.0704) 29.12%,
-        rgba(var(--bg1_rgb), 0.120652) 35.34%,
-        rgba(var(--bg1_rgb), 0.181481) 40.37%,
-        rgba(var(--bg1_rgb), 0.2512) 44.56%,
-        rgba(var(--bg1_rgb), 0.328119) 48.24%,
-        rgba(var(--bg1_rgb), 0.410548) 51.76%,
-        rgba(var(--bg1_rgb), 0.4968) 55.44%,
-        rgba(var(--bg1_rgb), 0.585185) 59.63%,
-        rgba(var(--bg1_rgb), 0.674015) 64.66%,
-        rgba(var(--bg1_rgb), 0.7616) 70.88%,
-        rgba(var(--bg1_rgb), 0.846252) 78.62%,
-        rgba(var(--bg1_rgb), 0.926281) 88.21%,
-        var(--bg1)
+        transparent,
+        color-mix(in srgb, var(--bew-bg) 7%, transparent) 11.79%,
+        color-mix(in srgb, var(--bew-bg) 8%, transparent) 21.38%,
+        color-mix(in srgb, var(--bew-bg) 7.04%, transparent) 29.12%,
+        color-mix(in srgb, var(--bew-bg) 12.0652%, transparent) 35.34%,
+        color-mix(in srgb, var(--bew-bg) 18.1481%, transparent) 40.37%,
+        color-mix(in srgb, var(--bew-bg) 25.12%, transparent) 44.56%,
+        color-mix(in srgb, var(--bew-bg) 32.8119%, transparent) 48.24%,
+        color-mix(in srgb, var(--bew-bg) 41.0548%, transparent) 51.76%,
+        color-mix(in srgb, var(--bew-bg) 49.68%, transparent) 55.44%,
+        color-mix(in srgb, var(--bew-bg) 58.5185%, transparent) 59.63%,
+        color-mix(in srgb, var(--bew-bg) 67.4015%, transparent) 64.66%,
+        color-mix(in srgb, var(--bew-bg) 76.16%, transparent) 70.88%,
+        color-mix(in srgb, var(--bew-bg) 84.6252%, transparent) 78.62%,
+        color-mix(in srgb, var(--bew-bg) 92.6281%, transparent) 88.21%,
+        var(--bew-bg)
       );
     }
   }

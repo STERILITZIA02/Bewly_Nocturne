@@ -1,4 +1,3 @@
-export const BILIBILI_LOGIN_INVALID_CODES = [-101, -658] as const
 export const BILIBILI_RISK_CONTROL_CODES = [-352, -412, -509, -799] as const
 const BILIBILI_RISK_CONTROL_HTML_MESSAGE = '检测到风控页面，API返回了HTML而不是JSON'
 
@@ -32,12 +31,6 @@ function hasRiskVoucher(value: unknown): boolean {
 
   const voucher = value.v_voucher
   return typeof voucher === 'string' ? voucher.trim().length > 0 : Boolean(voucher)
-}
-
-export function isBilibiliLoginInvalidCode(code: unknown): boolean {
-  const normalizedCode = normalizeCode(code)
-  return normalizedCode !== undefined
-    && BILIBILI_LOGIN_INVALID_CODES.includes(normalizedCode as typeof BILIBILI_LOGIN_INVALID_CODES[number])
 }
 
 export function isBilibiliRiskControl(value: unknown): boolean {

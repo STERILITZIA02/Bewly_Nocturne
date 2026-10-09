@@ -6,6 +6,7 @@ import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { vLiquidGlass } from '~/utils/liquidGlass'
 
+import ConversationFind from './ConversationFind.vue'
 import MessageComposer from './experimental/MessageComposer.vue'
 import type { DisplayPrivateMessage as OptimisticPrivateMessage } from './experimental/privateMessageTransactions'
 import type { PrivateMessageWritesController as PrivateMessageWriteController } from './experimental/privateMessageWriteTypes'
@@ -50,6 +51,8 @@ const selfAvatarUrl = computed(() => topBarStore.userInfo.face || '')
 const conversationViewRef = ref<HTMLElement | null>(null)
 
 const previewImage = ref('')
+const highlightedMessage = ref('')
+const findToolsRef = ref<HTMLElement>()
 const state = computed(() => props.controller.getState(talkerId.value))
 const isTextSendEnabled = computed(() => Boolean(props.writeController) && Boolean(
   props.recipient || props.session?.capabilities.canSend,
@@ -61,6 +64,7 @@ const timelineItems = computed<Array<DisplayPrivateMessage | OptimisticPrivateMe
     left.timestamp - right.timestamp || left.msgKey.localeCompare(right.msgKey)
   ))
 })
+const galleryImages = computed(() => [...new Set(timelineItems.value.flatMap(message => message.content.type === 'image' || message.content.type === 'emoticon' ? [message.content.src] : []))])
 const draft = computed({
   get: () => writeState.value?.draft ?? '',
   set: value => props.writeController?.setDraft(talkerId.value, value),
@@ -116,6 +120,12 @@ const viewport = useConversationViewport({
   },
 })
 const { messageScrollRef, messageContentRef, isAtLatestPosition, isAtLatest, saveViewportState, scrollToLatest, scheduleScrollFrame, handleContentResize, markReadingIntent, handleDirectGestureMove, endDirectScrollGesture, handleScroll } = viewport
+function locateMessage(key: string) {
+  highlightedMessage.value = key
+  const rootTop = messageScrollRef.value?.getBoundingClientRect().top ?? 0
+  const toolsBottom = findToolsRef.value?.getBoundingClientRect().bottom ?? rootTop
+  viewport.scrollToMessage(key, Math.max(16, toolsBottom - rootTop + 8))
+}
 const presentation = useConversationPresentation(conversationViewRef, () => props.active, {
   activate: () => void activateConversation(),
   layoutSettled: handleContentResize,
@@ -339,6 +349,7 @@ function handleEscape() {
 watch(talkerId, (_, previousTalkerId) => {
   saveViewportState(undefined, undefined, previousTalkerId)
   previewImage.value = ''
+  highlightedMessage.value = ''
   activationGeneration++
   conversationActivationPending = true
   viewport.resetReading()
@@ -351,6 +362,8 @@ watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl
 
 watch(() => props.active, (active) => {
   if (!active) {
+    previewImage.value = ''
+    highlightedMessage.value = ''
     activationGeneration++
     conversationActivationPending = false
   }
@@ -456,7 +469,7 @@ defineExpose({
                 <PrivateMessageItem
                   v-for="message in timelineItems"
                   :key="message.msgKey"
-                  :class="{ 'conversation-view__message--reveal': isRevealingHistory && message.msgKey in historyRevealDelays }"
+                  :class="{ 'conversation-view__message--reveal': isRevealingHistory && message.msgKey in historyRevealDelays, 'conversation-view__message--match': highlightedMessage === message.msgKey }"
                   :style="isRevealingHistory ? { '--conversation-message-delay': `${historyRevealDelays[message.msgKey] ?? 0}ms` } : undefined"
                   :message="message"
                   :auto-load-images="settings.autoLoadPrivateMessageImages"
@@ -485,6 +498,10 @@ defineExpose({
         :class="{ 'conversation-card__bottom-edge--visible': conversationExpanded }"
         aria-hidden="true"
       />
+    </div>
+
+    <div v-if="active && entryPhase === 'ready' && timelineItems.length" ref="findToolsRef" class="conversation-view__tools">
+      <ConversationFind :key="talkerId" :messages="timelineItems" @locate="locateMessage" @clear="highlightedMessage = ''" />
     </div>
 
     <button
@@ -531,6 +548,7 @@ defineExpose({
     <PrivateMessageImageViewer
       v-if="previewImage"
       :src="previewImage"
+      :images="galleryImages"
       @close="previewImage = ''"
     />
   </section>
@@ -605,6 +623,21 @@ defineExpose({
   scrollbar-gutter: stable;
   background: transparent;
   outline: none;
+}
+.conversation-view__tools {
+  position: absolute;
+  z-index: 3;
+  top: var(--bew-space-2);
+  right: var(--bew-space-4);
+  width: calc(100% - var(--bew-space-8));
+  display: flex;
+  justify-content: flex-end;
+  pointer-events: none;
+}
+.conversation-view__message--match {
+  outline: 2px solid var(--bew-theme-focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--bew-interactive-radius);
 }
 
 .conversation-view--layout-transitioning .conversation-view__messages {

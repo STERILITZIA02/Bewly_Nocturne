@@ -5,10 +5,11 @@ import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS, BEWLY_WIDESCREEN_MANUAL_TOGGLE 
 import { settings } from '~/logic'
 import type { VideoInfo } from '~/models/video/videoInfo'
 import { clearActionGeometry, setupActionGeometryObservers, syncActionAnimationTheme } from '~/utils/bewlyWidescreen/actionEffects'
-import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_POLL_SLOW_INTERVAL, READY_STABILITY_DELAY, selectors, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
+import { BODY_CLASS, DANMAKU_SKELETON_CLASS, DANMAKU_SOURCE_CLASS, DANMAKU_SOURCE_HOST_CLASS, EMPTY_CLASS, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_PLAYER_CLASS, PAGE_READY_FALLBACK_DELAY, READY_POLL_FAST_DURATION, READY_POLL_INTERVAL, READY_STABILITY_DELAY, selectors, SIDEBAR_RELEVANT_SELECTOR, TRANSFER_SETTLE_DELAY } from '~/utils/bewlyWidescreen/constants'
 import { clearDanmakuActivation, syncDanmakuInputSource } from '~/utils/bewlyWidescreen/danmaku'
 import { syncDescription } from '~/utils/bewlyWidescreen/description'
 import { clearAnchoredPlayerElement, clearAspectObservers, clearAuxiliaryControlGeometry, clearPlayerResizeSync, ensureAnchoredPlayer, schedulePlayerResizeSync, setupAspectObservers, syncAnchoredPlayerGeometry, updateAspectRatio, updateSidebarLayoutState } from '~/utils/bewlyWidescreen/geometry'
+import { setupIdleProgress } from '~/utils/bewlyWidescreen/idleProgress'
 import { setupSidebarInteractionTracking } from '~/utils/bewlyWidescreen/interactions'
 import { t } from '~/utils/bewlyWidescreen/labels'
 import { createWidescreenLoading } from '~/utils/bewlyWidescreen/loading'
@@ -254,6 +255,7 @@ function cleanupState(currentState: BewlyWidescreenState) {
   clearSidebarEdgeRevealSuppression(currentState)
   currentState.sidebarInteractionCleanup?.()
   currentState.sidebarToggleAutoHideCleanup?.()
+  currentState.idleProgressCleanup?.()
   currentState.activeControlCleanup?.()
   currentState.activeControlCleanup = undefined
   clearAspectObservers(currentState)
@@ -418,6 +420,7 @@ function applyNow(sidebarPosition: 'left' | 'right' = 'right') {
   setupActiveWidescreenControl(nextState)
   setupSidebarInteractionTracking(nextState)
   setupSidebarToggleAutoHide(nextState)
+  setupIdleProgress(nextState)
   if (settings.value.showVerticalVideoZoomButton)
     initVerticalVideoZoom()
   schedulePlayerResizeSync(nextState)
@@ -432,7 +435,8 @@ function clearReadyWait({ preserveCommentPrewarm = false }: { preserveCommentPre
     cancelAnimationFrame(readyFrame)
   readyFrame = undefined
   if (readyMetadataHandler) {
-    document.removeEventListener('loadedmetadata', readyMetadataHandler, true)
+    for (const name of ['loadedmetadata', 'loadeddata', 'resize'])
+      document.removeEventListener(name, readyMetadataHandler, true)
     readyMetadataHandler = undefined
   }
   if (readyPollTimer !== undefined) {
@@ -521,14 +525,33 @@ function waitForReadyLayout() {
       playerReadyForLayout = isReadyForLayout()
       contentReadyForLayout = isWidescreenTransferContentReady()
         || hasWidescreenTransferSettleElapsed()
-      tryCommitLayout()
+      if (!tryCommitLayout() && readyPollTimer === undefined
+        && (Date.now() - readinessStartedAt < READY_POLL_FAST_DURATION
+          || (pageReadyForLayout && playerReadyForLayout
+            && (!hasWidescreenTransferSettleElapsed() || readinessStableSince !== undefined)))) {
+        readyPollTimer = setTimeout(() => {
+          readyPollTimer = undefined
+          scheduleAttempt()
+        }, READY_POLL_INTERVAL)
+      }
     })
   }
 
-  readyObserver = new MutationObserver(scheduleAttempt)
+  readyObserver = new MutationObserver((records) => {
+    // Clock/danmaku text and our loading decoration do not change readiness.
+    const relevant = records.some(record => (record.target instanceof Element && record.target.matches(SIDEBAR_RELEVANT_SELECTOR))
+      || [...Array.from(record.addedNodes), ...Array.from(record.removedNodes)].some(node => node instanceof Element
+        && (node.matches(`${SIDEBAR_RELEVANT_SELECTOR},video,bwp-video`) || !!node.querySelector(`${SIDEBAR_RELEVANT_SELECTOR},video,bwp-video`))))
+    if (relevant)
+      scheduleAttempt()
+  })
   readyObserver.observe(document.body || document.documentElement, { childList: true, subtree: true })
-  readyMetadataHandler = scheduleAttempt
-  document.addEventListener('loadedmetadata', readyMetadataHandler, true)
+  readyMetadataHandler = (event) => {
+    if (event.target instanceof Element && getPlayerRoot()?.contains(event.target))
+      scheduleAttempt()
+  }
+  for (const name of ['loadedmetadata', 'loadeddata', 'resize'])
+    document.addEventListener(name, readyMetadataHandler, true)
   if (!pageReadyForLayout) {
     pageReadyHandler = () => {
       if (pageReadyFallbackTimer !== undefined) {
@@ -550,19 +573,8 @@ function waitForReadyLayout() {
     if (document.readyState === 'complete')
       pageReadyHandler()
   }
-  const pollReadiness = () => {
-    readyPollTimer = undefined
-    if (!session.entering || session.current)
-      return
-    scheduleAttempt()
-    // Slow CDN metadata is not a terminal failure. Keep the event-driven wait
-    // alive until navigation or an explicit exit, but reduce idle polling cost.
-    const interval = Date.now() - readinessStartedAt < READY_POLL_FAST_DURATION
-      ? READY_POLL_INTERVAL
-      : READY_POLL_SLOW_INTERVAL
-    readyPollTimer = setTimeout(pollReadiness, interval)
-  }
-  readyPollTimer = setTimeout(pollReadiness, READY_POLL_INTERVAL)
+  // Keep late native events subscribed after the initial window, without an
+  // idle polling loop. A real readiness change still gets its stability delay.
   scheduleAttempt()
 }
 

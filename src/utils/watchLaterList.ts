@@ -13,7 +13,7 @@ export function normalizeWatchLaterItem(value: unknown): WatchLaterItem | undefi
     pic: typeof item.pic === 'string' ? item.pic : typeof item.bangumi?.cover === 'string' ? item.bangumi.cover : '',
     bvid: typeof item.bvid === 'string' ? item.bvid : '',
     duration: Number.isFinite(item.duration) ? item.duration : 0,
-    progress: Number.isFinite(item.progress) ? item.progress : 0,
+    progress: Number.isFinite(item.progress) ? item.progress : undefined,
     pubdate: Number.isFinite(item.pubdate) ? item.pubdate : 0,
     owner: {
       mid: Number.isSafeInteger(item.owner?.mid) && item.owner.mid > 0 ? item.owner.mid : 0,

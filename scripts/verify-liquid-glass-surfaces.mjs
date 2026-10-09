@@ -34,7 +34,7 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       // JSDOM does not expose computed backdrop-filter. Read the matching
       // declaration from the real injected stylesheet; optical QA uses Chromium.
       const backdropDeclaration = () => [...style.sheet.cssRules]
-        .filter(rule => rule.selectorText && glass.matches(rule.selectorText) && rule.style.getPropertyValue('backdrop-filter'))
+        .filter(rule => rule.selectorText && rule.style.getPropertyValue('backdrop-filter') && glass.matches(rule.selectorText))
         .at(-1)
         ?.style
         .getPropertyValue('backdrop-filter')
@@ -138,6 +138,8 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       },
       '~/constants/layout': await import('../src/constants/layout'),
       '~/logic': { settings: fixture.settings },
+      '~/logic/iframePageState': { useIframePageActive: () => Vue.ref(false) },
+      '~/utils/main': { isInIframe: () => false },
       '~/logic/searchExperience': { acquireSearchExperience: () => () => {}, loadSharedHotSearch: async () => {}, useSearchExperience: () => ({ hotSearchList: Vue.ref([]), searchRecommendation: Vue.ref(null), isLoadingHotSearch: Vue.ref(false) }) },
       '~/utils/api': { default: { search: { getSearchSuggestion: async () => ({ code: 0, result: { tag: [] } }) } } },
       '~/utils/debug': { debugLog() {} },
@@ -403,6 +405,7 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
       '~/utils/liquidGlass': fixture.attachment,
       './searchCatalog': { settingsSearchEntries: [] },
+      './navigateToSetting': await import('../src/components/Settings/navigateToSetting'),
       './types': await import('../src/components/Settings/types'),
     }, { globals: { sessionStorage: window.sessionStorage, defineAsyncComponent: () => ({ render: () => null }) } })
     const app = Vue.createApp(Settings)

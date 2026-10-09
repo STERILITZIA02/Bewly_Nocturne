@@ -84,7 +84,7 @@ export function registerFourFeatureChecks(check, { Vue, flush, compileComponent 
       '~/constants/openTabsWatchLater': await import('../src/constants/openTabsWatchLater'),
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/main': { getUserID: () => cookie },
-      '~/utils/messaging': { sendMessage: async (_name, data) => {
+      '~/utils/messaging': { reportRuntimeFailure() {}, sendMessage: async (_name, data) => {
         commands.push(data.action)
         return snapshot
       } },
@@ -114,6 +114,9 @@ export function registerFourFeatureChecks(check, { Vue, flush, compileComponent 
 
   check('new settings: import accepts the new link mode and boolean, rejects invalid/video-card expansion', async () => {
     const settings = { value: { topBarLinkOpenMode: 'currentTabIfNotHomepage', searchBarLinkOpenMode: 'currentTabIfNotHomepage', videoCardLinkOpenMode: 'newTab', autoRemoveWatchLaterOnEnd: false } }
+    settings.import = async (values) => {
+      Object.assign(settings.value, values)
+    }
     const module = await loadSourceFunctions('../src/components/Settings/Advanced/Maintenance.vue', ['handleImportFile', 'matchesSettingType', 'hasBlockedProperty', 'isPlainObject', 'blockedPropertyNames', 'settingEnumValues'], {
       ...(await import('../src/utils/sidebarCoverSettings')),
       settings,
@@ -143,6 +146,7 @@ export function registerFourFeatureChecks(check, { Vue, flush, compileComponent 
     let sends = 0
     let commits = 0
     const module = await loadSourceModule('../src/utils/watchLater.ts', {
+      '~/logic/watchLaterState': { findWatchLaterEntry: () => undefined },
       '~/utils/api': { default: { watchlater: { removeFromWatchLater: () => {
         sends++
         return write.promise
@@ -426,27 +430,29 @@ export function registerFourFeatureChecks(check, { Vue, flush, compileComponent 
       './openTabsWatchLaterTask': core,
       './tabContext': context,
       './utils': { apiListenerFactory: () => async (params) => {
-        if (params.contentScriptQuery === 'getAllWatchLaterList')
-          return { code: 0, data: { list: [] } }
+        if (params.contentScriptQuery === 'getWatchLaterState')
+          return { code: 0, data: { complete: true, entries: [] } }
         sends.push(params)
         return response.promise
       } },
     }
     const module = await loadSourceModule('../src/background/openTabsWatchLater.ts', imports, { crypto: webcrypto })
-    module.setupOpenTabsWatchLater(async () => {})
+    module.setupOpenTabsWatchLater()
     const sender = { id: 'fixture', url: tabs[0].url, frameId: 0, tab: tabs[0] }
     const snapshot = await handler({ action: 'prepare', accountId: 7 }, sender)
     assert.deepEqual(Array.from(snapshot.items, item => [item.tabId, item.windowId]), [[1, 11], [3, 33]])
     assert.equal(sends.length, 0, 'preparation never submits')
-    await handler({ action: 'start', accountId: 7, taskId: snapshot.id }, sender)
+    await handler({ action: 'start', accountId: 7, taskId: snapshot.id, selectedTabIds: [3] }, sender)
     for (let i = 0; i < 30 && !sends.length; i++) await flush()
+    assert.deepEqual(Array.from(snapshot.items, item => item.tabId), [3])
+    assert.equal(sends[0].aid, 3, 'the unchecked playback tab is never sent')
     await handler({ action: 'unsubscribe', accountId: 7 }, sender)
     const reopened = await handler({ action: 'get', accountId: 7 }, { ...sender, tab: tabs[2] })
     assert.equal(reopened.id, snapshot.id)
     assert.equal(reopened.status, 'running')
     assert.equal((await handler({ action: 'prepare', accountId: 7 }, sender)).id, snapshot.id)
     const restart = await loadSourceModule('../src/background/openTabsWatchLater.ts', imports, { crypto: webcrypto })
-    restart.setupOpenTabsWatchLater(async () => {})
+    restart.setupOpenTabsWatchLater()
     const recovered = await handler({ action: 'get', accountId: 7 }, sender)
     assert.equal(recovered.status, 'stopped')
     assert.equal(recovered.items[0].status, 'unknown')

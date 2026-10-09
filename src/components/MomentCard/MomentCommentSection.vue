@@ -6,6 +6,7 @@ import { useToast } from 'vue-toastification'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { buildMomentCommentPermalink } from '~/utils/commentPermalink'
+import { captureCommentReadingAnchor } from '~/utils/commentReadingAnchor'
 import type { CommentTreeLayoutNode } from '~/utils/commentTree'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
@@ -76,16 +77,28 @@ const collapsedIds = reactive(new Set<string>())
 watch(() => sessions.hasPendingLikes(sessionLease.value), pending => emit('writingChange', pending), { flush: 'sync' })
 let requestGeneration = 0
 let disposed = false
+let readOwner = new AbortController()
 
 const {
   getThreadState,
   loadMoreReplies,
   resetThreads,
+  cancelReads: cancelReplyReads,
   revision: threadRevision,
   seedThread,
   snapshotThreads,
   restoreThreads,
 } = useMomentCommentThread(toRef(() => commentId.value), toRef(() => commentType.value), sort)
+
+function cancelReads() {
+  readOwner.abort()
+  readOwner = new AbortController()
+  requestGeneration += 1
+  loading.value = false
+  loadingMore.value = false
+  resolvingTarget.value = false
+  cancelReplyReads()
+}
 
 function saveSession() {
   if (!sessionLease.value || !hasLoaded || sessionSource !== getSourceIdentity())
@@ -110,7 +123,9 @@ async function restoreScroll() {
 }
 
 async function initializeComments(nextSort?: 0 | 1) {
+  cancelReads()
   const generation = ++requestGeneration
+  const signal = readOwner.signal
   sessionSource = getSourceIdentity()
   const source = sessionSource
   const isCurrent = () => !disposed && generation === requestGeneration && source === getSourceIdentity()
@@ -132,7 +147,7 @@ async function initializeComments(nextSort?: 0 | 1) {
   collapsedIds.clear()
   Object.keys(likeCounts).forEach(key => delete likeCounts[key])
   resetThreads()
-  if (props.active === false) {
+  if (props.active === false || document.hidden) {
     resolvingTarget.value = false
     return
   }
@@ -140,7 +155,7 @@ async function initializeComments(nextSort?: 0 | 1) {
   try {
     const resolved = readMomentCommentTarget(props.moment.commentId, props.moment.commentType)
       || sessions?.getTarget(getAccountIdentity(), props.moment.id)
-      || await resolveMomentCommentTarget(props.moment, id => api.moment.getMomentDetail({ id }), isCurrent)
+      || await resolveMomentCommentTarget(props.moment, id => api.moment.getMomentDetail({ id }, { signal }), isCurrent)
     if (!isCurrent())
       return
     if (!resolved)
@@ -270,13 +285,14 @@ function seedCommentLikeState(items: MomentCommentItem[], readVersion: number) {
 }
 
 async function loadComments(reset = false) {
-  if (disposed || props.active === false || !commentId.value || !commentType.value || loading.value || loadingMore.value)
+  if (disposed || props.active === false || document.hidden || !commentId.value || !commentType.value || loading.value || loadingMore.value)
     return
 
   const generation = reset ? ++requestGeneration : requestGeneration
   const requestIdentity = getCommentIdentity()
   const likeReadVersion = sessions.getLikeReadVersion(sessionLease.value)
   const pageNumber = reset ? 1 : nextPage.value
+  const signal = readOwner.signal
   if (reset) {
     hasLoaded = false
     restoredScrollTop = 0
@@ -302,7 +318,7 @@ async function loadComments(reset = false) {
       ps: 8,
       sort: sort.value,
       nohot: 0,
-    })
+    }, { signal })
     const page = normalizeMomentCommentPage(response, pageNumber, 8)
     if (generation !== requestGeneration
       || requestIdentity !== getCommentIdentity()) {
@@ -398,6 +414,8 @@ function openCommentImage(images: string[], index: number, trigger: HTMLElement)
 }
 
 async function loadThreadReplies(root: MomentCommentItem) {
+  if (disposed || props.active === false || document.hidden)
+    return
   const before = getThreadState(root)
   if (before?.loading)
     return
@@ -405,12 +423,17 @@ async function loadThreadReplies(root: MomentCommentItem) {
   const likeReadVersion = sessions.getLikeReadVersion(sessionLease.value)
   const generation = requestGeneration
   const identity = getCommentIdentity()
+  const anchor = listRef.value ? captureCommentReadingAnchor(listRef.value, listRef.value, readOwner.signal) : undefined
   await loadMoreReplies(root)
-  if (generation !== requestGeneration || identity !== getCommentIdentity())
+  if (generation !== requestGeneration || identity !== getCommentIdentity()) {
+    anchor?.cancel()
     return
+  }
   const state = getThreadState(root)
   if (state)
     seedCommentLikeState(state.items.filter(item => !previousItems.has(item)), likeReadVersion)
+  await nextTick()
+  void anchor?.restore(() => generation === requestGeneration && identity === getCommentIdentity())
 }
 
 function loadMoreIfNearEnd() {
@@ -424,15 +447,28 @@ watch([loading, loadingMore, listRef, () => props.active], () => {
   void nextTick(loadMoreIfNearEnd)
 }, { flush: 'post' })
 watch(() => props.active, (active) => {
-  if (active && !hasLoaded && !resolvingTarget.value && !loading.value)
+  if (!active)
+    cancelReads()
+  else if (!hasLoaded && !resolvingTarget.value && !loading.value)
     void initializeComments()
 })
 watch(getSourceIdentity, () => void initializeComments(), { immediate: true, flush: 'sync' })
 watch(() => [comments.value, loading.value, loadingMore.value, resolvingTarget.value, loadError.value, threadRevision.value], () => emit('interactiveResize'), { flush: 'sync' })
-onMounted(() => void restoreScroll())
+function onVisibilityChange() {
+  if (document.hidden)
+    cancelReads()
+  else if (props.active && !hasLoaded)
+    void initializeComments()
+}
+onMounted(() => {
+  void restoreScroll()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
 
 onBeforeUnmount(() => {
   saveSession()
+  cancelReads()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (sessionLease.value)
     sessions.release(sessionLease.value)
   disposed = true

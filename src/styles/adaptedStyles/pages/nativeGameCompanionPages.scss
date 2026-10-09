@@ -1,0 +1,675 @@
+// Public game-center companions reuse the standalone settings/theme owner.
+// Their banners, game icons, native forms and click handlers remain native.
+html.bewly-design:is(
+    [data-bewly-native-site="game-wiki"],
+    [data-bewly-native-site="game-gifts"],
+    [data-bewly-native-site="game-payment"]
+  ) {
+  // Some legacy documents keep body at one viewport while their content
+  // overflows it. Paint the document canvas as well as the existing surfaces.
+  background-color: var(--bew-bg);
+
+  :is(.bili-game-header-nav, .bili-game-header-nav-bar, .bili-game-header-nav-main) {
+    background-color: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+  }
+
+  .bili-game-header-nav-wrap a {
+    color: var(--bew-text-1);
+
+    &:hover {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  .bili-game-header-nav-search input {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bili-game-header-nav-search input::placeholder,
+  .bili-game-header-nav-search .iconic_pc_search {
+    color: var(--bew-text-2);
+  }
+
+  :is(.bili-game-footer, .bui-footer, .footer-public) {
+    background: var(--bew-bg);
+    color: var(--bew-text-2);
+  }
+
+  :is(.bili-game-footer-content-externalLinks, .footer-text) :is(p, a) {
+    color: var(--bew-text-2);
+  }
+
+  #biliGameFooter .bili-game-footer-content-externalLinks-item a,
+  #biliGameFooter .bili-game-footer-content-shareText {
+    color: var(--bew-text-2);
+  }
+
+  .bili-game-footer-content-logo {
+    border-color: var(--bew-border-color);
+  }
+
+  @media (max-width: 1232px) {
+    &,
+    body,
+    .bili-game-header-nav,
+    .bili-game-header-nav-bar,
+    .bili-game-footer,
+    .bui-footer {
+      min-width: 0;
+    }
+
+    :is(.bili-game-header-nav-main, .footer-public .footer-box) {
+      max-width: calc(100% - var(--bew-space-8));
+      margin-inline: auto;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="game-wiki"] {
+  :is(.game-bg, .wiki-header) {
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  #content,
+  #firstHeading,
+  .home-title {
+    color: var(--bew-text-1);
+  }
+
+  :is(.wiki-nav, .wiki-menu-li-1, .hot-card-wiki, .wiki-summary-item) {
+    border-color: var(--bew-border-color);
+  }
+
+  :is(.wiki-header .menu-title, .wiki-menu-ul-2 a, .personal-notification a) {
+    color: var(--bew-text-1);
+  }
+
+  #p-personal #pt-notifications-alert > a {
+    // The native #pt-notifications-alert a rule makes its ink important.
+    color: var(--bew-text-1) !important;
+
+    &.mw-echo-notifications-badge-all-read {
+      color: var(--bew-text-2) !important;
+    }
+
+    &:hover,
+    &:focus-visible {
+      color: var(--bew-text-1) !important;
+    }
+  }
+
+  .wiki-nav {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+  }
+
+  .wiki-header :is(.wiki-menu-li-1, .wiki-menu-li-2, .wiki-menu-li-3) {
+    // Native nested menu selectors assign their own surfaces at every level.
+    background: var(--bew-content-solid) !important;
+    color: var(--bew-text-1);
+
+    &:hover {
+      background: var(--bew-content-solid-hover) !important;
+    }
+  }
+
+  :is(.wiki-menu-ul-2, .bui-sns-info) {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    a {
+      color: inherit;
+    }
+  }
+
+  .bui-sns-info {
+    // The native inline margin can leave this fixed rail over the reading
+    // column after a desktop resize. Anchor its outer edge to the viewport.
+    left: auto;
+    right: var(--bew-space-4);
+  }
+
+  .bui-sns-info a {
+    > div {
+      color: inherit;
+    }
+
+    svg {
+      fill: currentColor;
+    }
+
+    &:hover {
+      color: var(--bew-theme-foreground);
+    }
+  }
+
+  #simpleSearch1 #searchInput,
+  .mw-searchInput {
+    box-sizing: border-box;
+    min-height: var(--bew-control-height);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  #simpleSearch1 #searchInput::placeholder {
+    color: var(--bew-text-3);
+    opacity: 1;
+  }
+
+  .bodySearchWrap .mw-ui-button {
+    box-sizing: border-box;
+    min-height: var(--bew-control-height);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+  }
+
+  :is(.gy-bwiki, .wiki-summary, .hot-card, .bz) {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .gy-bwiki .gy,
+  .wiki-summary .label {
+    color: var(--bew-text-2);
+  }
+
+  .gy-bwiki .gy > p > a {
+    // Paragraph links keep readable ink on the shared reading surface.
+    // Nested action surfaces continue to use their own paired foreground.
+    color: var(--bew-theme-foreground);
+  }
+
+  .wiki-summary .main-line-wrap,
+  .other-game-list .game-name {
+    color: var(--bew-text-1);
+  }
+
+  // Only the ordinary footer links of these cards have fixed inline dark ink.
+  // White captions over the game artwork keep their native gradient and ink.
+  .hot-card-wiki a {
+    color: var(--bew-text-1) !important;
+  }
+
+  :is(.bwiki-swiper:not(.bwiki-swiper-thumbs), .banner-b, .game-pic) {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .game-pic img {
+    border-radius: inherit;
+    corner-shape: inherit;
+  }
+
+  :is(.gy-bwiki .section-wrap, .resp-tabs-list > li) {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    a {
+      color: inherit;
+    }
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+  }
+
+  .resp-tabs-list > li.active {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+  }
+
+  .gy-bwiki .section-wrap a {
+    // The native external/visited link rules assign their own important ink.
+    color: inherit !important;
+  }
+
+  .resp-tabs > .search-kk {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--bew-space-4);
+    padding-block: var(--bew-space-4);
+  }
+
+  .resp-tabs-list {
+    display: flex;
+    gap: var(--bew-space-1);
+    height: auto;
+    margin: 0 !important; // The platform template supplies inline margins.
+
+    > li {
+      display: inline-flex;
+      align-items: center;
+      box-sizing: border-box;
+      min-height: var(--bew-control-height);
+      padding-inline: var(--bew-space-3);
+      font-size: var(--bew-font-size-control);
+      line-height: var(--bew-line-height-control);
+      font-weight: var(--bew-font-weight-semibold);
+
+      .tab-panel {
+        color: inherit;
+        font: inherit;
+      }
+    }
+  }
+
+  .resp-tabs .tabbernav {
+    background: var(--bew-content-alt-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    > li > a {
+      color: var(--bew-text-2);
+      border-color: var(--bew-border-color);
+    }
+
+    > li.tabberactive > a,
+    > li > a:hover {
+      color: var(--bew-text-1);
+      border-color: var(--bew-theme-foreground);
+    }
+  }
+
+  .bz-title,
+  .sq-bt {
+    color: var(--bew-text-1);
+  }
+
+  .sq-bg {
+    background: var(--bew-content-alt-solid);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .sq-bq-h {
+    border-color: var(--bew-border-color);
+  }
+
+  .bz a > span,
+  .home-box-4 font,
+  .glz-an > a {
+    // These ordinary reading links have explicit inline/legacy <font> ink.
+    // Artwork captions in .banner-b deliberately keep their white foreground.
+    color: var(--bew-text-1) !important;
+  }
+
+  .home-title > div,
+  .home-title > a > span,
+  .sq-bq-h > .sq-bq:last-child {
+    color: var(--bew-text-2) !important;
+  }
+
+  .glz-an {
+    background: var(--bew-content-solid);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .bz > div:empty {
+    // The three empty direct children are the native 54px circular icon discs.
+    background: var(--bew-content-alt-solid) !important;
+    corner-shape: var(--bew-corner-shape-round);
+  }
+
+  &.dark {
+    .gy-bwiki .home-title > img[alt="BWIKI logo.png"],
+    .bz img:is([alt="建站必读.png"], [alt="玩家教程.png"], [alt="编辑帮助.png"]),
+    .bui-sns-info .bili-kf-1,
+    #simpleSearch1 :is(#searchButton, #mw-searchButton, #searchDelete) {
+      filter: brightness(0) invert(1);
+    }
+  }
+
+  // Reserve the 70px native rail and a safe gap beside the 1200px content row.
+  @media (max-width: 1408px) {
+    .wiki-nav.wiki-nav-celling {
+      box-sizing: border-box;
+      left: var(--bew-space-4);
+      width: calc(100% - var(--bew-space-8));
+      padding-inline: var(--bew-space-4);
+      transform: none;
+    }
+
+    .wiki-nav-celling .celling-box {
+      width: 100%;
+      margin-inline: 0;
+    }
+
+    .wiki-nav-celling .menu-box {
+      // Keep the native one-sixth logo column and the measured 177px search
+      // footprint, including its borders, rather than the fixed 780px menu.
+      width: calc(83.333333% - 177px - var(--bew-space-2));
+    }
+
+    .game-bg {
+      // Keep the observed 70px native shortcut rail outside the reading column.
+      box-sizing: border-box;
+      width: calc(100% - var(--bew-space-12) * 2 - var(--bew-space-4));
+      padding-inline: var(--bew-space-6);
+      margin-inline: var(--bew-space-4) auto;
+    }
+
+    :is(#content, .wiki-header) {
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .home-1 {
+      width: 100%;
+      margin-inline: 0;
+    }
+
+    :is(.home-box-8, .home-box-4) {
+      width: 100%;
+      padding-inline: 0;
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="game-gifts"] {
+  .bui-container {
+    min-width: 0;
+    background-color: var(--bew-bg);
+    color: var(--bew-text-1);
+  }
+
+  .g-title h4 {
+    color: var(--bew-text-1);
+    border-color: var(--bew-theme-foreground);
+  }
+
+  .g-title > .btn-to-mygift {
+    background: var(--bew-theme-surface);
+    color: var(--bew-on-theme-surface);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-theme-surface-hover);
+    }
+  }
+
+  .bui-container :is(.gift-recommend, .gift-all) .gift-box {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-card-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    &:hover {
+      background: var(--bew-content-solid-hover);
+    }
+
+    .info h5 {
+      margin-top: 0;
+      color: var(--bew-text-1);
+    }
+
+    .info p {
+      margin-top: 0;
+    }
+
+    .info p,
+    .info .price-box .price-old {
+      color: var(--bew-text-2);
+    }
+
+    .info .price-box .price-old::before {
+      background: var(--bew-text-3);
+    }
+
+    .info .price-box em {
+      color: var(--bew-theme-foreground);
+    }
+
+    > .img {
+      background-color: var(--bew-content-alt-solid);
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      > img {
+        border-radius: inherit;
+        corner-shape: inherit;
+      }
+    }
+
+    .hover-bg {
+      // The observed bitmap is only a blue gradient; labels are separate DOM.
+      background: var(--bew-content-solid);
+      color: var(--bew-text-1);
+      border-radius: inherit;
+      corner-shape: inherit;
+
+      .depict {
+        color: inherit;
+      }
+    }
+
+    :is(.hover-bg, .info) .btn {
+      box-sizing: border-box;
+      min-height: var(--bew-control-height);
+      background: var(--bew-content-alt-solid);
+      color: var(--bew-text-1);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-radius-full);
+      corner-shape: var(--bew-corner-shape-round);
+    }
+  }
+
+  .bui-container .gift-recommend .gift-box > .img {
+    border-radius: var(--bew-media-radius) var(--bew-media-radius) 0 0;
+  }
+
+  .pop-nav {
+    background: var(--bew-content-solid);
+    color: var(--bew-text-1);
+    border-radius: var(--bew-panel-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .empty-box {
+    color: var(--bew-text-2);
+  }
+
+  :is(.empty-box p, .bread-nav nav span, .g-list .gift-box .info .date, .g-list .gift-box .info .links a) {
+    color: var(--bew-text-2);
+  }
+
+  :is(.bread-nav nav a, .g-list .gift-box .info h5) {
+    color: var(--bew-text-1);
+  }
+
+  .g-list .list li {
+    border-color: var(--bew-border-color);
+  }
+
+  .g-list .gift-box > .img {
+    border-radius: var(--bew-media-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+
+  .g-list .copy-box .code,
+  .gift-detail .detail-wapper .detail-left .info .code-box .code {
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+    box-shadow: none;
+  }
+
+  .g-list .gift-box .info .copy-box .btn-copy,
+  .gift-detail .detail-wapper .detail-left .info .code-box .btn {
+    background: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
+    border-color: var(--bew-theme-color);
+    border-radius: 0 var(--bew-interactive-radius) var(--bew-interactive-radius) 0;
+    corner-shape: var(--bew-corner-shape);
+    box-shadow: none;
+  }
+
+  .gift-detail .detail-wapper .detail-right .detail-content {
+    background: var(--bew-content-solid);
+    border-radius: var(--bew-modal-radius);
+    corner-shape: var(--bew-corner-shape);
+
+    h5,
+    .awards li span {
+      color: var(--bew-text-1);
+    }
+
+    p {
+      color: var(--bew-text-2);
+    }
+
+    .awards li .img {
+      background-color: var(--bew-content-alt-solid);
+      border-color: var(--bew-border-color);
+      border-radius: var(--bew-media-radius);
+      corner-shape: var(--bew-corner-shape);
+    }
+  }
+
+  &.dark .gift-detail .detail-content > .close {
+    // Native leaf-only cross bitmap, independent of the gift artwork.
+    filter: brightness(0) invert(1);
+  }
+
+  .bui-content {
+    max-width: calc(100% - var(--bew-space-8));
+    margin-inline: auto;
+  }
+}
+
+html.bewly-design[data-bewly-native-site="game-payment"] {
+  .top-warp {
+    background: var(--bew-elevated-solid);
+    color: var(--bew-text-1);
+  }
+
+  .content {
+    max-width: calc(100% - var(--bew-space-8));
+    color: var(--bew-text-1);
+  }
+
+  .content > .games > .game-list {
+    gap: var(--bew-space-6) var(--bew-space-4);
+
+    > .game-body {
+      box-sizing: border-box;
+      width: calc((100% - var(--bew-space-4) * 3) / 4);
+      min-width: 0;
+      height: auto;
+      min-height: calc(var(--bew-space-10) * 2);
+      margin: 0;
+      padding: var(--bew-space-2);
+      gap: var(--bew-space-2);
+      background: var(--bew-content-solid);
+      color: var(--bew-text-1);
+      border-radius: var(--bew-card-radius);
+      corner-shape: var(--bew-corner-shape);
+
+      &:hover {
+        background: var(--bew-content-solid-hover);
+      }
+
+      .icon {
+        flex-shrink: 0;
+        margin: 0;
+        border-radius: var(--bew-media-radius);
+        corner-shape: var(--bew-corner-shape);
+      }
+
+      .game-name {
+        min-width: 0;
+        margin: 0;
+        color: inherit;
+        font-size: var(--bew-font-size-body);
+        line-height: var(--bew-line-height-body);
+      }
+    }
+  }
+}
+
+html.bewly-design[data-bewly-native-site="game-agreement"] {
+  .page-content,
+  .choose {
+    box-sizing: border-box;
+    max-width: 1280px; // Keep the long document within the native desktop reading scale.
+    margin-inline: auto;
+  }
+
+  .page-content {
+    padding: var(--bew-space-6);
+    background: var(--bew-bg);
+    color: var(--bew-text-1);
+    font-size: var(--bew-font-size-body);
+    line-height: var(--bew-line-height-body);
+  }
+
+  .page-content h1 {
+    font-size: var(--bew-font-size-heading);
+    line-height: var(--bew-line-height-heading);
+    padding-block: var(--bew-space-6);
+  }
+
+  .page-content :is(h1, .strong, .item-title) {
+    color: var(--bew-text-1);
+  }
+
+  .page-content a {
+    color: var(--bew-theme-foreground);
+  }
+
+  .choose {
+    position: static;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--bew-space-2);
+    padding: var(--bew-space-6) var(--bew-space-6) 0;
+    color: var(--bew-text-2);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
+  }
+
+  #allVersion {
+    min-height: var(--bew-control-height);
+    padding-inline: var(--bew-space-2);
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-1);
+    border-color: var(--bew-border-color);
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+  }
+}

@@ -280,10 +280,9 @@ export function updateAspectRatio(currentState: BewlyWidescreenState | null = se
   const aspect = video?.videoWidth && video.videoHeight
     ? video.videoWidth / video.videoHeight
     : 16 / 9
-  const layoutAspect = Math.min(aspect, 16 / 9)
 
   setGeometryProperty(currentState.root, '--bewly-widescreen-aspect', String(aspect))
-  setGeometryProperty(currentState.root, '--bewly-widescreen-layout-aspect', String(layoutAspect))
+  setGeometryProperty(currentState.root, '--bewly-widescreen-layout-aspect', String(aspect))
   updateSidebarLayoutState(currentState)
   schedulePlayerResizeSync(currentState)
 }

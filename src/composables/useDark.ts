@@ -93,15 +93,25 @@ function syncBilibiliTheme(isDark: boolean) {
   window.dispatchEvent(new CustomEvent('global.themeChange', { detail: theme }))
 }
 
-function createDarkState() {
-  watch(() => settings.value.theme, (theme) => {
+function createDarkState(observeRoute = true, syncNativeTheme = true) {
+  watch(() => settings.value.theme, (theme, _previous, onCleanup) => {
+    const syncClock = () => {
+      if (theme === 'scheduled' && !document.hidden)
+        startScheduleClock()
+      else stopScheduleClock()
+    }
     if (theme === 'scheduled')
-      startScheduleClock()
-    else
+      document.addEventListener('visibilitychange', syncClock)
+    onCleanup(() => {
+      document.removeEventListener('visibilitychange', syncClock)
       stopScheduleClock()
+    })
+    syncClock()
   }, { immediate: true })
   onScopeDispose(stopScheduleClock)
-  const currentUrl = useCurrentLocationHref()
+  // The appearance-only subsite entry has no playback mode or route-dependent
+  // theme. It reuses this theme owner without starting the main site's fallback.
+  const currentUrl = observeRoute ? useCurrentLocationHref() : ref(window.location.href)
 
   const isPreferredDark = usePreferredDark()
   const currentSystemColorScheme = computed(() => isPreferredDark.value ? 'dark' : 'light')
@@ -214,7 +224,8 @@ function createDarkState() {
     if (isDark.value)
       setDarkModeBaseColor(settings.value.darkModeBaseColor)
 
-    syncBilibiliTheme(isDark.value)
+    if (syncNativeTheme)
+      syncBilibiliTheme(isDark.value)
 
     // Only used as a temporary solution, which will eventually be removed
     // It seems like Bilibili already supports dark mode when the `bili_dark` class is added to the `html` element
@@ -231,7 +242,11 @@ function createDarkState() {
     // }
   }
 
+  let cancelAppearanceTransition: (() => void) | undefined
+  onScopeDispose(() => cancelAppearanceTransition?.())
+
   function toggleDark(e: MouseEvent) {
+    cancelAppearanceTransition?.()
     const updateThemeSettings = () => {
       if (currentAppColorScheme.value !== currentSystemColorScheme.value)
         settings.value.theme = 'auto'
@@ -240,95 +255,75 @@ function createDarkState() {
     }
 
     const isAppearanceTransition = typeof document !== 'undefined'
-    // @ts-expect-error: Transition API
-      && document.startViewTransition
+      && typeof document.startViewTransition === 'function'
       && !window.matchMedia('(prefers-reduced-motion: reduce)').matches
     if (!isAppearanceTransition) {
       updateThemeSettings()
     }
     else {
-      const x = e.clientX
-      const y = e.clientY
+      const trigger = e.detail === 0 && e.currentTarget instanceof HTMLElement ? e.currentTarget.getBoundingClientRect() : undefined
+      const x = trigger ? trigger.left + trigger.width / 2 : e.clientX
+      const y = trigger ? trigger.top + trigger.height / 2 : e.clientY
       const endRadius = Math.hypot(
         Math.max(x, innerWidth - x),
         Math.max(y, innerHeight - y),
       )
-      // https://github.com/vueuse/vueuse/pull/3129
-      const style = document.createElement('style')
-      const styleString = `
-            *, *::before, *::after
-            {-webkit-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important}`
-      style.appendChild(document.createTextNode(styleString))
-      document.head.appendChild(style)
-
-      const viewTransitionStyle = document.createElement('style')
-      viewTransitionStyle.textContent = `
-            ::view-transition-old(root),
-            ::view-transition-new(root) {
-              animation: none !important;
-              mix-blend-mode: normal;
-            }
-            `
-      document.head.appendChild(viewTransitionStyle)
-
-      // Since the above normal dom style cannot be applied in shadow dom style
-      // We need to add this style again to the shadow dom
-      const shadowDomStyle = document.createElement('style')
-      const shadowDomStyleString = `
-            *, *::before, *::after
-            {-webkit-transition:none!important;-o-transition:none!important;-ms-transition:none!important;transition:none!important; will-change: background}`
-      shadowDomStyle.appendChild(document.createTextNode(shadowDomStyleString))
-
-      const bewlyShadowRoot = document.getElementById('bewly')?.shadowRoot
-      const bewlyWrapper = bewlyShadowRoot?.getElementById('bewly-wrapper')
-      if (!bewlyWrapper)
-        throw new Error('mainAppRef is not found')
-
-      bewlyWrapper.appendChild(shadowDomStyle)
-
-      const transition = document.startViewTransition(async () => {
-        updateThemeSettings()
-        await nextTick()
-      })
-
-      transition.ready.then(() => {
-        const isDarkNow = document.documentElement.classList.contains('dark')
-
-        const zIndexStyle = document.createElement('style')
-        const foregroundZIndex = 'var(--bew-z-popover)'
-        zIndexStyle.textContent = `
-            ::view-transition-old(root) { z-index: ${isDarkNow ? 1 : foregroundZIndex}; }
-            ::view-transition-new(root) { z-index: ${isDarkNow ? foregroundZIndex : 1}; }
-            `
-        document.head.appendChild(zIndexStyle)
-
-        const clipPath = [
-          `circle(0px at ${x}px ${y}px)`,
-          `circle(${endRadius}px at ${x}px ${y}px)`,
-        ]
-        const animation = document.documentElement.animate(
-          {
-            clipPath: isDarkNow ? clipPath : [...clipPath].reverse(),
-          },
-          {
+      const styles: HTMLStyleElement[] = []
+      let active = true
+      let transition: ViewTransition | undefined
+      let animation: Animation | undefined
+      const mountStyle = (parent: ParentNode, css: string) => {
+        const style = document.createElement('style')
+        style.dataset.bewlyThemeTransition = ''
+        style.textContent = css
+        styles.push(style)
+        parent.appendChild(style)
+      }
+      const cleanup = () => {
+        if (!active)
+          return
+        active = false
+        animation?.cancel()
+        styles.forEach(style => style.remove())
+        if (cancelAppearanceTransition === cancel)
+          cancelAppearanceTransition = undefined
+      }
+      function cancel() {
+        transition?.skipTransition()
+        cleanup()
+      }
+      cancelAppearanceTransition = cancel
+      try {
+        const suppressTransitions = '*, *::before, *::after { transition: none !important; }'
+        mountStyle(document.head, suppressTransitions)
+        mountStyle(document.head, '::view-transition-old(root), ::view-transition-new(root) { animation: none !important; mix-blend-mode: normal; }')
+        const shadow = document.getElementById('bewly')?.shadowRoot
+        if (shadow)
+          mountStyle(shadow, suppressTransitions)
+        transition = document.startViewTransition(async () => {
+          updateThemeSettings()
+          await nextTick()
+        })
+        void transition.ready.then(() => {
+          if (!active)
+            return
+          const isDarkNow = document.documentElement.classList.contains('dark')
+          const foregroundZIndex = 'var(--bew-z-popover)'
+          mountStyle(document.head, `::view-transition-old(root) { z-index: ${isDarkNow ? 1 : foregroundZIndex}; } ::view-transition-new(root) { z-index: ${isDarkNow ? foregroundZIndex : 1}; }`)
+          const clipPath = [`circle(0px at ${x}px ${y}px)`, `circle(${endRadius}px at ${x}px ${y}px)`]
+          animation = document.documentElement.animate({ clipPath: isDarkNow ? clipPath : [...clipPath].reverse() }, {
             duration: 300,
             easing: 'ease-in-out',
-            pseudoElement: isDarkNow
-              ? '::view-transition-new(root)'
-              : '::view-transition-old(root)',
-          },
-        )
-
-        animation.finished.then(() => {
-          zIndexStyle.remove()
-        })
-      })
-
-      transition.finished.then(() => {
-        style.remove()
-        viewTransitionStyle.remove()
-        shadowDomStyle.remove()
-      })
+            pseudoElement: isDarkNow ? '::view-transition-new(root)' : '::view-transition-old(root)',
+          })
+          return animation.finished
+        }).catch(() => {}).finally(cleanup)
+        void transition.finished.then(cleanup, cleanup)
+      }
+      catch {
+        cleanup()
+        updateThemeSettings()
+      }
     }
   }
 
@@ -343,9 +338,9 @@ type DarkState = ReturnType<typeof createDarkState>
 let darkStateScope = effectScope(true)
 let darkState: DarkState | undefined
 
-export function useDark(): DarkState {
+export function useDark(options: { observeRoute?: boolean, syncNativeTheme?: boolean } = {}): DarkState {
   if (!darkState)
-    darkState = darkStateScope.run(createDarkState)
+    darkState = darkStateScope.run(() => createDarkState(options.observeRoute, options.syncNativeTheme))
   return darkState!
 }
 

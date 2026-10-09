@@ -1,20 +1,46 @@
-.bpx-player-control-wrap:has(.bewly-video-screenshot-control) {
-  container: bewly-player-controls / inline-size;
+.bpx-player-control-bottom-right > .bewly-player-control-collapsed {
+  position: absolute !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
-@container bewly-player-controls (max-width: 900px) {
-  .bewly-video-screenshot-control {
-    display: none !important;
+.bewly-player-control-alternatives {
+  display: flex;
+  flex-direction: column;
+  padding-block: var(--bew-space-1);
+  border-top: 1px solid var(--bew-border-color);
+}
+
+.bewly-player-control-alternative {
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-1) var(--bew-space-3);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  background: transparent;
+  color: inherit;
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+  text-align: start;
+  cursor: pointer;
+
+  &:hover,
+  &:active {
+    background: var(--bew-fill-2);
+  }
+
+  &:focus-visible {
+    outline: var(--bew-space-0-5) solid var(--bew-theme-foreground);
+    outline-offset: calc(-1 * var(--bew-space-0-5));
+  }
+
+  &:disabled {
+    color: var(--bew-text-3);
+    cursor: default;
   }
 }
 
-@container bewly-player-controls (max-width: 1200px) {
-  .bpx-player-container:is([data-screen="web"], [data-screen="full"]) .bewly-video-screenshot-control {
-    display: none !important;
-  }
-}
-
-.bpx-player-container[data-screen="mini"] .bewly-video-screenshot-control {
+.bpx-player-container[data-screen="mini"] :is(.bewly-video-screenshot-control, .bewly-local-loudness-control) {
   display: none !important;
 }
 
@@ -64,7 +90,8 @@
   }
 }
 
-.bewly-video-screenshot-control {
+.bewly-video-screenshot-control,
+.bewly-local-loudness-control {
   position: relative;
   overflow: visible;
 
@@ -131,13 +158,13 @@
   :not(foobar) {
     #musicApp {
       .BgmInfo .right .bottom .btn {
-        color: var(--bew-theme-color);
+        color: var(--bew-theme-foreground);
       }
 
       .card .title:hover,
       .h2 .close:hover,
       .up a:hover * {
-        color: var(--bew-theme-color) !important;
+        color: var(--bew-theme-foreground) !important;
       }
 
       .BgmInfo .right .bottom .btn:hover {

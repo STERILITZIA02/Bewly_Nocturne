@@ -16,12 +16,11 @@ export const LAYOUT_BREAKPOINTS = {
 const HOME_SEARCH_STAGE_LEAD_HEIGHT = 128
 const HOME_SEARCH_STAGE_TAIL_HEIGHT = 64
 export const TOP_BAR_PRIMARY_CONTROL_HEIGHT = 46
-export const HOME_TASK_SEARCH_STAGE_HEIGHT = 16 + TOP_BAR_PRIMARY_CONTROL_HEIGHT + 24
 /** Keep aligned with --bew-top-bar-height. */
 export const TOP_BAR_HEIGHT = 64
-export function resolveHomeSearchStage(discovery: boolean, shortViewport: boolean) {
-  const lead = discovery ? shortViewport ? 96 : HOME_SEARCH_STAGE_LEAD_HEIGHT : 16
-  const tail = discovery ? shortViewport ? 32 : HOME_SEARCH_STAGE_TAIL_HEIGHT : 24
+export function resolveHomeSearchStage(shortViewport: boolean) {
+  const lead = shortViewport ? 96 : HOME_SEARCH_STAGE_LEAD_HEIGHT
+  const tail = shortViewport ? 32 : HOME_SEARCH_STAGE_TAIL_HEIGHT
   return {
     lead,
     tail,

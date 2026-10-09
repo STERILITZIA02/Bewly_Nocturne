@@ -3,6 +3,7 @@ import { useDateFormat, useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import IconButton from '~/components/IconButton.vue'
+import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import OpenTabsDialog from '~/components/WatchLater/OpenTabsDialog.vue'
@@ -12,6 +13,7 @@ import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
+import { applyWatchLaterUpdate } from '~/logic/watchLaterState'
 import type { List as VideoItem, WatchLaterResult } from '~/models/video/watchLater'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { createAccountLifetime } from '~/utils/accountLifetime'
@@ -19,11 +21,13 @@ import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
-import { normalizePlaybackProgress } from '~/utils/playbackProgress'
 import { openLinkInBackground } from '~/utils/tabs'
+import { getVideoPlaybackProgress, getVideoProgressPercentage, getVideoWatchState } from '~/utils/videoVisitHistory'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl, mergeWatchLaterItemsByAid, normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
+import type { WatchLaterDurationFilter, WatchLaterStatusFilter } from './watchLaterFilters'
+import { filterWatchLaterItems } from './watchLaterFilters'
 import WatchLaterGridCard from './WatchLaterGridCard.vue'
 
 const { t } = useI18n()
@@ -36,7 +40,18 @@ const isLoading = ref(false)
 const noMoreContent = ref(false)
 const requestFailed = ref(false)
 const currentWatchLaterList = ref<VideoItem[]>([])
-const watchLaterCount = ref<number>(0)
+const searchQuery = ref('')
+const statusFilter = ref<WatchLaterStatusFilter>('all')
+const durationFilter = ref<WatchLaterDurationFilter>('all')
+const statusFilters = ['all', 'unstarted', 'watching', 'completed', 'unknown'] as const
+const durationFilters = ['all', 'short', 'medium', 'long'] as const
+const filtersActive = computed(() => Boolean(searchQuery.value.trim() || statusFilter.value !== 'all' || durationFilter.value !== 'all'))
+const filteredItems = computed(() => filterWatchLaterItems(currentWatchLaterList.value, searchQuery.value, statusFilter.value, durationFilter.value, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id })))
+const layoutOptions = computed(() => [
+  { label: t('watch_later.layout_list'), value: 'list' as const },
+  { label: t('watch_later.layout_grid'), value: 'grid' as const },
+])
+const watchLaterCount = computed(() => topBarStore.watchLaterCount ?? 0)
 const pendingAction = shallowRef<{ accountId: number, aid: number } | null>(null)
 const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef } = useBewlyApp()
 const pageNum = ref<number>(1)
@@ -62,7 +77,7 @@ useResizeObserver(cardContainer, () => {
 const cardWindow = useCardWindow({
   root: scrollViewportRef,
   container: cardContainer,
-  keys: computed(() => currentWatchLaterList.value.map(item => item.aid)),
+  keys: computed(() => filteredItems.value.map(item => item.aid)),
   columns: cardColumns,
   gap: cardGap,
   enabled: computed(() => currentWatchLaterList.value.length > CARD_WINDOW_THRESHOLD),
@@ -72,17 +87,130 @@ const cardWindow = useCardWindow({
 })
 const renderedRows = computed(() => cardWindow.ranges.value.flatMap<{ key: string, height: number | undefined, items: VideoItem[] }>(range => range.height !== undefined
   ? [{ key: `spacer:${range.start}`, height: range.height, items: [] as VideoItem[] }]
-  : currentWatchLaterList.value.slice(range.start, range.end).map(item => ({ key: String(item.aid), height: undefined, items: [item] }))))
+  : filteredItems.value.slice(range.start, range.end).map(item => ({ key: String(item.aid), height: undefined, items: [item] }))))
 let requestGeneration = 0
 let loadedAccountId: number | null = null
 let watchLaterExtensionContextInvalidated = false
 const actionLifetime = createAccountLifetime(getCurrentAccountId)
-let appliedInvalidationVersion = topBarStore.watchLaterInvalidationVersion
-watch([() => topBarStore.watchLaterInvalidationVersion, pendingAction], ([version, pending]) => {
-  if (version === appliedInvalidationVersion || pending || getCurrentAccountId() === null)
+let viewRefreshTimer: ReturnType<typeof setTimeout> | undefined
+let viewDirty = false
+let replaceView = false
+let readController: AbortController | undefined
+let loadingLibrary = false
+
+async function loadFilterLibrary() {
+  if (!filtersActive.value || noMoreContent.value || loadingLibrary || watchLaterExtensionContextInvalidated)
     return
-  appliedInvalidationVersion = version
-  void initData()
+  const accountId = getCurrentAccountId()
+  if (!accountId)
+    return
+  const generation = invalidateRequests()
+  const controller = new AbortController()
+  readController = controller
+  isLoading.value = loadingLibrary = true
+  requestFailed.value = false
+  try {
+    const response = await api.watchlater.getWatchLaterLibrary({ accountId }, { signal: controller.signal })
+    if (!isCurrentRequest(generation, accountId))
+      return
+    if (response.code !== 0 || !Array.isArray(response.data?.list) || !Number.isSafeInteger(response.data.count) || response.data.count < 0)
+      throw new Error('Watch Later library unavailable')
+    currentWatchLaterList.value = response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
+    noMoreContent.value = currentWatchLaterList.value.length >= response.data.count
+    pageNum.value = Math.floor(currentWatchLaterList.value.length / pageSize.value) + 1
+  }
+  catch (error) {
+    if (!controller.signal.aborted && isCurrentRequest(generation, accountId) && !settleExtensionContextInvalidation(error))
+      requestFailed.value = true
+  }
+  finally {
+    if (readController === controller) {
+      readController = undefined
+      isLoading.value = loadingLibrary = false
+    }
+  }
+}
+watch([searchQuery, statusFilter, durationFilter], () => {
+  if (scrollViewportRef.value)
+    scrollViewportRef.value.scrollTop = 0
+  if (filtersActive.value)
+    void loadFilterLibrary()
+  else if (loadingLibrary)
+    invalidateRequests()
+})
+function clearFilters() {
+  searchQuery.value = ''
+  statusFilter.value = durationFilter.value = 'all'
+}
+
+function scheduleViewRefresh() {
+  if (!viewDirty || document.hidden || pendingAction.value || viewRefreshTimer !== undefined)
+    return
+  viewRefreshTimer = setTimeout(() => {
+    viewRefreshTimer = undefined
+    if (document.hidden || pendingAction.value)
+      return
+    const replace = replaceView
+    viewDirty = false
+    replaceView = false
+    void (replace ? initData() : refreshViewHead())
+  }, 800)
+}
+
+watch(() => topBarStore.watchLaterUpdate, (update) => {
+  if (!update || update.type !== 'change' || update.accountId !== getCurrentAccountId())
+    return
+  const change = update.change
+  if (change.type === 'clear') {
+    currentWatchLaterList.value = []
+    pageNum.value = 1
+    noMoreContent.value = true
+  }
+  else if (change.type === 'remove') {
+    currentWatchLaterList.value = currentWatchLaterList.value.filter(item => item.aid !== change.entry.aid)
+    pageNum.value = Math.max(1, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
+    noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
+  }
+  else {
+    viewDirty = true
+    replaceView ||= change.type === 'invalidate'
+    scheduleViewRefresh()
+  }
+}, { flush: 'sync' })
+watch(pendingAction, scheduleViewRefresh)
+
+async function refreshViewHead() {
+  const accountId = getCurrentAccountId()
+  if (!accountId || watchLaterExtensionContextInvalidated)
+    return
+  const generation = invalidateRequests()
+  try {
+    const response = await api.watchlater.getWatchLaterListByPage({ accountId, pn: 1, ps: pageSize.value })
+    if (!isCurrentRequest(generation, accountId) || response.code !== 0 || !response.data)
+      return
+    const list = response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
+    currentWatchLaterList.value = mergeWatchLaterItemsByAid(list, currentWatchLaterList.value)
+    pageNum.value = Math.max(2, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
+    noMoreContent.value = currentWatchLaterList.value.length >= watchLaterCount.value
+  }
+  catch (error) {
+    if (!settleExtensionContextInvalidation(error))
+      requestFailed.value = true
+  }
+}
+
+function handleViewVisibility() {
+  if (document.hidden) {
+    clearTimeout(viewRefreshTimer)
+    viewRefreshTimer = undefined
+  }
+  else {
+    scheduleViewRefresh()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('visibilitychange', handleViewVisibility)
 })
 
 function getCurrentAccountId(): number | null {
@@ -91,6 +219,9 @@ function getCurrentAccountId(): number | null {
 }
 
 function invalidateRequests(): number {
+  readController?.abort()
+  readController = undefined
+  loadingLibrary = false
   isLoading.value = false
   return ++requestGeneration
 }
@@ -124,12 +255,15 @@ watch(
       return
 
     actionLifetime.invalidate()
+    clearFilters()
     loadedAccountId = accountId
     void initData()
   },
 )
 
 onBeforeUnmount(() => {
+  clearTimeout(viewRefreshTimer)
+  document.removeEventListener('visibilitychange', handleViewVisibility)
   actionLifetime.dispose()
   invalidateRequests()
   if (handlePageRefresh.value === handleWatchLaterPageRefresh)
@@ -148,13 +282,15 @@ async function initData() {
   noMoreContent.value = false
   requestFailed.value = false
   currentWatchLaterList.value = []
-  watchLaterCount.value = 0
   pendingAction.value = null
   pageNum.value = 1
   if (accountId === null)
     return
 
-  await getWatchLaterListByPage(generation, accountId)
+  if (filtersActive.value)
+    await loadFilterLibrary()
+  else
+    await getWatchLaterListByPage(generation, accountId)
 }
 
 async function getData(): Promise<boolean> {
@@ -168,7 +304,7 @@ function retryWatchLaterRequest() {
   if (watchLaterExtensionContextInvalidated || isLoading.value)
     return
   requestFailed.value = false
-  void getData()
+  void (filtersActive.value ? loadFilterLibrary() : getData())
 }
 
 async function handleWatchLaterPageRefresh() {
@@ -178,7 +314,7 @@ async function handleWatchLaterPageRefresh() {
 }
 
 async function handleWatchLaterReachBottom(): Promise<boolean> {
-  if (watchLaterExtensionContextInvalidated || isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || filtersActive.value || isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value)
     return false
 
   // Observer and geometry fallback signals share the request/loading guards.
@@ -201,14 +337,17 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
 
   requestFailed.value = false
   isLoading.value = true
+  const controller = new AbortController()
+  readController = controller
 
   try {
     while (!noMoreContent.value) {
       const requestedPage = pageNum.value
       const res: WatchLaterResult = await api.watchlater.getWatchLaterListByPage({
+        accountId,
         pn: requestedPage,
         ps: pageSize.value,
-      })
+      }, { signal: controller.signal })
 
       if (!isCurrentRequest(generation, accountId))
         return false
@@ -231,9 +370,6 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
       }
 
       const list = payload.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
-      if (requestedPage === 1)
-        watchLaterCount.value = payload.count
-
       const previousListLength = currentWatchLaterList.value.length
       const mergedList = mergeWatchLaterItemsByAid(currentWatchLaterList.value, list)
       const madeProgress = mergedList.length > previousListLength
@@ -244,7 +380,7 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
         || mergedList.length >= payload.count
         || !madeProgress
 
-      if (noMoreContent.value)
+      if (noMoreContent.value || filtersActive.value)
         break
 
       const hasScrollbar = await haveScrollbar()
@@ -267,6 +403,8 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
   finally {
     if (isCurrentRequest(generation, accountId))
       isLoading.value = false
+    if (readController === controller)
+      readController = undefined
   }
 
   return true
@@ -292,7 +430,6 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
     const currentIndex = currentWatchLaterList.value.findIndex(item => item.aid === aid)
     if (currentIndex !== -1) {
       currentWatchLaterList.value.splice(currentIndex, 1)
-      watchLaterCount.value = Math.max(0, watchLaterCount.value - 1)
       // Removal shifts position-based server pages. Re-read the last partial
       // page and let aid deduplication fill the gap without clearing the list.
       pageNum.value = Math.max(1, Math.ceil(currentWatchLaterList.value.length / pageSize.value))
@@ -327,14 +464,14 @@ async function handleClearAllWatchLater() {
     isLoading.value = true
     try {
       const res = await api.watchlater.clearAllWatchLater({
+        accountId,
         csrf: getCSRF(),
       })
       if (res.code === 0 && isCurrentRequest(generation, accountId)) {
         currentWatchLaterList.value = []
-        watchLaterCount.value = 0
-        await topBarStore.commitWatchLaterClear(accountId)
-        if (isCurrentRequest(generation, accountId))
-          await initData()
+        if (res.watchLaterUpdate)
+          applyWatchLaterUpdate(res.watchLaterUpdate)
+        noMoreContent.value = true
       }
     }
     catch (error) {
@@ -364,11 +501,13 @@ async function handleRemoveWatchedVideos() {
     isLoading.value = true
     try {
       const res = await api.watchlater.removeFromWatchLater({
+        accountId,
         viewed: true,
         csrf: getCSRF(),
       })
       if (res.code === 0 && isCurrentRequest(generation, accountId)) {
-        await topBarStore.invalidateWatchLaterMembership(accountId)
+        if (res.watchLaterUpdate)
+          applyWatchLaterUpdate(res.watchLaterUpdate)
         if (isCurrentRequest(generation, accountId))
           await initData()
       }
@@ -444,13 +583,44 @@ function isItemActionPending(): boolean {
       w="full md:60% lg:70% xl:75%" order="2 md:1 lg:1" mb-6
     >
       <header flex="~ col items-start" gap-4 mb-6>
-        <h3 class="bew-page-heading" text="$bew-text-1">
-          {{ t('watch_later.title') }} ({{ watchLaterCount }})
-        </h3>
+        <div class="watch-later-toolbar">
+          <h3 class="bew-page-heading" text="$bew-text-1">
+            {{ t('watch_later.title') }} ({{ watchLaterCount }})
+          </h3>
+          <SettingsSegmentedControl v-if="settings.enableGridLayoutSwitcher" v-model="settings.watchLaterLayoutMode" :options="layoutOptions" :label="t('settings.watch_later_layout_mode')" />
+        </div>
+        <div class="watch-later-filters">
+          <div class="watch-later-search">
+            <input v-model="searchQuery" type="search" :placeholder="t('library_tools.watch_later_search')" :aria-label="t('library_tools.watch_later_search')">
+            <IconButton v-if="searchQuery" class="bew-icon-button--control" :label="t('library_tools.clear_search')" @click="searchQuery = ''">
+              <i i-mingcute:close-line />
+            </IconButton>
+          </div>
+          <select v-model="statusFilter" :aria-label="t('library_tools.playback_state')">
+            <option v-for="value in statusFilters" :key="value" :value="value">
+              {{ t(`library_tools.state_${value}`) }}
+            </option>
+          </select>
+          <select v-model="durationFilter" :aria-label="t('library_tools.duration')">
+            <option v-for="value in durationFilters" :key="value" :value="value">
+              {{ t(`library_tools.duration_${value}`) }}
+            </option>
+          </select>
+        </div>
+        <div v-if="filtersActive" class="watch-later-filter-summary" role="status">
+          <span>{{ t('library_tools.matched_count', { count: filteredItems.length, total: currentWatchLaterList.length }) }}</span>
+          <Button type="tertiary" @click="clearFilters">
+            {{ t('search.filters.clear') }}
+          </Button>
+        </div>
         <Button type="secondary" @click="showOpenTabsDialog = true">
           {{ $t('watch_later.open_tabs.title') }}
         </Button>
       </header>
+      <Empty v-if="filtersActive && watchLaterCount > 0 && !isLoading && !filteredItems.length && !requestFailed" :description="t('library_tools.no_matches')" />
+      <Button v-if="filtersActive && !noMoreContent && !isLoading && !requestFailed" type="secondary" @click="getData()">
+        {{ t('library_tools.load_more_videos') }}
+      </Button>
       <Empty v-if="requestFailed && !isLoading && currentWatchLaterList.length === 0" :description="$t('common.load_failed')">
         <Button type="primary" @click="retryWatchLaterRequest">
           {{ $t('common.operation.refresh') }}
@@ -533,7 +703,7 @@ function isItemActionPending(): boolean {
                       `${
                         item.progress === -1
                           ? calcCurrentTime(item.duration)
-                          : calcCurrentTime(item.progress)
+                          : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)
                       } /
                       ${calcCurrentTime(item.duration)}`
                     }}
@@ -541,7 +711,7 @@ function isItemActionPending(): boolean {
                   <div w-full pos="absolute bottom-0" bg="white opacity-60">
                     <Progress
                       :percentage="
-                        normalizePlaybackProgress(item.progress, item.duration)
+                        getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)
                       "
                     />
                   </div>
@@ -738,6 +908,9 @@ function isItemActionPending(): boolean {
             {{ t('watch_later.title') }} ({{ watchLaterCount }})
           </h3>
           <div v-if="watchLaterCount > 0" flex="~ col" gap-2 w-full>
+            <p v-if="filtersActive" class="watch-later-action-scope">
+              {{ t('library_tools.queue_actions_scope') }}
+            </p>
             <Button
               class="bew-cover-sidebar__action" type="primary" block
               @click="handlePlayAll"
@@ -779,6 +952,53 @@ function isItemActionPending(): boolean {
 </template>
 
 <style lang="scss" scoped>
+.watch-later-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--bew-space-4);
+  width: 100%;
+}
+.watch-later-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--bew-space-2);
+  width: 100%;
+}
+.watch-later-search {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-1);
+  flex: 1 1 240px;
+}
+.watch-later-search input {
+  width: 100%;
+  min-width: 0;
+}
+.watch-later-filters input,
+.watch-later-filters select {
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-2) var(--bew-space-3);
+  font: inherit;
+  font-size: var(--bew-font-size-control);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  background: var(--bew-content-alt-solid);
+  color: var(--bew-text-1);
+}
+.watch-later-filter-summary {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-3);
+  font-size: var(--bew-font-size-control);
+  color: var(--bew-text-2);
+}
+.watch-later-action-scope {
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  color: var(--bew-sidebar-secondary);
+}
 .watch-later-grid-slot {
   min-width: 0;
 }
