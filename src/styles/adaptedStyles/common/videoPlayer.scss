@@ -30,7 +30,7 @@
   }
 
   &:focus-visible {
-    outline: var(--bew-space-0-5) solid var(--bew-theme-foreground);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: calc(-1 * var(--bew-space-0-5));
   }
 
@@ -68,7 +68,7 @@
     opacity var(--bew-duration-fast) var(--bew-ease-out);
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-color);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
   }
 

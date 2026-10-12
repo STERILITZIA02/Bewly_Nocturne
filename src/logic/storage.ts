@@ -4,10 +4,12 @@ import browser from 'webextension-polyfill'
 import { useSettingsStorage } from '~/composables/useSettingsStorage'
 import { useStorageLocal } from '~/composables/useStorageLocal'
 import { COMMENT_REPLY_BATCH_DEFAULT, COMMENT_REPLY_CONTAINER_HEIGHT, normalizeCommentReplyBatch, normalizeCommentReplyContainerHeight } from '~/constants/commentReading'
-import type { DockCollapseMode } from '~/constants/dock'
+import type { DockCollapseMode, DockPosition } from '~/constants/dock'
+import { normalizeDockPosition } from '~/constants/dock'
 import { DEFAULT_SEARCH_BAR_CHARACTER } from '~/constants/imgs'
 import type { LiquidGlassMode, LiquidGlassTintSource } from '~/constants/liquidGlass'
 import { LIQUID_GLASS_MODES, LIQUID_GLASS_PARAMETERS, LIQUID_GLASS_TINT_SOURCES } from '~/constants/liquidGlass'
+import { removeRetiredSettings, RETIRED_LOCAL_STORAGE_KEYS } from '~/constants/retiredSettings'
 import type { HomeSubPage } from '~/contentScripts/views/Home/types'
 import type { AppPage } from '~/enums/appEnums'
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
@@ -35,26 +37,6 @@ export const noCookieForYouRecommendationState = useStorageLocal<NoCookieForYouR
   'noCookieForYouRecommendationState',
   { showlistGroups: [], nextFreshIdx: 1 },
   { mergeDefaults: true, writeDefaults: false },
-)
-
-export interface MomentsWantedUser {
-  mid: string
-  name: string
-  face: string
-}
-
-/** Bewly 动态页“想看”分组；缓存用户资料以避免每次进入页面重复请求。 */
-export const momentsWantedUsers = useStorageLocal<MomentsWantedUser[]>(
-  'momentsWantedUsers',
-  [],
-  { writeDefaults: false },
-)
-
-/** Bewly 动态页横向栏右侧“固定 UP”；与想看名单独立存储。 */
-export const momentsPinnedUsers = useStorageLocal<MomentsWantedUser[]>(
-  'momentsPinnedUsers',
-  [],
-  { writeDefaults: false },
 )
 
 export const FROSTED_GLASS_BLUR_MIN_PX = 1
@@ -108,9 +90,6 @@ export interface ShadowCurvePoint {
 
 // 本地存储配置接口（不同步到云端的配置）
 export interface LocalSettings {
-  // 自定义CSS
-  customizeCSS: boolean
-  customizeCSSContent: string
   lastPrivateConversationRoute: LastPrivateConversationRoute | null
 }
 
@@ -166,7 +145,6 @@ export const defaultVideoCardContextMenuConfig: VideoCardContextMenuConfigItem[]
 
 export interface Settings {
   touchScreenOptimization: boolean
-  showHomeButtonInTouchMode: boolean
   openTopBarItemsInBewly: boolean
   enableGridLayoutSwitcher: boolean
   enableHorizontalScrolling: boolean
@@ -283,7 +261,6 @@ export interface Settings {
   momentsOnlyCoverVideoPreview: boolean
   /** Bewly 动态页期望列数；窄屏会自动降列 */
   momentsGridColumns: '1' | '2' | '3'
-  momentsEnableWantedFilter: boolean
   momentsEnableKeywordFilter: boolean
   momentsBlockedKeywords: string
   momentsFilterUpRecommendation: boolean
@@ -307,7 +284,7 @@ export interface Settings {
 
   alwaysUseDock: boolean
   dockCollapseMode: DockCollapseMode
-  dockPosition: 'left' | 'right' | 'bottom'
+  dockPosition: DockPosition
   enableDockLiquidGlass: boolean
   dockLiquidGlassMode: LiquidGlassMode
   dockLiquidGlassRefraction: number
@@ -469,14 +446,11 @@ export interface Settings {
 
 // 本地存储配置默认值
 export const originalLocalSettings: LocalSettings = {
-  customizeCSS: false,
-  customizeCSSContent: '',
   lastPrivateConversationRoute: null,
 }
 
 export const originalSettings: Settings = {
   touchScreenOptimization: false,
-  showHomeButtonInTouchMode: true,
   openTopBarItemsInBewly: true,
   enableGridLayoutSwitcher: true,
   enableHorizontalScrolling: false,
@@ -599,7 +573,6 @@ export const originalSettings: Settings = {
   momentsVideoPreviewDelayed: false,
   momentsOnlyCoverVideoPreview: true,
   momentsGridColumns: '3',
-  momentsEnableWantedFilter: true,
   momentsEnableKeywordFilter: false,
   momentsBlockedKeywords: '',
   momentsFilterUpRecommendation: false,
@@ -809,6 +782,8 @@ function asUnknownRecord(value: object): Record<string, unknown> {
 }
 
 function normalizeSettings(value: Settings) {
+  removeRetiredSettings(value)
+  value.dockPosition = normalizeDockPosition(value.dockPosition)
   if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')
     value.autoRemoveWatchLaterOnEnd = false
   for (const key of ['topBarLinkOpenMode', 'searchBarLinkOpenMode'] as const) {
@@ -840,6 +815,7 @@ function normalizeSettings(value: Settings) {
   Reflect.deleteProperty(record, 'enableHomeGridVirtualization')
   Reflect.deleteProperty(record, 'releaseOffscreenVideoCardImages')
   Reflect.deleteProperty(record, 'showBewlyOrBiliTopBarSwitcher')
+  Reflect.deleteProperty(record, 'showHomeButtonInTouchMode')
   Reflect.deleteProperty(record, 'enableFrostedGlass')
   Reflect.deleteProperty(record, 'alwaysUseTransparentTopBar')
   Reflect.deleteProperty(record, 'enableTopBarGradient')
@@ -1085,10 +1061,11 @@ watch(
     () => settings.initializationState.value,
     () => localSettings.initializationState.value,
     () => settings.displayReady.value,
-    () => asUnknownRecord(settings.value).customizeCSS,
-    () => asUnknownRecord(settings.value).customizeCSSContent,
+    () => localSettings.value,
   ] as const,
   ([value, settingsState, localSettingsState]) => {
+    if (localSettingsState === 'loaded')
+      removeRetiredSettings(localSettings.value)
     if (!settingsDisplayReadyResolved && settings.displayReady.value) {
       settingsDisplayReadyResolved = true
       resolveSettingsDisplayReady(value)
@@ -1096,25 +1073,6 @@ watch(
     if (settingsState !== 'loaded')
       return
     normalizeSettings(value)
-    const record = value as Settings & Record<string, unknown>
-    const legacyRecord = asUnknownRecord(value)
-
-    // 迁移旧的 customizeCSS/customizeCSSContent 到 localSettings。
-    // 两个存储均真实加载后才允许移动字段，避免默认 localSettings 覆盖已有值。
-    if (localSettingsState === 'loaded' && ('customizeCSS' in record || 'customizeCSSContent' in record)) {
-      localSettings.value = {
-        ...localSettings.value,
-        customizeCSS: typeof legacyRecord.customizeCSS === 'boolean'
-          ? legacyRecord.customizeCSS
-          : localSettings.value.customizeCSS,
-        customizeCSSContent: typeof legacyRecord.customizeCSSContent === 'string'
-          ? legacyRecord.customizeCSSContent
-          : localSettings.value.customizeCSSContent,
-      }
-
-      Reflect.deleteProperty(record, 'customizeCSS')
-      Reflect.deleteProperty(record, 'customizeCSSContent')
-    }
 
     if (!settingsReadyResolved && localSettingsState === 'loaded') {
       settingsReadyResolved = true
@@ -1122,7 +1080,7 @@ watch(
     }
     if (!legacyGridSettingsRemoved && localSettingsState === 'loaded') {
       legacyGridSettingsRemoved = true
-      void browser.storage.local.remove(['gridBreakpoints', 'gridColumns']).catch(() => {})
+      void browser.storage.local.remove(['gridBreakpoints', 'gridColumns', ...RETIRED_LOCAL_STORAGE_KEYS]).catch(() => {})
     }
   },
   { immediate: true },

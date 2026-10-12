@@ -1,5 +1,7 @@
 library_tools:
-  queue_actions_scope: 下面嘅操作會套用到成個稍後再睇清單。
+  layout_list: 清單
+  layout_grid: 網格
+  search_scope: 搜尋範圍
   selected_tabs: '已揀 {count} / {total} 個分頁'
   search_results: '「{query}」嘅搜尋結果'
   load_more_matches: 繼續搵更早紀錄
@@ -25,7 +27,6 @@ library_tools:
   duration_short: 10 分鐘以內
   duration_medium: 10–30 分鐘
   duration_long: 30 分鐘以上
-  matched_count: '符合 {count} 項 · 已載入 {total} 項'
   find_messages: 搵呢個對話已載入嘅訊息
   previous_match: 上一個符合項目
   next_match: 下一個符合項目
@@ -76,6 +77,7 @@ common:
   load_failed: 載入失敗，請遲啲再試
   image_load_failed: 圖片載入失敗
   operation_failed: 操作失敗，請遲啲再試
+  send_not_allowed: 呢度暫時唔可以傳送
   load_more: 撈多啲
   operation:
     add: 新增
@@ -193,23 +195,14 @@ settings:
   menu_bewly_pages: Bewly 頁面
   menu_bewly_components: Bewly 元件
   menu_bilibili: Bilibili
-  menu_navigation: 頁面同元件
-  menu_playback: 播放同聲音
-  menu_advanced: 進階同維護
   category_navigation: 設定分類導覽
-  category_group_pages: 頁面
-  category_group_components: 元件
-  category_group_behavior: 行為
-  badge_performance_impact: 效能影響
-  badge_advanced: 進階
   badge_irreversible: 無法復原
-  badge_use_with_caution: 小心開啟
   search:
     placeholder: 搜尋設定
     no_results: 搵唔到相關設定
     located: 已定位到呢個設定
   category_general_desc: 設定語言、互動版面同抽屜行為。
-  category_appearance_desc: 設定毛玻璃、主題顏色、字型、自訂樣式同其他頁面嘅適配。
+  category_appearance_desc: 設定毛玻璃、主題顏色、字型同其他頁面嘅適配。
   breadcrumb: 設定位置
   group_interaction_layout: 互動同版面
   home_grid_layout: 主頁影片版面
@@ -269,6 +262,8 @@ settings:
   messages_server_block_words_add: 加入
   messages_server_block_words_remove: 刪除屏蔽詞 {word}
   messages_server_block_words_empty: 暫時冇屏蔽詞
+  messages_server_block_words_load_failed: 暫時讀取唔到屏蔽詞，請再試
+  messages_server_block_words_unconfirmed: 更改已提交，但暫時確認唔到結果。請重新整理狀態，唔好重複提交。
   messages_server_errors:
     login-required: 登入狀態已失效
     risk-control: 請求暫時受到限制
@@ -296,12 +291,9 @@ settings:
     reset_title: 還原預設設定
     reset_desc: 呢區嘅操作會影響全部 Bewly Nocturne 設定。
     reset_warning: 還原之後無法復原，而家嘅語言設定會保留。
-  menu_plugin_components_and_pages: Bewly Nocturne界面
-  menu_bilibili_features_enhancement: Bilibili 功能
   menu_appearance: 版面
   menu_compatibility: 相容性
   menu_about: 關於
-  menu_changelog: 更新日誌
   experimental: 實驗性
 
   # 外掛組件同頁面 子選單
@@ -324,16 +316,12 @@ settings:
     video_playback: 播放器
     auto_play: 播放行為
     vip_features: 大會員
-    vip_features_placeholder: 大會員功能增強將喺未來版本加入。
-
-  changelog_placeholder: 更新日誌內容將喺呢度顯示。
 
   group_common: 通用
   group_drawer_behavior: 抽屜行為
   group_language: 語言
   group_ad_blocking: 廣告攔截
   group_comments: 評論
-  group_languages_and_fonts: 語言同字型
   group_link_opening_behavior: 連結開啓行爲
   group_video_card: 影片卡片
   group_video_card_display: 顯示同預覽
@@ -349,8 +337,6 @@ settings:
   video_card_content_region_stats: 數據
   video_card_content_region_tags: 標籤
   video_card_content_region_other: 其它
-  group_performance: 毛玻璃同效能
-  group_player_settings: 播放器設定
   group_player_components: 播放器組件
   group_player_display_mode: 播放模式
   group_player_display_mode_desc: 設定基礎顯示模式，再按需要覆寫特定播放情況。
@@ -358,8 +344,6 @@ settings:
   group_playback_memory_desc: 揀選係咪記住倍速、影片比例同畫質。
   group_video_page_actions: 影片頁功能
   group_video_page_actions_desc: 標籤只用嚟切換影片頁同播放器控制欄入面相關按鈕嘅顯示。
-  group_playback_behavior: 播放行為
-  group_auto_play: 自動連播
   group_custom_auto_play_behavior: 播放結束行為
   group_custom_auto_play_behavior_desc: 關咗 Bilibili 預設行為之後，可以分別設定唔同影片類型嘅後續動作。「連播推薦」會喺目前影片播完之後繼續播推薦影片。
   group_playback_end_behavior: 播放結束行為
@@ -405,7 +389,6 @@ settings:
   topbar_user_menu: 頂欄用戶選單
   topbar_display_settings: 頂欄顯示同操作
   topbar_display_settings_desc: 調整頂欄喺唔同頁面同互動情況之下嘅顯示方式。
-  group_navigation: Dock同側邊欄
   group_dock: Dock
   group_liquid_glass: 浮動表面材質
   liquid_glass: 液態玻璃
@@ -435,8 +418,6 @@ settings:
   group_hot_search: 熱搜
   group_recommendation_mode: 「估你心水」推介模式
   group_recommendation_filters: 「估你心水」過濾
-  group_recommendation_filters_desc: |
-    限制嘅數值唔好設太大，唔係嘅話會影響載入時間！頻繁請求可能會導致 Bilibili 對 IP 嘅封禁!
   group_following: 跟緊啲人
   group_following_desc: 設定「跟緊啲人」頁面嘅版面、唔活躍 UP 主名單、直播內容同影片過濾規則。
   group_favorites: 收藏
@@ -468,8 +449,8 @@ settings:
   moments_enable_keyword_filter_desc: 過濾符合作者、標題、正文或者附加內容嘅動態。啟用有效關鍵詞之後，每次最多請求兩頁，之後用「載入更多」拎下一批。
   moments_blocked_keywords: 屏蔽關鍵詞
   moments_blocked_keywords_placeholder: 用換行、逗號或者分號分隔關鍵詞
-  moments_enable_live_preview: 直播動態懸停預覽
-  moments_enable_live_preview_desc: 滑鼠懸停直播動態封面嗰陣播放直播預覽。
+  moments_enable_live_preview: 直播懸停預覽
+  moments_enable_live_preview_desc: 滑鼠懸停直播動態封面或者左邊正在直播列表時，靜音預覽直播；移開後停止播放。
   moments_enable_video_preview: 影片動態懸停預覽
   moments_enable_video_preview_desc: 懸停影片動態或者轉發影片嗰陣播放預覽，可以設定觸發範圍、額外延遲、控制列同拖曳定位。
   moments_grid_columns: 動態欄數
@@ -496,41 +477,6 @@ settings:
     dialog: 彈窗
     new_tab: 新分頁
     background: 後台分頁
-  group_moments_wanted_users: 想睇分組
-  group_moments_wanted_users_desc: 管理想睇嘅 UP 主；支援輸入 UID 或暱稱，名單只會儲存喺本機。
-  moments_enable_wanted_filter: 啟用想睇篩選
-  moments_enable_wanted_filter_desc: 喺動態頁橫向欄顯示「想睇」入口，用嚟淨係睇名單內 UP 主嘅動態；關閉後會隱藏入口並退出想睇篩選。
-  moments_wanted_users: 想睇嘅 UP 主
-  group_moments_pinned_users: 固定 UP 主
-  group_moments_pinned_users_desc: 管理固定喺動態欄右側嘅 UP 主；支援輸入 UID 或暱稱，名單只會儲存喺本機。
-  moments_pinned_users: 固定嘅 UP 主
-  moments_wanted_manager:
-    input_required: 請輸入 UP 主 UID 或暱稱
-    search_empty: 搵唔到相關 UP 主，試下其他暱稱
-    search_failed: 搜尋 UP 主失敗，請遲啲再試
-    invalid_uid: 請輸入有效嘅 UP 主 UID
-    pinned_limit: 最多只可以固定 {count} 個 UP 主
-    user_not_found: 搵唔到呢個 UP 主
-    fetch_failed: 攞取 UP 主資料失敗，請遲啲再試
-    placeholder: 輸入 UP 主 UID 或暱稱
-    add: 加入
-    search: 搜尋
-    pinned:
-      already_in: 呢個 UP 主已經喺「固定 UP」入面
-      need_follow: 要先關注 {name}，先可以加佢入「固定 UP」
-      added: 已經將 {name} 固定到動態欄
-      removed: 已經取消固定 {name}
-      remove_aria: 取消固定 {name}
-      remove_title: 取消固定
-      empty: 暫時未有固定 UP 主。加入之後會顯示喺動態欄右邊。
-    wanted:
-      already_in: 呢個 UP 主已經喺「想睇」分組入面
-      need_follow: 要先關注 {name}，先可以加佢入「想睇」分組
-      added: 已經將 {name} 加入「想睇」
-      removed: 已經將 {name} 移出「想睇」
-      remove_aria: 將 {name} 移出想睇
-      remove_title: 移出想睇
-      empty: 暫時未有 UP 主。加入之後可以喺 Bewly 動態頁嘅「想睇」篩選。
   btn:
     authorize: 授權
     revoke: 解除授權
@@ -538,8 +484,6 @@ settings:
   touch_screen_optimization: 觸控螢幕體驗改進
   touch_screen_optimization_desc: |
     呢個設定開咗之後，好似頂欄噉，撳咗啲嘢先至可以睇到更多嘅資料，而唔係淨係靠游標懸停就睇到。影片頁支援雙擊播放、暫停或者快進快退，撳住左右滑動調整播放進度，同埋由播放器左右邊緣上下滑動調整音量。（舊版頂欄唔支援呢個功能）
-  show_home_button_in_touch_mode: 顯示 Home 掣
-  show_home_button_in_touch_mode_desc: 喺觸控螢幕優化開咗嗰陣，喺頂欄 Logo 隔籬顯示一個可以直接跳去首頁嘅掣。
   open_top_bar_items_in_bewly: 撳頂欄圖示打開 Bewly 頁面
   open_top_bar_items_in_bewly_desc: 未開啟觸控螢幕優化嗰陣，撳 Logo、動態、收藏、歷史或者稍後再睇圖示，會跟「頂欄連結開啟行為」打開 Dock 入面對應嘅頁面，並沿用該頁面嘅 Bewly/原版 Bilibili 設定；未適配嘅圖示會維持原本行為。
   show_bewly_or_bili_page_switcher_desc: 喺浮動 Dock 或側邊欄顯示「全原版」、「全 Bewly」同「自訂」頁面模式切換掣。
@@ -606,15 +550,8 @@ settings:
   video_card_cover_ratio_two_columns: 雙列版型
   grid_breakpoints: 網格斷點設定
   grid_breakpoints_desc: 設定唔同影片卡片區域闊度時顯示嘅列數。當區域闊度大過或者等於設定值時，用對應嘅列數。
-  grid_min_width: 闊度 ≥
   grid_columns: 顯示
   grid_columns_unit: 列
-  grid_add_breakpoint: 加斷點
-
-  home_adaptive_title_auto_size: 標題字體大小自動
-  home_adaptive_title_auto_size_desc: 根據網格闊度自動調整標題字體大小
-  home_adaptive_title_font_size: 標題字體大小
-  home_adaptive_title_font_size_desc: 固定標題字體大小（像素），開啟自動時唔生效
   video_card_title_font_size: 標題字體大小
   video_card_title_font_size_desc: 控制影片卡片標題嘅字體大小。
   video_card_author_font_size: UP 資訊字體大小
@@ -676,7 +613,7 @@ settings:
   auto_receive_vip_exp_desc: 開咗之後，會自動領取大會員每日經驗
   auto_receive_vip_exp_success: 大會員經驗自動領取成功
   group_topbar_pinned_channels: 頂欄固定分區
-  topbar_pinned_channels_desc: 可以將 Logo 展開嘅分區固定喺頂欄外面，並且設定顯示順序。
+  topbar_pinned_channels_desc: 可以將分區固定喺頂欄，並且設定顯示順序。
   topbar_pinned_channels_title: 固定分區
   topbar_pinned_channels_hint: 撳卡片就可以固定或者取消，撳落去嘅順序會決定顯示順序。排後面嗰啲會喺空間唔夠時優先收埋。
   topbar_pinned_channels_all_selected: 所有可用分區都已經加入。
@@ -728,10 +665,6 @@ settings:
   enable_oled_dark_mode_desc: 淨係喺實際使用深色模式時生效；網頁底色會變成純黑，但卡片同浮層仍然保留層次。
   gradient_theme_color_background: 喺深色模式下使用主題色漸變
   gradient_theme_color_background_desc: 同時套用喺網頁背景同頂欄。
-  customize_css: 自訂 CSS
-  customize_css_desc: |-
-    若然你唔係幾識 CSS，請唔好立亂去改 CSS。唔係嘅話可能會搞到個頁面亂晒。
-    若然你執咗 CSS 之後遇到任何問題，唔該重新單個 BewlyBewly。
   logo_color: Logo 顏色
   logo_color_opt:
     white: 白
@@ -875,10 +808,6 @@ settings:
   clean_share_link_remove_tracking_params_desc: >
     移除分享連結入面嘅追蹤參數，好似 spm_id_from、vd_source、share_source 噉。
 
-  keep_collection_video_default_mode: 合集影片保持預設模式
-  keep_collection_video_default_mode_desc: 啟用嗰陣，合集影片會一直用預設播放器模式，唔會套用寬螢幕或者全螢幕設定
-  keep_watch_later_video_default_mode: 稍後再睇保持預設模式
-  keep_watch_later_video_default_mode_desc: 啟用後，稍後再睇入面嘅影片會一直用預設播放器模式，唔會套用寬螢幕或者全螢幕設定
   remember_playback_rate: 記住倍速
   remember_video_aspect_ratio: 記住影片比例
   remember_video_quality: 記住畫質
@@ -1016,8 +945,6 @@ settings:
   topbar_components_adjustment_desc: 設定每個頂欄圖示嘅角標顯示方式
   visibility: 顯示
   remember_playback_rate_desc: 啓用後，播放器會記住你上次設定嘅倍速，下次開片時自動套用
-  disable_auto_play_collection: 自動關閉合集自動連播
-  disable_auto_play_collection_desc: 自動關閉影片合集嘅自動連播功能
   group_fonts: ''
   group_visual_effects: ''
 auth:
@@ -1120,6 +1047,24 @@ topbar:
     video: Po 片
     manager: 內容管理
 notifications:
+  insights:
+    activity: 對話最近活動
+    activity_scope: 近 7 日 · 已載入對話
+    mark_all_read: 全部標為已讀
+    marking_read: 標記緊
+    all_read: 全部已讀
+    read_partial: 部分訊息未能標記，請再試
+    read_failed: 標記失敗，請再試
+    overview: 訊息總覽
+    unread_total: 未讀訊息同通知
+    unread_private: 未讀私訊
+    followed: 已關注
+    unfollowed: 未關注
+    unread_notifications: 未讀通知
+    loaded_sessions: 已載入對話
+    pinned: 置頂
+    muted: 免打擾
+    recent: 最近對話
   document_title: '{section} - 訊息 - 嗶哩嗶哩'
   navigation_aria: 訊息分類
   section_aria: 打開{section}
@@ -1144,17 +1089,62 @@ notifications:
     system:
       label: 系統通知
   whisper:
+    actions:
+      menu: '管理同{name}嘅對話'
+      pin: 置頂聊天
+      unpin: 取消置頂
+      mute: 開啟免打擾
+      unmute: 取消免打擾
+      block: 加入黑名單
+      report: 舉報呢位用戶
+      disable_push: 唔接收推送
+      enable_push: 接收推送
+      notifications_normal: 通知正常接收
+      refresh: 重新讀取狀態
+      load_failed: 讀取對話設定失敗，請重試
+      write_failed: 操作失敗，請稍後重試
+      unconfirmed: 請求已提交，但暫時確認唔到結果。請重新讀取狀態，唔好重複提交。
+      success: 操作成功
+      report_success: 舉報已提交
+      block_warning: 加入黑名單後會自動取消關注同合集訂閱，禁止對方同你互動或睇你嘅空間。
+      report_notice: 請選擇舉報理由。呢個對話最近最多 10 則訊息會一齊提交做證據；確認之後先會送出舉報。
+      reason: 舉報理由
+      choose_reason: 請選擇理由；其他問題請填寫說明
+      reasons:
+        other: 其他問題
+        sexual: 色情低俗
+        political: 政治敏感
+        illegal: 違法有害
+        advertising: 廣告騷擾
+        abuse: 人身攻擊
+        fraud: 詐騙
+    search:
+      batch: 而家第 {count} 批結果
+      next_batch: 搜尋下一批結果
+      following: 已關注用戶
+      global: 所有用戶
+      users_empty: 搵唔到相關用戶
+      skip: 跳過呢個對話，繼續搜尋
+      people: 用戶
+      messages: 訊息
+      start: 搜尋全部私訊記錄
+      progress: 搜尋中
+      complete: 搜尋完成
+      skipped: '{count} 個群組或讀唔到嘅對話未納入搜尋'
+      error: 搜尋中斷，已搵到嘅結果會保留
+      limit: 呢批結果較多，可以繼續下一批或者縮小關鍵字
+      empty: 搵唔到符合嘅歷史訊息
+      stop: 暫停搜尋
+      continue: 繼續搜尋
+      context_error: 暫時定位唔到呢則訊息，請重試
+      select_result: 喺左邊揀一則訊息睇上下文
     loading: 載入緊私訊會話
     profile_pending: 確認緊帳號
     list_aria: 私訊會話列表
     search_placeholder: 搜尋目前已載入會話
-    search_aria: 搜尋已載入嘅私訊會話
+    search_aria: 搜尋用戶或者聊天記錄
     select_recipient: 揀{name}做私訊收件人
     recipient_search:
-      search_following: 喺關注列表搜尋
-      following_empty: 關注列表搵唔到相關用戶
-      search_global: 全站搜尋用戶
-      global_empty: 全站搵唔到相關用戶
       loading: 搜尋緊用戶
       more: 顯示更多
       error: 搜尋失敗，請再試
@@ -1233,6 +1223,9 @@ notifications:
       new_messages: 有新訊息
       return_latest: 返回最新訊息
       recalled: 訊息已經收回
+      expired: 訊息已失效
+      play_video: 撳此播放影片
+      open_media: 睇內容
       unsupported: 而家個版本暫時未支援呢種訊息
       preview_image: 預覽圖片
       image_preview: 私訊圖片預覽
@@ -1327,8 +1320,22 @@ dock:
   collapse_dock: 收埋 Dock
   expand_dock: 展開 Dock
 moments:
+  enter_live_room: '進入 {name} 嘅直播間'
+  promotion_advertisement: 廣告
+  promotion_commerce: 商品推廣
+  promotion_suspected: 疑似軟廣
+  promotion_reason_api: 介面明確標記為廣告
+  promotion_reason_goods: 包含商品卡片或商品連結
+  promotion_reason_coupon-code: 包含購物平台、促銷資訊同搜尋口令
+  promotion_reason_purchase-token: 包含購物口令、促銷資訊同複製或落單引導
+  promotion_reason_comment-shopping: 包含留言區或購物入口引流同領券促銷
+  promotion_reason_commission-shopping: 包含專屬購買入口同返佣或折扣引導
+  promotion_reason_disclosure: 內文包含商業合作或贊助聲明，只作提示
+  promotion_reason_purchase-and-offer: 同時有購買引導同促銷資訊，只作提示
+  promotion_reason_purchase-and-link: 同時有購買引導同購物連結，只作提示
+  hot_search_title: bilibili 熱搜
   retry: 再試
-  filter_all: 全部
+  filter_all: 全部動態
   filter_video: 影片投稿
   filter_pgc: 追番追劇
   filter_article: 專欄
@@ -1375,28 +1382,20 @@ moments:
   publish: 發布動態
   live_now: 直播緊
   live_badge: 直播中
+  live_preview_unavailable: 暫時無法預覽
   feed_bar: 動態欄
   feed_groups: 動態分組
   all_moments: 全部動態
-  wanted_enable: 淨係睇想睇嘅 UP 主
-  wanted_disable: 取消淨係睇想睇嘅 UP 主
-  wanted_only_all_video: 只適用於全部同影片投稿
-  wanted: 想睇
   scroll_frequent_left: 向左捲動經常瀏覽列表
   scroll_frequent_right: 向右捲動經常瀏覽列表
   scroll_left: 向左捲動
   scroll_right: 向右捲動
   frequent_uploaders: 經常瀏覽嘅 UP 主
   has_update: 有更新
-  pinned_uploaders: 固定 UP 主
   initial_loading: 準備緊動態同圖片…
-  empty_wanted: 最近冇更新
-  no_wanted_users: 請先喺設定加入想睇嘅 UP 主
-  configure_wanted: 設定想睇分組
   empty: 暫時冇動態可以顯示
   loading: 載入緊…
   load_more: 載入更多
-  recheck: 再檢查
   reload: 重新載入
   loading_more: 載入同準備緊更多動態…
   no_more: 已經到底喇
@@ -1544,6 +1543,7 @@ video_card:
   watch_later_update_failed: 更新陣間至睇失敗
   feedback_unavailable: 攞唔到意見選項
 home:
+  channels: 分區
   series:
     open: 開啟劇集
     more_updates: '其他更新（{count}）'
@@ -1617,6 +1617,24 @@ anime:
       sat: 週六
       sun: 週日
 history:
+  refresh: 重新整理紀錄
+  sort_newest: 最近睇過（已載入紀錄）
+  sort_oldest: 最早睇過（已載入紀錄）
+  select_results: 全選目前結果
+  filters:
+    title: 進階篩選
+    period: 觀看時間
+    period_all: 全部時間
+    period_today: 今日
+    period_yesterday: 尋日
+    period_week: 近一星期
+    by_device: 按裝置篩選
+    device_all: 全部裝置
+    device_pc: PC
+    device_phone: 手機
+    device_tablet: 平板
+    device_tv: TV
+  all_history: 全部紀錄
   media: 劇集 / 影視
   continue_watching: 繼續睇
   unknown_date: 日期不明
@@ -1624,6 +1642,7 @@ history:
   title: 收睇記錄
   turn_on_watch_history: 開返收睇記錄
   pause_watch_history: 暫停進行收睇記錄
+  retry_recording_status: 讀取記錄狀態
   clear_all_watch_history: 剷晒啲收睇記錄
   clear_all_watch_history_confirm: |-
     係咪要剷晒啲收睇記錄呀？
@@ -1636,6 +1655,44 @@ history:
     係咪要開返收睇記錄呀？
     你確定要開返收睇記錄？
 favorites:
+  saved_refresh_failed: 已儲存，但列表更新失敗，請重新整理查看
+  create_folder: 新增收藏夾
+  folder_name: 名稱
+  folder_intro: 簡介
+  change_cover: 更換封面
+  cover_invalid: 請選擇唔超過 5 MB 嘅 JPG 或 PNG 圖片
+  pin_folder: 置頂收藏夾
+  clean_invalid: 清除所有失效影片
+  clean_invalid_confirm: 清除目前收藏夾入面所有失效影片？
+  folder_like: 讚好
+  folder_unlike: 取消讚好
+  folder_creator: 建立者
+  folder_collect: 收藏
+  folder_share: 分享
+  folder_link_copied: 收藏夾連結已複製
+  rail_video: 影片收藏
+  rail_season: 訂閱合集
+  rail_article: 其他收藏
+  topic_folder: 話題收藏
+  article_folder: 圖文收藏夾
+  course_folder: 課程收藏夾
+  course_empty: 去收藏啲課堂影片啦～
+  video_order: 影片排序
+  order_recent: 最近收藏
+  order_views: 最多播放
+  order_published: 最近投稿
+  subscription_filter: 訂閱類型
+  manage_folders: 管理收藏夾
+  subscription_all: 全部訂閱
+  subscription_seasons: 影片合集
+  subscription_folders: 收藏夾
+  search_all_fields: 全部欄位
+  search_content_only: 只搜標題同內容
+  search_title_only: 只搜標題
+  search_author_only: 只搜作者
+  search_description_only: 只搜描述
+  search_season: 搜尋合集或目前合集入面嘅影片
+  search_article: 搜尋目前分類嘅收藏
   collected_season_prefix: 合集
   video_section_title: 收藏嘅影片
   folder_section_title: 所有收藏夾
@@ -1703,6 +1760,29 @@ version_reminder:
   acknowledge: 知道喇，呢個版本唔再提示
   settings_hint: 可以去「設定 → 關於」閂咗「新版本提醒」。
 watch_later:
+  refresh: 重新整理稍後再睇
+  filters:
+    title: 進階篩選
+    by_progress: 按進度篩選
+    by_date: 按日期篩選
+    by_duration: 按時長篩選
+    progress_all: 全部
+    progress_unstarted: 未睇過
+    startDate: 開始日期
+    endDate: 結束日期
+    invalid_range: 結束日期唔可以早過開始日期
+    duration_all: 全部
+    duration_short: 10分鐘以下
+    duration_medium: 10–30分鐘
+    duration_long: 30–60分鐘
+    duration_extraLong: 60分鐘以上
+  sort_order: 顯示次序
+  sort_newest: 最近加入
+  sort_oldest: 最早加入
+  batch_manage: 批量管理
+  select_all: 全選
+  unselect_all: 取消全選
+  remove_selected: 移除所選（{count}）
   auto_remove_failed: 自動移出陣間至睇失敗，請稍後手動重試。
   open_tabs:
     title: 加入播放分頁
@@ -1859,6 +1939,8 @@ search:
     next: 下一頁
     page: 第 {page} 頁
   date_picker:
+    date_placeholder: 年/月/日
+    open_calendar_for: 揀{label}
     start_date: 開始日期
     month: '{month} 月'
     year: '{year} 年'

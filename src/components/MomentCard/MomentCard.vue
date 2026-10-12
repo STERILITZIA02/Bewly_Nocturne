@@ -3,6 +3,7 @@ import type { ComponentPublicInstance, CSSProperties } from 'vue'
 import { computed, nextTick, onBeforeUnmount, provide, ref, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import MomentPromotionBadge from '~/components/MomentPromotionBadge.vue'
 import VideoWatchedTag from '~/components/VideoWatchedTag.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { BEWLY_NATIVE_USER_PROFILE_RELEASE, BEWLY_NATIVE_USER_PROFILE_REQUEST } from '~/constants/globalEvents'
@@ -632,6 +633,7 @@ onBeforeUnmount(() => {
           <strong>{{ moment.author.name }}</strong>
           <small>{{ moment.time || t('moment_card.just_now') }}</small>
         </span>
+        <MomentPromotionBadge v-if="moment.momentPromotion" :promotion="moment.momentPromotion" />
         <button
           v-if="menuVideo"
           ref="moreBtnRef"
@@ -1272,7 +1274,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__primary-action:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 4px;
 }
 
@@ -1549,7 +1551,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__forward:focus-visible {
-  box-shadow: 0 0 0 2px var(--bew-theme-focus-ring);
+  box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
 }
 
 .moment-card__forward-copy {
@@ -1663,7 +1665,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__additional-action:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 2px;
 }
 
@@ -1867,7 +1869,7 @@ onBeforeUnmount(() => {
 .moment-card__gallery-item:focus-visible {
   position: relative;
   z-index: 1;
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: -2px;
 }
 
@@ -1949,7 +1951,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__more-btn:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 2px;
 }
 
@@ -2059,7 +2061,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__description-toggle:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-0-5);
 }
 

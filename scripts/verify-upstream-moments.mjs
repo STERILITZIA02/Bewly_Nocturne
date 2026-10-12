@@ -121,6 +121,7 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       } }) },
       '~/utils/mediaResources': await import('../src/utils/mediaResources'),
       '~/utils/momentUrl': await import('../src/utils/momentUrl'),
+      '~/utils/livePreviewSources': await import('../src/utils/livePreviewSources'),
       '~/utils/previewMediaSession': await import('../src/utils/previewMediaSession'),
     })
     const gesture = await loadSourceModule('../src/composables/useVideoPreviewSwipeSeek.ts', { vue: Vue }, { performance })
@@ -193,6 +194,9 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       video.dispatchEvent(new Event('loadeddata'))
       await flush()
       assert.equal(previews.previewState.value, 'ready')
+      assert.ok(host.querySelector('.moment-video-preview--ready'), 'the first decoded frame hands off from the cover')
+      await new Promise(resolve => setTimeout(resolve, 60))
+      await flush()
       assert.equal(host.querySelector('[data-bew-skeleton]'), null)
       const controlClick = new MouseEvent('click', { bubbles: true, cancelable: true })
       video.dispatchEvent(controlClick)

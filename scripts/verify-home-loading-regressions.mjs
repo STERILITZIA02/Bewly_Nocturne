@@ -1,6 +1,68 @@
 import assert from 'node:assert/strict'
 
 export function registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush }) {
+  check('Home channels: keyboard, pointer and touch share one disclosure and release it on dismissal', async () => {
+    const settings = Vue.ref({ touchScreenOptimization: false })
+    const channels = await compileComponent('../src/components/TopBar/components/pops/ChannelsPop.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '../../constants/channels': await import('../src/components/TopBar/constants/channels'),
+    })
+    const Menu = await compileComponent('../src/contentScripts/views/Home/components/HomeChannelsMenu.vue', {
+      '~/logic': { settings },
+      '~/components/TopBar/components/pops/ChannelsPop.vue': { default: channels },
+      '~/composables/useAnchoredPopoverPosition': { useAnchoredPopoverPosition() {} },
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const outside = document.body.appendChild(document.createElement('button'))
+    const app = Vue.createApp(Menu)
+    app.config.globalProperties.$t = key => key
+    app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
+    app.provide('BEWLY_APP', { mainAppRef: Vue.ref(host) })
+    app.mount(host)
+    try {
+      await flush()
+      const trigger = host.querySelector('button')
+      trigger.focus()
+      trigger.click()
+      await flush()
+      const panel = host.querySelector('.channels-pop')
+      assert.ok(panel.querySelectorAll('a').length > 30)
+      assert.equal(document.activeElement, panel.querySelector('a'))
+      document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'false')
+      assert.equal(document.activeElement, trigger)
+      settings.value.touchScreenOptimization = true
+      trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }))
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'true')
+      trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }))
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'false')
+      settings.value.touchScreenOptimization = false
+      const hover = new Event('pointerenter')
+      Object.defineProperty(hover, 'pointerType', { value: 'mouse' })
+      trigger.dispatchEvent(hover)
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'true')
+      trigger.dispatchEvent(new MouseEvent('click', { detail: 1, bubbles: true }))
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'true', 'clicking a hovered trigger must not immediately close its panel')
+      window.dispatchEvent(new Event('blur'))
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'false')
+      trigger.click()
+      await flush()
+      outside.focus()
+      await flush()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'false')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+      outside.remove()
+    }
+  })
   check('Home refresh: delayed account readiness keeps the search hero at the page top', async () => {
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
     const layout = await import('../src/constants/layout')
@@ -45,6 +107,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       '~/utils/mitt': { default: { on() {}, off() {} } },
       '~/utils/scrollIntent': await import('../src/utils/scrollIntent'),
       './components/VersionReminder.vue': { default: blank },
+      './components/HomeChannelsMenu.vue': { default: { render: () => Vue.h('button', { 'data-home-channels': '' }, 'Channels') } },
       './components/RecommendationModeSwitcher.vue': { default: { render: () => Vue.h('div', { 'data-mode-switcher': '' }, Vue.h('button', 'mode')) } },
       './types': { HomeSubPage },
     }

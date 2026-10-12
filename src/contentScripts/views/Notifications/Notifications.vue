@@ -8,7 +8,7 @@ import { AppPage } from '~/enums/appEnums'
 import { localSettings, settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
-import { getCSRF } from '~/utils/main'
+import { getCSRF, getUserID } from '~/utils/main'
 import { buildBewlyNotificationUrl, normalizeNotificationRoute } from '~/utils/notificationRoute'
 import type { PrivateConversationRoute } from '~/utils/privateConversationRoute'
 import {
@@ -18,10 +18,12 @@ import {
   parsePrivateConversationRoute,
   PRIVATE_CONVERSATION_ROUTE_PARAMS,
 } from '~/utils/privateConversationRoute'
+import { changeUserRelation } from '~/utils/userRelation'
 
 import NativeNotificationFeed from './components/NativeNotificationFeed.vue'
 import NotificationsPageHeader from './components/NotificationsPageHeader.vue'
 import NotificationsPageSkeleton from './components/NotificationsPageSkeleton.vue'
+import { useMarkAllMessagesRead } from './composables/useMarkAllMessagesRead'
 import type { NotificationPageParams } from './composables/useNotificationFeed'
 import { useNotificationFeeds } from './composables/useNotificationFeeds'
 import { resolveNotificationAccountState } from './notificationFeedPolicy'
@@ -35,11 +37,14 @@ import {
   NOTIFICATION_SECTION_BY_ID,
 } from './notificationSections'
 import { createSystemNotificationPageFetcher } from './systemNotificationFeed'
+import { getMessageInsights } from './whisper/messageInsights'
 import type { TransientPrivateRecipient } from './whisper/privateRecipientSearch'
 import type { DisplayPrivateSession } from './whisper/privateSession'
 import { usePrivateEmotePanel } from './whisper/usePrivateEmotePanel'
+import { usePrivateHistorySearch } from './whisper/usePrivateHistorySearch'
 import { usePrivateMessageWorkspace } from './whisper/usePrivateMessageWorkspace'
 import { usePrivateRecipientSearch } from './whisper/usePrivateRecipientSearch'
+import { privateSessionActionsKey, usePrivateSessionActions } from './whisper/usePrivateSessionActions'
 import { usePrivateSessions } from './whisper/usePrivateSessions'
 import WhisperWorkspace from './whisper/WhisperWorkspace.vue'
 
@@ -57,7 +62,6 @@ const routeState = useRouteState()
 const topBarStore = useTopBarStore()
 
 const currentView = ref<NotificationView>('whisper')
-const measuredNavigationWidth = ref<number | null>(null)
 const routeReady = ref(false)
 const nativeFeedRef = ref<NativeNotificationFeedExposed | null>(null)
 const whisperWorkspaceRef = ref<WhisperWorkspaceExposed | null>(null)
@@ -66,6 +70,7 @@ const transientPrivateRecipient = ref<TransientPrivateRecipient | null>(null)
 const privateConversationRestoreAttempted = ref(false)
 const currentMid = computed(() => topBarStore.userInfo.mid ? String(topBarStore.userInfo.mid) : '')
 const accountState = computed(() => resolveNotificationAccountState(topBarStore.isLogin, currentMid.value))
+const isPageActive = ref(false)
 const privateEmotes = usePrivateEmotePanel(currentMid, () => api.moment.getMomentEmotes({ business: 'reply' }))
 const privateSessions = usePrivateSessions(currentMid, {
   fetchSessions: () => api.privateMessage.getPrivateSessions(),
@@ -82,6 +87,33 @@ const privateRecipientSearch = usePrivateRecipientSearch(currentMid, {
     page_size: params.pagesize,
   }),
 })
+const privateHistorySearch = usePrivateHistorySearch(currentMid, {
+  sessions: privateSessions,
+  active: () => isPageActive.value && accountState.value === 'ready',
+  fetchMessages: options => api.privateMessage.getPrivateMessages(options),
+})
+const privateSessionActions = usePrivateSessionActions(currentMid, {
+  active: () => isPageActive.value && accountState.value === 'ready' && String(getUserID() ?? '') === currentMid.value,
+  getCsrf: getCSRF,
+  detail: target => api.privateMessage.getPrivateSessionDetail(target),
+  settings: target => api.privateMessage.getPrivateSessionSettings(target),
+  relation: id => api.user.getRelations({ fids: id }),
+  mutate: (action, input) => action === 'top'
+    ? api.privateMessage.setPrivateSessionTop(input)
+    : action === 'dnd' ? api.privateMessage.setPrivateSessionDnd(input) : api.privateMessage.setPrivateSessionPush(input),
+  block: (account, id) => Number.isSafeInteger(Number(account)) && Number.isSafeInteger(Number(id))
+    ? changeUserRelation(Number(account), Number(id), 5)
+    : Promise.resolve({ code: -101 }),
+  report: input => api.privateMessage.reportPrivateUser(input),
+  messages: talkerId => api.privateMessage.getPrivateMessages({ talkerId, size: 20 }),
+  reconcile: privateSessions.reconcileSessionSettings,
+  blocked: (session) => {
+    if (privateSessions.selectedSessionKey.value === session.key)
+      closePrivateConversation()
+    privateSessions.removeSession(session.key)
+  },
+})
+provide(privateSessionActionsKey, privateSessionActions)
 const activePrivateTalkerId = computed(() => (
   transientPrivateRecipient.value?.mid || privateSessions.selectedTalkerId.value
 ))
@@ -103,6 +135,8 @@ const privateMessageWorkspace = usePrivateMessageWorkspace(currentMid, activePri
 })
 const { messages: privateMessages, writes: privateMessageWrites } = privateMessageWorkspace
 const fetchSystemNotificationPage = createSystemNotificationPageFetcher({
+  getAccount: () => String(getUserID() ?? ''),
+  isActive: () => isPageActive.value,
   fetchUnified: () => api.notification.getSystemUnifiedNotifications(),
   fetchUser: () => api.notification.getSystemUserNotifications(),
   fetchHistory: cursor => api.notification.getSystemNotificationHistory({ cursor }),
@@ -111,23 +145,30 @@ const fetchSystemNotificationPage = createSystemNotificationPageFetcher({
 const notificationFeeds = useNotificationFeeds(currentMid, {
   fetchPage: fetchNotificationPage,
 })
+const markAllMessagesRead = useMarkAllMessagesRead(currentMid, {
+  active: () => isPageActive.value && accountState.value === 'ready',
+  currentAccount: () => String(getUserID() ?? ''),
+  fetchSessions: endTs => endTs === undefined
+    ? api.privateMessage.getPrivateSessions()
+    : api.privateMessage.getOlderPrivateSessions({ endTs }),
+  ackSession: session => api.privateMessage.ackPrivateSession({ talkerId: session.talker_id, ackSeqno: session.max_seqno, csrf: getCSRF() }),
+  sessionRead: session => privateSessions.markSessionRead(session.talker_id, session.max_seqno),
+  markNotification: async (section) => {
+    const counts = getMessageInsights([], topBarStore.unReadMessage, topBarStore.unReadDm)
+    if (counts.notifications.find(item => item.key === section)?.count === 0)
+      return true
+    await notificationFeeds.loadInitial(section, { applyMode: 'merge-head' })
+    const candidate = notificationFeeds.getReadCandidate(section)
+    return Boolean(candidate && notificationFeeds.markCandidateReadLocally(section, candidate))
+  },
+  syncUnread: () => topBarStore.syncUnreadMessageState(),
+})
 const isBottomDock = computed(() => settings.value.dockPosition === 'bottom')
 const currentSection = computed(() => NOTIFICATION_SECTION_BY_ID[currentView.value])
 const nativeView = computed<NativeNotificationSection | null>(() => (
   isNativeNotificationSection(currentView.value) ? currentView.value : null
 ))
 const isWhisperView = computed(() => isHybridNotificationView(currentView.value))
-const usesWorkspaceLayout = computed(() => currentSection.value.layout === 'workspace')
-const notificationsPageStyle = computed(() => measuredNavigationWidth.value === null
-  ? undefined
-  : { '--notifications-navigation-width': `${measuredNavigationWidth.value}px` })
-
-const isPageActive = ref(false)
-
-function updateNavigationWidth(width: number) {
-  if (Number.isFinite(width) && width > 0)
-    measuredNavigationWidth.value = Math.ceil(width)
-}
 
 function hasPrivateConversationRouteParams(url: URL): boolean {
   return Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS).some(param => url.searchParams.has(param))
@@ -265,6 +306,7 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
   }
   const currentRoute = parsePrivateConversationRoute(window.location.href)
   const isCurrentSelection = privateSessions.selectedSessionKey.value === session.key
+  currentView.value = 'whisper'
   transientPrivateRecipient.value = null
   pendingPrivateConversationRoute.value = route
   privateSessions.selectSession(session)
@@ -287,11 +329,12 @@ function selectPrivateConversation(session: DisplayPrivateSession) {
 function selectTransientPrivateRecipient(recipient: TransientPrivateRecipient) {
   if (!/^\d+$/.test(recipient.mid))
     return
+  currentView.value = 'whisper'
   pendingPrivateConversationRoute.value = null
   privateSessions.clearSelectedSession()
   transientPrivateRecipient.value = recipient
   resetWorkspacePagePosition()
-  const nextUrl = clearPrivateConversationRoute(window.location.href)
+  const nextUrl = buildBewlyNotificationUrl('whisper')
   window.history.replaceState(
     window.history.state,
     '',
@@ -350,7 +393,6 @@ function selectView(view: NotificationView) {
   else {
     pendingPrivateConversationRoute.value = null
     transientPrivateRecipient.value = null
-    privateRecipientSearch.reset()
     privateSessions.clearSelectedSession()
   }
   window.history.pushState(
@@ -358,18 +400,6 @@ function selectView(view: NotificationView) {
     '',
     buildBewlyNotificationUrl(view),
   )
-}
-
-function resetOuterScrollForWorkspaceView(view: NotificationView) {
-  if (NOTIFICATION_SECTION_BY_ID[view].layout !== 'workspace')
-    return
-
-  // Let the active Native Feed persist its own scrollTop before resetting the
-  // shared outer viewport for the whisper workspace.
-  void nextTick(() => {
-    if (currentView.value === view)
-      scrollViewportRef.value?.scrollTo({ top: 0 })
-  })
 }
 
 function refreshCurrentView() {
@@ -433,6 +463,7 @@ function activatePage() {
 
   isPageActive.value = true
   routeReady.value = false
+  resetWorkspacePagePosition()
   privateConversationRestoreAttempted.value = false
   syncViewFromRoute(window.location.href)
   registerRefreshHandler()
@@ -450,7 +481,6 @@ function deactivatePage() {
 }
 
 watch(() => routeState.navigationId, () => syncViewFromRoute(routeState.href))
-watch(currentView, resetOuterScrollForWorkspaceView)
 watch(() => privateSessions.state.items, () => {
   applyPendingPrivateConversationRoute()
   maybeRestoreLastPrivateConversation()
@@ -499,13 +529,10 @@ onBeforeUnmount(() => {
 
 <template>
   <main
-    class="notifications-page"
+    class="notifications-page notifications-page--workspace"
     :class="{
-      'notifications-page--workspace': usesWorkspaceLayout,
-      'notifications-page--document': !usesWorkspaceLayout,
       'notifications-page--dock-bottom': isBottomDock,
     }"
-    :style="notificationsPageStyle"
   >
     <div v-if="!routeReady" class="notifications-page__route-loading" aria-busy="true">
       <NotificationsPageSkeleton :label="t('common.loading')" :view="currentView" />
@@ -513,29 +540,28 @@ onBeforeUnmount(() => {
 
     <template v-else>
       <div class="notifications-page__workspace">
-        <NotificationsPageHeader
+        <WhisperWorkspace
+          ref="whisperWorkspaceRef"
+          :read-all="markAllMessagesRead"
           :view="currentView"
-          @navigation-width-change="updateNavigationWidth"
-          @select="selectView"
-        />
-
-        <section class="notifications-page__outlet">
-          <WhisperWorkspace
-            v-if="isWhisperView"
-            ref="whisperWorkspaceRef"
-            :account-state="accountState"
-            :active="isPageActive"
-            :controller="privateSessions"
-            :messages-controller="privateMessages"
-            :emote-controller="privateEmotes"
-            :recipient-search="privateRecipientSearch"
-            :transient-recipient="transientPrivateRecipient"
-            :write-controller="privateMessageWrites"
-            @close-conversation="closePrivateConversation"
-            @select-session="selectPrivateConversation"
-            @select-recipient="selectTransientPrivateRecipient"
-            @transient-send-confirmed="resolveTransientPrivateRecipientAfterSend"
-          />
+          :account-state="accountState"
+          :active="isPageActive"
+          :controller="privateSessions"
+          :messages-controller="privateMessages"
+          :emote-controller="privateEmotes"
+          :recipient-search="privateRecipientSearch"
+          :history-search="privateHistorySearch"
+          :transient-recipient="transientPrivateRecipient"
+          :write-controller="privateMessageWrites"
+          @select-view="selectView"
+          @close-conversation="closePrivateConversation"
+          @select-session="selectPrivateConversation"
+          @select-recipient="selectTransientPrivateRecipient"
+          @transient-send-confirmed="resolveTransientPrivateRecipientAfterSend"
+        >
+          <template #navigation>
+            <NotificationsPageHeader :view="currentView" @select="selectView" />
+          </template>
           <NativeNotificationFeed
             v-if="nativeView"
             :key="nativeView"
@@ -545,7 +571,7 @@ onBeforeUnmount(() => {
             :controller="notificationFeeds"
             :section="nativeView"
           />
-        </section>
+        </WhisperWorkspace>
       </div>
     </template>
   </main>
@@ -555,11 +581,8 @@ onBeforeUnmount(() => {
 @use "../../../styles/breakpoints";
 
 .notifications-page {
-  --notifications-conversation-list-max-width: var(--bew-notifications-list-max-width);
-  --notifications-conversation-list-width: min(
-    var(--notifications-navigation-width, var(--notifications-conversation-list-max-width)),
-    var(--notifications-conversation-list-max-width)
-  );
+  --notifications-conversation-list-width: var(--bew-messages-sidebar-width);
+  --notifications-detail-bottom-space: var(--bew-space-3);
 
   box-sizing: border-box;
   width: 100%;
@@ -572,12 +595,13 @@ onBeforeUnmount(() => {
 }
 
 .notifications-page--workspace {
-  height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
+  height: 100dvh;
   overflow: visible;
 }
 
 :global(.bewly-scroll-viewport:has(.notifications-page--workspace)) {
   overflow-y: hidden;
+  scrollbar-gutter: auto;
 }
 
 .notifications-page__route-loading {
@@ -587,78 +611,20 @@ onBeforeUnmount(() => {
   background: transparent;
 }
 
-.notifications-page--document {
-  min-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
-}
-
 .notifications-page--workspace.notifications-page--dock-bottom {
-  height: calc(
-    100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
-  );
-}
-
-.notifications-page--document.notifications-page--dock-bottom {
-  min-height: calc(
-    100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size) - var(--bew-space-8)
-  );
+  --notifications-composer-dock-shift: var(--bew-dock-bottom-shift, 0px);
+  --notifications-detail-bottom-space: calc(var(--bew-dock-control-size) + var(--bew-space-8));
 }
 
 .notifications-page__workspace {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: auto minmax(0, 1fr);
-  gap: var(--bew-space-4);
+  height: 100%;
   min-width: 0;
   min-height: 0;
-}
-
-.notifications-page--workspace .notifications-page__workspace {
-  height: 100%;
-}
-
-.notifications-page--document .notifications-page__workspace {
-  width: min(100%, var(--bew-notifications-feed-max-width));
-  margin-inline: auto;
-  grid-template-rows: auto auto;
-}
-
-.notifications-page__outlet {
-  min-width: 0;
-  min-height: 0;
-}
-
-.notifications-page--workspace .notifications-page__outlet {
-  height: 100%;
-  overflow: visible;
-}
-
-@media (max-width: breakpoints.$mobile-max) {
-  .notifications-page {
-    --notifications-conversation-list-width: 100%;
-  }
-
-  .notifications-page__workspace {
-    gap: var(--bew-space-3);
-  }
-}
-
-@media (min-width: breakpoints.$grid-md) and (max-width: breakpoints.$compact-max) {
-  .notifications-page {
-    --notifications-conversation-list-max-width: calc(var(--bew-space-10) * 8);
-  }
 }
 
 @media (min-width: breakpoints.$grid-lg) {
   .notifications-page--workspace.notifications-page--dock-bottom {
-    height: calc(
-      100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
-    );
-  }
-
-  .notifications-page--document.notifications-page--dock-bottom {
-    min-height: calc(
-      100dvh - var(--bew-top-bar-height) - var(--bew-space-3) - var(--bew-dock-control-size-lg) - var(--bew-space-8)
-    );
+    --notifications-detail-bottom-space: calc(var(--bew-dock-control-size-lg) + var(--bew-space-8));
   }
 }
 </style>

@@ -1,0 +1,43 @@
+// Shared surface for search progress and continuation actions. Owners position it.
+.bew-message-search-pill {
+  position: relative;
+  isolation: isolate;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  min-height: var(--bew-control-height);
+  max-width: 100%;
+  padding: var(--bew-space-2) var(--bew-space-4);
+  overflow: hidden;
+  color: var(--bew-text-1);
+  background: var(--bew-fill-1);
+  border: 0;
+  border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
+  font-family: inherit;
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  font-weight: var(--bew-font-weight-medium);
+  cursor: pointer;
+  transition: background-color var(--bew-duration-fast) ease;
+
+  &:focus-visible {
+    outline: var(--bew-focus-ring);
+    outline-offset: var(--bew-space-0-5);
+  }
+  &:active:not(:disabled) {
+    background: var(--bew-fill-2);
+  }
+  &:disabled {
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .bew-message-search-pill:hover:not(:disabled) {
+    background: var(--bew-fill-2);
+  }
+}

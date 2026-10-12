@@ -3,7 +3,7 @@ import { useThrottleFn } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
 
 import Select from '~/components/Select.vue'
-import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, settings } from '~/logic'
+import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, settings } from '~/logic'
 
 import SettingsItem from '../components/SettingsItem.vue'
 import SettingsItemGroup from '../components/SettingsItemGroup.vue'
@@ -207,7 +207,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             :style="{
               background: color,
               transform: color === settings.themeColor ? 'scale(1.3)' : 'scale(1)',
-              border: color === settings.themeColor ? '2px solid white' : '2px solid transparent',
+              border: color === settings.themeColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid transparent',
               boxShadow: color === settings.themeColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
             }"
             @click="changeThemeColor(color)"
@@ -219,7 +219,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             flex="~ items-center justify-center"
             :style="{
               transform: isCustomColor ? 'scale(1.3)' : 'scale(1)',
-              border: isCustomColor ? '2px solid white' : `2px solid ${settings.themeColor}`,
+              border: isCustomColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid var(--bew-border-color)',
               boxShadow: isCustomColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
             }"
           >
@@ -252,7 +252,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             :style="{
               background: color,
               transform: color === settings.darkModeBaseColor ? 'scale(1.3)' : 'scale(1)',
-              border: color === settings.darkModeBaseColor ? '2px solid white' : '2px solid transparent',
+              border: color === settings.darkModeBaseColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid transparent',
               boxShadow: color === settings.darkModeBaseColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
             }"
             @click="changeDarkModeBaseColor(color)"
@@ -264,7 +264,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             flex="~ items-center justify-center"
             :style="{
               transform: isCustomDarkModeBaseColor ? 'scale(1.3)' : 'scale(1)',
-              border: isCustomDarkModeBaseColor ? '2px solid white' : `2px solid ${settings.darkModeBaseColor}`,
+              border: isCustomDarkModeBaseColor ? '1px solid var(--bew-focus-ring-color)' : '1px solid var(--bew-border-color)',
               boxShadow: isCustomDarkModeBaseColor ? '0 0 0 1px var(--bew-border-color), var(--bew-shadow-1)' : 'none',
             }"
           >
@@ -324,24 +324,6 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
       </SettingsItem>
       <SettingsItem :title="$t('settings.override_danmaku_font')" :desc="$t('settings.override_danmaku_font_desc')" right-width="auto">
         <Radio v-model="settings.overrideDanmakuFont" />
-      </SettingsItem>
-    </SettingsItemGroup>
-
-    <SettingsItemGroup>
-      <SettingsItem
-        :title="$t('settings.customize_css')"
-        :badge="$t('settings.badge_advanced')"
-        right-width="auto"
-      >
-        <Radio v-model="localSettings.customizeCSS" />
-        <template #desc>
-          <span text="$bew-error-color">
-            {{ $t('settings.customize_css_desc') }}
-          </span>
-        </template>
-        <template v-if="localSettings.customizeCSS" #bottom>
-          <CodeEditor v-model="localSettings.customizeCSSContent" language="css" @keydown.stop.passive="() => {}" />
-        </template>
       </SettingsItem>
     </SettingsItemGroup>
   </div>

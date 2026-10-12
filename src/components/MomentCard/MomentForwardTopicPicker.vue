@@ -202,7 +202,7 @@ onBeforeUnmount(() => {
 .moment-forward-topic-picker__results button:focus-visible,
 .moment-forward-topic-picker__state button:focus-visible,
 .moment-forward-topic-picker__search input:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 1px;
 }
 .moment-forward-topic-picker__state {

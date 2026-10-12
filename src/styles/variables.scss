@@ -1,4 +1,7 @@
-.bew-cover-sidebar {
+@use "./breakpoints";
+
+.bew-cover-sidebar,
+.library-workspace__rail {
   --bew-sidebar-text: var(--bew-text-1);
   --bew-sidebar-secondary: var(--bew-text-2);
   --bew-sidebar-muted: var(--bew-text-3);
@@ -40,6 +43,11 @@
   --bew-font-weight-semibold: 600;
   --bew-font-weight-bold: 700;
   --bew-control-press-scale: 0.97;
+  // Focus is independent of the user accent. Reuse this neutral, single-pixel
+  // treatment for selection controls, keyboard focus and injected native UI.
+  --bew-focus-ring-color: var(--bew-text-3);
+  --bew-focus-ring: 1px solid var(--bew-focus-ring-color);
+  --bew-focus-shadow: 0 0 0 1px var(--bew-focus-ring-color);
   --bew-base-font-size: var(--bew-font-size-body);
   // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
   --bew-media-pop-title-font-size: var(--bew-font-size-title);
@@ -95,8 +103,53 @@
   // #region Layout
   --bew-layout-content-gap: var(--bew-space-5);
   --bew-layout-sidebar-width: 200px;
+  --bew-library-filter-padding: var(--bew-space-3);
+  --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);
+  --bew-moments-hot-search-compact-max-height: 240px;
+  --bew-moments-hot-search-max-height: calc(
+    100dvh - var(--bew-top-bar-height) - var(--bew-space-4) - var(--bew-space-6)
+  );
+  --bew-history-timeline-gutter: var(--bew-space-6);
+  --bew-history-timeline-node: var(--bew-space-2);
+  --bew-history-timeline-color: var(--bew-wheel-text-active);
+  // Keep the outer contour offset by the actual inset from the inner controls.
+  --bew-library-filter-radius: calc(var(--bew-interactive-radius) + var(--bew-library-filter-padding));
   --bew-notifications-list-max-width: 360px;
-  --bew-notifications-feed-max-width: 1120px;
+  --bew-messages-sidebar-width: clamp(256px, 24vw, var(--bew-notifications-list-max-width));
+  --bew-message-composer-min-width: 256px;
+  --bew-message-input-height: calc(var(--bew-control-height) + var(--bew-space-2));
+  --bew-message-icon-hover: #000;
+  --bew-message-pinned-background: #fff;
+  --bew-message-pinned-hover-background: #fff;
+  --bew-message-composer-rest-height: calc(var(--bew-control-height) + var(--bew-space-2) * 3 + 2px);
+  // Message search explicitly uses a directional, translucent accent wash.
+  --bew-message-search-highlight: color-mix(in srgb, var(--bew-theme-color) 24%, transparent);
+  // Leave room for a heading-height selection between the compact adjacent rows.
+  --bew-wheel-label-size: var(--bew-font-size-display);
+  --bew-message-share-width: calc(var(--bew-space-12) * 8);
+  --bew-wheel-label-line-height: 32px;
+  --bew-wheel-radius: calc((var(--bew-wheel-label-line-height) + var(--bew-space-2)) * 2);
+  --bew-wheel-viewport-height: calc(var(--bew-line-height-control) * 3 + var(--bew-space-2) * 4);
+  --bew-sidebar-heading-height: calc(var(--bew-wheel-viewport-height) + var(--bew-space-2));
+  --bew-sidebar-section-gap: var(--bew-space-3);
+  --bew-sidebar-inline-padding: var(--bew-space-3);
+  --bew-sidebar-action-padding: min(var(--bew-space-3), var(--bew-top-bar-inline-padding));
+  --bew-sidebar-action-inset: calc(
+    var(--bew-top-bar-inline-padding) - var(--bew-sidebar-inline-padding) - var(--bew-sidebar-action-padding)
+  );
+  --bew-sidebar-action-hover: rgb(0 0 0 / 6%);
+  --bew-wheel-text-active: var(--bew-text-1);
+  --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
+  --bew-wheel-glow: rgb(from var(--bew-text-1) r g b / 35%);
+  --bew-notifications-feed-inline-space: var(--bew-space-4);
+  --bew-notifications-avatar-size: var(--bew-space-10);
+  --bew-notifications-card-background: var(--bew-content-solid);
+  --bew-notifications-card-background-hover: var(--bew-content-solid);
+  --bew-notifications-card-border: var(--bew-message-card-border);
+  --bew-notifications-reference-background: var(--bew-content-alt-solid);
+  --bew-message-card-border: color-mix(in srgb, var(--bew-surface-border-color) 65%, transparent);
+  --bew-chart-secondary: #426bc2;
+  --bew-insights-chart-height: calc(var(--bew-space-12) * 3);
   --bew-reading-line-length: 76ch;
   --bew-layout-sidebar-sticky-top: 150px;
   --bew-layout-sidebar-viewport-offset: 140px;
@@ -105,7 +158,6 @@
   --bew-dialog-action-min-width: 120px;
   --bew-dialog-grid-item-min-width: 260px;
   --bew-layout-drawer-max-width: 1400px;
-  --bew-layout-moments-sidebar-width: 248px;
   --bew-comment-media-max-width: 520px;
   --bew-comment-media-single-max-height: 420px;
   --bew-comment-media-fallback-size: 160px;
@@ -135,6 +187,7 @@
   --bew-z-base-overlay: 1000;
   --bew-z-topbar-interaction: var(--bew-z-base-overlay);
   --bew-z-topbar-host: 1001;
+  --bew-z-home-logo: calc(var(--bew-z-topbar-host) + 1);
   --bew-z-native-topbar: 1003;
   --bew-z-context-backdrop: 9998;
   --bew-z-popover: 9999;
@@ -203,6 +256,7 @@
   --bew-floating-control-icon-size: var(--bew-icon-size-md);
   --bew-dock-control-icon-size: 18px;
   --bew-dock-control-icon-size-lg: 22px;
+  --bew-dock-collapsed-mark-glow: drop-shadow(0 0 var(--bew-space-1) color-mix(in srgb, currentColor 30%, transparent));
   --bew-dock-navigation-active-bg: hsl(0 0% 100%);
   --bew-dock-navigation-active-color: hsl(0 0% 0%);
   --bew-dock-navigation-active-shadow: 0 4px 30px 4px rgb(255 255 255 / 60%);
@@ -238,6 +292,7 @@
   --bew-liquid-indicator-paint-duration: var(--bew-duration-normal);
 
   --bew-top-bar-height: 64px;
+  --bew-top-bar-inline-padding: var(--bew-space-12);
   --bew-popover-gap: var(--bew-space-1);
   --bew-popover-max-height: calc(100dvh - var(--bew-top-bar-height) - var(--bew-space-3));
   --bew-popover-surface-background: var(--bew-elevated);
@@ -349,6 +404,7 @@
   --bew-info-color-90: color-mix(in oklab, var(--bew-info-color), transparent 10%);
 
   --bew-success-color: hsl(164 60% 40%);
+  --bew-success-foreground: color-mix(in srgb, var(--bew-success-color) 65%, black);
   --bew-success-color-10: color-mix(in oklab, var(--bew-success-color), transparent 90%);
   --bew-success-color-20: color-mix(in oklab, var(--bew-success-color), transparent 80%);
   --bew-success-color-30: color-mix(in oklab, var(--bew-success-color), transparent 70%);
@@ -360,6 +416,7 @@
   --bew-success-color-90: color-mix(in oklab, var(--bew-success-color), transparent 10%);
 
   --bew-warning-color: #f59e0b;
+  --bew-warning-foreground: color-mix(in srgb, var(--bew-warning-color) 55%, black);
   --bew-warning-color-10: color-mix(in oklab, var(--bew-warning-color), transparent 90%);
   --bew-warning-color-20: color-mix(in oklab, var(--bew-warning-color), transparent 80%);
   --bew-warning-color-30: color-mix(in oklab, var(--bew-warning-color), transparent 70%);
@@ -371,6 +428,7 @@
   --bew-warning-color-90: color-mix(in oklab, var(--bew-warning-color), transparent 10%);
 
   --bew-error-color: hsl(358 75% 59%);
+  --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, black);
   --bew-error-color-10: color-mix(in oklab, var(--bew-error-color), transparent 90%);
   --bew-error-color-20: color-mix(in oklab, var(--bew-error-color), transparent 80%);
   --bew-error-color-30: color-mix(in oklab, var(--bew-error-color), transparent 70%);
@@ -405,7 +463,9 @@
 
   // Used as the background color of the Bilibili homepage (www.bilibili.com)
   --bew-homepage-bg: hsl(240 31% 96%);
-  --bew-conversation-list-background: var(--bew-content-solid);
+  // A subtle neutral tint separates the sidebar from the page without another glass layer.
+  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-homepage-bg) 94%, black);
+  --bew-sidebar-background: rgb(from var(--bew-sidebar-background-solid) r g b / var(--bew-content-opacity));
   // #endregion
 
   --bew-content-opacity: 0.68;
@@ -476,13 +536,40 @@
   --bew-ip-tag-text: #61666d;
 }
 
+@media (max-width: breakpoints.$compact-max) {
+  :host,
+  :root {
+    --bew-top-bar-inline-padding: var(--bew-space-4);
+  }
+}
+
+@media (max-width: breakpoints.$mobile-max) {
+  :host,
+  :root {
+    --bew-top-bar-inline-padding: var(--bew-space-2);
+    --bew-messages-sidebar-width: 40vw;
+    --bew-sidebar-section-gap: var(--bew-space-2);
+    --bew-sidebar-inline-padding: var(--bew-space-2);
+  }
+}
+
 :host(.dark),
 :root.dark {
   // dark mode
+  --bew-success-foreground: color-mix(in srgb, var(--bew-success-color) 80%, white);
+  --bew-warning-foreground: var(--bew-warning-color);
+  --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, white);
 
   // 深色模式基准颜色（通过 JS 动态设置）
   --bew-dark-base-color: #2a2d32;
-  --bew-conversation-list-background: var(--bew-dark-base-color);
+  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-homepage-bg) 88%, white);
+  --bew-sidebar-action-hover: rgb(0 0 0 / 18%);
+  --bew-wheel-text-active: #fff;
+  --bew-message-icon-hover: #fff;
+  --bew-message-pinned-background: rgb(0 0 0 / 24%);
+  --bew-message-pinned-hover-background: rgb(0 0 0 / 36%);
+  --bew-wheel-text: rgb(255 255 255 / 67%);
+  --bew-wheel-glow: rgb(255 255 255 / 55%);
 
   // #region shadow
   --bew-shadow-1: 0 4px 6px -1px rgb(0 0 0 / 0.08), 0 2px 4px -2px rgb(0 0 0 / 0.06);
@@ -532,6 +619,12 @@
   --bew-content-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 8%);
   --bew-content-alt-solid: color-mix(in oklab, var(--bew-dark-base-color), white 5%);
   --bew-content-alt-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 10%);
+  // Match saved article cards without changing the light notification palette.
+  --bew-notifications-card-background: var(--bew-elevated);
+  --bew-notifications-card-background-hover: var(--bew-elevated-hover);
+  --bew-notifications-card-border: var(--bew-surface-border-color);
+  --bew-notifications-reference-background: var(--bew-fill-1);
+  --bew-chart-secondary: #90b5ff;
 
   --bew-elevated: rgb(
     from color-mix(in oklab, var(--bew-dark-glass-base), white 6%) r g b / var(--bew-content-opacity)
@@ -582,10 +675,12 @@
 
 :host(.dark.oled-dark),
 :root.dark.oled-dark {
+  --bew-sidebar-action-hover: rgb(255 255 255 / 10%);
   --bew-bg: #000;
   --bew-homepage-bg: #000;
   --bew-surface-border-color: #4b4c4e;
   --bew-liquid-glass-color: #000;
+  // The inherited neutral sidebar tint stays slightly lifted above the OLED black page.
 }
 
 :host(.disable-frosted-glass),

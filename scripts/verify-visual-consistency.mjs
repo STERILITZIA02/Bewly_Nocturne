@@ -6,6 +6,7 @@ import { loadSourceModule } from './sourceModuleHarness'
 export function registerVisualConsistencyChecks(check, { Vue, compileComponent, flush }) {
   async function calendarPositioning(globals = {}) {
     return loadSourceModule('../src/composables/useAnchoredPopoverPosition.ts', {
+      'vue': Vue,
       '@vueuse/core': await import('@vueuse/core'),
       '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),
     }, {
@@ -178,6 +179,86 @@ export function registerVisualConsistencyChecks(check, { Vue, compileComponent, 
     }
     finally {
       app.unmount()
+      host.remove()
+    }
+  })
+
+  check('calendar inset fields portal outside clipped content, enforce both bounds and close with their owner', async () => {
+    const DatePicker = await compileComponent('../src/contentScripts/views/SearchResults/components/DatePicker.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '../utils/localDate': await import('../src/contentScripts/views/SearchResults/utils/localDate'),
+      '~/composables/useAnchoredPopoverPosition': await calendarPositioning(),
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const shadow = host.attachShadow({ mode: 'open' })
+    const mount = shadow.appendChild(document.createElement('div'))
+    const portal = shadow.appendChild(document.createElement('div'))
+    const state = Vue.reactive({ value: '2026-10-11', min: '2026-10-10', max: '2026-10-12', active: true, disabled: false })
+    const app = Vue.createApp({ render: () => Vue.h(DatePicker, {
+      modelValue: state.value,
+      min: state.min,
+      max: state.max,
+      active: state.active,
+      disabled: state.disabled,
+      embedded: true,
+      teleport: true,
+      label: 'Start date',
+      'onUpdate:modelValue': value => state.value = value,
+    }) })
+    app.provide('BEWLY_APP', { mainAppRef: Vue.ref(portal) })
+    app.config.globalProperties.$t = key => key
+    app.mount(mount)
+    try {
+      const trigger = mount.querySelector('.calendar-icon')
+      trigger.click()
+      await flush()
+      assert.equal(mount.querySelector('[role="dialog"]'), null)
+      const popup = portal.querySelector('[role="dialog"]')
+      assert.ok(popup)
+      assert.equal(popup.querySelector('[data-date="2026-10-09"]').disabled, true)
+      assert.equal(popup.querySelector('[data-date="2026-10-13"]').disabled, true)
+      const selected = popup.querySelector('[data-date="2026-10-11"]')
+      assert.equal(shadow.activeElement, selected)
+      selected.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(shadow.activeElement.getAttribute('data-date'), '2026-10-12')
+      shadow.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(shadow.activeElement.getAttribute('data-date'), '2026-10-12')
+      shadow.activeElement.click()
+      await flush()
+      assert.equal(state.value, '2026-10-12')
+      assert.equal(portal.querySelector('[role="dialog"]'), null)
+      assert.equal(shadow.activeElement, trigger)
+      const input = mount.querySelector('input')
+      assert.equal(input.type, 'text', 'no browser-owned date popup or segmented blue highlight')
+      input.value = '2026/10/09'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }))
+      await flush()
+      assert.equal(state.value, '2026-10-12')
+      trigger.click()
+      await flush()
+      state.active = false
+      await flush()
+      assert.equal(portal.querySelector('[role="dialog"]'), null)
+      state.active = true
+      state.disabled = true
+      await flush()
+      trigger.click()
+      assert.equal(portal.querySelector('[role="dialog"]'), null)
+      state.disabled = false
+      state.value = ''
+      state.min = ''
+      state.max = '2000-12-15'
+      await flush()
+      trigger.click()
+      await flush()
+      assert.equal(shadow.activeElement.getAttribute('data-date'), '2000-12-15', 'empty fields open at the nearest allowed date')
+    }
+    finally {
+      app.unmount()
+      assert.equal(portal.childElementCount, 0)
       host.remove()
     }
   })

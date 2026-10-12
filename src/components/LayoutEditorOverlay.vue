@@ -147,9 +147,7 @@ function updateSafeInsets() {
   const nextInsets: SafeInsets = { top: 8, right: 8, bottom: 8, left: 8 }
   const dockRect = getDockSurfaceRect()
   if (dockRect && dockRect.width > 0 && dockRect.height > 0) {
-    if (dockPosition.value === 'left')
-      nextInsets.left = Math.max(nextInsets.left, dockRect.right - viewport.left + gap)
-    else if (dockPosition.value === 'right')
+    if (dockPosition.value === 'right')
       nextInsets.right = Math.max(nextInsets.right, viewport.right - dockRect.left + gap)
     else
       nextInsets.bottom = Math.max(nextInsets.bottom, viewport.bottom - dockRect.top + gap)
@@ -773,15 +771,13 @@ onBeforeUnmount(() => {
 }
 
 .layout-editor-outline--hovered {
-  border: 2px solid var(--bew-theme-focus-ring);
-  box-shadow: 0 0 0 3px var(--bew-theme-focus-ring);
+  border: 1px dashed var(--bew-focus-ring-color);
+  box-shadow: none;
 }
 
 .layout-editor-outline--selected {
-  border: 2px solid var(--bew-theme-color);
-  box-shadow:
-    0 0 0 4px var(--bew-theme-focus-ring),
-    var(--bew-shadow-2);
+  border: var(--bew-focus-ring);
+  box-shadow: none;
 }
 
 .layout-editor-menu {
@@ -852,8 +848,8 @@ onBeforeUnmount(() => {
     outline: none;
 
     &:focus-visible {
-      border-color: var(--bew-theme-focus-ring);
-      box-shadow: 0 0 0 2px var(--bew-theme-focus-ring);
+      border-color: var(--bew-focus-ring-color);
+      box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
     }
   }
 }
@@ -893,7 +889,7 @@ onBeforeUnmount(() => {
     }
 
     &:focus-visible {
-      outline: 2px solid var(--bew-theme-focus-ring);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: -2px;
     }
   }

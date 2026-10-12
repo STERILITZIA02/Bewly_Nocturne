@@ -124,6 +124,8 @@ interface VideoCardGridProps<T = any> {
    * 空状态描述
    */
   emptyDescription?: string
+  /** Sidebar workspaces use centered text states and no completed-page footer. */
+  textOnlyStates?: boolean
 
   /**
    * 登录按钮文本
@@ -205,6 +207,7 @@ const emit = defineEmits<{
   (e: 'loadMore'): void
   (e: 'refresh'): void
   (e: 'login'): void
+  (e: 'authorItemsVisible', items: T[]): void
 }>()
 
 // Grid 容器 ref
@@ -936,6 +939,12 @@ const cardWindow = useCardWindow({
 restoredGrid = undefined
 const gridRelations = useUserRelations()
 watch(() => {
+  if (props.hideAuthor || !settings.value.showVideoCardAuthorAvatar)
+    return []
+  const { start, end } = cardWindow.loadingRange.value
+  return props.items.slice(start, end)
+}, items => emit('authorItemsVisible', items), { flush: 'post' })
+watch(() => {
   if (!props.moreBtn || props.isFollowingPage
     || settings.value.videoCardContextMenuConfig?.find(item => item.key === 'followUser')?.visible === false
     || bewlyApp?.isHomeTabSwitching.value || (tabState && !tabState.isCurrent())) {
@@ -1077,16 +1086,24 @@ function getUniqueKey(item: T, index: number): string | number {
 </script>
 
 <template>
-  <div class="video-card-grid-root">
+  <div class="video-card-grid-root" :class="{ 'video-card-grid-root--empty': textOnlyStates && (needToLoginFirst || showErrorState || showEmptyState) }">
     <!-- 需要登录 -->
-    <Empty v-if="needToLoginFirst" mt-6 :description="$t('common.please_log_in_first')">
-      <Button type="primary" @click="handleLogin">
+    <Empty
+      v-if="needToLoginFirst" :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="$t('common.please_log_in_first')"
+      :action-label="textOnlyStates ? (loginButtonText || $t('common.login')) : undefined"
+      @action="handleLogin"
+    >
+      <Button v-if="!textOnlyStates" type="primary" @click="handleLogin">
         {{ loginButtonText || $t('common.login') }}
       </Button>
     </Empty>
 
-    <Empty v-else-if="showErrorState" mt-6 :description="$t('common.load_failed')">
-      <Button type="primary" @click="handleRefresh">
+    <Empty
+      v-else-if="showErrorState" :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="$t('common.load_failed')"
+      :action-label="textOnlyStates ? (refreshButtonText || $t('common.operation.refresh')) : undefined"
+      @action="handleRefresh"
+    >
+      <Button v-if="!textOnlyStates" type="primary" @click="handleRefresh">
         {{ refreshButtonText || $t('common.operation.refresh') }}
       </Button>
     </Empty>
@@ -1094,8 +1111,8 @@ function getUniqueKey(item: T, index: number): string | number {
     <!-- 空列表 -->
     <template v-else-if="showEmptyState">
       <slot name="empty">
-        <Empty mt-6 :description="emptyDescription || $t('common.no_more_content')">
-          <Button type="primary" @click="handleRefresh">
+        <Empty :class="{ 'mt-6': !textOnlyStates }" :text-only="textOnlyStates" :fill="textOnlyStates" :description="emptyDescription || $t(textOnlyStates ? 'common.no_data' : 'common.no_more_content')">
+          <Button v-if="!textOnlyStates" type="primary" @click="handleRefresh">
             {{ refreshButtonText || $t('common.operation.refresh') }}
           </Button>
         </Empty>
@@ -1161,12 +1178,15 @@ function getUniqueKey(item: T, index: number): string | number {
     />
 
     <!-- 无更多内容提示（仅在有数据时显示，避免与空列表提示重复） -->
-    <Empty v-if="requestFailed && !loading && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.load_failed')" role="alert">
-      <Button type="primary" @click="handleRefresh">
+    <Empty
+      v-if="requestFailed && !loading && !needToLoginFirst && items.length > 0" :text-only="textOnlyStates" class="pb-4" :description="$t('common.load_failed')" role="alert"
+      :action-label="textOnlyStates ? (refreshButtonText || $t('common.operation.refresh')) : undefined" @action="handleRefresh"
+    >
+      <Button v-if="!textOnlyStates" type="primary" @click="handleRefresh">
         {{ refreshButtonText || $t('common.operation.refresh') }}
       </Button>
     </Empty>
-    <Empty v-else-if="noMoreContent && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.no_more_content')">
+    <Empty v-else-if="!textOnlyStates && noMoreContent && !needToLoginFirst && items.length > 0" class="pb-4" :description="$t('common.no_more_content')">
       <Button type="primary" @click="handleRefresh">
         {{ refreshButtonText || $t('common.operation.refresh') }}
       </Button>
@@ -1177,6 +1197,12 @@ function getUniqueKey(item: T, index: number): string | number {
 <style lang="scss" scoped>
 .video-card-grid-root {
   container-type: inline-size;
+}
+.video-card-grid-root--empty {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .video-card-slot {

@@ -158,7 +158,6 @@ export const useTopBarStore = defineStore('topBar', () => {
   })
   const notificationsDrawerUrl = ref<string>('https://message.bilibili.com/')
   const popupVisible = reactive({
-    channels: false,
     userPanel: false,
     notifications: false,
     moments: false,

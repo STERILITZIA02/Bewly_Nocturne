@@ -147,7 +147,7 @@ function handleOpenImage(index: number, event: MouseEvent) {
   transform: scale(0.99);
 }
 .moment-comment-media__item:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 2px;
 }
 .moment-comment-media__more {

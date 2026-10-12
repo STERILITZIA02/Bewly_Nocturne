@@ -27,6 +27,7 @@ const otherLinks = computed(() => {
 <template>
   <div
     class="channels-pop bew-popover bew-popover-surface"
+    role="navigation"
     data-key="channels"
   >
     <div class="bew-popover__scroll channels-pop__scroll">

@@ -1,0 +1,56 @@
+// Standalone rail actions share the heading's leading edge, with a centered hit area.
+.library-rail-content .library-sidebar-action,
+.library-sidebar-action-skeleton {
+  box-sizing: border-box;
+  width: calc(100% - var(--bew-sidebar-action-inset) * 2);
+  max-width: none;
+  margin-inline: var(--bew-sidebar-action-inset);
+}
+
+.library-rail-content .library-sidebar-action {
+  --b-button-width: calc(100% - var(--bew-sidebar-action-inset) * 2);
+  --b-button-color: transparent;
+  --b-button-shadow-hover: none;
+  --b-button-padding: var(--bew-sidebar-action-padding);
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--bew-space-2);
+  min-height: var(--bew-control-height);
+  padding-inline: var(--bew-sidebar-action-padding);
+  border: 0;
+  border-radius: var(--bew-badge-radius);
+  corner-shape: var(--bew-corner-shape-round);
+  background: transparent;
+  color: var(--bew-library-action-foreground, var(--bew-text-1));
+  font-size: var(--bew-font-size-control);
+  font-weight: var(--bew-font-weight-medium);
+  line-height: var(--bew-line-height-control);
+  text-align: start;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color var(--bew-duration-fast) var(--bew-ease-standard),
+    color var(--bew-duration-fast) var(--bew-ease-standard);
+
+  &[aria-checked="true"],
+  &[aria-pressed="true"] {
+    color: var(--bew-theme-foreground);
+  }
+  &:disabled {
+    background: transparent;
+    cursor: default;
+  }
+  @media (hover: hover) {
+    &:hover:not(:disabled) {
+      background: var(--bew-sidebar-action-hover);
+    }
+  }
+  &:focus-visible {
+    outline: var(--bew-focus-ring);
+    outline-offset: var(--bew-space-0-5);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}

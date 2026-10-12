@@ -7,17 +7,25 @@ import type { AccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
+import { getLivePreviewSources } from '~/utils/livePreviewSources'
 import { releaseMediaElement as releasePreviewVideoElement } from '~/utils/mediaResources'
 import { normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
 import { createPreviewMediaSession } from '~/utils/previewMediaSession'
 
-export function useMomentPreviews(getAccountId: () => AccountId) {
+export type MomentPreviewMedia = Pick<DisplayMoment, 'id' | 'isLive' | 'isVideo' | 'bvid' | 'cid' | 'videoUrl' | 'roomId' | 'forward'>
+
+export function useMomentPreviews(getAccountId: () => AccountId, options?: {
+  videoEnabled: () => boolean
+  videoDelayed: () => boolean
+}) {
   const streamSession = createPreviewMediaSession()
   let disposed = false
   let cacheGeneration = 0
   const hoveredMediaId = ref('')
-  const previewState = ref<'idle' | 'waiting' | 'loading' | 'ready'>('idle')
+  const previewState = ref<'idle' | 'waiting' | 'loading' | 'ready' | 'error'>('idle')
+  let livePreviewSources: string[] = []
   let previewEnterTimer: ReturnType<typeof setTimeout> | undefined
+  let previewReadController: AbortController | undefined
   const previewSources = new Map<string, string>()
   let hoveredSource = ''
   const previewUrls = reactive<Record<string, string>>({})
@@ -77,14 +85,34 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
   function failLivePreview(generation: number, momentId: string, url: string, videoEl: HTMLVideoElement) {
     if (!isLivePreviewCurrent(generation, momentId, url, videoEl))
       return
-    cleanupLivePreviewTransports()
-    releasePreviewVideoElement(videoEl)
-    if (activePreviewVideo?.element === videoEl)
-      activePreviewVideo = null
-    previewState.value = 'idle'
-    hoveredMediaId.value = ''
+    if (!hoveredSource.startsWith('live:')) {
+      release(momentId)
+      return
+    }
+    cleanupLivePreviewPlayer()
+    const next = livePreviewSources.shift()
+    if (next) {
+      previewUrls[momentId] = next
+      previewState.value = 'loading'
+    }
+    else {
+      failPreview(momentId)
+    }
+  }
+
+  function failPreview(momentId: string) {
+    if (hoveredMediaId.value !== momentId)
+      return
+    if (!hoveredSource.startsWith('live:')) {
+      release(momentId)
+      return
+    }
+    cleanupLivePreviewPlayer()
+    livePreviewSources = []
     delete previewUrls[momentId]
     previewSources.delete(momentId)
+    // A failed stream is not a pointer leave: keep the sidebar open for retry.
+    previewState.value = 'error'
   }
 
   async function setupStreamPreview(url: string, videoEl: HTMLVideoElement, momentId: string, generation: number) {
@@ -190,11 +218,11 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     })
   }
 
-  function isMomentPreviewEnabled(moment: DisplayMoment) {
+  function isMomentPreviewEnabled(moment: MomentPreviewMedia) {
     if (moment.isLive)
       return settings.value.momentsEnableLivePreview
     if (moment.isVideo || moment.forward?.video)
-      return settings.value.momentsEnableVideoPreview
+      return options?.videoEnabled() ?? settings.value.momentsEnableVideoPreview
     return false
   }
 
@@ -241,7 +269,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     return request
   }
 
-  function mediaIdentity(moment: DisplayMoment) {
+  function mediaIdentity(moment: MomentPreviewMedia) {
     const video = moment.forward?.video ?? moment
     const url = moment.forward?.video?.url ?? moment.videoUrl
     const requestedPage = url ? Number(new URL(url, 'https://www.bilibili.com').searchParams.get('p')) : 1
@@ -249,7 +277,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     return { video, page, source: moment.isLive ? `live:${moment.roomId}` : `${video.bvid}:${video.cid ?? ''}:${page}` }
   }
 
-  async function handleMediaEnter(moment: DisplayMoment, event?: MouseEvent) {
+  async function handleMediaEnter(moment: MomentPreviewMedia, event?: MouseEvent) {
     if (event?.buttons) {
       handleMediaLeave(moment)
       return
@@ -263,16 +291,18 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
       return
     clearTimeout(previewEnterTimer)
     previewEnterTimer = undefined
+    previewReadController?.abort()
 
     if (activePreviewVideo && (activePreviewVideo.id !== moment.id || hoveredSource !== source))
       cleanupLivePreviewPlayer()
     hoveredMediaId.value = moment.id
+    livePreviewSources = []
     hoveredSource = source
     const generation = ++previewGeneration.value
     if (previewSources.get(moment.id) !== source)
       delete previewUrls[moment.id]
     const accountId = getAccountId()
-    if (!moment.isLive && settings.value.momentsVideoPreviewDelayed) {
+    if (!moment.isLive && (options?.videoDelayed() ?? settings.value.momentsVideoPreviewDelayed)) {
       previewState.value = 'waiting'
       previewEnterTimer = setTimeout(() => {
         previewEnterTimer = undefined
@@ -284,7 +314,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     }
   }
 
-  async function loadMomentPreview(moment: DisplayMoment, generation: number, accountId: AccountId, source: string) {
+  async function loadMomentPreview(moment: MomentPreviewMedia, generation: number, accountId: AccountId, source: string) {
     const isCurrent = () => !disposed && !document.hidden && generation === previewGeneration.value && accountId === getAccountId()
       && hoveredMediaId.value === moment.id && hoveredSource === source && mediaIdentity(moment).source === source && isMomentPreviewEnabled(moment)
     if (!isCurrent())
@@ -293,20 +323,19 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     if (previewUrls[moment.id])
       return
     previewSources.set(moment.id, source)
+    const controller = previewReadController = new AbortController()
 
     try {
       if (moment.isLive && moment.roomId) {
-        const res = await api.live.getLivePlayUrl({
-          cid: moment.roomId,
-          platform: 'web',
-          qn: 80,
-        })
+        const res = await api.live.getLivePreviewInfo({ room_id: moment.roomId }, { signal: controller.signal })
         if (!isCurrent())
           return
-        if (res.code === 0 && res.data?.durl?.[0]?.url)
-          previewUrls[moment.id] = httpsUrl(res.data.durl[0].url)
+        livePreviewSources = getLivePreviewSources(res)
+        const url = livePreviewSources.shift()
+        if (url)
+          previewUrls[moment.id] = url
         else
-          release(moment.id)
+          failPreview(moment.id)
         return
       }
 
@@ -324,7 +353,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
         return
       }
 
-      const preview = await api.video.getVideoPreview({ bvid: media.bvid, cid })
+      const preview = await api.video.getVideoPreview({ bvid: media.bvid, cid }, { signal: controller.signal })
       if (
         preview.code === 0
         && preview.data?.durl?.[0]?.url
@@ -338,11 +367,11 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     }
     catch {
       if (isCurrent())
-        release(moment.id)
+        failPreview(moment.id)
     }
   }
 
-  function handleMediaLeave(moment: DisplayMoment) {
+  function handleMediaLeave(moment: MomentPreviewMedia) {
     if (activePreviewVideo?.id === moment.id && activePreviewVideo.element.matches(':fullscreen'))
       return
     if (hoveredMediaId.value !== moment.id)
@@ -350,7 +379,7 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     release(moment.id)
   }
 
-  function bindPreviewVideo(el: Element | null, moment: DisplayMoment) {
+  function bindPreviewVideo(el: Element | null, moment: MomentPreviewMedia) {
     if (!(el instanceof HTMLVideoElement)) {
       if (activePreviewVideo?.id === moment.id)
         cleanupLivePreviewPlayer()
@@ -375,6 +404,9 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     if (activePreviewVideo?.id === id && activePreviewVideo.element.matches(':fullscreen'))
       return
     if (hoveredMediaId.value === id) {
+      livePreviewSources = []
+      previewReadController?.abort()
+      previewReadController = undefined
       hoveredMediaId.value = ''
       clearTimeout(previewEnterTimer)
       previewEnterTimer = undefined
@@ -387,6 +419,9 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     previewSources.delete(id)
   }
   function clear() {
+    livePreviewSources = []
+    previewReadController?.abort()
+    previewReadController = undefined
     clearTimeout(previewEnterTimer)
     previewEnterTimer = undefined
     previewState.value = 'idle'
@@ -412,6 +447,8 @@ export function useMomentPreviews(getAccountId: () => AccountId) {
     reset()
   })
   watch(() => [settings.value.momentsEnableLivePreview, settings.value.momentsEnableVideoPreview, settings.value.momentsVideoPreviewDelayed, settings.value.momentsOnlyCoverVideoPreview], clear)
+  if (options)
+    watch(() => [options.videoEnabled(), options.videoDelayed()], clear)
   return {
     hoveredMediaId: readonly(hoveredMediaId),
     previewUrls: readonly(previewUrls),

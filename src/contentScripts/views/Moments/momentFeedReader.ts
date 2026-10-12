@@ -4,34 +4,28 @@ import api from '~/utils/api'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { resolveMomentHostFollowState } from '~/utils/momentHostFollowState'
 
-import type { MomentFilter, MomentsFeedCacheEntry, useMomentsFeedCache } from './useMomentsFeedCache'
-import { mergeCachedMoments } from './useMomentsFeedCache'
+import type { MomentFilter } from './momentFeedTypes'
 
 interface MomentFeedRead {
   reset: boolean
   type: MomentFilter
-  group: 'all' | 'wanted'
   hostMid: string
   offset: string
   updateBaseline: string
   page: number
   filtered: boolean
-  hasWantedUsers: boolean
 }
 const MOMENT_FEED_FEATURES = 'itemOpusStyle,listOnlyfans,opusBigCover,onlyfansVote,decorationCard,onlyfansAssetsV2,forwardListHidden,ugcDelete,onlyfansQaCard'
 const FILTERED_MAX_REQUEST_PAGES = 2
-const WANTED_SCAN_LIMIT = 100
 
-/** Owns remote page assembly and the unconsumed wanted segment; presentation never changes its cursor. */
+/** Owns remote page assembly; presentation never changes its cursor. */
 export function createMomentFeedReader(
-  cache: ReturnType<typeof useMomentsFeedCache>,
   mapMoment: (item: DataItem) => DisplayMoment,
 ) {
-  let wantedFeedBuffer: MomentsFeedCacheEntry | undefined
   let loadedItems: DisplayMoment[] = []
   let loadedQuery = ''
   let pendingRead: AbortController | undefined
-  const queryKey = (type: MomentFilter, group: string, hostMid: string) => `${type}:${group}:${hostMid}`
+  const queryKey = (type: MomentFilter, hostMid: string) => `${type}:${hostMid}`
   async function read(request: MomentFeedRead, isRequestCurrent: () => boolean) {
     if (!isRequestCurrent())
       return
@@ -40,16 +34,11 @@ export function createMomentFeedReader(
     pendingRead = controller
     const readOptions = { signal: controller.signal }
     const isCurrent = () => !controller.signal.aborted && isRequestCurrent()
-    const previousBuffer = wantedFeedBuffer
-    if (request.reset)
-      wantedFeedBuffer = undefined
     const requestType = request.type
-    const requestGroup = request.group
     const requestHostMid = request.hostMid
     let nextPageNumber = request.page
     let filteredRequestPages = 0
     let rawItems: DataItem[] = []
-    let cachedBatch: DisplayMoment[] | undefined
     let hasMore = false
     let nextOffset = ''
     let nextUpdateBaseline = ''
@@ -140,144 +129,6 @@ export function createMomentFeedReader(
         }
         nextPageNumber = nextPage
       }
-      else if (requestGroup === 'wanted') {
-        await cache.ready
-        if (!isCurrent())
-          return
-        let cacheEntry = wantedFeedBuffer ?? cache.getValidMomentsCache(requestType) ?? {
-          items: [],
-          offset: '',
-          updateBaseline: '',
-          hasMore: true,
-          updatedAt: Date.now(),
-        }
-
-        if (!request.hasWantedUsers) {
-          wantedFeedBuffer = undefined
-          cachedBatch = []
-        }
-        else {
-          let cacheChanged = false
-          if (request.reset) {
-            wantedFeedBuffer = undefined
-            const existingCache = cacheEntry
-            const existingIds = new Set(existingCache.items.map(moment => moment.id))
-            const freshItems: DisplayMoment[] = []
-            let scanOffset = ''
-            let scanUpdateBaseline = ''
-            let canContinue = true
-            let reachedCache = false
-
-            while (
-              canContinue
-              && freshItems.length < WANTED_SCAN_LIMIT
-              && !reachedCache
-              && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES
-            ) {
-              filteredRequestPages += 1
-              const response = await api.moment.getMoments({
-                type: requestType,
-                offset: scanOffset || undefined,
-                update_baseline: scanUpdateBaseline || undefined,
-                features: MOMENT_FEED_FEATURES,
-              }, readOptions) as MomentResult
-              if (!accept(response))
-                return
-
-              const pageItems = (response.data?.items || []).map(mapMoment)
-              reachedCache = pageItems.some(moment => existingIds.has(moment.id))
-              freshItems.push(...pageItems)
-              const responseOffset = response.data?.offset || ''
-              scanUpdateBaseline = response.data?.update_baseline || ''
-              canContinue = Boolean(response.data?.has_more)
-                && responseOffset !== scanOffset
-              scanOffset = responseOffset
-            }
-
-            cacheEntry = reachedCache
-              ? {
-                  ...existingCache,
-                  items: mergeCachedMoments(freshItems, existingCache.items),
-                }
-              : {
-                  items: mergeCachedMoments(freshItems, []),
-                  offset: scanOffset,
-                  updateBaseline: scanUpdateBaseline,
-                  hasMore: canContinue,
-                  updatedAt: Date.now(),
-                  continuation: canContinue && existingCache.items.length
-                    ? {
-                        items: existingCache.items,
-                        offset: existingCache.offset,
-                        updateBaseline: existingCache.updateBaseline,
-                        hasMore: existingCache.hasMore,
-                      }
-                    : undefined,
-                }
-            cacheChanged = true
-          }
-
-          const batchEnd = WANTED_SCAN_LIMIT
-          while (
-            cacheEntry.items.length < batchEnd
-            && cacheEntry.hasMore
-            && filteredRequestPages < FILTERED_MAX_REQUEST_PAGES
-          ) {
-            filteredRequestPages += 1
-            const response = await api.moment.getMoments({
-              type: requestType,
-              offset: cacheEntry.offset || undefined,
-              update_baseline: cacheEntry.updateBaseline || undefined,
-              features: MOMENT_FEED_FEATURES,
-            }, readOptions) as MomentResult
-            if (!accept(response))
-              return
-
-            const pageItems = (response.data?.items || []).map(mapMoment)
-            const responseOffset = response.data?.offset || ''
-            const continuationIds = new Set(cacheEntry.continuation?.items.map(moment => moment.id) || [])
-            const reachesContinuation = pageItems.some(moment => continuationIds.has(moment.id))
-            if (reachesContinuation && cacheEntry.continuation) {
-              cacheEntry = {
-                items: mergeCachedMoments(
-                  cacheEntry.items,
-                  mergeCachedMoments(pageItems, cacheEntry.continuation.items),
-                ),
-                offset: cacheEntry.continuation.offset,
-                updateBaseline: cacheEntry.continuation.updateBaseline,
-                hasMore: cacheEntry.continuation.hasMore,
-                updatedAt: Date.now(),
-              }
-            }
-            else {
-              cacheEntry = {
-                items: mergeCachedMoments(cacheEntry.items, pageItems),
-                offset: responseOffset,
-                updateBaseline: response.data?.update_baseline || '',
-                hasMore: Boolean(response.data?.has_more)
-                  && responseOffset !== cacheEntry.offset,
-                updatedAt: Date.now(),
-                continuation: response.data?.has_more && responseOffset !== cacheEntry.offset ? cacheEntry.continuation : undefined,
-              }
-            }
-            cacheChanged = true
-            if (reachesContinuation)
-              break
-          }
-
-          if (cacheChanged) {
-            const displayed = !request.reset && loadedQuery === queryKey(requestType, requestGroup, requestHostMid) ? loadedItems : []
-            cache.saveMomentsCache(requestType, { ...cacheEntry, items: mergeCachedMoments(displayed, cacheEntry.items) })
-          }
-          // 连续缓存可一次全部展示；存在缺口时仍按 API 原始条数每批推进 100 条。
-          const displayEnd = cacheEntry.continuation ? batchEnd : cacheEntry.items.length
-          cachedBatch = cacheEntry.items.slice(0, displayEnd)
-          wantedFeedBuffer = { ...cacheEntry, items: cacheEntry.items.slice(cachedBatch.length) }
-          nextOffset = cacheEntry.offset
-          nextUpdateBaseline = cacheEntry.updateBaseline
-          hasMore = wantedFeedBuffer.items.length > 0 || cacheEntry.hasMore
-        }
-      }
       else if (request.filtered) {
       // 过滤开启：每次用户操作最多请求两页原始动态，再交给本地过滤。
         let scanOffset = request.offset
@@ -328,18 +179,18 @@ export function createMomentFeedReader(
 
       if (!isCurrent())
         return
-      const normalizedItems = cachedBatch ?? rawItems.map(mapMoment)
-      if (requestGroup === 'all' && !requestHostMid)
-        cache.cacheRegularMomentPage(requestType, normalizedItems, nextOffset, nextUpdateBaseline, hasMore, request.reset)
-      const key = queryKey(requestType, requestGroup, requestHostMid)
-      loadedItems = request.reset || loadedQuery !== key ? normalizedItems.slice() : mergeCachedMoments(loadedItems, normalizedItems)
+      const normalizedItems = rawItems.map(mapMoment)
+      const key = queryKey(requestType, requestHostMid)
+      const previous = request.reset || loadedQuery !== key ? [] : loadedItems
+      const seen = new Set(previous.map(item => item.id))
+      loadedItems = [...previous, ...normalizedItems.filter((item) => {
+        if (seen.has(item.id))
+          return false
+        seen.add(item.id)
+        return true
+      })]
       loadedQuery = key
       return { rawItems, normalizedItems, hasMore, nextOffset, nextUpdateBaseline, nextPage: nextPageNumber }
-    }
-    catch (error) {
-      if (isCurrent())
-        wantedFeedBuffer = previousBuffer
-      throw error
     }
     finally {
       if (pendingRead === controller)
@@ -348,7 +199,7 @@ export function createMomentFeedReader(
   }
   return {
     read,
-    getLoaded: (type: MomentFilter, group: string, hostMid: string) => loadedQuery === queryKey(type, group, hostMid) ? loadedItems : undefined,
+    getLoaded: (type: MomentFilter, hostMid: string) => loadedQuery === queryKey(type, hostMid) ? loadedItems : undefined,
     updateMoment(id: string, patch: Partial<DisplayMoment>) {
       const index = loadedItems.findIndex(item => item.id === id)
       if (index < 0)
@@ -360,7 +211,6 @@ export function createMomentFeedReader(
     reset: () => {
       pendingRead?.abort()
       pendingRead = undefined
-      wantedFeedBuffer = undefined
       loadedItems = []
       loadedQuery = ''
     },

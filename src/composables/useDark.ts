@@ -247,11 +247,11 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
 
   function toggleDark(e: MouseEvent) {
     cancelAppearanceTransition?.()
+    const nextTheme = currentAppColorScheme.value !== currentSystemColorScheme.value
+      ? 'auto'
+      : isPreferredDark.value ? 'light' : 'dark'
     const updateThemeSettings = () => {
-      if (currentAppColorScheme.value !== currentSystemColorScheme.value)
-        settings.value.theme = 'auto'
-      else
-        settings.value.theme = isPreferredDark.value ? 'light' : 'dark'
+      settings.value.theme = nextTheme
     }
 
     const isAppearanceTransition = typeof document !== 'undefined'
@@ -301,6 +301,8 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
         if (shadow)
           mountStyle(shadow, suppressTransitions)
         transition = document.startViewTransition(async () => {
+          if (!active)
+            return
           updateThemeSettings()
           await nextTick()
         })
@@ -314,10 +316,16 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
           animation = document.documentElement.animate({ clipPath: isDarkNow ? clipPath : [...clipPath].reverse() }, {
             duration: 300,
             easing: 'ease-in-out',
+            fill: 'forwards',
             pseudoElement: isDarkNow ? '::view-transition-new(root)' : '::view-transition-old(root)',
           })
           return animation.finished
-        }).catch(() => {}).finally(cleanup)
+        }).catch(() => {
+          // Keep suppression and the final clip until the browser drops its snapshots.
+          // Removing them at animation.finished briefly repaints the old theme.
+          if (active)
+            transition?.skipTransition()
+        })
         void transition.finished.then(cleanup, cleanup)
       }
       catch {

@@ -22,8 +22,7 @@ import { shouldUsePluginSearchResultsPage } from '~/utils/searchNavigation'
 import { openLinkInBackground } from '~/utils/tabs'
 
 export type TopBarPopupKey
-  = | 'channels'
-    | 'userPanel'
+  = | 'userPanel'
     | 'notifications'
     | 'moments'
     | 'favorites'
@@ -33,7 +32,6 @@ export type TopBarPopupKey
     | 'more'
 
 const BEWLY_PAGE_BY_TOP_BAR_ITEM: Partial<Record<TopBarPopupKey, AppPage>> = {
-  channels: AppPage.Home,
   moments: AppPage.Moments,
   favorites: AppPage.Favorites,
   history: AppPage.History,
@@ -450,11 +448,6 @@ export function useTopBarInteraction() {
   }
 
   function handleClickTopBarLogo(event: MouseEvent) {
-    if (settings.value.touchScreenOptimization) {
-      handleClickTopBarItem(event, 'channels')
-      return
-    }
-
     if (event.button !== 0 || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey)
       return
 

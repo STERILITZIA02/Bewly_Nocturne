@@ -1,5 +1,7 @@
 library_tools:
-  queue_actions_scope: 下方操作作用于整个稍后再看列表。
+  layout_list: 列表
+  layout_grid: 网格
+  search_scope: 搜索范围
   selected_tabs: '已选 {count} / {total} 个标签页'
   search_results: '“{query}”的搜索结果'
   load_more_matches: 继续查找更早记录
@@ -25,7 +27,6 @@ library_tools:
   duration_short: 10 分钟以内
   duration_medium: 10–30 分钟
   duration_long: 30 分钟以上
-  matched_count: '匹配 {count} 项 · 已载入 {total} 项'
   find_messages: 查找本会话已加载的消息
   previous_match: 上一个匹配
   next_match: 下一个匹配
@@ -76,6 +77,7 @@ common:
   load_failed: 加载失败，请稍后重试
   image_load_failed: 图片加载失败
   operation_failed: 操作失败，请稍后重试
+  send_not_allowed: 此处暂不允许发送
   load_more: 加载更多
   operation:
     add: 新增
@@ -193,23 +195,14 @@ settings:
   menu_bewly_pages: Bewly 页面
   menu_bewly_components: Bewly 组件
   menu_bilibili: Bilibili
-  menu_navigation: 页面与组件
-  menu_playback: 播放与声音
-  menu_advanced: 高级与维护
   category_navigation: 设置分类导航
-  category_group_pages: 页面
-  category_group_components: 组件
-  category_group_behavior: 行为
-  badge_performance_impact: 性能影响
-  badge_advanced: 高级
   badge_irreversible: 不可撤销
-  badge_use_with_caution: 谨慎开启
   search:
     placeholder: 搜索设置
     no_results: 没有找到相关设置
     located: 已定位到此设置
   category_general_desc: 配置语言、交互布局与抽屉行为。
-  category_appearance_desc: 配置毛玻璃、主题颜色、字体、自定义样式和其他页面的适配。
+  category_appearance_desc: 配置毛玻璃、主题颜色、字体和其他页面的适配。
   breadcrumb: 设置位置
   group_interaction_layout: 交互与布局
   home_grid_layout: 首页视频布局
@@ -269,6 +262,8 @@ settings:
   messages_server_block_words_add: 添加
   messages_server_block_words_remove: 删除屏蔽词 {word}
   messages_server_block_words_empty: 暂无屏蔽词
+  messages_server_block_words_load_failed: 暂时无法读取屏蔽词，请重试
+  messages_server_block_words_unconfirmed: 更改已提交，但暂时无法确认结果。请刷新状态，勿重复提交。
   messages_server_errors:
     login-required: 登录状态已失效
     risk-control: 请求暂时受到限制
@@ -296,12 +291,9 @@ settings:
     reset_title: 恢复默认设置
     reset_desc: 此区域的操作会影响全部 Bewly Nocturne 设置。
     reset_warning: 恢复后无法撤销，当前语言设置会保留。
-  menu_plugin_components_and_pages: Bewly Nocturne界面
-  menu_bilibili_features_enhancement: Bilibili 功能
   menu_appearance: 外观
   menu_compatibility: 兼容性
   menu_about: 关于
-  menu_changelog: 更新日志
   experimental: 实验性
 
   # 插件组件与页面 子菜单
@@ -324,16 +316,12 @@ settings:
     video_playback: 播放器
     auto_play: 播放行为
     vip_features: 大会员
-    vip_features_placeholder: 大会员功能增强将在未来版本中添加。
-
-  changelog_placeholder: 更新日志内容将在这里显示。
 
   group_common: 通用
   group_drawer_behavior: 抽屉行为
   group_language: 语言
   group_ad_blocking: 广告拦截
   group_comments: 评论
-  group_languages_and_fonts: 语言和字体
   group_link_opening_behavior: 链接打开行为
   group_video_card: 视频卡片
   group_video_card_display: 显示与预览
@@ -349,8 +337,6 @@ settings:
   video_card_content_region_stats: 数据
   video_card_content_region_tags: 标签
   video_card_content_region_other: 其它
-  group_performance: 毛玻璃和性能
-  group_player_settings: 播放器设置
   group_player_components: 播放器组件
   group_player_display_mode: 播放模式
   group_player_display_mode_desc: 设置基础显示模式，并按需覆盖特定播放场景。
@@ -358,8 +344,6 @@ settings:
   group_playback_memory_desc: 选择是否记住倍速、视频比例和清晰度。
   group_video_page_actions: 视频页功能
   group_video_page_actions_desc: 标签仅用于切换视频页和播放器控制栏中相关按钮的显示。
-  group_playback_behavior: 播放行为
-  group_auto_play: 自动连播
   group_custom_auto_play_behavior: 播放结束行为
   group_custom_auto_play_behavior_desc: 关闭 Bilibili 默认行为后，可分别设置不同视频类型的后续动作。“连播推荐”会在当前视频结束后继续播放推荐视频。
   group_playback_end_behavior: 播放结束行为
@@ -376,7 +360,6 @@ settings:
   topbar_user_menu: 顶栏用户菜单
   topbar_display_settings: 顶栏显示与行为
   topbar_display_settings_desc: 调整顶栏在不同页面和交互场景下的显示方式。
-  group_navigation: Dock和侧边栏
   group_dock: Dock 栏
   group_liquid_glass: 悬浮表面材质
   liquid_glass: 液态玻璃
@@ -407,8 +390,6 @@ settings:
   group_search_results: 搜索结果
   group_recommendation_mode: “个性推荐” 推荐模式
   group_recommendation_filters: “个性推荐” 过滤
-  group_recommendation_filters_desc: |
-    请勿将限制值设置得太大，不然可能会增加加载时间！频繁请求可能会导致 Bilibili 对 IP 的封禁!
   group_following: 正在关注
   group_following_desc: 配置“正在关注”页面的布局、不活跃 UP 主名单、直播内容与视频过滤规则。
   group_favorites: 收藏
@@ -440,8 +421,8 @@ settings:
   moments_enable_keyword_filter_desc: 过滤匹配作者、标题、正文或附加内容的动态。启用有效关键词后，每次最多请求两页，后续内容通过“加载更多”获取。
   moments_blocked_keywords: 屏蔽关键词
   moments_blocked_keywords_placeholder: 使用换行、逗号或分号分隔关键词
-  moments_enable_live_preview: 直播动态悬停预览
-  moments_enable_live_preview_desc: 鼠标悬停直播动态封面时播放直播预览。
+  moments_enable_live_preview: 直播悬停预览
+  moments_enable_live_preview_desc: 悬停直播动态封面或左侧正在直播列表时，静音预览直播；移开后停止播放。
   moments_enable_video_preview: 视频动态悬停预览
   moments_enable_video_preview_desc: 悬停视频动态或转发视频时播放预览，可设置触发范围、额外延迟、控制条和拖动定位。
   moments_grid_columns: 动态列数
@@ -468,41 +449,6 @@ settings:
     dialog: 弹窗
     new_tab: 新建标签页
     background: 后台标签
-  group_moments_wanted_users: 想看分组
-  group_moments_wanted_users_desc: 管理想看的 UP 主；支持输入 UID 或昵称，名单仅保存在本地。
-  moments_enable_wanted_filter: 启用想看筛选
-  moments_enable_wanted_filter_desc: 在动态页横向栏显示“想看”入口，用于只查看名单内 UP 主的动态；关闭后隐藏入口并退出想看筛选。
-  moments_wanted_users: 想看的 UP 主
-  group_moments_pinned_users: 固定 UP 主
-  group_moments_pinned_users_desc: 管理固定在动态栏右侧的 UP 主；支持输入 UID 或昵称，名单仅保存在本地。
-  moments_pinned_users: 固定的 UP 主
-  moments_wanted_manager:
-    input_required: 请输入 UP 主 UID 或昵称
-    search_empty: 没有找到相关 UP 主，请尝试其他昵称
-    search_failed: 搜索 UP 主失败，请稍后重试
-    invalid_uid: 请输入有效的 UP 主 UID
-    pinned_limit: 最多只能固定 {count} 个 UP 主
-    user_not_found: 未找到该 UP 主
-    fetch_failed: 获取 UP 主信息失败，请稍后重试
-    placeholder: 输入 UP 主 UID 或昵称
-    add: 添加
-    search: 搜索
-    pinned:
-      already_in: 该 UP 主已经在“固定 UP”中
-      need_follow: 必须先关注 {name}，才能将其加入“固定 UP”
-      added: 已将 {name} 固定到动态栏
-      removed: 已取消固定 {name}
-      remove_aria: 取消固定 {name}
-      remove_title: 取消固定
-      empty: 尚未添加固定 UP 主。添加后会显示在动态栏右侧。
-    wanted:
-      already_in: 该 UP 主已经在“想看”分组中
-      need_follow: 必须先关注 {name}，才能将其加入“想看”分组
-      added: 已将 {name} 加入“想看”
-      removed: 已将 {name} 移出“想看”
-      remove_aria: 将 {name} 移出想看
-      remove_title: 移出想看
-      empty: 尚未添加 UP 主。添加后可在 Bewly 动态页的“想看”中筛选。
   btn:
     authorize: 授权
     revoke: 取消授权
@@ -510,8 +456,6 @@ settings:
   touch_screen_optimization: 触屏体验改进
   touch_screen_optimization_desc: |
     启用后，如顶栏，你可能需要点击项目以查看更多信息，而不是鼠标直接悬停查看。视频页支持双击播放、暂停或快进快退，按住左右滑动调整播放进度，以及从播放器左右边缘上下滑动调节音量。（旧版顶栏不支持此功能）
-  show_home_button_in_touch_mode: 显示 Home 按钮
-  show_home_button_in_touch_mode_desc: 在触屏优化开启时，在顶栏 Logo 旁边显示一个可以直接跳转到首页的按钮。
   open_top_bar_items_in_bewly: 点击顶栏图标打开 Bewly 页面
   open_top_bar_items_in_bewly_desc: 未启用触屏优化时，点击 Logo、动态、收藏、历史或稍后再看图标，将按照“顶栏链接打开行为”打开 Dock 中对应的页面，并沿用该页面的 Bewly/原版 Bilibili 配置；尚未适配的图标保持原有行为。
   show_bewly_or_bili_page_switcher_desc: 在悬浮 Dock 或侧边栏中显示全原版、全 Bewly 与自定义页面模式切换按钮。
@@ -620,12 +564,6 @@ settings:
   show_vertical_video_zoom_button_desc: 在竖屏视频播放器中显示放大/缩小按钮和画面位置调节控件
   show_video_screenshot_button: 显示播放器截图按钮
   show_video_screenshot_button_desc: 启用后，在视频播放器控制栏中显示截取当前视频画面的按钮。
-  disable_auto_play_collection: 自动关闭合集自动连播
-  disable_auto_play_collection_desc: 自动关闭视频合集的自动连播功能
-  keep_collection_video_default_mode: 合集视频保持默认模式
-  keep_collection_video_default_mode_desc: 当启用时，合集视频将始终使用默认播放器模式，不会应用宽屏或全屏设置
-  keep_watch_later_video_default_mode: 稍后再看保持默认模式
-  keep_watch_later_video_default_mode_desc: 启用后，稍后再看中的视频将始终使用默认播放器模式，不会应用宽屏或全屏设置
   remember_playback_rate: 记住倍速
   remember_playback_rate_desc: 启用后，播放器会记住您上次设置的倍速，并在下次打开视频时自动应用
   remember_video_aspect_ratio: 记住视频比例
@@ -767,15 +705,8 @@ settings:
   video_card_cover_ratio_two_columns: 双列布局
   grid_breakpoints: 网格断点配置
   grid_breakpoints_desc: 设置不同视频卡片区域宽度下显示的列数。当区域宽度大于等于设定值时，使用对应的列数。
-  grid_min_width: 宽度 ≥
   grid_columns: 显示
   grid_columns_unit: 列
-  grid_add_breakpoint: 添加断点
-
-  home_adaptive_title_auto_size: 标题字号自适应
-  home_adaptive_title_auto_size_desc: 根据网格宽度自动调整标题字号
-  home_adaptive_title_font_size: 标题字号
-  home_adaptive_title_font_size_desc: 固定的标题字号（像素），开启自适应时不生效
   video_card_title_font_size: 标题字号
   video_card_title_font_size_desc: 控制视频卡片标题的字号。
   video_card_author_font_size: UP 信息字号
@@ -802,7 +733,7 @@ settings:
   topbar_components_adjustment: 顶栏组件角标设置
   topbar_components_adjustment_desc: 配置各个顶栏图标的角标显示方式
   group_topbar_pinned_channels: 顶栏常驻分区
-  topbar_pinned_channels_desc: 可以将 Logo 展开中的分区固定在顶栏外侧，并自定义显示顺序。
+  topbar_pinned_channels_desc: 可以将分区固定在顶栏，并自定义显示顺序。
   topbar_pinned_channels_title: 常驻分区
   topbar_pinned_channels_hint: 点击卡片即可固定或取消，点击顺序决定展示顺序。靠后的分区会在空间不足时优先隐藏。
   topbar_pinned_channels_all_selected: 所有可用分区都已添加。
@@ -853,10 +784,6 @@ settings:
   enable_oled_dark_mode_desc: 仅在实际处于深色模式时生效；网页底色变为纯黑，卡片和浮层仍保留层次。
   gradient_theme_color_background: 在暗色模式下使用主题色渐变
   gradient_theme_color_background_desc: 同时应用于网页背景和顶栏。
-  customize_css: 自定义 CSS
-  customize_css_desc: |-
-    如果你不熟悉 CSS，请不要修改 CSS。否则可能会导致意外的显示问题。
-    如果在你修改 CSS 后遇到任何问题，请重新安装 Bewly Nocturne。
   logo_color: Logo 颜色
   logo_color_opt:
     white: 白
@@ -1119,6 +1046,24 @@ topbar:
     video: 上传视频
     manager: 投稿管理
 notifications:
+  insights:
+    activity: 会话最近活动
+    activity_scope: 近 7 天 · 已载入会话
+    mark_all_read: 全部标为已读
+    marking_read: 正在标记
+    all_read: 全部已读
+    read_partial: 部分消息未能标记，请重试
+    read_failed: 标记失败，请重试
+    overview: 消息概览
+    unread_total: 未读消息与通知
+    unread_private: 未读私信
+    followed: 已关注
+    unfollowed: 未关注
+    unread_notifications: 未读通知
+    loaded_sessions: 已载入会话
+    pinned: 置顶
+    muted: 免打扰
+    recent: 最近会话
   document_title: '{section} - 消息 - 哔哩哔哩'
   navigation_aria: 消息分类
   section_aria: 打开{section}
@@ -1143,17 +1088,62 @@ notifications:
     system:
       label: 系统通知
   whisper:
+    actions:
+      menu: '管理与{name}的会话'
+      pin: 置顶聊天
+      unpin: 取消置顶
+      mute: 开启免打扰
+      unmute: 取消免打扰
+      block: 加入黑名单
+      report: 举报该用户
+      disable_push: 不接收推送
+      enable_push: 接收推送
+      notifications_normal: 通知正常接收
+      refresh: 刷新状态
+      load_failed: 读取会话设置失败，请重试
+      write_failed: 操作失败，请稍后重试
+      unconfirmed: 请求已提交，但暂时无法确认结果。请刷新状态，不要重复提交。
+      success: 操作成功
+      report_success: 举报已提交
+      block_warning: 加入黑名单后将自动取消关注及合集订阅，禁止该用户与你互动或查看你的空间。
+      report_notice: 请选择举报理由。此会话最近最多 10 条消息将作为证据提交；仅在你确认后发送举报。
+      reason: 举报理由
+      choose_reason: 请选择理由；其他问题请填写说明
+      reasons:
+        other: 其他问题
+        sexual: 色情低俗
+        political: 政治敏感
+        illegal: 违法有害
+        advertising: 广告骚扰
+        abuse: 人身攻击
+        fraud: 诈骗
+    search:
+      batch: 当前第 {count} 批结果
+      next_batch: 搜索下一批结果
+      following: 已关注用户
+      global: 所有用户
+      users_empty: 没有找到相关用户
+      skip: 跳过此会话，继续搜索
+      people: 用户
+      messages: 消息
+      start: 搜索全部私信记录
+      progress: 正在搜索
+      complete: 搜索完成
+      skipped: '{count} 个群聊或不可读取的会话未纳入检索'
+      error: 检索中断，已找到的结果仍然保留
+      limit: 本批结果较多，可以继续下一批或缩小关键词
+      empty: 没有找到匹配的历史消息
+      stop: 暂停搜索
+      continue: 继续搜索
+      context_error: 这条消息暂时无法定位，请重试
+      select_result: 从左侧选择一条消息查看上下文
     loading: 正在加载私信会话
     profile_pending: 正在确认账号
     list_aria: 私信会话列表
     search_placeholder: 搜索当前已加载会话
-    search_aria: 搜索已加载的私信会话
+    search_aria: 搜索用户或聊天记录
     select_recipient: 选择{name}作为私信收件人
     recipient_search:
-      search_following: 在关注列表中搜索
-      following_empty: 关注列表中没有找到相关用户
-      search_global: 全站搜索用户
-      global_empty: 全站没有找到相关用户
       loading: 正在搜索用户
       more: 查看更多
       error: 搜索失败，请重试
@@ -1232,6 +1222,9 @@ notifications:
       new_messages: 有新消息
       return_latest: 回到最新消息
       recalled: 消息已撤回
+      expired: 消息已失效
+      play_video: 点击播放视频
+      open_media: 查看内容
       unsupported: 当前版本暂未支持此消息
       preview_image: 预览图片
       image_preview: 私信图片预览
@@ -1326,8 +1319,22 @@ dock:
   collapse_dock: 收起 Dock
   expand_dock: 展开 Dock
 moments:
+  enter_live_room: '进入 {name} 的直播间'
+  promotion_advertisement: 广告
+  promotion_commerce: 商品推广
+  promotion_suspected: 疑似软广
+  promotion_reason_api: 接口明确标记为广告
+  promotion_reason_goods: 包含商品卡片或商品链接
+  promotion_reason_coupon-code: 包含购物平台、促销信息和搜索口令
+  promotion_reason_purchase-token: 包含购物口令、促销信息和复制或下单引导
+  promotion_reason_comment-shopping: 包含评论区或购物入口导流及领券促销
+  promotion_reason_commission-shopping: 包含专属购买入口与返佣或折扣引导
+  promotion_reason_disclosure: 正文包含商业合作或赞助声明，仅作提示
+  promotion_reason_purchase-and-offer: 同时出现购买引导和促销信息，仅作提示
+  promotion_reason_purchase-and-link: 同时出现购买引导和购物链接，仅作提示
+  hot_search_title: bilibili 热搜
   retry: 重试
-  filter_all: 全部
+  filter_all: 全部动态
   filter_video: 视频投稿
   filter_pgc: 追番追剧
   filter_article: 专栏
@@ -1374,28 +1381,20 @@ moments:
   publish: 发布动态
   live_now: 正在直播
   live_badge: 直播中
+  live_preview_unavailable: 暂时无法预览
   feed_bar: 动态栏
   feed_groups: 动态分组
   all_moments: 全部动态
-  wanted_enable: 只看想看的 UP 主
-  wanted_disable: 取消只看想看的 UP 主
-  wanted_only_all_video: 仅适用于全部和视频投稿
-  wanted: 想看
   scroll_frequent_left: 向左滚动经常访问列表
   scroll_frequent_right: 向右滚动经常访问列表
   scroll_left: 向左滚动
   scroll_right: 向右滚动
   frequent_uploaders: 经常访问的 UP 主
   has_update: 有更新
-  pinned_uploaders: 固定 UP 主
   initial_loading: 正在准备动态和图片…
-  empty_wanted: 近期无更新
-  no_wanted_users: 请先在设置中添加想看的 UP 主
-  configure_wanted: 设置想看分组
   empty: 暂时没有可展示的动态
   loading: 正在加载…
   load_more: 加载更多
-  recheck: 重新检查
   reload: 重新加载
   loading_more: 正在加载并准备更多动态…
   no_more: 已经到底啦
@@ -1543,6 +1542,7 @@ video_card:
   watch_later_update_failed: 更新稍后再看失败
   feedback_unavailable: 无法获取反馈选项
 home:
+  channels: 分区
   series:
     open: 进入剧集
     more_updates: '其它更新（{count}）'
@@ -1616,6 +1616,24 @@ anime:
       sat: 周六
       sun: 周日
 history:
+  refresh: 刷新历史
+  sort_newest: 最近观看（已载入记录）
+  sort_oldest: 最早观看（已载入记录）
+  select_results: 全选当前结果
+  filters:
+    title: 高级筛选
+    period: 观看时间
+    period_all: 全部时间
+    period_today: 今天
+    period_yesterday: 昨天
+    period_week: 近一周
+    by_device: 按设备筛选
+    device_all: 全部设备
+    device_pc: PC
+    device_phone: 手机
+    device_tablet: 平板
+    device_tv: TV
+  all_history: 全部历史
   media: 剧集 / 影视
   continue_watching: 继续观看
   unknown_date: 日期未知
@@ -1625,6 +1643,7 @@ history:
     要清除所有观看历史吗？
     该操作无法撤销，你确定要清除所有观看历史吗？
   pause_watch_history: 暂停记录观看历史
+  retry_recording_status: 读取记录状态
   pause_watch_history_confirm: |-
     要暂停记录观看历史吗？
     你确定要要暂停记录观看历史吗？
@@ -1635,6 +1654,44 @@ history:
     要开启观看历史吗？
     你确定要开启观看历史吗？
 favorites:
+  saved_refresh_failed: 已保存，但列表刷新失败，请刷新查看
+  create_folder: 新建收藏夹
+  folder_name: 名称
+  folder_intro: 简介
+  change_cover: 更换封面
+  cover_invalid: 请选择不超过 5 MB 的 JPG 或 PNG 图片
+  pin_folder: 置顶收藏夹
+  clean_invalid: 清除所有失效视频
+  clean_invalid_confirm: 清除当前收藏夹中的所有失效视频？
+  folder_like: 点赞
+  folder_unlike: 取消点赞
+  folder_creator: 创建者
+  folder_collect: 收藏
+  folder_share: 分享
+  folder_link_copied: 收藏夹链接已复制
+  rail_video: 视频收藏
+  rail_season: 订阅合集
+  rail_article: 其他收藏
+  topic_folder: 话题收藏
+  article_folder: 图文收藏夹
+  course_folder: 课程收藏夹
+  course_empty: 去收藏些课堂视频吧～
+  video_order: 视频排序
+  order_recent: 最近收藏
+  order_views: 最多播放
+  order_published: 最近投稿
+  subscription_filter: 订阅类型
+  manage_folders: 管理收藏夹
+  subscription_all: 全部订阅
+  subscription_seasons: 视频合集
+  subscription_folders: 收藏夹
+  search_all_fields: 全部字段
+  search_content_only: 仅标题与内容
+  search_title_only: 仅标题
+  search_author_only: 仅作者
+  search_description_only: 仅描述
+  search_season: 搜索合集或当前合集内的视频
+  search_article: 搜索当前分类的收藏
   collected_season_prefix: 合集
   video_section_title: 收藏的视频
   folder_section_title: 所有收藏夹
@@ -1702,6 +1759,29 @@ version_reminder:
   acknowledge: 已知晓，本版本不再提示
   settings_hint: 可在“设置 → 关于”中关闭“新版本提醒”。
 watch_later:
+  refresh: 刷新稍后再看
+  filters:
+    title: 高级筛选
+    by_progress: 按进度筛选
+    by_date: 按日期筛选
+    by_duration: 按时长筛选
+    progress_all: 全部
+    progress_unstarted: 未观看
+    startDate: 开始日期
+    endDate: 结束日期
+    invalid_range: 结束日期不能早于开始日期
+    duration_all: 全部
+    duration_short: 10分钟以下
+    duration_medium: 10–30分钟
+    duration_long: 30–60分钟
+    duration_extraLong: 60分钟以上
+  sort_order: 显示顺序
+  sort_newest: 最近添加
+  sort_oldest: 最早添加
+  batch_manage: 批量管理
+  select_all: 全选
+  unselect_all: 取消全选
+  remove_selected: 移除所选（{count}）
   auto_remove_failed: 自动移出稍后再看失败，请稍后手动重试。
   open_tabs:
     title: 添加播放标签页
@@ -1858,6 +1938,8 @@ search:
     next: 下一页
     page: 第 {page} 页
   date_picker:
+    date_placeholder: 年/月/日
+    open_calendar_for: 选择{label}
     start_date: 开始日期
     month: '{month}月'
     year: '{year}年'

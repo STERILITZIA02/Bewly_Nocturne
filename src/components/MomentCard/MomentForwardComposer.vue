@@ -364,8 +364,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   box-sizing: border-box;
 }
 .moment-forward-composer textarea:focus-visible {
-  border-color: var(--bew-theme-color);
-  box-shadow: 0 0 0 2px var(--bew-theme-focus-ring);
+  border-color: var(--bew-focus-ring-color);
+  box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
 }
 .moment-forward-composer textarea:disabled {
   opacity: 0.65;
@@ -452,7 +452,7 @@ watch(accountId, (nextAccountId, previousAccountId) => {
 .moment-forward-composer__tools button:focus-visible,
 .moment-forward-composer__submit:focus-visible,
 .moment-forward-composer__topic button:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 2px;
 }
 .moment-forward-composer__tools button:disabled,

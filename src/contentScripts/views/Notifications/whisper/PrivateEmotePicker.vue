@@ -235,7 +235,7 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 }
 
 .private-emote-picker__package-button:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-0-5);
 }
 
@@ -281,7 +281,7 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 }
 
 .private-emote-picker__item:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-0-5);
 }
 

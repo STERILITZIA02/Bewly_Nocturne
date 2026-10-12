@@ -22,6 +22,7 @@ onMounted(() => {
 const {
   indicatorStyle,
   isMoving,
+  scrubbing,
   updateIndicator,
   setPreview,
   clearPreview,
@@ -45,6 +46,7 @@ defineExpose({
     class="bew-liquid-indicator"
     :class="{
       'is-moving': isMoving,
+      'is-scrubbing': scrubbing,
       'bew-liquid-indicator--white': white,
     }"
     :style="indicatorStyle"

@@ -388,6 +388,7 @@ onBeforeUnmount(() => {
     <template v-else>
       <!-- Video cover -->
       <LazyPicture
+        responsive-cover
         :src="coverImageUrl"
         loading="lazy"
         :retain-screens="3"

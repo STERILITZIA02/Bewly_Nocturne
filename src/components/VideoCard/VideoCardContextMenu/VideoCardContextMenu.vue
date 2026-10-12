@@ -618,7 +618,7 @@ const unfollowUser = () => writeRelation(2)
   }
 
   &:focus-visible {
-    outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: calc(-1 * var(--bew-space-0-5));
   }
 

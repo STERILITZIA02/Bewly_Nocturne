@@ -28,6 +28,18 @@ const { locale, t } = useI18n()
 const avatarLoadFailed = ref(false)
 const senderInitial = computed(() => props.senderName.trim().slice(0, 1) || '?')
 const dateLocale = computed(() => normalizePrivateSessionLocale(locale.value))
+const profileUrl = computed(() => /^[1-9]\d*$/.test(props.message.senderId)
+  ? `https://space.bilibili.com/${props.message.senderId}`
+  : '')
+const isMediaCard = computed(() => [
+  'share-v2',
+  'video-card',
+  'article-card',
+  'common-share-card',
+  'picture-card',
+  'business-card',
+  'expired',
+].includes(props.message.content.type))
 
 watch(() => props.senderAvatarUrl, () => {
   avatarLoadFailed.value = false
@@ -76,6 +88,7 @@ const deliveryLabel = computed(() => {
       'private-message-item--self': message.isSelf,
       'private-message-item--notice': message.content.type === 'tip' || message.content.type === 'recalled',
       'private-message-item--failed': sendState === 'failed',
+      'private-message-item--media-card': isMediaCard,
     }"
     :data-message-id="message.msgKey"
   >
@@ -93,7 +106,13 @@ const deliveryLabel = computed(() => {
     </div>
 
     <div v-else class="private-message-item__message">
-      <span class="private-message-item__avatar" aria-hidden="true">
+      <ALink
+        v-if="profileUrl"
+        :href="profileUrl"
+        type="content"
+        class="private-message-item__avatar"
+        :aria-label="t('notifications.whisper.open_profile', { name: senderName })"
+      >
         <img
           v-if="senderAvatarUrl && !avatarLoadFailed"
           :src="senderAvatarUrl"
@@ -103,7 +122,8 @@ const deliveryLabel = computed(() => {
           @error="avatarLoadFailed = true"
         >
         <span v-else>{{ senderInitial }}</span>
-      </span>
+      </ALink>
+      <span v-else class="private-message-item__avatar" aria-hidden="true">{{ senderInitial }}</span>
 
       <div class="private-message-item__body">
         <span class="private-message-item__sender">{{ senderName }}</span>
@@ -166,6 +186,39 @@ const deliveryLabel = computed(() => {
   justify-content: flex-end;
 }
 
+// The corner facing the sender's avatar is square; the other corners keep
+// their existing surface radii, including media and unavailable-message bubbles.
+.private-message-item:not(.private-message-item--self)
+  .private-message-item__content
+  :deep(
+    :is(
+      .private-message-content__bubble,
+      .private-message-content__card,
+      .private-message-content__unknown,
+      .private-message-content__expired,
+      .private-message-content__media-button,
+      .private-message-content__picture-card,
+      .private-message-content__media-placeholder
+    )
+  ) {
+  border-top-left-radius: 0;
+}
+.private-message-item--self
+  .private-message-item__content
+  :deep(
+    :is(
+      .private-message-content__bubble,
+      .private-message-content__card,
+      .private-message-content__unknown,
+      .private-message-content__expired,
+      .private-message-content__media-button,
+      .private-message-content__picture-card,
+      .private-message-content__media-placeholder
+    )
+  ) {
+  border-top-right-radius: 0;
+}
+
 .private-message-item--notice {
   justify-content: center;
 }
@@ -178,8 +231,44 @@ const deliveryLabel = computed(() => {
   align-items: flex-start;
 }
 
+// Give large media a definite available width before resolving nested 100%
+// widths. Intrinsic image width must never expand the flex item past the pane.
+.private-message-item--media-card .private-message-item__message {
+  width: min(100%, calc(var(--bew-message-share-width) + var(--bew-space-10) + var(--bew-space-4)));
+  max-width: 100%;
+
+  .private-message-item__body {
+    flex: 1 1 0;
+    width: 0;
+    max-width: none;
+  }
+
+  .private-message-item__content {
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+}
+
 .private-message-item--self .private-message-item__message {
   flex-direction: row-reverse;
+}
+
+// Keep all outgoing bubble surfaces opaque, including shared media cards.
+// Metadata outside the bubble retains the neutral page foreground.
+.private-message-item--self .private-message-item__content {
+  :deep(.private-message-content__card),
+  :deep(.private-message-content__media-button),
+  :deep(.private-message-content__picture-card),
+  :deep(.private-message-content__expired),
+  :deep(.private-message-content__unknown) {
+    color: var(--bew-on-theme-color);
+    background: var(--bew-theme-color);
+    border-color: var(--bew-message-card-border);
+    --bew-text-1: var(--bew-on-theme-color);
+    --bew-text-2: var(--bew-on-theme-color);
+    --bew-text-3: var(--bew-on-theme-color);
+    --bew-theme-foreground: var(--bew-on-theme-color);
+  }
 }
 
 .private-message-item__avatar {

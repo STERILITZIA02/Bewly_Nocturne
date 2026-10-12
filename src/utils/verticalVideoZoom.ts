@@ -138,7 +138,7 @@ function injectStyle() {
 
     .${MAP_CLASS}:focus-visible,
     .${BUTTON_CLASS}:focus-visible {
-      outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-foreground) !important;
+      outline: var(--bew-focus-ring, 1px solid CanvasText)!important;
       outline-offset: var(--bew-space-0-5, 2px);
     }
 

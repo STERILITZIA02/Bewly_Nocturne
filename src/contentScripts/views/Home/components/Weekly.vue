@@ -286,7 +286,6 @@ defineExpose({ initData })
         flex="~"
         justify="between"
         items="center"
-        :ring="showDropdown ? '2px $bew-theme-color' : ''"
         duration-300
         @click="showDropdown ? closeDropdown() : openDropdown()"
         @keydown.down.prevent="openDropdown"

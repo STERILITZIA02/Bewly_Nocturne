@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+
+import { observeSkeletonGroup } from '~/utils/skeletonVisibility'
 
 type SkeletonRadius = 'sm' | 'half' | 'control' | 'interactive' | 'media' | 'card' | 'panel' | 'full' | 'circle'
 
@@ -17,10 +19,18 @@ const blockStyle = computed(() => ({
   '--bew-skeleton-block-width': props.width,
   '--bew-skeleton-block-height': props.height,
 }))
+const block = ref<HTMLElement>()
+let releaseVisibility: (() => void) | undefined
+onMounted(() => {
+  if (block.value)
+    releaseVisibility = observeSkeletonGroup(block.value)
+})
+onBeforeUnmount(() => releaseVisibility?.())
 </script>
 
 <template>
   <span
+    ref="block"
     class="bew-skeleton-block"
     data-bew-skeleton
     :class="`bew-skeleton-block--${radius}`"

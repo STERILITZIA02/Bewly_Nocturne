@@ -87,6 +87,7 @@ export function registerUpstreamSettingsChecks(check, { Vue, flush, compileCompo
         Object.assign(imported.value, values)
       }
       const maintenance = await loadSourceFunctions('../src/components/Settings/Advanced/Maintenance.vue', ['handleImportFile', 'matchesSettingType', 'hasBlockedProperty', 'isPlainObject', 'blockedPropertyNames', 'settingEnumValues'], {
+        ...(await import('../src/constants/dock')),
         ...migration,
         settings: imported,
         originalSettings: { ...imported.value },

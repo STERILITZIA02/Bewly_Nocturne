@@ -203,7 +203,7 @@ watch(() => props.accountId, () => {
   background: var(--bew-fill-1);
 }
 .moment-forward-emoji-picker button:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 1px;
 }
 .moment-forward-picker__state {

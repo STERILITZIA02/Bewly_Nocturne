@@ -6,6 +6,7 @@ import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useGlassPanelMotion } from '~/composables/useGlassPanelMotion'
 import { GLASS_SURFACE_CONTEXT } from '~/composables/useLiquidGlass'
 import { settings } from '~/logic'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
@@ -31,13 +32,14 @@ const props = withDefaults(defineProps<{
   showHeader?: boolean
   /** 是否显示顶栏局部渐进模糊 */
   showTopBlur?: boolean
-  /** Vue Transition 名称；可为需要避免缩放的详情弹窗指定独立过渡 */
+  /** 动效场景；moments-dialog 保留详情弹窗不缩放的过渡 */
   transitionName?: string
   /** 是否显示边框和边缘光 */
   showBorder?: boolean
   showFooter?: boolean
   centerFooter?: boolean
   loading?: boolean
+  showLoadingOverlay?: boolean
   preventCloseWhenLoading?: boolean
   closeOnConfirm?: boolean
   layer?: 'dialog' | 'layout-editor' | 'critical-dialog'
@@ -49,6 +51,7 @@ const props = withDefaults(defineProps<{
   showTopBlur: true,
   showBorder: true,
   showFooter: true,
+  showLoadingOverlay: true,
   contentFlush: false,
   transitionName: 'modal',
   layer: 'dialog',
@@ -63,6 +66,7 @@ const dialogRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const dialogId = useId()
 const titleId = `${dialogId}-title`
+const dialogMotion = useGlassPanelMotion('.dialog__panel')
 provide(DIALOG_FOCUS_OWNER, dialogId)
 let previousFocus: HTMLElement | null = null
 let focusRestored = false
@@ -173,7 +177,6 @@ const dialogPanelStyle = computed(() => {
     top: topAligned ? `max(var(--bew-space-2), ${dialogTopOffset.value})` : '50%',
     left: '50%',
     transform: topAligned ? 'translateX(-50%)' : 'translate(-50%, -50%)',
-    transition: 'transform 0.4s, width 0.4s, height 0.4s',
     boxShadow: props.showBorder ? 'var(--bew-shadow-4), var(--bew-shadow-edge-glow-2)' : 'var(--bew-shadow-4)',
   }
 })
@@ -270,7 +273,7 @@ async function handleConfirm() {
 
 <template>
   <Teleport :to="mainAppRef" :disabled="!appendToBewlyBody">
-    <Transition :name="transitionName" @after-leave="onAfterLeave">
+    <Transition v-bind="dialogMotion" @after-leave="onAfterLeave">
       <div
         v-if="showDialog"
         ref="dialogRef"
@@ -299,7 +302,7 @@ async function handleConfirm() {
           z-2
           antialiased
           class="dialog__panel bew-shape-smooth-rect"
-          :class="{ 'dialog__panel--borderless': !showBorder }"
+          :class="{ 'dialog__panel--borderless': !showBorder, 'dialog__panel--detail': transitionName === 'moments-dialog' }"
         >
           <div class="dialog__clip">
             <div
@@ -311,7 +314,7 @@ async function handleConfirm() {
             <!-- loading masking -->
             <Transition name="fade">
               <div
-                v-if="loading"
+                v-if="loading && showLoadingOverlay"
                 pos="absolute top-0 left-0" w-full h-full bg="white dark:black opacity-60 dark:opacity-60" flex="~ justify-center items-center"
                 rounded-inherit
                 class="dialog__loading-mask"
@@ -441,6 +444,10 @@ async function handleConfirm() {
 }
 
 .dialog__panel {
+  --bew-panel-enter-transform: translateY(var(--bew-space-2)) scale(0.985);
+  --bew-panel-leave-transform: translateY(var(--bew-space-1)) scale(0.99);
+  --bew-panel-enter-duration: var(--bew-duration-moderate);
+  --bew-panel-leave-duration: var(--bew-duration-fast);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -527,13 +534,9 @@ async function handleConfirm() {
   margin-left: var(--bew-space-8);
 }
 
-.moments-dialog-enter-active,
-.moments-dialog-leave-active {
-  transition: opacity 140ms var(--bew-ease-standard, ease);
-}
-
-.moments-dialog-enter-from,
-.moments-dialog-leave-to {
-  opacity: 0;
+.dialog__panel--detail {
+  --bew-panel-enter-transform: translateY(var(--bew-space-1));
+  --bew-panel-leave-transform: translateY(var(--bew-space-1));
+  --bew-panel-enter-duration: var(--bew-duration-fast);
 }
 </style>

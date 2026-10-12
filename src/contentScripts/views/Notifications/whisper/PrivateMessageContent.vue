@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
+import PrivateMessageMediaCover from './PrivateMessageMediaCover.vue'
 import type { ParsedPrivateMessageContent } from './privateMessageRenderers'
 
 const props = defineProps<{
@@ -121,30 +122,32 @@ watch(() => props.content, () => {
     {{ t('notifications.whisper.messages.recalled') }}
   </div>
 
+  <div v-else-if="content.type === 'expired'" class="private-message-content__expired">
+    <i i-mingcute:unlink-line aria-hidden="true" />
+    {{ t('notifications.whisper.messages.expired') }}
+  </div>
+
   <div v-else-if="content.type === 'tip'" class="private-message-content__notice">
     <span v-for="(line, index) in content.lines" :key="index">{{ line }}</span>
   </div>
 
-  <ALink
+  <div
     v-else-if="content.type === 'share-v2'"
-    :href="content.href"
-    type="content"
     class="private-message-content__card"
   >
-    <img
+    <PrivateMessageMediaCover
       v-if="content.cover"
       class="private-message-content__cover"
       :src="content.cover"
-      alt=""
-      loading="lazy"
-      decoding="async"
-    >
-    <span class="private-message-content__card-copy">
+      :href="content.href"
+      :video="content.source === 'video'"
+    />
+    <ALink :href="content.href" type="content" class="private-message-content__card-copy">
       <strong>{{ content.title }}</strong>
       <span v-if="content.headline">{{ content.headline }}</span>
       <small v-if="content.author">{{ content.author }}</small>
-    </span>
-  </ALink>
+    </ALink>
+  </div>
 
   <div v-else-if="content.type === 'notification'" class="private-message-content__card">
     <div class="private-message-content__card-copy">
@@ -164,26 +167,23 @@ watch(() => props.content, () => {
     </div>
   </div>
 
-  <ALink
+  <div
     v-else-if="content.type === 'video-card'"
-    :href="content.href"
-    type="content"
     class="private-message-content__card"
   >
-    <img
+    <PrivateMessageMediaCover
       v-if="content.cover"
       class="private-message-content__cover"
       :src="content.cover"
-      alt=""
-      loading="lazy"
-      decoding="async"
-    >
-    <span class="private-message-content__card-copy">
+      :href="content.href"
+      video
+    />
+    <ALink :href="content.href" type="content" class="private-message-content__card-copy">
       <strong>{{ content.title }}</strong>
       <span v-if="content.attachMessage">{{ content.attachMessage }}</span>
       <small>{{ t('notifications.whisper.messages.video_views', { count: content.times }) }}</small>
-    </span>
-  </ALink>
+    </ALink>
+  </div>
 
   <ALink
     v-else-if="content.type === 'article-card'"
@@ -219,25 +219,22 @@ watch(() => props.content, () => {
     >
   </ALink>
 
-  <ALink
+  <div
     v-else-if="content.type === 'common-share-card'"
-    :href="content.href"
-    type="content"
     class="private-message-content__card"
   >
-    <img
+    <PrivateMessageMediaCover
       v-if="content.cover"
       class="private-message-content__cover"
       :src="content.cover"
-      alt=""
-      loading="lazy"
-      decoding="async"
-    >
-    <span class="private-message-content__card-copy">
+      :href="content.href"
+      :video="content.source === 'video'"
+    />
+    <ALink :href="content.href" type="content" class="private-message-content__card-copy">
       <strong>{{ content.title }}</strong>
       <small v-if="content.author">{{ content.author }}</small>
-    </span>
-  </ALink>
+    </ALink>
+  </div>
 
   <ALink
     v-else-if="content.type === 'text-share'"
@@ -289,7 +286,7 @@ watch(() => props.content, () => {
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-body);
   background: var(--bew-elevated-solid);
-  border: 1px solid var(--bew-border-color);
+  border: 1px solid var(--bew-message-card-border);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
 }
@@ -301,9 +298,9 @@ watch(() => props.content, () => {
 }
 
 .private-message-content__bubble--self {
-  color: var(--bew-on-theme-surface);
-  background: var(--bew-theme-surface);
-  border-color: transparent;
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
+  border-color: var(--bew-message-card-border);
 }
 
 .private-message-content__bubble--self .private-message-content__inline-link {
@@ -337,13 +334,14 @@ watch(() => props.content, () => {
 }
 
 .private-message-content__media-button {
+  box-sizing: border-box;
   max-width: 100%;
-  padding: 0;
+  padding: var(--bew-space-2);
   appearance: none;
   cursor: zoom-in;
-  background: transparent;
-  border: 0;
-  border-radius: var(--bew-media-radius);
+  background: var(--bew-elevated-solid);
+  border: 1px solid var(--bew-message-card-border);
+  border-radius: var(--bew-radius-xl);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -362,13 +360,13 @@ watch(() => props.content, () => {
   appearance: none;
   cursor: pointer;
   background: var(--bew-fill-1);
-  border: 1px solid var(--bew-border-color);
+  border: 1px solid var(--bew-message-card-border);
   border-radius: var(--bew-media-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
 .private-message-content__media-placeholder:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-1);
 }
 
@@ -377,7 +375,7 @@ watch(() => props.content, () => {
 .private-message-content__picture-card:focus-visible,
 .private-message-content__actions a:focus-visible,
 .private-message-content__business-cards a:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-1);
 }
 
@@ -388,7 +386,7 @@ watch(() => props.content, () => {
   max-height: calc(var(--bew-space-12) * 8);
   object-fit: contain;
   background: var(--bew-fill-1);
-  border-radius: inherit;
+  border-radius: var(--bew-radius-md);
   corner-shape: inherit;
 }
 
@@ -409,6 +407,25 @@ watch(() => props.content, () => {
   text-align: center;
 }
 
+.private-message-content__expired {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--bew-space-2);
+  box-sizing: border-box;
+  width: calc(var(--bew-space-12) * 6);
+  max-width: 100%;
+  min-height: calc(var(--bew-space-12) * 2);
+  padding: var(--bew-space-4);
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  background: var(--bew-elevated-solid);
+  border: 1px solid var(--bew-message-card-border);
+  border-radius: var(--bew-panel-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
 .private-message-content__card {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -418,21 +435,37 @@ watch(() => props.content, () => {
   text-decoration: none;
 }
 
-a.private-message-content__card:hover {
+a.private-message-content__card:not(:has(.private-message-content__cover)):hover {
   background: var(--bew-fill-1);
 }
 
 .private-message-content__cover {
-  width: calc(var(--bew-space-12) * 2);
-  height: var(--bew-space-12);
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-radius-md);
   corner-shape: var(--bew-corner-shape);
+}
+
+.private-message-content__card:has(> .private-message-content__cover) {
+  grid-template-columns: minmax(0, 1fr);
+  width: calc(var(--bew-message-share-width) + var(--bew-space-4));
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-2);
+  border-radius: var(--bew-radius-xl);
+
+  .private-message-content__card-copy {
+    padding: var(--bew-space-1) var(--bew-space-2) var(--bew-space-2);
+  }
 }
 
 .private-message-content__card-copy {
   display: grid;
   min-width: 0;
+  color: inherit;
+  text-decoration: none;
 }
 
 .private-message-content__card-copy strong,
@@ -511,18 +544,32 @@ a.private-message-content__card:hover {
 
 .private-message-content__picture-card {
   display: block;
+  box-sizing: border-box;
   max-width: 100%;
+  padding: var(--bew-space-2);
   overflow: hidden;
-  border-radius: var(--bew-media-radius);
+  background: var(--bew-elevated-solid);
+  border: 1px solid var(--bew-message-card-border);
+  border-radius: var(--bew-radius-xl);
   corner-shape: var(--bew-corner-shape);
 }
 
 .private-message-content__picture-card img {
   display: block;
-  width: auto;
+  width: var(--bew-message-share-width);
   max-width: 100%;
   max-height: calc(var(--bew-space-12) * 8);
   object-fit: contain;
+  border-radius: var(--bew-radius-md);
+  corner-shape: var(--bew-corner-shape);
+}
+
+@media (hover: hover) {
+  .private-message-content__media-button:hover img,
+  .private-message-content__picture-card:hover img,
+  a.private-message-content__card > .private-message-content__cover:hover {
+    filter: brightness(0.85);
+  }
 }
 
 .private-message-content__business-cards {
@@ -533,7 +580,7 @@ a.private-message-content__card:hover {
 
 .private-message-content__business-cards a {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--bew-space-2);
   padding: var(--bew-space-2);
   color: inherit;
@@ -544,10 +591,12 @@ a.private-message-content__card:hover {
 }
 
 .private-message-content__business-cards img {
-  width: var(--bew-space-12);
-  height: var(--bew-space-12);
+  width: var(--bew-message-share-width);
+  max-width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
   object-fit: cover;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-radius-sm);
   corner-shape: var(--bew-corner-shape);
 }
 

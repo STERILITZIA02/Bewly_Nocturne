@@ -427,7 +427,7 @@ function ensurePlaylistEditorStyle(): void {
       position: relative !important;
       cursor: grab !important;
       user-select: none !important;
-      outline: 1px dashed var(--bew-theme-color, #00aeec) !important;
+      outline: var(--bew-focus-ring, 1px solid CanvasText)!important;
       outline-offset: -1px !important;
     }
     .bewly-random-play-editing-item:active {

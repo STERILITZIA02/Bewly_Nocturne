@@ -1,0 +1,20 @@
+// One material for persistent page rails, their placeholders and the hot-search
+// companion card. Layout, clipping and borders remain each host's responsibility.
+@mixin surface {
+  background: var(--bew-sidebar-background);
+  backdrop-filter: var(--bew-filter-glass-1);
+  -webkit-backdrop-filter: var(--bew-filter-glass-1);
+}
+
+@mixin solid {
+  background: var(--bew-sidebar-background-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+
+@mixin vertical-scroll {
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}

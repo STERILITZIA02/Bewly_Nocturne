@@ -109,7 +109,7 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     }
   }
 
-  check('Dock glass: real library filter has one backdrop per surface, unique IDs and symmetric resize cleanup', async () => {
+  check('Dock glass: real library filter follows CSS geometry without resize observers and releases opaque optics', async () => {
     await withResizeObserver(async ({ observers, resize }) => {
       const library = await import('@wxperia/liquid-glass-vue')
       const Surface = await compileComponent('../src/components/LiquidGlassSurface.vue', { '@wxperia/liquid-glass-vue': library })
@@ -163,8 +163,9 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
       assert.notEqual(host.querySelector('feImage').getAttribute('href'), polarMap)
       assert.equal(host.querySelectorAll('filter').length, 2)
       await resize(64, 64)
-      assert.equal(host.querySelector('svg').style.width, '64px')
-      assert.equal(host.querySelector('svg').style.height, '64px')
+      assert.equal(host.querySelector('svg').style.width, '100%')
+      assert.equal(host.querySelector('svg').style.height, '100%')
+      assert.equal(observers.length, 0, 'shell morphs must not allocate a reactive size observer for optics')
       options.tintOpacity = 100
       await flush()
       assert.equal(host.querySelectorAll('filter').length, 0, 'opaque tint releases invisible refraction work')
@@ -235,7 +236,8 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     const style = document.head.appendChild(document.createElement('style'))
     style.textContent = compiled.code
     const host = document.body.appendChild(document.createElement('div'))
-    const app = Vue.createApp(Dock, { activatedPage: AppPage.Home, settingsOpen: false })
+    const bottomShifts = []
+    const app = Vue.createApp(Dock, { activatedPage: AppPage.Home, settingsOpen: false, onBottomShiftChange: value => bottomShifts.push(value) })
     app.config.globalProperties.$t = key => key
     app.mount(host)
     await flush()
@@ -309,6 +311,22 @@ export function registerDockGlassChecks(check, { Vue, compileComponent, flush })
     settings.value.enableDockLiquidGlass = false
     await flush()
     assert.equal(host.querySelector('.dock-shell-surface'), shell)
+    const collapsedTrigger = host.querySelector('.dock-collapsed-trigger')
+    assert.equal(collapsedTrigger.querySelectorAll('.dock-collapsed-mark__dot').length, 3)
+    assert.ok(collapsedTrigger.querySelector('.dock-collapsed-mark__line'))
+    host.querySelector('[aria-label="dock.collapse_dock"]').click()
+    await flush()
+    const geometry = host.querySelector('.dock-content-inner').style
+    assert.equal(geometry.getPropertyValue('--dock-collapsed-width'), '120px')
+    assert.equal(Number.parseFloat(geometry.getPropertyValue('--dock-collapsed-height')), 20)
+    assert.equal(bottomShifts.at(-1), 40, 'composer uses the actual scaled height released by Dock')
+    const ended = new window.Event('transitionend', { bubbles: true })
+    Object.defineProperty(ended, 'propertyName', { value: 'transform' })
+    shell.dispatchEvent(ended)
+    await flush()
+    collapsedTrigger.click()
+    await flush()
+    assert.equal(bottomShifts.at(-1), 0, 'expansion returns the composer to its original clearance')
     app.unmount()
     host.remove()
     style.remove()

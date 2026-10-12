@@ -1,11 +1,14 @@
 import type { Ref } from 'vue'
-import { nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, shallowRef, watch } from 'vue'
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, shallowRef, watch } from 'vue'
 
 import { CardRowMetrics } from '~/utils/cardRowMetrics'
 import { getScrollIntent } from '~/utils/scrollIntent'
 
 type CardKey = string | number
-export const CARD_WINDOW_THRESHOLD = 80
+export const CARD_WINDOW_THRESHOLD = 40
+const OVERSCAN_BEFORE = 1
+const OVERSCAN_AFTER = 2
+const RECYCLE_MARGIN = 0.5
 
 interface CardMeasurement {
   height: number
@@ -50,6 +53,12 @@ export function useCardWindow(options: {
   const elementKeys = new WeakMap<Element, CardKey>()
   const indices = new Map<CardKey, number>()
   const metrics = new CardRowMetrics()
+  // Avatar/progress enrichment can replace item objects without changing rows.
+  // Keep the index owner stable in that case instead of rebuilding all metrics.
+  const stableKeys = computed<CardKey[]>((previous) => {
+    const next = options.keys.value
+    return previous?.length === next.length && next.every((key, index) => key === previous[index]) ? previous : [...next]
+  })
   let rowCount = 0
   let measuredColumns = options.columns.value
   let active = false
@@ -165,11 +174,11 @@ export function useCardWindow(options: {
       : restoring || !container
         ? metrics.offset(Math.floor((anchorIndex ?? 0) / columns))
         : top - containerRect!.top
-    const loadingStart = metrics.rowAt(Math.max(0, offset - height * 3))
-    const loadingEnd = Math.min(rowCount, metrics.rowAt(offset + height * 4) + 1)
+    const loadingStart = metrics.rowAt(Math.max(0, offset - height * OVERSCAN_BEFORE))
+    const loadingEnd = Math.min(rowCount, metrics.rowAt(offset + height * OVERSCAN_AFTER) + 1)
     const loadable = active && !restoring && !document.hidden && container?.isConnected
       && containerRect && containerRect.width > 0 && containerRect.height > 0
-      && offset + height * 4 > 0 && offset - height * 3 < metrics.offset(rowCount)
+      && offset + height * OVERSCAN_AFTER > 0 && offset - height * OVERSCAN_BEFORE < metrics.offset(rowCount)
     const nextLoading = loadable ? { start: loadingStart * columns, end: Math.min(count, loadingEnd * columns) } : { start: 0, end: 0 }
     if (loadingRange.value.start !== nextLoading.start || loadingRange.value.end !== nextLoading.end)
       loadingRange.value = nextLoading
@@ -188,7 +197,7 @@ export function useCardWindow(options: {
       if (rows.has(row))
         continue
       // Hysteresis keeps recently mounted rows around for direction changes.
-      const nearby = metrics.offset(row + 1) > offset - height * 4 && metrics.offset(row) < offset + height * 5
+      const nearby = metrics.offset(row + 1) > offset - height * (OVERSCAN_BEFORE + RECYCLE_MARGIN) && metrics.offset(row) < offset + height * (OVERSCAN_AFTER + RECYCLE_MARGIN)
       const focused = (element.getRootNode() as Document | ShadowRoot).activeElement
       const pinned = !options.canRelease(key) || (!!focused && element.contains(focused))
       if (nearby || pinned)
@@ -409,7 +418,7 @@ export function useCardWindow(options: {
     disconnect()
   }
 
-  watch([options.keys, options.columns, options.gap, options.estimatedHeight, options.layout, options.enabled], rebuildRows, { immediate: true })
+  watch([stableKeys, options.columns, options.gap, options.estimatedHeight, options.layout, options.enabled], rebuildRows, { immediate: true })
   watch([options.root, options.container], observe, { flush: 'post' })
   onMounted(activate)
   onActivated(activate)

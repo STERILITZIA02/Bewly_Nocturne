@@ -1,8 +1,8 @@
 import { postMessageToParent } from '~/utils/iframeMessage'
 import { runWhenIdle } from '~/utils/lazyLoad'
-import { isPhotoViewerOpen } from '~/utils/photoViewer'
+import { observePhotoViewerState } from '~/utils/photoViewer'
 
-let observer: MutationObserver | null = null
+let stopObserver: (() => void) | null = null
 let photoViewerOpen = false
 let idleSetup: ReturnType<typeof runWhenIdle> | null = null
 let domReadyListener: (() => void) | null = null
@@ -24,7 +24,7 @@ function clearDeferredSetup() {
 }
 
 function setupObserverWhenReady() {
-  if (observer)
+  if (stopObserver)
     return
 
   const target = document.body ?? document.documentElement
@@ -47,19 +47,7 @@ function setupObserverWhenReady() {
     return
   }
 
-  observer = new MutationObserver(() => {
-    checkPhotoViewerState()
-  })
-
-  observer.observe(target, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class'],
-  })
-
-  // 初始检查
-  checkPhotoViewerState()
+  stopObserver = observePhotoViewerState(checkPhotoViewerState)
 }
 
 /**
@@ -72,7 +60,7 @@ export function setupIframePhotoViewerDetector() {
     return
 
   // 避免重复初始化
-  if (observer || idleSetup || domReadyListener || rootReadyRetryTimer !== null)
+  if (stopObserver || idleSetup || domReadyListener || rootReadyRetryTimer !== null)
     return
 
   idleSetup = runWhenIdle(() => {
@@ -81,9 +69,7 @@ export function setupIframePhotoViewerDetector() {
   })
 }
 
-function checkPhotoViewerState() {
-  const isOpen = isPhotoViewerOpen()
-
+function checkPhotoViewerState(isOpen: boolean) {
   // 只在状态变化时发送消息
   if (isOpen !== photoViewerOpen) {
     photoViewerOpen = isOpen
@@ -98,8 +84,8 @@ function checkPhotoViewerState() {
 
 export function cleanupIframePhotoViewerDetector() {
   clearDeferredSetup()
-  observer?.disconnect()
-  observer = null
+  stopObserver?.()
+  stopObserver = null
   if (photoViewerOpen) {
     postMessageToParent({
       type: 'IFRAME_PHOTO_VIEWER_STATE',

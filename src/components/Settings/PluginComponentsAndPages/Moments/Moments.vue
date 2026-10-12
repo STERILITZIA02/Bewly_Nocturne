@@ -9,7 +9,6 @@ import SettingsItem from '../../components/SettingsItem.vue'
 import SettingsItemGroup from '../../components/SettingsItemGroup.vue'
 import SettingsSegmentedControl from '../../components/SettingsSegmentedControl.vue'
 import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
-import WantedUsersManager from './WantedUsersManager.vue'
 
 const { t } = useI18n()
 
@@ -219,41 +218,6 @@ const gridColumnOptions = computed(() => [
           :options="openModeOptions"
           w="180px"
         />
-      </SettingsItem>
-    </SettingsItemGroup>
-
-    <SettingsItemGroup
-      :title="$t('settings.group_moments_wanted_users')"
-      :desc="$t('settings.group_moments_wanted_users_desc')"
-      icon="i-tabler-star-filled"
-      collapsible
-      default-collapsed
-    >
-      <SettingsItem
-        :title="$t('settings.moments_enable_wanted_filter')"
-        :desc="$t('settings.moments_enable_wanted_filter_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.momentsEnableWantedFilter" />
-      </SettingsItem>
-      <SettingsItem :title="$t('settings.moments_wanted_users')">
-        <template #bottom>
-          <WantedUsersManager mode="wanted" />
-        </template>
-      </SettingsItem>
-    </SettingsItemGroup>
-
-    <SettingsItemGroup
-      :title="$t('settings.group_moments_pinned_users')"
-      :desc="$t('settings.group_moments_pinned_users_desc')"
-      icon="i-tabler-pin-filled"
-      collapsible
-      default-collapsed
-    >
-      <SettingsItem :title="$t('settings.moments_pinned_users')">
-        <template #bottom>
-          <WantedUsersManager mode="pinned" />
-        </template>
       </SettingsItem>
     </SettingsItemGroup>
   </div>

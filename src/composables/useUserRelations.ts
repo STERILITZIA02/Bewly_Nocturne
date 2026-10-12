@@ -12,6 +12,12 @@ export interface UserRelation {
   isFollowing: boolean
 }
 
+interface RelationQuery {
+  promise: Promise<void>
+  resolve: () => void
+  readers: Set<() => boolean>
+}
+
 const RELATION_BATCH_SIZE = 40
 const RELATION_TTL = 5 * 60_000
 const RELATION_RETRY_DELAY = 30_000
@@ -35,7 +41,27 @@ const useSharedUserRelations = createSharedComposable(() => {
   const accessTimes = new Map<number, number>()
   const retryAfter = new Map<number, number>()
   const consumers = new Map<object, Set<number>>()
-  const pending = new Map<number, { promise: Promise<void>, resolve: () => void, readers: Set<() => boolean> }>()
+  const pending = new Map<number, RelationQuery>()
+  const requests = new Map<AbortController, Map<number, RelationQuery>>()
+
+  const hasReaders = (query: RelationQuery) => [...query.readers].some(current => current())
+  function settleQueries(queries: Map<number, RelationQuery>) {
+    queries.forEach((query, mid) => {
+      if (pending.get(mid) === query)
+        pending.delete(mid)
+      query.resolve()
+    })
+  }
+  function releaseUninterestedRequests() {
+    for (const [controller, queries] of requests) {
+      if ([...queries.values()].some(hasReaders))
+        continue
+      requests.delete(controller)
+      // Detach before aborting so immediate re-entry can create a fresh owner.
+      settleQueries(queries)
+      controller.abort()
+    }
+  }
 
   function prune() {
     const retained = new Set([...consumers.values()].flatMap(mids => [...mids]))
@@ -111,14 +137,16 @@ const useSharedUserRelations = createSharedComposable(() => {
       const queries = new Map(chunk.map(mid => [mid, scheduledQueries.get(mid)!]))
       const isInterested = (mid: number) => [...queries.get(mid)!.readers].some(current => current())
       const versions = new Map(chunk.map(mid => [String(mid), relationVersions.get(String(mid)) ?? 0]))
+      const controller = new AbortController()
       try {
         if (extensionContextInvalidated || generation !== requestGeneration || accountId !== getCurrentAccountId() || !chunk.some(isInterested))
           continue
+        requests.set(controller, queries)
         const response = await api.user.getRelations({
           fids: chunk.join(','),
-        })
+        }, { signal: controller.signal })
 
-        if (extensionContextInvalidated || generation !== requestGeneration || accountId !== getCurrentAccountId())
+        if (controller.signal.aborted || extensionContextInvalidated || generation !== requestGeneration || accountId !== getCurrentAccountId())
           continue
 
         const data = response?.data === null ? {} : response?.data
@@ -153,7 +181,7 @@ const useSharedUserRelations = createSharedComposable(() => {
           retryAfter.clear()
           return
         }
-        if (!extensionContextInvalidated && generation === requestGeneration && accountId === getCurrentAccountId()) {
+        if (!controller.signal.aborted && !extensionContextInvalidated && generation === requestGeneration && accountId === getCurrentAccountId()) {
           chunk.forEach((mid) => {
             retryAfter.set(mid, Date.now() + RELATION_RETRY_DELAY)
             if (!accessTimes.has(mid))
@@ -163,11 +191,8 @@ const useSharedUserRelations = createSharedComposable(() => {
         }
       }
       finally {
-        queries.forEach((query, mid) => {
-          if (pending.get(mid) === query)
-            pending.delete(mid)
-          query.resolve()
-        })
+        requests.delete(controller)
+        settleQueries(queries)
         prune()
       }
     }
@@ -196,6 +221,9 @@ const useSharedUserRelations = createSharedComposable(() => {
 
   function invalidateQueries() {
     requestGeneration++
+    for (const controller of requests.keys())
+      controller.abort()
+    requests.clear()
     pending.forEach((query) => {
       query.readers.clear()
       query.resolve()
@@ -228,6 +256,7 @@ const useSharedUserRelations = createSharedComposable(() => {
   return {
     userRelations: readonly(userRelations),
     batchQueryUserRelations,
+    releaseUninterestedRequests,
     retain,
   }
 })
@@ -244,6 +273,7 @@ export function useUserRelations() {
     retained = []
     queried = false
     owner.retain(consumer, [])
+    owner.releaseUninterestedRequests()
   }
   onScopeDispose(reset)
   if (getCurrentInstance()) {
@@ -251,6 +281,7 @@ export function useUserRelations() {
       active = false
       queryGeneration++
       owner.retain(consumer, [])
+      owner.releaseUninterestedRequests()
     })
     onActivated(() => {
       active = true
@@ -258,6 +289,7 @@ export function useUserRelations() {
       if (queried) {
         const generation = ++queryGeneration
         void owner.batchQueryUserRelations(retained, () => active && generation === queryGeneration)
+        owner.releaseUninterestedRequests()
       }
     })
   }
@@ -273,7 +305,9 @@ export function useUserRelations() {
       queried = true
       owner.retain(consumer, active ? mids : [])
       const generation = ++queryGeneration
-      return owner.batchQueryUserRelations(active ? mids : [], () => active && generation === queryGeneration)
+      const request = owner.batchQueryUserRelations(active ? mids : [], () => active && generation === queryGeneration)
+      owner.releaseUninterestedRequests()
+      return request
     },
   }
 }

@@ -7,6 +7,7 @@ import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { provideHomeTabCache } from '~/composables/useHomeTabState'
+import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
 import { resolveHomeSearchStage } from '~/constants/layout'
@@ -17,10 +18,13 @@ import type { HomeTab } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
+import { createAsyncPageRegistry } from '~/utils/asyncPage'
 import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
+import { retiringTransition } from '~/utils/motionPresence'
 import { scrollToPosition } from '~/utils/scrollIntent'
 
+import HomeChannelsMenu from './components/HomeChannelsMenu.vue'
 import RecommendationModeSwitcher from './components/RecommendationModeSwitcher.vue'
 import VersionReminder from './components/VersionReminder.vue'
 import type { GridLayoutIcon } from './types'
@@ -65,9 +69,9 @@ function preventBackgroundSelection(event: MouseEvent) {
   if (event.target === event.currentTarget || event.target.matches('.video-card-grid-root, .video-card-grid-container, .video-card-spacer, [data-layout-editable-id="home-video-grid"]'))
     event.preventDefault()
 }
+const asyncPages = createAsyncPageRegistry()
 function defineHomePageComponent(loader: AsyncComponentLoader) {
-  return defineAsyncComponent({
-    loader,
+  return asyncPages.define(loader, {
     loadingComponent: { render: () => h(PageAsyncLoading, { contentOnly: true, gridLayout: homeGridLayout.value }) },
     delay: 120,
   })
@@ -95,6 +99,7 @@ const pages = computed(() => ({
   [HomeSubPage.Weekly]: weeklyPage,
   [HomeSubPage.Live]: livePage,
 }))
+const tabTransition = useReadyPageTransition(() => pages.value[activatedPage.value], asyncPages.preload)
 const activatedPageCacheKey = computed(() => activatedPage.value === HomeSubPage.Following
   ? `${activatedPage.value}:${settings.value.useFollowingNewLayout ? 'new' : 'old'}`
   : activatedPage.value === HomeSubPage.ForYou
@@ -137,7 +142,6 @@ const shouldShowHomeTabs = computed(() => currentTabs.value.length > 1)
 const recommendationSwitcherEnabled = useLayoutEditSettingValue('page.home.recommendationSwitcher', () => settings.value.showRecommendationModeSwitcher)
 const reserveRecommendationModeSwitcher = computed(() => recommendationSwitcherEnabled.value || isLayoutEditing.value)
 const shouldShowRecommendationModeSwitcher = computed(() => activatedPage.value === HomeSubPage.ForYou && reserveRecommendationModeSwitcher.value)
-const shouldShowHomeHeader = computed(() => shouldShowHomeTabs.value || settings.value.enableGridLayoutSwitcher || reserveRecommendationModeSwitcher.value)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
   return [
     { icon: 'mingcute:table-3-line', iconActivated: 'mingcute:table-3-fill', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
@@ -337,7 +341,7 @@ watch(tabContentLoading, (loading) => {
   <div pos="relative" :style="searchStageStyle">
     <main @mousedown="preventBackgroundSelection">
       <!-- Home search page mode content -->
-      <Transition name="content">
+      <Transition name="content" v-bind="retiringTransition">
         <div v-if="settings.useSearchPageModeOnHomePage" class="home-search-stage">
           <div class="home-search-stage__lead">
             <Logo
@@ -366,7 +370,6 @@ watch(tabContentLoading, (loading) => {
       </Transition>
 
       <header
-        v-if="shouldShowHomeHeader"
         class="home-header"
         :class="{
           'home-header-fixed': settings.fixedHomeTabsOnHomePage,
@@ -374,35 +377,38 @@ watch(tabContentLoading, (loading) => {
         }"
         w-full z-9
       >
-        <section
-          v-if="shouldShowHomeTabs"
-          v-layout-editable="'home-tabs'"
-          class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface"
-          data-layout-editable-id="home-tabs"
-        >
-          <div class="home-tabs-scroll" h-full of-x-auto of-y-hidden>
-            <div
-              class="home-tabs-inside" flex="~ items-center" h-inherit w-max
-              box-border
-            >
-              <LiquidSegmentIndicator
-                ref="tabsIndicatorRef"
-                :active-key="activatedPage"
-              />
-              <button
-                v-for="tab in currentTabs" :key="tab.page"
-                type="button" :aria-pressed="activatedPage === tab.page"
-                class="home-tab-button bew-segment-control__item bew-segment-control__item--wide"
-                data-segment-item
-                :data-active="activatedPage === tab.page ? 'true' : undefined"
-                flex="~ gap-2 items-center shrink-0" relative
-                @click="handleChangeTab(tab)"
+        <div class="home-navigation">
+          <section
+            v-if="shouldShowHomeTabs"
+            v-layout-editable="'home-tabs'"
+            class="home-control-surface home-tabs-panel bew-segment-control bew-segment-control--surface"
+            data-layout-editable-id="home-tabs"
+          >
+            <div class="home-tabs-scroll" h-full of-x-auto of-y-hidden>
+              <div
+                class="home-tabs-inside" flex="~ items-center" h-inherit w-max
+                box-border
               >
-                <span class="text-center">{{ $t(tab.i18nKey) }}</span>
-              </button>
+                <LiquidSegmentIndicator
+                  ref="tabsIndicatorRef"
+                  :active-key="activatedPage"
+                />
+                <button
+                  v-for="tab in currentTabs" :key="tab.page"
+                  type="button" :aria-pressed="activatedPage === tab.page"
+                  class="home-tab-button bew-segment-control__item bew-segment-control__item--wide"
+                  data-segment-item
+                  :data-active="activatedPage === tab.page ? 'true' : undefined"
+                  flex="~ gap-2 items-center shrink-0" relative
+                  @click="handleChangeTab(tab)"
+                >
+                  <span class="text-center">{{ $t(tab.i18nKey) }}</span>
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
+          <HomeChannelsMenu />
+        </div>
 
         <div class="home-header-actions">
           <RecommendationModeSwitcher
@@ -452,7 +458,7 @@ watch(tabContentLoading, (loading) => {
         min-w-0
       >
         <Transition
-          name="home-tab"
+          v-bind="tabTransition"
           mode="out-in"
           @enter="restoreTabScrollPosition"
           @after-enter="finishTabSwitch"
@@ -523,24 +529,20 @@ watch(tabContentLoading, (loading) => {
 
 .content-enter-active,
 .content-leave-active {
-  --uno: "duration-500 ease-in-out";
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .content-enter-from,
 .content-leave-to {
-  --uno: "opacity-0 h-100vh";
-}
-.content-leave-to {
-  --uno: "hidden";
-}
-
-.home-tab-enter-active,
-.home-tab-leave-active {
-  transition: opacity var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
-}
-
-.home-tab-enter-from,
-.home-tab-leave-to {
   opacity: 0;
+}
+.content-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .content-enter-active,
+  .content-leave-active {
+    transition: none;
+  }
 }
 
 .home-control-surface {
@@ -571,6 +573,19 @@ watch(tabContentLoading, (loading) => {
   justify-self: start;
 }
 
+.home-navigation {
+  display: flex;
+  align-items: center;
+  gap: var(--bew-space-3);
+  min-width: 0;
+  max-width: 100%;
+
+  .home-tabs-panel {
+    min-width: 0;
+    flex: 0 1 auto;
+  }
+}
+
 .home-header-actions {
   grid-column: 2;
   justify-self: end;
@@ -589,7 +604,7 @@ watch(tabContentLoading, (loading) => {
 .home-header--recommendation-switcher {
   display: flex;
   flex-wrap: wrap;
-  .home-tabs-panel {
+  .home-navigation {
     min-width: min(100%, 24rem);
     flex: 0 1 auto;
   }
@@ -617,14 +632,5 @@ watch(tabContentLoading, (loading) => {
 
 .home-header-fixed {
   --uno: "sticky top-[calc(var(--bew-top-bar-height)+10px)]";
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .content-enter-active,
-  .content-leave-active,
-  .home-tab-enter-active,
-  .home-tab-leave-active {
-    transition: opacity 1ms linear;
-  }
 }
 </style>

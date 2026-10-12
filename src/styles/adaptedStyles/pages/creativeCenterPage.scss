@@ -1507,8 +1507,8 @@
       corner-shape: var(--bew-corner-shape);
 
       &:focus-within {
-        border-color: var(--bew-theme-focus-ring);
-        box-shadow: 0 0 0 var(--bew-space-0-5) var(--bew-theme-focus-ring);
+        border-color: var(--bew-focus-ring-color);
+        box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
       }
     }
 

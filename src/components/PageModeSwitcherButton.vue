@@ -56,15 +56,48 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
       @focus="focused = true"
       @blur="focused = false"
     >
-      <Transition name="fade" mode="out-in">
-        <Icon :key="displayedIcon" :icon="displayedIcon" aria-hidden="true" />
-      </Transition>
+      <span class="page-mode-switcher__glyph">
+        <Transition name="mode-glyph">
+          <Icon :key="displayedIcon" :icon="displayedIcon" aria-hidden="true" />
+        </Transition>
+      </span>
     </button>
   </Tooltip>
 </template>
 
 <style lang="scss" scoped>
 @use "../styles/breakpoints";
+
+.page-mode-switcher__glyph {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--page-mode-icon-size);
+  height: var(--page-mode-icon-size);
+  > svg {
+    grid-area: 1 / 1;
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
+.mode-glyph-enter-active,
+.mode-glyph-leave-active {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+.mode-glyph-enter-from,
+.mode-glyph-leave-to {
+  opacity: 0;
+}
+.mode-glyph-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .mode-glyph-enter-active,
+  .mode-glyph-leave-active {
+    transition: none;
+  }
+}
 
 .page-mode-switcher {
   --bew-liquid-frame-inset: 0px;
@@ -98,7 +131,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-focus-ring);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
   }
 
@@ -109,6 +142,7 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
   }
 
   &--dock {
+    --page-mode-icon-size: var(--bew-dock-control-icon-size);
     width: var(--bew-dock-control-size);
     height: var(--bew-dock-control-size);
     border: 0;
@@ -119,14 +153,10 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
       background: transparent;
       box-shadow: none;
     }
-
-    svg {
-      width: var(--bew-dock-control-icon-size);
-      height: var(--bew-dock-control-icon-size);
-    }
   }
 
   &--sidebar {
+    --page-mode-icon-size: var(--bew-floating-control-icon-size);
     width: var(--bew-floating-control-size);
     height: var(--bew-floating-control-size);
     border: 1px solid var(--bew-surface-border-color);
@@ -137,11 +167,6 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
     &:hover:not(:disabled) {
       background: var(--bew-elevated-hover);
       box-shadow: var(--bew-shadow-2);
-    }
-
-    svg {
-      width: var(--bew-floating-control-icon-size);
-      height: var(--bew-floating-control-icon-size);
     }
   }
 
@@ -171,13 +196,9 @@ const layoutEditableId = computed(() => `${props.variant}-page-mode-switcher`)
 
 @media (min-width: breakpoints.$grid-lg) {
   .page-mode-switcher--dock {
+    --page-mode-icon-size: var(--bew-dock-control-icon-size-lg);
     width: var(--bew-dock-control-size-lg);
     height: var(--bew-dock-control-size-lg);
-
-    svg {
-      width: var(--bew-dock-control-icon-size-lg);
-      height: var(--bew-dock-control-icon-size-lg);
-    }
   }
 }
 

@@ -21,9 +21,11 @@ export interface MessageServerSettingState {
 }
 
 export interface MessageBlockWordsState extends MessageBlockWordsData {
+  loaded: boolean
   loading: boolean
   pendingWord: string
   errorKind: MessageServerSettingsErrorKind | null
+  failedOperation: 'load' | 'add' | 'delete' | 'reconcile' | null
 }
 
 export interface MessageServerSettingsState {
@@ -71,7 +73,7 @@ function asResponse(value: unknown): MessageServerSettingsApiResponse | null {
 
 function resolveErrorKind(value: unknown): MessageServerSettingsErrorKind {
   const response = asResponse(value)
-  return response?.bewlyError?.kind ?? (response ? 'api-error' : 'invalid-response')
+  return response?.bewlyError?.kind ?? (response && response.code !== 0 ? 'api-error' : 'invalid-response')
 }
 
 export function useMessageServerSettings(
@@ -83,12 +85,14 @@ export function useMessageServerSettings(
     errorKind: null,
     settings: createSettingStates(),
     blockWords: {
+      loaded: false,
       words: [],
       maxWordLength: 0,
       maxWordsSize: 0,
       loading: false,
       pendingWord: '',
       errorKind: null,
+      failedOperation: null,
     },
   })
   let loadRequest: Promise<void> | null = null
@@ -96,16 +100,18 @@ export function useMessageServerSettings(
   const lifetime = createAccountLifetime(dependencies.getAccountId)
   const revisions = Object.fromEntries(MESSAGE_SERVER_SETTING_FIELDS.map(field => [field, 0])) as Record<MessageServerSettingField, number>
   let blockWordsRevision = 0
+  let pendingBlockWordMutation: { operation: 'add' | 'delete', word: string } | null = null
 
   function reset() {
     lifetime.invalidate()
     loadRequest = null
     blockWordRequest = null
+    pendingBlockWordMutation = null
     state.loaded = false
     state.loading = false
     state.errorKind = null
     state.settings = createSettingStates()
-    Object.assign(state.blockWords, { words: [], maxWordLength: 0, maxWordsSize: 0, loading: false, pendingWord: '', errorKind: null })
+    Object.assign(state.blockWords, { loaded: false, words: [], maxWordLength: 0, maxWordsSize: 0, loading: false, pendingWord: '', errorKind: null, failedOperation: null })
   }
 
   async function loadSettings(): Promise<boolean> {
@@ -142,6 +148,8 @@ export function useMessageServerSettings(
     const revision = ++blockWordsRevision
     const isCurrent = () => owner.isCurrent() && revision === blockWordsRevision
     state.blockWords.loading = true
+    state.blockWords.errorKind = null
+    state.blockWords.failedOperation = null
     try {
       const response = await dependencies.fetchBlockWords()
       if (!isCurrent())
@@ -152,12 +160,21 @@ export function useMessageServerSettings(
       state.blockWords.words = blockWords.words
       state.blockWords.maxWordLength = blockWords.maxWordLength
       state.blockWords.maxWordsSize = blockWords.maxWordsSize
+      state.blockWords.loaded = true
+      if (pendingBlockWordMutation) {
+        const { operation, word } = pendingBlockWordMutation
+        if (blockWords.words.includes(word) !== (operation === 'add'))
+          throw new Error('Block word change has not been reconciled')
+      }
+      pendingBlockWordMutation = null
       state.blockWords.errorKind = null
       return true
     }
     catch (error) {
-      if (isCurrent())
+      if (isCurrent()) {
         state.blockWords.errorKind = resolveErrorKind(error)
+        state.blockWords.failedOperation = pendingBlockWordMutation ? 'reconcile' : 'load'
+      }
       return false
     }
     finally {
@@ -244,11 +261,18 @@ export function useMessageServerSettings(
     const key = `${operation}:${word}`
     if (blockWordRequest)
       return blockWordRequest.key === key ? blockWordRequest.promise : Promise.resolve(false)
+    if (!state.blockWords.loaded || state.blockWords.loading || pendingBlockWordMutation)
+      return Promise.resolve(false)
+    if (operation === 'add' && (state.blockWords.words.includes(word) || Array.from(word).length > state.blockWords.maxWordLength || state.blockWords.words.length >= state.blockWords.maxWordsSize))
+      return Promise.resolve(false)
+    if (operation === 'delete' && !state.blockWords.words.includes(word))
+      return Promise.resolve(false)
     blockWordsRevision++
     state.blockWords.loading = false
     const request = (async () => {
       state.blockWords.pendingWord = word
       state.blockWords.errorKind = null
+      state.blockWords.failedOperation = null
       try {
         const response = operation === 'add'
           ? await dependencies.addBlockWord(word)
@@ -257,11 +281,14 @@ export function useMessageServerSettings(
           return false
         if (asResponse(response)?.code !== 0)
           throw response
+        pendingBlockWordMutation = { operation, word }
         return await loadBlockWords()
       }
       catch (error) {
-        if (owner.isCurrent())
+        if (owner.isCurrent()) {
           state.blockWords.errorKind = resolveErrorKind(error)
+          state.blockWords.failedOperation = operation
+        }
         return false
       }
       finally {

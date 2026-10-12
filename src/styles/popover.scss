@@ -131,6 +131,10 @@
   padding: var(--bew-popover-padding);
 }
 
+.bew-popover__list {
+  position: relative;
+}
+
 .bew-popover__state {
   display: flex;
   flex: 1 0 auto;
@@ -159,9 +163,8 @@
 
 .slide-in-enter-active,
 .slide-in-leave-active {
-  transition:
-    opacity var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-normal) var(--bew-ease-standard);
+  // Keep the backdrop sampling root stable for nested optical layers.
+  transition: transform var(--bew-duration-normal) var(--bew-ease-standard);
 }
 
 .slide-in-leave-active {
@@ -180,7 +183,6 @@
 
 .slide-in-enter-from,
 .slide-in-leave-to {
-  opacity: 0;
   transform: translateY(-4px) scale(0.985);
 }
 

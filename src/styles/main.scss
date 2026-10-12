@@ -1,11 +1,13 @@
 @use "./gridLayout";
 @use "./popover";
 @use "./skeleton";
+@use "./sendButton";
+@use "./messageSearch";
 
 :host,
 :host *,
 :where(.bewly-wrapper, .bewly-wrapper *, .bewly-design, .bewly-design *) {
-  outline-color: var(--bew-theme-focus-ring);
+  outline-color: var(--bew-focus-ring-color);
   font-feature-settings: "tnum";
   // outline-width: 2px;
   // outline-offset: 2px;
@@ -122,7 +124,12 @@ html.dark.bewly-design {
     [role="tab"],
     [tabindex]:not([tabindex="-1"])
   ):focus-visible {
-    outline: 2px solid var(--bew-theme-focus-ring);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
+    outline-offset: var(--bew-space-0-5);
+  }
+
+  select:focus-visible {
+    outline: var(--bew-focus-ring);
     outline-offset: var(--bew-space-0-5);
   }
 
@@ -238,18 +245,52 @@ html.dark.bewly-design {
 .native-notification-surface {
   box-sizing: border-box;
   isolation: isolate;
-  background: var(--bew-content-solid);
-  border: 0;
+  background: var(--bew-notifications-card-background);
+  border: 1px solid var(--bew-notifications-card-border);
   border-radius: var(--bew-card-radius);
   box-shadow: none;
+  transition: background-color var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+@media (hover: hover) {
+  .native-notification-surface:not([aria-hidden="true"]):hover {
+    background: var(--bew-notifications-card-background-hover);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .native-notification-surface {
+    transition: none;
+  }
+}
+
+// Live and loading feeds share widths; MasonryGrid measures natural heights.
+.native-notification-grid {
+  --bew-masonry-columns: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: var(--bew-space-3);
+  min-width: 0;
+}
+
+// Two readable cards (~434px each) plus the shared 12px gutter.
+@container notification-feed (min-width: 880px) {
+  .native-notification-grid {
+    --bew-masonry-columns: 2;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 // Interaction content and its source use the same columns in live cards and skeletons.
 .native-notification-interaction-layout {
   display: grid;
-  grid-template-columns: auto minmax(0, 3fr) minmax(0, 2fr);
-  gap: var(--bew-space-4);
+  grid-template-columns: auto minmax(0, 1fr);
+  align-content: start;
+  gap: var(--bew-space-3);
   padding: var(--bew-space-4);
+  min-width: 0;
+  container: notification-card / inline-size;
 }
 
 // Warning badges share one visual language across settings headings and items.

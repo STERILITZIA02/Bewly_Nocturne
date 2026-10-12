@@ -322,7 +322,7 @@
   }
 
   .bili-dyn-up-list__item.active .bili-dyn-up-list__item__face {
-    box-shadow: 0 0 0 2px var(--bew-theme-color);
+    box-shadow: var(--bew-focus-shadow);
   }
 
   .bili-dyn-list-tabs__highlight {

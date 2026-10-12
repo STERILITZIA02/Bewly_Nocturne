@@ -2,11 +2,10 @@
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
-import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
 import Dialog from '~/components/Dialog.vue'
 import IconButton from '~/components/IconButton.vue'
-import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
+import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import MomentCard from '~/components/MomentCard/MomentCard.vue'
 import MomentCardSkeleton from '~/components/MomentCard/MomentCardSkeleton.vue'
 import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount } from '~/components/MomentCard/momentForwardContent'
@@ -18,54 +17,27 @@ import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
 import { parseDedeUserID } from '~/logic/loginStatus'
 import { momentFilterPolicy } from '~/logic/momentFilters'
-import { momentsPinnedUsers, momentsWantedUsers } from '~/logic/storage'
 import { recordUploaderLatestVideoTimes } from '~/logic/uploaderLatestVideoTimes'
 import { useTopBarStore } from '~/stores/topBarStore'
 import type { AccountId } from '~/utils/accountScope'
 import { isSameAccount } from '~/utils/accountScope'
 import api from '~/utils/api'
-import { numFormatter } from '~/utils/dataFormatter'
 import { isExtensionContextInvalidatedError, reportRuntimeFailure } from '~/utils/messaging'
 import { createMomentCommentSessionCache, MOMENT_COMMENT_SESSIONS } from '~/utils/momentCommentSession'
 import { resolveHorizontalScrollState } from '~/utils/momentsLayout'
-import { normalizeMomentRemoteUrl } from '~/utils/momentUrl'
 
 import { createMomentAdapter } from './momentAdapter'
 import { createMomentFeedReader } from './momentFeedReader'
+import type { MomentFilter } from './momentFeedTypes'
+import type { MomentsPortalLiveUser, MomentsPortalUser } from './momentPortal'
+import { getSidebarAvatarUrl } from './momentPortal'
+import MomentsContentLayout from './MomentsContentLayout.vue'
+import MomentsHotSearch from './MomentsHotSearch.vue'
+import MomentsSidebar from './MomentsSidebar.vue'
 import { useMomentActions } from './useMomentActions'
 import { useMomentDetail } from './useMomentDetail'
 import { useMomentLayout } from './useMomentLayout'
 import { useMomentPreviews } from './useMomentPreviews'
-import type { MomentFilter } from './useMomentsFeedCache'
-import { useMomentsFeedCache } from './useMomentsFeedCache'
-
-interface MomentsPortalUser {
-  mid: string
-  name: string
-  face: string
-  following: string
-  follower: string
-  dyns: string
-  vip?: {
-    status?: number
-    nickname_color?: string
-    label?: {
-      text?: string
-    }
-  }
-  level_info?: {
-    current_level?: number
-  }
-}
-
-interface MomentsPortalLiveUser {
-  mid: string
-  room_id: string
-  jump_url: string
-  face: string
-  uname: string
-  title: string
-}
 
 interface MomentsPortalUpItem {
   face: string
@@ -124,23 +96,12 @@ const momentLayout = useMomentLayout(moments, {
     previews.prune(visible)
   },
 })
-const { showMomentsSidebar, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad } = momentLayout
+const { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad } = momentLayout
 const details = useMomentDetail(getMomentImageRatio, () => previews.clear())
 const detailDialogRef = ref<InstanceType<typeof Dialog> | null>(null)
 const { selectedMoment, detailFrameUrl, detailFrameLoaded, detailImageViewerRef, detailImageViewerOpen, detailImageViewerUrls, detailImageViewerIndex, detailImageViewerScale, detailImageViewerRotation, detailImageViewerDragging, isOpusDetailMoment, detailDialogHeight, detailDialogWidth, detailContentHeight, detailImageViewerUrl, detailImageViewerTransform, clearDetailFocusRetry, bindDetailIframe, resetDetailImageViewerTransform, setDetailImageViewerScale, showDetailImageViewerImage, openMomentImagePreview, closeDetailImageViewer, handleDetailImageViewerWheel, handleDetailImageViewerPointerDown, handleDetailImageViewerPointerMove, handleDetailImageViewerPointerEnd, handleDetailImageViewerDoubleClick, handleDetailImageViewerKeydown, openDetailFrameInNewTab, openMomentDetail, handleDetailIframeLoad, closeMomentDetail } = details
-const momentFilters = computed<Array<{ value: MomentFilter, label: string }>>(() => [
-  { value: 'all', label: t('moments.filter_all') },
-  { value: 'video', label: t('moments.filter_video') },
-  { value: 'pgc', label: t('moments.filter_pgc') },
-  { value: 'article', label: t('moments.filter_article') },
-])
 const activeMomentFilter = ref<MomentFilter>('all')
-const feedCache = useMomentsFeedCache(getCurrentAccountId)
-const feedReader = createMomentFeedReader(feedCache, mapMoment)
-const momentsFeedCacheReady = feedCache.ready
-const { ensureMomentsCacheAccount } = feedCache
-type MomentGroup = 'all' | 'wanted'
-const activeMomentGroup = ref<MomentGroup>('all')
+const feedReader = createMomentFeedReader(mapMoment)
 const portalUser = ref<MomentsPortalUser | null>(null)
 const portalLiveUsers = ref<MomentsPortalLiveUser[]>([])
 const portalLiveCount = ref(0)
@@ -167,7 +128,7 @@ const offset = ref('')
 const updateBaseline = ref('')
 /** 按 UP 主筛选时 feed/all 的 page，从 1 递增 */
 const momentsFeedPage = ref(1)
-const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef, openSettingsAt } = useBewlyApp()
+const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
 
 const MAX_POST_LOAD_AUTOFILL_PAGES = 3
 /** 开启过滤时，每次初始加载、刷新或手动加载最多请求的原始动态页数。 */
@@ -196,24 +157,9 @@ watch(commentAccountIdentity, accountId => commentSessions.setAccount(accountId)
 
 /** 高度已稳定的卡片，避免反复 Resize 微抖动 */
 
-const wantedUserMids = computed(() => new Set(momentsWantedUsers.value.map(user => user.mid)))
-const pinnedUserMids = computed(() => new Set(momentsPinnedUsers.value.map(user => user.mid)))
-const visiblePortalUpList = computed(() =>
-  portalUpList.value.filter(up => !pinnedUserMids.value.has(up.mid)),
-)
-const directWantedUsers = computed(() => momentsWantedUsers.value.filter(user => (
-  !portalUpList.value.some(up => up.mid === user.mid)
-  && !pinnedUserMids.value.has(user.mid)
-)))
 const showMomentsUpList = computed(() =>
   settings.value.momentsShowUpList
-  && (
-    isPortalLoading.value
-    || portalUpList.value.length > 0
-    || momentsWantedUsers.value.length > 0
-    || momentsPinnedUsers.value.length > 0
-    || settings.value.momentsEnableWantedFilter
-  ),
+  && (isPortalLoading.value || portalUpList.value.length > 0),
 )
 
 function getCurrentAccountId(): AccountId {
@@ -222,15 +168,6 @@ function getCurrentAccountId(): AccountId {
 
 function getMomentActionAccount(): AccountId {
   return isSameAccount(loadedAccountId, getCurrentAccountId()) ? loadedAccountId : null
-}
-
-const httpsUrl = normalizeMomentRemoteUrl
-
-function getSidebarAvatarUrl(url = '', size = 96) {
-  const normalized = httpsUrl(url).replace(/@[^/]*$/, '')
-  if (!normalized || !/hdslb\.com|biliimg\.com|bilibili\.com/.test(normalized))
-    return normalized
-  return `${normalized}@${size}w_${size}h_1c.webp`
 }
 
 function extractPortalUpListItems(
@@ -290,31 +227,8 @@ function handleMomentFilterChange(filter: MomentFilter) {
 
   previews.clear()
   activeMomentFilter.value = filter
-  if (filter !== 'all' && filter !== 'video')
-    activeMomentGroup.value = 'all'
   if (scrollViewportRef.value)
     scrollViewportRef.value.scrollTop = 0
-  void loadMoments(true)
-}
-
-function handleMomentGroupChange(group: MomentGroup) {
-  if (
-    group === 'wanted'
-    && (
-      !settings.value.momentsEnableWantedFilter
-      || (activeMomentFilter.value !== 'all' && activeMomentFilter.value !== 'video')
-    )
-  ) {
-    return
-  }
-  if (activeMomentGroup.value === group && (group !== 'wanted' || !selectedHostMid.value))
-    return
-
-  prepareMomentListTransition()
-  if (group === 'wanted')
-    selectedHostMid.value = ''
-  activeMomentGroup.value = group
-  feedReader.reset()
   void loadMoments(true)
 }
 
@@ -335,12 +249,11 @@ function prepareMomentListTransition() {
 /** 选择“全部动态”或某个经常访问的 UP 主；切换时 reset 列表与分页 */
 function handleUpFilterChange(mid = '') {
   const nextMid = mid ? String(mid) : ''
-  if (selectedHostMid.value === nextMid && activeMomentGroup.value === 'all')
+  if (selectedHostMid.value === nextMid)
     return
 
   prepareMomentListTransition()
   selectedHostMid.value = nextMid
-  activeMomentGroup.value = 'all'
   feedReader.reset()
   if (nextMid)
     clearUpUpdateDot(nextMid)
@@ -413,29 +326,13 @@ function setupUpListScrollerObserver() {
 function isFeedRequestCurrent(
   requestToken: number,
   requestType: MomentFilter,
-  requestGroup: MomentGroup,
   requestHostMid: string,
 ) {
   return momentsMounted
     && requestToken === feedRequestToken
     && isSameAccount(loadedAccountId, getCurrentAccountId())
     && requestType === activeMomentFilter.value
-    && requestGroup === activeMomentGroup.value
     && requestHostMid === selectedHostMid.value
-}
-
-function matchesMomentFilter(moment: DisplayMoment) {
-  if (activeMomentFilter.value === 'all')
-    return true
-  if (activeMomentFilter.value === 'video')
-    return moment.isVideo && !moment.isPgc
-  if (activeMomentFilter.value === 'pgc')
-    return moment.isPgc
-  return moment.isArticle
-}
-
-function loadMoreWantedMoments() {
-  void loadMoments(false, 0, true)
 }
 
 function loadMoreFilteredMoments() {
@@ -462,7 +359,7 @@ function hasActiveMomentFilters() {
 }
 
 function requiresManualMomentPaging() {
-  return feedRequestFailed.value || activeMomentGroup.value === 'wanted' || hasActiveMomentFilters()
+  return feedRequestFailed.value || hasActiveMomentFilters()
 }
 
 function passesMomentSettings(moment: DisplayMoment) {
@@ -471,16 +368,15 @@ function passesMomentSettings(moment: DisplayMoment) {
 }
 
 async function reapplyMomentFiltersFromCache() {
-  if (activeMomentGroup.value !== 'all' || selectedHostMid.value)
+  if (selectedHostMid.value)
     return false
 
-  const sourceItems = feedReader.getLoaded(activeMomentFilter.value, activeMomentGroup.value, selectedHostMid.value)
+  const sourceItems = feedReader.getLoaded(activeMomentFilter.value, selectedHostMid.value)
   if (!sourceItems)
     return false
 
   const requestToken = ++feedRequestToken
   const requestType = activeMomentFilter.value
-  const requestGroup = activeMomentGroup.value
   const requestHostMid = selectedHostMid.value
   const filteredItems = sourceItems
     .filter(passesMomentSettings)
@@ -497,7 +393,7 @@ async function reapplyMomentFiltersFromCache() {
 
   if (filteredItems.length > 0 || noMoreContent.value) {
     await nextTick()
-    if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
+    if (isFeedRequestCurrent(requestToken, requestType, requestHostMid)) {
       updateGridColumnCount()
       updateVirtualColumns()
       maybeLoadMoreNearBottom()
@@ -522,7 +418,6 @@ function applyMomentPatch(id: string, patch: Partial<DisplayMoment>) {
     return
   moments.value = moments.value.map(moment => moment.id === id ? updated : moment)
   momentLayout.updateMoment(updated)
-  feedCache.updateMoment(id, moment => ({ ...moment, ...patch }))
   if (selectedMoment.value?.id === id)
     details.updateMoment(updated)
 }
@@ -570,14 +465,12 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     return
 
   const requestedGeneration = reset ? ++feedRequestToken : feedRequestToken
-  await momentsFeedCacheReady
   if (momentsExtensionContextInvalidated || !momentsMounted || requestedGeneration !== feedRequestToken)
     return
   if (!reset && !manualPaging && document.hidden)
     return
   if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
     return
-  ensureMomentsCacheAccount(loadedAccountId)
 
   // “想看”或任意类型过滤开启时只允许按钮触发后续批次。
   if (!reset && requiresManualMomentPaging() && !manualPaging)
@@ -592,7 +485,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   }
   const requestToken = feedRequestToken
   const requestType = activeMomentFilter.value
-  const requestGroup = activeMomentGroup.value
   const requestHostMid = selectedHostMid.value
   const requestOffset = offset.value
   const requestUpdateBaseline = updateBaseline.value
@@ -619,15 +511,13 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     const response = await feedReader.read({
       reset,
       type: requestType,
-      group: requestGroup,
       hostMid: requestHostMid,
       offset: offset.value,
       updateBaseline: updateBaseline.value,
       page: momentsFeedPage.value,
       filtered: hasActiveMomentFilters(),
-      hasWantedUsers: momentsWantedUsers.value.length > 0,
-    }, () => isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
-    if (!response || !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+    }, () => isFeedRequestCurrent(requestToken, requestType, requestHostMid))
+    if (!response || !isFeedRequestCurrent(requestToken, requestType, requestHostMid))
       return
     if ('hostUnfollowed' in response) {
       handleUpFilterChange('')
@@ -657,8 +547,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       'moments-page',
     )
     const items = normalizedItems
-      .filter(moment => requestGroup !== 'wanted' || wantedUserMids.value.has(moment.author.mid))
-      .filter(moment => requestGroup !== 'wanted' || matchesMomentFilter(moment))
       .filter(passesMomentSettings)
       .sort((a, b) => b.publishedAt - a.publishedAt)
     if (!reset)
@@ -671,7 +559,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     if (reset) {
       await nextTick()
       await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-      if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+      if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
         return
     }
 
@@ -692,7 +580,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
       return
     }
 
-    if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
+    if (isFeedRequestCurrent(requestToken, requestType, requestHostMid)) {
       feedRequestFailed.value = true
       if (!pageApplied && previousPagination) {
         offset.value = previousPagination.offset
@@ -705,7 +593,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     }
   }
   finally {
-    if (isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)) {
+    if (isFeedRequestCurrent(requestToken, requestType, requestHostMid)) {
       isLoading.value = false
       isInitialLoading.value = false
     }
@@ -713,13 +601,13 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 
   if (
     preservedPaginationScrollTop !== null
-    && isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
+    && isFeedRequestCurrent(requestToken, requestType, requestHostMid)
   ) {
     // 等卡片、虚拟 spacer 和底部加载提示完成更新后，恢复分页前的滚动位置
     await nextTick()
     updateVirtualColumns()
     await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-    if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+    if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
       return
     const viewport = scrollViewportRef.value
     if (viewport)
@@ -732,7 +620,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     || noMoreContent.value
     || requiresManualMomentPaging()
     || autoFillDepth >= MAX_POST_LOAD_AUTOFILL_PAGES
-    || !isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid)
+    || !isFeedRequestCurrent(requestToken, requestType, requestHostMid)
   ) {
     return
   }
@@ -741,7 +629,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   await nextTick()
   updateVirtualColumns()
   await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
-  if (!isFeedRequestCurrent(requestToken, requestType, requestGroup, requestHostMid))
+  if (!isFeedRequestCurrent(requestToken, requestType, requestHostMid))
     return
   const viewport = scrollViewportRef.value
   if (!viewport)
@@ -835,8 +723,6 @@ async function ensureMomentsAccount(): Promise<boolean> {
     resetMomentsAccountState()
   }
 
-  await momentsFeedCacheReady
-  ensureMomentsCacheAccount(accountId)
   return changed
 }
 
@@ -910,44 +796,12 @@ watch([upListScrollerRef, upListTrackRef], async () => {
 
 watch(
   [
-    () => visiblePortalUpList.value.map(up => up.mid).join(','),
-    () => directWantedUsers.value.map(user => user.mid).join(','),
-    () => settings.value.momentsEnableWantedFilter,
+    () => portalUpList.value.map(up => up.mid).join(','),
     () => isPortalLoading.value,
   ],
   async () => {
     await nextTick()
     scheduleUpListStateUpdate()
-  },
-)
-
-watch(
-  () => momentsWantedUsers.value.map(user => user.mid).join(','),
-  () => {
-    if (activeMomentGroup.value === 'wanted')
-      void loadMoments(true)
-  },
-)
-
-watch(
-  () => momentsPinnedUsers.value.map(user => user.mid).join(','),
-  async () => {
-    await nextTick()
-    scheduleUpListStateUpdate()
-  },
-)
-
-watch(
-  () => settings.value.momentsEnableWantedFilter,
-  (enabled) => {
-    if (enabled || activeMomentGroup.value !== 'wanted')
-      return
-
-    activeMomentGroup.value = 'all'
-    feedReader.reset()
-    if (scrollViewportRef.value)
-      scrollViewportRef.value.scrollTop = 0
-    void loadMoments(true)
   },
 )
 
@@ -975,453 +829,243 @@ function appendMoments(items: DisplayMoment[]) {
 </script>
 
 <template>
-  <section class="moments-page">
-    <div
-      ref="layoutRef"
-      class="moments-layout"
-      :class="{ 'moments-layout--with-sidebar': showMomentsSidebar }"
-    >
-      <header class="moments-filter-header">
-        <section
-          class="moments-filter-panel bew-segment-control bew-segment-control--surface"
-        >
-          <div class="moments-filter-scroll">
-            <div class="moments-filter-inside">
-              <LiquidSegmentIndicator
-                :active-key="activeMomentFilter"
-              />
+  <section ref="layoutRef" class="moments-page">
+    <LibraryWorkspace :label="t('moments.moments')">
+      <template #sidebar="{ contentId }">
+        <MomentsSidebar
+          :model-value="activeMomentFilter" :content-id="contentId" :loading="isPortalLoading"
+          :user="portalUser" :live-users="portalLiveUsers" :live-count="portalLiveCount"
+          :previews="previews"
+          @update:model-value="handleMomentFilterChange"
+        />
+      </template>
+
+      <MomentsContentLayout :sidebar-label="t('moments.hot_search_title')">
+        <template #sidebar>
+          <MomentsHotSearch />
+        </template>
+        <main ref="momentsContentRef" class="moments-content">
+          <section
+            v-if="showMomentsUpList"
+            v-layout-editable="'moments-up-list'"
+            class="moments-up-list"
+            data-layout-editable-id="moments-up-list"
+            :aria-label="t('moments.feed_bar')"
+          >
+            <div class="moments-up-list__start" role="group" :aria-label="t('moments.feed_groups')">
               <button
-                v-for="filter in momentFilters"
-                :key="filter.value"
                 type="button"
-                class="moments-filter-button bew-segment-control__item bew-segment-control__item--wide"
-                data-segment-item
-                :data-active="activeMomentFilter === filter.value ? 'true' : undefined"
-                :aria-pressed="activeMomentFilter === filter.value"
-                @click="handleMomentFilterChange(filter.value)"
+                class="moments-up-list__item"
+                :class="{ 'moments-up-list__item--active': !selectedHostMid }"
+                :aria-pressed="!selectedHostMid"
+                :title="t('moments.all_moments')"
+                @click="handleUpFilterChange('')"
               >
-                {{ filter.label }}
+                <span class="moments-up-list__avatar moments-up-list__avatar--all" aria-hidden="true">
+                  <span
+                    class="moments-up-list__all-icon"
+                    :class="!selectedHostMid ? 'i-tabler-windmill-filled' : 'i-tabler-windmill'"
+                  />
+                </span>
+                <span class="moments-up-list__name">{{ t('moments.all_moments') }}</span>
               </button>
             </div>
-          </div>
-        </section>
-      </header>
 
-      <aside
-        v-if="showMomentsSidebar"
-        v-layout-editable="'moments-sidebar'"
-        class="moments-sidebar"
-        data-layout-editable-id="moments-sidebar"
-        :aria-label="t('moments.user_info')"
-      >
-        <template v-if="isPortalLoading">
-          <article v-if="settings.momentsSidebarShowUserCard" class="moments-user-card moments-sidebar-placeholder" aria-hidden="true">
-            <div class="moments-user-card__profile">
-              <SkeletonBlock width="58px" height="58px" radius="circle" />
-              <div class="moments-user-card__identity">
-                <SkeletonBlock width="104px" height="var(--bew-line-height-heading)" />
-                <SkeletonBlock width="72px" height="var(--bew-space-5)" radius="half" />
-              </div>
-            </div>
-            <div class="moments-user-card__stats">
-              <div v-for="index in 3" :key="index" class="moments-sidebar-placeholder__stat">
-                <SkeletonBlock width="60%" height="var(--bew-line-height-heading)" />
-                <SkeletonBlock width="48%" height="var(--bew-line-height-control)" />
-              </div>
-            </div>
-          </article>
-          <div v-if="settings.momentsSidebarShowPublish" class="moments-publish-link" data-bew-skeleton aria-hidden="true" />
-          <section v-if="settings.momentsSidebarShowLive" class="moments-live-card moments-sidebar-placeholder" aria-hidden="true">
-            <header><SkeletonBlock width="96px" height="var(--bew-line-height-title)" /></header>
-            <div class="moments-live-card__list">
-              <div v-for="index in 5" :key="index" class="moments-live-card__skeleton-row">
-                <div class="moments-live-card__avatar">
-                  <SkeletonBlock width="48px" height="48px" radius="circle" />
-                </div>
-                <div class="moments-live-card__info">
-                  <SkeletonBlock width="96px" height="var(--bew-line-height-body)" />
-                  <SkeletonBlock width="72px" height="var(--bew-line-height-control)" />
-                </div>
-              </div>
-            </div>
-          </section>
-        </template>
-        <template v-else>
-          <article v-if="settings.momentsSidebarShowUserCard && portalUser" class="moments-user-card">
-            <a
-              class="moments-user-card__profile"
-              :href="`https://space.bilibili.com/${portalUser.mid}`"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <img :src="getSidebarAvatarUrl(portalUser.face)" :alt="portalUser.name">
-              <span class="moments-user-card__identity">
-                <strong :style="{ color: portalUser.vip?.nickname_color || undefined }">{{ portalUser.name }}</strong>
-                <span class="moments-user-card__badges">
-                  <em v-if="portalUser.vip?.status === 1 && portalUser.vip.label?.text">{{ portalUser.vip.label.text }}</em>
-                  <i v-if="portalUser.level_info?.current_level">LV{{ portalUser.level_info.current_level }}</i>
-                </span>
-              </span>
-            </a>
-            <div class="moments-user-card__stats">
-              <a
-                :href="`https://space.bilibili.com/${portalUser.mid}/fans/follow`"
-                target="_blank"
-                rel="noopener noreferrer"
-                :title="portalUser.following"
-                @click.stop
-              ><strong>{{ numFormatter(portalUser.following || 0) }}</strong><small>{{ t('moments.following') }}</small></a>
-              <a
-                :href="`https://space.bilibili.com/${portalUser.mid}/fans/fans`"
-                target="_blank"
-                rel="noopener noreferrer"
-                :title="portalUser.follower"
-                @click.stop
-              ><strong>{{ numFormatter(portalUser.follower || 0) }}</strong><small>{{ t('moments.followers') }}</small></a>
-              <a
-                :href="`https://space.bilibili.com/${portalUser.mid}/dynamic`"
-                target="_blank"
-                rel="noopener noreferrer"
-                :title="portalUser.dyns"
-                @click.stop
-              ><strong>{{ numFormatter(portalUser.dyns || 0) }}</strong><small>{{ t('moments.moments') }}</small></a>
-            </div>
-          </article>
-
-          <a
-            v-if="settings.momentsSidebarShowPublish"
-            class="moments-publish-link"
-            href="https://t.bilibili.com"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <span i-tabler-edit aria-hidden="true" />
-            <span>{{ t('moments.publish') }}</span>
-            <span i-tabler-external-link aria-hidden="true" />
-          </a>
-
-          <section v-if="settings.momentsSidebarShowLive && portalLiveUsers.length" class="moments-live-card">
-            <header>
-              <strong>{{ t('moments.live_now') }} <span>{{ portalLiveCount }}</span></strong>
-            </header>
-            <div class="moments-live-card__list">
-              <a
-                v-for="liveUser in portalLiveUsers"
-                :key="liveUser.room_id"
-                :href="liveUser.jump_url || `https://live.bilibili.com/${liveUser.room_id}`"
-                target="_blank"
-                rel="noopener noreferrer"
+            <div class="moments-up-list__main">
+              <span
+                class="moments-up-list__fade moments-up-list__fade--prev"
+                :class="{ 'is-visible': canScrollUpListLeft }"
+                aria-hidden="true"
+              />
+              <span
+                class="moments-up-list__fade moments-up-list__fade--next"
+                :class="{ 'is-visible': canScrollUpListRight }"
+                aria-hidden="true"
+              />
+              <IconButton
+                v-show="canScrollUpListLeft"
+                class="moments-up-list__arrow moments-up-list__arrow--prev"
+                :label="t('moments.scroll_frequent_left')"
+                :title="t('moments.scroll_left')"
+                @click="scrollUpListBy(-1)"
               >
-                <span class="moments-live-card__avatar">
-                  <img :src="getSidebarAvatarUrl(liveUser.face, 64)" :alt="liveUser.uname" loading="lazy" decoding="async">
-                  <em><span i-tabler-chart-bar />{{ t('moments.live_badge') }}</em>
-                </span>
-                <span class="moments-live-card__info">
-                  <strong>{{ liveUser.uname }}</strong>
-                  <small>{{ liveUser.title }}</small>
-                </span>
-              </a>
-            </div>
-          </section>
-        </template>
-      </aside>
+                <span i-tabler-chevron-left aria-hidden="true" />
+              </IconButton>
+              <IconButton
+                v-show="canScrollUpListRight"
+                class="moments-up-list__arrow moments-up-list__arrow--next"
+                :label="t('moments.scroll_frequent_right')"
+                :title="t('moments.scroll_right')"
+                @click="scrollUpListBy(1)"
+              >
+                <span i-tabler-chevron-right aria-hidden="true" />
+              </IconButton>
 
-      <main ref="momentsContentRef" class="moments-content">
-        <section
-          v-if="showMomentsUpList"
-          v-layout-editable="'moments-up-list'"
-          class="moments-up-list"
-          data-layout-editable-id="moments-up-list"
-          :aria-label="t('moments.feed_bar')"
-        >
-          <div class="moments-up-list__start" role="group" :aria-label="t('moments.feed_groups')">
-            <button
-              type="button"
-              class="moments-up-list__item"
-              :class="{ 'moments-up-list__item--active': !selectedHostMid && activeMomentGroup === 'all' }"
-              :aria-pressed="!selectedHostMid && activeMomentGroup === 'all'"
-              :title="t('moments.all_moments')"
-              @click="handleUpFilterChange('')"
-            >
-              <span class="moments-up-list__avatar moments-up-list__avatar--all" aria-hidden="true">
-                <span
-                  class="moments-up-list__all-icon"
-                  :class="!selectedHostMid && activeMomentGroup === 'all' ? 'i-tabler-windmill-filled' : 'i-tabler-windmill'"
-                />
-              </span>
-              <span class="moments-up-list__name">{{ t('moments.all_moments') }}</span>
-            </button>
-            <button
-              v-if="settings.momentsEnableWantedFilter"
-              type="button"
-              class="moments-up-list__item"
-              :class="{ 'moments-up-list__item--active': activeMomentGroup === 'wanted' }"
-              :aria-pressed="activeMomentGroup === 'wanted'"
-              :disabled="activeMomentFilter !== 'all' && activeMomentFilter !== 'video'"
-              :aria-label="activeMomentGroup === 'wanted' ? t('moments.wanted_disable') : t('moments.wanted_enable')"
-              :title="activeMomentFilter === 'all' || activeMomentFilter === 'video'
-                ? (activeMomentGroup === 'wanted' ? t('moments.wanted_disable') : t('moments.wanted_enable'))
-                : t('moments.wanted_only_all_video')"
-              @click="handleMomentGroupChange(activeMomentGroup === 'wanted' ? 'all' : 'wanted')"
-            >
-              <span class="moments-up-list__avatar moments-up-list__avatar--wanted" aria-hidden="true">
-                <span
-                  class="moments-up-list__wanted-icon"
-                  :class="activeMomentGroup === 'wanted' ? 'i-tabler-star-filled' : 'i-tabler-star'"
-                />
-              </span>
-              <span class="moments-up-list__name">{{ t('moments.wanted') }}</span>
-            </button>
-          </div>
-
-          <div class="moments-up-list__main">
-            <span
-              class="moments-up-list__fade moments-up-list__fade--prev"
-              :class="{ 'is-visible': canScrollUpListLeft }"
-              aria-hidden="true"
-            />
-            <span
-              class="moments-up-list__fade moments-up-list__fade--next"
-              :class="{ 'is-visible': canScrollUpListRight }"
-              aria-hidden="true"
-            />
-            <IconButton
-              v-show="canScrollUpListLeft"
-              class="moments-up-list__arrow moments-up-list__arrow--prev"
-              :label="t('moments.scroll_frequent_left')"
-              :title="t('moments.scroll_left')"
-              @click="scrollUpListBy(-1)"
-            >
-              <span i-tabler-chevron-left aria-hidden="true" />
-            </IconButton>
-            <IconButton
-              v-show="canScrollUpListRight"
-              class="moments-up-list__arrow moments-up-list__arrow--next"
-              :label="t('moments.scroll_frequent_right')"
-              :title="t('moments.scroll_right')"
-              @click="scrollUpListBy(1)"
-            >
-              <span i-tabler-chevron-right aria-hidden="true" />
-            </IconButton>
-
-            <div
-              v-if="isPortalLoading && !portalUpList.length"
-              ref="upListScrollerRef"
-              class="moments-up-list__scroller"
-              aria-hidden="true"
-            >
-              <div ref="upListTrackRef" class="moments-up-list__track">
-                <div
-                  v-for="index in 8"
-                  :key="index"
-                  class="moments-up-list__item moments-up-list__item--skeleton"
-                >
-                  <span class="moments-up-list__avatar moments-skeleton-block" data-bew-skeleton />
-                  <span class="moments-up-list__name moments-skeleton-block" data-bew-skeleton />
+              <div
+                v-if="isPortalLoading && !portalUpList.length"
+                ref="upListScrollerRef"
+                class="moments-up-list__scroller"
+                aria-hidden="true"
+              >
+                <div ref="upListTrackRef" class="moments-up-list__track">
+                  <div
+                    v-for="index in 8"
+                    :key="index"
+                    class="moments-up-list__item moments-up-list__item--skeleton"
+                    data-bew-skeleton-group
+                  >
+                    <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-space-12)" radius="circle" />
+                    <SkeletonBlock width="var(--bew-space-10)" height="var(--bew-font-size-caption)" />
+                  </div>
+                </div>
+              </div>
+              <div
+                v-else
+                ref="upListScrollerRef"
+                class="moments-up-list__scroller"
+                :class="{
+                  'can-scroll-left': canScrollUpListLeft,
+                  'can-scroll-right': canScrollUpListRight,
+                }"
+                role="group"
+                :aria-label="t('moments.frequent_uploaders')"
+                @scroll="scheduleUpListStateUpdate"
+                @wheel="handleUpListWheel"
+              >
+                <div ref="upListTrackRef" class="moments-up-list__track">
+                  <button
+                    v-for="up in portalUpList"
+                    :key="up.mid"
+                    type="button"
+                    class="moments-up-list__item"
+                    :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid }"
+                    :aria-pressed="selectedHostMid === up.mid"
+                    :title="up.uname"
+                    @click="handleUpFilterChange(up.mid)"
+                  >
+                    <span class="moments-up-list__avatar">
+                      <img
+                        :src="getSidebarAvatarUrl(up.face, 96)"
+                        :alt="up.uname"
+                        loading="lazy"
+                        decoding="async"
+                      >
+                      <span
+                        v-if="up.has_update"
+                        class="moments-up-list__dot"
+                        :aria-label="t('moments.has_update')"
+                      />
+                    </span>
+                    <span class="moments-up-list__name">{{ up.uname }}</span>
+                  </button>
                 </div>
               </div>
             </div>
+          </section>
+          <div v-if="isInitialLoading" class="moments-page__initial-loading">
             <div
-              v-else
-              ref="upListScrollerRef"
-              class="moments-up-list__scroller"
-              :class="{
-                'can-scroll-left': canScrollUpListLeft,
-                'can-scroll-right': canScrollUpListRight,
-              }"
-              role="group"
-              :aria-label="t('moments.frequent_uploaders')"
-              @scroll="scheduleUpListStateUpdate"
-              @wheel="handleUpListWheel"
+              v-layout-editable="'moments-grid'"
+              class="moments-skeleton-grid"
+              data-layout-editable-id="moments-grid"
+              :style="momentsGridStyle"
             >
-              <div ref="upListTrackRef" class="moments-up-list__track">
-                <button
-                  v-for="up in visiblePortalUpList"
-                  :key="up.mid"
-                  type="button"
-                  class="moments-up-list__item"
-                  :class="{ 'moments-up-list__item--active': selectedHostMid === up.mid && activeMomentGroup === 'all' }"
-                  :aria-pressed="selectedHostMid === up.mid && activeMomentGroup === 'all'"
-                  :title="up.uname"
-                  @click="handleUpFilterChange(up.mid)"
-                >
-                  <span class="moments-up-list__avatar">
-                    <img
-                      :src="getSidebarAvatarUrl(up.face, 96)"
-                      :alt="up.uname"
-                      loading="lazy"
-                      decoding="async"
-                    >
-                    <span
-                      v-if="up.has_update"
-                      class="moments-up-list__dot"
-                      :aria-label="t('moments.has_update')"
-                    />
-                  </span>
-                  <span class="moments-up-list__name">{{ up.uname }}</span>
-                </button>
-                <template v-if="directWantedUsers.length">
-                  <span v-if="visiblePortalUpList.length" class="moments-up-list__divider" aria-hidden="true" />
-                  <button
-                    v-for="user in directWantedUsers"
-                    :key="user.mid"
-                    type="button"
-                    class="moments-up-list__item"
-                    :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
-                    :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
-                    :title="user.name"
-                    @click="handleUpFilterChange(user.mid)"
-                  >
-                    <span class="moments-up-list__avatar">
-                      <img
-                        :src="getSidebarAvatarUrl(user.face, 96)"
-                        :alt="user.name"
-                        loading="lazy"
-                        decoding="async"
-                      >
-                    </span>
-                    <span class="moments-up-list__name">{{ user.name }}</span>
-                  </button>
-                </template>
-                <template v-if="momentsPinnedUsers.length">
-                  <span class="moments-up-list__divider" aria-hidden="true" />
-                  <button
-                    v-for="user in momentsPinnedUsers"
-                    :key="user.mid"
-                    type="button"
-                    class="moments-up-list__item"
-                    :class="{ 'moments-up-list__item--active': selectedHostMid === user.mid && activeMomentGroup === 'all' }"
-                    :aria-pressed="selectedHostMid === user.mid && activeMomentGroup === 'all'"
-                    :title="user.name"
-                    @click="handleUpFilterChange(user.mid)"
-                  >
-                    <span class="moments-up-list__avatar">
-                      <img
-                        :src="getSidebarAvatarUrl(user.face, 96)"
-                        :alt="user.name"
-                        loading="lazy"
-                        decoding="async"
-                      >
-                    </span>
-                    <span class="moments-up-list__name">{{ user.name }}</span>
-                  </button>
-                </template>
+              <div
+                v-for="columnIndex in Math.max(1, gridColumnCount)"
+                :key="columnIndex"
+                class="moments-skeleton-column"
+              >
+                <MomentCardSkeleton
+                  v-for="itemIndex in 4"
+                  :key="itemIndex"
+                  :media="activeMomentFilter !== 'article'"
+                />
               </div>
             </div>
           </div>
-        </section>
-        <div v-if="isInitialLoading" class="moments-page__initial-loading">
+          <div v-else-if="feedRequestFailed && !moments.length" class="moments-page__empty moments-page__error bew-empty--fill" role="status">
+            <p>{{ t('common.load_failed') }}</p>
+            <button type="button" :disabled="isLoading" @click="refresh">
+              {{ t('moments.retry') }}
+            </button>
+          </div>
           <div
+            v-else-if="moments.length"
+            ref="gridRef"
             v-layout-editable="'moments-grid'"
-            class="moments-skeleton-grid"
+            class="moments-grid"
             data-layout-editable-id="moments-grid"
             :style="momentsGridStyle"
           >
-            <div
-              v-for="columnIndex in Math.max(1, gridColumnCount)"
-              :key="columnIndex"
-              class="moments-skeleton-column"
-            >
-              <MomentCardSkeleton
-                v-for="itemIndex in 4"
-                :key="itemIndex"
-                :media="activeMomentFilter !== 'article'"
-              />
+            <div v-for="(column, columnIndex) in virtualColumns" :key="columnIndex" class="moments-grid__column">
+              <div v-if="column.topPad" class="moments-grid__spacer" :style="{ height: `${column.topPad}px` }" />
+              <template v-for="(moment, momentIndex) in column.items" :key="moment.id">
+                <div v-if="column.gaps?.[momentIndex]" class="moments-grid__spacer" :style="{ height: `${column.gaps[momentIndex]}px` }" />
+                <MomentCard
+                  :moment="momentActions.getDisplayMoment(moment)"
+                  :card-width="gridCardWidth"
+                  :ready="readyCardIds.has(moment.id)"
+                  :entering="enteringCardIds.has(moment.id)"
+                  :preview-active="hoveredMediaId === moment.id && (previewState === 'loading' || previewState === 'ready')"
+                  :preview-loading="hoveredMediaId === moment.id && previewState !== 'ready'"
+                  :preview-generation="hoveredMediaId === moment.id ? previewGeneration : 0"
+                  :preview-url="previewUrls[moment.id]"
+                  :image-ratio="getMomentImageRatio(moment)"
+                  :is-like-loading="likingMomentIds.has(moment.id)"
+                  :is-reservation-loading="reservationLoadingMomentIds.has(moment.id)"
+                  :is-forward-loading="forwardTransactions.pending.has(moment.id)"
+                  :is-watch-later-added="isWatchLaterAdded"
+                  :is-watch-later-loading="isWatchLaterLoading"
+                  @card-element="element => bindCardEl(element, moment)"
+                  @open-detail="openMomentDetail"
+                  @media-enter="handleMediaEnter"
+                  @media-leave="handleMediaLeave"
+                  @cover-load="(event, momentId) => handleCoverLoad(event, momentId)"
+                  @preview-video="bindPreviewVideo"
+                  @open-video-link="details.openVideoLink"
+                  @toggle-watch-later="toggleMomentWatchLater"
+                  @toggle-like="toggleMomentLike"
+                  @toggle-reservation="toggleMomentReservation"
+                  @open-image-preview="openMomentImagePreview"
+                  @interactive-resize="handleMomentCardInteractiveResize"
+                  @interaction-change="held => momentLayout.setInteractionHeld(moment.id, held)"
+                />
+              </template>
+              <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
             </div>
           </div>
-        </div>
-        <div v-else-if="feedRequestFailed && !moments.length" class="moments-page__empty moments-page__error" role="status">
-          <span i-tabler-alert-circle text="size-$bew-icon-size-xl" />
-          <p>{{ t('common.load_failed') }}</p>
-          <button type="button" :disabled="isLoading" @click="refresh">
-            {{ t('moments.retry') }}
-          </button>
-        </div>
-        <div
-          v-else-if="moments.length"
-          ref="gridRef"
-          v-layout-editable="'moments-grid'"
-          class="moments-grid"
-          data-layout-editable-id="moments-grid"
-          :style="momentsGridStyle"
-        >
-          <div v-for="(column, columnIndex) in virtualColumns" :key="columnIndex" class="moments-grid__column">
-            <div v-if="column.topPad" class="moments-grid__spacer" :style="{ height: `${column.topPad}px` }" />
-            <template v-for="(moment, momentIndex) in column.items" :key="moment.id">
-              <div v-if="column.gaps?.[momentIndex]" class="moments-grid__spacer" :style="{ height: `${column.gaps[momentIndex]}px` }" />
-              <MomentCard
-                :moment="momentActions.getDisplayMoment(moment)"
-                :card-width="gridCardWidth"
-                :ready="readyCardIds.has(moment.id)"
-                :entering="enteringCardIds.has(moment.id)"
-                :preview-active="hoveredMediaId === moment.id && (previewState === 'loading' || previewState === 'ready')"
-                :preview-loading="hoveredMediaId === moment.id && previewState !== 'ready'"
-                :preview-generation="hoveredMediaId === moment.id ? previewGeneration : 0"
-                :preview-url="previewUrls[moment.id]"
-                :image-ratio="getMomentImageRatio(moment)"
-                :is-like-loading="likingMomentIds.has(moment.id)"
-                :is-reservation-loading="reservationLoadingMomentIds.has(moment.id)"
-                :is-forward-loading="forwardTransactions.pending.has(moment.id)"
-                :is-watch-later-added="isWatchLaterAdded"
-                :is-watch-later-loading="isWatchLaterLoading"
-                @card-element="element => bindCardEl(element, moment)"
-                @open-detail="openMomentDetail"
-                @media-enter="handleMediaEnter"
-                @media-leave="handleMediaLeave"
-                @cover-load="(event, momentId) => handleCoverLoad(event, momentId)"
-                @preview-video="bindPreviewVideo"
-                @open-video-link="details.openVideoLink"
-                @toggle-watch-later="toggleMomentWatchLater"
-                @toggle-like="toggleMomentLike"
-                @toggle-reservation="toggleMomentReservation"
-                @open-image-preview="openMomentImagePreview"
-                @interactive-resize="handleMomentCardInteractiveResize"
-                @interaction-change="held => momentLayout.setInteractionHeld(moment.id, held)"
-              />
-            </template>
-            <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
+          <div v-else-if="!isInitialLoading && (!requiresManualMomentPaging() || noMoreContent)" class="moments-page__empty bew-empty--fill" role="status">
+            <p>{{ t('moments.empty') }}</p>
+            <button
+              :disabled="isLoading"
+              @click="requiresManualMomentPaging() && !noMoreContent ? (loadMoreFilteredMoments()) : refresh()"
+            >
+              {{ isLoading ? t('moments.loading') : requiresManualMomentPaging() && !noMoreContent ? t('moments.load_more') : t('moments.reload') }}
+            </button>
           </div>
-        </div>
-        <div v-else-if="!isInitialLoading && (!requiresManualMomentPaging() || noMoreContent)" class="moments-page__empty">
-          <span i-tabler-windmill text="size-$bew-icon-size-xl" />
-          <p>{{ activeMomentGroup === 'wanted' ? (momentsWantedUsers.length ? t('moments.empty_wanted') : t('moments.no_wanted_users')) : t('moments.empty') }}</p>
-          <Button v-if="activeMomentGroup === 'wanted' && !momentsWantedUsers.length" type="secondary" @click="openSettingsAt({ category: 'bewly-pages', page: 'moments', section: 'wanted-users' })">
-            {{ t('moments.configure_wanted') }}
-          </Button>
           <button
-            v-if="activeMomentGroup !== 'wanted' || momentsWantedUsers.length"
-            :disabled="isLoading"
-            @click="requiresManualMomentPaging() && !noMoreContent ? (activeMomentGroup === 'wanted' ? loadMoreWantedMoments() : loadMoreFilteredMoments()) : refresh()"
+            v-if="requiresManualMomentPaging() && !isLoading && !noMoreContent && (!feedRequestFailed || moments.length)"
+            type="button"
+            class="moments-load-more"
+            @click="loadMoreFilteredMoments()"
           >
-            {{ isLoading ? t('moments.loading') : requiresManualMomentPaging() ? (!noMoreContent ? t('moments.load_more') : (activeMomentGroup === 'wanted' ? t('moments.recheck') : t('moments.reload'))) : t('moments.reload') }}
+            <span i-tabler-arrow-down />
+            {{ feedRequestFailed ? t('moments.retry') : t('moments.load_more') }}
           </button>
-        </div>
-        <button
-          v-if="requiresManualMomentPaging() && !isLoading && !noMoreContent && (!feedRequestFailed || moments.length)"
-          type="button"
-          class="moments-wanted-load-more"
-          @click="activeMomentGroup === 'wanted' ? loadMoreWantedMoments() : loadMoreFilteredMoments()"
-        >
-          <span i-tabler-arrow-down />
-          {{ feedRequestFailed ? t('moments.retry') : t('moments.load_more') }}
-        </button>
-        <p
-          v-if="!isInitialLoading && moments.length"
-          class="moments-page__loading"
-          :class="{ 'is-visible': isLoading || noMoreContent }"
-          :aria-hidden="!(isLoading || noMoreContent)"
-          aria-live="polite"
-        >
-          <template v-if="isLoading">
-            <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
-            {{ t('moments.loading_more') }}
-          </template>
-          <template v-else-if="noMoreContent">
-            {{ t('moments.no_more') }}
-          </template>
-        </p>
-      </main>
-    </div>
+          <p
+            v-if="!isInitialLoading && moments.length"
+            class="moments-page__loading"
+            :class="{ 'is-visible': isLoading }"
+            :aria-hidden="!isLoading"
+            aria-live="polite"
+          >
+            <template v-if="isLoading">
+              <SkeletonBlock width="var(--bew-space-12)" height="var(--bew-line-height-control)" />
+              {{ t('moments.loading_more') }}
+            </template>
+          </p>
+        </main>
+      </MomentsContentLayout>
+    </LibraryWorkspace>
 
     <Dialog
       v-if="selectedMoment && detailFrameUrl"
@@ -1582,27 +1226,11 @@ function appendMoments(items: DisplayMoment[]) {
 }
 
 .moments-page {
-  padding: var(--bew-space-2) 0 var(--bew-space-12);
-}
-.moments-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  row-gap: var(--bew-space-8);
-  width: 100%;
-}
-.moments-layout--with-sidebar {
-  grid-template-columns: var(--bew-layout-moments-sidebar-width) minmax(0, 1fr);
-  column-gap: var(--bew-space-4);
-}
-.moments-content {
-  grid-column: 1;
-  grid-row: 2;
-  width: 100%;
   min-width: 0;
 }
-.moments-layout--with-sidebar .moments-content {
-  grid-column: 2;
+.moments-content {
+  width: 100%;
+  min-width: 0;
 }
 .moments-up-list {
   display: flex;
@@ -1753,13 +1381,6 @@ function appendMoments(items: DisplayMoment[]) {
   opacity: 1;
   pointer-events: auto;
 }
-.moments-up-list__divider {
-  flex: 0 0 auto;
-  width: 1px;
-  height: 40px;
-  margin: 0 var(--bew-space-1);
-  background: var(--bew-border-color);
-}
 .moments-up-list__item {
   display: flex;
   flex: 0 0 auto;
@@ -1788,18 +1409,15 @@ function appendMoments(items: DisplayMoment[]) {
   transform: translateY(0) scale(0.98);
 }
 .moments-up-list__item:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-0-5);
 }
 .moments-up-list__item--active .moments-up-list__name {
   color: var(--bew-theme-foreground);
 }
 .moments-up-list__item--active .moments-up-list__avatar > img,
-.moments-up-list__item--active .moments-up-list__avatar--all,
-.moments-up-list__item--active .moments-up-list__avatar--wanted {
-  box-shadow:
-    0 0 0 2px var(--bew-elevated),
-    0 0 0 4px var(--bew-theme-color);
+.moments-up-list__item--active .moments-up-list__avatar--all {
+  box-shadow: var(--bew-focus-shadow);
 }
 .moments-up-list__item--skeleton {
   pointer-events: none;
@@ -1810,8 +1428,7 @@ function appendMoments(items: DisplayMoment[]) {
   height: 48px;
   flex: 0 0 auto;
 }
-.moments-up-list__avatar > img,
-.moments-up-list__item--skeleton .moments-up-list__avatar {
+.moments-up-list__avatar > img {
   display: block;
   width: 48px;
   height: 48px;
@@ -1820,8 +1437,7 @@ function appendMoments(items: DisplayMoment[]) {
   object-fit: cover;
   background: var(--bew-fill-1);
 }
-.moments-up-list__avatar--all,
-.moments-up-list__avatar--wanted {
+.moments-up-list__avatar--all {
   display: grid;
   place-items: center;
   width: 48px;
@@ -1833,9 +1449,7 @@ function appendMoments(items: DisplayMoment[]) {
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface-hover);
 }
-.moments-up-list__item--active .moments-up-list__avatar--all,
-.moments-up-list__item--active .moments-up-list__avatar--wanted {
-  border: 2px solid var(--bew-theme-color);
+.moments-up-list__item--active .moments-up-list__avatar--all {
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
 }
@@ -1843,8 +1457,7 @@ function appendMoments(items: DisplayMoment[]) {
   opacity: 0.45;
   cursor: not-allowed;
 }
-.moments-up-list__all-icon,
-.moments-up-list__wanted-icon {
+.moments-up-list__all-icon {
   display: block;
   width: 22px;
   height: 22px;
@@ -1874,310 +1487,6 @@ function appendMoments(items: DisplayMoment[]) {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.moments-up-list__item--skeleton .moments-up-list__name {
-  width: 40px;
-  height: 12px;
-  border-radius: var(--bew-radius-sm);
-}
-.moments-sidebar {
-  grid-column: 1;
-  grid-row: 2;
-  position: sticky;
-  top: calc(var(--bew-top-bar-height, 64px) + var(--bew-space-3));
-  display: flex;
-  justify-self: end;
-  width: var(--bew-layout-moments-sidebar-width);
-  max-height: calc(100dvh - var(--bew-top-bar-height, 64px) - var(--bew-space-6));
-  flex-direction: column;
-  gap: var(--bew-space-3);
-  min-width: 0;
-}
-.moments-user-card,
-.moments-live-card {
-  box-sizing: border-box;
-  overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-panel-radius);
-  background: var(--bew-elevated);
-  box-shadow: none;
-}
-.moments-user-card {
-  padding: var(--bew-space-4);
-}
-.moments-user-card__profile {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-3);
-  margin: calc(0px - var(--bew-space-2));
-  padding: var(--bew-space-2);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-  color: inherit;
-  text-decoration: none;
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
-}
-.moments-user-card__profile:hover {
-  background: var(--bew-fill-1);
-}
-.moments-user-card__profile > img {
-  flex: 0 0 auto;
-  width: 58px;
-  height: 58px;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  background: var(--bew-fill-1);
-  object-fit: cover;
-}
-.moments-user-card__identity {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--bew-space-2);
-}
-.moments-user-card__identity > strong {
-  overflow: hidden;
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-heading);
-  line-height: var(--bew-line-height-heading);
-  font-weight: var(--bew-font-weight-semibold);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.moments-user-card__badges {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-1);
-}
-.moments-user-card__badges em,
-.moments-user-card__badges i {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 6px;
-  border-radius: var(--bew-radius-half);
-  font-size: var(--bew-font-size-caption);
-  font-style: normal;
-  font-weight: var(--bew-font-weight-bold);
-  line-height: var(--bew-line-height-caption);
-}
-.moments-user-card__badges em {
-  color: #fff;
-  background: #fb7299;
-}
-.moments-user-card__badges i {
-  color: #fb7299;
-  border: 1px solid currentcolor;
-}
-.moments-user-card__stats {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  margin-top: var(--bew-space-5);
-}
-.moments-user-card__stats > a {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--bew-space-1);
-  color: inherit;
-  text-decoration: none;
-}
-.moments-user-card__stats strong {
-  overflow: hidden;
-  max-width: 100%;
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-heading);
-  line-height: var(--bew-line-height-heading);
-  font-weight: var(--bew-font-weight-semibold);
-  text-overflow: ellipsis;
-}
-.moments-user-card__stats strong,
-.moments-user-card__stats small {
-  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
-}
-.moments-user-card__stats small {
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-}
-.moments-user-card__stats > a:hover strong,
-.moments-user-card__stats > a:hover small {
-  color: var(--bew-theme-foreground);
-}
-.moments-user-card__stats > a:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
-  outline-offset: var(--bew-space-0-5);
-}
-.moments-publish-link {
-  display: flex;
-  box-sizing: border-box;
-  align-items: center;
-  gap: var(--bew-space-2);
-  min-height: 44px;
-  padding: 0 var(--bew-space-4);
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-interactive-radius);
-  color: var(--bew-text-1);
-  background: var(--bew-elevated);
-  box-shadow: none;
-  font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-body);
-  text-decoration: none;
-  transition:
-    color 0.2s ease,
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-}
-.moments-publish-link > :last-child {
-  margin-left: auto;
-  color: var(--bew-text-3);
-}
-.moments-publish-link:hover {
-  color: var(--bew-text-1);
-  background: var(--bew-elevated-hover);
-}
-.moments-publish-link:focus-visible,
-.moments-user-card__profile:focus-visible,
-.moments-live-card__list > a:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
-  outline-offset: var(--bew-space-0-5);
-}
-.moments-live-card {
-  display: flex;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  padding: var(--bew-space-4) 0 var(--bew-space-3);
-}
-.moments-live-card > header {
-  padding: 0 var(--bew-space-4) var(--bew-space-2);
-}
-.moments-live-card > header strong {
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-title);
-  line-height: var(--bew-line-height-title);
-}
-.moments-live-card > header span {
-  color: var(--bew-text-3);
-  font-weight: var(--bew-font-weight-medium);
-}
-.moments-live-card__list {
-  display: flex;
-  /* 五个 72px 直播项加四个 4px 间距，超出后在卡片内滚动。 */
-  max-height: 376px;
-  min-height: 0;
-  flex: 1 1 auto;
-  flex-direction: column;
-  gap: var(--bew-space-1);
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  padding-inline: var(--bew-space-4);
-}
-.moments-live-card__list > a,
-.moments-live-card__skeleton-row {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-3);
-  height: 72px;
-  min-width: 0;
-  flex: 0 0 72px;
-  padding: var(--bew-space-2) var(--bew-space-1);
-  border-radius: var(--bew-interactive-radius);
-  color: inherit;
-  text-decoration: none;
-  transition: background-color 0.18s ease;
-}
-.moments-live-card__list > a:hover {
-  background: var(--bew-fill-1);
-}
-.moments-live-card__avatar {
-  position: relative;
-  flex: 0 0 auto;
-  width: 48px;
-  height: 54px;
-}
-.moments-live-card__avatar img {
-  display: block;
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  background: var(--bew-fill-1);
-  object-fit: cover;
-}
-.moments-live-card__avatar em {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: var(--bew-space-0-5);
-  height: 17px;
-  padding: 0 var(--bew-space-1);
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
-  color: #fff;
-  background: #fb7299;
-  font-size: var(--bew-font-size-caption);
-  font-style: normal;
-  line-height: var(--bew-line-height-caption);
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-.moments-live-card__avatar em::after {
-  position: absolute;
-  inset: -3px;
-  border: 1px solid #fb7299;
-  border-radius: inherit;
-  corner-shape: inherit;
-  content: "";
-  pointer-events: none;
-  animation: moments-live-pulse 1.05s ease-out infinite;
-}
-.moments-live-card__info {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--bew-space-1);
-}
-.moments-live-card__info strong,
-.moments-live-card__info small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.moments-live-card__info strong {
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-body);
-}
-.moments-live-card__info small {
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-}
-.moments-sidebar-placeholder {
-  pointer-events: none;
-}
-.moments-sidebar-placeholder__stat {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--bew-space-1);
-}
-@keyframes moments-live-pulse {
-  0% {
-    opacity: 0.75;
-    transform: scale(0.94);
-  }
-  70%,
-  100% {
-    opacity: 0;
-    transform: scale(1.14);
-  }
-}
 .moments-page__initial-loading {
   position: relative;
   min-height: calc(100dvh - var(--bew-top-bar-height) - 90px);
@@ -2196,53 +1505,6 @@ function appendMoments(items: DisplayMoment[]) {
   width: 100%;
   max-width: 100%;
   min-width: 0;
-}
-.moments-filter-header {
-  position: relative;
-  z-index: 8;
-  grid-column: 1;
-  grid-row: 1;
-  display: grid;
-  grid-template-columns: minmax(0, max-content);
-  justify-content: start;
-  justify-self: start;
-  align-items: center;
-  width: 100%;
-  min-width: 0;
-}
-.moments-layout--with-sidebar .moments-filter-header {
-  grid-column: 2;
-}
-.moments-filter-panel {
-  max-width: 100%;
-}
-.moments-filter-scroll {
-  height: 100%;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scrollbar-width: none;
-}
-.moments-filter-scroll::-webkit-scrollbar {
-  display: none;
-}
-.moments-filter-inside {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--bew-control-gap);
-  width: max-content;
-  height: 100%;
-  box-sizing: border-box;
-}
-@media (max-width: 1000px) {
-  .moments-filter-panel {
-    max-width: 100%;
-  }
-}
-@media (max-width: 600px) {
-  .moments-filter-header {
-    grid-template-columns: minmax(0, 1fr);
-  }
 }
 .moments-page__empty button:not(.b-button) {
   border: 1px solid var(--bew-surface-border-color);
@@ -2325,7 +1587,7 @@ function appendMoments(items: DisplayMoment[]) {
   visibility: visible;
   opacity: 1;
 }
-.moments-wanted-load-more {
+.moments-load-more {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2350,19 +1612,33 @@ function appendMoments(items: DisplayMoment[]) {
     border-color var(--bew-duration-normal) var(--bew-ease-standard),
     opacity var(--bew-duration-normal) var(--bew-ease-standard);
 }
-.moments-wanted-load-more:hover {
+.moments-load-more:hover {
   color: var(--bew-on-theme-color);
   border-color: var(--bew-theme-color);
   background: var(--bew-theme-color);
 }
 .moments-page__empty {
-  min-height: 280px;
+  flex: 1;
+  min-height: var(--bew-space-12);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: var(--bew-space-3);
   color: var(--bew-text-2);
+  text-align: center;
+}
+.moments-content:has(.bew-empty--fill) {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+.moments-page__empty button:not(.b-button) {
+  background: transparent;
+  border: 0;
+  color: var(--bew-text-2);
+  text-decoration: underline;
+  text-underline-offset: var(--bew-space-1);
 }
 .moments-page__empty p {
   margin: 0;
@@ -2590,16 +1866,8 @@ function appendMoments(items: DisplayMoment[]) {
 
 .moments-up-list,
 .moments-up-list__item,
-.moments-up-list__item--skeleton .moments-up-list__name,
-.moments-user-card,
-.moments-live-card,
-.moments-user-card__badges em,
-.moments-user-card__badges i,
-.moments-publish-link,
-.moments-live-card__list > a,
-.moments-live-card__avatar em,
 .moments-page__empty button:not(.b-button),
-.moments-wanted-load-more,
+.moments-load-more,
 .moment-detail-frame,
 .moment-detail-frame__open,
 .moment-image-viewer__nav,
@@ -2607,12 +1875,7 @@ function appendMoments(items: DisplayMoment[]) {
   corner-shape: var(--bew-corner-shape);
 }
 
-.moments-live-card__avatar em::after {
-  corner-shape: inherit;
-}
-
-.moments-live-card__avatar em,
-.moments-wanted-load-more,
+.moments-load-more,
 .moment-detail-frame__open,
 .moment-image-viewer__toolbar {
   corner-shape: var(--bew-corner-shape-round);

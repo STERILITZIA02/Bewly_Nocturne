@@ -66,18 +66,29 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
 
   check('review TopBar lifetime: deferred initialization cannot reactivate a store after its component unmounts', async () => {
     const activations = []
-    const store = { popupVisible: {}, drawerVisible: { notifications: false }, setTopBarVisible() {}, setUiActive: async value => activations.push(value), cleanup: () => activations.push(false) }
+    const settings = Vue.ref({ videoPageTopBarConfig: 'alwaysShow', touchScreenOptimization: false, autoHideTopBar: true })
+    const viewport = document.body.appendChild(document.createElement('div'))
+    const rail = viewport.appendChild(document.createElement('div'))
+    rail.setAttribute('data-top-bar-scroll', '')
+    const sidebar = viewport.appendChild(document.createElement('aside'))
+    sidebar.setAttribute('data-top-bar-scroll-ignore', '')
+    const sidebarList = sidebar.appendChild(document.createElement('div'))
+    sidebarList.setAttribute('data-top-bar-scroll', '')
+    const menu = rail.appendChild(document.createElement('div'))
+    const scrollViewportRef = Vue.ref(viewport)
+    const activatedPage = Vue.ref('Home')
+    const store = { showTopBar: true, popupVisible: {}, drawerVisible: { notifications: false }, setTopBarVisible() {}, setUiActive: async value => activations.push(value), cleanup: () => activations.push(false) }
     const noUI = { render: () => null }
     const TopBar = await compileComponent('../src/components/TopBar/TopBar.vue', {
       '@vueuse/core': { onKeyStroke() {}, useMediaQuery: () => Vue.ref(false), useMouseInElement: () => ({ isOutside: Vue.ref(true) }) },
-      '~/composables/useAppProvider': { useBewlyApp: () => ({ reachTop: Vue.ref(true) }) },
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ reachTop: Vue.ref(true), scrollViewportRef, activatedPage }) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => Vue.ref(window.location.href) },
       '~/composables/useDark': { useDark: () => ({ isDark: Vue.ref(false) }) },
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/enums/appEnums': await import('../src/enums/appEnums'),
-      '~/logic': { settings: Vue.ref({ videoPageTopBarConfig: 'alwaysShow', touchScreenOptimization: false }) },
+      '~/logic': { settings },
       '~/logic/iframePageState': { useIframePageActive: () => Vue.ref(false) },
-      '~/logic/layoutEdit': { isLayoutEditing: Vue.ref(false), useLayoutEditableRoot() {} },
+      '~/logic/layoutEdit': { isLayoutEditing: Vue.ref(false), useLayoutEditableRoot() {}, vLayoutEditable: {} },
       '~/stores/settingsStore': { useSettingsStore: () => ({ getEffectiveTopBarSource: () => 'bewly' }) },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/bewlyWidescreen': { isBewlyWidescreenActive: () => false },
@@ -87,6 +98,7 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/utils/mitt': { default: { on() {}, off() {}, emit() {} } },
       './components/NotificationsDrawer.vue': { default: noUI },
       './components/TopBarHeader.vue': { default: noUI },
+      './components/TopBarLogo.vue': { default: { render: () => Vue.h('a', { href: '/', 'data-home-logo': '' }, 'Home') } },
       './composables/useTopBarInteraction': { resetTopBarTransientInteraction() {}, useTopBarInteraction: () => ({ forceWhiteIcon: Vue.ref(false) }) },
     }, { globals: { clearTimeout: window.clearTimeout.bind(window), MutationObserver: window.MutationObserver } })
     const host = document.body.appendChild(document.createElement('div'))
@@ -96,6 +108,92 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
     await flush()
     host.remove()
     assert.equal(activations.includes(true), false)
+    const nextHost = document.body.appendChild(document.createElement('div'))
+    const nextApp = Vue.createApp(TopBar)
+    const instance = nextApp.mount(nextHost)
+    try {
+      await flush()
+      instance.toggleTopBarVisible(false)
+      await flush()
+      assert.ok(nextHost.querySelector('header.hide'))
+      const logo = nextHost.querySelector('[data-home-logo]')
+      assert.ok(logo)
+      assert.equal(logo.closest('header'), null, 'home logo must remain outside the hidden/animated header')
+      instance.toggleTopBarVisible(true)
+      const scroll = async (target, top) => {
+        target.scrollTop = top
+        target.dispatchEvent(new window.Event('scroll', { bubbles: false }))
+        await flush()
+      }
+      await scroll(viewport, 60)
+      assert.ok(nextHost.querySelector('header.hide'), 'the shared outer viewport hides the header')
+      await scroll(viewport, 20)
+      assert.equal(nextHost.querySelector('header.hide'), null)
+      await scroll(menu, 100)
+      assert.equal(nextHost.querySelector('header.hide'), null, 'unmarked nested menus do not control the header')
+      await scroll(rail, 60)
+      assert.ok(nextHost.querySelector('header.hide'), 'non-bubbling content scroll reaches the capture listener')
+      await scroll(viewport, 25)
+      assert.ok(nextHost.querySelector('header.hide'), 'switching scroll roots must not compare unrelated offsets')
+      await scroll(rail, 20)
+      assert.equal(nextHost.querySelector('header.hide'), null)
+      rail.setAttribute('inert', '')
+      await scroll(rail, 120)
+      assert.equal(nextHost.querySelector('header.hide'), null, 'retiring views cannot drive the header')
+      rail.removeAttribute('inert')
+      settings.value.autoHideTopBar = false
+      await flush()
+      await scroll(rail, 200)
+      assert.equal(nextHost.querySelector('header.hide'), null, 'the setting is respected by nested viewports')
+      settings.value.autoHideTopBar = true
+      await flush()
+      await scroll(rail, 240)
+      assert.ok(nextHost.querySelector('header.hide'))
+      await scroll(rail, 0)
+      assert.equal(nextHost.querySelector('header.hide'), null, 'reaching the top restores the header')
+      scrollViewportRef.value = null
+      await flush()
+      await scroll(rail, 300)
+      assert.equal(nextHost.querySelector('header.hide'), null, 'detached workspace listeners are removed')
+      scrollViewportRef.value = viewport
+      for (const page of ['Moments', 'Notifications', 'History', 'WatchLater', 'Favorites']) {
+        viewport.scrollTop = 100
+        rail.scrollTop = 100
+        activatedPage.value = page
+        await flush()
+        await scroll(viewport, 140)
+        assert.ok(nextHost.querySelector('header.hide'), `${page}: downward scrolling hides the top bar`)
+        window.dispatchEvent(new window.MouseEvent('pointermove', { clientY: 12 }))
+        await flush()
+        assert.ok(nextHost.querySelector('header.hide'), 'the retired pointer reveal listener is absent')
+        await scroll(viewport, 80)
+        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: upward scrolling reveals the top bar`)
+        await scroll(sidebarList, 140)
+        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: sidebar scrolling cannot hide the top bar`)
+        await scroll(rail, 140)
+        assert.ok(nextHost.querySelector('header.hide'), `${page}: content downward scrolling hides it`)
+        await scroll(sidebarList, 0)
+        assert.ok(nextHost.querySelector('header.hide'), `${page}: sidebar scrolling cannot reveal the top bar either`)
+        await scroll(rail, 80)
+        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: content upward scrolling reveals it`)
+        await scroll(rail, 140)
+        await scroll(rail, 0)
+        assert.equal(nextHost.querySelector('header.hide'), null, `${page}: reaching top restores the header`)
+        await scroll(rail, 140)
+        nextHost.querySelector('header').dispatchEvent(new window.Event('focusin', { bubbles: true }))
+        await flush()
+        assert.equal(nextHost.querySelector('header.hide'), null, 'keyboard focus remains accessible')
+      }
+      settings.value.autoHideTopBar = false
+      await flush()
+      await scroll(rail, 400)
+      assert.equal(nextHost.querySelector('header.hide'), null, 'workspace auto hide remains opt-in')
+    }
+    finally {
+      nextApp.unmount()
+      nextHost.remove()
+      viewport.remove()
+    }
   })
 
   check('review dynamic emotes: A to B to A late reads cannot overwrite the current account request cache', async () => {
@@ -249,6 +347,11 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       fixture.transitions[1].ready.resolve()
       await flush()
       assert.equal(fixture.animations[0].options.duration, 300)
+      assert.equal(fixture.animations[0].options.fill, 'forwards')
+      fixture.animations[0].finished.resolve()
+      await flush()
+      assert.equal(styles(), 4, 'the final clip and transition suppression outlive animation.finished until browser snapshots disappear')
+      assert.equal(fixture.animations[0].canceled, 0)
       assert.ok(fixture.animations[0].frames.clipPath.every(value => value.includes('125px 120px')), 'keyboard activation originates at the trigger')
       fixture.transitions[1].finished.reject(new Error('interrupted'))
       await flush()
@@ -393,6 +496,15 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       requests[4].resolve({ code: 0, data: { name: 'account-b' } })
       await flush()
       assert.equal(state.searchRecommendation.value.name, 'account-b')
+      const failedHot = module.loadSharedHotSearch(true)
+      requests.at(-1).resolve({ code: -500 })
+      await failedHot
+      assert.equal(state.hotSearchFailed.value, true)
+      const recoveredHot = module.loadSharedHotSearch(true)
+      requests.at(-1).resolve({ code: 0, data: { trending: { list: [{ keyword: 'fresh', show_name: 'Fresh', icon: '' }] } } })
+      await recoveredHot
+      assert.equal(state.hotSearchFailed.value, false)
+      assert.equal(state.hotSearchList.value[0].keyword, 'fresh')
     }
     finally {
       first()

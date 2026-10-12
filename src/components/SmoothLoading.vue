@@ -18,29 +18,41 @@ const containerClass = computed(() => ({
   <div
     class="loading-container"
     :class="containerClass"
-    :style="{ minHeight: minHeight || '46px' }"
+    :aria-hidden="!show"
+    :inert="show ? undefined : true"
   >
-    <Transition name="loading-fade">
-      <PageLoadingIndicator v-if="show" :label="$t('common.loading')" />
-    </Transition>
+    <div class="loading-clip">
+      <div class="loading-body" :style="{ minHeight: minHeight || '46px' }">
+        <Transition name="loading-fade">
+          <PageLoadingIndicator v-if="show" :label="$t('common.loading')" />
+        </Transition>
+      </div>
+    </div>
   </div>
 </template>
 
 <style scoped lang="scss">
 .loading-container {
-  display: flex;
+  display: grid;
+  grid-template-rows: 1fr;
   width: 100%;
-  align-items: center;
-  justify-content: center;
   overflow: hidden;
   box-sizing: border-box;
   contain: layout style paint;
-  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+  transition:
+    grid-template-rows var(--bew-duration-normal) var(--bew-ease-standard),
+    opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
-.loading-visible,
-.loading-keep-space {
-  min-height: 100px;
+.loading-clip {
+  min-height: 0;
+  overflow: hidden;
+}
+.loading-body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: var(--bew-space-8) 0;
 }
 
@@ -50,10 +62,7 @@ const containerClass = computed(() => ({
 }
 
 .loading-hidden {
-  position: absolute;
-  min-height: 0;
-  padding: 0;
-  visibility: hidden;
+  grid-template-rows: 0fr;
   opacity: 0;
   pointer-events: none;
 }
@@ -72,5 +81,12 @@ const containerClass = computed(() => ({
 .loading-fade-enter-from,
 .loading-fade-leave-to {
   opacity: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-container,
+  .loading-fade-enter-active,
+  .loading-fade-leave-active {
+    transition: none;
+  }
 }
 </style>

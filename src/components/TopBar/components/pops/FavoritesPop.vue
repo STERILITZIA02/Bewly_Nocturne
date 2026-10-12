@@ -13,6 +13,7 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getFavoriteResourceBvid, getFavoriteResourceKey, getFavoriteResourceUrl } from '~/utils/favoriteResource'
 import { mergeFavoriteSeasonPage } from '~/utils/favoriteSeason'
 import { getUserID, removeHttpFromUrl, scrollToTop } from '~/utils/main'
+import { retiringListTransition } from '~/utils/motionPresence'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -406,7 +407,7 @@ defineExpose({
         />
 
         <!-- favorites -->
-        <TransitionGroup name="list">
+        <TransitionGroup name="list" v-bind="retiringListTransition">
           <article
             v-for="item in favoriteResources"
             :key="getFavoriteResourceKey(item)"

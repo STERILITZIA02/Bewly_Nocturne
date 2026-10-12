@@ -3,6 +3,7 @@ import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { normalizeBilibiliImageUrl } from '~/utils/bilibiliUrl'
 import type { ImageLoadQueueHandle } from '~/utils/imageLoadQueue'
 import { enqueueImageLoad, getImageLoadPriority, subscribeImageLoadRoot } from '~/utils/imageLoadQueue'
+import { getResponsiveCoverSrcset, observeCoverWidth } from '~/utils/responsiveImage'
 
 // 仅记录“曾经加载过”的 URL，避免重复淡入；不持有 ImageBitmap。
 const MAX_REMEMBERED_PICTURES = 240
@@ -170,6 +171,7 @@ interface Props {
   // 是否显示骨架占位
   showSkeleton?: boolean
   aspectRatio?: string
+  responsiveCover?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -196,9 +198,31 @@ const isVisible = ref(props.loading === 'eager')
 const isLoaded = ref(false)
 const imageFailed = ref(!props.src)
 const usePreferredSources = ref(true)
-const actualSrc = ref(props.loading === 'eager' ? sourceUrl.value : '')
+const actualSrc = ref(props.loading === 'eager' && !props.responsiveCover ? sourceUrl.value : '')
 const imageKey = computed(() => `${actualSrc.value}:${usePreferredSources.value}`)
 const skipRevealTransition = ref(false)
+const coverWidth = ref(0)
+const coverSizes = computed(() => coverWidth.value > 0 ? `${coverWidth.value}px` : undefined)
+const hasCoverSize = computed(() => coverWidth.value > 0)
+const coverSources = computed(() => props.responsiveCover && hasCoverSize.value && usePreferredSources.value
+  ? {
+      avif: getResponsiveCoverSrcset(actualSrc.value, 'avif'),
+      webp: getResponsiveCoverSrcset(actualSrc.value, 'webp'),
+      original: getResponsiveCoverSrcset(actualSrc.value),
+    }
+  : undefined)
+let stopMeasuring: (() => void) | undefined
+
+function measureCover() {
+  stopMeasuring?.()
+  stopMeasuring = undefined
+  if (props.responsiveCover && imgRef.value) {
+    stopMeasuring = observeCoverWidth(imgRef.value, (width) => {
+      if (width > 0)
+        coverWidth.value = Math.ceil(width)
+    })
+  }
+}
 
 let stopObserving: (() => void) | null = null
 let isWithinRetainedRange = props.loading === 'eager'
@@ -382,14 +406,19 @@ function bindImageEl(el: Element | { $el?: unknown } | null) {
 }
 
 onMounted(() => {
-  if (props.loading === 'eager')
+  measureCover()
+  if (props.loading === 'eager') {
+    startLoad()
     return
+  }
 
   createObserver()
 })
 
 function releaseResources() {
   active = false
+  stopMeasuring?.()
+  stopMeasuring = undefined
   cancelLoad()
   cleanupObserver()
   cancelScheduledRelease()
@@ -402,11 +431,14 @@ onBeforeUnmount(releaseResources)
 onDeactivated(releaseResources)
 onActivated(() => {
   active = true
+  measureCover()
   if (props.loading === 'eager')
     startLoad()
   else
     createObserver()
 })
+
+watch(() => props.responsiveCover, measureCover, { flush: 'post' })
 
 function isCurrentImage(image: HTMLImageElement) {
   return image === imageElRef.value && image.dataset.imageKey === imageKey.value && Boolean(actualSrc.value)
@@ -506,13 +538,15 @@ watch(
 
     <!-- 实际图片 - 仅在进入加载区后挂载，离开保留区后卸载 -->
     <template v-if="isVisible && actualSrc && !imageFailed">
-      <source v-if="usePreferredSources" :srcset="`${actualSrc}.avif`" type="image/avif">
-      <source v-if="usePreferredSources" :srcset="`${actualSrc}.webp`" type="image/webp">
+      <source v-if="usePreferredSources" :srcset="coverSources?.avif || `${actualSrc}.avif`" :sizes="coverSources?.avif ? coverSizes : undefined" type="image/avif">
+      <source v-if="usePreferredSources" :srcset="coverSources?.webp || `${actualSrc}.webp`" :sizes="coverSources?.webp ? coverSizes : undefined" type="image/webp">
       <img
         :key="imageKey"
         :ref="bindImageEl"
         :data-image-key="imageKey"
         :src="actualSrc"
+        :srcset="coverSources?.original"
+        :sizes="coverSources?.original ? coverSizes : undefined"
         :alt="alt"
         loading="eager"
         decoding="async"

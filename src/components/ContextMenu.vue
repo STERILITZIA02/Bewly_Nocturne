@@ -10,9 +10,11 @@ import { computeAnchoredFloatingMenuPosition } from '~/utils/floatingMenu'
 interface ContextMenuItem {
   value: string | number
   label: string
+  description?: string
   icon: string
   danger?: boolean
   disabled?: boolean
+  pending?: boolean
 }
 export type ContextMenuOption = ContextMenuItem & (
   | { kind?: 'action', closeOnSelect?: boolean, checked?: never }
@@ -40,6 +42,7 @@ let resizeObserver: ResizeObserver | undefined
 let previousFocus: HTMLElement | null = null
 let focusRestored = false
 let disposed = false
+let entryAnimation: Animation | undefined
 
 function menuItems() {
   return Array.from(menuRef.value?.querySelectorAll<HTMLButtonElement>('[role^="menuitem"]') ?? []).filter(item => !item.disabled)
@@ -133,13 +136,23 @@ function updatePosition() {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   const active = props.trigger ?? getDeepActiveElement(document)
   previousFocus = active instanceof HTMLElement ? active : null
   updatePosition()
   resizeObserver = new ResizeObserver(updatePosition)
   if (menuRef.value)
     resizeObserver.observe(menuRef.value)
+  await nextTick()
+  const menu = menuRef.value
+  const content = menu?.querySelector('ul')
+  if (!disposed && content?.animate && !previousFocus?.matches(':focus-visible') && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    const style = getComputedStyle(menu!)
+    entryAnimation = content.animate([{ opacity: 0, scale: 0.98 }, { opacity: 1, scale: 1 }], {
+      duration: Number.parseFloat(style.getPropertyValue('--bew-duration-fast')) || 120,
+      easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
+    })
+  }
   focusItem(0)
 })
 watch(() => props.anchor, () => void nextTick(updatePosition))
@@ -154,6 +167,7 @@ watch(() => props.options, async () => {
 useEventListener(window, 'resize', updatePosition, { passive: true })
 onBeforeUnmount(() => {
   disposed = true
+  entryAnimation?.cancel()
   resizeObserver?.disconnect()
   restoreMenuFocus()
 })
@@ -174,7 +188,7 @@ onBeforeUnmount(() => {
       @contextmenu.prevent.stop
     >
       <ul role="presentation" flex="~ col gap-1">
-        <li v-if="loading" role="presentation" class="context-menu-loading">
+        <li v-if="loading && !options.length" role="presentation" class="context-menu-loading">
           <SkeletonBlock v-for="index in 3" :key="index" height="var(--bew-control-height-sm)" radius="interactive" />
         </li>
         <li
@@ -193,8 +207,11 @@ onBeforeUnmount(() => {
             @click="selectOption(option)"
           >
             <i class="item-icon" :class="option.icon" aria-hidden="true" />
-            <span class="item-label">{{ option.label }}</span>
-            <i v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" :class="{ 'i-mingcute:check-line': option.checked }" aria-hidden="true" />
+            <span class="item-label">{{ option.label }}<small v-if="option.description" class="item-description">{{ option.description }}</small></span>
+            <span v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" aria-hidden="true">
+              <SkeletonBlock v-if="option.pending" width="var(--bew-control-icon-size)" height="var(--bew-control-icon-size)" />
+              <i v-else-if="option.checked" class="i-mingcute:check-line" />
+            </span>
           </button>
         </li>
       </ul>
@@ -228,6 +245,9 @@ onBeforeUnmount(() => {
   --uno: "flex items-center";
 
   min-height: var(--bew-space-8);
+  border: 0;
+  background: transparent;
+  color: inherit;
   width: 100%;
   text-align: left;
   padding: var(--bew-space-2);
@@ -253,6 +273,15 @@ onBeforeUnmount(() => {
   }
 }
 
+.context-menu-container > ul {
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
 .item-icon {
   --uno: "inline-block";
 
@@ -275,11 +304,28 @@ onBeforeUnmount(() => {
   min-width: var(--bew-layout-sidebar-width);
 }
 
+.item-description {
+  display: block;
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+  font-weight: var(--bew-font-weight-regular);
+}
+
 .item-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: var(--bew-control-icon-size);
   height: var(--bew-control-icon-size);
   flex: none;
   margin-left: var(--bew-space-2);
   color: var(--bew-theme-foreground);
+
+  > i {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
 }
 </style>

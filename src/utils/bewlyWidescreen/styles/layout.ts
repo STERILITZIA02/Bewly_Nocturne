@@ -1,6 +1,7 @@
 import { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS } from '~/constants/globalEvents'
 import LIQUID_GLASS_CSS from '~/styles/liquidGlass.scss?inline'
 import SEGMENT_CONTROL_CSS from '~/styles/segmentControl.scss?inline'
+import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import SKELETON_CSS from '~/styles/skeleton.scss?inline'
 import { BODY_CLASS, DANMAKU_GLASS_CLASS, DANMAKU_SOURCE_HOST_CLASS, DANMAKU_SURFACE_SELECTOR, EPISODE_SECTION_CLASS, HIDDEN_NATIVE_PLAYER_CONTROL_SELECTORS, HIGH_ENERGY_PROGRESS_PIN_SELECTOR, MOBILE_BREAKPOINT, NATIVE_LIGHT_OFF_CONTROL_SELECTORS, NATIVE_MUSIC_ENTRY_SELECTOR, NATIVE_PLAYER_ANCESTOR_CLASS, NATIVE_PLAYER_CLASS, PLAYLIST_RECOMMENDATION_FOOTER_SELECTOR, ROOT_ID, SIDEBAR_MAX_VIEWPORT_PERCENT } from '~/utils/bewlyWidescreen/constants'
 import { WIDESCREEN_SIDEBAR_DEFAULT_VIEWPORT_RATIO, WIDESCREEN_SIDEBAR_MIN_WIDTH } from '~/utils/bewlyWidescreenPolicy'
@@ -12,6 +13,7 @@ export function injectLayoutStyle() {
     ${SKELETON_CSS}
     ${LIQUID_GLASS_CSS}
     ${SEGMENT_CONTROL_CSS}
+    ${SEND_BUTTON_CSS}
     body.${BODY_CLASS} {
       --bewly-widescreen-inputbar-height: calc(
         var(--bew-control-height, 36px) + var(--bew-space-2, 8px)
@@ -145,7 +147,7 @@ export function injectLayoutStyle() {
 
     html:not(.dark) #${ROOT_ID},
     html:not(.dark) body.${BODY_CLASS} {
-      --bewly-widescreen-sidebar-resize-accent: var(--bew-theme-color, #00aeec);
+      --bewly-widescreen-sidebar-resize-accent: var(--bew-focus-ring-color, CanvasText);
     }
 
     html.dark body.${BODY_CLASS} {
@@ -999,7 +1001,7 @@ export function injectLayoutStyle() {
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch:focus-visible,
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting:focus-visible,
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-switch:has(.bui-danmaku-switch-input:focus-visible) {
-      outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-focus-ring, var(--bew-theme-color));
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: var(--bew-space-0-5, 2px);
     }
 
@@ -1137,9 +1139,9 @@ export function injectLayoutStyle() {
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-video-inputbar:focus-within {
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
       box-shadow:
-        0 0 0 var(--bew-space-0-5, 2px) var(--bew-theme-focus-ring),
+        var(--bew-focus-shadow, 0 0 0 1px CanvasText),
         var(--bew-shadow-2),
         var(--bew-shadow-edge-glow-1) !important;
     }
@@ -1193,36 +1195,6 @@ export function injectLayoutStyle() {
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-input::placeholder {
       color: var(--bew-text-3) !important;
       opacity: 1;
-    }
-
-    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send {
-      display: inline-flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      min-width: var(--bew-space-12, 48px) !important;
-      height: var(--bew-control-height, 36px) !important;
-      padding: 0 var(--bew-space-3, 12px) !important;
-      flex: 0 0 auto !important;
-      margin: 0 !important;
-      color: var(--bew-on-theme-color) !important;
-      background: var(--bew-theme-color) !important;
-      border: 0 !important;
-      border-radius: var(--bew-radius-full) !important;
-      corner-shape: var(--bew-corner-shape-round);
-      font-size: var(--bew-font-size-control, 13px) !important;
-      font-weight: var(--bew-font-weight-semibold, 600) !important;
-      line-height: var(--bew-line-height-control, 18px) !important;
-      transition: background-color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease);
-    }
-
-    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send:hover {
-      background: var(--bew-theme-color) !important;
-    }
-
-    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-btn-send :is(.bui-area, span) {
-      color: inherit !important;
-      font: inherit !important;
-      background: transparent !important;
     }
 
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-wrap {
@@ -1579,8 +1551,7 @@ export function injectLayoutStyle() {
     #${ROOT_ID}[data-sidebar-resizing="true"] .bewly-widescreen-sidebar {
       /* Outer paint only: the content box and native controls keep their size. */
       box-shadow:
-        0 0 0 var(--bew-space-0-5, 2px) var(--bewly-widescreen-sidebar-resize-accent),
-        0 0 var(--bew-space-6, 24px) color-mix(in oklab, var(--bewly-widescreen-sidebar-resize-accent) 42%, transparent),
+        var(--bew-focus-shadow, 0 0 0 1px CanvasText),
         var(--bew-shadow-3),
         var(--bew-shadow-edge-glow-1);
     }
@@ -2155,7 +2126,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-tags-slot .tag-link:focus-visible {
-      outline: 2px solid var(--bew-theme-focus-ring);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: 2px;
       border-radius: var(--bew-badge-radius);
     }
@@ -2687,7 +2658,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-error button:focus-visible {
-      outline: var(--bew-space-0-5) solid var(--bew-theme-color);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: var(--bew-space-0-5);
     }
 
@@ -2834,7 +2805,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-panel-danmaku .bpx-player-dm-btn-history:focus-visible {
-      outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: var(--bew-space-0-5);
     }
 
@@ -3034,7 +3005,7 @@ export function injectLayoutStyle() {
     }
 
     #${ROOT_ID} .bewly-widescreen-playlist-toggle:focus-visible {
-      outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-focus-ring, var(--bew-theme-color));
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: var(--bew-space-0-5, 2px);
     }
 

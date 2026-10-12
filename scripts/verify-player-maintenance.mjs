@@ -719,6 +719,7 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/styles/liquidGlass.scss?inline': { default: '' },
       '~/styles/segmentControl.scss?inline': { default: '' },
+      '~/styles/sendButton.scss?inline': { default: '' },
       '~/styles/skeleton.scss?inline': { default: '' },
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),

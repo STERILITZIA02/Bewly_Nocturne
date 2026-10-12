@@ -491,6 +491,8 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
   })
 
   check('UI audit: TopBar keyboard opens the existing popup, survives pointer leave, restores focus and cleans up', async () => {
+    const settings = Vue.ref({ touchScreenOptimization: false })
+    const destinations = []
     const timers = new Map()
     const currentHref = Vue.ref('https://space.bilibili.com/123')
     let timerId = 0
@@ -504,10 +506,10 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       '@vueuse/core': { unrefElement: target => Vue.unref(target) },
       '~/components/TopBar/constants/urls': await import('../src/components/TopBar/constants/urls'),
       '~/composables/useAnchoredPopoverPosition': { useAnchoredPopoverPosition() {} },
-      '~/composables/useAppProvider': { useBewlyApp: () => ({ activatedPage: Vue.ref('Home') }) },
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ activatedPage: Vue.ref('Home'), navigateToDockPage: page => destinations.push(page), getDockPageHref: () => 'https://www.bilibili.com/' }) },
       '~/composables/useCurrentLocationHref': { useCurrentLocationHref: () => currentHref },
       '~/enums/appEnums': await import('../src/enums/appEnums'),
-      '~/logic': { settings: Vue.ref({ touchScreenOptimization: false }) },
+      '~/logic': { settings },
       '~/stores/settingsStore': { useSettingsStore: () => ({}) },
       '~/stores/topBarStore': { useTopBarStore: () => store },
       '~/utils/configuredLinkNavigation': {},
@@ -545,6 +547,18 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
     try {
       app.mount(host)
       await flush()
+      for (const touch of [false, true]) {
+        settings.value.touchScreenOptimization = touch
+        const event = new MouseEvent('click', { button: 0, cancelable: true })
+        interaction.handleClickTopBarLogo(event)
+        assert.equal(event.defaultPrevented, true)
+        assert.equal(destinations.at(-1), 'Home')
+      }
+      settings.value.touchScreenOptimization = false
+      const modified = new MouseEvent('click', { button: 0, metaKey: true, cancelable: true })
+      interaction.handleClickTopBarLogo(modified)
+      assert.equal(modified.defaultPrevented, false)
+      assert.equal(destinations.length, 2)
       for (const [url, forceWhite] of [
         ['https://space.bilibili.com/123', true],
         ['https://space.bilibili.com/123/upload', true],

@@ -5,6 +5,9 @@ export interface PgcEpisodeVideoIds {
   bvid?: string
 }
 
+// Public ID metadata is cheap to reload; a long-lived tab must not retain every
+// episode it has ever visited. This bounds cache retention, not server results.
+export const PGC_EPISODE_CACHE_LIMIT = 256
 const episodeVideoIds = new Map<number, PgcEpisodeVideoIds>()
 const episodeVideoIdRequests = new Map<number, Promise<PgcEpisodeVideoIds | undefined>>()
 
@@ -22,9 +25,14 @@ export function findPgcEpisodeVideoIds(result: any, epid: number): PgcEpisodeVid
 }
 
 export async function resolvePgcEpisodeVideoIds(epid: number): Promise<PgcEpisodeVideoIds | undefined> {
+  if (!Number.isSafeInteger(epid) || epid <= 0)
+    return undefined
   const cached = episodeVideoIds.get(epid)
-  if (cached)
+  if (cached) {
+    episodeVideoIds.delete(epid)
+    episodeVideoIds.set(epid, cached)
     return cached
+  }
 
   const pending = episodeVideoIdRequests.get(epid)
   if (pending)
@@ -39,6 +47,8 @@ export async function resolvePgcEpisodeVideoIds(epid: number): Promise<PgcEpisod
       if (!ids)
         return undefined
       episodeVideoIds.set(epid, ids)
+      while (episodeVideoIds.size > PGC_EPISODE_CACHE_LIMIT)
+        episodeVideoIds.delete(episodeVideoIds.keys().next().value!)
       return ids
     })
     .catch(() => undefined)

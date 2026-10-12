@@ -1,17 +1,25 @@
 <script setup lang="ts">
 import { onClickOutside } from '@vueuse/core'
-import { computed, nextTick, ref, useId, watch } from 'vue'
+import { computed, inject, nextTick, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import { useAnchoredPopoverPosition } from '~/composables/useAnchoredPopoverPosition'
+import type { BewlyAppProvider } from '~/composables/useAppProvider'
 
 import { formatLocalCalendarDate, parseLocalCalendarDate, toLocalDate } from '../utils/localDate'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   modelValue?: string
+  min?: string
   max?: string
   placeholder?: string
-}>()
+  label?: string
+  embedded?: boolean
+  teleport?: boolean
+  disabled?: boolean
+  active?: boolean
+  invalid?: boolean
+}>(), { active: true })
 
 const emit = defineEmits<{
   'update:modelValue': [value: string]
@@ -23,6 +31,15 @@ const keyboardOpened = ref(false)
 const pickerRef = ref<HTMLElement>()
 const panelRef = ref<HTMLElement>()
 const triggerRef = ref<HTMLButtonElement>()
+const app = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
+const teleportTarget = computed(() => {
+  if (!props.teleport)
+    return undefined
+  const root = pickerRef.value?.getRootNode()
+  return app?.mainAppRef.value ?? (root?.nodeType === 11 ? root as ShadowRoot : pickerRef.value?.ownerDocument.body)
+})
+const pickerLabel = computed(() => props.label || props.placeholder || t('search.date_picker.start_date'))
+const focusedDay = ref('')
 useAnchoredPopoverPosition(pickerRef, panelRef, showPicker)
 const pickerId = useId()
 const inputValue = ref('')
@@ -31,6 +48,7 @@ const isInputMode = ref(false)
 // 当前显示的年月
 const currentYear = ref(new Date().getFullYear())
 const currentMonth = ref(new Date().getMonth())
+const minDate = computed(() => props.min ? parseLocalCalendarDate(props.min) : null)
 
 // 解析 max 日期
 const maxDate = computed(() => {
@@ -51,7 +69,12 @@ watch(() => props.modelValue, (newVal) => {
   if (!isInputMode.value) {
     inputValue.value = newVal ? displayValue.value : ''
   }
+  closePicker()
 }, { immediate: true })
+watch(() => [props.active, props.disabled], () => {
+  if (!props.active || props.disabled)
+    closePicker()
+})
 
 // 解析用户输入的日期
 // 生成日历数据
@@ -128,13 +151,10 @@ const calendarDays = computed(() => {
 
 // 检查日期是否被禁用
 function isDateDisabled(date: Date): boolean {
-  if (!maxDate.value)
-    return false
-
+  if (props.disabled || !props.active)
+    return true
   const checkDate = new Date(date.getFullYear(), date.getMonth(), date.getDate())
-  const max = new Date(maxDate.value.year, maxDate.value.month, maxDate.value.day)
-
-  return checkDate > max
+  return Boolean((minDate.value && checkDate < toLocalDate(minDate.value)) || (maxDate.value && checkDate > toLocalDate(maxDate.value)))
 }
 
 // 检查是否是同一天
@@ -155,7 +175,7 @@ function formatDate(date: Date): string {
 
 // 选择日期
 function selectDate(day: typeof calendarDays.value[0]) {
-  if (day.disabled)
+  if (day.disabled || !showPicker.value || isDateDisabled(day.date))
     return
 
   const date = day.date
@@ -206,6 +226,8 @@ function selectToday() {
 
 // 清除
 function clearDate() {
+  if (props.disabled || !props.active)
+    return
   emit('update:modelValue', '')
   closePicker(true)
   inputValue.value = ''
@@ -227,26 +249,85 @@ function handlePickerKeydown(event: KeyboardEvent) {
 }
 
 function handlePickerFocusOut(event: FocusEvent) {
-  if (!pickerRef.value?.contains(event.relatedTarget as Node | null))
+  const next = event.relatedTarget as Node | null
+  if (!pickerRef.value?.contains(next) && !panelRef.value?.contains(next))
     closePicker()
 }
 
 // 打开选择器时，初始化到当前选中的日期或今天
 function openPicker(event?: MouseEvent) {
+  if (props.disabled || !props.active)
+    return
   keyboardOpened.value = event?.detail === 0
-  if (props.modelValue) {
-    const date = parseLocalCalendarDate(props.modelValue)
-    if (date) {
-      currentYear.value = date.year
-      currentMonth.value = date.month
-    }
+  const selected = props.modelValue ? parseLocalCalendarDate(props.modelValue) : null
+  let openingDate = selected ? toLocalDate(selected) : new Date()
+  if (minDate.value && openingDate < toLocalDate(minDate.value))
+    openingDate = toLocalDate(minDate.value)
+  if (maxDate.value && openingDate > toLocalDate(maxDate.value))
+    openingDate = toLocalDate(maxDate.value)
+  currentYear.value = openingDate.getFullYear()
+  currentMonth.value = openingDate.getMonth()
+  showPicker.value = true
+  const preferred = calendarDays.value.find(day => isSameDay(day.date, openingDate) && !day.disabled)
+    ?? calendarDays.value.find(day => day.isToday && !day.disabled)
+    ?? calendarDays.value.find(day => !day.disabled)
+  focusedDay.value = preferred ? formatDate(preferred.date) : ''
+  if (keyboardOpened.value)
+    void nextTick(focusCalendarDay)
+}
+
+function focusCalendarDay() {
+  if (!showPicker.value)
+    return
+  const panel = panelRef.value
+  const button = panel?.querySelector<HTMLButtonElement>(`[data-date="${focusedDay.value}"]`)
+  if (!panel || !button)
+    return
+  button.focus({ preventScroll: true })
+  // Keep keyboard navigation within the popup instead of scrolling the page.
+  const bounds = panel.getBoundingClientRect()
+  const day = button.getBoundingClientRect()
+  if (day.top < bounds.top)
+    panel.scrollTop -= bounds.top - day.top
+  else if (day.bottom > bounds.bottom)
+    panel.scrollTop += day.bottom - bounds.bottom
+}
+
+function handleDayKeydown(event: KeyboardEvent, date: Date) {
+  if (event.isComposing)
+    return
+  const dayOffsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7, Home: -date.getDay(), End: 6 - date.getDay() }
+  let target: Date
+  if (event.key in dayOffsets) {
+    target = new Date(date.getFullYear(), date.getMonth(), date.getDate() + dayOffsets[event.key])
+  }
+  else if (event.key === 'PageUp' || event.key === 'PageDown') {
+    const offset = (event.key === 'PageUp' ? -1 : 1) * (event.shiftKey ? 12 : 1)
+    const month = new Date(date.getFullYear(), date.getMonth() + offset, 1)
+    target = new Date(month.getFullYear(), month.getMonth(), Math.min(date.getDate(), new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()))
   }
   else {
-    const today = new Date()
-    currentYear.value = today.getFullYear()
-    currentMonth.value = today.getMonth()
+    return
   }
-  showPicker.value = true
+  event.preventDefault()
+  if (isDateDisabled(target))
+    return
+  focusedDay.value = formatDate(target)
+  currentYear.value = target.getFullYear()
+  currentMonth.value = target.getMonth()
+  void nextTick(focusCalendarDay)
+}
+
+watch(calendarDays, (days) => {
+  if (!days.some(day => formatDate(day.date) === focusedDay.value && !day.disabled)) {
+    const available = days.find(day => day.month === 'current' && !day.disabled) ?? days.find(day => !day.disabled)
+    focusedDay.value = available ? formatDate(available.date) : ''
+  }
+})
+
+function retirePanel(element: Element) {
+  element.setAttribute('inert', '')
+  element.setAttribute('aria-hidden', 'true')
 }
 
 // 处理输入框点击
@@ -265,6 +346,10 @@ function handleInputFocus() {
 // 处理输入框失去焦点
 function handleInputBlur() {
   isInputMode.value = false
+  if (props.disabled || !props.active) {
+    inputValue.value = displayValue.value
+    return
+  }
   const parsedDate = parseLocalCalendarDate(inputValue.value)
   const date = parsedDate ? toLocalDate(parsedDate) : null
 
@@ -302,7 +387,7 @@ function handleInputKeydown(event: KeyboardEvent) {
 }
 
 // 点击外部关闭
-onClickOutside(pickerRef, () => closePicker())
+onClickOutside(pickerRef, () => closePicker(), { ignore: [panelRef] })
 
 // 月份名称
 const monthNames = computed(() => Array.from({ length: 12 }, (_, index) =>
@@ -319,14 +404,19 @@ const weekDays = computed(() => [
 </script>
 
 <template>
-  <div ref="pickerRef" class="date-picker" pos="relative" @keydown="handlePickerKeydown" @focusout="handlePickerFocusOut">
+  <div
+    ref="pickerRef" class="date-picker" :class="{ 'date-picker--embedded': embedded }" pos="relative" @keydown="handlePickerKeydown"
+    @focusout="handlePickerFocusOut"
+  >
     <!-- 输入框显示 -->
     <div class="date-picker-input-wrapper">
       <input
         v-model="inputValue"
         type="text"
+        autocomplete="off" :spellcheck="false"
         class="date-picker-input"
         :class="{ 'has-value': modelValue }"
+        :aria-label="pickerLabel" :aria-invalid="invalid || undefined" :disabled="disabled || !active"
         :placeholder="placeholder || $t('search.date_picker.start_date')"
         @click="handleInputClick"
         @focus="handleInputFocus"
@@ -337,7 +427,8 @@ const weekDays = computed(() => [
         ref="triggerRef"
         type="button"
         class="calendar-icon"
-        :aria-label="$t('search.date_picker.open_calendar')"
+        :aria-label="label ? $t('search.date_picker.open_calendar_for', { label }) : $t('search.date_picker.open_calendar')"
+        :disabled="disabled || !active"
         aria-haspopup="dialog"
         :aria-expanded="showPicker"
         :aria-controls="showPicker ? pickerId : undefined"
@@ -348,83 +439,114 @@ const weekDays = computed(() => [
     </div>
 
     <!-- 日历弹出框 -->
-    <Transition name="dropdown" :css="!keyboardOpened">
-      <div
-        v-if="showPicker" :id="pickerId" ref="panelRef" role="dialog"
-        :aria-label="placeholder || $t('search.date_picker.start_date')"
-        class="date-picker-panel bew-popover-surface"
-      >
-        <!-- 头部：年月选择 -->
-        <div class="picker-header">
-          <div class="year-controls">
-            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_year')" @click="prevYear">
-              <div class="i-tabler:chevron-left" w-4 h-4 />
-            </button>
-            <span class="year-text">{{ $t('search.date_picker.year', { year: currentYear }) }}</span>
-            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_year')" @click="nextYear">
-              <div class="i-tabler:chevron-right" w-4 h-4 />
-            </button>
-          </div>
-          <div class="month-controls">
-            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_month')" @click="prevMonth">
-              <div class="i-tabler:chevron-up" w-5 h-5 />
-            </button>
-            <div class="month-text">
-              {{ monthNames[currentMonth] }}
+    <Teleport :to="teleportTarget || 'body'" :disabled="!teleportTarget">
+      <Transition name="dropdown" :css="!keyboardOpened" @before-leave="retirePanel">
+        <div
+          v-if="showPicker" :id="pickerId" ref="panelRef" role="dialog"
+          :aria-label="pickerLabel"
+          class="date-picker-panel bew-popover-surface"
+          :class="{ 'date-picker-panel--portaled': teleport, 'date-picker-panel--embedded': embedded }"
+          @keydown="handlePickerKeydown" @focusout="handlePickerFocusOut"
+        >
+          <!-- 头部：年月选择 -->
+          <div class="picker-header">
+            <div class="year-controls">
+              <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_year')" @click="prevYear">
+                <div class="i-tabler:chevron-left" w-4 h-4 />
+              </button>
+              <span class="year-text">{{ $t('search.date_picker.year', { year: currentYear }) }}</span>
+              <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_year')" @click="nextYear">
+                <div class="i-tabler:chevron-right" w-4 h-4 />
+              </button>
             </div>
-            <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_month')" @click="nextMonth">
-              <div class="i-tabler:chevron-down" w-5 h-5 />
+            <div class="month-controls">
+              <button type="button" class="header-btn" :aria-label="$t('search.date_picker.previous_month')" @click="prevMonth">
+                <div class="i-tabler:chevron-up" w-5 h-5 />
+              </button>
+              <div class="month-text">
+                {{ monthNames[currentMonth] }}
+              </div>
+              <button type="button" class="header-btn" :aria-label="$t('search.date_picker.next_month')" @click="nextMonth">
+                <div class="i-tabler:chevron-down" w-5 h-5 />
+              </button>
+            </div>
+          </div>
+
+          <!-- 星期标题 -->
+          <div class="picker-weekdays">
+            <div v-for="day in weekDays" :key="day" class="weekday">
+              {{ day }}
+            </div>
+          </div>
+
+          <!-- 日期网格 -->
+          <div class="picker-days">
+            <button
+              v-for="(day, index) in calendarDays"
+              :key="index"
+              type="button"
+              class="day-cell"
+              :class="{
+                'other-month': day.month !== 'current',
+                'disabled': day.disabled,
+                'today': day.isToday,
+                'selected': day.isSelected,
+              }"
+              :disabled="day.disabled"
+              :aria-disabled="day.disabled"
+              :aria-pressed="day.isSelected"
+              :aria-label="$t('search.date_picker.select_date', { date: formatDate(day.date) })"
+              :data-date="formatDate(day.date)" :tabindex="formatDate(day.date) === focusedDay ? 0 : -1"
+              @focus="focusedDay = formatDate(day.date)" @keydown="handleDayKeydown($event, day.date)"
+              @click="selectDate(day)"
+            >
+              {{ day.day }}
+            </button>
+          </div>
+
+          <!-- 底部按钮 -->
+          <div class="picker-footer">
+            <button type="button" class="footer-btn clear" @click="clearDate">
+              {{ $t('search.date_picker.clear') }}
+            </button>
+            <button type="button" class="footer-btn today" :disabled="isDateDisabled(new Date())" @click="selectToday">
+              {{ $t('search.date_picker.today') }}
             </button>
           </div>
         </div>
-
-        <!-- 星期标题 -->
-        <div class="picker-weekdays">
-          <div v-for="day in weekDays" :key="day" class="weekday">
-            {{ day }}
-          </div>
-        </div>
-
-        <!-- 日期网格 -->
-        <div class="picker-days">
-          <button
-            v-for="(day, index) in calendarDays"
-            :key="index"
-            type="button"
-            class="day-cell"
-            :class="{
-              'other-month': day.month !== 'current',
-              'disabled': day.disabled,
-              'today': day.isToday,
-              'selected': day.isSelected,
-            }"
-            :disabled="day.disabled"
-            :aria-disabled="day.disabled"
-            :aria-pressed="day.isSelected"
-            :aria-label="$t('search.date_picker.select_date', { date: formatDate(day.date) })"
-            @click="selectDate(day)"
-          >
-            {{ day.day }}
-          </button>
-        </div>
-
-        <!-- 底部按钮 -->
-        <div class="picker-footer">
-          <button type="button" class="footer-btn clear" @click="clearDate">
-            {{ $t('search.date_picker.clear') }}
-          </button>
-          <button type="button" class="footer-btn today" @click="selectToday">
-            {{ $t('search.date_picker.today') }}
-          </button>
-        </div>
-      </div>
-    </Transition>
+      </Transition>
+    </Teleport>
   </div>
 </template>
 
 <style scoped lang="scss">
 .date-picker {
   display: inline-block;
+}
+.date-picker--embedded {
+  display: block;
+  min-width: 0;
+  .date-picker-input-wrapper {
+    width: 100%;
+  }
+  .date-picker-input {
+    min-width: 0;
+    border: 0;
+    color: var(--bew-text-1);
+    &::placeholder {
+      color: var(--bew-text-2);
+    }
+    &:focus-visible {
+      outline: none;
+      box-shadow: none;
+      color: var(--bew-on-theme-surface);
+      background: var(--bew-theme-surface);
+    }
+  }
+}
+.date-picker-input::selection {
+  background: var(--bew-theme-color);
+  color: var(--bew-on-theme-color);
 }
 
 .date-picker-input-wrapper {
@@ -465,7 +587,7 @@ const weekDays = computed(() => [
     color: var(--bew-text-1);
   }
 
-  &:hover {
+  &:hover:not(:disabled) {
     background: var(--bew-fill-2);
   }
 
@@ -516,6 +638,33 @@ const weekDays = computed(() => [
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: var(--bew-space-3);
+
+  &::selection,
+  :deep(::selection) {
+    color: var(--bew-on-theme-color);
+    background: var(--bew-theme-color);
+  }
+}
+.date-picker-panel--portaled {
+  z-index: var(--bew-z-popover);
+}
+.date-picker-panel--embedded {
+  .weekday {
+    color: var(--bew-text-2);
+  }
+  .year-text,
+  .month-text {
+    min-width: var(--bew-space-8);
+    font-size: var(--bew-font-size-control);
+    line-height: var(--bew-line-height-control);
+  }
+}
+.date-picker-panel .footer-btn:disabled,
+.date-picker .calendar-icon:disabled {
+  color: var(--bew-text-3);
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .picker-header {
@@ -668,6 +817,10 @@ const weekDays = computed(() => [
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
+  &:disabled {
+    color: var(--bew-text-3);
+    cursor: not-allowed;
+  }
   transition:
     background-color var(--bew-duration-normal) var(--bew-ease-out),
     color var(--bew-duration-normal) var(--bew-ease-out),
@@ -678,7 +831,7 @@ const weekDays = computed(() => [
   &.clear {
     color: var(--bew-text-2);
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--bew-fill-1);
       color: var(--bew-text-1);
     }
@@ -687,7 +840,7 @@ const weekDays = computed(() => [
   &.today {
     color: var(--bew-theme-foreground);
 
-    &:hover {
+    &:hover:not(:disabled) {
       background: var(--bew-theme-surface);
     }
   }

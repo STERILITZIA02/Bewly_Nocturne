@@ -1,5 +1,6 @@
 import { computed, reactive, ref } from 'vue'
 
+import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import type { HistoryResult, List as HistoryItem } from '~/models/history/history'
 import type { HistorySearchResult } from '~/models/video/historySearch'
 import { createAccountLifetime } from '~/utils/accountLifetime'
@@ -7,7 +8,7 @@ import type { AccountId } from '~/utils/accountScope'
 import type api from '~/utils/api'
 
 import type { HistoryContentFilter } from './historyFilters'
-import { historyDateBounds, matchesHistoryFilters } from './historyFilters'
+import { createHistoryFilters, hasHistoryFilters, historyRangeBounds, matchesHistoryFilters } from './historyFilters'
 
 interface HistoryDependencies {
   api: typeof api.history
@@ -28,39 +29,53 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
   const historyList = reactive<HistoryItem[]>([])
   const keyword = ref('')
   const submittedKeyword = ref('')
-  const date = ref('')
+  const filters = ref(createHistoryFilters())
   const contentType = ref<HistoryContentFilter>('all')
-  const filtersActive = computed(() => Boolean(submittedKeyword.value || date.value || contentType.value !== 'all'))
+  const filtersActive = computed(() => Boolean(submittedKeyword.value || hasHistoryFilters(filters.value) || contentType.value !== 'all'))
   const isClearingHistory = ref(false)
   const historyStatus = ref<boolean>()
+  const isReadingStatus = ref(false)
   const isUpdatingStatus = ref(false)
   const deleting = reactive(new Set<string>())
+  const seenReadKeys = new Set<string>()
   let cursor = 0
   let page = 1
   let generation = 0
   let statusRevision = 0
   let readController: AbortController | undefined
+  let refreshFailed = false
 
   function resetListState() {
     generation++
     readController?.abort()
     readController = undefined
     historyList.length = 0
-    cursor = historyDateBounds(date.value)?.end ?? 0
+    seenReadKeys.clear()
+    const end = historyRangeBounds(filters.value)?.end
+    cursor = end !== undefined && Number.isFinite(end) ? end : 0
     page = 1
     noMoreContent.value = false
     requestFailed.value = false
+    refreshFailed = false
     isLoading.value = false
   }
 
-  async function load() {
+  async function load(refresh = false) {
     const owner = lifetime.capture()
-    if (!owner.isCurrent() || isLoading.value || noMoreContent.value || isClearingHistory.value)
+    if (!owner.isCurrent() || isLoading.value || (!refresh && noMoreContent.value) || isClearingHistory.value || deleting.size > 0)
       return false
     const version = generation
     const query = submittedKeyword.value
-    const bounds = historyDateBounds(date.value)
+    const activeFilters = { ...filters.value }
+    const bounds = historyRangeBounds(activeFilters)
+    if (bounds === null)
+      return false
     const type = contentType.value
+    const draft = refresh ? [] : historyList
+    const sourceKeys = refresh ? new Set<string>() : seenReadKeys
+    let nextPage = refresh ? 1 : page
+    let nextCursor = refresh ? bounds?.end ?? 0 : cursor
+    let ended = false
     const isCurrent = () => owner.isCurrent() && version === generation
     const controller = new AbortController()
     readController = controller
@@ -72,42 +87,69 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
         if (!isCurrent())
           return false
         const response: HistoryResult | HistorySearchResult = query
-          ? await dependencies.api.searchHistoryList({ pn: page, keyword: query }, { signal: controller.signal })
-          : await dependencies.api.getHistoryList({ type: 'all', view_at: cursor }, { signal: controller.signal })
+          ? await dependencies.api.searchHistoryList({ pn: nextPage, keyword: query }, { signal: controller.signal })
+          : await dependencies.api.getHistoryList({ type: 'all', view_at: nextCursor }, { signal: controller.signal })
         if (!isCurrent())
           return false
         if (response.code !== 0)
           throw response
         const items = Array.isArray(response.data?.list) ? response.data.list : []
-        const seen = new Set(historyList.map(item => `${item.history.business}:${item.history.oid}:${item.view_at}`))
-        historyList.push(...items.filter((item) => {
+        let newSourceRecords = 0
+        for (const item of items) {
           const key = `${item.history.business}:${item.history.oid}:${item.view_at}`
-          if (!matchesHistoryFilters(item, type, bounds) || seen.has(key))
+          if (!sourceKeys.has(key)) {
+            sourceKeys.add(key)
+            newSourceRecords++
+          }
+        }
+        const seen = new Set(draft.map(item => `${item.history.business}:${item.history.oid}:${item.view_at}`))
+        draft.push(...items.filter((item) => {
+          const key = `${item.history.business}:${item.history.oid}:${item.view_at}`
+          if (!matchesHistoryFilters(item, type, bounds, activeFilters) || seen.has(key))
             return false
           seen.add(key)
           return true
         }))
         pagesRead++
         if (query) {
-          page++
-          noMoreContent.value = items.length < 20
-          if (!bounds && type === 'all')
-            return true
+          nextPage++
+          ended = items.length < 20 || newSourceRecords === 0
+          if (!filtersActive.value)
+            break
         }
         else {
-          const nextCursor = items.at(-1)?.view_at ?? cursor
-          noMoreContent.value = items.length < 20 || nextCursor === cursor || Boolean(bounds && nextCursor < bounds.start)
-          cursor = nextCursor
+          const previousCursor = nextCursor
+          nextCursor = items.at(-1)?.view_at ?? previousCursor
+          ended = items.length < 20 || newSourceRecords === 0 || (previousCursor > 0 && nextCursor >= previousCursor) || Boolean(bounds && nextCursor < bounds.start)
         }
-        // Explicit filtered browsing consumes at most three pages per action.
-        if (filtersActive.value && pagesRead >= 3)
+        if (!refresh) {
+          page = nextPage
+          cursor = nextCursor
+          noMoreContent.value = ended
+        }
+        // Keep each scan bounded; the shared viewport sentinel schedules the next
+        // scan if sparse results still leave the bottom visible.
+        if (pagesRead >= LIBRARY_AUTOFILL_PAGE_LIMIT)
           break
-      } while (!noMoreContent.value && !await dependencies.haveScrollbar())
+      } while (!ended && (refresh ? draft.length < Math.max(20, historyList.length) : !await dependencies.haveScrollbar()))
+      if (!isCurrent())
+        return false
+      if (refresh) {
+        historyList.splice(0, historyList.length, ...draft)
+        seenReadKeys.clear()
+        sourceKeys.forEach(key => seenReadKeys.add(key))
+      }
+      refreshFailed = false
+      page = nextPage
+      cursor = nextCursor
+      noMoreContent.value = ended
       return isCurrent()
     }
     catch {
-      if (isCurrent())
+      if (isCurrent()) {
         requestFailed.value = true
+        refreshFailed = refresh
+      }
       return false
     }
     finally {
@@ -125,29 +167,48 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     void load()
   }
 
+  function refreshCurrentMode() {
+    if (isClearingHistory.value || deleting.size)
+      return
+    generation++
+    readController?.abort()
+    isLoading.value = false
+    return load(true)
+  }
+
   async function deleteHistoryItem(item: HistoryItem) {
     const owner = lifetime.capture()
-    const version = generation
     const kid = `${item.history.business}_${item.history.oid}`
     if (!owner.isCurrent() || deleting.has(kid) || isClearingHistory.value)
-      return
+      return false
+    // A page fetched before this write must not restore a confirmed deletion.
+    if (readController) {
+      generation++
+      readController.abort()
+      readController = undefined
+      isLoading.value = false
+    }
+    const version = generation
     deleting.add(kid)
     try {
       const response = await dependencies.api.deleteHistoryItem({ kid, csrf: dependencies.getCSRF() })
       if (!owner.isCurrent())
-        return
+        return false
       if (response.code !== 0)
         throw response
       dependencies.onDeleted?.(item)
       if (version === generation) {
-        const index = historyList.findIndex(entry => `${entry.history.business}_${entry.history.oid}` === kid)
-        if (index >= 0)
-          historyList.splice(index, 1)
+        for (let index = historyList.length - 1; index >= 0; index--) {
+          if (`${historyList[index].history.business}_${historyList[index].history.oid}` === kid)
+            historyList.splice(index, 1)
+        }
       }
+      return true
     }
     catch (error) {
       if (owner.isCurrent())
         dependencies.onWriteError(error)
+      return false
     }
     finally {
       if (owner.isCurrent())
@@ -160,13 +221,18 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     if (!owner.isCurrent())
       return
     const revision = ++statusRevision
+    isReadingStatus.value = true
     try {
       const response = await dependencies.api.getHistoryPauseStatus()
-      if (owner.isCurrent() && revision === statusRevision && response.code === 0)
+      if (owner.isCurrent() && revision === statusRevision && response.code === 0 && typeof response.data === 'boolean')
         historyStatus.value = response.data
     }
     catch {
       // Unknown status stays unknown; writes report their own failures.
+    }
+    finally {
+      if (owner.isCurrent() && revision === statusRevision)
+        isReadingStatus.value = false
     }
   }
 
@@ -176,6 +242,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       return
     isUpdatingStatus.value = true
     statusRevision++
+    isReadingStatus.value = false
     try {
       const response = await dependencies.api.setHistoryPauseStatus({ csrf: dependencies.getCSRF(), switch: isPause })
       if (!owner.isCurrent())
@@ -186,9 +253,11 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       const confirmed = await dependencies.api.getHistoryPauseStatus()
       if (!owner.isCurrent() || revision !== statusRevision)
         return
-      if (confirmed.code !== 0)
+      if (confirmed.code !== 0 || typeof confirmed.data !== 'boolean')
         throw confirmed
       historyStatus.value = confirmed.data
+      if (confirmed.data !== isPause)
+        throw new Error('history-status-not-confirmed')
     }
     catch (error) {
       if (owner.isCurrent())
@@ -230,13 +299,14 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
 
   function resetAccount() {
     lifetime.invalidate()
-    date.value = ''
+    filters.value = createHistoryFilters()
     contentType.value = 'all'
     resetListState()
     statusRevision++
     keyword.value = ''
     submittedKeyword.value = ''
     historyStatus.value = undefined
+    isReadingStatus.value = false
     isClearingHistory.value = false
     isUpdatingStatus.value = false
     deleting.clear()
@@ -255,7 +325,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     historyList,
     keyword,
     submittedKeyword,
-    date,
+    filters,
     contentType,
     filtersActive,
     isClearingHistory,
@@ -264,7 +334,11 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     deleting,
     load,
     reloadCurrentMode,
+    refreshCurrentMode,
+    retry: () => load(refreshFailed),
     deleteHistoryItem,
+    getHistoryPauseStatus,
+    isReadingStatus,
     setHistoryPauseStatus,
     clearAllHistory,
     activate,
@@ -272,6 +346,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     capture: lifetime.capture,
     dispose() {
       lifetime.dispose()
+      seenReadKeys.clear()
       readController?.abort()
       generation++
     },
@@ -283,7 +358,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       }
     },
     handleSearch() {
-      if (isClearingHistory.value || (date.value && !historyDateBounds(date.value)))
+      if (isClearingHistory.value || historyRangeBounds(filters.value) === null)
         return
       submittedKeyword.value = keyword.value.trim()
       reloadCurrentMode()

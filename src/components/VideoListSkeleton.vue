@@ -63,7 +63,7 @@ withDefaults(defineProps<{
 .video-list-skeleton--history {
   gap: var(--bew-space-2);
 
-  > .skeleton-block {
+  > .bew-skeleton-block {
     margin-bottom: var(--bew-space-1);
   }
 

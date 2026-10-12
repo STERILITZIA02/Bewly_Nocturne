@@ -120,5 +120,38 @@
       "resourceTypes": ["xmlhttprequest"],
       "requestMethods": ["post"]
     }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "origin", "operation": "set", "value": "https://message.bilibili.com" },
+        { "header": "referer", "operation": "set", "value": "https://message.bilibili.com/" }
+      ]
+    },
+    "condition": {
+      "regexFilter": "^https://api\\.vc\\.bilibili\\.com/(?:session_svr/v1/session_svr/set_top|link_setting/v1/link_setting/(?:set_msg_dnd|set_push_ss)|x/bplus/im/report/add)(?:\\?|$)",
+      "resourceTypes": ["xmlhttprequest"],
+      "requestMethods": ["post"]
+    }
+  },
+  {
+    "id": 7,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "origin", "operation": "set", "value": "https://space.bilibili.com" },
+        { "header": "referer", "operation": "set", "value": "https://space.bilibili.com/" }
+      ]
+    },
+    "condition": {
+      "domainType": "thirdParty",
+      "regexFilter": "^https://api\\.bilibili\\.com/pugv/app/web/favorite/page(?:\\?|$)",
+      "resourceTypes": ["xmlhttprequest"],
+      "requestMethods": ["get"]
+    }
   }
 ]

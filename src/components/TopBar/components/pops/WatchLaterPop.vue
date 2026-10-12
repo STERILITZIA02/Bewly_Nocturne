@@ -19,6 +19,7 @@ import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
+import { retiringListTransition } from '~/utils/motionPresence'
 import { openLinkInBackground } from '~/utils/tabs'
 import { getVideoPlaybackProgress, getVideoProgressPercentage } from '~/utils/videoVisitHistory'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl } from '~/utils/watchLaterList'
@@ -163,7 +164,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
       />
 
       <!-- watchlater -->
-      <TransitionGroup name="list">
+      <TransitionGroup name="list" v-bind="retiringListTransition">
         <article
           v-for="item in watchLaterList"
           :key="item.aid"

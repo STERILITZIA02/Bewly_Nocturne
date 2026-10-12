@@ -18,6 +18,8 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { useHomePageRoute } from '~/composables/useHomePageRoute'
 import { localLoudnessPanelOpen } from '~/composables/useLocalLoudness'
+import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
+import { useSettingsMotion } from '~/composables/useSettingsMotion'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
 import { BEWLY_MOUNTED, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
 import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
@@ -38,6 +40,7 @@ import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { createAsyncPageRegistry } from '~/utils/asyncPage'
 import { hasValidAppAuthTokens } from '~/utils/authProvider'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
 import { setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
@@ -63,7 +66,9 @@ const useOriginalBilibiliTopBar = computed(() => showNativeBilibiliTopBar(effect
 const { t } = useI18n()
 
 const { isDark } = useDark()
-const { showSettings, settingsLaunchStyle, settingsNavigationRequest, toggleSettings, openSettingsAt, openLayoutEditorSetting } = useSettingsPanel()
+const settingsMotion = useSettingsMotion()
+const dockBottomShift = ref(0)
+const { showSettings, settingsDockHeld, onSettingsAfterLeave, settingsLaunchStyle, settingsNavigationRequest, toggleSettings, openSettingsAt, openLayoutEditorSetting } = useSettingsPanel()
 const showAppAuthorizationDialog = computed(() => (
   settings.value.recommendationMode === 'app'
   && (
@@ -146,9 +151,9 @@ watch(currentLocationHref, () => {
 if (activatedPage.value !== AppPage.Search && activatedPage.value !== AppPage.SearchResults && isHomePage())
   topBarStore.searchKeyword = ''
 
+const asyncPages = createAsyncPageRegistry()
 function definePageComponent(loader: AsyncComponentLoader, delay = 120) {
-  return defineAsyncComponent({
-    loader,
+  return asyncPages.define(loader, {
     loadingComponent: PageAsyncLoading,
     delay,
   })
@@ -166,6 +171,7 @@ const pages = {
   [AppPage.Notifications]: definePageComponent(() => import('./Notifications/Notifications.vue')),
 }
 const mainAppRef = ref<HTMLElement>() as Ref<HTMLElement>
+const isLibraryPage = computed(() => [AppPage.Favorites, AppPage.WatchLater, AppPage.History, AppPage.Moments].includes(activatedPage.value))
 const scrollViewportRef = ref<HTMLElement | null>(null)
 const loadMoreSentinelRef = ref<HTMLElement>() // ✅ IntersectionObserver 哨兵元素
 const handlePageRefresh = ref<() => void>()
@@ -363,6 +369,8 @@ const showBewlyPage = computed((): boolean => {
   return onHomePage
 })
 
+const pageTransition = useReadyPageTransition(() => showBewlyPage.value ? pages[activatedPage.value as keyof typeof pages] : undefined, asyncPages.preload)
+
 // SearchResults owns a keyword-aware title. Other Bewly shell pages follow the
 // currently selected Dock page (and Home sub-tab) and react to locale changes.
 const dockPageTitle = computed<string | undefined>(() => {
@@ -436,6 +444,11 @@ function focusScrollViewport(options: { force?: boolean } = {}) {
 watch(
   () => activatedPage.value,
   () => {
+    // Load only the selected view, during the outgoing fade rather than after it.
+    // This imports code only; requests start when the incoming component mounts.
+    const component = pages[activatedPage.value as keyof typeof pages]
+    if (showBewlyPage.value && component)
+      asyncPages.preload(component)
     exitLayoutEditMode()
     cancelPendingRefreshScroll()
     scrollViewportRef.value?.scrollTo({ top: 0 })
@@ -693,6 +706,7 @@ provide<BewlyAppProvider>('BEWLY_APP', {
   undoForwardState,
   openIframeDrawer,
   haveScrollbar,
+  requestLoadMoreCheck: scheduleLoadMoreSentinelCheck,
   activeDrawer,
   setActiveDrawer,
   getDockPageHref,
@@ -795,6 +809,7 @@ onBeforeUnmount(stopUrlCleaner)
     id="bewly-wrapper"
     ref="mainAppRef"
     class="bewly-wrapper"
+    :style="{ '--bew-dock-bottom-shift': `${dockBottomShift}px` }"
     :class="{
       'dark': isDark,
       'bewly-wrapper--viewport': isHomePage(currentLocationHref),
@@ -810,7 +825,7 @@ onBeforeUnmount(stopUrlCleaner)
     <ElementSettingsContextMenu v-if="!isInIframe()" @open-setting="openLayoutEditorSetting" />
 
     <!-- Settings -->
-    <Transition name="settings-launch">
+    <Transition v-bind="settingsMotion" @after-leave="onSettingsAfterLeave">
       <KeepAlive>
         <Settings
           v-if="showSettings"
@@ -836,7 +851,8 @@ onBeforeUnmount(stopUrlCleaner)
         v-if="settings.alwaysUseDock || (showBewlyPage || iframePageURL)"
         pointer-events-auto
         :activated-page="activatedPage"
-        :settings-open="showSettings"
+        :settings-open="settingsDockHeld"
+        @bottom-shift-change="dockBottomShift = $event"
         @settings-visibility-change="toggleSettings"
         @refresh="handleThrottledPageRefresh"
         @undo-refresh="handleThrottledPageUnRefresh"
@@ -856,6 +872,7 @@ onBeforeUnmount(stopUrlCleaner)
     <div
       v-if="showTopBar"
       class="top-bar-host"
+      :class="{ 'top-bar-host--messages': showBewlyPage && activatedPage === AppPage.Notifications, 'top-bar-host--library': showBewlyPage && isLibraryPage }"
       m-auto max-w="$bew-page-max-width"
       :style="{
         opacity: hideUIForIframePhotoViewer ? 0 : 1,
@@ -886,15 +903,20 @@ onBeforeUnmount(stopUrlCleaner)
             style="overscroll-behavior: contain;"
             @scroll.passive="handleNativeScroll"
           >
-            <main m-auto max-w="$bew-page-max-width">
+            <main
+              m-auto max-w="$bew-page-max-width"
+              :class="{ 'bewly-page-container--messages': activatedPage === AppPage.Notifications, 'bewly-page-container--library': isLibraryPage }"
+            >
               <div
+                class="bewly-page-content"
+                :class="{ 'bewly-page-content--messages': activatedPage === AppPage.Notifications, 'bewly-page-content--library': isLibraryPage }"
                 p="t-[calc(var(--bew-top-bar-height)+10px)]" m-auto
                 w="lg:[calc(100%-200px)] [calc(100%-150px)]"
-                :style="useOriginalBilibiliTopBar && !reachTop
+                :style="activatedPage !== AppPage.Notifications && !isLibraryPage && useOriginalBilibiliTopBar && !reachTop
                   ? { paddingTop: 'calc(var(--bew-top-bar-height) + 120px)' }
                   : undefined"
               >
-                <Transition name="page-fade" :css="activatedPage !== AppPage.SearchResults" @after-enter="scheduleLoadMoreSentinelCheck">
+                <Transition mode="out-in" v-bind="pageTransition" @after-enter="scheduleLoadMoreSentinelCheck">
                   <Component :is="pages[activatedPage]" :key="activatedPage" />
                 </Transition>
 
@@ -938,6 +960,48 @@ onBeforeUnmount(stopUrlCleaner)
 <style lang="scss" scoped>
 .top-bar-layer {
   z-index: var(--bew-z-topbar-host);
+}
+
+// Let the persistent message rail sit above the decorative blur, while keeping
+// top-bar controls/popovers above it. Blur geometry and material stay unchanged.
+.top-bar-host--messages,
+.top-bar-host--library {
+  :deep(.top-bar-layer),
+  :deep(.top-bar) {
+    z-index: auto;
+  }
+
+  :deep(.top-bar) {
+    // Fixed creates a stacking context even at z-index:auto. The message page
+    // has a stationary viewport, so absolute preserves its position and lets
+    // controls stack above cards while the decorative edge stays below the rail.
+    position: absolute;
+  }
+
+  :deep(.top-bar-header__scroll-edge) {
+    position: fixed;
+    left: var(--bew-messages-sidebar-width);
+    right: 0;
+    width: auto;
+    z-index: var(--bew-z-topbar);
+  }
+
+  :deep(.top-bar-header__side),
+  :deep(.top-bar-header__search) {
+    position: relative;
+    z-index: var(--bew-z-topbar-host);
+  }
+}
+
+.bewly-page-content.bewly-page-content--messages,
+.bewly-page-content.bewly-page-content--library {
+  width: 100%;
+  padding-top: 0;
+}
+
+.bewly-page-container--messages,
+.bewly-page-container--library {
+  max-width: none;
 }
 
 .settings-layer {

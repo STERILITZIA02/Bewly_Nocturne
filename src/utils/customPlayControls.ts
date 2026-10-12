@@ -43,7 +43,7 @@ function ensureStyle() {
     .random-play .switch-btn[aria-checked=true] .switch-block { background:var(--bew-on-theme-color); transform:translateX(calc(var(--bew-control-height) - var(--bew-space-1) * 2 - var(--bew-icon-size-sm))); }
     .random-play .random-play-edit-btn { display:flex; align-items:center; justify-content:center; flex:none; width:var(--bew-control-height-sm); height:var(--bew-control-height-sm); padding:0; cursor:pointer; color:var(--bew-text-2); background:transparent; border:0; border-radius:var(--bew-radius-half); corner-shape:var(--bew-corner-shape); }
     .random-play .random-play-edit-btn:hover { background:var(--bew-fill-2); }
-    .random-play :is(button,select):focus-visible { outline:2px solid var(--bew-theme-focus-ring); outline-offset:var(--bew-space-0-5); }
+    .random-play :is(button,select):focus-visible { outline: var(--bew-focus-ring, 1px solid CanvasText); outline-offset:var(--bew-space-0-5); }
     @media (prefers-reduced-motion:reduce) { .random-play .switch-btn,.random-play .switch-block { transition:none; } }
   `
   ;(document.head || document.documentElement).appendChild(style)

@@ -9,7 +9,7 @@ import { BEWLY_IFRAME_DRAWER_HOST_CHANGE, OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_SCR
 import { VideoPageTopBarConfig } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
-import { isLayoutEditing, useLayoutEditableRoot } from '~/logic/layoutEdit'
+import { isLayoutEditing, useLayoutEditableRoot, vLayoutEditable } from '~/logic/layoutEdit'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { isBewlyWidescreenActive } from '~/utils/bewlyWidescreen'
@@ -20,9 +20,10 @@ import emitter from '~/utils/mitt'
 
 import NotificationsDrawer from './components/NotificationsDrawer.vue'
 import TopBarHeader from './components/TopBarHeader.vue'
+import TopBarLogo from './components/TopBarLogo.vue'
 import { resetTopBarTransientInteraction, useTopBarInteraction } from './composables/useTopBarInteraction'
 
-const { reachTop } = useBewlyApp()
+const { reachTop, scrollViewportRef, activatedPage } = useBewlyApp()
 // 顶栏状态管理
 const topBarStore = useTopBarStore()
 const settingsStore = useSettingsStore()
@@ -182,6 +183,7 @@ watch(effectiveTopBarSource, () => {
   setupScrollListeners()
 }, { flush: 'post' })
 watch(() => settings.value.autoHideTopBar, setupScrollListeners)
+watch([scrollViewportRef, activatedPage], setupScrollListeners, { flush: 'post' })
 
 // 滚动处理
 const scrollTop = ref<number>(0)
@@ -192,6 +194,29 @@ const TOP_BAR_SHOW_SCROLL_THRESHOLD = 20
 
 // 保存overlay scroll的handler引用，用于正确移除监听器
 let overlayScrollHandler: ((scrollTop: number) => void) | null = null
+let workspaceScrollRoot: HTMLElement | null = null
+let workspaceScrollPositions = new WeakMap<HTMLElement, number>()
+let activeWorkspaceScroller: HTMLElement | null = null
+
+function handleWorkspaceScroll(event: Event) {
+  const target = event.target
+  if (!(target instanceof HTMLElement) || target.closest('[inert], [data-top-bar-scroll-ignore]'))
+    return
+  // Menus, popovers and media controls must not drive page chrome.
+  if (target !== workspaceScrollRoot && !target.hasAttribute('data-top-bar-scroll'))
+    return
+  const position = Math.max(0, target.scrollTop)
+  const previousPosition = workspaceScrollPositions.get(target)
+  if (activeWorkspaceScroller !== target) {
+    const previous = previousPosition ?? position
+    scrollTop.value = previous
+    oldScrollTop.value = previous
+    topBarVisibilityAnchorScrollTop.value = previous
+    activeWorkspaceScroller = target
+  }
+  workspaceScrollPositions.set(target, position)
+  handleScroll(position)
+}
 
 function handleScroll(arg?: number | Event): void {
   // ✅ 性能优化：优先使用传入的 scrollTop 值，避免重复 DOM 读取
@@ -348,7 +373,14 @@ function setupScrollListeners() {
   }
 
   // 设置滚动监听
-  if (isHomePage()) {
+  if (scrollViewportRef.value) {
+    workspaceScrollRoot = scrollViewportRef.value
+    for (const element of [workspaceScrollRoot, ...Array.from(workspaceScrollRoot.querySelectorAll<HTMLElement>('[data-top-bar-scroll]'))])
+      workspaceScrollPositions.set(element, Math.max(0, element.scrollTop))
+    // Element scroll events do not bubble; one capture listener owns the page.
+    workspaceScrollRoot.addEventListener('scroll', handleWorkspaceScroll, { capture: true, passive: true })
+  }
+  else if (isHomePage()) {
     // 创建并保存handler引用
     overlayScrollHandler = (payloadScrollTop: number) => {
       handleScroll(payloadScrollTop)
@@ -361,6 +393,10 @@ function setupScrollListeners() {
 }
 
 function cleanupScrollListeners() {
+  workspaceScrollRoot?.removeEventListener('scroll', handleWorkspaceScroll, true)
+  workspaceScrollRoot = null
+  activeWorkspaceScroller = null
+  workspaceScrollPositions = new WeakMap()
   window.removeEventListener('scroll', handleScroll)
   // 只移除我们自己的handler，不影响其他组件（如VideoCardGrid）的监听器
   if (overlayScrollHandler) {
@@ -548,7 +584,7 @@ function handleClickOutsidePopup(event: MouseEvent) {
   const target = event.target as HTMLElement
 
   // 检查点击是否在顶栏项目按钮上（这些按钮会自己处理切换逻辑）
-  const isTopBarItemButton = target.closest('.logo, .right-side-item, .home-button')
+  const isTopBarItemButton = target.closest('.right-side-item')
   if (isTopBarItemButton)
     return
 
@@ -660,6 +696,13 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
 
 <template>
   <div class="top-bar-container">
+    <TopBarLogo
+      v-if="topBarStore.showTopBar"
+      v-layout-editable="'topbar-logo'"
+      class="floating-home-logo"
+      floating
+      :force-white-icon="forceWhiteIcon && !hideTopBar"
+    />
     <!-- 顶部监听区域 -->
     <div
       v-if="!bewlyWidescreenActive && isCurrentVideoPage && effectiveVideoTopBarConfig === VideoPageTopBarConfigEnum.ShowOnMouse"
@@ -674,6 +717,7 @@ const VideoPageTopBarConfigEnum = VideoPageTopBarConfig
         data-layout-editable-id="topbar"
         w="full" transition="opacity duration-300, transform duration-300, background-color duration-300"
         :class="{ 'hide': hideTopBar, 'force-white-icon': forceWhiteIcon }"
+        @focusin="scrollViewportRef && settings.autoHideTopBar && toggleTopBarVisible(true)"
       >
         <TopBarHeader
           :active="hostAllowsUiReads && !hideTopBar && !usesNativeTopBar"

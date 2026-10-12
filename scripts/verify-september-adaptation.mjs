@@ -985,11 +985,14 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     let writeRequests = 0
     let libraryReads = 0
     let pageReads = 0
+    let refreshResponse
     const provider = { openIframeDrawer() {}, handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true, scrollViewportRef: Vue.ref(root) }
     const blank = { render: () => null }
     const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 }, watchLaterCount: 500 })
     const { normalizePlaybackProgress } = await import('../src/utils/playbackProgress')
     const Component = await compileComponent('../src/contentScripts/views/WatchLater/WatchLater.vue', {
+      'vue-toastification': { useToast: () => ({ error() {} }) },
+      './useWatchLaterBulkAction': await import('../src/contentScripts/views/WatchLater/useWatchLaterBulkAction'),
       '~/logic/watchLaterState': { applyWatchLaterUpdate() {} },
       '~/utils/videoVisitHistory': {
         getVideoWatchState: () => undefined,
@@ -1017,6 +1020,8 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
         },
         getWatchLaterLibrary: async () => {
           libraryReads++
+          if (refreshResponse)
+            return refreshResponse.promise
           return { code: 0, data: { count: raw.length, list: raw } }
         },
       } } },
@@ -1062,8 +1067,12 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     try {
       app.mount(root)
       await settle()
-      assert.ok(root.querySelector('.bew-page-heading').textContent.includes('500'), 'missing optional display fields do not reject the page')
-      const search = root.querySelector('.watch-later-search input')
+      assert.equal(root.querySelector('.library-sidebar-heading__count').textContent, '500', 'the sidebar shows the authoritative queue total')
+      root.querySelector('.watch-later-sort-button').click()
+      await settle()
+      assert.equal(root.querySelector('.watch-later-sort-button').getAttribute('aria-label'), 'watch_later.sort_oldest')
+      assert.equal(libraryReads, 1, 'oldest-first loads the complete queue rather than reversing the first page')
+      const search = root.querySelector('.library-search-field input')
       search.value = 'Video 500'
       search.dispatchEvent(new Event('input', { bubbles: true }))
       await settle()
@@ -1074,18 +1083,47 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       await settle()
       assert.equal(libraryReads, 1, 'editing a query reuses the loaded library')
       const initialPageReads = pageReads
-      await provider.handlePageRefresh.value()
+      refreshResponse = deferred()
+      const retainedCard = root.querySelector('.watch-later-list-card')
+      root.querySelector('.watch-later-refresh-button').click()
+      await flush()
+      assert.equal(root.querySelector('.watch-later-list-card'), retainedCard, 'refresh must retain the displayed card while waiting for the server')
+      assert.equal(root.querySelector('.watch-later-refresh-button').getAttribute('aria-busy'), 'true', 'refresh feedback starts before the response')
+      root.querySelector('.watch-later-refresh-button').click()
+      assert.equal(libraryReads, 2, 'repeated refresh cannot start a second request')
+      refreshResponse.resolve({ code: 0, data: { count: raw.length, list: raw } })
+      refreshResponse = undefined
       await settle()
       assert.equal(libraryReads, 2, 'refresh preserves the full filtered library')
       assert.equal(pageReads, initialPageReads, 'filtered refresh does not first fetch an unused preview page')
+      assert.equal(root.querySelector('.watch-later-list-card'), retainedCard, 'unchanged video IDs reuse the same DOM after refresh')
+      refreshResponse = deferred()
+      root.scrollTop = 90
+      root.querySelector('.watch-later-refresh-button').click()
+      await flush()
+      refreshResponse.resolve({ code: -503 })
+      refreshResponse = undefined
+      await settle()
+      assert.equal(root.querySelector('.watch-later-list-card'), retainedCard, 'failed refresh must retain usable previous results')
+      assert.equal(root.scrollTop, 90, 'refresh does not reset the reading position')
+      assert.equal(root.querySelector('.watch-later-refresh-button').getAttribute('aria-busy'), 'false')
+      const readsBeforeRetry = libraryReads
+      root.querySelector('.watch-later-load-more-error button').click()
+      await settle()
+      assert.equal(libraryReads, readsBeforeRetry + 1, 'retry repeats the failed snapshot refresh rather than appending a page')
+      assert.equal(root.querySelector('.watch-later-load-more-error'), null)
+      const readsBeforeInvalidation = libraryReads
       account.watchLaterUpdate = { type: 'change', accountId: 1, change: { type: 'invalidate' } }
       await new Promise(resolve => setTimeout(resolve, 850))
       await settle()
-      assert.equal(libraryReads, 3, 'cross-page invalidation retains the active full-library filter')
+      assert.equal(libraryReads, readsBeforeInvalidation + 1, 'cross-page invalidation retains the active full-library filter')
       assert.equal(root.querySelectorAll('.watch-later-list-card').length, 1)
       assert.match(root.querySelector('.watch-later-list-card').textContent, /Video 499/)
       search.value = ''
       search.dispatchEvent(new Event('input', { bubbles: true }))
+      await settle()
+      root.scrollTop = 0
+      root.dispatchEvent(new Event('scroll'))
       await settle()
       const mounted = root.querySelectorAll('.watch-later-list-card').length
       assert.ok(mounted > 0 && mounted < 80)
@@ -1105,7 +1143,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       root.dispatchEvent(new Event('scroll'))
       await settle()
       assert.equal(first.isConnected, false)
-      Array.from(root.querySelectorAll('[role="radio"]')).find(button => button.textContent.trim() === 'watch_later.layout_grid').click()
+      Array.from(root.querySelectorAll('.library-workspace__rail [role="radio"]')).find(button => button.textContent.trim() === 'library_tools.layout_grid').click()
       root.scrollTop = 0
       await settle()
       assert.ok(root.querySelectorAll('[data-grid-aid]').length > 0)
@@ -1114,7 +1152,21 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       root.dispatchEvent(new Event('scroll'))
       await settle()
       assert.ok(root.querySelector('[data-grid-aid="500"]'), 'the last resource remains reachable')
-      Array.from(root.querySelectorAll('header button')).find(button => button.textContent.trim() === 'watch_later.open_tabs.title').click()
+      assert.equal(root.querySelector('.library-search-field select'), null, 'the search field no longer contains a duration selector')
+      const batchToggle = root.querySelector('[role="switch"]')
+      batchToggle.click()
+      await settle()
+      assert.equal(batchToggle.getAttribute('aria-checked'), 'true')
+      assert.ok(root.querySelectorAll('.watch-later-selection input').length > 0)
+      assert.ok(root.querySelector('[data-grid-aid]').hasAttribute('inert'), 'batch mode prevents card navigation')
+      Array.from(root.querySelectorAll('.library-workspace__rail button')).find(button => button.textContent.trim() === 'watch_later.select_all').click()
+      await settle()
+      assert.ok([...root.querySelectorAll('.watch-later-selection input')].every(input => input.checked))
+      batchToggle.click()
+      await settle()
+      assert.equal(root.querySelector('.watch-later-selection'), null)
+      assert.equal(root.querySelector('[data-grid-aid]').hasAttribute('inert'), false)
+      Array.from(root.querySelectorAll('.library-workspace__rail button')).find(button => button.textContent.trim() === 'watch_later.open_tabs.title').click()
       await settle()
       account.isLogin = false
       account.userInfo.mid = 0
@@ -1123,7 +1175,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       account.isLogin = true
       account.userInfo.mid = 1
       await settle()
-      assert.ok(root.querySelector('.bew-page-heading'))
+      assert.ok(root.querySelector('.library-sidebar-heading h1'))
       assert.deepEqual(warnings, [], 'actual Transition accepts loaded, dialog-open and logged-out roots')
       console.log(`PERF WatchLater fixture: 500 resources retained, ${mounted} list cards mounted initially`)
     }

@@ -16,6 +16,37 @@ export interface AnchoredPopoverPosition {
   openUp: boolean
 }
 
+export type FloatingAnchor = Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width'>
+export type PopoverPositionResolver = (anchor: FloatingAnchor, popup: { width: number, height: number }, viewportWidth: number, viewportHeight: number) => AnchoredPopoverPosition
+export type TooltipPlacement = 'left' | 'right' | 'top' | 'bottom' | 'bottom-left' | 'bottom-right'
+
+export function computeTooltipPosition(anchor: FloatingAnchor, popup: { width: number, height: number }, viewportWidth: number, viewportHeight: number, placement: TooltipPlacement): AnchoredPopoverPosition {
+  const inset = 8
+  let left = anchor.left + (anchor.width - popup.width) / 2
+  let top = anchor.top - popup.height - inset
+  if (placement.startsWith('bottom')) {
+    top = anchor.bottom + inset
+    if (top + popup.height > viewportHeight - inset)
+      top = anchor.top - popup.height - inset
+    if (placement === 'bottom-left')
+      left = anchor.left
+    if (placement === 'bottom-right')
+      left = anchor.right - popup.width
+  }
+  else if (placement === 'left' || placement === 'right') {
+    left = placement === 'left' ? anchor.left - popup.width - inset : anchor.right + inset
+    top = anchor.top + (anchor.bottom - anchor.top - popup.height) / 2
+  }
+  else if (top < inset) {
+    top = anchor.bottom + inset
+  }
+  return {
+    left: clamp(left, inset, Math.max(inset, viewportWidth - popup.width - inset)),
+    top: clamp(top, inset, Math.max(inset, viewportHeight - popup.height - inset)),
+    openUp: top < anchor.top,
+  }
+}
+
 export function computeAnchoredPopoverPosition(
   anchor: Pick<DOMRect, 'top' | 'right' | 'bottom' | 'left' | 'width'>,
   popup: { width: number, height: number },

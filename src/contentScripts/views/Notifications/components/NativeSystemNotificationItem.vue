@@ -33,7 +33,7 @@ watch(() => props.item.id, () => {
 </script>
 
 <template>
-  <article class="native-system-notification native-notification-surface bew-shape-smooth-rect" :data-notification-id="item.id">
+  <article class="native-system-notification native-notification-interaction-layout native-notification-surface bew-shape-smooth-rect" :data-notification-id="item.id">
     <div class="native-system-notification__icon" aria-hidden="true">
       <img
         v-if="item.sourceLogo && !sourceLogoFailed"
@@ -43,7 +43,7 @@ watch(() => props.item.id, () => {
         decoding="async"
         @error="sourceLogoFailed = true"
       >
-      <i v-else i-solar:bell-bing-bold-duotone />
+      <i v-else i-mingcute:notification-line />
     </div>
 
     <div class="native-system-notification__content">
@@ -51,13 +51,17 @@ watch(() => props.item.id, () => {
         <div>
           <span v-if="item.unread" class="native-system-notification__unread" aria-hidden="true" />
           <h3>{{ item.title || t('notifications.native.system.unknown_title') }}</h3>
-          <span v-if="item.source" class="native-system-notification__source">{{ item.source }}</span>
         </div>
         <time v-if="formattedTime" :datetime="new Date(item.timestamp * 1000).toISOString()">
           {{ formattedTime }}
         </time>
       </header>
+      <p v-if="item.source" class="native-system-notification__source">
+        {{ item.source }}
+      </p>
+    </div>
 
+    <div class="native-system-notification__details">
       <p v-if="item.segments.length" class="native-system-notification__body">
         <template v-for="(segment, index) in item.segments" :key="`${item.id}:${index}`">
           <ALink
@@ -105,26 +109,18 @@ watch(() => props.item.id, () => {
 </template>
 
 <style scoped lang="scss">
-.native-system-notification {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--bew-space-3);
-  padding: var(--bew-space-4);
-}
-
 .native-system-notification__icon {
   display: grid;
   align-self: start;
   place-items: center;
-  width: var(--bew-space-12);
-  height: var(--bew-space-12);
+  width: var(--bew-notifications-avatar-size);
+  height: var(--bew-notifications-avatar-size);
   overflow: hidden;
-  color: var(--bew-theme-color);
+  color: var(--bew-text-1);
   font-size: var(--bew-icon-size-lg);
-  background: var(--bew-fill-1);
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .native-system-notification__icon img {
@@ -135,12 +131,19 @@ watch(() => props.item.id, () => {
 
 .native-system-notification__content {
   min-width: 0;
+  align-self: center;
+}
+
+.native-system-notification__details {
+  grid-column: 1 / -1;
+  min-width: 0;
 }
 
 .native-system-notification__header {
   display: flex;
-  gap: var(--bew-space-3);
-  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--bew-space-1) var(--bew-space-3);
+  align-items: center;
   justify-content: space-between;
 }
 
@@ -169,6 +172,14 @@ watch(() => props.item.id, () => {
   line-height: var(--bew-line-height-caption);
 }
 
+.native-system-notification__source {
+  margin: var(--bew-space-1) 0 0;
+}
+
+.native-system-notification__header time {
+  white-space: nowrap;
+}
+
 .native-system-notification__unread {
   flex: 0 0 auto;
   width: var(--bew-space-2);
@@ -180,7 +191,7 @@ watch(() => props.item.id, () => {
 
 .native-system-notification__body {
   max-width: var(--bew-reading-line-length);
-  margin: var(--bew-space-2) 0 0;
+  margin: 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-regular);
@@ -216,17 +227,23 @@ watch(() => props.item.id, () => {
   padding: var(--bew-space-3);
   color: var(--bew-text-1);
   text-decoration: none;
-  background: var(--bew-fill-1);
+  background: var(--bew-notifications-reference-background);
   border-radius: var(--bew-interactive-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
 .native-system-notification__card img {
+  flex: 0 0 auto;
   width: calc(var(--bew-space-10) * 2);
   height: var(--bew-space-12);
   object-fit: cover;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-radius-sm);
   corner-shape: var(--bew-corner-shape);
+}
+
+.native-system-notification__card span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 @media (prefers-reduced-motion: reduce) {

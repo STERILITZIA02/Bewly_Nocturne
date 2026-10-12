@@ -10,6 +10,7 @@ import { vLayoutEditable } from '~/logic/layoutEdit'
 
 import { useTopBarInteraction } from '../composables/useTopBarInteraction'
 import TopBarLogo from './TopBarLogo.vue'
+import TopBarPinnedChannels from './TopBarPinnedChannels.vue'
 import TopBarRight from './TopBarRight.vue'
 import TopBarSearch from './TopBarSearch.vue'
 
@@ -196,7 +197,7 @@ function refreshSearchContent() {
     }"
     max-w="$bew-page-max-width"
     grid="~ cols-[auto_1fr_auto] items-center gap-4"
-    p="x-12" m-auto
+    m-auto
     h="$bew-top-bar-height"
   >
     <!-- 顶栏边缘雾化：渐进模糊 + 雾色 -->
@@ -229,11 +230,10 @@ function refreshSearchContent() {
 
     <div
       ref="leftSection"
-      v-layout-editable="'topbar-logo'"
       class="top-bar-header__side top-bar-header__side--left"
-      data-layout-editable-id="topbar-logo"
     >
-      <TopBarLogo :force-white-icon="forceWhiteIcon" />
+      <TopBarLogo :force-white-icon="forceWhiteIcon" placeholder />
+      <TopBarPinnedChannels :force-white-icon="forceWhiteIcon" />
     </div>
 
     <!-- search bar -->
@@ -281,6 +281,7 @@ function refreshSearchContent() {
   box-sizing: border-box;
   min-width: 0;
   min-height: var(--bew-top-bar-height);
+  padding-inline: var(--bew-top-bar-inline-padding);
 }
 
 .top-bar-header--solid {
@@ -322,6 +323,7 @@ function refreshSearchContent() {
 
 .top-bar-header__side--left {
   justify-self: start;
+  gap: var(--bew-space-2);
 }
 
 .top-bar-header__side--right {
@@ -360,14 +362,12 @@ function refreshSearchContent() {
 @media (max-width: breakpoints.$compact-max) {
   .top-bar-header {
     gap: var(--bew-space-3);
-    padding-inline: 16px;
   }
 }
 
 @media (max-width: breakpoints.$mobile-max) {
   .top-bar-header {
     gap: var(--bew-space-2);
-    padding-inline: 8px;
   }
 }
 </style>

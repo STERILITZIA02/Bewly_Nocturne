@@ -4,7 +4,7 @@ import { IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { setUselessFeedCardBlockerEnabled, shouldEnableUselessFeedCardBlocker } from '~/contentScripts/features/blockUselessFeedCards'
 import { setupNativePageKeyboard } from '~/contentScripts/features/nativePageKeyboard'
 import { AppPage } from '~/enums/appEnums'
-import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, localSettings, originalSettings, settings } from '~/logic'
+import { FROSTED_GLASS_BLUR_MAX_PX, FROSTED_GLASS_BLUR_MIN_PX, originalSettings, settings } from '~/logic'
 import { useIframePageActive } from '~/logic/iframePageState'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { detachOriginalBilibiliTopBar, ensureOriginalBilibiliTopBarAppended, resetBilibiliTopBarInlineStyles, setOriginalBilibiliTopBarScrolled } from '~/utils/bilibiliTopBar'
@@ -330,35 +330,6 @@ export function setupNecessarySettingsWatchers() {
       })
     },
     { immediate: true, flush: 'post' },
-  )
-
-  let styleEL: HTMLStyleElement | null = null
-  let bewlyStyleEL: HTMLStyleElement | null = null
-  watch(
-    [() => localSettings.value.customizeCSS, () => localSettings.value.customizeCSSContent],
-    () => {
-      const bewlyEl: HTMLElement | null = document.querySelector('#bewly')
-      const bewlyShadow: ShadowRoot | null = bewlyEl?.shadowRoot || null
-
-      document.querySelectorAll('[data-bewly-customizeCSS]').forEach((el) => {
-        el.remove()
-      })
-
-      bewlyShadow?.querySelectorAll('[data-bewly-customizeCSS]').forEach((el) => {
-        el.remove()
-      })
-
-      if (localSettings.value.customizeCSS) {
-        styleEL = injectCSS(localSettings.value.customizeCSSContent)
-        styleEL.setAttribute('data-bewly-customizeCSS', '')
-
-        if (bewlyShadow) {
-          bewlyStyleEL = injectCSS(localSettings.value.customizeCSSContent, bewlyShadow)
-          bewlyStyleEL.setAttribute('data-bewly-customizeCSS', '')
-        }
-      }
-    },
-    { immediate: true },
   )
 
   watch(

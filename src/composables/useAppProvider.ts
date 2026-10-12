@@ -21,7 +21,6 @@ export enum DrawerType {
 
 export type SettingsNavigationTarget
   = | { category: 'bewly-pages', page: 'messages' }
-    | { category: 'bewly-pages', page: 'moments', section: 'wanted-users' }
 
 export interface SettingsNavigationRequest {
   id: number
@@ -49,6 +48,7 @@ export interface BewlyAppProvider {
   undoForwardState: Ref<UndoForwardState>
   handleBackToTop: (targetScrollTop?: number) => void
   haveScrollbar: () => Promise<boolean>
+  requestLoadMoreCheck?: () => void
   openIframeDrawer: (url: string, options?: { playbackContext?: IframePlaybackContext }) => void
   // 添加活跃抽屉状态
   activeDrawer: Ref<DrawerType>

@@ -125,6 +125,7 @@ export async function verifyMomentCommentLifecycle() {
     '~/utils/commentPermalink': {},
     // This in-memory renderer has no layout. Geometry has its own DOM module test.
     '~/utils/commentReadingAnchor': { captureCommentReadingAnchor: () => ({ cancel() {}, restore: async () => {} }) },
+    '~/utils/skeletonVisibility': { observeSkeletonGroup: () => () => {} },
     '~/utils/commentTree': commentTree,
     '~/utils/locale': { normalizeIntlLocale: (locale: string) => locale },
     '~/utils/momentCommentSession': sessions,

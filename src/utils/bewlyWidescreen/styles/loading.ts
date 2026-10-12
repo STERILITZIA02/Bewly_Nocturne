@@ -366,7 +366,7 @@ export function injectLoadingStyle() {
     }
 
     #${LOADING_ROOT_ID} .bewly-widescreen-loading-exit:focus-visible {
-      outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-color, #00aeec);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: var(--bew-space-0-5, 2px);
     }
 

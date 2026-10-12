@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import ChevronIcon from '~/components/ChevronIcon.vue'
+import { useSurfaceMorph } from '~/composables/useSurfaceMorph'
 import { LAYOUT_BREAKPOINTS } from '~/constants/layout'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -18,6 +20,8 @@ import type { DisplayPrivateSession } from './privateSession'
 import { useConversationPresentation } from './useConversationPresentation'
 import { useConversationViewport } from './useConversationViewport'
 import type { PrivateEmotePanelController } from './usePrivateEmotePanel'
+import type { PrivateHistorySearchController } from './usePrivateHistorySearch'
+import { usePrivateMessagePreviews } from './usePrivateMessagePreviews'
 import type { PrivateMessagesController } from './usePrivateMessages'
 
 const props = defineProps<{
@@ -27,17 +31,22 @@ const props = defineProps<{
   session?: DisplayPrivateSession | null
   recipient?: TransientPrivateRecipient | null
   writeController: PrivateMessageWriteController | null
+  searchMode?: boolean
+  historySearch?: PrivateHistorySearchController
 }>()
 
 const emit = defineEmits<{
   (event: 'back'): void
   (event: 'sendConfirmed', talkerId: string): void
+  (event: 'moveSearch', direction: number): void
+  (event: 'closeSearch'): void
 }>()
 
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
 const conversationAccountId = topBarStore.userInfo.mid
 const talkerId = computed(() => props.session?.talkerId ?? props.recipient?.mid ?? '')
+usePrivateMessagePreviews(() => props.active, () => topBarStore.userInfo.mid || null, () => talkerId.value)
 const displayName = computed(() => (
   props.session?.name
   || props.recipient?.name
@@ -49,16 +58,40 @@ const selfDisplayName = computed(() => (
 ))
 const selfAvatarUrl = computed(() => topBarStore.userInfo.face || '')
 const conversationViewRef = ref<HTMLElement | null>(null)
+const composerRef = ref<HTMLElement | null>(null)
+const navigationRef = ref<HTMLElement | null>(null)
+useSurfaceMorph(navigationRef, () => props.searchMode)
 
 const previewImage = ref('')
 const highlightedMessage = ref('')
-const findToolsRef = ref<HTMLElement>()
-const state = computed(() => props.controller.getState(talkerId.value))
+let searchViewportOwned = Boolean(props.searchMode)
+const searchContext = computed(() => props.searchMode && props.historySearch?.state.context?.talkerId === talkerId.value ? props.historySearch.state.context : null)
+const state = computed(() => {
+  if (!props.searchMode && props.active)
+    return props.controller.getState(talkerId.value)
+  // Search context is transient. Reading an uncached result must not create a
+  // normal reader entry or evict another conversation from its LRU.
+  return props.controller.states.get(talkerId.value) ?? {
+    items: [] as DisplayPrivateMessage[],
+    loaded: true,
+    loadingOlder: false,
+    noMore: false,
+    paginationStalled: false,
+    errorKind: null,
+    failedOperation: null,
+    generation: 0,
+    atLatest: false,
+    scrollTop: 0,
+    newMessagesAvailable: false,
+  }
+})
 const isTextSendEnabled = computed(() => Boolean(props.writeController) && Boolean(
   props.recipient || props.session?.capabilities.canSend,
 ))
 const writeState = computed(() => props.writeController?.getState(talkerId.value) ?? null)
 const timelineItems = computed<Array<DisplayPrivateMessage | OptimisticPrivateMessage>>(() => {
+  if (props.searchMode && props.historySearch?.state.selectedKey)
+    return searchContext.value?.items ?? []
   const optimisticItems = writeState.value?.items.filter(item => item.localId) ?? []
   return [...state.value.items, ...optimisticItems].sort((left, right) => (
     left.timestamp - right.timestamp || left.msgKey.localeCompare(right.msgKey)
@@ -92,7 +125,7 @@ const errorMessage = computed(() => {
   return t(`notifications.whisper.errors.${kind}`)
 })
 
-const historyLoading = computed(() => state.value.loadingOlder)
+const historyLoading = computed(() => props.searchMode ? props.historySearch?.state.loadingContext : state.value.loadingOlder)
 const isAtHistoryStart = computed(() => state.value.noMore)
 
 let activationGeneration = 0
@@ -107,6 +140,8 @@ const viewport = useConversationViewport({
   followContentGrowth: () => state.value.atLatest,
   talkerId: () => talkerId.value,
   save: (id, position) => {
+    if (props.searchMode || searchViewportOwned)
+      return
     if (topBarStore.userInfo.mid === conversationAccountId)
       props.controller.updateViewport(id, position)
   },
@@ -123,17 +158,17 @@ const { messageScrollRef, messageContentRef, isAtLatestPosition, isAtLatest, sav
 function locateMessage(key: string) {
   highlightedMessage.value = key
   const rootTop = messageScrollRef.value?.getBoundingClientRect().top ?? 0
-  const toolsBottom = findToolsRef.value?.getBoundingClientRect().bottom ?? rootTop
-  viewport.scrollToMessage(key, Math.max(16, toolsBottom - rootTop + 8))
+  const topBarHeight = conversationViewRef.value ? Number.parseFloat(getComputedStyle(conversationViewRef.value).getPropertyValue('--bew-top-bar-height')) || 64 : 64
+  viewport.scrollToMessage(key, Math.max(16, topBarHeight - rootTop + 16))
 }
 const presentation = useConversationPresentation(conversationViewRef, () => props.active, {
   activate: () => void activateConversation(),
   layoutSettled: handleContentResize,
   contentResized: handleContentResize,
   revealFinished: () => void acknowledgeIfEligible(),
-}, messageContentRef)
+}, messageContentRef, composerRef)
 const { conversationExpanded, reducedMotion, isLayoutTransitioning, entryPhase, historyVisible, isRevealingHistory, historyRevealDelays, conversationLayoutStyle, updateConversationGeometry, finishConversationSwitch, revealVisibleHistory, finishHistoryReveal, beginHistoryLeave } = presentation
-const showLatestButton = computed(() => entryPhase.value === 'ready' && timelineItems.value.length > 0
+const showLatestButton = computed(() => !props.searchMode && entryPhase.value === 'ready' && timelineItems.value.length > 0
   && (!isAtLatestPosition.value || state.value.newMessagesAvailable))
 
 function isHistoryReady() {
@@ -141,11 +176,11 @@ function isHistoryReady() {
 }
 
 async function acknowledgeIfEligible() {
-  if (!componentMounted || !props.active || !settings.value.autoMarkPrivateMessagesRead || entryPhase.value !== 'ready' || isRevealingHistory.value)
+  if (props.searchMode || searchViewportOwned || !componentMounted || !props.active || !settings.value.autoMarkPrivateMessagesRead || entryPhase.value !== 'ready' || isRevealingHistory.value)
     return
   const generation = activationGeneration
   await nextTick()
-  if (!componentMounted || !props.active || generation !== activationGeneration)
+  if (props.searchMode || !componentMounted || !props.active || generation !== activationGeneration)
     return
   await props.controller.acknowledgeIfEligible(talkerId.value, {
     atLatest: isAtLatest(),
@@ -158,7 +193,7 @@ async function acknowledgeIfEligible() {
 }
 
 async function loadOlderMessages(explicitRetry = false) {
-  if (entryPhase.value !== 'ready' || state.value.loadingOlder || state.value.noMore)
+  if (props.searchMode || entryPhase.value !== 'ready' || state.value.loadingOlder || state.value.noMore)
     return
   const anchor = viewport.captureReadingAnchor()
   if (!anchor)
@@ -185,7 +220,7 @@ async function loadOlderMessages(explicitRetry = false) {
 }
 
 async function refreshLatest(options: { forceBottom?: boolean } = {}) {
-  if (!componentMounted || !props.active || entryPhase.value !== 'ready')
+  if (props.searchMode || !componentMounted || !props.active || entryPhase.value !== 'ready')
     return
   const generation = activationGeneration
   const wasAtLatest = isAtLatest()
@@ -229,20 +264,22 @@ async function sendDraft() {
 }
 
 function selectImage(file: File) {
-  props.writeController?.selectImage(talkerId.value, file)
+  if (isTextSendEnabled.value)
+    props.writeController?.selectImage(talkerId.value, file)
 }
 
 async function finishConfirmedWrite(submittedTalkerId: string, generation: number) {
   await nextTick()
   if (!componentMounted || !props.active || generation !== activationGeneration || submittedTalkerId !== talkerId.value)
     return
-  scrollToLatest()
+  if (!props.searchMode)
+    scrollToLatest()
   emit('sendConfirmed', submittedTalkerId)
 }
 
 async function sendImage() {
   const writer = props.writeController
-  if (!writer)
+  if (!isTextSendEnabled.value || !writer)
     return
   const submittedTalkerId = talkerId.value
   const generation = activationGeneration
@@ -253,7 +290,7 @@ async function sendImage() {
 
 async function retryImage(localId: string) {
   const writer = props.writeController
-  if (!writer)
+  if (!isTextSendEnabled.value || !writer)
     return
   const submittedTalkerId = talkerId.value
   const generation = activationGeneration
@@ -299,6 +336,12 @@ async function activateConversation() {
     return
   const generation = ++activationGeneration
   conversationActivationPending = true
+  if (props.searchMode) {
+    presentation.showReadyHistory()
+    await nextTick()
+    finishConversationActivation(generation)
+    return
+  }
   const initialScrollGeneration = viewport.interactionGeneration
   const wasLoaded = state.value.loaded
   if (wasLoaded)
@@ -315,6 +358,7 @@ async function activateConversation() {
   if (initialScrollGeneration !== viewport.interactionGeneration) {
     if (element)
       revealVisibleHistory(element)
+    searchViewportOwned = false
     finishConversationActivation(generation)
     return
   }
@@ -323,6 +367,7 @@ async function activateConversation() {
     viewport.restorePosition(!wasLoaded || state.value.atLatest, state.value.scrollTop)
     revealVisibleHistory(element)
   }
+  searchViewportOwned = false
   finishConversationActivation(generation)
   saveViewportState()
   await acknowledgeIfEligible()
@@ -342,6 +387,10 @@ function focusHeading() {
 }
 
 function handleEscape() {
+  if (props.searchMode) {
+    emit('closeSearch')
+    return
+  }
   if (window.matchMedia(`(max-width: ${LAYOUT_BREAKPOINTS.mobileMax}px)`).matches)
     emit('back')
 }
@@ -355,6 +404,35 @@ watch(talkerId, (_, previousTalkerId) => {
   viewport.resetReading()
   presentation.switchHistory()
 })
+watch(() => props.searchMode, (searching) => {
+  if (searching)
+    searchViewportOwned = true
+  highlightedMessage.value = ''
+  if (componentMounted && props.active && entryPhase.value === 'ready')
+    void activateConversation()
+  if (searching)
+    props.controller.invalidatePendingRequests()
+})
+watch(() => [searchContext.value?.key, props.historySearch?.state.selectionVersion, entryPhase.value, historyVisible.value] as const, async () => {
+  const context = searchContext.value
+  const match = props.historySearch?.selected.value
+  if (!context || !match) {
+    highlightedMessage.value = ''
+    return
+  }
+  if (entryPhase.value !== 'ready' || !historyVisible.value)
+    return
+  await nextTick()
+  if (props.active && context === searchContext.value)
+    locateMessage(match.message.msgKey)
+}, { flush: 'post' })
+watch(() => [props.searchMode, props.historySearch?.state.selectedKey, props.historySearch?.state.selectionVersion, talkerId.value, entryPhase.value] as const, () => {
+  const search = props.historySearch
+  if (props.active && props.searchMode && entryPhase.value === 'ready' && search?.selected.value?.session.talkerId === talkerId.value
+    && !search.state.context && !search.state.loadingContext && !search.state.contextError) {
+    void search.select(search.state.selectedKey)
+  }
+}, { flush: 'post' })
 watch(() => writeState.value?.imageDraft?.objectUrl ?? '', (nextUrl, previousUrl) => {
   if (previousUrl && previewImage.value === previousUrl && nextUrl !== previousUrl)
     previewImage.value = ''
@@ -392,9 +470,10 @@ defineExpose({
     class="conversation-view conversation-column"
     :class="{
       'conversation-view--density-compact': settings.privateMessageDensity === 'compact',
-      'conversation-view--has-composer': isTextSendEnabled && writeState,
+      'conversation-view--has-composer': Boolean(writeState),
       'conversation-view--has-image-draft': writeState?.imageDraft,
-      'conversation-view--has-new-messages': showLatestButton,
+      'conversation-view--has-new-messages': showLatestButton || searchMode,
+      'conversation-view--search-mode': searchMode,
       'conversation-view--layout-transitioning': isLayoutTransitioning,
       'conversation-view--reduced-motion': reducedMotion,
       'conversation-view--solid': settings.disableFrostedGlass,
@@ -412,6 +491,7 @@ defineExpose({
       <div
         ref="messageScrollRef"
         class="conversation-view__messages"
+        data-top-bar-scroll
         tabindex="0"
         :aria-label="t('notifications.whisper.messages.timeline_aria', { name: displayName })"
         @keydown="markReadingIntent"
@@ -432,18 +512,19 @@ defineExpose({
               {{ t('notifications.whisper.messages.loading') }}
             </span>
 
-            <div v-else-if="state.errorKind && !timelineItems.length" class="conversation-view__state">
-              <Empty :description="errorMessage">
-                <div class="conversation-view__state-actions">
-                  <Button type="tertiary" @click="retry">
-                    {{ t('notifications.actions.retry') }}
-                  </Button>
-                </div>
-              </Empty>
+            <div v-else-if="searchMode && historySearch?.state.loadingContext" class="conversation-view__state" role="status">
+              {{ t('notifications.whisper.messages.loading') }}
+            </div>
+            <div v-else-if="searchMode && historySearch?.state.contextError" class="conversation-view__state">
+              <Empty text-only :description="t('notifications.whisper.search.context_error')" :action-label="t('notifications.actions.retry')" @action="historySearch?.select(historySearch.state.selectedKey)" />
+            </div>
+            <div v-else-if="!searchMode && state.errorKind && !timelineItems.length" class="conversation-view__state">
+              <Empty text-only :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry" />
             </div>
 
             <template v-else>
               <div
+                v-if="!searchMode"
                 class="conversation-view__history-status"
               >
                 <span v-if="historyLoading" role="status">{{ t('notifications.whisper.messages.loading') }}</span>
@@ -453,7 +534,7 @@ defineExpose({
                 </button>
               </div>
 
-              <div v-if="state.errorKind" class="conversation-view__inline-error" role="status">
+              <div v-if="!searchMode && state.errorKind" class="conversation-view__inline-error" role="status">
                 <span>{{ errorMessage }}</span>
                 <button type="button" @click="retry">
                   {{ t('notifications.actions.retry') }}
@@ -481,47 +562,63 @@ defineExpose({
                 />
               </div>
               <div v-else class="conversation-view__state">
-                <Empty :description="t('notifications.whisper.messages.empty')" />
+                <Empty text-only :description="t(searchMode ? 'notifications.whisper.search.select_result' : 'notifications.whisper.messages.empty')" />
               </div>
             </template>
           </div>
         </Transition>
       </div>
-
-      <div
-        class="conversation-card__top-edge"
-        :class="{ 'conversation-card__top-edge--visible': conversationExpanded }"
-        aria-hidden="true"
-      />
-      <div
-        class="conversation-card__bottom-edge"
-        :class="{ 'conversation-card__bottom-edge--visible': conversationExpanded }"
-        aria-hidden="true"
-      />
     </div>
 
-    <div v-if="active && entryPhase === 'ready' && timelineItems.length" ref="findToolsRef" class="conversation-view__tools">
-      <ConversationFind :key="talkerId" :messages="timelineItems" @locate="locateMessage" @clear="highlightedMessage = ''" />
-    </div>
+    <div
+      class="conversation-card__top-edge"
+      :class="{ 'conversation-card__top-edge--visible': conversationExpanded }"
+      aria-hidden="true"
+    />
+    <div
+      class="conversation-card__bottom-edge"
+      :class="{ 'conversation-card__bottom-edge--visible': conversationExpanded }"
+      aria-hidden="true"
+    />
 
-    <button
-      v-if="showLatestButton"
-      type="button"
-      class="conversation-view__new-messages"
-      @click="scrollToLatest('smooth'); acknowledgeIfEligible()"
-    >
-      {{ t(state.newMessagesAvailable ? 'notifications.whisper.messages.new_messages' : 'notifications.whisper.messages.return_latest') }}
-    </button>
+    <Transition name="conversation-latest">
+      <div
+        v-if="showLatestButton || (searchMode && entryPhase !== 'opening')"
+        ref="navigationRef"
+        v-liquid-glass="active"
+        class="conversation-view__new-messages"
+        :class="{ 'conversation-view__search-navigation': searchMode }"
+        :role="searchMode ? 'group' : undefined"
+        :aria-label="searchMode ? t('notifications.whisper.search.messages') : undefined"
+      >
+        <ConversationFind
+          v-if="searchMode" external :result-count="historySearch?.filteredResults.value.length ?? 0" :result-index="historySearch?.selectedIndex.value ?? -1" @move="emit('moveSearch', $event)"
+          @clear="emit('closeSearch')"
+        />
+        <button
+          v-else type="button" class="conversation-view__latest-action"
+          :aria-label="t(state.newMessagesAvailable ? 'notifications.whisper.messages.new_messages' : 'notifications.whisper.messages.return_latest')"
+          :title="t(state.newMessagesAvailable ? 'notifications.whisper.messages.new_messages' : 'notifications.whisper.messages.return_latest')"
+          @click="scrollToLatest('smooth'); acknowledgeIfEligible()"
+        >
+          <ChevronIcon />
+        </button>
+      </div>
+    </Transition>
 
     <footer
-      v-if="isTextSendEnabled && writeState && entryPhase !== 'opening'"
+      v-if="writeState"
+      ref="composerRef"
       v-liquid-glass="active"
       class="conversation-view__floating-composer"
+      :data-entering="!conversationExpanded"
+      :inert="entryPhase === 'opening' ? true : undefined"
     >
       <div class="conversation-view__test-send">
         <MessageComposer
           v-model="draft"
           :conversation-key="talkerId"
+          :disabled-reason="isTextSendEnabled ? '' : t('common.send_not_allowed')"
           :sending="writeState.sending"
           :image-draft="writeState.imageDraft"
           :emote-packages="emoteController.packages.value"
@@ -558,8 +655,16 @@ defineExpose({
 @use "../../../../styles/breakpoints";
 
 .conversation-view {
+  --conversation-message-inline-space: var(--bew-space-4);
   --conversation-composer-reserve: 0px;
   --conversation-new-message-reserve: 0px;
+  --conversation-composer-start-inset: var(--bew-space-4);
+  // Match the distance from the left screen edge on desktop. In a narrow pane,
+  // retain enough space for one row of input/actions instead of squeezing it shut.
+  --conversation-composer-end-inset: min(
+    calc(var(--bew-messages-sidebar-width) + var(--notifications-workspace-gap)),
+    max(var(--bew-space-4), calc(100% - var(--bew-space-4) - var(--bew-message-composer-min-width)))
+  );
 
   position: relative;
   width: 100%;
@@ -570,16 +675,25 @@ defineExpose({
   background: transparent;
 }
 
-.conversation-view--has-composer {
-  --conversation-composer-reserve: calc(var(--bew-space-12) * 2 + var(--bew-space-8));
-}
-
-.conversation-view--has-image-draft {
-  --conversation-composer-reserve: calc(var(--bew-space-12) * 4);
-}
-
 .conversation-view--has-new-messages {
-  --conversation-new-message-reserve: calc(var(--bew-control-height) + var(--bew-space-4));
+  --conversation-new-message-reserve: calc(var(--bew-message-composer-rest-height) + var(--bew-space-2));
+}
+
+.conversation-view--search-mode,
+.conversation-view--has-composer.conversation-view--has-new-messages,
+.conversation-view--has-composer:has(> .conversation-latest-leave-active) {
+  --conversation-new-message-reserve: 0px;
+  --conversation-composer-end-inset: max(
+    calc(var(--bew-message-composer-rest-height) + var(--bew-space-4)),
+    min(
+      calc(var(--bew-messages-sidebar-width) + var(--notifications-workspace-gap)),
+      max(var(--bew-space-4), calc(100% - var(--bew-space-4) - var(--bew-message-composer-min-width)))
+    )
+  );
+}
+
+.conversation-view--search-mode:not(.conversation-view--has-composer) {
+  --conversation-new-message-reserve: calc(var(--bew-message-composer-rest-height) + var(--bew-space-2));
 }
 
 .conversation-card {
@@ -587,36 +701,34 @@ defineExpose({
   box-sizing: border-box;
   display: grid;
   grid-template-rows: minmax(0, 1fr);
-  width: 100%;
+  // Extend the scroll paint area to the sidebar while retaining message alignment.
+  width: calc(100% + var(--notifications-workspace-gap) + var(--bew-space-4));
+  margin-left: calc(-1 * var(--notifications-workspace-gap));
   height: calc(100% + var(--conversation-extra-height, 0px));
   min-height: 0;
   overflow: hidden;
   background: transparent;
   border: 0;
-  border-inline: 1px solid var(--bew-surface-border-color);
   border-radius: var(--conversation-radius, var(--bew-panel-radius));
   corner-shape: var(--bew-corner-shape);
   transform: translateY(var(--conversation-top-lift, 0px));
 }
 
-.conversation-view--layout-transitioning .conversation-card {
-  will-change: height, transform, border-radius;
-  transition:
-    height var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-normal) var(--bew-ease-standard),
-    border-radius var(--bew-duration-fast) linear;
-}
+// The transparent scroll surface takes its final geometry in one layout pass.
+// Animating height/padding made its resize observers run on every entry frame.
 
 .conversation-view__messages {
   position: relative;
   z-index: 1;
   min-width: 0;
   min-height: 0;
-  padding: calc(var(--bew-space-3) + var(--conversation-top-expansion, 0px)) var(--bew-space-4)
+  padding: calc(var(--bew-space-3) + var(--conversation-top-expansion, 0px))
+    calc(var(--conversation-message-inline-space) + var(--bew-space-4))
     calc(
       var(--conversation-composer-reserve) + var(--conversation-new-message-reserve) +
         var(--conversation-bottom-expansion, 0px) + var(--bew-space-4)
-    );
+    )
+    calc(var(--conversation-message-inline-space) + var(--notifications-workspace-gap));
   overflow: auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
@@ -624,36 +736,42 @@ defineExpose({
   background: transparent;
   outline: none;
 }
-.conversation-view__tools {
-  position: absolute;
-  z-index: 3;
-  top: var(--bew-space-2);
-  right: var(--bew-space-4);
-  width: calc(100% - var(--bew-space-8));
-  display: flex;
-  justify-content: flex-end;
-  pointer-events: none;
-}
 .conversation-view__message--match {
-  outline: 2px solid var(--bew-theme-focus-ring);
-  outline-offset: 2px;
-  border-radius: var(--bew-interactive-radius);
+  position: relative;
+  isolation: isolate;
 }
 
-.conversation-view--layout-transitioning .conversation-view__messages {
-  transition:
-    padding-top var(--bew-duration-normal) var(--bew-ease-standard),
-    padding-bottom var(--bew-duration-normal) var(--bew-ease-standard);
+.conversation-view__message--match::before {
+  position: absolute;
+  z-index: -1;
+  top: calc(-1 * var(--bew-space-2));
+  bottom: calc(-1 * var(--bew-space-2));
+  left: calc(-1 * (var(--conversation-message-inline-space) + var(--notifications-workspace-gap)));
+  right: calc(-1 * (var(--conversation-message-inline-space) + var(--bew-space-4)));
+  content: "";
+  pointer-events: none;
+  background: linear-gradient(to right, var(--bew-message-search-highlight), transparent);
+  border-radius: 0;
+}
+
+.conversation-view__message--match.private-message-item--self::before {
+  background: linear-gradient(to left, var(--bew-message-search-highlight), transparent);
 }
 
 .conversation-view__messages:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: calc(0px - var(--bew-space-1));
 }
 
 .conversation-view__timeline {
   display: grid;
   gap: var(--bew-space-3);
+}
+
+.conversation-view .private-message-item--self {
+  box-sizing: border-box;
+  // Keep the conversation avatar inside the top-bar avatar's screen-edge inset.
+  padding-inline-end: var(--bew-top-bar-inline-padding);
 }
 
 .conversation-view__history {
@@ -689,12 +807,16 @@ defineExpose({
 }
 
 .conversation-view--density-compact .conversation-view__messages {
-  padding-right: var(--bew-space-3);
-  padding-left: var(--bew-space-3);
+  --conversation-message-inline-space: var(--bew-space-3);
 }
 
 .conversation-view--density-compact .conversation-view__timeline {
   gap: var(--bew-space-2);
+}
+
+.conversation-view--search-mode .conversation-view__timeline {
+  // Eight pixels above/below the highlight plus a clear gap to neighbouring rows.
+  gap: var(--bew-space-6);
 }
 
 .conversation-view__state {
@@ -709,12 +831,6 @@ defineExpose({
   font-size: var(--bew-font-size-body);
   line-height: var(--bew-line-height-body);
   text-align: center;
-}
-
-.conversation-view__state-actions {
-  display: flex;
-  gap: var(--bew-space-2);
-  align-items: center;
 }
 
 .conversation-view__history-status {
@@ -759,13 +875,12 @@ defineExpose({
 
 .conversation-card__top-edge,
 .conversation-card__bottom-edge {
-  position: absolute;
+  position: fixed;
   right: 0;
-  left: 0;
-  z-index: 2;
+  left: var(--bew-messages-sidebar-width);
+  z-index: var(--bew-z-topbar);
   overflow: hidden;
   pointer-events: none;
-  corner-shape: var(--bew-corner-shape);
   backdrop-filter: var(--bew-filter-glass-1);
   opacity: 0;
   transition:
@@ -777,8 +892,7 @@ defineExpose({
 .conversation-card__top-edge {
   top: 0;
   height: var(--bew-space-12);
-  border-top-left-radius: inherit;
-  border-top-right-radius: inherit;
+  border-radius: 0;
   mask-image: linear-gradient(to bottom, black, transparent);
   -webkit-mask-image: linear-gradient(to bottom, black, transparent);
 }
@@ -790,8 +904,7 @@ defineExpose({
 .conversation-card__bottom-edge {
   bottom: 0;
   height: var(--bew-space-12);
-  border-bottom-right-radius: inherit;
-  border-bottom-left-radius: inherit;
+  border-radius: 0;
   mask-image: linear-gradient(to bottom, transparent, black 70%);
   -webkit-mask-image: linear-gradient(to bottom, transparent, black 70%);
 }
@@ -806,12 +919,14 @@ defineExpose({
   -webkit-backdrop-filter: none;
 }
 
-.conversation-view__floating-composer {
+.conversation-view__floating-composer,
+.conversation-view__new-messages {
+  translate: 0 var(--notifications-composer-dock-shift, 0px);
   --bew-liquid-frame-inset: 0px;
   position: absolute;
-  right: var(--bew-space-4);
+  right: var(--conversation-composer-end-inset);
   bottom: 0;
-  left: var(--bew-space-4);
+  left: var(--conversation-composer-start-inset);
   z-index: 4;
   padding: var(--bew-space-2);
   background: var(--bew-elevated-alt);
@@ -823,6 +938,7 @@ defineExpose({
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
   background-clip: padding-box;
   transition:
+    translate var(--bew-duration-moderate) var(--bew-ease-standard),
     border-radius var(--bew-duration-normal) var(--bew-ease-standard),
     corner-shape var(--bew-duration-normal) var(--bew-ease-standard);
 }
@@ -833,14 +949,48 @@ defineExpose({
   corner-shape: var(--bew-corner-shape-round);
 }
 
+.conversation-view__floating-composer {
+  transform: translateY(0);
+  transition:
+    translate var(--bew-duration-moderate) var(--bew-ease-standard),
+    transform var(--bew-duration-normal) var(--bew-ease-standard),
+    border-radius var(--bew-duration-normal) var(--bew-ease-standard),
+    corner-shape var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.conversation-view__floating-composer[data-entering="true"] {
+  transform: translateY(var(--bew-space-2));
+}
+
+.conversation-view__floating-composer > .conversation-view__test-send {
+  opacity: 1;
+  transition: opacity var(--bew-duration-normal) var(--bew-ease-standard);
+}
+
+.conversation-view__floating-composer[data-entering="true"] > .conversation-view__test-send {
+  opacity: 0;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .conversation-view__floating-composer {
+  .conversation-view__floating-composer,
+  .conversation-view__new-messages {
+    transition: none;
+  }
+
+  .conversation-view__floating-composer[data-entering="true"] {
+    transform: none;
+  }
+
+  .conversation-view__floating-composer > .conversation-view__test-send {
     transition: none;
   }
 }
 
-.conversation-view--solid .conversation-view__floating-composer {
+.conversation-view--solid .conversation-view__floating-composer,
+.conversation-view--solid .conversation-view__new-messages {
   background: var(--bew-elevated-alt-solid);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
 .conversation-view__test-send {
@@ -858,26 +1008,154 @@ defineExpose({
 
 .conversation-view__new-messages {
   position: absolute;
+  box-sizing: border-box;
+  display: flex;
+  gap: var(--bew-space-2);
+  align-items: center;
+  justify-content: center;
   right: var(--bew-space-4);
-  bottom: var(--bew-space-4);
-  z-index: 3;
-  min-height: var(--bew-control-height);
-  padding: 0 var(--bew-space-3);
-  color: var(--bew-on-theme-color);
-  font-size: var(--bew-font-size-control);
+  left: auto;
+  bottom: 0;
+  width: var(--bew-control-height-lg);
+  height: var(--bew-control-height-lg);
+  max-width: calc(100% - var(--bew-space-8));
+  min-height: var(--bew-control-height-lg);
+  padding: 0;
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-control);
+  line-height: var(--bew-line-height-caption);
   appearance: none;
   cursor: pointer;
-  background: var(--bew-theme-color);
-  border: 0;
-  border-radius: var(--bew-badge-radius);
+  border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
-  box-shadow: var(--bew-shadow-2);
 }
 
+.conversation-view--search-mode .conversation-view__new-messages,
 .conversation-view--has-composer .conversation-view__new-messages {
-  bottom: calc(var(--conversation-composer-reserve) + var(--bew-space-4));
+  right: auto;
+  left: calc(100% - var(--conversation-composer-end-inset) + var(--bew-space-2));
+  width: var(--bew-message-composer-rest-height);
+  height: var(--bew-message-composer-rest-height);
+  min-height: var(--bew-message-composer-rest-height);
+  max-width: calc(var(--conversation-composer-end-inset) - var(--bew-space-2) - var(--bew-space-4));
+}
+
+.conversation-view .conversation-view__new-messages.conversation-view__search-navigation {
+  width: max-content;
+  padding: 0 var(--bew-space-2);
+  border-radius: calc(var(--bew-message-composer-rest-height) / 2);
+  cursor: default;
+}
+
+.conversation-view__latest-action {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+  color: var(--bew-message-icon-hover);
+  transition: color var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+.conversation-view__latest-action:hover {
+  color: var(--bew-theme-foreground);
+}
+
+.conversation-view__latest-action svg {
+  width: var(--bew-icon-size-lg);
+  height: var(--bew-icon-size-lg);
+}
+
+.conversation-view__new-messages > * {
+  animation: conversation-navigation-enter var(--bew-duration-fast) var(--bew-ease-standard);
+}
+@keyframes conversation-navigation-enter {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.conversation-latest-enter-active,
+.conversation-latest-leave-active {
+  transition:
+    opacity var(--bew-duration-moderate) var(--bew-ease-standard),
+    transform var(--bew-duration-moderate) var(--bew-ease-standard);
+}
+
+.conversation-latest-enter-from,
+.conversation-latest-leave-to {
+  opacity: 0;
+  transform: scale(0.9);
+}
+
+.conversation-latest-leave-active {
+  pointer-events: none;
+}
+
+@media (max-width: breakpoints.$mobile-max) {
+  .conversation-view--has-composer .conversation-view__new-messages {
+    width: var(--bew-message-composer-rest-height);
+    padding-inline: var(--bew-space-2);
+  }
+}
+
+// Latest-message navigation follows the inner single-line field, while search
+// navigation retains the existing outer-composer height at each breakpoint.
+.conversation-view .conversation-view__new-messages:not(.conversation-view__search-navigation) {
+  width: var(--bew-message-input-height);
+  height: var(--bew-message-input-height);
+  min-height: var(--bew-message-input-height);
+  padding: 0;
+}
+
+.conversation-view--has-composer .conversation-view__new-messages:not(.conversation-view__search-navigation) {
+  bottom: calc((var(--bew-message-composer-rest-height) - var(--bew-message-input-height)) / 2);
+}
+
+@media (max-width: breakpoints.$grid-sm) {
+  .conversation-view--has-composer:not(.conversation-view--search-mode):is(
+      .conversation-view--has-new-messages,
+      :has(> .conversation-latest-leave-active)
+    ) {
+    --conversation-composer-end-inset: calc(var(--bew-message-input-height) + var(--bew-space-2) + var(--bew-space-4));
+  }
+}
+
+@media (max-width: breakpoints.$grid-sm) {
+  .conversation-view.conversation-view--has-composer.conversation-view--search-mode {
+    --conversation-composer-end-inset: var(--bew-space-4);
+    --conversation-new-message-reserve: calc(var(--bew-control-height-lg) + var(--bew-space-2));
+  }
+  .conversation-view .conversation-view__new-messages.conversation-view__search-navigation {
+    right: var(--bew-space-4);
+    left: auto;
+    bottom: 0;
+    max-width: calc(100% - var(--bew-space-8));
+    height: var(--bew-control-height-lg);
+    min-height: var(--bew-control-height-lg);
+  }
+  .conversation-view--has-composer .conversation-view__new-messages.conversation-view__search-navigation {
+    bottom: calc(var(--conversation-composer-reserve) + var(--bew-space-2));
+  }
+  .conversation-view--has-composer.conversation-view--has-new-messages,
+  .conversation-view--has-composer:has(> .conversation-latest-leave-active) {
+    --conversation-composer-start-inset: var(--bew-space-2);
+    --conversation-composer-end-inset: calc(var(--bew-control-height-lg) + var(--bew-space-2) + var(--bew-space-4));
+  }
+
+  .conversation-view--has-composer .conversation-view__new-messages {
+    width: var(--bew-control-height-lg);
+    height: var(--bew-control-height-lg);
+    min-height: var(--bew-control-height-lg);
+  }
 }
 
 @media (max-width: breakpoints.$mobile-max) {
@@ -894,14 +1172,15 @@ defineExpose({
   .conversation-card__bottom-edge {
     display: none;
   }
-
-  .conversation-view__floating-composer {
-    right: var(--bew-space-3);
-    left: var(--bew-space-3);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .conversation-view__latest-action {
+    transition: none;
+  }
+  .conversation-view__new-messages > * {
+    animation: none;
+  }
   .conversation-view,
   .conversation-card,
   .conversation-view__messages,
@@ -910,6 +1189,14 @@ defineExpose({
   .conversation-history-enter-active,
   .conversation-history-leave-active {
     transition: none;
+  }
+  .conversation-latest-enter-active,
+  .conversation-latest-leave-active {
+    transition: opacity var(--bew-duration-fast) linear;
+  }
+  .conversation-latest-enter-from,
+  .conversation-latest-leave-to {
+    transform: none;
   }
   .conversation-view__timeline--reveal > .conversation-view__message--reveal {
     animation: none;

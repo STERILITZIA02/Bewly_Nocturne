@@ -19,6 +19,8 @@ export const CONTENT_SCRIPT_EXCLUDE_MATCHES = [
   ...new Set([...NATIVE_SITE_MATCHES, ...NATIVE_SITE_FRAME_MATCHES]),
   '*://www.bilibili.com/match/game*',
   '*://www.bilibili.com/toy*',
+  // Native header synchronization is a hidden transport frame, not a messages UI.
+  '*://message.bilibili.com/pages/nav/header_sync*',
 ]
 
 export const CONTENT_SCRIPT_PING = 'bewly-cat:content-script:ping'
@@ -60,6 +62,8 @@ export function isContentScriptTargetUrl(value?: string): boolean {
   try {
     const url = new URL(value)
     if (url.protocol !== 'http:' && url.protocol !== 'https:')
+      return false
+    if (url.hostname === 'message.bilibili.com' && url.pathname.startsWith('/pages/nav/header_sync'))
       return false
 
     if (getNativeSite(url.hostname, url.pathname))

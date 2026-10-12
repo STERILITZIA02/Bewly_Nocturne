@@ -18,6 +18,7 @@ const props = defineProps<{
   emotesLoading?: boolean
   emotesFailed?: boolean
   enableImage?: boolean
+  disabledReason?: string
 }>()
 
 const emit = defineEmits<{
@@ -48,6 +49,10 @@ const isComposing = ref(false)
 const emotePickerOpen = ref(false)
 const imageValidationError = ref('')
 let imagePickerConversationKey = props.conversationKey
+watch(() => props.disabledReason, (reason) => {
+  if (reason)
+    emotePickerOpen.value = false
+})
 watch(() => props.conversationKey, () => {
   isComposing.value = false
   emotePickerOpen.value = false
@@ -55,12 +60,14 @@ watch(() => props.conversationKey, () => {
   if (fileInputRef.value)
     fileInputRef.value.value = ''
 })
-const canSendText = computed(() => !props.sending && Boolean(props.modelValue.trim()))
+const canSendText = computed(() => !props.disabledReason && !props.sending && Boolean(props.modelValue.trim()))
 const canSendImage = computed(() => (
-  !props.sending && props.imageDraft?.status === 'ready'
+  !props.disabledReason && !props.sending && props.imageDraft?.status === 'ready'
 ))
-const canSubmit = computed(() => canSendImage.value || canSendText.value)
-const canSelectImage = computed(() => props.enableImage && !props.sending && !props.imageDraft)
+const busy = computed(() => props.sending || Boolean(props.imageDraft && ['preparing', 'uploading', 'sending', 'reconciling'].includes(props.imageDraft.status)))
+const canSubmit = computed(() => !busy.value && (canSendImage.value || canSendText.value))
+const canSelectImage = computed(() => !props.disabledReason && props.enableImage && !props.sending && !props.imageDraft)
+const sendState = computed(() => props.disabledReason ? 'blocked' : busy.value ? 'pending' : canSubmit.value ? 'ready' : 'idle')
 const imageSize = computed(() => {
   if (!props.imageDraft)
     return ''
@@ -100,6 +107,8 @@ function submitText() {
 }
 
 function submitCurrent() {
+  if (props.disabledReason || busy.value)
+    return
   const draft = props.imageDraft
   if (draft?.status === 'ready' && canSendImage.value) {
     emit('submitImage', draft.localId)
@@ -149,6 +158,8 @@ function openImagePicker() {
 }
 
 async function insertEmote(emote: PrivateEmote) {
+  if (props.disabledReason)
+    return
   const conversationKey = props.conversationKey
   const textarea = textareaRef.value
   const start = textarea?.selectionStart ?? props.modelValue.length
@@ -163,6 +174,8 @@ async function insertEmote(emote: PrivateEmote) {
 }
 
 function toggleEmotePicker() {
+  if (props.disabledReason)
+    return
   emotePickerOpen.value = !emotePickerOpen.value
   if (emotePickerOpen.value)
     emit('loadEmotes')
@@ -204,6 +217,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
       <Button
         v-if="imageDraft.status === 'failed'"
         type="tertiary"
+        :disabled="Boolean(disabledReason)"
         @click="emit('retryImage', imageDraft.localId)"
       >
         {{ t('notifications.whisper.messages.retry_send') }}
@@ -228,6 +242,7 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
             shape="circle"
             :label="t('notifications.whisper.messages.select_emote')"
             :aria-expanded="emotePickerOpen"
+            :disabled="Boolean(disabledReason)"
             aria-controls="private-message-emote-picker"
             @click="toggleEmotePicker"
           >
@@ -271,8 +286,9 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
         <textarea
           ref="textareaRef"
           class="message-composer__input"
-          :value="modelValue"
-          :placeholder="t('notifications.whisper.messages.composer_placeholder')"
+          :value="disabledReason ? '' : modelValue"
+          :disabled="Boolean(disabledReason)"
+          :placeholder="disabledReason || t('notifications.whisper.messages.composer_placeholder')"
           :aria-label="t('notifications.whisper.messages.composer_aria')"
           rows="1"
           @input="updateValue"
@@ -282,23 +298,23 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
           @paste="handlePaste"
         />
 
-        <Button
-          class="message-composer__send"
-          type="primary"
-          round
+        <button
+          class="message-composer__send bew-send-button"
+          type="submit"
           :disabled="!canSubmit"
-          :aria-busy="sending"
-          @click="submitCurrent"
-        >
-          <SkeletonBlock v-if="sending" width="1em" height="1em" radius="interactive" />
-          {{ t('notifications.whisper.messages.send') }}
-        </Button>
+          :data-bew-send-state="sendState"
+          :aria-busy="sendState === 'pending'"
+          :aria-label="disabledReason || t(sending ? 'notifications.whisper.messages.sending' : 'notifications.whisper.messages.send')"
+          :title="disabledReason || t('notifications.whisper.messages.send')"
+        />
       </div>
     </div>
   </form>
 </template>
 
 <style scoped lang="scss">
+@use "../../../../../styles/breakpoints";
+
 .message-composer {
   display: grid;
   gap: var(--bew-space-2);
@@ -397,14 +413,14 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 .message-composer__inputbar {
   display: flex;
   flex: 1 1 auto;
-  align-items: center;
+  align-items: flex-start;
   min-width: 0;
-  min-height: calc(var(--bew-control-height) + var(--bew-space-2));
+  min-height: var(--bew-message-input-height);
   padding: var(--bew-space-1);
   gap: var(--bew-space-1);
   box-sizing: border-box;
   background: var(--bew-elevated-alt-solid);
-  border-radius: calc((var(--bew-control-height) + var(--bew-space-2)) / 2);
+  border-radius: calc(var(--bew-message-input-height) / 2);
   corner-shape: var(--bew-corner-shape-round);
   transition:
     border-radius var(--bew-duration-normal) var(--bew-ease-standard),
@@ -417,6 +433,13 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   corner-shape: var(--bew-corner-shape);
 }
 
+.message-composer__inputbar.is-multiline .message-composer__send {
+  --bew-send-height: auto;
+  --bew-send-radius: var(--bew-radius-lg);
+  --bew-send-corner-shape: var(--bew-corner-shape);
+  align-self: stretch;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .message-composer__inputbar {
     transition: none;
@@ -424,17 +447,19 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
 }
 
 .message-composer__inputbar:focus-within {
-  box-shadow:
-    0 0 0 var(--bew-space-0-5) var(--bew-theme-focus-ring),
-    var(--bew-shadow-2),
-    var(--bew-shadow-edge-glow-1);
+  box-shadow: var(--bew-focus-shadow);
 }
 
 .message-composer__actions {
   display: flex;
+  grid-row: 1;
   min-width: 0;
   gap: var(--bew-space-2);
-  align-items: center;
+  align-items: flex-start;
+}
+
+.message-composer__actions .message-composer__action {
+  margin-top: var(--bew-space-1);
 }
 
 .message-composer__emote-control {
@@ -459,18 +484,14 @@ defineExpose({ focus: () => textareaRef.value?.focus() })
   font-size: var(--bew-icon-size-md);
 }
 
-.message-composer__send {
-  flex: 0 0 auto;
-  min-width: var(--bew-space-12);
-  height: var(--bew-control-height);
-  padding: 0 var(--bew-space-3);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
-}
-
-.message-composer__send:hover:not(:disabled) {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
-  filter: brightness(1.05);
+@media (max-width: breakpoints.$grid-sm) {
+  .message-composer__actions {
+    gap: var(--bew-space-1);
+  }
+  .message-composer__actions .message-composer__action {
+    width: var(--bew-control-height-sm);
+    height: var(--bew-control-height-sm);
+    margin-top: var(--bew-space-2);
+  }
 }
 </style>

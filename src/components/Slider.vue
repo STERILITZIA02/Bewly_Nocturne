@@ -77,12 +77,12 @@ label {
 input[type="range"] {
   &::-webkit-slider-thumb {
     --uno: "appearance-none w-$b-thumb-height h-$b-thumb-height bg-white rounded-$b-thumb-height";
-    --uno: "ring-$bew-border-color ring-2 cursor-pointer duration-300";
+    --uno: "ring-$bew-border-color ring-1 cursor-pointer duration-300";
     corner-shape: var(--bew-corner-shape-round);
   }
 
   &::-webkit-slider-thumb:hover {
-    --uno: "ring-$bew-theme-focus-ring";
+    --uno: "ring-$bew-focus-ring-color";
   }
 }
 </style>

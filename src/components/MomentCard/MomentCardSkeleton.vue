@@ -12,6 +12,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
         <SkeletonBlock width="40%" height="var(--bew-line-height-body)" />
         <SkeletonBlock width="26%" height="var(--bew-line-height-caption)" />
       </div>
+      <SkeletonBlock width="var(--bew-control-height-sm)" height="var(--bew-control-height-sm)" radius="circle" />
     </div>
     <div class="moment-card-skeleton__main">
       <SkeletonBlock v-if="media" class="moment-card-skeleton__media" height="auto" radius="media" />
@@ -35,6 +36,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
   border-radius: var(--bew-card-radius);
+  corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);
 }
 .moment-card-skeleton__header {

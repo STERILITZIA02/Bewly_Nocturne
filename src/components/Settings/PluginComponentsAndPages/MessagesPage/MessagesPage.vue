@@ -55,13 +55,28 @@ const serverSettings = useMessageServerSettings({
   deleteBlockWord: word => api.messageServerSettings.deleteMessageBlockWord({ word }),
 })
 const blockWordDraft = ref('')
+const blockWordsUnavailable = computed(() => {
+  const words = serverSettings.state.blockWords
+  return !words.loaded || words.loading || Boolean(words.pendingWord) || words.failedOperation === 'reconcile'
+})
+const blockWordError = computed(() => {
+  const words = serverSettings.state.blockWords
+  if (!words.errorKind || words.loading || words.pendingWord)
+    return ''
+  if (words.failedOperation === 'reconcile')
+    return t('settings.messages_server_block_words_unconfirmed')
+  if (words.failedOperation === 'load' && ['api-error', 'invalid-response'].includes(words.errorKind))
+    return t('settings.messages_server_block_words_load_failed')
+  return t(`settings.messages_server_errors.${words.errorKind}`)
+})
 const canAddBlockWord = computed(() => {
   const word = blockWordDraft.value.trim()
   const blockWords = serverSettings.state.blockWords
   return Boolean(word)
-    && !blockWords.pendingWord
-    && (blockWords.maxWordLength <= 0 || Array.from(word).length <= blockWords.maxWordLength)
-    && (blockWords.maxWordsSize <= 0 || blockWords.words.length < blockWords.maxWordsSize)
+    && !blockWordsUnavailable.value
+    && !blockWords.words.includes(word)
+    && Array.from(word).length <= blockWords.maxWordLength
+    && blockWords.words.length < blockWords.maxWordsSize
 })
 
 function getSettingValue(field: MessageServerSettingField): number | null {
@@ -221,10 +236,10 @@ onScopeDispose(serverSettings.dispose)
 
       <SettingsItem setting-id="messages.server.blockWords" :title="$t('settings.messages_server_block_words')">
         <template #desc>
-          <span v-if="serverSettings.state.blockWords.errorKind">
-            {{ $t(`settings.messages_server_errors.${serverSettings.state.blockWords.errorKind}`) }}
+          <span v-if="blockWordError" role="status">
+            {{ blockWordError }}
           </span>
-          <span v-else>
+          <span v-else-if="serverSettings.state.blockWords.loaded">
             {{ $t('settings.messages_server_block_words_limit', {
               count: serverSettings.state.blockWords.words.length,
               max: serverSettings.state.blockWords.maxWordsSize,
@@ -235,6 +250,7 @@ onScopeDispose(serverSettings.dispose)
         <div class="message-block-word-input">
           <Input
             v-model="blockWordDraft"
+            :disabled="!serverSettings.state.blockWords.loaded"
             size="small"
             :maxlength="serverSettings.state.blockWords.maxWordLength || undefined"
             :placeholder="$t('settings.messages_server_block_words_placeholder')"
@@ -252,15 +268,18 @@ onScopeDispose(serverSettings.dispose)
             <span v-for="word in serverSettings.state.blockWords.words" :key="word" class="message-block-word">
               <span>{{ word }}</span>
               <TagRemoveButton
-                :disabled="Boolean(serverSettings.state.blockWords.pendingWord)"
+                :disabled="blockWordsUnavailable"
                 :label="$t('settings.messages_server_block_words_remove', { word })"
                 @click="serverSettings.deleteBlockWord(word)"
               />
             </span>
           </div>
-          <span v-else-if="!serverSettings.state.blockWords.loading" class="message-block-words-empty">
+          <span v-else-if="serverSettings.state.blockWords.loaded && !serverSettings.state.blockWords.loading && !blockWordError" class="message-block-words-empty">
             {{ $t('settings.messages_server_block_words_empty') }}
           </span>
+          <Button v-if="blockWordError" type="tertiary" size="small" @click="serverSettings.refresh()">
+            {{ $t('settings.messages_server_refresh_action') }}
+          </Button>
         </template>
       </SettingsItem>
     </SettingsItemGroup>

@@ -42,15 +42,6 @@
   }
 }
 
-.logo.activated {
-  --uno: "bg-$bew-theme-color";
-
-  svg {
-    fill: currentColor !important;
-    filter: none !important;
-  }
-}
-
 .right-side {
   .avatar {
     --uno: "flex justify-center items-center relative z-1";
