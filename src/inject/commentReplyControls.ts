@@ -66,7 +66,7 @@ export function updateCommentReplyPageControl(renderer: HTMLElement, options: {
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button { cursor: pointer; }
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button:hover { background: var(--bew-theme-surface, var(--graph_bg_regular)); }
       .${COMMENT_REPLY_PAGE_CONTROL_CLASS} button:active { background: var(--bew-theme-surface-hover, var(--graph_bg_thick)); }
-      .${COMMENT_REPLY_PAGE_CONTROL_CLASS} :focus-visible { outline: 2px solid var(--bew-theme-foreground, var(--brand_blue)); outline-offset: 2px; }
+      .${COMMENT_REPLY_PAGE_CONTROL_CLASS} :focus-visible { outline: var(--bew-focus-ring, 1px solid CanvasText); outline-offset: 2px; }
     `
     root.append(style)
   }

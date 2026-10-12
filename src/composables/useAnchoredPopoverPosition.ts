@@ -1,16 +1,20 @@
 import type { MaybeElement } from '@vueuse/core'
 import { unrefElement } from '@vueuse/core'
 import type { Ref } from 'vue'
+import { nextTick, onScopeDispose, watch } from 'vue'
 
+import type { PopoverPositionResolver } from '~/utils/floatingMenu'
 import { computeAnchoredPopoverPosition } from '~/utils/floatingMenu'
 
 export function useAnchoredPopoverPosition(
   trigger: Ref<MaybeElement>,
   popup: Ref<MaybeElement>,
   visible: Readonly<Ref<boolean>>,
+  resolvePosition: PopoverPositionResolver = computeAnchoredPopoverPosition,
 ) {
   let frame: number | undefined
   let resizeObserver: ResizeObserver | undefined
+  let disposed = false
 
   function cancelFrame() {
     if (frame !== undefined)
@@ -22,17 +26,22 @@ export function useAnchoredPopoverPosition(
     frame = undefined
     const triggerElement = unrefElement(trigger)
     const popupElement = unrefElement(popup)
-    if (!triggerElement || !popupElement || !visible.value)
+    if (disposed || !triggerElement || !popupElement || !visible.value)
       return
 
     const triggerRect = triggerElement.getBoundingClientRect()
-    const popupRect = popupElement.getBoundingClientRect()
+    const paintedPopup = popupElement.getBoundingClientRect()
+    // Entry scale must not move the final anchor. Use layout dimensions while
+    // a popup is animating, with the measured rect as the non-HTML fallback.
+    const popupRect = popupElement instanceof HTMLElement
+      ? { width: popupElement.offsetWidth || paintedPopup.width, height: popupElement.offsetHeight || paintedPopup.height }
+      : paintedPopup
     const visualViewport = window.visualViewport
     const viewportLeft = visualViewport?.offsetLeft ?? 0
     const viewportTop = visualViewport?.offsetTop ?? 0
     const viewportWidth = visualViewport?.width ?? window.innerWidth
     const viewportHeight = visualViewport?.height ?? window.innerHeight
-    const position = computeAnchoredPopoverPosition(
+    const position = resolvePosition(
       {
         top: triggerRect.top - viewportTop,
         right: triggerRect.right - viewportLeft,
@@ -58,7 +67,7 @@ export function useAnchoredPopoverPosition(
   }
 
   function scheduleUpdate() {
-    if (frame === undefined)
+    if (!disposed && visible.value && frame === undefined)
       frame = requestAnimationFrame(updatePosition)
   }
 
@@ -76,12 +85,14 @@ export function useAnchoredPopoverPosition(
     stop()
     const triggerElement = unrefElement(trigger)
     const popupElement = unrefElement(popup)
-    if (!triggerElement || !popupElement || !visible.value)
+    if (disposed || !triggerElement || !popupElement || !visible.value)
       return
 
-    resizeObserver = new ResizeObserver(scheduleUpdate)
-    resizeObserver.observe(triggerElement)
-    resizeObserver.observe(popupElement)
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(scheduleUpdate)
+      resizeObserver.observe(triggerElement)
+      resizeObserver.observe(popupElement)
+    }
     window.addEventListener('resize', scheduleUpdate)
     window.addEventListener('scroll', scheduleUpdate, true)
     window.visualViewport?.addEventListener('resize', scheduleUpdate)
@@ -97,5 +108,9 @@ export function useAnchoredPopoverPosition(
       stop()
   }, { immediate: true, flush: 'post' })
 
-  onScopeDispose(stop)
+  onScopeDispose(() => {
+    disposed = true
+    stop()
+  })
+  return { scheduleUpdate }
 }

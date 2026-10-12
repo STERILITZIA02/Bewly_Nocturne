@@ -28,6 +28,7 @@ const REFRESH_INTERVAL_MS = 10 * 60 * 1000
 const hotSearchList = shallowRef<HotSearchItem[]>([])
 const searchRecommendation = shallowRef<SearchRecommendationItem | null>(null)
 const isLoadingHotSearch = ref(false)
+const hotSearchFailed = ref(false)
 const isLoadingSearchRecommendation = ref(false)
 
 let hotSearchUpdatedAt: number | undefined
@@ -72,6 +73,7 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
     return hotSearchRequest
 
   isLoadingHotSearch.value = true
+  hotSearchFailed.value = false
   const generation = hotSearchGeneration
   const controller = new AbortController()
   hotSearchController = controller
@@ -81,10 +83,16 @@ export async function loadSharedHotSearch(force = false): Promise<void> {
         hotSearchList.value = response.data.trending.list.slice(0, 10)
         hotSearchUpdatedAt = Date.now()
       }
+      else if (generation === hotSearchGeneration && !controller.signal.aborted) {
+        hotSearchFailed.value = true
+      }
     })
     .catch((error) => {
-      if (!controller.signal.aborted)
+      if (!controller.signal.aborted) {
+        if (generation === hotSearchGeneration)
+          hotSearchFailed.value = true
         reportSearchExperienceFailure('hot-search', error)
+      }
     })
     .finally(() => {
       if (hotSearchRequest !== request)
@@ -258,6 +266,7 @@ export function useSearchExperience() {
     hotSearchList: readonly(hotSearchList),
     searchRecommendation: readonly(searchRecommendation),
     isLoadingHotSearch: readonly(isLoadingHotSearch),
+    hotSearchFailed: readonly(hotSearchFailed),
     isLoadingSearchRecommendation: readonly(isLoadingSearchRecommendation),
   }
 }

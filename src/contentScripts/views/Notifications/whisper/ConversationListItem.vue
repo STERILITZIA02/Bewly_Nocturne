@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 
 import type { DisplayPrivateSession } from './privateSession'
 import { normalizePrivateSessionLocale } from './privateSession'
+import { canManagePrivateSession, privateSessionActionsKey } from './usePrivateSessionActions'
 
 const props = defineProps<{
   compact?: boolean
@@ -12,10 +13,12 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   (event: 'select', session: DisplayPrivateSession): void
+  (event: 'menu', session: DisplayPrivateSession, trigger: HTMLElement): void
 }>()
 
 const { locale, t } = useI18n()
 const avatarFailed = ref(false)
+const actions = inject(privateSessionActionsKey, undefined)
 const assistantLabel = computed(() => props.session.assistantType
   ? t(`notifications.whisper.assistants.${props.session.assistantType}`)
   : '')
@@ -23,6 +26,9 @@ const assistantLabel = computed(() => props.session.assistantType
 const displayName = computed(() => props.session.name || t('notifications.whisper.unknown_user'))
 const displaySummary = computed(() => props.session.summary || t('notifications.whisper.summary_unavailable'))
 const dateLocale = computed(() => normalizePrivateSessionLocale(locale.value))
+const profileUrl = computed(() => props.session.capabilities.canOpenProfile && /^[1-9]\d*$/.test(props.session.talkerId)
+  ? `https://space.bilibili.com/${props.session.talkerId}`
+  : '')
 const displayTime = computed(() => {
   if (!props.session.timestamp)
     return ''
@@ -44,20 +50,31 @@ watch(() => props.session.avatar, () => {
 </script>
 
 <template>
-  <button
-    type="button"
+  <div
     class="conversation-list-item bew-shape-smooth-rect"
-    :data-session-key="session.key"
     :class="{
       'conversation-list-item--compact': compact,
       'conversation-list-item--selected': selected,
+      'conversation-list-item--pinned': session.pinned,
     }"
-    :aria-current="selected ? 'true' : undefined"
-    :aria-expanded="selected"
-    :aria-label="t('notifications.whisper.select_conversation', { name: displayName })"
-    @click="emit('select', session)"
   >
+    <button
+      type="button"
+      class="conversation-list-item__select"
+      :data-session-key="session.key"
+      :aria-current="selected ? 'true' : undefined"
+      :aria-expanded="selected"
+      :aria-label="t('notifications.whisper.select_conversation', { name: displayName })"
+      @click="emit('select', session)"
+    />
     <span class="conversation-list-item__avatar-wrap">
+      <ALink
+        v-if="profileUrl"
+        :href="profileUrl"
+        type="content"
+        class="conversation-list-item__profile"
+        :aria-label="t('notifications.whisper.open_profile', { name: displayName })"
+      />
       <img
         v-if="session.avatar && !avatarFailed"
         class="conversation-list-item__avatar"
@@ -101,11 +118,20 @@ watch(() => props.session.avatar, () => {
         </span>
       </span>
     </span>
-  </button>
+    <IconButton
+      v-if="actions && canManagePrivateSession(session)"
+      class="conversation-list-item__menu" :label="t('notifications.whisper.actions.menu', { name: displayName })"
+      aria-haspopup="menu" :aria-expanded="actions.state.target?.key === session.key"
+      @click.stop="emit('menu', session, $event.currentTarget as HTMLElement)"
+    >
+      <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="2" /><circle cx="12" cy="12" r="2" /><circle cx="12" cy="19" r="2" /></svg>
+    </IconButton>
+  </div>
 </template>
 
 <style scoped lang="scss">
 .conversation-list-item {
+  position: relative;
   display: flex;
   gap: var(--bew-space-3);
   align-items: center;
@@ -120,19 +146,95 @@ watch(() => props.session.avatar, () => {
   cursor: pointer;
   background: transparent;
   border: 0;
-  border-radius: var(--bew-interactive-radius);
+  border-radius: var(--bew-card-radius);
   corner-shape: var(--bew-corner-shape);
   transition:
     color var(--bew-duration-fast) var(--bew-ease-standard),
     background-color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
+.conversation-list-item__menu {
+  position: relative;
+  z-index: 1;
+  width: var(--bew-control-height-sm);
+  height: var(--bew-control-height-sm);
+  flex: none;
+  opacity: 0;
+  color: inherit;
+  transition: opacity var(--bew-duration-fast) ease;
+}
+.conversation-list-item:is(:hover, :focus-within) .conversation-list-item__menu,
+.conversation-list-item__menu[aria-expanded="true"] {
+  opacity: 1;
+}
+@media (hover: none) {
+  .conversation-list-item__menu {
+    opacity: 1;
+  }
+}
+
+.conversation-list-item__select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+}
+
+.conversation-list-item__body,
+.conversation-list-item__avatar-wrap {
+  pointer-events: none;
+}
+
+.conversation-list-item__profile {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: auto;
+}
+
+.conversation-list-item__avatar-wrap {
+  position: relative;
+}
+
+.conversation-list-item__avatar-wrap:has(.conversation-list-item__profile:focus-visible) {
+  outline: var(--bew-focus-ring);
+  outline-offset: var(--bew-space-0-5);
+}
+
 .conversation-list-item:hover {
   background: var(--bew-fill-1);
 }
 
-.conversation-list-item--selected {
-  background: var(--bew-theme-surface);
+.conversation-list-item--pinned {
+  background: var(--bew-message-pinned-background);
+
+  &:hover {
+    background: var(--bew-message-pinned-hover-background);
+  }
+
+  // Join only touching pinned rows in the rendered list. Filtering and search
+  // group boundaries naturally create new rounded groups without extra state.
+  &:has(+ .conversation-list-item--pinned) {
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+  }
+
+  + .conversation-list-item--pinned {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+  }
+}
+
+.conversation-list-item--selected,
+.conversation-list-item--selected:hover {
+  color: var(--bew-on-theme-color);
+  background: var(--bew-theme-color);
 }
 
 .conversation-list-item--compact {
@@ -209,8 +311,8 @@ watch(() => props.session.avatar, () => {
   text-overflow: ellipsis;
   white-space: nowrap;
   background: var(--bew-fill-1);
-  border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .conversation-list-item strong {
@@ -264,8 +366,25 @@ watch(() => props.session.avatar, () => {
   font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-theme-color);
-  border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape-round);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
+}
+
+// Keep state overrides after the base metadata rules: `time` has the same
+// specificity in both rules and must inherit the selected contrast foreground.
+.conversation-list-item--selected {
+  time,
+  .conversation-list-item__summary,
+  .conversation-list-item__status,
+  .conversation-list-item__fallback-avatar,
+  .conversation-list-item__assistant-label {
+    color: inherit;
+  }
+
+  .conversation-list-item__badge {
+    color: var(--bew-theme-color);
+    background: var(--bew-on-theme-color);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -8,9 +8,11 @@ import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import type { SettingsNavigationRequest } from '~/composables/useAppProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { GLASS_SURFACE_CONTEXT } from '~/composables/useLiquidGlass'
+import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { settings } from '~/logic'
 import type { SettingDescriptor } from '~/logic/layoutEdit'
 import { enterLayoutEditMode, subscribeSettingNavigation } from '~/logic/layoutEdit'
+import { createAsyncPageRegistry } from '~/utils/asyncPage'
 import { getTopDialog } from '~/utils/dialogFocus'
 
 import { navigateToSetting } from './navigateToSetting'
@@ -33,7 +35,6 @@ const searchQuery = ref('')
 const settingsContentKey = ref(0)
 const settingsContentReady = ref(false)
 const settingsLayerRef = ref<HTMLElement | null>(null)
-let settingsContentFrame: number | undefined
 let settingNavigationController: AbortController | undefined
 let quickLayoutEditFrame: number | undefined
 let settingsModalActive = false
@@ -114,13 +115,6 @@ function trapSettingsFocus(event: KeyboardEvent) {
 
 onMounted(() => {
   activateSettingsModal()
-  // 先让设置外壳完成首帧绘制，再挂载异步设置页，避免点击反馈被重组件初始化阻塞。
-  settingsContentFrame = requestAnimationFrame(() => {
-    settingsContentFrame = requestAnimationFrame(() => {
-      settingsContentFrame = undefined
-      settingsContentReady.value = true
-    })
-  })
 })
 onActivated(activateSettingsModal)
 onDeactivated(deactivateSettingsModal)
@@ -131,13 +125,14 @@ provide('setSettingsBreadcrumb', (detail?: string) => {
 })
 provide('startQuickLayoutEdit', startQuickLayoutEdit)
 
+const asyncSettings = createAsyncPageRegistry()
 const settingsMenu = {
-  [MenuType.General]: defineAsyncComponent(() => import('./PluginComponentsAndPages/General/General.vue')),
-  [MenuType.BewlyPages]: defineAsyncComponent(() => import('./Navigation/BewlyPages.vue')),
-  [MenuType.BewlyComponents]: defineAsyncComponent(() => import('./Navigation/BewlyComponents.vue')),
-  [MenuType.Bilibili]: defineAsyncComponent(() => import('./BilibiliFeaturesEnhancement/BilibiliFeaturesEnhancement.vue')),
-  [MenuType.Appearance]: defineAsyncComponent(() => import('./Appearance/Appearance.vue')),
-  [MenuType.About]: defineAsyncComponent(() => import('./About/About.vue')),
+  [MenuType.General]: asyncSettings.define(() => import('./PluginComponentsAndPages/General/General.vue'), {}),
+  [MenuType.BewlyPages]: asyncSettings.define(() => import('./Navigation/BewlyPages.vue'), {}),
+  [MenuType.BewlyComponents]: asyncSettings.define(() => import('./Navigation/BewlyComponents.vue'), {}),
+  [MenuType.Bilibili]: asyncSettings.define(() => import('./BilibiliFeaturesEnhancement/BilibiliFeaturesEnhancement.vue'), {}),
+  [MenuType.Appearance]: asyncSettings.define(() => import('./Appearance/Appearance.vue'), {}),
+  [MenuType.About]: asyncSettings.define(() => import('./About/About.vue'), {}),
 }
 const settingsMenuStorageKey = 'bewly-settings-active-menu'
 const navigationPageStorageKey = 'bewly-settings-navigation-page'
@@ -191,6 +186,7 @@ const activatedMenuItem = ref<MenuType>(
     ? initialMenuItem
     : MenuType.General,
 )
+const contentTransition = useReadyPageTransition(() => settingsMenu[activatedMenuItem.value], asyncSettings.preload)
 watch(
   () => props.navigationRequest?.id,
   () => {
@@ -525,19 +521,9 @@ function navigateToSettingDescriptor(descriptor: SettingDescriptor) {
 
 const unsubscribeSettingNavigation = subscribeSettingNavigation(navigateToSettingDescriptor)
 
-watch(() => props.navigationRequest?.id, () => {
-  const target = props.navigationRequest?.target
-  if (target?.page !== 'moments' || target.section !== 'wanted-users')
-    return
-  const navigationId = cancelSettingNavigation()
-  nextTick(() => scrollToSearchTarget(t('settings.moments_wanted_users'), navigationId))
-}, { immediate: true, flush: 'post' })
-
 onBeforeUnmount(() => {
   deactivateSettingsModal()
   unsubscribeSettingNavigation()
-  if (settingsContentFrame !== undefined)
-    cancelAnimationFrame(settingsContentFrame)
   if (quickLayoutEditFrame !== undefined)
     cancelAnimationFrame(quickLayoutEditFrame)
 })
@@ -570,6 +556,7 @@ function changeMenuItem(menuItem: MenuType) {
     aria-modal="true"
     :aria-label="$t('settings.title')"
     tabindex="-1"
+    @bew-settings-motion-ready="settingsContentReady = true"
   >
     <div
       class="settings-backdrop fixed w-full h-full top-0 left-0"
@@ -592,9 +579,6 @@ function changeMenuItem(menuItem: MenuType) {
       >
         <ul
           class="settings-primary-navigation__list"
-          style="
-            box-shadow: var(--bew-shadow-4);
-          "
           relative
           overflow-hidden antialiased
         >
@@ -650,12 +634,9 @@ function changeMenuItem(menuItem: MenuType) {
 
       <div
         class="settings-content bew-shape-smooth-rect"
-        :style="{
-          '--un-shadow': 'var(--bew-shadow-4), var(--bew-shadow-edge-glow-2)',
-        }"
         relative flex-1 min-w-0 box-border
         h-full
-        shadow rounded="$bew-modal-radius"
+        rounded="$bew-modal-radius"
       >
         <div
           class="settings-content__surface"
@@ -730,7 +711,7 @@ function changeMenuItem(menuItem: MenuType) {
           <main w-full min-h="[calc(100%-92px)]" p="x-12 b-10">
             <!-- <div h-80px mt--8 /> -->
 
-            <Transition name="page-fade">
+            <Transition mode="out-in" v-bind="contentTransition">
               <Component
                 :is="settingsMenu[activatedMenuItem as keyof typeof settingsMenu]"
                 v-if="settingsContentReady"
@@ -837,7 +818,7 @@ function changeMenuItem(menuItem: MenuType) {
   border: 1px solid var(--bew-surface-border-color);
   border-radius: inherit;
   corner-shape: inherit;
-  box-shadow: none;
+  box-shadow: var(--bew-shadow-4);
   transition: box-shadow var(--bew-duration-moderate) var(--bew-ease-standard);
 }
 
@@ -863,7 +844,7 @@ function changeMenuItem(menuItem: MenuType) {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-focus-ring);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: -2px;
   }
 }
@@ -890,18 +871,6 @@ function changeMenuItem(menuItem: MenuType) {
 
 .settings-content {
   isolation: isolate;
-
-  &::after {
-    position: absolute;
-    z-index: 3;
-    inset: 0;
-    box-sizing: border-box;
-    border: 1px solid var(--bew-surface-border-color);
-    border-radius: inherit;
-    corner-shape: inherit;
-    content: "";
-    pointer-events: none;
-  }
 }
 
 .settings-content__surface {
@@ -909,6 +878,8 @@ function changeMenuItem(menuItem: MenuType) {
   z-index: 0;
   inset: 0;
   box-sizing: border-box;
+  border: 1px solid var(--bew-surface-border-color);
+  box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-2);
   border-radius: inherit;
   corner-shape: inherit;
   pointer-events: none;
@@ -994,16 +965,14 @@ function changeMenuItem(menuItem: MenuType) {
     background-color var(--bew-duration-normal) var(--bew-ease-standard);
 
   &:hover {
-    border-color: var(--bew-theme-focus-ring);
+    border-color: var(--bew-focus-ring-color);
   }
 
   &:focus-within {
-    border-color: var(--bew-theme-focus-ring);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-panel-radius);
     corner-shape: var(--bew-corner-shape);
-    box-shadow:
-      var(--bew-shadow-edge-glow-1),
-      0 0 0 2px var(--bew-theme-focus-ring);
+    box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-focus-shadow, 0 0 0 1px CanvasText);
   }
 
   > i {
@@ -1306,60 +1275,10 @@ function changeMenuItem(menuItem: MenuType) {
   }
 }
 
-.settings-launch-enter-active #settings-window {
-  animation: settings-launch-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: var(--bew-settings-origin-x) var(--bew-settings-origin-y);
-  will-change: opacity, transform;
-}
-
-.settings-launch-leave-active #settings-window {
-  animation: settings-launch-out 200ms cubic-bezier(0.4, 0, 1, 1) both;
-  transform-origin: var(--bew-settings-origin-x) var(--bew-settings-origin-y);
-  will-change: opacity, transform;
-}
-
-.settings-launch-enter-active .settings-backdrop {
-  transition: opacity 240ms var(--bew-ease-standard);
-}
-
-.settings-launch-leave-active .settings-backdrop {
-  transition: opacity 180ms var(--bew-ease-standard);
-}
-
-.settings-launch-enter-from .settings-backdrop,
-.settings-launch-leave-to .settings-backdrop {
-  opacity: 0;
-}
-
-@keyframes settings-launch-in {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) translate3d(var(--bew-settings-enter-x), var(--bew-settings-enter-y), 0)
-      scale(0.94);
-  }
-
-  72% {
-    opacity: 1;
-    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1.006);
-  }
-
-  100% {
-    opacity: 1;
-    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1);
-  }
-}
-
-@keyframes settings-launch-out {
-  from {
-    opacity: 1;
-    transform: translate(-50%, -50%) translate3d(0, 0, 0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translate(-50%, -50%) translate3d(var(--bew-settings-leave-x), var(--bew-settings-leave-y), 0)
-      scale(0.98);
-  }
+#settings-window {
+  --bew-panel-enter-duration: var(--bew-duration-moderate);
+  --bew-panel-leave-duration: var(--bew-duration-moderate);
+  transform-origin: center;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1376,8 +1295,6 @@ function changeMenuItem(menuItem: MenuType) {
     transform: none;
   }
 
-  .settings-launch-enter-active #settings-window,
-  .settings-launch-leave-active #settings-window,
   :deep(.settings-search-target::before),
   :deep(.settings-search-target::after) {
     animation: none;

@@ -14,6 +14,7 @@ import {
   parsePrivateMessagesResponse,
   parsePrivateSessionsResponse,
 } from './protocol'
+import { getPrivateSessionDetail, getPrivateSessionSettings, reportPrivateUser, setPrivateSessionDnd, setPrivateSessionPush, setPrivateSessionTop } from './sessionActions'
 import {
   requestPreferredPrivateMessageForm,
   requestPrivateMessage,
@@ -71,7 +72,7 @@ export async function getPrivateSessions(
   }
 }
 
-export async function getOlderPrivateSessions(
+async function getOlderPrivateSessions(
   message: PrivateSessionsMessage = {},
 ): Promise<PrivateMessageApiResponse> {
   if (message.endTs === undefined)
@@ -79,7 +80,7 @@ export async function getOlderPrivateSessions(
   return getPrivateSessions(message)
 }
 
-export async function getNewPrivateSessions(
+async function getNewPrivateSessions(
   message: NewPrivateSessionsMessage = {},
 ): Promise<PrivateMessageApiResponse> {
   try {
@@ -99,7 +100,7 @@ export async function getNewPrivateSessions(
   }
 }
 
-export async function getPrivateUserCards(
+async function getPrivateUserCards(
   message: PrivateUserCardsMessage = {},
 ): Promise<PrivateMessageApiResponse> {
   try {
@@ -114,7 +115,7 @@ export async function getPrivateUserCards(
   }
 }
 
-export async function getPrivateMessages(
+async function getPrivateMessages(
   message: PrivateMessagesMessage = {},
 ): Promise<PrivateMessageApiResponse> {
   try {
@@ -138,7 +139,7 @@ export async function getPrivateMessages(
   }
 }
 
-export async function ackPrivateSession(
+async function ackPrivateSession(
   message: PrivateAckMessage = {},
 ): Promise<PrivateMessageApiResponse> {
   try {
@@ -168,6 +169,12 @@ export async function ackPrivateSession(
 }
 
 const API_PRIVATE_MESSAGE = {
+  getPrivateSessionDetail,
+  getPrivateSessionSettings,
+  setPrivateSessionTop,
+  setPrivateSessionDnd,
+  setPrivateSessionPush,
+  reportPrivateUser,
   getPrivateSessions,
   getOlderPrivateSessions,
   getNewPrivateSessions,

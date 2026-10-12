@@ -10,6 +10,365 @@ import { loadSourceModule } from './sourceModuleHarness'
 export function registerNotificationUIChecks(check, { Vue, compileComponent, flush }) {
   const i18n = { useI18n: () => ({ t: key => key, locale: Vue.ref('cmn-CN') }) }
 
+  check('inbox insights distinguish unknown counts, preserve source order and expose navigation/read actions', async () => {
+    const { getMessageInsights, getRecentConversationActivity } = await import('../src/contentScripts/views/Notifications/whisper/messageInsights')
+    assert.equal(getMessageInsights([], {}, {}).total, null)
+    assert.equal(getMessageInsights([], { reply: 0, at: 0, like: 0, sys_msg: 0 }, { follow_unread: 0, unfollow_unread: 0 }).total, 0)
+    const sessions = [{ key: '1:2', talkerId: '2', name: 'Alice', timestamp: 1700000000000000, unreadCount: 2, pinned: true, muted: false }, { key: '1:3', talkerId: '3', name: 'Bob', timestamp: 1700000100000000, unreadCount: 0, pinned: false, muted: true }]
+    const topBar = Vue.reactive({ unReadMessage: { reply: 1, at: 2, like: 3, recv_like: 4, sys_msg: 5 }, unReadDm: { follow_unread: 2, unfollow_unread: 1 } })
+    const data = getMessageInsights(sessions, topBar.unReadMessage, topBar.unReadDm)
+    assert.equal(data.total, 15)
+    assert.deepEqual(data.recent.map(item => item.name), ['Bob', 'Alice'])
+    assert.deepEqual(sessions.map(item => item.name), ['Alice', 'Bob'])
+    assert.equal(data.pinned, 1)
+    assert.equal(data.muted, 1)
+    const now = new Date(2026, 9, 11, 12).getTime()
+    const activity = getRecentConversationActivity([
+      { timestamp: now * 1000, followed: true },
+      { timestamp: now * 1000, followed: false },
+      { timestamp: new Date(2026, 9, 5, 10).getTime() * 1000, followed: true },
+      { timestamp: new Date(2026, 9, 4, 10).getTime() * 1000, followed: true },
+      { timestamp: (now + 10000) * 1000, followed: true },
+    ], now)
+    assert.equal(activity.length, 7)
+    assert.equal(activity[0].followed, 1)
+    assert.equal(activity[6].followed, 1)
+    assert.equal(activity[6].unfollowed, 1)
+    assert.equal(activity.reduce((sum, day) => sum + day.followed + day.unfollowed, 0), 3)
+    const Insights = await compileComponent('../src/contentScripts/views/Notifications/whisper/ConversationInsights.vue', {
+      'vue-i18n': i18n,
+      '~/stores/topBarStore': { useTopBarStore: () => topBar },
+    })
+    const selections = []
+    let writes = 0
+    const readAll = { state: Vue.reactive({ status: 'idle' }), markAllRead() {
+      writes++
+      this.state.status = 'running'
+    } }
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Insights, { sessions, loaded: true, readAll, onSelectView: view => selections.push(view), onSelectSession: session => selections.push(session.key) }) })
+    try {
+      app.mount(host)
+      await flush()
+      assert.equal(writes, 0)
+      assert.equal(host.querySelector('time').dateTime, new Date(sessions[1].timestamp / 1000).toISOString())
+      host.querySelector('.conversation-insights__notification').click()
+      host.querySelector('.conversation-insights__session').click()
+      assert.deepEqual(selections, ['reply', '1:3'])
+      host.querySelector('.conversation-insights__mark-read').click()
+      await flush()
+      assert.equal(writes, 1)
+      assert.equal(host.querySelector('.conversation-insights__mark-read').disabled, true)
+      readAll.state.status = 'partial'
+      await flush()
+      assert.match(host.querySelector('[role="status"]').textContent, /read_partial/)
+      readAll.state.status = 'success'
+      Object.assign(topBar.unReadMessage, { reply: 0, at: 0, like: 0, recv_like: 0, sys_msg: 0 })
+      Object.assign(topBar.unReadDm, { follow_unread: 0, unfollow_unread: 0 })
+      await flush()
+      assert.equal(host.querySelector('[role="status"]'), null)
+      assert.equal(host.querySelector('.conversation-insights__mark-read').disabled, true)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('mark all read paginates beyond loaded sessions, deduplicates ACKs and cancels stale account writes', async () => {
+    const { useMarkAllMessagesRead } = await import('../src/contentScripts/views/Notifications/composables/useMarkAllMessagesRead')
+    const row = (id, ts) => ({ talker_id: id, session_type: 1, top_ts: 0, session_ts: ts, unread_count: 2, ack_seqno: '0', max_seqno: '90071992547409930' })
+    const mid = Vue.ref('1')
+    const scope = Vue.effectScope()
+    const reads = []
+    const acks = []
+    const local = []
+    const sections = []
+    let rejectAck = false
+    let syncs = 0
+    let pendingFetch
+    const controller = scope.run(() => useMarkAllMessagesRead(mid, {
+      active: () => true,
+      currentAccount: () => mid.value,
+      wait: async () => {},
+      fetchSessions: async (endTs) => {
+        reads.push(endTs)
+        if (pendingFetch)
+          return pendingFetch
+        return { code: 0, data: endTs === undefined ? { has_more: 1, session_list: [row('2', 200)] } : { has_more: 0, session_list: [row('2', 200), row('3', 100)] } }
+      },
+      ackSession: async (session) => {
+        acks.push(session.talker_id)
+        return { code: rejectAck ? -412 : 0 }
+      },
+      sessionRead: session => local.push(session.talker_id),
+      markNotification: async (section) => {
+        sections.push(section)
+        return true
+      },
+      syncUnread: async () => { syncs++ },
+    }))
+    try {
+      assert.equal(acks.length, 0)
+      await Promise.all([controller.markAllRead(), controller.markAllRead()])
+      assert.deepEqual(reads, [undefined, 200])
+      assert.deepEqual(acks, ['2', '3'])
+      assert.deepEqual(local, ['2', '3'])
+      assert.deepEqual(sections, ['reply', 'at', 'love', 'system'])
+      assert.equal(syncs, 1)
+      assert.equal(controller.state.status, 'success')
+      rejectAck = true
+      await controller.markAllRead()
+      assert.equal(controller.state.status, 'partial')
+      assert.deepEqual(local, ['2', '3'], 'a rejected ACK must not clear local unread')
+      assert.equal(acks.length, 3, 'risk-control rejection stops the write sequence')
+      let resolveFetch
+      pendingFetch = new Promise((resolve) => {
+        resolveFetch = resolve
+      })
+      const pending = controller.markAllRead()
+      await flush()
+      mid.value = 'other'
+      resolveFetch({ code: 0, data: { has_more: 0, session_list: [row('4', 10)] } })
+      await pending
+      assert.equal(acks.length, 3)
+      assert.equal(controller.state.status, 'idle')
+    }
+    finally {
+      scope.stop()
+    }
+  })
+
+  check('masonry keeps DOM order and existing positions when appending, and reflows to one column', async () => {
+    const Grid = await compileComponent('../src/components/MasonryGrid.vue')
+    const items = Vue.ref([100, 60, 80])
+    const gridRef = Vue.ref()
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Grid, { ref: gridRef }, () => items.value.map((height, index) => Vue.h('article', { key: index, 'data-height': height }, String(index)))) })
+    try {
+      app.mount(host)
+      await flush()
+      const grid = host.firstElementChild
+      Object.defineProperty(grid, 'clientWidth', { value: 612 })
+      grid.style.gridTemplateColumns = '300px 300px'
+      grid.style.setProperty('--bew-masonry-columns', '2')
+      grid.style.columnGap = '12px'
+      let measurements = 0
+      const measure = () => [...grid.children].forEach((el) => {
+        el.getBoundingClientRect = () => {
+          measurements++
+          return { height: Number(el.dataset.height) }
+        }
+      })
+      measure()
+      gridRef.value.layout()
+      assert.deepEqual([...grid.children].map(el => el.style.gridRow), ['1 / span 100', '1 / span 60', '73 / span 80'])
+      measurements = 0
+      const previousMedia = window.matchMedia
+      window.matchMedia = () => ({ matches: true })
+      gridRef.value.layout(false)
+      window.matchMedia = previousMedia
+      assert.equal(measurements, 0, 'unchanged cards reuse cached heights instead of forcing layout')
+      items.value.push(50)
+      await flush()
+      measure()
+      gridRef.value.layout()
+      assert.deepEqual([...grid.children].map(el => el.style.gridRow), ['1 / span 100', '1 / span 60', '73 / span 80', '113 / span 50'])
+      assert.deepEqual([...grid.children].map(el => el.textContent), ['0', '1', '2', '3'])
+      grid.style.gridTemplateColumns = '612px'
+      grid.style.setProperty('--bew-masonry-columns', '1')
+      gridRef.value.layout()
+      assert.deepEqual([...grid.children].map(el => el.style.gridRow), ['1 / span 100', '113 / span 60', '185 / span 80', '277 / span 50'])
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('history search status keeps one accessible pause/resume control without scan counts or skeletons', async () => {
+    const Results = await compileComponent('../src/contentScripts/views/Notifications/whisper/PrivateHistorySearchResults.vue', { vue: Vue, 'vue-i18n': i18n })
+    const state = Vue.reactive({ query: 'needle', results: [], visibleResultCount: 50, running: true, complete: false, limited: false, error: false, batch: 1, scannedMessages: 12345, skippedSessions: 0 })
+    const controller = {
+      state,
+      selectedIndex: Vue.ref(-1),
+      filteredResults: Vue.computed(() => state.results),
+      stop() { state.running = false },
+      resume() { state.running = true },
+    }
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Results, { controller, query: 'needle' }) })
+    try {
+      app.mount(host)
+      await flush()
+      const toggle = host.querySelector('.private-history-results__search-toggle')
+      assert.ok(toggle)
+      assert.match(toggle.textContent, /search.progress/)
+      assert.match(toggle.getAttribute('aria-label'), /search.stop/)
+      assert.equal(host.querySelector('[data-bew-skeleton]'), null)
+      assert.equal(host.textContent.includes('12345'), false)
+      assert.equal(toggle.closest('.private-history-results__list'), null, 'the control must stay outside the changing scrollable result list')
+      toggle.click()
+      await flush()
+      assert.equal(state.running, false)
+      assert.match(toggle.textContent, /search.continue/)
+      assert.equal(toggle.classList.contains('private-history-results__search-toggle--running'), false)
+      toggle.click()
+      await flush()
+      assert.equal(state.running, true)
+      assert.equal(host.querySelector('.private-history-results__search-toggle'), toggle, 'retain the button and keyboard focus across pause/resume')
+      state.complete = true
+      state.running = false
+      await flush()
+      assert.equal(host.querySelector('.private-history-results__search-toggle'), null)
+      assert.equal(host.textContent.includes('12345'), false)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('message wheel: keyboard previews without reading feeds, commits explicitly, and keeps one tab stop', async () => {
+    const Wheel = await compileComponent('../src/components/WheelSelector.vue', { vue: Vue })
+    const value = Vue.ref('whisper')
+    const updates = []
+    const items = ['whisper', 'reply', 'at', 'love', 'system'].map(value => ({ value, label: value, ariaLabel: value, badge: value === 'reply' ? 123 : 0 }))
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Wheel, {
+      modelValue: value.value,
+      items,
+      label: 'Messages',
+      panelId: 'fixture-panel',
+      'onUpdate:modelValue': (next) => {
+        value.value = next
+        updates.push(next)
+      },
+    }) })
+    try {
+      app.mount(host)
+      await flush()
+      const tabs = [...host.querySelectorAll('[role="tab"]')]
+      const targetStyle = tabs[1].getAttribute('style')
+      tabs[1].focus()
+      await flush()
+      assert.equal(tabs[1].getAttribute('style'), targetStyle, 'pointer focus must not move the hit target before click')
+      assert.equal(value.value, 'whisper')
+      assert.equal(tabs.length, 5)
+      assert.equal(tabs.filter(tab => tab.tabIndex === 0).length, 1)
+      assert.equal(host.querySelector('.wheel-selector__badge').textContent.trim(), '99+')
+      tabs[0].focus()
+      tabs[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(document.activeElement, tabs[1])
+      assert.equal(value.value, 'whisper', 'focus alone must not mark intermediate categories as read')
+      tabs[1].click()
+      await flush()
+      assert.deepEqual(updates, ['reply'])
+      assert.equal(tabs[1].getAttribute('aria-selected'), 'true')
+      assert.equal(tabs[1].getAttribute('aria-controls'), 'fixture-panel')
+      tabs[1].dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(document.activeElement, tabs[4])
+      assert.equal(value.value, 'reply')
+      tabs[4].click()
+      await flush()
+      assert.equal(value.value, 'system')
+      const blocked = new KeyboardEvent('keydown', { key: 'ArrowUp', ctrlKey: true, bubbles: true, cancelable: true })
+      tabs[4].dispatchEvent(blocked)
+      await flush()
+      assert.equal(blocked.defaultPrevented, false)
+      assert.equal(document.activeElement, tabs[4])
+      value.value = 'at'
+      await flush()
+      assert.equal(tabs[2].tabIndex, 0, 'route-driven changes reposition the same options')
+      assert.equal(host.querySelectorAll('[role="tab"][tabindex="0"]').length, 1)
+      const wheel = async (deltaY, timeStamp) => {
+        const event = new window.WheelEvent('wheel', { deltaY, bubbles: true, cancelable: true })
+        Object.defineProperty(event, 'timeStamp', { value: timeStamp })
+        host.querySelector('.wheel-selector').dispatchEvent(event)
+        await flush()
+      }
+      await wheel(60, 1000)
+      assert.equal(value.value, 'love')
+      await wheel(4, 1100)
+      await wheel(4, 1200)
+      assert.equal(value.value, 'love', 'small inertial tails cannot advance another category')
+      await wheel(60, 1300)
+      assert.equal(value.value, 'system', 'a sustained deliberate gesture can keep advancing')
+      await wheel(-60, 1310)
+      assert.equal(value.value, 'love', 'reversing direction responds immediately during the current transition')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('notification scroll: mounted feeds own independent viewports and save only their category on unmount', async () => {
+    const root = '../src/contentScripts/views/Notifications/'
+    const blank = { render: () => null }
+    const controller = {
+      accountMid: Vue.ref('1'),
+      states: Object.fromEntries(['reply', 'at'].map(section => [section, Vue.reactive({ items: [], loaded: true, noMore: true, scrollTop: 0 })])),
+      getReadCandidate: () => null,
+      refresh: async () => {},
+    }
+    const Feed = await compileComponent(`${root}components/NativeNotificationFeed.vue`, {
+      'vue-i18n': i18n,
+      '~/stores/topBarStore': { useTopBarStore: () => ({ unReadMessage: {} }) },
+      '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
+      '../notificationFeedPolicy': await import(`${root}notificationFeedPolicy`),
+      '../notificationReadReconciliation': await import(`${root}notificationReadReconciliation`),
+      '../notificationTimings': await import(`${root}notificationTimings`),
+      './NativeNotificationFeedSkeleton.vue': { default: blank },
+      './NativeNotificationItem.vue': { default: blank },
+      './NativeSystemNotificationItem.vue': { default: blank },
+    })
+    const category = Vue.ref('reply')
+    const outer = document.body.appendChild(document.createElement('div'))
+    outer.scrollTop = 900
+    let instance
+    const app = Vue.createApp({ render: () => Vue.h(Feed, {
+      key: category.value,
+      section: category.value,
+      accountState: 'ready',
+      active: false,
+      controller,
+      ref: value => instance = value,
+    }) })
+    app.component('Empty', blank)
+    app.component('ALink', blank)
+    app.component('Button', blank)
+    try {
+      app.mount(outer)
+      await flush()
+      const first = outer.querySelector('.native-notification-feed')
+      first.scrollTop = 180
+      category.value = 'at'
+      await flush()
+      assert.equal(controller.states.reply.scrollTop, 180)
+      assert.equal(controller.states.at.scrollTop, 0)
+      const second = outer.querySelector('.native-notification-feed')
+      assert.notEqual(second, first)
+      assert.equal(outer.scrollTop, 900, 'category switches do not scroll the page or sidebar')
+      second.scrollTop = 240
+      second.scrollTo = ({ top }) => second.scrollTop = top
+      await instance.refresh()
+      assert.equal(second.scrollTop, 0, 'manual refresh resets only the current feed')
+      assert.equal(controller.states.reply.scrollTop, 180)
+      assert.equal(outer.scrollTop, 900)
+      second.scrollTop = 320
+      app.unmount()
+      assert.equal(controller.states.at.scrollTop, 320)
+    }
+    finally {
+      if (outer.firstChild)
+        app.unmount()
+      outer.remove()
+    }
+  })
+
   check('notification routing: departing page preserves hot/history search destinations and legacy message settings still normalize', async () => {
     const previousUrl = window.location.href
     const previousState = window.history.state
@@ -37,6 +396,8 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
     const blank = { render: () => null }
     const sessions = { state: Vue.reactive({ items: [], loaded: false }), selectedTalkerId: Vue.ref(''), selectedSessionKey: Vue.ref(''), clearSelectedSession() {} }
     const component = await compileComponent('../src/contentScripts/views/Notifications/Notifications.vue', {
+      '~/utils/userRelation': { changeUserRelation() {} },
+      './whisper/usePrivateSessionActions': { privateSessionActionsKey: Symbol('session-actions-fixture'), usePrivateSessionActions: () => ({ state: {} }) },
       'vue-i18n': i18n,
       '~/composables/useAppProvider': { useBewlyApp: () => provider },
       '~/composables/useRouteState': route,
@@ -58,6 +419,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       './whisper/usePrivateEmotePanel': { usePrivateEmotePanel: () => ({ release() {} }) },
       './whisper/usePrivateMessageWorkspace': { usePrivateMessageWorkspace: () => ({ messages: {}, writes: {}, release() {}, dispose() {} }) },
       './whisper/usePrivateRecipientSearch': { usePrivateRecipientSearch: () => ({ reset() {} }) },
+      './whisper/usePrivateHistorySearch': { usePrivateHistorySearch: () => ({ reset() {} }) },
       './whisper/usePrivateSessions': { usePrivateSessions: () => sessions },
       './whisper/WhisperWorkspace.vue': { default: blank },
     }, { renderTemplate: false, globals: { URL } })
@@ -166,7 +528,9 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
         const content = card.querySelector('.native-notification-item__content')
         const context = card.querySelector('.native-notification-item__context')
         assert.equal(context.parentElement, card)
-        assert.match(content.textContent, new RegExp(`received ${section}`))
+        const body = card.querySelector('.native-notification-item__body')
+        assert.equal(body.parentElement, card)
+        assert.match(body.textContent, new RegExp(`received ${section}`))
         assert.equal(content.contains(context), false)
         assert.ok(context.textContent.includes('the quoted interaction'))
         assert.equal(card.querySelector('.native-notification-item__actor').href, 'https://space.bilibili.com/42')
@@ -176,7 +540,7 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
         const skeleton = host.querySelector('.native-notification-feed-skeleton__item')
         assert.equal(card.classList.contains('native-notification-interaction-layout'), true)
         assert.equal(skeleton.classList.contains('native-notification-interaction-layout'), true)
-        assert.equal(getComputedStyle(card).gridTemplateColumns, 'auto minmax(0, 3fr) minmax(0, 2fr)')
+        assert.equal(getComputedStyle(card).gridTemplateColumns, 'auto minmax(0, 1fr)')
         assert.equal(getComputedStyle(card).gridTemplateColumns, getComputedStyle(skeleton).gridTemplateColumns)
         assert.equal(skeleton.querySelector('.native-notification-feed-skeleton__context').parentElement, skeleton)
         context.querySelector('img').dispatchEvent(new Event('error'))

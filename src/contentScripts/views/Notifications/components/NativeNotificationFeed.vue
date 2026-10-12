@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import { useBewlyApp } from '~/composables/useAppProvider'
+import MasonryGrid from '~/components/MasonryGrid.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
 
@@ -24,9 +24,11 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
-const { scrollViewportRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const feedRootRef = ref<HTMLElement | null>(null)
+// Each mounted category owns its viewport; the persistent sidebar never scrolls
+// with a feed. Existing per-category anchors and pagination share this same root.
+const scrollViewportRef = feedRootRef
 const sentinelRef = ref<HTMLElement | null>(null)
 const state = props.controller.states[props.section]
 const originalNotificationUrl = computed(() => buildOriginalNotificationUrl(props.section))
@@ -59,6 +61,7 @@ let resolveBadgeRetry: ((shouldContinue: boolean) => void) | null = null
 let lifecycleActive = true
 
 const AUTO_REFRESH_TOP_THRESHOLD_PX = 32
+const masonryRef = ref<InstanceType<typeof MasonryGrid> | null>(null)
 
 interface NotificationScrollAnchor {
   atTop: boolean
@@ -89,6 +92,7 @@ function restoreScrollPosition(): Promise<void> {
     restoreFrame = requestAnimationFrame(() => {
       restoreFrame = undefined
       resolveRestoreFrame = null
+      masonryRef.value?.layout()
       if (props.active)
         scrollViewportRef.value?.scrollTo({ top: state.scrollTop })
       resolve()
@@ -122,6 +126,7 @@ async function restoreScrollAnchor(anchor: NotificationScrollAnchor | null) {
     return
 
   await nextTick()
+  masonryRef.value?.layout()
   const viewport = scrollViewportRef.value
   const feed = feedRootRef.value
   if (!viewport || !feed || !props.active)
@@ -408,6 +413,7 @@ defineExpose({ refresh })
   <section
     ref="feedRootRef"
     class="native-notification-feed"
+    data-top-bar-scroll
     :aria-label="feedAriaLabel"
     :aria-busy="accountState === 'profile-pending' || (accountState === 'ready' && (!state.loaded || state.loading || state.loadingMore))"
   >
@@ -417,11 +423,10 @@ defineExpose({ refresh })
     />
 
     <div v-else-if="accountState === 'logged-out'" class="native-notification-feed__state">
-      <Empty :description="t('notifications.native.errors.login-required')">
-        <ALink :href="originalNotificationUrl" type="content" class="native-notification-feed__original-link">
-          {{ t('notifications.actions.open_original') }}
-        </ALink>
-      </Empty>
+      <p>{{ t('notifications.native.errors.login-required') }}</p>
+      <ALink :href="originalNotificationUrl" type="content" class="native-notification-feed__original-link">
+        {{ t('notifications.actions.open_original') }}
+      </ALink>
     </div>
 
     <NativeNotificationFeedSkeleton
@@ -430,34 +435,38 @@ defineExpose({ refresh })
     />
 
     <div v-else-if="state.errorKind && state.items.length === 0" class="native-notification-feed__state">
-      <Empty :description="errorMessage">
-        <div class="native-notification-feed__state-actions">
-          <Button type="tertiary" @click="retry">
-            {{ t('notifications.actions.retry') }}
-          </Button>
-          <ALink :href="originalNotificationUrl" type="content" class="native-notification-feed__original-link">
-            {{ t('notifications.actions.open_original') }}
-          </ALink>
-        </div>
-      </Empty>
+      <p role="status">
+        {{ errorMessage }}
+      </p>
+      <div class="native-notification-feed__state-actions">
+        <Button type="tertiary" @click="retry">
+          {{ t('notifications.actions.retry') }}
+        </Button>
+        <ALink :href="originalNotificationUrl" type="content" class="native-notification-feed__original-link">
+          {{ t('notifications.actions.open_original') }}
+        </ALink>
+      </div>
     </div>
 
     <div v-else-if="state.loaded && state.items.length === 0" class="native-notification-feed__state">
-      <Empty :description="t(`notifications.native.empty.${section}`)" />
+      <p role="status">
+        {{ t(`notifications.native.empty.${section}`) }}
+      </p>
     </div>
 
     <template v-else>
-      <div class="native-notification-feed__items">
+      <MasonryGrid ref="masonryRef" class="native-notification-feed__items native-notification-grid">
         <template v-for="item in state.items" :key="item.id">
           <NativeSystemNotificationItem v-if="item.kind === 'system'" :item="item" />
           <NativeNotificationItem v-else :item="item" />
         </template>
         <NativeNotificationFeedSkeleton
           v-if="state.loadingMore"
+          data-masonry-full-width
           :count="2"
           :label="feedAriaLabel" :section="section"
         />
-      </div>
+      </MasonryGrid>
 
       <div v-if="state.errorKind" class="native-notification-feed__pagination-state" role="status">
         <span>{{ errorMessage }}</span>
@@ -478,20 +487,46 @@ defineExpose({ refresh })
 
 <style scoped lang="scss">
 .native-notification-feed {
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
   min-width: 0;
-  min-height: 100%;
+  min-height: 0;
+  margin-inline: auto;
+  padding: calc(var(--bew-top-bar-height) + var(--bew-space-4)) var(--bew-notifications-feed-inline-space)
+    calc(var(--notifications-detail-bottom-space, var(--bew-space-3)) + var(--bew-space-4));
+  overflow: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  container: notification-feed / inline-size;
 }
 
 .native-notification-feed__items {
-  display: grid;
-  min-width: 0;
-  gap: var(--bew-space-3);
+  :deep(.native-notification-feed-skeleton) {
+    grid-column: 1 / -1;
+  }
+}
+
+.native-notification-feed__items,
+.native-notification-feed > :deep(.native-notification-feed-skeleton) {
+  width: 100%;
+  margin-inline: auto;
 }
 
 .native-notification-feed__state {
   display: grid;
-  min-height: calc(var(--bew-space-12) * 6);
-  place-items: center;
+  min-height: 100%;
+  gap: var(--bew-space-4);
+  place-content: center;
+  justify-items: center;
+  color: var(--bew-text-2);
+  font-size: var(--bew-font-size-body);
+  line-height: var(--bew-line-height-body);
+  text-align: center;
+
+  p {
+    margin: 0;
+  }
 }
 
 .native-notification-feed__state-actions,
@@ -515,9 +550,9 @@ defineExpose({ refresh })
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   background: var(--bew-content-solid);
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
+  border: 0;
+  border-radius: var(--bew-badge-radius);
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .native-notification-feed__original-link:hover {

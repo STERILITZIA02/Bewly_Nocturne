@@ -27,7 +27,7 @@ function invalidResponse(endpointName: keyof typeof MESSAGE_SERVER_SETTINGS_ENDP
   }
 }
 
-export function getMessageServerSettings(
+function getMessageServerSettings(
   _message: MessageServerSettingsMessage = {},
 ) {
   return requestMessageServerSettings({
@@ -38,7 +38,7 @@ export function getMessageServerSettings(
   })
 }
 
-export function setMessageServerSetting(
+function setMessageServerSetting(
   message: MessageServerSettingsMessage = {},
 ) {
   if (!isMessageServerSettingField(message.field) || typeof message.value !== 'number')
@@ -57,7 +57,7 @@ export function setMessageServerSetting(
   }
 }
 
-export function getMessageBlockWords(
+function getMessageBlockWords(
   _message: MessageServerSettingsMessage = {},
 ) {
   return requestMessageServerSettings({
@@ -88,13 +88,13 @@ function mutateMessageBlockWord(
   }
 }
 
-export function addMessageBlockWord(
+function addMessageBlockWord(
   message: MessageServerSettingsMessage = {},
 ) {
   return mutateMessageBlockWord('add', message)
 }
 
-export function deleteMessageBlockWord(
+function deleteMessageBlockWord(
   message: MessageServerSettingsMessage = {},
 ) {
   return mutateMessageBlockWord('delete', message)

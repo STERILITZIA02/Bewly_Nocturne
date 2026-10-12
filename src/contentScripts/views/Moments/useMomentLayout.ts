@@ -8,7 +8,7 @@ import { settings } from '~/logic'
 import { useLayoutEditSettingValue } from '~/logic/layoutEdit'
 import { shouldUseWideMomentCardLayout } from '~/utils/momentCardLayout'
 import { createMomentColumnIndex } from '~/utils/momentColumnIndex'
-import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount, shouldShowMomentsSidebar } from '~/utils/momentsLayout'
+import { MOMENT_GRID_DIMENSIONS, resolveMomentCardWidth, resolveMomentGridColumnCount } from '~/utils/momentsLayout'
 
 interface LayoutHooks {
   onNearBottom: () => void
@@ -29,13 +29,11 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     'page.moments.gridColumns',
     () => settings.value.momentsGridColumns,
   )
-  const showMomentsSidebar = ref(false)
   const momentColumns = ref<DisplayMoment[][]>([])
   const layoutRef = ref<HTMLElement | null>(null)
   const momentsContentRef = ref<HTMLElement | null>(null)
   const gridRef = ref<HTMLElement | null>(null)
-  const { minCardWidth: CARD_MIN_WIDTH, gap: GRID_GAP, sidebarWidth: SIDEBAR_WIDTH } = MOMENT_GRID_DIMENSIONS
-  const SIDEBAR_MIN_MAIN_WIDTH = CARD_MIN_WIDTH * 2 + GRID_GAP
+  const { minCardWidth: CARD_MIN_WIDTH, gap: GRID_GAP } = MOMENT_GRID_DIMENSIONS
   const gridColumnCount = ref(1)
   const gridCardWidth = ref(520)
   let rebalanceTimer: ReturnType<typeof setTimeout> | null = null
@@ -295,17 +293,6 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   function updateGridColumnCount() {
     const layoutWidth = layoutRef.value?.clientWidth || window.innerWidth
     const mainRailWidth = momentsContentRef.value?.clientWidth || layoutWidth
-    const hasSidebarContent = settings.value.momentsSidebarShowUserCard
-      || settings.value.momentsSidebarShowPublish
-      || settings.value.momentsSidebarShowLive
-    showMomentsSidebar.value = shouldShowMomentsSidebar({
-      layoutWidth,
-      sidebarWidth: SIDEBAR_WIDTH,
-      gap: GRID_GAP,
-      minMainWidth: SIDEBAR_MIN_MAIN_WIDTH,
-      hasContent: hasSidebarContent,
-    })
-
     const preferredColumns = Math.min(3, Math.max(1, Number(momentsGridColumns.value) || 3))
     const desiredCols = resolveMomentGridColumnCount({
       containerWidth: mainRailWidth,
@@ -684,19 +671,6 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     }
   })
   watch(
-    [
-      () => settings.value.momentsSidebarShowUserCard,
-      () => settings.value.momentsSidebarShowPublish,
-      () => settings.value.momentsSidebarShowLive,
-    ],
-    async () => {
-      await nextTick()
-      if (!active)
-        return
-      updateGridColumnCount()
-    },
-  )
-  watch(
     () => settings.value.fontFamily,
     async () => {
       await nextTick()
@@ -792,7 +766,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     updateGridColumnCount()
     scheduleVirtualUpdate()
   }
-  return { showMomentsSidebar, layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, setInteractionHeld, suspendRebalance(duration: number) {
+  return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, setInteractionHeld, suspendRebalance(duration: number) {
     suppressBottomRebalanceUntil = Date.now() + duration
   } }
 }

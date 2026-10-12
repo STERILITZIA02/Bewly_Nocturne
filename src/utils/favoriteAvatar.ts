@@ -24,16 +24,17 @@ export function createFavoriteAvatarLoader(fetchFace: (mid: number, signal: Abor
       request.controller = controller
       const fetch = async () => fetchFace(mid, controller.signal)
       void waitWithSignal(fetch(), controller.signal).catch(() => undefined).then((face) => {
-        if (!disposed) {
+        if (!disposed && !controller.signal.aborted) {
           cache.delete(mid)
           cache.set(mid, { face, expiresAt: now() + (face ? FAVORITE_AVATAR_TTL : FAVORITE_AVATAR_FAILURE_TTL) })
           while (cache.size > FAVORITE_AVATAR_CACHE_LIMIT)
             cache.delete(cache.keys().next().value!)
         }
-        request.resolve(disposed ? undefined : face)
+        request.resolve(disposed || controller.signal.aborted ? undefined : face)
       }).finally(() => {
         active--
-        requests.delete(mid)
+        if (requests.get(mid) === request)
+          requests.delete(mid)
         drain()
       })
     }
@@ -61,18 +62,23 @@ export function createFavoriteAvatarLoader(fetchFace: (mid: number, signal: Abor
     return promise
   }
 
+  function cancelPending() {
+    queue.length = 0
+    for (const request of requests.values()) {
+      request.controller?.abort()
+      request.resolve()
+    }
+    requests.clear()
+  }
+
   return {
     load,
+    cancelPending,
     get cacheSize() { return cache.size },
     dispose() {
       disposed = true
-      queue.length = 0
       cache.clear()
-      for (const request of requests.values()) {
-        request.controller?.abort()
-        request.resolve()
-      }
-      requests.clear()
+      cancelPending()
     },
   }
 }

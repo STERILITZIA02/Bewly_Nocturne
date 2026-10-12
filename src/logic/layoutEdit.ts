@@ -1,6 +1,7 @@
 import type { Directive, Ref } from 'vue'
 import { computed, onScopeDispose, readonly, ref, shallowRef, watch } from 'vue'
 
+import { DOCK_POSITIONS, normalizeDockPosition } from '~/constants/dock'
 import { AppPage } from '~/enums/appEnums'
 import { gridLayout, settings } from '~/logic/storage'
 
@@ -323,7 +324,7 @@ export function getTopBarItemLayoutEditableId(key: string): string {
 registerSettingDescriptors([
   { id: 'navigation.pageMode', category: 'BewlyComponents', page: 'dock', group: 'page-mode', titleKey: 'settings.page_mode', get: () => settings.value.pageMode, set: value => settings.value.pageMode = value as typeof settings.value.pageMode },
   { id: 'navigation.dock.collapseMode', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_collapse_mode', get: () => settings.value.dockCollapseMode, set: value => settings.value.dockCollapseMode = value as typeof settings.value.dockCollapseMode },
-  { id: 'navigation.dock.position', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_position', get: () => settings.value.dockPosition, set: value => settings.value.dockPosition = value as typeof settings.value.dockPosition },
+  { id: 'navigation.dock.position', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_position', get: () => settings.value.dockPosition, set: value => settings.value.dockPosition = normalizeDockPosition(value) },
   { id: 'navigation.dock.items', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.dock_content_adjustment', get: () => settings.value.dockItemsConfig, set: value => settings.value.dockItemsConfig = value as typeof settings.value.dockItemsConfig },
   { id: 'navigation.dock.themeSwitcher', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.disable_light_dark_mode_switcher', get: () => settings.value.disableLightDarkModeSwitcherOnDock, set: value => settings.value.disableLightDarkModeSwitcherOnDock = Boolean(value) },
   { id: 'navigation.dock.actionButtons', category: 'BewlyComponents', page: 'dock', group: 'dock', titleKey: 'settings.back_to_top_and_refresh_buttons_are_separated', get: () => settings.value.backToTopAndRefreshButtonsAreSeparated, set: value => settings.value.backToTopAndRefreshButtonsAreSeparated = Boolean(value) },
@@ -383,11 +384,7 @@ registerLayoutEditableDescriptors([
     scope: 'all-pages',
     previewControl: {
       type: 'select',
-      options: [
-        { labelKey: 'common.position.left', value: 'left' },
-        { labelKey: 'common.position.right', value: 'right' },
-        { labelKey: 'common.position.bottom', value: 'bottom' },
-      ],
+      options: DOCK_POSITIONS.map(value => ({ labelKey: `common.position.${value}`, value })),
     },
   },
   { id: 'dock-page-mode-switcher', section: 'dock', category: 'navigation', settingId: 'navigation.pageMode', titleKey: 'layout_editor.target_page_mode_switcher', scope: 'all-pages' },

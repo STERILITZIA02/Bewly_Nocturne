@@ -73,6 +73,8 @@ export interface PrivateSessionsController {
   clearSelectedSession: () => void
   markSessionRead: (talkerId: string, ackSeqno: string) => void
   markSessionSent: (talkerId: string, summary: string, timestamp: number) => void
+  reconcileSessionSettings: (detail: Pick<PrivateSession, 'talker_id' | 'session_type' | 'top_ts' | 'is_dnd'>) => void
+  removeSession: (key: string) => void
 }
 
 interface ExtractedSessions {
@@ -600,18 +602,22 @@ export function usePrivateSessions(
   }
 
   function markSessionRead(talkerId: string, ackSeqno: string) {
-    const session = state.items.find(item => item.key === `1:${talkerId}`)
-    if (!session)
-      return
-    const previousAckSeqno = confirmedAckSeqnos.get(session.key)
+    const key = `1:${talkerId}`
+    const previousAckSeqno = confirmedAckSeqnos.get(key)
     if (!previousAckSeqno || comparePrivateMessageSeqno(ackSeqno, previousAckSeqno) > 0)
-      confirmedAckSeqnos.set(session.key, ackSeqno)
+      confirmedAckSeqnos.set(key, ackSeqno)
+    const confirmedAckSeqno = confirmedAckSeqnos.get(key)!
+    const session = state.items.find(item => item.key === key)
+    // Bulk ACKs may precede a list response. Keep their sequence boundary, but
+    // never erase a newer message that arrived while the ACK was in flight.
+    if (!session || comparePrivateMessageSeqno(session.maxSeqno, confirmedAckSeqno) > 0)
+      return
     session.unreadCount = 0
-    session.ackSeqno = ackSeqno
+    session.ackSeqno = confirmedAckSeqno
     session.original = {
       ...session.original,
       unread_count: 0,
-      ack_seqno: ackSeqno,
+      ack_seqno: confirmedAckSeqno,
     }
   }
 
@@ -631,8 +637,24 @@ export function usePrivateSessions(
 
   watch(currentMid, resetForAccount, { flush: 'sync' })
 
+  function reconcileSessionSettings(detail: Pick<PrivateSession, 'talker_id' | 'session_type' | 'top_ts' | 'is_dnd'>) {
+    const existing = state.items.find(item => item.talkerId === detail.talker_id && item.sessionType === detail.session_type)
+    if (!existing || (existing.original.top_ts === detail.top_ts && existing.muted === (detail.is_dnd === 1)))
+      return
+    invalidatePendingRequests()
+    state.items = state.items.map(item => item.talkerId === detail.talker_id && item.sessionType === detail.session_type
+      ? { ...item, pinned: detail.top_ts > 0, muted: detail.is_dnd === 1, original: { ...item.original, top_ts: detail.top_ts, is_dnd: detail.is_dnd } }
+      : item).sort((a, b) => Number(b.pinned) - Number(a.pinned) || (a.pinned ? b.original.top_ts - a.original.top_ts : b.timestamp - a.timestamp))
+  }
+  function removeSession(key: string) {
+    invalidatePendingRequests()
+    state.items = state.items.filter(item => item.key !== key)
+  }
+
   return {
     state,
+    reconcileSessionSettings,
+    removeSession,
     selectedSessionKey,
     selectedTalkerId,
     loadInitial,

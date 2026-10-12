@@ -1,0 +1,146 @@
+// The native danmaku button keeps its own children, events and disabled state.
+// Only its paint changes; private-message controls use the same visual contract.
+.bew-send-button,
+:is(body.bewly-widescreen-active, .bewly-design.videoPage:not(.bewly-video-dark-only)) .bpx-player-dm-btn-send {
+  position: relative !important;
+  display: inline-flex !important;
+  box-sizing: border-box !important;
+  flex: 0 0 auto !important;
+  width: var(--bew-control-height, 36px) !important;
+  min-width: var(--bew-control-height, 36px) !important;
+  height: var(--bew-send-height, var(--bew-control-height, 36px)) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden;
+  color: var(--bew-on-theme-color) !important;
+  font-size: 0 !important;
+  appearance: none;
+  opacity: 1 !important;
+  cursor: pointer;
+  background: var(--bew-theme-color) !important;
+  border: 0 !important;
+  border-radius: var(--bew-send-radius, calc(var(--bew-control-height, 36px) / 2)) !important;
+  corner-shape: var(--bew-send-corner-shape, round);
+  transition:
+    background-color var(--bew-duration-normal) var(--bew-ease-standard),
+    color var(--bew-duration-normal) var(--bew-ease-standard),
+    border-radius var(--bew-duration-normal) var(--bew-ease-standard),
+    corner-shape var(--bew-duration-normal) var(--bew-ease-standard);
+
+  > * {
+    opacity: 0 !important;
+  }
+
+  &::before,
+  &::after {
+    position: absolute;
+    inset: 0;
+    box-sizing: border-box;
+    margin: auto;
+    content: "";
+    pointer-events: none;
+    transition:
+      opacity var(--bew-duration-normal) var(--bew-ease-standard),
+      scale var(--bew-duration-normal) var(--bew-ease-standard);
+  }
+
+  &::before {
+    width: var(--bew-icon-size-lg, 24px);
+    height: var(--bew-icon-size-lg, 24px);
+    background: currentColor;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 19V5m-6 6 6-6 6 6' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E")
+      center / contain no-repeat;
+    opacity: 1;
+    scale: 1;
+  }
+
+  &::after {
+    width: var(--bew-icon-size-md, 16px);
+    height: var(--bew-icon-size-md, 16px);
+    border: 2px solid currentColor;
+    border-inline-end-color: transparent;
+    border-radius: 50%;
+    opacity: 0;
+    scale: 0.8;
+    animation: bew-send-pending 900ms linear infinite paused;
+  }
+
+  &:is(
+    :disabled,
+    [aria-disabled="true"],
+    [data-bew-send-idle="true"],
+    [data-bew-send-state="idle"],
+    [data-bew-send-state="blocked"],
+    [data-bew-send-state="pending"],
+    .bui-disabled
+  ) {
+    cursor: default;
+    color: var(--bew-text-3) !important;
+    background: var(--bew-fill-2) !important;
+  }
+
+  &:is([aria-busy="true"], [data-busy="true"], [data-bew-send-state="pending"]):not([data-bew-send-state="blocked"]) {
+    &::before {
+      opacity: 0;
+      scale: 0.8;
+    }
+    &::after {
+      opacity: 1;
+      scale: 1;
+      animation-play-state: running;
+    }
+  }
+
+  &:focus-visible {
+    outline: var(--bew-focus-ring);
+    outline-offset: var(--bew-space-0-5);
+  }
+}
+
+// Restriction is different from a cooldown or an empty draft. Preserve the
+// native button and its validation; replace only our painted icon.
+.bew-send-button[data-bew-send-state="blocked"],
+:is(body.bewly-widescreen-active, .bewly-design.videoPage:not(.bewly-video-dark-only))
+  .bpx-player-dm-btn-send[data-bew-send-state="blocked"],
+:is(body.bewly-widescreen-active, .bewly-design.videoPage:not(.bewly-video-dark-only))
+  .bpx-player-video-inputbar:has(.bpx-player-dm-input:is(:disabled, [readonly], [aria-disabled="true"]))
+  .bpx-player-dm-btn-send:not([data-bew-send-state]) {
+  color: var(--bew-text-3) !important;
+  background: var(--bew-fill-2) !important;
+  cursor: not-allowed;
+  &::before {
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M12 6v8' fill='none' stroke='black' stroke-width='2' stroke-linecap='round'/%3E%3Ccircle cx='12' cy='18' r='1.2' fill='black'/%3E%3C/svg%3E");
+    opacity: 1;
+    scale: 1;
+  }
+  &::after {
+    opacity: 0;
+    animation-play-state: paused;
+  }
+}
+
+:is(body.bewly-widescreen-active, .bewly-design.videoPage:not(.bewly-video-dark-only))
+  .bpx-player-video-inputbar:has(.bpx-player-dm-input:placeholder-shown)
+  .bpx-player-dm-btn-send:not(.bui-disabled) {
+  color: var(--bew-text-2) !important;
+  background: var(--bew-fill-2) !important;
+}
+
+@keyframes bew-send-pending {
+  to {
+    rotate: 1turn;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bew-send-button,
+  :is(body.bewly-widescreen-active, .bewly-design.videoPage:not(.bewly-video-dark-only)) .bpx-player-dm-btn-send {
+    transition: none;
+    &::before,
+    &::after {
+      transition: opacity var(--bew-duration-fast) linear;
+      animation: none;
+      scale: 1;
+    }
+  }
+}

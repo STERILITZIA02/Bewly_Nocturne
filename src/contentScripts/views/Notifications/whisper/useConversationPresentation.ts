@@ -12,7 +12,8 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
   layoutSettled: () => void
   contentResized: () => void
   revealFinished: () => void
-}, content: Ref<HTMLElement | null>) {
+}, content: Ref<HTMLElement | null>, composer?: Ref<HTMLElement | null>) {
+  const composerHeight = ref(0)
   const conversationExpanded = ref(false)
   const isMobileLayout = ref(false)
   const reducedMotion = ref(false)
@@ -32,6 +33,7 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
     const geometry = getConversationExpansionGeometry(conversationExpanded.value, isMobileLayout.value, expandedGeometry.value)
     const top = Math.max(0, -geometry.topLift)
     return {
+      '--conversation-composer-reserve': `${composerHeight.value}px`,
       '--conversation-extra-height': `${geometry.extraHeight}px`,
       '--conversation-top-expansion': `${top}px`,
       '--conversation-bottom-expansion': `${Math.max(0, geometry.extraHeight - top)}px`,
@@ -60,6 +62,21 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
     if (geometry.extraHeight !== expandedGeometry.value.extraHeight || geometry.topLift !== expandedGeometry.value.topLift)
       expandedGeometry.value = geometry
   }
+  function updateComposerHeight() {
+    const height = composer?.value ? Math.ceil(composer.value.getBoundingClientRect().height) : 0
+    if (height === composerHeight.value)
+      return
+    composerHeight.value = height
+    if (mounted && active())
+      events.contentResized()
+  }
+  watch(() => composer?.value, (element, previous) => {
+    if (previous)
+      resize?.unobserve(previous)
+    if (element && mounted && active())
+      resize?.observe(element)
+    updateComposerHeight()
+  }, { flush: 'post' })
   function completeLayoutTransition() {
     clearTransition()
     if (entryPhase.value === 'opening' && mounted && active()) {
@@ -115,12 +132,18 @@ export function useConversationPresentation(view: Ref<HTMLElement | null>, activ
           }
           if (entries.some(entry => entry.target === content.value))
             events.contentResized()
+          if (composer?.value && entries.some(entry => entry.target === composer.value))
+            updateComposerHeight()
         }
       })
       if (view.value)
         resize.observe(view.value)
       if (content.value)
         resize.observe(content.value)
+      if (composer?.value) {
+        resize.observe(composer.value)
+        updateComposerHeight()
+      }
     }
     // Commit compact geometry once. Only the completed expansion releases data.
     openingFrame = requestAnimationFrame(() => {

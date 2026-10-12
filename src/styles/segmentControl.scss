@@ -22,6 +22,18 @@
   box-shadow: none;
 }
 
+// Embedded panel controls use the same outline as nearby inputs and list rows.
+.bew-segment-control--rect {
+  --bew-control-radius: var(--bew-interactive-radius);
+  --bew-control-item-radius: var(--bew-interactive-radius);
+
+  corner-shape: var(--bew-corner-shape);
+
+  .bew-segment-control__item {
+    corner-shape: var(--bew-corner-shape);
+  }
+}
+
 // Subordinate choices keep their selection clear without competing with the
 // page navigation or a primary action for the same accent color.
 .bew-segment-control--secondary {
@@ -79,7 +91,7 @@
 }
 
 .bew-segment-control__item:focus-visible:not([data-active="true"]):not(:disabled) {
-  outline: 2px solid var(--bew-segment-item-focus-ring-color, var(--bew-theme-focus-ring));
+  outline: var(--bew-focus-ring);
   outline-offset: -2px;
 }
 
@@ -90,7 +102,7 @@
 }
 
 .bew-segment-control__item[data-active="true"]:focus-visible {
-  outline: 2px solid var(--bew-segment-item-focus-ring-color, var(--bew-theme-focus-ring));
+  outline: var(--bew-focus-ring);
   outline-offset: -2px;
 }
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import MasonryGrid from '~/components/MasonryGrid.vue'
 import NotificationSkeletonBlock from '~/components/SkeletonBlock.vue'
 
 import type { NativeNotificationSection } from '../notificationSections'
@@ -9,25 +10,25 @@ withDefaults(defineProps<{
   section?: NativeNotificationSection
   announce?: boolean
 }>(), {
-  count: 5,
+  count: 6,
   section: 'reply',
   announce: true,
 })
 </script>
 
 <template>
-  <div class="native-notification-feed-skeleton" :role="announce ? 'status' : undefined" :aria-label="announce ? label : undefined">
+  <MasonryGrid class="native-notification-feed-skeleton native-notification-grid" :role="announce ? 'status' : undefined" :aria-label="announce ? label : undefined">
     <article
       v-for="index in count"
       :key="index"
-      class="native-notification-feed-skeleton__item native-notification-surface bew-shape-smooth-rect"
-      :class="section === 'system' ? 'native-notification-feed-skeleton__item--system' : 'native-notification-interaction-layout'"
+      class="native-notification-feed-skeleton__item native-notification-interaction-layout native-notification-surface bew-shape-smooth-rect"
+      :class="{ 'native-notification-feed-skeleton__item--system': section === 'system' }"
       aria-hidden="true"
     >
       <NotificationSkeletonBlock
-        width="var(--bew-space-12)"
-        height="var(--bew-space-12)"
-        :radius="section === 'system' ? 'panel' : 'circle'"
+        width="var(--bew-notifications-avatar-size)"
+        height="var(--bew-notifications-avatar-size)"
+        :radius="section === 'system' ? 'interactive' : 'circle'"
       />
       <div class="native-notification-feed-skeleton__content">
         <div class="native-notification-feed-skeleton__heading">
@@ -43,10 +44,19 @@ withDefaults(defineProps<{
           />
         </div>
         <NotificationSkeletonBlock
+          v-if="section === 'system'"
+          width="24%"
+          height="var(--bew-line-height-caption)"
+          radius="full"
+        />
+      </div>
+      <div v-if="section !== 'love'" class="native-notification-feed-skeleton__body">
+        <NotificationSkeletonBlock
           :width="index % 3 === 0 ? '78%' : '92%'"
           height="var(--bew-line-height-body)"
         />
         <NotificationSkeletonBlock
+          v-if="index % 3 !== 0"
           width="64%"
           height="var(--bew-line-height-body)"
         />
@@ -58,7 +68,7 @@ withDefaults(defineProps<{
             <NotificationSkeletonBlock
               width="calc(var(--bew-space-10) * 2)"
               height="var(--bew-space-12)"
-              radius="media"
+              radius="sm"
             />
             <div class="native-notification-feed-skeleton__reference-copy">
               <NotificationSkeletonBlock width="78%" height="var(--bew-line-height-control)" />
@@ -73,35 +83,32 @@ withDefaults(defineProps<{
         />
       </div>
     </article>
-  </div>
+  </MasonryGrid>
 </template>
 
 <style scoped lang="scss">
-.native-notification-feed-skeleton {
-  display: grid;
-  min-width: 0;
-  gap: var(--bew-space-3);
-}
-
 .native-notification-feed-skeleton__item {
   pointer-events: none;
 }
 
-.native-notification-feed-skeleton__item--system {
+.native-notification-feed-skeleton__content {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--bew-space-3);
-  padding: var(--bew-space-4);
+  gap: var(--bew-space-1);
+  min-width: 0;
+  align-self: center;
 }
 
-.native-notification-feed-skeleton__content {
+.native-notification-feed-skeleton__body {
+  grid-column: 1 / -1;
   display: grid;
   min-width: 0;
   gap: var(--bew-space-2);
 }
 
 .native-notification-feed-skeleton__heading {
-  display: grid;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   min-width: 0;
   gap: var(--bew-space-1);
   align-items: center;
@@ -114,12 +121,15 @@ withDefaults(defineProps<{
 }
 
 .native-notification-feed-skeleton__context {
+  grid-column: 1 / -1;
   display: grid;
   min-width: 0;
   gap: var(--bew-space-2);
   align-content: center;
-  padding: 0 0 0 var(--bew-space-4);
-  border-left: var(--bew-space-0-5) solid var(--bew-border-color);
+  padding: var(--bew-space-3);
+  background: var(--bew-notifications-reference-background);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .native-notification-feed-skeleton__reference {
@@ -131,7 +141,7 @@ withDefaults(defineProps<{
 .native-notification-feed-skeleton__reference-source {
   display: flex;
   min-width: 0;
-  gap: var(--bew-space-2);
+  gap: var(--bew-space-3);
   align-items: center;
 }
 

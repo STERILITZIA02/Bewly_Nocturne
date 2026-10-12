@@ -18,6 +18,7 @@ import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { retiringListTransition } from '~/utils/motionPresence'
 import { getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -301,7 +302,7 @@ defineExpose({
       />
 
       <!-- historys -->
-      <TransitionGroup name="list">
+      <TransitionGroup name="list" v-bind="retiringListTransition">
         <article
           v-for="historyItem in historys"
           :key="historyItem.kid"

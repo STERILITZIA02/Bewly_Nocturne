@@ -1,9 +1,141 @@
 import assert from 'node:assert/strict'
 import { readFile } from 'node:fs/promises'
 
+import * as folderForm from '../src/utils/favoriteFolderForm'
 import { loadSourceModule } from './sourceModuleHarness'
 
 export function registerFavoriteSourceChecks(check, { Vue, flush, compileComponent }) {
+  check('folder interactions: acknowledged state/count updates honor native likes and clamp fallback decrements', async () => {
+    const { applyFavoriteFolderInteraction: apply } = await import('../src/contentScripts/views/Favorites/favoriteFolderSocial')
+    const folder = { like_state: 0, fav_state: 0, cnt_info: { thumb_up: 4, collect: 2, play: 99 } }
+    const liked = apply(folder, 'like', { like_state: 1, likes: 9 })
+    assert.equal(liked.like_state, 1)
+    assert.equal(liked.cnt_info.thumb_up, 9)
+    assert.equal(folder.cnt_info.thumb_up, 4, 'the submitted snapshot remains immutable')
+    const unliked = apply(liked, 'like', null)
+    assert.equal(unliked.like_state, 0)
+    assert.equal(unliked.cnt_info.thumb_up, 8)
+    assert.equal(apply(unliked, 'like', { likes: -1 }).cnt_info.thumb_up, 9)
+    assert.equal(apply({ ...liked, cnt_info: { ...liked.cnt_info, thumb_up: 0 } }, 'like', undefined).cnt_info.thumb_up, 0)
+    const subscribed = apply(folder, 'subscribe', null)
+    assert.equal(subscribed.fav_state, 1)
+    assert.equal(subscribed.cnt_info.collect, 3)
+    assert.equal(apply(subscribed, 'subscribe', null).cnt_info.collect, 2)
+    assert.equal(apply(folder, 'like', { like_state: 0 }).cnt_info.thumb_up, 4, 'same acknowledged state does not count twice')
+  })
+
+  check('folder interactions: no skeleton/refetch, duplicate lock, stale reads and account/folder switches preserve ownership', async () => {
+    const { useFavoriteFolderManager } = await import('../src/contentScripts/views/Favorites/useFavoriteFolderManager')
+    const { useFavoriteWrites } = await import('../src/contentScripts/views/Favorites/useFavoriteWrites')
+    const { createAccountLifetime } = await import('../src/utils/accountLifetime')
+    let account = 1
+    const lifetime = createAccountLifetime(() => account)
+    const reads = []
+    const posts = []
+    const errors = []
+    const api = {
+      getFavoriteFolderInfo: (params, options) => new Promise(resolve => reads.push({ params, options, resolve })),
+      likeFavoriteFolder: params => new Promise(resolve => posts.push({ params, resolve })),
+    }
+    const data = { capture: lifetime.capture, favoriteView: Vue.ref('video'), searchScope: Vue.ref('current'), selectedCategory: Vue.ref({ id: 1 }), selectedSeason: Vue.ref() }
+    const writes = useFavoriteWrites({ api, capture: lifetime.capture, getCSRF: () => 'fixture', onError: error => errors.push(error) })
+    const scope = Vue.effectScope()
+    const manager = scope.run(() => useFavoriteFolderManager({ api, data, writes, getCSRF: () => 'fixture', notify() {}, error() {}, confirm: async () => true }))
+    const info = id => ({ id, mid: 2, upper: { mid: 2 }, like_state: 0, fav_state: 0, cnt_info: { thumb_up: 4, collect: 2 } })
+    try {
+      reads[0].resolve({ code: 0, data: info(1) })
+      await flush()
+      const held = manager.info.value
+      let operation = manager.interact('like')
+      await manager.interact('like')
+      assert.equal(posts.length, 1)
+      assert.equal(manager.info.value, held)
+      assert.equal(manager.infoLoading.value, false)
+      posts[0].resolve({ code: 0, data: { like_state: 1, likes: 5 } })
+      await operation
+      assert.equal(reads.length, 1, 'no eventually-consistent GET after a successful write')
+      assert.equal(manager.info.value.like_state, 1)
+      assert.equal(manager.info.value.cnt_info.thumb_up, 5)
+      const stale = manager.refreshInfo()
+      assert.ok(manager.info.value, 'refresh retains existing metadata')
+      operation = manager.interact('like')
+      assert.equal(posts[1].params.thumb_type, 2)
+      posts[1].resolve({ code: 0 })
+      await operation
+      reads[1].resolve({ code: 0, data: { ...info(1), like_state: 1 } })
+      await stale
+      assert.equal(reads[1].options.signal.aborted, true)
+      assert.equal(manager.info.value.like_state, 0)
+      assert.equal(manager.info.value.cnt_info.thumb_up, 4)
+      operation = manager.interact('like')
+      posts[2].resolve({ code: -503 })
+      await operation
+      assert.equal(manager.info.value.cnt_info.thumb_up, 4)
+      assert.equal(errors.length, 1)
+      operation = manager.interact('like')
+      data.selectedCategory.value = { id: 2 }
+      reads[2].resolve({ code: 0, data: info(2) })
+      await flush()
+      posts[3].resolve({ code: 0, data: { like_state: 1, likes: 100 } })
+      await operation
+      assert.equal(manager.info.value.id, 2)
+      assert.equal(manager.info.value.cnt_info.thumb_up, 4)
+      operation = manager.interact('like')
+      account = 3
+      manager.reset()
+      posts[4].resolve({ code: 0, data: { likes: 101 } })
+      await operation
+      assert.equal(manager.info.value, undefined)
+    }
+    finally {
+      scope.stop()
+      lifetime.dispose()
+    }
+  })
+
+  check('folder social: creator is linked; own collection stays disabled; other collection follows authoritative state', async () => {
+    const Social = await compileComponent('../src/contentScripts/views/Favorites/FavoriteFolderSocial.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+      '~/utils/main': { removeHttpFromUrl: url => url },
+    })
+    const own = Vue.ref(true)
+    const pending = Vue.ref(false)
+    const info = Vue.reactive({ upper: { mid: 7, name: 'Creator', face: '' }, like_state: 0, fav_state: 0, cnt_info: { thumb_up: 3, collect: 4 } })
+    let requests = 0
+    const root = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Social, { info, own: own.value, pending: pending.value, loading: false, failed: false, onSubscribe: () => requests++ }) })
+    app.mount(root)
+    try {
+      assert.equal(root.querySelector('a').href, 'https://space.bilibili.com/7')
+      assert.ok(root.querySelector('a').textContent.includes('Creator'))
+      const collect = () => root.querySelectorAll('button')[1]
+      assert.equal(collect().disabled, true)
+      collect().click()
+      assert.equal(requests, 0)
+      own.value = false
+      await flush()
+      assert.equal(collect().disabled, false)
+      collect().click()
+      assert.equal(requests, 1)
+      info.fav_state = 1
+      await flush()
+      assert.equal(collect().getAttribute('aria-pressed'), 'true')
+      assert.ok(collect().textContent.includes('favorites.unfavorite'))
+      info.like_state = 1
+      info.cnt_info.thumb_up++
+      await flush()
+      assert.ok(root.querySelector('button').textContent.includes('favorites.folder_unlike'))
+      assert.equal(root.querySelector('button').getAttribute('aria-pressed'), 'true')
+      pending.value = true
+      await flush()
+      assert.equal(collect().disabled, true)
+    }
+    finally {
+      app.unmount()
+      root.remove()
+    }
+  })
+
   const deferred = () => {
     let resolve
     const promise = new Promise(done => resolve = done)
@@ -32,6 +164,674 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
     ...fields,
   })
   const page = (medias, count = medias.length, has_more = false) => ({ code: 0, data: { medias, info: { media_count: count, cover: 'cover' }, has_more } })
+
+  check('favorite refresh keeps old cards through pending/error/retry and commits the first replacement once', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const reads = []
+    const data = useFavoritesData({ api: { getFavoriteResources: () => {
+      const held = deferred()
+      reads.push(held)
+      return held.promise
+    } }, user: {}, getAccountId: () => 1, haveScrollbar: async () => true, t: key => key })
+    try {
+      data.selectedCategory.value = { id: 1 }
+      const initial = data.loadSelectedContent()
+      reads[0].resolve(page([video(1)]))
+      await initial
+      const pending = data.refreshSelectedContent()
+      assert.equal(data.favoriteResources[0].id, 1)
+      assert.equal(data.isFullPageLoading.value, false)
+      reads[1].resolve({ code: -503 })
+      await pending
+      assert.equal(data.favoriteResources[0].id, 1)
+      const retry = data.retryFavoriteContent()
+      assert.equal(data.isFullPageLoading.value, false)
+      reads[2].resolve(page([video(2)]))
+      await retry
+      assert.deepEqual(data.favoriteResources.map(item => item.id), [2])
+    }
+    finally { data.dispose() }
+  })
+
+  check('page preloading: selection shares one import with mounting and failed imports can retry', async () => {
+    const { createAsyncPageRegistry } = await import('../src/utils/asyncPage')
+    const registry = createAsyncPageRegistry()
+    const held = deferred()
+    let imports = 0
+    let mounts = 0
+    const page = registry.define(() => {
+      imports++
+      return held.promise
+    }, {})
+    registry.preload(page)
+    registry.preload(page)
+    assert.equal(imports, 1)
+    assert.equal(mounts, 0)
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(page) })
+    app.mount(host)
+    held.resolve({ setup: () => {
+      mounts++
+      return () => Vue.h('p', 'loaded')
+    } })
+    await flush()
+    assert.equal(imports, 1)
+    assert.equal(mounts, 1)
+    app.unmount()
+    host.remove()
+    let attempts = 0
+    const retry = registry.define(async () => {
+      attempts++
+      if (attempts === 1)
+        throw new Error('network')
+      return { render: () => null }
+    }, {})
+    registry.preload(retry)
+    await flush()
+    registry.preload(retry)
+    await flush()
+    assert.equal(attempts, 2)
+  })
+
+  check('folder editor lifecycle: a late metadata read and a changed upload account cannot overwrite or submit another editor', async () => {
+    const { useFavoriteFolderManager } = await import('../src/contentScripts/views/Favorites/useFavoriteFolderManager')
+    const { useFavoriteWrites } = await import('../src/contentScripts/views/Favorites/useFavoriteWrites')
+    const { createAccountLifetime } = await import('../src/utils/accountLifetime')
+    let account = 1
+    let uploads = 0
+    let creates = 0
+    const lifetime = createAccountLifetime(() => account)
+    const reads = []
+    const api = {
+      getFavoriteFolderInfo: () => {
+        const held = deferred()
+        reads.push(held)
+        return held.promise
+      },
+      uploadFavoriteCover: async () => {
+        uploads++
+        return { code: 0, data: { location: 'https://i0.hdslb.com/cover.png' } }
+      },
+      createFavoriteFolder: async () => {
+        creates++
+        return { code: 0, data: { id: 9 } }
+      },
+    }
+    const data = {
+      capture: lifetime.capture,
+      favoriteView: Vue.ref('article'),
+      searchScope: Vue.ref('current'),
+      selectedCategory: Vue.ref(),
+      selectedSeason: Vue.ref(),
+      favoriteCategories: [],
+      categoryState: { failed: false },
+      getFavoriteCategories: async () => {},
+      setFolderCover() {},
+    }
+    const writes = useFavoriteWrites({ api, capture: lifetime.capture, getCSRF: () => 'fixture', onError() {} })
+    const scope = Vue.effectScope()
+    const manager = scope.run(() => useFavoriteFolderManager({ api, data, writes, getCSRF: () => 'fixture', notify() {}, error() {}, confirm: async () => true }))
+    const older = manager.openEditor(1)
+    await manager.openEditor()
+    reads[0].resolve({ code: 0, data: { id: 1, mid: 1, upper: { mid: 1 }, title: 'old', intro: 'old', attr: 1 } })
+    await older
+    assert.equal(manager.editor.id, 0)
+    assert.equal(manager.form.value.title, '')
+    assert.equal(manager.form.value.privacy, 0)
+    const fileRead = deferred()
+    const save = manager.save({ title: 'new', intro: '', cover: '', privacy: 0 }, { type: 'image/png', size: 4, name: 'test.png', arrayBuffer: () => fileRead.promise })
+    account = 2
+    fileRead.resolve(new Uint8Array([137, 80, 78, 71]).buffer)
+    await save
+    assert.equal(uploads, 0)
+    assert.equal(creates, 0)
+    scope.stop()
+  })
+
+  check('folder editor contract: complete fields, bounded cover upload and server sorting preserve the default folder', async () => {
+    assert.deepEqual(folderForm.moveFavoriteFolderToTop([1, 2, 3, 4], 4), [1, 4, 2, 3])
+    assert.deepEqual(folderForm.moveFavoriteFolderToTop([1, 2, 3], 1), [1, 2, 3])
+    assert.deepEqual(folderForm.moveFavoriteFolderToTop([1, 2, 3], 99), [1, 2, 3])
+    assert.equal(folderForm.isFavoriteCover({ type: 'image/svg+xml', size: 12 }), false)
+    assert.equal(folderForm.isFavoriteCover({ type: 'image/png', size: folderForm.FAVORITE_COVER_MAX_BYTES + 1 }), false)
+    const form = folderForm.serializeFavoriteCover({ bytes: [137, 80, 78, 71], mimeType: 'image/png', fileName: 'cover.png', csrf: 'fixture' })
+    assert.equal(form.get('bucket'), 'medialist')
+    assert.equal(form.get('dir'), 'cover')
+    assert.equal(form.get('file').type, 'image/png')
+    assert.equal(form.get('csrf'), 'fixture')
+    assert.throws(() => folderForm.serializeFavoriteCover({ bytes: [256], mimeType: 'image/png', csrf: 'fixture' }))
+    const schema = (await loadSourceModule('../src/background/messageListeners/api/favorite.ts', { '../../utils': { AHS: { J_D: [] } }, '~/utils/favoriteFolderForm': folderForm })).default
+    for (const name of ['createFavoriteFolder', 'editFavoriteFolder']) {
+      for (const field of ['title', 'intro', 'cover', 'privacy', 'csrf'])
+        assert.ok(Object.hasOwn(schema[name]._fetch.body, field))
+    }
+    assert.ok(schema.likeFavoriteFolder.url.endsWith('/x/v3/fav/thump/up'))
+    assert.ok(schema.cleanFavoriteFolder.url.endsWith('/x/v3/fav/resource/clean'))
+    assert.equal(schema.uploadFavoriteCover._fetch.headers, undefined, 'multipart boundary belongs to fetch')
+  })
+
+  check('folder writes: native parameters, duplicate-submit lock and own-folder subscription guard', async () => {
+    const { useFavoriteWrites } = await import('../src/contentScripts/views/Favorites/useFavoriteWrites')
+    const { createAccountLifetime } = await import('../src/utils/accountLifetime')
+    const lifetime = createAccountLifetime(() => 1)
+    const calls = []
+    const errors = []
+    const names = ['createFavoriteFolder', 'editFavoriteFolder', 'sortFavoriteFolders', 'cleanFavoriteFolder', 'likeFavoriteFolder', 'favCollectedFavoriteFolder', 'unfavCollectedFavoriteFolder']
+    const api = Object.fromEntries(names.map(name => [name, async (params) => {
+      calls.push({ name, params })
+      return { code: 0, data: { id: 9 } }
+    }]))
+    const writer = useFavoriteWrites({ api, capture: lifetime.capture, getCSRF: () => 'fixture', onError: e => errors.push(e) })
+    await writer.execute(writer.prepare({ kind: 'create', title: 'name', intro: 'intro', cover: 'https://i0.hdslb.com/test.png', privacy: 0 }))
+    await writer.execute(writer.prepare({ kind: 'edit', folderId: 9, title: 'name', intro: 'updated', cover: '', privacy: 1 }))
+    await writer.execute(writer.prepare({ kind: 'sort', ids: [1, 9, 2] }))
+    await writer.execute(writer.prepare({ kind: 'clean', folderId: 9 }))
+    await writer.execute(writer.prepare({ kind: 'like', folderId: 9, liked: false }))
+    await writer.execute(writer.prepare({ kind: 'like', folderId: 9, liked: true }))
+    await writer.execute(writer.prepare({ kind: 'subscribe', folderId: 9, mid: 1, subscribed: false }))
+    assert.equal(calls.length, 6, 'own folders never reach the subscribe API')
+    assert.equal(errors.length, 1)
+    await writer.execute(writer.prepare({ kind: 'subscribe', folderId: 9, mid: 2, subscribed: false }))
+    assert.equal(calls.at(-1).name, 'favCollectedFavoriteFolder')
+    assert.equal(calls[1].params.intro, 'updated')
+    assert.equal(calls[2].params.sort, '1,9,2')
+    assert.equal(calls[4].params.thumb_type, 1)
+    assert.equal(calls[4].params.up_mid, 1)
+    assert.equal(calls[5].params.thumb_type, 2)
+    assert.ok(calls.every(call => call.params.csrf === 'fixture'))
+    const held = deferred()
+    api.cleanFavoriteFolder = (params) => {
+      calls.push({ name: 'clean', params })
+      return held.promise
+    }
+    const transaction = writer.prepare({ kind: 'clean', folderId: 9 })
+    const running = writer.execute(transaction)
+    assert.equal(await writer.execute(transaction), null)
+    held.resolve({ code: 0 })
+    await running
+  })
+
+  check('favorite switches: replaced and unmounted content reads are aborted without committing stale cards', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const calls = []
+    const data = useFavoritesData({ api: { getFavoriteResources: (params, request) => {
+      const held = deferred()
+      calls.push({ ...held, params, signal: request.signal })
+      return held.promise
+    } }, user: {}, getAccountId: () => 1, haveScrollbar: async () => true, t: key => key })
+    data.selectedCategory.value = { id: 1 }
+    const first = data.loadSelectedContent()
+    data.selectedCategory.value = { id: 2 }
+    const second = data.loadSelectedContent()
+    assert.equal(calls[0].signal.aborted, true)
+    calls[1].resolve(page([video(2)]))
+    await second
+    calls[0].resolve(page([video(1)]))
+    await first
+    assert.deepEqual(data.favoriteResources.map(item => item.id), [2])
+    const third = data.loadSelectedContent()
+    data.dispose()
+    assert.equal(calls[2].signal.aborted, true)
+    calls[2].resolve(page([video(3)]))
+    await third
+    assert.equal(data.favoriteResources.length, 0)
+  })
+
+  check('favorite pagination: the video grid owns viewport filling instead of racing a second recursive loader', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const reads = []
+    const data = useFavoritesData({ api: { getFavoriteResources: async ({ pn }) => {
+      reads.push(pn)
+      return page(Array.from({ length: 20 }, (_, index) => video((pn - 1) * 20 + index)), 100, true)
+    } }, user: {}, getAccountId: () => 1, haveScrollbar: async () => false, t: key => key })
+    data.selectedCategory.value = { id: 1 }
+    await data.loadSelectedContent()
+    assert.deepEqual(reads, [1])
+    await data.loadNextPage()
+    assert.deepEqual(reads, [1, 2])
+    data.dispose()
+  })
+
+  check('favorite removal: offset pagination rewinds after a large batch without skipping unseen videos', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    let items = Array.from({ length: 80 }, (_, index) => video(index + 1))
+    const folder = { id: 1, media_count: 80 }
+    const data = useFavoritesData({ api: {
+      getFavoriteCategories: async () => ({ code: 0, data: { list: [{ ...folder, media_count: items.length }] } }),
+      getFavoriteResources: async ({ pn }) => page(items.slice((pn - 1) * 20, pn * 20), items.length, pn * 20 < items.length),
+    }, user: {}, getAccountId: () => 1, haveScrollbar: async () => true, t: key => key })
+    data.favoriteCategories.push(folder)
+    data.selectedCategory.value = folder
+    await data.loadSelectedContent()
+    await data.loadNextPage()
+    items = items.slice(25)
+    data.applyResourceWrite({ kind: 'delete', sourceId: 1, resourceKeys: Array.from({ length: 25 }, (_, i) => `${i + 1}:2`) }, data.contentVersion.value)
+    await data.loadNextPage()
+    assert.deepEqual(data.favoriteResources.map(item => item.id), items.slice(0, 20).map(item => item.id))
+    data.dispose()
+  })
+
+  check('course favorites: native GET context is scoped to the course read and the captured zero result stays empty', async () => {
+    const rules = JSON.parse(await readFile(new URL('../assets/rules.json', import.meta.url), 'utf8'))
+    const rule = rules.find(item => item.condition.regexFilter?.includes('pugv'))
+    assert.ok(rule)
+    assert.equal(rule.condition.domainType, 'thirdParty')
+    assert.deepEqual(rule.condition.requestMethods, ['get'])
+    assert.deepEqual(rule.condition.resourceTypes, ['xmlhttprequest'])
+    assert.equal(rule.action.requestHeaders.find(header => header.header === 'origin').value, 'https://space.bilibili.com')
+    assert.equal(rule.action.requestHeaders.find(header => header.header === 'referer').value, 'https://space.bilibili.com/')
+    const matcher = new RegExp(rule.condition.regexFilter)
+    assert.ok(matcher.test('https://api.bilibili.com/pugv/app/web/favorite/page?mid=1&pn=1&ps=20'))
+    assert.equal(matcher.test('https://api.bilibili.com/pugv/app/web/favorite/del'), false)
+    assert.equal(matcher.test('https://api.bilibili.com/x/v3/fav/resource/list'), false)
+    const api = await loadSourceModule('../src/background/messageListeners/api/favorite.ts', { '../../utils': { AHS: { J_D: [] } }, '~/utils/favoriteFolderForm': folderForm })
+    assert.equal(api.default.getFavoriteCourses.params.web_location, '333.1387')
+    const { parseOtherFavoritePage } = await import('../src/contentScripts/views/Favorites/otherFavorites')
+    const captured = JSON.parse(await readFile(new URL('../tests/fixtures/favorites/course-empty-native.json', import.meta.url), 'utf8'))
+    assert.deepEqual(parseOtherFavoritePage('course', captured), { items: [], total: 0 })
+    assert.throws(() => parseOtherFavoritePage('course', { code: -403, message: '访问权限不足' }))
+  })
+
+  check('course favorites: successful empty payloads finish normally while auth and incomplete pages remain errors', async () => {
+    const { parseOtherFavoritePage } = await import('../src/contentScripts/views/Favorites/otherFavorites')
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const payloads = [null, {}, { items: [] }, { items: null, page: { total: 0 } }, { items: [], page: { total: '0' } }]
+    for (const payload of payloads)
+      assert.deepEqual(parseOtherFavoritePage('course', { code: 0, data: payload }), { items: [], total: 0 })
+    for (const response of [{ code: -101 }, { code: 0, data: { items: null, page: { total: 1 } } }, { code: 0, data: { items: [], page: { next: true } } }])
+      assert.throws(() => parseOtherFavoritePage('course', response))
+    let response = { code: 0, data: null }
+    const data = useFavoritesData({ api: { getFavoriteCourses: async () => response }, user: {}, getAccountId: () => 1, haveScrollbar: async () => true, t: key => key })
+    try {
+      data.favoriteView.value = 'article'
+      data.otherFavoriteType.value = 'course'
+      await data.loadSelectedContent()
+      assert.equal(data.failedContentPage.value, null)
+      assert.equal(data.noMoreContent.value, true)
+      assert.equal(data.otherFavoriteCounts.course, 0)
+      response = { code: -101, data: null }
+      await data.loadSelectedContent()
+      assert.equal(data.failedContentPage.value, 1)
+      assert.equal(data.noMoreContent.value, false)
+    }
+    finally { data.dispose() }
+  })
+
+  check('text-only states: no illustration is mounted and the retry action remains keyboard accessible', async () => {
+    const Empty = await compileComponent('../src/components/Empty.vue', {
+      '~/utils/messaging': { getExtensionAssetUrl: () => 'https://example.test/empty.png' },
+    })
+    const textOnly = Vue.ref(true)
+    let retries = 0
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup: () => () => Vue.h(Empty, { description: 'Retry the request', textOnly: textOnly.value, fill: true, actionLabel: 'Retry', onAction: () => retries++ }) })
+    app.mount(host)
+    try {
+      assert.equal(host.querySelector('img'), null)
+      assert.equal(host.querySelector('button').type, 'button')
+      host.querySelector('button').click()
+      assert.equal(retries, 1)
+      textOnly.value = false
+      await Vue.nextTick()
+      assert.ok(host.querySelector('img'), 'ordinary pages retain their existing illustrated state')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('favorite resource actions: transfer gating and pending state preserve the existing batch commands', async () => {
+    const Actions = await compileComponent('../src/contentScripts/views/Favorites/FavoriteResourceActions.vue', {
+      'vue-i18n': { useI18n: () => ({ t: key => key }) },
+    })
+    const state = Vue.reactive({ managing: false, pending: false, total: 2, selectedCount: 0, allSelected: false, canTransfer: true })
+    const events = []
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup: () => () => Vue.h(Actions, {
+      ...state,
+      onToggle: () => { state.managing = !state.managing },
+      onSelectAll: () => events.push('all'),
+      onCopy: () => events.push('copy'),
+      onMove: () => events.push('move'),
+      onRemove: () => events.push('remove'),
+    }) })
+    app.mount(host)
+    try {
+      host.querySelector('button').click()
+      await Vue.nextTick()
+      const button = label => [...host.querySelectorAll('button')].find(item => item.textContent.includes(label))
+      assert.ok(button('batch_copy').disabled)
+      button('batch_select_all').click()
+      state.selectedCount = 2
+      state.allSelected = true
+      await Vue.nextTick()
+      button('batch_copy').click()
+      button('batch_move').click()
+      button('batch_unfavorite').click()
+      assert.deepEqual(events, ['all', 'copy', 'move', 'remove'])
+      state.pending = true
+      await Vue.nextTick()
+      assert.ok([...host.querySelectorAll('button')].every(item => item.disabled))
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('favorite video sorting: order reaches each page and late previous-order responses are ignored', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const calls = []
+    const data = useFavoritesData({
+      api: { getFavoriteResources: (params) => {
+        const task = deferred()
+        calls.push({ ...task, params })
+        return task.promise
+      } },
+      user: {},
+      getAccountId: () => 1,
+      haveScrollbar: async () => true,
+      t: key => key,
+    })
+    try {
+      data.selectedCategory.value = { id: 1 }
+      const first = data.loadSelectedContent()
+      data.videoOrder.value = 'view'
+      const second = data.loadSelectedContent()
+      assert.deepEqual(calls.map(call => call.params.order), ['mtime', 'view'])
+      calls[1].resolve(page([video(2)], 2, true))
+      await second
+      calls[0].resolve(page([video(1)], 1, false))
+      await first
+      assert.deepEqual(data.favoriteResources.map(item => item.id), [2])
+      const next = data.loadNextPage()
+      assert.equal(calls[2].params.order, 'view')
+      assert.equal(calls[2].params.pn, 2)
+      calls[2].resolve(page([video(3)], 2, false))
+      await next
+      data.videoOrder.value = 'pubtime'
+      const published = data.loadSelectedContent()
+      assert.equal(calls[3].params.order, 'pubtime')
+      assert.equal(calls[3].params.pn, 1)
+      calls[3].resolve(page([], 0, false))
+      await published
+    }
+    finally { data.dispose() }
+  })
+
+  check('other favorites: topic search scans later pages, scopes reuse data and courses stay independent', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const { parseOtherFavoritePage } = await import('../src/contentScripts/views/Favorites/otherFavorites')
+    const topics = []
+    const courses = []
+    const data = useFavoritesData({
+      api: {
+        getFavoriteTopics: async (params) => {
+          topics.push(params)
+          return { code: 0, data: { topic_list: { topic_items: [{ id: params.page_num, name: params.page_num === 1 ? 'ordinary' : 'needle', stat_desc: 'description', jump_url: `https://www.bilibili.com/v/topic/detail?topic_id=${params.page_num}` }], page_info: { total: 2 } } } }
+        },
+        getFavoriteCourses: async (params) => {
+          courses.push(params)
+          return { code: 0, data: { items: [{ season_id: 3, title: 'needle course', status: 'complete', cover: '' }], page: { total: 1 } } }
+        },
+      },
+      user: {},
+      getAccountId: () => 1,
+      haveScrollbar: async () => true,
+      t: key => key,
+    })
+    try {
+      data.favoriteView.value = 'article'
+      data.otherFavoriteType.value = 'topic'
+      await data.loadSelectedContent()
+      data.keyword.value = 'needle'
+      await flush()
+      assert.deepEqual(topics.map(params => params.page_num), [1, 2])
+      assert.equal(data.visibleOtherFavorites.value[0].id, '2')
+      data.otherSearchScope.value = 'detail'
+      await flush()
+      assert.equal(data.visibleOtherFavorites.value.length, 0)
+      data.keyword.value = 'description'
+      assert.equal(data.visibleOtherFavorites.value.length, 2)
+      assert.equal(topics.length, 2)
+      data.keyword.value = ''
+      data.otherFavoriteType.value = 'course'
+      data.otherSearchScope.value = 'all'
+      await data.loadSelectedContent()
+      assert.equal(data.visibleOtherFavorites.value.length, 1)
+      assert.equal(data.visibleOtherFavorites.value[0].url, 'https://www.bilibili.com/cheese/play/ss3')
+      assert.deepEqual(courses[0], { mid: '1', pn: 1, ps: 20 })
+      assert.equal(data.otherFavoriteCounts.topic, 2)
+      assert.equal(data.otherFavoriteCounts.course, 1)
+      data.resetAccount()
+      assert.deepEqual({ ...data.otherFavoriteCounts }, {})
+      assert.equal(data.visibleOtherFavorites.value.length, 0)
+      assert.equal(parseOtherFavoritePage('topic', { code: 0, data: { topic_list: null } }).total, 0)
+      assert.throws(() => parseOtherFavoritePage('course', { code: -101, data: null }))
+      assert.throws(() => parseOtherFavoritePage('course', { code: 0, data: { items: [], page: { total: 'unknown' } } }))
+    }
+    finally { data.dispose() }
+  })
+
+  check('favorite subscription filters: paginate to matching types and compose with collection search', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const sources = Array.from({ length: 51 }, (_, i) => ({ id: i + 1, type: i === 50 ? 21 : 11, title: i === 50 ? 'needle season' : `folder ${i}`, media_count: 0 }))
+    const requests = []
+    const data = useFavoritesData({
+      api: {
+        getCollectedFavoriteSeasons: async ({ pn, ps }) => {
+          requests.push(pn)
+          return { code: 0, data: { list: sources.slice((pn - 1) * ps, pn * ps), count: 51, has_more: pn === 1 } }
+        },
+        getFavoriteSeasonResources: async () => page([], 0),
+      },
+      user: {},
+      getAccountId: () => 1,
+      haveScrollbar: async () => true,
+      t: key => key,
+    })
+    try {
+      data.favoriteView.value = 'season'
+      data.subscriptionFilter.value = 'season'
+      await data.loadMoreSubscriptions()
+      await flush()
+      assert.deepEqual(requests, [1, 2])
+      assert.equal(data.visibleSubscriptions.value.length, 1)
+      assert.equal(data.selectedSeason.value.id, 51)
+      data.keyword.value = 'needle'
+      assert.equal(data.visibleSubscriptions.value.length, 1)
+      data.subscriptionFilter.value = 'folder'
+      assert.equal(data.visibleSubscriptions.value.length, 0)
+      data.keyword.value = ''
+      assert.equal(data.visibleSubscriptions.value.length, 50)
+      data.subscriptionFilter.value = 'season'
+      data.removeSeasons([{ id: 51, type: 21 }])
+      assert.equal(data.selectedSeason.value, undefined, 'removing the final matching season must not select a filtered-out folder')
+    }
+    finally { data.dispose() }
+  })
+
+  check('favorite folder covers: lazy queue deduplicates reads and rejects retired account responses', async () => {
+    const { createFavoriteFolderCoverLoader } = await import('../src/contentScripts/views/Favorites/favoriteFolderCovers')
+    const calls = []
+    const loader = createFavoriteFolderCoverLoader((id, signal) => {
+      const task = deferred()
+      calls.push({ id, signal, ...task })
+      return task.promise
+    })
+    loader.load(1)
+    loader.load(1)
+    loader.load(2)
+    assert.deepEqual(calls.map(call => call.id), [1])
+    loader.seed(1, 'fresh-content-cover')
+    calls[0].resolve('older-thumbnail')
+    await flush()
+    assert.equal(loader.covers[1], 'fresh-content-cover')
+    assert.deepEqual(calls.map(call => call.id), [1, 2])
+    loader.reset()
+    assert.equal(calls[1].signal.aborted, true)
+    loader.load(2)
+    calls[1].resolve('previous-account')
+    calls[2].resolve('current-account')
+    await flush()
+    assert.deepEqual({ ...loader.covers }, { 2: 'current-account' })
+    loader.load(3)
+    loader.load(4)
+    loader.dispose()
+    calls[3].resolve('unmounted')
+    await flush()
+    assert.equal(calls.length, 4)
+    assert.deepEqual({ ...loader.covers }, {})
+  })
+
+  check('favorite sidebar: single-click selection, isolated actions and inert collapsed panels', async () => {
+    let onIntersect
+    let stopped = false
+    const Item = await compileComponent('../src/contentScripts/views/Favorites/FavoriteSidebarItem.vue', {
+      '@vueuse/core': { useIntersectionObserver: (_, callback) => {
+        onIntersect = callback
+        return { stop: () => stopped = true }
+      } },
+      '~/utils/main': { removeHttpFromUrl: value => value },
+    })
+    const selected = Vue.ref(false)
+    let visible = 0
+    let actions = 0
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup: () => () => Vue.h(Item, {
+      title: 'Folder',
+      count: 8,
+      expanded: selected.value,
+      icon: 'folder',
+      onSelect: () => selected.value = true,
+      onVisible: () => visible++,
+    }, { default: () => Vue.h('button', { class: 'test-action', onClick: () => actions++ }, 'Play') }) })
+    app.mount(host)
+    try {
+      const trigger = host.querySelector('.favorite-sidebar-item__trigger')
+      const panel = host.querySelector('.favorite-sidebar-item__panel')
+      assert.equal(panel.getAttribute('aria-hidden'), 'true')
+      assert.ok(panel.hasAttribute('inert'))
+      trigger.click()
+      await Vue.nextTick()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'true')
+      assert.equal(panel.hasAttribute('inert'), false)
+      host.querySelector('.test-action').click()
+      assert.equal(actions, 1)
+      selected.value = false
+      selected.value = true
+      selected.value = false
+      await Vue.nextTick()
+      assert.equal(trigger.getAttribute('aria-expanded'), 'false')
+      assert.ok(panel.hasAttribute('inert'))
+      onIntersect([{ isIntersecting: true }])
+      assert.equal(visible, 1)
+      assert.equal(stopped, true)
+      assert.equal(host.querySelector('button button'), null)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('favorite search: later collection names and current collection videos are found without refetching edits', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const { matchesFavoriteQuery } = await import('../src/contentScripts/views/Favorites/favoriteSearch')
+    assert.ok(matchesFavoriteQuery(' ＡＢＣ 作者 ', 'abc 视频', '作者'))
+    const sources = Array.from({ length: 51 }, (_, i) => ({ id: i + 1, type: 11, title: i === 50 ? 'needle collection' : `collection ${i}`, media_count: 2 }))
+    const directoryCalls = []
+    const contentCalls = []
+    const data = useFavoritesData({
+      api: {
+        getCollectedFavoriteSeasons: async ({ pn, ps }) => {
+          directoryCalls.push(pn)
+          return { code: 0, data: { list: sources.slice((pn - 1) * ps, pn * ps), count: 51, has_more: pn === 1 } }
+        },
+        getFavoriteResources: async ({ pn }) => {
+          contentCalls.push(pn)
+          return page([video(pn, { title: pn === 2 ? 'needle video' : 'ordinary' })], 2, pn === 1)
+        },
+      },
+      user: {},
+      getAccountId: () => 1,
+      haveScrollbar: async () => true,
+      t: key => key,
+    })
+    try {
+      data.favoriteView.value = 'season'
+      await data.loadMoreSubscriptions()
+      await flush()
+      data.keyword.value = 'needle'
+      await flush()
+      assert.deepEqual(directoryCalls, [1, 2])
+      assert.deepEqual(contentCalls, [1, 2])
+      assert.equal(data.visibleSubscriptions.value[0].id, 51)
+      assert.equal(data.visibleResources.value[0].id, 2)
+      data.keyword.value = 'ordinary'
+      await flush()
+      assert.equal(data.visibleResources.value[0].id, 1)
+      data.keyword.value = ''
+      await flush()
+      assert.equal(data.visibleResources.value.length, 2)
+      assert.deepEqual(contentCalls, [1, 2])
+      data.keyword.value = 'needle'
+      data.favoriteView.value = 'article'
+      assert.equal(data.keyword.value, '')
+      data.favoriteView.value = 'season'
+      assert.equal(data.keyword.value, 'needle')
+      data.resetAccount()
+      data.favoriteView.value = 'season'
+      assert.equal(data.keyword.value, '')
+    }
+    finally { data.dispose() }
+  })
+
+  check('favorite search: article title/author pagination deduplicates, stops a stalled cursor and retries the same boundary', async () => {
+    const { useFavoritesData } = await import('../src/contentScripts/views/Favorites/useFavoritesData')
+    const requests = []
+    let repaired = false
+    let account = 1
+    const late = deferred()
+    const article = (id, content, name) => ({ opus_id: String(id), content, author: { name } })
+    const data = useFavoritesData({
+      api: { getFavoriteArticles: async ({ page: pn, offset }) => {
+        requests.push([pn, offset])
+        if (pn === 3)
+          return late.promise
+        return { code: 0, data: pn === 1
+          ? { items: [article(1, 'ordinary', 'Alice')], offset: 'a', has_more: true }
+          : { items: [article(1, 'ordinary', 'Alice'), article(2, 'needle', 'Bob')], offset: repaired ? 'b' : 'a', has_more: true } }
+      } },
+      user: {},
+      getAccountId: () => account,
+      haveScrollbar: async () => true,
+      t: key => key,
+    })
+    try {
+      data.favoriteView.value = 'article'
+      await data.loadSelectedContent()
+      data.keyword.value = 'needle Bob'
+      await flush()
+      assert.equal(data.visibleArticles.value.length, 1)
+      assert.equal(data.favoriteArticles.length, 2)
+      assert.equal(data.stalledContentPage.value, 2)
+      assert.equal(data.articleFavoriteOffset.value, 'a')
+      await flush()
+      assert.equal(requests.length, 2)
+      repaired = true
+      await data.retryFavoriteContent()
+      await flush()
+      assert.deepEqual(requests, [[1, ''], [2, 'a'], [2, 'a'], [3, 'b']])
+      account = 2
+      data.resetAccount()
+      late.resolve({ code: 0, data: { items: [article(3, 'needle', 'Bob')], has_more: false } })
+      await flush()
+      assert.equal(data.favoriteArticles.length, 0)
+    }
+    finally { data.dispose() }
+  })
 
   check('favorite sources: actual page fetch routes type 11/21 separately and retains raw media contracts', async () => {
     const calls = []
@@ -416,7 +1216,7 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
 
   check('native favorites: verified parameters/modifiers preserve native behavior; source changes and runtime stop invalidate pending play-all', async () => {
     const contract = JSON.parse(await readFile(new URL('../tests/fixtures/favorites/native-space-contract.json', import.meta.url), 'utf8'))
-    const schema = (await loadSourceModule('../src/background/messageListeners/api/favorite.ts', { '../../utils': { AHS: { J_D: 'json' } } })).default
+    const schema = (await loadSourceModule('../src/background/messageListeners/api/favorite.ts', { '../../utils': { AHS: { J_D: 'json' } }, '~/utils/favoriteFolderForm': folderForm })).default
     assert.equal(new URL(schema.unfavCollectedFavoriteFolder.url).pathname, contract.publicFolder.unfav)
     assert.equal(schema.unfavCollectedFavoriteFolder._fetch.method, contract.publicFolder.method)
     assert.deepEqual(Object.keys(schema.unfavCollectedFavoriteFolder.params).sort(), [...contract.publicFolder.query].sort())

@@ -8,7 +8,6 @@ defineProps<{
 
 const emit = defineEmits<{
   (event: 'select', view: NotificationView): void
-  (event: 'navigationWidthChange', width: number): void
 }>()
 </script>
 
@@ -17,7 +16,6 @@ const emit = defineEmits<{
     <NotificationsNavigation
       :model-value="view"
       @update:model-value="emit('select', $event)"
-      @width-change="emit('navigationWidthChange', $event)"
     />
   </header>
 </template>
@@ -25,6 +23,7 @@ const emit = defineEmits<{
 <style scoped lang="scss">
 .notifications-page-header {
   display: flex;
+  flex: 0 0 auto;
   width: 100%;
   min-width: 0;
 }

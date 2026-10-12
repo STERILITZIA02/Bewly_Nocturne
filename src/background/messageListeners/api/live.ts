@@ -2,6 +2,12 @@ import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
 
 const API_LIVE = {
+  getLivePreviewInfo: {
+    url: 'https://api.live.bilibili.com/xlive/web-room/v2/index/getRoomPlayInfo',
+    _fetch: { method: 'get' },
+    params: { room_id: 0, protocol: '0,1', format: '0,1,2', codec: '0', qn: 80, platform: 'web' },
+    afterHandle: AHS.J_D,
+  },
   // https://socialsisteryi.github.io/bilibili-API-collect/docs/live/follow_up_live.html#%E7%94%A8%E6%88%B7%E5%85%B3%E6%B3%A8%E7%9A%84%E6%89%80%E6%9C%89up%E7%9A%84%E7%9B%B4%E6%92%AD%E6%83%85%E5%86%B5
   getFollowingLiveList: {
     url: 'https://api.live.bilibili.com/xlive/web-ucenter/user/following',

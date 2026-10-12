@@ -183,13 +183,10 @@ verify('notification headers keep only titles and delegate refresh to the Dock c
   assert.doesNotMatch(headerSource, /descriptionKey|notifications\.actions\.refresh|notifications\.actions\.open_original/)
   assert.doesNotMatch(headerSource, /<Button\b|<ALink\b/)
   assert.doesNotMatch(navigationSource, /descriptionKey/)
-  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,220}box-sizing: border-box/)
-  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,260}min-width: var\(--bew-space-4\)/)
-  assert.match(navigationSource, /\.notifications-navigation__badge \{[\s\S]{0,420}white-space: nowrap/)
-  assert.match(navigationSource, /v-if="unreadCount\(section\) > 0"/)
-  assert.match(navigationSource, /function revealActiveSection\(\)/)
-  assert.match(navigationSource, /scrollTo\(\{ left:[\s\S]{0,120}behavior: 'auto'/)
-  assert.match(navigationSource, /\.notifications-navigation__inside \{[\s\S]{0,260}padding-inline: var\(--bew-space-0-5\)/)
+  assert.match(navigationSource, /<WheelSelector/)
+  assert.match(navigationSource, /unreadCount\(section\)/)
+  assert.match(navigationSource, /notifications\.unread_count/)
+  assert.doesNotMatch(navigationSource, /ResizeObserver|LiquidSegmentIndicator/)
   assert.match(headerSource, /\.notifications-page-header \{[\s\S]{0,100}width: 100%/)
   assert.doesNotMatch(sectionsSource, /descriptionKey/)
   assert.doesNotMatch(pageSource, /<NotificationsPageHeader[^>]*@refresh/)
@@ -209,7 +206,7 @@ verify('Native Feed retry, account pending, and scroll anchor wiring are explici
   assert.match(itemSource, /data-notification-id/)
 })
 
-verify('all Native Feed items share an opaque reading surface without per-row glass and top-align identities', async () => {
+verify('all Native Feed items share a themed reading surface without per-row glass and top-align identities', async () => {
   const [mainStyles, interactionItemSource, systemItemSource] = await Promise.all([
     readFile(new URL('../src/styles/main.scss', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NativeNotificationItem.vue', import.meta.url), 'utf8'),
@@ -219,7 +216,7 @@ verify('all Native Feed items share an opaque reading surface without per-row gl
   for (const source of [interactionItemSource, systemItemSource]) {
     assert.match(source, /native-notification-surface bew-shape-smooth-rect/)
   }
-  assert.match(mainStyles, /\.native-notification-surface \{[\s\S]{0,420}background: var\(--bew-content-solid\)/)
+  assert.match(mainStyles, /\.native-notification-surface \{[\s\S]{0,420}background: var\(--bew-notifications-card-background\)/)
   assert.match(mainStyles, /border-radius: var\(--bew-card-radius\)/)
   const surface = mainStyles.slice(mainStyles.indexOf('.native-notification-surface {'), mainStyles.indexOf('// Interaction content'))
   assert.doesNotMatch(surface, /backdrop-filter/)
@@ -240,7 +237,6 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
     listSkeletonSource,
     conversationDetailSkeletonSource,
     conversationSource,
-    timelineSkeletonSource,
   ] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/Notifications.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/components/NotificationsPageSkeleton.vue', import.meta.url), 'utf8'),
@@ -252,7 +248,6 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationListSkeleton.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationDetailSkeleton.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
-    readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationTimelineSkeleton.vue', import.meta.url), 'utf8'),
   ])
 
   assert.match(pageSource, /v-if="!routeReady"[\s\S]{0,220}<NotificationsPageSkeleton/)
@@ -263,7 +258,7 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
   assert.match(workspaceSource, /<ConversationListSkeleton[\s\S]{0,120}v-else-if="controller\.state\.loading && !controller\.state\.loaded"/)
   assert.match(workspaceSource, /<ConversationDetailSkeleton[\s\S]{0,180}controller\.state\.loading && !controller\.state\.loaded/)
   assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="loadingMore"/)
-  assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="recipientSearch\.state\.loading"/)
+  assert.match(listSource, /<ConversationListSkeleton[\s\S]{0,100}v-if="recipientSearch\.state\.loading \|\| recipientSearch\.state\.searching"/)
   assert.match(conversationSource, /v-if="entryPhase !== 'ready'"[\s\S]{0,120}role="status"/)
   assert.doesNotMatch(conversationSource, /<Conversation(?:History|Timeline)Skeleton/)
   assert.match(conversationSource, /v-if="historyLoading" role="status"/)
@@ -271,8 +266,8 @@ verify('all message-page data loading states use feed-shaped skeletons', async (
   assert.match(feedSkeletonSource, /native-notification-feed-skeleton__reference[\s\S]{0,520}native-notification-feed-skeleton__reference-source/)
   assert.match(feedSkeletonSource, /width="96px"[\s\S]{0,100}height="var\(--bew-line-height-control\)"/)
   assert.match(listSkeletonSource, /conversation-list-skeleton__item/)
-  assert.match(conversationDetailSkeletonSource, /<ConversationTimelineSkeleton[\s\S]{0,100}:announce="announce"/)
-  assert.match(timelineSkeletonSource, /conversation-timeline-skeleton__item--self/)
+  assert.doesNotMatch(conversationDetailSkeletonSource, /<ConversationTimelineSkeleton/)
+  assert.match(conversationDetailSkeletonSource, /background: transparent/)
   assert.match(skeletonBlockSource, /data-bew-skeleton/)
   assert.match(await readFile(new URL('../src/styles/skeleton.scss', import.meta.url), 'utf8'), /@media \(prefers-reduced-motion: reduce\)[\s\S]{0,120}animation: none/)
 
@@ -718,6 +713,31 @@ verify('System first-page adapter commits the confirmed read cursor once before 
   })
 })
 
+verify('System account change prevents the deferred cursor write', async () => {
+  const [unified, user] = await Promise.all([
+    parseSystemUnifiedNotificationResponse(createMockResponse(await readFixtureText('system/unified-first.json'))),
+    parseSystemUserNotificationResponse(createMockResponse(await readFixtureText('system/user-first.json'))),
+  ])
+  let account = 'first'
+  let writes = 0
+  const fetchPage = createSystemNotificationPageFetcher({
+    getAccount: () => account,
+    fetchUnified: async () => {
+      account = 'second'
+      return unified
+    },
+    fetchUser: async () => user,
+    fetchHistory: async () => ({ code: 0, data: [] }),
+    markRead: async () => {
+      writes++
+      return { code: 0 }
+    },
+  })
+  const result = await fetchPage()
+  assert.equal(writes, 0)
+  assert.ok(!parseNotificationPage('system', result).page)
+})
+
 verify('System read failure does not publish a first page or fake local success', async () => {
   const [unified, user, readFailure] = await Promise.all([
     parseSystemUnifiedNotificationResponse(createMockResponse(await readFixtureText('system/unified-first.json'))),
@@ -1143,7 +1163,7 @@ verify('extension-invalidated empty and loading states do not throw during setup
   assert.equal(emptySource.includes('browser.runtime.getURL'), false)
   assert.match(loadingSource, /<SkeletonBlock/)
   assert.doesNotMatch(loadingSource, /loading\.gif|<img\b/)
-  assert.ok(emptySource.includes('v-if="emptyImg"'))
+  assert.ok(emptySource.includes('v-if="!textOnly && emptyImg"'))
 })
 
 async function main() {

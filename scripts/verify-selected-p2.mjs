@@ -16,7 +16,9 @@ import { registerDesignImplementationChecks } from './verify-design-implementati
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
 import { registerFavoriteSourceChecks } from './verify-favorite-sources.mjs'
 import { registerFourFeatureChecks } from './verify-four-features.mjs'
+import { registerGlobalResourceChecks } from './verify-global-resources.mjs'
 import { registerHomeLoadingRegressionChecks } from './verify-home-loading-regressions.mjs'
+import { registerLibraryMemoryChecks } from './verify-library-memory.mjs'
 import { registerLibraryToolChecks } from './verify-library-tools.mjs'
 import { registerLiquidGlassSurfaceChecks } from './verify-liquid-glass-surfaces.mjs'
 import { registerLoadingSkeletonChecks } from './verify-loading-skeletons.mjs'
@@ -24,11 +26,15 @@ import { registerLocalLoudnessChecks } from './verify-local-loudness.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
 import { registerMaintenanceIntegrationChecks } from './verify-maintenance-integration.mjs'
 import { registerMaintenanceReviewChecks } from './verify-maintenance-review.mjs'
+import { registerMomentsMaintenanceChecks } from './verify-moments-maintenance.mjs'
+import { registerMotionContinuityChecks } from './verify-motion-continuity.mjs'
 import { registerNativeAppearanceChecks } from './verify-native-appearance.mjs'
 import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
 import { registerPlayerMaintenanceChecks } from './verify-player-maintenance.mjs'
+import { registerPrivateHistorySearchChecks } from './verify-private-history-search.mjs'
+import { registerPrivateSessionActionChecks } from './verify-private-session-actions.mjs'
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
@@ -94,8 +100,11 @@ registerLocalLoudnessChecks(check, { Vue, compileComponent, flush })
 registerPlayerMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerMaintenanceIntegrationChecks(check, { Vue, compileComponent, flush })
 registerMaintenanceReviewChecks(check, { Vue, compileComponent, flush })
+registerMotionContinuityChecks(check, { Vue, flush })
+registerMomentsMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerNativeAppearanceChecks(check, { Vue, compileComponent, flush })
 registerLibraryToolChecks(check, { Vue, compileComponent, flush })
+registerLibraryMemoryChecks(check, { Vue, compileComponent, flush })
 registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
 registerSeptemberAdaptationChecks(check, { Vue, compileComponent, flush })
 registerSixAuditFixChecks(check, { Vue, compileComponent, flush })
@@ -116,6 +125,8 @@ registerPlaybackContentChecks(check)
 registerAdvertisingRuleChecks(check, { Vue, compileComponent, flush })
 registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
 registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
+registerPrivateHistorySearchChecks(check, { Vue, flush })
+registerPrivateSessionActionChecks(check, { Vue })
 registerWatchLaterOwnershipChecks(check, { Vue, flush })
 registerFavoriteSourceChecks(check, { Vue, flush, compileComponent })
 registerNotificationUIChecks(check, { Vue, compileComponent, flush })
@@ -245,6 +256,7 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     'getWatchLaterListByPage',
     'deleteWatchLaterItem',
   ], {
+    LIBRARY_AUTOFILL_PAGE_LIMIT: (await import('../src/constants/library')).LIBRARY_AUTOFILL_PAGE_LIMIT,
     topBarStore: { isLogin: true, userInfo: { mid: 1 }, commitWatchLaterMutation: async () => {} },
     watchLaterExtensionContextInvalidated: false,
     AbortController,
@@ -253,6 +265,8 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     filtersActive: r(false),
     requestGeneration: 0,
     isLoading: r(false),
+    isRefreshing: r(false),
+    refreshFailed: r(false),
     requestFailed: r(false),
     noMoreContent: r(false),
     pageNum: r(1),
@@ -260,6 +274,7 @@ check('P2-03 watch-later re-reads the shifted boundary after single and repeated
     watchLaterCount: { get value() { return server.length } },
     currentWatchLaterList: r([]),
     pendingAction: r(null),
+    bulkAction: { pending: r(false) },
     haveScrollbar: async () => true,
     getCSRF: () => 'fixture',
     getUserID: () => '1',
@@ -309,12 +324,16 @@ async function favoriteContext() {
     user: { getUserCard: async () => ({ code: 0, data: { card: { face: '' } } }) },
   }, haveScrollbar: async () => true }
   const module = await loadSourceModule('../src/contentScripts/views/Favorites/useFavoritesData.ts', {
+    '~/constants/library': await import('../src/constants/library'),
     vue: Vue,
     '~/utils/accountLifetime': lifetime,
     '~/utils/favoriteFolder': folders,
     '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
     '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
     '~/utils/favoriteAvatar': await import('../src/utils/favoriteAvatar'),
+    './favoriteSearch': await import('../src/contentScripts/views/Favorites/favoriteSearch'),
+    './favoriteFolderCovers': await import('../src/contentScripts/views/Favorites/favoriteFolderCovers'),
+    './otherFavorites': await import('../src/contentScripts/views/Favorites/otherFavorites'),
     './favoriteAdapters': { getFavoriteArticleCover: () => 'cover' },
   })
   Object.assign(context, module.useFavoritesData({ api: context.api.favorite, user: context.api.user, haveScrollbar: () => context.haveScrollbar(), getAccountId: () => 1, t: key => key }))
@@ -357,19 +376,20 @@ check('P2-04 favorites retains the failed page, retries in place, and serializes
   assert.equal(context.failedContentPage.value, 3)
   assert.equal(context.currentPageNum.value, 2)
 
-  const measuring = deferred()
   let measurements = 0
   context.favoriteView.value = 'video'
   context.failedContentPage.value = null
-  context.haveScrollbar = () => ++measurements === 1 ? measuring.promise : Promise.resolve(true)
+  context.haveScrollbar = () => {
+    measurements++
+    return Promise.resolve(false)
+  }
   const pending = context.loadNextPage()
-  await flush()
-  assert.equal(context.isLoading.value, true)
-  await context.loadNextPage()
-  assert.equal(requests.at(-1), 3)
-  measuring.resolve(false)
   await pending
-  assert.deepEqual(requests.slice(-2), [3, 4], 'autofill does not race the observer')
+  assert.equal(context.isLoading.value, false)
+  assert.equal(measurements, 0, 'video grid owns viewport measurement')
+  assert.equal(requests.at(-1), 3)
+  await context.loadNextPage()
+  assert.deepEqual(requests.slice(-2), [3, 4], 'each observer call owns exactly one page')
   await context.initData()
   assert.equal(context.bootstrapFailed.value, true, 'both category API failures reach the bootstrap error state')
 })
@@ -428,7 +448,10 @@ check('P2-07 filtered empty pages pause automation without marking server exhaus
 
 let sharedSkeletonComponent
 let sharedIconButton
+let sharedChevronIcon
+let sharedMasonryGrid
 let sharedAdvertisementCard
+let sharedLibraryVideoSkeleton
 const glassSurfaceContext = Symbol('fixture-glass-surface')
 async function compileComponent(file, mocks = {}, { renderTemplate = true, globals = {} } = {}) {
   if (!file.endsWith('/SkeletonBlock.vue'))
@@ -436,6 +459,12 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const text = await readFile(new URL(file, import.meta.url), 'utf8')
   if (text.includes('\'~/components/IconButton.vue\''))
     sharedIconButton ??= await compileComponent('../src/components/IconButton.vue')
+  if (text.includes('\'~/components/ChevronIcon.vue\''))
+    sharedChevronIcon ??= await compileComponent('../src/components/ChevronIcon.vue')
+  if (text.includes('\'~/components/MasonryGrid.vue\''))
+    sharedMasonryGrid ??= await compileComponent('../src/components/MasonryGrid.vue')
+  if (text.includes('\'~/components/LibraryVideoCardSkeleton.vue\''))
+    sharedLibraryVideoSkeleton ??= await compileComponent('../src/components/LibraryVideoCardSkeleton.vue')
   if (text.includes('\'~/components/VideoCard/AdvertisementCard.vue\'')) {
     sharedAdvertisementCard ??= await compileComponent('../src/components/VideoCard/AdvertisementCard.vue', {
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
@@ -447,8 +476,32 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const exports = {}
   const modules = {
     'vue': Vue,
+    '~/utils/motionPresence': await import('../src/utils/motionPresence'),
+    '~/utils/asyncPage': globals.defineAsyncComponent
+      ? { createAsyncPageRegistry: () => ({ define: (loader, options) => globals.defineAsyncComponent({ loader, ...options }), preload: () => Promise.resolve() }) }
+      : await import('../src/utils/asyncPage'),
+    '~/composables/useLayoutMotion': await import('../src/composables/useLayoutMotion'),
+    '~/composables/useSurfaceMorph': await import('../src/composables/useSurfaceMorph'),
+    '~/composables/useSpringValue': await import('../src/composables/useSpringValue'),
+    '~/composables/useSettingsMotion': await import('../src/composables/useSettingsMotion'),
+    '~/composables/useReadyPageTransition': await import('../src/composables/useReadyPageTransition'),
+    '~/composables/useAnchoredPopoverPosition': await import('../src/composables/useAnchoredPopoverPosition'),
+    '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),
+    '~/utils/selectionScrollAnchor': await import('../src/utils/selectionScrollAnchor'),
+    '~/utils/skeletonVisibility': await import('../src/utils/skeletonVisibility'),
+    '~/constants/dock': await import('../src/constants/dock'),
+    '~/constants/library': await import('../src/constants/library'),
     '~/components/SkeletonBlock.vue': { default: sharedSkeletonComponent },
+    '~/components/LibraryVideoCardSkeleton.vue': { default: sharedLibraryVideoSkeleton },
     '~/components/IconButton.vue': { default: sharedIconButton },
+    '~/components/ChevronIcon.vue': { default: sharedChevronIcon },
+    '~/components/MasonryGrid.vue': { default: sharedMasonryGrid },
+    './messageInsights': await import('../src/contentScripts/views/Notifications/whisper/messageInsights'),
+    './whisper/messageInsights': await import('../src/contentScripts/views/Notifications/whisper/messageInsights'),
+    './composables/useMarkAllMessagesRead': await import('../src/contentScripts/views/Notifications/composables/useMarkAllMessagesRead'),
+    './whisper/privateMessage': await import('../src/contentScripts/views/Notifications/whisper/privateMessage'),
+    '~/utils/locale': await import('../src/utils/locale'),
+    './privateSearchPolicy': await import('../src/contentScripts/views/Notifications/whisper/privateSearchPolicy'),
     '~/components/VideoCard/AdvertisementCard.vue': { default: sharedAdvertisementCard },
     '~/utils/advertising': await import('../src/utils/advertising'),
     '@vueuse/core': VueUse,
@@ -462,10 +515,54 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     // replace these dependencies with the real production modules.
     '~/utils/liquidGlass': { vLiquidGlass: {} },
     '~/composables/useLiquidGlass': { GLASS_SURFACE_CONTEXT: glassSurfaceContext, liquidGlassEnabled: Vue.ref(false) },
+    '~/composables/useGlassPanelMotion': await import('../src/composables/useGlassPanelMotion'),
     ...mocks,
   }
   if (text.includes('\'./watchLaterFilters\'') && !modules['./watchLaterFilters'])
     modules['./watchLaterFilters'] = await import('../src/contentScripts/views/WatchLater/watchLaterFilters')
+  for (const path of ['./historyFilters', '~/contentScripts/views/History/historyFilters']) {
+    if (text.includes(`'${path}'`) && !modules[path])
+      modules[path] = await import('../src/contentScripts/views/History/historyFilters')
+  }
+  if (text.includes('\'~/composables/useLibraryBatchSelection\''))
+    modules['~/composables/useLibraryBatchSelection'] = await import('../src/composables/useLibraryBatchSelection')
+  for (const name of ['WatchLaterSelectionOverlay', 'WatchLaterFilterSection']) {
+    const path = `~/contentScripts/views/WatchLater/${name}.vue`
+    if (text.includes(`'${path}'`) && !modules[path])
+      modules[path] = { default: await compileComponent(`../src/contentScripts/views/WatchLater/${name}.vue`) }
+  }
+  for (const path of ['./HistoryAdvancedFilters.vue', '~/contentScripts/views/History/HistoryAdvancedFilters.vue']) {
+    if (text.includes(`'${path}'`) && !modules[path])
+      modules[path] = { default: await compileComponent('../src/contentScripts/views/History/HistoryAdvancedFilters.vue', { 'vue-i18n': modules['vue-i18n'] }) }
+  }
+  if (text.includes('\'./HistoryDayToggle.vue\''))
+    modules['./HistoryDayToggle.vue'] = { default: await compileComponent('../src/contentScripts/views/History/HistoryDayToggle.vue') }
+  if (text.includes('\'./useHistoryDayMotion\''))
+    modules['./useHistoryDayMotion'] = await import('../src/contentScripts/views/History/useHistoryDayMotion')
+  if (text.includes('\'./useWatchLaterBatch\'') && !modules['./useWatchLaterBatch'])
+    modules['./useWatchLaterBatch'] = await import('../src/contentScripts/views/WatchLater/useWatchLaterBatch')
+  if (text.includes('\'./WatchLaterSelectionOverlay.vue\'') && !modules['./WatchLaterSelectionOverlay.vue'])
+    modules['./WatchLaterSelectionOverlay.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue') }
+  if (text.includes('\'./WatchLaterAdvancedFilters.vue\'') && !modules['./WatchLaterAdvancedFilters.vue'])
+    modules['./WatchLaterAdvancedFilters.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterAdvancedFilters.vue', { 'vue-i18n': modules['vue-i18n'] }) }
+  if (text.includes('\'./WatchLaterFilterSection.vue\'') && !modules['./WatchLaterFilterSection.vue'])
+    modules['./WatchLaterFilterSection.vue'] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterFilterSection.vue') }
+  if (text.includes('\'~/contentScripts/views/SearchResults/components/DatePicker.vue\'')) {
+    modules['~/contentScripts/views/SearchResults/components/DatePicker.vue'] = { default: await compileComponent('../src/contentScripts/views/SearchResults/components/DatePicker.vue', {
+      'vue-i18n': modules['vue-i18n'],
+      '../utils/localDate': await import('../src/contentScripts/views/SearchResults/utils/localDate'),
+      '~/composables/useAnchoredPopoverPosition': { useAnchoredPopoverPosition: () => ({ scheduleUpdate() {} }) },
+    }) }
+  }
+  for (const path of ['./WatchLaterPlayAllCard.vue', '~/contentScripts/views/WatchLater/WatchLaterPlayAllCard.vue']) {
+    if (text.includes(`'${path}'`) && !modules[path]) {
+      modules[path] = { default: await compileComponent('../src/contentScripts/views/WatchLater/WatchLaterPlayAllCard.vue', {
+        '~/components/Button.vue': { default: await compileComponent('../src/components/Button.vue') },
+        '~/utils/main': modules['~/utils/main'] ?? { removeHttpFromUrl: value => value },
+        'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+      }) }
+    }
+  }
   if (text.includes('\'~/components/Settings/components/SettingsSegmentedControl.vue\'') && !modules['~/components/Settings/components/SettingsSegmentedControl.vue']) {
     modules['~/components/Settings/components/SettingsSegmentedControl.vue'] = { default: await compileComponent('../src/components/Settings/components/SettingsSegmentedControl.vue', {
       '~/components/LiquidSegmentIndicator.vue': { default: { render: () => null } },
@@ -477,6 +574,74 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
       './privateMessageSearch': await import('../src/contentScripts/views/Notifications/whisper/privateMessageSearch'),
     }) }
   }
+  if (text.includes('\'./ConversationInsights.vue\'') && !modules['./ConversationInsights.vue']) {
+    modules['./ConversationInsights.vue'] = { default: await compileComponent('../src/contentScripts/views/Notifications/whisper/ConversationInsights.vue', {
+      'vue-i18n': modules['vue-i18n'],
+      '~/stores/topBarStore': modules['~/stores/topBarStore'],
+    }) }
+  }
+  if (text.includes('\'./MessageActivityChart.vue\'') && !modules['./MessageActivityChart.vue']) {
+    modules['./MessageActivityChart.vue'] = { default: await compileComponent('../src/contentScripts/views/Notifications/whisper/MessageActivityChart.vue', {
+      'vue-i18n': modules['vue-i18n'],
+    }) }
+  }
+  for (const name of ['LibraryWorkspace', 'LibrarySidebarHeading', 'LibrarySearchField']) {
+    const path = `~/components/${name}.vue`
+    if (text.includes(`'${path}'`) && !modules[path]) {
+      modules[path] = { default: await compileComponent(`../src/components/${name}.vue`, {
+        '~/logic': modules['~/logic'] ?? { settings: Vue.ref({}) },
+        'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+        './WheelSelector.vue': { default: await compileComponent('../src/components/WheelSelector.vue') },
+      }) }
+    }
+  }
+  if (text.includes('\'./momentPortal\'') && !modules['./momentPortal'])
+    modules['./momentPortal'] = await import('../src/contentScripts/views/Moments/momentPortal')
+  if (text.includes('\'~/components/MomentPromotionBadge.vue\'') && !modules['~/components/MomentPromotionBadge.vue']) {
+    modules['~/components/MomentPromotionBadge.vue'] = { default: await compileComponent('../src/components/MomentPromotionBadge.vue', {
+      'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+    }) }
+  }
+  if (text.includes('\'./MomentsLiveRow.vue\'') && !modules['./MomentsLiveRow.vue']) {
+    modules['./MomentsLiveRow.vue'] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsLiveRow.vue', {
+      'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+      '~/components/MomentCard/MomentVideoPreview.vue': { default: { render: () => null } },
+    }) }
+  }
+  for (const path of ['./MomentsSidebar.vue', '~/contentScripts/views/Moments/MomentsSidebar.vue']) {
+    if (text.includes(`'${path}'`) && !modules[path]) {
+      modules[path] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsSidebar.vue', {
+        '~/logic': modules['~/logic'] ?? { settings: Vue.ref({}) },
+        '~/logic/layoutEdit': { vLayoutEditable: {} },
+        '~/utils/dataFormatter': { numFormatter: String },
+        'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+      }) }
+    }
+  }
+  for (const path of ['./MomentsContentLayout.vue', '~/contentScripts/views/Moments/MomentsContentLayout.vue']) {
+    if (text.includes(`'${path}'`) && !modules[path])
+      modules[path] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsContentLayout.vue') }
+  }
+  for (const path of ['./MomentsHotSearch.vue', '~/contentScripts/views/Moments/MomentsHotSearch.vue']) {
+    if (text.includes(`'${path}'`) && !modules[path]) {
+      modules[path] = { default: await compileComponent('../src/contentScripts/views/Moments/MomentsHotSearch.vue', {
+        '~/logic': modules['~/logic'] ?? { settings: Vue.ref({ disableFrostedGlass: false }) },
+        '~/components/Button.vue': { default: await compileComponent('../src/components/Button.vue') },
+        '~/components/ALink.vue': { default: { props: ['href', 'title'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href, title: props.title }, slots.default?.()) } },
+        '~/logic/searchExperience': modules['~/logic/searchExperience'] ?? {
+          acquireSearchExperience: () => () => {},
+          loadSharedHotSearch: async () => {},
+          useSearchExperience: () => ({ hotSearchList: Vue.ref([]), isLoadingHotSearch: Vue.ref(false), hotSearchFailed: Vue.ref(false) }),
+        },
+        '~/utils/searchNavigation': { resolveSearchNavigationTarget: keyword => `https://search.bilibili.com/all?keyword=${encodeURIComponent(keyword)}` },
+        'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+      }) }
+    }
+  }
+  if (text.includes('\'~/utils/responsiveImage\'') && !modules['~/utils/responsiveImage'])
+    modules['~/utils/responsiveImage'] = await import('../src/utils/responsiveImage')
+  if (text.includes('\'~/components/LazyPicture.vue\'') && !modules['~/components/LazyPicture.vue'])
+    modules['~/components/LazyPicture.vue'] = { default: await compileComponent('../src/components/LazyPicture.vue') }
   vm.runInNewContext(code, {
     ...Vue,
     exports,
@@ -832,6 +997,7 @@ check('P2-14 custom multipart order excludes collection manuscripts and preserve
 })
 
 registerPlaybackVisualFixChecks(check, { Vue, compileComponent, flush })
+registerGlobalResourceChecks(check, { Vue, flush })
 
 try {
   const selected = process.argv[2] ? checks.filter(check => check.name.includes(process.argv[2])) : checks

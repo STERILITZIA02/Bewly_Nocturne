@@ -218,7 +218,7 @@ watch(unavailable, (disabled) => {
       flex="~"
       justify="between"
       items="center" w="full"
-      :ring="showOptions ? '2px $bew-theme-focus-ring' : ''" duration-300
+      duration-300
       @click="toggleOptions"
       @keydown="handleTriggerKeyDown"
     >
@@ -324,6 +324,12 @@ watch(unavailable, (disabled) => {
 
 .select-trigger:hover {
   background-color: var(--bew-fill-2);
+}
+
+.select-trigger:focus-visible,
+.select-option:focus-visible {
+  outline: var(--bew-focus-ring);
+  outline-offset: var(--bew-space-0-5);
 }
 
 .select-trigger--compact {

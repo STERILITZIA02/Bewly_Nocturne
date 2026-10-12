@@ -14,6 +14,7 @@ import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { getUserID, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { retiringListTransition } from '~/utils/motionPresence'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -170,7 +171,7 @@ defineExpose({
         class="bew-popover__state"
       />
 
-      <TransitionGroup name="list">
+      <TransitionGroup name="list" v-bind="retiringListTransition">
         <article
           v-for="(moment, index) in topBarStore.moments"
           :key="moment.id_str"

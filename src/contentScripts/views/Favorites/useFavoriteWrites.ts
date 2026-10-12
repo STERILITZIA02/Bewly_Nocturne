@@ -3,12 +3,18 @@ import { ref } from 'vue'
 import type { FavoriteSource } from '~/models/video/favoriteSeason'
 import type { createAccountLifetime } from '~/utils/accountLifetime'
 import type api from '~/utils/api'
+import type { FavoriteFolderForm } from '~/utils/favoriteFolderForm'
 
 export type FavoriteWrite
   = | { kind: 'delete' | 'copy' | 'move', sourceId: number, targetId?: number, resourceKeys: readonly string[] }
     | { kind: 'folders', ids: readonly number[] }
     | { kind: 'seasons', sources: readonly FavoriteSource[] }
-    | { kind: 'edit', folderId: number, title: string, privacy: number }
+    | ({ kind: 'edit', folderId: number } & FavoriteFolderForm)
+    | ({ kind: 'create' } & FavoriteFolderForm)
+    | { kind: 'sort', ids: readonly number[] }
+    | { kind: 'clean', folderId: number }
+    | { kind: 'like', folderId: number, liked: boolean }
+    | { kind: 'subscribe', folderId: number, mid: number, subscribed: boolean }
 
 interface FavoriteWriteDependencies {
   api: typeof api.favorite
@@ -31,7 +37,7 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
 
   async function execute(transaction: ReturnType<typeof prepare>) {
     const { command, owner, csrf } = transaction
-    if (!owner.isCurrent() || pending.value)
+    if (!owner.isCurrent() || pending.value || !csrf)
       return null
     const version = ++operation
     pending.value = true
@@ -65,7 +71,25 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
         response = await dependencies.api.delFavoriteFolder({ media_ids: command.ids.join(','), csrf })
       }
       else if (command.kind === 'edit') {
-        response = await dependencies.api.editFavoriteFolder({ media_id: command.folderId, title: command.title, privacy: command.privacy, csrf })
+        response = await dependencies.api.editFavoriteFolder({ media_id: command.folderId, title: command.title, intro: command.intro, cover: command.cover, privacy: command.privacy, csrf })
+      }
+      else if (command.kind === 'create') {
+        response = await dependencies.api.createFavoriteFolder({ title: command.title, intro: command.intro, cover: command.cover, privacy: command.privacy, csrf })
+      }
+      else if (command.kind === 'sort') {
+        response = await dependencies.api.sortFavoriteFolders({ sort: command.ids.join(','), csrf })
+      }
+      else if (command.kind === 'clean') {
+        response = await dependencies.api.cleanFavoriteFolder({ media_id: command.folderId, csrf })
+      }
+      else if (command.kind === 'like') {
+        // Native space uses the current space MID, including its collected folders.
+        response = await dependencies.api.likeFavoriteFolder({ rid: command.folderId, up_mid: Number(owner.accountId), thumb_type: command.liked ? 2 : 1, csrf })
+      }
+      else if (command.kind === 'subscribe') {
+        if (String(command.mid) === String(owner.accountId))
+          throw new Error('cannot-subscribe-own-folder')
+        response = await dependencies.api[command.subscribed ? 'unfavCollectedFavoriteFolder' : 'favCollectedFavoriteFolder']({ media_id: command.folderId, csrf })
       }
       else {
         const resources = command.resourceKeys.join(',')
@@ -83,7 +107,7 @@ export function useFavoriteWrites(dependencies: FavoriteWriteDependencies) {
         return null
       if (response.code !== 0)
         throw response
-      return { kind: command.kind, succeeded: command.kind === 'folders' ? [...command.ids] : [], failed: [] }
+      return { kind: command.kind, data: response.data, succeeded: command.kind === 'folders' ? [...command.ids] : [], failed: [] }
     }
     catch (error) {
       if (owner.isCurrent())

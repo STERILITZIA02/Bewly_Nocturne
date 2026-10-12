@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { useDateFormat, useResizeObserver } from '@vueuse/core'
 import { useI18n } from 'vue-i18n'
+import { useToast } from 'vue-toastification'
 
 import IconButton from '~/components/IconButton.vue'
+import LazyPicture from '~/components/LazyPicture.vue'
+import LibrarySearchField from '~/components/LibrarySearchField.vue'
+import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
+import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
+import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
@@ -11,6 +17,8 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useGridLayout } from '~/composables/useGridLayout'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { LIBRARY_AUTOFILL_PAGE_LIMIT } from '~/constants/library'
 import { settings } from '~/logic'
 import { isLayoutEditing, useLayoutEditSettingValue, vLayoutEditable } from '~/logic/layoutEdit'
 import { applyWatchLaterUpdate } from '~/logic/watchLaterState'
@@ -21,35 +29,42 @@ import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getCSRF, getUserID, openLinkToNewTab, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
+import { retiringListTransition, retiringTransition } from '~/utils/motionPresence'
 import { openLinkInBackground } from '~/utils/tabs'
 import { getVideoPlaybackProgress, getVideoProgressPercentage, getVideoWatchState } from '~/utils/videoVisitHistory'
 import { updateOwnedWatchLater } from '~/utils/watchLater'
 import { getWatchLaterAuthor, getWatchLaterPlaybackUrl, mergeWatchLaterItemsByAid, normalizeWatchLaterItem } from '~/utils/watchLaterList'
 
-import type { WatchLaterDurationFilter, WatchLaterStatusFilter } from './watchLaterFilters'
-import { filterWatchLaterItems } from './watchLaterFilters'
+import { useWatchLaterBatch } from './useWatchLaterBatch'
+import { useWatchLaterBulkAction } from './useWatchLaterBulkAction'
+import WatchLaterAdvancedFilters from './WatchLaterAdvancedFilters.vue'
+import type { WatchLaterSortOrder } from './watchLaterFilters'
+import { createWatchLaterFilters, filterWatchLaterItems, hasWatchLaterFilters, sortWatchLaterItems } from './watchLaterFilters'
 import WatchLaterGridCard from './WatchLaterGridCard.vue'
+import WatchLaterPlayAllCard from './WatchLaterPlayAllCard.vue'
+import WatchLaterSelectionOverlay from './WatchLaterSelectionOverlay.vue'
 
 const { t } = useI18n()
+const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 const { openIframeDrawer } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const showOpenTabsDialog = ref(false)
 
 const isLoading = ref(false)
+const isRefreshing = ref(false)
+const refreshFailed = ref(false)
 const noMoreContent = ref(false)
 const requestFailed = ref(false)
 const currentWatchLaterList = ref<VideoItem[]>([])
 const searchQuery = ref('')
-const statusFilter = ref<WatchLaterStatusFilter>('all')
-const durationFilter = ref<WatchLaterDurationFilter>('all')
-const statusFilters = ['all', 'unstarted', 'watching', 'completed', 'unknown'] as const
-const durationFilters = ['all', 'short', 'medium', 'long'] as const
-const filtersActive = computed(() => Boolean(searchQuery.value.trim() || statusFilter.value !== 'all' || durationFilter.value !== 'all'))
-const filteredItems = computed(() => filterWatchLaterItems(currentWatchLaterList.value, searchQuery.value, statusFilter.value, durationFilter.value, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id })))
+const advancedFilters = ref(createWatchLaterFilters())
+const sortOrder = ref<WatchLaterSortOrder>('newest')
+const filtersActive = computed(() => Boolean(searchQuery.value.trim() || hasWatchLaterFilters(advancedFilters.value)))
+const filteredItems = computed(() => sortWatchLaterItems(filterWatchLaterItems(currentWatchLaterList.value, searchQuery.value, advancedFilters.value.progress, advancedFilters.value.duration, item => getVideoWatchState({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }), advancedFilters.value), sortOrder.value))
 const layoutOptions = computed(() => [
-  { label: t('watch_later.layout_list'), value: 'list' as const },
-  { label: t('watch_later.layout_grid'), value: 'grid' as const },
+  { label: t('library_tools.layout_list'), value: 'list' as const },
+  { label: t('library_tools.layout_grid'), value: 'grid' as const },
 ])
 const watchLaterCount = computed(() => topBarStore.watchLaterCount ?? 0)
 const pendingAction = shallowRef<{ accountId: number, aid: number } | null>(null)
@@ -92,14 +107,57 @@ let requestGeneration = 0
 let loadedAccountId: number | null = null
 let watchLaterExtensionContextInvalidated = false
 const actionLifetime = createAccountLifetime(getCurrentAccountId)
+const batch = useWatchLaterBatch({
+  visibleIds: () => filteredItems.value.map(item => item.aid),
+  captureOwner: () => actionLifetime.capture(),
+  remove: deleteWatchLaterItem,
+})
+const bulkAction = useWatchLaterBulkAction({
+  capture: () => actionLifetime.capture(),
+  getCSRF,
+  blocked: () => watchLaterExtensionContextInvalidated || isLoading.value || Boolean(pendingAction.value) || batch.busy.value,
+  confirm: kind => showConfirmDialog(t(kind === 'clear' ? 'watch_later.clear_all_confirm' : 'watch_later.remove_watched_videos_confirm')),
+  async submit(kind, owner, csrf) {
+    const accountId = Number(owner.accountId)
+    const generation = invalidateRequests()
+    isLoading.value = true
+    try {
+      const response = kind === 'clear'
+        ? await api.watchlater.clearAllWatchLater({ accountId, csrf })
+        : await api.watchlater.removeFromWatchLater({ accountId, viewed: true, csrf })
+      if (!owner.isCurrent() || !isCurrentRequest(generation, accountId))
+        return
+      if (response?.code !== 0)
+        throw response
+      if (response.watchLaterUpdate)
+        applyWatchLaterUpdate(response.watchLaterUpdate)
+      if (kind === 'clear') {
+        currentWatchLaterList.value = []
+        noMoreContent.value = true
+      }
+      else {
+        await initData()
+      }
+    }
+    finally {
+      if (generation === requestGeneration)
+        isLoading.value = false
+    }
+  },
+  onError(error) {
+    if (!settleExtensionContextInvalidation(error))
+      toast.error(t('common.operation_failed'))
+  },
+})
+const requiresFullLibrary = computed(() => filtersActive.value || sortOrder.value === 'oldest' || batch.managing.value)
 let viewRefreshTimer: ReturnType<typeof setTimeout> | undefined
 let viewDirty = false
 let replaceView = false
 let readController: AbortController | undefined
 let loadingLibrary = false
 
-async function loadFilterLibrary() {
-  if (!filtersActive.value || noMoreContent.value || loadingLibrary || watchLaterExtensionContextInvalidated)
+async function loadCompleteLibrary(refresh = false) {
+  if ((!refresh && (!requiresFullLibrary.value || noMoreContent.value)) || loadingLibrary || watchLaterExtensionContextInvalidated || batch.busy.value)
     return
   const accountId = getCurrentAccountId()
   if (!accountId)
@@ -108,6 +166,7 @@ async function loadFilterLibrary() {
   const controller = new AbortController()
   readController = controller
   isLoading.value = loadingLibrary = true
+  isRefreshing.value = refresh
   requestFailed.value = false
   try {
     const response = await api.watchlater.getWatchLaterLibrary({ accountId }, { signal: controller.signal })
@@ -115,45 +174,66 @@ async function loadFilterLibrary() {
       return
     if (response.code !== 0 || !Array.isArray(response.data?.list) || !Number.isSafeInteger(response.data.count) || response.data.count < 0)
       throw new Error('Watch Later library unavailable')
-    currentWatchLaterList.value = response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
+    let list = mergeWatchLaterItemsByAid([], response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item)))
+    // Some responses contain only a prefix. Complete the existing server pages
+    // before exposing an oldest-first order or an all-results selection.
+    for (let pn = Math.floor(response.data.list.length / pageSize.value) + 1; list.length < response.data.count && pn <= Math.ceil(response.data.count / pageSize.value); pn++) {
+      const page = await api.watchlater.getWatchLaterListByPage({ accountId, pn, ps: pageSize.value }, { signal: controller.signal })
+      if (!isCurrentRequest(generation, accountId))
+        return
+      if (page.code !== 0 || !Array.isArray(page.data?.list))
+        throw new Error('Watch Later page unavailable')
+      const incoming = page.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
+      const merged = mergeWatchLaterItemsByAid(list, incoming)
+      if (merged.length === list.length)
+        break
+      list = merged
+    }
+    if (list.length < response.data.count)
+      throw new Error('Watch Later library incomplete')
+    currentWatchLaterList.value = list
     noMoreContent.value = currentWatchLaterList.value.length >= response.data.count
     pageNum.value = Math.floor(currentWatchLaterList.value.length / pageSize.value) + 1
   }
   catch (error) {
-    if (!controller.signal.aborted && isCurrentRequest(generation, accountId) && !settleExtensionContextInvalidation(error))
+    if (!controller.signal.aborted && isCurrentRequest(generation, accountId) && !settleExtensionContextInvalidation(error)) {
       requestFailed.value = true
+      refreshFailed.value = refresh
+    }
   }
   finally {
     if (readController === controller) {
       readController = undefined
       isLoading.value = loadingLibrary = false
+      isRefreshing.value = false
     }
   }
 }
-watch([searchQuery, statusFilter, durationFilter], () => {
+watch([searchQuery, advancedFilters], () => batch.clearSelection())
+watch([searchQuery, advancedFilters, sortOrder, batch.managing], () => {
   if (scrollViewportRef.value)
     scrollViewportRef.value.scrollTop = 0
-  if (filtersActive.value)
-    void loadFilterLibrary()
+  if (requiresFullLibrary.value)
+    void loadCompleteLibrary()
   else if (loadingLibrary)
     invalidateRequests()
 })
 function clearFilters() {
   searchQuery.value = ''
-  statusFilter.value = durationFilter.value = 'all'
+  advancedFilters.value = createWatchLaterFilters()
 }
 
 function scheduleViewRefresh() {
-  if (!viewDirty || document.hidden || pendingAction.value || viewRefreshTimer !== undefined)
+  if (!viewDirty || document.hidden || isLoading.value || pendingAction.value || batch.busy.value || bulkAction.pending.value || viewRefreshTimer !== undefined)
     return
   viewRefreshTimer = setTimeout(() => {
     viewRefreshTimer = undefined
-    if (document.hidden || pendingAction.value)
+    if (document.hidden || isLoading.value || pendingAction.value || batch.busy.value || bulkAction.pending.value)
       return
     const replace = replaceView
     viewDirty = false
     replaceView = false
-    void (replace ? initData() : refreshViewHead())
+    void (replace ? handleWatchLaterPageRefresh() : refreshViewHead())
   }, 800)
 }
 
@@ -178,6 +258,9 @@ watch(() => topBarStore.watchLaterUpdate, (update) => {
   }
 }, { flush: 'sync' })
 watch(pendingAction, scheduleViewRefresh)
+watch(batch.busy, scheduleViewRefresh)
+watch(bulkAction.pending, scheduleViewRefresh)
+watch(isLoading, scheduleViewRefresh)
 
 async function refreshViewHead() {
   const accountId = getCurrentAccountId()
@@ -223,6 +306,8 @@ function invalidateRequests(): number {
   readController = undefined
   loadingLibrary = false
   isLoading.value = false
+  isRefreshing.value = false
+  refreshFailed.value = false
   return ++requestGeneration
 }
 
@@ -255,6 +340,9 @@ watch(
       return
 
     actionLifetime.invalidate()
+    bulkAction.reset()
+    batch.reset()
+    sortOrder.value = 'newest'
     clearFilters()
     loadedAccountId = accountId
     void initData()
@@ -265,6 +353,7 @@ onBeforeUnmount(() => {
   clearTimeout(viewRefreshTimer)
   document.removeEventListener('visibilitychange', handleViewVisibility)
   actionLifetime.dispose()
+  bulkAction.reset()
   invalidateRequests()
   if (handlePageRefresh.value === handleWatchLaterPageRefresh)
     handlePageRefresh.value = undefined
@@ -287,13 +376,15 @@ async function initData() {
   if (accountId === null)
     return
 
-  if (filtersActive.value)
-    await loadFilterLibrary()
+  if (requiresFullLibrary.value)
+    await loadCompleteLibrary()
   else
     await getWatchLaterListByPage(generation, accountId)
 }
 
 async function getData(): Promise<boolean> {
+  if (batch.busy.value)
+    return false
   const accountId = getCurrentAccountId()
   return accountId !== null
     ? getWatchLaterListByPage(requestGeneration, accountId)
@@ -304,17 +395,70 @@ function retryWatchLaterRequest() {
   if (watchLaterExtensionContextInvalidated || isLoading.value)
     return
   requestFailed.value = false
-  void (filtersActive.value ? loadFilterLibrary() : getData())
+  if (refreshFailed.value) {
+    void handleWatchLaterPageRefresh()
+    return
+  }
+  void (requiresFullLibrary.value ? loadCompleteLibrary() : getData())
 }
 
 async function handleWatchLaterPageRefresh() {
-  if (watchLaterExtensionContextInvalidated || isLoading.value || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || isLoading.value || pendingAction.value || batch.busy.value || bulkAction.pending.value)
     return
-  await initData()
+  const accountId = getCurrentAccountId()
+  if (accountId === null)
+    return
+  // Keep the visible snapshot and its keyed DOM until a replacement succeeds.
+  // A complete queue uses its existing endpoint; a partial queue only rereads
+  // the loaded prefix, so refreshing never fetches the unseen remainder.
+  if (requiresFullLibrary.value || (noMoreContent.value && currentWatchLaterList.value.length > pageSize.value)) {
+    await loadCompleteLibrary(true)
+    return
+  }
+  const targetLength = Math.max(pageSize.value, currentWatchLaterList.value.length)
+  const generation = invalidateRequests()
+  const controller = new AbortController()
+  readController = controller
+  isLoading.value = isRefreshing.value = true
+  requestFailed.value = false
+  try {
+    let list: VideoItem[] = []
+    let nextPage = 1
+    let exhausted = false
+    while (!exhausted && list.length < targetLength) {
+      const response = await api.watchlater.getWatchLaterListByPage({ accountId, pn: nextPage, ps: pageSize.value }, { signal: controller.signal })
+      if (!isCurrentRequest(generation, accountId))
+        return
+      if (response.code !== 0 || !Array.isArray(response.data?.list) || !Number.isSafeInteger(response.data.count) || response.data.count < 0)
+        throw new Error('Watch Later refresh unavailable')
+      const incoming = response.data.list.map(normalizeWatchLaterItem).filter((item): item is VideoItem => Boolean(item))
+      const merged = mergeWatchLaterItemsByAid(list, incoming)
+      if (merged.length === list.length && list.length < response.data.count)
+        throw new Error('Watch Later refresh stalled')
+      list = merged
+      nextPage++
+      exhausted = response.data.list.length < pageSize.value || list.length >= response.data.count
+    }
+    currentWatchLaterList.value = list
+    pageNum.value = nextPage
+    noMoreContent.value = exhausted
+  }
+  catch (error) {
+    if (!controller.signal.aborted && isCurrentRequest(generation, accountId) && !settleExtensionContextInvalidation(error)) {
+      requestFailed.value = true
+      refreshFailed.value = true
+    }
+  }
+  finally {
+    if (readController === controller) {
+      readController = undefined
+      isLoading.value = isRefreshing.value = false
+    }
+  }
 }
 
 async function handleWatchLaterReachBottom(): Promise<boolean> {
-  if (watchLaterExtensionContextInvalidated || filtersActive.value || isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || requiresFullLibrary.value || isLoading.value || noMoreContent.value || requestFailed.value || pendingAction.value || batch.busy.value || bulkAction.pending.value)
     return false
 
   // Observer and geometry fallback signals share the request/loading guards.
@@ -339,6 +483,7 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
   isLoading.value = true
   const controller = new AbortController()
   readController = controller
+  let pagesRead = 0
 
   try {
     while (!noMoreContent.value) {
@@ -380,7 +525,8 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
         || mergedList.length >= payload.count
         || !madeProgress
 
-      if (noMoreContent.value || filtersActive.value)
+      pagesRead++
+      if (noMoreContent.value || filtersActive.value || pagesRead >= LIBRARY_AUTOFILL_PAGE_LIMIT)
         break
 
       const hasScrollbar = await haveScrollbar()
@@ -412,7 +558,7 @@ async function getWatchLaterListByPage(generation: number, accountId: number): P
 
 async function deleteWatchLaterItem(aid: number): Promise<boolean> {
   const accountId = getCurrentAccountId()
-  if (watchLaterExtensionContextInvalidated || !accountId || pendingAction.value)
+  if (watchLaterExtensionContextInvalidated || !accountId || pendingAction.value || bulkAction.pending.value)
     return false
 
   const action = { accountId, aid }
@@ -449,78 +595,11 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
 }
 
 async function handleClearAllWatchLater() {
-  if (watchLaterExtensionContextInvalidated)
-    return
-
-  const result = await showConfirmDialog(
-    t('watch_later.clear_all_confirm'),
-  )
-  if (result) {
-    const accountId = getCurrentAccountId()
-    if (!accountId)
-      return
-
-    const generation = invalidateRequests()
-    isLoading.value = true
-    try {
-      const res = await api.watchlater.clearAllWatchLater({
-        accountId,
-        csrf: getCSRF(),
-      })
-      if (res.code === 0 && isCurrentRequest(generation, accountId)) {
-        currentWatchLaterList.value = []
-        if (res.watchLaterUpdate)
-          applyWatchLaterUpdate(res.watchLaterUpdate)
-        noMoreContent.value = true
-      }
-    }
-    catch (error) {
-      if (!settleExtensionContextInvalidation(error))
-        console.error('[WatchLater] Failed to clear list:', error)
-    }
-    finally {
-      if (generation === requestGeneration)
-        isLoading.value = false
-    }
-  }
+  await bulkAction.run('clear')
 }
 
 async function handleRemoveWatchedVideos() {
-  if (watchLaterExtensionContextInvalidated)
-    return
-
-  const result = await showConfirmDialog(
-    t('watch_later.remove_watched_videos_confirm'),
-  )
-  if (result) {
-    const accountId = getCurrentAccountId()
-    if (!accountId)
-      return
-
-    const generation = invalidateRequests()
-    isLoading.value = true
-    try {
-      const res = await api.watchlater.removeFromWatchLater({
-        accountId,
-        viewed: true,
-        csrf: getCSRF(),
-      })
-      if (res.code === 0 && isCurrentRequest(generation, accountId)) {
-        if (res.watchLaterUpdate)
-          applyWatchLaterUpdate(res.watchLaterUpdate)
-        if (isCurrentRequest(generation, accountId))
-          await initData()
-      }
-    }
-    catch (error) {
-      if (!settleExtensionContextInvalidation(error))
-        console.error('[WatchLater] Failed to remove viewed items:', error)
-    }
-    finally {
-      if (generation === requestGeneration)
-        isLoading.value = false
-    }
-  }
+  await bulkAction.run('viewed')
 }
 
 function handlePlayAll() {
@@ -571,62 +650,31 @@ function remove(item: VideoItem) {
 }
 
 function isItemActionPending(): boolean {
-  return pendingAction.value?.accountId === getCurrentAccountId()
+  return batch.busy.value || bulkAction.pending.value || pendingAction.value?.accountId === getCurrentAccountId()
 }
+const hasNoMatches = computed(() => filtersActive.value && watchLaterCount.value > 0 && (!isLoading.value || isRefreshing.value) && !filteredItems.value.length && !requestFailed.value)
+useLayoutMotion(cardContainer, () => `${watchLaterLayoutMode.value}:${filteredItems.value.map(item => item.aid).join(',')}`)
 </script>
 
 <template>
-  <div v-if="getCSRF()" flex="~ col md:row lg:row items-stretch" gap-4>
+  <LibraryWorkspace v-if="getCSRF()" :label="t('watch_later.title')" :class="{ 'watch-later-workspace--empty': hasNoMatches }">
+    <p v-if="hasNoMatches" class="watch-later-no-matches" role="status">
+      {{ t('library_tools.no_matches') }}
+    </p>
     <main
+      v-else
       v-layout-editable="'watch-later-layout'"
+      :aria-busy="isLoading || batch.busy.value"
       data-layout-editable-id="watch-later-layout"
-      w="full md:60% lg:70% xl:75%" order="2 md:1 lg:1" mb-6
     >
-      <header flex="~ col items-start" gap-4 mb-6>
-        <div class="watch-later-toolbar">
-          <h3 class="bew-page-heading" text="$bew-text-1">
-            {{ t('watch_later.title') }} ({{ watchLaterCount }})
-          </h3>
-          <SettingsSegmentedControl v-if="settings.enableGridLayoutSwitcher" v-model="settings.watchLaterLayoutMode" :options="layoutOptions" :label="t('settings.watch_later_layout_mode')" />
-        </div>
-        <div class="watch-later-filters">
-          <div class="watch-later-search">
-            <input v-model="searchQuery" type="search" :placeholder="t('library_tools.watch_later_search')" :aria-label="t('library_tools.watch_later_search')">
-            <IconButton v-if="searchQuery" class="bew-icon-button--control" :label="t('library_tools.clear_search')" @click="searchQuery = ''">
-              <i i-mingcute:close-line />
-            </IconButton>
-          </div>
-          <select v-model="statusFilter" :aria-label="t('library_tools.playback_state')">
-            <option v-for="value in statusFilters" :key="value" :value="value">
-              {{ t(`library_tools.state_${value}`) }}
-            </option>
-          </select>
-          <select v-model="durationFilter" :aria-label="t('library_tools.duration')">
-            <option v-for="value in durationFilters" :key="value" :value="value">
-              {{ t(`library_tools.duration_${value}`) }}
-            </option>
-          </select>
-        </div>
-        <div v-if="filtersActive" class="watch-later-filter-summary" role="status">
-          <span>{{ t('library_tools.matched_count', { count: filteredItems.length, total: currentWatchLaterList.length }) }}</span>
-          <Button type="tertiary" @click="clearFilters">
-            {{ t('search.filters.clear') }}
-          </Button>
-        </div>
-        <Button type="secondary" @click="showOpenTabsDialog = true">
-          {{ $t('watch_later.open_tabs.title') }}
-        </Button>
-      </header>
-      <Empty v-if="filtersActive && watchLaterCount > 0 && !isLoading && !filteredItems.length && !requestFailed" :description="t('library_tools.no_matches')" />
-      <Button v-if="filtersActive && !noMoreContent && !isLoading && !requestFailed" type="secondary" @click="getData()">
-        {{ t('library_tools.load_more_videos') }}
+      <Button v-if="requiresFullLibrary && !noMoreContent && !isLoading && !requestFailed" type="secondary" :disabled="batch.busy.value" @click="loadCompleteLibrary()">
+        {{ t('common.load_more') }}
       </Button>
-      <Empty v-if="requestFailed && !isLoading && currentWatchLaterList.length === 0" :description="$t('common.load_failed')">
-        <Button type="primary" @click="retryWatchLaterRequest">
-          {{ $t('common.operation.refresh') }}
-        </Button>
-      </Empty>
-      <Empty v-else-if="watchLaterCount === 0 && !isLoading" />
+      <Empty
+        v-if="requestFailed && !isLoading && currentWatchLaterList.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        @action="retryWatchLaterRequest"
+      />
+      <Empty v-else-if="watchLaterCount === 0 && (!isLoading || isRefreshing)" text-only fill :description="$t('common.no_data')" role="status" />
       <template v-else>
         <VideoListSkeleton
           v-if="isLoading && currentWatchLaterList.length === 0 && watchLaterLayoutMode === 'list'"
@@ -635,51 +683,56 @@ function isItemActionPending(): boolean {
         />
         <!-- watcher later list -->
         <div v-else-if="watchLaterLayoutMode === 'list'" ref="cardContainer">
-          <template v-for="row in renderedRows" :key="row.key">
-            <div v-if="row.height !== undefined" :style="{ height: `${row.height}px` }" aria-hidden="true" />
-            <div
-              v-for="item in row.items"
-              :key="item.aid"
-              :ref="element => cardWindow.setElement(item.aid, element)"
-              class="watch-later-list-card group"
-              flex cursor-pointer
-            >
-              <ALink
-                class="watch-later-list-card__overlay"
-                :href="getWatchLaterPlaybackUrl(item)"
-                type="videoCard"
-                :aria-label="item.title"
-              />
-              <section
-                class="watch-later-list-card__content"
-                rounded="$bew-radius"
-                flex="~ gap-6 col md:col lg:row items-start"
-                relative
-                group-hover:bg="$bew-fill-2"
-                duration-300 w-full
-                p-2 m-1
-                content-visibility-auto
+          <TransitionGroup name="library-list" :css="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD" v-bind="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD ? retiringListTransition : {}">
+            <template v-for="row in renderedRows" :key="row.key">
+              <div v-if="row.height !== undefined" :style="{ height: `${row.height}px` }" aria-hidden="true" />
+              <div
+                v-for="item in row.items"
+                :key="item.aid"
+                :ref="element => cardWindow.setElement(item.aid, element)"
+                :data-motion-key="item.aid"
+                class="watch-later-list-card group"
+                flex cursor-pointer
               >
-                <!-- Cover -->
-                <div
-                  pos="relative"
-                  bg="$bew-skeleton"
-                  w="full md:full lg:250px"
-                  flex="shrink-0"
+                <ALink
+                  :inert="batch.managing.value ? true : undefined"
+                  class="watch-later-list-card__overlay"
+                  :href="getWatchLaterPlaybackUrl(item)"
+                  type="videoCard"
+                  :aria-label="item.title"
+                />
+                <section
+                  :inert="batch.managing.value ? true : undefined"
+                  class="watch-later-list-card__content"
                   rounded="$bew-radius"
-                  overflow-hidden
-                  aspect-video
+                  flex="~ gap-6 col md:col lg:row items-start"
+                  relative
+                  group-hover:bg="$bew-fill-2"
+                  duration-300 w-full
+                  p-2 m-1
+                  content-visibility-auto
                 >
-                  <img
-                    v-if="item.pic"
-                    w="full"
+                  <!-- Cover -->
+                  <div
+                    pos="relative"
+                    bg="$bew-skeleton"
+                    w="full md:full lg:250px"
+                    flex="shrink-0"
+                    rounded="$bew-radius"
+                    overflow-hidden
                     aspect-video
-                    :src="removeHttpFromUrl(`${item.pic}@480w_270h_1c`)"
-                    :alt="item.title"
-                    object-cover
                   >
+                    <LazyPicture
+                      v-if="item.pic"
+                      responsive-cover
+                      w="full"
+                      aspect-video
+                      :src="removeHttpFromUrl(`${item.pic}@480w_270h_1c`)"
+                      :alt="item.title"
+                      object-cover
+                    />
 
-                  <!-- <div
+                    <!-- <div
                   pos="absolute bottom-0 right-0"
                   bg="black opacity-60"
                   m="2"
@@ -689,133 +742,135 @@ function isItemActionPending(): boolean {
                 >
                   {{ calcCurrentTime(item.duration) }}
                 </div> -->
-                  <div
+                    <div
 
-                    pos="absolute bottom-0 right-0"
-                    bg="black opacity-60"
-                    m="2"
-                    p="x-2 y-1"
-                    text="white xs"
-                    rounded="$bew-radius-half"
-                  >
-                    <!--  When progress = -1 means that the user watched the full video -->
-                    {{
-                      `${
-                        item.progress === -1
-                          ? calcCurrentTime(item.duration)
-                          : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)
-                      } /
-                      ${calcCurrentTime(item.duration)}`
-                    }}
-                  </div>
-                  <div w-full pos="absolute bottom-0" bg="white opacity-60">
-                    <Progress
-                      :percentage="
-                        getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)
-                      "
-                    />
-                  </div>
-                </div>
-
-                <!-- Description -->
-                <div flex justify-between w-full h-full>
-                  <div flex="~ col">
-                    <ALink
-                      class="watch-later-list-card__action keep-two-lines"
-                      :href="getWatchLaterPlaybackUrl(item)"
-                      type="videoCard"
-                      overflow="hidden"
-                      un-text="lg overflow-ellipsis"
+                      pos="absolute bottom-0 right-0"
+                      bg="black opacity-60"
+                      m="2"
+                      p="x-2 y-1"
+                      text="white xs"
+                      rounded="$bew-radius-half"
                     >
-                      {{ item.title }}
-                    </ALink>
-                    <a
-                      class="watch-later-list-card__action"
-                      un-text="$bew-text-2 sm"
-                      m="t-4 b-2"
-                      flex="~"
-                      items-center
-                      cursor-pointer
-                      w-fit
-                      rounded="$bew-radius"
-                      hover:color="$bew-theme-color"
-                      hover:bg="$bew-theme-surface"
-                      duration-300
-                      pr-2
-                      :href="getWatchLaterAuthor(item).authorUrl" target="_blank"
-                      @click.stop
-                    >
-                      <img
-                        v-if="getWatchLaterAuthor(item).authorFace"
-                        :src="removeHttpFromUrl(`${getWatchLaterAuthor(item).authorFace}@40w_40h_1c`)"
-                        w-30px
-                        aspect-square
-                        class="bew-shape-circle"
-                        object-cover
-                        alt=""
-                        mr-2
-                      >
-                      {{ getWatchLaterAuthor(item).name }}
-                    </a>
-                    <p display="block xl:none" text="$bew-text-3 sm" mt-auto mb-2>
+                      <!--  When progress = -1 means that the user watched the full video -->
                       {{
-                        useDateFormat(item.pubdate * 1000, 'YYYY-MM-DD HH:mm:ss')
-                          .value
+                        `${
+                          item.progress === -1
+                            ? calcCurrentTime(item.duration)
+                            : calcCurrentTime(getVideoPlaybackProgress({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)?.progress ?? 0)
+                        } /
+                      ${calcCurrentTime(item.duration)}`
                       }}
-                    </p>
+                    </div>
+                    <div w-full pos="absolute bottom-0" bg="white opacity-60">
+                      <Progress
+                        :percentage="
+                          getVideoProgressPercentage({ aid: item.aid, bvid: item.bvid, cid: item.cid, epid: item.bangumi?.ep_id }, item.progress, item.duration)
+                        "
+                      />
+                    </div>
                   </div>
 
-                  <div flex items-center gap-1>
-                    <Tooltip :content="t('watch_later.play_video')" placement="top">
-                      <IconButton
-                        class="watch-later-list-card__action"
-                        :label="t('watch_later.play_video')"
-                        :disabled="isItemActionPending() || !getWatchLaterPlaybackUrl(item)"
-                        text="size-$bew-icon-size-lg $bew-text-3"
-                        hover:color="$bew-theme-color"
-                        opacity-0 group-hover:opacity-100
-                        p-2
-                        duration-300
-                        @click.prevent.stop="playAndRemove(item)"
+                  <!-- Description -->
+                  <div flex justify-between w-full h-full>
+                    <div flex="~ col">
+                      <ALink
+                        class="watch-later-list-card__action keep-two-lines"
+                        :href="getWatchLaterPlaybackUrl(item)"
+                        type="videoCard"
+                        overflow="hidden"
+                        un-text="lg overflow-ellipsis"
                       >
-                        <div i-tabler:player-play aria-hidden="true" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip :content="t('watch_later.play_in_watch_later')" placement="top">
-                      <IconButton
+                        {{ item.title }}
+                      </ALink>
+                      <a
                         class="watch-later-list-card__action"
-                        :label="t('watch_later.play_in_watch_later')"
-                        :disabled="isItemActionPending() || !getWatchLaterPlaybackUrl(item)"
-                        text="size-$bew-icon-size-lg $bew-text-3"
-                        hover:color="$bew-theme-color"
-                        opacity-0 group-hover:opacity-100
-                        p-2
+                        un-text="$bew-text-2 sm"
+                        m="t-4 b-2"
+                        flex="~"
+                        items-center
+                        cursor-pointer
+                        w-fit
+                        rounded="$bew-radius"
+                        hover:color="$bew-theme-foreground"
+                        hover:bg="$bew-theme-surface"
                         duration-300
-                        @click.prevent.stop="playInWatchLater(item)"
+                        pr-2
+                        :href="getWatchLaterAuthor(item).authorUrl" target="_blank"
+                        @click.stop
                       >
-                        <div i-tabler:list-check aria-hidden="true" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip :content="t('watch_later.remove_from_watch_later')" placement="top">
-                      <IconButton
-                        class="watch-later-list-card__action"
-                        :label="t('watch_later.remove_from_watch_later')"
-                        :disabled="isItemActionPending()"
-                        text="size-$bew-icon-size-lg $bew-text-3"
-                        hover:color="$bew-theme-color"
-                        opacity-0 group-hover:opacity-100
-                        p-2
-                        duration-300
-                        @click.prevent.stop="remove(item)"
-                      >
-                        <div i-tabler:trash aria-hidden="true" />
-                      </IconButton>
-                    </Tooltip>
+                        <img
+                          v-if="getWatchLaterAuthor(item).authorFace"
+                          :src="removeHttpFromUrl(`${getWatchLaterAuthor(item).authorFace}@40w_40h_1c`)"
+                          w-30px
+                          aspect-square
+                          class="bew-shape-circle"
+                          object-cover
+                          alt=""
+                          mr-2
+                        >
+                        {{ getWatchLaterAuthor(item).name }}
+                      </a>
+                      <p display="block xl:none" text="$bew-text-2 sm" mt-auto mb-2>
+                        {{
+                          useDateFormat(item.pubdate * 1000, 'YYYY-MM-DD HH:mm:ss')
+                            .value
+                        }}
+                      </p>
+                    </div>
+
+                    <div class="watch-later-list-card__actions" flex items-center gap-1>
+                      <Tooltip :content="t('watch_later.play_video')" placement="top">
+                        <IconButton
+                          class="watch-later-list-card__action"
+                          :label="t('watch_later.play_video')"
+                          :disabled="isItemActionPending() || !getWatchLaterPlaybackUrl(item)"
+                          text="size-$bew-icon-size-lg $bew-text-3"
+                          hover:color="$bew-theme-foreground"
+                          p-2
+                          duration-300
+                          @click.prevent.stop="playAndRemove(item)"
+                        >
+                          <div i-tabler:player-play aria-hidden="true" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip :content="t('watch_later.play_in_watch_later')" placement="top">
+                        <IconButton
+                          class="watch-later-list-card__action"
+                          :label="t('watch_later.play_in_watch_later')"
+                          :disabled="isItemActionPending() || !getWatchLaterPlaybackUrl(item)"
+                          text="size-$bew-icon-size-lg $bew-text-3"
+                          hover:color="$bew-theme-foreground"
+                          p-2
+                          duration-300
+                          @click.prevent.stop="playInWatchLater(item)"
+                        >
+                          <div i-tabler:list-check aria-hidden="true" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip :content="t('watch_later.remove_from_watch_later')" placement="top">
+                        <IconButton
+                          class="watch-later-list-card__action"
+                          :label="t('watch_later.remove_from_watch_later')"
+                          :disabled="isItemActionPending()"
+                          text="size-$bew-icon-size-lg $bew-text-3"
+                          hover:color="$bew-theme-foreground"
+                          p-2
+                          duration-300
+                          @click.prevent.stop="remove(item)"
+                        >
+                          <div i-tabler:trash aria-hidden="true" />
+                        </IconButton>
+                      </Tooltip>
+                    </div>
                   </div>
-                </div>
-              </section>
-            </div>
-          </template>
+                </section>
+                <WatchLaterSelectionOverlay
+                  v-if="batch.managing.value" :label="item.title" :selected="batch.selected.value.has(item.aid)"
+                  :disabled="isLoading || batch.busy.value" @toggle="batch.toggle(item.aid)"
+                />
+              </div>
+            </template>
+          </TransitionGroup>
         </div>
 
         <div v-else class="watch-later-grid-root">
@@ -825,181 +880,218 @@ function isItemActionPending(): boolean {
             :class="watchLaterGridClass"
             :style="watchLaterGridCssVars"
           >
-            <template v-for="row in renderedRows" :key="row.key">
-              <div v-if="row.height !== undefined" :style="{ height: `${row.height}px`, gridColumn: '1 / -1' }" aria-hidden="true" />
-              <div v-for="item in row.items" :key="item.aid" :ref="element => cardWindow.setElement(item.aid, element)" class="watch-later-grid-slot">
-                <WatchLaterGridCard
-                  :key="item.aid"
-                  :item="item"
-                  :disabled="isItemActionPending()"
-                  @play-and-remove="playAndRemove"
-                  @play-in-watch-later="playInWatchLater"
-                  @remove="remove"
-                />
-              </div>
-            </template>
-            <article
-              v-for="index in (isLoading ? (currentWatchLaterList.length === 0 ? 8 : 4) : 0)"
-              :key="`watch-later-grid-skeleton-${index}`"
-              class="watch-later-grid-skeleton"
-              aria-hidden="true"
-            >
-              <SkeletonBlock class="watch-later-grid-skeleton__media" height="auto" radius="media" />
-              <div class="watch-later-grid-skeleton__body">
-                <div class="watch-later-grid-skeleton__title">
-                  <SkeletonBlock height="var(--bew-font-size-title)" />
-                  <SkeletonBlock width="82%" height="var(--bew-font-size-title)" />
+            <TransitionGroup name="library-list" :css="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD" v-bind="currentWatchLaterList.length <= CARD_WINDOW_THRESHOLD ? retiringListTransition : {}">
+              <template v-for="row in renderedRows" :key="row.key">
+                <div v-if="row.height !== undefined" :style="{ height: `${row.height}px`, gridColumn: '1 / -1' }" aria-hidden="true" />
+                <div v-for="item in row.items" :key="item.aid" :ref="element => cardWindow.setElement(item.aid, element)" :data-motion-key="item.aid" class="watch-later-grid-slot">
+                  <WatchLaterGridCard
+                    :key="item.aid"
+                    :inert="batch.managing.value ? true : undefined"
+                    :item="item"
+                    :disabled="isItemActionPending()"
+                    @play-and-remove="playAndRemove"
+                    @play-in-watch-later="playInWatchLater"
+                    @remove="remove"
+                  />
+                  <WatchLaterSelectionOverlay
+                    v-if="batch.managing.value" :label="item.title" :selected="batch.selected.value.has(item.aid)"
+                    :disabled="isLoading || batch.busy.value" @toggle="batch.toggle(item.aid)"
+                  />
                 </div>
-                <div class="watch-later-grid-skeleton__author">
-                  <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-space-6)" radius="circle" />
-                  <SkeletonBlock width="104px" height="var(--bew-line-height-control)" />
-                </div>
-              </div>
-            </article>
+              </template>
+              <LibraryVideoCardSkeleton
+                v-for="index in (isLoading && !isRefreshing ? (currentWatchLaterList.length === 0 ? 8 : 4) : 0)"
+                :key="`watch-later-grid-skeleton-${index}`"
+              />
+            </TransitionGroup>
           </div>
         </div>
 
         <VideoListSkeleton
-          v-if="isLoading && currentWatchLaterList.length !== 0 && !noMoreContent && watchLaterLayoutMode === 'list'"
+          v-if="isLoading && !isRefreshing && currentWatchLaterList.length !== 0 && !noMoreContent && watchLaterLayoutMode === 'list'"
           :count="2"
           :action-count="3"
         />
-        <div
+        <Empty
           v-if="requestFailed && !isLoading && currentWatchLaterList.length > 0"
-          class="watch-later-load-more-error"
-        >
-          <span>{{ $t('common.load_failed') }}</span>
-          <Button type="tertiary" @click="retryWatchLaterRequest">
-            {{ $t('common.operation.refresh') }}
-          </Button>
-        </div>
+          text-only class="watch-later-load-more-error" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')" @action="retryWatchLaterRequest"
+        />
       </template>
     </main>
 
-    <aside relative w="full md:40% lg:30% xl:25%" order="1 md:2 lg:2">
-      <CoverSidebarSurface
-        :cover="currentWatchLaterList[0]?.pic ? removeHttpFromUrl(`${currentWatchLaterList[0].pic}@480w_270h_1c`) : ''"
-        pos="sticky top-120px"
-        w-full h="230px md:[calc(100vh-160px)]"
-        my-10
-        rounded="$bew-panel-radius"
-        overflow-hidden
-      >
-        <!-- Content -->
-        <main
-          pos="absolute top-0 left-0"
-          w-full h-inherit
-          overflow-overlay
-          flex="~ col gap-4 justify-start"
-          p-6
-        >
-          <picture
-            class="hidden md:block"
-            rounded="$bew-media-radius" overflow-hidden style="box-shadow: var(--bew-sidebar-media-shadow)"
-            aspect-video mb-4 bg="$bew-skeleton"
-          >
-            <img
-              v-if="currentWatchLaterList[0]" :src="removeHttpFromUrl(`${currentWatchLaterList[0].pic}@480w_270h_1c`)"
-              rounded-inherit aspect-video w-full
-            >
-          </picture>
-
-          <h3 class="bew-page-heading" style="color: var(--bew-sidebar-text); text-shadow: var(--bew-sidebar-text-shadow)">
-            {{ t('watch_later.title') }} ({{ watchLaterCount }})
-          </h3>
-          <div v-if="watchLaterCount > 0" flex="~ col" gap-2 w-full>
-            <p v-if="filtersActive" class="watch-later-action-scope">
-              {{ t('library_tools.queue_actions_scope') }}
-            </p>
-            <Button
-              class="bew-cover-sidebar__action" type="primary" block
-              @click="handlePlayAll"
-            >
-              <template #left>
-                <div i-tabler:player-play />
-              </template>
-              {{ t('common.play_all') }}
-            </Button>
-            <Button
-              class="bew-cover-sidebar__action" block
-              @click="handleClearAllWatchLater"
-            >
-              <template #left>
-                <div i-tabler:trash />
-              </template>
-              {{ t('watch_later.clear_all') }}
-            </Button>
-            <Button
-              class="bew-cover-sidebar__action" block
-              @click="handleRemoveWatchedVideos"
-            >
-              <template #left>
-                <div i-tabler:circle-minus />
-              </template>
-              {{ t('watch_later.remove_watched_videos') }}
-            </Button>
+    <template #sidebar="{ contentId }">
+      <div class="library-rail-content">
+        <LibrarySidebarHeading :title="t('watch_later.title')" :content-id="contentId" :count="watchLaterCount" />
+        <fieldset class="watch-later-controls library-rail-content" :disabled="isItemActionPending()" :aria-label="t('watch_later.title')">
+          <div class="library-rail-tools">
+            <LibrarySearchField v-model="searchQuery" :label="t('library_tools.watch_later_search')" />
+            <div class="watch-later-layout-switcher" :class="{ 'watch-later-layout-switcher--sort-only': !settings.enableGridLayoutSwitcher }">
+              <SettingsSegmentedControl
+                v-if="settings.enableGridLayoutSwitcher" v-model="settings.watchLaterLayoutMode" class="library-rail-segments bew-segment-control--secondary"
+                :options="layoutOptions" :label="t('settings.watch_later_layout_mode')"
+              />
+              <Tooltip class="watch-later-sort" :content="t(`watch_later.sort_${sortOrder}`)" placement="bottom" teleport>
+                <IconButton
+                  class="watch-later-sort-button" :label="t(`watch_later.sort_${sortOrder}`)" :data-sort-order="sortOrder"
+                  @click="sortOrder = sortOrder === 'newest' ? 'oldest' : 'newest'"
+                >
+                  <i :class="sortOrder === 'newest' ? 'i-tabler:sort-descending' : 'i-tabler:sort-ascending'" aria-hidden="true" />
+                </IconButton>
+              </Tooltip>
+            </div>
           </div>
-        </main>
-      </CoverSidebarSurface>
-    </aside>
+          <WatchLaterAdvancedFilters v-model="advancedFilters" :disabled="isItemActionPending()" />
+          <WatchLaterPlayAllCard
+            v-if="watchLaterCount > 0 || isLoading" :items="currentWatchLaterList" :total="watchLaterCount"
+            :loading="isLoading" :disabled="watchLaterCount === 0" @play="handlePlayAll"
+          />
+          <Button
+            class="library-sidebar-action" :type="batch.managing.value ? 'primary' : 'default'"
+            role="switch" :aria-checked="batch.managing.value"
+            @click="batch.toggleManaging"
+          >
+            <template #left>
+              <div :class="batch.managing.value ? 'i-tabler:check' : 'i-tabler:list-check'" aria-hidden="true" />
+            </template>
+            {{ t('watch_later.batch_manage') }}
+          </Button>
+          <Transition name="page-fade" mode="out-in" v-bind="retiringTransition">
+            <div v-if="batch.managing.value" key="selection" class="library-rail-actions">
+              <Button
+                class="library-sidebar-action" :disabled="isLoading || !noMoreContent || !filteredItems.length" :aria-pressed="batch.allSelected.value"
+                @click="batch.toggleAll"
+              >
+                {{ t(batch.allSelected.value ? 'watch_later.unselect_all' : 'watch_later.select_all') }}
+              </Button>
+              <Button
+                type="primary" class="library-sidebar-action" :disabled="isLoading || !batch.selected.value.size"
+                @click="batch.removeSelected"
+              >
+                <template #left>
+                  <SkeletonBlock v-if="batch.busy.value" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
+                  <i v-else i-tabler:trash aria-hidden="true" />
+                </template>
+                {{ t('watch_later.remove_selected', { count: batch.selected.value.size }) }}
+              </Button>
+              <p v-if="batch.failed.value" class="watch-later-batch-error" role="alert">
+                {{ t('common.operation_failed') }}
+              </p>
+            </div>
+            <div v-else key="actions" class="library-rail-actions">
+              <Button class="library-sidebar-action" @click="showOpenTabsDialog = true">
+                <template #left>
+                  <span i-tabler:browser-plus aria-hidden="true" />
+                </template>
+                {{ t('watch_later.open_tabs.title') }}
+              </Button>
+              <Button
+                class="library-sidebar-action watch-later-refresh-button" :disabled="isLoading"
+                :aria-busy="isLoading" @click="handleWatchLaterPageRefresh"
+              >
+                <template #left>
+                  <SkeletonBlock v-if="isLoading" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
+                  <i v-else i-tabler:refresh aria-hidden="true" />
+                </template>
+                {{ t('watch_later.refresh') }}
+              </Button>
+              <Button
+                v-if="watchLaterCount > 0" class="library-sidebar-action watch-later-action--warning"
+                @click="handleRemoveWatchedVideos"
+              >
+                <template #left>
+                  <div i-tabler:circle-minus aria-hidden="true" />
+                </template>
+                {{ t('watch_later.remove_watched_videos') }}
+              </Button>
+              <Button
+                v-if="watchLaterCount > 0" class="library-sidebar-action watch-later-action--danger"
+                @click="handleClearAllWatchLater"
+              >
+                <template #left>
+                  <div i-tabler:trash aria-hidden="true" />
+                </template>
+                {{ t('watch_later.clear_all') }}
+              </Button>
+            </div>
+          </Transition>
+        </fieldset>
+      </div>
+    </template>
     <OpenTabsDialog v-if="showOpenTabsDialog" @close="showOpenTabsDialog = false" />
-  </div>
-  <Empty v-else mt-6 :description="t('common.please_log_in_first')">
-    <Button type="primary" @click="jumpToLoginPage()">
-      {{ $t('common.login') }}
-    </Button>
-  </Empty>
+  </LibraryWorkspace>
+  <Empty
+    v-else text-only class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
+    @action="jumpToLoginPage"
+  />
 </template>
 
 <style lang="scss" scoped>
-.watch-later-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bew-space-4);
-  width: 100%;
+.watch-later-workspace--empty :deep(.library-workspace__content) {
+  display: grid;
+  align-self: stretch;
+  place-items: center;
 }
-.watch-later-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--bew-space-2);
-  width: 100%;
-}
-.watch-later-search {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-1);
-  flex: 1 1 240px;
-}
-.watch-later-search input {
-  width: 100%;
-  min-width: 0;
-}
-.watch-later-filters input,
-.watch-later-filters select {
-  min-height: var(--bew-control-height);
-  padding: var(--bew-space-2) var(--bew-space-3);
-  font: inherit;
-  font-size: var(--bew-font-size-control);
-  border: 0;
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-content-alt-solid);
-  color: var(--bew-text-1);
-}
-.watch-later-filter-summary {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-3);
-  font-size: var(--bew-font-size-control);
+.watch-later-no-matches {
+  margin: 0;
+  text-align: center;
   color: var(--bew-text-2);
+  font-size: var(--bew-font-size-body);
+  line-height: var(--bew-line-height-body);
 }
-.watch-later-action-scope {
+.watch-later-action--warning {
+  --bew-library-action-foreground: var(--bew-warning-foreground);
+}
+.watch-later-action--danger {
+  --bew-library-action-foreground: var(--bew-error-foreground);
+}
+.watch-later-layout-switcher {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 60%) minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+
+  .library-rail-segments {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+  }
+}
+.watch-later-sort {
+  grid-column: 3;
+  justify-self: start;
+  margin-inline-start: var(--bew-space-1);
+}
+.watch-later-layout-switcher--sort-only .watch-later-sort {
+  grid-column: 2;
+  justify-self: center;
+  margin: 0;
+}
+.watch-later-sort-button {
+  width: var(--bew-control-height);
+  height: var(--bew-control-height);
+  color: var(--bew-text-1);
+
+  i {
+    font-size: var(--bew-control-icon-size);
+  }
+  &:is(:hover, :focus-visible):not(:disabled) {
+    color: var(--bew-message-icon-hover);
+  }
+}
+.watch-later-controls {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.watch-later-batch-error {
+  margin: 0;
+  color: var(--bew-error-foreground);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  color: var(--bew-sidebar-secondary);
 }
 .watch-later-grid-slot {
+  position: relative;
   min-width: 0;
 }
 .watch-later-list-card {
@@ -1015,6 +1107,23 @@ function isItemActionPending(): boolean {
 .watch-later-list-card__action {
   position: relative;
   z-index: 2;
+}
+.watch-later-list-card__actions {
+  opacity: 0;
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+}
+.watch-later-list-card:is(:hover, :focus-within) .watch-later-list-card__actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .watch-later-list-card__actions {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .watch-later-list-card__actions {
+    transition: none;
+  }
 }
 
 .watch-later-grid-root {
@@ -1034,38 +1143,5 @@ function isItemActionPending(): boolean {
   gap: var(--bew-space-2);
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
-}
-
-.watch-later-grid-skeleton {
-  display: flex;
-  min-width: 0;
-  padding: var(--bew-space-2);
-  flex-direction: column;
-  gap: var(--bew-space-3);
-  border-radius: var(--bew-card-radius);
-  corner-shape: var(--bew-corner-shape);
-}
-
-.watch-later-grid-skeleton__media {
-  width: 100% !important;
-  aspect-ratio: 16 / 9;
-}
-
-.watch-later-grid-skeleton__author {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-2);
-}
-
-.watch-later-grid-skeleton__body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bew-space-2);
-}
-
-.watch-later-grid-skeleton__title {
-  display: grid;
-  grid-template-rows: repeat(2, var(--bew-line-height-title));
-  align-items: center;
 }
 </style>

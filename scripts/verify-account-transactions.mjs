@@ -100,6 +100,7 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     const api = {
       getFavoriteCategories: async () => ({ code: 0, data: { list: folders.map(folder => ({ ...folder })) } }),
       getCollectedFavoriteSeasons: async () => ({ code: 0, data: { list: [] } }),
+      getFavoriteFolderInfo: async ({ media_id }) => ({ code: 0, data: { ...folders.find(folder => folder.id === media_id), mid: 1, upper: { mid: 1 }, intro: '', cover: '', attr: 0 } }),
       getFavoriteResources: async ({ media_id }) => ({ code: 0, data: { medias: media_id === 1 ? [{ id: 10, type: 2 }, { id: 11, type: 2 }] : [{ id: 30, type: 2 }], info: { cover: '' }, has_more: false } }),
       patchDelFavoriteResources: params => submit('delete', params),
       copyFavoriteResources: params => submit('copy', params),
@@ -112,12 +113,16 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     const accountScope = await import('../src/utils/accountScope')
     const writeModule = await import('../src/contentScripts/views/Favorites/useFavoriteWrites')
     const dataModule = await loadSourceModule('../src/contentScripts/views/Favorites/useFavoritesData.ts', {
+      '~/constants/library': await import('../src/constants/library'),
       vue: Vue,
       '~/utils/accountLifetime': { createAccountLifetime },
       '~/utils/favoriteFolder': folderModule,
       '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
       '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
       '~/utils/favoriteAvatar': await import('../src/utils/favoriteAvatar'),
+      './favoriteSearch': await import('../src/contentScripts/views/Favorites/favoriteSearch'),
+      './favoriteFolderCovers': await import('../src/contentScripts/views/Favorites/favoriteFolderCovers'),
+      './otherFavorites': await import('../src/contentScripts/views/Favorites/otherFavorites'),
       './favoriteAdapters': adapters,
     })
     const page = await compileComponent('../src/contentScripts/views/Favorites/FavoritesPage.vue', {
@@ -139,6 +144,13 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
       '~/utils/main': { getCSRF: () => `csrf-${cookieAccount}`, getUserID: () => String(cookieAccount), removeHttpFromUrl: value => value },
       './favoriteAdapters': adapters,
       './useFavoritesData': dataModule,
+      './FavoriteSidebarItem.vue': { default: {} },
+      './FavoriteResourceActions.vue': { default: {} },
+      './FavoriteSidebarSkeleton.vue': { default: {} },
+      './FavoriteFolderEditor.vue': { default: {} },
+      './FavoriteFolderSocial.vue': { default: {} },
+      './useFavoriteFolderManager': await import('../src/contentScripts/views/Favorites/useFavoriteFolderManager'),
+      './otherFavorites': await import('../src/contentScripts/views/Favorites/otherFavorites'),
       './useFavoriteWrites': writeModule,
     }, { renderTemplate: false })
     const host = document.body.appendChild(document.createElement('div'))
@@ -174,28 +186,26 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     assert.deepEqual([...state.favoriteResources.map(item => item.id)], [30])
     assert.equal(state.selectedCategory.id, 3)
     state.openSingleEditFolder(2)
-    state.editFolderTitle = 'submitted title'
-    state.editFolderPublic = false
-    const failedEdit = state.handleEditFolderConfirm()
+    await flush()
+    const draft = { title: 'submitted title', intro: 'keep intro', cover: '', privacy: 1 }
+    const failedEdit = state.folders.save(draft)
     const editRequest = calls.pop()
     assert.equal(editRequest.params.title, 'submitted title')
     assert.equal(editRequest.params.privacy, 1)
     editRequest.resolve({ code: -1 })
     await failedEdit
     assert.equal(state.favoriteCategories[1].title, 'target')
-    assert.equal(state.editFolderDialogVisible, true)
-    assert.equal(state.editFolderTitle, 'submitted title')
+    assert.equal(state.folderEditor.visible, true)
     assert.deepEqual(errors, ['common.operation_failed'])
     errors.length = 0
-    const editing = state.handleEditFolderConfirm()
+    const editing = state.folders.save(draft)
     const acceptedEdit = calls.pop()
-    state.editFolderTitle = 'new draft'
     acceptedEdit.resolve({ code: 0 })
     await editing
     assert.equal(state.favoriteCategories[1].title, 'submitted title')
     assert.equal(state.favoriteCategories[1].attr & 1, 1)
-    assert.equal(state.editFolderTitle, 'new draft')
-    assert.equal(state.editFolderDialogVisible, true)
+    assert.equal(acceptedEdit.params.intro, 'keep intro')
+    assert.equal(state.folderEditor.visible, false)
     const batch = state.unfavSeasons([100, 101].map(id => ({ id, type: 21 })))
     await flush()
     cookieAccount = 2
@@ -274,12 +284,16 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     const adapters = await import('../src/contentScripts/views/Favorites/favoriteAdapters')
     const { getFavoriteFolderEditedAttr } = await import('../src/utils/favoriteFolder')
     const module = await loadSourceModule('../src/contentScripts/views/Favorites/useFavoritesData.ts', {
+      '~/constants/library': await import('../src/constants/library'),
       vue: Vue,
       '~/utils/accountLifetime': { createAccountLifetime },
       '~/utils/favoriteFolder': { getFavoriteFolderEditedAttr },
       '~/utils/favoriteSeason': await import('../src/utils/favoriteSeason'),
       '~/utils/favoriteResource': await import('../src/utils/favoriteResource'),
       '~/utils/favoriteAvatar': await import('../src/utils/favoriteAvatar'),
+      './favoriteSearch': await import('../src/contentScripts/views/Favorites/favoriteSearch'),
+      './favoriteFolderCovers': await import('../src/contentScripts/views/Favorites/favoriteFolderCovers'),
+      './otherFavorites': await import('../src/contentScripts/views/Favorites/otherFavorites'),
       './favoriteAdapters': adapters,
     })
     let account = 1
@@ -470,7 +484,7 @@ export function registerAccountTransactionChecks(check, { Vue, compileComponent,
     assert.equal(wordWrites.length, 1)
     wordWrites[0].resolve({ code: 0 })
     await flush()
-    words[1].resolve(wordResponse)
+    words[1].resolve({ ...wordResponse, data: { ...wordResponse.data, words: [{ content: 'b' }] } })
     assert.equal(await deletion, true)
     const old = controller.updateSetting('msg_notify', 3)
     account = 2

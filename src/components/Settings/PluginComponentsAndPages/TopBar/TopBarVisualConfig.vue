@@ -264,15 +264,6 @@ function toggleChannel(value: string) {
           </button>
         </div>
       </SettingsItem>
-
-      <SettingsItem
-        v-if="settings.touchScreenOptimization"
-        :title="$t('settings.show_home_button_in_touch_mode')"
-        :desc="$t('settings.show_home_button_in_touch_mode_desc')"
-        right-width="auto"
-      >
-        <Radio v-model="settings.showHomeButtonInTouchMode" />
-      </SettingsItem>
     </SettingsItemGroup>
 
     <SettingsItemGroup
@@ -528,7 +519,7 @@ function toggleChannel(value: string) {
   }
 
   &:focus-visible {
-    outline: 2px solid var(--bew-theme-focus-ring);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
   }
 

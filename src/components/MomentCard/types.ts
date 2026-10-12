@@ -1,3 +1,5 @@
+import type { MomentPromotion } from '~/utils/momentPromotion'
+
 export interface DisplayRichTextSegment {
   type: 'text' | 'emoji' | 'link'
   text: string
@@ -87,6 +89,7 @@ export interface DisplayMoment {
   isForward: boolean
   /** 专栏动态：详情走专栏布局（可有目录） */
   isArticle: boolean
+  momentPromotion?: MomentPromotion
   /** 是否带有“UP主的推荐”附加信息，用于整条动态过滤 */
   isUpRecommendation: boolean
   /** 是否为视频预约动态，用于整条动态过滤 */

@@ -58,6 +58,7 @@ import { mountWatchLaterButtonWhenToolbarReady, removeWatchLaterButton } from '~
 
 import { version } from '../../package.json'
 import { mountBewlyBootOverlay } from './bewlyBootOverlay'
+import { suspendHiddenHomepageImages } from './features/hiddenHomepageImages'
 import { cleanupIframePhotoViewerDetector, setupIframePhotoViewerDetector } from './features/iframePhotoViewerDetector'
 import { setupNotificationStateInvalidation } from './features/notificationStateInvalidation'
 import { disposeOpusDetailDrawerLayout, setupOpusDetailDrawerLayout } from './features/opusDetailDrawerLayout'
@@ -411,6 +412,7 @@ else if (shouldInitializeContentScript) {
   contentScriptDisposers.push(setupNotificationStateInvalidation())
 
   let homePageHiddenStyleEl: HTMLStyleElement | undefined
+  let releaseHiddenHomepageImages: (() => void) | undefined
   let settingsBootLoaded = false
   let lastUrl = location.href
   let lastVideoNavigationKey = getVideoNavigationKey(location.href)
@@ -554,6 +556,8 @@ else if (shouldInitializeContentScript) {
   }
 
   function removeHomePageHiddenStyle() {
+    releaseHiddenHomepageImages?.()
+    releaseHiddenHomepageImages = undefined
     homePageHiddenStyleEl?.remove()
     homePageHiddenStyleEl = undefined
     document.documentElement.classList.remove('bewly-custom-homepage')
@@ -607,6 +611,7 @@ else if (shouldInitializeContentScript) {
         pointer-events: auto !important;
       }
     `)
+    releaseHiddenHomepageImages = suspendHiddenHomepageImages()
   }
 
   function applyAppRouteLayout(

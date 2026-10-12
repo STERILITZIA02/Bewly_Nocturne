@@ -852,7 +852,7 @@ html.notificationsPage.bewly-notifications-embedded {
   }
 
   :where(a, button, input, textarea, [tabindex]):focus-visible {
-    outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring) !important;
+    outline: var(--bew-focus-ring, 1px solid CanvasText) !important;
     outline-offset: var(--bew-space-0-5);
   }
 

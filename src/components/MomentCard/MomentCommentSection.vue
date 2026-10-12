@@ -727,7 +727,7 @@ onBeforeUnmount(() => {
 .moment-comments__thread-more button:focus-visible,
 .moment-comments__state button:focus-visible,
 .moment-comments__action:focus-visible {
-  outline: 2px solid var(--bew-theme-color);
+  outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: 2px;
 }
 .moment-comments__refresh:disabled,

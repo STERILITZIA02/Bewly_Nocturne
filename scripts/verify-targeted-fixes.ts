@@ -59,7 +59,7 @@ import { isMomentDescriptionOverflowing, resolveMomentTextSources } from '../src
 import { countVisibleNewMomentItems } from '../src/utils/momentFeedOrder'
 import { resolveMomentHostFollowState } from '../src/utils/momentHostFollowState'
 import { resolveStableMomentKey } from '../src/utils/momentKey'
-import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize, shouldShowMomentsSidebar } from '../src/utils/momentsLayout'
+import { resolveHorizontalScrollState, resolveMomentCardWidth, resolveMomentGridColumnCount, resolveVirtualSpacerSize } from '../src/utils/momentsLayout'
 import { normalizeMomentRemoteUrl } from '../src/utils/momentUrl'
 import { buildNativeSearchUrl } from '../src/utils/pageMode'
 import { createPageSettingsPayload } from '../src/utils/pageSettingsProtocol'
@@ -1873,7 +1873,7 @@ async function verifyComponentContracts() {
   assert.match(momentsPage, /forwardCountOverrides/)
   assert.match(momentsPage, /const updated = feedReader\.updateMoment\(id, patch\)/)
   assert.match(momentsPage, /momentLayout\.updateMoment\(updated\)/)
-  assert.match(momentsPage, /feedCache\.updateMoment\(id/)
+  assert.doesNotMatch(momentsPage, /feedCache\./, 'the retired duplicate feed cache must not retain a second copy of moments')
   assert.match(momentsPage, /applyMomentPatch\(momentId, \{ forwardCount: count \}\)/)
   assert.match(momentsPage, /provide\(MOMENT_FORWARD_TRANSACTIONS, forwardTransactions\)/)
   assert.match(momentsPage, /bewly-moment-image-viewer-open/)
@@ -1887,7 +1887,12 @@ async function verifyComponentContracts() {
   assert.match(momentsPage, /\.moments-up-list__fade \{[\s\S]{0,460}background: radial-gradient\([\s\S]{0,260}filter: var\(--bew-filter-glass-1\)/)
   assert.match(momentsPage, /handleReachBottom\.value === handleMomentsReachBottom/)
   assert.match(momentsPage, /handlePageRefresh\.value === refresh/)
-  assert.match(momentsPage, /\.moments-publish-link \{[\s\S]{0,240}border: 1px solid var\(--bew-surface-border-color\)/)
+  const momentsSidebar = await readFile(`${root}/src/contentScripts/views/Moments/MomentsSidebar.vue`, 'utf8')
+  assert.match(momentsSidebar, /class="moments-publish-link library-sidebar-action"/)
+  const sidebarAction = await readFile(`${root}/src/styles/sidebarAction.scss`, 'utf8')
+  assert.match(sidebarAction, /background: transparent/)
+  assert.match(sidebarAction, /var\(--bew-sidebar-action-hover\)/)
+  assert.doesNotMatch(momentsSidebar, /backdrop-filter/)
   assert.doesNotMatch(bootOverlay, /radial-gradient|box-shadow/)
   assert.match(bootOverlay, /data-bew-skeleton/)
   assert.match(skeletonBlock, /data-bew-skeleton/)
@@ -2354,7 +2359,7 @@ async function verifyContributorCache() {
 
 async function verifyP2WidescreenControl() {
   const root = process.cwd()
-  const [storage, contentScript, videoPlayback, playbackPage, maintenance, catalog, widescreen, pageModeSwitcher, watchLaterButton, tsconfig, about, prepare, dock, dockPolicy, bilibiliTopBar, sideBar, cmnCn, cmnTw, jyut, en, nativeAdaptation, moduleAudit] = await Promise.all([
+  const [storage, contentScript, videoPlayback, playbackPage, maintenance, catalog, widescreen, pageModeSwitcher, watchLaterButton, tsconfig, about, prepare, dock, dockPolicy, bilibiliTopBar, sideBar, cmnCn, cmnTw, jyut, en, nativeAdaptation] = await Promise.all([
     readFile(`${root}/src/logic/storage.ts`, 'utf8'),
     readFile(`${root}/src/contentScripts/index.ts`, 'utf8'),
     readFile(`${root}/src/components/Settings/BilibiliFeaturesEnhancement/VideoPlayback/VideoPlayback.vue`, 'utf8'),
@@ -2376,7 +2381,6 @@ async function verifyP2WidescreenControl() {
     readFile(`${root}/src/_locales/jyut.yml`, 'utf8'),
     readFile(`${root}/src/_locales/en.yml`, 'utf8'),
     readFile(`${root}/docs/maintenance/widescreen-native-adaptation.md`, 'utf8'),
-    readFile(`${root}/docs/maintenance/widescreen-module-audit.md`, 'utf8'),
   ])
 
   assert.doesNotMatch(storage, /showBewlyWidescreenButton/)
@@ -2719,14 +2723,14 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /data-sidebar-resizing="true"/)
   assert.match(widescreen, /--bewly-widescreen-sidebar-resize-accent: var\(--bew-text-1, #fff\)/)
   assert.doesNotMatch(widescreen, /--bewly-widescreen-sidebar-resize-accent: var\(--Wh0/)
-  assert.match(widescreen, /html:not\(\.dark\) #\$\{ROOT_ID\}[\s\S]{0,100}--bewly-widescreen-sidebar-resize-accent: var\(--bew-theme-color/)
+  assert.match(widescreen, /html:not\(\.dark\) #\$\{ROOT_ID\}[\s\S]{0,100}--bewly-widescreen-sidebar-resize-accent: var\(--bew-focus-ring-color/)
   const resizeFeedback = widescreen.slice(
     widescreen.indexOf('[data-sidebar-resizing="true"] .bewly-widescreen-sidebar {'),
     widescreen.indexOf('[data-sidebar-resizing="true"] .bewly-widescreen-sidebar-resizer::before'),
   )
-  assert.match(resizeFeedback, /0 0 0 var\(--bew-space-0-5, 2px\) var\(--bewly-widescreen-sidebar-resize-accent\)/)
+  assert.match(resizeFeedback, /var\(--bew-focus-shadow, 0 0 0 1px CanvasText\)/)
   assert.doesNotMatch(resizeFeedback, /border-(?:color|width):|\binset\b/)
-  assert.match(resizeFeedback, /color-mix\(in oklab, var\(--bewly-widescreen-sidebar-resize-accent\) 42%, transparent\)/)
+  assert.doesNotMatch(resizeFeedback, /color-mix|--bew-theme-color|--bew-theme-focus-ring/)
   const sidebarInteractionSection = playbackFunctions(widescreen, 'setupSidebarInteractionTracking')
   assert.match(sidebarInteractionSection, /root\.dataset\.sidebarHoverExpanded !== nextValue/)
   assert.match(sidebarInteractionSection, /window\.addEventListener\('pointermove', handlePointerMove/)
@@ -2914,7 +2918,6 @@ async function verifyP2WidescreenControl() {
   assert.doesNotMatch(en, /Bewly Widescreen|Widescreen mode/)
   assert.doesNotMatch(widescreen, /Failed to load widescreen video information/)
   assert.doesNotMatch(nativeAdaptation, /Bewly Widescreen/)
-  assert.doesNotMatch(moduleAudit, /Bewly Widescreen/)
   const playerSlotStyles = widescreen.slice(
     widescreen.indexOf('.bewly-widescreen-player-slot {'),
     widescreen.indexOf('.bewly-widescreen-player-frame {'),
@@ -3063,17 +3066,15 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /\.bpx-player-mode-selection-container\.active[\s\S]{0,80}display: block !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,500}background: var\(--bew-elevated-alt-solid\) !important[\s\S]{0,280}border-radius: var\(--bew-popover-radius\) !important/)
   assert.match(widescreen, /\.bpx-player-mode-selection-panel[\s\S]{0,700}backdrop-filter: none !important/)
-  const danmakuSendButtonStyles = widescreen.slice(
-    widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-btn-send {`),
-    widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-btn-send:hover`),
-  )
+  const danmakuSendButtonStyles = await readFile(`${root}/src/styles/sendButton.scss`, 'utf8')
+  assert.match(widescreen, /\$\{SEND_BUTTON_CSS\}/)
   assert.match(danmakuSendButtonStyles, /background: var\(--bew-theme-color/)
   assert.match(danmakuSendButtonStyles, /display: inline-flex !important/)
-  assert.match(danmakuSendButtonStyles, /align-items: center !important/)
-  assert.match(danmakuSendButtonStyles, /justify-content: center !important/)
-  assert.match(danmakuSendButtonStyles, /height: var\(--bew-control-height, 36px\) !important/)
-  assert.match(danmakuSendButtonStyles, /border-radius: var\(--bew-radius-full\) !important/)
-  assert.match(danmakuSendButtonStyles, /corner-shape: var\(--bew-corner-shape-round\)/)
+  assert.match(danmakuSendButtonStyles, /width: var\(--bew-control-height, 36px\) !important/)
+  assert.match(danmakuSendButtonStyles, /height: var\(--bew-send-height, var\(--bew-control-height, 36px\)\) !important/)
+  assert.match(danmakuSendButtonStyles, /border-radius: var\(--bew-send-radius, calc\(var\(--bew-control-height, 36px\) \/ 2\)\) !important/)
+  assert.match(danmakuSendButtonStyles, /\.bui-disabled/)
+  assert.match(danmakuSendButtonStyles, /prefers-reduced-motion: reduce/)
   assert.match(widescreen, /\.bpx-player-video-inputbar \.bpx-player-dm-setting \{[\s\S]{0,60}order: -1 !important/)
   assert.match(widescreen, /\.bilibili-player-video-inputbar\n[\s\S]{0,80}\) a \{\s*display: none !important/)
   assert.match(widescreen, /\[class\*="shadow-progress"\][\s\S]{0,120}display: none !important/)
@@ -3081,7 +3082,7 @@ async function verifyP2WidescreenControl() {
   assert.match(widescreen, /--bewly-widescreen-inputbar-height: calc\(/)
   const danmakuInputStyles = widescreen.slice(
     widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-input {`),
-    widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-btn-send {`),
+    widescreen.indexOf(`${danmakuSurfaceMarker} .bpx-player-dm-setting-wrap {`),
   )
   assert.match(danmakuInputStyles, /font-family: var\(--bew-font-family\) !important/)
   assert.match(danmakuInputStyles, /::placeholder[\s\S]{0,160}color: var\(--bew-text-3\) !important/)
@@ -3523,7 +3524,7 @@ async function verifyUpstreamReliabilityContracts() {
   assert.match(app, /activatedPage\.value !== AppPage\.SearchResults[\s\S]{0,140}topBarStore\.searchKeyword = ''/)
   assert.match(app, /isSentinelWithinLoadThreshold/)
   assert.match(watchLater, /handleReachBottom\.value === handleWatchLaterReachBottom/)
-  assert.match(watchLater, /async function handleWatchLaterReachBottom\(\): Promise<boolean>[\s\S]{0,420}return getData\(\)/)
+  assert.match(watchLater, /async function handleWatchLaterReachBottom\(\): Promise<boolean> \{[^}]*return getData\(\)\s*\}/)
   assert.match(watchLater, /payload\.list\.map\(normalizeWatchLaterItem\)/)
   assert.match(watchLater, /mergedList\.length >= payload\.count[\s\S]{0,80}!madeProgress/)
   assert.match(watchLater, /let watchLaterExtensionContextInvalidated = false/)
@@ -3538,7 +3539,10 @@ async function verifyUpstreamReliabilityContracts() {
     watchLaterLoadSection.indexOf('if (settleExtensionContextInvalidation(error))')
     < watchLaterLoadSection.indexOf('console.error(\'[WatchLater] Failed to load list:\''),
   )
-  assert.equal((watchLater.match(/if \(!settleExtensionContextInvalidation\(error\)\)/g) ?? []).length, 4)
+  // Bulk clearing now shares one transaction owner; verify its failure gate,
+  // rather than counting duplicated catch blocks across unrelated read paths.
+  assert.match(watchLater, /const bulkAction = useWatchLaterBulkAction\(/)
+  assert.match(watchLater, /onError\(error\) \{\s*if \(!settleExtensionContextInvalidation\(error\)\)\s*toast\.error/)
   assert.match(input, /w-inherit min-w-0 h-inherit/)
   assert.match(input, /\.prefix,[\s\S]{0,120}flex: 0 0 auto;[\s\S]{0,80}white-space: nowrap;/)
   assert.match(comments, /^\.bewly-design \{/)
@@ -3898,8 +3902,6 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.equal(resolveVirtualSpacerSize(0, 16), 0)
   assert.equal(resolveVirtualSpacerSize(116, 16), 100)
   assert.equal(resolveVirtualSpacerSize(232, 16), 216)
-  assert.equal(shouldShowMomentsSidebar({ layoutWidth: 999, sidebarWidth: 248, gap: 16, minMainWidth: 736, hasContent: true }), false)
-  assert.equal(shouldShowMomentsSidebar({ layoutWidth: 1000, sidebarWidth: 248, gap: 16, minMainWidth: 736, hasContent: true }), true)
 
   const videoMoment = {
     additional: undefined,
@@ -3958,10 +3960,9 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(app, /watch\(iframePageURL,[\s\S]*hideUIForIframePhotoViewer\.value = false/)
   assert.match(randomPlay, /event\.preventDefault\(\)[\s\S]*event\.stopPropagation\(\)[\s\S]*stopNativePlaylistEditing\(\)/)
   assert.doesNotMatch(moments, /momentsContentStyle/)
-  assert.match(moments, /moments-layout--with-sidebar/)
-  assert.match(moments, /padding: var\(--bew-space-2\) 0 var\(--bew-space-12\)/)
-  assert.match(moments, /grid-template-columns: var\(--bew-layout-moments-sidebar-width\) minmax\(0, 1fr\)/)
-  assert.match(moments, /row-gap: var\(--bew-space-8\)/)
+  assert.match(moments, /<LibraryWorkspace/)
+  assert.match(moments, /<MomentsSidebar/)
+  assert.doesNotMatch(moments, /showMomentsSidebar|moments-filter-header/)
   assert.match(moments, /grid-template-columns:\s*repeat\(var\(--moments-columns\), minmax\(0, 1fr\)\)/)
   assert.match(moments, /class="moments-up-list__track"/)
   assert.match(moments, /'can-scroll-left': canScrollUpListLeft[\s\S]*'can-scroll-right': canScrollUpListRight/)
@@ -3977,7 +3978,7 @@ async function verifyDrawerAndMomentsLayoutContracts() {
   assert.match(moments, /let attachedScrollViewport: HTMLElement \| null = null/)
   assert.match(moments, /attachedScrollViewport\?\.removeEventListener\('scroll', handleViewportScroll\)/)
   assert.doesNotMatch(moments, /MOMENTS_MEMORY_MAX_ITEMS/)
-  assert.match(moments, /entry\.items\.slice\(-MOMENTS_CACHE_MAX_ITEMS\)/)
+  assert.doesNotMatch(moments, /MOMENTS_CACHE_MAX_ITEMS|useMomentsFeedCache/)
   assert.match(moments, /function releaseMediaElement\(media: HTMLMediaElement\)/)
   assert.match(moments, /media\.srcObject = null/)
   assert.match(moments, /media\.removeAttribute\('srcset'\)/)
@@ -4039,17 +4040,16 @@ async function verifyIncrementalCorrectnessContracts() {
   assert.doesNotMatch(webAccessibleResources, /dist\/contentScripts\/style\.css/)
   assert.match(webAccessibleResources, /assets\/\*/)
 
-  assert.match(favoriteApi, /editFavoriteFolder:[\s\S]{0,260}privacy: 0/)
-  assert.match(favorites, /const isPublic = editFolderPublic\.value/)
-  assert.match(favorites, /privacy: getFavoriteFolderPrivacy\(isPublic\)/)
+  const editFolderApi = favoriteApi.slice(favoriteApi.indexOf('editFavoriteFolder:'), favoriteApi.indexOf('delFavoriteFolder:'))
+  assert.match(editFolderApi, /privacy: 0/)
+  const folderManager = await readFile(`${root}/src/contentScripts/views/Favorites/useFavoriteFolderManager.ts`, 'utf8')
+  assert.match(favorites, /useFavoriteFolderManager/)
+  assert.match(folderManager, /privacy: result\.attr & 1/)
+  assert.match(folderManager, /data\.applyFolderEdit\(id, draft\.title, draft\.privacy === 0\)/)
   assert.match(favorites, /folder\.attr = getFavoriteFolderEditedAttr\(folder\.attr, isPublic\)/)
   assert.match(favorites, /SettingsSegmentedControl/)
-  assert.match(favorites, /if \(folderId === defaultFolderId\.value\)[\s\S]{0,80}return/)
-  const editFolderRequest = favorites.slice(
-    favorites.indexOf('async function handleEditFolderConfirm'),
-    favorites.indexOf('async function deleteFolders'),
-  )
-  assert.match(editFolderRequest, /const result = await writes\.execute\(transaction\)[\s\S]*if \(!result\)\s+return[\s\S]*data\.applyFolderEdit/)
+  assert.match(favorites, /if \(item\.id === defaultFolderId\.value\)[\s\S]{0,80}return/)
+  assert.match(folderManager, /const result = await writes\.execute\(transaction\)[\s\S]*if \(!result \|\| !current\(\)\)\s+return[\s\S]*data\.applyFolderEdit/)
   assert.match(favorites, /onError: \(\) => toast\.error\(t\('common.operation_failed'\)\)/)
   for (const locale of [cmnCn, cmnTw, jyut, en]) {
     assert.match(locale, /edit_folder:/)
@@ -4239,13 +4239,15 @@ async function verifySemanticPortContracts() {
   assert.match(moments, /resolveMomentTextSources/)
   assert.match(moments, /descInherited: isForward \? false : content\.descInherited/)
   assert.match(moments, /const richText = descInherited[\s\S]{0,160}\? \[\]/)
-  assert.match(moments, /'descInherited' in moment/)
+  // resolveMomentTextSources is exercised above; the retired persistent feed
+  // cache no longer needs to inspect previously normalized descInherited fields.
   assert.match(moments, /function handleMomentCardInteractiveResize\(\)/)
   assert.match(moments, /@interactive-resize="handleMomentCardInteractiveResize"/)
-  assert.match(moments, /numFormatter\(portalUser\.following/)
-  assert.match(moments, /space\.bilibili\.com\/\$\{portalUser\.mid\}\/fans\/follow/)
-  assert.match(moments, /space\.bilibili\.com\/\$\{portalUser\.mid\}\/fans\/fans/)
-  assert.match(moments, /space\.bilibili\.com\/\$\{portalUser\.mid\}\/dynamic/)
+  const momentsSidebarSource = await readFile(`${root}/src/contentScripts/views/Moments/MomentsSidebar.vue`, 'utf8')
+  assert.match(momentsSidebarSource, /numFormatter\(user\[stat\.key\]/)
+  for (const path of ['fans/follow', 'fans/fans', 'dynamic'])
+    assert.ok(momentsSidebarSource.includes(`path: '${path}'`))
+  assert.match(momentsSidebarSource, /space\.bilibili\.com\/\$\{user\.mid\}\/\$\{stat\.path\}/)
 
   assert.match(momentCard, /const descriptionRef = ref<HTMLElement \| null>\(null\)/)
   assert.match(momentCard, /const descriptionExpanded = ref\(false\)/)

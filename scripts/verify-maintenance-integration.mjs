@@ -38,8 +38,12 @@ function frameClock() {
 export function registerMaintenanceIntegrationChecks(check, { Vue, compileComponent, flush }) {
   check('maintenance settings: real normalization and import/export preserve old reminders, mode overrides and validate new fields', async () => {
     let normalize
+    const storageWatchers = []
     const storage = await loadSourceModule('../src/logic/storage.ts', {
-      'vue': { ...Vue, watch: () => () => {} },
+      'vue': { ...Vue, watch: (sources, callback) => {
+        storageWatchers.push(() => callback(sources.map(source => source())))
+        return () => {}
+      } },
       'webextension-polyfill': { default: { storage: { local: { remove: async () => {} } } } },
       '~/composables/useSettingsStorage': { useSettingsStorage: (value, options) => {
         normalize = options.normalize
@@ -48,6 +52,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       '~/composables/useStorageLocal': { useStorageLocal: (_key, value) => Object.assign(Vue.ref(value), { initializationState: Vue.ref('loaded') }) },
       '~/constants/imgs': { DEFAULT_SEARCH_BAR_CHARACTER: 'fixture-character' },
       '~/constants/commentReading': await import('../src/constants/commentReading'),
+      '~/constants/dock': await import('../src/constants/dock'),
+      '~/constants/retiredSettings': await import('../src/constants/retiredSettings'),
       '~/utils/localLoudnessProtocol': await import('../src/utils/localLoudnessProtocol'),
       '~/constants/liquidGlass': await import('../src/constants/liquidGlass'),
       '~/enums/appEnums': await import('../src/enums/appEnums'),
@@ -59,6 +65,33 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       './appAuthStorage': {},
     })
     const defaults = JSON.parse(JSON.stringify(storage.originalSettings))
+    const retired = { customizeCSS: true, customizeCSSContent: 'body { color: red; }' }
+    const { removeRetiredSettings } = await import('../src/constants/retiredSettings')
+    for (const malformed of [null, undefined, false, 0, 'invalid'])
+      assert.doesNotThrow(() => removeRetiredSettings(malformed))
+    const upgraded = { ...defaults, ...retired }
+    normalize(upgraded)
+    for (const key of Object.keys(retired)) {
+      assert.equal(key in defaults, false)
+      assert.equal(key in storage.originalLocalSettings, false)
+      assert.equal(key in upgraded, false)
+    }
+    const route = { mid: '1', talkerId: '2', sessionType: 1 }
+    storage.localSettings.value = { lastPrivateConversationRoute: route, ...retired }
+    storage.localSettings.initializationState.value = 'degraded'
+    storageWatchers.forEach(run => run())
+    assert.equal(storage.localSettings.value.customizeCSS, true, 'failed storage reads must not trigger cleanup writes')
+    storage.localSettings.initializationState.value = 'loaded'
+    storageWatchers.forEach(run => run())
+    assert.deepEqual(JSON.parse(JSON.stringify(storage.localSettings.value)), { lastPrivateConversationRoute: route })
+    storage.localSettings.value = { lastPrivateConversationRoute: route, ...retired }
+    storageWatchers.forEach(run => run())
+    assert.deepEqual(JSON.parse(JSON.stringify(storage.localSettings.value)), { lastPrivateConversationRoute: route }, 'a legacy client cannot restore retired local settings')
+    const cloudProtocol = await import('../src/utils/settingsCloudSyncProtocol')
+    for (const key of Object.keys(retired)) {
+      assert.equal(cloudProtocol.isSettingsCloudSyncField(key), false)
+      assert.equal(cloudProtocol.parseSettingsCloudSyncKey(cloudProtocol.createSettingsCloudSyncKey(key)), null)
+    }
     const categoryKeys = ['showReplyNotificationReminder', 'showAtNotificationReminder', 'showSystemNotificationReminder', 'showFollowedPrivateMessageUnreadCount', 'showUnfollowedPrivateMessageUnreadCount']
     const newSwitches = ['rememberVideoQuality', 'showWidescreenIdleProgress', 'originalMomentsUseBewlyFilters']
     const old = { ...defaults, videoPlayerModeOverrides: { multipart: 'widescreen', collection: 'default', bangumi: 'inherit', watchLater: 'inherit', playlist: 'inherit' } }
@@ -72,6 +105,12 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
     assert.equal(old.showLikeNotificationReminder, false)
     assert.equal(old.savedVideoQuality, null)
     assert.equal(old.historyLayout, 'list')
+    for (const [value, expected] of [['left', 'bottom'], ['bottom', 'bottom'], ['right', 'right'], ['invalid', 'bottom']]) {
+      const legacy = { ...old, dockPosition: value, showHomeButtonInTouchMode: true }
+      normalize(legacy)
+      assert.equal(legacy.dockPosition, expected)
+      assert.equal('showHomeButtonInTouchMode' in legacy, false)
+    }
     assert.equal(old.videoPlayerModeOverrides.multipart, 'widescreen')
     assert.equal(old.videoPlayerModeOverrides.momentsDialog, 'inherit')
     const invalid = { ...old, savedVideoQuality: -1, historyLayout: 'broken', showReplyNotificationReminder: 'false', originalMomentsUseBewlyFilters: 1 }
@@ -139,7 +178,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       await flush()
     }
     try {
-      await importValues({ savedVideoQuality: 64, historyLayout: 'grid', rememberVideoQuality: true, showUnfollowedPrivateMessageUnreadCount: false, videoPlayerModeOverrides: { multipart: 'default', collection: 'widescreen', bangumi: 'inherit', watchLater: 'inherit', playlist: 'inherit' } })
+      await importValues({ ...retired, savedVideoQuality: 64, historyLayout: 'grid', rememberVideoQuality: true, showUnfollowedPrivateMessageUnreadCount: false, videoPlayerModeOverrides: { multipart: 'default', collection: 'widescreen', bangumi: 'inherit', watchLater: 'inherit', playlist: 'inherit' } })
       assert.equal(settings.value.savedVideoQuality, 64)
       assert.equal(settings.value.historyLayout, 'grid')
       assert.equal(settings.value.showUnfollowedPrivateMessageUnreadCount, false)
@@ -153,6 +192,10 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       const exportButton = [...host.querySelectorAll('button')].find(button => button.textContent.trim() === 'settings.export_settings')
       exportButton.click()
       const roundTrip = JSON.parse(await exported.text())
+      for (const key of Object.keys(retired)) {
+        assert.equal(key in imported[0], false)
+        assert.equal(key in roundTrip, false)
+      }
       assert.equal(roundTrip.savedVideoQuality, 64)
       assert.equal(roundTrip.videoPlayerModeOverrides.momentsDialog, 'bewlyWidescreen')
       assert.equal(roundTrip.showUnfollowedPrivateMessageUnreadCount, false)
@@ -196,6 +239,11 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
           assert.equal(index % columns, 0)
       })
       assert.equal(new Set(grid.map(cell => cell.key)).size, grid.length)
+      const collapsed = createHistoryWindow(groups, columns, new Set(['a']))
+      assert.equal(collapsed.length % columns, 0)
+      assert.equal(collapsed.filter(cell => cell.kind === 'heading').length, 2)
+      assert.equal(collapsed.find(cell => cell.kind === 'heading').expanded, false)
+      assert.deepEqual(collapsed.filter(cell => cell.kind === 'item').map(cell => cell.item.kid), [5, 6])
     }
     const duplicate = createHistoryWindow([{ key: 'a', label: 'A', items: [item(1), item(1)] }], 3)
     assert.equal(new Set(duplicate.map(cell => cell.key)).size, duplicate.length)
@@ -221,7 +269,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       history: { business: 'archive', oid: index + 1, page: 2, cid: index + 1, dt: 1 },
     }))
     const account = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
-    const provider = { scrollViewportRef: Vue.ref(root), handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true }
+    let sentinelChecks = 0
+    const provider = { scrollViewportRef: Vue.ref(root), handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref(), haveScrollbar: async () => true, requestLoadMoreCheck: () => sentinelChecks++ }
     const reads = []
     const writes = []
     let timeline
@@ -289,7 +338,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
           const heading = sibling.classList.contains('history-day-heading')
           const spacer = sibling.style.gridColumn === '1 / -1'
           const card = sibling.classList.contains('history-list-card')
-          const height = heading ? (sibling.classList.contains('history-day-heading--first') ? (grid ? 22 : 26) : grid ? 30 : 42) : spacer ? Number.parseFloat(sibling.style.height) || 0 : grid ? 320 : 140
+          const height = heading ? (sibling.classList.contains('history-day-heading--first') ? (grid ? 28 : 32) : grid ? 36 : 48) : spacer ? Number.parseFloat(sibling.style.height) || 0 : grid ? 320 : 140
           if ((heading || spacer) && column) {
             top += (grid ? 320 : 140) + gap
             column = 0
@@ -363,8 +412,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       settings.value.historyLayout = 'grid'
       await settle()
       assert.equal(root.querySelectorAll('.video-list-skeleton__row').length, 0)
-      assert.equal(root.querySelectorAll('.history-grid-skeleton').length, 6)
-      assert.ok(root.querySelector('.history-grid-skeleton__author [data-bew-skeleton]'))
+      assert.equal(root.querySelectorAll('.library-video-skeleton--history').length, 6)
+      assert.ok(root.querySelector('.library-video-skeleton__author [data-bew-skeleton]'))
       settings.value.historyLayout = 'list'
       initialRead.resolve()
       await settle()
@@ -401,13 +450,13 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.equal(timeline.historyList.length, 999)
       assert.equal(document.activeElement.classList.contains('history-list-card__delete'), true)
       assert.notEqual(document.activeElement.closest('[data-history-key]').dataset.historyKey, key)
-      const search = root.querySelector('.history-search-input')
+      const search = root.querySelector('.library-search-field input')
       search.value = 'needle'
       search.dispatchEvent(new Event('input', { bubbles: true }))
-      search.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', isComposing: true, bubbles: true }))
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', isComposing: true, bubbles: true }))
       await flush()
       assert.equal(reads.length, before)
-      search.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', bubbles: true }))
+      search.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
       await settle()
       assert.deepEqual(reads.at(-1), ['search', 'needle', 1])
       assert.equal(root.scrollTop, 0)
@@ -418,6 +467,55 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       assert.deepEqual(reads.at(-1), ['history', 0], 'clearing the field exits search without a second Enter')
       assert.equal(timeline.historyList.length, 20)
       assert.equal(root.querySelector('.history-query-summary'), null)
+      const beforeRefresh = reads.length
+      records[0] = { ...records[0], title: 'Latest history result' }
+      root.querySelector('.history-refresh-button').click()
+      await settle()
+      assert.equal(reads.length, beforeRefresh + 1)
+      assert.deepEqual(reads.at(-1), ['history', 0], 'sidebar refresh restarts the history cursor without reloading the document')
+      assert.equal(timeline.historyList[0].title, 'Latest history result')
+      const readsBeforeSort = reads.length
+      root.querySelector('.history-sort-button').click()
+      await settle()
+      assert.equal(reads.length, readsBeforeSort, 'sorting reuses loaded history')
+      assert.equal(root.querySelector('.history-sort-button').dataset.sortOrder, 'oldest')
+      root.querySelector('[role="switch"]').click()
+      await settle()
+      assert.equal(root.querySelectorAll('.watch-later-selection input').length, 20)
+      assert.ok(root.querySelector('.history-list-card__content').hasAttribute('inert'))
+      const checkbox = root.querySelector('.watch-later-selection input')
+      checkbox.checked = true
+      checkbox.dispatchEvent(new Event('change', { bubbles: true }))
+      await settle()
+      const removeSelected = [...root.querySelectorAll('.history-controls button')].find(button => button.textContent.includes('watch_later.remove_selected'))
+      removeSelected.click()
+      await settle()
+      assert.equal(writes.length, 2, 'batch action reaches the existing delete transport once')
+      assert.equal(timeline.historyList.length, 19)
+      assert.equal(root.querySelectorAll('.watch-later-selection input:checked').length, 0)
+      assert.equal(root.textContent.includes('library_tools.load_more_matches'), false, 'history no longer requires a manual load-more button')
+      const beforeCollapseChecks = sentinelChecks
+      const heading = root.querySelector('.history-day-toggle')
+      const remaining = timeline.historyList.length
+      heading.click()
+      await settle()
+      assert.equal(root.querySelector('.history-day-toggle').getAttribute('aria-expanded'), 'false')
+      assert.equal(root.querySelectorAll('.history-list-card').length, 0)
+      assert.equal(timeline.historyList.length, remaining, 'collapsing only changes presentation')
+      assert.ok(sentinelChecks > beforeCollapseChecks, 'collapsing rechecks the existing bottom sentinel')
+      root.querySelector('.history-day-toggle').click()
+      await settle()
+      assert.equal(root.querySelectorAll('.history-list-card').length, remaining)
+      const beforeAutomatic = reads.length
+      await provider.handleReachBottom.value()
+      await settle()
+      assert.equal(reads.length, beforeAutomatic + 1, 'oldest-first mode also permits automatic paging')
+      timeline.contentType.value = 'live'
+      timeline.handleSearch()
+      await settle()
+      const filteredReads = reads.length
+      await provider.handleReachBottom.value()
+      assert.equal(reads.length, filteredReads + 1, 'filtered results also permit automatic paging')
       assert.deepEqual(failures, [])
     }
     finally {
@@ -490,6 +588,8 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       await step()
       await step()
       const viewport = host.querySelector('.settings-content__scroll')
+      host.querySelector('.settings-layer').dispatchEvent(new Event('bew-settings-motion-ready'))
+      await step()
       viewport.scrollTo = value => scrolls.push(value)
       const input = host.querySelector('.settings-search input')
       input.value = 'Target'

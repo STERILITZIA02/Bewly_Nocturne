@@ -5,7 +5,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
 
-const props = defineProps<{ url: string, loading: boolean, generation?: number, live?: boolean }>()
+const props = withDefaults(defineProps<{ url: string, loading: boolean, generation?: number, live?: boolean, controls?: boolean, hoverSurface?: string }>(), { controls: undefined })
 const emit = defineEmits<{
   video: [element: HTMLVideoElement | null]
   interactionChange: [held: boolean]
@@ -13,15 +13,54 @@ const emit = defineEmits<{
   activate: [event: MouseEvent]
 }>()
 const videoRef = ref<HTMLVideoElement | null>(null)
+const frameReady = ref(false)
+const frameFailed = ref(false)
+let cancelFirstFrame: (() => void) | undefined
 const fullscreen = ref(false)
 let leaveFrame: number | undefined
-const controls = computed(() => !props.live && !props.loading && settings.value.momentsEnableVideoControls)
+const controls = computed(() => !props.live && !props.loading && frameReady.value && (props.controls ?? settings.value.momentsEnableVideoControls))
 const swipe = computed(() => !props.live && !props.loading && settings.value.momentsEnableVideoPreviewSwipeSeek)
 const gestureSource = computed(() => `${props.generation ?? 0}:${props.url}`)
 const gesture = useVideoPreviewSwipeSeek(videoRef, swipe, controls, gestureSource)
 const interaction = computed(() => fullscreen.value || gesture.isScrubbing.value)
 watch(interaction, held => emit('interactionChange', held), { flush: 'sync' })
 watch([videoRef, () => props.url, () => props.generation], ([element]) => emit('video', element), { flush: 'post' })
+watch([videoRef, () => props.url, () => props.generation], () => {
+  cancelFirstFrame?.()
+  frameReady.value = false
+  frameFailed.value = false
+}, { flush: 'sync' })
+
+function revealFirstFrame(event: Event) {
+  const video = event.currentTarget as HTMLVideoElement
+  if (video !== videoRef.value || frameReady.value)
+    return
+  cancelFirstFrame?.()
+  let current = true
+  const reveal = () => {
+    if (current && video === videoRef.value)
+      frameReady.value = true
+  }
+  if (typeof video.requestVideoFrameCallback === 'function') {
+    const frame = video.requestVideoFrameCallback(reveal)
+    cancelFirstFrame = () => {
+      current = false
+      video.cancelVideoFrameCallback(frame)
+    }
+  }
+  else {
+    reveal()
+    cancelFirstFrame = () => {
+      current = false
+    }
+  }
+}
+
+function failFrame() {
+  cancelFirstFrame?.()
+  frameFailed.value = true
+  frameReady.value = false
+}
 
 function syncFullscreen() {
   const next = videoRef.value?.matches(':fullscreen') === true
@@ -32,9 +71,9 @@ function syncFullscreen() {
 }
 
 function reconcileHover() {
-  const surface = settings.value.momentsOnlyCoverVideoPreview
+  const surface = props.hoverSurface ?? (settings.value.momentsOnlyCoverVideoPreview
     ? '.moment-card__forward-video-cover, .moment-card__cover--media'
-    : '.moment-card'
+    : '.moment-card')
   if (!interaction.value && !videoRef.value?.closest(surface)?.matches(':hover'))
     emit('leave')
 }
@@ -64,6 +103,7 @@ function handleClick(event: MouseEvent) {
 
 onMounted(() => document.addEventListener('fullscreenchange', syncFullscreen))
 onBeforeUnmount(() => {
+  cancelFirstFrame?.()
   if (leaveFrame !== undefined)
     cancelAnimationFrame(leaveFrame)
   document.removeEventListener('fullscreenchange', syncFullscreen)
@@ -75,8 +115,8 @@ onBeforeUnmount(() => {
 <template>
   <span
     class="moment-video-preview"
-    :class="{ 'moment-video-preview--scrubbable': swipe }"
-    :aria-busy="loading"
+    :class="{ 'moment-video-preview--scrubbable': swipe, 'moment-video-preview--ready': frameReady }"
+    :aria-busy="loading || (!!url && !frameReady && !frameFailed)"
     @pointerdown="gesture.handlePreviewPointerDown"
     @pointermove="gesture.handlePreviewPointerMove"
     @pointerup="finishGesture"
@@ -88,8 +128,11 @@ onBeforeUnmount(() => {
     <video
       v-if="url" ref="videoRef" :controls="controls" :loop="!live" :draggable="false"
       autoplay muted playsinline
+      @loadeddata="revealFirstFrame" @playing="revealFirstFrame" @error="failFrame"
     />
-    <SkeletonBlock v-if="loading" height="100%" radius="media" class="moment-video-preview__loading" />
+    <Transition name="fade">
+      <SkeletonBlock v-if="loading || (url && !frameReady && !frameFailed)" height="100%" radius="media" class="moment-video-preview__loading" />
+    </Transition>
     <span v-if="gesture.isScrubbing.value && !controls" class="moment-video-preview__progress" aria-hidden="true">
       <span :style="{ transform: `scaleX(${gesture.scrubProgress.value / 100})` }" />
     </span>
@@ -112,6 +155,17 @@ onBeforeUnmount(() => {
     object-fit: cover;
     border-radius: inherit;
     corner-shape: inherit;
+    opacity: 0;
+    transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+  }
+}
+
+.moment-video-preview--ready video {
+  opacity: 1;
+}
+@media (prefers-reduced-motion: reduce) {
+  .moment-video-preview video {
+    transition: none;
   }
 }
 

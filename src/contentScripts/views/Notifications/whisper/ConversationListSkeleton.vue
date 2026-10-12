@@ -29,21 +29,16 @@ withDefaults(defineProps<{
     <div v-if="showTools" class="conversation-list-skeleton__tools" aria-hidden="true">
       <NotificationSkeletonBlock
         height="var(--bew-control-height)"
-        radius="interactive"
+        radius="full"
       />
       <div class="conversation-list-skeleton__segments">
         <NotificationSkeletonBlock
           v-for="index in 3"
           :key="index"
           height="var(--bew-control-item-height)"
-          radius="control"
+          radius="full"
         />
       </div>
-      <NotificationSkeletonBlock
-        width="72%"
-        height="var(--bew-control-height-sm)"
-        radius="interactive"
-      />
     </div>
 
     <div class="conversation-list-skeleton__items" aria-hidden="true">
@@ -51,6 +46,7 @@ withDefaults(defineProps<{
         v-for="index in count"
         :key="index"
         class="conversation-list-skeleton__item"
+        data-bew-skeleton-group
       >
         <NotificationSkeletonBlock
           width="var(--bew-control-height-lg)"
@@ -62,12 +58,12 @@ withDefaults(defineProps<{
             <NotificationSkeletonBlock
               :width="index % 2 === 0 ? '52%' : '38%'"
               height="var(--bew-line-height-title)"
-              radius="full"
+              radius="sm"
             />
             <NotificationSkeletonBlock
               width="52px"
               height="var(--bew-line-height-caption)"
-              radius="full"
+              radius="sm"
             />
           </div>
           <NotificationSkeletonBlock
@@ -75,12 +71,15 @@ withDefaults(defineProps<{
             height="var(--bew-line-height-caption)"
           />
         </div>
+        <span class="conversation-list-skeleton__action-space" />
       </div>
     </div>
   </section>
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/breakpoints";
+
 .conversation-list-skeleton {
   display: flex;
   width: 100%;
@@ -108,9 +107,6 @@ withDefaults(defineProps<{
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--bew-space-1);
   padding: var(--bew-space-1);
-  background: var(--bew-fill-1);
-  border-radius: var(--bew-control-radius);
-  corner-shape: var(--bew-corner-shape-round);
 }
 
 .conversation-list-skeleton__items {
@@ -131,6 +127,12 @@ withDefaults(defineProps<{
   gap: var(--bew-space-3);
   align-items: center;
   padding: var(--bew-space-3);
+  border-radius: var(--bew-card-radius);
+}
+
+.conversation-list-skeleton__action-space {
+  flex: none;
+  width: var(--bew-control-height-sm);
 }
 
 .conversation-list-skeleton--compact .conversation-list-skeleton__item {
@@ -150,5 +152,11 @@ withDefaults(defineProps<{
   gap: var(--bew-space-2);
   align-items: center;
   justify-content: space-between;
+}
+
+@media (max-width: breakpoints.$mobile-max) {
+  .conversation-list-skeleton__tools {
+    padding: var(--bew-space-2);
+  }
 }
 </style>

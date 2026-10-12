@@ -8,7 +8,9 @@ import { patchCommentReplyInteraction } from '~/inject/commentReplyInteraction'
 import { createCommentReplyPaginationController } from '~/inject/commentReplyPagination'
 import { createNativeCommentReplyReader } from '~/inject/commentReplyReader'
 import { createCommentReplyReadingController, getCommentReplyGuideCoordinates, isCommentReplyReadingScroll } from '~/inject/commentReplyReading'
+import { updateCommentSendButton } from '~/inject/commentSendButton'
 import { setupVideoMetadataBridge } from '~/inject/videoMetadata'
+import SEND_BUTTON_CSS from '~/styles/sendButton.scss?inline'
 import { BILIBILI_DESKTOP_USER_AGENT, isBilibiliWwwUrl } from '~/utils/bilibiliDesktopNavigation'
 import { cleanBilibiliShareText } from '~/utils/bilibiliUrl'
 import { patchCommentTransferLifecycle } from '~/utils/commentDomTransfer'
@@ -488,7 +490,7 @@ else if (shouldInitializePageScript) {
         }
 
         :host > .bewly-comment-expand-all:focus-visible {
-          outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-focus-ring, var(--bew-theme-color));
+          outline: var(--bew-focus-ring, 1px solid CanvasText);
           outline-offset: var(--bew-space-0-5, 2px);
         }
 
@@ -538,12 +540,13 @@ else if (shouldInitializePageScript) {
     'bili-comment-box': {
       id: 'bewly-comment-box-style',
       css: `
+        ${SEND_BUTTON_CSS}
         #editor:not(:hover):not(.active),
         .tool-btn {
           border-color: var(--bew-comment-box-border, var(--Ga1)) !important;
         }
 
-        :is(#pub button, button[data-v-risk="fingerprint"]):not(:hover, :active, .active) {
+        :is(#pub button, button[data-v-risk="fingerprint"]):not(.bew-send-button):not(:hover, :active, .active) {
           background-color: var(--bew-theme-color) !important;
         }
       `,
@@ -2931,6 +2934,20 @@ else if (shouldInitializePageScript) {
       if (typeof classConstructor !== 'function')
         return
 
+      if (name === 'bili-comment-rich-textarea') {
+        try {
+          patchCommentComponentUpdate(name, classConstructor, (component) => {
+            const root = component.getRootNode()
+            if (root instanceof ShadowRoot && root.host.localName === 'bili-comment-box')
+              updateCommentSendButton(root, currentSettings?.language)
+          })
+        }
+        catch (error) {
+          console.warn(`[Bewly Nocturne] Failed to patch ${name}.`, error)
+        }
+        return
+      }
+
       if (name === 'bili-comment-replies-renderer')
         commentReplyPagination.patchPrototype(classConstructor)
       if (name === 'bili-comment-action-buttons-renderer') {
@@ -2969,6 +2986,7 @@ else if (shouldInitializePageScript) {
             }
             else if (name === 'bili-comment-box') {
               updateWidescreenCommentEmojiOverflow(component, root)
+              updateCommentSendButton(root, currentSettings?.language)
             }
           }, name === 'bili-comment-replies-renderer'
             ? {
@@ -3103,6 +3121,7 @@ else if (shouldInitializePageScript) {
       'bili-comment-reply-renderer',
       'bili-comment-pictures-renderer',
       'bili-comment-user-info',
+      'bili-comment-rich-textarea',
     ])
     for (const name of commentElementNames)
       patchCommentCustomElement(name, window.customElements.get(name))

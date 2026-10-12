@@ -1,113 +1,39 @@
 # 貢獻指南
 
-[English](CONTRIBUTING.md) | [官话 - 简体中文](CONTRIBUTING-cmn_CN.md) | [官話 - 繁体中文](CONTRIBUTING-cmn_TW.md) | [廣東話](CONTRIBUTING-jyut.md)
+[English](CONTRIBUTING.md) · [简体中文](CONTRIBUTING-cmn_CN.md)
 
-## 💻 設定開發環境
+## 開發
 
-此專案使用 [Vite](https://vitejs.dev/) 構建，請確保你離線安裝了 [Node.js](https://nodejs.org/) 和 [pnpm](https://pnpm.io/)，並推薦使用 [Visual Studio Code](https://code.visualstudio.com/) 進行開發。
+使用 `package.json` 指定的 pnpm 版本：
 
-## 🔧 開發與建置專案
-
-### 開發（Chrome 或 Edge）
-
-#### Chrome 或 Edge 的第一種方法
-
-<details>
- <summary>詳細內容</summary>
-
-1. 執行 pnpm 指令
-
-```bash
-# 安裝依賴
+```sh
 pnpm install
-
-# 建立一個用戶的帳戶資料夾，用於擴充功能存儲登入狀態
-mkdir chromium-web-ext-profile
-
-# 運行專案
-pnpm dev
-
-# 打完這條指令之後，會自動開啓一個新的 Chrome 視窗並打開 BiliBili 網站
-pnpm start:chromium
-```
-
-2. 之後每次修改擴充功能，他都會重新載入內容，你可以透過重新整理頁面來查看變更內容
-
-</details>
-
-#### Chrome 或 Edge 的另外一種方法
-
-<details>
- <summary>詳細內容</summary>
-
-1. 執行 pnpm 指令
-
-```bash
-# 安裝依賴
-pnpm install
-
-# 運行專案
 pnpm dev
 ```
 
-2. 在地址欄輸入 `chrome://extensions/`（Chrome），`edge://extensions/`（Edge）並按 Enter 鍵
+在 Chrome/Edge 擴充功能管理頁啟用開發人員模式，載入 `extension/`。程式更新後重新載入擴充功能並重新整理 Bilibili 頁面。已有開發 watcher 時直接沿用，不重複啟動或停止其他任務的程序。
 
-3. 啓用 `開發者模式` 並點擊 `載入解壓縮`
+也可使用 `pnpm start:chromium` 開啟獨立開發視窗。`chromium-web-ext-profile/` 含有本機瀏覽器資料，不屬於專案清理範圍。
 
-<img width="655" alt="Snipaste_2022-03-27_18-17-04" src="https://user-images.githubusercontent.com/33394391/160276882-13da0484-92c1-47dd-add8-7655c5c2bf1c.png">
-<br/>
-<img width="655" alt="image" src="https://user-images.githubusercontent.com/33394391/232246901-e3544c16-bde2-480d-b770-ca5242793963.png">
+## 驗證與發布
 
-4. 在瀏覽器中載入生成的 `extension/` 資料夾
-
-每次修改後，您需要點選 [Extensions Reloader](https://chromewebstore.google.com/detail/extensions-reloader/fimgfedafeadlieiabdeeaodndnlbhid) 按鈕，然後重新整理頁面，以確保更改生效。
-
-</details>
-
-#### 建置（Chrome 或 Edge）
-
-建置此擴充功能，需要執行以下指令
-
-```bash
-pnpm build
+```sh
+pnpm lint
+pnpm typecheck
+pnpm test
+pnpm knip
 ```
 
-然後打包 `extension` 下的檔案
+開發驗證不執行正式建置。發布時使用 `pnpm build` 及 `pnpm pack:zip`；Safari 使用 `pnpm build-safari`。
 
-## 🤝 貢獻
+原始碼或元件檢查與重新載入後的瀏覽器驗收分別記錄。伺服器寫入以實際回應和狀態回讀確認。
 
-### 關於分支
+## 分支與提交
 
-#### 永久分支
+遵循[上游協作流程](maintenance/upstream-workflow.md)和[專案約定](../AGENTS.md)。先核對任務指定的分支；不直接在 main 開發，也不將 Nocturne 定製混入上游修正分支。
 
-- **Main**：用於錯誤修正開發新功能、性能改進或修改國際化（i18n）文件的分支。
+提交使用 Conventional Commits，格式為 `type(scope): 中文說明`。提交前 lint 與 typecheck 必須通過，PR 不加入建置產物、tests 檔案或無關變更。
 
-#### 其他臨時分支
+## 翻譯
 
-- **feat/**：用於提交新功能的分支
-- **doc/**：專門用於修正文檔，無功能更改的分支。
-- **fix/**：專門用於修正 dev 分支中的錯誤的分支。
-
-### Commit 規範
-
-你也可以參考 [Angular commit message guidelines](https://github.com/angular/angular/blob/22b96b9/CONTRIBUTING.md#-commit-message-guidelines)
-
-- `feat`：新功能
-- `fix`：錯誤修復
-- `docs`：文檔更新
-- `style`：不影響程式碼含義的更改（空白、格式、缺少分號等）
-- `refactor`：重構程式碼
-- `test`：添加或更新測試
-- `chore`：對構建過程或工具鏈進行更改
-- `perf`：效能改進
-- `ci`：持續集成/交付更改
-也歡迎添加範圍和腳註
-例如：
-`fix(dock)：xxx`
-`變更描述`
-`相關 PR：url`
-
-### I18n
-
-- 在進行翻譯時，如果你遇到一種你不熟悉的語言，你可以使用另一種你已經翻譯過的語言來翻譯，並在 PR 中指出你無法翻譯的那個語言。
-- **請手動維護 i18n 國際化語系檔！！！** 請勿使用 `i18n Ally` 或其他擴充套件來進行維護。 我知道你可能會感到困惑，或者可能不喜歡這樣做，但使用 `i18n Ally` 進行維護後，將不確定翻譯放在哪裏，或刪除程式碼註解。
+維護 `src/_locales/` 的四種語言，使鍵名與實際設定入口一致。移除功能時同步刪除文案，避免翻譯工具重排無關內容。

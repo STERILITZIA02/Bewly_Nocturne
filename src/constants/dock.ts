@@ -1,5 +1,12 @@
 export type DockCollapseMode = 'button' | 'hidden' | 'automatic'
 
+export const DOCK_POSITIONS = ['right', 'bottom'] as const
+export type DockPosition = typeof DOCK_POSITIONS[number]
+
+export function normalizeDockPosition(value: unknown): DockPosition {
+  return value === 'right' ? 'right' : 'bottom'
+}
+
 export function shouldShowDockCollapseButton(mode: DockCollapseMode): boolean {
   return mode === 'button'
 }

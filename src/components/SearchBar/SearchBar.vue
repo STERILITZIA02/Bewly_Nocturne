@@ -911,9 +911,7 @@ function handleClearKeyword() {
   }
 
   .search-bar::after {
-    box-shadow:
-      0 0 0 2px var(--bew-theme-focus-ring),
-      var(--bew-shadow-2);
+    box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText), var(--bew-shadow-2);
     opacity: 0;
   }
 
@@ -985,7 +983,7 @@ function handleClearKeyword() {
     }
 
     &.focus input {
-      border-color: var(--bew-theme-focus-ring);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .search-submit-btn {

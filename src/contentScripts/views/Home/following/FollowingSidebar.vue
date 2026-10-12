@@ -260,7 +260,7 @@ onMounted(() => emit('scrollElement', scroller.value))
     cursor: default;
   }
   &:focus-visible {
-    outline: var(--bew-space-0-5) solid var(--bew-theme-foreground);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
   }
 }

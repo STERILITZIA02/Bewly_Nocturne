@@ -10,6 +10,8 @@ import {
 } from './notificationFeedParsing'
 
 interface SystemNotificationPageDependencies {
+  getAccount?: () => string
+  isActive?: () => boolean
   fetchUnified: () => Promise<unknown>
   fetchUser: () => Promise<unknown>
   fetchHistory: (cursor: string) => Promise<unknown>
@@ -60,6 +62,11 @@ export function createSystemNotificationPageFetcher(
   dependencies: SystemNotificationPageDependencies,
 ) {
   return async (params?: NotificationPageParams): Promise<unknown> => {
+    const account = dependencies.getAccount?.()
+    const current = () => (!dependencies.getAccount || (Boolean(account) && dependencies.getAccount() === account))
+      && (dependencies.isActive?.() ?? true)
+    if (!current())
+      return invalidSystemResponse()
     if (params?.cursor) {
       const response = asNotificationApiResponse(await dependencies.fetchHistory(params.cursor))
       reportSystemResponse('history', response)
@@ -85,7 +92,7 @@ export function createSystemNotificationPageFetcher(
       return userResponse
 
     const page = parseSystemInitialPage(unifiedResponse, userResponse)
-    if (!page)
+    if (!page || !current())
       return invalidSystemResponse()
     if (page.readCursor) {
       const readResponse = asNotificationApiResponse(await dependencies.markRead(page.readCursor))

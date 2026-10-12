@@ -5,12 +5,19 @@ import { useToast } from 'vue-toastification'
 
 import IconButton from '~/components/IconButton.vue'
 import LazyPicture from '~/components/LazyPicture.vue'
+import LibrarySearchField from '~/components/LibrarySearchField.vue'
+import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
+import LibraryVideoCardSkeleton from '~/components/LibraryVideoCardSkeleton.vue'
+import LibraryWorkspace from '~/components/LibraryWorkspace.vue'
 import SettingsSegmentedControl from '~/components/Settings/components/SettingsSegmentedControl.vue'
 import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import VideoListSkeleton from '~/components/VideoListSkeleton.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindow'
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
+import { useLayoutMotion } from '~/composables/useLayoutMotion'
+import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
+import SelectionOverlay from '~/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue'
 import { settings } from '~/logic'
 import type { List as HistoryItem } from '~/models/history/history'
 import { Business } from '~/models/history/history'
@@ -22,17 +29,23 @@ import { getAdaptiveGridColumnCount } from '~/utils/gridLayout'
 import { getHistoryResumeUrl, getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
 import { normalizeIntlLocale } from '~/utils/locale'
 import { getCSRF, getUserID, removeHttpFromUrl } from '~/utils/main'
+import { retiringListTransition } from '~/utils/motionPresence'
 import { clearVideoVisitHistory, getVideoProgressPercentage, removeVideoVisitHistory } from '~/utils/videoVisitHistory'
 
+import HistoryAdvancedFilters from './HistoryAdvancedFilters.vue'
+import HistoryDayToggle from './HistoryDayToggle.vue'
+import type { HistoryFilters, HistorySortOrder } from './historyFilters'
+import { sortHistoryItems } from './historyFilters'
 import type { HistoryDayGroup, HistoryWindowCell } from './historyWindow'
-import { createHistoryWindow, historyItemKey } from './historyWindow'
+import { createHistoryWindow, historyDayKey, historyItemKey } from './historyWindow'
+import { useHistoryDayMotion } from './useHistoryDayMotion'
 import { useHistoryTimeline } from './useHistoryTimeline'
 
 const { t, locale } = useI18n()
 const toast = useToast()
 const { confirm: showConfirmDialog } = useConfirmDialog()
 
-const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef } = useBewlyApp()
+const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef, requestLoadMoreCheck } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 const timeline = useHistoryTimeline({
@@ -44,17 +57,56 @@ const timeline = useHistoryTimeline({
   onDeleted: (item) => { void removeVideoVisitHistory(getHistoryVideoIdentity(item)) },
   onCleared: () => { void clearVideoVisitHistory() },
 })
-const { isLoading, requestFailed, noMoreContent, historyList, keyword, submittedKeyword, date: selectedDate, contentType, filtersActive, isClearingHistory, historyStatus, setHistoryPauseStatus, clearAllHistory } = timeline
+const { isLoading, requestFailed, noMoreContent, historyList, keyword, submittedKeyword, filters, contentType, filtersActive, isClearingHistory, historyStatus, setHistoryPauseStatus, clearAllHistory } = timeline
+const sortOrder = ref<HistorySortOrder>('newest')
+const sortedHistory = computed(() => sortHistoryItems(historyList, sortOrder.value))
+const collapsedDays = shallowRef(new Set<string>())
+const mutationKey = (item: HistoryItem) => `${item.history.business}_${item.history.oid}`
+const batch = useLibraryBatchSelection({
+  keys: () => sortedHistory.value.filter(item => !collapsedDays.value.has(historyDayKey(item))).map(mutationKey),
+  captureOwner: timeline.capture,
+  remove: async (key) => {
+    const item = historyList.find(item => mutationKey(item) === key)
+    return item ? timeline.deleteHistoryItem(item) : true
+  },
+})
+const controlsDisabled = computed(() => batch.busy.value || isClearingHistory.value || timeline.deleting.size > 0)
+// Recheck the shared sentinel when a request finishes or collapsing a day
+// exposes the bottom; IntersectionObserver need not emit another entry then.
+watch([isLoading, controlsDisabled, collapsedDays, sortOrder], () => {
+  if (!isLoading.value && !controlsDisabled.value && !requestFailed.value && !noMoreContent.value)
+    requestLoadMoreCheck?.()
+}, { flush: 'post' })
+function updateFilters(value: HistoryFilters) {
+  if (controlsDisabled.value)
+    return
+  filters.value = value
+  handleSearch()
+}
+function toggleSortOrder() {
+  sortOrder.value = sortOrder.value === 'newest' ? 'oldest' : 'newest'
+  resetHistoryPosition()
+}
 const contentTypes = ['all', 'archive', 'pgc', 'live', 'article'] as const
+const railContentOptions = computed(() => contentTypes.map(value => ({ value, label: t(value === 'all' ? 'history.all_history' : `library_tools.type_${value}`) })))
+function selectRailContent(value: string) {
+  if (controlsDisabled.value)
+    return
+  const type = contentTypes.find(type => type === value)
+  if (type) {
+    contentType.value = type
+    void handleSearch()
+  }
+}
 const HistoryBusiness = computed(() => Business)
 const dateFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { dateStyle: 'medium' }))
 const timeFormatter = computed(() => new Intl.DateTimeFormat(normalizeIntlLocale(locale.value), { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }))
 const historyGroups = computed(() => {
   const groups = new Map<string, HistoryDayGroup>()
-  for (const item of historyList) {
+  for (const item of sortedHistory.value) {
     const date = new Date(item.view_at * 1000)
     const valid = Number.isFinite(date.getTime())
-    const key = valid ? `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}` : 'unknown'
+    const key = historyDayKey(item)
     let group = groups.get(key)
     if (!group) {
       group = { key, label: valid ? dateFormatter.value.format(date) : t('history.unknown_date'), items: [] }
@@ -66,10 +118,20 @@ const historyGroups = computed(() => {
 })
 
 const historyContainer = ref<HTMLElement | null>(null)
+const dayMotion = useHistoryDayMotion(historyContainer)
+const layoutMotion = useLayoutMotion(historyContainer, () => `${settings.value.historyLayout}:${sortedHistory.value.map(historyItemKey).join(',')}`, {
+  selector: '[data-history-cell]',
+  key: 'data-history-cell',
+  enabled: () => !dayMotion.active.value,
+})
+watch(dayMotion.active, (active) => {
+  if (!active && !isLoading.value && !requestFailed.value && !noMoreContent.value)
+    requestLoadMoreCheck?.()
+})
 const containerWidth = ref(0)
 const rowGap = ref(8)
 const columns = computed(() => settings.value.historyLayout === 'grid' ? getAdaptiveGridColumnCount(containerWidth.value, settings.value.gridColumns) : 1)
-const windowCells = computed(() => createHistoryWindow(historyGroups.value, columns.value))
+const windowCells = computed(() => createHistoryWindow(historyGroups.value, columns.value, collapsedDays.value))
 const cellByKey = computed(() => new Map(windowCells.value.map(cell => [cell.key, cell])))
 const windowEnabled = computed(() => historyList.length > CARD_WINDOW_THRESHOLD)
 const estimatedCardHeight = computed(() => settings.value.historyLayout === 'grid'
@@ -85,7 +147,7 @@ const cardWindow = useCardWindow({
   estimatedHeight: estimatedCardHeight,
   estimateHeight: (key) => {
     const cell = cellByKey.value.get(String(key))
-    return cell?.kind === 'padding' ? 0 : cell?.kind === 'heading' ? 22 + (cell.first ? 0 : 24 - rowGap.value) + (settings.value.historyLayout === 'grid' ? 0 : 4) : estimatedCardHeight.value
+    return cell?.kind === 'padding' ? 0 : cell?.kind === 'heading' ? 28 + (cell.first ? 0 : 24 - rowGap.value) + (settings.value.historyLayout === 'grid' ? 0 : 4) : estimatedCardHeight.value
   },
   layout: computed(() => `${settings.value.historyLayout}:${columns.value}:${Math.round(containerWidth.value)}`),
   canRelease: (key) => {
@@ -97,18 +159,38 @@ type RenderedHistoryCell = Exclude<HistoryWindowCell, { kind: 'padding' }> | { k
 const renderedCells = computed(() => cardWindow.ranges.value.flatMap<RenderedHistoryCell>(range => range.height !== undefined
   ? [{ kind: 'spacer' as const, key: `spacer:${range.start}`, height: range.height }]
   : windowCells.value.slice(range.start, range.end).filter(cell => cell.kind !== 'padding')))
+function toggleHistoryDay(key: string, event?: MouseEvent) {
+  if (controlsDisabled.value)
+    return
+  const next = new Set(collapsedDays.value)
+  if (next.has(key))
+    next.delete(key)
+  else
+    next.add(key)
+  void dayMotion.run(() => {
+    layoutMotion.cancel()
+    collapsedDays.value = next
+  }, event?.detail === 0)
+}
 function measureHistoryLayout(width = historyContainer.value?.clientWidth) {
-  if (width && width !== containerWidth.value)
-    containerWidth.value = width
   const grid = historyContainer.value?.querySelector<HTMLElement>('.history-window')
-  if (grid)
-    rowGap.value = Number.parseFloat(getComputedStyle(grid).rowGap) || (settings.value.historyLayout === 'grid' ? 16 : 8)
+  const style = grid ? getComputedStyle(grid) : undefined
+  const availableWidth = width ? Math.max(0, width - (Number.parseFloat(style?.paddingInlineStart ?? '') || 0)) : 0
+  if (availableWidth && availableWidth !== containerWidth.value) {
+    dayMotion.cancel()
+    containerWidth.value = availableWidth
+  }
+  if (style)
+    rowGap.value = Number.parseFloat(style.rowGap) || (settings.value.historyLayout === 'grid' ? 16 : 8)
 }
 useResizeObserver(historyContainer, entries => measureHistoryLayout(entries[0]?.contentRect.width))
-watch(() => settings.value.historyLayout, () => nextTick(() => measureHistoryLayout()))
+watch(() => settings.value.historyLayout, () => {
+  dayMotion.cancel()
+  void nextTick(() => measureHistoryLayout())
+})
 const layoutOptions = computed(() => [
-  { label: t('settings.history_layout_list'), value: 'list' as const },
-  { label: t('settings.history_layout_grid'), value: 'grid' as const },
+  { label: t('library_tools.layout_list'), value: 'list' as const },
+  { label: t('library_tools.layout_grid'), value: 'grid' as const },
 ])
 
 function resetHistoryPosition() {
@@ -116,12 +198,20 @@ function resetHistoryPosition() {
     scrollViewportRef.value.scrollTop = 0
 }
 function handleSearch(event?: KeyboardEvent) {
-  if (event?.isComposing)
+  if (event?.isComposing || controlsDisabled.value)
     return
+  batch.clearSelection()
+  dayMotion.cancel()
+  collapsedDays.value = new Set()
   resetHistoryPosition()
   timeline.handleSearch()
 }
 function clearSearch() {
+  if (controlsDisabled.value)
+    return
+  batch.clearSelection()
+  dayMotion.cancel()
+  collapsedDays.value = new Set()
   resetHistoryPosition()
   timeline.clearSearch()
 }
@@ -159,6 +249,10 @@ onMounted(() => {
 })
 watch(accountId, () => {
   if (mounted) {
+    batch.reset()
+    dayMotion.cancel()
+    collapsedDays.value = new Set()
+    sortOrder.value = 'newest'
     resetHistoryPosition()
     timeline.activate()
   }
@@ -171,14 +265,20 @@ onScopeDispose(() => {
     handlePageRefresh.value = undefined
 })
 function handleHistoryReachBottom() {
-  return requestFailed.value || filtersActive.value ? Promise.resolve(false) : timeline.load()
+  return requestFailed.value || controlsDisabled.value || dayMotion.active.value ? Promise.resolve(false) : timeline.load()
 }
 function handleHistoryPageRefresh() {
+  if (controlsDisabled.value)
+    return
+  batch.clearSelection()
+  dayMotion.cancel()
+  collapsedDays.value = new Set()
   resetHistoryPosition()
-  timeline.reloadCurrentMode()
+  void timeline.refreshCurrentMode()
 }
 function retryHistoryRequest() {
-  void timeline.load()
+  if (!controlsDisabled.value)
+    void timeline.retry()
 }
 
 function getHistoryItemCover(item: HistoryItem) {
@@ -191,15 +291,19 @@ function getHistoryItemCover(item: HistoryItem) {
 }
 
 async function handleClearAllWatchHistory() {
+  if (controlsDisabled.value)
+    return
   const owner = timeline.capture()
   const result = await showConfirmDialog(
     t('history.clear_all_watch_history_confirm'),
   )
-  if (result && owner.isCurrent())
-    clearAllHistory()
+  if (result && owner.isCurrent() && !controlsDisabled.value)
+    void clearAllHistory()
 }
 
 async function handlePauseWatchHistory() {
+  if (timeline.isUpdatingStatus.value || historyStatus.value !== false)
+    return
   const owner = timeline.capture()
   const result = await showConfirmDialog(
     t('history.pause_watch_history_confirm'),
@@ -209,6 +313,8 @@ async function handlePauseWatchHistory() {
 }
 
 async function handleTurnOnWatchHistory() {
+  if (timeline.isUpdatingStatus.value || historyStatus.value !== true)
+    return
   const owner = timeline.capture()
   const result = await showConfirmDialog(
     t('history.turn_on_watch_history_confirm'),
@@ -223,42 +329,41 @@ function jumpToLoginPage() {
 </script>
 
 <template>
-  <div v-if="getCSRF()" flex="~ col md:row lg:row" gap-4>
-    <main class="history-content" w="full md:60% lg:70% xl:75%" order="2 md:1 lg:1" mb-6>
-      <header class="history-toolbar">
-        <h3 class="bew-page-heading" text="$bew-text-1">
-          {{ $t('history.title') }}
-        </h3>
-        <SettingsSegmentedControl v-if="settings.enableGridLayoutSwitcher" v-model="settings.historyLayout" :options="layoutOptions" :label="t('settings.history_layout')" />
-      </header>
+  <LibraryWorkspace v-if="getCSRF()" :label="t('history.title')">
+    <main class="history-content">
       <p v-if="submittedKeyword" class="history-query-summary" role="status">
         {{ t('library_tools.search_results', { query: submittedKeyword }) }}
       </p>
-      <Empty v-if="requestFailed && !isLoading && historyList.length === 0" :description="$t('common.load_failed')">
-        <Button type="primary" @click="retryHistoryRequest">
-          {{ $t('common.operation.refresh') }}
-        </Button>
-      </Empty>
-      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0 && settings.historyLayout === 'list'" :count="5" history />
+      <Empty
+        v-if="requestFailed && !isLoading && historyList.length === 0" text-only fill :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        @action="retryHistoryRequest"
+      />
+      <Empty v-else-if="noMoreContent && !isLoading && !historyList.length" text-only fill :description="t(filtersActive ? 'library_tools.no_matches' : 'common.no_data')" role="status" />
+      <VideoListSkeleton v-else-if="isLoading && historyList.length === 0 && settings.historyLayout === 'list'" class="history-timeline-skeleton" :count="5" history />
 
       <!-- historyList -->
       <div v-else ref="historyContainer" class="history-groups">
-        <TransitionGroup name="list" tag="div" class="history-window" :css="!windowEnabled" :style="{ '--history-columns': columns, '--history-gap': settings.historyLayout === 'grid' ? 'var(--bew-space-4)' : 'var(--bew-space-2)' }">
+        <TransitionGroup
+          name="library-list" tag="div" class="history-window" v-bind="dayMotion.active.value ? dayMotion.transitionProps.value : windowEnabled ? {} : retiringListTransition" :css="!windowEnabled && !dayMotion.active.value"
+          :style="{ '--history-columns': columns, '--history-gap': settings.historyLayout === 'grid' ? 'var(--bew-space-4)' : 'var(--bew-space-2)' }"
+        >
           <template v-for="entry in renderedCells" :key="entry.key">
             <div v-if="entry.kind === 'spacer'" :style="{ height: `${entry.height}px`, gridColumn: '1 / -1' }" aria-hidden="true" />
-            <h4 v-else-if="entry.kind === 'heading'" :ref="element => cardWindow.setElement(entry.key, element)" class="history-day-heading" :class="{ 'history-day-heading--first': entry.first, 'history-day-heading--grid': settings.historyLayout === 'grid' }">
-              {{ entry.label }}
+            <h4 v-else-if="entry.kind === 'heading'" :ref="element => cardWindow.setElement(entry.key, element)" :data-history-cell="entry.key" class="history-day-heading" :class="{ 'history-day-heading--first': entry.first, 'history-day-heading--grid': settings.historyLayout === 'grid' }">
+              <HistoryDayToggle :label="entry.label" :expanded="entry.expanded" :disabled="controlsDisabled" @toggle="toggleHistoryDay(entry.groupKey, $event)" />
             </h4>
             <div
               v-else-if="entry.kind === 'item'"
               :ref="element => cardWindow.setElement(entry.key, element)"
               :data-history-key="historyItemKey(entry.item)"
+              :data-history-cell="entry.key"
               :aria-label="entry.date"
               class="history-list-card group"
               :class="{ 'history-list-card--grid': settings.historyLayout === 'grid' }"
               cursor-pointer
             >
               <ALink
+                :inert="batch.managing.value ? true : undefined"
                 class="history-list-card__overlay"
                 type="videoCard"
                 :href="getHistoryUrl(entry.item)"
@@ -266,6 +371,7 @@ function jumpToLoginPage() {
               />
               <section
                 class="history-list-card__content bew-history-row"
+                :inert="batch.managing.value ? true : undefined"
               >
                 <!-- Cover -->
                 <div
@@ -278,6 +384,7 @@ function jumpToLoginPage() {
                   aspect-video
                 >
                   <LazyPicture
+                    responsive-cover
                     w="full"
                     aspect-video
                     :src="`${getHistoryItemCover(entry.item)}@480w_270h_1c`"
@@ -434,164 +541,200 @@ function jumpToLoginPage() {
                   </IconButton>
                 </div>
               </section>
+              <SelectionOverlay
+                v-if="batch.managing.value" :label="entry.item.show_title || entry.item.title"
+                :selected="batch.selected.value.has(mutationKey(entry.item))" :disabled="batch.busy.value"
+                @toggle="batch.toggle(mutationKey(entry.item))"
+              />
             </div>
           </template>
           <div v-if="isLoading && !historyList.length && settings.historyLayout === 'grid'" key="loading:date" class="history-day-heading history-day-heading--first history-day-heading--grid" aria-hidden="true">
             <SkeletonBlock width="112px" height="var(--bew-line-height-title)" />
           </div>
-          <article v-for="index in (isLoading && settings.historyLayout === 'grid' ? (historyList.length ? columns : columns * 2) : 0)" :key="`loading:${index}`" class="history-grid-skeleton" aria-hidden="true">
-            <SkeletonBlock class="history-grid-skeleton__cover" height="auto" radius="media" />
-            <div class="history-grid-skeleton__details">
-              <div class="history-grid-skeleton__title">
-                <SkeletonBlock width="88%" height="var(--bew-font-size-title)" />
-                <SkeletonBlock width="68%" height="var(--bew-font-size-title)" />
-              </div>
-              <div class="history-grid-skeleton__author">
-                <SkeletonBlock width="var(--bew-space-6)" height="var(--bew-space-6)" radius="circle" />
-                <SkeletonBlock width="45%" height="var(--bew-line-height-control)" />
-              </div>
-              <div class="history-grid-skeleton__time">
-                <SkeletonBlock width="60%" height="var(--bew-line-height-control)" />
-              </div>
-            </div>
-          </article>
+          <LibraryVideoCardSkeleton
+            v-for="index in (isLoading && settings.historyLayout === 'grid' ? (historyList.length ? columns : columns * 2) : 0)"
+            :key="`loading:${index}`" history
+          />
         </TransitionGroup>
       </div>
 
-      <div v-if="requestFailed && !isLoading && historyList.length > 0" class="history-load-more-error">
-        <span>{{ $t('common.load_failed') }}</span>
-        <Button type="tertiary" @click="retryHistoryRequest">
-          {{ $t('common.operation.refresh') }}
-        </Button>
-      </div>
-
-      <Button v-if="filtersActive && !noMoreContent && !isLoading && !requestFailed" type="secondary" @click="timeline.load()">
-        {{ t('library_tools.load_more_matches') }}
-      </Button>
-      <p v-if="filtersActive && !isLoading && !historyList.length && !requestFailed" role="status">
-        {{ t('library_tools.no_matches') }}
-      </p>
-
-      <!-- no more content -->
-      <Empty v-if="noMoreContent && (!filtersActive || historyList.length)" class="py-4" :description="$t('common.no_more_content')" />
+      <Empty
+        v-if="requestFailed && !isLoading && historyList.length > 0" text-only class="history-load-more-error" :description="$t('common.load_failed')" :action-label="$t('common.operation.refresh')"
+        @action="retryHistoryRequest"
+      />
 
       <VideoListSkeleton
         v-if="isLoading && historyList.length !== 0 && !noMoreContent && settings.historyLayout === 'list'"
+        class="history-timeline-skeleton"
         :count="2"
         history
       />
     </main>
 
-    <aside relative w="full md:40% lg:30% xl:25%" order="1 md:2 lg:2">
-      <CoverSidebarSurface
-        class="history-sidebar-panel" pos="sticky top-120px" flex="~ col gap-4" justify-start my-10
-        w-full
-      >
-        <div class="history-search-row">
-          <input
-            v-model.trim="keyword"
-            type="text"
-            :placeholder="t('history.search_watch_history')"
-            :aria-label="t('history.search_watch_history')"
-            class="history-search-input"
-            rounded="$bew-radius"
-            w-full
-            @keyup.enter="handleSearch"
+    <template #sidebar="{ contentId }">
+      <div class="library-rail-content">
+        <LibrarySidebarHeading
+          hide-title :title="t('history.title')" :model-value="contentType" :options="railContentOptions" :content-id="contentId"
+          :disabled="controlsDisabled"
+          @update:model-value="selectRailContent"
+        />
+        <fieldset class="history-controls library-rail-content" :disabled="controlsDisabled" :aria-label="t('history.title')">
+          <div class="library-rail-tools">
+            <LibrarySearchField v-model="keyword" :label="t('history.search_watch_history')" :clearable="Boolean(submittedKeyword)" @submit="handleSearch()" @clear="clearSearch" />
+            <div class="history-layout-switcher" :class="{ 'history-layout-switcher--sort-only': !settings.enableGridLayoutSwitcher }">
+              <SettingsSegmentedControl
+                v-if="settings.enableGridLayoutSwitcher" v-model="settings.historyLayout"
+                class="library-rail-segments bew-segment-control--secondary" :options="layoutOptions" :label="t('settings.history_layout')"
+              />
+              <Tooltip :content="t(`history.sort_${sortOrder}`)" placement="top">
+                <IconButton class="history-sort-button" :label="t(`history.sort_${sortOrder}`)" :data-sort-order="sortOrder" @click="toggleSortOrder">
+                  <i :class="sortOrder === 'newest' ? 'i-tabler:sort-descending' : 'i-tabler:sort-ascending'" />
+                </IconButton>
+              </Tooltip>
+            </div>
+          </div>
+          <HistoryAdvancedFilters :model-value="filters" :disabled="controlsDisabled" @update:model-value="updateFilters" />
+          <Button
+            class="library-sidebar-action" :type="batch.managing.value ? 'primary' : 'default'"
+            role="switch" :aria-checked="batch.managing.value" @click="batch.toggleManaging"
           >
-          <IconButton v-if="keyword || submittedKeyword" class="bew-icon-button--control" :label="t('library_tools.clear_search')" @click="clearSearch">
-            <i i-mingcute:close-line />
-          </IconButton>
-          <IconButton class="bew-icon-button--control" :label="t('common.search')" @click="handleSearch()">
-            <i i-mingcute:search-line />
-          </IconButton>
-        </div>
-        <label class="history-filter-field">
-          <span>{{ t('library_tools.date') }}</span>
-          <input v-model="selectedDate" type="date" @change="handleSearch()">
-        </label>
-        <Button v-if="selectedDate" type="tertiary" @click="selectedDate = ''; handleSearch()">
-          {{ t('library_tools.all_dates') }}
-        </Button>
-        <label class="history-filter-field">
-          <span>{{ t('library_tools.content_type') }}</span>
-          <select v-model="contentType" @change="handleSearch()">
-            <option v-for="value in contentTypes" :key="value" :value="value">{{ t(`library_tools.type_${value}`) }}</option>
-          </select>
-        </label>
-        <Button v-if="filtersActive" type="tertiary" @click="keyword = ''; selectedDate = ''; contentType = 'all'; handleSearch()">
-          {{ t('search.filters.clear') }}
-        </Button>
-        <Button
-          block
-          class="bew-cover-sidebar__action"
-          :disabled="isClearingHistory"
-          @click="handleClearAllWatchHistory"
-        >
-          <template #left>
-            <div i-tabler:trash />
-          </template>
-          {{ $t('history.clear_all_watch_history') }}
-        </Button>
-        <Button
-          v-if="!historyStatus"
-          block
-          class="bew-cover-sidebar__action"
-          @click="handlePauseWatchHistory"
-        >
-          <template #left>
-            <div i-ph:pause-circle-bold />
-          </template>
-          {{ $t('history.pause_watch_history') }}
-        </Button>
-        <Button
-          v-else
-          block
-          class="bew-cover-sidebar__action"
-          @click="handleTurnOnWatchHistory"
-        >
-          <template #left>
-            <div i-ph:play-circle-bold />
-          </template>
-          {{ $t('history.turn_on_watch_history') }}
-        </Button>
-      </CoverSidebarSurface>
-    </aside>
-  </div>
-  <Empty v-else mt-6 :description="t('common.please_log_in_first')">
-    <Button type="primary" @click="jumpToLoginPage()">
-      {{ $t('common.login') }}
-    </Button>
-  </Empty>
+            <template #left>
+              <i :class="batch.managing.value ? 'i-tabler:check' : 'i-tabler:list-check'" />
+            </template>
+            {{ t('watch_later.batch_manage') }}
+          </Button>
+          <div v-if="batch.managing.value" class="library-rail-actions">
+            <Button class="library-sidebar-action" :disabled="!historyList.length" :aria-pressed="batch.allSelected.value" @click="batch.toggleAll">
+              <template #left>
+                <i i-tabler:checks />
+              </template>
+              {{ t(batch.allSelected.value ? 'watch_later.unselect_all' : 'history.select_results') }}
+            </Button>
+            <Button class="library-sidebar-action" type="primary" :disabled="!batch.selected.value.size" @click="batch.removeSelected">
+              <template #left>
+                <SkeletonBlock v-if="batch.busy.value" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
+                <i v-else i-tabler:trash />
+              </template>
+              {{ t('watch_later.remove_selected', { count: batch.selected.value.size }) }}
+            </Button>
+            <p v-if="batch.failed.value" class="history-batch-error" role="alert">
+              {{ t('common.operation_failed') }}
+            </p>
+          </div>
+          <div v-else class="library-rail-actions">
+            <Button
+              class="library-sidebar-action history-refresh-button" :disabled="isLoading"
+              :aria-busy="isLoading" @click="!isLoading && handleHistoryPageRefresh()"
+            >
+              <template #left>
+                <SkeletonBlock v-if="isLoading" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
+                <i v-else i-tabler:refresh aria-hidden="true" />
+              </template>
+              {{ t('history.refresh') }}
+            </Button>
+            <Button
+              v-if="historyStatus === undefined"
+              class="library-sidebar-action" :disabled="timeline.isReadingStatus.value"
+              @click="timeline.getHistoryPauseStatus"
+            >
+              <template #left>
+                <SkeletonBlock v-if="timeline.isReadingStatus.value" width="var(--bew-icon-size-md)" height="var(--bew-icon-size-md)" />
+                <i v-else i-tabler:refresh />
+              </template>
+              {{ t('history.retry_recording_status') }}
+            </Button>
+            <Button
+              v-else-if="!historyStatus"
+              class="library-sidebar-action history-action--warning"
+              :disabled="timeline.isUpdatingStatus.value" :aria-busy="timeline.isUpdatingStatus.value"
+              @click="handlePauseWatchHistory"
+            >
+              <template #left>
+                <div i-ph:pause-circle-bold />
+              </template>
+              {{ $t('history.pause_watch_history') }}
+            </Button>
+            <Button
+              v-else
+              class="library-sidebar-action history-action--success"
+              :disabled="timeline.isUpdatingStatus.value" :aria-busy="timeline.isUpdatingStatus.value"
+              @click="handleTurnOnWatchHistory"
+            >
+              <template #left>
+                <div i-ph:play-circle-bold />
+              </template>
+              {{ $t('history.turn_on_watch_history') }}
+            </Button>
+            <Button
+              class="library-sidebar-action history-action--danger"
+              :disabled="isClearingHistory"
+              @click="handleClearAllWatchHistory"
+            >
+              <template #left>
+                <div i-tabler:trash />
+              </template>
+              {{ $t('history.clear_all_watch_history') }}
+            </Button>
+          </div>
+        </fieldset>
+      </div>
+    </template>
+  </LibraryWorkspace>
+  <Empty
+    v-else text-only class="library-workspace-login" :description="t('common.please_log_in_first')" :action-label="t('common.login')"
+    @action="jumpToLoginPage"
+  />
 </template>
 
 <style lang="scss" scoped>
 @use "../../../styles/videoList";
-.history-search-row {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-1);
+@use "./historyTimeline";
+.history-action--warning {
+  --bew-library-action-foreground: var(--bew-warning-foreground);
 }
-.history-search-row input {
+.history-action--success {
+  --bew-library-action-foreground: var(--bew-success-foreground);
+}
+.history-action--danger {
+  --bew-library-action-foreground: var(--bew-error-foreground);
+}
+.history-controls {
   min-width: 0;
-  flex: 1;
-}
-.history-filter-field {
-  display: grid;
-  gap: var(--bew-space-2);
-  font-size: var(--bew-font-size-control);
-}
-.history-filter-field input,
-.history-filter-field select {
-  min-width: 0;
-  width: 100%;
-  min-height: var(--bew-control-height);
-  padding: var(--bew-space-2);
+  padding: 0;
+  margin: 0;
   border: 0;
-  border-radius: var(--bew-interactive-radius);
-  background: var(--bew-content-alt-solid);
+}
+.history-layout-switcher {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 60%) minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  .library-rail-segments {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+  }
+}
+.history-sort-button {
+  width: var(--bew-control-height);
+  height: var(--bew-control-height);
+  margin-inline-start: var(--bew-space-1);
   color: var(--bew-text-1);
-  font: inherit;
-  color-scheme: inherit;
+  i {
+    font-size: var(--bew-control-icon-size);
+  }
+  &:hover:not(:disabled) {
+    color: var(--bew-message-icon-hover);
+  }
+}
+.history-layout-switcher--sort-only > :last-child {
+  grid-column: 2;
+  justify-self: center;
+}
+.history-batch-error {
+  margin: 0;
+  color: var(--bew-error-foreground);
+  font-size: var(--bew-font-size-control);
 }
 .history-query-summary {
   color: var(--bew-text-2);
@@ -605,36 +748,6 @@ function jumpToLoginPage() {
   min-width: 0;
 }
 
-.history-day-heading {
-  grid-column: 1 / -1;
-  margin: 0;
-  padding-top: calc(var(--bew-space-6) - var(--history-gap));
-  padding-bottom: var(--bew-space-1);
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
-}
-
-.history-day-heading--first {
-  padding-top: 0;
-}
-.history-day-heading--grid {
-  padding-bottom: 0;
-}
-.history-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--bew-space-4);
-}
-.history-window {
-  position: relative;
-  display: grid;
-  grid-template-columns: repeat(var(--history-columns), minmax(0, 1fr));
-  gap: var(--history-gap);
-}
 .history-list-card--grid .history-list-card__content {
   height: 100%;
   grid-template-columns: minmax(0, 1fr);
@@ -653,46 +766,6 @@ function jumpToLoginPage() {
   height: var(--bew-space-6);
   margin-right: var(--bew-space-2);
   overflow: hidden;
-}
-.history-grid-skeleton {
-  display: flex;
-  flex-direction: column;
-  gap: var(--bew-space-3);
-  padding: var(--bew-space-3);
-  border-radius: var(--bew-card-radius);
-}
-.history-grid-skeleton__cover {
-  width: 100% !important;
-  aspect-ratio: 16 / 9;
-}
-.history-grid-skeleton__title {
-  display: grid;
-  grid-template-rows: repeat(2, var(--bew-line-height-title));
-  align-items: center;
-}
-.history-grid-skeleton__author {
-  display: flex;
-  align-items: center;
-  gap: var(--bew-space-2);
-  margin-block: var(--bew-space-2);
-}
-.history-grid-skeleton__time {
-  display: flex;
-  align-items: center;
-  min-height: var(--bew-control-height-sm);
-}
-
-.history-sidebar-panel {
-  padding: var(--bew-space-6);
-}
-.history-search-input {
-  flex-shrink: 0;
-  min-height: var(--bew-control-height);
-  padding-inline: var(--bew-space-3);
-  color: var(--bew-sidebar-text);
-  background: var(--bew-sidebar-control);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
 }
 .history-list-card {
   position: relative;

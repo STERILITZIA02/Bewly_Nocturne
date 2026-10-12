@@ -159,12 +159,13 @@ export async function fetchFavoriteSeasonPage(
   pn: number,
   api: typeof import('~/utils/api').default.favorite,
   pageSize = source.type === 11 ? FAVORITE_FOLDER_PAGE_SIZE : FAVORITE_SEASON_PAGE_SIZE,
+  request?: { signal?: AbortSignal },
 ): Promise<FavoriteSeasonPageFetchResult> {
   try {
     const res: FavoritesResult | FavoriteSeasonResourcesResult | undefined = source.type === 11
-      ? await api.getFavoriteResources({ media_id: source.id, pn, ps: Math.min(FAVORITE_FOLDER_PAGE_SIZE, pageSize), order: 'mtime' })
+      ? await api.getFavoriteResources({ media_id: source.id, pn, ps: Math.min(FAVORITE_FOLDER_PAGE_SIZE, pageSize), order: 'mtime' }, request)
       : source.type === 21
-        ? await api.getFavoriteSeasonResources({ season_id: source.id, pn, ps: pageSize })
+        ? await api.getFavoriteSeasonResources({ season_id: source.id, pn, ps: pageSize }, request)
         : undefined
 
     if (res?.code !== 0 || !res.data) {

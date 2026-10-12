@@ -12,6 +12,7 @@ import { liquidGlassEnabled as useLiquidGlass, useLiquidGlassOptions } from '~/c
 import {
   getDockCollapsedStateForMode,
   getPreservedDockStageSize,
+  normalizeDockPosition,
   resolveDockCollapsedShellSize,
   shouldAutoCollapseDock,
   shouldShowDockCollapseButton,
@@ -54,6 +55,7 @@ const emit = defineEmits<{
   (e: 'backToTop'): void
   (e: 'undoRefresh'): void
   (e: 'forwardRefresh'): void
+  (e: 'bottomShiftChange', shift: number): void
 }>()
 
 const settingsStore = useSettingsStore()
@@ -80,7 +82,8 @@ const dockBadges = computed<Partial<Record<AppPage, { count: number, label: stri
 })
 const { isDark, toggleDark } = useDark()
 const { reachTop, homeActivatedPage, undoForwardState, canRefreshHomeSubPage, getDockPageHref } = useBewlyApp()
-const dockPosition = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
+const dockPositionSetting = useLayoutEditSettingValue('navigation.dock.position', () => settings.value.dockPosition)
+const dockPosition = computed(() => normalizeDockPosition(dockPositionSetting.value))
 const liquidGlassProps = useLiquidGlassOptions()
 
 // 计算属性：是否显示撤销按钮
@@ -107,10 +110,12 @@ let dockReadyFrame: number | undefined
 let dockMorphFrame: number | undefined
 let dockContentTimer: ReturnType<typeof setTimeout> | undefined
 let dockMorphCompletionTimer: ReturnType<typeof setTimeout> | undefined
+let dockMorphGeneration = 0
 const dockContentRef = useDelayedHover({
   enterDelay: 100,
   leaveDelay: 600,
   beforeEnter: () => {
+    clearAutoCollapseTimer()
     if (isLayoutEditing.value)
       return
     if (shouldAutoCollapseDock(settings.value.dockCollapseMode))
@@ -151,15 +156,7 @@ const hoveringDockItem = reactive<HoveringDockItem>({
 const currentDockItems = ref<DockItem[]>([])
 const dockIndicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>(null)
 
-const tooltipPlacement = computed(() => {
-  if (dockPosition.value === 'left')
-    return 'right'
-  else if (dockPosition.value === 'right')
-    return 'left'
-  else if (dockPosition.value === 'bottom')
-    return 'top'
-  return 'right'
-})
+const tooltipPlacement = computed(() => dockPosition.value === 'right' ? 'left' : 'top')
 
 const dockCollapseIcon = computed(() => dockPosition.value === 'bottom'
   ? 'mingcute:fold-horizontal-line'
@@ -280,6 +277,7 @@ function cacheExpandedDockSize() {
 }
 
 function clearDockMorphSchedule() {
+  dockMorphGeneration++
   if (dockContentTimer !== undefined) {
     clearTimeout(dockContentTimer)
     dockContentTimer = undefined
@@ -332,6 +330,7 @@ async function startDockShellCollapse() {
   cacheExpandedDockSize()
   isDockTransitioning.value = dockReady.value
   dockMorphDirection.value = 'collapse'
+  const generation = dockMorphGeneration
 
   if (!dockReady.value) {
     isDockCollapsed.value = true
@@ -340,11 +339,15 @@ async function startDockShellCollapse() {
   }
 
   await nextTick()
+  if (generation !== dockMorphGeneration || dockMorphDirection.value !== 'collapse')
+    return
   // Commit the frozen expanded geometry before switching to the collapsed
   // dimensions. Without this read, Chromium can merge both style updates and
   // omit the transition event that unlocks the expand button.
   void dockShellSurfaceRef.value?.offsetHeight
   dockMorphFrame = requestAnimationFrame(() => {
+    if (generation !== dockMorphGeneration || dockMorphDirection.value !== 'collapse')
+      return
     isDockCollapsed.value = true
     dockMorphFrame = undefined
     scheduleDockMorphCompletion('collapse')
@@ -352,6 +355,8 @@ async function startDockShellCollapse() {
 }
 
 function collapseDock() {
+  if (props.settingsOpen)
+    return
   if (isDockCollapsed.value || dockMorphDirection.value === 'collapse' || dockContentTimer !== undefined)
     return
 
@@ -407,14 +412,23 @@ function handleDockShellTransitionEnd(event: TransitionEvent) {
   if (event.target !== event.currentTarget)
     return
 
-  const primaryAxisProperty = dockPosition.value === 'bottom' ? 'width' : 'height'
-  if (event.propertyName !== primaryAxisProperty)
+  if (event.propertyName !== 'transform')
     return
 
   const direction = dockMorphDirection.value
   if (direction)
     completeDockMorph(direction)
 }
+
+watch(preferredReducedMotion, (value) => {
+  if (value !== 'reduce' || (!isDockTransitioning.value && dockContentTimer === undefined && dockMorphFrame === undefined))
+    return
+  const direction = dockMorphDirection.value ?? 'collapse'
+  clearDockMorphSchedule()
+  isDockCollapsed.value = direction === 'collapse'
+  dockMorphDirection.value = direction
+  completeDockMorph(direction)
+})
 
 function handleDockItemClick($event: MouseEvent, dockItem: DockItem) {
   if ($event.button !== 0)
@@ -449,7 +463,8 @@ function scheduleAutoCollapse(delay = 900) {
 
   autoCollapseTimer = setTimeout(() => {
     autoCollapseTimer = undefined
-    collapseDock()
+    if (!isLayoutEditing.value && shouldAutoCollapseDock(settings.value.dockCollapseMode) && !props.settingsOpen && !dockContentHover.value && !dockInteractionActive.value)
+      collapseDock()
   }, delay)
 }
 
@@ -468,8 +483,9 @@ function handleDockPointerUp(event: PointerEvent) {
   scheduleAutoCollapse(1800)
 }
 
-function handleDockFocusIn() {
-  dockInteractionActive.value = true
+function handleDockFocusIn(event: FocusEvent) {
+  // Restoring mouse focus from Settings must not pin Dock open indefinitely.
+  dockInteractionActive.value = event.target instanceof HTMLElement && event.target.matches(':focus-visible')
   clearAutoCollapseTimer()
   expandDock()
 }
@@ -566,7 +582,8 @@ watch(
       expandDock()
       return
     }
-    const shouldCollapse = getDockCollapsedStateForMode(mode, dockContentHover.value || settingsOpen)
+    clearAutoCollapseTimer()
+    const shouldCollapse = getDockCollapsedStateForMode(mode, dockContentHover.value || dockInteractionActive.value || settingsOpen)
     if (shouldCollapse && ready)
       collapseDock()
     else if (!shouldCollapse)
@@ -661,7 +678,6 @@ const dockTransformStyle = computed((): CSSProperties => {
 
   // Adjust origin based on dock position
   const origin = {
-    left: 'left center',
     right: 'right center',
     bottom: 'center bottom',
   }[position] || 'center center'
@@ -678,7 +694,7 @@ const dockTransformStyle = computed((): CSSProperties => {
   }
 })
 
-const dockShellStyle = computed((): CSSProperties => {
+const dockShellGeometry = computed(() => {
   const measuredSize = dockPosition.value === 'bottom'
     ? expandedDockShellHeight.value
     : expandedDockShellWidth.value
@@ -687,14 +703,39 @@ const dockShellStyle = computed((): CSSProperties => {
     : DOCK_LAYOUT.controlSize
   const expectedDockShellSize = controlSize + DOCK_LAYOUT.shellPadding
   const collapsedSize = resolveDockCollapsedShellSize(measuredSize, expectedDockShellSize)
+  const width = collapsedSize * 2
+  const height = collapsedSize / 3
+  const expandedWidth = expandedDockShellWidth.value || collapsedSize
+  const expandedHeight = expandedDockShellHeight.value || collapsedSize
+  return { width, height, expandedWidth, expandedHeight, radius: collapsedSize / 2 }
+})
 
+const dockShellStyle = computed((): CSSProperties => {
+  const { width, height, expandedWidth, expandedHeight, radius } = dockShellGeometry.value
   return {
-    '--dock-shell-size': `${collapsedSize}px`,
-    '--dock-shell-radius': `${collapsedSize / 2}px`,
+    '--dock-shell-radius': `${radius}px`,
+    '--dock-collapsed-width': `${width}px`,
+    '--dock-collapsed-height': `${height}px`,
+    '--dock-wake-width': `${expandedDockWidth.value || expandedWidth}px`,
+    '--dock-collapse-x': `${dockPosition.value === 'right' ? (expandedWidth - width) / 2 : 0}px`,
+    '--dock-collapse-y': `${dockPosition.value === 'bottom' ? (expandedHeight - height) / 2 : 0}px`,
+    '--dock-collapse-scale-x': width / expandedWidth,
+    '--dock-collapse-scale-y': height / expandedHeight,
+    // Compensate the shell scale so the final painted ends remain circular.
+    '--dock-collapse-radius-x': `${height / 2 * expandedWidth / width}px`,
+    '--dock-collapse-radius-y': `${expandedHeight / 2}px`,
   }
 })
 
+watchEffect(() => {
+  const { expandedHeight, height } = dockShellGeometry.value
+  emit('bottomShiftChange', dockPosition.value === 'bottom' && isDockCollapsed.value
+    ? (expandedHeight - height) * dockScale.value
+    : 0)
+})
+
 onUnmounted(() => {
+  emit('bottomShiftChange', 0)
   clearAutoCollapseTimer()
   if (dockReadyFrame !== undefined)
     cancelAnimationFrame(dockReadyFrame)
@@ -705,8 +746,8 @@ onUnmounted(() => {
 <template>
   <aside
     class="dock-wrap"
-    pos="fixed top-0" z-100 flex="~ col justify-center items-center" w-full h-full
-    z-10 pointer-events-none
+    pos="fixed top-0" flex="~ col justify-center items-center" w-full h-full
+    pointer-events-none
   >
     <!-- Dock Content -->
     <div
@@ -714,7 +755,6 @@ onUnmounted(() => {
       class="dock-content"
       data-layout-editable-id="dock"
       :class="{
-        'left': dockPosition === 'left',
         'right': dockPosition === 'right',
         'bottom': dockPosition === 'bottom',
         'hover': dockContentHover,
@@ -874,7 +914,8 @@ onUnmounted(() => {
         </div>
 
         <IconButton
-          class="dock-collapsed-trigger bew-shape-circle"
+          class="dock-collapsed-trigger"
+          shape="pill"
           :class="{ visible: isDockCollapsedTriggerVisible }"
           :label="$t('dock.expand_dock')"
           :aria-hidden="!isDockCollapsedTriggerVisible"
@@ -883,7 +924,10 @@ onUnmounted(() => {
           @click="expandDock"
           @pointerenter="shouldAutoCollapseDock(settings.dockCollapseMode) && expandDock()"
         >
-          <Icon icon="mingcute:more-2-line" />
+          <span class="dock-collapsed-mark" aria-hidden="true">
+            <span class="dock-collapsed-mark__line" />
+            <span v-for="dot in 3" :key="dot" class="dock-collapsed-mark__dot" />
+          </span>
         </IconButton>
       </div>
 
@@ -989,6 +1033,8 @@ onUnmounted(() => {
 @use "../../styles/breakpoints";
 
 .dock-wrap {
+  z-index: var(--bew-z-base-overlay);
+
   > * {
     --uno: "pointer-events-auto";
   }
@@ -1011,10 +1057,6 @@ onUnmounted(() => {
 
   :deep(.b-tooltip-wrapper:hover .b-tooltip) {
     transition-delay: var(--bew-duration-moderate, 300ms);
-  }
-
-  &.left {
-    --uno: "left-2 after:right--4px";
   }
 
   &.right {
@@ -1077,19 +1119,16 @@ onUnmounted(() => {
     pointer-events: none;
     transform: translate(-50%, -50%);
     transition:
-      width var(--bew-duration-moderate) var(--bew-ease-standard),
-      height var(--bew-duration-moderate) var(--bew-ease-standard),
+      transform var(--bew-duration-moderate) var(--bew-ease-standard),
+      border-radius var(--bew-duration-moderate) var(--bew-ease-standard),
       background var(--bew-duration-normal) var(--bew-ease-standard),
       box-shadow var(--bew-duration-normal) var(--bew-ease-standard);
   }
 
-  .dock-content-inner.morphing .dock-shell-surface {
-    will-change: width, height;
-  }
-
   .dock-content-inner.collapsed .dock-shell-surface {
-    width: var(--dock-shell-size);
-    height: var(--dock-shell-size);
+    transform: translate(-50%, -50%) translate(var(--dock-collapse-x), var(--dock-collapse-y))
+      scale(var(--dock-collapse-scale-x), var(--dock-collapse-scale-y));
+    border-radius: var(--dock-collapse-radius-x) / var(--dock-collapse-radius-y);
   }
 
   .dock-expanded-content {
@@ -1123,13 +1162,16 @@ onUnmounted(() => {
     top: 50%;
     left: 50%;
     z-index: 3;
-    width: var(--dock-shell-size);
-    height: var(--dock-shell-size);
+    width: var(--dock-collapsed-width);
+    height: var(--dock-collapsed-height);
+    min-height: calc(var(--bew-space-6) / var(--scale, 1));
+    border-radius: var(--bew-radius-full);
+    background: transparent;
     color: var(--bew-text-1);
     visibility: hidden;
     opacity: 0;
     pointer-events: none;
-    transform: translate(-50%, -50%) scale(0.86);
+    transform: translate(-50%, -50%) translate(var(--dock-collapse-x), var(--dock-collapse-y)) scale(0.86);
     transition:
       opacity var(--bew-duration-fast) var(--bew-ease-standard),
       transform var(--bew-duration-fast) var(--bew-ease-standard),
@@ -1139,14 +1181,51 @@ onUnmounted(() => {
       visibility: visible;
       opacity: 1;
       pointer-events: auto;
-      transform: translate(-50%, -50%) scale(1);
+      transform: translate(-50%, -50%) translate(var(--dock-collapse-x), var(--dock-collapse-y)) scale(1);
       transition-delay: 0s;
     }
 
-    svg {
-      width: var(--bew-dock-control-icon-size);
-      height: var(--bew-dock-control-icon-size);
+    &.visible:active:not(:disabled) {
+      transform: translate(-50%, -50%) translate(var(--dock-collapse-x), var(--dock-collapse-y))
+        scale(var(--bew-control-press-scale));
     }
+  }
+
+  &.bottom .dock-collapsed-trigger::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 50%;
+    width: var(--dock-wake-width);
+    height: calc(100% + var(--bew-space-2));
+    transform: translateX(-50%);
+  }
+
+  .dock-collapsed-mark {
+    filter: var(--bew-dock-collapsed-mark-glow);
+    position: relative;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: var(--bew-space-2);
+    width: calc(var(--dock-collapsed-width) - var(--dock-collapsed-height));
+    height: var(--bew-space-1);
+    pointer-events: none;
+  }
+
+  .dock-collapsed-mark__line,
+  .dock-collapsed-mark__dot {
+    height: 100%;
+    background: currentColor;
+    border-radius: var(--bew-radius-full);
+  }
+
+  .dock-collapsed-mark__line {
+    flex: 1;
+  }
+  .dock-collapsed-mark__dot {
+    width: var(--bew-space-1);
+    flex: none;
   }
 
   &.bottom .dock-expanded-content {
@@ -1203,7 +1282,7 @@ onUnmounted(() => {
     }
 
     &:focus-visible:not([data-active="true"]):not(:disabled) {
-      outline: 2px solid var(--bew-theme-focus-ring);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: var(--bew-space-0-5);
     }
 
@@ -1416,13 +1495,6 @@ onUnmounted(() => {
 
   .dock-content .dock-content-inner {
     --dock-shell-control-size: var(--bew-dock-control-size-lg);
-  }
-
-  .dock-content .dock-collapsed-trigger {
-    svg {
-      width: var(--bew-dock-control-icon-size-lg);
-      height: var(--bew-dock-control-icon-size-lg);
-    }
   }
 }
 

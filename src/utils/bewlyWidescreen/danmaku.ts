@@ -236,6 +236,7 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
     source,
     {
       send: t('widescreen.send_danmaku'),
+      unavailable: t('common.send_not_allowed'),
       settings: t('widescreen.danmaku_settings'),
       style: t('widescreen.danmaku_style'),
     },

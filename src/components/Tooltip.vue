@@ -1,25 +1,37 @@
 <script lang="ts">
+import { useAnchoredPopoverPosition } from '~/composables/useAnchoredPopoverPosition'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
+import type { TooltipPlacement } from '~/utils/floatingMenu'
+import { computeTooltipPosition } from '~/utils/floatingMenu'
 
 let tooltipWarmUntil = 0
 </script>
 
-<script lang="ts" setup>
-const props = defineProps<{
+<script setup lang="ts">
+const props = withDefaults(defineProps<{
   content: string
-  placement: 'left' | 'right' | 'top' | 'bottom' | 'bottom-left' | 'bottom-right'
+  placement?: TooltipPlacement
   type?: 'default' | 'dark' | 'white'
   teleport?: boolean
-}>()
+}>(), { placement: 'top' })
 
 const app = inject<BewlyAppProvider | undefined>('BEWLY_APP', undefined)
 const teleportTarget = computed(() => props.teleport ? app?.mainAppRef.value : undefined)
 const wrapperRef = ref<HTMLElement>()
 const tooltipRef = ref<HTMLElement>()
-const floatingPosition = ref<{ top: string, left: string }>()
 const visible = ref(false)
 const instant = ref(false)
 let enterTimer: ReturnType<typeof setTimeout> | undefined
+const floatingVisible = computed(() => visible.value && Boolean(teleportTarget.value))
+const { scheduleUpdate } = useAnchoredPopoverPosition(wrapperRef, tooltipRef, floatingVisible, (anchor, popup, width, height) => computeTooltipPosition(anchor, popup, width, height, props.placement))
+watch([() => props.placement, () => props.content, teleportTarget], ([,, target]) => {
+  if (!target) {
+    tooltipRef.value?.style.removeProperty('top')
+    tooltipRef.value?.style.removeProperty('left')
+    tooltipRef.value?.removeAttribute('data-positioned')
+  }
+  scheduleUpdate()
+})
 
 function showTooltip(keyboard = false) {
   clearTimeout(enterTimer)
@@ -50,49 +62,6 @@ function dismissTooltip() {
   visible.value = false
 }
 
-function updateFloatingPosition() {
-  if (!wrapperRef.value || !tooltipRef.value)
-    return
-  const anchor = wrapperRef.value.getBoundingClientRect()
-  const tip = tooltipRef.value.getBoundingClientRect()
-  const inset = 8
-  let left = anchor.left + (anchor.width - tip.width) / 2
-  let top = anchor.top - tip.height - inset
-  if (props.placement.startsWith('bottom')) {
-    top = anchor.bottom + inset
-    if (top + tip.height > window.innerHeight - inset)
-      top = anchor.top - tip.height - inset
-    if (props.placement === 'bottom-left')
-      left = anchor.left
-    if (props.placement === 'bottom-right')
-      left = anchor.right - tip.width
-  }
-  else if (props.placement === 'left' || props.placement === 'right') {
-    left = props.placement === 'left' ? anchor.left - tip.width - inset : anchor.right + inset
-    top = anchor.top + (anchor.height - tip.height) / 2
-  }
-  else if (top < inset) {
-    top = anchor.bottom + inset
-  }
-  floatingPosition.value = {
-    left: `${Math.max(inset, Math.min(left, window.innerWidth - tip.width - inset))}px`,
-    top: `${Math.max(inset, Math.min(top, window.innerHeight - tip.height - inset))}px`,
-  }
-}
-
-watch([visible, teleportTarget], ([shown, target], _previous, onCleanup) => {
-  floatingPosition.value = undefined
-  if (!shown || !target)
-    return
-  updateFloatingPosition()
-  window.addEventListener('resize', updateFloatingPosition, { passive: true })
-  window.addEventListener('scroll', updateFloatingPosition, { passive: true, capture: true })
-  onCleanup(() => {
-    window.removeEventListener('resize', updateFloatingPosition)
-    window.removeEventListener('scroll', updateFloatingPosition, true)
-  })
-}, { flush: 'post' })
-
 onDeactivated(dismissTooltip)
 onBeforeUnmount(() => clearTimeout(enterTimer))
 </script>
@@ -115,7 +84,6 @@ onBeforeUnmount(() => clearTimeout(enterTimer))
         role="tooltip"
         :aria-hidden="!visible"
         :class="[!teleportTarget && `b-tooltip--placement-${placement ?? 'top'}`, `b-tooltip--type-${type ?? 'default'}`, { 'is-visible': visible, 'is-instant': instant, 'is-teleported': teleportTarget }]"
-        :style="teleportTarget ? { ...floatingPosition, visibility: floatingPosition ? undefined : 'hidden' } : undefined"
       >
         {{ content }}
       </div>
@@ -142,6 +110,10 @@ onBeforeUnmount(() => clearTimeout(enterTimer))
     width: max-content;
     max-width: calc(100vw - var(--bew-space-4));
     white-space: normal;
+
+    &:not([data-positioned]) {
+      visibility: hidden;
+    }
   }
 
   z-index: var(--bew-z-popover);

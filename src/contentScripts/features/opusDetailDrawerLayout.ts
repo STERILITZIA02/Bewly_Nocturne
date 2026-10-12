@@ -590,7 +590,7 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
   width: 44px !important;
   height: 44px !important;
   padding: 0 !important;
-  border: 2px solid rgba(255, 255, 255, 0.55) !important;
+  border: 1px solid rgba(255, 255, 255, 0.55) !important;
   border-radius: 8px !important;
   overflow: hidden !important;
   background: rgba(0, 0, 0, 0.25) !important;
@@ -600,8 +600,8 @@ html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-g
 }
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__thumb.is-active {
   opacity: 1 !important;
-  border-color: var(--bew-theme-color, var(--brand_pink, #fb7299)) !important;
-  box-shadow: 0 0 0 1px var(--bew-theme-color, var(--brand_pink, #fb7299)) !important;
+  border-color: var(--bew-focus-ring-color, CanvasText) !important;
+  box-shadow: none !important;
 }
 html.momentsPage.drawer.bewly-opus-layout .bewly-opus-split__media .bewly-opus-gallery__thumb img {
   display: block !important;

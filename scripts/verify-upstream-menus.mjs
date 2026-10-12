@@ -8,6 +8,7 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
     const settings = Vue.ref({ dockPosition: 'bottom', dockCollapseMode: 'button', autoHideTopBar: false, dockItemsConfig: [], topBarComponentsConfig: [] })
     const layout = await loadSourceModule('../src/logic/layoutEdit.ts', {
       'vue': Vue,
+      '~/constants/dock': await import('../src/constants/dock'),
       '~/enums/appEnums': enums,
       '~/logic/storage': { settings, gridLayout: Vue.ref({ home: 'adaptive' }) },
       './layoutEditPreview': await import('../src/logic/layoutEditPreview'),
@@ -57,13 +58,13 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
       dock.dispatchEvent(keyboard)
       await flush()
       assert.equal(keyboard.defaultPrevented, true)
-      clickChoice('position.left')
-      await flush()
-      assert.equal(settings.value.dockPosition, 'left')
-      assert.match(host.querySelector('[role="menuitemradio"][aria-checked="true"]').textContent, /position.left/)
+      assert.equal([...host.querySelectorAll('[role="menuitemradio"]')].some(item => item.textContent.includes('position.left')), false)
+      assert.match(host.querySelector('[role="menuitemradio"][aria-checked="true"]').textContent, /position.bottom/)
       clickChoice('position.right')
       await flush()
       assert.equal(settings.value.dockPosition, 'right')
+      layout.getSettingDescriptor('navigation.dock.position').set('left')
+      assert.equal(settings.value.dockPosition, 'bottom', 'old left-position values normalize to the supported default')
       host.querySelector('[role="menuitem"]').click()
       await flush()
       assert.deepEqual(opened, ['navigation.dock.position'])

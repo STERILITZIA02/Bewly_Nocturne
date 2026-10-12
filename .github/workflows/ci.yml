@@ -7,8 +7,7 @@ on:
       - main
     paths-ignore:
       - LICENSE
-      - README-cmn_CN.md
-      - README-cmn_TW.md
+      - README.md
       - docs/**
 
   pull_request:
@@ -17,8 +16,7 @@ on:
       - main
     paths-ignore:
       - LICENSE
-      - README-cmn_CN.md
-      - README-cmn_TW.md
+      - README.md
       - docs/**
 
 jobs:
@@ -86,9 +84,9 @@ jobs:
       - name: Build Extension
         run: pnpm build
 
-      - name: Upload Chrome Extension Zip
+      - name: Upload Chrome extension
         if: ${{ matrix.os == 'ubuntu-latest' && matrix.node == 'lts/*' && github.ref_name == 'main' }}
         uses: actions/upload-artifact@v4.3.1
         with:
-          name: BewlyMac-chrome-extension
+          name: Bewly-Nocturne-chrome-extension
           path: extension

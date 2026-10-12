@@ -1,5 +1,7 @@
 import type { Settings } from '~/logic/storage'
 
+import type { MomentPromotion } from './momentPromotion'
+
 export interface MomentFilterCandidate {
   isUpRecommendation?: boolean
   isChargeExclusive?: boolean
@@ -12,13 +14,14 @@ export interface MomentFilterCandidate {
   isUgcSeason?: boolean
   isPgc?: boolean
   isArticle?: boolean
+  momentPromotion?: MomentPromotion
 }
 
 type FilterSettings = Pick<Settings, 'momentsEnableKeywordFilter' | 'momentsBlockedKeywords'
   | 'momentsFilterUpRecommendation' | 'momentsHideChargeExclusive' | 'momentsHideVideoReservation'
   | 'momentsHideLiveReservation' | 'momentsHideLiveDynamics' | 'momentsHideForwardDynamics'
   | 'momentsHideVideoDynamics' | 'momentsHideDrawDynamics' | 'momentsHideUgcSeasonDynamics'
-  | 'momentsHidePgcDynamics' | 'momentsHideArticleDynamics'>
+  | 'momentsHidePgcDynamics' | 'momentsHideArticleDynamics' | 'blockAds'>
 
 /** Compile once when the rules change. Unknown fields never imply a type. */
 export function createMomentFilter(config: FilterSettings) {
@@ -49,8 +52,10 @@ export function createMomentFilter(config: FilterSettings) {
   const hideVideo = config.momentsHideVideoDynamics
   return {
     keywords,
-    active: Boolean(keywords.length || common.length || types.length || hideForward || hideVideo),
+    active: Boolean(keywords.length || common.length || types.length || hideForward || hideVideo || config.blockAds),
     passes(item: MomentFilterCandidate, text = '') {
+      if (config.blockAds && item.momentPromotion && item.momentPromotion.kind !== 'suspected')
+        return false
       if (keywords.length) {
         const searchable = text.toLocaleLowerCase()
         if (keywords.some(word => searchable.includes(word)))

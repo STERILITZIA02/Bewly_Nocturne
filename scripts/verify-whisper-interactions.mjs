@@ -40,6 +40,245 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     app.component('ALink', { props: ['href'], setup: (props, { slots }) => () => Vue.h('a', { href: props.href }, slots.default?.()) })
   }
 
+  check('Native send paint distinguishes empty disabled input from a real cooldown and restores its marker', async () => {
+    const { setupWidescreenDanmakuSemantics } = await import('../src/utils/bewlyWidescreenNative')
+    const host = document.body.appendChild(document.createElement('div'))
+    host.innerHTML = '<input class="bpx-player-dm-input" placeholder="Message"><div class="bpx-player-dm-btn-send bui-disabled">发送</div>'
+    const send = host.querySelector('.bpx-player-dm-btn-send')
+    const input = host.querySelector('input')
+    const cleanup = setupWidescreenDanmakuSemantics(host, { send: 'Send', unavailable: 'Not allowed', style: 'Style', settings: 'Settings' })
+    try {
+      assert.equal(send.dataset.bewSendIdle, 'true')
+      assert.equal(send.dataset.bewSendState, 'idle')
+      send.textContent = '3s'
+      await flush()
+      assert.equal(send.dataset.bewSendIdle, 'false', 'the real cooldown remains busy after native input clearing')
+      assert.equal(send.dataset.bewSendState, 'pending')
+      send.textContent = '发送'
+      await flush()
+      assert.equal(send.dataset.bewSendIdle, 'true')
+      input.value = 'draft'
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      assert.equal(send.dataset.bewSendIdle, 'false')
+      input.disabled = true
+      send.textContent = '需要达到 Lv2'
+      await flush()
+      assert.equal(send.dataset.bewSendState, 'blocked', 'a level requirement is not a numeric countdown')
+      assert.equal(send.getAttribute('aria-label'), 'Not allowed')
+      assert.equal(send.title, 'Not allowed')
+      input.disabled = false
+      send.classList.remove('bui-disabled')
+      send.textContent = '发送'
+      await flush()
+      assert.equal(send.dataset.bewSendState, 'ready')
+      assert.equal(send.getAttribute('aria-label'), 'Send')
+      cleanup()
+      assert.equal(send.hasAttribute('data-bew-send-state'), false)
+      assert.equal(send.hasAttribute('title'), false)
+      assert.equal(send.hasAttribute('data-bew-send-idle'), false)
+      input.value = ''
+      input.dispatchEvent(new Event('input', { bubbles: true }))
+      assert.equal(send.hasAttribute('data-bew-send-idle'), false, 'cleanup removes the input listener')
+    }
+    finally {
+      cleanup()
+      host.remove()
+    }
+  })
+
+  check('Native comments retain their publisher while distinguishing empty, restricted and pending editors', async () => {
+    const { updateCommentSendButton } = await import('../src/inject/commentSendButton')
+    const host = document.body.appendChild(document.createElement('div'))
+    const root = host.attachShadow({ mode: 'open' })
+    root.innerHTML = '<bili-comment-rich-textarea></bili-comment-rich-textarea><div id="pub"><button>发布</button></div>'
+    const inputRoot = root.querySelector('bili-comment-rich-textarea').attachShadow({ mode: 'open' })
+    inputRoot.innerHTML = '<div contenteditable="true"></div>'
+    const editor = inputRoot.querySelector('div')
+    const button = root.querySelector('button')
+    let clicks = 0
+    button.onclick = () => clicks++
+    try {
+      updateCommentSendButton(root, 'en')
+      assert.equal(button.dataset.bewSendState, 'idle')
+      editor.setAttribute('contenteditable', 'false')
+      updateCommentSendButton(root, 'en')
+      assert.equal(button.dataset.bewSendState, 'blocked')
+      assert.match(button.title, /cannot be posted/)
+      editor.setAttribute('contenteditable', 'true')
+      editor.textContent = 'Fixture comment'
+      editor.dispatchEvent(new Event('input', { bubbles: true, composed: true }))
+      assert.equal(button.dataset.bewSendState, 'ready')
+      button.click()
+      assert.equal(clicks, 1, 'the original native button and its listener stay intact')
+      button.setAttribute('aria-busy', 'true')
+      updateCommentSendButton(root, 'en')
+      assert.equal(button.dataset.bewSendState, 'pending')
+    }
+    finally { host.remove() }
+  })
+
+  check('Whisper avatars: profile links are separate from session buttons and reject non-user IDs', async () => {
+    const sessionModule = await import(`${path}privateSession`)
+    const ListItem = await compileComponent(`${path}ConversationListItem.vue`, { 'vue-i18n': i18n, './privateSession': sessionModule, './usePrivateSessionActions': await import('../src/contentScripts/views/Notifications/whisper/usePrivateSessionActions') })
+    const Item = await compileComponent(`${path}PrivateMessageItem.vue`, {
+      'vue-i18n': i18n,
+      './privateSession': sessionModule,
+      './PrivateMessageContent.vue': { default: blank },
+    })
+    const senderId = Vue.ref('123')
+    let selected = 0
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h('div', [
+      Vue.h(ListItem, { selected: false, session: { key: '1:123', talkerId: '123', name: 'Fixture', summary: '', timestamp: 0, capabilities: { canOpenProfile: true } }, onSelect: () => selected++ }),
+      Vue.h(Item, { autoLoadImages: false, senderName: 'Fixture', senderAvatarUrl: '', message: { senderId: senderId.value, msgKey: '1', timestamp: 0, content: { type: 'text', segments: [] } } }),
+    ]) })
+    installLeaves(app)
+    try {
+      app.mount(host)
+      await flush()
+      const links = [...host.querySelectorAll('a')]
+      assert.equal(links.length, 2)
+      for (const link of links) {
+        assert.equal(link.href, 'https://space.bilibili.com/123')
+        assert.equal(link.closest('button'), null, 'no interactive link is nested inside the session button')
+        link.addEventListener('click', event => event.preventDefault())
+        link.click()
+      }
+      assert.equal(selected, 0, 'avatar navigation never selects or acknowledges a conversation')
+      host.querySelector('[data-session-key]').click()
+      assert.equal(selected, 1)
+      senderId.value = '0'
+      await flush()
+      assert.equal(host.querySelector('.private-message-item__avatar').tagName, 'SPAN')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
+  check('Whisper media: one shared owner, hover-only activation, native controls and release on leave/offscreen/account changes', async () => {
+    const active = Vue.ref(true)
+    const account = Vue.ref(1)
+    const talker = Vue.ref('2')
+    let starts = 0
+    let resets = 0
+    let observed
+    let disconnected = 0
+    const oldObserver = globalThis.IntersectionObserver
+    const oldMatchMedia = window.matchMedia
+    globalThis.IntersectionObserver = class {
+      constructor(callback) { observed = callback }
+      observe() {}
+      disconnect() { disconnected++ }
+    }
+    window.matchMedia = () => ({ matches: false })
+    const controller = {
+      hoveredMediaId: Vue.ref(''),
+      previewState: Vue.ref('ready'),
+      previewGeneration: Vue.ref(1),
+      previewUrls: Vue.reactive({}),
+      handleMediaEnter(media) {
+        starts++
+        this.hoveredMediaId.value = media.id
+        this.previewUrls[media.id] = 'https://example.com/fixture.mp4'
+      },
+      handleMediaLeave() { this.hoveredMediaId.value = '' },
+      bindPreviewVideo() {},
+      reset() {
+        resets++
+        this.hoveredMediaId.value = ''
+      },
+    }
+    const adapter = await loadSourceModule(`${path}usePrivateMessagePreviews.ts`, {
+      'vue': Vue,
+      '../../Moments/useMomentPreviews': { useMomentPreviews(getAccount, options) {
+        assert.equal(getAccount(), 1)
+        assert.equal(options.videoEnabled(), true)
+        assert.equal(options.videoDelayed(), false, 'hover starts private-message media loading immediately')
+        return controller
+      } },
+    })
+    const Cover = await compileComponent(`${path}PrivateMessageMediaCover.vue`, {
+      'vue': Vue,
+      'vue-i18n': i18n,
+      './usePrivateMessagePreviews': adapter,
+      '~/components/MomentCard/MomentVideoPreview.vue': { default: { props: ['controls'], render() { return Vue.h('video', { controls: this.controls }) } } },
+    }, { globals: { IntersectionObserver: globalThis.IntersectionObserver } })
+    const href = Vue.ref('https://www.bilibili.com/video/BV1Fixture')
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ setup() {
+      adapter.usePrivateMessagePreviews(() => active.value, () => account.value, () => talker.value)
+      return () => Vue.h(Cover, { src: 'https://example.com/cover.jpg', href: href.value, video: true })
+    } })
+    installLeaves(app)
+    try {
+      app.mount(host)
+      await flush()
+      assert.equal(starts, 0, 'mounting the timeline never starts preview requests')
+      const cover = host.querySelector('.private-message-media-cover')
+      cover.dispatchEvent(new MouseEvent('mouseenter', { buttons: 1 }))
+      assert.equal(starts, 0, 'dragging does not start previews')
+      cover.dispatchEvent(new MouseEvent('mouseenter'))
+      await flush()
+      assert.equal(starts, 1)
+      assert.equal(host.querySelector('video').controls, true)
+      assert.equal(host.querySelector('video').closest('a'), null, 'media controls must not trigger link navigation')
+      observed([{ isIntersecting: false }])
+      await flush()
+      assert.equal(host.querySelector('video'), null)
+      assert.ok(disconnected)
+      cover.dispatchEvent(new MouseEvent('mouseenter'))
+      await flush()
+      cover.dispatchEvent(new MouseEvent('mouseleave'))
+      await flush()
+      assert.equal(host.querySelector('video'), null)
+      for (const change of [() => account.value++, () => talker.value = '3', () => active.value = false]) {
+        const before = resets
+        change()
+        await flush()
+        assert.equal(resets, before + 1)
+      }
+      href.value = 'https://www.bilibili.com/opus/123'
+      await flush()
+      const before = starts
+      cover.dispatchEvent(new MouseEvent('mouseenter'))
+      assert.equal(starts, before, 'an ordinary dynamic link is not guessed to contain a video')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+      globalThis.IntersectionObserver = oldObserver
+      window.matchMedia = oldMatchMedia
+    }
+  })
+
+  check('Expired private cards show a localized notice without the unsupported-message link', async () => {
+    const Content = await compileComponent(`${path}PrivateMessageContent.vue`, {
+      './PrivateMessageMediaCover.vue': { default: blank },
+      'vue-i18n': i18n,
+      '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
+    })
+    const content = Vue.ref({ type: 'expired' })
+    const host = document.body.appendChild(document.createElement('div'))
+    const app = Vue.createApp({ render: () => Vue.h(Content, { content: content.value, autoLoadImages: false, isSelf: false }) })
+    installLeaves(app)
+    try {
+      app.mount(host)
+      await flush()
+      assert.equal(host.textContent.trim(), 'notifications.whisper.messages.expired')
+      assert.equal(host.querySelector('a'), null)
+      content.value = { type: 'unknown' }
+      await flush()
+      assert.ok(host.textContent.includes('notifications.whisper.messages.unsupported'))
+      assert.ok(host.querySelector('a'), 'unknown types retain their explicit original-page fallback')
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
   check('Whisper reading anchor: prepends preserve the visible message; newer reading intent and replaced viewports reject restoration', async () => {
     const frames = new Map()
     let id = 0
@@ -213,6 +452,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
   })
 
   check('Whisper history: entry gates requests, switching preserves the shell/composer, and late history never crosses conversations', async () => {
+    let resizePresentation
     const frames = new Map()
     const timers = new Map()
     let id = 0
@@ -232,7 +472,12 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
         return id
       },
       clearTimeout: id => timers.delete(id),
-      ResizeObserver: class { observe() {} unobserve() {} disconnect() {} },
+      ResizeObserver: class {
+        constructor(callback) { resizePresentation = callback }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
     }
     const stepFrame = () => {
       const batch = [...frames.values()]
@@ -282,6 +527,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       syncUnread: async () => {},
     }))
     const Content = await compileComponent(`${path}PrivateMessageContent.vue`, {
+      './PrivateMessageMediaCover.vue': { default: blank },
       'vue-i18n': i18n,
       '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
     })
@@ -307,6 +553,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       setDraft(talkerId, value) { this.getState(talkerId).draft = value },
     }
     const View = await compileComponent(`${path}ConversationView.vue`, {
+      './usePrivateMessagePreviews': { usePrivateMessagePreviews() {} },
       'vue-i18n': i18n,
       '~/constants/layout': await import('../src/constants/layout'),
       '~/logic': { settings: Vue.ref({ autoMarkPrivateMessagesRead: true, followNewPrivateMessages: true, autoLoadPrivateMessageImages: true }) },
@@ -345,6 +592,17 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       app.mount(host)
       await flush()
       assert.equal(requests.length, 0)
+      const preparedComposer = host.querySelector('.conversation-view__floating-composer')
+      assert.ok(preparedComposer, 'prepare the composer before releasing history, not after the entrance')
+      assert.equal(preparedComposer.hasAttribute('inert'), true)
+      preparedComposer.getBoundingClientRect = () => ({ height: 62 })
+      resizePresentation([{ target: preparedComposer }])
+      await flush()
+      assert.equal(host.querySelector('.conversation-view').style.getPropertyValue('--conversation-composer-reserve'), '62px')
+      // Restore this suite's shared geometry before its existing resize cases.
+      delete preparedComposer.getBoundingClientRect
+      resizePresentation([{ target: preparedComposer }])
+      await flush()
       await exposed.refresh()
       assert.equal(requests.length, 0, 'polling/manual refresh cannot bypass the entry phase')
       stepFrame()
@@ -356,6 +614,8 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.equal(timers.size, 1, 'a switch during entry retains the same expansion and releases only the latest selection')
       settleExpansion()
       await flush()
+      assert.equal(host.querySelector('.conversation-view__floating-composer'), preparedComposer)
+      assert.equal(preparedComposer.hasAttribute('inert'), false)
       assert.deepEqual(requests.map(request => request.talkerId), ['3'])
       assert.equal(host.querySelector('[data-bew-skeleton]'), null)
       requests[0].resolve(response('history-A', 3, 11, 1))
@@ -395,7 +655,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       }
       reader.getState('3').newMessagesAvailable = true
       await flush()
-      host.querySelector('.conversation-view__new-messages').click()
+      host.querySelector('.conversation-view__latest-action').click()
       stepFrame()
       await flush()
       assert.equal(host.querySelector('.conversation-view').getAttribute('style'), expandedStyle, 'the latest-message shortcut only scrolls the timeline')
@@ -409,6 +669,13 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       assert.equal(host.querySelector('.conversation-view').getAttribute('style'), expandedStyle, 'a late history page and its no-more flag never collapse the container')
       const shell = host.querySelector('.conversation-card')
       const composer = host.querySelector('.conversation-view__floating-composer')
+      for (const height of [60, 112, 600]) {
+        composer.getBoundingClientRect = () => ({ height })
+        resizePresentation([{ target: composer }])
+        await flush()
+        assert.equal(host.querySelector('.conversation-view').style.getPropertyValue('--conversation-composer-reserve'), `${height}px`, 'latest-message offset follows the existing composer observer through expansion and collapse')
+      }
+      delete composer.getBoundingClientRect
       const textarea = composer.querySelector('textarea')
       assert.equal(host.querySelector('.conversation-view__close'), null)
       textarea.value = 'saved draft for 3'
@@ -557,23 +824,33 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       activate() {},
       updateScrollTop(value) { this.state.scrollTop = value },
     }
+    const view = Vue.ref('whisper')
+    let pollingOptions
     const Workspace = await compileComponent(`${path}WhisperWorkspace.vue`, {
+      './PrivateConversationMenu.vue': { default: blank },
+      './usePrivateSessionActions': await import('../src/contentScripts/views/Notifications/whisper/usePrivateSessionActions'),
+      './PrivateHistorySearchResults.vue': { default: blank },
       'vue-i18n': i18n,
       '~/logic': { settings: Vue.ref({}) },
       '~/stores/topBarStore': { useTopBarStore: () => topBar },
       '~/utils/notificationRoute': await import('../src/utils/notificationRoute'),
       './ConversationDetailSkeleton.vue': { default: blank },
       './ConversationEmptyState.vue': { default: { render: () => Vue.h('p', { 'data-empty': '', 'style': transitionStyle }, 'empty') } },
+      './ConversationInsights.vue': { default: { render: () => Vue.h('section', { 'data-empty': '', 'style': transitionStyle }, 'insights') } },
       './ConversationList.vue': { default: List },
       './ConversationListSkeleton.vue': { default: blank },
       './ConversationOriginalFallback.vue': { default: blank },
       './ConversationView.vue': { default: Detail },
-      './usePrivateMessagePolling': { usePrivateMessagePolling: () => ({ triggerNow() {} }) },
+      './usePrivateMessagePolling': { usePrivateMessagePolling: (options) => {
+        pollingOptions = options
+        return { triggerNow() {} }
+      } },
     })
     const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp({ render: () => Vue.h(Workspace, {
       accountState: 'ready',
       active: true,
+      view: view.value,
       controller: reader,
       messagesController: {},
       emoteController: {},
@@ -581,6 +858,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       transientRecipient: transient.value,
       writeController: null,
       onSelectSession: (session) => {
+        view.value = 'whisper'
         selected.value = session.key
         transient.value = null
       },
@@ -592,7 +870,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
         selected.value = ''
         transient.value = null
       },
-    }) })
+    }, { navigation: () => Vue.h('div', { 'data-navigation': '' }), default: () => Vue.h('div', { 'data-feed': view.value }) }) })
     installLeaves(app)
     const select = async (key) => {
       host.querySelector(`[data-session="${key}"]`).click()
@@ -656,6 +934,23 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       await flush()
       assert.equal(host.querySelector('[data-talker="5"]'), recipient, 'confirmation of a transient recipient preserves its live composer and timeline')
       assert.deepEqual(mounts, ['2', '3', '5'])
+      const sidebar = host.querySelector('.whisper-workspace__sessions')
+      const list = sidebar.querySelector('nav')
+      for (const section of ['reply', 'at', 'love', 'system']) {
+        view.value = section
+        await flush()
+        assert.equal(host.querySelector('.whisper-workspace__sessions'), sidebar)
+        assert.equal(sidebar.querySelector('nav'), list, 'category changes preserve the same searchable list')
+        assert.ok(sidebar.querySelector('[data-navigation]'))
+        assert.ok(host.querySelector(`[data-feed="${section}"]`))
+        assert.equal(host.querySelector('[data-talker]'), null, 'hidden conversation DOM is released')
+        assert.equal(pollingOptions.getActiveConversation(), null, 'hidden details cannot poll or ACK')
+      }
+      list.querySelector('[data-session="1:2"]').click()
+      await flush()
+      assert.equal(view.value, 'whisper')
+      assert.equal(selected.value, '1:2')
+      assert.equal(host.querySelector('.whisper-workspace__sessions'), sidebar)
       app.unmount()
       await stepFrame()
       await stepFrame()
@@ -726,6 +1021,8 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       '~/utils/privateMessageImage': await import('../src/utils/privateMessageImage'),
     })
     const value = Vue.ref('before after')
+    const sending = Vue.ref(false)
+    const disabledReason = Vue.ref('')
     const conversationKey = Vue.ref('first')
     const imageDraft = Vue.ref(null)
     const host = document.body.appendChild(document.createElement('div'))
@@ -735,7 +1032,8 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const app = Vue.createApp({ render: () => Vue.h(Composer, {
       modelValue: value.value,
       conversationKey: conversationKey.value,
-      sending: false,
+      sending: sending.value,
+      disabledReason: disabledReason.value,
       enableImage: true,
       imageDraft: imageDraft.value,
       emotePackages: renderers.parsePrivateEmotePanel(catalogResponse),
@@ -823,6 +1121,39 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       await flush()
       assert.equal(files.length, 2, 'a newly opened picker belongs to the current user')
       assert.equal(submits, 1, 'switching and selecting images never send automatically')
+      const send = host.querySelector('.bew-send-button')
+      assert.equal(send.getAttribute('aria-label'), 'notifications.whisper.messages.send')
+      send.click()
+      await flush()
+      assert.equal(submits, 2, 'the circular submit button sends once through the form')
+      sending.value = true
+      await flush()
+      assert.equal(send.disabled, true)
+      assert.equal(send.getAttribute('aria-busy'), 'true')
+      send.click()
+      assert.equal(submits, 2, 'pending state prevents duplicate submissions')
+      sending.value = false
+      value.value = ''
+      await flush()
+      assert.equal(send.disabled, true, 'empty drafts remain unavailable')
+      assert.equal(send.getAttribute('aria-busy'), 'false', 'empty input is unavailable, not pending')
+      disabledReason.value = 'This conversation is read-only'
+      value.value = 'a retained draft must not be sent'
+      await flush()
+      assert.equal(send.dataset.bewSendState, 'blocked')
+      assert.equal(textarea.disabled, true)
+      assert.equal(textarea.value, '')
+      assert.equal(send.title, disabledReason.value)
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+      host.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+      input.dispatchEvent(new Event('change'))
+      await flush()
+      assert.equal(submits, 2)
+      assert.equal(files.length, 2)
+      disabledReason.value = ''
+      await flush()
+      assert.equal(send.dataset.bewSendState, 'ready')
+      assert.equal(textarea.value, value.value, 'restoring permission preserves the owned draft')
     }
     finally {
       app.unmount()

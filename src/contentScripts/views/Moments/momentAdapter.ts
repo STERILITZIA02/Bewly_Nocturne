@@ -3,6 +3,7 @@ import { formatCount } from '~/components/MomentCard/utils'
 import type { DataItem } from '~/models/moment/moment'
 import { classifyMomentAdditional, resolveMomentVoteStatus } from '~/utils/momentAdditionalPolicy'
 import { resolveMomentTextSources } from '~/utils/momentDescription'
+import { detectMomentPromotion } from '~/utils/momentPromotion'
 import { normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
 
 /** API-to-display normalization is independent of feed paging and DOM/layout ownership. */
@@ -385,7 +386,7 @@ export function createMomentAdapter(
     const raw = item as any
     const author = raw.modules?.module_author || {}
     const dynamic = raw.modules?.module_dynamic || {}
-    const isForward = raw.type === 'DYNAMIC_TYPE_FORWARD' && raw.orig
+    const isForward = Boolean(raw.type === 'DYNAMIC_TYPE_FORWARD' && raw.orig)
     const contentRaw = isForward ? raw.orig : raw
     const content = getMomentContent(contentRaw)
     // Keep the immediate quoted author separate from the video at the end of a
@@ -491,6 +492,7 @@ export function createMomentAdapter(
         || raw.modules?.module_dynamic?.major?.type === 'MAJOR_TYPE_ARTICLE'
         || contentRaw.modules?.module_dynamic?.major?.type === 'MAJOR_TYPE_ARTICLE',
       isUpRecommendation: Boolean(additional?.isUpRecommendation),
+      momentPromotion: detectMomentPromotion(raw),
       isVideoReservation: Boolean(additional?.isVideoReservation),
       isLiveReservation: Boolean(additional?.isLiveReservation),
       isChargeExclusive,

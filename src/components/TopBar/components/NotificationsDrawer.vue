@@ -8,6 +8,7 @@ import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { retiringTransition } from '~/utils/motionPresence'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
 const props = defineProps<{
@@ -468,7 +469,7 @@ function handleFocusDrawer(e?: Event) {
         />
       </Transition>
 
-      <Transition name="drawer">
+      <Transition name="drawer" v-bind="retiringTransition">
         <div
           v-show="show"
           ref="drawerRef"
@@ -603,12 +604,25 @@ function handleFocusDrawer(e?: Event) {
 
 .drawer-enter-active,
 .drawer-leave-active {
-  transition: transform var(--bew-duration-moderate);
+  transition: transform var(--bew-duration-moderate) var(--bew-ease-standard);
 }
 
 .drawer-enter-from,
 .drawer-leave-to {
   transform: translateX(100%);
+}
+.drawer-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-enter-active,
+  .drawer-leave-active {
+    transition: none;
+  }
+  .drawer-enter-from,
+  .drawer-leave-to {
+    transform: none;
+  }
 }
 
 /* 修改全局样式，避免重复设置 */

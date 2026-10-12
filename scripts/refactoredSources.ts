@@ -8,7 +8,6 @@ export const MOMENTS_SOURCE_FILES = [
   '../src/contentScripts/views/Moments/useMomentActions.ts',
   '../src/contentScripts/views/Moments/momentAdapter.ts',
   '../src/contentScripts/views/Moments/momentFeedReader.ts',
-  '../src/contentScripts/views/Moments/useMomentsFeedCache.ts',
   '../src/utils/momentColumnIndex.ts',
   '../src/utils/mediaResources.ts',
   '../src/utils/previewMediaSession.ts',
@@ -24,6 +23,8 @@ export const FOR_YOU_SOURCE_FILES = [
 
 export const FAVORITES_SOURCE_FILES = [
   '../src/contentScripts/views/Favorites/FavoritesPage.vue',
+  '../src/contentScripts/views/Favorites/FavoriteFolderEditor.vue',
+  '../src/contentScripts/views/Favorites/useFavoriteFolderManager.ts',
   '../src/contentScripts/views/Favorites/favoritesLayout.scss',
   '../src/contentScripts/views/Favorites/useFavoritesData.ts',
   '../src/contentScripts/views/Favorites/useFavoriteWrites.ts',

@@ -1,13 +1,13 @@
 .page-fade-enter-active,
 .page-fade-leave-active {
-  --uno: "transition-opacity duration-300";
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .page-fade-enter-from,
 .page-fade-leave-to {
   --uno: "opacity-0";
 }
-.page-fade-leave-to {
-  --uno: "!hidden";
+.page-fade-leave-active {
+  pointer-events: none;
 }
 
 .fade-enter-active,
@@ -25,11 +25,12 @@
     opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
     transform var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
 }
-.slide-fade-enter,
+.slide-fade-enter-from,
 .slide-fade-leave-to {
   --uno: "opacity-0";
 }
 
+.list-move,
 .list-enter-active,
 .list-leave-active {
   transition:
@@ -38,19 +39,19 @@
 }
 .list-enter-from,
 .list-leave-to {
-  --uno: "opacity-0 translate-y-6";
+  opacity: 0;
+  transform: translateY(var(--bew-space-2));
 }
-.list-leave-to {
-  --uno: "hidden";
+.list-leave-active {
+  pointer-events: none;
 }
 
-.modal-enter-active,
-.modal-leave-active {
-  transition: opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
+.library-list-leave-active {
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+  pointer-events: none;
 }
-.modal-enter-from,
-.modal-leave-to {
-  --uno: "opacity-0";
+.library-list-leave-to {
+  opacity: 0;
 }
 
 .dropdown-enter-active,
@@ -93,8 +94,7 @@
   .list-enter-active,
   .list-leave-active,
   .list-move,
-  .modal-enter-active,
-  .modal-leave-active,
+  .library-list-leave-active,
   .dropdown-enter-active,
   .dropdown-leave-active,
   .dropdown-up-enter-active,

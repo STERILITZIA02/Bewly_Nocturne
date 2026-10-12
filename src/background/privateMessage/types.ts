@@ -6,6 +6,12 @@ export const PRIVATE_MESSAGE_ENDPOINTS = {
   getPrivateMessages: 'https://api.vc.bilibili.com/svr_sync/v1/svr_sync/fetch_session_msgs',
   ackPrivateSession: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/update_ack',
   sendPrivateMessage: 'https://api.vc.bilibili.com/web_im/v1/web_im/send_msg',
+  getPrivateSessionDetail: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/session_detail',
+  getPrivateSessionSettings: 'https://api.vc.bilibili.com/link_setting/v1/link_setting/get_session_ss',
+  setPrivateSessionTop: 'https://api.vc.bilibili.com/session_svr/v1/session_svr/set_top',
+  setPrivateSessionDnd: 'https://api.vc.bilibili.com/link_setting/v1/link_setting/set_msg_dnd',
+  setPrivateSessionPush: 'https://api.vc.bilibili.com/link_setting/v1/link_setting/set_push_ss',
+  reportPrivateUser: 'https://api.vc.bilibili.com/x/bplus/im/report/add',
 } as const
 
 export type PrivateMessageEndpointName = keyof typeof PRIVATE_MESSAGE_ENDPOINTS

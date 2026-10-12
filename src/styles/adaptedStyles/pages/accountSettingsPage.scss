@@ -389,7 +389,7 @@
     corner-shape: var(--bew-corner-shape);
 
     &:hover {
-      border-color: var(--bew-theme-focus-ring);
+      border-color: var(--bew-focus-ring-color);
     }
 
     // Owned pendants paint a second white surface in this inner wrapper.

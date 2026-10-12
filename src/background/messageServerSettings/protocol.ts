@@ -91,10 +91,13 @@ export function parseMessageBlockWordsResponse(value: unknown): MessageBlockWord
   if (!isSuccessfulResponse(value))
     return null
   const data = asRecord((value as MessageServerSettingsApiResponse).data)
-  if (!data || !Array.isArray(data.words))
+  // The published native client treats absent/null words as an empty list.
+  // Quotas must still come from a valid response, never client defaults.
+  if (!data || (data.words != null && !Array.isArray(data.words)))
     return null
 
-  const words = Array.from(new Set(data.words.flatMap((item) => {
+  const rawWords = data.words ?? []
+  const words = Array.from(new Set(rawWords.flatMap((item: unknown) => {
     const content = asRecord(item)?.content
     return typeof content === 'string' && content.trim() ? [content.trim()] : []
   })))
@@ -102,9 +105,9 @@ export function parseMessageBlockWordsResponse(value: unknown): MessageBlockWord
   const maxWordsSize = data.max_words_size
   if (
     typeof maxWordLength !== 'number'
-    || !Number.isFinite(maxWordLength)
+    || !Number.isSafeInteger(maxWordLength) || maxWordLength < 0
     || typeof maxWordsSize !== 'number'
-    || !Number.isFinite(maxWordsSize)
+    || !Number.isSafeInteger(maxWordsSize) || maxWordsSize < 0
   ) {
     return null
   }

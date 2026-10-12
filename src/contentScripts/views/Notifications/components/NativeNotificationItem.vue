@@ -77,7 +77,7 @@ function markAvatarFailed(index: number) {
           decoding="async"
           @error="markAvatarFailed(index)"
         >
-        <i v-else i-solar:user-circle-bold-duotone />
+        <i v-else i-mingcute:user-3-line aria-hidden="true" />
       </ALink>
       <span
         v-if="remainingActorCount > 0"
@@ -101,11 +101,11 @@ function markAvatarFailed(index: number) {
           {{ formattedTime }}
         </time>
       </header>
-
-      <p v-if="item.body" class="native-notification-item__body">
-        {{ item.body }}
-      </p>
     </div>
+
+    <p v-if="item.body" class="native-notification-item__body">
+      {{ item.body }}
+    </p>
 
     <div class="native-notification-item__context">
       <div v-if="item.quote || item.sourceTitle || item.sourceImage" class="native-notification-item__reference">
@@ -122,7 +122,7 @@ function markAvatarFailed(index: number) {
               decoding="async"
               @error="sourceImageFailed = true"
             >
-            <i v-else i-solar:document-text-bold-duotone />
+            <i v-else i-mingcute:document-line aria-hidden="true" />
           </span>
           <span>{{ sourceTitle }}</span>
         </ALink>
@@ -130,7 +130,7 @@ function markAvatarFailed(index: number) {
 
       <ALink :href="sourceUrl" type="content" class="native-notification-item__open-source">
         {{ t('notifications.native.view_source') }}
-        <i i-mingcute:arrow-right-line />
+        <i i-mingcute:arrow-up-line class="native-notification-item__source-arrow" aria-hidden="true" />
       </ALink>
     </div>
   </article>
@@ -141,7 +141,7 @@ function markAvatarFailed(index: number) {
   display: flex;
   align-self: start;
   align-items: flex-start;
-  min-width: var(--bew-space-12);
+  min-width: var(--bew-notifications-avatar-size);
 }
 
 .native-notification-item__avatar,
@@ -149,13 +149,13 @@ function markAvatarFailed(index: number) {
   display: grid;
   flex: 0 0 auto;
   place-items: center;
-  width: var(--bew-space-12);
-  height: var(--bew-space-12);
+  width: var(--bew-notifications-avatar-size);
+  height: var(--bew-notifications-avatar-size);
   overflow: hidden;
-  color: var(--bew-text-3);
+  color: var(--bew-text-1);
   font-size: var(--bew-icon-size-xl);
   background: var(--bew-fill-1);
-  border: 1px solid var(--bew-surface-border-color);
+  border: 0;
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
 }
@@ -192,11 +192,15 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__content {
   min-width: 0;
+  align-self: center;
 }
 
 .native-notification-item__header {
-  display: grid;
-  gap: var(--bew-space-1);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--bew-space-1) var(--bew-space-4);
 }
 
 .native-notification-item__header p,
@@ -221,6 +225,7 @@ function markAvatarFailed(index: number) {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+  white-space: nowrap;
 }
 
 .native-notification-item__actor {
@@ -243,7 +248,8 @@ function markAvatarFailed(index: number) {
 }
 
 .native-notification-item__body {
-  margin-top: var(--bew-space-2);
+  grid-column: 1 / -1;
+  max-width: var(--bew-reading-line-length);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
   font-weight: var(--bew-font-weight-regular);
@@ -253,15 +259,18 @@ function markAvatarFailed(index: number) {
 }
 
 .native-notification-item__context {
+  grid-column: 1 / -1;
   display: grid;
   min-width: 0;
   gap: var(--bew-space-2);
   align-content: center;
-  padding: 0 0 0 var(--bew-space-4);
+  padding: var(--bew-space-3);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  border-left: var(--bew-space-0-5) solid var(--bew-border-color);
+  background: var(--bew-notifications-reference-background);
+  border-radius: var(--bew-interactive-radius);
+  corner-shape: var(--bew-corner-shape);
 }
 
 .native-notification-item__reference {
@@ -274,7 +283,7 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__source {
   display: flex;
-  gap: var(--bew-space-2);
+  gap: var(--bew-space-3);
   align-items: center;
   min-width: 0;
   color: inherit;
@@ -288,10 +297,10 @@ function markAvatarFailed(index: number) {
   width: calc(var(--bew-space-10) * 2);
   height: var(--bew-space-12);
   overflow: hidden;
-  color: var(--bew-text-3);
+  color: var(--bew-text-1);
   font-size: var(--bew-icon-size-lg);
-  background: var(--bew-content-alt);
-  border-radius: var(--bew-media-radius);
+  background: var(--bew-content-solid);
+  border-radius: var(--bew-radius-sm);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -304,15 +313,46 @@ function markAvatarFailed(index: number) {
   overflow-wrap: anywhere;
 }
 
+.native-notification-item__source:hover {
+  color: var(--bew-theme-foreground);
+}
+
 .native-notification-item__open-source {
   display: inline-flex;
   gap: var(--bew-space-1);
   align-items: center;
-  color: var(--bew-text-2);
+  justify-self: start;
+  min-height: var(--bew-icon-button-size-sm);
+  color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
+}
+
+.native-notification-item__source-arrow {
+  color: var(--bew-theme-foreground);
+  font-size: var(--bew-icon-size-sm);
+  transform: rotate(45deg);
+}
+
+@container notification-card (max-width: 360px) {
+  .native-notification-item__avatars--grouped {
+    flex-wrap: wrap;
+    max-width: calc(var(--bew-space-6) * 2 + var(--bew-space-1));
+    gap: var(--bew-space-1);
+  }
+
+  .native-notification-item__avatars--grouped .native-notification-item__avatar,
+  .native-notification-item__remaining-actors {
+    width: var(--bew-space-6);
+    height: var(--bew-space-6);
+    margin-left: 0;
+  }
+
+  .native-notification-item__avatars--grouped .native-notification-item__avatar {
+    font-size: var(--bew-icon-size-lg);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

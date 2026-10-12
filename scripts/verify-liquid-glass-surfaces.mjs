@@ -16,6 +16,7 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       '~/constants/globalEvents': { BEWLY_WIDESCREEN_CONTROLS_HIDDEN_CLASS },
       '~/styles/liquidGlass.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/liquidGlass.scss', import.meta.url))).css },
       '~/styles/segmentControl.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/segmentControl.scss', import.meta.url))).css },
+      '~/styles/sendButton.scss?inline': { default: compile(fileURLToPath(new URL('../src/styles/sendButton.scss', import.meta.url))).css },
       '~/styles/skeleton.scss?inline': { default: '' },
       '~/utils/bewlyWidescreen/constants': constants,
       '~/utils/bewlyWidescreenPolicy': await import('../src/utils/bewlyWidescreenPolicy'),
@@ -55,14 +56,8 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
   })
 
   check('liquid surfaces: first paint has optics before any ResizeObserver delivery', async () => {
-    let resized
-    let cleanups = 0
     const Surface = await compileComponent('../src/components/LiquidGlassSurface.vue', {
       '@wxperia/liquid-glass-vue': await import('@wxperia/liquid-glass-vue'),
-      '@vueuse/core': { useResizeObserver: (_target, callback) => {
-        resized = callback
-        Vue.onScopeDispose(() => cleanups++)
-      } },
     })
     const style = document.head.appendChild(document.createElement('style'))
     style.textContent = '.bew-liquid-glass-surface { width:480px; height:120px; }'
@@ -72,19 +67,18 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       app.mount(host)
       await flush()
       assert.equal(host.querySelectorAll('filter').length, 1)
-      assert.equal(host.querySelector('svg').style.width, '480px')
-      assert.equal(host.querySelector('svg').style.height, '120px')
-      resized([{ contentRect: { width: 640.5, height: 240.5 } }])
+      assert.equal(host.querySelector('svg').style.width, '100%')
+      assert.equal(host.querySelector('svg').style.height, '100%')
+      style.textContent = '.bew-liquid-glass-surface { width:640.5px; height:240.5px; }'
       await flush()
-      assert.equal(host.querySelector('svg').style.width, '640.5px')
-      assert.equal(host.querySelector('svg').style.height, '240.5px')
+      assert.equal(host.querySelector('svg').style.width, '100%')
+      assert.equal(host.querySelector('svg').style.height, '100%')
     }
     finally {
       app.unmount()
       host.remove()
       style.remove()
     }
-    assert.equal(cleanups, 1)
   })
 
   async function materialFixture() {
@@ -101,12 +95,11 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
     let mounted = 0
     const Surface = await compileComponent('../src/components/LiquidGlassSurface.vue', {
       '@wxperia/liquid-glass-vue': library,
-      '@vueuse/core': { useResizeObserver: (_target, callback) => {
-        mounted++
-        Vue.onScopeDispose(() => mounted--)
-        Vue.onMounted(() => callback([{ contentRect: { width: 420, height: 160 } }]))
-      } },
     })
+    Surface.mixins = [{
+      mounted() { mounted++ },
+      unmounted() { mounted-- },
+    }]
     const attachment = await loadSourceModule('../src/utils/liquidGlass.ts', {
       'vue': Vue,
       '~/components/LiquidGlassSurface.vue': { default: Surface },

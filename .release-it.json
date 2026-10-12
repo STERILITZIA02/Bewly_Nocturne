@@ -5,7 +5,7 @@
     }
   },
   "git": {
-    "commitMessage": "chore: release v${version}",
+    "commitMessage": "chore: 发布 v${version}",
     "tagName": "v${version}"
   },
   "hooks": {

@@ -9,6 +9,7 @@ export interface TransientPrivateRecipient {
   name: string
   avatar: string
   source: PrivateRecipientSource
+  followed?: boolean
 }
 
 export interface PrivateRecipientSearchPage {
@@ -69,6 +70,7 @@ function parseRecipientItems(
       name,
       avatar: normalizeHttpUrl(record?.face ?? record?.upic ?? record?.avatar),
       source,
+      followed: source === 'following' || record?.is_follow === 1 || record?.is_follow === true,
     }]
   })
 }
@@ -79,7 +81,7 @@ export function normalizePrivateRecipientQuery(value: string): string {
 
 export function canSearchPrivateRecipients(value: string): boolean {
   const query = normalizePrivateRecipientQuery(value)
-  return /^\d+$/.test(query) || Array.from(query).length >= 2
+  return Boolean(query)
 }
 
 export function buildFollowingRecipientSearchParams(

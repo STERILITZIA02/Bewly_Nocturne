@@ -4,6 +4,7 @@ import { useToast } from 'vue-toastification'
 
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { COMMENT_REPLY_BATCH_MAX, COMMENT_REPLY_CONTAINER_HEIGHT } from '~/constants/commentReading'
+import { DOCK_POSITIONS } from '~/constants/dock'
 import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 import { originalSettings, settings } from '~/logic'
@@ -39,7 +40,7 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   historyLayout: ['list', 'grid'],
   momentsCardOpenMode: ['dialog', 'newTab', 'background'],
   dockCollapseMode: ['button', 'hidden', 'automatic'],
-  dockPosition: ['left', 'right', 'bottom'],
+  dockPosition: DOCK_POSITIONS,
   pageMode: ['original', 'bewly', 'custom'],
   sidebarPosition: ['left', 'right'],
   theme: ['light', 'dark', 'auto', 'scheduled'],

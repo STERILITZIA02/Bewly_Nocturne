@@ -118,6 +118,7 @@ export function registerFourFeatureChecks(check, { Vue, flush, compileComponent 
       Object.assign(settings.value, values)
     }
     const module = await loadSourceFunctions('../src/components/Settings/Advanced/Maintenance.vue', ['handleImportFile', 'matchesSettingType', 'hasBlockedProperty', 'isPlainObject', 'blockedPropertyNames', 'settingEnumValues'], {
+      ...(await import('../src/constants/dock')),
       ...(await import('../src/utils/sidebarCoverSettings')),
       settings,
       originalSettings: { ...settings.value },

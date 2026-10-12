@@ -55,7 +55,7 @@ defineExpose({ focusHeading })
     </header>
 
     <div class="conversation-original-fallback__body">
-      <Empty :description="t('notifications.whisper.fallback_description')">
+      <Empty text-only :description="t('notifications.whisper.fallback_description')">
         <ALink :href="originalUrl" type="content" class="conversation-original-fallback__link">
           {{ t('notifications.whisper.open_original_list') }}
         </ALink>

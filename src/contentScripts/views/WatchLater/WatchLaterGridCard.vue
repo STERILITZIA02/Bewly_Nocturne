@@ -4,6 +4,7 @@ import { Icon } from '@iconify/vue'
 import ALink from '~/components/ALink.vue'
 import Button from '~/components/Button.vue'
 import IconButton from '~/components/IconButton.vue'
+import LazyPicture from '~/components/LazyPicture.vue'
 import type { List as VideoItem } from '~/models/video/watchLater'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { removeHttpFromUrl } from '~/utils/main'
@@ -45,14 +46,14 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
         :tabindex="videoUrl ? undefined : -1"
         type="videoCard"
       >
-        <img
+        <LazyPicture
           v-if="coverUrl"
+          responsive-cover
           class="watch-later-grid-card__cover"
           :src="coverUrl"
           :alt="item.title"
           loading="lazy"
-          decoding="async"
-        >
+        />
         <span class="watch-later-grid-card__media-gradient" aria-hidden="true" />
         <span class="watch-later-grid-card__progress-label">
           {{ progressText }} / {{ durationText }}
@@ -211,8 +212,8 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   color: var(--bew-on-overlay-color);
   background: var(--bew-overlay-background);
 
-  &:hover,
-  &:focus-visible {
+  &:hover:not(:disabled),
+  &:focus-visible:not(:disabled) {
     background: var(--bew-overlay-background-hover);
   }
 

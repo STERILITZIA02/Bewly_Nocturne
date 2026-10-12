@@ -15,6 +15,7 @@ import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe 
 import { isHomePage, isInIframe } from '~/utils/main'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 import { reportRuntimeFailure } from '~/utils/messaging'
+import { retiringTransition } from '~/utils/motionPresence'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 import { resolveMomentsDialogPlayerModeOverride } from '~/utils/player'
 
@@ -640,7 +641,7 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
     </Transition>
 
     <!-- Iframe Container -->
-    <Transition :name="isPageFullscreen ? 'fade' : 'drawer'">
+    <Transition :name="isPageFullscreen ? 'fade' : 'drawer'" v-bind="retiringTransition">
       <div
         v-if="show"
         :class="iframeContainerClasses"
@@ -678,11 +679,24 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
 
 .drawer-enter-active,
 .drawer-leave-active {
-  transition: transform var(--bew-duration-moderate);
+  transition: transform var(--bew-duration-moderate) var(--bew-ease-standard);
 }
 
 .drawer-enter-from,
 .drawer-leave-to {
   transform: translateY(100%);
+}
+.drawer-leave-active {
+  pointer-events: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .drawer-enter-active,
+  .drawer-leave-active {
+    transition: none;
+  }
+  .drawer-enter-from,
+  .drawer-leave-to {
+    transform: none;
+  }
 }
 </style>

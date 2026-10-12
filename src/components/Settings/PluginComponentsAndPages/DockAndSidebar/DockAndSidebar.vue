@@ -6,6 +6,7 @@ import Button from '~/components/Button.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import type { DockCollapseMode } from '~/constants/dock'
+import { DOCK_POSITIONS } from '~/constants/dock'
 import { settings } from '~/logic'
 import type { DockItem } from '~/stores/mainStore'
 import { useMainStore } from '~/stores/mainStore'
@@ -18,22 +19,7 @@ const { t } = useI18n()
 const mainStore = useMainStore()
 const settingsStore = useSettingsStore()
 
-const dockPositions = computed(() => {
-  return [
-    {
-      label: t('common.position.left'),
-      value: 'left',
-    },
-    {
-      label: t('common.position.right'),
-      value: 'right',
-    },
-    {
-      label: t('common.position.bottom'),
-      value: 'bottom',
-    },
-  ]
-})
+const dockPositions = computed(() => DOCK_POSITIONS.map(value => ({ label: t(`common.position.${value}`), value })))
 
 const dockCollapseModeOptions = computed((): { label: string, value: DockCollapseMode }[] => {
   return [

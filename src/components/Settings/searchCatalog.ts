@@ -321,11 +321,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.moments_filter_live_reservation',
     'settings.moments_filter_live_dynamic',
     'settings.moments_card_open_mode',
-    'settings.group_moments_wanted_users',
-    'settings.moments_enable_wanted_filter',
-    'settings.moments_wanted_users',
-    'settings.group_moments_pinned_users',
-    'settings.moments_pinned_users',
   ]),
   ...createEntries(watchLaterPageRoute, [
     'settings.watch_later_layout_mode',
@@ -409,7 +404,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
   ...createEntries(topBarRoute, [
     'settings.topbar_logo_and_channels',
     'settings.top_bar_logo_style',
-    'settings.show_home_button_in_touch_mode',
   ]),
   ...createEntries(topBarRoute, [
     'settings.group_topbar_pinned_channels',
@@ -634,7 +628,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.customize_font',
     'settings.remove_the_indent_from_chinese_punctuation',
     'settings.override_danmaku_font',
-    'settings.customize_css',
   ]),
 
   ...createEntries(playerRoute, [

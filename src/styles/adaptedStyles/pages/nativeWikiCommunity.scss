@@ -82,7 +82,7 @@ html.bewly-design[data-bewly-native-site="game-wiki-community"] {
       }
 
       &:focus-visible {
-        outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+        outline: var(--bew-focus-ring, 1px solid CanvasText);
         outline-offset: var(--bew-space-0-5);
         box-shadow: none;
       }
@@ -187,8 +187,8 @@ html.bewly-design[data-bewly-native-site="game-wiki-community"] {
       corner-shape: var(--bew-corner-shape);
 
       &:focus-within {
-        border-color: var(--bew-theme-focus-ring);
-        box-shadow: 0 0 0 var(--bew-space-0-5) var(--bew-theme-focus-ring);
+        border-color: var(--bew-focus-ring-color);
+        box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
       }
     }
 
@@ -300,7 +300,7 @@ html.bewly-design[data-bewly-native-site="game-wiki-community"] {
 
   :is(#nrc-site-search, #nrc-notification-panel, .nrc-site-welcome) :focus-visible,
   .nrc-search-trigger:focus-visible {
-    outline: var(--bew-space-0-5) solid var(--bew-theme-focus-ring);
+    outline: var(--bew-focus-ring, 1px solid CanvasText);
     outline-offset: var(--bew-space-0-5);
     box-shadow: none;
   }

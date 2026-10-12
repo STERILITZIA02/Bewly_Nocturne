@@ -8,6 +8,14 @@
   );
   background-size: 220% 100%;
   animation: bew-skeleton-shimmer 1.4s linear infinite;
+  animation-play-state: running;
+}
+
+// aria-hidden excludes decorative placeholders from speech, not from sight.
+// Only the shared visibility owner may pause a visually hidden skeleton group.
+[data-bew-skeleton-paused] [data-bew-skeleton],
+[data-bew-skeleton-paused][data-bew-skeleton] {
+  animation-play-state: paused;
 }
 
 @keyframes bew-skeleton-shimmer {

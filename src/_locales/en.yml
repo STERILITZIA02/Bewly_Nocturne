@@ -1,5 +1,7 @@
 library_tools:
-  queue_actions_scope: The actions below apply to the entire Watch Later queue.
+  layout_list: List
+  layout_grid: Grid
+  search_scope: Search scope
   selected_tabs: '{count} of {total} tabs selected'
   search_results: 'Results for “{query}”'
   load_more_matches: Find more earlier records
@@ -25,7 +27,6 @@ library_tools:
   duration_short: Up to 10 minutes
   duration_medium: 10–30 minutes
   duration_long: Over 30 minutes
-  matched_count: '{count} matches · {total} items loaded'
   find_messages: Find in loaded conversation messages
   previous_match: Previous match
   next_match: Next match
@@ -76,6 +77,7 @@ common:
   load_failed: Failed to load. Please try again later.
   image_load_failed: Image failed to load
   operation_failed: Operation failed. Please try again later.
+  send_not_allowed: Sending is not allowed here
   load_more: Load more
   operation:
     add: Add
@@ -193,23 +195,14 @@ settings:
   menu_bewly_pages: Bewly Pages
   menu_bewly_components: Bewly Components
   menu_bilibili: Bilibili
-  menu_navigation: Pages & Components
-  menu_playback: Playback & Audio
-  menu_advanced: Advanced & Maintenance
   category_navigation: Settings category navigation
-  category_group_pages: Pages
-  category_group_components: Components
-  category_group_behavior: Behavior
-  badge_performance_impact: Performance impact
-  badge_advanced: Advanced
   badge_irreversible: Irreversible
-  badge_use_with_caution: Use with caution
   search:
     placeholder: Search settings
     no_results: No matching settings
     located: Setting located
   category_general_desc: Configure language, interaction, and drawer behavior.
-  category_appearance_desc: Configure frosted glass, theme colors, fonts, custom styles, and page style adaptation.
+  category_appearance_desc: Configure frosted glass, theme colors, fonts, and page style adaptation.
   breadcrumb: Settings location
   group_interaction_layout: Interaction & Layout
   home_grid_layout: Home video layout
@@ -269,6 +262,8 @@ settings:
   messages_server_block_words_add: Add
   messages_server_block_words_remove: Remove blocked word {word}
   messages_server_block_words_empty: No blocked words
+  messages_server_block_words_load_failed: Blocked words could not be loaded. Please try again.
+  messages_server_block_words_unconfirmed: The change was submitted but could not be confirmed. Refresh the status before trying again.
   messages_server_errors:
     login-required: Your login session has expired
     risk-control: This request is temporarily restricted
@@ -296,12 +291,9 @@ settings:
     reset_title: Restore default settings
     reset_desc: Actions in this section affect all Bewly Nocturne settings.
     reset_warning: This cannot be undone. Your current language will be preserved.
-  menu_plugin_components_and_pages: Bewly Nocturne Interface
-  menu_bilibili_features_enhancement: Bilibili Features
   menu_appearance: Appearance
   menu_compatibility: Compatibility
   menu_about: About
-  menu_changelog: Changelog
   experimental: Experimental
 
   # Plugin Components & Pages submenu
@@ -324,16 +316,12 @@ settings:
     video_playback: Player
     auto_play: Playback Behavior
     vip_features: VIP Features
-    vip_features_placeholder: VIP feature enhancements will be added here in future updates.
-
-  changelog_placeholder: Changelog content will be displayed here.
 
   group_common: Common
   group_drawer_behavior: Drawer Behavior
   group_language: Language
   group_ad_blocking: Ad Blocking
   group_comments: Comments
-  group_languages_and_fonts: Languages & Fonts
   group_link_opening_behavior: Link Opening Behavior
   group_video_card: Video Card
   group_video_card_display: Display & Preview
@@ -349,8 +337,6 @@ settings:
   video_card_content_region_stats: Stats
   video_card_content_region_tags: Tags
   video_card_content_region_other: Other
-  group_performance: Frosted Glass & Performance
-  group_player_settings: Player Settings
   group_player_components: Player Components
   group_player_display_mode: Display Mode
   group_player_display_mode_desc: Set a base display mode and override it for specific playback contexts when needed.
@@ -358,8 +344,6 @@ settings:
   group_playback_memory_desc: Choose whether to remember playback rate, video aspect ratio and quality.
   group_video_page_actions: Video Page Features
   group_video_page_actions_desc: Tags only toggle the visibility of related controls on the video page and player toolbar.
-  group_playback_behavior: Playback Behavior
-  group_auto_play: Auto Play
   group_custom_auto_play_behavior: End-of-playback Behavior
   group_custom_auto_play_behavior_desc: Set what happens for each video type when Bilibili's default behavior is disabled. “Play recommendations” continues with recommended videos.
   group_playback_end_behavior: End-of-playback Behavior
@@ -376,7 +360,6 @@ settings:
   topbar_user_menu: Top bar user menu
   topbar_display_settings: Top bar display & behavior
   topbar_display_settings_desc: Adjust how the top bar behaves across pages and interaction modes.
-  group_navigation: Dock & Sidebar
   group_dock: Dock
   group_liquid_glass: Floating surfaces
   liquid_glass: Liquid glass
@@ -409,9 +392,6 @@ settings:
   group_search_results: Search Results
   group_recommendation_mode: '"For you" Recommendation Mode'
   group_recommendation_filters: '"For you" Recommendation Filters'
-  group_recommendation_filters_desc: >
-    Do not set the restricted value too large, as this may increase loading
-    time! Frequent requests may result in IP blocking by Bilibili!
   group_following: Following
   group_following_desc: Configure the Following page layout, inactive uploader list, live content, and video filters.
   group_favorites: Favorites
@@ -443,8 +423,8 @@ settings:
   moments_enable_keyword_filter_desc: Filter dynamics by author, title, body, or additional content. With valid keywords enabled, each action requests at most two pages and further results use Load more.
   moments_blocked_keywords: Blocked keywords
   moments_blocked_keywords_placeholder: Separate keywords with line breaks, commas, or semicolons
-  moments_enable_live_preview: Preview live dynamics on hover
-  moments_enable_live_preview_desc: Play a live preview when hovering over a live dynamic cover.
+  moments_enable_live_preview: Live previews on hover
+  moments_enable_live_preview_desc: Preview live covers and the sidebar live list with muted playback. Stop when the pointer leaves.
   moments_enable_video_preview: Preview video dynamics on hover
   moments_enable_video_preview_desc: Preview video posts and forwarded videos on hover, with an optional extra delay, controls, drag seeking, and cover-only triggering.
   moments_grid_columns: Dynamic columns
@@ -471,41 +451,6 @@ settings:
     dialog: Dialog
     new_tab: New tab
     background: Background tab
-  group_moments_wanted_users: Watchlist
-  group_moments_wanted_users_desc: Manage uploaders you want to watch by UID or name. The list is stored only on this device.
-  moments_enable_wanted_filter: Enable watchlist filter
-  moments_enable_wanted_filter_desc: Show a Watchlist entry in the Moments horizontal bar to display only posts from watchlisted uploaders. Turning it off hides the entry and exits the filter.
-  moments_wanted_users: Watchlisted uploaders
-  group_moments_pinned_users: Pinned uploaders
-  group_moments_pinned_users_desc: Manage uploaders pinned to the right side of the Moments bar by UID or name. The list is stored only on this device.
-  moments_pinned_users: Pinned uploaders
-  moments_wanted_manager:
-    input_required: Enter an uploader UID or name
-    search_empty: No matching uploader was found. Try another name.
-    search_failed: Failed to search for uploaders. Try again later.
-    invalid_uid: Enter a valid uploader UID
-    pinned_limit: You can pin at most {count} uploaders
-    user_not_found: This uploader was not found
-    fetch_failed: Failed to load uploader information. Try again later.
-    placeholder: Enter an uploader UID or name
-    add: Add
-    search: Search
-    pinned:
-      already_in: This uploader is already pinned
-      need_follow: Follow {name} before pinning them
-      added: Pinned {name} to the Moments bar
-      removed: Unpinned {name}
-      remove_aria: Unpin {name}
-      remove_title: Unpin
-      empty: No uploaders are pinned. Pinned uploaders appear on the right side of the Moments bar.
-    wanted:
-      already_in: This uploader is already in the Watchlist
-      need_follow: Follow {name} before adding them to the Watchlist
-      added: Added {name} to the Watchlist
-      removed: Removed {name} from the Watchlist
-      remove_aria: Remove {name} from the Watchlist
-      remove_title: Remove from Watchlist
-      empty: No uploaders have been added. Add uploaders to filter them from the Watchlist on the Bewly Moments page.
   btn:
     authorize: Authorize
     revoke: Revoke
@@ -517,8 +462,6 @@ settings:
     supported by the old top bar.) On video pages, double-tap to play, pause, or
     seek, drag horizontally to scrub through the video, and swipe vertically
     from either player edge to adjust volume.
-  show_home_button_in_touch_mode: Show Home button
-  show_home_button_in_touch_mode_desc: When touch screen optimization is enabled, show a Home button next to the top bar Logo to navigate directly to the homepage.
   open_top_bar_items_in_bewly: Open Bewly pages from top bar icons
   open_top_bar_items_in_bewly_desc: When touch screen optimization is off, the Logo, Moments, Favorites, History, and Watch Later icons follow the top bar link opening behavior and open the corresponding Dock page using its Bewly/original Bilibili setting. Unsupported icons keep their existing behavior.
   show_bewly_or_bili_page_switcher_desc: Show the Original, Bewly, and Custom page mode switcher in the floating Dock or sidebar.
@@ -678,15 +621,8 @@ settings:
   video_card_cover_ratio_two_columns: Two-column layout
   grid_breakpoints: Grid Breakpoints
   grid_breakpoints_desc: Set the number of columns at different video grid widths. The matching column count is used when the grid reaches each breakpoint.
-  grid_min_width: Width ≥
   grid_columns: Show
   grid_columns_unit: cols
-  grid_add_breakpoint: Add Breakpoint
-
-  home_adaptive_title_auto_size: Auto adjust title font size
-  home_adaptive_title_auto_size_desc: Adjusts title font size based on the grid width
-  home_adaptive_title_font_size: Title font size
-  home_adaptive_title_font_size_desc: Fixed title font size (px); disabled when auto is on
   video_card_title_font_size: Title Font Size
   video_card_title_font_size_desc: Controls the font size of the video card title.
   video_card_author_font_size: UP info font size
@@ -713,7 +649,7 @@ settings:
   topbar_components_adjustment: Top Bar Components Badge Settings
   topbar_components_adjustment_desc: Configure the badge display mode for each top bar icon
   group_topbar_pinned_channels: Top Bar Pinned Channels
-  topbar_pinned_channels_desc: Choose items from the logo dropdown to keep directly on the top bar and arrange their priority.
+  topbar_pinned_channels_desc: Pin channels to the top bar and arrange their display order.
   topbar_pinned_channels_title: Pinned channels
   topbar_pinned_channels_hint: Click a tile to pin or unpin it; the order follows the sequence of your clicks. Items toward the end hide first when space is tight.
   topbar_pinned_channels_all_selected: All channels have already been pinned.
@@ -764,13 +700,6 @@ settings:
   enable_oled_dark_mode_desc: Only applies while the effective theme is dark; page backgrounds become pure black while cards and overlays keep their layers.
   gradient_theme_color_background: Use theme color gradient in dark mode
   gradient_theme_color_background_desc: Apply it to both the page background and top bar.
-  customize_css: Customize CSS
-  customize_css_desc: >-
-    If you are unfamiliar with CSS, please DO NOT modify CSS. Doing so may cause
-    unexpected display issues.
-
-    If you encounter any problems after modifying CSS, please reinstall
-    BewlyBewly.
   logo_color: Logo color
   logo_color_opt:
     white: White
@@ -921,16 +850,6 @@ settings:
   sync_cloud_status_failed: Failed to read cloud sync status
   sync_cloud_enable_failed: Failed to enable settings cloud sync
   sync_cloud_incompatible: The cloud data was written by a newer version of the extension. Update the extension before enabling sync.
-  disable_auto_play_collection: Auto disable collection autoplay
-  disable_auto_play_collection_desc: Automatically turn off the autoplay feature for video collections
-  keep_collection_video_default_mode: Keep collection videos in default mode
-  keep_collection_video_default_mode_desc: >-
-    When enabled, collection videos will always use the default player mode and
-    won't apply widescreen or fullscreen settings
-  keep_watch_later_video_default_mode: Keep Watch Later videos in default mode
-  keep_watch_later_video_default_mode_desc: >-
-    When enabled, videos played from Watch Later will always use the default
-    player mode and won't apply widescreen or fullscreen settings
   remember_playback_rate: Remember playback rate
   remember_playback_rate_desc: >
     When enabled, the player will remember your last set playback rate and
@@ -1170,6 +1089,24 @@ topbar:
     video: Video
     manager: Manager
 notifications:
+  insights:
+    activity: Recent conversation activity
+    activity_scope: Last 7 days · Loaded conversations
+    mark_all_read: Mark all as read
+    marking_read: Marking as read
+    all_read: All read
+    read_partial: Some messages could not be marked. Try again.
+    read_failed: Could not mark as read. Try again.
+    overview: Inbox overview
+    unread_total: 'Unread messages & notifications'
+    unread_private: Unread messages
+    followed: Following
+    unfollowed: Not following
+    unread_notifications: Unread notifications
+    loaded_sessions: Loaded conversations
+    pinned: Pinned
+    muted: Muted
+    recent: Recent conversations
   document_title: '{section} - Messages - Bilibili'
   navigation_aria: Message categories
   section_aria: Open {section}
@@ -1194,17 +1131,62 @@ notifications:
     system:
       label: System
   whisper:
+    actions:
+      menu: 'Manage conversation with {name}'
+      pin: Pin chat
+      unpin: Unpin chat
+      mute: Mute chat
+      unmute: Unmute chat
+      block: Block user
+      report: Report user
+      disable_push: Disable content pushes
+      enable_push: Receive content pushes
+      notifications_normal: Notifications are still received
+      refresh: Refresh status
+      load_failed: Could not load conversation settings. Try again.
+      write_failed: The operation failed. Please try again later.
+      unconfirmed: The request was accepted but its result could not be confirmed. Refresh status instead of submitting again.
+      success: Operation completed
+      report_success: Report submitted
+      block_warning: Blocking also unfollows this user and unsubscribes from their collections. They will no longer be able to interact with you or view your space.
+      report_notice: Choose a reason. Up to 10 recent messages will be included as evidence. Nothing is reported until you confirm.
+      reason: Report reason
+      choose_reason: Choose a reason and describe Other issues
+      reasons:
+        other: Other issues
+        sexual: Sexual or vulgar content
+        political: Politically sensitive content
+        illegal: Illegal or harmful content
+        advertising: Advertising harassment
+        abuse: Personal attacks
+        fraud: Fraud
+    search:
+      batch: Result batch {count}
+      next_batch: Search the next batch
+      following: Following
+      global: All users
+      users_empty: No matching users found
+      skip: Skip this conversation and continue
+      people: People
+      messages: Messages
+      start: Search all private message history
+      progress: Searching
+      complete: Search complete
+      skipped: '{count} group or unreadable conversations excluded'
+      error: Search interrupted. Existing results are preserved.
+      limit: Many results in this batch. Continue to the next batch or refine your query.
+      empty: No matching messages found
+      stop: Pause search
+      continue: Continue search
+      context_error: This message cannot be located right now. Please retry.
+      select_result: Select a result on the left to view its context
     loading: Loading direct-message conversations
     profile_pending: Confirming your account
     list_aria: Direct-message conversation list
     search_placeholder: Search loaded conversations
-    search_aria: Search loaded direct-message conversations
+    search_aria: Search people or message history
     select_recipient: Select {name} as the message recipient
     recipient_search:
-      search_following: Search people you follow
-      following_empty: No matching users were found among people you follow
-      search_global: Search all Bilibili users
-      global_empty: No matching Bilibili users were found
       loading: Searching users
       more: Show more
       error: Search failed. Try again.
@@ -1283,6 +1265,9 @@ notifications:
       new_messages: New messages
       return_latest: Back to latest messages
       recalled: Message recalled
+      expired: Message no longer available
+      play_video: Play video
+      open_media: View content
       unsupported: This message type is not supported yet
       preview_image: Preview image
       image_preview: Direct-message image preview
@@ -1377,8 +1362,22 @@ dock:
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
 moments:
+  enter_live_room: "Enter {name}'s live room"
+  promotion_advertisement: Ad
+  promotion_commerce: Product promotion
+  promotion_suspected: Possible promotion
+  promotion_reason_api: Explicit advertising marker from the API
+  promotion_reason_goods: Contains a product card or product link
+  promotion_reason_coupon-code: Shopping platform, promotional offer and search code
+  promotion_reason_purchase-token: Shopping token, promotional offer and copy or purchase instructions
+  promotion_reason_comment-shopping: Comment or storefront referral with a coupon or purchase offer
+  promotion_reason_commission-shopping: Attributed purchase link or code with commission or discount incentives
+  promotion_reason_disclosure: Sponsorship disclosure in the supplied text; informational only
+  promotion_reason_purchase-and-offer: Purchase prompt and promotional offer; informational only
+  promotion_reason_purchase-and-link: Purchase prompt and shopping link; informational only
+  hot_search_title: bilibili Hot Search
   retry: Retry
-  filter_all: All
+  filter_all: All posts
   filter_video: Videos
   filter_pgc: Series
   filter_article: Articles
@@ -1425,28 +1424,20 @@ moments:
   publish: Publish a post
   live_now: Live now
   live_badge: LIVE
+  live_preview_unavailable: Preview unavailable
   feed_bar: Feed bar
   feed_groups: Feed groups
   all_moments: All posts
-  wanted_enable: Only show wanted creators
-  wanted_disable: Show all creators
-  wanted_only_all_video: Available for All and Videos only
-  wanted: Wanted
   scroll_frequent_left: Scroll frequently visited creators left
   scroll_frequent_right: Scroll frequently visited creators right
   scroll_left: Scroll left
   scroll_right: Scroll right
   frequent_uploaders: Frequently visited creators
   has_update: New update
-  pinned_uploaders: Pinned creators
   initial_loading: Preparing posts and images…
-  empty_wanted: No recent updates
-  no_wanted_users: Add wanted creators in Settings first
-  configure_wanted: Configure watchlist
   empty: No posts to show
   loading: Loading…
   load_more: Load more
-  recheck: Check again
   reload: Reload
   loading_more: Loading and preparing more posts…
   no_more: You have reached the end
@@ -1594,6 +1585,7 @@ video_card:
   watch_later_update_failed: Failed to update Watch Later
   feedback_unavailable: Feedback options are unavailable
 home:
+  channels: Channels
   series:
     open: Open series
     more_updates: 'More updates ({count})'
@@ -1668,6 +1660,24 @@ anime:
       sat: SAT
       sun: SUN
 history:
+  refresh: Refresh history
+  sort_newest: Most recently watched (loaded records)
+  sort_oldest: Earliest watched (loaded records)
+  select_results: Select current results
+  filters:
+    title: Advanced filters
+    period: Watched date
+    period_all: All dates
+    period_today: Today
+    period_yesterday: Yesterday
+    period_week: Past week
+    by_device: Filter by device
+    device_all: All devices
+    device_pc: PC
+    device_phone: Phone
+    device_tablet: Tablet
+    device_tv: TV
+  all_history: All history
   media: Series / Films
   continue_watching: Continue watching
   unknown_date: Unknown date
@@ -1681,12 +1691,51 @@ history:
     This operation cannot be reversed. Are you sure you want to clear all watch
     history?
   pause_watch_history: Pause watch history
+  retry_recording_status: Read recording status
   pause_watch_history_confirm: |-
     Pause watch history?
     Are you sure you want to pause watch history?
   turn_on_watch_history: Turn on watch history
   turn_on_watch_history_confirm: Turn on watch history? Are you sure you want to turn on watch history?
 favorites:
+  saved_refresh_failed: 'Saved, but the list could not refresh. Please refresh to verify.'
+  create_folder: Create folder
+  folder_name: Name
+  folder_intro: Description
+  change_cover: Change cover
+  cover_invalid: Choose a JPG or PNG image up to 5 MB
+  pin_folder: Pin folder
+  clean_invalid: Clear all unavailable videos
+  clean_invalid_confirm: Clear all unavailable videos in this folder?
+  folder_like: Like
+  folder_unlike: Unlike
+  folder_creator: Creator
+  folder_collect: Save
+  folder_share: Share
+  folder_link_copied: Folder link copied
+  rail_video: Saved videos
+  rail_season: Subscribed collections
+  rail_article: Other favorites
+  topic_folder: Saved topics
+  article_folder: Saved articles
+  course_folder: Saved courses
+  course_empty: Save some course videos to see them here.
+  video_order: Video order
+  order_recent: Recently saved
+  order_views: Most played
+  order_published: Latest uploads
+  subscription_filter: Subscription type
+  manage_folders: Manage folders
+  subscription_all: All subscriptions
+  subscription_seasons: Video collections
+  subscription_folders: Favorite folders
+  search_all_fields: All fields
+  search_content_only: Title and content only
+  search_title_only: Title only
+  search_author_only: Author only
+  search_description_only: Description only
+  search_season: Search collections or videos in this collection
+  search_article: Search favorites in this category
   collected_season_prefix: Season
   video_section_title: Favorite videos
   folder_section_title: All folders
@@ -1756,6 +1805,29 @@ version_reminder:
   acknowledge: Got it, don't show this version again
   settings_hint: You can turn off “New version reminders” under Settings → About.
 watch_later:
+  refresh: Refresh Watch Later
+  filters:
+    title: Advanced filters
+    by_progress: Filter by progress
+    by_date: Filter by date
+    by_duration: Filter by duration
+    progress_all: All
+    progress_unstarted: Unwatched
+    startDate: Start date
+    endDate: End date
+    invalid_range: End date must not precede start date
+    duration_all: All
+    duration_short: Under 10 min
+    duration_medium: 10–30 min
+    duration_long: 30–60 min
+    duration_extraLong: Over 60 min
+  sort_order: Added date
+  sort_newest: Newest
+  sort_oldest: Oldest
+  batch_manage: Batch manage
+  select_all: Select all
+  unselect_all: Deselect all
+  remove_selected: Remove selected ({count})
   auto_remove_failed: Could not remove the completed video from Watch Later. Retry manually later.
   open_tabs:
     title: Add playback tabs
@@ -1916,6 +1988,8 @@ search:
     next: Next page
     page: Page {page}
   date_picker:
+    date_placeholder: YYYY/MM/DD
+    open_calendar_for: Choose {label}
     start_date: Start date
     month: Month {month}
     year: '{year}'

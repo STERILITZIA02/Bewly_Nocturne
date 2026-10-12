@@ -19,9 +19,12 @@
     box-shadow var(--bew-liquid-indicator-paint-duration) var(--bew-ease-standard);
   // Only transform is compositor-friendly; width/height are set via JS
   // inline styles and don't benefit from will-change hints.
-  will-change: transform;
   contain: layout style;
   transform-origin: center center;
+}
+
+.bew-liquid-indicator:is(.is-moving, .is-scrubbing) {
+  will-change: transform;
 }
 
 .bew-liquid-indicator--white {

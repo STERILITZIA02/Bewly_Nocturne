@@ -284,6 +284,12 @@ export function getPrivateSessionTimeBounds(
   }
 }
 
+export function matchesPrivateSessionType(kind: PrivateSessionKind, filter: PrivateSessionTypeFilter): boolean {
+  if (filter === 'all')
+    return true
+  return filter === 'other' ? kind !== 'user' && kind !== 'official-assistant' : kind === filter
+}
+
 export function filterPrivateSessions(
   items: DisplayPrivateSession[],
   options: PrivateSessionFilterOptions,
@@ -294,16 +300,8 @@ export function filterPrivateSessions(
       return false
     if (options.filter === 'pinned' && !item.pinned)
       return false
-    if (options.typeFilter === 'user' && item.kind !== 'user')
+    if (!matchesPrivateSessionType(item.kind, options.typeFilter))
       return false
-    if (options.typeFilter === 'official-assistant' && item.kind !== 'official-assistant')
-      return false
-    if (
-      options.typeFilter === 'other'
-      && (item.kind === 'user' || item.kind === 'official-assistant')
-    ) {
-      return false
-    }
     return !query || item.name.toLocaleLowerCase().includes(query)
   })
 }

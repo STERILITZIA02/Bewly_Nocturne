@@ -269,6 +269,9 @@ function showRefreshPrompt(...args: unknown[]): void {
   const themeProperties = [
     '--bew-theme-color',
     '--bew-theme-focus-ring',
+    '--bew-focus-ring-color',
+    '--bew-focus-ring',
+    '--bew-focus-shadow',
     '--bew-on-theme-color',
     '--bew-dark-base-color',
     '--bew-text-1',
@@ -396,7 +399,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       transform: scale(0.95);
     }
     button:focus-visible {
-      outline: 2px solid var(--bew-theme-focus-ring, #00aeec);
+      outline: var(--bew-focus-ring, 1px solid CanvasText);
       outline-offset: 2px;
     }
     button:disabled { opacity: 0.6; cursor: wait; }

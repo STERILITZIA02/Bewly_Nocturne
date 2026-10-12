@@ -1,5 +1,5 @@
 export const MOMENTS_SCROLL_BOUNDARY_TOLERANCE_PX = 2
-export const MOMENT_GRID_DIMENSIONS = { minCardWidth: 360, gap: 16, sidebarWidth: 248 } as const
+export const MOMENT_GRID_DIMENSIONS = { minCardWidth: 360, gap: 16 } as const
 
 interface HorizontalScrollStateInput {
   scrollLeft: number
@@ -20,14 +20,6 @@ interface MomentCardWidthInput {
   gridClientWidth: number
   columns: number
   gap: number
-}
-
-interface MomentsSidebarVisibilityInput {
-  layoutWidth: number
-  sidebarWidth: number
-  gap: number
-  minMainWidth: number
-  hasContent: boolean
 }
 
 export function resolveHorizontalScrollState(input: HorizontalScrollStateInput) {
@@ -56,11 +48,4 @@ export function resolveMomentCardWidth(input: MomentCardWidthInput): number {
 
 export function resolveVirtualSpacerSize(accumulatedSize: number, gap: number): number {
   return accumulatedSize > 0 ? Math.max(0, accumulatedSize - gap) : 0
-}
-
-export function shouldShowMomentsSidebar(input: MomentsSidebarVisibilityInput): boolean {
-  if (!input.hasContent)
-    return false
-  const requiredWidth = input.sidebarWidth + input.gap + input.minMainWidth
-  return input.layoutWidth >= requiredWidth
 }

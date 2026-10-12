@@ -6,6 +6,27 @@
     "note": "Read from script[src] on the live native space page. Describes source contracts, not captured successful write traffic."
   },
   "sourceTypes": { "publicFolder": 11, "ugcSeason": 21 },
+  "videoOrders": ["mtime", "view", "pubtime"],
+  "otherFavorites": {
+    "sourceRetrievedAt": "2026-10-12",
+    "topic": {
+      "url": "/x/topic/web/fav/list",
+      "params": ["page_num", "page_size"],
+      "items": "data.topic_list.topic_items",
+      "total": "data.topic_list.page_info.total"
+    },
+    "course": {
+      "verifiedClient": "https://s1.hdslb.com/bfs/static/shanks/fresh-space/assets/index-76bd2e5f.js",
+      "verifiedAt": "2026-10-12",
+      "emptyResponseFixture": "course-empty-native.json",
+      "url": "/pugv/app/web/favorite/page",
+      "params": ["mid", "pn", "ps", "web_location"],
+      "origin": "https://space.bilibili.com",
+      "referer": "https://space.bilibili.com/",
+      "items": "data.items",
+      "total": "data.page.total"
+    }
+  },
   "publicFolder": {
     "resources": "/x/v3/fav/resource/list",
     "idParameter": "media_id",

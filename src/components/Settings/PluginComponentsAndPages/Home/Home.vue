@@ -252,7 +252,6 @@ function handleToggleHomeTab(tab: any) {
 
     <SettingsItemGroup
       :title="$t('settings.group_recommendation_filters')"
-      :desc="$t('settings.group_recommendation_filters_desc')"
       collapsible
       default-collapsed
     >

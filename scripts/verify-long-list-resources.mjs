@@ -45,12 +45,10 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
         return { code: 0, data: {} }
       },
     } }
-    const cache = { ready: Promise.resolve(), ensureMomentsCacheAccount: noop, cacheRegularMomentPage: noop }
     const readerModule = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
       '~/utils/api': { default: api },
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/momentHostFollowState': {},
-      './useMomentsFeedCache': { mergeCachedMoments: (a, b) => [...a, ...b] },
     })
     const componentStubs = Object.fromEntries(['Button.vue', 'CloseButton.vue', 'Dialog.vue', 'LiquidSegmentIndicator.vue', 'MomentCard/MomentCard.vue', 'MomentCard/MomentCardSkeleton.vue'].map(name => [`~/components/${name}`, { default: { render: () => null } }]))
     const component = await compileComponent('../src/contentScripts/views/Moments/Moments.vue', {
@@ -65,7 +63,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/logic/layoutEdit': { vLayoutEditable: {} },
       '~/logic/loginStatus': { parseDedeUserID: () => 1 },
       '~/logic/momentFilters': { momentFilterPolicy: Vue.ref({ active: false, keywords: [], passes: () => true }) },
-      '~/logic/storage': { momentsPinnedUsers: Vue.ref([]), momentsWantedUsers: Vue.ref([]) },
       '~/logic/uploaderLatestVideoTimes': { recordUploaderLatestVideoTimes: noop },
       '~/stores/topBarStore': { useTopBarStore: () => ({ userInfo: { mid: 1 }, isLogin: true, ensureWatchLaterState: noop }) },
       '~/utils/accountScope': await import('../src/utils/accountScope'),
@@ -81,7 +78,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       './useMomentDetail': { useMomentDetail: () => ({ selectedMoment: Vue.ref(null), closeMomentDetail: noop }) },
       './useMomentLayout': { useMomentLayout: () => ({ reset: noop, append: noop, clearColumns: noop, suspendRebalance: noop, updateVirtualColumns: noop, updateGridColumnCount: noop }) },
       './useMomentPreviews': { useMomentPreviews: () => ({ clear: noop, reset: noop }) },
-      './useMomentsFeedCache': { useMomentsFeedCache: () => cache },
     }, { renderTemplate: false, globals: { requestAnimationFrame: (callback) => {
       queueMicrotask(callback)
       return 1
@@ -153,7 +149,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
 
   check('moment reader: replacing or disposing a read aborts only its own GET transport and never commits the cancelled batch', async () => {
     const requests = []
-    const calls = []
     const module = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
       '~/utils/api': { default: { moment: { getMoments: (params, { signal }) => {
         const pending = deferred()
@@ -162,9 +157,8 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       } } } },
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/momentHostFollowState': {},
-      './useMomentsFeedCache': { mergeCachedMoments: (a, b) => [...a, ...b] },
     })
-    const reader = module.createMomentFeedReader({ cacheRegularMomentPage: (...args) => calls.push(args) }, item => item)
+    const reader = module.createMomentFeedReader(item => item)
     const query = { reset: true, type: 'all', group: 'all', hostMid: '', offset: '', page: 1, filtered: true }
     const old = reader.read(query, () => true)
     reader.reset()
@@ -173,41 +167,30 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     requests[0].resolve({ code: 0, data: { items: [{ id: 'old' }], offset: 'next', has_more: true } })
     assert.equal(await old, undefined)
     assert.equal(requests.length, 2, 'an aborted multi-page scan never starts its second request')
-    assert.equal(calls.length, 0)
+    assert.equal(reader.getLoaded('all', ''), undefined)
     assert.equal(requests[1].signal.aborted, false, 'late old completion does not abort the replacement owner')
     requests[1].resolve({ code: 0, data: { items: [{ id: 'current' }], offset: '', has_more: false } })
     assert.equal((await current).normalizedItems[0].id, 'current')
-    assert.equal(calls.length, 1)
+    assert.equal(reader.getLoaded('video', '').length, 1)
     const abandoned = reader.read(query, () => true)
     reader.reset()
     assert.equal(requests[2].signal.aborted, true)
     requests[2].resolve({ code: 0, data: { items: [{ id: 'abandoned' }], has_more: false } })
     assert.equal(await abandoned, undefined)
-    assert.equal(reader.getLoaded('all', 'all', ''), undefined)
+    assert.equal(reader.getLoaded('all', ''), undefined)
   })
 
-  check('A17/A19 actual forward patches share canonical rows while pending likes never enter persisted snapshots', async () => {
-    const account = await import('../src/utils/accountScope')
+  check('A17/A19 actual forward patches share canonical rows while pending likes never alter confirmed data', async () => {
     const { createAccountLifetime } = await import('../src/utils/accountLifetime')
     const post = Vue.reactive({ id: 'one', forwardCount: 1, isLiked: false, likeCount: 0 })
     const row = Vue.ref([post])
     const list = Vue.ref([post])
-    let stored = Vue.shallowRef({ accountId: 1, entries: { all: { items: [post], offset: 'cursor', hasMore: true } } })
-    const cacheModule = await loadSourceModule('../src/contentScripts/views/Moments/useMomentsFeedCache.ts', {
-      '~/composables/useStorageLocal': { useStorageLocal: (_key, _initial, options) => {
-        queueMicrotask(() => options.onReady())
-        return stored
-      } },
-      '~/utils/accountScope': account,
-    })
-    const cache = cacheModule.useMomentsFeedCache(() => 1)
     const readerModule = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
       '~/utils/api': { default: { moment: { getMoments: async () => ({ code: 0, data: { items: [{}], offset: 'one', has_more: false } }) } } },
       '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
       '~/utils/momentHostFollowState': {},
-      './useMomentsFeedCache': cacheModule,
     })
-    const reader = readerModule.createMomentFeedReader(cache, () => post)
+    const reader = readerModule.createMomentFeedReader(() => post)
     await reader.read({ reset: true, type: 'all', group: 'all', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: false }, () => true)
     const request = deferred()
     const actionModule = await loadSourceModule('../src/contentScripts/views/Moments/useMomentActions.ts', {
@@ -228,7 +211,6 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       forwardCountOverrides: new Map(),
       getCurrentAccountId: () => 1,
       moments: list,
-      feedCache: cache,
       feedReader: reader,
       momentLayout: { updateMoment: moment => row.value = [moment] },
       selectedMoment: selected,
@@ -238,20 +220,19 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const actions = scope.run(() => actionModule.useMomentActions(() => 1, handler.applyMomentPatch))
     const liking = actions.toggleMomentLike(post)
     assert.equal(actions.getDisplayMoment(list.value[0]).isLiked, true)
-    assert.equal(stored.value.entries.all.items[0].isLiked, false)
+    assert.equal(reader.getLoaded('all', '')[0].isLiked, false)
     handler.handleMomentForwardCountChange('one', 5)
     assert.equal(list.value[0], row.value[0])
     assert.equal(row.value[0].forwardCount, 5)
     assert.equal(selected.value, list.value[0])
-    assert.equal(stored.value.entries.all.items[0].forwardCount, 5)
-    assert.equal(stored.value.entries.all.items[0].isLiked, false)
+    assert.equal(reader.getLoaded('all', '')[0].forwardCount, 5)
+    assert.equal(reader.getLoaded('all', '')[0].isLiked, false)
     assert.equal(actions.getDisplayMoment(list.value[0]).isLiked, true)
     request.resolve({ code: -1 })
     await liking
     assert.equal(actions.getDisplayMoment(row.value[0]).isLiked, false)
     assert.equal(list.value[0].likeCount, 0)
     scope.stop()
-    stored = null
   })
 
   check('A10 real VideoCardGrid bounds components/slots, preserves focus and interaction state, and remeasures columns', async () => {
@@ -324,8 +305,12 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       },
     }
     const items = Array.from({ length: 5000 }, (_, id) => ({ id: id + 1, author: { mid: id + 10001 } }))
-    const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items, gridLayout: mode.value, noMoreContent: true, transformItem: item => item, getItemKey: item => item.id }) })
-    app.component('VideoCard', card).component('Empty', { render: () => null }).component('Button', { render: () => null })
+    const textOnlyStates = Vue.ref(false)
+    const app = Vue.createApp({ setup: () => () => Vue.h(grid, { items, gridLayout: mode.value, noMoreContent: true, textOnlyStates: textOnlyStates.value, transformItem: item => item, getItemKey: item => item.id }) })
+    app.component('VideoCard', card).component('Empty', {
+      props: ['description'],
+      setup: props => () => Vue.h('p', { 'data-grid-state': '' }, props.description),
+    }).component('Button', { render: () => null })
     app.config.globalProperties.$t = key => key
     app.provide('BEWLY_APP', { scrollViewportRef: Vue.ref(root), isHomeTabSwitching: Vue.ref(false) })
     const settle = async () => {
@@ -336,6 +321,10 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       app.mount(root)
       await settle()
       assert.ok(mounted > 0 && mounted < 250)
+      assert.equal(root.querySelector('[data-grid-state]').textContent, 'common.no_more_content')
+      textOnlyStates.value = true
+      await Vue.nextTick()
+      assert.equal(root.querySelector('[data-grid-state]'), null, 'completed sidebar lists have no empty/end footer')
       assert.ok(relationWindows.some(mids => mids.includes(10001)), 'visible unknown relationships are read')
       assert.ok(relationWindows.every(mids => mids.length < 400), 'relation requests cover the loading window, not the entire list')
       const first = root.querySelector('[data-video-id="1"] button')
@@ -463,22 +452,8 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     assert.equal(index.window(0, 600)[0].items[0].height, 500)
   })
 
-  check('A09 actual reader/cache continue past 1000 and persist a tail aligned with its continuation cursor', async () => {
+  check('A09 regular feed retains all in-memory pages without retired persistent group caches', async () => {
     const { createMomentAdapter } = await import('../src/contentScripts/views/Moments/momentAdapter')
-    const account = await import('../src/utils/accountScope')
-    const follow = await import('../src/utils/momentHostFollowState')
-    const messaging = await loadSourceModule('../src/utils/messaging.ts', { 'webextension-polyfill': { default: {} }, '~/utils/abort': await import('../src/utils/abort'), '~/constants/apiRequest': await import('../src/constants/apiRequest') })
-    let stored
-    const cacheModule = await loadSourceModule('../src/contentScripts/views/Moments/useMomentsFeedCache.ts', {
-      '~/composables/useStorageLocal': { useStorageLocal: (_key, initial, options) => {
-        assert.equal(options.deep, false)
-        assert.equal(options.shallow, true)
-        stored = Vue.shallowRef(initial)
-        queueMicrotask(() => options.onReady())
-        return stored
-      } },
-      '~/utils/accountScope': account,
-    })
     const requests = []
     const raw = id => ({ id_str: String(id), type: 'DYNAMIC_TYPE_WORD', modules: { module_author: { mid: '1', pub_ts: 20000 - id }, module_dynamic: { desc: { text: `post ${id}` } } } })
     const api = { moment: { getMoments: async (request) => {
@@ -488,91 +463,28 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     } } }
     const readerModule = await loadSourceModule('../src/contentScripts/views/Moments/momentFeedReader.ts', {
       '~/utils/api': { default: api },
-      '~/utils/messaging': messaging,
-      '~/utils/momentHostFollowState': follow,
-      './useMomentsFeedCache': cacheModule,
+      '~/utils/messaging': { isExtensionContextInvalidatedError: () => false },
+      '~/utils/momentHostFollowState': {},
     })
-    const cache = cacheModule.useMomentsFeedCache(() => 1)
-    await cache.ready
     const adapter = createMomentAdapter(key => key, (_id, count) => Number(count) || 0)
-    const reader = readerModule.createMomentFeedReader(cache, adapter.mapMoment)
-    const query = { reset: true, type: 'all', group: 'all', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: false, hasWantedUsers: true }
-    for (let page = 0; page < 26; page++) {
+    const reader = readerModule.createMomentFeedReader(adapter.mapMoment)
+    const query = { reset: true, type: 'all', hostMid: '', offset: '', updateBaseline: '', page: 1, filtered: false }
+    for (let page = 0; page < 27; page++) {
       const result = await reader.read(query, () => true)
-      assert.equal(result.normalizedItems.length, 50)
-      assert.equal(result.hasMore, true)
       query.offset = result.nextOffset
       query.reset = false
     }
-    assert.equal(reader.getLoaded('all', 'all', '').length, 1300)
-    assert.equal(stored.value.entries.all.items.length, 1000)
-    assert.equal(stored.value.entries.all.items[0].id, '301')
-    assert.equal(stored.value.entries.all.offset, '1300')
-    const resumed = readerModule.createMomentFeedReader(cache, adapter.mapMoment)
-    const wanted = { ...query, group: 'wanted', offset: '', reset: false }
-    const restored = await resumed.read(wanted, () => true)
-    assert.equal(restored.normalizedItems[0].id, '301')
-    assert.equal(restored.nextOffset, '1300')
-    const continued = await resumed.read({ ...wanted, offset: restored.nextOffset }, () => true)
-    assert.equal(continued.normalizedItems[0].id, '1301')
-    assert.equal(continued.hasMore, false)
-    assert.equal(requests.at(-1), '1300')
-    assert.equal(stored.value.entries.all.items.length, 1000)
-    assert.equal(stored.value.entries.all.items[0].id, '351')
-    assert.equal(stored.value.entries.all.offset, '1350')
+    assert.equal(reader.getLoaded('all', '').length, 1350)
     const delayed = deferred()
     api.moment.getMoments = () => delayed.promise
     let current = true
-    const stale = reader.read({ ...query, offset: '1300' }, () => current)
+    const stale = reader.read(query, () => current)
     current = false
-    delayed.resolve({ code: 0, data: { items: [raw(2000)], offset: '2000', has_more: true } })
+    delayed.resolve({ code: 0, data: { items: [raw(2000)], has_more: false } })
     assert.equal(await stale, undefined)
-    assert.equal(reader.getLoaded('all', 'all', '').length, 1300)
+    assert.equal(reader.getLoaded('all', '').length, 1350)
     reader.reset()
-    assert.equal(reader.getLoaded('all', 'all', ''), undefined)
-
-    // A refreshed head can be separated from the persisted tail by many API pages.
-    // Reopening halfway through must consume that gap before using its continuation.
-    const pages = []
-    let failNext = false
-    api.moment.getMoments = async (request) => {
-      const start = Number(request.offset || 0)
-      pages.push(start)
-      if (failNext) {
-        failNext = false
-        throw new Error('retry fixture')
-      }
-      return { code: 0, data: { items: Array.from({ length: 50 }, (_, i) => raw(start + i + 1)), offset: String(start + 50), has_more: start + 50 < 3000 } }
-    }
-    cache.saveMomentsCache('all', { items: Array.from({ length: 800 }, (_, i) => adapter.mapMoment(raw(2201 + i))), offset: '3000', hasMore: false, updateBaseline: '', updatedAt: Date.now() })
-    let gapReader = readerModule.createMomentFeedReader(cache, adapter.mapMoment)
-    let gapQuery = { ...query, group: 'wanted', reset: true, offset: '' }
-    const ids = []
-    for (let batch = 0; batch < 40; batch++) {
-      const before = pages.length
-      const response = await gapReader.read(gapQuery, () => true)
-      assert.ok(pages.length - before <= 2, 'wanted scans retain the two-page request budget')
-      ids.push(...response.normalizedItems.map(item => Number(item.id)))
-      gapQuery = { ...gapQuery, reset: false, offset: response.nextOffset }
-      if (batch === 3) {
-        failNext = true
-        await assert.rejects(gapReader.read(gapQuery, () => true), /retry fixture/)
-        assert.equal(pages.at(-1), Number(gapQuery.offset), 'failed request retains its committed cursor')
-      }
-      if (!response.hasMore)
-        break
-    }
-    assert.deepEqual(ids, Array.from({ length: 3000 }, (_, i) => i + 1), 'gap and continuation are consumed exactly once')
-    gapReader = readerModule.createMomentFeedReader(cache, adapter.mapMoment)
-    const reopened = await gapReader.read({ ...gapQuery, offset: '' }, () => true)
-    assert.equal(reopened.normalizedItems[0].id, '2001')
-    assert.equal(reopened.normalizedItems.at(-1).id, '3000')
-    assert.equal(reopened.hasMore, false)
-    const filtered = readerModule.createMomentFeedReader(cache, adapter.mapMoment)
-    const filteredResponse = await filtered.read({ ...query, reset: true, offset: '', filtered: true }, () => true)
-    assert.equal(filteredResponse.normalizedItems.length, 100)
-    assert.equal(filteredResponse.hasMore, true, 'filter budget is not server exhaustion')
-    assert.equal(filteredResponse.nextOffset, '100')
+    assert.equal(reader.getLoaded('all', ''), undefined)
   })
 
   check('A11 actual tab cache transfers data without cloning and clears old account generations', async () => {

@@ -97,7 +97,7 @@ export function createCommentReplyReadingController(getOptions: () => ReadingOpt
           background: var(--bew-content-solid, var(--bg1));
         }
         :host([${COMMENT_REPLY_READING_ATTRIBUTE}]) #expander-contents:focus-visible {
-          outline: var(--bew-space-0-5, 2px) solid var(--bew-theme-foreground, var(--brand_blue));
+          outline: var(--bew-focus-ring, 1px solid CanvasText);
           outline-offset: calc(-1 * var(--bew-space-0-5, 2px));
         }
       `

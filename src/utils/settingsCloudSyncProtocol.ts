@@ -1,3 +1,5 @@
+import { RETIRED_SETTINGS_FIELDS } from '../constants/retiredSettings'
+
 export const SETTINGS_CLOUD_SYNC_ENABLED_KEY = 'settingsCloudSyncEnabled:v1'
 export const SETTINGS_CLOUD_SYNC_STATUS_KEY = 'settingsCloudSyncStatus:v1'
 export const SETTINGS_CLOUD_SYNC_KEY_PREFIX = 'bewlycat:settings:v1:'
@@ -71,8 +73,7 @@ export interface SettingsCloudSyncEntry {
 const BLOCKED_FIELDS = new Set(['__proto__', 'constructor', 'prototype'])
 
 const LOCAL_ONLY_SETTINGS_FIELDS = new Set([
-  'customizeCSS',
-  'customizeCSSContent',
+  ...RETIRED_SETTINGS_FIELDS,
   // A device must opt into this experimental media-source takeover itself.
   'localLoudnessEnabled',
 ])

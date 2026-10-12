@@ -187,14 +187,28 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
     const messaging = await loadSourceModule('../src/utils/messaging.ts', {
       '~/utils/abort': await import('../src/utils/abort'),
       '~/constants/apiRequest': await import('../src/constants/apiRequest'),
-      'webextension-polyfill': { default: { runtime: { sendMessage: (message) => {
-        let resolve, reject
-        const promise = new Promise((done, fail) => {
-          resolve = done
-          reject = fail
-        })
-        requests.push({ message, resolve, reject })
-        return promise
+      'webextension-polyfill': { default: { runtime: { connect: () => {
+        const responses = new Set()
+        const disconnected = new Set()
+        let request
+        return {
+          onMessage: { addListener: listener => responses.add(listener), removeListener: listener => responses.delete(listener) },
+          onDisconnect: { addListener: listener => disconnected.add(listener), removeListener: listener => disconnected.delete(listener) },
+          postMessage(message) {
+            request = {
+              message,
+              disconnected: false,
+              resolve: data => responses.forEach(listener => listener({ ok: true, data })),
+              reject: error => responses.forEach(listener => listener({ ok: false, error: { name: error.name, message: error.message } })),
+            }
+            requests.push(request)
+          },
+          disconnect() {
+            if (request)
+              request.disconnected = true
+            disconnected.forEach(listener => listener())
+          },
+        }
       } } } },
     })
     const api = await loadSourceModule('../src/utils/api.ts', { '~/utils/messaging': messaging })
@@ -274,13 +288,14 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
     }
   })
 
-  check('relations invalidation: a stale account rejection terminates current readers and rejects late successful responses', async () => {
+  check('relations cancellation: account changes close old ports without poisoning new-account readers', async () => {
     const fixture = await relationsFixture()
     const first = fixture.consumer().state
     const second = fixture.consumer().state
     try {
       const oldRead = first.batchQueryUserRelations([10])
       fixture.changeAccount(2)
+      assert.equal(fixture.requests[0].disconnected, true)
       const currentRead = second.batchQueryUserRelations([20])
       let joinedSettled = false
       const joined = first.batchQueryUserRelations([20]).then(() => {
@@ -289,13 +304,39 @@ export function registerRuntimeErrorChecks(check, { Vue, flush, compileComponent
       assert.equal(fixture.requests.length, 2)
       fixture.requests[0].reject(new Error('Extension context invalidated.'))
       await flush()
-      assert.equal(joinedSettled, true)
+      assert.equal(joinedSettled, false, 'an already disconnected old port cannot fail the new account')
       fixture.requests[1].resolve({ code: 0, data: { 20: { attribute: 2 } } })
       await Promise.all([oldRead, currentRead, joined])
-      assert.equal(second.userRelations.value[20], undefined)
-      await second.batchQueryUserRelations([30])
-      assert.equal(fixture.requests.length, 2)
+      assert.equal(second.userRelations.value[20].isFollowing, true)
+      const next = second.batchQueryUserRelations([30])
+      assert.equal(fixture.requests.length, 3)
+      fixture.requests[2].resolve({ code: 0, data: null })
+      await next
       assert.equal(fixture.errors.length, 0)
+    }
+    finally { fixture.dispose() }
+  })
+
+  check('relations cancellation: joined consumers share a port; the last departure aborts transport and permits immediate retry', async () => {
+    const fixture = await relationsFixture()
+    const first = fixture.consumer().state
+    const second = fixture.consumer().state
+    try {
+      const read = first.batchQueryUserRelations(Array.from({ length: 81 }, (_, index) => 100 + index))
+      const joined = second.batchQueryUserRelations([100])
+      first.reset()
+      assert.equal(fixture.requests[0].disconnected, false, 'one departing consumer must not abort a shared read')
+      second.reset()
+      assert.equal(fixture.requests[0].disconnected, true)
+      await Promise.all([read, joined])
+      assert.equal(fixture.requests.length, 1, 'cancelled unsent pages stay unsent')
+      assert.equal(fixture.errors.length, 0, 'cancellation is not an operation failure')
+      const retry = second.batchQueryUserRelations([100])
+      assert.equal(fixture.requests.length, 2, 'cancellation must not start the failure cooldown')
+      fixture.requests[0].resolve({ code: 0, data: { 100: { attribute: 0 } } })
+      fixture.requests[1].resolve({ code: 0, data: { 100: { attribute: 2 } } })
+      await retry
+      assert.equal(second.userRelations.value[100].isFollowing, true)
     }
     finally { fixture.dispose() }
   })

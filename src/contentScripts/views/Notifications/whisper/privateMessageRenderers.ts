@@ -5,6 +5,7 @@ export type ParsedPrivateMessageContent
   = | PrivateMessageTextContent
     | PrivateMessageMediaContent
     | PrivateMessageRecalledContent
+    | PrivateMessageExpiredContent
     | PrivateMessageShareV2Content
     | PrivateMessageNotificationContent
     | PrivateMessageVideoCardContent
@@ -35,6 +36,10 @@ export interface PrivateMessageMediaContent {
 
 export interface PrivateMessageRecalledContent {
   type: 'recalled'
+}
+
+export interface PrivateMessageExpiredContent {
+  type: 'expired'
 }
 
 type PrivateMessageShareSource = 'article' | 'dynamic' | 'pgc' | 'video'
@@ -567,10 +572,13 @@ function parseNotificationContent(content: string): PrivateMessageNotificationCo
   return { type: 'notification', title, text, modules, links }
 }
 
-function parseVideoCardContent(content: string): PrivateMessageVideoCardContent | null {
+function parseVideoCardContent(content: string): PrivateMessageVideoCardContent | PrivateMessageExpiredContent | null {
   const record = parseContentRecord(content)
   if (!record)
     return null
+  // The native MsgVideo renders its expired archive placeholder when cover is absent.
+  if (record.cover === undefined || record.cover === null || record.cover === '')
+    return { type: 'expired' }
   const bvid = normalizeString(record.bvid)
   const title = normalizeString(record.title)
   const cover = parseOptionalHttpUrl(record.cover)
@@ -587,9 +595,14 @@ function parseVideoCardContent(content: string): PrivateMessageVideoCardContent 
   }
 }
 
-function parseArticleCardContent(content: string): PrivateMessageArticleCardContent | null {
+function parseArticleCardContent(content: string): PrivateMessageArticleCardContent | PrivateMessageExpiredContent | null {
   const record = parseContentRecord(content)
-  if (!record || !Array.isArray(record.image_urls))
+  if (!record)
+    return null
+  // Match native MsgArticle's missing image_urls state; an empty array is still valid.
+  if (record.image_urls === undefined || record.image_urls === null)
+    return { type: 'expired' }
+  if (!Array.isArray(record.image_urls))
     return null
   const rid = normalizeString(record.rid).replace(/^cv/i, '')
   const title = normalizeString(record.title)

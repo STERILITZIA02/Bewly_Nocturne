@@ -4,14 +4,15 @@ import { useI18n } from 'vue-i18n'
 import ConversationListItem from './ConversationListItem.vue'
 import ConversationListSkeleton from './ConversationListSkeleton.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
-import { canSearchPrivateRecipients, normalizePrivateRecipientQuery, resolvePrivateRecipientSelection } from './privateRecipientSearch'
+import { normalizePrivateRecipientQuery, resolvePrivateRecipientSelection } from './privateRecipientSearch'
 import PrivateRecipientSearchResultItem from './PrivateRecipientSearchResultItem.vue'
+import { PRIVATE_SEARCH_DEBOUNCE_MS } from './privateSearchPolicy'
 import type {
   DisplayPrivateSession,
   PrivateSessionFilter,
   PrivateSessionTypeFilter,
 } from './privateSession'
-import { filterPrivateSessions } from './privateSession'
+import { filterPrivateSessions, matchesPrivateSessionType } from './privateSession'
 import type { PrivateRecipientSearchController } from './usePrivateRecipientSearch'
 
 const props = defineProps<{
@@ -25,6 +26,7 @@ const props = defineProps<{
   selectedSessionKey: string
   showOfficialAssistants: boolean
   recipientSearch: PrivateRecipientSearchController
+  searchMode?: 'people' | 'messages'
 }>()
 
 const emit = defineEmits<{
@@ -32,15 +34,19 @@ const emit = defineEmits<{
   (event: 'selectRecipient', recipient: TransientPrivateRecipient): void
   (event: 'loadMore'): void
   (event: 'retryLoadMore'): void
+  (event: 'searchMode', mode: 'people' | 'messages'): void
+  (event: 'searchMessages', direction?: number): void
+  (event: 'menu', session: DisplayPrivateSession, trigger: HTMLElement): void
 }>()
 
 const { t } = useI18n()
 const filter = ref<PrivateSessionFilter>('all')
-const typeFilter = ref<PrivateSessionTypeFilter>('all')
-const query = ref('')
+const typeFilter = defineModel<PrivateSessionTypeFilter>('typeFilter', { default: 'all' })
+const query = defineModel<string>('query', { default: '' })
 const filters: PrivateSessionFilter[] = ['all', 'unread', 'pinned']
 const typeFilters: PrivateSessionTypeFilter[] = ['all', 'user', 'official-assistant', 'other']
 const itemsRef = ref<HTMLElement | null>(null)
+const searchInputRef = ref<HTMLInputElement | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 let observerGeneration = 0
@@ -49,21 +55,51 @@ const visibleItems = computed(() => props.showOfficialAssistants
   ? props.items
   : props.items.filter(item => item.kind !== 'official-assistant'))
 const filteredItems = computed(() => filterPrivateSessions(visibleItems.value, {
-  filter: filter.value,
+  filter: query.value.trim() ? 'all' : filter.value,
   typeFilter: typeFilter.value,
   query: query.value,
 }))
 const normalizedQuery = computed(() => normalizePrivateRecipientQuery(query.value))
-const localSearchMatches = computed(() => {
-  const normalized = normalizedQuery.value.toLocaleLowerCase()
-  return normalized
-    ? visibleItems.value.filter(item => item.name.toLocaleLowerCase().includes(normalized))
-    : visibleItems.value
+const messageSearch = computed(() => props.searchMode === 'messages' && Boolean(normalizedQuery.value))
+const recipientGroups = computed(() => {
+  const groups = props.recipientSearch.state.groups
+  const directSessions = new Map(props.items.filter(item => item.sessionType === 1).map(item => [item.talkerId, item]))
+  const followed = new Set([
+    ...groups.following.items.map(item => item.mid),
+    ...groups.global.items.filter(item => item.followed).map(item => item.mid),
+    ...props.items.filter(item => item.sessionType === 1 && item.followed).map(item => item.talkerId),
+  ])
+  const results = new Map<string, { key: string, recipient: TransientPrivateRecipient, session?: DisplayPrivateSession }>()
+  for (const session of filteredItems.value) {
+    results.set(session.key, { key: session.key, session, recipient: { mid: session.talkerId, name: session.name, avatar: session.avatar, source: 'global' } })
+  }
+  for (const recipient of [...groups.following.items, ...groups.global.items]) {
+    const session = directSessions.get(recipient.mid)
+    const key = session?.key ?? `recipient:${recipient.mid}`
+    if (!results.has(key) && matchesPrivateSessionType(session?.kind ?? 'user', typeFilter.value)
+      && (props.showOfficialAssistants || session?.kind !== 'official-assistant')) {
+      results.set(key, { key, recipient, session })
+    }
+  }
+  const rows = [...results.values()].map(row => ({ ...row, recipient: { ...row.recipient, source: followed.has(row.recipient.mid) ? 'following' as const : 'global' as const } }))
+  return (['following', 'global'] as const).map(source => ({ source, items: rows.filter(row => row.recipient.source === source) }))
 })
-const canOfferRemoteSearch = computed(() => (
-  localSearchMatches.value.length === 0
-  && canSearchPrivateRecipients(normalizedQuery.value)
-))
+const hasPeopleResults = computed(() => recipientGroups.value.some(group => group.items.length))
+const recipientErrors = computed(() => (['following', 'global'] as const).filter(source => props.recipientSearch.state.groups[source].errorKind))
+const noPeopleResults = computed(() => Boolean(normalizedQuery.value) && props.recipientSearch.state.complete
+  && !props.recipientSearch.state.loading && !props.recipientSearch.state.searching
+  && !recipientErrors.value.length && !hasPeopleResults.value)
+let searchTimer: ReturnType<typeof setTimeout> | undefined
+let normalScrollTop = 0
+watch(() => Boolean(normalizedQuery.value), async (searching) => {
+  if (searching) {
+    normalScrollTop = itemsRef.value?.scrollTop ?? 0
+  }
+  else {
+    await nextTick()
+    restoreScrollTop(normalScrollTop)
+  }
+})
 
 const canAutoLoad = computed(() => (
   props.active
@@ -83,10 +119,14 @@ function disconnectObserver() {
 }
 
 function getScrollTop(): number {
-  return itemsRef.value?.scrollTop ?? 0
+  return normalizedQuery.value ? normalScrollTop : itemsRef.value?.scrollTop ?? 0
 }
 
 function restoreScrollTop(scrollTop: number) {
+  if (normalizedQuery.value) {
+    normalScrollTop = scrollTop
+    return
+  }
   if (itemsRef.value)
     itemsRef.value.scrollTop = Math.max(0, scrollTop)
 }
@@ -157,7 +197,49 @@ watch(
 
 onBeforeUnmount(disconnectObserver)
 
-watch(query, value => props.recipientSearch.setQuery(value), { immediate: true })
+watch(() => [query.value, props.active, props.searchMode] as const, () => {
+  clearTimeout(searchTimer)
+  props.recipientSearch.setQuery(props.active ? query.value : '')
+  if (props.active && normalizedQuery.value && !messageSearch.value) {
+    searchTimer = setTimeout(() => {
+      if (!document.hidden && props.active)
+        void props.recipientSearch.resume()
+    }, PRIVATE_SEARCH_DEBOUNCE_MS)
+  }
+  else {
+    props.recipientSearch.pause()
+  }
+}, { immediate: true })
+onBeforeUnmount(() => {
+  clearTimeout(searchTimer)
+  props.recipientSearch.pause()
+})
+
+function submitSearch(direction?: number) {
+  clearTimeout(searchTimer)
+  if (messageSearch.value)
+    emit('searchMessages', direction)
+  else
+    void props.recipientSearch.resume()
+}
+function handleSearchEnter(event: KeyboardEvent) {
+  if (event.isComposing)
+    return
+  event.preventDefault()
+  submitSearch(event.shiftKey ? -1 : 1)
+}
+async function clearSearch() {
+  query.value = ''
+  await nextTick()
+  searchInputRef.value?.focus({ preventScroll: true })
+}
+function handleSearchEscape(event: KeyboardEvent) {
+  if (event.isComposing)
+    return
+  event.preventDefault()
+  event.stopPropagation()
+  void clearSearch()
+}
 
 function selectSearchResult(recipient: TransientPrivateRecipient) {
   const selection = resolvePrivateRecipientSelection(recipient, props.items)
@@ -167,7 +249,7 @@ function selectSearchResult(recipient: TransientPrivateRecipient) {
     emit('selectRecipient', recipient)
 }
 
-defineExpose({ focusSession, getScrollTop, restoreScrollTop })
+defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => searchInputRef.value?.focus({ preventScroll: true }) })
 </script>
 
 <template>
@@ -176,27 +258,57 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
     :class="{ 'conversation-list--compact': compact }"
     :aria-label="t('notifications.whisper.list_aria')"
   >
-    <div class="conversation-list__tools">
-      <div class="conversation-list__search">
-        <i i-mingcute:search-line aria-hidden="true" />
+    <div class="conversation-list__tools" :class="{ 'conversation-list__tools--pinned': filteredItems.some(session => session.pinned) }">
+      <form class="conversation-list__search" role="search" :aria-label="t('notifications.whisper.search_aria')" @submit.prevent="submitSearch()">
+        <button type="submit" class="conversation-list__search-submit" :aria-label="t('notifications.whisper.search_aria')">
+          <i i-mingcute:search-line aria-hidden="true" />
+        </button>
         <input
+          ref="searchInputRef"
           v-model="query"
-          type="search"
+          type="text"
+          inputmode="search"
+          enterkeyhint="search"
+          name="conversation-search"
+          autocomplete="off"
+          autocapitalize="off"
+          autocorrect="off"
+          :spellcheck="false"
           :aria-label="t('notifications.whisper.search_aria')"
-          :placeholder="t('notifications.whisper.search_placeholder')"
+          @keydown.enter="handleSearchEnter"
+          @keydown.esc="handleSearchEscape"
         >
         <Tooltip v-if="query" :content="t('notifications.whisper.clear_search')" placement="bottom">
           <IconButton
             class="conversation-list__clear"
             shape="circle"
             :label="t('notifications.whisper.clear_search')"
-            @click="query = ''"
+            @click="clearSearch"
           >
             <i i-mingcute:close-line />
           </IconButton>
         </Tooltip>
+        <label class="conversation-list__type-select" :class="{ 'conversation-list__type-select--active': typeFilter !== 'all' }">
+          <select v-model="typeFilter" name="conversation-type" :aria-label="t('notifications.whisper.type_filter_label')">
+            <option v-for="typeFilterId in typeFilters" :key="typeFilterId" :value="typeFilterId">
+              {{ t(`notifications.whisper.type_filters.${typeFilterId}`) }}
+            </option>
+          </select>
+          <svg
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
+            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
+          ><path d="M4 5h16l-6 7v6l-4 2v-8Z" /></svg>
+        </label>
+      </form>
+      <div v-if="normalizedQuery" class="bew-segment-control bew-segment-control--static bew-segment-control--secondary conversation-list__filters">
+        <button
+          v-for="mode in (['people', 'messages'] as const)" :key="mode" type="button" class="bew-segment-control__item" :data-active="(searchMode ?? 'people') === mode ? 'true' : undefined"
+          :aria-pressed="(searchMode ?? 'people') === mode" @click="emit('searchMode', mode)"
+        >
+          {{ t(`notifications.whisper.search.${mode}`) }}
+        </button>
       </div>
-      <div class="bew-segment-control bew-segment-control--static bew-segment-control--secondary conversation-list__filters">
+      <div v-else class="bew-segment-control bew-segment-control--static bew-segment-control--secondary conversation-list__filters">
         <button
           v-for="filterId in filters"
           :key="filterId"
@@ -209,35 +321,65 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
           {{ t(`notifications.whisper.filters.${filterId}`) }}
         </button>
       </div>
-
-      <label class="conversation-list__type-filter">
-        <span>{{ t('notifications.whisper.type_filter_label') }}</span>
-        <span class="conversation-list__type-select">
-          <select v-model="typeFilter">
-            <option v-for="typeFilterId in typeFilters" :key="typeFilterId" :value="typeFilterId">
-              {{ t(`notifications.whisper.type_filters.${typeFilterId}`) }}
-            </option>
-          </select>
-          <i i-mingcute:down-line aria-hidden="true" />
-        </span>
-      </label>
     </div>
 
+    <div v-if="messageSearch" class="conversation-list__items conversation-list__history-results">
+      <slot name="message-results" />
+    </div>
     <div
-      v-if="filteredItems.length"
+      v-else
       ref="itemsRef"
       class="conversation-list__items"
+      :class="{ 'conversation-list__items--empty': (!normalizedQuery && !filteredItems.length) || noPeopleResults }"
       @keydown="handleListKeydown"
     >
-      <ConversationListItem
-        v-for="session in filteredItems"
-        :key="session.key"
-        :compact="compact"
-        :session="session"
-        :selected="selectedSessionKey === session.key"
-        @select="emit('select', $event)"
-      />
+      <template v-if="!normalizedQuery">
+        <ConversationListItem
+          v-for="session in filteredItems"
+          :key="session.key"
+          :compact="compact"
+          :session="session"
+          :selected="selectedSessionKey === session.key"
+          @select="emit('select', $event)"
+          @menu="(session, trigger) => emit('menu', session, trigger)"
+        />
+      </template>
+      <template v-if="normalizedQuery">
+        <template v-for="group in recipientGroups" :key="group.source">
+          <section v-if="group.items.length" :aria-label="t(`notifications.whisper.search.${group.source}`)">
+            <p class="conversation-list__search-heading">
+              {{ t(`notifications.whisper.search.${group.source}`) }}
+            </p>
+            <template v-for="row in group.items" :key="row.key">
+              <ConversationListItem
+                v-if="row.session" :session="row.session" :compact="compact" :selected="selectedSessionKey === row.session.key" @select="emit('select', $event)"
+                @menu="(session, trigger) => emit('menu', session, trigger)"
+              />
+              <PrivateRecipientSearchResultItem v-else :recipient="row.recipient" @select="selectSearchResult" />
+            </template>
+          </section>
+        </template>
+        <ConversationListSkeleton v-if="recipientSearch.state.loading || recipientSearch.state.searching" :compact="compact" :count="2" :label="t('notifications.whisper.recipient_search.loading')" :show-tools="false" />
+        <div v-else-if="recipientSearch.state.groups.global.hasMore && hasPeopleResults" class="conversation-list__more">
+          <button type="button" class="bew-message-search-pill" @click="recipientSearch.loadMore('global')">
+            {{ t('notifications.whisper.recipient_search.more') }}
+          </button>
+        </div>
+        <p v-for="source in recipientErrors" :key="source" class="conversation-list__remote-error" role="status">
+          {{ t(`notifications.whisper.search.${source}`) }} · {{ t('notifications.whisper.recipient_search.error') }}
+          <button type="button" @click="submitSearch()">
+            {{ t('notifications.actions.retry') }}
+          </button>
+        </p>
+        <p v-if="noPeopleResults" class="conversation-list__empty" role="status">
+          {{ t('notifications.whisper.search.users_empty') }}
+        </p>
+      </template>
+      <p v-else-if="!filteredItems.length" class="conversation-list__empty" role="status">
+        {{ visibleItems.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty') }}
+      </p>
       <div
+        v-if="!normalizedQuery && (filteredItems.length || canAutoLoad || loadingMore || paginationStalled || loadMoreFailed)"
         ref="sentinelRef"
         class="conversation-list__sentinel"
         :class="{ 'conversation-list__sentinel--loading': loadingMore }"
@@ -250,7 +392,7 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
           :label="t('notifications.whisper.loading_more_sessions')"
           :show-tools="false"
         />
-        <span v-else-if="noMore">{{ t('notifications.whisper.earliest_session') }}</span>
+        <span v-else-if="noMore && filteredItems.length">{{ t('notifications.whisper.earliest_session') }}</span>
         <template v-else-if="paginationStalled || loadMoreFailed">
           <span>{{ t('notifications.whisper.load_more_failed') }}</span>
           <Button type="tertiary" @click="emit('retryLoadMore')">
@@ -259,62 +401,13 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
         </template>
       </div>
     </div>
-    <div v-else class="conversation-list__empty">
-      <div v-if="canOfferRemoteSearch" class="conversation-list__remote-search">
-        <ConversationListSkeleton
-          v-if="recipientSearch.state.loading"
-          :compact="compact"
-          :count="3"
-          :label="t('notifications.whisper.recipient_search.loading')"
-          :show-tools="false"
-        />
-
-        <template v-else-if="recipientSearch.state.source && recipientSearch.state.items.length">
-          <div class="conversation-list__remote-results">
-            <PrivateRecipientSearchResultItem
-              v-for="recipient in recipientSearch.state.items"
-              :key="recipient.mid"
-              :recipient="recipient"
-              @select="selectSearchResult"
-            />
-          </div>
-          <Button
-            v-if="recipientSearch.state.hasMore"
-            type="tertiary"
-            @click="recipientSearch.loadMore()"
-          >
-            {{ t('notifications.whisper.recipient_search.more') }}
-          </Button>
-        </template>
-
-        <template v-else-if="recipientSearch.state.source === 'following'">
-          <Empty :description="t('notifications.whisper.recipient_search.following_empty')" />
-          <Button type="tertiary" @click="recipientSearch.searchGlobal()">
-            {{ t('notifications.whisper.recipient_search.search_global') }}
-          </Button>
-        </template>
-
-        <template v-else-if="recipientSearch.state.source === 'global'">
-          <Empty :description="t('notifications.whisper.recipient_search.global_empty')" />
-        </template>
-
-        <template v-else>
-          <Empty :description="t('notifications.whisper.empty_filtered')" />
-          <Button type="tertiary" @click="recipientSearch.searchFollowing()">
-            {{ t('notifications.whisper.recipient_search.search_following') }}
-          </Button>
-        </template>
-
-        <span v-if="recipientSearch.state.errorKind" class="conversation-list__remote-error" role="status">
-          {{ t('notifications.whisper.recipient_search.error') }}
-        </span>
-      </div>
-      <Empty v-else :description="visibleItems.length ? t('notifications.whisper.empty_filtered') : t('notifications.whisper.empty')" />
-    </div>
   </section>
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/breakpoints";
+@use "../../../../styles/sidebarSurface";
+
 .conversation-list {
   display: flex;
   flex-direction: column;
@@ -333,24 +426,25 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   border-bottom: 1px solid var(--bew-border-color);
 }
 
+.conversation-list__tools--pinned {
+  border-bottom-color: transparent;
+}
+
 .conversation-list__search {
+  box-sizing: border-box;
   display: flex;
-  gap: var(--bew-space-2);
+  gap: var(--bew-space-1);
   align-items: center;
   min-width: 0;
   height: var(--bew-control-height);
-  padding: 0 var(--bew-space-3);
+  padding: 0 var(--bew-space-1) 0 var(--bew-space-2);
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  background: var(--bew-fill-1);
-  border: 1px solid transparent;
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-}
-
-.conversation-list__search:focus-within {
-  border-color: var(--bew-theme-focus-ring);
+  background: var(--bew-content-solid);
+  border: 1px solid var(--bew-focus-ring-color);
+  border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .conversation-list__search input {
@@ -364,12 +458,59 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   outline: none;
 }
 
+.conversation-list__search-submit {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--bew-icon-button-size-sm);
+  height: var(--bew-icon-button-size-sm);
+  padding: 0;
+  color: var(--bew-text-2);
+  background: transparent;
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  cursor: pointer;
+}
+.conversation-list__search-heading,
+.conversation-list__history-results {
+  padding: var(--bew-space-3);
+}
+.conversation-list__search-heading {
+  margin: 0;
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-caption);
+  line-height: var(--bew-line-height-caption);
+}
+
+.conversation-list__items {
+  @include sidebarSurface.vertical-scroll;
+  animation: conversation-results-enter var(--bew-duration-fast) var(--bew-ease-standard);
+}
+@keyframes conversation-results-enter {
+  from {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .conversation-list__items {
+    animation: none;
+  }
+}
+
 .conversation-list__clear {
+  flex: none;
   width: var(--bew-control-height-sm);
   height: var(--bew-control-height-sm);
+  border-radius: var(--bew-radius-full);
+  corner-shape: var(--bew-corner-shape-round);
 }
 
 .conversation-list__filters {
+  --bew-control-radius: var(--bew-radius-full);
+  --bew-control-item-radius: var(--bew-radius-full);
   width: 100%;
 }
 
@@ -378,63 +519,89 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   min-width: 0;
 }
 
-.conversation-list__type-filter {
-  display: flex;
-  gap: var(--bew-space-2);
-  align-items: center;
-  min-width: 0;
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-caption);
-  line-height: var(--bew-line-height-caption);
-}
-
-.conversation-list__type-filter > span:first-child {
-  flex: 0 0 auto;
-}
-
 .conversation-list__type-select {
   position: relative;
-  display: flex;
-  flex: 1 1 auto;
-  min-width: 0;
-  align-items: center;
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: var(--bew-control-height-sm);
+  height: var(--bew-control-height-sm);
+  margin-inline-end: var(--bew-space-1);
+  color: var(--bew-text-2);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  transition: background-color var(--bew-duration-fast) ease;
 }
 
 .conversation-list__type-select select {
-  width: 100%;
-  min-width: 0;
-  height: var(--bew-control-height-sm);
-  padding: 0 var(--bew-space-8) 0 var(--bew-space-2);
-  overflow: hidden;
-  color: var(--bew-text-2);
-  font: inherit;
-  text-overflow: ellipsis;
-  appearance: none;
-  cursor: pointer;
-  background: var(--bew-fill-1);
-  border: 1px solid transparent;
-  border-radius: var(--bew-interactive-radius);
-  corner-shape: var(--bew-corner-shape);
-}
-
-.conversation-list__type-select select:focus-visible {
-  outline: 2px solid var(--bew-theme-focus-ring);
-  outline-offset: var(--bew-space-0-5);
-}
-
-.conversation-list__type-select i {
+  // Retain the native picker and keyboard semantics behind the icon-only target.
   position: absolute;
-  right: var(--bew-space-2);
-  color: var(--bew-text-3);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.conversation-list__type-select:has(select:focus-visible) {
+  color: var(--bew-message-icon-hover);
+}
+
+.conversation-list__type-select svg {
+  width: var(--bew-icon-size-md);
+  height: var(--bew-icon-size-md);
   pointer-events: none;
+}
+
+.conversation-list__type-select--active {
+  color: var(--bew-message-icon-hover);
+}
+@media (hover: hover) and (pointer: fine) {
+  .conversation-list__type-select:has(select:enabled):hover {
+    color: var(--bew-message-icon-hover);
+  }
+  .conversation-list__clear:hover {
+    color: var(--bew-theme-foreground);
+    background: transparent;
+  }
+}
+
+.conversation-list__type-select:active,
+.conversation-list__type-select:focus-within {
+  color: var(--bew-message-icon-hover);
+}
+.conversation-list__more {
+  display: flex;
+  justify-content: center;
+  margin-block: var(--bew-space-4);
 }
 
 .conversation-list__items {
   flex: 1 1 auto;
   min-height: 0;
   padding: var(--bew-space-1);
-  overflow: auto;
-  overscroll-behavior: contain;
+}
+
+.conversation-list__items--empty {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.conversation-list__empty {
+  display: grid;
+  flex: 1 1 auto;
+  place-items: center;
+  margin: 0;
+  padding: var(--bew-space-4);
+  color: var(--bew-text-3);
+  font-size: var(--bew-font-size-control);
+  line-height: var(--bew-line-height-control);
+  text-align: center;
+}
+
+.conversation-list__items--empty .conversation-list__sentinel {
+  flex: none;
 }
 
 .conversation-list__sentinel {
@@ -456,34 +623,19 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop })
   padding: 0;
 }
 
-.conversation-list__empty {
-  display: grid;
-  flex: 1 1 auto;
-  place-items: center;
-  min-height: 0;
-  padding: var(--bew-space-4);
-  overflow: auto;
-}
-
-.conversation-list__remote-search {
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  flex-direction: column;
-  gap: var(--bew-space-3);
-  align-items: center;
-}
-
-.conversation-list__remote-results {
-  display: grid;
-  width: 100%;
-  min-width: 0;
-  gap: var(--bew-space-1);
-}
-
 .conversation-list__remote-error {
   color: var(--bew-warning-color);
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
+}
+
+@media (max-width: breakpoints.$mobile-max) {
+  .conversation-list__tools {
+    padding: var(--bew-space-2);
+  }
+
+  .conversation-list__filters .bew-segment-control__item {
+    padding-inline: var(--bew-space-1);
+  }
 }
 </style>
