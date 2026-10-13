@@ -28,7 +28,7 @@ function toggleAll() {
 <template>
   <Dialog
     ref="dialog" :title="$t('watch_later.open_tabs.title')" width="550px" max-width="calc(100vw - var(--bew-space-8))" append-to-bewly-body
-    :show-footer="false" :show-top-blur="false" @close="emit('close')"
+    :show-footer="false" @close="emit('close')"
   >
     <div class="open-tabs-dialog">
       <SkeletonBlock v-if="!task && busy" width="100%" height="var(--bew-control-height)" />

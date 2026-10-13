@@ -630,7 +630,9 @@ onBeforeUnmount(() => {
           <img :src="getAvatarThumbnailUrl(moment.author.face)" :alt="moment.author.name" class="moment-card__avatar" loading="lazy" decoding="async">
         </a>
         <span class="moment-card__identity">
-          <strong>{{ moment.author.name }}</strong>
+          <a :href="`https://space.bilibili.com/${moment.author.mid}`" target="_blank" rel="noopener noreferrer" @click.stop>
+            <strong>{{ moment.author.name }}</strong>
+          </a>
           <small>{{ moment.time || t('moment_card.just_now') }}</small>
         </span>
         <MomentPromotionBadge v-if="moment.momentPromotion" :promotion="moment.momentPromotion" />
@@ -1200,6 +1202,7 @@ onBeforeUnmount(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/contentCard";
 @use "../../styles/breakpoints";
 .moment-card--preparing {
   visibility: hidden;
@@ -1229,9 +1232,11 @@ onBeforeUnmount(() => {
   background-color: transparent;
   cursor: pointer;
   box-shadow: none;
-  transition:
-    box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
-    transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
+  @include contentCard.surface(false);
+}
+
+.moment-card:is(.moment-card--comments-expanded, .moment-card--forward-expanded):focus-within {
+  transform: none;
 }
 
 .moment-card__surface {
@@ -1279,11 +1284,6 @@ onBeforeUnmount(() => {
 }
 
 @media (hover: hover) and (pointer: fine) {
-  .moment-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--bew-shadow-1);
-  }
-
   .moment-card--comments-expanded:hover,
   .moment-card--forward-expanded:hover {
     transform: none;
@@ -1297,6 +1297,10 @@ onBeforeUnmount(() => {
 @media (prefers-reduced-motion: reduce) {
   .moment-card {
     transition: none;
+  }
+
+  .moment-card:has(.moment-card__primary-action:active) {
+    transform: none;
   }
 
   .moment-card--entering {
@@ -1350,15 +1354,15 @@ onBeforeUnmount(() => {
   right: var(--bew-space-2);
   z-index: 3;
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: var(--bew-cover-action-size);
+  height: var(--bew-cover-action-size);
   padding: 0;
   border: 0;
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
   place-items: center;
   color: #fff;
-  background: rgb(0 0 0 / 62%);
+  background: var(--bew-cover-scrim);
   cursor: pointer;
   font-size: var(--bew-icon-size-md);
   opacity: 0;
@@ -1379,11 +1383,12 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__watch-later:hover {
-  background: rgb(0 0 0 / 78%);
+  background: var(--bew-theme-color);
+  color: var(--bew-on-theme-color);
 }
 
 .moment-card__watch-later:focus-visible {
-  outline: 2px solid #fff;
+  outline: var(--bew-focus-ring);
   outline-offset: 2px;
 }
 
@@ -1418,8 +1423,8 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__live-mark {
-  top: 8px;
-  left: 8px;
+  top: var(--bew-cover-overlay-inset);
+  left: var(--bew-cover-overlay-inset);
   bottom: auto;
   z-index: 2;
   border-radius: var(--bew-badge-radius);
@@ -1531,7 +1536,7 @@ onBeforeUnmount(() => {
   margin-top: var(--bew-space-3);
   overflow: hidden;
   border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-card-inset-radius);
   color: var(--bew-text-2);
   background: transparent;
   cursor: pointer;
@@ -1728,7 +1733,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--bew-space-3);
-  padding: var(--bew-space-3) var(--bew-space-4);
+  padding: var(--bew-card-inset) var(--bew-card-inset) var(--bew-card-stack-gap);
 }
 
 .moment-card__header .moment-card__avatar {
@@ -1763,10 +1768,16 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__identity strong {
-  color: var(--bew-theme-foreground);
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
+  display: block;
+  color: var(--bew-text-1);
+  font-size: var(--bew-font-size-title);
+  line-height: var(--bew-line-height-title);
   font-weight: var(--bew-font-weight-semibold);
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+
+.moment-card__identity a:is(:hover, :focus-visible) strong {
+  color: var(--bew-theme-foreground);
 }
 
 .moment-card__identity small {
@@ -1810,7 +1821,7 @@ onBeforeUnmount(() => {
 .moment-card__media {
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-card-inset-radius);
 }
 
 .moment-card__cover--media {
@@ -1825,7 +1836,7 @@ onBeforeUnmount(() => {
   gap: var(--bew-space-1);
   margin-top: var(--bew-space-3);
   overflow: hidden;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-card-inset-radius);
   aspect-ratio: 1;
   background: var(--bew-fill-1);
 }
@@ -2009,7 +2020,7 @@ onBeforeUnmount(() => {
 }
 
 .moment-card__title {
-  margin-bottom: var(--bew-space-2);
+  margin-bottom: var(--bew-space-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-semibold);
@@ -2102,7 +2113,7 @@ onBeforeUnmount(() => {
   margin-top: var(--bew-space-3);
   padding: var(--bew-space-3);
   background: var(--bew-fill-1);
-  border-radius: var(--bew-card-radius);
+  border-radius: var(--bew-card-inset-radius);
   corner-shape: var(--bew-corner-shape);
 }
 
@@ -2143,10 +2154,10 @@ onBeforeUnmount(() => {
   grid-template-columns: minmax(0, 40%) minmax(0, 1fr);
   margin-top: 0;
   overflow: hidden;
-  border: 1px solid var(--bew-surface-border-color);
-  border-radius: var(--bew-card-radius);
+  border: 1px solid transparent;
+  border-radius: var(--bew-card-inset-radius);
   color: inherit;
-  background: var(--bew-fill-1);
+  background: var(--bew-content-solid);
   box-sizing: border-box;
   text-decoration: none;
   transition:
@@ -2189,7 +2200,7 @@ onBeforeUnmount(() => {
   gap: var(--bew-space-1);
   margin: 0 var(--bew-space-3) var(--bew-space-3);
   overflow: hidden;
-  border-radius: var(--bew-media-radius);
+  border-radius: var(--bew-card-inset-radius);
   aspect-ratio: 1;
   background: var(--bew-fill-1);
 }
@@ -2260,7 +2271,9 @@ onBeforeUnmount(() => {
   justify-content: space-between;
   gap: var(--bew-space-2);
   min-height: 28px;
-  padding: var(--bew-space-3) var(--bew-space-2) var(--bew-space-1);
+  padding: var(--bew-cover-overlay-inset);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--bew-font-weight-medium);
   color: #fff;
   background: linear-gradient(to bottom, transparent, rgb(0 0 0 / 72%));
   box-sizing: border-box;
@@ -2282,6 +2295,14 @@ onBeforeUnmount(() => {
 
 .moment-card__video-stat-group > span {
   gap: var(--bew-space-1);
+}
+
+.moment-card__video-stat-group svg {
+  width: var(--bew-icon-size-xs);
+  height: var(--bew-icon-size-xs);
+}
+.moment-card__video-stats > span {
+  font-weight: var(--bew-font-weight-semibold);
 }
 
 .moment-card__forward-video-info {
@@ -2347,16 +2368,16 @@ onBeforeUnmount(() => {
 
 .moment-card__hot-comment {
   display: flex;
-  width: 100%;
+  width: calc(100% - 2 * var(--bew-card-inset));
   max-width: 100%;
   min-height: 40px;
   align-items: center;
   gap: var(--bew-space-2);
-  margin: 0 0 var(--bew-space-3);
-  padding: var(--bew-space-2) var(--bew-space-4);
+  margin: 0 var(--bew-card-inset) var(--bew-card-stack-gap);
+  padding: var(--bew-space-2) var(--bew-space-3);
   overflow: hidden;
   border: 0;
-  border-radius: 0;
+  border-radius: var(--bew-card-inset-radius);
   color: var(--bew-text-2);
   background: var(--bew-fill-1);
   box-sizing: border-box;
@@ -2407,7 +2428,9 @@ onBeforeUnmount(() => {
   grid-template-columns: repeat(3, 1fr);
   align-items: center;
   gap: 0;
-  min-height: 42px;
+  min-height: var(--bew-space-10);
+  padding: 0 var(--bew-space-2);
+  box-sizing: border-box;
   margin: 0;
   border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
   color: var(--bew-text-2);
@@ -2422,11 +2445,11 @@ onBeforeUnmount(() => {
   justify-content: center;
   gap: var(--bew-space-1);
   min-width: 0;
-  height: 100%;
+  height: var(--bew-icon-button-size-md);
   margin: 0;
-  padding: 0 8px;
+  padding: 0 var(--bew-space-2);
   border: 0;
-  border-radius: 0;
+  border-radius: var(--bew-card-inset-radius);
   color: inherit;
   background: transparent;
   box-sizing: border-box;
@@ -2456,10 +2479,6 @@ onBeforeUnmount(() => {
 .moment-card__footer > button:disabled {
   cursor: not-allowed;
   opacity: 0.5;
-}
-
-.moment-card__footer > :not(:first-child) {
-  border-left: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 72%);
 }
 
 .moment-card__footer .moment-card__likes:active {
@@ -2514,6 +2533,10 @@ onBeforeUnmount(() => {
   .moment-card__disclosure,
   .moment-card__disclosure-inner {
     transition: none;
+  }
+  .moment-card__watch-later {
+    transform: none;
+    transition-property: opacity, color, background-color;
   }
 }
 

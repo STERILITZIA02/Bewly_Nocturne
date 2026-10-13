@@ -18,6 +18,7 @@ import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { useDark } from '~/composables/useDark'
 import { useHomePageRoute } from '~/composables/useHomePageRoute'
 import { localLoudnessPanelOpen } from '~/composables/useLocalLoudness'
+import { providePanelOrigin } from '~/composables/usePanelOrigin'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSettingsMotion } from '~/composables/useSettingsMotion'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
@@ -67,6 +68,7 @@ const { t } = useI18n()
 
 const { isDark } = useDark()
 const settingsMotion = useSettingsMotion()
+const capturePanelOrigin = providePanelOrigin()
 const dockBottomShift = ref(0)
 const { showSettings, settingsDockHeld, onSettingsAfterLeave, settingsLaunchStyle, settingsNavigationRequest, toggleSettings, openSettingsAt, openLayoutEditorSetting } = useSettingsPanel()
 const showAppAuthorizationDialog = computed(() => (
@@ -815,6 +817,8 @@ onBeforeUnmount(stopUrlCleaner)
       'bewly-wrapper--viewport': isHomePage(currentLocationHref),
     }"
     text="$bew-text-1 size-$bew-base-font-size"
+    @click.capture="capturePanelOrigin"
+    @keydown.capture="capturePanelOrigin"
   >
     <!-- Theme color gradient -->
     <template v-if="showBewlyPage">

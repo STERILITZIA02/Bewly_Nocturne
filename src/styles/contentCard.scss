@@ -1,0 +1,52 @@
+// Shared card responses. No extra compositing layers or runtime observers.
+@mixin bare {
+  box-sizing: border-box;
+  padding: var(--bew-card-hover-outset);
+  margin: calc(-1 * var(--bew-card-hover-outset));
+  border-radius: var(--bew-radius-xl);
+  corner-shape: var(--bew-corner-shape);
+  background: transparent;
+  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      background: var(--bew-fill-1);
+    }
+  }
+  &:focus-within {
+    background: var(--bew-fill-1);
+  }
+  &:active {
+    background: var(--bew-fill-2);
+  }
+}
+
+@mixin surface($press: true) {
+  transition:
+    background-color var(--bew-duration-moderate) var(--bew-ease-standard),
+    box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
+    transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
+
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      transform: translateY(calc(-1 * var(--bew-space-0-5)));
+      box-shadow: var(--bew-shadow-1);
+    }
+  }
+  &:focus-within {
+    transform: translateY(calc(-1 * var(--bew-space-0-5)));
+    box-shadow: var(--bew-shadow-1);
+  }
+  @if $press {
+    &:active {
+      transform: translateY(0) scale(0.99);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &:is(:hover, :focus-within, :active) {
+      transform: none;
+    }
+    transition-property: background-color, box-shadow;
+  }
+}

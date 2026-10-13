@@ -12,6 +12,7 @@ import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount 
 import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/components/MomentCard/momentForwardTransactions'
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
 import { vLayoutEditable } from '~/logic/layoutEdit'
@@ -97,8 +98,9 @@ const momentLayout = useMomentLayout(moments, {
   },
 })
 const { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad } = momentLayout
-const details = useMomentDetail(getMomentImageRatio, () => previews.clear())
 const detailDialogRef = ref<InstanceType<typeof Dialog> | null>(null)
+const details = useMomentDetail(getMomentImageRatio, () => previews.clear(), () => detailDialogRef.value?.close())
+const imageViewerMotion = useSourcePanelMotion('.moment-image-viewer__stage', ':scope > .moment-image-viewer__surface, :scope > .moment-image-viewer__stage, :scope > button, :scope > .moment-image-viewer__toolbar')
 const { selectedMoment, detailFrameUrl, detailFrameLoaded, detailImageViewerRef, detailImageViewerOpen, detailImageViewerUrls, detailImageViewerIndex, detailImageViewerScale, detailImageViewerRotation, detailImageViewerDragging, isOpusDetailMoment, detailDialogHeight, detailDialogWidth, detailContentHeight, detailImageViewerUrl, detailImageViewerTransform, clearDetailFocusRetry, bindDetailIframe, resetDetailImageViewerTransform, setDetailImageViewerScale, showDetailImageViewerImage, openMomentImagePreview, closeDetailImageViewer, handleDetailImageViewerWheel, handleDetailImageViewerPointerDown, handleDetailImageViewerPointerMove, handleDetailImageViewerPointerEnd, handleDetailImageViewerDoubleClick, handleDetailImageViewerKeydown, openDetailFrameInNewTab, openMomentDetail, handleDetailIframeLoad, closeMomentDetail } = details
 const activeMomentFilter = ref<MomentFilter>('all')
 const feedReader = createMomentFeedReader(mapMoment)
@@ -1072,7 +1074,6 @@ function appendMoments(items: DisplayMoment[]) {
       ref="detailDialogRef"
       append-to-bewly-body
       content-flush
-      transition-name="moments-dialog"
       :show-header="false"
       :show-border="false"
       :show-footer="false"
@@ -1127,85 +1128,89 @@ function appendMoments(items: DisplayMoment[]) {
       </div>
     </Dialog>
 
-    <Teleport v-if="mainAppRef && detailImageViewerOpen" :to="mainAppRef">
-      <div
-        ref="detailImageViewerRef"
-        class="moment-image-viewer"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="t('moments.image_viewer')"
-        tabindex="-1"
-        @keydown="handleDetailImageViewerKeydown"
-        @wheel.prevent.stop="handleDetailImageViewerWheel"
-      >
-        <CloseButton
-          class="moment-image-viewer__close"
-          :label="t('moments.close_image_viewer')"
-          size="large"
-          variant="overlay"
-          @click="closeDetailImageViewer"
-        />
-        <div class="moment-image-viewer__stage" @click.self="closeDetailImageViewer">
-          <img
-            :src="detailImageViewerUrl"
-            :alt="t('moments.image_large')"
-            class="moment-image-viewer__image"
-            :class="{
-              'is-zoomed': detailImageViewerScale > 1,
-              'is-dragging': detailImageViewerDragging,
-            }"
-            :style="{ transform: detailImageViewerTransform }"
-            draggable="false"
-            @dblclick.prevent.stop="handleDetailImageViewerDoubleClick"
-            @pointerdown="handleDetailImageViewerPointerDown"
-            @pointermove="handleDetailImageViewerPointerMove"
-            @pointerup="handleDetailImageViewerPointerEnd"
-            @pointercancel="handleDetailImageViewerPointerEnd"
+    <Teleport v-if="mainAppRef" :to="mainAppRef">
+      <Transition v-bind="imageViewerMotion" @after-leave="details.finishDetailImageViewerClose">
+        <div
+          v-if="detailImageViewerOpen"
+          ref="detailImageViewerRef"
+          class="moment-image-viewer"
+          role="dialog"
+          aria-modal="true"
+          :aria-label="t('moments.image_viewer')"
+          tabindex="-1"
+          @keydown="handleDetailImageViewerKeydown"
+          @wheel.prevent.stop="handleDetailImageViewerWheel"
+        >
+          <div class="moment-image-viewer__surface" aria-hidden="true" />
+          <CloseButton
+            class="moment-image-viewer__close"
+            :label="t('moments.close_image_viewer')"
+            size="large"
+            variant="overlay"
+            @click="closeDetailImageViewer"
+          />
+          <div class="moment-image-viewer__stage" @click.self="closeDetailImageViewer">
+            <img
+              :src="detailImageViewerUrl"
+              :alt="t('moments.image_large')"
+              class="moment-image-viewer__image"
+              :class="{
+                'is-zoomed': detailImageViewerScale > 1,
+                'is-dragging': detailImageViewerDragging,
+              }"
+              :style="{ transform: detailImageViewerTransform }"
+              draggable="false"
+              @dblclick.prevent.stop="handleDetailImageViewerDoubleClick"
+              @pointerdown="handleDetailImageViewerPointerDown"
+              @pointermove="handleDetailImageViewerPointerMove"
+              @pointerup="handleDetailImageViewerPointerEnd"
+              @pointercancel="handleDetailImageViewerPointerEnd"
+            >
+          </div>
+          <button
+            v-if="detailImageViewerUrls.length > 1"
+            type="button"
+            class="moment-image-viewer__nav moment-image-viewer__nav--prev"
+            :aria-label="t('moments.previous_image')"
+            @click="showDetailImageViewerImage(detailImageViewerIndex - 1)"
           >
-        </div>
-        <button
-          v-if="detailImageViewerUrls.length > 1"
-          type="button"
-          class="moment-image-viewer__nav moment-image-viewer__nav--prev"
-          :aria-label="t('moments.previous_image')"
-          @click="showDetailImageViewerImage(detailImageViewerIndex - 1)"
-        >
-          <span i-tabler-chevron-left />
-        </button>
-        <button
-          v-if="detailImageViewerUrls.length > 1"
-          type="button"
-          class="moment-image-viewer__nav moment-image-viewer__nav--next"
-          :aria-label="t('moments.next_image')"
-          @click="showDetailImageViewerImage(detailImageViewerIndex + 1)"
-        >
-          <span i-tabler-chevron-right />
-        </button>
-        <div class="moment-image-viewer__toolbar">
-          <span class="moment-image-viewer__counter">
-            {{ detailImageViewerIndex + 1 }}/{{ detailImageViewerUrls.length }}
-          </span>
-          <span class="moment-image-viewer__divider" />
-          <button type="button" :aria-label="t('moments.zoom_out')" :title="t('moments.zoom_out')" @click="setDetailImageViewerScale(detailImageViewerScale - 0.25)">
-            −
-          </button>
-          <span class="moment-image-viewer__zoom">{{ Math.round(detailImageViewerScale * 100) }}%</span>
-          <button type="button" :aria-label="t('moments.zoom_in')" :title="t('moments.zoom_in')" @click="setDetailImageViewerScale(detailImageViewerScale + 0.25)">
-            +
-          </button>
-          <button type="button" :aria-label="t('moments.fit_window')" :title="t('moments.fit_window')" @click="resetDetailImageViewerTransform">
-            1:1
+            <span i-tabler-chevron-left />
           </button>
           <button
+            v-if="detailImageViewerUrls.length > 1"
             type="button"
-            :aria-label="t('moments.rotate_clockwise')"
-            :title="t('moments.rotate_clockwise')"
-            @click="detailImageViewerRotation = (detailImageViewerRotation + 90) % 360"
+            class="moment-image-viewer__nav moment-image-viewer__nav--next"
+            :aria-label="t('moments.next_image')"
+            @click="showDetailImageViewerImage(detailImageViewerIndex + 1)"
           >
-            ↻
+            <span i-tabler-chevron-right />
           </button>
+          <div class="moment-image-viewer__toolbar">
+            <span class="moment-image-viewer__counter">
+              {{ detailImageViewerIndex + 1 }}/{{ detailImageViewerUrls.length }}
+            </span>
+            <span class="moment-image-viewer__divider" />
+            <button type="button" :aria-label="t('moments.zoom_out')" :title="t('moments.zoom_out')" @click="setDetailImageViewerScale(detailImageViewerScale - 0.25)">
+              −
+            </button>
+            <span class="moment-image-viewer__zoom">{{ Math.round(detailImageViewerScale * 100) }}%</span>
+            <button type="button" :aria-label="t('moments.zoom_in')" :title="t('moments.zoom_in')" @click="setDetailImageViewerScale(detailImageViewerScale + 0.25)">
+              +
+            </button>
+            <button type="button" :aria-label="t('moments.fit_window')" :title="t('moments.fit_window')" @click="resetDetailImageViewerTransform">
+              1:1
+            </button>
+            <button
+              type="button"
+              :aria-label="t('moments.rotate_clockwise')"
+              :title="t('moments.rotate_clockwise')"
+              @click="detailImageViewerRotation = (detailImageViewerRotation + 90) % 360"
+            >
+              ↻
+            </button>
+          </div>
         </div>
-      </div>
+      </Transition>
     </Teleport>
   </section>
 </template>
@@ -1738,12 +1743,19 @@ function appendMoments(items: DisplayMoment[]) {
   z-index: var(--bew-z-image-viewer);
   overflow: hidden;
   color: #fff;
+  touch-action: none;
+}
+.moment-image-viewer__surface {
+  position: absolute;
+  inset: 0;
   background: rgb(18 18 18 / 76%);
   backdrop-filter: var(--bew-filter-glass-1);
   -webkit-backdrop-filter: var(--bew-filter-glass-1);
-  touch-action: none;
+  pointer-events: none;
 }
 .moment-image-viewer__stage {
+  --bew-panel-enter-duration: var(--bew-duration-moderate);
+  --bew-panel-leave-duration: var(--bew-duration-moderate);
   position: absolute;
   inset: 0;
   display: flex;

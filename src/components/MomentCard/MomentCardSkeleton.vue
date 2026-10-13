@@ -9,13 +9,13 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
     <div class="moment-card-skeleton__header">
       <SkeletonBlock width="var(--bew-control-height)" height="var(--bew-control-height)" radius="circle" />
       <div class="moment-card-skeleton__identity">
-        <SkeletonBlock width="40%" height="var(--bew-line-height-body)" />
+        <SkeletonBlock width="40%" height="var(--bew-line-height-title)" />
         <SkeletonBlock width="26%" height="var(--bew-line-height-caption)" />
       </div>
-      <SkeletonBlock width="var(--bew-control-height-sm)" height="var(--bew-control-height-sm)" radius="circle" />
+      <SkeletonBlock width="var(--bew-icon-button-size-md)" height="var(--bew-icon-button-size-md)" radius="circle" />
     </div>
     <div class="moment-card-skeleton__main">
-      <SkeletonBlock v-if="media" class="moment-card-skeleton__media" height="auto" radius="media" />
+      <SkeletonBlock v-if="media" class="moment-card-skeleton__media" height="auto" radius="interactive" />
       <div class="moment-card-skeleton__body">
         <SkeletonBlock width="76%" height="var(--bew-line-height-title)" />
         <SkeletonBlock v-for="line in 3" :key="line" :width="line === 3 ? '64%' : '100%'" height="var(--bew-line-height-body)" />
@@ -43,7 +43,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   display: flex;
   align-items: center;
   gap: var(--bew-space-3);
-  padding: var(--bew-space-3) var(--bew-space-4);
+  padding: var(--bew-card-inset) var(--bew-card-inset) var(--bew-card-stack-gap);
 }
 .moment-card-skeleton__identity {
   display: grid;
@@ -63,15 +63,20 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
 }
 .moment-card-skeleton__body {
   display: grid;
-  gap: var(--bew-space-2);
+  gap: 0;
   min-width: 0;
+  > :first-child {
+    margin-bottom: var(--bew-space-1);
+  }
 }
 .moment-card-skeleton__footer {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   place-items: center;
-  min-height: 42px;
-  border-top: 1px solid var(--bew-border-color);
+  min-height: var(--bew-space-10);
+  padding: 0 var(--bew-space-2);
+  box-sizing: border-box;
+  border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
 }
 
 @container (min-width: #{breakpoints.$moment-card-wide}) {

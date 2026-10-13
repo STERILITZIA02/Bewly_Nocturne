@@ -911,7 +911,6 @@ const estimatedCardHeight = computed(() => {
 })
 const cardLayoutKey = computed(() => [
   props.gridLayout,
-  settings.value.videoCardLayout,
   settings.value.videoCardTitleFontSize,
   settings.value.videoCardAuthorFontSize,
   settings.value.videoCardMetaFontSize,
@@ -1225,7 +1224,7 @@ function getUniqueKey(item: T, index: number): string | number {
   contain: layout style;
   content-visibility: auto;
   overflow-anchor: none;
-  contain-intrinsic-size: auto 360px 260px;
+  contain-intrinsic-size: auto 376px 276px;
   min-width: 0;
 }
 

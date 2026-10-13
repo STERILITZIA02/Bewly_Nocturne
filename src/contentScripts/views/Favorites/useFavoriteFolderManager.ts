@@ -21,7 +21,7 @@ interface Dependencies {
 
 /** Folder metadata/editor lifecycle is independent of the video grid and pagination. */
 export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, error, confirm }: Dependencies) {
-  const editor = reactive({ visible: false, id: 0, loading: false, failed: false })
+  const editor = reactive({ visible: false, closing: false, id: 0, loading: false, failed: false })
   const form = ref<FavoriteFolderForm>({ title: '', intro: '', cover: '', privacy: 0 })
   const busy = ref(false)
   const pending = computed(() => busy.value || writes.pending.value)
@@ -73,12 +73,12 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
   watch(currentFolderId, () => void refreshInfo(), { immediate: true, flush: 'sync' })
 
   async function openEditor(id = 0) {
-    if (pending.value || !data.capture().isCurrent())
+    if (pending.value || editor.closing || !data.capture().isCurrent())
       return
     editorController?.abort()
     const version = ++editorVersion
     const owner = data.capture()
-    Object.assign(editor, { visible: true, id, loading: Boolean(id), failed: false })
+    Object.assign(editor, { visible: true, closing: false, id, loading: Boolean(id), failed: false })
     form.value = { title: '', intro: '', cover: '', privacy: 0 }
     if (!id)
       return
@@ -102,16 +102,17 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
   }
 
   function closeEditor() {
-    if (pending.value)
+    if (pending.value && !editor.closing)
       return
     editorVersion++
     editorController?.abort()
     editor.visible = false
+    editor.closing = false
   }
 
   async function save(value: FavoriteFolderForm, file?: File) {
     const owner = data.capture()
-    if (pending.value || editor.loading || editor.failed || !owner.isCurrent())
+    if (pending.value || editor.closing || editor.loading || editor.failed || !owner.isCurrent())
       return
     const draft = { ...value, title: value.title.trim() }
     if (!draft.title || draft.title.length > FAVORITE_FOLDER_TITLE_LIMIT || draft.intro.length > FAVORITE_FOLDER_INTRO_LIMIT) {
@@ -145,8 +146,9 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
       const result = await writes.execute(transaction)
       if (!result || !current())
         return
-      // The write succeeded: close before refreshing, so a read failure cannot invite duplicate creation.
-      editor.visible = false
+      // Commit the closed state before refreshing; keep the view alive only for
+      // its exit. A slow/failed refresh must never invite duplicate creation.
+      editor.closing = true
       await data.getFavoriteCategories()
       if (!current())
         return
@@ -278,6 +280,7 @@ export function useFavoriteFolderManager({ api, data, writes, getCSRF, notify, e
     infoController?.abort()
     editorController?.abort()
     editor.visible = false
+    editor.closing = false
     busy.value = false
     info.value = undefined
     infoFailed.value = false

@@ -431,7 +431,7 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     }
   })
 
-  check('September metadata: whole tags only; equal updates reuse measurements; time leads both templates', async () => {
+  check('Card metadata: whole tags only; equal updates reuse measurements; unified layout preserves time and author toggles', async () => {
     const frames = []
     let resized
     let measured = 0
@@ -475,8 +475,17 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     row.remove()
 
     const blank = { render: () => null }
+    const settings = Vue.ref({ showVideoCardPublishTime: true, showVideoCardVideoTag: true, showVideoCardRecommendTag: true })
+    const Meta = await compileComponent('../src/components/VideoCard/components/VideoCardMeta.vue', {
+      '~/logic': { settings },
+      '~/utils/dataFormatter': { calcTimeSince: () => 'TIME' },
+      '../directives/wholeMeta': { vWholeMeta: {} },
+      '../utils': { getTagSearchUrl: () => '#' },
+    })
     const Component = await compileComponent('../src/components/VideoCard/components/VideoCardInfo.vue', {
-      '~/logic': { settings: Vue.ref({ showVideoCardPublishTime: true, showVideoCardVideoTag: true, showVideoCardRecommendTag: true }) },
+      '~/logic': { settings },
+      '~/components/SkeletonBlock.vue': { default: blank },
+      './VideoCardMeta.vue': { default: Meta },
       '~/utils/dataFormatter': { calcTimeSince: () => 'TIME', numFormatter: String },
       '../../VideoWatchedTag.vue': { default: blank },
       '../directives/wholeMeta': { vWholeMeta: {} },
@@ -485,11 +494,12 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       '../VideoCardAuthor/components/VideoCardAuthorAvatar.vue': { default: blank },
       '../VideoCardAuthor/components/VideoCardAuthorName.vue': { default: blank },
     })
-    for (const layout of ['modern', 'old']) {
+    for (const horizontal of [false, true]) {
       const host = document.body.appendChild(document.createElement('div'))
-      const app = Vue.createApp(Component, { layout, hideAuthor: true, video: { title: 'Title', publishedTimestamp: 1, tag: 'Tag', threePointV2: [] }, highlightTags: ['Hint'], moreBtn: false, showVideoOptions: false, titleFontSizeClass: '', titleStyle: {}, authorFontSizeClass: '', metaFontSizeClass: '', metaStyle: {} })
+      const app = Vue.createApp(Component, { horizontal, hideAuthor: true, video: { title: 'Title', publishedTimestamp: 1, tag: 'Tag', searchableTags: ['Search', 'Second'], threePointV2: [] }, highlightTags: ['Hint'], moreBtn: false, showVideoOptions: false, titleFontSizeClass: '', titleStyle: {}, authorFontSizeClass: '', metaFontSizeClass: '', metaStyle: {} })
       app.mount(host)
       assert.equal(host.querySelector('.video-card-meta-row').firstElementChild.textContent.trim(), 'TIME')
+      assert.equal(host.querySelectorAll('.video-card-meta__chip--searchable').length, 1)
       app.unmount()
       host.remove()
     }

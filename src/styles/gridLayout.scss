@@ -4,7 +4,8 @@
 // through useGridLayout and only own their card-specific presentation.
 .bew-grid-adaptive {
   display: grid;
-  gap: var(--bew-layout-content-gap);
+  column-gap: var(--bew-layout-content-gap);
+  row-gap: var(--bew-card-row-gap);
   grid-template-columns: repeat(var(--grid-cols-base, 1), minmax(0, 1fr));
   contain: layout style;
   align-items: stretch;
@@ -42,7 +43,8 @@
 
 .bew-grid-two-columns {
   display: grid;
-  gap: var(--bew-layout-content-gap);
+  column-gap: var(--bew-layout-content-gap);
+  row-gap: var(--bew-card-row-gap);
   grid-template-columns: repeat(2, minmax(0, 1fr));
   contain: layout style;
   align-items: stretch;
@@ -50,7 +52,8 @@
 
 .bew-grid-one-column {
   display: grid;
-  gap: var(--bew-layout-content-gap);
+  column-gap: var(--bew-layout-content-gap);
+  row-gap: var(--bew-card-row-gap);
   grid-template-columns: minmax(0, 1fr);
   contain: layout style;
   align-items: stretch;

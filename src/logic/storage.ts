@@ -45,7 +45,6 @@ export const FROSTED_GLASS_BLUR_MAX_PX = 20
 export type DrawerEscapeBehavior = 'immediate' | 'secondPress'
 
 export type VideoCardFontSizeSetting = 'xs' | 'sm' | 'base' | 'lg'
-export type VideoCardLayoutSetting = 'modern' | 'old'
 export type WatchLaterLayoutMode = 'list' | 'grid'
 export type TopBarLogoStyle = 'icon' | 'brand'
 export type AutoPlayMode = 'default' | 'autoPlay' | 'autoPlayWithRecommend' | 'pauseAtEnd' | 'loop'
@@ -377,7 +376,6 @@ export interface Settings {
   // Video card tag/meta font size token
   videoCardMetaFontSize: VideoCardFontSizeSetting
   // Preferred video card layout
-  videoCardLayout: VideoCardLayoutSetting
   // Video card shadow customization (modern layout only)
   videoCardShadowCurve: ShadowCurvePoint[]
   videoCardShadowHeight: number // 1.0-3.0
@@ -677,7 +675,6 @@ export const originalSettings: Settings = {
   videoCardTitleFontSize: 'base',
   videoCardAuthorFontSize: 'sm',
   videoCardMetaFontSize: 'xs',
-  videoCardLayout: 'modern',
   videoCardShadowCurve: [
     { position: 0, opacity: 80 },
     { position: 30, opacity: 70 },
@@ -1005,10 +1002,6 @@ function normalizeSettings(value: Settings) {
 
   Reflect.deleteProperty(record, 'customPlayDefaultEnabled')
   Reflect.deleteProperty(record, 'randomPlayOrder')
-
-  // 紧凑布局已由卡片元素显示设置替代
-  if (legacyRecord.videoCardLayout === 'compact')
-    record.videoCardLayout = 'modern'
 
   if (record.rememberDanmakuState === true)
     record.defaultDanmakuState = 'remember'

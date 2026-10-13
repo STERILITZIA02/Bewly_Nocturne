@@ -4,10 +4,10 @@ import { useId } from 'vue'
 
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
-import PanelTopBlur from '~/components/PanelTopBlur.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useGlassPanelMotion } from '~/composables/useGlassPanelMotion'
 import { GLASS_SURFACE_CONTEXT } from '~/composables/useLiquidGlass'
+import { usePanelTrigger } from '~/composables/usePanelOrigin'
+import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { settings } from '~/logic'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { resolveDialogKeyboardAction } from '~/utils/dialogKeyboard'
@@ -30,10 +30,6 @@ const props = withDefaults(defineProps<{
   contentFlush?: boolean
   /** 是否显示对话框顶栏 */
   showHeader?: boolean
-  /** 是否显示顶栏局部渐进模糊 */
-  showTopBlur?: boolean
-  /** 动效场景；moments-dialog 保留详情弹窗不缩放的过渡 */
-  transitionName?: string
   /** 是否显示边框和边缘光 */
   showBorder?: boolean
   showFooter?: boolean
@@ -48,12 +44,10 @@ const props = withDefaults(defineProps<{
   closeOnConfirm: true,
   frostedGlass: true,
   showHeader: true,
-  showTopBlur: true,
   showBorder: true,
   showFooter: true,
   showLoadingOverlay: true,
   contentFlush: false,
-  transitionName: 'modal',
   layer: 'dialog',
 })
 
@@ -66,9 +60,18 @@ const dialogRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const dialogId = useId()
 const titleId = `${dialogId}-title`
-const dialogMotion = useGlassPanelMotion('.dialog__panel')
+const dialogMotion = useSourcePanelMotion('.dialog__panel', [
+  ':scope > .dialog__backdrop',
+  ':scope > .dialog__panel > .dialog__edge',
+  ':scope > .dialog__panel > .dialog__clip > .dialog__surface',
+  ':scope > .dialog__panel > .dialog__clip > .dialog__loading-mask',
+  ':scope > .dialog__panel > .dialog__clip > header',
+  ':scope > .dialog__panel > .dialog__clip > main',
+  ':scope > .dialog__panel > .dialog__clip > footer',
+].join(', '))
 provide(DIALOG_FOCUS_OWNER, dialogId)
 let previousFocus: HTMLElement | null = null
+const getTrigger = usePanelTrigger()
 let focusRestored = false
 /**
  * Closing protocol:
@@ -177,7 +180,6 @@ const dialogPanelStyle = computed(() => {
     top: topAligned ? `max(var(--bew-space-2), ${dialogTopOffset.value})` : '50%',
     left: '50%',
     transform: topAligned ? 'translateX(-50%)' : 'translate(-50%, -50%)',
-    boxShadow: props.showBorder ? 'var(--bew-shadow-4), var(--bew-shadow-edge-glow-2)' : 'var(--bew-shadow-4)',
   }
 })
 const dialogSurfaceStyle = computed(() => {
@@ -193,7 +195,7 @@ onKeyStroke('Alt', event => handleDialogKeyboardEvent(event, 'keyup'), { eventNa
 
 onMounted(() => {
   const active = getDeepActiveElement(document)
-  previousFocus = active instanceof HTMLElement ? active : null
+  previousFocus = getTrigger() ?? (active instanceof HTMLElement ? active : null)
   showDialog.value = true
   void nextTick(() => {
     const dialog = dialogRef.value
@@ -284,6 +286,7 @@ async function handleConfirm() {
         pointer-events-auto
       >
         <div
+          class="dialog__backdrop"
           bg="black opacity-40 dark:opacity-40"
           pos="absolute top-0 left-0" w-full h-full z-0
           @click="handleClose"
@@ -302,8 +305,9 @@ async function handleConfirm() {
           z-2
           antialiased
           class="dialog__panel bew-shape-smooth-rect"
-          :class="{ 'dialog__panel--borderless': !showBorder, 'dialog__panel--detail': transitionName === 'moments-dialog' }"
+          :class="{ 'dialog__panel--borderless': !showBorder }"
         >
+          <div class="dialog__edge" aria-hidden="true" />
           <div class="dialog__clip">
             <div
               class="dialog__surface"
@@ -338,7 +342,6 @@ async function handleConfirm() {
               items-center justify-between
               z-1
             >
-              <PanelTopBlur v-if="showTopBlur" :enabled="frostedGlassEnabled" />
               <div
                 class="dialog__heading"
                 :style="{ textAlign: center ? 'center' : 'left' }"
@@ -444,10 +447,8 @@ async function handleConfirm() {
 }
 
 .dialog__panel {
-  --bew-panel-enter-transform: translateY(var(--bew-space-2)) scale(0.985);
-  --bew-panel-leave-transform: translateY(var(--bew-space-1)) scale(0.99);
   --bew-panel-enter-duration: var(--bew-duration-moderate);
-  --bew-panel-leave-duration: var(--bew-duration-fast);
+  --bew-panel-leave-duration: var(--bew-duration-moderate);
   box-sizing: border-box;
   display: flex;
   flex-direction: column;
@@ -467,22 +468,23 @@ async function handleConfirm() {
   border-radius: inherit;
   corner-shape: inherit;
   isolation: isolate;
-
-  &::after {
-    position: absolute;
-    z-index: 3;
-    inset: 0;
-    box-sizing: border-box;
-    border: 1px solid var(--bew-surface-border-color);
-    border-radius: inherit;
-    corner-shape: inherit;
-    content: "";
-    pointer-events: none;
-  }
 }
 
-.dialog__panel--borderless .dialog__clip::after {
+.dialog__edge {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: inherit;
+  corner-shape: inherit;
+  box-shadow: var(--bew-shadow-4), var(--bew-shadow-edge-glow-2);
+  pointer-events: none;
+}
+
+.dialog__panel--borderless .dialog__edge {
   border: 0;
+  box-shadow: var(--bew-shadow-4);
 }
 
 .dialog__surface,
@@ -500,6 +502,7 @@ async function handleConfirm() {
 }
 
 .dialog__header {
+  box-sizing: border-box;
   flex-shrink: 0;
   border-top-left-radius: inherit;
   border-top-right-radius: inherit;
@@ -530,13 +533,12 @@ async function handleConfirm() {
   z-index: 1;
 }
 
-.dialog__close {
-  margin-left: var(--bew-space-8);
+.dialog__heading {
+  min-width: 0;
+  flex: 1;
 }
 
-.dialog__panel--detail {
-  --bew-panel-enter-transform: translateY(var(--bew-space-1));
-  --bew-panel-leave-transform: translateY(var(--bew-space-1));
-  --bew-panel-enter-duration: var(--bew-duration-fast);
+.dialog__close {
+  margin-left: var(--bew-space-8);
 }
 </style>

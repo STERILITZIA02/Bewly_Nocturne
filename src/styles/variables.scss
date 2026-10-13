@@ -53,7 +53,6 @@
   --bew-media-pop-title-font-size: var(--bew-font-size-title);
   --bew-media-pop-title-line-height: var(--bew-line-height-title);
   --bew-media-pop-title-font-weight: var(--bew-font-weight-semibold);
-  --bew-video-card-meta-min-height: 46px;
   // #endregion
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.
@@ -102,6 +101,15 @@
 
   // #region Layout
   --bew-layout-content-gap: var(--bew-space-5);
+  --bew-card-inset: var(--bew-space-4);
+  --bew-card-stack-gap: var(--bew-space-3);
+  --bew-card-hover-outset: var(--bew-space-2);
+  --bew-card-row-gap: var(--bew-space-8);
+  --bew-card-inset-radius: var(--bew-radius-md);
+  --bew-card-avatar-size: var(--bew-space-8);
+  --bew-cover-overlay-inset: var(--bew-space-2);
+  --bew-cover-action-size: var(--bew-icon-button-size-md);
+  --bew-cover-scrim: rgb(0 0 0 / 56%);
   --bew-layout-sidebar-width: 200px;
   --bew-library-filter-padding: var(--bew-space-3);
   --bew-moments-hot-search-width: clamp(240px, 18vw, 300px);

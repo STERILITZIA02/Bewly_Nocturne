@@ -37,7 +37,7 @@ export function useGlassPanelMotion(selector: string, collapsedTransform?: (pane
     if (!panel?.animate || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       interrupted.delete(element)
       if (panel && fadeSelector)
-        panel.querySelectorAll<HTMLElement>(fadeSelector).forEach(target => interruptedOpacity.delete(target))
+        element.querySelectorAll<HTMLElement>(fadeSelector).forEach(target => interruptedOpacity.delete(target))
       done()
       return
     }
@@ -55,7 +55,7 @@ export function useGlassPanelMotion(selector: string, collapsedTransform?: (pane
     // Fade actual paint layers, never a glass ancestor: the backdrop stays sampled
     // from the same root from first frame to last. Exit is invisible before arrival.
     if (fadeSelector) {
-      fades.set(element, Array.from(panel.querySelectorAll<HTMLElement>(fadeSelector), (target) => {
+      fades.set(element, Array.from(element.querySelectorAll<HTMLElement>(fadeSelector), (target) => {
         const from = interruptedOpacity.get(target) ?? (entering ? '0' : '1')
         interruptedOpacity.delete(target)
         const frames = entering

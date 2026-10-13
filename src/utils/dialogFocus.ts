@@ -67,7 +67,7 @@ export function moveDialogTabFocus(dialog: HTMLElement, panel: HTMLElement, even
   ;(focusable[nextIndex] || panel).focus({ preventScroll: true })
 }
 
-export function restoreOverlayFocus(overlay: HTMLElement | null, target: HTMLElement | null) {
+export function restoreOverlayFocus(overlay: HTMLElement | null, target: HTMLElement | null, retryDisabled = true) {
   if (!target?.isConnected || target.closest('[inert]'))
     return
   const topDialog = getTopDialog(target.getRootNode() as ParentNode)
@@ -77,5 +77,18 @@ export function restoreOverlayFocus(overlay: HTMLElement | null, target: HTMLEle
   const otherModal = active?.closest('[aria-modal="true"]')
   if (otherModal && !overlay?.contains(otherModal) && !otherModal.contains(target))
     return
+  if (target.matches(':disabled')) {
+    if (retryDisabled) {
+      // Confirmation callers clear their pending flag after the close Promise
+      // settles. One task lets that Vue update finish; never poll or steal focus.
+      setTimeout(() => {
+        const current = getDeepActiveElement(target.ownerDocument)
+        if (current && current !== target.ownerDocument.body && current !== target && !overlay?.contains(current))
+          return
+        restoreOverlayFocus(null, target, false)
+      }, 0)
+    }
+    return
+  }
   target.focus({ preventScroll: true })
 }

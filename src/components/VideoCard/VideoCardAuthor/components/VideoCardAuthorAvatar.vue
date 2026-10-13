@@ -8,10 +8,8 @@ const props = withDefaults(defineProps<{
   author: Author | Author[]
   maxCount?: number
   isLive?: boolean
-  compact?: boolean
 }>(), {
   maxCount: 3, // 最多显示的头像数量
-  compact: false,
 })
 
 // 限制显示的头像数量，最多显示 maxCount 个
@@ -35,16 +33,15 @@ const isKetang = computed(() => {
   <div
     v-if="isKetang"
     :style="{
-      width: '34px',
-      height: '34px',
+      width: 'var(--bew-card-avatar-size)',
+      height: 'var(--bew-card-avatar-size)',
     }"
-    :class="compact ? 'mr-2' : 'mr-4'"
     pos="relative"
     shrink-0
   >
     <div
       class="ketang-icon video-card-author-avatar bew-shape-circle"
-      w-34px h-34px
+      w-full h-full
       bg="$bew-theme-surface"
       grid="~ place-items-center"
     >
@@ -56,10 +53,9 @@ const isKetang = computed(() => {
   <div
     v-else
     :style="{
-      width: Array.isArray(author) && author.length > 1 ? `${28 + (displayedAvatars?.length) * 6}px` : '34px',
-      height: Array.isArray(author) && author.length > 1 ? '28px' : '34px',
+      width: `calc(var(--bew-card-avatar-size) + ${(displayedAvatars.length - 1)} * var(--bew-space-2))`,
+      height: 'var(--bew-card-avatar-size)',
     }"
-    :class="compact ? 'mr-2' : 'mr-4'"
     pos="relative"
     shrink-0
   >
@@ -72,9 +68,9 @@ const isKetang = computed(() => {
       position-absolute top-0 inline-block
       :style="{
         zIndex: displayedAvatars.length - index,
-        left: `${index * 6}px`,
-        width: displayedAvatars.length > 1 ? `28px` : '34px',
-        height: displayedAvatars.length > 1 ? `28px` : '34px',
+        left: `calc(${index} * var(--bew-space-2))`,
+        width: 'var(--bew-card-avatar-size)',
+        height: 'var(--bew-card-avatar-size)',
       }"
       :class="{ live: isLive }"
       @click.stop=""
@@ -92,7 +88,7 @@ const isKetang = computed(() => {
       <div
         v-if="item.followed && !Array.isArray(author)"
         class="bew-shape-circle"
-        pos="absolute top-21px left-22px"
+        pos="absolute bottom--2px right--2px"
         w-14px h-14px
         bg="$bew-theme-color"
         border="2 outset solid white"
@@ -103,7 +99,7 @@ const isKetang = computed(() => {
       <div
         v-else-if="isLive"
         class="bew-shape-circle"
-        pos="absolute top-18px left-22px"
+        pos="absolute bottom--2px right--2px"
         w-14px h-14px
         bg="$bew-theme-color"
         grid place-items-center

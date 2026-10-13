@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import Button from '~/components/Button.vue'
 import CloseButton from '~/components/CloseButton.vue'
+import { usePanelTrigger } from '~/composables/usePanelOrigin'
+import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { getDeepActiveElement, getTopDialog, moveDialogTabFocus, ownsDialogKeyboard, restoreOverlayFocus } from '~/utils/dialogFocus'
 
 defineProps<{ message: string }>()
@@ -9,6 +11,24 @@ const dialogRef = ref<HTMLElement | null>(null)
 const panelRef = ref<HTMLElement | null>(null)
 const dialogId = useId()
 let previousFocus: HTMLElement | null = null
+const getTrigger = usePanelTrigger()
+const visible = ref(true)
+let result = false
+const motion = useSourcePanelMotion('.bew-confirm-dialog__panel', ':scope > .bew-confirm-dialog__backdrop, :scope > .bew-confirm-dialog__panel')
+
+function finish(confirmed: boolean) {
+  if (!visible.value)
+    return
+  result = confirmed
+  dialogRef.value?.removeAttribute('data-bewly-dialog-active')
+  visible.value = false
+}
+
+function afterLeave() {
+  restoreOverlayFocus(dialogRef.value, previousFocus)
+  previousFocus = null
+  emit('finish', result)
+}
 
 function handleKeydown(event: KeyboardEvent) {
   const dialog = dialogRef.value
@@ -29,7 +49,7 @@ function handleKeydown(event: KeyboardEvent) {
   else if (event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
-    emit('finish', false)
+    finish(false)
   }
   else if (event.key === 'Enter' || event.key === ' ') {
     // Native buttons decide whether Enter/Space means cancel or confirm.
@@ -39,7 +59,7 @@ function handleKeydown(event: KeyboardEvent) {
 
 onMounted(() => {
   const active = getDeepActiveElement(document)
-  previousFocus = active instanceof HTMLElement ? active : null
+  previousFocus = getTrigger() ?? (active instanceof HTMLElement ? active : null)
   const dialog = dialogRef.value
   if (dialog && getTopDialog(dialog.getRootNode() as ParentNode) === dialog)
     panelRef.value?.querySelector<HTMLButtonElement>('[data-confirm-cancel]')?.focus({ preventScroll: true })
@@ -55,44 +75,47 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div
-    ref="dialogRef"
-    class="bew-confirm-dialog"
-    role="alertdialog"
-    aria-modal="true"
-    :data-bewly-dialog-active="dialogId"
-    :aria-label="$t('common.operation.confirm')"
-    :aria-describedby="`${dialogId}-message`"
-    @keydown="handleKeydown"
-  >
-    <div class="bew-confirm-dialog__backdrop" @click="emit('finish', false)" />
-    <div ref="panelRef" class="bew-confirm-dialog__panel" tabindex="-1">
-      <header class="bew-confirm-dialog__header">
-        <p class="bew-confirm-dialog__title">
-          {{ $t('common.operation.confirm') }}
-        </p>
-        <CloseButton
-          class="bew-confirm-dialog__close"
-          :label="$t('common.close')"
-          size="medium"
-          @click="emit('finish', false)"
-        />
-      </header>
-      <div class="bew-confirm-dialog__body">
-        <p :id="`${dialogId}-message`" class="bew-confirm-dialog__message">
-          {{ message }}
-        </p>
+  <Transition appear v-bind="motion" @after-leave="afterLeave">
+    <div
+      v-if="visible"
+      ref="dialogRef"
+      class="bew-confirm-dialog"
+      role="alertdialog"
+      aria-modal="true"
+      :data-bewly-dialog-active="dialogId"
+      :aria-label="$t('common.operation.confirm')"
+      :aria-describedby="`${dialogId}-message`"
+      @keydown="handleKeydown"
+    >
+      <div class="bew-confirm-dialog__backdrop" @click="finish(false)" />
+      <div ref="panelRef" class="bew-confirm-dialog__panel" tabindex="-1">
+        <header class="bew-confirm-dialog__header">
+          <p class="bew-confirm-dialog__title">
+            {{ $t('common.operation.confirm') }}
+          </p>
+          <CloseButton
+            class="bew-confirm-dialog__close"
+            :label="$t('common.close')"
+            size="medium"
+            @click="finish(false)"
+          />
+        </header>
+        <div class="bew-confirm-dialog__body">
+          <p :id="`${dialogId}-message`" class="bew-confirm-dialog__message">
+            {{ message }}
+          </p>
+        </div>
+        <footer class="bew-confirm-dialog__footer">
+          <Button type="tertiary" data-confirm-cancel @click="finish(false)">
+            {{ $t('common.operation.cancel') }}
+          </Button>
+          <Button type="primary" @click="finish(true)">
+            {{ $t('common.operation.confirm') }}
+          </Button>
+        </footer>
       </div>
-      <footer class="bew-confirm-dialog__footer">
-        <Button type="tertiary" data-confirm-cancel @click="emit('finish', false)">
-          {{ $t('common.operation.cancel') }}
-        </Button>
-        <Button type="primary" @click="emit('finish', true)">
-          {{ $t('common.operation.confirm') }}
-        </Button>
-      </footer>
     </div>
-  </div>
+  </Transition>
 </template>
 
 <style lang="scss" scoped>
@@ -110,6 +133,8 @@ onBeforeUnmount(() => {
 }
 
 .bew-confirm-dialog__panel {
+  --bew-panel-enter-duration: var(--bew-duration-moderate);
+  --bew-panel-leave-duration: var(--bew-duration-moderate);
   position: absolute;
   top: 50%;
   left: 50%;

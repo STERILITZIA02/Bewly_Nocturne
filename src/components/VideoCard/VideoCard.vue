@@ -6,7 +6,6 @@ import { useBewlyApp } from '~/composables/useAppProvider'
 import { useUserRelations } from '~/composables/useUserRelations'
 import { useVideoCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { settings } from '~/logic'
-import type { VideoCardLayoutSetting } from '~/logic/storage'
 import { calcCurrentTime, numFormatter } from '~/utils/dataFormatter'
 import { recordVideoVisit } from '~/utils/videoVisitHistory'
 
@@ -40,11 +39,6 @@ interface Props {
   coverTopLeftAlwaysVisible?: boolean
 }
 
-const layout = computed((): VideoCardLayoutSetting => {
-  const layoutSetting = settings.value.videoCardLayout as VideoCardLayoutSetting | undefined
-  return layoutSetting === 'old' ? 'old' : 'modern'
-})
-
 // 数据现在在转换阶段已经完成 HTML 解码，直接使用 props
 const logic = useVideoCardLogic(props, props.persistentState)
 defineExpose({ canRecycle: computed(() => !logic.showVideoOptions.value && !logic.isPreviewFullscreen.value && !logic.isPreviewScrubbing.value && !logic.isHover.value && !logic.isUpdatingWatchLater.value && !logic.isUndoing.value) })
@@ -69,7 +63,7 @@ const relationVideo = computed(() => {
 // 使用共享样式（避免每个卡片重复计算）
 const { titleFontSizeClass, titleStyle, authorFontSizeClass, metaFontSizeClass, metaStyle } = useVideoCardSharedStyles()
 
-// Modern layout specific: cover stats calculation
+// Shared cover statistics; presentation settings retain their individual gates.
 const statSuffixPattern = /(播放量?|观看|弹幕|点赞|views?|likes?|danmakus?|comments?|回复|人气|转发|分享|[次条人])/gi
 const statSeparatorPattern = /[•·]/g
 
@@ -87,7 +81,7 @@ function formatStatValue(count?: number, countStr?: string) {
 }
 
 const coverStatValues = computed(() => {
-  if (!props.video || layout.value === 'old') {
+  if (!props.video) {
     return {
       view: '',
       danmaku: '',
@@ -132,9 +126,6 @@ const coverStatsVisibility = computed(() => {
 })
 
 const hasCoverStats = computed(() => {
-  if (layout.value === 'old')
-    return false
-
   const visibility = coverStatsVisibility.value
   const values = coverStatValues.value
 
@@ -309,28 +300,12 @@ const coverImageUrl = computed(() =>
 
 const infoComponentRef = ref()
 
-// 图片加载状态：用于等待图片加载完成后才显示真实内容
-const imageLoaded = ref(false)
-
 // Cover 骨架屏状态：只依赖数据骨架屏，让图片能立即开始加载
 const coverSkeleton = computed(() => props.skeleton)
 
 // Info 骨架屏状态：只依赖数据骨架屏，不等待图片加载
 // 这避免了滚动时图片加载触发的大量 DOM 重构
 const infoSkeleton = computed(() => props.skeleton)
-
-// 监听skeleton prop变化，重置imageLoaded状态
-watch(() => props.skeleton, (newVal) => {
-  if (newVal) {
-    // 变成骨架屏时，重置图片加载状态
-    imageLoaded.value = false
-  }
-})
-
-// 处理图片加载完成
-function handleImageLoaded() {
-  imageLoaded.value = true
-}
 
 // Expose moreBtnRef from child component
 watchEffect(() => {
@@ -351,9 +326,7 @@ provide('getVideoType', () => props.type!)
   <div
     :ref="(el) => logic.cardRootRef.value = el as HTMLElement"
     class="video-card-container"
-    rounded="$bew-card-radius"
     :class="[
-      layout !== 'old' ? 'mb-3' : 'mb-4',
       skeleton ? 'video-card-container--skeleton' : 'video-card-container--interactive',
       disableContentVisibility ? 'video-card-container--layout-stable' : '',
     ]"
@@ -368,7 +341,7 @@ provide('getVideoType', () => props.type!)
     >
       <component
         :is="coverSkeleton ? 'div' : 'ALink'"
-        :style="{ display: horizontal ? 'flex' : 'block', gap: horizontal ? 'var(--bew-space-6)' : '0' }"
+        :style="{ display: horizontal ? 'flex' : 'block', gap: horizontal ? 'var(--bew-card-inset)' : '0' }"
         v-bind="coverSkeleton ? {} : {
           href: logic.videoUrl.value,
           type: 'videoCard',
@@ -387,11 +360,8 @@ provide('getVideoType', () => props.type!)
           <VideoCardCover
             :skeleton="coverSkeleton"
             :video="props.video"
-            :layout="layout"
-            :horizontal="horizontal"
             :removed="logic.removed.value"
             :is-hover="logic.isHover.value"
-            :should-hide-overlay-elements="Boolean(logic.shouldHideOverlayElements.value)"
             :preview-video-url="logic.previewVideoUrl.value || ''"
             :video-element="logic.videoElement.value || null"
             :preview-current-time="logic.videoCurrentTime.value"
@@ -405,7 +375,6 @@ provide('getVideoType', () => props.type!)
             :should-hide-cover-stats="Boolean(shouldHideCoverStats)"
             @toggle-watch-later="logic.toggleWatchLater"
             @undo="logic.handleUndo"
-            @image-loaded="handleImageLoaded"
             @preview-error="logic.clearPreviewVideoUrl"
             @preview-fullscreen-change="logic.handlePreviewFullscreenChange"
             @preview-scrub-change="logic.handlePreviewScrubChange"
@@ -424,7 +393,6 @@ provide('getVideoType', () => props.type!)
           :class="{ 'horizontal-card-info': horizontal }"
           :skeleton="infoSkeleton"
           :video="relationVideo"
-          :layout="layout"
           :horizontal="horizontal || false"
           :video-url="logic.videoUrl.value"
           :more-btn="moreBtn"
@@ -467,6 +435,7 @@ provide('getVideoType', () => props.type!)
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/contentCard";
 .video-card:focus-within :deep(.video-card-watch-later) {
   opacity: 1;
   pointer-events: auto;
@@ -474,26 +443,18 @@ provide('getVideoType', () => props.type!)
   transition: none;
 }
 
-/* ✅ 性能优化：移除Container Query，减少11,206个容器的查询计算开销 */
 .video-card-container {
-  /* ❌ 移除 container-type 和 container-name，避免大规模容器查询计算 */
-  /* container-type: inline-size; */
-  /* container-name: video-card; */
-
-  /* ✅ 增强 containment：移除 paint 以允许 hover 背景向外扩展 */
   contain: layout style;
   min-width: 0;
 
-  /**
-   * 关键优化：让浏览器跳过 offscreen 子树的 layout/style/paint。
-   * 使用 content-visibility: auto 大幅减少 11k 卡片的渲染开销。
-   */
+  // Windowed grids disable this estimate and use their shared measured heights.
   content-visibility: auto;
-  contain-intrinsic-size: 360px 260px;
+  contain-intrinsic-size: 376px 276px;
 
   /* 防止骨架屏和真实内容切换时的布局偏移：
      确保容器在加载过程中保持稳定的最小高度 */
   min-height: fit-content;
+  @include contentCard.bare;
 }
 
 /* 骨架屏状态：禁用交互；各内容块自身已经提供骨架反馈。 */
@@ -505,28 +466,6 @@ provide('getVideoType', () => props.type!)
 .video-card-container--layout-stable {
   content-visibility: visible;
   contain-intrinsic-size: none;
-}
-
-/* One restrained surface response, without painting into the neighboring gap. */
-.video-card-container--interactive {
-  position: relative;
-  background-color: transparent;
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
-}
-
-/* 只在支持 hover 的设备上启用 hover 效果（避免触屏设备的性能损失） */
-@media (hover: hover) and (pointer: fine) {
-  .video-card-container--interactive:hover {
-    background-color: var(--bew-fill-1);
-  }
-}
-
-.video-card-container--interactive:focus-within {
-  background-color: var(--bew-fill-1);
-}
-
-.video-card-container--interactive:active {
-  background-color: var(--bew-fill-2);
 }
 
 .horizontal-card-cover {
@@ -547,9 +486,13 @@ provide('getVideoType', () => props.type!)
 
 /* 使用固定样式变量 */
 :deep(.video-card-stats) {
-  --video-card-stats-font-size: var(--bew-font-size-control);
-  --video-card-stats-line-height: var(--bew-line-height-control);
+  --video-card-stats-font-size: var(--bew-font-size-caption);
+  --video-card-stats-line-height: var(--bew-line-height-caption);
   --video-card-stats-overlay-scale: 1.4;
-  --video-card-stats-icon-size: 0.825rem;
+  --video-card-stats-icon-size: var(--bew-icon-size-xs);
+}
+
+.video-card-container:is(:hover, :focus-within) :deep(.video-card__more-btn) {
+  color: var(--bew-text-1);
 }
 </style>

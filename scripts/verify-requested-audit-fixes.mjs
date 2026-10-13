@@ -81,6 +81,60 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
     host.remove()
   })
 
+  check('audit 01: cancelled confirmation restores its pointer trigger after pending disables it', async () => {
+    const focus = await import('../src/utils/dialogFocus')
+    const { providePanelOrigin } = await import('../src/composables/usePanelOrigin')
+    const { useConfirmDialogHost } = await import('../src/composables/useConfirmDialogHost')
+    const ConfirmDialog = await compileComponent('../src/components/ConfirmDialog.vue', {
+      '~/components/Button.vue': { default: buttonStub },
+      '~/components/CloseButton.vue': { default: buttonStub },
+      '~/utils/dialogFocus': focus,
+    })
+    const host = document.body.appendChild(document.createElement('div'))
+    const shadow = host.attachShadow({ mode: 'open' })
+    const mount = shadow.appendChild(document.createElement('div'))
+    let outcome
+    const app = Vue.createApp({ setup() {
+      const capture = providePanelOrigin()
+      const controller = useConfirmDialogHost()
+      const pending = Vue.ref(false)
+      async function open() {
+        pending.value = true
+        outcome = await controller.confirm('cancel only')
+        pending.value = false
+      }
+      return () => Vue.h('section', { onClickCapture: capture }, [
+        Vue.h('button', { 'data-origin': '', 'disabled': pending.value, 'onClick': open }, 'open'),
+        controller.activeRequest.value ? Vue.h(ConfirmDialog, { message: controller.activeRequest.value.message, onFinish: controller.finish }) : null,
+      ])
+    } })
+    app.config.globalProperties.$t = key => key
+    try {
+      app.mount(mount)
+      await flush()
+      // A real pointer click follows mount in a later task. Same-millisecond
+      // synthetic capture/bubble delivery can trip Vue's newly-added-listener guard.
+      await new Promise(resolve => setTimeout(resolve, 10))
+      const origin = shadow.querySelector('[data-origin]')
+      origin.getBoundingClientRect = () => ({ left: 10, top: 20, width: 80, height: 32 })
+      origin.click()
+      await flush()
+      assert.equal(origin.disabled, true)
+      assert.equal(shadow.activeElement, shadow.querySelector('[data-confirm-cancel]'))
+      shadow.querySelector('[data-confirm-cancel]').click()
+      await flush()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      assert.equal(outcome, false)
+      assert.equal(origin.disabled, false)
+      assert.equal(shadow.activeElement, origin)
+      assert.equal(shadow.querySelector('[role="alertdialog"]'), null)
+    }
+    finally {
+      app.unmount()
+      host.remove()
+    }
+  })
+
   check('audit 01: confirmation ownership cancels queued, closing, deactivated and disposed requests', async () => {
     const { useConfirmDialogHost } = await import('../src/composables/useConfirmDialogHost')
     const scope = Vue.effectScope()

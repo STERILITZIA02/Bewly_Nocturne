@@ -242,7 +242,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const gridPolicy = await import('../src/utils/gridLayout')
     const coverPolicy = await import('../src/utils/videoCardLayout')
     const events = await import('../src/constants/globalEvents')
-    const settings = Vue.ref({ gridColumns: { base: 4, sm: 4, md: 4, lg: 4, xl: 4, xxl: 4 }, autoSwitchListLayout: false, videoCardLayout: 'modern', videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50, videoCardContextMenuConfig: [{ key: 'followUser', visible: true }] })
+    const settings = Vue.ref({ gridColumns: { base: 4, sm: 4, md: 4, lg: 4, xl: 4, xxl: 4 }, autoSwitchListLayout: false, videoCardCoverRatioOneColumn: 40, videoCardCoverRatioTwoColumns: 50, videoCardContextMenuConfig: [{ key: 'followUser', visible: true }] })
     const relationWindows = []
     const editing = Vue.ref(false)
     const mode = Vue.ref('adaptive')

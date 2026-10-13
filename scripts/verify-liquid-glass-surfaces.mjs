@@ -463,12 +463,12 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
       assert.equal(fixture.mounted, 0, 'large dialogs allocate no liquid-glass resize observers')
       assert.equal(surfaces[0].style.backdropFilter, 'var(--bew-filter-glass-2)')
       assert.equal(surfaces[1].style.backdropFilter, 'none')
-      assert.equal(host.querySelectorAll('[data-top-blur="true"]').length, 2, 'protected top blur retains its original enabled state')
+      assert.equal(host.querySelectorAll('[data-top-blur]').length, 0, 'ordinary and nested dialogs have no top blur; Settings is tested separately')
       assert.match(surfaces[1].style.backgroundColor, /bew-elevated-alt-solid/)
       fixture.settings.value.disableFrostedGlass = true
       await flush()
       assert.equal(host.querySelectorAll('filter').length, 0)
-      assert.equal(host.querySelectorAll('[data-top-blur="false"]').length, 2)
+      assert.equal(host.querySelectorAll('[data-top-blur]').length, 0)
       assert.deepEqual([...host.querySelectorAll('input')].map(input => input.value), ['outer draft', 'inner draft'])
     }
     finally {

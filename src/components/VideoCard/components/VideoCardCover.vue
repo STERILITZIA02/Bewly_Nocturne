@@ -10,7 +10,6 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { useVideoPreviewSwipeSeek } from '~/composables/useVideoPreviewSwipeSeek'
 import { settings } from '~/logic'
-import { calcCurrentTime } from '~/utils/dataFormatter'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
 import { releaseMediaElement } from '~/utils/mediaResources'
@@ -21,11 +20,8 @@ import type { Video } from '../types'
 interface Props {
   skeleton?: boolean
   video?: Video
-  layout: 'modern' | 'old'
-  horizontal?: boolean
   removed: boolean
   isHover: boolean
-  shouldHideOverlayElements: boolean
   previewVideoUrl: string
   videoElement: HTMLVideoElement | null
   previewCurrentTime?: number | null
@@ -33,7 +29,7 @@ interface Props {
   showWatchLater: boolean
   coverTopLeftAlwaysVisible?: boolean
   coverImageUrl: string
-  // Modern layout specific
+  // Shared cover metadata
   coverStatValues?: {
     view: string
     danmaku: string
@@ -55,7 +51,6 @@ const emit = defineEmits<{
   previewProgress: [time: number]
   toggleWatchLater: []
   undo: []
-  imageLoaded: []
   previewError: []
   previewFullscreenChange: [isFullscreen: boolean]
   previewScrubChange: [scrubbing: boolean]
@@ -393,7 +388,6 @@ onBeforeUnmount(() => {
         loading="lazy"
         :retain-screens="3"
         :show-skeleton="true"
-        @loaded="emit('imageLoaded')"
       />
 
       <div
@@ -470,15 +464,14 @@ onBeforeUnmount(() => {
       <!-- Ranking Number -->
       <div
         v-if="video?.rank"
-        class="video-card-overlay-transition"
+        class="video-card-overlay-transition group-hover:opacity-0"
         pos="absolute top-0"
         p-2
-        :class="layout !== 'old' ? 'group-hover:opacity-0' : { 'opacity-0': shouldHideOverlayElements }"
       >
         <div
           v-if="Number(video?.rank) <= 3"
           class="bew-shape-circle"
-          bg="$bew-theme-color" text-center lh-0 h-30px w-30px
+          bg="$bew-theme-color" text-center lh-0 h-28px w-28px
           text="$bew-on-theme-color xl" shadow="$bew-shadow-1"
           border="1 $bew-theme-color"
           grid="~ place-content-center"
@@ -489,7 +482,7 @@ onBeforeUnmount(() => {
         <div
           v-else
           class="bew-shape-circle"
-          bg="$bew-elevated-solid" text-center lh-30px h-30px w-30px
+          bg="$bew-elevated-solid" text-center lh-28px h-28px w-28px
           shadow="$bew-shadow-1"
           border="1 $bew-border-color"
         >
@@ -498,21 +491,6 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-if="!removed && video">
-        <!-- Old layout: Video Duration (right bottom) -->
-        <div
-          v-if="layout === 'old' && settings.showVideoCardDuration && (video?.duration || video?.durationStr)"
-          class="video-card-overlay-transition bew-shape-pill"
-          pos="absolute bottom-0 right-0"
-          z="2"
-          p="x-2 y-1"
-          m="1"
-          text="!white xs"
-          bg="black opacity-60"
-          :class="{ 'opacity-0': shouldHideOverlayElements }"
-        >
-          {{ video?.duration ? calcCurrentTime(video?.duration ?? 0) : video?.durationStr }}
-        </div>
-
         <div
           class="video-card-overlay-transform-transition"
           :class="coverTopLeftAlwaysVisible ? 'opacity-100' : 'opacity-0 group-hover/cover:opacity-100'"
@@ -525,10 +503,10 @@ onBeforeUnmount(() => {
 
         <div
           v-if="video?.liveStatus === 1"
-          class="video-card-overlay-transition bew-shape-pill"
-          :class="layout !== 'old' ? 'group-hover:opacity-0' : { 'opacity-0': shouldHideOverlayElements }"
+          class="video-card-overlay-transition bew-shape-pill group-hover:opacity-0"
+
           pos="absolute left-0 top-0" bg="$bew-theme-color" text="xs $bew-on-theme-color" fw-bold
-          p="x-2 y-1" m-1 inline-block
+          p="x-2 y-1" m="$bew-cover-overlay-inset" inline-block
         >
           LIVE
           <i i-svg-spinners:pulse-3 align-middle mt--0.2em />
@@ -536,14 +514,14 @@ onBeforeUnmount(() => {
 
         <div
           v-if="Object.keys(video?.badge ?? {}).length > 0"
-          class="video-card-overlay-transition bew-shape-pill"
-          :class="layout !== 'old' ? 'group-hover:opacity-0' : { 'opacity-0': shouldHideOverlayElements }"
+          class="video-card-overlay-transition bew-shape-pill group-hover:opacity-0"
+
           :style="{
             backgroundColor: video?.badge?.bgColor,
             color: video?.badge?.color,
           }"
           pos="absolute right-0 top-0" bg="$bew-theme-color" text="xs $bew-on-theme-color"
-          p="x-2 y-1" m-1 inline-block
+          p="x-2 y-1" m="$bew-cover-overlay-inset" inline-block
         >
           {{ video?.badge?.text }}
         </div>
@@ -554,10 +532,6 @@ onBeforeUnmount(() => {
           type="button"
           :aria-label="isInWatchLater === undefined ? $t('common.watch_later_status_unknown') : isInWatchLater ? $t('common.added') : $t('common.save_to_watch_later')"
           pos="absolute top-0 right-0" z="2"
-          p="x-2 y-1" m="1"
-          rounded="$bew-radius"
-          text="xl"
-          bg="black opacity-60"
           class="video-card-watch-later"
           @click.prevent.stop="emit('toggleWatchLater')"
           @keydown.enter.prevent.stop="emit('toggleWatchLater')"
@@ -571,9 +545,9 @@ onBeforeUnmount(() => {
           </Tooltip>
         </button>
 
-        <!-- Modern layout: Cover stats (bottom overlay) -->
+        <!-- Cover stats (bottom overlay) -->
         <div
-          v-if="layout !== 'old' && hasCoverStats"
+          v-if="hasCoverStats"
           class="video-card-cover-stats video-card-stats"
           :class="{
             'video-card-cover-stats--hidden': shouldHideCoverStats,
@@ -629,6 +603,16 @@ onBeforeUnmount(() => {
 }
 
 .video-card-watch-later {
+  display: grid;
+  place-items: center;
+  width: var(--bew-cover-action-size);
+  height: var(--bew-cover-action-size);
+  padding: 0;
+  margin: var(--bew-cover-overlay-inset);
+  border-radius: 50%;
+  corner-shape: var(--bew-corner-shape-round);
+  font-size: var(--bew-icon-size-md);
+  background: var(--bew-cover-scrim);
   appearance: none;
   color: white;
   line-height: 1;
@@ -663,9 +647,7 @@ onBeforeUnmount(() => {
 .video-card-watch-later:focus-visible {
   color: var(--bew-on-theme-color);
   background-color: var(--bew-theme-color);
-  box-shadow:
-    0 0 14px var(--bew-theme-color-40),
-    var(--bew-shadow-1);
+  box-shadow: var(--bew-shadow-1);
 }
 
 .video-card-preview--scrubbable {
@@ -720,9 +702,10 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 0.4rem;
-  padding: calc(var(--video-card-stats-font-size, 0.75rem) * 0.55)
-    calc(var(--video-card-stats-font-size, 0.75rem) * 0.6) calc(var(--video-card-stats-font-size, 0.75rem) * 0.45);
+  gap: var(--bew-space-2);
+  padding: var(--bew-cover-overlay-inset);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--bew-font-weight-medium);
   color: #fff;
   font-size: var(--video-card-stats-font-size, 0.75rem);
   line-height: var(--video-card-stats-line-height, 1rem);
@@ -765,7 +748,7 @@ onBeforeUnmount(() => {
   flex: 1 1 0;
   align-items: center;
   align-content: flex-start;
-  gap: 0.4rem;
+  gap: var(--bew-space-2);
   height: var(--video-card-stats-line-height, 1rem);
   min-width: 0;
   overflow: hidden;
@@ -776,7 +759,7 @@ onBeforeUnmount(() => {
 .video-card-cover-stats__item {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: var(--bew-space-1);
   max-width: 100%;
   min-width: 0;
   white-space: nowrap;
@@ -797,6 +780,7 @@ onBeforeUnmount(() => {
 }
 
 .video-card-cover-stats__item--duration {
+  font-weight: var(--bew-font-weight-semibold);
   margin-left: auto;
   font-size: var(--video-card-stats-font-size, 0.75rem);
   /* 时长固定在最右侧，不收缩 */
