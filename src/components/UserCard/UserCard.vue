@@ -158,7 +158,7 @@ async function handleFollowClick(e: Event) {
       flex
       align-items-center
       gap-3
-      p-3
+      p-4
       bg="$bew-elevated"
       rounded="$bew-card-radius"
       cursor="pointer"
@@ -277,8 +277,8 @@ async function handleFollowClick(e: Event) {
       flex
       align-items-center
       gap-3
-      p-3
-      bg="$bew-elevated hover:$bew-elevated-hover"
+      p-4
+      bg="$bew-elevated"
       rounded="$bew-card-radius"
       cursor="pointer"
     >
@@ -381,51 +381,25 @@ async function handleFollowClick(e: Event) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/contentCard";
 .user-card {
   text-decoration: none;
   color: inherit;
-  transition:
-    background-color var(--bew-duration-moderate) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
-    transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
-
-  &:not(.compact):hover {
-    transform: translateY(-2px);
-    box-shadow: var(--bew-shadow-2);
-  }
-
-  &.horizontal {
-    padding: 0.75rem;
-
-    .avatar-wrapper {
-      width: 3rem;
-      height: 3rem;
-    }
-  }
-
-  &.compact {
-    display: flex;
-    cursor: pointer;
-    transition:
-      background-color var(--bew-duration-normal) var(--bew-ease-standard),
-      box-shadow var(--bew-duration-normal) var(--bew-ease-standard),
-      transform var(--bew-duration-normal) var(--bew-ease-emphasized);
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--bew-shadow-2);
-    }
-
-    &:active {
-      transform: translateY(0) scale(0.98);
-    }
-  }
+  @include contentCard.surface;
 }
 
 .user-card__overlay {
   position: absolute;
   z-index: 1;
   inset: 0;
+  border-radius: inherit;
+}
+
+.username {
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+.user-card:has(.user-card__overlay:is(:hover, :focus-visible)) .username {
+  color: var(--bew-theme-foreground);
 }
 
 .user-card__interactive {
@@ -547,7 +521,7 @@ async function handleFollowClick(e: Event) {
   position: relative;
   width: 100%;
   aspect-ratio: 16 / 9;
-  border-radius: var(--bew-radius-sm);
+  border-radius: var(--bew-card-inset-radius);
   overflow: hidden;
   background: var(--bew-skeleton);
 
@@ -565,7 +539,7 @@ async function handleFollowClick(e: Event) {
   position: absolute;
   bottom: var(--bew-space-2);
   right: var(--bew-space-2);
-  padding: var(--bew-space-0-5) var(--bew-space-2);
+  padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-badge-radius);
   font-size: var(--bew-font-size-control);
   background: rgba(0, 0, 0, 0.65);
@@ -579,7 +553,7 @@ async function handleFollowClick(e: Event) {
   display: inline-flex;
   align-items: center;
   gap: var(--bew-space-1);
-  padding: var(--bew-space-0-5) var(--bew-space-2);
+  padding: var(--bew-space-1) var(--bew-space-2);
   border-radius: var(--bew-badge-radius);
   font-size: var(--bew-font-size-control);
   color: #fff;

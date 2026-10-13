@@ -635,11 +635,6 @@ settings:
   video_card_shadow_height: Shadow height
   video_card_shadow_height_desc: Adjust the height ratio of the shadow covering the cover
   video_card_shadow_reset: Reset shadow settings
-  video_card_layout: Video card layout
-  video_card_layout_desc: Switch between the redesigned card and the legacy layout.
-  video_card_layout_option:
-    modern: Modern layout
-    old: Classic layout
   font_size_option:
     xs: Extra small
     sm: Small

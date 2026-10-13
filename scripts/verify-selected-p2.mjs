@@ -484,6 +484,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/useSurfaceMorph': await import('../src/composables/useSurfaceMorph'),
     '~/composables/useSpringValue': await import('../src/composables/useSpringValue'),
     '~/composables/useSettingsMotion': await import('../src/composables/useSettingsMotion'),
+    '~/composables/useSourcePanelMotion': await import('../src/composables/useSourcePanelMotion'),
+    '~/composables/usePanelOrigin': await import('../src/composables/usePanelOrigin'),
     '~/composables/useReadyPageTransition': await import('../src/composables/useReadyPageTransition'),
     '~/composables/useAnchoredPopoverPosition': await import('../src/composables/useAnchoredPopoverPosition'),
     '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),

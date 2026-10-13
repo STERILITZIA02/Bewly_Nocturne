@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import type { ComponentPublicInstance } from 'vue'
-
 import { useDark } from '~/composables/useDark'
 import { useBangumiCardSharedStyles } from '~/composables/useVideoCardSharedStyles'
 import { numFormatter } from '~/utils/dataFormatter'
@@ -14,37 +12,6 @@ const props = defineProps<{
   bangumi: Bangumi
   horizontal?: boolean
 }>()
-const cardRootRef = ref<HTMLElement | ComponentPublicInstance | null>(null)
-let cardResizeObserver: ResizeObserver | null = null
-
-onMounted(() => {
-  const el = resolveCardElement()
-  if (!el || typeof ResizeObserver === 'undefined')
-    return
-  cardResizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const width = entry.contentRect.width
-      el.style.setProperty('--bew-card-width', `${Math.round(width)}px`)
-    }
-  })
-  cardResizeObserver.observe(el)
-})
-
-onBeforeUnmount(() => {
-  cardResizeObserver?.disconnect()
-  cardResizeObserver = null
-})
-
-function resolveCardElement(): HTMLElement | null {
-  const el = cardRootRef.value
-  if (!el)
-    return null
-  if (el instanceof HTMLElement)
-    return el
-  const exposed = (el as ComponentPublicInstance).$el
-  return exposed instanceof HTMLElement ? exposed : null
-}
-
 interface Bangumi {
   url: string
   cover: string
@@ -74,17 +41,16 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 </script>
 
 <template>
-  <div mb-6>
+  <div class="bangumi-card-shell">
     <div
       v-if="!skeleton && bangumi"
-      ref="cardRootRef"
       class="bangumi-card"
       :style="{
         display: horizontal ? 'flex' : 'block',
       }"
       gap-4
       content-visibility-auto intrinsic-size-400px
-      rounded="$bew-card-radius" h-fit
+      h-fit
     >
       <ALink
         class="bangumi-card__overlay"
@@ -107,7 +73,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
             class="bangumi-card__badge"
             :style="badgeStyle"
             pos="absolute top-0 right-0"
-            p="x-2 y-1" m-1 rounded="$bew-badge-radius"
+            p="x-2 y-1" m="$bew-cover-overlay-inset" rounded="$bew-badge-radius"
             text="sm" z-1
           >
             {{ bangumi.badge.text }}
@@ -156,11 +122,11 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
                   <span
                     v-for="tag in bangumi.tags"
                     :key="tag"
-                    bg="white opacity-30"
+                    bg="$bew-cover-scrim"
                     text="white sm"
                     leading-none
                     p="x-2 y-1"
-                    rounded="$bew-radius-half"
+                    rounded="$bew-badge-radius"
                     shrink-0
                   >{{ tag }}
                   </span>
@@ -195,10 +161,10 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
       <div
         flex-1
         :style="{
-          marginTop: horizontal ? '0' : '1rem',
+          marginTop: horizontal ? '0' : 'var(--bew-card-stack-gap)',
         }"
       >
-        <p un-text="lg" mb-2 :class="bangumiTitleClass" :style="bangumiTitleStyle">
+        <p class="bangumi-card__heading" mb-2 :class="bangumiTitleClass" :style="bangumiTitleStyle">
           <span
             class="bangumi-card__title keep-two-lines"
             :title="bangumi.title"
@@ -225,21 +191,21 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
     <BangumiCardSkeleton
       v-else-if="skeleton"
       :horizontal="horizontal"
-      important-mb-0
     />
   </div>
 </template>
 
 <style scoped lang="scss">
 @use "./title";
+@use "../../styles/contentCard";
+
+.bangumi-card-shell {
+  min-width: 0;
+}
 
 .bangumi-card {
   position: relative;
-  transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);
-
-  &:is(:hover, :focus-within) {
-    background: var(--bew-fill-1);
-  }
+  @include contentCard.bare;
 }
 
 .bangumi-card__overlay {

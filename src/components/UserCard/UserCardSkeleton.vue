@@ -24,8 +24,8 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
   align-items: center;
   gap: var(--bew-space-5);
   min-width: 0;
-  min-height: 122px;
-  padding: var(--bew-space-3);
+  min-height: 128px;
+  padding: var(--bew-card-inset);
   border-radius: var(--bew-card-radius);
   corner-shape: var(--bew-corner-shape);
   background: var(--bew-elevated);

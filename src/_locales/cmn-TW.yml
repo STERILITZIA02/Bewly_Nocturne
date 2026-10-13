@@ -535,11 +535,6 @@ settings:
   video_card_shadow_height: 陰影高度
   video_card_shadow_height_desc: 調整陰影覆蓋封面的高度比例
   video_card_shadow_reset: 重設陰影設定
-  video_card_layout: 影片卡片版型
-  video_card_layout_desc: 在新版與舊版影片卡片呈現之間切換。
-  video_card_layout_option:
-    modern: 新版
-    old: 經典版
   font_size_option:
     xs: 特小
     sm: 小

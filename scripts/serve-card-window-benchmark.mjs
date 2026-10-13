@@ -13,7 +13,7 @@ const root = process.cwd()
 const baseline = execFileSync('git', ['show', '118f6d8:src/components/VideoCardGrid.vue'], { encoding: 'utf8' })
 const virtual = {
   '/__baseline.vue': baseline,
-  '/__settings.js': `import {ref} from 'vue'; export const settings=ref({gridColumns:{base:6,sm:6,md:6,lg:6,xl:6,xxl:6},videoCardLayout:'modern',autoSwitchListLayout:false,videoCardCoverRatioOneColumn:40,videoCardCoverRatioTwoColumns:50}); export const originalSettings=settings.value;`,
+  '/__settings.js': `import {ref} from 'vue'; export const settings=ref({gridColumns:{base:6,sm:6,md:6,lg:6,xl:6,xxl:6},autoSwitchListLayout:false,videoCardCoverRatioOneColumn:40,videoCardCoverRatioTwoColumns:50}); export const originalSettings=settings.value;`,
   '/__editing.js': `import {ref} from 'vue'; export const isLayoutEditing=ref(false);`,
   '/__shadow.js': `import {ref} from 'vue'; export const useVideoCardShadowStyle=()=>({shadowStyleVars:ref({})});`,
   '/__emitter.js': `export default {on(){},off(){}};`,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onScopeDispose, ref, useId, watch } from 'vue'
+import { computed, nextTick, onScopeDispose, ref, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
 import Dialog from '~/components/Dialog.vue'
@@ -7,7 +7,7 @@ import SettingsSegmentedControl from '~/components/Settings/components/SettingsS
 import type { FavoriteFolderForm } from '~/utils/favoriteFolderForm'
 import { FAVORITE_COVER_TYPES, FAVORITE_FOLDER_INTRO_LIMIT, FAVORITE_FOLDER_TITLE_LIMIT, isFavoriteCover } from '~/utils/favoriteFolderForm'
 
-const props = defineProps<{ value: FavoriteFolderForm, creating: boolean, loading: boolean, failed: boolean, pending: boolean }>()
+const props = defineProps<{ value: FavoriteFolderForm, creating: boolean, loading: boolean, failed: boolean, pending: boolean, closing?: boolean }>()
 const emit = defineEmits<{ close: [], retry: [], save: [value: FavoriteFolderForm, file?: File] }>()
 const { t } = useI18n()
 const id = useId()
@@ -16,6 +16,14 @@ const file = ref<File>()
 const localCover = ref('')
 const error = ref('')
 const formElement = ref<HTMLFormElement>()
+const dialogRef = ref<InstanceType<typeof Dialog>>()
+watch(() => props.closing, async (closing) => {
+  if (!closing)
+    return
+  await nextTick()
+  if (props.closing)
+    dialogRef.value?.close()
+})
 const visibility = computed({ get: () => draft.value.privacy ? 'private' : 'public', set: value => draft.value.privacy = value === 'private' ? 1 : 0 })
 const visibilityOptions = computed(() => [
   { label: t('favorites.folder_public'), value: 'public' },
@@ -61,9 +69,10 @@ function save() {
 
 <template>
   <Dialog
-    :title="t(creating ? 'favorites.create_folder' : 'favorites.edit_folder_dialog_title')"
-    width="var(--bew-layout-dialog-width)" append-to-bewly-body :show-top-blur="false"
-    :close-on-confirm="false" :loading="pending" :show-loading-overlay="false" @close="emit('close')" @confirm="save"
+    ref="dialogRef" :title="t(creating ? 'favorites.create_folder' : 'favorites.edit_folder_dialog_title')"
+    width="var(--bew-layout-dialog-width)" append-to-bewly-body
+    :close-on-confirm="false" :loading="pending || closing" :prevent-close-when-loading="!closing" :show-loading-overlay="false" @close="emit('close')"
+    @confirm="save"
   >
     <div v-if="loading" class="folder-editor" aria-hidden="true">
       <SkeletonBlock class="folder-editor__cover" height="auto" radius="card" />

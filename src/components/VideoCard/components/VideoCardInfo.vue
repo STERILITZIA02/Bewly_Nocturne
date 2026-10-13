@@ -1,21 +1,19 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 
+import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { settings } from '~/logic'
-import { calcTimeSince, numFormatter } from '~/utils/dataFormatter'
 
 import VideoWatchedTag from '../../VideoWatchedTag.vue'
-import { vWholeMeta } from '../directives/wholeMeta'
 import { normalizeVideoCardTags, selectVisibleVideoCardTags } from '../tagPolicy'
 import type { Video } from '../types'
-import { getTagSearchUrl } from '../utils'
 import VideoCardAuthorAvatar from '../VideoCardAuthor/components/VideoCardAuthorAvatar.vue'
 import VideoCardAuthorName from '../VideoCardAuthor/components/VideoCardAuthorName.vue'
+import VideoCardMeta from './VideoCardMeta.vue'
 
 interface Props {
   skeleton?: boolean
   video?: Video
-  layout: 'modern' | 'old'
   horizontal?: boolean
   videoUrl?: string
   moreBtn: boolean
@@ -28,701 +26,151 @@ interface Props {
   highlightTags: string[]
   hideAuthor?: boolean
 }
-
 const props = defineProps<Props>()
-const emit = defineEmits<{
-  moreBtnClick: [event: MouseEvent]
-}>()
-
-const metaMetricsKey = computed(() => JSON.stringify([props.metaFontSizeClass, props.metaStyle, settings.value.customizeFont, settings.value.fontFamily]))
-
+const emit = defineEmits<{ moreBtnClick: [event: MouseEvent] }>()
 const moreBtnRef = ref<HTMLButtonElement | null>(null)
-
-defineExpose({
-  moreBtnRef,
-})
-
-// 将卡片内容开关集中到单个响应式计算，避免每张卡片为同一组设置创建大量 computed。
+defineExpose({ moreBtnRef })
 const content = computed(() => {
-  const video = props.video
-  const currentSettings = settings.value
-  const visibleTags = selectVisibleVideoCardTags(
-    normalizeVideoCardTags(video ?? {}),
-    props.highlightTags,
-    currentSettings.showVideoCardVideoTag,
-    currentSettings.showVideoCardRecommendTag,
-  )
-  const authorAvatarEnabled = !props.hideAuthor && currentSettings.showVideoCardAuthorAvatar
-  const authorNameEnabled = !props.hideAuthor && currentSettings.showVideoCardAuthorName
-  const showAuthorAvatar = authorAvatarEnabled && Boolean(video?.author)
-  const showAuthorName = authorNameEnabled && Boolean(video?.author)
-  const showPublishTime = currentSettings.showVideoCardPublishTime
-    && (Boolean(video?.publishedTimestamp) || Boolean(video?.capsuleText))
-  const showVideoType = video?.type === 'vertical' || video?.type === 'bangumi'
-  const showLegacyViewCount = currentSettings.showVideoCardViewCount
-    && (Boolean(video?.view) || Boolean(video?.viewStr))
-  const showLegacyDanmakuCount = currentSettings.showVideoCardDanmakuCount
-    && (Boolean(video?.danmaku) || Boolean(video?.danmakuStr))
-  const metaPlaceholderEnabled = currentSettings.showVideoCardVideoTag
-    || currentSettings.showVideoCardRecommendTag
-    || currentSettings.showVideoCardPublishTime
-    || Boolean(video?.type)
-  const statsPlaceholderEnabled = currentSettings.showVideoCardViewCount
-    || currentSettings.showVideoCardDanmakuCount
-  const hasVisibleMeta = visibleTags.leading.length > 0
-    || visibleTags.highlights.length > 0
-    || showPublishTime
-    || showVideoType
-
+  const current = settings.value
+  const tags = selectVisibleVideoCardTags(normalizeVideoCardTags(props.video ?? {}), props.highlightTags, current.showVideoCardVideoTag, current.showVideoCardRecommendTag)
+  const avatar = !props.hideAuthor && current.showVideoCardAuthorAvatar
+  const name = !props.hideAuthor && current.showVideoCardAuthorName
   return {
-    authorAvatarEnabled,
-    authorNameEnabled,
-    hasLegacyStats: showLegacyViewCount || showLegacyDanmakuCount,
-    hasVisibleMeta,
-    isModernLayout: props.layout === 'modern',
-    metaPlaceholderEnabled,
-    showAuthorAvatar,
-    showAuthorName,
-    showLegacyDanmakuCount,
-    showLegacyViewCount,
-    showPublishTime,
-    showVideoType,
-    showWatchedBadge: currentSettings.showVideoWatchedBadge && !video?.roomid,
-    statsPlaceholderEnabled,
-    visibleHighlightTags: visibleTags.highlights,
-    visibleLeadingTags: visibleTags.leading,
+    avatar,
+    name,
+    showAvatar: avatar && Boolean(props.video?.author),
+    showName: name && Boolean(props.video?.author),
+    tags,
+    publishTime: current.showVideoCardPublishTime,
+    metaPlaceholder: current.showVideoCardVideoTag || current.showVideoCardRecommendTag || current.showVideoCardPublishTime || Boolean(props.video?.type),
+    hasMeta: tags.leading.length > 0 || tags.highlights.length > 0 || (current.showVideoCardPublishTime && Boolean(props.video?.publishedTimestamp || props.video?.capsuleText)) || props.video?.type === 'vertical' || props.video?.type === 'bangumi',
+    watched: current.showVideoWatchedBadge && !props.video?.roomid,
   }
 })
 </script>
 
 <template>
-  <div
-    :style="{
-      ...metaStyle,
-      width: horizontal ? '100%' : 'unset',
-      marginTop: horizontal ? '0' : content.isModernLayout ? '0.5rem' : '1rem',
-    }"
-    flex="~"
-  >
-    <!-- Skeleton mode -->
+  <div class="video-card-info" :class="{ 'video-card-info--horizontal': horizontal }" :style="{ ...metaStyle, '--bew-title-line-height': titleStyle['--bew-title-line-height'] }">
     <template v-if="skeleton">
-      <!-- Old layout skeleton: Avatar on left -->
-      <div
-        v-if="layout === 'old' && !horizontal && content.authorAvatarEnabled"
-        class="bew-shape-circle"
-        m="r-4" w="34px" h="34px" bg="$bew-skeleton" data-bew-skeleton
-        shrink-0
-      />
-
-      <div class="group/desc" flex="~ col" :class="content.isModernLayout ? 'gap-2' : ''" w="full" align="items-start">
-        <!-- Title skeleton -->
-        <div flex="~ gap-1 justify-between items-start" w="full">
-          <!-- 使用与真实标题完全相同的样式和高度 -->
-          <div
-            class="keep-two-lines video-card-info-title video-card-info-title--skeleton" :class="[
-              content.isModernLayout ? 'video-card-title' : '',
-              titleFontSizeClass,
-            ]"
-            :style="titleStyle"
-            text="overflow-ellipsis $bew-text-1"
-          >
-            <!-- 使用与真实文本相同的行高填充，考虑 line-height -->
-            <div w-full bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm" style="height: 1em; margin-bottom: calc(var(--bew-title-line-height) - 1em);" />
-            <div w="3/4" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm" style="height: 1em;" />
-          </div>
-          <div
-            v-if="moreBtn" class="bew-shape-circle" shrink-0 w-32px h-32px
-            m="t--3px"
-            bg="$bew-skeleton" data-bew-skeleton
-          />
+      <div class="video-card-info__heading">
+        <div class="video-card-info-title video-card-info-title--skeleton" :class="titleFontSizeClass">
+          <SkeletonBlock width="100%" height="1em" />
+          <SkeletonBlock width="75%" height="1em" />
         </div>
-
-        <!-- Modern layout: Author info skeleton -->
-        <div
-          v-if="layout === 'modern' && (content.authorAvatarEnabled || content.authorNameEnabled)"
-          class="video-card-meta"
-          flex="~ gap-2 items-center"
-          w="full"
-        >
-          <div
-            v-if="content.authorAvatarEnabled"
-            class="bew-shape-circle"
-            w="34px" h="34px" bg="$bew-skeleton" data-bew-skeleton shrink-0
-            m-r-2
-          />
-          <div v-if="content.authorNameEnabled || content.metaPlaceholderEnabled" flex="~ col gap-1 1" min-w-0>
-            <!-- 作者名称骨架：使用与真实文本相同的字体大小和行高 -->
-            <div
-              v-if="content.authorNameEnabled"
-              w="60%" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm"
-              :class="authorFontSizeClass"
-              style="height: var(--bew-author-line-height);"
-            />
-            <!-- 标签骨架：使用与真实标签相同的高度，包括 padding -->
-            <div
-              v-if="content.metaPlaceholderEnabled"
-              w="80%" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm"
-              :class="metaFontSizeClass"
-              style="height: var(--bew-video-card-meta-row-height);"
-            />
-          </div>
+        <SkeletonBlock v-if="moreBtn" class="video-card__more-btn" width="var(--bew-icon-button-size-md)" height="var(--bew-icon-button-size-md)" radius="circle" />
+      </div>
+      <div v-if="content.avatar || content.name || content.metaPlaceholder" class="video-card-meta">
+        <SkeletonBlock v-if="content.avatar" class="video-card-info__avatar" width="var(--bew-card-avatar-size)" height="var(--bew-card-avatar-size)" radius="circle" />
+        <div class="video-card-info__identity">
+          <SkeletonBlock v-if="content.name" width="60%" height="var(--bew-author-line-height)" />
+          <SkeletonBlock v-if="content.metaPlaceholder" width="80%" height="var(--bew-video-card-meta-row-height)" />
         </div>
-
-        <!-- Modern layout with hideAuthor: Tags skeleton -->
-        <div
-          v-if="layout === 'modern' && !content.authorAvatarEnabled && !content.authorNameEnabled && content.metaPlaceholderEnabled"
-          class="video-card-meta-row"
-          flex="~ items-center gap-2"
-          :class="metaFontSizeClass"
-        >
-          <div
-            class="bew-shape-pill"
-            w="60px" bg="$bew-skeleton" data-bew-skeleton
-            style="height: var(--bew-video-card-meta-row-height);"
-          />
-        </div>
-
-        <!-- Old layout: Info skeleton -->
-        <template v-else-if="layout === 'old'">
-          <!-- Old layout with hideAuthor: Only tags skeleton -->
-          <div
-            v-if="hideAuthor && content.metaPlaceholderEnabled"
-            class="video-card-meta-row"
-            mt-2
-            flex="~ gap-1"
-            :class="metaFontSizeClass"
-          >
-            <div
-              class="bew-shape-pill"
-              bg="$bew-skeleton" data-bew-skeleton
-              lh-6 p="x-2" w="60px"
-              style="height: var(--bew-video-card-meta-row-height);"
-            />
-          </div>
-
-          <!-- Old layout with author info: Full skeleton -->
-          <template v-else-if="!hideAuthor">
-            <!-- Author name skeleton -->
-            <div
-              v-if="content.authorNameEnabled || (horizontal && content.authorAvatarEnabled)"
-              text="$bew-text-2"
-              w-fit
-              m="t-2"
-              flex="~ items-center"
-              :class="authorFontSizeClass"
-            >
-              <!-- Horizontal mode avatar -->
-              <div
-                v-if="horizontal && content.authorAvatarEnabled"
-                class="bew-shape-circle"
-                w="34px" h="34px" bg="$bew-skeleton" data-bew-skeleton
-                shrink-0 m-r-4 mb-2
-              />
-              <div
-                v-if="content.authorNameEnabled" w="100px" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm"
-                :class="{ 'mb-2': horizontal }"
-                style="height: var(--bew-author-line-height);"
-              />
-            </div>
-
-            <!-- View & Danmaku skeleton -->
-            <div v-if="content.statsPlaceholderEnabled" flex="~ items-center gap-1">
-              <div
-                :class="metaFontSizeClass"
-                text="$bew-text-2"
-              >
-                <div w="150px" bg="$bew-skeleton" data-bew-skeleton rounded="$bew-radius-sm" style="height: 1em; display: inline-block;" />
-              </div>
-            </div>
-
-            <!-- Tags skeleton -->
-            <div
-              v-if="content.metaPlaceholderEnabled"
-              class="video-card-meta-row"
-              mt-2
-              flex="~ gap-1"
-              :class="metaFontSizeClass"
-            >
-              <div
-                class="bew-shape-pill"
-                bg="$bew-skeleton" data-bew-skeleton
-                lh-6 p="x-2" w="60px"
-                style="height: var(--bew-video-card-meta-row-height);"
-              />
-            </div>
-          </template>
-        </template>
       </div>
     </template>
-
-    <!-- Normal mode -->
     <template v-else-if="video">
-      <!-- Old layout: Author Avatar (left side) -->
-      <VideoCardAuthorAvatar
-        v-if="layout === 'old' && !horizontal && content.showAuthorAvatar && video.author"
-        :author="video.author"
-        :is-live="video.liveStatus === 1"
-      />
-
-      <div class="group/desc" flex="~ col" :class="content.isModernLayout ? 'gap-2' : ''" w="full" align="items-start">
-        <div flex="~ gap-1 justify-between items-start" w="full" pos="relative">
-          <h3
-            class="video-card-info-title"
-            :class="[
-              video.liveStatus === 1 ? 'keep-one-line' : 'keep-two-lines',
-              content.isModernLayout ? 'video-card-title' : '',
-              titleFontSizeClass,
-            ]"
-            text="overflow-ellipsis $bew-text-1"
-            :style="titleStyle"
-            cursor="pointer"
-            :title="video.title"
-          >
-            <a :href="videoUrl" target="_blank">
-              <VideoWatchedTag
-                v-if="content.showWatchedBadge"
-                :aid="video.aid"
-                :bvid="video.bvid"
-                :epid="video.epid"
-                :roomid="video.roomid"
-              />
-              {{ video.title }}
-            </a>
-          </h3>
-
-          <button
-            v-if="moreBtn"
-            ref="moreBtnRef"
-            type="button"
-            class="video-card__more-btn bew-shape-circle"
-            :aria-label="$t('video_card.operation.more_options')"
-            aria-haspopup="menu"
-            :aria-expanded="showVideoOptions"
-            :class="[
-              { 'more-active': showVideoOptions },
-              content.isModernLayout ? 'overflow-hidden' : '',
-            ]"
-            bg="hover:$bew-fill-2 active:$bew-fill-3"
-            shrink-0 w-32px h-32px m="t--3px"
-            grid place-items-center cursor-pointer
-            @click.stop.prevent="emit('moreBtnClick', $event)"
-          >
-            <div i-mingcute:more-2-line text="lg" aria-hidden="true" />
-          </button>
-        </div>
-
-        <!-- Modern layout with hideAuthor: Tags directly under title -->
-        <div
-          v-if="layout === 'modern' && !content.showAuthorAvatar && !content.showAuthorName && content.hasVisibleMeta"
-          v-whole-meta="metaMetricsKey"
-          class="video-card-meta-row"
-          flex="~ items-center gap-2 wrap"
-          :class="metaFontSizeClass"
+      <div class="video-card-info__heading">
+        <h3 class="video-card-info-title video-card-title keep-two-lines" :class="titleFontSizeClass" :title="video.title">
+          <a :href="videoUrl" target="_blank">
+            <VideoWatchedTag v-if="content.watched" :aid="video.aid" :bvid="video.bvid" :epid="video.epid" :roomid="video.roomid" />
+            {{ video.title }}
+          </a>
+        </h3>
+        <button
+          v-if="moreBtn" ref="moreBtnRef" type="button" class="video-card__more-btn bew-shape-circle"
+          :class="{ 'more-active': showVideoOptions }" :aria-label="$t('video_card.operation.more_options')"
+          aria-haspopup="menu" :aria-expanded="showVideoOptions" @click.stop.prevent="emit('moreBtnClick', $event)"
         >
-          <span
-            v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" lh-6
-            rounded="$bew-radius" text="$bew-text-3"
-          >
-            {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
-          </span>
-          <component
-            :is="tag.searchable ? 'a' : 'span'"
-            v-for="tag in content.visibleLeadingTags"
-            :key="`primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
-            class="video-card-meta__chip"
-            :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-            un-text="$bew-on-theme-surface"
-            p="x-2"
-            lh-6
-            rounded="$bew-radius"
-            bg="$bew-theme-surface"
-            :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
-            :target="tag.searchable ? '_blank' : undefined"
-            :title="tag.text"
-            @click="tag.searchable ? $event.stopPropagation() : undefined"
-          >
-            {{ tag.text }}
-          </component>
-
-          <span
-            v-for="extraTag in content.visibleHighlightTags"
-            :key="`highlight-${extraTag}`"
-            class="video-card-meta__chip"
-            :title="extraTag"
-            text="$bew-on-theme-surface"
-            p="x-2"
-            lh-6
-            rounded="$bew-radius"
-            bg="$bew-theme-surface"
-          >
-            {{ extraTag }}
-          </span>
-
-          <span
-            v-if="content.showVideoType"
-            text="$bew-text-2"
-            grid="~ place-items-center"
-          >
-            <div v-if="video.type === 'vertical'" i-mingcute:cellphone-2-line />
-            <div v-else-if="video.type === 'bangumi'" i-mingcute:movie-line />
-          </span>
+          <div i-mingcute:more-2-line aria-hidden="true" />
+        </button>
+      </div>
+      <div v-if="content.showAvatar || content.showName || content.hasMeta" class="video-card-meta">
+        <VideoCardAuthorAvatar v-if="content.showAvatar && video.author" :author="video.author" :is-live="video.liveStatus === 1" />
+        <div class="video-card-info__identity">
+          <VideoCardAuthorName v-if="content.showName" :author="video.author" :class="authorFontSizeClass" />
+          <VideoCardMeta :video="video" :tags="content.tags" :publish-time="content.publishTime" :class="metaFontSizeClass" />
         </div>
-
-        <!-- Modern layout: Author info -->
-        <div
-          v-if="layout === 'modern' && (content.showAuthorAvatar || content.showAuthorName)"
-          class="video-card-meta"
-          flex="~ gap-2 items-center"
-          w="full"
-        >
-          <VideoCardAuthorAvatar
-            v-if="content.showAuthorAvatar && video.author"
-            :author="video.author"
-            :is-live="video.liveStatus === 1"
-            compact
-          />
-
-          <div v-if="content.showAuthorName || content.hasVisibleMeta" flex="~ col gap-1" w="full">
-            <div
-              v-if="content.showAuthorName"
-              flex="~ items-center gap-2"
-              text="$bew-text-2"
-              :class="authorFontSizeClass"
-            >
-              <VideoCardAuthorName :author="video.author" />
-            </div>
-
-            <div
-              v-if="content.hasVisibleMeta"
-              v-whole-meta="metaMetricsKey"
-              class="video-card-meta-row"
-              flex="~ items-center gap-2 wrap"
-              :class="metaFontSizeClass"
-            >
-              <span
-                v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" lh-6
-                rounded="$bew-radius" text="$bew-text-3"
-              >
-                {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
-              </span>
-              <component
-                :is="tag.searchable ? 'a' : 'span'"
-                v-for="tag in content.visibleLeadingTags"
-                :key="`primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
-                class="video-card-meta__chip"
-                :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-                un-text="$bew-on-theme-surface"
-                p="x-2"
-                lh-6
-                rounded="$bew-radius"
-                bg="$bew-theme-surface"
-                :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
-                :target="tag.searchable ? '_blank' : undefined"
-                :title="tag.text"
-                @click="tag.searchable ? $event.stopPropagation() : undefined"
-              >
-                {{ tag.text }}
-              </component>
-
-              <span
-                v-for="extraTag in content.visibleHighlightTags"
-                :key="`highlight-${extraTag}`"
-                class="video-card-meta__chip"
-                :title="extraTag"
-                text="$bew-on-theme-surface"
-                p="x-2"
-                lh-6
-                rounded="$bew-radius"
-                bg="$bew-theme-surface"
-              >
-                {{ extraTag }}
-              </span>
-
-              <span
-                v-if="content.showVideoType"
-                text="$bew-text-2"
-                grid="~ place-items-center"
-              >
-                <div v-if="video.type === 'vertical'" i-mingcute:cellphone-2-line />
-                <div v-else-if="video.type === 'bangumi'" i-mingcute:movie-line />
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Old layout: Traditional info display -->
-        <template v-else-if="layout === 'old'">
-          <!-- Old layout with hideAuthor: Only tags -->
-          <div
-            v-if="hideAuthor && content.hasVisibleMeta"
-            v-whole-meta="metaMetricsKey"
-            class="video-card-meta-row"
-            mt-2
-            flex="~ gap-1 wrap"
-            :class="metaFontSizeClass"
-          >
-            <!-- Tag -->
-            <span
-              v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" rounded="$bew-radius"
-              text="$bew-text-3" lh-6
-            >
-              {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
-            </span>
-            <component
-              :is="tag.searchable ? 'a' : 'span'"
-              v-for="tag in content.visibleLeadingTags"
-              :key="`legacy-primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
-              class="video-card-meta__chip"
-              :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-              un-text="$bew-on-theme-surface" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-surface"
-              :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
-              :target="tag.searchable ? '_blank' : undefined"
-              :title="tag.text"
-              @click="tag.searchable ? $event.stopPropagation() : undefined"
-            >
-              {{ tag.text }}
-            </component>
-            <span
-              v-for="extraTag in content.visibleHighlightTags"
-              :key="`highlight-${extraTag}`"
-              class="video-card-meta__chip"
-              :title="extraTag"
-              text="$bew-on-theme-surface"
-              lh-6
-              p="x-2"
-              rounded="$bew-radius"
-              bg="$bew-theme-surface"
-            >
-              {{ extraTag }}
-            </span>
-            <!-- Video type -->
-            <span v-if="content.showVideoType" text="$bew-text-2" grid="~ place-items-center">
-              <div v-if="video.type === 'vertical'" i-mingcute:cellphone-2-line />
-              <div v-else-if="video.type === 'bangumi'" i-mingcute:movie-line />
-            </span>
-          </div>
-
-          <!-- Old layout with author info -->
-          <template v-else>
-            <div
-              v-if="content.showAuthorName || (horizontal && content.showAuthorAvatar)"
-              text="$bew-text-2"
-              w-fit
-              m="t-2"
-              flex="~ items-center wrap"
-              :class="authorFontSizeClass"
-            >
-              <!-- Author Avatar (horizontal mode) -->
-              <span
-                :style="{
-                  marginBottom: horizontal ? '0.5rem' : '0',
-                }"
-                flex="inline items-center"
-              >
-                <VideoCardAuthorAvatar
-                  v-if="horizontal && content.showAuthorAvatar && video.author"
-                  :author="video.author"
-                  :is-live="video.liveStatus === 1"
-                />
-                <VideoCardAuthorName
-                  v-if="content.showAuthorName"
-                  :author="video.author"
-                />
-              </span>
-            </div>
-
-            <div v-if="content.hasLegacyStats" flex="~ items-center gap-1 wrap">
-              <!-- View & Danmaku Count -->
-              <div
-                text="$bew-text-2"
-                rounded="$bew-radius"
-                inline-block
-                :class="metaFontSizeClass"
-              >
-                <span v-if="content.showLegacyViewCount">
-                  {{ video.view ? $t('common.view', { count: numFormatter(video.view) }, video.view) : `${numFormatter(video.viewStr || '0')}${$t('common.viewWithoutNum')}` }}
-                </span>
-                <template v-if="content.showLegacyDanmakuCount">
-                  <span v-if="content.showLegacyViewCount" text-xs font-normal mx-4px>•</span>
-                  <span>{{ video.danmaku ? $t('common.danmaku', { count: numFormatter(video.danmaku) }, video.danmaku) : `${numFormatter(video.danmakuStr || '0')}${$t('common.danmakuWithoutNum')}` }}</span>
-                </template>
-                <br>
-              </div>
-            </div>
-
-            <div
-              v-if="content.hasVisibleMeta"
-              v-whole-meta="metaMetricsKey"
-              class="video-card-meta-row"
-              mt-2
-              flex="~ gap-1 wrap"
-              :class="metaFontSizeClass"
-            >
-              <!-- Tag -->
-              <span
-                v-if="content.showPublishTime" class="video-card-meta__chip" bg="$bew-fill-1" p="x-2" rounded="$bew-radius"
-                text="$bew-text-3" lh-6
-              >
-                {{ video.publishedTimestamp ? calcTimeSince(video.publishedTimestamp * 1000) : video.capsuleText?.trim() }}
-              </span>
-              <component
-                :is="tag.searchable ? 'a' : 'span'"
-                v-for="tag in content.visibleLeadingTags"
-                :key="`legacy-primary-${tag.searchable ? 'search' : 'display'}-${tag.text}`"
-                class="video-card-meta__chip"
-                :class="{ 'video-card-meta__chip--searchable': tag.searchable }"
-                un-text="$bew-on-theme-surface" lh-6 p="x-2" rounded="$bew-radius" bg="$bew-theme-surface"
-                :href="tag.searchable ? getTagSearchUrl(tag.text) : undefined"
-                :target="tag.searchable ? '_blank' : undefined"
-                :title="tag.text"
-                @click="tag.searchable ? $event.stopPropagation() : undefined"
-              >
-                {{ tag.text }}
-              </component>
-              <span
-                v-for="extraTag in content.visibleHighlightTags"
-                :key="`highlight-${extraTag}`"
-                class="video-card-meta__chip"
-                :title="extraTag"
-                text="$bew-on-theme-surface"
-                lh-6
-                p="x-2"
-                rounded="$bew-radius"
-                bg="$bew-theme-surface"
-              >
-                {{ extraTag }}
-              </span>
-              <!-- Video type -->
-              <span v-if="content.showVideoType" text="$bew-text-2" grid="~ place-items-center">
-                <div v-if="video.type === 'vertical'" i-mingcute:cellphone-2-line />
-                <div v-else-if="video.type === 'bangumi'" i-mingcute:movie-line />
-              </span>
-            </div>
-          </template>
-        </template>
       </div>
     </template>
   </div>
 </template>
 
 <style lang="scss" scoped>
-.video-card-info-title {
-  flex: 1 1 auto;
+.video-card-info {
+  --bew-video-card-meta-row-height: max(var(--bew-space-6), var(--bew-meta-line-height));
+  display: flex;
+  flex-direction: column;
+  gap: var(--bew-space-2);
   min-width: 0;
+  margin-top: var(--bew-card-stack-gap);
+  color: var(--bew-text-2);
 }
-
-.video-card-info-title--skeleton {
-  min-height: calc(var(--bew-title-line-height) * 2);
-}
-.video-card-title {
-  &.keep-two-lines {
-    min-height: calc(var(--bew-title-line-height) * 2);
-  }
-  &.keep-one-line {
-    min-height: auto;
-  }
-}
-
-.video-card__more-btn {
-  position: relative;
-  padding: 0;
-  color: inherit;
-  font: inherit;
-  border: 0;
-  overflow: hidden;
-  transition:
-    opacity var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease),
-    background-color var(--bew-duration-moderate, 300ms) var(--bew-ease-standard, ease);
-}
-
-.video-card__more-btn::before,
-.video-card__more-btn::after {
-  border-radius: inherit;
-  corner-shape: inherit;
-}
-
-.more-active {
-  --uno: "opacity-100";
-}
-
-.video-card-meta,
-.video-card-meta-row {
-  --bew-video-card-meta-row-height: max(
-    var(--bew-space-6),
-    calc(var(--bew-meta-line-height) + var(--bew-base-font-size) * 0.24)
-  );
-}
-
-.video-card-meta {
-  --bew-video-card-meta-height: max(
-    var(--bew-video-card-meta-min-height),
-    calc(var(--bew-author-line-height) + var(--bew-video-card-meta-row-height) + var(--bew-space-1))
-  );
-  min-height: var(--bew-video-card-meta-height);
-  max-height: var(--bew-video-card-meta-height);
-  overflow: hidden;
-}
-
-.video-card-meta > div:last-child {
-  min-width: 0;
-}
-
-.video-card-meta > div:last-child > div:last-child {
-  flex-wrap: wrap;
-  overflow: hidden;
-  max-width: 100%;
-}
-
-.video-card-meta-row {
+.video-card-info--horizontal {
   width: 100%;
-  flex-wrap: wrap;
-  align-content: flex-start;
-  overflow: hidden;
-  max-width: 100%;
-  min-height: var(--bew-video-card-meta-row-height);
-  max-height: var(--bew-video-card-meta-row-height);
+  margin-top: 0;
 }
-.video-card-meta-row > * {
-  flex: 0 0 auto;
-  white-space: nowrap;
+.video-card-info__heading {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--bew-space-2);
 }
-.group\/desc {
+.video-card-info-title {
+  flex: 1;
   min-width: 0;
+  margin: 0;
+  min-height: calc(var(--bew-title-line-height) * 2);
+  color: var(--bew-text-1);
+  font-weight: var(--bew-font-weight-semibold);
+  line-height: var(--bew-title-line-height);
 }
-
-.video-card-meta-row > a,
-.video-card-meta-row > span,
-.video-card-meta__chip {
-  border-radius: var(--bew-badge-radius);
-  corner-shape: var(--bew-corner-shape-round);
+.video-card-info-title--skeleton {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;
 }
-
-.video-card-meta__chip--searchable:hover {
-  background: var(--bew-theme-surface-hover);
-}
-
-span.video-card-meta__chip {
-  padding-inline: 0;
+.video-card__more-btn {
+  display: grid;
+  flex: none;
+  width: var(--bew-icon-button-size-md);
+  height: var(--bew-icon-button-size-md);
+  margin-top: calc((var(--bew-title-line-height) - var(--bew-icon-button-size-md)) / 2);
+  padding: 0;
+  border: 0;
+  place-items: center;
   color: var(--bew-text-3);
-  background: transparent;
-  border-radius: 0;
+  &:not([data-bew-skeleton]) {
+    background: transparent;
+  }
+  font-size: var(--bew-icon-size-md);
+  cursor: pointer;
+  transition:
+    color var(--bew-duration-fast) var(--bew-ease-standard),
+    background-color var(--bew-duration-fast) var(--bew-ease-standard);
+  &:hover,
+  &.more-active {
+    background: var(--bew-fill-2);
+    color: var(--bew-text-1);
+  }
+  &:active {
+    background: var(--bew-fill-3);
+  }
 }
-
-.video-card-meta__chip--searchable {
-  min-height: var(--bew-icon-button-size-sm);
+.video-card-info:focus-within .video-card__more-btn {
+  color: var(--bew-text-1);
 }
-
-.video-card-meta__chip {
-  display: inline-flex;
+.video-card-meta {
+  display: flex;
   align-items: center;
-  font-size: inherit;
-  line-height: inherit;
-  padding-block: 0;
-  flex: 0 0 auto;
-  max-width: 100%;
+  gap: var(--bew-space-2);
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+}
+.video-card-info__identity {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--bew-space-1);
+  min-width: 0;
+}
+.video-card-info__avatar {
+  flex: none;
 }
 </style>

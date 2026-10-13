@@ -18,7 +18,7 @@ import { openLinkInBackground } from '~/utils/tabs'
 import { recordVideoVisit, recordVideoVisitFromUrl } from '~/utils/videoVisitHistory'
 
 /** Owns the detail frame, gallery, focus and navigation lifecycle. */
-export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number, beforeOpen: () => void) {
+export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number, beforeOpen: () => void, requestClose?: () => void) {
   const { mainAppRef, openIframeDrawer } = useBewlyApp()
   let disposed = false
   const selectedMoment = ref<DisplayMoment | null>(null)
@@ -366,13 +366,11 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     }
     detailImageViewerOpen.value = false
     document.documentElement.classList.remove('bewly-moment-image-viewer-open')
-    detailImageViewerUrls.value = []
     const source = detailImageViewerSource.value
     const trigger = detailImageViewerTrigger.value
     detailImageViewerSource.value = null
     detailImageViewerTrigger.value = null
     detailImageViewerDragging.value = false
-    resetDetailImageViewerTransform()
     const generation = detailFrameGeneration
     nextTick(() => {
       if (disposed || generation !== detailFrameGeneration || detailImageViewerOpen.value)
@@ -382,6 +380,13 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
       else
         trigger?.focus({ preventScroll: true })
     })
+  }
+
+  function finishDetailImageViewerClose() {
+    if (detailImageViewerOpen.value)
+      return
+    detailImageViewerUrls.value = []
+    resetDetailImageViewerTransform()
   }
 
   function handleDetailImageViewerWheel(event: WheelEvent) {
@@ -671,8 +676,11 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     // iframe 内 ESC 会 post 该消息；Dialog 场景下同步关闭详情
     if (type === BEWLY_DRAWER_ESCAPE_HANDLED)
       return
-    if (type === BEWLY_DRAWER_CLOSE_REQUEST && selectedMoment.value)
-      closeMomentDetail()
+    if (type === BEWLY_DRAWER_CLOSE_REQUEST && selectedMoment.value) {
+      if (requestClose)
+        requestClose()
+      else closeMomentDetail()
+    }
   }
   onMounted(() => {
     window.addEventListener('message', handleDetailFrameMessage)
@@ -683,6 +691,7 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     window.removeEventListener('message', handleDetailFrameMessage)
     window.removeEventListener('resize', syncDetailFrameViewport)
     closeMomentDetail()
+    finishDetailImageViewerClose()
   })
   return {
     selectedMoment: shallowReadonly(selectedMoment),
@@ -708,6 +717,7 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
     showDetailImageViewerImage,
     openMomentImagePreview,
     closeDetailImageViewer,
+    finishDetailImageViewerClose,
     handleDetailImageViewerWheel,
     handleDetailImageViewerPointerDown,
     handleDetailImageViewerPointerMove,

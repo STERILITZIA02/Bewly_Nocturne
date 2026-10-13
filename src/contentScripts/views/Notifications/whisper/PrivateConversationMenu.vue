@@ -100,7 +100,7 @@ watch(() => state.value?.target, (target) => {
     v-if="dialog && state?.target" :title="text(dialog)" width="var(--bew-layout-dialog-width)"
     append-to-bewly-body :loading="state.busy || state.loading" :close-on-confirm="false" :show-footer="!completed"
     :show-loading-overlay="false" :prevent-close-when-loading="state.busy"
-    :show-top-blur="dialog !== 'report'"
+
     @confirm="confirm" @close="emit('close')"
   >
     <div class="private-conversation-menu__dialog" :aria-busy="state.busy || state.loading">

@@ -349,7 +349,6 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.video_card_cover_ratio_two_columns',
     'settings.grid_breakpoints',
     'settings.group_video_card_display',
-    'settings.video_card_layout',
     'settings.enable_video_preview',
     'settings.enable_video_ctrl_bar_on_video_card',
     'settings.video_preview_swipe_seek',

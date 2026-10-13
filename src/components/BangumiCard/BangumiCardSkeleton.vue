@@ -15,7 +15,8 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
       <SkeletonBlock class="bangumi-card-skeleton__image" height="auto" radius="media" />
     </div>
     <div class="bangumi-card-skeleton__content">
-      <div :class="bangumiTitleClass" :style="bangumiTitleStyle" un-text="lg">
+      <div class="bangumi-card__heading" :class="bangumiTitleClass" :style="bangumiTitleStyle">
+        <SkeletonBlock height="1lh" />
         <SkeletonBlock height="1lh" />
       </div>
       <SkeletonBlock v-if="showStats" width="68%" height="var(--bew-line-height-control)" />
@@ -31,7 +32,6 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 @use "./title";
 
 .bangumi-card-skeleton {
-  --uno: "mb-6";
   display: block;
   min-width: 0;
 }
@@ -61,7 +61,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
   display: flex;
   flex-direction: column;
   width: 100%;
-  margin-top: var(--bew-space-4);
+  margin-top: var(--bew-card-stack-gap);
 }
 .bangumi-card-skeleton--horizontal .bangumi-card-skeleton__content {
   margin-top: 0;

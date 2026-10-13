@@ -1,5 +1,6 @@
 <script lang="ts" setup>
 import ALink from '~/components/ALink.vue'
+import { calcTimeSince, numFormatter } from '~/utils/dataFormatter'
 
 interface ArticleCardProps {
   id: number | string
@@ -37,9 +38,7 @@ function formatNumber(num: number | string | undefined) {
     return '0'
   if (typeof num === 'string')
     return num
-  if (num >= 10000)
-    return `${(num / 10000).toFixed(1)}万`
-  return num.toString()
+  return numFormatter(num)
 }
 
 // 格式化日期：字符串直接展示；数字按 Unix 秒处理
@@ -49,31 +48,7 @@ function formatDate(timestamp: number | string | undefined) {
   if (typeof timestamp === 'string')
     return timestamp
 
-  const date = new Date(timestamp * 1000)
-  const now = new Date()
-  const diff = now.getTime() - date.getTime()
-  const days = Math.floor(diff / (1000 * 60 * 60 * 24))
-
-  if (days === 0) {
-    const hours = Math.floor(diff / (1000 * 60 * 60))
-    if (hours === 0) {
-      const minutes = Math.floor(diff / (1000 * 60))
-      return minutes === 0 ? '刚刚' : `${minutes}分钟前`
-    }
-    return `${hours}小时前`
-  }
-  else if (days === 1) {
-    return '昨天'
-  }
-  else if (days < 30) {
-    return `${days}天前`
-  }
-  else if (days < 365) {
-    return `${Math.floor(days / 30)}个月前`
-  }
-  else {
-    return `${Math.floor(days / 365)}年前`
-  }
+  return calcTimeSince(timestamp * 1000)
 }
 </script>
 
@@ -83,7 +58,7 @@ function formatDate(timestamp: number | string | undefined) {
     type="videoCard"
     class="article-card bew-surface-border"
     flex gap-4 p-4
-    bg="$bew-elevated hover:$bew-elevated-hover"
+    bg="$bew-elevated"
     rounded="$bew-card-radius"
     cursor-pointer
   >
@@ -103,7 +78,7 @@ function formatDate(timestamp: number | string | undefined) {
       <p
         v-if="desc"
         class="article-desc"
-        text="sm $bew-text-2"
+        text="$bew-text-2"
         line-clamp-2
         mb-2
       >
@@ -111,17 +86,13 @@ function formatDate(timestamp: number | string | undefined) {
       </p>
 
       <!-- 元信息 -->
-      <div class="article-meta" flex items-center gap-3 text="xs $bew-text-3">
+      <div
+        class="article-meta" flex flex-wrap items-center gap-2
+        text="xs $bew-text-3"
+      >
         <span class="author">{{ author }}</span>
         <span v-if="categoryName">{{ categoryName }}</span>
         <span v-if="publishTime">{{ formatDate(publishTime) }}</span>
-      </div>
-
-      <!-- 统计信息 -->
-      <div
-        class="article-stats" flex items-center gap-3 text="xs $bew-text-3"
-        mt-2
-      >
         <div v-if="view !== undefined" flex items-center gap-1>
           <div i-tabler:eye />
           <span>{{ formatNumber(view) }}</span>
@@ -143,11 +114,11 @@ function formatDate(timestamp: number | string | undefined) {
         flex flex-wrap gap-2 mt-2
       >
         <span
-          v-for="tag in tags.slice(0, 3)"
+          v-for="tag in tags.slice(0, 2)"
           :key="tag.name"
-          text="xs $bew-text-3"
-          bg="$bew-fill-1"
-          px-2 py-0.5
+          text="xs $bew-on-theme-surface"
+          bg="$bew-theme-surface"
+          px-2 h-6 inline-flex items-center font-medium
           rounded-full
         >
           {{ tag.name }}
@@ -159,8 +130,7 @@ function formatDate(timestamp: number | string | undefined) {
     <div
       v-if="cover"
       class="article-cover bew-surface-border"
-      w-32 h-24
-      rounded="$bew-media-radius"
+      rounded="$bew-card-inset-radius"
       overflow-hidden
       flex-shrink-0
       bg="$bew-fill-1"
@@ -168,6 +138,7 @@ function formatDate(timestamp: number | string | undefined) {
       <img
         :src="cover"
         :alt="title"
+        loading="lazy" decoding="async"
         w-full h-full object-cover rounded-inherit
       >
     </div>
@@ -175,6 +146,7 @@ function formatDate(timestamp: number | string | undefined) {
 </template>
 
 <style lang="scss" scoped>
+@use "../../styles/contentCard";
 .article-title {
   font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-semibold);
@@ -185,14 +157,25 @@ function formatDate(timestamp: number | string | undefined) {
   text-decoration: none;
   color: inherit;
   display: flex;
-  transition:
-    background-color var(--bew-duration-moderate) var(--bew-ease-standard),
-    box-shadow var(--bew-duration-moderate) var(--bew-ease-standard),
-    transform var(--bew-duration-moderate) var(--bew-ease-emphasized);
-
-  &:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--bew-shadow-2);
-  }
+  @include contentCard.surface;
+}
+.article-desc {
+  font-size: var(--bew-font-size-body);
+  line-height: var(--bew-line-height-body);
+}
+.article-meta > :not(:first-child)::before {
+  content: "·";
+  margin-right: var(--bew-space-2);
+}
+.article-meta .author {
+  font-weight: var(--bew-font-weight-medium);
+}
+.article-meta .author:hover {
+  color: var(--bew-theme-foreground);
+}
+.article-cover {
+  width: min(32%, 160px);
+  aspect-ratio: 16 / 10;
+  align-self: flex-start;
 }
 </style>

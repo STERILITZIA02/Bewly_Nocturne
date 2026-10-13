@@ -65,7 +65,7 @@ export function registerMaintenanceIntegrationChecks(check, { Vue, compileCompon
       './appAuthStorage': {},
     })
     const defaults = JSON.parse(JSON.stringify(storage.originalSettings))
-    const retired = { customizeCSS: true, customizeCSSContent: 'body { color: red; }' }
+    const retired = { customizeCSS: true, customizeCSSContent: 'body { color: red; }', videoCardLayout: 'old' }
     const { removeRetiredSettings } = await import('../src/constants/retiredSettings')
     for (const malformed of [null, undefined, false, 0, 'invalid'])
       assert.doesNotThrow(() => removeRetiredSettings(malformed))

@@ -11,8 +11,8 @@ defineProps<{
 <template>
   <a
     class="channel-name"
-    un-text="hover:$bew-theme-color"
-    cursor-pointer mr-4
+    un-text="$bew-text-2 hover:$bew-theme-foreground"
+    cursor-pointer truncate font-medium
     :href="getAuthorJumpUrl(Array.isArray(author) ? author[0] : author)"
     target="_blank"
     @click.stop=""
@@ -27,3 +27,13 @@ defineProps<{
     </span>
   </a>
 </template>
+
+<style scoped>
+.channel-name {
+  line-height: var(--bew-author-line-height);
+  transition: color var(--bew-duration-fast) var(--bew-ease-standard);
+}
+.channel-name:focus-visible {
+  color: var(--bew-theme-foreground);
+}
+</style>

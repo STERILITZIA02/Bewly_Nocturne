@@ -728,7 +728,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
       <FavoriteFolderEditor
         v-if="folderEditor.visible" :value="folderForm" :creating="!folderEditor.id" :loading="folderEditor.loading" :failed="folderEditor.failed"
-        :pending="isSidebarOperating"
+        :pending="isSidebarOperating" :closing="folderEditor.closing"
         @close="folders.closeEditor" @retry="folders.openEditor(folderEditor.id)" @save="folders.save"
       />
 

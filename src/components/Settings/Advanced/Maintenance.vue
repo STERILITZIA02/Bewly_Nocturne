@@ -51,7 +51,6 @@ const settingEnumValues: Partial<Record<keyof Settings, readonly unknown[]>> = {
   videoCardTitleFontSize: ['xs', 'sm', 'base', 'lg'],
   videoCardAuthorFontSize: ['xs', 'sm', 'base', 'lg'],
   videoCardMetaFontSize: ['xs', 'sm', 'base', 'lg'],
-  videoCardLayout: ['modern', 'old'],
   defaultVideoPlayerMode: ['default', 'webFullscreen', 'widescreen', 'bewlyWidescreen'],
   bewlyWidescreenSidebarPosition: ['left', 'right'],
   bewlyWidescreenLayoutPriority: ['video-first', 'sidebar-first'],

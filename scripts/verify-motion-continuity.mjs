@@ -6,6 +6,110 @@ import { compileString } from 'sass'
 import { loadSourceFunctions } from './sourceFunctionHarness'
 
 export function registerMotionContinuityChecks(check, { Vue, flush }) {
+  check('Motion: dialog source survives menu removal, uses Shadow DOM activation and expires after its event', async () => {
+    const { providePanelOrigin, usePanelOrigin } = await import('../src/composables/usePanelOrigin')
+    const host = document.body.appendChild(document.createElement('div'))
+    const shadow = host.attachShadow({ mode: 'open' })
+    const mount = shadow.appendChild(document.createElement('div'))
+    let resolveOrigin
+    const Receiver = { setup() {
+      resolveOrigin = usePanelOrigin()
+      return () => null
+    } }
+    const app = Vue.createApp({ setup() {
+      const capture = providePanelOrigin()
+      return () => Vue.h('section', { onClickCapture: capture, onKeydownCapture: capture }, [
+        Vue.h('button', { id: 'source' }, [Vue.h('span', 'open')]),
+        Vue.h(Receiver),
+      ])
+    } })
+    try {
+      app.mount(mount)
+      const button = shadow.querySelector('button')
+      let reads = 0
+      button.getBoundingClientRect = () => {
+        reads++
+        return { left: 20, top: 60, width: 80, height: 32 }
+      }
+      button.querySelector('span').dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }))
+      button.remove()
+      assert.deepEqual(resolveOrigin(), { x: 60, y: 76, size: 80 }, 'capture uses the control, not the icon, even after its menu unmounts')
+      assert.equal(reads, 1)
+      await new Promise(resolve => setTimeout(resolve, 0))
+      assert.equal(resolveOrigin(), undefined, 'unrelated timer-driven dialogs never reuse an old click')
+      mount.querySelector('section').append(button)
+      button.focus()
+      button.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }))
+      assert.deepEqual(resolveOrigin(), { x: 60, y: 76, size: 80 })
+      app.unmount()
+      button.remove()
+      assert.equal(resolveOrigin(), undefined, 'scope disposal releases the captured source')
+    }
+    finally {
+      host.remove()
+    }
+  })
+
+  check('Motion: dialogs fly to their source, fade only paint layers and retain the exit until completion', async () => {
+    const { useSourcePanelMotion } = await import('../src/composables/useSourcePanelMotion')
+    const previous = window.matchMedia
+    window.matchMedia = () => ({ matches: false })
+    const root = document.body.appendChild(document.createElement('div'))
+    const panel = root.appendChild(document.createElement('section'))
+    panel.className = 'panel'
+    panel.style.transform = 'translate(-50%, -50%)'
+    panel.getBoundingClientRect = () => ({ left: 200, top: 100, width: 400, height: 300 })
+    const surface = panel.appendChild(document.createElement('div'))
+    surface.className = 'surface'
+    const backdrop = root.appendChild(document.createElement('div'))
+    backdrop.className = 'backdrop'
+    const records = []
+    for (const target of [panel, surface, backdrop]) {
+      target.animate = (frames) => {
+        let finish
+        const record = { target, frames, finished: new Promise(resolve => finish = resolve), cancel() {
+          this.cancelled = true
+        }, finish: () => finish() }
+        records.push(record)
+        return record
+      }
+    }
+    let hooks
+    const app = Vue.createApp({ setup() {
+      hooks = useSourcePanelMotion('.panel', ':scope > .panel > .surface, :scope > .backdrop', () => ({ x: 100, y: 600, size: 40 }))
+      return () => null
+    } })
+    const mount = document.body.appendChild(document.createElement('div'))
+    let done = 0
+    try {
+      app.mount(mount)
+      hooks.onBeforeEnter(root)
+      hooks.onEnter(root, () => done++)
+      assert.equal(records[0].frames[0].transform, 'translate(-50%, -50%) translate3d(-300px, 350px, 0) scale(0.1)')
+      assert.ok(records[0].frames.every(frame => Object.keys(frame).join() === 'transform'))
+      assert.equal(records.length, 3, 'one geometry animation and one per paint surface, no per-frame observers')
+      records[0].finish()
+      await flush()
+      assert.equal(done, 1)
+      hooks.onLeave(root, () => done++)
+      assert.equal(root.inert, true)
+      assert.equal(records[3].frames[1].transform, records[0].frames[0].transform)
+      assert.equal(records[4].frames[1].opacity, 0)
+      assert.equal(records[4].frames[1].offset, 0.72, 'paint fades out before reaching the source')
+      assert.equal(done, 1)
+      app.unmount()
+      assert.ok(records.every(record => record.cancelled))
+      records[3].finish()
+      await flush()
+      assert.equal(done, 1, 'disposed completion cannot remove a replacement dialog')
+    }
+    finally {
+      root.remove()
+      mount.remove()
+      window.matchMedia = previous
+    }
+  })
+
   check('Motion: cached page refresh and account-placeholder handoff do not reenter the Vue renderer', async () => {
     const { useReadyPageTransition } = await import('../src/composables/useReadyPageTransition')
     const revision = Vue.ref(0)

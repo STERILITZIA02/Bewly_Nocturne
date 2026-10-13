@@ -7,7 +7,7 @@ import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import Slider from '~/components/Slider.vue'
 import { originalSettings, settings } from '~/logic'
-import type { GridColumnsConfig, VideoCardFontSizeSetting, VideoCardLayoutSetting } from '~/logic/storage'
+import type { GridColumnsConfig, VideoCardFontSizeSetting } from '~/logic/storage'
 import { defaultGridColumns, GRID_BREAKPOINTS } from '~/logic/storage'
 import {
   MAX_LIST_LAYOUT_BREAKPOINT,
@@ -30,19 +30,12 @@ import VideoCardContextMenuEditor from './VideoCardContextMenuEditor.vue'
 const { t } = useI18n()
 
 const fontSizeOptionValues: VideoCardFontSizeSetting[] = ['xs', 'sm', 'base', 'lg']
-const videoCardLayoutOptionValues: VideoCardLayoutSetting[] = ['modern', 'old']
 
 const videoCardFontSizeOptions = computed(() => fontSizeOptionValues.map(value => ({
   label: t(`settings.font_size_option.${value}`),
   value,
 })))
 
-const videoCardLayoutOptions = computed(() => videoCardLayoutOptionValues.map(value => ({
-  label: t(`settings.video_card_layout_option.${value}`),
-  value,
-})))
-
-const isModernLayout = computed(() => settings.value.videoCardLayout === 'modern')
 const listLayoutBreakpointDraft = ref(String(settings.value.autoSwitchListLayoutBreakpoint))
 const isEditingListLayoutBreakpoint = ref(false)
 
@@ -99,14 +92,6 @@ function cancelListLayoutBreakpointEditing() {
 <template>
   <div>
     <SettingsItemGroup :title="$t('settings.group_video_card_display')">
-      <SettingsItem
-        :title="$t('settings.video_card_layout')"
-        :desc="$t('settings.video_card_layout_desc')"
-        right-width="auto"
-      >
-        <Select v-model="settings.videoCardLayout" :options="videoCardLayoutOptions" w="160px" />
-      </SettingsItem>
-
       <SettingsItem :title="$t('settings.enable_video_preview')" right-width="auto">
         <Radio v-model="settings.enableVideoPreview" />
       </SettingsItem>
@@ -264,7 +249,6 @@ function cancelListLayoutBreakpointEditing() {
 
     <!-- 阴影设置仅适用于现代布局，默认折叠 -->
     <SettingsItemGroup
-      v-if="isModernLayout"
       :title="$t('settings.video_card_shadow_curve')"
       :desc="$t('settings.video_card_shadow_curve_desc')"
       collapsible
