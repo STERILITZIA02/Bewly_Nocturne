@@ -890,9 +890,13 @@ export function registerPlayerMaintenanceChecks(check, { Vue, flush }) {
   })
 
   check('maintenance 13: notification categories are finite, preserve private defaults and deduplicate aliases and legacy chat', async () => {
-    const { getNotificationBadgeCounts } = await import('../src/utils/notificationBadge')
+    const { getNotificationBadgeCounts, getNotificationCounts } = await import('../src/utils/notificationBadge')
     const message = { reply: 3, at: 2, like: 8, recv_like: 9, sys_msg: 1, chat: 90 }
     const dm = { follow_unread: 4, unfollow_unread: 5 }
+    assert.equal(getNotificationCounts(message, dm).total, 24)
+    assert.equal(getNotificationCounts(message, { follow_unread: 0 }).privateMessages, 0, 'one present group suppresses legacy fallback')
+    assert.equal(getNotificationBadgeCounts({ showReplyNotificationReminder: false }, message, dm).reply, 0)
+    assert.equal(getNotificationCounts(message, dm).reply, 3, 'category facts survive disabled badge reminders')
     assert.equal(getNotificationBadgeCounts({}, message, dm).total, 15)
     assert.equal(getNotificationBadgeCounts({ showLikeNotificationReminder: true }, message, dm).total, 24)
     assert.equal(getNotificationBadgeCounts({}, message).privateMessages, 90)

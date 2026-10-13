@@ -18,11 +18,12 @@ import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { openLinkInBackground } from '~/utils/tabs'
 import { onUserRelationChange } from '~/utils/userRelation'
+import { getVideoPreviewIdentity, getVideoPreviewPage } from '~/utils/videoPreviewProgress'
 import { resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
 import type { Video, VideoCardState } from '../types'
 import { createVideoCardState } from '../types'
-import { getCurrentTime, getCurrentVideoUrl } from '../utils'
+import { getCurrentVideoUrl } from '../utils'
 import { releaseVideoPreviewCacheEntry, retainVideoPreviewCacheEntry } from './videoPreviewCache'
 
 interface VideoCardProps {
@@ -81,6 +82,17 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const contextMenuRef = ref<HTMLDivElement | null>(null)
   const selectedDislikeOpt = toRef(interactionState, 'selectedDislikeOpt')
   const videoCurrentTime = toRef(interactionState, 'videoCurrentTime')
+  const previewMediaIdentity = computed(() => getVideoPreviewIdentity(props.value.video))
+  watch(previewMediaIdentity, (identity) => {
+    if (interactionState.previewMediaIdentity !== identity) {
+      interactionState.previewMediaIdentity = identity
+      videoCurrentTime.value = null
+    }
+  }, { immediate: true, flush: 'sync' })
+  function recordPreviewProgress(time: number, identity: string) {
+    if (identity && identity === previewMediaIdentity.value && Number.isFinite(time) && time >= 0)
+      videoCurrentTime.value = time
+  }
   const resolvedWatchLaterAid = toRef(interactionState, 'resolvedWatchLaterAid')
   const isUpdatingWatchLater = ref(false)
   const watchLaterMediaIdentity = computed(() => {
@@ -115,7 +127,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   const mouseLeaveTimeOut = ref<number | null>(null)
   const previewVideoUrl = ref<string>('')
   const contentVisibility = ref<'auto' | 'visible'>('auto')
-  const videoElement = ref<HTMLVideoElement | null>(null)
   const cardRootRef = ref<HTMLElement | null>(null)
   const isDisposed = ref<boolean>(false) // 跟踪组件是否已卸载
   const previewCacheKey = Symbol('video-preview-cache')
@@ -158,17 +169,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     if (removed.value || !props.value.video)
       return undefined
 
-    let url = ''
-    if (props.value.video.url)
-      url = props.value.video.url
-    else if (props.value.video.bvid || props.value.video.aid)
-      url = getCurrentVideoUrl(props.value.video, videoCurrentTime)
-    else if (props.value.video.epid)
-      url = `https://www.bilibili.com/bangumi/play/ep${props.value.video.epid}/`
-    else if (props.value.video.roomid)
-      url = `https://live.bilibili.com/${props.value.video.roomid}/`
-    else
-      return ''
+    const url = getCurrentVideoUrl(props.value.video, videoCurrentTime)
 
     try {
       const urlObj = new URL(url)
@@ -260,6 +261,7 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     momentsSelectedUploader,
     watchLaterMediaIdentity,
     () => props.value.video?.cid,
+    previewMediaIdentity,
     () => topBarStore.userInfo.mid,
   ], async ([video, hover, showPreview, enableVideoPreview, isLogin]) => {
     const generation = ++previewRequestGeneration
@@ -304,29 +306,33 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
       return
     }
 
-    if (!video.aid && !video.bvid)
+    if ((!video.aid && !video.bvid) || !previewMediaIdentity.value)
       return
 
     let cid = video.cid
-    if (!cid && video.bvid) {
+    let bvid = video.bvid
+    if ((!cid || !bvid) && (video.bvid || video.aid)) {
       try {
-        const res: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid })
+        const res: VideoInfo = await api.video.getVideoInfo({ bvid: video.bvid, aid: video.aid ? String(video.aid) : undefined })
         if (!isCurrentRequest())
           return
-        if (res.code === 0)
-          cid = res.data.cid
+        if (res.code === 0) {
+          bvid = res.data.bvid
+          cid ||= res.data.pages?.find(page => page.page === getVideoPreviewPage(video))?.cid
+            || (getVideoPreviewPage(video) === 1 ? res.data.cid : undefined)
+        }
       }
       catch {
         // Ignore preview request errors.
       }
     }
 
-    if (!isCurrentRequest())
+    if (!isCurrentRequest() || !cid || !bvid)
       return
 
     try {
       const res: VideoPreviewResult = await api.video.getVideoPreview({
-        bvid: video.bvid,
+        bvid,
         cid,
       })
       if (isCurrentRequest() && res.code === 0 && res.data.durl?.length)
@@ -466,7 +472,6 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
   }
 
   function handleClick(event: MouseEvent) {
-    videoCurrentTime.value = getCurrentTime(videoElement) ?? videoCurrentTime.value
     if (settings.value.videoCardLinkOpenMode === 'background' && videoUrl.value && !event.ctrlKey && !event.metaKey) {
       event.preventDefault()
       openLinkInBackground(videoUrl.value)
@@ -557,7 +562,8 @@ export function useVideoCardLogic(propsOrGetter: MaybeRefOrGetter<VideoCardProps
     isUndoing,
     previewVideoUrl,
     contentVisibility,
-    videoElement,
+    previewMediaIdentity,
+    recordPreviewProgress,
     cardRootRef,
 
     // Computed

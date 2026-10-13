@@ -213,7 +213,7 @@ const shouldShowDivider = computed(() => {
         important-w-auto
       >
         <a href="https://passport.bilibili.com/login" class="login">
-          <div i-solar:user-circle-bold-duotone class="text-xl mr-2" />{{
+          <div i-solar:user-circle-linear class="text-xl mr-2" />{{
             $t('topbar.sign_in')
           }}
         </a>

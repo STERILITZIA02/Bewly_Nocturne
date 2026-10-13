@@ -5,6 +5,7 @@ export interface VideoCardState {
   removed: boolean
   selectedDislikeOpt?: { reasonId?: number, feedbackId?: number }
   videoCurrentTime: number | null
+  previewMediaIdentity?: string
   resolvedWatchLaterAid?: number
 }
 

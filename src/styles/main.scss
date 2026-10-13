@@ -8,9 +8,21 @@
 :host *,
 :where(.bewly-wrapper, .bewly-wrapper *, .bewly-design, .bewly-design *) {
   outline-color: var(--bew-focus-ring-color);
+}
+
+// Retain the native-page policy. Bewly text uses proportional figures unless a
+// count, duration or aligned statistic explicitly requests tabular-nums.
+:where(.bewly-design, .bewly-design *) {
   font-feature-settings: "tnum";
-  // outline-width: 2px;
-  // outline-offset: 2px;
+}
+:host,
+:where(.bewly-wrapper, .bewly-wrapper *) {
+  font-feature-settings: normal;
+}
+
+:where(.bewly-wrapper) svg.iconify--tabler[stroke-width="2"],
+:where(.bewly-wrapper) svg.iconify--tabler [stroke-width="2"] {
+  stroke-width: 1.75px;
 }
 
 :host(.dark),
@@ -100,6 +112,10 @@ html.dark.bewly-design {
   line-height: var(--bew-line-height-body);
   font-weight: var(--bew-font-weight-regular);
 
+  :where(time, input[type="number"], input[inputmode="numeric"]) {
+    font-variant-numeric: tabular-nums;
+  }
+
   * {
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
@@ -107,7 +123,7 @@ html.dark.bewly-design {
 
   .bew-page-heading {
     font-size: var(--bew-font-size-heading);
-    font-weight: var(--bew-font-weight-bold);
+    font-weight: var(--bew-font-weight-semibold);
     line-height: var(--bew-line-height-heading);
   }
 
@@ -157,7 +173,7 @@ html.dark.bewly-design {
     margin: 0.14em 0.2em;
     border-radius: var(--bew-radius-sm);
     corner-shape: var(--bew-corner-shape);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-regular);
     line-height: 1.24;
   }
 
@@ -303,7 +319,7 @@ html.dark.bewly-design {
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
 }
 

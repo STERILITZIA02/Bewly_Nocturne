@@ -434,7 +434,9 @@ function syncDisplayedDisclosure(value: MomentDisclosure) {
 }
 
 function handleDisclosureTransitionEnd(event: TransitionEvent) {
-  if (event.target !== event.currentTarget || event.propertyName !== 'grid-template-rows')
+  // A reversed opening emits transitioncancel before the closing transition.
+  // Retain its contents until the actual close finishes, rather than snapping.
+  if (event.type === 'transitioncancel' || event.target !== event.currentTarget || !['grid-template-rows', 'height'].includes(event.propertyName))
     return
   if (disclosure.value === 'none')
     displayedDisclosure.value = 'none'
@@ -1430,7 +1432,7 @@ onBeforeUnmount(() => {
   border-radius: var(--bew-badge-radius);
   color: var(--bew-on-theme-color);
   background: var(--bew-theme-color);
-  font-weight: var(--bew-font-weight-bold);
+  font-weight: var(--bew-font-weight-semibold);
   letter-spacing: 0.02em;
 }
 
@@ -1448,7 +1450,7 @@ onBeforeUnmount(() => {
   color: #fff;
   background: linear-gradient(135deg, #ff8eb4, #fb7299);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   box-shadow: 0 2px 8px rgb(251 114 153 / 35%);
 }
@@ -1651,7 +1653,7 @@ onBeforeUnmount(() => {
   box-sizing: border-box;
   cursor: pointer;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   white-space: nowrap;
@@ -1772,7 +1774,7 @@ onBeforeUnmount(() => {
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
   line-height: var(--bew-line-height-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   transition: color var(--bew-duration-fast) var(--bew-ease-standard);
 }
 
@@ -1976,6 +1978,9 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
 }
+.moment-card__main--has-media:not(.moment-card__main--live) .moment-card__body {
+  @include contentCard.under-cover(var(--bew-card-inset-radius));
+}
 
 .moment-card__main--video:not(.moment-card__main--live) .moment-card__media {
   width: 100%;
@@ -2023,7 +2028,7 @@ onBeforeUnmount(() => {
   margin-bottom: var(--bew-space-1);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
 }
 
@@ -2302,7 +2307,7 @@ onBeforeUnmount(() => {
   height: var(--bew-icon-size-xs);
 }
 .moment-card__video-stats > span {
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
 }
 
 .moment-card__forward-video-info {
@@ -2321,7 +2326,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -2412,7 +2417,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: var(--bew-space-1);
   color: var(--bew-theme-foreground);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
 }
 
 .moment-card__hot-comment-content {
@@ -2495,7 +2500,7 @@ onBeforeUnmount(() => {
   pointer-events: auto;
   grid-template-rows: 0fr;
   min-width: 0;
-  transition: grid-template-rows var(--bew-duration-moderate) var(--bew-ease-standard);
+  transition: grid-template-rows var(--bew-duration-moderate) var(--bew-ease-emphasized);
 }
 
 .moment-card__disclosure.is-open {
@@ -2511,15 +2516,27 @@ onBeforeUnmount(() => {
   overflow: hidden;
   opacity: 0;
   background: transparent;
-  transform: translateY(calc(0px - var(--bew-space-2)));
-  transition:
-    opacity var(--bew-duration-normal) var(--bew-ease-standard),
-    transform var(--bew-duration-moderate) var(--bew-ease-standard);
+  transition: opacity var(--bew-duration-normal) var(--bew-ease-standard);
 }
 
 .moment-card__disclosure.is-open .moment-card__disclosure-inner {
   opacity: 1;
-  transform: translateY(0);
+}
+
+// Keep the inner comments at their natural size while the outer clip expands.
+// This avoids squeezing their scroll viewport through fractional grid tracks.
+// The grid transition remains the fallback on engines without intrinsic sizing.
+@supports (interpolate-size: allow-keywords) {
+  .moment-card__disclosure {
+    display: block;
+    interpolate-size: allow-keywords;
+    height: 0;
+    overflow: clip;
+    transition-property: height;
+  }
+  .moment-card__disclosure.is-open {
+    height: auto;
+  }
 }
 
 .moment-card__comments,
@@ -2541,6 +2558,9 @@ onBeforeUnmount(() => {
 }
 
 @container (max-width: 359px) {
+  .moment-card__main--has-media.moment-card__main--live .moment-card__body {
+    @include contentCard.under-cover(var(--bew-card-inset-radius));
+  }
   .moment-card__main--has-media {
     display: flex;
     flex-direction: column;

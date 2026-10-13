@@ -9,6 +9,21 @@ interface IframeMessagingReadyState {
 }
 
 const iframeMessagingReadyStates = new WeakMap<object, IframeMessagingReadyState>()
+interface DocumentEnvelope { documentId: string, sessionId: string, revision: number }
+const iframeDocuments = new WeakMap<object, DocumentEnvelope>()
+let parentDocument: DocumentEnvelope | undefined
+
+export function setIframeDocumentBinding(iframe: IframeMessageTarget | null | undefined, binding?: DocumentEnvelope) {
+  if (!iframe)
+    return
+  if (binding)
+    iframeDocuments.set(iframe, binding)
+  else iframeDocuments.delete(iframe)
+}
+
+export function setParentDocumentBinding(binding?: DocumentEnvelope) {
+  parentDocument = binding
+}
 
 function getMomentPageId(value: string, baseUrl?: string): string | undefined {
   try {
@@ -61,9 +76,17 @@ export function markIframeReadyForMessaging(
   iframe: IframeMessageTarget | null | undefined,
   baseUrl = globalThis.location?.href,
 ): boolean {
-  const expectedOrigin = getIframeExpectedOrigin(iframe, baseUrl)
+  let expectedOrigin = getIframeExpectedOrigin(iframe, baseUrl)
   if (!iframe?.contentWindow || !expectedOrigin || typeof iframe !== 'object')
     return false
+  // A same-origin navigation may leave an earlier cross-origin Opus document
+  // while retaining its WindowProxy and initial src.
+  try {
+    const href = iframe.contentWindow.location.href
+    if (isContentScriptTargetUrl(href))
+      expectedOrigin = getHttpOrigin(href) || expectedOrigin
+  }
+  catch {}
   // Opus can redirect to t.bilibili.com without changing the iframe src.
   // A cross-origin load alone cannot establish the recipient's origin.
   if (getMomentPageId(iframe.getAttribute('src') || '', baseUrl) && !getReadyState(iframe)) {
@@ -110,7 +133,8 @@ export function getIframeMessageData(
   baseUrl = globalThis.location?.href,
 ): Record<string, unknown> | undefined {
   if (iframe?.contentWindow && iframe.contentWindow === event.source && isPlainObject(event.data)
-    && event.data.type === 'BEWLY_OPUS_LAYOUT_READY' && typeof event.data.href === 'string') {
+    && !getReadyState(iframe)
+    && (event.data.type === 'BEWLY_OPUS_LAYOUT_READY' || event.data.type === 'BEWLY_IFRAME_DOCUMENT_CONTEXT') && typeof event.data.href === 'string') {
     const id = getMomentPageId(iframe.getAttribute('src') || '', baseUrl)
     if (id && id === getMomentPageId(event.data.href) && getHttpOrigin(event.data.href) === event.origin) {
       iframeMessagingReadyStates.set(iframe, {
@@ -129,6 +153,13 @@ export function getIframeMessageData(
     || event.origin !== expectedOrigin
     || !isPlainObject(event.data)) {
     return undefined
+  }
+  if (event.data._bewDocumentId !== undefined && event.data.type !== 'BEWLY_IFRAME_DOCUMENT_CONTEXT') {
+    const binding = iframe && iframeDocuments.get(iframe)
+    if (!binding || event.data._bewDocumentId !== binding.documentId || event.data._bewSessionId !== binding.sessionId
+      || event.data._bewRevision !== binding.revision) {
+      return undefined
+    }
   }
   return event.data
 }
@@ -178,6 +209,8 @@ export function postMessageToParent(message: unknown): boolean {
   const expectedOrigin = getAllowedParentOrigin()
   if (window.parent === window || !expectedOrigin)
     return false
-  window.parent.postMessage(message, expectedOrigin)
+  window.parent.postMessage(parentDocument && isPlainObject(message)
+    ? { ...message, _bewDocumentId: parentDocument.documentId, _bewSessionId: parentDocument.sessionId, _bewRevision: parentDocument.revision }
+    : message, expectedOrigin)
   return true
 }

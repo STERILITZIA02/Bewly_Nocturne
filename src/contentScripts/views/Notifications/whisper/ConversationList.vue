@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import LibrarySearchField from '~/components/LibrarySearchField.vue'
+
 import ConversationListItem from './ConversationListItem.vue'
 import ConversationListSkeleton from './ConversationListSkeleton.vue'
 import type { TransientPrivateRecipient } from './privateRecipientSearch'
@@ -46,7 +48,7 @@ const query = defineModel<string>('query', { default: '' })
 const filters: PrivateSessionFilter[] = ['all', 'unread', 'pinned']
 const typeFilters: PrivateSessionTypeFilter[] = ['all', 'user', 'official-assistant', 'other']
 const itemsRef = ref<HTMLElement | null>(null)
-const searchInputRef = ref<HTMLInputElement | null>(null)
+const searchInputRef = ref<InstanceType<typeof LibrarySearchField> | null>(null)
 const sentinelRef = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 let observerGeneration = 0
@@ -222,24 +224,6 @@ function submitSearch(direction?: number) {
   else
     void props.recipientSearch.resume()
 }
-function handleSearchEnter(event: KeyboardEvent) {
-  if (event.isComposing)
-    return
-  event.preventDefault()
-  submitSearch(event.shiftKey ? -1 : 1)
-}
-async function clearSearch() {
-  query.value = ''
-  await nextTick()
-  searchInputRef.value?.focus({ preventScroll: true })
-}
-function handleSearchEscape(event: KeyboardEvent) {
-  if (event.isComposing)
-    return
-  event.preventDefault()
-  event.stopPropagation()
-  void clearSearch()
-}
 
 function selectSearchResult(recipient: TransientPrivateRecipient) {
   const selection = resolvePrivateRecipientSelection(recipient, props.items)
@@ -249,7 +233,7 @@ function selectSearchResult(recipient: TransientPrivateRecipient) {
     emit('selectRecipient', recipient)
 }
 
-defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => searchInputRef.value?.focus({ preventScroll: true }) })
+defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => searchInputRef.value?.focus() })
 </script>
 
 <template>
@@ -259,47 +243,19 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
     :aria-label="t('notifications.whisper.list_aria')"
   >
     <div class="conversation-list__tools" :class="{ 'conversation-list__tools--pinned': filteredItems.some(session => session.pinned) }">
-      <form class="conversation-list__search" role="search" :aria-label="t('notifications.whisper.search_aria')" @submit.prevent="submitSearch()">
-        <button type="submit" class="conversation-list__search-submit" :aria-label="t('notifications.whisper.search_aria')">
-          <i i-mingcute:search-line aria-hidden="true" />
-        </button>
-        <input
-          ref="searchInputRef"
-          v-model="query"
-          type="text"
-          inputmode="search"
-          enterkeyhint="search"
-          name="conversation-search"
-          autocomplete="off"
-          autocapitalize="off"
-          autocorrect="off"
-          :spellcheck="false"
-          :aria-label="t('notifications.whisper.search_aria')"
-          @keydown.enter="handleSearchEnter"
-          @keydown.esc="handleSearchEscape"
-        >
-        <Tooltip v-if="query" :content="t('notifications.whisper.clear_search')" placement="bottom">
-          <IconButton
-            class="conversation-list__clear"
-            shape="circle"
-            :label="t('notifications.whisper.clear_search')"
-            @click="clearSearch"
-          >
-            <i i-mingcute:close-line />
-          </IconButton>
-        </Tooltip>
-        <label class="conversation-list__type-select" :class="{ 'conversation-list__type-select--active': typeFilter !== 'all' }">
+      <LibrarySearchField
+        ref="searchInputRef" v-model="query" :label="t('notifications.whisper.search_aria')"
+        clear-on-escape :filter-active="typeFilter !== 'all'"
+        @submit="event => submitSearch(event ? (event.shiftKey ? -1 : 1) : undefined)"
+      >
+        <template #filter>
           <select v-model="typeFilter" name="conversation-type" :aria-label="t('notifications.whisper.type_filter_label')">
             <option v-for="typeFilterId in typeFilters" :key="typeFilterId" :value="typeFilterId">
               {{ t(`notifications.whisper.type_filters.${typeFilterId}`) }}
             </option>
           </select>
-          <svg
-            viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75"
-            stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"
-          ><path d="M4 5h16l-6 7v6l-4 2v-8Z" /></svg>
-        </label>
-      </form>
+        </template>
+      </LibrarySearchField>
       <div v-if="normalizedQuery" class="bew-segment-control bew-segment-control--static bew-segment-control--secondary conversation-list__filters">
         <button
           v-for="mode in (['people', 'messages'] as const)" :key="mode" type="button" class="bew-segment-control__item" :data-active="(searchMode ?? 'people') === mode ? 'true' : undefined"
@@ -430,47 +386,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
   border-bottom-color: transparent;
 }
 
-.conversation-list__search {
-  box-sizing: border-box;
-  display: flex;
-  gap: var(--bew-space-1);
-  align-items: center;
-  min-width: 0;
-  height: var(--bew-control-height);
-  padding: 0 var(--bew-space-1) 0 var(--bew-space-2);
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
-  background: var(--bew-content-solid);
-  border: 1px solid var(--bew-focus-ring-color);
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
-}
-
-.conversation-list__search input {
-  flex: 1 1 auto;
-  min-width: 0;
-  padding: 0;
-  color: var(--bew-text-1);
-  font: inherit;
-  background: transparent;
-  border: 0;
-  outline: none;
-}
-
-.conversation-list__search-submit {
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: var(--bew-icon-button-size-sm);
-  height: var(--bew-icon-button-size-sm);
-  padding: 0;
-  color: var(--bew-text-2);
-  background: transparent;
-  border: 0;
-  border-radius: var(--bew-interactive-radius);
-  cursor: pointer;
-}
 .conversation-list__search-heading,
 .conversation-list__history-results {
   padding: var(--bew-space-3);
@@ -500,14 +415,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
   }
 }
 
-.conversation-list__clear {
-  flex: none;
-  width: var(--bew-control-height-sm);
-  height: var(--bew-control-height-sm);
-  border-radius: var(--bew-radius-full);
-  corner-shape: var(--bew-corner-shape-round);
-}
-
 .conversation-list__filters {
   --bew-control-radius: var(--bew-radius-full);
   --bew-control-item-radius: var(--bew-radius-full);
@@ -519,57 +426,6 @@ defineExpose({ focusSession, getScrollTop, restoreScrollTop, focusSearch: () => 
   min-width: 0;
 }
 
-.conversation-list__type-select {
-  position: relative;
-  display: grid;
-  place-items: center;
-  flex: none;
-  width: var(--bew-control-height-sm);
-  height: var(--bew-control-height-sm);
-  margin-inline-end: var(--bew-space-1);
-  color: var(--bew-text-2);
-  border-radius: 50%;
-  corner-shape: var(--bew-corner-shape-round);
-  transition: background-color var(--bew-duration-fast) ease;
-}
-
-.conversation-list__type-select select {
-  // Retain the native picker and keyboard semantics behind the icon-only target.
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.conversation-list__type-select:has(select:focus-visible) {
-  color: var(--bew-message-icon-hover);
-}
-
-.conversation-list__type-select svg {
-  width: var(--bew-icon-size-md);
-  height: var(--bew-icon-size-md);
-  pointer-events: none;
-}
-
-.conversation-list__type-select--active {
-  color: var(--bew-message-icon-hover);
-}
-@media (hover: hover) and (pointer: fine) {
-  .conversation-list__type-select:has(select:enabled):hover {
-    color: var(--bew-message-icon-hover);
-  }
-  .conversation-list__clear:hover {
-    color: var(--bew-theme-foreground);
-    background: transparent;
-  }
-}
-
-.conversation-list__type-select:active,
-.conversation-list__type-select:focus-within {
-  color: var(--bew-message-icon-hover);
-}
 .conversation-list__more {
   display: flex;
   justify-content: center;

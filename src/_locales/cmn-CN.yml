@@ -171,6 +171,9 @@ player_screenshot:
   failed: 截图失败
   video_unavailable: 当前视频画面不可用
 settings:
+  custom_playback_rate: 自定义倍速
+  apply_playback_rate: 应用
+  playback_rate_unavailable: 当前没有可用的主播放器
   comment_reply_batch_pages: 每次加载的回复页数
   comment_reply_batch_pages_desc: 只在点击加载下一批时请求；首次展开和直接选页各请求一页，不自动加载整个楼层。
   enable_comment_reply_tree_container: 独立回复阅读区域
@@ -476,7 +479,7 @@ settings:
     jyut: 粤语
   customize_font: 自定义字体
   customize_font_opt:
-    default: Bilibili 默认
+    default: 默认
     recommend: 推荐
     custom: 自定义
   customize_font_desc: >-
@@ -1464,7 +1467,6 @@ moment_card:
   comments_retry: 重试
   comments_unavailable: 评论暂不可用，请重试
   comments_refresh: 刷新
-  comments_load_more: 查看更多评论
   comments_missing_parent: 上级回复暂未加载
   comments_reply_new_tab: 在新标签页回复
   comments_expand_replies: 展开剩余回复
@@ -1489,7 +1491,13 @@ moment_card:
   reservation_failed: 预约操作失败
   reservation_login_required: 登录后才能预约
 video_card:
+  favorite_dialog:
+    read: 收藏夹加载失败，请重试
+    save: 收藏操作失败，请重试
+    verify: 收藏状态尚未确认，请刷新
+    empty: 暂无收藏夹
   operation:
+    favorite: 收藏到收藏夹
     not_interested: 不感兴趣
     not_interested_uploader: 不想看此 UP 主
     open_in_new_tab: 新标签页打开

@@ -10,6 +10,7 @@ import Picture from '~/components/Picture.vue'
 import Progress from '~/components/Progress.vue'
 import Tooltip from '~/components/Tooltip.vue'
 import { resetTopBarTransientInteraction } from '~/components/TopBar/composables/useTopBarInteraction'
+import { useBewlyApp } from '~/composables/useAppProvider'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { settings } from '~/logic'
 import type { List as WatchLaterItem } from '~/models/video/watchLater'
@@ -18,6 +19,8 @@ import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { resolveConfiguredLinkAction } from '~/utils/configuredLinkNavigation'
 import { calcCurrentTime } from '~/utils/dataFormatter'
+import type { ResolvedLinkOpenAction } from '~/utils/linkNavigation'
+import { captureListRemovalFocus } from '~/utils/listRemovalFocus'
 import { getUserID, removeHttpFromUrl } from '~/utils/main'
 import { retiringListTransition } from '~/utils/motionPresence'
 import { openLinkInBackground } from '~/utils/tabs'
@@ -28,6 +31,7 @@ import PopoverListSkeleton from './PopoverListSkeleton.vue'
 
 const emit = defineEmits<{ addOpenTabs: [] }>()
 const topBarStore = useTopBarStore()
+const { openIframeDrawer } = useBewlyApp()
 const { t } = useI18n()
 const toast = useToast()
 const { watchLaterList, isLoadingWatchLater, watchLaterCount } = storeToRefs(topBarStore)
@@ -73,8 +77,7 @@ onMounted(async () => {
   await topBarStore.syncWatchLaterState(true)
 })
 
-function openVideoPage(url: string) {
-  const action = resolveConfiguredLinkAction(settings.value.topBarLinkOpenMode, location.href)
+function openVideoPage(url: string, action: ResolvedLinkOpenAction = resolveConfiguredLinkAction(settings.value.topBarLinkOpenMode, location.href)) {
   if (action === 'background') {
     resetTopBarTransientInteraction()
     void openLinkInBackground(url)
@@ -86,23 +89,33 @@ function openVideoPage(url: string) {
     window.open(url, '_blank')
     return
   }
+  if (action === 'drawer') {
+    openIframeDrawer(url)
+    return
+  }
 
   window.open(url, '_top')
 }
 
-async function deleteWatchLaterItem(aid: number): Promise<boolean> {
+async function deleteWatchLaterItem(aid: number, event?: MouseEvent): Promise<boolean> {
   if (pendingActions.has(aid))
     return false
 
   const owner = actionLifetime.capture()
+  const restoreFocus = captureListRemovalFocus(event?.currentTarget)
   const requestId = Symbol('watch-later-remove')
   pendingActions.set(aid, requestId)
   try {
     const removed = await topBarStore.deleteWatchLaterItem(aid, owner.isCurrent)
     if (!owner.isCurrent())
       return false
-    if (!removed)
+    if (!removed) {
       toast.error(t('moments.watch_later_failed_retry'))
+    }
+    else {
+      await nextTick()
+      restoreFocus()
+    }
     return removed
   }
   finally {
@@ -114,8 +127,30 @@ async function deleteWatchLaterItem(aid: number): Promise<boolean> {
 async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
   const owner = actionLifetime.capture()
   const url = getWatchLaterPlaybackUrl(item)
-  if (url && await deleteWatchLaterItem(item.aid) && owner.isCurrent())
-    openVideoPage(url)
+  if (!url || pendingActions.has(item.aid))
+    return
+  const action = resolveConfiguredLinkAction(settings.value.topBarLinkOpenMode, location.href)
+  // Reserve the tab in the activation task; only navigate it after confirmed removal.
+  const tab = action === 'newTab' ? window.open('about:blank', '_blank') : null
+  if (action === 'newTab' && !tab)
+    return
+  if (tab)
+    tab.opener = null
+  try {
+    if (await deleteWatchLaterItem(item.aid) && owner.isCurrent()) {
+      if (tab)
+        tab.location.replace(url)
+      else openVideoPage(url, action)
+    }
+    else {
+      tab?.close()
+    }
+  }
+  catch {
+    tab?.close()
+    if (owner.isCurrent())
+      toast.error(t('moments.watch_later_failed_retry'))
+  }
 }
 </script>
 
@@ -205,7 +240,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
                 class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger watch-later-pop__remove"
                 :label="$t('common.operation.delete')"
                 :disabled="pendingActions.has(item.aid)"
-                @click.stop.prevent="deleteWatchLaterItem(item.aid)"
+                @click.stop.prevent="deleteWatchLaterItem(item.aid, $event)"
               >
                 <i i-mingcute:close-line />
               </IconButton>
@@ -348,6 +383,7 @@ async function handleOpenVideoPageAndRemove(item: WatchLaterItem) {
 }
 
 .watch-later-pop__progress {
+  font-variant-numeric: tabular-nums;
   position: absolute;
   z-index: 2;
   right: 0;

@@ -347,14 +347,14 @@ function handleToggleHomeTab(tab: any) {
             <div flex="~ gap-2" mb-2>
               <Button type="secondary" size="small" @click="handleImportFilterByTitle">
                 <template #left>
-                  <div i-uil:import />
+                  <div i-tabler:download />
                 </template>
                 <input type="file" accept=".json" hidden>
                 {{ $t('common.operation.import') }}
               </Button>
               <Button type="secondary" size="small" @click="handleExportFilterByTitle">
                 <template #left>
-                  <div i-uil:export />
+                  <div i-tabler:upload />
                 </template>
                 {{ $t('common.operation.export') }}
               </Button>
@@ -391,14 +391,14 @@ function handleToggleHomeTab(tab: any) {
             <div flex="~ gap-2" mb-2>
               <Button type="secondary" size="small" @click="handleImportFilterByUser">
                 <template #left>
-                  <div i-uil:import />
+                  <div i-tabler:download />
                 </template>
                 <input type="file" accept=".json" hidden>
                 {{ $t('common.operation.import') }}
               </Button>
               <Button type="secondary" size="small" @click="handleExportFilterByUser">
                 <template #left>
-                  <div i-uil:export />
+                  <div i-tabler:upload />
                 </template>
                 {{ $t('common.operation.export') }}
               </Button>

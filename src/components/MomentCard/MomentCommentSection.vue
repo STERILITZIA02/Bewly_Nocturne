@@ -287,6 +287,8 @@ function seedCommentLikeState(items: MomentCommentItem[], readVersion: number) {
 async function loadComments(reset = false) {
   if (disposed || props.active === false || document.hidden || !commentId.value || !commentType.value || loading.value || loadingMore.value)
     return
+  if (!reset && !hasMore.value)
+    return
 
   const generation = reset ? ++requestGeneration : requestGeneration
   const requestIdentity = getCommentIdentity()
@@ -320,18 +322,18 @@ async function loadComments(reset = false) {
       nohot: 0,
     }, { signal })
     const page = normalizeMomentCommentPage(response, pageNumber, 8)
-    if (generation !== requestGeneration
+    if (signal.aborted || generation !== requestGeneration
       || requestIdentity !== getCommentIdentity()) {
       return
     }
-    const previousItemCount = comments.value.length
     const mergedItems = reset ? page.items : mergeMomentComments(comments.value, page.items)
-    const madeProgress = reset ? page.items.length > 0 : mergedItems.length > previousItemCount
     const pageAdvanced = page.nextPage > pageNumber
     comments.value = mergedItems
     hasLoaded = true
     hasMore.value = page.hasMore
-    const stalled = page.hasMore && (!madeProgress || !pageAdvanced)
+    // Hot comments may repeat on ordinary pages. An advancing successful page
+    // is not a request failure merely because every row was already displayed.
+    const stalled = page.hasMore && !pageAdvanced
     nextPage.value = !stalled && pageAdvanced ? page.nextPage : pageNumber
     if (stalled)
       loadError.value = t('moment_card.comments_load_failed')
@@ -351,6 +353,8 @@ async function loadComments(reset = false) {
 }
 
 async function toggleCommentLike(comment: MomentCommentItem) {
+  if (props.active === false || disposed)
+    return
   const userId = getUserID()
   if (!userId) {
     toast.error(t('moment_card.comment_login_required'))
@@ -453,7 +457,7 @@ watch(() => props.active, (active) => {
     void initializeComments()
 })
 watch(getSourceIdentity, () => void initializeComments(), { immediate: true, flush: 'sync' })
-watch(() => [comments.value, loading.value, loadingMore.value, resolvingTarget.value, loadError.value, threadRevision.value], () => emit('interactiveResize'), { flush: 'sync' })
+watch(() => [comments.value, loading.value, loadingMore.value, resolvingTarget.value, loadError.value, threadRevision.value], () => emit('interactiveResize'), { flush: 'post' })
 function onVisibilityChange() {
   if (document.hidden)
     cancelReads()
@@ -629,6 +633,10 @@ onBeforeUnmount(() => {
           </button>
         </div>
       </section>
+      <div v-if="loadingMore" class="moment-comments__loading-more" role="status" :aria-label="t('moment_card.comments_loading')">
+        <SkeletonBlock width="40%" height="var(--bew-line-height-control)" />
+        <SkeletonBlock width="72%" height="var(--bew-line-height-caption)" />
+      </div>
     </div>
 
     <div v-if="loadError && comments.length" class="moment-comments__pagination-error" role="alert">
@@ -637,17 +645,6 @@ onBeforeUnmount(() => {
         {{ t('moment_card.comments_retry') }}
       </button>
     </div>
-
-    <button
-      v-if="hasMore"
-      type="button"
-      class="moment-comments__load-more"
-      :disabled="loadingMore"
-      @click="loadComments(false)"
-    >
-      <SkeletonBlock v-if="loadingMore" width="1em" height="1em" radius="interactive" />
-      {{ t('moment_card.comments_load_more') }}
-    </button>
   </section>
 </template>
 
@@ -697,7 +694,6 @@ onBeforeUnmount(() => {
   line-height: var(--bew-line-height-control);
 }
 .moment-comments__refresh,
-.moment-comments__load-more,
 .moment-comments__thread-more button,
 .moment-comments__state button {
   display: inline-flex;
@@ -716,14 +712,12 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .moment-comments__refresh:hover,
-.moment-comments__load-more:hover,
 .moment-comments__thread-more button:hover,
 .moment-comments__state button:hover {
   color: var(--bew-text-1);
   background: var(--bew-fill-1);
 }
 .moment-comments__refresh:focus-visible,
-.moment-comments__load-more:focus-visible,
 .moment-comments__thread-more button:focus-visible,
 .moment-comments__state button:focus-visible,
 .moment-comments__action:focus-visible {
@@ -731,7 +725,6 @@ onBeforeUnmount(() => {
   outline-offset: 2px;
 }
 .moment-comments__refresh:disabled,
-.moment-comments__load-more:disabled,
 .moment-comments__thread-more button:disabled,
 .moment-comments__action:disabled {
   cursor: default;
@@ -806,7 +799,7 @@ onBeforeUnmount(() => {
 .moment-comments__author {
   overflow: hidden;
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -880,8 +873,10 @@ onBeforeUnmount(() => {
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
 }
-.moment-comments__load-more {
-  width: 100%;
-  margin-top: var(--bew-space-3);
+.moment-comments__loading-more {
+  display: grid;
+  flex: none;
+  gap: var(--bew-space-2);
+  padding: var(--bew-space-3) 0;
 }
 </style>

@@ -1,6 +1,7 @@
 import { normalizeMomentRemoteUrl } from './momentUrl'
 
 const MAX_LIVE_PREVIEW_SOURCES = 3
+export const LIVE_PREVIEW_START_TIMEOUT_MS = 12_000
 const record = (value: unknown): Record<string, unknown> => value !== null && typeof value === 'object' ? value as Record<string, unknown> : {}
 const list = (value: unknown): unknown[] => Array.isArray(value) ? value : []
 
@@ -32,11 +33,14 @@ export function getLivePreviewSources(response: unknown): string[] {
             continue
           const url = normalizeMomentRemoteUrl(`${info.host}${codec.base_url}${info.extra}`)
           if (url)
-            sources.push({ url, quality: typeof codec.current_qn === 'number' ? codec.current_qn : Number.MAX_SAFE_INTEGER, rank: hls ? 0 : 1 })
+            sources.push({ url, quality: typeof codec.current_qn === 'number' ? codec.current_qn : Number.MAX_SAFE_INTEGER, rank: hls ? format.format_name === 'fmp4' ? 0 : 1 : 2 })
         }
       }
     }
   }
   sources.sort((a, b) => a.quality - b.quality || a.rank - b.rank)
-  return [...new Set(sources.map(source => source.url))].slice(0, MAX_LIVE_PREVIEW_SOURCES)
+  // Reserve a fallback per transport before spending the budget on CDN mirrors.
+  // A broken TS route must not consume all slots ahead of working fMP4/FLV.
+  const primary = sources.filter((source, index) => sources.findIndex(item => item.rank === source.rank) === index)
+  return [...new Set([...primary, ...sources].map(source => source.url))].slice(0, MAX_LIVE_PREVIEW_SOURCES)
 }

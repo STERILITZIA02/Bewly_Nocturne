@@ -177,6 +177,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
 }
 
 .watch-later-grid-card__progress-label {
+  font-variant-numeric: tabular-nums;
   position: absolute;
   right: var(--bew-space-2);
   bottom: var(--bew-space-3);
@@ -254,7 +255,7 @@ const progressPercentage = computed(() => getVideoProgressPercentage({ aid: prop
   overflow: hidden;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;

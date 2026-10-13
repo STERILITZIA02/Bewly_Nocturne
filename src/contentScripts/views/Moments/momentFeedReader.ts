@@ -96,6 +96,7 @@ export function createMomentFeedReader(
             const responseOffset = response.data?.offset || ''
             scanUpdateBaseline = response.data?.update_baseline || ''
             canContinue = Boolean(response.data?.has_more)
+              && pageItems.length > 0
               && responseOffset !== scanOffset
             scanOffset = responseOffset
             nextPage += 1
@@ -130,7 +131,7 @@ export function createMomentFeedReader(
         nextPageNumber = nextPage
       }
       else if (request.filtered) {
-      // 过滤开启：每次用户操作最多请求两页原始动态，再交给本地过滤。
+      // Filtered batches read at most two pages before yielding to the viewport.
         let scanOffset = request.offset
         let scanUpdateBaseline = request.updateBaseline
         let canContinue = true
@@ -152,6 +153,7 @@ export function createMomentFeedReader(
           const responseOffset = response.data?.offset || ''
           scanUpdateBaseline = response.data?.update_baseline || ''
           canContinue = Boolean(response.data?.has_more)
+            && pageItems.length > 0
             && responseOffset !== scanOffset
           scanOffset = responseOffset
         }

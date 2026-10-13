@@ -350,7 +350,7 @@ export function injectLoadingStyle() {
       padding: 0 var(--bew-space-3, 12px);
       color: var(--bew-text-1, #18191c);
       font: inherit;
-      font-weight: var(--bew-font-weight-semibold, 600);
+      font-weight: var(--bew-font-weight-medium, 500);
       background: var(--bew-fill-2, rgb(0 0 0 / 8%));
       border: 1px solid var(--bew-surface-border-color, #d1d2d4);
       border-radius: var(--bew-interactive-radius, 8px);

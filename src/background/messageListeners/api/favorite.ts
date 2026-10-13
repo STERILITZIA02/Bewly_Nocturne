@@ -67,7 +67,19 @@ const API_FAVORITE = {
     },
     params: {
       up_mid: '',
+      type: undefined as number | undefined,
+      rid: undefined as number | undefined,
     },
+    afterHandle: AHS.J_D,
+  },
+  updateVideoFavorites: {
+    url: 'https://api.bilibili.com/x/v3/fav/resource/deal',
+    _fetch: {
+      method: 'post',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: { rid: 0, type: 2, add_media_ids: '', del_media_ids: '', platform: 'web', csrf: '' },
+    },
+    params: {},
     afterHandle: AHS.J_D,
   },
   // 原站公开收藏夹读取契约：tests/fixtures/favorites/native-space-contract.json。

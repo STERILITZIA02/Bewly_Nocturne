@@ -12,7 +12,7 @@ defineProps<{
   <a
     class="channel-name"
     un-text="$bew-text-2 hover:$bew-theme-foreground"
-    cursor-pointer truncate font-medium
+    cursor-pointer truncate font-normal
     :href="getAuthorJumpUrl(Array.isArray(author) ? author[0] : author)"
     target="_blank"
     @click.stop=""

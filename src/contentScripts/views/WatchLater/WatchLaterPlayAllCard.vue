@@ -128,7 +128,7 @@ function failCover(pic: string) {
 .watch-later-play-all-card__remaining {
   flex: none;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

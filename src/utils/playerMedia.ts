@@ -18,6 +18,13 @@ export function getPlayerModeContainer(video = getVideoElement()): HTMLElement |
   return video?.closest<HTMLElement>(PLAYER_MODE_CONTAINER_SELECTOR) ?? null
 }
 
+export function isPlayerAdvertisement(video: HTMLVideoElement | null): boolean {
+  const root = getPlayerModeContainer(video)
+  return !!root && (root.classList.contains('bpx-state-ad') || root.getAttribute('data-ad') === 'true'
+    || Array.from(root.querySelectorAll('.bpx-player-ads,.bilibili-player-ads,.bpx-player-ad-wrap,.bpx-player-adwrap,.bpx-player-pic-ad,.bpx-player-ads-wrap,.bpx-player-ads-skip,.bpx-player-btn-skip'))
+      .some(node => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden'))
+}
+
 export function getPlayerModeControl(mode: keyof typeof PLAYER_MODE_CONTROL_SELECTORS, root = getPlayerModeContainer()): HTMLElement | null {
   return root?.querySelector<HTMLElement>(PLAYER_MODE_CONTROL_SELECTORS[mode].join(',')) ?? null
 }

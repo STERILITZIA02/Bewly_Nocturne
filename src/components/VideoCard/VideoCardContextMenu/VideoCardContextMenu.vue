@@ -14,10 +14,12 @@ import api from '~/utils/api'
 import { cleanBilibiliUrl, getCSRF, getUserID, openLinkToNewTab } from '~/utils/main'
 import { openLinkInBackground } from '~/utils/tabs'
 import { changeUserRelation } from '~/utils/userRelation'
+import { canFavoriteVideo } from '~/utils/videoFavoriteSelection'
 
 import type { Video } from '../types'
 import BlockUserConfirmDialog from './components/BlockUserConfirmDialog.vue'
 import DislikeDialog from './components/DislikeDialog.vue'
+import FavoriteVideoDialog from './components/FavoriteVideoDialog.vue'
 import FollowUserConfirmDialog from './components/FollowUserConfirmDialog.vue'
 import UnfollowUserConfirmDialog from './components/UnfollowUserConfirmDialog.vue'
 
@@ -139,11 +141,13 @@ const showDislikeDialog = ref<boolean>(false)
 const showBlockUserDialog = ref<boolean>(false)
 const showFollowUserDialog = ref<boolean>(false)
 const showUnfollowUserDialog = ref<boolean>(false)
+const showFavoriteDialog = ref(false)
 const showPipWindow = ref<boolean>(false)
 const loadingWebDislike = ref<boolean>(false)
 const { openIframeDrawer } = useBewlyApp()
 
 enum VideoOption {
+  Favorite,
   OpenInNewTab,
   OpenInBackground,
   OpenInCurrentTab,
@@ -171,36 +175,39 @@ function isOptionVisible(key: VideoCardContextMenuKey) {
 
 const commonOptions = computed((): OptionItem[][] => {
   let result: OptionItem[][] = [
+    canFavoriteVideo(props.video)
+      ? [{ command: VideoOption.Favorite, key: 'favorite', name: t('video_card.operation.favorite'), icon: 'i-mingcute:star-line' }]
+      : [],
     [
       ...(props.video.url
         ? [
-            { command: VideoOption.OpenInNewTab, key: 'openInNewTab' as const, name: t('video_card.operation.open_in_new_tab'), icon: 'i-solar:square-top-down-bold-duotone' },
-            { command: VideoOption.OpenInBackground, key: 'openInBackground' as const, name: t('video_card.operation.open_in_background'), icon: 'i-solar:square-top-down-bold-duotone' },
-            { command: VideoOption.OpenInNewWindow, key: 'openInNewWindow' as const, name: t('video_card.operation.open_in_new_window'), icon: 'i-solar:maximize-square-3-bold-duotone' },
-            { command: VideoOption.OpenInCurrentTab, key: 'openInCurrentTab' as const, name: t('video_card.operation.open_in_current_tab'), icon: 'i-solar:square-top-down-bold-duotone' },
-            { command: VideoOption.OpenInDrawer, key: 'openInDrawer' as const, name: t('video_card.operation.open_in_drawer'), icon: 'i-solar:archive-up-minimlistic-bold-duotone' },
+            { command: VideoOption.OpenInNewTab, key: 'openInNewTab' as const, name: t('video_card.operation.open_in_new_tab'), icon: 'i-solar:square-top-down-linear' },
+            { command: VideoOption.OpenInBackground, key: 'openInBackground' as const, name: t('video_card.operation.open_in_background'), icon: 'i-solar:square-top-down-linear' },
+            { command: VideoOption.OpenInNewWindow, key: 'openInNewWindow' as const, name: t('video_card.operation.open_in_new_window'), icon: 'i-solar:maximize-square-3-linear' },
+            { command: VideoOption.OpenInCurrentTab, key: 'openInCurrentTab' as const, name: t('video_card.operation.open_in_current_tab'), icon: 'i-solar:square-top-down-linear' },
+            { command: VideoOption.OpenInDrawer, key: 'openInDrawer' as const, name: t('video_card.operation.open_in_drawer'), icon: 'i-solar:archive-up-minimlistic-linear' },
           ]
         : []),
     ],
 
     [
       ...(props.video.url
-        ? [{ command: VideoOption.CopyVideoLink, key: 'copyVideoLink' as const, name: t('video_card.operation.copy_video_link'), icon: 'i-solar:copy-bold-duotone' }]
+        ? [{ command: VideoOption.CopyVideoLink, key: 'copyVideoLink' as const, name: t('video_card.operation.copy_video_link'), icon: 'i-solar:copy-linear' }]
         : []),
       ...(settings.value.enableCleanShareLink && props.video.url
-        ? [{ command: VideoOption.CopyCleanVideoLink, key: 'copyCleanVideoLink' as const, name: t('video_card.operation.copy_clean_video_link'), icon: 'i-solar:link-minimalistic-2-bold-duotone' }]
+        ? [{ command: VideoOption.CopyCleanVideoLink, key: 'copyCleanVideoLink' as const, name: t('video_card.operation.copy_clean_video_link'), icon: 'i-solar:link-minimalistic-2-linear' }]
         : []),
       ...(props.video.bvid
-        ? [{ command: VideoOption.CopyBVNumber, key: 'copyBVNumber' as const, name: t('video_card.operation.copy_bv_number'), icon: 'i-solar:copy-bold-duotone' }]
+        ? [{ command: VideoOption.CopyBVNumber, key: 'copyBVNumber' as const, name: t('video_card.operation.copy_bv_number'), icon: 'i-solar:copy-linear' }]
         : []),
       ...(props.video.id
-        ? [{ command: VideoOption.CopyAVNumber, key: 'copyAVNumber' as const, name: t('video_card.operation.copy_av_number'), icon: 'i-solar:copy-bold-duotone' }]
+        ? [{ command: VideoOption.CopyAVNumber, key: 'copyAVNumber' as const, name: t('video_card.operation.copy_av_number'), icon: 'i-solar:copy-linear' }]
         : []),
     ],
 
     [
       ...(props.video.cover
-        ? [{ command: VideoOption.ViewTheOriginalCover, key: 'viewOriginalCover' as const, name: t('video_card.operation.view_the_original_cover'), icon: 'i-solar:gallery-minimalistic-bold-duotone' }]
+        ? [{ command: VideoOption.ViewTheOriginalCover, key: 'viewOriginalCover' as const, name: t('video_card.operation.view_the_original_cover'), icon: 'i-solar:gallery-minimalistic-linear' }]
         : []),
     ],
   ]
@@ -220,12 +227,12 @@ const commonOptions = computed((): OptionItem[][] => {
 
     if (isFollowed) {
       result.push([
-        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-bold-duotone' },
+        { command: VideoOption.UnfollowUser, key: 'followUser', name: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-linear' },
       ])
     }
     else {
       result.push([
-        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-solar:user-plus-bold-duotone' },
+        { command: VideoOption.FollowUser, key: 'followUser', name: t('video_card.operation.follow_user'), icon: 'i-solar:user-plus-linear' },
       ])
     }
   }
@@ -233,14 +240,14 @@ const commonOptions = computed((): OptionItem[][] => {
   // 添加拉黑用户选项；缺少作者 mid 时隐藏，避免点击后发出无效请求。
   if (authorMid) {
     result.push([
-      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-solar:user-block-bold-duotone', color: 'text-$bew-error-color' },
+      { command: VideoOption.BlockUser, key: 'blockUser', name: t('video_card.operation.block_user'), icon: 'i-solar:user-block-linear', color: 'text-$bew-error-color' },
     ])
   }
 
   if (getVideoType() === 'bangumi' || getVideoType() === 'live') {
     result = result.map((group) => {
       return group.filter((opt) => {
-        return opt.command !== VideoOption.CopyBVNumber && opt.command !== VideoOption.CopyAVNumber && opt.command !== VideoOption.CopyCleanVideoLink && opt.command !== VideoOption.ViewThisUserChannel
+        return opt.command !== VideoOption.Favorite && opt.command !== VideoOption.CopyBVNumber && opt.command !== VideoOption.CopyAVNumber && opt.command !== VideoOption.CopyCleanVideoLink && opt.command !== VideoOption.ViewThisUserChannel
       })
     })
   }
@@ -249,9 +256,9 @@ const commonOptions = computed((): OptionItem[][] => {
 
 const menuGroups = computed(() => {
   const recommendation = getVideoType() === 'appRcmd'
-    ? (props.video.threePointV2 ?? []).filter(option => option.type === ThreePointV2Type.Dislike && isOptionVisible('notInterested')).filter((option, index, all) => all.findIndex(item => item.type === option.type) === index).map(option => ({ key: `app:${option.type}`, name: t('video_card.operation.not_interested'), icon: 'i-solar:confounded-circle-bold-duotone', color: undefined, run: () => openAppDislikeDialog() }))
+    ? (props.video.threePointV2 ?? []).filter(option => option.type === ThreePointV2Type.Dislike && isOptionVisible('notInterested')).filter((option, index, all) => all.findIndex(item => item.type === option.type) === index).map(option => ({ key: `app:${option.type}`, name: t('video_card.operation.not_interested'), icon: 'i-solar:confounded-circle-linear', color: undefined, run: () => openAppDislikeDialog() }))
     : getVideoType() === 'rcmd'
-      ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-solar:confounded-circle-bold-duotone', color: undefined, run: () => handleMoreCommand(option.id) }))
+      ? videoOptions.value.map(option => ({ key: `web:${option.id}`, name: option.name, icon: 'i-solar:confounded-circle-linear', color: undefined, run: () => handleMoreCommand(option.id) }))
       : []
   return [recommendation, ...commonOptions.value.map(group => group.map(option => ({ ...option, run: () => handleCommonCommand(option.command) })))].filter(group => group.length)
 })
@@ -350,6 +357,10 @@ function handleMoreCommand(command: number) {
 
 function handleCommonCommand(command: VideoOption) {
   switch (command) {
+    case VideoOption.Favorite:
+      showFavoriteDialog.value = true
+      showContextMenu.value = false
+      break
     case VideoOption.OpenInNewTab:
       openLinkToNewTab(props.video.url!)
       handleClose()
@@ -443,7 +454,8 @@ function handleClose() {
 }
 
 function handleViewportResize() {
-  handleClose()
+  if (!showFavoriteDialog.value)
+    handleClose()
 }
 
 function handleReopen() {
@@ -554,6 +566,8 @@ const unfollowUser = () => writeRelation(2)
       @click="handleClose"
       @click.right.prevent.stop="handleReopen"
     />
+
+    <FavoriteVideoDialog v-if="showFavoriteDialog" :video="video" @close="handleClose" />
 
     <DislikeDialog
       v-if="showDislikeDialog"

@@ -116,6 +116,7 @@ export const defaultGridColumns: GridColumnsConfig = {
 }
 
 export const videoCardContextMenuKeys = [
+  'favorite',
   'notInterested',
   'notInterestedUploader',
   'openInNewTab',

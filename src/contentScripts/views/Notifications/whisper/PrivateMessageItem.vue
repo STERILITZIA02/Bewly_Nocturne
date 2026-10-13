@@ -280,7 +280,7 @@ const deliveryLabel = computed(() => {
   place-items: center;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   background: var(--bew-fill-2);
   border-radius: 50%;
@@ -307,7 +307,7 @@ const deliveryLabel = computed(() => {
   overflow: hidden;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   text-overflow: ellipsis;
   white-space: nowrap;

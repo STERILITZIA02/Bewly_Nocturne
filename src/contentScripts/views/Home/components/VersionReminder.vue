@@ -158,7 +158,7 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-trigger__text strong {
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-bold);
+  font-weight: var(--bew-font-weight-medium);
 }
 
 .version-reminder-trigger__text small {
@@ -236,7 +236,7 @@ function acknowledgeCurrentVersion() {
 
 .version-reminder-dialog__link strong {
   font-size: var(--bew-font-size-body);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-body);
 }
 

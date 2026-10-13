@@ -14,6 +14,7 @@ import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
 import { releaseMediaElement } from '~/utils/mediaResources'
 import { createPreviewMediaSession } from '~/utils/previewMediaSession'
+import { normalizePreviewPosition } from '~/utils/videoPreviewProgress'
 
 import type { Video } from '../types'
 
@@ -23,7 +24,7 @@ interface Props {
   removed: boolean
   isHover: boolean
   previewVideoUrl: string
-  videoElement: HTMLVideoElement | null
+  previewIdentity?: string
   previewCurrentTime?: number | null
   isInWatchLater: boolean | undefined
   showWatchLater: boolean
@@ -48,7 +49,7 @@ interface Props {
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
-  previewProgress: [time: number]
+  previewProgress: [time: number, identity: string]
   toggleWatchLater: []
   undo: []
   previewError: []
@@ -78,19 +79,17 @@ const showVideoControls = computed(() => shouldEnableVideoControls.value
   && (props.isHover || isPreviewFullscreen.value || isScrubbing.value))
 
 let previewSetupGeneration = 0
+let progressOwner: { video: HTMLVideoElement, generation: number, identity: string } | undefined
 
-function restorePreviewPosition(event: Event) {
-  const video = event.target as HTMLVideoElement
-  const time = props.previewCurrentTime
-  if (video !== videoRef.value || props.video?.roomid || !time || !Number.isFinite(video.duration))
+function recordPreviewPosition() {
+  const owner = progressOwner
+  if (!owner || owner.generation !== previewSetupGeneration || owner.identity !== props.previewIdentity
+    || props.video?.roomid || owner.video.readyState === 0) {
     return
-  video.currentTime = Math.min(time, Math.max(0, video.duration - 0.1))
-}
-
-function recordPreviewPosition(event: Event) {
-  const video = event.target as HTMLVideoElement
-  if (video === videoRef.value && !props.video?.roomid && video.readyState > 0 && Number.isFinite(video.currentTime))
-    emit('previewProgress', video.currentTime)
+  }
+  const time = normalizePreviewPosition(owner.video.currentTime, owner.video.duration, owner.video.ended)
+  if (time !== null)
+    emit('previewProgress', time, owner.identity)
 }
 
 const previewInteractionEvents = computed(() => ({
@@ -113,7 +112,9 @@ function resetVideoElement(videoEl: HTMLVideoElement) {
 }
 
 function stopPreview(videoEl: HTMLVideoElement) {
+  recordPreviewPosition()
   previewSetupGeneration++
+  progressOwner = undefined
   cleanupPlayers()
   resetPreviewScrub()
   resetVideoElement(videoEl)
@@ -183,6 +184,23 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
 
   cleanupPlayers()
   resetVideoElement(videoEl)
+  const identity = props.previewIdentity || ''
+  progressOwner = { video: videoEl, generation, identity }
+  const current = () => identity === props.previewIdentity && isPreviewSetupCurrent(generation, url, videoEl)
+  const save = () => {
+    if (current())
+      recordPreviewPosition()
+  }
+  videoEl.addEventListener('loadedmetadata', () => {
+    if (!current() || !identity || props.video?.roomid)
+      return
+    const time = props.previewCurrentTime
+    const restored = time == null ? null : normalizePreviewPosition(time, videoEl.duration)
+    if (restored !== null)
+      videoEl.currentTime = restored
+  }, { once: true, signal: streamSession.signal })
+  for (const event of ['timeupdate', 'pause', 'ended'])
+    videoEl.addEventListener(event, save, { signal: streamSession.signal })
   isPreviewLoading.value = true
   const onFrameReady = () => {
     if (isPreviewSetupCurrent(generation, url, videoEl) && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)
@@ -316,7 +334,8 @@ async function setupPreviewVideo(url: string, videoEl: HTMLVideoElement, generat
 }
 
 // Watch for preview URL and videoRef changes
-watch([() => props.previewVideoUrl, () => props.isHover, videoRef], ([url, isHover, videoEl], [, , previousVideo]) => {
+watch([() => props.previewVideoUrl, () => props.isHover, videoRef, () => props.previewIdentity], ([url, isHover, videoEl], [, , previousVideo]) => {
+  recordPreviewPosition()
   if (!videoEl) {
     cleanupPlayers()
     if (previousVideo)
@@ -339,7 +358,7 @@ watch([() => props.previewVideoUrl, () => props.isHover, videoRef], ([url, isHov
     console.error('Failed to set up video preview:', error)
     failPreviewSetup(generation, url, videoEl)
   })
-})
+}, { flush: 'post' })
 
 // Cleanup on unmount
 onMounted(() => {
@@ -348,7 +367,9 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  recordPreviewPosition()
   previewSetupGeneration++
+  progressOwner = undefined
   document.removeEventListener('fullscreenchange', syncPreviewFullscreenState)
   document.removeEventListener('webkitfullscreenchange', syncPreviewFullscreenState as EventListener)
   disposeSwipeSeek()
@@ -420,14 +441,14 @@ onBeforeUnmount(() => {
           v-on="previewInteractionEvents"
         >
           <video
+            :key="previewIdentity"
             ref="videoRef"
             autoplay
             muted
             :draggable="false" :controls="showVideoControls && !isPreviewLoading"
             w-full
             h-full
-            class="video-card-preview__video" @loadedmetadata="restorePreviewPosition"
-            @timeupdate="recordPreviewPosition"
+            class="video-card-preview__video" @click.capture="recordPreviewPosition"
           />
 
           <div
@@ -780,7 +801,7 @@ onBeforeUnmount(() => {
 }
 
 .video-card-cover-stats__item--duration {
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   margin-left: auto;
   font-size: var(--video-card-stats-font-size, 0.75rem);
   /* 时长固定在最右侧，不收缩 */

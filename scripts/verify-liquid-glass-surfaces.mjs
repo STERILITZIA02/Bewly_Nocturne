@@ -330,6 +330,7 @@ export function registerLiquidGlassSurfaceChecks(check, { Vue, compileComponent,
     player.innerHTML = '<div><div class="input-host"><div class="bpx-player-sending-bar"><input value="danmaku draft"><button class="bpx-player-dm-btn-send">Send</button></div></div></div>'
     const state = { playerEl: player }
     const binding = await loadSourceModule('../src/utils/bewlyWidescreen/danmaku.ts', {
+      '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),
       '~/utils/bewlyWidescreen/constants': await import('../src/utils/bewlyWidescreen/constants'),
       '~/utils/bewlyWidescreen/geometry': { resetControlsLayout() {}, schedulePlayerResizeSync() {}, syncControlsGlassGeometry() {} },
       '~/utils/bewlyWidescreen/labels': { t: key => key },

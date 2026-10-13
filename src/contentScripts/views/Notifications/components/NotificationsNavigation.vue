@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
-import WheelSelector from '~/components/WheelSelector.vue'
+import LibrarySidebarHeading from '~/components/LibrarySidebarHeading.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 
 import type { NotificationSectionDefinition, NotificationView } from '../notificationSections'
@@ -48,11 +48,12 @@ function select(value: string) {
 
 <template>
   <nav class="notifications-navigation" :aria-label="t('notifications.navigation_aria')">
-    <WheelSelector
+    <LibrarySidebarHeading
       :model-value="modelValue"
-      :items="items"
-      :label="t('notifications.navigation_aria')"
-      panel-id="notifications-outlet"
+      :options="items"
+      :title="t('notifications.navigation_aria')"
+      content-id="notifications-outlet"
+      hide-title
       @update:model-value="select"
     />
   </nav>
@@ -63,8 +64,10 @@ function select(value: string) {
   width: 100%;
   min-width: 0;
   height: var(--bew-sidebar-heading-height);
-  // The wheel keeps a 4px focus-ring inset; its text aligns with the top-bar edge.
-  padding: 0 calc(var(--bew-top-bar-inline-padding) - var(--bew-space-1)) var(--bew-space-2);
   box-sizing: border-box;
+}
+.notifications-navigation :deep(.library-sidebar-heading) {
+  // Library rails supply inline padding; the message rail has none.
+  margin-inline: 0;
 }
 </style>

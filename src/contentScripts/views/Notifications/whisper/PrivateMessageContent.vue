@@ -477,7 +477,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
 
 .private-message-content__card-copy strong {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
 }
 
@@ -534,7 +534,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
   padding: var(--bew-space-1) var(--bew-space-2);
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   background: var(--bew-fill-1);
@@ -607,7 +607,7 @@ a.private-message-content__card:not(:has(.private-message-content__cover)):hover
 
 .private-message-content__unknown a {
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
 }
 </style>

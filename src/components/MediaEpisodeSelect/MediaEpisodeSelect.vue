@@ -219,7 +219,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
   min-height: var(--bew-control-height);
   border: 1px solid transparent;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   user-select: none;
   transition: background-color var(--bew-duration-fast) var(--bew-ease-standard);

@@ -52,7 +52,7 @@
   // Compact media rows shared by Favorites, History, Moments and Watch Later pops.
   --bew-media-pop-title-font-size: var(--bew-font-size-title);
   --bew-media-pop-title-line-height: var(--bew-line-height-title);
-  --bew-media-pop-title-font-weight: var(--bew-font-weight-semibold);
+  --bew-media-pop-title-font-weight: var(--bew-font-weight-medium);
   // #endregion
 
   // Icon-font glyphs use their own scale and must not be mistaken for text.
@@ -107,6 +107,7 @@
   --bew-card-row-gap: var(--bew-space-8);
   --bew-card-inset-radius: var(--bew-radius-md);
   --bew-card-avatar-size: var(--bew-space-8);
+  --bew-card-sample-min-width: calc(var(--bew-space-10) * 4);
   --bew-cover-overlay-inset: var(--bew-space-2);
   --bew-cover-action-size: var(--bew-icon-button-size-md);
   --bew-cover-scrim: rgb(0 0 0 / 56%);
@@ -123,7 +124,9 @@
   // Keep the outer contour offset by the actual inset from the inner controls.
   --bew-library-filter-radius: calc(var(--bew-interactive-radius) + var(--bew-library-filter-padding));
   --bew-notifications-list-max-width: 360px;
-  --bew-messages-sidebar-width: clamp(256px, 24vw, var(--bew-notifications-list-max-width));
+  --bew-sidebar-base-width: calc(clamp(256px, 24vw, var(--bew-notifications-list-max-width)) * 0.9);
+  --bew-sidebar-message-width: calc(var(--bew-sidebar-base-width) * 1.2);
+  --bew-messages-sidebar-width: var(--bew-sidebar-base-width);
   --bew-message-composer-min-width: 256px;
   --bew-message-input-height: calc(var(--bew-control-height) + var(--bew-space-2));
   --bew-message-icon-hover: #000;
@@ -134,6 +137,7 @@
   --bew-message-search-highlight: color-mix(in srgb, var(--bew-theme-color) 24%, transparent);
   // Leave room for a heading-height selection between the compact adjacent rows.
   --bew-wheel-label-size: var(--bew-font-size-display);
+  --bew-wheel-label-weight: var(--bew-font-weight-medium);
   --bew-message-share-width: calc(var(--bew-space-12) * 8);
   --bew-wheel-label-line-height: 32px;
   --bew-wheel-radius: calc((var(--bew-wheel-label-line-height) + var(--bew-space-2)) * 2);
@@ -141,10 +145,10 @@
   --bew-sidebar-heading-height: calc(var(--bew-wheel-viewport-height) + var(--bew-space-2));
   --bew-sidebar-section-gap: var(--bew-space-3);
   --bew-sidebar-inline-padding: var(--bew-space-3);
-  --bew-sidebar-action-padding: min(var(--bew-space-3), var(--bew-top-bar-inline-padding));
-  --bew-sidebar-action-inset: calc(
-    var(--bew-top-bar-inline-padding) - var(--bew-sidebar-inline-padding) - var(--bew-sidebar-action-padding)
-  );
+  // A small inset from the search edge, bounded by its capsule corner radius.
+  --bew-sidebar-label-inset: min(var(--bew-space-2), calc(var(--bew-control-height) / 2));
+  --bew-sidebar-action-padding: var(--bew-space-2);
+  --bew-sidebar-action-inset: calc(var(--bew-sidebar-label-inset) - var(--bew-sidebar-action-padding));
   --bew-sidebar-action-hover: rgb(0 0 0 / 6%);
   --bew-wheel-text-active: var(--bew-text-1);
   --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
@@ -162,6 +166,7 @@
   --bew-layout-sidebar-sticky-top: 150px;
   --bew-layout-sidebar-viewport-offset: 140px;
   --bew-layout-dialog-width: 420px;
+  --bew-dialog-compact-width: 440px;
   --bew-settings-label-min-width: 160px;
   --bew-dialog-action-min-width: 120px;
   --bew-dialog-grid-item-min-width: 260px;
@@ -244,8 +249,7 @@
   --bew-control-icon-size: 16px;
   --bew-control-label-size: var(--bew-font-size-control);
   --bew-control-label-line-height: var(--bew-line-height-control);
-  --bew-control-label-weight: var(--bew-font-weight-semibold);
-  --bew-control-brand-label-weight: var(--bew-font-weight-bold);
+  --bew-control-label-weight: var(--bew-font-weight-medium);
   --bew-control-background: var(--bew-elevated-solid);
   --bew-control-selected-background: color-mix(in srgb, var(--bew-text-1) 9%, var(--bew-content-solid));
   --bew-control-background-white: var(--bew-top-bar-solid-background-force-white);
@@ -555,7 +559,8 @@
   :host,
   :root {
     --bew-top-bar-inline-padding: var(--bew-space-2);
-    --bew-messages-sidebar-width: 40vw;
+    --bew-sidebar-base-width: calc(40vw * 0.9);
+    --bew-sidebar-message-width: calc(var(--bew-sidebar-base-width) * 1.2);
     --bew-sidebar-section-gap: var(--bew-space-2);
     --bew-sidebar-inline-padding: var(--bew-space-2);
   }

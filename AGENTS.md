@@ -96,18 +96,19 @@ pnpm typecheck
 - 2026-10-11 通知卡片紧凑化：四类 Native Feed 与骨架共用 `.native-notification-grid`，可用内容宽度达到 880px 时由 `MasonryGrid.vue` 按内容自然高度放入较短的一列，窄屏单列；DOM 保持时间顺序，分页追加不重分配已有卡片，ResizeObserver 与帧任务随组件卸载清理。引用与正文跨满卡片内宽，引用左侧与头像齐平，头像及标题区垂直居中；通知外层不再限制 960px 居中宽度。引用底色使用独立语义 token，暗色/OLED 向深色收敛；卡片与私信气泡共用弱化后的表面细边框，自己气泡仍保持不透明主题色。图片类气泡外圆角 16px、媒体 8px、留白 8px，保留双方气泡的指定直角。骨架同步列数、头像、正文与引用结构，点赞无正文占位、系统通知保留来源行；分页、已读与请求生命周期不因排布变化而改动。
 
 - 基础界面文字限定为：caption `12/16px`、control `13/18px`、body `15/24px`、title `15/22px`、heading `20/28px`，优先使用对应的 `--bew-font-size-*` 和 `--bew-line-height-*` token。
-- 品牌锁定字等极少量展示文字使用 `--bew-font-size-display`，比分等大号数据使用 `--bew-font-size-data/data-emphasis`；图标字体只使用 `--bew-icon-size-sm/md/lg/xl`。这些不参与正文层级，也不要用任意字号模拟。
+- 品牌锁定字等极少量展示文字使用 `--bew-font-size-display`，比分等大号数据使用 `--bew-font-size-data/data-emphasis`；图标字体只使用 `--bew-icon-size-xs/sm/md/lg/xl`。caption 邻接图标使用 xs（14px），control 使用 sm（16px）。
 - 字重仅使用 `400/500/600/700` 对应的 `--bew-font-weight-regular/medium/semibold/bold`；不要新增 `650`、裸写 `bold` 或其他中间值。
-- 正文默认 `400`，次要强调和普通按钮用 `500`，标签/卡片标题/区块标题用 `600`，`700` 仅用于品牌文字、强标题和少量关键数字。
+- 2026-10-14 字体规范覆盖冻结页面：正文、作者元信息与帮助文字用 `400`；卡片/列表标题、人名、控件、徽标与滚筒用 `500`；区块/弹窗/页面标题、内联 strong/b 和关键数字用 `600`；`700` 仅用于品牌字标。滚筒与静态侧栏标题共用 `--bew-wheel-label-weight`。不改用户明确加粗的图标（包括 ChevronIcon 的 2.5px）或既有页面布局。
+- Bewly 默认使用 `--bew-fonts-ui` 多字重系统字体栈并禁止合成粗体；默认模式下原生页保留原站字体，推荐/自定义模式继续沿用既有字体覆盖。Bewly 正文默认比例数字，只有计数、时间、进度和统计按需使用 tabular-nums；不在中文上加字距。图标默认线性，Tabler 为 1.75px、Solar 使用 linear，激活状态可保留实心；禁止笼统覆盖用户指定描边的 SVG。
 - 页面主标题复用 `.bew-page-heading`，不要在页面里重复组合字号、字重和行高。
 - 同组标签的未选中与选中状态保持相同字重，依靠颜色、背景和液态指示器表达状态，避免切换字重导致文字宽度和指示器跳动。
 - 新样式不要混用无语义的 px/rem 字号；确需特殊字号时应先判断能否扩充语义 token。
 
 ### 紧凑控件
 
-- 2026-10-12 侧栏独立单行操作：卡片、分段控件之外仅含图标与文字的整行按钮复用 `.library-sidebar-action` 与 `sidebarAction.scss`。按钮命中区域等宽居中，内容靠左，首个图标或文字的左边缘与滚筒选中标题对齐；宽度和内距通过 `--bew-sidebar-action-inset/padding` 从标题实际内距计算。常态透明无边框，hover 在亮色/暗色略加深、OLED 略提亮；保留语义警告色、禁用和键盘焦点。卡片内部操作、播放全部卡片、分段筛选不套用此规范。
+- 2026-10-12 侧栏独立单行操作：卡片、分段控件之外仅含图标与文字的整行按钮复用 `.library-sidebar-action` 与 `sidebarAction.scss`。按钮命中区域等宽居中，内容靠左，首个图标或文字与滚筒标题对齐（2026-10-14 修订）；共同基线取侧栏内距加 `--bew-sidebar-label-inset`，相对搜索框左缘轻微内收 8px，且不超过搜索框圆角半径，不再跟随顶栏 Logo 内距。命中面通过 `--bew-sidebar-action-inset/padding` 向基线两侧对称延展。常态透明无边框，hover 在亮色/暗色略加深、OLED 略提亮；保留语义警告色、禁用和键盘焦点。卡片内部操作、播放全部卡片、分段筛选不套用此规范。
 
-- 默认规格：外层高 `36px`、padding `4px`、gap `4px`、内部项高 `28px`、文字 `13/18px 600`、图标 `16px`。
+- 默认规格：外层高 `36px`、padding `4px`、gap `4px`、内部项高 `28px`、文字 `13/18px 500`、图标 `16px`。
 - 普通文字项水平 padding 为 `12px`；页面主标签使用 `.bew-segment-control__item--wide` 的 `16px`；纯图标项使用 `.bew-segment-control__item--icon`。
 - 必须覆盖 default、hover、focus-visible、active、disabled 状态；不要移除键盘焦点反馈。
 - `src/styles/main.scss` 提供全局 `focus-visible` 兜底；2026-10-10 起全项目选择、展开、聚焦与编辑描边统一使用中性 1px 的 `--bew-focus-ring` / `--bew-focus-ring-color` / `--bew-focus-shadow`，不再绘制主题色粗 outline、UnoCSS ring 或外扩阴影环。Input、Select、Slider、布局编辑器以及 MAIN world / 原生页注入样式均遵循此规则；不得通过关闭键盘焦点反馈来实现。组件只有在提供等价反馈时才能覆盖或移除焦点样式。
@@ -126,6 +127,7 @@ pnpm typecheck
 - 圆角使用 `--bew-radius-sm/half/md/lg/xl/2xl/full`（`4/6/8/12/16/24px/full`），不要直接新增 `5/7/10/20/999px` 等一次性值。
 - 优先使用语义 token：卡片 `--bew-card-radius`、媒体封面 `--bew-media-radius`、普通面板 `--bew-panel-radius`、Dialog/设置窗口等大型模态容器 `--bew-modal-radius`、顶栏 Pop/浮层 `--bew-popover-radius`、普通交互项 `--bew-interactive-radius`、徽标/胶囊 `--bew-badge-radius`。
 - 视频卡片、动态卡片和同层级内容卡片默认使用 `12px`；内部按钮/菜单项通常使用 `8px`；小型状态块和骨架条使用 `4–6px`；头像等真实圆形可使用 `50%`。
+- 2026-10-13 封面下方信息区：左右内容边界须内收至封面圆角的直线切点，底部保留同等留白，标题、作者、元信息、操作与骨架均遵循。复用 `contentCard.scss` 的 `under-cover`，内收值直接取对应媒体圆角（独立封面 `--bew-media-radius`，内嵌媒体 `--bew-card-inset-radius`），不要复制数值或新增运行时测量。横向图文排版不套用纵向内收；可截断文本的元素不要添加底部 padding，以免破坏行数裁切，使用外层信息区或 margin。
 - 父子元素需要共享裁切轮廓时，子元素使用 `inherit`；不要通过 `calc(父圆角 - 任意像素)` 猜测内层圆角。
 - 同一个 Pop、卡片或媒体容器的四角必须来自同一语义 token，局部直角仅允许用于明确的相邻拼接结构。
 - 胶囊与面板之间需要动画时，不要直接从 `--bew-radius-full` 插值；起始值应使用胶囊真实几何半径，结束值使用语义圆角，避免大数值被持续裁切后在动画末尾突然跳变。

@@ -30,6 +30,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 
 <style scoped lang="scss">
 @use "./title";
+@use "../../styles/contentCard";
 
 .bangumi-card-skeleton {
   display: block;
@@ -52,16 +53,20 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 }
 
 .bangumi-card-skeleton--horizontal .bangumi-card-skeleton__media {
-  width: 170px !important;
-  flex: 0 0 170px;
+  width: min(170px, 42%) !important;
+  flex: none;
 }
 
 .bangumi-card-skeleton__content {
   --uno: "gap-2";
   display: flex;
   flex-direction: column;
-  width: 100%;
+  min-width: 0;
+  flex: 1;
   margin-top: var(--bew-card-stack-gap);
+}
+.bangumi-card-skeleton:not(.bangumi-card-skeleton--horizontal) .bangumi-card-skeleton__content {
+  @include contentCard.under-cover;
 }
 .bangumi-card-skeleton--horizontal .bangumi-card-skeleton__content {
   margin-top: 0;

@@ -95,6 +95,8 @@ const content = computed(() => {
 </template>
 
 <style lang="scss" scoped>
+@use "../../../styles/contentCard";
+
 .video-card-info {
   --bew-video-card-meta-row-height: max(var(--bew-space-6), var(--bew-meta-line-height));
   display: flex;
@@ -103,6 +105,9 @@ const content = computed(() => {
   min-width: 0;
   margin-top: var(--bew-card-stack-gap);
   color: var(--bew-text-2);
+}
+.video-card-info:not(.video-card-info--horizontal) {
+  @include contentCard.under-cover;
 }
 .video-card-info--horizontal {
   width: 100%;
@@ -119,7 +124,7 @@ const content = computed(() => {
   margin: 0;
   min-height: calc(var(--bew-title-line-height) * 2);
   color: var(--bew-text-1);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-title-line-height);
 }
 .video-card-info-title--skeleton {

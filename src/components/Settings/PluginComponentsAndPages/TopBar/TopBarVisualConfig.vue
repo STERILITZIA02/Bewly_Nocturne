@@ -270,7 +270,7 @@ function toggleChannel(value: string) {
       data-setting-id="navigation.topBar.pinnedChannels"
       :title="$t('settings.group_topbar_pinned_channels')"
       :desc="$t('settings.topbar_pinned_channels_desc')"
-      icon="i-tabler:pin-filled"
+      icon="i-tabler:pin"
       collapsible
       default-collapsed
     >
@@ -578,7 +578,7 @@ function toggleChannel(value: string) {
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   pointer-events: none;
 }

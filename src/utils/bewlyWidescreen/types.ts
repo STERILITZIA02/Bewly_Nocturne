@@ -83,6 +83,7 @@ export interface BewlyWidescreenState {
   danmakuPendingSource?: HTMLElement
   danmakuSemanticsCleanup?: () => void
   danmakuSettingsCleanup?: () => void
+  danmakuPopoverPositionSync?: () => void
   danmakuSemanticsSource?: HTMLElement
   danmakuSourceHost?: HTMLElement
   danmakuGlass?: HTMLElement

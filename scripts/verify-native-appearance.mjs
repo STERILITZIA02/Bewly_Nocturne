@@ -2612,6 +2612,7 @@ export function registerNativeAppearanceChecks(check, { Vue, compileComponent, f
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/logic': { settings },
       '~/utils/iframeMessage': { getParentMessageData: () => null },
+      '~/utils/iframeDocument': await import('../src/utils/iframeDocument'),
       '~/utils/main': { isVideoPlaybackPage: () => false, setCookie() { cookieWrites++ } },
     }, { ...Vue, CustomEvent, window: { ...window, location: window.location, addEventListener() {}, removeEventListener() {}, dispatchEvent() {}, setInterval() {
       intervals++

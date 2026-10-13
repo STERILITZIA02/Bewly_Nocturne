@@ -424,6 +424,8 @@ export function registerNotificationUIChecks(check, { Vue, compileComponent, flu
       './whisper/WhisperWorkspace.vue': { default: blank },
     }, { renderTemplate: false, globals: { URL } })
     const navigation = await loadSourceModule('../src/utils/searchNavigation.ts', {
+      '~/composables/useDark': { useDark: () => assert.fail('a top-level search must not access an iframe channel') },
+      '~/utils/iframeSearch': await import('../src/utils/iframeSearch'),
       '~/composables/useRouteState': route,
       '~/enums/appEnums': enums,
       '~/logic': { settings },

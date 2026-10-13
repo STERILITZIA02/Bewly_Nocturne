@@ -6,7 +6,7 @@ import { waitWithSignal } from '~/utils/abort'
 import api from '~/utils/api'
 import { resolvePgcEpisodeVideoIds } from '~/utils/pgcEpisode'
 import { getPlaybackNavigationKey, parsePlaybackTabUrl } from '~/utils/playbackTab'
-import { getPlayerModeContainer, getVideoElement } from '~/utils/playerMedia'
+import { getVideoElement, isPlayerAdvertisement } from '~/utils/playerMedia'
 import { isNativeVideoComponentReady, readNativePlaybackEpisodeId } from '~/utils/videoMetadataBridge'
 import type { PlaybackHistoryIdentity } from '~/utils/videoPlaybackHistory'
 import { createVideoPlaybackHistory } from '~/utils/videoPlaybackHistory'
@@ -24,12 +24,7 @@ export function setupVideoWatchProgress() {
     navigation: () => navigation,
     epoch: () => videoVisitHistoryEpoch.value,
     eligible: () => settings.value.showVideoWatchedBadge && Boolean(navigation),
-    advertisement() {
-      const root = getPlayerModeContainer(media)
-      return !!root && (root.classList.contains('bpx-state-ad') || root.getAttribute('data-ad') === 'true'
-        || Array.from(root.querySelectorAll('.bpx-player-ads,.bilibili-player-ads,.bpx-player-ad-wrap,.bpx-player-adwrap,.bpx-player-pic-ad,.bpx-player-ads-wrap,.bpx-player-ads-skip,.bpx-player-btn-skip'))
-          .some(node => node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden'))
-    },
+    advertisement: () => isPlayerAdvertisement(media),
     async identity(video, signal) {
       if (isNativeVideoComponentReady(video) === false)
         return

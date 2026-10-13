@@ -126,7 +126,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
     <SettingsSectionHeading
       :title="$t('settings.menu_appearance')"
       :desc="$t('settings.category_appearance_desc')"
-      icon="i-mingcute:paint-brush-fill"
+      icon="i-mingcute:paint-brush-line"
     />
 
     <SettingsItemGroup :title="$t('settings.group_visual_effects')">

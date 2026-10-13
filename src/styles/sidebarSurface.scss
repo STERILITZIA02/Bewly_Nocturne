@@ -12,6 +12,21 @@
   -webkit-backdrop-filter: none;
 }
 
+// Apply at the rail's own scoped selector. A parent-level override can tie
+// with Vue's scope attribute and lose when an async page stylesheet arrives.
+@mixin rail {
+  @include surface;
+  &.bew-sidebar-hosted {
+    position: relative;
+    height: 100%;
+    width: 100%;
+    border-inline-end: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+
 @mixin vertical-scroll {
   min-width: 0;
   overflow-x: hidden;

@@ -527,7 +527,7 @@
         white-space: nowrap;
         color: var(--bew-text-2);
         font-size: var(--bew-font-size-control);
-        font-weight: var(--bew-font-weight-semibold);
+        font-weight: var(--bew-font-weight-medium);
         line-height: var(--bew-line-height-control);
         border-radius: var(--bew-interactive-radius);
         corner-shape: var(--bew-corner-shape);
@@ -1742,7 +1742,7 @@
 
       :is(.core-value-item, .classification-item) .title {
         font-size: var(--bew-font-size-title);
-        font-weight: var(--bew-font-weight-semibold);
+        font-weight: var(--bew-font-weight-medium);
         line-height: var(--bew-line-height-title);
       }
 

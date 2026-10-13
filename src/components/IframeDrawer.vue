@@ -2,8 +2,8 @@
 import { useEventListener } from '@vueuse/core'
 
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
-import { useDark } from '~/composables/useDark'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_IFRAME_DRAWER_HOST_CLASS, IFRAME_DARK_MODE_CHANGE, IFRAME_PLAYER_CONTEXT } from '~/constants/globalEvents'
+import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_IFRAME_DRAWER_HOST_CLASS, IFRAME_PLAYER_CONTEXT } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
 import type { IframePlaybackContext } from '~/logic/iframePageState'
@@ -11,7 +11,9 @@ import type { DefaultVideoPlayerMode } from '~/logic/storage'
 import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
+import { resolveIframeExternalUrl } from '~/utils/iframeExternalUrl'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { hasNavigationModifier } from '~/utils/linkNavigation'
 import { isHomePage, isInIframe } from '~/utils/main'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 import { reportRuntimeFailure } from '~/utils/messaging'
@@ -29,7 +31,6 @@ const emit = defineEmits<{
   (e: 'close'): void
 }>()
 
-const { isDark, isOledDark } = useDark()
 const { activeDrawer, setActiveDrawer } = useBewlyApp()
 
 const show = ref(false)
@@ -52,7 +53,6 @@ let stopIframePopStateListener: (() => void) | null = null
 let stopIframeDOMContentLoadedListener: (() => void) | null = null
 let focusRetryTimer: ReturnType<typeof setTimeout> | null = null
 let focusFrame: number | null = null
-let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
 let iframeGeneration = 0
 let navigationVersion = 0
 let focusVersion = 0
@@ -109,61 +109,12 @@ const iframeStyles = computed(() => {
 
 disposers.push(useEventListener(window, 'popstate', updateIframeUrl))
 
-// 监听黑暗模式变化
-watch([isDark, isOledDark], ([newValue, newOledValue]) => {
-  try {
-    postMessageToIframe(iframeRef.value, {
-      type: IFRAME_DARK_MODE_CHANGE,
-      isDark: newValue,
-      isOledDark: newOledValue,
-    })
-  }
-  catch (error) {
-    reportRuntimeFailure('Failed to send dark mode change message to iframe', error)
-  }
-})
+const { currentHref: reportedHref } = useIframeDocumentHost(iframeRef, () => show.value && !closing && !disposed, () => show.value && activeDrawer.value === DrawerType.IframeDrawer && !closing && !disposed)
+const externalHref = computed(() => resolveIframeExternalUrl(iframeRef.value, reportedHref.value, props.url))
 
-// 监听深色模式基准颜色变化
-watch(() => settings.value.darkModeBaseColor, (newColor) => {
-  if (!isDark.value)
-    return
-  try {
-    postMessageToIframe(iframeRef.value, {
-      type: IFRAME_DARK_MODE_CHANGE,
-      isDark: isDark.value,
-      isOledDark: isOledDark.value,
-      darkModeBaseColor: newColor,
-    })
-  }
-  catch (error) {
-    reportRuntimeFailure('Failed to send dark mode base color change message to iframe', error)
-  }
-})
-
-// 监听iframe加载状态，加载完成后发送初始的黑暗模式状态
-watch(() => showIframe.value, (newValue) => {
-  if (newValue && iframeRef.value?.contentWindow) {
-    clearInitialThemeTimer()
-    const generation = iframeGeneration
-    const iframeWindow = iframeRef.value.contentWindow
-    initialThemeTimer = setTimeout(() => {
-      initialThemeTimer = null
-      if (generation !== iframeGeneration || iframeWindow !== iframeRef.value?.contentWindow)
-        return
-      try {
-        postMessageToIframe(iframeRef.value, {
-          type: IFRAME_DARK_MODE_CHANGE,
-          isDark: isDark.value,
-          isOledDark: isOledDark.value,
-          darkModeBaseColor: settings.value.darkModeBaseColor,
-        })
-      }
-      catch (error) {
-        reportRuntimeFailure('Failed to send initial dark mode state to iframe', error)
-      }
-    }, 500) // 稍长的延迟确保iframe完全加载
-  }
-})
+function syncExternalHref(event: Event) {
+  (event.currentTarget as HTMLAnchorElement).href = resolveIframeExternalUrl(iframeRef.value, reportedHref.value, props.url)
+}
 
 watch(() => props.url, async (newUrl, oldUrl) => {
   if (disposed || closing || !show.value || newUrl === oldUrl)
@@ -191,13 +142,6 @@ function clearFocusRetryTimer() {
   if (focusFrame !== null) {
     cancelAnimationFrame(focusFrame)
     focusFrame = null
-  }
-}
-
-function clearInitialThemeTimer() {
-  if (initialThemeTimer !== null) {
-    clearTimeout(initialThemeTimer)
-    initialThemeTimer = null
   }
 }
 
@@ -440,7 +384,6 @@ async function releaseIframeResources() {
   playerContextRequest = undefined
   reportedPlayerMode.value = undefined
   clearFocusRetryTimer()
-  clearInitialThemeTimer()
   cleanupIframeWindowListeners()
   showIframe.value = false
   removeTopBarClassInjected.value = false
@@ -457,10 +400,16 @@ async function releaseIframeResources() {
   await nextTick()
 }
 
-function handleOpenInNewTab() {
-  if (iframeRef.value) {
-    window.open(iframeRef.value.contentWindow?.location.href.replace(/\/$/, ''), '_blank')
-    handleClose()
+function handleOpenInNewTab(event: MouseEvent) {
+  if (closing || disposed) {
+    event.preventDefault()
+    return
+  }
+  syncExternalHref(event)
+  if (event.button === 0 && !hasNavigationModifier(event)) {
+    event.preventDefault()
+    window.open((event.currentTarget as HTMLAnchorElement).href, '_blank', 'noopener,noreferrer')
+    void handleClose()
   }
 }
 
@@ -598,19 +547,20 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
         m-auto px-4
         pointer-events-none
       >
-        <Button
+        <a
+          :href="externalHref" target="_blank" rel="noopener noreferrer"
+          class="iframe-drawer__external"
           style="
             --b-button-color: var(--bew-elevated-solid);
             --b-button-color-hover: var(--bew-elevated-solid-hover);
           "
           pointer-events-auto
+          @pointerdown="syncExternalHref" @focus="syncExternalHref" @contextmenu="syncExternalHref"
           @click="handleOpenInNewTab"
         >
-          <template #left>
-            <i i-mingcute:external-link-line />
-          </template>
+          <i i-mingcute:external-link-line />
           {{ $t('iframe_drawer.open_in_new_tab') }}
-        </Button>
+        </a>
         <Button
           v-if="!isEscPressed"
           style="
@@ -672,6 +622,20 @@ disposers.push(useEventListener(window, 'message', handleIframeMessage))
 </template>
 
 <style lang="scss" scoped>
+.iframe-drawer__external {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--bew-space-2);
+  min-height: var(--bew-control-height);
+  padding: var(--bew-space-2) var(--bew-space-3);
+  border-radius: var(--bew-interactive-radius);
+  background: var(--bew-elevated-solid);
+  color: var(--bew-text-1);
+
+  &:hover {
+    background: var(--bew-elevated-solid-hover);
+  }
+}
 .iframe-drawer-layer,
 .iframe-drawer__fullscreen {
   z-index: var(--bew-z-drawer);

@@ -24,6 +24,8 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
     const viewport = { scrollHeight: 4000, clientHeight: 800, scrollTop: 0 }
     const appState = { scrollViewportRef: Vue.ref(viewport), handlePageRefresh: Vue.ref(), handleReachBottom: Vue.ref() }
     const data = id => ({ id, publishedAt: 1, isVideo: false, author: { mid: '1' } })
+    const filterPolicy = Vue.ref({ active: false, keywords: [], passes: () => true })
+    let ended = false
     const api = { moment: {
       getMoments: async (params, options) => {
         calls.push({ params, ...options })
@@ -34,7 +36,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
         }
         if (fail)
           throw new Error('pagination fixture')
-        return { code: 0, data: { items: [data(String(calls.length))], offset: `cursor-${calls.length}`, has_more: true } }
+        return { code: 0, data: { items: [data(String(calls.length))], offset: `cursor-${calls.length}`, has_more: !ended } }
       },
       getMomentsPortal: async (_params, { signal }) => {
         if (stall) {
@@ -62,7 +64,7 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       '~/logic': { settings: Vue.ref({}) },
       '~/logic/layoutEdit': { vLayoutEditable: {} },
       '~/logic/loginStatus': { parseDedeUserID: () => 1 },
-      '~/logic/momentFilters': { momentFilterPolicy: Vue.ref({ active: false, keywords: [], passes: () => true }) },
+      '~/logic/momentFilters': { momentFilterPolicy: filterPolicy },
       '~/logic/uploaderLatestVideoTimes': { recordUploaderLatestVideoTimes: noop },
       '~/stores/topBarStore': { useTopBarStore: () => ({ userInfo: { mid: 1 }, isLogin: true, ensureWatchLaterState: noop }) },
       '~/utils/accountScope': await import('../src/utils/accountScope'),
@@ -124,6 +126,15 @@ export function registerLongListResourceChecks(check, { Vue, compileComponent, f
       await state.loadMoments()
       assert.equal(calls.length, 3, 'a hidden page cannot prefetch from stale geometry')
       hidden = false
+      filterPolicy.value.active = true
+      ended = true
+      const beforeFilteredScroll = calls.length
+      assert.equal(appState.handleReachBottom.value(), true, 'filters do not force manual pagination')
+      await flush()
+      await flush()
+      assert.equal(calls.length, beforeFilteredScroll + 1)
+      assert.equal(state.noMoreContent, true)
+      assert.equal(appState.handleReachBottom.value(), false, 'server end cannot be read again')
       stall = true
       state.refresh()
       await flush()

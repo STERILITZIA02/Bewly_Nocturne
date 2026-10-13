@@ -7,7 +7,7 @@ import type { AccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { loadFlvModule } from '~/utils/flv'
 import { loadHlsModule } from '~/utils/hls'
-import { getLivePreviewSources } from '~/utils/livePreviewSources'
+import { getLivePreviewSources, LIVE_PREVIEW_START_TIMEOUT_MS } from '~/utils/livePreviewSources'
 import { releaseMediaElement as releasePreviewVideoElement } from '~/utils/mediaResources'
 import { normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
 import { createPreviewMediaSession } from '~/utils/previewMediaSession'
@@ -26,6 +26,7 @@ export function useMomentPreviews(getAccountId: () => AccountId, options?: {
   let livePreviewSources: string[] = []
   let previewEnterTimer: ReturnType<typeof setTimeout> | undefined
   let previewReadController: AbortController | undefined
+  let previewStartTimer: ReturnType<typeof setTimeout> | undefined
   const previewSources = new Map<string, string>()
   let hoveredSource = ''
   const previewUrls = reactive<Record<string, string>>({})
@@ -61,6 +62,8 @@ export function useMomentPreviews(getAccountId: () => AccountId, options?: {
   }
 
   function cleanupLivePreviewTransports() {
+    clearTimeout(previewStartTimer)
+    previewStartTimer = undefined
     streamSession.clear()
   }
 
@@ -122,8 +125,17 @@ export function useMomentPreviews(getAccountId: () => AccountId, options?: {
     releasePreviewVideoElement(videoEl)
     previewState.value = 'loading'
     const frameReady = () => {
-      if (isLivePreviewCurrent(generation, momentId, url, videoEl) && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA)
+      if (isLivePreviewCurrent(generation, momentId, url, videoEl) && videoEl.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        clearTimeout(previewStartTimer)
+        previewStartTimer = undefined
         previewState.value = 'ready'
+      }
+    }
+    if (hoveredSource.startsWith('live:')) {
+      previewStartTimer = setTimeout(() => {
+        previewStartTimer = undefined
+        failLivePreview(generation, momentId, url, videoEl)
+      }, LIVE_PREVIEW_START_TIMEOUT_MS)
     }
     for (const name of ['loadeddata', 'canplay'])
       videoEl.addEventListener(name, frameReady, { signal: streamSession.signal })

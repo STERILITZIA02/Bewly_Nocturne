@@ -448,6 +448,8 @@ export function registerUIAuditFixChecks(check, { Vue, compileComponent, flush }
       '~/utils/homeTabConfig': await import('../src/utils/homeTabConfig'),
     })
     const navigation = await loadSourceModule('../src/utils/searchNavigation.ts', {
+      '~/composables/useDark': { useDark: () => assert.fail('a top-level search must not access an iframe channel') },
+      '~/utils/iframeSearch': await import('../src/utils/iframeSearch'),
       '~/composables/useRouteState': routeModule,
       '~/enums/appEnums': enums,
       '~/logic': { settings },

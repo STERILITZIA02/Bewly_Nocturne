@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
 
+import { useSidebarRail } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { buildOriginalNotificationUrl } from '~/utils/notificationRoute'
@@ -29,18 +30,6 @@ import type { PrivateRecipientSearchController } from './usePrivateRecipientSear
 import { privateSessionActionsKey } from './usePrivateSessionActions'
 import type { PrivateSessionsController } from './usePrivateSessions'
 
-interface ConversationDetailExposed {
-  focusHeading: () => void
-  refresh?: () => Promise<void>
-}
-
-interface ConversationListExposed {
-  focusSearch?: () => void
-  focusSession: (sessionKey: string) => void
-  getScrollTop: () => number
-  restoreScrollTop: (scrollTop: number) => void
-}
-
 const props = defineProps<{
   accountState: NotificationAccountState
   active: boolean
@@ -62,6 +51,20 @@ const emit = defineEmits<{
   (event: 'selectSession', session: DisplayPrivateSession): void
   (event: 'transientSendConfirmed', talkerId: string): void
 }>()
+
+const sidebarHost = useSidebarRail()
+
+interface ConversationDetailExposed {
+  focusHeading: () => void
+  refresh?: () => Promise<void>
+}
+
+interface ConversationListExposed {
+  focusSearch?: () => void
+  focusSession: (sessionKey: string) => void
+  getScrollTop: () => number
+  restoreScrollTop: (scrollTop: number) => void
+}
 
 const { t } = useI18n()
 const topBarStore = useTopBarStore()
@@ -334,90 +337,94 @@ defineExpose({ refresh })
       'whisper-workspace--solid': settings.disableFrostedGlass,
     }"
   >
-    <aside
-      class="whisper-workspace__sessions conversation-list-card"
-      data-top-bar-scroll-ignore
-      :aria-busy="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
-    >
-      <slot name="navigation" />
-      <div :key="topBarStore.userInfo.mid" class="whisper-workspace__list-body">
-        <ConversationListSkeleton
-          v-if="accountState === 'profile-pending'"
-          :compact="settings.privateMessageDensity === 'compact'"
-          :label="t('notifications.whisper.profile_pending')"
-        />
+    <div v-if="sidebarHost" aria-hidden="true" />
+    <Teleport :to="sidebarHost?.rail.value ?? 'body'" :disabled="!sidebarHost?.rail.value">
+      <aside
+        class="whisper-workspace__sessions conversation-list-card"
+        :class="{ 'bew-sidebar-hosted': sidebarHost }"
+        data-top-bar-scroll-ignore
+        :aria-busy="accountState === 'profile-pending' || (controller.state.loading && !controller.state.loaded)"
+      >
+        <slot name="navigation" />
+        <div :key="topBarStore.userInfo.mid" class="whisper-workspace__list-body">
+          <ConversationListSkeleton
+            v-if="accountState === 'profile-pending'"
+            :compact="settings.privateMessageDensity === 'compact'"
+            :label="t('notifications.whisper.profile_pending')"
+          />
 
-        <div v-else-if="accountState === 'logged-out'" class="whisper-workspace__state">
-          <Empty text-only :description="t('notifications.whisper.errors.login-required')">
-            <ALink :href="originalUrl" type="content" class="whisper-workspace__original-link">
-              {{ t('notifications.actions.open_original') }}
-            </ALink>
-          </Empty>
-        </div>
-
-        <ConversationListSkeleton
-          v-else-if="controller.state.loading && !controller.state.loaded"
-          :compact="settings.privateMessageDensity === 'compact'"
-          :label="t('notifications.whisper.loading')"
-        />
-
-        <div
-          v-else-if="controller.state.errorKind && !controller.state.items.length"
-          class="whisper-workspace__state"
-        >
-          <Empty text-only :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry">
-            <div class="whisper-workspace__state-actions">
+          <div v-else-if="accountState === 'logged-out'" class="whisper-workspace__state">
+            <Empty text-only :description="t('notifications.whisper.errors.login-required')">
               <ALink :href="originalUrl" type="content" class="whisper-workspace__original-link">
                 {{ t('notifications.actions.open_original') }}
               </ALink>
-            </div>
-          </Empty>
-        </div>
-
-        <template v-else>
-          <div
-            v-if="controller.state.errorKind && controller.state.failedOperation !== 'load-more'"
-            class="whisper-workspace__inline-error"
-            role="status"
-          >
-            <span>{{ errorMessage }}</span>
-            <button type="button" @click="retry">
-              {{ t('notifications.actions.retry') }}
-            </button>
+            </Empty>
           </div>
-          <ConversationList
-            ref="conversationListRef"
-            v-model:query="searchQuery"
-            v-model:type-filter="searchTypeFilter"
-            :search-mode="searchMode"
-            :active="active"
+
+          <ConversationListSkeleton
+            v-else-if="controller.state.loading && !controller.state.loaded"
             :compact="settings.privateMessageDensity === 'compact'"
-            :items="controller.state.items"
-            :loading-more="controller.state.loadingMore"
-            :no-more="controller.state.noMore"
-            :pagination-stalled="controller.state.paginationStalled"
-            :recipient-search="recipientSearch"
-            :load-more-failed="controller.state.failedOperation === 'load-more'"
-            :selected-session-key="controller.selectedSessionKey.value"
-            :show-official-assistants="settings.showOfficialPrivateAssistants"
-            @search-mode="changeSearchMode"
-            @search-messages="searchMessages"
-            @load-more="controller.loadMore()"
-            @retry-load-more="controller.loadMore({ retry: true })"
-            @select-recipient="selectRecipient"
-            @select="selectSession"
-            @menu="openSessionMenu"
+            :label="t('notifications.whisper.loading')"
+          />
+
+          <div
+            v-else-if="controller.state.errorKind && !controller.state.items.length"
+            class="whisper-workspace__state"
           >
-            <template #message-results>
-              <PrivateHistorySearchResults
-                v-if="historySearch" :controller="historySearch" :query="searchQuery"
-                @search="searchMessages()" @select="selectSearchMatch"
-              />
-            </template>
-          </ConversationList>
-        </template>
-      </div>
-    </aside>
+            <Empty text-only :description="errorMessage" :action-label="t('notifications.actions.retry')" @action="retry">
+              <div class="whisper-workspace__state-actions">
+                <ALink :href="originalUrl" type="content" class="whisper-workspace__original-link">
+                  {{ t('notifications.actions.open_original') }}
+                </ALink>
+              </div>
+            </Empty>
+          </div>
+
+          <template v-else>
+            <div
+              v-if="controller.state.errorKind && controller.state.failedOperation !== 'load-more'"
+              class="whisper-workspace__inline-error"
+              role="status"
+            >
+              <span>{{ errorMessage }}</span>
+              <button type="button" @click="retry">
+                {{ t('notifications.actions.retry') }}
+              </button>
+            </div>
+            <ConversationList
+              ref="conversationListRef"
+              v-model:query="searchQuery"
+              v-model:type-filter="searchTypeFilter"
+              :search-mode="searchMode"
+              :active="active"
+              :compact="settings.privateMessageDensity === 'compact'"
+              :items="controller.state.items"
+              :loading-more="controller.state.loadingMore"
+              :no-more="controller.state.noMore"
+              :pagination-stalled="controller.state.paginationStalled"
+              :recipient-search="recipientSearch"
+              :load-more-failed="controller.state.failedOperation === 'load-more'"
+              :selected-session-key="controller.selectedSessionKey.value"
+              :show-official-assistants="settings.showOfficialPrivateAssistants"
+              @search-mode="changeSearchMode"
+              @search-messages="searchMessages"
+              @load-more="controller.loadMore()"
+              @retry-load-more="controller.loadMore({ retry: true })"
+              @select-recipient="selectRecipient"
+              @select="selectSession"
+              @menu="openSessionMenu"
+            >
+              <template #message-results>
+                <PrivateHistorySearchResults
+                  v-if="historySearch" :controller="historySearch" :query="searchQuery"
+                  @search="searchMessages()" @select="selectSearchMatch"
+                />
+              </template>
+            </ConversationList>
+          </template>
+        </div>
+      </aside>
+    </Teleport>
 
     <div
       id="notifications-outlet"
@@ -516,7 +523,7 @@ defineExpose({ refresh })
 }
 
 .whisper-workspace__sessions {
-  @include sidebarSurface.surface;
+  @include sidebarSurface.rail;
   position: relative;
   // Above the top-bar's decorative edge, below its controls and popovers.
   z-index: var(--bew-z-base-overlay);
@@ -538,7 +545,7 @@ defineExpose({ refresh })
   overflow: hidden;
 }
 
-.whisper-workspace--solid .whisper-workspace__sessions {
+.whisper-workspace--solid .whisper-workspace__sessions:not(.bew-sidebar-hosted) {
   @include sidebarSurface.solid;
 }
 
@@ -659,7 +666,7 @@ defineExpose({ refresh })
 .whisper-workspace__inline-error button {
   color: var(--bew-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 }

@@ -8,12 +8,13 @@ import type { AutoPlayMode, DefaultVideoPlayerMode, VideoPlayerModeContext, Vide
 import { selectors as playbackSelectors } from '~/utils/bewlyWidescreen/constants'
 import {
   applyConfiguredPlaybackRate,
+  isValidPlaybackRate,
   resolvePlaybackRateChange,
 } from '~/utils/playbackRate'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
-import { readVideoPageMetadata } from '~/utils/videoMetadataBridge'
+import { isNativeVideoComponentReady, readVideoPageMetadata } from '~/utils/videoMetadataBridge'
 
-import { getPlayerModeContainer, getPlayerModeControl, getPlayerRoot, getVideoElement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
+import { getPlayerModeContainer, getPlayerModeControl, getPlayerRoot, getVideoElement, isPlayerAdvertisement, PLAYER_MEDIA_SELECTOR } from './playerMedia'
 
 export { getVideoElement } from './playerMedia'
 
@@ -945,6 +946,25 @@ function markPlaybackRateUserIntent(video: HTMLVideoElement) {
   playbackRateUserIntentUntil.set(video, Date.now() + PLAYBACK_RATE_USER_INTENT_DURATION_MS)
 }
 
+export function applyExplicitPlaybackRate(rate: number): boolean {
+  if (!playbackRateLifecycleActive || !isValidPlaybackRate(rate) || !isVideoPage())
+    return false
+  const video = getVideoElement()
+  if (!video || !video.isConnected || isNativeVideoComponentReady(video) !== true || isPlayerAdvertisement(video))
+    return false
+  monitorPlaybackRateVideo(video)
+  markPlaybackRateUserIntent(video)
+  // Commit before native asynchronous events or metadata correction can restore
+  // the previous rate. With memory disabled only this media element changes.
+  applyingPlaybackRateVideos.add(video)
+  try {
+    if (settings.value.rememberPlaybackRate)
+      settings.value.savedPlaybackRate = rate
+    return applyConfiguredPlaybackRate(video, rate)
+  }
+  finally { applyingPlaybackRateVideos.delete(video) }
+}
+
 function consumePlaybackRateUserIntent(video: HTMLVideoElement): boolean {
   const intentUntil = playbackRateUserIntentUntil.get(video) ?? 0
   playbackRateUserIntentUntil.delete(video)
@@ -1122,9 +1142,9 @@ function ensurePlaybackRateMonitoring() {
           return
         }
         discoverPlaybackRateVideos()
-        playbackRateListenerControllers.forEach((_controller, video) => {
+        const video = getVideoElement()
+        if (video)
           applyRememberedPlaybackRateToVideo(video)
-        })
       },
       { flush: 'sync' },
     )

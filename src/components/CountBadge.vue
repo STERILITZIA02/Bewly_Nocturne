@@ -22,7 +22,7 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;

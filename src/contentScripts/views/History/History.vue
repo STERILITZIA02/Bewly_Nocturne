@@ -650,7 +650,7 @@ function jumpToLoginPage() {
               @click="handlePauseWatchHistory"
             >
               <template #left>
-                <div i-ph:pause-circle-bold />
+                <div i-ph:pause-circle />
               </template>
               {{ $t('history.pause_watch_history') }}
             </Button>
@@ -661,7 +661,7 @@ function jumpToLoginPage() {
               @click="handleTurnOnWatchHistory"
             >
               <template #left>
-                <div i-ph:play-circle-bold />
+                <div i-ph:play-circle />
               </template>
               {{ $t('history.turn_on_watch_history') }}
             </Button>
@@ -784,7 +784,7 @@ function jumpToLoginPage() {
 .history-list-card__title {
   font-size: var(--bew-font-size-title);
   line-height: var(--bew-line-height-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
 }
 
 .history-list-card__overlay {

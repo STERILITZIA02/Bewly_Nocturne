@@ -7,6 +7,7 @@ const props = defineProps<{
   modelValue: string
   label: string
   panelId: string
+  scope?: object
   items: readonly { value: string, label: string, ariaLabel: string, icon?: string, badge?: number }[]
 }>()
 
@@ -26,8 +27,17 @@ let wheelDistance = 0
 let lastWheelTime = 0
 let lastWheelCommitTime = -Infinity
 let lastWheelDirection = 0
+let interactionGeneration = 0
 
 watch(selectedIndex, index => cursor.value = index)
+watch(() => props.scope, () => {
+  interactionGeneration++
+  cursor.value = selectedIndex.value
+  wheelDistance = 0
+  lastWheelTime = 0
+  lastWheelCommitTime = -Infinity
+  lastWheelDirection = 0
+}, { flush: 'sync' })
 
 function itemStyle(index: number) {
   const distance = index - position.value
@@ -48,8 +58,10 @@ function select(index: number) {
   if (item.value !== props.modelValue)
     emit('update:modelValue', item.value)
   if (root.value?.querySelector('[role="tab"]:focus')) {
+    const generation = interactionGeneration
     void nextTick(() => {
-      root.value?.querySelector<HTMLButtonElement>(`[data-wheel-index="${index}"]`)?.focus({ preventScroll: true })
+      if (generation === interactionGeneration)
+        root.value?.querySelector<HTMLButtonElement>(`[data-wheel-index="${index}"]`)?.focus({ preventScroll: true })
     })
   }
 }
@@ -69,8 +81,10 @@ async function handleKeydown(event: KeyboardEvent) {
   // Focus previews a category; Enter/Space commits it, so browsing the wheel
   // with a keyboard does not fetch or mark every intermediate feed as read.
   cursor.value = next
+  const generation = interactionGeneration
   await nextTick()
-  root.value?.querySelector<HTMLButtonElement>(`[data-wheel-index="${next}"]`)?.focus({ preventScroll: true })
+  if (generation === interactionGeneration)
+    root.value?.querySelector<HTMLButtonElement>(`[data-wheel-index="${next}"]`)?.focus({ preventScroll: true })
 }
 
 function handleWheel(event: WheelEvent) {
@@ -169,7 +183,7 @@ function resetPreview(event: FocusEvent) {
   padding: 0;
   color: var(--bew-wheel-text);
   font-size: var(--bew-wheel-label-size);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-wheel-label-weight);
   line-height: var(--wheel-item-line-height);
   text-align: left;
   cursor: pointer;

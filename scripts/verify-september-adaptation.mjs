@@ -915,6 +915,8 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     const location = { href: 'https://www.bilibili.com/?page=SearchResults&keyword=A', assign: url => opened.push(url) }
     const history = { state: { retained: 'native state' }, pushState: (state, _title, url) => pushes.push({ state, url }) }
     const module = await loadSourceModule('../src/utils/searchNavigation.ts', {
+      '~/composables/useDark': { useDark: () => assert.fail('a top-level search must not access an iframe channel') },
+      '~/utils/iframeSearch': await import('../src/utils/iframeSearch'),
       '~/composables/useRouteState': { syncRouteState() {} },
       '~/utils/configuredLinkNavigation': { getLinkFallbackPage: () => 'Home' },
       '~/enums/appEnums': await import('../src/enums/appEnums'),

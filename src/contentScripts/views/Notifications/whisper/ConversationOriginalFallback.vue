@@ -125,7 +125,7 @@ defineExpose({ focusHeading })
 .conversation-original-fallback__link {
   color: var(--bew-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
 }

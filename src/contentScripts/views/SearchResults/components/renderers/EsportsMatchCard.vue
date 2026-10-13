@@ -195,7 +195,7 @@ const awayScore = computed(() => {
 
 .season-title {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
   color: var(--bew-text-1);
   flex: 1;
@@ -287,8 +287,9 @@ const awayScore = computed(() => {
 }
 
 .score {
+  font-variant-numeric: tabular-nums;
   font-size: var(--bew-font-size-data-emphasis);
-  font-weight: var(--bew-font-weight-bold);
+  font-weight: var(--bew-font-weight-semibold);
   color: var(--bew-text-1);
   line-height: var(--bew-line-height-data);
   min-width: 1.5rem;
@@ -303,7 +304,7 @@ const awayScore = computed(() => {
 
 .vs-text {
   font-size: var(--bew-font-size-data);
-  font-weight: var(--bew-font-weight-bold);
+  font-weight: var(--bew-font-weight-semibold);
   color: var(--bew-text-2);
   line-height: var(--bew-line-height-data);
 }

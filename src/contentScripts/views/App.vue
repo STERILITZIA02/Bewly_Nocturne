@@ -10,6 +10,7 @@ import ElementSettingsContextMenu from '~/components/ElementSettingsContextMenu.
 import LayoutEditorOverlay from '~/components/LayoutEditorOverlay.vue'
 import LocalLoudnessPanel from '~/components/LocalLoudnessPanel.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
+import PersistentSidebar from '~/components/PersistentSidebar.vue'
 import type { BewlyAppProvider } from '~/composables/useAppProvider'
 import { DrawerType, UndoForwardState } from '~/composables/useAppProvider'
 import { confirmDialogKey } from '~/composables/useConfirmDialog'
@@ -22,6 +23,7 @@ import { providePanelOrigin } from '~/composables/usePanelOrigin'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSettingsMotion } from '~/composables/useSettingsMotion'
 import { useSettingsPanel } from '~/composables/useSettingsPanel'
+import { provideSidebarHost, registerSidebarWidth } from '~/composables/useSidebarHost'
 import { BEWLY_MOUNTED, OVERLAY_SCROLL_BAR_SCROLL, OVERLAY_SCROLL_STATE_CHANGE } from '~/constants/globalEvents'
 import { PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupWatchLaterAutoRemove } from '~/contentScripts/features/watchLaterAutoRemove'
@@ -59,6 +61,7 @@ import { cancelScrollIntent } from '~/utils/scrollIntent'
 import { setupNecessarySettingsWatchers } from './necessarySettingsWatchers'
 
 const mainStore = useMainStore()
+registerSidebarWidth()
 const settingsStore = useSettingsStore()
 const topBarStore = useTopBarStore()
 const currentLocationHref = useCurrentLocationHref()
@@ -126,6 +129,7 @@ const { activatedPage, homeActivatedPage, homeActivatedPageTouched, navigateToPa
   visible: tab.page !== HomeSubPage.Precious,
 })))
 const isHomeTabSwitching = ref(false)
+provideSidebarHost(() => activatedPage.value)
 
 const shouldUseOriginalSearchResultsPage = computed(() => {
   return activatedPage.value === AppPage.SearchResults
@@ -814,6 +818,7 @@ onBeforeUnmount(stopUrlCleaner)
     :style="{ '--bew-dock-bottom-shift': `${dockBottomShift}px` }"
     :class="{
       'dark': isDark,
+      'bewly-wrapper--wide-sidebar': activatedPage === AppPage.Notifications,
       'bewly-wrapper--viewport': isHomePage(currentLocationHref),
     }"
     text="$bew-text-1 size-$bew-base-font-size"
@@ -871,6 +876,8 @@ onBeforeUnmount(stopUrlCleaner)
         @settings-visibility-change="toggleSettings"
       />
     </div>
+
+    <PersistentSidebar :active="showBewlyPage && (isLibraryPage || activatedPage === AppPage.Notifications)" />
 
     <!-- TopBar -->
     <div
@@ -962,6 +969,19 @@ onBeforeUnmount(stopUrlCleaner)
 </template>
 
 <style lang="scss" scoped>
+.bewly-wrapper {
+  --bew-active-sidebar-width: var(--bew-sidebar-base-width);
+  --bew-messages-sidebar-width: var(--bew-active-sidebar-width);
+  transition: --bew-active-sidebar-width var(--bew-duration-normal) var(--bew-ease-standard);
+}
+.bewly-wrapper--wide-sidebar {
+  --bew-active-sidebar-width: var(--bew-sidebar-message-width);
+}
+@media (prefers-reduced-motion: reduce) {
+  .bewly-wrapper {
+    transition: none;
+  }
+}
 .top-bar-layer {
   z-index: var(--bew-z-topbar-host);
 }

@@ -38,5 +38,6 @@ export function normalizeNativeCommentReplyPage(response: unknown, request: Comm
     throw new Error(value?.message || 'Invalid comment reply page')
   }
   const count = data.page!.count!
-  return { items: data.replies ?? [], page: request.page, pageSize: request.identity.pageSize, count, totalPages: Math.max(1, Math.ceil(count / request.identity.pageSize)) }
+  const totalPages = data.replies?.length ? Math.max(1, Math.ceil(count / request.identity.pageSize)) : request.page
+  return { items: data.replies ?? [], page: request.page, pageSize: request.identity.pageSize, count, totalPages }
 }

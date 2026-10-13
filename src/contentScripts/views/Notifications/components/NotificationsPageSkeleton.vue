@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import NotificationSkeletonBlock from '~/components/SkeletonBlock.vue'
+import { useSidebarRail } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 
 import type { NotificationView } from '../notificationSections'
@@ -12,23 +13,27 @@ withDefaults(defineProps<{
   view?: NotificationView
   announce?: boolean
 }>(), { view: 'whisper', announce: true })
+const sidebarHost = useSidebarRail()
 </script>
 
 <template>
   <section class="notifications-page-skeleton" :class="{ 'notifications-page-skeleton--solid': settings.disableFrostedGlass }" :role="announce ? 'status' : undefined" :aria-label="announce ? label : undefined">
     <div class="notifications-page-skeleton__workspace">
-      <aside class="notifications-page-skeleton__sessions bew-shape-smooth-rect">
-        <header class="notifications-page-skeleton__header" aria-hidden="true">
-          <NotificationSkeletonBlock width="28%" height="var(--bew-line-height-control)" />
-          <NotificationSkeletonBlock width="44%" height="var(--bew-wheel-label-line-height)" />
-          <NotificationSkeletonBlock width="32%" height="var(--bew-line-height-control)" />
-        </header>
-        <ConversationListSkeleton
-          :announce="false"
-          :count="6"
-          :label="label"
-        />
-      </aside>
+      <div v-if="sidebarHost" aria-hidden="true" />
+      <Teleport :to="sidebarHost?.rail.value ?? 'body'" :disabled="!sidebarHost?.rail.value">
+        <aside class="notifications-page-skeleton__sessions bew-shape-smooth-rect" :class="{ 'bew-sidebar-hosted': sidebarHost }">
+          <header class="notifications-page-skeleton__header" aria-hidden="true">
+            <NotificationSkeletonBlock width="28%" height="var(--bew-line-height-control)" />
+            <NotificationSkeletonBlock width="44%" height="var(--bew-wheel-label-line-height)" />
+            <NotificationSkeletonBlock width="32%" height="var(--bew-line-height-control)" />
+          </header>
+          <ConversationListSkeleton
+            :announce="false"
+            :count="6"
+            :label="label"
+          />
+        </aside>
+      </Teleport>
       <ConversationDetailSkeleton
         v-if="view === 'whisper'"
         :announce="false"
@@ -63,13 +68,13 @@ withDefaults(defineProps<{
   height: var(--bew-sidebar-heading-height);
   min-width: 0;
   flex: 0 0 auto;
-  padding: 0 var(--bew-top-bar-inline-padding) var(--bew-space-2);
+  padding: 0 calc(var(--bew-sidebar-inline-padding) + var(--bew-sidebar-label-inset)) var(--bew-space-2);
 }
 
 .notifications-page-skeleton__workspace {
   display: grid;
   grid-template-columns:
-    minmax(0, var(--notifications-conversation-list-width, var(--bew-notifications-list-max-width)))
+    minmax(0, var(--notifications-conversation-list-width, var(--bew-messages-sidebar-width)))
     minmax(0, 1fr);
   gap: var(--bew-space-4);
   min-width: 0;
@@ -81,7 +86,7 @@ withDefaults(defineProps<{
 }
 
 .notifications-page-skeleton__sessions {
-  @include sidebarSurface.surface;
+  @include sidebarSurface.rail;
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -115,7 +120,7 @@ withDefaults(defineProps<{
   }
 }
 
-.notifications-page-skeleton--solid .notifications-page-skeleton__sessions {
+.notifications-page-skeleton--solid .notifications-page-skeleton__sessions:not(.bew-sidebar-hosted) {
   @include sidebarSurface.solid;
 }
 

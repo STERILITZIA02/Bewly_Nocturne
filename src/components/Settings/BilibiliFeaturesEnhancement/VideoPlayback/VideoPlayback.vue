@@ -1,11 +1,15 @@
 <script lang="ts" setup>
 import { useI18n } from 'vue-i18n'
 
+import Button from '~/components/Button.vue'
+import Input from '~/components/Input.vue'
 import LocalLoudnessPreferences from '~/components/LocalLoudnessPreferences.vue'
 import Radio from '~/components/Radio.vue'
 import Select from '~/components/Select.vue'
 import { settings } from '~/logic'
 import type { PlayerDefaultState } from '~/logic/storage'
+import { isValidPlaybackRate, MAX_PLAYBACK_RATE, MIN_PLAYBACK_RATE } from '~/utils/playbackRate'
+import { applyActivePlaybackRate } from '~/utils/playbackRateCommand'
 import { DEFAULT_SCREENSHOT_SHORTCUT, isValidScreenshotShortcut, screenshotKey } from '~/utils/videoScreenshotShortcut'
 
 import SettingsItem from '../../components/SettingsItem.vue'
@@ -15,6 +19,21 @@ import SettingsToggleTag from '../../components/SettingsToggleTag.vue'
 
 const { t } = useI18n()
 const shortcutError = ref(false)
+const customRate = ref<string | number>(settings.value.savedPlaybackRate)
+const applyingRate = ref(false)
+const rateUnavailable = ref(false)
+const validRate = computed(() => String(customRate.value).trim() !== '' && isValidPlaybackRate(Number(customRate.value)))
+async function applyRate() {
+  if (!validRate.value || applyingRate.value)
+    return
+  applyingRate.value = true
+  rateUnavailable.value = false
+  try {
+    rateUnavailable.value = !await applyActivePlaybackRate(Number(customRate.value))
+  }
+  catch { rateUnavailable.value = true }
+  finally { applyingRate.value = false }
+}
 function recordScreenshotKey(event: KeyboardEvent) {
   if (event.isComposing || event.repeat || ['Tab', 'Escape', 'Shift', 'Control', 'Alt', 'Meta'].includes(event.key))
     return
@@ -97,6 +116,19 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
         </div>
       </SettingsItemSubgroup>
 
+      <SettingsItem :title="t('settings.custom_playback_rate')" right-width="auto">
+        <div class="custom-playback-rate">
+          <Input
+            v-model="customRate" type="number" :min="MIN_PLAYBACK_RATE" :max="MAX_PLAYBACK_RATE" step="any"
+            @enter="applyRate"
+          />
+          <Button :disabled="!validRate || applyingRate" @click="applyRate">
+            {{ t('settings.apply_playback_rate') }}
+          </Button>
+          <span v-if="rateUnavailable" role="status">{{ t('settings.playback_rate_unavailable') }}</span>
+        </div>
+      </SettingsItem>
+
       <SettingsItemSubgroup
         :title="t('settings.group_video_page_actions')"
         :desc="t('settings.group_video_page_actions_desc')"
@@ -147,6 +179,19 @@ const playerDefaultStateOptions = computed<{ label: string, value: PlayerDefault
 </template>
 
 <style lang="scss" scoped>
+.custom-playback-rate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--bew-space-2);
+  .b-input {
+    width: calc(var(--bew-space-12) * 2);
+  }
+  [role="status"] {
+    color: var(--bew-text-2);
+    font-size: var(--bew-font-size-control);
+  }
+}
 .screenshot-shortcut {
   display: flex;
   flex-wrap: wrap;

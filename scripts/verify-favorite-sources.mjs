@@ -903,7 +903,7 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
   })
 
   check('favorite popover: actual rendered cards share media keys, retain invalid entries, and pause duplicate/failed pagination', async () => {
-    const store = Vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
+    const store = Vue.reactive({ isLogin: true, userInfo: { mid: 1 }, isInWatchLater: () => undefined })
     let cookieMid = '1'
     let phase = 'duplicate'
     let reachBottom
@@ -918,6 +918,9 @@ export function registerFavoriteSourceChecks(check, { Vue, flush, compileCompone
       },
     } }
     const Popover = await compileComponent('../src/components/TopBar/components/pops/FavoritesPop.vue', {
+      '~/components/Tooltip.vue': { default: { inheritAttrs: false, setup: (_props, { slots }) => () => slots.default?.() } },
+      '~/utils/accountLifetime': await import('../src/utils/accountLifetime'),
+      '~/utils/watchLater': { updateOwnedWatchLater: () => assert.fail('rendering a folder must not submit watch later') },
       'pinia': { storeToRefs: () => ({ favoriteStateVersion: Vue.ref(0) }) },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error() {} }) },

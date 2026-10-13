@@ -315,7 +315,7 @@ onMounted(() => emit('scrollElement', scroller.value))
   gap: var(--bew-space-2);
   min-height: var(--bew-control-height);
   color: var(--bew-text-2);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
 }
 .following-sidebar__group-name {
   flex: 1;

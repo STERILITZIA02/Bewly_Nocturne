@@ -1200,14 +1200,14 @@ export function injectLayoutStyle() {
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-wrap {
       display: none !important;
       position: absolute !important;
-      top: auto !important;
+      top: var(--bew-dm-popover-top, auto) !important;
       right: auto !important;
-      bottom: calc(100% + var(--bew-space-2, 8px)) !important;
-      left: 50% !important;
+      bottom: auto !important;
+      left: var(--bew-dm-popover-left, 0) !important;
       z-index: var(--bew-z-popover) !important;
-      max-width: calc(100vw - var(--bew-space-8, 32px)) !important;
+      max-width: var(--bew-dm-popover-max-width, calc(100vw - var(--bew-space-8, 32px))) !important;
       margin: 0 !important;
-      translate: -50% 0 !important;
+      translate: none !important;
       transform: none !important;
     }
 
@@ -1215,13 +1215,22 @@ export function injectLayoutStyle() {
       display: block !important;
     }
 
+    ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-wrap::after {
+      content: "";
+      position: absolute;
+      top: var(--bew-dm-popover-bridge-top, 100%);
+      left: 0;
+      width: 100%;
+      height: var(--bew-space-2, 8px);
+    }
+
     ${DANMAKU_SURFACE_SELECTOR} .bpx-player-dm-setting-box {
       max-width: 100% !important;
-      max-height: calc(
+      max-height: var(--bew-dm-popover-max-height, calc(
         100dvh
         - var(--bew-control-height, 36px)
         - var(--bew-space-12, 48px)
-      ) !important;
+      )) !important;
       color: var(--bew-text-1) !important;
       background: var(--bew-elevated-alt-solid) !important;
       border: 1px solid var(--bew-surface-border-color) !important;
@@ -1648,7 +1657,7 @@ export function injectLayoutStyle() {
       -webkit-backdrop-filter: none;
       cursor: pointer;
       font-size: var(--bew-font-size-control, 13px);
-      font-weight: var(--bew-font-weight-semibold, 600);
+      font-weight: var(--bew-font-weight-medium, 500);
       line-height: var(--bew-line-height-control, 18px);
       opacity: 0;
       pointer-events: none;
@@ -1842,7 +1851,7 @@ export function injectLayoutStyle() {
       color: var(--bew-text-1) !important;
       font-size: var(--bew-font-size-title) !important;
       line-height: var(--bew-line-height-title) !important;
-      font-weight: var(--bew-font-weight-semibold) !important;
+      font-weight: var(--bew-font-weight-medium) !important;
       white-space: normal !important;
     }
 
@@ -2036,7 +2045,7 @@ export function injectLayoutStyle() {
       min-width: 0;
       overflow: hidden;
       font-size: var(--bew-font-size-title);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-medium);
       line-height: var(--bew-line-height-title);
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -2547,7 +2556,7 @@ export function injectLayoutStyle() {
 
     #${ROOT_ID} .bewly-widescreen-up-slot .up-name {
       font-size: var(--bew-font-size-title) !important;
-      font-weight: var(--bew-font-weight-semibold) !important;
+      font-weight: var(--bew-font-weight-medium) !important;
       line-height: var(--bew-line-height-title) !important;
     }
 
@@ -2949,7 +2958,7 @@ export function injectLayoutStyle() {
       cursor: pointer;
       font-family: var(--bew-font-family);
       font-size: var(--bew-font-size-control, 13px);
-      font-weight: var(--bew-font-weight-semibold, 600);
+      font-weight: var(--bew-font-weight-medium, 500);
       line-height: var(--bew-line-height-control, 18px);
       transition:
         color var(--bew-duration-fast, 150ms) var(--bew-ease-standard, ease),

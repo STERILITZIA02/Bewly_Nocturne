@@ -46,48 +46,48 @@ const otherLinks = computed((): { name: string, url: string, icon: string, code?
     {
       name: t('topbar.user_dropdown.uploads_manager'),
       url: 'https://member.bilibili.com/platform/upload-manager/article',
-      icon: 'i-solar:video-library-bold-duotone',
+      icon: 'i-solar:video-library-linear',
     },
     {
       name: t('topbar.user_dropdown.account_settings'),
       url: 'https://account.bilibili.com/account/home',
-      icon: 'i-solar:user-circle-bold-duotone',
+      icon: 'i-solar:user-circle-linear',
     },
     {
       name: t('topbar.user_dropdown.bilibili_premium'),
       url: 'https://account.bilibili.com/big',
-      icon: 'i-solar:accessibility-bold-duotone',
+      icon: 'i-solar:accessibility-linear',
     },
     {
       name: t('topbar.user_dropdown.bilibili_premium_rewards'),
       url: 'https://account.bilibili.com/account/big/myPackage',
-      icon: 'i-solar:accessibility-bold-duotone',
+      icon: 'i-solar:accessibility-linear',
       code: 'vip_rewards',
     },
     {
       name: t('topbar.user_dropdown.b_coins_wallet'),
       url: 'https://pay.bilibili.com/',
-      icon: 'i-solar:wallet-money-bold-duotone',
+      icon: 'i-solar:wallet-money-linear',
     },
     {
       name: t('topbar.user_dropdown.orders'),
       url: 'https://show.bilibili.com/orderlist',
-      icon: 'i-solar:clipboard-list-bold-duotone',
+      icon: 'i-solar:clipboard-list-linear',
     },
     {
       name: t('topbar.user_dropdown.workshop'),
       url: 'https://gf.bilibili.com?msource=main_station',
-      icon: 'i-solar:garage-bold-duotone',
+      icon: 'i-solar:garage-linear',
     },
     {
       name: t('topbar.user_dropdown.my_stream_info'),
       url: 'https://link.bilibili.com/p/center/index',
-      icon: 'i-solar:videocamera-record-bold-duotone',
+      icon: 'i-solar:videocamera-record-linear',
     },
     {
       name: t('topbar.user_dropdown.my_courses'),
       url: 'https://www.bilibili.com/cheese/mine/list',
-      icon: 'i-solar:notebook-bookmark-bold-duotone',
+      icon: 'i-solar:notebook-bookmark-linear',
     },
   ]
 })
@@ -434,7 +434,7 @@ function handleClickChannel() {
           text="$bew-error-color"
           @click="logout()"
         >
-          <div i-solar:logout-2-bold-duotone text="$bew-error-60" mr-2 />
+          <div i-solar:logout-2-linear text="$bew-error-60" mr-2 />
           {{ $t('topbar.user_dropdown.log_out') }}
         </div>
       </div>
@@ -521,9 +521,10 @@ function handleClickChannel() {
 
   .num {
     --uno: "font-semibold text-xl";
+    font-variant-numeric: tabular-nums;
 
     + div {
-      --uno: "text-$bew-text-2 mt-1 text-xs font-semibold";
+      --uno: "text-$bew-text-2 mt-1 text-xs font-normal";
     }
   }
 }
