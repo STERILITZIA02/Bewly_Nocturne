@@ -2,6 +2,10 @@
 
 :root,
 :host {
+  --bew-fonts-ui:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "PingFang TC", "HarmonyOS Sans", MiSans,
+    "Segoe UI Variable", "Segoe UI", "Microsoft YaHei UI", "Noto Sans CJK SC", "Noto Sans CJK TC", "Source Han Sans SC",
+    "Source Han Sans TC", "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --bew-fonts-basic:
     CJKEmDash, Numbers, Onest, ShangguSansSCVF, -apple-system, BlinkMacSystemFont, InterVariable, Inter, "Segoe UI",
     Cantarell, "Noto Sans", "Roboto Flex", Roboto;
@@ -13,6 +17,16 @@
     Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
 
   --bew-fonts: bilifont, var(--bew-custom-fonts, var(--bew-fonts-basic), var(--bew-fonts-fallback));
+}
+
+:host {
+  font-family: var(--bew-fonts-ui);
+  font-synthesis-weight: none;
+}
+
+.bewly-wrapper {
+  font-family: var(--bew-fonts-ui);
+  font-synthesis-weight: none;
 }
 
 .bewly-wrapper {

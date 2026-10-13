@@ -1,3 +1,5 @@
+import { resolveCommentPagination } from '~/utils/commentPagination'
+
 export interface MomentCommentAuthor {
   id: string
   name: string
@@ -307,8 +309,8 @@ export function normalizeMomentCommentPage(
     throw new Error(typeof root.message === 'string' && root.message ? root.message : 'Comment request failed')
 
   const data = asRecord(root.data)
-  const page = asRecord(data.page)
-  const cursor = asRecord(data.cursor)
+  if (!root.data || (data.replies !== null && !Array.isArray(data.replies)))
+    throw new Error('Invalid comment page')
   const replies = asArray(data.replies)
   const source = requestedPage === 1
     ? [...asArray(data.hots), ...replies]
@@ -320,20 +322,9 @@ export function normalizeMomentCommentPage(
       .filter((item): item is MomentCommentItem => Boolean(item)),
   )
 
-  const pageNumber = Math.max(1, Number(page.num) || requestedPage)
-  const pageSize = Math.max(1, Number(page.size) || requestedPageSize)
-  const total = Math.max(0, Number(page.count ?? page.acount) || 0)
-  const hasCursorEnd = typeof cursor.is_end === 'boolean'
-  const hasMore = hasCursorEnd
-    ? !cursor.is_end
-    : total > 0
-      ? pageNumber * pageSize < total
-      : replies.length >= pageSize
-
   return {
     items,
-    hasMore,
-    nextPage: pageNumber + 1,
+    ...resolveCommentPagination(data, replies.length, requestedPage, requestedPageSize),
   }
 }
 
@@ -347,22 +338,15 @@ export function normalizeMomentCommentRepliesPage(
     throw new Error(typeof root.message === 'string' && root.message ? root.message : 'Comment reply request failed')
 
   const data = asRecord(root.data)
-  const page = asRecord(data.page)
+  if (!root.data || (data.replies !== null && !Array.isArray(data.replies)))
+    throw new Error('Invalid comment reply page')
   const source = mergeMomentComments([], [
     ...asArray(data.replies),
     ...asArray(asRecord(data.root).replies),
   ].map(normalizeMomentComment).filter((item): item is MomentCommentItem => Boolean(item)))
   const items = flattenMomentCommentReplies(source)
-  const pageNumber = Math.max(1, Number(page.num) || requestedPage)
-  const pageSize = Math.max(1, Number(page.size) || requestedPageSize)
-  const total = Math.max(0, Number(page.count ?? page.acount) || 0)
-  const hasMore = total > 0
-    ? pageNumber * pageSize < total
-    : source.length >= pageSize
-
   return {
     items,
-    hasMore,
-    nextPage: pageNumber + 1,
+    ...resolveCommentPagination(data, asArray(data.replies).length, requestedPage, requestedPageSize),
   }
 }

@@ -16,6 +16,7 @@ import { isAccountRequestCurrent, resolveAuthenticatedAccountId } from '~/utils/
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
 import { getHistoryUrl, getHistoryVideoIdentity } from '~/utils/historyTarget'
+import { captureListRemovalFocus } from '~/utils/listRemovalFocus'
 import { getCSRF, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { retiringListTransition } from '~/utils/motionPresence'
@@ -31,6 +32,7 @@ const currentAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.userInfo.mid,
 ))
 const historys = reactive<Array<HistoryItem>>([])
+const pendingRemovals = reactive(new Set<string>())
 const historyTabs = computed(() => [
   {
     id: 0,
@@ -205,13 +207,18 @@ function getHistoryItemKey(historyItem: HistoryItem): string {
   return `${historyItem.history.business}_${historyItem.history.oid}`
 }
 
-async function deleteHistoryItem(historyItem: HistoryItem) {
+async function deleteHistoryItem(historyItem: HistoryItem, event?: MouseEvent) {
   const requestAccountId = currentAccountId.value
   if (requestAccountId === null)
     return
 
   const generation = requestGeneration
   const itemKey = getHistoryItemKey(historyItem)
+  const pendingKey = `${requestAccountId}:${itemKey}`
+  if (pendingRemovals.has(pendingKey))
+    return
+  const restoreFocus = captureListRemovalFocus(event?.currentTarget)
+  pendingRemovals.add(pendingKey)
   try {
     const res = await api.history.deleteHistoryItem({
       kid: itemKey,
@@ -228,6 +235,8 @@ async function deleteHistoryItem(historyItem: HistoryItem) {
     const currentIndex = historys.findIndex(item => getHistoryItemKey(item) === itemKey)
     if (currentIndex >= 0)
       historys.splice(currentIndex, 1)
+    await nextTick()
+    restoreFocus()
   }
   catch (error) {
     if (!isAccountRequestCurrent(requestAccountId, generation, currentAccountId.value, requestGeneration))
@@ -235,6 +244,7 @@ async function deleteHistoryItem(historyItem: HistoryItem) {
     console.error('Failed to delete history item:', error)
     toast.error(t('common.load_failed'))
   }
+  finally { pendingRemovals.delete(pendingKey) }
 }
 
 function initData() {
@@ -323,7 +333,8 @@ defineExpose({
               <IconButton
                 class="popover-card__interactive popover-card-action popover-card__overlay-action popover-card__overlay-action--danger history-pop__remove"
                 :label="$t('common.operation.delete')"
-                @click.stop.prevent="deleteHistoryItem(historyItem)"
+                :disabled="pendingRemovals.has(`${currentAccountId}:${getHistoryItemKey(historyItem)}`)"
+                @click.stop.prevent="deleteHistoryItem(historyItem, $event)"
               >
                 <i i-mingcute:close-line />
               </IconButton>
@@ -511,6 +522,7 @@ defineExpose({
 }
 
 .history-pop__progress {
+  font-variant-numeric: tabular-nums;
   position: absolute;
   z-index: 2;
   right: 0;

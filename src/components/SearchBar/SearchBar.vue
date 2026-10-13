@@ -1051,7 +1051,7 @@ function handleClearKeyword() {
           }
 
           .index {
-            --uno: "text-xs min-w-4 text-center font-bold";
+            --uno: "text-xs min-w-4 text-center font-semibold";
 
             &.top-1 {
               --uno: "text-red-500";

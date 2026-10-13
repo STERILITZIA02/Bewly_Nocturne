@@ -53,6 +53,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   const OVERSCAN_PX = 1200
   let attachedScrollViewport: HTMLElement | null = null
   let cardMeasureObserver: ResizeObserver | undefined
+  const measuredCardWidths = new WeakMap<HTMLElement, number>()
   let visibilityObserver: IntersectionObserver | undefined
   let lastScrollAt = 0
   let virtualRaf = 0
@@ -572,7 +573,13 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         const id = card.dataset.momentId
         if (!id || cardElements.get(id) !== card)
           return
-        fitVideoCardDescription(card)
+        const width = entry.contentRect.width
+        const widthChanged = measuredCardWidths.get(card) !== width
+        measuredCardWidths.set(card, width)
+        // Comment expansion changes only the footer. Re-clamping the unchanged
+        // video body here removes a style then forces layout on every frame.
+        if (widthChanged || !card.querySelector('.moment-card__disclosure-inner')?.childElementCount)
+          fitVideoCardDescription(card)
         const next = Math.round(entry.contentRect.height)
         if (commitCardHeight(id, next))
           changed = true
@@ -715,7 +722,17 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   }
   onMounted(() => {
     active = true
-    gridObserver = new ResizeObserver(() => {
+    const observedWidths = new WeakMap<Element, number>()
+    gridObserver = new ResizeObserver((entries) => {
+      let changed = false
+      entries.forEach((entry) => {
+        const previous = observedWidths.get(entry.target)
+        observedWidths.set(entry.target, entry.contentRect.width)
+        if (previous !== entry.contentRect.width)
+          changed = true
+      })
+      if (!changed)
+        return
       updateGridColumnCount()
       updateVirtualColumns()
     })

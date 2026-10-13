@@ -102,6 +102,7 @@ export function registerUpstreamMenuChecks(check, { Vue, flush, compileComponent
     const blank = { render: () => null }
     const model = await import('../src/models/video/appForYou')
     const Component = await compileComponent('../src/components/VideoCard/VideoCardContextMenu/VideoCardContextMenu.vue', {
+      './components/FavoriteVideoDialog.vue': { default: blank },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error() {}, success() {} }) },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ openIframeDrawer() {} }) },

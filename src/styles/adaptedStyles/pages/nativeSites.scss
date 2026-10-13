@@ -266,7 +266,7 @@ html.bewly-design[data-bewly-native-site="live"] {
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-medium);
 
       .title {
         color: inherit;
@@ -312,7 +312,7 @@ html.bewly-design[data-bewly-native-site="live"] {
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-medium);
 
       > svg > g {
         // Keep the original switching arrows; their fixed white stroke was
@@ -3202,7 +3202,7 @@ html.bewly-design[data-bewly-native-site="love"] {
       corner-shape: var(--bew-corner-shape);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-medium);
 
       &:hover {
         background: var(--bew-theme-surface);

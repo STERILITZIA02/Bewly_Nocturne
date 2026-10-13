@@ -267,7 +267,7 @@ watch(() => props.session.avatar, () => {
   place-items: center;
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
   background: var(--bew-fill-1);
 }
@@ -319,7 +319,7 @@ watch(() => props.session.avatar, () => {
   min-width: 0;
   overflow: hidden;
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -352,10 +352,11 @@ watch(() => props.session.avatar, () => {
   align-items: center;
   margin-left: auto;
   color: var(--bew-text-3);
-  font-size: var(--bew-icon-size-sm);
+  font-size: var(--bew-icon-size-xs);
 }
 
 .conversation-list-item__badge {
+  font-variant-numeric: tabular-nums;
   display: inline-grid;
   place-items: center;
   min-width: var(--bew-space-4);
@@ -363,7 +364,7 @@ watch(() => props.session.avatar, () => {
   padding: 0 var(--bew-space-1);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-theme-color);
   border-radius: var(--bew-interactive-radius);

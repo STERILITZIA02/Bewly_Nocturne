@@ -388,7 +388,7 @@ defineExpose({
             && (filters.subCategory === 'all' || filters.subCategory === 'live_user')"
         >
           <div flex items-center gap-3 mb-3>
-            <h3 text="lg $bew-text-1" font-medium>
+            <h3 text="lg $bew-text-1" font-semibold>
               {{ t('search.live.streamers') }}
             </h3>
             <span text="sm $bew-text-3">
@@ -438,7 +438,7 @@ defineExpose({
         <!-- 直播间 (下面) - 始终渲染 VideoCardGrid 以支持骨架屏和空状态 -->
         <div v-if="filters.subCategory === 'all' || filters.subCategory === 'live_room'">
           <div v-if="liveRoomList.length > 0" flex items-center gap-3 mb-3>
-            <h3 text="lg $bew-text-1" font-medium>
+            <h3 text="lg $bew-text-1" font-semibold>
               {{ t('search.live.rooms') }}
             </h3>
             <span text="sm $bew-text-3">

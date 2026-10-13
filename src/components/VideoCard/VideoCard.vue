@@ -363,7 +363,7 @@ provide('getVideoType', () => props.type!)
             :removed="logic.removed.value"
             :is-hover="logic.isHover.value"
             :preview-video-url="logic.previewVideoUrl.value || ''"
-            :video-element="logic.videoElement.value || null"
+            :preview-identity="logic.previewMediaIdentity.value"
             :preview-current-time="logic.videoCurrentTime.value"
             :is-in-watch-later="logic.isInWatchLater.value"
             :show-watch-later="showWatchLater && settings.showVideoCardWatchLater"
@@ -378,7 +378,7 @@ provide('getVideoType', () => props.type!)
             @preview-error="logic.clearPreviewVideoUrl"
             @preview-fullscreen-change="logic.handlePreviewFullscreenChange"
             @preview-scrub-change="logic.handlePreviewScrubChange"
-            @preview-progress="logic.videoCurrentTime.value = $event"
+            @preview-progress="logic.recordPreviewProgress"
           >
             <template #coverTopLeft>
               <slot name="coverTopLeft" />

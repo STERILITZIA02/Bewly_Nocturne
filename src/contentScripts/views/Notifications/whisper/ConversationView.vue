@@ -849,7 +849,7 @@ defineExpose({
   padding: 0;
   color: var(--bew-theme-foreground);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   appearance: none;
@@ -1023,7 +1023,7 @@ defineExpose({
   padding: 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   appearance: none;
   cursor: pointer;

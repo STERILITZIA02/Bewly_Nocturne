@@ -186,7 +186,7 @@ function formatTime(timestamp: number) {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
 }
 .private-history-results__heading time {
   flex: none;

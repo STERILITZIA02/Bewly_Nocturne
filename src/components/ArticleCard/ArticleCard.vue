@@ -149,7 +149,7 @@ function formatDate(timestamp: number | string | undefined) {
 @use "../../styles/contentCard";
 .article-title {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
 }
 
@@ -168,7 +168,20 @@ function formatDate(timestamp: number | string | undefined) {
   margin-right: var(--bew-space-2);
 }
 .article-meta .author {
-  font-weight: var(--bew-font-weight-medium);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: var(--bew-font-weight-regular);
+}
+.article-tags > span {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: var(--bew-space-6);
 }
 .article-meta .author:hover {
   color: var(--bew-theme-foreground);

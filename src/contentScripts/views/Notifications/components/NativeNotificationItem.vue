@@ -178,7 +178,7 @@ function markAvatarFailed(index: number) {
 .native-notification-item__remaining-actors {
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   background: var(--bew-elevated-solid);
 }
@@ -230,7 +230,7 @@ function markAvatarFailed(index: number) {
 
 .native-notification-item__actor {
   color: var(--bew-text-1);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   text-decoration: none;
 }
 

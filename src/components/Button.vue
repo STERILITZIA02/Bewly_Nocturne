@@ -157,7 +157,7 @@ function handleClick(evt: MouseEvent) {
   }
 
   &--strong {
-    --b-button-font-weight: var(--bew-font-weight-bold);
+    --b-button-font-weight: var(--bew-font-weight-semibold);
   }
 }
 

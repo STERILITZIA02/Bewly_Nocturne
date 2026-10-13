@@ -147,7 +147,7 @@ export function setupNecessarySettingsWatchers() {
       // Remove the custom fonts first
       document.documentElement.style.removeProperty('--bew-custom-fonts')
 
-      // Under default settings, revert to Bilibili's original font-family
+      // Default preserves the native page font; Bewly uses its own UI stack.
       if (settings.value.customizeFont === 'default') {
         document.documentElement.classList.remove('modify-fonts')
         bewlyHost?.classList.remove('modify-fonts')

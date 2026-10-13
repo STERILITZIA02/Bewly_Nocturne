@@ -171,6 +171,9 @@ player_screenshot:
   failed: Failed to capture screenshot
   video_unavailable: The current video frame is unavailable
 settings:
+  custom_playback_rate: Custom playback speed
+  apply_playback_rate: Apply
+  playback_rate_unavailable: No active main player is available
   comment_reply_batch_pages: Reply pages per batch
   comment_reply_batch_pages_desc: Only Load next batch requests several pages. Initial expansion and direct page selection request one page; the rest of the thread is never fetched automatically.
   enable_comment_reply_tree_container: Separate reply reading area
@@ -483,7 +486,7 @@ settings:
     jyut: Cantonese
   customize_font: Customize font
   customize_font_opt:
-    default: Bilibili Default
+    default: Default
     recommend: Recommend
     custom: Custom
   customize_font_desc: >-
@@ -1507,7 +1510,6 @@ moment_card:
   comments_retry: Retry
   comments_unavailable: Comments are unavailable. Please retry.
   comments_refresh: Refresh
-  comments_load_more: View more comments
   comments_missing_parent: Parent reply is not loaded yet
   comments_reply_new_tab: Reply in a new tab
   comments_expand_replies: Show remaining replies
@@ -1532,7 +1534,13 @@ moment_card:
   reservation_failed: Reservation failed
   reservation_login_required: Sign in to reserve
 video_card:
+  favorite_dialog:
+    read: Could not load folders. Try again.
+    save: Could not update favorites. Try again.
+    verify: Favorite status is not confirmed. Refresh to check.
+    empty: No favorite folders
   operation:
+    favorite: Save to favorite folders
     not_interested: Not Interested
     not_interested_uploader: Don't Recommend This Uploader
     open_in_new_tab: Open in New Tab

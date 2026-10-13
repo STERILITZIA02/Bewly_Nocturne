@@ -73,7 +73,10 @@ const { t } = useI18n()
       cursor: default;
     }
     span:first-child {
-      font-size: var(--bew-icon-size-md);
+      font-size: var(--bew-icon-size-sm);
+    }
+    span:last-child {
+      font-variant-numeric: tabular-nums;
     }
   }
 }

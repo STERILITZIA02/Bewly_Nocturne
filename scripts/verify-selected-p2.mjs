@@ -11,6 +11,7 @@ import { loadSourceFunctions } from './sourceFunctionHarness'
 import { registerAccountTransactionChecks } from './verify-account-transactions.mjs'
 import { registerAdvertisingRuleChecks } from './verify-advertising-rules.mjs'
 import { registerCommentReadingChecks } from './verify-comment-reading.mjs'
+import { registerCompatibleAChecks } from './verify-compatible-a.mjs'
 import { registerDataConsistencyChecks } from './verify-data-consistency.mjs'
 import { registerDesignImplementationChecks } from './verify-design-implementation.mjs'
 import { registerDockGlassChecks } from './verify-dock-glass.mjs'
@@ -38,9 +39,11 @@ import { registerPrivateSessionActionChecks } from './verify-private-session-act
 import { registerRequestedAuditFixChecks } from './verify-requested-audit-fixes.mjs'
 import { registerRuntimeErrorChecks } from './verify-runtime-errors.mjs'
 import { registerSeptemberAdaptationChecks } from './verify-september-adaptation.mjs'
+import { registerSidebarContinuityChecks } from './verify-sidebar-continuity.mjs'
 import { registerSixAuditFixChecks } from './verify-six-audit-fixes.mjs'
 import { registerSurfaceMaterialChecks } from './verify-surface-materials.mjs'
 import { registerTopBarSyncChecks } from './verify-top-bar-sync.mjs'
+import { registerTypographyChecks } from './verify-typography.mjs'
 import { registerUIAuditFixChecks } from './verify-ui-audit-fixes.mjs'
 import { registerUpstreamCommentChecks } from './verify-upstream-comments.mjs'
 import { registerUpstreamFollowingChecks } from './verify-upstream-following.mjs'
@@ -94,6 +97,7 @@ const { useLoadMore } = await import('../src/contentScripts/views/SearchResults/
 const r = value => ({ value })
 const checks = []
 const check = (name, run) => checks.push({ name, run })
+registerCompatibleAChecks(check, { Vue, flush, compileComponent })
 registerDataConsistencyChecks(check, { Vue, flush })
 registerCommentReadingChecks(check, { Vue, compileComponent, flush })
 registerLocalLoudnessChecks(check, { Vue, compileComponent, flush })
@@ -104,6 +108,8 @@ registerMotionContinuityChecks(check, { Vue, flush })
 registerMomentsMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerNativeAppearanceChecks(check, { Vue, compileComponent, flush })
 registerLibraryToolChecks(check, { Vue, compileComponent, flush })
+registerSidebarContinuityChecks(check, { Vue, compileComponent, flush })
+registerTypographyChecks(check)
 registerLibraryMemoryChecks(check, { Vue, compileComponent, flush })
 registerRequestedAuditFixChecks(check, { Vue, compileComponent, flush })
 registerSeptemberAdaptationChecks(check, { Vue, compileComponent, flush })
@@ -476,6 +482,15 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const exports = {}
   const modules = {
     'vue': Vue,
+    '~/composables/useSidebarHost': await import('../src/composables/useSidebarHost'),
+    '~/utils/videoPreviewProgress': await import('../src/utils/videoPreviewProgress'),
+    '~/utils/iframeExternalUrl': await import('../src/utils/iframeExternalUrl'),
+    '~/utils/linkNavigation': await import('../src/utils/linkNavigation'),
+    '~/utils/listRemovalFocus': await import('../src/utils/listRemovalFocus'),
+    '~/utils/videoFavoriteSelection': await import('../src/utils/videoFavoriteSelection'),
+    // The document protocol has dedicated actual-module tests; unrelated Drawer
+    // fixtures do not create a real embedded document or settings owner.
+    '~/composables/useIframeDocumentHost': { useIframeDocumentHost: () => ({ currentHref: Vue.ref('') }) },
     '~/utils/motionPresence': await import('../src/utils/motionPresence'),
     '~/utils/asyncPage': globals.defineAsyncComponent
       ? { createAsyncPageRegistry: () => ({ define: (loader, options) => globals.defineAsyncComponent({ loader, ...options }), preload: () => Promise.resolve() }) }
@@ -587,14 +602,15 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
       'vue-i18n': modules['vue-i18n'],
     }) }
   }
-  for (const name of ['LibraryWorkspace', 'LibrarySidebarHeading', 'LibrarySearchField']) {
-    const path = `~/components/${name}.vue`
-    if (text.includes(`'${path}'`) && !modules[path]) {
-      modules[path] = { default: await compileComponent(`../src/components/${name}.vue`, {
-        '~/logic': modules['~/logic'] ?? { settings: Vue.ref({}) },
-        'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
-        './WheelSelector.vue': { default: await compileComponent('../src/components/WheelSelector.vue') },
-      }) }
+  for (const name of ['LibraryWorkspace', 'LibrarySidebarHeading', 'LibrarySearchField', 'SidebarHeadingControl', 'SidebarSearchControl']) {
+    for (const path of [`~/components/${name}.vue`, `./${name}.vue`]) {
+      if (text.includes(`'${path}'`) && !modules[path]) {
+        modules[path] = { default: await compileComponent(`../src/components/${name}.vue`, {
+          '~/logic': modules['~/logic'] ?? { settings: Vue.ref({}) },
+          'vue-i18n': modules['vue-i18n'] ?? { useI18n: () => ({ t: key => key }) },
+          './WheelSelector.vue': { default: await compileComponent('../src/components/WheelSelector.vue') },
+        }) }
+      }
     }
   }
   if (text.includes('\'./momentPortal\'') && !modules['./momentPortal'])

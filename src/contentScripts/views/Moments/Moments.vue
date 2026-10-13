@@ -133,7 +133,10 @@ const momentsFeedPage = ref(1)
 const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
 
 const MAX_POST_LOAD_AUTOFILL_PAGES = 3
-/** 开启过滤时，每次初始加载、刷新或手动加载最多请求的原始动态页数。 */
+// All-filtered batches yield before continuing; this is a one-shot continuation,
+// not polling. Every continuation rechecks visibility, cursor ownership and size.
+const FILTERED_FEED_YIELD_MS = 800
+let autoFillTimer: ReturnType<typeof setTimeout> | undefined
 /** 虚拟瀑布流需要在全局哨兵进入视口前主动预取，避免高度修正后漏掉相交事件 */
 const LOAD_MORE_AHEAD_PX = 640
 
@@ -355,13 +358,13 @@ function getMomentFilterText(moment: DisplayMoment) {
   ].filter(Boolean).join('\n')
 }
 
-/** 任一有效过滤开启时，后续分页只由“加载更多”触发。 */
+/** Filters affect page assembly, not whether scrolling can request the next page. */
 function hasActiveMomentFilters() {
   return momentFilterPolicy.value.active
 }
 
 function requiresManualMomentPaging() {
-  return feedRequestFailed.value || hasActiveMomentFilters()
+  return feedRequestFailed.value
 }
 
 function passesMomentSettings(moment: DisplayMoment) {
@@ -437,7 +440,6 @@ function maybeLoadMoreNearBottom() {
     || isInitialLoading.value
     || isLoading.value
     || noMoreContent.value
-    || !moments.value.length
     || requiresManualMomentPaging()
   ) {
     return
@@ -474,13 +476,15 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   if (!isSameAccount(loadedAccountId, getCurrentAccountId()))
     return
 
-  // “想看”或任意类型过滤开启时只允许按钮触发后续批次。
+  // A failed request needs explicit retry; valid filtered pages continue normally.
   if (!reset && requiresManualMomentPaging() && !manualPaging)
     return
   if ((!reset && isLoading.value) || (!reset && noMoreContent.value))
     return
 
   if (reset) {
+    clearTimeout(autoFillTimer)
+    autoFillTimer = undefined
     feedRequestFailed.value = false
     isInitialLoading.value = true
     clearMomentPresentationForRefresh([])
@@ -621,7 +625,6 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
     || document.hidden
     || noMoreContent.value
     || requiresManualMomentPaging()
-    || autoFillDepth >= MAX_POST_LOAD_AUTOFILL_PAGES
     || !isFeedRequestCurrent(requestToken, requestType, requestHostMid)
   ) {
     return
@@ -637,8 +640,19 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
   if (!viewport)
     return
   const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight
-  if (distanceFromBottom <= 240)
-    void loadMoments(false, autoFillDepth + 1)
+  if (distanceFromBottom <= 240) {
+    if (autoFillDepth < MAX_POST_LOAD_AUTOFILL_PAGES) {
+      void loadMoments(false, autoFillDepth + 1)
+    }
+    else {
+      clearTimeout(autoFillTimer)
+      autoFillTimer = setTimeout(() => {
+        autoFillTimer = undefined
+        if (isFeedRequestCurrent(requestToken, requestType, requestHostMid))
+          maybeLoadMoreNearBottom()
+      }, FILTERED_FEED_YIELD_MS)
+    }
+  }
 }
 
 function clearMomentsPortalState() {
@@ -761,6 +775,7 @@ watch([
 
 onBeforeUnmount(() => {
   momentsMounted = false
+  clearTimeout(autoFillTimer)
   feedReader.reset()
   moments.value = []
   commentSessions.clear()
@@ -1035,13 +1050,13 @@ function appendMoments(items: DisplayMoment[]) {
               <div v-if="column.bottomPad" class="moments-grid__spacer" :style="{ height: `${column.bottomPad}px` }" />
             </div>
           </div>
-          <div v-else-if="!isInitialLoading && (!requiresManualMomentPaging() || noMoreContent)" class="moments-page__empty bew-empty--fill" role="status">
-            <p>{{ t('moments.empty') }}</p>
+          <div v-else-if="!isInitialLoading && !isLoading && (noMoreContent || feedRequestFailed)" class="moments-page__empty bew-empty--fill" role="status">
+            <p>{{ feedRequestFailed ? t('common.load_failed') : t('moments.empty') }}</p>
             <button
               :disabled="isLoading"
-              @click="requiresManualMomentPaging() && !noMoreContent ? (loadMoreFilteredMoments()) : refresh()"
+              @click="refresh()"
             >
-              {{ isLoading ? t('moments.loading') : requiresManualMomentPaging() && !noMoreContent ? t('moments.load_more') : t('moments.reload') }}
+              {{ feedRequestFailed ? t('moments.retry') : t('moments.reload') }}
             </button>
           </div>
           <button
@@ -1054,7 +1069,7 @@ function appendMoments(items: DisplayMoment[]) {
             {{ feedRequestFailed ? t('moments.retry') : t('moments.load_more') }}
           </button>
           <p
-            v-if="!isInitialLoading && moments.length"
+            v-if="!isInitialLoading && (moments.length || isLoading)"
             class="moments-page__loading"
             :class="{ 'is-visible': isLoading }"
             :aria-hidden="!isLoading"
@@ -1117,14 +1132,15 @@ function appendMoments(items: DisplayMoment[]) {
           scrolling="yes"
           @load="handleDetailIframeLoad"
         />
-        <button
-          type="button"
+        <a
+          :href="details.detailExternalHref.value" target="_blank" rel="noopener noreferrer"
           class="moment-detail-frame__open"
+          @pointerdown="details.syncDetailExternalHref" @focus="details.syncDetailExternalHref" @contextmenu="details.syncDetailExternalHref"
           @click.stop="openDetailFrameInNewTab"
         >
           {{ t('moments.open_new_tab') }}
           <span i-tabler-external-link />
-        </button>
+        </a>
       </div>
     </Dialog>
 
@@ -1522,7 +1538,7 @@ function appendMoments(items: DisplayMoment[]) {
   align-items: center;
   gap: var(--bew-space-2);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
@@ -1608,7 +1624,7 @@ function appendMoments(items: DisplayMoment[]) {
   background: var(--bew-elevated);
   font: inherit;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   cursor: pointer;
   transition:
@@ -1719,7 +1735,7 @@ function appendMoments(items: DisplayMoment[]) {
   font-family: inherit;
   text-decoration: none;
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   opacity: 0.92;
   cursor: pointer;

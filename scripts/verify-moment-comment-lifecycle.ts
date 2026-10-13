@@ -69,6 +69,12 @@ export async function verifyMomentCommentLifecycle() {
   const textOf = (root: HostNode): string => root.type === '#comment' ? '' : root.text + root.children.map(textOf).join('')
   const host = node('root')
   const findClass = (name: string) => descendants(host).find(item => String(item.props.class || '').split(' ').includes(name))!
+  const scrollComments = async () => {
+    measureCommentList = true
+    findClass('moment-comments__list').props.onScrollPassive()
+    measureCommentList = false
+    await flush()
+  }
   const clickText = (text: string) => {
     const button = descendants(host).find(item => item.type === 'button' && textOf(item).includes(text))
     assert.ok(button, `Missing button: ${text}`)
@@ -90,6 +96,8 @@ export async function verifyMomentCommentLifecycle() {
   let likeRequests = 0
   const delayedPages: Array<{ sort: number, resolve: (value: unknown) => void }> = []
   let delayPages = false
+  let emptyTail = false
+  let failedPage = false
   const requestedPages: number[] = []
   const requestedSorts: number[] = []
   const momentApi = {
@@ -103,6 +111,10 @@ export async function verifyMomentCommentLifecycle() {
       requestedSorts.push(sort)
       if (delayPages)
         return new Promise(resolve => delayedPages.push({ sort, resolve }))
+      if (failedPage && pn === 2)
+        return { code: -500, message: 'fixture page failure' }
+      if (emptyTail && pn >= 4)
+        return { code: 0, data: { page: { num: pn, count: 40, size: 8 }, replies: null } }
       return { code: 0, data: { page: { num: pn, count: 40, size: 8 }, replies: [fixtureComment(pn === 1 ? '100' : '200')] } }
     },
     getMomentCommentReplies: async () => {
@@ -155,8 +167,9 @@ export async function verifyMomentCommentLifecycle() {
   const SkeletonBlock = evaluate(compileScript(skeleton, { id: 'comment-skeleton', inlineTemplate: true }).content).default
   const cache = sessions.createMomentCommentSessionCache('1:1')
   const moment = vue.ref({ id: '123', commentCount: 40, commentId: '999', commentType: 17 } as DisplayMoment)
+  const active = vue.ref(true)
   const mount = () => {
-    const app = renderer.createApp({ setup: () => () => vue.h(component, { moment: moment.value }) })
+    const app = renderer.createApp({ setup: () => () => vue.h(component, { moment: moment.value, active: active.value }) })
     app.component('SkeletonBlock', SkeletonBlock)
     app.component('IconButton', vue.defineComponent({ setup: (_props, { attrs, slots }) => () => vue.h('button', attrs, slots.default?.()) }))
     app.provide(sessions.MOMENT_COMMENT_SESSIONS, cache)
@@ -170,7 +183,8 @@ export async function verifyMomentCommentLifecycle() {
   assert.equal(requestedSorts[0], 1, 'first opening requests the hottest comments')
   assert.ok(descendants(host).some(item => item.props['aria-pressed'] === true && textOf(item).includes('comments_sort_hot')))
   await clickText('comments_expand_replies')
-  await findClass('moment-comments__load-more').props.onClick()
+  assert.equal(findClass('moment-comments__load-more'), undefined, 'pagination is scroll driven, without a manual load-more control')
+  await scrollComments()
   await flush()
   const likeButton = descendants(host).find(item => item.props['aria-label'] === 'moment_card.comment_like')!
   await likeButton.props.onClick()
@@ -264,20 +278,57 @@ export async function verifyMomentCommentLifecycle() {
   assert.equal(detailRequests, 1, 'missing target resolves through detail before loading comments')
   assert.equal(requestedSorts.at(-1), 1, 'a different dynamic starts with hottest comments independently of the previous choice')
   measureCommentList = true
+  emptyTail = true
   const beforeFill = rootRequests
   moment.value = { ...moment.value, id: '789', commentId: '1000', commentType: 17 }
   await flush()
   await flush()
-  for (let turn = 0; turn < 10 && !findClass('moment-comments__pagination-error'); turn++)
+  for (let turn = 0; turn < 10; turn++)
     await flush()
-  assert.equal(rootRequests - beforeFill, 3, 'short first page fills the viewport, but the duplicate third page stops automatic loading')
-  assert.ok(findClass('moment-comments__pagination-error'))
+  assert.equal(rootRequests - beforeFill, 4, 'hot-comment duplicates do not fail; the successful empty tail ends loading despite stale count')
+  assert.equal(findClass('moment-comments__pagination-error'), undefined)
+  assert.equal(findClass('moment-comments__load-more'), undefined)
   await findClass('moment-comments__list').props.onScrollPassive()
   await flush()
-  assert.equal(rootRequests - beforeFill, 3, 'a stalled cursor is not retried by scrolling')
+  assert.equal(rootRequests - beforeFill, 4, 'scrolling a completed thread cannot keep requesting pages')
   measureCommentList = false
+  failedPage = true
+  moment.value = { ...moment.value, id: 'pagination-failure', commentId: '998' }
+  await flush()
+  await scrollComments()
+  await flush()
+  assert.ok(findClass('moment-comments__pagination-error'))
+  assert.equal(findClass('moment-comments__load-more'), undefined, 'a real failure exposes one retry, not a second load-more action')
+  failedPage = false
   await findClass('moment-comments__pagination-error').children.find(child => child.type === 'button')!.props.onClick()
   await flush()
-  assert.equal(requestedPages.at(-1), 3, 'manual retry uses the stalled page, not a skipped page')
+  assert.equal(requestedPages.at(-1), 2, 'manual retry uses the failed page, not a skipped page')
+  delayPages = true
+  moment.value = { ...moment.value, id: 'A11-pending', commentId: '1001' }
+  await flush()
+  assert.ok(findClass('moment-comments__skeleton'))
+  const oldPage = delayedPages.at(-1)!
+  active.value = false
+  await flush()
+  oldPage.resolve({ code: 0, data: { page: { num: 1, count: 1, size: 8 }, replies: [fixtureComment('old-document')] } })
+  await flush()
+  const beforeReopen = rootRequests
+  active.value = true
+  await flush()
+  assert.equal(rootRequests, beforeReopen + 1)
+  delayedPages.at(-1)!.resolve({ code: 0, data: { page: { num: 1, count: 0, size: 8 }, replies: [] } })
+  await flush()
+  assert.equal(Boolean(findClass('moment-comments__skeleton')), false, 'authoritative empty ends initial waiting')
+  const afterEmpty = rootRequests
+  active.value = false
+  await flush()
+  active.value = true
+  await flush()
+  assert.equal(rootRequests, afterEmpty, 'quick reopen of ready empty content does not await another ready event')
+  moment.value = { ...moment.value, id: 'A11-failure', commentId: '1002' }
+  await flush()
+  delayedPages.at(-1)!.resolve({ code: -1, message: 'fixture failure' })
+  await flush()
+  assert.equal(Boolean(findClass('moment-comments__skeleton')), false, 'error also ends waiting')
   app.unmount()
 }

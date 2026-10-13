@@ -110,10 +110,12 @@ button.popover-card__overlay-action {
 
 button.popover-card__overlay-action:hover {
   background: var(--bew-theme-color);
+  color: var(--bew-on-theme-color);
 }
 
 button.popover-card__overlay-action--danger:hover {
   background: var(--bew-error-color);
+  color: var(--bew-on-overlay-color);
 }
 
 button.popover-card__interactive {

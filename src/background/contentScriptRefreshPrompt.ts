@@ -381,7 +381,7 @@ function showRefreshPrompt(...args: unknown[]): void {
       color: var(--bew-text-1, #18191c);
       font: inherit;
       font-size: var(--bew-font-size-control, 12px);
-      font-weight: var(--bew-font-weight-semibold, 600);
+      font-weight: var(--bew-font-weight-medium, 500);
       line-height: var(--bew-line-height-control, 16px);
       background: transparent;
       border: 0;

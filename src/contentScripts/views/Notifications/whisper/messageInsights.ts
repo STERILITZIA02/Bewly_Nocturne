@@ -1,5 +1,5 @@
 import type { UnReadDm, UnReadMessage } from '~/components/TopBar/types'
-import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
+import { getNotificationCounts } from '~/utils/notificationBadge'
 
 import type { DisplayPrivateSession } from './privateSession'
 
@@ -41,7 +41,7 @@ export function getMessageInsights(
   message: Partial<UnReadMessage> & { recv_like?: unknown } = {},
   dm: Partial<UnReadDm> = {},
 ) {
-  const counts = getNotificationBadgeCounts({ showLikeNotificationReminder: true }, message, dm)
+  const counts = getNotificationCounts(message, dm)
   const notifications = [
     { key: 'reply', count: known(message.reply) ? counts.reply : null },
     { key: 'at', count: known(message.at) ? counts.at : null },

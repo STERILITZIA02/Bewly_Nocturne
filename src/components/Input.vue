@@ -7,6 +7,7 @@ interface Props {
   type?: 'text' | 'password' | 'email' | 'number'
   min?: number
   max?: number
+  step?: number | 'any'
   maxlength?: number
   placeholder?: string
   disabled?: boolean
@@ -73,6 +74,7 @@ defineExpose({ focus })
       :type="type"
       :min="min"
       :max="max"
+      :step="step"
       :maxlength="maxlength"
       :placeholder="placeholder"
       :disabled="disabled"

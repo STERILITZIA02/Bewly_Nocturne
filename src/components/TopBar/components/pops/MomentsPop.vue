@@ -223,7 +223,7 @@ defineExpose({
                       :href="author.jump_url"
                       type="topBar"
                       class="popover-card__interactive"
-                      font-bold
+                      font-medium
                     >
                       {{ author.name }}
                     </ALink>
@@ -236,7 +236,7 @@ defineExpose({
                   :href="moment.authorJumpUrl"
                   type="topBar"
                   class="popover-card__interactive"
-                  font-bold
+                  font-medium
                 >
                   {{ moment.author }}
                 </ALink>
@@ -253,11 +253,11 @@ defineExpose({
                   <div
                     v-else
                     text="$bew-theme-foreground"
-                    font="bold"
+                    font="semibold"
                     flex="~"
                     items="center"
                   >
-                    <div i-fluent:live-24-filled m="r-2" />
+                    <div i-fluent:live-24-regular m="r-2" />
                     {{ $t('topbar.moments_dropdown.live_status') }}
                   </div>
                 </div>
@@ -345,7 +345,7 @@ defineExpose({
 .moments-pop__authors a {
   min-width: 0;
   overflow: hidden;
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   text-overflow: ellipsis;
 }
 

@@ -45,6 +45,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
     <div
       v-if="!skeleton && bangumi"
       class="bangumi-card"
+      :class="{ 'bangumi-card--horizontal': horizontal }"
       :style="{
         display: horizontal ? 'flex' : 'block',
       }"
@@ -60,7 +61,6 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
       />
       <!-- Cover -->
       <div
-        :style="{ width: horizontal ? '170px' : '100%' }"
         tabindex="-1" block
         class="bangumi-card__cover bew-surface-border"
         rounded="$bew-media-radius" w-full bg="$bew-skeleton" relative shrink-0
@@ -159,6 +159,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
         </div>
       </div>
       <div
+        class="bangumi-card__info"
         flex-1
         :style="{
           marginTop: horizontal ? '0' : 'var(--bew-card-stack-gap)',
@@ -191,6 +192,7 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
     <BangumiCardSkeleton
       v-else-if="skeleton"
       :horizontal="horizontal"
+      :show-stats="Boolean(bangumi?.view || bangumi?.follow)"
     />
   </div>
 </template>
@@ -218,6 +220,17 @@ const { bangumiTitleClass, bangumiTitleStyle } = useBangumiCardSharedStyles()
 
 .bangumi-card__cover {
   z-index: 0;
+  width: 100%;
+}
+.bangumi-card--horizontal .bangumi-card__cover {
+  width: min(170px, 42%);
+}
+.bangumi-card__info {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.bangumi-card:not(.bangumi-card--horizontal) .bangumi-card__info {
+  @include contentCard.under-cover;
 }
 
 .bangumi-card__badge,

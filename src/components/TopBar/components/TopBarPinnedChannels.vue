@@ -261,7 +261,7 @@ function arraysEqual<T>(a: T[], b: T[]): boolean {
     background: transparent;
     color: var(--bew-text-2);
     font-size: var(--bew-control-label-size);
-    font-weight: var(--bew-control-brand-label-weight);
+    font-weight: var(--bew-control-label-weight);
     line-height: var(--bew-control-label-line-height);
     transition:
       background-color var(--bew-duration-normal, 200ms) ease,

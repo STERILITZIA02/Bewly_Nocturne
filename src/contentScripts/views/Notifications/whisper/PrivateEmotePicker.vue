@@ -208,7 +208,7 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
   padding: 0 var(--bew-space-2);
   color: var(--bew-text-2);
   font-size: var(--bew-font-size-caption);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   background: transparent;
   border: 0;

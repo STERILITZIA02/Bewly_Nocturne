@@ -836,7 +836,7 @@ html.bewly-design[data-bewly-native-site="game"] {
       corner-shape: var(--bew-corner-shape-round);
       font-size: var(--bew-font-size-control);
       line-height: var(--bew-line-height-control);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-medium);
 
       > span {
         color: inherit !important;
@@ -864,7 +864,7 @@ html.bewly-design[data-bewly-native-site="game"] {
       align-items: center;
       font-size: var(--bew-font-size-body);
       line-height: var(--bew-line-height-body);
-      font-weight: var(--bew-font-weight-semibold);
+      font-weight: var(--bew-font-weight-medium);
     }
 
     .qa-q .qa-index {
@@ -916,14 +916,14 @@ html.bewly-design[data-bewly-native-site="game"] {
       .game-des {
         font-size: var(--bew-font-size-title);
         line-height: var(--bew-line-height-title);
-        font-weight: var(--bew-font-weight-semibold);
+        font-weight: var(--bew-font-weight-medium);
       }
 
       .game-contact-service-btn {
         height: var(--bew-control-height);
         font-size: var(--bew-font-size-control);
         line-height: var(--bew-line-height-control);
-        font-weight: var(--bew-font-weight-semibold);
+        font-weight: var(--bew-font-weight-medium);
       }
     }
   }
@@ -941,7 +941,7 @@ html.bewly-design[data-bewly-native-site="game"] {
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-control);
     line-height: var(--bew-line-height-control);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-medium);
 
     &::after {
       content: attr(aria-label);

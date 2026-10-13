@@ -481,7 +481,7 @@ defineExpose({
     <div v-else class="all-results" space-y-6>
       <!-- 活动和游戏 -->
       <div v-if="!isInPaginationNonFirstPage && activityAndGameItems.length > 0">
-        <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
+        <h3 text="lg $bew-text-1" font-semibold mb-3 mt-6>
           {{ t('search.sections.activities') }}
         </h3>
         <div class="activity-results" grid="~ cols-1 md:cols-2 lg:cols-3 gap-4">
@@ -537,7 +537,7 @@ defineExpose({
           v-else-if="!isInPaginationNonFirstPage && (section?.result_type === 'media_bangumi' || section?.result_type === 'media_ft')
             && Array.isArray(section.data) && section.data.length"
         >
-          <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
+          <h3 text="lg $bew-text-1" font-semibold mb-3 mt-6>
             {{ section.result_type === 'media_ft' ? t('search.categories.media_ft') : t('search.categories.bangumi') }}
           </h3>
           <!-- 影视 -->
@@ -565,7 +565,7 @@ defineExpose({
                   v-html="sanitizeSearchHighlight(item.title)"
                 />
                 <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                  <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-bold>
+                  <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-semibold tabular-nums>
                     {{ t('search.media.score', { score: item.media_score.score.toFixed(1) }) }}
                   </span>
                   <span v-if="item.areas">{{ item.areas }}</span>
@@ -616,7 +616,7 @@ defineExpose({
                   {{ bangumi.title }}
                 </div>
                 <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                  <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
+                  <span v-if="bangumi.score" text="$bew-theme-foreground" font-semibold tabular-nums>
                     {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
                   </span>
                   <span v-if="bangumi.areas">{{ bangumi.areas }}</span>
@@ -648,7 +648,7 @@ defineExpose({
 
         <!-- 赛事 -->
         <div v-else-if="!isInPaginationNonFirstPage && section?.result_type === 'esports' && Array.isArray(section.data) && section.data.length">
-          <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
+          <h3 text="lg $bew-text-1" font-semibold mb-3 mt-6>
             {{ t('search.sections.schedule') }}
           </h3>
           <div class="esports-grid" flex="~ wrap gap-4" mb-4>
@@ -672,7 +672,7 @@ defineExpose({
 
         <!-- 用户 -->
         <div v-else-if="!isInPaginationNonFirstPage && section?.result_type === 'bili_user' && Array.isArray(section.data) && section.data.length">
-          <h3 text="lg $bew-text-1" font-medium mb-3 mt-6>
+          <h3 text="lg $bew-text-1" font-semibold mb-3 mt-6>
             {{ t('search.categories.user') }}
           </h3>
           <div class="user-highlight-grid">
@@ -777,7 +777,7 @@ defineExpose({
 
       <!-- 视频（放在最后，因为有滚动加载） -->
       <div>
-        <h3 v-if="videoList.length > 0" text="lg $bew-text-1" font-medium mb-3 mt-6>
+        <h3 v-if="videoList.length > 0" text="lg $bew-text-1" font-semibold mb-3 mt-6>
           {{ t('search.categories.video') }}
         </h3>
         <VideoCardGrid
@@ -862,7 +862,7 @@ defineExpose({
 
 .activity-title {
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   color: var(--bew-text-1);
   line-height: var(--bew-line-height-title);
 }
@@ -940,7 +940,7 @@ defineExpose({
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   border: 1px solid var(--bew-theme-color);
   cursor: pointer;
   transition:

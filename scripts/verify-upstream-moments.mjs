@@ -319,6 +319,7 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
     const items = Vue.ref(Array.from({ length: 3000 }, (_, index) => ({ id: String(index), text: 'post', images: [], title: '', isVideo: false, isForward: false })))
     const heights = new Map()
     const binders = new Map()
+    let gridReads = 0
     let layout
     function bind(moment) {
       if (!binders.has(moment.id)) {
@@ -335,7 +336,10 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       return () => Vue.h('div', { ref: (el) => {
         if (el) {
           Object.defineProperty(el, 'clientWidth', { value: 1100, configurable: true })
-          el.getBoundingClientRect = () => rect(-viewport.scrollTop, 1100, 100000)
+          el.getBoundingClientRect = () => {
+            gridReads++
+            return rect(-viewport.scrollTop, 1100, 100000)
+          }
         }
         layout.gridRef.value = el
         layout.layoutRef.value = el
@@ -352,6 +356,11 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       await flush()
     }
     try {
+      observers[0].callback([{ target: layout.gridRef.value, contentRect: { width: 1100, height: 100000 } }])
+      gridReads = 0
+      for (let step = 0; step < 30; step++)
+        observers[0].callback([{ target: layout.gridRef.value, contentRect: { width: 1100, height: 100000 + step } }])
+      assert.equal(gridReads, 0, 'height-only disclosure frames do not repeat column geometry reads')
       const stable = layout.virtualColumns.value
       const card = viewport.querySelector('article')
       const item = stable.flatMap(column => column.items).find(item => item.id === card.dataset.id)
@@ -367,6 +376,23 @@ export function registerUpstreamMomentChecks(check, { Vue, flush, compileCompone
       await flush()
       assert.notEqual(layout.virtualColumns.value, stable)
       assert.match(card.textContent, /replacement/)
+      const disclosure = card.appendChild(document.createElement('div'))
+      disclosure.className = 'moment-card__disclosure-inner'
+      disclosure.appendChild(document.createElement('section'))
+      const originalQuery = card.querySelector.bind(card)
+      let descriptionReads = 0
+      card.querySelector = (selector) => {
+        if (selector.includes('.moment-card__main--video'))
+          descriptionReads++
+        return originalQuery(selector)
+      }
+      observers[1].callback([{ target: card, contentRect: { width: 540, height: 180 } }])
+      descriptionReads = 0
+      for (let step = 0; step < 30; step++)
+        observers[1].callback([{ target: card, contentRect: { width: 540, height: 180 + step } }])
+      assert.equal(descriptionReads, 0, 'opening comments do not re-clamp an unchanged video description')
+      card.querySelector = originalQuery
+      disclosure.remove()
       layout.setInteractionHeld(item.id, true)
       viewport.scrollTop = 20000
       layout.updateVirtualColumns()

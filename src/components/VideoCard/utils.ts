@@ -1,4 +1,5 @@
 import { resolveSearchNavigationTarget } from '~/utils/searchNavigation'
+import { getVideoPlaybackUrl } from '~/utils/videoPreviewProgress'
 
 import type { Author, Video } from './types'
 
@@ -14,15 +15,6 @@ export function getTagSearchUrl(tag: string) {
   return resolveSearchNavigationTarget(tag)
 }
 
-export function getCurrentTime(videoElement: Ref<HTMLVideoElement | null>) {
-  if (videoElement.value) {
-    return videoElement.value.currentTime
-  }
-  return null
-}
-
 export function getCurrentVideoUrl(video: Video, videoCurrentTime: Ref<number | null>) {
-  const baseUrl = `https://www.bilibili.com/video/${video.bvid ?? `av${video.aid}`}`
-  const currentTime = videoCurrentTime.value
-  return currentTime && currentTime > 5 ? `${baseUrl}/?t=${currentTime}` : `${baseUrl}`
+  return getVideoPlaybackUrl(video, videoCurrentTime.value)
 }

@@ -5,7 +5,39 @@ import { findFirst, findMovable } from '~/utils/bewlyWidescreen/nativeDom'
 import { session } from '~/utils/bewlyWidescreen/session'
 import type { BewlyWidescreenState } from '~/utils/bewlyWidescreen/types'
 import { setupWidescreenDanmakuSemantics } from '~/utils/bewlyWidescreenNative'
+import { computeAnchoredPopoverPosition } from '~/utils/floatingMenu'
 import { attachLiquidGlass } from '~/utils/liquidGlass'
+
+export function positionDanmakuSettingsPanel(setting: HTMLElement, panel: HTMLElement) {
+  const anchor = setting.getBoundingClientRect()
+  if (!setting.isConnected || anchor.width <= 0 || anchor.height <= 0)
+    return
+  let bounds = { left: 0, top: 0, right: window.innerWidth, bottom: window.innerHeight }
+  for (let parent = setting.parentElement; parent && parent !== document.body; parent = parent.parentElement) {
+    const style = getComputedStyle(parent)
+    const clipsX = /hidden|clip|auto|scroll/.test(style.overflowX)
+    const clipsY = /hidden|clip|auto|scroll/.test(style.overflowY)
+    if (!clipsX && !clipsY)
+      continue
+    const rect = parent.getBoundingClientRect()
+    if (rect.width <= 0 || rect.height <= 0)
+      continue
+    bounds = { left: clipsX ? Math.max(bounds.left, rect.left) : bounds.left, right: clipsX ? Math.min(bounds.right, rect.right) : bounds.right, top: clipsY ? Math.max(bounds.top, rect.top) : bounds.top, bottom: clipsY ? Math.min(bounds.bottom, rect.bottom) : bounds.bottom }
+  }
+  const width = Math.max(0, bounds.right - bounds.left)
+  const height = Math.max(0, bounds.bottom - bounds.top)
+  const gap = Number.parseFloat(getComputedStyle(setting).getPropertyValue('--bew-space-2')) || 8
+  const scale = setting.offsetWidth > 0 ? anchor.width / setting.offsetWidth : 1
+  panel.style.setProperty('--bew-dm-popover-max-width', `${Math.max(0, width - gap * 2) / scale}px`)
+  panel.style.setProperty('--bew-dm-popover-max-height', `${Math.max(0, Math.max(anchor.top - bounds.top, bounds.bottom - anchor.bottom) - gap * 2) / scale}px`)
+  const rect = panel.getBoundingClientRect()
+  const local = { left: anchor.left - bounds.left, right: anchor.right - bounds.left, top: anchor.top - bounds.top, bottom: anchor.bottom - bounds.top, width: anchor.width }
+  const position = computeAnchoredPopoverPosition(local, rect, width, height)
+  panel.style.setProperty('--bew-dm-popover-left', `${(position.left + bounds.left - anchor.left) / scale}px`)
+  panel.style.setProperty('--bew-dm-popover-top', `${(position.top + bounds.top - anchor.top) / scale}px`)
+  panel.style.setProperty('--bew-dm-popover-max-height', `${Math.max(0, (position.openUp ? local.top : height - local.bottom) - gap * 2) / scale}px`)
+  panel.style.setProperty('--bew-dm-popover-bridge-top', position.openUp ? '100%' : `-${gap}px`)
+}
 
 function setupDanmakuSettingsClickToggle(source: HTMLElement) {
   let settingsPinned = false
@@ -64,6 +96,8 @@ function setupDanmakuSettingsClickToggle(source: HTMLElement) {
     }
     if (currentPanel)
       currentPanel.style.display = nextPinned ? 'block' : 'none'
+    if (nextPinned && currentPanel)
+      positionDanmakuSettingsPanel(currentSetting, currentPanel)
     if (!nextPinned)
       dispatchNativeSettingHover(currentSetting, false)
   }
@@ -174,6 +208,8 @@ function setupDanmakuSettingsClickToggle(source: HTMLElement) {
     const currentPanel = currentSetting?.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
     if (currentPanel)
       currentPanel.style.display = originalPanelDisplay
+    for (const name of ['left', 'top', 'max-width', 'max-height', 'bridge-top'])
+      currentPanel?.style.removeProperty(`--bew-dm-popover-${name}`)
     if (currentSetting) {
       if (originalAriaExpanded === null)
         currentSetting.removeAttribute('aria-expanded')
@@ -241,7 +277,17 @@ export function syncDanmakuInputSource(currentState: BewlyWidescreenState, force
       style: t('widescreen.danmaku_style'),
     },
   )
-  currentState.danmakuSettingsCleanup = setupDanmakuSettingsClickToggle(source)
+  const cleanupSettings = setupDanmakuSettingsClickToggle(source)
+  currentState.danmakuSettingsCleanup = () => {
+    cleanupSettings()
+    currentState.danmakuPopoverPositionSync = undefined
+  }
+  currentState.danmakuPopoverPositionSync = () => {
+    const setting = source.querySelector<HTMLElement>('.bpx-player-dm-setting[aria-expanded="true"]')
+    const panel = setting?.querySelector<HTMLElement>('.bpx-player-dm-setting-wrap')
+    if (setting && panel)
+      positionDanmakuSettingsPanel(setting, panel)
+  }
   currentState.resizeObserver?.observe(host)
   syncControlsGlassGeometry(currentState)
   schedulePlayerResizeSync(currentState)

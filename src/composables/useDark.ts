@@ -4,6 +4,7 @@ import { effectScope, onScopeDispose } from 'vue'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { DARK_MODE_BASE_COLOR_CHANGE, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
+import { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
 
@@ -80,9 +81,10 @@ function setDarkModeBaseColor(color: string) {
   }
 }
 
-function syncBilibiliTheme(isDark: boolean) {
+function syncBilibiliTheme(isDark: boolean, persist = true) {
   const theme = isDark ? 'dark' : 'light'
-  setCookie('theme_style', theme, 365 * 10)
+  if (persist)
+    setCookie('theme_style', theme, 365 * 10)
 
   // useDark() is shared by several components. Only notify Bilibili when the
   // effective theme actually changes; repeated events rebuild native feeds.
@@ -94,13 +96,14 @@ function syncBilibiliTheme(isDark: boolean) {
 }
 
 function createDarkState(observeRoute = true, syncNativeTheme = true) {
-  watch(() => settings.value.theme, (theme, _previous, onCleanup) => {
+  const parentTheme = shallowRef<{ isDark: boolean, isOledDark: boolean, darkModeBaseColor: string }>()
+  watch([() => settings.value.theme, () => Boolean(parentTheme.value)], ([theme, inherited], _previous, onCleanup) => {
     const syncClock = () => {
-      if (theme === 'scheduled' && !document.hidden)
+      if (theme === 'scheduled' && !inherited && !document.hidden)
         startScheduleClock()
       else stopScheduleClock()
     }
-    if (theme === 'scheduled')
+    if (theme === 'scheduled' && !inherited)
       document.addEventListener('visibilitychange', syncClock)
     onCleanup(() => {
       document.removeEventListener('visibilitychange', syncClock)
@@ -131,34 +134,31 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   const isVideoPageDark = computed(() => {
     return settings.value.videoPageDarkMode && isVideoPlaybackPage(currentUrl.value)
   })
-  const isDark = computed(() => currentAppColorScheme.value === 'dark' || isVideoPageDark.value)
-  const isOledDark = computed(() => isDark.value && settings.value.enableOledDarkMode === true)
+  const iframeDocument = createIframeDocumentClient()
+  const isDark = computed(() => parentTheme.value?.isDark ?? (currentAppColorScheme.value === 'dark' || isVideoPageDark.value))
+  const isOledDark = computed(() => isDark.value && (parentTheme.value?.isOledDark ?? settings.value.enableOledDarkMode === true))
+  const darkModeBaseColor = computed(() => parentTheme.value?.darkModeBaseColor ?? settings.value.darkModeBaseColor)
 
   const handleIframeThemeMessage = (event: MessageEvent) => {
+    iframeDocument.receive(event)
     const data = getParentMessageData(event, [IFRAME_DARK_MODE_CHANGE])
     if (!data
+      || !iframeDocument.matches(data)
       || typeof data.isDark !== 'boolean'
       || (data.isOledDark !== undefined && typeof data.isOledDark !== 'boolean')
       || (data.darkModeBaseColor !== undefined && typeof data.darkModeBaseColor !== 'string')) {
       return
     }
 
-    const selective = isFestivalPage()
-    const bewlyContainer = document.getElementById('bewly')
-    bewlyContainer?.classList.toggle('dark', data.isDark)
-    bewlyContainer?.classList.toggle('oled-dark', data.isDark && data.isOledDark === true)
-    if (!selective) {
-      document.documentElement.classList.toggle('dark', data.isDark)
-      document.documentElement.classList.toggle('oled-dark', data.isDark && data.isOledDark === true)
-      document.body?.classList.toggle('dark', data.isDark)
-      document.body?.classList.toggle('oled-dark', data.isDark && data.isOledDark === true)
-    }
-    if (typeof data.darkModeBaseColor === 'string')
-      setDarkModeBaseColor(data.darkModeBaseColor)
+    parentTheme.value = { isDark: data.isDark, isOledDark: data.isOledDark === true, darkModeBaseColor: typeof data.darkModeBaseColor === 'string' && /^#[\da-f]{6}$/i.test(data.darkModeBaseColor)
+      ? data.darkModeBaseColor
+      : settings.value.darkModeBaseColor }
   }
   window.addEventListener('message', handleIframeThemeMessage)
+  watch(currentUrl, () => iframeDocument.report(), { immediate: true })
   onScopeDispose(() => {
     window.removeEventListener('message', handleIframeThemeMessage)
+    iframeDocument.dispose()
   })
 
   // Apply appearance only when an effective theme input changes. The settings
@@ -180,7 +180,7 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
 
   // 监听深色模式基准颜色变化
   watch(
-    () => settings.value.darkModeBaseColor,
+    darkModeBaseColor,
     (newColor) => {
       setDarkModeBaseColor(newColor)
       if (lastDarkModeBaseColor === newColor)
@@ -222,10 +222,10 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
     }
 
     if (isDark.value)
-      setDarkModeBaseColor(settings.value.darkModeBaseColor)
+      setDarkModeBaseColor(darkModeBaseColor.value)
 
     if (syncNativeTheme)
-      syncBilibiliTheme(isDark.value)
+      syncBilibiliTheme(isDark.value, !parentTheme.value)
 
     // Only used as a temporary solution, which will eventually be removed
     // It seems like Bilibili already supports dark mode when the `bili_dark` class is added to the `html` element
@@ -338,6 +338,8 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   return {
     isDark,
     isOledDark,
+    darkModeBaseColor,
+    iframeDocument,
     toggleDark,
   }
 }

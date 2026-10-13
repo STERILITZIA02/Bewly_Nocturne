@@ -8,7 +8,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
   <article class="media-highlight-skeleton bew-media-result-card" aria-hidden="true">
     <SkeletonBlock class="media-highlight-skeleton__cover" width="var(--bew-media-result-cover-width)" height="auto" radius="media" />
     <div class="media-highlight-skeleton__info">
-      <SkeletonBlock width="64%" height="var(--bew-line-height-heading)" />
+      <SkeletonBlock width="64%" height="var(--bew-line-height-title)" />
       <div class="media-highlight-skeleton__meta">
         <SkeletonBlock width="56px" height="var(--bew-line-height-control)" />
         <SkeletonBlock width="72px" height="var(--bew-line-height-control)" />

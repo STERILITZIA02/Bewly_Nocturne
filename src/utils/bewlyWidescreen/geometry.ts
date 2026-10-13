@@ -70,6 +70,7 @@ function syncHighEnergyProgressState(
 /* 悬浮玻璃卡高度 = 弹幕区高度 + 原生控制栏实际高度 + 高能进度图高度。
    原生收起态由 CSS 属性选择器塌缩，无需在此处处理。 */
 export function syncControlsGlassGeometry(currentState: BewlyWidescreenState) {
+  currentState.danmakuPopoverPositionSync?.()
   const glass = currentState.danmakuGlass
   if (!glass?.isConnected)
     return

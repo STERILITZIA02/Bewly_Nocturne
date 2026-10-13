@@ -109,10 +109,29 @@ function select(value: string) {
 </template>
 
 <style scoped lang="scss">
-.moments-sidebar__modules {
-  display: grid;
+.moments-sidebar {
+  height: 100%;
+  min-height: 0;
+}
+.moments-sidebar .moments-sidebar__modules {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
   gap: var(--bew-space-3);
   min-width: 0;
+  min-height: 0;
+  > * {
+    flex: none;
+  }
+  > .moments-live-card {
+    flex: 0 1 auto;
+    // Keep one row reachable on exceptionally short windows; only then may
+    // the outer rail scroll. Ordinary expansion stays inside the live list.
+    min-height: calc(
+      var(--bew-library-filter-padding) * 2 + var(--bew-line-height-control) + var(--bew-space-2) +
+        var(--bew-space-10) + var(--bew-space-4)
+    );
+  }
 }
 .moments-sidebar__card {
   box-sizing: border-box;
@@ -154,7 +173,7 @@ function select(value: string) {
     white-space: nowrap;
     font-size: var(--bew-font-size-title);
     line-height: var(--bew-line-height-title);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-medium);
     transition: color var(--bew-duration-fast) var(--bew-ease-standard);
   }
 }
@@ -204,6 +223,7 @@ function select(value: string) {
     font-size: var(--bew-font-size-heading);
     line-height: var(--bew-line-height-heading);
     font-weight: var(--bew-font-weight-semibold);
+    font-variant-numeric: tabular-nums;
   }
   small {
     color: var(--bew-text-2);
@@ -224,7 +244,13 @@ function select(value: string) {
     margin-inline-start: auto;
   }
 }
+.moments-live-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
 .moments-live-card > header {
+  flex: none;
   display: flex;
   align-items: center;
   gap: var(--bew-space-2);
@@ -241,6 +267,13 @@ function select(value: string) {
 }
 .moments-live-card__list {
   display: grid;
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  overflow-anchor: none;
+  scrollbar-width: thin;
   gap: var(--bew-space-1);
 }
 .moments-live-card__row {

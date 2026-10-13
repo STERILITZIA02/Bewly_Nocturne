@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { DrawerType, useBewlyApp } from '~/composables/useAppProvider'
 import { useDark } from '~/composables/useDark'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
+import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
 import { DRAWER_TRANSITION_MS, ESC_CONFIRM_WINDOW_MS } from '~/constants/timing'
 import { settings } from '~/logic'
 import { isBewlyWidescreenEngaged } from '~/utils/bewlyWidescreen'
 import { isEditableLeafActiveElement, isEligibleDrawerEscape, resolveDrawerEscapeBehavior, shouldHandleDrawerEscape } from '~/utils/drawerEscape'
 import { hasIframeEscapePriorityState } from '~/utils/escapePriority'
-import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
+import { getIframeMessageData, markIframeReadyForMessaging } from '~/utils/iframeMessage'
 import { retiringTransition } from '~/utils/motionPresence'
 import { lockPageScroll, unlockPageScroll } from '~/utils/pageScrollLock'
 
@@ -20,7 +21,7 @@ const emit = defineEmits<{
 }>()
 
 const { mainAppRef, activeDrawer, setActiveDrawer } = useBewlyApp()
-const { isDark, isOledDark } = useDark()
+const { isDark } = useDark()
 
 const show = ref(false)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
@@ -32,7 +33,6 @@ const isIframeDisplayReady = ref(false)
 const delayCloseTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const revealIframeTimer = ref<ReturnType<typeof setTimeout> | null>(null)
 const openIframeTimer = ref<ReturnType<typeof setTimeout> | null>(null)
-const darkModeSyncTimers: Array<ReturnType<typeof setTimeout>> = []
 const isPageScrollLocked = ref(false)
 const isEscPressed = ref<boolean>(false)
 const escPressedTimer = ref<ReturnType<typeof setTimeout> | null>(null)
@@ -58,10 +58,7 @@ function clearOpenIframeTimer() {
   }
 }
 
-function clearDarkModeSyncTimers() {
-  while (darkModeSyncTimers.length)
-    clearTimeout(darkModeSyncTimers.pop())
-}
+useIframeDocumentHost(iframeRef, () => show.value && showIframe.value)
 
 function scheduleRevealIframe() {
   if (!showIframe.value || !isIframeLoaded.value)
@@ -73,20 +70,6 @@ function scheduleRevealIframe() {
       isIframeDisplayReady.value = true
     revealIframeTimer.value = null
   }, isDark.value ? 360 : 120)
-}
-
-function syncIframeDarkModeState() {
-  try {
-    postMessageToIframe(iframeRef.value, {
-      type: IFRAME_DARK_MODE_CHANGE,
-      isDark: isDark.value,
-      isOledDark: isOledDark.value,
-      darkModeBaseColor: settings.value.darkModeBaseColor,
-    })
-  }
-  catch (error) {
-    console.warn('Failed to send dark mode change message to iframe:', error)
-  }
 }
 
 function handleIframeLoad(event: Event) {
@@ -102,28 +85,11 @@ function handleIframeLoad(event: Event) {
   isIframeLoaded.value = true
 }
 
-// 监听黑暗模式变化
-watch([isDark, isOledDark], () => {
-  syncIframeDarkModeState()
-})
-
-// 监听深色模式基准颜色变化
-watch(() => settings.value.darkModeBaseColor, () => {
-  syncIframeDarkModeState()
-})
-
-// 监听iframe加载状态，加载完成后发送初始的黑暗模式状态
+// Theme sync follows document readiness; this only controls the existing reveal.
 watch(() => isIframeLoaded.value, (newValue) => {
   if (!newValue)
     return
 
-  // 发送多次深色模式同步消息，减少 iframe 页面初始亮色闪烁
-  clearDarkModeSyncTimers()
-  syncIframeDarkModeState()
-  darkModeSyncTimers.push(
-    setTimeout(syncIframeDarkModeState, 120),
-    setTimeout(syncIframeDarkModeState, 320),
-  )
   scheduleRevealIframe()
 })
 
@@ -183,7 +149,6 @@ function handleClose() {
   }
   clearOpenIframeTimer()
   clearRevealIframeTimer()
-  clearDarkModeSyncTimers()
   if (isPageScrollLocked.value) {
     unlockPageScroll()
     isPageScrollLocked.value = false
@@ -403,7 +368,6 @@ function unregisterGlobalListeners() {
 function clearLifecycleTimers() {
   clearOpenIframeTimer()
   clearRevealIframeTimer()
-  clearDarkModeSyncTimers()
   clearEscapeConfirmation()
   clearEscapeArbitrationTimers()
   if (escHintTimer.value) {
@@ -647,7 +611,7 @@ function handleFocusDrawer(e?: Event) {
 .notifications-drawer__title {
   margin: 0;
   font-size: var(--bew-font-size-heading);
-  font-weight: var(--bew-font-weight-bold);
+  font-weight: var(--bew-font-weight-semibold);
   line-height: var(--bew-line-height-heading);
 }
 </style>

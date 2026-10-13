@@ -171,6 +171,9 @@ player_screenshot:
   failed: 截圖失敗
   video_unavailable: 而家嘅影片畫面用唔到
 settings:
+  custom_playback_rate: 自訂倍速
+  apply_playback_rate: 套用
+  playback_rate_unavailable: 而家冇可用嘅主播放器
   comment_reply_batch_pages: 每次載入嘅回覆頁數
   comment_reply_batch_pages_desc: 只喺撳載入下一批時請求；首次展開同直接揀頁各請求一頁，唔會自動載入成個樓層。
   enable_comment_reply_tree_container: 獨立回覆閱讀區域
@@ -503,7 +506,7 @@ settings:
     jyut: 廣東話
   customize_font: 自訂字型
   customize_font_opt:
-    default: Bilibili 預設
+    default: 預設
     recommend: 推介
     custom: 自訂
   customize_font_desc: >-
@@ -1465,7 +1468,6 @@ moment_card:
   comments_retry: 再試
   comments_unavailable: 暫時睇唔到評論，請再試
   comments_refresh: 重新整理
-  comments_load_more: 睇更多留言
   comments_missing_parent: 上層回覆仲未載入
   comments_reply_new_tab: 喺新分頁回覆
   comments_expand_replies: 展開其餘回覆
@@ -1490,7 +1492,13 @@ moment_card:
   reservation_failed: 預約操作失敗
   reservation_login_required: 登入之後先可以預約
 video_card:
+  favorite_dialog:
+    read: 收藏夾載入失敗，請重試
+    save: 收藏操作失敗，請重試
+    verify: 收藏狀態未確認，請重新整理
+    empty: 暫時冇收藏夾
   operation:
+    favorite: 收藏到收藏夾
     not_interested: 唔鍾意
     not_interested_uploader: 唔想睇呢個 UP 主
     open_in_new_tab: 新分頁開啓

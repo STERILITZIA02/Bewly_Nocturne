@@ -8,7 +8,7 @@ import { stopDarkState, useDark } from '~/composables/useDark'
 import { onRouteChange, stopRouteObserver } from '~/composables/useRouteState'
 import { CONTENT_SCRIPT_COMMIT, CONTENT_SCRIPT_PING, CONTENT_SCRIPT_PONG } from '~/constants/contentScript'
 import type { BewlyWidescreenManualToggleDetail } from '~/constants/globalEvents'
-import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
+import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED, BEWLY_IFRAME_DRAWER_HOST_CHANGE, BEWLY_MOUNTED, BEWLY_WIDESCREEN_MANUAL_TOGGLE, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { getPageBridgeTargetOrigin, isPageBridgeMessage, matchesPageBridgeEvent, PAGE_BRIDGE_MESSAGE, PAGE_BRIDGE_PROTOCOL, postPageBridgeMessage } from '~/constants/pageBridge'
 import { setupCommentReplyApiBridge } from '~/contentScripts/features/commentReplyApiBridge'
 import { setupOriginalMomentsFilter } from '~/contentScripts/features/originalMomentsFilter'
@@ -40,7 +40,8 @@ import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 import { initNativeFavoriteSeasonPlayAllIntercept, stopNativeFavoriteSeasonPlayAllIntercept } from '~/utils/nativeFavoriteSeasonPlayAll'
 import { getPageBridgeChannelId, setPageBridgeChannelId } from '~/utils/pageBridgeChannel'
 import { createPageSettingsPayload } from '~/utils/pageSettingsProtocol'
-import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isPlayerShowingEndingRecommendation, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
+import { IFRAME_PLAYBACK_RATE } from '~/utils/playbackRateCommand'
+import { applyAutoPlayByVideoType, applyDefaultCaptionState, applyDefaultDanmakuState, applyExplicitPlaybackRate, cancelPlayerRetryTasks, defaultMode, getVideoElement, handleVideoPageNavigation, isPlayerDisplayModeReady, isPlayerShowingEndingRecommendation, isVideoPage, resetAutoPlayUserChangeFlag, resolveDefaultVideoPlayerMode, startAutoExitFullscreenMonitoring, startAutoPlayUserChangeMonitoring, stopAutoExitFullscreenMonitoring, stopAutoPlayUserChangeMonitoring, stopPlaybackRateMonitoring, webFullscreen, widescreen } from '~/utils/player'
 import { getPlayerModeContainer, getPlayerModeControl, getPlayerModeReadiness, hasNativePlayerError, PLAYER_ERROR_SELECTOR, PLAYER_MODE_CONTAINER_SELECTOR, PLAYER_MODE_CONTROL_SELECTORS } from '~/utils/playerMedia'
 import type { PlayerModeApplication } from '~/utils/playerModeApplication'
 import { createPlayerModeApplication } from '~/utils/playerModeApplication'
@@ -1810,58 +1811,28 @@ else if (shouldInitializeContentScript) {
       removeWatchLaterButton()
   }))
 
-  // 监听来自父页面的黑暗模式切换消息（用于iframe跨域场景）
+  let lastRateCommand: { sessionId: unknown, id: number } | undefined
+  // Theme messages are owned by useDark's document-scoped reactive state.
   window.addEventListener('message', (event) => {
-    const data = getParentMessageData(event, [IFRAME_DARK_MODE_CHANGE, IFRAME_TOP_BAR_CHANGE])
+    const data = getParentMessageData(event, [IFRAME_TOP_BAR_CHANGE, IFRAME_PLAYBACK_RATE])
     if (!data)
       return
 
-    const { type, isDark, isOledDark, darkModeBaseColor, useOriginalBilibiliTopBar } = data
-
-    if (type === IFRAME_DARK_MODE_CHANGE) {
-      if (typeof isDark !== 'boolean'
-        || (isOledDark !== undefined && typeof isOledDark !== 'boolean')
-        || (darkModeBaseColor !== undefined && typeof darkModeBaseColor !== 'string')) {
+    if (data.type === IFRAME_PLAYBACK_RATE) {
+      const channel = useDark().iframeDocument
+      if (data.phase !== 'apply' || !channel.matches(data) || typeof data.rate !== 'number'
+        || !Number.isSafeInteger(data.requestId) || Number(data.requestId) < 1
+        || (lastRateCommand && lastRateCommand.sessionId === data.sessionId && Number(data.requestId) <= lastRateCommand.id)) {
         return
       }
-      // Check if we should apply selective dark mode (plugin UI only) on festival pages
-      const isSelectiveDark = isFestivalPage()
-
-      if (isDark) {
-      // Always apply to plugin container if it exists
-        const bewlyElement = document.querySelector('#bewly')
-        if (bewlyElement) {
-          bewlyElement.classList.add('dark')
-          bewlyElement.classList.toggle('oled-dark', isOledDark === true)
-        }
-
-        // Only apply global styles if not on festival pages
-        if (!isSelectiveDark) {
-          document.documentElement.classList.add('dark')
-          document.documentElement.classList.toggle('oled-dark', isOledDark === true)
-          document.body?.classList.add('dark')
-          document.body?.classList.toggle('oled-dark', isOledDark === true)
-        }
-
-        // 如果提供了深色模式基准颜色，则应用它
-        if (typeof darkModeBaseColor === 'string' && darkModeBaseColor) {
-          document.documentElement.style.setProperty('--bew-dark-base-color', darkModeBaseColor)
-        }
-      }
-      else {
-        const bewlyElement = document.querySelector('#bewly')
-        if (bewlyElement) {
-          bewlyElement.classList.remove('dark', 'oled-dark')
-        }
-
-        // Only remove global classes if not in selective mode
-        if (!isSelectiveDark) {
-          document.documentElement.classList.remove('dark', 'oled-dark')
-          document.body?.classList.remove('dark', 'oled-dark')
-        }
-      }
+      lastRateCommand = { sessionId: data.sessionId, id: Number(data.requestId) }
+      const applied = applyExplicitPlaybackRate(data.rate)
+      channel.send({ type: IFRAME_PLAYBACK_RATE, phase: 'result', requestId: data.requestId, applied })
+      return
     }
-    else if (type === IFRAME_TOP_BAR_CHANGE) {
+
+    const { type, useOriginalBilibiliTopBar } = data
+    if (type === IFRAME_TOP_BAR_CHANGE) {
       if (typeof useOriginalBilibiliTopBar !== 'boolean')
         return
 

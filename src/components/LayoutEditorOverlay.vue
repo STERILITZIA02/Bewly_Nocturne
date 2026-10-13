@@ -751,7 +751,7 @@ onBeforeUnmount(() => {
     corner-shape: var(--bew-corner-shape-round);
     box-shadow: var(--bew-shadow-2);
     font-size: var(--bew-font-size-control);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-medium);
     line-height: var(--bew-line-height-control);
   }
 }

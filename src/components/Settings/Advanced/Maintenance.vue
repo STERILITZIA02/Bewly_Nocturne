@@ -283,7 +283,7 @@ async function handleResetSettings() {
         >
         <Button @click="handleImportSettings">
           <template #left>
-            <div i-uil:import />
+            <div i-tabler:download />
           </template>
           {{ $t('settings.import_settings') }}
         </Button>
@@ -295,7 +295,7 @@ async function handleResetSettings() {
       >
         <Button @click="handleExportSettings">
           <template #left>
-            <div i-uil:export />
+            <div i-tabler:upload />
           </template>
           {{ $t('settings.export_settings') }}
         </Button>

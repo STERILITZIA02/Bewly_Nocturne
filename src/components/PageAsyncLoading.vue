@@ -194,7 +194,7 @@ const historyFilters = createHistoryFilters()
   gap: var(--bew-space-1);
   height: var(--bew-sidebar-heading-height);
   margin-inline: calc(-1 * var(--bew-sidebar-inline-padding));
-  padding: 0 var(--bew-top-bar-inline-padding) var(--bew-space-2);
+  padding: 0 calc(var(--bew-sidebar-inline-padding) + var(--bew-sidebar-label-inset)) var(--bew-space-2);
 }
 .bew-page-async-loading__rail-heading--static {
   display: flex;

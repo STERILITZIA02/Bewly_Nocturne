@@ -99,7 +99,7 @@ defineExpose({
               {{ bangumi.title }}
             </div>
             <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-              <span v-if="bangumi.score" text="$bew-theme-foreground" font-bold>
+              <span v-if="bangumi.score" text="$bew-theme-foreground" font-semibold tabular-nums>
                 {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
               </span>
               <span v-if="bangumi.areas">
@@ -138,7 +138,7 @@ defineExpose({
         </div>
       </div>
       <div v-if="bangumiGroups.movie.length" space-y-3>
-        <h3 text="lg $bew-text-1" font-medium>
+        <h3 text="lg $bew-text-1" font-semibold>
           {{ t('search.categories.media_ft') }}
         </h3>
         <div class="bew-media-result-grid">
@@ -167,7 +167,7 @@ defineExpose({
                 {{ item.title }}
               </div>
               <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                <span v-if="item.score" text="$bew-theme-foreground" font-bold>
+                <span v-if="item.score" text="$bew-theme-foreground" font-semibold tabular-nums>
                   {{ t('search.media.score', { score: item.score?.toFixed(1) }) }}
                 </span>
                 <span v-if="item.areas">

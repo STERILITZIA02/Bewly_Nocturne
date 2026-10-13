@@ -5,15 +5,19 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import Empty from '~/components/Empty.vue'
+import IconButton from '~/components/IconButton.vue'
+import Tooltip from '~/components/Tooltip.vue'
 import { useOptimizedScroll } from '~/composables/useOptimizedScroll'
 import { useTopBarStore } from '~/stores/topBarStore'
+import { createAccountLifetime } from '~/utils/accountLifetime'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import api from '~/utils/api'
 import { calcCurrentTime } from '~/utils/dataFormatter'
-import { getFavoriteResourceBvid, getFavoriteResourceKey, getFavoriteResourceUrl } from '~/utils/favoriteResource'
+import { getFavoriteResourceBvid, getFavoriteResourceKey, getFavoriteResourceUrl, isPlayableFavoriteVideo } from '~/utils/favoriteResource'
 import { mergeFavoriteSeasonPage } from '~/utils/favoriteSeason'
 import { getUserID, removeHttpFromUrl, scrollToTop } from '~/utils/main'
 import { retiringListTransition } from '~/utils/motionPresence'
+import { updateOwnedWatchLater } from '~/utils/watchLater'
 
 import type { FavoriteCategory, FavoriteResource } from '../../types'
 import PopoverListSkeleton from './PopoverListSkeleton.vue'
@@ -48,6 +52,8 @@ const favoriteCategories = reactive<Array<FavoriteCategory>>([])
 const favoriteResources = reactive<Array<FavoriteResource>>([])
 
 const activatedMediaId = ref<number>(0)
+const displayedMediaId = ref(0)
+const displayingCurrentFolder = computed(() => displayedMediaId.value === activatedMediaId.value)
 const activatedFavoriteTitle = ref<string>()
 const currentPageNum = ref<number>(1)
 
@@ -74,6 +80,32 @@ const currentAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
 ))
+const watchLaterLifetime = createAccountLifetime(() => currentAccountId.value)
+const pendingWatchLater = ref(new Set<number>())
+onScopeDispose(watchLaterLifetime.dispose)
+watch(currentAccountId, () => {
+  watchLaterLifetime.invalidate()
+  pendingWatchLater.value = new Set()
+})
+async function toggleWatchLater(item: FavoriteResource) {
+  if (!displayingCurrentFolder.value || !isPlayableFavoriteVideo(item) || pendingWatchLater.value.has(item.id))
+    return
+  const owner = watchLaterLifetime.capture()
+  pendingWatchLater.value.add(item.id)
+  try {
+    const result = await updateOwnedWatchLater({ aid: item.id, bvid: getFavoriteResourceBvid(item) }, 'toggle', owner, topBarStore)
+    if (owner.isCurrent() && result.status === 'failed')
+      toast.error(result.message || t('common.operation_failed'))
+  }
+  catch {
+    if (owner.isCurrent())
+      toast.error(t('common.operation_failed'))
+  }
+  finally {
+    if (owner.isCurrent())
+      pendingWatchLater.value.delete(item.id)
+  }
+}
 function isFavoriteAccountCurrent(accountId: number | null): accountId is number {
   return accountId !== null && accountId === currentAccountId.value && getUserID() === String(accountId)
 }
@@ -93,7 +125,6 @@ watch(activatedMediaId, (newId, oldId) => {
     return
   stalledPageStart = undefined
 
-  favoriteResources.length = 0
   if (favoriteVideosWrap.value)
     scrollToTop(favoriteVideosWrap.value)
 
@@ -102,7 +133,7 @@ watch(activatedMediaId, (newId, oldId) => {
   paginationStalled.value = false
   resourceRequestFailed.value = false
   if (newId)
-    void getFavoriteResources(true)
+    void getFavoriteResources(true, true, 1)
 })
 
 watch(favoriteStateVersion, () => {
@@ -118,7 +149,7 @@ watch(currentAccountId, (accountId) => {
 
 // 使用 useOptimizedScroll 处理滚动加载
 function handleReachBottom() {
-  if (isLoadingCategories.value || isLoading.value || noMoreContent.value || favoriteResources.length === 0)
+  if (!displayingCurrentFolder.value || isLoadingCategories.value || isLoading.value || noMoreContent.value || favoriteResources.length === 0)
     return
 
   if (activatedMediaId.value) {
@@ -138,6 +169,7 @@ function resetFavoriteState() {
   favoriteResourcesRequestVersion++
   favoriteCategories.length = 0
   favoriteResources.length = 0
+  displayedMediaId.value = 0
   activatedMediaId.value = 0
   activatedFavoriteTitle.value = undefined
   currentPageNum.value = 1
@@ -176,6 +208,7 @@ async function refreshFavoriteData() {
     activatedMediaId.value = 0
     activatedFavoriteTitle.value = undefined
     favoriteResources.length = 0
+    displayedMediaId.value = 0
     favoriteResourcesRequestVersion++
     isLoading.value = false
     isRefreshingResources.value = false
@@ -296,6 +329,7 @@ async function getFavoriteResources(
         for (const { index, item } of merged.changed)
           favoriteResources[index] = item
       }
+      displayedMediaId.value = mediaId
 
       paginationStalled.value = merged.stalled
       noMoreContent.value = merged.complete
@@ -319,6 +353,8 @@ async function getFavoriteResources(
   }
   finally {
     if (requestVersion === favoriteResourcesRequestVersion && requestAccountId === currentAccountId.value) {
+      if (resourceRequestFailed.value && !displayingCurrentFolder.value)
+        favoriteResources.length = 0
       isLoading.value = false
       isRefreshingResources.value = false
     }
@@ -402,12 +438,15 @@ defineExpose({
         />
 
         <Empty
-          v-if="!isLoadingCategories && !isLoading && favoriteResources.length === 0"
+          v-if="!isLoadingCategories && !isLoading && !resourceRequestFailed && favoriteResources.length === 0"
           class="bew-popover__state"
         />
 
         <!-- favorites -->
-        <TransitionGroup name="list" v-bind="retiringListTransition">
+        <TransitionGroup
+          name="list" tag="div" class="favorites-pop__items" :class="{ 'favorites-pop__items--stale': !displayingCurrentFolder }"
+          :inert="!displayingCurrentFolder || undefined" :aria-hidden="!displayingCurrentFolder" v-bind="retiringListTransition"
+        >
           <article
             v-for="item in favoriteResources"
             :key="getFavoriteResourceKey(item)"
@@ -424,6 +463,17 @@ defineExpose({
               <div
                 class="popover-card__media aspect-video"
               >
+                <div v-if="isPlayableFavoriteVideo(item)" class="popover-card__interactive popover-card-action favorites-pop__watch-later">
+                  <Tooltip :content="t(topBarStore.isInWatchLater(item.id) ? 'common.remove_from_watch_later' : 'common.save_to_watch_later')" placement="top" teleport>
+                    <IconButton
+                      class="popover-card__overlay-action" :label="t(topBarStore.isInWatchLater(item.id) ? 'common.remove_from_watch_later' : 'common.save_to_watch_later')"
+                      :aria-pressed="topBarStore.isInWatchLater(item.id) === true" :disabled="pendingWatchLater.has(item.id)"
+                      @click.prevent.stop="toggleWatchLater(item)"
+                    >
+                      <i :class="topBarStore.isInWatchLater(item.id) ? 'i-mingcute:check-line' : 'i-mingcute:time-line'" />
+                    </IconButton>
+                  </Tooltip>
+                </div>
                 <div pos="relative" w-full h-full>
                   <img
                     w-full h-full
@@ -470,7 +520,7 @@ defineExpose({
         </TransitionGroup>
         <div v-if="paginationStalled || resourceRequestFailed" class="bew-popover__state" role="status">
           <span>{{ t('common.load_failed') }}</span>
-          <Button :disabled="isLoading" type="tertiary" @click="getFavoriteResources(true)">
+          <Button :disabled="isLoading" type="tertiary" @click="getFavoriteResources(true, !displayingCurrentFolder || currentPageNum === 1, displayingCurrentFolder ? currentPageNum : 1)">
             {{ t('common.operation.refresh') }}
           </Button>
         </div>
@@ -491,6 +541,26 @@ defineExpose({
   --bew-popover-media-width: 120px;
   width: 450px;
   height: min(500px, var(--bew-popover-max-height));
+}
+
+.favorites-pop__watch-later {
+  position: absolute;
+  top: var(--bew-space-1);
+  left: var(--bew-space-1);
+  z-index: 1;
+}
+
+.favorites-pop__items {
+  display: grid;
+  gap: var(--bew-space-2);
+  transition: opacity var(--bew-duration-fast) var(--bew-ease-standard);
+  &--stale {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
 }
 
 .favorites-pop__sidebar {

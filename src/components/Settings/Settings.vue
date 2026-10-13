@@ -1035,7 +1035,7 @@ function changeMenuItem(menuItem: MenuType) {
     overflow: hidden;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-body);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-font-weight-medium);
     line-height: var(--bew-line-height-body);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1117,7 +1117,7 @@ function changeMenuItem(menuItem: MenuType) {
   box-shadow: var(--bew-shadow-2);
   content: attr(data-settings-search-highlight);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   pointer-events: none;
   white-space: nowrap;

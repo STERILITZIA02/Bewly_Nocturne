@@ -29,6 +29,7 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
 
 <style scoped lang="scss">
 @use "../../styles/breakpoints";
+@use "../../styles/contentCard";
 
 .moment-card-skeleton {
   container-type: inline-size;
@@ -78,12 +79,18 @@ withDefaults(defineProps<{ media?: boolean }>(), { media: true })
   box-sizing: border-box;
   border-top: 1px solid color-mix(in oklab, var(--bew-border-color), transparent 64%);
 }
+.moment-card-skeleton--media .moment-card-skeleton__body {
+  @include contentCard.under-cover(var(--bew-card-inset-radius));
+}
 
 @container (min-width: #{breakpoints.$moment-card-wide}) {
   .moment-card-skeleton--media .moment-card-skeleton__main {
     display: grid;
     grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr);
     align-items: start;
+  }
+  .moment-card-skeleton--media .moment-card-skeleton__body {
+    padding: 0;
   }
 }
 </style>

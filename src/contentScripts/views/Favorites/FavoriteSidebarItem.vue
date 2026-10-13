@@ -164,8 +164,8 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   gap: var(--bew-space-1);
   font-size: var(--bew-font-size-caption);
   > span:first-child {
-    width: var(--bew-control-icon-size);
-    height: var(--bew-control-icon-size);
+    width: var(--bew-icon-size-xs);
+    height: var(--bew-icon-size-xs);
   }
 }
 .favorite-sidebar-item__panel {

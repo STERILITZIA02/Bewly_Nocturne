@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import { useId } from 'vue'
 
+import { useSidebarRail } from '~/composables/useSidebarHost'
 import { settings } from '~/logic'
 
 defineProps<{ label: string }>()
 const contentId = `library-content-${useId()}`
+const sidebarHost = useSidebarRail()
 </script>
 
 <template>
   <div class="library-workspace" :class="{ 'library-workspace--solid': settings.disableFrostedGlass, 'library-workspace--bottom-dock': settings.dockPosition === 'bottom' }">
-    <aside class="library-workspace__rail" data-top-bar-scroll-ignore :aria-label="label">
-      <div class="library-workspace__rail-scroll">
-        <slot name="sidebar" :content-id="contentId" />
-      </div>
-    </aside>
+    <div v-if="sidebarHost" aria-hidden="true" />
+    <Teleport :to="sidebarHost?.rail.value ?? 'body'" :disabled="!sidebarHost?.rail.value">
+      <aside class="library-workspace__rail" :class="{ 'bew-sidebar-hosted': sidebarHost }" data-top-bar-scroll-ignore :aria-label="label">
+        <div class="library-workspace__rail-scroll">
+          <slot name="sidebar" :content-id="contentId" />
+        </div>
+      </aside>
+    </Teleport>
     <div :id="contentId" class="library-workspace__content" role="tabpanel" :aria-label="label">
       <slot />
     </div>
@@ -38,7 +43,7 @@ const contentId = `library-content-${useId()}`
 }
 
 .library-workspace__rail {
-  @include sidebarSurface.surface;
+  @include sidebarSurface.rail;
   --bew-sidebar-control: var(--bew-fill-1);
   --bew-sidebar-control-hover: var(--bew-fill-2);
   --bew-sidebar-media-shadow: none;
@@ -63,7 +68,7 @@ const contentId = `library-content-${useId()}`
   scrollbar-width: thin;
 }
 
-.library-workspace--solid .library-workspace__rail {
+.library-workspace--solid .library-workspace__rail:not(.bew-sidebar-hosted) {
   @include sidebarSurface.solid;
 }
 

@@ -159,8 +159,7 @@ function handlePageMouseDown(event: MouseEvent) {
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-semibold);
-  letter-spacing: 0.02em;
-  line-height: 1.4;
+  line-height: var(--bew-line-height-control);
 }
 
 .settings-category-button {

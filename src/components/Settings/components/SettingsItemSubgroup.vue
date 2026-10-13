@@ -43,9 +43,9 @@ defineProps<{
 
 .subgroup-title {
   color: var(--bew-text-1);
-  font-size: var(--bew-font-size-body);
+  font-size: var(--bew-font-size-title);
   font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-body);
+  line-height: var(--bew-line-height-title);
 }
 
 .subgroup-desc {

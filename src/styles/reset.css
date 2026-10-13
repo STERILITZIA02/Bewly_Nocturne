@@ -45,9 +45,10 @@ html {
     ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji"; /* 4 */
 }
 
-/* Preserve the page font stack across the Shadow DOM boundary. */
+/* Bewly UI has its own multi-weight system stack; native pages keep their font. */
 :host {
-  font-family: inherit; /* 4 */
+  font-family: var(--bew-fonts-ui, system-ui, sans-serif); /* 4 */
+  font-synthesis-weight: none;
 }
 
 /*
@@ -109,7 +110,7 @@ Add the correct font weight in Edge and Safari.
 
 b,
 strong {
-  font-weight: bolder;
+  font-weight: var(--bew-font-weight-semibold, 600);
 }
 
 /*

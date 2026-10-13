@@ -111,8 +111,8 @@ export function createMomentCommentThreadController(
     const normalizedReplyCount = Number.isFinite(replyCount) ? Math.max(0, replyCount) : 0
     if (!state.loaded)
       state.hasMore = normalizedReplyCount > state.items.length
-    else if (normalizedReplyCount > state.items.length)
-      state.hasMore = true
+    // A parent count can include hidden/deleted replies. Once the dedicated
+    // reply endpoint reached its end, reseeding previews must not reopen it.
     retain(rootRpid, state)
     return state
   }

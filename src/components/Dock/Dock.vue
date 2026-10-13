@@ -703,8 +703,10 @@ const dockShellGeometry = computed(() => {
     : DOCK_LAYOUT.controlSize
   const expectedDockShellSize = controlSize + DOCK_LAYOUT.shellPadding
   const collapsedSize = resolveDockCollapsedShellSize(measuredSize, expectedDockShellSize)
-  const width = collapsedSize * 2
-  const height = collapsedSize / 3
+  const longSide = collapsedSize * 2
+  const shortSide = collapsedSize / 3
+  const width = dockPosition.value === 'right' ? shortSide : longSide
+  const height = dockPosition.value === 'right' ? longSide : shortSide
   const expandedWidth = expandedDockShellWidth.value || collapsedSize
   const expandedHeight = expandedDockShellHeight.value || collapsedSize
   return { width, height, expandedWidth, expandedHeight, radius: collapsedSize / 2 }
@@ -712,18 +714,21 @@ const dockShellGeometry = computed(() => {
 
 const dockShellStyle = computed((): CSSProperties => {
   const { width, height, expandedWidth, expandedHeight, radius } = dockShellGeometry.value
+  const collapsedRadius = Math.min(width, height) / 2
   return {
     '--dock-shell-radius': `${radius}px`,
     '--dock-collapsed-width': `${width}px`,
     '--dock-collapsed-height': `${height}px`,
     '--dock-wake-width': `${expandedDockWidth.value || expandedWidth}px`,
+    '--dock-wake-height': `${expandedDockHeight.value || expandedHeight}px`,
+    '--dock-collapsed-mark-length': `${Math.abs(width - height)}px`,
     '--dock-collapse-x': `${dockPosition.value === 'right' ? (expandedWidth - width) / 2 : 0}px`,
     '--dock-collapse-y': `${dockPosition.value === 'bottom' ? (expandedHeight - height) / 2 : 0}px`,
     '--dock-collapse-scale-x': width / expandedWidth,
     '--dock-collapse-scale-y': height / expandedHeight,
     // Compensate the shell scale so the final painted ends remain circular.
-    '--dock-collapse-radius-x': `${height / 2 * expandedWidth / width}px`,
-    '--dock-collapse-radius-y': `${expandedHeight / 2}px`,
+    '--dock-collapse-radius-x': `${collapsedRadius * expandedWidth / width}px`,
+    '--dock-collapse-radius-y': `${collapsedRadius * expandedHeight / height}px`,
   }
 })
 
@@ -746,7 +751,8 @@ onUnmounted(() => {
 <template>
   <aside
     class="dock-wrap"
-    pos="fixed top-0" flex="~ col justify-center items-center" w-full h-full
+    :class="`dock-wrap--${dockPosition}`"
+    pos="fixed" flex="~ col justify-center items-center"
     pointer-events-none
   >
     <!-- Dock Content -->
@@ -1035,6 +1041,18 @@ onUnmounted(() => {
 .dock-wrap {
   z-index: var(--bew-z-base-overlay);
 
+  // Keep the absolute flex child's static center, without a viewport-sized
+  // hit-test surface. The child's scale origin and wake channel stay unchanged.
+  &--bottom {
+    inset: auto 0 0;
+    height: 0;
+  }
+
+  &--right {
+    inset: 0 0 0 auto;
+    width: 0;
+  }
+
   > * {
     --uno: "pointer-events-auto";
   }
@@ -1159,6 +1177,9 @@ onUnmounted(() => {
 
   .dock-collapsed-trigger {
     position: absolute;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     top: 50%;
     left: 50%;
     z-index: 3;
@@ -1201,16 +1222,35 @@ onUnmounted(() => {
     transform: translateX(-50%);
   }
 
+  &.right .dock-collapsed-trigger {
+    min-width: calc(var(--bew-space-6) / var(--scale, 1));
+
+    &::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 0;
+      width: calc(100% + var(--bew-space-4));
+      height: var(--dock-wake-height);
+      transform: translateY(-50%);
+    }
+  }
+
   .dock-collapsed-mark {
     filter: var(--bew-dock-collapsed-mark-glow);
     position: relative;
     z-index: 1;
     display: flex;
+    flex: none;
     align-items: center;
     gap: var(--bew-space-2);
-    width: calc(var(--dock-collapsed-width) - var(--dock-collapsed-height));
+    width: var(--dock-collapsed-mark-length);
     height: var(--bew-space-1);
     pointer-events: none;
+  }
+
+  &.right .dock-collapsed-mark {
+    transform: rotate(90deg);
   }
 
   .dock-collapsed-mark__line,

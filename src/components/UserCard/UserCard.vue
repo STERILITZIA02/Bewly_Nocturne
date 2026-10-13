@@ -199,7 +199,7 @@ async function handleFollowClick(e: Event) {
           <!-- 用户名 + 等级 + 性别 -->
           <div flex items-center gap-2>
             <div
-              class="username" text="base $bew-text-1" font-semibold truncate
+              class="username" text="base $bew-text-1" font-medium truncate
             >
               {{ name }}
             </div>
@@ -307,7 +307,7 @@ async function handleFollowClick(e: Event) {
       <div class="user-info" flex-1 min-w-0>
         <!-- 用户名和认证 -->
         <div flex items-center gap-2 mb-1>
-          <div class="username" text="base $bew-text-1" font-semibold truncate>
+          <div class="username" text="base $bew-text-1" font-medium truncate>
             {{ name }}
           </div>
           <div
@@ -465,7 +465,7 @@ async function handleFollowClick(e: Event) {
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   border: none;
   cursor: pointer;
@@ -501,18 +501,19 @@ async function handleFollowClick(e: Event) {
 
 .sample-list {
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, var(--bew-card-sample-min-width)), 1fr));
   gap: var(--bew-space-3);
   margin-top: var(--bew-space-3);
 }
 
 .sample-card {
   display: flex;
+  min-width: 0;
   flex-direction: column;
   gap: var(--bew-space-2);
   cursor: pointer;
 
-  &:hover .sample-title {
+  &:is(:hover, :focus-visible) .sample-title {
     color: var(--bew-theme-foreground);
   }
 }
@@ -536,6 +537,7 @@ async function handleFollowClick(e: Event) {
 }
 
 .sample-duration {
+  font-variant-numeric: tabular-nums;
   position: absolute;
   bottom: var(--bew-space-2);
   right: var(--bew-space-2);
@@ -565,6 +567,8 @@ async function handleFollowClick(e: Event) {
 }
 
 .sample-title {
+  margin-inline: var(--bew-card-inset-radius);
+  margin-block-end: var(--bew-card-inset-radius);
   font-size: var(--bew-font-size-control);
   color: var(--bew-text-1);
   line-height: var(--bew-line-height-control);
@@ -572,6 +576,7 @@ async function handleFollowClick(e: Event) {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  overflow-wrap: anywhere;
 }
 
 .avatar-wrapper-compact {
@@ -628,6 +633,7 @@ async function handleFollowClick(e: Event) {
 }
 
 .user-card__compact-stats {
+  font-variant-numeric: tabular-nums;
   flex-wrap: wrap;
   row-gap: var(--bew-space-1);
 
@@ -645,7 +651,7 @@ async function handleFollowClick(e: Event) {
   background: var(--bew-theme-color);
   color: var(--bew-on-theme-color);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   border: 1px solid var(--bew-theme-color);
   cursor: pointer;

@@ -6,7 +6,7 @@ import { TOP_BAR_NOTIFICATION_SECTIONS } from '~/contentScripts/views/Notificati
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { useSettingsStore } from '~/stores/settingsStore'
-import { getNotificationBadgeCounts } from '~/utils/notificationBadge'
+import { getNotificationCounts } from '~/utils/notificationBadge'
 import { resolveNotificationNavigationUrl } from '~/utils/notificationRoute'
 
 interface NotificationPopItem {
@@ -27,7 +27,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const settingsStore = useSettingsStore()
-const badgeCounts = computed(() => getNotificationBadgeCounts(settings.value, props.unReadMessage, props.unReadDm))
+const badgeCounts = computed(() => getNotificationCounts(props.unReadMessage, props.unReadDm))
 
 function unreadCount(section: NotificationSectionDefinition): number {
   switch (section.unreadSource) {
@@ -92,9 +92,9 @@ function notificationBadgeWidth(count: number): string {
           <span
             v-if="item.unreadCount > 0"
             class="notification-pop__badge"
-            :style="{ width: notificationBadgeWidth(item.unreadCount) }"
+            :style="{ minWidth: notificationBadgeWidth(item.unreadCount) }"
           >
-            {{ item.unreadCount > 99 ? '99+' : item.unreadCount }}
+            {{ item.unreadCount }}
           </span>
         </Transition>
       </ALink>

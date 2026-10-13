@@ -4,13 +4,15 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReadonly, s
 import type { DisplayMoment, WatchLaterTarget } from '~/components/MomentCard/types'
 import { getMomentOriginalImageUrl } from '~/components/MomentCard/utils'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
 import { BEWLY_DRAWER_CLOSE_REQUEST, BEWLY_DRAWER_ESCAPE_HANDLED } from '~/constants/globalEvents'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
 import { getBilibiliImageResourceKey } from '~/utils/bilibiliUrl'
+import { resolveIframeExternalUrl } from '~/utils/iframeExternalUrl'
 import { shouldContinueIframeFocusRetry } from '~/utils/iframeFocusRetryPolicy'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
-import { executeResolvedLinkAction, resolveLinkOpenAction } from '~/utils/linkNavigation'
+import { executeResolvedLinkAction, hasNavigationModifier, resolveLinkOpenAction } from '~/utils/linkNavigation'
 import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
 import { releaseIframeMedia } from '~/utils/mediaResources'
 import { isMomentVideoUrl, normalizeMomentRemoteUrl as httpsUrl } from '~/utils/momentUrl'
@@ -25,6 +27,8 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
   const detailFrameUrl = ref('')
   const detailFrameLoaded = ref(false)
   const detailIframeRef = ref<HTMLIFrameElement | null>(null)
+  const { currentHref: reportedHref } = useIframeDocumentHost(detailIframeRef, () => Boolean(selectedMoment.value) && !disposed)
+  const detailExternalHref = computed(() => resolveIframeExternalUrl(detailIframeRef.value, reportedHref.value, detailFrameUrl.value))
   const detailIframeGenerations = new WeakMap<HTMLIFrameElement, number>()
   let detailFrameGeneration = 0
   const detailImageViewerRef = ref<HTMLElement | null>(null)
@@ -489,22 +493,22 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
       window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  function openDetailFrameInNewTab() {
-    const url = detailFrameUrl.value
-    if (!url)
-      return
+  function syncDetailExternalHref(event: Event) {
+    (event.currentTarget as HTMLAnchorElement).href = resolveIframeExternalUrl(detailIframeRef.value, reportedHref.value, detailFrameUrl.value)
+  }
 
-    const newWindow = window.open('about:blank', '_blank')
-    if (!newWindow)
+  function openDetailFrameInNewTab(event: MouseEvent) {
+    if (disposed || !selectedMoment.value) {
+      event.preventDefault()
       return
-
-    try {
-      newWindow.opener = null
-      newWindow.location.replace(url)
-      closeMomentDetail()
     }
-    catch {
-      newWindow.close()
+    syncDetailExternalHref(event)
+    if (event.button === 0 && !hasNavigationModifier(event)) {
+      event.preventDefault()
+      window.open((event.currentTarget as HTMLAnchorElement).href, '_blank', 'noopener,noreferrer')
+      if (requestClose)
+        requestClose()
+      else closeMomentDetail()
     }
   }
 
@@ -696,6 +700,8 @@ export function useMomentDetail(getImageRatio: (moment: DisplayMoment) => number
   return {
     selectedMoment: shallowReadonly(selectedMoment),
     detailFrameUrl,
+    detailExternalHref,
+    syncDetailExternalHref,
     detailFrameLoaded,
     detailImageViewerRef,
     detailImageViewerOpen,

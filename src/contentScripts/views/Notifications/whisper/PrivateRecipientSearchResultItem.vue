@@ -70,7 +70,7 @@ const emit = defineEmits<{
   place-items: center;
   overflow: hidden;
   color: var(--bew-text-2);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   background: var(--bew-fill-2);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
@@ -97,7 +97,7 @@ const emit = defineEmits<{
 .private-recipient-result__copy strong {
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
 }
 

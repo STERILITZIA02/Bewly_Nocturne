@@ -49,7 +49,7 @@ watch(() => settings.value.language, (newValue) => {
     <SettingsSectionHeading
       :title="$t('settings.menu_general')"
       :desc="$t('settings.category_general_desc')"
-      icon="i-mingcute:settings-3-fill"
+      icon="i-mingcute:settings-3-line"
     />
 
     <SettingsItemGroup :title="$t('settings.group_language')">

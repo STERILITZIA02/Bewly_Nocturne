@@ -3,9 +3,8 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
-import { useDark } from '~/composables/useDark'
-import { IFRAME_DARK_MODE_CHANGE, IFRAME_NAVIGATION_ACK, IFRAME_NAVIGATION_REQUEST, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
-import { settings } from '~/logic'
+import { useIframeDocumentHost } from '~/composables/useIframeDocumentHost'
+import { IFRAME_NAVIGATION_ACK, IFRAME_NAVIGATION_REQUEST, IFRAME_TOP_BAR_CHANGE } from '~/constants/globalEvents'
 import { useSettingsStore } from '~/stores/settingsStore'
 import { showNativeBilibiliTopBar } from '~/utils/effectiveTopBarSource'
 import { getIframeMessageData, markIframeReadyForMessaging, postMessageToIframe } from '~/utils/iframeMessage'
@@ -19,7 +18,6 @@ const emit = defineEmits<{ scroll: [scrollTop: number] }>()
 const { reachTop } = useBewlyApp()
 const { t } = useI18n()
 const toast = useToast()
-const { isDark, isOledDark } = useDark()
 const settingsStore = useSettingsStore()
 const headerShow = ref(false)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
@@ -30,7 +28,6 @@ const showLoading = ref<boolean>(false)
 const iframeScrollCleanupFns = ref<Array<() => void>>([])
 const iframeScrollSyncFailed = ref(false)
 let iframeGeneration = 0
-let initialThemeTimer: ReturnType<typeof setTimeout> | null = null
 let commandId = 0
 let commandTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -136,42 +133,12 @@ function syncIframeTopBarVisibility(useOriginalBilibiliTopBar: boolean) {
   }
 }
 
-watch([isDark, isOledDark], ([newValue, newOledValue]) => {
-  if (iframeRef.value?.contentWindow) {
-    try {
-      postMessageToIframe(iframeRef.value, {
-        type: IFRAME_DARK_MODE_CHANGE,
-        isDark: newValue,
-        isOledDark: newOledValue,
-      })
-    }
-    catch (error) {
-      console.warn('Failed to send dark mode change message to iframe:', error)
-    }
-  }
-})
+useIframeDocumentHost(iframeRef, () => currentUrl.value !== 'about:blank')
 
 watch(() => settingsStore.getEffectiveTopBarSource(), (source) => {
   const newValue = showNativeBilibiliTopBar(source)
   syncIframeTopBarVisibility(newValue)
 }, { immediate: true })
-
-// 监听深色模式基准颜色变化
-watch(() => settings.value.darkModeBaseColor, (newColor) => {
-  if (iframeRef.value?.contentWindow && isDark.value) {
-    try {
-      postMessageToIframe(iframeRef.value, {
-        type: IFRAME_DARK_MODE_CHANGE,
-        isDark: isDark.value,
-        isOledDark: isOledDark.value,
-        darkModeBaseColor: newColor,
-      })
-    }
-    catch (error) {
-      console.warn('Failed to send dark mode base color change message to iframe:', error)
-    }
-  }
-})
 
 // Only show loading animation after 1.5 seconds to prevent annoying flash when content loads quickly
 const showLoadingTimeout = ref<ReturnType<typeof setTimeout> | null>(null)
@@ -184,10 +151,6 @@ function clearLifecycleTimers() {
   if (showLoadingTimeout.value !== null) {
     clearTimeout(showLoadingTimeout.value)
     showLoadingTimeout.value = null
-  }
-  if (initialThemeTimer !== null) {
-    clearTimeout(initialThemeTimer)
-    initialThemeTimer = null
   }
 }
 
@@ -214,33 +177,6 @@ function handleIframeLoad(event: Event) {
 
   setupIframeScrollSync()
   syncIframeTopBarVisibility(shouldUseOriginalBilibiliTopBar())
-
-  // 当iframe加载完成后，发送当前的黑暗模式状态（仅在跨域时需要）
-  if (iframeRef.value?.contentWindow) {
-    const generation = iframeGeneration
-    const iframeWindow = iframe.contentWindow
-    if (!iframeWindow)
-      return
-    if (initialThemeTimer !== null)
-      clearTimeout(initialThemeTimer)
-    initialThemeTimer = setTimeout(() => {
-      initialThemeTimer = null
-      if (generation !== iframeGeneration || iframeWindow !== iframeRef.value?.contentWindow)
-        return
-      try {
-        postMessageToIframe(iframeRef.value, {
-          type: IFRAME_DARK_MODE_CHANGE,
-          isDark: isDark.value,
-          isOledDark: isOledDark.value,
-          darkModeBaseColor: settings.value.darkModeBaseColor,
-        })
-        syncIframeTopBarVisibility(shouldUseOriginalBilibiliTopBar())
-      }
-      catch (error) {
-        console.warn('Failed to send initial dark mode state to iframe:', error)
-      }
-    }, 100) // 减少延迟，因为iframe已经触发了load事件
-  }
 }
 
 function beginNavigation() {

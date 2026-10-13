@@ -159,7 +159,7 @@ watch(() => props.item.id, () => {
   margin: 0;
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-title);
   overflow-wrap: anywhere;
 }

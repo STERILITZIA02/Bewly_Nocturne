@@ -277,9 +277,11 @@ export function registerMaintenanceReviewChecks(check, { Vue, flush, compileComp
       '~/constants/globalEvents': await import('../src/constants/globalEvents'),
       '~/logic': { settings },
       '~/utils/iframeMessage': { getParentMessageData: () => undefined },
+      '~/utils/iframeDocument': await import('../src/utils/iframeDocument'),
       '~/utils/main': { isVideoPlaybackPage: () => false, setCookie() {} },
     }, {
       ref: Vue.ref,
+      shallowRef: Vue.shallowRef,
       computed: Vue.computed,
       watch: Vue.watch,
       nextTick: Vue.nextTick,

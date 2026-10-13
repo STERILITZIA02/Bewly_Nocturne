@@ -53,10 +53,10 @@ export const otherChannelConfigs: TopBarChannelConfig[] = [
   { key: 'paid_courses', nameKey: 'topbar.logo_dropdown.paid_courses', icon: '#channel-zhishi', href: 'https://www.bilibili.com/cheese' },
   { key: 'community', nameKey: 'topbar.logo_dropdown.community', icon: '#channel-blackroom', href: 'https://www.bilibili.com/blackboard/activity-5zJxM3spoS.html' },
   { key: 'music_plus', nameKey: 'topbar.logo_dropdown.music_plus', icon: '#channel-musicplus', href: 'https://music.bilibili.com/pc/music-center' },
-  { key: 'game_center', nameKey: 'topbar.logo_dropdown.game_center', icon: 'i-mingcute:game-2-fill', href: 'https://game.bilibili.com/platform', color: '#69B1DD' },
-  { key: 'comic_con_and_goods', nameKey: 'topbar.logo_dropdown.comic_con_and_goods', icon: 'i-mingcute:store-fill', href: 'https://show.bilibili.com/platform/home.html', color: '#E4C081' },
-  { key: 'manga', nameKey: 'topbar.logo_dropdown.manga', icon: 'i-mingcute:cat-fill', href: 'https://manga.bilibili.com', color: '#FFC1CC' },
-  { key: 'game_competitions', nameKey: 'topbar.logo_dropdown.game_competitions', icon: 'i-mingcute:sword-fill', href: 'https://www.bilibili.com/match/home', color: '#C8D3DF' },
+  { key: 'game_center', nameKey: 'topbar.logo_dropdown.game_center', icon: 'i-mingcute:game-2-line', href: 'https://game.bilibili.com/platform', color: '#69B1DD' },
+  { key: 'comic_con_and_goods', nameKey: 'topbar.logo_dropdown.comic_con_and_goods', icon: 'i-mingcute:store-line', href: 'https://show.bilibili.com/platform/home.html', color: '#E4C081' },
+  { key: 'manga', nameKey: 'topbar.logo_dropdown.manga', icon: 'i-mingcute:cat-line', href: 'https://manga.bilibili.com', color: '#FFC1CC' },
+  { key: 'game_competitions', nameKey: 'topbar.logo_dropdown.game_competitions', icon: 'i-mingcute:sword-line', href: 'https://www.bilibili.com/match/home', color: '#C8D3DF' },
 ]
 
 export const allChannelConfigs: TopBarChannelConfig[] = [

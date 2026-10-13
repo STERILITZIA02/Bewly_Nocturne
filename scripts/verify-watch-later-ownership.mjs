@@ -58,6 +58,7 @@ export function registerWatchLaterOwnershipChecks(check, { Vue, flush }) {
       '~/utils/main': main,
     })
     const logic = await loadSourceModule('../src/components/VideoCard/composables/useVideoCardLogic.ts', {
+      '~/utils/videoPreviewProgress': await import('../src/utils/videoPreviewProgress'),
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error: message => errors.push(message), warning: message => errors.push(message) }) },
       '~/composables/useAppProvider': { useBewlyApp: () => ({ openIframeDrawer() {} }) },

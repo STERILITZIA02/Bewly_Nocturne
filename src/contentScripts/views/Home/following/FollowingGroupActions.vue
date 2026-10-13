@@ -51,11 +51,11 @@ const options = computed<ContextMenuOption[]>(() => {
     return [
       { value: 'move', label: t('home.following_move_group'), icon: 'i-mingcute:folder-line', closeOnSelect: false, disabled: menuLoading.value },
       { value: 'special', label: t(special ? 'home.following_remove_special' : 'home.following_add_special'), icon: 'i-mingcute:star-line', kind: 'toggle', checked: special, closeOnSelect: true, disabled: menuLoading.value },
-      { value: 'unfollow', label: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-bold-duotone', danger: true, disabled: menuLoading.value },
+      { value: 'unfollow', label: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-linear', danger: true, disabled: menuLoading.value },
     ]
   }
   return [
-    { value: 'create', label: t('home.following_create_group'), icon: 'i-mingcute:folder-add-line' },
+    { value: 'create', label: t('home.following_create_group'), icon: 'i-tabler:folder-plus' },
     ...(target.value?.type === 'group' && target.value.value.tagid > 0
       ? [
           { value: 'rename', label: t('home.following_rename_group'), icon: 'i-mingcute:edit-line' },

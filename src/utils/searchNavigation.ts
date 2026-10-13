@@ -1,7 +1,9 @@
+import { useDark } from '~/composables/useDark'
 import { syncRouteState } from '~/composables/useRouteState'
 import { AppPage } from '~/enums/appEnums'
 import { settings } from '~/logic'
 import { getLinkFallbackPage } from '~/utils/configuredLinkNavigation'
+import { IFRAME_SEARCH_REQUEST, parseIframeSearchUrl } from '~/utils/iframeSearch'
 import { isHomePage, isInIframe, openLinkToNewTab } from '~/utils/main'
 import { getDefaultCustomUseOriginalBiliPage, resolvePluginSearchResultsUsage } from '~/utils/pageMode'
 import { resolveSearchOpenAction } from '~/utils/searchNavigationCore'
@@ -50,7 +52,7 @@ function isPluginSearchResultsDestination(destination: string): boolean {
   }
 }
 
-function openSearchResultsInCurrentTab(destination: string): void {
+export function openSearchResultsInCurrentTab(destination: string): void {
   if (isPluginSearchResultsDestination(destination) && isHomePage() && !isInIframe()) {
     const target = new URL(destination)
     window.history.pushState(window.history.state, '', `${target.pathname}${target.search}${target.hash}`)
@@ -58,13 +60,10 @@ function openSearchResultsInCurrentTab(destination: string): void {
     return
   }
 
-  if (isInIframe()) {
-    window.open(destination, '_top')
-    return
-  }
-
   window.location.assign(destination)
 }
+
+let iframeSearchRequestId = 0
 
 export interface SearchNavigationOptions {
   persistHistory?: () => Promise<void>
@@ -97,7 +96,17 @@ export function openSearchResults(destination: string, options?: SearchNavigatio
     // page visible or perform a second, stale navigation after its async write.
     // Plugin result pages persist their keyword in the destination document.
     void persistSearchHistory(options).catch(() => undefined)
-    openSearchResultsInCurrentTab(destination)
+    if (isInIframe()) {
+      const search = parseIframeSearchUrl(destination)
+      if (search && useDark().iframeDocument.send({ type: IFRAME_SEARCH_REQUEST, ...search, intent: 'currentTab', requestId: ++iframeSearchRequestId }))
+        return
+      // A not-yet-bound child cannot navigate the sandboxed top document.
+      // Keep the user activation for the explicit destination in a new tab.
+      openLinkToNewTab(destination)
+    }
+    else {
+      openSearchResultsInCurrentTab(destination)
+    }
   }
   else if (action === 'background') {
     void openLinkInBackground(destination)

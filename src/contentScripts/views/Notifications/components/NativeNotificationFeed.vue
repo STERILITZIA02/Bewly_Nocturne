@@ -546,7 +546,7 @@ defineExpose({ refresh })
   padding: 0 var(--bew-space-3);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
+  font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);
   text-decoration: none;
   background: var(--bew-content-solid);

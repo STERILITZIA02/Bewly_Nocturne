@@ -570,7 +570,6 @@ const weekDays = computed(() => [
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-regular);
   line-height: var(--bew-line-height-control);
-  letter-spacing: -0.01em;
   transition:
     background-color var(--bew-duration-normal) var(--bew-ease-out),
     color var(--bew-duration-normal) var(--bew-ease-out),
@@ -757,6 +756,8 @@ const weekDays = computed(() => [
   corner-shape: var(--bew-corner-shape);
   color: var(--bew-text-1);
   font-size: var(--bew-font-size-body);
+  font-weight: var(--bew-font-weight-medium);
+  font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition:
     background-color var(--bew-duration-normal) var(--bew-ease-out),
@@ -781,13 +782,11 @@ const weekDays = computed(() => [
 
   &.today {
     color: var(--bew-theme-foreground);
-    font-weight: var(--bew-font-weight-semibold);
   }
 
   &.selected {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    font-weight: var(--bew-font-weight-semibold);
 
     &:hover {
       background: var(--bew-theme-color);
