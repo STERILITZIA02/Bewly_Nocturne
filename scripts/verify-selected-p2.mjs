@@ -31,6 +31,7 @@ import { registerMomentsMaintenanceChecks } from './verify-moments-maintenance.m
 import { registerMotionContinuityChecks } from './verify-motion-continuity.mjs'
 import { registerNativeAppearanceChecks } from './verify-native-appearance.mjs'
 import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
+import { registerPlatformCompatibilityChecks } from './verify-platform-compatibility.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
 import { registerPlayerMaintenanceChecks } from './verify-player-maintenance.mjs'
@@ -105,6 +106,7 @@ registerPlayerMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerMaintenanceIntegrationChecks(check, { Vue, compileComponent, flush })
 registerMaintenanceReviewChecks(check, { Vue, compileComponent, flush })
 registerMotionContinuityChecks(check, { Vue, flush })
+registerPlatformCompatibilityChecks(check, { Vue, flush, compileComponent })
 registerMomentsMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerNativeAppearanceChecks(check, { Vue, compileComponent, flush })
 registerLibraryToolChecks(check, { Vue, compileComponent, flush })
@@ -658,6 +660,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   }
   if (text.includes('\'~/utils/responsiveImage\'') && !modules['~/utils/responsiveImage'])
     modules['~/utils/responsiveImage'] = await import('../src/utils/responsiveImage')
+  if (text.includes('\'~/utils/motionTiming\'') && !modules['~/utils/motionTiming'])
+    modules['~/utils/motionTiming'] = await import('../src/utils/motionTiming')
   if (text.includes('\'~/components/LazyPicture.vue\'') && !modules['~/components/LazyPicture.vue'])
     modules['~/components/LazyPicture.vue'] = { default: await compileComponent('../src/components/LazyPicture.vue') }
   vm.runInNewContext(code, {

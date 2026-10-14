@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, useId, watch } from 'vue'
 
 import { useSpringValue } from '~/composables/useSpringValue'
+import { getMotionDuration } from '~/utils/motionTiming'
 
 const props = defineProps<{
   modelValue: string
@@ -20,8 +21,8 @@ const root = ref<HTMLElement | null>(null)
 const selectedIndex = computed(() => Math.max(0, props.items.findIndex(item => item.value === props.modelValue)))
 const cursor = ref(selectedIndex.value)
 const position = useSpringValue(() => cursor.value, () => {
-  const duration = root.value ? Number.parseFloat(getComputedStyle(root.value).getPropertyValue('--bew-duration-normal')) : 200
-  return (duration || 200) / 1000
+  const duration = root.value ? getMotionDuration(getComputedStyle(root.value), '--bew-duration-normal') : 200
+  return duration / 1000
 })
 let wheelDistance = 0
 let lastWheelTime = 0

@@ -1,6 +1,8 @@
 import type { Ref } from 'vue'
 import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 
+import { getMotionDuration } from '~/utils/motionTiming'
+
 interface Frame { rect: DOMRect, opacity: string }
 interface Leave { finish: () => void, restore: () => void }
 
@@ -137,7 +139,7 @@ export function useHistoryDayMotion(container: Ref<HTMLElement | null>) {
     cancel()
     frames = before
     const style = getComputedStyle(root)
-    duration = Number.parseFloat(style.getPropertyValue('--bew-duration-normal')) || 200
+    duration = getMotionDuration(style, '--bew-duration-normal')
     easing = style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out'
     const version = generation
     active.value = true

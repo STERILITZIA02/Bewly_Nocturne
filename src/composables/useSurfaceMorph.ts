@@ -1,6 +1,8 @@
 import type { Ref, WatchSource } from 'vue'
 import { nextTick, onScopeDispose, watch } from 'vue'
 
+import { getMotionDuration } from '../utils/motionTiming'
+
 /** Same surface, new geometry. Never fades a glass shell or scales its text. */
 export function useSurfaceMorph(root: Ref<HTMLElement | null>, source: WatchSource) {
   let animation: Animation | undefined
@@ -36,7 +38,7 @@ export function useSurfaceMorph(root: Ref<HTMLElement | null>, source: WatchSour
       { width: `${before.width}px`, maxWidth: `${before.width}px`, height: `${before.height}px`, minHeight: `${before.height}px`, translate: `${before.left - after.left}px ${before.top - after.top}px`, borderRadius: `${radius(beforeRadius, before)}px` },
       { width: `${after.width}px`, maxWidth: `${after.width}px`, height: `${after.height}px`, minHeight: `${after.height}px`, translate: '0 0', borderRadius: `${targetRadius}px` },
     ], {
-      duration: Number.parseFloat(style.getPropertyValue('--bew-duration-normal')) || 200,
+      duration: getMotionDuration(style, '--bew-duration-normal'),
       easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
     })
     const current = animation

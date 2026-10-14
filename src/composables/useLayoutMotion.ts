@@ -1,6 +1,8 @@
 import type { Ref, WatchSource } from 'vue'
 import { nextTick, onScopeDispose, watch } from 'vue'
 
+import { getMotionDuration } from '../utils/motionTiming'
+
 interface Frame { rect: DOMRect, opacity: string }
 
 /** Animate only mounted, visible items. The caller retains data, scroll and virtualization ownership. */
@@ -41,7 +43,7 @@ export function useLayoutMotion(root: Ref<HTMLElement | null>, source: WatchSour
     if (version !== generation || !before.size || !root.value)
       return
     const style = getComputedStyle(root.value)
-    const duration = Number.parseFloat(style.getPropertyValue('--bew-duration-normal')) || 200
+    const duration = getMotionDuration(style, '--bew-duration-normal')
     const easing = style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out'
     const after = rows().map(row => ({ row, rect: row.getBoundingClientRect() }))
     for (const { row, rect } of after) {
