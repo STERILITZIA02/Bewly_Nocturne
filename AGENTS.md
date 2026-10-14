@@ -34,6 +34,7 @@ pnpm typecheck
 ### Token 与复用
 
 - 全局视觉 token 统一维护在 `src/styles/variables.scss`，不要在页面组件中重复定义同义尺寸、字号、字重或状态颜色。
+- JavaScript 读取 CSS 动效时间 token 时统一使用 `utils/motionTiming.ts` 的 `getMotionDuration`，不得直接 `parseFloat()` 后当成毫秒；正式 CSS 压缩会将 `300ms` 改写为 `.3s`，开发与压缩产物都要覆盖回归。
 - 紧凑胶囊、标签栏、分段选择器和图标切换器使用 `src/styles/segmentControl.scss` 的 `.bew-segment-control` / `.bew-segment-control__item` 基础类；页面组件只负责定位、宽度和响应式布局。
 - 使用液态指示器时，选项必须包含 `data-segment-item`，激活项使用 `data-active="true"`；无液态指示器的分组增加 `.bew-segment-control--static`。
 - 液态指示器统一使用 `src/components/LiquidSegmentIndicator.vue`，页面不要重复调用 `useLiquidSegmentIndicator` 或手写 `.bew-liquid-indicator` DOM；组件通过 `active-key` 接收当前值，必要时用组件 ref 调用 `updateIndicator(true)`。

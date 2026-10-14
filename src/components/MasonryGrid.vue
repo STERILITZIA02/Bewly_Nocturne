@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, onUpdated, ref } from 'vue'
 
+import { getMotionDuration } from '~/utils/motionTiming'
+
 // Keep slot/DOM order intact. Each next item occupies the shortest column;
 // existing items therefore keep their positions when a page is appended.
 const root = ref<HTMLElement | null>(null)
@@ -81,7 +83,7 @@ function layout(force = true) {
     if (!child.animate || (Math.abs(x) < 0.5 && Math.abs(y) < 0.5))
       continue
     const animation = child.animate([{ translate: `${x}px ${y}px` }, { translate: '0 0' }], {
-      duration: Number.parseFloat(style.getPropertyValue('--bew-duration-normal')) || 200,
+      duration: getMotionDuration(style, '--bew-duration-normal'),
       easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
     })
     animations.set(child, animation)

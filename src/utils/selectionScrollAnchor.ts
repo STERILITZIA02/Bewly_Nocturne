@@ -1,3 +1,5 @@
+import { getMotionDuration } from './motionTiming'
+
 const owners = new WeakMap<HTMLElement, () => void>()
 
 /** One short-lived owner per list; user scroll intent always takes precedence. */
@@ -36,7 +38,7 @@ export function keepSelectionScrollAnchor(row: HTMLElement, viewport: HTMLElemen
   observer.observe(row)
   for (const type of ['wheel', 'touchstart', 'pointerdown', 'keydown'])
     viewport.addEventListener(type, cancel, { passive: true })
-  const duration = Number.parseFloat(getComputedStyle(row).getPropertyValue('--bew-duration-normal')) || 200
+  const duration = getMotionDuration(getComputedStyle(row), '--bew-duration-normal')
   timer = setTimeout(cancel, duration + 50)
   return cancel
 }

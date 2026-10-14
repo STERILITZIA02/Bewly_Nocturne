@@ -1,6 +1,8 @@
 import type { TransitionProps } from 'vue'
 import { onScopeDispose } from 'vue'
 
+import { getMotionDuration } from '../utils/motionTiming'
+
 /** Keep glass and its ancestors opaque: opacity changes the backdrop sampling root. */
 export function useGlassPanelMotion(selector: string, collapsedTransform?: (panel: HTMLElement) => string, fadeSelector?: string): TransitionProps {
   const running = new Map<Element, Animation>()
@@ -47,33 +49,53 @@ export function useGlassPanelMotion(selector: string, collapsedTransform?: (pane
     const offset = (phase: string) => collapsed ?? (style.getPropertyValue(`--bew-panel-${phase}-transform`).trim() || 'translateY(0)')
     const from = interrupted.get(element) ?? (entering ? `${base} ${offset('enter')}` : base || 'none')
     interrupted.delete(element)
-    const duration = Number.parseFloat(style.getPropertyValue(entering ? '--bew-panel-enter-duration' : '--bew-panel-leave-duration')) || 200
-    const animation = panel.animate([
-      { transform: from },
-      { transform: entering ? base || 'none' : `${base} ${offset('leave')}` },
-    ], { duration, easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out', fill: 'both' })
-    // Fade actual paint layers, never a glass ancestor: the backdrop stays sampled
-    // from the same root from first frame to last. Exit is invisible before arrival.
-    if (fadeSelector) {
-      fades.set(element, Array.from(element.querySelectorAll<HTMLElement>(fadeSelector), (target) => {
-        const from = interruptedOpacity.get(target) ?? (entering ? '0' : '1')
-        interruptedOpacity.delete(target)
-        const frames = entering
-          ? [{ opacity: from, offset: 0 }, { opacity: from, offset: 0.12 }, { opacity: 1, offset: 1 }]
-          : [{ opacity: from, offset: 0 }, { opacity: 0, offset: 0.72 }, { opacity: 0, offset: 1 }]
-        return { target, animation: target.animate(frames, { duration, easing: 'linear', fill: 'both' }) }
-      }))
+    const duration = getMotionDuration(style, entering ? '--bew-panel-enter-duration' : '--bew-panel-leave-duration')
+    let animation: Animation
+    const paintAnimations: { target: HTMLElement, animation: Animation }[] = []
+    try {
+      animation = panel.animate([
+        { transform: from },
+        { transform: entering ? base || 'none' : `${base} ${offset('leave')}` },
+      ], { duration, easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out', fill: 'both' })
+      // Register immediately: a later paint layer can fail independently.
+      running.set(element, animation)
+      fades.set(element, paintAnimations)
+      // Fade actual paint layers, never a glass ancestor: the backdrop stays sampled
+      // from the same root from first frame to last. Exit is invisible before arrival.
+      if (fadeSelector) {
+        for (const target of Array.from(element.querySelectorAll<HTMLElement>(fadeSelector))) {
+          const from = interruptedOpacity.get(target) ?? (entering ? '0' : '1')
+          interruptedOpacity.delete(target)
+          const frames = entering
+            ? [{ opacity: from, offset: 0 }, { opacity: from, offset: 0.12 }, { opacity: 1, offset: 1 }]
+            : [{ opacity: from, offset: 0 }, { opacity: 0, offset: 0.72 }, { opacity: 0, offset: 1 }]
+          paintAnimations.push({ target, animation: target.animate(frames, { duration, easing: 'linear', fill: 'both' }) })
+        }
+      }
     }
-    running.set(element, animation)
-    void animation.finished.then(() => {
+    catch (error) {
+      // An unavailable animation must never strand Vue's leave/close lifecycle.
+      // Consume cancellation before releasing any partially-created effects.
+      void running.get(element)?.finished.catch(() => {})
+      cancel(element, true)
+      interrupted.delete(element)
+      console.warn('[Bewly] Panel animation could not start.', error)
+      done()
+      return
+    }
+    const finish = () => {
       if (running.get(element) !== animation)
         return
       running.delete(element)
+      // Detach this run before done(), which may immediately start a new enter.
+      fades.delete(element)
       done()
       animation.cancel()
-      fades.get(element)?.forEach(({ animation }) => animation.cancel())
-      fades.delete(element)
-    }, () => {})
+      paintAnimations.forEach(({ animation }) => animation.cancel())
+    }
+    // Own cancellations remove the map entry; external cancellation still has
+    // to settle the current transition (focus, closing gates, Dock release).
+    void animation.finished.then(finish, finish)
   }
   onScopeDispose(() => {
     for (const element of running.keys())

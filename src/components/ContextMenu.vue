@@ -6,6 +6,7 @@ import SkeletonBlock from '~/components/SkeletonBlock.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { DIALOG_FOCUS_OWNER, getDeepActiveElement, restoreOverlayFocus } from '~/utils/dialogFocus'
 import { computeAnchoredFloatingMenuPosition } from '~/utils/floatingMenu'
+import { getMotionDuration } from '~/utils/motionTiming'
 
 interface ContextMenuItem {
   value: string | number
@@ -149,7 +150,7 @@ onMounted(async () => {
   if (!disposed && content?.animate && !previousFocus?.matches(':focus-visible') && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
     const style = getComputedStyle(menu!)
     entryAnimation = content.animate([{ opacity: 0, scale: 0.98 }, { opacity: 1, scale: 1 }], {
-      duration: Number.parseFloat(style.getPropertyValue('--bew-duration-fast')) || 120,
+      duration: getMotionDuration(style, '--bew-duration-fast', 120),
       easing: style.getPropertyValue('--bew-ease-standard').trim() || 'ease-out',
     })
   }

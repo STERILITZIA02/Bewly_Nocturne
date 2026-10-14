@@ -1,9 +1,16 @@
 let lockCount = 0
-let htmlOverflow = ''
-let bodyOverflow = ''
-let paddingApplied = false
-let scrollContainer: HTMLElement | null = null
-let scrollContainerPaddingRight = ''
+let restoreStyles: (() => void) | undefined
+
+function preserveProperties(element: HTMLElement, properties: string[]) {
+  const saved = properties.map(name => [name, element.style.getPropertyValue(name), element.style.getPropertyPriority(name)] as const)
+  return () => {
+    for (const [name, value, priority] of saved) {
+      if (value)
+        element.style.setProperty(name, value, priority)
+      else element.style.removeProperty(name)
+    }
+  }
+}
 
 function getDocumentElements() {
   if (typeof document === 'undefined')
@@ -14,12 +21,6 @@ function getDocumentElements() {
     return null
 
   return { documentElement, body }
-}
-
-function getScrollbarWidth(documentElement: HTMLElement) {
-  const viewportWidth = window.innerWidth
-  const documentWidth = documentElement.clientWidth
-  return Math.max(0, viewportWidth - documentWidth)
 }
 
 function isScrollable(element: HTMLElement, overflowY: string) {
@@ -50,20 +51,28 @@ export function lockPageScroll() {
     return
 
   const { documentElement, body } = elements
-  htmlOverflow = documentElement.style.overflow
-  bodyOverflow = body.style.overflow
-
-  const scrollbarWidth = getScrollbarWidth(documentElement)
+  const scrollContainer = getScrollContainer(documentElement, body)
+  const paddingRight = Number.parseFloat(window.getComputedStyle(scrollContainer).paddingRight) || 0
+  const restoreHtml = preserveProperties(documentElement, ['overflow-x', 'overflow-y'])
+  const restoreBody = preserveProperties(body, ['overflow-x', 'overflow-y'])
+  const restorePadding = preserveProperties(scrollContainer, ['padding-right'])
+  const beforeWidth = documentElement.clientWidth
+  documentElement.style.setProperty('overflow', 'hidden', 'important')
+  body.style.setProperty('overflow', 'hidden', 'important')
+  // Windows classic scrollbars consume layout width. Overlay scrollbars and a
+  // stable gutter do not release space when locked, so must not be compensated.
+  const scrollbarWidth = Math.max(0, documentElement.clientWidth - beforeWidth)
   if (scrollbarWidth > 0) {
-    const paddingValue = `${scrollbarWidth}px`
-    scrollContainer = getScrollContainer(documentElement, body)
-    scrollContainerPaddingRight = scrollContainer.style.paddingRight
-    scrollContainer.style.paddingRight = paddingValue
-    paddingApplied = true
+    scrollContainer.style.setProperty('padding-right', `${paddingRight + scrollbarWidth}px`, 'important')
   }
-
-  documentElement.style.overflow = 'hidden'
-  body.style.overflow = 'hidden'
+  restoreStyles = () => {
+    documentElement.style.removeProperty('overflow')
+    body.style.removeProperty('overflow')
+    restoreHtml()
+    restoreBody()
+    if (scrollbarWidth > 0)
+      restorePadding()
+  }
 }
 
 export function unlockPageScroll() {
@@ -78,13 +87,6 @@ export function unlockPageScroll() {
   if (lockCount > 0)
     return
 
-  const { documentElement, body } = elements
-  documentElement.style.overflow = htmlOverflow
-  body.style.overflow = bodyOverflow
-
-  if (paddingApplied && scrollContainer) {
-    scrollContainer.style.paddingRight = scrollContainerPaddingRight
-    scrollContainer = null
-    paddingApplied = false
-  }
+  restoreStyles?.()
+  restoreStyles = undefined
 }

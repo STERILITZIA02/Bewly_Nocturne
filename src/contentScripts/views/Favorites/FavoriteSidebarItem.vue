@@ -3,6 +3,7 @@ import { useIntersectionObserver } from '@vueuse/core'
 import { onBeforeUnmount, ref, useId, watch } from 'vue'
 
 import { removeHttpFromUrl } from '~/utils/main'
+import { getMotionDuration } from '~/utils/motionTiming'
 import { keepSelectionScrollAnchor } from '~/utils/selectionScrollAnchor'
 
 const props = defineProps<{
@@ -35,7 +36,7 @@ watch(() => props.expanded, (expanded) => {
     renderActions.value = false
   }
   else {
-    const duration = root.value ? Number.parseFloat(getComputedStyle(root.value).getPropertyValue('--bew-duration-normal')) || 200 : 200
+    const duration = root.value ? getMotionDuration(getComputedStyle(root.value), '--bew-duration-normal') : 200
     closeActionsTimer = setTimeout(() => renderActions.value = false, duration + 50)
   }
   releaseAnchor?.()
