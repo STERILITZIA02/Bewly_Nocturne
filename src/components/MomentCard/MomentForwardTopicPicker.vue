@@ -17,7 +17,7 @@ const props = withDefaults(defineProps<{
   emptyLabel: string
   retryLabel: string
   errorLabel: string
-  kind?: 'mention' | 'topic'
+  kind?: 'mention' | 'reply-mention' | 'topic'
   initialQuery?: string
   autofocus?: boolean
 }>(), { autofocus: true })
@@ -36,13 +36,15 @@ const searchState = reactive<MomentTopicSearchState>({
 const searchController = createMomentTopicSearchController({
   state: searchState,
   search: async (keywords, content) => {
-    if (props.kind === 'mention') {
-      const response = await api.moment.searchMomentMentions({ keyword: keywords })
+    if (props.kind === 'mention' || props.kind === 'reply-mention') {
+      const response = props.kind === 'reply-mention'
+        ? await api.moment.searchMomentReplyMentions({ keyword: keywords })
+        : await api.moment.searchMomentMentions({ keyword: keywords })
       if (getMomentForwardResponseCode(response) !== 0 || !Array.isArray(response.data?.groups))
         throw new Error(props.errorLabel)
       const seen = new Set<string>()
-      return response.data.groups.flatMap((group: { items?: { uid: string | number, name: string }[] }) => (group.items ?? []).flatMap((item) => {
-        const id = String(item.uid)
+      return response.data.groups.flatMap((group: { items?: { uid?: string | number, mid?: string | number, name: string }[] }) => (group.items ?? []).flatMap((item) => {
+        const id = String(props.kind === 'reply-mention' ? item.mid : item.uid)
         if (!/^[1-9]\d*$/.test(id) || typeof item.name !== 'string' || !item.name.trim() || seen.has(id))
           return []
         seen.add(id)
@@ -74,7 +76,7 @@ function scheduleSearch() {
   clearSearchTimer()
   searchController.invalidate()
   const keywords = query.value.trim()
-  if (!keywords) {
+  if (!keywords && props.kind !== 'reply-mention') {
     searchState.results = []
     return
   }
@@ -136,7 +138,7 @@ onBeforeUnmount(() => {
         data-completion-result
         @click="emit('select', topic)"
       >
-        <span>{{ kind === 'mention' ? '@' : '#' }}{{ topic.name }}</span>
+        <span>{{ kind === 'mention' || kind === 'reply-mention' ? '@' : '#' }}{{ topic.name }}</span>
       </button>
     </div>
   </section>

@@ -230,8 +230,8 @@ watch(() => activePackage.value ? getPackageKey(activePackage.value) : '', () =>
 }
 
 .private-emote-picker__package-button[aria-selected="true"] {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .private-emote-picker__package-button:focus-visible {

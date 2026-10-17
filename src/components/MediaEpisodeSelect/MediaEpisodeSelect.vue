@@ -141,7 +141,7 @@ watch(isOpen, async (open, _previous, onCleanup) => {
       <span truncate>{{ t('search.media.select_episode') }}</span>
 
       <!-- arrow -->
-      <i i-mingcute:down-line class="select-arrow" aria-hidden="true" />
+      <i i-tabler:chevron-down class="select-arrow" aria-hidden="true" />
     </button>
 
     <Teleport :to="mainAppRef">

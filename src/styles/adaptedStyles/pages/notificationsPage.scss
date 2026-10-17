@@ -101,7 +101,7 @@ html.bewly-design.notificationsPage {
       .item.active a,
       .item:hover,
       .item.active {
-        color: var(--bew-theme-foreground) !important;
+        color: var(--bew-text-1) !important;
       }
     }
 
@@ -136,14 +136,14 @@ html.bewly-design.notificationsPage {
     .msg-more,
     .error .btn,
     .detail .content.active:hover {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .content .input-section .row .emoji-btn:hover,
     .content .input-section .row .emoji-btn.active,
     .action-button:hover,
     .action-button.active {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     .space-right .space-right-bottom .bili-im .right .dialog .send-box .btn-box.send-btn.active,
@@ -176,38 +176,42 @@ html.bewly-design.notificationsPage {
     .bl-button--shallow-o:active,
     .bl-button--shallow-o.active,
     .bl-button--shallow-o[active] {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .content .input-section .row .emoji-btn:hover,
     .content .input-section .row .emoji-btn.active,
     .reply-textarea:focus {
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     .tab-list .tab-item.active::before {
-      border-top-color: var(--bew-theme-color);
+      border-top-color: var(--bew-focus-ring-color);
     }
 
-    .medal-admin,
-    .medal-system,
-    .medal-master,
     .space-right .space-right-bottom .bili-im .right .dialog .send-box .btn-box.send-btn.active,
-    .tab-list .tab-item.active::after,
     .content .btnrow .btn.save,
     .send-button,
-    .notify-number,
     .bl-button--primary,
-    .bl-button--ghost:hover,
     .notify-dot,
     .content .kw-search-row .create-btn {
       background-color: var(--bew-theme-color);
     }
 
-    .is-up > .message > .message-content,
-    .toggle.active,
-    .message .message-content.is-me {
+    .toggle.active {
       background-color: var(--bew-theme-color) !important;
+    }
+
+    .is-up > .message > .message-content,
+    .message .message-content.is-me,
+    .notify-number,
+    .bl-button--ghost:hover {
+      background-color: var(--bew-selected-bg) !important;
+      color: var(--bew-text-1) !important;
+    }
+
+    .tab-list .tab-item.active::after {
+      background-color: var(--bew-text-1);
     }
 
     .bl-button--shallow-o:active,
@@ -801,7 +805,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .message-list-content .msg-item .message > .message-content.is-me,
   .message-list-content .msg-item.is-up > .message > .message-content {
     color: var(--bew-text-1) !important;
-    background-color: color-mix(in oklab, var(--bew-elevated-solid) 80%, var(--bew-theme-color)) !important;
+    background-color: var(--bew-selected-bg) !important;
     border: 0;
     border-radius: var(--bew-panel-radius);
     corner-shape: var(--bew-corner-shape);
@@ -864,7 +868,7 @@ html.notificationsPage.bewly-notifications-embedded {
   .content .kw-search-row .create-btn {
     color: var(--bew-on-theme-color) !important;
     background: var(--bew-theme-color) !important;
-    border-color: var(--bew-theme-color) !important;
+    border-color: var(--bew-focus-ring-color) !important;
   }
 
   .send-btn,
@@ -950,8 +954,8 @@ html.notificationsPage.bewly-notifications-embedded {
   .medal-admin,
   .medal-system,
   .medal-master {
-    color: var(--bew-on-theme-color) !important;
-    background: var(--bew-theme-color) !important;
+    color: var(--bew-text-1) !important;
+    background: var(--bew-selected-bg) !important;
     border-radius: var(--bew-badge-radius);
     corner-shape: var(--bew-corner-shape-round);
   }

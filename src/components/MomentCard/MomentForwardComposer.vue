@@ -3,6 +3,8 @@ import { computed, nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useToast } from 'vue-toastification'
 
+import { useBewlyApp } from '~/composables/useAppProvider'
+import { useComposerPicker } from '~/composables/useComposerPicker'
 import { useTopBarStore } from '~/stores/topBarStore'
 
 import type { MomentForwardEmote, MomentForwardToken, SelectedMomentTopic } from './momentForwardContent'
@@ -30,6 +32,7 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const toast = useToast()
+const { mainAppRef } = useBewlyApp()
 const topBarStore = useTopBarStore()
 const momentRef = toRef(() => props.moment)
 const accountId = computed(() => topBarStore.isLogin ? topBarStore.userInfo.mid : '')
@@ -38,6 +41,15 @@ const emojiPickerOpen = ref(false)
 const topicPickerOpen = ref(false)
 const completion = ref<ReturnType<typeof findMomentForwardCompletion>>(null)
 const completionPickerRef = ref<InstanceType<typeof MomentForwardTopicPicker>>()
+const surfaceRef = ref<HTMLElement | null>(null)
+const pickerRef = ref<HTMLElement | null>(null)
+const pickerVisible = computed(() => props.active && Boolean(emojiPickerOpen.value || topicPickerOpen.value || completion.value))
+function closePickers() {
+  emojiPickerOpen.value = false
+  topicPickerOpen.value = false
+  completion.value = null
+}
+useComposerPicker(surfaceRef, pickerRef, pickerVisible, closePickers)
 
 const {
   state,
@@ -122,6 +134,30 @@ function toggleTopicPicker() {
   emojiPickerOpen.value = false
 }
 
+function toggleMentionPicker() {
+  if (submitting.value)
+    return
+  if (completion.value?.kind === 'mention') {
+    closePickers()
+    focusTextarea()
+    return
+  }
+  const start = textareaRef.value?.selectionStart ?? draftText.value.length
+  const end = textareaRef.value?.selectionEnd ?? start
+  // Preserve token boundaries beside text/emotes, including insertion mid-word.
+  const prefix = start > 0 && !/\s/.test(draftText.value[start - 1]) ? ' ' : ''
+  const suffix = end < draftText.value.length && !/\s/.test(draftText.value[end]) ? ' ' : ''
+  const value = `${draftText.value.slice(0, start)}${prefix}@${suffix}${draftText.value.slice(end)}`
+  const caret = start + prefix.length + 1
+  closePickers()
+  setTokens(parseMomentForwardTokens(value, knownEmojiTexts.value, mentions()))
+  void nextTick(() => {
+    textareaRef.value?.focus({ preventScroll: true })
+    textareaRef.value?.setSelectionRange(caret, caret)
+    updateCompletion()
+  })
+}
+
 function handleEmojiSelect(emote: MomentForwardEmote) {
   const textarea = textareaRef.value
   const selectionStart = textarea?.selectionStart ?? draftText.value.length
@@ -164,9 +200,7 @@ function handleEscape(event: KeyboardEvent) {
   event.preventDefault()
   event.stopPropagation()
   if (emojiPickerOpen.value || topicPickerOpen.value || completion.value) {
-    completion.value = null
-    emojiPickerOpen.value = false
-    topicPickerOpen.value = false
+    closePickers()
     focusTextarea()
     return
   }
@@ -190,9 +224,7 @@ function handleSubmitShortcut(event: KeyboardEvent) {
 async function handleSubmit() {
   if (submitting.value)
     return
-  emojiPickerOpen.value = false
-  topicPickerOpen.value = false
-  completion.value = null
+  closePickers()
   const result = await submit()
   if (!result.applied)
     return
@@ -250,122 +282,127 @@ watch(accountId, (nextAccountId, previousAccountId) => {
     @keydown="handleSubmitShortcut"
     @keydown.esc="handleEscape"
   >
-    <textarea
-      ref="textareaRef"
-      :value="draftText"
-      :placeholder="t('moment_card.forward_placeholder')"
-      :disabled="submitting"
-      rows="2"
-      @input="handleInput"
-      @keyup="handleKeyup"
-      @compositionend="updateCompletion"
-    />
-    <MomentForwardTopicPicker
-      v-if="completion" ref="completionPickerRef" :kind="completion.kind" :initial-query="completion.query" :autofocus="false"
-      :content="draftText" :search-placeholder="t(completion.kind === 'mention' ? 'moment_card.forward_search_mention' : 'moment_card.forward_search_topic')"
-      :empty-label="t('moment_card.forward_topic_empty')" :retry-label="t('common.retry')" :error-label="t('moment_card.forward_topic_search_failed')"
-      @select="selectCompletion" @close="completion = null; focusTextarea()"
-    />
-
-    <div v-if="state.selectedTopic" class="moment-forward-composer__topic">
-      <span>#{{ state.selectedTopic.name }}</span>
-      <button
-        type="button"
-        :aria-label="t('moment_card.forward_clear_topic')"
+    <form ref="surfaceRef" class="moment-forward-composer__surface" @submit.prevent="handleSubmit">
+      <textarea
+        ref="textareaRef"
+        :value="draftText"
+        :placeholder="t('moment_card.forward_placeholder')"
+        :aria-label="t('moment_card.forward_placeholder')"
         :disabled="submitting"
-        @click="clearTopic"
-      >
-        <span i-tabler-x aria-hidden="true" />
-      </button>
-    </div>
+        rows="2"
+        @input="handleInput"
+        @keyup="handleKeyup"
+        @compositionend="updateCompletion"
+      />
 
-    <p v-if="state.error" class="moment-forward-composer__error" role="alert">
-      {{ state.error }}
-    </p>
-
-    <div class="moment-forward-composer__toolbar">
-      <div class="moment-forward-composer__tools">
+      <div v-if="state.selectedTopic" class="moment-forward-composer__topic">
+        <span>#{{ state.selectedTopic.name }}</span>
         <button
           type="button"
-          :aria-expanded="emojiPickerOpen"
+          :aria-label="t('moment_card.forward_clear_topic')"
           :disabled="submitting"
-          @click="toggleEmojiPicker"
+          @click="clearTopic"
         >
-          <span i-tabler-mood-smile aria-hidden="true" />
-          {{ t('moment_card.forward_emoji') }}
-        </button>
-        <button
-          type="button"
-          :aria-expanded="topicPickerOpen"
-          :disabled="submitting"
-          @click="toggleTopicPicker"
-        >
-          <span i-tabler-hash aria-hidden="true" />
-          {{ t('moment_card.forward_select_topic') }}
+          <span i-tabler-x aria-hidden="true" />
         </button>
       </div>
 
-      <button
-        type="button"
-        class="moment-forward-composer__submit"
-        :disabled="submitting"
-        @click="handleSubmit"
-      >
-        <SkeletonBlock v-if="submitting" width="1em" height="1em" radius="interactive" />
-        {{ submitting ? t('moment_card.forward_submitting') : t('moment_card.forward') }}
-      </button>
-    </div>
+      <p v-if="state.error" class="moment-forward-composer__error" role="alert">
+        {{ state.error }}
+      </p>
 
-    <MomentForwardEmojiPicker
-      v-if="emojiPickerOpen"
-      :account-id="accountId"
-      :picker-label="t('moment_card.forward_emoji')"
-      :retry-label="t('moment_card.comments_retry')"
-      :error-label="t('moment_card.forward_emote_failed')"
-      @select="handleEmojiSelect"
-      @close="emojiPickerOpen = false; focusTextarea()"
-    />
-    <MomentForwardTopicPicker
-      v-if="topicPickerOpen"
-      :content="draftText"
-      :search-placeholder="t('moment_card.forward_search_topic')"
-      :empty-label="t('moment_card.forward_topic_empty')"
-      :retry-label="t('moment_card.comments_retry')"
-      :error-label="t('moment_card.forward_topic_search_failed')"
-      @select="handleTopicSelect"
-      @close="topicPickerOpen = false; focusTextarea()"
-    />
+      <div class="moment-forward-composer__toolbar">
+        <div class="moment-forward-composer__tools">
+          <button
+            type="button"
+            :aria-expanded="emojiPickerOpen"
+            :aria-label="t('moment_card.forward_emoji')"
+            :disabled="submitting"
+            @click="toggleEmojiPicker"
+          >
+            <span i-tabler-mood-smile aria-hidden="true" />
+          </button>
+          <button
+            type="button" :aria-expanded="completion?.kind === 'mention'" :aria-label="t('moment_card.forward_search_mention')"
+            :disabled="submitting" @click="toggleMentionPicker"
+          >
+            <span i-tabler-at aria-hidden="true" />
+          </button>
+          <button
+            type="button"
+            :aria-expanded="topicPickerOpen"
+            :aria-label="t('moment_card.forward_select_topic')"
+            :disabled="submitting"
+            @click="toggleTopicPicker"
+          >
+            <span i-tabler-hash aria-hidden="true" />
+          </button>
+        </div>
+
+        <button
+          type="submit"
+          class="moment-forward-composer__submit bew-send-button"
+          :disabled="submitting"
+          :aria-label="t(submitting ? 'moment_card.forward_submitting' : 'moment_card.forward')"
+          :aria-busy="submitting"
+          :data-bew-send-state="submitting ? 'pending' : 'ready'"
+        />
+      </div>
+    </form>
+
+    <Teleport :to="mainAppRef">
+      <div
+        v-if="pickerVisible" ref="pickerRef" class="moment-forward-composer__picker" @click.stop @pointerdown.stop
+        @keydown="handleSubmitShortcut"
+      >
+        <MomentForwardTopicPicker
+          v-if="completion" ref="completionPickerRef" :kind="completion.kind" :initial-query="completion.query" :autofocus="false"
+          :content="draftText" :search-placeholder="t(completion.kind === 'mention' ? 'moment_card.forward_search_mention' : 'moment_card.forward_search_topic')"
+          :empty-label="t('moment_card.forward_topic_empty')" :retry-label="t('common.retry')" :error-label="t('moment_card.forward_topic_search_failed')"
+          @select="selectCompletion" @close="closePickers(); focusTextarea()"
+        />
+        <MomentForwardEmojiPicker
+          v-if="emojiPickerOpen"
+          :account-id="accountId"
+          :picker-label="t('moment_card.forward_emoji')"
+          :retry-label="t('moment_card.comments_retry')"
+          :error-label="t('moment_card.forward_emote_failed')"
+          @select="handleEmojiSelect"
+          @close="emojiPickerOpen = false; focusTextarea()"
+        />
+        <MomentForwardTopicPicker
+          v-if="topicPickerOpen"
+          :content="draftText"
+          :search-placeholder="t('moment_card.forward_search_topic')"
+          :empty-label="t('moment_card.forward_topic_empty')"
+          :retry-label="t('moment_card.comments_retry')"
+          :error-label="t('moment_card.forward_topic_search_failed')"
+          @select="handleTopicSelect"
+          @close="topicPickerOpen = false; focusTextarea()"
+        />
+      </div>
+    </Teleport>
   </section>
 </template>
 
 <style scoped lang="scss">
+@use "../../styles/composer";
 .moment-forward-composer {
   padding: var(--bew-space-4);
   border-top: 1px solid var(--bew-border-color);
   background: transparent;
 }
-.moment-forward-composer textarea {
-  display: block;
-  field-sizing: content;
-  width: 100%;
-  min-height: var(--bew-moment-forward-textarea-min-height);
-  max-height: var(--bew-moment-forward-textarea-max-height);
-  padding: var(--bew-space-3);
-  overflow-y: auto;
-  resize: none;
-  border: 1px solid var(--bew-border-color);
-  border-radius: var(--bew-interactive-radius);
-  outline: 0;
-  color: var(--bew-text-1);
-  background: var(--bew-bg);
-  font: inherit;
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
-  box-sizing: border-box;
+.moment-forward-composer__surface {
+  @include composer.surface;
+  position: relative;
+  min-width: 0;
 }
-.moment-forward-composer textarea:focus-visible {
-  border-color: var(--bew-focus-ring-color);
-  box-shadow: var(--bew-focus-shadow, 0 0 0 1px CanvasText);
+.moment-forward-composer__picker {
+  @include composer.picker;
+}
+.moment-forward-composer textarea {
+  @include composer.input;
+  overflow-y: auto;
 }
 .moment-forward-composer textarea:disabled {
   opacity: 0.65;
@@ -410,8 +447,8 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--bew-space-3);
-  margin-top: var(--bew-space-3);
+  gap: var(--bew-space-2);
+  margin-top: var(--bew-space-2);
 }
 .moment-forward-composer__tools {
   display: flex;
@@ -419,14 +456,14 @@ watch(accountId, (nextAccountId, previousAccountId) => {
   align-items: center;
   gap: var(--bew-space-2);
 }
-.moment-forward-composer__tools button,
-.moment-forward-composer__submit {
+.moment-forward-composer__tools button {
   display: inline-flex;
-  min-height: var(--bew-control-height);
+  width: var(--bew-control-height-sm);
+  height: var(--bew-control-height-sm);
   align-items: center;
   justify-content: center;
   gap: var(--bew-space-1);
-  padding: 0 var(--bew-space-3);
+  padding: 0;
   border: 0;
   border-radius: var(--bew-interactive-radius);
   color: var(--bew-text-2);
@@ -438,16 +475,14 @@ watch(accountId, (nextAccountId, previousAccountId) => {
 }
 .moment-forward-composer__tools button:hover {
   color: var(--bew-text-1);
-  background: var(--bew-fill-2);
+  background: var(--bew-hover-bg);
 }
 .moment-forward-composer__tools button[aria-expanded="true"] {
   color: var(--bew-on-theme-surface);
   background: var(--bew-theme-surface);
 }
-.moment-forward-composer__submit {
-  flex: 0 0 auto;
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+.moment-forward-composer__tools span {
+  font-size: var(--bew-icon-size-sm);
 }
 .moment-forward-composer__tools button:focus-visible,
 .moment-forward-composer__submit:focus-visible,

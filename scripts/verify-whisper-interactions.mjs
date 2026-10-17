@@ -21,16 +21,6 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
   ] } }
   const i18n = { useI18n: () => ({ t: key => key, locale: Vue.ref('cmn-CN') }) }
   const blank = { render: () => null }
-  const inputResizeCallbacks = new Map()
-  const useInputResizeObserver = (target, callback) => {
-    Vue.watch(target, (element, previous) => {
-      if (previous)
-        inputResizeCallbacks.delete(previous)
-      if (element)
-        inputResizeCallbacks.set(element, callback)
-    }, { flush: 'post' })
-    Vue.onBeforeUnmount(() => inputResizeCallbacks.delete(target.value))
-  }
   const button = { props: ['label', 'disabled'], setup: (props, { slots }) => () => Vue.h('button', { 'type': 'button', 'aria-label': props.label, 'disabled': props.disabled }, slots.default?.()) }
   const installLeaves = (app) => {
     for (const name of ['Button', 'IconButton', 'CloseButton'])
@@ -537,7 +527,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       './privateSession': await import(`${path}privateSession`),
     })
     const Composer = await compileComponent(`${path}experimental/MessageComposer.vue`, {
-      '@vueuse/core': { ...await import('@vueuse/core'), useResizeObserver: useInputResizeObserver },
+      '@vueuse/core': await import('@vueuse/core'),
       'vue-i18n': i18n,
       '../PrivateEmotePicker.vue': { default: blank },
       '../privateMessageRenderers': await import(`${path}privateMessageRenderers`),
@@ -1014,7 +1004,7 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
     const renderers = await import(`${path}privateMessageRenderers`)
     const Picker = await compileComponent(`${path}PrivateEmotePicker.vue`, { 'vue-i18n': i18n })
     const Composer = await compileComponent(`${path}experimental/MessageComposer.vue`, {
-      '@vueuse/core': { ...await import('@vueuse/core'), useResizeObserver: useInputResizeObserver },
+      '@vueuse/core': await import('@vueuse/core'),
       'vue-i18n': i18n,
       '../PrivateEmotePicker.vue': { default: Picker },
       '../privateMessageRenderers': renderers,
@@ -1048,24 +1038,10 @@ export function registerWhisperInteractionChecks(check, { Vue, compileComponent,
       app.mount(host)
       await flush()
       const textarea = host.querySelector('textarea')
-      assert.equal(textarea.rows, 1)
-      textarea.style.cssText = 'line-height: 18px; padding-top: 9px; padding-bottom: 9px'
-      let inputHeight = 36
-      Object.defineProperty(textarea, 'clientHeight', { configurable: true, get: () => inputHeight })
-      const resizeInput = inputResizeCallbacks.get(textarea)
-      assert.ok(resizeInput)
-      resizeInput()
-      await flush()
-      assert.equal(host.querySelector('.message-composer').dataset.expanded, 'false')
-      inputHeight = 54
-      resizeInput()
-      await flush()
-      assert.ok(host.querySelector('.message-composer__inputbar.is-multiline'))
-      assert.equal(host.querySelector('.message-composer').dataset.expanded, 'true')
-      inputHeight = 36
-      resizeInput()
-      await flush()
-      assert.equal(host.querySelector('.message-composer__inputbar.is-multiline'), null)
+      assert.equal(textarea.rows, 2)
+      assert.ok(host.querySelector('.message-composer__actions > .message-composer__send'), 'send stays in the lower toolbar when text grows')
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', shiftKey: true, bubbles: true }))
+      assert.equal(submits, 0, 'Shift+Enter remains a newline action')
       textarea.focus()
       textarea.setSelectionRange(7, 12)
       host.querySelector('[aria-controls="private-message-emote-picker"]').click()

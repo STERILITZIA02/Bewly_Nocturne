@@ -72,13 +72,13 @@ function toggle() {
 
 .settings-toggle-tag.is-active {
   border-color: transparent;
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .settings-toggle-tag.is-active:hover {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .settings-toggle-tag__state {

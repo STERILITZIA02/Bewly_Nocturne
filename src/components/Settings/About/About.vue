@@ -339,7 +339,7 @@ function handleContributorImageError() {
           class="maintenance-heading"
           :title="$t('settings.maintenance.title')"
           :desc="$t('settings.category_advanced_maintenance_desc')"
-          icon="i-mingcute:save-2-line"
+          icon="i-tabler:device-floppy"
         />
         <Maintenance />
       </section>

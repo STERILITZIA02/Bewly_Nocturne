@@ -718,7 +718,7 @@ function handleClearKeyword() {
             <div class="title p-2 pb-0 flex justify-between">
               <span>{{ $t('search_bar.history_title') }}</span>
               <button
-                type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-theme-foreground" text="base $bew-text-2" :disabled="historyChanging || historyLoading"
+                type="button" class="rounded-2 duration-300 pointer-events-auto cursor-pointer" hover="text-$bew-text-1" text="base $bew-text-2" :disabled="historyChanging || historyLoading"
                 @click="handleClearSearchHistory"
               >
                 {{ $t('search_bar.clear_history') }}
@@ -872,8 +872,8 @@ function handleClearKeyword() {
   --b-search-bar-focus-color: var(--bew-elevated);
 
   --b-search-bar-normal-icon-color: var(--bew-text-1);
-  --b-search-bar-hover-icon-color: var(--bew-theme-foreground);
-  --b-search-bar-focus-icon-color: var(--bew-theme-foreground);
+  --b-search-bar-hover-icon-color: var(--bew-text-1);
+  --b-search-bar-focus-icon-color: var(--bew-text-1);
 
   --b-search-bar-normal-text-color: var(--bew-text-1);
   --b-search-bar-hover-text-color: var(--bew-text-1);
@@ -1003,7 +1003,7 @@ function handleClearKeyword() {
     &:focus-within .search-submit-btn,
     .search-submit-btn:hover,
     .search-submit-btn:focus-visible {
-      color: var(--b-search-bar-hover-icon-color, var(--bew-theme-foreground));
+      color: var(--b-search-bar-hover-icon-color, var(--bew-text-1));
     }
   }
 

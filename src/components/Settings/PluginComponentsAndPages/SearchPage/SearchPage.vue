@@ -140,6 +140,6 @@ async function clearSearchHistory() {
 
 <style scoped lang="scss">
 .selected-character {
-  --uno: "border-$bew-theme-foreground";
+  --uno: "border-$bew-focus-ring-color";
 }
 </style>

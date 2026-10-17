@@ -106,8 +106,8 @@ const { stop } = useIntersectionObserver(root, ([entry]) => {
   }
   &.is-active,
   &.is-selected {
-    color: var(--bew-on-theme-color);
-    background: var(--bew-theme-color);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
   }
 }
 .favorite-sidebar-item__trigger {

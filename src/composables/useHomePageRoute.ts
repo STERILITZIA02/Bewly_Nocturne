@@ -8,9 +8,10 @@ import { settings } from '~/logic'
 import { readHomeRoute, resolveHomeTab, writeHomeRoute } from '~/utils/homeRoute'
 import type { HomeTabConfigItem } from '~/utils/homeTabConfig'
 import { isSameHomeTabConfig, normalizeHomeTabConfig } from '~/utils/homeTabConfig'
+import { clearIframeDrawerHistory } from '~/utils/iframeDrawerHistory'
 
 /** Page/tab state belongs to the existing route source; this adds no browser listeners. */
-export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTabConfigItem[]) {
+export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTabConfigItem[], account: () => string = () => '') {
   const href = useCurrentLocationHref()
   const availablePage = (page: AppPage) => settings.value.useSearchPageModeOnHomePage && page === AppPage.Search ? AppPage.Home : page
   const tabConfig = () => normalizeHomeTabConfig(settings.value.homePageTabVisibilityList, defaultTabs)
@@ -20,23 +21,34 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
   const homeActivatedPageTouched = ref(Boolean(initial?.tab))
   let applyingRoute = false
   let writtenHref: string | undefined
+  const rememberedUrls = new Map<AppPage, string>()
+  let routeAccount = account()
+  watch(account, () => rememberedUrls.clear(), { flush: 'sync' })
 
-  function syncUrl(mode: 'push' | 'replace' = 'replace') {
+  function syncUrl(mode: 'push' | 'replace' = 'replace', base = window.location.href) {
     if (applyingRoute)
       return
-    const next = writeHomeRoute(window.location.href, activatedPage.value, homeActivatedPage.value)
+    const next = writeHomeRoute(base, activatedPage.value, homeActivatedPage.value)
+    routeAccount = account()
+    if (readHomeRoute(next))
+      rememberedUrls.set(activatedPage.value, next)
     if (next !== window.location.href) {
       writtenHref = next
-      window.history[mode === 'push' ? 'pushState' : 'replaceState'](window.history.state, '', next)
+      window.history[mode === 'push' ? 'pushState' : 'replaceState'](clearIframeDrawerHistory(window.history.state), '', next)
       syncRouteState()
     }
   }
 
   function navigateToPage(page: AppPage) {
+    const current = readHomeRoute(window.location.href)
+    if (current?.page && routeAccount === account())
+      rememberedUrls.set(current.page, window.location.href)
+    const target = availablePage(page)
+    const remembered = rememberedUrls.get(target)
     applyingRoute = true
-    activatedPage.value = availablePage(page)
+    activatedPage.value = target
     applyingRoute = false
-    syncUrl('push')
+    syncUrl('push', remembered ?? window.location.href)
   }
 
   function navigateToHomeTab(tab: HomeSubPage) {
@@ -54,6 +66,9 @@ export function useHomePageRoute(defaultPage: () => AppPage, defaultTabs: HomeTa
     const route = readHomeRoute(value)
     if (!route)
       return
+    if (route.page)
+      rememberedUrls.set(route.page, value)
+    routeAccount = account()
     applyingRoute = true
     activatedPage.value = availablePage(route.page ?? defaultPage())
     if (activatedPage.value === AppPage.Home) {

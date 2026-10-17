@@ -12,7 +12,7 @@ import type { WatchLaterMutationOwner } from '~/utils/watchLater'
 import { resolveWatchLaterAid, updateOwnedWatchLater } from '~/utils/watchLater'
 
 const BUTTON_CLASS = 'bewly-watch-later-btn'
-const WATCH_LATER_ICON_CLASS = 'i-mingcute:carplay-line'
+const WATCH_LATER_ICON_CLASS = 'i-tabler:playlist'
 const TOOLBAR_LIFECYCLE_SELECTOR = '.video-tool-more, .video-toolbar-container, #arc_toolbar_report, .bewly-watch-later-btn'
 const buttonMembershipWatchers = new WeakMap<HTMLButtonElement, () => void>()
 const buttonInitializationContexts = new WeakMap<HTMLButtonElement, { ids: VideoIds, state: WatchLaterButtonState }>()

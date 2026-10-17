@@ -23,7 +23,7 @@ import TopBarHeader from './components/TopBarHeader.vue'
 import TopBarLogo from './components/TopBarLogo.vue'
 import { resetTopBarTransientInteraction, useTopBarInteraction } from './composables/useTopBarInteraction'
 
-const { reachTop, scrollViewportRef, activatedPage } = useBewlyApp()
+const { reachTop, scrollViewportRef, activatedPage, isPageSwitching, isHomeTabSwitching } = useBewlyApp()
 // 顶栏状态管理
 const topBarStore = useTopBarStore()
 const settingsStore = useSettingsStore()
@@ -241,6 +241,13 @@ function handleScroll(arg?: number | Event): void {
     scheduleConflictingHeaderVisibilityUpdate()
   }
 
+  if (isPageSwitching?.value || isHomeTabSwitching?.value) {
+    clearHideTimer()
+    oldScrollTop.value = scrollTop.value
+    topBarVisibilityAnchorScrollTop.value = scrollTop.value
+    return
+  }
+
   // 计算滚动距离，只有超过阈值才处理
   const scrollDelta = scrollTop.value - oldScrollTop.value
   const finishScrollHandling = () => {
@@ -359,7 +366,7 @@ function setupScrollListeners() {
       toggleTopBarVisible(true)
     }
   }
-  else {
+  else if (!isPageSwitching?.value && !isHomeTabSwitching?.value) {
     toggleTopBarVisible(true)
   }
 

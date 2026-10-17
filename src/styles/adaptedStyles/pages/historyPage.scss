@@ -63,12 +63,12 @@
     .history-wrap .active:before,
     .history-wrap .time-label:after,
     .history-wrap .time-label.active:before {
-      border-left-color: var(--bew-theme-color);
+      border-left-color: var(--bew-focus-ring-color);
     }
 
     .history-wrap .history-btn .btn:hover,
     .history-dlg .hsbtn .cancel:hover {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .b-head-search.input-active,
@@ -77,7 +77,7 @@
     .history-wrap .time-label.active,
     .history-wrap a.btn:hover,
     .go-top-m .go-top:hover {
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     .b-head-search .search-icon > img,

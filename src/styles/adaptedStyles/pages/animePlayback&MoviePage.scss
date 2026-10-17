@@ -9,11 +9,11 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
 :is(.bewly-design.animePlaybackAndMoviePage, #bewly-widescreen-root[data-page-kind="pgc"]) {
   [class*="EpisodeVirtualList_activeNumber"],
   [class*="numberListItem_number_list_item"][class*="numberListItem_select"] {
-    color: var(--bew-on-theme-color) !important;
-    background: var(--bew-theme-color) !important;
+    color: var(--bew-text-1) !important;
+    background: var(--bew-selected-bg) !important;
 
     > :is([class*="EpisodeVirtualList_numberTitle"], [class*="numberListItem_title"]) {
-      color: var(--bew-on-theme-color) !important;
+      color: var(--bew-text-1) !important;
     }
   }
 
@@ -48,7 +48,6 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   }
 
   // #region new anime playback & movie page
-  [class*="numberListItem_number_list_item"][class*="numberListItem_select"],
   [class*="follow_btnFollow"],
   .squirtle-controller.squirtle-pgc .squirtle-progress-timeline,
   .squirtle-controller.squirtle-pgc .squirtle-video-volume .squirtle-volume .squirtle-volume-bar .squirtle-volume-dot,
@@ -62,6 +61,10 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     background-color: var(--bew-theme-color);
   }
 
+  [class*="follow_btnFollow"] {
+    color: var(--bew-on-theme-color) !important;
+  }
+
   [class*="numberListItem_badge"],
   [class*="vipPaybar_textWrap"],
   [class*="imageListItem_wrap"] [class*="imageListItem_coverWrap"] [class*="imageListItem_badge"],
@@ -71,11 +74,13 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
     .squirtle-single-side-setting
     .squirtle-single-setting-chooses
     .squirtle-single-setting-choice.active {
-    background-color: var(--bew-theme-color) !important;
+    background-color: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1) !important;
   }
 
   [class*="promptBar_remindActionWrap"] [class*="promptBar_btnItemWrap"] [class*="positionBtn_btn"] {
     background: var(--bew-theme-color) !important;
+    color: var(--bew-on-theme-color) !important;
   }
 
   [class*="follow_btnFollow"]:hover {
@@ -145,7 +150,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   }
 
   [class*="rankTab_sponsor_rank_tab"] [class*="rankTab_indicator"] {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
   }
 
   [class*="rankTab_sponsor_rank_tab"] [class*="rankTab_indicator"]:after {
@@ -268,7 +273,7 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   .section-ep-wrapper .ep-item i,
   .up-info .btn-follow-up,
   .main-container .media-info .media-right .media-desc i {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .main-container .review-module .review-list .review-item .review-header #review-author-nick-name.review-author.is-vip,
@@ -281,9 +286,9 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   }
 
   .main-container .pay-bar .vip .btn-pay,
-  .main-container .media-info .media-right .media-tool-bar .btn-follow,
-  .main-container .nav-tools .tool-item:hover {
+  .main-container .media-info .media-right .media-tool-bar .btn-follow {
     background-color: var(--bew-theme-color);
+    color: var(--bew-on-theme-color);
   }
 
   .ep-list-wrapper .ep-item .badge.pink,
@@ -291,7 +296,8 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
   .main-container .nav-tools .tool-item:hover,
   .main-container .ep-list-wrapper .list-wrapper.simple ul .ep-item.cursor,
   .main-container .ep-list-wrapper .list-wrapper.simple ul .ep-item:hover {
-    background-color: var(--bew-theme-color) !important;
+    background-color: var(--bew-selected-bg) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .main-container .pay-bar .vip .btn-pay:hover,
@@ -301,11 +307,11 @@ html.animePlaybackAndMoviePage .plp-player:has([class*="video_playerFullScreen"]
 
   .main-container .ep-list-wrapper .list-wrapper.simple ul .ep-item.cursor,
   .sponsor-rank-tab .indicator {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .main-container .nav-tools .tool-item:hover {
-    border-color: var(--bew-theme-color) !important;
+    border-color: var(--bew-focus-ring-color) !important;
   }
 
   .main-container .tool-bar .watch-info:hover #watch-together-icon-1 path {

@@ -294,7 +294,7 @@ defineExpose({ initData })
         <div v-if="group.seasonId || group.updates.length > 1" class="series-group-actions">
           <ALink v-if="group.seasonId" :href="`https://www.bilibili.com/bangumi/play/ss${group.seasonId}`" type="videoCard" class="series-open">
             {{ $t('home.series.open') }}
-            <i i-mingcute:arrow-right-line aria-hidden="true" />
+            <i i-tabler:arrow-right aria-hidden="true" />
           </ALink>
           <details v-if="group.updates.length > 1" class="series-updates">
             <summary>{{ $t('home.series.more_updates', { count: group.updates.length - 1 }) }}</summary>

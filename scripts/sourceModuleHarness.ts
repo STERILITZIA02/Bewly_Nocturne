@@ -6,6 +6,10 @@ import ts from 'typescript'
 /** Executes the complete production module; only its external dependencies are substituted. */
 export async function loadSourceModule(file: string, imports: Record<string, unknown>, globals: Record<string, unknown> = {}) {
   const source = await readFile(new URL(file, import.meta.url), 'utf8')
+  if (source.includes('from \'~/utils/iframeDrawerHistory\''))
+    imports = { '~/utils/iframeDrawerHistory': await import('../src/utils/iframeDrawerHistory'), ...imports }
+  if (source.includes('from \'./privateConversationRoute\''))
+    imports = { './privateConversationRoute': await import('../src/utils/privateConversationRoute'), ...imports }
   const exports: Record<string, any> = {}
   const browserWindow = Reflect.get(globalThis, 'window')
   const code = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS } }).outputText

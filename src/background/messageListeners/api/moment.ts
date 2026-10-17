@@ -1,8 +1,17 @@
+import { submitMomentReply, uploadMomentReplyImage } from '../../momentReply'
 import { serializeMomentVoteBody } from '../../momentVoteSerializer'
 import type { APIMAP } from '../../utils'
 import { AHS } from '../../utils'
 
 const API_MOMENT = {
+  submitMomentReply,
+  uploadMomentReplyImage,
+  searchMomentReplyMentions: {
+    url: 'https://api.bilibili.com/x/v2/reply/at',
+    _fetch: { method: 'get', strictParams: true },
+    params: { keyword: '' },
+    afterHandle: AHS.J_D,
+  },
   getMomentVote: {
     url: 'https://api.bilibili.com/x/vote/vote_info',
     _fetch: { method: 'get', strictParams: true },

@@ -27,9 +27,9 @@ export interface PageModeSwitcherState {
 }
 
 const PAGE_MODE_ICONS: Readonly<Record<PageMode, string>> = {
-  original: 'mingcute:bilibili-line',
-  bewly: 'mingcute:cat-line',
-  custom: 'mingcute:pencil-ruler-line',
+  original: 'tabler:brand-bilibili',
+  bewly: 'tabler:cat',
+  custom: 'tabler:tools',
 }
 
 const PAGE_MODE_LABEL_KEYS: Readonly<Record<PageMode, string>> = {

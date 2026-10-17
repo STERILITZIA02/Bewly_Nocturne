@@ -63,8 +63,8 @@ function resolveCssColor(currentState: BewlyWidescreenState, value: string) {
 }
 
 export function syncActionAnimationTheme(currentState: BewlyWidescreenState) {
-  const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--bew-theme-color').trim()
-  const rgb = resolveCssColor(currentState, themeColor || '#00aeec')
+  const themeColor = getComputedStyle(document.documentElement).getPropertyValue('--bew-text-1').trim()
+  const rgb = resolveCssColor(currentState, themeColor || '#888888')
   if (!rgb)
     return
 

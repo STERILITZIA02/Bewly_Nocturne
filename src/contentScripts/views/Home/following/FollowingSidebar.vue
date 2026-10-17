@@ -147,7 +147,7 @@ onMounted(() => emit('scrollElement', scroller.value))
               @click="toggleGroup(row.group.tagid)" @keydown="keyboardMenu($event, row)"
               @contextmenu.prevent.stop="actions?.openGroup($event, row.group)"
             >
-              <span :class="row.expanded ? 'i-mingcute:down-line' : 'i-mingcute:right-line'" aria-hidden="true" />
+              <span :class="row.expanded ? 'i-tabler:chevron-down' : 'i-tabler:chevron-right'" aria-hidden="true" />
               <span class="following-sidebar__group-name">{{ row.group.name }}</span><span>{{ row.count }}</span>
             </button>
             <button

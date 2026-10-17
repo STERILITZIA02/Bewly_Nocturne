@@ -1617,7 +1617,7 @@ verify('private-session UI keeps type filters while moving participant identity 
   }
 })
 
-verify('confirmed outgoing text uses an opaque theme bubble and a compact delivery check', async () => {
+verify('confirmed outgoing text uses an opaque neutral bubble and a compact delivery check', async () => {
   const [conversationSource, itemSource, contentSource] = await Promise.all([
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/ConversationView.vue', import.meta.url), 'utf8'),
     readFile(new URL('../src/contentScripts/views/Notifications/whisper/PrivateMessageItem.vue', import.meta.url), 'utf8'),
@@ -1626,13 +1626,13 @@ verify('confirmed outgoing text uses an opaque theme bubble and a compact delive
 
   assert.match(itemSource, /<PrivateMessageContent[\s\S]{0,240}:is-self="message\.isSelf"/)
   assert.match(contentSource, /'private-message-content__bubble--self':\s*isSelf/)
-  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,160}background:\s*var\(--bew-theme-color\)/)
-  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,240}color:\s*var\(--bew-on-theme-color\)/)
+  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,160}background:\s*var\(--bew-selected-bg\)/)
+  assert.match(contentSource, /\.private-message-content__bubble--self\s*\{[\s\S]{0,240}color:\s*var\(--bew-text-1\)/)
   assert.match(contentSource, /\.private-message-content__media-placeholder\s*\{[\s\S]{0,220}width:\s*min\(100%/)
   assert.match(itemSource, /\.private-message-item__failed-actions\s*\{[\s\S]{0,120}max-width:\s*100%/)
   assert.doesNotMatch(contentSource, /:global\(\.private-message-item--self\)/)
   assert.match(itemSource, /v-if="message\.isSelf"/)
-  assert.match(itemSource, /i-mingcute:check-line/)
+  assert.match(itemSource, /i-tabler:check/)
   assert.match(itemSource, /sendState === 'failed'/)
   assert.match(itemSource, /notifications\.whisper\.messages\.test_send_success/)
   assert.doesNotMatch(itemSource, /notifications\.whisper\.messages\.sent/)
@@ -1801,6 +1801,7 @@ verify('private write assets reuse the existing controller while text and image 
   assert.equal(knipSource.includes('whisper/experimental/MessageComposer.vue'), false)
   assert.equal(knipSource.includes('whisper/experimental/privateMessageWriteProtocolGate.ts'), false)
   assert.deepEqual(Object.keys(api.default).sort(), [
+    'getPrivateConversationTarget',
     'getPrivateSessionDetail',
     'getPrivateSessionSettings',
     'setPrivateSessionTop',
@@ -2911,8 +2912,8 @@ verify('message settings live in the global Bewly settings page and the old sect
   assert.ok(workspaceSource.includes('settings.privateMessageDensity'))
   assert.ok(conversationListSource.includes('showOfficialAssistants'))
   assert.ok(conversationListSource.includes('conversation-list--compact'))
-  assert.ok(settingsCategorySource.includes('color: var(--bew-on-theme-color)'))
-  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color)'))
+  assert.ok(settingsCategorySource.includes('color: var(--bew-text-1)'))
+  assert.ok(settingsCategorySource.includes('background: var(--bew-selected-bg)'))
   assert.equal(settingsCategorySource.includes('color: var(--bew-theme-foreground)'), false)
   assert.ok(notificationsSource.includes('lastPrivateConversationRoute'))
   assert.ok(notificationsSource.includes('privateMessageMobileOpenMode'))
@@ -2967,7 +2968,8 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(itemSource.includes('type="button"'))
   assert.ok(itemSource.includes(':aria-current="selected'))
   assert.ok(itemSource.includes(`@click="emit('select', session)"`))
-  assert.equal((listSource.match(/<ConversationListItem\b/g) ?? []).length, 2)
+  assert.equal((listSource.match(/<ConversationListItem\b/g) ?? []).length, 3)
+  assert.ok(listSource.includes('v-if="outsideSelection"'))
   assert.ok(listSource.includes('<template v-if="!normalizedQuery">'))
   assert.ok(listSource.includes('v-if="row.session"'))
   assert.ok(listSource.includes('v-for="session in filteredItems"'))
@@ -3017,15 +3019,15 @@ verify('message interaction shell keeps selection internal, settings typed, and 
     settingsSource.indexOf('.menu-item-activated'),
     settingsSource.indexOf('.settings-primary-navigation__list'),
   )
-  assert.ok(primarySelectedStyle.includes('background: var(--bew-theme-color)'))
-  assert.ok(primarySelectedStyle.includes('color: var(--bew-on-theme-color)'))
+  assert.ok(primarySelectedStyle.includes('background: var(--bew-selected-bg)'))
+  assert.ok(primarySelectedStyle.includes('color: var(--bew-text-1)'))
   assert.equal(primarySelectedStyle.includes('--bew-theme-color-auto'), false)
   assert.equal(primarySelectedStyle.includes('--bew-text-auto'), false)
   assert.equal(messagesPageSource.includes('SettingsSectionHeading'), false)
   assert.equal(messagesPageSource.includes('ORIGINAL_MESSAGE_SETTINGS_URL'), false)
   assert.ok(messagesPageSource.includes('useMessageServerSettings'))
-  assert.ok(settingsCategorySource.includes('color: var(--bew-on-theme-color)'))
-  assert.ok(settingsCategorySource.includes('background: var(--bew-theme-color)'))
+  assert.ok(settingsCategorySource.includes('color: var(--bew-text-1)'))
+  assert.ok(settingsCategorySource.includes('background: var(--bew-selected-bg)'))
 
   const workspaceLayoutStyle = workspaceSource.slice(
     workspaceSource.indexOf('.whisper-workspace {'),
@@ -3061,7 +3063,7 @@ verify('message interaction shell keeps selection internal, settings typed, and 
   assert.ok(conversationSource.includes('conversation-card__top-edge'))
   assert.ok(conversationSource.includes('conversation-card__bottom-edge'))
   assert.equal(conversationSource.includes('--bew-homepage-bg'), false)
-  assert.equal(conversationSource.includes('--bew-elevated-solid'), false)
+  assert.match(conversationSource, /\.conversation-view--solid \.conversation-view__floating-composer \{\s*background: var\(--bew-elevated-solid\)/)
   assert.ok(fallbackSource.includes('background: transparent'))
   assert.ok(conversationSource.includes(`data-expansion-state`))
   assert.ok(conversationSource.includes('conversationExpanded ? \'expanded\' : \'compact\''))
@@ -3456,7 +3458,7 @@ verify('Composer emote insertion and inline fallback remain typed and accessible
   const emoteActionIndex = composerSource.indexOf('class="message-composer__emote-control"')
   const textareaIndex = composerSource.indexOf('<textarea')
   const sendActionIndex = composerSource.indexOf('message-composer__send')
-  assert.ok(emoteActionIndex < textareaIndex && textareaIndex < sendActionIndex)
+  assert.ok(textareaIndex < emoteActionIndex && emoteActionIndex < sendActionIndex)
   assert.ok(pickerSource.includes('bew-popover-surface'))
   const pickerStyle = pickerSource.slice(pickerSource.indexOf('.private-emote-picker {'))
   assert.match(pickerStyle, /bottom:\s*calc\(100% \+ var\(--bew-space-2\)\);[\s\S]{0,80}left:\s*0;/)

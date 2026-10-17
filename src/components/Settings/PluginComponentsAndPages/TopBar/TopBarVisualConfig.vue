@@ -43,31 +43,31 @@ const topBarComponents = computed<TopBarComponent[]>(() => [
   {
     key: 'favorites',
     i18nKey: 'topbar.favorites',
-    icon: 'i-mingcute:star-line',
+    icon: 'i-tabler:star',
     supportsBadge: false,
   },
   {
     key: 'history',
     i18nKey: 'topbar.history',
-    icon: 'i-mingcute:time-line',
+    icon: 'i-tabler:clock',
     supportsBadge: false,
   },
   {
     key: 'watchLater',
     i18nKey: 'topbar.watch_later',
-    icon: 'i-mingcute:carplay-line',
+    icon: 'i-tabler:playlist',
     supportsBadge: true,
   },
   {
     key: 'creatorCenter',
     i18nKey: 'topbar.creative_center',
-    icon: 'i-mingcute:bulb-line',
+    icon: 'i-tabler:bulb',
     supportsBadge: false,
   },
   {
     key: 'upload',
     i18nKey: 'topbar.upload',
-    icon: 'i-mingcute:upload-line',
+    icon: 'i-tabler:upload',
     supportsBadge: false,
   },
   {
@@ -285,7 +285,7 @@ function toggleChannel(value: string) {
               @click="resetPinnedChannels"
             >
               <template #left>
-                <div i-mingcute:back-line />
+                <div i-tabler:arrow-back-up />
               </template>
               {{ $t('common.operation.reset') }}
             </Button>
@@ -380,7 +380,7 @@ function toggleChannel(value: string) {
       <div class="topbar-section-actions">
         <Button size="small" type="secondary" @click="resetTopBarComponents">
           <template #left>
-            <div i-mingcute:back-line />
+            <div i-tabler:arrow-back-up />
           </template>
           {{ $t('common.operation.reset') }}
         </Button>
@@ -421,7 +421,7 @@ function toggleChannel(value: string) {
 
 .topbar-component-icon {
   flex: 0 0 auto;
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
   font-size: var(--bew-icon-size-md);
 }
 
@@ -524,12 +524,12 @@ function toggleChannel(value: string) {
   }
 
   &.selected {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     transform: none;
 
     &:hover {
-      background: var(--bew-theme-color);
+      background: var(--bew-selected-bg);
     }
   }
 }
@@ -575,8 +575,8 @@ function toggleChannel(value: string) {
   place-items: center;
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
+  background: var(--bew-selected-bg);
+  color: var(--bew-text-1);
   font-size: var(--bew-font-size-control);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-control);

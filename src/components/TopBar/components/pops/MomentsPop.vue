@@ -191,9 +191,8 @@ defineExpose({
             w="8px"
             h="8px"
             m="-2"
-            bg="$bew-theme-color"
+            bg="$bew-accent-marker"
             pos="absolute -top-12px -left-12px"
-            style="box-shadow: 0 0 4px var(--bew-theme-color)"
           />
           <div class="popover-card__content moments-pop__card-content">
             <ALink
@@ -252,12 +251,12 @@ defineExpose({
                   <!-- Live -->
                   <div
                     v-else
-                    text="$bew-theme-foreground"
+                    text="$bew-text-1"
                     font="semibold"
                     flex="~"
                     items="center"
                   >
-                    <div i-fluent:live-24-regular m="r-2" />
+                    <div i-tabler:broadcast m="r-2" />
                     {{ $t('topbar.moments_dropdown.live_status') }}
                   </div>
                 </div>
@@ -276,10 +275,10 @@ defineExpose({
                   @click.stop.prevent="toggleWatchLater(moment.watchLaterAid)"
                 >
                   <Tooltip v-if="!topBarStore.isInWatchLater(moment.watchLaterAid)" :content="topBarStore.isInWatchLater(moment.watchLaterAid) === undefined ? $t('common.watch_later_status_unknown') : $t('common.save_to_watch_later')" placement="bottom" type="dark">
-                    <div i-mingcute:carplay-line />
+                    <div i-tabler:playlist />
                   </Tooltip>
                   <Tooltip v-else :content="$t('common.added')" placement="bottom" type="dark">
-                    <Icon icon="line-md:confirm" />
+                    <Icon icon="tabler:check" />
                   </Tooltip>
                 </IconButton>
               </div>

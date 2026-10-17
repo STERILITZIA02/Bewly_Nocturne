@@ -63,7 +63,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       outside.remove()
     }
   })
-  check('Home refresh: delayed account readiness keeps the search hero at the page top', async () => {
+  check('Home refresh: per-tab scroll memory preserves the header geometry and late account updates do not rewind the view', async () => {
     const { HomeSubPage } = await import('../src/contentScripts/views/Home/types')
     const layout = await import('../src/constants/layout')
     const topBar = Vue.reactive({ isLogin: false, userInfo: { mid: 0 } })
@@ -128,7 +128,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
         await flush()
         state.restoreTabScrollPosition()
         assert.deepEqual({ ...state.searchStageStyle }, stageStyle, 'tab identity cannot change the search stage geometry')
-        assert.equal(state.showHomeSearchCharacter, true)
+        assert.equal(state.showHomeSearchCharacter, tab.page === HomeSubPage.ForYou)
         assert.equal(state.reserveRecommendationModeSwitcher, true, 'toolbar geometry cannot switch by tab')
         assert.equal(state.shouldShowRecommendationModeSwitcher, tab.page === HomeSubPage.ForYou)
         assert.equal(state.getContentScrollTop(), 238)
@@ -141,21 +141,22 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       assert.equal(state.getContentScrollTop(), 174)
       shortViewport.value = false
       await flush()
+      const beforeAccountReady = viewport.scrollTop
       topBar.isLogin = true
       await flush()
       topBar.userInfo.mid = 42
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, 0, 'late account identity must not replace the entry position with the video section offset')
-      assert.equal(state.cachedScrollTop, 0)
+      assert.equal(viewport.scrollTop, beforeAccountReady, 'late account identity must not rewind an already navigated view')
+      assert.equal(state.cachedScrollTop, beforeAccountReady)
       state.handleChangeTab(tabs[1])
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, 0, 'switching to an uncached tab from the search hero must keep it visible')
+      assert.equal(viewport.scrollTop, state.getContentScrollTop(), 'new tabs begin at their toolbar after the outgoing fade')
       topBar.userInfo.mid = 43
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, 0, 'account updates after switching tabs must also retain the visible search hero')
+      assert.equal(viewport.scrollTop, state.getContentScrollTop(), 'account updates after switching tabs must preserve the current position')
       const discoveryHeight = layout.resolveHomeSearchStage(false).height
       const content = viewport.appendChild(document.createElement('section'))
       content.getBoundingClientRect = () => ({ height: 1600 })
@@ -165,16 +166,16 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
       await flush()
       assert.equal(state.tabContentMinHeight, 1600, 'the outgoing space protects the viewport during the out-in gap')
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, discoveryHeight + 500, 'an uncached tab keeps the shared reading position')
+      assert.equal(viewport.scrollTop, discoveryHeight, 'an uncached tab starts at its toolbar')
       assert.equal(state.restoreTabScrollPosition(), true, 'a cached grid cannot replay its own previous anchor')
       viewport.scrollTop = discoveryHeight + 900
       state.handleChangeTab(tabs[1])
       await flush()
       state.restoreTabScrollPosition()
-      assert.equal(viewport.scrollTop, discoveryHeight + 900, 'returning to a visited tab does not restore its old position')
+      assert.equal(viewport.scrollTop, discoveryHeight + 500, 'returning to a visited tab restores its own saved position')
       state.handleChangeTab(tabs[1])
       await flush()
-      assert.equal(viewport.scrollTop, discoveryHeight + 900, 'clicking the selected tab does not scroll either')
+      assert.equal(viewport.scrollTop, discoveryHeight + 500, 'clicking the selected tab does not scroll either')
       state.toggleTabContentLoading(true)
       state.finishTabSwitch()
       await new Promise(resolve => requestAnimationFrame(resolve))
@@ -212,7 +213,7 @@ export function registerHomeLoadingRegressionChecks(check, { Vue, compileCompone
         await flush()
         assert.equal(host.querySelector('[data-search]'), search)
         assert.equal(host.querySelector('.home-search-stage__logo'), logo)
-        assert.equal(search.dataset.character, 'focus-character')
+        assert.equal(search.dataset.character, tab.page === HomeSubPage.ForYou ? 'focus-character' : undefined, 'the existing hero decoration follows the restored scroll position')
         assert.equal(host.firstElementChild.getAttribute('style'), shellStyle)
         assert.equal(host.querySelector('.home-header').className, headerClass)
         const modes = host.querySelector('[data-mode-switcher]')

@@ -48,7 +48,7 @@
       }
 
       .el-select-dropdown__item.selected {
-        color: var(--bew-theme-foreground) !important;
+        color: var(--bew-text-1) !important;
       }
 
       .btn_primary,
@@ -67,7 +67,7 @@
       }
 
       .bili-mini-login-register-wrapper .register-btn:hover {
-        border-color: var(--bew-theme-color);
+        border-color: var(--bew-focus-ring-color);
       }
     }
   }

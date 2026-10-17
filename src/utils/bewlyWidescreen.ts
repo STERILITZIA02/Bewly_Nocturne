@@ -147,6 +147,7 @@ function setupWidescreenSettingsWatchers(currentState: BewlyWidescreenState) {
     () => [
       settings.value.themeColor,
       settings.value.darkModeBaseColor,
+      settings.value.enableDarkModeTint,
       settings.value.enableOledDarkMode,
     ] as const,
     () => syncActionAnimationTheme(currentState),

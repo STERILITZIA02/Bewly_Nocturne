@@ -33,7 +33,7 @@ const href = computed(() => live.value && Number.isSafeInteger(props.roomid) && 
     content: "";
     position: absolute;
     inset: calc(-1 * var(--bew-space-1));
-    border: var(--bew-space-0-5) solid var(--bew-theme-foreground);
+    border: var(--bew-space-0-5) solid var(--bew-text-1);
     border-radius: 50%;
     corner-shape: var(--bew-corner-shape-round);
     pointer-events: none;
@@ -53,8 +53,8 @@ const href = computed(() => live.value && Number.isSafeInteger(props.roomid) && 
   left: 50%;
   transform: translateX(-50%);
   padding-inline: var(--bew-space-2);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
   font-size: var(--bew-font-size-caption);

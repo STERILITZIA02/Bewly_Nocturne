@@ -19,13 +19,22 @@ const count = computed(() => Number.isFinite(props.count) ? Math.max(0, Math.flo
   padding-inline: var(--bew-space-1);
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
-  background: var(--bew-theme-color);
-  color: var(--bew-on-theme-color);
+  // Solid fallback for browsers without backdrop filtering.
+  background: var(--bew-elevated-solid);
+  color: var(--bew-text-1);
   font-size: var(--bew-font-size-caption);
   font-weight: var(--bew-font-weight-medium);
   line-height: var(--bew-line-height-caption);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
+
+  // Explicitly requested for the Dock and top-bar unread capsules, including
+  // over the Dock's glass shell; do not generalize this to other nested controls.
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    background: var(--bew-count-badge-bg);
+    backdrop-filter: var(--bew-filter-glass-1);
+    -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  }
 }
 </style>

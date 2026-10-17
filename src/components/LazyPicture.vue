@@ -532,7 +532,7 @@ watch(
   >
 
     <div v-if="imageFailed" class="lazy-picture-error" role="img" :aria-label="$t('common.image_load_failed')">
-      <i i-mingcute:pic-line aria-hidden="true" />
+      <i i-tabler:photo aria-hidden="true" />
       <span>{{ $t('common.image_load_failed') }}</span>
     </div>
 

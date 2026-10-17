@@ -165,13 +165,13 @@ function goToNextPage() {
 
   &:hover:not(:disabled):not(.active) {
     background-color: var(--bew-elevated-2);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-selected-bg);
   }
 
   &.active {
-    background-color: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    background-color: var(--bew-selected-bg);
+    color: var(--bew-text-1);
+    border-color: var(--bew-selected-bg);
   }
 
   &:disabled {

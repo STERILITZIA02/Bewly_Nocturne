@@ -1,6 +1,70 @@
 :host(bili-user-profile) {
-  #action button#follow:hover {
-    background-color: var(--bew-theme-color);
-    border-color: var(--bew-theme-foreground);
+  max-width: calc(100vw - var(--bew-space-4));
+  #wrap {
+    box-sizing: border-box;
+    overflow: hidden;
+    border: 1px solid var(--bew-surface-border-color);
+    border-radius: var(--bew-popover-radius);
+    corner-shape: var(--bew-corner-shape);
+    background: var(--bew-popover-surface-background-solid);
+    box-shadow: var(--bew-popover-surface-shadow);
+    color: var(--bew-text-2);
+    font-family: var(--bew-font-family);
+  }
+  #bg {
+    width: 100%;
+    border-radius: var(--bew-popover-radius) var(--bew-popover-radius) 0 0;
+    corner-shape: var(--bew-corner-shape);
+  }
+  #action {
+    gap: var(--bew-space-2);
+  }
+  #action button {
+    flex: 1;
+    min-width: 0;
+    height: var(--bew-control-height);
+    padding-inline: var(--bew-space-3);
+    margin: 0;
+    border: 1px solid transparent;
+    border-radius: var(--bew-interactive-radius);
+    corner-shape: var(--bew-corner-shape);
+    font-family: inherit;
+    font-size: var(--bew-font-size-control);
+    font-weight: var(--bew-font-weight-medium);
+    line-height: var(--bew-line-height-control);
+    transition:
+      color var(--bew-duration-fast) var(--bew-ease-standard),
+      background-color var(--bew-duration-fast) var(--bew-ease-standard);
+  }
+  #action button#follow:not(.active) {
+    background: var(--bew-accent-solid);
+    color: var(--bew-on-accent-solid);
+    border-color: transparent;
+  }
+  #action button#follow.active,
+  #action button#chat {
+    margin: 0;
+    background: var(--bew-content-alt-solid);
+    color: var(--bew-text-2);
+    border-color: transparent;
+  }
+  #action button#follow.active:hover,
+  #action button#chat:hover {
+    background: var(--bew-hover-bg);
+    color: var(--bew-text-1);
+    border-color: transparent;
+  }
+  #action button:focus-visible {
+    outline: var(--bew-focus-ring);
+    outline-offset: var(--bew-space-0-5);
+  }
+  #action button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    #action button {
+      transition: none;
+    }
   }
 }

@@ -47,6 +47,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   const cardElements = new Map<string, HTMLElement>()
   const virtualColumns = shallowRef<VirtualColumn[]>([])
   const interactiveCardIds = new Set<string>()
+  const movingDisclosureIds = new Set<string>()
   const coverRatios = reactive<Record<string, number>>({})
   const MIN_SINGLE_IMAGE_RATIO = 1 / 2
   let gridObserver: ResizeObserver | undefined
@@ -520,6 +521,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         visibilityObserver?.unobserve(previous)
         cardElements.delete(moment.id)
       }
+      movingDisclosureIds.delete(moment.id)
       visibleMomentIds.delete(moment.id)
       readyCardIds.delete(moment.id)
       enteringCardIds.delete(moment.id)
@@ -572,6 +574,11 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
         const card = entry.target as HTMLElement
         const id = card.dataset.momentId
         if (!id || cardElements.get(id) !== card)
+          return
+        // Natural column flow already moves siblings during the local reveal.
+        // Commit the final height once instead of rerendering the virtual window
+        // and checking pagination for every intermediate animation frame.
+        if (movingDisclosureIds.has(id))
           return
         const width = entry.contentRect.width
         const widthChanged = measuredCardWidths.get(card) !== width
@@ -707,6 +714,7 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
   }
   function reset(nextItems: DisplayMoment[] = []) {
     interactiveCardIds.clear()
+    movingDisclosureIds.clear()
     const ratios = new Map(nextItems.flatMap(item => coverRatios[item.id] ? [[item.id, coverRatios[item.id]] as const] : []))
     clearColumns()
     Object.keys(cardHeights).forEach(key => delete cardHeights[key])
@@ -783,7 +791,19 @@ export function useMomentLayout(moments: Ref<DisplayMoment[]>, hooks: LayoutHook
     updateGridColumnCount()
     scheduleVirtualUpdate()
   }
-  return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, setInteractionHeld, suspendRebalance(duration: number) {
+  function setDisclosureMotion(id: string, moving: boolean) {
+    if (moving) {
+      movingDisclosureIds.add(id)
+      handleMomentCardInteractiveResize()
+      return
+    }
+    if (!movingDisclosureIds.delete(id) || !active)
+      return
+    const card = cardElements.get(id)
+    if (card && commitCardHeight(id, Math.round(card.getBoundingClientRect().height), { force: true }))
+      scheduleVirtualUpdate()
+  }
+  return { layoutRef, momentsContentRef, gridRef, gridColumnCount, gridCardWidth, readyCardIds, enteringCardIds, virtualColumns, momentsGridStyle, getMomentImageRatio, updateGridColumnCount, handleMomentCardInteractiveResize, updateVirtualColumns, bindCardEl, handleCoverLoad, append, reset, clearColumns, updateMoment, setInteractionHeld, setDisclosureMotion, suspendRebalance(duration: number) {
     suppressBottomRebalanceUntil = Date.now() + duration
   } }
 }

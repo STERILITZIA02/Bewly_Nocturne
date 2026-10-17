@@ -10,27 +10,27 @@ const list = computed(() => {
     {
       name: t('topbar.upload_dropdown.article'),
       url: 'https://member.bilibili.com/platform/upload/text/apply',
-      icon: 'i-solar:document-add-linear',
+      icon: 'i-tabler:file-plus',
     },
     {
       name: t('topbar.upload_dropdown.music'),
       url: 'https://member.bilibili.com/platform/upload/audio/frame',
-      icon: 'i-solar:music-notes-linear',
+      icon: 'i-tabler:music',
     },
     {
       name: t('topbar.upload_dropdown.sticker'),
       url: 'https://member.bilibili.com/platform/upload/sticker',
-      icon: 'i-solar:sticker-smile-square-linear',
+      icon: 'i-tabler:sticker',
     },
     {
       name: t('topbar.upload_dropdown.video'),
       url: 'https://member.bilibili.com/platform/upload/video/frame',
-      icon: 'i-solar:video-frame-linear',
+      icon: 'i-tabler:video',
     },
     {
       name: t('topbar.upload_dropdown.manager'),
       url: 'https://member.bilibili.com/platform/upload-manager/article',
-      icon: 'i-solar:video-library-linear',
+      icon: 'i-tabler:video',
     },
   ]
 })

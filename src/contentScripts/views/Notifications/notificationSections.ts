@@ -26,7 +26,7 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'hybrid',
     layout: 'workspace',
     labelKey: 'notifications.sections.whisper.label',
-    icon: 'i-solar:chat-round-linear',
+    icon: 'i-tabler:message-circle',
     unreadSource: 'dm',
   },
   {
@@ -34,7 +34,7 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.reply.label',
-    icon: 'i-solar:reply-2-linear',
+    icon: 'i-tabler:corner-up-left',
     unreadSource: 'reply',
   },
   {
@@ -42,7 +42,7 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.at.label',
-    icon: 'i-solar:mention-circle-linear',
+    icon: 'i-tabler:at',
     unreadSource: 'at',
   },
   {
@@ -50,7 +50,7 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.love.label',
-    icon: 'i-solar:like-linear',
+    icon: 'i-tabler:thumb-up',
     unreadSource: 'like',
   },
   {
@@ -58,7 +58,7 @@ export const NOTIFICATION_SECTIONS = [
     implementation: 'native',
     layout: 'document',
     labelKey: 'notifications.sections.system.label',
-    icon: 'i-solar:chat-line-linear',
+    icon: 'i-tabler:message',
     unreadSource: 'system',
   },
 ] as const satisfies readonly NotificationSectionDefinition[]

@@ -298,7 +298,7 @@ defineExpose({ initData })
         <!-- arrow -->
         <div
           border="~ solid t-0 l-0 r-2 b-2"
-          :border-color="showDropdown ? '$bew-theme-color' : '$bew-fill-4'"
+          :border-color="showDropdown ? '$bew-text-1' : '$bew-fill-4'"
           p="3px"
           ml-2
           display="inline-block"

@@ -213,7 +213,7 @@ const shouldShowDivider = computed(() => {
         important-w-auto
       >
         <a href="https://passport.bilibili.com/login" class="login">
-          <div i-solar:user-circle-linear class="text-xl mr-2" />{{
+          <div i-tabler:user-circle class="text-xl mr-2" />{{
             $t('topbar.sign_in')
           }}
         </a>
@@ -283,7 +283,7 @@ const shouldShowDivider = computed(() => {
               :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('favorites')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'favorites')"
             >
-              <div i-mingcute:star-line />
+              <div i-tabler:star />
             </ALink>
 
             <Transition name="slide-in">
@@ -316,7 +316,7 @@ const shouldShowDivider = computed(() => {
               :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('history')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'history')"
             >
-              <div i-mingcute:time-line />
+              <div i-tabler:clock />
             </ALink>
 
             <Transition name="slide-in">
@@ -360,7 +360,7 @@ const shouldShowDivider = computed(() => {
               :custom-click-event="!settings.touchScreenOptimization && shouldOpenConfiguredTopBarItem('watchLater')"
               @click="(event: MouseEvent) => handleClickTopBarItem(event, 'watchLater')"
             >
-              <div i-mingcute:carplay-line />
+              <div i-tabler:playlist />
             </ALink>
 
             <Transition name="slide-in">
@@ -390,7 +390,7 @@ const shouldShowDivider = computed(() => {
               :title="$t('topbar.creative_center')"
               @click="resetTopBarTransientInteraction"
             >
-              <div i-mingcute:bulb-line />
+              <div i-tabler:bulb />
             </a>
           </div>
         </div>
@@ -412,7 +412,7 @@ const shouldShowDivider = computed(() => {
             :aria-label="$t('video_card.operation.more_options')"
             :aria-expanded="Boolean(popupVisible?.more)"
           >
-            <div i-mingcute:menu-line />
+            <div i-tabler:menu />
           </button>
 
           <Transition name="slide-in">
@@ -453,7 +453,7 @@ const shouldShowDivider = computed(() => {
               :title="$t('topbar.upload')"
               @click="resetTopBarTransientInteraction"
             >
-              <div i-mingcute:upload-line flex-shrink-0 />
+              <div i-tabler:upload flex-shrink-0 />
             </a>
 
             <Transition name="slide-in">

@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { usePageViewState } from '~/composables/usePageViewState'
 import type { List as PopularAnimeItem, PopularAnimeResult } from '~/models/anime/popular'
 import type { ItemSubItem as RecommendationItem, RecommendationResult } from '~/models/anime/recommendation'
 import type { List as WatchListItem, WatchListResult } from '~/models/anime/watchList'
@@ -15,7 +16,8 @@ import { reportRuntimeFailure } from '~/utils/messaging'
 
 import AnimeTimeTable from './components/AnimeTimeTable.vue'
 
-const animeWatchList = reactive<WatchListItem[]>([])
+const viewState = usePageViewState('anime')
+const animeWatchList = reactive(viewState.read<WatchListItem[]>('watchList', []))
 const { t } = useI18n()
 
 function getWatchProgressLabel(item: WatchListItem) {
@@ -26,16 +28,22 @@ function getWatchProgressLabel(item: WatchListItem) {
     : undefined
   return time ? t('anime.watched_until', { time }) : item.progress || t('anime.havent_seen')
 }
-const recommendAnimeList = reactive<RecommendationItem[]>([])
-const popularAnimeList = reactive<PopularAnimeItem[]>([])
-const cursor = ref<number>(0)
+const recommendAnimeList = reactive(viewState.read<RecommendationItem[]>('recommendations', []))
+const popularAnimeList = reactive(viewState.read<PopularAnimeItem[]>('popular', []))
+viewState.capture('watchList', () => animeWatchList)
+viewState.capture('recommendations', () => recommendAnimeList)
+viewState.capture('popular', () => popularAnimeList)
+const cursor = viewState.ref<number>('cursor', 0)
+const watchListLoaded = viewState.ref('watchListLoaded', false)
+const popularLoaded = viewState.ref('popularLoaded', false)
+const recommendationsLoaded = viewState.ref('recommendationsLoaded', false)
 const isLoadingAnimeWatchList = ref<boolean>()
 const isLoadingPopularAnime = ref<boolean>()
 const isLoadingRecommendAnime = ref<boolean>()
 const recommendRequestFailed = ref(false)
 const popularRequestFailed = ref(false)
 const watchListRequestFailed = ref(false)
-const noMoreContent = ref<boolean>()
+const noMoreContent = viewState.ref<boolean | undefined>('noMore', undefined)
 const animeTimeTableRef = ref()
 const { handleReachBottom, handlePageRefresh } = useBewlyApp()
 const topBarStore = useTopBarStore()
@@ -48,7 +56,19 @@ const isLoading = computed(() => {
 
 onMounted(() => {
   animeMounted = true
-  reloadAnimePage()
+  if (!viewState.restored) {
+    reloadAnimePage()
+  }
+  else {
+    // Each section has an independent request. Leaving after one finishes must
+    // not turn unfinished sections into permanently cached empty results.
+    if (!watchListLoaded.value)
+      void getAnimeWatchList()
+    if (!popularLoaded.value)
+      void getPopularAnimeList()
+    if (!recommendationsLoaded.value)
+      void getRecommendAnimeList()
+  }
   initPageAction()
 })
 
@@ -84,6 +104,9 @@ function reloadAnimePage() {
   recommendAnimeList.length = 0
   popularAnimeList.length = 0
   cursor.value = 0
+  watchListLoaded.value = false
+  popularLoaded.value = false
+  recommendationsLoaded.value = false
   noMoreContent.value = false
   recommendRequestFailed.value = false
   popularRequestFailed.value = false
@@ -133,6 +156,7 @@ async function getAnimeWatchList(generation = requestGeneration, requestAccountI
       return
     }
     animeWatchList.splice(0, animeWatchList.length, ...response.data.list)
+    watchListLoaded.value = true
   }
   catch {
     if (isAnimeRequestCurrent(generation, requestAccountId))
@@ -168,6 +192,7 @@ async function getRecommendAnimeList(
     recommendAnimeList.push(...subItems)
     cursor.value = response.data.coursor
     noMoreContent.value = !response.data.has_next || subItems.length === 0
+    recommendationsLoaded.value = true
     return true
   }
   catch (error) {
@@ -195,6 +220,7 @@ async function getPopularAnimeList(generation = requestGeneration, requestAccoun
     if (response.code !== 0 || !Array.isArray(response.result?.list))
       throw new Error('Popular anime request failed')
     popularAnimeList.splice(0, popularAnimeList.length, ...response.result.list)
+    popularLoaded.value = true
   }
   catch (error) {
     if (isAnimeRequestCurrent(generation, requestAccountId)) {

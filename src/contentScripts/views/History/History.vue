@@ -17,6 +17,7 @@ import { CARD_WINDOW_THRESHOLD, useCardWindow } from '~/composables/useCardWindo
 import { useConfirmDialog } from '~/composables/useConfirmDialog'
 import { useLayoutMotion } from '~/composables/useLayoutMotion'
 import { useLibraryBatchSelection } from '~/composables/useLibraryBatchSelection'
+import { usePageViewState } from '~/composables/usePageViewState'
 import SelectionOverlay from '~/contentScripts/views/WatchLater/WatchLaterSelectionOverlay.vue'
 import { settings } from '~/logic'
 import type { List as HistoryItem } from '~/models/history/history'
@@ -47,6 +48,7 @@ const { confirm: showConfirmDialog } = useConfirmDialog()
 
 const { handlePageRefresh, handleReachBottom, haveScrollbar, scrollViewportRef, requestLoadMoreCheck } = useBewlyApp()
 const topBarStore = useTopBarStore()
+const viewState = usePageViewState('history')
 const accountId = computed(() => resolveAuthenticatedAccountId(topBarStore.isLogin, topBarStore.userInfo.mid))
 const timeline = useHistoryTimeline({
   api: api.history,
@@ -58,9 +60,10 @@ const timeline = useHistoryTimeline({
   onCleared: () => { void clearVideoVisitHistory() },
 })
 const { isLoading, requestFailed, noMoreContent, historyList, keyword, submittedKeyword, filters, contentType, filtersActive, isClearingHistory, historyStatus, setHistoryPauseStatus, clearAllHistory } = timeline
-const sortOrder = ref<HistorySortOrder>('newest')
+viewState.capture('timeline', timeline.snapshot)
+const sortOrder = viewState.ref<HistorySortOrder>('sort', 'newest')
 const sortedHistory = computed(() => sortHistoryItems(historyList, sortOrder.value))
-const collapsedDays = shallowRef(new Set<string>())
+const collapsedDays = viewState.ref('collapsedDays', new Set<string>())
 const mutationKey = (item: HistoryItem) => `${item.history.business}_${item.history.oid}`
 const batch = useLibraryBatchSelection({
   keys: () => sortedHistory.value.filter(item => !collapsedDays.value.has(historyDayKey(item))).map(mutationKey),
@@ -71,6 +74,10 @@ const batch = useLibraryBatchSelection({
   },
 })
 const controlsDisabled = computed(() => batch.busy.value || isClearingHistory.value || timeline.deleting.size > 0)
+batch.managing.value = viewState.read('managing', false)
+batch.selected.value = viewState.read('selected', new Set<string>())
+viewState.capture('managing', () => batch.managing.value)
+viewState.capture('selected', () => batch.selected.value)
 // Recheck the shared sentinel when a request finishes or collapsing a day
 // exposes the bottom; IntersectionObserver need not emit another entry then.
 watch([isLoading, controlsDisabled, collapsedDays, sortOrder], () => {
@@ -243,7 +250,7 @@ function formatHistoryTime(item: HistoryItem) {
 let mounted = false
 onMounted(() => {
   mounted = true
-  timeline.activate()
+  timeline.activate(viewState.read<ReturnType<typeof timeline.snapshot> | undefined>('timeline', undefined))
   handleReachBottom.value = handleHistoryReachBottom
   handlePageRefresh.value = handleHistoryPageRefresh
 })
@@ -395,8 +402,8 @@ function jumpToLoginPage() {
                   <span
                     v-if="entry.item.history.business === HistoryBusiness.LIVE || entry.item.history.business === HistoryBusiness.PGC"
                     pos="absolute right-0 top-0"
-                    bg="$bew-theme-color"
-                    text="xs $bew-on-theme-color"
+                    bg="$bew-selected-bg"
+                    text="xs $bew-text-1"
                     p="x-2 y-1"
                     m-1
                     rounded="$bew-radius-half"
@@ -491,7 +498,7 @@ function jumpToLoginPage() {
                       }}
                       <span
                         v-if="entry.item.live_status === 1"
-                        text="$bew-theme-foreground"
+                        text="$bew-text-1"
                         flex
                         items-center
                         gap-1
@@ -509,13 +516,13 @@ function jumpToLoginPage() {
                       <span text="$bew-icon-size-sm" mr-2 lh-0>
                         <i
                           v-if="entry.item.history.dt === 1 || entry.item.history.dt === 3 || entry.item.history.dt === 5 || entry.item.history.dt === 7"
-                          i-mingcute:cellphone-line
+                          i-tabler:device-mobile
                         />
-                        <i v-if="entry.item.history.dt === 2" i-mingcute:tv-1-line />
+                        <i v-if="entry.item.history.dt === 2" i-tabler:device-tv />
                         <i
-                          v-if="entry.item.history.dt === 4 || entry.item.history.dt === 6" i-mingcute:pad-line
+                          v-if="entry.item.history.dt === 4 || entry.item.history.dt === 6" i-tabler:device-tablet
                         />
-                        <i v-if="entry.item.history.dt === 33" i-mingcute:tv-2-line />
+                        <i v-if="entry.item.history.dt === 33" i-tabler:device-tv />
                       </span>
                       <span>
                         {{ formatHistoryTime(entry.item) }}
@@ -650,7 +657,7 @@ function jumpToLoginPage() {
               @click="handlePauseWatchHistory"
             >
               <template #left>
-                <div i-ph:pause-circle />
+                <div i-tabler:player-pause />
               </template>
               {{ $t('history.pause_watch_history') }}
             </Button>
@@ -661,7 +668,7 @@ function jumpToLoginPage() {
               @click="handleTurnOnWatchHistory"
             >
               <template #left>
-                <div i-ph:play-circle />
+                <div i-tabler:player-play />
               </template>
               {{ $t('history.turn_on_watch_history') }}
             </Button>

@@ -25,8 +25,10 @@
   // Bilibili's 15px base, with line height and weight providing their hierarchy.
   --bew-font-size-caption: 12px;
   --bew-font-size-control: 13px;
+  --bew-font-size-ui: 14px;
   --bew-font-size-body: 15px;
   --bew-font-size-title: 15px;
+  --bew-font-size-subheading: 17px;
   --bew-font-size-heading: 20px;
   // Rare display text and large numerals are not part of the interface text scale.
   --bew-font-size-display: 24px;
@@ -34,14 +36,21 @@
   --bew-font-size-data-emphasis: 28px;
   --bew-line-height-caption: 16px;
   --bew-line-height-control: 18px;
+  --bew-line-height-ui: 20px;
+  --bew-line-height-help: 20px;
   --bew-line-height-body: 24px;
   --bew-line-height-title: 22px;
+  --bew-line-height-subheading: 24px;
   --bew-line-height-heading: 28px;
   --bew-line-height-data: 32px;
   --bew-font-weight-regular: 400;
   --bew-font-weight-medium: 500;
   --bew-font-weight-semibold: 600;
   --bew-font-weight-bold: 700;
+  // Hierarchy is conveyed by foreground tone and indentation, not heavier type.
+  --bew-heading-weight: var(--bew-font-weight-regular);
+  --bew-subheading-weight: var(--bew-font-weight-regular);
+  --bew-label-weight: var(--bew-font-weight-regular);
   --bew-control-press-scale: 0.97;
   // Focus is independent of the user accent. Reuse this neutral, single-pixel
   // treatment for selection controls, keyboard focus and injected native UI.
@@ -71,6 +80,7 @@
   --bew-radius-lg: 12px;
   --bew-radius-xl: 16px;
   --bew-radius-2xl: 24px;
+  --bew-radius-3xl: 32px;
   --bew-radius-full: 9999px;
   --bew-corner-shape: superellipse(1.7);
   --bew-corner-shape-round: round;
@@ -130,11 +140,11 @@
   --bew-message-composer-min-width: 256px;
   --bew-message-input-height: calc(var(--bew-control-height) + var(--bew-space-2));
   --bew-message-icon-hover: #000;
-  --bew-message-pinned-background: #fff;
-  --bew-message-pinned-hover-background: #fff;
+  --bew-message-pinned-background: var(--bew-neutral-bg);
+  --bew-message-pinned-hover-background: var(--bew-neutral-bg);
   --bew-message-composer-rest-height: calc(var(--bew-control-height) + var(--bew-space-2) * 3 + 2px);
-  // Message search explicitly uses a directional, translucent accent wash.
-  --bew-message-search-highlight: color-mix(in srgb, var(--bew-theme-color) 24%, transparent);
+  // The row locator stays neutral; matched words retain the accent.
+  --bew-message-search-highlight: color-mix(in srgb, var(--bew-text-1) 14%, transparent);
   // Leave room for a heading-height selection between the compact adjacent rows.
   --bew-wheel-label-size: var(--bew-font-size-display);
   --bew-wheel-label-weight: var(--bew-font-weight-medium);
@@ -149,7 +159,7 @@
   --bew-sidebar-label-inset: min(var(--bew-space-2), calc(var(--bew-control-height) / 2));
   --bew-sidebar-action-padding: var(--bew-space-2);
   --bew-sidebar-action-inset: calc(var(--bew-sidebar-label-inset) - var(--bew-sidebar-action-padding));
-  --bew-sidebar-action-hover: rgb(0 0 0 / 6%);
+  --bew-sidebar-action-hover: var(--bew-hover-bg);
   --bew-wheel-text-active: var(--bew-text-1);
   --bew-wheel-text: rgb(from var(--bew-text-1) r g b / 67%);
   --bew-wheel-glow: rgb(from var(--bew-text-1) r g b / 35%);
@@ -159,8 +169,7 @@
   --bew-notifications-card-background-hover: var(--bew-content-solid);
   --bew-notifications-card-border: var(--bew-message-card-border);
   --bew-notifications-reference-background: var(--bew-content-alt-solid);
-  --bew-message-card-border: color-mix(in srgb, var(--bew-surface-border-color) 65%, transparent);
-  --bew-chart-secondary: #426bc2;
+  --bew-message-card-border: var(--bew-surface-border-color);
   --bew-insights-chart-height: calc(var(--bew-space-12) * 3);
   --bew-reading-line-length: 76ch;
   --bew-layout-sidebar-sticky-top: 150px;
@@ -168,18 +177,16 @@
   --bew-layout-dialog-width: 420px;
   --bew-dialog-compact-width: 440px;
   --bew-settings-label-min-width: 160px;
+  --bew-settings-level-indent: var(--bew-space-2);
   --bew-dialog-action-min-width: 120px;
   --bew-dialog-grid-item-min-width: 260px;
   --bew-layout-drawer-max-width: 1400px;
-  --bew-comment-media-max-width: 520px;
-  --bew-comment-media-single-max-height: 420px;
-  --bew-comment-media-fallback-size: 160px;
   --bew-comment-avatar-size: 32px;
   --bew-comment-state-min-height: 88px;
   --bew-moment-forward-picker-width: 320px;
+  --bew-moment-reply-image-size: 64px;
+  --bew-composer-radius: var(--bew-radius-3xl);
   --bew-moment-forward-picker-max-height: 320px;
-  --bew-moment-forward-textarea-min-height: 72px;
-  --bew-moment-forward-textarea-max-height: 180px;
   --bew-moment-forward-picker-state-min-height: 112px;
   --bew-widescreen-episode-max-height: 560px;
   --bew-history-cover-width: clamp(144px, 18vw, 200px);
@@ -224,6 +231,9 @@
   --bew-duration-fast: 150ms;
   --bew-duration-normal: 200ms;
   --bew-duration-moderate: 300ms;
+  --bew-page-exit-duration: 90ms;
+  --bew-page-enter-duration: 210ms;
+  --bew-ease-in: ease-in;
   --bew-ease-standard: cubic-bezier(0.22, 0.61, 0.36, 1);
   --bew-ease-out: ease-out;
   --bew-ease-in-out: ease-in-out;
@@ -287,13 +297,13 @@
   --bew-top-bar-solid-shadow: var(--bew-shadow-1);
 
   // Interaction tokens aligned with home tab buttons
-  --bew-segment-item-hover-bg: var(--bew-fill-1);
+  --bew-segment-item-hover-bg: var(--bew-hover-bg);
   --bew-segment-item-hover-color: var(--bew-text-1);
-  --bew-segment-item-active-bg: var(--bew-theme-color);
-  --bew-segment-item-active-color: var(--bew-on-theme-color);
+  --bew-segment-item-active-bg: var(--bew-selected-bg);
+  --bew-segment-item-active-color: var(--bew-text-1);
   --bew-segment-item-active-shadow: inset 0 0 0 1px var(--bew-surface-border-color);
   --bew-segment-item-hover-bg-white: rgba(255, 255, 255, 0.16);
-  --bew-segment-item-active-bg-white: var(--bew-theme-color);
+  --bew-segment-item-active-bg-white: var(--bew-selected-bg);
   --bew-segment-item-active-shadow-white: var(--bew-segment-item-active-shadow);
   --bew-liquid-indicator-bg: var(--bew-segment-item-active-bg);
   --bew-liquid-indicator-shadow: var(--bew-segment-item-active-shadow);
@@ -338,13 +348,12 @@
 
   // Use this in dialogs if you want to add a frosted glass effect
   --bew-filter-glass-2: blur(30px) saturate(180%);
-  --bew-liquid-glass-color: #fff;
+  --bew-liquid-glass-color: var(--bew-neutral-bg);
 
   // Apply this to the Bilibili icon if it is an image with the brand's original blue or pink color
-  // Change it to glow effect to matches the user's theme color
+  // Icon emphasis stays neutral; accent is reserved for the seven semantic uses.
   --bew-filter-icon-glow: saturate(0) brightness(2) drop-shadow(0 0 0.2px white)
-    drop-shadow(0 0 0.5px var(--bew-theme-color)) drop-shadow(0 0 0.5px var(--bew-theme-color))
-    drop-shadow(0 0 0.5px var(--bew-theme-color)) drop-shadow(0 0 2px var(--bew-theme-color-80));
+    drop-shadow(0 0 2px rgb(255 255 255 / 80%));
   // #endregion
 
   // #region Shadows
@@ -361,15 +370,10 @@
   --bew-shadow-4:
     0 34px 50px -20px rgb(0 0 0 / 0.14), 0 32px 45px -12px rgb(0 0 0 / 0.1), 0 30px 40px -8px rgb(0 0 0 / 0.12);
 
-  // Use this to imitate the frosted glass edge effect in components with a frosted glass design (except dialogs)
-  --bew-shadow-edge-glow-1:
-    inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.34), inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.14),
-    inset 0 0 10px rgba(255, 255, 255, 0.6);
-
-  // Use this for dialogs with the frosted glass effect
-  --bew-shadow-edge-glow-2:
-    inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.34), inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.14),
-    inset 0 0 14px rgba(255, 255, 255, 0.62);
+  // Retired decorative inner glows. Keep a valid shadow-list item for existing
+  // consumers that combine these aliases with elevation/focus shadows.
+  --bew-shadow-edge-glow-1: 0 0 0 transparent;
+  --bew-shadow-edge-glow-2: 0 0 0 transparent;
 
   // #endregion
 
@@ -387,12 +391,28 @@
 
   --bew-theme-color: hsl(195 100% 42%);
   --bew-on-theme-color: white;
+  --bew-accent-solid: var(--bew-theme-color);
+  --bew-on-accent-solid: var(--bew-on-theme-color);
+  --bew-accent-marker: var(--bew-theme-focus-ring);
+  // Dock's existing active indicator is white in every theme.
+  --bew-accent-marker-on-light: var(--bew-theme-focus-ring);
+  --bew-chart-primary: var(--bew-text-1);
+  --bew-chart-secondary: color-mix(in srgb, var(--bew-neutral-fg) 60%, var(--bew-content-solid));
+  --bew-chart-grid: color-mix(in srgb, var(--bew-neutral-fg) 18%, var(--bew-content-solid));
+  --bew-chart-surface: var(--bew-content-solid);
+  --bew-chart-accent: var(--bew-theme-foreground);
+  --bew-chart-line-width: 1.5px;
+  --bew-chart-guide-width: 1px;
   --bew-theme-checkmark-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 14 14' fill='none'%3E%3Cpath d='M3 7.2 5.7 10 11 4.5' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
   --bew-theme-foreground: hsl(195 100% 32%);
   --bew-theme-focus-ring: hsl(195 100% 36%);
-  // Opaque secondary emphasis: consistent on glass, media and solid panels.
-  --bew-theme-surface: color-mix(in srgb, var(--bew-theme-color) 10%, var(--bew-content-solid));
-  --bew-theme-surface-hover: color-mix(in srgb, var(--bew-theme-color) 18%, var(--bew-content-solid));
+  --bew-hover-bg: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
+  --bew-selected-bg: color-mix(in srgb, var(--bew-neutral-fg) 8%, var(--bew-content-solid));
+  --bew-pressed-bg: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-content-solid));
+  --bew-selected-ring: inset 0 0 0 1px color-mix(in srgb, var(--bew-neutral-fg) 6%, transparent);
+  // Compatibility aliases for existing secondary surfaces; never tinted by accent.
+  --bew-theme-surface: var(--bew-selected-bg);
+  --bew-theme-surface-hover: var(--bew-pressed-bg);
   --bew-on-theme-surface: var(--bew-text-1);
   --bew-theme-color-10: color-mix(in oklab, var(--bew-theme-color), transparent 90%);
   --bew-theme-color-20: color-mix(in oklab, var(--bew-theme-color), transparent 80%);
@@ -452,100 +472,82 @@
   --bew-error-color-90: color-mix(in oklab, var(--bew-error-color), transparent 10%);
   // #endregion
 
-  // #region Text colors
-  // In light mode, use black; in dark mode, use white
-  --bew-text-auto: white;
+  // The only theme-dependent neutral pigments. All reading surfaces, text,
+  // fills and borders below derive from this pair (sRGB amounts are predictable).
+  --bew-neutral-bg: #fff;
+  --bew-neutral-fg: #171717;
+  --bew-neutral-canvas: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
+  --bew-neutral-surface: var(--bew-neutral-bg);
+  --bew-neutral-raised: var(--bew-neutral-bg);
+  // Fields sit within a surface; they are not another elevation level.
+  --bew-neutral-inset: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-bg));
+  // Native Bilibili neutral ramp aliases use the same pigments, not a blue-gray palette.
+  --bew-neutral-ramp-2: color-mix(in srgb, var(--bew-neutral-fg) 12%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-3: color-mix(in srgb, var(--bew-neutral-fg) 22%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-4: color-mix(in srgb, var(--bew-neutral-fg) 32%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-5: color-mix(in srgb, var(--bew-neutral-fg) 42%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-6: color-mix(in srgb, var(--bew-neutral-fg) 54%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-7: color-mix(in srgb, var(--bew-neutral-fg) 67%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-8: color-mix(in srgb, var(--bew-neutral-fg) 76%, var(--bew-neutral-bg));
+  --bew-neutral-ramp-9: color-mix(in srgb, var(--bew-neutral-fg) 88%, var(--bew-neutral-bg));
+  --bew-text-auto: var(--bew-neutral-bg);
+  --bew-text-1: var(--bew-neutral-fg);
+  --bew-text-2: color-mix(in srgb, var(--bew-neutral-fg) 76%, transparent);
+  --bew-text-3: color-mix(in srgb, var(--bew-neutral-fg) 67%, transparent);
+  // Disabled/placeholder only; never use this level for reading content.
+  --bew-text-4: color-mix(in srgb, var(--bew-neutral-fg) 38%, transparent);
 
-  --bew-text-1: hsl(217 19% 10%);
-
-  // It can also be used for the text that is followed or subscribed to
-  --bew-text-2: hsl(215 19% 24% / 80%);
-
-  --bew-text-3: hsl(215 15% 38%);
-
-  // It can also be used for the text that is disabled
-  --bew-text-4: hsl(215 19% 36% / 40%);
-  // #endregion
-
-  // #region Webpage background colors
-  // Used as a webpage background color, but not on the Bilibili homepage (www.bilibili.com)
-  --bew-bg: hsl(0 0% 100%);
+  --bew-bg: var(--bew-neutral-canvas);
+  // Media canvases/white artwork are intentionally independent of UI theme.
   --bew-player-canvas: hsl(0 0% 0%);
   --bew-static-white: hsl(0 0% 100%);
-
-  // Used as the background color of the Bilibili homepage (www.bilibili.com)
-  --bew-homepage-bg: hsl(240 31% 96%);
-  // A subtle neutral tint separates the sidebar from the page without another glass layer.
-  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-homepage-bg) 94%, black);
+  --bew-homepage-bg: var(--bew-neutral-canvas);
+  // Preserve the approved sidebar separation and its single glass layer.
+  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-neutral-fg) 6%, var(--bew-neutral-canvas));
   --bew-sidebar-background: rgb(from var(--bew-sidebar-background-solid) r g b / var(--bew-content-opacity));
-  // #endregion
-
   --bew-content-opacity: 0.68;
 
-  // #region Content colors, used to buttons, cards, popover and so on
-  // Variable names that don't contain `solid` are used to frosted glass effect elements
+  --bew-content-solid: var(--bew-neutral-surface);
+  --bew-content-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-neutral-surface));
+  --bew-content-alt-solid: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-surface));
+  --bew-content-alt-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-content-alt-solid));
+  --bew-content: rgb(from var(--bew-content-solid) r g b / var(--bew-content-opacity));
+  --bew-content-hover: rgb(from var(--bew-content-solid-hover) r g b / var(--bew-content-opacity));
+  --bew-content-alt: rgb(from var(--bew-content-alt-solid) r g b / var(--bew-content-opacity));
+  --bew-content-alt-hover: rgb(from var(--bew-content-alt-solid-hover) r g b / var(--bew-content-opacity));
 
-  // `--bew-content-*` for the flat background elements
-  // #region `--bew-content-*` background colors
-  --bew-content: hsl(0 0% 100% / var(--bew-content-opacity));
-  --bew-content-hover: hsl(0 0% 85% / var(--bew-content-opacity));
-  --bew-content-alt: hsl(240 31% 95% / var(--bew-content-opacity));
-  --bew-content-alt-hover: hsl(240 31% 80% / var(--bew-content-opacity));
+  --bew-elevated-solid: var(--bew-neutral-raised);
+  --bew-elevated-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-neutral-raised));
+  --bew-elevated-alt-solid: var(--bew-neutral-raised);
+  --bew-elevated-alt-solid-hover: color-mix(in srgb, var(--bew-neutral-fg) 7%, var(--bew-elevated-alt-solid));
+  --bew-elevated: rgb(from var(--bew-elevated-solid) r g b / var(--bew-content-opacity));
+  --bew-elevated-hover: rgb(from var(--bew-elevated-solid-hover) r g b / var(--bew-content-opacity));
+  --bew-elevated-alt: rgb(from var(--bew-elevated-alt-solid) r g b / var(--bew-content-opacity));
+  --bew-elevated-alt-hover: rgb(from var(--bew-elevated-alt-solid-hover) r g b / var(--bew-content-opacity));
 
-  --bew-content-solid: hsl(0 0% 100%);
-  --bew-content-solid-hover: hsl(0 0% 85%);
-  --bew-content-alt-solid: hsl(240 31% 95%);
-  --bew-content-alt-solid-hover: hsl(240 31% 80%);
-  // #endregion
+  // Small unread numerals need a stronger tint over arbitrary page artwork.
+  // The shared opacity still reaches 1 when frosted glass is disabled.
+  --bew-count-badge-bg: rgb(from var(--bew-elevated-solid) r g b / max(0.76, var(--bew-content-opacity)));
 
-  // `--bew-elevated-*` for popup, dialog and difference layers with difference elevation levels
-  // #region `--bew-elevated-*` background colors
-  --bew-elevated: hsl(0 0% 100% / var(--bew-content-opacity));
-  --bew-elevated-hover: hsl(0 0% 85% / var(--bew-content-opacity));
-  --bew-elevated-alt: var(--bew-content-alt);
-  --bew-elevated-alt-hover: var(--bew-content-alt-hover);
-
-  --bew-elevated-solid: hsl(0 0% 100%);
-  --bew-elevated-solid-hover: hsl(0 0% 85%);
-  --bew-elevated-alt-solid: var(--bew-content-alt-solid);
-  --bew-elevated-alt-solid-hover: var(--bew-content-alt-solid-hover);
-  // #endregion
-  // #endregion
-
-  // #region Gray semi-transparent colors
-  // You can used for buttons, input fields and the other components on the top of elements
-  --bew-fill-1: rgb(131 131 145 / 15%);
-  --bew-surface-inset-bg: rgb(0 0 0 / 6%);
-
-  // Used this for hovering color if it within the top layer of elements,
-  // not just when hovering over the element itself; otherwise, use `--bew-content-*-hover` or `--bew-elevated--hover`
-  --bew-fill-2: rgb(131 131 145 / 30%);
-
-  // You can used for the disabled state of elements on the top layer
-  --bew-fill-3: rgb(131 131 145 / 45%);
-
-  // You can use this as the frosted glass mask, such as on the right side of the "Watch Later" page panel and the "Favorites" page panel
-  --bew-fill-4: rgb(131 131 145 / 60%);
-
-  --bew-fill-alt: rgb(255 255 255 / 45%);
-
-  // This color is used in skeleton screens
-  --bew-skeleton: var(--bew-fill-2);
-  // #endregion
-
-  --bew-border-color: rgb(131 131 145 / 18%);
-  --bew-surface-border-color: #d1d2d4;
-
-  // Threaded comments use this subtle rail to keep nested reply ancestry visible.
-  --bew-comment-tree-line-color: rgb(131 131 145 / 30%);
-
-  // 开关背景色
-  --bew-switch-bg: rgb(227, 229, 231);
+  --bew-fill-1: color-mix(in srgb, var(--bew-neutral-fg) 5%, transparent);
+  --bew-fill-2: color-mix(in srgb, var(--bew-neutral-fg) 9%, transparent);
+  --bew-fill-3: color-mix(in srgb, var(--bew-neutral-fg) 14%, transparent);
+  --bew-fill-4: color-mix(in srgb, var(--bew-neutral-fg) 22%, transparent);
+  --bew-fill-alt: color-mix(in srgb, var(--bew-neutral-bg) 45%, transparent);
+  --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-fg) 4%, transparent);
+  --bew-skeleton: color-mix(in srgb, var(--bew-neutral-fg) 7%, transparent);
+  --bew-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --un-default-border-color: var(--bew-border-color);
+  --bew-surface-border-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-comment-tree-line-color: color-mix(in srgb, var(--bew-neutral-fg) 12%, transparent);
+  --bew-input-bg: var(--bew-neutral-inset);
+  --bew-input-bg-hover: color-mix(in srgb, var(--bew-neutral-fg) 3%, var(--bew-neutral-inset));
+  --bew-input-border-color: color-mix(in srgb, var(--bew-neutral-fg) 16%, transparent);
+  --bew-input-border-color-hover: color-mix(in srgb, var(--bew-neutral-fg) 20%, transparent);
+  --bew-switch-bg: var(--bew-fill-3);
   --bew-switch-thumb-active: var(--bew-on-theme-color);
-
-  // IP标签背景色
-  --bew-ip-tag-bg: #f1f2f3;
-  --bew-ip-tag-text: #61666d;
+  --bew-ip-tag-bg: var(--bew-fill-1);
+  --bew-ip-tag-text: var(--bew-text-3);
 }
 
 @media (max-width: breakpoints.$compact-max) {
@@ -574,13 +576,15 @@
   --bew-error-foreground: color-mix(in srgb, var(--bew-error-color) 84%, white);
 
   // 深色模式基准颜色（通过 JS 动态设置）
-  --bew-dark-base-color: #2a2d32;
-  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-homepage-bg) 88%, white);
-  --bew-sidebar-action-hover: rgb(0 0 0 / 18%);
+  --bew-dark-base-color: #2b2b2b;
+  // Approximate the former overlapping fills with one neutral sRGB tint;
+  // keep the existing alpha and blur so background detail still shows through.
+  --bew-sidebar-background-solid: color-mix(in srgb, var(--bew-neutral-fg) 16%, var(--bew-neutral-canvas));
+  --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-bg) 18%, transparent);
   --bew-wheel-text-active: #fff;
   --bew-message-icon-hover: #fff;
-  --bew-message-pinned-background: rgb(0 0 0 / 24%);
-  --bew-message-pinned-hover-background: rgb(0 0 0 / 36%);
+  --bew-message-pinned-background: color-mix(in srgb, var(--bew-neutral-bg) 24%, transparent);
+  --bew-message-pinned-hover-background: color-mix(in srgb, var(--bew-neutral-bg) 36%, transparent);
   --bew-wheel-text: rgb(255 255 255 / 67%);
   --bew-wheel-glow: rgb(255 255 255 / 55%);
 
@@ -591,12 +595,6 @@
   --bew-shadow-4:
     0 34px 50px -20px rgb(0 0 0 / 0.14), 0 32px 45px -12px rgb(0 0 0 / 0.12), 0 30px 40px -8px rgb(0 0 0 / 0.14);
 
-  --bew-shadow-edge-glow-1:
-    inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.06), inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.03),
-    inset 0 0 10px rgba(255, 255, 255, 0.02);
-  --bew-shadow-edge-glow-2:
-    inset 1px 1px 1px -0.5px rgba(255, 255, 255, 0.06), inset -1px -1px 1px -0.5px rgba(255, 255, 255, 0.03),
-    inset 0 0 14px rgba(255, 255, 255, 0.03);
   // #endregion
 
   --bew-logo-color: var(--bew-text-1);
@@ -604,95 +602,47 @@
 
   --bew-theme-color-auto: var(--bew-text-1);
 
-  --bew-text-auto: black;
-  --bew-text-1: hsl(220 13% 95%);
-  --bew-text-2: hsl(220 13% 85% / 90%);
-  --bew-text-3: hsl(220 13% 75% / 75%);
-  --bew-text-4: hsl(220 13% 65% / 55%);
-
-  // Keep webpage backgrounds in a stable perceptual dark range while retaining
-  // only a restrained hue hint from the user's dark base color.
-  --bew-dark-page-bg: #181a1e;
-  --bew-bg: var(--bew-dark-page-bg);
-  --bew-homepage-bg: var(--bew-dark-page-bg);
-
-  --bew-dark-glass-base: color-mix(in oklab, var(--bew-dark-base-color), black 35%);
-  --bew-content: rgb(from color-mix(in oklab, var(--bew-dark-glass-base), white 3%) r g b / var(--bew-content-opacity));
-  --bew-content-hover: rgb(
-    from color-mix(in oklab, var(--bew-dark-glass-base), white 8%) r g b / var(--bew-content-opacity)
-  );
-  --bew-content-alt: rgb(
-    from color-mix(in oklab, var(--bew-dark-glass-base), white 5%) r g b / var(--bew-content-opacity)
-  );
-  --bew-content-alt-hover: rgb(
-    from color-mix(in oklab, var(--bew-dark-glass-base), white 10%) r g b / var(--bew-content-opacity)
-  );
-
-  --bew-content-solid: color-mix(in oklab, var(--bew-dark-base-color), white 3%);
-  --bew-content-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 8%);
-  --bew-content-alt-solid: color-mix(in oklab, var(--bew-dark-base-color), white 5%);
-  --bew-content-alt-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 10%);
+  --bew-neutral-bg: #141414;
+  --bew-neutral-fg: #ebebeb;
+  --bew-neutral-canvas: var(--bew-neutral-bg);
+  // Calibrated by role: quiet reading surfaces, distinct overlays, recessed fields.
+  // These amounts reproduce the approved visual balance, not equal numeric steps.
+  --bew-neutral-surface: color-mix(in srgb, var(--bew-neutral-fg) 3.5%, var(--bew-neutral-bg));
+  --bew-neutral-raised: color-mix(in srgb, var(--bew-neutral-fg) 8%, var(--bew-neutral-bg));
+  --bew-neutral-inset: color-mix(in srgb, var(--bew-neutral-fg) 1.5%, var(--bew-neutral-bg));
+  // Compatibility names remain aliases, never an independent palette.
+  --bew-dark-page-bg: var(--bew-neutral-canvas);
+  --bew-dark-glass-base: var(--bew-neutral-surface);
   // Match saved article cards without changing the light notification palette.
   --bew-notifications-card-background: var(--bew-elevated);
   --bew-notifications-card-background-hover: var(--bew-elevated-hover);
   --bew-notifications-card-border: var(--bew-surface-border-color);
   --bew-notifications-reference-background: var(--bew-fill-1);
-  --bew-chart-secondary: #90b5ff;
 
-  --bew-elevated: rgb(
-    from color-mix(in oklab, var(--bew-dark-glass-base), white 6%) r g b / var(--bew-content-opacity)
-  );
-  --bew-elevated-hover: rgb(
-    from color-mix(in oklab, var(--bew-dark-glass-base), white 11%) r g b / var(--bew-content-opacity)
-  );
-  --bew-elevated-alt: rgb(from color-mix(in oklab, #08090b 82%, var(--bew-dark-glass-base) 18%) r g b / 60%);
-  --bew-elevated-alt-hover: rgb(from color-mix(in oklab, #08090b 78%, var(--bew-dark-glass-base) 22%) r g b / 68%);
-
-  --bew-elevated-solid: color-mix(in oklab, var(--bew-dark-base-color), white 6%);
-  --bew-elevated-solid-hover: color-mix(in oklab, var(--bew-dark-base-color), white 11%);
-  --bew-liquid-glass-color: color-mix(in oklab, var(--bew-dark-page-bg), black 40%);
-  --bew-elevated-alt-solid: var(--bew-elevated-solid);
-  --bew-elevated-alt-solid-hover: var(--bew-elevated-solid-hover);
-
-  --bew-fill-1: rgb(131 131 145 / 10%);
-  --bew-surface-inset-bg: rgb(0 0 0 / 18%);
-  --bew-fill-2: rgb(131 131 145 / 20%);
-  --bew-fill-3: rgb(131 131 145 / 30%);
-  --bew-fill-4: rgb(131 131 145 / 40%);
+  --bew-liquid-glass-color: var(--bew-neutral-canvas);
   --bew-fill-alt: var(--bew-fill-1);
-
-  --bew-border-color: rgb(131 131 145 / 16%);
-  --bew-surface-border-color: #4b4c4e;
-
-  // Blend a white-majority tone with the dark base, then soften it to 35% alpha for reply rails.
-  --bew-comment-tree-line-color: rgb(
-    from color-mix(in oklab, var(--bew-dark-base-color, #2a2d32) 40%, white 60%) r g b / 35%
-  );
-
-  // 开关背景色 - 暗色模式
-  --bew-switch-bg: oklab(0.419682 -0.00131126 -0.00814272);
-
-  // IP标签背景色 - 暗色模式
-  --bew-ip-tag-bg: var(--bew-fill-1);
-  --bew-ip-tag-text: var(--bew-text-3);
+  --bew-surface-inset-bg: color-mix(in srgb, var(--bew-neutral-bg) 20%, transparent);
 }
 
 @supports (color: oklch(from white l c h)) {
   :host(.dark),
   :root.dark {
-    --bew-dark-page-bg: oklch(
-      from var(--bew-dark-base-color) clamp(0.16, l, 0.22) clamp(0.008, calc(c * 0.35), 0.04) h
-    );
+    // resolveDarkModeBaseColor supplies an achromatic source unless tint is on.
+    // Tint changes only the source pair; every descendant uses the same recipes.
+    --bew-neutral-bg: oklch(from var(--bew-dark-base-color) 0.19 min(c, 0.03) h);
+    --bew-neutral-fg: oklch(from var(--bew-dark-base-color) 0.94 min(c, 0.006) h);
   }
 }
 
 :host(.dark.oled-dark),
 :root.dark.oled-dark {
-  --bew-sidebar-action-hover: rgb(255 255 255 / 10%);
-  --bew-bg: #000;
-  --bew-homepage-bg: #000;
-  --bew-surface-border-color: #4b4c4e;
-  --bew-liquid-glass-color: #000;
+  --bew-sidebar-action-hover: color-mix(in srgb, var(--bew-neutral-fg) 10%, transparent);
+  --bew-neutral-bg: #000;
+  --bew-neutral-fg: #ebebeb;
+  // Pure-black canvases need their own low-light balance, not the dark-mode ramp.
+  --bew-neutral-surface: color-mix(in srgb, var(--bew-neutral-fg) 4%, var(--bew-neutral-bg));
+  --bew-neutral-raised: color-mix(in srgb, var(--bew-neutral-fg) 9%, var(--bew-neutral-bg));
+  --bew-neutral-inset: color-mix(in srgb, var(--bew-neutral-fg) 2%, var(--bew-neutral-bg));
   // The inherited neutral sidebar tint stays slightly lifted above the OLED black page.
 }
 
@@ -711,7 +661,6 @@
 
 :host(.disable-frosted-glass.dark),
 :root.disable-frosted-glass.dark {
-  --bew-dark-glass-base: var(--bew-dark-base-color);
   --bew-fill-alt: var(--bew-fill-1);
 }
 
@@ -730,13 +679,22 @@
   --bg3: var(--bew-content-alt-solid);
   --bg1_float: var(--bew-elevated-solid);
   --bg2_float: var(--bew-elevated-solid);
+  --graph_bg_thin: var(--bew-neutral-canvas);
+  --graph_bg_regular: var(--bew-content-solid);
+  --graph_bg_thick: var(--bew-neutral-ramp-2);
+  --graph_weak: var(--bew-neutral-ramp-3);
+  --graph_medium: var(--bew-neutral-ramp-5);
+  --graph_bold: var(--bew-neutral-ramp-7);
+  --graph_icon: var(--bew-neutral-ramp-8);
+  --graph_bg_thin_rgb: var(--bew-native-graph_bg_thin-rgb, 246, 246, 246);
+  --bg1_rgb: var(--bew-native-bg1-rgb, 246, 246, 246);
   --text1: var(--bew-text-1);
   --text2: var(--bew-text-2);
   --text3: var(--bew-text-3);
   --text4: var(--bew-text-4);
-  --line_light: var(--bew-fill-1);
-  --line_regular: var(--bew-fill-2);
-  --line_bold: var(--bew-fill-3);
+  --line_light: var(--bew-border-color);
+  --line_regular: var(--bew-input-border-color);
+  --line_bold: var(--bew-input-border-color-hover);
 
   --brand_pink: var(--bew-theme-color);
   --brand_pink_thin: var(--bew-theme-surface);
@@ -790,13 +748,13 @@
   --bg1_float: var(--bew-elevated-solid);
   --bg2_float: var(--bew-elevated-solid);
   // --graph_white: var(--bew-bg);
-  --graph_bg_thin: color-mix(in oklab, var(--bew-content-solid), black 15%);
+  --graph_bg_thin: var(--bew-neutral-canvas);
   --graph_bg_regular: var(--bew-content-solid);
-  --graph_bg_thick: color-mix(in oklab, var(--bew-content-solid), white 15%);
-  --graph_weak: color-mix(in oklab, var(--bew-content-solid), white 30%);
-  --graph_medium: color-mix(in oklab, var(--bew-content-solid), white 45%);
-  --graph_bold: color-mix(in oklab, var(--bew-content-solid), white 60%);
-  --graph_icon: color-mix(in oklab, var(--bew-content-solid), white 75%);
+  --graph_bg_thick: var(--bew-neutral-ramp-2);
+  --graph_weak: var(--bew-neutral-ramp-3);
+  --graph_medium: var(--bew-neutral-ramp-5);
+  --graph_bold: var(--bew-neutral-ramp-7);
+  --graph_icon: var(--bew-neutral-ramp-8);
   --shadow: var(--Ba0);
   --text_white: var(--bew-static-white);
   --text1: var(--bew-text-1);
@@ -805,11 +763,11 @@
   --text4: var(--bew-text-4);
   // --text_link: var(--bew-theme-color);
   --text_notice: var(--Ye6);
-  --line_light: var(--bew-fill-1);
-  --line_regular: var(--bew-fill-2);
-  --line_bold: var(--bew-fill-3);
+  --line_light: var(--bew-border-color);
+  --line_regular: var(--bew-input-border-color);
+  --line_bold: var(--bew-input-border-color-hover);
 
-  --graph_bg_thin_rgb: 13, 14, 17;
+  --graph_bg_thin_rgb: var(--bew-native-graph_bg_thin-rgb, 13, 13, 13);
 
   --bpx-aux-header-bg: var(--bew-content-solid);
   --bpx-aux-header-icon: var(--bew-text-2);
@@ -826,7 +784,7 @@
   --bpx-dmsend-switch-icon: var(--bew-text-2);
   --bpx-dmsend-border: var(--bew-border-color);
   --bpx-dmsend-input-font: var(--bew-text-1);
-  --bg1_rgb: 9, 9, 11;
+  --bg1_rgb: var(--bew-native-bg1-rgb, 9, 9, 9);
 
   --Lb0: color-mix(in oklab, var(--bew-theme-color), black 75%);
   --Lb1: color-mix(in oklab, var(--bew-theme-color), black 60%);
@@ -890,45 +848,45 @@
   --bpx-dmsend-input-bg: var(--Ga1_s);
   --bpx-dmsend-info-font: var(--Ga7);
   --bpx-dmsend-switch-icon: var(--Ga7);
-  --bpx-dmsend-border: var(--Ga2);
+  --bpx-dmsend-border: var(--bew-border-color);
   --bpx-dmsend-input-font: var(--Ga10);
 }
 
 // #region Bilibili original css variables
 :root.bewly-design {
-  --Ga0: #f6f7f8;
-  --Ga0_s: #f6f7f8;
-  --Ga0_t: #f6f7f8;
-  --Ga1: #f1f2f3;
-  --Ga1_s: #f1f2f3;
-  --Ga1_t: #f1f2f3;
-  --Ga1_e: #f1f2f3;
-  --Ga2: #e3e5e7;
-  --Ga2_t: #e3e5e7;
-  --Ga3: #c9ccd0;
-  --Ga3_t: #c9ccd0;
-  --Ga4: #aeb3b9;
-  --Ga4_t: #aeb3b9;
-  --Ga5: #9499a0;
-  --Ga5_t: #9499a0;
-  --Ga6: #797f87;
-  --Ga6_t: #797f87;
-  --Ga7: #61666d;
-  --Ga7_t: #61666d;
-  --Ga8: #484c53;
-  --Ga8_t: #484c53;
-  --Ga9: #2f3238;
-  --Ga9_t: #2f3238;
-  --Ga10: #18191c;
-  --Ga10_t: #18191c;
-  --Ga11: #ffffff;
-  --Ga12: #f1f2f3;
-  --Ga12_s: #f6f7f8;
-  --Ga13: #f1f2f3;
-  --Ga13_s: #f1f2f3;
-  --Wh0: #ffffff;
-  --Wh0_s: #ffffff;
-  --Wh0_t: #ffffff;
+  --Ga0: var(--bew-neutral-canvas);
+  --Ga0_s: var(--bew-neutral-canvas);
+  --Ga0_t: var(--bew-neutral-canvas);
+  --Ga1: var(--bew-content-alt-solid);
+  --Ga1_s: var(--bew-content-alt-solid);
+  --Ga1_t: var(--bew-content-alt-solid);
+  --Ga1_e: var(--bew-content-alt-solid);
+  --Ga2: var(--bew-neutral-ramp-2);
+  --Ga2_t: var(--bew-neutral-ramp-2);
+  --Ga3: var(--bew-neutral-ramp-3);
+  --Ga3_t: var(--bew-neutral-ramp-3);
+  --Ga4: var(--bew-neutral-ramp-4);
+  --Ga4_t: var(--bew-neutral-ramp-4);
+  --Ga5: var(--bew-neutral-ramp-5);
+  --Ga5_t: var(--bew-neutral-ramp-5);
+  --Ga6: var(--bew-neutral-ramp-6);
+  --Ga6_t: var(--bew-neutral-ramp-6);
+  --Ga7: var(--bew-neutral-ramp-7);
+  --Ga7_t: var(--bew-neutral-ramp-7);
+  --Ga8: var(--bew-neutral-ramp-8);
+  --Ga8_t: var(--bew-neutral-ramp-8);
+  --Ga9: var(--bew-neutral-ramp-9);
+  --Ga9_t: var(--bew-neutral-ramp-9);
+  --Ga10: var(--bew-neutral-fg);
+  --Ga10_t: var(--bew-neutral-fg);
+  --Ga11: var(--bew-neutral-raised);
+  --Ga12: var(--bew-content-alt-solid);
+  --Ga12_s: var(--bew-content-alt-solid);
+  --Ga13: var(--bew-content-alt-solid);
+  --Ga13_s: var(--bew-content-alt-solid);
+  --Wh0: var(--bew-neutral-bg);
+  --Wh0_s: var(--bew-neutral-bg);
+  --Wh0_t: var(--bew-neutral-bg);
   --Ba0: #000000;
   --Ba0_s: #000000;
   --Ba0_t: #000000;
@@ -1076,33 +1034,33 @@
   --Br8: #634a3e;
   --Br9: #423029;
   --Br10: #211815;
-  --Si0: #f9fbfc;
-  --Si1: #f5f7fa;
-  --Si2: #ebeff4;
-  --Si3: #d7e0ea;
-  --Si4: #c3d0df;
-  --Si5: #afc0d5;
-  --Si6: #8d9fb9;
-  --Si7: #6d7f9c;
-  --Si8: #4d5d7c;
-  --Si9: #323d54;
-  --Si10: #191e2b;
-  --Ga0_rgb: 246, 247, 248;
-  --Ga0_s_rgb: 246, 247, 248;
-  --Ga1_rgb: 241, 242, 243;
-  --Ga1_s_rgb: 241, 242, 243;
-  --Ga2_rgb: 227, 229, 231;
-  --Ga3_rgb: 201, 204, 208;
-  --Ga5_rgb: 148, 153, 160;
-  --Ga7_rgb: 97, 102, 109;
-  --Ga10_rgb: 24, 25, 28;
-  --Ga11_rgb: 255, 255, 255;
-  --Ga12_rgb: 241, 242, 243;
-  --Ga12_s_rgb: 246, 247, 248;
-  --Ga13_rgb: 241, 242, 243;
-  --Ga13_s_rgb: 241, 242, 243;
-  --Wh0_rgb: 255, 255, 255;
-  --Wh0_s_rgb: 255, 255, 255;
+  --Si0: var(--Ga0);
+  --Si1: var(--Ga1);
+  --Si2: var(--Ga2);
+  --Si3: var(--Ga3);
+  --Si4: var(--Ga4);
+  --Si5: var(--Ga5);
+  --Si6: var(--Ga6);
+  --Si7: var(--Ga7);
+  --Si8: var(--Ga8);
+  --Si9: var(--Ga9);
+  --Si10: var(--Ga10);
+  --Ga0_rgb: var(--bew-native-Ga0-rgb, 246, 246, 246);
+  --Ga0_s_rgb: var(--bew-native-Ga0_s-rgb, 246, 246, 246);
+  --Ga1_rgb: var(--bew-native-Ga1-rgb, 241, 241, 241);
+  --Ga1_s_rgb: var(--bew-native-Ga1_s-rgb, 241, 241, 241);
+  --Ga2_rgb: var(--bew-native-Ga2-rgb, 227, 227, 227);
+  --Ga3_rgb: var(--bew-native-Ga3-rgb, 201, 201, 201);
+  --Ga5_rgb: var(--bew-native-Ga5-rgb, 148, 148, 148);
+  --Ga7_rgb: var(--bew-native-Ga7-rgb, 97, 97, 97);
+  --Ga10_rgb: var(--bew-native-Ga10-rgb, 24, 24, 24);
+  --Ga11_rgb: var(--bew-native-Ga11-rgb, 255, 255, 255);
+  --Ga12_rgb: var(--bew-native-Ga12-rgb, 241, 241, 241);
+  --Ga12_s_rgb: var(--bew-native-Ga12_s-rgb, 246, 246, 246);
+  --Ga13_rgb: var(--bew-native-Ga13-rgb, 241, 241, 241);
+  --Ga13_s_rgb: var(--bew-native-Ga13_s-rgb, 241, 241, 241);
+  --Wh0_rgb: var(--bew-native-Wh0-rgb, 255, 255, 255);
+  --Wh0_s_rgb: var(--bew-native-Wh0_s-rgb, 255, 255, 255);
   --Ba0_rgb: 0, 0, 0;
   --Pi1_rgb: 255, 236, 241;
   --Pi5_rgb: 255, 102, 153;
@@ -1122,39 +1080,39 @@
 
 // https://s1.hdslb.com/bfs/static/jinkela/long/laputa-css/dark.css
 :root.dark.bewly-design {
-  --Ga0: #101011;
-  --Ga0_s: #1e2022;
-  --Ga0_t: #1e2022;
-  --Ga1: #0a0b0c;
-  --Ga1_s: #232527;
-  --Ga1_t: #232527;
-  --Ga1_e: #232527;
-  --Ga2: #2f3134;
-  --Ga2_t: #2f3134;
-  --Ga3: #46494d;
-  --Ga3_t: #46494d;
-  --Ga4: #5e6267;
-  --Ga4_t: #5e6267;
-  --Ga5: #757a81;
-  --Ga5_t: #757a81;
-  --Ga6: #8b9097;
-  --Ga6_t: #8b9097;
-  --Ga7: #a2a7ae;
-  --Ga7_t: #a2a7ae;
-  --Ga8: #b9bdc2;
-  --Ga8_t: #b9bdc2;
-  --Ga9: #d0d3d7;
-  --Ga9_t: #d0d3d7;
-  --Ga10: #e7e9eb;
-  --Ga10_t: #e7e9eb;
-  --Ga11: #242628;
-  --Ga12: #1f2022;
-  --Ga12_s: #2b2c2f;
-  --Ga13: #1a1b1d;
-  --Ga13_s: #2f3134;
-  --Wh0: #17181a;
-  --Wh0_s: #2f3134;
-  --Wh0_t: #17181a;
+  --Ga0: var(--bew-neutral-canvas);
+  --Ga0_s: var(--bew-neutral-canvas);
+  --Ga0_t: var(--bew-neutral-canvas);
+  --Ga1: var(--bew-content-alt-solid);
+  --Ga1_s: var(--bew-content-alt-solid);
+  --Ga1_t: var(--bew-content-alt-solid);
+  --Ga1_e: var(--bew-content-alt-solid);
+  --Ga2: var(--bew-neutral-ramp-2);
+  --Ga2_t: var(--bew-neutral-ramp-2);
+  --Ga3: var(--bew-neutral-ramp-3);
+  --Ga3_t: var(--bew-neutral-ramp-3);
+  --Ga4: var(--bew-neutral-ramp-4);
+  --Ga4_t: var(--bew-neutral-ramp-4);
+  --Ga5: var(--bew-neutral-ramp-5);
+  --Ga5_t: var(--bew-neutral-ramp-5);
+  --Ga6: var(--bew-neutral-ramp-6);
+  --Ga6_t: var(--bew-neutral-ramp-6);
+  --Ga7: var(--bew-neutral-ramp-7);
+  --Ga7_t: var(--bew-neutral-ramp-7);
+  --Ga8: var(--bew-neutral-ramp-8);
+  --Ga8_t: var(--bew-neutral-ramp-8);
+  --Ga9: var(--bew-neutral-ramp-9);
+  --Ga9_t: var(--bew-neutral-ramp-9);
+  --Ga10: var(--bew-neutral-fg);
+  --Ga10_t: var(--bew-neutral-fg);
+  --Ga11: var(--bew-neutral-raised);
+  --Ga12: var(--bew-content-alt-solid);
+  --Ga12_s: var(--bew-content-alt-solid);
+  --Ga13: var(--bew-content-alt-solid);
+  --Ga13_s: var(--bew-content-alt-solid);
+  --Wh0: var(--bew-neutral-bg);
+  --Wh0_s: var(--bew-neutral-bg);
+  --Wh0_t: var(--bew-neutral-bg);
   --Ba0: #000000;
   --Ba0_s: #ffffff;
   --Ba0_t: #000000;
@@ -1302,33 +1260,33 @@
   --Br8: #cebfb7;
   --Br9: #e0d7d1;
   --Br10: #f2eeeb;
-  --Si0: #212325;
-  --Si1: #27292c;
-  --Si2: #36393f;
-  --Si3: #535962;
-  --Si4: #6f7987;
-  --Si5: #8c99aa;
-  --Si6: #a0abb9;
-  --Si7: #b4bcc7;
-  --Si8: #c8ced6;
-  --Si9: #dce0e5;
-  --Si10: #f0f2f4;
-  --Ga0_rgb: 16, 16, 17;
-  --Ga0_s_rgb: 30, 32, 34;
-  --Ga1_rgb: 10, 11, 12;
-  --Ga1_s_rgb: 35, 37, 39;
-  --Ga2_rgb: 47, 49, 52;
-  --Ga3_rgb: 70, 73, 77;
-  --Ga5_rgb: 117, 122, 129;
-  --Ga7_rgb: 162, 167, 174;
-  --Ga10_rgb: 231, 233, 235;
-  --Ga11_rgb: 36, 38, 40;
-  --Ga12_rgb: 31, 32, 34;
-  --Ga12_s_rgb: 43, 44, 47;
-  --Ga13_rgb: 26, 27, 29;
-  --Ga13_s_rgb: 47, 49, 52;
-  --Wh0_rgb: 23, 24, 26;
-  --Wh0_s_rgb: 47, 49, 52;
+  --Si0: var(--Ga0);
+  --Si1: var(--Ga1);
+  --Si2: var(--Ga2);
+  --Si3: var(--Ga3);
+  --Si4: var(--Ga4);
+  --Si5: var(--Ga5);
+  --Si6: var(--Ga6);
+  --Si7: var(--Ga7);
+  --Si8: var(--Ga8);
+  --Si9: var(--Ga9);
+  --Si10: var(--Ga10);
+  --Ga0_rgb: var(--bew-native-Ga0-rgb, 16, 16, 16);
+  --Ga0_s_rgb: var(--bew-native-Ga0_s-rgb, 30, 30, 30);
+  --Ga1_rgb: var(--bew-native-Ga1-rgb, 10, 10, 10);
+  --Ga1_s_rgb: var(--bew-native-Ga1_s-rgb, 35, 35, 35);
+  --Ga2_rgb: var(--bew-native-Ga2-rgb, 47, 47, 47);
+  --Ga3_rgb: var(--bew-native-Ga3-rgb, 70, 70, 70);
+  --Ga5_rgb: var(--bew-native-Ga5-rgb, 117, 117, 117);
+  --Ga7_rgb: var(--bew-native-Ga7-rgb, 162, 162, 162);
+  --Ga10_rgb: var(--bew-native-Ga10-rgb, 231, 231, 231);
+  --Ga11_rgb: var(--bew-native-Ga11-rgb, 36, 36, 36);
+  --Ga12_rgb: var(--bew-native-Ga12-rgb, 31, 31, 31);
+  --Ga12_s_rgb: var(--bew-native-Ga12_s-rgb, 43, 43, 43);
+  --Ga13_rgb: var(--bew-native-Ga13-rgb, 26, 26, 26);
+  --Ga13_s_rgb: var(--bew-native-Ga13_s-rgb, 47, 47, 47);
+  --Wh0_rgb: var(--bew-native-Wh0-rgb, 23, 23, 23);
+  --Wh0_s_rgb: var(--bew-native-Wh0_s-rgb, 47, 47, 47);
   --Ba0_rgb: 0, 0, 0;
   --Pi1_rgb: 47, 26, 34;
   --Pi5_rgb: 212, 78, 125;
@@ -1347,12 +1305,12 @@
 }
 
 :root.dark.bewly-design.oled-dark {
-  --Ga0: #000;
-  --Ga0_t: #000;
-  --Ga0_rgb: 0, 0, 0;
-  --bg1: #000;
-  --bg1_rgb: 0, 0, 0;
-  --bpx-aux-content-bg: #000;
+  --Ga0: var(--bew-neutral-canvas);
+  --Ga0_t: var(--bew-neutral-canvas);
+  --Ga0_rgb: var(--bew-native-Ga0-rgb, 0, 0, 0);
+  --bg1: var(--bew-neutral-canvas);
+  --bg1_rgb: var(--bew-native-bg1-rgb, 0, 0, 0);
+  --bpx-aux-content-bg: var(--bew-neutral-canvas);
 }
 
 // #endregion

@@ -1,0 +1,62 @@
+// Shared appearance for private messages, dynamic comments and reposts.
+@mixin surface {
+  box-sizing: border-box;
+  padding: var(--bew-space-3);
+  border: 1px solid var(--bew-surface-border-color);
+  border-radius: var(--bew-composer-radius);
+  corner-shape: var(--bew-corner-shape);
+  background: var(--bew-elevated-solid);
+  box-shadow: var(--bew-popover-surface-shadow);
+
+  @supports (backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px)) {
+    background: var(--bew-elevated);
+    backdrop-filter: var(--bew-filter-glass-1);
+    -webkit-backdrop-filter: var(--bew-filter-glass-1);
+  }
+
+  &:focus-within {
+    border-color: var(--bew-focus-ring-color);
+  }
+}
+
+@mixin input {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: calc(var(--bew-line-height-body) * 2);
+  max-height: calc(var(--bew-line-height-body) * 4);
+  field-sizing: content;
+  resize: none;
+  padding: var(--bew-space-1) var(--bew-space-2);
+  color: var(--bew-text-1);
+  background: transparent;
+  border: 0;
+  border-radius: var(--bew-interactive-radius);
+  font-family: var(--bew-font-family);
+  font-size: var(--bew-font-size-body);
+  font-weight: var(--bew-font-weight-regular);
+  line-height: var(--bew-line-height-body);
+
+  &::placeholder {
+    color: var(--bew-text-3);
+  }
+
+  &:focus-visible {
+    // The outer card supplies the keyboard focus indicator.
+    outline: none;
+    box-shadow: none;
+  }
+}
+
+@mixin picker {
+  position: fixed;
+  z-index: var(--bew-z-dialog);
+  width: min(var(--bew-moment-forward-picker-width), calc(100vw - var(--bew-space-8)));
+  :deep(.moment-forward-emoji-picker),
+  :deep(.moment-forward-topic-picker) {
+    width: 100%;
+    margin-top: 0;
+    max-height: min(var(--bew-moment-forward-picker-max-height), var(--bew-composer-picker-height, 100dvh));
+  }
+}

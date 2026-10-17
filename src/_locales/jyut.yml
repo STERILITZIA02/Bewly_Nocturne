@@ -661,8 +661,8 @@ settings:
   theme_color: 主題色
   enable_oled_dark_mode: OLED 純黑模式
   enable_oled_dark_mode_desc: 淨係喺實際使用深色模式時生效；網頁底色會變成純黑，但卡片同浮層仍然保留層次。
-  gradient_theme_color_background: 喺深色模式下使用主題色漸變
-  gradient_theme_color_background_desc: 同時套用喺網頁背景同頂欄。
+  gradient_theme_color_background: 喺深色模式下使用中性漸變
+  gradient_theme_color_background_desc: 同時套用喺網頁背景同頂欄，唔使用主題色。
   logo_color: Logo 顏色
   logo_color_opt:
     white: 白
@@ -937,6 +937,8 @@ settings:
   adjust_comment_image_height_desc: 自動按實際長寬比例調整留言區圖片高度，避免圖片變形
   badge_type: 角標類型
   dark_mode_base_color: 深色模式基準顏色
+  enable_dark_mode_tint: 深色背景色調
+  enable_dark_mode_tint_desc: 預設用冇色調嘅中性灰。開啟後會用下面嘅背景色調；關閉會保留揀咗嘅顏色。
   group_search_results: 搜尋結果
   group_topbar_components: 頂欄元件設定
   topbar_components_adjustment: 頂欄元件角標設定
@@ -1048,6 +1050,8 @@ notifications:
   insights:
     activity: 對話最近活動
     activity_scope: 近 7 日 · 已載入對話
+    rung_unit: '每格 {count} 則 · 相同刻度'
+    ring_unit: '每刻度約 1% · 按實際數量計算'
     mark_all_read: 全部標為已讀
     marking_read: 標記緊
     all_read: 全部已讀
@@ -1318,6 +1322,7 @@ dock:
   collapse_dock: 收埋 Dock
   expand_dock: 展開 Dock
 moments:
+  vote_chart_unit: '每刻度 1% · 多選比例獨立計算'
   enter_live_room: '進入 {name} 嘅直播間'
   promotion_advertisement: 廣告
   promotion_commerce: 商品推廣
@@ -1469,7 +1474,25 @@ moment_card:
   comments_unavailable: 暫時睇唔到評論，請再試
   comments_refresh: 重新整理
   comments_missing_parent: 上層回覆仲未載入
-  comments_reply_new_tab: 喺新分頁回覆
+  reply_action: 回覆
+  reply_new: 寫評論
+  reply_cancel_target: 取消回覆，評論動態
+  reply_to: '回覆 {name}'
+  reply_emoji: 表情
+  reply_mention: "揀選或輸入想 {'@'} 嘅人"
+  reply_image: 加入圖片
+  reply_sync: 轉發到動態
+  reply_send: 發送評論
+  reply_remove_image: 移除圖片
+  reply_image_limit: 最多加入 9 張圖片
+  reply_image_invalid: 只支援細過 20MB、寬高至少 10px 嘅 JPG / PNG 圖片
+  reply_upload_failed: 圖片上傳失敗，請再試
+  reply_failed: 發送失敗，請再試
+  reply_uncertain: 未確認請求結果。為免重複發送，請先去原站檢查；草稿已保留。
+  reply_picker_failed: 載入失敗，請再試
+  reply_no_users: 搵唔到用戶
+  reply_check_original: 去原站檢查
+  reply_success: 評論已發送
   comments_expand_replies: 展開其餘回覆
   comments_load_more_replies: 載入更多回覆
   comments_replies_failed: 回覆載入失敗，可以重試

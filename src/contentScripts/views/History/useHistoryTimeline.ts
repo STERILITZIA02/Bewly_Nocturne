@@ -44,6 +44,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
   let statusRevision = 0
   let readController: AbortController | undefined
   let refreshFailed = false
+  let hasLoaded = false
 
   function resetListState() {
     generation++
@@ -57,6 +58,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     noMoreContent.value = false
     requestFailed.value = false
     refreshFailed = false
+    hasLoaded = false
     isLoading.value = false
   }
 
@@ -143,6 +145,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
       page = nextPage
       cursor = nextCursor
       noMoreContent.value = ended
+      hasLoaded = true
       return isCurrent()
     }
     catch {
@@ -312,9 +315,38 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     deleting.clear()
   }
 
-  function activate() {
+  function snapshot() {
+    return {
+      accountId: dependencies.getAccountId(),
+      items: historyList.slice(),
+      keyword: keyword.value,
+      submittedKeyword: submittedKeyword.value,
+      filters: { ...filters.value },
+      contentType: contentType.value,
+      noMoreContent: noMoreContent.value,
+      cursor,
+      page,
+      seenReadKeys: [...seenReadKeys],
+      hasLoaded,
+    }
+  }
+
+  function activate(saved?: ReturnType<typeof snapshot>) {
     resetAccount()
-    void load()
+    if (saved && saved.accountId === dependencies.getAccountId()) {
+      historyList.push(...saved.items)
+      keyword.value = saved.keyword
+      submittedKeyword.value = saved.submittedKeyword
+      filters.value = saved.filters
+      contentType.value = saved.contentType
+      noMoreContent.value = saved.noMoreContent
+      cursor = saved.cursor
+      page = saved.page
+      saved.seenReadKeys.forEach(key => seenReadKeys.add(key))
+      hasLoaded = saved.hasLoaded
+    }
+    if (!hasLoaded)
+      void load()
     void getHistoryPauseStatus()
   }
 
@@ -342,6 +374,7 @@ export function useHistoryTimeline(dependencies: HistoryDependencies) {
     setHistoryPauseStatus,
     clearAllHistory,
     activate,
+    snapshot,
     resetAccount,
     capture: lifetime.capture,
     dispose() {

@@ -93,7 +93,7 @@ function handlePageMouseDown(event: MouseEvent) {
         class="settings-category-group"
         :class="{ 'has-label': !!group.key }"
       >
-        <div v-if="group.key" class="settings-category-group-label">
+        <div v-if="group.key" class="settings-category-group-label bew-section-label">
           {{ $t(group.key) }}
         </div>
         <button
@@ -156,10 +156,6 @@ function handlePageMouseDown(event: MouseEvent) {
 
 .settings-category-group-label {
   padding: 0 var(--bew-space-3) var(--bew-space-0-5);
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-control);
 }
 
 .settings-category-button {
@@ -186,8 +182,8 @@ function handlePageMouseDown(event: MouseEvent) {
   }
 
   &.active {
-    color: var(--bew-on-theme-color);
-    background: var(--bew-theme-color);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
   }
 
   > span:last-child {

@@ -119,8 +119,8 @@ onBeforeUnmount(leave)
   width: var(--bew-space-6);
   height: var(--bew-space-6);
   border-radius: var(--bew-radius-full);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   i {
     display: block;
     width: var(--bew-control-icon-size);
@@ -169,7 +169,7 @@ onBeforeUnmount(leave)
   overflow: hidden;
   border-radius: var(--bew-media-radius);
   background: var(--bew-content-solid);
-  border: 1px solid var(--bew-surface-border-color);
+  border: 0;
   box-sizing: border-box;
 }
 .moments-live-row__preview-link {

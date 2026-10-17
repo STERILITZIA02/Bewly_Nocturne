@@ -126,7 +126,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
     <SettingsSectionHeading
       :title="$t('settings.menu_appearance')"
       :desc="$t('settings.category_appearance_desc')"
-      icon="i-mingcute:paint-brush-line"
+      icon="i-tabler:brush"
     />
 
     <SettingsItemGroup :title="$t('settings.group_visual_effects')">
@@ -224,7 +224,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             }"
           >
             <div
-              i-mingcute:color-picker-line pos="absolute" text-white w-12px h-12px
+              i-tabler:color-picker pos="absolute" text-white w-12px h-12px
               pointer-events-none
             />
             <input
@@ -239,7 +239,14 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
         </div>
       </SettingsItem>
 
-      <SettingsItem :title="$t('settings.dark_mode_base_color')" right-width="auto">
+      <SettingsItem
+        :title="$t('settings.enable_dark_mode_tint')"
+        :desc="$t('settings.enable_dark_mode_tint_desc')"
+        right-width="auto"
+      >
+        <Radio v-model="settings.enableDarkModeTint" />
+      </SettingsItem>
+      <SettingsItem v-if="settings.enableDarkModeTint" :title="$t('settings.dark_mode_base_color')" right-width="auto">
         <div class="dark-mode-base-color-options" flex="~ gap-2 wrap" justify-end>
           <button
             v-for="color in darkModeBaseColorOptions" :key="color"
@@ -269,7 +276,7 @@ const changeDarkModeBaseColorThrottle = useThrottleFn((color: string) => changeD
             }"
           >
             <div
-              i-mingcute:color-picker-line pos="absolute" text-white w-12px h-12px
+              i-tabler:color-picker pos="absolute" text-white w-12px h-12px
               pointer-events-none
             />
             <input

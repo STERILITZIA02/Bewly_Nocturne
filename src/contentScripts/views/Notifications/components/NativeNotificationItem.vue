@@ -77,7 +77,7 @@ function markAvatarFailed(index: number) {
           decoding="async"
           @error="markAvatarFailed(index)"
         >
-        <i v-else i-mingcute:user-3-line aria-hidden="true" />
+        <i v-else i-tabler:user aria-hidden="true" />
       </ALink>
       <span
         v-if="remainingActorCount > 0"
@@ -122,7 +122,7 @@ function markAvatarFailed(index: number) {
               decoding="async"
               @error="sourceImageFailed = true"
             >
-            <i v-else i-mingcute:document-line aria-hidden="true" />
+            <i v-else i-tabler:file-text aria-hidden="true" />
           </span>
           <span>{{ sourceTitle }}</span>
         </ALink>
@@ -130,7 +130,7 @@ function markAvatarFailed(index: number) {
 
       <ALink :href="sourceUrl" type="content" class="native-notification-item__open-source">
         {{ t('notifications.native.view_source') }}
-        <i i-mingcute:arrow-up-line class="native-notification-item__source-arrow" aria-hidden="true" />
+        <i i-tabler:arrow-up class="native-notification-item__source-arrow" aria-hidden="true" />
       </ALink>
     </div>
   </article>
@@ -242,7 +242,7 @@ function markAvatarFailed(index: number) {
 .native-notification-item__unread {
   width: var(--bew-space-2);
   height: var(--bew-space-2);
-  background: var(--bew-theme-color);
+  background: var(--bew-accent-marker);
   border-radius: 50%;
   corner-shape: var(--bew-corner-shape-round);
 }

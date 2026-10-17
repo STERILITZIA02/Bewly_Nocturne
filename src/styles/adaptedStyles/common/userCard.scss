@@ -5,7 +5,7 @@
   .bili-user-profile-view__info__button.follow:hover {
     background-color: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
   // #endregion
 
@@ -41,18 +41,18 @@
         &:hover {
           background-color: unset;
           color: var(--bew-theme-foreground);
-          border-color: var(--bew-theme-color);
+          border-color: var(--bew-focus-ring-color);
         }
       }
 
       .btn.primary {
         background-color: var(--bew-theme-color);
-        border-color: var(--bew-theme-color);
+        border-color: var(--bew-focus-ring-color);
         color: var(--bew-on-theme-color);
 
         &:hover {
           background-color: var(--bew-theme-color);
-          border-color: var(--bew-theme-foreground);
+          border-color: var(--bew-focus-ring-color);
           color: var(--bew-on-theme-color);
         }
       }

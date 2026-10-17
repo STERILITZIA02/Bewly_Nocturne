@@ -2,13 +2,13 @@
   :not(foobar) {
     .btn.primary {
       background-color: var(--bew-theme-color) !important;
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
       color: var(--bew-on-theme-color) !important;
     }
     .btn.primary:focus,
     .btn.primary:hover {
       background-color: var(--bew-theme-color) !important;
-      border-color: var(--bew-theme-foreground) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     .btn.default {
@@ -18,9 +18,9 @@
 
       &:focus,
       &:hover {
-        color: var(--bew-theme-foreground) !important;
+        color: var(--bew-text-1) !important;
         background-color: unset !important;
-        border-color: var(--bew-theme-color) !important;
+        border-color: var(--bew-focus-ring-color) !important;
       }
     }
 
@@ -28,19 +28,19 @@
     .be-pager-next,
     .be-pager-prev {
       &:hover {
-        color: var(--bew-theme-foreground) !important;
-        border-color: var(--bew-theme-color);
+        color: var(--bew-text-1) !important;
+        border-color: var(--bew-focus-ring-color);
 
         a {
-          color: var(--bew-theme-foreground) !important;
+          color: var(--bew-text-1) !important;
         }
       }
     }
 
     .be-pager-item-active {
-      background-color: var(--bew-theme-color);
-      border-color: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
+      background-color: var(--bew-selected-bg);
+      border-color: var(--bew-focus-ring-color);
+      color: var(--bew-text-1);
     }
   }
 

@@ -53,7 +53,7 @@ onBeforeUnmount(leave)
     <ALink :href="href" type="content" class="private-message-media-cover__link">
       <img :src="src" alt="" loading="lazy" decoding="async">
       <span class="private-message-media-cover__hint">
-        <i :class="video ? 'i-mingcute:play-line' : 'i-mingcute:external-link-line'" aria-hidden="true" />
+        <i :class="video ? 'i-tabler:player-play' : 'i-tabler:external-link'" aria-hidden="true" />
         {{ t(video ? 'notifications.whisper.messages.play_video' : 'notifications.whisper.messages.open_media') }}
       </span>
     </ALink>

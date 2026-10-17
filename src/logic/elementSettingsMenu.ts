@@ -34,13 +34,13 @@ function descriptorActions(target: LayoutEditableDescriptor, t: (key: string) =>
   for (const id of new Set([target.settingId, ...relatedSettings[target.id] ?? []])) {
     const descriptor = getSettingDescriptor(id)
     if (descriptor && typeof descriptor.get() === 'boolean') {
-      actions.push({ value: id, label: t(descriptor.titleKey), icon: 'i-mingcute:settings-3-line', kind: 'toggle', closeOnSelect: false, checked: Boolean(descriptor.get()), run: () => descriptor.set(!descriptor.get()) })
+      actions.push({ value: id, label: t(descriptor.titleKey), icon: 'i-tabler:settings', kind: 'toggle', closeOnSelect: false, checked: Boolean(descriptor.get()), run: () => descriptor.set(!descriptor.get()) })
     }
   }
   const primary = getSettingDescriptor(target.settingId)
   if (primary && target.previewControl) {
     for (const option of target.previewControl.options)
-      actions.push({ value: `choice:${String(option.value)}`, label: t(option.labelKey), icon: 'i-mingcute:layout-line', kind: 'radio', closeOnSelect: false, checked: primary.get() === option.value, run: () => primary.set(option.value) })
+      actions.push({ value: `choice:${String(option.value)}`, label: t(option.labelKey), icon: 'i-tabler:layout', kind: 'radio', closeOnSelect: false, checked: primary.get() === option.value, run: () => primary.set(option.value) })
   }
   return actions
 }
@@ -55,11 +55,11 @@ function dockActions(target: LayoutEditableDescriptor, items: DockItem[], store:
       return []
     const actions: ElementSettingsAction[] = [{ value: `dock:${item.page}:visible`, label: t(target.dockPage ? 'settings.visibility' : item.i18nKey), icon: item.icon, kind: 'toggle', closeOnSelect: false, checked: config.visible, run: () => store.toggleDockItemVisibility(item.page) }]
     if (target.dockPage) {
-      actions.push({ value: 'dock:new-tab', label: t('settings.dock_item_open_in_new_tab'), icon: 'i-mingcute:external-link-line', kind: 'toggle', closeOnSelect: false, checked: config.openInNewTab, run: () => {
+      actions.push({ value: 'dock:new-tab', label: t('settings.dock_item_open_in_new_tab'), icon: 'i-tabler:external-link', kind: 'toggle', closeOnSelect: false, checked: config.openInNewTab, run: () => {
         config.openInNewTab = !config.openInNewTab
       } })
       if (item.hasBewlyPage) {
-        actions.push({ value: 'dock:original', label: t('settings.dock_item_use_original_bili_web_page'), icon: 'i-mingcute:layout-line', kind: 'toggle', closeOnSelect: false, checked: store.getDockItemIsUseOriginalBiliPage(item.page), disabled: settings.value.pageMode !== 'custom', run: () => store.setDockItemCustomUseOriginalBiliPage(item.page, !store.getDockItemCustomUseOriginalBiliPage(item.page)) })
+        actions.push({ value: 'dock:original', label: t('settings.dock_item_use_original_bili_web_page'), icon: 'i-tabler:layout', kind: 'toggle', closeOnSelect: false, checked: store.getDockItemIsUseOriginalBiliPage(item.page), disabled: settings.value.pageMode !== 'custom', run: () => store.setDockItemCustomUseOriginalBiliPage(item.page, !store.getDockItemCustomUseOriginalBiliPage(item.page)) })
       }
     }
     return actions
@@ -75,14 +75,14 @@ function topBarActions(target: LayoutEditableDescriptor, t: (key: string) => str
         settings.value.topBarComponentsConfig = [...settings.value.topBarComponentsConfig, { key, visible: true, badgeType: getBadgeType(key) }]
       return getComponentConfig(key)!
     }
-    const actions: ElementSettingsAction[] = [{ value: `topbar:${key}:visible`, label: t(target.topBarKey ? 'settings.visibility' : item.titleKey), icon: 'i-mingcute:eye-line', kind: 'toggle', closeOnSelect: false, checked: isComponentVisible(key), run: () => {
+    const actions: ElementSettingsAction[] = [{ value: `topbar:${key}:visible`, label: t(target.topBarKey ? 'settings.visibility' : item.titleKey), icon: 'i-tabler:eye', kind: 'toggle', closeOnSelect: false, checked: isComponentVisible(key), run: () => {
       ensureConfig().visible = !isComponentVisible(key)
     } }]
     if (!target.topBarKey || !['moments', 'watchLater', 'notifications'].includes(key))
       return actions
     const current = key === 'notifications' && getBadgeType(key) === 'number' && settings.value.showLikeNotificationReminder ? 'number_with_likes' : getBadgeType(key)
     for (const badge of key === 'notifications' ? ['number', 'number_with_likes', 'dot', 'none'] as const : ['number', 'dot', 'none'] as const) {
-      actions.push({ value: `badge:${badge}`, label: `${t('settings.badge_type')} · ${t(`settings.top_bar_icon_badges_opt.${badge}`)}`, icon: 'i-mingcute:notification-line', kind: 'radio', closeOnSelect: false, checked: current === badge, run: () => {
+      actions.push({ value: `badge:${badge}`, label: `${t('settings.badge_type')} · ${t(`settings.top_bar_icon_badges_opt.${badge}`)}`, icon: 'i-tabler:bell', kind: 'radio', closeOnSelect: false, checked: current === badge, run: () => {
         ensureConfig().badgeType = badge === 'number_with_likes' ? 'number' : badge
         if (key === 'notifications')
           settings.value.showLikeNotificationReminder = badge === 'number_with_likes'

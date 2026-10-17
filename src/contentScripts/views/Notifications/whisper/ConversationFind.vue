@@ -64,7 +64,7 @@ async function close() {
 <template>
   <div ref="root" class="conversation-find" :class="{ 'conversation-find--expanded': expanded && !external, 'conversation-find--external': external }" @keydown.esc.stop.prevent="close">
     <IconButton v-if="!expanded && !external" class="bew-icon-button--control" :label="t('library_tools.find_messages')" @click="open">
-      <i i-mingcute:search-line />
+      <i i-tabler:search />
     </IconButton>
     <template v-else>
       <input
@@ -80,7 +80,7 @@ async function close() {
         <ChevronIcon />
       </IconButton>
       <IconButton v-if="!external" class="bew-icon-button--control" :label="t('common.close')" @click="close">
-        <i i-mingcute:close-line />
+        <i i-tabler:x />
       </IconButton>
     </template>
   </div>
@@ -136,7 +136,7 @@ async function close() {
     transform var(--bew-duration-fast) var(--bew-ease-standard);
 }
 .conversation-find__move:hover:not(:disabled) {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
   background: var(--bew-fill-2);
 }
 .conversation-find__move:disabled {

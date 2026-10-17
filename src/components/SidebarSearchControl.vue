@@ -49,7 +49,7 @@ defineExpose({ focus })
 <template>
   <div class="library-search-field" role="search" :aria-label="label">
     <button type="button" :disabled="submitDisabled" :aria-label="t('common.search')" @click="emit('submit')">
-      <i i-mingcute:search-line aria-hidden="true" />
+      <i i-tabler:search aria-hidden="true" />
     </button>
     <input
       ref="input" v-model="value" type="text" inputmode="search" enterkeyhint="search"
@@ -58,7 +58,7 @@ defineExpose({ focus })
       @keydown.esc="escape($event, clearOnEscape)"
     >
     <button v-if="modelValue || clearable" type="button" :aria-label="t('library_tools.clear_search')" class="library-search-field__clear" @click="clear">
-      <i i-mingcute:close-line aria-hidden="true" />
+      <i i-tabler:x aria-hidden="true" />
     </button>
     <span v-if="$slots.filter" class="library-search-field__filter" :class="{ 'library-search-field__filter--active': filterActive }">
       <svg
@@ -86,10 +86,16 @@ defineExpose({ focus })
   color: var(--bew-text-3);
   font-size: var(--bew-font-size-control);
   line-height: var(--bew-line-height-control);
-  border: 1px solid var(--bew-focus-ring-color);
+  border: 1px solid var(--bew-input-border-color);
   border-radius: var(--bew-radius-full);
   corner-shape: var(--bew-corner-shape-round);
   background: var(--bew-content-solid);
+}
+.library-search-field:hover {
+  border-color: var(--bew-input-border-color-hover);
+}
+.library-search-field:focus-within {
+  border-color: var(--bew-focus-ring-color);
 }
 .library-search-field input {
   flex: 1 1 auto;
@@ -159,7 +165,7 @@ defineExpose({ focus })
   color: var(--bew-message-icon-hover);
 }
 .library-search-field__clear:is(:hover, :focus-visible):not(:disabled) {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
 }
 @media (prefers-reduced-motion: reduce) {
   .library-search-field button,

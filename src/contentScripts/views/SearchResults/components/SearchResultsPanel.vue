@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 
+import { useBewlyApp } from '~/composables/useAppProvider'
+import { usePageScrollPositions } from '~/composables/usePageViewState'
+import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { settings } from '~/logic'
 
 import AllSearchPage from '../pages/AllSearchPage.vue'
@@ -38,49 +41,95 @@ const emit = defineEmits<{
   updatePage: [page: number]
 }>()
 
-// Page 组件的 refs
-const allPageRef = ref<InstanceType<typeof AllSearchPage>>()
-const videoPageRef = ref<InstanceType<typeof VideoSearchPage>>()
-const bangumiPageRef = ref<InstanceType<typeof BangumiSearchPage>>()
-const mediaFtPageRef = ref<InstanceType<typeof MediaFtSearchPage>>()
-const userPageRef = ref<InstanceType<typeof UserSearchPage>>()
-const livePageRef = ref<InstanceType<typeof LiveSearchPage>>()
-const articlePageRef = ref<InstanceType<typeof ArticleSearchPage>>()
-
-// 当前激活的 Page 组件
-const currentPageRef = computed(() => {
-  switch (props.currentCategory) {
-    case 'all':
-      return allPageRef.value
-    case 'video':
-      return videoPageRef.value
-    case 'bangumi':
-      return bangumiPageRef.value
-    case 'media_ft':
-      return mediaFtPageRef.value
-    case 'user':
-      return userPageRef.value
-    case 'live':
-      return livePageRef.value
-    case 'article':
-      return articlePageRef.value
-    default:
-      return null
-  }
+interface SearchPageHandle {
+  isLoading: boolean
+  hasMore: boolean
+  needsManualLoadMore?: boolean
+  results?: unknown[]
+  totalResults?: number
+  requestLoadMore?: () => unknown
+  resumeLoadMore?: () => unknown
+  refreshCurrentPage?: () => Promise<boolean>
+  restorePage?: (page: number) => Promise<boolean>
+}
+const pages = { all: AllSearchPage, video: VideoSearchPage, bangumi: BangumiSearchPage, media_ft: MediaFtSearchPage, user: UserSearchPage, live: LiveSearchPage, article: ArticleSearchPage }
+const currentPageRef = ref<SearchPageHandle>()
+const { scrollViewportRef } = useBewlyApp()
+const scrollPositions = usePageScrollPositions('SearchResults:')
+const switching = ref(false)
+const panelRef = ref<HTMLElement>()
+const minHeight = ref<number>()
+let displayedKey = `${props.keyword}:${props.currentCategory}`
+let pendingScroll: number | undefined
+let ready = Promise.resolve(true)
+let finishReady: ((value: boolean) => void) | undefined
+const pageProps = computed(() => ({
+  keyword: props.keyword,
+  initialPage: props.initialPage,
+  ...(props.currentCategory === 'all' || props.currentCategory === 'video'
+    ? { filters: props.videoFilters }
+    : props.currentCategory === 'user'
+      ? { filters: props.userFilters }
+      : props.currentCategory === 'live' ? { filters: props.liveFilters } : {}),
+}))
+watch(() => props.currentCategory, () => {
+  finishReady?.(false)
+  ready = new Promise(resolve => finishReady = resolve)
+}, { flush: 'sync' })
+watch(() => props.keyword, () => {
+  displayedKey = `${props.keyword}:${props.currentCategory}`
+  pendingScroll = undefined
 })
+function restoreScroll() {
+  if (switching.value || currentPageRef.value?.isLoading || pendingScroll === undefined)
+    return
+  minHeight.value = undefined
+  const top = pendingScroll
+  pendingScroll = undefined
+  void nextTick(() => {
+    if (scrollViewportRef.value)
+      scrollViewportRef.value.scrollTop = top
+  })
+}
+const transition = useReadyPageTransition(() => pages[props.currentCategory], async () => {}, {
+  onStart() {
+    if (!switching.value)
+      scrollPositions.set(displayedKey, scrollViewportRef.value?.scrollTop ?? 0)
+    switching.value = true
+    minHeight.value = panelRef.value?.offsetHeight
+  },
+  onSwap() {
+    displayedKey = `${props.keyword}:${props.currentCategory}`
+    pendingScroll = scrollPositions.get(displayedKey) ?? 0
+    if (scrollViewportRef.value)
+      scrollViewportRef.value.scrollTop = pendingScroll
+  },
+  onEnter() {
+    void nextTick(() => {
+      finishReady?.(true)
+      finishReady = undefined
+    })
+  },
+  onSettled() {
+    switching.value = false
+    restoreScroll()
+  },
+})
+watch(() => currentPageRef.value?.isLoading, restoreScroll, { flush: 'post' })
+onBeforeUnmount(() => finishReady?.(false))
 
 const canManuallyLoadMore = computed(() => {
   const page = currentPageRef.value
-  if (settings.value.searchResultsPaginationMode !== 'scroll' || !page || page.isLoading || !page.hasMore)
+  if (switching.value || settings.value.searchResultsPaginationMode !== 'scroll' || !page || page.isLoading || !page.hasMore)
     return false
   return page.needsManualLoadMore
-    || ('results' in page && Array.isArray(page.results) && page.results.length === 0 && page.totalResults > 0)
+    || (Array.isArray(page.results) && page.results.length === 0 && (page.totalResults ?? 0) > 0)
 })
 
 // 处理滚动到底部事件
 function handleReachBottom() {
   const page = currentPageRef.value
-  if (page?.isLoading)
+  if (switching.value || page?.isLoading)
     return
 
   if (page && page.requestLoadMore) {
@@ -94,10 +143,16 @@ function handleUpdatePage(page: number) {
 }
 
 function refreshCurrentPage(): Promise<boolean> {
+  if (switching.value)
+    return Promise.resolve(false)
   return currentPageRef.value?.refreshCurrentPage?.() ?? Promise.resolve(false)
 }
 
-function restoreCurrentPage(page: number): Promise<boolean> {
+async function restoreCurrentPage(page: number): Promise<boolean> {
+  const category = props.currentCategory
+  if (!await ready || category !== props.currentCategory)
+    return false
+  await nextTick()
   return currentPageRef.value?.restorePage?.(page) ?? Promise.resolve(false)
 }
 
@@ -110,75 +165,12 @@ defineExpose({
 </script>
 
 <template>
-  <div class="search-results-panel">
-    <!-- All Search Page -->
-    <AllSearchPage
-      v-if="currentCategory === 'all'"
-      ref="allPageRef"
-      :keyword="keyword"
-      :filters="videoFilters"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
-
-    <!-- Video Search Page -->
-    <VideoSearchPage
-      v-if="currentCategory === 'video'"
-      ref="videoPageRef"
-      :keyword="keyword"
-      :filters="videoFilters"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
-
-    <!-- Bangumi Search Page -->
-    <BangumiSearchPage
-      v-if="currentCategory === 'bangumi'"
-      ref="bangumiPageRef"
-      :keyword="keyword"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
-
-    <!-- MediaFt Search Page -->
-    <MediaFtSearchPage
-      v-if="currentCategory === 'media_ft'"
-      ref="mediaFtPageRef"
-      :keyword="keyword"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
-
-    <!-- User Search Page -->
-    <UserSearchPage
-      v-if="currentCategory === 'user'"
-      ref="userPageRef"
-      :keyword="keyword"
-      :filters="userFilters"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
-
-    <!-- Live Search Page -->
-    <LiveSearchPage
-      v-if="currentCategory === 'live'"
-      ref="livePageRef"
-      :keyword="keyword"
-      :filters="liveFilters"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
-
-    <!-- Article Search Page -->
-    <ArticleSearchPage
-      v-if="currentCategory === 'article'"
-      ref="articlePageRef"
-      :keyword="keyword"
-      :initial-page="initialPage"
-      @update-page="handleUpdatePage"
-    />
+  <div ref="panelRef" class="search-results-panel" :style="{ minHeight: minHeight === undefined ? undefined : `${minHeight}px` }">
+    <Transition mode="out-in" v-bind="transition">
+      <Component :is="pages[currentCategory]" :key="currentCategory" ref="currentPageRef" v-bind="pageProps" @update-page="handleUpdatePage" />
+    </Transition>
     <div v-if="canManuallyLoadMore" class="search-results-panel__more">
-      <Button type="secondary" @click="currentPageRef?.resumeLoadMore()">
+      <Button type="secondary" @click="currentPageRef?.resumeLoadMore?.()">
         {{ $t('common.load_more') }}
       </Button>
     </div>

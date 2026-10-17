@@ -8,6 +8,7 @@ import { parseDedeUserID } from '~/logic/loginStatus'
 import type { FollowingLiveResult, List as FollowingLiveItem } from '~/models/live/getFollowingLiveList'
 import api from '~/utils/api'
 import { decodeHtmlEntities } from '~/utils/htmlDecode'
+import { isExtensionContextInvalidatedError } from '~/utils/messaging'
 
 interface VideoElement {
   uniqueId: string
@@ -44,6 +45,10 @@ function isCurrentRequest(generation: number, accountId: number | null) {
 
 onMounted(() => {
   initPageAction()
+  if (liveExtensionContextInvalidated) {
+    hasSettled.value = true
+    return
+  }
   if (!tabState.restored)
     void initData()
   else if (!hasSettled.value)
@@ -74,7 +79,7 @@ function initPageAction() {
 }
 
 async function initData() {
-  if (!tabState.isCurrent())
+  if (liveExtensionContextInvalidated || !tabState.isCurrent())
     return
   hasSettled.value = false
   const generation = ++requestGeneration
@@ -118,7 +123,7 @@ function transformLiveVideo(item: VideoElement): Video | undefined {
 }
 
 async function getData(generation = requestGeneration, accountId = loadedAccountId) {
-  if (!isCurrentRequest(generation, accountId))
+  if (liveExtensionContextInvalidated || !isCurrentRequest(generation, accountId))
     return
   emit('beforeLoading')
   isLoading.value = true
@@ -134,13 +139,15 @@ async function getData(generation = requestGeneration, accountId = loadedAccount
     if (isCurrentRequest(generation, accountId)) {
       hasSettled.value = true
       isLoading.value = false
+      if (liveExtensionContextInvalidated)
+        requestFailed.value = false
       emit('afterLoading')
     }
   }
 }
 
 async function getLiveVideos(generation = requestGeneration, accountId = loadedAccountId) {
-  if (!isCurrentRequest(generation, accountId))
+  if (liveExtensionContextInvalidated || !isCurrentRequest(generation, accountId))
     return false
   if (noMoreContent.value)
     return true
@@ -151,7 +158,7 @@ async function getLiveVideos(generation = requestGeneration, accountId = loadedA
       page_size: 9,
     })
 
-    if (!isCurrentRequest(generation, accountId))
+    if (liveExtensionContextInvalidated || !isCurrentRequest(generation, accountId))
       return false
 
     if (response.code === -101) {
@@ -184,6 +191,16 @@ async function getLiveVideos(generation = requestGeneration, accountId = loadedA
     return false
   }
   catch (error) {
+    // A superseded request can still prove that the whole extension world is
+    // stale. Do not turn that terminal state into a retryable network failure.
+    if (isExtensionContextInvalidatedError(error)) {
+      liveExtensionContextInvalidated = true
+      if (isCurrentRequest(generation, accountId))
+        requestFailed.value = false
+      return false
+    }
+    if (liveExtensionContextInvalidated)
+      return false
     if (isCurrentRequest(generation, accountId)) {
       requestFailed.value = true
       noMoreContent.value = false
@@ -195,7 +212,7 @@ async function getLiveVideos(generation = requestGeneration, accountId = loadedA
 
 // 供 VideoCardGrid 预加载调用的函数
 async function handleLoadMore() {
-  if (isLoading.value || noMoreContent.value)
+  if (liveExtensionContextInvalidated || isLoading.value || noMoreContent.value)
     return
 
   isLoading.value = true
@@ -205,8 +222,11 @@ async function handleLoadMore() {
     await getLiveVideos(generation, accountId)
   }
   finally {
-    if (isCurrentRequest(generation, accountId))
+    if (isCurrentRequest(generation, accountId)) {
       isLoading.value = false
+      if (liveExtensionContextInvalidated)
+        requestFailed.value = false
+    }
   }
 }
 
@@ -215,6 +235,12 @@ function jumpToLoginPage() {
 }
 
 defineExpose({ initData })
+</script>
+
+<script lang="ts">
+// An extension reload cannot revive this content-script world, even when the
+// Live tab is remounted. The existing page-refresh prompt owns recovery.
+let liveExtensionContextInvalidated = false
 </script>
 
 <template>

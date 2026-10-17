@@ -1,0 +1,15 @@
+// Shared Mono roles: data stays opaque; accent is reserved for the active reading.
+@mixin line {
+  fill: none;
+  stroke: var(--bew-chart-primary);
+  stroke-width: var(--bew-chart-line-width);
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+@mixin guide {
+  fill: none;
+  stroke: var(--bew-chart-grid);
+  stroke-width: var(--bew-chart-guide-width);
+  vector-effect: non-scaling-stroke;
+}

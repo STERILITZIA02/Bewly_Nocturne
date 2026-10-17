@@ -30,8 +30,13 @@ const dayLabel = (day: MessageActivityDay) => `${dateFormat.value.format(day.tim
     <div class="message-activity-chart__plot">
       <svg viewBox="0 0 560 176" preserveAspectRatio="none" aria-hidden="true">
         <path class="message-activity-chart__guide" d="M0 16H560M0 88H560M0 160H560" />
+        <path v-for="(day, index) in days" :key="`tick-${day.timestamp}`" class="message-activity-chart__guide" :d="`M${x(index)} 160v8`" />
         <polyline class="message-activity-chart__line message-activity-chart__line--secondary" :points="points('unfollowed')" />
         <polyline class="message-activity-chart__line" :points="points('followed')" />
+        <template v-for="(day, index) in days" :key="day.timestamp">
+          <circle class="message-activity-chart__sample message-activity-chart__sample--secondary" :cx="x(index)" :cy="y(day.unfollowed)" r="3.5" />
+          <circle class="message-activity-chart__sample" :cx="x(index)" :cy="y(day.followed)" r="2.5" />
+        </template>
         <template v-if="active !== null && days[active]">
           <path class="message-activity-chart__guide" :d="`M${x(active)} 16V160`" />
           <circle class="message-activity-chart__point--secondary" :cx="x(active)" :cy="y(days[active].unfollowed)" r="4" />
@@ -49,12 +54,14 @@ const dayLabel = (day: MessageActivityDay) => `${dateFormat.value.format(day.tim
         </button>
       </div>
       <span class="message-activity-chart__scale" aria-hidden="true">{{ numberFormat.format(max) }}</span>
+      <span class="message-activity-chart__scale message-activity-chart__scale--zero" aria-hidden="true">0</span>
     </div>
     <span v-if="selected" class="message-activity-chart__detail">{{ dayLabel(selected) }}</span>
   </div>
 </template>
 
 <style scoped lang="scss">
+@use "../../../../styles/dataChart";
 .message-activity-chart {
   display: grid;
   gap: var(--bew-space-3);
@@ -77,10 +84,12 @@ const dayLabel = (day: MessageActivityDay) => `${dateFormat.value.format(day.tim
   width: var(--bew-space-2);
   height: var(--bew-space-2);
   border-radius: var(--bew-badge-radius);
-  background: var(--bew-theme-foreground);
+  background: var(--bew-chart-primary);
 }
 .message-activity-chart__dot--secondary {
-  background: var(--bew-chart-secondary);
+  box-sizing: border-box;
+  border: 1px solid var(--bew-chart-secondary);
+  background: transparent;
 }
 .message-activity-chart__plot {
   position: relative;
@@ -93,27 +102,32 @@ const dayLabel = (day: MessageActivityDay) => `${dateFormat.value.format(day.tim
   overflow: visible;
 }
 .message-activity-chart__guide {
-  stroke: var(--bew-border-color);
-  stroke-width: 1;
-  fill: none;
-  vector-effect: non-scaling-stroke;
+  @include dataChart.guide;
 }
 .message-activity-chart__line {
-  stroke: var(--bew-theme-foreground);
-  stroke-width: 3;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  fill: none;
-  vector-effect: non-scaling-stroke;
+  @include dataChart.line;
 }
 .message-activity-chart__line--secondary {
   stroke: var(--bew-chart-secondary);
+  stroke-dasharray: 3 4;
 }
-.message-activity-chart__point {
-  fill: var(--bew-theme-foreground);
+.message-activity-chart__sample {
+  fill: var(--bew-chart-primary);
+  stroke: var(--bew-chart-primary);
+  vector-effect: non-scaling-stroke;
+}
+.message-activity-chart__sample--secondary {
+  fill: var(--bew-chart-surface);
+  stroke: var(--bew-chart-secondary);
+}
+.message-activity-chart__point,
+.message-activity-chart__point--secondary {
+  fill: var(--bew-chart-accent);
+  stroke: var(--bew-chart-accent);
+  vector-effect: non-scaling-stroke;
 }
 .message-activity-chart__point--secondary {
-  fill: var(--bew-chart-secondary);
+  fill: var(--bew-chart-surface);
 }
 .message-activity-chart__targets {
   position: absolute;
@@ -153,5 +167,8 @@ const dayLabel = (day: MessageActivityDay) => `${dateFormat.value.format(day.tim
   font-size: var(--bew-font-size-caption);
   line-height: var(--bew-line-height-caption);
   pointer-events: none;
+}
+.message-activity-chart__scale--zero {
+  inset: auto auto var(--bew-space-6) 0;
 }
 </style>

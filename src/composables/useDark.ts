@@ -4,6 +4,7 @@ import { effectScope, onScopeDispose } from 'vue'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
 import { DARK_MODE_BASE_COLOR_CHANGE, IFRAME_DARK_MODE_CHANGE } from '~/constants/globalEvents'
 import { settings } from '~/logic'
+import { resolveDarkModeBaseColor } from '~/utils/darkModeTint'
 import { createIframeDocumentClient } from '~/utils/iframeDocument'
 import { getParentMessageData } from '~/utils/iframeMessage'
 import { isVideoPlaybackPage, setCookie } from '~/utils/main'
@@ -137,7 +138,7 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
   const iframeDocument = createIframeDocumentClient()
   const isDark = computed(() => parentTheme.value?.isDark ?? (currentAppColorScheme.value === 'dark' || isVideoPageDark.value))
   const isOledDark = computed(() => isDark.value && (parentTheme.value?.isOledDark ?? settings.value.enableOledDarkMode === true))
-  const darkModeBaseColor = computed(() => parentTheme.value?.darkModeBaseColor ?? settings.value.darkModeBaseColor)
+  const darkModeBaseColor = computed(() => parentTheme.value?.darkModeBaseColor ?? resolveDarkModeBaseColor(settings.value))
 
   const handleIframeThemeMessage = (event: MessageEvent) => {
     iframeDocument.receive(event)
@@ -152,7 +153,7 @@ function createDarkState(observeRoute = true, syncNativeTheme = true) {
 
     parentTheme.value = { isDark: data.isDark, isOledDark: data.isOledDark === true, darkModeBaseColor: typeof data.darkModeBaseColor === 'string' && /^#[\da-f]{6}$/i.test(data.darkModeBaseColor)
       ? data.darkModeBaseColor
-      : settings.value.darkModeBaseColor }
+      : resolveDarkModeBaseColor(settings.value) }
   }
   window.addEventListener('message', handleIframeThemeMessage)
   watch(currentUrl, () => iframeDocument.report(), { immediate: true })

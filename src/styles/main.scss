@@ -122,9 +122,38 @@ html.dark.bewly-design {
   }
 
   .bew-page-heading {
+    color: var(--bew-text-1);
     font-size: var(--bew-font-size-heading);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-heading-weight);
     line-height: var(--bew-line-height-heading);
+  }
+
+  .bew-subheading {
+    color: var(--bew-text-1);
+    font-size: var(--bew-font-size-subheading);
+    font-weight: var(--bew-subheading-weight);
+    line-height: var(--bew-line-height-subheading);
+  }
+
+  .bew-section-label {
+    color: var(--bew-text-2);
+    font-size: var(--bew-font-size-caption);
+    font-weight: var(--bew-label-weight);
+    line-height: var(--bew-line-height-caption);
+  }
+
+  .bew-ui-label {
+    color: var(--bew-text-2);
+    font-size: var(--bew-font-size-ui);
+    font-weight: var(--bew-label-weight);
+    line-height: var(--bew-line-height-ui);
+  }
+
+  .bew-help {
+    color: var(--bew-text-3);
+    font-size: var(--bew-font-size-control);
+    font-weight: var(--bew-font-weight-regular);
+    line-height: var(--bew-line-height-help);
   }
 
   // Baseline keyboard feedback for legacy/raw controls. Component-specific

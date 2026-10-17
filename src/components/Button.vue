@@ -111,10 +111,14 @@ function handleClick(evt: MouseEvent) {
   }
 
   &--type-primary {
-    --b-button-color: var(--bew-theme-color);
-    --b-button-color-hover: var(--bew-theme-color);
-    --b-button-text-color: var(--bew-on-theme-color);
+    --b-button-color: var(--bew-accent-solid);
+    --b-button-color-hover: var(--bew-accent-solid);
+    --b-button-text-color: var(--bew-on-accent-solid);
     --b-button-shadow-hover: inset 0 0 0 1px color-mix(in srgb, var(--bew-on-theme-color) 30%, transparent);
+
+    @supports (color: contrast-color(white)) {
+      --b-button-text-color: contrast-color(var(--bew-accent-solid));
+    }
   }
 
   &--type-secondary {

@@ -352,7 +352,7 @@ export function injectLoadingStyle() {
       font: inherit;
       font-weight: var(--bew-font-weight-medium, 500);
       background: var(--bew-fill-2, rgb(0 0 0 / 8%));
-      border: 1px solid var(--bew-surface-border-color, #d1d2d4);
+      border: 1px solid var(--bew-surface-border-color, rgb(127 127 127 / 12%));
       border-radius: var(--bew-interactive-radius, 8px);
       cursor: pointer;
     }

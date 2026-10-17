@@ -209,7 +209,7 @@
     .subscribe-list li .subscribe-link:after,
     #page-collection-detail .channel-add-video:hover,
     #page-collection-detail .channel-add-video:hover .text {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     #page-follows .follow-main .follow-action-top .back-to-info:hover,
@@ -223,34 +223,21 @@
     .btn.primary:focus,
     .btn.primary:hover,
     .paly-all-btn:hover {
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     .i-live .i-live-fo-btn:hover {
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
-    .n .n-cursor,
-    #pin-wrapper .pin-layer-vlist .small-item.selected,
     .be-switch-container.is-checked .be-switch,
     .h .h-follow,
-    #page-follows .follow-sidenav .follow-list-container .follow-item.cur,
-    #page-follows .follow-tabs span.active:after,
-    .contribution-sidenav .contribution-item.cur,
-    #page-setting .setting-index-module:hover,
     .btn.primary,
-    #page-fav .fav-sidenav .fav-item.cur,
     .favInfo-box .favInfo-details .fav-options .fav-play,
-    .be-pager-item-active,
-    .search-nav-item.search-nav-actived,
     .game-card__btn,
-    .be-tags-container .tag.new-tag,
-    #page-fav .fav-sidenav .fav-item.cur:hover .icon-cursor,
     .favInfo-box .collection-details .collection-btn,
     #page-series-index .channel-option.no-channel .create-channel,
-    .video-container .types,
     .bl-button--primary,
-    .bl-button--ghost:hover,
     .h .report-popup-item.checked .report-popup-item-checkbox,
     .h .report-popup .report-popup-tip__radio input[type="radio"]:checked + label:after,
     .follow-dialog-wrap .follow-dialog-window .bottom .btn,
@@ -259,6 +246,26 @@
     .bili-topic-new__default__create__icon:before,
     .btn-subscribe:not(.btn-cancel) {
       background-color: var(--bew-theme-color);
+    }
+
+    .n .n-cursor,
+    #page-follows .follow-tabs span.active:after {
+      background-color: var(--bew-text-1);
+    }
+
+    #pin-wrapper .pin-layer-vlist .small-item.selected,
+    #page-follows .follow-sidenav .follow-list-container .follow-item.cur,
+    .contribution-sidenav .contribution-item.cur,
+    #page-setting .setting-index-module:hover,
+    #page-fav .fav-sidenav .fav-item.cur,
+    .be-pager-item-active,
+    .search-nav-item.search-nav-actived,
+    .be-tags-container .tag.new-tag,
+    #page-fav .fav-sidenav .fav-item.cur:hover .icon-cursor,
+    .video-container .types,
+    .bl-button--ghost:hover {
+      background-color: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
 
     .channel-option .modify-channel {
@@ -295,7 +302,6 @@
     #page-series-index .channel-option.no-channel .create-channel,
     .channel-option .modify-channel,
     .bl-button--primary,
-    .bl-button--ghost:hover,
     .follow-dialog-wrap .follow-dialog-window .bottom .btn,
     .comment-bilibili-con .btn .btn-submit,
     .btn-subscribe:not(.btn-cancel) {
@@ -303,18 +309,23 @@
     }
 
     .h .h-guest-hint {
-      background-color: var(--bew-theme-color);
+      background-color: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
 
     .create-wrapper .choose-action .confirm-btn,
     .create-wrapper .choose-action .next-btn,
     .create-wrapper .create-action .confirm-btn,
     .create-wrapper .create-action .next-btn,
-    .edit-media-list .edit-mask .edit-board .edit-info .submit-btn,
-    .bangumi-pagelistbox .p:hover,
-    .bangumi-pagelistbox .p.active {
+    .edit-media-list .edit-mask .edit-board .edit-info .submit-btn {
       background-color: var(--bew-theme-color) !important;
       color: var(--bew-on-theme-color);
+    }
+
+    .bangumi-pagelistbox .p:hover,
+    .bangumi-pagelistbox .p.active {
+      background-color: var(--bew-selected-bg) !important;
+      color: var(--bew-text-1);
     }
 
     .i-m-title .icon-i-title,
@@ -605,7 +616,7 @@
     }
 
     .large-item .cover img {
-      box-shadow: 0 0 0 1px var(--bew-border-color);
+      box-shadow: none;
     }
 
     .section-title,

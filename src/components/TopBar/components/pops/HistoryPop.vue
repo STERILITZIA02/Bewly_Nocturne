@@ -336,7 +336,7 @@ defineExpose({
                 :disabled="pendingRemovals.has(`${currentAccountId}:${getHistoryItemKey(historyItem)}`)"
                 @click.stop.prevent="deleteHistoryItem(historyItem, $event)"
               >
-                <i i-mingcute:close-line />
+                <i i-tabler:x />
               </IconButton>
 
               <!-- Video -->
@@ -393,8 +393,8 @@ defineExpose({
                   <div
                     v-if="historyItem.live_status === 1"
                     pos="absolute top-0 left-0"
-                    bg="$bew-theme-color"
-                    text="xs $bew-on-theme-color"
+                    bg="$bew-selected-bg"
+                    text="xs $bew-text-1"
                     p="x-2 y-1"
                     m="1"
                     rounded-full
@@ -454,7 +454,7 @@ defineExpose({
                 </ALink>
                 <span
                   v-if="historyItem.live_status === 1"
-                  text="$bew-theme-foreground"
+                  text="$bew-text-1"
                   flex
                   items-center
                   gap-1

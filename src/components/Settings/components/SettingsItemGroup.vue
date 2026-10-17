@@ -25,30 +25,30 @@ const collapsed = ref(props.defaultCollapsed)
       @click="collapsed = !collapsed"
     >
       <span>
-        <span class="group-title" text="$bew-text-1">
+        <span class="group-title bew-section-label">
           <i v-if="icon" :class="icon" />
           {{ title }}
         </span>
         <span
           v-if="desc"
-          block text="sm $bew-text-2" fw-normal
+          block class="bew-help"
           :class="{ 'warning-desc': warningDesc }"
         >
           {{ desc }}
         </span>
       </span>
       <i
-        i-mingcute:down-line
+        i-tabler:chevron-down
         class="collapse-icon"
         :class="{ collapsed }"
       />
     </button>
     <template v-else-if="title || desc">
-      <p class="group-title" text="$bew-text-1">
+      <p class="group-title bew-section-label">
         <i v-if="icon" :class="icon" />
         {{ title }}
       </p>
-      <p v-if="desc" text="sm $bew-text-2" :class="{ 'warning-desc': warningDesc }">
+      <p v-if="desc" class="bew-help" :class="{ 'warning-desc': warningDesc }">
         {{ desc }}
       </p>
     </template>
@@ -70,6 +70,7 @@ const collapsed = ref(props.defaultCollapsed)
 .group-panel {
   margin: var(--bew-space-2) calc(0px - var(--bew-space-4)) 0;
   padding-inline: var(--bew-space-4);
+  padding-inline-start: calc(var(--bew-space-4) + var(--bew-settings-level-indent));
   background: var(--bew-content-solid);
   border-radius: var(--bew-panel-radius);
   corner-shape: var(--bew-corner-shape);
@@ -91,7 +92,7 @@ const collapsed = ref(props.defaultCollapsed)
   &:hover {
     .group-title,
     .collapse-icon {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
   }
 }
@@ -100,14 +101,11 @@ const collapsed = ref(props.defaultCollapsed)
   display: inline-flex;
   align-items: center;
   gap: var(--bew-space-2);
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
 }
 
 .group-title > i {
-  color: var(--bew-theme-foreground);
-  font-size: var(--bew-icon-size-md);
+  color: currentColor;
+  font-size: var(--bew-icon-size-xs);
 }
 
 .collapse-icon {
@@ -125,7 +123,7 @@ const collapsed = ref(props.defaultCollapsed)
   }
 }
 
-.warning-desc {
+.bew-help.warning-desc {
   color: var(--bew-warning-color);
 }
 </style>

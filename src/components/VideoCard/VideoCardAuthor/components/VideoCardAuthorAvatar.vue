@@ -45,7 +45,7 @@ const isKetang = computed(() => {
       bg="$bew-theme-surface"
       grid="~ place-items-center"
     >
-      <div i-mingcute:book-2-line text="xl $bew-theme-color" />
+      <div i-tabler:book text="xl $bew-text-1" />
     </div>
   </div>
 
@@ -90,21 +90,21 @@ const isKetang = computed(() => {
         class="bew-shape-circle"
         pos="absolute bottom--2px right--2px"
         w-14px h-14px
-        bg="$bew-theme-color"
+        bg="$bew-selected-bg"
         border="2 outset solid white"
         grid place-items-center
       >
-        <div color="$bew-on-theme-color" text-sm class="i-mingcute:check-fill w-8px h-8px" />
+        <div color="$bew-text-1" text-sm class="i-tabler:check w-8px h-8px" />
       </div>
       <div
         v-else-if="isLive"
         class="bew-shape-circle"
         pos="absolute bottom--2px right--2px"
         w-14px h-14px
-        bg="$bew-theme-color"
+        bg="$bew-selected-bg"
         grid place-items-center
       >
-        <div color="$bew-on-theme-color" text-sm class="i-svg-spinners:pulse-3 w-12px h-12px" />
+        <div color="$bew-text-1" text-sm class="i-svg-spinners:pulse-3 w-12px h-12px" />
       </div>
     </a>
 
@@ -125,12 +125,12 @@ const isKetang = computed(() => {
 <style scoped lang="scss">
 .video-card-author-avatar {
   box-sizing: border-box;
-  border: 1px solid var(--bew-surface-border-color);
+  border: 0;
 }
 
 .live {
   padding: 2px;
-  border-width: 2px;
-  border-color: var(--bew-theme-foreground);
+  // A live status indicator, not a decorative image frame.
+  border: 2px solid var(--bew-text-1);
 }
 </style>

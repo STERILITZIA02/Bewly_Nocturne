@@ -9,6 +9,7 @@ const props = defineProps<{
   pickerLabel: string
   retryLabel: string
   errorLabel: string
+  business?: 'dynamic' | 'reply'
 }>()
 
 const emit = defineEmits<{
@@ -40,7 +41,7 @@ async function loadEmotes() {
   loading.value = true
   error.value = ''
   try {
-    const result = await loadMomentForwardEmotes(account, props.errorLabel)
+    const result = await loadMomentForwardEmotes(account, props.errorLabel, props.business)
     if (version !== generation || account !== props.accountId)
       return
     packages.value = result
@@ -57,7 +58,7 @@ async function loadEmotes() {
 }
 
 onMounted(loadEmotes)
-watch(() => props.accountId, () => {
+watch(() => [props.accountId, props.business], () => {
   packages.value = []
   failedImages.value.clear()
   void loadEmotes()

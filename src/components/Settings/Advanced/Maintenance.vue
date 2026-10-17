@@ -314,7 +314,7 @@ async function handleResetSettings() {
       >
         <Button class="danger-button" @click="handleResetSettings">
           <template #left>
-            <i i-mingcute:back-line />
+            <i i-tabler:arrow-back-up />
           </template>
           {{ $t('settings.reset_settings') }}
         </Button>

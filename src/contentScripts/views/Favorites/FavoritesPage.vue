@@ -1002,7 +1002,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
   }
   &:hover {
     background: var(--bew-sidebar-control-hover);
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
   &:disabled {
     opacity: 0.5;
@@ -1193,8 +1193,8 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
     background: var(--bew-sidebar-control);
   }
   &.active {
-    color: var(--bew-on-theme-color);
-    background: var(--bew-theme-color);
+    color: var(--bew-text-1);
+    background: var(--bew-selected-bg);
     .category-count {
       color: inherit;
     }
@@ -1261,13 +1261,13 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 }
 
 .favorite-card-action:hover {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .favorite-card-action.selected {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .favorite-card-action.danger:hover {
@@ -1311,7 +1311,7 @@ async function runResourceWrite(command: Extract<FavoriteWrite, { sourceId: numb
 
 .batch-target-folder.active {
   color: var(--bew-on-theme-surface);
-  border-color: var(--bew-theme-color);
+  border-color: var(--bew-selected-bg);
   background: var(--bew-theme-surface);
 }
 

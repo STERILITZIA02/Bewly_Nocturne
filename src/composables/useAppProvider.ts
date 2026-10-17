@@ -35,6 +35,7 @@ export interface BewlyAppProvider {
   navigateToPage: (page: AppPage) => void
   navigateToHomeTab: (tab: HomeSubPage) => void
   isHomeTabSwitching: Ref<boolean>
+  isPageSwitching?: Ref<boolean>
   scrollViewportRef: Ref<HTMLElement | null>
   reachTop: Ref<boolean>
   mainAppRef: Ref<HTMLElement>

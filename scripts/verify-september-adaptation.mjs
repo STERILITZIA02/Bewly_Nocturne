@@ -311,7 +311,9 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
     }
     editor.remove()
     const state = Vue.reactive({ status: 'editing', tokens: [], selectedTopic: null })
+    const host = document.body.appendChild(document.createElement('div'))
     const Composer = await compileComponent('../src/components/MomentCard/MomentForwardComposer.vue', {
+      '~/composables/useAppProvider': { useBewlyApp: () => ({ mainAppRef: Vue.ref(host) }) },
       'vue-i18n': { useI18n: () => ({ t: key => key }) },
       'vue-toastification': { useToast: () => ({ error() {}, success() {} }) },
       '~/stores/topBarStore': { useTopBarStore: () => ({ isLogin: true, userInfo: { mid: 1 } }) },
@@ -320,11 +322,10 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       './MomentForwardEmojiPicker.vue': { default: { render: () => null } },
       './useMomentForwardComposer': { useMomentForwardComposer: () => ({ state, beginEditing() {}, invalidate() {}, setTokens: (tokens) => { state.tokens = tokens }, selectTopic() {}, clearTopic() {}, submit: () => assert.fail('focus interactions cannot send') }) },
     })
-    const host = document.body.appendChild(document.createElement('div'))
     const app = Vue.createApp(Composer, { moment: { id: '1' }, active: true })
     try {
       app.mount(host)
-      const button = [...host.querySelectorAll('button')].find(item => item.textContent.includes('moment_card.forward_select_topic'))
+      const button = host.querySelector('[aria-label="moment_card.forward_select_topic"]')
       button.focus()
       button.click()
       await flush()
@@ -334,6 +335,28 @@ export function registerSeptemberAdaptationChecks(check, { Vue, flush, compileCo
       await flush()
       assert.equal(host.querySelector('.moment-forward-topic-picker'), null)
       assert.equal(document.activeElement, host.querySelector('textarea'), 'Escape returns to the live draft without scrolling or submitting')
+      const textarea = host.querySelector('textarea')
+      textarea.value = 'left right'
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+      await flush()
+      textarea.setSelectionRange(5, 10)
+      host.querySelector('[aria-label="moment_card.forward_search_mention"]').click()
+      await flush()
+      assert.equal(textarea.value, 'left @', 'the mention tool inserts at the existing selection')
+      assert.equal(document.activeElement, textarea, 'typing a mention continues in the editor')
+      assert.ok(host.querySelector('.moment-forward-composer__picker'))
+      assert.equal(host.querySelector('.moment-forward-composer__surface .moment-forward-topic-picker'), null, 'the auxiliary picker does not resize the glass editor')
+      textarea.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      await flush()
+      assert.equal(host.querySelector('.moment-forward-composer__picker'), null)
+      textarea.value = '正文[微笑]'
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+      await flush()
+      textarea.setSelectionRange(textarea.value.length, textarea.value.length)
+      host.querySelector('[aria-label="moment_card.forward_search_mention"]').click()
+      await flush()
+      assert.equal(textarea.value, '正文[微笑] @')
+      assert.ok(host.querySelector('.moment-forward-composer__picker'), 'mention picker opens after non-space text and emotes')
     }
     finally {
       app.unmount()

@@ -14,7 +14,7 @@ import {
   parsePrivateMessagesResponse,
   parsePrivateSessionsResponse,
 } from './protocol'
-import { getPrivateSessionDetail, getPrivateSessionSettings, reportPrivateUser, setPrivateSessionDnd, setPrivateSessionPush, setPrivateSessionTop } from './sessionActions'
+import { getPrivateConversationTarget, getPrivateSessionDetail, getPrivateSessionSettings, reportPrivateUser, setPrivateSessionDnd, setPrivateSessionPush, setPrivateSessionTop } from './sessionActions'
 import {
   requestPreferredPrivateMessageForm,
   requestPrivateMessage,
@@ -170,6 +170,7 @@ async function ackPrivateSession(
 
 const API_PRIVATE_MESSAGE = {
   getPrivateSessionDetail,
+  getPrivateConversationTarget,
   getPrivateSessionSettings,
   setPrivateSessionTop,
   setPrivateSessionDnd,

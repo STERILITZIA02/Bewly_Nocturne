@@ -2,6 +2,13 @@ import { HomeSubPage } from '~/contentScripts/views/Home/types'
 import { AppPage } from '~/enums/appEnums'
 
 import type { HomeTabConfigItem } from './homeTabConfig'
+import { PRIVATE_CONVERSATION_ROUTE_PARAMS } from './privateConversationRoute'
+
+export function homeTabStateKey(tab: HomeSubPage, recommendationMode: string, useFollowingNewLayout: boolean) {
+  return tab === HomeSubPage.Following
+    ? `${tab}:${useFollowingNewLayout ? 'new' : 'old'}`
+    : tab === HomeSubPage.ForYou ? `${tab}:${recommendationMode}` : tab
+}
 
 export function resolveDefaultAppPage(config: readonly { page: AppPage, visible: boolean }[]): AppPage {
   return config.find(item => item.visible)?.page ?? AppPage.Home
@@ -32,6 +39,10 @@ export function writeHomeRoute(href: string, page: AppPage, tab: HomeSubPage): s
   url.searchParams.set('page', page)
   if (page !== AppPage.SearchResults) {
     for (const key of ['keyword', 'category', 'user_order', 'user_type', 'search_type', 'live_room_order', 'live_user_order', 'pn'])
+      url.searchParams.delete(key)
+  }
+  if (page !== AppPage.Notifications) {
+    for (const key of ['notificationView', ...Object.values(PRIVATE_CONVERSATION_ROUTE_PARAMS)])
       url.searchParams.delete(key)
   }
   if (page === AppPage.Home)

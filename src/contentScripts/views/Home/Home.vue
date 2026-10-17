@@ -7,6 +7,7 @@ import LiquidSegmentIndicator from '~/components/LiquidSegmentIndicator.vue'
 import PageAsyncLoading from '~/components/PageAsyncLoading.vue'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { provideHomeTabCache } from '~/composables/useHomeTabState'
+import { usePageScrollPositions } from '~/composables/usePageViewState'
 import { useReadyPageTransition } from '~/composables/useReadyPageTransition'
 import { useSearchFocusEffect } from '~/composables/useSearchFocusEffect'
 import { OVERLAY_SCROLL_BAR_SCROLL, TOP_BAR_VISIBILITY_CHANGE } from '~/constants/globalEvents'
@@ -19,6 +20,7 @@ import { useMainStore } from '~/stores/mainStore'
 import { useTopBarStore } from '~/stores/topBarStore'
 import { resolveAuthenticatedAccountId } from '~/utils/accountScope'
 import { createAsyncPageRegistry } from '~/utils/asyncPage'
+import { homeTabStateKey } from '~/utils/homeRoute'
 import { normalizeHomeTabConfig } from '~/utils/homeTabConfig'
 import emitter from '~/utils/mitt'
 import { retiringTransition } from '~/utils/motionPresence'
@@ -29,6 +31,8 @@ import RecommendationModeSwitcher from './components/RecommendationModeSwitcher.
 import VersionReminder from './components/VersionReminder.vue'
 import type { GridLayoutIcon } from './types'
 import { HomeSubPage } from './types'
+
+defineOptions({ name: 'BewlyHomePage' })
 
 const mainStore = useMainStore()
 const topBarStore = useTopBarStore()
@@ -51,10 +55,25 @@ const searchStageStyle = computed(() => ({
   '--bew-layout-home-search-stage-tail-height': `${searchStage.value.tail}px`,
 }))
 const showHomeSearchCharacter = computed(() => cachedScrollTop.value < searchStage.value.stickyScrollTop)
-const tabScrollPositions = new Map<string, number>()
+const tabScrollPositions = usePageScrollPositions('Home:')
+const homeActive = ref(true)
 let pendingTabScrollTop: number | null = null
 let resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
 let tabSwitchFrame: number | null = null
+let homeEventsAttached = false
+
+function subscribeHomeEvents() {
+  if (homeEventsAttached)
+    return
+  homeEventsAttached = true
+  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
+  emitter.on(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
+}
+function unsubscribeHomeEvents() {
+  homeEventsAttached = false
+  emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
+  emitter.off(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
+}
 
 // 使用全局的homeActivatedPage状态
 const activatedPage = homeActivatedPage
@@ -99,12 +118,11 @@ const pages = computed(() => ({
   [HomeSubPage.Weekly]: weeklyPage,
   [HomeSubPage.Live]: livePage,
 }))
-const tabTransition = useReadyPageTransition(() => pages.value[activatedPage.value], asyncPages.preload)
-const activatedPageCacheKey = computed(() => activatedPage.value === HomeSubPage.Following
-  ? `${activatedPage.value}:${settings.value.useFollowingNewLayout ? 'new' : 'old'}`
-  : activatedPage.value === HomeSubPage.ForYou
-    ? `${activatedPage.value}:${settings.value.recommendationMode}`
-    : activatedPage.value)
+const tabTransition = useReadyPageTransition(() => pages.value[activatedPage.value], asyncPages.preload, {
+  onSwap: restoreTabScrollPosition,
+  rise: () => false,
+})
+const activatedPageCacheKey = computed(() => homeTabStateKey(activatedPage.value, settings.value.recommendationMode, settings.value.useFollowingNewLayout))
 const homeAccountId = computed(() => resolveAuthenticatedAccountId(
   topBarStore.isLogin,
   topBarStore.userInfo.mid,
@@ -144,9 +162,9 @@ const reserveRecommendationModeSwitcher = computed(() => recommendationSwitcherE
 const shouldShowRecommendationModeSwitcher = computed(() => activatedPage.value === HomeSubPage.ForYou && reserveRecommendationModeSwitcher.value)
 const gridLayoutIcons = computed((): GridLayoutIcon[] => {
   return [
-    { icon: 'mingcute:table-3-line', iconActivated: 'mingcute:table-3-fill', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
-    { icon: 'mingcute:layout-grid-line', iconActivated: 'mingcute:layout-grid-fill', value: 'twoColumns', labelKey: 'layout_editor.layout_two_columns' },
-    { icon: 'mingcute:list-check-3-line', iconActivated: 'mingcute:list-check-3-fill', value: 'oneColumn', labelKey: 'layout_editor.layout_one_column' },
+    { icon: 'tabler:table', iconActivated: 'tabler:table-filled', value: 'adaptive', labelKey: 'layout_editor.layout_adaptive' },
+    { icon: 'tabler:layout-grid', iconActivated: 'tabler:layout-grid-filled', value: 'twoColumns', labelKey: 'layout_editor.layout_two_columns' },
+    { icon: 'tabler:layout-list', iconActivated: 'tabler:layout-list-filled', value: 'oneColumn', labelKey: 'layout_editor.layout_one_column' },
   ]
 })
 
@@ -212,15 +230,15 @@ watch(activatedPageCacheKey, (_newPage, oldPage) => {
   resetScrollOnEntry = false
   tabContentLoading.value = false
   const viewport = scrollViewportRef.value
-  if (!viewport)
+  if (!viewport || !homeActive.value)
     return
 
   if (pendingTabScrollTop === null)
     tabScrollPositions.set(oldPage, viewport.scrollTop)
-  pendingTabScrollTop = null
+  pendingTabScrollTop = tabScrollPositions.get(activatedPageCacheKey.value) ?? getContentScrollTop()
   // Keep the outgoing space through the out-in/async-loading gap so the
   // browser itself cannot clamp the shared viewport back to the top.
-  tabContentMinHeight.value = tabContentRef.value?.getBoundingClientRect().height
+  tabContentMinHeight.value = Math.max(tabContentRef.value?.getBoundingClientRect().height ?? 0, pendingTabScrollTop + viewport.clientHeight - getContentScrollTop())
   if (tabSwitchFrame !== null) {
     cancelAnimationFrame(tabSwitchFrame)
     tabSwitchFrame = null
@@ -281,14 +299,31 @@ function syncCurrentTabs() {
 
 onMounted(() => {
   // ✅ 性能优化：订阅滚动事件以缓存 scrollTop，避免后续 DOM 读取
-  emitter.on(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
-  emitter.on(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
+  subscribeHomeEvents()
 
   syncCurrentTabs()
   resetScrollOnEntry = settings.value.useSearchPageModeOnHomePage
   if (resetScrollOnEntry) {
     pendingTabScrollTop = 0
     restoreTabScrollPosition()
+  }
+})
+
+onActivated(() => {
+  homeActive.value = true
+  subscribeHomeEvents()
+  cachedScrollTop.value = scrollViewportRef.value?.scrollTop ?? cachedScrollTop.value
+})
+
+onDeactivated(() => {
+  // Keep the Home shell and its data cache, but release its active grid owner.
+  // This reuses existing unmount cleanup for requests, previews and observers.
+  homeActive.value = false
+  unsubscribeHomeEvents()
+  isHomeTabSwitching.value = false
+  if (tabSwitchFrame !== null) {
+    cancelAnimationFrame(tabSwitchFrame)
+    tabSwitchFrame = null
   }
 })
 
@@ -305,8 +340,7 @@ onUnmounted(() => {
     })
   }
   tabCache.clear()
-  emitter.off(TOP_BAR_VISIBILITY_CHANGE, handleTopBarVisibilityChange)
-  emitter.off(OVERLAY_SCROLL_BAR_SCROLL, handleOverlayScroll)
+  unsubscribeHomeEvents()
   isHomeTabSwitching.value = false
   if (tabSwitchFrame !== null) {
     cancelAnimationFrame(tabSwitchFrame)
@@ -451,6 +485,7 @@ watch(tabContentLoading, (loading) => {
       </header>
 
       <div
+        v-if="homeActive"
         ref="tabContentRef"
         v-layout-editable="'home-video-grid'"
         data-layout-editable-id="home-video-grid"

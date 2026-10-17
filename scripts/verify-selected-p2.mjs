@@ -27,10 +27,12 @@ import { registerLocalLoudnessChecks } from './verify-local-loudness.mjs'
 import { registerLongListResourceChecks } from './verify-long-list-resources.mjs'
 import { registerMaintenanceIntegrationChecks } from './verify-maintenance-integration.mjs'
 import { registerMaintenanceReviewChecks } from './verify-maintenance-review.mjs'
+import { registerMomentReplyChecks } from './verify-moment-reply.mjs'
 import { registerMomentsMaintenanceChecks } from './verify-moments-maintenance.mjs'
 import { registerMotionContinuityChecks } from './verify-motion-continuity.mjs'
 import { registerNativeAppearanceChecks } from './verify-native-appearance.mjs'
 import { registerNotificationUIChecks } from './verify-notification-ui.mjs'
+import { registerPageContinuityChecks } from './verify-page-continuity.mjs'
 import { registerPlatformCompatibilityChecks } from './verify-platform-compatibility.mjs'
 import { registerPlaybackContentChecks } from './verify-playback-content-lifecycle.mjs'
 import { registerPlaybackVisualFixChecks } from './verify-playback-visual-fixes.mjs'
@@ -55,6 +57,7 @@ import { registerUpstreamPlayerChecks } from './verify-upstream-player.mjs'
 import { registerPlayerLifecycleChecks } from './verify-upstream-player-lifecycle.mjs'
 import { registerUpstreamSettingsChecks } from './verify-upstream-settings.mjs'
 import { registerUpstreamTransactionChecks } from './verify-upstream-transactions.mjs'
+import { registerUserProfileChecks } from './verify-user-profile.mjs'
 import { registerViewLifetimeChecks } from './verify-view-lifetimes.mjs'
 import { registerVisualConsistencyChecks } from './verify-visual-consistency.mjs'
 import { registerWatchLaterOwnershipChecks } from './verify-watch-later-ownership.mjs'
@@ -106,8 +109,10 @@ registerPlayerMaintenanceChecks(check, { Vue, compileComponent, flush })
 registerMaintenanceIntegrationChecks(check, { Vue, compileComponent, flush })
 registerMaintenanceReviewChecks(check, { Vue, compileComponent, flush })
 registerMotionContinuityChecks(check, { Vue, flush })
+registerPageContinuityChecks(check, { Vue, flush, compileComponent })
 registerPlatformCompatibilityChecks(check, { Vue, flush, compileComponent })
 registerMomentsMaintenanceChecks(check, { Vue, compileComponent, flush })
+registerMomentReplyChecks(check, { Vue, compileComponent, flush })
 registerNativeAppearanceChecks(check, { Vue, compileComponent, flush })
 registerLibraryToolChecks(check, { Vue, compileComponent, flush })
 registerSidebarContinuityChecks(check, { Vue, compileComponent, flush })
@@ -135,6 +140,7 @@ registerHomeLoadingRegressionChecks(check, { Vue, compileComponent, flush })
 registerWhisperInteractionChecks(check, { Vue, compileComponent, flush })
 registerPrivateHistorySearchChecks(check, { Vue, flush })
 registerPrivateSessionActionChecks(check, { Vue })
+registerUserProfileChecks(check, { Vue, flush, compileComponent })
 registerWatchLaterOwnershipChecks(check, { Vue, flush })
 registerFavoriteSourceChecks(check, { Vue, flush, compileComponent })
 registerNotificationUIChecks(check, { Vue, compileComponent, flush })
@@ -485,6 +491,11 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
   const modules = {
     'vue': Vue,
     '~/composables/useSidebarHost': await import('../src/composables/useSidebarHost'),
+    '~/composables/usePageViewState': await import('../src/composables/usePageViewState'),
+    '~/utils/dialogFocus': await import('../src/utils/dialogFocus'),
+    '~/utils/homeRoute': await import('../src/utils/homeRoute'),
+    '~/utils/iframeDrawerHistory': await import('../src/utils/iframeDrawerHistory'),
+    '~/composables/useRouteState': await import('../src/composables/useRouteState'),
     '~/utils/videoPreviewProgress': await import('../src/utils/videoPreviewProgress'),
     '~/utils/iframeExternalUrl': await import('../src/utils/iframeExternalUrl'),
     '~/utils/linkNavigation': await import('../src/utils/linkNavigation'),
@@ -505,7 +516,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/usePanelOrigin': await import('../src/composables/usePanelOrigin'),
     '~/composables/useReadyPageTransition': await import('../src/composables/useReadyPageTransition'),
     '~/composables/useAnchoredPopoverPosition': await import('../src/composables/useAnchoredPopoverPosition'),
+    '~/composables/useComposerPicker': await import('../src/composables/useComposerPicker'),
     '~/utils/floatingMenu': await import('../src/utils/floatingMenu'),
+    '~/utils/chartScale': await import('../src/utils/chartScale'),
     '~/utils/selectionScrollAnchor': await import('../src/utils/selectionScrollAnchor'),
     '~/utils/skeletonVisibility': await import('../src/utils/skeletonVisibility'),
     '~/constants/dock': await import('../src/constants/dock'),
@@ -537,6 +550,8 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     '~/composables/useGlassPanelMotion': await import('../src/composables/useGlassPanelMotion'),
     ...mocks,
   }
+  if (modules['~/composables/useAppProvider'])
+    modules['~/composables/useAppProvider'] = { ...(await import('../src/composables/useAppProvider')), ...modules['~/composables/useAppProvider'] }
   if (text.includes('\'./watchLaterFilters\'') && !modules['./watchLaterFilters'])
     modules['./watchLaterFilters'] = await import('../src/contentScripts/views/WatchLater/watchLaterFilters')
   for (const path of ['./historyFilters', '~/contentScripts/views/History/historyFilters']) {
@@ -603,6 +618,9 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     modules['./MessageActivityChart.vue'] = { default: await compileComponent('../src/contentScripts/views/Notifications/whisper/MessageActivityChart.vue', {
       'vue-i18n': modules['vue-i18n'],
     }) }
+  }
+  if (text.includes('\'~/components/ChartRungs.vue\'')) {
+    modules['~/components/ChartRungs.vue'] = { default: await compileComponent('../src/components/ChartRungs.vue') }
   }
   for (const name of ['LibraryWorkspace', 'LibrarySidebarHeading', 'LibrarySearchField', 'SidebarHeadingControl', 'SidebarSearchControl']) {
     for (const path of [`~/components/${name}.vue`, `./${name}.vue`]) {
@@ -672,6 +690,7 @@ async function compileComponent(file, mocks = {}, { renderTemplate = true, globa
     crypto,
     document,
     HTMLElement,
+    HTMLTextAreaElement: window.HTMLTextAreaElement,
     HTMLImageElement: window.HTMLImageElement,
     HTMLIFrameElement: window.HTMLIFrameElement,
     HTMLVideoElement: window.HTMLVideoElement,
@@ -982,6 +1001,7 @@ check('P2-13 weekly retries the failed edition; ranking and anime settle network
     requestGeneration: 1,
     isLoadingPopularAnime: r(false),
     popularRequestFailed: r(false),
+    popularLoaded: r(false),
     popularAnimeList: [],
     getAnimeAccountId: () => '1',
     isAnimeRequestCurrent: () => true,

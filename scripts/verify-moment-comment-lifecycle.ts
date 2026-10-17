@@ -126,15 +126,16 @@ export async function verifyMomentCommentLifecycle() {
       return delayedLike ? new Promise(resolve => resolveLike = resolve) : { code: 0 }
     },
   }
-  const store = vue.reactive({ userInfo: { mid: 1 } })
+  const store = vue.reactive({ isLogin: true, userInfo: { mid: 1 } })
   const mockModules: Record<string, unknown> = {
     'vue': vue,
+    '@vueuse/core': { useElementSize: () => ({ height: vue.ref(0) }) },
     'vue-i18n': { useI18n: () => ({ locale: vue.ref('en'), t: (key: string) => key }) },
-    'vue-toastification': { useToast: () => ({ error: () => {} }) },
+    'vue-toastification': { useToast: () => ({ error: () => {}, success: () => {} }) },
     '~/stores/topBarStore': { useTopBarStore: () => store },
     '~/utils/api': { default: { moment: momentApi } },
     '~/utils/main': { getUserID: () => String(store.userInfo.mid), getCSRF: () => 'fixture' },
-    '~/utils/commentPermalink': {},
+    '~/utils/commentPermalink': await import('../src/utils/commentPermalink'),
     // This in-memory renderer has no layout. Geometry has its own DOM module test.
     '~/utils/commentReadingAnchor': { captureCommentReadingAnchor: () => ({ cancel() {}, restore: async () => {} }) },
     '~/utils/skeletonVisibility': { observeSkeletonGroup: () => () => {} },
@@ -149,6 +150,20 @@ export async function verifyMomentCommentLifecycle() {
     './MomentCommentMedia.vue': { default: { render: () => vue.h('span') } },
     './MomentCommentRichText.vue': { default: { render: () => vue.h('span') } },
     './MomentCommentTreeGuides.vue': { default: { render: () => vue.h('svg') } },
+    './MomentReplyComposer.vue': { default: vue.defineComponent({
+      props: ['reply'],
+      emits: ['posted', 'close'],
+      setup: (props, { emit, expose }) => {
+        expose({ focus: () => true })
+        return () => vue.h('button', {
+          class: 'reply-composer-fixture',
+          onClick: () => {
+            emit('posted', fixtureComment(props.reply ? '100100' : '100200', props.reply ? '100' : ''))
+            emit('close')
+          },
+        }, 'fixture-submit')
+      },
+    }) },
   }
   const evaluate = (source: string) => {
     const exports: Record<string, any> = {}
@@ -330,5 +345,25 @@ export async function verifyMomentCommentLifecycle() {
   delayedPages.at(-1)!.resolve({ code: -1, message: 'fixture failure' })
   await flush()
   assert.equal(Boolean(findClass('moment-comments__skeleton')), false, 'error also ends waiting')
+  delayPages = false
+  emptyTail = false
+  moment.value = { ...moment.value, id: 'reply-composer', commentId: '1003' }
+  await flush()
+  assert.ok(findClass('reply-composer-fixture'), 'composer is present as soon as comments open')
+  const initialComposer = findClass('reply-composer-fixture')
+  findClass('moment-comments__action--permalink').props.onClick()
+  await flush()
+  assert.equal(findClass('reply-composer-fixture'), initialComposer, 'reply changes the target without replacing the persistent editor')
+  findClass('reply-composer-fixture').props.onClick()
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['data-comment-id'] === '100100'), 'confirmed child is inserted into the current thread')
+  assert.equal(findClass('reply-composer-fixture'), initialComposer, 'successful reply returns the same editor to top-level comments')
+  findClass('reply-composer-fixture').props.onClick()
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['data-comment-id'] === '100200'), 'confirmed top-level comment appears immediately')
+  app.unmount()
+  app = mount()
+  await flush()
+  assert.ok(descendants(host).some(item => item.props['data-comment-id'] === '100100'), 'confirmed reply survives the existing data-cache remount')
   app.unmount()
 }

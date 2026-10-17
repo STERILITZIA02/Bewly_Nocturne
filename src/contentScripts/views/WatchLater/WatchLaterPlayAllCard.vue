@@ -104,7 +104,7 @@ function failCover(pic: string) {
   width: min(100%, var(--queue-cover-width));
   aspect-ratio: 16 / 9;
   overflow: hidden;
-  border: 1px solid var(--bew-static-white);
+  border: 0;
   // The 12px cover radius + 8px inset follows the filter card's 20px contour.
   border-radius: var(--bew-card-radius);
   corner-shape: var(--bew-corner-shape);

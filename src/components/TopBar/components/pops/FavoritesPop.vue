@@ -470,7 +470,7 @@ defineExpose({
                       :aria-pressed="topBarStore.isInWatchLater(item.id) === true" :disabled="pendingWatchLater.has(item.id)"
                       @click.prevent.stop="toggleWatchLater(item)"
                     >
-                      <i :class="topBarStore.isInWatchLater(item.id) ? 'i-mingcute:check-line' : 'i-mingcute:time-line'" />
+                      <i :class="topBarStore.isInWatchLater(item.id) ? 'i-tabler:check' : 'i-tabler:clock'" />
                     </IconButton>
                   </Tooltip>
                 </div>
@@ -592,7 +592,7 @@ defineExpose({
 }
 
 .activated-category {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
   background: var(--bew-fill-2);
 }
 

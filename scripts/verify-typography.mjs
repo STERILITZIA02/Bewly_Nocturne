@@ -41,13 +41,13 @@ export function registerTypographyChecks(check) {
     const { createGenerator } = await import('unocss')
     const { default: config } = await import('../unocss.config')
     const uno = await createGenerator(config)
-    const { css } = await uno.generate('i-tabler:search i-tabler:star-filled i-solar:copy-linear font-medium')
+    const { css } = await uno.generate('i-tabler:search i-tabler:star-filled i-tabler:copy font-medium')
     const decoded = css.replace(/data:image\/svg\+xml;utf8,[^"]+/g, svg => decodeURIComponent(svg))
     const search = decoded.split('.i-tabler\\:search{')[1]?.split('}')[0]
     assert.ok(search?.includes('stroke-width=\'1.75\''))
     assert.ok(!search?.includes('stroke-width=\'2\''))
     assert.ok(decoded.includes('.i-tabler\\:star-filled{'))
-    assert.ok(decoded.includes('.i-solar\\:copy-linear{'))
+    assert.ok(decoded.includes('.i-tabler\\:copy{'))
     assert.ok(css.includes('font-weight:var(--bew-font-weight-medium)'))
   })
 }

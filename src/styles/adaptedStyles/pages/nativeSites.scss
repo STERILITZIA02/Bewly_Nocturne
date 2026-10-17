@@ -100,12 +100,12 @@ html.bewly-design:is([data-bewly-native-site="live"], [data-bewly-native-site="l
   }
 
   .link-navbar .follow-panel-set .follow-cntr .follow-text {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .side-bar-popup-cntr .follow-header .section-title {
     // The native sidebar assigns brand_blue with !important, including plain text.
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .link-navbar .follow-panel-set .follow-cntr .more-follows span,
@@ -124,7 +124,7 @@ html.bewly-design:is([data-bewly-native-site="live"], [data-bewly-native-site="l
   }
 
   .side-bar-popup-cntr .follow-cntr .user-info-name.active {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .link-navbar .follow-panel-set .follow-cntr .more-follows:hover span {
@@ -280,8 +280,8 @@ html.bewly-design[data-bewly-native-site="live"] {
       &.active {
         // Native lab-style dark pages force their selected background with
         // !important, independently of the user's Nocturne theme preference.
-        background: var(--bew-theme-color) !important;
-        color: var(--bew-on-theme-color) !important;
+        background: var(--bew-selected-bg) !important;
+        color: var(--bew-text-1) !important;
       }
     }
   }
@@ -361,8 +361,8 @@ html.bewly-design[data-bewly-native-site="live"] {
         }
 
         &[class*="index_active_"] {
-          background: var(--bew-theme-color);
-          color: var(--bew-on-theme-color);
+          background: var(--bew-selected-bg);
+          color: var(--bew-text-1);
         }
       }
     }
@@ -405,7 +405,7 @@ html.bewly-design[data-bewly-native-site="live"] {
     }
 
     &.active > .item-border {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -427,9 +427,9 @@ html.bewly-design[data-bewly-native-site="live"] {
     }
 
     &[class*="index_current_"] {
-      background: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -686,7 +686,7 @@ html.bewly-design[data-bewly-native-site="live"] .live-room-app {
   .chat-control-panel .send-btn:not(:disabled):not([aria-disabled="true"]) {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .chat-control-panel .send-btn:not(:disabled):not([aria-disabled="true"]) .txt {
@@ -761,7 +761,7 @@ html.bewly-design[data-bewly-native-site="show"] {
 
   .mallhome__list__card__price,
   .mallhome__selector__line__container__text--selected {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .mallhome__list__card__price :is(.mallhome__list__card__price__unit, .mallhome__list__card__price__value) {
@@ -841,7 +841,7 @@ html.bewly-design[data-bewly-native-site="show"] {
 
     .project-list-item-price,
     .project-list-item-price :is(.not-free, .price-symbol, .price, .promo-item) {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
   }
 
@@ -849,7 +849,7 @@ html.bewly-design[data-bewly-native-site="show"] {
   .calendar .days .selected {
     background-color: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .showhome__switch__button--select,
@@ -1045,7 +1045,7 @@ html.bewly-design[data-bewly-native-site="merchandise-detail"] {
   }
 
   .item__thumbnail__cont.active {
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .info-qrcode-img {
@@ -1165,7 +1165,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   .left-nav-link-item.on {
     background: var(--bew-theme-surface);
     color: var(--bew-on-theme-surface);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .left-nav-link-item:focus-visible {
@@ -1173,7 +1173,7 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   }
 
   .pay-bcoin-num {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .pay-bcoin-btn {
@@ -1191,16 +1191,16 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   }
 
   .pay-tab-item:hover {
-    color: var(--bew-theme-foreground);
-    border-color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .pay-tab-item-selected,
   .pay-tab-item-selected:hover {
     // The native speech-bubble SVG encodes blue in its pixels.
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
+    border-color: var(--bew-focus-ring-color);
   }
 
   :is(.part-title, .pay-bcoin-help-txt, .lineto, .el-table__empty-text) {
@@ -1271,8 +1271,8 @@ html.bewly-design[data-bewly-native-site="wallet"] {
   }
 
   .el-date-table td.current:not(.disabled) span {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
   }
 
   .el-picker-panel :is(.el-date-picker__header-label, .el-picker-panel__icon-btn) {
@@ -1362,7 +1362,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
 
   .side-bar .sub-pages-item.active,
   .tabnav-item.current {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .section-block .uid {
@@ -1400,7 +1400,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
 
   :is(.bl-button--primary, .open-btn):not(:disabled, .disabled, .is-disabled) {
     background: var(--bew-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     color: var(--bew-on-theme-color);
 
     > :is(span, .txt) {
@@ -1442,12 +1442,12 @@ html.bewly-design[data-bewly-native-site="live-center"] {
 
     &.active {
       background: var(--bew-theme-surface);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
   .report-wrap :is(.tab-item.active, .show-more, a) {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   // The help application shares the host, but has a separate stable app root.
@@ -1485,7 +1485,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
       &.active {
         color: var(--bew-on-theme-surface);
         background: var(--bew-theme-surface);
-        border-color: var(--bew-theme-foreground);
+        border-color: var(--bew-focus-ring-color);
       }
     }
 
@@ -1531,7 +1531,7 @@ html.bewly-design[data-bewly-native-site="live-center"] {
     }
 
     .menu-title {
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     :is(.menu-title, .menu-txt, .conf-detail, .conf-list .t, .conf-list .normal, .conf-list .small) {
@@ -1750,11 +1750,11 @@ html.bewly-design[data-bewly-native-site="manga"] {
 
   [class*="_scheduleList_"] [class*="_dateItem_"]:is([class*="_active_"], :hover),
   [class*="_sidebarCtnr_"] [class*="_sidebarItem_"]:is([class*="_activated_"], :hover) {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   [class*="_scheduleList_"] [class*="_dateItem_"][class*="_active_"]::after {
-    background: var(--bew-theme-color);
+    background: var(--bew-text-1);
   }
 
   [class*="_scheduleImg_"],
@@ -1886,7 +1886,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
   }
 
   nav .item-underline {
-    background: var(--bew-theme-color);
+    background: var(--bew-text-1);
   }
 
   div:has(> button[class*="_back-to-top_"]) {
@@ -2019,11 +2019,11 @@ html.bewly-design[data-bewly-native-site="manga"] {
   .style-tag:hover,
   #main-stage .style-section .style-tag.selected,
   #main-stage .style-section .style-tag:hover {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .manga-navbar .app-button.active .item-underline {
-    background-color: var(--bew-theme-foreground);
+    background-color: var(--bew-text-1);
   }
 
   .big-card,
@@ -2104,11 +2104,11 @@ html.bewly-design[data-bewly-native-site="manga"] {
 
     .pivot-button:is(.enabled, :hover),
     .edit-button {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     .pivot-button.enabled::after {
-      background: var(--bew-theme-color);
+      background: var(--bew-text-1);
     }
 
     .manga-cover {
@@ -2187,7 +2187,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     }
 
     :is(.coupon-number, .coin-remain-count, .monthly-card .num) {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     :is(.hover-tab, .dropbox-component .data-list) {
@@ -2209,7 +2209,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
       }
 
       &.selected {
-        color: var(--bew-theme-foreground);
+        color: var(--bew-text-1);
       }
     }
 
@@ -2293,7 +2293,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
     :is(.recharge-btn, .my-universal-card .button, .feedback-page .manga-button.primary) {
       background: var(--bew-theme-color);
       color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
       border-radius: var(--bew-interactive-radius);
       corner-shape: var(--bew-corner-shape);
 
@@ -2433,7 +2433,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
 
   .manga-detail .episode-list-component .list-item.last-read {
     color: var(--bew-theme-foreground) !important;
-    border-color: var(--bew-theme-foreground) !important;
+    border-color: var(--bew-focus-ring-color) !important;
   }
 
   .episode-list-component .list-item :is(.title, .short-title) {
@@ -2448,7 +2448,7 @@ html.bewly-design[data-bewly-native-site="manga"] {
   }
 
   .header-info .manga-button.primary:not(:disabled):hover {
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   @media (max-width: 1192px) {
@@ -2574,8 +2574,9 @@ html.bewly-design[data-bewly-native-site="manga"] {
     }
 
     .image-opt.active {
-      background: var(--bew-theme-color);
-      border-color: var(--bew-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .image-opt .image-opt-slider {
@@ -2678,7 +2679,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   }
 
   .game-card.theme-light .rating-text {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .game-card.theme-light .game-meta :is(.category, .category-separator) {
@@ -2686,7 +2687,7 @@ html.bewly-design[data-bewly-native-site="game"] {
   }
 
   .bili-game-header-nav-wrap a.bili-game-header-menu-active {
-    color: var(--bew-theme-foreground) !important;
+    color: var(--bew-text-1) !important;
   }
 
   .aside-wrap .anchor_item.active .text {
@@ -2893,7 +2894,7 @@ html.bewly-design[data-bewly-native-site="game-detail"] {
   .tab-head a.active,
   .bui-expander-switch {
     color: var(--bew-theme-foreground);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .bui-gc .dev-words .multi-line-text,
@@ -3122,15 +3123,15 @@ html.bewly-design[data-bewly-native-site="love"] {
   .charity-button {
     background: var(--bew-theme-color) !important;
     color: var(--bew-on-theme-color) !important;
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
 
   .card-a .angle-mark,
   .charity-detail .overview .angle-mark {
-    background: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background: var(--bew-selected-bg);
+    color: var(--bew-text-1);
     border-radius: var(--bew-badge-radius);
     corner-shape: var(--bew-corner-shape-round);
 
@@ -3210,8 +3211,8 @@ html.bewly-design[data-bewly-native-site="love"] {
       }
 
       &.selected {
-        background: var(--bew-theme-color);
-        color: var(--bew-on-theme-color);
+        background: var(--bew-selected-bg);
+        color: var(--bew-text-1);
       }
     }
 
@@ -3264,12 +3265,12 @@ html.bewly-design[data-bewly-native-site="love"] {
     .unit-text-item a,
     .unit-text-header a:is(:hover, :focus-visible) {
       color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .charity-list-box-title--active {
-      color: var(--bew-theme-foreground) !important;
-      border-color: var(--bew-theme-foreground);
+      color: var(--bew-text-1) !important;
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -3361,7 +3362,7 @@ html.bewly-design[data-bewly-native-site="love"] {
     .el-radio.is-checked .el-radio__label {
       background: var(--bew-theme-surface) !important;
       color: var(--bew-on-theme-surface) !important;
-      border-color: var(--bew-theme-foreground) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     .detail-header .clicked,
@@ -3369,11 +3370,11 @@ html.bewly-design[data-bewly-native-site="love"] {
     .donation-box .blue,
     .check-btn a {
       color: var(--bew-theme-foreground);
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .detail-header li.clicked {
-      border-color: var(--bew-theme-foreground) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
   }
 }
@@ -3407,8 +3408,8 @@ html.bewly-design.cheesePage {
     }
 
     &.router-link-active {
-      background: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
     }
   }
 
@@ -3432,8 +3433,8 @@ html.bewly-design.cheesePage {
   }
 
   .cheese-mine .tickets :is(.navtab_active, .navtab:hover) {
-    color: var(--bew-theme-foreground);
-    border-color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .cheese-mine .exchange .code {
@@ -3448,7 +3449,7 @@ html.bewly-design.cheesePage {
     }
 
     &:focus {
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -3526,7 +3527,7 @@ html.bewly-design.cheesePage {
   }
 
   .classroom-wrapper .block-list-item-price {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .classroom-wrapper .block-list-item-img {
@@ -3589,7 +3590,7 @@ html.bewly-design.cheesePage {
 
   .season-catalogue .section-item.active {
     background: var(--bew-theme-surface);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .season-catalogue .section-item.active :is(.title, .season-title-ellipsis-active, .info, .season-info-active) {
@@ -3635,7 +3636,7 @@ html.bewly-design[data-bewly-native-site="article-drafts"] {
   .new-creation_button {
     background: var(--bew-theme-color);
     color: var(--bew-on-theme-color);
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     border-radius: var(--bew-interactive-radius);
     corner-shape: var(--bew-corner-shape);
   }
@@ -3715,9 +3716,9 @@ html.bewly-design[data-bewly-native-site="activities"] {
     }
 
     &.active {
-      background: var(--bew-theme-color);
-      color: var(--bew-on-theme-color);
-      border-color: var(--bew-theme-color);
+      background: var(--bew-selected-bg);
+      color: var(--bew-text-1);
+      border-color: var(--bew-focus-ring-color);
     }
   }
 
@@ -3776,7 +3777,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
   }
 
   .act-list .status-ing {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .list-view .tab-header {
@@ -3796,7 +3797,7 @@ html.bewly-design[data-bewly-native-site="activities"] {
   }
 
   .list-view .tab-item.active {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 
   .list-view .activity-tags .tag {

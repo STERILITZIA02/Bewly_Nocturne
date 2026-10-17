@@ -7,6 +7,7 @@
     "scripts/verify-private-message.ts",
     "scripts/verify-targeted-fixes.ts",
     "scripts/verify-selected-p2.mjs",
+    "scripts/verify-color-policy.ts",
     "scripts/serve-card-window-benchmark.mjs",
     "src/contentScripts/views/Notifications/whisper/experimental/index.ts",
     "src/components/*.vue",
@@ -20,7 +21,6 @@
   ],
   "ignoreExportsUsedInFile": true,
   "ignoreDependencies": [
-    "@iconify/json",
     "uno.css"
   ],
   "ignoreBinaries": ["gh", "xcrun"],

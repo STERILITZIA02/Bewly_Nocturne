@@ -209,7 +209,7 @@ watch(unavailable, (disabled) => {
       :aria-label="accessibleLabel ? `${accessibleLabel}: ${label}` : undefined"
       :aria-labelledby="!accessibleLabel && fieldLabelId ? `${fieldLabelId} ${valueLabelId}` : undefined"
       p="x-4 y-2"
-      bg="$bew-fill-1"
+      bg="$bew-input-bg"
       rounded="$bew-interactive-radius"
       border="1 $bew-surface-border-color"
       box-border
@@ -242,7 +242,7 @@ watch(unavailable, (disabled) => {
         <div
           class="select-arrow"
           border="~ solid t-0 l-0 r-2 b-2"
-          :border-color="showOptions ? '$bew-theme-color' : '$bew-fill-4'"
+          :border-color="showOptions ? '$bew-focus-ring-color' : '$bew-input-border-color'"
           p="3px"
           display="inline-block"
           :transform="`~ ${!showOptions ? 'rotate-45 -translate-y-1/4' : 'rotate-225 translate-y-1/4'} `"
@@ -292,7 +292,7 @@ watch(unavailable, (disabled) => {
             @click="selectOption(option)"
           >
             <span v-text="option.label" />
-            <i v-if="Object.is(option.value, modelValue)" i-mingcute:check-line aria-hidden="true" />
+            <i v-if="Object.is(option.value, modelValue)" i-tabler:check aria-hidden="true" />
           </div>
         </div>
       </Transition>
@@ -323,7 +323,7 @@ watch(unavailable, (disabled) => {
 }
 
 .select-trigger:hover {
-  background-color: var(--bew-fill-2);
+  background-color: var(--bew-input-bg-hover);
 }
 
 .select-trigger:focus-visible,

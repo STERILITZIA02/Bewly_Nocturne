@@ -694,10 +694,12 @@ settings:
   video_page_dark_mode_desc: Keep the global theme unchanged and enable Bewly Nocturne dark styles only on video playback pages.
   theme_color: Theme color
   dark_mode_base_color: Dark mode base color
+  enable_dark_mode_tint: Dark background tint
+  enable_dark_mode_tint_desc: Use neutral gray by default. Enable to use the tint below; disabling preserves your chosen color.
   enable_oled_dark_mode: OLED pure black mode
   enable_oled_dark_mode_desc: Only applies while the effective theme is dark; page backgrounds become pure black while cards and overlays keep their layers.
-  gradient_theme_color_background: Use theme color gradient in dark mode
-  gradient_theme_color_background_desc: Apply it to both the page background and top bar.
+  gradient_theme_color_background: Use a neutral gradient in dark mode
+  gradient_theme_color_background_desc: Apply a neutral gradient to the page background and top bar without using the theme color.
   logo_color: Logo color
   logo_color_opt:
     white: White
@@ -1090,6 +1092,8 @@ notifications:
   insights:
     activity: Recent conversation activity
     activity_scope: Last 7 days · Loaded conversations
+    rung_unit: '{count} per rung · Shared scale'
+    ring_unit: 'Each tick ≈ 1% · Based on actual counts'
     mark_all_read: Mark all as read
     marking_read: Marking as read
     all_read: All read
@@ -1360,6 +1364,7 @@ dock:
   collapse_dock: Collapse Dock
   expand_dock: Expand Dock
 moments:
+  vote_chart_unit: '1% per tick · Multiple-choice shares are independent'
   enter_live_room: "Enter {name}'s live room"
   promotion_advertisement: Ad
   promotion_commerce: Product promotion
@@ -1511,7 +1516,25 @@ moment_card:
   comments_unavailable: Comments are unavailable. Please retry.
   comments_refresh: Refresh
   comments_missing_parent: Parent reply is not loaded yet
-  comments_reply_new_tab: Reply in a new tab
+  reply_action: Reply
+  reply_new: Write a comment
+  reply_cancel_target: Cancel reply and comment on this post
+  reply_to: 'Reply to {name}'
+  reply_emoji: Emoji
+  reply_mention: Find someone to mention
+  reply_image: Add images
+  reply_sync: Repost to feed
+  reply_send: Send comment
+  reply_remove_image: Remove image
+  reply_image_limit: Add up to 9 images
+  reply_image_invalid: Use JPG / PNG images under 20MB and at least 10px wide and tall
+  reply_upload_failed: Image upload failed. Please retry.
+  reply_failed: Unable to send. Please retry.
+  reply_uncertain: The outcome is unconfirmed. Check the original page before sending again to avoid duplicates. Your draft is preserved.
+  reply_picker_failed: Unable to load. Please retry.
+  reply_no_users: No users found
+  reply_check_original: Check the original page
+  reply_success: Comment sent
   comments_expand_replies: Show remaining replies
   comments_load_more_replies: Load more replies
   comments_replies_failed: Failed to load replies. Retry available.

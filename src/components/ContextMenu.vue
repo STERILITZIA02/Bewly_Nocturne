@@ -211,7 +211,7 @@ onBeforeUnmount(() => {
             <span class="item-label">{{ option.label }}<small v-if="option.description" class="item-description">{{ option.description }}</small></span>
             <span v-if="option.kind === 'toggle' || option.kind === 'radio'" class="item-check" aria-hidden="true">
               <SkeletonBlock v-if="option.pending" width="var(--bew-control-icon-size)" height="var(--bew-control-icon-size)" />
-              <i v-else-if="option.checked" class="i-mingcute:check-line" />
+              <i v-else-if="option.checked" class="i-tabler:check" />
             </span>
           </button>
         </li>
@@ -321,7 +321,7 @@ onBeforeUnmount(() => {
   height: var(--bew-control-icon-size);
   flex: none;
   margin-left: var(--bew-space-2);
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
 
   > i {
     display: block;

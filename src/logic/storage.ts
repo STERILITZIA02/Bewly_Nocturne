@@ -310,6 +310,7 @@ export interface Settings {
   videoPageDarkMode: boolean
   themeColor: string
   darkModeBaseColor: string // 深色模式基准颜色
+  enableDarkModeTint: boolean
   enableOledDarkMode: boolean
   useLinearGradientThemeColorBackground: boolean
 
@@ -614,7 +615,8 @@ export const originalSettings: Settings = {
   themeScheduleEnd: '18:00',
   videoPageDarkMode: false,
   themeColor: '#00a1d6',
-  darkModeBaseColor: '#2a2d32', // 默认深色模式基准颜色
+  darkModeBaseColor: '#2a2d32', // 开启可选色调时使用；关闭时保留此值
+  enableDarkModeTint: false,
   enableOledDarkMode: false,
   useLinearGradientThemeColorBackground: false,
 
@@ -781,6 +783,8 @@ function asUnknownRecord(value: object): Record<string, unknown> {
 
 function normalizeSettings(value: Settings) {
   removeRetiredSettings(value)
+  if (typeof value.enableDarkModeTint !== 'boolean')
+    value.enableDarkModeTint = false
   value.dockPosition = normalizeDockPosition(value.dockPosition)
   if (typeof value.autoRemoveWatchLaterOnEnd !== 'boolean')
     value.autoRemoveWatchLaterOnEnd = false

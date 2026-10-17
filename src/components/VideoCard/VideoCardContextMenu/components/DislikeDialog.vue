@@ -169,7 +169,7 @@ onKeyStroke((e: KeyboardEvent) => {
         <div flex="~ gap-2">
           <div
             class="bew-shape-circle"
-            bg="$bew-theme-color" color="$bew-on-theme-color" w-20px h-20px rounded-10
+            bg="$bew-selected-bg" color="$bew-text-1" w-20px h-20px rounded-10
             flex="~ justify-center items-center"
           >
             {{ index + 1 }}
@@ -177,7 +177,7 @@ onKeyStroke((e: KeyboardEvent) => {
           {{ reason.name }}
         </div>
         <Icon
-          v-if="isSelected(ThreePointV2Type.Dislike, reason)" icon="line-md:confirm"
+          v-if="isSelected(ThreePointV2Type.Dislike, reason)" icon="tabler:check"
           w-18px h-18px
         />
       </li>
@@ -196,7 +196,7 @@ onKeyStroke((e: KeyboardEvent) => {
           <div flex="~ gap-2">
             <div
               class="bew-shape-circle"
-              bg="$bew-theme-color" color="$bew-on-theme-color" w-20px h-20px rounded-10
+              bg="$bew-selected-bg" color="$bew-text-1" w-20px h-20px rounded-10
               flex="~ justify-center items-center"
             >
               {{ dislikeReasons.length + index + 1 }}
@@ -204,7 +204,7 @@ onKeyStroke((e: KeyboardEvent) => {
             {{ reason.name }}
           </div>
           <Icon
-            v-if="isSelected(ThreePointV2Type.Feedback, reason)" icon="line-md:confirm"
+            v-if="isSelected(ThreePointV2Type.Feedback, reason)" icon="tabler:check"
             w-18px h-18px
           />
         </li>
@@ -216,7 +216,7 @@ onKeyStroke((e: KeyboardEvent) => {
 
 <style lang="scss" scoped>
 .activated-dislike-reason {
-  --uno: "bg-$bew-theme-color color-$bew-on-theme-color";
+  --uno: "bg-$bew-selected-bg color-$bew-text-1";
 }
 
 .divider {

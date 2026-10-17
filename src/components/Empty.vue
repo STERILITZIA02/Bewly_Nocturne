@@ -47,7 +47,7 @@ const emptyImg = getExtensionAssetUrl('/assets/empty.png')
   text-decoration: underline;
   text-underline-offset: var(--bew-space-1);
   &:hover {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 }
 </style>

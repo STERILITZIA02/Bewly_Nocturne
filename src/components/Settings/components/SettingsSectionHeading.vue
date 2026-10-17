@@ -26,14 +26,14 @@ const collapsed = defineModel<boolean>('collapsed', {
   >
     <span v-if="icon" class="settings-section-heading__icon" :class="icon" />
     <span class="settings-section-heading__content">
-      <h2>
+      <h2 class="bew-subheading">
         {{ title }}
         <span v-if="badge" class="settings-risk-badge bew-warning-badge">{{ badge }}</span>
       </h2>
-      <p v-if="desc" :class="{ warning }">{{ desc }}</p>
+      <p v-if="desc" class="bew-help" :class="{ warning }">{{ desc }}</p>
     </span>
     <i
-      i-mingcute:down-line
+      i-tabler:chevron-down
       class="settings-section-heading__chevron"
       :class="{ collapsed }"
     />
@@ -45,11 +45,11 @@ const collapsed = defineModel<boolean>('collapsed', {
   >
     <span v-if="icon" class="settings-section-heading__icon" :class="icon" />
     <span class="settings-section-heading__content">
-      <h2>
+      <h2 class="bew-subheading">
         {{ title }}
         <span v-if="badge" class="settings-risk-badge bew-warning-badge">{{ badge }}</span>
       </h2>
-      <p v-if="desc" :class="{ warning }">{{ desc }}</p>
+      <p v-if="desc" class="bew-help" :class="{ warning }">{{ desc }}</p>
     </span>
   </header>
 </template>
@@ -67,7 +67,7 @@ const collapsed = defineModel<boolean>('collapsed', {
   width: 24px;
   height: 24px;
   flex: 0 0 auto;
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
   font-size: var(--bew-icon-size-lg);
 }
 
@@ -84,7 +84,7 @@ const collapsed = defineModel<boolean>('collapsed', {
   &:hover {
     .settings-section-heading__content h2,
     .settings-section-heading__chevron {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
   }
 }
@@ -107,9 +107,6 @@ const collapsed = defineModel<boolean>('collapsed', {
 
 h2 {
   color: var(--bew-text-1);
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
   transition: color var(--bew-duration-normal) var(--bew-ease-standard);
 }
 
@@ -120,12 +117,9 @@ h2 {
 
 p {
   margin-top: var(--bew-space-1);
-  color: var(--bew-text-2);
-  font-size: var(--bew-font-size-body);
-  line-height: var(--bew-line-height-body);
 }
 
-p.warning {
+p.bew-help.warning {
   color: var(--bew-warning-color);
 }
 </style>

@@ -44,22 +44,22 @@ const options = computed<ContextMenuOption[]>(() => {
     const groups = props.groups.filter(group => group.tagid >= 0)
     if (!groups.some(group => group.tagid === 0))
       groups.unshift({ tagid: 0, name: t('home.following_default_group'), count: 0 })
-    return groups.map(group => ({ value: group.tagid, label: group.tagid === 0 ? t('home.following_default_group') : group.name, icon: 'i-mingcute:folder-line', kind: 'radio', closeOnSelect: true, checked: target.value?.type === 'uploader' && target.value.value.groupIds.includes(group.tagid), disabled: props.busy || menuLoading.value }))
+    return groups.map(group => ({ value: group.tagid, label: group.tagid === 0 ? t('home.following_default_group') : group.name, icon: 'i-tabler:folder', kind: 'radio', closeOnSelect: true, checked: target.value?.type === 'uploader' && target.value.value.groupIds.includes(group.tagid), disabled: props.busy || menuLoading.value }))
   }
   if (target.value?.type === 'uploader') {
     const special = target.value.value.groupIds.includes(SPECIAL_FOLLOWING_GROUP)
     return [
-      { value: 'move', label: t('home.following_move_group'), icon: 'i-mingcute:folder-line', closeOnSelect: false, disabled: menuLoading.value },
-      { value: 'special', label: t(special ? 'home.following_remove_special' : 'home.following_add_special'), icon: 'i-mingcute:star-line', kind: 'toggle', checked: special, closeOnSelect: true, disabled: menuLoading.value },
-      { value: 'unfollow', label: t('video_card.operation.unfollow_user'), icon: 'i-solar:user-minus-linear', danger: true, disabled: menuLoading.value },
+      { value: 'move', label: t('home.following_move_group'), icon: 'i-tabler:folder', closeOnSelect: false, disabled: menuLoading.value },
+      { value: 'special', label: t(special ? 'home.following_remove_special' : 'home.following_add_special'), icon: 'i-tabler:star', kind: 'toggle', checked: special, closeOnSelect: true, disabled: menuLoading.value },
+      { value: 'unfollow', label: t('video_card.operation.unfollow_user'), icon: 'i-tabler:user-minus', danger: true, disabled: menuLoading.value },
     ]
   }
   return [
     { value: 'create', label: t('home.following_create_group'), icon: 'i-tabler:folder-plus' },
     ...(target.value?.type === 'group' && target.value.value.tagid > 0
       ? [
-          { value: 'rename', label: t('home.following_rename_group'), icon: 'i-mingcute:edit-line' },
-          { value: 'delete', label: t('home.following_delete_group'), icon: 'i-mingcute:delete-line', danger: true },
+          { value: 'rename', label: t('home.following_rename_group'), icon: 'i-tabler:edit' },
+          { value: 'delete', label: t('home.following_delete_group'), icon: 'i-tabler:trash', danger: true },
         ]
       : []),
   ]

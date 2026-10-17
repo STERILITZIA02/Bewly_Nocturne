@@ -84,7 +84,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   .btn-follow:not(.active) {
     background: var(--bew-theme-color) !important;
     color: var(--bew-on-theme-color) !important;
-    border-color: var(--bew-theme-color) !important;
+    border-color: var(--bew-focus-ring-color) !important;
     border-radius: var(--bew-interactive-radius) !important;
     corner-shape: var(--bew-corner-shape);
   }
@@ -102,7 +102,7 @@ html.bewly-design[data-bewly-native-site="season-media"] {
   .media-tab-module-write,
   .media-tab-module-more {
     color: var(--bew-theme-foreground);
-    border-color: var(--bew-theme-foreground);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .media-tab-module-write {

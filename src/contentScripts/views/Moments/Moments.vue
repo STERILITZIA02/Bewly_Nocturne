@@ -12,6 +12,7 @@ import { createMomentDisclosureCache, MOMENT_DISCLOSURES, normalizeForwardCount 
 import { createMomentForwardTransactions, MOMENT_FORWARD_TRANSACTIONS } from '~/components/MomentCard/momentForwardTransactions'
 import type { DisplayMoment } from '~/components/MomentCard/types'
 import { useBewlyApp } from '~/composables/useAppProvider'
+import { usePageViewState } from '~/composables/usePageViewState'
 import { useSourcePanelMotion } from '~/composables/useSourcePanelMotion'
 import { MOMENTS_DETAIL_LAYOUT } from '~/constants/layout'
 import { settings } from '~/logic'
@@ -80,7 +81,8 @@ const { t } = useI18n()
 const { mapMoment, collectVideoPublicationTimes } = createMomentAdapter(t, resolveMomentForwardCount)
 const topBarStore = useTopBarStore()
 
-const moments = ref<DisplayMoment[]>([])
+const viewState = usePageViewState('moments')
+const moments = viewState.ref<DisplayMoment[]>('items', [])
 const momentActions = useMomentActions(getMomentActionAccount, applyMomentPatch)
 const { likingMomentIds, reservationLoadingMomentIds, toggleMomentLike, toggleMomentReservation, isWatchLaterAdded, isWatchLaterLoading, toggleMomentWatchLater } = momentActions
 const previews = useMomentPreviews(getCurrentAccountId)
@@ -102,15 +104,16 @@ const detailDialogRef = ref<InstanceType<typeof Dialog> | null>(null)
 const details = useMomentDetail(getMomentImageRatio, () => previews.clear(), () => detailDialogRef.value?.close())
 const imageViewerMotion = useSourcePanelMotion('.moment-image-viewer__stage', ':scope > .moment-image-viewer__surface, :scope > .moment-image-viewer__stage, :scope > button, :scope > .moment-image-viewer__toolbar')
 const { selectedMoment, detailFrameUrl, detailFrameLoaded, detailImageViewerRef, detailImageViewerOpen, detailImageViewerUrls, detailImageViewerIndex, detailImageViewerScale, detailImageViewerRotation, detailImageViewerDragging, isOpusDetailMoment, detailDialogHeight, detailDialogWidth, detailContentHeight, detailImageViewerUrl, detailImageViewerTransform, clearDetailFocusRetry, bindDetailIframe, resetDetailImageViewerTransform, setDetailImageViewerScale, showDetailImageViewerImage, openMomentImagePreview, closeDetailImageViewer, handleDetailImageViewerWheel, handleDetailImageViewerPointerDown, handleDetailImageViewerPointerMove, handleDetailImageViewerPointerEnd, handleDetailImageViewerDoubleClick, handleDetailImageViewerKeydown, openDetailFrameInNewTab, openMomentDetail, handleDetailIframeLoad, closeMomentDetail } = details
-const activeMomentFilter = ref<MomentFilter>('all')
+const activeMomentFilter = viewState.ref<MomentFilter>('filter', 'all')
 const feedReader = createMomentFeedReader(mapMoment)
-const portalUser = ref<MomentsPortalUser | null>(null)
-const portalLiveUsers = ref<MomentsPortalLiveUser[]>([])
-const portalLiveCount = ref(0)
-const portalUpList = ref<MomentsPortalUpItem[]>([])
+const portalUser = viewState.ref<MomentsPortalUser | null>('portalUser', null)
+const portalLiveUsers = viewState.ref<MomentsPortalLiveUser[]>('portalLiveUsers', [])
+const portalLiveCount = viewState.ref('portalLiveCount', 0)
+const portalUpList = viewState.ref<MomentsPortalUpItem[]>('portalUpList', [])
+const portalLoaded = viewState.ref('portalLoaded', false)
 /** 选中的经常访问 UP 主 mid；空字符串表示“全部动态” */
-const selectedHostMid = ref('')
-const isPortalLoading = ref(true)
+const selectedHostMid = viewState.ref('hostMid', '')
+const isPortalLoading = ref(!viewState.restored)
 const upListScrollerRef = ref<HTMLElement | null>(null)
 const upListTrackRef = ref<HTMLElement | null>(null)
 const canScrollUpListLeft = ref(false)
@@ -123,13 +126,15 @@ const forwardCountOverrides = new Map<string, number>()
 /** 封面宽高比（宽/高），用于单图布局、详情视频比例兜底和虚拟列表测量 */
 
 const isLoading = ref(false)
-const isInitialLoading = ref(true)
+const isInitialLoading = ref(!viewState.restored)
 const feedRequestFailed = ref(false)
-const noMoreContent = ref(false)
-const offset = ref('')
-const updateBaseline = ref('')
+const noMoreContent = viewState.ref('noMoreContent', false)
+const offset = viewState.ref('offset', '')
+const updateBaseline = viewState.ref('updateBaseline', '')
 /** 按 UP 主筛选时 feed/all 的 page，从 1 递增 */
-const momentsFeedPage = ref(1)
+const momentsFeedPage = viewState.ref('page', 1)
+if (viewState.restored)
+  feedReader.restore(moments.value, activeMomentFilter.value, selectedHostMid.value)
 const { handlePageRefresh, handleReachBottom, mainAppRef, scrollViewportRef } = useBewlyApp()
 
 const MAX_POST_LOAD_AUTOFILL_PAGES = 3
@@ -656,6 +661,7 @@ async function loadMoments(reset = false, autoFillDepth = 0, manualPaging = fals
 }
 
 function clearMomentsPortalState() {
+  portalLoaded.value = false
   portalUser.value = null
   portalLiveUsers.value = []
   portalLiveCount.value = 0
@@ -686,6 +692,7 @@ async function loadMomentsPortal() {
     portalLiveUsers.value = response.data?.live_users?.items || []
     portalLiveCount.value = response.data?.live_users?.count ?? portalLiveUsers.value.length
     portalUpList.value = normalizePortalUpList(response.data)
+    portalLoaded.value = true
   }
   catch {
     if (requestToken === portalRequestToken && isSameAccount(accountId, getCurrentAccountId()))
@@ -755,7 +762,17 @@ onMounted(() => {
     if (!momentsMounted)
       return
     void topBarStore.ensureWatchLaterState()
-    refresh()
+    if (!viewState.restored || (!moments.value.length && !noMoreContent.value)) {
+      refresh()
+    }
+    else {
+      if (!portalLoaded.value)
+        void loadMomentsPortal()
+      void nextTick(() => {
+        updateGridColumnCount()
+        updateVirtualColumns()
+      })
+    }
   })
   handlePageRefresh.value = refresh
   handleReachBottom.value = handleMomentsReachBottom
@@ -1044,6 +1061,7 @@ function appendMoments(items: DisplayMoment[]) {
                   @toggle-reservation="toggleMomentReservation"
                   @open-image-preview="openMomentImagePreview"
                   @interactive-resize="handleMomentCardInteractiveResize"
+                  @disclosure-motion="moving => momentLayout.setDisclosureMotion(moment.id, moving)"
                   @interaction-change="held => momentLayout.setInteractionHeld(moment.id, held)"
                 />
               </template>
@@ -1434,7 +1452,7 @@ function appendMoments(items: DisplayMoment[]) {
   outline-offset: var(--bew-space-0-5);
 }
 .moments-up-list__item--active .moments-up-list__name {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
 }
 .moments-up-list__item--active .moments-up-list__avatar > img,
 .moments-up-list__item--active .moments-up-list__avatar--all {
@@ -1471,8 +1489,8 @@ function appendMoments(items: DisplayMoment[]) {
   background: var(--bew-theme-surface-hover);
 }
 .moments-up-list__item--active .moments-up-list__avatar--all {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 .moments-up-list__item:disabled {
   opacity: 0.45;
@@ -1548,9 +1566,9 @@ function appendMoments(items: DisplayMoment[]) {
     opacity var(--bew-duration-normal) var(--bew-ease-standard);
 }
 .moments-page__empty button:not(.b-button):hover {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
-  border-color: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
+  border-color: var(--bew-selected-bg);
 }
 .moments-page__empty button:not(.b-button):disabled {
   opacity: 0.55;
@@ -1634,9 +1652,9 @@ function appendMoments(items: DisplayMoment[]) {
     opacity var(--bew-duration-normal) var(--bew-ease-standard);
 }
 .moments-load-more:hover {
-  color: var(--bew-on-theme-color);
-  border-color: var(--bew-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  border-color: var(--bew-selected-bg);
+  background: var(--bew-selected-bg);
 }
 .moments-page__empty {
   flex: 1;

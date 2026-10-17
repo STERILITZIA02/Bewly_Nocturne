@@ -22,7 +22,7 @@ withDefaults(defineProps<{
     ]"
     :label="label"
   >
-    <Icon icon="mingcute:close-line" aria-hidden="true" />
+    <Icon icon="tabler:x" aria-hidden="true" />
   </IconButton>
 </template>
 
@@ -35,7 +35,7 @@ withDefaults(defineProps<{
   box-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
   backdrop-filter: none;
   &:hover {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
     background: var(--bew-elevated-solid-hover);
   }
 

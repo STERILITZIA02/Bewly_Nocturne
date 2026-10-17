@@ -159,8 +159,8 @@ const dockIndicatorRef = ref<InstanceType<typeof LiquidSegmentIndicator> | null>
 const tooltipPlacement = computed(() => dockPosition.value === 'right' ? 'left' : 'top')
 
 const dockCollapseIcon = computed(() => dockPosition.value === 'bottom'
-  ? 'mingcute:fold-horizontal-line'
-  : 'mingcute:fold-vertical-line')
+  ? 'tabler:chevrons-left'
+  : 'tabler:chevrons-up')
 
 /**
  * Whether to show the back to top or refresh button
@@ -875,14 +875,14 @@ onUnmounted(() => {
             >
               <Transition name="fade">
                 <div v-show="hoveringDockItem.themeMode" absolute>
-                  <Icon v-if="isDark" icon="line-md:sunny-outline-to-moon-loop-transition" />
-                  <Icon v-else icon="line-md:moon-alt-to-sunny-outline-loop-transition" />
+                  <Icon v-if="isDark" icon="tabler:moon" />
+                  <Icon v-else icon="tabler:sun" />
                 </div>
               </Transition>
               <Transition name="fade">
                 <div v-show="!hoveringDockItem.themeMode" absolute>
-                  <Icon v-if="isDark" icon="line-md:sunny-outline-to-moon-transition" />
-                  <Icon v-else icon="line-md:moon-to-sunny-outline-transition" />
+                  <Icon v-if="isDark" icon="tabler:moon" />
+                  <Icon v-else icon="tabler:sun" />
                 </div>
               </Transition>
             </button>
@@ -898,7 +898,7 @@ onUnmounted(() => {
               :aria-label="$t('dock.settings')"
               @click="openSettings"
             >
-              <div i-mingcute:settings-3-line text-xl group-hover:rotate-180 transition="transform duration-400 ease-out" />
+              <div i-tabler:settings text-xl group-hover:rotate-180 transition="transform duration-400 ease-out" />
             </button>
           </Tooltip>
 
@@ -962,13 +962,13 @@ onUnmounted(() => {
                 <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
                 <Icon
                   v-if="key === 1"
-                  icon="line-md:rotate-270"
+                  icon="tabler:refresh"
                   class="dock-action-icon"
                   shrink-0 rotate-90 absolute
                 />
                 <Icon
                   v-else
-                  icon="line-md:arrow-small-up"
+                  icon="tabler:arrow-up"
                   class="dock-action-icon"
                   shrink-0 absolute
                 />
@@ -990,13 +990,13 @@ onUnmounted(() => {
             <Transition name="fade">
               <Icon
                 v-if="reachTop && canRefreshCurrentPage"
-                icon="line-md:rotate-270"
+                icon="tabler:refresh"
                 class="dock-action-icon"
                 shrink-0 rotate-90 absolute
               />
               <Icon
                 v-else
-                icon="line-md:arrow-small-up"
+                icon="tabler:arrow-up"
                 class="dock-action-icon"
                 shrink-0 absolute
               />
@@ -1018,13 +1018,13 @@ onUnmounted(() => {
             <LiquidGlassSurface v-if="useLiquidGlass" v-bind="liquidGlassProps" />
             <Icon
               v-if="showUndo"
-              icon="mdi:undo-variant"
+              icon="tabler:arrow-back-up"
               class="dock-action-icon"
               shrink-0 absolute
             />
             <Icon
               v-else-if="showForward"
-              icon="mdi:redo-variant"
+              icon="tabler:arrow-forward-up"
               class="dock-action-icon"
               shrink-0 absolute
             />
@@ -1366,6 +1366,18 @@ onUnmounted(() => {
     transition: filter var(--bew-duration-normal) var(--bew-ease-standard);
   }
 
+  .dock-page-navigation__item[data-active="true"]::after {
+    content: "";
+    position: absolute;
+    bottom: var(--bew-space-1);
+    left: calc(50% - var(--bew-space-0-5));
+    width: var(--bew-space-1);
+    height: var(--bew-space-1);
+    border-radius: 50%;
+    background: var(--bew-accent-marker-on-light);
+    pointer-events: none;
+  }
+
   .back-to-top-or-refresh-btn {
     --dock-surface-shadow: var(--bew-shadow-edge-glow-1), var(--bew-shadow-2);
     --uno: "transform active:important-scale-90 hover:scale-110";
@@ -1436,9 +1448,9 @@ onUnmounted(() => {
 
 .dock-item {
   --shadow-dark: 0 4px 30px 4px rgba(255, 255, 255, 0.6);
-  --shadow-active: 0 4px 30px var(--bew-theme-color-60);
+  --shadow-active: 0 4px 30px rgb(0 0 0 / 20%);
   --shadow-dark-active: 0 4px 20px rgba(255, 255, 255, 0.8);
-  --shadow-active-active: 0 4px 20px var(--bew-theme-color-80);
+  --shadow-active-active: 0 4px 20px rgb(0 0 0 / 25%);
 
   --uno: "relative transform active:important-scale-90 hover:scale-110";
   width: var(--bew-dock-control-size);
@@ -1488,7 +1500,7 @@ onUnmounted(() => {
   }
 
   &.active {
-    --uno: "important-bg-$bew-theme-color text-$bew-on-theme-color !dark:bg-white !dark:text-black";
+    --uno: "important-bg-$bew-selected-bg text-$bew-text-1 !dark:bg-white !dark:text-black";
     --uno: "shadow-$shadow-active dark:shadow-$shadow-dark";
     --uno: "active:shadow-$shadow-active-active dark-active:shadow-$shadow-dark-active";
   }

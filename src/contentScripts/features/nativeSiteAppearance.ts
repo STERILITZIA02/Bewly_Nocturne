@@ -3,7 +3,7 @@ import { effectScope, onScopeDispose, watch } from 'vue'
 import { stopDarkState, useDark } from '~/composables/useDark'
 import { getNativeSite } from '~/constants/nativeSites'
 import { settings, settingsInitializationState } from '~/logic/storage'
-import { getThemeColorTokens, readThemeContrastSurfaces } from '~/utils/themeColor'
+import { getThemeColorTokens, readThemeContrastSurfaces, syncNativeNeutralRgb } from '~/utils/themeColor'
 
 import { setupNativePageKeyboard } from './nativePageKeyboard'
 
@@ -132,14 +132,15 @@ export function setupNativeSiteAppearance() {
           if (keyboardRoot)
             onScopeDispose(setupNativePageKeyboard(keyboardRoot, keyboardPage))
         }
-        const { isDark } = useDark({ observeRoute: false, syncNativeTheme: false })
+        const { isDark, isOledDark, darkModeBaseColor } = useDark({ observeRoute: false, syncNativeTheme: false })
         watch([() => settings.value.customizeFont, () => settings.value.fontFamily], ([mode, family]) => {
           root.classList.toggle('bewly-native-fonts', mode !== 'default')
           if (mode === 'default')
             root.style.removeProperty('--bew-native-font-family')
           else root.style.setProperty('--bew-native-font-family', mode === 'custom' && family ? family : 'var(--bew-fonts)')
         }, { immediate: true })
-        watch([() => settings.value.themeColor, isDark, () => settings.value.darkModeBaseColor, () => settings.value.enableOledDarkMode], ([themeColor, dark]) => {
+        watch([() => settings.value.themeColor, isDark, isOledDark, darkModeBaseColor], ([themeColor, dark]) => {
+          syncNativeNeutralRgb(root)
           const tokens = getThemeColorTokens(themeColor, dark, readThemeContrastSurfaces(root))
           root.style.setProperty('--bew-theme-color', tokens.theme)
           root.style.setProperty('--bew-on-theme-color', tokens.onTheme)

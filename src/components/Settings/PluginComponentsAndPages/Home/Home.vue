@@ -424,7 +424,7 @@ function handleToggleHomeTab(tab: any) {
             {{ $t('settings.home_tabs_adjustment') }}
             <Button size="small" type="secondary" @click="resetHomeTabs">
               <template #left>
-                <div i-mingcute:back-line />
+                <div i-tabler:arrow-back-up />
               </template>
               {{ $t('common.operation.reset') }}
             </Button>

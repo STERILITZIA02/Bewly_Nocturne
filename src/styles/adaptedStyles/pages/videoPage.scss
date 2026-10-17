@@ -49,7 +49,7 @@
 
     .upinfo-btn-panel :is(.new-charge-btn, .not-follow-charge-btn) {
       color: var(--bew-theme-foreground) !important;
-      border-color: var(--bew-theme-foreground) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     // Preserve the native monochrome bitmap and derive its visible alpha colour.
@@ -148,7 +148,7 @@
     .simple-base-item.active .title,
     .normal-base-item:hover .info .title,
     .normal-base-item.active .info .title {
-      color: var(--bew-theme-foreground) !important;
+      color: var(--bew-text-1) !important;
     }
 
     .note-list .list-note-operation,
@@ -322,7 +322,7 @@
               &:hover {
                 color: var(--bew-on-theme-surface);
                 background-color: var(--bew-theme-surface);
-                border-color: var(--bew-theme-color);
+                border-color: var(--bew-focus-ring-color);
               }
             }
 
@@ -353,7 +353,7 @@
                 line-height: var(--bew-line-height-control);
 
                 &:focus {
-                  border-color: var(--bew-theme-color);
+                  border-color: var(--bew-focus-ring-color);
                 }
               }
 
@@ -384,8 +384,8 @@
                 left: 0;
                 margin-bottom: var(--bew-space-3);
                 white-space: nowrap;
-                background: var(--bew-theme-color);
-                color: var(--bew-on-theme-color);
+                background: var(--bew-selected-bg);
+                color: var(--bew-text-1);
                 padding: var(--bew-space-1) var(--bew-space-3);
                 border-radius: var(--bew-radius-sm);
                 font-size: var(--bew-font-size-caption);
@@ -399,7 +399,7 @@
                   left: var(--bew-space-5);
                   border-width: var(--bew-space-1);
                   border-style: solid;
-                  border-color: var(--bew-theme-color) transparent transparent transparent;
+                  border-color: var(--bew-selected-bg) transparent transparent transparent;
                 }
 
                 .icon-close {
@@ -479,7 +479,7 @@
 
       &:hover {
         color: var(--bew-on-theme-surface) !important;
-        border-color: var(--bew-theme-color) !important;
+        border-color: var(--bew-focus-ring-color) !important;
         background-color: var(--bew-theme-surface) !important;
       }
     }
@@ -499,7 +499,7 @@
 
     .video-sections-v1 .video-sections-head_first-line .first-line-left .first-line-title:hover,
     .note-detail .note-operation .tab-action-item.is-active .tab-icon {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .membersinfo-upcard .staff-info .staff-name.is-vip,
@@ -557,17 +557,17 @@
     .content .group-list li input[type="checkbox"]:checked + i,
     .content .group-list li input[type="checkbox"]:checked:hover + i,
     .coin-operated-m-exp .like-checkbox input[type="checkbox"]:checked + i {
-      border-color: var(--bew-theme-color);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .editor-innter div:last-child {
-      border-color: var(--bew-theme-color) !important;
+      border-color: var(--bew-focus-ring-color) !important;
     }
 
     .upinfo-btn-panel .not-follow-charge-btn:hover,
     .user-card-m-exp .user-info-wrapper .info .btn-box .like:not(.liked):hover,
     .coin-operated-m-exp .coin-bottom .bi-btn:hover {
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     // Tick icon for  danmaku enable

@@ -145,7 +145,7 @@ const loading = computed(() => props.placeholder || isLoadingHotSearch.value)
   text-align: center;
 }
 .moments-hot-search__list li:nth-child(-n + 3) .moments-hot-search__rank {
-  color: var(--bew-theme-foreground);
+  color: var(--bew-text-1);
 }
 .moments-hot-search__keyword {
   display: -webkit-box;

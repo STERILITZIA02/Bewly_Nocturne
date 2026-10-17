@@ -565,7 +565,7 @@ defineExpose({
                   v-html="sanitizeSearchHighlight(item.title)"
                 />
                 <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                  <span v-if="item.media_score?.score" text="$bew-theme-foreground" font-semibold tabular-nums>
+                  <span v-if="item.media_score?.score" text="$bew-text-1" font-semibold tabular-nums>
                     {{ t('search.media.score', { score: item.media_score.score.toFixed(1) }) }}
                   </span>
                   <span v-if="item.areas">{{ item.areas }}</span>
@@ -616,7 +616,7 @@ defineExpose({
                   {{ bangumi.title }}
                 </div>
                 <div class="bew-media-result-meta" text="$bew-text-3" flex items-center gap-2>
-                  <span v-if="bangumi.score" text="$bew-theme-foreground" font-semibold tabular-nums>
+                  <span v-if="bangumi.score" text="$bew-text-1" font-semibold tabular-nums>
                     {{ t('search.media.score', { score: bangumi.score?.toFixed(1) }) }}
                   </span>
                   <span v-if="bangumi.areas">{{ bangumi.areas }}</span>
@@ -840,7 +840,7 @@ defineExpose({
   min-width: 120px;
   aspect-ratio: 4 / 3;
   border-radius: var(--bew-media-radius);
-  border: 1px solid var(--bew-surface-border-color);
+  border: 0;
   overflow: hidden;
   background: var(--bew-skeleton);
 

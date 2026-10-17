@@ -622,7 +622,7 @@ export const settingsSearchEntries: SettingsSearchEntry[] = [
     'settings.theme_schedule',
     'settings.video_page_dark_mode',
     'settings.theme_color',
-    'settings.dark_mode_base_color',
+    'settings.enable_dark_mode_tint',
     'settings.enable_oled_dark_mode',
     'settings.gradient_theme_color_background',
     'settings.group_fonts',

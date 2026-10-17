@@ -275,39 +275,39 @@ watch(
 const settingsMenuItems: MenuItem[] = [
   {
     value: MenuType.General,
-    icon: 'i-mingcute:settings-3-line',
-    iconActivated: 'i-mingcute:settings-3-fill',
+    icon: 'i-tabler:settings',
+    iconActivated: 'i-tabler:settings-filled',
     titleKey: 'settings.menu_general',
   },
   {
     value: MenuType.BewlyPages,
-    icon: 'i-mingcute:web-line',
-    iconActivated: 'i-mingcute:web-fill',
+    icon: 'i-tabler:world',
+    iconActivated: 'i-tabler:world',
     titleKey: 'settings.menu_bewly_pages',
   },
   {
     value: MenuType.BewlyComponents,
-    icon: 'i-mingcute:tool-line',
-    iconActivated: 'i-mingcute:tool-fill',
+    icon: 'i-tabler:tool',
+    iconActivated: 'i-tabler:tool',
     titleKey: 'settings.menu_bewly_components',
   },
   {
     value: MenuType.Bilibili,
-    icon: 'i-mingcute:sparkles-2-line',
-    iconActivated: 'i-mingcute:sparkles-2-fill',
+    icon: 'i-tabler:sparkles',
+    iconActivated: 'i-tabler:sparkles',
     titleKey: 'settings.menu_bilibili',
     sectionStart: true,
   },
   {
     value: MenuType.Appearance,
     titleKey: 'settings.menu_appearance',
-    icon: 'i-mingcute:paint-brush-line',
-    iconActivated: 'i-mingcute:paint-brush-fill',
+    icon: 'i-tabler:brush',
+    iconActivated: 'i-tabler:brush',
   },
   {
     value: MenuType.About,
-    icon: 'i-mingcute:information-line',
-    iconActivated: 'i-mingcute:information-fill',
+    icon: 'i-tabler:info-circle',
+    iconActivated: 'i-tabler:info-circle-filled',
     titleKey: 'settings.menu_about',
     sectionStart: true,
   },
@@ -654,10 +654,10 @@ function changeMenuItem(menuItem: MenuType) {
           <PanelTopBlur :enabled="!settings.disableFrostedGlass" />
           <nav class="settings-breadcrumb" :aria-label="$t('settings.breadcrumb')">
             <span>{{ $t('settings.title') }}</span>
-            <i i-mingcute:right-line />
+            <i i-tabler:chevron-right />
             <strong>{{ title }}</strong>
             <template v-if="breadcrumbDetail">
-              <i i-mingcute:right-line />
+              <i i-tabler:chevron-right />
               <strong>{{ breadcrumbDetail }}</strong>
             </template>
           </nav>
@@ -665,10 +665,10 @@ function changeMenuItem(menuItem: MenuType) {
             ref="settingsSearchRef"
             class="settings-search"
             :class="{ 'has-query': Boolean(searchQuery) }"
-            :style="{ backgroundColor: 'var(--bew-content-solid)' }"
+            :style="{ backgroundColor: 'var(--bew-input-bg)' }"
             @click="focusSettingsSearch"
           >
-            <i i-mingcute:search-2-line />
+            <i i-tabler:search />
             <input
               ref="searchInputRef"
               v-model="searchQuery"
@@ -765,8 +765,8 @@ function changeMenuItem(menuItem: MenuType) {
 
 <style lang="scss" scoped>
 .menu-item-activated {
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
 }
 
 .settings-primary-navigation {
@@ -930,7 +930,7 @@ function changeMenuItem(menuItem: MenuType) {
     overflow: hidden;
     color: var(--bew-text-1);
     font-size: var(--bew-font-size-heading);
-    font-weight: var(--bew-font-weight-semibold);
+    font-weight: var(--bew-heading-weight);
     line-height: var(--bew-line-height-heading);
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -1095,7 +1095,7 @@ function changeMenuItem(menuItem: MenuType) {
   position: absolute;
   inset: 0 -12px;
   z-index: 0;
-  background: var(--bew-theme-color);
+  background: var(--bew-selected-bg);
   border-radius: var(--bew-panel-radius);
   corner-shape: inherit;
   content: "";
@@ -1110,8 +1110,8 @@ function changeMenuItem(menuItem: MenuType) {
   right: 12px;
   z-index: 3;
   padding: var(--bew-space-1) var(--bew-space-2);
-  color: var(--bew-on-theme-color);
-  background: var(--bew-theme-color);
+  color: var(--bew-text-1);
+  background: var(--bew-selected-bg);
   border-radius: var(--bew-badge-radius);
   corner-shape: var(--bew-corner-shape-round);
   box-shadow: var(--bew-shadow-2);

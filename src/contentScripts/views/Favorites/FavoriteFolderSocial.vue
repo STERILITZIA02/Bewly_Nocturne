@@ -65,8 +65,8 @@ const { t } = useI18n()
       background: var(--bew-theme-surface);
     }
     &[aria-pressed="true"] {
-      color: var(--bew-on-theme-color);
-      background: var(--bew-theme-color);
+      color: var(--bew-text-1);
+      background: var(--bew-selected-bg);
     }
     &:disabled {
       opacity: 0.5;
@@ -114,7 +114,7 @@ const { t } = useI18n()
     line-height: var(--bew-line-height-caption);
   }
   &:hover {
-    color: var(--bew-theme-foreground);
+    color: var(--bew-text-1);
   }
 }
 @media (prefers-reduced-motion: reduce) {

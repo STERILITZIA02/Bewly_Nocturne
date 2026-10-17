@@ -7,6 +7,7 @@ import { useI18n } from 'vue-i18n'
 import { addSearchHistory } from '~/components/SearchBar/searchHistoryProvider'
 import { useBewlyApp } from '~/composables/useAppProvider'
 import { useCurrentLocationHref } from '~/composables/useCurrentLocationHref'
+import { usePageViewState } from '~/composables/usePageViewState'
 import { syncRouteState } from '~/composables/useRouteState'
 import { settings } from '~/logic'
 import { useTopBarStore } from '~/stores/topBarStore'
@@ -79,11 +80,12 @@ const initialFilters = getFiltersFromUrl()
 const currentPage = ref<number>(initialFilters.page)
 
 // 视频筛选条件（不同步到URL）
-const currentVideoOrder = ref<string>('')
-const currentDuration = ref<number>(0)
-const currentTimeRange = ref<string>('all')
-const customStartDate = ref<string>('')
-const customEndDate = ref<string>('')
+const viewState = usePageViewState('search-filters')
+const currentVideoOrder = viewState.ref<string>('videoOrder', '')
+const currentDuration = viewState.ref<number>('duration', 0)
+const currentTimeRange = viewState.ref<string>('timeRange', 'all')
+const customStartDate = viewState.ref<string>('start', '')
+const customEndDate = viewState.ref<string>('end', '')
 
 // 用户筛选条件（同步到URL）
 const currentUserOrder = ref<string>(initialFilters.userOrder)

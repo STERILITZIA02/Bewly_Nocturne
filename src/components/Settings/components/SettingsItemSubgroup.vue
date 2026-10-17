@@ -8,10 +8,10 @@ defineProps<{
 <template>
   <section class="settings-item-subgroup" :data-settings-title="title">
     <header class="subgroup-heading">
-      <div class="subgroup-title">
+      <div class="subgroup-title bew-ui-label">
         {{ title }}
       </div>
-      <div v-if="desc" class="subgroup-desc">
+      <div v-if="desc" class="subgroup-desc bew-help">
         {{ desc }}
       </div>
     </header>
@@ -41,22 +41,13 @@ defineProps<{
   padding: var(--bew-space-0-5) 0 var(--bew-space-2);
 }
 
-.subgroup-title {
-  color: var(--bew-text-1);
-  font-size: var(--bew-font-size-title);
-  font-weight: var(--bew-font-weight-semibold);
-  line-height: var(--bew-line-height-title);
-}
-
 .subgroup-desc {
   margin-top: var(--bew-space-0-5);
-  color: var(--bew-text-3);
-  font-size: var(--bew-font-size-control);
-  line-height: var(--bew-line-height-control);
 }
 
 .subgroup-content {
   margin-top: var(--bew-space-1);
+  padding-inline-start: var(--bew-settings-level-indent);
 
   :deep(.b-settings-item) {
     padding: var(--bew-space-3) 0;

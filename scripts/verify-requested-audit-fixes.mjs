@@ -272,6 +272,7 @@ export function registerRequestedAuditFixChecks(check, { Vue, compileComponent, 
       requestGeneration: 1,
       isLoadingAnimeWatchList: Vue.ref(false),
       watchListRequestFailed: Vue.ref(false),
+      watchListLoaded: Vue.ref(false),
       animeWatchList: [],
       api: { anime: { getAnimeWatchList: () => {
         const request = deferred()

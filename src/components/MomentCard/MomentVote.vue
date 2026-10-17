@@ -3,6 +3,7 @@ import { useNow } from '@vueuse/core'
 import { computed, onBeforeUnmount, reactive, useId, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
 
+import ChartRungs from '~/components/ChartRungs.vue'
 import { useTopBarStore } from '~/stores/topBarStore'
 import api from '~/utils/api'
 import { normalizeIntlLocale } from '~/utils/locale'
@@ -98,7 +99,6 @@ onBeforeUnmount(controller.invalidate)
       </p>
       <div class="moment-vote__options" :role="state.info.choiceCount === 1 ? 'radiogroup' : 'group'" :aria-labelledby="groupId">
         <label v-for="option in state.info.options" :key="option.index" class="moment-vote__option" :class="{ 'is-selected': state.selected.includes(option.index), 'is-locked': locked }">
-          <span v-if="showResults" class="moment-vote__fill" :style="{ width: `${percentage(option.count)}%` }" aria-hidden="true" />
           <img
             v-if="option.imageUrl" class="moment-vote__image" :src="getMomentThumbnailUrl(option.imageUrl, 320)" alt="" loading="lazy"
             decoding="async"
@@ -115,8 +115,14 @@ onBeforeUnmount(controller.invalidate)
             <span>{{ option.text || t('moments.vote_image_option', { index: option.index }) }}</span>
             <span v-if="showResults" class="moment-vote__percentage">{{ percentage(option.count).toFixed(1) }}%</span>
           </span>
+          <div v-if="showResults" class="moment-vote__result" aria-hidden="true">
+            <ChartRungs :value="percentage(option.count)" :unit="1" :steps="100" horizontal />
+          </div>
         </label>
       </div>
+      <p v-if="showResults" class="moment-vote__meta">
+        {{ t('moments.vote_chart_unit') }}
+      </p>
       <p class="moment-vote__meta">
         {{ t('moments.vote_participants', { count: state.info.total }) }}
         <template v-if="deadline">
@@ -180,7 +186,7 @@ onBeforeUnmount(controller.invalidate)
   background: var(--bew-theme-surface);
 }
 .moment-vote__option.is-selected {
-  border-color: var(--bew-theme-color);
+  border-color: var(--bew-focus-ring-color);
 }
 .moment-vote__option.is-locked {
   cursor: default;
@@ -189,10 +195,10 @@ onBeforeUnmount(controller.invalidate)
   outline: var(--bew-focus-ring, 1px solid CanvasText);
   outline-offset: var(--bew-space-0-5);
 }
-.moment-vote__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  background: var(--bew-theme-surface);
+.moment-vote__result {
+  height: var(--bew-space-4);
+  margin: 0 var(--bew-space-3) var(--bew-space-2);
+  border-bottom: 1px solid var(--bew-chart-grid);
   pointer-events: none;
 }
 .moment-vote__image {

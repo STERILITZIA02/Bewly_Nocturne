@@ -123,7 +123,7 @@
     .bili-topic-new__default__create__text,
     .opus-module-topic,
     .side-toolbar__action.is-active {
-      color: var(--bew-theme-foreground);
+      color: var(--bew-text-1);
     }
 
     .side-toolbar__action:not(.is-disabled):hover,
@@ -153,7 +153,7 @@
     }
 
     .bili-pics-uploader__add:hover {
-      border-color: var(--bew-theme-foreground);
+      border-color: var(--bew-focus-ring-color);
     }
 
     .side-toolbar__action.is-active svg path,
@@ -280,8 +280,8 @@
   .bili-dyn-card-video__badge,
   .bili-dyn-card-medialist__badge,
   .bili-dyn-title__label {
-    background-color: var(--bew-theme-color);
-    color: var(--bew-on-theme-color);
+    background-color: var(--bew-selected-bg);
+    color: var(--bew-text-1);
   }
 
   .bili-dyn-action:not(.disabled).active i,
@@ -299,7 +299,7 @@
 
   .dyn-reserve__lottery__text:after,
   .bili-album__watch__track__activeitemborder {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
   }
 
   .bili-dyn-publishing__action.launcher,
@@ -317,7 +317,7 @@
   }
 
   .dyn-orig-author__following {
-    border-color: var(--bew-theme-color);
+    border-color: var(--bew-focus-ring-color);
     color: var(--bew-theme-foreground);
   }
 
@@ -326,7 +326,7 @@
   }
 
   .bili-dyn-list-tabs__highlight {
-    background-color: var(--bew-theme-color);
+    background-color: var(--bew-text-1);
   }
 
   .bili-dyn-live-users__item__face-container {

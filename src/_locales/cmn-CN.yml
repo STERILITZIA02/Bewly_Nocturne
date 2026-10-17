@@ -778,10 +778,12 @@ settings:
   video_page_dark_mode_desc: 保持全站主题设置不变，仅在视频播放页启用 Bewly Nocturne 深色样式。
   theme_color: 主题色
   dark_mode_base_color: 深色模式基准颜色
+  enable_dark_mode_tint: 深色背景色调
+  enable_dark_mode_tint_desc: 默认使用无色调的中性灰。开启后使用下方的背景色调；关闭会保留已选颜色。
   enable_oled_dark_mode: OLED 纯黑模式
   enable_oled_dark_mode_desc: 仅在实际处于深色模式时生效；网页底色变为纯黑，卡片和浮层仍保留层次。
-  gradient_theme_color_background: 在暗色模式下使用主题色渐变
-  gradient_theme_color_background_desc: 同时应用于网页背景和顶栏。
+  gradient_theme_color_background: 在深色模式下使用中性渐变
+  gradient_theme_color_background_desc: 同时应用于网页背景和顶栏，不使用主题色。
   logo_color: Logo 颜色
   logo_color_opt:
     white: 白
@@ -1047,6 +1049,8 @@ notifications:
   insights:
     activity: 会话最近活动
     activity_scope: 近 7 天 · 已载入会话
+    rung_unit: '每格 {count} 条 · 同一刻度'
+    ring_unit: '每刻度约 1% · 按实际数量计算'
     mark_all_read: 全部标为已读
     marking_read: 正在标记
     all_read: 全部已读
@@ -1317,6 +1321,7 @@ dock:
   collapse_dock: 收起 Dock
   expand_dock: 展开 Dock
 moments:
+  vote_chart_unit: '每刻度 1% · 多选比例独立计算'
   enter_live_room: '进入 {name} 的直播间'
   promotion_advertisement: 广告
   promotion_commerce: 商品推广
@@ -1468,7 +1473,25 @@ moment_card:
   comments_unavailable: 评论暂不可用，请重试
   comments_refresh: 刷新
   comments_missing_parent: 上级回复暂未加载
-  comments_reply_new_tab: 在新标签页回复
+  reply_action: 回复
+  reply_new: 写评论
+  reply_cancel_target: 取消回复，评论动态
+  reply_to: '回复 {name}'
+  reply_emoji: 表情
+  reply_mention: "选择或输入想 {'@'} 的人"
+  reply_image: 添加图片
+  reply_sync: 转发到动态
+  reply_send: 发送评论
+  reply_remove_image: 移除图片
+  reply_image_limit: 最多添加 9 张图片
+  reply_image_invalid: 仅支持小于 20MB、宽高至少 10px 的 JPG / PNG 图片
+  reply_upload_failed: 图片上传失败，请重试
+  reply_failed: 发送失败，请重试
+  reply_uncertain: 请求结果未确认。为避免重复发送，请先在原站检查；草稿已保留。
+  reply_picker_failed: 加载失败，请重试
+  reply_no_users: 没有找到用户
+  reply_check_original: 在原站检查
+  reply_success: 评论已发送
   comments_expand_replies: 展开剩余回复
   comments_load_more_replies: 加载更多回复
   comments_replies_failed: 回复加载失败，可重试

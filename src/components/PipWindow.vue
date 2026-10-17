@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { useDark } from '~/composables/useDark'
-import { settings } from '~/logic'
 
 const props = defineProps<{
   url: string
@@ -14,7 +13,7 @@ const pipWindowRef = ref<HTMLElement | null>(null)
 const pipWindowEl = ref<any | null>(null)
 const iframeRef = ref<HTMLIFrameElement | null>(null)
 const currentUrl = ref<string>(props.url)
-const { isDark, isOledDark } = useDark()
+const { isDark, isOledDark, darkModeBaseColor } = useDark()
 let closing = false
 let closed = false
 
@@ -25,10 +24,11 @@ function applyPipTheme() {
 
   documentElement.classList.toggle('dark', isDark.value)
   documentElement.classList.toggle('oled-dark', isOledDark.value)
+  documentElement.style.setProperty('--bew-dark-base-color', darkModeBaseColor.value)
   documentElement.style.background = isOledDark.value ? '#000' : 'var(--bew-bg)'
 }
 
-watch([isDark, isOledDark, () => settings.value.darkModeBaseColor], applyPipTheme)
+watch([isDark, isOledDark, darkModeBaseColor], applyPipTheme)
 
 onMounted(() => {
   openPipWindow()
@@ -123,7 +123,7 @@ async function releaseIframeResources() {
           @click="handleOpenInNewTab"
         >
           <template #left>
-            <i i-mingcute:external-link-line />
+            <i i-tabler:external-link />
           </template>
           {{ $t('iframe_drawer.open_in_new_tab') }}
         </Button>
@@ -137,7 +137,7 @@ async function releaseIframeResources() {
           @click="handleClose"
         >
           <template #left>
-            <i i-mingcute:close-line />
+            <i i-tabler:x />
           </template>
           {{ $t('iframe_drawer.close') }}
         </Button>

@@ -59,7 +59,7 @@ defineExpose({ focus })
     p="x-4"
     rounded="$bew-interactive-radius" border="1 $bew-surface-border-color" box-border
     transition="border-color duration-300, background-color duration-300, box-shadow duration-300"
-    bg="$bew-fill-1" flex="~ gap-2"
+    bg="$bew-input-bg" flex="~ gap-2"
   >
     <div v-if="$slots.prefix" class="prefix">
       <div>
